@@ -134,6 +134,23 @@ test("SourceIndex compacts duplicate snapshot records", async () => {
   assert.equal(readFileSync(filesPath, "utf8").trim().split(/\r?\n/).length, 1);
 });
 
+test("SourceIndex status throttles dirtyCount stat scans", async () => {
+  const { mkdtemp, mkdir, writeFile } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-source-dirty-"));
+  const file = path.join(root, "src/main/java/demo/Dirty.java");
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(file, "package demo; public class Dirty { public void saved() {} }\n");
+
+  const index = new SourceIndex(root);
+  index.factsFor(file);
+  assert.equal(index.status().dirtyCount, 0);
+  await writeFile(file, "package demo; public class Dirty { public void changed() {} }\n");
+  assert.equal(index.status().dirtyCount, 0);
+  await new Promise(resolve => setTimeout(resolve, 1100));
+  assert.equal(index.status().dirtyCount, 1);
+});
+
 test("SourceIndex finds the nearest method around a real repo line", { skip: !hasLishueduFixture }, () => {
   const index = new SourceIndex(repoRoot);
   const file = "modules/school/src/main/java/com/lishu/edu/school/interfaces/web/SchoolTemplateImportController.java";
