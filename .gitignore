@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+.nyc_output/
+.npm/
+*.tsbuildinfo
+*.tgz
+*.log
+.env
+.env.*
+!.env.example
