@@ -153,8 +153,11 @@ hook 行为：
 推荐默认调用顺序：
 
 ```json
-{"tool":"java_impact","arguments":{"repoRoot":"/absolute/repo","anchors":["OrderService"],"semanticPolicy":"auto"}}
+{"tool":"java_status","arguments":{"repoRoot":"/absolute/repo","start":true}}
+{"tool":"java_impact","arguments":{"repoRoot":"/absolute/repo","anchors":[{"file":"src/main/java/demo/OrderService.java","line":42,"column":18}],"semanticPolicy":"auto"}}
 ```
+
+默认不要在每次查询后调用 `java_shutdown`；让 idle TTL 回收 JDT LS，才能复用 workspace import、JDT LS 内存索引和 SourceIndex 缓存。
 
 需要强语义结果时：
 
@@ -188,11 +191,15 @@ hook 行为：
 | `JAVA_LSP_PROJECTS_JSON` | 覆盖 `projects.json` 路径。 |
 | `JDTLS_BIN` | 指定 `jdtls` 可执行文件。 |
 | `JDTLS_JAVA_HOME` | 指定运行 JDT LS 的 Java home。 |
+| `JDTLS_EXTRA_ARGS` | 追加传给 `jdtls` launcher 的参数，例如额外 `--jvm-arg=`。 |
 | `JAVA_LSP_PROJECT_JAVA_HOME` | 指定默认项目 JDK。 |
 | `JAVA_LSP_PROJECT_JAVA_HOME_<ALIAS>` | 为某个 alias 指定项目 JDK，alias 会转成大写并把非字母数字替换成 `_`。 |
 | `JAVA_LSP_JDTLS_XMX` | 覆盖 JDT LS heap，例如 `2g`。 |
 | `JAVA_LSP_MAX_ACTIVE_REPOS` | 限制同时活跃的 JDT LS repo 数。 |
 | `JAVA_LSP_IDLE_TTL_MS` | repo 空闲后自动停止 JDT LS 的时间。 |
+| `JAVA_LSP_AUTOBUILD` | 设为 `on` 时启用 JDT LS auto build；默认关闭以降低 import 等待。 |
+| `JAVA_LSP_IMPORT_CONCURRENCY` | 透传给 JDT LS `java.maxConcurrentBuilds`。 |
+| `JAVA_LSP_RG_CONCURRENCY` | `java_impact` 内部 rg section 并行度。 |
 | `JAVA_LSP_DOCUMENT_SYMBOL_TIMEOUT_MS` | documentSymbol warm-index 等待预算。 |
 | `JAVA_LSP_DOCUMENT_SYMBOL_GLOBAL_CONCURRENCY` | documentSymbol 全局并发。 |
 | `JAVA_LSP_DOCUMENT_SYMBOL_PER_REPO_CONCURRENCY` | documentSymbol 单 repo 并发。 |
@@ -203,6 +210,9 @@ hook 行为：
 
 - `JAVA_LSP_MAX_ACTIVE_REPOS=3`
 - `JAVA_LSP_JDTLS_XMX=2g`
+- `JAVA_LSP_IDLE_TTL_MS=2700000`
+- `JAVA_LSP_IMPORT_CONCURRENCY=2`
+- `JAVA_LSP_RG_CONCURRENCY=4`
 - `JAVA_LSP_DOCUMENT_SYMBOL_GLOBAL_CONCURRENCY=2`
 - `JAVA_LSP_DOCUMENT_SYMBOL_PER_REPO_CONCURRENCY=1`
 - `JAVA_LSP_DOCUMENT_SYMBOL_TIMEOUT_MS=2000`

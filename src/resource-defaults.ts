@@ -15,7 +15,7 @@ export function resourceDefaults(): ResourceDefaults {
     return defaults(memoryGb, 1, 900000, "1536m", 1);
   }
   if (memoryGb <= 48) {
-    return defaults(memoryGb, 3, 1800000, "2g", 1);
+    return defaults(memoryGb, 3, 2700000, "2g", 2);
   }
   return defaults(memoryGb, 4, 2700000, "3g", 2);
 }

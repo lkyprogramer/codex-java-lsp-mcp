@@ -148,6 +148,7 @@ export class JdtlsSession {
   private readonly activeProgress = new Map<string, string>();
   private lastProgressAt?: Date;
   private lastLanguageStatus?: string;
+  private phaseMetrics: Record<string, number> = {};
 
   constructor(private readonly repoRoot: string, aliases: string[] = []) {
     const cacheRoot = repoCacheRoot(repoRoot);
@@ -191,14 +192,22 @@ export class JdtlsSession {
     if (this.connection && this.process && !this.process.killed) {
       return;
     }
+    const startedAt = Date.now();
     if (!this.starting) {
       this.starting = this.start();
     }
     try {
       await this.starting;
     } finally {
+      this.addPhaseMetric("ensureStart", Date.now() - startedAt);
       this.starting = undefined;
     }
+  }
+
+  drainPhaseMetrics(): Record<string, number> {
+    const metrics = this.phaseMetrics;
+    this.phaseMetrics = {};
+    return metrics;
   }
 
   async restart(clearCache: boolean): Promise<JdtlsStatus> {
@@ -293,7 +302,10 @@ export class JdtlsSession {
 
   async documentSymbolsWithRetry(file: string, totalTimeoutMs = 20000): Promise<LspDocumentSymbol[]> {
     const deadline = Date.now() + totalTimeoutMs;
+    await this.ensureStarted();
+    const waitStartedAt = Date.now();
     await this.waitForProgressIdle(Math.max(1, deadline - Date.now()));
+    this.addPhaseMetric("progressIdleWait", Date.now() - waitStartedAt);
     const attemptTimeoutMs = positiveInteger(process.env.JAVA_LSP_DOCUMENT_SYMBOL_ATTEMPT_TIMEOUT_MS, 3000);
     let lastError: unknown;
     while (Date.now() < deadline) {
@@ -547,10 +559,13 @@ export class JdtlsSession {
           updateBuildConfiguration: "automatic",
           runtimes: runtime
         },
+        autobuild: {
+          enabled: ["1", "on", "true"].includes(process.env.JAVA_LSP_AUTOBUILD?.toLowerCase() || "")
+        },
         compile: {
           nullAnalysis: { mode: "disabled" }
         },
-        maxConcurrentBuilds: 1
+        maxConcurrentBuilds: positiveInteger(process.env.JAVA_LSP_IMPORT_CONCURRENCY, resourceDefaults().importConcurrency)
       }
     };
   }
@@ -768,6 +783,10 @@ export class JdtlsSession {
     } else if (this.activeProgress.has(token)) {
       this.activeProgress.set(token, [value.title, value.message].filter(Boolean).join(": ") || this.activeProgress.get(token) || token);
     }
+  }
+
+  private addPhaseMetric(name: string, elapsedMs: number): void {
+    this.phaseMetrics[name] = (this.phaseMetrics[name] || 0) + elapsedMs;
   }
 
   private async waitForProgressIdle(maxWaitMs: number): Promise<void> {

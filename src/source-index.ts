@@ -73,6 +73,7 @@ export class SourceIndex {
   private warmIndexFailed = 0;
   private hits = 0;
   private misses = 0;
+  private dirtyCountCache?: { computedAt: number; value: number };
 
   constructor(private readonly repoRoot: string) {
     this.snapshotDir = repoCacheRoot(repoRoot);
@@ -227,7 +228,7 @@ export class SourceIndex {
     const { methods, ...fileFacts } = facts;
     const fileRecord: FileRecord = { ...fileFacts, mtimeMs, size, batchId };
     appendFileSync(this.filesPath, `${JSON.stringify(fileRecord)}\n`);
-    for (const method of methods) {
+    const symbolLines = methods.map(method => {
       const symbol: SymbolRecord = {
         ...method,
         file: facts.absolutePath,
@@ -236,7 +237,10 @@ export class SourceIndex {
         factSource: facts.factSource,
         confirmedAt: facts.confirmedAt
       };
-      appendFileSync(this.symbolsPath, `${JSON.stringify(symbol)}\n`);
+      return `${JSON.stringify(symbol)}\n`;
+    });
+    if (symbolLines.length > 0) {
+      appendFileSync(this.symbolsPath, symbolLines.join(""));
     }
     this.totalFileRecords += 1;
     this.snapshotUpdatedAt = Date.now();
@@ -299,6 +303,10 @@ export class SourceIndex {
   }
 
   private dirtyCount(): number {
+    const now = Date.now();
+    if (this.dirtyCountCache && now - this.dirtyCountCache.computedAt < 1000) {
+      return this.dirtyCountCache.value;
+    }
     let dirty = 0;
     for (const [file, entry] of this.cache.entries()) {
       try {
@@ -310,6 +318,7 @@ export class SourceIndex {
         dirty += 1;
       }
     }
+    this.dirtyCountCache = { computedAt: now, value: dirty };
     return dirty;
   }
 }

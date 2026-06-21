@@ -1,8 +1,9 @@
 // input: java_impact tool arguments, source facts, optional JDT LS context, and rg output.
 // output: Compact v5 impact map, read plan, and evidence gaps.
 // pos: Single agent-grade semantic router for lishuedu Java navigation.
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
+import { availableParallelism } from "node:os";
 import path from "node:path";
 import { fromFileUri, classifyPath, normalizeRepoFile } from "../repo-layout.js";
 import { JdtlsSession, type LspLocation, type LspLocationLink } from "../jdtls-session.js";
@@ -49,6 +50,7 @@ type RouterStatus = {
 };
 
 const RG_CACHE_TTL_MS = positiveInteger(process.env.AGENT_RG_CACHE_TTL_MS, 300000);
+const RG_CONCURRENCY = positiveInteger(process.env.JAVA_LSP_RG_CONCURRENCY, Math.min(4, availableParallelism()));
 
 export class AgentRouter {
   private readonly rgCache = new Map<string, RgCacheEntry>();
@@ -317,22 +319,25 @@ export class AgentRouter {
     return sections.filter(item => item.paths.length > 0 && item.pattern.length > 0);
   }
 
-  private executeRgPlan(plan: RgPlanSection[], options: ImpactOptions, anchors: ResolvedAnchor[]): {
+  private async executeRgPlan(plan: RgPlanSection[], options: ImpactOptions, anchors: ResolvedAnchor[]): Promise<{
     files: CandidateFile[];
     sections: RgSectionSummary[];
     rawBytes: number;
     totalMatches: number;
     commandCount: number;
     suppressed: Record<string, unknown>;
-  } {
+  }> {
     const fileMap = new Map<string, CandidateFile>();
     const sections: RgSectionSummary[] = [];
     let rawBytes = 0;
     let totalMatches = 0;
     let commandCount = 0;
-    for (const item of plan) {
+    const results = await mapConcurrent(plan, RG_CONCURRENCY, async item => ({
+      item,
+      summary: await this.rgSummary(item, options, anchors)
+    }));
+    for (const { item, summary } of results) {
       commandCount += 1;
-      const summary = this.rgSummary(item, options, anchors);
       rawBytes += summary.rawBytes;
       totalMatches += summary.totalMatches;
       for (const file of summary.files) {
@@ -372,7 +377,7 @@ export class AgentRouter {
     };
   }
 
-  private rgSummary(section: RgPlanSection, options: ImpactOptions, anchors: ResolvedAnchor[]): RgCommandSummary {
+  private async rgSummary(section: RgPlanSection, options: ImpactOptions, anchors: ResolvedAnchor[]): Promise<RgCommandSummary> {
     this.evictExpiredRgCache();
     const generation = this.session.cacheStatus().invalidations;
     const key = JSON.stringify({ repoRoot: this.repoRoot, generation, section, focusModules: options.focusModules, excludeModules: options.excludeModules });
@@ -405,11 +410,10 @@ export class AgentRouter {
       "-g",
       "!**/{build,.gradle,node_modules,dist}/**"
     ];
-    const result = spawnSync("rg", args, {
+    const result = await runRg(args, {
       cwd: this.repoRoot,
-      encoding: "utf8",
       maxBuffer: 12 * 1024 * 1024,
-      timeout: 15000
+      timeoutMs: 15000
     });
     if (result.error && (result.error as NodeJS.ErrnoException).code !== "ETIMEDOUT") {
       throw result.error;
@@ -1013,6 +1017,22 @@ function compact(value: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined));
 }
 
+async function mapConcurrent<T, R>(items: T[], concurrency: number, worker: (item: T) => Promise<R>): Promise<R[]> {
+  if (items.length === 0) {
+    return [];
+  }
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await worker(items[index]);
+    }
+  }));
+  return results;
+}
+
 async function timed<T>(phases: Record<string, number>, name: string, action: () => Promise<T>): Promise<T> {
   const startedAt = Date.now();
   try {
@@ -1028,4 +1048,64 @@ function positiveInteger(value: string | undefined, fallback: number): number {
   }
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+type RgRunResult = {
+  status: number | null;
+  stdout: string;
+  stderr: string;
+  error?: NodeJS.ErrnoException;
+};
+
+function runRg(args: string[], options: { cwd: string; maxBuffer: number; timeoutMs: number }): Promise<RgRunResult> {
+  return new Promise(resolve => {
+    const child = spawn("rg", args, {
+      cwd: options.cwd,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let stdout = "";
+    let stderr = "";
+    let stdoutBytes = 0;
+    let stderrBytes = 0;
+    let settled = false;
+    const finish = (result: RgRunResult) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      resolve(result);
+    };
+    const fail = (message: string, code: string) => {
+      const error = new Error(message) as NodeJS.ErrnoException;
+      error.code = code;
+      child.kill("SIGTERM");
+      finish({ status: null, stdout, stderr, error });
+    };
+    const append = (stream: "stdout" | "stderr", chunk: Buffer) => {
+      const nextBytes = (stream === "stdout" ? stdoutBytes : stderrBytes) + chunk.length;
+      if (nextBytes > options.maxBuffer) {
+        fail("rg output exceeded maxBuffer", "ENOBUFS");
+        return;
+      }
+      if (stream === "stdout") {
+        stdoutBytes = nextBytes;
+        stdout += chunk.toString("utf8");
+      } else {
+        stderrBytes = nextBytes;
+        stderr += chunk.toString("utf8");
+      }
+    };
+    const timer = setTimeout(() => {
+      const error = new Error(`Timed out waiting for rg after ${options.timeoutMs}ms`) as NodeJS.ErrnoException;
+      error.code = "ETIMEDOUT";
+      child.kill("SIGTERM");
+      finish({ status: null, stdout, stderr, error });
+    }, options.timeoutMs);
+    timer.unref?.();
+    child.stdout.on("data", chunk => append("stdout", chunk));
+    child.stderr.on("data", chunk => append("stderr", chunk));
+    child.on("error", error => finish({ status: null, stdout, stderr, error: error as NodeJS.ErrnoException }));
+    child.on("close", code => finish({ status: code, stdout, stderr }));
+  });
 }

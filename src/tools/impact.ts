@@ -5,7 +5,7 @@ import { z } from "zod";
 import { documentSymbolLimiter } from "../document-symbol-limiter.js";
 import { normalizeRepoFile } from "../repo-layout.js";
 import type { ToolContext } from "./context.js";
-import type { ImpactAnchorInput, ImpactOptions } from "../agent-types.js";
+import type { ImpactAnchorInput, ImpactOptions, ImpactResult } from "../agent-types.js";
 
 export const impactSchema = {
   projectId: z.string().min(1).optional(),
@@ -39,11 +39,13 @@ export async function javaImpact(context: ToolContext, args: z.infer<z.ZodObject
   }
   const semanticPolicy = context.lsp?.enabled ? args.semanticPolicy : "fast";
   const anchors = normalizeAnchors(args);
+  const phaseMs: Record<string, number> = {};
   if (semanticPolicy === "required" && context.lsp?.enabled) {
-    await warmDocumentSymbols(context, anchors, semanticPolicy);
+    await timed(phaseMs, "warmDocumentSymbol", async () => warmDocumentSymbols(context, anchors, semanticPolicy));
   } else {
     warmDocumentSymbols(context, anchors, semanticPolicy).catch(() => undefined);
   }
+  mergePhaseMs(phaseMs, context.session.drainPhaseMetrics());
   const options: ImpactOptions = {
     anchors,
     mode: args.mode,
@@ -57,7 +59,9 @@ export async function javaImpact(context: ToolContext, args: z.infer<z.ZodObject
     taskKeywords: args.taskKeywords,
     crossModulePolicy: args.crossModulePolicy
   };
-  return context.router.impact(options);
+  const result = await context.router.impact(options);
+  mergePhaseMs(phaseMs, context.session.drainPhaseMetrics());
+  return withPhaseMs(result, phaseMs);
 }
 
 async function warmDocumentSymbols(
@@ -105,4 +109,37 @@ function normalizeAnchors(args: z.infer<z.ZodObject<typeof impactSchema>>): Impa
     return [{ file: args.file, line: args.line, column: args.column, role: args.anchorRole }];
   }
   throw new Error("java_impact requires anchors[] or file/line/column.");
+}
+
+async function timed<T>(phases: Record<string, number>, name: string, action: () => Promise<T>): Promise<T> {
+  const startedAt = Date.now();
+  try {
+    return await action();
+  } finally {
+    phases[name] = (phases[name] || 0) + Date.now() - startedAt;
+  }
+}
+
+function mergePhaseMs(target: Record<string, number>, source: Record<string, number>): void {
+  for (const [name, elapsedMs] of Object.entries(source)) {
+    target[name] = (target[name] || 0) + elapsedMs;
+  }
+}
+
+function withPhaseMs(result: unknown, phases: Record<string, number>): unknown {
+  if (Object.keys(phases).length === 0 || !result || typeof result !== "object") {
+    return result;
+  }
+  const payload = result as ImpactResult;
+  const metrics = payload.metrics || {};
+  const phaseMs = metrics.phaseMs && typeof metrics.phaseMs === "object" ? metrics.phaseMs as Record<string, number> : {};
+  payload.metrics = {
+    ...metrics,
+    phaseMs: {
+      ...phases,
+      ...phaseMs
+    }
+  };
+  payload.metrics.outputBytes = Buffer.byteLength(JSON.stringify(payload), "utf8");
+  return payload;
 }

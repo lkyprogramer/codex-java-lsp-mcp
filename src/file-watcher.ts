@@ -67,7 +67,6 @@ export class JavaFileWatcher {
 
     try {
       const roots = await this.buildWatchRoots();
-      await this.seedKnownFiles(roots);
       for (const watchRoot of roots) {
         const watcher = watch(watchRoot.root, { recursive: watchRoot.recursive }, (_eventType, filename) => {
           this.handleFsEvent(watchRoot, filename);
@@ -77,6 +76,7 @@ export class JavaFileWatcher {
       }
       this.watchedRoots = roots.map(root => root.root);
       this.active = this.watchers.length > 0;
+      void this.seedKnownFiles(roots).catch(error => this.recordError(error));
     } catch (error) {
       this.recordError(error);
       this.close();
@@ -128,33 +128,53 @@ export class JavaFileWatcher {
   }
 
   private async sourceRoots(): Promise<string[]> {
-    const roots: string[] = [];
+    const roots = new Set<string>();
+    const addJavaRoots = (base: string) => {
+      for (const sourceSet of ["main", "test"]) {
+        const sourceRoot = path.join(base, "src", sourceSet, "java");
+        if (isDirectory(sourceRoot)) {
+          roots.add(sourceRoot);
+        }
+      }
+    };
+
+    addJavaRoots(this.repoRoot);
+    for (const child of await listDirectories(this.repoRoot)) {
+      addJavaRoots(path.join(this.repoRoot, child));
+    }
     for (const topLevel of ["modules", "apps"]) {
       const base = path.join(this.repoRoot, topLevel);
       for (const child of await listDirectories(base)) {
-        for (const sourceSet of ["main", "test"]) {
-          const sourceRoot = path.join(base, child, "src", sourceSet, "java");
-          if (isDirectory(sourceRoot)) {
-            roots.push(sourceRoot);
-          }
-        }
+        addJavaRoots(path.join(base, child));
       }
     }
-    return roots;
+    return [...roots];
   }
 
   private async configFiles(): Promise<string[]> {
     const files = [
+      path.join(this.repoRoot, "pom.xml"),
+      path.join(this.repoRoot, "build.gradle"),
       path.join(this.repoRoot, "settings.gradle.kts"),
+      path.join(this.repoRoot, "settings.gradle"),
       path.join(this.repoRoot, "build.gradle.kts"),
       path.join(this.repoRoot, "gradle.properties"),
       path.join(this.repoRoot, "gradle", "libs.versions.toml")
     ];
+    const addProjectConfig = (base: string) => {
+      files.push(path.join(base, "pom.xml"));
+      files.push(path.join(base, "build.gradle"));
+      files.push(path.join(base, "build.gradle.kts"));
+      files.push(path.join(base, "gradle.properties"));
+    };
 
+    for (const child of await listDirectories(this.repoRoot)) {
+      addProjectConfig(path.join(this.repoRoot, child));
+    }
     for (const topLevel of ["modules", "apps"]) {
       const base = path.join(this.repoRoot, topLevel);
       for (const child of await listDirectories(base)) {
-        files.push(path.join(base, child, "build.gradle.kts"));
+        addProjectConfig(path.join(base, child));
       }
     }
 
