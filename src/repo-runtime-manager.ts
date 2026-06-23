@@ -7,6 +7,7 @@ import { RepoResolver, type RepoSelector, type ResolvedRepo } from "./repo-resol
 import { positiveInteger, resourceDefaults, type ResourceDefaults } from "./resource-defaults.js";
 import { SourceIndex } from "./source-index.js";
 import type { ToolContext } from "./tools/context.js";
+import { touchRepoCache } from "./worktree-cache-cleanup.js";
 
 export type ManagedToolContext = ToolContext & {
   repoHash: string;
@@ -118,6 +119,7 @@ export class RepoRuntimeManager {
 
   private getOrCreate(resolved: ResolvedRepo): RuntimeEntry {
     let entry = this.runtimes.get(resolved.repoRoot);
+    touchRepoCache(resolved.repoRoot);
     if (!entry) {
       entry = {
         context: this.runtimeFactory(resolved),

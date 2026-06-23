@@ -20,3 +20,4 @@
 - `smoke.ts` | 启动已构建 MCP server，验证 tools/list、`java_status` 与 shutdown。
 - `source-index.ts` | Java 轻量源码索引，支持 regex cold facts 和 documentSymbol warm-index 回填。
 - `tools/` | 七个 public MCP tool 的 handler 与共享 context。
+- `worktree-cache-cleanup.ts` | 启动时清理超过 TTL 的非活跃 Git worktree cache，不清主 checkout。

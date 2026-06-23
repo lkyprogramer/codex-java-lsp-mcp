@@ -14,6 +14,7 @@ import { javaRestart, restartSchema } from "./tools/restart.js";
 import { javaShutdown, shutdownSchema } from "./tools/shutdown.js";
 import { javaStatus, statusSchema } from "./tools/status.js";
 import { javaSymbol, symbolSchema } from "./tools/symbol.js";
+import { cleanupStaleWorktreeCaches } from "./worktree-cache-cleanup.js";
 
 type ToolResult = {
   content: Array<{ type: "text"; text: string }>;
@@ -77,6 +78,10 @@ register("java_shutdown", {
 }, args => shutdownFor(args));
 
 async function main(): Promise<void> {
+  const cleanup = cleanupStaleWorktreeCaches();
+  if (cleanup.removed > 0) {
+    console.error(`[codex-java-lsp] cleaned ${cleanup.removed} stale worktree cache(s)`);
+  }
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error("[codex-java-lsp] MCP server ready");

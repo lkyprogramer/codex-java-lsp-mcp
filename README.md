@@ -197,6 +197,7 @@ hook 行为：
 | `JAVA_LSP_JDTLS_XMX` | 覆盖 JDT LS heap，例如 `2g`。 |
 | `JAVA_LSP_MAX_ACTIVE_REPOS` | 限制同时活跃的 JDT LS repo 数。 |
 | `JAVA_LSP_IDLE_TTL_MS` | repo 空闲后自动停止 JDT LS 的时间。 |
+| `JAVA_LSP_WORKTREE_CACHE_TTL_DAYS` | 自动删除超过指定天数未更新的 Git worktree cache；默认 `2`，设为 `0` 关闭。 |
 | `JAVA_LSP_AUTOBUILD` | 设为 `on` 时启用 JDT LS auto build；默认关闭以降低 import 等待。 |
 | `JAVA_LSP_IMPORT_CONCURRENCY` | 透传给 JDT LS `java.maxConcurrentBuilds`。 |
 | `JAVA_LSP_RG_CONCURRENCY` | `java_impact` 内部 rg section 并行度。 |
@@ -211,6 +212,7 @@ hook 行为：
 - `JAVA_LSP_MAX_ACTIVE_REPOS=3`
 - `JAVA_LSP_JDTLS_XMX=2g`
 - `JAVA_LSP_IDLE_TTL_MS=2700000`
+- `JAVA_LSP_WORKTREE_CACHE_TTL_DAYS=2`
 - `JAVA_LSP_IMPORT_CONCURRENCY=2`
 - `JAVA_LSP_RG_CONCURRENCY=4`
 - `JAVA_LSP_DOCUMENT_SYMBOL_GLOBAL_CONCURRENCY=2`

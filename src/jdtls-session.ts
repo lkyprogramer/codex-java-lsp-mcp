@@ -23,6 +23,7 @@ import { detectGeneratedCode, type GeneratedCodeStatus } from "./generated-code.
 import { detectBuildSystem, resolveProjectJdk, type BuildSystem, type ProjectJdkStatus } from "./project-jdk.js";
 import { repoCacheRoot, toFileUri } from "./repo-layout.js";
 import { resourceDefaults } from "./resource-defaults.js";
+import { touchRepoCache } from "./worktree-cache-cleanup.js";
 
 export type LspPosition = {
   line: number;
@@ -236,6 +237,7 @@ export class JdtlsSession {
     if (this.process && !this.process.killed) {
       this.process.kill();
     }
+    touchRepoCache(this.repoRoot);
     this.openDocuments.clear();
     this.diagnostics.clear();
     this.process = undefined;
@@ -447,6 +449,7 @@ export class JdtlsSession {
 
     this.process = child;
     this.connection = connection;
+    touchRepoCache(this.repoRoot, { jdtlsPid: child.pid });
     const initializeResult = await withTimeout(
       connection.sendRequest("initialize", this.initializeParams()),
       120000,

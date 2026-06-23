@@ -64,7 +64,11 @@ function findBuildRoot(startDir: string): string | undefined {
 
 export function repoCacheRoot(repoRoot: string): string {
   const hash = createHash("sha1").update(repoRoot).digest("hex").slice(0, 12);
-  return path.join(homedir(), "Library", "Caches", "codex-java-lsp", hash);
+  return path.join(repoCacheBase(), hash);
+}
+
+export function repoCacheBase(): string {
+  return path.join(homedir(), "Library", "Caches", "codex-java-lsp");
 }
 
 export function toFileUri(filePath: string): string {
