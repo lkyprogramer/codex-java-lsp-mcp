@@ -8,6 +8,15 @@ export type SemanticPolicy = "auto" | "fast" | "required";
 export type TestReadMode = "defer" | "include" | "priority";
 export type CrossModulePolicy = "auto" | "focused" | "all";
 export type ReadPriority = "P0" | "P1" | "P2";
+export type ImpactVerbosity = "compact" | "standard" | "diagnostic";
+export type Confidence = "high" | "medium" | "low";
+
+export type ScoreBreakdownItem = {
+  id: string;
+  source: "anchor" | "semantic-seed" | "rg" | "merge" | "policy" | "finalize";
+  delta: number;
+  reason: string;
+};
 
 export type ImpactAnchorInput = {
   file: string;
@@ -28,6 +37,7 @@ export type ImpactOptions = {
   excludeModules: string[];
   taskKeywords: string[];
   crossModulePolicy: CrossModulePolicy;
+  verbosity?: ImpactVerbosity;
 };
 
 export type ResolvedAnchor = {
@@ -64,6 +74,15 @@ export type CandidateFile = {
   positions: RouterPosition[];
   categories: string[];
   reasons: string[];
+  confidence?: Confidence;
+  verifiedBy?: string[];
+  scoreBreakdown?: ScoreBreakdownItem[];
+};
+
+export type RoutedCandidate = CandidateFile & {
+  confidence: Confidence;
+  verifiedBy: string[];
+  scoreBreakdown?: ScoreBreakdownItem[];
 };
 
 export type ReadPlanItem = {

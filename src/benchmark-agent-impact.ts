@@ -1,18 +1,29 @@
-// input: Fixed complex Java navigation scenarios.
-// output: v5 java_impact payload, latency, precision, recall, and read-plan metrics.
+// input: External Java navigation golden scenarios.
+// output: java_impact payload, latency, precision, recall, read-plan metrics, and run metadata.
 // pos: Repeatable benchmark entrypoint for the clean agent router.
-import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import { AgentRouter } from "./agent-router/index.js";
+import type { ImpactOptions } from "./agent-types.js";
+import { readRuntimeBuild } from "./build-info.js";
 import { JdtlsSession } from "./jdtls-session.js";
 import { SourceIndex } from "./source-index.js";
-import type { ImpactOptions } from "./agent-types.js";
+
+type WarmState = "cold-nolsp" | "cold-lsp" | "warm-auto" | "warm-required";
+type BenchmarkStrategy = "impact" | "no-lsp";
 
 type Scenario = {
   id: string;
   name: string;
+  projectId?: string;
+  layoutProfile?: string;
+  repoCommit?: string;
+  scenarioVersion?: number;
+  warmState?: WarmState;
+  skippedProfiles?: string[];
   anchor: {
     file: string;
     line: number;
@@ -21,135 +32,129 @@ type Scenario = {
     focusModules?: string[];
     taskKeywords?: string[];
   };
-  groundTruth: string[];
+  golden?: {
+    mustHit?: string[];
+    shouldHit?: string[];
+    side?: string[];
+  };
+  groundTruth?: string[];
+};
+
+type Cli = {
+  repoRoot: string;
+  scenarioFile: string;
+  projectId: string;
+  layoutProfile: string;
+  warmState: WarmState;
+  mode: ImpactOptions["mode"];
+  semanticPolicy: ImpactOptions["semanticPolicy"];
+  runs: number;
+  listScenarios: boolean;
+  strategy: BenchmarkStrategy;
 };
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const projectDir = path.resolve(scriptDir, "..");
-const repoRoot = process.env.JAVA_LSP_BENCH_REPO_ROOT || process.env.LISHUEDU_ROOT || path.resolve(projectDir, "..", "..");
-const router = new AgentRouter(repoRoot, new JdtlsSession(repoRoot), new SourceIndex(repoRoot));
+const cli = parseCli(process.argv.slice(2), projectDir);
+const scenarios = loadScenarios(cli.scenarioFile).filter(scenario => !scenario.projectId || scenario.projectId === cli.projectId);
+const runtimeBuild = readRuntimeBuild();
+const metadata = {
+  generatedAt: new Date().toISOString(),
+  repoRoot: cli.repoRoot,
+  repoCommit: git(cli.repoRoot, ["rev-parse", "--short=12", "HEAD"]) || "unknown",
+  projectId: cli.projectId,
+  layoutProfile: cli.layoutProfile,
+  warmState: cli.warmState,
+  mode: cli.mode,
+  semanticPolicy: effectiveSemanticPolicy(cli),
+  strategy: cli.strategy,
+  runs: cli.runs,
+  scenarioFile: cli.scenarioFile,
+  runtimeBuild
+};
 
-const scenarios: Scenario[] = [
-  {
-    id: "storage-signed-url",
-    name: "StorageGateway#getSignedUrl",
-    anchor: {
-      file: "modules/integration/src/main/java/com/lishu/edu/integration/domain/port/StorageGateway.java",
-      line: 21,
-      column: 28,
-      profile: "port",
-      taskKeywords: ["storage", "signed", "url", "report"]
-    },
-    groundTruth: [
-      "modules/integration/src/main/java/com/lishu/edu/integration/domain/port/StorageGateway.java",
-      "modules/integration/src/main/java/com/lishu/edu/integration/domain/contract/StorageSignedUrlCommand.java",
-      "modules/integration/src/main/java/com/lishu/edu/integration/domain/contract/StorageSignedUrlResult.java",
-      "modules/integration/src/main/java/com/lishu/edu/integration/infrastructure/storage/AliyunOssGateway.java",
-      "modules/integration/src/main/java/com/lishu/edu/integration/infrastructure/storage/StubStorageGateway.java",
-      "modules/integration/src/main/java/com/lishu/edu/integration/infrastructure/storage/AliyunOssConfig.java",
-      "modules/integration/src/main/java/com/lishu/edu/integration/application/service/StorageAppService.java",
-      "modules/report/src/main/java/com/lishu/edu/report/application/service/ReportBatchExportQueryService.java",
-      "modules/report/src/main/java/com/lishu/edu/report/application/service/ReportExportTaskCommandService.java",
-      "modules/report/src/main/java/com/lishu/edu/report/application/service/BusinessOperationDashboardAppService.java"
-    ]
-  },
-  {
-    id: "school-template-parser",
-    name: "SchoolTemplateImportParser#parse",
-    anchor: {
-      file: "modules/school/src/main/java/com/lishu/edu/school/application/port/SchoolTemplateImportParser.java",
-      line: 16,
-      column: 34,
-      profile: "parser",
-      focusModules: ["school"],
-      taskKeywords: ["school", "template", "import", "parser"]
-    },
-    groundTruth: [
-      "modules/school/src/main/java/com/lishu/edu/school/application/port/SchoolTemplateImportParser.java",
-      "modules/school/src/main/java/com/lishu/edu/school/infrastructure/excel/SchoolTemplateImportExcelParser.java",
-      "modules/school/src/main/java/com/lishu/edu/school/domain/template/SchoolTemplateParsedTemplate.java",
-      "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolTemplateImportAppService.java",
-      "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolTemplateImportDiffBuilder.java",
-      "modules/school/src/test/java/com/lishu/edu/school/infrastructure/excel/SchoolTemplateImportExcelParserTest.java",
-      "modules/school/src/test/java/com/lishu/edu/school/application/service/SchoolTemplateImportDiffBuilderTest.java"
-    ]
-  },
-  {
-    id: "report-reusable-zip",
-    name: "ReportBatchExportTaskRepository#findReusableReadyZip",
-    anchor: {
-      file: "modules/report/src/main/java/com/lishu/edu/report/domain/port/ReportBatchExportTaskRepository.java",
-      line: 36,
-      column: 14,
-      profile: "repository",
-      focusModules: ["report"],
-      taskKeywords: ["report", "batch", "export", "zip", "task"]
-    },
-    groundTruth: [
-      "modules/report/src/main/java/com/lishu/edu/report/domain/port/ReportBatchExportTaskRepository.java",
-      "modules/report/src/main/java/com/lishu/edu/report/infrastructure/persistence/repository/ReportBatchExportTaskRepositoryImpl.java",
-      "modules/report/src/main/java/com/lishu/edu/report/infrastructure/persistence/entity/ReportBatchExportTaskDO.java",
-      "modules/report/src/main/java/com/lishu/edu/report/infrastructure/persistence/mapper/ReportBatchExportTaskMapper.java",
-      "modules/report/src/main/java/com/lishu/edu/report/application/service/ReportBatchExportCommandService.java",
-      "modules/report/src/main/java/com/lishu/edu/report/application/service/ReportBatchExportQueryService.java",
-      "modules/report/src/test/java/com/lishu/edu/report/application/service/ReportBatchExportCommandServiceTest.java",
-      "modules/report/src/main/resources/db/migration/V011__report_batch_export_task.sql"
-    ]
-  },
-  {
-    id: "school-confirm-controller",
-    name: "SchoolTemplateImportController#confirm",
-    anchor: {
-      file: "modules/school/src/main/java/com/lishu/edu/school/interfaces/web/SchoolTemplateImportController.java",
-      line: 109,
-      column: 12,
-      profile: "controller",
-      focusModules: ["school"],
-      taskKeywords: ["school", "template", "import", "confirm"]
-    },
-    groundTruth: [
-      "modules/school/src/main/java/com/lishu/edu/school/interfaces/web/SchoolTemplateImportController.java",
-      "modules/school/src/main/java/com/lishu/edu/school/interfaces/assembler/SchoolTemplateImportAssembler.java",
-      "modules/school/src/main/java/com/lishu/edu/school/interfaces/dto/SchoolTemplateImportConfirmRequest.java",
-      "modules/school/src/main/java/com/lishu/edu/school/interfaces/dto/SchoolTemplateImportConfirmResponse.java",
-      "modules/school/src/main/java/com/lishu/edu/school/application/dto/SchoolTemplateImportConfirmCommand.java",
-      "modules/school/src/main/java/com/lishu/edu/school/application/dto/SchoolTemplateImportConfirmResult.java",
-      "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolTemplateImportAppService.java"
-    ]
-  },
-  {
-    id: "benefit-product-code-dto",
-    name: "ParentStudentBenefitItemResponse.productCode",
-    anchor: {
-      file: "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/dto/ParentStudentBenefitItemResponse.java",
-      line: 19,
-      column: 16,
-      profile: "dto",
-      focusModules: ["benefits", "product"],
-      taskKeywords: ["benefit", "product", "code", "parent"]
-    },
-    groundTruth: [
-      "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/dto/ParentStudentBenefitItemResponse.java",
-      "modules/benefits/src/main/java/com/lishu/edu/benefits/application/dto/ParentStudentBenefitItemView.java",
-      "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/assembler/BenefitEntitlementAssembler.java",
-      "modules/benefits/src/main/java/com/lishu/edu/benefits/application/service/ParentBenefitQueryAppService.java",
-      "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/controller/ParentBenefitController.java",
-      "modules/product/src/main/java/com/lishu/edu/product/application/service/ProductQueryAppService.java",
-      "modules/product/src/main/java/com/lishu/edu/product/application/dto/ProductView.java",
-      "modules/benefits/src/test/java/com/lishu/edu/benefits/application/service/ParentBenefitQueryAppServiceTest.java",
-      "modules/benefits/src/test/java/com/lishu/edu/benefits/interfaces/assembler/BenefitEntitlementAssemblerTest.java"
-    ]
-  }
-];
+if (cli.listScenarios) {
+  console.log(JSON.stringify({
+    metadata,
+    scenarios: scenarios.map(scenario => ({
+      id: scenario.id,
+      name: scenario.name,
+      projectId: scenario.projectId,
+      layoutProfile: scenario.layoutProfile,
+      warmState: scenario.warmState,
+      mustHit: goldenFiles(scenario, "mustHit").length,
+      shouldHit: goldenFiles(scenario, "shouldHit").length,
+      side: goldenFiles(scenario, "side").length
+    }))
+  }, null, 2));
+  process.exit(0);
+}
+
+const session = cli.strategy === "impact" ? new JdtlsSession(cli.repoRoot) : undefined;
+const router = session ? new AgentRouter(cli.repoRoot, session, new SourceIndex(cli.repoRoot)) : undefined;
+if (session) {
+  await prepareWarmState(cli, session, scenarios);
+}
 
 const rows = [];
 for (const scenario of scenarios) {
+  const attempts = [];
+  for (let run = 0; run < cli.runs; run += 1) {
+    attempts.push(cli.strategy === "no-lsp" ? noLspAttempt(cli.repoRoot, scenario) : await impactAttempt(router as AgentRouter, cli, scenario));
+  }
+  rows.push({
+    id: scenario.id,
+    name: scenario.name,
+    attempts,
+    summary: summarize(attempts)
+  });
+}
+
+console.log(JSON.stringify({
+  metadata,
+  totals: summarize(rows.flatMap(row => row.attempts)),
+  rows
+}, null, 2));
+
+if (session) {
+  await session.stop();
+}
+
+function parseCli(args: string[], root: string): Cli {
+  const values = new Map<string, string | true>();
+  for (let index = 0; index < args.length; index += 1) {
+    const item = args[index];
+    if (item === "--list-scenarios") {
+      values.set(item, true);
+      continue;
+    }
+    if (item.startsWith("--")) {
+      values.set(item, args[index + 1]);
+      index += 1;
+    }
+  }
+  const projectId = stringArg(values, "--project-id", process.env.JAVA_LSP_BENCH_PROJECT_ID || "lishuedu");
+  return {
+    repoRoot: stringArg(values, "--repo-root", process.env.JAVA_LSP_BENCH_REPO_ROOT || process.env.LISHUEDU_ROOT || path.resolve(root, "..", "..")),
+    scenarioFile: stringArg(values, "--scenarios", process.env.JAVA_LSP_BENCH_SCENARIOS || path.join(root, "golden", `${projectId}.scenarios.jsonl`)),
+    projectId,
+    layoutProfile: stringArg(values, "--layout-profile", process.env.JAVA_LSP_BENCH_LAYOUT_PROFILE || (projectId === "exam-parent-v3" ? "maven-reactor" : projectId === "generic-java" ? "generic-java" : "ddd-gradle")),
+    warmState: stringArg(values, "--warm-state", process.env.JAVA_LSP_BENCH_WARM_STATE || "cold-nolsp") as WarmState,
+    mode: stringArg(values, "--mode", process.env.JAVA_LSP_BENCH_MODE || "balanced") as ImpactOptions["mode"],
+    semanticPolicy: stringArg(values, "--semantic-policy", process.env.JAVA_LSP_BENCH_SEMANTIC_POLICY || "auto") as ImpactOptions["semanticPolicy"],
+    runs: Number(stringArg(values, "--runs", process.env.JAVA_LSP_BENCH_RUNS || "1")),
+    listScenarios: values.get("--list-scenarios") === true,
+    strategy: stringArg(values, "--strategy", process.env.JAVA_LSP_BENCH_STRATEGY || "impact") as BenchmarkStrategy
+  };
+}
+
+async function impactAttempt(router: AgentRouter, cli: Cli, scenario: Scenario): Promise<Record<string, unknown>> {
   const startedAt = performance.now();
   const result = await router.impact({
     anchors: [scenario.anchor],
-    mode: "balanced",
+    mode: cli.mode,
     profile: scenario.anchor.profile,
-    semanticPolicy: "auto",
+    semanticPolicy: effectiveSemanticPolicy(cli),
     semanticTimeoutMs: 1500,
     testReadMode: "defer",
     focusModules: scenario.anchor.focusModules || [],
@@ -159,61 +164,111 @@ for (const scenario of scenarios) {
   });
   const elapsedMs = performance.now() - startedAt;
   const rawSearchPayload = Buffer.byteLength(JSON.stringify(result), "utf8");
-  const readingPayload = readPlanBytes(result);
+  const readingPayload = readPlanBytes(cli.repoRoot, result);
   const candidatePaths = result.files.map(file => String(file.path));
-  const quality = evaluate(candidatePaths, scenario.groundTruth);
-  rows.push({
-    id: scenario.id,
-    name: scenario.name,
+  const readFiles = distinctReadFiles(result);
+  const quality = evaluate(candidatePaths, readFiles, scenario);
+  return attemptPayload("impact", quality, rawSearchPayload, readingPayload, elapsedMs, 1 + result.readPlan.length, result.readPlan.length, Number(result.counts.totalRgRawBytes || 0), 0);
+}
+
+function noLspAttempt(repoRoot: string, scenario: Scenario): Record<string, unknown> {
+  const startedAt = performance.now();
+  const rg = runNoLspRg(repoRoot, scenario);
+  const candidatePaths = unique([scenario.anchor.file, ...rg.files]);
+  const readFiles = candidatePaths.slice(0, 6);
+  const readingPayload = readMatchedFilesBytes(repoRoot, readFiles, rg.lineByPath, scenario);
+  const rawSearchPayload = Buffer.byteLength(rg.stdout, "utf8");
+  const quality = evaluate(candidatePaths, readFiles, scenario);
+  return attemptPayload("no-lsp", quality, rawSearchPayload, readingPayload, performance.now() - startedAt, 1 + readFiles.length, readFiles.length, 0, rawSearchPayload);
+}
+
+function attemptPayload(
+  strategy: BenchmarkStrategy,
+  quality: Record<string, number>,
+  rawSearchPayload: number,
+  readingPayload: number,
+  elapsedMs: number,
+  roundTrips: number,
+  readPlanItems: number,
+  rgRawBytesSuppressed: number,
+  rgRawBytesExposed: number
+): Record<string, unknown> {
+  return {
+    strategy,
     rawSearchPayload,
     readingPayload,
     totalAgentVisiblePayload: rawSearchPayload + readingPayload,
     estimatedTokens: Math.round((rawSearchPayload + readingPayload) / 4),
     elapsedMs,
-    roundTrips: 1 + result.readPlan.length,
+    roundTrips,
     returnedFiles: quality.returnedFiles,
     hitFiles: quality.hitFiles,
     precision: quality.precision,
     recall: quality.recall,
-    readPlanItems: result.readPlan.length,
-    rgRawBytesSuppressed: result.counts.totalRgRawBytes
-  });
+    pCandAt5: quality.pCandAt5,
+    pCandAt10: quality.pCandAt10,
+    rCand: quality.recall,
+    pRead: quality.pRead,
+    rReadMust: quality.rReadMust,
+    readPlanItems,
+    rgRawBytesSuppressed,
+    rgRawBytesExposed
+  };
 }
 
-const totals = rows.reduce((acc, row) => {
-  acc.rawSearchPayload += row.rawSearchPayload;
-  acc.readingPayload += row.readingPayload;
-  acc.totalAgentVisiblePayload += row.totalAgentVisiblePayload;
-  acc.estimatedTokens += row.estimatedTokens;
-  acc.elapsedMs += row.elapsedMs;
-  acc.roundTrips += row.roundTrips;
-  acc.returnedFiles += row.returnedFiles;
-  acc.hitFiles += row.hitFiles;
-  return acc;
-}, {
-  rawSearchPayload: 0,
-  readingPayload: 0,
-  totalAgentVisiblePayload: 0,
-  estimatedTokens: 0,
-  elapsedMs: 0,
-  roundTrips: 0,
-  returnedFiles: 0,
-  hitFiles: 0
-});
-const groundTruth = scenarios.reduce((sum, scenario) => sum + scenario.groundTruth.length, 0);
+function stringArg(values: Map<string, string | true>, name: string, fallback: string): string {
+  const value = values.get(name);
+  return typeof value === "string" && value.length > 0 ? value : fallback;
+}
 
-console.log(JSON.stringify({
-  generatedAt: new Date().toISOString(),
-  repoRoot,
-  totals: {
-    ...totals,
-    precision: totals.returnedFiles ? totals.hitFiles / totals.returnedFiles : 0,
-    recall: groundTruth ? totals.hitFiles / groundTruth : 1
-  },
-  rows
-}, null, 2));
+function loadScenarios(file: string): Scenario[] {
+  if (!existsSync(file)) {
+    throw new Error(`Scenario file does not exist: ${file}`);
+  }
+  return readFileSync(file, "utf8")
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map((line, index) => {
+      try {
+        return JSON.parse(line) as Scenario;
+      } catch (error) {
+        throw new Error(`Invalid scenario JSON at ${file}:${index + 1}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    });
+}
 
-function readPlanBytes(result: Awaited<ReturnType<AgentRouter["impact"]>>): number {
+function effectiveSemanticPolicy(cli: Cli): ImpactOptions["semanticPolicy"] {
+  return cli.warmState === "cold-nolsp" ? "fast" : cli.warmState === "warm-required" ? "required" : cli.semanticPolicy;
+}
+
+async function prepareWarmState(cli: Cli, session: JdtlsSession, items: Scenario[]): Promise<void> {
+  if (cli.warmState === "cold-nolsp") {
+    return;
+  }
+  await session.ensureStarted();
+  if (cli.warmState === "warm-auto") {
+    await waitForProgressIdle(session, 30000);
+  }
+  if (cli.warmState === "warm-required") {
+    for (const scenario of items) {
+      await session.documentSymbolsWithRetry(path.resolve(cli.repoRoot, scenario.anchor.file), 45000);
+    }
+  }
+}
+
+async function waitForProgressIdle(session: JdtlsSession, timeoutMs: number): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const status = session.status().progress;
+    if (status.active === 0) {
+      return;
+    }
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
+}
+
+function readPlanBytes(repoRoot: string, result: Awaited<ReturnType<AgentRouter["impact"]>>): number {
   const files = new Map(result.files.map(file => [String(file.id), String(file.path)]));
   let bytes = 0;
   for (const item of result.readPlan) {
@@ -221,20 +276,145 @@ function readPlanBytes(result: Awaited<ReturnType<AgentRouter["impact"]>>): numb
     if (!file) {
       continue;
     }
-    const lines = readFileSync(path.join(repoRoot, file), "utf8").split(/\r?\n/);
+    const absolutePath = path.join(repoRoot, file);
+    if (!existsSync(absolutePath)) {
+      continue;
+    }
+    const lines = readFileSync(absolutePath, "utf8").split(/\r?\n/);
     bytes += Buffer.byteLength(lines.slice(item.startLine - 1, item.endLine).join("\n"), "utf8");
   }
   return bytes;
 }
 
-function evaluate(candidateFiles: string[], groundTruth: string[]): { returnedFiles: number; hitFiles: number; precision: number; recall: number } {
+function readMatchedFilesBytes(repoRoot: string, files: string[], lineByPath: Map<string, number>, scenario: Scenario): number {
+  let bytes = 0;
+  for (const file of files) {
+    const absolutePath = path.join(repoRoot, file);
+    if (!existsSync(absolutePath)) {
+      continue;
+    }
+    const line = file === scenario.anchor.file ? scenario.anchor.line : lineByPath.get(file) || 1;
+    const lines = readFileSync(absolutePath, "utf8").split(/\r?\n/);
+    bytes += Buffer.byteLength(lines.slice(Math.max(0, line - 17), line + 32).join("\n"), "utf8");
+  }
+  return bytes;
+}
+
+function distinctReadFiles(result: Awaited<ReturnType<AgentRouter["impact"]>>): string[] {
+  const files = new Map(result.files.map(file => [String(file.id), String(file.path)]));
+  return [...new Set(result.readPlan.map(item => files.get(item.fileId)).filter((file): file is string => Boolean(file)))];
+}
+
+function runNoLspRg(repoRoot: string, scenario: Scenario): { stdout: string; files: string[]; lineByPath: Map<string, number> } {
+  const pattern = unique(noLspTerms(repoRoot, scenario)).map(regexLiteral).join("|") || regexLiteral(path.basename(scenario.anchor.file, ".java"));
+  const result = spawnSync("rg", ["--line-number", "--no-heading", "-g", "*.java", pattern, "."], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    maxBuffer: 50 * 1024 * 1024
+  });
+  if (result.status && result.status !== 1) {
+    throw new Error(`no-lsp rg failed: ${(result.stderr || "").trim()}`);
+  }
+  const lineByPath = new Map<string, number>();
+  const files: string[] = [];
+  for (const line of (result.stdout || "").split(/\r?\n/)) {
+    const match = line.match(/^(.+?):(\d+):/);
+    if (!match) {
+      continue;
+    }
+    const file = normalizeRelative(match[1]);
+    if (!lineByPath.has(file)) {
+      lineByPath.set(file, Number(match[2]));
+      files.push(file);
+    }
+  }
+  return { stdout: result.stdout || "", files, lineByPath };
+}
+
+function noLspTerms(repoRoot: string, scenario: Scenario): string[] {
+  const anchorPath = path.join(repoRoot, scenario.anchor.file);
+  const line = existsSync(anchorPath) ? readFileSync(anchorPath, "utf8").split(/\r?\n/)[scenario.anchor.line - 1] || "" : "";
+  const identifiers = line.match(/[A-Za-z_][A-Za-z0-9_]*/g) || [];
+  return [
+    path.basename(scenario.anchor.file, ".java"),
+    ...(scenario.anchor.taskKeywords || []),
+    ...identifiers.filter(item => item.length >= 4)
+  ];
+}
+
+function normalizeRelative(file: string): string {
+  return file.replace(/^\.\//, "");
+}
+
+function evaluate(candidateFiles: string[], readFiles: string[], scenario: Scenario): Record<string, number> {
   const candidates = new Set(candidateFiles);
-  const expected = new Set(groundTruth);
-  const hitFiles = [...candidates].filter(file => expected.has(file)).length;
+  const goldenAll = new Set([...goldenFiles(scenario, "mustHit"), ...goldenFiles(scenario, "shouldHit"), ...goldenFiles(scenario, "side")]);
+  const mustHit = new Set(goldenFiles(scenario, "mustHit"));
+  const hitFiles = [...candidates].filter(file => goldenAll.has(file)).length;
   return {
     returnedFiles: candidates.size,
     hitFiles,
     precision: candidates.size ? hitFiles / candidates.size : 0,
-    recall: expected.size ? hitFiles / expected.size : 1
+    recall: goldenAll.size ? hitFiles / goldenAll.size : 1,
+    pCandAt5: precisionAt(candidateFiles, goldenAll, 5),
+    pCandAt10: precisionAt(candidateFiles, goldenAll, 10),
+    pRead: readFiles.length ? readFiles.filter(file => goldenAll.has(file)).length / readFiles.length : 1,
+    rReadMust: mustHit.size ? readFiles.filter(file => mustHit.has(file)).length / mustHit.size : 1
   };
+}
+
+function goldenFiles(scenario: Scenario, key: "mustHit" | "shouldHit" | "side"): string[] {
+  if (scenario.golden) {
+    return scenario.golden[key] || [];
+  }
+  return key === "mustHit" ? scenario.groundTruth || [] : [];
+}
+
+function precisionAt(files: string[], expected: Set<string>, limit: number): number {
+  const selected = files.slice(0, limit);
+  return selected.length ? selected.filter(file => expected.has(file)).length / selected.length : 0;
+}
+
+function summarize(items: Array<Record<string, unknown>>): Record<string, number> {
+  if (items.length === 0) {
+    return {};
+  }
+  const summed: Record<string, number> = {};
+  for (const item of items) {
+    for (const [key, value] of Object.entries(item)) {
+      if (typeof value !== "number") {
+        continue;
+      }
+      summed[key] = (summed[key] || 0) + value;
+    }
+  }
+  for (const key of Object.keys(summed)) {
+    summed[key] = summed[key] / items.length;
+  }
+  for (const key of ["elapsedMs", "rawSearchPayload", "readingPayload", "totalAgentVisiblePayload", "estimatedTokens"]) {
+    const values = items.map(item => item[key]).filter((value): value is number => typeof value === "number" && Number.isFinite(value)).sort((left, right) => left - right);
+    if (values.length > 0) {
+      summed[`${key}P50`] = percentile(values, 0.5);
+      summed[`${key}P95`] = percentile(values, 0.95);
+    }
+  }
+  return summed;
+}
+
+function regexLiteral(value: string): string {
+  return value.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
+}
+
+function unique(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function percentile(sortedValues: number[], percentileValue: number): number {
+  const index = Math.min(sortedValues.length - 1, Math.max(0, Math.ceil(sortedValues.length * percentileValue) - 1));
+  return sortedValues[index];
+}
+
+function git(cwd: string, args: string[]): string | undefined {
+  const result = spawnSync("git", ["-C", cwd, ...args], { encoding: "utf8" });
+  return result.status === 0 ? result.stdout.trim() : undefined;
 }

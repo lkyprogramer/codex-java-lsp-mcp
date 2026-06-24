@@ -30,7 +30,8 @@ export const impactSchema = {
   focusModules: z.array(z.string().min(1)).max(10).default([]),
   excludeModules: z.array(z.string().min(1)).max(20).default([]),
   taskKeywords: z.array(z.string().min(1)).max(20).default([]),
-  crossModulePolicy: z.enum(["auto", "focused", "all"]).default("auto")
+  crossModulePolicy: z.enum(["auto", "focused", "all"]).default("auto"),
+  verbosity: z.enum(["compact", "standard", "diagnostic"]).default("standard")
 };
 
 export async function javaImpact(context: ToolContext, args: z.infer<z.ZodObject<typeof impactSchema>>): Promise<unknown> {
@@ -57,7 +58,8 @@ export async function javaImpact(context: ToolContext, args: z.infer<z.ZodObject
     focusModules: args.focusModules,
     excludeModules: args.excludeModules,
     taskKeywords: args.taskKeywords,
-    crossModulePolicy: args.crossModulePolicy
+    crossModulePolicy: args.crossModulePolicy,
+    verbosity: args.verbosity
   };
   const result = await context.router.impact(options);
   mergePhaseMs(phaseMs, context.session.drainPhaseMetrics());

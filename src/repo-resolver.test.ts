@@ -59,6 +59,26 @@ test("resolver returns enable hint for unregistered repos", async () => {
   assert.match(resolved.lsp.enableHint || "", /register-alias\.sh --enable-lsp/);
 });
 
+test("resolver reports where the repo root came from", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-root-source-"));
+  await mkdir(path.join(root, "src", "main", "java"), { recursive: true });
+  await writeFile(path.join(root, "pom.xml"), "<project></project>");
+  const config = path.join(root, "projects.json");
+  await writeFile(config, JSON.stringify({
+    aliases: [
+      { id: "demo", root, lspEnabled: true, layoutProfile: "maven-reactor" }
+    ]
+  }));
+
+  const registry = new AliasRegistry(config);
+  await registry.reloadIfChanged();
+  const resolver = new RepoResolver(registry);
+
+  assert.equal((await resolver.resolve({ repoRoot: root }) as unknown as { rootSource?: string }).rootSource, "explicit");
+  assert.equal((await resolver.resolve({ projectId: "demo" }) as unknown as { rootSource?: string }).rootSource, "projectId");
+  assert.equal((await resolver.resolve({ file: path.join(root, "src", "main", "java", "Demo.java") }) as unknown as { rootSource?: string }).rootSource, "inferred");
+});
+
 test("registry rejects relative alias roots", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "java-lsp-relative-config-"));
   const config = path.join(root, "projects.json");

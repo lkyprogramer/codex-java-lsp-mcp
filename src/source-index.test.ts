@@ -151,6 +151,23 @@ test("SourceIndex status throttles dirtyCount stat scans", async () => {
   assert.equal(index.status().dirtyCount, 1);
 });
 
+test("SourceIndex finds cached implementers for a type", async () => {
+  const { mkdtemp, mkdir, writeFile } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-source-typegraph-"));
+  const port = path.join(root, "src/main/java/demo/PaymentGateway.java");
+  const impl = path.join(root, "src/main/java/demo/StripeGateway.java");
+  await mkdir(path.dirname(port), { recursive: true });
+  await writeFile(port, "package demo; public interface PaymentGateway { void pay(); }\n");
+  await writeFile(impl, "package demo; public class StripeGateway implements PaymentGateway { public void pay() {} }\n");
+
+  const index = new SourceIndex(root);
+  index.factsFor(port);
+  index.factsFor(impl);
+
+  assert.deepEqual(index.findImplementers("PaymentGateway").map(item => item.typeName), ["StripeGateway"]);
+});
+
 test("SourceIndex finds the nearest method around a real repo line", { skip: !hasLishueduFixture }, () => {
   const index = new SourceIndex(repoRoot);
   const file = "modules/school/src/main/java/com/lishu/edu/school/interfaces/web/SchoolTemplateImportController.java";

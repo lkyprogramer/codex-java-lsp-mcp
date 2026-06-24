@@ -78,6 +78,7 @@ function fakeResolver(): { resolve(selector: { repoRoot?: string }): Promise<Res
       return {
         repoRoot,
         repoHash: repoRoot.replace(/\W/g, ""),
+        rootSource: "explicit",
         aliases: [],
         layoutProfile: "generic-java",
         lsp: {
@@ -96,6 +97,7 @@ function fakeContext(resolved: ResolvedRepo, sessions: Map<string, FakeSession>)
   sessions.set(resolved.repoRoot, session);
   return {
     repoRoot: resolved.repoRoot,
+    rootSource: resolved.rootSource,
     repoHash: resolved.repoHash,
     aliases: resolved.aliases,
     layoutProfile: resolved.layoutProfile,

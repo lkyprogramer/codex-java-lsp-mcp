@@ -11,6 +11,7 @@ import { touchRepoCache } from "./worktree-cache-cleanup.js";
 
 export type ManagedToolContext = ToolContext & {
   repoHash: string;
+  rootSource: NonNullable<ToolContext["rootSource"]>;
   aliases: string[];
   layoutProfile: string;
   lsp: ResolvedRepo["lsp"];
@@ -129,6 +130,7 @@ export class RepoRuntimeManager {
       this.runtimes.set(resolved.repoRoot, entry);
     } else {
       entry.context.aliases = resolved.aliases;
+      entry.context.rootSource = resolved.rootSource;
       entry.context.layoutProfile = resolved.layoutProfile;
       entry.context.lsp = resolved.lsp;
     }
@@ -201,6 +203,7 @@ function createRuntime(resolved: ResolvedRepo): ManagedToolContext {
   const router = new AgentRouter(resolved.repoRoot, session, sourceIndex);
   return {
     repoRoot: resolved.repoRoot,
+    rootSource: resolved.rootSource,
     repoHash: resolved.repoHash,
     aliases: resolved.aliases,
     layoutProfile: resolved.layoutProfile,

@@ -15,6 +15,8 @@ export type RepoSelector = {
   files?: string[];
 };
 
+export type RootSource = "explicit" | "projectId" | "cwd" | "inferred";
+
 export type LspEnablement = {
   enabled: boolean;
   matchedBy: "direct-root" | "git-worktree-family" | "disabled" | "unregistered" | "conflict";
@@ -26,6 +28,7 @@ export type LspEnablement = {
 
 export type ResolvedRepo = {
   repoRoot: string;
+  rootSource: RootSource;
   repoHash: string;
   aliases: string[];
   layoutProfile: "ddd-gradle" | "maven-reactor" | "generic-java";
@@ -37,10 +40,12 @@ export class RepoResolver {
 
   async resolve(selector: RepoSelector): Promise<ResolvedRepo> {
     await this.registry.reloadIfChanged();
-    const repoRoot = canonicalPath(this.resolveRoot(selector));
+    const resolvedRoot = this.resolveRoot(selector);
+    const repoRoot = canonicalPath(resolvedRoot.repoRoot);
     const matchingAliases = this.registry.aliases().filter(alias => alias.root === repoRoot);
     return {
       repoRoot,
+      rootSource: resolvedRoot.source,
       repoHash: repoHash(repoRoot),
       aliases: matchingAliases.map(alias => alias.id),
       layoutProfile: matchingAliases[0]?.layoutProfile || inferLayoutProfile(repoRoot),
@@ -96,22 +101,23 @@ export class RepoResolver {
     };
   }
 
-  private resolveRoot(selector: RepoSelector): string {
+  private resolveRoot(selector: RepoSelector): { repoRoot: string; source: RootSource } {
     if (selector.repoRoot) {
-      return findRepoRoot(selector.repoRoot);
+      return { repoRoot: findRepoRoot(selector.repoRoot), source: "explicit" };
     }
     if (selector.projectId) {
       const alias = this.registry.findById(selector.projectId);
       if (!alias) {
         throw new Error(`Unknown projectId: ${selector.projectId}`);
       }
-      return findRepoRoot(alias.root);
+      return { repoRoot: findRepoRoot(alias.root), source: "projectId" };
     }
     const file = selector.file || selector.files?.[0];
-    if (file && path.isAbsolute(file)) {
-      return findRepoRoot(path.dirname(file));
+    if (file) {
+      const absoluteFile = path.isAbsolute(file) ? file : path.resolve(process.cwd(), file);
+      return { repoRoot: findRepoRoot(path.dirname(absoluteFile)), source: "inferred" };
     }
-    return findRepoRoot(process.cwd());
+    return { repoRoot: findRepoRoot(process.cwd()), source: "cwd" };
   }
 }
 

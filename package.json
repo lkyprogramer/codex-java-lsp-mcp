@@ -8,7 +8,7 @@
     "codex-java-lsp-mcp": "dist/server.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node scripts/write-build-stamp.mjs",
     "clean": "rm -rf dist",
     "test": "node --test \"dist/**/*.test.js\"",
     "benchmark:agent-impact": "node dist/benchmark-agent-impact.js",

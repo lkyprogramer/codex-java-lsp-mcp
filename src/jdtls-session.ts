@@ -321,18 +321,18 @@ export class JdtlsSession {
     throw lastError instanceof Error ? lastError : new Error("Timed out waiting for textDocument/documentSymbol retry budget.");
   }
 
-  async references(file: string, line: number, column: number, includeDeclaration: boolean): Promise<{
+  async references(file: string, line: number, column: number, includeDeclaration: boolean, timeoutMs = DEFAULT_LSP_REQUEST_TIMEOUT_MS): Promise<{
     items: LspLocation[];
     totalReferences: number;
     truncated: boolean;
   }> {
-    return this.cached("references", [file, line, column, includeDeclaration], [file], async () => {
+    return this.cached("references", [file, line, column, includeDeclaration, timeoutMs], [file], async () => {
       await this.ensureStarted();
       const params = await this.textDocumentPositionParams(file, line, column) as Record<string, unknown>;
       const items = await this.request<LspLocation[]>("textDocument/references", {
         ...params,
         context: { includeDeclaration }
-      });
+      }, timeoutMs);
       const references = items || [];
       return {
         items: references,

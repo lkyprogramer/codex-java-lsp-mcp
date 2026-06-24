@@ -8,6 +8,8 @@ import path from "node:path";
 import { fromFileUri, classifyPath, normalizeRepoFile } from "../repo-layout.js";
 import { JdtlsSession, type LspLocation, type LspLocationLink } from "../jdtls-session.js";
 import { SourceIndex, type JavaSourceFacts } from "../source-index.js";
+import { probeLayout, type LayoutContext } from "../layout-probe.js";
+import { legacyRoutingPolicy, scoreWithPolicy, type ScoreCategory } from "../routing-policy.js";
 import {
   type CandidateFile,
   type CrossModulePolicy,
@@ -22,8 +24,11 @@ import {
   type RgPlanSection,
   type RgSectionSummary,
   type RouterPosition,
+  type ScoreBreakdownItem,
   type SemanticPolicy,
-  type TestReadMode
+  type TestReadMode,
+  type ImpactVerbosity,
+  type Confidence
 } from "../agent-types.js";
 
 type RgCacheEntry = {
@@ -60,7 +65,8 @@ export class AgentRouter {
   constructor(
     private readonly repoRoot: string,
     private readonly session: JdtlsSession,
-    private readonly sourceIndex: SourceIndex
+    private readonly sourceIndex: SourceIndex,
+    private readonly layoutContext: LayoutContext = probeLayout(repoRoot)
   ) {}
 
   rgCacheStatus(): RouterStatus {
@@ -88,6 +94,8 @@ export class AgentRouter {
       used: false,
       skipped: false,
       timeout: false,
+      verifyUsed: false,
+      verifySkipped: false,
       policy: options.semanticPolicy,
       timeoutMs: options.semanticTimeoutMs
     };
@@ -98,49 +106,19 @@ export class AgentRouter {
       mergeCandidate(candidates, candidateFromAnchor(anchor));
     }
 
-    const shouldUseSemantic = this.shouldUseSemantic(options.semanticPolicy, options.mode, anchors);
-    if (shouldUseSemantic) {
-      semantic.used = true;
-      await timed(phaseMs, "semantic", async () => {
-        for (const anchor of anchors) {
-          const before = Date.now();
-          const context = await this.session.semanticLocations(anchor.absolutePath, anchor.line, anchor.column, options.semanticTimeoutMs, shouldIncludeImplementations(anchor));
-          semantic.timeout ||= Date.now() - before >= options.semanticTimeoutMs;
-          for (const location of [...context.definitions, ...context.implementations]) {
-            const described = this.locationCandidate(location, context.implementations.includes(location) ? "implementation" : "definition", anchor, options);
-            if (described) {
-              mergeCandidate(candidates, described);
-            }
-          }
-        }
-      });
-    } else {
-      semantic.skipped = true;
-    }
+    await this.collectSemanticSeed(candidates, anchors, options, semantic, phaseMs);
+    this.collectTypeGraphCandidates(candidates, anchors, options);
 
-    const rgPlan = anchors.flatMap(anchor => this.buildRgPlan(anchor, options));
-    const rgExecution = await timed(phaseMs, "rg", async () => this.executeRgPlan(rgPlan, options, anchors));
-    for (const file of rgExecution.files) {
-      mergeCandidate(candidates, file);
-    }
+    const rgExecution = await this.collectNamingRecall(candidates, anchors, options, phaseMs);
+    await this.semanticVerify(candidates, anchors, options, semantic, phaseMs);
 
     const suppressed = {
       deferredTests: 0,
       crossModuleConsumers: 0,
       excludedModules: 0
     };
-    const ranked = [...candidates.values()]
-      .filter(candidate => {
-        if (candidate.module && options.excludeModules.includes(candidate.module)) {
-          suppressed.excludedModules += 1;
-          return false;
-        }
-        return true;
-      })
-      .map(candidate => this.finalizeScore(candidate, anchors[0], options, suppressed))
-      .sort((left, right) => right.score - left.score || (left.path || left.absolutePath).localeCompare(right.path || right.absolutePath))
-      .slice(0, candidateLimit(options.mode, anchors[0]?.profile));
-    const formattedFiles = ranked.map((file, index) => formatCandidate(file, `F${index + 1}`));
+    const ranked = this.finalizeRank(candidates, anchors[0], options, suppressed);
+    const formattedFiles = ranked.map((file, index) => formatCandidate(file, `F${index + 1}`, options.verbosity || "standard"));
     const idByPath = new Map(ranked.map((file, index) => [file.absolutePath, `F${index + 1}`]));
     const readPlan = this.buildReadPlan(ranked, idByPath, options);
     const cacheAfter = this.session.cacheStatus();
@@ -158,7 +136,8 @@ export class AgentRouter {
         focusModules: options.focusModules,
         excludeModules: options.excludeModules,
         taskKeywords: options.taskKeywords,
-        crossModulePolicy: options.crossModulePolicy
+        crossModulePolicy: options.crossModulePolicy,
+        verbosity: options.verbosity || "standard"
       },
       counts: {
         anchors: anchors.length,
@@ -207,6 +186,7 @@ export class AgentRouter {
         outputBytes: 0
       }
     };
+    applyVerbosity(payload, options.verbosity || "standard");
     payload.metrics.outputBytes = Buffer.byteLength(JSON.stringify(payload), "utf8");
     return payload;
   }
@@ -246,6 +226,121 @@ export class AgentRouter {
     return anchors.some(anchor => anchor.profile === "service");
   }
 
+  private async collectSemanticSeed(
+    candidates: Map<string, CandidateFile>,
+    anchors: ResolvedAnchor[],
+    options: ImpactOptions,
+    semantic: { used: boolean; skipped: boolean; timeout: boolean },
+    phaseMs: Record<string, number>
+  ): Promise<void> {
+    const shouldUseSemantic = this.shouldUseSemantic(options.semanticPolicy, options.mode, anchors);
+    if (!shouldUseSemantic) {
+      semantic.skipped = true;
+      return;
+    }
+    semantic.used = true;
+    await timed(phaseMs, "semantic", async () => {
+      for (const anchor of anchors) {
+        const before = Date.now();
+        const context = await this.session.semanticLocations(anchor.absolutePath, anchor.line, anchor.column, options.semanticTimeoutMs, shouldIncludeImplementations(anchor));
+        semantic.timeout ||= Date.now() - before >= options.semanticTimeoutMs;
+        for (const location of [...context.definitions, ...context.implementations]) {
+          const described = this.locationCandidate(location, context.implementations.includes(location) ? "implementation" : "definition", anchor, options);
+          if (described) {
+            mergeCandidate(candidates, described);
+          }
+        }
+      }
+    });
+  }
+
+  private async collectNamingRecall(
+    candidates: Map<string, CandidateFile>,
+    anchors: ResolvedAnchor[],
+    options: ImpactOptions,
+    phaseMs: Record<string, number>
+  ): Promise<Awaited<ReturnType<AgentRouter["executeRgPlan"]>>> {
+    const rgPlan = anchors.flatMap(anchor => this.buildRgPlan(anchor, options));
+    const rgExecution = await timed(phaseMs, "rg", async () => this.executeRgPlan(rgPlan, options, anchors));
+    for (const file of rgExecution.files) {
+      mergeCandidate(candidates, file);
+    }
+    return rgExecution;
+  }
+
+  private collectTypeGraphCandidates(candidates: Map<string, CandidateFile>, anchors: ResolvedAnchor[], options: ImpactOptions): void {
+    for (const anchor of anchors) {
+      if (!shouldUseTypeGraph(anchor)) {
+        continue;
+      }
+      const typeName = anchor.className || path.basename(anchor.absolutePath, ".java");
+      for (const facts of this.sourceIndex.findImplementers(typeName).slice(0, 20)) {
+        const candidate = candidateFromFacts(facts, scoreBase("semantic", facts, anchor, options) + 70, "typeGraph");
+        mergeCandidate(candidates, candidate);
+      }
+    }
+  }
+
+  private async semanticVerify(
+    candidates: Map<string, CandidateFile>,
+    anchors: ResolvedAnchor[],
+    options: ImpactOptions,
+    semantic: { verifyUsed: boolean; verifySkipped: boolean; timeout: boolean },
+    phaseMs: Record<string, number>
+  ): Promise<void> {
+    if (!this.shouldUseSemanticVerify(options)) {
+      semantic.verifySkipped = true;
+      return;
+    }
+    semantic.verifyUsed = true;
+    await timed(phaseMs, "semanticVerify", async () => {
+      for (const anchor of anchors) {
+        const before = Date.now();
+        try {
+          const references = await this.session.references(anchor.absolutePath, anchor.line, anchor.column, false, options.semanticTimeoutMs);
+          semantic.timeout ||= Date.now() - before >= options.semanticTimeoutMs;
+          for (const location of references.items.slice(0, 40)) {
+            const candidate = this.locationCandidate(location, "reference", anchor, options);
+            if (candidate) {
+              candidate.confidence = "high";
+              candidate.verifiedBy = ["reference"];
+              mergeCandidate(candidates, candidate);
+            }
+          }
+          if (this.shouldUseTypeHierarchyVerify(anchor, options)) {
+            const hierarchy = await this.session.typeHierarchy(anchor.absolutePath, anchor.line, anchor.column, "subtypes", 2, 40);
+            for (const edge of hierarchy.edges.slice(0, 40)) {
+              const location = hierarchyItemLocation(edge.from);
+              const candidate = location ? this.locationCandidate(location, "typeHierarchy", anchor, options) : undefined;
+              if (candidate) {
+                candidate.confidence = "high";
+                candidate.verifiedBy = ["typeHierarchy"];
+                mergeCandidate(candidates, candidate);
+              }
+            }
+          }
+        } catch {
+          semantic.timeout = true;
+        }
+      }
+    });
+  }
+
+  private shouldUseTypeHierarchyVerify(anchor: ResolvedAnchor, options: ImpactOptions): boolean {
+    return options.semanticPolicy === "required" && (anchor.kind === "interface" || new Set(["port", "repository", "service"]).has(anchor.profile));
+  }
+
+  private shouldUseSemanticVerify(options: ImpactOptions): boolean {
+    if (options.semanticPolicy === "fast") {
+      return false;
+    }
+    if (options.semanticPolicy === "required" || options.mode === "precision" || options.mode === "recall") {
+      return true;
+    }
+    const status = this.session.status();
+    return Boolean(status.started && status.progress?.active === 0);
+  }
+
   private locationCandidate(
     location: LspLocation | LspLocationLink,
     reason: string,
@@ -259,17 +354,21 @@ export class AgentRouter {
       return undefined;
     }
     const context = classifyPath(this.repoRoot, filePath);
+    const score = scoreBase("semantic", context, anchor, options) + (reason === "implementation" ? 120 : reason === "typeHierarchy" ? 110 : 80);
     return {
       absolutePath: filePath,
       path: context.relativePath,
       module: context.module,
       layer: context.layer,
       sourceSet: context.sourceSet,
-      score: scoreBase("semantic", context, anchor, options) + (reason === "implementation" ? 120 : 80),
+      score,
       matchCount: 0,
       positions: [{ line: range.start.line + 1, column: range.start.character + 1 }],
       categories: ["semantic"],
-      reasons: [reason]
+      reasons: [reason],
+      confidence: "high",
+      verifiedBy: [semanticVerifiedBy(reason)],
+      scoreBreakdown: [breakdown(`semantic.${reason}`, "semantic-seed", score, reason)]
     };
   }
 
@@ -278,43 +377,44 @@ export class AgentRouter {
     const stem = classStem(base);
     const symbol = anchor.methodName || anchor.symbolName;
     const sections: RgPlanSection[] = [];
-    const mainRoots = rootsFor(this.repoRoot, anchor, "main", options);
-    const testRoots = rootsFor(this.repoRoot, anchor, "test", options);
+    const mainRoots = rootsFor(this.repoRoot, anchor, "main", options, this.layoutContext);
+    const testRoots = rootsFor(this.repoRoot, anchor, "test", options, this.layoutContext);
+    const expand = (terms: string[]) => [...terms, ...taskKeywordTerms(options.taskKeywords)];
     if (anchor.profile === "repository") {
-      sections.push(section("java", "repository port, implementation, mapper, entity, and application callers", repositoryTerms(base, stem, symbol), mainRoots, ["*.java"]));
-      sections.push(section("persistence", "mapper, migration, and SQL evidence", sqlTerms(base, stem, symbol), persistenceRoots(anchor), ["*.sql", "*.xml", "*.java"]));
+      sections.push(section("java", "repository port, implementation, mapper, entity, and application callers", expand(repositoryTerms(base, stem, symbol)), mainRoots, ["*.java"]));
+      sections.push(section("persistence", "mapper, migration, and SQL evidence", expand(sqlTerms(base, stem, symbol)), persistenceRoots(anchor, this.layoutContext), ["*.sql", "*.xml", "*.java"]));
     } else if (anchor.profile === "controller") {
-      sections.push(section("protocol", "endpoint contract, assembler, command/result, and application service path", controllerTerms(base, stem, symbol), mainRoots, ["*.java"]));
+      sections.push(section("protocol", "endpoint contract, assembler, command/result, and application service path", expand(controllerTerms(base, stem, symbol)), mainRoots, ["*.java"]));
     } else if (anchor.profile === "parser") {
-      sections.push(section("java", "parser port, implementation, parsed model, and app-service callers", parserTerms(base, stem, symbol), mainRoots, ["*.java"]));
+      sections.push(section("java", "parser port, implementation, parsed model, and app-service callers", expand(parserTerms(base, stem, symbol)), mainRoots, ["*.java"]));
     } else if (anchor.profile === "dto") {
-      sections.push(section("java", "DTO/view field propagation and mapper usage", dtoTerms(base, stem, symbol), mainRoots, ["*.java"]));
-      const upstream = dtoUpstream(anchor, symbol, this.repoRoot);
+      sections.push(section("java", "DTO/view field propagation and mapper usage", expand(dtoTerms(base, stem, symbol)), mainRoots, ["*.java"]));
+      const upstream = dtoUpstream(anchor, symbol, this.repoRoot, this.layoutContext);
       if (upstream.terms.length > 0) {
-        sections.push(section("java", "likely upstream source service or view", upstream.terms, upstream.paths, ["*.java"]));
+        sections.push(section("java", "likely upstream source service or view", expand(upstream.terms), upstream.paths, ["*.java"]));
       }
     } else if (anchor.profile === "vo") {
-      sections.push(section("java", "VO/view field propagation, assembler, and service callers", voTerms(base, stem, symbol), mainRoots, ["*.java"]));
+      sections.push(section("java", "VO/view field propagation, assembler, and service callers", expand(voTerms(base, stem, symbol)), mainRoots, ["*.java"]));
     } else if (anchor.profile === "entity") {
-      sections.push(section("java", "entity mapping, mapper, repository, and service callers", entityTerms(base, stem, symbol), mainRoots, ["*.java"]));
-      sections.push(section("persistence", "entity table, mapper XML, migration, and SQL evidence", sqlTerms(base, stem, symbol), persistenceRoots(anchor), ["*.sql", "*.xml", "*.java"]));
+      sections.push(section("java", "entity mapping, mapper, repository, and service callers", expand(entityTerms(base, stem, symbol)), mainRoots, ["*.java"]));
+      sections.push(section("persistence", "entity table, mapper XML, migration, and SQL evidence", expand(sqlTerms(base, stem, symbol)), persistenceRoots(anchor, this.layoutContext), ["*.sql", "*.xml", "*.java"]));
     } else if (anchor.profile === "mapper") {
-      sections.push(section("java", "mapper interface, entity, repository, and service callers", mapperTerms(base, stem, symbol), mainRoots, ["*.java"]));
-      sections.push(section("persistence", "mapper XML, entity table, migration, and SQL evidence", sqlTerms(base, stem, symbol), persistenceRoots(anchor), ["*.sql", "*.xml", "*.java"]));
+      sections.push(section("java", "mapper interface, entity, repository, and service callers", expand(mapperTerms(base, stem, symbol)), mainRoots, ["*.java"]));
+      sections.push(section("persistence", "mapper XML, entity table, migration, and SQL evidence", expand(sqlTerms(base, stem, symbol)), persistenceRoots(anchor, this.layoutContext), ["*.sql", "*.xml", "*.java"]));
     } else if (anchor.profile === "job") {
-      sections.push(section("java", "scheduled job, application service, repository, and config path", jobTerms(base, stem, symbol), mainRoots, ["*.java"]));
-      sections.push(section("config", "job scheduling and runtime configuration evidence", [base, stem, symbol], ["modules", "apps"], ["*.yml", "*.yaml", "*.properties", "*.xml"]));
+      sections.push(section("java", "scheduled job, application service, repository, and config path", expand(jobTerms(base, stem, symbol)), mainRoots, ["*.java"]));
+      sections.push(section("config", "job scheduling and runtime configuration evidence", expand([base, stem, symbol]), this.layoutContext.broadRoots, ["*.yml", "*.yaml", "*.properties", "*.xml"]));
     } else if (anchor.profile === "listener") {
-      sections.push(section("java", "event listener, publisher, handler, service, and repository path", listenerTerms(base, stem, symbol), mainRoots, ["*.java"]));
-      sections.push(section("config", "listener/event runtime configuration evidence", [base, stem, symbol], ["modules", "apps"], ["*.yml", "*.yaml", "*.properties", "*.xml"]));
+      sections.push(section("java", "event listener, publisher, handler, service, and repository path", expand(listenerTerms(base, stem, symbol)), mainRoots, ["*.java"]));
+      sections.push(section("config", "listener/event runtime configuration evidence", expand([base, stem, symbol]), this.layoutContext.broadRoots, ["*.yml", "*.yaml", "*.properties", "*.xml"]));
     } else if (anchor.profile === "port") {
-      sections.push(section("java", "port contract, implementations, and direct callers", portTerms(base, stem, symbol), rootsFor(this.repoRoot, anchor, "main", { ...options, crossModulePolicy: "all" }), ["*.java"]));
+      sections.push(section("java", "port contract, implementations, and direct callers", expand(portTerms(base, stem, symbol)), rootsFor(this.repoRoot, anchor, "main", { ...options, crossModulePolicy: "all" }, this.layoutContext), ["*.java"]));
     } else {
-      sections.push(section("java", "service, direct callers, and local protocol family", serviceTerms(base, stem, symbol), mainRoots, ["*.java"]));
+      sections.push(section("java", "service, direct callers, and local protocol family", expand(serviceTerms(base, stem, symbol)), mainRoots, ["*.java"]));
     }
-    sections.push(section("tests", "targeted verification candidates", testTerms(anchor, base, stem, symbol), testRoots, ["*Test.java"]));
+    sections.push(section("tests", "targeted verification candidates", expand(testTerms(anchor, base, stem, symbol)), testRoots, ["*Test.java"]));
     if (options.mode === "recall") {
-      sections.push(section("config", "runtime configuration evidence", [base, stem], ["modules", "apps"], ["*.yml", "*.yaml", "*.properties", "*.xml"]));
+      sections.push(section("config", "runtime configuration evidence", expand([base, stem]), this.layoutContext.broadRoots, ["*.yml", "*.yaml", "*.properties", "*.xml"]));
     }
     return sections.filter(item => item.paths.length > 0 && item.pattern.length > 0);
   }
@@ -431,24 +531,66 @@ export class AgentRouter {
   }
 
   private finalizeScore(candidate: CandidateFile, anchor: ResolvedAnchor, options: ImpactOptions, suppressed: Record<string, number>): CandidateFile {
-    let score = candidate.score + Math.min(40, candidate.matchCount * 2);
+    const scoreBreakdown = [...(candidate.scoreBreakdown || [breakdown("unknown.initial", "policy", candidate.score, "initial candidate score")])];
+    let score = candidate.score;
+    const matchCountDelta = Math.min(40, candidate.matchCount * 2);
+    score += addScoreDelta(scoreBreakdown, "finalize.match-count", matchCountDelta, "match count");
     if (candidate.module && options.focusModules.includes(candidate.module)) {
-      score += 35;
+      score += addScoreDelta(scoreBreakdown, "finalize.focus-module", 35, "focus module");
     }
     if (candidate.path && matchesAny(candidate.path, options.taskKeywords)) {
-      score += 30;
+      score += addScoreDelta(scoreBreakdown, "finalize.task-keyword", 30, "task keyword");
     }
+    score += addScoreDelta(scoreBreakdown, "finalize.direct-collaborator", directCollaboratorDelta(candidate, anchor, options), "direct type-name collaborator");
+    score += addScoreDelta(scoreBreakdown, "finalize.type-relation", this.typeRelationDelta(candidate, anchor), "implements or extends anchor type");
     if (candidate.sourceSet === "test" && options.testReadMode === "defer") {
-      score -= 10;
+      score += addScoreDelta(scoreBreakdown, "finalize.defer-test", -10, "defer test candidate");
       suppressed.deferredTests += 1;
     }
     if (candidate.module && candidate.module !== anchor.module && options.crossModulePolicy !== "all") {
       if (!options.focusModules.includes(candidate.module) && !(candidate.path && matchesAny(candidate.path, options.taskKeywords))) {
-        score += options.crossModulePolicy === "focused" ? -80 : -20;
+        score += addScoreDelta(scoreBreakdown, "finalize.cross-module", options.crossModulePolicy === "focused" ? -80 : -20, "cross module policy");
         suppressed.crossModuleConsumers += 1;
       }
     }
-    return { ...candidate, score: Math.max(1, score) };
+    score += addScoreDelta(scoreBreakdown, "finalize.confidence", legacyRoutingPolicy.confidenceDeltas[candidate.confidence || "medium"], "confidence delta");
+    const finalScore = Math.max(1, score);
+    if (finalScore !== score) {
+      addScoreDelta(scoreBreakdown, "finalize.clamp", finalScore - score, "minimum score clamp");
+    }
+    return { ...candidate, score: finalScore, scoreBreakdown };
+  }
+
+  private typeRelationDelta(candidate: CandidateFile, anchor: ResolvedAnchor): number {
+    if (!anchor.className || candidate.absolutePath === anchor.absolutePath || !candidate.absolutePath.endsWith(".java")) {
+      return 0;
+    }
+    try {
+      const facts = this.sourceIndex.factsFor(candidate.absolutePath);
+      const parents = [...facts.implementsTypes, facts.extendsType || ""].map(simpleTypeName);
+      return parents.includes(anchor.className) ? 95 : 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  private finalizeRank(
+    candidates: Map<string, CandidateFile>,
+    anchor: ResolvedAnchor,
+    options: ImpactOptions,
+    suppressed: Record<string, number>
+  ): CandidateFile[] {
+    return [...candidates.values()]
+      .filter(candidate => {
+        if (candidate.module && options.excludeModules.includes(candidate.module)) {
+          suppressed.excludedModules += 1;
+          return false;
+        }
+        return true;
+      })
+      .map(candidate => this.finalizeScore(candidate, anchor, options, suppressed))
+      .sort((left, right) => right.score - left.score || (left.path || left.absolutePath).localeCompare(right.path || right.absolutePath))
+      .slice(0, candidateLimit(options.mode, anchor.profile));
   }
 
   private buildReadPlan(files: CandidateFile[], ids: Map<string, string>, options: ImpactOptions): ReadPlanItem[] {
@@ -515,17 +657,21 @@ function parseRgOutput(repoRoot: string, section: RgPlanSection, stdout: string,
     const absolutePath = normalizeRepoFile(repoRoot, match[1]);
     const lineNumber = Number(match[2]);
     const context = classifyPath(repoRoot, absolutePath);
+    const score = scoreBase(section.category, context, anchors[0], options);
     const existing = files.get(absolutePath) || {
       absolutePath,
       path: context.relativePath,
       module: context.module,
       layer: context.layer,
       sourceSet: context.sourceSet,
-      score: scoreBase(section.category, context, anchors[0], options),
+      score,
       matchCount: 0,
       positions: [],
       categories: [section.category],
-      reasons: [`rg:${section.category}`]
+      reasons: [`rg:${section.category}`],
+      confidence: "medium",
+      verifiedBy: ["rg"],
+      scoreBreakdown: [breakdown(`rg.${section.category}`, "rg", score, section.reason)]
     };
     existing.matchCount += 1;
     if (existing.positions.length < 4) {
@@ -553,8 +699,33 @@ function candidateFromAnchor(anchor: ResolvedAnchor): CandidateFile {
     matchCount: 0,
     positions: [{ line: anchor.line, column: anchor.column }],
     categories: ["target"],
-    reasons: ["target"]
+    reasons: ["target"],
+    confidence: "high",
+    verifiedBy: ["anchor"],
+    scoreBreakdown: [breakdown("anchor.target", "anchor", 1000, "anchor symbol and local behavior")]
   };
+}
+
+function candidateFromFacts(facts: JavaSourceFacts, score: number, verifiedBy: string): CandidateFile {
+  return {
+    absolutePath: facts.absolutePath,
+    path: facts.path,
+    module: facts.module,
+    layer: facts.layer,
+    sourceSet: facts.sourceSet,
+    score,
+    matchCount: 0,
+    positions: [{ line: 1, column: 1 }],
+    categories: ["semantic"],
+    reasons: [verifiedBy],
+    confidence: "medium",
+    verifiedBy: [verifiedBy],
+    scoreBreakdown: [breakdown(`semantic.${verifiedBy}`, "semantic-seed", score, verifiedBy)]
+  };
+}
+
+function shouldUseTypeGraph(anchor: ResolvedAnchor): boolean {
+  return anchor.kind === "interface" || new Set(["port", "repository", "service"]).has(anchor.profile);
 }
 
 function mergeCandidate(target: Map<string, CandidateFile>, incoming: CandidateFile): void {
@@ -567,6 +738,9 @@ function mergeCandidate(target: Map<string, CandidateFile>, incoming: CandidateF
   existing.matchCount += incoming.matchCount;
   existing.categories = unique([...existing.categories, ...incoming.categories]);
   existing.reasons = unique([...existing.reasons, ...incoming.reasons]);
+  existing.confidence = maxConfidence(existing.confidence, incoming.confidence);
+  existing.verifiedBy = unique([...(existing.verifiedBy || []), ...(incoming.verifiedBy || [])]);
+  existing.scoreBreakdown = [...(existing.scoreBreakdown || []), ...(incoming.scoreBreakdown || [breakdown("merge.incoming", "merge", incoming.score, "merged candidate score")])];
   for (const position of incoming.positions) {
     if (existing.positions.length >= 8) {
       break;
@@ -577,108 +751,141 @@ function mergeCandidate(target: Map<string, CandidateFile>, incoming: CandidateF
   }
 }
 
+function maxConfidence(left: Confidence | undefined, right: Confidence | undefined): Confidence | undefined {
+  if (!left) return right;
+  if (!right) return left;
+  return confidenceRank(right) > confidenceRank(left) ? right : left;
+}
+
+function confidenceRank(value: Confidence): number {
+  return value === "high" ? 3 : value === "medium" ? 2 : 1;
+}
+
+function breakdown(id: string, source: ScoreBreakdownItem["source"], delta: number, reason: string): ScoreBreakdownItem {
+  return { id, source, delta, reason };
+}
+
+function addScoreDelta(items: ScoreBreakdownItem[], id: string, delta: number, reason: string): number {
+  items.push(breakdown(id, "finalize", delta, reason));
+  return delta;
+}
+
 function scoreBase(category: string, context: ReturnType<typeof classifyPath>, anchor: ResolvedAnchor, options: ImpactOptions): number {
-  let score = category === "persistence" ? 70 : category === "protocol" ? 64 : category === "java" ? 56 : category === "semantic" ? 80 : category === "tests" ? 24 : 18;
-  if (context.relativePath === anchor.path) {
-    score += 180;
-  }
-  if (context.module === anchor.module) {
-    score += 28;
-  }
-  if (context.sourceSet === "main") {
-    score += 14;
-  }
-  if (context.layer === "interfaces" || context.layer === "application") {
-    score += 12;
-  }
-  if (anchor.profile === "controller" && context.layer === "interfaces") {
-    score += 35;
-  }
-  if (anchor.profile === "repository" && (context.layer === "infrastructure" || context.relativePath?.includes("/db/migration/"))) {
-    score += 35;
-  }
-  if (anchor.profile === "entity" && /(\/entity\/|Entity|DO|Mapper|Repository|db\/migration)/.test(context.relativePath || "")) {
-    score += 34;
-  }
-  if (anchor.profile === "mapper" && /(\/mapper\/|Mapper|Entity|DO|Repository|\.xml$|db\/migration)/.test(context.relativePath || "")) {
-    score += 36;
-  }
-  if (anchor.profile === "job" && /(Job|Scheduler|Schedule|Task|Config|AppService|Service|Repository)/.test(context.relativePath || "")) {
-    score += 32;
-  }
-  if (anchor.profile === "listener" && /(Listener|Event|Publisher|Handler|Consumer|AppService|Service|Repository)/.test(context.relativePath || "")) {
-    score += 32;
-  }
-  if (anchor.profile === "parser" && /Parser|ParsedTemplate|DiffBuilder|Draft|PreviewItem/.test(context.relativePath || "")) {
-    score += 38;
-  }
-  if (anchor.profile === "parser" && /\/persistence\/|Repository|Mapper|DO|Task(File|Status|Repository|Mapper|DO)?/.test(context.relativePath || "")) {
-    score -= 70;
-  }
-  if (anchor.profile === "parser" && context.sourceSet === "test" && /ExcelParserTest|DiffBuilderTest/.test(context.relativePath || "")) {
-    score += 90;
-  }
-  if (anchor.profile === "port" && /Gateway|Config|SignedUrl|AppService|Report/.test(context.relativePath || "")) {
-    score += 30;
-  }
-  if (anchor.profile === "dto" && /Assembler|Controller|QueryAppService|ProductView|ParentBenefit|ItemView/.test(context.relativePath || "")) {
-    score += 32;
-  }
-  if (anchor.profile === "vo" && /VO|Vo|View|Assembler|Controller|AppService|Service/.test(context.relativePath || "")) {
-    score += 30;
-  }
-  if (anchor.profile === "dto" && context.sourceSet === "test" && /ParentBenefitQueryAppServiceTest|BenefitEntitlementAssemblerTest/.test(context.relativePath || "")) {
-    score += 90;
-  }
-  if (context.module && options.focusModules.includes(context.module)) {
-    score += 18;
-  }
-  if (context.relativePath && matchesAny(context.relativePath, options.taskKeywords)) {
-    score += 20;
-  }
-  if (context.module === "common") {
-    score -= 20;
-  }
-  return Math.max(1, score);
+  return scoreWithPolicy(legacyRoutingPolicy, category as ScoreCategory, context, anchor, options);
 }
 
 function inferProfile(facts: JavaSourceFacts, role?: string): ResolvedImpactProfile {
-  const hint = `${facts.path || ""} ${facts.typeName || ""} ${role || ""}`.toLowerCase();
-  if (hint.includes("/interfaces/web/") || /controller\b/.test(hint)) {
-    return "controller";
+  const explicit = roleToProfile(role);
+  if (explicit) {
+    return explicit;
   }
-  if (/parser\b/.test(hint)) {
-    return "parser";
+  const scores = new Map<ResolvedImpactProfile, number>();
+  for (const annotation of facts.annotations.map(simpleAnnotation)) {
+    if (["RestController", "Controller"].includes(annotation)) addScore(scores, "controller", 100);
+    if (annotation === "Service") addScore(scores, "service", 100);
+    if (annotation === "Repository") addScore(scores, "repository", 100);
+    if (annotation === "Mapper") addScore(scores, "mapper", 100);
+    if (["Entity", "Table"].includes(annotation)) addScore(scores, "entity", 100);
   }
-  if (/(listener|eventhandler|consumer)\b/.test(hint) || hint.includes("/listener/")) {
-    return "listener";
+  const typeText = [...facts.implementsTypes, facts.extendsType || ""].join(" ");
+  if (/(JpaRepository|CrudRepository|Repository)\b/.test(typeText)) addScore(scores, "repository", 80);
+  if (/\bMapper\b/.test(typeText)) addScore(scores, "mapper", 80);
+  if (/(Gateway|Client|Port)\b/.test(typeText) || facts.kind === "interface") addScore(scores, "port", 80);
+
+  const pathHint = (facts.path || "").toLowerCase();
+  const nameHint = facts.typeName || "";
+  if (pathHint.includes("/interfaces/web/") || pathHint.includes("/controller/")) addScore(scores, "controller", 50);
+  if (pathHint.includes("/parser/")) addScore(scores, "parser", 50);
+  if (pathHint.includes("/listener/")) addScore(scores, "listener", 50);
+  if (pathHint.includes("/job/")) addScore(scores, "job", 50);
+  if (pathHint.includes("/repository/")) addScore(scores, "repository", 50);
+  if (pathHint.includes("/mapper/")) addScore(scores, "mapper", 50);
+  if (pathHint.includes("/entity/")) addScore(scores, "entity", 50);
+  if (pathHint.includes("/dto/")) addScore(scores, "dto", 50);
+  if (pathHint.includes("/vo/")) addScore(scores, "vo", 50);
+
+  if (/Controller$/.test(nameHint)) addScore(scores, "controller", 35);
+  if (/Parser$/.test(nameHint)) addScore(scores, "parser", 35);
+  if (/(Listener|EventHandler|Consumer)$/.test(nameHint)) addScore(scores, "listener", 35);
+  if (/(Job|Scheduler|Scheduled|Task)$/.test(nameHint)) addScore(scores, "job", 35);
+  if (/Repository$/.test(nameHint)) addScore(scores, "repository", 35);
+  if (/Mapper$/.test(nameHint)) addScore(scores, "mapper", 35);
+  if (/(Entity|DO)$/.test(nameHint)) addScore(scores, "entity", 35);
+  if (/(Gateway|Port|Client)$/.test(nameHint)) addScore(scores, "port", 35);
+  if (/(Request|Response|View|DTO|Command|Result)$/.test(nameHint) || facts.kind === "record") addScore(scores, "dto", 35);
+  if (/VO$|Vo$/.test(nameHint)) addScore(scores, "vo", 35);
+
+  return bestProfile(scores) || "service";
+}
+
+function roleToProfile(role?: string): ResolvedImpactProfile | undefined {
+  if (!role) {
+    return undefined;
   }
-  if (/(job|scheduler|scheduled|task)\b/.test(hint) || hint.includes("/job/")) {
-    return "job";
+  const normalized = role.toLowerCase();
+  return profileTieOrder.find(profile => profile === normalized);
+}
+
+function simpleAnnotation(value: string): string {
+  const trimmed = value.replace(/^@/, "");
+  return trimmed.slice(trimmed.lastIndexOf(".") + 1);
+}
+
+function simpleTypeName(value: string): string {
+  const withoutGenerics = value.replace(/<.*$/, "");
+  return withoutGenerics.slice(withoutGenerics.lastIndexOf(".") + 1);
+}
+
+function addScore(scores: Map<ResolvedImpactProfile, number>, profile: ResolvedImpactProfile, value: number): void {
+  scores.set(profile, (scores.get(profile) || 0) + value);
+}
+
+const profileTieOrder: ResolvedImpactProfile[] = ["controller", "parser", "listener", "job", "repository", "mapper", "entity", "port", "dto", "vo", "service"];
+
+function bestProfile(scores: Map<ResolvedImpactProfile, number>): ResolvedImpactProfile | undefined {
+  let best: ResolvedImpactProfile | undefined;
+  let bestScore = 0;
+  for (const profile of profileTieOrder) {
+    const score = scores.get(profile) || 0;
+    if (score > bestScore) {
+      best = profile;
+      bestScore = score;
+    }
   }
-  if (/repository\b/.test(hint)) {
-    return "repository";
-  }
-  if (/(mapper)\b/.test(hint) || hint.includes("/mapper/")) {
-    return "mapper";
-  }
-  if (/(entity|do)\b/.test(hint) || hint.includes("/entity/")) {
-    return "entity";
-  }
-  if (/(gateway|port|client)\b/.test(hint) || facts.kind === "interface") {
-    return "port";
-  }
-  if (/(request|response|view|dto|command|result)\b/.test(hint) || hint.includes("/dto/") || facts.kind === "record") {
-    return "dto";
-  }
-  if (/\bvo\b/.test(hint) || hint.includes("/vo/")) {
-    return "vo";
-  }
-  return "service";
+  return best;
 }
 
 function shouldIncludeImplementations(anchor: ResolvedAnchor): boolean {
   return anchor.kind === "interface" || new Set(["port", "service", "repository"]).has(anchor.profile);
+}
+
+function hierarchyItemLocation(item: unknown): LspLocation | undefined {
+  if (!item || typeof item !== "object") {
+    return undefined;
+  }
+  const record = item as { uri?: unknown; range?: unknown; selectionRange?: unknown };
+  const range = isLspRange(record.range) ? record.range : isLspRange(record.selectionRange) ? record.selectionRange : undefined;
+  return typeof record.uri === "string" && range ? { uri: record.uri, range } : undefined;
+}
+
+function isLspRange(value: unknown): value is LspLocation["range"] {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const record = value as { start?: unknown; end?: unknown };
+  return isLspPosition(record.start) && isLspPosition(record.end);
+}
+
+function isLspPosition(value: unknown): value is LspLocation["range"]["start"] {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const record = value as { line?: unknown; character?: unknown };
+  return typeof record.line === "number" && typeof record.character === "number";
+}
+
+function semanticVerifiedBy(reason: string): string {
+  return reason === "reference" || reason === "typeHierarchy" ? reason : `semantic-${reason}`;
 }
 
 function section(category: RgPlanSection["category"], reason: string, terms: string[], paths: string[], globs: string[]): RgPlanSection {
@@ -691,28 +898,57 @@ function section(category: RgPlanSection["category"], reason: string, terms: str
   };
 }
 
-function rootsFor(repoRoot: string, anchor: ResolvedAnchor, sourceSet: "main" | "test", options: Pick<ImpactOptions, "crossModulePolicy" | "focusModules">): string[] {
+function rootsFor(repoRoot: string, anchor: ResolvedAnchor, sourceSet: "main" | "test", options: Pick<ImpactOptions, "crossModulePolicy" | "focusModules">, layoutContext?: LayoutContext): string[] {
   if (options.crossModulePolicy === "all") {
-    return broadSearchRoots(repoRoot);
+    return broadSearchRoots(repoRoot, layoutContext);
   }
   const modules = unique([anchor.module, ...options.focusModules].filter((value): value is string => Boolean(value)));
+  const detectedRoots = layoutContext?.sourceRoots
+    .filter(root => root.sourceSet === sourceSet && modules.includes(root.module))
+    .map(root => root.relativePath)
+    .filter(item => existsSync(path.resolve(repoRoot, item))) || [];
+  if (detectedRoots.length > 0) {
+    return unique(detectedRoots);
+  }
   const roots = modules
     .flatMap(module => [`modules/${module}/src/${sourceSet}/java`, `apps/${module}/src/${sourceSet}/java`, `${module}/src/${sourceSet}/java`])
     .filter(item => existsSync(path.resolve(repoRoot, item)));
-  return roots.length > 0 ? unique(roots) : broadSearchRoots(repoRoot);
+  return roots.length > 0 ? unique(roots) : broadSearchRoots(repoRoot, layoutContext);
 }
 
-function broadSearchRoots(repoRoot: string): string[] {
+function broadSearchRoots(repoRoot: string, layoutContext?: LayoutContext): string[] {
+  if (layoutContext?.broadRoots.length) {
+    return layoutContext.broadRoots;
+  }
   const roots = ["modules", "apps"].filter(item => existsSync(path.resolve(repoRoot, item)));
   return roots.length > 0 ? roots : ["."];
 }
 
-function persistenceRoots(anchor: ResolvedAnchor): string[] {
+function persistenceRoots(anchor: ResolvedAnchor, layoutContext?: LayoutContext): string[] {
+  const detected = layoutContext
+    ? [
+        ...layoutContext.resourceRoots.filter(root => root === "docs/sql" || moduleFromRoot(root) === anchor.module),
+        ...layoutContext.sourceRoots.filter(root => root.sourceSet === "main" && root.module === anchor.module).map(root => root.relativePath)
+      ]
+    : [];
   return unique([
+    ...detected,
     anchor.module ? `modules/${anchor.module}/src/main/resources` : undefined,
     anchor.module ? `modules/${anchor.module}/src/main/java` : undefined,
     "docs/sql"
   ].filter((value): value is string => Boolean(value)));
+}
+
+function moduleFromRoot(root: string): string {
+  const parts = root.split(path.sep);
+  const srcIndex = parts.findIndex(part => part === "src");
+  if (srcIndex <= 0) {
+    return ".";
+  }
+  if ((parts[0] === "modules" || parts[0] === "apps") && parts[1]) {
+    return parts[1];
+  }
+  return parts.slice(0, srcIndex).join("/") || ".";
 }
 
 function classStem(baseName: string): string {
@@ -725,6 +961,45 @@ function serviceTerms(base: string, stem: string, symbol: string): string[] {
 
 function controllerTerms(base: string, stem: string, symbol: string): string[] {
   return [literal(base), `${literal(stem)}(Controller|AppService|Service|Assembler|Request|Response|Command|Result|Confirm|Summary)`, safeSymbol(symbol)];
+}
+
+function taskKeywordTerms(keywords: string[]): string[] {
+  return unique(taskKeywordStems(keywords).flatMap(({ stem, wordCount }) => {
+    const escaped = literal(stem);
+    const suffixes = wordCount > 1
+      ? "Controller|AppService|Service|Assembler|Command|Request|Response|Result|DTO|View|Executor|Engine|Repository|Mapper|Entity|DO|Gateway|Port|Client|Config|Properties|Event|Listener|Handler|Consumer"
+      : "Command|Request|Response|Result|DTO|View|Executor|Engine|Repository|Mapper|Entity|DO|Gateway|Port";
+    const terms = [
+      `${escaped}(${suffixes})`,
+      `${escaped}(Request|Response)Assembler`,
+      `Final${escaped}Result`
+    ];
+    if (wordCount === 1) {
+      terms.push(`${escaped}.*Assembler`);
+    }
+    return terms;
+  }));
+}
+
+function taskKeywordStems(keywords: string[]): Array<{ stem: string; wordCount: number }> {
+  const words = unique(keywords.flatMap(keywordWords))
+    .filter(word => word.length >= 3)
+    .map(capitalize);
+  const stems: Array<{ stem: string; wordCount: number }> = [];
+  for (let start = 0; start < words.length; start += 1) {
+    for (let count = 1; count <= 4 && start + count <= words.length; count += 1) {
+      stems.push({ stem: words.slice(start, start + count).join(""), wordCount: count });
+    }
+  }
+  return stems;
+}
+
+function keywordWords(keyword: string): string[] {
+  return keyword
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean)
+    .map(word => word.toLowerCase());
 }
 
 function repositoryTerms(base: string, stem: string, symbol: string): string[] {
@@ -809,13 +1084,18 @@ function listenerTerms(base: string, stem: string, symbol: string): string[] {
   ];
 }
 
-function dtoUpstream(anchor: ResolvedAnchor, symbol: string, repoRoot: string): { terms: string[]; paths: string[] } {
+function dtoUpstream(anchor: ResolvedAnchor, symbol: string, repoRoot: string, layoutContext?: LayoutContext): { terms: string[]; paths: string[] } {
   const root = symbol.replace(/Code$/, "");
   if (!root || root === symbol || root.length < 4) {
     return { terms: [], paths: [] };
   }
   const moduleName = root.charAt(0).toLowerCase() + root.slice(1);
-  const paths = existsSync(path.resolve(repoRoot, `modules/${moduleName}/src/main/java`)) ? [`modules/${moduleName}/src/main/java`] : ["modules", "apps"];
+  const detected = layoutContext?.sourceRoots
+    .filter(item => item.sourceSet === "main" && item.module === moduleName)
+    .map(item => item.relativePath) || [];
+  const paths = detected.length > 0
+    ? detected
+    : existsSync(path.resolve(repoRoot, `modules/${moduleName}/src/main/java`)) ? [`modules/${moduleName}/src/main/java`] : broadSearchRoots(repoRoot, layoutContext);
   return {
     terms: [`${literal(capitalize(root))}(QueryAppService|View)`, `${literal(symbol)}\\(`, `\\.${literal(symbol)}\\(`],
     paths
@@ -857,6 +1137,80 @@ function sqlTerms(base: string, stem: string, symbol: string): string[] {
   return [camelToSnake(base), camelToSnake(stem), camelToSnake(symbol), actionTail(symbol) ? camelToSnake(actionTail(symbol) as string) : ""].map(literal);
 }
 
+function directCollaboratorDelta(candidate: CandidateFile, anchor: ResolvedAnchor, options: ImpactOptions): number {
+  const candidatePath = candidate.path || candidate.absolutePath;
+  if (!candidatePath.endsWith(".java")) {
+    return 0;
+  }
+  const typeName = path.basename(candidatePath, ".java");
+  if (!typeName || typeName === anchor.className) {
+    return 0;
+  }
+  const sameAnchorModule = Boolean(candidate.module && candidate.module === anchor.module);
+  let delta = 0;
+  for (const stem of directAnchorStems(anchor)) {
+    if (isDirectTypeName(typeName, stem)) {
+      delta = Math.max(delta, 170);
+    }
+  }
+  for (const { stem, wordCount } of taskKeywordStems(options.taskKeywords)) {
+    if (isDirectTypeName(typeName, stem) && (wordCount > 1 || sameAnchorModule)) {
+      delta = Math.max(delta, 170);
+    }
+    if (sameAnchorModule && stem.length >= 5 && typeName.startsWith(stem) && typeName.endsWith("Assembler")) {
+      delta = Math.max(delta, 140);
+    }
+  }
+  if (delta > 0 && anchor.profile === "port" && candidatePath.includes("/domain/")) {
+    delta += 50;
+  }
+  return delta;
+}
+
+function directAnchorStems(anchor: ResolvedAnchor): string[] {
+  const base = classStem(anchor.className || path.basename(anchor.absolutePath, ".java"));
+  const action = actionTailRaw(anchor.methodName || anchor.symbolName);
+  return unique([
+    base,
+    base.endsWith("Import") ? base.replace(/Import$/, "") : "",
+    action ? `${base}${action}` : ""
+  ]);
+}
+
+function isDirectTypeName(typeName: string, stem: string): boolean {
+  const suffixes = [
+    "Controller",
+    "AppService",
+    "Service",
+    "Assembler",
+    "Command",
+    "Request",
+    "Response",
+    "RequestAssembler",
+    "ResponseAssembler",
+    "Result",
+    "DTO",
+    "View",
+    "Executor",
+    "Engine",
+    "Repository",
+    "RepositoryImpl",
+    "Mapper",
+    "Entity",
+    "DO",
+    "Gateway",
+    "Port",
+    "Client",
+    "Config",
+    "Properties",
+    "Parser",
+    "ExcelParser",
+    "ParsedTemplate",
+    "DiffBuilder"
+  ];
+  return suffixes.some(suffix => typeName === `${stem}${suffix}`) || typeName === `Final${stem}Result`;
+}
+
 function dtoFlowStemTerms(stem: string): string[] {
   const flowStem = stem.replace(/Student|Item|Detail|Entry/g, "");
   return flowStem && flowStem !== stem && flowStem.length >= 8
@@ -869,8 +1223,13 @@ function safeSymbol(symbol: string): string {
 }
 
 function actionTail(symbol: string): string {
+  const tail = actionTailRaw(symbol);
+  return tail ? literal(tail) : "";
+}
+
+function actionTailRaw(symbol: string): string {
   const tail = symbol.replace(/^(get|find|list|load|resolve|create|update|delete|save|mark|claim)/, "");
-  return tail && tail !== symbol ? literal(tail) : "";
+  return tail && tail !== symbol ? tail : "";
 }
 
 function isNoisySymbol(value: string): boolean {
@@ -909,7 +1268,7 @@ function readReason(file: CandidateFile, priority: ReadPriority): string {
   return "ranked candidate from source index, rg summary, and optional LSP";
 }
 
-function formatCandidate(file: CandidateFile, id: string): Record<string, unknown> {
+function formatCandidate(file: CandidateFile, id: string, verbosity: ImpactVerbosity): Record<string, unknown> {
   return compact({
     id,
     path: file.path || file.absolutePath,
@@ -920,7 +1279,10 @@ function formatCandidate(file: CandidateFile, id: string): Record<string, unknow
     matchCount: file.matchCount,
     categories: file.categories,
     reasons: file.reasons,
-    positions: file.positions.slice(0, 3)
+    positions: file.positions.slice(0, 3),
+    confidence: verbosity === "diagnostic" ? file.confidence || "medium" : undefined,
+    verifiedBy: verbosity === "diagnostic" ? file.verifiedBy || [] : undefined,
+    scoreBreakdown: verbosity === "diagnostic" ? file.scoreBreakdown : undefined
   });
 }
 
@@ -1015,6 +1377,19 @@ function camelToSnake(value: string): string {
 
 function compact(value: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined));
+}
+
+function applyVerbosity(payload: ImpactResult, verbosity: ImpactVerbosity): void {
+  if (verbosity !== "compact") {
+    return;
+  }
+  payload.rgSummary.sections = payload.rgSummary.sections.map(section => ({
+    ...section,
+    files: []
+  }));
+  payload.evidenceGaps = unique(payload.evidenceGaps).slice(0, 2);
+  delete payload.metrics.sourceFacts;
+  delete payload.metrics.rgCache;
 }
 
 async function mapConcurrent<T, R>(items: T[], concurrency: number, worker: (item: T) => Promise<R>): Promise<R[]> {

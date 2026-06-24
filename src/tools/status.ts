@@ -2,6 +2,10 @@
 // output: Current JDT LS, watcher, source-index, and router cache status.
 // pos: v5 status tool handler.
 import { z } from "zod";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { readRuntimeBuild } from "../build-info.js";
+import { probeLayout } from "../layout-probe.js";
 import type { ToolContext } from "./context.js";
 
 export const statusSchema = {
@@ -16,9 +20,13 @@ export async function javaStatus(context: ToolContext, _args: z.infer<z.ZodObjec
     if (context.lsp && !context.lsp.enabled) {
       return {
         repoRoot: context.repoRoot,
+        rootSource: context.rootSource,
         repoHash: context.repoHash,
         aliases: context.aliases || [],
         layoutProfile: context.layoutProfile,
+        layout: probeLayout(context.repoRoot, context.layoutProfile),
+        runtimeBuild: readRuntimeBuild(),
+        rootWarnings: rootWarnings(context.repoRoot),
         lsp: context.lsp,
         started: false,
         note: context.lsp.enableHint || "Enable this project in projects.json before starting JDT LS."
@@ -29,12 +37,30 @@ export async function javaStatus(context: ToolContext, _args: z.infer<z.ZodObjec
   return {
     ...context.session.status(),
     repoHash: context.repoHash,
+    rootSource: context.rootSource,
     aliases: context.aliases || [],
     layoutProfile: context.layoutProfile,
+    layout: probeLayout(context.repoRoot, context.layoutProfile),
+    runtimeBuild: readRuntimeBuild(),
+    rootWarnings: rootWarnings(context.repoRoot),
     lsp: context.lsp,
     repoRoot: context.repoRoot,
     sourceIndex: context.sourceIndex.status(),
     rgCache: context.router.rgCacheStatus(),
     note: "This MCP server is read-only and exposes the Java impact router."
   };
+}
+
+function rootWarnings(repoRoot: string): string[] {
+  return hasBuildFile(repoRoot) ? [] : ["No pom.xml, build.gradle, or settings.gradle file was found at the resolved repo root."];
+}
+
+function hasBuildFile(repoRoot: string): boolean {
+  return [
+    "pom.xml",
+    "build.gradle",
+    "build.gradle.kts",
+    "settings.gradle",
+    "settings.gradle.kts"
+  ].some(file => existsSync(path.join(repoRoot, file)));
 }

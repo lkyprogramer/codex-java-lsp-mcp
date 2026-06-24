@@ -1,0 +1,275 @@
+# Java LSP MCP Benchmark Guide
+
+日期：2026-06-23
+
+适用仓库：`/Users/luo/Documents/github/codex-java-lsp-mcp`
+
+## 1. 目的
+
+这套 benchmark 用来验证 `java_impact` 的效果质量，而不是只验证工具能返回结果。核心判断是：
+
+- 候选集是否覆盖 golden 文件。
+- `readPlan` 是否把 must-hit 文件放进 agent 实际会读的文件里。
+- cold / warm 不同状态下是否能稳定运行。
+- payload、估算 token、P50/P95 延迟是否可比较。
+- 与不使用 LSP/MCP routing 的 raw `rg` baseline 相比，token 是否实际下降。
+
+硬门槛是 `R_read_must = 1.0`：每个场景的 `golden.mustHit` 必须全部进入 `readPlan`。
+
+## 2. 资产
+
+场景文件：
+
+- `golden/lishuedu.scenarios.jsonl`
+- `golden/cipherlink.scenarios.jsonl`
+- `golden/exam-parent-v3.scenarios.jsonl`
+- `golden/generic-java.scenarios.jsonl`
+
+通用 fixture：
+
+- `fixtures/generic-java`
+
+runner：
+
+- `src/benchmark-agent-impact.ts`
+- 构建后入口：`dist/benchmark-agent-impact.js`
+
+## 3. 场景格式
+
+每行是一个 JSON scenario：
+
+```json
+{
+  "id": "rule-engine-execute",
+  "name": "RuleEngine#execute",
+  "projectId": "exam-parent-v3",
+  "layoutProfile": "maven-reactor",
+  "scenarioVersion": 1,
+  "warmState": "cold-nolsp",
+  "anchor": {
+    "file": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/execute/RuleEngine.java",
+    "line": 54,
+    "column": 29,
+    "profile": "service",
+    "focusModules": ["exam-checkRule"],
+    "taskKeywords": ["rule", "execute", "check"]
+  },
+  "golden": {
+    "mustHit": [],
+    "shouldHit": [],
+    "side": []
+  }
+}
+```
+
+字段含义：
+
+- `anchor`：传给 `java_impact` 的锚点。
+- `golden.mustHit`：直接语义邻居，必须进入 `readPlan`。
+- `golden.shouldHit`：一跳协作者，参与 precision/recall，但不是 hard gate。
+- `golden.side`：测试、SQL、配置等旁路证据，按场景显式声明。
+
+## 4. 指标
+
+候选集：
+
+```text
+precision = hitFiles / returnedFiles
+recall    = hitFiles / goldenAll
+pCandAt5  = cand[:5] 命中率
+pCandAt10 = cand[:10] 命中率
+```
+
+阅读计划：
+
+```text
+pRead      = readPlan 命中文件数 / readPlan 文件数
+rReadMust  = readPlan 命中 mustHit 数 / mustHit 数
+```
+
+成本：
+
+```text
+rawSearchPayload
+readingPayload
+totalAgentVisiblePayload
+estimatedTokens = totalAgentVisiblePayload / 4
+rgRawBytesExposed      # no-lsp baseline 暴露给 agent 的 raw rg 输出
+rgRawBytesSuppressed   # impact strategy 内部吸收但未暴露的 raw rg 输出
+elapsedMs P50/P95
+```
+
+## 5. Warm State
+
+| warmState | 语义策略 | 行为 |
+|---|---|---|
+| `cold-nolsp` | `fast` | 不启动 JDT LS，只测 SourceIndex + rg + routing |
+| `cold-lsp` | `auto` | 启动 JDT LS，不等待 import idle |
+| `warm-auto` | `auto` | 启动并等待 progress idle，允许轻量 semantic verify |
+| `warm-required` | `required` | 预热 anchor document symbols，启用 required 语义路径 |
+
+## 6. 常用命令
+
+先构建：
+
+```bash
+npm run build
+```
+
+列出场景：
+
+```bash
+node dist/benchmark-agent-impact.js \
+  --repo-root /Users/luo/Documents/github/codex-java-lsp-mcp/fixtures/generic-java \
+  --project-id generic-java \
+  --list-scenarios
+```
+
+四项目 cold 正式矩阵：
+
+```bash
+node dist/benchmark-agent-impact.js --repo-root /Users/luo/Documents/program/lishu/lishuedu --project-id lishuedu --warm-state cold-nolsp --strategy impact --runs 5 > /tmp/java-lsp-bench-lishuedu-impact-runs5.json
+node dist/benchmark-agent-impact.js --repo-root /Users/luo/Documents/program/cipherlink --project-id cipherlink --warm-state cold-nolsp --strategy impact --runs 5 > /tmp/java-lsp-bench-cipherlink-impact-runs5.json
+node dist/benchmark-agent-impact.js --repo-root /Users/luo/Documents/program/exam-parent-v3 --project-id exam-parent-v3 --warm-state cold-nolsp --strategy impact --runs 5 > /tmp/java-lsp-bench-exam-impact-runs5.json
+node dist/benchmark-agent-impact.js --repo-root /Users/luo/Documents/github/codex-java-lsp-mcp/fixtures/generic-java --project-id generic-java --warm-state cold-nolsp --strategy impact --runs 5 > /tmp/java-lsp-bench-generic-impact-runs5.json
+```
+
+三项目 no-LSP token baseline：
+
+```bash
+node dist/benchmark-agent-impact.js --repo-root /Users/luo/Documents/program/lishu/lishuedu --project-id lishuedu --warm-state cold-nolsp --strategy no-lsp --runs 5 > /tmp/java-lsp-bench-lishuedu-nolsp-runs5.json
+node dist/benchmark-agent-impact.js --repo-root /Users/luo/Documents/program/cipherlink --project-id cipherlink --warm-state cold-nolsp --strategy no-lsp --runs 5 > /tmp/java-lsp-bench-cipherlink-nolsp-runs5.json
+node dist/benchmark-agent-impact.js --repo-root /Users/luo/Documents/program/exam-parent-v3 --project-id exam-parent-v3 --warm-state cold-nolsp --strategy no-lsp --runs 5 > /tmp/java-lsp-bench-exam-nolsp-runs5.json
+```
+
+generic warm 矩阵：
+
+```bash
+node dist/benchmark-agent-impact.js --repo-root /Users/luo/Documents/github/codex-java-lsp-mcp/fixtures/generic-java --project-id generic-java --warm-state warm-auto --runs 5 > /tmp/java-lsp-bench-generic-warm-auto-runs5.json
+node dist/benchmark-agent-impact.js --repo-root /Users/luo/Documents/github/codex-java-lsp-mcp/fixtures/generic-java --project-id generic-java --warm-state warm-required --runs 5 > /tmp/java-lsp-bench-generic-warm-required-runs5.json
+```
+
+汇总 JSON：
+
+```bash
+node - <<'NODE'
+const fs = require("fs");
+for (const [name, file] of [
+  ["lishuedu", "/tmp/java-lsp-bench-lishuedu-impact-runs5.json"],
+  ["cipherlink", "/tmp/java-lsp-bench-cipherlink-impact-runs5.json"],
+  ["exam", "/tmp/java-lsp-bench-exam-impact-runs5.json"],
+  ["generic", "/tmp/java-lsp-bench-generic-impact-runs5.json"]
+]) {
+  const p = JSON.parse(fs.readFileSync(file, "utf8"));
+  console.log(name, JSON.stringify({
+    projectId: p.metadata.projectId,
+    warmState: p.metadata.warmState,
+    runs: p.metadata.runs,
+    precision: p.totals.precision,
+    recall: p.totals.recall,
+    rReadMust: p.totals.rReadMust,
+    pRead: p.totals.pRead,
+    elapsedMsP50: p.totals.elapsedMsP50,
+    elapsedMsP95: p.totals.elapsedMsP95
+  }));
+}
+NODE
+```
+
+汇总 impact vs no-LSP：
+
+```bash
+node - <<'NODE'
+const fs = require("fs");
+for (const [name, impactFile, noLspFile] of [
+  ["lishuedu", "/tmp/java-lsp-bench-lishuedu-impact-runs5.json", "/tmp/java-lsp-bench-lishuedu-nolsp-runs5.json"],
+  ["cipherlink", "/tmp/java-lsp-bench-cipherlink-impact-runs5.json", "/tmp/java-lsp-bench-cipherlink-nolsp-runs5.json"],
+  ["exam-parent-v3", "/tmp/java-lsp-bench-exam-impact-runs5.json", "/tmp/java-lsp-bench-exam-nolsp-runs5.json"]
+]) {
+  const impact = JSON.parse(fs.readFileSync(impactFile, "utf8")).totals;
+  const noLsp = JSON.parse(fs.readFileSync(noLspFile, "utf8")).totals;
+  const savedTokens = noLsp.estimatedTokens - impact.estimatedTokens;
+  console.log(name, JSON.stringify({
+    impactTokens: impact.estimatedTokens,
+    noLspTokens: noLsp.estimatedTokens,
+    savedTokens,
+    savedPct: savedTokens / noLsp.estimatedTokens,
+    impactRReadMust: impact.rReadMust,
+    noLspRReadMust: noLsp.rReadMust
+  }));
+}
+NODE
+```
+
+## 7. 本轮验证快照
+
+命令：
+
+```bash
+npm run build && npm test
+```
+
+结果：
+
+```text
+47 tests
+43 pass
+4 skip
+0 fail
+```
+
+四项目 `cold-nolsp strategy=impact runs=5`：
+
+| project | precision | recall | R_read_must | P_read | elapsed P50 | elapsed P95 |
+|---|---:|---:|---:|---:|---:|---:|
+| lishuedu | 0.3144 | 0.7756 | 1.0000 | 0.7667 | 3.72ms | 67.29ms |
+| cipherlink | 0.5455 | 1.0000 | 1.0000 | 0.8333 | 1.58ms | 20.46ms |
+| exam-parent-v3 | 0.5833 | 1.0000 | 1.0000 | 0.6667 | 1.11ms | 21.40ms |
+| generic-java | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0.88ms | 38.83ms |
+
+三项目 `impact` vs `no-lsp` token 对照，均为 `cold-nolsp runs=5`：
+
+| project | impact tokens | no-LSP tokens | saved tokens | saved % | impact R_read_must | no-LSP R_read_must |
+|---|---:|---:|---:|---:|---:|---:|
+| lishuedu | 5,976.96 | 1,572,293.48 | 1,566,316.52 | 99.62% | 1.0000 | 0.2567 |
+| cipherlink | 2,924.20 | 100,070.00 | 97,145.80 | 97.08% | 1.0000 | 0.2500 |
+| exam-parent-v3 | 3,811.00 | 431,472.40 | 427,661.40 | 99.12% | 1.0000 | 0.5000 |
+
+对应 raw `rg` 暴露/吸收：
+
+| project | impact rgRawBytesSuppressed | no-LSP rgRawBytesExposed |
+|---|---:|---:|
+| lishuedu | 192,321.80 | 6,279,131.00 |
+| cipherlink | 12,923.00 | 393,778.00 |
+| exam-parent-v3 | 23,352.00 | 1,718,893.00 |
+
+`generic-java runs=5` warm：
+
+| warmState | semanticPolicy | precision | recall | R_read_must | P_read | elapsed P50 | elapsed P95 |
+|---|---|---:|---:|---:|---:|---:|---:|
+| warm-auto | auto | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1501.53ms | 1586.83ms |
+| warm-required | required | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0.80ms | 892.48ms |
+
+## 8. 判定规则
+
+通过：
+
+- `npm run build && npm test` 无失败。
+- 每个项目 cold matrix 的 `R_read_must = 1.0`。
+- 三项目 no-LSP baseline 已输出 `rgRawBytesExposed`、`estimatedTokens`、`R_read_must`，可与 `impact` strategy A/B。
+- benchmark JSON 包含 `metadata.runtimeBuild`、`repoCommit`、`projectId`、`layoutProfile`、`warmState`、`runs`。
+- `runs >= 5` 的报告必须使用 P50/P95，不看单次耗时下结论。
+
+失败：
+
+- 任一 scenario 的 `R_read_must < 1.0`。
+- runner 因 JDT LS timeout 直接退出。
+- golden 文件缺失或 scenario 与 `projectId` 不匹配。
+- 只看候选集 precision，未检查 `readPlan`。
+
+## 9. 已知边界
+
+- 真实项目的 warm-auto / warm-required 矩阵未作为本轮固定门槛；当前只用 `generic-java` 验证 warm harness。
+- no-LSP baseline 是固定 raw `rg` + 前 6 个命中文件片段的可复现代理，不代表人类或模型手工多轮搜索的最优策略。
+- golden 是人工标注资产；业务代码大幅变化后，应更新 `repoCommit` 或重新确认 must/should/side。
+- `precision` 仍受 golden 覆盖范围影响，发布门槛以 `R_read_must` 为硬指标。

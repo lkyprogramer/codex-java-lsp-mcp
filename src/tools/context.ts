@@ -7,6 +7,7 @@ import { SourceIndex } from "../source-index.js";
 
 export type ToolContext = {
   repoRoot: string;
+  rootSource?: "explicit" | "projectId" | "cwd" | "inferred";
   repoHash?: string;
   aliases?: string[];
   layoutProfile?: string;

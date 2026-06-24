@@ -147,6 +147,14 @@ export class SourceIndex {
       || [...facts.methods].filter(method => method.line <= line).sort((left, right) => right.line - left.line)[0];
   }
 
+  findImplementers(typeName: string): JavaSourceFacts[] {
+    const simpleName = typeName.slice(typeName.lastIndexOf(".") + 1);
+    return [...this.cache.values()]
+      .map(entry => entry.facts)
+      .filter(facts => facts.typeName !== simpleName && implementsOrExtends(facts, simpleName))
+      .sort((left, right) => (left.path || left.absolutePath).localeCompare(right.path || right.absolutePath));
+  }
+
   upsertDocumentSymbols(inputFile: string, symbols: LspDocumentSymbol[]): JavaSourceFacts {
     const absolutePath = normalizeRepoFile(this.repoRoot, inputFile);
     if (!existsSync(absolutePath)) {
@@ -321,6 +329,15 @@ export class SourceIndex {
     this.dirtyCountCache = { computedAt: now, value: dirty };
     return dirty;
   }
+}
+
+function implementsOrExtends(facts: JavaSourceFacts, simpleName: string): boolean {
+  return facts.implementsTypes.some(type => sameSimpleType(type, simpleName)) || sameSimpleType(facts.extendsType || "", simpleName);
+}
+
+function sameSimpleType(value: string, expected: string): boolean {
+  const simple = value.replace(/<.*>/, "").trim().slice(value.lastIndexOf(".") + 1);
+  return simple === expected;
 }
 
 export function parseJavaSource(repoRoot: string, absolutePath: string, content: string): JavaSourceFacts {
