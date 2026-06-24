@@ -48,6 +48,7 @@ type Cli = {
   warmState: WarmState;
   mode: ImpactOptions["mode"];
   semanticPolicy: ImpactOptions["semanticPolicy"];
+  verbosity: NonNullable<ImpactOptions["verbosity"]>;
   runs: number;
   listScenarios: boolean;
   strategy: BenchmarkStrategy;
@@ -67,6 +68,7 @@ const metadata = {
   warmState: cli.warmState,
   mode: cli.mode,
   semanticPolicy: effectiveSemanticPolicy(cli),
+  verbosity: cli.verbosity,
   strategy: cli.strategy,
   runs: cli.runs,
   scenarioFile: cli.scenarioFile,
@@ -142,6 +144,7 @@ function parseCli(args: string[], root: string): Cli {
     warmState: stringArg(values, "--warm-state", process.env.JAVA_LSP_BENCH_WARM_STATE || "cold-nolsp") as WarmState,
     mode: stringArg(values, "--mode", process.env.JAVA_LSP_BENCH_MODE || "balanced") as ImpactOptions["mode"],
     semanticPolicy: stringArg(values, "--semantic-policy", process.env.JAVA_LSP_BENCH_SEMANTIC_POLICY || "auto") as ImpactOptions["semanticPolicy"],
+    verbosity: stringArg(values, "--verbosity", process.env.JAVA_LSP_BENCH_VERBOSITY || "standard") as NonNullable<ImpactOptions["verbosity"]>,
     runs: Number(stringArg(values, "--runs", process.env.JAVA_LSP_BENCH_RUNS || "1")),
     listScenarios: values.get("--list-scenarios") === true,
     strategy: stringArg(values, "--strategy", process.env.JAVA_LSP_BENCH_STRATEGY || "impact") as BenchmarkStrategy
@@ -160,7 +163,8 @@ async function impactAttempt(router: AgentRouter, cli: Cli, scenario: Scenario):
     focusModules: scenario.anchor.focusModules || [],
     excludeModules: [],
     taskKeywords: scenario.anchor.taskKeywords || [],
-    crossModulePolicy: "auto"
+    crossModulePolicy: "auto",
+    verbosity: cli.verbosity
   });
   const elapsedMs = performance.now() - startedAt;
   const rawSearchPayload = Buffer.byteLength(JSON.stringify(result), "utf8");

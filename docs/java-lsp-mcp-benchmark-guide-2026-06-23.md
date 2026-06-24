@@ -33,6 +33,8 @@ runner：
 
 - `src/benchmark-agent-impact.ts`
 - 构建后入口：`dist/benchmark-agent-impact.js`
+- 汇总脚本：`scripts/summarize-impact-benchmark.mjs`
+- MCP runtime payload attribution：`scripts/attribute-impact-payload.mjs`
 
 ## 3. 场景格式
 
@@ -134,6 +136,20 @@ node dist/benchmark-agent-impact.js --repo-root /Users/luo/Documents/program/exa
 node dist/benchmark-agent-impact.js --repo-root /Users/luo/Documents/github/codex-java-lsp-mcp/fixtures/generic-java --project-id generic-java --warm-state cold-nolsp --strategy impact --runs 5 > /tmp/java-lsp-bench-generic-impact-runs5.json
 ```
 
+按 verbosity 对比 benchmark payload：
+
+```bash
+node dist/benchmark-agent-impact.js --repo-root /Users/luo/Documents/program/cipherlink --project-id cipherlink --warm-state cold-nolsp --strategy impact --runs 5 --verbosity diagnostic > /tmp/java-lsp-bench-cipherlink-diagnostic.json
+node dist/benchmark-agent-impact.js --repo-root /Users/luo/Documents/program/cipherlink --project-id cipherlink --warm-state cold-nolsp --strategy impact --runs 5 --verbosity standard > /tmp/java-lsp-bench-cipherlink-standard.json
+node scripts/summarize-impact-benchmark.mjs /tmp/java-lsp-bench-cipherlink-diagnostic.json /tmp/java-lsp-bench-cipherlink-standard.json
+```
+
+验证真实 MCP handler 路径，而不是只测 `router.impact()`：
+
+```bash
+npm run benchmark:impact-attribution -- --repo-root /Users/luo/Documents/program/cipherlink --project-id cipherlink > /tmp/java-lsp-bench-cipherlink-attribution.json
+```
+
 三项目 no-LSP token baseline：
 
 ```bash
@@ -201,7 +217,72 @@ for (const [name, impactFile, noLspFile] of [
 NODE
 ```
 
-## 7. 本轮验证快照
+## 7. 本轮验证快照（2026-06-24）
+
+命令：
+
+```bash
+npm run build && npm test
+```
+
+结果：
+
+```text
+48 tests
+44 pass
+4 skip
+0 fail
+```
+
+本轮未重跑 no-LSP baseline；token 优化验收使用本地 `main` 临时 worktree 作为 before，对当前分支作为 after，均为 `cold-nolsp strategy=impact runs=5`。
+
+| project | before total | after total | total drop | raw drop | R_read_must | P_read | precision | recall |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| lishuedu | 23,870.88 B | 20,281.04 B | 15.04% | 27.36% | 1.0000 | 0.7667 | 0.3144 | 0.7756 |
+| cipherlink | 12,110.40 B | 9,835.20 B | 18.79% | 27.60% | 1.0000 | 0.8333 | 0.5455 | 1.0000 |
+| exam-parent-v3 | 15,235.40 B | 13,368.20 B | 12.26% | 23.91% | 1.0000 | 0.6667 | 0.5833 | 1.0000 |
+
+汇总：
+
+```text
+weighted total drop: 15.10%
+average project drop: 15.36%
+all project R_read_must: 1.0
+```
+
+MCP handler runtime attribution 验证了 `withPhaseMs()` 不会把 standard 加胖：
+
+| project | standard bytes | diagnostic bytes | standard phase/cache/sourceFacts | diagnostic phase/cache/sourceFacts |
+|---|---:|---:|---|---|
+| lishuedu | 9,532.80 B | 29,303.40 B | absent | present |
+| cipherlink | 5,968.00 B | 16,734.00 B | absent | present |
+| exam-parent-v3 | 5,944.00 B | 16,690.00 B | absent | present |
+
+`generic-java warm-required runs=5` 使用临时 clean `JDTLS_DATA_DIR/JDTLS_LOG_DIR` 重跑通过：
+
+| warmState | semanticPolicy | precision | recall | R_read_must | P_read | total payload | estimatedTokens |
+|---|---|---:|---:|---:|---:|---:|---:|
+| warm-required | required | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 3,426.40 B | 857 |
+
+备注：一次普通 workspace 重跑出现过 `initialize` 120s 超时；检查日志后使用 clean JDT LS workspace 重跑通过，判定为 JDT LS workspace/runtime 临时状态，不是 payload 改造退化。
+
+Batch 2 strict method window 追加验证，使用 Batch 1 after 结果作为 before，均为 `cold-nolsp strategy=impact runs=5`：
+
+| project | reading before | reading after | reading drop | total drop | R_read_must | P_read |
+|---|---:|---:|---:|---:|---:|---:|
+| lishuedu | 10,749.40 B | 10,475.00 B | 2.55% | 1.35% | 1.0000 | 0.7667 |
+| cipherlink | 3,868.00 B | 3,867.00 B | 0.03% | 0.01% | 1.0000 | 0.8333 |
+| exam-parent-v3 | 7,425.00 B | 7,425.00 B | 0.00% | 0.00% | 1.0000 | 0.6667 |
+
+汇总：
+
+```text
+weighted reading drop: 1.25%
+weighted total drop: 0.63%
+all project R_read_must: 1.0
+```
+
+### 历史验证快照（2026-06-23）
 
 命令：
 

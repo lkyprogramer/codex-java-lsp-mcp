@@ -184,7 +184,7 @@ test("annotation profile signal beats misleading path names", async () => {
   assert.equal(result.target.profile, "service");
 });
 
-test("compact verbosity trims diagnostics without dropping core routing output", async () => {
+test("verbosity trims diagnostics without dropping core routing output", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "java-lsp-router-compact-"));
   await mkdir(path.join(root, "src", "main", "java", "demo"), { recursive: true });
   await writeFile(path.join(root, "pom.xml"), "<project></project>\n");
@@ -200,11 +200,70 @@ test("compact verbosity trims diagnostics without dropping core routing output",
     profile: "controller",
     verbosity: "compact"
   }));
+  const diagnostic = await tempRouter(root).impact(options({
+    anchors: [{ file: "src/main/java/demo/DemoController.java", line: 2, column: 45 }],
+    profile: "controller",
+    verbosity: "diagnostic"
+  }));
 
+  assert.ok(standard.files.length > 0);
+  assert.ok(standard.readPlan.length > 0);
+  assert.equal(standard.rgSummary.sections.every(section => section.files.length === 0), true);
+  assert.equal(Object.hasOwn(standard.metrics, "phaseMs"), false);
+  assert.equal(Object.hasOwn(standard.metrics, "cache"), false);
+  assert.equal(Object.hasOwn(standard.metrics, "rgCache"), false);
+  assert.equal(Object.hasOwn(standard.metrics, "sourceFacts"), false);
+  assert.equal(Object.hasOwn(standard.metrics, "semantic"), true);
   assert.ok(compact.files.length > 0);
   assert.ok(compact.readPlan.length > 0);
   assert.equal(compact.rgSummary.sections.every(section => section.files.length === 0), true);
-  assert.ok(Number(compact.metrics.outputBytes) < Number(standard.metrics.outputBytes));
+  assert.ok(compact.evidenceGaps.length <= 2);
+  assert.ok(diagnostic.rgSummary.sections.some(section => section.files.length > 0));
+  assert.equal(Object.hasOwn(diagnostic.metrics, "phaseMs"), true);
+  assert.equal(Object.hasOwn(diagnostic.metrics, "cache"), true);
+  assert.equal(Object.hasOwn(diagnostic.metrics, "rgCache"), true);
+  assert.equal(Object.hasOwn(diagnostic.metrics, "sourceFacts"), true);
+  assert.ok(Number(standard.metrics.outputBytes) < Number(diagnostic.metrics.outputBytes));
+  assert.ok(Number(compact.metrics.outputBytes) <= Number(standard.metrics.outputBytes));
+});
+
+test("readPlan uses strict method windows only for positions inside methods", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-router-method-window-"));
+  await mkdir(path.join(root, "src", "main", "java", "demo"), { recursive: true });
+  await writeFile(path.join(root, "pom.xml"), "<project></project>\n");
+  await writeFile(path.join(root, "src", "main", "java", "demo", "WindowService.java"), [
+    "package demo;",
+    "public class WindowService {",
+    ...Array.from({ length: 27 }, () => "  int padding;"),
+    "  public void targetMethod() {",
+    "    int value = 1;",
+    "    value++;",
+    "  }",
+    "",
+    "  int afterMethod;",
+    "}"
+  ].join("\n"));
+
+  const methodResult = await tempRouter(root).impact(options({
+    anchors: [{ file: "src/main/java/demo/WindowService.java", line: 31, column: 10 }],
+    profile: "service",
+    readPlanMaxItems: 1
+  }));
+  assert.deepEqual(methodResult.readPlan[0], {
+    priority: "P0",
+    fileId: "F1",
+    startLine: 18,
+    endLine: 41,
+    reason: "anchor symbol and local behavior"
+  });
+
+  const classLevelResult = await tempRouter(root).impact(options({
+    anchors: [{ file: "src/main/java/demo/WindowService.java", line: 35, column: 7 }],
+    profile: "service",
+    readPlanMaxItems: 1
+  }));
+  assert.equal(classLevelResult.readPlan[0].startLine, 11);
+  assert.equal(classLevelResult.readPlan[0].endLine, 79);
 });
 
 test("semanticPolicy fast does not call semantic verify", async () => {

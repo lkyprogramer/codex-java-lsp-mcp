@@ -5,7 +5,7 @@ import { z } from "zod";
 import { documentSymbolLimiter } from "../document-symbol-limiter.js";
 import { normalizeRepoFile } from "../repo-layout.js";
 import type { ToolContext } from "./context.js";
-import type { ImpactAnchorInput, ImpactOptions, ImpactResult } from "../agent-types.js";
+import type { ImpactAnchorInput, ImpactOptions, ImpactResult, ImpactVerbosity } from "../agent-types.js";
 
 export const impactSchema = {
   projectId: z.string().min(1).optional(),
@@ -129,10 +129,17 @@ function mergePhaseMs(target: Record<string, number>, source: Record<string, num
 }
 
 function withPhaseMs(result: unknown, phases: Record<string, number>): unknown {
-  if (Object.keys(phases).length === 0 || !result || typeof result !== "object") {
+  if (!result || typeof result !== "object") {
     return result;
   }
   const payload = result as ImpactResult;
+  if (impactVerbosity(payload) !== "diagnostic") {
+    updateOutputBytes(payload);
+    return payload;
+  }
+  if (Object.keys(phases).length === 0) {
+    return result;
+  }
   const metrics = payload.metrics || {};
   const phaseMs = metrics.phaseMs && typeof metrics.phaseMs === "object" ? metrics.phaseMs as Record<string, number> : {};
   payload.metrics = {
@@ -142,6 +149,21 @@ function withPhaseMs(result: unknown, phases: Record<string, number>): unknown {
       ...phaseMs
     }
   };
-  payload.metrics.outputBytes = Buffer.byteLength(JSON.stringify(payload), "utf8");
+  updateOutputBytes(payload);
   return payload;
+}
+
+function impactVerbosity(result: ImpactResult): ImpactVerbosity {
+  const value = result.options?.verbosity;
+  return value === "compact" || value === "diagnostic" ? value : "standard";
+}
+
+function updateOutputBytes(payload: ImpactResult): void {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const outputBytes = Buffer.byteLength(JSON.stringify(payload), "utf8");
+    if (payload.metrics.outputBytes === outputBytes) {
+      return;
+    }
+    payload.metrics.outputBytes = outputBytes;
+  }
 }

@@ -7,7 +7,7 @@ import { availableParallelism } from "node:os";
 import path from "node:path";
 import { fromFileUri, classifyPath, normalizeRepoFile } from "../repo-layout.js";
 import { JdtlsSession, type LspLocation, type LspLocationLink } from "../jdtls-session.js";
-import { SourceIndex, type JavaSourceFacts } from "../source-index.js";
+import { SourceIndex, type JavaMethodFact, type JavaSourceFacts } from "../source-index.js";
 import { probeLayout, type LayoutContext } from "../layout-probe.js";
 import { legacyRoutingPolicy, scoreWithPolicy, type ScoreCategory } from "../routing-policy.js";
 import {
@@ -187,7 +187,7 @@ export class AgentRouter {
       }
     };
     applyVerbosity(payload, options.verbosity || "standard");
-    payload.metrics.outputBytes = Buffer.byteLength(JSON.stringify(payload), "utf8");
+    updateOutputBytes(payload);
     return payload;
   }
 
@@ -600,16 +600,61 @@ export class AgentRouter {
       .sort((left, right) => priorityRank(left.priority) - priorityRank(right.priority) || right.file.score - left.file.score)
       .slice(0, maxItems)
       .map(({ file, priority }) => {
-        const position = file.positions[0] || { line: 1, column: 1 };
-        const radius = priority === "P0" ? { before: 24, after: 44 } : priority === "P1" ? { before: 16, after: 32 } : { before: 10, after: 22 };
+        const planWindow = this.readWindow(file, priority);
         return {
           priority,
           fileId: ids.get(file.absolutePath) || "F?",
-          startLine: Math.max(1, position.line - radius.before),
-          endLine: position.line + radius.after,
+          startLine: planWindow.startLine,
+          endLine: planWindow.endLine,
           reason: readReason(file, priority)
         };
       });
+  }
+
+  private readWindow(file: CandidateFile, priority: ReadPriority): { startLine: number; endLine: number } {
+    const basePosition = file.positions[0] || { line: 1, column: 1 };
+    const radius = readRadius(priority);
+    const fixed = {
+      startLine: Math.max(1, basePosition.line - radius.before),
+      endLine: basePosition.line + radius.after
+    };
+    const position = this.readPosition(file, priority);
+    const method = priority === "P2" ? undefined : this.methodContaining(file.absolutePath, position.line);
+    if (!method) {
+      return fixed;
+    }
+    const padding = priority === "P0" ? { before: 12, after: 8 } : { before: 8, after: 8 };
+    const methodWindow = {
+      startLine: Math.max(1, method.line - padding.before),
+      endLine: method.endLine + padding.after
+    };
+    return methodWindow.startLine >= fixed.startLine && methodWindow.endLine <= fixed.endLine ? methodWindow : fixed;
+  }
+
+  private readPosition(file: CandidateFile, priority: ReadPriority): RouterPosition {
+    if (file.categories.includes("target")) {
+      return file.positions[0] || { line: 1, column: 1 };
+    }
+    if (priority !== "P2") {
+      const methodPosition = file.positions.find(position => this.methodContaining(file.absolutePath, position.line));
+      if (methodPosition) {
+        return methodPosition;
+      }
+    }
+    return file.positions[0] || { line: 1, column: 1 };
+  }
+
+  private methodContaining(file: string, line: number): JavaMethodFact | undefined {
+    if (!file.endsWith(".java")) {
+      return undefined;
+    }
+    try {
+      return this.sourceIndex.factsFor(file).methods
+        .filter(method => method.line <= line && line <= method.endLine)
+        .sort((left, right) => right.line - left.line)[0];
+    } catch {
+      return undefined;
+    }
   }
 
   private evidenceGaps(anchors: ResolvedAnchor[], options: ImpactOptions, semantic: { skipped: boolean; timeout: boolean }): string[] {
@@ -1349,6 +1394,10 @@ function priorityRank(priority: ReadPriority): number {
   return priority === "P0" ? 0 : priority === "P1" ? 1 : 2;
 }
 
+function readRadius(priority: ReadPriority): { before: number; after: number } {
+  return priority === "P0" ? { before: 24, after: 44 } : priority === "P1" ? { before: 16, after: 32 } : { before: 10, after: 22 };
+}
+
 function matchesAny(value: string, keywords: string[]): boolean {
   const lower = value.toLowerCase();
   return keywords.some(keyword => keyword.length > 0 && lower.includes(keyword.toLowerCase()));
@@ -1380,16 +1429,70 @@ function compact(value: Record<string, unknown>): Record<string, unknown> {
 }
 
 function applyVerbosity(payload: ImpactResult, verbosity: ImpactVerbosity): void {
-  if (verbosity !== "compact") {
+  payload.evidenceGaps = unique(payload.evidenceGaps);
+  if (verbosity === "diagnostic") {
     return;
   }
   payload.rgSummary.sections = payload.rgSummary.sections.map(section => ({
     ...section,
     files: []
   }));
-  payload.evidenceGaps = unique(payload.evidenceGaps).slice(0, 2);
-  delete payload.metrics.sourceFacts;
-  delete payload.metrics.rgCache;
+  payload.evidenceGaps = payload.evidenceGaps.map(shortEvidenceGap);
+  payload.evidenceGaps = payload.evidenceGaps.slice(0, verbosity === "compact" ? 2 : 3);
+  payload.metrics = compact({
+    routingVersion: payload.metrics.routingVersion,
+    elapsedMs: payload.metrics.elapsedMs,
+    semantic: slimSemantic(payload.metrics.semantic),
+    outputBytes: payload.metrics.outputBytes
+  });
+}
+
+function slimSemantic(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+  const semantic = value as Record<string, unknown>;
+  return compact({
+    used: semantic.used,
+    skipped: semantic.skipped,
+    timeout: semantic.timeout,
+    policy: semantic.policy
+  });
+}
+
+function updateOutputBytes(payload: ImpactResult): void {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const outputBytes = Buffer.byteLength(JSON.stringify(payload), "utf8");
+    if (payload.metrics.outputBytes === outputBytes) {
+      return;
+    }
+    payload.metrics.outputBytes = outputBytes;
+  }
+}
+
+function shortEvidenceGap(gap: string): string {
+  if (gap === "Run Gradle compile/test before claiming behavior.") {
+    return "Run compile/test before claims.";
+  }
+  if (gap === "Use rg/runtime evidence for Spring wiring, SQL/XML/YAML, logs, Nacos, and DB state.") {
+    return "Check rg/runtime evidence for wiring and DB/config.";
+  }
+  if (gap === "LSP semantic enrichment was skipped by policy; raise semanticPolicy or mode if exact symbol binding is required.") {
+    return "Semantic skipped; raise semanticPolicy for exact binding.";
+  }
+  if (gap === "LSP semantic enrichment hit the configured timeout and fell back to source-index plus rg evidence.") {
+    return "Semantic timed out; using source-index plus rg.";
+  }
+  if (gap === "Source facts are regex-derived and not yet JDT LS documentSymbol confirmed.") {
+    return "Source facts are regex-derived.";
+  }
+  if (gap === "Review persistence/config evidence from rgSummary before changing behavior.") {
+    return "Review persistence/config evidence.";
+  }
+  if (gap === "Tests are returned as lower-priority candidates; use testReadMode=priority when verification planning is the main task.") {
+    return "Tests are lower-priority; use testReadMode=priority for verification.";
+  }
+  return gap;
 }
 
 async function mapConcurrent<T, R>(items: T[], concurrency: number, worker: (item: T) => Promise<R>): Promise<R[]> {

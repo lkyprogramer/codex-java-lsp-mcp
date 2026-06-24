@@ -12,6 +12,8 @@
     "clean": "rm -rf dist",
     "test": "node --test \"dist/**/*.test.js\"",
     "benchmark:agent-impact": "node dist/benchmark-agent-impact.js",
+    "benchmark:agent-summary": "node scripts/summarize-impact-benchmark.mjs",
+    "benchmark:impact-attribution": "node scripts/attribute-impact-payload.mjs",
     "benchmark:lsp-performance": "node dist/benchmark-lsp-performance.js",
     "smoke": "node dist/smoke.js",
     "start": "node dist/server.js"
