@@ -515,6 +515,53 @@ test("port recall includes action contracts and implementations under keyword no
   assert.ok(readPaths.includes("modules/integration/src/main/java/demo/StubStorageGateway.java"));
 });
 
+test("required semantic candidates do not evict non-LSP read plan neighbors", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-router-readplan-protect-"));
+  await mkdir(path.join(root, "modules", "integration", "src", "main", "java", "demo"), { recursive: true });
+  await mkdir(path.join(root, "modules", "report", "src", "main", "java", "demo"), { recursive: true });
+  await writeFile(path.join(root, "pom.xml"), "<project></project>\n");
+  await writeFile(path.join(root, "modules", "integration", "src", "main", "java", "demo", "StorageGateway.java"), [
+    "package demo;",
+    "public interface StorageGateway {",
+    "  StorageSignedUrlResult getSignedUrl(StorageSignedUrlCommand command);",
+    "}",
+    ""
+  ].join("\n"));
+  await writeFile(path.join(root, "modules", "integration", "src", "main", "java", "demo", "StorageSignedUrlCommand.java"), "package demo; public record StorageSignedUrlCommand(String key) {}\n");
+  await writeFile(path.join(root, "modules", "integration", "src", "main", "java", "demo", "StorageSignedUrlResult.java"), "package demo; public record StorageSignedUrlResult(String url) {}\n");
+  await writeFile(path.join(root, "modules", "integration", "src", "main", "java", "demo", "AliyunOssGateway.java"), "package demo; public class AliyunOssGateway implements StorageGateway { public StorageSignedUrlResult getSignedUrl(StorageSignedUrlCommand command) { return null; } }\n");
+  await writeFile(path.join(root, "modules", "integration", "src", "main", "java", "demo", "StubStorageGateway.java"), "package demo; public class StubStorageGateway implements StorageGateway { public StorageSignedUrlResult getSignedUrl(StorageSignedUrlCommand command) { return null; } }\n");
+  const referenceItems = [];
+  const implementationItems = [];
+  for (let index = 0; index < 8; index += 1) {
+    const caller = path.join(root, "modules", "report", "src", "main", "java", "demo", `ReportStorageCaller${index}.java`);
+    await writeFile(caller, `package demo; public class ReportStorageCaller${index} { public void call() {} }\n`);
+    const location = {
+      uri: pathToFileURL(caller).toString(),
+      range: { start: { line: 0, character: 27 }, end: { line: 0, character: 47 } }
+    };
+    referenceItems.push(location);
+    implementationItems.push(location);
+  }
+  const session = new FakeSemanticSession(referenceItems, [], implementationItems);
+
+  const result = await new AgentRouter(root, session as unknown as JdtlsSession, new SourceIndex(root)).impact(options({
+    anchors: [{ file: "modules/integration/src/main/java/demo/StorageGateway.java", line: 3, column: 28 }],
+    profile: "port",
+    semanticPolicy: "required",
+    readPlanMaxItems: 6,
+    focusModules: ["integration"],
+    taskKeywords: ["storage", "signed", "url", "report"]
+  }));
+  const readPaths = readPlanPaths(result);
+
+  assert.equal(session.referencesCalls, 1);
+  assert.ok(readPaths.includes("modules/integration/src/main/java/demo/StorageGateway.java"));
+  assert.ok(readPaths.includes("modules/integration/src/main/java/demo/StorageSignedUrlCommand.java"));
+  assert.ok(readPaths.includes("modules/integration/src/main/java/demo/StorageSignedUrlResult.java"));
+  assert.ok(readPaths.some(file => file.endsWith("AliyunOssGateway.java") || file.endsWith("StubStorageGateway.java")));
+});
+
 function readPlanPaths(result: Awaited<ReturnType<AgentRouter["impact"]>>): string[] {
   const byId = new Map(result.files.map(file => [String(file.id), String(file.path)]));
   return result.readPlan.map(item => byId.get(item.fileId)).filter((value): value is string => Boolean(value));
@@ -527,7 +574,8 @@ class FakeSemanticSession {
 
   constructor(
     private readonly referenceItems: Array<{ uri: string; range: { start: { line: number; character: number }; end: { line: number; character: number } } }> = [],
-    private readonly typeHierarchyEdges: Array<{ depth: number; from: unknown; to: unknown }> = []
+    private readonly typeHierarchyEdges: Array<{ depth: number; from: unknown; to: unknown }> = [],
+    private readonly implementationItems: Array<{ uri: string; range: { start: { line: number; character: number }; end: { line: number; character: number } } }> = []
   ) {}
 
   cacheStatus(): { invalidations: number; entries: number; hits: number; misses: number } {
@@ -538,8 +586,8 @@ class FakeSemanticSession {
     return { started: true, progress: { active: 0 } };
   }
 
-  async semanticLocations(): Promise<{ definitions: []; implementations: [] }> {
-    return { definitions: [], implementations: [] };
+  async semanticLocations(): Promise<{ definitions: []; implementations: Array<{ uri: string; range: { start: { line: number; character: number }; end: { line: number; character: number } } }> }> {
+    return { definitions: [], implementations: this.implementationItems };
   }
 
   async references(): Promise<{ items: Array<{ uri: string; range: { start: { line: number; character: number }; end: { line: number; character: number } } }>; totalReferences: number; truncated: boolean }> {

@@ -113,10 +113,11 @@ export class AgentRouter {
       mergeCandidate(candidates, candidateFromAnchor(anchor));
     }
 
-    await this.collectSemanticSeed(candidates, anchors, options, semantic, phaseMs);
     this.collectTypeGraphCandidates(candidates, anchors, options);
-
     const rgExecution = await this.collectNamingRecall(candidates, anchors, options, phaseMs);
+    const nonLspReadPlanPaths = this.nonLspReadPlanPaths(candidates, anchors[0], options);
+
+    await this.collectSemanticSeed(candidates, anchors, options, semantic, phaseMs);
     await this.semanticVerify(candidates, anchors, options, semantic, phaseMs);
 
     const suppressed = {
@@ -124,10 +125,10 @@ export class AgentRouter {
       crossModuleConsumers: 0,
       excludedModules: 0
     };
-    const ranked = this.finalizeRank(candidates, anchors[0], options, suppressed);
+    const ranked = this.finalizeRank(candidates, anchors[0], options, suppressed, nonLspReadPlanPaths);
     const formattedFiles = ranked.map((file, index) => formatCandidate(file, `F${index + 1}`, options.verbosity || "standard"));
     const idByPath = new Map(ranked.map((file, index) => [file.absolutePath, `F${index + 1}`]));
-    const readPlan = this.buildReadPlan(ranked, idByPath, options);
+    const readPlan = this.buildReadPlan(ranked, idByPath, options, nonLspReadPlanPaths);
     const cacheAfter = this.session.cacheStatus();
     const rgAfter = this.rgCacheStatus();
     const sourceAfter = this.sourceIndex.status();
@@ -286,6 +287,20 @@ export class AgentRouter {
         mergeCandidate(candidates, candidate);
       }
     }
+  }
+
+  private nonLspReadPlanPaths(
+    candidates: Map<string, CandidateFile>,
+    anchor: ResolvedAnchor,
+    options: ImpactOptions
+  ): Set<string> {
+    const suppressed = { deferredTests: 0, crossModuleConsumers: 0, excludedModules: 0 };
+    const ranked = this.finalizeRank(candidates, anchor, options, suppressed);
+    const maxItems = options.readPlanMaxItems ?? defaultReadPlanMax(options.mode);
+    return new Set(
+      this.selectReadPlanFiles(ranked, options, maxItems)
+        .map(file => file.absolutePath)
+    );
   }
 
   private async semanticVerify(
@@ -609,7 +624,8 @@ export class AgentRouter {
     candidates: Map<string, CandidateFile>,
     anchor: ResolvedAnchor,
     options: ImpactOptions,
-    suppressed: Record<string, number>
+    suppressed: Record<string, number>,
+    extraProtectedPaths = new Set<string>()
   ): CandidateFile[] {
     let anchorFacts: JavaSourceFacts | undefined;
     try {
@@ -635,16 +651,19 @@ export class AgentRouter {
         .slice(0, maxItems)
         .map(entry => entry.file)
     );
+    for (const file of ranked) {
+      if (extraProtectedPaths.has(file.absolutePath)) {
+        readPlanCovered.add(file);
+      }
+    }
     return truncateCandidateTail(ranked, readPlanCovered, candidateLimit(options.mode, anchor.profile));
   }
 
-  private buildReadPlan(files: CandidateFile[], ids: Map<string, string>, options: ImpactOptions): ReadPlanItem[] {
+  private buildReadPlan(files: CandidateFile[], ids: Map<string, string>, options: ImpactOptions, protectedPaths = new Set<string>()): ReadPlanItem[] {
     const maxItems = options.readPlanMaxItems ?? defaultReadPlanMax(options.mode);
-    return files
-      .map(file => ({ file, priority: readPriority(file, options) }))
-      .sort((left, right) => priorityRank(left.priority) - priorityRank(right.priority) || right.file.score - left.file.score)
-      .slice(0, maxItems)
-      .map(({ file, priority }) => {
+    return this.selectReadPlanFiles(files, options, maxItems, protectedPaths)
+      .map(file => {
+        const priority = readPriority(file, options);
         const planWindow = this.readWindow(file, priority);
         return {
           priority,
@@ -654,6 +673,42 @@ export class AgentRouter {
           reason: readReason(file, priority)
         };
       });
+  }
+
+  private selectReadPlanFiles(
+    files: CandidateFile[],
+    options: ImpactOptions,
+    maxItems: number,
+    protectedPaths = new Set<string>()
+  ): CandidateFile[] {
+    const sorted = files
+      .map(file => ({ file, priority: readPriority(file, options) }))
+      .sort((left, right) => priorityRank(left.priority) - priorityRank(right.priority) || right.file.score - left.file.score)
+      .map(entry => entry.file);
+    const selected: CandidateFile[] = [];
+    const selectedPaths = new Set<string>();
+    for (const file of sorted) {
+      if (selected.length >= maxItems) {
+        break;
+      }
+      if (protectedPaths.has(file.absolutePath)) {
+        selected.push(file);
+        selectedPaths.add(file.absolutePath);
+      }
+    }
+    for (const file of sorted) {
+      if (selected.length >= maxItems) {
+        break;
+      }
+      if (!selectedPaths.has(file.absolutePath)) {
+        selected.push(file);
+        selectedPaths.add(file.absolutePath);
+      }
+    }
+    return selected
+      .map(file => ({ file, priority: readPriority(file, options) }))
+      .sort((left, right) => priorityRank(left.priority) - priorityRank(right.priority) || right.file.score - left.file.score)
+      .map(entry => entry.file);
   }
 
   private readWindow(file: CandidateFile, priority: ReadPriority): { startLine: number; endLine: number } {
