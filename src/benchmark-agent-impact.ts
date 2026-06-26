@@ -37,8 +37,16 @@ type Scenario = {
     shouldHit?: string[];
     side?: string[];
   };
+  goldenMeta?: Record<string, {
+    shouldBlocksTask?: boolean;
+    note?: string;
+  }>;
   groundTruth?: string[];
 };
+
+type GoldenKind = "must" | "should" | "side";
+type GoldenSource = "rg" | "typeGraph" | "seed" | "reference" | "typeHierarchy" | "typeReference" | "no-lsp" | "absent" | "unknown";
+type GoldenBlockedBy = "hit" | "readplan-full" | "absent";
 
 type Cli = {
   repoRoot: string;
@@ -172,7 +180,10 @@ async function impactAttempt(router: AgentRouter, cli: Cli, scenario: Scenario):
   const candidatePaths = result.files.map(file => String(file.path));
   const readFiles = distinctReadFiles(result);
   const quality = evaluate(candidatePaths, readFiles, scenario);
-  return attemptPayload("impact", quality, rawSearchPayload, readingPayload, elapsedMs, 1 + result.readPlan.length, result.readPlan.length, Number(result.counts.totalRgRawBytes || 0), 0);
+  return {
+    ...attemptPayload("impact", quality, rawSearchPayload, readingPayload, elapsedMs, 1 + result.readPlan.length, result.readPlan.length, Number(result.counts.totalRgRawBytes || 0), 0),
+    goldenAttribution: goldenAttributionForImpact(result, scenario)
+  };
 }
 
 function noLspAttempt(repoRoot: string, scenario: Scenario): Record<string, unknown> {
@@ -183,7 +194,10 @@ function noLspAttempt(repoRoot: string, scenario: Scenario): Record<string, unkn
   const readingPayload = readMatchedFilesBytes(repoRoot, readFiles, rg.lineByPath, scenario);
   const rawSearchPayload = Buffer.byteLength(rg.stdout, "utf8");
   const quality = evaluate(candidatePaths, readFiles, scenario);
-  return attemptPayload("no-lsp", quality, rawSearchPayload, readingPayload, performance.now() - startedAt, 1 + readFiles.length, readFiles.length, 0, rawSearchPayload);
+  return {
+    ...attemptPayload("no-lsp", quality, rawSearchPayload, readingPayload, performance.now() - startedAt, 1 + readFiles.length, readFiles.length, 0, rawSearchPayload),
+    goldenAttribution: goldenAttributionForNoLsp(candidatePaths, readFiles, scenario)
+  };
 }
 
 function attemptPayload(
@@ -309,6 +323,97 @@ function distinctReadFiles(result: Awaited<ReturnType<AgentRouter["impact"]>>): 
   return [...new Set(result.readPlan.map(item => files.get(item.fileId)).filter((file): file is string => Boolean(file)))];
 }
 
+function goldenAttributionForImpact(result: Awaited<ReturnType<AgentRouter["impact"]>>, scenario: Scenario): Array<Record<string, unknown>> {
+  const fileByPath = new Map(result.files.map(file => [String(file.path), file]));
+  const pathById = new Map(result.files.map(file => [String(file.id), String(file.path)]));
+  const readSet = new Set(result.readPlan.map(item => pathById.get(item.fileId)).filter(Boolean));
+  const semanticUsed = semanticWasUsed(result.metrics);
+  return goldenEntries(scenario).map(({ file, kind }) => {
+    const candidate = fileByPath.get(file);
+    const inReadPlan = readSet.has(file);
+    return goldenAttributionRow(scenario, file, kind, Boolean(candidate), inReadPlan, candidate ? goldenSource(candidate) : "absent", semanticUsed);
+  });
+}
+
+function goldenAttributionForNoLsp(candidatePaths: string[], readFiles: string[], scenario: Scenario): Array<Record<string, unknown>> {
+  const candidates = new Set(candidatePaths);
+  const readSet = new Set(readFiles);
+  return goldenEntries(scenario).map(({ file, kind }) => {
+    const inFiles = candidates.has(file);
+    const inReadPlan = readSet.has(file);
+    return goldenAttributionRow(scenario, file, kind, inFiles, inReadPlan, inFiles ? "no-lsp" : "absent", false);
+  });
+}
+
+function goldenAttributionRow(
+  scenario: Scenario,
+  file: string,
+  kind: GoldenKind,
+  inFiles: boolean,
+  inReadPlan: boolean,
+  source: GoldenSource,
+  semanticUsed: boolean
+): Record<string, unknown> {
+  const shouldBlocksTask = kind === "should" ? scenario.goldenMeta?.[file]?.shouldBlocksTask : undefined;
+  return compactRecord({
+    scenario: scenario.name,
+    file,
+    kind,
+    inFiles,
+    inReadPlan,
+    source,
+    blockedBy: blockedBy(inFiles, inReadPlan),
+    profile: scenario.anchor.profile,
+    semanticUsed,
+    shouldBlocksTask
+  });
+}
+
+function goldenEntries(scenario: Scenario): Array<{ file: string; kind: GoldenKind }> {
+  return [
+    ...goldenFiles(scenario, "mustHit").map(file => ({ file, kind: "must" as const })),
+    ...goldenFiles(scenario, "shouldHit").map(file => ({ file, kind: "should" as const })),
+    ...goldenFiles(scenario, "side").map(file => ({ file, kind: "side" as const }))
+  ];
+}
+
+function blockedBy(inFiles: boolean, inReadPlan: boolean): GoldenBlockedBy {
+  return inReadPlan ? "hit" : inFiles ? "readplan-full" : "absent";
+}
+
+function goldenSource(candidate: Record<string, unknown>): GoldenSource {
+  const verifiedBy = Array.isArray(candidate.verifiedBy) ? candidate.verifiedBy.map(String) : [];
+  const sources = Array.isArray(candidate.scoreBreakdown)
+    ? candidate.scoreBreakdown
+      .map(item => item && typeof item === "object" ? (item as Record<string, unknown>).source : undefined)
+      .map(String)
+    : [];
+  if (verifiedBy.includes("reference")) {
+    return "reference";
+  }
+  if (verifiedBy.includes("typeHierarchy")) {
+    return "typeHierarchy";
+  }
+  if (verifiedBy.includes("typeReference")) {
+    return "typeReference";
+  }
+  if (verifiedBy.includes("semantic-definition") || verifiedBy.includes("semantic-implementation") || sources.includes("semantic-seed")) {
+    return "seed";
+  }
+  if (verifiedBy.includes("typeGraph")) {
+    return "typeGraph";
+  }
+  if (sources.includes("rg")) {
+    return "rg";
+  }
+  return "unknown";
+}
+
+function semanticWasUsed(metrics: Record<string, unknown>): boolean {
+  const semantic = metrics.semantic;
+  return Boolean(semantic && typeof semantic === "object" && (semantic as Record<string, unknown>).used);
+}
+
 function runNoLspRg(repoRoot: string, scenario: Scenario): { stdout: string; files: string[]; lineByPath: Map<string, number> } {
   const pattern = unique(noLspTerms(repoRoot, scenario)).map(regexLiteral).join("|") || regexLiteral(path.basename(scenario.anchor.file, ".java"));
   const result = spawnSync("rg", ["--line-number", "--no-heading", "-g", "*.java", pattern, "."], {
@@ -411,6 +516,10 @@ function regexLiteral(value: string): string {
 
 function unique(values: string[]): string[] {
   return [...new Set(values.filter(Boolean))];
+}
+
+function compactRecord(value: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined));
 }
 
 function percentile(sortedValues: number[], percentileValue: number): number {

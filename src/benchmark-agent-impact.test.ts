@@ -82,8 +82,14 @@ test("benchmark can run a no-lsp token baseline", async () => {
     },
     golden: {
       mustHit: ["src/main/java/demo/DemoController.java", "src/main/java/demo/DemoRequest.java", "src/main/java/demo/DemoResponse.java"],
-      shouldHit: [],
+      shouldHit: ["src/main/java/demo/MissingService.java"],
       side: []
+    },
+    goldenMeta: {
+      "src/main/java/demo/MissingService.java": {
+        shouldBlocksTask: false,
+        note: "not needed for this fixture"
+      }
     }
   })}\n`);
 
@@ -107,4 +113,27 @@ test("benchmark can run a no-lsp token baseline", async () => {
   assert.equal(attempt.strategy, "no-lsp");
   assert.ok(attempt.estimatedTokens > 0);
   assert.ok(attempt.rgRawBytesExposed > 0);
+  assert.deepEqual(attempt.goldenAttribution.find((item: Record<string, unknown>) => item.file === "src/main/java/demo/DemoController.java"), {
+    scenario: "DemoController#updateDemo",
+    file: "src/main/java/demo/DemoController.java",
+    kind: "must",
+    inFiles: true,
+    inReadPlan: true,
+    source: "no-lsp",
+    blockedBy: "hit",
+    profile: "controller",
+    semanticUsed: false
+  });
+  assert.deepEqual(attempt.goldenAttribution.find((item: Record<string, unknown>) => item.file === "src/main/java/demo/MissingService.java"), {
+    scenario: "DemoController#updateDemo",
+    file: "src/main/java/demo/MissingService.java",
+    kind: "should",
+    inFiles: false,
+    inReadPlan: false,
+    source: "absent",
+    blockedBy: "absent",
+    profile: "controller",
+    semanticUsed: false,
+    shouldBlocksTask: false
+  });
 });
