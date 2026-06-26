@@ -70,6 +70,30 @@ runner：
 - `golden.mustHit`：直接语义邻居，必须进入 `readPlan`。
 - `golden.shouldHit`：一跳协作者，参与 precision/recall，但不是 hard gate。
 - `golden.side`：测试、SQL、配置等旁路证据，按场景显式声明。
+- `goldenMeta[path].shouldBlocksTask`：仅解释 `shouldHit` 缺口是否会卡真实任务完成，不参与 precision/recall 或 hard gate。
+
+`mustHit` 只承载当前任务的硬邻居；DTO 细节、实现消费者、跨模块服务和测试证据优先放入 `shouldHit` / `side`，再用 `shouldBlocksTask` 标注是否影响真实排查。`side` 仍是 diagnostic-only，不进入 hard gate。
+
+### 3.1 Golden 覆盖快照（2026-06-27）
+
+本轮 readPlan attribution 扩充后，三个真实项目共 15 个场景：
+
+| project | scenarios | profiles |
+|---|---:|---|
+| lishuedu | 5 | port, parser, repository, controller, dto |
+| cipherlink | 5 | controller x2, repository, port, dto |
+| exam-parent-v3 | 5 | service x2, controller, repository, dto |
+
+跨三项目 profile 分布：
+
+| profile | count | note |
+|---|---:|---|
+| controller | 4 | 覆盖管理/客户端入口与上传接口 |
+| service | 2 | 覆盖规则引擎与报名保存主服务 |
+| repository | 3 | 覆盖 MyBatis、Mongo Repository 与导出任务仓储 |
+| dto | 3 | 覆盖响应 DTO、支付 DTO 与权益 DTO |
+| port | 2 | 覆盖 storage 与 SMS gateway |
+| parser | 1 | 仅 lishuedu 有高价值 parser 样本；不为覆盖指标虚构低价值 parser |
 
 ## 4. 指标
 
