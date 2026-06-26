@@ -11,6 +11,13 @@ import { SourceIndex, type JavaMethodFact, type JavaSourceFacts } from "../sourc
 import { probeLayout, type LayoutContext } from "../layout-probe.js";
 import { legacyRoutingPolicy, scoreWithPolicy, type ScoreCategory } from "../routing-policy.js";
 import {
+  annotationCollaborationDelta,
+  kindPairingDelta,
+  packageProximityDelta,
+  symmetricTypeRelationDelta,
+  truncateCandidateTail
+} from "./ranking-signals.js";
+import {
   type CandidateFile,
   type CrossModulePolicy,
   type ImpactMode,
@@ -530,7 +537,13 @@ export class AgentRouter {
     return summary;
   }
 
-  private finalizeScore(candidate: CandidateFile, anchor: ResolvedAnchor, options: ImpactOptions, suppressed: Record<string, number>): CandidateFile {
+  private finalizeScore(
+    candidate: CandidateFile,
+    anchor: ResolvedAnchor,
+    options: ImpactOptions,
+    suppressed: Record<string, number>,
+    anchorFacts?: JavaSourceFacts
+  ): CandidateFile {
     const scoreBreakdown = [...(candidate.scoreBreakdown || [breakdown("unknown.initial", "policy", candidate.score, "initial candidate score")])];
     let score = candidate.score;
     const matchCountDelta = Math.min(40, candidate.matchCount * 2);
@@ -542,7 +555,12 @@ export class AgentRouter {
       score += addScoreDelta(scoreBreakdown, "finalize.task-keyword", 30, "task keyword");
     }
     score += addScoreDelta(scoreBreakdown, "finalize.direct-collaborator", directCollaboratorDelta(candidate, anchor, options), "direct type-name collaborator");
-    score += addScoreDelta(scoreBreakdown, "finalize.type-relation", this.typeRelationDelta(candidate, anchor), "implements or extends anchor type");
+    const structural = this.structuralDeltas(candidate, anchor, anchorFacts);
+    score += addScoreDelta(scoreBreakdown, "finalize.type-relation", structural.typeRelation, "implements or extends anchor type");
+    score += addScoreDelta(scoreBreakdown, "finalize.structural.annotation", structural.annotation, "stereotype collaboration");
+    score += addScoreDelta(scoreBreakdown, "finalize.structural.package", structural.packageProximity, "package proximity");
+    score += addScoreDelta(scoreBreakdown, "finalize.structural.type-symmetric", structural.typeSymmetric, "anchor is candidate subtype");
+    score += addScoreDelta(scoreBreakdown, "finalize.structural.kind", structural.kind, "interface-impl pairing");
     if (candidate.sourceSet === "test" && options.testReadMode === "defer") {
       score += addScoreDelta(scoreBreakdown, "finalize.defer-test", -10, "defer test candidate");
       suppressed.deferredTests += 1;
@@ -561,16 +579,29 @@ export class AgentRouter {
     return { ...candidate, score: finalScore, scoreBreakdown };
   }
 
-  private typeRelationDelta(candidate: CandidateFile, anchor: ResolvedAnchor): number {
-    if (!anchor.className || candidate.absolutePath === anchor.absolutePath || !candidate.absolutePath.endsWith(".java")) {
-      return 0;
+  private structuralDeltas(candidate: CandidateFile, anchor: ResolvedAnchor, anchorFacts?: JavaSourceFacts): {
+    annotation: number;
+    packageProximity: number;
+    typeRelation: number;
+    typeSymmetric: number;
+    kind: number;
+  } {
+    const zero = { annotation: 0, packageProximity: 0, typeRelation: 0, typeSymmetric: 0, kind: 0 };
+    if (!anchorFacts || candidate.absolutePath === anchor.absolutePath || !candidate.absolutePath.endsWith(".java")) {
+      return zero;
     }
     try {
-      const facts = this.sourceIndex.factsFor(candidate.absolutePath);
-      const parents = [...facts.implementsTypes, facts.extendsType || ""].map(simpleTypeName);
-      return parents.includes(anchor.className) ? 95 : 0;
+      const candidateFacts = this.sourceIndex.factsFor(candidate.absolutePath);
+      const candidateParents = [...candidateFacts.implementsTypes, candidateFacts.extendsType || ""].map(simpleTypeName);
+      return {
+        annotation: annotationCollaborationDelta(anchorFacts.annotations, candidateFacts.annotations),
+        packageProximity: packageProximityDelta(anchorFacts.packageName, candidateFacts.packageName),
+        typeRelation: anchor.className && candidateParents.includes(anchor.className) ? 95 : 0,
+        typeSymmetric: symmetricTypeRelationDelta(anchorFacts, candidateFacts),
+        kind: kindPairingDelta(anchorFacts, candidateFacts, anchor.profile)
+      };
     } catch {
-      return 0;
+      return zero;
     }
   }
 
@@ -580,7 +611,13 @@ export class AgentRouter {
     options: ImpactOptions,
     suppressed: Record<string, number>
   ): CandidateFile[] {
-    return [...candidates.values()]
+    let anchorFacts: JavaSourceFacts | undefined;
+    try {
+      anchorFacts = this.sourceIndex.factsFor(anchor.absolutePath);
+    } catch {
+      anchorFacts = undefined;
+    }
+    const ranked = [...candidates.values()]
       .filter(candidate => {
         if (candidate.module && options.excludeModules.includes(candidate.module)) {
           suppressed.excludedModules += 1;
@@ -588,9 +625,17 @@ export class AgentRouter {
         }
         return true;
       })
-      .map(candidate => this.finalizeScore(candidate, anchor, options, suppressed))
-      .sort((left, right) => right.score - left.score || (left.path || left.absolutePath).localeCompare(right.path || right.absolutePath))
-      .slice(0, candidateLimit(options.mode, anchor.profile));
+      .map(candidate => this.finalizeScore(candidate, anchor, options, suppressed, anchorFacts))
+      .sort((left, right) => right.score - left.score || (left.path || left.absolutePath).localeCompare(right.path || right.absolutePath));
+    const maxItems = options.readPlanMaxItems ?? defaultReadPlanMax(options.mode);
+    const readPlanCovered = new Set(
+      [...ranked]
+        .map(file => ({ file, priority: readPriority(file, options) }))
+        .sort((left, right) => priorityRank(left.priority) - priorityRank(right.priority) || right.file.score - left.file.score)
+        .slice(0, maxItems)
+        .map(entry => entry.file)
+    );
+    return truncateCandidateTail(ranked, readPlanCovered, candidateLimit(options.mode, anchor.profile));
   }
 
   private buildReadPlan(files: CandidateFile[], ids: Map<string, string>, options: ImpactOptions): ReadPlanItem[] {

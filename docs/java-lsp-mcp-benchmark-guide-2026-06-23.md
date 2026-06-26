@@ -282,6 +282,64 @@ weighted total drop: 0.63%
 all project R_read_must: 1.0
 ```
 
+Batch 3 cold-path ranking precision 验证（2026-06-26），before = `753e947`（Batch 2 after），after = `codex/cold-path-ranking-precision` 当前实现，均为 `cold-nolsp strategy=impact runs=5`：
+
+```bash
+npm run build
+node dist/benchmark-agent-impact.js --repo-root /Users/luo/Documents/program/lishu/lishuedu --project-id lishuedu --warm-state cold-nolsp --strategy impact --runs 5 > /tmp/bench-lishuedu-before.json
+node dist/benchmark-agent-impact.js --repo-root /Users/luo/Documents/program/cipherlink --project-id cipherlink --warm-state cold-nolsp --strategy impact --runs 5 > /tmp/bench-cipherlink-before.json
+node dist/benchmark-agent-impact.js --repo-root /Users/luo/Documents/program/exam-parent-v3 --project-id exam-parent-v3 --warm-state cold-nolsp --strategy impact --runs 5 > /tmp/bench-exam-parent-v3-before.json
+# after 使用当前分支同参数输出到 /tmp/bench-*-after.json
+node scripts/summarize-impact-benchmark.mjs /tmp/bench-lishuedu-before.json /tmp/bench-lishuedu-after.json
+node scripts/summarize-impact-benchmark.mjs /tmp/bench-cipherlink-before.json /tmp/bench-cipherlink-after.json
+node scripts/summarize-impact-benchmark.mjs /tmp/bench-exam-parent-v3-before.json /tmp/bench-exam-parent-v3-after.json
+```
+
+结果：
+
+| project | raw before | raw after | raw drop | returnedFiles before | after | precision before | after | recall before | after | P_read before | after | R_read_must |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| lishuedu | 9,531.92 B | 7,745.64 B | 18.74% | 20.80 | 15.80 | 0.3144 | 0.4127 | 0.7756 | 0.7756 | 0.7667 | 0.8000 | 1.0000 |
+| cipherlink | 5,967.20 B | 5,967.20 B | 0.00% | 11.00 | 11.00 | 0.5455 | 0.5455 | 1.0000 | 1.0000 | 0.8333 | 0.8333 | 1.0000 |
+| exam-parent-v3 | 5,943.20 B | 5,943.20 B | 0.00% | 12.00 | 12.00 | 0.5833 | 0.5833 | 1.0000 | 1.0000 | 0.6667 | 0.6667 | 1.0000 |
+
+汇总：
+
+```text
+weighted raw drop: 8.33%
+weighted total drop: 3.64%
+weighted estimated token drop: 3.64%
+all project recall: no regression
+all project R_read_must: 1.0
+```
+
+最终 L2 参数与口径：
+
+- `cliff ratio = 0.5`。
+- `dynamicBudget = min(floor(strongStructuralCount * 0.5), 4)`。
+- `floor = max(readPlanCovered.size, 8)`。
+- `minStrongStructuralEvidence = 6`；强结构证据少于 6 时不做尾部裁剪，只做 readPlan-aware candidateLimit。
+- L2 protected 只包含 readPlan 覆盖候选和强结构信号：`finalize.direct-collaborator`、`finalize.type-relation`、`finalize.structural.type-symmetric`、`finalize.structural.kind`。
+- `finalize.structural.annotation`、`finalize.structural.package`、`finalize.focus-module` 只加分，不保护。实测证明 annotation/focus 在 lishuedu 大模块上会保护过多同层/同模块候选，使 raw payload 反增。
+- Batch C（字符串权重下调）未执行；Batch A+B 已达到 lishuedu precision/raw 目标，并且三项目 recall/readPlan hard gate 稳定。
+
+lishuedu per-scenario 变化：
+
+| scenario | returnedFiles | raw payload | precision | recall | readingPayload | P_read | R_read_must |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| StorageGateway#getSignedUrl | 20 -> 11 | 9,165.4 -> 6,084.4 | 0.3000 -> 0.5455 | 0.6000 -> 0.6000 | 7,726 -> 7,726 | 1.0000 -> 1.0000 | 1.0000 |
+| SchoolTemplateImportParser#parse | 18 -> 18 | 8,272.2 -> 8,272.2 | 0.3889 -> 0.3889 | 1.0000 -> 1.0000 | 12,450 -> 12,450 | 0.8333 -> 0.8333 | 1.0000 |
+| ReportBatchExportTaskRepository#findReusableReadyZip | 26 -> 10 | 12,074.6 -> 6,202.2 | 0.1538 -> 0.4000 | 0.5000 -> 0.5000 | 9,864 -> 9,864 | 0.6667 -> 0.6667 | 1.0000 |
+| SchoolTemplateImportController#confirm | 16 -> 16 | 7,770.2 -> 7,792.2 | 0.4375 -> 0.4375 | 1.0000 -> 1.0000 | 11,715 -> 12,603 | 0.6667 -> 0.8333 | 1.0000 |
+| ParentStudentBenefitItemResponse.productCode | 24 -> 24 | 10,377.2 -> 10,377.2 | 0.2917 -> 0.2917 | 0.7778 -> 0.7778 | 10,620 -> 10,742 | 0.6667 -> 0.6667 | 1.0000 |
+
+readPlan diff 结论：
+
+- 只有 lishuedu 的 `SchoolTemplateImportController#confirm` 与 `ParentStudentBenefitItemResponse.productCode` 出现 readPlan 排序变化；三项目 `R_read_must` 均保持 `1.0`。
+- `SchoolTemplateImportController#confirm`：新增 `SchoolTemplateImportAppService` 进入 readPlan，替换原第 6 位 `SchoolResponse`；`P_read` 从 `0.6667` 提升到 `0.8333`，reading 增加 888 B。
+- `ParentStudentBenefitItemResponse.productCode`：`BenefitEntitlementAssembler` 提前，`BenefitAdminAssembler` 替换 `CmccProductSubjectMappingQueryAppService`；`P_read` 持平 `0.6667`，reading 增加 122 B。
+- 这两个 readPlan 变化均由 L1 结构加分引起，不是 L2 截断误删；候选 recall 不降，must-hit 全部仍在 readPlan。
+
 ### 历史验证快照（2026-06-23）
 
 命令：

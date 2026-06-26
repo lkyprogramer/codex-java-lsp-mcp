@@ -384,6 +384,38 @@ test("diagnostic score breakdown sums to final score", async () => {
   }
 });
 
+test("L1 structural signals are scored on a real collaborator candidate", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-router-l1-"));
+  const base = path.join(root, "modules", "order", "src", "main", "java", "com", "x", "order");
+  await mkdir(path.join(base, "app"), { recursive: true });
+  await mkdir(path.join(base, "infra"), { recursive: true });
+  await writeFile(path.join(root, "pom.xml"), "<project></project>\n");
+  await writeFile(path.join(base, "app", "OrderService.java"), [
+    "package com.x.order.app;",
+    "@Service",
+    "public class OrderService { public void placeOrder() { } }",
+    ""
+  ].join("\n"));
+  await writeFile(path.join(base, "infra", "OrderRepository.java"), [
+    "package com.x.order.infra;",
+    "@Repository",
+    "public class OrderRepository { public void saveOrder(Long orderId) { } }",
+    ""
+  ].join("\n"));
+
+  const result = await tempRouter(root).impact(options({
+    anchors: [{ file: "modules/order/src/main/java/com/x/order/app/OrderService.java", line: 3, column: 21 }],
+    taskKeywords: ["order"],
+    verbosity: "diagnostic"
+  }));
+
+  const repo = result.files.find(file => String(file.path).endsWith("OrderRepository.java"));
+  assert.ok(repo, "OrderRepository should be returned as a candidate");
+  const breakdown = new Map(((repo.scoreBreakdown as Array<{ id: string; delta: number }>) || []).map(item => [item.id, item.delta]));
+  assert.equal(breakdown.get("finalize.structural.annotation"), 50);
+  assert.equal(breakdown.get("finalize.structural.package"), 18);
+});
+
 test("controller recall includes method-infix request response and assembler", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "java-lsp-router-controller-recall-"));
   await mkdir(path.join(root, "modules", "client", "src", "main", "java", "demo"), { recursive: true });
