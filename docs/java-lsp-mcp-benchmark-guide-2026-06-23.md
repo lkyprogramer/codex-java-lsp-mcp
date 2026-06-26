@@ -389,6 +389,17 @@ npm run build && npm test
 | warm-auto | auto | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1501.53ms | 1586.83ms |
 | warm-required | required | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0.80ms | 892.48ms |
 
+### readPlan semantic overflow 修复验证（2026-06-26）
+
+本轮验证目标：确认 `semanticPolicy=required` 引入 semanticLocations/references/typeHierarchy 候选后，不再挤出 non-LSP readPlan 邻居。
+
+| project | warmState | recall | precision | P_read | R_read_must | elapsedMs | total payload | estimatedTokens |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| lishuedu | cold-nolsp | 0.7756 | 0.4127 | 0.8000 | 1.0000 | 19.88 ms | 18432.24 B | 4608 |
+| lishuedu | warm-required | 0.8256 | 0.4030 | 0.8000 | 1.0000 | 603.26 ms | 19077.96 B | 4770 |
+
+结论：接受 `warm-required` 作为 precision/recall mode 的可选增强；它将 lishuedu recall 从 `0.7756` 提升到 `0.8256`，同时 `R_read_must` 从修复前的 `0.7000` 恢复到 `1.0000`。默认 `warm-auto` 启用范围本轮不扩大。
+
 ## 8. 判定规则
 
 通过：
