@@ -29,7 +29,7 @@ try {
   if (!lsp.enabled || !looksJavaSemantic(prompt)) {
     writeContinue();
   } else {
-    writeAdvice(`JAVA_LSP_ADVISOR: 当前路径已启用 codex-java-lsp (${lsp.matchedBy})。先调用 java_status({repoRoot:"${lsp.effectiveRepoRoot}",start:false}) 校验 repoRoot；如果已决定使用 LSP 且 started=false，再调用 java_status({repoRoot:"${lsp.effectiveRepoRoot}",start:true}) 主动启动；随后优先用 java_impact 获取影响面。`);
+    writeAdvice(`JAVA_LSP_ADVISOR: 当前路径已启用 codex-java-lsp (${lsp.matchedBy})。这是已配置项目，不能只报告 LSP server 未启动。先调用 java_status({repoRoot:"${lsp.effectiveRepoRoot}",start:false}) 校验 repoRoot；若返回 started=false，必须立即调用 java_status({repoRoot:"${lsp.effectiveRepoRoot}",start:true}) 启动 LSP server；随后优先用 java_impact 获取影响面。`);
   }
 } catch {
   writeContinue();

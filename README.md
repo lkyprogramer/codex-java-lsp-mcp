@@ -137,7 +137,7 @@ hook 行为：
 - 只校验当前 cwd 是否命中 `lspEnabled=true` 或 Git worktree family 继承。
 - 未启用、冲突、非 Java 语义提示时静默放行。
 - 只追加短提示，不直接启动 JDT LS，不阻断 shell/`rg`。
-- 提示 agent 先用 `java_status(start=false)` 校验 `repoRoot`；如果工作流已经决定使用 LSP 且返回 `started=false`，再用 `java_status(start=true)` 主动启动。
+- 提示 agent 先用 `java_status(start=false)` 校验 `repoRoot`；已配置项目不能只报告 LSP server 未启动，若返回 `started=false`，必须用 `java_status(start=true)` 主动启动。
 
 ## Public MCP Tools
 
