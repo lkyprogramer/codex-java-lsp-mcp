@@ -94,9 +94,10 @@ export class AgentRouter {
 
   async impact(options: ImpactOptions): Promise<ImpactResult> {
     const startedAt = Date.now();
-    const sourceBefore = this.sourceIndex.status();
-    const cacheBefore = this.session.cacheStatus();
-    const rgBefore = this.rgCacheStatus();
+    const phaseMs: Record<string, number> = {};
+    const sourceBefore = await timed(phaseMs, "sourceStatusBefore", async () => this.sourceIndex.status());
+    const cacheBefore = await timed(phaseMs, "sessionCacheBefore", async () => this.session.cacheStatus());
+    const rgBefore = await timed(phaseMs, "rgCacheBefore", async () => this.rgCacheStatus());
     const semantic = {
       used: false,
       skipped: false,
@@ -106,16 +107,15 @@ export class AgentRouter {
       policy: options.semanticPolicy,
       timeoutMs: options.semanticTimeoutMs
     };
-    const phaseMs: Record<string, number> = {};
-    const anchors = options.anchors.map((anchor, index) => this.resolveAnchor(anchor, options.profile, `A${index + 1}`));
+    const anchors = await timed(phaseMs, "resolveAnchors", async () => options.anchors.map((anchor, index) => this.resolveAnchor(anchor, options.profile, `A${index + 1}`)));
     const candidates = new Map<string, CandidateFile>();
     for (const anchor of anchors) {
       mergeCandidate(candidates, candidateFromAnchor(anchor));
     }
 
-    this.collectTypeGraphCandidates(candidates, anchors, options);
+    await timed(phaseMs, "typeGraph", async () => this.collectTypeGraphCandidates(candidates, anchors, options));
     const rgExecution = await this.collectNamingRecall(candidates, anchors, options, phaseMs);
-    const nonLspReadPlanPaths = this.nonLspReadPlanPaths(candidates, anchors[0], options);
+    const nonLspReadPlanPaths = await timed(phaseMs, "nonLspReadPlan", async () => this.nonLspReadPlanPaths(candidates, anchors[0], options));
 
     await this.collectSemanticSeed(candidates, anchors, options, semantic, phaseMs);
     await this.semanticVerify(candidates, anchors, options, semantic, phaseMs);
@@ -125,13 +125,13 @@ export class AgentRouter {
       crossModuleConsumers: 0,
       excludedModules: 0
     };
-    const ranked = this.finalizeRank(candidates, anchors[0], options, suppressed, nonLspReadPlanPaths);
-    const formattedFiles = ranked.map((file, index) => formatCandidate(file, `F${index + 1}`, options.verbosity || "standard"));
+    const ranked = await timed(phaseMs, "finalizeRank", async () => this.finalizeRank(candidates, anchors[0], options, suppressed, nonLspReadPlanPaths));
+    const formattedFiles = await timed(phaseMs, "formatCandidates", async () => ranked.map((file, index) => formatCandidate(file, `F${index + 1}`, options.verbosity || "standard")));
     const idByPath = new Map(ranked.map((file, index) => [file.absolutePath, `F${index + 1}`]));
-    const readPlan = this.buildReadPlan(ranked, idByPath, options, nonLspReadPlanPaths);
-    const cacheAfter = this.session.cacheStatus();
-    const rgAfter = this.rgCacheStatus();
-    const sourceAfter = this.sourceIndex.status();
+    const readPlan = await timed(phaseMs, "buildReadPlan", async () => this.buildReadPlan(ranked, idByPath, options, nonLspReadPlanPaths));
+    const cacheAfter = await timed(phaseMs, "sessionCacheAfter", async () => this.session.cacheStatus());
+    const rgAfter = await timed(phaseMs, "rgCacheAfter", async () => this.rgCacheStatus());
+    const sourceAfter = await timed(phaseMs, "sourceStatusAfter", async () => this.sourceIndex.status());
 
     const payload: ImpactResult = {
       target: formatAnchor(anchors[0]),

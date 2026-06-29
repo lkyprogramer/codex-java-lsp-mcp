@@ -80,7 +80,9 @@ const metadata = {
   strategy: cli.strategy,
   runs: cli.runs,
   scenarioFile: cli.scenarioFile,
-  runtimeBuild
+  runtimeBuild,
+  prepareWarmMs: 0,
+  prepareWarmPhaseMs: {} as Record<string, number>
 };
 
 if (cli.listScenarios) {
@@ -102,15 +104,18 @@ if (cli.listScenarios) {
 
 const session = cli.strategy === "impact" ? new JdtlsSession(cli.repoRoot) : undefined;
 const router = session ? new AgentRouter(cli.repoRoot, session, new SourceIndex(cli.repoRoot)) : undefined;
-if (session) {
+if (session && cli.warmState !== "cold-nolsp") {
+  const startedAt = performance.now();
   await prepareWarmState(cli, session, scenarios);
+  metadata.prepareWarmMs = performance.now() - startedAt;
+  metadata.prepareWarmPhaseMs = session.drainPhaseMetrics();
 }
 
 const rows = [];
 for (const scenario of scenarios) {
   const attempts = [];
   for (let run = 0; run < cli.runs; run += 1) {
-    attempts.push(cli.strategy === "no-lsp" ? noLspAttempt(cli.repoRoot, scenario) : await impactAttempt(router as AgentRouter, cli, scenario));
+    attempts.push(cli.strategy === "no-lsp" ? noLspAttempt(cli.repoRoot, scenario) : await impactAttempt(router as AgentRouter, session as JdtlsSession, cli, scenario));
   }
   rows.push({
     id: scenario.id,
@@ -159,7 +164,7 @@ function parseCli(args: string[], root: string): Cli {
   };
 }
 
-async function impactAttempt(router: AgentRouter, cli: Cli, scenario: Scenario): Promise<Record<string, unknown>> {
+async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cli, scenario: Scenario): Promise<Record<string, unknown>> {
   const startedAt = performance.now();
   const result = await router.impact({
     anchors: [scenario.anchor],
@@ -180,8 +185,10 @@ async function impactAttempt(router: AgentRouter, cli: Cli, scenario: Scenario):
   const candidatePaths = result.files.map(file => String(file.path));
   const readFiles = distinctReadFiles(result);
   const quality = evaluate(candidatePaths, readFiles, scenario);
+  const sessionPhaseMs = session.drainPhaseMetrics();
   return {
     ...attemptPayload("impact", quality, rawSearchPayload, readingPayload, elapsedMs, 1 + result.readPlan.length, result.readPlan.length, Number(result.counts.totalRgRawBytes || 0), 0),
+    timing: timingPayload(result, sessionPhaseMs),
     goldenAttribution: goldenAttributionForImpact(result, scenario)
   };
 }
@@ -321,6 +328,15 @@ function readMatchedFilesBytes(repoRoot: string, files: string[], lineByPath: Ma
 function distinctReadFiles(result: Awaited<ReturnType<AgentRouter["impact"]>>): string[] {
   const files = new Map(result.files.map(file => [String(file.id), String(file.path)]));
   return [...new Set(result.readPlan.map(item => files.get(item.fileId)).filter((file): file is string => Boolean(file)))];
+}
+
+function timingPayload(result: Awaited<ReturnType<AgentRouter["impact"]>>, sessionPhaseMs: Record<string, number>): Record<string, unknown> {
+  const metrics = result.metrics || {};
+  return compactRecord({
+    phaseMs: metrics.phaseMs,
+    sessionPhaseMs,
+    semantic: metrics.semantic
+  });
 }
 
 function goldenAttributionForImpact(result: Awaited<ReturnType<AgentRouter["impact"]>>, scenario: Scenario): Array<Record<string, unknown>> {

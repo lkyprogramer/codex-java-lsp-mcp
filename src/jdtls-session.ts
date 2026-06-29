@@ -671,9 +671,11 @@ export class JdtlsSession {
       throw new Error("JDT LS is not started.");
     }
     const cancellation = new CancellationTokenSource();
+    const startedAt = Date.now();
     try {
       return await withTimeout(this.connection.sendRequest(method, params, cancellation.token), timeoutMs, method, () => cancellation.cancel()) as T;
     } finally {
+      this.addPhaseMetric(method, Date.now() - startedAt);
       cancellation.dispose();
     }
   }

@@ -137,3 +137,62 @@ test("benchmark can run a no-lsp token baseline", async () => {
     shouldBlocksTask: false
   });
 });
+
+test("impact benchmark exposes timing diagnostics", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-benchmark-impact-timing-"));
+  const srcDir = path.join(root, "src", "main", "java", "demo");
+  await mkdir(srcDir, { recursive: true });
+  await writeFile(path.join(root, "pom.xml"), "<project></project>\n");
+  await writeFile(path.join(srcDir, "DemoService.java"), [
+    "package demo;",
+    "public class DemoService {",
+    "  public DemoResult execute(DemoCommand command) { return null; }",
+    "}",
+    ""
+  ].join("\n"));
+  await writeFile(path.join(srcDir, "DemoCommand.java"), "package demo; public record DemoCommand(String id) {}\n");
+  await writeFile(path.join(srcDir, "DemoResult.java"), "package demo; public record DemoResult(String id) {}\n");
+
+  const scenarioFile = path.join(root, "generic-java.scenarios.jsonl");
+  await writeFile(scenarioFile, `${JSON.stringify({
+    id: "demo-service-execute",
+    name: "DemoService#execute",
+    projectId: "generic-java",
+    layoutProfile: "generic-java",
+    scenarioVersion: 1,
+    warmState: "cold-nolsp",
+    anchor: {
+      file: "src/main/java/demo/DemoService.java",
+      line: 3,
+      column: 21,
+      profile: "service",
+      taskKeywords: ["demo", "execute"]
+    },
+    golden: {
+      mustHit: ["src/main/java/demo/DemoService.java"],
+      shouldHit: [],
+      side: []
+    }
+  })}\n`);
+
+  const result = spawnSync(process.execPath, [
+    "dist/benchmark-agent-impact.js",
+    "--repo-root", root,
+    "--scenarios", scenarioFile,
+    "--project-id", "generic-java",
+    "--warm-state", "cold-nolsp",
+    "--strategy", "impact",
+    "--runs", "1",
+    "--verbosity", "diagnostic"
+  ], {
+    cwd: path.resolve(import.meta.dirname, ".."),
+    encoding: "utf8"
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  const payload = JSON.parse(result.stdout);
+  const timing = payload.rows[0].attempts[0].timing;
+  assert.equal(typeof timing.phaseMs, "object");
+  assert.equal(timing.semantic.policy, "fast");
+  assert.equal(timing.semantic.used, false);
+});
