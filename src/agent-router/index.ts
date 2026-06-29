@@ -307,10 +307,10 @@ export class AgentRouter {
     candidates: Map<string, CandidateFile>,
     anchors: ResolvedAnchor[],
     options: ImpactOptions,
-    semantic: { verifyUsed: boolean; verifySkipped: boolean; timeout: boolean },
+    semantic: { used: boolean; verifyUsed: boolean; verifySkipped: boolean; timeout: boolean },
     phaseMs: Record<string, number>
   ): Promise<void> {
-    if (!this.shouldUseSemanticVerify(options)) {
+    if (!this.shouldUseSemanticVerify(options, semantic)) {
       semantic.verifySkipped = true;
       return;
     }
@@ -352,12 +352,15 @@ export class AgentRouter {
     return options.semanticPolicy === "required" && (anchor.kind === "interface" || new Set(["port", "repository", "service"]).has(anchor.profile));
   }
 
-  private shouldUseSemanticVerify(options: ImpactOptions): boolean {
+  private shouldUseSemanticVerify(options: ImpactOptions, semantic: { used: boolean }): boolean {
     if (options.semanticPolicy === "fast") {
       return false;
     }
     if (options.semanticPolicy === "required" || options.mode === "precision" || options.mode === "recall") {
       return true;
+    }
+    if (options.semanticPolicy === "auto" && !semantic.used) {
+      return false;
     }
     const status = this.session.status();
     return Boolean(status.started && status.progress?.active === 0);

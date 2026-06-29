@@ -282,6 +282,26 @@ test("semanticPolicy fast does not call semantic verify", async () => {
   assert.equal(session.referencesCalls, 0);
 });
 
+test("auto semantic verify is skipped when semantic seed is skipped", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-router-auto-verify-"));
+  await mkdir(path.join(root, "src", "main", "java", "demo"), { recursive: true });
+  await writeFile(path.join(root, "pom.xml"), "<project></project>\n");
+  await writeFile(path.join(root, "src", "main", "java", "demo", "FooController.java"), "package demo;\npublic class FooController { public void applyOrder() {} }\n");
+  const session = new FakeSemanticSession();
+
+  const result = await new AgentRouter(root, session as unknown as JdtlsSession, new SourceIndex(root)).impact(options({
+    anchors: [{ file: "src/main/java/demo/FooController.java", line: 2, column: 48 }],
+    profile: "controller",
+    semanticPolicy: "auto",
+    verbosity: "diagnostic"
+  }));
+
+  const semantic = result.metrics.semantic as { used: boolean; verifySkipped: boolean };
+  assert.equal(session.referencesCalls, 0);
+  assert.equal(semantic.used, false);
+  assert.equal(semantic.verifySkipped, true);
+});
+
 test("required semantic verify promotes reference candidates", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "java-lsp-router-references-"));
   await mkdir(path.join(root, "src", "main", "java", "demo"), { recursive: true });
