@@ -29,6 +29,7 @@
 - 注册一个 Codex MCP server：`codex-java-lsp`。
 - 提供 7 个 public tools：`java_status`、`java_impact`、`java_symbol`、`java_references`、`java_diagnostics`、`java_restart`、`java_shutdown`。
 - 默认推荐入口是 `java_impact`，用于生成影响面、候选文件、`readPlan`、证据缺口和指标。
+- benchmark harness 固化 15 个真实 golden 场景，并输出 per-golden attribution、warm prepare/router/session phase timing 和 runtime build metadata。
 - 未启用 LSP 的 Java repo 仍可走 fast path：repo/root/layout/JDK/generated-code 探测、SourceIndex、内部 `rg` 摘要。
 - 启用 LSP 后，JDT LS 可为 symbol、references、diagnostics 和 documentSymbol warm-index 提供增强结果。
 - 支持 Git worktree family 继承 LSP enablement，但每个 worktree 仍独立使用自己的 `repoRoot`、`repoHash`、workspace、日志和 SourceIndex。
@@ -41,6 +42,7 @@
 - SourceIndex 是冷启动事实来源；JDT LS 是可选增强，不是路由正确性的唯一来源。
 - JDT LS runtime JDK 与项目 JDK 分开处理，避免把语言服务器运行环境误当成项目编译环境。
 - resource 默认值按本机内存保守计算；多 repo 并行时优先保住可用性，而不是抢占更多 JDT LS。
+- `warm-required` 仍是 precision/recall 可选增强，不是默认路径；profile-aware/default warm 需要先解决首触 `textDocument/references` P95。
 
 ## 环境要求
 
@@ -251,8 +253,23 @@ fast-path smoke：
 benchmark 入口：
 
 ```bash
-npm run benchmark:agent-impact
+npm run benchmark:agent-impact -- --repo-root /absolute/path/to/java-repo --project-id <id> --warm-state cold-nolsp --strategy impact --runs 5 --verbosity diagnostic
+npm run benchmark:impact-attribution -- --repo-root /absolute/path/to/java-repo --project-id <id>
 ```
+
+当前 benchmark 口径：
+
+- hard gate 是 `R_read_must=1.0000`；side/test/SQL/config 证据只参与诊断，不进 hard gate。
+- `goldenAttribution[]` 用于判断缺口是 `absent`、`readplan-full` 还是已命中 `readPlan`。
+- `timing.phaseMs/sessionPhaseMs` 用于 warm 延迟归因；`warm-auto` 已去掉 no-seed semantic verify 固定成本，`warm-required` 仍因 first-touch references P95 超过 `800ms` 而不可默认化。
+
+最新验证报告：
+
+- `docs/java-lsp-mcp-benchmark-guide-2026-06-23.md`
+- `docs/java-lsp-mcp-readplan-semantic-gap-report-2026-06-26.md`
+- `docs/java-lsp-mcp-warm-latency-report-2026-06-27.md`
+- `docs/java-lsp-mcp-warm-instrumentation-report-2026-06-29.md`
+- `docs/java-lsp-mcp-warm-optimization-test-report-2026-06-29.md`
 
 ## 故障排查
 
