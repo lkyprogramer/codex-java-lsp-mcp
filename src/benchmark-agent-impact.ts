@@ -45,7 +45,7 @@ type Scenario = {
 };
 
 type GoldenKind = "must" | "should" | "side";
-type GoldenSource = "rg" | "typeGraph" | "seed" | "reference" | "typeHierarchy" | "typeReference" | "no-lsp" | "absent" | "unknown";
+type GoldenSource = "rg" | "typeGraph" | "importGraph" | "seed" | "reference" | "typeHierarchy" | "typeReference" | "no-lsp" | "absent" | "unknown";
 type GoldenBlockedBy = "hit" | "readplan-full" | "absent";
 type GoldenAbsentReason = "not-recalled-implementer" | "no-type-edge" | "cross-module-cold" | "profile-gate" | "golden-stale-or-low-value";
 
@@ -360,7 +360,8 @@ function timingPayload(result: Awaited<ReturnType<AgentRouter["impact"]>>, sessi
     phaseMs: metrics.phaseMs,
     sessionPhaseMs,
     semantic: metrics.semantic,
-    typeReference: metrics.typeReference
+    typeReference: metrics.typeReference,
+    importGraph: metrics.importGraph
   });
 }
 
@@ -496,6 +497,9 @@ function goldenSource(candidate: Record<string, unknown>): GoldenSource {
   }
   if (verifiedBy.includes("typeReference")) {
     return "typeReference";
+  }
+  if (verifiedBy.includes("importGraph")) {
+    return "importGraph";
   }
   if (verifiedBy.includes("semantic-definition") || verifiedBy.includes("semantic-implementation") || sources.includes("semantic-seed")) {
     return "seed";

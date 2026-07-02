@@ -245,4 +245,7 @@ test("impact benchmark exposes timing diagnostics", async () => {
   assert.equal(typeof timing.typeReference.elapsedMs, "number");
   assert.equal(typeof timing.typeReference.indexHits, "number");
   assert.equal(typeof timing.typeReference.cacheMisses, "number");
+  assert.equal(typeof timing.importGraph, "object");
+  assert.equal(typeof timing.importGraph.elapsedMs, "number");
+  assert.equal(typeof timing.importGraph.scannedAnchors, "number");
 });
