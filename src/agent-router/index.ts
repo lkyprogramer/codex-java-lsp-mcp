@@ -12,7 +12,6 @@ import { probeLayout, type LayoutContext } from "../layout-probe.js";
 import { legacyRoutingPolicy, scoreWithPolicy, type ScoreCategory } from "../routing-policy.js";
 import {
   annotationCollaborationDelta,
-  hasProtectedStructuralSignal,
   kindPairingDelta,
   packageProximityDelta,
   symmetricTypeRelationDelta,
@@ -458,6 +457,13 @@ export class AgentRouter {
     const suppressed = { deferredTests: 0, crossModuleConsumers: 0, excludedModules: 0 };
     const ranked = this.finalizeRank(candidates, anchor, options, suppressed);
     const maxItems = options.readPlanMaxItems ?? defaultReadPlanMax(options.mode);
+    if (options.semanticPolicy === "required") {
+      return new Set(
+        legacyReadPlanSorted(ranked, options)
+          .slice(0, maxItems)
+          .map(file => file.absolutePath)
+      );
+    }
     return new Set(
       this.selectReadPlanFiles(ranked, options, maxItems)
         .map(file => file.absolutePath)
@@ -823,7 +829,10 @@ export class AgentRouter {
 
   private buildReadPlan(files: CandidateFile[], ids: Map<string, string>, options: ImpactOptions, protectedPaths = new Set<string>()): ReadPlanItem[] {
     const maxItems = options.readPlanMaxItems ?? defaultReadPlanMax(options.mode);
-    return this.selectReadPlanFiles(files, options, maxItems, protectedPaths)
+    const selected = options.semanticPolicy === "required"
+      ? selectLegacyReadPlanFiles(files, options, maxItems, protectedPaths)
+      : this.selectReadPlanFiles(files, options, maxItems, protectedPaths);
+    return selected
       .map(file => {
         const priority = readPriority(file, options);
         const planWindow = this.readWindow(file, priority);
@@ -1559,11 +1568,43 @@ function readPriority(file: CandidateFile, options: ImpactOptions): ReadPriority
 function protectedReadPlanPaths(files: CandidateFile[], protectedPaths = new Set<string>()): Set<string> {
   const paths = new Set(protectedPaths);
   for (const file of files) {
-    if (hasProtectedStructuralSignal(file)) {
+    if ((file.verifiedBy || []).includes("typeGraph") || file.reasons.includes("implementation")) {
       paths.add(file.absolutePath);
     }
   }
   return paths;
+}
+
+function legacyReadPlanSorted(files: CandidateFile[], options: ImpactOptions): CandidateFile[] {
+  return [...files]
+    .map(file => ({ file, priority: readPriority(file, options) }))
+    .sort((left, right) => priorityRank(left.priority) - priorityRank(right.priority) || right.file.score - left.file.score)
+    .map(entry => entry.file);
+}
+
+function selectLegacyReadPlanFiles(files: CandidateFile[], options: ImpactOptions, maxItems: number, protectedPaths: Set<string>): CandidateFile[] {
+  const sorted = legacyReadPlanSorted(files, options);
+  const selected: CandidateFile[] = [];
+  const selectedPaths = new Set<string>();
+  for (const file of sorted) {
+    if (selected.length >= maxItems) {
+      break;
+    }
+    if (protectedPaths.has(file.absolutePath)) {
+      selected.push(file);
+      selectedPaths.add(file.absolutePath);
+    }
+  }
+  for (const file of sorted) {
+    if (selected.length >= maxItems) {
+      break;
+    }
+    if (!selectedPaths.has(file.absolutePath)) {
+      selected.push(file);
+      selectedPaths.add(file.absolutePath);
+    }
+  }
+  return selected;
 }
 
 const INDEX_RECALL_REASONS = new Set(["typeReference", "importGraph", "importGraph:reverse"]);

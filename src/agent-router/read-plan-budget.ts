@@ -34,10 +34,12 @@ export function evidenceClassOf(file: CandidateFile): EvidenceClass {
 }
 
 export function classQuotas(maxItems: number): Record<Exclude<EvidenceClass, "anchor">, number> {
+  const structuralQuota = maxItems >= 6 ? 5 : Math.max(1, Math.floor(maxItems / 3));
+  const namingQuota = maxItems >= 6 ? 1 : Math.max(1, Math.floor(maxItems / 3));
   return {
     verified: Math.max(1, Math.ceil(maxItems / 3)),
-    structural: Math.max(1, Math.floor(maxItems / 3)),
-    naming: Math.max(1, Math.floor(maxItems / 3)),
+    structural: structuralQuota,
+    naming: namingQuota,
     support: Math.max(1, Math.floor(maxItems / 6))
   };
 }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { evidenceClassOf, selectWithEvidenceBudget } from "./agent-router/read-plan-budget.js";
+import { classQuotas, evidenceClassOf, selectWithEvidenceBudget } from "./agent-router/read-plan-budget.js";
 import type { CandidateFile } from "./agent-types.js";
 
 function candidate(overrides: Partial<CandidateFile> & { absolutePath: string }): CandidateFile {
@@ -28,6 +28,10 @@ test("evidenceClassOf classifies anchor, verified, structural, naming, and suppo
   assert.equal(evidenceClassOf(candidate({ absolutePath: "/f", sourceSet: "test" })), "support");
   assert.equal(evidenceClassOf(candidate({ absolutePath: "/g", categories: ["persistence"] })), "support");
   assert.equal(evidenceClassOf(candidate({ absolutePath: "/h", sourceSet: "test", verifiedBy: ["reference"] })), "support");
+});
+
+test("classQuotas favors structural evidence for six-slot read plans", () => {
+  assert.deepEqual(classQuotas(6), { verified: 2, structural: 5, naming: 1, support: 1 });
 });
 
 test("protected paths always enter the plan regardless of quota", () => {
