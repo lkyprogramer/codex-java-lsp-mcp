@@ -359,6 +359,57 @@ test("SourceIndex answers loaded type lookups without rg scans", async () => {
   assert.equal(status.scanCacheMisses, 0);
 });
 
+test("SourceIndex finds importers via the imported type index", async () => {
+  const { mkdtemp, mkdir, writeFile } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-source-importers-"));
+  const dto = path.join(root, "src/main/java/demo/dto/ApplyInfoUpdateDTO.java");
+  const importer = path.join(root, "src/main/java/demo/application/ApplyInfoServiceImpl.java");
+  const unrelated = path.join(root, "src/main/java/demo/Other.java");
+  await mkdir(path.dirname(dto), { recursive: true });
+  await mkdir(path.dirname(importer), { recursive: true });
+  await writeFile(dto, "package demo.dto;\npublic class ApplyInfoUpdateDTO {}\n");
+  await writeFile(importer, [
+    "package demo.application;",
+    "import demo.dto.ApplyInfoUpdateDTO;",
+    "public class ApplyInfoServiceImpl {",
+    "  public void save() { ApplyInfoUpdateDTO dto = null; }",
+    "}",
+    ""
+  ].join("\n"));
+  await writeFile(unrelated, "package demo;\npublic class Other {}\n");
+
+  const index = new SourceIndex(root);
+  index.factsFor(dto);
+  index.factsFor(importer);
+  index.factsFor(unrelated);
+
+  assert.deepEqual(index.findImporters("ApplyInfoUpdateDTO").map(item => item.typeName), ["ApplyInfoServiceImpl"]);
+  const status = index.status();
+  assert.equal(status.typeLookupIndexHits, 1);
+  assert.equal(status.scanCacheMisses, 0);
+});
+
+test("SourceIndex falls back to rg scan for importers not yet cached", async () => {
+  const { mkdtemp, mkdir, writeFile } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-source-importers-scan-"));
+  const importer = path.join(root, "src/main/java/demo/application/ApplyInfoServiceImpl.java");
+  await mkdir(path.dirname(importer), { recursive: true });
+  await writeFile(importer, [
+    "package demo.application;",
+    "import demo.dto.ApplyInfoUpdateDTO;",
+    "public class ApplyInfoServiceImpl {",
+    "}",
+    ""
+  ].join("\n"));
+
+  const index = new SourceIndex(root);
+  assert.deepEqual(index.findImporters("ApplyInfoUpdateDTO").map(item => item.typeName), ["ApplyInfoServiceImpl"]);
+  assert.equal(index.status().typeLookupIndexMisses, 1);
+  assert.equal(index.status().scanCacheMisses, 1);
+});
+
 test("SourceIndex finds the nearest method around a real repo line", { skip: !hasLishueduFixture }, () => {
   const index = new SourceIndex(repoRoot);
   const file = "modules/school/src/main/java/com/lishu/edu/school/interfaces/web/SchoolTemplateImportController.java";

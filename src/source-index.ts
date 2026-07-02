@@ -81,6 +81,7 @@ export class SourceIndex {
   private readonly rgFileCache = new Map<string, RgFileCacheEntry>();
   private readonly typeNameIndex = new Map<string, Set<string>>();
   private readonly referencedTypeIndex = new Map<string, Set<string>>();
+  private readonly importedTypeIndex = new Map<string, Set<string>>();
   private readonly snapshotDir: string;
   private readonly filesPath: string;
   private readonly symbolsPath: string;
@@ -132,7 +133,7 @@ export class SourceIndex {
       scanCacheEntries: this.rgFileCache.size,
       typeLookupIndexHits: this.typeLookupIndexHits,
       typeLookupIndexMisses: this.typeLookupIndexMisses,
-      typeLookupIndexEntries: this.typeNameIndex.size + this.referencedTypeIndex.size
+      typeLookupIndexEntries: this.typeNameIndex.size + this.referencedTypeIndex.size + this.importedTypeIndex.size
     };
   }
 
@@ -201,6 +202,21 @@ export class SourceIndex {
     this.typeLookupIndexMisses += 1;
     return this.cachedAndScannedFacts(String.raw`\b${escapeRegex(simpleName)}\b`)
       .filter(facts => facts.typeName !== simpleName && facts.referencedTypes.some(type => sameSimpleType(type, simpleName)))
+      .sort(compareFactsByPath);
+  }
+
+  findImporters(typeName: string): JavaSourceFacts[] {
+    const simpleName = typeName.slice(typeName.lastIndexOf(".") + 1);
+    const indexed = this.importedTypeIndex.get(simpleName);
+    if (indexed && indexed.size > 0) {
+      this.typeLookupIndexHits += 1;
+      return this.factsForIndexedPaths(indexed)
+        .filter(facts => facts.typeName !== simpleName)
+        .sort(compareFactsByPath);
+    }
+    this.typeLookupIndexMisses += 1;
+    return this.cachedAndScannedFacts(String.raw`^\s*import\s+(static\s+)?[A-Za-z0-9_.]+\.${escapeRegex(simpleName)}\s*;`)
+      .filter(facts => facts.typeName !== simpleName && facts.imports.some(type => sameSimpleType(type, simpleName)))
       .sort(compareFactsByPath);
   }
 
@@ -495,6 +511,7 @@ export class SourceIndex {
   private rebuildLookupIndexes(): void {
     this.typeNameIndex.clear();
     this.referencedTypeIndex.clear();
+    this.importedTypeIndex.clear();
     for (const entry of this.cache.values()) {
       this.indexFacts(entry.facts);
     }
@@ -507,6 +524,9 @@ export class SourceIndex {
     for (const type of facts.referencedTypes) {
       addIndexPath(this.referencedTypeIndex, simpleTypeName(type), facts.absolutePath);
     }
+    for (const type of facts.imports) {
+      addIndexPath(this.importedTypeIndex, simpleTypeName(type), facts.absolutePath);
+    }
   }
 
   private unindexFacts(facts: JavaSourceFacts): void {
@@ -515,6 +535,9 @@ export class SourceIndex {
     }
     for (const type of facts.referencedTypes) {
       removeIndexPath(this.referencedTypeIndex, simpleTypeName(type), facts.absolutePath);
+    }
+    for (const type of facts.imports) {
+      removeIndexPath(this.importedTypeIndex, simpleTypeName(type), facts.absolutePath);
     }
   }
 }
