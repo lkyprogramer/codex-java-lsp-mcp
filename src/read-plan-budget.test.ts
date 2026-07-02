@@ -39,6 +39,18 @@ test("protected paths always enter the plan regardless of quota", () => {
   assert.equal(selected.length, 4);
 });
 
+test("anchor is protected even when structural protected paths fill the budget", () => {
+  const anchor = candidate({ absolutePath: "/anchor", reasons: ["target"], verifiedBy: ["anchor"], score: 1000 });
+  const structural = Array.from({ length: 4 }, (_, i) =>
+    candidate({ absolutePath: `/structural-${i}`, verifiedBy: ["typeGraph"], reasons: ["typeGraph"], categories: ["semantic"], score: 900 - i })
+  );
+  const selected = selectWithEvidenceBudget([anchor, ...structural], 2, new Set(structural.map(file => file.absolutePath)));
+  assert.deepEqual(
+    selected.map(file => file.absolutePath),
+    ["/anchor", "/structural-0"]
+  );
+});
+
 test("structural candidates keep quota slots under naming flood", () => {
   const anchor = candidate({ absolutePath: "/anchor", reasons: ["target"], verifiedBy: ["anchor"], score: 1000 });
   const naming = Array.from({ length: 5 }, (_, i) => candidate({ absolutePath: `/naming-${i}`, score: 500 - i }));

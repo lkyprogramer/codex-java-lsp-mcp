@@ -60,7 +60,7 @@ export function selectWithEvidenceBudget(
     if (selected.length >= maxItems) {
       break;
     }
-    if (protectedPaths.has(file.absolutePath) && !selectedPaths.has(file.absolutePath)) {
+    if ((evidenceClassOf(file) === "anchor" || protectedPaths.has(file.absolutePath)) && !selectedPaths.has(file.absolutePath)) {
       take(file);
     }
   }
