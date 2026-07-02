@@ -25,6 +25,7 @@ export type JavaSourceFacts = {
   implementsTypes: string[];
   extendsType?: string;
   referencedTypes: string[];
+  imports: string[];
   annotations: string[];
   methods: JavaMethodFact[];
   factSource: "regex" | "documentSymbol";
@@ -283,7 +284,8 @@ export class SourceIndex {
     try {
       const files = new Map<string, FileRecord>();
       for (const record of readJsonLines<FileRecord>(this.filesPath)) {
-        if (!Array.isArray((record as { referencedTypes?: unknown }).referencedTypes)) {
+        if (!Array.isArray((record as { referencedTypes?: unknown }).referencedTypes)
+          || !Array.isArray((record as { imports?: unknown }).imports)) {
           continue;
         }
         files.set(record.absolutePath, record);
@@ -584,6 +586,7 @@ export function parseJavaSource(repoRoot: string, absolutePath: string, content:
     .filter(Boolean) || [];
   const extendsType = typeTail.match(/\bextends\s+([A-Za-z_][A-Za-z0-9_]*)/)?.[1];
   const referencedTypes = parseSignatureReferencedTypes(lines, typeMatch?.[2]);
+  const imports = parseImports(lines);
 
   return {
     absolutePath,
@@ -597,6 +600,7 @@ export function parseJavaSource(repoRoot: string, absolutePath: string, content:
     implementsTypes,
     extendsType,
     referencedTypes,
+    imports,
     annotations,
     methods: parseMethods(lines),
     factSource: "regex"
@@ -654,6 +658,21 @@ function parseSignatureReferencedTypes(lines: string[], selfType: string | undef
       }
     }
     depth += braceDelta(code);
+  }
+  return [...found].sort();
+}
+
+function parseImports(lines: string[]): string[] {
+  const found = new Set<string>();
+  for (const line of lines) {
+    const match = line.match(/^\s*import\s+(static\s+)?([A-Za-z0-9_.]+)\s*;/);
+    if (!match) {
+      continue;
+    }
+    const fqn = match[1] ? match[2].slice(0, match[2].lastIndexOf(".")) : match[2];
+    if (fqn.includes(".")) {
+      found.add(fqn);
+    }
   }
   return [...found].sort();
 }

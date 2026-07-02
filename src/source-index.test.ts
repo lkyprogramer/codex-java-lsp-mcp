@@ -66,6 +66,28 @@ public class ApplyInfoService {
   assert.equal(facts.referencedTypes.includes("ORDER_CREATE"), false);
 });
 
+test("parseJavaSource extracts import declarations as dependency facts", () => {
+  const facts = parseJavaSource(repoRoot, path.join(repoRoot, "modules/sample/src/main/java/demo/ApplyInfoServiceImpl.java"), `
+package demo;
+
+import com.demo.dto.ApplyInfoUpdateDTO;
+import static com.demo.util.Checks.requireNonBlank;
+import java.util.List;
+import com.demo.legacy.*;
+
+public class ApplyInfoServiceImpl {
+  public void save() {
+    ApplyInfoUpdateDTO dto = null;
+  }
+}
+`);
+  assert.deepEqual(facts.imports, [
+    "com.demo.dto.ApplyInfoUpdateDTO",
+    "com.demo.util.Checks",
+    "java.util.List"
+  ]);
+});
+
 test("SourceIndex can replace regex facts with documentSymbol facts", async () => {
   const { mkdtemp, mkdir, writeFile } = await import("node:fs/promises");
   const { tmpdir } = await import("node:os");
@@ -169,6 +191,44 @@ test("SourceIndex skips legacy snapshots without referenced types", async () => 
   const index = new SourceIndex(root);
   assert.equal(index.status().entries, 0);
   assert.deepEqual(index.factsFor(file).referencedTypes, ["DemoRepository"]);
+});
+
+test("SourceIndex skips legacy snapshots without imports", async () => {
+  const { mkdtemp, mkdir, writeFile } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-source-legacy-imports-"));
+  const file = path.join(root, "src/main/java/demo/Legacy.java");
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(file, [
+    "package demo;",
+    "import demo.dto.LegacyDTO;",
+    "public class Legacy {",
+    "}",
+    ""
+  ].join("\n"));
+
+  const cacheDir = repoCacheRoot(root);
+  await mkdir(cacheDir, { recursive: true });
+  const stat = statSync(file);
+  writeFileSync(path.join(cacheDir, "source-index.files.jsonl"), `${JSON.stringify({
+    absolutePath: file,
+    path: "src/main/java/demo/Legacy.java",
+    mtimeMs: stat.mtimeMs,
+    size: stat.size,
+    packageName: "demo",
+    typeName: "Legacy",
+    kind: "class",
+    implementsTypes: [],
+    referencedTypes: [],
+    annotations: [],
+    factSource: "regex",
+    batchId: "legacy"
+  })}\n`);
+  writeFileSync(path.join(cacheDir, "source-index.symbols.jsonl"), "");
+
+  const index = new SourceIndex(root);
+  assert.equal(index.status().entries, 0);
+  assert.deepEqual(index.factsFor(file).imports, ["demo.dto.LegacyDTO"]);
 });
 
 test("SourceIndex compacts duplicate snapshot records", async () => {
