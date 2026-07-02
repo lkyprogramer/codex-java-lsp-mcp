@@ -47,6 +47,13 @@ type Scenario = {
 type GoldenKind = "must" | "should" | "side";
 type GoldenSource = "rg" | "typeGraph" | "seed" | "reference" | "typeHierarchy" | "typeReference" | "no-lsp" | "absent" | "unknown";
 type GoldenBlockedBy = "hit" | "readplan-full" | "absent";
+type GoldenAbsentReason = "not-recalled-implementer" | "no-type-edge" | "cross-module-cold" | "profile-gate" | "golden-stale-or-low-value";
+
+type GoldenAttributionContext = {
+  readonly repoRoot: string;
+  readonly semanticPolicy?: string;
+  readonly semanticUsed: boolean;
+};
 
 type Cli = {
   repoRoot: string;
@@ -58,6 +65,7 @@ type Cli = {
   semanticPolicy: ImpactOptions["semanticPolicy"];
   verbosity: NonNullable<ImpactOptions["verbosity"]>;
   runs: number;
+  readPlanMaxItems?: number;
   listScenarios: boolean;
   strategy: BenchmarkStrategy;
 };
@@ -79,6 +87,7 @@ const metadata = {
   verbosity: cli.verbosity,
   strategy: cli.strategy,
   runs: cli.runs,
+  readPlanMaxItems: cli.readPlanMaxItems,
   scenarioFile: cli.scenarioFile,
   runtimeBuild,
   prepareWarmMs: 0,
@@ -159,6 +168,7 @@ function parseCli(args: string[], root: string): Cli {
     semanticPolicy: stringArg(values, "--semantic-policy", process.env.JAVA_LSP_BENCH_SEMANTIC_POLICY || "auto") as ImpactOptions["semanticPolicy"],
     verbosity: stringArg(values, "--verbosity", process.env.JAVA_LSP_BENCH_VERBOSITY || "standard") as NonNullable<ImpactOptions["verbosity"]>,
     runs: Number(stringArg(values, "--runs", process.env.JAVA_LSP_BENCH_RUNS || "1")),
+    readPlanMaxItems: optionalPositiveIntegerArg(values, "--read-plan-max-items", process.env.JAVA_LSP_BENCH_READ_PLAN_MAX_ITEMS),
     listScenarios: values.get("--list-scenarios") === true,
     strategy: stringArg(values, "--strategy", process.env.JAVA_LSP_BENCH_STRATEGY || "impact") as BenchmarkStrategy
   };
@@ -177,7 +187,8 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
     excludeModules: [],
     taskKeywords: scenario.anchor.taskKeywords || [],
     crossModulePolicy: "auto",
-    verbosity: cli.verbosity
+    verbosity: cli.verbosity,
+    readPlanMaxItems: cli.readPlanMaxItems
   });
   const elapsedMs = performance.now() - startedAt;
   const rawSearchPayload = Buffer.byteLength(JSON.stringify(result), "utf8");
@@ -189,7 +200,7 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
   return {
     ...attemptPayload("impact", quality, rawSearchPayload, readingPayload, elapsedMs, 1 + result.readPlan.length, result.readPlan.length, Number(result.counts.totalRgRawBytes || 0), 0),
     timing: timingPayload(result, sessionPhaseMs),
-    goldenAttribution: goldenAttributionForImpact(result, scenario)
+    goldenAttribution: goldenAttributionForImpact(cli.repoRoot, result, scenario)
   };
 }
 
@@ -203,7 +214,7 @@ function noLspAttempt(repoRoot: string, scenario: Scenario): Record<string, unkn
   const quality = evaluate(candidatePaths, readFiles, scenario);
   return {
     ...attemptPayload("no-lsp", quality, rawSearchPayload, readingPayload, performance.now() - startedAt, 1 + readFiles.length, readFiles.length, 0, rawSearchPayload),
-    goldenAttribution: goldenAttributionForNoLsp(candidatePaths, readFiles, scenario)
+    goldenAttribution: goldenAttributionForNoLsp(repoRoot, candidatePaths, readFiles, scenario)
   };
 }
 
@@ -244,6 +255,19 @@ function attemptPayload(
 function stringArg(values: Map<string, string | true>, name: string, fallback: string): string {
   const value = values.get(name);
   return typeof value === "string" && value.length > 0 ? value : fallback;
+}
+
+function optionalPositiveIntegerArg(values: Map<string, string | true>, name: string, fallback?: string): number | undefined {
+  const raw = values.get(name);
+  const value = typeof raw === "string" && raw.length > 0 ? raw : fallback;
+  if (!value) {
+    return undefined;
+  }
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`${name} must be a positive integer`);
+  }
+  return parsed;
 }
 
 function loadScenarios(file: string): Scenario[] {
@@ -335,29 +359,32 @@ function timingPayload(result: Awaited<ReturnType<AgentRouter["impact"]>>, sessi
   return compactRecord({
     phaseMs: metrics.phaseMs,
     sessionPhaseMs,
-    semantic: metrics.semantic
+    semantic: metrics.semantic,
+    typeReference: metrics.typeReference
   });
 }
 
-function goldenAttributionForImpact(result: Awaited<ReturnType<AgentRouter["impact"]>>, scenario: Scenario): Array<Record<string, unknown>> {
+function goldenAttributionForImpact(repoRoot: string, result: Awaited<ReturnType<AgentRouter["impact"]>>, scenario: Scenario): Array<Record<string, unknown>> {
   const fileByPath = new Map(result.files.map(file => [String(file.path), file]));
   const pathById = new Map(result.files.map(file => [String(file.id), String(file.path)]));
   const readSet = new Set(result.readPlan.map(item => pathById.get(item.fileId)).filter(Boolean));
   const semanticUsed = semanticWasUsed(result.metrics);
+  const context = { repoRoot, semanticPolicy: semanticPolicyOf(result.options), semanticUsed };
   return goldenEntries(scenario).map(({ file, kind }) => {
     const candidate = fileByPath.get(file);
     const inReadPlan = readSet.has(file);
-    return goldenAttributionRow(scenario, file, kind, Boolean(candidate), inReadPlan, candidate ? goldenSource(candidate) : "absent", semanticUsed);
+    return goldenAttributionRow(scenario, file, kind, Boolean(candidate), inReadPlan, candidate ? goldenSource(candidate) : "absent", context);
   });
 }
 
-function goldenAttributionForNoLsp(candidatePaths: string[], readFiles: string[], scenario: Scenario): Array<Record<string, unknown>> {
+function goldenAttributionForNoLsp(repoRoot: string, candidatePaths: string[], readFiles: string[], scenario: Scenario): Array<Record<string, unknown>> {
   const candidates = new Set(candidatePaths);
   const readSet = new Set(readFiles);
+  const context = { repoRoot, semanticPolicy: "fast", semanticUsed: false };
   return goldenEntries(scenario).map(({ file, kind }) => {
     const inFiles = candidates.has(file);
     const inReadPlan = readSet.has(file);
-    return goldenAttributionRow(scenario, file, kind, inFiles, inReadPlan, inFiles ? "no-lsp" : "absent", false);
+    return goldenAttributionRow(scenario, file, kind, inFiles, inReadPlan, inFiles ? "no-lsp" : "absent", context);
   });
 }
 
@@ -368,9 +395,10 @@ function goldenAttributionRow(
   inFiles: boolean,
   inReadPlan: boolean,
   source: GoldenSource,
-  semanticUsed: boolean
+  context: GoldenAttributionContext
 ): Record<string, unknown> {
   const shouldBlocksTask = kind === "should" ? scenario.goldenMeta?.[file]?.shouldBlocksTask : undefined;
+  const blocked = blockedBy(inFiles, inReadPlan);
   return compactRecord({
     scenario: scenario.name,
     file,
@@ -378,9 +406,10 @@ function goldenAttributionRow(
     inFiles,
     inReadPlan,
     source,
-    blockedBy: blockedBy(inFiles, inReadPlan),
+    blockedBy: blocked,
+    absentReason: blocked === "absent" ? goldenAbsentReason(context, scenario, file, kind) : undefined,
     profile: scenario.anchor.profile,
-    semanticUsed,
+    semanticUsed: context.semanticUsed,
     shouldBlocksTask
   });
 }
@@ -395,6 +424,61 @@ function goldenEntries(scenario: Scenario): Array<{ file: string; kind: GoldenKi
 
 function blockedBy(inFiles: boolean, inReadPlan: boolean): GoldenBlockedBy {
   return inReadPlan ? "hit" : inFiles ? "readplan-full" : "absent";
+}
+
+function goldenAbsentReason(context: GoldenAttributionContext, scenario: Scenario, file: string, kind: GoldenKind): GoldenAbsentReason {
+  const shouldBlocksTask = kind === "should" ? scenario.goldenMeta?.[file]?.shouldBlocksTask : undefined;
+  const absolutePath = path.join(context.repoRoot, file);
+  if (!existsSync(absolutePath) || kind === "side" || shouldBlocksTask === false) {
+    return "golden-stale-or-low-value";
+  }
+
+  const anchorText = readJavaFile(context.repoRoot, scenario.anchor.file);
+  const goldenText = readJavaFile(context.repoRoot, file);
+  const anchorType = simpleTypeName(scenario.anchor.file);
+  const goldenType = simpleTypeName(file);
+  if (implementsOrExtends(goldenText, anchorType)) {
+    return "not-recalled-implementer";
+  }
+  if (mentionsType(anchorText, goldenType) || mentionsType(goldenText, anchorType)) {
+    return "no-type-edge";
+  }
+
+  const goldenModule = moduleName(file);
+  if (goldenModule && goldenModule !== moduleName(scenario.anchor.file) && context.semanticPolicy !== "required") {
+    return "cross-module-cold";
+  }
+  if (context.semanticPolicy === "auto" && !context.semanticUsed) {
+    return "profile-gate";
+  }
+  return "golden-stale-or-low-value";
+}
+
+function readJavaFile(repoRoot: string, file: string): string {
+  const absolutePath = path.join(repoRoot, file);
+  return existsSync(absolutePath) ? readFileSync(absolutePath, "utf8") : "";
+}
+
+function simpleTypeName(file: string): string {
+  return path.basename(file, ".java");
+}
+
+function implementsOrExtends(content: string, typeName: string): boolean {
+  return new RegExp(`\\b(?:implements|extends)\\b[^{};]*\\b${regexLiteral(typeName)}\\b`).test(content);
+}
+
+function mentionsType(content: string, typeName: string): boolean {
+  return new RegExp(`\\b${regexLiteral(typeName)}\\b`).test(content);
+}
+
+function moduleName(file: string): string | undefined {
+  const segments = file.split(/[\\/]+/).filter(Boolean);
+  const modulesIndex = segments.indexOf("modules");
+  if (modulesIndex >= 0) {
+    return segments[modulesIndex + 1];
+  }
+  const srcIndex = segments.indexOf("src");
+  return srcIndex > 0 ? segments.slice(0, srcIndex).join("/") : undefined;
 }
 
 function goldenSource(candidate: Record<string, unknown>): GoldenSource {
@@ -428,6 +512,11 @@ function goldenSource(candidate: Record<string, unknown>): GoldenSource {
 function semanticWasUsed(metrics: Record<string, unknown>): boolean {
   const semantic = metrics.semantic;
   return Boolean(semantic && typeof semantic === "object" && (semantic as Record<string, unknown>).used);
+}
+
+function semanticPolicyOf(options: Record<string, unknown>): string | undefined {
+  const value = options.semanticPolicy;
+  return typeof value === "string" ? value : undefined;
 }
 
 function runNoLspRg(repoRoot: string, scenario: Scenario): { stdout: string; files: string[]; lineByPath: Map<string, number> } {

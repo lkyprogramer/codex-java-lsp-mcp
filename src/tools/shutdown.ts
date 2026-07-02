@@ -3,17 +3,28 @@
 // pos: Public v5 shutdown tool handler.
 import { z } from "zod";
 import type { ToolContext } from "./context.js";
+import { detailSchema, isDiagnosticDetail } from "./shared.js";
 
 export const shutdownSchema = {
   projectId: z.string().min(1).optional(),
   repoRoot: z.string().min(1).optional(),
-  all: z.boolean().default(false)
+  all: z.boolean().default(false),
+  detail: detailSchema
 };
 
 export async function javaShutdown(context: ToolContext, _args: z.infer<z.ZodObject<typeof shutdownSchema>>): Promise<unknown> {
   const before = context.session.status();
   await context.session.stop();
   context.router.clearRgCache();
+  if (!isDiagnosticDetail(_args.detail)) {
+    return {
+      stopped: before.started,
+      repoRoot: before.repoRoot,
+      wasStarted: before.started,
+      started: false,
+      rgCacheCleared: true
+    };
+  }
   return {
     stopped: before.started,
     status: context.session.status(),

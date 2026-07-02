@@ -384,6 +384,129 @@ test("cached type graph promotes implementers before rg naming fallback", async 
   assert.ok((impl?.verifiedBy as string[]).includes("typeGraph"));
 });
 
+test("signature type references promote typed collaborators", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-router-type-reference-"));
+  await mkdir(path.join(root, "src", "main", "java", "demo"), { recursive: true });
+  await writeFile(path.join(root, "pom.xml"), "<project></project>\n");
+  await writeFile(path.join(root, "src", "main", "java", "demo", "EnrollmentService.java"), [
+    "package demo;",
+    "public class EnrollmentService {",
+    "  private SchoolTemplateRepository repository;",
+    "  public void confirm() {",
+    "  }",
+    "}",
+    ""
+  ].join("\n"));
+  await writeFile(path.join(root, "src", "main", "java", "demo", "SchoolTemplateRepository.java"), "package demo;\npublic interface SchoolTemplateRepository {}\n");
+
+  const result = await tempRouter(root).impact(options({
+    anchors: [{ file: "src/main/java/demo/EnrollmentService.java", line: 2, column: 15 }],
+    profile: "service",
+    semanticPolicy: "fast",
+    taskKeywords: ["ExistingRepository"],
+    verbosity: "diagnostic"
+  }));
+
+  const repository = result.files.find(file => String(file.path).endsWith("SchoolTemplateRepository.java")) as Record<string, unknown> | undefined;
+  assert.ok((repository?.verifiedBy as string[] | undefined)?.includes("typeReference"));
+});
+
+test("type reference diagnostics report scanned, skipped, and added candidates", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-router-type-reference-metrics-"));
+  await mkdir(path.join(root, "src", "main", "java", "demo"), { recursive: true });
+  await writeFile(path.join(root, "pom.xml"), "<project></project>\n");
+  await writeFile(path.join(root, "src", "main", "java", "demo", "EnrollmentService.java"), [
+    "package demo;",
+    "public class EnrollmentService {",
+    "  private ExistingRepository existingRepository;",
+    "  private NewRepository newRepository;",
+    "  public void confirm() {",
+    "  }",
+    "}",
+    ""
+  ].join("\n"));
+  await writeFile(path.join(root, "src", "main", "java", "demo", "ExistingRepository.java"), "package demo;\npublic interface ExistingRepository {}\n");
+  await writeFile(path.join(root, "src", "main", "java", "demo", "NewRepository.java"), "package demo;\npublic interface NewRepository {}\n");
+  const sourceIndex = new SourceIndex(root);
+  for (const file of ["EnrollmentService.java", "ExistingRepository.java"]) {
+    sourceIndex.factsFor(path.join(root, "src", "main", "java", "demo", file));
+  }
+
+  const result = await new AgentRouter(root, new JdtlsSession(root), sourceIndex).impact(options({
+    anchors: [{ file: "src/main/java/demo/EnrollmentService.java", line: 2, column: 15 }],
+    profile: "service",
+    semanticPolicy: "fast",
+    taskKeywords: ["existing"],
+    verbosity: "diagnostic"
+  }));
+
+  const metrics = result.metrics.typeReference as Record<string, unknown> | undefined;
+  assert.equal(metrics?.scannedPatterns, 2);
+  assert.equal(metrics?.skippedExisting, 1);
+  assert.equal(metrics?.addedCandidates, 1);
+  assert.equal(metrics?.indexMisses, 2);
+  assert.equal(metrics?.cacheMisses, 2);
+  assert.equal(typeof metrics?.cacheMissElapsedMs, "number");
+});
+
+test("required semantic policy skips local type reference expansion", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-router-type-reference-required-"));
+  await mkdir(path.join(root, "src", "main", "java", "demo"), { recursive: true });
+  await writeFile(path.join(root, "pom.xml"), "<project></project>\n");
+  await writeFile(path.join(root, "src", "main", "java", "demo", "CebOrderRequest.java"), "package demo;\npublic record CebOrderRequest(String id) {}\n");
+  await writeFile(path.join(root, "src", "main", "java", "demo", "CebPayServiceImpl.java"), [
+    "package demo;",
+    "public class CebPayServiceImpl {",
+    "  public void create(CebOrderRequest request) {",
+    "  }",
+    "}",
+    ""
+  ].join("\n"));
+
+  const session = new FakeSemanticSession();
+  const result = await new AgentRouter(root, session as unknown as JdtlsSession, new SourceIndex(root)).impact(options({
+    anchors: [{ file: "src/main/java/demo/CebOrderRequest.java", line: 2, column: 15 }],
+    profile: "dto",
+    semanticPolicy: "required",
+    verbosity: "diagnostic"
+  }));
+
+  assert.equal(result.files.some(file => ((file as Record<string, unknown>).verifiedBy as string[] | undefined)?.includes("typeReference")), false);
+});
+
+test("pure type references do not evict graph candidates from read plan", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-router-type-reference-priority-"));
+  await mkdir(path.join(root, "src", "main", "java", "demo"), { recursive: true });
+  await writeFile(path.join(root, "pom.xml"), "<project></project>\n");
+  await writeFile(path.join(root, "src", "main", "java", "demo", "PaymentGateway.java"), [
+    "package demo;",
+    "public interface PaymentGateway {",
+    "  PaymentResult pay(PaymentCommand command);",
+    "}",
+    ""
+  ].join("\n"));
+  await writeFile(path.join(root, "src", "main", "java", "demo", "PaymentCommand.java"), "package demo;\npublic class PaymentCommand {}\n");
+  await writeFile(path.join(root, "src", "main", "java", "demo", "PaymentResult.java"), "package demo;\npublic class PaymentResult {}\n");
+  await writeFile(path.join(root, "src", "main", "java", "demo", "AliyunPaymentGateway.java"), "package demo;\npublic class AliyunPaymentGateway implements PaymentGateway { public PaymentResult pay(PaymentCommand command) { return null; } }\n");
+  await writeFile(path.join(root, "src", "main", "java", "demo", "StubPaymentGateway.java"), "package demo;\npublic class StubPaymentGateway implements PaymentGateway { public PaymentResult pay(PaymentCommand command) { return null; } }\n");
+  const sourceIndex = new SourceIndex(root);
+  for (const file of ["PaymentGateway.java", "PaymentCommand.java", "PaymentResult.java", "AliyunPaymentGateway.java", "StubPaymentGateway.java"]) {
+    sourceIndex.factsFor(path.join(root, "src", "main", "java", "demo", file));
+  }
+
+  const result = await new AgentRouter(root, new JdtlsSession(root), sourceIndex).impact(options({
+    anchors: [{ file: "src/main/java/demo/PaymentGateway.java", line: 2, column: 18 }],
+    profile: "port",
+    semanticPolicy: "fast",
+    readPlanMaxItems: 3,
+    verbosity: "diagnostic"
+  }));
+  const readPaths = readPlanPaths(result);
+
+  assert.ok(readPaths.includes("src/main/java/demo/AliyunPaymentGateway.java"));
+  assert.ok(readPaths.includes("src/main/java/demo/StubPaymentGateway.java"));
+});
+
 test("diagnostic score breakdown sums to final score", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "java-lsp-router-breakdown-"));
   await mkdir(path.join(root, "src", "main", "java", "demo"), { recursive: true });

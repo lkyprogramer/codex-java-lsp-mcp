@@ -3,6 +3,8 @@
 > 收口 `docs/superpowers/plans/2026-06-26-readplan-semantic-gap-optimization.md` 本轮（Task 1/2）后的方向判断。
 > 定位：决策规则 + 触发门槛，不是实现。目的是让"是否做 Task 3/4/5"由 attribution 数据判定，而不是直觉或在小样本上调参。
 
+2026-07-01 复核：`docs/java-lsp-mcp-readplan-platform-proof-2026-07-01.md` 已在 15 个真实场景上重跑验证。cold hard gate 仍成立，`warm-auto` no-seed 固定成本已修复，但 `warm-required` first-touch P95 仍超过 `800ms`；同时 `exam-parent-v3` 暴露 material `shouldBlocksTask absent` 缺口，所以下一刀从 attribution v2 分类开始，而不是直接做 Task 3/4/5。
+
 ## 1. 状态结论
 
 计划已在 **Task 2 收官**，主目标达成，不是被中途放弃：
@@ -26,7 +28,7 @@
 1. **Task 3/4/5 默认不做。** 它们在计划里就是条件触发；当前没有 attribution 证据证明触发条件满足。
 2. **下一刀必须由 attribution 数据触发**，不靠"recall 没到 1.0 所以还有空间"的直觉。`recall < 1.0` ≠ 值得追：分母含 side，且多数缺口是有意权衡掉的。
 3. **第一动作是产出 per-scenario gap attribution + 扩 golden 覆盖**，两者并行；扩 golden 是后续任何"按证据打一刀"的硬前提（理由见 §4）。
-4. **evidence budget / 三层 planner / profile-aware warm 是北极星，当前不动手**（理由见 §6）。在 8 个 golden 场景上落地分桶配额，等于把"调字符串权重"换成"调桶预算"，是更精致的过拟合。
+4. **evidence budget / 三层 planner / profile-aware warm 是北极星，当前不动手**（理由见 §6）。在 material `absent` 缺口尚未分类前落地分桶配额，等于把"调字符串权重"换成"调桶预算"，是更精致的过拟合。
 
 ## 3. Gap Attribution 字段定义
 
@@ -62,11 +64,13 @@
 
 ## 4. Golden 扩充要求
 
-**为什么必须先扩：** 当前 golden 仅 8 个场景（lishuedu 5 + cipherlink/exam/generic 各 1）。在 8 个点上给证据类型定预算、给 profile 定 gate，是在噪声上拟合。任何 Task 3/4/5 的"门槛是否满足"判断，在这个样本量下都不稳。
+**当前状态：** golden 已扩到 15 个真实场景（lishuedu/cipherlink/exam-parent-v3 各 5 个）。profile 分布为 controller 4、service 2、repository 3、dto 3、port 2、parser 1。parser 只有 lishuedu 有高价值样本，不为覆盖指标虚构低价值场景。
+
+**为什么仍不能直接做 Task 3/4/5：** v1 attribution 只能稳定区分 `hit` / `readplan-full` / `absent`，还不能解释 `absent` 是 implementer index、signature type edge、cross-module cold、profile gate，还是 golden 质量问题。2026-07-01 proof 显示 `exam-parent-v3` 存在 material `shouldBlocksTask absent`，但这只触发 attribution v2，不直接触发图扩张实现。
 
 **最小扩充目标（建议，非硬性）：**
 
-- 跨 ≥2 个独立真实 repo，每个 ≥5 个场景；覆盖 `port/repository/dto/service/controller/parser` 各 profile 至少各 2 例。
+- 跨 ≥2 个独立真实 repo，每个 ≥5 个场景；覆盖 `port/repository/dto/service/controller/parser`，其中 parser 不为凑数添加低质量样本。
 - 显式覆盖**跨模块消费者**形态（anchor 与 should 不同模块），因为这是当前剩余 should 缺口的主体，也是 D-cold/Task 5 的判据来源。
 - 每场景标注 must/should/side，并标注 should 是否"卡真实任务完成"（用于 §7 停止条件判定）。
 
@@ -87,7 +91,7 @@
 
 - **Evidence-aware budget / 三层 planner**：把现有的"加性基分 + `readPriority` 分层 + protected baseline"显式化成每证据类型 slot 配额。**前置条件：golden 扩到几十个真实场景且 slot 竞争真实出现。** 当前 must=3–5/场景、`readPlanMaxItems=6`、baseline 仍有富余空位（Decision Record 第 5 条），slot 压力未到需要预算制。现状不是"总分池互相污染"，是隐式分层；该重构有价值但非当前瓶颈。
 - **Profile-aware warm policy（port/repository/dto 分别开 warm semantic）**：方向认同，能让 warm-auto 获得真实语义收益。**但必须与 warm 延迟优化打包**——见下。
-- **warm 延迟（决定性约束，全程不可漏）**：warm-required 的代价是 `elapsedMs 18→705ms`（39×）。这是 warm 无法默认化的真障碍。任何"给更多 profile 开 warm"的动作只算 recall 收益、不算延迟成本，都是不完整的。若要把 warm 推向默认，**先做批量 references / 超时与并发调优，再谈覆盖面**。
+- **warm 延迟（决定性约束，全程不可漏）**：`614deb9` 已去掉 `warm-auto` no-seed semantic verify 固定成本，lishuedu `warm-auto` P95 约 `76ms`。但 `warm-required` 在 lishuedu/cipherlink/exam-parent-v3 上的 first-touch P95 仍约 `1736ms / 1525ms / 1506ms`，top session phase 仍是 `textDocument/references`，超过绝对 `800ms` SLO。任何"给更多 profile 开 warm"的动作只算 recall 收益、不算延迟成本，都是不完整的；当前不做 warm 调度或 profile-aware warm，除非新的 phase evidence 证明 first-touch references 已稳定低于 SLO。
 - **method-call token graph**：继续排除（计划 Non-goals）。噪声最高，第一版收益不可控。
 
 ## 7. 停止条件 / Falsifier
@@ -95,6 +99,7 @@
 attribution + 扩 golden 后，若出现以下任一，判定为"到达当前性价比平台"，后续转向**工具交互体验 / 稳定性（含 warm 延迟）**，而非继续召回优化：
 
 - 大多数剩余缺口为 should/side，且标注显示不卡真实任务完成；
+- 若 material `shouldBlocksTask absent` 在 attribution v2 中被分类为同一机制并跨场景复现，则停止条件不成立，改为触发对应 Task 3/4/5 设计。
 - warm-required 在更多 repo 上 latency 或 `textDocument/implementation` timeout 不稳定（报告已记录一次 implementation timeout）；
 - 窄图（Task 3/4）使 raw payload 反弹 `>5%` 而 recall 无实质提升。
 

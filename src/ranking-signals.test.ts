@@ -18,6 +18,7 @@ function facts(partial: Partial<JavaSourceFacts>): JavaSourceFacts {
   return {
     absolutePath: "/x.java",
     implementsTypes: [],
+    referencedTypes: [],
     annotations: [],
     methods: [],
     factSource: "regex",

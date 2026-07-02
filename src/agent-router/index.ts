@@ -61,6 +61,18 @@ type RouterStatus = {
   ttlMs: number;
 };
 
+type TypeReferenceMetrics = {
+  scannedPatterns: number;
+  addedCandidates: number;
+  skippedExisting: number;
+  elapsedMs: number;
+  cacheHits: number;
+  cacheMisses: number;
+  cacheMissElapsedMs: number;
+  indexHits: number;
+  indexMisses: number;
+};
+
 const RG_CACHE_TTL_MS = positiveInteger(process.env.AGENT_RG_CACHE_TTL_MS, 300000);
 const RG_CONCURRENCY = positiveInteger(process.env.JAVA_LSP_RG_CONCURRENCY, Math.min(4, availableParallelism()));
 
@@ -107,6 +119,17 @@ export class AgentRouter {
       policy: options.semanticPolicy,
       timeoutMs: options.semanticTimeoutMs
     };
+    const typeReference: TypeReferenceMetrics = {
+      scannedPatterns: 0,
+      addedCandidates: 0,
+      skippedExisting: 0,
+      elapsedMs: 0,
+      cacheHits: 0,
+      cacheMisses: 0,
+      cacheMissElapsedMs: 0,
+      indexHits: 0,
+      indexMisses: 0
+    };
     const anchors = await timed(phaseMs, "resolveAnchors", async () => options.anchors.map((anchor, index) => this.resolveAnchor(anchor, options.profile, `A${index + 1}`)));
     const candidates = new Map<string, CandidateFile>();
     for (const anchor of anchors) {
@@ -115,6 +138,8 @@ export class AgentRouter {
 
     await timed(phaseMs, "typeGraph", async () => this.collectTypeGraphCandidates(candidates, anchors, options));
     const rgExecution = await this.collectNamingRecall(candidates, anchors, options, phaseMs);
+    await timed(phaseMs, "typeReference", async () => this.collectTypeReferenceCandidates(candidates, anchors, options, typeReference));
+    typeReference.elapsedMs = phaseMs.typeReference || 0;
     const nonLspReadPlanPaths = await timed(phaseMs, "nonLspReadPlan", async () => this.nonLspReadPlanPaths(candidates, anchors[0], options));
 
     await this.collectSemanticSeed(candidates, anchors, options, semantic, phaseMs);
@@ -132,6 +157,11 @@ export class AgentRouter {
     const cacheAfter = await timed(phaseMs, "sessionCacheAfter", async () => this.session.cacheStatus());
     const rgAfter = await timed(phaseMs, "rgCacheAfter", async () => this.rgCacheStatus());
     const sourceAfter = await timed(phaseMs, "sourceStatusAfter", async () => this.sourceIndex.status());
+    typeReference.cacheHits = sourceAfter.scanCacheHits - sourceBefore.scanCacheHits;
+    typeReference.cacheMisses = sourceAfter.scanCacheMisses - sourceBefore.scanCacheMisses;
+    typeReference.cacheMissElapsedMs = sourceAfter.scanCacheMissElapsedMs - sourceBefore.scanCacheMissElapsedMs;
+    typeReference.indexHits = sourceAfter.typeLookupIndexHits - sourceBefore.typeLookupIndexHits;
+    typeReference.indexMisses = sourceAfter.typeLookupIndexMisses - sourceBefore.typeLookupIndexMisses;
 
     const payload: ImpactResult = {
       target: formatAnchor(anchors[0]),
@@ -169,6 +199,7 @@ export class AgentRouter {
         elapsedMs: Date.now() - startedAt,
         phaseMs,
         semantic,
+        typeReference,
         cache: {
           entries: cacheAfter.entries,
           hitsDelta: cacheAfter.hits - cacheBefore.hits,
@@ -189,6 +220,10 @@ export class AgentRouter {
           documentSymbolFacts: sourceAfter.documentSymbolFacts,
           warmIndexPending: sourceAfter.warmIndexPending,
           warmIndexFailed: sourceAfter.warmIndexFailed,
+          scanCacheHitsDelta: sourceAfter.scanCacheHits - sourceBefore.scanCacheHits,
+          scanCacheMissesDelta: sourceAfter.scanCacheMisses - sourceBefore.scanCacheMisses,
+          typeLookupIndexHitsDelta: sourceAfter.typeLookupIndexHits - sourceBefore.typeLookupIndexHits,
+          typeLookupIndexMissesDelta: sourceAfter.typeLookupIndexMisses - sourceBefore.typeLookupIndexMisses,
           anchorFactSource: anchors[0]?.factSource
         },
         outputBytes: 0
@@ -287,6 +322,65 @@ export class AgentRouter {
         mergeCandidate(candidates, candidate);
       }
     }
+  }
+
+  private collectTypeReferenceCandidates(candidates: Map<string, CandidateFile>, anchors: ResolvedAnchor[], options: ImpactOptions, metrics: TypeReferenceMetrics): void {
+    if (options.semanticPolicy === "required") {
+      return;
+    }
+    for (const anchor of anchors) {
+      if (!shouldUseTypeReference(anchor)) {
+        continue;
+      }
+      const typeName = anchor.className || path.basename(anchor.absolutePath, ".java");
+      metrics.scannedPatterns += 1;
+      for (const facts of this.sourceIndex.findTypeReferences(typeName).slice(0, 20)) {
+        if (candidates.has(facts.absolutePath)) {
+          metrics.skippedExisting += 1;
+          continue;
+        }
+        const candidate = candidateFromFacts(facts, scoreBase("semantic", facts, anchor, options) + 60, "typeReference");
+        mergeCandidate(candidates, candidate);
+        metrics.addedCandidates += 1;
+      }
+      const anchorFacts = this.sourceIndex.factsFor(anchor.absolutePath);
+      const existingTypeNames = this.candidateTypeNames(candidates);
+      const missingTypes = anchorFacts.referencedTypes.filter(type => !existingTypeNames.has(simpleTypeName(type)));
+      metrics.skippedExisting += anchorFacts.referencedTypes.length - missingTypes.length;
+      if (missingTypes.length > 0) {
+        metrics.scannedPatterns += 1;
+      }
+      for (const facts of this.sourceIndex.findTypeDefinitions(missingTypes).slice(0, 20)) {
+        if (facts.absolutePath === anchor.absolutePath) {
+          continue;
+        }
+        if (candidates.has(facts.absolutePath)) {
+          metrics.skippedExisting += 1;
+          continue;
+        }
+        const candidate = candidateFromFacts(facts, scoreBase("semantic", facts, anchor, options) + 55, "typeReference");
+        mergeCandidate(candidates, candidate);
+        metrics.addedCandidates += 1;
+      }
+    }
+  }
+
+  private candidateTypeNames(candidates: Map<string, CandidateFile>): Set<string> {
+    const typeNames = new Set<string>();
+    for (const candidate of candidates.values()) {
+      if (!candidate.absolutePath.endsWith(".java")) {
+        continue;
+      }
+      try {
+        const typeName = this.sourceIndex.factsFor(candidate.absolutePath).typeName;
+        if (typeName) {
+          typeNames.add(typeName);
+        }
+      } catch {
+        continue;
+      }
+    }
+    return typeNames;
   }
 
   private nonLspReadPlanPaths(
@@ -876,6 +970,10 @@ function shouldUseTypeGraph(anchor: ResolvedAnchor): boolean {
   return anchor.kind === "interface" || new Set(["port", "repository", "service"]).has(anchor.profile);
 }
 
+function shouldUseTypeReference(anchor: ResolvedAnchor): boolean {
+  return new Set(["service", "repository", "dto", "port"]).has(anchor.profile);
+}
+
 function mergeCandidate(target: Map<string, CandidateFile>, incoming: CandidateFile): void {
   const existing = target.get(incoming.absolutePath);
   if (!existing) {
@@ -1391,6 +1489,9 @@ function readPriority(file: CandidateFile, options: ImpactOptions): ReadPriority
   if (file.categories.includes("config") || file.categories.includes("nonJava")) {
     return "P2";
   }
+  if (isPureTypeReference(file)) {
+    return "P2";
+  }
   if (file.reasons.includes("target") || (file.reasons.includes("implementation") && file.sourceSet === "main")) {
     return "P0";
   }
@@ -1398,6 +1499,10 @@ function readPriority(file: CandidateFile, options: ImpactOptions): ReadPriority
     return "P1";
   }
   return "P2";
+}
+
+function isPureTypeReference(file: CandidateFile): boolean {
+  return file.reasons.length > 0 && file.reasons.every(reason => reason === "typeReference");
 }
 
 function readReason(file: CandidateFile, priority: ReadPriority): string {

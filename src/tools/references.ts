@@ -4,7 +4,7 @@
 import { z } from "zod";
 import { clampLimit, normalizeRepoFile } from "../repo-layout.js";
 import type { ToolContext } from "./context.js";
-import { describeLocation } from "./shared.js";
+import { compact, describeLocation, detailSchema } from "./shared.js";
 
 export const referencesSchema = {
   projectId: z.string().min(1).optional(),
@@ -17,24 +17,25 @@ export const referencesSchema = {
   positionsPerFile: z.number().int().positive().max(20).default(3),
   module: z.string().min(1).optional(),
   layer: z.string().min(1).optional(),
-  sourceSet: z.string().min(1).optional()
+  sourceSet: z.string().min(1).optional(),
+  detail: detailSchema
 };
 
 export async function javaReferences(context: ToolContext, args: z.infer<z.ZodObject<typeof referencesSchema>>): Promise<unknown> {
   const file = normalizeRepoFile(context.repoRoot, args.file);
   const limit = clampLimit(args.limit);
   const result = await context.session.references(file, args.line, args.column, args.includeDeclaration);
-  const described = await Promise.all(result.items.map(location => describeLocation(context.repoRoot, location, false)));
-  const filtered = described
+  const described = await Promise.all(result.items.map(location => describeLocation(context.repoRoot, location, { detail: args.detail })));
+  const matched = described
     .filter(item => !args.module || item.module === args.module)
     .filter(item => !args.layer || item.layer === args.layer)
-    .filter(item => !args.sourceSet || item.sourceSet === args.sourceSet)
-    .slice(0, limit);
+    .filter(item => !args.sourceSet || item.sourceSet === args.sourceSet);
+  const filtered = matched.slice(0, limit);
   return {
     totalReferences: result.totalReferences,
-    filteredReferences: filtered.length,
+    matchedReferences: matched.length,
     returnedReferences: filtered.length,
-    truncated: described.length > filtered.length,
+    truncated: result.truncated || matched.length > filtered.length,
     groups: groupReferences(filtered, args.positionsPerFile)
   };
 }
@@ -43,7 +44,7 @@ function groupReferences(items: Array<Record<string, unknown>>, positionsPerFile
   const groups = new Map<string, Record<string, unknown> & { files: Map<string, Record<string, unknown> & { positions: unknown[]; referenceCount: number }> }>();
   for (const item of items) {
     const groupKey = `${item.module || "unknown"}/${item.layer || "unknown"}`;
-    const fileKey = String(item.relativePath || item.absolutePath || item.uri);
+    const fileKey = String(item.path || item.relativePath || item.absolutePath || item.uri);
     let group = groups.get(groupKey);
     if (!group) {
       group = {
@@ -58,7 +59,7 @@ function groupReferences(items: Array<Record<string, unknown>>, positionsPerFile
     let file = group.files.get(fileKey);
     if (!file) {
       file = {
-        path: item.relativePath || item.absolutePath,
+        path: item.path || item.relativePath || item.absolutePath,
         sourceSet: item.sourceSet,
         referenceCount: 0,
         positions: []
@@ -67,7 +68,7 @@ function groupReferences(items: Array<Record<string, unknown>>, positionsPerFile
     }
     file.referenceCount += 1;
     if (file.positions.length < positionsPerFile) {
-      file.positions.push({ line: item.line, column: item.column, range: item.range });
+      file.positions.push(compact({ line: item.line, column: item.column, range: item.range }));
     }
   }
   return [...groups.values()].map(group => ({

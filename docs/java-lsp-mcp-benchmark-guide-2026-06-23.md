@@ -424,6 +424,22 @@ npm run build && npm test
 
 结论：接受 `warm-required` 作为 precision/recall mode 的可选增强；它将 lishuedu recall 从 `0.7756` 提升到 `0.8256`，同时 `R_read_must` 从修复前的 `0.7000` 恢复到 `1.0000`。默认 `warm-auto` 启用范围本轮不扩大。
 
+### readPlan platform proof（2026-07-01）
+
+完整报告见 `docs/java-lsp-mcp-readplan-platform-proof-2026-07-01.md`。
+
+| project | warmState | recall | R_read_must | elapsed P95 | decision |
+|---|---|---:|---:|---:|---|
+| lishuedu | cold-nolsp | 0.7756 | 1.0000 | 70.95ms | 默认路径保持 |
+| cipherlink | cold-nolsp | 0.7885 | 1.0000 | 31.46ms | 默认路径保持 |
+| exam-parent-v3 | cold-nolsp | 0.5217 | 1.0000 | 39.76ms | 默认路径保持，但 material should gap 需 attribution v2 |
+| lishuedu | warm-auto | 0.7756 | 1.0000 | 76.41ms | no-seed semantic verify 固定成本已消失 |
+| lishuedu | warm-required | 0.8256 | 1.0000 | 1735.60ms | 超过 `800ms` first-touch SLO，不默认化 |
+| cipherlink | warm-required | 0.8171 | 1.0000 | 1524.66ms | 超过 `800ms` first-touch SLO，不默认化 |
+| exam-parent-v3 | warm-required | 0.5883 | 1.0000 | 1506.33ms | 超过 `800ms` first-touch SLO，不默认化 |
+
+本轮同时确认三个真实项目 15 个 golden 场景的 anchor/must/should/side 文件均存在；`cipherlink` controller 包迁移后，golden 路径已同步到 `interfaces/web/`。
+
 ## 8. 判定规则
 
 通过：
@@ -443,7 +459,7 @@ npm run build && npm test
 
 ## 9. 已知边界
 
-- 真实项目的 warm-auto / warm-required 矩阵未作为本轮固定门槛；当前只用 `generic-java` 验证 warm harness。
+- 真实项目 warm 矩阵已有固定报告：`warm-auto` no-seed P95 以 `<=300ms` 为门槛，`warm-required` first-touch P95 以 `<=800ms` 为默认化门槛。2026-07-01 结果显示 `warm-auto` 已通过 no-seed 门槛，`warm-required` 仍不默认化。
 - no-LSP baseline 是固定 raw `rg` + 前 6 个命中文件片段的可复现代理，不代表人类或模型手工多轮搜索的最优策略。
 - golden 是人工标注资产；业务代码大幅变化后，应更新 `repoCommit` 或重新确认 must/should/side。
 - `precision` 仍受 golden 覆盖范围影响，发布门槛以 `R_read_must` 为硬指标。

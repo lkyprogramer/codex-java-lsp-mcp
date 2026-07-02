@@ -1,6 +1,7 @@
 // input: Java source files in the current repo/worktree.
 // output: Lightweight cached source facts for agent routing.
 // pos: Fast source index used before bounded LSP enrichment.
+import { spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { LspDocumentSymbol } from "./jdtls-session.js";
@@ -23,6 +24,7 @@ export type JavaSourceFacts = {
   kind?: "class" | "interface" | "record" | "enum";
   implementsTypes: string[];
   extendsType?: string;
+  referencedTypes: string[];
   annotations: string[];
   methods: JavaMethodFact[];
   factSource: "regex" | "documentSymbol";
@@ -35,6 +37,11 @@ type CacheEntry = {
   facts: JavaSourceFacts;
 };
 
+type RgFileCacheEntry = {
+  expiresAt: number;
+  files: string[];
+};
+
 export type SourceIndexStatus = {
   entries: number;
   hits: number;
@@ -45,6 +52,13 @@ export type SourceIndexStatus = {
   dirtyCount: number;
   warmIndexPending: number;
   warmIndexFailed: number;
+  scanCacheHits: number;
+  scanCacheMisses: number;
+  scanCacheMissElapsedMs: number;
+  scanCacheEntries: number;
+  typeLookupIndexHits: number;
+  typeLookupIndexMisses: number;
+  typeLookupIndexEntries: number;
 };
 
 type FileRecord = Omit<JavaSourceFacts, "methods"> & {
@@ -63,6 +77,9 @@ type SymbolRecord = JavaMethodFact & {
 
 export class SourceIndex {
   private readonly cache = new Map<string, CacheEntry>();
+  private readonly rgFileCache = new Map<string, RgFileCacheEntry>();
+  private readonly typeNameIndex = new Map<string, Set<string>>();
+  private readonly referencedTypeIndex = new Map<string, Set<string>>();
   private readonly snapshotDir: string;
   private readonly filesPath: string;
   private readonly symbolsPath: string;
@@ -73,6 +90,11 @@ export class SourceIndex {
   private warmIndexFailed = 0;
   private hits = 0;
   private misses = 0;
+  private scanCacheHits = 0;
+  private scanCacheMisses = 0;
+  private scanCacheMissElapsedMs = 0;
+  private typeLookupIndexHits = 0;
+  private typeLookupIndexMisses = 0;
   private dirtyCountCache?: { computedAt: number; value: number };
 
   constructor(private readonly repoRoot: string) {
@@ -102,7 +124,14 @@ export class SourceIndex {
       snapshotAgeMs: this.snapshotUpdatedAt ? Date.now() - this.snapshotUpdatedAt : undefined,
       dirtyCount: this.dirtyCount(),
       warmIndexPending: this.warmIndexPending,
-      warmIndexFailed: this.warmIndexFailed
+      warmIndexFailed: this.warmIndexFailed,
+      scanCacheHits: this.scanCacheHits,
+      scanCacheMisses: this.scanCacheMisses,
+      scanCacheMissElapsedMs: this.scanCacheMissElapsedMs,
+      scanCacheEntries: this.rgFileCache.size,
+      typeLookupIndexHits: this.typeLookupIndexHits,
+      typeLookupIndexMisses: this.typeLookupIndexMisses,
+      typeLookupIndexEntries: this.typeNameIndex.size + this.referencedTypeIndex.size
     };
   }
 
@@ -130,11 +159,15 @@ export class SourceIndex {
     }
     this.misses += 1;
     const facts = parseJavaSource(this.repoRoot, absolutePath, readFileSync(absolutePath, "utf8"));
+    if (cached) {
+      this.unindexFacts(cached.facts);
+    }
     this.cache.set(absolutePath, {
       mtimeMs: stat.mtimeMs,
       size: stat.size,
       facts
     });
+    this.indexFacts(facts);
     this.persist(stat.mtimeMs, stat.size, facts);
     return facts;
   }
@@ -153,6 +186,55 @@ export class SourceIndex {
       .map(entry => entry.facts)
       .filter(facts => facts.typeName !== simpleName && implementsOrExtends(facts, simpleName))
       .sort((left, right) => (left.path || left.absolutePath).localeCompare(right.path || right.absolutePath));
+  }
+
+  findTypeReferences(typeName: string): JavaSourceFacts[] {
+    const simpleName = typeName.slice(typeName.lastIndexOf(".") + 1);
+    const indexed = this.referencedTypeIndex.get(simpleName);
+    if (indexed && indexed.size > 0) {
+      this.typeLookupIndexHits += 1;
+      return this.factsForIndexedPaths(indexed)
+        .filter(facts => facts.typeName !== simpleName && facts.referencedTypes.some(type => sameSimpleType(type, simpleName)))
+        .sort(compareFactsByPath);
+    }
+    this.typeLookupIndexMisses += 1;
+    return this.cachedAndScannedFacts(String.raw`\b${escapeRegex(simpleName)}\b`)
+      .filter(facts => facts.typeName !== simpleName && facts.referencedTypes.some(type => sameSimpleType(type, simpleName)))
+      .sort(compareFactsByPath);
+  }
+
+  findTypeDefinitions(typeNames: readonly string[]): JavaSourceFacts[] {
+    const found = new Map<string, JavaSourceFacts>();
+    const simpleNames = unique(typeNames.map(simpleTypeName).filter(name => /^[A-Z][A-Za-z0-9_]*$/.test(name))).slice(0, 16);
+    if (simpleNames.length === 0) {
+      return [];
+    }
+    const missing: string[] = [];
+    for (const simpleName of simpleNames) {
+      const indexed = this.typeNameIndex.get(simpleName);
+      if (!indexed || indexed.size === 0) {
+        missing.push(simpleName);
+        continue;
+      }
+      this.typeLookupIndexHits += 1;
+      for (const facts of this.factsForIndexedPaths(indexed)) {
+        if (facts.typeName === simpleName) {
+          found.set(facts.absolutePath, facts);
+        }
+      }
+    }
+    if (missing.length === 0) {
+      return [...found.values()].sort(compareFactsByPath);
+    }
+    this.typeLookupIndexMisses += missing.length;
+    const expected = new Set(missing);
+    const pattern = String.raw`\b(class|interface|record|enum)\s+(${missing.map(escapeRegex).join("|")})\b`;
+    for (const facts of this.cachedAndScannedFacts(pattern)) {
+      if (facts.typeName && expected.has(facts.typeName)) {
+        found.set(facts.absolutePath, facts);
+      }
+    }
+    return [...found.values()].sort(compareFactsByPath);
   }
 
   upsertDocumentSymbols(inputFile: string, symbols: LspDocumentSymbol[]): JavaSourceFacts {
@@ -180,11 +262,16 @@ export class SourceIndex {
       factSource: "documentSymbol",
       confirmedAt: new Date().toISOString()
     };
+    const cached = this.cache.get(absolutePath);
+    if (cached) {
+      this.unindexFacts(cached.facts);
+    }
     this.cache.set(absolutePath, {
       mtimeMs: stat.mtimeMs,
       size: stat.size,
       facts
     });
+    this.indexFacts(facts);
     this.persist(stat.mtimeMs, stat.size, facts);
     return facts;
   }
@@ -196,6 +283,9 @@ export class SourceIndex {
     try {
       const files = new Map<string, FileRecord>();
       for (const record of readJsonLines<FileRecord>(this.filesPath)) {
+        if (!Array.isArray((record as { referencedTypes?: unknown }).referencedTypes)) {
+          continue;
+        }
         files.set(record.absolutePath, record);
         this.totalFileRecords += 1;
       }
@@ -220,12 +310,14 @@ export class SourceIndex {
           }
         });
       }
+      this.rebuildLookupIndexes();
       this.snapshotUpdatedAt = existsSync(this.metaPath) ? statSync(this.metaPath).mtimeMs : undefined;
     } catch {
       rmSync(this.filesPath, { force: true });
       rmSync(this.symbolsPath, { force: true });
       rmSync(this.metaPath, { force: true });
       this.cache.clear();
+      this.rebuildLookupIndexes();
       this.totalFileRecords = 0;
     }
   }
@@ -329,15 +421,151 @@ export class SourceIndex {
     this.dirtyCountCache = { computedAt: now, value: dirty };
     return dirty;
   }
+
+  private cachedAndScannedFacts(pattern: string): JavaSourceFacts[] {
+    const found = new Map<string, JavaSourceFacts>();
+    for (const entry of this.cache.values()) {
+      found.set(entry.facts.absolutePath, entry.facts);
+    }
+    for (const file of this.rgJavaFiles(pattern)) {
+      try {
+        const facts = this.factsFor(file);
+        found.set(facts.absolutePath, facts);
+      } catch {
+        continue;
+      }
+    }
+    return [...found.values()];
+  }
+
+  private rgJavaFiles(pattern: string): string[] {
+    const now = Date.now();
+    const ttlMs = sourceIndexScanCacheTtlMs();
+    const cached = ttlMs > 0 ? this.rgFileCache.get(pattern) : undefined;
+    if (cached && cached.expiresAt > now) {
+      this.scanCacheHits += 1;
+      return cached.files;
+    }
+    this.scanCacheMisses += 1;
+    const startedAt = Date.now();
+    const result = spawnSync("rg", [
+      "-l",
+      pattern,
+      "-g",
+      "*.java",
+      "-g",
+      "!**/{build,.gradle,node_modules,dist,target}/**",
+      "."
+    ], {
+      cwd: this.repoRoot,
+      encoding: "utf8",
+      maxBuffer: 4 * 1024 * 1024,
+      timeout: 5000
+    });
+    this.scanCacheMissElapsedMs += Date.now() - startedAt;
+    if (result.error || (typeof result.status === "number" && result.status > 1)) {
+      return [];
+    }
+    const files = result.stdout
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map(file => path.resolve(this.repoRoot, file));
+    if (ttlMs > 0) {
+      this.rgFileCache.set(pattern, {
+        expiresAt: now + ttlMs,
+        files
+      });
+    }
+    return files;
+  }
+
+  private factsForIndexedPaths(paths: Set<string>): JavaSourceFacts[] {
+    const facts: JavaSourceFacts[] = [];
+    for (const file of paths) {
+      const entry = this.cache.get(file);
+      if (entry) {
+        facts.push(entry.facts);
+      }
+    }
+    return facts;
+  }
+
+  private rebuildLookupIndexes(): void {
+    this.typeNameIndex.clear();
+    this.referencedTypeIndex.clear();
+    for (const entry of this.cache.values()) {
+      this.indexFacts(entry.facts);
+    }
+  }
+
+  private indexFacts(facts: JavaSourceFacts): void {
+    if (facts.typeName) {
+      addIndexPath(this.typeNameIndex, facts.typeName, facts.absolutePath);
+    }
+    for (const type of facts.referencedTypes) {
+      addIndexPath(this.referencedTypeIndex, simpleTypeName(type), facts.absolutePath);
+    }
+  }
+
+  private unindexFacts(facts: JavaSourceFacts): void {
+    if (facts.typeName) {
+      removeIndexPath(this.typeNameIndex, facts.typeName, facts.absolutePath);
+    }
+    for (const type of facts.referencedTypes) {
+      removeIndexPath(this.referencedTypeIndex, simpleTypeName(type), facts.absolutePath);
+    }
+  }
+}
+
+function addIndexPath(index: Map<string, Set<string>>, key: string, file: string): void {
+  const paths = index.get(key) || new Set<string>();
+  paths.add(file);
+  index.set(key, paths);
+}
+
+function removeIndexPath(index: Map<string, Set<string>>, key: string, file: string): void {
+  const paths = index.get(key);
+  if (!paths) {
+    return;
+  }
+  paths.delete(file);
+  if (paths.size === 0) {
+    index.delete(key);
+  }
 }
 
 function implementsOrExtends(facts: JavaSourceFacts, simpleName: string): boolean {
   return facts.implementsTypes.some(type => sameSimpleType(type, simpleName)) || sameSimpleType(facts.extendsType || "", simpleName);
 }
 
+function compareFactsByPath(left: JavaSourceFacts, right: JavaSourceFacts): number {
+  return (left.path || left.absolutePath).localeCompare(right.path || right.absolutePath);
+}
+
 function sameSimpleType(value: string, expected: string): boolean {
   const simple = value.replace(/<.*>/, "").trim().slice(value.lastIndexOf(".") + 1);
   return simple === expected;
+}
+
+function simpleTypeName(value: string): string {
+  const stripped = value.replace(/<.*>/, "").trim();
+  return stripped.slice(stripped.lastIndexOf(".") + 1);
+}
+
+function unique(values: string[]): string[] {
+  return [...new Set(values)];
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function sourceIndexScanCacheTtlMs(): number {
+  const parsed = Number(process.env.JAVA_LSP_SOURCE_INDEX_SCAN_CACHE_TTL_MS);
+  if (Number.isInteger(parsed) && parsed >= 0) {
+    return parsed;
+  }
+  return 5000;
 }
 
 export function parseJavaSource(repoRoot: string, absolutePath: string, content: string): JavaSourceFacts {
@@ -355,6 +583,7 @@ export function parseJavaSource(repoRoot: string, absolutePath: string, content:
     .map(value => value.replace(/<.*>/, "").trim())
     .filter(Boolean) || [];
   const extendsType = typeTail.match(/\bextends\s+([A-Za-z_][A-Za-z0-9_]*)/)?.[1];
+  const referencedTypes = parseSignatureReferencedTypes(lines, typeMatch?.[2]);
 
   return {
     absolutePath,
@@ -367,6 +596,7 @@ export function parseJavaSource(repoRoot: string, absolutePath: string, content:
     kind: typeMatch?.[1] as JavaSourceFacts["kind"] | undefined,
     implementsTypes,
     extendsType,
+    referencedTypes,
     annotations,
     methods: parseMethods(lines),
     factSource: "regex"
@@ -406,6 +636,51 @@ function javaKind(kind: number): JavaSourceFacts["kind"] {
     return "record";
   }
   return "class";
+}
+
+function parseSignatureReferencedTypes(lines: string[], selfType: string | undefined): string[] {
+  const found = new Set<string>();
+  let depth = 0;
+  let pending: string[] = [];
+  for (const line of lines) {
+    const code = line.replace(/\/\/.*/, "").trim();
+    if (depth === 1 && code.length > 0 && !code.startsWith("@") && !isStaticFinalDeclaration(code)) {
+      if (pending.length > 0 || isTopLevelSignatureLine(code)) {
+        pending.push(code);
+      }
+      if (pending.length > 0 && /[;{]/.test(code)) {
+        collectReferencedTypes(found, pending.join(" "), selfType);
+        pending = [];
+      }
+    }
+    depth += braceDelta(code);
+  }
+  return [...found].sort();
+}
+
+function isTopLevelSignatureLine(line: string): boolean {
+  return line.includes("(") || line.endsWith(";");
+}
+
+function isStaticFinalDeclaration(line: string): boolean {
+  return /\bstatic\b/.test(line) && /\bfinal\b/.test(line) && line.endsWith(";");
+}
+
+function collectReferencedTypes(target: Set<string>, signature: string, selfType: string | undefined): void {
+  const head = signature
+    .replace(/\{.*/, "")
+    .replace(/=.*/, "")
+    .replace(/;.*/, "");
+  for (const match of head.matchAll(/\b[A-Z][A-Za-z0-9_]*\b/g)) {
+    const token = match[0];
+    if (token !== selfType) {
+      target.add(token);
+    }
+  }
+}
+
+function braceDelta(line: string): number {
+  return (line.match(/\{/g) || []).length - (line.match(/}/g) || []).length;
 }
 
 function parseMethods(lines: string[]): JavaMethodFact[] {

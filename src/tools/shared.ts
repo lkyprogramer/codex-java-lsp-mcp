@@ -1,10 +1,20 @@
 // input: Raw LSP locations, hovers, ranges, and symbols.
 // output: Compact JSON-safe descriptions for MCP tools.
 // pos: Shared response formatting helpers for v5 tools.
+import { z } from "zod";
 import { fromFileUri, classifyPath, sourcePreview } from "../repo-layout.js";
 import type { LspLocation, LspLocationLink, LspRange } from "../jdtls-session.js";
 
-export async function describeLocation(repoRoot: string, location: LspLocation | LspLocationLink, includePreview = false): Promise<Record<string, unknown>> {
+export const detailSchema = z.enum(["summary", "diagnostic"]).optional();
+export type ResponseDetail = "summary" | "diagnostic";
+
+type LocationFormatOptions = {
+  readonly detail?: ResponseDetail;
+  readonly includePreview?: boolean;
+};
+
+export async function describeLocation(repoRoot: string, location: LspLocation | LspLocationLink, options: LocationFormatOptions | boolean = false): Promise<Record<string, unknown>> {
+  const formatOptions = typeof options === "boolean" ? { includePreview: options } : options;
   const uri = "targetUri" in location ? location.targetUri : location.uri;
   const range = "targetSelectionRange" in location ? location.targetSelectionRange : location.range;
   const filePath = fromFileUri(uri);
@@ -12,17 +22,46 @@ export async function describeLocation(repoRoot: string, location: LspLocation |
     return { uri, range: oneBasedRange(range) };
   }
   const line = range.start.line + 1;
-  const result: Record<string, unknown> = {
-    uri,
-    ...classifyPath(repoRoot, filePath),
-    line,
-    column: range.start.character + 1,
-    range: oneBasedRange(range)
-  };
-  if (includePreview) {
+  const pathContext = classifyPath(repoRoot, filePath);
+  const result: Record<string, unknown> = isDiagnosticDetail(formatOptions.detail)
+    ? {
+        uri,
+        ...pathContext,
+        line,
+        column: range.start.character + 1,
+        range: oneBasedRange(range)
+      }
+    : {
+        path: pathContext.relativePath || pathContext.absolutePath,
+        module: pathContext.module,
+        projectPath: pathContext.projectPath,
+        layer: pathContext.layer,
+        sourceSet: pathContext.sourceSet,
+        line,
+        column: range.start.character + 1
+      };
+  if (formatOptions.includePreview) {
     result.preview = await sourcePreview(filePath, line);
   }
   return compact(result);
+}
+
+export function describeFile(repoRoot: string, filePath: string, detail?: ResponseDetail): Record<string, unknown> {
+  const pathContext = classifyPath(repoRoot, filePath);
+  if (isDiagnosticDetail(detail)) {
+    return compact(pathContext);
+  }
+  return compact({
+    path: pathContext.relativePath || pathContext.absolutePath,
+    module: pathContext.module,
+    projectPath: pathContext.projectPath,
+    layer: pathContext.layer,
+    sourceSet: pathContext.sourceSet
+  });
+}
+
+export function isDiagnosticDetail(detail?: ResponseDetail): boolean {
+  return detail === "diagnostic";
 }
 
 export function normalizeHover(value: unknown): unknown {

@@ -4,7 +4,7 @@
 import { z } from "zod";
 import { clampLimit, normalizeRepoFile } from "../repo-layout.js";
 import type { ToolContext } from "./context.js";
-import { describeLocation, normalizeHover, symbolKindName } from "./shared.js";
+import { describeFile, describeLocation, detailSchema, isDiagnosticDetail, normalizeHover, symbolKindName } from "./shared.js";
 
 export const symbolSchema = {
   projectId: z.string().min(1).optional(),
@@ -14,7 +14,8 @@ export const symbolSchema = {
   line: z.number().int().positive().optional(),
   column: z.number().int().positive().optional(),
   limit: z.number().int().positive().max(300).optional(),
-  semanticTimeoutMs: z.number().int().positive().max(10000).default(3000)
+  semanticTimeoutMs: z.number().int().positive().max(10000).default(3000),
+  detail: detailSchema
 };
 
 export async function javaSymbol(context: ToolContext, args: z.infer<z.ZodObject<typeof symbolSchema>>): Promise<unknown> {
@@ -30,7 +31,7 @@ export async function javaSymbol(context: ToolContext, args: z.infer<z.ZodObject
         name: item.name,
         kind: symbolKindName(item.kind),
         containerName: item.containerName,
-        location: item.location ? await describeLocation(context.repoRoot, item.location, false) : undefined
+        location: item.location ? await describeLocation(context.repoRoot, item.location, { detail: args.detail }) : undefined
       })))
     };
   }
@@ -41,11 +42,11 @@ export async function javaSymbol(context: ToolContext, args: z.infer<z.ZodObject
   const result = await context.session.symbolContext(file, args.line, args.column, args.semanticTimeoutMs);
   return {
     mode: "position",
-    file,
+    file: isDiagnosticDetail(args.detail) ? file : describeFile(context.repoRoot, file).path,
     line: args.line,
     column: args.column,
     hover: normalizeHover(result.hover),
-    definitions: await Promise.all(result.definitions.map(location => describeLocation(context.repoRoot, location, false))),
-    implementations: await Promise.all(result.implementations.map(location => describeLocation(context.repoRoot, location, false)))
+    definitions: await Promise.all(result.definitions.map(location => describeLocation(context.repoRoot, location, { detail: args.detail }))),
+    implementations: await Promise.all(result.implementations.map(location => describeLocation(context.repoRoot, location, { detail: args.detail })))
   };
 }

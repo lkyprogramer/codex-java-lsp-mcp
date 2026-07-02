@@ -55,15 +55,23 @@ test("benchmark can run a no-lsp token baseline", async () => {
   const srcDir = path.join(root, "src", "main", "java", "demo");
   await mkdir(srcDir, { recursive: true });
   await writeFile(path.join(root, "pom.xml"), "<project></project>\n");
+  const hiddenDir = path.join(root, "src", "main", "java", "hidden");
+  const billingDir = path.join(root, "modules", "billing", "src", "main", "java", "external");
+  await mkdir(hiddenDir, { recursive: true });
+  await mkdir(billingDir, { recursive: true });
   await writeFile(path.join(srcDir, "DemoController.java"), [
     "package demo;",
+    "import hidden.HiddenDto;",
     "public class DemoController {",
+    "  private HiddenDto hidden;",
     "  public DemoResponse updateDemo(DemoRequest request) { return null; }",
     "}",
     ""
   ].join("\n"));
   await writeFile(path.join(srcDir, "DemoRequest.java"), "package demo; public record DemoRequest(String name) {}\n");
   await writeFile(path.join(srcDir, "DemoResponse.java"), "package demo; public record DemoResponse(String name) {}\n");
+  await writeFile(path.join(hiddenDir, "HiddenDto.java"), "package hidden; class HiddenDto {}\n");
+  await writeFile(path.join(billingDir, "BillingClient.java"), "package external; class BillingClient {}\n");
 
   const scenarioFile = path.join(root, "generic-java.scenarios.jsonl");
   await writeFile(scenarioFile, `${JSON.stringify({
@@ -75,20 +83,26 @@ test("benchmark can run a no-lsp token baseline", async () => {
     warmState: "cold-nolsp",
     anchor: {
       file: "src/main/java/demo/DemoController.java",
-      line: 3,
+      line: 5,
       column: 29,
       profile: "controller",
       taskKeywords: ["demo", "update"]
     },
     golden: {
       mustHit: ["src/main/java/demo/DemoController.java", "src/main/java/demo/DemoRequest.java", "src/main/java/demo/DemoResponse.java"],
-      shouldHit: ["src/main/java/demo/MissingService.java"],
+      shouldHit: ["src/main/java/demo/MissingService.java", "src/main/java/hidden/HiddenDto.java", "modules/billing/src/main/java/external/BillingClient.java"],
       side: []
     },
     goldenMeta: {
       "src/main/java/demo/MissingService.java": {
         shouldBlocksTask: false,
         note: "not needed for this fixture"
+      },
+      "src/main/java/hidden/HiddenDto.java": {
+        shouldBlocksTask: true
+      },
+      "modules/billing/src/main/java/external/BillingClient.java": {
+        shouldBlocksTask: true
       }
     }
   })}\n`);
@@ -132,9 +146,36 @@ test("benchmark can run a no-lsp token baseline", async () => {
     inReadPlan: false,
     source: "absent",
     blockedBy: "absent",
+    absentReason: "golden-stale-or-low-value",
     profile: "controller",
     semanticUsed: false,
     shouldBlocksTask: false
+  });
+  assert.deepEqual(attempt.goldenAttribution.find((item: Record<string, unknown>) => item.file === "src/main/java/hidden/HiddenDto.java"), {
+    scenario: "DemoController#updateDemo",
+    file: "src/main/java/hidden/HiddenDto.java",
+    kind: "should",
+    inFiles: false,
+    inReadPlan: false,
+    source: "absent",
+    blockedBy: "absent",
+    absentReason: "no-type-edge",
+    profile: "controller",
+    semanticUsed: false,
+    shouldBlocksTask: true
+  });
+  assert.deepEqual(attempt.goldenAttribution.find((item: Record<string, unknown>) => item.file === "modules/billing/src/main/java/external/BillingClient.java"), {
+    scenario: "DemoController#updateDemo",
+    file: "modules/billing/src/main/java/external/BillingClient.java",
+    kind: "should",
+    inFiles: false,
+    inReadPlan: false,
+    source: "absent",
+    blockedBy: "absent",
+    absentReason: "cross-module-cold",
+    profile: "controller",
+    semanticUsed: false,
+    shouldBlocksTask: true
   });
 });
 
@@ -183,7 +224,8 @@ test("impact benchmark exposes timing diagnostics", async () => {
     "--warm-state", "cold-nolsp",
     "--strategy", "impact",
     "--runs", "1",
-    "--verbosity", "diagnostic"
+    "--verbosity", "diagnostic",
+    "--read-plan-max-items", "1"
   ], {
     cwd: path.resolve(import.meta.dirname, ".."),
     encoding: "utf8"
@@ -191,8 +233,16 @@ test("impact benchmark exposes timing diagnostics", async () => {
 
   assert.equal(result.status, 0, result.stderr);
   const payload = JSON.parse(result.stdout);
-  const timing = payload.rows[0].attempts[0].timing;
+  const attempt = payload.rows[0].attempts[0];
+  const timing = attempt.timing;
+  assert.equal(payload.metadata.readPlanMaxItems, 1);
+  assert.equal(attempt.readPlanItems, 1);
+  assert.equal(attempt.roundTrips, 2);
   assert.equal(typeof timing.phaseMs, "object");
   assert.equal(timing.semantic.policy, "fast");
   assert.equal(timing.semantic.used, false);
+  assert.equal(typeof timing.typeReference, "object");
+  assert.equal(typeof timing.typeReference.elapsedMs, "number");
+  assert.equal(typeof timing.typeReference.indexHits, "number");
+  assert.equal(typeof timing.typeReference.cacheMisses, "number");
 });

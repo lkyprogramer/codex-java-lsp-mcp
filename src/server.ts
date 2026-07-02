@@ -12,7 +12,8 @@ import { impactSchema, javaImpact } from "./tools/impact.js";
 import { javaReferences, referencesSchema } from "./tools/references.js";
 import { javaRestart, restartSchema } from "./tools/restart.js";
 import { javaShutdown, shutdownSchema } from "./tools/shutdown.js";
-import { javaStatus, statusSchema } from "./tools/status.js";
+import { javaStatus, statusSchema, summarizeResourceStatus } from "./tools/status.js";
+import { isDiagnosticDetail } from "./tools/shared.js";
 import { javaSymbol, symbolSchema } from "./tools/symbol.js";
 import { cleanupStaleWorktreeCaches } from "./worktree-cache-cleanup.js";
 
@@ -119,10 +120,13 @@ async function javaStatusFor(args: z.infer<z.ZodObject<typeof statusSchema>>): P
       activeRepos: runtimes.activeRepos()
     };
   }
-  return withContext(args, async context => ({
-    ...await javaStatus(context, args),
-    resource: runtimes.resourceStatus()
-  }), { mayStartLsp: args.start });
+  return withContext(args, async context => {
+    const resource = runtimes.resourceStatus();
+    return {
+      ...await javaStatus(context, args),
+      resource: isDiagnosticDetail(args.detail) ? resource : summarizeResourceStatus(resource)
+    };
+  }, { mayStartLsp: args.start });
 }
 
 async function shutdownFor(args: z.infer<z.ZodObject<typeof shutdownSchema>>): Promise<unknown> {

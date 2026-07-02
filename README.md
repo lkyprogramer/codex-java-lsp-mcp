@@ -145,19 +145,25 @@ hook 行为：
 
 | Tool | 用途 | 是否要求 LSP |
 | --- | --- | --- |
-| `java_status` | 查看 server、repo、JDT LS、watcher、SourceIndex、resource 状态；`start=true` 时尝试启动 JDT LS。 | 否；启动时需要启用 |
+| `java_status` | 查看 server、repo、JDT LS、watcher、SourceIndex、resource 摘要；`start=true` 时尝试启动 JDT LS；`detail=diagnostic` 返回完整排障字段。 | 否；启动时需要启用 |
 | `java_impact` | 推荐入口。生成 Java 影响面、候选文件、内部 `rg` 摘要、可读计划、证据缺口和指标。 | `semanticPolicy=fast` 不要求；`required` 要求 |
-| `java_symbol` | 按 query 搜索 workspace symbols，或按 file/line/column 查 hover、definition、implementation。 | 是 |
-| `java_references` | 对精确 Java 符号位置返回 summary-only references。 | 是 |
-| `java_diagnostics` | 打开 Java 文件并等待短时间返回 JDT LS diagnostics。 | 是 |
-| `java_restart` | 重启当前 repo 的 JDT LS session；只有显式参数才清 cache。 | 是 |
-| `java_shutdown` | 停止当前或全部 JDT LS 子进程，MCP server 保持存活。 | 否 |
+| `java_symbol` | 按 query 搜索 workspace symbols，或按 file/line/column 查 hover、definition、implementation；默认返回 repo-relative 位置。 | 是 |
+| `java_references` | 对精确 Java 符号位置返回 summary-only references；默认隐藏 raw URI/range。 | 是 |
+| `java_diagnostics` | 打开 Java 文件并等待短时间返回 JDT LS diagnostics；默认按 repo-relative 文件聚合。 | 是 |
+| `java_restart` | 重启当前 repo 的 JDT LS session；默认返回动作摘要，只有显式参数才清 cache。 | 是 |
+| `java_shutdown` | 停止当前或全部 JDT LS 子进程，MCP server 保持存活；默认返回动作摘要。 | 否 |
 
 推荐默认调用顺序：
 
 ```json
 {"tool":"java_status","arguments":{"repoRoot":"/absolute/repo","start":true}}
 {"tool":"java_impact","arguments":{"repoRoot":"/absolute/repo","anchors":[{"file":"src/main/java/demo/OrderService.java","line":42,"column":18}],"semanticPolicy":"auto"}}
+```
+
+排查 runtime、watcher roots、JDK candidates、raw LSP URI/range 或完整 diagnostics 时显式打开诊断字段：
+
+```json
+{"tool":"java_status","arguments":{"repoRoot":"/absolute/repo","start":false,"detail":"diagnostic"}}
 ```
 
 默认不要在每次查询后调用 `java_shutdown`；让 idle TTL 回收 JDT LS，才能复用 workspace import、JDT LS 内存索引和 SourceIndex 缓存。
