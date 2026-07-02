@@ -853,7 +853,7 @@ function isControlWord(value: string): boolean {
   return new Set(["if", "for", "while", "switch", "catch", "return", "new", "throw"]).has(value);
 }
 
-function readJsonLines<T>(file: string): T[] {
+export function readJsonLines<T>(file: string): T[] {
   return readFileSync(file, "utf8")
     .split(/\r?\n/)
     .filter(Boolean)
