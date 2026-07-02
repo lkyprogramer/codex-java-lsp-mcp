@@ -26,6 +26,7 @@ export type JavaSourceFacts = {
   extendsType?: string;
   referencedTypes: string[];
   imports: string[];
+  wildcardImports: string[];
   annotations: string[];
   methods: JavaMethodFact[];
   factSource: "regex" | "documentSymbol";
@@ -82,6 +83,7 @@ export class SourceIndex {
   private readonly typeNameIndex = new Map<string, Set<string>>();
   private readonly referencedTypeIndex = new Map<string, Set<string>>();
   private readonly importedTypeIndex = new Map<string, Set<string>>();
+  private readonly wildcardImportIndex = new Map<string, Set<string>>();
   private readonly snapshotDir: string;
   private readonly filesPath: string;
   private readonly symbolsPath: string;
@@ -133,7 +135,7 @@ export class SourceIndex {
       scanCacheEntries: this.rgFileCache.size,
       typeLookupIndexHits: this.typeLookupIndexHits,
       typeLookupIndexMisses: this.typeLookupIndexMisses,
-      typeLookupIndexEntries: this.typeNameIndex.size + this.referencedTypeIndex.size + this.importedTypeIndex.size
+      typeLookupIndexEntries: this.typeNameIndex.size + this.referencedTypeIndex.size + this.importedTypeIndex.size + this.wildcardImportIndex.size
     };
   }
 
@@ -207,25 +209,38 @@ export class SourceIndex {
 
   findImporters(typeName: string): JavaSourceFacts[] {
     const simpleName = typeName.slice(typeName.lastIndexOf(".") + 1);
+    const typePackage = packageNameOf(typeName);
     const indexed = this.importedTypeIndex.get(simpleName);
-    if (indexed && indexed.size > 0) {
+    const wildcardIndexed = typePackage ? this.wildcardImportIndex.get(typePackage) : undefined;
+    const indexedPaths = new Set([...(indexed || []), ...(wildcardIndexed || [])]);
+    if (indexedPaths.size > 0) {
       this.typeLookupIndexHits += 1;
-      return this.factsForIndexedPaths(indexed)
+      return this.factsForIndexedPaths(indexedPaths)
         .filter(facts => facts.typeName !== simpleName)
         .sort(compareFactsByPath);
     }
     this.typeLookupIndexMisses += 1;
-    return this.cachedAndScannedFacts(String.raw`^\s*import\s+(static\s+)?[A-Za-z0-9_.]+\.${escapeRegex(simpleName)}\s*;`)
-      .filter(facts => facts.typeName !== simpleName && facts.imports.some(type => sameSimpleType(type, simpleName)))
+    const pattern = typePackage
+      ? String.raw`(^\s*import\s+(static\s+)?[A-Za-z0-9_.]+\.${escapeRegex(simpleName)}\s*;|\b${escapeRegex(simpleName)}\b)`
+      : String.raw`^\s*import\s+(static\s+)?[A-Za-z0-9_.]+\.${escapeRegex(simpleName)}\s*;`;
+    return this.cachedAndScannedFacts(pattern)
+      .filter(facts => facts.typeName !== simpleName
+        && (facts.imports.some(type => sameSimpleType(type, simpleName))
+          || (typePackage !== undefined && facts.wildcardImports.includes(typePackage))))
       .sort(compareFactsByPath);
   }
 
   findTypeDefinitions(typeNames: readonly string[]): JavaSourceFacts[] {
     const found = new Map<string, JavaSourceFacts>();
-    const simpleNames = unique(typeNames.map(simpleTypeName).filter(name => /^[A-Z][A-Za-z0-9_]*$/.test(name))).slice(0, 16);
+    const requestedNames = unique(typeNames
+      .map(value => value.replace(/<.*>/, "").trim())
+      .filter(Boolean)
+    ).slice(0, 64);
+    const simpleNames = unique(requestedNames.map(simpleTypeName).filter(name => /^[A-Z][A-Za-z0-9_]*$/.test(name)));
     if (simpleNames.length === 0) {
       return [];
     }
+    const exactBySimple = exactDefinitionRequestsBySimpleName(requestedNames);
     const missing: string[] = [];
     for (const simpleName of simpleNames) {
       const indexed = this.typeNameIndex.get(simpleName);
@@ -235,7 +250,7 @@ export class SourceIndex {
       }
       this.typeLookupIndexHits += 1;
       for (const facts of this.factsForIndexedPaths(indexed)) {
-        if (facts.typeName === simpleName) {
+        if (matchesDefinitionRequest(facts, simpleName, exactBySimple)) {
           found.set(facts.absolutePath, facts);
         }
       }
@@ -247,7 +262,7 @@ export class SourceIndex {
     const expected = new Set(missing);
     const pattern = String.raw`\b(class|interface|record|enum)\s+(${missing.map(escapeRegex).join("|")})\b`;
     for (const facts of this.cachedAndScannedFacts(pattern)) {
-      if (facts.typeName && expected.has(facts.typeName)) {
+      if (facts.typeName && expected.has(facts.typeName) && matchesDefinitionRequest(facts, facts.typeName, exactBySimple)) {
         found.set(facts.absolutePath, facts);
       }
     }
@@ -301,7 +316,8 @@ export class SourceIndex {
       const files = new Map<string, FileRecord>();
       for (const record of readJsonLines<FileRecord>(this.filesPath)) {
         if (!Array.isArray((record as { referencedTypes?: unknown }).referencedTypes)
-          || !Array.isArray((record as { imports?: unknown }).imports)) {
+          || !Array.isArray((record as { imports?: unknown }).imports)
+          || !Array.isArray((record as { wildcardImports?: unknown }).wildcardImports)) {
           continue;
         }
         files.set(record.absolutePath, record);
@@ -512,6 +528,7 @@ export class SourceIndex {
     this.typeNameIndex.clear();
     this.referencedTypeIndex.clear();
     this.importedTypeIndex.clear();
+    this.wildcardImportIndex.clear();
     for (const entry of this.cache.values()) {
       this.indexFacts(entry.facts);
     }
@@ -527,6 +544,9 @@ export class SourceIndex {
     for (const type of facts.imports) {
       addIndexPath(this.importedTypeIndex, simpleTypeName(type), facts.absolutePath);
     }
+    for (const packageName of facts.wildcardImports) {
+      addIndexPath(this.wildcardImportIndex, packageName, facts.absolutePath);
+    }
   }
 
   private unindexFacts(facts: JavaSourceFacts): void {
@@ -538,6 +558,9 @@ export class SourceIndex {
     }
     for (const type of facts.imports) {
       removeIndexPath(this.importedTypeIndex, simpleTypeName(type), facts.absolutePath);
+    }
+    for (const packageName of facts.wildcardImports) {
+      removeIndexPath(this.wildcardImportIndex, packageName, facts.absolutePath);
     }
   }
 }
@@ -577,6 +600,45 @@ function simpleTypeName(value: string): string {
   return stripped.slice(stripped.lastIndexOf(".") + 1);
 }
 
+function exactDefinitionRequestsBySimpleName(requestedNames: readonly string[]): Map<string, Set<string>> {
+  const exact = new Map<string, Set<string>>();
+  const simpleRequests = new Set(requestedNames
+    .filter(requestedName => !packageNameOf(requestedName))
+    .map(simpleTypeName)
+  );
+  for (const requestedName of requestedNames) {
+    if (!packageNameOf(requestedName)) {
+      continue;
+    }
+    const simpleName = simpleTypeName(requestedName);
+    if (simpleRequests.has(simpleName)) {
+      continue;
+    }
+    const entries = exact.get(simpleName) || new Set<string>();
+    entries.add(requestedName);
+    exact.set(simpleName, entries);
+  }
+  return exact;
+}
+
+function matchesDefinitionRequest(facts: JavaSourceFacts, simpleName: string, exactBySimple: Map<string, Set<string>>): boolean {
+  if (facts.typeName !== simpleName) {
+    return false;
+  }
+  const exactNames = exactBySimple.get(simpleName);
+  if (!exactNames || exactNames.size === 0) {
+    return true;
+  }
+  const packageName = facts.packageName;
+  return Boolean(packageName && exactNames.has(`${packageName}.${simpleName}`));
+}
+
+function packageNameOf(value: string): string | undefined {
+  const stripped = value.replace(/<.*>/, "").trim();
+  const separator = stripped.lastIndexOf(".");
+  return separator > 0 ? stripped.slice(0, separator) : undefined;
+}
+
 function unique(values: string[]): string[] {
   return [...new Set(values)];
 }
@@ -609,7 +671,7 @@ export function parseJavaSource(repoRoot: string, absolutePath: string, content:
     .filter(Boolean) || [];
   const extendsType = typeTail.match(/\bextends\s+([A-Za-z_][A-Za-z0-9_]*)/)?.[1];
   const referencedTypes = parseSignatureReferencedTypes(lines, typeMatch?.[2]);
-  const imports = parseImports(lines);
+  const { imports, wildcardImports } = parseImports(lines);
 
   return {
     absolutePath,
@@ -624,6 +686,7 @@ export function parseJavaSource(repoRoot: string, absolutePath: string, content:
     extendsType,
     referencedTypes,
     imports,
+    wildcardImports,
     annotations,
     methods: parseMethods(lines),
     factSource: "regex"
@@ -685,9 +748,15 @@ function parseSignatureReferencedTypes(lines: string[], selfType: string | undef
   return [...found].sort();
 }
 
-function parseImports(lines: string[]): string[] {
+function parseImports(lines: string[]): { imports: string[]; wildcardImports: string[] } {
   const found = new Set<string>();
+  const wildcard = new Set<string>();
   for (const line of lines) {
+    const wildcardMatch = line.match(/^\s*import\s+([A-Za-z0-9_.]+)\.\*\s*;/);
+    if (wildcardMatch) {
+      wildcard.add(wildcardMatch[1]);
+      continue;
+    }
     const match = line.match(/^\s*import\s+(static\s+)?([A-Za-z0-9_.]+)\s*;/);
     if (!match) {
       continue;
@@ -697,7 +766,7 @@ function parseImports(lines: string[]): string[] {
       found.add(fqn);
     }
   }
-  return [...found].sort();
+  return { imports: [...found].sort(), wildcardImports: [...wildcard].sort() };
 }
 
 function isTopLevelSignatureLine(line: string): boolean {

@@ -86,6 +86,7 @@ public class ApplyInfoServiceImpl {
     "com.demo.util.Checks",
     "java.util.List"
   ]);
+  assert.deepEqual(facts.wildcardImports, ["com.demo.legacy"]);
 });
 
 test("SourceIndex can replace regex facts with documentSymbol facts", async () => {
@@ -388,6 +389,73 @@ test("SourceIndex finds importers via the imported type index", async () => {
   const status = index.status();
   assert.equal(status.typeLookupIndexHits, 1);
   assert.equal(status.scanCacheMisses, 0);
+});
+
+test("SourceIndex finds type definitions beyond the first sixteen requested names", async () => {
+  const { mkdtemp, mkdir, writeFile } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-source-many-definitions-"));
+  const dir = path.join(root, "src/main/java/demo");
+  await mkdir(dir, { recursive: true });
+  const names = Array.from({ length: 24 }, (_, index) => `Type${String(index).padStart(2, "0")}`);
+  for (const name of names) {
+    await writeFile(path.join(dir, `${name}.java`), `package demo;\npublic class ${name} {}\n`);
+  }
+
+  const index = new SourceIndex(root);
+  const found = index.findTypeDefinitions(names).map(item => item.typeName);
+  assert.ok(found.includes("Type23"));
+});
+
+test("SourceIndex resolves fully qualified type definitions without same-name collisions", async () => {
+  const { mkdtemp, mkdir, writeFile } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-source-exact-definition-"));
+  const domain = path.join(root, "src/main/java/demo/domain/contract/StorageSignedUrlCommand.java");
+  const application = path.join(root, "src/main/java/demo/application/dto/StorageSignedUrlCommand.java");
+  await mkdir(path.dirname(domain), { recursive: true });
+  await mkdir(path.dirname(application), { recursive: true });
+  await writeFile(domain, "package demo.domain.contract;\npublic record StorageSignedUrlCommand(String key) {}\n");
+  await writeFile(application, "package demo.application.dto;\npublic record StorageSignedUrlCommand(String key) {}\n");
+
+  const index = new SourceIndex(root);
+  index.factsFor(domain);
+  index.factsFor(application);
+
+  assert.deepEqual(
+    index.findTypeDefinitions(["demo.domain.contract.StorageSignedUrlCommand"]).map(item => item.path),
+    ["src/main/java/demo/domain/contract/StorageSignedUrlCommand.java"]
+  );
+  assert.deepEqual(
+    index.findTypeDefinitions(["StorageSignedUrlCommand"]).map(item => item.path),
+    [
+      "src/main/java/demo/application/dto/StorageSignedUrlCommand.java",
+      "src/main/java/demo/domain/contract/StorageSignedUrlCommand.java"
+    ]
+  );
+});
+
+test("SourceIndex finds wildcard importers when queried with a fully qualified type", async () => {
+  const { mkdtemp, mkdir, writeFile } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-source-wildcard-importers-"));
+  const dto = path.join(root, "src/main/java/demo/dto/ApplyInfoUpdateDTO.java");
+  const importer = path.join(root, "src/main/java/demo/application/ApplyInfoServiceImpl.java");
+  await mkdir(path.dirname(dto), { recursive: true });
+  await mkdir(path.dirname(importer), { recursive: true });
+  await writeFile(dto, "package demo.dto;\npublic class ApplyInfoUpdateDTO {}\n");
+  await writeFile(importer, [
+    "package demo.application;",
+    "import demo.dto.*;",
+    "public class ApplyInfoServiceImpl {",
+    "  public void save() { ApplyInfoUpdateDTO dto = null; }",
+    "}",
+    ""
+  ].join("\n"));
+
+  const index = new SourceIndex(root);
+
+  assert.deepEqual(index.findImporters("demo.dto.ApplyInfoUpdateDTO").map(item => item.typeName), ["ApplyInfoServiceImpl"]);
 });
 
 test("SourceIndex falls back to rg scan for importers not yet cached", async () => {

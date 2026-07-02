@@ -545,7 +545,7 @@ test("import graph recalls cross-module importers outside rg roots", async () =>
   await writeFile(path.join(root, "modules", "core", "src", "main", "java", "demo", "core", "PositionQuery.java"), "package demo.core;\npublic class PositionQuery {}\n");
   await writeFile(path.join(root, "modules", "flow", "src", "main", "java", "demo", "flow", "SubmitFlowHandler.java"), [
     "package demo.flow;",
-    "import demo.core.PositionQuery;",
+    "import demo.core.*;",
     "public class SubmitFlowHandler {",
     "  public void handle() { PositionQuery query = null; }",
     "}",

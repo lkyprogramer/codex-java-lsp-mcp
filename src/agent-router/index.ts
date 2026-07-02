@@ -401,7 +401,7 @@ export class AgentRouter {
       }
       metrics.scannedAnchors += 1;
       const localImports = projectLocalImports(anchorFacts.imports, anchorFacts.packageName);
-      for (const facts of this.sourceIndex.findTypeDefinitions(localImports).slice(0, 20)) {
+      for (const facts of this.sourceIndex.findTypeDefinitions(localImports).slice(0, 40)) {
         if (facts.absolutePath === anchor.absolutePath) {
           continue;
         }
@@ -413,7 +413,8 @@ export class AgentRouter {
         metrics.addedCandidates += 1;
       }
       const typeName = anchor.className || path.basename(anchor.absolutePath, ".java");
-      for (const facts of this.sourceIndex.findImporters(typeName).slice(0, 20)) {
+      const importerLookupName = anchorFacts.packageName ? `${anchorFacts.packageName}.${typeName}` : typeName;
+      for (const facts of this.sourceIndex.findImporters(importerLookupName).slice(0, 20)) {
         if (facts.absolutePath === anchor.absolutePath) {
           continue;
         }
@@ -421,7 +422,9 @@ export class AgentRouter {
           metrics.skippedExisting += 1;
           continue;
         }
-        mergeCandidate(candidates, candidateFromFacts(facts, scoreBase("semantic", facts, anchor, options) + 60, "importGraph"));
+        const candidate = candidateFromFacts(facts, scoreBase("semantic", facts, anchor, options) + 20, "importGraph");
+        candidate.reasons = ["importGraph:reverse"];
+        mergeCandidate(candidates, candidate);
         metrics.addedCandidates += 1;
       }
     }
@@ -1573,7 +1576,7 @@ function readPriority(file: CandidateFile, options: ImpactOptions): ReadPriority
   return "P2";
 }
 
-const INDEX_RECALL_REASONS = new Set(["typeReference", "importGraph"]);
+const INDEX_RECALL_REASONS = new Set(["typeReference", "importGraph", "importGraph:reverse"]);
 
 function isPureIndexRecall(file: CandidateFile): boolean {
   return file.reasons.length > 0 && file.reasons.every(reason => INDEX_RECALL_REASONS.has(reason));

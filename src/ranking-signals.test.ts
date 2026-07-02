@@ -20,6 +20,7 @@ function facts(partial: Partial<JavaSourceFacts>): JavaSourceFacts {
     implementsTypes: [],
     referencedTypes: [],
     imports: [],
+    wildcardImports: [],
     annotations: [],
     methods: [],
     factSource: "regex",
