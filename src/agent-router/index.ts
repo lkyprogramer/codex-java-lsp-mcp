@@ -12,11 +12,13 @@ import { probeLayout, type LayoutContext } from "../layout-probe.js";
 import { legacyRoutingPolicy, scoreWithPolicy, type ScoreCategory } from "../routing-policy.js";
 import {
   annotationCollaborationDelta,
+  hasProtectedStructuralSignal,
   kindPairingDelta,
   packageProximityDelta,
   symmetricTypeRelationDelta,
   truncateCandidateTail
 } from "./ranking-signals.js";
+import { selectWithEvidenceBudget } from "./read-plan-budget.js";
 import {
   type CandidateFile,
   type CrossModulePolicy,
@@ -806,13 +808,11 @@ export class AgentRouter {
       .map(candidate => this.finalizeScore(candidate, anchor, options, suppressed, anchorFacts))
       .sort((left, right) => right.score - left.score || (left.path || left.absolutePath).localeCompare(right.path || right.absolutePath));
     const maxItems = options.readPlanMaxItems ?? defaultReadPlanMax(options.mode);
-    const readPlanCovered = new Set(
-      [...ranked]
-        .map(file => ({ file, priority: readPriority(file, options) }))
-        .sort((left, right) => priorityRank(left.priority) - priorityRank(right.priority) || right.file.score - left.file.score)
-        .slice(0, maxItems)
-        .map(entry => entry.file)
-    );
+    const sortedForPlan = [...ranked]
+      .map(file => ({ file, priority: readPriority(file, options) }))
+      .sort((left, right) => priorityRank(left.priority) - priorityRank(right.priority) || right.file.score - left.file.score)
+      .map(entry => entry.file);
+    const readPlanCovered = new Set(selectWithEvidenceBudget(sortedForPlan, maxItems, protectedReadPlanPaths(sortedForPlan)));
     for (const file of ranked) {
       if (extraProtectedPaths.has(file.absolutePath)) {
         readPlanCovered.add(file);
@@ -847,27 +847,7 @@ export class AgentRouter {
       .map(file => ({ file, priority: readPriority(file, options) }))
       .sort((left, right) => priorityRank(left.priority) - priorityRank(right.priority) || right.file.score - left.file.score)
       .map(entry => entry.file);
-    const selected: CandidateFile[] = [];
-    const selectedPaths = new Set<string>();
-    for (const file of sorted) {
-      if (selected.length >= maxItems) {
-        break;
-      }
-      if (protectedPaths.has(file.absolutePath)) {
-        selected.push(file);
-        selectedPaths.add(file.absolutePath);
-      }
-    }
-    for (const file of sorted) {
-      if (selected.length >= maxItems) {
-        break;
-      }
-      if (!selectedPaths.has(file.absolutePath)) {
-        selected.push(file);
-        selectedPaths.add(file.absolutePath);
-      }
-    }
-    return selected
+    return selectWithEvidenceBudget(sorted, maxItems, protectedReadPlanPaths(sorted, protectedPaths))
       .map(file => ({ file, priority: readPriority(file, options) }))
       .sort((left, right) => priorityRank(left.priority) - priorityRank(right.priority) || right.file.score - left.file.score)
       .map(entry => entry.file);
@@ -1574,6 +1554,16 @@ function readPriority(file: CandidateFile, options: ImpactOptions): ReadPriority
     return "P1";
   }
   return "P2";
+}
+
+function protectedReadPlanPaths(files: CandidateFile[], protectedPaths = new Set<string>()): Set<string> {
+  const paths = new Set(protectedPaths);
+  for (const file of files) {
+    if (hasProtectedStructuralSignal(file)) {
+      paths.add(file.absolutePath);
+    }
+  }
+  return paths;
 }
 
 const INDEX_RECALL_REASONS = new Set(["typeReference", "importGraph", "importGraph:reverse"]);
