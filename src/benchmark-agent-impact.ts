@@ -181,7 +181,7 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
     mode: cli.mode,
     profile: scenario.anchor.profile,
     semanticPolicy: effectiveSemanticPolicy(cli),
-    semanticTimeoutMs: 1500,
+    semanticTimeoutMs: effectiveSemanticTimeoutMs(cli),
     testReadMode: "defer",
     focusModules: scenario.anchor.focusModules || [],
     excludeModules: [],
@@ -291,6 +291,10 @@ function effectiveSemanticPolicy(cli: Cli): ImpactOptions["semanticPolicy"] {
   return cli.warmState === "cold-nolsp" ? "fast" : cli.warmState === "warm-required" ? "required" : cli.semanticPolicy;
 }
 
+function effectiveSemanticTimeoutMs(cli: Cli): number {
+  return cli.warmState === "warm-required" ? 10000 : 1500;
+}
+
 async function prepareWarmState(cli: Cli, session: JdtlsSession, items: Scenario[]): Promise<void> {
   if (cli.warmState === "cold-nolsp") {
     return;
@@ -361,7 +365,8 @@ function timingPayload(result: Awaited<ReturnType<AgentRouter["impact"]>>, sessi
     sessionPhaseMs,
     semantic: metrics.semantic,
     typeReference: metrics.typeReference,
-    importGraph: metrics.importGraph
+    importGraph: metrics.importGraph,
+    persistedSemantic: metrics.persistedSemantic
   });
 }
 

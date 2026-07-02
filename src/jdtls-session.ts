@@ -308,7 +308,7 @@ export class JdtlsSession {
     const waitStartedAt = Date.now();
     await this.waitForProgressIdle(Math.max(1, deadline - Date.now()));
     this.addPhaseMetric("progressIdleWait", Date.now() - waitStartedAt);
-    const attemptTimeoutMs = positiveInteger(process.env.JAVA_LSP_DOCUMENT_SYMBOL_ATTEMPT_TIMEOUT_MS, 3000);
+    const attemptTimeoutMs = positiveInteger(process.env.JAVA_LSP_DOCUMENT_SYMBOL_ATTEMPT_TIMEOUT_MS, 10000);
     let lastError: unknown;
     while (Date.now() < deadline) {
       try {

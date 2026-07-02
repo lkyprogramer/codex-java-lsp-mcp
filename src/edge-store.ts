@@ -61,7 +61,11 @@ export class EdgeStore {
     const stat = statSync(fromFile);
     const batchId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const confirmedAt = new Date().toISOString();
-    const records = edges.map(edge => ({
+    const uniqueEdges = uniqueSemanticEdgeInputs(edges);
+    if (uniqueEdges.length === 0) {
+      return;
+    }
+    const records = uniqueEdges.map(edge => ({
       ...edge,
       from: fromFile,
       fromMtimeMs: stat.mtimeMs,
@@ -139,4 +143,18 @@ export class EdgeStore {
     writeFileSync(tmp, lines.length > 0 ? `${lines.join("\n")}\n` : "");
     renameSync(tmp, this.edgesPath);
   }
+}
+
+function uniqueSemanticEdgeInputs(edges: SemanticEdgeInput[]): SemanticEdgeInput[] {
+  const uniqueEdges: SemanticEdgeInput[] = [];
+  const seen = new Set<string>();
+  for (const edge of edges) {
+    const key = `${edge.kind}\0${edge.to}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    uniqueEdges.push(edge);
+  }
+  return uniqueEdges;
 }

@@ -8,7 +8,7 @@ import path from "node:path";
 import { fromFileUri, classifyPath, normalizeRepoFile } from "../repo-layout.js";
 import { JdtlsSession, type LspLocation, type LspLocationLink } from "../jdtls-session.js";
 import { SourceIndex, type JavaMethodFact, type JavaSourceFacts } from "../source-index.js";
-import { EdgeStore, type SemanticEdgeInput } from "../edge-store.js";
+import { EdgeStore, type SemanticEdgeInput, type SemanticEdgeKind } from "../edge-store.js";
 import { probeLayout, type LayoutContext } from "../layout-probe.js";
 import { legacyRoutingPolicy, scoreWithPolicy, type ScoreCategory } from "../routing-policy.js";
 import {
@@ -451,13 +451,23 @@ export class AgentRouter {
       return;
     }
     for (const anchor of anchors) {
-      for (const edge of this.edgeStore.edgesFor(anchor.absolutePath).slice(0, 40)) {
+      const seenEdges = new Set<string>();
+      let uniqueEdges = 0;
+      for (const edge of this.edgeStore.edgesFor(anchor.absolutePath)) {
         metrics.edgesSeen += 1;
+        const edgeKey = `${edge.kind}\0${edge.to}`;
+        if (seenEdges.has(edgeKey)) {
+          continue;
+        }
+        seenEdges.add(edgeKey);
         if (edge.to === anchor.absolutePath) {
           continue;
         }
+        if (uniqueEdges >= 40) {
+          break;
+        }
         const context = classifyPath(this.repoRoot, edge.to);
-        const score = scoreBase("semantic", context, anchor, options) + (edge.kind === "implementation" ? 110 : 95);
+        const score = scoreBase("semantic", context, anchor, options) + persistedEdgeScoreBonus(edge.kind);
         mergeCandidate(candidates, {
           absolutePath: edge.to,
           path: context.relativePath,
@@ -474,6 +484,7 @@ export class AgentRouter {
           scoreBreakdown: [breakdown(`semantic.persisted-${edge.kind}`, "semantic-seed", score, `persisted ${edge.kind} edge`)]
         });
         metrics.addedCandidates += 1;
+        uniqueEdges += 1;
       }
     }
   }
@@ -1267,6 +1278,16 @@ function isLspPosition(value: unknown): value is LspLocation["range"]["start"] {
 
 function semanticVerifiedBy(reason: string): string {
   return reason === "reference" || reason === "typeHierarchy" ? reason : `semantic-${reason}`;
+}
+
+function persistedEdgeScoreBonus(kind: SemanticEdgeKind): number {
+  if (kind === "implementation") {
+    return 90;
+  }
+  if (kind === "typeHierarchy") {
+    return 70;
+  }
+  return 10;
 }
 
 function section(category: RgPlanSection["category"], reason: string, terms: string[], paths: string[], globs: string[]): RgPlanSection {

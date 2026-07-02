@@ -248,4 +248,7 @@ test("impact benchmark exposes timing diagnostics", async () => {
   assert.equal(typeof timing.importGraph, "object");
   assert.equal(typeof timing.importGraph.elapsedMs, "number");
   assert.equal(typeof timing.importGraph.scannedAnchors, "number");
+  assert.equal(typeof timing.persistedSemantic, "object");
+  assert.equal(typeof timing.persistedSemantic.elapsedMs, "number");
+  assert.equal(typeof timing.persistedSemantic.edgesSeen, "number");
 });

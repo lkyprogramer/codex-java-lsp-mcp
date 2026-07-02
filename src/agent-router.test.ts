@@ -901,7 +901,10 @@ test("persisted semantic edges provide high-confidence candidates without lsp", 
   await writeFile(anchor, "package demo;\npublic class FooService { public void applyOrder() {} }\n");
   const caller = path.join(root, "src", "main", "java", "demo", "OtherController.java");
   await writeFile(caller, "package demo;\npublic class OtherController { public void route() {} }\n");
-  new EdgeStore(root).recordEdges(anchor, [{ to: caller, kind: "reference", line: 2, column: 14 }]);
+  new EdgeStore(root).recordEdges(anchor, [
+    { to: caller, kind: "reference", line: 2, column: 14 },
+    { to: caller, kind: "reference", line: 2, column: 30 }
+  ]);
   const session = new FakeSemanticSession();
 
   const result = await new AgentRouter(root, session as unknown as JdtlsSession, new SourceIndex(root)).impact(options({
@@ -915,6 +918,7 @@ test("persisted semantic edges provide high-confidence candidates without lsp", 
   assert.equal(session.referencesCalls, 0);
   assert.equal(persisted?.confidence, "high");
   assert.ok((persisted?.verifiedBy as string[]).includes("persisted-reference"));
+  assert.equal((result.metrics.persistedSemantic as { addedCandidates: number }).addedCandidates, 1);
 });
 
 test("stale persisted edges are ignored after anchor changes", async () => {

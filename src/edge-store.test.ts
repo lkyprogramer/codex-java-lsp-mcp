@@ -63,3 +63,16 @@ test("EdgeStore re-record replaces previous edges for the same anchor", async ()
   assert.equal(edges.length, 1);
   assert.equal(edges[0].kind, "typeHierarchy");
 });
+
+test("EdgeStore de-duplicates repeated edges to the same target and kind", async () => {
+  const { root, anchor, caller } = await fixture("java-lsp-edge-dedupe-");
+  const store = new EdgeStore(root);
+  store.recordEdges(anchor, [
+    { to: caller, kind: "reference", line: 2, column: 14 },
+    { to: caller, kind: "reference", line: 3, column: 4 },
+    { to: caller, kind: "typeHierarchy", line: 4, column: 8 }
+  ]);
+  const edges = new EdgeStore(root).edgesFor(anchor);
+  assert.equal(edges.length, 2);
+  assert.deepEqual(edges.map(edge => edge.kind).sort(), ["reference", "typeHierarchy"]);
+});
