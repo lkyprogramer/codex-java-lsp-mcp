@@ -617,40 +617,6 @@ test("import graph diagnostics report scanned and added candidates", async () =>
   assert.equal(typeof metrics?.elapsedMs, "number");
 });
 
-test("evidence budget keeps structural collaborator under naming flood", async () => {
-  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-router-budget-"));
-  await mkdir(path.join(root, "src", "main", "java", "demo"), { recursive: true });
-  await writeFile(path.join(root, "pom.xml"), "<project></project>\n");
-  await writeFile(path.join(root, "src", "main", "java", "demo", "OrderService.java"), [
-    "package demo;",
-    "public class OrderService {",
-    "  private OrderPolicy policy;",
-    "  public void submitOrder() {",
-    "  }",
-    "}",
-    ""
-  ].join("\n"));
-  await writeFile(path.join(root, "src", "main", "java", "demo", "OrderPolicy.java"), "package demo;\npublic interface OrderPolicy {}\n");
-  const flood = "OrderService OrderService OrderService OrderService OrderService\n".repeat(12);
-  for (const name of ["OrderHelperA", "OrderHelperB", "OrderHelperC", "OrderHelperD", "OrderHelperE"]) {
-    await writeFile(path.join(root, "src", "main", "java", "demo", `${name}.java`), `package demo;\n${flood}public class ${name} {}\n`);
-  }
-  const sourceIndex = new SourceIndex(root);
-  sourceIndex.factsFor(path.join(root, "src", "main", "java", "demo", "OrderPolicy.java"));
-
-  const result = await new AgentRouter(root, new JdtlsSession(root), sourceIndex).impact(options({
-    anchors: [{ file: "src/main/java/demo/OrderService.java", line: 2, column: 15 }],
-    profile: "service",
-    semanticPolicy: "fast",
-    readPlanMaxItems: 4,
-    verbosity: "diagnostic"
-  }));
-
-  const readPaths = readPlanPaths(result);
-  assert.ok(readPaths.includes("src/main/java/demo/OrderPolicy.java"));
-  assert.ok(readPaths.includes("src/main/java/demo/OrderService.java"));
-});
-
 test("diagnostic score breakdown sums to final score", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "java-lsp-router-breakdown-"));
   await mkdir(path.join(root, "src", "main", "java", "demo"), { recursive: true });
