@@ -73,6 +73,13 @@ type TypeReferenceMetrics = {
   indexMisses: number;
 };
 
+type ImportGraphMetrics = {
+  scannedAnchors: number;
+  addedCandidates: number;
+  skippedExisting: number;
+  elapsedMs: number;
+};
+
 const RG_CACHE_TTL_MS = positiveInteger(process.env.AGENT_RG_CACHE_TTL_MS, 300000);
 const RG_CONCURRENCY = positiveInteger(process.env.JAVA_LSP_RG_CONCURRENCY, Math.min(4, availableParallelism()));
 
@@ -130,6 +137,12 @@ export class AgentRouter {
       indexHits: 0,
       indexMisses: 0
     };
+    const importGraph: ImportGraphMetrics = {
+      scannedAnchors: 0,
+      addedCandidates: 0,
+      skippedExisting: 0,
+      elapsedMs: 0
+    };
     const anchors = await timed(phaseMs, "resolveAnchors", async () => options.anchors.map((anchor, index) => this.resolveAnchor(anchor, options.profile, `A${index + 1}`)));
     const candidates = new Map<string, CandidateFile>();
     for (const anchor of anchors) {
@@ -137,9 +150,13 @@ export class AgentRouter {
     }
 
     await timed(phaseMs, "typeGraph", async () => this.collectTypeGraphCandidates(candidates, anchors, options));
+    await timed(phaseMs, "importGraph", async () => this.collectImportGraphCandidates(candidates, anchors, options, importGraph));
     const rgExecution = await this.collectNamingRecall(candidates, anchors, options, phaseMs);
+    const typeReferenceBefore = this.sourceIndex.status();
     await timed(phaseMs, "typeReference", async () => this.collectTypeReferenceCandidates(candidates, anchors, options, typeReference));
+    const typeReferenceAfter = this.sourceIndex.status();
     typeReference.elapsedMs = phaseMs.typeReference || 0;
+    importGraph.elapsedMs = phaseMs.importGraph || 0;
     const nonLspReadPlanPaths = await timed(phaseMs, "nonLspReadPlan", async () => this.nonLspReadPlanPaths(candidates, anchors[0], options));
 
     await this.collectSemanticSeed(candidates, anchors, options, semantic, phaseMs);
@@ -157,11 +174,11 @@ export class AgentRouter {
     const cacheAfter = await timed(phaseMs, "sessionCacheAfter", async () => this.session.cacheStatus());
     const rgAfter = await timed(phaseMs, "rgCacheAfter", async () => this.rgCacheStatus());
     const sourceAfter = await timed(phaseMs, "sourceStatusAfter", async () => this.sourceIndex.status());
-    typeReference.cacheHits = sourceAfter.scanCacheHits - sourceBefore.scanCacheHits;
-    typeReference.cacheMisses = sourceAfter.scanCacheMisses - sourceBefore.scanCacheMisses;
-    typeReference.cacheMissElapsedMs = sourceAfter.scanCacheMissElapsedMs - sourceBefore.scanCacheMissElapsedMs;
-    typeReference.indexHits = sourceAfter.typeLookupIndexHits - sourceBefore.typeLookupIndexHits;
-    typeReference.indexMisses = sourceAfter.typeLookupIndexMisses - sourceBefore.typeLookupIndexMisses;
+    typeReference.cacheHits = typeReferenceAfter.scanCacheHits - typeReferenceBefore.scanCacheHits;
+    typeReference.cacheMisses = typeReferenceAfter.scanCacheMisses - typeReferenceBefore.scanCacheMisses;
+    typeReference.cacheMissElapsedMs = typeReferenceAfter.scanCacheMissElapsedMs - typeReferenceBefore.scanCacheMissElapsedMs;
+    typeReference.indexHits = typeReferenceAfter.typeLookupIndexHits - typeReferenceBefore.typeLookupIndexHits;
+    typeReference.indexMisses = typeReferenceAfter.typeLookupIndexMisses - typeReferenceBefore.typeLookupIndexMisses;
 
     const payload: ImpactResult = {
       target: formatAnchor(anchors[0]),
@@ -200,6 +217,7 @@ export class AgentRouter {
         phaseMs,
         semantic,
         typeReference,
+        importGraph,
         cache: {
           entries: cacheAfter.entries,
           hitsDelta: cacheAfter.hits - cacheBefore.hits,
@@ -360,6 +378,50 @@ export class AgentRouter {
         }
         const candidate = candidateFromFacts(facts, scoreBase("semantic", facts, anchor, options) + 55, "typeReference");
         mergeCandidate(candidates, candidate);
+        metrics.addedCandidates += 1;
+      }
+    }
+  }
+
+  private collectImportGraphCandidates(
+    candidates: Map<string, CandidateFile>,
+    anchors: ResolvedAnchor[],
+    options: ImpactOptions,
+    metrics: ImportGraphMetrics
+  ): void {
+    if (options.semanticPolicy === "required") {
+      return;
+    }
+    for (const anchor of anchors) {
+      let anchorFacts: JavaSourceFacts;
+      try {
+        anchorFacts = this.sourceIndex.factsFor(anchor.absolutePath);
+      } catch {
+        continue;
+      }
+      metrics.scannedAnchors += 1;
+      const localImports = projectLocalImports(anchorFacts.imports, anchorFacts.packageName);
+      for (const facts of this.sourceIndex.findTypeDefinitions(localImports).slice(0, 20)) {
+        if (facts.absolutePath === anchor.absolutePath) {
+          continue;
+        }
+        if (candidates.has(facts.absolutePath)) {
+          metrics.skippedExisting += 1;
+          continue;
+        }
+        mergeCandidate(candidates, candidateFromFacts(facts, scoreBase("semantic", facts, anchor, options) + 65, "importGraph"));
+        metrics.addedCandidates += 1;
+      }
+      const typeName = anchor.className || path.basename(anchor.absolutePath, ".java");
+      for (const facts of this.sourceIndex.findImporters(typeName).slice(0, 20)) {
+        if (facts.absolutePath === anchor.absolutePath) {
+          continue;
+        }
+        if (candidates.has(facts.absolutePath)) {
+          metrics.skippedExisting += 1;
+          continue;
+        }
+        mergeCandidate(candidates, candidateFromFacts(facts, scoreBase("semantic", facts, anchor, options) + 60, "importGraph"));
         metrics.addedCandidates += 1;
       }
     }
@@ -974,6 +1036,16 @@ function shouldUseTypeReference(anchor: ResolvedAnchor): boolean {
   return new Set(["service", "repository", "dto", "port"]).has(anchor.profile);
 }
 
+function projectLocalImports(imports: string[], packageName: string | undefined): string[] {
+  if (!packageName) {
+    return [];
+  }
+  const segments = packageName.split(".");
+  const prefixLength = segments.length >= 3 ? 2 : 1;
+  const prefix = segments.slice(0, prefixLength).join(".");
+  return imports.filter(value => value.startsWith(`${prefix}.`));
+}
+
 function mergeCandidate(target: Map<string, CandidateFile>, incoming: CandidateFile): void {
   const existing = target.get(incoming.absolutePath);
   if (!existing) {
@@ -1489,7 +1561,7 @@ function readPriority(file: CandidateFile, options: ImpactOptions): ReadPriority
   if (file.categories.includes("config") || file.categories.includes("nonJava")) {
     return "P2";
   }
-  if (isPureTypeReference(file)) {
+  if (isPureIndexRecall(file)) {
     return "P2";
   }
   if (file.reasons.includes("target") || (file.reasons.includes("implementation") && file.sourceSet === "main")) {
@@ -1501,8 +1573,10 @@ function readPriority(file: CandidateFile, options: ImpactOptions): ReadPriority
   return "P2";
 }
 
-function isPureTypeReference(file: CandidateFile): boolean {
-  return file.reasons.length > 0 && file.reasons.every(reason => reason === "typeReference");
+const INDEX_RECALL_REASONS = new Set(["typeReference", "importGraph"]);
+
+function isPureIndexRecall(file: CandidateFile): boolean {
+  return file.reasons.length > 0 && file.reasons.every(reason => INDEX_RECALL_REASONS.has(reason));
 }
 
 function readReason(file: CandidateFile, priority: ReadPriority): string {

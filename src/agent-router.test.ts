@@ -507,6 +507,116 @@ test("pure type references do not evict graph candidates from read plan", async 
   assert.ok(readPaths.includes("src/main/java/demo/StubPaymentGateway.java"));
 });
 
+test("import graph recalls method-body collaborators invisible to signature scan", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-router-import-forward-"));
+  await mkdir(path.join(root, "src", "main", "java", "demo", "application"), { recursive: true });
+  await mkdir(path.join(root, "src", "main", "java", "demo", "dto"), { recursive: true });
+  await writeFile(path.join(root, "pom.xml"), "<project></project>\n");
+  await writeFile(path.join(root, "src", "main", "java", "demo", "application", "ApplyInfoServiceImpl.java"), [
+    "package demo.application;",
+    "import demo.dto.ApplyInfoUpdateDTO;",
+    "public class ApplyInfoServiceImpl {",
+    "  public void save() {",
+    "    ApplyInfoUpdateDTO dto = null;",
+    "  }",
+    "}",
+    ""
+  ].join("\n"));
+  await writeFile(path.join(root, "src", "main", "java", "demo", "dto", "ApplyInfoUpdateDTO.java"), "package demo.dto;\npublic class ApplyInfoUpdateDTO {}\n");
+  const sourceIndex = new SourceIndex(root);
+  sourceIndex.factsFor(path.join(root, "src", "main", "java", "demo", "dto", "ApplyInfoUpdateDTO.java"));
+
+  const result = await new AgentRouter(root, new JdtlsSession(root), sourceIndex).impact(options({
+    anchors: [{ file: "src/main/java/demo/application/ApplyInfoServiceImpl.java", line: 3, column: 15 }],
+    profile: "service",
+    semanticPolicy: "fast",
+    verbosity: "diagnostic"
+  }));
+
+  const dto = result.files.find(file => String(file.path).endsWith("ApplyInfoUpdateDTO.java")) as Record<string, unknown> | undefined;
+  assert.ok((dto?.verifiedBy as string[] | undefined)?.includes("importGraph"));
+});
+
+test("import graph recalls cross-module importers outside rg roots", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-router-import-reverse-"));
+  await mkdir(path.join(root, "modules", "core", "src", "main", "java", "demo", "core"), { recursive: true });
+  await mkdir(path.join(root, "modules", "flow", "src", "main", "java", "demo", "flow"), { recursive: true });
+  await writeFile(path.join(root, "pom.xml"), "<project></project>\n");
+  await writeFile(path.join(root, "modules", "core", "src", "main", "java", "demo", "core", "PositionQuery.java"), "package demo.core;\npublic class PositionQuery {}\n");
+  await writeFile(path.join(root, "modules", "flow", "src", "main", "java", "demo", "flow", "SubmitFlowHandler.java"), [
+    "package demo.flow;",
+    "import demo.core.PositionQuery;",
+    "public class SubmitFlowHandler {",
+    "  public void handle() { PositionQuery query = null; }",
+    "}",
+    ""
+  ].join("\n"));
+  const sourceIndex = new SourceIndex(root);
+  sourceIndex.factsFor(path.join(root, "modules", "flow", "src", "main", "java", "demo", "flow", "SubmitFlowHandler.java"));
+
+  const result = await new AgentRouter(root, new JdtlsSession(root), sourceIndex).impact(options({
+    anchors: [{ file: "modules/core/src/main/java/demo/core/PositionQuery.java", line: 2, column: 15 }],
+    profile: "dto",
+    semanticPolicy: "fast",
+    verbosity: "diagnostic"
+  }));
+
+  const handler = result.files.find(file => String(file.path).endsWith("SubmitFlowHandler.java")) as Record<string, unknown> | undefined;
+  assert.ok((handler?.verifiedBy as string[] | undefined)?.includes("importGraph"));
+});
+
+test("required semantic policy skips import graph expansion", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-router-import-required-"));
+  await mkdir(path.join(root, "src", "main", "java", "demo"), { recursive: true });
+  await writeFile(path.join(root, "pom.xml"), "<project></project>\n");
+  await writeFile(path.join(root, "src", "main", "java", "demo", "OrderQuery.java"), "package demo;\npublic class OrderQuery {}\n");
+  await writeFile(path.join(root, "src", "main", "java", "demo", "OrderFlow.java"), [
+    "package demo;",
+    "import demo.OrderQuery;",
+    "public class OrderFlow {}",
+    ""
+  ].join("\n"));
+
+  const session = new FakeSemanticSession();
+  const result = await new AgentRouter(root, session as unknown as JdtlsSession, new SourceIndex(root)).impact(options({
+    anchors: [{ file: "src/main/java/demo/OrderQuery.java", line: 2, column: 15 }],
+    profile: "dto",
+    semanticPolicy: "required",
+    verbosity: "diagnostic"
+  }));
+
+  assert.equal(result.files.some(file => ((file as Record<string, unknown>).verifiedBy as string[] | undefined)?.includes("importGraph")), false);
+});
+
+test("import graph diagnostics report scanned and added candidates", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-router-import-metrics-"));
+  await mkdir(path.join(root, "src", "main", "java", "demo", "application"), { recursive: true });
+  await mkdir(path.join(root, "src", "main", "java", "demo", "dto"), { recursive: true });
+  await writeFile(path.join(root, "pom.xml"), "<project></project>\n");
+  await writeFile(path.join(root, "src", "main", "java", "demo", "application", "ApplyInfoServiceImpl.java"), [
+    "package demo.application;",
+    "import demo.dto.ApplyInfoUpdateDTO;",
+    "public class ApplyInfoServiceImpl {",
+    "}",
+    ""
+  ].join("\n"));
+  await writeFile(path.join(root, "src", "main", "java", "demo", "dto", "ApplyInfoUpdateDTO.java"), "package demo.dto;\npublic class ApplyInfoUpdateDTO {}\n");
+  const sourceIndex = new SourceIndex(root);
+  sourceIndex.factsFor(path.join(root, "src", "main", "java", "demo", "dto", "ApplyInfoUpdateDTO.java"));
+
+  const result = await new AgentRouter(root, new JdtlsSession(root), sourceIndex).impact(options({
+    anchors: [{ file: "src/main/java/demo/application/ApplyInfoServiceImpl.java", line: 3, column: 15 }],
+    profile: "service",
+    semanticPolicy: "fast",
+    verbosity: "diagnostic"
+  }));
+
+  const metrics = result.metrics.importGraph as Record<string, unknown> | undefined;
+  assert.equal(metrics?.scannedAnchors, 1);
+  assert.ok(Number(metrics?.addedCandidates) >= 1);
+  assert.equal(typeof metrics?.elapsedMs, "number");
+});
+
 test("diagnostic score breakdown sums to final score", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "java-lsp-router-breakdown-"));
   await mkdir(path.join(root, "src", "main", "java", "demo"), { recursive: true });
