@@ -146,12 +146,18 @@ export class AgentRouter {
       skippedExisting: 0,
       elapsedMs: 0
     };
+    const persistedSemantic = {
+      edgesSeen: 0,
+      addedCandidates: 0,
+      elapsedMs: 0
+    };
     const anchors = await timed(phaseMs, "resolveAnchors", async () => options.anchors.map((anchor, index) => this.resolveAnchor(anchor, options.profile, `A${index + 1}`)));
     const candidates = new Map<string, CandidateFile>();
     for (const anchor of anchors) {
       mergeCandidate(candidates, candidateFromAnchor(anchor));
     }
 
+    await timed(phaseMs, "persistedSemantic", async () => this.collectPersistedSemanticCandidates(candidates, anchors, options, persistedSemantic));
     await timed(phaseMs, "typeGraph", async () => this.collectTypeGraphCandidates(candidates, anchors, options));
     await timed(phaseMs, "importGraph", async () => this.collectImportGraphCandidates(candidates, anchors, options, importGraph));
     const rgExecution = await this.collectNamingRecall(candidates, anchors, options, phaseMs);
@@ -160,6 +166,7 @@ export class AgentRouter {
     const typeReferenceAfter = this.sourceIndex.status();
     typeReference.elapsedMs = phaseMs.typeReference || 0;
     importGraph.elapsedMs = phaseMs.importGraph || 0;
+    persistedSemantic.elapsedMs = phaseMs.persistedSemantic || 0;
     const nonLspReadPlanPaths = await timed(phaseMs, "nonLspReadPlan", async () => this.nonLspReadPlanPaths(candidates, anchors[0], options));
 
     await this.collectSemanticSeed(candidates, anchors, options, semantic, phaseMs);
@@ -221,6 +228,7 @@ export class AgentRouter {
         semantic,
         typeReference,
         importGraph,
+        persistedSemantic,
         cache: {
           entries: cacheAfter.entries,
           hitsDelta: cacheAfter.hits - cacheBefore.hits,
@@ -428,6 +436,43 @@ export class AgentRouter {
         const candidate = candidateFromFacts(facts, scoreBase("semantic", facts, anchor, options) + 20, "importGraph");
         candidate.reasons = ["importGraph:reverse"];
         mergeCandidate(candidates, candidate);
+        metrics.addedCandidates += 1;
+      }
+    }
+  }
+
+  private collectPersistedSemanticCandidates(
+    candidates: Map<string, CandidateFile>,
+    anchors: ResolvedAnchor[],
+    options: ImpactOptions,
+    metrics: { edgesSeen: number; addedCandidates: number }
+  ): void {
+    if (options.semanticPolicy === "required") {
+      return;
+    }
+    for (const anchor of anchors) {
+      for (const edge of this.edgeStore.edgesFor(anchor.absolutePath).slice(0, 40)) {
+        metrics.edgesSeen += 1;
+        if (edge.to === anchor.absolutePath) {
+          continue;
+        }
+        const context = classifyPath(this.repoRoot, edge.to);
+        const score = scoreBase("semantic", context, anchor, options) + (edge.kind === "implementation" ? 110 : 95);
+        mergeCandidate(candidates, {
+          absolutePath: edge.to,
+          path: context.relativePath,
+          module: context.module,
+          layer: context.layer,
+          sourceSet: context.sourceSet,
+          score,
+          matchCount: 0,
+          positions: [{ line: edge.line, column: edge.column }],
+          categories: ["semantic"],
+          reasons: [`persisted-${edge.kind}`],
+          confidence: "high",
+          verifiedBy: [`persisted-${edge.kind}`],
+          scoreBreakdown: [breakdown(`semantic.persisted-${edge.kind}`, "semantic-seed", score, `persisted ${edge.kind} edge`)]
+        });
         metrics.addedCandidates += 1;
       }
     }

@@ -3,6 +3,7 @@
 // pos: Node test coverage for the agent impact router.
 import assert from "node:assert/strict";
 import test from "node:test";
+import { utimesSync } from "node:fs";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -890,6 +891,52 @@ test("failed semantic verify does not persist edges", async () => {
   }));
 
   assert.deepEqual(new EdgeStore(root).edgesFor(anchor), []);
+});
+
+test("persisted semantic edges provide high-confidence candidates without lsp", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-router-persisted-recall-"));
+  await mkdir(path.join(root, "src", "main", "java", "demo"), { recursive: true });
+  await writeFile(path.join(root, "pom.xml"), "<project></project>\n");
+  const anchor = path.join(root, "src", "main", "java", "demo", "FooService.java");
+  await writeFile(anchor, "package demo;\npublic class FooService { public void applyOrder() {} }\n");
+  const caller = path.join(root, "src", "main", "java", "demo", "OtherController.java");
+  await writeFile(caller, "package demo;\npublic class OtherController { public void route() {} }\n");
+  new EdgeStore(root).recordEdges(anchor, [{ to: caller, kind: "reference", line: 2, column: 14 }]);
+  const session = new FakeSemanticSession();
+
+  const result = await new AgentRouter(root, session as unknown as JdtlsSession, new SourceIndex(root)).impact(options({
+    anchors: [{ file: "src/main/java/demo/FooService.java", line: 2, column: 45 }],
+    profile: "service",
+    semanticPolicy: "fast",
+    verbosity: "diagnostic"
+  }));
+
+  const persisted = result.files.find(file => String(file.path).endsWith("OtherController.java")) as Record<string, unknown> | undefined;
+  assert.equal(session.referencesCalls, 0);
+  assert.equal(persisted?.confidence, "high");
+  assert.ok((persisted?.verifiedBy as string[]).includes("persisted-reference"));
+});
+
+test("stale persisted edges are ignored after anchor changes", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-router-persisted-stale-"));
+  await mkdir(path.join(root, "src", "main", "java", "demo"), { recursive: true });
+  await writeFile(path.join(root, "pom.xml"), "<project></project>\n");
+  const anchor = path.join(root, "src", "main", "java", "demo", "FooService.java");
+  await writeFile(anchor, "package demo;\npublic class FooService { public void applyOrder() {} }\n");
+  const caller = path.join(root, "src", "main", "java", "demo", "OtherController.java");
+  await writeFile(caller, "package demo;\npublic class OtherController { public void route() {} }\n");
+  new EdgeStore(root).recordEdges(anchor, [{ to: caller, kind: "reference", line: 2, column: 14 }]);
+  const future = new Date(Date.now() + 5000);
+  utimesSync(anchor, future, future);
+
+  const result = await new AgentRouter(root, new JdtlsSession(root), new SourceIndex(root)).impact(options({
+    anchors: [{ file: "src/main/java/demo/FooService.java", line: 2, column: 45 }],
+    profile: "service",
+    semanticPolicy: "fast",
+    verbosity: "diagnostic"
+  }));
+
+  assert.equal(result.files.some(file => ((file as Record<string, unknown>).verifiedBy as string[] | undefined)?.includes("persisted-reference")), false);
 });
 
 function readPlanPaths(result: Awaited<ReturnType<AgentRouter["impact"]>>): string[] {
