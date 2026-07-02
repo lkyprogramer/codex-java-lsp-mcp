@@ -10,7 +10,7 @@ import { JdtlsSession, type LspLocation, type LspLocationLink } from "../jdtls-s
 import { SourceIndex, type JavaMethodFact, type JavaSourceFacts } from "../source-index.js";
 import { EdgeStore, type SemanticEdgeInput, type SemanticEdgeKind } from "../edge-store.js";
 import { probeLayout, type LayoutContext } from "../layout-probe.js";
-import { legacyRoutingPolicy, scoreWithPolicy, type ScoreCategory } from "../routing-policy.js";
+import { resolveRoutingPolicy, scoreWithPolicy, type RoutingPolicy, type ScoreCategory } from "../routing-policy.js";
 import {
   annotationCollaborationDelta,
   kindPairingDelta,
@@ -95,7 +95,8 @@ export class AgentRouter {
     private readonly session: JdtlsSession,
     private readonly sourceIndex: SourceIndex,
     private readonly layoutContext: LayoutContext = probeLayout(repoRoot),
-    private readonly edgeStore: EdgeStore = new EdgeStore(repoRoot)
+    private readonly edgeStore: EdgeStore = new EdgeStore(repoRoot),
+    private readonly routingPolicy: RoutingPolicy = resolveRoutingPolicy(repoRoot)
   ) {}
 
   rgCacheStatus(): RouterStatus {
@@ -347,7 +348,7 @@ export class AgentRouter {
       }
       const typeName = anchor.className || path.basename(anchor.absolutePath, ".java");
       for (const facts of this.sourceIndex.findImplementers(typeName).slice(0, 20)) {
-        const candidate = candidateFromFacts(facts, scoreBase("semantic", facts, anchor, options) + 70, "typeGraph");
+        const candidate = candidateFromFacts(facts, scoreBase(this.routingPolicy, "semantic", facts, anchor, options) + 70, "typeGraph");
         mergeCandidate(candidates, candidate);
       }
     }
@@ -368,7 +369,7 @@ export class AgentRouter {
           metrics.skippedExisting += 1;
           continue;
         }
-        const candidate = candidateFromFacts(facts, scoreBase("semantic", facts, anchor, options) + 60, "typeReference");
+        const candidate = candidateFromFacts(facts, scoreBase(this.routingPolicy, "semantic", facts, anchor, options) + 60, "typeReference");
         mergeCandidate(candidates, candidate);
         metrics.addedCandidates += 1;
       }
@@ -387,7 +388,7 @@ export class AgentRouter {
           metrics.skippedExisting += 1;
           continue;
         }
-        const candidate = candidateFromFacts(facts, scoreBase("semantic", facts, anchor, options) + 55, "typeReference");
+        const candidate = candidateFromFacts(facts, scoreBase(this.routingPolicy, "semantic", facts, anchor, options) + 55, "typeReference");
         mergeCandidate(candidates, candidate);
         metrics.addedCandidates += 1;
       }
@@ -420,7 +421,7 @@ export class AgentRouter {
           metrics.skippedExisting += 1;
           continue;
         }
-        mergeCandidate(candidates, candidateFromFacts(facts, scoreBase("semantic", facts, anchor, options) + 65, "importGraph"));
+        mergeCandidate(candidates, candidateFromFacts(facts, scoreBase(this.routingPolicy, "semantic", facts, anchor, options) + 65, "importGraph"));
         metrics.addedCandidates += 1;
       }
       const typeName = anchor.className || path.basename(anchor.absolutePath, ".java");
@@ -433,7 +434,7 @@ export class AgentRouter {
           metrics.skippedExisting += 1;
           continue;
         }
-        const candidate = candidateFromFacts(facts, scoreBase("semantic", facts, anchor, options) + 20, "importGraph");
+        const candidate = candidateFromFacts(facts, scoreBase(this.routingPolicy, "semantic", facts, anchor, options) + 20, "importGraph");
         candidate.reasons = ["importGraph:reverse"];
         mergeCandidate(candidates, candidate);
         metrics.addedCandidates += 1;
@@ -467,7 +468,7 @@ export class AgentRouter {
           break;
         }
         const context = classifyPath(this.repoRoot, edge.to);
-        const score = scoreBase("semantic", context, anchor, options) + persistedEdgeScoreBonus(edge.kind);
+        const score = scoreBase(this.routingPolicy, "semantic", context, anchor, options) + persistedEdgeScoreBonus(edge.kind);
         mergeCandidate(candidates, {
           absolutePath: edge.to,
           path: context.relativePath,
@@ -628,7 +629,7 @@ export class AgentRouter {
       return undefined;
     }
     const context = classifyPath(this.repoRoot, filePath);
-    const score = scoreBase("semantic", context, anchor, options) + (reason === "implementation" ? 120 : reason === "typeHierarchy" ? 110 : 80);
+    const score = scoreBase(this.routingPolicy, "semantic", context, anchor, options) + (reason === "implementation" ? 120 : reason === "typeHierarchy" ? 110 : 80);
     return {
       absolutePath: filePath,
       path: context.relativePath,
@@ -795,7 +796,7 @@ export class AgentRouter {
     if (result.status && result.status !== 1) {
       throw new Error(`rg failed for ${section.category}: ${(result.stderr || "").trim()}`);
     }
-    const summary = parseRgOutput(this.repoRoot, section, result.stdout || "", Date.now() - startedAt, anchors, options);
+    const summary = parseRgOutput(this.routingPolicy, this.repoRoot, section, result.stdout || "", Date.now() - startedAt, anchors, options);
     this.rgCache.set(key, {
       generation,
       expiresAt: Date.now() + RG_CACHE_TTL_MS,
@@ -838,7 +839,7 @@ export class AgentRouter {
         suppressed.crossModuleConsumers += 1;
       }
     }
-    score += addScoreDelta(scoreBreakdown, "finalize.confidence", legacyRoutingPolicy.confidenceDeltas[candidate.confidence || "medium"], "confidence delta");
+    score += addScoreDelta(scoreBreakdown, "finalize.confidence", this.routingPolicy.confidenceDeltas[candidate.confidence || "medium"], "confidence delta");
     const finalScore = Math.max(1, score);
     if (finalScore !== score) {
       addScoreDelta(scoreBreakdown, "finalize.clamp", finalScore - score, "minimum score clamp");
@@ -1023,7 +1024,7 @@ export class AgentRouter {
   }
 }
 
-function parseRgOutput(repoRoot: string, section: RgPlanSection, stdout: string, elapsedMs: number, anchors: ResolvedAnchor[], options: ImpactOptions): RgCommandSummary {
+function parseRgOutput(policy: RoutingPolicy, repoRoot: string, section: RgPlanSection, stdout: string, elapsedMs: number, anchors: ResolvedAnchor[], options: ImpactOptions): RgCommandSummary {
   const files = new Map<string, CandidateFile>();
   let totalMatches = 0;
   for (const line of stdout.split(/\r?\n/)) {
@@ -1035,7 +1036,7 @@ function parseRgOutput(repoRoot: string, section: RgPlanSection, stdout: string,
     const absolutePath = normalizeRepoFile(repoRoot, match[1]);
     const lineNumber = Number(match[2]);
     const context = classifyPath(repoRoot, absolutePath);
-    const score = scoreBase(section.category, context, anchors[0], options);
+    const score = scoreBase(policy, section.category, context, anchors[0], options);
     const existing = files.get(absolutePath) || {
       absolutePath,
       path: context.relativePath,
@@ -1162,8 +1163,8 @@ function addScoreDelta(items: ScoreBreakdownItem[], id: string, delta: number, r
   return delta;
 }
 
-function scoreBase(category: string, context: ReturnType<typeof classifyPath>, anchor: ResolvedAnchor, options: ImpactOptions): number {
-  return scoreWithPolicy(legacyRoutingPolicy, category as ScoreCategory, context, anchor, options);
+function scoreBase(policy: RoutingPolicy, category: string, context: ReturnType<typeof classifyPath>, anchor: ResolvedAnchor, options: ImpactOptions): number {
+  return scoreWithPolicy(policy, category as ScoreCategory, context, anchor, options);
 }
 
 function inferProfile(facts: JavaSourceFacts, role?: string): ResolvedImpactProfile {

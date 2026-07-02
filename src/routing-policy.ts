@@ -1,6 +1,7 @@
 // input: Router evidence context and built-in scoring policy.
 // output: Candidate base score with traceable legacy rule ids.
 // pos: Internal routing policy layer; no public per-repo DSL.
+import path from "node:path";
 import type { ImpactOptions, ResolvedAnchor, ResolvedImpactProfile } from "./agent-types.js";
 import type { PathContext } from "./repo-layout.js";
 
@@ -32,41 +33,74 @@ export type RoutingPolicy = {
   scoreRules: ScoreRule[];
 };
 
-export const legacyRoutingPolicy: RoutingPolicy = {
+const sharedCategoryBase: RoutingPolicy["categoryBase"] = {
+  persistence: 70,
+  protocol: 64,
+  java: 56,
+  semantic: 80,
+  tests: 24,
+  config: 18,
+  nonJava: 18
+};
+
+const sharedConfidenceDeltas: RoutingPolicy["confidenceDeltas"] = { high: 0, medium: 0, low: 0 };
+
+const sharedScoreRules: ScoreRule[] = [
+  rule("structure.same-file", { sameFile: true }, 180, "same file as anchor"),
+  rule("structure.same-module", { sameModule: true }, 28, "same module as anchor"),
+  rule("structure.main-source", { sourceSet: "main" }, 14, "main source set"),
+  rule("structure.interface-application-layer", { layer: ["interfaces", "application"] }, 12, "interfaces/application layer"),
+  rule("profile.controller.interfaces", { profile: "controller", layer: "interfaces" }, 35, "controller interface layer"),
+  rule("profile.repository.infrastructure", { profile: "repository", pathRegex: /(\/infrastructure\/|\/db\/migration\/)/ }, 35, "repository infrastructure evidence"),
+  rule("profile.entity.family", { profile: "entity", pathRegex: /(\/entity\/|Entity|DO|Mapper|Repository|db\/migration)/ }, 34, "entity family evidence"),
+  rule("profile.mapper.family", { profile: "mapper", pathRegex: /(\/mapper\/|Mapper|Entity|DO|Repository|\.xml$|db\/migration)/ }, 36, "mapper family evidence"),
+  rule("profile.job.family", { profile: "job", pathRegex: /(Job|Scheduler|Schedule|Task|Config|AppService|Service|Repository)/ }, 32, "job family evidence"),
+  rule("profile.listener.family", { profile: "listener", pathRegex: /(Listener|Event|Publisher|Handler|Consumer|AppService|Service|Repository)/ }, 32, "listener family evidence"),
+  rule("profile.parser.persistence-penalty", { profile: "parser", pathRegex: /\/persistence\/|Repository|Mapper|DO|Task(File|Status|Repository|Mapper|DO)?/ }, -70, "parser persistence penalty"),
+  rule("profile.vo.family", { profile: "vo", pathRegex: /VO|Vo|View|Assembler|Controller|AppService|Service/ }, 30, "vo family evidence"),
+  rule("options.focus-module", { focusModule: true }, 18, "focus module"),
+  rule("options.task-keyword", { taskKeyword: true }, 20, "task keyword"),
+  rule("structure.common-penalty", { moduleEquals: "common" }, -20, "common module penalty")
+];
+
+export const lishueduLegacyPolicy: RoutingPolicy = {
   id: "lishuedu-legacy",
-  categoryBase: {
-    persistence: 70,
-    protocol: 64,
-    java: 56,
-    semantic: 80,
-    tests: 24,
-    config: 18,
-    nonJava: 18
-  },
-  confidenceDeltas: { high: 0, medium: 0, low: 0 },
+  categoryBase: sharedCategoryBase,
+  confidenceDeltas: sharedConfidenceDeltas,
   scoreRules: [
-    rule("structure.same-file", { sameFile: true }, 180, "same file as anchor"),
-    rule("structure.same-module", { sameModule: true }, 28, "same module as anchor"),
-    rule("structure.main-source", { sourceSet: "main" }, 14, "main source set"),
-    rule("structure.interface-application-layer", { layer: ["interfaces", "application"] }, 12, "interfaces/application layer"),
-    rule("profile.controller.interfaces", { profile: "controller", layer: "interfaces" }, 35, "controller interface layer"),
-    rule("profile.repository.infrastructure", { profile: "repository", pathRegex: /(\/infrastructure\/|\/db\/migration\/)/ }, 35, "repository infrastructure evidence"),
-    rule("profile.entity.family", { profile: "entity", pathRegex: /(\/entity\/|Entity|DO|Mapper|Repository|db\/migration)/ }, 34, "entity family evidence"),
-    rule("profile.mapper.family", { profile: "mapper", pathRegex: /(\/mapper\/|Mapper|Entity|DO|Repository|\.xml$|db\/migration)/ }, 36, "mapper family evidence"),
-    rule("profile.job.family", { profile: "job", pathRegex: /(Job|Scheduler|Schedule|Task|Config|AppService|Service|Repository)/ }, 32, "job family evidence"),
-    rule("profile.listener.family", { profile: "listener", pathRegex: /(Listener|Event|Publisher|Handler|Consumer|AppService|Service|Repository)/ }, 32, "listener family evidence"),
+    ...sharedScoreRules,
     rule("profile.parser.family", { profile: "parser", pathRegex: /Parser|ParsedTemplate|DiffBuilder|Draft|PreviewItem/ }, 38, "parser family evidence"),
-    rule("profile.parser.persistence-penalty", { profile: "parser", pathRegex: /\/persistence\/|Repository|Mapper|DO|Task(File|Status|Repository|Mapper|DO)?/ }, -70, "parser persistence penalty"),
     rule("profile.parser.tests", { profile: "parser", sourceSet: "test", pathRegex: /ExcelParserTest|DiffBuilderTest/ }, 90, "parser targeted tests"),
     rule("profile.port.family", { profile: "port", pathRegex: /Gateway|Config|SignedUrl|AppService|Report/ }, 30, "port family evidence"),
     rule("profile.dto.family", { profile: "dto", pathRegex: /Assembler|Controller|QueryAppService|ProductView|ParentBenefit|ItemView/ }, 32, "dto family evidence"),
-    rule("profile.vo.family", { profile: "vo", pathRegex: /VO|Vo|View|Assembler|Controller|AppService|Service/ }, 30, "vo family evidence"),
-    rule("profile.dto.tests", { profile: "dto", sourceSet: "test", pathRegex: /ParentBenefitQueryAppServiceTest|BenefitEntitlementAssemblerTest/ }, 90, "dto targeted tests"),
-    rule("options.focus-module", { focusModule: true }, 18, "focus module"),
-    rule("options.task-keyword", { taskKeyword: true }, 20, "task keyword"),
-    rule("structure.common-penalty", { moduleEquals: "common" }, -20, "common module penalty")
+    rule("profile.dto.tests", { profile: "dto", sourceSet: "test", pathRegex: /ParentBenefitQueryAppServiceTest|BenefitEntitlementAssemblerTest/ }, 90, "dto targeted tests")
   ]
 };
+
+export const genericJavaPolicy: RoutingPolicy = {
+  id: "generic-java",
+  categoryBase: sharedCategoryBase,
+  confidenceDeltas: sharedConfidenceDeltas,
+  scoreRules: [
+    ...sharedScoreRules,
+    rule("profile.parser.family", { profile: "parser", pathRegex: /Parser/ }, 38, "parser family evidence"),
+    rule("profile.port.family", { profile: "port", pathRegex: /Gateway|Port|Client|Config|AppService/ }, 30, "port family evidence"),
+    rule("profile.dto.family", { profile: "dto", pathRegex: /Assembler|Controller|QueryAppService/ }, 32, "dto family evidence")
+  ]
+};
+
+export const legacyRoutingPolicy = lishueduLegacyPolicy;
+
+export function resolveRoutingPolicy(repoRoot: string): RoutingPolicy {
+  const override = process.env.JAVA_LSP_ROUTING_POLICY;
+  if (override === "lishuedu-legacy") {
+    return lishueduLegacyPolicy;
+  }
+  if (override === "generic-java") {
+    return genericJavaPolicy;
+  }
+  return path.basename(repoRoot) === "lishuedu" ? lishueduLegacyPolicy : genericJavaPolicy;
+}
 
 export function scoreWithPolicy(policy: RoutingPolicy, category: ScoreCategory, context: PathContext, anchor: ResolvedAnchor, options: ImpactOptions): number {
   let score = policy.categoryBase[category] ?? 18;
