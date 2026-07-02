@@ -7,6 +7,8 @@ import path from "node:path";
 import type { LspDocumentSymbol } from "./jdtls-session.js";
 import { classifyPath, normalizeRepoFile, repoCacheRoot } from "./repo-layout.js";
 
+const SOURCE_INDEX_SCHEMA_VERSION = 2;
+
 export type JavaMethodFact = {
   name: string;
   line: number;
@@ -64,6 +66,7 @@ export type SourceIndexStatus = {
 };
 
 type FileRecord = Omit<JavaSourceFacts, "methods"> & {
+  schemaVersion: number;
   mtimeMs: number;
   size: number;
   batchId: string;
@@ -240,6 +243,7 @@ export class SourceIndex {
     if (simpleNames.length === 0) {
       return [];
     }
+    const requestedOrder = new Map(simpleNames.map((name, index) => [name, index]));
     const exactBySimple = exactDefinitionRequestsBySimpleName(requestedNames);
     const missing: string[] = [];
     for (const simpleName of simpleNames) {
@@ -256,7 +260,7 @@ export class SourceIndex {
       }
     }
     if (missing.length === 0) {
-      return [...found.values()].sort(compareFactsByPath);
+      return [...found.values()].sort((left, right) => compareFactsByRequestedType(left, right, requestedOrder));
     }
     this.typeLookupIndexMisses += missing.length;
     const expected = new Set(missing);
@@ -266,7 +270,7 @@ export class SourceIndex {
         found.set(facts.absolutePath, facts);
       }
     }
-    return [...found.values()].sort(compareFactsByPath);
+    return [...found.values()].sort((left, right) => compareFactsByRequestedType(left, right, requestedOrder));
   }
 
   upsertDocumentSymbols(inputFile: string, symbols: LspDocumentSymbol[]): JavaSourceFacts {
@@ -315,7 +319,8 @@ export class SourceIndex {
     try {
       const files = new Map<string, FileRecord>();
       for (const record of readJsonLines<FileRecord>(this.filesPath)) {
-        if (!Array.isArray((record as { referencedTypes?: unknown }).referencedTypes)
+        if ((record as { schemaVersion?: unknown }).schemaVersion !== SOURCE_INDEX_SCHEMA_VERSION
+          || !Array.isArray((record as { referencedTypes?: unknown }).referencedTypes)
           || !Array.isArray((record as { imports?: unknown }).imports)
           || !Array.isArray((record as { wildcardImports?: unknown }).wildcardImports)) {
           continue;
@@ -334,7 +339,7 @@ export class SourceIndex {
         symbolsByFile.set(symbol.file, symbols);
       }
       for (const file of files.values()) {
-        const { mtimeMs, size, batchId: _batchId, ...facts } = file;
+        const { schemaVersion: _schemaVersion, mtimeMs, size, batchId: _batchId, ...facts } = file;
         this.cache.set(file.absolutePath, {
           mtimeMs,
           size,
@@ -360,7 +365,7 @@ export class SourceIndex {
     mkdirSync(this.snapshotDir, { recursive: true });
     const batchId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const { methods, ...fileFacts } = facts;
-    const fileRecord: FileRecord = { ...fileFacts, mtimeMs, size, batchId };
+    const fileRecord: FileRecord = { ...fileFacts, schemaVersion: SOURCE_INDEX_SCHEMA_VERSION, mtimeMs, size, batchId };
     appendFileSync(this.filesPath, `${JSON.stringify(fileRecord)}\n`);
     const symbolLines = methods.map(method => {
       const symbol: SymbolRecord = {
@@ -396,6 +401,7 @@ export class SourceIndex {
       const { methods, ...fileFacts } = entry.facts;
       const fileRecord: FileRecord = {
         ...fileFacts,
+        schemaVersion: SOURCE_INDEX_SCHEMA_VERSION,
         mtimeMs: entry.mtimeMs,
         size: entry.size,
         batchId
@@ -422,7 +428,7 @@ export class SourceIndex {
   private writeMeta(duplicateRatio: number, lastCompactedAt?: string): void {
     const updatedAt = this.snapshotUpdatedAt || Date.now();
     writeFileSync(this.metaPath, `${JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: SOURCE_INDEX_SCHEMA_VERSION,
       repoRoot: this.repoRoot,
       updatedAt: new Date(updatedAt).toISOString(),
       files: this.cache.size,
@@ -590,6 +596,12 @@ function compareFactsByPath(left: JavaSourceFacts, right: JavaSourceFacts): numb
   return (left.path || left.absolutePath).localeCompare(right.path || right.absolutePath);
 }
 
+function compareFactsByRequestedType(left: JavaSourceFacts, right: JavaSourceFacts, order: ReadonlyMap<string, number>): number {
+  const leftOrder = order.get(left.typeName || "") ?? Number.MAX_SAFE_INTEGER;
+  const rightOrder = order.get(right.typeName || "") ?? Number.MAX_SAFE_INTEGER;
+  return leftOrder - rightOrder || compareFactsByPath(left, right);
+}
+
 function sameSimpleType(value: string, expected: string): boolean {
   const simple = value.replace(/<.*>/, "").trim().slice(value.lastIndexOf(".") + 1);
   return simple === expected;
@@ -745,7 +757,7 @@ function parseSignatureReferencedTypes(lines: string[], selfType: string | undef
     }
     depth += braceDelta(code);
   }
-  return [...found].sort();
+  return [...found];
 }
 
 function parseImports(lines: string[]): { imports: string[]; wildcardImports: string[] } {

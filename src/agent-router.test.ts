@@ -413,6 +413,77 @@ test("signature type references promote typed collaborators", async () => {
   assert.ok((repository?.verifiedBy as string[] | undefined)?.includes("typeReference"));
 });
 
+test("type reference keeps source-order collaborators ahead of wildcard noise", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-router-type-reference-order-"));
+  const appDir = path.join(root, "src", "main", "java", "demo", "app");
+  const dataDir = path.join(root, "src", "main", "java", "demo", "data");
+  await mkdir(appDir, { recursive: true });
+  await mkdir(dataDir, { recursive: true });
+  await writeFile(path.join(root, "pom.xml"), "<project></project>\n");
+  await writeFile(path.join(appDir, "ApplyInfoServiceImpl.java"), [
+    "package demo.app;",
+    "import demo.data.*;",
+    "public class ApplyInfoServiceImpl {",
+    "  private PositionTemplate positionTemplate;",
+    ...Array.from({ length: 24 }, (_, index) => `  private Alpha${String(index).padStart(2, "0")} alpha${index};`),
+    "  public void save() {}",
+    "}",
+    ""
+  ].join("\n"));
+  await writeFile(path.join(dataDir, "PositionTemplate.java"), "package demo.data;\npublic class PositionTemplate {}\n");
+  for (let index = 0; index < 24; index += 1) {
+    const name = `Alpha${String(index).padStart(2, "0")}`;
+    await writeFile(path.join(dataDir, `${name}.java`), `package demo.data;\npublic class ${name} {}\n`);
+  }
+
+  const result = await tempRouter(root).impact(options({
+    anchors: [{ file: "src/main/java/demo/app/ApplyInfoServiceImpl.java", line: 3, column: 15 }],
+    profile: "service",
+    semanticPolicy: "fast",
+    verbosity: "diagnostic"
+  }));
+
+  const collaborator = result.files.find(file => String(file.path).endsWith("PositionTemplate.java")) as Record<string, unknown> | undefined;
+  assert.ok((collaborator?.verifiedBy as string[] | undefined)?.includes("typeReference"));
+});
+
+test("controller type references promote field collaborators", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-router-controller-type-reference-"));
+  const webDir = path.join(root, "src", "main", "java", "demo", "web");
+  const serviceDir = path.join(root, "src", "main", "java", "demo", "service");
+  const dtoDir = path.join(root, "src", "main", "java", "demo", "dto");
+  await mkdir(webDir, { recursive: true });
+  await mkdir(serviceDir, { recursive: true });
+  await mkdir(dtoDir, { recursive: true });
+  await writeFile(path.join(root, "pom.xml"), "<project></project>\n");
+  await writeFile(path.join(webDir, "ExaminationController.java"), [
+    "package demo.web;",
+    "import demo.service.*;",
+    "import demo.dto.*;",
+    "public class ExaminationController {",
+    "  private PositionService positionService;",
+    ...Array.from({ length: 24 }, (_, index) => `  private Alpha${String(index).padStart(2, "0")}DTO alpha${index};`),
+    "  public void select() {}",
+    "}",
+    ""
+  ].join("\n"));
+  await writeFile(path.join(serviceDir, "PositionService.java"), "package demo.service;\npublic interface PositionService {}\n");
+  for (let index = 0; index < 24; index += 1) {
+    const name = `Alpha${String(index).padStart(2, "0")}DTO`;
+    await writeFile(path.join(dtoDir, `${name}.java`), `package demo.dto;\npublic record ${name}() {}\n`);
+  }
+
+  const result = await tempRouter(root).impact(options({
+    anchors: [{ file: "src/main/java/demo/web/ExaminationController.java", line: 3, column: 15 }],
+    profile: "controller",
+    semanticPolicy: "fast",
+    verbosity: "diagnostic"
+  }));
+
+  const collaborator = result.files.find(file => String(file.path).endsWith("PositionService.java")) as Record<string, unknown> | undefined;
+  assert.ok((collaborator?.verifiedBy as string[] | undefined)?.includes("typeReference"));
+});
+
 test("type reference diagnostics report scanned, skipped, and added candidates", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "java-lsp-router-type-reference-metrics-"));
   await mkdir(path.join(root, "src", "main", "java", "demo"), { recursive: true });

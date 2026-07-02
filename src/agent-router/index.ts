@@ -362,6 +362,11 @@ export class AgentRouter {
       if (!shouldUseTypeReference(anchor)) {
         continue;
       }
+      const canReinforceExistingTypeReferences = this.routingPolicy.id !== "lishuedu-legacy";
+      if (anchor.profile === "controller" && !canReinforceExistingTypeReferences) {
+        continue;
+      }
+      const canUseReferenceOrderBonus = canReinforceExistingTypeReferences && anchor.profile === "controller";
       const typeName = anchor.className || path.basename(anchor.absolutePath, ".java");
       metrics.scannedPatterns += 1;
       for (const facts of this.sourceIndex.findTypeReferences(typeName).slice(0, 20)) {
@@ -374,7 +379,33 @@ export class AgentRouter {
         metrics.addedCandidates += 1;
       }
       const anchorFacts = this.sourceIndex.factsFor(anchor.absolutePath);
+      const referencedTypeOrder = new Map<string, number>();
+      anchorFacts.referencedTypes.forEach((type, index) => {
+        const simple = simpleTypeName(type);
+        if (!referencedTypeOrder.has(simple)) {
+          referencedTypeOrder.set(simple, index);
+        }
+      });
       const existingTypeNames = this.candidateTypeNames(candidates);
+      const existingReferencedTypes = new Set(anchorFacts.referencedTypes.map(simpleTypeName).filter(type => existingTypeNames.has(type)));
+      if (canReinforceExistingTypeReferences) {
+        for (const existing of [...candidates.values()]) {
+          if (existing.absolutePath === anchor.absolutePath) {
+            continue;
+          }
+          let existingFacts: JavaSourceFacts;
+          try {
+            existingFacts = this.sourceIndex.factsFor(existing.absolutePath);
+          } catch {
+            continue;
+          }
+          if (existingFacts.typeName && existingReferencedTypes.has(simpleTypeName(existingFacts.typeName))) {
+            const orderBonus = canUseReferenceOrderBonus ? typeReferenceOrderBonus(referencedTypeOrder.get(simpleTypeName(existingFacts.typeName))) : 0;
+            const candidate = candidateFromFacts(existingFacts, scoreBase(this.routingPolicy, "semantic", existingFacts, anchor, options) + 55 + orderBonus, "typeReference");
+            mergeCandidate(candidates, candidate);
+          }
+        }
+      }
       const missingTypes = anchorFacts.referencedTypes.filter(type => !existingTypeNames.has(simpleTypeName(type)));
       metrics.skippedExisting += anchorFacts.referencedTypes.length - missingTypes.length;
       if (missingTypes.length > 0) {
@@ -388,7 +419,8 @@ export class AgentRouter {
           metrics.skippedExisting += 1;
           continue;
         }
-        const candidate = candidateFromFacts(facts, scoreBase(this.routingPolicy, "semantic", facts, anchor, options) + 55, "typeReference");
+        const orderBonus = canUseReferenceOrderBonus ? typeReferenceOrderBonus(referencedTypeOrder.get(simpleTypeName(facts.typeName || ""))) : 0;
+        const candidate = candidateFromFacts(facts, scoreBase(this.routingPolicy, "semantic", facts, anchor, options) + 55 + orderBonus, "typeReference");
         mergeCandidate(candidates, candidate);
         metrics.addedCandidates += 1;
       }
@@ -1108,7 +1140,7 @@ function shouldUseTypeGraph(anchor: ResolvedAnchor): boolean {
 }
 
 function shouldUseTypeReference(anchor: ResolvedAnchor): boolean {
-  return new Set(["service", "repository", "dto", "port"]).has(anchor.profile);
+  return new Set(["controller", "service", "repository", "dto", "port"]).has(anchor.profile);
 }
 
 function projectLocalImports(imports: string[], packageName: string | undefined): string[] {
@@ -1165,6 +1197,10 @@ function addScoreDelta(items: ScoreBreakdownItem[], id: string, delta: number, r
 
 function scoreBase(policy: RoutingPolicy, category: string, context: ReturnType<typeof classifyPath>, anchor: ResolvedAnchor, options: ImpactOptions): number {
   return scoreWithPolicy(policy, category as ScoreCategory, context, anchor, options);
+}
+
+function typeReferenceOrderBonus(order: number | undefined): number {
+  return order === undefined ? 0 : Math.max(0, 80 - order * 5);
 }
 
 function inferProfile(facts: JavaSourceFacts, role?: string): ResolvedImpactProfile {
