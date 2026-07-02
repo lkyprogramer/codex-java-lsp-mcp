@@ -8,6 +8,7 @@ import path from "node:path";
 import { fromFileUri, classifyPath, normalizeRepoFile } from "../repo-layout.js";
 import { JdtlsSession, type LspLocation, type LspLocationLink } from "../jdtls-session.js";
 import { SourceIndex, type JavaMethodFact, type JavaSourceFacts } from "../source-index.js";
+import { EdgeStore, type SemanticEdgeInput } from "../edge-store.js";
 import { probeLayout, type LayoutContext } from "../layout-probe.js";
 import { legacyRoutingPolicy, scoreWithPolicy, type ScoreCategory } from "../routing-policy.js";
 import {
@@ -93,7 +94,8 @@ export class AgentRouter {
     private readonly repoRoot: string,
     private readonly session: JdtlsSession,
     private readonly sourceIndex: SourceIndex,
-    private readonly layoutContext: LayoutContext = probeLayout(repoRoot)
+    private readonly layoutContext: LayoutContext = probeLayout(repoRoot),
+    private readonly edgeStore: EdgeStore = new EdgeStore(repoRoot)
   ) {}
 
   rgCacheStatus(): RouterStatus {
@@ -485,6 +487,7 @@ export class AgentRouter {
     await timed(phaseMs, "semanticVerify", async () => {
       for (const anchor of anchors) {
         const before = Date.now();
+        const verifiedEdges: SemanticEdgeInput[] = [];
         try {
           const references = await this.session.references(anchor.absolutePath, anchor.line, anchor.column, false, options.semanticTimeoutMs);
           semantic.timeout ||= Date.now() - before >= options.semanticTimeoutMs;
@@ -494,6 +497,14 @@ export class AgentRouter {
               candidate.confidence = "high";
               candidate.verifiedBy = ["reference"];
               mergeCandidate(candidates, candidate);
+              if (candidate.absolutePath !== anchor.absolutePath) {
+                verifiedEdges.push({
+                  to: candidate.absolutePath,
+                  kind: "reference",
+                  line: candidate.positions[0]?.line || 1,
+                  column: candidate.positions[0]?.column || 1
+                });
+              }
             }
           }
           if (this.shouldUseTypeHierarchyVerify(anchor, options)) {
@@ -505,11 +516,26 @@ export class AgentRouter {
                 candidate.confidence = "high";
                 candidate.verifiedBy = ["typeHierarchy"];
                 mergeCandidate(candidates, candidate);
+                if (candidate.absolutePath !== anchor.absolutePath) {
+                  verifiedEdges.push({
+                    to: candidate.absolutePath,
+                    kind: "typeHierarchy",
+                    line: candidate.positions[0]?.line || 1,
+                    column: candidate.positions[0]?.column || 1
+                  });
+                }
               }
             }
           }
         } catch {
           semantic.timeout = true;
+        }
+        if (verifiedEdges.length > 0) {
+          try {
+            this.edgeStore.recordEdges(anchor.absolutePath, verifiedEdges);
+          } catch {
+            continue;
+          }
         }
       }
     });

@@ -9,6 +9,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { fileURLToPath } from "node:url";
 import { AgentRouter } from "./agent-router/index.js";
+import { EdgeStore } from "./edge-store.js";
 import { JdtlsSession } from "./jdtls-session.js";
 import { SourceIndex } from "./source-index.js";
 import type { ImpactOptions } from "./agent-types.js";
@@ -847,6 +848,48 @@ test("required semantic candidates do not evict non-LSP read plan neighbors", as
   assert.ok(readPaths.includes("modules/integration/src/main/java/demo/StorageSignedUrlCommand.java"));
   assert.ok(readPaths.includes("modules/integration/src/main/java/demo/StorageSignedUrlResult.java"));
   assert.ok(readPaths.some(file => file.endsWith("AliyunOssGateway.java") || file.endsWith("StubStorageGateway.java")));
+});
+
+test("required semantic verify persists reference edges for cold reuse", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-router-edge-writeback-"));
+  await mkdir(path.join(root, "src", "main", "java", "demo"), { recursive: true });
+  await writeFile(path.join(root, "pom.xml"), "<project></project>\n");
+  const anchor = path.join(root, "src", "main", "java", "demo", "FooService.java");
+  await writeFile(anchor, "package demo;\npublic class FooService { public void applyOrder() {} }\n");
+  const caller = path.join(root, "src", "main", "java", "demo", "OtherController.java");
+  await writeFile(caller, "package demo;\npublic class OtherController { public void route() {} }\n");
+  const session = new FakeSemanticSession([
+    { uri: pathToFileURL(caller).toString(), range: { start: { line: 1, character: 13 }, end: { line: 1, character: 28 } } }
+  ]);
+
+  await new AgentRouter(root, session as unknown as JdtlsSession, new SourceIndex(root)).impact(options({
+    anchors: [{ file: "src/main/java/demo/FooService.java", line: 2, column: 45 }],
+    profile: "service",
+    semanticPolicy: "required"
+  }));
+
+  const edges = new EdgeStore(root).edgesFor(anchor);
+  assert.equal(edges.length, 1);
+  assert.equal(edges[0].to, caller);
+  assert.equal(edges[0].kind, "reference");
+});
+
+test("failed semantic verify does not persist edges", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-router-edge-writeback-fail-"));
+  await mkdir(path.join(root, "src", "main", "java", "demo"), { recursive: true });
+  await writeFile(path.join(root, "pom.xml"), "<project></project>\n");
+  const anchor = path.join(root, "src", "main", "java", "demo", "FooService.java");
+  await writeFile(anchor, "package demo;\npublic class FooService { public void applyOrder() {} }\n");
+  const session = new FakeSemanticSession();
+  session.failReferences = true;
+
+  await new AgentRouter(root, session as unknown as JdtlsSession, new SourceIndex(root)).impact(options({
+    anchors: [{ file: "src/main/java/demo/FooService.java", line: 2, column: 45 }],
+    profile: "service",
+    semanticPolicy: "required"
+  }));
+
+  assert.deepEqual(new EdgeStore(root).edgesFor(anchor), []);
 });
 
 function readPlanPaths(result: Awaited<ReturnType<AgentRouter["impact"]>>): string[] {
