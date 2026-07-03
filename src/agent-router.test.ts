@@ -484,6 +484,82 @@ test("controller type references promote field collaborators", async () => {
   assert.ok((collaborator?.verifiedBy as string[] | undefined)?.includes("typeReference"));
 });
 
+test("method type references promote anchor method collaborators ahead of class noise", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-router-method-type-reference-"));
+  const appDir = path.join(root, "src", "main", "java", "demo", "app");
+  const dtoDir = path.join(root, "src", "main", "java", "demo", "dto");
+  const noiseDir = path.join(root, "src", "main", "java", "demo", "noise");
+  await mkdir(appDir, { recursive: true });
+  await mkdir(dtoDir, { recursive: true });
+  await mkdir(noiseDir, { recursive: true });
+  await writeFile(path.join(root, "pom.xml"), "<project></project>\n");
+  await writeFile(path.join(appDir, "ApplyInfoServiceImpl.java"), [
+    "package demo.app;",
+    "import demo.dto.*;",
+    "import demo.noise.*;",
+    "public class ApplyInfoServiceImpl {",
+    ...Array.from({ length: 24 }, (_, index) => `  private Alpha${String(index).padStart(2, "0")} alpha${index};`),
+    "  public ApplyInfo saveApplyBasicInfo(ApplyInfoUpdateDTO command) {",
+    "    return new ApplyInfo();",
+    "  }",
+    "}",
+    ""
+  ].join("\n"));
+  await writeFile(path.join(dtoDir, "ApplyInfo.java"), "package demo.dto;\npublic class ApplyInfo {}\n");
+  await writeFile(path.join(dtoDir, "ApplyInfoUpdateDTO.java"), "package demo.dto;\npublic record ApplyInfoUpdateDTO() {}\n");
+  for (let index = 0; index < 24; index += 1) {
+    const name = `Alpha${String(index).padStart(2, "0")}`;
+    await writeFile(path.join(noiseDir, `${name}.java`), `package demo.noise;\npublic class ${name} {}\n`);
+  }
+
+  const result = await tempRouter(root).impact(options({
+    anchors: [{ file: "src/main/java/demo/app/ApplyInfoServiceImpl.java", line: 29, column: 20 }],
+    profile: "service",
+    semanticPolicy: "fast",
+    verbosity: "diagnostic"
+  }));
+
+  const collaborator = result.files.find(file => String(file.path).endsWith("ApplyInfoUpdateDTO.java"));
+  assert.equal(Array.isArray(collaborator?.verifiedBy) && collaborator.verifiedBy.includes("typeReference"), true);
+});
+
+test("method type references promote referenced interface implementers", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-router-method-interface-"));
+  const appDir = path.join(root, "src", "main", "java", "demo", "app");
+  const serviceDir = path.join(root, "src", "main", "java", "demo", "service");
+  await mkdir(appDir, { recursive: true });
+  await mkdir(serviceDir, { recursive: true });
+  await writeFile(path.join(root, "pom.xml"), "<project></project>\n");
+  await writeFile(path.join(appDir, "CheckoutService.java"), [
+    "package demo.app;",
+    "import demo.service.*;",
+    "public class CheckoutService {",
+    "  public void checkout(PaymentService paymentService) {",
+    "    paymentService.pay();",
+    "  }",
+    "}",
+    ""
+  ].join("\n"));
+  await writeFile(path.join(serviceDir, "PaymentService.java"), "package demo.service;\npublic interface PaymentService { void pay(); }\n");
+  await writeFile(path.join(serviceDir, "StripePaymentService.java"), [
+    "package demo.service;",
+    "public class StripePaymentService implements PaymentService {",
+    "  public void pay() {}",
+    "}",
+    ""
+  ].join("\n"));
+
+  const result = await tempRouter(root).impact(options({
+    anchors: [{ file: "src/main/java/demo/app/CheckoutService.java", line: 4, column: 15 }],
+    profile: "service",
+    semanticPolicy: "fast",
+    verbosity: "diagnostic"
+  }));
+
+  const impl = result.files.find(file => String(file.path).endsWith("StripePaymentService.java"));
+  assert.equal(Array.isArray(impl?.verifiedBy) && impl.verifiedBy.includes("typeGraph"), true);
+});
+
 test("type reference diagnostics report scanned, skipped, and added candidates", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "java-lsp-router-type-reference-metrics-"));
   await mkdir(path.join(root, "src", "main", "java", "demo"), { recursive: true });
@@ -518,7 +594,7 @@ test("type reference diagnostics report scanned, skipped, and added candidates",
   assert.equal(metrics?.skippedExisting, 1);
   assert.equal(metrics?.addedCandidates, 1);
   assert.equal(metrics?.indexMisses, 2);
-  assert.equal(metrics?.cacheMisses, 2);
+  assert.equal(metrics?.cacheMisses, 3);
   assert.equal(typeof metrics?.cacheMissElapsedMs, "number");
 });
 

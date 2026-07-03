@@ -379,15 +379,19 @@ export class AgentRouter {
         metrics.addedCandidates += 1;
       }
       const anchorFacts = this.sourceIndex.factsFor(anchor.absolutePath);
+      const methodTypes = canReinforceExistingTypeReferences
+        ? this.sourceIndex.methodAt(anchor.absolutePath, anchor.line)?.referencedTypes || []
+        : [];
+      const referencedTypes = unique([...methodTypes, ...anchorFacts.referencedTypes]);
       const referencedTypeOrder = new Map<string, number>();
-      anchorFacts.referencedTypes.forEach((type, index) => {
+      referencedTypes.forEach((type, index) => {
         const simple = simpleTypeName(type);
         if (!referencedTypeOrder.has(simple)) {
           referencedTypeOrder.set(simple, index);
         }
       });
       const existingTypeNames = this.candidateTypeNames(candidates);
-      const existingReferencedTypes = new Set(anchorFacts.referencedTypes.map(simpleTypeName).filter(type => existingTypeNames.has(type)));
+      const existingReferencedTypes = new Set(referencedTypes.map(simpleTypeName).filter(type => existingTypeNames.has(type)));
       if (canReinforceExistingTypeReferences) {
         for (const existing of [...candidates.values()]) {
           if (existing.absolutePath === anchor.absolutePath) {
@@ -406,8 +410,8 @@ export class AgentRouter {
           }
         }
       }
-      const missingTypes = anchorFacts.referencedTypes.filter(type => !existingTypeNames.has(simpleTypeName(type)));
-      metrics.skippedExisting += anchorFacts.referencedTypes.length - missingTypes.length;
+      const missingTypes = referencedTypes.filter(type => !existingTypeNames.has(simpleTypeName(type)));
+      metrics.skippedExisting += referencedTypes.length - missingTypes.length;
       if (missingTypes.length > 0) {
         metrics.scannedPatterns += 1;
       }
@@ -423,6 +427,11 @@ export class AgentRouter {
         const candidate = candidateFromFacts(facts, scoreBase(this.routingPolicy, "semantic", facts, anchor, options) + 55 + orderBonus, "typeReference");
         mergeCandidate(candidates, candidate);
         metrics.addedCandidates += 1;
+        if (canReinforceExistingTypeReferences && facts.kind === "interface" && facts.typeName) {
+          for (const implFacts of this.sourceIndex.findImplementers(facts.typeName, true).slice(0, 8)) {
+            mergeCandidate(candidates, candidateFromFacts(implFacts, scoreBase(this.routingPolicy, "semantic", implFacts, anchor, options) + 70, "typeGraph"));
+          }
+        }
       }
     }
   }

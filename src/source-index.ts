@@ -7,12 +7,13 @@ import path from "node:path";
 import type { LspDocumentSymbol } from "./jdtls-session.js";
 import { classifyPath, normalizeRepoFile, repoCacheRoot } from "./repo-layout.js";
 
-const SOURCE_INDEX_SCHEMA_VERSION = 2;
+const SOURCE_INDEX_SCHEMA_VERSION = 3;
 
 export type JavaMethodFact = {
   name: string;
   line: number;
   endLine: number;
+  referencedTypes: string[];
 };
 
 export type JavaSourceFacts = {
@@ -187,10 +188,12 @@ export class SourceIndex {
       || [...facts.methods].filter(method => method.line <= line).sort((left, right) => right.line - left.line)[0];
   }
 
-  findImplementers(typeName: string): JavaSourceFacts[] {
+  findImplementers(typeName: string, scan = false): JavaSourceFacts[] {
     const simpleName = typeName.slice(typeName.lastIndexOf(".") + 1);
-    return [...this.cache.values()]
-      .map(entry => entry.facts)
+    const facts = scan
+      ? this.cachedAndScannedFacts(String.raw`\b(?:implements|extends)\s+[^{;]*\b${escapeRegex(simpleName)}\b`)
+      : [...this.cache.values()].map(entry => entry.facts);
+    return facts
       .filter(facts => facts.typeName !== simpleName && implementsOrExtends(facts, simpleName))
       .sort((left, right) => (left.path || left.absolutePath).localeCompare(right.path || right.absolutePath));
   }
@@ -284,11 +287,17 @@ export class SourceIndex {
     const typeSymbol = flattened.find(symbol => isTypeSymbol(symbol.kind));
     const methods = flattened
       .filter(symbol => isMethodSymbol(symbol.kind))
-      .map(symbol => ({
-        name: symbol.name,
-        line: symbol.range.start.line + 1,
-        endLine: Math.max(symbol.range.start.line + 1, symbol.range.end.line + 1)
-      }))
+      .map(symbol => {
+        const line = symbol.range.start.line + 1;
+        const baseMethod = baseFacts.methods.find(method => method.name === symbol.name && method.line === line)
+          || baseFacts.methods.find(method => method.name === symbol.name && method.line <= line && line <= method.endLine);
+        return {
+          name: symbol.name,
+          line,
+          endLine: Math.max(line, symbol.range.end.line + 1),
+          referencedTypes: baseMethod?.referencedTypes || []
+        };
+      })
       .sort((left, right) => left.line - right.line || left.name.localeCompare(right.name));
     const facts: JavaSourceFacts = {
       ...baseFacts,
@@ -335,7 +344,7 @@ export class SourceIndex {
           continue;
         }
         const symbols = symbolsByFile.get(symbol.file) || [];
-        symbols.push({ name: symbol.name, line: symbol.line, endLine: symbol.endLine });
+        symbols.push({ name: symbol.name, line: symbol.line, endLine: symbol.endLine, referencedTypes: symbol.referencedTypes });
         symbolsByFile.set(symbol.file, symbols);
       }
       for (const file of files.values()) {
@@ -700,7 +709,7 @@ export function parseJavaSource(repoRoot: string, absolutePath: string, content:
     imports,
     wildcardImports,
     annotations,
-    methods: parseMethods(lines),
+    methods: parseMethods(lines, typeMatch?.[2]),
     factSource: "regex"
   };
 }
@@ -806,7 +815,7 @@ function braceDelta(line: string): number {
   return (line.match(/\{/g) || []).length - (line.match(/}/g) || []).length;
 }
 
-function parseMethods(lines: string[]): JavaMethodFact[] {
+function parseMethods(lines: string[], selfType: string | undefined): JavaMethodFact[] {
   const methods: JavaMethodFact[] = [];
   const methodPattern = /^\s*(?:@\w+(?:\([^)]*\))?\s*)*(?:(?:public|private|protected|static|final|synchronized|abstract|default|native)\s+)+(?:<[^>]+>\s*)?(?:[A-Za-z_][\w<>\[\].?,\s]*\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\(/;
   for (let index = 0; index < lines.length; index += 1) {
@@ -818,13 +827,26 @@ function parseMethods(lines: string[]): JavaMethodFact[] {
     if (blockStart === undefined) {
       continue;
     }
+    const endLine = findBlockEnd(lines, blockStart);
     methods.push({
       name: match[1],
       line: index + 1,
-      endLine: findBlockEnd(lines, blockStart)
+      endLine,
+      referencedTypes: parseMethodReferencedTypes(lines.slice(index, endLine), selfType)
     });
   }
   return methods;
+}
+
+function parseMethodReferencedTypes(lines: string[], selfType: string | undefined): string[] {
+  const found = new Set<string>();
+  for (const line of lines) {
+    const code = stripLineComment(line).trim();
+    if (code.length > 0 && !code.startsWith("@")) {
+      collectReferencedTypes(found, code, selfType);
+    }
+  }
+  return [...found];
 }
 
 function findSignatureBlockStart(lines: string[], startIndex: number): number | undefined {
