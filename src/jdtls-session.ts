@@ -2,7 +2,7 @@
 // output: Managed Eclipse JDT LS requests and normalized raw LSP responses.
 // pos: Stateful LSP client and process manager for the generic Java LSP MCP bridge.
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { createWriteStream, existsSync, rmSync, statSync } from "node:fs";
+import { createWriteStream, existsSync, readFileSync, rmSync, statSync } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import {
@@ -21,7 +21,7 @@ import {
 } from "./file-watcher.js";
 import { detectGeneratedCode, type GeneratedCodeStatus } from "./generated-code.js";
 import { detectBuildSystem, resolveProjectJdk, type BuildSystem, type ProjectJdkStatus } from "./project-jdk.js";
-import { repoCacheRoot, toFileUri } from "./repo-layout.js";
+import { fromFileUri, repoCacheRoot, toFileUri } from "./repo-layout.js";
 import { resourceDefaults } from "./resource-defaults.js";
 import { touchRepoCache } from "./worktree-cache-cleanup.js";
 
@@ -68,6 +68,12 @@ export type LspDiagnostic = {
   code?: string | number;
   source?: string;
   message: string;
+};
+
+export type DiagnosticFilterInput = {
+  readonly generatedCode: GeneratedCodeStatus;
+  readonly source?: string;
+  readonly diagnostics: readonly LspDiagnostic[];
 };
 
 type OpenDocument = {
@@ -482,7 +488,11 @@ export class JdtlsSession {
     connection.onRequest("window/workDoneProgress/create", async () => null);
     connection.onRequest("window/showMessageRequest", async () => null);
     connection.onNotification("textDocument/publishDiagnostics", (params: { uri: string; diagnostics: LspDiagnostic[] }) => {
-      this.diagnostics.set(params.uri, params.diagnostics || []);
+      this.diagnostics.set(params.uri, filterGeneratedCodeDiagnostics({
+        generatedCode: this.generatedCode,
+        source: this.sourceTextForUri(params.uri),
+        diagnostics: params.diagnostics || []
+      }));
     });
     connection.onNotification("$/progress", (params: { token?: string | number; value?: { kind?: string; title?: string; message?: string } }) => {
       this.recordProgress(params);
@@ -604,6 +614,25 @@ export class JdtlsSession {
       });
     }
     return uri;
+  }
+
+  private sourceTextForUri(uri: string): string | undefined {
+    const opened = this.openDocuments.get(uri)?.text;
+    if (opened !== undefined) {
+      return opened;
+    }
+    const file = fromFileUri(uri);
+    if (!file || !existsSync(file)) {
+      return undefined;
+    }
+    try {
+      return readFileSync(file, "utf8");
+    } catch (error) {
+      if (error instanceof Error) {
+        return undefined;
+      }
+      throw error;
+    }
   }
 
   private async startFileWatcher(): Promise<void> {
@@ -903,6 +932,41 @@ function jvmArgs(generatedCode: GeneratedCodeStatus): string[] {
     args.push(`--jvm-arg=-javaagent:${generatedCode.lombok.jar}`);
   }
   return args;
+}
+
+const LOMBOK_LOG_ANNOTATION = /@(?:[A-Za-z_$][\w$]*\.)*(?:Slf4j|XSlf4j|Log4j2?|CommonsLog|Flogger|JBossLog|Log)\b/;
+
+export function filterGeneratedCodeDiagnostics(input: DiagnosticFilterInput): LspDiagnostic[] {
+  if (!input.source || !hasLombokLogSource(input.generatedCode, input.source)) {
+    return [...input.diagnostics];
+  }
+  const { source } = input;
+  return input.diagnostics.filter(diagnostic => !isLombokLogUnresolvedDiagnostic(source, diagnostic));
+}
+
+function hasLombokLogSource(generatedCode: GeneratedCodeStatus, source: string): boolean {
+  const lombokKnown = generatedCode.lombok.detected || /\blombok\.extern\./.test(source);
+  return lombokKnown && LOMBOK_LOG_ANNOTATION.test(source);
+}
+
+function isLombokLogUnresolvedDiagnostic(source: string, diagnostic: LspDiagnostic): boolean {
+  return tokenAt(source, diagnostic.range.start.line, diagnostic.range.start.character) === "log"
+    && unresolvedLogMessage(diagnostic.message);
+}
+
+function unresolvedLogMessage(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return /\blog\b.*\bcannot be resolved\b/.test(normalized)
+    || /\bcannot resolve symbol\b[\s\S]*\blog\b/.test(normalized)
+    || /\bcannot find symbol\b[\s\S]*\blog\b/.test(normalized);
+}
+
+function tokenAt(source: string, lineNumber: number, character: number): string | undefined {
+  const line = source.split(/\r?\n/)[lineNumber];
+  if (line === undefined) {
+    return undefined;
+  }
+  return line.slice(Math.max(0, character)).match(/^[A-Za-z_$][\w$]*/)?.[0];
 }
 
 function pickSection(source: unknown, dottedPath: string): unknown {
