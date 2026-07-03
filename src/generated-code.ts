@@ -52,16 +52,32 @@ export function detectGeneratedCode(repoRoot: string): GeneratedCodeStatus {
   };
 }
 
+const BUILD_FILE_NAMES = [
+  "pom.xml",
+  "build.gradle",
+  "build.gradle.kts",
+  "settings.gradle",
+  "settings.gradle.kts",
+  "gradle/libs.versions.toml"
+] as const;
+
 function buildFiles(repoRoot: string): string[] {
-  const names = [
-    "pom.xml",
-    "build.gradle",
-    "build.gradle.kts",
-    "settings.gradle",
-    "settings.gradle.kts",
-    "gradle/libs.versions.toml"
-  ];
-  return names.map(name => path.join(repoRoot, name)).filter(existsSync);
+  const files = BUILD_FILE_NAMES.map(name => path.join(repoRoot, name)).filter(existsSync);
+  for (const parent of ["apps", "modules"]) {
+    files.push(...oneLevelBuildFiles(path.join(repoRoot, parent)));
+  }
+  return files;
+}
+
+function oneLevelBuildFiles(parentDir: string): string[] {
+  if (!existsSync(parentDir) || !statSync(parentDir).isDirectory()) {
+    return [];
+  }
+  return readdirSync(parentDir, { withFileTypes: true })
+    .filter(entry => entry.isDirectory())
+    .flatMap(entry => BUILD_FILE_NAMES
+      .map(name => path.join(parentDir, entry.name, name))
+      .filter(existsSync));
 }
 
 function resolveLombokJar(buildText: string): string | undefined {

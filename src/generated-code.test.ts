@@ -20,6 +20,22 @@ dependencies {
   assert.ok(status.annotationProcessing.detectedProcessors.includes("mapstruct"));
 });
 
+test("detects Lombok from common module build files", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-module-apt-"));
+  await mkdir(path.join(root, "modules", "core"), { recursive: true });
+  await writeFile(path.join(root, "settings.gradle.kts"), "include(\":modules:core\")");
+  await writeFile(path.join(root, "modules", "core", "build.gradle.kts"), `
+dependencies {
+  annotationProcessor("org.projectlombok:lombok:1.18.42")
+}`);
+
+  const status = detectGeneratedCode(root);
+
+  assert.equal(status.lombok.detected, true);
+  assert.equal(status.annotationProcessing.enabled, true);
+  assert.ok(status.annotationProcessing.detectedProcessors.includes("lombok"));
+});
+
 test("JAVA_LSP_LOMBOK_JAR enables Lombok agent", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "java-lsp-lombok-"));
   const jar = path.join(root, "lombok.jar");
