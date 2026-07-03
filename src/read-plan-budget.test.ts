@@ -86,6 +86,18 @@ test("task utility breaks structural score ties before generic wrappers", () => 
   );
 });
 
+test("concrete naming family member replaces abstract base in a saturated slot", () => {
+  const anchor = candidate({ absolutePath: "/anchor", reasons: ["target"], verifiedBy: ["anchor"], score: 1000 });
+  const abstractBase = candidate({ absolutePath: "/AbstractRuleExecutor.java", score: 300 });
+  const concrete = candidate({ absolutePath: "/impl/StringRuleExecutor.java", score: 280 });
+
+  const selected = selectWithEvidenceBudget([anchor, abstractBase, concrete], 2, new Set<string>());
+  assert.deepEqual(
+    selected.map(file => file.absolutePath),
+    ["/anchor", "/impl/StringRuleExecutor.java"]
+  );
+});
+
 test("unused quota backfills by sorted order", () => {
   const anchor = candidate({ absolutePath: "/anchor", reasons: ["target"], verifiedBy: ["anchor"], score: 1000 });
   const naming = Array.from({ length: 6 }, (_, i) => candidate({ absolutePath: `/naming-${i}`, score: 500 - i }));

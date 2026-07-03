@@ -101,7 +101,15 @@ function readPlanOrder(sorted: CandidateFile[]): CandidateFile[] {
   return sorted
     .map((file, index) => ({ file, index }))
     .sort((left, right) => {
-      const sameEvidenceClass = evidenceClassOf(left.file) === evidenceClassOf(right.file);
+      const leftClass = evidenceClassOf(left.file);
+      const rightClass = evidenceClassOf(right.file);
+      const sameEvidenceClass = leftClass === rightClass;
+      if (sameEvidenceClass && leftClass === "naming") {
+        const familyDelta = concreteFamilyDelta(left.file, right.file);
+        if (familyDelta !== 0) {
+          return familyDelta;
+        }
+      }
       if (sameEvidenceClass && left.file.score === right.file.score) {
         const utilityDelta = readPlanUtilityScore(right.file) - readPlanUtilityScore(left.file);
         if (utilityDelta !== 0) {
@@ -117,4 +125,40 @@ function readPlanUtilityScore(file: CandidateFile): number {
   return (file.scoreBreakdown || [])
     .filter(item => READ_PLAN_UTILITY_SCORE_IDS.has(item.id))
     .reduce((sum, item) => sum + item.delta, 0);
+}
+
+function concreteFamilyDelta(left: CandidateFile, right: CandidateFile): number {
+  const leftName = javaTypeName(left);
+  const rightName = javaTypeName(right);
+  const leftAbstractFamily = abstractFamilyName(leftName);
+  const rightAbstractFamily = abstractFamilyName(rightName);
+  if (leftAbstractFamily && isConcreteFamilyMember(rightName, leftAbstractFamily)) {
+    return 1;
+  }
+  if (rightAbstractFamily && isConcreteFamilyMember(leftName, rightAbstractFamily)) {
+    return -1;
+  }
+  return 0;
+}
+
+function javaTypeName(file: CandidateFile): string {
+  const value = file.path || file.absolutePath;
+  const base = value.slice(value.lastIndexOf("/") + 1);
+  return base.endsWith(".java") ? base.slice(0, -5) : base;
+}
+
+function abstractFamilyName(typeName: string): string {
+  if (typeName.startsWith("Abstract") && typeName.length > "Abstract".length) {
+    return typeName.slice("Abstract".length);
+  }
+  if (typeName.startsWith("Base") && typeName.length > "Base".length) {
+    return typeName.slice("Base".length);
+  }
+  return "";
+}
+
+function isConcreteFamilyMember(typeName: string, familyName: string): boolean {
+  return typeName !== familyName
+    && !abstractFamilyName(typeName)
+    && typeName.endsWith(familyName);
 }
