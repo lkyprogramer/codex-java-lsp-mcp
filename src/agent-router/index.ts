@@ -863,7 +863,11 @@ export class AgentRouter {
     if (candidate.path && matchesAny(candidate.path, options.taskKeywords)) {
       score += addScoreDelta(scoreBreakdown, "finalize.task-keyword", 30, "task keyword");
     }
-    score += addScoreDelta(scoreBreakdown, "finalize.direct-collaborator", directCollaboratorDelta(candidate, anchor, options), "direct type-name collaborator");
+    const directDelta = Math.max(
+      directCollaboratorDelta(candidate, anchor, options),
+      anchor.profile === "service" ? directReferencedTypeDelta(candidate, anchorFacts) : 0
+    );
+    score += addScoreDelta(scoreBreakdown, "finalize.direct-collaborator", directDelta, "direct type-name collaborator");
     const structural = this.structuralDeltas(candidate, anchor, anchorFacts);
     score += addScoreDelta(scoreBreakdown, "finalize.type-relation", structural.typeRelation, "implements or extends anchor type");
     score += addScoreDelta(scoreBreakdown, "finalize.structural.annotation", structural.annotation, "stereotype collaboration");
@@ -1613,6 +1617,25 @@ function directCollaboratorDelta(candidate: CandidateFile, anchor: ResolvedAncho
     delta += 50;
   }
   return delta;
+}
+
+function directReferencedTypeDelta(candidate: CandidateFile, anchorFacts: JavaSourceFacts | undefined): number {
+  if (!anchorFacts || !(candidate.verifiedBy || []).includes("typeReference")) {
+    return 0;
+  }
+  const candidatePath = candidate.path || candidate.absolutePath;
+  const typeName = path.basename(candidatePath, ".java");
+  if (!isPersistenceDirectReference(typeName, candidatePath)) {
+    return 0;
+  }
+  const referencedTypes = new Set(anchorFacts.referencedTypes.map(simpleTypeName));
+  return referencedTypes.has(typeName) ? 140 : 0;
+}
+
+function isPersistenceDirectReference(typeName: string, candidatePath: string): boolean {
+  return /(?:Repository|Template|Entity)$/.test(typeName)
+    || candidatePath.includes("/repository/")
+    || candidatePath.includes("/entity/");
 }
 
 function directAnchorStems(anchor: ResolvedAnchor): string[] {
