@@ -16,6 +16,13 @@ const STRUCTURAL_EVIDENCE = new Set(["typeGraph", "importGraph", "typeReference"
 
 const SUPPORT_CATEGORIES = new Set(["config", "persistence", "nonJava"]);
 
+const READ_PLAN_UTILITY_SCORE_IDS = new Set([
+  "finalize.task-keyword",
+  "finalize.direct-collaborator",
+  "finalize.type-relation",
+  "finalize.structural.kind"
+]);
+
 export function evidenceClassOf(file: CandidateFile): EvidenceClass {
   if (file.reasons.includes("target")) {
     return "anchor";
@@ -49,6 +56,7 @@ export function selectWithEvidenceBudget(
   maxItems: number,
   protectedPaths: Set<string>
 ): CandidateFile[] {
+  const ordered = readPlanOrder(sorted);
   const quotas = classQuotas(maxItems);
   const used: Record<EvidenceClass, number> = { anchor: 0, verified: 0, structural: 0, naming: 0, support: 0 };
   const selected: CandidateFile[] = [];
@@ -58,7 +66,7 @@ export function selectWithEvidenceBudget(
     selectedPaths.add(file.absolutePath);
     used[evidenceClassOf(file)] += 1;
   };
-  for (const file of sorted) {
+  for (const file of ordered) {
     if (selected.length >= maxItems) {
       break;
     }
@@ -66,7 +74,7 @@ export function selectWithEvidenceBudget(
       take(file);
     }
   }
-  for (const file of sorted) {
+  for (const file of ordered) {
     if (selected.length >= maxItems) {
       break;
     }
@@ -78,7 +86,7 @@ export function selectWithEvidenceBudget(
       take(file);
     }
   }
-  for (const file of sorted) {
+  for (const file of ordered) {
     if (selected.length >= maxItems) {
       break;
     }
@@ -87,4 +95,26 @@ export function selectWithEvidenceBudget(
     }
   }
   return selected;
+}
+
+function readPlanOrder(sorted: CandidateFile[]): CandidateFile[] {
+  return sorted
+    .map((file, index) => ({ file, index }))
+    .sort((left, right) => {
+      const sameEvidenceClass = evidenceClassOf(left.file) === evidenceClassOf(right.file);
+      if (sameEvidenceClass && left.file.score === right.file.score) {
+        const utilityDelta = readPlanUtilityScore(right.file) - readPlanUtilityScore(left.file);
+        if (utilityDelta !== 0) {
+          return utilityDelta;
+        }
+      }
+      return left.index - right.index;
+    })
+    .map(entry => entry.file);
+}
+
+function readPlanUtilityScore(file: CandidateFile): number {
+  return (file.scoreBreakdown || [])
+    .filter(item => READ_PLAN_UTILITY_SCORE_IDS.has(item.id))
+    .reduce((sum, item) => sum + item.delta, 0);
 }

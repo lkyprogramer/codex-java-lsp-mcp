@@ -67,6 +67,25 @@ test("structural candidates keep quota slots under naming flood", () => {
   assert.equal(paths.filter(item => item.startsWith("/naming-")).length, 2);
 });
 
+test("task utility breaks structural score ties before generic wrappers", () => {
+  const anchor = candidate({ absolutePath: "/anchor", reasons: ["target"], verifiedBy: ["anchor"], score: 1000 });
+  const generic = candidate({ absolutePath: "/CommonsResult.java", verifiedBy: ["typeReference"], reasons: ["typeReference"], categories: ["semantic"], score: 300 });
+  const taskRelevant = candidate({
+    absolutePath: "/PositionService.java",
+    verifiedBy: ["typeReference"],
+    reasons: ["typeReference"],
+    categories: ["semantic"],
+    score: 300,
+    scoreBreakdown: [{ id: "finalize.task-keyword", source: "finalize", delta: 30, reason: "task keyword" }]
+  });
+
+  const selected = selectWithEvidenceBudget([anchor, generic, taskRelevant], 2, new Set<string>());
+  assert.deepEqual(
+    selected.map(file => file.absolutePath),
+    ["/anchor", "/PositionService.java"]
+  );
+});
+
 test("unused quota backfills by sorted order", () => {
   const anchor = candidate({ absolutePath: "/anchor", reasons: ["target"], verifiedBy: ["anchor"], score: 1000 });
   const naming = Array.from({ length: 6 }, (_, i) => candidate({ absolutePath: `/naming-${i}`, score: 500 - i }));
