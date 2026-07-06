@@ -1,0 +1,153 @@
+import type { ImpactOptions, ResolvedAnchor } from "../agent-types.js";
+import type { ImportGraphMetrics } from "./candidate-collectors.js";
+import type { TypeReferenceMetrics } from "./type-reference.js";
+
+export type SemanticMetrics = {
+  used: boolean;
+  skipped: boolean;
+  timeout: boolean;
+  verifyUsed: boolean;
+  verifySkipped: boolean;
+  policy: ImpactOptions["semanticPolicy"];
+  timeoutMs: number;
+};
+
+export type PersistedSemanticMetrics = {
+  edgesSeen: number;
+  addedCandidates: number;
+  elapsedMs: number;
+};
+
+type SessionCacheSnapshot = {
+  entries: number;
+  hits: number;
+  misses: number;
+  invalidations: number;
+};
+
+type RgCacheSnapshot = {
+  entries: number;
+  hits: number;
+  misses: number;
+  generation: number;
+};
+
+type SourceStatusSnapshot = {
+  entries: number;
+  hits: number;
+  misses: number;
+  regexFacts: number;
+  documentSymbolFacts: number;
+  warmIndexPending: number;
+  warmIndexFailed: number;
+  scanCacheHits: number;
+  scanCacheMisses: number;
+  scanCacheMissElapsedMs: number;
+  typeLookupIndexHits: number;
+  typeLookupIndexMisses: number;
+};
+
+export function createSemanticMetrics(options: ImpactOptions): SemanticMetrics {
+  return {
+    used: false,
+    skipped: false,
+    timeout: false,
+    verifyUsed: false,
+    verifySkipped: false,
+    policy: options.semanticPolicy,
+    timeoutMs: options.semanticTimeoutMs
+  };
+}
+
+export function createTypeReferenceMetrics(): TypeReferenceMetrics {
+  return {
+    scannedPatterns: 0,
+    addedCandidates: 0,
+    skippedExisting: 0,
+    elapsedMs: 0,
+    cacheHits: 0,
+    cacheMisses: 0,
+    cacheMissElapsedMs: 0,
+    indexHits: 0,
+    indexMisses: 0
+  };
+}
+
+export function createImportGraphMetrics(): ImportGraphMetrics {
+  return {
+    scannedAnchors: 0,
+    addedCandidates: 0,
+    skippedExisting: 0,
+    elapsedMs: 0
+  };
+}
+
+export function createPersistedSemanticMetrics(): PersistedSemanticMetrics {
+  return {
+    edgesSeen: 0,
+    addedCandidates: 0,
+    elapsedMs: 0
+  };
+}
+
+export function updateCollectorElapsed(
+  phaseMs: Record<string, number>,
+  typeReference: TypeReferenceMetrics,
+  importGraph: ImportGraphMetrics,
+  persistedSemantic: PersistedSemanticMetrics
+): void {
+  typeReference.elapsedMs = phaseMs.typeReference || 0;
+  importGraph.elapsedMs = phaseMs.importGraph || 0;
+  persistedSemantic.elapsedMs = phaseMs.persistedSemantic || 0;
+}
+
+export function updateTypeReferenceCacheMetrics(
+  metrics: TypeReferenceMetrics,
+  before: SourceStatusSnapshot,
+  after: SourceStatusSnapshot
+): void {
+  metrics.cacheHits = after.scanCacheHits - before.scanCacheHits;
+  metrics.cacheMisses = after.scanCacheMisses - before.scanCacheMisses;
+  metrics.cacheMissElapsedMs = after.scanCacheMissElapsedMs - before.scanCacheMissElapsedMs;
+  metrics.indexHits = after.typeLookupIndexHits - before.typeLookupIndexHits;
+  metrics.indexMisses = after.typeLookupIndexMisses - before.typeLookupIndexMisses;
+}
+
+export function sessionCacheDelta(before: SessionCacheSnapshot, after: SessionCacheSnapshot): Record<string, unknown> {
+  return {
+    entries: after.entries,
+    hitsDelta: after.hits - before.hits,
+    missesDelta: after.misses - before.misses,
+    invalidationsDelta: after.invalidations - before.invalidations
+  };
+}
+
+export function rgCacheDelta(before: RgCacheSnapshot, after: RgCacheSnapshot): Record<string, unknown> {
+  return {
+    entries: after.entries,
+    hitsDelta: after.hits - before.hits,
+    missesDelta: after.misses - before.misses,
+    generation: after.generation
+  };
+}
+
+export function sourceFactsDelta(
+  before: SourceStatusSnapshot,
+  after: SourceStatusSnapshot,
+  anchors: readonly ResolvedAnchor[]
+): Record<string, unknown> {
+  return {
+    entries: after.entries,
+    hitsDelta: after.hits - before.hits,
+    missesDelta: after.misses - before.misses,
+    regexFacts: after.regexFacts,
+    documentSymbolFacts: after.documentSymbolFacts,
+    warmIndexPending: after.warmIndexPending,
+    warmIndexFailed: after.warmIndexFailed,
+    scanCacheHitsDelta: after.scanCacheHits - before.scanCacheHits,
+    scanCacheMissesDelta: after.scanCacheMisses - before.scanCacheMisses,
+    typeLookupIndexHitsDelta: after.typeLookupIndexHits - before.typeLookupIndexHits,
+    typeLookupIndexMissesDelta: after.typeLookupIndexMisses - before.typeLookupIndexMisses,
+    anchorFactSource: anchors[0]?.factSource
+  };
+}

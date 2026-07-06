@@ -6,14 +6,16 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync
 import path from "node:path";
 import type { LspDocumentSymbol } from "./jdtls-session.js";
 import { classifyPath, normalizeRepoFile, repoCacheRoot } from "./repo-layout.js";
+import { parseMethodRelations, type MethodRelationFact } from "./source-index-method-relations.js";
 
-const SOURCE_INDEX_SCHEMA_VERSION = 3;
+const SOURCE_INDEX_SCHEMA_VERSION = 4;
 
 export type JavaMethodFact = {
   name: string;
   line: number;
   endLine: number;
   referencedTypes: string[];
+  relations: MethodRelationFact[];
 };
 
 export type JavaSourceFacts = {
@@ -295,7 +297,8 @@ export class SourceIndex {
           name: symbol.name,
           line,
           endLine: Math.max(line, symbol.range.end.line + 1),
-          referencedTypes: baseMethod?.referencedTypes || []
+          referencedTypes: baseMethod?.referencedTypes || [],
+          relations: baseMethod?.relations || []
         };
       })
       .sort((left, right) => left.line - right.line || left.name.localeCompare(right.name));
@@ -344,7 +347,7 @@ export class SourceIndex {
           continue;
         }
         const symbols = symbolsByFile.get(symbol.file) || [];
-        symbols.push({ name: symbol.name, line: symbol.line, endLine: symbol.endLine, referencedTypes: symbol.referencedTypes });
+        symbols.push({ name: symbol.name, line: symbol.line, endLine: symbol.endLine, referencedTypes: symbol.referencedTypes || [], relations: symbol.relations || [] });
         symbolsByFile.set(symbol.file, symbols);
       }
       for (const file of files.values()) {
@@ -832,7 +835,8 @@ function parseMethods(lines: string[], selfType: string | undefined): JavaMethod
       name: match[1],
       line: index + 1,
       endLine,
-      referencedTypes: parseMethodReferencedTypes(lines.slice(index, endLine), selfType)
+      referencedTypes: parseMethodReferencedTypes(lines.slice(index, endLine), selfType),
+      relations: parseMethodRelations({ lines, methodName: match[1], startIndex: index, endLine, selfType })
     });
   }
   return methods;

@@ -1,0 +1,151 @@
+import path from "node:path";
+import { classifyPath, normalizeRepoFile } from "../repo-layout.js";
+import type { LayoutContext } from "../layout-probe.js";
+import type { RoutingPolicy } from "../routing-policy.js";
+import type { CandidateFile, ImpactOptions, ResolvedAnchor, RgPlanSection } from "../agent-types.js";
+import { breakdown, scoreBase, unique } from "./candidate-helpers.js";
+import { classStem } from "./name-helpers.js";
+import { persistenceRoots, rootsFor } from "./rg-roots.js";
+import {
+  controllerTerms,
+  dtoTerms,
+  dtoUpstream,
+  entityTerms,
+  jobTerms,
+  listenerTerms,
+  mapperTerms,
+  parserTerms,
+  portTerms,
+  repositoryTerms,
+  serviceTerms,
+  sqlTerms,
+  taskKeywordTerms,
+  testTerms,
+  voTerms
+} from "./rg-terms.js";
+
+export type RgCommandSummary = {
+  rawBytes: number;
+  totalMatches: number;
+  elapsedMs: number;
+  files: CandidateFile[];
+  cacheHit: boolean;
+};
+
+type BuildRgPlanInput = {
+  readonly repoRoot: string;
+  readonly anchor: ResolvedAnchor;
+  readonly options: ImpactOptions;
+  readonly layoutContext: LayoutContext;
+};
+
+type ParseRgOutputInput = {
+  readonly policy: RoutingPolicy;
+  readonly repoRoot: string;
+  readonly section: RgPlanSection;
+  readonly stdout: string;
+  readonly elapsedMs: number;
+  readonly anchors: readonly ResolvedAnchor[];
+  readonly options: ImpactOptions;
+};
+
+export function buildRgPlan(input: BuildRgPlanInput): RgPlanSection[] {
+  const { repoRoot, anchor, options, layoutContext } = input;
+  const base = anchor.className || path.basename(anchor.absolutePath, ".java");
+  const stem = classStem(base);
+  const symbol = anchor.methodName || anchor.symbolName;
+  const sections: RgPlanSection[] = [];
+  const mainRoots = rootsFor(repoRoot, anchor, "main", options, layoutContext);
+  const testRoots = rootsFor(repoRoot, anchor, "test", options, layoutContext);
+  const expand = (terms: string[]) => [...terms, ...taskKeywordTerms(options.taskKeywords)];
+  if (anchor.profile === "repository") {
+    sections.push(section("java", "repository port, implementation, mapper, entity, and application callers", expand(repositoryTerms(base, stem, symbol)), mainRoots, ["*.java"]));
+    sections.push(section("persistence", "mapper, migration, and SQL evidence", expand(sqlTerms(base, stem, symbol)), persistenceRoots(anchor, layoutContext), ["*.sql", "*.xml", "*.java"]));
+  } else if (anchor.profile === "controller") {
+    sections.push(section("protocol", "endpoint contract, assembler, command/result, and application service path", expand(controllerTerms(base, stem, symbol)), mainRoots, ["*.java"]));
+  } else if (anchor.profile === "parser") {
+    sections.push(section("java", "parser port, implementation, parsed model, and app-service callers", expand(parserTerms(base, stem, symbol)), mainRoots, ["*.java"]));
+  } else if (anchor.profile === "dto") {
+    sections.push(section("java", "DTO/view field propagation and mapper usage", expand(dtoTerms(base, stem, symbol)), mainRoots, ["*.java"]));
+    const upstream = dtoUpstream(anchor, symbol, repoRoot, layoutContext);
+    if (upstream.terms.length > 0) {
+      sections.push(section("java", "likely upstream source service or view", expand(upstream.terms), upstream.paths, ["*.java"]));
+    }
+  } else if (anchor.profile === "vo") {
+    sections.push(section("java", "VO/view field propagation, assembler, and service callers", expand(voTerms(base, stem, symbol)), mainRoots, ["*.java"]));
+  } else if (anchor.profile === "entity") {
+    sections.push(section("java", "entity mapping, mapper, repository, and service callers", expand(entityTerms(base, stem, symbol)), mainRoots, ["*.java"]));
+    sections.push(section("persistence", "entity table, mapper XML, migration, and SQL evidence", expand(sqlTerms(base, stem, symbol)), persistenceRoots(anchor, layoutContext), ["*.sql", "*.xml", "*.java"]));
+  } else if (anchor.profile === "mapper") {
+    sections.push(section("java", "mapper interface, entity, repository, and service callers", expand(mapperTerms(base, stem, symbol)), mainRoots, ["*.java"]));
+    sections.push(section("persistence", "mapper XML, entity table, migration, and SQL evidence", expand(sqlTerms(base, stem, symbol)), persistenceRoots(anchor, layoutContext), ["*.sql", "*.xml", "*.java"]));
+  } else if (anchor.profile === "job") {
+    sections.push(section("java", "scheduled job, application service, repository, and config path", expand(jobTerms(base, stem, symbol)), mainRoots, ["*.java"]));
+    sections.push(section("config", "job scheduling and runtime configuration evidence", expand([base, stem, symbol]), layoutContext.broadRoots, ["*.yml", "*.yaml", "*.properties", "*.xml"]));
+  } else if (anchor.profile === "listener") {
+    sections.push(section("java", "event listener, publisher, handler, service, and repository path", expand(listenerTerms(base, stem, symbol)), mainRoots, ["*.java"]));
+    sections.push(section("config", "listener/event runtime configuration evidence", expand([base, stem, symbol]), layoutContext.broadRoots, ["*.yml", "*.yaml", "*.properties", "*.xml"]));
+  } else if (anchor.profile === "port") {
+    sections.push(section("java", "port contract, implementations, and direct callers", expand(portTerms(base, stem, symbol)), rootsFor(repoRoot, anchor, "main", { ...options, crossModulePolicy: "all" }, layoutContext), ["*.java"]));
+  } else {
+    sections.push(section("java", "service, direct callers, and local protocol family", expand(serviceTerms(base, stem, symbol)), mainRoots, ["*.java"]));
+  }
+  sections.push(section("tests", "targeted verification candidates", expand(testTerms(anchor, base, stem, symbol)), testRoots, ["*Test.java"]));
+  if (options.mode === "recall") {
+    sections.push(section("config", "runtime configuration evidence", expand([base, stem]), layoutContext.broadRoots, ["*.yml", "*.yaml", "*.properties", "*.xml"]));
+  }
+  return sections.filter(item => item.paths.length > 0 && item.pattern.length > 0);
+}
+
+export function parseRgOutput(input: ParseRgOutputInput): RgCommandSummary {
+  const files = new Map<string, CandidateFile>();
+  let totalMatches = 0;
+  for (const line of input.stdout.split(/\r?\n/)) {
+    const match = line.match(/^(.+?):(\d+):(.*)$/);
+    if (!match) {
+      continue;
+    }
+    totalMatches += 1;
+    const absolutePath = normalizeRepoFile(input.repoRoot, match[1]);
+    const lineNumber = Number(match[2]);
+    const context = classifyPath(input.repoRoot, absolutePath);
+    const score = scoreBase(input.policy, input.section.category, context, input.anchors[0], input.options);
+    const existing = files.get(absolutePath) || {
+      absolutePath,
+      path: context.relativePath,
+      module: context.module,
+      layer: context.layer,
+      sourceSet: context.sourceSet,
+      score,
+      matchCount: 0,
+      positions: [],
+      categories: [input.section.category],
+      reasons: [`rg:${input.section.category}`],
+      confidence: "medium",
+      verifiedBy: ["rg"],
+      scoreBreakdown: [breakdown(`rg.${input.section.category}`, "rg", score, input.section.reason)]
+    };
+    existing.matchCount += 1;
+    if (existing.positions.length < 4) {
+      existing.positions.push({ line: lineNumber, column: 1 });
+    }
+    files.set(absolutePath, existing);
+  }
+  return {
+    rawBytes: Buffer.byteLength(input.stdout, "utf8"),
+    totalMatches,
+    elapsedMs: input.elapsedMs,
+    files: [...files.values()],
+    cacheHit: false
+  };
+}
+
+function section(category: RgPlanSection["category"], reason: string, terms: string[], paths: string[], globs: string[]): RgPlanSection {
+  return {
+    category,
+    reason,
+    pattern: unique(terms.filter(term => term.length > 0)).join("|"),
+    paths,
+    globs
+  };
+}

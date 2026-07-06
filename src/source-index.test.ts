@@ -66,6 +66,35 @@ public class ApplyInfoService {
   assert.equal(facts.referencedTypes.includes("ORDER_CREATE"), false);
 });
 
+test("parseJavaSource extracts method relation facts", () => {
+  // Given: a method that links domain types through its signature and receivers.
+  const facts = parseJavaSource(repoRoot, path.join(repoRoot, "modules/sample/src/main/java/demo/RuleEngineService.java"), `
+package demo;
+
+public class RuleEngineService {
+  private RuleRepository repository;
+
+  public FinalCheckResult execute(CheckRule rule) {
+    RuleExecutor executor = registry.executorFor(rule);
+    executor.execute(rule);
+    repository.save(rule);
+    return FinalCheckResult.empty();
+  }
+}
+`);
+
+  // When: method facts are read from the lightweight source index.
+  const method = facts.methods[0];
+
+  // Then: signature and receiver relations are explicit method-level facts.
+  assert.deepEqual(method.relations, [
+    { kind: "parameter", typeName: "CheckRule", name: "rule", line: 7, confidence: "high", source: "regex-fallback" },
+    { kind: "return", typeName: "FinalCheckResult", line: 7, confidence: "high", source: "regex-fallback" },
+    { kind: "local-receiver", typeName: "RuleExecutor", name: "executor", line: 8, confidence: "medium", source: "regex-fallback" },
+    { kind: "field-receiver", typeName: "RuleRepository", name: "repository", line: 10, confidence: "medium", source: "regex-fallback" }
+  ]);
+});
+
 test("parseJavaSource extracts import declarations as dependency facts", () => {
   const facts = parseJavaSource(repoRoot, path.join(repoRoot, "modules/sample/src/main/java/demo/ApplyInfoServiceImpl.java"), `
 package demo;
@@ -230,6 +259,55 @@ test("SourceIndex skips legacy snapshots without imports", async () => {
   const index = new SourceIndex(root);
   assert.equal(index.status().entries, 0);
   assert.deepEqual(index.factsFor(file).imports, ["demo.dto.LegacyDTO"]);
+});
+
+test("SourceIndex reloads legacy method symbols without relation fields", async () => {
+  const { mkdtemp, mkdir, writeFile } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-source-legacy-method-symbol-"));
+  const file = path.join(root, "src/main/java/demo/LegacySymbol.java");
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(file, [
+    "package demo;",
+    "public class LegacySymbol {",
+    "  public void save() {}",
+    "}",
+    ""
+  ].join("\n"));
+
+  const cacheDir = repoCacheRoot(root);
+  await mkdir(cacheDir, { recursive: true });
+  const stat = statSync(file);
+  writeFileSync(path.join(cacheDir, "source-index.files.jsonl"), `${JSON.stringify({
+    schemaVersion: 4,
+    absolutePath: file,
+    path: "src/main/java/demo/LegacySymbol.java",
+    mtimeMs: stat.mtimeMs,
+    size: stat.size,
+    packageName: "demo",
+    typeName: "LegacySymbol",
+    kind: "class",
+    implementsTypes: [],
+    referencedTypes: [],
+    imports: [],
+    wildcardImports: [],
+    annotations: [],
+    factSource: "regex",
+    batchId: "legacy"
+  })}\n`);
+  writeFileSync(path.join(cacheDir, "source-index.symbols.jsonl"), `${JSON.stringify({
+    file,
+    batchId: "legacy",
+    kind: "method",
+    name: "save",
+    line: 3,
+    endLine: 3,
+    factSource: "regex"
+  })}\n`);
+
+  const method = new SourceIndex(root).methodAt(file, 3);
+  assert.deepEqual(method?.referencedTypes, []);
+  assert.deepEqual(method?.relations, []);
 });
 
 test("SourceIndex compacts duplicate snapshot records", async () => {

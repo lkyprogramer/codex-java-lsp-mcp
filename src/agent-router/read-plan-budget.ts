@@ -19,6 +19,7 @@ const SUPPORT_CATEGORIES = new Set(["config", "persistence", "nonJava"]);
 const READ_PLAN_UTILITY_SCORE_IDS = new Set([
   "finalize.task-keyword",
   "finalize.direct-collaborator",
+  "finalize.method-relation",
   "finalize.type-relation",
   "finalize.structural.kind"
 ]);
@@ -33,6 +34,9 @@ export function evidenceClassOf(file: CandidateFile): EvidenceClass {
   const verifiedBy = file.verifiedBy || [];
   if (verifiedBy.some(item => VERIFIED_EVIDENCE.has(item))) {
     return "verified";
+  }
+  if (verifiedBy.includes("typeGraph") && file.reasons.includes("typeGraph:implementation-lookup")) {
+    return "naming";
   }
   if (verifiedBy.some(item => STRUCTURAL_EVIDENCE.has(item))) {
     return "structural";
