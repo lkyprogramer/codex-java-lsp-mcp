@@ -87,14 +87,11 @@ function worktreeCacheTtlDays(): number {
 }
 
 function readRepoCacheMeta(cacheRoot: string): RepoCacheMeta | undefined {
-  for (const file of [META_FILE, "source-index.meta.json"]) {
-    try {
-      return JSON.parse(readFileSync(path.join(cacheRoot, file), "utf8")) as RepoCacheMeta;
-    } catch {
-      // Try the next metadata source.
-    }
+  try {
+    return JSON.parse(readFileSync(path.join(cacheRoot, META_FILE), "utf8")) as RepoCacheMeta;
+  } catch {
+    return undefined;
   }
-  return undefined;
 }
 
 function cacheUpdatedAt(cacheRoot: string, meta: RepoCacheMeta): number {

@@ -45,6 +45,31 @@ test("cleanupStaleWorktreeCaches removes only stale inactive worktree caches by 
   }
 });
 
+test("cleanupStaleWorktreeCaches ignores legacy source-index metadata", async () => {
+  const { cleanupStaleWorktreeCaches } = await import("./worktree-cache-cleanup.js");
+  const cacheBase = await mkdtemp(path.join(tmpdir(), "java-lsp-worktree-cache-"));
+  const legacyDir = path.join(cacheBase, "legacy-index");
+
+  try {
+    await mkdir(legacyDir, { recursive: true });
+    await writeFile(path.join(legacyDir, "source-index.meta.json"), JSON.stringify({
+      repoRoot: "/tmp/old-worktree",
+      isGitWorktree: true,
+      updatedAt: "2026-06-18T00:00:00.000Z"
+    }));
+
+    const result = cleanupStaleWorktreeCaches({
+      cacheBase,
+      now: Date.parse("2026-06-21T00:00:00.000Z")
+    });
+
+    assert.equal(result.removed, 0);
+    assert.equal(existsSync(legacyDir), true);
+  } finally {
+    await rm(cacheBase, { recursive: true, force: true });
+  }
+});
+
 async function writeMeta(cacheBase: string, name: string, meta: Record<string, unknown>): Promise<void> {
   const dir = path.join(cacheBase, name);
   await mkdir(dir, { recursive: true });
