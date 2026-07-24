@@ -26,7 +26,10 @@ export async function javaReferences(context: ToolContext, args: z.infer<z.ZodOb
   const limit = clampLimit(args.limit);
   const result = await context.session.references(file, args.line, args.column, args.includeDeclaration);
   const described = await Promise.all(result.items.map(location => describeLocation(context.repoRoot, location, { detail: args.detail })));
-  const matched = described
+  // describeLocation returns undefined for hits outside this repo (jars, JDK
+  // sources); they are counted, not rendered.
+  const contained = described.filter((item): item is Record<string, unknown> => item !== undefined);
+  const matched = contained
     .filter(item => !args.module || item.module === args.module)
     .filter(item => !args.layer || item.layer === args.layer)
     .filter(item => !args.sourceSet || item.sourceSet === args.sourceSet);
@@ -35,6 +38,7 @@ export async function javaReferences(context: ToolContext, args: z.infer<z.ZodOb
     totalReferences: result.totalReferences,
     matchedReferences: matched.length,
     returnedReferences: filtered.length,
+    externalReferencesSuppressed: described.length - contained.length,
     truncated: result.truncated || matched.length > filtered.length,
     groups: groupReferences(filtered, args.positionsPerFile)
   };

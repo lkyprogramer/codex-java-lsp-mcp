@@ -2,7 +2,8 @@
 // output: Compact JSON-safe descriptions for MCP tools.
 // pos: Shared response formatting helpers for v5 tools.
 import { z } from "zod";
-import { fromFileUri, classifyPath, sourcePreview } from "../repo-layout.js";
+import { classifyPath, sourcePreview } from "../repo-layout.js";
+import { normalizeRepoLocation } from "../semantic-location.js";
 import type { LspLocation, LspLocationLink, LspRange } from "../jdtls-session.js";
 
 export const detailSchema = z.enum(["summary", "diagnostic"]).optional();
@@ -13,35 +14,46 @@ type LocationFormatOptions = {
   readonly includePreview?: boolean;
 };
 
-export async function describeLocation(repoRoot: string, location: LspLocation | LspLocationLink, options: LocationFormatOptions | boolean = false): Promise<Record<string, unknown>> {
+/**
+ * Returns undefined for any location outside the repo. Callers must drop those
+ * rather than render them: a raw uri or an absolute ~/.m2 path in tool output
+ * is both a leak and useless to the agent.
+ */
+export async function describeLocation(
+  repoRoot: string,
+  location: LspLocation | LspLocationLink,
+  options: LocationFormatOptions | boolean = false
+): Promise<Record<string, unknown> | undefined> {
   const formatOptions = typeof options === "boolean" ? { includePreview: options } : options;
-  const uri = "targetUri" in location ? location.targetUri : location.uri;
-  const range = "targetSelectionRange" in location ? location.targetSelectionRange : location.range;
-  const filePath = fromFileUri(uri);
-  if (!filePath) {
-    return { uri, range: oneBasedRange(range) };
+  const normalized = normalizeRepoLocation(repoRoot, location);
+  if (!normalized) {
+    return undefined;
   }
-  const line = range.start.line + 1;
-  const pathContext = classifyPath(repoRoot, filePath);
+  const line = normalized.range.start.line;
+  const column = normalized.range.start.column;
+  const pathContext = classifyPath(repoRoot, normalized.absolutePath);
   const result: Record<string, unknown> = isDiagnosticDetail(formatOptions.detail)
     ? {
-        uri,
+        // Diagnostic detail is opt-in and may carry the raw uri and absolute
+        // path; containment guarantees both now point inside this repo.
+        uri: "targetUri" in location ? location.targetUri : location.uri,
         ...pathContext,
+        path: normalized.relativePath,
         line,
-        column: range.start.character + 1,
-        range: oneBasedRange(range)
+        column,
+        range: normalized.range
       }
     : {
-        path: pathContext.relativePath || pathContext.absolutePath,
+        path: normalized.relativePath,
         module: pathContext.module,
         projectPath: pathContext.projectPath,
         layer: pathContext.layer,
         sourceSet: pathContext.sourceSet,
         line,
-        column: range.start.character + 1
+        column
       };
   if (formatOptions.includePreview) {
-    result.preview = await sourcePreview(filePath, line);
+    result.preview = await sourcePreview(normalized.absolutePath, line);
   }
   return compact(result);
 }

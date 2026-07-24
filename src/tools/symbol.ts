@@ -3,8 +3,9 @@
 // pos: Public v5 symbol tool handler.
 import { z } from "zod";
 import { clampLimit, normalizeRepoFile } from "../repo-layout.js";
+import type { LspLocation, LspLocationLink } from "../jdtls-session.js";
 import type { ToolContext } from "./context.js";
-import { describeFile, describeLocation, detailSchema, isDiagnosticDetail, normalizeHover, symbolKindName } from "./shared.js";
+import { describeFile, describeLocation, detailSchema, isDiagnosticDetail, normalizeHover, symbolKindName, type ResponseDetail } from "./shared.js";
 
 export const symbolSchema = {
   projectId: z.string().min(1).optional(),
@@ -27,12 +28,22 @@ export async function javaSymbol(context: ToolContext, args: z.infer<z.ZodObject
       query: args.query,
       limit,
       truncated: result.truncated,
-      items: await Promise.all(result.items.map(async item => ({
-        name: item.name,
-        kind: symbolKindName(item.kind),
-        containerName: item.containerName,
-        location: item.location ? await describeLocation(context.repoRoot, item.location, { detail: args.detail }) : undefined
-      })))
+      // A workspace symbol whose only location is outside the repo is dropped
+      // entirely: without a location it is not actionable evidence.
+      items: (await Promise.all(result.items.map(async item => {
+        const location = item.location
+          ? await describeLocation(context.repoRoot, item.location, { detail: args.detail })
+          : undefined;
+        if (item.location && !location) {
+          return undefined;
+        }
+        return {
+          name: item.name,
+          kind: symbolKindName(item.kind),
+          containerName: item.containerName,
+          location
+        };
+      }))).filter(item => item !== undefined)
     };
   }
   if (!args.file || !args.line || !args.column) {
@@ -46,7 +57,18 @@ export async function javaSymbol(context: ToolContext, args: z.infer<z.ZodObject
     line: args.line,
     column: args.column,
     hover: normalizeHover(result.hover),
-    definitions: await Promise.all(result.definitions.map(location => describeLocation(context.repoRoot, location, { detail: args.detail }))),
-    implementations: await Promise.all(result.implementations.map(location => describeLocation(context.repoRoot, location, { detail: args.detail })))
+    definitions: await describeContainedLocations(context.repoRoot, result.definitions, args.detail),
+    implementations: await describeContainedLocations(context.repoRoot, result.implementations, args.detail)
   };
+}
+
+async function describeContainedLocations(
+  repoRoot: string,
+  locations: Array<LspLocation | LspLocationLink>,
+  detail: ResponseDetail | undefined
+): Promise<Array<Record<string, unknown>>> {
+  const described = await Promise.all(
+    locations.map(location => describeLocation(repoRoot, location, { detail }))
+  );
+  return described.filter((item): item is Record<string, unknown> => item !== undefined);
 }

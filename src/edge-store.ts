@@ -1,5 +1,6 @@
 import { appendFileSync, existsSync, mkdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { isPotentiallyWithin } from "./path-utils.js";
 import { repoCacheRoot } from "./repo-layout.js";
 import { readJsonLines } from "./source-index.js";
 
@@ -25,17 +26,21 @@ export type EdgeStoreStatus = {
   hits: number;
   misses: number;
   invalidated: number;
+  rejectedOutsideRepo: number;
 };
 
 export class EdgeStore {
   private readonly edgesByFrom = new Map<string, EdgeRecord[]>();
   private readonly edgesPath: string;
+  private readonly repoRoot: string;
   private totalRecords = 0;
   private hits = 0;
   private misses = 0;
   private invalidated = 0;
+  private rejectedOutsideRepo = 0;
 
   constructor(repoRoot: string) {
+    this.repoRoot = repoRoot;
     this.edgesPath = path.join(repoCacheRoot(repoRoot), "semantic-edges.jsonl");
     this.load();
   }
@@ -50,7 +55,8 @@ export class EdgeStore {
       edges,
       hits: this.hits,
       misses: this.misses,
-      invalidated: this.invalidated
+      invalidated: this.invalidated,
+      rejectedOutsideRepo: this.rejectedOutsideRepo
     };
   }
 
@@ -58,10 +64,27 @@ export class EdgeStore {
     if (edges.length === 0) {
       return;
     }
+    // Last line of defence: an outside-repo target must never be persisted,
+    // or it would survive as evidence long after the request that produced it.
+    if (!isPotentiallyWithin(this.repoRoot, fromFile)) {
+      this.rejectedOutsideRepo += 1;
+      return;
+    }
+    const contained: SemanticEdgeInput[] = [];
+    for (const edge of edges) {
+      if (isPotentiallyWithin(this.repoRoot, edge.to)) {
+        contained.push(edge);
+      } else {
+        this.rejectedOutsideRepo += 1;
+      }
+    }
+    if (contained.length === 0) {
+      return;
+    }
     const stat = statSync(fromFile);
     const batchId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const confirmedAt = new Date().toISOString();
-    const uniqueEdges = uniqueSemanticEdgeInputs(edges);
+    const uniqueEdges = uniqueSemanticEdgeInputs(contained);
     if (uniqueEdges.length === 0) {
       return;
     }

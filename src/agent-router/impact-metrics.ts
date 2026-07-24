@@ -10,6 +10,10 @@ export type SemanticMetrics = {
   verifySkipped: boolean;
   policy: ImpactOptions["semanticPolicy"];
   timeoutMs: number;
+  /** JDT hits dropped because they resolve outside this repository. */
+  externalLocationsSuppressed: number;
+  /** Classification of the last semantic failure, if any. */
+  errorCode?: string;
 };
 
 export type PersistedSemanticMetrics = {
@@ -55,7 +59,8 @@ export function createSemanticMetrics(options: ImpactOptions): SemanticMetrics {
     verifyUsed: false,
     verifySkipped: false,
     policy: options.semanticPolicy,
-    timeoutMs: options.semanticTimeoutMs
+    timeoutMs: options.semanticTimeoutMs,
+    externalLocationsSuppressed: 0
   };
 }
 

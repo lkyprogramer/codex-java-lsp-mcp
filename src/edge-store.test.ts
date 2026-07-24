@@ -76,3 +76,33 @@ test("EdgeStore de-duplicates repeated edges to the same target and kind", async
   assert.equal(edges.length, 2);
   assert.deepEqual(edges.map(edge => edge.kind).sort(), ["reference", "typeHierarchy"]);
 });
+
+test("EdgeStore refuses to persist a target outside the repository", async () => {
+  const { root, anchor, caller } = await fixture("java-lsp-edge-store-outside-");
+  const outside = await mkdtemp(path.join(tmpdir(), "java-lsp-edge-external-"));
+  const jarSource = path.join(outside, "Library.java");
+  await writeFile(jarSource, "package org.example;\npublic class Library {}\n");
+  const store = new EdgeStore(root);
+
+  store.recordEdges(anchor, [
+    { to: jarSource, kind: "reference", line: 2, column: 1 },
+    { to: caller, kind: "reference", line: 2, column: 14 }
+  ]);
+
+  const edges = store.edgesFor(anchor);
+  assert.deepEqual(edges.map(edge => edge.to), [caller]);
+  assert.equal(store.status().rejectedOutsideRepo, 1);
+});
+
+test("EdgeStore refuses an anchor outside the repository", async () => {
+  const { root, caller } = await fixture("java-lsp-edge-store-outside-anchor-");
+  const outside = await mkdtemp(path.join(tmpdir(), "java-lsp-edge-external-anchor-"));
+  const externalAnchor = path.join(outside, "External.java");
+  await writeFile(externalAnchor, "package org.example;\npublic class External {}\n");
+  const store = new EdgeStore(root);
+
+  store.recordEdges(externalAnchor, [{ to: caller, kind: "reference", line: 2, column: 1 }]);
+
+  assert.deepEqual(store.edgesFor(externalAnchor), []);
+  assert.equal(store.status().rejectedOutsideRepo, 1);
+});

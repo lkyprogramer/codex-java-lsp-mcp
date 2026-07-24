@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import path from "node:path";
+import { homedir, tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import { javaDiagnostics } from "./diagnostics.js";
 import { javaReferences } from "./references.js";
@@ -138,6 +139,77 @@ test("java_symbol and java_references omit raw uri ranges unless diagnostic is r
   assert.equal(referencesSummary.returnedReferences, 2);
   assert.equal(Object.hasOwn(firstPosition, "range"), false);
   assert.equal(Object.hasOwn(firstDiagnosticPosition, "range"), true);
+});
+
+test("semantic tools never emit locations from outside the repository", async () => {
+  const externalUri = pathToFileURL(path.join(tmpdir(), "dependency", "Library.java")).toString();
+  const jarUri = pathToFileURL(path.join(homedir(), ".m2", "repository", "org", "example", "Lib.java")).toString();
+  const jdkUri = pathToFileURL("/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home/lib/src/String.java").toString();
+  const external = (uri: string) => ({
+    uri,
+    range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }
+  });
+
+  const context = {
+    repoRoot,
+    session: {
+      async workspaceSymbols() {
+        return {
+          truncated: false,
+          items: [
+            { name: "Library", kind: 5, location: external(jarUri) },
+            { name: "DemoService", kind: 5, location: locationAt(5, 9) }
+          ]
+        };
+      },
+      async symbolContext() {
+        return {
+          hover: { contents: "DemoService" },
+          definitions: [external(jarUri), locationAt(5, 9)],
+          implementations: [external(jdkUri)]
+        };
+      },
+      async references() {
+        return {
+          items: [external(externalUri), locationAt(5, 9), external(jdkUri)],
+          totalReferences: 3,
+          truncated: false
+        };
+      }
+    }
+  } as unknown as ToolContext;
+
+  const results = [
+    record(await javaSymbol(context, { query: "Library", semanticTimeoutMs: 3000 })),
+    record(await javaSymbol(context, { query: "Library", semanticTimeoutMs: 3000, detail: "diagnostic" })),
+    record(await javaSymbol(context, { file: "src/main/java/demo/DemoService.java", line: 5, column: 9, semanticTimeoutMs: 3000 })),
+    record(await javaSymbol(context, { file: "src/main/java/demo/DemoService.java", line: 5, column: 9, semanticTimeoutMs: 3000, detail: "diagnostic" })),
+    record(await javaReferences(context, { file: "src/main/java/demo/DemoService.java", line: 5, column: 9, includeDeclaration: false, positionsPerFile: 3 })),
+    record(await javaReferences(context, { file: "src/main/java/demo/DemoService.java", line: 5, column: 9, includeDeclaration: false, positionsPerFile: 3, detail: "diagnostic" }))
+  ];
+
+  for (const result of results) {
+    const serialized = JSON.stringify(result);
+    assert.equal(serialized.includes(tmpdir()), false, "no temp-dir path leaks");
+    assert.equal(serialized.includes(".m2/repository"), false, "no Maven jar source leaks");
+    assert.equal(serialized.includes("Library/Java/JavaVirtualMachines"), false, "no JDK source leaks");
+  }
+
+  const symbolQuery = results[0];
+  assert.deepEqual(
+    (symbolQuery.items as Array<Record<string, unknown>>).map(item => item.name),
+    ["DemoService"],
+    "a symbol whose only location is outside the repo is dropped"
+  );
+
+  const positionResult = results[2];
+  assert.equal((positionResult.definitions as unknown[]).length, 1);
+  assert.equal((positionResult.implementations as unknown[]).length, 0);
+
+  const referencesResult = results[4];
+  assert.equal(referencesResult.totalReferences, 3, "the raw JDT total is still reported");
+  assert.equal(referencesResult.matchedReferences, 1);
+  assert.equal(referencesResult.externalReferencesSuppressed, 2);
 });
 
 function locationAt(line: number, column: number) {
