@@ -9,6 +9,8 @@ import { fileURLToPath } from "node:url";
 import { AgentRouter } from "./agent-router/index.js";
 import type { ImpactOptions } from "./agent-types.js";
 import { readRuntimeBuild } from "./build-info.js";
+import { DeadlineBudget } from "./runtime/deadline-budget.js";
+import { defaultDeadlineMs, MAX_REQUEST_DEADLINE_MS } from "./runtime/request-context.js";
 import { JdtlsSession } from "./jdtls-session.js";
 import { SourceIndex } from "./source-index.js";
 
@@ -68,6 +70,7 @@ type Cli = {
   readPlanMaxItems?: number;
   listScenarios: boolean;
   strategy: BenchmarkStrategy;
+  deadlineMs: number;
 };
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -86,6 +89,8 @@ const metadata = {
   semanticPolicy: effectiveSemanticPolicy(cli),
   verbosity: cli.verbosity,
   strategy: cli.strategy,
+  // Recorded so a run is comparable only against runs with the same budget.
+  deadlineMs: cli.deadlineMs,
   runs: cli.runs,
   readPlanMaxItems: cli.readPlanMaxItems,
   scenarioFile: cli.scenarioFile,
@@ -170,26 +175,39 @@ function parseCli(args: string[], root: string): Cli {
     runs: Number(stringArg(values, "--runs", process.env.JAVA_LSP_BENCH_RUNS || "1")),
     readPlanMaxItems: optionalPositiveIntegerArg(values, "--read-plan-max-items", process.env.JAVA_LSP_BENCH_READ_PLAN_MAX_ITEMS),
     listScenarios: values.get("--list-scenarios") === true,
-    strategy: stringArg(values, "--strategy", process.env.JAVA_LSP_BENCH_STRATEGY || "impact") as BenchmarkStrategy
+    strategy: stringArg(values, "--strategy", process.env.JAVA_LSP_BENCH_STRATEGY || "impact") as BenchmarkStrategy,
+    // Default to the same absolute deadline java_impact gives a real caller, so
+    // the benchmark measures what users actually get rather than a looser bound.
+    deadlineMs: Math.min(
+      MAX_REQUEST_DEADLINE_MS,
+      optionalPositiveIntegerArg(values, "--deadline-ms", process.env.JAVA_LSP_BENCH_DEADLINE_MS)
+        ?? defaultDeadlineMs(
+          stringArg(values, "--mode", process.env.JAVA_LSP_BENCH_MODE || "balanced") as ImpactOptions["mode"],
+          stringArg(values, "--semantic-policy", process.env.JAVA_LSP_BENCH_SEMANTIC_POLICY || "auto") as "fast" | "auto" | "required"
+        )
+    )
   };
 }
 
 async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cli, scenario: Scenario): Promise<Record<string, unknown>> {
   const startedAt = performance.now();
-  const result = await router.impact({
-    anchors: [scenario.anchor],
-    mode: cli.mode,
-    profile: scenario.anchor.profile,
-    semanticPolicy: effectiveSemanticPolicy(cli),
-    semanticTimeoutMs: effectiveSemanticTimeoutMs(cli),
-    testReadMode: "defer",
-    focusModules: scenario.anchor.focusModules || [],
-    excludeModules: [],
-    taskKeywords: scenario.anchor.taskKeywords || [],
-    crossModulePolicy: "auto",
-    verbosity: cli.verbosity,
-    readPlanMaxItems: cli.readPlanMaxItems
-  });
+  const result = await router.impact(
+    {
+      anchors: [scenario.anchor],
+      mode: cli.mode,
+      profile: scenario.anchor.profile,
+      semanticPolicy: effectiveSemanticPolicy(cli),
+      semanticTimeoutMs: effectiveSemanticTimeoutMs(cli),
+      testReadMode: "defer",
+      focusModules: scenario.anchor.focusModules || [],
+      excludeModules: [],
+      taskKeywords: scenario.anchor.taskKeywords || [],
+      crossModulePolicy: "auto",
+      verbosity: cli.verbosity,
+      readPlanMaxItems: cli.readPlanMaxItems
+    },
+    DeadlineBudget.fromTimeout(cli.deadlineMs)
+  );
   const elapsedMs = performance.now() - startedAt;
   const rawSearchPayload = Buffer.byteLength(JSON.stringify(result), "utf8");
   const readingPayload = readPlanBytes(cli.repoRoot, result);

@@ -2,8 +2,12 @@
 
 ## 1. Decision
 
-**部分通过。** Iteration A 的 7 项实现任务（Task 1–7）全部完成并有定向测试覆盖；
-C-01～C-07 全部封口。
+**部分通过。** Iteration A 的 7 项实现任务（Task 1–7）全部完成并有定向测试覆盖。
+C-01～C-06 全部封口；**C-07 部分封口** —— rg 与 hierarchy 路径已由请求级绝对
+deadline 约束，但 `semanticLocations` / `references` / `symbolContext` 仍使用
+请求开始时刻捕获的 `semanticTimeoutMs` 阶段超时，且其内部 `ensureStarted()` 仍走
+120 s 默认预算，因此这些路径仍可能超出请求的绝对 deadline。计划 Task 1 Step 6
+明确把它定为「adapter，直到所有 JDT 调用消费 DeadlineBudget」，属既定延后项。
 
 **但 Iteration A 的完成门禁未完全满足**：门禁中的
 `R_read_must=1.0000`（三仓真实 benchmark）在本会话**无法执行**，因此
@@ -159,6 +163,8 @@ NODE=/Users/luo/.nvm/versions/node/v22.16.0/bin/node
 | D9 | — | `resourceStatus()` 增加 `reservedRepos` / `queuedRepos` | 这两个数字是解释 slot 等待超时的唯一依据。 |
 | D10 | 原测试断言 `/active limit is 1/` | 改为断言 `JavaIntelligenceError` code `DEADLINE_EXCEEDED` @ `runtime.lsp-slot` | Task 1 已把错误分类迁移到 `JavaIntelligenceError`。 |
 | D11 | Task 6 Step 2 返回 canonical `absolutePath` | containment 仍按 canonical 判定，但返回值用调用方 `repoRoot` 重建 | 返回 canonical 会让 repoRoot 位于符号链接之后时，缓存与 edge 记录落在另一个 key 命名空间（实测打断了两个既有 router 测试）。 |
+| D13 | Task 5 Step 6 未指定 benchmark 预算 | benchmark 默认用 `defaultDeadlineMs(mode, policy)` 构造 budget，并新增 `--deadline-ms` | 原先 benchmark 走 router 的 15 s 兜底，而真实 `java_impact` 只有 2 s，跑出来的 `R_read_must` 无法证明生产预算下的召回。 |
+| D14 | Task 7 未指定 hierarchy 缓存写入策略 | `cached()` 增加 `shouldCache` 断言，非 COMPLETE 直接不写 | 先前用 `cached(...) ?? compute()` 会把 `undefined` 写进缓存并在 partial 时把整趟遍历跑第二遍。 |
 | D12 | Task 6 Step 6 要求输出不含外部路径 | diagnostic detail 保留 `uri` 字段 | 全局约束第 21 条限定的是「默认结果」；diagnostic 是显式选择，且 containment 之后该 uri 必定指向仓库内。保留既有可观察行为。 |
 
 ## 9. Known Limits
@@ -172,16 +178,20 @@ NODE=/Users/luo/.nvm/versions/node/v22.16.0/bin/node
    总预算是 2000 ms。若大仓上 rg 因此转为 `PARTIAL_TIMEOUT`，会同时损失召回**并且**
    禁用缓存（partial 不入 cache），导致每次请求重跑 rg。
    **这是本迭代最需要用真实 benchmark 验证的一项。**
-   调节点：`java_impact` 的 `deadlineMs`，以及 benchmark 侧的
-   `JAVA_LSP_ROUTER_DEADLINE_MS`（默认 15000，仅在调用方未传 budget 时生效）。
-4. **generation 仍未统一**：C-03 未修复，`rgSummary` 的 generation 仍取自
+   benchmark 已改为默认使用与 `java_impact` 相同的 `defaultDeadlineMs`
+   （见 D13），并把生效值写入结果的 `deadlineMs` 字段；用 `--deadline-ms`
+   可显式覆盖以做 A/B 对照。
+4. **C-07 仅部分封口**（见 §1）。definition / implementation / reference 路径
+   仍是请求开始时刻的阶段超时，不是活的剩余预算。计划把这条留给
+   Task 33（SemanticGateway）统一。
+5. **generation 仍未统一**：C-03 未修复，`rgSummary` 的 generation 仍取自
    `session.cacheStatus().invalidations`，fast path 下恒为 0。Iteration B Task 9/10 修复。
-5. **active limit 仍只在进程内**：多个 stdio MCP 进程之间无协调，
+6. **active limit 仍只在进程内**：多个 stdio MCP 进程之间无协调，
    机器级 JDT 数量仍无上界。Iteration B Task 12a 引入文件 lease。
-6. **`shutdownAll()` 取消排队 waiter 时**只置 settled，不会立即解除
+7. **`shutdownAll()` 取消排队 waiter 时**只置 settled，不会立即解除
    `reserveLspSlot` 的等待，该调用方会等到自身预算耗尽。与改造前的轮询实现同等，
    非回归；但不要新增假设「关闭会立即解阻塞」的路径。
-7. **`source-index.ts` 的 `spawnSync("rg")` fallback 仍在请求路径上**，
+8. **`source-index.ts` 的 `spawnSync("rg")` fallback 仍在请求路径上**，
    按 §2.1 留待 Iteration C 之后删除。
 
 ## 10. Reproduction Commands
@@ -197,21 +207,34 @@ NODE=/Users/luo/.nvm/versions/node/v22.16.0/bin/node
 "$NODE" --test --test-name-pattern="concurrent ensureStarted|failed initialize|STARTING sessions|rg timeout|outside canonical repo|hierarchy stops|never cached|degrades the semantic stage|outside the repository" "dist/**/*.test.js"
 ```
 
-三仓 cold benchmark（**尚待执行**，需在有读取授权的终端运行）：
+三仓 cold benchmark（**尚待执行**，需在有读取授权的终端运行）。
+
+benchmark 现在默认使用与 `java_impact` 相同的绝对 deadline
+（`cold-nolsp` + `balanced` → 2000 ms），生效值写入结果的 `deadlineMs`。
+**必须跑两轮做 A/B**：生产预算一轮，旧的宽松预算一轮。
+若两轮 `R_read_must` 与 `recall` 一致，则 Known Limit #3 的风险以证据消解；
+若生产预算这轮下降，说明 rg 被 deadline 截断，需在进入 Iteration B 前处理。
 
 ```bash
 NODE=/Users/luo/.nvm/versions/node/v22.16.0/bin/node
-OUT="artifacts/v3-phase1/$(git rev-parse --short=12 HEAD)"
-mkdir -p "$OUT"
-"$NODE" dist/benchmark-agent-impact.js --repo-root /Users/luo/Documents/program/lishu/lishuedu \
-  --project-id lishuedu --warm-state cold-nolsp --strategy impact --runs 5 \
-  --verbosity diagnostic > "$OUT/lishuedu-cold.json"
-"$NODE" dist/benchmark-agent-impact.js --repo-root /Users/luo/Documents/program/cipherlink \
-  --project-id cipherlink --warm-state cold-nolsp --strategy impact --runs 5 \
-  --verbosity diagnostic > "$OUT/cipherlink-cold.json"
-"$NODE" dist/benchmark-agent-impact.js --repo-root /Users/luo/Documents/program/exam-parent-v3 \
-  --project-id exam-parent-v3 --warm-state cold-nolsp --strategy impact --runs 5 \
-  --verbosity diagnostic > "$OUT/exam-cold.json"
+BASE="artifacts/v3-phase1/$(git rev-parse --short=12 HEAD)"
+
+run() {   # $1=label  $2=extra args
+  mkdir -p "$BASE/$1"
+  for repo in \
+    "lishuedu:/Users/luo/Documents/program/lishu/lishuedu" \
+    "cipherlink:/Users/luo/Documents/program/cipherlink" \
+    "exam-parent-v3:/Users/luo/Documents/program/exam-parent-v3"
+  do
+    id="${repo%%:*}"; root="${repo#*:}"
+    "$NODE" dist/benchmark-agent-impact.js --repo-root "$root" --project-id "$id" \
+      --warm-state cold-nolsp --strategy impact --runs 5 --verbosity diagnostic $2 \
+      > "$BASE/$1/$id-cold.json"
+  done
+}
+
+run production ""                      # 2000ms，用户实际拿到的预算
+run relaxed    "--deadline-ms 15000"   # 旧的宽松预算，用于对照
 ```
 
 ## 11. Gate Result

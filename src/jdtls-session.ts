@@ -580,11 +580,13 @@ export class JdtlsSession {
     file: string,
     compute: () => Promise<HierarchyResult>
   ): Promise<HierarchyResult> {
-    const cached = await this.cached(method, parts, [file], async () => {
-      const result = await compute();
-      return isCacheableCompletion(result.completion) ? result : undefined;
-    });
-    return cached ?? compute();
+    return this.cached(
+      method,
+      parts,
+      [file],
+      compute,
+      result => isCacheableCompletion(result.completion)
+    );
   }
 
   private async walkHierarchy(input: {
@@ -1127,7 +1129,8 @@ export class JdtlsSession {
     method: string,
     parts: unknown[],
     dependencies: string[],
-    compute: () => Promise<T>
+    compute: () => Promise<T>,
+    shouldCache: (value: T) => boolean = () => true
   ): Promise<T> {
     if (DEFAULT_CACHE_TTL_MS <= 0) {
       return compute();
@@ -1145,6 +1148,9 @@ export class JdtlsSession {
     }
     this.cacheMisses += 1;
     const value = await compute();
+    if (!shouldCache(value)) {
+      return value;
+    }
     this.cache.set(key, {
       value,
       expiresAt: now + DEFAULT_CACHE_TTL_MS,
