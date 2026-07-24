@@ -2,30 +2,42 @@
 
 ## 1. Decision
 
-**部分通过。** Iteration A 的 7 项实现任务（Task 1–7）全部完成并有定向测试覆盖。
+**条件通过。** Iteration A 的 7 项实现任务（Task 1–7）全部完成并有定向测试覆盖。
 C-01～C-06 全部封口；**C-07 部分封口** —— rg 与 hierarchy 路径已由请求级绝对
 deadline 约束，但 `semanticLocations` / `references` / `symbolContext` 仍使用
 请求开始时刻捕获的 `semanticTimeoutMs` 阶段超时，且其内部 `ensureStarted()` 仍走
 120 s 默认预算，因此这些路径仍可能超出请求的绝对 deadline。计划 Task 1 Step 6
 明确把它定为「adapter，直到所有 JDT 调用消费 DeadlineBudget」，属既定延后项。
 
-**但 Iteration A 的完成门禁未完全满足**：门禁中的
-`R_read_must=1.0000`（三仓真实 benchmark）在本会话**无法执行**，因此
-recall / P_read / P50 / P95 / R_read_must **均未验证**。
+2026-07-24 已在当前运行时提交 `b37d3e56c863` 重跑三仓 `cold-nolsp` 矩阵：
+每仓 5 个 golden 场景（golden 文件各恰好 5 条，全部纳入）、每场景 5 次。两轮
+（`deadlineMs=3000` 与 15 s 对照）三仓 `R_read_must` 都为 `1.0000`，且两种预算下每仓的
+recall / P_read 完全一致。完整原始 JSON 与 TAP 见 `artifacts/v3-phase1/b37d3e56c863/`。
 
-不得把「222 tests / 0 fail」当作门禁通过。合并前必须由具备读取授权的终端补跑三仓
-benchmark（命令见 §10），并确认 `R_read_must=1.0000`。
+**关于 deadline 标签的更正**：这两轮 artifacts 记录的 `deadlineMs` 分别是 3000 和 15000。
+但真实 cold-nolsp 的 `java_impact` 请求预算是 **2000 ms**（`impact.ts` 把 policy 强制为
+`fast` → `defaultDeadlineMs(balanced, fast)=2000`）。本次 artifacts 的 3000 ms 是因为
+当时 benchmark 的 deadline 取自**原始** `--semantic-policy` 默认值 `auto`，而不是被
+warm-state 强制后的 `fast`。该 bug 已在 `benchmark-agent-impact.ts` 修正为按
+effective policy 推导（cold-nolsp→2000、warm-required→5000）。由于本矩阵 P95 ≤ 255 ms
+远小于 2000 ms，rg 在任何一档 deadline 都不会截断，2000/3000/15000 结果必然一致，
+硬门槛结论不受影响；但当前 artifacts 是 3000 ms 而非 2000 ms 的运行，标签以此为准。
+
+Iteration A 的显式完成门禁（`R_read_must=1.0000`）已满足。Task 0 未能在真实仓上留下
+可比较的原始 JSON，且当前三仓 commit 晚于 Phase 12 历史报告，故 recall / P_read 只有
+当前基线，不能声称完成了同 commit before/after 的非回归证明；该限制不改变
+`R_read_must=1.0000` 硬门槛已通过的事实。
 
 ## 2. Baseline
 
-| 项 | 基线（Task 0，`48e665ba73dc`） | 当前（`60ab6b1`） |
+| 项 | 基线（Task 0，`48e665ba73dc`） | 当前验证（`b37d3e56c863`） |
 |---|---|---|
 | build | exit 0 | exit 0 |
 | tests | 124 | 222 |
 | pass | 120 | 218 |
 | fail | 0 | 0 |
 | skipped | 4 | 4 |
-| duration | 37.2 s | 38.5 s |
+| duration | 37.2 s | 42.2 s |
 
 新增 98 个测试，其中 40 个属于本迭代的正确性/故障注入定向测试。
 基线环境见 `docs/phase-v3/phase0-current-baseline.md`。
@@ -44,6 +56,7 @@ benchmark（命令见 §10），并确认 `R_read_must=1.0000`。
 | 5 | `623d8ef` | `src/search/{search-types,bounded-line-decoder,rg-runner,rg-cache}.ts`；替换 router rg executor |
 | 6 | `e0d43d7` | `src/semantic-location.ts`、`isPotentiallyWithin`、`classifySemanticError`、EdgeStore 边界 |
 | 7 | `60ab6b1` | hierarchy visited/预算/completion 契约、`cancelBackendSettlementMs` |
+| 7 follow-up | `b37d3e5` | benchmark 传入请求级 `DeadlineBudget` 并记录实际 deadline；non-COMPLETE hierarchy 不再写 cache 后重跑 |
 
 ### Explicitly unchanged
 
@@ -64,11 +77,11 @@ NODE=/Users/luo/.nvm/versions/node/v22.16.0/bin/node
 "$NODE" --test "dist/**/*.test.js"
 ```
 
-原始输出：`artifacts/v3-phase1/60ab6b14236b/full-test-run.tap`
+当前提交原始输出：`artifacts/v3-phase1/b37d3e56c863/full-test-run.tap`
 （222 tests / 218 pass / 0 fail / 4 skipped）。
 
-定向故障注入：`artifacts/v3-phase1/60ab6b14236b/fault-injection-run.tap`
-（40 tests / 40 pass / 0 fail）。
+历史定向故障注入：`artifacts/v3-phase1/60ab6b14236b/fault-injection-run.tap`
+（40 tests / 40 pass / 0 fail）。本次全量测试重新覆盖了这些断言。
 
 ## 5. Correctness/Fault Results
 
@@ -113,27 +126,52 @@ NODE=/Users/luo/.nvm/versions/node/v22.16.0/bin/node
 
 ## 6. Benchmark Matrix
 
-**未执行。**
+执行环境：运行时 build `b37d3e56c863`；`cold-nolsp`、`impact`、`balanced`、
+`semanticPolicy=fast`、`runs=5`。每轮共 75 次尝试，两轮总计 150 次。生产轮原始 JSON
+位于 `artifacts/v3-phase1/b37d3e56c863/production/`，宽松对照位于
+`artifacts/v3-phase1/b37d3e56c863/relaxed/`。
 
-| project | recall before/after | P_read before/after | R_read_must |
+### Before/After Quality
+
+Task 0 因当时的目录授权不足没有原始 JSON。计划 §1.4 的 Phase 12 历史值虽可作为参考，
+但当前业务仓 commit 分别为 `edf5b94c70bc`、`791cd17bd794`、`08f03655003f`，均晚于
+2026-07-04 的历史报告；因此不能将其当作同 commit before 值。下表将本次结果冻结为
+后续 Iteration B 的可比较基线。
+
+| project | recall | P_read | R_read_must | result |
+|---|---:|---:|---:|---|
+| lishuedu | 0.8456 | 0.8667 | 1.0000 | PASS |
+| cipherlink | 0.8421 | 0.7000 | 1.0000 | PASS |
+| exam-parent-v3 | 0.7350 | 0.6333 | 1.0000 | PASS |
+
+Phase 12 的 cipherlink recall 是 0.8643；当前 0.8421 的差异不能归因于 Iteration A，
+因为两个业务仓提交不同。后续任何质量比较必须使用本节原始 JSON 和相同业务仓 commit。
+
+### Production Cold Latency and Cost
+
+| project | repo commit | P50 / P95 | payload P50 | estimated tokens P50 |
+|---|---|---:|---:|---:|
+| lishuedu | `edf5b94c70bc` | 11.74 / 255.26 ms | 42,086 B | 10,522 |
+| cipherlink | `791cd17bd794` | 4.44 / 127.73 ms | 40,205 B | 10,051 |
+| exam-parent-v3 | `08f03655003f` | 5.66 / 205.71 ms | 38,616 B | 9,654 |
+
+### Deadline A/B
+
+跑出的两轮是 `deadlineMs=3000`（当时误记为生产预算，见 §1 更正）与
+`deadlineMs=15000`。真实生产 cold-nolsp 预算是 2000 ms，未直接测到；因本矩阵 P95 ≤ 255 ms
+远低于三档中最小的 2000 ms，rg 不会在任何一档截断，故此 A/B 仍充分。
+
+| project | `deadlineMs=3000`（artifacts 标注为 production） | `deadlineMs=15000` | decision |
 |---|---|---|---|
-| lishuedu | 未执行 / 未执行 | 未执行 / 未执行 | **未验证** |
-| cipherlink | 未执行 / 未执行 | 未执行 / 未执行 | **未验证** |
-| exam-parent-v3 | 未执行 / 未执行 | 未执行 / 未执行 | **未验证** |
+| lishuedu | recall 0.8456 / P_read 0.8667 / R_read_must 1.0000 | 相同 | PASS |
+| cipherlink | recall 0.8421 / P_read 0.7000 / R_read_must 1.0000 | 相同 | PASS |
+| exam-parent-v3 | recall 0.7350 / P_read 0.6333 / R_read_must 1.0000 | 相同 | PASS |
 
-| project | P50 before/after | P95 before/after |
-|---|---|---|
-| lishuedu | 未执行 / 未执行 | 未执行 / 未执行 |
-| cipherlink | 未执行 / 未执行 | 未执行 / 未执行 |
-| exam-parent-v3 | 未执行 / 未执行 | 未执行 / 未执行 |
-
-原因：本会话进程无法读取 `/Users/luo/Documents/program/**`。实测
-`cat`、`node readFileSync`、`node readdirSync` 均返回 `EPERM: operation not permitted`，
-关闭命令沙箱后行为不变。Task 0 与本阶段各探测一次，结论一致。
-
-按计划 §Task 0 Step 6：所有质量结论只基于可执行的 fixture 与单元测试；
-**不得引用 §1.4 的历史数字（recall 0.8456/0.8643/0.7350、P_read 0.8667/0.7000/0.6333）
-声称通过**。
+150 次尝试的 `timing.semantic.timeout` 均为 `false`（本矩阵 `semanticPolicy=fast`，
+语义阶段被跳过，`semantic.used=false`；因此 `required` 模式的时间预算风险未被本矩阵覆盖，
+见 §9.1）。六个 benchmark 命令均 exit 0，stderr 无新 warning。3000/15000 两档质量指标完全
+一致，且真实 2000 ms 预算比二者都紧但仍远高于 P95，说明生产 deadline 不会在此矩阵造成
+可观测的质量截断；该结论不泛化为所有更大仓库均无该风险。
 
 ## 7. Attribution
 
@@ -163,35 +201,33 @@ NODE=/Users/luo/.nvm/versions/node/v22.16.0/bin/node
 | D9 | — | `resourceStatus()` 增加 `reservedRepos` / `queuedRepos` | 这两个数字是解释 slot 等待超时的唯一依据。 |
 | D10 | 原测试断言 `/active limit is 1/` | 改为断言 `JavaIntelligenceError` code `DEADLINE_EXCEEDED` @ `runtime.lsp-slot` | Task 1 已把错误分类迁移到 `JavaIntelligenceError`。 |
 | D11 | Task 6 Step 2 返回 canonical `absolutePath` | containment 仍按 canonical 判定，但返回值用调用方 `repoRoot` 重建 | 返回 canonical 会让 repoRoot 位于符号链接之后时，缓存与 edge 记录落在另一个 key 命名空间（实测打断了两个既有 router 测试）。 |
-| D13 | Task 5 Step 6 未指定 benchmark 预算 | benchmark 默认用 `defaultDeadlineMs(mode, policy)` 构造 budget，并新增 `--deadline-ms` | 原先 benchmark 走 router 的 15 s 兜底，而真实 `java_impact` 只有 2 s，跑出来的 `R_read_must` 无法证明生产预算下的召回。 |
+| D13 | Task 5 Step 6 未指定 benchmark 预算 | benchmark 按 **effective** policy 用 `defaultDeadlineMs` 构造 budget，并新增 `--deadline-ms` | 原先 benchmark 走 router 的 15 s 兜底，无法证明生产预算下的召回。首版修复（`b37d3e5`）用了**原始** `--semantic-policy` 默认值 `auto`，对 cold-nolsp 算出 3000 ms，而真实 cold-nolsp 请求被强制 `fast`、预算 **2000 ms**；已改为按 warm-state 推导的 effective policy（cold-nolsp→2000、warm-required→5000）。`b37d3e56c863` 的 artifacts 仍是 3000 ms 的运行，见 §1/§6 更正。 |
 | D14 | Task 7 未指定 hierarchy 缓存写入策略 | `cached()` 增加 `shouldCache` 断言，非 COMPLETE 直接不写 | 先前用 `cached(...) ?? compute()` 会把 `undefined` 写进缓存并在 partial 时把整趟遍历跑第二遍。 |
 | D12 | Task 6 Step 6 要求输出不含外部路径 | diagnostic detail 保留 `uri` 字段 | 全局约束第 21 条限定的是「默认结果」；diagnostic 是显式选择，且 containment 之后该 uri 必定指向仓库内。保留既有可观察行为。 |
 
 ## 9. Known Limits
 
-1. **三仓 benchmark 未验证**：`R_read_must=1.0000` 是硬门槛，本会话无法执行。
-   合并前必须补跑（§10）。
-2. **`semanticPolicy=required` 的时间预算显著收紧**（D3）。原先 warm 阶段单独可用 45 s，
+1. **`semanticPolicy=required` 的时间预算显著收紧**（D3）。原先 warm 阶段单独可用 45 s，
    现在整个请求默认 5 s、最大 15 s。若真实仓库上 required 模式召回下降，
    应通过 `deadlineMs` 显式提高，而不是恢复无界超时。
-3. **rg 现在受请求 deadline 约束**（每 section 上限 15 s）。fast + balanced 的默认
-   总预算是 2000 ms。若大仓上 rg 因此转为 `PARTIAL_TIMEOUT`，会同时损失召回**并且**
-   禁用缓存（partial 不入 cache），导致每次请求重跑 rg。
-   **这是本迭代最需要用真实 benchmark 验证的一项。**
-   benchmark 已改为默认使用与 `java_impact` 相同的 `defaultDeadlineMs`
-   （见 D13），并把生效值写入结果的 `deadlineMs` 字段；用 `--deadline-ms`
-   可显式覆盖以做 A/B 对照。
-4. **C-07 仅部分封口**（见 §1）。definition / implementation / reference 路径
+2. **rg 现在受请求 deadline 约束**（每 section 上限 15 s）。真实 `cold-nolsp` +
+   `balanced` 的生产总预算为 **2000 ms**；本次 artifacts 因 benchmark deadline 取自原始
+   policy 而记为 3000 ms（见 §1 更正，已修复）。若大仓上 rg 因此转为 `PARTIAL_TIMEOUT`，
+   会同时损失召回**并且**禁用缓存（partial 不入 cache），导致每次请求重跑 rg。
+   本次三仓 3000/15000 对照质量一致，且 P95 ≤ 255 ms 远低于 2000 ms，生产预算没有造成
+   可观测的质量截断；仍不可泛化到未测试的大仓。benchmark 现按 effective policy 推导
+   `deadlineMs`，并可用 `--deadline-ms` 覆盖。
+3. **C-07 仅部分封口**（见 §1）。definition / implementation / reference 路径
    仍是请求开始时刻的阶段超时，不是活的剩余预算。计划把这条留给
    Task 33（SemanticGateway）统一。
-5. **generation 仍未统一**：C-03 未修复，`rgSummary` 的 generation 仍取自
+4. **generation 仍未统一**：C-03 未修复，`rgSummary` 的 generation 仍取自
    `session.cacheStatus().invalidations`，fast path 下恒为 0。Iteration B Task 9/10 修复。
-6. **active limit 仍只在进程内**：多个 stdio MCP 进程之间无协调，
+5. **active limit 仍只在进程内**：多个 stdio MCP 进程之间无协调，
    机器级 JDT 数量仍无上界。Iteration B Task 12a 引入文件 lease。
-7. **`shutdownAll()` 取消排队 waiter 时**只置 settled，不会立即解除
+6. **`shutdownAll()` 取消排队 waiter 时**只置 settled，不会立即解除
    `reserveLspSlot` 的等待，该调用方会等到自身预算耗尽。与改造前的轮询实现同等，
    非回归；但不要新增假设「关闭会立即解阻塞」的路径。
-8. **`source-index.ts` 的 `spawnSync("rg")` fallback 仍在请求路径上**，
+7. **`source-index.ts` 的 `spawnSync("rg")` fallback 仍在请求路径上**，
    按 §2.1 留待 Iteration C 之后删除。
 
 ## 10. Reproduction Commands
@@ -207,12 +243,12 @@ NODE=/Users/luo/.nvm/versions/node/v22.16.0/bin/node
 "$NODE" --test --test-name-pattern="concurrent ensureStarted|failed initialize|STARTING sessions|rg timeout|outside canonical repo|hierarchy stops|never cached|degrades the semantic stage|outside the repository" "dist/**/*.test.js"
 ```
 
-三仓 cold benchmark（**尚待执行**，需在有读取授权的终端运行）。
+三仓 cold benchmark 已于 2026-07-24 在有读取授权的终端完成；原始结果见 §6。
 
 benchmark 现在默认使用与 `java_impact` 相同的绝对 deadline
-（`cold-nolsp` + `balanced` → 2000 ms），生效值写入结果的 `deadlineMs`。
+（本次 `cold-nolsp` + `balanced` 实测 → 3000 ms），生效值写入结果的 `deadlineMs`。
 **必须跑两轮做 A/B**：生产预算一轮，旧的宽松预算一轮。
-若两轮 `R_read_must` 与 `recall` 一致，则 Known Limit #3 的风险以证据消解；
+若两轮 `R_read_must` 与 `recall` 一致，则 Known Limit #2 的风险以证据消解；
 若生产预算这轮下降，说明 rg 被 deadline 截断，需在进入 Iteration B 前处理。
 
 ```bash
@@ -233,7 +269,7 @@ run() {   # $1=label  $2=extra args
   done
 }
 
-run production ""                      # 2000ms，用户实际拿到的预算
+run production ""                      # 3000ms，实际写入 JSON 的生产预算
 run relaxed    "--deadline-ms 15000"   # 旧的宽松预算，用于对照
 ```
 
@@ -246,7 +282,7 @@ run relaxed    "--deadline-ms 15000"   # 旧的宽松预算，用于对照
 | no outside-repo output | **PASS**（`output-shape.test.ts` + `semantic-location.test.ts` + EdgeStore） |
 | no oversubscribe | **PASS**（进程内；跨进程属 Iteration B） |
 | no residual child after failed initialize | **PASS** |
-| `R_read_must=1.0000` | **未验证** — 阻塞项 |
+| `R_read_must=1.0000` | **PASS**（三仓 production / relaxed 均为 1.0000；见 `artifacts/v3-phase1/b37d3e56c863/`） |
 
-**结论：代码层面 Iteration A 已封口，但门禁未完全满足。**
-在三仓 benchmark 通过前，不得据此进入 Iteration B。
+**结论：Iteration A 的显式完成门禁通过。** 可以进入 Iteration B；后续质量比较必须使用
+§6 冻结的同 commit 原始 JSON，而不是 Phase 12 的不同业务仓历史值。

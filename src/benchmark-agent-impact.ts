@@ -163,28 +163,34 @@ function parseCli(args: string[], root: string): Cli {
     }
   }
   const projectId = stringArg(values, "--project-id", process.env.JAVA_LSP_BENCH_PROJECT_ID || "lishuedu");
+  const warmState = stringArg(values, "--warm-state", process.env.JAVA_LSP_BENCH_WARM_STATE || "cold-nolsp") as WarmState;
+  const mode = stringArg(values, "--mode", process.env.JAVA_LSP_BENCH_MODE || "balanced") as ImpactOptions["mode"];
+  const semanticPolicy = stringArg(values, "--semantic-policy", process.env.JAVA_LSP_BENCH_SEMANTIC_POLICY || "auto") as ImpactOptions["semanticPolicy"];
+  // Match the policy java_impact will actually run under for this warm state,
+  // so the derived deadline equals what a real caller gets. Using the raw
+  // --semantic-policy default (auto) would budget 3000ms while a cold-nolsp
+  // request is forced to fast and budgets 2000ms.
+  const effectivePolicy: "fast" | "auto" | "required" =
+    warmState === "cold-nolsp" ? "fast" : warmState === "warm-required" ? "required" : semanticPolicy;
   return {
     repoRoot: stringArg(values, "--repo-root", process.env.JAVA_LSP_BENCH_REPO_ROOT || process.env.LISHUEDU_ROOT || path.resolve(root, "..", "..")),
     scenarioFile: stringArg(values, "--scenarios", process.env.JAVA_LSP_BENCH_SCENARIOS || path.join(root, "golden", `${projectId}.scenarios.jsonl`)),
     projectId,
     layoutProfile: stringArg(values, "--layout-profile", process.env.JAVA_LSP_BENCH_LAYOUT_PROFILE || (projectId === "exam-parent-v3" ? "maven-reactor" : projectId === "generic-java" ? "generic-java" : "ddd-gradle")),
-    warmState: stringArg(values, "--warm-state", process.env.JAVA_LSP_BENCH_WARM_STATE || "cold-nolsp") as WarmState,
-    mode: stringArg(values, "--mode", process.env.JAVA_LSP_BENCH_MODE || "balanced") as ImpactOptions["mode"],
-    semanticPolicy: stringArg(values, "--semantic-policy", process.env.JAVA_LSP_BENCH_SEMANTIC_POLICY || "auto") as ImpactOptions["semanticPolicy"],
+    warmState,
+    mode,
+    semanticPolicy,
     verbosity: stringArg(values, "--verbosity", process.env.JAVA_LSP_BENCH_VERBOSITY || "standard") as NonNullable<ImpactOptions["verbosity"]>,
     runs: Number(stringArg(values, "--runs", process.env.JAVA_LSP_BENCH_RUNS || "1")),
     readPlanMaxItems: optionalPositiveIntegerArg(values, "--read-plan-max-items", process.env.JAVA_LSP_BENCH_READ_PLAN_MAX_ITEMS),
     listScenarios: values.get("--list-scenarios") === true,
     strategy: stringArg(values, "--strategy", process.env.JAVA_LSP_BENCH_STRATEGY || "impact") as BenchmarkStrategy,
-    // Default to the same absolute deadline java_impact gives a real caller, so
-    // the benchmark measures what users actually get rather than a looser bound.
+    // The same absolute deadline java_impact gives a real caller in this warm
+    // state, so the benchmark measures what users actually get.
     deadlineMs: Math.min(
       MAX_REQUEST_DEADLINE_MS,
       optionalPositiveIntegerArg(values, "--deadline-ms", process.env.JAVA_LSP_BENCH_DEADLINE_MS)
-        ?? defaultDeadlineMs(
-          stringArg(values, "--mode", process.env.JAVA_LSP_BENCH_MODE || "balanced") as ImpactOptions["mode"],
-          stringArg(values, "--semantic-policy", process.env.JAVA_LSP_BENCH_SEMANTIC_POLICY || "auto") as "fast" | "auto" | "required"
-        )
+        ?? defaultDeadlineMs(mode, effectivePolicy)
     )
   };
 }
