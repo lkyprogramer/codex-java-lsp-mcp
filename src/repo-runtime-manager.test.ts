@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { RepoRuntimeManager, type ManagedToolContext } from "./repo-runtime-manager.js";
+import { JavaIntelligenceError } from "./runtime/intelligence-error.js";
+import { deferred, delay, type Deferred } from "./test-support/fake-jdtls.js";
+import type { JdtlsLifecycleState } from "./jdtls-session.js";
 import type { ResolvedRepo } from "./repo-resolver.js";
 
 test("RepoRuntimeManager evicts the oldest idle started runtime before starting another", async () => {
@@ -12,11 +15,11 @@ test("RepoRuntimeManager evicts the oldest idle started runtime before starting 
   }, resolved => fakeContext(resolved, sessions));
 
   await manager.withContext({ repoRoot: "/repo-a" }, async context => {
-    (context.session as unknown as FakeSession).started = true;
+    await (context.session as unknown as FakeSession).ensureStarted();
   }, { mayStartLsp: true });
 
   await manager.withContext({ repoRoot: "/repo-b" }, async context => {
-    (context.session as unknown as FakeSession).started = true;
+    await (context.session as unknown as FakeSession).ensureStarted();
   }, { mayStartLsp: true });
 
   assert.equal(sessions.get("/repo-a")?.stops, 1);
@@ -30,44 +33,249 @@ test("RepoRuntimeManager fails fast when all active runtimes are in use", async 
     idleTtlMs: 100000,
     requestTimeoutMs: 30
   }, resolved => fakeContext(resolved, sessions));
-  let release!: () => void;
-  let entered!: () => void;
-  const held = new Promise<void>(resolve => {
-    release = resolve;
-  });
-  const firstEntered = new Promise<void>(resolve => {
-    entered = resolve;
-  });
+  const held = deferred<void>();
+  const firstEntered = deferred<void>();
 
   const first = manager.withContext({ repoRoot: "/repo-a" }, async context => {
-    (context.session as unknown as FakeSession).started = true;
-    entered();
-    await held;
+    await (context.session as unknown as FakeSession).ensureStarted();
+    firstEntered.resolve();
+    await held.promise;
   }, { mayStartLsp: true });
-  await firstEntered;
+  await firstEntered.promise;
 
   await assert.rejects(
     () => manager.withContext({ repoRoot: "/repo-b" }, async context => {
-      (context.session as unknown as FakeSession).started = true;
+      await (context.session as unknown as FakeSession).ensureStarted();
     }, { mayStartLsp: true }),
-    /active limit is 1/
+    (error: unknown) => error instanceof JavaIntelligenceError
+      && error.code === "DEADLINE_EXCEEDED"
+      && /runtime\.lsp-slot/.test(error.message)
   );
 
-  release();
+  held.resolve();
   await first;
 });
 
-class FakeSession {
-  started = false;
-  stops = 0;
+test("STARTING sessions count against the active repo limit", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const gateA = deferred<void>();
+  const enteredB = deferred<void>();
+  const manager = new RepoRuntimeManager(fakeResolver(), {
+    maxActiveRepos: 1,
+    idleTtlMs: 100000,
+    requestTimeoutMs: 5000
+  }, resolved => fakeContext(resolved, sessions, { "/repo-a": gateA }));
 
-  status(): { started: boolean } {
-    return { started: this.started };
+  const first = manager.withContext({ repoRoot: "/repo-a" }, async context => {
+    await (context.session as unknown as FakeSession).ensureStarted();
+  }, { mayStartLsp: true });
+
+  await waitFor(() => sessions.get("/repo-a")?.state === "STARTING");
+  assert.equal(sessions.get("/repo-a")!.status().started, false, "A is STARTING, not started");
+  assert.equal(manager.reservedCount(), 1, "a STARTING session holds the slot");
+
+  const second = manager.withContext({ repoRoot: "/repo-b" }, async context => {
+    enteredB.resolve();
+    await (context.session as unknown as FakeSession).ensureStarted();
+  }, { mayStartLsp: true });
+
+  await delay(20);
+  assert.equal(enteredB.settled, false, "B must not run while A holds the only slot");
+  assert.equal(manager.reservedCount(), 1);
+  assert.equal(sessions.has("/repo-b"), true);
+  assert.equal(sessions.get("/repo-b")!.state, "NEW", "B never spawned while queued");
+
+  gateA.resolve();
+  await first;
+  await second;
+
+  assert.equal(sessions.get("/repo-a")!.stops, 1, "idle A is evicted so the queued B can run");
+  assert.equal(sessions.get("/repo-b")!.state, "READY");
+});
+
+test("slot waiters are granted in FIFO order", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const held = deferred<void>();
+  const order: string[] = [];
+  const manager = new RepoRuntimeManager(fakeResolver(), {
+    maxActiveRepos: 1,
+    idleTtlMs: 100000,
+    requestTimeoutMs: 5000
+  }, resolved => fakeContext(resolved, sessions));
+
+  const entered = deferred<void>();
+  const first = manager.withContext({ repoRoot: "/repo-a" }, async context => {
+    await (context.session as unknown as FakeSession).ensureStarted();
+    entered.resolve();
+    await held.promise;
+  }, { mayStartLsp: true });
+  await entered.promise;
+
+  const second = manager.withContext({ repoRoot: "/repo-b" }, async context => {
+    order.push("b");
+    await (context.session as unknown as FakeSession).ensureStarted();
+  }, { mayStartLsp: true });
+  await delay(10);
+  const third = manager.withContext({ repoRoot: "/repo-c" }, async context => {
+    order.push("c");
+    await (context.session as unknown as FakeSession).ensureStarted();
+  }, { mayStartLsp: true });
+  await delay(10);
+
+  assert.deepEqual(order, [], "neither waiter runs while A holds the slot");
+
+  held.resolve();
+  await first;
+  await second;
+  await third;
+
+  assert.deepEqual(order, ["b", "c"], "B queued before C, so B is granted first");
+});
+
+test("a waiter that misses its deadline is removed and never granted later", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const held = deferred<void>();
+  const manager = new RepoRuntimeManager(fakeResolver(), {
+    maxActiveRepos: 1,
+    idleTtlMs: 100000,
+    requestTimeoutMs: 40
+  }, resolved => fakeContext(resolved, sessions));
+
+  const entered = deferred<void>();
+  const first = manager.withContext({ repoRoot: "/repo-a" }, async context => {
+    await (context.session as unknown as FakeSession).ensureStarted();
+    entered.resolve();
+    await held.promise;
+  }, { mayStartLsp: true });
+  await entered.promise;
+
+  let bRan = false;
+  await assert.rejects(
+    () => manager.withContext({ repoRoot: "/repo-b" }, async () => { bRan = true; }, { mayStartLsp: true }),
+    (error: unknown) => error instanceof JavaIntelligenceError && error.code === "DEADLINE_EXCEEDED"
+  );
+  assert.equal(bRan, false);
+
+  held.resolve();
+  await first;
+  await delay(30);
+
+  // The cancelled waiter must not be handed a reservation once A releases.
+  assert.equal(bRan, false);
+  assert.equal(manager.activeRepos().find(item => item.repoRoot === "/repo-b")?.lspReservation, "NONE");
+});
+
+test("a reservation taken but never used is released for the next caller", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const manager = new RepoRuntimeManager(fakeResolver(), {
+    maxActiveRepos: 1,
+    idleTtlMs: 100000,
+    requestTimeoutMs: 5000
+  }, resolved => fakeContext(resolved, sessions));
+
+  // mayStartLsp only means "the handler is allowed to start JDT", not that it will.
+  await manager.withContext({ repoRoot: "/repo-a" }, async () => undefined, { mayStartLsp: true });
+  assert.equal(manager.reservedCount(), 0, "an unused STARTING reservation is released");
+  assert.equal(sessions.get("/repo-a")!.stops, 0, "no eviction was needed");
+
+  await manager.withContext({ repoRoot: "/repo-b" }, async context => {
+    await (context.session as unknown as FakeSession).ensureStarted();
+  }, { mayStartLsp: true });
+  assert.equal(manager.reservedCount(), 1);
+  assert.equal(manager.activeRepos().find(item => item.repoRoot === "/repo-b")?.lspReservation, "READY");
+});
+
+test("a session that breaks releases its slot to a queued waiter", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const held = deferred<void>();
+  const manager = new RepoRuntimeManager(fakeResolver(), {
+    maxActiveRepos: 1,
+    idleTtlMs: 100000,
+    requestTimeoutMs: 5000
+  }, resolved => fakeContext(resolved, sessions));
+
+  const entered = deferred<void>();
+  const first = manager.withContext({ repoRoot: "/repo-a" }, async context => {
+    const session = context.session as unknown as FakeSession;
+    await session.ensureStarted();
+    entered.resolve();
+    await held.promise;
+    session.transition("BROKEN");
+  }, { mayStartLsp: true });
+  await entered.promise;
+
+  let bRan = false;
+  const second = manager.withContext({ repoRoot: "/repo-b" }, async context => {
+    bRan = true;
+    await (context.session as unknown as FakeSession).ensureStarted();
+  }, { mayStartLsp: true });
+  await delay(10);
+  assert.equal(bRan, false);
+
+  held.resolve();
+  await first;
+  await second;
+  assert.equal(bRan, true);
+  assert.equal(sessions.get("/repo-a")!.stops, 0, "a BROKEN session releases without being stopped again");
+});
+
+test("activeRepos exposes lifecycle state and reservation", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const manager = new RepoRuntimeManager(fakeResolver(), {
+    maxActiveRepos: 2,
+    idleTtlMs: 100000,
+    requestTimeoutMs: 5000
+  }, resolved => fakeContext(resolved, sessions));
+
+  await manager.withContext({ repoRoot: "/repo-a" }, async context => {
+    await (context.session as unknown as FakeSession).ensureStarted();
+  }, { mayStartLsp: true });
+
+  const [entry] = manager.activeRepos();
+  assert.equal(entry.repoRoot, "/repo-a");
+  assert.equal(entry.lifecycleState, "READY");
+  assert.equal(entry.lspReservation, "READY");
+  assert.equal(entry.started, true);
+});
+
+async function waitFor(condition: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 200 && !condition(); attempt += 1) {
+    await delay(5);
+  }
+  assert.equal(condition(), true, "condition never became true");
+}
+
+class FakeSession {
+  state: JdtlsLifecycleState = "NEW";
+  stops = 0;
+  startGate?: Deferred<void>;
+
+  private readonly listeners = new Set<(state: JdtlsLifecycleState) => void>();
+
+  status(): { state: JdtlsLifecycleState; started: boolean } {
+    return { state: this.state, started: this.state === "READY" };
+  }
+
+  onLifecycleChange(listener: (state: JdtlsLifecycleState) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  transition(next: JdtlsLifecycleState): void {
+    if (this.state === next) return;
+    this.state = next;
+    for (const listener of [...this.listeners]) listener(next);
+  }
+
+  async ensureStarted(): Promise<void> {
+    this.transition("STARTING");
+    if (this.startGate) await this.startGate.promise;
+    this.transition("READY");
   }
 
   async stop(): Promise<void> {
     this.stops += 1;
-    this.started = false;
+    this.transition("STOPPED");
   }
 }
 
@@ -92,8 +300,13 @@ function fakeResolver(): { resolve(selector: { repoRoot?: string }): Promise<Res
   };
 }
 
-function fakeContext(resolved: ResolvedRepo, sessions: Map<string, FakeSession>): ManagedToolContext {
+function fakeContext(
+  resolved: ResolvedRepo,
+  sessions: Map<string, FakeSession>,
+  gates: Record<string, Deferred<void>> = {}
+): ManagedToolContext {
   const session = new FakeSession();
+  session.startGate = gates[resolved.repoRoot];
   sessions.set(resolved.repoRoot, session);
   return {
     repoRoot: resolved.repoRoot,

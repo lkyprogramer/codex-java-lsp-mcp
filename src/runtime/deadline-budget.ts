@@ -54,6 +54,10 @@ export class DeadlineBudget {
       );
     }
     let timer: NodeJS.Timeout | undefined;
+    // Deliberately not unref'd. Some raced operations (an in-process slot
+    // waiter, for example) hold nothing else open, and an unref'd timer would
+    // let the process exit instead of delivering the deadline rejection. The
+    // finally below always clears it, so it never outlives the race.
     const timeout = new Promise<never>((_, reject) => {
       timer = setTimeout(() => {
         onTimeout?.();
@@ -62,7 +66,6 @@ export class DeadlineBudget {
           `Deadline exceeded during ${stage} after ${timeoutMs}ms`
         ));
       }, timeoutMs);
-      timer.unref?.();
     });
     try {
       return await Promise.race([operation, timeout]);

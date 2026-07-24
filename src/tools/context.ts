@@ -26,6 +26,8 @@ export type ToolContext = {
     idleTtlMs: number;
     jdtlsXmx: string;
     activeRepos: number;
+    reservedRepos: number;
+    queuedRepos: number;
     activeJdtlsPids: number[];
     importConcurrency: number;
     workspaceRetainedOnShutdown: boolean;

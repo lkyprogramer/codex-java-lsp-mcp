@@ -31,24 +31,18 @@ test("DeadlineBudget rejects expired stages with a classified error", () => {
 test("DeadlineBudget.race calls timeout cleanup", async () => {
   let cleaned = 0;
   const budget = DeadlineBudget.fromTimeout(10);
-  // The deadline timer is unref'd on purpose so a pending timeout never keeps the
-  // MCP process alive. The operation under test never settles, so this test must
-  // hold the event loop open itself or Node exits before the deadline fires.
-  const keepAlive = setTimeout(() => undefined, 1000);
-  try {
-    await assert.rejects(
-      () => budget.race(
-        "slow-stage",
-        new Promise<void>(() => undefined),
-        1000,
-        () => { cleaned += 1; }
-      ),
-      (error: unknown) => error instanceof JavaIntelligenceError
-        && error.code === "DEADLINE_EXCEEDED"
-    );
-  } finally {
-    clearTimeout(keepAlive);
-  }
+  // The raced operation never settles and holds nothing open, so this also
+  // proves the deadline timer keeps the process alive long enough to reject.
+  await assert.rejects(
+    () => budget.race(
+      "slow-stage",
+      new Promise<void>(() => undefined),
+      1000,
+      () => { cleaned += 1; }
+    ),
+    (error: unknown) => error instanceof JavaIntelligenceError
+      && error.code === "DEADLINE_EXCEEDED"
+  );
   assert.equal(cleaned, 1);
 });
 
