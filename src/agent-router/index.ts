@@ -32,8 +32,12 @@ import {
   updateTypeReferenceCacheMetrics
 } from "./impact-metrics.js";
 import { collectNamingRecall } from "./naming-recall.js";
-import { loadRgCommandSummary } from "./rg-execution.js";
-import { type RgCommandSummary } from "./rg-plan.js";
+import { runRgSection } from "./rg-execution.js";
+import { summaryFromSearchResult, type RgCommandSummary } from "./rg-plan.js";
+import { DeadlineBudget } from "../runtime/deadline-budget.js";
+import { GenerationRgCache } from "../search/rg-cache.js";
+import { RgRunner } from "../search/rg-runner.js";
+import type { SearchResult } from "../search/search-types.js";
 import { positiveInteger, timed } from "./runtime.js";
 import { collectSemanticSeed, semanticVerify } from "./semantic.js";
 import { collectTypeReferenceCandidates } from "./type-reference.js";
@@ -44,12 +48,6 @@ import {
   type ResolvedAnchor,
   type RgPlanSection
 } from "../agent-types.js";
-
-type RgCacheEntry = {
-  expiresAt: number;
-  generation: number;
-  summary: RgCommandSummary;
-};
 
 type RouterStatus = {
   enabled: boolean;
@@ -62,9 +60,11 @@ type RouterStatus = {
 
 const RG_CACHE_TTL_MS = positiveInteger(process.env.AGENT_RG_CACHE_TTL_MS, 300000);
 const RG_CONCURRENCY = positiveInteger(process.env.JAVA_LSP_RG_CONCURRENCY, Math.min(4, availableParallelism()));
+// Used only when a caller does not supply the request budget (benchmarks, tests).
+const DEFAULT_ROUTER_DEADLINE_MS = positiveInteger(process.env.JAVA_LSP_ROUTER_DEADLINE_MS, 15000);
 
 export class AgentRouter {
-  private readonly rgCache = new Map<string, RgCacheEntry>();
+  private readonly rgCache = new GenerationRgCache(RG_CACHE_TTL_MS);
   private rgHits = 0;
   private rgMisses = 0;
 
@@ -74,11 +74,12 @@ export class AgentRouter {
     private readonly sourceIndex: SourceIndex,
     private readonly layoutContext: LayoutContext = probeLayout(repoRoot),
     private readonly edgeStore: EdgeStore = new EdgeStore(repoRoot),
-    private readonly routingPolicy: RoutingPolicy = resolveRoutingPolicy(repoRoot)
+    private readonly routingPolicy: RoutingPolicy = resolveRoutingPolicy(repoRoot),
+    private readonly rgRunner: RgRunner = new RgRunner()
   ) {}
 
   rgCacheStatus(): RouterStatus {
-    this.evictExpiredRgCache();
+    this.rgCache.evictExpired();
     return {
       enabled: RG_CACHE_TTL_MS > 0,
       entries: this.rgCache.size,
@@ -93,7 +94,10 @@ export class AgentRouter {
     this.rgCache.clear();
   }
 
-  async impact(options: ImpactOptions): Promise<ImpactResult> {
+  async impact(
+    options: ImpactOptions,
+    budget: DeadlineBudget = DeadlineBudget.fromTimeout(DEFAULT_ROUTER_DEADLINE_MS)
+  ): Promise<ImpactResult> {
     const startedAt = Date.now();
     const phaseMs: Record<string, number> = {};
     const sourceBefore = await timed(phaseMs, "sourceStatusBefore", async () => this.sourceIndex.status());
@@ -147,7 +151,7 @@ export class AgentRouter {
       repoRoot: this.repoRoot,
       layoutContext: this.layoutContext,
       concurrency: RG_CONCURRENCY,
-      loadSummary: (section, currentOptions, currentAnchors) => this.rgSummary(section, currentOptions, currentAnchors)
+      loadSummary: (section, currentOptions, currentAnchors) => this.rgSummary(section, currentOptions, currentAnchors, budget)
     });
     const typeReferenceBefore = this.sourceIndex.status();
     await timed(phaseMs, "typeReference", async () => collectTypeReferenceCandidates({
@@ -239,37 +243,39 @@ export class AgentRouter {
     });
   }
 
-  private async rgSummary(section: RgPlanSection, options: ImpactOptions, anchors: readonly ResolvedAnchor[]): Promise<RgCommandSummary> {
-    this.evictExpiredRgCache();
+  private async rgSummary(
+    section: RgPlanSection,
+    options: ImpactOptions,
+    anchors: readonly ResolvedAnchor[],
+    budget: DeadlineBudget
+  ): Promise<RgCommandSummary> {
+    this.rgCache.evictExpired();
     const generation = this.session.cacheStatus().invalidations;
-    const key = JSON.stringify({ repoRoot: this.repoRoot, generation, section, focusModules: options.focusModules, excludeModules: options.excludeModules });
-    const cached = this.rgCache.get(key);
-    if (cached && cached.expiresAt > Date.now()) {
-      this.rgHits += 1;
-      return { ...cached.summary, cacheHit: true };
-    }
-    this.rgMisses += 1;
-    const summary = await loadRgCommandSummary({
+    const key = JSON.stringify({ repoRoot: this.repoRoot, section, focusModules: options.focusModules, excludeModules: options.excludeModules });
+    const score = (result: SearchResult): RgCommandSummary => summaryFromSearchResult({
+      policy: this.routingPolicy,
       repoRoot: this.repoRoot,
-      routingPolicy: this.routingPolicy,
       section,
+      result,
       anchors,
       options
     });
-    this.rgCache.set(key, {
-      generation,
-      expiresAt: Date.now() + RG_CACHE_TTL_MS,
-      summary
-    });
-    return summary;
-  }
 
-  private evictExpiredRgCache(): void {
-    const now = Date.now();
-    for (const [key, entry] of this.rgCache.entries()) {
-      if (entry.expiresAt <= now) {
-        this.rgCache.delete(key);
-      }
+    const cached = this.rgCache.get(key, generation);
+    if (cached) {
+      this.rgHits += 1;
+      return { ...score(cached), cacheHit: true };
     }
+    this.rgMisses += 1;
+    const result = await runRgSection({
+      repoRoot: this.repoRoot,
+      section,
+      budget,
+      runner: this.rgRunner
+    });
+    // GenerationRgCache drops anything that is not COMPLETE, so a timed-out or
+    // truncated search is re-executed next time instead of being reused.
+    this.rgCache.set(key, generation, result);
+    return score(result);
   }
 }

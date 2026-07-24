@@ -1,6 +1,8 @@
 // input: Public java_impact options and internal routing state.
 // output: Shared v5 agent router types.
 // pos: Type contracts for the lishuedu JDT LS MCP v5 router.
+import type { Completion } from "./runtime/completion.js";
+
 export type ImpactMode = "minimal" | "balanced" | "precision" | "recall";
 export type ImpactProfile = "auto" | "controller" | "service" | "port" | "repository" | "parser" | "dto" | "entity" | "mapper" | "vo" | "job" | "listener";
 export type ResolvedImpactProfile = Exclude<ImpactProfile, "auto">;
@@ -109,6 +111,7 @@ export type RgSectionSummary = {
   totalMatches: number;
   rawBytes: number;
   cacheHits: number;
+  completion: Completion;
   files: Array<Record<string, unknown>>;
 };
 

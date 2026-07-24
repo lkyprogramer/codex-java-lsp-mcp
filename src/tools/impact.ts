@@ -72,7 +72,7 @@ export async function javaImpact(context: ToolContext, args: z.infer<z.ZodObject
     crossModulePolicy: args.crossModulePolicy,
     verbosity: args.verbosity
   };
-  const result = await context.router.impact(options);
+  const result = await context.router.impact(options, budget);
   mergePhaseMs(phaseMs, context.session.drainPhaseMetrics());
   return withPhaseMs(result, phaseMs);
 }

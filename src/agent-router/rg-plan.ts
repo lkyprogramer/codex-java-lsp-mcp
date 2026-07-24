@@ -1,7 +1,9 @@
 import path from "node:path";
-import { classifyPath, normalizeRepoFile } from "../repo-layout.js";
+import { classifyPath } from "../repo-layout.js";
 import type { LayoutContext } from "../layout-probe.js";
 import type { RoutingPolicy } from "../routing-policy.js";
+import type { Completion } from "../runtime/completion.js";
+import type { SearchResult } from "../search/search-types.js";
 import type { CandidateFile, ImpactOptions, ResolvedAnchor, RgPlanSection } from "../agent-types.js";
 import { breakdown, scoreBase, unique } from "./candidate-helpers.js";
 import { classStem } from "./name-helpers.js";
@@ -30,6 +32,8 @@ export type RgCommandSummary = {
   elapsedMs: number;
   files: CandidateFile[];
   cacheHit: boolean;
+  /** Whether the underlying search actually finished; gates caching. */
+  completion: Completion;
 };
 
 type BuildRgPlanInput = {
@@ -39,12 +43,11 @@ type BuildRgPlanInput = {
   readonly layoutContext: LayoutContext;
 };
 
-type ParseRgOutputInput = {
+type SummaryFromSearchResultInput = {
   readonly policy: RoutingPolicy;
   readonly repoRoot: string;
   readonly section: RgPlanSection;
-  readonly stdout: string;
-  readonly elapsedMs: number;
+  readonly result: SearchResult;
   readonly anchors: readonly ResolvedAnchor[];
   readonly options: ImpactOptions;
 };
@@ -97,46 +100,34 @@ export function buildRgPlan(input: BuildRgPlanInput): RgPlanSection[] {
   return sections.filter(item => item.paths.length > 0 && item.pattern.length > 0);
 }
 
-export function parseRgOutput(input: ParseRgOutputInput): RgCommandSummary {
-  const files = new Map<string, CandidateFile>();
-  let totalMatches = 0;
-  for (const line of input.stdout.split(/\r?\n/)) {
-    const match = line.match(/^(.+?):(\d+):(.*)$/);
-    if (!match) {
-      continue;
-    }
-    totalMatches += 1;
-    const absolutePath = normalizeRepoFile(input.repoRoot, match[1]);
-    const lineNumber = Number(match[2]);
-    const context = classifyPath(input.repoRoot, absolutePath);
+export function summaryFromSearchResult(input: SummaryFromSearchResultInput): RgCommandSummary {
+  const files: CandidateFile[] = [];
+  for (const match of input.result.files) {
+    const context = classifyPath(input.repoRoot, match.absolutePath);
     const score = scoreBase(input.policy, input.section.category, context, input.anchors[0], input.options);
-    const existing = files.get(absolutePath) || {
-      absolutePath,
+    files.push({
+      absolutePath: match.absolutePath,
       path: context.relativePath,
       module: context.module,
       layer: context.layer,
       sourceSet: context.sourceSet,
       score,
-      matchCount: 0,
-      positions: [],
+      matchCount: match.matchCount,
+      positions: match.positions.map(position => ({ line: position.line, column: position.column })),
       categories: [input.section.category],
       reasons: [`rg:${input.section.category}`],
       confidence: "medium",
       verifiedBy: ["rg"],
       scoreBreakdown: [breakdown(`rg.${input.section.category}`, "rg", score, input.section.reason)]
-    };
-    existing.matchCount += 1;
-    if (existing.positions.length < 4) {
-      existing.positions.push({ line: lineNumber, column: 1 });
-    }
-    files.set(absolutePath, existing);
+    });
   }
   return {
-    rawBytes: Buffer.byteLength(input.stdout, "utf8"),
-    totalMatches,
-    elapsedMs: input.elapsedMs,
-    files: [...files.values()],
-    cacheHit: false
+    rawBytes: input.result.rawBytes,
+    totalMatches: input.result.totalMatches,
+    elapsedMs: Math.round(input.result.elapsedMs),
+    files,
+    cacheHit: false,
+    completion: input.result.completion
   };
 }
 
