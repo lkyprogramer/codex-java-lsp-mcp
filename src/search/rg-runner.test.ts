@@ -93,8 +93,10 @@ process.stdout.write(${JSON.stringify(matchLine("src/main/java/demo/A.java"))} +
 setInterval(() => {}, 1000);
 `, "utf8");
 
-  const runner = fakeRunner(script, { killGraceMs: 50 });
-  const result = await runner.run(query(root), DeadlineBudget.fromTimeout(100));
+  // Generous headroom: this asserts the SIGTERM->SIGKILL escalation, not tight
+  // timing, and the assertions do not depend on the exact deadline.
+  const runner = fakeRunner(script, { killGraceMs: 100 });
+  const result = await runner.run(query(root), DeadlineBudget.fromTimeout(400));
 
   assert.equal(result.completion, "PARTIAL_TIMEOUT");
   assert.equal(result.files.length, 1);

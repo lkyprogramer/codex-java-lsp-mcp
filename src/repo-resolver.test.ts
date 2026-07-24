@@ -36,7 +36,7 @@ test("resolver uses deepest enabled absolute root", async () => {
 
   const registry = new AliasRegistry(config);
   await registry.reloadIfChanged();
-  const resolved = new RepoResolver(registry).resolveEnablement(nested);
+  const resolved = await new RepoResolver(registry).resolveEnablement(nested);
 
   assert.equal(resolved.enabled, true);
   assert.equal(resolved.configuredRoot, canonicalPath(nested));
@@ -120,6 +120,10 @@ test("resolver lets Git worktrees inherit enablement without sharing runtime ide
   assert.equal(resolved.lsp.matchedBy, "git-worktree-family");
   assert.equal(resolved.lsp.configuredRoot, canonicalPath(root));
   assert.equal(resolved.lsp.effectiveRepoRoot, canonicalPath(reviewRoot));
+  // The resolved identity is canonical and matches the top-level ResolvedRepo.
+  assert.equal(resolved.worktree.repoRoot, resolved.repoRoot);
+  assert.equal(resolved.worktree.repoHash, resolved.repoHash);
+  assert.equal(resolved.worktree.isLinkedWorktree, true);
 });
 
 function hasGit(): boolean {

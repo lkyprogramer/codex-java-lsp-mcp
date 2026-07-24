@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { RepoRuntimeManager, type ManagedToolContext } from "./repo-runtime-manager.js";
+import { RepoRuntimeManager, type ManagedToolContext, type RuntimeCoordination } from "./repo-runtime-manager.js";
+import { GenerationClock, type RepoChangeBatch } from "./repo-generation.js";
 import { JavaIntelligenceError } from "./runtime/intelligence-error.js";
 import { deferred, delay, type Deferred } from "./test-support/fake-jdtls.js";
 import type { JdtlsLifecycleState } from "./jdtls-session.js";
@@ -12,7 +13,8 @@ test("RepoRuntimeManager evicts the oldest idle started runtime before starting 
     maxActiveRepos: 1,
     idleTtlMs: 100000,
     requestTimeoutMs: 100
-  }, resolved => fakeContext(resolved, sessions));
+  }, resolved => fakeContext(resolved, sessions),
+    fakeCoordination());
 
   await manager.withContext({ repoRoot: "/repo-a" }, async context => {
     await (context.session as unknown as FakeSession).ensureStarted();
@@ -32,7 +34,8 @@ test("RepoRuntimeManager fails fast when all active runtimes are in use", async 
     maxActiveRepos: 1,
     idleTtlMs: 100000,
     requestTimeoutMs: 30
-  }, resolved => fakeContext(resolved, sessions));
+  }, resolved => fakeContext(resolved, sessions),
+    fakeCoordination());
   const held = deferred<void>();
   const firstEntered = deferred<void>();
 
@@ -64,7 +67,8 @@ test("STARTING sessions count against the active repo limit", async () => {
     maxActiveRepos: 1,
     idleTtlMs: 100000,
     requestTimeoutMs: 5000
-  }, resolved => fakeContext(resolved, sessions, { "/repo-a": gateA }));
+  }, resolved => fakeContext(resolved, sessions, { "/repo-a": gateA }),
+    fakeCoordination());
 
   const first = manager.withContext({ repoRoot: "/repo-a" }, async context => {
     await (context.session as unknown as FakeSession).ensureStarted();
@@ -101,7 +105,8 @@ test("slot waiters are granted in FIFO order", async () => {
     maxActiveRepos: 1,
     idleTtlMs: 100000,
     requestTimeoutMs: 5000
-  }, resolved => fakeContext(resolved, sessions));
+  }, resolved => fakeContext(resolved, sessions),
+    fakeCoordination());
 
   const entered = deferred<void>();
   const first = manager.withContext({ repoRoot: "/repo-a" }, async context => {
@@ -139,7 +144,8 @@ test("a waiter that misses its deadline is removed and never granted later", asy
     maxActiveRepos: 1,
     idleTtlMs: 100000,
     requestTimeoutMs: 40
-  }, resolved => fakeContext(resolved, sessions));
+  }, resolved => fakeContext(resolved, sessions),
+    fakeCoordination());
 
   const entered = deferred<void>();
   const first = manager.withContext({ repoRoot: "/repo-a" }, async context => {
@@ -171,7 +177,8 @@ test("a reservation taken but never used is released for the next caller", async
     maxActiveRepos: 1,
     idleTtlMs: 100000,
     requestTimeoutMs: 5000
-  }, resolved => fakeContext(resolved, sessions));
+  }, resolved => fakeContext(resolved, sessions),
+    fakeCoordination());
 
   // mayStartLsp only means "the handler is allowed to start JDT", not that it will.
   await manager.withContext({ repoRoot: "/repo-a" }, async () => undefined, { mayStartLsp: true });
@@ -192,7 +199,8 @@ test("a session that breaks releases its slot to a queued waiter", async () => {
     maxActiveRepos: 1,
     idleTtlMs: 100000,
     requestTimeoutMs: 5000
-  }, resolved => fakeContext(resolved, sessions));
+  }, resolved => fakeContext(resolved, sessions),
+    fakeCoordination());
 
   const entered = deferred<void>();
   const first = manager.withContext({ repoRoot: "/repo-a" }, async context => {
@@ -225,7 +233,8 @@ test("activeRepos exposes lifecycle state and reservation", async () => {
     maxActiveRepos: 2,
     idleTtlMs: 100000,
     requestTimeoutMs: 5000
-  }, resolved => fakeContext(resolved, sessions));
+  }, resolved => fakeContext(resolved, sessions),
+    fakeCoordination());
 
   await manager.withContext({ repoRoot: "/repo-a" }, async context => {
     await (context.session as unknown as FakeSession).ensureStarted();
@@ -236,6 +245,28 @@ test("activeRepos exposes lifecycle state and reservation", async () => {
   assert.equal(entry.lifecycleState, "READY");
   assert.equal(entry.lspReservation, "READY");
   assert.equal(entry.started, true);
+});
+
+test("two concurrent contextFor calls share one runtime and one coordinator", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const coordinators = new Map<string, FakeCoordinator>();
+  let contextCalls = 0;
+  const manager = new RepoRuntimeManager(
+    fakeResolver(),
+    { maxActiveRepos: 2, idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    resolved => { contextCalls += 1; return fakeContext(resolved, sessions); },
+    fakeCoordination(coordinators)
+  );
+
+  const [a, b] = await Promise.all([
+    manager.contextFor({ repoRoot: "/repo-a" }),
+    manager.contextFor({ repoRoot: "/repo-a" })
+  ]);
+
+  assert.equal(a, b, "both callers receive the same context");
+  assert.equal(contextCalls, 1, "the runtime is created once");
+  assert.equal(coordinators.size, 1, "one coordinator for the shared runtime");
+  assert.equal([...coordinators.values()][0].starts, 1, "the watcher is started once");
 });
 
 async function waitFor(condition: () => boolean): Promise<void> {
@@ -283,9 +314,10 @@ function fakeResolver(): { resolve(selector: { repoRoot?: string }): Promise<Res
   return {
     async resolve(selector) {
       const repoRoot = selector.repoRoot || "/repo";
+      const repoHash = repoRoot.replace(/\W/g, "");
       return {
         repoRoot,
-        repoHash: repoRoot.replace(/\W/g, ""),
+        repoHash,
         rootSource: "explicit",
         aliases: [],
         layoutProfile: "generic-java",
@@ -294,10 +326,49 @@ function fakeResolver(): { resolve(selector: { repoRoot?: string }): Promise<Res
           matchedBy: "direct-root",
           configuredRoot: repoRoot,
           effectiveRepoRoot: repoRoot
-        }
+        },
+        worktree: { repoRoot, repoHash, isLinkedWorktree: false }
       };
     }
   };
+}
+
+class FakeCoordinator {
+  starts = 0;
+  closes = 0;
+  private readonly listeners = new Set<(batch: RepoChangeBatch) => void | Promise<void>>();
+  onBatch(listener: (batch: RepoChangeBatch) => void | Promise<void>): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+  async start(): Promise<void> { this.starts += 1; }
+  async flushNow(): Promise<void> {}
+  async close(): Promise<void> { this.closes += 1; }
+  status(): { ready: boolean; degraded: boolean; pending: number } {
+    return { ready: true, degraded: false, pending: 0 };
+  }
+}
+
+function fakeCoordination(coordinators?: Map<string, FakeCoordinator>) {
+  return (resolved: ResolvedRepo): RuntimeCoordination => {
+    const coordinator = new FakeCoordinator();
+    coordinators?.set(resolved.repoRoot, coordinator);
+    return { generation: new GenerationClock(), coordinator };
+  };
+}
+
+function managerWith(
+  options: Partial<{ maxActiveRepos: number; idleTtlMs: number; requestTimeoutMs: number }>,
+  sessions: Map<string, FakeSession>,
+  gates: Record<string, Deferred<void>> = {},
+  coordinators?: Map<string, FakeCoordinator>
+): RepoRuntimeManager {
+  return new RepoRuntimeManager(
+    fakeResolver(),
+    { idleTtlMs: 100000, requestTimeoutMs: 5000, ...options },
+    resolved => fakeContext(resolved, sessions, gates),
+    fakeCoordination(coordinators)
+  );
 }
 
 function fakeContext(

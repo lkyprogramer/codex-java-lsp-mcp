@@ -4,6 +4,7 @@
 import { AgentRouter } from "../agent-router/index.js";
 import { JdtlsSession } from "../jdtls-session.js";
 import { SourceIndex } from "../source-index.js";
+import type { WorktreeIdentity } from "../worktree-identity.js";
 
 export type ToolContext = {
   repoRoot: string;
@@ -11,6 +12,7 @@ export type ToolContext = {
   repoHash?: string;
   aliases?: string[];
   layoutProfile?: string;
+  worktree?: WorktreeIdentity;
   lsp?: {
     enabled: boolean;
     matchedBy: string;

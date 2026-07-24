@@ -3,12 +3,32 @@
 // pos: Lazy runtime manager; one context per canonical repoRoot with small LRU/idle control.
 import { AgentRouter } from "./agent-router/index.js";
 import { JdtlsSession, type JdtlsLifecycleState } from "./jdtls-session.js";
+import { probeLayout } from "./layout-probe.js";
+import { RepoChangeCoordinator } from "./repo-change-coordinator.js";
+import { GenerationClock, type RepoChangeBatch } from "./repo-generation.js";
+import { repoCacheBase } from "./repo-layout.js";
 import { RepoResolver, type RepoSelector, type ResolvedRepo } from "./repo-resolver.js";
 import { positiveInteger, resourceDefaults, type ResourceDefaults } from "./resource-defaults.js";
 import { DeadlineBudget } from "./runtime/deadline-budget.js";
 import { SourceIndex } from "./source-index.js";
 import type { ToolContext } from "./tools/context.js";
 import { touchRepoCache } from "./worktree-cache-cleanup.js";
+
+/** The subset of RepoChangeCoordinator the runtime manager depends on. */
+export interface RuntimeCoordinator {
+  start(): Promise<void>;
+  flushNow(): Promise<void>;
+  close(): Promise<void>;
+  onBatch(listener: (batch: RepoChangeBatch) => void | Promise<void>): () => void;
+  status(): { ready: boolean; degraded: boolean; pending: number };
+}
+
+export type RuntimeCoordination = {
+  generation: GenerationClock;
+  coordinator: RuntimeCoordinator;
+};
+
+export type CoordinationFactory = (resolved: ResolvedRepo) => RuntimeCoordination;
 
 export type ManagedToolContext = ToolContext & {
   repoHash: string;
@@ -27,6 +47,9 @@ type LspReservation = "NONE" | "STARTING" | "READY";
 
 type RuntimeEntry = {
   context: ManagedToolContext;
+  generation: GenerationClock;
+  coordinator: RuntimeCoordinator;
+  ready: Promise<void>;
   refCount: number;
   lastUsedAt: number;
   idleTimer?: NodeJS.Timeout;
@@ -49,6 +72,7 @@ type RuntimeManagerOptions = {
 
 export class RepoRuntimeManager {
   private readonly runtimes = new Map<string, RuntimeEntry>();
+  private readonly creating = new Map<string, Promise<RuntimeEntry>>();
   private readonly slotWaiters: SlotWaiter[] = [];
   private servicingWaiters = false;
   private readonly options: RuntimeManagerOptions;
@@ -57,7 +81,8 @@ export class RepoRuntimeManager {
   constructor(
     private readonly resolver: Pick<RepoResolver, "resolve">,
     options: Partial<RuntimeManagerOptions> = {},
-    private readonly runtimeFactory: (resolved: ResolvedRepo) => ManagedToolContext = createRuntime
+    private readonly runtimeFactory: (resolved: ResolvedRepo) => ManagedToolContext = createRuntime,
+    private readonly coordinationFactory: CoordinationFactory = createCoordination
   ) {
     this.defaults = resourceDefaults();
     this.options = {
@@ -70,7 +95,7 @@ export class RepoRuntimeManager {
 
   async contextFor(selector: RepoSelector): Promise<ManagedToolContext> {
     const resolved = await this.resolver.resolve(selector);
-    const entry = this.getOrCreate(resolved);
+    const entry = await this.getOrCreate(resolved);
     this.refreshResource(entry);
     return entry.context;
   }
@@ -81,7 +106,7 @@ export class RepoRuntimeManager {
     options: { mayStartLsp?: boolean } = {}
   ): Promise<T> {
     const resolved = await this.resolver.resolve(selector);
-    const entry = this.getOrCreate(resolved);
+    const entry = await this.getOrCreate(resolved);
     this.refreshResource(entry);
     entry.refCount += 1;
     if (entry.idleTimer) {
@@ -159,38 +184,64 @@ export class RepoRuntimeManager {
       waiter.cancel();
     }
     await Promise.all([...this.runtimes.values()].map(entry => this.stopEntry(entry)));
+    // The coordinator is the freshness engine, independent of the JDT session,
+    // so it is closed only when the whole manager shuts down.
+    await Promise.all([...this.runtimes.values()].map(entry => entry.coordinator.close()));
     for (const entry of this.runtimes.values()) {
       entry.unsubscribeLifecycle?.();
       entry.unsubscribeLifecycle = undefined;
     }
   }
 
-  private getOrCreate(resolved: ResolvedRepo): RuntimeEntry {
-    let entry = this.runtimes.get(resolved.repoRoot);
+  /** Singleflight so two concurrent requests share one runtime/coordinator/watcher. */
+  private async getOrCreate(resolved: ResolvedRepo): Promise<RuntimeEntry> {
     touchRepoCache(resolved.repoRoot);
-    if (!entry) {
-      const created: RuntimeEntry = {
-        context: this.runtimeFactory(resolved),
-        refCount: 0,
-        lastUsedAt: Date.now(),
-        lspReservation: "NONE"
-      };
-      created.unsubscribeLifecycle = created.context.session.onLifecycleChange(state => {
-        if (state === "STARTING") created.lspReservation = "STARTING";
-        else if (state === "READY") created.lspReservation = "READY";
-        else {
-          created.lspReservation = "NONE";
-          this.drainSlotWaiters();
-        }
-      });
-      entry = created;
-      this.runtimes.set(resolved.repoRoot, entry);
-    } else {
-      entry.context.aliases = resolved.aliases;
-      entry.context.rootSource = resolved.rootSource;
-      entry.context.layoutProfile = resolved.layoutProfile;
-      entry.context.lsp = resolved.lsp;
+    const existing = this.runtimes.get(resolved.repoRoot);
+    if (existing) {
+      existing.context.aliases = resolved.aliases;
+      existing.context.rootSource = resolved.rootSource;
+      existing.context.layoutProfile = resolved.layoutProfile;
+      existing.context.lsp = resolved.lsp;
+      existing.context.worktree = resolved.worktree;
+      return existing;
     }
+    const pending = this.creating.get(resolved.repoRoot);
+    if (pending) return pending;
+    const operation = this.createEntry(resolved).finally(() => {
+      if (this.creating.get(resolved.repoRoot) === operation) {
+        this.creating.delete(resolved.repoRoot);
+      }
+    });
+    this.creating.set(resolved.repoRoot, operation);
+    return operation;
+  }
+
+  private async createEntry(resolved: ResolvedRepo): Promise<RuntimeEntry> {
+    const { generation, coordinator } = this.coordinationFactory(resolved);
+    const entry: RuntimeEntry = {
+      context: this.runtimeFactory(resolved),
+      generation,
+      coordinator,
+      ready: Promise.resolve(),
+      refCount: 0,
+      lastUsedAt: Date.now(),
+      lspReservation: "NONE"
+    };
+    entry.unsubscribeLifecycle = entry.context.session.onLifecycleChange(state => {
+      if (state === "STARTING") entry.lspReservation = "STARTING";
+      else if (state === "READY") entry.lspReservation = "READY";
+      else {
+        entry.lspReservation = "NONE";
+        this.drainSlotWaiters();
+      }
+    });
+    // Register a listener before start() so the first event cannot be lost.
+    // Task 10 replaces this placeholder with cache/index/edge invalidation.
+    coordinator.onBatch(() => {});
+    // Store the readiness promise; the freshness barrier (Task 10) waits on it
+    // only within the request budget, so a slow initial scan never blocks here.
+    entry.ready = coordinator.start();
+    this.runtimes.set(resolved.repoRoot, entry);
     return entry;
   }
 
@@ -341,8 +392,21 @@ function createRuntime(resolved: ResolvedRepo): ManagedToolContext {
     aliases: resolved.aliases,
     layoutProfile: resolved.layoutProfile,
     lsp: resolved.lsp,
+    worktree: resolved.worktree,
     session,
     sourceIndex,
     router
   };
+}
+
+function createCoordination(resolved: ResolvedRepo): RuntimeCoordination {
+  const generation = new GenerationClock();
+  const coordinator = new RepoChangeCoordinator(
+    resolved.repoRoot,
+    resolved.worktree,
+    repoCacheBase(),
+    generation,
+    () => probeLayout(resolved.repoRoot, resolved.layoutProfile)
+  );
+  return { generation, coordinator };
 }

@@ -25,7 +25,7 @@ try {
   const registry = new AliasRegistry();
   await registry.reloadIfChanged();
   const resolver = new RepoResolver(registry);
-  const lsp = resolver.resolveEnablement(cwd);
+  const lsp = await resolver.resolveEnablement(cwd);
   if (!lsp.enabled || !looksJavaSemantic(prompt)) {
     writeContinue();
   } else {
