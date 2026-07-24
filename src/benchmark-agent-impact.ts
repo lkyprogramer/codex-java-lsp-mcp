@@ -10,7 +10,7 @@ import { AgentRouter } from "./agent-router/index.js";
 import type { ImpactOptions } from "./agent-types.js";
 import { readRuntimeBuild } from "./build-info.js";
 import { DeadlineBudget } from "./runtime/deadline-budget.js";
-import { defaultDeadlineMs, MAX_REQUEST_DEADLINE_MS } from "./runtime/request-context.js";
+import { createRequestContext, defaultDeadlineMs, MAX_REQUEST_DEADLINE_MS } from "./runtime/request-context.js";
 import { JdtlsSession } from "./jdtls-session.js";
 import { SourceIndex } from "./source-index.js";
 
@@ -212,7 +212,20 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
       verbosity: cli.verbosity,
       readPlanMaxItems: cli.readPlanMaxItems
     },
-    DeadlineBudget.fromTimeout(cli.deadlineMs)
+    // The benchmark has no live watcher, so it uses generation 0 with caches
+    // enabled — the pre-freshness behavior — under the same production budget.
+    createRequestContext({
+      repoRoot: cli.repoRoot,
+      repoHash: "benchmark",
+      generation: 0,
+      freshnessMode: "NORMAL",
+      cacheReadAllowed: true,
+      cacheWriteAllowed: true,
+      negativeLookupAllowed: false,
+      mode: cli.mode,
+      semanticPolicy: effectiveSemanticPolicy(cli),
+      budget: DeadlineBudget.fromTimeout(cli.deadlineMs)
+    })
   );
   const elapsedMs = performance.now() - startedAt;
   const rawSearchPayload = Buffer.byteLength(JSON.stringify(result), "utf8");

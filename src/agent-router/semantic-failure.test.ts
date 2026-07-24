@@ -6,6 +6,7 @@ import path from "node:path";
 import { AgentRouter } from "./index.js";
 import { SourceIndex } from "../source-index.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
+import { createRequestContext } from "../runtime/request-context.js";
 import { JavaIntelligenceError, type JavaIntelligenceErrorCode } from "../runtime/intelligence-error.js";
 import type { ImpactOptions } from "../agent-types.js";
 
@@ -61,7 +62,7 @@ for (const code of ["JDT_BACKOFF", "JDT_CONFIG_ERROR", "JDT_BROKEN", "DEADLINE_E
     const { repoRoot, anchorFile } = buildRepo();
     const router = routerThatThrows(repoRoot, code, `simulated ${code}`);
 
-    const result = await router.impact(options(anchorFile, repoRoot), DeadlineBudget.fromTimeout(5000));
+    const result = await router.impact(options(anchorFile, repoRoot), createRequestContext({ repoRoot, repoHash: "test", generation: 0, freshnessMode: "NORMAL", cacheReadAllowed: true, cacheWriteAllowed: true, negativeLookupAllowed: false, mode: "balanced", semanticPolicy: "fast", budget: DeadlineBudget.fromTimeout(5000) }));
 
     // The lexical and structural evidence must still be delivered.
     assert.equal(Array.isArray(result.files), true);
@@ -76,7 +77,7 @@ test("a JDT failure is not reported as a timeout unless it actually was one", as
   const { repoRoot, anchorFile } = buildRepo();
   const router = routerThatThrows(repoRoot, "JDT_BACKOFF", "simulated backoff");
 
-  const result = await router.impact(options(anchorFile, repoRoot), DeadlineBudget.fromTimeout(5000));
+  const result = await router.impact(options(anchorFile, repoRoot), createRequestContext({ repoRoot, repoHash: "test", generation: 0, freshnessMode: "NORMAL", cacheReadAllowed: true, cacheWriteAllowed: true, negativeLookupAllowed: false, mode: "balanced", semanticPolicy: "fast", budget: DeadlineBudget.fromTimeout(5000) }));
 
   const semantic = result.metrics.semantic as Record<string, unknown>;
   assert.equal(semantic.timeout, false, "backoff is not a timeout");

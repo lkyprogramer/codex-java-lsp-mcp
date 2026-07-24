@@ -7,6 +7,7 @@ import { AgentRouter } from "./index.js";
 import { SourceIndex } from "../source-index.js";
 import { RgRunner } from "../search/rg-runner.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
+import { createRequestContext } from "../runtime/request-context.js";
 import type { Completion } from "../runtime/completion.js";
 import type { RgQuery, SearchResult } from "../search/search-types.js";
 import type { ImpactOptions } from "../agent-types.js";
@@ -97,11 +98,11 @@ test("a partial rg result is never cached, so the next request runs rg again", a
   const router = routerWith(runner, repoRoot);
   const options = impactOptions(anchorFile, repoRoot);
 
-  const first = await router.impact(options, DeadlineBudget.fromTimeout(5000));
+  const first = await router.impact(options, createRequestContext({ repoRoot, repoHash: "test", generation: 0, freshnessMode: "NORMAL", cacheReadAllowed: true, cacheWriteAllowed: true, negativeLookupAllowed: false, mode: "balanced", semanticPolicy: "fast", budget: DeadlineBudget.fromTimeout(5000) }));
   const callsAfterFirst = runner.calls;
   assert.equal(callsAfterFirst > 0, true, "the first request executes rg");
 
-  const second = await router.impact(options, DeadlineBudget.fromTimeout(5000));
+  const second = await router.impact(options, createRequestContext({ repoRoot, repoHash: "test", generation: 0, freshnessMode: "NORMAL", cacheReadAllowed: true, cacheWriteAllowed: true, negativeLookupAllowed: false, mode: "balanced", semanticPolicy: "fast", budget: DeadlineBudget.fromTimeout(5000) }));
   assert.equal(
     runner.calls,
     callsAfterFirst * 2,
@@ -130,11 +131,11 @@ test("a complete rg result is cached and the next request reuses it", async () =
   const router = routerWith(runner, repoRoot);
   const options = impactOptions(anchorFile, repoRoot);
 
-  await router.impact(options, DeadlineBudget.fromTimeout(5000));
+  await router.impact(options, createRequestContext({ repoRoot, repoHash: "test", generation: 0, freshnessMode: "NORMAL", cacheReadAllowed: true, cacheWriteAllowed: true, negativeLookupAllowed: false, mode: "balanced", semanticPolicy: "fast", budget: DeadlineBudget.fromTimeout(5000) }));
   const callsAfterFirst = runner.calls;
   assert.equal(callsAfterFirst > 0, true);
 
-  const second = await router.impact(options, DeadlineBudget.fromTimeout(5000));
+  const second = await router.impact(options, createRequestContext({ repoRoot, repoHash: "test", generation: 0, freshnessMode: "NORMAL", cacheReadAllowed: true, cacheWriteAllowed: true, negativeLookupAllowed: false, mode: "balanced", semanticPolicy: "fast", budget: DeadlineBudget.fromTimeout(5000) }));
   assert.equal(runner.calls, callsAfterFirst, "a complete search is reused");
   assert.equal(
     second.rgSummary.sections.every(section => section.cacheHits === 1),
@@ -148,9 +149,9 @@ test("a failed rg result is not cached either", async () => {
   const router = routerWith(runner, repoRoot);
   const options = impactOptions(anchorFile, repoRoot);
 
-  await router.impact(options, DeadlineBudget.fromTimeout(5000));
+  await router.impact(options, createRequestContext({ repoRoot, repoHash: "test", generation: 0, freshnessMode: "NORMAL", cacheReadAllowed: true, cacheWriteAllowed: true, negativeLookupAllowed: false, mode: "balanced", semanticPolicy: "fast", budget: DeadlineBudget.fromTimeout(5000) }));
   const callsAfterFirst = runner.calls;
-  await router.impact(options, DeadlineBudget.fromTimeout(5000));
+  await router.impact(options, createRequestContext({ repoRoot, repoHash: "test", generation: 0, freshnessMode: "NORMAL", cacheReadAllowed: true, cacheWriteAllowed: true, negativeLookupAllowed: false, mode: "balanced", semanticPolicy: "fast", budget: DeadlineBudget.fromTimeout(5000) }));
 
   assert.equal(runner.calls, callsAfterFirst * 2);
 });

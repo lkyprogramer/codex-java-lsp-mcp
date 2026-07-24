@@ -35,6 +35,8 @@ import { collectNamingRecall } from "./naming-recall.js";
 import { runRgSection } from "./rg-execution.js";
 import { summaryFromSearchResult, type RgCommandSummary } from "./rg-plan.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
+import type { RepoChangeBatch } from "../repo-generation.js";
+import type { RequestContext } from "../runtime/request-context.js";
 import { GenerationRgCache } from "../search/rg-cache.js";
 import { RgRunner } from "../search/rg-runner.js";
 import type { SearchResult } from "../search/search-types.js";
@@ -94,10 +96,39 @@ export class AgentRouter {
     this.rgCache.clear();
   }
 
+  /** Drop cache entries taken before the current generation. */
+  invalidateGeneration(generation: number): void {
+    this.rgCache.invalidateBefore(generation);
+  }
+
+  /**
+   * Applies a coordinator change batch: the rg cache is invalidated below the
+   * new generation, and any Java or build change clears the semantic edge store.
+   * Iteration B keeps this deliberately coarse; Task 33 adds selective eviction.
+   */
+  onRepoChanged(batch: RepoChangeBatch): void {
+    this.rgCache.invalidateBefore(batch.generation);
+    const semantic = batch.changes.some(change =>
+      change.kind === "JAVA_ADD"
+      || change.kind === "JAVA_CHANGE"
+      || change.kind === "JAVA_DELETE"
+      || change.kind === "BUILD_CHANGE");
+    if (semantic) this.edgeStore.invalidateAll();
+  }
+
   async impact(
     options: ImpactOptions,
-    budget: DeadlineBudget = DeadlineBudget.fromTimeout(DEFAULT_ROUTER_DEADLINE_MS)
+    request?: RequestContext
   ): Promise<ImpactResult> {
+    const budget = request?.budget ?? DeadlineBudget.fromTimeout(DEFAULT_ROUTER_DEADLINE_MS);
+    // A generation of 0 with reads/writes allowed reproduces the pre-freshness
+    // behavior for callers (benchmarks/tests) that do not build a RequestContext.
+    const freshness = request ?? {
+      generation: 0,
+      cacheReadAllowed: true,
+      cacheWriteAllowed: true,
+      freshnessMode: "NORMAL" as const
+    };
     const startedAt = Date.now();
     const phaseMs: Record<string, number> = {};
     const sourceBefore = await timed(phaseMs, "sourceStatusBefore", async () => this.sourceIndex.status());
@@ -151,7 +182,7 @@ export class AgentRouter {
       repoRoot: this.repoRoot,
       layoutContext: this.layoutContext,
       concurrency: RG_CONCURRENCY,
-      loadSummary: (section, currentOptions, currentAnchors) => this.rgSummary(section, currentOptions, currentAnchors, budget)
+      loadSummary: (section, currentOptions, currentAnchors) => this.rgSummary(section, currentOptions, currentAnchors, budget, freshness)
     });
     const typeReferenceBefore = this.sourceIndex.status();
     await timed(phaseMs, "typeReference", async () => collectTypeReferenceCandidates({
@@ -240,7 +271,13 @@ export class AgentRouter {
         persistedSemantic,
         cache: sessionCacheDelta(cacheBefore, cacheAfter),
         rgCache: rgCacheDelta(rgBefore, rgAfter),
-        sourceFacts: sourceFactsDelta(sourceBefore, sourceAfter, anchors)
+        sourceFacts: sourceFactsDelta(sourceBefore, sourceAfter, anchors),
+        freshness: {
+          requestGeneration: freshness.generation,
+          freshnessMode: freshness.freshnessMode,
+          cacheReadAllowed: freshness.cacheReadAllowed,
+          cacheWriteAllowed: freshness.cacheWriteAllowed
+        }
       }
     });
   }
@@ -249,10 +286,14 @@ export class AgentRouter {
     section: RgPlanSection,
     options: ImpactOptions,
     anchors: readonly ResolvedAnchor[],
-    budget: DeadlineBudget
+    budget: DeadlineBudget,
+    freshness: RouterFreshness
   ): Promise<RgCommandSummary> {
     this.rgCache.evictExpired();
-    const generation = this.session.cacheStatus().invalidations;
+    // The request's repo generation is the single cache key dimension. The old
+    // session.cacheStatus().invalidations source was 0 on the fast path, so an
+    // edit never invalidated an rg result (C-03).
+    const generation = freshness.generation;
     const key = JSON.stringify({ repoRoot: this.repoRoot, section, focusModules: options.focusModules, excludeModules: options.excludeModules });
     const score = (result: SearchResult): RgCommandSummary => summaryFromSearchResult({
       policy: this.routingPolicy,
@@ -263,7 +304,7 @@ export class AgentRouter {
       options
     });
 
-    const cached = this.rgCache.get(key, generation);
+    const cached = freshness.cacheReadAllowed ? this.rgCache.get(key, generation) : undefined;
     if (cached) {
       this.rgHits += 1;
       return { ...score(cached), cacheHit: true };
@@ -275,9 +316,18 @@ export class AgentRouter {
       budget,
       runner: this.rgRunner
     });
-    // GenerationRgCache drops anything that is not COMPLETE, so a timed-out or
-    // truncated search is re-executed next time instead of being reused.
-    this.rgCache.set(key, generation, result);
+    // GenerationRgCache drops anything that is not COMPLETE; a dirty/degraded
+    // request additionally forbids writes so a stale generation is never stored.
+    if (freshness.cacheWriteAllowed) {
+      this.rgCache.set(key, generation, result);
+    }
     return score(result);
   }
 }
+
+type RouterFreshness = {
+  generation: number;
+  cacheReadAllowed: boolean;
+  cacheWriteAllowed: boolean;
+  freshnessMode: RequestContext["freshnessMode"];
+};

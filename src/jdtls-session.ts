@@ -315,6 +315,22 @@ export class JdtlsSession {
     for (const listener of this.lifecycleListeners) listener(next);
   }
 
+  /**
+   * Applies a coordinator change batch to the JDT completed-request cache.
+   * Changed/deleted files evict their dependent entries; a build change clears
+   * everything because classpath/import semantics may have shifted.
+   */
+  invalidateForRepoChanges(batch: { changes: ReadonlyArray<{ kind: string; absolutePath: string }> }): void {
+    if (batch.changes.some(change => change.kind === "BUILD_CHANGE")) {
+      this.clearCache();
+      return;
+    }
+    const files = batch.changes
+      .filter(change => change.kind.startsWith("JAVA_"))
+      .map(change => change.absolutePath);
+    if (files.length > 0) this.invalidateCacheFor(files);
+  }
+
   drainPhaseMetrics(): Record<string, number> {
     const metrics = this.phaseMetrics;
     this.phaseMetrics = {};

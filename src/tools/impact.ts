@@ -5,7 +5,7 @@ import { z } from "zod";
 import { documentSymbolLimiter } from "../document-symbol-limiter.js";
 import { normalizeRepoFile } from "../repo-layout.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
-import { defaultDeadlineMs, MAX_REQUEST_DEADLINE_MS } from "../runtime/request-context.js";
+import { defaultDeadlineMs, MAX_REQUEST_DEADLINE_MS, type RequestContext } from "../runtime/request-context.js";
 import type { ToolContext } from "./context.js";
 import type { ImpactAnchorInput, ImpactOptions, ImpactResult, ImpactVerbosity } from "../agent-types.js";
 
@@ -41,13 +41,19 @@ export const impactSchema = {
   verbosity: z.enum(["compact", "standard", "diagnostic"]).default("standard")
 };
 
-export async function javaImpact(context: ToolContext, args: z.infer<z.ZodObject<typeof impactSchema>>): Promise<unknown> {
+export async function javaImpact(
+  context: ToolContext,
+  args: z.infer<z.ZodObject<typeof impactSchema>>,
+  request?: RequestContext
+): Promise<unknown> {
   if (args.semanticPolicy === "required" && context.lsp && !context.lsp.enabled) {
     throw new Error(context.lsp.enableHint || "This repo is not LSP-enabled.");
   }
   const semanticPolicy = context.lsp?.enabled ? args.semanticPolicy : "fast";
   const anchors = normalizeAnchors(args);
-  const budget = DeadlineBudget.fromTimeout(Math.min(
+  // The runtime manager's freshness barrier owns the request budget and
+  // generation. Fall back to a local budget only when called without one.
+  const budget = request?.budget ?? DeadlineBudget.fromTimeout(Math.min(
     MAX_REQUEST_DEADLINE_MS,
     args.deadlineMs ?? defaultDeadlineMs(args.mode, semanticPolicy)
   ));
@@ -72,7 +78,7 @@ export async function javaImpact(context: ToolContext, args: z.infer<z.ZodObject
     crossModulePolicy: args.crossModulePolicy,
     verbosity: args.verbosity
   };
-  const result = await context.router.impact(options, budget);
+  const result = await context.router.impact(options, request);
   mergePhaseMs(phaseMs, context.session.drainPhaseMetrics());
   return withPhaseMs(result, phaseMs);
 }

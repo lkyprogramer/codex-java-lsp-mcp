@@ -343,6 +343,7 @@ class FakeCoordinator {
   }
   async start(): Promise<void> { this.starts += 1; }
   async flushNow(): Promise<void> {}
+  async awaitReadyWithin(): Promise<boolean> { return true; }
   async close(): Promise<void> { this.closes += 1; }
   status(): { ready: boolean; degraded: boolean; pending: number } {
     return { ready: true, degraded: false, pending: 0 };

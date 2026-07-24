@@ -1,6 +1,8 @@
-// input: A resolved repo plus the public java_impact options.
-// output: The per-request identity, generation and absolute budget every stage shares.
-// pos: Created once per MCP request; never rebuilt inside a provider.
+// input: A resolved repo plus the public java_impact options and freshness state.
+// output: The per-request identity, generation, freshness policy and absolute
+//         budget every stage shares.
+// pos: Created once per MCP request by the runtime manager's freshness barrier;
+//      never rebuilt inside a provider and never stored on shared runtime state.
 import { randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { DeadlineBudget } from "./deadline-budget.js";
@@ -8,11 +10,22 @@ import { DeadlineBudget } from "./deadline-budget.js";
 export type RequestMode = "minimal" | "balanced" | "precision" | "recall";
 export type SemanticPolicy = "fast" | "auto" | "required";
 
+export type RequestFreshnessMode =
+  | "NORMAL"
+  | "WATCHER_NOT_READY"
+  | "WATCHER_DEGRADED"
+  | "RECONCILING";
+
 export type RequestContext = {
   requestId: string;
   repoRoot: string;
   repoHash: string;
+  familyHash?: string;
   generation: number;
+  freshnessMode: RequestFreshnessMode;
+  cacheReadAllowed: boolean;
+  cacheWriteAllowed: boolean;
+  negativeLookupAllowed: boolean;
   mode: RequestMode;
   budget: DeadlineBudget;
   startedAtMs: number;
@@ -30,10 +43,16 @@ export function defaultDeadlineMs(mode: RequestMode, policy: SemanticPolicy): nu
 export function createRequestContext(input: {
   repoRoot: string;
   repoHash: string;
+  familyHash?: string;
   generation: number;
+  freshnessMode: RequestFreshnessMode;
+  cacheReadAllowed: boolean;
+  cacheWriteAllowed: boolean;
+  negativeLookupAllowed: boolean;
   mode: RequestMode;
   semanticPolicy: SemanticPolicy;
   deadlineMs?: number;
+  budget?: DeadlineBudget;
 }): RequestContext {
   const deadlineMs = Math.min(
     MAX_REQUEST_DEADLINE_MS,
@@ -43,9 +62,14 @@ export function createRequestContext(input: {
     requestId: randomUUID(),
     repoRoot: input.repoRoot,
     repoHash: input.repoHash,
+    familyHash: input.familyHash,
     generation: input.generation,
+    freshnessMode: input.freshnessMode,
+    cacheReadAllowed: input.cacheReadAllowed,
+    cacheWriteAllowed: input.cacheWriteAllowed,
+    negativeLookupAllowed: input.negativeLookupAllowed,
     mode: input.mode,
-    budget: DeadlineBudget.fromTimeout(deadlineMs),
+    budget: input.budget ?? DeadlineBudget.fromTimeout(deadlineMs),
     startedAtMs: performance.now()
   };
 }

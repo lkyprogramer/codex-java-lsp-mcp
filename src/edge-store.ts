@@ -105,6 +105,13 @@ export class EdgeStore {
     }
   }
 
+  /** Coarse eviction: drop all cached edges on any repo change (Iteration B). */
+  invalidateAll(): void {
+    if (this.edgesByFrom.size === 0) return;
+    this.invalidated += this.edgesByFrom.size;
+    this.edgesByFrom.clear();
+  }
+
   edgesFor(fromFile: string): SemanticEdge[] {
     const records = this.edgesByFrom.get(fromFile);
     if (!records || records.length === 0) {

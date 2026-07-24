@@ -29,6 +29,7 @@ type BuildImpactResultInput = {
     readonly cache: Record<string, unknown>;
     readonly rgCache: Record<string, unknown>;
     readonly sourceFacts: Record<string, unknown>;
+    readonly freshness: Record<string, unknown>;
   };
 };
 
@@ -77,6 +78,7 @@ export function buildImpactResult(input: BuildImpactResultInput): ImpactResult {
       cache: input.metrics.cache,
       rgCache: input.metrics.rgCache,
       sourceFacts: input.metrics.sourceFacts,
+      freshness: input.metrics.freshness,
       outputBytes: 0
     }
   };
@@ -136,6 +138,8 @@ export function applyVerbosity(payload: ImpactResult, verbosity: ImpactVerbosity
     routingVersion: payload.metrics.routingVersion,
     elapsedMs: payload.metrics.elapsedMs,
     semantic: slimSemantic(payload.metrics.semantic),
+    // Freshness is a small correctness signal; keep it in every verbosity.
+    freshness: payload.metrics.freshness,
     outputBytes: payload.metrics.outputBytes
   });
 }

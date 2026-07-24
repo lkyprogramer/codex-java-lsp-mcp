@@ -10,14 +10,33 @@ import { repoCacheBase } from "./repo-layout.js";
 import { RepoResolver, type RepoSelector, type ResolvedRepo } from "./repo-resolver.js";
 import { positiveInteger, resourceDefaults, type ResourceDefaults } from "./resource-defaults.js";
 import { DeadlineBudget } from "./runtime/deadline-budget.js";
+import {
+  createRequestContext,
+  defaultDeadlineMs,
+  MAX_REQUEST_DEADLINE_MS,
+  type RequestContext,
+  type RequestFreshnessMode,
+  type RequestMode,
+  type SemanticPolicy
+} from "./runtime/request-context.js";
 import { SourceIndex } from "./source-index.js";
 import type { ToolContext } from "./tools/context.js";
 import { touchRepoCache } from "./worktree-cache-cleanup.js";
+
+export type RequestOptionsInput = {
+  mode: RequestMode;
+  semanticPolicy: SemanticPolicy;
+  deadlineMs?: number;
+};
+
+/** How long a watcher-ready wait may borrow from the request budget. */
+const WATCHER_READY_CAP_MS = 2000;
 
 /** The subset of RepoChangeCoordinator the runtime manager depends on. */
 export interface RuntimeCoordinator {
   start(): Promise<void>;
   flushNow(): Promise<void>;
+  awaitReadyWithin(ms: number): Promise<boolean>;
   close(): Promise<void>;
   onBatch(listener: (batch: RepoChangeBatch) => void | Promise<void>): () => void;
   status(): { ready: boolean; degraded: boolean; pending: number };
@@ -102,8 +121,8 @@ export class RepoRuntimeManager {
 
   async withContext<T>(
     selector: RepoSelector,
-    handler: (context: ManagedToolContext) => Promise<T>,
-    options: { mayStartLsp?: boolean } = {}
+    handler: (context: ManagedToolContext, request: RequestContext) => Promise<T>,
+    options: { mayStartLsp?: boolean; requestOptions?: RequestOptionsInput } = {}
   ): Promise<T> {
     const resolved = await this.resolver.resolve(selector);
     const entry = await this.getOrCreate(resolved);
@@ -114,10 +133,11 @@ export class RepoRuntimeManager {
       entry.idleTimer = undefined;
     }
     try {
+      const request = await this.prepareRequestContext(entry, options.requestOptions);
       if (options.mayStartLsp) {
         await this.reserveLspSlot(entry, DeadlineBudget.fromTimeout(this.options.requestTimeoutMs));
       }
-      return await handler(entry.context);
+      return await handler(entry.context, request);
     } finally {
       entry.refCount = Math.max(0, entry.refCount - 1);
       entry.lastUsedAt = Date.now();
@@ -125,6 +145,65 @@ export class RepoRuntimeManager {
       this.scheduleIdleShutdown(entry);
       void this.serviceSlotWaiters();
     }
+  }
+
+  /**
+   * The freshness barrier: settle the watcher, reconcile if dirty, then fix the
+   * request's generation and cache policy. A watcher-ready timeout is not a
+   * failure — the request proceeds DEGRADED with caches and negative answers off.
+   */
+  private async prepareRequestContext(
+    entry: RuntimeEntry,
+    requestOptions?: RequestOptionsInput
+  ): Promise<RequestContext> {
+    const mode = requestOptions?.mode ?? "balanced";
+    const semanticPolicy = requestOptions?.semanticPolicy ?? "auto";
+    const deadlineMs = Math.min(
+      MAX_REQUEST_DEADLINE_MS,
+      requestOptions?.deadlineMs ?? defaultDeadlineMs(mode, semanticPolicy)
+    );
+    const budget = DeadlineBudget.fromTimeout(deadlineMs);
+
+    const ready = await entry.coordinator.awaitReadyWithin(
+      Math.min(WATCHER_READY_CAP_MS, budget.remainingMs())
+    );
+
+    let freshnessMode: RequestFreshnessMode;
+    let cacheReadAllowed = false;
+    let cacheWriteAllowed = false;
+    const negativeLookupAllowed = false; // coverage tracking arrives in Task 11 / Iteration C
+
+    if (ready) {
+      await entry.coordinator.flushNow();      // already-delivered debounced events
+      await this.reconcileIfDirty(entry);      // Task 11 fills this; no-op while clean
+      await entry.coordinator.flushNow();      // events delivered during reconcile
+      const clock = entry.generation.snapshot();
+      freshnessMode = clock.dirty ? "WATCHER_DEGRADED" : "NORMAL";
+      cacheReadAllowed = !clock.dirty;
+      cacheWriteAllowed = !clock.dirty;
+    } else {
+      freshnessMode = entry.generation.snapshot().dirty ? "WATCHER_DEGRADED" : "WATCHER_NOT_READY";
+    }
+
+    return createRequestContext({
+      repoRoot: entry.context.repoRoot,
+      repoHash: entry.context.repoHash,
+      familyHash: entry.context.worktree?.familyHash,
+      generation: entry.generation.snapshot().value,
+      freshnessMode,
+      cacheReadAllowed,
+      cacheWriteAllowed,
+      negativeLookupAllowed,
+      mode,
+      semanticPolicy,
+      deadlineMs,
+      budget
+    });
+  }
+
+  /** Task 11 implements reconcile; Iteration B ships the fixed call position. */
+  private async reconcileIfDirty(_entry: RuntimeEntry): Promise<void> {
+    // No-op shell: the dirty state is cleared by Task 11's SourceIndex reconcile.
   }
 
   reservedCount(): number {
@@ -235,9 +314,13 @@ export class RepoRuntimeManager {
         this.drainSlotWaiters();
       }
     });
-    // Register a listener before start() so the first event cannot be lost.
-    // Task 10 replaces this placeholder with cache/index/edge invalidation.
-    coordinator.onBatch(() => {});
+    // Register invalidation before start() so the first event cannot be lost.
+    coordinator.onBatch(batch => {
+      entry.context.router.onRepoChanged(batch);
+      entry.context.sourceIndex.applyChanges(batch);
+      entry.context.session.invalidateForRepoChanges(batch);
+      // BUILD_CHANGE layout refresh + delete/rename eviction complete in Task 11.
+    });
     // Store the readiness promise; the freshness barrier (Task 10) waits on it
     // only within the request budget, so a slow initial scan never blocks here.
     entry.ready = coordinator.start();

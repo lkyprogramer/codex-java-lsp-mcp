@@ -156,6 +156,57 @@ export class SourceIndex {
     }
   }
 
+  /**
+   * Applies a coordinator change batch. Deleted files are unindexed and removed;
+   * changed files have their cached facts dropped so the next factsFor re-parses;
+   * any change clears the scan-fallback cache which is not path-keyed.
+   */
+  applyChanges(batch: { changes: ReadonlyArray<{ kind: string; absolutePath: string }> }): void {
+    const removed: string[] = [];
+    const invalidated: string[] = [];
+    for (const change of batch.changes) {
+      if (change.kind === "JAVA_DELETE") removed.push(change.absolutePath);
+      else if (change.kind === "JAVA_ADD" || change.kind === "JAVA_CHANGE") invalidated.push(change.absolutePath);
+    }
+    if (removed.length > 0) this.removeFiles(removed);
+    if (invalidated.length > 0) this.invalidateFiles(invalidated);
+    // The rg scan cache is keyed by pattern, not path, so any Java change makes
+    // its contents potentially stale.
+    if (removed.length > 0 || invalidated.length > 0) this.rgFileCache.clear();
+  }
+
+  /** Drop cached facts for changed files; factsFor re-parses on next access. */
+  invalidateFiles(files: string[]): void {
+    for (const file of files) {
+      const absolutePath = path.normalize(file);
+      const cached = this.cache.get(absolutePath);
+      if (cached) {
+        this.unindexFacts(cached.facts);
+        this.cache.delete(absolutePath);
+      }
+    }
+    this.rgFileCache.clear();
+  }
+
+  /** Fully unindex and forget deleted files, including persisted records. */
+  removeFiles(files: string[]): void {
+    let changed = false;
+    for (const file of files) {
+      const absolutePath = path.normalize(file);
+      const cached = this.cache.get(absolutePath);
+      if (cached) {
+        this.unindexFacts(cached.facts);
+        this.cache.delete(absolutePath);
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.rgFileCache.clear();
+      // Rewrite the persisted snapshot so removed files do not reappear on reload.
+      this.compact();
+    }
+  }
+
   factsFor(inputFile: string): JavaSourceFacts {
     const absolutePath = normalizeRepoFile(this.repoRoot, inputFile);
     if (!existsSync(absolutePath)) {

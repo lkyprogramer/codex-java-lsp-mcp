@@ -272,6 +272,27 @@ export class RepoChangeCoordinator {
     await this.flush();
   }
 
+  /**
+   * Waits up to `ms` for the initial scan to finish. A large-repo scan or a
+   * watcher failure must not block the whole request, so the caller proceeds
+   * DEGRADED when this returns false.
+   */
+  async awaitReadyWithin(ms: number): Promise<boolean> {
+    if (this.ready) return true;
+    if (!this.startPromise) return false;
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<void>(resolve => {
+      timer = setTimeout(resolve, Math.max(1, ms));
+      timer.unref?.();
+    });
+    try {
+      await Promise.race([this.startPromise.catch(() => undefined), timeout]);
+      return this.ready;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
   private flush(): Promise<void> {
     if (this.flushPromise) return this.flushPromise;
     const operation = (async () => {

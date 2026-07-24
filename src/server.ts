@@ -6,7 +6,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { AliasRegistry } from "./alias-registry.js";
 import { RepoResolver, type RepoSelector } from "./repo-resolver.js";
-import { RepoRuntimeManager } from "./repo-runtime-manager.js";
+import { RepoRuntimeManager, type RequestOptionsInput } from "./repo-runtime-manager.js";
+import type { RequestContext } from "./runtime/request-context.js";
 import { diagnosticsSchema, javaDiagnostics } from "./tools/diagnostics.js";
 import { impactSchema, javaImpact } from "./tools/impact.js";
 import { javaReferences, referencesSchema } from "./tools/references.js";
@@ -43,9 +44,14 @@ register("java_impact", {
   title: "Java Impact",
   description: "Build a compact Java impact plan with source-index routing, internal rg summary, optional bounded LSP enrichment, and read plan.",
   inputSchema: impactSchema
-}, args => withContext(args, context => javaImpact(context, args), {
+}, args => withContext(args, (context, request) => javaImpact(context, args, request), {
   mayStartLsp: args.semanticPolicy !== "fast",
-  requireLspEnabled: args.semanticPolicy === "required"
+  requireLspEnabled: args.semanticPolicy === "required",
+  requestOptions: {
+    mode: args.mode,
+    semanticPolicy: args.semanticPolicy,
+    deadlineMs: args.deadlineMs
+  }
 }));
 
 register("java_symbol", {
@@ -140,15 +146,22 @@ async function shutdownFor(args: z.infer<z.ZodObject<typeof shutdownSchema>>): P
 
 async function withContext<T>(
   args: RepoSelector,
-  handler: (context: Awaited<ReturnType<RepoRuntimeManager["contextFor"]>>) => Promise<T>,
-  options: { mayStartLsp?: boolean; requireLspEnabled?: boolean } = {}
+  handler: (
+    context: Awaited<ReturnType<RepoRuntimeManager["contextFor"]>>,
+    request: RequestContext
+  ) => Promise<T>,
+  options: {
+    mayStartLsp?: boolean;
+    requireLspEnabled?: boolean;
+    requestOptions?: RequestOptionsInput;
+  } = {}
 ): Promise<T> {
-  return runtimes.withContext(args, async context => {
+  return runtimes.withContext(args, async (context, request) => {
     if (options.requireLspEnabled && !context.lsp.enabled) {
       throw new Error(context.lsp.enableHint || "This repo is not LSP-enabled.");
     }
-    return handler(context);
-  }, { mayStartLsp: options.mayStartLsp });
+    return handler(context, request);
+  }, { mayStartLsp: options.mayStartLsp, requestOptions: options.requestOptions });
 }
 
 function register<T extends z.ZodRawShape>(
