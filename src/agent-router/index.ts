@@ -180,7 +180,8 @@ export class AgentRouter {
       phaseMs,
       repoRoot: this.repoRoot,
       session: this.session,
-      routingPolicy: this.routingPolicy
+      routingPolicy: this.routingPolicy,
+      budget
     });
     await semanticVerify({
       candidates,
@@ -191,7 +192,8 @@ export class AgentRouter {
       repoRoot: this.repoRoot,
       session: this.session,
       routingPolicy: this.routingPolicy,
-      edgeStore: this.edgeStore
+      edgeStore: this.edgeStore,
+      budget
     });
 
     const suppressed = {

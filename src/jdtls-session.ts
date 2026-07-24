@@ -15,7 +15,13 @@ import {
   type JdtlsTransportFactory
 } from "./jdtls-transport.js";
 import { DeadlineBudget } from "./runtime/deadline-budget.js";
-import { JavaIntelligenceError } from "./runtime/intelligence-error.js";
+import { isCacheableCompletion, type Completion } from "./runtime/completion.js";
+import {
+  classifySemanticError,
+  JavaIntelligenceError,
+  type JavaIntelligenceErrorCode
+} from "./runtime/intelligence-error.js";
+import { normalizeRepoLocation } from "./semantic-location.js";
 import {
   isFileWatchEnabled,
   JavaFileWatcher,
@@ -146,6 +152,21 @@ export type HierarchyEdge = {
   to: unknown;
   ranges?: LspRange[];
 };
+
+export type HierarchyResult = {
+  roots: unknown[];
+  edges: HierarchyEdge[];
+  completion: Completion;
+  truncated: boolean;
+  requests: number;
+  visited: number;
+  errorCode?: JavaIntelligenceErrorCode;
+};
+
+/** Hard ceiling on expansion requests regardless of the caller's limit. */
+const MAX_HIERARCHY_REQUESTS = 64;
+const HIERARCHY_PREPARE_CAP_MS = 1000;
+const HIERARCHY_STEP_CAP_MS = 1500;
 
 export class JdtlsSession {
   private connection?: JdtlsConnection;
@@ -492,15 +513,32 @@ export class JdtlsSession {
     column: number,
     direction: "incoming" | "outgoing",
     depth: number,
-    limit: number
-  ): Promise<{ roots: unknown[]; edges: HierarchyEdge[]; truncated: boolean }> {
-    return this.cached("callHierarchy", [file, line, column, direction, depth, limit], [file], async () => {
-      await this.ensureStarted();
-      const params = await this.textDocumentPositionParams(file, line, column);
-      const roots = await this.request<unknown[]>("textDocument/prepareCallHierarchy", params);
-      const edges: HierarchyEdge[] = [];
-      await this.walkCallHierarchy(roots || [], direction, Math.max(1, depth), 1, edges, limit);
-      return { roots: roots || [], edges, truncated: edges.length >= limit };
+    limit: number,
+    budget: DeadlineBudget
+  ): Promise<HierarchyResult> {
+    return this.cachedHierarchy("callHierarchy", [file, line, column, direction, depth, limit], file, async () => {
+      const method = direction === "incoming" ? "callHierarchy/incomingCalls" : "callHierarchy/outgoingCalls";
+      return this.walkHierarchy({
+        file,
+        line,
+        column,
+        prepareMethod: "textDocument/prepareCallHierarchy",
+        method,
+        depth,
+        limit,
+        budget,
+        expand: (item, related) => (related as Array<{ from?: unknown; to?: unknown; fromRanges?: LspRange[] }>).map(call => {
+          const next = direction === "incoming" ? call.from : call.to;
+          return {
+            next,
+            edge: {
+              from: direction === "incoming" ? next : item,
+              to: direction === "incoming" ? item : next,
+              ranges: call.fromRanges
+            }
+          };
+        })
+      });
     });
   }
 
@@ -510,16 +548,151 @@ export class JdtlsSession {
     column: number,
     direction: "supertypes" | "subtypes",
     depth: number,
-    limit: number
-  ): Promise<{ roots: unknown[]; edges: HierarchyEdge[]; truncated: boolean }> {
-    return this.cached("typeHierarchy", [file, line, column, direction, depth, limit], [file], async () => {
-      await this.ensureStarted();
-      const params = await this.textDocumentPositionParams(file, line, column);
-      const roots = await this.request<unknown[]>("textDocument/prepareTypeHierarchy", params);
-      const edges: HierarchyEdge[] = [];
-      await this.walkTypeHierarchy(roots || [], direction, Math.max(1, depth), 1, edges, limit);
-      return { roots: roots || [], edges, truncated: edges.length >= limit };
+    limit: number,
+    budget: DeadlineBudget
+  ): Promise<HierarchyResult> {
+    return this.cachedHierarchy("typeHierarchy", [file, line, column, direction, depth, limit], file, async () => {
+      const method = direction === "supertypes" ? "typeHierarchy/supertypes" : "typeHierarchy/subtypes";
+      return this.walkHierarchy({
+        file,
+        line,
+        column,
+        prepareMethod: "textDocument/prepareTypeHierarchy",
+        method,
+        depth,
+        limit,
+        budget,
+        expand: (item, related) => (related as unknown[]).map(next => ({
+          next,
+          edge: {
+            from: direction === "supertypes" ? item : next,
+            to: direction === "supertypes" ? next : item
+          }
+        }))
+      });
     });
+  }
+
+  /** Only COMPLETE hierarchies may be reused; a truncated walk must be retried. */
+  private async cachedHierarchy(
+    method: string,
+    parts: unknown[],
+    file: string,
+    compute: () => Promise<HierarchyResult>
+  ): Promise<HierarchyResult> {
+    const cached = await this.cached(method, parts, [file], async () => {
+      const result = await compute();
+      return isCacheableCompletion(result.completion) ? result : undefined;
+    });
+    return cached ?? compute();
+  }
+
+  private async walkHierarchy(input: {
+    file: string;
+    line: number;
+    column: number;
+    prepareMethod: string;
+    method: string;
+    depth: number;
+    limit: number;
+    budget: DeadlineBudget;
+    expand: (item: unknown, related: unknown) => Array<{ next: unknown; edge: Omit<HierarchyEdge, "depth"> }>;
+  }): Promise<HierarchyResult> {
+    const edges: HierarchyEdge[] = [];
+    const visited = new Set<string>();
+    const maxDepth = Math.max(1, input.depth);
+    const maxRequests = Math.min(Math.max(1, input.limit), MAX_HIERARCHY_REQUESTS);
+    let requests = 0;
+
+    const empty = (completion: Completion, errorCode?: JavaIntelligenceErrorCode): HierarchyResult => ({
+      roots: [], edges, completion, truncated: false, requests, visited: visited.size, errorCode
+    });
+
+    let roots: unknown[];
+    try {
+      await this.ensureStarted(input.budget);
+      const params = await this.textDocumentPositionParams(input.file, input.line, input.column);
+      roots = await this.request<unknown[]>(
+        input.prepareMethod,
+        params,
+        input.budget.remainingMs(HIERARCHY_PREPARE_CAP_MS)
+      ) || [];
+    } catch (error) {
+      // A prepare that never answered means there is nothing to traverse.
+      const classified = classifySemanticError(error);
+      return empty(completionForError(classified.code), classified.code);
+    }
+
+    const queue = roots.map(item => ({ item, depth: 1 }));
+    let limited = false;
+    while (queue.length > 0) {
+      if (edges.length >= input.limit || requests >= maxRequests) {
+        limited = true;
+        break;
+      }
+      const current = queue.shift()!;
+      if (current.depth > maxDepth) {
+        continue;
+      }
+      const key = hierarchyItemKey(current.item);
+      if (!key || visited.has(key)) {
+        continue;
+      }
+      visited.add(key);
+      requests += 1;
+      let related: unknown;
+      try {
+        related = await this.request<unknown[]>(
+          input.method,
+          { item: current.item },
+          input.budget.remainingMs(HIERARCHY_STEP_CAP_MS)
+        );
+      } catch (error) {
+        // Preserve what was already collected; classification decides whether
+        // this is an expected bound or a genuine JDT fault.
+        const classified = classifySemanticError(error);
+        return {
+          roots,
+          edges,
+          completion: completionForError(classified.code),
+          truncated: true,
+          requests,
+          visited: visited.size,
+          errorCode: classified.code
+        };
+      }
+      for (const { next, edge } of input.expand(current.item, related ?? [])) {
+        if (edges.length >= input.limit) {
+          limited = true;
+          break;
+        }
+        // Containment is applied before insertion so an out-of-repo type can
+        // never enter the edge set or the traversal queue.
+        if (!next || !this.isRepoHierarchyItem(next)) {
+          continue;
+        }
+        edges.push({ depth: current.depth, ...edge });
+        const nextKey = hierarchyItemKey(next);
+        if (nextKey && !visited.has(nextKey)) {
+          queue.push({ item: next, depth: current.depth + 1 });
+        }
+      }
+    }
+
+    const truncated = limited || edges.length >= input.limit;
+    return {
+      roots,
+      edges,
+      completion: truncated ? "PARTIAL_LIMIT" : "COMPLETE",
+      truncated,
+      requests,
+      visited: visited.size
+    };
+  }
+
+  private isRepoHierarchyItem(item: unknown): boolean {
+    const location = hierarchyItemLocation(item);
+    return Boolean(location && normalizeRepoLocation(this.repoRoot, location));
   }
 
   cacheStatus(): JdtlsCacheStatus {
@@ -916,10 +1089,27 @@ export class JdtlsSession {
     }
     const cancellation = new CancellationTokenSource();
     const startedAt = Date.now();
+    // Hold the raw promise so backend settlement can still be measured after the
+    // client gives up. requestSettled() is unusable here: its `undefined` return
+    // would lose the timeout/cancel/server-error classification.
+    const backend = this.connection.sendRequest(method, params, cancellation.token);
+    let backendSettledAt: number | undefined;
+    const markSettled = (): void => { backendSettledAt = Date.now(); };
+    backend.then(markSettled, markSettled);
+
     try {
-      return await withTimeout(this.connection.sendRequest(method, params, cancellation.token), timeoutMs, method, () => cancellation.cancel()) as T;
+      return await withTimeout(backend, timeoutMs, method, () => cancellation.cancel()) as T;
     } finally {
-      this.addPhaseMetric(method, Date.now() - startedAt);
+      const clientCompletedAt = Date.now();
+      this.addPhaseMetric(method, clientCompletedAt - startedAt);
+      if (backendSettledAt === undefined) {
+        // The user response is never blocked on this; it only records how long
+        // JDT actually took to honour the cancellation.
+        const recordOvershoot = (): void => {
+          this.addPhaseMetric("cancelBackendSettlementMs", Date.now() - clientCompletedAt);
+        };
+        backend.then(recordOvershoot, recordOvershoot);
+      }
       cancellation.dispose();
     }
   }
@@ -1053,71 +1243,6 @@ export class JdtlsSession {
     }
   }
 
-  private async walkCallHierarchy(
-    items: unknown[],
-    direction: "incoming" | "outgoing",
-    maxDepth: number,
-    currentDepth: number,
-    edges: HierarchyEdge[],
-    limit: number
-  ): Promise<void> {
-    if (currentDepth > maxDepth || edges.length >= limit) {
-      return;
-    }
-    for (const item of items) {
-      if (edges.length >= limit) {
-        return;
-      }
-      const method = direction === "incoming" ? "callHierarchy/incomingCalls" : "callHierarchy/outgoingCalls";
-      const calls = await this.requestSettled<Array<{ from?: unknown; to?: unknown; fromRanges?: LspRange[] }>>(method, { item });
-      const nextItems: unknown[] = [];
-      for (const call of calls || []) {
-        if (edges.length >= limit) {
-          break;
-        }
-        const from = direction === "incoming" ? call.from : item;
-        const to = direction === "incoming" ? item : call.to;
-        edges.push({ depth: currentDepth, from, to, ranges: call.fromRanges });
-        if (direction === "incoming" && call.from) {
-          nextItems.push(call.from);
-        } else if (direction === "outgoing" && call.to) {
-          nextItems.push(call.to);
-        }
-      }
-      await this.walkCallHierarchy(nextItems, direction, maxDepth, currentDepth + 1, edges, limit);
-    }
-  }
-
-  private async walkTypeHierarchy(
-    items: unknown[],
-    direction: "supertypes" | "subtypes",
-    maxDepth: number,
-    currentDepth: number,
-    edges: HierarchyEdge[],
-    limit: number
-  ): Promise<void> {
-    if (currentDepth > maxDepth || edges.length >= limit) {
-      return;
-    }
-    const method = direction === "supertypes" ? "typeHierarchy/supertypes" : "typeHierarchy/subtypes";
-    for (const item of items) {
-      if (edges.length >= limit) {
-        return;
-      }
-      const related = await this.requestSettled<unknown[]>(method, { item });
-      for (const next of related || []) {
-        if (edges.length >= limit) {
-          break;
-        }
-        edges.push({
-          depth: currentDepth,
-          from: direction === "supertypes" ? item : next,
-          to: direction === "supertypes" ? next : item
-        });
-      }
-      await this.walkTypeHierarchy(related || [], direction, maxDepth, currentDepth + 1, edges, limit);
-    }
-  }
 }
 
 function findExecutable(name: string): string {
@@ -1233,6 +1358,50 @@ function truncate<T>(items: T[], limit: number): { items: T[]; truncated: boolea
 
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/** Stable identity for a hierarchy item, so a cycle is visited exactly once. */
+function hierarchyItemKey(item: unknown): string | undefined {
+  if (!item || typeof item !== "object") return undefined;
+  const value = item as Record<string, unknown>;
+  const uri = typeof value.uri === "string" ? value.uri : "";
+  const name = typeof value.name === "string" ? value.name : "";
+  const range = isLspRange(value.selectionRange)
+    ? value.selectionRange
+    : isLspRange(value.range)
+      ? value.range
+      : undefined;
+  if (!uri || !range) return undefined;
+  return `${uri}:${range.start.line}:${range.start.character}:${name}`;
+}
+
+function hierarchyItemLocation(item: unknown): LspLocation | undefined {
+  if (!item || typeof item !== "object") return undefined;
+  const record = item as { uri?: unknown; range?: unknown; selectionRange?: unknown };
+  const range = isLspRange(record.selectionRange)
+    ? record.selectionRange
+    : isLspRange(record.range)
+      ? record.range
+      : undefined;
+  return typeof record.uri === "string" && range ? { uri: record.uri, range } : undefined;
+}
+
+function isLspRange(value: unknown): value is LspRange {
+  if (!value || typeof value !== "object") return false;
+  const record = value as { start?: unknown; end?: unknown };
+  return isLspPosition(record.start) && isLspPosition(record.end);
+}
+
+function isLspPosition(value: unknown): value is LspPosition {
+  if (!value || typeof value !== "object") return false;
+  const record = value as { line?: unknown; character?: unknown };
+  return typeof record.line === "number" && typeof record.character === "number";
+}
+
+function completionForError(code: JavaIntelligenceErrorCode): Completion {
+  if (code === "DEADLINE_EXCEEDED") return "PARTIAL_TIMEOUT";
+  if (code === "CANCELLED") return "CANCELLED";
+  return "FAILED";
 }
 
 async function terminateChild(child: JdtlsChild, graceMs: number): Promise<void> {

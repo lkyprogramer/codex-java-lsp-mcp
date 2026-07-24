@@ -4,6 +4,7 @@ import { classifySemanticError, isExpectedSemanticOutcome } from "../runtime/int
 import type { EdgeStore, SemanticEdgeInput } from "../edge-store.js";
 import type { JdtlsSession, LspLocation, LspLocationLink } from "../jdtls-session.js";
 import type { RoutingPolicy } from "../routing-policy.js";
+import type { DeadlineBudget } from "../runtime/deadline-budget.js";
 import type { CandidateFile, ImpactMode, ImpactOptions, ResolvedAnchor, SemanticPolicy } from "../agent-types.js";
 import { breakdown, mergeCandidate, scoreBase } from "./candidate-helpers.js";
 
@@ -37,6 +38,7 @@ type SemanticInput = {
   readonly repoRoot: string;
   readonly session: JdtlsSession;
   readonly routingPolicy: RoutingPolicy;
+  readonly budget: DeadlineBudget;
 };
 
 type SemanticSeedInput = SemanticInput & {
@@ -138,7 +140,18 @@ export async function semanticVerify(input: SemanticVerifyInput): Promise<void> 
           }
         }
         if (shouldUseTypeHierarchyVerify(anchor, input.options)) {
-          const hierarchy = await input.session.typeHierarchy(anchor.absolutePath, anchor.line, anchor.column, "subtypes", 2, 40);
+          // The hierarchy walk shares the request budget instead of falling back
+          // to its own 120s default.
+          const hierarchy = await input.session.typeHierarchy(
+            anchor.absolutePath,
+            anchor.line,
+            anchor.column,
+            "subtypes",
+            2,
+            40,
+            input.budget
+          );
+          input.semantic.timeout ||= hierarchy.completion === "PARTIAL_TIMEOUT";
           for (const edge of hierarchy.edges.slice(0, 40)) {
             const location = hierarchyItemLocation(edge.from);
             const candidate = location ? locationCandidate({ location, reason: "typeHierarchy", anchor, options: input.options, repoRoot: input.repoRoot, routingPolicy: input.routingPolicy, suppressed }) : undefined;

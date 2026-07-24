@@ -109,7 +109,10 @@ export class FakeJdtlsConnection implements JdtlsConnection {
   private readonly requestHandlers = new Map<string, (...args: any[]) => unknown>();
   private readonly notificationHandlers = new Map<string, (...args: any[]) => void>();
 
-  async sendRequest<R>(method: string): Promise<R> {
+  /** Per-call responses; takes precedence over the static `responses` map. */
+  handlers = new Map<string, (params: unknown) => unknown>();
+
+  async sendRequest<R>(method: string, params?: unknown): Promise<R> {
     this.requests.push(method);
     const failure = this.errors.get(method);
     if (failure !== undefined) {
@@ -118,6 +121,10 @@ export class FakeJdtlsConnection implements JdtlsConnection {
     const waiting = this.pending.get(method);
     if (waiting) {
       return await waiting.promise as R;
+    }
+    const handler = this.handlers.get(method);
+    if (handler) {
+      return await Promise.resolve(handler(params) as R);
     }
     if (!this.responses.has(method)) {
       throw new Error(`No fake response for ${method}`);
@@ -169,6 +176,8 @@ export type FakeAttemptOptions = {
   initializeError?: unknown;
   /** Extra canned responses keyed by LSP method. */
   responses?: Record<string, unknown>;
+  /** Per-call response functions keyed by LSP method; win over `responses`. */
+  handlers?: Record<string, (params: unknown) => unknown>;
   /** Errors keyed by LSP method. */
   errors?: Record<string, unknown>;
   /** Throw from spawn() itself, simulating a missing binary. */
@@ -202,6 +211,9 @@ export class FakeJdtlsTransportFactory implements JdtlsTransportFactory {
     connection.responses.set("shutdown", null);
     for (const [method, value] of Object.entries(options.responses ?? {})) {
       connection.responses.set(method, value);
+    }
+    for (const [method, value] of Object.entries(options.handlers ?? {})) {
+      connection.handlers.set(method, value);
     }
     for (const [method, value] of Object.entries(options.errors ?? {})) {
       connection.errors.set(method, value);
