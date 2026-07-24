@@ -145,6 +145,11 @@ export class FakeJdtlsConnection implements JdtlsConnection {
 
   dispose(): void {
     this.disposed = true;
+    // vscode-jsonrpc rejects in-flight requests when the connection is disposed;
+    // the fake must do the same or startup waiters would hang forever.
+    for (const waiting of this.pending.values()) {
+      waiting.reject(new Error("The JSON-RPC connection was disposed"));
+    }
   }
 
   count(method: string): number {

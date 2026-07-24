@@ -95,8 +95,16 @@ export async function javaStatus(context: ToolContext, _args: z.infer<z.ZodObjec
 export function summarizeSessionStatus(status: SessionStatus): Record<string, unknown> {
   return compact({
     repoRoot: status.repoRoot,
+    state: status.state,
     started: status.started,
     pid: status.pid,
+    startingPid: status.startingPid,
+    restartBackoff: compact({
+      consecutiveFailures: status.restartBackoff.consecutiveFailures || undefined,
+      retryAfterMs: status.restartBackoff.retryAfterMs,
+      blockedUntilExplicitReset: status.restartBackoff.blockedUntilExplicitReset || undefined,
+      lastErrorCode: status.restartBackoff.lastErrorCode
+    }),
     startedAt: status.startedAt,
     knownDiagnostics: status.knownDiagnostics,
     openDocuments: status.openDocuments,
