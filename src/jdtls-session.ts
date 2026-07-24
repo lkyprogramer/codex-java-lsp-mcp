@@ -1,17 +1,17 @@
 // input: MCP tool requests that need Java semantic information.
 // output: Managed Eclipse JDT LS requests and normalized raw LSP responses.
 // pos: Stateful LSP client and process manager for the generic Java LSP MCP bridge.
-import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { createWriteStream, existsSync, readFileSync, rmSync, statSync } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
+import { CancellationTokenSource } from "vscode-jsonrpc/node.js";
 import {
-  createMessageConnection,
-  CancellationTokenSource,
-  StreamMessageReader,
-  StreamMessageWriter,
-  type MessageConnection
-} from "vscode-jsonrpc/node.js";
+  defaultJdtlsTransportFactory,
+  type JdtlsChild,
+  type JdtlsConnection,
+  type JdtlsTransportFactory
+} from "./jdtls-transport.js";
 import {
   isFileWatchEnabled,
   JavaFileWatcher,
@@ -132,8 +132,8 @@ export type HierarchyEdge = {
 };
 
 export class JdtlsSession {
-  private connection?: MessageConnection;
-  private process?: ChildProcessWithoutNullStreams;
+  private connection?: JdtlsConnection;
+  private process?: JdtlsChild;
   private starting?: Promise<void>;
   private startedAt?: Date;
   private readonly openDocuments = new Map<string, OpenDocument>();
@@ -157,7 +157,11 @@ export class JdtlsSession {
   private lastLanguageStatus?: string;
   private phaseMetrics: Record<string, number> = {};
 
-  constructor(private readonly repoRoot: string, aliases: string[] = []) {
+  constructor(
+    private readonly repoRoot: string,
+    aliases: string[] = [],
+    private readonly transportFactory: JdtlsTransportFactory = defaultJdtlsTransportFactory
+  ) {
     const cacheRoot = repoCacheRoot(repoRoot);
     this.dataDir = process.env.JDTLS_DATA_DIR || path.join(cacheRoot, "workspace");
     this.logDir = process.env.JDTLS_LOG_DIR || path.join(cacheRoot, "logs");
@@ -427,16 +431,19 @@ export class JdtlsSession {
       this.dataDir,
       ...splitArgs(process.env.JDTLS_EXTRA_ARGS)
     ];
-    const child = spawn(this.jdtlsBin, args, {
+    const attempt = this.transportFactory.spawn({
+      binary: this.jdtlsBin,
+      args,
       cwd: this.repoRoot,
-      env: buildJdtlsEnv(this.jdtlsRuntimeJavaHome),
-      stdio: ["pipe", "pipe", "pipe"]
+      env: buildJdtlsEnv(this.jdtlsRuntimeJavaHome)
     });
+    const child = attempt.child;
+    const connection = attempt.connection;
     const logStream = createWriteStream(this.logFile, { flags: "a" });
-    child.stderr.on("data", chunk => {
+    child.stderr.on("data", (chunk: Buffer) => {
       logStream.write(chunk);
     });
-    child.on("exit", (code, signal) => {
+    child.once("exit", (code, signal) => {
       logStream.write(`\n[jdtls exited] code=${code ?? ""} signal=${signal ?? ""}\n`);
       logStream.end();
       this.stopFileWatcher();
@@ -446,10 +453,6 @@ export class JdtlsSession {
       this.startedAt = undefined;
     });
 
-    const connection = createMessageConnection(
-      new StreamMessageReader(child.stdout),
-      new StreamMessageWriter(child.stdin)
-    );
     this.registerClientHandlers(connection);
     connection.listen();
 
@@ -471,7 +474,7 @@ export class JdtlsSession {
     }
   }
 
-  private registerClientHandlers(connection: MessageConnection): void {
+  private registerClientHandlers(connection: JdtlsConnection): void {
     connection.onRequest("client/registerCapability", async () => null);
     connection.onRequest("workspace/configuration", async (params: { items?: Array<{ section?: string }> }) => {
       return (params.items || []).map(item => {
