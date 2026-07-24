@@ -4,8 +4,15 @@
 import { z } from "zod";
 import { documentSymbolLimiter } from "../document-symbol-limiter.js";
 import { normalizeRepoFile } from "../repo-layout.js";
+import { DeadlineBudget } from "../runtime/deadline-budget.js";
+import { defaultDeadlineMs, MAX_REQUEST_DEADLINE_MS } from "../runtime/request-context.js";
 import type { ToolContext } from "./context.js";
 import type { ImpactAnchorInput, ImpactOptions, ImpactResult, ImpactVerbosity } from "../agent-types.js";
+
+// Iteration A adapter: JDT calls still take a plain timeout, so the request-level
+// absolute deadline is projected onto the single legacy stage timeout. Task 7
+// replaces this by passing the budget itself down to every JDT call.
+const SEMANTIC_STAGE_CAP_MS = 1500;
 
 export const impactSchema = {
   projectId: z.string().min(1).optional(),
@@ -24,7 +31,7 @@ export const impactSchema = {
   profile: z.enum(["auto", "controller", "service", "port", "repository", "parser", "dto", "entity", "mapper", "vo", "job", "listener"]).default("auto"),
   anchorRole: z.enum(["auto", "controller", "service", "port", "repository", "parser", "dto", "entity", "mapper", "vo", "job", "listener"]).optional(),
   semanticPolicy: z.enum(["auto", "fast", "required"]).default("auto"),
-  semanticTimeoutMs: z.number().int().positive().max(10000).default(1500),
+  deadlineMs: z.number().int().positive().max(15000).optional(),
   readPlanMaxItems: z.number().int().positive().max(30).optional(),
   testReadMode: z.enum(["defer", "include", "priority"]).default("defer"),
   focusModules: z.array(z.string().min(1)).max(10).default([]),
@@ -40,11 +47,15 @@ export async function javaImpact(context: ToolContext, args: z.infer<z.ZodObject
   }
   const semanticPolicy = context.lsp?.enabled ? args.semanticPolicy : "fast";
   const anchors = normalizeAnchors(args);
+  const budget = DeadlineBudget.fromTimeout(Math.min(
+    MAX_REQUEST_DEADLINE_MS,
+    args.deadlineMs ?? defaultDeadlineMs(args.mode, semanticPolicy)
+  ));
   const phaseMs: Record<string, number> = {};
   if (semanticPolicy === "required" && context.lsp?.enabled) {
-    await timed(phaseMs, "warmDocumentSymbol", async () => warmDocumentSymbols(context, anchors, semanticPolicy));
+    await timed(phaseMs, "warmDocumentSymbol", async () => warmDocumentSymbols(context, anchors, semanticPolicy, budget));
   } else {
-    warmDocumentSymbols(context, anchors, semanticPolicy).catch(() => undefined);
+    warmDocumentSymbols(context, anchors, semanticPolicy, budget).catch(() => undefined);
   }
   mergePhaseMs(phaseMs, context.session.drainPhaseMetrics());
   const options: ImpactOptions = {
@@ -52,7 +63,7 @@ export async function javaImpact(context: ToolContext, args: z.infer<z.ZodObject
     mode: args.mode,
     profile: args.anchorRole || args.profile,
     semanticPolicy,
-    semanticTimeoutMs: args.semanticTimeoutMs,
+    semanticTimeoutMs: budget.remainingMs(SEMANTIC_STAGE_CAP_MS),
     readPlanMaxItems: args.readPlanMaxItems,
     testReadMode: args.testReadMode,
     focusModules: args.focusModules,
@@ -69,16 +80,23 @@ export async function javaImpact(context: ToolContext, args: z.infer<z.ZodObject
 async function warmDocumentSymbols(
   context: ToolContext,
   anchors: ImpactAnchorInput[],
-  semanticPolicy: "auto" | "fast" | "required"
+  semanticPolicy: "auto" | "fast" | "required",
+  budget: DeadlineBudget
 ): Promise<void> {
   if (!context.lsp?.enabled || semanticPolicy === "fast") {
     return;
   }
-  const timeoutMs = Number(process.env.JAVA_LSP_DOCUMENT_SYMBOL_TIMEOUT_MS || (semanticPolicy === "required" ? 45000 : 2000));
+  const configuredTimeoutMs = Number(process.env.JAVA_LSP_DOCUMENT_SYMBOL_TIMEOUT_MS || (semanticPolicy === "required" ? 45000 : 2000));
   const warmed = new Set<string>();
   for (const anchor of anchors) {
     if (warmed.has(anchor.file)) {
       continue;
+    }
+    // Warm indexing is inside the request deadline, so it can no longer consume
+    // an unbounded prefix and starve the semantic stage that follows it.
+    const timeoutMs = budget.remainingMs(configuredTimeoutMs);
+    if (timeoutMs <= 0) {
+      return;
     }
     warmed.add(anchor.file);
     const file = normalizeRepoFile(context.repoRoot, anchor.file);
