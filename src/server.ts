@@ -123,6 +123,7 @@ async function javaStatusFor(args: z.infer<z.ZodObject<typeof statusSchema>>): P
       },
       resource: runtimes.resourceStatus(),
       aliases: registry.aliases(),
+      aliasRegistry: registry.status(),
       activeRepos: runtimes.activeRepos()
     };
   }

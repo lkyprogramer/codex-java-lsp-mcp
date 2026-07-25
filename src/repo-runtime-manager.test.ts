@@ -271,6 +271,41 @@ test("two concurrent contextFor calls share one runtime and one coordinator", as
   assert.equal([...coordinators.values()][0].starts, 1, "the watcher is started once");
 });
 
+test("fully stopped idle runtimes are removed from the runtime map beyond the retention bound", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const manager = managerWith({ maxRetainedStoppedRepos: 2 }, sessions);
+
+  for (const repo of ["/repo-a", "/repo-b", "/repo-c"]) {
+    await manager.withContext({ repoRoot: repo }, async () => undefined);
+    await manager.shutdown(repo);
+  }
+
+  assert.equal(manager.activeRepos().length, 2, "only the bound's worth of stopped repos are retained");
+  assert.equal(manager.hasRuntime("/repo-a"), false, "the oldest stopped repo is evicted");
+  assert.equal(manager.hasRuntime("/repo-b"), true);
+  assert.equal(manager.hasRuntime("/repo-c"), true);
+});
+
+test("a runtime reused after shutdown gets a freshly started coordinator, not the closed one", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const coordinators = new Map<string, FakeCoordinator>();
+  // A bound of 1 keeps the just-stopped repo retained (not evicted) so this
+  // test can prove getOrCreate does not hand back its closed coordinator.
+  const manager = managerWith({ maxRetainedStoppedRepos: 1 }, sessions, {}, coordinators);
+
+  await manager.withContext({ repoRoot: "/repo-a" }, async () => undefined);
+  await manager.shutdown("/repo-a");
+  assert.equal(manager.hasRuntime("/repo-a"), true, "retained within the bound");
+  const closedCoordinator = coordinators.get("/repo-a");
+  assert.equal(closedCoordinator?.closes, 1);
+
+  await manager.withContext({ repoRoot: "/repo-a" }, async () => undefined);
+
+  const recreatedCoordinator = coordinators.get("/repo-a");
+  assert.notEqual(recreatedCoordinator, closedCoordinator, "a fresh coordinator replaced the closed one");
+  assert.equal(recreatedCoordinator?.starts, 1, "the new coordinator was started");
+});
+
 test("reconcileIfDirty runs once under two concurrent requests and clears dirty via compare-and-set", async () => {
   const clock = new GenerationClock();
   clock.markDirty("test-forced-dirty");
@@ -445,7 +480,7 @@ function fakeCoordination(coordinators?: Map<string, FakeCoordinator>) {
 }
 
 function managerWith(
-  options: Partial<{ maxActiveRepos: number; idleTtlMs: number; requestTimeoutMs: number }>,
+  options: Partial<{ maxActiveRepos: number; idleTtlMs: number; requestTimeoutMs: number; maxRetainedStoppedRepos: number }>,
   sessions: Map<string, FakeSession>,
   gates: Record<string, Deferred<void>> = {},
   coordinators?: Map<string, FakeCoordinator>

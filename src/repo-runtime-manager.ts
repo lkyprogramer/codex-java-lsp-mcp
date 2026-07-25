@@ -77,6 +77,8 @@ type RuntimeEntry = {
   lspReservation: LspReservation;
   unsubscribeLifecycle?: () => void;
   reconcilePromise?: Promise<void>;
+  /** Set once `shutdown()` has retired this entry; undefined while active. */
+  stoppedAt?: number;
 };
 
 type SlotWaiter = {
@@ -90,6 +92,7 @@ type RuntimeManagerOptions = {
   maxActiveRepos: number;
   idleTtlMs: number;
   requestTimeoutMs: number;
+  maxRetainedStoppedRepos: number;
 };
 
 export class RepoRuntimeManager {
@@ -111,6 +114,7 @@ export class RepoRuntimeManager {
       maxActiveRepos: positiveInteger(process.env.JAVA_LSP_MAX_ACTIVE_REPOS, this.defaults.maxActiveRepos),
       idleTtlMs: positiveInteger(process.env.JAVA_LSP_IDLE_TTL_MS, this.defaults.idleTtlMs),
       requestTimeoutMs: positiveInteger(process.env.JAVA_LSP_REQUEST_TIMEOUT_MS, 120000),
+      maxRetainedStoppedRepos: positiveInteger(process.env.JAVA_LSP_MAX_RETAINED_STOPPED_REPOS, 2),
       ...options
     };
   }
@@ -234,6 +238,10 @@ export class RepoRuntimeManager {
     return this.reservedEntries().length;
   }
 
+  hasRuntime(repoRoot: string): boolean {
+    return this.runtimes.has(repoRoot);
+  }
+
   activeRepos(): Array<{
     repoRoot: string;
     repoHash: string;
@@ -282,13 +290,43 @@ export class RepoRuntimeManager {
     };
   }
 
+  /**
+   * The coarse, single-repo retirement path: unlike the JDT-capacity teardown
+   * in `stopEntry` (used to free an LSP slot for a waiting repo, which must
+   * leave the watcher and in-memory caches intact for a quick resume), this
+   * fully closes the coordinator and retires the entry. It stays in the map
+   * as a bounded, inert placeholder — `getOrCreate` never reuses one — purely
+   * so `activeRepos()`/`hasRuntime()` can still see it until eviction.
+   */
+  async shutdown(repoRoot: string): Promise<void> {
+    const entry = this.runtimes.get(repoRoot);
+    if (!entry) return;
+    await this.stopEntry(entry);
+    await entry.coordinator.close();
+    entry.unsubscribeLifecycle?.();
+    entry.unsubscribeLifecycle = undefined;
+    entry.stoppedAt = Date.now();
+    this.evictStoppedBeyondLimit();
+  }
+
+  private evictStoppedBeyondLimit(): void {
+    const stopped = [...this.runtimes.entries()]
+      .filter((pair): pair is [string, RuntimeEntry & { stoppedAt: number }] => pair[1].stoppedAt !== undefined)
+      .sort((left, right) => left[1].stoppedAt - right[1].stoppedAt);
+    const excess = stopped.length - this.options.maxRetainedStoppedRepos;
+    for (let index = 0; index < excess; index += 1) {
+      this.runtimes.delete(stopped[index][0]);
+    }
+  }
+
   async shutdownAll(): Promise<void> {
     for (const waiter of this.slotWaiters.splice(0)) {
       waiter.cancel();
     }
     await Promise.all([...this.runtimes.values()].map(entry => this.stopEntry(entry)));
-    // The coordinator is the freshness engine, independent of the JDT session,
-    // so it is closed only when the whole manager shuts down.
+    // A prior shutdown(repoRoot) may have already closed some coordinators;
+    // RepoChangeCoordinator.close() is idempotent, so closing the rest here
+    // (and re-closing the already-closed ones) is safe either way.
     await Promise.all([...this.runtimes.values()].map(entry => entry.coordinator.close()));
     for (const entry of this.runtimes.values()) {
       entry.unsubscribeLifecycle?.();
@@ -301,12 +339,18 @@ export class RepoRuntimeManager {
     touchRepoCache(resolved.repoRoot);
     const existing = this.runtimes.get(resolved.repoRoot);
     if (existing) {
-      existing.context.aliases = resolved.aliases;
-      existing.context.rootSource = resolved.rootSource;
-      existing.context.layoutProfile = resolved.layoutProfile;
-      existing.context.lsp = resolved.lsp;
-      existing.context.worktree = resolved.worktree;
-      return existing;
+      if (existing.stoppedAt === undefined) {
+        existing.context.aliases = resolved.aliases;
+        existing.context.rootSource = resolved.rootSource;
+        existing.context.layoutProfile = resolved.layoutProfile;
+        existing.context.lsp = resolved.lsp;
+        existing.context.worktree = resolved.worktree;
+        return existing;
+      }
+      // A retained-but-stopped placeholder's coordinator is already closed
+      // (its startPromise is settled, so start() would be a no-op); reusing
+      // it would silently leave freshness tracking dead for this repo.
+      this.runtimes.delete(resolved.repoRoot);
     }
     const pending = this.creating.get(resolved.repoRoot);
     if (pending) return pending;
