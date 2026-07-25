@@ -12,8 +12,10 @@ memory `node-and-benchmark-env-constraints.md`）——**该项必须由用户�
 黄金仓库的环境中运行**，本报告在 §7.2 给出准确命令与门槛，不以空表或推测值
 冒充已通过。
 
-在此前提下，Iteration B 的实现侧完成门禁已满足；`R_read_must=1.0000` 等
-质量门槛需三仓 benchmark 补齐后才能最终关闭。
+在此前提下，Iteration B 的实现侧完成门禁已满足——除机器级 sweep 槽一项
+（§9 / Known Limit #2：`acquireSweep()` 无生产调用点，"从未超出"目前真空
+成立而非被验证）外；`R_read_must=1.0000` 等质量门槛需三仓 benchmark
+补齐后才能最终关闭。
 
 ## 2. Baseline
 
@@ -74,6 +76,14 @@ Task 13 Step 1 指定的定向 mutation pattern：
 计划原文的部分片段（如 `rename removes`）与实际测试标题不完全逐字匹配（例如实际标题是
 `a rename evicts the old path so the router stops surfacing it`），`--test-name-pattern`
 是正则子串匹配，仍然命中；未按片段直译测试名。
+
+`npm run benchmark:edit-to-visible` / `npm run smoke:lease-subprocess` 现已注册为
+`package.json` scripts。**在本环境中 `npm` 本身因 nvm shell wrapper 在非交互
+shell 下损坏而不可用**（`_nvm_load`/`maximum nested function level` 递归错误，
+见 memory `node-and-benchmark-env-constraints.md`）；本报告的实际调用一律
+使用绝对路径直接跑 node：`/Users/luo/.nvm/versions/node/v22.16.0/bin/node
+scripts/<script>.mjs`。若 `npm` 在用户环境中工作正常，两个 `npm run` 别名
+同样有效。
 
 ## 5. Worktree Concurrency
 
