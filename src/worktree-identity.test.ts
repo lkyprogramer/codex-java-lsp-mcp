@@ -3,7 +3,7 @@ import test from "node:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { resolveWorktreeIdentity, WorktreeIdentityCache } from "./worktree-identity.js";
+import { leaseFamilyKey, resolveWorktreeIdentity, WorktreeIdentityCache } from "./worktree-identity.js";
 import { canonicalPath } from "./path-utils.js";
 import { createGitWorktreeFamily } from "./test-support/git-worktree.js";
 
@@ -34,6 +34,21 @@ test("linked worktrees share familyHash but retain distinct repoHash", async () 
   assert.equal(primary.gitCommonDir, linked.gitCommonDir);
   assert.equal(primary.familyHash, linked.familyHash);
   assert.equal(linked.isLinkedWorktree, true);
+});
+
+test("leaseFamilyKey falls back to repoHash for a non-Git directory", async () => {
+  const dir = canonicalPath(mkdtempSync(path.join(tmpdir(), "wt-plain-")));
+  const identity = await resolveWorktreeIdentity(dir);
+  assert.equal(leaseFamilyKey(identity), identity.repoHash);
+});
+
+test("leaseFamilyKey uses the shared familyHash for linked worktrees, not their distinct repoHash", async () => {
+  const fixture = await createGitWorktreeFamily();
+  const primary = await resolveWorktreeIdentity(fixture.primary);
+  const linked = await resolveWorktreeIdentity(fixture.linked);
+  assert.equal(leaseFamilyKey(primary), leaseFamilyKey(linked));
+  assert.equal(leaseFamilyKey(primary), primary.familyHash);
+  assert.notEqual(leaseFamilyKey(primary), primary.repoHash);
 });
 
 test("the identity cache resolves a root once and can be invalidated", async () => {

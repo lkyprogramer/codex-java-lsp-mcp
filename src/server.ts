@@ -89,6 +89,9 @@ async function main(): Promise<void> {
   if (cleanup.removed > 0) {
     console.error(`[codex-java-lsp] cleaned ${cleanup.removed} stale worktree cache(s)`);
   }
+  // Bounded local filesystem work (capacityLockTimeoutMs caps the worst case);
+  // a degraded lease store never blocks startup, only cross-process JDT admission.
+  await runtimes.initialize();
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error("[codex-java-lsp] MCP server ready");
@@ -122,6 +125,7 @@ async function javaStatusFor(args: z.infer<z.ZodObject<typeof statusSchema>>): P
         activeRepos: runtimes.activeRepos().length
       },
       resource: runtimes.resourceStatus(),
+      leases: await runtimes.leaseStatus(),
       aliases: registry.aliases(),
       aliasRegistry: registry.status(),
       activeRepos: runtimes.activeRepos()

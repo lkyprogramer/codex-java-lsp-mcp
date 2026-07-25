@@ -15,6 +15,14 @@ import {
 } from "./test-support/fake-jdtls.js";
 import type { GeneratedCodeStatus } from "./generated-code.js";
 import type { LspDiagnostic } from "./jdtls-session.js";
+import type {
+  CompositeJdtLease,
+  CrossProcessLeaseStore,
+  CrossProcessLeaseStatus,
+  JdtLeaseAcquireResult,
+  LeaseHandle,
+  LeaseOwner
+} from "./cross-process-lease.js";
 
 const lombokStatus: GeneratedCodeStatus = {
   lombok: {
@@ -76,7 +84,7 @@ type Harness = {
 
 function harness(
   factory: FakeJdtlsTransportFactory,
-  options: { readyStabilityMs?: number } = {}
+  options: { readyStabilityMs?: number; leaseStore?: CrossProcessLeaseStore } = {}
 ): Harness {
   const scratch = mkdtempSync(path.join(tmpdir(), "jdtls-session-"));
   const repoRoot = path.join(scratch, "repo");
@@ -102,7 +110,7 @@ function harness(
   }
 
   let now = 1_000_000;
-  const session = new JdtlsSession(repoRoot, [], factory, () => now);
+  const session = new JdtlsSession(repoRoot, [], factory, () => now, options.leaseStore);
 
   for (const [key, value] of Object.entries({
     JDTLS_BIN: previous.bin,
@@ -125,6 +133,121 @@ async function waitForSpawn(factory: FakeJdtlsTransportFactory, count: number): 
   }
   assert.equal(factory.spawnCalls >= count, true, `expected at least ${count} spawn(s), saw ${factory.spawnCalls}`);
 }
+
+/** A single-slot lease store test double: acquireJdt either always succeeds
+ * (recording whatever pid is given) or always rejects with a fixed result. */
+class FakeLeaseStore implements CrossProcessLeaseStore {
+  acquireCalls = 0;
+  released: string[] = [];
+  recordedPids: number[] = [];
+  recordSucceeds = true;
+  rejection?: Exclude<JdtLeaseAcquireResult, { kind: "ACQUIRED" }>;
+
+  async open(): Promise<void> {}
+
+  async acquireRuntime(): Promise<LeaseHandle> {
+    throw new Error("not used by these tests");
+  }
+
+  async tryAcquireJdt(): Promise<JdtLeaseAcquireResult> {
+    return this.acquireJdt();
+  }
+
+  async acquireJdt(): Promise<JdtLeaseAcquireResult> {
+    this.acquireCalls += 1;
+    if (this.rejection) return this.rejection;
+    const worktree = this.handle("JDT_WORKTREE");
+    const slot = this.handle("JDT_SLOT");
+    const lease: CompositeJdtLease = {
+      worktree,
+      slot,
+      heartbeat: async () => {},
+      release: async () => {
+        await worktree.release();
+        await slot.release();
+      },
+      recordJdtlsPid: async (pid: number) => {
+        this.recordedPids.push(pid);
+        return this.recordSucceeds;
+      }
+    };
+    return { kind: "ACQUIRED", lease };
+  }
+
+  async acquireSweep(): Promise<LeaseHandle> {
+    throw new Error("not used by these tests");
+  }
+
+  async activeRuntimeCount(): Promise<number> {
+    return 0;
+  }
+
+  async status(): Promise<CrossProcessLeaseStatus> {
+    throw new Error("not used by these tests");
+  }
+
+  private handle(kind: LeaseHandle["kind"]): LeaseHandle {
+    const owner: LeaseOwner = { ownerToken: kind, pid: 1, repoRoot: "", repoHash: "", acquiredAt: "", heartbeatAt: "" };
+    return {
+      kind,
+      path: kind,
+      owner,
+      heartbeat: async () => {},
+      release: async () => { this.released.push(kind); }
+    };
+  }
+}
+
+test("a lease metadata-update failure after spawn kills the child and never reaches READY", async () => {
+  const factory = fakeTransportFactory({ initializeResult: { capabilities: {} } });
+  const leaseStore = new FakeLeaseStore();
+  leaseStore.recordSucceeds = false;
+  const { session } = harness(factory, { leaseStore });
+
+  await assert.rejects(
+    () => session.ensureStarted(DeadlineBudget.fromTimeout(5000)),
+    (error: unknown) => error instanceof JavaIntelligenceError && error.code === "LEASE_CONFIG_ERROR"
+  );
+  assert.equal(session.status().state, "BROKEN");
+  assert.equal(session.status().started, false);
+  assert.equal(factory.children[0].killCalls > 0, true, "the spawned child was terminated");
+  assert.deepEqual(leaseStore.released.sort(), ["JDT_SLOT", "JDT_WORKTREE"], "both lease directories are released");
+  assert.equal(session.status().restartBackoff.consecutiveFailures, 0, "a lease failure never pollutes JDT restart backoff");
+  await session.stop();
+});
+
+test("a rejected lease acquisition fails fast without spawning and does not gate future retries", async () => {
+  const factory = fakeTransportFactory({ initializeResult: { capabilities: {} } });
+  const leaseStore = new FakeLeaseStore();
+  leaseStore.rejection = { kind: "BUSY_SAME_WORKTREE" };
+  const { session } = harness(factory, { leaseStore });
+
+  await assert.rejects(
+    () => session.ensureStarted(DeadlineBudget.fromTimeout(5000)),
+    (error: unknown) => error instanceof JavaIntelligenceError && error.code === "JDT_BUSY_OTHER_SESSION"
+  );
+  assert.equal(factory.spawnCalls, 0, "no child is spawned when the lease is rejected");
+  assert.equal(session.status().restartBackoff.consecutiveFailures, 0);
+
+  // The next attempt is not blocked by backoff: another lease attempt is made.
+  leaseStore.rejection = undefined;
+  await session.ensureStarted(DeadlineBudget.fromTimeout(5000));
+  assert.equal(session.status().state, "READY");
+  assert.equal(leaseStore.acquireCalls, 2);
+  await session.stop();
+});
+
+test("a successful start records the spawned jdtls pid on the lease", async () => {
+  const factory = fakeTransportFactory({ initializeResult: { capabilities: {} } });
+  const leaseStore = new FakeLeaseStore();
+  const { session } = harness(factory, { leaseStore });
+
+  await session.ensureStarted(DeadlineBudget.fromTimeout(5000));
+  assert.equal(session.status().state, "READY");
+  assert.deepEqual(leaseStore.recordedPids, [factory.children[0].pid]);
+  await session.stop();
+  assert.deepEqual(leaseStore.released.sort(), ["JDT_SLOT", "JDT_WORKTREE"], "stop() releases the lease");
+});
 
 test("concurrent ensureStarted shares one transactional start", async () => {
   const initialize = deferred<unknown>();

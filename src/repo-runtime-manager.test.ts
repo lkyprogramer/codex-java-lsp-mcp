@@ -7,6 +7,7 @@ import { deferred, delay, type Deferred } from "./test-support/fake-jdtls.js";
 import type { JdtlsLifecycleState } from "./jdtls-session.js";
 import type { ResolvedRepo } from "./repo-resolver.js";
 import { probeLayout } from "./layout-probe.js";
+import { NoopCrossProcessLeaseStore, type CrossProcessLeaseStore } from "./cross-process-lease.js";
 import type { LayoutSource } from "./layout-manager.js";
 
 test("RepoRuntimeManager evicts the oldest idle started runtime before starting another", async () => {
@@ -16,7 +17,7 @@ test("RepoRuntimeManager evicts the oldest idle started runtime before starting 
     idleTtlMs: 100000,
     requestTimeoutMs: 100
   }, resolved => fakeContext(resolved, sessions),
-    fakeCoordination());
+    fakeCoordination(), new NoopCrossProcessLeaseStore());
 
   await manager.withContext({ repoRoot: "/repo-a" }, async context => {
     await (context.session as unknown as FakeSession).ensureStarted();
@@ -37,7 +38,7 @@ test("RepoRuntimeManager fails fast when all active runtimes are in use", async 
     idleTtlMs: 100000,
     requestTimeoutMs: 30
   }, resolved => fakeContext(resolved, sessions),
-    fakeCoordination());
+    fakeCoordination(), new NoopCrossProcessLeaseStore());
   const held = deferred<void>();
   const firstEntered = deferred<void>();
 
@@ -70,7 +71,7 @@ test("STARTING sessions count against the active repo limit", async () => {
     idleTtlMs: 100000,
     requestTimeoutMs: 5000
   }, resolved => fakeContext(resolved, sessions, { "/repo-a": gateA }),
-    fakeCoordination());
+    fakeCoordination(), new NoopCrossProcessLeaseStore());
 
   const first = manager.withContext({ repoRoot: "/repo-a" }, async context => {
     await (context.session as unknown as FakeSession).ensureStarted();
@@ -108,7 +109,7 @@ test("slot waiters are granted in FIFO order", async () => {
     idleTtlMs: 100000,
     requestTimeoutMs: 5000
   }, resolved => fakeContext(resolved, sessions),
-    fakeCoordination());
+    fakeCoordination(), new NoopCrossProcessLeaseStore());
 
   const entered = deferred<void>();
   const first = manager.withContext({ repoRoot: "/repo-a" }, async context => {
@@ -147,7 +148,7 @@ test("a waiter that misses its deadline is removed and never granted later", asy
     idleTtlMs: 100000,
     requestTimeoutMs: 40
   }, resolved => fakeContext(resolved, sessions),
-    fakeCoordination());
+    fakeCoordination(), new NoopCrossProcessLeaseStore());
 
   const entered = deferred<void>();
   const first = manager.withContext({ repoRoot: "/repo-a" }, async context => {
@@ -180,7 +181,7 @@ test("a reservation taken but never used is released for the next caller", async
     idleTtlMs: 100000,
     requestTimeoutMs: 5000
   }, resolved => fakeContext(resolved, sessions),
-    fakeCoordination());
+    fakeCoordination(), new NoopCrossProcessLeaseStore());
 
   // mayStartLsp only means "the handler is allowed to start JDT", not that it will.
   await manager.withContext({ repoRoot: "/repo-a" }, async () => undefined, { mayStartLsp: true });
@@ -202,7 +203,7 @@ test("a session that breaks releases its slot to a queued waiter", async () => {
     idleTtlMs: 100000,
     requestTimeoutMs: 5000
   }, resolved => fakeContext(resolved, sessions),
-    fakeCoordination());
+    fakeCoordination(), new NoopCrossProcessLeaseStore());
 
   const entered = deferred<void>();
   const first = manager.withContext({ repoRoot: "/repo-a" }, async context => {
@@ -236,7 +237,7 @@ test("activeRepos exposes lifecycle state and reservation", async () => {
     idleTtlMs: 100000,
     requestTimeoutMs: 5000
   }, resolved => fakeContext(resolved, sessions),
-    fakeCoordination());
+    fakeCoordination(), new NoopCrossProcessLeaseStore());
 
   await manager.withContext({ repoRoot: "/repo-a" }, async context => {
     await (context.session as unknown as FakeSession).ensureStarted();
@@ -257,7 +258,8 @@ test("two concurrent contextFor calls share one runtime and one coordinator", as
     fakeResolver(),
     { maxActiveRepos: 2, idleTtlMs: 100000, requestTimeoutMs: 5000 },
     resolved => { contextCalls += 1; return fakeContext(resolved, sessions); },
-    fakeCoordination(coordinators)
+    fakeCoordination(coordinators),
+    new NoopCrossProcessLeaseStore()
   );
 
   const [a, b] = await Promise.all([
@@ -269,6 +271,47 @@ test("two concurrent contextFor calls share one runtime and one coordinator", as
   assert.equal(contextCalls, 1, "the runtime is created once");
   assert.equal(coordinators.size, 1, "one coordinator for the shared runtime");
   assert.equal([...coordinators.values()][0].starts, 1, "the watcher is started once");
+});
+
+test("initialize() singleflights lease store opening and a degraded store still leaves the fast path usable", async () => {
+  let openCalls = 0;
+  const degradedLeaseStore: CrossProcessLeaseStore = {
+    async open() {
+      openCalls += 1;
+      throw new Error("disk full");
+    },
+    async acquireRuntime() { throw new Error("not used by this test"); },
+    async tryAcquireJdt() { throw new Error("not used by this test"); },
+    async acquireJdt() { throw new Error("not used by this test"); },
+    async acquireSweep() { throw new Error("not used by this test"); },
+    async activeRuntimeCount() { return 0; },
+    async status() {
+      return {
+        opened: false, configuredJdtSlots: 0, configuredSweepSlots: 0,
+        requestedJdtSlots: 0, requestedSweepSlots: 0, capacityConflict: false,
+        runtimeLeases: 0, jdtWorktreeLeases: 0, claimedJdtSlots: 0, claimedSweepSlots: 0,
+        staleLeaseReclaims: 0
+      };
+    }
+  };
+  const sessions = new Map<string, FakeSession>();
+  const manager = new RepoRuntimeManager(
+    fakeResolver(),
+    { idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    resolved => fakeContext(resolved, sessions),
+    fakeCoordination(),
+    degradedLeaseStore
+  );
+
+  await Promise.all([manager.initialize(), manager.initialize()]);
+  assert.equal(openCalls, 1, "open() runs once even under concurrent initialize() calls");
+
+  const status = await manager.leaseStatus();
+  assert.match(status.initError ?? "", /disk full/);
+
+  let handlerRan = false;
+  await manager.withContext({ repoRoot: "/repo-a" }, async () => { handlerRan = true; }, {});
+  assert.equal(handlerRan, true, "a degraded lease store does not block the fast/lexical path");
 });
 
 test("fully stopped idle runtimes are removed from the runtime map beyond the retention bound", async () => {
@@ -336,7 +379,8 @@ test("reconcileIfDirty runs once under two concurrent requests and clears dirty 
       sourceIndex: sourceIndexStub as never,
       router: { clearRgCache() {} } as never
     }),
-    () => ({ generation: clock, coordinator, layout: { current: () => layout, refresh: () => ({ changed: false, layout }) } })
+    () => ({ generation: clock, coordinator, layout: { current: () => layout, refresh: () => ({ changed: false, layout }) } }),
+    new NoopCrossProcessLeaseStore()
   );
 
   const first = manager.withContext({ repoRoot: "/repo-a" }, async () => {}, {});
@@ -375,7 +419,8 @@ test("reconcileIfDirty leaves dirty set when reconcile fails, without failing th
       sourceIndex: sourceIndexStub as never,
       router: { clearRgCache() {} } as never
     }),
-    () => ({ generation: clock, coordinator, layout: { current: () => layout, refresh: () => ({ changed: false, layout }) } })
+    () => ({ generation: clock, coordinator, layout: { current: () => layout, refresh: () => ({ changed: false, layout }) } }),
+    new NoopCrossProcessLeaseStore()
   );
 
   let handlerRan = false;
@@ -489,7 +534,8 @@ function managerWith(
     fakeResolver(),
     { idleTtlMs: 100000, requestTimeoutMs: 5000, ...options },
     resolved => fakeContext(resolved, sessions, gates),
-    fakeCoordination(coordinators)
+    fakeCoordination(coordinators),
+    new NoopCrossProcessLeaseStore()
   );
 }
 

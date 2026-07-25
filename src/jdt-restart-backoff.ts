@@ -24,9 +24,16 @@ const BASE_BACKOFF_MS = 500;
 const CONFIG_CODES = new Set<JavaIntelligenceErrorCode>(["JDT_CONFIG_ERROR"]);
 
 // Caller-side outcomes say nothing about JDT health and must never gate a restart.
+// The four lease codes are cross-process contention (another session owns the
+// worktree/machine slot, or the shared lease config is transiently unusable),
+// not a signal that *this* process's JDT is unhealthy.
 const IGNORED_CODES = new Set<JavaIntelligenceErrorCode>([
   "DEADLINE_EXCEEDED",
-  "CANCELLED"
+  "CANCELLED",
+  "JDT_BUSY_OTHER_SESSION",
+  "JDT_ORPHANED",
+  "JDT_NOT_READY",
+  "LEASE_CONFIG_ERROR"
 ]);
 
 export class JdtRestartBackoff {

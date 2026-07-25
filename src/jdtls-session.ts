@@ -6,6 +6,12 @@ import { createWriteStream, existsSync, readFileSync, rmSync, statSync } from "n
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { CancellationTokenSource } from "vscode-jsonrpc/node.js";
+import {
+  NoopCrossProcessLeaseStore,
+  type CompositeJdtLease,
+  type CrossProcessLeaseStore,
+  type JdtLeaseAcquireResult
+} from "./cross-process-lease.js";
 import { JdtRestartBackoff, type JdtRestartBackoffStatus } from "./jdt-restart-backoff.js";
 import {
   defaultJdtlsTransportFactory,
@@ -14,6 +20,7 @@ import {
   type JdtlsTransportAttempt,
   type JdtlsTransportFactory
 } from "./jdtls-transport.js";
+import { repoHash } from "./path-utils.js";
 import { DeadlineBudget } from "./runtime/deadline-budget.js";
 import { isCacheableCompletion, type Completion } from "./runtime/completion.js";
 import {
@@ -34,6 +41,7 @@ import { detectBuildSystem, resolveProjectJdk, type BuildSystem, type ProjectJdk
 import { fromFileUri, repoCacheRoot, toFileUri } from "./repo-layout.js";
 import { resourceDefaults } from "./resource-defaults.js";
 import { touchRepoCache } from "./worktree-cache-cleanup.js";
+import type { WorktreeIdentity } from "./worktree-identity.js";
 
 export type LspPosition = {
   line: number;
@@ -207,13 +215,18 @@ export class JdtlsSession {
   private lastProgressAt?: Date;
   private lastLanguageStatus?: string;
   private phaseMetrics: Record<string, number> = {};
+  private pendingLease?: CompositeJdtLease;
+  private readonly worktree: WorktreeIdentity;
 
   constructor(
     private readonly repoRoot: string,
     aliases: string[] = [],
     private readonly transportFactory: JdtlsTransportFactory = defaultJdtlsTransportFactory,
-    now: () => number = Date.now
+    now: () => number = Date.now,
+    private readonly leaseStore: CrossProcessLeaseStore = new NoopCrossProcessLeaseStore(),
+    worktree?: WorktreeIdentity
   ) {
+    this.worktree = worktree ?? { repoRoot, repoHash: repoHash(repoRoot), isLinkedWorktree: false };
     this.restartBackoff = new JdtRestartBackoff(now);
     const cacheRoot = repoCacheRoot(repoRoot);
     this.dataDir = process.env.JDTLS_DATA_DIR || path.join(cacheRoot, "workspace");
@@ -286,15 +299,20 @@ export class JdtlsSession {
       }
       let sharedStart = this.startPromise;
       if (!sharedStart) {
+        // Claim the singleflight synchronously (this.startPromise is assigned
+        // before any await below), so a second concurrent ensureStarted() call
+        // sees `sharedStart` already set instead of racing its own lease
+        // acquisition and spawn. The lease check itself happens inside
+        // startAfterLease, gating the spawn but not this synchronous claim.
         this.transition("STARTING");
-        // The start owns its own hard cap. A caller deadline only stops that
-        // caller from waiting; it must never kill work shared with another caller.
-        const startBudget = DeadlineBudget.fromTimeout(this.startHardCapMs);
-        const created: Promise<void> = this.startTransactional(startBudget)
-          .catch((error: unknown) => {
+        const created: Promise<void> = this.startAfterLease(callerBudget)
+          .catch(async (error: unknown) => {
             const classified = classifyJdtStartError(error);
             if (this.lifecycleState !== "STOPPED") this.transition("BROKEN");
+            // Cross-process contention (IGNORED_CODES) never pollutes the
+            // backoff counter; a genuine JDT start failure still does.
             this.restartBackoff.recordFailure(classified.code);
+            await this.releasePendingLease();
             throw classified;
           })
           .finally(() => {
@@ -313,6 +331,37 @@ export class JdtlsSession {
     if (this.lifecycleState === next) return;
     this.lifecycleState = next;
     for (const listener of this.lifecycleListeners) listener(next);
+  }
+
+  private async startAfterLease(callerBudget: DeadlineBudget): Promise<void> {
+    const leaseResult = await this.acquireCrossProcessLease(callerBudget);
+    if (leaseResult.kind !== "ACQUIRED") {
+      throw leaseAcquireResultToError(leaseResult);
+    }
+    this.pendingLease = leaseResult.lease;
+    // The start owns its own hard cap. A caller deadline only stops that
+    // caller from waiting; it must never kill work shared with another caller.
+    const startBudget = DeadlineBudget.fromTimeout(this.startHardCapMs);
+    await this.startTransactional(startBudget);
+  }
+
+  /** A lease-store failure (corrupt shared config, lock timeout) is reported the same as a lease being unavailable. */
+  private async acquireCrossProcessLease(budget: DeadlineBudget): Promise<JdtLeaseAcquireResult> {
+    try {
+      return await this.leaseStore.acquireJdt(this.worktree, budget);
+    } catch (error) {
+      throw new JavaIntelligenceError(
+        "LEASE_CONFIG_ERROR",
+        error instanceof Error ? error.message : String(error),
+        error
+      );
+    }
+  }
+
+  private async releasePendingLease(): Promise<void> {
+    const lease = this.pendingLease;
+    this.pendingLease = undefined;
+    if (lease) await lease.release();
   }
 
   /**
@@ -405,6 +454,10 @@ export class JdtlsSession {
     if (child) {
       await terminateChild(child, 200);
     }
+    // A start failure already releases via ensureStarted()'s own catch (awaited
+    // above through startPromise); this is a no-op in that case and the only
+    // release path when stop() is called on an already-READY session.
+    await this.releasePendingLease();
     touchRepoCache(this.repoRoot);
     this.openDocuments.clear();
     this.diagnostics.clear();
@@ -756,6 +809,15 @@ export class JdtlsSession {
     touchRepoCache(this.repoRoot, { jdtlsPid: attempt.child.pid });
 
     try {
+      if (this.pendingLease && attempt.child.pid !== undefined) {
+        const recorded = await this.pendingLease.recordJdtlsPid(attempt.child.pid);
+        if (!recorded) {
+          throw new JavaIntelligenceError(
+            "LEASE_CONFIG_ERROR",
+            "the cross-process JDT lease was lost before initialize could commit"
+          );
+        }
+      }
       const initializeResult = await budget.race(
         "jdtls.initialize",
         attempt.connection.sendRequest("initialize", this.initializeParams()),
@@ -840,8 +902,11 @@ export class JdtlsSession {
           this.readyStableTimer = undefined;
         }
         // A STARTING attempt's failure is recorded once by the shared start
-        // promise catch, so only a READY child's death is counted here.
+        // promise catch, so only a READY child's death is counted here. The
+        // same is true of the lease release: a STARTING attempt's failure
+        // releases it through that same catch.
         this.restartBackoff.recordFailure("JDT_BROKEN");
+        void this.releasePendingLease();
       }
       try {
         attempt.connection.dispose();
@@ -1468,6 +1533,23 @@ export function classifyJdtStartError(error: unknown): JavaIntelligenceError {
     return new JavaIntelligenceError("JDT_BROKEN", message, error);
   }
   return new JavaIntelligenceError("JDT_SERVER_ERROR", message, error);
+}
+
+function leaseAcquireResultToError(result: Exclude<JdtLeaseAcquireResult, { kind: "ACQUIRED" }>): JavaIntelligenceError {
+  if (result.kind === "BUSY_SAME_WORKTREE") {
+    return new JavaIntelligenceError(
+      "JDT_BUSY_OTHER_SESSION",
+      "Another codex-java-lsp process already runs JDT LS for this worktree."
+    );
+  }
+  if (result.kind === "ORPHAN_JDT") {
+    return new JavaIntelligenceError(
+      "JDT_ORPHANED",
+      `A previous session's JDT LS process (pid ${result.owner.jdtlsPid}) is still running for this worktree; `
+      + "it must exit before a new one can start here."
+    );
+  }
+  return new JavaIntelligenceError("JDT_NOT_READY", "No machine-wide JDT slot is available right now.");
 }
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string, onTimeout?: () => void): Promise<T> {

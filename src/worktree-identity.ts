@@ -51,6 +51,16 @@ export async function resolveWorktreeIdentity(inputRoot: string): Promise<Worktr
   };
 }
 
+/**
+ * The scoping key for cross-process JDT/sweep leases: linked worktrees of the
+ * same Git repo share one family and so must not run a second JDT for "the
+ * same" checkout under a different path. Never use this for cache/JavaIndex
+ * identity — that stays repoHash (Task 9).
+ */
+export function leaseFamilyKey(identity: WorktreeIdentity): string {
+  return identity.familyHash ?? identity.repoHash;
+}
+
 /** Promise-cached identity so repeated tool calls do not respawn Git. */
 export class WorktreeIdentityCache {
   private readonly entries = new Map<string, Promise<WorktreeIdentity>>();

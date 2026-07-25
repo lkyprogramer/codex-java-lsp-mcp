@@ -1,7 +1,14 @@
 // input: Resolved repo roots.
 // output: Per-repo runtime contexts.
 // pos: Lazy runtime manager; one context per canonical repoRoot with small LRU/idle control.
+import path from "node:path";
 import { AgentRouter } from "./agent-router/index.js";
+import {
+  defaultLeaseClockDeps,
+  FileCrossProcessLeaseStore,
+  type CrossProcessLeaseStatus,
+  type CrossProcessLeaseStore
+} from "./cross-process-lease.js";
 import { JdtlsSession, type JdtlsLifecycleState } from "./jdtls-session.js";
 import { LayoutManager, type LayoutSource } from "./layout-manager.js";
 import { RepoChangeCoordinator } from "./repo-change-coordinator.js";
@@ -103,11 +110,15 @@ export class RepoRuntimeManager {
   private readonly options: RuntimeManagerOptions;
   private readonly defaults: ResourceDefaults;
 
+  private leaseReady?: Promise<void>;
+  private leaseInitError?: string;
+
   constructor(
     private readonly resolver: Pick<RepoResolver, "resolve">,
     options: Partial<RuntimeManagerOptions> = {},
-    private readonly runtimeFactory: (resolved: ResolvedRepo) => ManagedToolContext = createRuntime,
-    private readonly coordinationFactory: CoordinationFactory = createCoordination
+    private readonly runtimeFactory: (resolved: ResolvedRepo, leases: CrossProcessLeaseStore) => ManagedToolContext = createRuntime,
+    private readonly coordinationFactory: CoordinationFactory = createCoordination,
+    private readonly leases: CrossProcessLeaseStore = createDefaultLeaseStore()
   ) {
     this.defaults = resourceDefaults();
     this.options = {
@@ -117,6 +128,30 @@ export class RepoRuntimeManager {
       maxRetainedStoppedRepos: positiveInteger(process.env.JAVA_LSP_MAX_RETAINED_STOPPED_REPOS, 2),
       ...options
     };
+  }
+
+  /**
+   * Opens the shared machine-wide capacity once per process (singleflighted).
+   * A degraded lease store never blocks server startup: the fast lexical/rg
+   * path stays usable, and every subsequent `JdtlsSession.ensureStarted()`
+   * naturally fails with LEASE_CONFIG_ERROR (FileCrossProcessLeaseStore's own
+   * `assertOpen()` guard), so no separate gate is needed here.
+   */
+  initialize(): Promise<void> {
+    return this.leaseReady ??= this.leases
+      .open({
+        jdtSlots: this.options.maxActiveRepos,
+        sweepSlots: positiveInteger(process.env.JAVA_LSP_MAX_BACKGROUND_SWEEPS, 1)
+      })
+      .catch(error => {
+        this.leaseInitError = error instanceof Error ? error.message : String(error);
+        console.error(`[codex-java-lsp] cross-process JDT lease store degraded: ${this.leaseInitError}`);
+      });
+  }
+
+  async leaseStatus(): Promise<CrossProcessLeaseStatus & { initError?: string }> {
+    const status = await this.leases.status();
+    return { ...status, initError: this.leaseInitError };
   }
 
   async contextFor(selector: RepoSelector): Promise<ManagedToolContext> {
@@ -366,7 +401,7 @@ export class RepoRuntimeManager {
   private async createEntry(resolved: ResolvedRepo): Promise<RuntimeEntry> {
     const { generation, coordinator, layout } = this.coordinationFactory(resolved);
     const entry: RuntimeEntry = {
-      context: this.runtimeFactory(resolved),
+      context: this.runtimeFactory(resolved, this.leases),
       generation,
       coordinator,
       layout,
@@ -532,8 +567,8 @@ export class RepoRuntimeManager {
   }
 }
 
-function createRuntime(resolved: ResolvedRepo): ManagedToolContext {
-  const session = new JdtlsSession(resolved.repoRoot, resolved.aliases);
+function createRuntime(resolved: ResolvedRepo, leases: CrossProcessLeaseStore): ManagedToolContext {
+  const session = new JdtlsSession(resolved.repoRoot, resolved.aliases, undefined, undefined, leases, resolved.worktree);
   const sourceIndex = new SourceIndex(resolved.repoRoot);
   const router = new AgentRouter(resolved.repoRoot, session, sourceIndex);
   return {
@@ -548,6 +583,10 @@ function createRuntime(resolved: ResolvedRepo): ManagedToolContext {
     sourceIndex,
     router
   };
+}
+
+function createDefaultLeaseStore(): CrossProcessLeaseStore {
+  return new FileCrossProcessLeaseStore(path.join(repoCacheBase(), "leases"), defaultLeaseClockDeps());
 }
 
 function createCoordination(resolved: ResolvedRepo): RuntimeCoordination {
