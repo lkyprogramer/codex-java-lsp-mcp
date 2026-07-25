@@ -1,0 +1,163 @@
+warm-up cycle (discarded): {"index":0,"elapsedMs":1395.4846659999998,"stale":false}
+{
+  "fixture": "synthetic (golden repos unreadable in this environment)",
+  "cycles": 30,
+  "staleCount": 0,
+  "p50Ms": 179.93425000000002,
+  "p95Ms": 345.3283339999998,
+  "pollIntervalMs": 25,
+  "perCycleTimeoutMs": 3000,
+  "raw": [
+    {
+      "index": 1,
+      "elapsedMs": 179.93425000000002,
+      "stale": false
+    },
+    {
+      "index": 2,
+      "elapsedMs": 172.37520799999993,
+      "stale": false
+    },
+    {
+      "index": 3,
+      "elapsedMs": 199.62691700000028,
+      "stale": false
+    },
+    {
+      "index": 4,
+      "elapsedMs": 185.76616699999977,
+      "stale": false
+    },
+    {
+      "index": 5,
+      "elapsedMs": 197.34179099999983,
+      "stale": false
+    },
+    {
+      "index": 6,
+      "elapsedMs": 192.74670799999967,
+      "stale": false
+    },
+    {
+      "index": 7,
+      "elapsedMs": 175.0435419999999,
+      "stale": false
+    },
+    {
+      "index": 8,
+      "elapsedMs": 171.85770900000034,
+      "stale": false
+    },
+    {
+      "index": 9,
+      "elapsedMs": 169.34937499999978,
+      "stale": false
+    },
+    {
+      "index": 10,
+      "elapsedMs": 168.3235420000001,
+      "stale": false
+    },
+    {
+      "index": 11,
+      "elapsedMs": 175.78420800000004,
+      "stale": false
+    },
+    {
+      "index": 12,
+      "elapsedMs": 172.09241599999996,
+      "stale": false
+    },
+    {
+      "index": 13,
+      "elapsedMs": 171.4675000000002,
+      "stale": false
+    },
+    {
+      "index": 14,
+      "elapsedMs": 173.332625,
+      "stale": false
+    },
+    {
+      "index": 15,
+      "elapsedMs": 170.9772499999999,
+      "stale": false
+    },
+    {
+      "index": 16,
+      "elapsedMs": 174.535167,
+      "stale": false
+    },
+    {
+      "index": 17,
+      "elapsedMs": 173.50562499999978,
+      "stale": false
+    },
+    {
+      "index": 18,
+      "elapsedMs": 279.9871660000008,
+      "stale": false
+    },
+    {
+      "index": 19,
+      "elapsedMs": 176.96962499999972,
+      "stale": false
+    },
+    {
+      "index": 20,
+      "elapsedMs": 174.28179200000068,
+      "stale": false
+    },
+    {
+      "index": 21,
+      "elapsedMs": 183.54904199999964,
+      "stale": false
+    },
+    {
+      "index": 22,
+      "elapsedMs": 379.1149580000001,
+      "stale": false
+    },
+    {
+      "index": 23,
+      "elapsedMs": 331.62629200000083,
+      "stale": false
+    },
+    {
+      "index": 24,
+      "elapsedMs": 345.3283339999998,
+      "stale": false
+    },
+    {
+      "index": 25,
+      "elapsedMs": 256.9676670000008,
+      "stale": false
+    },
+    {
+      "index": 26,
+      "elapsedMs": 231.66791699999976,
+      "stale": false
+    },
+    {
+      "index": 27,
+      "elapsedMs": 233.34616599999936,
+      "stale": false
+    },
+    {
+      "index": 28,
+      "elapsedMs": 199.81283299999996,
+      "stale": false
+    },
+    {
+      "index": 29,
+      "elapsedMs": 239.7366659999998,
+      "stale": false
+    },
+    {
+      "index": 30,
+      "elapsedMs": 204.8252080000002,
+      "stale": false
+    }
+  ]
+}
+GATE: PASS (stale=0, P95<=500ms) on this machine/fixture
