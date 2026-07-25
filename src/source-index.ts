@@ -5,6 +5,8 @@ import { spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { LspDocumentSymbol } from "./jdtls-session.js";
+import type { LayoutContext } from "./layout-probe.js";
+import { isWithin } from "./path-utils.js";
 import { classifyPath, normalizeRepoFile, repoCacheRoot } from "./repo-layout.js";
 import { parseMethodRelations, type MethodRelationFact } from "./source-index-method-relations.js";
 
@@ -205,6 +207,29 @@ export class SourceIndex {
       // Rewrite the persisted snapshot so removed files do not reappear on reload.
       this.compact();
     }
+  }
+
+  /**
+   * Catch-up pass for a runtime marked dirty (watcher degraded, or a build
+   * change that added/removed a source root). No unlink event announces a
+   * file that vanished while the watcher was down, or one that fell outside
+   * every current source root, so this scans the live cache for both.
+   */
+  async reconcile(layout: LayoutContext, _generation: number): Promise<void> {
+    const sourceRoots = layout.sourceRoots.map(root => path.resolve(this.repoRoot, root.relativePath));
+    const stale: string[] = [];
+    for (const absolutePath of this.cache.keys()) {
+      if (!existsSync(absolutePath)) {
+        stale.push(absolutePath);
+        continue;
+      }
+      // Only evict "moved out of every root" when roots are known; a
+      // flat-layout repo with no detected source roots must not be wiped.
+      if (sourceRoots.length > 0 && !sourceRoots.some(root => isWithin(root, absolutePath))) {
+        stale.push(absolutePath);
+      }
+    }
+    if (stale.length > 0) this.removeFiles(stale);
   }
 
   factsFor(inputFile: string): JavaSourceFacts {

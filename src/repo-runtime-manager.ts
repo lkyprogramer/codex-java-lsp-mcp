@@ -3,7 +3,7 @@
 // pos: Lazy runtime manager; one context per canonical repoRoot with small LRU/idle control.
 import { AgentRouter } from "./agent-router/index.js";
 import { JdtlsSession, type JdtlsLifecycleState } from "./jdtls-session.js";
-import { probeLayout } from "./layout-probe.js";
+import { LayoutManager, type LayoutSource } from "./layout-manager.js";
 import { RepoChangeCoordinator } from "./repo-change-coordinator.js";
 import { GenerationClock, type RepoChangeBatch } from "./repo-generation.js";
 import { repoCacheBase } from "./repo-layout.js";
@@ -45,6 +45,7 @@ export interface RuntimeCoordinator {
 export type RuntimeCoordination = {
   generation: GenerationClock;
   coordinator: RuntimeCoordinator;
+  layout: LayoutSource;
 };
 
 export type CoordinationFactory = (resolved: ResolvedRepo) => RuntimeCoordination;
@@ -68,12 +69,14 @@ type RuntimeEntry = {
   context: ManagedToolContext;
   generation: GenerationClock;
   coordinator: RuntimeCoordinator;
+  layout: LayoutSource;
   ready: Promise<void>;
   refCount: number;
   lastUsedAt: number;
   idleTimer?: NodeJS.Timeout;
   lspReservation: LspReservation;
   unsubscribeLifecycle?: () => void;
+  reconcilePromise?: Promise<void>;
 };
 
 type SlotWaiter = {
@@ -171,11 +174,11 @@ export class RepoRuntimeManager {
     let freshnessMode: RequestFreshnessMode;
     let cacheReadAllowed = false;
     let cacheWriteAllowed = false;
-    const negativeLookupAllowed = false; // coverage tracking arrives in Task 11 / Iteration C
+    const negativeLookupAllowed = false; // negative-answer coverage tracking arrives in Iteration C
 
     if (ready) {
       await entry.coordinator.flushNow();      // already-delivered debounced events
-      await this.reconcileIfDirty(entry);      // Task 11 fills this; no-op while clean
+      await this.reconcileIfDirty(entry);      // no-op unless a reconcile is pending
       await entry.coordinator.flushNow();      // events delivered during reconcile
       const clock = entry.generation.snapshot();
       freshnessMode = clock.dirty ? "WATCHER_DEGRADED" : "NORMAL";
@@ -201,9 +204,30 @@ export class RepoRuntimeManager {
     });
   }
 
-  /** Task 11 implements reconcile; Iteration B ships the fixed call position. */
-  private async reconcileIfDirty(_entry: RuntimeEntry): Promise<void> {
-    // No-op shell: the dirty state is cleared by Task 11's SourceIndex reconcile.
+  /**
+   * Singleflight: two concurrent requests against a dirty runtime share one
+   * reconcile. A failure leaves `dirty` set (clearDirty is never reached), so
+   * the runtime stays DEGRADED and the next request tries again rather than
+   * silently believing the index is clean.
+   */
+  private async reconcileIfDirty(entry: RuntimeEntry): Promise<void> {
+    if (!entry.generation.snapshot().dirty) return;
+    if (!entry.reconcilePromise) {
+      const operation = (async () => {
+        const generationAtStart = entry.generation.snapshot().value;
+        try {
+          await entry.context.sourceIndex.reconcile(entry.layout.current(), generationAtStart);
+          entry.generation.clearDirty(generationAtStart);
+        } catch {
+          // Reconcile failure must not fail the request: output coverage stays
+          // DEGRADED and the next dirty request retries the reconcile.
+        }
+      })().finally(() => {
+        if (entry.reconcilePromise === operation) entry.reconcilePromise = undefined;
+      });
+      entry.reconcilePromise = operation;
+    }
+    await entry.reconcilePromise;
   }
 
   reservedCount(): number {
@@ -296,11 +320,12 @@ export class RepoRuntimeManager {
   }
 
   private async createEntry(resolved: ResolvedRepo): Promise<RuntimeEntry> {
-    const { generation, coordinator } = this.coordinationFactory(resolved);
+    const { generation, coordinator, layout } = this.coordinationFactory(resolved);
     const entry: RuntimeEntry = {
       context: this.runtimeFactory(resolved),
       generation,
       coordinator,
+      layout,
       ready: Promise.resolve(),
       refCount: 0,
       lastUsedAt: Date.now(),
@@ -319,7 +344,6 @@ export class RepoRuntimeManager {
       entry.context.router.onRepoChanged(batch);
       entry.context.sourceIndex.applyChanges(batch);
       entry.context.session.invalidateForRepoChanges(batch);
-      // BUILD_CHANGE layout refresh + delete/rename eviction complete in Task 11.
     });
     // Store the readiness promise; the freshness barrier (Task 10) waits on it
     // only within the request budget, so a slow initial scan never blocks here.
@@ -484,12 +508,13 @@ function createRuntime(resolved: ResolvedRepo): ManagedToolContext {
 
 function createCoordination(resolved: ResolvedRepo): RuntimeCoordination {
   const generation = new GenerationClock();
+  const layout = new LayoutManager(resolved.repoRoot, resolved.layoutProfile);
   const coordinator = new RepoChangeCoordinator(
     resolved.repoRoot,
     resolved.worktree,
     repoCacheBase(),
     generation,
-    () => probeLayout(resolved.repoRoot, resolved.layoutProfile)
+    layout
   );
-  return { generation, coordinator };
+  return { generation, coordinator, layout };
 }

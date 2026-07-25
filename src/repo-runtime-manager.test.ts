@@ -6,6 +6,8 @@ import { JavaIntelligenceError } from "./runtime/intelligence-error.js";
 import { deferred, delay, type Deferred } from "./test-support/fake-jdtls.js";
 import type { JdtlsLifecycleState } from "./jdtls-session.js";
 import type { ResolvedRepo } from "./repo-resolver.js";
+import { probeLayout } from "./layout-probe.js";
+import type { LayoutSource } from "./layout-manager.js";
 
 test("RepoRuntimeManager evicts the oldest idle started runtime before starting another", async () => {
   const sessions = new Map<string, FakeSession>();
@@ -269,6 +271,85 @@ test("two concurrent contextFor calls share one runtime and one coordinator", as
   assert.equal([...coordinators.values()][0].starts, 1, "the watcher is started once");
 });
 
+test("reconcileIfDirty runs once under two concurrent requests and clears dirty via compare-and-set", async () => {
+  const clock = new GenerationClock();
+  clock.markDirty("test-forced-dirty");
+  const coordinator = new FakeCoordinator();
+  const layout = probeLayout("/repo-a");
+
+  let reconcileCalls = 0;
+  let releaseReconcile!: () => void;
+  const reconcileGate = new Promise<void>(resolve => { releaseReconcile = resolve; });
+  const sourceIndexStub = {
+    async reconcile(): Promise<void> {
+      reconcileCalls += 1;
+      await reconcileGate;
+    }
+  };
+
+  const manager = new RepoRuntimeManager(
+    fakeResolver(),
+    { idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    resolved => ({
+      repoRoot: resolved.repoRoot,
+      rootSource: resolved.rootSource,
+      repoHash: resolved.repoHash,
+      aliases: resolved.aliases,
+      layoutProfile: resolved.layoutProfile,
+      lsp: resolved.lsp,
+      session: new FakeSession() as never,
+      sourceIndex: sourceIndexStub as never,
+      router: { clearRgCache() {} } as never
+    }),
+    () => ({ generation: clock, coordinator, layout: { current: () => layout, refresh: () => ({ changed: false, layout }) } })
+  );
+
+  const first = manager.withContext({ repoRoot: "/repo-a" }, async () => {}, {});
+  await waitFor(() => reconcileCalls === 1);
+  const second = manager.withContext({ repoRoot: "/repo-a" }, async () => {}, {});
+
+  releaseReconcile();
+  await Promise.all([first, second]);
+
+  assert.equal(reconcileCalls, 1, "two concurrent dirty requests share one reconcile");
+  assert.equal(clock.snapshot().dirty, false, "clearDirty succeeds since no new change arrived during reconcile");
+});
+
+test("reconcileIfDirty leaves dirty set when reconcile fails, without failing the request", async () => {
+  const clock = new GenerationClock();
+  clock.markDirty("test-forced-dirty");
+  const coordinator = new FakeCoordinator();
+  const layout = probeLayout("/repo-a");
+  const sourceIndexStub = {
+    async reconcile(): Promise<void> {
+      throw new Error("reconcile boom");
+    }
+  };
+
+  const manager = new RepoRuntimeManager(
+    fakeResolver(),
+    { idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    resolved => ({
+      repoRoot: resolved.repoRoot,
+      rootSource: resolved.rootSource,
+      repoHash: resolved.repoHash,
+      aliases: resolved.aliases,
+      layoutProfile: resolved.layoutProfile,
+      lsp: resolved.lsp,
+      session: new FakeSession() as never,
+      sourceIndex: sourceIndexStub as never,
+      router: { clearRgCache() {} } as never
+    }),
+    () => ({ generation: clock, coordinator, layout: { current: () => layout, refresh: () => ({ changed: false, layout }) } })
+  );
+
+  let handlerRan = false;
+  await manager.withContext({ repoRoot: "/repo-a" }, async () => { handlerRan = true; }, {});
+
+  assert.equal(handlerRan, true, "a reconcile failure does not fail the request");
+  assert.equal(clock.snapshot().dirty, true, "dirty remains set so the next request retries reconcile");
+});
+
 async function waitFor(condition: () => boolean): Promise<void> {
   for (let attempt = 0; attempt < 200 && !condition(); attempt += 1) {
     await delay(5);
@@ -350,11 +431,16 @@ class FakeCoordinator {
   }
 }
 
+function fakeLayoutSource(repoRoot: string): LayoutSource {
+  const layout = probeLayout(repoRoot);
+  return { current: () => layout, refresh: () => ({ changed: false, layout }) };
+}
+
 function fakeCoordination(coordinators?: Map<string, FakeCoordinator>) {
   return (resolved: ResolvedRepo): RuntimeCoordination => {
     const coordinator = new FakeCoordinator();
     coordinators?.set(resolved.repoRoot, coordinator);
-    return { generation: new GenerationClock(), coordinator };
+    return { generation: new GenerationClock(), coordinator, layout: fakeLayoutSource(resolved.repoRoot) };
   };
 }
 

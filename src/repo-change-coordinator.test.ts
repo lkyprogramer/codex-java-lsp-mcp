@@ -10,6 +10,7 @@ import {
 } from "./repo-change-coordinator.js";
 import { GenerationClock, type RepoChangeBatch } from "./repo-generation.js";
 import { probeLayout, type LayoutContext } from "./layout-probe.js";
+import { LayoutManager, type LayoutSource } from "./layout-manager.js";
 import { canonicalPath } from "./path-utils.js";
 import type { WorktreeIdentity } from "./worktree-identity.js";
 import { createGitWorktreeFamily } from "./test-support/git-worktree.js";
@@ -22,6 +23,13 @@ function repo(): { root: string; layout: LayoutContext } {
   writeFileSync(path.join(root, "pom.xml"), "<project></project>\n");
   writeFileSync(path.join(root, "src", "main", "java", "demo", "A.java"), "class A {}\n");
   return { root, layout: probeLayout(root) };
+}
+
+function staticLayoutSource(layout: LayoutContext): LayoutSource {
+  return {
+    current: () => layout,
+    refresh: () => ({ changed: false, layout })
+  };
 }
 
 function identityFor(root: string, gitCommonDir?: string): WorktreeIdentity {
@@ -86,7 +94,7 @@ async function coordinatorFor(): Promise<{ coordinator: RepoChangeCoordinator; c
   const { root, layout } = repo();
   const clock = new GenerationClock();
   const cacheBase = canonicalPath(mkdtempSync(path.join(tmpdir(), "cache-")));
-  const coordinator = new RepoChangeCoordinator(root, identityFor(root), cacheBase, clock, () => layout);
+  const coordinator = new RepoChangeCoordinator(root, identityFor(root), cacheBase, clock, staticLayoutSource(layout));
   const batches: RepoChangeBatch[] = [];
   coordinator.onBatch(batch => { batches.push(batch); });
   return { coordinator, clock, root, batches };
@@ -126,11 +134,50 @@ test("a listener exception marks the clock dirty and still runs later listeners"
   assert.equal(clock.snapshot().dirty, true);
 });
 
+test("a BUILD_CHANGE reconfigures the watch plan so a newly added module's source root is recognized", async () => {
+  const { root } = repo();
+  const clock = new GenerationClock();
+  const cacheBase = canonicalPath(mkdtempSync(path.join(tmpdir(), "cache-")));
+  const layoutManager = new LayoutManager(root);
+  const coordinator = new RepoChangeCoordinator(root, identityFor(root), cacheBase, clock, layoutManager);
+  const batches: RepoChangeBatch[] = [];
+  coordinator.onBatch(batch => { batches.push(batch); });
+
+  const moduleDir = path.join(root, "moduleA");
+  mkdirSync(path.join(moduleDir, "src", "main", "java", "demo"), { recursive: true });
+  writeFileSync(path.join(moduleDir, "pom.xml"), "<project></project>\n");
+  const newJavaFile = path.join(moduleDir, "src", "main", "java", "demo", "New.java");
+  writeFileSync(newJavaFile, "package demo;\nclass New {}\n");
+
+  // Classified against the still-stale (pre-module) plan in the same round as
+  // the BUILD_CHANGE: the reconfigure runs during this flush, too late for an
+  // event that was already classified at queue time.
+  coordinator.queueFsPathForTest(newJavaFile, "add");
+  coordinator.queueForTest({ kind: "BUILD_CHANGE", absolutePath: path.join(root, "pom.xml") });
+  await coordinator.flushNow();
+  assert.equal(batches.length, 1);
+  assert.equal(
+    batches[0].changes.some(change => change.absolutePath === newJavaFile),
+    false,
+    "not classified yet under the stale plan"
+  );
+  assert.equal(clock.snapshot().dirty, true, "a layout-changing build event marks the runtime dirty for reconcile");
+
+  // A fresh event after the reconfigure now classifies under the new plan.
+  coordinator.queueFsPathForTest(newJavaFile, "add");
+  await coordinator.flushNow();
+  assert.equal(batches.length, 2);
+  assert.ok(
+    batches[1].changes.some(change => change.kind === "JAVA_ADD" && change.absolutePath === newJavaFile),
+    "after reconfigure, the new module's source root is watched"
+  );
+});
+
 test("the coordinator watches real edits and advances generation without JDT", async () => {
   const { root, layout } = repo();
   const clock = new GenerationClock();
   const cacheBase = canonicalPath(mkdtempSync(path.join(tmpdir(), "cache-")));
-  const coordinator = new RepoChangeCoordinator(root, identityFor(root), cacheBase, clock, () => layout, 20);
+  const coordinator = new RepoChangeCoordinator(root, identityFor(root), cacheBase, clock, staticLayoutSource(layout), 20);
   await coordinator.start();
   const target = path.join(root, "src/main/java/demo/B.java");
   try {

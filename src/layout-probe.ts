@@ -102,6 +102,58 @@ function broadRoots(repoRoot: string, sourceRoots: SourceRootInfo[]): string[] {
   return modules.length > 0 ? modules.sort() : ["."];
 }
 
+const LAYOUT_MARKER_NAMES = [
+  "pom.xml",
+  "settings.gradle",
+  "settings.gradle.kts",
+  "build.gradle",
+  "build.gradle.kts",
+  "gradle.properties"
+];
+
+const LAYOUT_MARKER_RELATIVE = ["gradle/libs.versions.toml"];
+
+/**
+ * A cheap size/mtime fingerprint over the root and every one-level-deep module
+ * candidate's build markers. Recomputed from disk each call (not from cached
+ * layout state) so a brand-new module directory is picked up as soon as it
+ * exists, without waiting for a prior probe to have known about it.
+ */
+export function layoutBuildFingerprint(repoRoot: string): string {
+  const parts: string[] = [];
+  for (const root of markerRootCandidates(repoRoot)) {
+    for (const name of LAYOUT_MARKER_NAMES) {
+      parts.push(fileFingerprint(path.join(root, name)));
+    }
+  }
+  for (const relative of LAYOUT_MARKER_RELATIVE) {
+    parts.push(fileFingerprint(path.join(repoRoot, relative)));
+  }
+  return parts.join("|");
+}
+
+function markerRootCandidates(repoRoot: string): string[] {
+  const roots = new Set<string>([repoRoot]);
+  for (const child of listDirectories(repoRoot)) {
+    roots.add(path.join(repoRoot, child));
+  }
+  for (const topLevel of ["modules", "apps"]) {
+    for (const child of listDirectories(path.join(repoRoot, topLevel))) {
+      roots.add(path.join(repoRoot, topLevel, child));
+    }
+  }
+  return [...roots].sort();
+}
+
+function fileFingerprint(filePath: string): string {
+  try {
+    const stat = statSync(filePath);
+    return `${filePath}:${stat.size}:${stat.mtimeMs}`;
+  } catch {
+    return `${filePath}:absent`;
+  }
+}
+
 function mavenModules(repoRoot: string): string[] {
   try {
     const text = readFileSync(path.join(repoRoot, "pom.xml"), "utf8");

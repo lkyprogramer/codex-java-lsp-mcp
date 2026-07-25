@@ -7,6 +7,7 @@ import { watch, type FSWatcher } from "chokidar";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import type { LayoutContext } from "./layout-probe.js";
+import type { LayoutSource } from "./layout-manager.js";
 import { isWithin } from "./path-utils.js";
 import {
   GenerationClock,
@@ -156,7 +157,7 @@ export class RepoChangeCoordinator {
     private readonly identity: WorktreeIdentity,
     private readonly cacheBase: string,
     private readonly clock: GenerationClock,
-    private readonly layout: () => LayoutContext,
+    private readonly layoutSource: LayoutSource,
     private readonly debounceMs = 150
   ) {}
 
@@ -179,7 +180,9 @@ export class RepoChangeCoordinator {
         followSymlinks: false,
         atomic: true,
         awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 20 },
-        ignored: candidate => isIgnoredRepoPath(candidate, this.identity, this.cacheBase, plan.generatedRoots)
+        // Reads `this.plan` dynamically (not the `plan` captured above) so a
+        // build-change reconfigure keeps the generated-root allowlist current.
+        ignored: candidate => isIgnoredRepoPath(candidate, this.identity, this.cacheBase, this.plan?.generatedRoots ?? [])
       });
       this.watcher = watcher;
       watcher
@@ -209,9 +212,37 @@ export class RepoChangeCoordinator {
 
   private ensurePlan(): RepoWatchPlan {
     if (!this.plan) {
-      this.plan = buildRepoWatchPlan(this.repoRoot, this.layout());
+      this.plan = buildRepoWatchPlan(this.repoRoot, this.layoutSource.current());
     }
     return this.plan;
+  }
+
+  /**
+   * Called once per flush round when the round's changes include a
+   * BUILD_CHANGE. A layout-affecting build edit (new/removed module) is rare
+   * enough that a full LayoutManager.refresh() fingerprint check per such
+   * round is cheap; an edit that leaves layout unchanged is a no-op here.
+   */
+  private reconfigureIfLayoutChanged(): void {
+    const result = this.layoutSource.refresh();
+    if (!result.changed) return;
+    const nextPlan = buildRepoWatchPlan(this.repoRoot, result.layout);
+    const oldTargets = new Set(this.plan?.targets ?? []);
+    const newTargets = new Set(nextPlan.targets);
+    const toRemove = [...oldTargets].filter(target => !newTargets.has(target));
+    const toAdd = [...newTargets].filter(target => !oldTargets.has(target));
+    // Update the plan before touching the watcher: the `ignored` predicate
+    // above reads `this.plan` live, and chokidar only honors `.add()` for a
+    // target the predicate already allows at add-time.
+    this.plan = nextPlan;
+    if (this.watcher) {
+      if (toRemove.length > 0) this.watcher.unwatch(toRemove);
+      if (toAdd.length > 0) this.watcher.add(toAdd);
+    }
+    // A layout change can silently orphan cached facts under a root that no
+    // longer exists or was never watched before; no unlink event will ever
+    // announce that. Force the next request through a full reconcile.
+    this.clock.markDirty("repo layout changed");
   }
 
   private classify(file: string, event: "add" | "change" | "unlink"): RepoChange | undefined {
@@ -301,6 +332,9 @@ export class RepoChangeCoordinator {
           .map(([absolutePath, kind]) => ({ absolutePath, kind }))
           .sort((left, right) => left.absolutePath.localeCompare(right.absolutePath));
         this.pending.clear();
+        if (changes.some(change => change.kind === "BUILD_CHANGE")) {
+          this.reconfigureIfLayoutChanged();
+        }
         const generation = this.clock.advance(summarizeChanges(changes));
         const batch: RepoChangeBatch = {
           generation,
