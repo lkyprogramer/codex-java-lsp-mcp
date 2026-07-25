@@ -1,0 +1,89 @@
+import { createRequire } from "node:module";
+import Parser from "tree-sitter";
+
+const require = createRequire(import.meta.url);
+const Java = require("tree-sitter-java");
+
+export type JavaPoint = { row: number; column: number }; // Tree-sitter UTF-8 byte column
+
+export type JavaInputEdit = {
+  startIndex: number;
+  oldEndIndex: number;
+  newEndIndex: number;
+  startPosition: JavaPoint;
+  oldEndPosition: JavaPoint;
+  newEndPosition: JavaPoint;
+};
+
+export interface JavaSyntaxNode {
+  readonly type: string;
+  readonly startIndex: number;
+  readonly endIndex: number;
+  readonly startPosition: JavaPoint;
+  readonly endPosition: JavaPoint;
+  readonly namedChildren: readonly JavaSyntaxNode[];
+  readonly hasError: boolean;
+  childForFieldName(name: string): JavaSyntaxNode | null;
+  toString(): string;
+}
+
+export interface JavaSyntaxTree {
+  readonly rootNode: JavaSyntaxNode;
+  edit(edit: JavaInputEdit): void;
+  getChangedRanges(other: JavaSyntaxTree): readonly unknown[];
+  delete(): void;
+}
+
+export interface JavaParserBackend {
+  parse(source: string, oldTree?: JavaSyntaxTree): JavaSyntaxTree;
+}
+
+const nativeTrees = new WeakMap<JavaSyntaxTree, Parser.Tree>();
+
+function wrapTree(tree: Parser.Tree): JavaSyntaxTree {
+  const wrapped: JavaSyntaxTree = {
+    rootNode: tree.rootNode as unknown as JavaSyntaxNode,
+    edit(edit: JavaInputEdit): void {
+      tree.edit(edit);
+    },
+    getChangedRanges(other: JavaSyntaxTree): readonly unknown[] {
+      const otherNative = nativeTrees.get(other);
+      if (!otherNative) throw new Error("getChangedRanges: other tree was not produced by this backend");
+      return tree.getChangedRanges(otherNative);
+    },
+    delete(): void {
+      // node-tree-sitter (native) frees the underlying C tree in its N-API
+      // destructor when the JS Tree is garbage collected; it never exposes a
+      // JS-level Tree.delete() (confirmed by inspecting
+      // node_modules/tree-sitter/src/tree.cc — ts_tree_delete() runs in
+      // ~Tree(), and only edit/rootNode/rootNodeWithOffset/printDotGraph/
+      // getChangedRanges/getIncludedRanges/getEditedRange/_cacheNode/
+      // _cacheNodes are registered as InstanceMethods). This is a deliberate
+      // no-op, not a dual implementation: it keeps the interface stable for
+      // a future WASM backend (web-tree-sitter requires an explicit delete()
+      // since Emscripten heap objects aren't covered by V8 GC).
+    }
+  };
+  nativeTrees.set(wrapped, tree);
+  return wrapped;
+}
+
+class NativeJavaParserBackend implements JavaParserBackend {
+  private readonly parser: Parser;
+
+  constructor() {
+    this.parser = new Parser();
+    this.parser.setLanguage(Java);
+  }
+
+  parse(source: string, oldTree?: JavaSyntaxTree): JavaSyntaxTree {
+    const previous = oldTree ? nativeTrees.get(oldTree) : undefined;
+    if (oldTree && !previous) throw new Error("parse: oldTree was not produced by this backend");
+    const tree = this.parser.parse(source, previous);
+    return wrapTree(tree);
+  }
+}
+
+export async function createJavaParserBackend(): Promise<JavaParserBackend> {
+  return new NativeJavaParserBackend();
+}
