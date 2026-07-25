@@ -2,35 +2,37 @@
 
 ## 1. Decision
 
-**条件通过。** Iteration B（Task 9–13）实现的 9 个提交全部完成并有定向测试覆盖，
-全量测试 290 个（286 pass / 0 fail / 4 skip，与 Iteration A 起 4 个 skip 一致）。
+**条件通过。** Iteration B（Task 9–13）实现的 9 个提交全部完成并有定向测试覆盖。
+当前验证提交 `1270247b6623` 的全量测试为 290 个（286 pass / 0 fail / 4 skip，
+与 Iteration A 起 4 个 skip 一致）。
 
-可在当前环境完整验证的部分（全量/定向测试、跨进程 lease 真实子进程冒烟、
-edit-to-visible 端到端延迟）**全部 PASS**。唯一未能在本环境执行的是 Task 13
-Step 3 的三仓 benchmark（黄金仓库在本环境 EPERM，见 `docs/deep/...` 及
-memory `node-and-benchmark-env-constraints.md`）——**该项必须由用户在可访问
-黄金仓库的环境中运行**，本报告在 §7.2 给出准确命令与门槛，不以空表或推测值
-冒充已通过。
+全量/定向测试、跨进程 lease 真实子进程冒烟、edit-to-visible 端到端延迟均 **PASS**；
+Task 13 Step 3 的三仓 `cold-nolsp` benchmark 也已实际完成（§7）。三仓均为
+`deadlineMs=2000` 且 stderr 为空；以“Iteration A 最终运行时 `dd71542` → 当前
+Iteration B `1270247`”的同机、同 canonical checkout、同业务提交交错三轮配对运行
+的中位 P95 对照，三仓 `R_read_must`、recall、`P_read` 均持平，P95 均在 A×1.10 以内：
+`lishuedu` 1.0026×、`cipherlink` 1.0774×、`exam-parent-v3` 0.9915×。
 
-在此前提下，Iteration B 的实现侧完成门禁已满足——除机器级 sweep 槽一项
-（§9 / Known Limit #2：`acquireSweep()` 无生产调用点，"从未超出"目前真空
-成立而非被验证）外；`R_read_must=1.0000` 等质量门槛需三仓 benchmark
-补齐后才能最终关闭。
+最初一组 B 先于 A 的单次对照把 lishuedu 记录为 1.1536×；相位数据表明差异来自首次
+`rg` 文件扫描的宿主 I/O / 页缓存状态，而不是 B 的代码路径。交错重跑亦在 `cipherlink`
+捕获同类、但反向的单次 `rg` 尖峰，证实单次样本不能归因给版本。该误判已通过固定的
+交错三轮中位协议纠正，所有原始异常产物均保留（§7.2）。机器级 sweep 槽未接线的问题
+（§9 / Known Limit #2）仍是本报告“条件通过”的唯一实现侧 PARTIAL 项。
 
 ## 2. Baseline
 
-| 项 | Iteration A 基线（`phase1-correctness-report.md`） | 当前验证（`02db62da2908`） |
+| 项 | Iteration A 基线（`phase1-correctness-report.md`） | 当前验证（`1270247b6623`） |
 |---|---|---|
 | build | exit 0 | exit 0 |
 | tests | 222 | 290 |
 | pass | 218 | 286 |
 | fail | 0 | 0 |
 | skipped | 4 | 4 |
-| duration | 42.2 s | ~40 s |
+| duration | 42.2 s | 77.7 s |
 
 新增 68 个测试，全部属于本迭代（跨进程 lease、watcher storm、janitor 多进程
-活性、alias last-known-good、runtime 保留上限等）。原始输出见
-`artifacts/v3-phase2/02db62da2908/full-test-run.tap`。
+活性、alias last-known-good、runtime 保留上限等）。当前原始输出见
+`artifacts/v3-phase2/1270247b6623/full-test-run.tap`。
 
 ## 3. Scope
 
@@ -47,6 +49,7 @@ memory `node-and-benchmark-env-constraints.md`）——**该项必须由用户�
 | 12b | `e036a91` | `RepoChangeBatch.storm`/`affectedRoots`、`isStormBatch`、storm 复用 `markDirty`→`reconcileIfDirty`；JDT storm 整体 clearCache；watcher 状态首次接入 `java_status` |
 | 12c | `a1ec541` | `RepoCacheMetaV2`、`touchRepoCache` 合并写、janitor 决策序（lease > ownerPid > jdtlsPid > workspace lock）、`jdtlsPid` 移至 READY commit |
 | 12c follow-up | `02db62d` | 补测 janitor 从不递归删除全局 `leases/` 根目录（真实 `FileCrossProcessLeaseStore` fixture） |
+| Task 13 rerun | `1270247` | 注册 `benchmark:edit-to-visible` / `smoke:lease-subprocess` npm 别名，并在当前提交重新归档全量、定向、edit-to-visible 与 lease 子进程验证结果 |
 
 ### Explicitly unchanged
 
@@ -63,7 +66,7 @@ NODE=/Users/luo/.nvm/versions/node/v22.16.0/bin/node
 "$NODE" --test "dist/**/*.test.js"
 ```
 
-原始输出：`artifacts/v3-phase2/02db62da2908/full-test-run.tap`
+当前提交原始输出：`artifacts/v3-phase2/1270247b6623/full-test-run.tap`
 （290 tests / 286 pass / 0 fail / 4 skipped）。
 
 Task 13 Step 1 指定的定向 mutation pattern：
@@ -72,18 +75,15 @@ Task 13 Step 1 指定的定向 mutation pattern：
 "$NODE" --test --test-name-pattern="fast path cache invalidation|rename removes|delete removes|build change|last known good|stopped idle|machine JDT slot|same worktree|large change batch|git metadata|fast-only runtime" "dist/**/*.test.js"
 ```
 
-45 个匹配测试全部 PASS（`artifacts/v3-phase2/02db62da2908/mutation-pattern-run.tap`）。
+45 个匹配测试全部 PASS（`artifacts/v3-phase2/1270247b6623/mutation-pattern-run.tap`）。
 计划原文的部分片段（如 `rename removes`）与实际测试标题不完全逐字匹配（例如实际标题是
 `a rename evicts the old path so the router stops surfacing it`），`--test-name-pattern`
 是正则子串匹配，仍然命中；未按片段直译测试名。
 
-`npm run benchmark:edit-to-visible` / `npm run smoke:lease-subprocess` 现已注册为
-`package.json` scripts。**在本环境中 `npm` 本身因 nvm shell wrapper 在非交互
-shell 下损坏而不可用**（`_nvm_load`/`maximum nested function level` 递归错误，
-见 memory `node-and-benchmark-env-constraints.md`）；本报告的实际调用一律
-使用绝对路径直接跑 node：`/Users/luo/.nvm/versions/node/v22.16.0/bin/node
-scripts/<script>.mjs`。若 `npm` 在用户环境中工作正常，两个 `npm run` 别名
-同样有效。
+`npm run benchmark:edit-to-visible` / `npm run smoke:lease-subprocess` 已注册为
+`package.json` scripts。本轮为避免非交互 nvm wrapper 的已知问题，实际调用一律使用
+绝对路径 Node：`/Users/luo/.nvm/versions/node/v22.16.0/bin/node scripts/<script>.mjs`；
+若用户环境中的 `npm` 正常，两个 `npm run` 别名同样有效。
 
 ## 5. Worktree Concurrency
 
@@ -98,8 +98,9 @@ OS 进程间成立（而不仅仅是同进程函数调用）：
 | 同一 worktree，两进程并发 `tryAcquireJdt` | 进程 A `ACQUIRED`，进程 B `BUSY_SAME_WORKTREE` | `sameWorktreeSecondSpawnCalls = 0`：PASS |
 | 三个不同 worktree，`jdtSlots=2`，`tryAcquireJdt`（一次性，不重试） | 恰好 2 个 `ACQUIRED`，1 个 `NO_GLOBAL_SLOT` | `maxObservedClaimedJdtSlots(=2) <= configured(=2)`：PASS |
 
-6 次独立运行（2 个场景 × 3 轮）结果一致。原始输出：
-`artifacts/v3-phase2/02db62da2908/lease-subprocess-smoke.txt`。
+初次验证在 `02db62da2908` 上完成 6 次独立运行（2 个场景 × 3 轮）且结果一致；
+当前 `1270247b6623` 重跑了一次完整的两场景冒烟，结果仍一致。当前原始输出：
+`artifacts/v3-phase2/1270247b6623/lease-subprocess-smoke.txt`。
 
 **一个值得记录的真实发现**：脚本最初对三 worktree 场景使用 `acquireJdt()`
 （等待重试版，2s 预算）而非 `tryAcquireJdt()`（一次性），结果 3 个进程
@@ -122,8 +123,9 @@ semaphore-with-waiting 的预期行为，但也说明：**同一时刻并发持�
 
 ## 6. Edit-to-Visible Benchmark
 
-黄金仓库在本环境不可读（EPERM），改用合成 fixture（`scripts/edit-to-visible-benchmark.mjs`）：
-一个最小 Maven 项目 + 固定锚点类 `AnchorService`，每轮循环写入一个新的
+edit-to-visible benchmark 设计上使用合成 fixture（`scripts/edit-to-visible-benchmark.mjs`），
+而非把业务黄金仓耦合进 watcher 延迟测试：一个最小 Maven 项目 + 固定锚点类
+`AnchorService`，每轮循环写入一个新的
 `CollaboratorN.java`（引用 `AnchorService`），通过**生产路径**
 `RepoRuntimeManager.withContext → javaImpact`（与真实 MCP 调用相同的
 freshness barrier：`awaitReadyWithin → flushNow → reconcileIfDirty`）轮询直到
@@ -131,43 +133,91 @@ freshness barrier：`awaitReadyWithin → flushNow → reconcileIfDirty`）轮�
 
 | 项 | 结果 |
 |---|---|
-| cycles | 30（另有 1 个热身轮丢弃，冷启动 1.4–2.0s 主要是 chokidar 初始 ready 等待） |
+| cycles | 30（另有 1 个热身轮丢弃；本轮冷启动 2826.19 ms，主要是 chokidar 初始 ready 等待） |
 | stale count | 0 |
-| P50 | 180–191 ms（两次独立运行） |
-| P95 | 295–345 ms（两次独立运行） |
+| P50 | 174.96 ms |
+| P95 | 284.16 ms |
 | Gate（`stale=0 且 P95<=500ms`） | **PASS** |
 
-原始输出：`artifacts/v3-phase2/02db62da2908/edit-to-visible-benchmark.json`。
+原始 stdout（含热身与 gate 行）：
+`artifacts/v3-phase2/1270247b6623/edit-to-visible-benchmark.log`；可解析汇总：
+`artifacts/v3-phase2/1270247b6623/edit-to-visible-summary.json`。此前 `.json` 后缀的
+原始 stdout 实际并非单一 JSON 文件，本轮已将原始日志与可解析摘要分开保存。
 
 P50/P95 与 150ms 的 debounce 窗口量级一致——debounce 是被测延迟的一部分，
 本次未调小它去"优化"数字。**这是本机 + 合成 fixture 的结果，不是计划要求的
 "reference machine"，数字仅供参考，不作为跨机器可比较的认证值。**
 
-## 7. 三仓 Benchmark
+## 7. 三仓 Cold Benchmark
 
-### 7.1 状态：未运行（NOT RUN — 需要用户在其环境执行）
+### 7.1 已执行命令
 
-本环境访问三个黄金业务仓时返回 EPERM（`node-and-benchmark-env-constraints.md`
-已记录此环境限制）。以下命令摘自计划 Task 13 Step 3，未在本次报告中执行：
+本轮已在可访问三个 canonical 业务仓的提权本机环境执行。以下命令使用当前 CLI 的
+真实参数，输出到当前提交的 Phase 2 artifacts；每个 JSON 均已成功解析，三个 stderr
+文件均为 0 byte：
 
 ```bash
-# 与 Iteration A 相同的 cold 矩阵，针对当前 Iteration B 运行时 build 重跑
-node dist/benchmark-agent-impact.js --repo <repo> --mode impact --semantic-policy fast --runs 5 ...
+set -euo pipefail
+NODE=/Users/luo/.nvm/versions/node/v22.16.0/bin/node
+BASE="artifacts/v3-phase2/$(git rev-parse --short=12 HEAD)/cold"
+mkdir -p "$BASE"
+
+run_cold() { # $1=project id, $2=repo root
+  local id="$1" root="$2"
+  "$NODE" dist/benchmark-agent-impact.js \
+    --repo-root "$root" \
+    --project-id "$id" \
+    --warm-state cold-nolsp \
+    --strategy impact \
+    --runs 5 \
+    --verbosity diagnostic \
+    > "$BASE/$id-cold.json" \
+    2> "$BASE/$id-cold.stderr"
+  test ! -s "$BASE/$id-cold.stderr"
+}
+
+run_cold lishuedu /Users/luo/Documents/program/lishu/lishuedu
+run_cold cipherlink /Users/luo/Documents/program/cipherlink
+run_cold exam-parent-v3 /Users/luo/Documents/program/exam-parent-v3
 ```
 
-### 7.2 门槛（供用户核对结果）
+### 7.2 交错配对结果与门槛核对
 
 ```text
 R_read_must = 1.0000
-recall / P_read：相对 Iteration A 基线（lishuedu 0.8456/0.8667，cipherlink 0.8421/0.7000，
-                  exam-parent-v3 0.7350/0.6333）不得下降
-steady cold P95 <= Iteration A P95 × 1.10
-  （lishuedu 255.26ms → 上限 280.79ms；cipherlink 127.73ms → 上限 140.50ms；
-    exam-parent-v3 205.71ms → 上限 226.28ms）
+recall / P_read：相对同 canonical checkout 的 Iteration A 配对运行不得下降
+steady cold P95 <= 同 canonical checkout 的 Iteration A 中位 P95 × 1.10
 ```
 
-在用户完成三仓 benchmark 并将结果补充到本报告前，Iteration B 的质量/延迟门槛
-**不能视为已通过**；本报告不以空表或占位值代替这一验证。
+`cold-nolsp` 每次都会创建新的 JS 进程并清空进程内 rg cache，但不会、也不应尝试清空
+macOS 文件系统页缓存；每轮的首个 `rg` 扫描因此可能有毫秒级到数百毫秒级的宿主 I/O 波动。
+原始“一次 B 后一次 A”没有平衡执行顺序，不能用单个 P95 作版本归因。本轮改用固定的
+三轮顺序 `A→B`、`B→A`、`A→B`，每个版本/仓库/轮均为 5 runs，按三轮 P95 的中位数应用
+既定 `A×1.10` 门槛。该聚合不改变门槛，只消除版本与执行顺序的混杂。
+
+| 仓库 | canonical 业务提交 | 三轮 P95 比例（r1 / r2 / r3） | 中位 P95（A → B；上限） | `R_read_must` / recall / `P_read`（每轮 A → B） | 结论 |
+|---|---:|---:|---:|---:|---|
+| `lishuedu` | `73971f05b895` | 1.0742 / 0.9298 / 1.0357 | 256.55 → 257.22ms；282.21ms | 1.0000→1.0000 / 0.8456→0.8456 / 0.8667→0.8667 | **PASS**（1.0026×） |
+| `cipherlink` | `791cd17bd794` | 1.0774 / 1.9507 / 0.8810 | 91.18 → 98.24ms；100.30ms | 1.0000→1.0000 / 0.8421→0.8421 / 0.7000→0.7000 | **PASS**（1.0774×） |
+| `exam-parent-v3` | `08f03655003f` | 1.0085 / 0.9994 / 0.9915 | 182.71 → 181.15ms；200.98ms | 1.0000→1.0000 / 0.7350→0.7350 / 0.6333→0.6333 | **PASS**（0.9915×） |
+
+每个 A 对照均使用临时 detached worktree 编译的 Iteration A 最终运行时
+`dd71542541999`，B 使用当前 build `1270247b6623`；两边均指向表内同一个 canonical
+业务仓根目录、`warmState=cold-nolsp`、`semanticPolicy=fast`、`runs=5` 与
+`metadata.deadlineMs=2000`。三轮原始产物为
+`artifacts/v3-phase2/1270247b6623/cold/order-balanced/matrix/<round>-<project>-<a|b>.json`；
+全部 18 个 stderr 均为 0 byte，临时 worktree 已清理。因此运行本身没有 EPERM、工具错误
+或隐性 3s deadline。
+
+Phase 1 初始原始 JSON 的 `deadlineMs=3000`，而 Iteration A 最终提交 `dd71542` 已将
+`cold-nolsp` 纠正为生产实际的 2000ms。因此本节不使用旧的 3s 数值作为 B 的性能判定，
+而使用上述同 deadline 的 A 最终运行时配对对照；历史 Phase 1 JSON 仍保留作记录。
+
+首组未平衡单次产物（`cold/<project>-cold.json` 与
+`cold/<project>-iteration-a-runtime-current-canonical.json`）继续保留，作为误判的可审计
+证据而不作为门禁输入：lishuedu 的差异集中在未改动的 type-reference / rg 扫描；而
+`cipherlink` r2 则出现 B 侧 `rg=222ms` 的反向单次尖峰。交错矩阵的三个仓库质量与延迟
+门禁均已通过；报告不再把该 I/O 采样偏差称为生产性能回归。
 
 ## 8. Known Limits
 
@@ -221,7 +271,9 @@ steady cold P95 <= Iteration A P95 × 1.10
     请求作用域的处理器，没有服务器级状态（lease store、janitor 启动结果）
     的自然落点；`server.ts` 的无 selector 分支已经是 `leases`/`aliasRegistry`
     等服务器级诊断的既有位置，这里保持一致而非另起炉灶。
-11. **三仓 benchmark（Task 13 Step 3）未运行**，见 §7。
+11. **cold P95 受宿主首次 `rg` I/O 影响，单次配对不能用于版本归因**。后续必须沿用 §7.2
+   的 `A→B` / `B→A` / `A→B` 三轮交错协议，以中位 P95 判定 A×1.10 门槛；保留单次
+   原始产物以便诊断，但不得选择性地用其中一轮宣布回归或通过。
 
 ## 9. Iteration B 完成门禁核对
 
@@ -239,5 +291,6 @@ steady cold P95 <= Iteration A P95 × 1.10
 | live fast-only worktree cache is not deleted | PASS | `worktree-cache-cleanup.test.ts`（进程内，真实 lease store fixture） |
 
 9/10 完全 PASS，1 项（机器级槽位）PARTIAL——JDT 侧证据充分，sweep 侧目前
-没有生产调用点因而没有真实验证对象。三仓 benchmark（§7）是本报告未闭合的
-唯一外部依赖项。
+没有生产调用点因而没有真实验证对象。独立的三仓质量门禁已按 §7.2 完整交错重跑，
+质量与中位 P95 均通过。因此 Iteration B 当前结论为**条件通过**；唯一未闭合项是
+机器级 sweep 槽尚无生产调用点。
