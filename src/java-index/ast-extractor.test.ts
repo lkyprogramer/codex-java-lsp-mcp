@@ -1,0 +1,137 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { createJavaParserBackend } from "./java-parser-backend.js";
+import { extractJavaFile, type ExtractJavaInput } from "./ast-extractor.js";
+
+const dirname = path.dirname(fileURLToPath(import.meta.url));
+const fixturesRoot = path.resolve(dirname, "..", "..", "fixtures", "java-index-v2");
+
+function baseInput(overrides: Partial<ExtractJavaInput> & { content: string; relativePath: string }): ExtractJavaInput {
+  return {
+    repoRoot: fixturesRoot,
+    absolutePath: path.join(fixturesRoot, overrides.relativePath),
+    sourceRoot: "src/main/java",
+    module: "demo-module",
+    sourceSet: "main",
+    size: Buffer.byteLength(overrides.content, "utf8"),
+    mtimeMs: 0,
+    contentHash: "test",
+    generation: 1,
+    ...overrides
+  };
+}
+
+test("extractJavaFile extracts package, imports, types, methods and call sites", async () => {
+  const backend = await createJavaParserBackend();
+  const relativePath = "src/main/java/demo/ComplexJava.java";
+  const content = readFileSync(path.join(fixturesRoot, relativePath), "utf8");
+  const input = baseInput({ content, relativePath });
+
+  const result = extractJavaFile(input, backend);
+
+  assert.equal(result.file.packageName, "demo");
+  assert.deepEqual(result.file.imports.map(i => i.qualifiedName), [
+    "java.util.List",
+    "java.util.Map",
+    "java.util.Objects.requireNonNull"
+  ]);
+  assert.deepEqual(result.types.map(t => t.simpleName).sort(), [
+    "Child", "ComplexJava", "Helper", "SecondTopLevel"
+  ]);
+  // The plan's Step 5 FQN convention (package.Outer$Inner) is load-bearing
+  // for Task 21a's sibling-worktree snapshot seeding; a simpleName-only
+  // assertion would not catch a silent divergence to e.g. "Outer.Inner".
+  assert.deepEqual(result.types.map(t => t.fqn).sort(), [
+    "demo.ComplexJava", "demo.ComplexJava$Child", "demo.ComplexJava$Helper", "demo.SecondTopLevel"
+  ]);
+  const complexJava = result.types.find(t => t.simpleName === "ComplexJava")!;
+  const child = result.types.find(t => t.simpleName === "Child")!;
+  assert.equal(child.enclosingTypeId, complexJava.typeId);
+  assert.ok(result.methods.some(m => m.name === "packagePrivate"));
+  assert.ok(result.methods.some(m => m.name === "packagePrivateToo"));
+  assert.ok(result.methods.some(m => m.constructor && m.name === "ComplexJava"));
+  assert.ok(result.methods.find(m => m.name === "packagePrivate")!.bodyRange);
+  assert.deepEqual(
+    result.methods.find(m => m.name === "packagePrivate")!.callSites.map(c => c.name).sort(),
+    ["Helper", "save"]
+  );
+  assert.equal(result.file.parseState, "COMPLETE");
+
+  // The method's end range must not be thrown off by the unmatched `{` inside
+  // the string literal ("{ this is not a block }") or the text block's own
+  // brace-shaped content. If the boundary were miscomputed at the first such
+  // brace, the method's sliced text would end early and miss everything
+  // after the string/text-block declarations.
+  const method = result.methods.find(m => m.name === "packagePrivate")!;
+  const methodText = content.slice(
+    lineColToIndex(content, method.range.start),
+    lineColToIndex(content, method.range.end)
+  );
+  assert.match(methodText, /Helper helper = new Helper\(\);/);
+  assert.match(methodText, /return repository\.save\(command, helper\);/);
+  assert.ok(methodText.trimEnd().endsWith("}"));
+});
+
+test("extractJavaFile marks RECOVERED when a top-level type survives a parse error", async () => {
+  const backend = await createJavaParserBackend();
+  const content = [
+    "package demo;",
+    "",
+    "public class Broken {",
+    "  void ok() {}",
+    "  void trailing( {",
+    "}"
+  ].join("\n");
+  const input = baseInput({ content, relativePath: "src/main/java/demo/Broken.java" });
+
+  const result = extractJavaFile(input, backend);
+
+  assert.equal(result.file.parseState, "RECOVERED");
+  assert.ok(result.types.some(t => t.simpleName === "Broken"));
+  assert.ok(result.file.parseErrorCount > 0);
+});
+
+test("extractJavaFile marks FAILED when no useful structural root can be obtained", async () => {
+  const backend = await createJavaParserBackend();
+  const content = "{{{ not java at all ]] ) )) &&&";
+  const input = baseInput({ content, relativePath: "src/main/java/demo/Garbage.java" });
+
+  const result = extractJavaFile(input, backend);
+
+  assert.equal(result.file.parseState, "FAILED");
+  assert.equal(result.types.length, 0);
+  assert.ok(result.file.parseErrorCount > 0);
+});
+
+test("extracted ranges are exact across Chinese text and a surrogate-pair emoji preceding a token", async () => {
+  const backend = await createJavaParserBackend();
+  const content = [
+    "package demo;",
+    "",
+    "public class Widget {",
+    '  String comment = "中文注释 \u{1F389}"; void run() {}',
+    "}",
+    ""
+  ].join("\n");
+  const input = baseInput({ content, relativePath: "src/main/java/demo/Widget.java" });
+
+  const result = extractJavaFile(input, backend);
+  const method = result.methods.find(m => m.name === "run");
+  assert.ok(method);
+
+  const lineIndex = 3;
+  const line = content.split("\n")[lineIndex]!;
+  const expectedColumn = line.indexOf("void run") + 1;
+  assert.equal(method!.range.start.line, lineIndex + 1);
+  assert.equal(method!.range.start.column, expectedColumn);
+});
+
+function lineColToIndex(text: string, position: { line: number; column: number }): number {
+  const lines = text.split("\n");
+  let index = 0;
+  for (let i = 0; i < position.line - 1; i += 1) index += lines[i]!.length + 1;
+  return index + (position.column - 1);
+}

@@ -3,9 +3,13 @@ import test from "node:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
 import type { JavaIndexStatus } from "./index-types.js";
 import { JavaIndexClient, type WorkerLike } from "./java-index-client.js";
+
+const dirname = path.dirname(fileURLToPath(import.meta.url));
+const fixturesRepoRoot = path.resolve(dirname, "..", "..", "fixtures", "java-index-v2");
 
 function validStatus(generation: number): JavaIndexStatus {
   return {
@@ -192,4 +196,29 @@ test("client opens a real worker thread, reaches READY, and closes cleanly", asy
   assert.equal((await client.status()).state, "READY");
   await client.close();
   assert.equal(client.localStatus().state, "CLOSED");
+});
+
+test("REFRESH end-to-end through a real worker thread: reads, parses, extracts, and QUERY_FILES returns the facts; deletion clears them", async () => {
+  const absolutePath = path.join(fixturesRepoRoot, "src/main/java/demo/ComplexJava.java");
+  const client = new JavaIndexClient(fixturesRepoRoot, mkdtempSync(path.join(tmpdir(), "java-index-refresh-cache-")));
+  await client.open(1);
+
+  const afterRefresh = await client.refresh(2, [absolutePath], []);
+  assert.equal(afterRefresh.files, 1);
+  assert.equal(afterRefresh.types, 4);
+  assert.ok(afterRefresh.methods >= 4);
+
+  const bundles = await client.queryFiles([absolutePath]);
+  assert.equal(bundles.length, 1);
+  assert.equal(bundles[0]!.file.packageName, "demo");
+  assert.deepEqual(bundles[0]!.types.map(t => t.simpleName).sort(), [
+    "Child", "ComplexJava", "Helper", "SecondTopLevel"
+  ]);
+
+  const afterDelete = await client.refresh(3, [], [absolutePath]);
+  assert.equal(afterDelete.files, 0);
+  const bundlesAfterDelete = await client.queryFiles([absolutePath]);
+  assert.equal(bundlesAfterDelete.length, 0);
+
+  await client.close();
 });

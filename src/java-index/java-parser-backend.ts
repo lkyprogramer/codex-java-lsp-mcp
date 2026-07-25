@@ -34,6 +34,13 @@ export interface JavaSyntaxNode {
   readonly startPosition: JavaPoint;
   readonly endPosition: JavaPoint;
   readonly namedChildren: readonly JavaSyntaxNode[];
+  // Includes anonymous tokens (keywords, punctuation) that `namedChildren`
+  // omits - needed for modifier keywords (`public`, `static`, ...) and the
+  // `static`/`*` markers on import declarations, none of which are named
+  // fields or named nodes in tree-sitter-java's grammar.
+  readonly children: readonly JavaSyntaxNode[];
+  readonly isNamed: boolean;
+  readonly isMissing: boolean;
   readonly hasError: boolean;
   childForFieldName(name: string): JavaSyntaxNode | null;
   toString(): string;

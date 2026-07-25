@@ -1,5 +1,12 @@
+import { createHash } from "node:crypto";
+import { readFile, stat } from "node:fs/promises";
+import path from "node:path";
 import { parentPort } from "node:worker_threads";
-import type { JavaIndexStatus, JavaTypeLookupResult } from "./index-types.js";
+import { classifyPath, normalizeRepoFile } from "../repo-layout.js";
+import { createJavaParserBackend, type JavaParserBackend } from "./java-parser-backend.js";
+import { extractFromParsedTree, type ExtractedJavaFile, type ExtractJavaInput } from "./ast-extractor.js";
+import { ParseTreeCache, refreshParseTree } from "./parse-tree-cache.js";
+import type { JavaIndexStatus, JavaSourceSet, JavaTypeLookupResult } from "./index-types.js";
 import type { JavaIndexRequest, JavaIndexResponse } from "./worker-protocol.js";
 
 let status: JavaIndexStatus = {
@@ -15,6 +22,20 @@ let status: JavaIndexStatus = {
   coverage: []
 };
 
+let repoRoot = "";
+let backend: JavaParserBackend | undefined;
+let cache: ParseTreeCache | undefined;
+// Task 19 (JavaIndexStore) replaces this temporary in-memory map with the
+// real O(1) query structure; this task only needs REFRESH to produce and
+// hold facts somewhere.
+const filesByRelativePath = new Map<string, ExtractedJavaFile>();
+// A single unreadable/unparsable file must not fail the whole REFRESH batch
+// (its previous cached state, if any, is left untouched), but a silently
+// swallowed failure is worse than a surfaced one: Task 20 owns proper
+// per-file coverage/failedFiles accounting, but until then the most recent
+// failure is surfaced here rather than only in a comment.
+let lastRefreshError: string | undefined;
+
 const commandQueue: JavaIndexRequest[] = [];
 let draining = false;
 
@@ -23,15 +44,80 @@ function respond(response: JavaIndexResponse): void {
 }
 
 function unresolvedTypeLookup(): JavaTypeLookupResult {
-  // No extraction is implemented yet (Task 16+); DEGRADED is the honest
-  // coverage state for a worker that has not indexed anything.
+  // No query index is implemented yet (Task 19+); DEGRADED is the honest
+  // coverage state for a worker that has not built one.
   return { state: "UNRESOLVED", coverage: "DEGRADED" };
+}
+
+// Provisional: reuses the repo's existing Maven/Gradle module + sourceSet
+// classifier (src/repo-layout.ts) rather than inventing a parallel one. A
+// real source-set/module classifier tied to build-file parsing is a later
+// task's concern; this is enough to populate JavaFileFacts today.
+function deriveSourceLayout(
+  inputPath: string
+): { absolutePath: string; relativePath: string; sourceRoot: string; module: string; sourceSet: JavaSourceSet } {
+  // normalizeRepoFile resolves a relative-or-absolute path against repoRoot
+  // and throws if it escapes the repo; classifyPath's own path.relative
+  // silently resolves a relative input against process.cwd() instead, which
+  // would return an empty context.relativePath for any caller that passes a
+  // repo-relative path (as opposed to absolute).
+  const absolutePath = normalizeRepoFile(repoRoot, inputPath);
+  const context = classifyPath(repoRoot, absolutePath);
+  const relativePath = (context.relativePath ?? path.relative(repoRoot, absolutePath))
+    .split(path.sep)
+    .join("/");
+  const module = context.module && context.module !== "." ? context.module : "";
+  const sourceSet: JavaSourceSet = context.sourceSet === "main" || context.sourceSet === "test"
+    ? context.sourceSet
+    : "unknown";
+  const sourceRoot = context.sourceSet
+    ? [module, "src", context.sourceSet, "java"].filter(Boolean).join("/")
+    : "";
+  return { absolutePath, relativePath, sourceRoot, module, sourceSet };
+}
+
+function summarizeFiles(): Pick<JavaIndexStatus, "files" | "types" | "methods" | "edges"> {
+  let types = 0;
+  let methods = 0;
+  for (const bundle of filesByRelativePath.values()) {
+    types += bundle.types.length;
+    methods += bundle.methods.length;
+  }
+  return { files: filesByRelativePath.size, types, methods, edges: 0 };
+}
+
+async function refreshFile(inputPath: string, generation: number): Promise<void> {
+  if (!backend || !cache) throw new Error("refreshFile called before OPEN");
+  const { absolutePath, relativePath, sourceRoot, module, sourceSet } = deriveSourceLayout(inputPath);
+  const [content, stats] = await Promise.all([
+    readFile(absolutePath, "utf8"),
+    stat(absolutePath)
+  ]);
+  const contentHash = createHash("sha256").update(content, "utf8").digest("hex");
+  const { tree } = refreshParseTree(cache, backend, relativePath, content);
+  const input: ExtractJavaInput = {
+    repoRoot,
+    absolutePath,
+    relativePath,
+    sourceRoot,
+    module,
+    sourceSet,
+    content,
+    size: stats.size,
+    mtimeMs: stats.mtimeMs,
+    contentHash,
+    generation
+  };
+  filesByRelativePath.set(relativePath, extractFromParsedTree(input, tree));
 }
 
 async function handle(request: JavaIndexRequest): Promise<void> {
   try {
     switch (request.type) {
       case "OPEN": {
+        repoRoot = request.repoRoot;
+        backend = await createJavaParserBackend();
+        cache = new ParseTreeCache();
         status = { ...status, state: "READY", indexedGeneration: request.generation };
         respond({ id: request.id, ok: true, value: status });
         return;
@@ -45,10 +131,43 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         respond({ id: request.id, ok: true, value: status });
         return;
       }
-      case "REFRESH":
-      case "RECONCILE":
+      case "REFRESH": {
+        for (const inputPath of request.changed) {
+          try {
+            await refreshFile(inputPath, request.generation);
+          } catch (error) {
+            lastRefreshError = `failed to refresh ${inputPath}: ${
+              error instanceof Error ? error.message : String(error)
+            }`;
+          }
+        }
+        for (const inputPath of request.deleted) {
+          try {
+            const { relativePath } = deriveSourceLayout(inputPath);
+            cache?.delete(relativePath);
+            filesByRelativePath.delete(relativePath);
+          } catch (error) {
+            lastRefreshError = `failed to delete ${inputPath}: ${
+              error instanceof Error ? error.message : String(error)
+            }`;
+          }
+        }
+        status = {
+          ...status,
+          indexedGeneration: request.generation,
+          ...summarizeFiles(),
+          ...(lastRefreshError ? { lastError: lastRefreshError } : {})
+        };
+        respond({ id: request.id, ok: true, value: status });
+        return;
+      }
+      case "RECONCILE": {
+        status = { ...status, indexedGeneration: request.generation, ...summarizeFiles() };
+        respond({ id: request.id, ok: true, value: status });
+        return;
+      }
       case "FLUSH": {
-        status = { ...status, indexedGeneration: "generation" in request ? request.generation : status.indexedGeneration };
+        status = { ...status, ...summarizeFiles() };
         respond({ id: request.id, ok: true, value: status });
         return;
       }
@@ -63,9 +182,24 @@ async function handle(request: JavaIndexRequest): Promise<void> {
       case "QUERY_IMPLEMENTERS":
       case "QUERY_TYPE_REFERENCERS":
       case "QUERY_CALLERS":
-      case "QUERY_CALLEES":
-      case "QUERY_FILES": {
+      case "QUERY_CALLEES": {
         respond({ id: request.id, ok: true, value: [] });
+        return;
+      }
+      case "QUERY_FILES": {
+        const bundles = request.files
+          .map(inputPath => {
+            try {
+              return filesByRelativePath.get(deriveSourceLayout(inputPath).relativePath);
+            } catch {
+              // Outside repoRoot or otherwise unresolvable: no facts for it,
+              // same as a path that was never refreshed.
+              return undefined;
+            }
+          })
+          .filter((bundle): bundle is ExtractedJavaFile => bundle !== undefined)
+          .map(bundle => ({ ...bundle, edges: [] }));
+        respond({ id: request.id, ok: true, value: bundles });
         return;
       }
       default: {
