@@ -33,13 +33,17 @@ test("java parser backend: full parse, incremental edit, changed ranges, delete"
   const insertToken = "final ";
   const anchor = "String text";
   const charIndex = source.indexOf(anchor);
-  const startIndex = Buffer.byteLength(source.slice(0, charIndex));
+  // This backend's startIndex/endIndex are UTF-16 code-unit offsets into the
+  // JS string (node-tree-sitter hardcodes TSInputEncodingUTF16LE - see the
+  // citations in java-parser-backend.ts), not UTF-8 byte offsets, so plain
+  // string indices are the correct units for an edit, not Buffer.byteLength.
+  const startIndex = charIndex;
   const editedSource = `${source.slice(0, charIndex)}${insertToken}${source.slice(charIndex)}`;
 
   tree.edit({
     startIndex,
     oldEndIndex: startIndex,
-    newEndIndex: startIndex + Buffer.byteLength(insertToken),
+    newEndIndex: startIndex + insertToken.length,
     startPosition: { row: 3, column: 4 },
     oldEndPosition: { row: 3, column: 4 },
     newEndPosition: { row: 3, column: 4 + insertToken.length }
@@ -51,9 +55,8 @@ test("java parser backend: full parse, incremental edit, changed ranges, delete"
   assert.ok(changedRanges.length >= 1);
 
   const typeNode = findFirst(updatedTree.rootNode, "type_identifier");
-  const editedBytes = Buffer.from(editedSource, "utf8");
   const incrementalTypeText = typeNode
-    ? editedBytes.subarray(typeNode.startIndex, typeNode.endIndex).toString("utf8")
+    ? editedSource.slice(typeNode.startIndex, typeNode.endIndex)
     : undefined;
   assert.equal(incrementalTypeText, "String");
 

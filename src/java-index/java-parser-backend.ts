@@ -4,7 +4,19 @@ import Parser from "tree-sitter";
 const require = createRequire(import.meta.url);
 const Java = require("tree-sitter-java");
 
-export type JavaPoint = { row: number; column: number }; // Tree-sitter UTF-8 byte column
+// `tree-sitter` (the native N-API binding selected in Task 14) hardcodes
+// TSInputEncodingUTF16LE for every parse, regardless of whether the input is
+// a plain string or a callback (verified against
+// node_modules/tree-sitter/src/parser.cc's CallbackInput::Input() and
+// conversions.cc's ByteCountToJS/BYTES_PER_CHARACTER=2). So despite the
+// "index"/"byte" naming inherited from tree-sitter's C core, every row/column
+// and startIndex/endIndex this backend produces is a 0-based UTF-16 code-unit
+// offset into the original JS string - the same units as `String.slice()` and
+// `.length`, NOT UTF-8 bytes. `JavaInputEdit` indices must be given in the
+// same UTF-16 units. A WASM backend (web-tree-sitter) would be byte-oriented
+// instead, so switching backends would require a coordinate-conversion layer
+// at this file's boundary, not just a reimplementation of this interface.
+export type JavaPoint = { row: number; column: number };
 
 export type JavaInputEdit = {
   startIndex: number;

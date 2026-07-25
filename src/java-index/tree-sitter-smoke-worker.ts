@@ -37,12 +37,17 @@ try {
   const anchor = "String text";
   const charIndex = source.indexOf(anchor);
   if (charIndex < 0) throw new Error("smoke edit anchor was not found");
-  const startIndex = Buffer.byteLength(source.slice(0, charIndex));
+  // node-tree-sitter hardcodes TSInputEncodingUTF16LE (see java-parser-backend.ts
+  // for the source citations), so startIndex/endIndex and point columns are
+  // UTF-16 code-unit offsets into the JS string, not UTF-8 byte offsets -
+  // plain `String.indexOf`/`.length` are the correct units here, not
+  // `Buffer.byteLength`.
+  const startIndex = charIndex;
   const editedSource = `${source.slice(0, charIndex)}${insertToken}${source.slice(charIndex)}`;
   tree.edit({
     startIndex,
     oldEndIndex: startIndex,
-    newEndIndex: startIndex + Buffer.byteLength(insertToken),
+    newEndIndex: startIndex + insertToken.length,
     startPosition: { row: 3, column: 4 },
     oldEndPosition: { row: 3, column: 4 },
     newEndPosition: { row: 3, column: 4 + insertToken.length }
@@ -50,9 +55,8 @@ try {
   const updatedTree = parser.parse(editedSource, tree);
   const changedRanges = tree.getChangedRanges(updatedTree);
   const typeNode = findFirst(updatedTree.rootNode, "type_identifier");
-  const editedBytes = Buffer.from(editedSource, "utf8");
   const incrementalTypeText = typeNode
-    ? editedBytes.subarray(typeNode.startIndex, typeNode.endIndex).toString("utf8")
+    ? editedSource.slice(typeNode.startIndex, typeNode.endIndex)
     : undefined;
   // node-tree-sitter's type declarations do not declare Tree.delete at all
   // (it frees the underlying C tree in its N-API destructor instead), so the
