@@ -369,8 +369,11 @@ export class JdtlsSession {
    * Changed/deleted files evict their dependent entries; a build change clears
    * everything because classpath/import semantics may have shifted.
    */
-  invalidateForRepoChanges(batch: { changes: ReadonlyArray<{ kind: string; absolutePath: string }> }): void {
-    if (batch.changes.some(change => change.kind === "BUILD_CHANGE")) {
+  invalidateForRepoChanges(batch: { changes: ReadonlyArray<{ kind: string; absolutePath: string }>; storm?: boolean }): void {
+    // A storm is handled the same as a build change: filtering/invalidating
+    // per-path for hundreds of entries is strictly more work than one clear,
+    // for no precision benefit once that many files moved at once.
+    if (batch.storm || batch.changes.some(change => change.kind === "BUILD_CHANGE")) {
       this.clearCache();
       return;
     }

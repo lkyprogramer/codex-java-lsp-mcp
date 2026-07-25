@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtempSync, mkdirSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { JdtlsSession, filterGeneratedCodeDiagnostics } from "./jdtls-session.js";
@@ -79,6 +79,7 @@ function diagnosticAt(line: number, start: number, end: number, message: string)
 type Harness = {
   session: JdtlsSession;
   factory: FakeJdtlsTransportFactory;
+  repoRoot: string;
   advance(ms: number): void;
 };
 
@@ -124,7 +125,7 @@ function harness(
     else process.env[key] = value;
   }
 
-  return { session, factory, advance: ms => { now += ms; } };
+  return { session, factory, repoRoot, advance: ms => { now += ms; } };
 }
 
 async function waitForSpawn(factory: FakeJdtlsTransportFactory, count: number): Promise<void> {
@@ -247,6 +248,37 @@ test("a successful start records the spawned jdtls pid on the lease", async () =
   assert.deepEqual(leaseStore.recordedPids, [factory.children[0].pid]);
   await session.stop();
   assert.deepEqual(leaseStore.released.sort(), ["JDT_SLOT", "JDT_WORKTREE"], "stop() releases the lease");
+});
+
+test("invalidateForRepoChanges clears the whole cache on a storm instead of only the affected files", async () => {
+  const factory = fakeTransportFactory({
+    initializeResult: { capabilities: {} },
+    responses: { "textDocument/documentSymbol": [] }
+  });
+  const { session, repoRoot } = harness(factory);
+  await session.ensureStarted(DeadlineBudget.fromTimeout(5000));
+
+  const fileA = path.join(repoRoot, "A.java");
+  const fileB = path.join(repoRoot, "B.java");
+  writeFileSync(fileA, "class A {}\n");
+  writeFileSync(fileB, "class B {}\n");
+  await session.documentSymbols(fileA);
+  await session.documentSymbols(fileB);
+  assert.equal(session.cacheStatus().entries, 2);
+
+  // Non-storm: only the entry depending on the changed file is invalidated.
+  session.invalidateForRepoChanges({ changes: [{ kind: "JAVA_CHANGE", absolutePath: fileA }] });
+  assert.equal(session.cacheStatus().entries, 1, "only file A's entry was invalidated");
+
+  await session.documentSymbols(fileA);
+  assert.equal(session.cacheStatus().entries, 2);
+
+  // Storm: everything is cleared, since filtering per path is strictly more
+  // work than one clear once this many files changed at once.
+  session.invalidateForRepoChanges({ changes: [{ kind: "JAVA_CHANGE", absolutePath: fileA }], storm: true });
+  assert.equal(session.cacheStatus().entries, 0, "a storm clears the whole cache regardless of which paths it lists");
+
+  await session.stop();
 });
 
 test("concurrent ensureStarted shares one transactional start", async () => {

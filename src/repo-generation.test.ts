@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { GenerationClock, mergeChangeKind } from "./repo-generation.js";
+import { GenerationClock, isStormBatch, mergeChangeKind } from "./repo-generation.js";
 
 test("generation advances monotonically and dirty clear is compare-and-set", () => {
   const clock = new GenerationClock();
@@ -41,4 +41,11 @@ test("change kinds merge within one debounce window", () => {
     assert.equal(mergeChangeKind(oldKind, newKind), expected);
   }
   assert.equal(mergeChangeKind("JAVA_ADD", "JAVA_DELETE"), undefined);
+});
+
+test("isStormBatch flags an absolutely large batch or one large relative to the indexed repo", () => {
+  assert.equal(isStormBatch(99, 5_000), false);
+  assert.equal(isStormBatch(100, 5_000), true);
+  assert.equal(isStormBatch(50, 400), true);
+  assert.equal(isStormBatch(19, 100), false);
 });

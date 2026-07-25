@@ -76,7 +76,9 @@ test("a rename evicts the old path so the router stops surfacing it", async () =
     changes: [
       { kind: "JAVA_DELETE", absolutePath: oldFile },
       { kind: "JAVA_ADD", absolutePath: newFile }
-    ]
+    ],
+    storm: false,
+    affectedRoots: []
   };
   sourceIndex.applyChanges(batch);
   router.onRepoChanged(batch);
@@ -100,7 +102,9 @@ test("a delete evicts the old path from the type index", async () => {
   const batch: RepoChangeBatch = {
     generation: 2,
     observedAt: new Date().toISOString(),
-    changes: [{ kind: "JAVA_DELETE", absolutePath: oldFile }]
+    changes: [{ kind: "JAVA_DELETE", absolutePath: oldFile }],
+    storm: false,
+    affectedRoots: []
   };
   sourceIndex.applyChanges(batch);
 

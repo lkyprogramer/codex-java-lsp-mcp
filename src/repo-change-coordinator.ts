@@ -11,6 +11,7 @@ import type { LayoutSource } from "./layout-manager.js";
 import { isWithin } from "./path-utils.js";
 import {
   GenerationClock,
+  isStormBatch,
   mergeChangeKind,
   type RepoChange,
   type RepoChangeBatch,
@@ -54,6 +55,9 @@ const IGNORED_SEGMENTS = new Set([
 ]);
 
 const RESOURCE_EXTENSIONS = new Set([".xml", ".sql", ".yml", ".yaml", ".properties"]);
+
+/** A pathological module count must never make a storm's diagnostic root list unbounded. */
+const AFFECTED_ROOTS_LIMIT = 20;
 
 export type RepoWatchPlan = {
   sourceRoots: string[];
@@ -137,6 +141,8 @@ export type RepoChangeCoordinatorStatus = {
   pending: number;
   lastError?: string;
   degraded: boolean;
+  /** Diagnostics only: never the raw changed-path list, which can run into the hundreds. */
+  lastStorm?: { observedAt: string; changeCount: number; affectedRoots: string[] };
 };
 
 export class RepoChangeCoordinator {
@@ -151,6 +157,7 @@ export class RepoChangeCoordinator {
   private ready = false;
   private degraded = false;
   private lastError?: string;
+  private lastStorm?: RepoChangeCoordinatorStatus["lastStorm"];
 
   constructor(
     private readonly repoRoot: string,
@@ -158,7 +165,9 @@ export class RepoChangeCoordinator {
     private readonly cacheBase: string,
     private readonly clock: GenerationClock,
     private readonly layoutSource: LayoutSource,
-    private readonly debounceMs = 150
+    private readonly debounceMs = 150,
+    /** How many Java files are currently indexed, for the storm-size ratio check. */
+    private readonly indexedFileCount: () => number = () => 0
   ) {}
 
   onBatch(listener: RepoChangeListener): () => void {
@@ -215,6 +224,23 @@ export class RepoChangeCoordinator {
       this.plan = buildRepoWatchPlan(this.repoRoot, this.layoutSource.current());
     }
     return this.plan;
+  }
+
+  /**
+   * Diagnostic summary of a storm batch: which watched roots it touched, as
+   * repo-relative paths, capped so a huge module count can never make this
+   * grow unbounded. Never the raw per-file change list.
+   */
+  private affectedRoots(changes: readonly RepoChange[]): string[] {
+    const plan = this.ensurePlan();
+    const roots = [...plan.sourceRoots, ...plan.resourceRoots, ...plan.generatedRoots];
+    const affected = new Set<string>();
+    for (const change of changes) {
+      const root = roots.find(candidate => isWithin(candidate, change.absolutePath));
+      if (root) affected.add(path.relative(this.repoRoot, root) || ".");
+      if (affected.size >= AFFECTED_ROOTS_LIMIT) break;
+    }
+    return [...affected];
   }
 
   /**
@@ -335,11 +361,28 @@ export class RepoChangeCoordinator {
         if (changes.some(change => change.kind === "BUILD_CHANGE")) {
           this.reconfigureIfLayoutChanged();
         }
-        const generation = this.clock.advance(summarizeChanges(changes));
+        const storm = isStormBatch(changes.length, this.indexedFileCount());
+        const observedAt = new Date().toISOString();
+        const affectedRoots = storm ? this.affectedRoots(changes) : [];
+        // A storm still advances generation exactly once, but is handled the
+        // same way a degraded watcher is: the batch is delivered so listeners
+        // can do coarse (not per-path) invalidation, and the run is marked
+        // dirty so the existing reconcile-on-next-request path (Task 11)
+        // catches anything a coarse pass under-invalidated. Known limit: this
+        // reports freshnessMode WATCHER_DEGRADED for a storm even though the
+        // watcher itself is healthy — see the Iteration B phase report.
+        const generation = storm
+          ? this.clock.markDirty(`change storm: ${changes.length} files`)
+          : this.clock.advance(summarizeChanges(changes));
+        if (storm) {
+          this.lastStorm = { observedAt, changeCount: changes.length, affectedRoots };
+        }
         const batch: RepoChangeBatch = {
           generation,
-          observedAt: new Date().toISOString(),
-          changes
+          observedAt,
+          changes,
+          storm,
+          affectedRoots
         };
         for (const listener of this.listeners) {
           try {
@@ -364,7 +407,9 @@ export class RepoChangeCoordinator {
     const batch: RepoChangeBatch = {
       generation,
       observedAt: new Date().toISOString(),
-      changes: [{ kind: "WATCHER_DEGRADED", absolutePath: this.repoRoot }]
+      changes: [{ kind: "WATCHER_DEGRADED", absolutePath: this.repoRoot }],
+      storm: false,
+      affectedRoots: []
     };
     for (const listener of this.listeners) {
       try {
@@ -383,7 +428,8 @@ export class RepoChangeCoordinator {
       watching: this.plan?.targets.length ?? 0,
       pending: this.pending.size,
       lastError: this.lastError,
-      degraded: this.degraded
+      degraded: this.degraded,
+      lastStorm: this.lastStorm
     };
   }
 

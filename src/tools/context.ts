@@ -34,6 +34,12 @@ export type ToolContext = {
     importConcurrency: number;
     workspaceRetainedOnShutdown: boolean;
   };
+  watcher?: {
+    ready: boolean;
+    degraded: boolean;
+    pending: number;
+    lastStorm?: { observedAt: string; changeCount: number; affectedRoots: string[] };
+  };
   session: JdtlsSession;
   sourceIndex: SourceIndex;
   router: AgentRouter;

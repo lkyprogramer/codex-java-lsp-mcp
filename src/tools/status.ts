@@ -84,6 +84,7 @@ export async function javaStatus(context: ToolContext, _args: z.infer<z.ZodObjec
     lsp: context.lsp,
     repoRoot: context.repoRoot,
     sourceIndex,
+    watcher: context.watcher,
     rgCache: context.router.rgCacheStatus(),
     note: "This MCP server is read-only and exposes the Java impact router."
   };
@@ -154,7 +155,21 @@ function statusSummary(input: StatusSummaryInput): Record<string, unknown> {
     rootWarnings: input.warnings,
     lsp: input.context.lsp,
     repoRoot: input.context.repoRoot,
-    sourceIndex: summarizeSourceIndex(input.sourceIndex)
+    sourceIndex: summarizeSourceIndex(input.sourceIndex),
+    watcher: input.context.watcher && summarizeWatcher(input.context.watcher)
+  });
+}
+
+function summarizeWatcher(watcher: NonNullable<ToolContext["watcher"]>): Record<string, unknown> {
+  return compact({
+    ready: watcher.ready,
+    degraded: watcher.degraded,
+    pending: watcher.pending,
+    lastStorm: watcher.lastStorm && compact({
+      observedAt: watcher.lastStorm.observedAt,
+      changeCount: watcher.lastStorm.changeCount,
+      affectedRoots: watcher.lastStorm.affectedRoots
+    })
   });
 }
 

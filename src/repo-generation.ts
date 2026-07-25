@@ -69,7 +69,22 @@ export type RepoChangeBatch = {
   generation: number;
   observedAt: string;
   changes: RepoChange[];
+  /** True when this batch was large enough to be handled as a storm (see `isStormBatch`). */
+  storm: boolean;
+  /** Source/resource/generated roots touched by this batch; bounded, never the raw path list. */
+  affectedRoots: string[];
 };
+
+/**
+ * A branch switch or rebase can touch hundreds of files in one debounce
+ * window. Past this size (absolute, or proportional to how many Java files
+ * are already indexed), a batch is handled as one storm event rather than
+ * flooding listeners with per-path work.
+ */
+export function isStormBatch(changeCount: number, indexedJavaFiles: number): boolean {
+  return changeCount >= 100
+    || changeCount >= Math.max(20, Math.ceil(indexedJavaFiles * 0.10));
+}
 
 /**
  * Collapses two events for the same path within one debounce window.

@@ -47,7 +47,12 @@ export interface RuntimeCoordinator {
   awaitReadyWithin(ms: number): Promise<boolean>;
   close(): Promise<void>;
   onBatch(listener: (batch: RepoChangeBatch) => void | Promise<void>): () => void;
-  status(): { ready: boolean; degraded: boolean; pending: number };
+  status(): {
+    ready: boolean;
+    degraded: boolean;
+    pending: number;
+    lastStorm?: { observedAt: string; changeCount: number; affectedRoots: string[] };
+  };
 }
 
 export type RuntimeCoordination = {
@@ -56,7 +61,7 @@ export type RuntimeCoordination = {
   layout: LayoutSource;
 };
 
-export type CoordinationFactory = (resolved: ResolvedRepo) => RuntimeCoordination;
+export type CoordinationFactory = (resolved: ResolvedRepo, indexedFileCount: () => number) => RuntimeCoordination;
 
 export type ManagedToolContext = ToolContext & {
   repoHash: string;
@@ -412,9 +417,10 @@ export class RepoRuntimeManager {
   }
 
   private async createEntry(resolved: ResolvedRepo): Promise<RuntimeEntry> {
-    const { generation, coordinator, layout } = this.coordinationFactory(resolved);
+    const context = this.runtimeFactory(resolved, this.leases);
+    const { generation, coordinator, layout } = this.coordinationFactory(resolved, () => context.sourceIndex.status().entries);
     const entry: RuntimeEntry = {
-      context: this.runtimeFactory(resolved, this.leases),
+      context,
       generation,
       coordinator,
       layout,
@@ -449,6 +455,7 @@ export class RepoRuntimeManager {
 
   private refreshResource(entry: RuntimeEntry): void {
     entry.context.resource = this.resourceStatus();
+    entry.context.watcher = entry.coordinator.status();
   }
 
   private async reserveLspSlot(entry: RuntimeEntry, budget: DeadlineBudget): Promise<void> {
@@ -605,7 +612,7 @@ function createDefaultLeaseStore(): CrossProcessLeaseStore {
   return new FileCrossProcessLeaseStore(path.join(repoCacheBase(), "leases"), defaultLeaseClockDeps());
 }
 
-function createCoordination(resolved: ResolvedRepo): RuntimeCoordination {
+function createCoordination(resolved: ResolvedRepo, indexedFileCount: () => number): RuntimeCoordination {
   const generation = new GenerationClock();
   const layout = new LayoutManager(resolved.repoRoot, resolved.layoutProfile);
   const coordinator = new RepoChangeCoordinator(
@@ -613,7 +620,9 @@ function createCoordination(resolved: ResolvedRepo): RuntimeCoordination {
     resolved.worktree,
     repoCacheBase(),
     generation,
-    layout
+    layout,
+    undefined,
+    indexedFileCount
   );
   return { generation, coordinator, layout };
 }

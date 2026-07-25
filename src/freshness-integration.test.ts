@@ -112,7 +112,9 @@ test("a change batch invalidates the fast-path rg cache; the next request sees t
   const batch: RepoChangeBatch = {
     generation: 2,
     observedAt: new Date().toISOString(),
-    changes: [{ kind: "JAVA_ADD", absolutePath: second }]
+    changes: [{ kind: "JAVA_ADD", absolutePath: second }],
+    storm: false,
+    affectedRoots: []
   };
   router.onRepoChanged(batch);
   sourceIndex.applyChanges(batch);
