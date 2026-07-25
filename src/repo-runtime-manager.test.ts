@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { RepoRuntimeManager, type ManagedToolContext, type RuntimeCoordination } from "./repo-runtime-manager.js";
 import { GenerationClock, type RepoChangeBatch } from "./repo-generation.js";
 import { JavaIntelligenceError } from "./runtime/intelligence-error.js";
@@ -7,7 +10,12 @@ import { deferred, delay, type Deferred } from "./test-support/fake-jdtls.js";
 import type { JdtlsLifecycleState } from "./jdtls-session.js";
 import type { ResolvedRepo } from "./repo-resolver.js";
 import { probeLayout } from "./layout-probe.js";
-import { NoopCrossProcessLeaseStore, type CrossProcessLeaseStore } from "./cross-process-lease.js";
+import {
+  defaultLeaseClockDeps,
+  FileCrossProcessLeaseStore,
+  NoopCrossProcessLeaseStore,
+  type CrossProcessLeaseStore
+} from "./cross-process-lease.js";
 import type { LayoutSource } from "./layout-manager.js";
 
 test("RepoRuntimeManager evicts the oldest idle started runtime before starting another", async () => {
@@ -312,6 +320,26 @@ test("initialize() singleflights lease store opening and a degraded store still 
   let handlerRan = false;
   await manager.withContext({ repoRoot: "/repo-a" }, async () => { handlerRan = true; }, {});
   assert.equal(handlerRan, true, "a degraded lease store does not block the fast/lexical path");
+});
+
+test("a live runtime holds a runtime lease so activeRuntimeCount reflects it, and shutdown releases it", async () => {
+  const leaseRoot = mkdtempSync(path.join(tmpdir(), "runtime-lease-"));
+  const leaseStore = new FileCrossProcessLeaseStore(leaseRoot, defaultLeaseClockDeps());
+  await leaseStore.open({ jdtSlots: 1, sweepSlots: 1 });
+  const sessions = new Map<string, FakeSession>();
+  const manager = new RepoRuntimeManager(
+    fakeResolver(),
+    { idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    resolved => fakeContext(resolved, sessions),
+    fakeCoordination(),
+    leaseStore
+  );
+
+  await manager.withContext({ repoRoot: "/repo-a" }, async () => undefined, {});
+  assert.equal(await leaseStore.activeRuntimeCount(), 1, "the live runtime registered a runtime lease");
+
+  await manager.shutdown("/repo-a");
+  assert.equal(await leaseStore.activeRuntimeCount(), 0, "shutdown released the runtime lease");
 });
 
 test("fully stopped idle runtimes are removed from the runtime map beyond the retention bound", async () => {

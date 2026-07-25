@@ -7,7 +7,8 @@ import {
   defaultLeaseClockDeps,
   FileCrossProcessLeaseStore,
   type CrossProcessLeaseStatus,
-  type CrossProcessLeaseStore
+  type CrossProcessLeaseStore,
+  type LeaseHandle
 } from "./cross-process-lease.js";
 import { JdtlsSession, type JdtlsLifecycleState } from "./jdtls-session.js";
 import { LayoutManager, type LayoutSource } from "./layout-manager.js";
@@ -86,6 +87,12 @@ type RuntimeEntry = {
   reconcilePromise?: Promise<void>;
   /** Set once `shutdown()` has retired this entry; undefined while active. */
   stoppedAt?: number;
+  /**
+   * Best-effort: a degraded/unopened lease store must never block runtime
+   * creation, so a failed acquire simply leaves this undefined and the repo
+   * stays invisible to `activeRuntimeCount()`/janitor protection.
+   */
+  runtimeLease?: LeaseHandle;
 };
 
 type SlotWaiter = {
@@ -338,6 +345,8 @@ export class RepoRuntimeManager {
     if (!entry) return;
     await this.stopEntry(entry);
     await entry.coordinator.close();
+    await entry.runtimeLease?.release();
+    entry.runtimeLease = undefined;
     entry.unsubscribeLifecycle?.();
     entry.unsubscribeLifecycle = undefined;
     entry.stoppedAt = Date.now();
@@ -362,7 +371,11 @@ export class RepoRuntimeManager {
     // A prior shutdown(repoRoot) may have already closed some coordinators;
     // RepoChangeCoordinator.close() is idempotent, so closing the rest here
     // (and re-closing the already-closed ones) is safe either way.
-    await Promise.all([...this.runtimes.values()].map(entry => entry.coordinator.close()));
+    await Promise.all([...this.runtimes.values()].map(async entry => {
+      await entry.coordinator.close();
+      await entry.runtimeLease?.release();
+      entry.runtimeLease = undefined;
+    }));
     for (const entry of this.runtimes.values()) {
       entry.unsubscribeLifecycle?.();
       entry.unsubscribeLifecycle = undefined;
@@ -408,7 +421,10 @@ export class RepoRuntimeManager {
       ready: Promise.resolve(),
       refCount: 0,
       lastUsedAt: Date.now(),
-      lspReservation: "NONE"
+      lspReservation: "NONE",
+      // Best-effort: a degraded or unopened lease store must never block a
+      // runtime from being created, so acquisition failure is swallowed here.
+      runtimeLease: await this.leases.acquireRuntime(resolved.worktree).catch(() => undefined)
     };
     entry.unsubscribeLifecycle = entry.context.session.onLifecycleChange(state => {
       if (state === "STARTING") entry.lspReservation = "STARTING";

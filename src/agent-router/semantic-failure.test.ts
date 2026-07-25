@@ -57,7 +57,18 @@ function options(anchorFile: string, repoRoot: string): ImpactOptions {
   };
 }
 
-for (const code of ["JDT_BACKOFF", "JDT_CONFIG_ERROR", "JDT_BROKEN", "DEADLINE_EXCEEDED"] as const) {
+for (const code of [
+  "JDT_BACKOFF",
+  "JDT_CONFIG_ERROR",
+  "JDT_BROKEN",
+  "DEADLINE_EXCEEDED",
+  // Cross-process lease contention/config failures (Task 12a): a busy
+  // worktree, an unreclaimed orphan, or a corrupt shared lease store must
+  // degrade the semantic stage the same as any other JDT unavailability.
+  "JDT_BUSY_OTHER_SESSION",
+  "JDT_ORPHANED",
+  "LEASE_CONFIG_ERROR"
+] as const) {
   test(`a ${code} JDT degrades the semantic stage instead of failing the request`, async () => {
     const { repoRoot, anchorFile } = buildRepo();
     const router = routerThatThrows(repoRoot, code, `simulated ${code}`);

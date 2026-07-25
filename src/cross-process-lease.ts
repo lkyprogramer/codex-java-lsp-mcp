@@ -36,10 +36,12 @@ export interface CompositeJdtLease {
   heartbeat(): Promise<void>;
   release(): Promise<void>;
   /**
-   * Atomically records the spawned Eclipse JDT LS child on both the worktree
-   * and slot leases. Returns false if either update failed, in which case the
-   * caller must kill the child and release this composite lease before ever
-   * reaching lifecycle READY (Task 12a Step 5).
+   * Records the spawned Eclipse JDT LS child on both the worktree and slot
+   * leases (two sequential atomic renames, not one joint transaction).
+   * Returns false if either update failed, in which case the caller must kill
+   * the child and release this composite lease before ever reaching
+   * lifecycle READY (Task 12a Step 5) — that rollback is what makes a
+   * partial write safe, not atomicity across the two renames.
    */
   recordJdtlsPid(jdtlsPid: number): Promise<boolean>;
 }
