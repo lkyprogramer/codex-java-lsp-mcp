@@ -72,6 +72,35 @@ test("cleanupStaleWorktreeCaches ignores legacy source-index metadata", async ()
   }
 });
 
+test("the janitor never recursively deletes the global leases/ base, even though it lives inside the same cacheBase", async () => {
+  const cacheBase = await mkdtemp(path.join(tmpdir(), "java-lsp-worktree-cache-"));
+  const leaseBase = path.join(cacheBase, "leases");
+  try {
+    // Production layout: leaseBase (repoCacheBase()/leases) is itself a
+    // subdirectory the janitor's readdirSync(cacheBase) walks over.
+    const leases = new FileCrossProcessLeaseStore(leaseBase, defaultLeaseClockDeps());
+    await leases.open({ jdtSlots: 4, sweepSlots: 1 });
+    const identity: WorktreeIdentity = { repoRoot: "/tmp/x", repoHash: "rh", familyHash: "fh", isLinkedWorktree: true };
+    const runtimeLease = await leases.acquireRuntime(identity);
+
+    await writeMeta(cacheBase, "stale-worktree", {
+      repoRoot: "/tmp/old-worktree",
+      isGitWorktree: true,
+      updatedAt: new Date(Date.now() - 30 * 86400000).toISOString()
+    });
+
+    const { cleanupStaleWorktreeCaches } = await import("./worktree-cache-cleanup.js");
+    cleanupStaleWorktreeCaches({ cacheBase, leaseBase });
+
+    assert.equal(existsSync(path.join(cacheBase, "stale-worktree")), false, "the stale cache is still removed");
+    assert.equal(existsSync(leaseBase), true, "the leases/ base itself is never touched");
+    assert.equal(existsSync(path.join(leaseBase, "runtime")), true, "the live lease tree under it survives too");
+    await runtimeLease.release();
+  } finally {
+    await rm(cacheBase, { recursive: true, force: true });
+  }
+});
+
 // --- Task 12c: multi-process runtime-lease liveness protection ------------
 
 type JanitorFixture = {
