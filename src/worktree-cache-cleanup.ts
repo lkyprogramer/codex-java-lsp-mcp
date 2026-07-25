@@ -4,18 +4,33 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { hasLiveRuntimeLease } from "./cross-process-lease.js";
 import { repoCacheBase, repoCacheRoot } from "./repo-layout.js";
 
 const DAY_MS = 86400000;
 const META_FILE = "repo-meta.json";
 
+/**
+ * `ownerPid`/`ownerToken`/`repoHash`/`familyHash` were added for Task 12c; a
+ * legacy v1 file simply lacks them, which every reader here treats as "no
+ * signal from this source" rather than an error.
+ */
 type RepoCacheMeta = {
   schemaVersion?: number;
   repoRoot?: string;
+  repoHash?: string;
+  familyHash?: string;
   isGitWorktree?: boolean;
+  ownerPid?: number;
+  ownerToken?: string;
   jdtlsPid?: number;
+  lastRequestAt?: string;
   updatedAt?: string;
 };
+
+export type RepoCacheMetaV2 = Required<Pick<RepoCacheMeta, "repoRoot" | "isGitWorktree" | "updatedAt" | "lastRequestAt">> & {
+  schemaVersion: 2;
+} & Pick<RepoCacheMeta, "repoHash" | "familyHash" | "ownerPid" | "ownerToken" | "jdtlsPid">;
 
 export type WorktreeCacheCleanupResult = {
   scanned: number;
@@ -24,16 +39,34 @@ export type WorktreeCacheCleanupResult = {
   removedDirs: string[];
 };
 
-export function touchRepoCache(repoRoot: string, extra: Pick<RepoCacheMeta, "jdtlsPid"> = {}): void {
+type TouchRepoCacheExtra = Partial<
+  Pick<RepoCacheMeta, "repoHash" | "familyHash" | "ownerPid" | "ownerToken" | "jdtlsPid">
+>;
+
+/**
+ * Merges `extra` onto whatever is already on disk (a request-touch and a JDT
+ * lifecycle touch write different, independent fields; a blind overwrite
+ * would make each clobber the other's last write). A field explicitly passed
+ * as `undefined` clears it — used to drop `jdtlsPid` on stop/BROKEN and
+ * `ownerPid`/`ownerToken` on runtime disposal.
+ */
+export function touchRepoCache(repoRoot: string, extra: TouchRepoCacheExtra = {}): void {
   try {
     const cacheRoot = repoCacheRoot(repoRoot);
     mkdirSync(cacheRoot, { recursive: true });
-    const meta: RepoCacheMeta = {
-      schemaVersion: 1,
+    const existing = readRepoCacheMeta(cacheRoot);
+    const meta: RepoCacheMetaV2 = {
+      schemaVersion: 2,
       repoRoot,
       isGitWorktree: isLinkedGitWorktree(repoRoot),
-      updatedAt: new Date().toISOString(),
-      ...extra
+      repoHash: existing?.repoHash,
+      familyHash: existing?.familyHash,
+      ownerPid: existing?.ownerPid,
+      ownerToken: existing?.ownerToken,
+      jdtlsPid: existing?.jdtlsPid,
+      ...extra,
+      lastRequestAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
     writeFileSync(path.join(cacheRoot, META_FILE), `${JSON.stringify(meta, null, 2)}\n`);
   } catch {
@@ -43,8 +76,11 @@ export function touchRepoCache(repoRoot: string, extra: Pick<RepoCacheMeta, "jdt
 
 export function cleanupStaleWorktreeCaches(options: {
   cacheBase?: string;
+  leaseBase?: string;
   now?: number;
   ttlDays?: number;
+  /** Test seam; defaults to a real `process.kill(pid, 0)` liveness check. */
+  isAlive?: (pid: number) => boolean;
 } = {}): WorktreeCacheCleanupResult {
   const ttlDays = options.ttlDays ?? worktreeCacheTtlDays();
   const result: WorktreeCacheCleanupResult = { scanned: 0, removed: 0, skipped: 0, removedDirs: [] };
@@ -56,6 +92,8 @@ export function cleanupStaleWorktreeCaches(options: {
   if (!existsSync(base)) {
     return result;
   }
+  const leaseBase = options.leaseBase ?? path.join(repoCacheBase(), "leases");
+  const isAlive = options.isAlive ?? isProcessAlive;
   const cutoff = (options.now ?? Date.now()) - ttlDays * DAY_MS;
 
   for (const entry of readdirSync(base, { withFileTypes: true })) {
@@ -65,7 +103,7 @@ export function cleanupStaleWorktreeCaches(options: {
     result.scanned += 1;
     const cacheRoot = path.join(base, entry.name);
     const meta = readRepoCacheMeta(cacheRoot);
-    if (!meta?.repoRoot || cacheUpdatedAt(cacheRoot, meta) > cutoff || !isWorktreeCache(meta) || hasActiveJdtls(cacheRoot, meta)) {
+    if (!meta?.repoRoot || cacheUpdatedAt(cacheRoot, meta) > cutoff || !isWorktreeCache(meta) || hasActiveOwner(cacheRoot, meta, leaseBase, isAlive)) {
       result.skipped += 1;
       continue;
     }
@@ -109,8 +147,22 @@ function isWorktreeCache(meta: RepoCacheMeta): boolean {
   return Boolean(meta.repoRoot && existsSync(meta.repoRoot) && isLinkedGitWorktree(meta.repoRoot));
 }
 
-function hasActiveJdtls(cacheRoot: string, meta: RepoCacheMeta): boolean {
-  if (meta.jdtlsPid && isProcessAlive(meta.jdtlsPid)) {
+/**
+ * Decision order: a live runtime lease is the authoritative, multi-process
+ * signal (Task 12a) that some MCP server still has this exact repo open,
+ * even for fast-only (never-started-JDT) use. `ownerPid`/`jdtlsPid` are
+ * last-touch diagnostics/fallback for when the lease itself can't be read,
+ * not a replacement for it.
+ */
+function hasActiveOwner(cacheRoot: string, meta: RepoCacheMeta, leaseBase: string, isAlive: (pid: number) => boolean): boolean {
+  const familyKey = meta.familyHash ?? meta.repoHash;
+  if (familyKey && meta.repoHash && hasLiveRuntimeLease(leaseBase, familyKey, meta.repoHash, isAlive)) {
+    return true;
+  }
+  if (meta.ownerPid && isAlive(meta.ownerPid)) {
+    return true;
+  }
+  if (meta.jdtlsPid && isAlive(meta.jdtlsPid)) {
     return true;
   }
   return existsSync(path.join(cacheRoot, "workspace", ".metadata", ".lock"));

@@ -352,6 +352,10 @@ export class RepoRuntimeManager {
     await entry.coordinator.close();
     await entry.runtimeLease?.release();
     entry.runtimeLease = undefined;
+    // This process's PID would otherwise keep looking alive to the janitor's
+    // ownerPid fallback long after this repo's runtime (and its lease) is
+    // gone — a long-lived server process is not proof this repo is still in use.
+    touchRepoCache(entry.context.repoRoot, { ownerPid: undefined, ownerToken: undefined });
     entry.unsubscribeLifecycle?.();
     entry.unsubscribeLifecycle = undefined;
     entry.stoppedAt = Date.now();
@@ -380,6 +384,7 @@ export class RepoRuntimeManager {
       await entry.coordinator.close();
       await entry.runtimeLease?.release();
       entry.runtimeLease = undefined;
+      touchRepoCache(entry.context.repoRoot, { ownerPid: undefined, ownerToken: undefined });
     }));
     for (const entry of this.runtimes.values()) {
       entry.unsubscribeLifecycle?.();
@@ -389,7 +394,6 @@ export class RepoRuntimeManager {
 
   /** Singleflight so two concurrent requests share one runtime/coordinator/watcher. */
   private async getOrCreate(resolved: ResolvedRepo): Promise<RuntimeEntry> {
-    touchRepoCache(resolved.repoRoot);
     const existing = this.runtimes.get(resolved.repoRoot);
     if (existing) {
       if (existing.stoppedAt === undefined) {
@@ -456,6 +460,16 @@ export class RepoRuntimeManager {
   private refreshResource(entry: RuntimeEntry): void {
     entry.context.resource = this.resourceStatus();
     entry.context.watcher = entry.coordinator.status();
+    // The multi-process janitor's authoritative signal (Task 12c) is the
+    // runtime lease itself; this touch just refreshes the diagnostic
+    // fallback fields and lastRequestAt/updatedAt so a fast-only (never
+    // started JDT) repo still looks recently used.
+    touchRepoCache(entry.context.repoRoot, {
+      repoHash: entry.context.repoHash,
+      familyHash: entry.context.worktree?.familyHash,
+      ownerPid: process.pid,
+      ownerToken: entry.runtimeLease?.owner.ownerToken
+    });
   }
 
   private async reserveLspSlot(entry: RuntimeEntry, budget: DeadlineBudget): Promise<void> {

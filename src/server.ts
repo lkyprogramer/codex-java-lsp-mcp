@@ -16,7 +16,7 @@ import { javaShutdown, shutdownSchema } from "./tools/shutdown.js";
 import { javaStatus, statusSchema, summarizeResourceStatus } from "./tools/status.js";
 import { isDiagnosticDetail } from "./tools/shared.js";
 import { javaSymbol, symbolSchema } from "./tools/symbol.js";
-import { cleanupStaleWorktreeCaches } from "./worktree-cache-cleanup.js";
+import { cleanupStaleWorktreeCaches, type WorktreeCacheCleanupResult } from "./worktree-cache-cleanup.js";
 
 type ToolResult = {
   content: Array<{ type: "text"; text: string }>;
@@ -84,8 +84,11 @@ register("java_shutdown", {
   inputSchema: shutdownSchema
 }, args => shutdownFor(args));
 
+let startupCleanup: WorktreeCacheCleanupResult | undefined;
+
 async function main(): Promise<void> {
   const cleanup = cleanupStaleWorktreeCaches();
+  startupCleanup = cleanup;
   if (cleanup.removed > 0) {
     console.error(`[codex-java-lsp] cleaned ${cleanup.removed} stale worktree cache(s)`);
   }
@@ -126,6 +129,12 @@ async function javaStatusFor(args: z.infer<z.ZodObject<typeof statusSchema>>): P
       },
       resource: runtimes.resourceStatus(),
       leases: await runtimes.leaseStatus(),
+      // Counts only; removedDirs is never surfaced here (it is a raw path list).
+      janitor: startupCleanup && {
+        scanned: startupCleanup.scanned,
+        removed: startupCleanup.removed,
+        skipped: startupCleanup.skipped
+      },
       aliases: registry.aliases(),
       aliasRegistry: registry.status(),
       activeRepos: runtimes.activeRepos()

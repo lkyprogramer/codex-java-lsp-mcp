@@ -180,6 +180,40 @@ export function defaultIsAlive(pid: number): boolean {
   }
 }
 
+/**
+ * Read-only, synchronous liveness check for the startup cache janitor: does
+ * any runtime lease directory for this exact (familyHash, repoHash) belong to
+ * a still-alive owner? No `open()`, no mutation, no reclaim — the janitor
+ * only ever needs to ask "is someone still using this", never touch the
+ * shared lease tree itself.
+ */
+export function hasLiveRuntimeLease(
+  leaseBase: string,
+  familyHash: string,
+  repoHash: string,
+  isAlive: (pid: number) => boolean = defaultIsAlive
+): boolean {
+  const repoDir = path.join(leaseBase, "runtime", familyHash, repoHash);
+  if (!existsSync(repoDir)) return false;
+  let entries: string[];
+  try {
+    entries = readdirSync(repoDir, { withFileTypes: true })
+      .filter(entry => entry.isDirectory())
+      .map(entry => entry.name);
+  } catch {
+    return false;
+  }
+  for (const entry of entries) {
+    try {
+      const owner = JSON.parse(readFileSync(path.join(repoDir, entry, "metadata.json"), "utf8")) as { pid?: unknown };
+      if (typeof owner.pid === "number" && isAlive(owner.pid)) return true;
+    } catch {
+      // A metadata-less or unreadable lease directory is not proof of life.
+    }
+  }
+  return false;
+}
+
 export function defaultLeaseClockDeps(overrides: Partial<LeaseClockDeps> = {}): LeaseClockDeps {
   return {
     pid: process.pid,

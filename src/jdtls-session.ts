@@ -461,7 +461,7 @@ export class JdtlsSession {
     // above through startPromise); this is a no-op in that case and the only
     // release path when stop() is called on an already-READY session.
     await this.releasePendingLease();
-    touchRepoCache(this.repoRoot);
+    touchRepoCache(this.repoRoot, { jdtlsPid: undefined });
     this.openDocuments.clear();
     this.diagnostics.clear();
   }
@@ -809,7 +809,6 @@ export class JdtlsSession {
     this.registerClientHandlers(attempt.connection);
     attempt.connection.listen();
     this.attachAttemptLogging(attempt);
-    touchRepoCache(this.repoRoot, { jdtlsPid: attempt.child.pid });
 
     try {
       if (this.pendingLease && attempt.child.pid !== undefined) {
@@ -851,6 +850,10 @@ export class JdtlsSession {
       this.startAttempt = undefined;
       this.restartBackoff.recordReadyStarted();
       this.transition("READY");
+      // The janitor's cross-process liveness check trusts a recorded jdtlsPid
+      // as proof this worktree is in use; writing it before READY would let a
+      // process that dies mid-STARTING leave a stale-but-plausible signal.
+      touchRepoCache(this.repoRoot, { jdtlsPid: attempt.child.pid });
       this.armReadyStabilityReset(attempt);
     } catch (error) {
       const stoppedOrSuperseded =
@@ -909,6 +912,7 @@ export class JdtlsSession {
         // same is true of the lease release: a STARTING attempt's failure
         // releases it through that same catch.
         this.restartBackoff.recordFailure("JDT_BROKEN");
+        touchRepoCache(this.repoRoot, { jdtlsPid: undefined });
         void this.releasePendingLease();
       }
       try {
