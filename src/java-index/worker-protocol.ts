@@ -1,0 +1,652 @@
+import type {
+  AnchorFacts,
+  IndexedReference,
+  JavaAnnotationFact,
+  JavaCallSiteFact,
+  JavaCallSiteKind,
+  JavaFieldFacts,
+  JavaFileBundle,
+  JavaFileFacts,
+  JavaImportFact,
+  JavaIndexStatus,
+  JavaMethodFacts,
+  JavaParseState,
+  JavaSourceSet,
+  JavaTypeFacts,
+  JavaTypeKind,
+  JavaTypeLookupResult,
+  JavaTypeParameterFact,
+  JavaTypeRef,
+  SourcePosition,
+  SourceRange,
+  SourceRootCoverage,
+  StaticEdge,
+  StaticEdgeKind,
+  StaticEdgeResolutionKind,
+  TypeResolutionStrategy
+} from "./index-types.js";
+
+export type JavaIndexRequest =
+  | { id: number; type: "OPEN"; repoRoot: string; cacheDir: string; generation: number }
+  | { id: number; type: "REFRESH"; generation: number; changed: string[]; deleted: string[] }
+  | { id: number; type: "RECONCILE"; generation: number }
+  | { id: number; type: "QUERY_ANCHOR"; file: string; line: number; column: number }
+  | { id: number; type: "QUERY_TYPE"; typeText: string; scopeFile?: string }
+  | { id: number; type: "QUERY_IMPLEMENTERS"; typeId: string; limit: number }
+  | { id: number; type: "QUERY_TYPE_REFERENCERS"; typeId: string; edgeKinds: StaticEdgeKind[]; limit: number }
+  | { id: number; type: "QUERY_CALLERS"; methodId: string; limit: number }
+  | { id: number; type: "QUERY_CALLEES"; methodId: string; limit: number }
+  | { id: number; type: "QUERY_FILES"; files: string[] }
+  | { id: number; type: "STATUS" }
+  | { id: number; type: "FLUSH" }
+  | { id: number; type: "CLOSE" };
+
+export type JavaIndexCommand = JavaIndexRequest extends infer Request
+  ? Request extends { id: number }
+    ? Omit<Request, "id">
+    : never
+  : never;
+
+export type JavaIndexResponse =
+  | { id: number; ok: true; value: unknown }
+  | { id: number; ok: false; error: { code: string; message: string; stack?: string } };
+
+export type JavaIndexValueValidator<T> = (value: unknown) => T;
+
+// --- generic guards --------------------------------------------------------
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === "string";
+}
+
+function isNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function isBoolean(value: unknown): value is boolean {
+  return typeof value === "boolean";
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every(isString);
+}
+
+function isOneOf<T extends string>(value: unknown, options: readonly T[]): value is T {
+  return typeof value === "string" && (options as readonly string[]).includes(value);
+}
+
+function invalid(context: string, detail: string): never {
+  throw new Error(`invalid ${context}: ${detail}`);
+}
+
+function record(value: unknown, context: string): Record<string, unknown> {
+  if (!isRecord(value)) invalid(context, "expected an object");
+  return value as Record<string, unknown>;
+}
+
+function array(value: unknown, context: string): unknown[] {
+  if (!Array.isArray(value)) invalid(context, "expected an array");
+  return value as unknown[];
+}
+
+function optional<T>(
+  value: unknown,
+  context: string,
+  validate: (value: unknown, context: string) => T
+): T | undefined {
+  if (value === undefined) return undefined;
+  return validate(value, context);
+}
+
+// Spreads to nothing when the value is absent, rather than an explicit
+// `key: undefined` own property — so a validated object's key set matches
+// what a JSON-serialized snapshot round-trip would produce (JSON.stringify
+// drops undefined-valued keys), instead of only matching objects freshly
+// received from the worker.
+function withOptional<K extends string, V>(key: K, value: V | undefined): { [P in K]?: V } {
+  return value === undefined ? {} : ({ [key]: value } as { [P in K]?: V });
+}
+
+// --- envelope ---------------------------------------------------------------
+
+export function isJavaIndexResponse(value: unknown): value is JavaIndexResponse {
+  if (!isRecord(value)) return false;
+  if (!isNumber(value.id)) return false;
+  if (value.ok === true) return "value" in value;
+  if (value.ok === false) {
+    const error = value.error;
+    return isRecord(error) && isString(error.code) && isString(error.message);
+  }
+  return false;
+}
+
+// --- shared fact validators --------------------------------------------------
+
+function validateSourcePosition(value: unknown, context: string): SourcePosition {
+  const source = record(value, context);
+  if (!isNumber(source.line) || !isNumber(source.column)) {
+    invalid(context, "expected {line, column} numbers");
+  }
+  return { line: source.line as number, column: source.column as number };
+}
+
+function validateSourceRange(value: unknown, context: string): SourceRange {
+  const source = record(value, context);
+  return {
+    start: validateSourcePosition(source.start, `${context}.start`),
+    end: validateSourcePosition(source.end, `${context}.end`)
+  };
+}
+
+const TYPE_RESOLUTION_STRATEGIES = [
+  "QUALIFIED",
+  "EXPLICIT_IMPORT",
+  "ENCLOSING_TYPE",
+  "SAME_PACKAGE",
+  "JAVA_LANG",
+  "WILDCARD_IMPORT",
+  "REPO_UNIQUE_SIMPLE_NAME"
+] as const satisfies readonly TypeResolutionStrategy[];
+
+const EXTERNAL_TYPE_STRATEGIES = ["QUALIFIED", "EXPLICIT_IMPORT", "JAVA_LANG"] as const;
+
+function validateTypeRefResolution(value: unknown, context: string): JavaTypeRef["resolution"] {
+  const source = record(value, context);
+  if (!isString(source.state)) invalid(context, "expected resolution.state");
+  switch (source.state) {
+    case "RESOLVED_REPO": {
+      if (!isString(source.typeId)) invalid(context, "RESOLVED_REPO.typeId");
+      if (!isOneOf(source.strategy, TYPE_RESOLUTION_STRATEGIES)) invalid(context, "RESOLVED_REPO.strategy");
+      return { state: "RESOLVED_REPO", typeId: source.typeId, strategy: source.strategy };
+    }
+    case "EXTERNAL": {
+      if (!isString(source.qualifiedName)) invalid(context, "EXTERNAL.qualifiedName");
+      if (!isOneOf(source.strategy, EXTERNAL_TYPE_STRATEGIES)) invalid(context, "EXTERNAL.strategy");
+      return { state: "EXTERNAL", qualifiedName: source.qualifiedName, strategy: source.strategy };
+    }
+    case "TYPE_VARIABLE": {
+      if (!isString(source.name)) invalid(context, "TYPE_VARIABLE.name");
+      return { state: "TYPE_VARIABLE", name: source.name };
+    }
+    case "AMBIGUOUS": {
+      if (!isStringArray(source.candidates)) invalid(context, "AMBIGUOUS.candidates");
+      return { state: "AMBIGUOUS", candidates: source.candidates };
+    }
+    case "UNRESOLVED":
+      return { state: "UNRESOLVED" };
+    default:
+      return invalid(context, `unknown resolution state ${String(source.state)}`);
+  }
+}
+
+function validateJavaTypeRef(value: unknown, context: string): JavaTypeRef {
+  const source = record(value, context);
+  if (!isString(source.text)) invalid(context, "text");
+  if (!isString(source.simpleName)) invalid(context, "simpleName");
+  if (!isNumber(source.arrayDepth)) invalid(context, "arrayDepth");
+  const typeArguments = array(source.typeArguments, `${context}.typeArguments`)
+    .map((entry, index) => validateJavaTypeRef(entry, `${context}.typeArguments[${index}]`));
+  const wildcard = source.wildcard === undefined
+    ? undefined
+    : isOneOf(source.wildcard, ["extends", "super", "unbounded"] as const)
+      ? source.wildcard
+      : invalid(context, "wildcard");
+  const qualifiedName = optional(source.qualifiedName, `${context}.qualifiedName`, isAssertString);
+  const range = optional(source.range, `${context}.range`, validateSourceRange);
+  return {
+    text: source.text,
+    simpleName: source.simpleName,
+    ...withOptional("qualifiedName", qualifiedName),
+    typeArguments,
+    arrayDepth: source.arrayDepth,
+    ...withOptional("wildcard", wildcard),
+    resolution: validateTypeRefResolution(source.resolution, `${context}.resolution`),
+    ...withOptional("range", range)
+  };
+}
+
+function isAssertString(value: unknown, context: string): string {
+  if (!isString(value)) invalid(context, "expected a string");
+  return value;
+}
+
+function validateJavaTypeParameterFact(value: unknown, context: string): JavaTypeParameterFact {
+  const source = record(value, context);
+  if (!isString(source.name)) invalid(context, "name");
+  const bounds = array(source.bounds, `${context}.bounds`)
+    .map((entry, index) => validateJavaTypeRef(entry, `${context}.bounds[${index}]`));
+  return {
+    name: source.name,
+    bounds,
+    range: validateSourceRange(source.range, `${context}.range`)
+  };
+}
+
+function validateJavaAnnotationFact(value: unknown, context: string): JavaAnnotationFact {
+  const source = record(value, context);
+  if (!isString(source.name)) invalid(context, "name");
+  return {
+    name: source.name,
+    ...withOptional("qualifiedName", optional(source.qualifiedName, `${context}.qualifiedName`, isAssertString)),
+    ...withOptional("argumentsText", optional(source.argumentsText, `${context}.argumentsText`, isAssertString)),
+    range: validateSourceRange(source.range, `${context}.range`)
+  };
+}
+
+const JAVA_CALL_SITE_KINDS: readonly JavaCallSiteKind[] = [
+  "METHOD_INVOCATION",
+  "CONSTRUCTOR_INVOCATION",
+  "METHOD_REFERENCE"
+];
+
+function validateJavaCallSiteFact(value: unknown, context: string): JavaCallSiteFact {
+  const source = record(value, context);
+  if (!isOneOf(source.kind, JAVA_CALL_SITE_KINDS)) invalid(context, "kind");
+  if (!isString(source.name)) invalid(context, "name");
+  if (!isNumber(source.arity)) invalid(context, "arity");
+  const argumentTypeHints = array(source.argumentTypeHints, `${context}.argumentTypeHints`)
+    .map((entry, index) => validateJavaTypeRef(entry, `${context}.argumentTypeHints[${index}]`));
+  return {
+    kind: source.kind,
+    name: source.name,
+    ...withOptional("receiverText", optional(source.receiverText, `${context}.receiverText`, isAssertString)),
+    ...withOptional("receiverDeclaredType", optional(
+      source.receiverDeclaredType,
+      `${context}.receiverDeclaredType`,
+      validateJavaTypeRef
+    )),
+    arity: source.arity,
+    argumentTypeHints,
+    range: validateSourceRange(source.range, `${context}.range`)
+  };
+}
+
+function validateJavaImportFact(value: unknown, context: string): JavaImportFact {
+  const source = record(value, context);
+  if (!isString(source.qualifiedName)) invalid(context, "qualifiedName");
+  if (!isBoolean(source.wildcard)) invalid(context, "wildcard");
+  if (!isBoolean(source.static)) invalid(context, "static");
+  return {
+    qualifiedName: source.qualifiedName,
+    wildcard: source.wildcard,
+    static: source.static,
+    range: validateSourceRange(source.range, `${context}.range`)
+  };
+}
+
+function validateJavaFieldFacts(value: unknown, context: string): JavaFieldFacts {
+  const source = record(value, context);
+  if (!isString(source.fieldId)) invalid(context, "fieldId");
+  if (!isString(source.ownerTypeId)) invalid(context, "ownerTypeId");
+  if (!isString(source.name)) invalid(context, "name");
+  if (!isStringArray(source.modifiers)) invalid(context, "modifiers");
+  const annotations = array(source.annotations, `${context}.annotations`)
+    .map((entry, index) => validateJavaAnnotationFact(entry, `${context}.annotations[${index}]`));
+  return {
+    fieldId: source.fieldId,
+    ownerTypeId: source.ownerTypeId,
+    name: source.name,
+    type: validateJavaTypeRef(source.type, `${context}.type`),
+    modifiers: source.modifiers,
+    annotations,
+    range: validateSourceRange(source.range, `${context}.range`)
+  };
+}
+
+function validateJavaMethodParameter(
+  value: unknown,
+  context: string
+): { name: string; type: JavaTypeRef; varargs: boolean; range: SourceRange } {
+  const source = record(value, context);
+  if (!isString(source.name)) invalid(context, "name");
+  if (!isBoolean(source.varargs)) invalid(context, "varargs");
+  return {
+    name: source.name,
+    type: validateJavaTypeRef(source.type, `${context}.type`),
+    varargs: source.varargs,
+    range: validateSourceRange(source.range, `${context}.range`)
+  };
+}
+
+function validateJavaMethodFacts(value: unknown, context: string): JavaMethodFacts {
+  const source = record(value, context);
+  if (!isString(source.methodId)) invalid(context, "methodId");
+  if (!isString(source.ownerTypeId)) invalid(context, "ownerTypeId");
+  if (!isString(source.name)) invalid(context, "name");
+  if (!isBoolean(source.constructor)) invalid(context, "constructor");
+  if (!isString(source.signatureKey)) invalid(context, "signatureKey");
+  if (!isStringArray(source.modifiers)) invalid(context, "modifiers");
+  const annotations = array(source.annotations, `${context}.annotations`)
+    .map((entry, index) => validateJavaAnnotationFact(entry, `${context}.annotations[${index}]`));
+  const typeParameters = array(source.typeParameters, `${context}.typeParameters`)
+    .map((entry, index) => validateJavaTypeParameterFact(entry, `${context}.typeParameters[${index}]`));
+  const parameters = array(source.parameters, `${context}.parameters`)
+    .map((entry, index) => validateJavaMethodParameter(entry, `${context}.parameters[${index}]`));
+  const throwsTypes = array(source.throws, `${context}.throws`)
+    .map((entry, index) => validateJavaTypeRef(entry, `${context}.throws[${index}]`));
+  const callSites = array(source.callSites, `${context}.callSites`)
+    .map((entry, index) => validateJavaCallSiteFact(entry, `${context}.callSites[${index}]`));
+  const localTypes = array(source.localTypes, `${context}.localTypes`)
+    .map((entry, index) => validateJavaTypeRef(entry, `${context}.localTypes[${index}]`));
+  return {
+    methodId: source.methodId,
+    ownerTypeId: source.ownerTypeId,
+    name: source.name,
+    constructor: source.constructor,
+    signatureKey: source.signatureKey,
+    range: validateSourceRange(source.range, `${context}.range`),
+    ...withOptional("bodyRange", optional(source.bodyRange, `${context}.bodyRange`, validateSourceRange)),
+    modifiers: source.modifiers,
+    annotations,
+    typeParameters,
+    ...withOptional("returnType", optional(source.returnType, `${context}.returnType`, validateJavaTypeRef)),
+    parameters,
+    throws: throwsTypes,
+    callSites,
+    localTypes
+  };
+}
+
+const JAVA_TYPE_KINDS: readonly JavaTypeKind[] = ["class", "interface", "record", "enum", "annotation"];
+
+function validateJavaTypeFacts(value: unknown, context: string): JavaTypeFacts {
+  const source = record(value, context);
+  if (!isString(source.typeId)) invalid(context, "typeId");
+  if (!isString(source.simpleName)) invalid(context, "simpleName");
+  if (!isOneOf(source.kind, JAVA_TYPE_KINDS)) invalid(context, "kind");
+  if (!isString(source.fileId)) invalid(context, "fileId");
+  if (!isStringArray(source.modifiers)) invalid(context, "modifiers");
+  if (!isStringArray(source.fieldIds)) invalid(context, "fieldIds");
+  if (!isStringArray(source.methodIds)) invalid(context, "methodIds");
+  if (!isNumber(source.confidence)) invalid(context, "confidence");
+  const annotations = array(source.annotations, `${context}.annotations`)
+    .map((entry, index) => validateJavaAnnotationFact(entry, `${context}.annotations[${index}]`));
+  const typeParameters = array(source.typeParameters, `${context}.typeParameters`)
+    .map((entry, index) => validateJavaTypeParameterFact(entry, `${context}.typeParameters[${index}]`));
+  const extendsTypes = array(source.extends, `${context}.extends`)
+    .map((entry, index) => validateJavaTypeRef(entry, `${context}.extends[${index}]`));
+  const implementsTypes = array(source.implements, `${context}.implements`)
+    .map((entry, index) => validateJavaTypeRef(entry, `${context}.implements[${index}]`));
+  const permitsTypes = array(source.permits, `${context}.permits`)
+    .map((entry, index) => validateJavaTypeRef(entry, `${context}.permits[${index}]`));
+  return {
+    typeId: source.typeId,
+    ...withOptional("fqn", optional(source.fqn, `${context}.fqn`, isAssertString)),
+    simpleName: source.simpleName,
+    kind: source.kind,
+    fileId: source.fileId,
+    ...withOptional("enclosingTypeId", optional(source.enclosingTypeId, `${context}.enclosingTypeId`, isAssertString)),
+    range: validateSourceRange(source.range, `${context}.range`),
+    modifiers: source.modifiers,
+    annotations,
+    typeParameters,
+    extends: extendsTypes,
+    implements: implementsTypes,
+    permits: permitsTypes,
+    fieldIds: source.fieldIds,
+    methodIds: source.methodIds,
+    confidence: source.confidence
+  };
+}
+
+const JAVA_SOURCE_SETS: readonly JavaSourceSet[] = ["main", "test", "generated", "unknown"];
+const JAVA_PARSE_STATES: readonly JavaParseState[] = ["COMPLETE", "RECOVERED", "FAILED"];
+
+function validateJavaFileFacts(value: unknown, context: string): JavaFileFacts {
+  const source = record(value, context);
+  if (!isString(source.fileId)) invalid(context, "fileId");
+  if (!isString(source.relativePath)) invalid(context, "relativePath");
+  if (!isString(source.sourceRoot)) invalid(context, "sourceRoot");
+  if (!isString(source.module)) invalid(context, "module");
+  if (!isOneOf(source.sourceSet, JAVA_SOURCE_SETS)) invalid(context, "sourceSet");
+  if (!isString(source.packageName)) invalid(context, "packageName");
+  if (!isStringArray(source.topLevelTypeIds)) invalid(context, "topLevelTypeIds");
+  if (!isStringArray(source.allTypeIds)) invalid(context, "allTypeIds");
+  if (!isString(source.contentHash)) invalid(context, "contentHash");
+  if (!isNumber(source.size)) invalid(context, "size");
+  if (!isNumber(source.mtimeMs)) invalid(context, "mtimeMs");
+  if (!isOneOf(source.parseState, JAVA_PARSE_STATES)) invalid(context, "parseState");
+  if (!isNumber(source.parseErrorCount)) invalid(context, "parseErrorCount");
+  if (!isNumber(source.generation)) invalid(context, "generation");
+  const imports = array(source.imports, `${context}.imports`)
+    .map((entry, index) => validateJavaImportFact(entry, `${context}.imports[${index}]`));
+  return {
+    fileId: source.fileId,
+    relativePath: source.relativePath,
+    sourceRoot: source.sourceRoot,
+    module: source.module,
+    sourceSet: source.sourceSet,
+    packageName: source.packageName,
+    imports,
+    topLevelTypeIds: source.topLevelTypeIds,
+    allTypeIds: source.allTypeIds,
+    contentHash: source.contentHash,
+    size: source.size,
+    mtimeMs: source.mtimeMs,
+    parseState: source.parseState,
+    parseErrorCount: source.parseErrorCount,
+    generation: source.generation
+  };
+}
+
+const STATIC_EDGE_KINDS: readonly StaticEdgeKind[] = [
+  "DECLARES",
+  "EXTENDS",
+  "IMPLEMENTS",
+  "PERMITS",
+  "IMPORTS",
+  "FIELD_TYPE",
+  "PARAM_TYPE",
+  "RETURN_TYPE",
+  "THROWS_TYPE",
+  "LOCAL_TYPE",
+  "CALLS",
+  "CONSTRUCTS",
+  "METHOD_REFERENCE",
+  "ANNOTATED_WITH"
+];
+
+const STATIC_EDGE_RESOLUTION_KINDS: readonly StaticEdgeResolutionKind[] = [
+  "AST_EXPLICIT",
+  "TYPE_REFERENCE",
+  "SAME_OWNER_NAME_ARITY",
+  "DECLARED_RECEIVER_NAME_ARITY",
+  "SUPER_CHAIN_NAME_ARITY",
+  "CONSTRUCTOR_TYPE",
+  "METHOD_REFERENCE_OWNER"
+];
+
+function validateStaticEdge(value: unknown, context: string): StaticEdge {
+  const source = record(value, context);
+  if (!isString(source.edgeId)) invalid(context, "edgeId");
+  if (!isString(source.fromId)) invalid(context, "fromId");
+  if (!isString(source.toId)) invalid(context, "toId");
+  if (!isOneOf(source.kind, STATIC_EDGE_KINDS)) invalid(context, "kind");
+  if (!isNumber(source.confidence)) invalid(context, "confidence");
+  if (!isString(source.sourceFile)) invalid(context, "sourceFile");
+  if (!isNumber(source.generation)) invalid(context, "generation");
+  const resolutionSource = record(source.resolution, `${context}.resolution`);
+  if (!isOneOf(resolutionSource.kind, STATIC_EDGE_RESOLUTION_KINDS)) invalid(context, "resolution.kind");
+  const typeStrategy = optional(
+    resolutionSource.typeStrategy,
+    `${context}.resolution.typeStrategy`,
+    (typeStrategyValue, typeStrategyContext) => {
+      if (!isOneOf(typeStrategyValue, TYPE_RESOLUTION_STRATEGIES)) invalid(typeStrategyContext, "typeStrategy");
+      return typeStrategyValue;
+    }
+  );
+  return {
+    edgeId: source.edgeId,
+    fromId: source.fromId,
+    toId: source.toId,
+    kind: source.kind,
+    confidence: source.confidence,
+    ...withOptional("range", optional(source.range, `${context}.range`, validateSourceRange)),
+    sourceFile: source.sourceFile,
+    generation: source.generation,
+    resolution: { kind: resolutionSource.kind, ...withOptional("typeStrategy", typeStrategy) }
+  };
+}
+
+const SOURCE_ROOT_STATES = ["UNKNOWN", "BUILDING", "COMPLETE", "DEGRADED"] as const;
+
+function validateSourceRootCoverage(value: unknown, context: string): SourceRootCoverage {
+  const source = record(value, context);
+  if (!isString(source.root)) invalid(context, "root");
+  if (!isNumber(source.generation)) invalid(context, "generation");
+  if (!isOneOf(source.state, SOURCE_ROOT_STATES)) invalid(context, "state");
+  if (!isNumber(source.discoveredFiles)) invalid(context, "discoveredFiles");
+  if (!isNumber(source.indexedFiles)) invalid(context, "indexedFiles");
+  if (!isNumber(source.failedFiles)) invalid(context, "failedFiles");
+  if (!isNumber(source.recoveredFiles)) invalid(context, "recoveredFiles");
+  if (!isString(source.extractorVersion)) invalid(context, "extractorVersion");
+  return {
+    root: source.root,
+    generation: source.generation,
+    state: source.state,
+    discoveredFiles: source.discoveredFiles,
+    indexedFiles: source.indexedFiles,
+    failedFiles: source.failedFiles,
+    recoveredFiles: source.recoveredFiles,
+    extractorVersion: source.extractorVersion,
+    ...withOptional("completedAt", optional(source.completedAt, `${context}.completedAt`, isAssertString))
+  };
+}
+
+function validateJavaFileBundle(value: unknown, context: string): JavaFileBundle {
+  const source = record(value, context);
+  const types = array(source.types, `${context}.types`)
+    .map((entry, index) => validateJavaTypeFacts(entry, `${context}.types[${index}]`));
+  const fields = array(source.fields, `${context}.fields`)
+    .map((entry, index) => validateJavaFieldFacts(entry, `${context}.fields[${index}]`));
+  const methods = array(source.methods, `${context}.methods`)
+    .map((entry, index) => validateJavaMethodFacts(entry, `${context}.methods[${index}]`));
+  const edges = array(source.edges, `${context}.edges`)
+    .map((entry, index) => validateStaticEdge(entry, `${context}.edges[${index}]`));
+  return {
+    file: validateJavaFileFacts(source.file, `${context}.file`),
+    types,
+    fields,
+    methods,
+    edges
+  };
+}
+
+// --- exported command-specific validators ------------------------------------
+
+export function validateJavaIndexStatus(value: unknown): JavaIndexStatus {
+  const context = "JavaIndexStatus";
+  const source = record(value, context);
+  const states = ["NEW", "OPENING", "READY", "DEGRADED", "CLOSED"] as const;
+  if (!isOneOf(source.state, states)) invalid(context, "state");
+  if (!isNumber(source.indexedGeneration)) invalid(context, "indexedGeneration");
+  if (!isNumber(source.files)) invalid(context, "files");
+  if (!isNumber(source.types)) invalid(context, "types");
+  if (!isNumber(source.methods)) invalid(context, "methods");
+  if (!isNumber(source.edges)) invalid(context, "edges");
+  if (!isNumber(source.snapshotBytes)) invalid(context, "snapshotBytes");
+  if (!isNumber(source.pendingForeground)) invalid(context, "pendingForeground");
+  if (!isNumber(source.pendingBackground)) invalid(context, "pendingBackground");
+  const coverage = array(source.coverage, `${context}.coverage`)
+    .map((entry, index) => validateSourceRootCoverage(entry, `${context}.coverage[${index}]`));
+  return {
+    state: source.state,
+    indexedGeneration: source.indexedGeneration,
+    files: source.files,
+    types: source.types,
+    methods: source.methods,
+    edges: source.edges,
+    snapshotBytes: source.snapshotBytes,
+    pendingForeground: source.pendingForeground,
+    pendingBackground: source.pendingBackground,
+    coverage,
+    ...withOptional("lastError", optional(source.lastError, `${context}.lastError`, isAssertString))
+  };
+}
+
+export function validateAnchorFacts(value: unknown): AnchorFacts | undefined {
+  if (value === undefined || value === null) return undefined;
+  const context = "AnchorFacts";
+  const source = record(value, context);
+  const symbolKinds = ["TYPE", "METHOD", "CONSTRUCTOR", "FIELD", "FILE"] as const;
+  if (!isString(source.symbolId)) invalid(context, "symbolId");
+  if (!isOneOf(source.symbolKind, symbolKinds)) invalid(context, "symbolKind");
+  if (!isString(source.symbolName)) invalid(context, "symbolName");
+  if (!isOneOf(source.coverage, SOURCE_ROOT_STATES)) invalid(context, "coverage");
+  if (!isNumber(source.confidence)) invalid(context, "confidence");
+  return {
+    file: validateJavaFileFacts(source.file, `${context}.file`),
+    symbolId: source.symbolId,
+    symbolKind: source.symbolKind,
+    symbolName: source.symbolName,
+    range: validateSourceRange(source.range, `${context}.range`),
+    ...withOptional("type", optional(source.type, `${context}.type`, validateJavaTypeFacts)),
+    ...withOptional("method", optional(source.method, `${context}.method`, validateJavaMethodFacts)),
+    ...withOptional("field", optional(source.field, `${context}.field`, validateJavaFieldFacts)),
+    coverage: source.coverage,
+    confidence: source.confidence
+  };
+}
+
+export function validateTypeLookup(value: unknown): JavaTypeLookupResult {
+  const context = "JavaTypeLookupResult";
+  const source = record(value, context);
+  if (!isString(source.state)) invalid(context, "state");
+  switch (source.state) {
+    case "RESOLVED":
+      return { state: "RESOLVED", type: validateJavaTypeFacts(source.type, `${context}.type`) };
+    case "AMBIGUOUS": {
+      const candidates = array(source.candidates, `${context}.candidates`)
+        .map((entry, index) => validateJavaTypeFacts(entry, `${context}.candidates[${index}]`));
+      return { state: "AMBIGUOUS", candidates };
+    }
+    case "UNRESOLVED": {
+      const coverageStates = ["COMPLETE", "PARTIAL", "DEGRADED"] as const;
+      if (!isOneOf(source.coverage, coverageStates)) invalid(context, "coverage");
+      return { state: "UNRESOLVED", coverage: source.coverage };
+    }
+    default:
+      return invalid(context, `unknown state ${String(source.state)}`);
+  }
+}
+
+export function validateTypeFactsArray(value: unknown): JavaTypeFacts[] {
+  const context = "JavaTypeFacts[]";
+  return array(value, context).map((entry, index) => validateJavaTypeFacts(entry, `${context}[${index}]`));
+}
+
+export function validateIndexedReferenceArray(value: unknown): IndexedReference[] {
+  const context = "IndexedReference[]";
+  return array(value, context).map((entry, index) => {
+    const entryContext = `${context}[${index}]`;
+    const source = record(entry, entryContext);
+    if (!isString(source.sourceId)) invalid(entryContext, "sourceId");
+    if (!isString(source.targetId)) invalid(entryContext, "targetId");
+    if (!isString(source.sourceFile)) invalid(entryContext, "sourceFile");
+    if (!isString(source.sourceModule)) invalid(entryContext, "sourceModule");
+    if (!isOneOf(source.sourceSet, JAVA_SOURCE_SETS)) invalid(entryContext, "sourceSet");
+    if (!isOneOf(source.kind, STATIC_EDGE_KINDS)) invalid(entryContext, "kind");
+    if (!isNumber(source.confidence)) invalid(entryContext, "confidence");
+    if (!isNumber(source.generation)) invalid(entryContext, "generation");
+    return {
+      sourceId: source.sourceId,
+      targetId: source.targetId,
+      sourceFile: source.sourceFile,
+      sourceModule: source.sourceModule,
+      sourceSet: source.sourceSet,
+      kind: source.kind,
+      confidence: source.confidence,
+      ...withOptional("range", optional(source.range, `${entryContext}.range`, validateSourceRange)),
+      generation: source.generation
+    };
+  });
+}
+
+export function validateFileBundleArray(value: unknown): JavaFileBundle[] {
+  const context = "JavaFileBundle[]";
+  return array(value, context).map((entry, index) => validateJavaFileBundle(entry, `${context}[${index}]`));
+}
