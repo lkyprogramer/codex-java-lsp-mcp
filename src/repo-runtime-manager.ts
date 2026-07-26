@@ -468,7 +468,26 @@ export class RepoRuntimeManager {
     await entry.context.javaIndex?.open(generation.snapshot().value, {
       leaseRoot: path.join(repoCacheBase(), "leases"),
       worktree: resolved.worktree
-    }).then(() => entry.context.javaIndex?.reconcile(generation.snapshot().value)).catch(() => undefined);
+    }).then(async openStatus => {
+      // A restored-and-verified snapshot (Task 21 Step 6a) reports its own
+      // (possibly higher) generation; the repo's clock must never regress
+      // behind facts the Java index has already verified as current.
+      generation.rebaseAtLeast(openStatus.indexedGeneration);
+      // A root with a nonzero failed/recovered count restores COMPLETE too
+      // (its content is provably unchanged from a prior parse that had
+      // issues), but only a fresh coverage.begin() - which only a
+      // reconcile()'d sweep performs - ever resets that count. Treating such
+      // a root as "not fully restored" keeps it self-healing instead of
+      // leaving canAnswerNegative() stuck false forever.
+      const fullyRestored = openStatus.coverage.length > 0
+        && openStatus.coverage.every(entry_ =>
+          entry_.state === "COMPLETE"
+          && entry_.generation === openStatus.indexedGeneration
+          && entry_.failedFiles === 0
+          && entry_.recoveredFiles === 0
+        );
+      if (!fullyRestored) await entry.context.javaIndex?.reconcile(generation.snapshot().value);
+    }).catch(() => undefined);
     // Store the readiness promise; the freshness barrier (Task 10) waits on it
     // only within the request budget, so a slow initial scan never blocks here.
     entry.ready = coordinator.start();

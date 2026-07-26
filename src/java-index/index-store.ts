@@ -376,6 +376,89 @@ export class JavaIndexStore {
     return results;
   }
 
+  /** Deterministic (sorted by id/path) so two snapshots of identical facts diff/compare cleanly. */
+  toSnapshotData(): {
+    files: JavaFileFacts[];
+    types: JavaTypeFacts[];
+    fields: JavaFieldFacts[];
+    methods: JavaMethodFacts[];
+    edges: StaticEdge[];
+  } {
+    return {
+      files: [...this.filesByPath.values()].sort((a, b) => a.relativePath.localeCompare(b.relativePath)),
+      types: [...this.typesById.values()].sort((a, b) => a.typeId.localeCompare(b.typeId)),
+      fields: [...this.fieldsById.values()].sort((a, b) => a.fieldId.localeCompare(b.fieldId)),
+      methods: [...this.methodsById.values()].sort((a, b) => a.methodId.localeCompare(b.methodId)),
+      edges: [...this.edgesById.values()].sort((a, b) => a.edgeId.localeCompare(b.edgeId))
+    };
+  }
+
+  /**
+   * Bulk-rebuilds this store from a snapshot's flat fact arrays, replacing
+   * whatever it currently holds. Reverse indexes are derived here, never
+   * persisted. Unlike `replaceFile`, this does not recompute every id via the
+   * Task 15 factories (the snapshot was produced by this same store's own
+   * `toSnapshotData`, so that would be redundant work on a trusted
+   * round-trip) - it only rejects a duplicate id, which a hand-edited or
+   * corrupted snapshot file could otherwise introduce silently.
+   */
+  loadSnapshotData(data: {
+    files: readonly JavaFileFacts[];
+    types: readonly JavaTypeFacts[];
+    fields: readonly JavaFieldFacts[];
+    methods: readonly JavaMethodFacts[];
+    edges: readonly StaticEdge[];
+  }): void {
+    this.filesByPath.clear();
+    this.typesById.clear();
+    this.typeIdByFqn.clear();
+    this.typeIdsBySimpleName.clear();
+    this.fieldsById.clear();
+    this.methodsById.clear();
+    this.methodIdsByOwnerAndName.clear();
+    this.edgesById.clear();
+    this.outEdgeIdsByNode.clear();
+    this.inEdgeIdsByNode.clear();
+    this.fileOwnedNodeIds.clear();
+    this.fileOwnedEdgeIds.clear();
+
+    for (const file of data.files) {
+      if (this.filesByPath.has(file.relativePath)) {
+        throw new Error(`duplicate file in snapshot: ${file.relativePath}`);
+      }
+      this.filesByPath.set(file.relativePath, file);
+    }
+    for (const type of data.types) {
+      if (this.typesById.has(type.typeId)) throw new Error(`duplicate type id in snapshot: ${type.typeId}`);
+      this.typesById.set(type.typeId, type);
+      if (type.fqn) this.typeIdByFqn.set(type.fqn, type.typeId);
+      addToSetMap(this.typeIdsBySimpleName, type.simpleName, type.typeId);
+      addToSetMap(this.fileOwnedNodeIds, relativePathOfFileId(type.fileId), type.typeId);
+    }
+    for (const field of data.fields) {
+      if (this.fieldsById.has(field.fieldId)) throw new Error(`duplicate field id in snapshot: ${field.fieldId}`);
+      this.fieldsById.set(field.fieldId, field);
+      const ownerType = this.typesById.get(field.ownerTypeId);
+      if (!ownerType) throw new Error(`field ${field.fieldId} references unknown owner type ${field.ownerTypeId}`);
+      addToSetMap(this.fileOwnedNodeIds, relativePathOfFileId(ownerType.fileId), field.fieldId);
+    }
+    for (const method of data.methods) {
+      if (this.methodsById.has(method.methodId)) throw new Error(`duplicate method id in snapshot: ${method.methodId}`);
+      this.methodsById.set(method.methodId, method);
+      addToSetMap(this.methodIdsByOwnerAndName, `${method.ownerTypeId}#${method.name}`, method.methodId);
+      const ownerType = this.typesById.get(method.ownerTypeId);
+      if (!ownerType) throw new Error(`method ${method.methodId} references unknown owner type ${method.ownerTypeId}`);
+      addToSetMap(this.fileOwnedNodeIds, relativePathOfFileId(ownerType.fileId), method.methodId);
+    }
+    for (const edge of data.edges) {
+      if (this.edgesById.has(edge.edgeId)) throw new Error(`duplicate edge id in snapshot: ${edge.edgeId}`);
+      this.edgesById.set(edge.edgeId, edge);
+      addToSetMap(this.outEdgeIdsByNode, edge.fromId, edge.edgeId);
+      addToSetMap(this.inEdgeIdsByNode, edge.toId, edge.edgeId);
+      addToSetMap(this.fileOwnedEdgeIds, edge.sourceFile, edge.edgeId);
+    }
+  }
+
   private referencesInto(nodeId: string, kinds: ReadonlySet<StaticEdgeKind>, limit: number): IndexedReference[] {
     return this.referencesVia(this.inEdgeIdsByNode.get(nodeId), kinds, limit);
   }

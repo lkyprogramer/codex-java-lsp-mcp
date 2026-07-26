@@ -63,6 +63,38 @@ test("complete() advancing a root directly to a new generation without a precedi
   assert.equal(tracker.snapshot()[0]?.indexedFiles, 2);
 });
 
+test("restoreProvisional forces BUILDING but preserves failed/recovered counts verbatim", () => {
+  // A persisted snapshot's failed/recovered counts describe the outcome of a
+  // real parse; an identical-manifest re-verification proves content hasn't
+  // changed, so that outcome (failures included) is still the current truth
+  // - restoring must never launder it into fresh negative-answer trust by
+  // zeroing the counts, only by an explicit complete()/invalidate() decision
+  // after verification.
+  const tracker = new CoverageTracker();
+  tracker.begin(root, 5, 3);
+  tracker.recovered(root, "src/main/java/demo/Broken.java", 1);
+  tracker.failed(root, "src/main/java/demo/Unreadable.java", new Error("EACCES"));
+  tracker.complete(root, 5);
+  const persisted = tracker.snapshot()[0]!;
+  assert.equal(persisted.failedFiles, 1);
+  assert.equal(persisted.recoveredFiles, 1);
+
+  const restored = new CoverageTracker();
+  restored.restoreProvisional(persisted);
+  const entry = restored.snapshot()[0]!;
+  assert.equal(entry.state, "BUILDING", "must never come back as COMPLETE before re-verification");
+  assert.equal(entry.failedFiles, 1, "failed count must survive a restore verbatim");
+  assert.equal(entry.recoveredFiles, 1, "recovered count must survive a restore verbatim");
+  assert.equal(restored.canAnswerNegative(root, 5), false);
+
+  restored.complete(root, 5);
+  assert.equal(
+    restored.canAnswerNegative(root, 5),
+    false,
+    "a root restored with a nonzero failed/recovered count must stay untrustworthy for negatives even once marked COMPLETE again"
+  );
+});
+
 test("snapshot reflects multiple independently tracked roots", () => {
   const tracker = new CoverageTracker();
   tracker.begin("src/main/java", 1, 1);

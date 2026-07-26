@@ -1,11 +1,9 @@
+import { computeExtractorVersion } from "./build-fingerprint.js";
 import type { SourceRootCoverage } from "./index-types.js";
 
-// Task 21 defines the real extractorVersion format
-// (schema-2|tree-sitter-<version>|tree-sitter-java-<version>|extractor-code-<buildHash>)
-// and is what wires a real value into new entries; this tracker just needs
-// some string until then, since SourceRootCoverage.extractorVersion isn't
-// optional.
-const PENDING_EXTRACTOR_VERSION = "pending";
+// Process-wide and constant for this runtime's lifetime (see
+// build-fingerprint.ts); computed once at module load, not per-entry.
+const EXTRACTOR_VERSION = computeExtractorVersion();
 
 // Per-source-root coverage state machine per architecture V3 §9.10: tracks
 // whether a root's facts are trustworthy enough to answer a *negative*
@@ -23,7 +21,7 @@ export class CoverageTracker {
       indexedFiles: 0,
       failedFiles: 0,
       recoveredFiles: 0,
-      extractorVersion: this.states.get(root)?.extractorVersion ?? PENDING_EXTRACTOR_VERSION
+      extractorVersion: this.states.get(root)?.extractorVersion ?? EXTRACTOR_VERSION
     });
   }
 
@@ -63,6 +61,19 @@ export class CoverageTracker {
     });
   }
 
+  // Installs a persisted coverage entry (Step 6a) as provisional: forced to
+  // BUILDING regardless of the state it was persisted in, keeping its
+  // failed/recovered counts exactly as persisted. An identical-manifest
+  // verification proves the repo's *content* has not changed since these
+  // counts were recorded, so the prior parse outcome (failures included) is
+  // still the current truth - a save/reload cycle must not launder a
+  // recovered or failed parse into fresh negative-answer trust by zeroing
+  // these. Only an explicit complete()/invalidate() call after verification
+  // may advance the root out of BUILDING.
+  restoreProvisional(entry: SourceRootCoverage): void {
+    this.states.set(entry.root, { ...entry, state: "BUILDING" });
+  }
+
   invalidate(root: string, generation: number): void {
     const entry = this.states.get(root);
     this.states.set(root, {
@@ -73,7 +84,7 @@ export class CoverageTracker {
       indexedFiles: entry?.indexedFiles ?? 0,
       failedFiles: entry?.failedFiles ?? 0,
       recoveredFiles: entry?.recoveredFiles ?? 0,
-      extractorVersion: entry?.extractorVersion ?? PENDING_EXTRACTOR_VERSION
+      extractorVersion: entry?.extractorVersion ?? EXTRACTOR_VERSION
     });
   }
 

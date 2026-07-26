@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -18,6 +18,8 @@ function tempRepo(prefix: string): string {
 function tempCacheDir(): string {
   return mkdtempSync(path.join(tmpdir(), "java-index-worker-cache-"));
 }
+
+const SNAPSHOT_FILE_NAME = "java-index-snapshot.json.gz";
 
 function writeJavaFile(repoRoot: string, relativePath: string, content: string): void {
   const absolutePath = path.join(repoRoot, relativePath);
@@ -224,4 +226,209 @@ test("a background sweep waits for the machine sweep lease without blocking fore
   }, 15000);
 
   await client.close();
+});
+
+test("a file's own sourceRoot matches the repo-wide discovery root under a modules/X layout", async () => {
+  // layout-probe.ts's discovery keeps the "modules/" prefix for a
+  // modules/<name> layout (e.g. "modules/foo/src/main/java"), while
+  // classifyPath's module alone would synthesize "foo/src/main/java" if
+  // resolveSourceRoot did not defer to the discovered source root list -
+  // a mismatch here would silently split coverage tracking and manifest
+  // fingerprints across two different root keys for the same directory.
+  const repoRoot = tempRepo("java-index-worker-modules-layout-");
+  const file = "modules/foo/src/main/java/demo/Widget.java";
+  writeJavaFile(repoRoot, file, "package demo;\n\nclass Widget {}\n");
+
+  const client = new JavaIndexClient(repoRoot, tempCacheDir());
+  await client.open(1);
+  await client.reconcile(1);
+  await waitFor(async () => (await client.status()).pendingBackground === 0, 5000);
+
+  const swept = await client.status();
+  assert.deepEqual(swept.coverage.map(entry => entry.root), ["modules/foo/src/main/java"]);
+  assert.ok(swept.coverage.every(entry => entry.state === "COMPLETE"));
+
+  const bundle = (await client.queryFiles([path.join(repoRoot, file)]))[0]!;
+  assert.equal(
+    bundle.file.sourceRoot,
+    "modules/foo/src/main/java",
+    "a single file's own sourceRoot must match the repo-wide discovery root exactly"
+  );
+
+  // A foreground refresh of that same file must key onto the exact same
+  // coverage entry, not silently create/target a differently-spelled root.
+  await client.refresh(2, [path.join(repoRoot, file)], []);
+  const afterRefresh = await client.status();
+  assert.deepEqual(afterRefresh.coverage.map(entry => entry.root), ["modules/foo/src/main/java"]);
+  assert.ok(afterRefresh.coverage.every(entry => entry.state === "COMPLETE" && entry.generation === 2));
+
+  await client.close();
+});
+
+test("a diff too large to apply inline is abandoned in favor of an ordinary leased, chunked reconcile", async () => {
+  // Models a partial snapshot recovering from an unclean shutdown, or a large
+  // branch switch: the manifest diff vastly exceeds what OPEN should ever
+  // parse synchronously and without the sweep lease.
+  const repoRoot = tempRepo("java-index-worker-snapshot-large-diff-");
+  writeJavaFile(repoRoot, "src/main/java/demo/Seed.java", "package demo;\n\nclass Seed {}\n");
+  const cacheDir = tempCacheDir();
+
+  const first = new JavaIndexClient(repoRoot, cacheDir);
+  await first.open(1);
+  await first.reconcile(1);
+  await waitFor(async () => (await first.status()).pendingBackground === 0, 5000);
+  await first.close();
+
+  for (let i = 0; i < 210; i += 1) {
+    writeJavaFile(repoRoot, `src/main/java/demo/Added${i}.java`, `package demo;\n\nclass Added${i} {}\n`);
+  }
+
+  const second = new JavaIndexClient(repoRoot, cacheDir);
+  const openStatus = await second.open(1);
+  assert.equal(
+    openStatus.indexedGeneration,
+    1,
+    "an oversized diff must not bump the generation - it is abandoned, not applied"
+  );
+  assert.ok(
+    openStatus.coverage.every(entry => entry.state !== "COMPLETE"),
+    "an oversized diff must leave roots provisional, not silently promote them"
+  );
+
+  // Mirrors what repo-runtime-manager.createEntry does: a not-fully-restored
+  // open triggers an ordinary reconcile().
+  await second.reconcile(2);
+  await waitFor(async () => (await second.status()).pendingBackground === 0, 15000);
+
+  const finalStatus = await second.status();
+  assert.equal(finalStatus.files, 211, "the full, governed sweep must still discover every file");
+  assert.ok(finalStatus.coverage.every(entry => entry.state === "COMPLETE"));
+
+  await second.close();
+});
+
+test("a full sweep's completion persists a snapshot that a fresh client restores without re-parsing", async () => {
+  const repoRoot = tempRepo("java-index-worker-snapshot-restore-");
+  writeJavaFile(repoRoot, "src/main/java/demo/Gateway.java", "package demo;\n\ninterface Gateway {}\n");
+  writeJavaFile(repoRoot, "src/main/java/demo/Impl.java", "package demo;\n\nclass Impl implements Gateway {}\n");
+  const cacheDir = tempCacheDir();
+
+  const first = new JavaIndexClient(repoRoot, cacheDir);
+  await first.open(1);
+  await first.reconcile(1);
+  await waitFor(async () => (await first.status()).pendingBackground === 0, 5000);
+  const firstStatus = await first.status();
+  assert.ok(firstStatus.coverage.every(entry => entry.state === "COMPLETE"));
+  await first.close();
+
+  assert.ok(
+    existsSync(path.join(cacheDir, SNAPSHOT_FILE_NAME)),
+    "a full sweep's completion must persist a snapshot without waiting for CLOSE"
+  );
+
+  const second = new JavaIndexClient(repoRoot, cacheDir);
+  const openStatus = await second.open(1);
+  assert.equal(openStatus.files, 2, "facts must be restored from the snapshot, not rediscovered");
+  assert.equal(openStatus.pendingBackground, 0, "no background sweep should be needed for an unchanged repo");
+  assert.equal(
+    openStatus.indexedGeneration,
+    firstStatus.indexedGeneration,
+    "an identical manifest must not advance the generation"
+  );
+  assert.ok(
+    openStatus.coverage.every(entry => entry.state === "COMPLETE" && entry.generation === openStatus.indexedGeneration),
+    `expected every root restored COMPLETE without a re-parse, got ${JSON.stringify(openStatus.coverage)}`
+  );
+
+  const gatewayBundle = (await second.queryFiles([path.join(repoRoot, "src/main/java/demo/Gateway.java")]))[0]!;
+  const implBundle = (await second.queryFiles([path.join(repoRoot, "src/main/java/demo/Impl.java")]))[0]!;
+  const gateway = gatewayBundle.types.find(t => t.simpleName === "Gateway")!;
+  assert.ok(
+    implBundle.edges.some(e => e.kind === "IMPLEMENTS" && e.toId === gateway.typeId),
+    "a restored snapshot's facts must include the same resolved edges the original sweep produced"
+  );
+
+  await second.close();
+});
+
+test("a file edited while the index was closed is detected and only that file is re-parsed on reopen", async () => {
+  const repoRoot = tempRepo("java-index-worker-snapshot-diff-");
+  const editedFile = "src/main/java/demo/Impl.java";
+  writeJavaFile(repoRoot, "src/main/java/demo/Gateway.java", "package demo;\n\ninterface Gateway {}\n");
+  writeJavaFile(repoRoot, editedFile, "package demo;\n\nclass Impl implements Gateway {}\n");
+  const cacheDir = tempCacheDir();
+
+  const first = new JavaIndexClient(repoRoot, cacheDir);
+  await first.open(1);
+  await first.reconcile(1);
+  await waitFor(async () => (await first.status()).pendingBackground === 0, 5000);
+  const firstStatus = await first.status();
+  await first.close();
+
+  // Simulate an edit made while no process had this repo open (e.g. a branch
+  // switch), so no REFRESH/RECONCILE ever told a running worker about it.
+  writeJavaFile(repoRoot, editedFile, "package demo;\n\nclass Impl implements Gateway { void extra() {} }\n");
+
+  const second = new JavaIndexClient(repoRoot, cacheDir);
+  const openStatus = await second.open(1);
+  assert.equal(
+    openStatus.indexedGeneration,
+    firstStatus.indexedGeneration + 1,
+    "a manifest mismatch must advance the generation exactly once"
+  );
+  assert.ok(
+    openStatus.coverage.every(entry => entry.state === "COMPLETE" && entry.generation === openStatus.indexedGeneration),
+    `expected every root to reach COMPLETE at the new generation, got ${JSON.stringify(openStatus.coverage)}`
+  );
+
+  const implBundle = (await second.queryFiles([path.join(repoRoot, editedFile)]))[0]!;
+  const implType = implBundle.types.find(t => t.simpleName === "Impl")!;
+  assert.equal(implType.methodIds.length, 1, "the edited file's new method must be reflected without a full sweep");
+
+  await second.close();
+});
+
+test("FLUSH writes the current facts immediately, ahead of the debounce timer", async () => {
+  const repoRoot = tempRepo("java-index-worker-flush-");
+  const file = "src/main/java/demo/Solo.java";
+  writeJavaFile(repoRoot, file, "package demo;\n\nclass Solo {}\n");
+  const cacheDir = tempCacheDir();
+
+  const client = new JavaIndexClient(repoRoot, cacheDir);
+  await client.open(1);
+  await client.refresh(2, [path.join(repoRoot, file)], []);
+  await client.flush();
+
+  const snapshotPath = path.join(cacheDir, SNAPSHOT_FILE_NAME);
+  assert.ok(existsSync(snapshotPath), "FLUSH must write the snapshot without waiting for the debounce timer");
+  const bytesAtFlush = readFileSync(snapshotPath).length;
+  assert.ok(bytesAtFlush > 0);
+
+  await client.close();
+});
+
+test("the first V2 open deletes SourceIndex V1's cache files exactly once", async () => {
+  const repoRoot = tempRepo("java-index-worker-v1-cleanup-");
+  const cacheDir = tempCacheDir();
+  const v1Files = ["source-index.files.jsonl", "source-index.symbols.jsonl", "source-index.meta.json"];
+  for (const name of v1Files) writeFileSync(path.join(cacheDir, name), "legacy");
+
+  const client = new JavaIndexClient(repoRoot, cacheDir);
+  await client.open(1);
+  for (const name of v1Files) {
+    assert.ok(!existsSync(path.join(cacheDir, name)), `${name} must be deleted on the first V2 open`);
+  }
+  assert.ok(existsSync(path.join(cacheDir, "java-index-v2.initialized")), "a one-time marker must be left behind");
+  await client.close();
+
+  // A later open must not repeat the cleanup: a file that happens to share a
+  // legacy name after the marker exists is left alone.
+  writeFileSync(path.join(cacheDir, v1Files[0]!), "unrelated content written after the marker");
+  const second = new JavaIndexClient(repoRoot, cacheDir);
+  await second.open(1);
+  assert.ok(
+    existsSync(path.join(cacheDir, v1Files[0]!)),
+    "cleanup must not run again once the marker is present"
+  );
+  await second.close();
 });

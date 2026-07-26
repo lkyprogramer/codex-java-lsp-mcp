@@ -388,3 +388,65 @@ test("performance: 10,000 types and 50,000 edges, 1,000 repeated lookups stay we
   const elapsedMs = performance.now() - start;
   assert.ok(elapsedMs < 500, `indexed lookup took ${elapsedMs}ms`);
 });
+
+test("toSnapshotData returns arrays sorted by id/path regardless of insertion order", () => {
+  const storeA = new JavaIndexStore();
+  const bundleGateway = emptyBundle("src/main/java/demo/Gateway.java", "Gateway");
+  addMethod(bundleGateway, "pay");
+  const bundleImpl = emptyBundle("src/main/java/demo/Impl.java", "Impl");
+  addEdge(bundleImpl, { fromId: bundleImpl.types[0]!.typeId, toId: bundleGateway.types[0]!.typeId, kind: "IMPLEMENTS", confidence: 0.98, range: RANGE });
+  storeA.replaceFile(bundleGateway);
+  storeA.replaceFile(bundleImpl);
+
+  const storeB = new JavaIndexStore();
+  // Same two files, loaded in the opposite order.
+  storeB.replaceFile(bundleImpl);
+  storeB.replaceFile(bundleGateway);
+
+  assert.deepEqual(storeA.toSnapshotData(), storeB.toSnapshotData());
+});
+
+test("loadSnapshotData rebuilds a store whose queries behave identically to the original", () => {
+  const original = new JavaIndexStore();
+  const gateway = emptyBundle("src/main/java/demo/Gateway.java", "Gateway");
+  addMethod(gateway, "pay");
+  addField(gateway, "name");
+  const impl = emptyBundle("src/main/java/demo/Impl.java", "Impl");
+  addEdge(impl, { fromId: impl.types[0]!.typeId, toId: gateway.types[0]!.typeId, kind: "IMPLEMENTS", confidence: 0.98, range: RANGE });
+  original.replaceFile(gateway);
+  original.replaceFile(impl);
+
+  const rebuilt = new JavaIndexStore();
+  rebuilt.loadSnapshotData(original.toSnapshotData());
+
+  const gatewayTypeId = gateway.types[0]!.typeId;
+  assert.deepEqual(rebuilt.typeByFqn("demo.Gateway"), original.typeByFqn("demo.Gateway"));
+  assert.deepEqual(rebuilt.implementers(gatewayTypeId), original.implementers(gatewayTypeId));
+  assert.deepEqual(rebuilt.files(["src/main/java/demo/Gateway.java"]), original.files(["src/main/java/demo/Gateway.java"]));
+  assert.deepEqual(rebuilt.files(["src/main/java/demo/Impl.java"]), original.files(["src/main/java/demo/Impl.java"]));
+});
+
+test("loadSnapshotData replaces whatever the store previously held", () => {
+  const store = new JavaIndexStore();
+  store.replaceFile(emptyBundle("src/main/java/demo/Old.java", "Old"));
+
+  const fresh = emptyBundle("src/main/java/demo/New.java", "New");
+  store.loadSnapshotData({ files: [fresh.file], types: fresh.types, fields: [], methods: [], edges: [] });
+
+  assert.equal(store.file("src/main/java/demo/Old.java"), undefined);
+  assert.ok(store.file("src/main/java/demo/New.java"));
+  assert.equal(store.typeByFqn("demo.New")?.simpleName, "New");
+});
+
+test("loadSnapshotData rejects a snapshot with a duplicate type id", () => {
+  const store = new JavaIndexStore();
+  const bundle = emptyBundle("src/main/java/demo/Dup.java", "Dup");
+  const data = {
+    files: [bundle.file],
+    types: [bundle.types[0]!, bundle.types[0]!],
+    fields: [],
+    methods: [],
+    edges: []
+  };
+  assert.throws(() => store.loadSnapshotData(data), /duplicate type id/);
+});
