@@ -4,9 +4,11 @@ import path from "node:path";
 import { parentPort } from "node:worker_threads";
 import { classifyPath, normalizeRepoFile } from "../repo-layout.js";
 import { createJavaParserBackend, type JavaParserBackend } from "./java-parser-backend.js";
-import { extractFromParsedTree, type ExtractedJavaFile, type ExtractJavaInput } from "./ast-extractor.js";
+import { extractFromParsedTree, type ExtractJavaInput } from "./ast-extractor.js";
 import { ParseTreeCache, refreshParseTree } from "./parse-tree-cache.js";
-import type { JavaIndexStatus, JavaSourceSet, JavaTypeLookupResult } from "./index-types.js";
+import { buildStaticEdges, resolveFileRefs } from "./edge-builder.js";
+import { JavaNameResolver, buildTypeRegistryView, type TypeRegistryView } from "./name-resolver.js";
+import type { JavaFileBundle, JavaIndexStatus, JavaSourceSet, JavaTypeLookupResult } from "./index-types.js";
 import type { JavaIndexRequest, JavaIndexResponse } from "./worker-protocol.js";
 
 let status: JavaIndexStatus = {
@@ -28,7 +30,7 @@ let cache: ParseTreeCache | undefined;
 // Task 19 (JavaIndexStore) replaces this temporary in-memory map with the
 // real O(1) query structure; this task only needs REFRESH to produce and
 // hold facts somewhere.
-const filesByRelativePath = new Map<string, ExtractedJavaFile>();
+const filesByRelativePath = new Map<string, JavaFileBundle>();
 // A single unreadable/unparsable file must not fail the whole REFRESH batch
 // (its previous cached state, if any, is left untouched), but a silently
 // swallowed failure is worse than a surfaced one: Task 20 owns proper
@@ -79,14 +81,16 @@ function deriveSourceLayout(
 function summarizeFiles(): Pick<JavaIndexStatus, "files" | "types" | "methods" | "edges"> {
   let types = 0;
   let methods = 0;
+  let edges = 0;
   for (const bundle of filesByRelativePath.values()) {
     types += bundle.types.length;
     methods += bundle.methods.length;
+    edges += bundle.edges.length;
   }
-  return { files: filesByRelativePath.size, types, methods, edges: 0 };
+  return { files: filesByRelativePath.size, types, methods, edges };
 }
 
-async function refreshFile(inputPath: string, generation: number): Promise<void> {
+async function refreshFile(inputPath: string, generation: number): Promise<string> {
   if (!backend || !cache) throw new Error("refreshFile called before OPEN");
   const { absolutePath, relativePath, sourceRoot, module, sourceSet } = deriveSourceLayout(inputPath);
   const [content, stats] = await Promise.all([
@@ -108,7 +112,63 @@ async function refreshFile(inputPath: string, generation: number): Promise<void>
     contentHash,
     generation
   };
-  filesByRelativePath.set(relativePath, extractFromParsedTree(input, tree));
+  filesByRelativePath.set(relativePath, { ...extractFromParsedTree(input, tree), edges: [] });
+  return relativePath;
+}
+
+// Repo-wide registry rebuilt from whatever REFRESH has produced so far.
+// O(repo size) per call - acceptable for this task's "narrow" worker wiring
+// per Task 18; Task 20's incremental sweep owns making this bounded.
+function rebuildRegistry(): TypeRegistryView {
+  const bundles = [...filesByRelativePath.values()];
+  return buildTypeRegistryView(bundles.flatMap(b => b.types), bundles.flatMap(b => b.methods));
+}
+
+// Resolves one file's refs against the registry as it stands (including any
+// other files touched earlier in the same REFRESH batch) and rebuilds its
+// static edges. Does not re-resolve *other*, already-indexed files whose
+// prior REPO_UNIQUE_SIMPLE_NAME fallback a new type might now make
+// ambiguous - that reverse-dependency re-resolution is deferred to whichever
+// task owns the refresh pipeline's incremental rebuild (Task 19/20), per
+// Task 17's own Step 6 deferral.
+function resolveAndBuildEdges(relativePath: string): void {
+  const raw = filesByRelativePath.get(relativePath);
+  if (!raw) return;
+  const registryBeforeResolve = rebuildRegistry();
+  const resolver = new JavaNameResolver(registryBeforeResolve);
+  const resolved = resolveFileRefs(raw, resolver, registryBeforeResolve);
+  // Store the resolved (still edge-less) facts before rebuilding the
+  // registry again: buildStaticEdges' super-chain/receiver lookups need
+  // *this* file's own supertype refs to carry their resolution, which only
+  // the post-resolve registry reflects.
+  filesByRelativePath.set(relativePath, { ...resolved, edges: [] });
+  const edges = buildStaticEdges(resolved, rebuildRegistry(), resolver);
+  filesByRelativePath.set(relativePath, { ...resolved, edges });
+}
+
+// After a delete, other files' *already-built* edges can be left pointing at
+// a type/method id that no longer exists in the registry (Task 18 Step 7:
+// "Incoming edges from other files become unresolved and those files enter
+// dependency rebuild set"). Unlike the simple-name-collision case, this
+// can't be retrofitted once bundles are handed to Task 19's store - the
+// stale edges would already be baked in - so it is handled here rather than
+// deferred alongside it.
+function findFilesWithDanglingEdges(registry: TypeRegistryView): string[] {
+  const validMethodIds = new Set<string>();
+  for (const methods of registry.methodsByOwnerTypeId.values()) {
+    for (const method of methods) validMethodIds.add(method.methodId);
+  }
+  const affected: string[] = [];
+  for (const [relativePath, bundle] of filesByRelativePath) {
+    const hasDanglingEdge = bundle.edges.some(edge => {
+      if (edge.toId.startsWith("external:")) return false;
+      if (edge.toId.startsWith("type:") || edge.toId.startsWith("type-local:")) return !registry.byId.has(edge.toId);
+      if (edge.toId.startsWith("method:")) return !validMethodIds.has(edge.toId);
+      return false;
+    });
+    if (hasDanglingEdge) affected.push(relativePath);
+  }
+  return affected;
 }
 
 async function handle(request: JavaIndexRequest): Promise<void> {
@@ -132,22 +192,36 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         return;
       }
       case "REFRESH": {
+        const touched = new Set<string>();
         for (const inputPath of request.changed) {
           try {
-            await refreshFile(inputPath, request.generation);
+            touched.add(await refreshFile(inputPath, request.generation));
           } catch (error) {
             lastRefreshError = `failed to refresh ${inputPath}: ${
               error instanceof Error ? error.message : String(error)
             }`;
           }
         }
+        let deletedAny = false;
         for (const inputPath of request.deleted) {
           try {
             const { relativePath } = deriveSourceLayout(inputPath);
             cache?.delete(relativePath);
-            filesByRelativePath.delete(relativePath);
+            deletedAny = filesByRelativePath.delete(relativePath) || deletedAny;
           } catch (error) {
             lastRefreshError = `failed to delete ${inputPath}: ${
+              error instanceof Error ? error.message : String(error)
+            }`;
+          }
+        }
+        if (deletedAny) {
+          for (const relativePath of findFilesWithDanglingEdges(rebuildRegistry())) touched.add(relativePath);
+        }
+        for (const relativePath of touched) {
+          try {
+            resolveAndBuildEdges(relativePath);
+          } catch (error) {
+            lastRefreshError = `failed to resolve ${relativePath}: ${
               error instanceof Error ? error.message : String(error)
             }`;
           }
@@ -197,8 +271,7 @@ async function handle(request: JavaIndexRequest): Promise<void> {
               return undefined;
             }
           })
-          .filter((bundle): bundle is ExtractedJavaFile => bundle !== undefined)
-          .map(bundle => ({ ...bundle, edges: [] }));
+          .filter((bundle): bundle is JavaFileBundle => bundle !== undefined);
         respond({ id: request.id, ok: true, value: bundles });
         return;
       }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -214,11 +214,56 @@ test("REFRESH end-to-end through a real worker thread: reads, parses, extracts, 
   assert.deepEqual(bundles[0]!.types.map(t => t.simpleName).sort(), [
     "Child", "ComplexJava", "Helper", "SecondTopLevel"
   ]);
+  // Task 18 wires real static edges into the worker's REFRESH pipeline:
+  // packagePrivate()'s `new Helper()` resolves Helper via ENCLOSING_TYPE
+  // (nested inside ComplexJava, same file), so a CONSTRUCTS edge must
+  // appear even though most of this fixture's other types (BaseType,
+  // DemoPort, DemoRepository, ...) have no repo source anywhere and stay
+  // UNRESOLVED.
+  const helperType = bundles[0]!.types.find(t => t.simpleName === "Helper")!;
+  const packagePrivateMethod = bundles[0]!.methods.find(m => m.name === "packagePrivate")!;
+  assert.ok(
+    bundles[0]!.edges.some(
+      e => e.kind === "CONSTRUCTS" && e.fromId === packagePrivateMethod.methodId && e.toId === helperType.typeId
+    ),
+    "expected a CONSTRUCTS edge from packagePrivate() to the nested Helper type"
+  );
 
   const afterDelete = await client.refresh(3, [], [absolutePath]);
   assert.equal(afterDelete.files, 0);
   const bundlesAfterDelete = await client.queryFiles([absolutePath]);
   assert.equal(bundlesAfterDelete.length, 0);
+
+  await client.close();
+});
+
+test("deleting a type's sole source file drops the now-stale IMPLEMENTS edge from its implementer", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "java-index-dangling-edge-"));
+  const packageDir = path.join(repoRoot, "src/main/java/demo");
+  mkdirSync(packageDir, { recursive: true });
+  const gatewayPath = path.join(packageDir, "Gateway.java");
+  const implPath = path.join(packageDir, "Impl.java");
+  writeFileSync(gatewayPath, "package demo;\n\ninterface Gateway {}\n");
+  writeFileSync(implPath, "package demo;\n\nclass Impl implements Gateway {}\n");
+
+  const client = new JavaIndexClient(repoRoot, mkdtempSync(path.join(tmpdir(), "java-index-dangling-edge-cache-")));
+  await client.open(1);
+  await client.refresh(2, [gatewayPath, implPath], []);
+
+  const impl = (await client.queryFiles([implPath]))[0]!;
+  const gateway = (await client.queryFiles([gatewayPath]))[0]!.types.find(t => t.simpleName === "Gateway")!;
+  assert.ok(
+    impl.edges.some(e => e.kind === "IMPLEMENTS" && e.toId === gateway.typeId),
+    "expected Impl IMPLEMENTS Gateway before the delete"
+  );
+
+  await client.refresh(3, [], [gatewayPath]);
+  const implAfterDelete = (await client.queryFiles([implPath]))[0]!;
+  assert.equal(
+    implAfterDelete.edges.some(e => e.kind === "IMPLEMENTS" && e.toId === gateway.typeId),
+    false,
+    "Gateway's sole source file was deleted; the stale IMPLEMENTS edge must not survive re-resolution"
+  );
 
   await client.close();
 });

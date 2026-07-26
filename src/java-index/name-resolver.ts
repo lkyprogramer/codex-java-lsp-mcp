@@ -1,13 +1,19 @@
-import type { JavaImportFact, JavaTypeFacts, JavaTypeRef, TypeResolutionStrategy } from "./index-types.js";
+import type { JavaImportFact, JavaMethodFacts, JavaTypeFacts, JavaTypeRef, TypeResolutionStrategy } from "./index-types.js";
 
 export type TypeRegistryView = {
   byId: ReadonlyMap<string, JavaTypeFacts>;
   byFqn: ReadonlyMap<string, string>;
   bySimpleName: ReadonlyMap<string, ReadonlySet<string>>;
   nestedByOwnerAndSimpleName: ReadonlyMap<string, string>;
+  // Populated for Task 18's bounded call resolution (same-owner/receiver/
+  // super-chain method lookup by owner type); Task 17 itself never reads it.
+  methodsByOwnerTypeId: ReadonlyMap<string, readonly JavaMethodFacts[]>;
 };
 
-export function buildTypeRegistryView(types: readonly JavaTypeFacts[]): TypeRegistryView {
+export function buildTypeRegistryView(
+  types: readonly JavaTypeFacts[],
+  methods: readonly JavaMethodFacts[] = []
+): TypeRegistryView {
   const byId = new Map<string, JavaTypeFacts>();
   const byFqn = new Map<string, string>();
   const bySimpleName = new Map<string, Set<string>>();
@@ -26,7 +32,14 @@ export function buildTypeRegistryView(types: readonly JavaTypeFacts[]): TypeRegi
     }
   }
 
-  return { byId, byFqn, bySimpleName, nestedByOwnerAndSimpleName };
+  const methodsByOwnerTypeId = new Map<string, JavaMethodFacts[]>();
+  for (const method of methods) {
+    const bucket = methodsByOwnerTypeId.get(method.ownerTypeId);
+    if (bucket) bucket.push(method);
+    else methodsByOwnerTypeId.set(method.ownerTypeId, [method]);
+  }
+
+  return { byId, byFqn, bySimpleName, nestedByOwnerAndSimpleName, methodsByOwnerTypeId };
 }
 
 export type JavaResolutionContext = {
