@@ -7,8 +7,9 @@ import { createJavaParserBackend, type JavaParserBackend } from "./java-parser-b
 import { extractFromParsedTree, type ExtractJavaInput } from "./ast-extractor.js";
 import { ParseTreeCache, refreshParseTree } from "./parse-tree-cache.js";
 import { buildStaticEdges, resolveFileRefs } from "./edge-builder.js";
+import { JavaIndexStore } from "./index-store.js";
 import { JavaNameResolver, buildTypeRegistryView, type TypeRegistryView } from "./name-resolver.js";
-import type { JavaFileBundle, JavaIndexStatus, JavaSourceSet, JavaTypeLookupResult } from "./index-types.js";
+import type { JavaIndexStatus, JavaSourceSet, JavaTypeLookupResult } from "./index-types.js";
 import type { JavaIndexRequest, JavaIndexResponse } from "./worker-protocol.js";
 
 let status: JavaIndexStatus = {
@@ -27,10 +28,7 @@ let status: JavaIndexStatus = {
 let repoRoot = "";
 let backend: JavaParserBackend | undefined;
 let cache: ParseTreeCache | undefined;
-// Task 19 (JavaIndexStore) replaces this temporary in-memory map with the
-// real O(1) query structure; this task only needs REFRESH to produce and
-// hold facts somewhere.
-const filesByRelativePath = new Map<string, JavaFileBundle>();
+let store: JavaIndexStore | undefined;
 // A single unreadable/unparsable file must not fail the whole REFRESH batch
 // (its previous cached state, if any, is left untouched), but a silently
 // swallowed failure is worse than a surfaced one: Task 20 owns proper
@@ -79,19 +77,17 @@ function deriveSourceLayout(
 }
 
 function summarizeFiles(): Pick<JavaIndexStatus, "files" | "types" | "methods" | "edges"> {
-  let types = 0;
-  let methods = 0;
-  let edges = 0;
-  for (const bundle of filesByRelativePath.values()) {
-    types += bundle.types.length;
-    methods += bundle.methods.length;
-    edges += bundle.edges.length;
-  }
-  return { files: filesByRelativePath.size, types, methods, edges };
+  if (!store) return { files: 0, types: 0, methods: 0, edges: 0 };
+  return {
+    files: store.filesByPath.size,
+    types: store.typesById.size,
+    methods: store.methodsById.size,
+    edges: store.edgesById.size
+  };
 }
 
 async function refreshFile(inputPath: string, generation: number): Promise<string> {
-  if (!backend || !cache) throw new Error("refreshFile called before OPEN");
+  if (!backend || !cache || !store) throw new Error("refreshFile called before OPEN");
   const { absolutePath, relativePath, sourceRoot, module, sourceSet } = deriveSourceLayout(inputPath);
   const [content, stats] = await Promise.all([
     readFile(absolutePath, "utf8"),
@@ -112,7 +108,7 @@ async function refreshFile(inputPath: string, generation: number): Promise<strin
     contentHash,
     generation
   };
-  filesByRelativePath.set(relativePath, { ...extractFromParsedTree(input, tree), edges: [] });
+  store.replaceFile({ ...extractFromParsedTree(input, tree), edges: [] });
   return relativePath;
 }
 
@@ -120,8 +116,8 @@ async function refreshFile(inputPath: string, generation: number): Promise<strin
 // O(repo size) per call - acceptable for this task's "narrow" worker wiring
 // per Task 18; Task 20's incremental sweep owns making this bounded.
 function rebuildRegistry(): TypeRegistryView {
-  const bundles = [...filesByRelativePath.values()];
-  return buildTypeRegistryView(bundles.flatMap(b => b.types), bundles.flatMap(b => b.methods));
+  if (!store) return buildTypeRegistryView([], []);
+  return buildTypeRegistryView([...store.typesById.values()], [...store.methodsById.values()]);
 }
 
 // Resolves one file's refs against the registry as it stands (including any
@@ -129,10 +125,11 @@ function rebuildRegistry(): TypeRegistryView {
 // static edges. Does not re-resolve *other*, already-indexed files whose
 // prior REPO_UNIQUE_SIMPLE_NAME fallback a new type might now make
 // ambiguous - that reverse-dependency re-resolution is deferred to whichever
-// task owns the refresh pipeline's incremental rebuild (Task 19/20), per
-// Task 17's own Step 6 deferral.
+// task owns the refresh pipeline's incremental rebuild (Task 20), per Task
+// 17's own Step 6 deferral.
 function resolveAndBuildEdges(relativePath: string): void {
-  const raw = filesByRelativePath.get(relativePath);
+  if (!store) return;
+  const raw = store.files([relativePath])[0];
   if (!raw) return;
   const registryBeforeResolve = rebuildRegistry();
   const resolver = new JavaNameResolver(registryBeforeResolve);
@@ -141,34 +138,9 @@ function resolveAndBuildEdges(relativePath: string): void {
   // registry again: buildStaticEdges' super-chain/receiver lookups need
   // *this* file's own supertype refs to carry their resolution, which only
   // the post-resolve registry reflects.
-  filesByRelativePath.set(relativePath, { ...resolved, edges: [] });
+  store.replaceFile({ ...resolved, edges: [] });
   const edges = buildStaticEdges(resolved, rebuildRegistry(), resolver);
-  filesByRelativePath.set(relativePath, { ...resolved, edges });
-}
-
-// After a delete, other files' *already-built* edges can be left pointing at
-// a type/method id that no longer exists in the registry (Task 18 Step 7:
-// "Incoming edges from other files become unresolved and those files enter
-// dependency rebuild set"). Unlike the simple-name-collision case, this
-// can't be retrofitted once bundles are handed to Task 19's store - the
-// stale edges would already be baked in - so it is handled here rather than
-// deferred alongside it.
-function findFilesWithDanglingEdges(registry: TypeRegistryView): string[] {
-  const validMethodIds = new Set<string>();
-  for (const methods of registry.methodsByOwnerTypeId.values()) {
-    for (const method of methods) validMethodIds.add(method.methodId);
-  }
-  const affected: string[] = [];
-  for (const [relativePath, bundle] of filesByRelativePath) {
-    const hasDanglingEdge = bundle.edges.some(edge => {
-      if (edge.toId.startsWith("external:")) return false;
-      if (edge.toId.startsWith("type:") || edge.toId.startsWith("type-local:")) return !registry.byId.has(edge.toId);
-      if (edge.toId.startsWith("method:")) return !validMethodIds.has(edge.toId);
-      return false;
-    });
-    if (hasDanglingEdge) affected.push(relativePath);
-  }
-  return affected;
+  store.replaceFile({ ...resolved, edges });
 }
 
 async function handle(request: JavaIndexRequest): Promise<void> {
@@ -178,6 +150,7 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         repoRoot = request.repoRoot;
         backend = await createJavaParserBackend();
         cache = new ParseTreeCache();
+        store = new JavaIndexStore();
         status = { ...status, state: "READY", indexedGeneration: request.generation };
         respond({ id: request.id, ok: true, value: status });
         return;
@@ -202,25 +175,45 @@ async function handle(request: JavaIndexRequest): Promise<void> {
             }`;
           }
         }
-        let deletedAny = false;
+        const deletedPaths: string[] = [];
         for (const inputPath of request.deleted) {
           try {
             const { relativePath } = deriveSourceLayout(inputPath);
             cache?.delete(relativePath);
-            deletedAny = filesByRelativePath.delete(relativePath) || deletedAny;
+            deletedPaths.push(relativePath);
           } catch (error) {
             lastRefreshError = `failed to delete ${inputPath}: ${
               error instanceof Error ? error.message : String(error)
             }`;
           }
         }
-        if (deletedAny) {
-          for (const relativePath of findFilesWithDanglingEdges(rebuildRegistry())) touched.add(relativePath);
+        if (deletedPaths.length > 0 && store) {
+          // The store's own reverse index already knows which surviving
+          // files have an edge into a node this delete removes (Task 18
+          // Step 7's "incoming edges from other files become unresolved");
+          // no separate dangling-edge scan is needed once that index exists.
+          // This is a strict equivalent of the Task 18 scan, not a narrower
+          // approximation: every edge target (a type: or method: id) is
+          // owned by exactly one file, so the only way a target can go
+          // stale is for *its* owning file to be deleted - which is exactly
+          // what store.removeFiles' owned-node walk computes dependents
+          // from. external: targets are never owned by any file and are
+          // never removed by a delete, so they never need this treatment.
+          for (const dependent of store.removeFiles(deletedPaths)) touched.add(dependent);
         }
         for (const relativePath of touched) {
           try {
             resolveAndBuildEdges(relativePath);
           } catch (error) {
+            // The store is left holding refreshFile's raw, unresolved,
+            // edge-less bundle for this path (resolveAndBuildEdges' first
+            // replaceFile already landed before the failure could occur
+            // past that point) - queries against it return UNRESOLVED
+            // facts with no edges, indistinguishable from a file that
+            // legitimately references nothing. Task 20's per-file
+            // coverage/failedFiles accounting is what makes that
+            // distinguishable; until then, lastRefreshError is the only
+            // signal, so name the file in it explicitly.
             lastRefreshError = `failed to resolve ${relativePath}: ${
               error instanceof Error ? error.message : String(error)
             }`;
@@ -246,33 +239,65 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         return;
       }
       case "QUERY_ANCHOR": {
-        respond({ id: request.id, ok: true, value: undefined });
+        // A single bad path must not fail (and DEGRADE) the whole client -
+        // same reasoning as QUERY_FILES' per-path try/catch, just for one
+        // path instead of a list: an anchor for a file outside the repo or
+        // otherwise unresolvable simply has no anchor, not a fatal error.
+        let relativePath: string | undefined;
+        try {
+          relativePath = deriveSourceLayout(request.file).relativePath;
+        } catch {
+          relativePath = undefined;
+        }
+        respond({
+          id: request.id,
+          ok: true,
+          value: relativePath ? store?.anchor(relativePath, request.line, request.column) : undefined
+        });
         return;
       }
       case "QUERY_TYPE": {
-        respond({ id: request.id, ok: true, value: unresolvedTypeLookup() });
+        const scopeFile = request.scopeFile ? deriveSourceLayout(request.scopeFile).relativePath : undefined;
+        respond({
+          id: request.id,
+          ok: true,
+          value: store ? store.typeLookup(request.typeText, scopeFile) : unresolvedTypeLookup()
+        });
         return;
       }
-      case "QUERY_IMPLEMENTERS":
-      case "QUERY_TYPE_REFERENCERS":
-      case "QUERY_CALLERS":
+      case "QUERY_IMPLEMENTERS": {
+        respond({ id: request.id, ok: true, value: store?.implementers(request.typeId, request.limit) ?? [] });
+        return;
+      }
+      case "QUERY_TYPE_REFERENCERS": {
+        respond({
+          id: request.id,
+          ok: true,
+          value: store?.typeReferencers(request.typeId, new Set(request.edgeKinds), request.limit) ?? []
+        });
+        return;
+      }
+      case "QUERY_CALLERS": {
+        respond({ id: request.id, ok: true, value: store?.callers(request.methodId, request.limit) ?? [] });
+        return;
+      }
       case "QUERY_CALLEES": {
-        respond({ id: request.id, ok: true, value: [] });
+        respond({ id: request.id, ok: true, value: store?.callees(request.methodId, request.limit) ?? [] });
         return;
       }
       case "QUERY_FILES": {
-        const bundles = request.files
+        const relativePaths = request.files
           .map(inputPath => {
             try {
-              return filesByRelativePath.get(deriveSourceLayout(inputPath).relativePath);
+              return deriveSourceLayout(inputPath).relativePath;
             } catch {
               // Outside repoRoot or otherwise unresolvable: no facts for it,
               // same as a path that was never refreshed.
               return undefined;
             }
           })
-          .filter((bundle): bundle is JavaFileBundle => bundle !== undefined);
-        respond({ id: request.id, ok: true, value: bundles });
+          .filter((relativePath): relativePath is string => relativePath !== undefined);
+        respond({ id: request.id, ok: true, value: store?.files(relativePaths) ?? [] });
         return;
       }
       default: {

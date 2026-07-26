@@ -267,3 +267,40 @@ test("deleting a type's sole source file drops the now-stale IMPLEMENTS edge fro
 
   await client.close();
 });
+
+test("Task 19's query commands (anchor/type/implementers/referencers/callers/callees) answer through a real worker thread", async () => {
+  const absolutePath = path.join(fixturesRepoRoot, "src/main/java/demo/PaymentGateway.java");
+  const client = new JavaIndexClient(fixturesRepoRoot, mkdtempSync(path.join(tmpdir(), "java-index-query-cache-")));
+  await client.open(1);
+  await client.refresh(2, [absolutePath], []);
+
+  const bundle = (await client.queryFiles([absolutePath]))[0]!;
+  const paymentGateway = bundle.types.find(t => t.simpleName === "PaymentGateway")!;
+  const aliyunGateway = bundle.types.find(t => t.simpleName === "AliyunGateway")!;
+  const gatewayPayMethod = bundle.methods.find(m => m.ownerTypeId === paymentGateway.typeId && m.name === "pay")!;
+  const servicePayMethod = bundle.methods.find(
+    m => m.ownerTypeId === bundle.types.find(t => t.simpleName === "PaymentService")!.typeId && m.name === "pay"
+  )!;
+
+  const implementers = await client.queryImplementers(paymentGateway.typeId, 10);
+  assert.deepEqual(implementers.map(t => t.typeId), [aliyunGateway.typeId]);
+
+  const referencers = await client.queryTypeReferencers(paymentGateway.typeId, ["IMPLEMENTS"], 10);
+  assert.equal(referencers.length, 1);
+  assert.equal(referencers[0]!.sourceId, aliyunGateway.typeId);
+
+  const callers = await client.queryCallers(gatewayPayMethod.methodId, 10);
+  assert.deepEqual(callers.map(r => r.sourceId), [servicePayMethod.methodId]);
+
+  const callees = await client.queryCallees(servicePayMethod.methodId, 10);
+  assert.deepEqual(callees.map(r => r.targetId), [gatewayPayMethod.methodId]);
+
+  const anchor = await client.queryAnchor(absolutePath, paymentGateway.range.start.line, paymentGateway.range.start.column);
+  assert.equal(anchor?.symbolId, paymentGateway.typeId);
+
+  const typeLookup = await client.queryType("PaymentGateway", absolutePath);
+  assert.equal(typeLookup.state, "RESOLVED");
+  assert.equal((typeLookup as { type: { typeId: string } }).type.typeId, paymentGateway.typeId);
+
+  await client.close();
+});
