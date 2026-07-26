@@ -23,7 +23,8 @@ import type {
   StaticEdge,
   StaticEdgeKind,
   StaticEdgeResolutionKind,
-  TypeResolutionStrategy
+  TypeResolutionStrategy,
+  WorktreeSeedStatus
 } from "./index-types.js";
 
 /** Worker-thread-safe subset of WorktreeIdentity: plain strings/booleans, never the live identity cache. */
@@ -44,6 +45,8 @@ export type JavaIndexRequest =
       /** Absent => the worker never attempts a machine-level sweep lease and always runs sweeps unslotted. */
       leaseRoot?: string;
       worktree?: JavaIndexWorktreeIdentity;
+      /** Absent => the worker never attempts a sibling-worktree snapshot seed (Task 21a), even with no own snapshot. */
+      siblingCacheBase?: string;
     }
   | { id: number; type: "REFRESH"; generation: number; changed: string[]; deleted: string[] }
   | { id: number; type: "RECONCILE"; generation: number }
@@ -553,6 +556,21 @@ function validateJavaFileBundle(value: unknown, context: string): JavaFileBundle
   };
 }
 
+const WORKTREE_SEED_COMPLETIONS = ["NOT_ATTEMPTED", "SEEDED_DEGRADED", "NO_VALID_SOURCE", "FAILED"] as const;
+
+function validateWorktreeSeedStatus(value: unknown, context: string): WorktreeSeedStatus {
+  const source = record(value, context);
+  if (!isBoolean(source.attempted)) invalid(context, "attempted");
+  if (!isNumber(source.reusedFiles)) invalid(context, "reusedFiles");
+  if (!isOneOf(source.completion, WORKTREE_SEED_COMPLETIONS)) invalid(context, "completion");
+  return {
+    attempted: source.attempted,
+    ...withOptional("sourceRepoHash", optional(source.sourceRepoHash, `${context}.sourceRepoHash`, isAssertString)),
+    reusedFiles: source.reusedFiles,
+    completion: source.completion
+  };
+}
+
 // --- exported command-specific validators ------------------------------------
 
 export function validateJavaIndexStatus(value: unknown): JavaIndexStatus {
@@ -581,7 +599,8 @@ export function validateJavaIndexStatus(value: unknown): JavaIndexStatus {
     pendingForeground: source.pendingForeground,
     pendingBackground: source.pendingBackground,
     coverage,
-    ...withOptional("lastError", optional(source.lastError, `${context}.lastError`, isAssertString))
+    ...withOptional("lastError", optional(source.lastError, `${context}.lastError`, isAssertString)),
+    ...withOptional("worktreeSeed", optional(source.worktreeSeed, `${context}.worktreeSeed`, validateWorktreeSeedStatus))
   };
 }
 

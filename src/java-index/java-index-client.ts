@@ -26,6 +26,8 @@ export type JavaIndexOpenOptions = {
   /** Absent => the worker never acquires a machine-level sweep lease. */
   leaseRoot?: string;
   worktree?: JavaIndexWorktreeIdentity;
+  /** Absent => the worker never attempts a sibling-worktree snapshot seed (Task 21a), even with no own snapshot. */
+  siblingCacheBase?: string;
 };
 
 export interface WorkerLike {
@@ -193,7 +195,8 @@ export class JavaIndexClient {
           cacheDir: this.cacheDir,
           generation,
           ...(this.openOptions.leaseRoot ? { leaseRoot: this.openOptions.leaseRoot } : {}),
-          ...(this.openOptions.worktree ? { worktree: this.openOptions.worktree } : {})
+          ...(this.openOptions.worktree ? { worktree: this.openOptions.worktree } : {}),
+          ...(this.openOptions.siblingCacheBase ? { siblingCacheBase: this.openOptions.siblingCacheBase } : {})
         },
         validateJavaIndexStatus
       );

@@ -25,7 +25,8 @@ import { JavaIndexStore } from "./index-store.js";
 import { JavaNameResolver, buildTypeRegistryView, type TypeRegistryView } from "./name-resolver.js";
 import { loadSnapshot, writeSnapshotAtomic, type JavaIndexSnapshotV2, type SnapshotIdentity } from "./snapshot.js";
 import { STABLE_ID_VERSION } from "./stable-id.js";
-import type { JavaIndexStatus, JavaSourceSet, JavaTypeLookupResult, SourceRootCoverage } from "./index-types.js";
+import { WorktreeSnapshotSeeder } from "./worktree-snapshot-seeder.js";
+import type { JavaIndexStatus, JavaSourceSet, JavaTypeLookupResult, SourceRootCoverage, WorktreeSeedStatus } from "./index-types.js";
 import type { JavaIndexRequest, JavaIndexResponse } from "./worker-protocol.js";
 
 // A full sweep processes this many files before yielding to the message loop
@@ -75,6 +76,7 @@ let store: JavaIndexStore | undefined;
 let layout: LayoutContext | undefined;
 let leaseStore: CrossProcessLeaseStore = new NoopCrossProcessLeaseStore();
 let worktreeIdentity: WorktreeIdentity | undefined;
+let worktreeSeedStatus: WorktreeSeedStatus | undefined;
 const coverage = new CoverageTracker();
 // A single unreadable/unparsable file must not fail the whole REFRESH batch
 // (its previous cached state, if any, is left untouched), but a silently
@@ -217,6 +219,7 @@ function currentStatus(overrides: Partial<JavaIndexStatus> = {}): JavaIndexStatu
     pendingForeground: foregroundQueue.length,
     pendingBackground: backgroundSweep?.remaining.length ?? 0,
     ...(lastRefreshError ? { lastError: lastRefreshError } : {}),
+    ...(worktreeSeedStatus ? { worktreeSeed: worktreeSeedStatus } : {}),
     ...overrides
   };
 }
@@ -551,6 +554,75 @@ async function verifyOwnSnapshot(snapshotData: JavaIndexSnapshotV2): Promise<num
   return newGeneration;
 }
 
+/**
+ * Task 21a: with no valid own snapshot, try to seed from a sibling
+ * worktree's validated, COMPLETE snapshot instead of starting from a fully
+ * empty store. Any failure anywhere in this attempt (a malformed sibling
+ * snapshot - a different trust domain than the own-snapshot round-trip
+ * Task 21's `loadSnapshot` guards, since it is another process's cache,
+ * possibly mid-write - a filesystem race, or anything else) must never fail
+ * OPEN: it is treated exactly like "no candidate found," falling through to
+ * the ordinary empty-store-plus-cold-sweep path.
+ *
+ * The seeded store is always installed with DEGRADED coverage at the
+ * caller's own generation (never the source's), so `canAnswerNegative()` is
+ * false for every root and `repo-runtime-manager.createEntry`'s
+ * "already fully restored" check is false too - the mandatory follow-up
+ * reconcile() (today's ordinary full sweep) is what actually promotes
+ * coverage to COMPLETE, correcting any file that was seeded stale as a side
+ * effect of also re-parsing it. That sweep does not yet skip re-parsing
+ * files the seeder already reused (Step 5's "schedule changed/new files"
+ * optimization) - it re-parses everything discovered, same as a cold sweep
+ * would. The benefit this task delivers is real but narrower than the full
+ * plan: a query landing in the window between OPEN responding and that
+ * sweep completing can get a useful, DEGRADED-coverage positive answer from
+ * reused facts instead of an empty store; steady-state re-parse cost is not
+ * reduced yet.
+ *
+ * Checked, not assumed: a REFRESH landing in that same window (before the
+ * follow-up sweep completes) does call scheduleSnapshotFlush(), so a
+ * debounced write could in principle publish a snapshot before the seeded
+ * roots are ever verified. This is harmless, not merely unlikely:
+ * beginBackgroundSweep's coverage.begin() unconditionally resets every
+ * discovered root from this function's DEGRADED to BUILDING the moment the
+ * follow-up RECONCILE is handled (which happens before the coordinator - and
+ * therefore any REFRESH - starts), and processBackgroundChunk only ever
+ * promotes rootsSeen to COMPLETE once, when the *entire* sweep's `remaining`
+ * queue drains to zero. So a flush mid-sweep can only ever write coverage
+ * that is BUILDING (never COMPLETE, never DEGRADED), which grants no
+ * negative-answer trust and is simply re-verified from scratch - like any
+ * other not-yet-complete snapshot - the next time this repo is opened.
+ */
+async function attemptSiblingSeed(
+  siblingCacheBase: string,
+  buildFingerprint: string,
+  generation: number
+): Promise<WorktreeSeedStatus> {
+  if (!layout || !store) return { attempted: false, reusedFiles: 0, completion: "NOT_ATTEMPTED" };
+  try {
+    const seedIdentity = { extractorVersion: computeExtractorVersion(), stableIdVersion: STABLE_ID_VERSION, buildFingerprint };
+    const seeder = new WorktreeSnapshotSeeder();
+    const candidate = await seeder.findCandidate(currentWorktreeIdentity(), seedIdentity, siblingCacheBase);
+    if (!candidate) {
+      return { attempted: true, reusedFiles: 0, completion: "NO_VALID_SOURCE" };
+    }
+    const seeded = await seeder.seedValidatedFacts(candidate, seedIdentity, repoRoot, layout, generation);
+    store = seeded.store;
+    const discovered = await discoverJavaFiles(repoRoot, layout);
+    const roots = new Set(discovered.map(file => file.sourceRoot));
+    for (const root of roots) coverage.invalidate(root, generation);
+    return {
+      attempted: true,
+      sourceRepoHash: seeded.result.sourceRepoHash,
+      reusedFiles: seeded.result.reusedFiles,
+      completion: "SEEDED_DEGRADED"
+    };
+  } catch {
+    store = new JavaIndexStore();
+    return { attempted: true, reusedFiles: 0, completion: "FAILED" };
+  }
+}
+
 async function beginBackgroundSweep(generation: number): Promise<void> {
   if (backgroundSweep) {
     // A sweep is already in flight: piggyback on it rather than starting a
@@ -712,6 +784,8 @@ async function handle(request: JavaIndexRequest): Promise<void> {
             store.loadSnapshotData(loaded);
             for (const entry of loaded.coverage) coverage.restoreProvisional(entry);
             openedGeneration = await verifyOwnSnapshot(loaded);
+          } else if (request.siblingCacheBase) {
+            worktreeSeedStatus = await attemptSiblingSeed(request.siblingCacheBase, buildFingerprint, request.generation);
           }
         }
         status = { ...status, state: "READY", indexedGeneration: openedGeneration };

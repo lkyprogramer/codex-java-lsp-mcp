@@ -182,6 +182,14 @@ export type SourceRootCoverage = {
   completedAt?: string;
 };
 
+/** Task 21a diagnostic summary of the OPEN-time sibling-worktree seed attempt, if any. */
+export type WorktreeSeedStatus = {
+  attempted: boolean;
+  sourceRepoHash?: string;
+  reusedFiles: number;
+  completion: "NOT_ATTEMPTED" | "SEEDED_DEGRADED" | "NO_VALID_SOURCE" | "FAILED";
+};
+
 export type JavaIndexStatus = {
   state: "NEW" | "OPENING" | "READY" | "DEGRADED" | "CLOSED";
   indexedGeneration: number;
@@ -194,6 +202,7 @@ export type JavaIndexStatus = {
   pendingBackground: number;
   coverage: SourceRootCoverage[];
   lastError?: string;
+  worktreeSeed?: WorktreeSeedStatus;
 };
 
 export type JavaTypeLookupResult =

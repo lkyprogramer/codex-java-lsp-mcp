@@ -467,7 +467,8 @@ export class RepoRuntimeManager {
     // A failed open must not fail runtime creation; the client self-degrades.
     await entry.context.javaIndex?.open(generation.snapshot().value, {
       leaseRoot: path.join(repoCacheBase(), "leases"),
-      worktree: resolved.worktree
+      worktree: resolved.worktree,
+      siblingCacheBase: repoCacheBase()
     }).then(async openStatus => {
       // A restored-and-verified snapshot (Task 21 Step 6a) reports its own
       // (possibly higher) generation; the repo's clock must never regress

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { opendir, readFile } from "node:fs/promises";
+import { open, opendir, readFile } from "node:fs/promises";
 import path from "node:path";
 import type { LayoutContext } from "../layout-probe.js";
 
@@ -115,4 +115,64 @@ export async function scanCurrentManifest(
 export async function computeCurrentManifestFingerprint(repoRoot: string, layout: LayoutContext): Promise<string> {
   const { entries } = await scanCurrentManifest(repoRoot, layout);
   return computeManifestFingerprint(entries);
+}
+
+/**
+ * Reads one file the way sibling-worktree seeding (Task 21a) must: open the
+ * path once, fstat the resulting *file descriptor* before and after reading
+ * its bytes, and report whether size/mtime changed in between. Using the
+ * same fd for both stats (rather than two separate path-based `stat()`
+ * calls) also catches the path being replaced/renamed mid-read, not just the
+ * original inode being mutated - a plain `readFile` cannot distinguish "this
+ * content is exactly what the target has right now" from "this content was
+ * true for a moment that already passed," which matters here because a
+ * seeded fact wrongly treated as still-matching would be reused as if it
+ * were current.
+ */
+export async function readFileStable(absolutePath: string): Promise<{ content: string; stable: boolean } | undefined> {
+  let handle;
+  try {
+    handle = await open(absolutePath, "r");
+  } catch {
+    return undefined;
+  }
+  try {
+    const before = await handle.stat();
+    const buffer = await handle.readFile();
+    const after = await handle.stat();
+    const stable = before.size === after.size && before.mtimeMs === after.mtimeMs;
+    return { content: buffer.toString("utf8"), stable };
+  } finally {
+    await handle.close();
+  }
+}
+
+/**
+ * Same shape as `scanCurrentManifest`, but every file is read via
+ * `readFileStable` and an entry whose stat changed during its own read is
+ * reported in `unstablePaths` instead of `entries` - sibling seeding (Task
+ * 21a) must treat such a file as dirty (never reusable), since its content
+ * hash cannot be trusted to reflect any single point in time.
+ */
+export async function scanCurrentManifestStable(
+  repoRoot: string,
+  layout: LayoutContext
+): Promise<{ discovered: DiscoveredJavaFile[]; entries: ManifestEntry[]; unstablePaths: string[] }> {
+  const discovered = await discoverJavaFiles(repoRoot, layout);
+  const entries: ManifestEntry[] = [];
+  const unstablePaths: string[] = [];
+  for (const file of discovered) {
+    const read = await readFileStable(file.absolutePath);
+    if (!read) {
+      unstablePaths.push(file.relativePath);
+      continue;
+    }
+    if (!read.stable) {
+      unstablePaths.push(file.relativePath);
+      continue;
+    }
+    const contentHash = createHash("sha256").update(read.content, "utf8").digest("hex");
+    entries.push({ relativePath: file.relativePath, contentHash, sourceRoot: file.sourceRoot });
+  }
+  return { discovered, entries, unstablePaths };
 }

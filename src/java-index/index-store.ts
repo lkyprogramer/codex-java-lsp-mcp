@@ -188,6 +188,52 @@ export class JavaIndexStore {
     return [...dependents];
   }
 
+  /**
+   * Drops only the edges a file owns (`sourceFile === relativePath`),
+   * leaving that file's own type/field/method facts untouched - unlike
+   * `removeFiles`, which deletes a file's facts entirely. Used by
+   * sibling-worktree seeding (Task 21a) for a RELINK_ONLY file: its own
+   * declarations are still valid (their target-side content matched), but a
+   * resolved edge into a *different*, non-reused file's now-removed type
+   * must never survive into the seeded (unresolved-pending-relink) store.
+   * The seeder itself never re-resolves; that is left to whatever consumes
+   * `relinkPaths` next. Returns how many edges were dropped.
+   */
+  dropOwnedEdges(relativePaths: readonly string[]): number {
+    let dropped = 0;
+    for (const relativePath of relativePaths) {
+      if (!this.filesByPath.has(relativePath)) continue; // never resurrect bookkeeping for a file this store doesn't have
+      for (const edgeId of this.fileOwnedEdgeIds.get(relativePath) ?? []) {
+        const edge = this.edgesById.get(edgeId);
+        if (!edge) continue;
+        this.edgesById.delete(edgeId);
+        removeFromSetMap(this.outEdgeIdsByNode, edge.fromId, edgeId);
+        removeFromSetMap(this.inEdgeIdsByNode, edge.toId, edgeId);
+        dropped += 1;
+      }
+      this.fileOwnedEdgeIds.set(relativePath, new Set());
+    }
+    return dropped;
+  }
+
+  /**
+   * Rewrites just the `generation` field on already-installed files (and any
+   * edge they own) without re-deriving or re-validating ids - used by
+   * sibling-worktree seeding (Task 21a) to stamp reused facts into the
+   * *target's* current generation, since their underlying content (and
+   * therefore every id) has not changed.
+   */
+  stampGeneration(relativePaths: readonly string[], generation: number): void {
+    const paths = new Set(relativePaths);
+    for (const relativePath of paths) {
+      const file = this.filesByPath.get(relativePath);
+      if (file) this.filesByPath.set(relativePath, { ...file, generation });
+    }
+    for (const [edgeId, edge] of this.edgesById) {
+      if (paths.has(edge.sourceFile)) this.edgesById.set(edgeId, { ...edge, generation });
+    }
+  }
+
   file(relativePath: string): JavaFileFacts | undefined {
     return this.filesByPath.get(relativePath);
   }

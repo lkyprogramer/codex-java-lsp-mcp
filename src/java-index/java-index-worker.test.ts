@@ -3,6 +3,7 @@ import test from "node:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { gunzipSync, gzipSync } from "node:zlib";
 import {
   defaultLeaseClockDeps,
   FileCrossProcessLeaseStore
@@ -431,4 +432,86 @@ test("the first V2 open deletes SourceIndex V1's cache files exactly once", asyn
     "cleanup must not run again once the marker is present"
   );
   await second.close();
+});
+
+test("OPEN seeds a DEGRADED store from a valid sibling snapshot when it has no own snapshot", async () => {
+  const siblingRepo = tempRepo("java-index-worker-sibling-source-");
+  writeJavaFile(siblingRepo, "src/main/java/demo/Same.java", "package demo;\n\nclass Same {}\n");
+  const cacheBase = tempCacheDir();
+  const siblingCacheDir = path.join(cacheBase, "sibling");
+  const siblingClient = new JavaIndexClient(siblingRepo, siblingCacheDir);
+  await siblingClient.open(1);
+  await siblingClient.reconcile(1);
+  await waitFor(async () => (await siblingClient.status()).pendingBackground === 0, 5000);
+  await siblingClient.close();
+  writeFileSync(
+    path.join(siblingCacheDir, "repo-meta.json"),
+    JSON.stringify({ repoRoot: siblingRepo, repoHash: "sibling-repo-hash", familyHash: "shared-family" })
+  );
+
+  const targetRepo = tempRepo("java-index-worker-sibling-target-");
+  writeJavaFile(targetRepo, "src/main/java/demo/Same.java", "package demo;\n\nclass Same {}\n");
+  const identity: WorktreeIdentity = {
+    repoRoot: targetRepo,
+    repoHash: "target-repo-hash",
+    familyHash: "shared-family",
+    isLinkedWorktree: true
+  };
+
+  const client = new JavaIndexClient(targetRepo, tempCacheDir());
+  const openStatus = await client.open(1, { worktree: identity, siblingCacheBase: cacheBase });
+
+  assert.equal(openStatus.worktreeSeed?.completion, "SEEDED_DEGRADED");
+  assert.equal(openStatus.worktreeSeed?.reusedFiles, 1);
+  assert.equal(openStatus.files, 1, "the seeded store's facts must be visible immediately, before any sweep runs");
+  assert.ok(
+    openStatus.coverage.every(entry => entry.state === "DEGRADED"),
+    `seeded coverage must never read COMPLETE before the target's own reconcile, got ${JSON.stringify(openStatus.coverage)}`
+  );
+
+  const bundle = (await client.queryFiles([path.join(targetRepo, "src/main/java/demo/Same.java")]))[0];
+  assert.ok(bundle, "a reused file's facts must already answer a query right after OPEN");
+
+  await client.close();
+});
+
+test("a malformed sibling snapshot fails the seed attempt softly - OPEN still succeeds with an empty store", async () => {
+  const siblingRepo = tempRepo("java-index-worker-bad-sibling-source-");
+  writeJavaFile(siblingRepo, "src/main/java/demo/Solo.java", "package demo;\n\nclass Solo {}\n");
+  const cacheBase = tempCacheDir();
+  const siblingCacheDir = path.join(cacheBase, "sibling");
+  const siblingClient = new JavaIndexClient(siblingRepo, siblingCacheDir);
+  await siblingClient.open(1);
+  await siblingClient.reconcile(1);
+  await waitFor(async () => (await siblingClient.status()).pendingBackground === 0, 5000);
+  await siblingClient.close();
+
+  // Corrupt the otherwise-identity-matching snapshot: duplicate a file entry,
+  // which JavaIndexStore.loadSnapshotData() rejects by throwing.
+  const snapshotPath = path.join(siblingCacheDir, "java-index-snapshot.json.gz");
+  const raw = JSON.parse(gunzipSync(readFileSync(snapshotPath)).toString("utf8")) as { files: unknown[] };
+  raw.files.push({ ...(raw.files[0] as Record<string, unknown>) });
+  writeFileSync(snapshotPath, gzipSync(Buffer.from(JSON.stringify(raw))));
+  writeFileSync(
+    path.join(siblingCacheDir, "repo-meta.json"),
+    JSON.stringify({ repoRoot: siblingRepo, repoHash: "sibling-repo-hash", familyHash: "shared-family" })
+  );
+
+  const targetRepo = tempRepo("java-index-worker-bad-sibling-target-");
+  writeJavaFile(targetRepo, "src/main/java/demo/Target.java", "package demo;\n\nclass Target {}\n");
+  const identity: WorktreeIdentity = {
+    repoRoot: targetRepo,
+    repoHash: "target-repo-hash",
+    familyHash: "shared-family",
+    isLinkedWorktree: true
+  };
+
+  const client = new JavaIndexClient(targetRepo, tempCacheDir());
+  const openStatus = await client.open(1, { worktree: identity, siblingCacheBase: cacheBase });
+
+  assert.equal(openStatus.state, "READY", "OPEN must succeed even when the only sibling candidate is malformed");
+  assert.equal(openStatus.worktreeSeed?.completion, "FAILED");
+  assert.equal(openStatus.files, 0, "a failed seed must fall back to an empty store, never partial/garbage facts");
+
+  await client.close();
 });

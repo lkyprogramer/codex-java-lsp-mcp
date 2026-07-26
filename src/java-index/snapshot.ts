@@ -110,6 +110,41 @@ async function discard(target: string, reason: string): Promise<undefined> {
   return undefined;
 }
 
+type ParsedSnapshot = { snapshot: Partial<JavaIndexSnapshotV2> } | { error: string };
+
+// Shared by both loaders: reads, gunzips, JSON-parses, and checks
+// schemaVersion. Never throws - a missing file is `undefined` (a miss, not
+// an error); anything else unreadable is `{ error }`, leaving what happens
+// next (delete it vs. leave someone else's cache alone) to the caller.
+async function parseSnapshotFile(target: string): Promise<ParsedSnapshot | undefined> {
+  let compressed: Buffer;
+  try {
+    compressed = await readFile(target);
+  } catch {
+    return undefined;
+  }
+  let json: Buffer;
+  try {
+    json = await gunzipAsync(compressed);
+  } catch {
+    return { error: "invalid gzip stream" };
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json.toString("utf8"));
+  } catch {
+    return { error: "invalid JSON payload" };
+  }
+  if (typeof parsed !== "object" || parsed === null) {
+    return { error: "payload is not an object" };
+  }
+  const snapshot = parsed as Partial<JavaIndexSnapshotV2>;
+  if (snapshot.schemaVersion !== 2) {
+    return { error: `unsupported schemaVersion ${String(snapshot.schemaVersion)}` };
+  }
+  return { snapshot };
+}
+
 /**
  * Loads and validates a snapshot for a *normal own-repo* load: any corruption
  * (bad gzip, bad JSON, wrong schemaVersion) or identity mismatch (extractor,
@@ -122,40 +157,20 @@ async function discard(target: string, reason: string): Promise<undefined> {
  * after an independent manifest re-scan.
  *
  * This function's delete-on-mismatch behavior is specific to trusting one's
- * *own* cache directory; it must not be reused to validate a snapshot found
- * in a *different* worktree's cache before deciding whether to seed from it
- * (Task 21a), since a expected canonicalRepoRoot mismatch there is normal,
- * not corruption, and must never delete the sibling's own valid snapshot.
+ * *own* cache directory; use `loadSiblingSnapshot` instead to validate a
+ * snapshot found in a *different* worktree's cache before deciding whether
+ * to seed from it (Task 21a), since an expected canonicalRepoRoot mismatch
+ * there is normal, not corruption, and must never delete the sibling's own
+ * valid snapshot.
  */
 export async function loadSnapshot(
   target: string,
   expected: SnapshotIdentity
 ): Promise<JavaIndexSnapshotV2 | undefined> {
-  let compressed: Buffer;
-  try {
-    compressed = await readFile(target);
-  } catch {
-    return undefined;
-  }
-  let json: Buffer;
-  try {
-    json = await gunzipAsync(compressed);
-  } catch {
-    return discard(target, "invalid gzip stream");
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(json.toString("utf8"));
-  } catch {
-    return discard(target, "invalid JSON payload");
-  }
-  if (typeof parsed !== "object" || parsed === null) {
-    return discard(target, "payload is not an object");
-  }
-  const snapshot = parsed as Partial<JavaIndexSnapshotV2>;
-  if (snapshot.schemaVersion !== 2) {
-    return discard(target, `unsupported schemaVersion ${String(snapshot.schemaVersion)}`);
-  }
+  const parsed = await parseSnapshotFile(target);
+  if (!parsed) return undefined;
+  if ("error" in parsed) return discard(target, parsed.error);
+  const snapshot = parsed.snapshot;
   if (snapshot.extractorVersion !== expected.extractorVersion) {
     return discard(target, "extractorVersion mismatch");
   }
@@ -168,5 +183,29 @@ export async function loadSnapshot(
   if (snapshot.buildFingerprint !== expected.buildFingerprint) {
     return discard(target, "buildFingerprint mismatch");
   }
+  return snapshot as JavaIndexSnapshotV2;
+}
+
+/** The identity a sibling worktree's snapshot must match to be seed-eligible; `canonicalRepoRoot` is deliberately excluded - a sibling legitimately has a different one. */
+export type SiblingSnapshotIdentity = Omit<SnapshotIdentity, "canonicalRepoRoot">;
+
+/**
+ * Reads and validates a snapshot found in a *different* worktree's cache
+ * directory (Task 21a candidate evaluation). Unlike `loadSnapshot`, this
+ * never deletes or otherwise mutates the file on any failure or mismatch -
+ * it is someone else's (possibly still-active) cache, not this reader's to
+ * manage - and a mismatch (including a corrupt file) is simply not a seed
+ * candidate, reported the same way as a miss (`undefined`).
+ */
+export async function loadSiblingSnapshot(
+  target: string,
+  expected: SiblingSnapshotIdentity
+): Promise<JavaIndexSnapshotV2 | undefined> {
+  const parsed = await parseSnapshotFile(target);
+  if (!parsed || "error" in parsed) return undefined;
+  const snapshot = parsed.snapshot;
+  if (snapshot.extractorVersion !== expected.extractorVersion) return undefined;
+  if (snapshot.stableIdVersion !== expected.stableIdVersion) return undefined;
+  if (snapshot.buildFingerprint !== expected.buildFingerprint) return undefined;
   return snapshot as JavaIndexSnapshotV2;
 }
