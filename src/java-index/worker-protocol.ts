@@ -26,8 +26,25 @@ import type {
   TypeResolutionStrategy
 } from "./index-types.js";
 
+/** Worker-thread-safe subset of WorktreeIdentity: plain strings/booleans, never the live identity cache. */
+export type JavaIndexWorktreeIdentity = {
+  repoRoot: string;
+  repoHash: string;
+  familyHash?: string;
+  isLinkedWorktree: boolean;
+};
+
 export type JavaIndexRequest =
-  | { id: number; type: "OPEN"; repoRoot: string; cacheDir: string; generation: number }
+  | {
+      id: number;
+      type: "OPEN";
+      repoRoot: string;
+      cacheDir: string;
+      generation: number;
+      /** Absent => the worker never attempts a machine-level sweep lease and always runs sweeps unslotted. */
+      leaseRoot?: string;
+      worktree?: JavaIndexWorktreeIdentity;
+    }
   | { id: number; type: "REFRESH"; generation: number; changed: string[]; deleted: string[] }
   | { id: number; type: "RECONCILE"; generation: number }
   | { id: number; type: "QUERY_ANCHOR"; file: string; line: number; column: number }

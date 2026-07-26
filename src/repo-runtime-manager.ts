@@ -11,10 +11,11 @@ import {
   type LeaseHandle
 } from "./cross-process-lease.js";
 import { JdtlsSession, type JdtlsLifecycleState } from "./jdtls-session.js";
+import { JavaIndexClient } from "./java-index/java-index-client.js";
 import { LayoutManager, type LayoutSource } from "./layout-manager.js";
 import { RepoChangeCoordinator } from "./repo-change-coordinator.js";
 import { GenerationClock, type RepoChangeBatch } from "./repo-generation.js";
-import { repoCacheBase } from "./repo-layout.js";
+import { repoCacheBase, repoCacheRoot } from "./repo-layout.js";
 import { RepoResolver, type RepoSelector, type ResolvedRepo } from "./repo-resolver.js";
 import { positiveInteger, resourceDefaults, type ResourceDefaults } from "./resource-defaults.js";
 import { DeadlineBudget } from "./runtime/deadline-budget.js";
@@ -69,6 +70,12 @@ export type ManagedToolContext = ToolContext & {
   aliases: string[];
   layoutProfile: string;
   lsp: ResolvedRepo["lsp"];
+  /**
+   * Optional: only `createRuntime` (the production factory) constructs one.
+   * Test fixtures that inject their own `runtimeFactory` may omit it, since
+   * nothing yet requires it (Task 22 wires AgentRouter to query it).
+   */
+  javaIndex?: JavaIndexClient;
 };
 
 /**
@@ -268,6 +275,7 @@ export class RepoRuntimeManager {
         const generationAtStart = entry.generation.snapshot().value;
         try {
           await entry.context.sourceIndex.reconcile(entry.layout.current(), generationAtStart);
+          await entry.context.javaIndex?.reconcile(generationAtStart).catch(() => undefined);
           entry.generation.clearDirty(generationAtStart);
         } catch {
           // Reconcile failure must not fail the request: output coverage stays
@@ -350,6 +358,7 @@ export class RepoRuntimeManager {
     if (!entry) return;
     await this.stopEntry(entry);
     await entry.coordinator.close();
+    await entry.context.javaIndex?.close().catch(() => undefined);
     await entry.runtimeLease?.release();
     entry.runtimeLease = undefined;
     // This process's PID would otherwise keep looking alive to the janitor's
@@ -382,6 +391,7 @@ export class RepoRuntimeManager {
     // (and re-closing the already-closed ones) is safe either way.
     await Promise.all([...this.runtimes.values()].map(async entry => {
       await entry.coordinator.close();
+      await entry.context.javaIndex?.close().catch(() => undefined);
       await entry.runtimeLease?.release();
       entry.runtimeLease = undefined;
       touchRepoCache(entry.context.repoRoot, { ownerPid: undefined, ownerToken: undefined });
@@ -445,16 +455,54 @@ export class RepoRuntimeManager {
       }
     });
     // Register invalidation before start() so the first event cannot be lost.
-    coordinator.onBatch(batch => {
+    coordinator.onBatch(async batch => {
       entry.context.router.onRepoChanged(batch);
       entry.context.sourceIndex.applyChanges(batch);
       entry.context.session.invalidateForRepoChanges(batch);
+      await this.applyBatchToJavaIndex(entry.context.javaIndex, batch);
     });
+    // Best-effort: chokidar's initial scan (ignoreInitial: true) never emits
+    // an onBatch for pre-existing files, so the Java index's first full
+    // discovery is kicked off explicitly here rather than waiting for one.
+    // A failed open must not fail runtime creation; the client self-degrades.
+    await entry.context.javaIndex?.open(generation.snapshot().value, {
+      leaseRoot: path.join(repoCacheBase(), "leases"),
+      worktree: resolved.worktree
+    }).then(() => entry.context.javaIndex?.reconcile(generation.snapshot().value)).catch(() => undefined);
     // Store the readiness promise; the freshness barrier (Task 10) waits on it
     // only within the request budget, so a slow initial scan never blocks here.
     entry.ready = coordinator.start();
     this.runtimes.set(resolved.repoRoot, entry);
     return entry;
+  }
+
+  /**
+   * Maps one coordinator batch onto the Java index's own refresh/reconcile
+   * contract (Task 20 Step 7). A storm or a build-file change routes to a
+   * background reconcile rather than a per-path foreground refresh, matching
+   * how the batch is already handled for SourceIndex/freshness. A listener
+   * throw here is caught by RepoChangeCoordinator's own per-listener catch,
+   * which marks the generation dirty for the next request's retry - the same
+   * treatment a SourceIndex failure already gets.
+   */
+  private async applyBatchToJavaIndex(
+    javaIndex: JavaIndexClient | undefined,
+    batch: RepoChangeBatch
+  ): Promise<void> {
+    if (!javaIndex) return;
+    if (batch.storm || batch.changes.some(change => change.kind === "BUILD_CHANGE")) {
+      await javaIndex.reconcile(batch.generation);
+      return;
+    }
+    const changed: string[] = [];
+    const deleted: string[] = [];
+    for (const change of batch.changes) {
+      if (change.kind === "JAVA_ADD" || change.kind === "JAVA_CHANGE") changed.push(change.absolutePath);
+      else if (change.kind === "JAVA_DELETE") deleted.push(change.absolutePath);
+    }
+    if (changed.length > 0 || deleted.length > 0) {
+      await javaIndex.refresh(batch.generation, changed, deleted);
+    }
   }
 
   private refreshResource(entry: RuntimeEntry): void {
@@ -608,6 +656,7 @@ function createRuntime(resolved: ResolvedRepo, leases: CrossProcessLeaseStore): 
   const session = new JdtlsSession(resolved.repoRoot, resolved.aliases, undefined, undefined, leases, resolved.worktree);
   const sourceIndex = new SourceIndex(resolved.repoRoot);
   const router = new AgentRouter(resolved.repoRoot, session, sourceIndex);
+  const javaIndex = new JavaIndexClient(resolved.repoRoot, repoCacheRoot(resolved.repoRoot));
   return {
     repoRoot: resolved.repoRoot,
     rootSource: resolved.rootSource,
@@ -618,7 +667,8 @@ function createRuntime(resolved: ResolvedRepo, leases: CrossProcessLeaseStore): 
     worktree: resolved.worktree,
     session,
     sourceIndex,
-    router
+    router,
+    javaIndex
   };
 }
 

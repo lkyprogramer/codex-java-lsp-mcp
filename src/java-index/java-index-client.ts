@@ -18,8 +18,15 @@ import {
   validateTypeFactsArray,
   validateTypeLookup,
   type JavaIndexCommand,
-  type JavaIndexValueValidator
+  type JavaIndexValueValidator,
+  type JavaIndexWorktreeIdentity
 } from "./worker-protocol.js";
+
+export type JavaIndexOpenOptions = {
+  /** Absent => the worker never acquires a machine-level sweep lease. */
+  leaseRoot?: string;
+  worktree?: JavaIndexWorktreeIdentity;
+};
 
 export interface WorkerLike {
   postMessage(value: unknown): void;
@@ -58,6 +65,7 @@ export class JavaIndexClient {
   }>();
   private restartCount = 0;
   private lastKnownStatus: JavaIndexStatus = emptyStatus();
+  private openOptions: JavaIndexOpenOptions = {};
 
   constructor(
     private readonly repoRoot: string,
@@ -65,13 +73,14 @@ export class JavaIndexClient {
     private readonly createWorker: () => WorkerLike = defaultWorkerFactory
   ) {}
 
-  async open(generation: number): Promise<JavaIndexStatus> {
+  async open(generation: number, options: JavaIndexOpenOptions = {}): Promise<JavaIndexStatus> {
     if (this.worker || this.state !== "NEW") {
       throw new JavaIntelligenceError(
         "INDEX_PARTIAL",
         `Java index client cannot open from state ${this.state}`
       );
     }
+    this.openOptions = options;
     return this.spawnAndOpen(generation);
   }
 
@@ -178,7 +187,14 @@ export class JavaIndexClient {
     this.state = "OPENING";
     try {
       const status = await this.request(
-        { type: "OPEN", repoRoot: this.repoRoot, cacheDir: this.cacheDir, generation },
+        {
+          type: "OPEN",
+          repoRoot: this.repoRoot,
+          cacheDir: this.cacheDir,
+          generation,
+          ...(this.openOptions.leaseRoot ? { leaseRoot: this.openOptions.leaseRoot } : {}),
+          ...(this.openOptions.worktree ? { worktree: this.openOptions.worktree } : {})
+        },
         validateJavaIndexStatus
       );
       this.state = status.state;

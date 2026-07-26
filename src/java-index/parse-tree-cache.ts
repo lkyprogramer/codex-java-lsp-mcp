@@ -96,12 +96,33 @@ function pointAt(text: string, index: number): JavaPoint {
   return { row, column: index - lastNewlineIndex - 1 };
 }
 
+// Task 20 Step 4a's dynamic background-sweep budget: a machine running several
+// concurrent MCP runtimes must shrink each one's parse-tree LRU so their sum
+// stays reasonable, while a lone runtime keeps the full default. An explicit
+// override always wins, since the operator has more information than any
+// runtime-count heuristic.
+export function effectiveParseTreeSourceBudget(
+  configuredBytes: number | undefined,
+  activeMachineRuntimes: number
+): number {
+  if (configuredBytes) return configuredBytes;
+  if (activeMachineRuntimes >= 3) return 24 * 1024 * 1024;
+  if (activeMachineRuntimes >= 2) return 32 * 1024 * 1024;
+  return 64 * 1024 * 1024;
+}
+
 export class ParseTreeCache {
   readonly metrics: ParseTreeCacheMetrics = { incrementalParseHits: 0, fullParseCount: 0, evictions: 0 };
   private readonly entries = new Map<string, CachedParseTree>();
   private totalSourceBytes = 0;
 
   constructor(readonly options: ParseTreeCacheOptions = DEFAULT_PARSE_TREE_CACHE_OPTIONS) {}
+
+  /** Applied before starting a background sweep chunk, not on every parser callback (Step 4a). */
+  setMaxSourceBytes(bytes: number): void {
+    this.options.maxSourceBytes = bytes;
+    this.evictIfNeeded();
+  }
 
   get(file: string): CachedParseTree | undefined {
     const entry = this.entries.get(file);

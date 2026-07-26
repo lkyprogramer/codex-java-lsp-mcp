@@ -5,6 +5,7 @@ import { extractFromParsedTree, type ExtractJavaInput } from "./ast-extractor.js
 import {
   ParseTreeCache,
   computeSingleEdit,
+  effectiveParseTreeSourceBudget,
   refreshParseTree,
   type ParseTreeCacheOptions
 } from "./parse-tree-cache.js";
@@ -222,4 +223,34 @@ test("incremental facts equal clean full-parse facts", async () => {
   const freshFacts = extractFromParsedTree(baseInput({ content: edited, relativePath }), freshTree);
 
   assert.deepEqual(incrementalFacts, freshFacts);
+});
+
+test("effectiveParseTreeSourceBudget shrinks as active machine runtimes grow", () => {
+  assert.equal(effectiveParseTreeSourceBudget(undefined, 0), 64 * 1024 * 1024);
+  assert.equal(effectiveParseTreeSourceBudget(undefined, 1), 64 * 1024 * 1024);
+  assert.equal(effectiveParseTreeSourceBudget(undefined, 2), 32 * 1024 * 1024);
+  assert.equal(effectiveParseTreeSourceBudget(undefined, 3), 24 * 1024 * 1024);
+  assert.equal(effectiveParseTreeSourceBudget(undefined, 9), 24 * 1024 * 1024);
+});
+
+test("an explicit configured byte budget always wins over the runtime-count heuristic", () => {
+  assert.equal(effectiveParseTreeSourceBudget(10 * 1024 * 1024, 3), 10 * 1024 * 1024);
+  assert.equal(effectiveParseTreeSourceBudget(10 * 1024 * 1024, 0), 10 * 1024 * 1024);
+});
+
+test("ParseTreeCache.setMaxSourceBytes shrinks the budget and evicts over the new limit", async () => {
+  const cache = new ParseTreeCache({
+    maxEntries: 128,
+    maxSourceBytes: 1024,
+    maxSingleFileBytes: 1024,
+    maxIncrementalChangeRatio: 0.25
+  });
+  const backend = await createJavaParserBackend();
+  refreshParseTree(cache, backend, "A.java", "class A {}".padEnd(300, " "));
+  refreshParseTree(cache, backend, "B.java", "class B {}".padEnd(300, " "));
+  assert.equal(cache.size(), 2);
+
+  cache.setMaxSourceBytes(200);
+
+  assert.ok(cache.size() < 2, "at least one entry must be evicted once the budget shrinks below both entries");
 });
