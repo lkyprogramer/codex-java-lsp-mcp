@@ -18,12 +18,23 @@ import { createJavaParserBackend, type JavaParserBackend } from "./java-parser-b
 import { extractFromParsedTree, type ExtractJavaInput } from "./ast-extractor.js";
 import { computeBuildFingerprint, computeExtractorVersion } from "./build-fingerprint.js";
 import { CoverageTracker } from "./coverage.js";
-import { computeManifestFingerprint, discoverJavaFiles, scanCurrentManifest, type DiscoveredJavaFile } from "./manifest.js";
+import {
+  computeCurrentManifestFingerprint,
+  computeManifestFingerprint,
+  discoverJavaFiles,
+  scanCurrentManifest,
+  type DiscoveredJavaFile
+} from "./manifest.js";
 import { effectiveParseTreeSourceBudget, ParseTreeCache, refreshParseTree } from "./parse-tree-cache.js";
 import { buildStaticEdges, resolveFileRefs } from "./edge-builder.js";
 import { JavaIndexStore } from "./index-store.js";
 import { JavaNameResolver, buildTypeRegistryView, type TypeRegistryView } from "./name-resolver.js";
-import { loadSnapshot, writeSnapshotAtomic, type JavaIndexSnapshotV2, type SnapshotIdentity } from "./snapshot.js";
+import {
+  loadSnapshot,
+  writeSnapshotIfManifestCurrent,
+  type JavaIndexSnapshotV2,
+  type SnapshotIdentity
+} from "./snapshot.js";
 import { STABLE_ID_VERSION } from "./stable-id.js";
 import { WorktreeSnapshotSeeder } from "./worktree-snapshot-seeder.js";
 import type { JavaIndexStatus, JavaSourceSet, JavaTypeLookupResult, SourceRootCoverage, WorktreeSeedStatus } from "./index-types.js";
@@ -88,6 +99,7 @@ type BackgroundSweep = {
   generation: number;
   remaining: DiscoveredJavaFile[];
   rootsSeen: Set<string>;
+  parsedFiles: number;
   leaseHandle?: LeaseHandle;
 };
 let backgroundSweep: BackgroundSweep | undefined;
@@ -323,15 +335,6 @@ async function cleanupLegacyCacheOnce(cacheDir: string): Promise<void> {
   await writeFile(markerPath, new Date().toISOString()).catch(() => undefined);
 }
 
-function manifestEntriesFromStore(): { relativePath: string; contentHash: string; sourceRoot: string }[] {
-  if (!store) return [];
-  return [...store.filesByPath.values()].map(file => ({
-    relativePath: file.relativePath,
-    contentHash: file.contentHash,
-    sourceRoot: file.sourceRoot
-  }));
-}
-
 // Debounced (Step 5): a burst of foreground refreshes coalesces into one
 // write, `SNAPSHOT_FLUSH_DEBOUNCE_MS` after the last one settles.
 function scheduleSnapshotFlush(): void {
@@ -377,17 +380,11 @@ async function flushSnapshotNow(): Promise<void> {
       ...data
     };
     try {
-      const bytes = await writeSnapshotAtomic(target, value, {
-        // Cheap in-memory re-check (no disk re-scan): catches a REFRESH or
-        // sweep chunk that mutated the store while this write was being
-        // serialized/compressed, aborting the rename rather than publishing a
-        // snapshot that is already stale the instant it lands.
-        beforeRename: async () => {
-          if (computeManifestFingerprint(manifestEntriesFromStore()) !== manifestFingerprint) {
-            throw new Error("store changed before publish");
-          }
-        }
-      });
+      const bytes = await writeSnapshotIfManifestCurrent(
+        target,
+        value,
+        () => computeCurrentManifestFingerprint(repoRoot, currentLayout)
+      );
       status = { ...status, snapshotBytes: bytes };
     } catch {
       snapshotDirty = true;
@@ -598,13 +595,13 @@ async function attemptSiblingSeed(
   buildFingerprint: string,
   generation: number
 ): Promise<WorktreeSeedStatus> {
-  if (!layout || !store) return { attempted: false, reusedFiles: 0, completion: "NOT_ATTEMPTED" };
+  if (!layout || !store) return emptyWorktreeSeedStatus("NOT_ATTEMPTED");
   try {
     const seedIdentity = { extractorVersion: computeExtractorVersion(), stableIdVersion: STABLE_ID_VERSION, buildFingerprint };
     const seeder = new WorktreeSnapshotSeeder();
     const candidate = await seeder.findCandidate(currentWorktreeIdentity(), seedIdentity, siblingCacheBase);
     if (!candidate) {
-      return { attempted: true, reusedFiles: 0, completion: "NO_VALID_SOURCE" };
+      return { ...emptyWorktreeSeedStatus("NO_VALID_SOURCE"), attempted: true };
     }
     const seeded = await seeder.seedValidatedFacts(candidate, seedIdentity, repoRoot, layout, generation);
     store = seeded.store;
@@ -615,12 +612,30 @@ async function attemptSiblingSeed(
       attempted: true,
       sourceRepoHash: seeded.result.sourceRepoHash,
       reusedFiles: seeded.result.reusedFiles,
+      dirtyFiles: seeded.result.dirtyPaths.length,
+      relinkFiles: seeded.result.relinkPaths.length,
+      droppedCrossFileEdges: seeded.result.droppedCrossFileEdges,
+      manifestValidationMs: seeded.result.manifestValidationMs,
+      deltaParsedFiles: 0,
       completion: "SEEDED_DEGRADED"
     };
   } catch {
     store = new JavaIndexStore();
-    return { attempted: true, reusedFiles: 0, completion: "FAILED" };
+    return { ...emptyWorktreeSeedStatus("FAILED"), attempted: true };
   }
+}
+
+function emptyWorktreeSeedStatus(completion: WorktreeSeedStatus["completion"]): WorktreeSeedStatus {
+  return {
+    attempted: false,
+    reusedFiles: 0,
+    dirtyFiles: 0,
+    relinkFiles: 0,
+    droppedCrossFileEdges: 0,
+    manifestValidationMs: 0,
+    deltaParsedFiles: 0,
+    completion
+  };
 }
 
 async function beginBackgroundSweep(generation: number): Promise<void> {
@@ -642,7 +657,7 @@ async function beginBackgroundSweep(generation: number): Promise<void> {
     byRoot.set(file.sourceRoot, (byRoot.get(file.sourceRoot) ?? 0) + 1);
   }
   for (const [root, count] of byRoot) coverage.begin(root, generation, count);
-  backgroundSweep = { generation, remaining: discovered.slice(), rootsSeen: new Set(byRoot.keys()) };
+  backgroundSweep = { generation, remaining: discovered.slice(), rootsSeen: new Set(byRoot.keys()), parsedFiles: 0 };
   startBackgroundLoop();
 }
 
@@ -687,9 +702,17 @@ async function processBackgroundChunk(sweep: BackgroundSweep): Promise<void> {
     }
   }
   sweep.remaining.splice(0, chunk.length);
+  sweep.parsedFiles += chunk.length;
   await sweep.leaseHandle.heartbeat();
   if (sweep.remaining.length === 0) {
     for (const root of sweep.rootsSeen) coverage.complete(root, sweep.generation);
+    if (worktreeSeedStatus?.completion === "SEEDED_DEGRADED") {
+      worktreeSeedStatus = {
+        ...worktreeSeedStatus,
+        deltaParsedFiles: sweep.parsedFiles,
+        completion: "RECONCILED_COMPLETE"
+      };
+    }
     await sweep.leaseHandle.release();
     // Step 5: a full sweep's completion forces an immediate (non-debounced)
     // flush, since it is exactly the moment the persisted snapshot goes from

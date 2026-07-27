@@ -30,6 +30,7 @@ type BuildImpactResultInput = {
     readonly rgCache: Record<string, unknown>;
     readonly sourceFacts: Record<string, unknown>;
     readonly freshness: Record<string, unknown>;
+    readonly javaIndex: Record<string, unknown>;
   };
 };
 
@@ -79,6 +80,7 @@ export function buildImpactResult(input: BuildImpactResultInput): ImpactResult {
       rgCache: input.metrics.rgCache,
       sourceFacts: input.metrics.sourceFacts,
       freshness: input.metrics.freshness,
+      javaIndex: input.metrics.javaIndex,
       outputBytes: 0
     }
   };
@@ -140,6 +142,7 @@ export function applyVerbosity(payload: ImpactResult, verbosity: ImpactVerbosity
     semantic: slimSemantic(payload.metrics.semantic),
     // Freshness is a small correctness signal; keep it in every verbosity.
     freshness: payload.metrics.freshness,
+    javaIndex: slimJavaIndex(payload.metrics.javaIndex),
     outputBytes: payload.metrics.outputBytes
   });
 }
@@ -156,6 +159,18 @@ export function updateOutputBytes(payload: ImpactResult): void {
 
 function compact(value: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined));
+}
+
+function slimJavaIndex(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+  const javaIndex = value as Record<string, unknown>;
+  return compact({
+    state: javaIndex.state,
+    files: javaIndex.files,
+    coverage: javaIndex.coverage
+  });
 }
 
 function slimSemantic(value: unknown): Record<string, unknown> | undefined {

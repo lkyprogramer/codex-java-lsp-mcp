@@ -1,8 +1,12 @@
+// input: Anchors, JavaIndex facts, routing policy, and optional JDT edge store.
+// output: Candidate map mutations for type graph, import graph, and persisted semantic edges.
+// pos: Static candidate collectors for AgentRouter (Task 22: async JavaIndex V2).
 import path from "node:path";
 import { classifyPath } from "../repo-layout.js";
 import type { EdgeStore, SemanticEdgeKind } from "../edge-store.js";
 import type { RoutingPolicy } from "../routing-policy.js";
-import type { JavaSourceFacts, SourceIndex } from "../source-index.js";
+import type { RouterIndex } from "../java-index/router-java-index.js";
+import type { JavaSourceFacts } from "../java-index/router-facts.js";
 import type { CandidateFile, ImpactOptions, ResolvedAnchor } from "../agent-types.js";
 import {
   breakdown,
@@ -22,8 +26,9 @@ type CollectCandidatesInput = {
   readonly candidates: Map<string, CandidateFile>;
   readonly anchors: readonly ResolvedAnchor[];
   readonly options: ImpactOptions;
-  readonly sourceIndex: SourceIndex;
+  readonly javaIndex: RouterIndex;
   readonly routingPolicy: RoutingPolicy;
+  readonly generation?: number;
 };
 
 type CollectImportGraphInput = CollectCandidatesInput & {
@@ -58,35 +63,35 @@ export function candidateFromAnchor(anchor: ResolvedAnchor): CandidateFile {
   };
 }
 
-export function collectTypeGraphCandidates(input: CollectCandidatesInput): void {
-  const { candidates, anchors, options, sourceIndex, routingPolicy } = input;
+export async function collectTypeGraphCandidates(input: CollectCandidatesInput): Promise<void> {
+  const { candidates, anchors, options, javaIndex, routingPolicy } = input;
   for (const anchor of anchors) {
     if (!shouldUseTypeGraph(anchor)) {
       continue;
     }
     const typeName = anchor.className || path.basename(anchor.absolutePath, ".java");
-    for (const facts of sourceIndex.findImplementers(typeName).slice(0, 20)) {
+    for (const facts of (await javaIndex.findImplementers(typeName, 20))) {
       const candidate = candidateFromFacts(facts, scoreBase(routingPolicy, "semantic", facts, anchor, options) + 70, "typeGraph");
       mergeCandidate(candidates, candidate);
     }
   }
 }
 
-export function collectImportGraphCandidates(input: CollectImportGraphInput): void {
-  const { candidates, anchors, options, sourceIndex, routingPolicy, metrics } = input;
+export async function collectImportGraphCandidates(input: CollectImportGraphInput): Promise<void> {
+  const { candidates, anchors, options, javaIndex, routingPolicy, metrics, generation } = input;
   if (options.semanticPolicy === "required") {
     return;
   }
   for (const anchor of anchors) {
     let anchorFacts: JavaSourceFacts;
     try {
-      anchorFacts = sourceIndex.factsFor(anchor.absolutePath);
+      anchorFacts = await javaIndex.factsFor(anchor.absolutePath, generation);
     } catch {
       continue;
     }
     metrics.scannedAnchors += 1;
     const localImports = projectLocalImports(anchorFacts.imports, anchorFacts.packageName);
-    for (const facts of sourceIndex.findTypeDefinitions(localImports).slice(0, 40)) {
+    for (const facts of await javaIndex.findTypeDefinitions(localImports, 40)) {
       if (facts.absolutePath === anchor.absolutePath) {
         continue;
       }
@@ -99,7 +104,7 @@ export function collectImportGraphCandidates(input: CollectImportGraphInput): vo
     }
     const typeName = anchor.className || path.basename(anchor.absolutePath, ".java");
     const importerLookupName = anchorFacts.packageName ? `${anchorFacts.packageName}.${typeName}` : typeName;
-    for (const facts of sourceIndex.findImporters(importerLookupName).slice(0, 20)) {
+    for (const facts of await javaIndex.findImporters(importerLookupName, 20)) {
       if (facts.absolutePath === anchor.absolutePath) {
         continue;
       }

@@ -1,7 +1,15 @@
+// input: Impact anchor coordinates plus JavaIndex facts.
+// output: ResolvedAnchor with profile inference and symbol metadata.
+// pos: Async anchor resolution for the AgentRouter impact pipeline.
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { normalizeRepoFile } from "../repo-layout.js";
-import type { JavaSourceFacts, SourceIndex } from "../source-index.js";
+import type { RouterIndex } from "../java-index/router-java-index.js";
+import {
+  anchorToSourceFacts,
+  fallbackSourceFacts,
+  type JavaSourceFacts
+} from "../java-index/router-facts.js";
 import type {
   ImpactAnchorInput,
   ImpactProfile,
@@ -11,17 +19,46 @@ import type {
 
 type ResolveAnchorInput = {
   readonly repoRoot: string;
-  readonly sourceIndex: SourceIndex;
+  readonly javaIndex: RouterIndex;
   readonly input: ImpactAnchorInput;
   readonly requested: ImpactProfile;
   readonly id: string;
+  readonly generation?: number;
 };
 
-export function resolveAnchor(input: ResolveAnchorInput): ResolvedAnchor {
+export async function resolveAnchor(input: ResolveAnchorInput): Promise<ResolvedAnchor> {
   const absolutePath = normalizeRepoFile(input.repoRoot, input.input.file);
-  const facts = input.sourceIndex.factsFor(absolutePath);
-  const method = input.sourceIndex.methodAt(absolutePath, input.input.line);
-  const symbolName = tokenAtColumn(absolutePath, input.input.line, input.input.column) || method?.name || facts.typeName || path.basename(absolutePath, ".java");
+  const generation = input.generation ?? 0;
+  let facts: JavaSourceFacts;
+  let methodName: string | undefined;
+  let kind = "Type";
+  try {
+    await input.javaIndex.ensureFresh([absolutePath], generation);
+    const anchor = await input.javaIndex.queryAnchor(absolutePath, input.input.line, input.input.column);
+    if (anchor) {
+      facts = anchorToSourceFacts(input.repoRoot, anchor);
+      methodName = anchor.method?.name;
+      kind = anchor.symbolKind === "METHOD" || anchor.symbolKind === "CONSTRUCTOR"
+        ? "Method"
+        : anchor.type?.kind || facts.kind || "Type";
+    } else {
+      facts = await input.javaIndex.factsFor(absolutePath, generation);
+      const method = await input.javaIndex.methodAt(absolutePath, input.input.line, generation);
+      methodName = method?.name;
+      kind = method ? "Method" : facts.kind || "Type";
+    }
+  } catch {
+    // Degraded index: keep impact alive with file/token fallback.
+    const token = tokenAtColumn(absolutePath, input.input.line, input.input.column);
+    facts = fallbackSourceFacts(input.repoRoot, absolutePath, token);
+    methodName = undefined;
+    kind = "Type";
+  }
+
+  const symbolName = tokenAtColumn(absolutePath, input.input.line, input.input.column)
+    || methodName
+    || facts.typeName
+    || path.basename(absolutePath, ".java");
   const profile = input.requested === "auto" ? inferProfile(facts, input.input.role) : input.requested;
   return {
     id: input.id,
@@ -35,10 +72,10 @@ export function resolveAnchor(input: ResolveAnchorInput): ResolvedAnchor {
     role: input.input.role,
     profile,
     symbolName,
-    methodName: method?.name,
+    methodName,
     className: facts.typeName,
     factSource: facts.factSource,
-    kind: method ? "Method" : facts.kind || "Type"
+    kind
   };
 }
 

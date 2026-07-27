@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { AgentRouter } from "./agent-router/index.js";
 import { SourceIndex } from "./source-index.js";
+import { wrapSourceIndex } from "./source-index-router-adapter.js";
 import { probeLayout } from "./layout-probe.js";
 import { canonicalPath } from "./path-utils.js";
 import type { RepoChangeBatch } from "./repo-generation.js";
@@ -62,7 +63,7 @@ function impactOptions(root: string, anchor: string): ImpactOptions {
 test("a rename evicts the old path so the router stops surfacing it", async () => {
   const { root, anchor, oldFile } = buildRepo();
   const sourceIndex = new SourceIndex(root);
-  const router = new AgentRouter(root, fakeSession() as never, sourceIndex);
+  const router = new AgentRouter(root, fakeSession() as never, wrapSourceIndex(sourceIndex));
   sourceIndex.factsFor(anchor);
   sourceIndex.factsFor(oldFile);
 

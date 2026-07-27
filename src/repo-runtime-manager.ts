@@ -12,6 +12,7 @@ import {
 } from "./cross-process-lease.js";
 import { JdtlsSession, type JdtlsLifecycleState } from "./jdtls-session.js";
 import { JavaIndexClient } from "./java-index/java-index-client.js";
+import { RouterJavaIndex, type RouterIndex } from "./java-index/router-java-index.js";
 import { LayoutManager, type LayoutSource } from "./layout-manager.js";
 import { RepoChangeCoordinator } from "./repo-change-coordinator.js";
 import { GenerationClock, type RepoChangeBatch } from "./repo-generation.js";
@@ -29,8 +30,16 @@ import {
   type SemanticPolicy
 } from "./runtime/request-context.js";
 import { SourceIndex } from "./source-index.js";
+import { wrapSourceIndex } from "./source-index-router-adapter.js";
 import type { ToolContext } from "./tools/context.js";
 import { touchRepoCache } from "./worktree-cache-cleanup.js";
+
+/**
+ * Step 7 (Task 22): keeps V1 and V2 wired side by side so the benchmark gate
+ * (R_read_must, recall/P_read, P95, output bytes vs V1) can be measured
+ * before source-index.ts and this flag are deleted (Step 8).
+ */
+const JAVA_INDEX_BACKEND: "v1" | "v2" = process.env.JAVA_LSP_INDEX_BACKEND === "v1" ? "v1" : "v2";
 
 export type RequestOptionsInput = {
   mode: RequestMode;
@@ -70,12 +79,6 @@ export type ManagedToolContext = ToolContext & {
   aliases: string[];
   layoutProfile: string;
   lsp: ResolvedRepo["lsp"];
-  /**
-   * Optional: only `createRuntime` (the production factory) constructs one.
-   * Test fixtures that inject their own `runtimeFactory` may omit it, since
-   * nothing yet requires it (Task 22 wires AgentRouter to query it).
-   */
-  javaIndex?: JavaIndexClient;
 };
 
 /**
@@ -275,7 +278,7 @@ export class RepoRuntimeManager {
         const generationAtStart = entry.generation.snapshot().value;
         try {
           await entry.context.sourceIndex.reconcile(entry.layout.current(), generationAtStart);
-          await entry.context.javaIndex?.reconcile(generationAtStart).catch(() => undefined);
+          await entry.context.javaIndexClient?.reconcile(generationAtStart).catch(() => undefined);
           entry.generation.clearDirty(generationAtStart);
         } catch {
           // Reconcile failure must not fail the request: output coverage stays
@@ -358,7 +361,7 @@ export class RepoRuntimeManager {
     if (!entry) return;
     await this.stopEntry(entry);
     await entry.coordinator.close();
-    await entry.context.javaIndex?.close().catch(() => undefined);
+    await entry.context.javaIndexClient?.close().catch(() => undefined);
     await entry.runtimeLease?.release();
     entry.runtimeLease = undefined;
     // This process's PID would otherwise keep looking alive to the janitor's
@@ -391,7 +394,7 @@ export class RepoRuntimeManager {
     // (and re-closing the already-closed ones) is safe either way.
     await Promise.all([...this.runtimes.values()].map(async entry => {
       await entry.coordinator.close();
-      await entry.context.javaIndex?.close().catch(() => undefined);
+      await entry.context.javaIndexClient?.close().catch(() => undefined);
       await entry.runtimeLease?.release();
       entry.runtimeLease = undefined;
       touchRepoCache(entry.context.repoRoot, { ownerPid: undefined, ownerToken: undefined });
@@ -455,17 +458,32 @@ export class RepoRuntimeManager {
       }
     });
     // Register invalidation before start() so the first event cannot be lost.
+    // The coordinator starts before JavaIndex OPEN because sibling snapshot
+    // validation has a real filesystem race: batches observed while OPEN is
+    // reading its target manifest are buffered here, then applied before this
+    // runtime becomes visible to a request.
+    const bufferedJavaIndexBatches: RepoChangeBatch[] = [];
+    let javaIndexReady = entry.context.javaIndexClient === undefined;
     coordinator.onBatch(async batch => {
       entry.context.router.onRepoChanged(batch);
       entry.context.sourceIndex.applyChanges(batch);
       entry.context.session.invalidateForRepoChanges(batch);
-      await this.applyBatchToJavaIndex(entry.context.javaIndex, batch);
+      if (!javaIndexReady) {
+        bufferedJavaIndexBatches.push(batch);
+        return;
+      }
+      await this.applyBatchToJavaIndex(entry.context.javaIndexClient, batch);
     });
+    // Do not await the watcher-ready scan here: requests retain their bounded
+    // readiness barrier below, while OPEN already gets a live coordinator and
+    // can flush any events that have arrived so far.
+    entry.ready = coordinator.start();
     // Best-effort: chokidar's initial scan (ignoreInitial: true) never emits
     // an onBatch for pre-existing files, so the Java index's first full
     // discovery is kicked off explicitly here rather than waiting for one.
     // A failed open must not fail runtime creation; the client self-degrades.
-    await entry.context.javaIndex?.open(generation.snapshot().value, {
+    const validationGeneration = generation.snapshot().value;
+    await entry.context.javaIndexClient?.open(validationGeneration, {
       leaseRoot: path.join(repoCacheBase(), "leases"),
       worktree: resolved.worktree,
       siblingCacheBase: repoCacheBase()
@@ -474,6 +492,16 @@ export class RepoRuntimeManager {
       // (possibly higher) generation; the repo's clock must never regress
       // behind facts the Java index has already verified as current.
       generation.rebaseAtLeast(openStatus.indexedGeneration);
+      javaIndexReady = true;
+      // Step 21a 4.8: replay batches observed during target manifest
+      // validation, then flush any event that arrived in the narrow gap. The
+      // batch's own generation is preserved, so only its changed/deleted Java
+      // paths are refreshed; no stale seeded fact reaches a caller.
+      for (const batch of bufferedJavaIndexBatches.splice(0)) {
+        await this.applyBatchToJavaIndex(entry.context.javaIndexClient, batch);
+      }
+      await coordinator.flushNow();
+      const generationChangedDuringSeed = generation.snapshot().value !== validationGeneration;
       // A root with a nonzero failed/recovered count restores COMPLETE too
       // (its content is provably unchanged from a prior parse that had
       // issues), but only a fresh coverage.begin() - which only a
@@ -487,11 +515,16 @@ export class RepoRuntimeManager {
           && entry_.failedFiles === 0
           && entry_.recoveredFiles === 0
         );
-      if (!fullyRestored) await entry.context.javaIndex?.reconcile(generation.snapshot().value);
-    }).catch(() => undefined);
-    // Store the readiness promise; the freshness barrier (Task 10) waits on it
-    // only within the request budget, so a slow initial scan never blocks here.
-    entry.ready = coordinator.start();
+      if (!fullyRestored || generationChangedDuringSeed) {
+        await entry.context.javaIndexClient?.reconcile(generation.snapshot().value);
+      }
+    }).catch(() => {
+      // An OPEN failure remains non-fatal, but watchers must not retain every
+      // later batch forever. Subsequent batch delivery will self-degrade the
+      // unavailable client through the coordinator's normal listener path.
+      javaIndexReady = true;
+      bufferedJavaIndexBatches.length = 0;
+    });
     this.runtimes.set(resolved.repoRoot, entry);
     return entry;
   }
@@ -675,8 +708,13 @@ export class RepoRuntimeManager {
 function createRuntime(resolved: ResolvedRepo, leases: CrossProcessLeaseStore): ManagedToolContext {
   const session = new JdtlsSession(resolved.repoRoot, resolved.aliases, undefined, undefined, leases, resolved.worktree);
   const sourceIndex = new SourceIndex(resolved.repoRoot);
-  const router = new AgentRouter(resolved.repoRoot, session, sourceIndex);
-  const javaIndex = new JavaIndexClient(resolved.repoRoot, repoCacheRoot(resolved.repoRoot));
+  const javaIndexClient = new JavaIndexClient(resolved.repoRoot, repoCacheRoot(resolved.repoRoot));
+  const routerJavaIndex = new RouterJavaIndex(resolved.repoRoot, javaIndexClient);
+  // The V2 worker (javaIndexClient) always runs so its coverage/snapshot facts
+  // stay warm regardless of backend; only the router-facing answer source
+  // switches on JAVA_LSP_INDEX_BACKEND (Step 7 benchmark gate).
+  const javaIndex: RouterIndex = JAVA_INDEX_BACKEND === "v1" ? wrapSourceIndex(sourceIndex) : routerJavaIndex;
+  const router = new AgentRouter(resolved.repoRoot, session, javaIndex);
   return {
     repoRoot: resolved.repoRoot,
     rootSource: resolved.rootSource,
@@ -688,7 +726,8 @@ function createRuntime(resolved: ResolvedRepo, leases: CrossProcessLeaseStore): 
     session,
     sourceIndex,
     router,
-    javaIndex
+    javaIndex,
+    javaIndexClient
   };
 }
 

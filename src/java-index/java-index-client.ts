@@ -103,6 +103,15 @@ export class JavaIndexClient {
     return status;
   }
 
+  /**
+   * Request-path foreground refresh for the given files at `generation`.
+   * Empty input is a no-op so callers can always pair ensureFresh with a query.
+   */
+  async ensureFresh(files: string[], generation: number): Promise<void> {
+    if (files.length === 0) return;
+    await this.refresh(generation, files, []);
+  }
+
   async reconcile(generation: number): Promise<JavaIndexStatus> {
     await this.ensureOpen();
     const status = await this.request({ type: "RECONCILE", generation }, validateJavaIndexStatus);

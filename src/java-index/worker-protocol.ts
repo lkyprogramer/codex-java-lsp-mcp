@@ -556,17 +556,27 @@ function validateJavaFileBundle(value: unknown, context: string): JavaFileBundle
   };
 }
 
-const WORKTREE_SEED_COMPLETIONS = ["NOT_ATTEMPTED", "SEEDED_DEGRADED", "NO_VALID_SOURCE", "FAILED"] as const;
+const WORKTREE_SEED_COMPLETIONS = ["NOT_ATTEMPTED", "SEEDED_DEGRADED", "RECONCILED_COMPLETE", "NO_VALID_SOURCE", "FAILED"] as const;
 
 function validateWorktreeSeedStatus(value: unknown, context: string): WorktreeSeedStatus {
   const source = record(value, context);
   if (!isBoolean(source.attempted)) invalid(context, "attempted");
   if (!isNumber(source.reusedFiles)) invalid(context, "reusedFiles");
+  if (!isNumber(source.dirtyFiles)) invalid(context, "dirtyFiles");
+  if (!isNumber(source.relinkFiles)) invalid(context, "relinkFiles");
+  if (!isNumber(source.droppedCrossFileEdges)) invalid(context, "droppedCrossFileEdges");
+  if (!isNumber(source.manifestValidationMs)) invalid(context, "manifestValidationMs");
+  if (!isNumber(source.deltaParsedFiles)) invalid(context, "deltaParsedFiles");
   if (!isOneOf(source.completion, WORKTREE_SEED_COMPLETIONS)) invalid(context, "completion");
   return {
     attempted: source.attempted,
     ...withOptional("sourceRepoHash", optional(source.sourceRepoHash, `${context}.sourceRepoHash`, isAssertString)),
     reusedFiles: source.reusedFiles,
+    dirtyFiles: source.dirtyFiles,
+    relinkFiles: source.relinkFiles,
+    droppedCrossFileEdges: source.droppedCrossFileEdges,
+    manifestValidationMs: source.manifestValidationMs,
+    deltaParsedFiles: source.deltaParsedFiles,
     completion: source.completion
   };
 }

@@ -1,6 +1,10 @@
+// input: Anchors, candidate map, and JavaIndex type/reference facts.
+// output: Type-reference and implementation-lookup candidates without rg scans.
+// pos: Async type-reference collector for AgentRouter (Task 22).
 import path from "node:path";
 import type { RoutingPolicy } from "../routing-policy.js";
-import type { JavaSourceFacts, SourceIndex } from "../source-index.js";
+import type { RouterIndex } from "../java-index/router-java-index.js";
+import type { JavaSourceFacts } from "../java-index/router-facts.js";
 import type { CandidateFile, ImpactOptions, ResolvedAnchor } from "../agent-types.js";
 import {
   candidateFromFacts,
@@ -29,12 +33,13 @@ type CollectTypeReferenceInput = {
   anchors: ResolvedAnchor[];
   options: ImpactOptions;
   metrics: TypeReferenceMetrics;
-  sourceIndex: SourceIndex;
+  javaIndex: RouterIndex;
   routingPolicy: RoutingPolicy;
+  generation?: number;
 };
 
-export function collectTypeReferenceCandidates(input: CollectTypeReferenceInput): void {
-  const { candidates, anchors, options, metrics, sourceIndex, routingPolicy } = input;
+export async function collectTypeReferenceCandidates(input: CollectTypeReferenceInput): Promise<void> {
+  const { candidates, anchors, options, metrics, javaIndex, routingPolicy, generation } = input;
   if (options.semanticPolicy === "required") {
     return;
   }
@@ -49,7 +54,7 @@ export function collectTypeReferenceCandidates(input: CollectTypeReferenceInput)
     const canUseReferenceOrderBonus = canReinforceExistingTypeReferences && anchor.profile === "controller";
     const typeName = anchor.className || path.basename(anchor.absolutePath, ".java");
     metrics.scannedPatterns += 1;
-    for (const facts of sourceIndex.findTypeReferences(typeName).slice(0, 20)) {
+    for (const facts of await javaIndex.findTypeReferences(typeName, 20)) {
       if (candidates.has(facts.absolutePath)) {
         metrics.skippedExisting += 1;
         continue;
@@ -58,9 +63,14 @@ export function collectTypeReferenceCandidates(input: CollectTypeReferenceInput)
       mergeCandidate(candidates, candidate);
       metrics.addedCandidates += 1;
     }
-    const anchorFacts = sourceIndex.factsFor(anchor.absolutePath);
+    let anchorFacts: JavaSourceFacts;
+    try {
+      anchorFacts = await javaIndex.factsFor(anchor.absolutePath, generation);
+    } catch {
+      continue;
+    }
     const methodFact = canReinforceExistingTypeReferences
-      ? sourceIndex.methodAt(anchor.absolutePath, anchor.line)
+      ? await javaIndex.methodAt(anchor.absolutePath, anchor.line, generation)
       : undefined;
     const methodTypes = methodFact
       ? unique([...methodFact.relations.map(relation => relation.typeName), ...methodFact.referencedTypes])
@@ -73,7 +83,7 @@ export function collectTypeReferenceCandidates(input: CollectTypeReferenceInput)
         referencedTypeOrder.set(simple, index);
       }
     });
-    const existingTypeNames = candidateTypeNames(sourceIndex, candidates);
+    const existingTypeNames = await candidateTypeNames(javaIndex, candidates, generation);
     const existingReferencedTypes = new Set(referencedTypes.map(simpleTypeName).filter(type => existingTypeNames.has(type)));
     if (canReinforceExistingTypeReferences) {
       for (const existing of [...candidates.values()]) {
@@ -82,7 +92,7 @@ export function collectTypeReferenceCandidates(input: CollectTypeReferenceInput)
         }
         let existingFacts: JavaSourceFacts;
         try {
-          existingFacts = sourceIndex.factsFor(existing.absolutePath);
+          existingFacts = await javaIndex.factsFor(existing.absolutePath, generation);
         } catch {
           continue;
         }
@@ -91,7 +101,7 @@ export function collectTypeReferenceCandidates(input: CollectTypeReferenceInput)
           const candidate = candidateFromFacts(existingFacts, scoreBase(routingPolicy, "semantic", existingFacts, anchor, options) + 55 + orderBonus, "typeReference");
           mergeCandidate(candidates, candidate);
           if (shouldLookupReferencedImplementers(existingFacts, options)) {
-            for (const implFacts of sourceIndex.findImplementers(existingFacts.typeName, true).slice(0, 8)) {
+            for (const implFacts of await javaIndex.findImplementers(existingFacts.typeName, 8, true)) {
               if (implementationLookupInScope(implFacts, anchor, options)) {
                 const implCandidate = candidateFromFacts(implFacts, scoreBase(routingPolicy, "semantic", implFacts, anchor, options) + 70, "typeGraph");
                 implCandidate.reasons = ["typeGraph:implementation-lookup"];
@@ -107,7 +117,7 @@ export function collectTypeReferenceCandidates(input: CollectTypeReferenceInput)
     if (missingTypes.length > 0) {
       metrics.scannedPatterns += 1;
     }
-    for (const facts of sourceIndex.findTypeDefinitions(missingTypes).slice(0, 20)) {
+    for (const facts of await javaIndex.findTypeDefinitions(missingTypes, 20)) {
       if (facts.absolutePath === anchor.absolutePath) {
         continue;
       }
@@ -120,7 +130,7 @@ export function collectTypeReferenceCandidates(input: CollectTypeReferenceInput)
       mergeCandidate(candidates, candidate);
       metrics.addedCandidates += 1;
       if (canReinforceExistingTypeReferences && facts.kind === "interface" && facts.typeName) {
-        for (const implFacts of sourceIndex.findImplementers(facts.typeName, true).slice(0, 8)) {
+        for (const implFacts of await javaIndex.findImplementers(facts.typeName, 8, true)) {
           mergeCandidate(candidates, candidateFromFacts(implFacts, scoreBase(routingPolicy, "semantic", implFacts, anchor, options) + 70, "typeGraph"));
         }
       }
@@ -128,14 +138,18 @@ export function collectTypeReferenceCandidates(input: CollectTypeReferenceInput)
   }
 }
 
-function candidateTypeNames(sourceIndex: SourceIndex, candidates: Map<string, CandidateFile>): Set<string> {
+async function candidateTypeNames(
+  javaIndex: RouterIndex,
+  candidates: Map<string, CandidateFile>,
+  generation?: number
+): Promise<Set<string>> {
   const typeNames = new Set<string>();
   for (const candidate of candidates.values()) {
     if (!candidate.absolutePath.endsWith(".java")) {
       continue;
     }
     try {
-      const typeName = sourceIndex.factsFor(candidate.absolutePath).typeName;
+      const typeName = (await javaIndex.factsFor(candidate.absolutePath, generation)).typeName;
       if (typeName) {
         typeNames.add(typeName);
       }

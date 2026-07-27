@@ -9,10 +9,17 @@ import { fileURLToPath } from "node:url";
 import { AgentRouter } from "./agent-router/index.js";
 import type { ImpactOptions } from "./agent-types.js";
 import { readRuntimeBuild } from "./build-info.js";
+import { JavaIndexClient } from "./java-index/java-index-client.js";
+import { RouterJavaIndex, type RouterIndex } from "./java-index/router-java-index.js";
+import { repoCacheRoot } from "./repo-layout.js";
 import { DeadlineBudget } from "./runtime/deadline-budget.js";
 import { createRequestContext, defaultDeadlineMs, MAX_REQUEST_DEADLINE_MS } from "./runtime/request-context.js";
 import { JdtlsSession } from "./jdtls-session.js";
 import { SourceIndex } from "./source-index.js";
+import { wrapSourceIndex } from "./source-index-router-adapter.js";
+
+/** Mirrors RepoRuntimeManager's Step 7 gate flag so this benchmark measures whichever backend the flag selects. */
+const JAVA_INDEX_BACKEND: "v1" | "v2" = process.env.JAVA_LSP_INDEX_BACKEND === "v1" ? "v1" : "v2";
 
 type WarmState = "cold-nolsp" | "cold-lsp" | "warm-auto" | "warm-required";
 type BenchmarkStrategy = "impact" | "no-lsp";
@@ -117,7 +124,17 @@ if (cli.listScenarios) {
 }
 
 const session = cli.strategy === "impact" ? new JdtlsSession(cli.repoRoot) : undefined;
-const router = session ? new AgentRouter(cli.repoRoot, session, new SourceIndex(cli.repoRoot)) : undefined;
+// Kept separate from `javaIndex` (the router-facing RouterIndex, which may be
+// the V1 adapter with nothing to close): a real V2 run spawns a worker_threads
+// Worker, which otherwise keeps this CLI process alive forever after its
+// output is printed - there is no coordinator here to close it for us.
+const javaIndexClient = session && JAVA_INDEX_BACKEND === "v2"
+  ? new JavaIndexClient(cli.repoRoot, repoCacheRoot(cli.repoRoot))
+  : undefined;
+const javaIndex: RouterIndex | undefined = session
+  ? (javaIndexClient ? new RouterJavaIndex(cli.repoRoot, javaIndexClient) : wrapSourceIndex(new SourceIndex(cli.repoRoot)))
+  : undefined;
+const router = session && javaIndex ? new AgentRouter(cli.repoRoot, session, javaIndex) : undefined;
 if (session && cli.warmState !== "cold-nolsp") {
   const startedAt = performance.now();
   await prepareWarmState(cli, session, scenarios);
@@ -147,6 +164,9 @@ console.log(JSON.stringify({
 
 if (session) {
   await session.stop();
+}
+if (javaIndexClient) {
+  await javaIndexClient.close();
 }
 
 function parseCli(args: string[], root: string): Cli {

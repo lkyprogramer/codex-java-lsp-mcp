@@ -49,6 +49,8 @@ type SourceStatusSnapshot = {
   scanCacheMissElapsedMs: number;
   typeLookupIndexHits: number;
   typeLookupIndexMisses: number;
+  openSource?: string;
+  coverage?: string;
 };
 
 export function createSemanticMetrics(options: ImpactOptions): SemanticMetrics {
@@ -153,6 +155,8 @@ export function sourceFactsDelta(
     scanCacheMissesDelta: after.scanCacheMisses - before.scanCacheMisses,
     typeLookupIndexHitsDelta: after.typeLookupIndexHits - before.typeLookupIndexHits,
     typeLookupIndexMissesDelta: after.typeLookupIndexMisses - before.typeLookupIndexMisses,
-    anchorFactSource: anchors[0]?.factSource
+    anchorFactSource: anchors[0]?.factSource,
+    openSource: after.openSource,
+    coverage: after.coverage
   };
 }

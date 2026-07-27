@@ -1,6 +1,6 @@
 import type { PathContext } from "../repo-layout.js";
 import { scoreWithPolicy, type RoutingPolicy, type ScoreCategory } from "../routing-policy.js";
-import type { JavaSourceFacts } from "../source-index.js";
+import type { JavaSourceFacts } from "../java-index/router-facts.js";
 import type {
   CandidateFile,
   Confidence,

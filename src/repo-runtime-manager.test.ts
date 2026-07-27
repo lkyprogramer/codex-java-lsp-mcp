@@ -39,6 +39,42 @@ test("RepoRuntimeManager evicts the oldest idle started runtime before starting 
   assert.equal(sessions.get("/repo-b")?.stops, 0);
 });
 
+test("RepoRuntimeManager starts and flushes the coordinator around Java index OPEN so a seed cannot miss its watcher window", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const coordinator = new FakeCoordinator();
+  const clock = new GenerationClock();
+  const javaIndex = new RecordingJavaIndex(() => coordinator.starts);
+  let emitted = false;
+  coordinator.flushHook = async () => {
+    if (emitted) return;
+    emitted = true;
+    const generation = clock.advance("changed while seed was validating");
+    await coordinator.emit({
+      generation,
+      observedAt: new Date().toISOString(),
+      changes: [{ kind: "JAVA_CHANGE", absolutePath: "/repo-a/src/main/java/demo/Changed.java" }],
+      storm: false,
+      affectedRoots: []
+    });
+  };
+  const manager = new RepoRuntimeManager(
+    fakeResolver(),
+    { idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
+    resolved => ({ generation: clock, coordinator, layout: fakeLayoutSource(resolved.repoRoot) }),
+    new NoopCrossProcessLeaseStore()
+  );
+
+  await manager.contextFor({ repoRoot: "/repo-a" });
+
+  assert.equal(javaIndex.coordinatorStartsAtOpen, 1, "the watcher must be started before sibling seed validation begins");
+  assert.ok(coordinator.flushes >= 1, "OPEN must flush any batches buffered while a sibling seed was being validated");
+  assert.ok(javaIndex.calls.includes("refresh:2:1:0"), "the flushed batch must refresh its changed Java path before the runtime is exposed");
+  assert.ok(javaIndex.calls.includes("reconcile:2"), "a generation change during seed validation receives a target reconcile");
+
+  await manager.shutdownAll();
+});
+
 test("RepoRuntimeManager fails fast when all active runtimes are in use", async () => {
   const sessions = new Map<string, FakeSession>();
   const manager = new RepoRuntimeManager(fakeResolver(), {
@@ -405,7 +441,8 @@ test("reconcileIfDirty runs once under two concurrent requests and clears dirty 
       lsp: resolved.lsp,
       session: new FakeSession() as never,
       sourceIndex: sourceIndexStub as never,
-      router: { clearRgCache() {} } as never
+      router: { clearRgCache() {} } as never,
+      javaIndex: {} as never
     }),
     () => ({ generation: clock, coordinator, layout: { current: () => layout, refresh: () => ({ changed: false, layout }) } }),
     new NoopCrossProcessLeaseStore()
@@ -445,7 +482,8 @@ test("reconcileIfDirty leaves dirty set when reconcile fails, without failing th
       lsp: resolved.lsp,
       session: new FakeSession() as never,
       sourceIndex: sourceIndexStub as never,
-      router: { clearRgCache() {} } as never
+      router: { clearRgCache() {} } as never,
+      javaIndex: {} as never
     }),
     () => ({ generation: clock, coordinator, layout: { current: () => layout, refresh: () => ({ changed: false, layout }) } }),
     new NoopCrossProcessLeaseStore()
@@ -497,6 +535,8 @@ class FakeSession {
     this.stops += 1;
     this.transition("STOPPED");
   }
+
+  invalidateForRepoChanges(): void {}
 }
 
 function fakeResolver(): { resolve(selector: { repoRoot?: string }): Promise<ResolvedRepo> } {
@@ -524,6 +564,8 @@ function fakeResolver(): { resolve(selector: { repoRoot?: string }): Promise<Res
 
 class FakeCoordinator {
   starts = 0;
+  flushes = 0;
+  flushHook?: () => void | Promise<void>;
   closes = 0;
   private readonly listeners = new Set<(batch: RepoChangeBatch) => void | Promise<void>>();
   onBatch(listener: (batch: RepoChangeBatch) => void | Promise<void>): () => void {
@@ -531,12 +573,40 @@ class FakeCoordinator {
     return () => this.listeners.delete(listener);
   }
   async start(): Promise<void> { this.starts += 1; }
-  async flushNow(): Promise<void> {}
+  async flushNow(): Promise<void> {
+    this.flushes += 1;
+    await this.flushHook?.();
+  }
+  async emit(batch: RepoChangeBatch): Promise<void> {
+    for (const listener of this.listeners) await listener(batch);
+  }
   async awaitReadyWithin(): Promise<boolean> { return true; }
   async close(): Promise<void> { this.closes += 1; }
   status(): { ready: boolean; degraded: boolean; pending: number } {
     return { ready: true, degraded: false, pending: 0 };
   }
+}
+
+class RecordingJavaIndex {
+  readonly calls: string[] = [];
+  coordinatorStartsAtOpen: number | undefined;
+
+  constructor(private readonly coordinatorStarts: () => number) {}
+
+  async open(generation: number): Promise<{
+    indexedGeneration: number;
+    coverage: Array<{ state: "COMPLETE" | "DEGRADED"; generation: number; failedFiles: number; recoveredFiles: number }>;
+  }> {
+    this.coordinatorStartsAtOpen = this.coordinatorStarts();
+    this.calls.push(`open:${generation}`);
+    return { indexedGeneration: generation, coverage: [] };
+  }
+
+  async reconcile(generation: number): Promise<void> { this.calls.push(`reconcile:${generation}`); }
+  async refresh(generation: number, changed: string[], deleted: string[]): Promise<void> {
+    this.calls.push(`refresh:${generation}:${changed.length}:${deleted.length}`);
+  }
+  async close(): Promise<void> { this.calls.push("close"); }
 }
 
 function fakeLayoutSource(repoRoot: string): LayoutSource {
@@ -583,9 +653,16 @@ function fakeContext(
     layoutProfile: resolved.layoutProfile,
     lsp: resolved.lsp,
     session: session as never,
-    sourceIndex: {} as never,
+    sourceIndex: {
+      status: () => ({ entries: 0 }),
+      applyChanges() {}
+    } as never,
     router: {
-      clearRgCache() {}
+      clearRgCache() {},
+      onRepoChanged() {}
+    } as never,
+    javaIndex: {
+      routerStatus: async () => ({ entries: 0 })
     } as never
   };
 }

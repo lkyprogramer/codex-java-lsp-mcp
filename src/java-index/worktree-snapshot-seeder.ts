@@ -37,6 +37,11 @@ export type WorktreeSeedResult = {
   negativeLookupAllowed: false;
 };
 
+/** Test-only timing seam for the final validation boundary. */
+export type WorktreeSeedValidationHooks = {
+  beforeFinalValidation?: () => void | Promise<void>;
+};
+
 function emptySeedResult(targetGeneration: number): WorktreeSeedResult {
   return {
     targetGeneration,
@@ -137,25 +142,21 @@ export class WorktreeSnapshotSeeder {
    * Reused facts are stamped into `targetGeneration`, not the source
    * snapshot's own generation, which is discarded once validation is done.
    *
-   * Deliberately does not implement the plan's Step 4.8
-   * (`coordinator.flushNow()` + revalidate-if-generation-changed): seeding
-   * runs inside the JavaIndex worker's OPEN handler, before
-   * `repo-runtime-manager.createEntry` starts the repo's
-   * `RepoChangeCoordinator` - there is no live coordinator with buffered
-   * events for `flushNow()` to flush at this point, so Step 4.8's own
-   * precondition does not hold in this wiring. The equivalent protection is
-   * structural rather than a revalidation step: every seeded root starts
-   * DEGRADED, and `createEntry` only skips its own `reconcile()` when every
-   * root is COMPLETE - which a freshly seeded store never is - so a file
-   * that changed between this scan and store publication is still corrected
-   * by the mandatory follow-up sweep.
+   * The runtime starts its coordinator before OPEN and flushes batches after
+   * this method returns. This method adds the complementary local guard for
+   * the narrower race inside the worker: it takes a second stable manifest
+   * scan immediately before returning the store and removes any fact no
+   * longer matching that final scan. Together those boundaries mean neither
+   * a watcher-delivered change nor a write that lands during validation can
+   * be published as a reusable current fact.
    */
   async seedValidatedFacts(
     candidate: WorktreeSeedCandidate,
     identity: SiblingSnapshotIdentity,
     targetRepoRoot: string,
     targetLayout: LayoutContext,
-    targetGeneration: number
+    targetGeneration: number,
+    hooks: WorktreeSeedValidationHooks = {}
   ): Promise<{ result: WorktreeSeedResult; store: JavaIndexStore }> {
     const start = Date.now();
     const snapshot = await loadSiblingSnapshot(candidate.sourceSnapshotPath, identity);
@@ -164,10 +165,9 @@ export class WorktreeSnapshotSeeder {
       return { result: emptySeedResult(targetGeneration), store: new JavaIndexStore() };
     }
 
-    const { discovered, entries, unstablePaths } = await scanCurrentManifestStable(targetRepoRoot, targetLayout);
+    const { entries, unstablePaths } = await scanCurrentManifestStable(targetRepoRoot, targetLayout);
     const unstable = new Set(unstablePaths);
     const targetEntryByPath = new Map(entries.map(entry => [entry.relativePath, entry]));
-    const targetPaths = new Set(discovered.map(file => file.relativePath));
 
     const store = new JavaIndexStore();
     store.loadSnapshotData({
@@ -191,21 +191,52 @@ export class WorktreeSnapshotSeeder {
     }
 
     const edgesBeforeRemoval = store.edgesById.size;
-    const relinkPaths = store.removeFiles(nonReusedSourcePaths);
+    let relinkPaths = store.removeFiles(nonReusedSourcePaths);
     const droppedByRemoval = edgesBeforeRemoval - store.edgesById.size;
     // removeFiles only deletes the *removed* files' own edges; a surviving
     // (reused) dependent's edge into a node that removal just deleted is
     // reported in relinkPaths but left dangling by design (the caller
     // decides how to re-resolve it) - the seeder has no re-resolution step,
     // so it must drop those stale edges itself rather than publish them.
-    const droppedByRelink = store.dropOwnedEdges(relinkPaths);
-    const droppedCrossFileEdges = droppedByRemoval + droppedByRelink;
+    let droppedCrossFileEdges = droppedByRemoval + store.dropOwnedEdges(relinkPaths);
+
+    // A file may change after the first stable read but before this fresh
+    // store is installed by the worker. Re-scan at that exact publication
+    // boundary and evict any formerly reusable facts that no longer match.
+    await hooks.beforeFinalValidation?.();
+    const finalManifest = await scanCurrentManifestStable(targetRepoRoot, targetLayout);
+    const finalUnstable = new Set(finalManifest.unstablePaths);
+    const finalEntriesByPath = new Map(finalManifest.entries.map(entry => [entry.relativePath, entry]));
+    const snapshotFilesByPath = new Map(snapshot.files.map(file => [file.relativePath, file]));
+    const invalidatedReusePaths = reusedPaths.filter(relativePath => {
+      const snapshotFile = snapshotFilesByPath.get(relativePath);
+      const finalEntry = finalEntriesByPath.get(relativePath);
+      return finalUnstable.has(relativePath)
+        || !snapshotFile
+        || !finalEntry
+        || finalEntry.contentHash !== snapshotFile.contentHash
+        || finalEntry.sourceRoot !== snapshotFile.sourceRoot;
+    });
+    if (invalidatedReusePaths.length > 0) {
+      const edgesBeforeFinalRemoval = store.edgesById.size;
+      const finalRelinkPaths = store.removeFiles(invalidatedReusePaths);
+      droppedCrossFileEdges += edgesBeforeFinalRemoval - store.edgesById.size;
+      droppedCrossFileEdges += store.dropOwnedEdges(finalRelinkPaths);
+      relinkPaths = [...new Set([...relinkPaths, ...finalRelinkPaths])];
+      const invalidated = new Set(invalidatedReusePaths);
+      for (let index = reusedPaths.length - 1; index >= 0; index -= 1) {
+        if (invalidated.has(reusedPaths[index]!)) reusedPaths.splice(index, 1);
+      }
+    }
     store.stampGeneration(reusedPaths, targetGeneration);
 
     const reusedSet = new Set(reusedPaths);
-    const dirtyPaths = discovered.map(file => file.relativePath).filter(relativePath => !reusedSet.has(relativePath));
+    const dirtyPaths = finalManifest.discovered
+      .map(file => file.relativePath)
+      .filter(relativePath => !reusedSet.has(relativePath));
     const sourcePaths = new Set(snapshot.files.map(file => file.relativePath));
-    const deletedSourcePaths = [...sourcePaths].filter(relativePath => !targetPaths.has(relativePath));
+    const finalTargetPaths = new Set(finalManifest.discovered.map(file => file.relativePath));
+    const deletedSourcePaths = [...sourcePaths].filter(relativePath => !finalTargetPaths.has(relativePath));
 
     const result: WorktreeSeedResult = {
       sourceRepoHash: candidate.sourceRepoHash,

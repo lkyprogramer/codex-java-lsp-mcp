@@ -1,9 +1,9 @@
-// input: java_impact tool arguments, source facts, optional JDT LS context, and rg output.
+// input: java_impact tool arguments, JavaIndex facts, optional JDT LS context, and rg output.
 // output: Compact v5 impact map, read plan, and evidence gaps.
-// pos: Single agent-grade semantic router for lishuedu Java navigation.
+// pos: Single agent-grade semantic router for Java navigation (Task 22: JavaIndex V2).
 import { availableParallelism } from "node:os";
 import { JdtlsSession } from "../jdtls-session.js";
-import { SourceIndex } from "../source-index.js";
+import type { RouterIndex } from "../java-index/router-java-index.js";
 import { EdgeStore } from "../edge-store.js";
 import { probeLayout, type LayoutContext } from "../layout-probe.js";
 import { resolveRoutingPolicy, type RoutingPolicy } from "../routing-policy.js";
@@ -73,7 +73,7 @@ export class AgentRouter {
   constructor(
     private readonly repoRoot: string,
     private readonly session: JdtlsSession,
-    private readonly sourceIndex: SourceIndex,
+    private readonly javaIndex: RouterIndex,
     private readonly layoutContext: LayoutContext = probeLayout(repoRoot),
     private readonly edgeStore: EdgeStore = new EdgeStore(repoRoot),
     private readonly routingPolicy: RoutingPolicy = resolveRoutingPolicy(repoRoot),
@@ -127,24 +127,27 @@ export class AgentRouter {
       generation: 0,
       cacheReadAllowed: true,
       cacheWriteAllowed: true,
-      freshnessMode: "NORMAL" as const
+      freshnessMode: "NORMAL" as const,
+      indexOpenSource: undefined as RequestContext["indexOpenSource"]
     };
+    const generation = freshness.generation;
     const startedAt = Date.now();
     const phaseMs: Record<string, number> = {};
-    const sourceBefore = await timed(phaseMs, "sourceStatusBefore", async () => this.sourceIndex.status());
+    const sourceBefore = await timed(phaseMs, "sourceStatusBefore", async () => this.javaIndex.routerStatus());
     const cacheBefore = await timed(phaseMs, "sessionCacheBefore", async () => this.session.cacheStatus());
     const rgBefore = await timed(phaseMs, "rgCacheBefore", async () => this.rgCacheStatus());
     const semantic = createSemanticMetrics(options);
     const typeReference = createTypeReferenceMetrics();
     const importGraph = createImportGraphMetrics();
     const persistedSemantic = createPersistedSemanticMetrics();
-    const anchors = await timed(phaseMs, "resolveAnchors", async () => options.anchors.map((anchor, index) => resolveAnchor({
+    const anchors = await timed(phaseMs, "resolveAnchors", async () => Promise.all(options.anchors.map((anchor, index) => resolveAnchor({
       repoRoot: this.repoRoot,
-      sourceIndex: this.sourceIndex,
+      javaIndex: this.javaIndex,
       input: anchor,
       requested: options.profile,
-      id: `A${index + 1}`
-    })));
+      id: `A${index + 1}`,
+      generation
+    }))));
     const candidates = new Map<string, CandidateFile>();
     for (const anchor of anchors) {
       mergeCandidate(candidates, candidateFromAnchor(anchor));
@@ -163,16 +166,18 @@ export class AgentRouter {
       candidates,
       anchors,
       options,
-      sourceIndex: this.sourceIndex,
-      routingPolicy: this.routingPolicy
+      javaIndex: this.javaIndex,
+      routingPolicy: this.routingPolicy,
+      generation
     }));
     await timed(phaseMs, "importGraph", async () => collectImportGraphCandidates({
       candidates,
       anchors,
       options,
-      sourceIndex: this.sourceIndex,
+      javaIndex: this.javaIndex,
       routingPolicy: this.routingPolicy,
-      metrics: importGraph
+      metrics: importGraph,
+      generation
     }));
     const rgExecution = await collectNamingRecall({
       candidates,
@@ -184,23 +189,25 @@ export class AgentRouter {
       concurrency: RG_CONCURRENCY,
       loadSummary: (section, currentOptions, currentAnchors) => this.rgSummary(section, currentOptions, currentAnchors, budget, freshness)
     });
-    const typeReferenceBefore = this.sourceIndex.status();
+    const typeReferenceBefore = await this.javaIndex.routerStatus();
     await timed(phaseMs, "typeReference", async () => collectTypeReferenceCandidates({
       candidates,
       anchors,
       options,
       metrics: typeReference,
-      sourceIndex: this.sourceIndex,
-      routingPolicy: this.routingPolicy
+      javaIndex: this.javaIndex,
+      routingPolicy: this.routingPolicy,
+      generation
     }));
-    const typeReferenceAfter = this.sourceIndex.status();
+    const typeReferenceAfter = await this.javaIndex.routerStatus();
     updateCollectorElapsed(phaseMs, typeReference, importGraph, persistedSemantic);
     const protectedReadPlanPaths = await timed(phaseMs, "nonLspReadPlan", async () => nonLspReadPlanPaths({
       candidates,
-      anchor: anchors[0],
+      anchor: anchors[0]!,
       options,
-      sourceIndex: this.sourceIndex,
-      routingPolicy: this.routingPolicy
+      javaIndex: this.javaIndex,
+      routingPolicy: this.routingPolicy,
+      generation
     }));
 
     await collectSemanticSeed({
@@ -234,24 +241,26 @@ export class AgentRouter {
     };
     const ranked = await timed(phaseMs, "finalizeRank", async () => finalizeRank({
       candidates,
-      anchor: anchors[0],
+      anchor: anchors[0]!,
       options,
       suppressed,
       extraProtectedPaths: protectedReadPlanPaths,
-      sourceIndex: this.sourceIndex,
-      routingPolicy: this.routingPolicy
+      javaIndex: this.javaIndex,
+      routingPolicy: this.routingPolicy,
+      generation
     }));
     const idByPath = new Map(ranked.map((file, index) => [file.absolutePath, `F${index + 1}`]));
     const readPlan = await timed(phaseMs, "buildReadPlan", async () => buildReadPlan({
       files: ranked,
       ids: idByPath,
       options,
-      sourceIndex: this.sourceIndex,
-      protectedPaths: protectedReadPlanPaths
+      javaIndex: this.javaIndex,
+      protectedPaths: protectedReadPlanPaths,
+      generation
     }));
     const cacheAfter = await timed(phaseMs, "sessionCacheAfter", async () => this.session.cacheStatus());
     const rgAfter = await timed(phaseMs, "rgCacheAfter", async () => this.rgCacheStatus());
-    const sourceAfter = await timed(phaseMs, "sourceStatusAfter", async () => this.sourceIndex.status());
+    const sourceAfter = await timed(phaseMs, "sourceStatusAfter", async () => this.javaIndex.routerStatus());
     updateTypeReferenceCacheMetrics(typeReference, typeReferenceBefore, typeReferenceAfter);
 
     return buildImpactResult({
@@ -276,7 +285,14 @@ export class AgentRouter {
           requestGeneration: freshness.generation,
           freshnessMode: freshness.freshnessMode,
           cacheReadAllowed: freshness.cacheReadAllowed,
-          cacheWriteAllowed: freshness.cacheWriteAllowed
+          cacheWriteAllowed: freshness.cacheWriteAllowed,
+          indexOpenSource: freshness.indexOpenSource ?? sourceAfter.openSource
+        },
+        javaIndex: {
+          state: sourceAfter.javaIndex.state,
+          files: sourceAfter.javaIndex.files,
+          coverage: sourceAfter.coverage,
+          openSource: sourceAfter.openSource
         }
       }
     });
@@ -330,4 +346,5 @@ type RouterFreshness = {
   cacheReadAllowed: boolean;
   cacheWriteAllowed: boolean;
   freshnessMode: RequestContext["freshnessMode"];
+  indexOpenSource?: RequestContext["indexOpenSource"];
 };

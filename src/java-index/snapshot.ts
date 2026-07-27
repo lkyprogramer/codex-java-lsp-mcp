@@ -90,6 +90,26 @@ export async function writeSnapshotAtomic(
   }
 }
 
+/**
+ * Publishes a snapshot only if an independent re-scan still observes the
+ * manifest it was serialized from. The callback deliberately belongs at the
+ * atomic writer boundary: checking the in-memory store cannot detect a file
+ * edit that arrived after the last refresh but before rename.
+ */
+export async function writeSnapshotIfManifestCurrent(
+  target: string,
+  value: JavaIndexSnapshotV2,
+  currentManifestFingerprint: () => Promise<string>
+): Promise<number> {
+  return writeSnapshotAtomic(target, value, {
+    beforeRename: async () => {
+      if (await currentManifestFingerprint() !== value.manifestFingerprint) {
+        throw new Error("manifest changed before snapshot publish");
+      }
+    }
+  });
+}
+
 /** Directory fsync support varies by filesystem; this is a rebuildable cache, so a lack of support is not an error. */
 async function fsyncDirectoryBestEffort(directory: string): Promise<void> {
   let handle;

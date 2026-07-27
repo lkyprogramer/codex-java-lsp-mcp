@@ -7,6 +7,7 @@ import { AgentRouter } from "./agent-router/index.js";
 import type { ImpactOptions } from "./agent-types.js";
 import { JdtlsSession } from "./jdtls-session.js";
 import { SourceIndex } from "./source-index.js";
+import { wrapSourceIndex } from "./source-index-router-adapter.js";
 
 function options(overrides: Partial<ImpactOptions>): ImpactOptions {
   return {
@@ -51,7 +52,7 @@ test("direct type references survive noisy cross-module tail truncation", async 
     await writeFile(path.join(noiseDir, `${typeName}.java`), `package demo.noise;\npublic class ${typeName} {}\n`);
   }
 
-  const result = await new AgentRouter(root, new JdtlsSession(root), new SourceIndex(root)).impact(options({
+  const result = await new AgentRouter(root, new JdtlsSession(root), wrapSourceIndex(new SourceIndex(root))).impact(options({
     anchors: [{ file: "modules/app/src/main/java/demo/app/ApplyInfoServiceImpl.java", line: 44, column: 15 }],
     profile: "service",
     focusModules: ["app"],
@@ -92,7 +93,7 @@ test("method receiver relations outrank noisy class fields", async () => {
     await writeFile(path.join(noiseDir, `${typeName}.java`), `package demo.noise;\npublic class ${typeName} {}\n`);
   }
 
-  const result = await new AgentRouter(root, new JdtlsSession(root), new SourceIndex(root)).impact(options({
+  const result = await new AgentRouter(root, new JdtlsSession(root), wrapSourceIndex(new SourceIndex(root))).impact(options({
     anchors: [{ file: "modules/app/src/main/java/demo/app/ApplyInfoServiceImpl.java", line: 34, column: 15 }],
     profile: "service",
     focusModules: ["app"],
@@ -133,7 +134,7 @@ test("method parameter relations survive persistence score noise", async () => {
     await writeFile(path.join(dataDir, `${typeName}.java`), `package demo.data;\npublic interface ${typeName} {}\n`);
   }
 
-  const result = await new AgentRouter(root, new JdtlsSession(root), new SourceIndex(root)).impact(options({
+  const result = await new AgentRouter(root, new JdtlsSession(root), wrapSourceIndex(new SourceIndex(root))).impact(options({
     anchors: [{ file: "modules/app/src/main/java/demo/app/ApplyInfoServiceImpl.java", line: 29, column: 20 }],
     profile: "service",
     focusModules: ["app"],

@@ -187,7 +187,13 @@ export type WorktreeSeedStatus = {
   attempted: boolean;
   sourceRepoHash?: string;
   reusedFiles: number;
-  completion: "NOT_ATTEMPTED" | "SEEDED_DEGRADED" | "NO_VALID_SOURCE" | "FAILED";
+  dirtyFiles: number;
+  relinkFiles: number;
+  droppedCrossFileEdges: number;
+  manifestValidationMs: number;
+  /** Files actually passed through the target's post-seed reconciliation sweep. */
+  deltaParsedFiles: number;
+  completion: "NOT_ATTEMPTED" | "SEEDED_DEGRADED" | "RECONCILED_COMPLETE" | "NO_VALID_SOURCE" | "FAILED";
 };
 
 export type JavaIndexStatus = {

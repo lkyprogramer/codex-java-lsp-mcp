@@ -1,6 +1,10 @@
+// input: Ranked candidates, anchor facts, and JavaIndex structural signals.
+// output: Final per-candidate score with breakdown items.
+// pos: Finalize scoring for AgentRouter (Task 22: async JavaIndex).
 import path from "node:path";
 import type { RoutingPolicy } from "../routing-policy.js";
-import type { JavaMethodFact, JavaSourceFacts, SourceIndex } from "../source-index.js";
+import type { RouterIndex } from "../java-index/router-java-index.js";
+import type { JavaMethodFact, JavaSourceFacts } from "../java-index/router-facts.js";
 import type { CandidateFile, ImpactOptions, ResolvedAnchor } from "../agent-types.js";
 import {
   annotationCollaborationDelta,
@@ -23,12 +27,15 @@ type FinalizeScoreInput = {
   options: ImpactOptions;
   suppressed: Record<string, number>;
   anchorFacts?: JavaSourceFacts;
-  sourceIndex: SourceIndex;
+  javaIndex: RouterIndex;
   routingPolicy: RoutingPolicy;
+  generation?: number;
+  methodCache?: Map<string, JavaMethodFact | undefined>;
+  factsCache?: Map<string, JavaSourceFacts | undefined>;
 };
 
-export function finalizeScore(input: FinalizeScoreInput): CandidateFile {
-  const { candidate, anchor, options, suppressed, anchorFacts, sourceIndex, routingPolicy } = input;
+export async function finalizeScore(input: FinalizeScoreInput): Promise<CandidateFile> {
+  const { candidate, anchor, options, suppressed, anchorFacts, javaIndex, routingPolicy, generation } = input;
   const scoreBreakdown = [...(candidate.scoreBreakdown || [breakdown("unknown.initial", "policy", candidate.score, "initial candidate score")])];
   let score = candidate.score;
   const matchCountDelta = Math.min(40, candidate.matchCount * 2);
@@ -44,8 +51,13 @@ export function finalizeScore(input: FinalizeScoreInput): CandidateFile {
     anchor.profile === "service" ? directReferencedTypeDelta(candidate, anchorFacts) : 0
   );
   score += addScoreDelta(scoreBreakdown, "finalize.direct-collaborator", directDelta, "direct type-name collaborator");
-  score += addScoreDelta(scoreBreakdown, "finalize.method-relation", methodRelationDelta(candidate, anchor, sourceIndex), "method relation");
-  const structural = structuralDeltas(sourceIndex, candidate, anchor, anchorFacts);
+  score += addScoreDelta(
+    scoreBreakdown,
+    "finalize.method-relation",
+    await methodRelationDelta(candidate, anchor, javaIndex, generation, input.methodCache),
+    "method relation"
+  );
+  const structural = await structuralDeltas(javaIndex, candidate, anchor, anchorFacts, generation, input.factsCache);
   score += addScoreDelta(scoreBreakdown, "finalize.type-relation", structural.typeRelation, "implements or extends anchor type");
   score += addScoreDelta(scoreBreakdown, "finalize.structural.annotation", structural.annotation, "stereotype collaboration");
   score += addScoreDelta(scoreBreakdown, "finalize.structural.package", structural.packageProximity, "package proximity");
@@ -69,24 +81,27 @@ export function finalizeScore(input: FinalizeScoreInput): CandidateFile {
   return { ...candidate, score: finalScore, scoreBreakdown };
 }
 
-function structuralDeltas(
-  sourceIndex: SourceIndex,
+async function structuralDeltas(
+  javaIndex: RouterIndex,
   candidate: CandidateFile,
   anchor: ResolvedAnchor,
-  anchorFacts?: JavaSourceFacts
-): {
+  anchorFacts: JavaSourceFacts | undefined,
+  generation: number | undefined,
+  factsCache: Map<string, JavaSourceFacts | undefined> | undefined
+): Promise<{
   annotation: number;
   packageProximity: number;
   typeRelation: number;
   typeSymmetric: number;
   kind: number;
-} {
+}> {
   const zero = { annotation: 0, packageProximity: 0, typeRelation: 0, typeSymmetric: 0, kind: 0 };
   if (!anchorFacts || candidate.absolutePath === anchor.absolutePath || !candidate.absolutePath.endsWith(".java")) {
     return zero;
   }
   try {
-    const candidateFacts = sourceIndex.factsFor(candidate.absolutePath);
+    const candidateFacts = await cachedFacts(javaIndex, candidate.absolutePath, generation, factsCache);
+    if (!candidateFacts) return zero;
     const candidateParents = [...candidateFacts.implementsTypes, candidateFacts.extendsType || ""].map(simpleTypeName);
     return {
       annotation: annotationCollaborationDelta(anchorFacts.annotations, candidateFacts.annotations),
@@ -143,14 +158,26 @@ function directReferencedTypeDelta(candidate: CandidateFile, anchorFacts: JavaSo
   return referencedTypes.has(typeName) ? 140 : 0;
 }
 
-function methodRelationDelta(candidate: CandidateFile, anchor: ResolvedAnchor, sourceIndex: SourceIndex): number {
+async function methodRelationDelta(
+  candidate: CandidateFile,
+  anchor: ResolvedAnchor,
+  javaIndex: RouterIndex,
+  generation: number | undefined,
+  methodCache: Map<string, JavaMethodFact | undefined> | undefined
+): Promise<number> {
   if (!(candidate.verifiedBy || []).includes("typeReference")) {
     return 0;
   }
   const typeName = path.basename(candidate.path || candidate.absolutePath, ".java");
   let method: JavaMethodFact | undefined;
   try {
-    method = sourceIndex.methodAt(anchor.absolutePath, anchor.line);
+    const cacheKey = `${anchor.absolutePath}:${anchor.line}`;
+    if (methodCache?.has(cacheKey)) {
+      method = methodCache.get(cacheKey);
+    } else {
+      method = await javaIndex.methodAt(anchor.absolutePath, anchor.line, generation);
+      methodCache?.set(cacheKey, method);
+    }
   } catch {
     return 0;
   }
@@ -159,6 +186,25 @@ function methodRelationDelta(candidate: CandidateFile, anchor: ResolvedAnchor, s
     return 0;
   }
   return relation.kind === "parameter" || relation.kind === "return" ? 160 : 120;
+}
+
+async function cachedFacts(
+  javaIndex: RouterIndex,
+  absolutePath: string,
+  generation: number | undefined,
+  factsCache: Map<string, JavaSourceFacts | undefined> | undefined
+): Promise<JavaSourceFacts | undefined> {
+  if (factsCache?.has(absolutePath)) {
+    return factsCache.get(absolutePath);
+  }
+  try {
+    const facts = await javaIndex.factsFor(absolutePath, generation);
+    factsCache?.set(absolutePath, facts);
+    return facts;
+  } catch {
+    factsCache?.set(absolutePath, undefined);
+    return undefined;
+  }
 }
 
 function isPersistenceDirectReference(typeName: string, candidatePath: string): boolean {

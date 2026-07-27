@@ -153,6 +153,51 @@ test("java_status returns summary by default and keeps diagnostics explicit", as
   assert.equal(Object.hasOwn(diagnostic, "rgCache"), true);
 });
 
+test("java_status exposes sibling-seed progress without requiring diagnostic detail", async () => {
+  const context = {
+    repoRoot: "/tmp/demo",
+    session: { status: () => testSessionStatus(false) },
+    sourceIndex: { status: () => ({ entries: 0 }) },
+    router: { rgCacheStatus: () => ({ entries: 0 }) },
+    javaIndexClient: {
+      async status() {
+        return {
+          state: "READY",
+          indexedGeneration: 7,
+          files: 12,
+          types: 12,
+          methods: 4,
+          edges: 3,
+          snapshotBytes: 1024,
+          pendingForeground: 0,
+          pendingBackground: 2,
+          coverage: [],
+          worktreeSeed: {
+            attempted: true,
+            sourceRepoHash: "sibling-hash",
+            reusedFiles: 9,
+            dirtyFiles: 3,
+            relinkFiles: 1,
+            droppedCrossFileEdges: 2,
+            manifestValidationMs: 18,
+            deltaParsedFiles: 0,
+            completion: "SEEDED_DEGRADED"
+          }
+        };
+      }
+    }
+  } as unknown as ToolContext;
+
+  const result = await javaStatus(context, { start: false });
+  const javaIndex = result.javaIndex as Record<string, unknown>;
+  const seed = javaIndex.worktreeSeed as Record<string, unknown>;
+  assert.equal(javaIndex.files, 12);
+  assert.equal(seed.completion, "SEEDED_DEGRADED");
+  assert.equal(seed.reusedFiles, 9);
+  assert.equal(seed.dirtyFiles, 3);
+  assert.equal(seed.deltaParsedFiles, 0);
+});
+
 function testSessionStatus(started: boolean): Record<string, unknown> {
   return {
     repoRoot: "/tmp/demo",

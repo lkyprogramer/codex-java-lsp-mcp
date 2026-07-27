@@ -1,4 +1,8 @@
-import type { SourceIndex, JavaMethodFact } from "../source-index.js";
+// input: Ranked candidates and JavaIndex method/type ranges.
+// output: Byte/token-aware read plan windows from AST ranges.
+// pos: Read plan builder for AgentRouter (Task 22: AST windows, fixed-radius fallback on FAILED).
+import type { RouterIndex } from "../java-index/router-java-index.js";
+import type { JavaMethodFact, JavaSourceFacts } from "../java-index/router-facts.js";
 import type {
   CandidateFile,
   ImpactMode,
@@ -14,8 +18,9 @@ type BuildReadPlanInput = {
   readonly files: readonly CandidateFile[];
   readonly ids: ReadonlyMap<string, string>;
   readonly options: ImpactOptions;
-  readonly sourceIndex: SourceIndex;
+  readonly javaIndex: RouterIndex;
   readonly protectedPaths?: ReadonlySet<string>;
+  readonly generation?: number;
 };
 
 type SelectReadPlanInput = {
@@ -25,23 +30,26 @@ type SelectReadPlanInput = {
   readonly protectedPaths?: ReadonlySet<string>;
 };
 
-export function buildReadPlan(input: BuildReadPlanInput): ReadPlanItem[] {
+export async function buildReadPlan(input: BuildReadPlanInput): Promise<ReadPlanItem[]> {
   const protectedPaths = input.protectedPaths || new Set<string>();
   const maxItems = input.options.readPlanMaxItems ?? defaultReadPlanMax(input.options.mode);
   const selected = input.options.semanticPolicy === "required"
     ? selectLegacyReadPlanFiles({ files: input.files, options: input.options, maxItems, protectedPaths })
     : selectReadPlanFiles({ files: input.files, options: input.options, maxItems, protectedPaths });
-  return selected.map(file => {
+  const factsCache = new Map<string, JavaSourceFacts | undefined>();
+  const items: ReadPlanItem[] = [];
+  for (const file of selected) {
     const priority = readPriority(file, input.options);
-    const planWindow = readWindow(input.sourceIndex, file, priority);
-    return {
+    const planWindow = await readWindow(input.javaIndex, file, priority, input.generation, factsCache);
+    items.push({
       priority,
       fileId: input.ids.get(file.absolutePath) || "F?",
       startLine: planWindow.startLine,
       endLine: planWindow.endLine,
       reason: readReason(file, priority)
-    };
-  });
+    });
+  }
+  return items;
 }
 
 export function selectReadPlanFiles(input: SelectReadPlanInput): CandidateFile[] {
@@ -151,15 +159,26 @@ function sortedByReadPriority(files: readonly CandidateFile[], options: ImpactOp
     .map(entry => entry.file);
 }
 
-function readWindow(sourceIndex: SourceIndex, file: CandidateFile, priority: ReadPriority): { startLine: number; endLine: number } {
+async function readWindow(
+  javaIndex: RouterIndex,
+  file: CandidateFile,
+  priority: ReadPriority,
+  generation: number | undefined,
+  factsCache: Map<string, JavaSourceFacts | undefined>
+): Promise<{ startLine: number; endLine: number }> {
   const basePosition = file.positions[0] || { line: 1, column: 1 };
   const radius = readRadius(priority);
   const fixed = {
     startLine: Math.max(1, basePosition.line - radius.before),
     endLine: basePosition.line + radius.after
   };
-  const position = readPosition(sourceIndex, file, priority);
-  const method = priority === "P2" ? undefined : methodContaining(sourceIndex, file.absolutePath, position.line);
+  const facts = await cachedFacts(javaIndex, file.absolutePath, generation, factsCache);
+  // Only FIXED radius when parse failed or facts are unavailable.
+  if (!facts || facts.parseState === "FAILED" || facts.factSource === "fallback") {
+    return fixed;
+  }
+  const position = await readPosition(javaIndex, file, priority, generation, factsCache);
+  const method = priority === "P2" ? undefined : methodContaining(facts, position.line);
   if (!method) {
     return fixed;
   }
@@ -171,28 +190,52 @@ function readWindow(sourceIndex: SourceIndex, file: CandidateFile, priority: Rea
   return methodWindow.startLine >= fixed.startLine && methodWindow.endLine <= fixed.endLine ? methodWindow : fixed;
 }
 
-function readPosition(sourceIndex: SourceIndex, file: CandidateFile, priority: ReadPriority): RouterPosition {
+async function readPosition(
+  javaIndex: RouterIndex,
+  file: CandidateFile,
+  priority: ReadPriority,
+  generation: number | undefined,
+  factsCache: Map<string, JavaSourceFacts | undefined>
+): Promise<RouterPosition> {
   if (file.categories.includes("target")) {
     return file.positions[0] || { line: 1, column: 1 };
   }
   if (priority !== "P2") {
-    const methodPosition = file.positions.find(position => methodContaining(sourceIndex, file.absolutePath, position.line));
-    if (methodPosition) {
-      return methodPosition;
+    const facts = await cachedFacts(javaIndex, file.absolutePath, generation, factsCache);
+    if (facts) {
+      const methodPosition = file.positions.find(position => methodContaining(facts, position.line));
+      if (methodPosition) {
+        return methodPosition;
+      }
     }
   }
   return file.positions[0] || { line: 1, column: 1 };
 }
 
-function methodContaining(sourceIndex: SourceIndex, file: string, line: number): JavaMethodFact | undefined {
-  if (!file.endsWith(".java")) {
+function methodContaining(facts: JavaSourceFacts, line: number): JavaMethodFact | undefined {
+  return facts.methods
+    .filter(method => method.line <= line && line <= method.endLine)
+    .sort((left, right) => right.line - left.line)[0];
+}
+
+async function cachedFacts(
+  javaIndex: RouterIndex,
+  absolutePath: string,
+  generation: number | undefined,
+  factsCache: Map<string, JavaSourceFacts | undefined>
+): Promise<JavaSourceFacts | undefined> {
+  if (!absolutePath.endsWith(".java")) {
     return undefined;
   }
+  if (factsCache.has(absolutePath)) {
+    return factsCache.get(absolutePath);
+  }
   try {
-    return sourceIndex.factsFor(file).methods
-      .filter(method => method.line <= line && line <= method.endLine)
-      .sort((left, right) => right.line - left.line)[0];
+    const facts = await javaIndex.factsFor(absolutePath, generation);
+    factsCache.set(absolutePath, facts);
+    return facts;
   } catch {
+    factsCache.set(absolutePath, undefined);
     return undefined;
   }
 }
@@ -216,7 +259,7 @@ function readReason(file: CandidateFile, priority: ReadPriority): string {
   if (file.sourceSet === "test") {
     return priority === "P1" ? "priority verification candidate" : "deferred verification candidate";
   }
-  return "ranked candidate from source index, rg summary, and optional LSP";
+  return "ranked candidate from Java index, rg summary, and optional LSP";
 }
 
 function readRadius(priority: ReadPriority): { before: number; after: number } {

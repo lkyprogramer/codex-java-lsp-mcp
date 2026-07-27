@@ -1,5 +1,9 @@
+// input: Candidate map, anchor, options, and JavaIndex facts.
+// output: Score-sorted candidates with protected read-plan paths.
+// pos: Finalize rank stage for AgentRouter (Task 22: async).
 import type { RoutingPolicy } from "../routing-policy.js";
-import type { SourceIndex, JavaSourceFacts } from "../source-index.js";
+import type { RouterIndex } from "../java-index/router-java-index.js";
+import type { JavaMethodFact, JavaSourceFacts } from "../java-index/router-facts.js";
 import type { CandidateFile, ImpactOptions, ResolvedAnchor } from "../agent-types.js";
 import { truncateCandidateTail } from "./ranking-signals.js";
 import { finalizeScore } from "./finalize-scoring.js";
@@ -15,39 +19,48 @@ type FinalizeRankInput = {
   readonly anchor: ResolvedAnchor;
   readonly options: ImpactOptions;
   readonly suppressed: Record<string, number>;
-  readonly sourceIndex: SourceIndex;
+  readonly javaIndex: RouterIndex;
   readonly routingPolicy: RoutingPolicy;
   readonly extraProtectedPaths?: ReadonlySet<string>;
+  readonly generation?: number;
 };
 
 type NonLspReadPlanPathsInput = {
   readonly candidates: ReadonlyMap<string, CandidateFile>;
   readonly anchor: ResolvedAnchor;
   readonly options: ImpactOptions;
-  readonly sourceIndex: SourceIndex;
+  readonly javaIndex: RouterIndex;
   readonly routingPolicy: RoutingPolicy;
+  readonly generation?: number;
 };
 
-export function finalizeRank(input: FinalizeRankInput): CandidateFile[] {
-  const anchorFacts = factsFor(input.sourceIndex, input.anchor.absolutePath);
-  const ranked = [...input.candidates.values()]
-    .filter(candidate => {
-      if (candidate.module && input.options.excludeModules.includes(candidate.module)) {
-        input.suppressed.excludedModules += 1;
-        return false;
-      }
-      return true;
-    })
-    .map(candidate => finalizeScore({
+export async function finalizeRank(input: FinalizeRankInput): Promise<CandidateFile[]> {
+  const anchorFacts = await factsFor(input.javaIndex, input.anchor.absolutePath, input.generation);
+  const factsCache = new Map<string, JavaSourceFacts | undefined>();
+  const methodCache = new Map<string, JavaMethodFact | undefined>();
+  if (anchorFacts) factsCache.set(input.anchor.absolutePath, anchorFacts);
+  const scored: CandidateFile[] = [];
+  for (const candidate of input.candidates.values()) {
+    if (candidate.module && input.options.excludeModules.includes(candidate.module)) {
+      input.suppressed.excludedModules += 1;
+      continue;
+    }
+    scored.push(await finalizeScore({
       candidate,
       anchor: input.anchor,
       options: input.options,
       suppressed: input.suppressed,
       anchorFacts,
-      sourceIndex: input.sourceIndex,
-      routingPolicy: input.routingPolicy
-    }))
-    .sort((left, right) => right.score - left.score || (left.path || left.absolutePath).localeCompare(right.path || right.absolutePath));
+      javaIndex: input.javaIndex,
+      routingPolicy: input.routingPolicy,
+      generation: input.generation,
+      factsCache,
+      methodCache
+    }));
+  }
+  const ranked = scored.sort((left, right) =>
+    right.score - left.score || (left.path || left.absolutePath).localeCompare(right.path || right.absolutePath)
+  );
   const maxItems = input.options.readPlanMaxItems ?? defaultReadPlanMax(input.options.mode);
   const sortedForPlan = legacyReadPlanSorted(ranked, input.options);
   const readPlanCovered = new Set(selectReadPlanFiles({ files: sortedForPlan, options: input.options, maxItems }));
@@ -59,9 +72,9 @@ export function finalizeRank(input: FinalizeRankInput): CandidateFile[] {
   return truncateCandidateTail(ranked, readPlanCovered, candidateLimit(input.options.mode, input.anchor.profile));
 }
 
-export function nonLspReadPlanPaths(input: NonLspReadPlanPathsInput): Set<string> {
+export async function nonLspReadPlanPaths(input: NonLspReadPlanPathsInput): Promise<Set<string>> {
   const suppressed = { deferredTests: 0, crossModuleConsumers: 0, excludedModules: 0 };
-  const ranked = finalizeRank({ ...input, suppressed });
+  const ranked = await finalizeRank({ ...input, suppressed });
   const maxItems = input.options.readPlanMaxItems ?? defaultReadPlanMax(input.options.mode);
   if (input.options.semanticPolicy === "required") {
     return new Set(
@@ -76,9 +89,13 @@ export function nonLspReadPlanPaths(input: NonLspReadPlanPathsInput): Set<string
   );
 }
 
-function factsFor(sourceIndex: SourceIndex, absolutePath: string): JavaSourceFacts | undefined {
+async function factsFor(
+  javaIndex: RouterIndex,
+  absolutePath: string,
+  generation?: number
+): Promise<JavaSourceFacts | undefined> {
   try {
-    return sourceIndex.factsFor(absolutePath);
+    return await javaIndex.factsFor(absolutePath, generation);
   } catch {
     return undefined;
   }

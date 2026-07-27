@@ -2,7 +2,7 @@ import { appendFileSync, existsSync, mkdirSync, renameSync, rmSync, statSync, wr
 import path from "node:path";
 import { isPotentiallyWithin } from "./path-utils.js";
 import { repoCacheRoot } from "./repo-layout.js";
-import { readJsonLines } from "./source-index.js";
+import { readJsonLines } from "./util/jsonl.js";
 
 export type SemanticEdgeKind = "reference" | "implementation" | "typeHierarchy";
 

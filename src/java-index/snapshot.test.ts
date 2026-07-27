@@ -5,9 +5,12 @@ import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { gzipSync } from "node:zlib";
+import { probeLayout } from "../layout-probe.js";
+import { computeCurrentManifestFingerprint } from "./manifest.js";
 import {
   loadSnapshot,
   writeSnapshotAtomic,
+  writeSnapshotIfManifestCurrent,
   type JavaIndexSnapshotV2,
   type SnapshotIdentity
 } from "./snapshot.js";
@@ -68,6 +71,36 @@ test("failed snapshot write leaves the previous snapshot readable", async () => 
 
   const loaded = await loadSnapshot(target, identityFor(first));
   assert.equal(loaded?.indexedGeneration, first.indexedGeneration);
+});
+
+test("a snapshot candidate is not renamed after the target manifest changes during serialization", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "java-index-snapshot-race-"));
+  const source = path.join(repoRoot, "src/main/java/demo/Current.java");
+  mkdirSync(path.dirname(source), { recursive: true });
+  writeFileSync(source, "package demo; class Current {}\n");
+  const layout = probeLayout(repoRoot);
+  const target = tempFile();
+  const previous = snapshot({ indexedGeneration: 1, manifestFingerprint: "previous-manifest" });
+  const candidate = snapshot({
+    indexedGeneration: 2,
+    manifestFingerprint: await computeCurrentManifestFingerprint(repoRoot, layout)
+  });
+  await writeSnapshotAtomic(target, previous);
+
+  let changed = false;
+  await assert.rejects(
+    () => writeSnapshotIfManifestCurrent(target, candidate, async () => {
+      if (!changed) {
+        changed = true;
+        writeFileSync(source, "package demo; class Current { void changed() {} }\n");
+      }
+      return computeCurrentManifestFingerprint(repoRoot, layout);
+    }),
+    /manifest changed before snapshot publish/
+  );
+
+  const loaded = await loadSnapshot(target, identityFor(previous));
+  assert.equal(loaded?.indexedGeneration, previous.indexedGeneration, "the stale candidate must not replace the prior snapshot");
 });
 
 test("a write failure does not leave a stray temp file behind", async () => {

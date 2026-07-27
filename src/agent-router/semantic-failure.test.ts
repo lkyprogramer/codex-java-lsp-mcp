@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { AgentRouter } from "./index.js";
 import { SourceIndex } from "../source-index.js";
+import { wrapSourceIndex } from "../source-index-router-adapter.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import { createRequestContext } from "../runtime/request-context.js";
 import { JavaIntelligenceError, type JavaIntelligenceErrorCode } from "../runtime/intelligence-error.js";
@@ -37,7 +38,7 @@ function routerThatThrows(repoRoot: string, code: JavaIntelligenceErrorCode, mes
     references: failure,
     typeHierarchy: failure
   };
-  return new AgentRouter(repoRoot, session as never, new SourceIndex(repoRoot));
+  return new AgentRouter(repoRoot, session as never, wrapSourceIndex(new SourceIndex(repoRoot)));
 }
 
 function options(anchorFile: string, repoRoot: string): ImpactOptions {

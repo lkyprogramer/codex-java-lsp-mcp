@@ -16,6 +16,8 @@ export type RequestFreshnessMode =
   | "WATCHER_DEGRADED"
   | "RECONCILING";
 
+export type IndexOpenSource = "own-snapshot" | "sibling-seed" | "cold";
+
 export type RequestContext = {
   requestId: string;
   repoRoot: string;
@@ -26,6 +28,8 @@ export type RequestContext = {
   cacheReadAllowed: boolean;
   cacheWriteAllowed: boolean;
   negativeLookupAllowed: boolean;
+  /** How JavaIndex was populated for this runtime (own snapshot, sibling seed, or cold). */
+  indexOpenSource?: IndexOpenSource;
   mode: RequestMode;
   budget: DeadlineBudget;
   startedAtMs: number;
@@ -49,6 +53,7 @@ export function createRequestContext(input: {
   cacheReadAllowed: boolean;
   cacheWriteAllowed: boolean;
   negativeLookupAllowed: boolean;
+  indexOpenSource?: IndexOpenSource;
   mode: RequestMode;
   semanticPolicy: SemanticPolicy;
   deadlineMs?: number;
@@ -68,6 +73,7 @@ export function createRequestContext(input: {
     cacheReadAllowed: input.cacheReadAllowed,
     cacheWriteAllowed: input.cacheWriteAllowed,
     negativeLookupAllowed: input.negativeLookupAllowed,
+    indexOpenSource: input.indexOpenSource,
     mode: input.mode,
     budget: input.budget ?? DeadlineBudget.fromTimeout(deadlineMs),
     startedAtMs: performance.now()

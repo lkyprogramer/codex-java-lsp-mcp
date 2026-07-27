@@ -13,6 +13,7 @@ import { AgentRouter } from "./agent-router/index.js";
 import { EdgeStore } from "./edge-store.js";
 import { JdtlsSession } from "./jdtls-session.js";
 import { SourceIndex } from "./source-index.js";
+import { wrapSourceIndex } from "./source-index-router-adapter.js";
 import type { ImpactOptions } from "./agent-types.js";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -21,11 +22,11 @@ const repoRoot = process.env.LISHUEDU_ROOT || path.resolve(projectDir, "..", "..
 const hasLishueduFixture = process.env.LISHUEDU_ROOT !== undefined;
 
 function router(): AgentRouter {
-  return new AgentRouter(repoRoot, new JdtlsSession(repoRoot), new SourceIndex(repoRoot));
+  return new AgentRouter(repoRoot, new JdtlsSession(repoRoot), wrapSourceIndex(new SourceIndex(repoRoot)));
 }
 
 function tempRouter(root: string): AgentRouter {
-  return new AgentRouter(root, new JdtlsSession(root), new SourceIndex(root));
+  return new AgentRouter(root, new JdtlsSession(root), wrapSourceIndex(new SourceIndex(root)));
 }
 
 function options(overrides: Partial<ImpactOptions>): ImpactOptions {
@@ -275,7 +276,7 @@ test("semanticPolicy fast does not call semantic verify", async () => {
   await writeFile(path.join(root, "src", "main", "java", "demo", "FooService.java"), "package demo;\npublic class FooService { public void applyOrder() {} }\n");
   const session = new FakeSemanticSession();
 
-  await new AgentRouter(root, session as unknown as JdtlsSession, new SourceIndex(root)).impact(options({
+  await new AgentRouter(root, session as unknown as JdtlsSession, wrapSourceIndex(new SourceIndex(root))).impact(options({
     anchors: [{ file: "src/main/java/demo/FooService.java", line: 2, column: 45 }],
     profile: "service",
     semanticPolicy: "fast"
@@ -291,7 +292,7 @@ test("auto semantic verify is skipped when semantic seed is skipped", async () =
   await writeFile(path.join(root, "src", "main", "java", "demo", "FooController.java"), "package demo;\npublic class FooController { public void applyOrder() {} }\n");
   const session = new FakeSemanticSession();
 
-  const result = await new AgentRouter(root, session as unknown as JdtlsSession, new SourceIndex(root)).impact(options({
+  const result = await new AgentRouter(root, session as unknown as JdtlsSession, wrapSourceIndex(new SourceIndex(root))).impact(options({
     anchors: [{ file: "src/main/java/demo/FooController.java", line: 2, column: 48 }],
     profile: "controller",
     semanticPolicy: "auto",
@@ -313,7 +314,7 @@ test("required semantic verify promotes reference candidates", async () => {
   await writeFile(caller, "package demo;\npublic class OtherController { public void route() {} }\n");
   const session = new FakeSemanticSession([{ uri: pathToFileURL(caller).toString(), range: { start: { line: 1, character: 13 }, end: { line: 1, character: 28 } } }]);
 
-  const result = await new AgentRouter(root, session as unknown as JdtlsSession, new SourceIndex(root)).impact(options({
+  const result = await new AgentRouter(root, session as unknown as JdtlsSession, wrapSourceIndex(new SourceIndex(root))).impact(options({
     anchors: [{ file: "src/main/java/demo/FooService.java", line: 2, column: 45 }],
     profile: "service",
     semanticPolicy: "required",
@@ -334,7 +335,7 @@ test("semantic verify timeout falls back to non-semantic candidates", async () =
   const session = new FakeSemanticSession();
   session.failReferences = true;
 
-  const result = await new AgentRouter(root, session as unknown as JdtlsSession, new SourceIndex(root)).impact(options({
+  const result = await new AgentRouter(root, session as unknown as JdtlsSession, wrapSourceIndex(new SourceIndex(root))).impact(options({
     anchors: [{ file: "src/main/java/demo/FooService.java", line: 2, column: 45 }],
     profile: "service",
     semanticPolicy: "required"
@@ -353,7 +354,7 @@ test("required semantic verify promotes type hierarchy subtype candidates", asyn
   await writeFile(subtype, "package demo;\npublic class StripeGateway implements PaymentGateway { public void pay() {} }\n");
   const session = new FakeSemanticSession([], [{ depth: 1, from: { uri: pathToFileURL(subtype).toString(), range: { start: { line: 1, character: 13 }, end: { line: 1, character: 26 } } }, to: {} }]);
 
-  const result = await new AgentRouter(root, session as unknown as JdtlsSession, new SourceIndex(root)).impact(options({
+  const result = await new AgentRouter(root, session as unknown as JdtlsSession, wrapSourceIndex(new SourceIndex(root))).impact(options({
     anchors: [{ file: "src/main/java/demo/PaymentGateway.java", line: 2, column: 18 }],
     profile: "port",
     semanticPolicy: "required",
@@ -375,7 +376,7 @@ test("cached type graph promotes implementers before rg naming fallback", async 
   sourceIndex.factsFor(path.join(root, "src", "main", "java", "demo", "PaymentGateway.java"));
   sourceIndex.factsFor(path.join(root, "src", "main", "java", "demo", "StripeGateway.java"));
 
-  const result = await new AgentRouter(root, new JdtlsSession(root), sourceIndex).impact(options({
+  const result = await new AgentRouter(root, new JdtlsSession(root), wrapSourceIndex(sourceIndex)).impact(options({
     anchors: [{ file: "src/main/java/demo/PaymentGateway.java", line: 2, column: 18 }],
     profile: "port",
     semanticPolicy: "fast",
@@ -581,7 +582,7 @@ test("type reference diagnostics report scanned, skipped, and added candidates",
     sourceIndex.factsFor(path.join(root, "src", "main", "java", "demo", file));
   }
 
-  const result = await new AgentRouter(root, new JdtlsSession(root), sourceIndex).impact(options({
+  const result = await new AgentRouter(root, new JdtlsSession(root), wrapSourceIndex(sourceIndex)).impact(options({
     anchors: [{ file: "src/main/java/demo/EnrollmentService.java", line: 2, column: 15 }],
     profile: "service",
     semanticPolicy: "fast",
@@ -613,7 +614,7 @@ test("required semantic policy skips local type reference expansion", async () =
   ].join("\n"));
 
   const session = new FakeSemanticSession();
-  const result = await new AgentRouter(root, session as unknown as JdtlsSession, new SourceIndex(root)).impact(options({
+  const result = await new AgentRouter(root, session as unknown as JdtlsSession, wrapSourceIndex(new SourceIndex(root))).impact(options({
     anchors: [{ file: "src/main/java/demo/CebOrderRequest.java", line: 2, column: 15 }],
     profile: "dto",
     semanticPolicy: "required",
@@ -643,7 +644,7 @@ test("pure type references do not evict graph candidates from read plan", async 
     sourceIndex.factsFor(path.join(root, "src", "main", "java", "demo", file));
   }
 
-  const result = await new AgentRouter(root, new JdtlsSession(root), sourceIndex).impact(options({
+  const result = await new AgentRouter(root, new JdtlsSession(root), wrapSourceIndex(sourceIndex)).impact(options({
     anchors: [{ file: "src/main/java/demo/PaymentGateway.java", line: 2, column: 18 }],
     profile: "port",
     semanticPolicy: "fast",
@@ -675,7 +676,7 @@ test("import graph recalls method-body collaborators invisible to signature scan
   const sourceIndex = new SourceIndex(root);
   sourceIndex.factsFor(path.join(root, "src", "main", "java", "demo", "dto", "ApplyInfoUpdateDTO.java"));
 
-  const result = await new AgentRouter(root, new JdtlsSession(root), sourceIndex).impact(options({
+  const result = await new AgentRouter(root, new JdtlsSession(root), wrapSourceIndex(sourceIndex)).impact(options({
     anchors: [{ file: "src/main/java/demo/application/ApplyInfoServiceImpl.java", line: 3, column: 15 }],
     profile: "service",
     semanticPolicy: "fast",
@@ -703,7 +704,7 @@ test("import graph recalls cross-module importers outside rg roots", async () =>
   const sourceIndex = new SourceIndex(root);
   sourceIndex.factsFor(path.join(root, "modules", "flow", "src", "main", "java", "demo", "flow", "SubmitFlowHandler.java"));
 
-  const result = await new AgentRouter(root, new JdtlsSession(root), sourceIndex).impact(options({
+  const result = await new AgentRouter(root, new JdtlsSession(root), wrapSourceIndex(sourceIndex)).impact(options({
     anchors: [{ file: "modules/core/src/main/java/demo/core/PositionQuery.java", line: 2, column: 15 }],
     profile: "dto",
     semanticPolicy: "fast",
@@ -727,7 +728,7 @@ test("required semantic policy skips import graph expansion", async () => {
   ].join("\n"));
 
   const session = new FakeSemanticSession();
-  const result = await new AgentRouter(root, session as unknown as JdtlsSession, new SourceIndex(root)).impact(options({
+  const result = await new AgentRouter(root, session as unknown as JdtlsSession, wrapSourceIndex(new SourceIndex(root))).impact(options({
     anchors: [{ file: "src/main/java/demo/OrderQuery.java", line: 2, column: 15 }],
     profile: "dto",
     semanticPolicy: "required",
@@ -753,7 +754,7 @@ test("import graph diagnostics report scanned and added candidates", async () =>
   const sourceIndex = new SourceIndex(root);
   sourceIndex.factsFor(path.join(root, "src", "main", "java", "demo", "dto", "ApplyInfoUpdateDTO.java"));
 
-  const result = await new AgentRouter(root, new JdtlsSession(root), sourceIndex).impact(options({
+  const result = await new AgentRouter(root, new JdtlsSession(root), wrapSourceIndex(sourceIndex)).impact(options({
     anchors: [{ file: "src/main/java/demo/application/ApplyInfoServiceImpl.java", line: 3, column: 15 }],
     profile: "service",
     semanticPolicy: "fast",
@@ -787,7 +788,7 @@ test("evidence budget keeps structural collaborator under naming flood", async (
   const sourceIndex = new SourceIndex(root);
   sourceIndex.factsFor(path.join(root, "src", "main", "java", "demo", "OrderPolicy.java"));
 
-  const result = await new AgentRouter(root, new JdtlsSession(root), sourceIndex).impact(options({
+  const result = await new AgentRouter(root, new JdtlsSession(root), wrapSourceIndex(sourceIndex)).impact(options({
     anchors: [{ file: "src/main/java/demo/OrderService.java", line: 2, column: 15 }],
     profile: "service",
     semanticPolicy: "fast",
@@ -981,7 +982,7 @@ test("required semantic candidates do not evict non-LSP read plan neighbors", as
   }
   const session = new FakeSemanticSession(referenceItems, [], implementationItems);
 
-  const result = await new AgentRouter(root, session as unknown as JdtlsSession, new SourceIndex(root)).impact(options({
+  const result = await new AgentRouter(root, session as unknown as JdtlsSession, wrapSourceIndex(new SourceIndex(root))).impact(options({
     anchors: [{ file: "modules/integration/src/main/java/demo/StorageGateway.java", line: 3, column: 28 }],
     profile: "port",
     semanticPolicy: "required",
@@ -1010,7 +1011,7 @@ test("required semantic verify persists reference edges for cold reuse", async (
     { uri: pathToFileURL(caller).toString(), range: { start: { line: 1, character: 13 }, end: { line: 1, character: 28 } } }
   ]);
 
-  await new AgentRouter(root, session as unknown as JdtlsSession, new SourceIndex(root)).impact(options({
+  await new AgentRouter(root, session as unknown as JdtlsSession, wrapSourceIndex(new SourceIndex(root))).impact(options({
     anchors: [{ file: "src/main/java/demo/FooService.java", line: 2, column: 45 }],
     profile: "service",
     semanticPolicy: "required"
@@ -1031,7 +1032,7 @@ test("failed semantic verify does not persist edges", async () => {
   const session = new FakeSemanticSession();
   session.failReferences = true;
 
-  await new AgentRouter(root, session as unknown as JdtlsSession, new SourceIndex(root)).impact(options({
+  await new AgentRouter(root, session as unknown as JdtlsSession, wrapSourceIndex(new SourceIndex(root))).impact(options({
     anchors: [{ file: "src/main/java/demo/FooService.java", line: 2, column: 45 }],
     profile: "service",
     semanticPolicy: "required"
@@ -1054,7 +1055,7 @@ test("persisted semantic edges provide high-confidence candidates without lsp", 
   ]);
   const session = new FakeSemanticSession();
 
-  const result = await new AgentRouter(root, session as unknown as JdtlsSession, new SourceIndex(root)).impact(options({
+  const result = await new AgentRouter(root, session as unknown as JdtlsSession, wrapSourceIndex(new SourceIndex(root))).impact(options({
     anchors: [{ file: "src/main/java/demo/FooService.java", line: 2, column: 45 }],
     profile: "service",
     semanticPolicy: "fast",
@@ -1080,7 +1081,7 @@ test("stale persisted edges are ignored after anchor changes", async () => {
   const future = new Date(Date.now() + 5000);
   utimesSync(anchor, future, future);
 
-  const result = await new AgentRouter(root, new JdtlsSession(root), new SourceIndex(root)).impact(options({
+  const result = await new AgentRouter(root, new JdtlsSession(root), wrapSourceIndex(new SourceIndex(root))).impact(options({
     anchors: [{ file: "src/main/java/demo/FooService.java", line: 2, column: 45 }],
     profile: "service",
     semanticPolicy: "fast",

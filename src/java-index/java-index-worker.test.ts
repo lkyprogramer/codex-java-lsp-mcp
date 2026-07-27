@@ -10,7 +10,12 @@ import {
 } from "../cross-process-lease.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import type { WorktreeIdentity } from "../worktree-identity.js";
+import { probeLayout } from "../layout-probe.js";
+import { computeBuildFingerprint, computeExtractorVersion } from "./build-fingerprint.js";
 import { JavaIndexClient } from "./java-index-client.js";
+import { computeCurrentManifestFingerprint } from "./manifest.js";
+import { loadSnapshot } from "./snapshot.js";
+import { STABLE_ID_VERSION } from "./stable-id.js";
 
 function tempRepo(prefix: string): string {
   return mkdtempSync(path.join(tmpdir(), prefix));
@@ -463,6 +468,11 @@ test("OPEN seeds a DEGRADED store from a valid sibling snapshot when it has no o
 
   assert.equal(openStatus.worktreeSeed?.completion, "SEEDED_DEGRADED");
   assert.equal(openStatus.worktreeSeed?.reusedFiles, 1);
+  assert.equal(openStatus.worktreeSeed?.dirtyFiles, 0);
+  assert.equal(openStatus.worktreeSeed?.relinkFiles, 0);
+  assert.equal(openStatus.worktreeSeed?.droppedCrossFileEdges, 0);
+  assert.equal(openStatus.worktreeSeed?.deltaParsedFiles, 0);
+  assert.ok((openStatus.worktreeSeed?.manifestValidationMs ?? 0) >= 0);
   assert.equal(openStatus.files, 1, "the seeded store's facts must be visible immediately, before any sweep runs");
   assert.ok(
     openStatus.coverage.every(entry => entry.state === "DEGRADED"),
@@ -472,7 +482,63 @@ test("OPEN seeds a DEGRADED store from a valid sibling snapshot when it has no o
   const bundle = (await client.queryFiles([path.join(targetRepo, "src/main/java/demo/Same.java")]))[0];
   assert.ok(bundle, "a reused file's facts must already answer a query right after OPEN");
 
+  await client.reconcile(1);
+  await waitFor(async () => (await client.status()).pendingBackground === 0, 5000);
+  const reconciled = await client.status();
+  assert.equal(reconciled.worktreeSeed?.completion, "RECONCILED_COMPLETE");
+  assert.equal(reconciled.worktreeSeed?.deltaParsedFiles, 1);
+
   await client.close();
+});
+
+test("two target processes can seed concurrently and leave a manifest-validated target snapshot", async () => {
+  const siblingRepo = tempRepo("java-index-concurrent-seed-source-");
+  const relativePath = "src/main/java/demo/Same.java";
+  writeJavaFile(siblingRepo, relativePath, "package demo;\n\nclass Same {}\n");
+  const cacheBase = tempCacheDir();
+  const siblingCacheDir = path.join(cacheBase, "sibling");
+  const siblingClient = new JavaIndexClient(siblingRepo, siblingCacheDir);
+  await siblingClient.open(1);
+  await siblingClient.reconcile(1);
+  await waitFor(async () => (await siblingClient.status()).pendingBackground === 0, 5000);
+  await siblingClient.close();
+  writeFileSync(
+    path.join(siblingCacheDir, "repo-meta.json"),
+    JSON.stringify({ repoRoot: siblingRepo, repoHash: "sibling-concurrent-hash", familyHash: "shared-concurrent-family" })
+  );
+
+  const targetRepo = tempRepo("java-index-concurrent-seed-target-");
+  writeJavaFile(targetRepo, relativePath, "package demo;\n\nclass Same {}\n");
+  const targetCacheDir = path.join(cacheBase, "target");
+  const identity: WorktreeIdentity = {
+    repoRoot: targetRepo,
+    repoHash: "target-concurrent-hash",
+    familyHash: "shared-concurrent-family",
+    isLinkedWorktree: true
+  };
+  const first = new JavaIndexClient(targetRepo, targetCacheDir);
+  const second = new JavaIndexClient(targetRepo, targetCacheDir);
+  const [firstOpen, secondOpen] = await Promise.all([
+    first.open(1, { worktree: identity, siblingCacheBase: cacheBase }),
+    second.open(1, { worktree: identity, siblingCacheBase: cacheBase })
+  ]);
+  assert.equal(firstOpen.worktreeSeed?.completion, "SEEDED_DEGRADED");
+  assert.equal(secondOpen.worktreeSeed?.completion, "SEEDED_DEGRADED");
+
+  await Promise.all([first.reconcile(1), second.reconcile(1)]);
+  await waitFor(async () => (await first.status()).pendingBackground === 0 && (await second.status()).pendingBackground === 0, 10000);
+  await Promise.all([first.flush(), second.flush()]);
+  await Promise.all([first.close(), second.close()]);
+
+  const layout = probeLayout(targetRepo);
+  const snapshot = await loadSnapshot(path.join(targetCacheDir, SNAPSHOT_FILE_NAME), {
+    extractorVersion: computeExtractorVersion(),
+    stableIdVersion: STABLE_ID_VERSION,
+    canonicalRepoRoot: targetRepo,
+    buildFingerprint: await computeBuildFingerprint(targetRepo, layout)
+  });
+  assert.ok(snapshot, "concurrent atomic writers must leave one readable target snapshot");
+  assert.equal(snapshot!.manifestFingerprint, await computeCurrentManifestFingerprint(targetRepo, layout));
 });
 
 test("a malformed sibling snapshot fails the seed attempt softly - OPEN still succeeds with an empty store", async () => {

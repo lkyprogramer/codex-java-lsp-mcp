@@ -2,7 +2,7 @@
 // output: Pure cold-path ranking deltas and safe tail truncation decisions.
 // pos: Structural ranking helpers for AgentRouter final scoring.
 import type { CandidateFile } from "../agent-types.js";
-import type { JavaSourceFacts } from "../source-index.js";
+import type { JavaSourceFacts } from "../java-index/router-facts.js";
 
 const STEREOTYPE_NAMES = new Set([
   "Controller",

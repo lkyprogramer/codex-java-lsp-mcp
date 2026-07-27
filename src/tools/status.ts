@@ -9,6 +9,7 @@ import { probeLayout, type LayoutContext } from "../layout-probe.js";
 import type { JdtlsProgressStatus } from "../jdtls-session.js";
 import type { FileWatcherStatus } from "../file-watcher.js";
 import type { GeneratedCodeStatus } from "../generated-code.js";
+import type { JavaIndexStatus } from "../java-index/index-types.js";
 import type { ProjectJdkStatus } from "../project-jdk.js";
 import type { SourceIndexStatus } from "../source-index.js";
 import type { ToolContext } from "./context.js";
@@ -37,6 +38,7 @@ type StatusSummaryInput = {
   readonly runtimeBuild: RuntimeBuildInfo;
   readonly warnings: string[];
   readonly sourceIndex: SourceIndexStatus;
+  readonly javaIndex?: JavaIndexStatus;
 };
 
 export const statusSchema = {
@@ -72,6 +74,7 @@ export async function javaStatus(context: ToolContext, _args: z.infer<z.ZodObjec
   }
   const sessionStatus = context.session.status();
   const sourceIndex = context.sourceIndex.status();
+  const javaIndex = await context.javaIndexClient?.status().catch(() => undefined);
   const full = {
     ...sessionStatus,
     repoHash: context.repoHash,
@@ -84,13 +87,14 @@ export async function javaStatus(context: ToolContext, _args: z.infer<z.ZodObjec
     lsp: context.lsp,
     repoRoot: context.repoRoot,
     sourceIndex,
+    javaIndex,
     watcher: context.watcher,
     rgCache: context.router.rgCacheStatus(),
     note: "This MCP server is read-only and exposes the Java impact router."
   };
   return isDiagnosticDetail(_args.detail)
     ? full
-    : statusSummary({ context, sessionStatus, layout, runtimeBuild, warnings, sourceIndex });
+    : statusSummary({ context, sessionStatus, layout, runtimeBuild, warnings, sourceIndex, javaIndex });
 }
 
 export function summarizeSessionStatus(status: SessionStatus): Record<string, unknown> {
@@ -156,7 +160,23 @@ function statusSummary(input: StatusSummaryInput): Record<string, unknown> {
     lsp: input.context.lsp,
     repoRoot: input.context.repoRoot,
     sourceIndex: summarizeSourceIndex(input.sourceIndex),
+    javaIndex: input.javaIndex && summarizeJavaIndex(input.javaIndex),
     watcher: input.context.watcher && summarizeWatcher(input.context.watcher)
+  });
+}
+
+function summarizeJavaIndex(status: JavaIndexStatus): Record<string, unknown> {
+  return compact({
+    state: status.state,
+    indexedGeneration: status.indexedGeneration,
+    files: status.files,
+    pendingBackground: status.pendingBackground,
+    worktreeSeed: status.worktreeSeed && compact({
+      completion: status.worktreeSeed.completion,
+      reusedFiles: status.worktreeSeed.reusedFiles,
+      dirtyFiles: status.worktreeSeed.dirtyFiles,
+      deltaParsedFiles: status.worktreeSeed.deltaParsedFiles
+    })
   });
 }
 

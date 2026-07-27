@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { AgentRouter } from "./agent-router/index.js";
 import { SourceIndex } from "./source-index.js";
+import { wrapSourceIndex } from "./source-index-router-adapter.js";
 import { RgRunner } from "./search/rg-runner.js";
 import { canonicalPath } from "./path-utils.js";
 import { createRequestContext, type RequestContext } from "./runtime/request-context.js";
@@ -94,7 +95,7 @@ test("a change batch invalidates the fast-path rg cache; the next request sees t
     ensureStarted: async () => { ensureStartedCalls += 1; },
     invalidateForRepoChanges: () => {}
   };
-  const router = new AgentRouter(root, fakeSession as never, sourceIndex, undefined, undefined, undefined, runner);
+  const router = new AgentRouter(root, fakeSession as never, wrapSourceIndex(sourceIndex), undefined, undefined, undefined, runner);
 
   // World 0: only FirstService. Cache it at generation 1.
   const gen1 = await router.impact(options(root, anchor), request(root, 1));

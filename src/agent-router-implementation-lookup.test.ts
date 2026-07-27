@@ -7,6 +7,7 @@ import { AgentRouter } from "./agent-router/index.js";
 import type { ImpactOptions } from "./agent-types.js";
 import { JdtlsSession } from "./jdtls-session.js";
 import { SourceIndex } from "./source-index.js";
+import { wrapSourceIndex } from "./source-index-router-adapter.js";
 
 type ImpactResult = Awaited<ReturnType<AgentRouter["impact"]>>;
 
@@ -74,7 +75,7 @@ test("referenced interface implementers are added when the interface is already 
     await writeFile(path.join(dtoDir, `${typeName}.java`), `package demo.dto;\npublic record ${typeName}() {}\n`);
   }
 
-  const result = await new AgentRouter(root, new JdtlsSession(root), new SourceIndex(root)).impact(options({
+  const result = await new AgentRouter(root, new JdtlsSession(root), wrapSourceIndex(new SourceIndex(root))).impact(options({
     anchors: [{ file: "exam-candidate/src/main/java/demo/app/CandidatePositionQueryService.java", line: 5, column: 15 }],
     profile: "service",
     focusModules: ["exam-candidate", "exam-service-candidate"],

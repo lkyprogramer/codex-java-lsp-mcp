@@ -135,6 +135,31 @@ test("reused facts are stamped into the target's current generation, not the sou
   assert.equal(same.generation, targetGeneration);
 });
 
+test("final stable revalidation drops a reused fact changed after its initial hash and before seed publication", async () => {
+  const { family, cacheBase } = await seedableFamily();
+  const targetIdentity = await resolveWorktreeIdentity(family.linked);
+  const { identity, layout } = await seedIdentityFor(family.linked);
+  const seeder = new WorktreeSnapshotSeeder();
+  const candidate = await seeder.findCandidate(targetIdentity, identity, cacheBase);
+  assert.ok(candidate);
+
+  const { result, store } = await seeder.seedValidatedFacts(candidate!, identity, family.linked, layout, 2, {
+    beforeFinalValidation: () => write(
+      family.linked,
+      SAME,
+      "package demo; public class Same { void changedAfterHash() {} }\n"
+    )
+  });
+
+  assert.equal(
+    result.reusedPaths.includes(SAME),
+    false,
+    "a file changed after the initial stable scan must not be published as reused"
+  );
+  assert.ok(result.dirtyPaths.includes(SAME));
+  assert.equal(store.file(SAME), undefined, "no stale facts may survive the final validation boundary");
+});
+
 test("a corrupt newest candidate falls back to the next valid candidate", async () => {
   const { family, cacheBase } = await seedableFamily();
 

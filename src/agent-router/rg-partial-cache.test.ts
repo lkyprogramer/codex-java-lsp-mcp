@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { AgentRouter } from "./index.js";
 import { SourceIndex } from "../source-index.js";
+import { wrapSourceIndex } from "../source-index-router-adapter.js";
 import { RgRunner } from "../search/rg-runner.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import { createRequestContext } from "../runtime/request-context.js";
@@ -84,7 +85,7 @@ function routerWith(runner: RgRunner, repoRoot: string): AgentRouter {
   return new AgentRouter(
     repoRoot,
     session as never,
-    new SourceIndex(repoRoot),
+    wrapSourceIndex(new SourceIndex(repoRoot)),
     undefined,
     undefined,
     undefined,
