@@ -2,6 +2,7 @@
 // output: One CandidateEvidence per candidate file, deduplicated by canonical identity.
 // pos: Task 24 Step 2-4 - the single place duplicate/invalid provider output is caught.
 import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
+import { classifyPath } from "../repo-layout.js";
 import type { Confidence } from "../agent-types.js";
 import type { CandidateEvidence, EvidenceCompleteness, EvidenceSignal } from "./evidence.js";
 
@@ -13,7 +14,15 @@ const COMPLETENESS_RANK: Record<EvidenceCompleteness, number> = {
 
 const DEFAULT_CONFIDENCE: Confidence = "low";
 
-export function normalizeEvidence(signals: readonly EvidenceSignal[]): Map<string, CandidateEvidence> {
+/**
+ * `repoRoot` is optional so every existing caller (15 test call sites as of
+ * Task 25) keeps working unchanged. Pass it to populate `module`/`layer`/
+ * `sourceSet` via the same `classifyPath` every provider already uses for
+ * that path's structural facts - family-ranker.ts's same-module/cross-module/
+ * sourceSet terms and `materializeRankedCandidates()` both need these fields
+ * populated before ranking, not derived after the fact.
+ */
+export function normalizeEvidence(signals: readonly EvidenceSignal[], repoRoot?: string): Map<string, CandidateEvidence> {
   const bestByIdentity = new Map<string, EvidenceSignal>();
   for (const signal of signals) {
     validateSignal(signal);
@@ -31,8 +40,12 @@ export function normalizeEvidence(signals: readonly EvidenceSignal[]): Map<strin
       entry.signals.push(signal);
       continue;
     }
+    const context = repoRoot ? classifyPath(repoRoot, signal.candidateFile) : undefined;
     byFile.set(signal.candidateFile, {
       file: signal.candidateFile,
+      module: context?.module,
+      layer: context?.layer,
+      sourceSet: context?.sourceSet,
       signals: [signal],
       familyScores: {},
       finalScore: 0,
