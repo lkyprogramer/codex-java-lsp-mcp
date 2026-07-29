@@ -1,4 +1,4 @@
-// input: SourceIndex facts and finalized candidate score breakdowns.
+// input: JavaIndex facts and finalized candidate score breakdowns.
 // output: Pure cold-path ranking deltas and safe tail truncation decisions.
 // pos: Structural ranking helpers for AgentRouter final scoring.
 import type { CandidateFile } from "../agent-types.js";
@@ -33,7 +33,11 @@ const STRUCTURAL_SIGNAL_IDS = new Set([
   "finalize.structural.type-symmetric",
   "finalize.structural.kind",
   "finalize.type-relation",
-  "finalize.direct-collaborator"
+  "finalize.direct-collaborator",
+  // A method parameter or return type is an exact AST relationship to the
+  // anchor. It must not be discarded merely because a dense static graph has
+  // already filled the small read-plan budget.
+  "finalize.method-relation"
 ]);
 
 const MIN_STRUCTURAL_EVIDENCE_FOR_TAIL_TRUNCATION = 6;
@@ -111,6 +115,9 @@ export function kindPairingDelta(anchorFacts: JavaSourceFacts, candidateFacts: J
 }
 
 export function hasProtectedStructuralSignal(candidate: CandidateFile): boolean {
+  if ((candidate.verifiedBy || []).some(source => source === "persisted-reference" || source === "persisted-implementation" || source === "persisted-typeHierarchy")) {
+    return true;
+  }
   return (candidate.scoreBreakdown || []).some(item => item.delta > 0 && STRUCTURAL_SIGNAL_IDS.has(item.id));
 }
 
@@ -124,7 +131,8 @@ export function truncateCandidateTail(
   }
   const isProtected = (file: CandidateFile): boolean =>
     readPlanCovered.has(file)
-    || hasProtectedStructuralSignal(file);
+    || hasProtectedStructuralSignal(file)
+    || hasExactDeferredTestReference(file);
 
   const protectedFiles: CandidateFile[] = [];
   const discardable: CandidateFile[] = [];
@@ -134,7 +142,7 @@ export function truncateCandidateTail(
 
   const structuralCount = ranked.filter(hasProtectedStructuralSignal).length;
   if (structuralCount < MIN_STRUCTURAL_EVIDENCE_FOR_TAIL_TRUNCATION) {
-    return limitKeepingProtected(sortByScore(ranked), [...readPlanCovered], limit);
+    return limitKeepingProtected(sortByScore(ranked), protectedFiles, limit);
   }
   const dynamicBudget = Math.min(Math.floor(structuralCount * 0.5), 4);
   let cliffIdx = discardable.length;
@@ -169,6 +177,13 @@ function limitKeepingProtected(sorted: CandidateFile[], protectedFiles: Candidat
     }
   }
   return sortByScore(limited);
+}
+
+function hasExactDeferredTestReference(candidate: CandidateFile): boolean {
+  // A deferred test stays out of the bounded foreground read plan, but an exact
+  // JavaIndex type edge is still useful candidate evidence. Keep it visible
+  // when trimming the noisy tail without broadening the read-plan budget.
+  return candidate.sourceSet === "test" && (candidate.verifiedBy || []).includes("typeReference");
 }
 
 function simpleName(value: string): string {

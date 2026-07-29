@@ -43,14 +43,8 @@ function sourceRootInfos(repoRoot: string): SourceRootInfo[] {
     }
   };
 
-  addJavaRoots("", ".");
-  for (const child of listDirectories(repoRoot)) {
-    addJavaRoots(child, child);
-  }
-  for (const topLevel of ["modules", "apps"]) {
-    for (const child of listDirectories(path.join(repoRoot, topLevel))) {
-      addJavaRoots(path.join(topLevel, child), child);
-    }
+  for (const baseRelative of moduleBaseRelatives(repoRoot)) {
+    addJavaRoots(baseRelative, baseRelative === "" ? "." : path.basename(baseRelative));
   }
   return [...roots.values()].sort((left, right) => left.relativePath.localeCompare(right.relativePath));
 }
@@ -64,14 +58,8 @@ function resourceRootInfos(repoRoot: string): string[] {
     }
   };
 
-  addResourceRoot("");
-  for (const child of listDirectories(repoRoot)) {
-    addResourceRoot(child);
-  }
-  for (const topLevel of ["modules", "apps"]) {
-    for (const child of listDirectories(path.join(repoRoot, topLevel))) {
-      addResourceRoot(path.join(topLevel, child));
-    }
+  for (const baseRelative of moduleBaseRelatives(repoRoot)) {
+    addResourceRoot(baseRelative);
   }
   if (isDirectory(path.join(repoRoot, "docs", "sql"))) {
     roots.add(path.join("docs", "sql"));
@@ -95,11 +83,16 @@ function broadRoots(repoRoot: string, sourceRoots: SourceRootInfo[]): string[] {
     return roots;
   }
   const hasRootSource = sourceRoots.some(root => root.module === ".");
-  const modules = [...new Set([...mavenModules(repoRoot), ...sourceRoots.map(root => root.module).filter(module => module !== ".")])];
+  const modules = new Set([
+    ...mavenModules(repoRoot),
+    ...sourceRoots
+      .map(root => moduleBaseRelative(root.relativePath))
+      .filter(module => module !== ".")
+  ]);
   if (hasRootSource) {
-    modules.push(".");
+    modules.add(".");
   }
-  return modules.length > 0 ? modules.sort() : ["."];
+  return compactBroadRoots([...modules]);
 }
 
 const LAYOUT_MARKER_NAMES = [
@@ -133,16 +126,56 @@ export function layoutBuildFingerprint(repoRoot: string): string {
 }
 
 function markerRootCandidates(repoRoot: string): string[] {
-  const roots = new Set<string>([repoRoot]);
-  for (const child of listDirectories(repoRoot)) {
-    roots.add(path.join(repoRoot, child));
-  }
-  for (const topLevel of ["modules", "apps"]) {
-    for (const child of listDirectories(path.join(repoRoot, topLevel))) {
-      roots.add(path.join(repoRoot, topLevel, child));
-    }
-  }
+  const roots = new Set(moduleBaseRelatives(repoRoot).map(relative => path.join(repoRoot, relative)));
   return [...roots].sort();
+}
+
+const MODULE_DISCOVERY_MAX_DEPTH = 4;
+const MODULE_DISCOVERY_IGNORED = new Set([
+  ".git", ".gradle", ".idea", ".mvn", ".cache", ".worktrees", "build", "dist", "node_modules", "out", "target"
+]);
+
+/**
+ * A Maven reactor may have a grouping module such as `exam-service/` whose
+ * actual Java modules live one level below it.  Discover module bases by a
+ * bounded directory walk, stopping before source/build trees, so every
+ * a module's `src/{main,test}/{java,resources}` root is visible to both the index and
+ * the router without turning normal discovery into an unbounded repository
+ * scan.
+ */
+function moduleBaseRelatives(repoRoot: string): string[] {
+  const bases = new Set<string>([""]);
+  const visit = (relative: string, depth: number): void => {
+    if (depth >= MODULE_DISCOVERY_MAX_DEPTH) {
+      return;
+    }
+    const absolute = path.join(repoRoot, relative);
+    for (const child of listDirectories(absolute)) {
+      if (MODULE_DISCOVERY_IGNORED.has(child) || child === "src") {
+        continue;
+      }
+      const nested = relative ? path.join(relative, child) : child;
+      bases.add(nested);
+      visit(nested, depth + 1);
+    }
+  };
+  visit("", 0);
+  return [...bases].sort();
+}
+
+function moduleBaseRelative(sourceRoot: string): string {
+  const parts = sourceRoot.split(path.sep);
+  const srcSegmentIndex = parts.lastIndexOf("src");
+  if (srcSegmentIndex <= 0) {
+    return ".";
+  }
+  return parts.slice(0, srcSegmentIndex).join(path.sep);
+}
+
+function compactBroadRoots(roots: string[]): string[] {
+  const sorted = [...new Set(roots.filter(Boolean))].sort((left, right) => left.length - right.length || left.localeCompare(right));
+  const compact = sorted.filter(root => !sorted.some(parent => parent !== root && (parent === "." || root.startsWith(`${parent}${path.sep}`))));
+  return compact.length > 0 ? compact.sort() : ["."];
 }
 
 function fileFingerprint(filePath: string): string {

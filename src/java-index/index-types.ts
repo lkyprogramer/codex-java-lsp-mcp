@@ -125,6 +125,8 @@ export type JavaFileFacts = {
   contentHash: string;
   size: number;
   mtimeMs: number;
+  /** Filesystem change time persisted for metadata-only own-snapshot validation. */
+  ctimeMs?: number;
   parseState: JavaParseState;
   parseErrorCount: number;
   generation: number;
@@ -206,6 +208,8 @@ export type JavaIndexStatus = {
   snapshotBytes: number;
   pendingForeground: number;
   pendingBackground: number;
+  /** Own-snapshot manifest validation still running after OPEN returned. */
+  snapshotVerificationPending?: boolean;
   coverage: SourceRootCoverage[];
   lastError?: string;
   worktreeSeed?: WorktreeSeedStatus;

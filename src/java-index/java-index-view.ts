@@ -17,6 +17,7 @@ export interface JavaIndexView {
   ensureFresh(files: string[], generation: number): Promise<void>;
   queryAnchor(file: string, line: number, column: number): Promise<AnchorFacts | undefined>;
   queryType(typeText: string, scopeFile?: string): Promise<JavaTypeLookupResult>;
+  queryTypes(queries: Array<{ typeText: string; scopeFile?: string }>): Promise<JavaTypeLookupResult[]>;
   queryImplementers(typeId: string, limit: number): Promise<JavaTypeFacts[]>;
   queryTypeReferencers(
     typeId: string,
@@ -34,7 +35,14 @@ export function openSourceFromStatus(status: JavaIndexStatus): JavaIndexOpenSour
   if (!seed || !seed.attempted) {
     return status.files > 0 ? "own-snapshot" : "cold";
   }
-  if (seed.completion === "SEEDED_DEGRADED" || seed.reusedFiles > 0) {
+  // Reconciliation upgrades coverage, not provenance: after a sibling seed
+  // finishes its mandatory target sweep it is still a sibling-seeded OPEN,
+  // not an own-snapshot OPEN.  Keep that source in request diagnostics.
+  if (
+    seed.completion === "SEEDED_DEGRADED"
+    || seed.completion === "RECONCILED_COMPLETE"
+    || seed.reusedFiles > 0
+  ) {
     return "sibling-seed";
   }
   if (seed.completion === "NO_VALID_SOURCE" || seed.completion === "FAILED" || seed.completion === "NOT_ATTEMPTED") {

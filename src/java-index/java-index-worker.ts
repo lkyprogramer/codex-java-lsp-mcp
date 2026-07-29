@@ -22,7 +22,7 @@ import {
   computeCurrentManifestFingerprint,
   computeManifestFingerprint,
   discoverJavaFiles,
-  scanCurrentManifest,
+  scanSnapshotManifestDiff,
   type DiscoveredJavaFile
 } from "./manifest.js";
 import { effectiveParseTreeSourceBudget, ParseTreeCache, refreshParseTree } from "./parse-tree-cache.js";
@@ -88,6 +88,11 @@ let layout: LayoutContext | undefined;
 let leaseStore: CrossProcessLeaseStore = new NoopCrossProcessLeaseStore();
 let worktreeIdentity: WorktreeIdentity | undefined;
 let worktreeSeedStatus: WorktreeSeedStatus | undefined;
+// Installed only after a sibling snapshot has been validated against the
+// target.  The next reconcile discovers the tree again (to include a file
+// created after validation) but parses only paths absent from this set; the
+// final batch re-link still revisits every discovered fact without AST work.
+let seededReconcilePlan: { reusedPaths: Set<string> } | undefined;
 const coverage = new CoverageTracker();
 // A single unreadable/unparsable file must not fail the whole REFRESH batch
 // (its previous cached state, if any, is left untouched), but a silently
@@ -98,6 +103,8 @@ let lastRefreshError: string | undefined;
 type BackgroundSweep = {
   generation: number;
   remaining: DiscoveredJavaFile[];
+  /** Every discovered file is batch re-linked once all declarations exist. */
+  allDiscovered: DiscoveredJavaFile[];
   rootsSeen: Set<string>;
   parsedFiles: number;
   leaseHandle?: LeaseHandle;
@@ -118,6 +125,20 @@ let snapshotFlushTimer: NodeJS.Timeout | undefined;
 // CLOSE awaits this (bounded by CLOSE_FLUSH_BUDGET_MS via Promise.race) so it
 // never responds while a write is still being serialized/compressed.
 let snapshotFlushPromise: Promise<void> = Promise.resolve();
+// A completed sweep is not fully quiescent until its durable snapshot is
+// published. Expose that work through pendingBackground so callers that wait
+// for a steady index never start a latency sample behind gzip/atomic rename.
+let snapshotFlushInProgress = false;
+
+// OPEN restores own-snapshot facts immediately but leaves their coverage at
+// BUILDING until the independent manifest check completes.  Keeping that
+// scan off the OPEN request path is what makes a real snapshot startup cheap;
+// the flag also lets RepoRuntimeManager avoid immediately replacing the
+// restored store with a redundant full reconcile.
+let ownSnapshotVerificationPending = false;
+let ownSnapshotVerificationStale = false;
+let ownSnapshotVerificationPromise: Promise<void> = Promise.resolve();
+let queuedReconcileAfterSnapshotVerification: number | undefined;
 
 const foregroundQueue: JavaIndexRequest[] = [];
 let drainingForeground = false;
@@ -224,19 +245,28 @@ function summarizeFiles(): Pick<JavaIndexStatus, "files" | "types" | "methods" |
 }
 
 function currentStatus(overrides: Partial<JavaIndexStatus> = {}): JavaIndexStatus {
+  const pendingSweep = backgroundSweep?.remaining.length ?? 0;
   return {
     ...status,
     ...summarizeFiles(),
     coverage: coverage.snapshot(),
     pendingForeground: foregroundQueue.length,
-    pendingBackground: backgroundSweep?.remaining.length ?? 0,
+    pendingBackground: pendingSweep
+      + (ownSnapshotVerificationPending ? 1 : 0)
+      + (snapshotFlushInProgress ? 1 : 0),
+    ...(ownSnapshotVerificationPending ? { snapshotVerificationPending: true } : {}),
     ...(lastRefreshError ? { lastError: lastRefreshError } : {}),
     ...(worktreeSeedStatus ? { worktreeSeed: worktreeSeedStatus } : {}),
     ...overrides
   };
 }
 
-async function refreshFile(inputPath: string, generation: number): Promise<string> {
+type RefreshedFile = {
+  relativePath: string;
+  dependents: string[];
+};
+
+async function refreshFile(inputPath: string, generation: number): Promise<RefreshedFile> {
   if (!backend || !cache || !store) throw new Error("refreshFile called before OPEN");
   const { absolutePath, relativePath, sourceRoot, module, sourceSet } = deriveSourceLayout(inputPath);
   const [content, stats] = await Promise.all([
@@ -255,11 +285,12 @@ async function refreshFile(inputPath: string, generation: number): Promise<strin
     content,
     size: stats.size,
     mtimeMs: stats.mtimeMs,
+    ctimeMs: stats.ctimeMs,
     contentHash,
     generation
   };
-  store.replaceFile({ ...extractFromParsedTree(input, tree), edges: [] });
-  return relativePath;
+  const dependents = store.replaceFile({ ...extractFromParsedTree(input, tree), edges: [] });
+  return { relativePath, dependents };
 }
 
 // Repo-wide registry rebuilt from whatever has been indexed so far. O(repo
@@ -295,6 +326,44 @@ function resolveAndBuildEdges(relativePath: string): void {
   store.replaceFile({ ...resolved, edges });
 }
 
+/**
+ * A full sweep parses in bounded chunks, so an early chunk can see an
+ * explicit import or same-package declaration whose defining file has not
+ * reached the store yet.  Re-link all already-parsed facts once at sweep
+ * completion against the complete registry.  This is deliberately a batch
+ * operation: rebuilding a registry for every file here would turn a large
+ * sweep into O(N^2) work, while no AST is reparsed in either pass.
+ */
+function resolveAllAndBuildEdges(relativePaths: readonly string[]): Map<string, unknown> {
+  if (!store) return new Map();
+  const errors = new Map<string, unknown>();
+  const registry = rebuildRegistry();
+  const resolver = new JavaNameResolver(registry);
+  const resolvedByPath = new Map<string, ReturnType<typeof resolveFileRefs>>();
+  for (const relativePath of relativePaths) {
+    const raw = store.files([relativePath])[0];
+    if (!raw) continue;
+    try {
+      const resolved = resolveFileRefs(raw, resolver, registry);
+      resolvedByPath.set(relativePath, resolved);
+      store.replaceFile({ ...resolved, edges: [] });
+    } catch (error) {
+      errors.set(relativePath, error);
+    }
+  }
+  const finalRegistry = rebuildRegistry();
+  const finalResolver = new JavaNameResolver(finalRegistry);
+  for (const [relativePath, resolved] of resolvedByPath) {
+    try {
+      const edges = buildStaticEdges(resolved, finalRegistry, finalResolver);
+      store.replaceFile({ ...resolved, edges });
+    } catch (error) {
+      errors.set(relativePath, error);
+    }
+  }
+  return errors;
+}
+
 /** Returns true when this file's outcome must block its root from advancing straight to COMPLETE this round. */
 function recordFileCoverage(relativePath: string, failure?: unknown): boolean {
   const file = store?.file(relativePath);
@@ -315,7 +384,7 @@ function recordFileCoverage(relativePath: string, failure?: unknown): boolean {
   return false;
 }
 
-// Deletes SourceIndex V1's on-disk cache files once, the first time this repo
+// Deletes legacy V1 on-disk cache files once, the first time this repo
 // is ever opened as a V2 index - guarded by a marker file so every later OPEN
 // is a single cheap stat() instead of repeating the deletion. The current
 // Java index snapshot lives under a different file name in the same
@@ -357,37 +426,42 @@ async function flushSnapshotNow(): Promise<void> {
   }
   if (!snapshotDirty || !snapshotPath || !store || !layout) return Promise.resolve();
   snapshotDirty = false;
+  snapshotFlushInProgress = true;
   const target = snapshotPath;
   const currentLayout = layout;
   const generationAtSerialize = status.indexedGeneration;
   snapshotFlushPromise = (async () => {
-    const buildFingerprint = await computeBuildFingerprint(repoRoot, currentLayout).catch(() => undefined);
-    if (buildFingerprint === undefined || !store) return;
-    const data = store.toSnapshotData();
-    const manifestFingerprint = computeManifestFingerprint(
-      data.files.map(file => ({ relativePath: file.relativePath, contentHash: file.contentHash, sourceRoot: file.sourceRoot }))
-    );
-    const value: JavaIndexSnapshotV2 = {
-      schemaVersion: 2,
-      extractorVersion: computeExtractorVersion(),
-      stableIdVersion: STABLE_ID_VERSION,
-      canonicalRepoRoot: repoRoot,
-      buildFingerprint,
-      manifestFingerprint,
-      indexedGeneration: generationAtSerialize,
-      createdAt: new Date().toISOString(),
-      coverage: coverage.snapshot(),
-      ...data
-    };
     try {
-      const bytes = await writeSnapshotIfManifestCurrent(
-        target,
-        value,
-        () => computeCurrentManifestFingerprint(repoRoot, currentLayout)
+      const buildFingerprint = await computeBuildFingerprint(repoRoot, currentLayout).catch(() => undefined);
+      if (buildFingerprint === undefined || !store) return;
+      const data = store.toSnapshotData();
+      const manifestFingerprint = computeManifestFingerprint(
+        data.files.map(file => ({ relativePath: file.relativePath, contentHash: file.contentHash, sourceRoot: file.sourceRoot }))
       );
-      status = { ...status, snapshotBytes: bytes };
-    } catch {
-      snapshotDirty = true;
+      const value: JavaIndexSnapshotV2 = {
+        schemaVersion: 2,
+        extractorVersion: computeExtractorVersion(),
+        stableIdVersion: STABLE_ID_VERSION,
+        canonicalRepoRoot: repoRoot,
+        buildFingerprint,
+        manifestFingerprint,
+        indexedGeneration: generationAtSerialize,
+        createdAt: new Date().toISOString(),
+        coverage: coverage.snapshot(),
+        ...data
+      };
+      try {
+        const bytes = await writeSnapshotIfManifestCurrent(
+          target,
+          value,
+          () => computeCurrentManifestFingerprint(repoRoot, currentLayout)
+        );
+        status = { ...status, snapshotBytes: bytes };
+      } catch {
+        snapshotDirty = true;
+      }
+    } finally {
+      snapshotFlushInProgress = false;
     }
   })();
   return snapshotFlushPromise;
@@ -411,7 +485,9 @@ async function handleRefresh(request: Extract<JavaIndexRequest, { type: "REFRESH
   const rootHadIssue = new Set<string>();
   for (const inputPath of request.changed) {
     try {
-      touched.add(await refreshFile(inputPath, request.generation));
+      const refreshed = await refreshFile(inputPath, request.generation);
+      touched.add(refreshed.relativePath);
+      for (const dependent of refreshed.dependents) touched.add(dependent);
     } catch (error) {
       lastRefreshError = `failed to refresh ${inputPath}: ${error instanceof Error ? error.message : String(error)}`;
       try {
@@ -465,28 +541,34 @@ async function handleRefresh(request: Extract<JavaIndexRequest, { type: "REFRESH
 
 /**
  * Step 6a: verifies a just-restored snapshot's facts against the repo's
- * *current* files on disk (an independent re-scan, not a re-parse) and
+ * *current* files on disk (an independent metadata re-scan, not a re-parse) and
  * returns the generation OPEN should report. Facts were already installed
  * provisionally (`coverage.restoreProvisional`, forced to BUILDING) before
  * this runs, so a concurrent foreground query sees either fully-verified
  * COMPLETE coverage or honestly-provisional BUILDING coverage - never a
  * silent, unverified COMPLETE.
  *
- * - Identical manifest: every root the snapshot or the current disk scan
- *   knows about is promoted straight to COMPLETE at the snapshot's own
- *   generation, with no AST parse at all.
- * - Different manifest: the generation advances exactly once: added/changed
- *   files are re-parsed via the same `handleRefresh` a foreground REFRESH
- *   uses (bounded to the diff, not a full sweep), deleted files are removed,
- *   and only after that pass do roots with no issue this round advance to
+ * - Metadata-identical manifest: every root the snapshot or the current disk
+ *   scan knows about is promoted straight to COMPLETE at the snapshot's own
+ *   generation, with no source-content read or AST parse at all.  New
+ *   snapshots persist size, mtime, and ctime; older snapshots have no ctime
+ *   and deliberately take the conservative diff path once.
+ * - Metadata-different manifest: only the added/changed metadata paths are
+ *   re-parsed via the same `handleRefresh` a foreground REFRESH uses
+ *   (bounded to the diff, not a full sweep), while deleted files are removed.
+ *   Only after that pass do roots with no issue this round advance to
  *   COMPLETE - `handleRefresh`'s own "advance already-COMPLETE roots" loop
  *   does not help here, since every restored root started this round at
  *   BUILDING, not COMPLETE.
  */
-async function verifyOwnSnapshot(snapshotData: JavaIndexSnapshotV2): Promise<number> {
+async function verifyOwnSnapshot(
+  snapshotData: JavaIndexSnapshotV2,
+  canApply: () => boolean = () => true
+): Promise<number | undefined> {
   if (!layout || !store) return snapshotData.indexedGeneration;
-  const { discovered, entries } = await scanCurrentManifest(repoRoot, layout);
-  const currentFingerprint = computeManifestFingerprint(entries);
+  const manifestDiff = await scanSnapshotManifestDiff(repoRoot, layout, snapshotData.files);
+  if (!canApply()) return undefined;
+  const { discovered, changed, deletedRelativePaths, metadataMatches } = manifestDiff;
 
   const allRoots = new Set(snapshotData.coverage.map(entry => entry.root));
   const discoveredCountByRoot = new Map<string, number>();
@@ -503,25 +585,14 @@ async function verifyOwnSnapshot(snapshotData: JavaIndexSnapshotV2): Promise<num
     }
   }
 
-  if (currentFingerprint === snapshotData.manifestFingerprint) {
+  if (metadataMatches) {
+    if (!canApply()) return undefined;
     for (const root of allRoots) coverage.complete(root, snapshotData.indexedGeneration);
     return snapshotData.indexedGeneration;
   }
 
   const newGeneration = snapshotData.indexedGeneration + 1;
-  const snapshotHashByPath = new Map(snapshotData.files.map(file => [file.relativePath, file.contentHash]));
-  const currentPaths = new Set(discovered.map(file => file.relativePath));
-  const changedAbsolutePaths: string[] = [];
-  for (let index = 0; index < discovered.length; index += 1) {
-    const file = discovered[index]!;
-    const entry = entries[index]!;
-    if (snapshotHashByPath.get(file.relativePath) !== entry.contentHash) {
-      changedAbsolutePaths.push(file.absolutePath);
-    }
-  }
-  const deletedRelativePaths = snapshotData.files
-    .map(file => file.relativePath)
-    .filter(relativePath => !currentPaths.has(relativePath));
+  const changedAbsolutePaths = changed.map(file => file.absolutePath);
 
   if (changedAbsolutePaths.length + deletedRelativePaths.length >= SNAPSHOT_DIFF_INLINE_LIMIT) {
     // Too large to parse inline without the sweep lease's governance: leave
@@ -533,6 +604,7 @@ async function verifyOwnSnapshot(snapshotData: JavaIndexSnapshotV2): Promise<num
     return snapshotData.indexedGeneration;
   }
 
+  if (!canApply()) return undefined;
   const rootHadIssue = await handleRefresh({
     id: -1,
     type: "REFRESH",
@@ -540,6 +612,7 @@ async function verifyOwnSnapshot(snapshotData: JavaIndexSnapshotV2): Promise<num
     changed: changedAbsolutePaths,
     deleted: deletedRelativePaths
   });
+  if (!canApply()) return undefined;
 
   for (const root of allRoots) {
     if (rootHadIssue.has(root)) continue;
@@ -549,6 +622,88 @@ async function verifyOwnSnapshot(snapshotData: JavaIndexSnapshotV2): Promise<num
     }
   }
   return newGeneration;
+}
+
+function ownSnapshotCoverageFullyRestored(generation: number): boolean {
+  const entries = coverage.snapshot();
+  return entries.length > 0 && entries.every(entry =>
+    entry.state === "COMPLETE"
+    && entry.generation === generation
+    && entry.failedFiles === 0
+    && entry.recoveredFiles === 0
+  );
+}
+
+function queueSnapshotVerificationReconcile(generation: number): void {
+  queuedReconcileAfterSnapshotVerification = Math.max(
+    queuedReconcileAfterSnapshotVerification ?? generation,
+    generation
+  );
+}
+
+function invalidateOwnSnapshotVerification(generation: number): void {
+  if (!ownSnapshotVerificationPending) return;
+  ownSnapshotVerificationStale = true;
+  queueSnapshotVerificationReconcile(generation);
+}
+
+function startOwnSnapshotHydration(
+  identity: SnapshotIdentity,
+  requestedGeneration: number,
+  buildFingerprint: string,
+  siblingCacheBase: string | undefined
+): void {
+  ownSnapshotVerificationPending = true;
+  ownSnapshotVerificationStale = false;
+  ownSnapshotVerificationPromise = (async () => {
+    try {
+      const loaded = snapshotPath ? await loadSnapshot(snapshotPath, identity) : undefined;
+      if (!loaded) {
+        // Preserve Task 21a's immediate sibling-seed path when no own cache
+        // exists. A corrupt own snapshot is simply a cache miss here; its
+        // sibling attempt remains fail-soft, exactly as before.
+        if (!ownSnapshotVerificationStale && siblingCacheBase) {
+          worktreeSeedStatus = await attemptSiblingSeed(siblingCacheBase, buildFingerprint, requestedGeneration);
+        }
+        if (!closing) queueSnapshotVerificationReconcile(status.indexedGeneration);
+        return;
+      }
+      if (closing || ownSnapshotVerificationStale) {
+        if (!closing) queueSnapshotVerificationReconcile(status.indexedGeneration);
+        return;
+      }
+      store = new JavaIndexStore();
+      store.loadSnapshotData(loaded);
+      for (const entry of loaded.coverage) coverage.restoreProvisional(entry);
+      const expectedGeneration = Math.max(requestedGeneration, loaded.indexedGeneration);
+      status = { ...status, indexedGeneration: expectedGeneration };
+      const canApply = (): boolean =>
+        !closing
+        && !ownSnapshotVerificationStale
+        && status.indexedGeneration === expectedGeneration;
+      const verifiedGeneration = await verifyOwnSnapshot(loaded, canApply);
+      if (verifiedGeneration !== undefined && canApply()) {
+        status = { ...status, indexedGeneration: verifiedGeneration };
+        if (!ownSnapshotCoverageFullyRestored(verifiedGeneration)) {
+          queueSnapshotVerificationReconcile(verifiedGeneration);
+        }
+      } else if (!closing) {
+        queueSnapshotVerificationReconcile(status.indexedGeneration);
+      }
+    } catch (error) {
+      lastRefreshError = `failed to verify restored snapshot: ${error instanceof Error ? error.message : String(error)}`;
+      if (!closing) queueSnapshotVerificationReconcile(status.indexedGeneration);
+    } finally {
+      ownSnapshotVerificationPending = false;
+      ownSnapshotVerificationStale = false;
+      const reconcileGeneration = queuedReconcileAfterSnapshotVerification;
+      queuedReconcileAfterSnapshotVerification = undefined;
+      if (reconcileGeneration !== undefined && !closing) {
+        await beginBackgroundSweep(reconcileGeneration);
+        status = { ...status, indexedGeneration: Math.max(status.indexedGeneration, reconcileGeneration) };
+      }
+    }
+  })();
 }
 
 /**
@@ -567,14 +722,9 @@ async function verifyOwnSnapshot(snapshotData: JavaIndexSnapshotV2): Promise<num
  * "already fully restored" check is false too - the mandatory follow-up
  * reconcile() (today's ordinary full sweep) is what actually promotes
  * coverage to COMPLETE, correcting any file that was seeded stale as a side
- * effect of also re-parsing it. That sweep does not yet skip re-parsing
- * files the seeder already reused (Step 5's "schedule changed/new files"
- * optimization) - it re-parses everything discovered, same as a cold sweep
- * would. The benefit this task delivers is real but narrower than the full
- * plan: a query landing in the window between OPEN responding and that
- * sweep completing can get a useful, DEGRADED-coverage positive answer from
- * reused facts instead of an empty store; steady-state re-parse cost is not
- * reduced yet.
+ * effect of re-parsing only dirty/new paths. Content-identical reused files
+ * remain DEGRADED until that reconcile finishes; its final full-store relink
+ * repairs cross-file edges without paying a second AST parse for those files.
  *
  * Checked, not assumed: a REFRESH landing in that same window (before the
  * follow-up sweep completes) does call scheduleSnapshotFlush(), so a
@@ -605,6 +755,7 @@ async function attemptSiblingSeed(
     }
     const seeded = await seeder.seedValidatedFacts(candidate, seedIdentity, repoRoot, layout, generation);
     store = seeded.store;
+    seededReconcilePlan = { reusedPaths: new Set(seeded.result.reusedPaths) };
     const discovered = await discoverJavaFiles(repoRoot, layout);
     const roots = new Set(discovered.map(file => file.sourceRoot));
     for (const root of roots) coverage.invalidate(root, generation);
@@ -621,6 +772,7 @@ async function attemptSiblingSeed(
     };
   } catch {
     store = new JavaIndexStore();
+    seededReconcilePlan = undefined;
     return { ...emptyWorktreeSeedStatus("FAILED"), attempted: true };
   }
 }
@@ -657,7 +809,18 @@ async function beginBackgroundSweep(generation: number): Promise<void> {
     byRoot.set(file.sourceRoot, (byRoot.get(file.sourceRoot) ?? 0) + 1);
   }
   for (const [root, count] of byRoot) coverage.begin(root, generation, count);
-  backgroundSweep = { generation, remaining: discovered.slice(), rootsSeen: new Set(byRoot.keys()), parsedFiles: 0 };
+  const reusedPaths = worktreeSeedStatus?.completion === "SEEDED_DEGRADED"
+    ? seededReconcilePlan?.reusedPaths
+    : undefined;
+  backgroundSweep = {
+    generation,
+    remaining: reusedPaths
+      ? discovered.filter(file => !reusedPaths.has(file.relativePath))
+      : discovered.slice(),
+    allDiscovered: discovered,
+    rootsSeen: new Set(byRoot.keys()),
+    parsedFiles: 0
+  };
   startBackgroundLoop();
 }
 
@@ -688,7 +851,9 @@ async function processBackgroundChunk(sweep: BackgroundSweep): Promise<void> {
   const touched = new Set<string>();
   for (const file of chunk) {
     try {
-      touched.add(await refreshFile(file.absolutePath, sweep.generation));
+      const refreshed = await refreshFile(file.absolutePath, sweep.generation);
+      touched.add(refreshed.relativePath);
+      for (const dependent of refreshed.dependents) touched.add(dependent);
     } catch (error) {
       coverage.failed(file.sourceRoot, file.relativePath, error);
     }
@@ -705,6 +870,10 @@ async function processBackgroundChunk(sweep: BackgroundSweep): Promise<void> {
   sweep.parsedFiles += chunk.length;
   await sweep.leaseHandle.heartbeat();
   if (sweep.remaining.length === 0) {
+    const relinkErrors = resolveAllAndBuildEdges(sweep.allDiscovered.map(file => file.relativePath));
+    for (const [relativePath, error] of relinkErrors) {
+      recordFileCoverage(relativePath, error);
+    }
     for (const root of sweep.rootsSeen) coverage.complete(root, sweep.generation);
     if (worktreeSeedStatus?.completion === "SEEDED_DEGRADED") {
       worktreeSeedStatus = {
@@ -713,6 +882,7 @@ async function processBackgroundChunk(sweep: BackgroundSweep): Promise<void> {
         completion: "RECONCILED_COMPLETE"
       };
     }
+    seededReconcilePlan = undefined;
     await sweep.leaseHandle.release();
     // Step 5: a full sweep's completion forces an immediate (non-debounced)
     // flush, since it is exactly the moment the persisted snapshot goes from
@@ -794,6 +964,7 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         await cleanupLegacyCacheOnce(request.cacheDir);
 
         let openedGeneration = request.generation;
+        let ownSnapshotIdentity: SnapshotIdentity | undefined;
         const buildFingerprint = await computeBuildFingerprint(repoRoot, layout).catch(() => undefined);
         if (buildFingerprint !== undefined) {
           const identity: SnapshotIdentity = {
@@ -802,16 +973,17 @@ async function handle(request: JavaIndexRequest): Promise<void> {
             canonicalRepoRoot: repoRoot,
             buildFingerprint
           };
-          const loaded = await loadSnapshot(snapshotPath, identity);
-          if (loaded) {
-            store.loadSnapshotData(loaded);
-            for (const entry of loaded.coverage) coverage.restoreProvisional(entry);
-            openedGeneration = await verifyOwnSnapshot(loaded);
+          const ownSnapshotExists = await stat(snapshotPath).then(() => true).catch(() => false);
+          if (ownSnapshotExists) {
+            ownSnapshotIdentity = identity;
           } else if (request.siblingCacheBase) {
             worktreeSeedStatus = await attemptSiblingSeed(request.siblingCacheBase, buildFingerprint, request.generation);
           }
         }
         status = { ...status, state: "READY", indexedGeneration: openedGeneration };
+        if (ownSnapshotIdentity && buildFingerprint !== undefined) {
+          startOwnSnapshotHydration(ownSnapshotIdentity, openedGeneration, buildFingerprint, request.siblingCacheBase);
+        }
         respond({ id: request.id, ok: true, value: currentStatus() });
         return;
       }
@@ -826,6 +998,7 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         // after this responds - tearing down native parser state mid-parse
         // previously aborted the whole process, not just this worker thread.
         closing = true;
+        await ownSnapshotVerificationPromise;
         await backgroundLoopPromise;
         if (backgroundSweep?.leaseHandle) {
           await backgroundSweep.leaseHandle.release().catch(() => undefined);
@@ -852,12 +1025,19 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         return;
       }
       case "REFRESH": {
+        invalidateOwnSnapshotVerification(request.generation);
         await handleRefresh(request);
         status = { ...status, indexedGeneration: request.generation };
         respond({ id: request.id, ok: true, value: currentStatus() });
         return;
       }
       case "RECONCILE": {
+        if (ownSnapshotVerificationPending) {
+          invalidateOwnSnapshotVerification(request.generation);
+          status = { ...status, indexedGeneration: Math.max(status.indexedGeneration, request.generation) };
+          respond({ id: request.id, ok: true, value: currentStatus() });
+          return;
+        }
         await beginBackgroundSweep(request.generation);
         status = { ...status, indexedGeneration: request.generation };
         respond({ id: request.id, ok: true, value: currentStatus() });
@@ -893,6 +1073,17 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         const value = result.state === "UNRESOLVED"
           ? { ...result, coverage: worstTypeLookupCoverage(status.indexedGeneration) }
           : result;
+        respond({ id: request.id, ok: true, value });
+        return;
+      }
+      case "QUERY_TYPES": {
+        const value = request.queries.map(query => {
+          const scopeFile = query.scopeFile ? deriveSourceLayout(query.scopeFile).relativePath : undefined;
+          const result = store ? store.typeLookup(query.typeText, scopeFile) : unresolvedTypeLookup();
+          return result.state === "UNRESOLVED"
+            ? { ...result, coverage: worstTypeLookupCoverage(status.indexedGeneration) }
+            : result;
+        });
         respond({ id: request.id, ok: true, value });
         return;
       }

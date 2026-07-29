@@ -6,7 +6,9 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { AgentRouter } from "../dist/agent-router/index.js";
-import { SourceIndex } from "../dist/source-index.js";
+import { JavaIndexClient } from "../dist/java-index/java-index-client.js";
+import { RouterJavaIndex } from "../dist/java-index/router-java-index.js";
+import { repoCacheRoot } from "../dist/repo-layout.js";
 import { JdtlsSession } from "../dist/jdtls-session.js";
 import { javaImpact } from "../dist/tools/impact.js";
 
@@ -19,12 +21,14 @@ if (!existsSync(path.join(projectDir, "dist", "tools", "impact.js"))) {
 
 const scenarios = loadScenarios(scenarioFile).filter(scenario => !scenario.projectId || scenario.projectId === cli.projectId);
 const session = new JdtlsSession(cli.repoRoot);
-const sourceIndex = new SourceIndex(cli.repoRoot);
-const router = new AgentRouter(cli.repoRoot, session, sourceIndex);
+const javaIndexClient = new JavaIndexClient(cli.repoRoot, repoCacheRoot(cli.repoRoot));
+const javaIndex = new RouterJavaIndex(cli.repoRoot, javaIndexClient);
+const router = new AgentRouter(cli.repoRoot, session, javaIndex);
 const context = {
   repoRoot: cli.repoRoot,
   session,
-  sourceIndex,
+  javaIndex,
+  javaIndexClient,
   router
 };
 
@@ -56,6 +60,7 @@ for (const scenario of scenarios) {
 }
 
 await session.stop();
+await javaIndexClient.close();
 
 console.log(JSON.stringify({
   metadata: {
@@ -63,6 +68,7 @@ console.log(JSON.stringify({
     repoRoot: cli.repoRoot,
     projectId: cli.projectId,
     scenarios: scenarioFile,
+    indexBackend: "v2",
     mode: cli.mode
   },
   totals: averageAttribution(rows),

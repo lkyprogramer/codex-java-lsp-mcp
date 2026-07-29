@@ -1,9 +1,7 @@
 // input: java_impact MCP request.
-// output: v5 source-index plus rg plus optional LSP impact result.
+// output: v5 JavaIndex plus rg plus optional LSP impact result.
 // pos: Public recommended impact tool handler.
 import { z } from "zod";
-import { documentSymbolLimiter } from "../document-symbol-limiter.js";
-import { normalizeRepoFile } from "../repo-layout.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import { defaultDeadlineMs, MAX_REQUEST_DEADLINE_MS, type RequestContext } from "../runtime/request-context.js";
 import type { ToolContext } from "./context.js";
@@ -58,11 +56,6 @@ export async function javaImpact(
     args.deadlineMs ?? defaultDeadlineMs(args.mode, semanticPolicy)
   ));
   const phaseMs: Record<string, number> = {};
-  if (semanticPolicy === "required" && context.lsp?.enabled) {
-    await timed(phaseMs, "warmDocumentSymbol", async () => warmDocumentSymbols(context, anchors, semanticPolicy, budget));
-  } else {
-    warmDocumentSymbols(context, anchors, semanticPolicy, budget).catch(() => undefined);
-  }
   mergePhaseMs(phaseMs, context.session.drainPhaseMetrics());
   const options: ImpactOptions = {
     anchors,
@@ -83,47 +76,6 @@ export async function javaImpact(
   return withPhaseMs(result, phaseMs);
 }
 
-async function warmDocumentSymbols(
-  context: ToolContext,
-  anchors: ImpactAnchorInput[],
-  semanticPolicy: "auto" | "fast" | "required",
-  budget: DeadlineBudget
-): Promise<void> {
-  if (!context.lsp?.enabled || semanticPolicy === "fast") {
-    return;
-  }
-  const configuredTimeoutMs = Number(process.env.JAVA_LSP_DOCUMENT_SYMBOL_TIMEOUT_MS || (semanticPolicy === "required" ? 45000 : 2000));
-  const warmed = new Set<string>();
-  for (const anchor of anchors) {
-    if (warmed.has(anchor.file)) {
-      continue;
-    }
-    // Warm indexing is inside the request deadline, so it can no longer consume
-    // an unbounded prefix and starve the semantic stage that follows it.
-    const timeoutMs = budget.remainingMs(configuredTimeoutMs);
-    if (timeoutMs <= 0) {
-      return;
-    }
-    warmed.add(anchor.file);
-    const file = normalizeRepoFile(context.repoRoot, anchor.file);
-    context.sourceIndex.beginWarmIndex();
-    let success = false;
-    try {
-      await documentSymbolLimiter.withSlot(context.repoRoot, async () => {
-        const symbols = semanticPolicy === "required"
-          ? await context.session.documentSymbolsWithRetry(file, timeoutMs)
-          : await context.session.documentSymbols(file, timeoutMs);
-        context.sourceIndex.upsertDocumentSymbols(file, symbols);
-      });
-      success = true;
-    } catch {
-      // documentSymbol is a warm-index upgrade; semantic routing still has its own bounded LSP calls.
-    } finally {
-      context.sourceIndex.finishWarmIndex(success);
-    }
-  }
-}
-
 function normalizeAnchors(args: z.infer<z.ZodObject<typeof impactSchema>>): ImpactAnchorInput[] {
   if (args.anchors && args.anchors.length > 0) {
     return args.anchors.map(anchor => ({
@@ -135,15 +87,6 @@ function normalizeAnchors(args: z.infer<z.ZodObject<typeof impactSchema>>): Impa
     return [{ file: args.file, line: args.line, column: args.column, role: args.anchorRole }];
   }
   throw new Error("java_impact requires anchors[] or file/line/column.");
-}
-
-async function timed<T>(phases: Record<string, number>, name: string, action: () => Promise<T>): Promise<T> {
-  const startedAt = Date.now();
-  try {
-    return await action();
-  } finally {
-    phases[name] = (phases[name] || 0) + Date.now() - startedAt;
-  }
 }
 
 function mergePhaseMs(target: Record<string, number>, source: Record<string, number>): void {

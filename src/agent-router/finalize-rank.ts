@@ -64,6 +64,15 @@ export async function finalizeRank(input: FinalizeRankInput): Promise<CandidateF
   const maxItems = input.options.readPlanMaxItems ?? defaultReadPlanMax(input.options.mode);
   const sortedForPlan = legacyReadPlanSorted(ranked, input.options);
   const readPlanCovered = new Set(selectReadPlanFiles({ files: sortedForPlan, options: input.options, maxItems }));
+  // An interface implementation is static JavaIndex evidence worth exposing
+  // even when its lower score does not earn one of the small read-plan
+  // windows.  Candidate-tail truncation must not erase that relation; callers
+  // can then choose it deliberately without spending read-plan budget.
+  for (const file of ranked) {
+    if (file.reasons.includes("typeGraph:implementation-lookup")) {
+      readPlanCovered.add(file);
+    }
+  }
   for (const file of ranked) {
     if (input.extraProtectedPaths?.has(file.absolutePath)) {
       readPlanCovered.add(file);

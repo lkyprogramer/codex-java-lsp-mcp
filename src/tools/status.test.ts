@@ -20,11 +20,6 @@ test("java_status exposes runtime build and root source metadata", async () => {
         return testSessionStatus(false);
       }
     },
-    sourceIndex: {
-      status() {
-        return { entries: 0 };
-      }
-    },
     router: {
       rgCacheStatus() {
         return { entries: 0 };
@@ -109,20 +104,6 @@ test("java_status returns summary by default and keeps diagnostics explicit", as
         };
       }
     },
-    sourceIndex: {
-      status() {
-        return {
-          entries: 5,
-          hits: 1,
-          misses: 2,
-          regexFacts: 4,
-          documentSymbolFacts: 1,
-          dirtyCount: 0,
-          warmIndexPending: 0,
-          warmIndexFailed: 0
-        };
-      }
-    },
     router: {
       rgCacheStatus() {
         return {
@@ -157,7 +138,6 @@ test("java_status exposes sibling-seed progress without requiring diagnostic det
   const context = {
     repoRoot: "/tmp/demo",
     session: { status: () => testSessionStatus(false) },
-    sourceIndex: { status: () => ({ entries: 0 }) },
     router: { rgCacheStatus: () => ({ entries: 0 }) },
     javaIndexClient: {
       async status() {
@@ -171,7 +151,16 @@ test("java_status exposes sibling-seed progress without requiring diagnostic det
           snapshotBytes: 1024,
           pendingForeground: 0,
           pendingBackground: 2,
-          coverage: [],
+          coverage: [{
+            root: "src/main/java",
+            generation: 7,
+            state: "COMPLETE",
+            discoveredFiles: 12,
+            indexedFiles: 12,
+            failedFiles: 0,
+            recoveredFiles: 0,
+            extractorVersion: "test"
+          }],
           worktreeSeed: {
             attempted: true,
             sourceRepoHash: "sibling-hash",
@@ -192,6 +181,7 @@ test("java_status exposes sibling-seed progress without requiring diagnostic det
   const javaIndex = result.javaIndex as Record<string, unknown>;
   const seed = javaIndex.worktreeSeed as Record<string, unknown>;
   assert.equal(javaIndex.files, 12);
+  assert.equal(javaIndex.coverage, "partial");
   assert.equal(seed.completion, "SEEDED_DEGRADED");
   assert.equal(seed.reusedFiles, 9);
   assert.equal(seed.dirtyFiles, 3);

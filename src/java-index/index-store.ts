@@ -133,9 +133,23 @@ export class JavaIndexStore {
   // already owns.
   readonly dependentFilesByTypeName = new Map<string, Set<string>>();
 
-  replaceFile(bundle: JavaFileBundle): void {
+  /**
+   * Replaces one file's facts and returns surviving files whose static edges
+   * pointed at a node owned by the previous version.  Callers must re-resolve
+   * those files after the new declarations are installed; otherwise the
+   * reverse lookup maps lose valid implementation/call edges during an
+   * incremental refresh of their target.
+   */
+  replaceFile(bundle: JavaFileBundle): string[] {
     validateBundleIds(bundle);
     const relativePath = bundle.file.relativePath;
+    const nextNodeIds = bundleNodeIds(bundle);
+    const retainedIncoming = new Map<string, Set<string>>();
+    for (const nodeId of nextNodeIds) {
+      const inbound = this.inEdgeIdsByNode.get(nodeId);
+      if (inbound) retainedIncoming.set(nodeId, new Set(inbound));
+    }
+    const dependents = this.dependentFilesForOwnedNodes(relativePath, nextNodeIds);
     this.removeFileInternal(relativePath);
 
     this.filesByPath.set(relativePath, bundle.file);
@@ -157,6 +171,9 @@ export class JavaIndexStore {
       ownedNodeIds.add(method.methodId);
     }
     this.fileOwnedNodeIds.set(relativePath, ownedNodeIds);
+    for (const [nodeId, inbound] of retainedIncoming) {
+      this.inEdgeIdsByNode.set(nodeId, inbound);
+    }
 
     const ownedEdgeIds = new Set<string>();
     for (const edge of bundle.edges) {
@@ -166,6 +183,7 @@ export class JavaIndexStore {
       ownedEdgeIds.add(edge.edgeId);
     }
     this.fileOwnedEdgeIds.set(relativePath, ownedEdgeIds);
+    return dependents;
   }
 
   // Returns the relative paths of files with an edge into a node this
@@ -174,15 +192,7 @@ export class JavaIndexStore {
   removeFiles(relativePaths: readonly string[]): string[] {
     const dependents = new Set<string>();
     for (const relativePath of relativePaths) {
-      const ownedNodeIds = this.fileOwnedNodeIds.get(relativePath);
-      if (ownedNodeIds) {
-        for (const nodeId of ownedNodeIds) {
-          for (const edgeId of this.inEdgeIdsByNode.get(nodeId) ?? []) {
-            const edge = this.edgesById.get(edgeId);
-            if (edge && edge.sourceFile !== relativePath) dependents.add(edge.sourceFile);
-          }
-        }
-      }
+      for (const dependent of this.dependentFilesForOwnedNodes(relativePath)) dependents.add(dependent);
       this.removeFileInternal(relativePath);
     }
     return [...dependents];
@@ -272,7 +282,16 @@ export class JavaIndexStore {
       for (const fieldId of type.fieldIds) {
         const field = this.fieldsById.get(fieldId);
         if (field && rangeContains(field.range, position)) {
-          candidates.push({ range: field.range, isMember: true, depth: depth + 1, symbolKind: "FIELD", symbolId: field.fieldId, symbolName: field.name, field });
+          candidates.push({
+            range: field.range,
+            isMember: true,
+            depth: depth + 1,
+            symbolKind: "FIELD",
+            symbolId: field.fieldId,
+            symbolName: field.name,
+            type,
+            field
+          });
         }
       }
       for (const methodId of type.methodIds) {
@@ -285,6 +304,7 @@ export class JavaIndexStore {
             symbolKind: method.constructor ? "CONSTRUCTOR" : "METHOD",
             symbolId: method.methodId,
             symbolName: method.name,
+            type,
             method
           });
         }
@@ -570,4 +590,24 @@ export class JavaIndexStore {
     }
     this.fileOwnedEdgeIds.delete(relativePath);
   }
+
+  private dependentFilesForOwnedNodes(relativePath: string, retainedNodeIds: ReadonlySet<string> = new Set()): string[] {
+    const dependents = new Set<string>();
+    for (const nodeId of this.fileOwnedNodeIds.get(relativePath) ?? []) {
+      if (retainedNodeIds.has(nodeId)) continue;
+      for (const edgeId of this.inEdgeIdsByNode.get(nodeId) ?? []) {
+        const edge = this.edgesById.get(edgeId);
+        if (edge && edge.sourceFile !== relativePath) dependents.add(edge.sourceFile);
+      }
+    }
+    return [...dependents];
+  }
+}
+
+function bundleNodeIds(bundle: JavaFileBundle): Set<string> {
+  return new Set([
+    ...bundle.types.map(type => type.typeId),
+    ...bundle.fields.map(field => field.fieldId),
+    ...bundle.methods.map(method => method.methodId)
+  ]);
 }

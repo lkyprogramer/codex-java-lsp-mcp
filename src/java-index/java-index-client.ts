@@ -17,6 +17,7 @@ import {
   validateJavaIndexStatus,
   validateTypeFactsArray,
   validateTypeLookup,
+  validateTypeLookupArray,
   type JavaIndexCommand,
   type JavaIndexValueValidator,
   type JavaIndexWorktreeIdentity
@@ -134,6 +135,12 @@ export class JavaIndexClient {
   async queryType(typeText: string, scopeFile?: string): Promise<JavaTypeLookupResult> {
     await this.ensureOpen();
     return this.request({ type: "QUERY_TYPE", typeText, scopeFile }, validateTypeLookup);
+  }
+
+  async queryTypes(queries: Array<{ typeText: string; scopeFile?: string }>): Promise<JavaTypeLookupResult[]> {
+    await this.ensureOpen();
+    if (queries.length === 0) return [];
+    return this.request({ type: "QUERY_TYPES", queries }, validateTypeLookupArray);
   }
 
   async queryImplementers(typeId: string, limit: number): Promise<JavaTypeFacts[]> {

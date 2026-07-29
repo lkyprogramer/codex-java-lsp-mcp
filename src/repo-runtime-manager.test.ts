@@ -422,7 +422,13 @@ test("reconcileIfDirty runs once under two concurrent requests and clears dirty 
   let reconcileCalls = 0;
   let releaseReconcile!: () => void;
   const reconcileGate = new Promise<void>(resolve => { releaseReconcile = resolve; });
-  const sourceIndexStub = {
+  const javaIndexClientStub = {
+    localStatus() {
+      return { files: 0 };
+    },
+    async open(generation: number) {
+      return { indexedGeneration: generation, coverage: [{ state: "COMPLETE", generation, failedFiles: 0, recoveredFiles: 0 }] };
+    },
     async reconcile(): Promise<void> {
       reconcileCalls += 1;
       await reconcileGate;
@@ -440,9 +446,9 @@ test("reconcileIfDirty runs once under two concurrent requests and clears dirty 
       layoutProfile: resolved.layoutProfile,
       lsp: resolved.lsp,
       session: new FakeSession() as never,
-      sourceIndex: sourceIndexStub as never,
+      javaIndexClient: javaIndexClientStub as never,
       router: { clearRgCache() {} } as never,
-      javaIndex: {} as never
+      javaIndex: { routerStatus: async () => ({}) } as never
     }),
     () => ({ generation: clock, coordinator, layout: { current: () => layout, refresh: () => ({ changed: false, layout }) } }),
     new NoopCrossProcessLeaseStore()
@@ -464,7 +470,13 @@ test("reconcileIfDirty leaves dirty set when reconcile fails, without failing th
   clock.markDirty("test-forced-dirty");
   const coordinator = new FakeCoordinator();
   const layout = probeLayout("/repo-a");
-  const sourceIndexStub = {
+  const javaIndexClientStub = {
+    localStatus() {
+      return { files: 0 };
+    },
+    async open(generation: number) {
+      return { indexedGeneration: generation, coverage: [{ state: "COMPLETE", generation, failedFiles: 0, recoveredFiles: 0 }] };
+    },
     async reconcile(): Promise<void> {
       throw new Error("reconcile boom");
     }
@@ -481,9 +493,9 @@ test("reconcileIfDirty leaves dirty set when reconcile fails, without failing th
       layoutProfile: resolved.layoutProfile,
       lsp: resolved.lsp,
       session: new FakeSession() as never,
-      sourceIndex: sourceIndexStub as never,
+      javaIndexClient: javaIndexClientStub as never,
       router: { clearRgCache() {} } as never,
-      javaIndex: {} as never
+      javaIndex: { routerStatus: async () => ({}) } as never
     }),
     () => ({ generation: clock, coordinator, layout: { current: () => layout, refresh: () => ({ changed: false, layout }) } }),
     new NoopCrossProcessLeaseStore()
@@ -494,6 +506,104 @@ test("reconcileIfDirty leaves dirty set when reconcile fails, without failing th
 
   assert.equal(handlerRan, true, "a reconcile failure does not fail the request");
   assert.equal(clock.snapshot().dirty, true, "dirty remains set so the next request retries reconcile");
+});
+
+test("V2 runtime reconciles only JavaIndex and records its OPEN source on the request", async () => {
+  const clock = new GenerationClock();
+  const coordinator = new FakeCoordinator();
+  const layout = probeLayout("/repo-a");
+  let reconcileCalls = 0;
+  const javaIndexClient = {
+    localStatus() {
+      return { files: 3 };
+    },
+    async open(generation: number) {
+      return { indexedGeneration: generation, coverage: [] };
+    },
+    async reconcile() {
+      reconcileCalls += 1;
+    },
+    async close() {}
+  };
+  const manager = new RepoRuntimeManager(
+    fakeResolver(),
+    { idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    resolved => ({
+      repoRoot: resolved.repoRoot,
+      rootSource: resolved.rootSource,
+      repoHash: resolved.repoHash,
+      aliases: resolved.aliases,
+      layoutProfile: resolved.layoutProfile,
+      lsp: resolved.lsp,
+      session: new FakeSession() as never,
+      javaIndexClient: javaIndexClient as never,
+      javaIndex: {
+        async routerStatus() {
+          return { openSource: "sibling-seed" };
+        }
+      } as never,
+      router: { clearRgCache() {}, onRepoChanged() {} } as never
+    }),
+    () => ({ generation: clock, coordinator, layout: { current: () => layout, refresh: () => ({ changed: false, layout }) } }),
+    new NoopCrossProcessLeaseStore()
+  );
+
+  const context = await manager.contextFor({ repoRoot: "/repo-a" });
+  reconcileCalls = 0;
+  clock.markDirty("test-v2-dirty");
+  let openSource: string | undefined;
+  await manager.withContext({ repoRoot: "/repo-a" }, async (_context, request) => {
+    openSource = request.indexOpenSource;
+  });
+
+  assert.equal(context.javaIndexClient, javaIndexClient as never, "runtime must retain its JavaIndex worker client");
+  assert.equal(reconcileCalls, 1, "dirty V2 request must reconcile JavaIndex exactly once");
+  assert.equal(openSource, "sibling-seed");
+});
+
+test("own snapshot verification stays worker-owned after OPEN instead of triggering a duplicate full reconcile", async () => {
+  const clock = new GenerationClock();
+  const coordinator = new FakeCoordinator();
+  const layout = probeLayout("/repo-a");
+  let reconcileCalls = 0;
+  const javaIndexClient = {
+    localStatus() {
+      return { files: 0 };
+    },
+    async open(generation: number) {
+      return {
+        indexedGeneration: generation,
+        coverage: [],
+        snapshotVerificationPending: true
+      };
+    },
+    async reconcile() {
+      reconcileCalls += 1;
+    },
+    async close() {}
+  };
+  const manager = new RepoRuntimeManager(
+    fakeResolver(),
+    { idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    resolved => ({
+      repoRoot: resolved.repoRoot,
+      rootSource: resolved.rootSource,
+      repoHash: resolved.repoHash,
+      aliases: resolved.aliases,
+      layoutProfile: resolved.layoutProfile,
+      lsp: resolved.lsp,
+      session: new FakeSession() as never,
+      javaIndexClient: javaIndexClient as never,
+      javaIndex: { routerStatus: async () => ({ openSource: "own-snapshot" }) } as never,
+      router: { clearRgCache() {}, onRepoChanged() {} } as never
+    }),
+    () => ({ generation: clock, coordinator, layout: { current: () => layout, refresh: () => ({ changed: false, layout }) } }),
+    new NoopCrossProcessLeaseStore()
+  );
+
+  await manager.contextFor({ repoRoot: "/repo-a" });
+
+  assert.equal(reconcileCalls, 0, "the worker verifies/queues the snapshot itself; manager must not race it with a full sweep");
 });
 
 async function waitFor(condition: () => boolean): Promise<void> {
@@ -653,10 +763,6 @@ function fakeContext(
     layoutProfile: resolved.layoutProfile,
     lsp: resolved.lsp,
     session: session as never,
-    sourceIndex: {
-      status: () => ({ entries: 0 }),
-      applyChanges() {}
-    } as never,
     router: {
       clearRgCache() {},
       onRepoChanged() {}

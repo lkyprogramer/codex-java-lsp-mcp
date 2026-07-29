@@ -1,5 +1,5 @@
 // input: JavaIndexClient plus router lookup patterns (type name, file, method line).
-// output: Async SourceIndex-compatible facts for AgentRouter collectors and scoring.
+// output: Async JavaIndex facts for AgentRouter collectors and scoring.
 // pos: Task 22 cutover facade between V2 worker queries and router call sites.
 import { existsSync } from "node:fs";
 import path from "node:path";
@@ -46,47 +46,23 @@ export type RouterIndexStatus = {
   entries: number;
   hits: number;
   misses: number;
-  regexFacts: number;
-  documentSymbolFacts: number;
-  snapshotAgeMs?: number;
-  dirtyCount: number;
-  warmIndexPending: number;
-  warmIndexFailed: number;
-  scanCacheHits: number;
-  scanCacheMisses: number;
-  scanCacheMissElapsedMs: number;
-  scanCacheEntries: number;
   typeLookupIndexHits: number;
   typeLookupIndexMisses: number;
-  typeLookupIndexEntries: number;
   javaIndex: JavaIndexStatus;
   openSource: JavaIndexOpenSource;
   coverage: "complete" | "partial" | "degraded";
 };
 
-/**
- * Router-facing fact surface shared by both index backends (Step 7 of Task
- * 22 keeps V1 and V2 wired side by side behind JAVA_LSP_INDEX_BACKEND until
- * the benchmark gate passes). `RouterJavaIndex` implements this directly;
- * `wrapSourceIndex` (source-index-router-adapter.ts) adapts V1's sync
- * `SourceIndex` to it.
- */
+/** Router-facing fact surface backed exclusively by JavaIndex V2. */
 export interface RouterIndex {
   ensureFresh(files: string[], generation: number): Promise<void>;
   queryAnchor(file: string, line: number, column: number): Promise<AnchorFacts | undefined>;
   factsFor(inputFile: string, generation?: number): Promise<JavaSourceFacts>;
   methodAt(inputFile: string, line: number, generation?: number): Promise<JavaMethodFact | undefined>;
-  /**
-   * `scan` mirrors V1 SourceIndex's cheap-cache-only default vs. an explicit
-   * repo-wide rg scan: callers that already asked V1 for a full scan (the
-   * type-reference implementer lookups) must keep asking for one, since a
-   * silently cheaper default would under-find candidates relative to V1's
-   * pre-migration behavior. V2 ignores it - its index has no such tier.
-   */
-  findImplementers(typeName: string, limit?: number, scan?: boolean): Promise<JavaSourceFacts[]>;
+  findImplementers(typeName: string, limit?: number, scopeFile?: string): Promise<JavaSourceFacts[]>;
   findTypeReferences(typeName: string, limit?: number): Promise<JavaSourceFacts[]>;
   findImporters(typeName: string, limit?: number): Promise<JavaSourceFacts[]>;
-  findTypeDefinitions(typeNames: readonly string[], limit?: number): Promise<JavaSourceFacts[]>;
+  findTypeDefinitions(typeNames: readonly string[], limit?: number, hydrate?: boolean): Promise<JavaSourceFacts[]>;
   routerStatus(): Promise<RouterIndexStatus>;
 }
 
@@ -102,6 +78,10 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex {
   private typeLookupMisses = 0;
   private factsHits = 0;
   private factsMisses = 0;
+  /** Files known to have completed a foreground refresh at a repo generation. */
+  private readonly freshGenerationByPath = new Map<string, number>();
+  /** Router facts are immutable for one generation; retain them across ranking phases. */
+  private readonly factsByPath = new Map<string, { generation: number; facts: JavaSourceFacts }>();
 
   constructor(
     private readonly repoRoot: string,
@@ -148,7 +128,22 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex {
       this.generation = Math.max(this.generation, generation);
       return;
     }
-    const status = await this.client.refresh(generation, absoluteFiles, []);
+    const staleFiles = absoluteFiles.filter(file => {
+      if (this.freshGenerationByPath.get(file) === generation) {
+        return false;
+      }
+      if (this.hasCompleteCoverageAt(file, generation)) {
+        this.freshGenerationByPath.set(file, generation);
+        return false;
+      }
+      return true;
+    });
+    if (staleFiles.length === 0) {
+      this.generation = Math.max(this.generation, generation);
+      return;
+    }
+    const status = await this.client.refresh(generation, staleFiles, []);
+    for (const file of staleFiles) this.freshGenerationByPath.set(file, generation);
     this.generation = Math.max(generation, status.indexedGeneration);
   }
 
@@ -160,6 +155,11 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex {
   async queryType(typeText: string, scopeFile?: string) {
     await this.ensureOpened(this.generation);
     return this.client.queryType(typeText, scopeFile);
+  }
+
+  async queryTypes(queries: Array<{ typeText: string; scopeFile?: string }>) {
+    await this.ensureOpened(this.generation);
+    return this.client.queryTypes(queries);
   }
 
   async queryImplementers(typeId: string, limit: number) {
@@ -202,18 +202,8 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex {
       entries: javaIndex.files,
       hits: this.factsHits,
       misses: this.factsMisses,
-      regexFacts: 0,
-      documentSymbolFacts: javaIndex.files,
-      dirtyCount: javaIndex.pendingForeground + javaIndex.pendingBackground,
-      warmIndexPending: javaIndex.pendingBackground,
-      warmIndexFailed: 0,
-      scanCacheHits: 0,
-      scanCacheMisses: 0,
-      scanCacheMissElapsedMs: 0,
-      scanCacheEntries: 0,
       typeLookupIndexHits: this.typeLookupHits,
       typeLookupIndexMisses: this.typeLookupMisses,
-      typeLookupIndexEntries: javaIndex.types,
       javaIndex,
       openSource: this.openSource,
       coverage: summarizeCoverage(javaIndex)
@@ -227,6 +217,16 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex {
   async refresh(generation: number, changed: string[], deleted: string[]): Promise<JavaIndexStatus> {
     await this.ensureOpened(generation);
     const status = await this.client.refresh(generation, changed, deleted);
+    for (const file of changed) {
+      const absolute = normalizeRepoFile(this.repoRoot, file);
+      this.freshGenerationByPath.set(absolute, generation);
+      this.factsByPath.delete(absolute);
+    }
+    for (const file of deleted) {
+      const absolute = normalizeRepoFile(this.repoRoot, file);
+      this.freshGenerationByPath.delete(absolute);
+      this.factsByPath.delete(absolute);
+    }
     this.generation = Math.max(generation, status.indexedGeneration);
     return status;
   }
@@ -234,6 +234,8 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex {
   async reconcile(generation: number): Promise<JavaIndexStatus> {
     await this.ensureOpened(generation);
     const status = await this.client.reconcile(generation);
+    this.freshGenerationByPath.clear();
+    this.factsByPath.clear();
     this.generation = Math.max(generation, status.indexedGeneration);
     return status;
   }
@@ -241,6 +243,8 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex {
   async close(): Promise<void> {
     await this.client.close();
     this.opened = false;
+    this.freshGenerationByPath.clear();
+    this.factsByPath.clear();
   }
 
   async factsFor(inputFile: string, generation = this.generation): Promise<JavaSourceFacts> {
@@ -248,15 +252,24 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex {
     if (!existsSync(absolutePath)) {
       throw new Error(`Java source file does not exist: ${inputFile}`);
     }
+    const cached = this.factsByPath.get(absolutePath);
+    if (cached?.generation === generation) {
+      this.factsHits += 1;
+      return cached.facts;
+    }
     await this.ensureFresh([absolutePath], generation);
     const bundles = await this.client.queryFiles([absolutePath]);
     const bundle = bundles[0];
     if (!bundle) {
       this.factsMisses += 1;
-      return fallbackSourceFacts(this.repoRoot, absolutePath);
+      const facts = fallbackSourceFacts(this.repoRoot, absolutePath);
+      this.factsByPath.set(absolutePath, { generation, facts });
+      return facts;
     }
     this.factsHits += 1;
-    return bundleToSourceFacts(this.repoRoot, bundle);
+    const facts = bundleToSourceFacts(this.repoRoot, bundle);
+    this.factsByPath.set(absolutePath, { generation, facts });
+    return facts;
   }
 
   async methodAt(inputFile: string, line: number, generation = this.generation): Promise<JavaMethodFact | undefined> {
@@ -267,8 +280,8 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex {
       || [...facts.methods].filter(method => method.line <= line).sort((left, right) => right.line - left.line)[0];
   }
 
-  async findImplementers(typeName: string, limit = 20, _scan?: boolean): Promise<JavaSourceFacts[]> {
-    const typeId = await this.resolveTypeId(typeName);
+  async findImplementers(typeName: string, limit = 20, scopeFile?: string): Promise<JavaSourceFacts[]> {
+    const typeId = await this.resolveTypeId(typeName, scopeFile);
     if (!typeId) {
       this.typeLookupMisses += 1;
       return [];
@@ -302,29 +315,35 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex {
     return this.referencesToFacts(refs, limit);
   }
 
-  async findTypeDefinitions(typeNames: readonly string[], limit = 40): Promise<JavaSourceFacts[]> {
-    const found = new Map<string, JavaSourceFacts>();
-    for (const typeName of unique(typeNames.map(value => value.replace(/<.*>/, "").trim()).filter(Boolean)).slice(0, 64)) {
-      const lookup = await this.client.queryType(typeName);
+  async findTypeDefinitions(typeNames: readonly string[], limit = 40, hydrate = true): Promise<JavaSourceFacts[]> {
+    const names = unique(typeNames.map(value => value.replace(/<.*>/, "").trim()).filter(Boolean)).slice(0, 64);
+    // A request commonly has a method signature plus a handful of imports.
+    // Resolve those independent lookups together and hydrate their owning
+    // files once.  The former one-type-at-a-time pattern paid a worker IPC
+    // round-trip for every definition and then another for every file bundle.
+    const lookupResults = await this.client.queryTypes(names.map(typeText => ({ typeText })));
+    const found: JavaTypeFacts[] = [];
+    const foundFiles = new Set<string>();
+    for (const lookup of lookupResults) {
       if (lookup.state === "RESOLVED") {
         this.typeLookupHits += 1;
-        const facts = (await this.typesToFacts([lookup.type]))[0];
-        if (facts) found.set(facts.absolutePath, facts);
+        addType(lookup.type, found, foundFiles);
         continue;
       }
       if (lookup.state === "AMBIGUOUS") {
         this.typeLookupHits += 1;
         for (const type of lookup.candidates.slice(0, 4)) {
-          const facts = (await this.typesToFacts([type]))[0];
-          if (facts) found.set(facts.absolutePath, facts);
+          addType(type, found, foundFiles);
         }
         continue;
       }
       this.typeLookupMisses += 1;
     }
-    return [...found.values()]
-      .sort((left, right) => (left.path || left.absolutePath).localeCompare(right.path || right.absolutePath))
-      .slice(0, limit);
+    // Input order is semantic priority (method signature and direct imports
+    // precede wider task-named imports).  Sorting before the limit used to
+    // discard a direct interface such as PositionService, which also meant
+    // its implementation lookup never ran in a large controller import set.
+    return (await this.typesToFacts(found, true, hydrate)).slice(0, limit);
   }
 
   private async resolveTypeId(typeName: string, scopeFile?: string): Promise<string | undefined> {
@@ -344,11 +363,21 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex {
     return undefined;
   }
 
-  private async typesToFacts(types: readonly JavaTypeFacts[]): Promise<JavaSourceFacts[]> {
+  private async typesToFacts(
+    types: readonly JavaTypeFacts[],
+    preserveInputOrder = false,
+    hydrate = true
+  ): Promise<JavaSourceFacts[]> {
     const byPath = new Map<string, JavaTypeFacts>();
     for (const type of types) {
       const relativePath = relativePathOfFileId(type.fileId);
       if (!byPath.has(relativePath)) byPath.set(relativePath, type);
+    }
+    if (!hydrate) {
+      return [...byPath.entries()].map(([relativePath, type]) => typeFactsToSourceFacts(this.repoRoot, {
+        ...type,
+        fileId: relativePath
+      }));
     }
     const absolutePaths = [...byPath.keys()].map(relative => path.resolve(this.repoRoot, relative));
     const bundles = absolutePaths.length > 0 ? await this.client.queryFiles(absolutePaths) : [];
@@ -356,9 +385,19 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex {
     const facts: JavaSourceFacts[] = [];
     for (const [relativePath, type] of byPath) {
       const bundle = bundleByRelative.get(relativePath);
+      if (bundle) {
+        // Definition lookup already paid to transfer the complete bundle.
+        // Retain the ordinary file facts as well as returning the
+        // type-specific projection, so final ranking does not immediately
+        // issue the same QUERY_FILES request again.
+        const fullFacts = bundleToSourceFacts(this.repoRoot, bundle);
+        this.factsByPath.set(fullFacts.absolutePath, { generation: this.generation, facts: fullFacts });
+      }
       facts.push(typeFactsToSourceFacts(this.repoRoot, type, bundle));
     }
-    return facts.sort((left, right) => (left.path || left.absolutePath).localeCompare(right.path || right.absolutePath));
+    return preserveInputOrder
+      ? facts
+      : facts.sort((left, right) => (left.path || left.absolutePath).localeCompare(right.path || right.absolutePath));
   }
 
   private async referencesToFacts(refs: readonly IndexedReference[], limit: number): Promise<JavaSourceFacts[]> {
@@ -366,8 +405,12 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex {
     if (relativePaths.length === 0) return [];
     const absolutePaths = relativePaths.map(relative => path.resolve(this.repoRoot, relative));
     const bundles = await this.client.queryFiles(absolutePaths);
-    return bundles
-      .map(bundle => bundleToSourceFacts(this.repoRoot, bundle))
+    const facts = bundles
+      .map(bundle => bundleToSourceFacts(this.repoRoot, bundle));
+    for (const fact of facts) {
+      this.factsByPath.set(fact.absolutePath, { generation: this.generation, facts: fact });
+    }
+    return facts
       .sort((left, right) => (left.path || left.absolutePath).localeCompare(right.path || right.absolutePath))
       .slice(0, limit);
   }
@@ -403,6 +446,26 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex {
       throw new Error("Java index is unavailable");
     }
   }
+
+  /**
+   * A reconciled/snapshot-restored COMPLETE root already contains facts at
+   * this generation.  Re-reading it is safe; reparsing every candidate during
+   * rank finalization is not.  Dirty/change batches advance coverage or call
+   * refresh before a request observes their generation, so this never masks a
+   * known mutation.
+   */
+  private hasCompleteCoverageAt(absolutePath: string, generation: number): boolean {
+    const status = this.client.localStatus();
+    if (status.indexedGeneration < generation) {
+      return false;
+    }
+    const relativePath = path.relative(this.repoRoot, absolutePath).replace(/\\/g, "/");
+    return status.coverage.some(root =>
+      root.state === "COMPLETE"
+      && root.generation >= generation
+      && (relativePath === root.root || relativePath.startsWith(`${root.root}/`))
+    );
+  }
 }
 
 function relativePathOfFileId(fileId: string): string {
@@ -413,4 +476,11 @@ function unique(values: string[]): string[] {
   return [...new Set(values.filter(Boolean))];
 }
 
-
+function addType(type: JavaTypeFacts, found: JavaTypeFacts[], foundFiles: Set<string>): void {
+  const relativePath = relativePathOfFileId(type.fileId);
+  if (foundFiles.has(relativePath)) {
+    return;
+  }
+  foundFiles.add(relativePath);
+  found.push(type);
+}

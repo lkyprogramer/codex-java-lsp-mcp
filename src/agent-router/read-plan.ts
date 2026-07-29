@@ -12,6 +12,7 @@ import type {
   ResolvedImpactProfile,
   RouterPosition
 } from "../agent-types.js";
+import { hasProtectedStructuralSignal } from "./ranking-signals.js";
 import { selectWithEvidenceBudget } from "./read-plan-budget.js";
 
 type BuildReadPlanInput = {
@@ -55,7 +56,7 @@ export async function buildReadPlan(input: BuildReadPlanInput): Promise<ReadPlan
 export function selectReadPlanFiles(input: SelectReadPlanInput): CandidateFile[] {
   const protectedPaths = input.protectedPaths || new Set<string>();
   const sorted = sortedByReadPriority(input.files, input.options);
-  return selectWithEvidenceBudget(sorted, input.maxItems, protectedReadPlanPaths(sorted, protectedPaths))
+  return selectWithEvidenceBudget(sorted, input.maxItems, protectedReadPlanPaths(sorted, protectedPaths, input.options))
     .map(file => ({ file, priority: readPriority(file, input.options) }))
     .sort((left, right) => priorityRank(left.priority) - priorityRank(right.priority) || right.file.score - left.file.score)
     .map(entry => entry.file);
@@ -65,10 +66,29 @@ export function legacyReadPlanSorted(files: readonly CandidateFile[], options: I
   return sortedByReadPriority(files, options);
 }
 
-export function protectedReadPlanPaths(files: readonly CandidateFile[], protectedPaths: ReadonlySet<string> = new Set<string>()): Set<string> {
+export function protectedReadPlanPaths(
+  files: readonly CandidateFile[],
+  protectedPaths: ReadonlySet<string> = new Set<string>(),
+  options: Pick<ImpactOptions, "anchors" | "profile" | "focusModules" | "testReadMode"> = {
+    anchors: [],
+    profile: "auto",
+    focusModules: [],
+    testReadMode: "defer"
+  }
+): Set<string> {
   const paths = new Set(protectedPaths);
   for (const file of files) {
-    if (((file.verifiedBy || []).includes("typeGraph") && !file.reasons.includes("typeGraph:implementation-lookup")) || file.reasons.includes("implementation")) {
+    // Deferred tests remain useful candidates, but cannot preempt exact
+    // production collaborators in the bounded read budget.
+    if (file.sourceSet === "test" && options.testReadMode === "defer") {
+      continue;
+    }
+    if (hasProtectedStructuralSignal(file)
+      || (file.verifiedBy || []).includes("typeReference")
+      || file.reasons.includes("persisted-implementation")
+      || file.reasons.includes("persisted-typeHierarchy")
+      || file.reasons.includes("implementation")
+      || isTaskLocalRepositoryPersistence(file, options)) {
       paths.add(file.absolutePath);
     }
   }
@@ -85,7 +105,9 @@ export function readPriority(file: CandidateFile, options: ImpactOptions): ReadP
   if (isPureIndexRecall(file)) {
     return "P2";
   }
-  if (file.reasons.includes("target") || (file.reasons.includes("implementation") && file.sourceSet === "main")) {
+  if (file.reasons.includes("target")
+    || (file.reasons.includes("implementation") && file.sourceSet === "main")
+    || isTaskLocalRepositoryPersistence(file, options)) {
     return "P0";
   }
   if (file.sourceSet === "main") {
@@ -244,6 +266,70 @@ const INDEX_RECALL_REASONS = new Set(["typeReference", "importGraph", "importGra
 
 function isPureIndexRecall(file: CandidateFile): boolean {
   return file.reasons.length > 0 && file.reasons.every(reason => INDEX_RECALL_REASONS.has(reason));
+}
+
+// A repository method's behavior is normally completed by its row model and
+// mapper.  Generic type references can be useful context, but must not use up
+// the bounded plan before task-local persistence evidence is read.  Restrict
+// this elevation to the requested repository module when one is supplied so a
+// cross-module persistence candidate cannot preempt the local data boundary.
+function isTaskLocalRepositoryPersistence(
+  file: CandidateFile,
+  options: Pick<ImpactOptions, "anchors" | "profile" | "focusModules">
+): boolean {
+  const candidatePath = file.path || file.absolutePath;
+  const persistencePath = /(?:^|\/)(?:persistence|entity|mapper)(?:\/|$)/.test(candidatePath)
+    || /(?:DO|Entity|Mapper)\.java$/.test(candidatePath);
+  if (options.profile !== "repository"
+    || file.sourceSet !== "main"
+    // The broad persistence rg section also returns application services. The
+    // bounded plan reserves this elevation for the row-model/mapper boundary
+    // itself, identified structurally rather than by its search-section tag.
+    || !persistencePath) {
+    return false;
+  }
+  if (!file.module) {
+    return false;
+  }
+  if (options.focusModules.length > 0 && !options.focusModules.includes(file.module)) {
+    return false;
+  }
+  const candidateType = javaTypeName(file);
+  const anchorTypes = options.anchors
+    .map(anchor => repositoryAnchorTypeName(anchor.file))
+    .filter(anchorType => anchorType.length >= 3);
+  const exactAnchorMatch = anchorTypes
+    .some(anchorType => candidateType === anchorType || candidateType.endsWith(anchorType));
+  const anchorFamilies = anchorTypes
+    .map(repositoryAnchorFamily)
+    .filter((family): family is string => family.length >= 3)
+  const exactFamilyMatch = anchorFamilies.some(family => candidateType === family);
+  const derivativeFamilyMatch = anchorFamilies
+    .some(family => candidateType.startsWith(family) || candidateType.endsWith(family));
+  const hasDirectCollaborator = (file.scoreBreakdown || [])
+    .some(item => item.id === "finalize.direct-collaborator" && item.delta > 0);
+  // A mapper can be named after its persisted aggregate rather than its port
+  // (e.g. UploadSessionMapper behind TransferRepository). Preserve it only
+  // when the task-specific persistence search found it; arbitrary entities and
+  // mappers in the focused module do not receive this elevation.
+  const taskDiscoveredMapper = /(?:^|\/)mapper(?:\/|$)/.test(candidatePath)
+    && file.reasons.includes("rg:persistence")
+    && hasDirectCollaborator;
+  return exactAnchorMatch || exactFamilyMatch || (derivativeFamilyMatch && hasDirectCollaborator) || taskDiscoveredMapper;
+}
+
+function repositoryAnchorTypeName(anchorPath: string): string {
+  return anchorPath.slice(anchorPath.lastIndexOf("/") + 1).replace(/\.java$/, "");
+}
+
+function repositoryAnchorFamily(anchorType: string): string {
+  return anchorType.replace(/(?:Repository|Mapper|Service|Controller|Handler|Adapter)(?:Impl)?$/, "");
+}
+
+function javaTypeName(file: CandidateFile): string {
+  const path = file.path || file.absolutePath;
+  const filename = path.slice(path.lastIndexOf("/") + 1);
+  return filename.replace(/\.java$/, "");
 }
 
 function readReason(file: CandidateFile, priority: ReadPriority): string {

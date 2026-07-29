@@ -15,9 +15,9 @@
 - `project-jdk.ts` | 解析项目 JDK 与 JDT LS runtime JDK 的配置关系。
 - `repo-layout.ts` | 识别 repo root、模块、layer、sourceSet 和路径规范化。
 - `repo-resolver.ts` | 将 `projectId/repoRoot/file` 解析为 canonical repoRoot、repoHash 与 LSP enablement。
-- `repo-runtime-manager.ts` | 管理每个 repo/worktree 的 session、SourceIndex 和 AgentRouter。
+- `repo-runtime-manager.ts` | 管理每个 repo/worktree 的 session、JavaIndex 和 AgentRouter。
 - `server.ts` | 注册七个只读 public MCP tools。
 - `smoke.ts` | 启动已构建 MCP server，验证 tools/list、`java_status` 与 shutdown。
-- `source-index.ts` | Java 轻量源码索引，支持 regex cold facts 和 documentSymbol warm-index 回填。
+- `java-index/` | 异步 Java AST 索引、快照恢复与 worktree seed，向 AgentRouter 提供静态事实。
 - `tools/` | 七个 public MCP tool 的 handler 与共享 context。
 - `worktree-cache-cleanup.ts` | 启动时清理超过 TTL 的非活跃 Git worktree cache，不清主 checkout。

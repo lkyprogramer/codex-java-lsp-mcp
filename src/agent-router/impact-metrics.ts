@@ -40,13 +40,6 @@ type SourceStatusSnapshot = {
   entries: number;
   hits: number;
   misses: number;
-  regexFacts: number;
-  documentSymbolFacts: number;
-  warmIndexPending: number;
-  warmIndexFailed: number;
-  scanCacheHits: number;
-  scanCacheMisses: number;
-  scanCacheMissElapsedMs: number;
   typeLookupIndexHits: number;
   typeLookupIndexMisses: number;
   openSource?: string;
@@ -113,9 +106,9 @@ export function updateTypeReferenceCacheMetrics(
   before: SourceStatusSnapshot,
   after: SourceStatusSnapshot
 ): void {
-  metrics.cacheHits = after.scanCacheHits - before.scanCacheHits;
-  metrics.cacheMisses = after.scanCacheMisses - before.scanCacheMisses;
-  metrics.cacheMissElapsedMs = after.scanCacheMissElapsedMs - before.scanCacheMissElapsedMs;
+  metrics.cacheHits = after.hits - before.hits;
+  metrics.cacheMisses = after.misses - before.misses;
+  metrics.cacheMissElapsedMs = 0;
   metrics.indexHits = after.typeLookupIndexHits - before.typeLookupIndexHits;
   metrics.indexMisses = after.typeLookupIndexMisses - before.typeLookupIndexMisses;
 }
@@ -147,12 +140,6 @@ export function sourceFactsDelta(
     entries: after.entries,
     hitsDelta: after.hits - before.hits,
     missesDelta: after.misses - before.misses,
-    regexFacts: after.regexFacts,
-    documentSymbolFacts: after.documentSymbolFacts,
-    warmIndexPending: after.warmIndexPending,
-    warmIndexFailed: after.warmIndexFailed,
-    scanCacheHitsDelta: after.scanCacheHits - before.scanCacheHits,
-    scanCacheMissesDelta: after.scanCacheMisses - before.scanCacheMisses,
     typeLookupIndexHitsDelta: after.typeLookupIndexHits - before.typeLookupIndexHits,
     typeLookupIndexMissesDelta: after.typeLookupIndexMisses - before.typeLookupIndexMisses,
     anchorFactSource: anchors[0]?.factSource,

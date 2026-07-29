@@ -232,6 +232,7 @@ test("anchor prefers the most specific containing symbol: method over its owning
   const onMethod = store.anchor(bundle.file.relativePath, 2, 5);
   assert.equal(onMethod?.symbolKind, "METHOD");
   assert.equal(onMethod?.symbolId, method.methodId);
+  assert.equal(onMethod?.type?.simpleName, "Widget", "member anchors retain their enclosing type facts");
 
   const onTypeOnly = store.anchor(bundle.file.relativePath, 1, 1);
   assert.equal(onTypeOnly?.symbolKind, "TYPE");

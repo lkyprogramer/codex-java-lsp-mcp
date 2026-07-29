@@ -56,7 +56,7 @@ export type ResolvedAnchor = {
   symbolName: string;
   methodName?: string;
   className?: string;
-  factSource?: "javaIndex" | "fallback" | "regex" | "documentSymbol";
+  factSource?: "javaIndex" | "fallback";
   kind: string;
 };
 

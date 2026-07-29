@@ -14,10 +14,10 @@ export function evidenceGaps(anchors: readonly ResolvedAnchor[], options: Impact
     gaps.push("LSP semantic enrichment was skipped by policy; raise semanticPolicy or mode if exact symbol binding is required.");
   }
   if (semantic.timeout) {
-    gaps.push("LSP semantic enrichment hit the configured timeout and fell back to source-index plus rg evidence.");
+    gaps.push("LSP semantic enrichment hit the configured timeout and fell back to JavaIndex plus rg evidence.");
   }
-  if (anchors.some(anchor => anchor.factSource !== "documentSymbol")) {
-    gaps.push("Source facts are regex-derived and not yet JDT LS documentSymbol confirmed.");
+  if (anchors.some(anchor => anchor.factSource === "fallback")) {
+    gaps.push("Some source facts used the degraded fallback because JavaIndex facts were unavailable.");
   }
   if (anchors.some(anchor => anchor.profile === "repository" || anchor.profile === "port")) {
     gaps.push("Review persistence/config evidence from rgSummary before changing behavior.");

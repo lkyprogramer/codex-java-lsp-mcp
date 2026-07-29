@@ -12,7 +12,7 @@ import {
 } from "./cross-process-lease.js";
 import { JdtlsSession, type JdtlsLifecycleState } from "./jdtls-session.js";
 import { JavaIndexClient } from "./java-index/java-index-client.js";
-import { RouterJavaIndex, type RouterIndex } from "./java-index/router-java-index.js";
+import { RouterJavaIndex } from "./java-index/router-java-index.js";
 import { LayoutManager, type LayoutSource } from "./layout-manager.js";
 import { RepoChangeCoordinator } from "./repo-change-coordinator.js";
 import { GenerationClock, type RepoChangeBatch } from "./repo-generation.js";
@@ -29,17 +29,8 @@ import {
   type RequestMode,
   type SemanticPolicy
 } from "./runtime/request-context.js";
-import { SourceIndex } from "./source-index.js";
-import { wrapSourceIndex } from "./source-index-router-adapter.js";
 import type { ToolContext } from "./tools/context.js";
 import { touchRepoCache } from "./worktree-cache-cleanup.js";
-
-/**
- * Step 7 (Task 22): keeps V1 and V2 wired side by side so the benchmark gate
- * (R_read_must, recall/P_read, P95, output bytes vs V1) can be measured
- * before source-index.ts and this flag are deleted (Step 8).
- */
-const JAVA_INDEX_BACKEND: "v1" | "v2" = process.env.JAVA_LSP_INDEX_BACKEND === "v1" ? "v1" : "v2";
 
 export type RequestOptionsInput = {
   mode: RequestMode;
@@ -258,6 +249,7 @@ export class RepoRuntimeManager {
       cacheReadAllowed,
       cacheWriteAllowed,
       negativeLookupAllowed,
+      indexOpenSource: await entry.context.javaIndex.routerStatus().then(status => status.openSource).catch(() => undefined),
       mode,
       semanticPolicy,
       deadlineMs,
@@ -277,8 +269,7 @@ export class RepoRuntimeManager {
       const operation = (async () => {
         const generationAtStart = entry.generation.snapshot().value;
         try {
-          await entry.context.sourceIndex.reconcile(entry.layout.current(), generationAtStart);
-          await entry.context.javaIndexClient?.reconcile(generationAtStart).catch(() => undefined);
+          await entry.context.javaIndexClient?.reconcile(generationAtStart);
           entry.generation.clearDirty(generationAtStart);
         } catch {
           // Reconcile failure must not fail the request: output coverage stays
@@ -435,7 +426,10 @@ export class RepoRuntimeManager {
 
   private async createEntry(resolved: ResolvedRepo): Promise<RuntimeEntry> {
     const context = this.runtimeFactory(resolved, this.leases);
-    const { generation, coordinator, layout } = this.coordinationFactory(resolved, () => context.sourceIndex.status().entries);
+    const { generation, coordinator, layout } = this.coordinationFactory(
+      resolved,
+      () => context.javaIndexClient?.localStatus().files ?? 0
+    );
     const entry: RuntimeEntry = {
       context,
       generation,
@@ -466,7 +460,6 @@ export class RepoRuntimeManager {
     let javaIndexReady = entry.context.javaIndexClient === undefined;
     coordinator.onBatch(async batch => {
       entry.context.router.onRepoChanged(batch);
-      entry.context.sourceIndex.applyChanges(batch);
       entry.context.session.invalidateForRepoChanges(batch);
       if (!javaIndexReady) {
         bufferedJavaIndexBatches.push(batch);
@@ -515,7 +508,13 @@ export class RepoRuntimeManager {
           && entry_.failedFiles === 0
           && entry_.recoveredFiles === 0
         );
-      if (!fullyRestored || generationChangedDuringSeed) {
+      // Own-snapshot verification now continues in the worker after OPEN has
+      // restored its facts provisionally.  Starting a full reconcile here
+      // would erase the startup win and duplicate the verifier's bounded
+      // diff/sweep decision; it promotes COMPLETE or schedules the governed
+      // sweep itself.  A real watcher batch still sets generationChanged and
+      // takes the normal reconcile path.
+      if ((!fullyRestored && !openStatus.snapshotVerificationPending) || generationChangedDuringSeed) {
         await entry.context.javaIndexClient?.reconcile(generation.snapshot().value);
       }
     }).catch(() => {
@@ -532,11 +531,9 @@ export class RepoRuntimeManager {
   /**
    * Maps one coordinator batch onto the Java index's own refresh/reconcile
    * contract (Task 20 Step 7). A storm or a build-file change routes to a
-   * background reconcile rather than a per-path foreground refresh, matching
-   * how the batch is already handled for SourceIndex/freshness. A listener
+   * background reconcile rather than a per-path foreground refresh. A listener
    * throw here is caught by RepoChangeCoordinator's own per-listener catch,
-   * which marks the generation dirty for the next request's retry - the same
-   * treatment a SourceIndex failure already gets.
+   * which marks the generation dirty for the next request's retry.
    */
   private async applyBatchToJavaIndex(
     javaIndex: JavaIndexClient | undefined,
@@ -707,13 +704,8 @@ export class RepoRuntimeManager {
 
 function createRuntime(resolved: ResolvedRepo, leases: CrossProcessLeaseStore): ManagedToolContext {
   const session = new JdtlsSession(resolved.repoRoot, resolved.aliases, undefined, undefined, leases, resolved.worktree);
-  const sourceIndex = new SourceIndex(resolved.repoRoot);
   const javaIndexClient = new JavaIndexClient(resolved.repoRoot, repoCacheRoot(resolved.repoRoot));
-  const routerJavaIndex = new RouterJavaIndex(resolved.repoRoot, javaIndexClient);
-  // The V2 worker (javaIndexClient) always runs so its coverage/snapshot facts
-  // stay warm regardless of backend; only the router-facing answer source
-  // switches on JAVA_LSP_INDEX_BACKEND (Step 7 benchmark gate).
-  const javaIndex: RouterIndex = JAVA_INDEX_BACKEND === "v1" ? wrapSourceIndex(sourceIndex) : routerJavaIndex;
+  const javaIndex = new RouterJavaIndex(resolved.repoRoot, javaIndexClient);
   const router = new AgentRouter(resolved.repoRoot, session, javaIndex);
   return {
     repoRoot: resolved.repoRoot,
@@ -724,7 +716,6 @@ function createRuntime(resolved: ResolvedRepo, leases: CrossProcessLeaseStore): 
     lsp: resolved.lsp,
     worktree: resolved.worktree,
     session,
-    sourceIndex,
     router,
     javaIndex,
     javaIndexClient

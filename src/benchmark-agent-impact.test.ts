@@ -47,7 +47,43 @@ test("benchmark loads scenarios from external jsonl and prints metadata", async 
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.metadata.projectId, "generic-java");
   assert.equal(payload.metadata.warmState, "cold-nolsp");
+  assert.equal(payload.metadata.indexBackend, "v2");
+  assert.equal(payload.metadata.indexPrepareTimeoutMs, 600000);
   assert.equal(payload.scenarios[0].id, "demo");
+});
+
+test("benchmark records an explicitly isolated JavaIndex cache directory", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-benchmark-cache-"));
+  const scenarioFile = path.join(root, "generic-java.scenarios.jsonl");
+  const cacheDir = path.join(root, "isolated-index-cache");
+  await writeFile(scenarioFile, `${JSON.stringify({
+    id: "demo",
+    name: "Demo",
+    projectId: "generic-java",
+    anchor: {
+      file: "src/main/java/demo/Demo.java",
+      line: 1,
+      column: 1,
+      profile: "service"
+    }
+  })}\n`);
+
+  const result = spawnSync(process.execPath, [
+    "dist/benchmark-agent-impact.js",
+    "--repo-root", root,
+    "--scenarios", scenarioFile,
+    "--project-id", "generic-java",
+    "--warm-state", "cold-nolsp",
+    "--index-cache-dir", cacheDir,
+    "--list-scenarios"
+  ], {
+    cwd: path.resolve(import.meta.dirname, ".."),
+    encoding: "utf8"
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.metadata.indexCacheDir, cacheDir);
 });
 
 test("benchmark can run a no-lsp token baseline", async () => {
@@ -235,6 +271,10 @@ test("impact benchmark exposes timing diagnostics", async () => {
   const payload = JSON.parse(result.stdout);
   const attempt = payload.rows[0].attempts[0];
   const timing = attempt.timing;
+  assert.equal(payload.metadata.indexBackend, "v2");
+  assert.equal(typeof payload.metadata.prepareJavaIndexMs, "number");
+  assert.ok(payload.metadata.prepareJavaIndexMs >= 0);
+  assert.equal(payload.metadata.prepareJavaIndexStatus.pendingBackground, 0);
   assert.equal(payload.metadata.readPlanMaxItems, 1);
   assert.equal(attempt.readPlanItems, 1);
   assert.equal(attempt.roundTrips, 2);

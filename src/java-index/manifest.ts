@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { open, opendir, readFile } from "node:fs/promises";
+import { open, opendir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import type { LayoutContext } from "../layout-probe.js";
 
@@ -67,6 +67,78 @@ export type ManifestEntry = {
   contentHash: string;
   sourceRoot: string;
 };
+
+/**
+ * Persisted file metadata sufficient to identify the small set of files whose
+ * content hashes must be re-read after restoring an own snapshot.  `ctimeMs`
+ * is intentionally required for a metadata match: old snapshots without it
+ * take the conservative slow path once, rather than trusting only a size and
+ * user-settable mtime.
+ */
+export type SnapshotManifestFile = {
+  relativePath: string;
+  sourceRoot: string;
+  size: number;
+  mtimeMs: number;
+  ctimeMs?: number;
+};
+
+export type SnapshotManifestDiff = {
+  discovered: DiscoveredJavaFile[];
+  changed: DiscoveredJavaFile[];
+  deletedRelativePaths: string[];
+  metadataMatches: boolean;
+};
+
+/**
+ * Performs the cheap half of own-snapshot validation: discover source files
+ * and stat each one, then return only the paths that differ from persisted
+ * file metadata.  Callers hash/re-parse that returned delta, not every source
+ * file.  A metadata match is safe for normal filesystem edits because ctime
+ * changes whenever content or mtime is changed; snapshots created before
+ * ctime was recorded deliberately never match and fall back to content
+ * verification.
+ */
+export async function scanSnapshotManifestDiff(
+  repoRoot: string,
+  layout: LayoutContext,
+  snapshotFiles: readonly SnapshotManifestFile[]
+): Promise<SnapshotManifestDiff> {
+  const discovered = await discoverJavaFiles(repoRoot, layout);
+  const snapshotByPath = new Map(snapshotFiles.map(file => [file.relativePath, file]));
+  const currentPaths = new Set(discovered.map(file => file.relativePath));
+  const changed: DiscoveredJavaFile[] = [];
+
+  for (const file of discovered) {
+    const previous = snapshotByPath.get(file.relativePath);
+    try {
+      const current = await stat(file.absolutePath);
+      const metadataMatches = previous !== undefined
+        && previous.sourceRoot === file.sourceRoot
+        && previous.size === current.size
+        && previous.mtimeMs === current.mtimeMs
+        && previous.ctimeMs !== undefined
+        && previous.ctimeMs === current.ctimeMs;
+      if (!metadataMatches) changed.push(file);
+    } catch {
+      // A file that disappears or becomes unreadable between discovery and
+      // stat cannot be trusted as unchanged.  The caller's normal refresh or
+      // governed sweep will surface the concrete failure and retain safe
+      // non-COMPLETE coverage.
+      changed.push(file);
+    }
+  }
+
+  const deletedRelativePaths = snapshotFiles
+    .map(file => file.relativePath)
+    .filter(relativePath => !currentPaths.has(relativePath));
+  return {
+    discovered,
+    changed,
+    deletedRelativePaths,
+    metadataMatches: changed.length === 0 && deletedRelativePaths.length === 0
+  };
+}
 
 /**
  * Hashes sorted `relativePath + contentHash + sourceRoot` triples - the

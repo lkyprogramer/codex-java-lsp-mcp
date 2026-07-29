@@ -19,8 +19,7 @@ export type MethodRelationFact = {
   name?: string;
   line: number;
   confidence: "high" | "medium" | "low";
-  /** "regex-fallback" only appears via the V1 SourceIndex backend (Step 7 coexistence). */
-  source: "ast" | "regex-fallback";
+  source: "ast";
 };
 
 export type JavaMethodFact = {
@@ -50,8 +49,7 @@ export type JavaSourceFacts = {
   wildcardImports: string[];
   annotations: string[];
   methods: JavaMethodFact[];
-  /** "regex" / "documentSymbol" only appear via the V1 SourceIndex backend (Step 7 coexistence). */
-  factSource: "javaIndex" | "fallback" | "regex" | "documentSymbol";
+  factSource: "javaIndex" | "fallback";
   parseState?: "COMPLETE" | "RECOVERED" | "FAILED";
   confirmedAt?: string;
 };

@@ -32,7 +32,7 @@ import {
   updateTypeReferenceCacheMetrics
 } from "./impact-metrics.js";
 import { collectNamingRecall } from "./naming-recall.js";
-import { runRgSection } from "./rg-execution.js";
+import { runRgSection, type RgExecutionResult } from "./rg-execution.js";
 import { summaryFromSearchResult, type RgCommandSummary } from "./rg-plan.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import type { RepoChangeBatch } from "../repo-generation.js";
@@ -179,6 +179,11 @@ export class AgentRouter {
       metrics: importGraph,
       generation
     }));
+    // JavaIndex replaces only static relation discovery.  Naming recall stays
+    // a first-class asynchronous collector: conventions, config, and broad
+    // consumers are not a fallback for implementer/type lookup.  Suppressing
+    // it for a complete port index silently regressed the established V1
+    // candidate-recall baseline on real multi-module repositories.
     const rgExecution = await collectNamingRecall({
       candidates,
       anchors,

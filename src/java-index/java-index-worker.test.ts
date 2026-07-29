@@ -52,13 +52,18 @@ test("reconcile() runs a background full sweep that discovers and indexes every 
   writeJavaFile(repoRoot, "src/main/java/demo/Impl.java", "package demo;\n\nclass Impl implements Gateway {}\n");
   writeJavaFile(repoRoot, "src/test/java/demo/ImplTest.java", "package demo;\n\nclass ImplTest {}\n");
 
-  const client = new JavaIndexClient(repoRoot, tempCacheDir());
+  const cacheDir = tempCacheDir();
+  const client = new JavaIndexClient(repoRoot, cacheDir);
   await client.open(1);
 
   const afterReconcile = await client.reconcile(1);
   assert.ok(afterReconcile.pendingBackground >= 0, "reconcile() returns promptly, not waiting for the sweep");
 
   await waitFor(async () => (await client.status()).pendingBackground === 0, 5000);
+  assert.ok(
+    existsSync(path.join(cacheDir, SNAPSHOT_FILE_NAME)),
+    "a quiescent full sweep must include its durable snapshot flush"
+  );
 
   const status = await client.status();
   assert.equal(status.files, 3);
@@ -76,6 +81,78 @@ test("reconcile() runs a background full sweep that discovers and indexes every 
     "a background-swept file must resolve its cross-file edges just like a foreground refresh does"
   );
 
+  await client.close();
+});
+
+test("a clean full sweep re-links an early source file after its later declaration is indexed", async () => {
+  const repoRoot = tempRepo("java-index-worker-final-relink-");
+  const consumer = "src/main/java/demo/AConsumer.java";
+  writeJavaFile(repoRoot, consumer, [
+    "package demo;",
+    "class AConsumer { ZProvider provider; }",
+    ""
+  ].join("\n"));
+  // The alphabetical discovery order deliberately indexes AConsumer before
+  // ZProvider.  A complete sweep must not leave that timing accident as an
+  // unresolved type reference once all declarations are present.
+  writeJavaFile(repoRoot, "src/main/java/demo/ZProvider.java", "package demo;\nclass ZProvider {}\n");
+
+  const client = new JavaIndexClient(repoRoot, tempCacheDir());
+  await client.open(1);
+  await client.reconcile(1);
+  await waitFor(async () => (await client.status()).pendingBackground === 0, 5000);
+
+  const bundle = (await client.queryFiles([path.join(repoRoot, consumer)]))[0]!;
+  const providerField = bundle.fields.find(field => field.name === "provider")!;
+  assert.deepEqual(providerField.type.resolution, {
+    state: "RESOLVED_REPO",
+    typeId: "type:demo.ZProvider",
+    strategy: "SAME_PACKAGE"
+  });
+  assert.ok(
+    bundle.edges.some(edge => edge.kind === "FIELD_TYPE" && edge.toId === "type:demo.ZProvider"),
+    "the final re-link must also publish the resolved FIELD_TYPE edge"
+  );
+  await client.close();
+});
+
+test("a clean multi-module sweep resolves an import into a source root indexed later", async () => {
+  const repoRoot = tempRepo("java-index-worker-cross-module-relink-");
+  const consumer = "modules/account/src/main/java/account/AccountConsumer.java";
+  writeJavaFile(repoRoot, consumer, [
+    "package account;",
+    "import common.ErrorCode;",
+    "class AccountConsumer { ErrorCode errorCode; }",
+    ""
+  ].join("\n"));
+  // Force the imported declaration into a later 50-file background chunk;
+  // a same-chunk fixture would accidentally get a free re-link at the end of
+  // the first chunk and would not exercise the cross-chunk completion path.
+  for (let index = 0; index < 60; index += 1) {
+    writeJavaFile(
+      repoRoot,
+      `modules/account/src/main/java/account/Filler${index}.java`,
+      `package account; class Filler${index} {}\n`
+    );
+  }
+  writeJavaFile(
+    repoRoot,
+    "modules/common/src/main/java/common/ErrorCode.java",
+    "package common;\npublic interface ErrorCode {}\n"
+  );
+
+  const client = new JavaIndexClient(repoRoot, tempCacheDir());
+  await client.open(1);
+  await client.reconcile(1);
+  await waitFor(async () => (await client.status()).pendingBackground === 0, 5000);
+
+  const bundle = (await client.queryFiles([path.join(repoRoot, consumer)]))[0]!;
+  const errorCodeField = bundle.fields.find(field => field.name === "errorCode")!;
+  assert.deepEqual(errorCodeField.type.resolution, {
+    state: "RESOLVED_REPO",
+    typeId: "type:common.ErrorCode",
+    strategy: "EXPLICIT_IMPORT"
+  });
   await client.close();
 });
 
@@ -334,16 +411,23 @@ test("a full sweep's completion persists a snapshot that a fresh client restores
 
   const second = new JavaIndexClient(repoRoot, cacheDir);
   const openStatus = await second.open(1);
-  assert.equal(openStatus.files, 2, "facts must be restored from the snapshot, not rediscovered");
-  assert.equal(openStatus.pendingBackground, 0, "no background sweep should be needed for an unchanged repo");
+  assert.equal(openStatus.files, 0, "OPEN must not synchronously deserialize the full snapshot payload");
+  assert.ok(openStatus.pendingBackground > 0, "OPEN must return before the snapshot manifest verification finishes");
+  assert.ok(
+    openStatus.coverage.every(entry => entry.state === "BUILDING"),
+    `unverified restored facts must not claim COMPLETE coverage, got ${JSON.stringify(openStatus.coverage)}`
+  );
+  await waitFor(async () => (await second.status()).pendingBackground === 0, 5000);
+  const restoredStatus = await second.status();
+  assert.equal(restoredStatus.files, 2, "facts must be restored from the snapshot after background hydration");
   assert.equal(
-    openStatus.indexedGeneration,
+    restoredStatus.indexedGeneration,
     firstStatus.indexedGeneration,
     "an identical manifest must not advance the generation"
   );
   assert.ok(
-    openStatus.coverage.every(entry => entry.state === "COMPLETE" && entry.generation === openStatus.indexedGeneration),
-    `expected every root restored COMPLETE without a re-parse, got ${JSON.stringify(openStatus.coverage)}`
+    restoredStatus.coverage.every(entry => entry.state === "COMPLETE" && entry.generation === restoredStatus.indexedGeneration),
+    `expected every root restored COMPLETE without a re-parse, got ${JSON.stringify(restoredStatus.coverage)}`
   );
 
   const gatewayBundle = (await second.queryFiles([path.join(repoRoot, "src/main/java/demo/Gateway.java")]))[0]!;
@@ -377,14 +461,17 @@ test("a file edited while the index was closed is detected and only that file is
 
   const second = new JavaIndexClient(repoRoot, cacheDir);
   const openStatus = await second.open(1);
+  assert.ok(openStatus.pendingBackground > 0, "the reopened snapshot is verified after OPEN responds");
+  await waitFor(async () => (await second.status()).pendingBackground === 0, 5000);
+  const verifiedStatus = await second.status();
   assert.equal(
-    openStatus.indexedGeneration,
+    verifiedStatus.indexedGeneration,
     firstStatus.indexedGeneration + 1,
     "a manifest mismatch must advance the generation exactly once"
   );
   assert.ok(
-    openStatus.coverage.every(entry => entry.state === "COMPLETE" && entry.generation === openStatus.indexedGeneration),
-    `expected every root to reach COMPLETE at the new generation, got ${JSON.stringify(openStatus.coverage)}`
+    verifiedStatus.coverage.every(entry => entry.state === "COMPLETE" && entry.generation === verifiedStatus.indexedGeneration),
+    `expected every root to reach COMPLETE at the new generation, got ${JSON.stringify(verifiedStatus.coverage)}`
   );
 
   const implBundle = (await second.queryFiles([path.join(repoRoot, editedFile)]))[0]!;
@@ -413,7 +500,7 @@ test("FLUSH writes the current facts immediately, ahead of the debounce timer", 
   await client.close();
 });
 
-test("the first V2 open deletes SourceIndex V1's cache files exactly once", async () => {
+test("the first V2 open deletes legacy V1 cache files exactly once", async () => {
   const repoRoot = tempRepo("java-index-worker-v1-cleanup-");
   const cacheDir = tempCacheDir();
   const v1Files = ["source-index.files.jsonl", "source-index.symbols.jsonl", "source-index.meta.json"];
@@ -439,9 +526,10 @@ test("the first V2 open deletes SourceIndex V1's cache files exactly once", asyn
   await second.close();
 });
 
-test("OPEN seeds a DEGRADED store from a valid sibling snapshot when it has no own snapshot", async () => {
+test("sibling-seeded reconcile re-parses only target-side diffs while preserving reusable facts", async () => {
   const siblingRepo = tempRepo("java-index-worker-sibling-source-");
   writeJavaFile(siblingRepo, "src/main/java/demo/Same.java", "package demo;\n\nclass Same {}\n");
+  writeJavaFile(siblingRepo, "src/main/java/demo/Changed.java", "package demo;\n\nclass Changed {}\n");
   const cacheBase = tempCacheDir();
   const siblingCacheDir = path.join(cacheBase, "sibling");
   const siblingClient = new JavaIndexClient(siblingRepo, siblingCacheDir);
@@ -456,6 +544,7 @@ test("OPEN seeds a DEGRADED store from a valid sibling snapshot when it has no o
 
   const targetRepo = tempRepo("java-index-worker-sibling-target-");
   writeJavaFile(targetRepo, "src/main/java/demo/Same.java", "package demo;\n\nclass Same {}\n");
+  writeJavaFile(targetRepo, "src/main/java/demo/Changed.java", "package demo;\n\nclass Changed { void targetOnly() {} }\n");
   const identity: WorktreeIdentity = {
     repoRoot: targetRepo,
     repoHash: "target-repo-hash",
@@ -468,7 +557,7 @@ test("OPEN seeds a DEGRADED store from a valid sibling snapshot when it has no o
 
   assert.equal(openStatus.worktreeSeed?.completion, "SEEDED_DEGRADED");
   assert.equal(openStatus.worktreeSeed?.reusedFiles, 1);
-  assert.equal(openStatus.worktreeSeed?.dirtyFiles, 0);
+  assert.equal(openStatus.worktreeSeed?.dirtyFiles, 1);
   assert.equal(openStatus.worktreeSeed?.relinkFiles, 0);
   assert.equal(openStatus.worktreeSeed?.droppedCrossFileEdges, 0);
   assert.equal(openStatus.worktreeSeed?.deltaParsedFiles, 0);
@@ -481,12 +570,19 @@ test("OPEN seeds a DEGRADED store from a valid sibling snapshot when it has no o
 
   const bundle = (await client.queryFiles([path.join(targetRepo, "src/main/java/demo/Same.java")]))[0];
   assert.ok(bundle, "a reused file's facts must already answer a query right after OPEN");
+  assert.equal(
+    (await client.queryFiles([path.join(targetRepo, "src/main/java/demo/Changed.java")])).length,
+    0,
+    "a target-side changed file must not be exposed from the sibling snapshot"
+  );
 
   await client.reconcile(1);
   await waitFor(async () => (await client.status()).pendingBackground === 0, 5000);
   const reconciled = await client.status();
   assert.equal(reconciled.worktreeSeed?.completion, "RECONCILED_COMPLETE");
   assert.equal(reconciled.worktreeSeed?.deltaParsedFiles, 1);
+  const changed = (await client.queryFiles([path.join(targetRepo, "src/main/java/demo/Changed.java")]))[0]!;
+  assert.equal(changed.methods.length, 1, "the target-side diff must be parsed during reconcile");
 
   await client.close();
 });

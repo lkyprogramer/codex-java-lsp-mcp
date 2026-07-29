@@ -196,11 +196,11 @@ function shortEvidenceGap(gap: string): string {
   if (gap === "LSP semantic enrichment was skipped by policy; raise semanticPolicy or mode if exact symbol binding is required.") {
     return "Semantic skipped; raise semanticPolicy for exact binding.";
   }
-  if (gap === "LSP semantic enrichment hit the configured timeout and fell back to source-index plus rg evidence.") {
-    return "Semantic timed out; using source-index plus rg.";
+  if (gap === "LSP semantic enrichment hit the configured timeout and fell back to JavaIndex plus rg evidence.") {
+    return "Semantic timed out; using JavaIndex plus rg.";
   }
-  if (gap === "Source facts are regex-derived and not yet JDT LS documentSymbol confirmed.") {
-    return "Source facts are regex-derived.";
+  if (gap === "Some source facts used the degraded fallback because JavaIndex facts were unavailable.") {
+    return "Some source facts used fallback evidence.";
   }
   if (gap === "Review persistence/config evidence from rgSummary before changing behavior.") {
     return "Review persistence/config evidence.";

@@ -64,14 +64,24 @@ export function candidateFromAnchor(anchor: ResolvedAnchor): CandidateFile {
 }
 
 export async function collectTypeGraphCandidates(input: CollectCandidatesInput): Promise<void> {
-  const { candidates, anchors, options, javaIndex, routingPolicy } = input;
+  const { candidates, anchors, options, javaIndex, routingPolicy, generation } = input;
   for (const anchor of anchors) {
     if (!shouldUseTypeGraph(anchor)) {
       continue;
     }
+    let isInterface = anchor.profile === "port";
+    try {
+      isInterface = (await javaIndex.factsFor(anchor.absolutePath, generation)).kind === "interface";
+    } catch {
+      // A failed fact read must not prevent the ordinary type lookup; it only
+      // means this candidate cannot claim the stronger implementation reason.
+    }
     const typeName = anchor.className || path.basename(anchor.absolutePath, ".java");
-    for (const facts of (await javaIndex.findImplementers(typeName, 20))) {
+    for (const facts of (await javaIndex.findImplementers(typeName, 20, anchor.absolutePath))) {
       const candidate = candidateFromFacts(facts, scoreBase(routingPolicy, "semantic", facts, anchor, options) + 70, "typeGraph");
+      if (isInterface) {
+        candidate.reasons = ["typeGraph:implementation-lookup"];
+      }
       mergeCandidate(candidates, candidate);
     }
   }
@@ -91,16 +101,22 @@ export async function collectImportGraphCandidates(input: CollectImportGraphInpu
     }
     metrics.scannedAnchors += 1;
     const localImports = projectLocalImports(anchorFacts.imports, anchorFacts.packageName);
-    for (const facts of await javaIndex.findTypeDefinitions(localImports, 40)) {
+    // Import graph only needs the declaration identity/path to nominate a
+    // candidate.  Hydrating every imported file's full AST bundle creates a
+    // large worker payload on wide application services without adding any
+    // structural signal to this collector.
+    for (const facts of await javaIndex.findTypeDefinitions(localImports, 40, false)) {
       if (facts.absolutePath === anchor.absolutePath) {
         continue;
       }
-      if (candidates.has(facts.absolutePath)) {
+      const alreadyCandidate = candidates.has(facts.absolutePath);
+      if (alreadyCandidate) {
         metrics.skippedExisting += 1;
-        continue;
       }
       mergeCandidate(candidates, candidateFromFacts(facts, scoreBase(routingPolicy, "semantic", facts, anchor, options) + 65, "importGraph"));
-      metrics.addedCandidates += 1;
+      if (!alreadyCandidate) {
+        metrics.addedCandidates += 1;
+      }
     }
     const typeName = anchor.className || path.basename(anchor.absolutePath, ".java");
     const importerLookupName = anchorFacts.packageName ? `${anchorFacts.packageName}.${typeName}` : typeName;
@@ -108,14 +124,16 @@ export async function collectImportGraphCandidates(input: CollectImportGraphInpu
       if (facts.absolutePath === anchor.absolutePath) {
         continue;
       }
-      if (candidates.has(facts.absolutePath)) {
+      const alreadyCandidate = candidates.has(facts.absolutePath);
+      if (alreadyCandidate) {
         metrics.skippedExisting += 1;
-        continue;
       }
       const candidate = candidateFromFacts(facts, scoreBase(routingPolicy, "semantic", facts, anchor, options) + 20, "importGraph");
       candidate.reasons = ["importGraph:reverse"];
       mergeCandidate(candidates, candidate);
-      metrics.addedCandidates += 1;
+      if (!alreadyCandidate) {
+        metrics.addedCandidates += 1;
+      }
     }
   }
 }

@@ -12,7 +12,7 @@ import {
   symmetricTypeRelationDelta,
   truncateCandidateTail
 } from "./agent-router/ranking-signals.js";
-import type { JavaSourceFacts } from "./source-index.js";
+import type { JavaSourceFacts } from "./java-index/router-facts.js";
 
 function facts(partial: Partial<JavaSourceFacts>): JavaSourceFacts {
   return {
@@ -23,7 +23,7 @@ function facts(partial: Partial<JavaSourceFacts>): JavaSourceFacts {
     wildcardImports: [],
     annotations: [],
     methods: [],
-    factSource: "regex",
+    factSource: "javaIndex",
     ...partial
   };
 }
@@ -96,6 +96,19 @@ test("hasProtectedStructuralSignal reads positive protected deltas from scoreBre
   assert.equal(hasProtectedStructuralSignal(weakFocus), false);
   const weakAnnotation = cand("/f.java", 10, [{ id: "finalize.structural.annotation", source: "finalize", delta: 50, reason: "" }]);
   assert.equal(hasProtectedStructuralSignal(weakAnnotation), false);
+  const directMethodType = cand("/g.java", 10, [{ id: "finalize.method-relation", source: "finalize", delta: 160, reason: "parameter type" }]);
+  assert.equal(
+    hasProtectedStructuralSignal(directMethodType),
+    true,
+    "a direct method parameter/return type is exact static evidence and must survive candidate-tail trimming"
+  );
+  const persistedReference = cand("/h.java", 10, [{ id: "finalize.match-count", source: "finalize", delta: 1, reason: "" }]);
+  persistedReference.verifiedBy = ["persisted-reference"];
+  assert.equal(
+    hasProtectedStructuralSignal(persistedReference),
+    true,
+    "an exact persisted semantic reference must survive candidate-tail trimming"
+  );
 });
 
 test("truncateCandidateTail returns input unchanged when 10 or fewer candidates", () => {
@@ -112,6 +125,40 @@ test("truncateCandidateTail keeps protected/structural, trims pure-string tail, 
   assert.ok(struct.every(file => result.includes(file)));
   assert.equal(result.length, 13);
   assert.ok(result.length < ranked.length);
+});
+
+test("truncateCandidateTail retains a deferred test candidate backed by an exact JavaIndex type reference", () => {
+  const structural = Array.from({ length: 8 }, (_, i) => strong(`/main/S${i}.java`, 200 - i));
+  const ordinaryTail = Array.from({ length: 6 }, (_, i) => noise(`/main/N${i}.java`, 100 - i));
+  const deferredTestReference = noise("/test/GatewayUsageTest.java", 10);
+  deferredTestReference.sourceSet = "test";
+  deferredTestReference.reasons = ["typeReference"];
+  deferredTestReference.verifiedBy = ["typeReference"];
+
+  const result = truncateCandidateTail(
+    [...structural, ...ordinaryTail, deferredTestReference, noise("/main/Last.java", 9)],
+    new Set<CandidateFile>()
+  );
+
+  assert.ok(
+    result.includes(deferredTestReference),
+    "testReadMode=defer controls read-plan slots, not visibility of an exact static test reference"
+  );
+});
+
+test("truncateCandidateTail retains an exact deferred test reference when sparse evidence reaches the caller limit", () => {
+  const ordinary = Array.from({ length: 12 }, (_, i) => noise(`/main/N${i}.java`, 100 - i));
+  const deferredTestReference = noise("/test/GatewayUsageTest.java", 1);
+  deferredTestReference.sourceSet = "test";
+  deferredTestReference.verifiedBy = ["typeReference"];
+
+  const result = truncateCandidateTail(
+    [...ordinary, deferredTestReference],
+    new Set<CandidateFile>(),
+    5
+  );
+
+  assert.ok(result.includes(deferredTestReference));
 });
 
 test("truncateCandidateTail cuts at a score cliff inside the discardable tail", () => {

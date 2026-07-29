@@ -92,6 +92,26 @@ test("two out-of-order responses resolve correct promises", async () => {
   assert.equal(anchorResult, undefined);
 });
 
+test("QUERY_TYPES sends one worker command and validates ordered lookup results", async () => {
+  const { client, worker } = await openedClient();
+  const pending = client.queryTypes([{ typeText: "Gateway" }, { typeText: "Missing" }]);
+  await flushMicrotasks();
+  const message = worker.posted[1];
+  assert.equal(message.type, "QUERY_TYPES");
+  worker.emitMessage({
+    id: message.id,
+    ok: true,
+    value: [
+      { state: "UNRESOLVED", coverage: "COMPLETE" },
+      { state: "UNRESOLVED", coverage: "DEGRADED" }
+    ]
+  });
+  assert.deepEqual(await pending, [
+    { state: "UNRESOLVED", coverage: "COMPLETE" },
+    { state: "UNRESOLVED", coverage: "DEGRADED" }
+  ]);
+});
+
 test("an invalid command payload is rejected by the validator and moves the client to DEGRADED", async () => {
   const { client, worker } = await openedClient();
 
@@ -263,6 +283,33 @@ test("deleting a type's sole source file drops the now-stale IMPLEMENTS edge fro
     implAfterDelete.edges.some(e => e.kind === "IMPLEMENTS" && e.toId === gateway.typeId),
     false,
     "Gateway's sole source file was deleted; the stale IMPLEMENTS edge must not survive re-resolution"
+  );
+
+  await client.close();
+});
+
+test("refreshing a declaration preserves inbound implementation edges when its stable id is unchanged", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "java-index-refresh-inbound-edge-"));
+  const packageDir = path.join(repoRoot, "src/main/java/demo");
+  mkdirSync(packageDir, { recursive: true });
+  const gatewayPath = path.join(packageDir, "Gateway.java");
+  const implPath = path.join(packageDir, "Impl.java");
+  writeFileSync(gatewayPath, "package demo;\n\ninterface Gateway { void run(); }\n");
+  writeFileSync(implPath, "package demo;\n\nclass Impl implements Gateway { public void run() {} }\n");
+
+  const client = new JavaIndexClient(repoRoot, mkdtempSync(path.join(tmpdir(), "java-index-refresh-inbound-cache-")));
+  await client.open(1);
+  await client.refresh(1, [gatewayPath, implPath], []);
+  const before = (await client.queryFiles([gatewayPath]))[0]!.types.find(type => type.simpleName === "Gateway")!;
+  assert.deepEqual((await client.queryImplementers(before.typeId, 10)).map(type => type.simpleName), ["Impl"]);
+
+  await client.refresh(2, [gatewayPath], []);
+  const after = (await client.queryFiles([gatewayPath]))[0]!.types.find(type => type.simpleName === "Gateway")!;
+  assert.equal(after.typeId, before.typeId, "unchanged declaration must keep the same stable id");
+  assert.deepEqual(
+    (await client.queryImplementers(after.typeId, 10)).map(type => type.simpleName),
+    ["Impl"],
+    "refreshing the target declaration must not drop inbound implementation edges"
   );
 
   await client.close();

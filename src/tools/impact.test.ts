@@ -61,7 +61,6 @@ function capturingContext(seen: ImpactOptions[]): ToolContext {
         return {};
       }
     },
-    sourceIndex: {},
     router: {
       async impact(options: ImpactOptions) {
         seen.push(options);
@@ -104,7 +103,6 @@ function contextFor(verbosity: NonNullable<ImpactOptions["verbosity"]>): ToolCon
         return { sessionDrain: 1 };
       }
     },
-    sourceIndex: {},
     router: {
       async impact(options: ImpactOptions) {
         const payload: ImpactResult = {

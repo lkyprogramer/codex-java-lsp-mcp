@@ -1,5 +1,5 @@
 // input: java_status MCP request and optional start flag.
-// output: Current JDT LS, watcher, source-index, and router cache status.
+// output: Current JDT LS, watcher, JavaIndex, and router cache status.
 // pos: v5 status tool handler.
 import { z } from "zod";
 import { existsSync } from "node:fs";
@@ -10,8 +10,8 @@ import type { JdtlsProgressStatus } from "../jdtls-session.js";
 import type { FileWatcherStatus } from "../file-watcher.js";
 import type { GeneratedCodeStatus } from "../generated-code.js";
 import type { JavaIndexStatus } from "../java-index/index-types.js";
+import { summarizeCoverage } from "../java-index/java-index-view.js";
 import type { ProjectJdkStatus } from "../project-jdk.js";
-import type { SourceIndexStatus } from "../source-index.js";
 import type { ToolContext } from "./context.js";
 import { compact, detailSchema, isDiagnosticDetail } from "./shared.js";
 
@@ -37,7 +37,6 @@ type StatusSummaryInput = {
   readonly layout: LayoutContext;
   readonly runtimeBuild: RuntimeBuildInfo;
   readonly warnings: string[];
-  readonly sourceIndex: SourceIndexStatus;
   readonly javaIndex?: JavaIndexStatus;
 };
 
@@ -73,7 +72,6 @@ export async function javaStatus(context: ToolContext, _args: z.infer<z.ZodObjec
     await context.session.ensureStarted();
   }
   const sessionStatus = context.session.status();
-  const sourceIndex = context.sourceIndex.status();
   const javaIndex = await context.javaIndexClient?.status().catch(() => undefined);
   const full = {
     ...sessionStatus,
@@ -86,7 +84,6 @@ export async function javaStatus(context: ToolContext, _args: z.infer<z.ZodObjec
     rootWarnings: warnings,
     lsp: context.lsp,
     repoRoot: context.repoRoot,
-    sourceIndex,
     javaIndex,
     watcher: context.watcher,
     rgCache: context.router.rgCacheStatus(),
@@ -94,7 +91,7 @@ export async function javaStatus(context: ToolContext, _args: z.infer<z.ZodObjec
   };
   return isDiagnosticDetail(_args.detail)
     ? full
-    : statusSummary({ context, sessionStatus, layout, runtimeBuild, warnings, sourceIndex, javaIndex });
+    : statusSummary({ context, sessionStatus, layout, runtimeBuild, warnings, javaIndex });
 }
 
 export function summarizeSessionStatus(status: SessionStatus): Record<string, unknown> {
@@ -159,7 +156,6 @@ function statusSummary(input: StatusSummaryInput): Record<string, unknown> {
     rootWarnings: input.warnings,
     lsp: input.context.lsp,
     repoRoot: input.context.repoRoot,
-    sourceIndex: summarizeSourceIndex(input.sourceIndex),
     javaIndex: input.javaIndex && summarizeJavaIndex(input.javaIndex),
     watcher: input.context.watcher && summarizeWatcher(input.context.watcher)
   });
@@ -170,6 +166,7 @@ function summarizeJavaIndex(status: JavaIndexStatus): Record<string, unknown> {
     state: status.state,
     indexedGeneration: status.indexedGeneration,
     files: status.files,
+    coverage: summarizeCoverage(status),
     pendingBackground: status.pendingBackground,
     worktreeSeed: status.worktreeSeed && compact({
       completion: status.worktreeSeed.completion,
@@ -271,15 +268,5 @@ function summarizeProgress(progress: JdtlsProgressStatus): Record<string, unknow
     activeMessageCount: progress.activeMessages.length,
     lastProgressAt: progress.lastProgressAt,
     lastLanguageStatus: progress.lastLanguageStatus
-  });
-}
-
-function summarizeSourceIndex(sourceIndex: SourceIndexStatus): Record<string, unknown> {
-  return compact({
-    entries: sourceIndex.entries,
-    documentSymbolFacts: sourceIndex.documentSymbolFacts,
-    dirtyCount: sourceIndex.dirtyCount,
-    warmIndexPending: sourceIndex.warmIndexPending,
-    warmIndexFailed: sourceIndex.warmIndexFailed
   });
 }

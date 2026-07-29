@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { probeLayout } from "../layout-probe.js";
-import { computeCurrentManifestFingerprint, computeManifestFingerprint, discoverJavaFiles } from "./manifest.js";
+import {
+  computeCurrentManifestFingerprint,
+  computeManifestFingerprint,
+  discoverJavaFiles,
+  scanSnapshotManifestDiff
+} from "./manifest.js";
 
 function write(root: string, relativePath: string, content: string): void {
   const absolutePath = path.join(root, relativePath);
@@ -126,4 +131,35 @@ test("the write-side and disk-rescan manifest fingerprints agree for identical r
     if (relativePath.endsWith("BTest.java")) return "class BTest {}";
     throw new Error(`unexpected file: ${relativePath}`);
   }
+});
+
+test("snapshot manifest diff uses file metadata to isolate the paths that need content verification", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "java-manifest-incremental-diff-"));
+  const a = "src/main/java/demo/A.java";
+  const b = "src/main/java/demo/B.java";
+  write(root, a, "class A {}");
+  write(root, b, "class B {}");
+  const layout = probeLayout(root);
+  const snapshotFiles = [a, b].map(relativePath => {
+    const absolutePath = path.join(root, relativePath);
+    const stats = statSync(absolutePath);
+    return {
+      relativePath,
+      sourceRoot: "src/main/java",
+      size: stats.size,
+      mtimeMs: stats.mtimeMs,
+      ctimeMs: stats.ctimeMs
+    };
+  });
+
+  const unchanged = await scanSnapshotManifestDiff(root, layout, snapshotFiles);
+  assert.equal(unchanged.metadataMatches, true);
+  assert.deepEqual(unchanged.changed.map(file => file.relativePath), []);
+  assert.deepEqual(unchanged.deletedRelativePaths, []);
+
+  write(root, b, "class B { void changed() {} }");
+  const changed = await scanSnapshotManifestDiff(root, layout, snapshotFiles);
+  assert.equal(changed.metadataMatches, false);
+  assert.deepEqual(changed.changed.map(file => file.relativePath), [b]);
+  assert.deepEqual(changed.deletedRelativePaths, []);
 });

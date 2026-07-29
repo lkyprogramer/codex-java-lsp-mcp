@@ -52,6 +52,7 @@ export type JavaIndexRequest =
   | { id: number; type: "RECONCILE"; generation: number }
   | { id: number; type: "QUERY_ANCHOR"; file: string; line: number; column: number }
   | { id: number; type: "QUERY_TYPE"; typeText: string; scopeFile?: string }
+  | { id: number; type: "QUERY_TYPES"; queries: Array<{ typeText: string; scopeFile?: string }> }
   | { id: number; type: "QUERY_IMPLEMENTERS"; typeId: string; limit: number }
   | { id: number; type: "QUERY_TYPE_REFERENCERS"; typeId: string; edgeKinds: StaticEdgeKind[]; limit: number }
   | { id: number; type: "QUERY_CALLERS"; methodId: string; limit: number }
@@ -231,6 +232,11 @@ function validateJavaTypeRef(value: unknown, context: string): JavaTypeRef {
 
 function isAssertString(value: unknown, context: string): string {
   if (!isString(value)) invalid(context, "expected a string");
+  return value;
+}
+
+function isAssertNumber(value: unknown, context: string): number {
+  if (!isNumber(value)) invalid(context, "expected a number");
   return value;
 }
 
@@ -429,6 +435,7 @@ function validateJavaFileFacts(value: unknown, context: string): JavaFileFacts {
   if (!isString(source.contentHash)) invalid(context, "contentHash");
   if (!isNumber(source.size)) invalid(context, "size");
   if (!isNumber(source.mtimeMs)) invalid(context, "mtimeMs");
+  const ctimeMs = optional(source.ctimeMs, `${context}.ctimeMs`, isAssertNumber);
   if (!isOneOf(source.parseState, JAVA_PARSE_STATES)) invalid(context, "parseState");
   if (!isNumber(source.parseErrorCount)) invalid(context, "parseErrorCount");
   if (!isNumber(source.generation)) invalid(context, "generation");
@@ -447,6 +454,7 @@ function validateJavaFileFacts(value: unknown, context: string): JavaFileFacts {
     contentHash: source.contentHash,
     size: source.size,
     mtimeMs: source.mtimeMs,
+    ...withOptional("ctimeMs", ctimeMs),
     parseState: source.parseState,
     parseErrorCount: source.parseErrorCount,
     generation: source.generation
@@ -596,6 +604,14 @@ export function validateJavaIndexStatus(value: unknown): JavaIndexStatus {
   if (!isNumber(source.snapshotBytes)) invalid(context, "snapshotBytes");
   if (!isNumber(source.pendingForeground)) invalid(context, "pendingForeground");
   if (!isNumber(source.pendingBackground)) invalid(context, "pendingBackground");
+  const snapshotVerificationPending = optional(
+    source.snapshotVerificationPending,
+    `${context}.snapshotVerificationPending`,
+    (pending, pendingContext) => {
+      if (!isBoolean(pending)) invalid(pendingContext, "expected a boolean");
+      return pending;
+    }
+  );
   const coverage = array(source.coverage, `${context}.coverage`)
     .map((entry, index) => validateSourceRootCoverage(entry, `${context}.coverage[${index}]`));
   return {
@@ -608,6 +624,7 @@ export function validateJavaIndexStatus(value: unknown): JavaIndexStatus {
     snapshotBytes: source.snapshotBytes,
     pendingForeground: source.pendingForeground,
     pendingBackground: source.pendingBackground,
+    ...withOptional("snapshotVerificationPending", snapshotVerificationPending),
     coverage,
     ...withOptional("lastError", optional(source.lastError, `${context}.lastError`, isAssertString)),
     ...withOptional("worktreeSeed", optional(source.worktreeSeed, `${context}.worktreeSeed`, validateWorktreeSeedStatus))
@@ -658,6 +675,11 @@ export function validateTypeLookup(value: unknown): JavaTypeLookupResult {
     default:
       return invalid(context, `unknown state ${String(source.state)}`);
   }
+}
+
+export function validateTypeLookupArray(value: unknown): JavaTypeLookupResult[] {
+  const context = "JavaTypeLookupResult[]";
+  return array(value, context).map((entry, index) => validateTypeLookup(entry));
 }
 
 export function validateTypeFactsArray(value: unknown): JavaTypeFacts[] {

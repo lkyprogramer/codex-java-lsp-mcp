@@ -21,7 +21,8 @@ import {
   validateIndexedReferenceArray,
   validateJavaIndexStatus,
   validateTypeFactsArray,
-  validateTypeLookup
+  validateTypeLookup,
+  validateTypeLookupArray
 } from "./worker-protocol.js";
 
 function validStatus(): JavaIndexStatus {
@@ -279,6 +280,15 @@ test("validateTypeLookup accepts each state and rejects an unknown one", () => {
     { state: "UNRESOLVED", coverage: "PARTIAL" }
   );
   assert.throws(() => validateTypeLookup({ state: "BOGUS" }));
+});
+
+test("validateTypeLookupArray preserves a batched lookup response", () => {
+  const bundle = fullBundle();
+  const values = [
+    { state: "RESOLVED", type: bundle.types[0] },
+    { state: "UNRESOLVED", coverage: "COMPLETE" }
+  ];
+  assert.deepEqual(validateTypeLookupArray(values), values);
 });
 
 test("validateTypeFactsArray rejects a type missing required fields", () => {

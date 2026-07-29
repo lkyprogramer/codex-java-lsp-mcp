@@ -99,6 +99,13 @@ async function structuralDeltas(
   if (!anchorFacts || candidate.absolutePath === anchor.absolutePath || !candidate.absolutePath.endsWith(".java")) {
     return zero;
   }
+  // Do not make a foreground worker parse for a lexical-only rg candidate.
+  // Static JavaIndex evidence is already available to candidates verified by
+  // the type graph/reference collectors; the remaining candidates retain
+  // their lexical ranking and are parsed only if selected for the read plan.
+  if (!(candidate.verifiedBy || []).some(source => source === "typeGraph" || source === "typeReference")) {
+    return zero;
+  }
   try {
     const candidateFacts = await cachedFacts(javaIndex, candidate.absolutePath, generation, factsCache);
     if (!candidateFacts) return zero;

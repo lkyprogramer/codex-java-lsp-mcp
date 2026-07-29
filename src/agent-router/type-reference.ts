@@ -8,6 +8,7 @@ import type { JavaSourceFacts } from "../java-index/router-facts.js";
 import type { CandidateFile, ImpactOptions, ResolvedAnchor } from "../agent-types.js";
 import {
   candidateFromFacts,
+  breakdown,
   matchesAny,
   mergeCandidate,
   scoreBase,
@@ -48,26 +49,37 @@ export async function collectTypeReferenceCandidates(input: CollectTypeReference
       continue;
     }
     const canReinforceExistingTypeReferences = routingPolicy.id !== "lishuedu-legacy";
-    if (anchor.profile === "controller" && !canReinforceExistingTypeReferences) {
-      continue;
-    }
+    // The legacy controller policy historically disabled broad static
+    // reinforcement.  Keep that restraint, but still use an exact explicit
+    // import whose already-recalled path proves it is a direct collaborator.
+    const canQueryStaticIndex = canReinforceExistingTypeReferences || anchor.profile !== "controller";
     const canUseReferenceOrderBonus = canReinforceExistingTypeReferences && anchor.profile === "controller";
     const typeName = anchor.className || path.basename(anchor.absolutePath, ".java");
-    metrics.scannedPatterns += 1;
-    for (const facts of await javaIndex.findTypeReferences(typeName, 20)) {
-      if (candidates.has(facts.absolutePath)) {
-        metrics.skippedExisting += 1;
-        continue;
-      }
-      const candidate = candidateFromFacts(facts, scoreBase(routingPolicy, "semantic", facts, anchor, options) + 60, "typeReference");
-      mergeCandidate(candidates, candidate);
-      metrics.addedCandidates += 1;
-    }
+    const typeReferenceFacts = canQueryStaticIndex
+      ? javaIndex.findTypeReferences(typeName, 20)
+      : Promise.resolve<JavaSourceFacts[]>([]);
     let anchorFacts: JavaSourceFacts;
     try {
       anchorFacts = await javaIndex.factsFor(anchor.absolutePath, generation);
     } catch {
+      // Ensure an in-flight static query is observed before moving to the next
+      // anchor, so a failed fact read cannot leave a rejected promise behind.
+      await typeReferenceFacts.catch(() => undefined);
       continue;
+    }
+    if (canQueryStaticIndex) {
+      metrics.scannedPatterns += 1;
+      for (const facts of await typeReferenceFacts) {
+        const alreadyCandidate = candidates.has(facts.absolutePath);
+        if (alreadyCandidate) {
+          metrics.skippedExisting += 1;
+        }
+        const candidate = candidateFromFacts(facts, scoreBase(routingPolicy, "semantic", facts, anchor, options) + 60, "typeReference");
+        mergeCandidate(candidates, candidate);
+        if (!alreadyCandidate) {
+          metrics.addedCandidates += 1;
+        }
+      }
     }
     const methodFact = canReinforceExistingTypeReferences
       ? await javaIndex.methodAt(anchor.absolutePath, anchor.line, generation)
@@ -75,7 +87,16 @@ export async function collectTypeReferenceCandidates(input: CollectTypeReference
     const methodTypes = methodFact
       ? unique([...methodFact.relations.map(relation => relation.typeName), ...methodFact.referencedTypes])
       : [];
-    const referencedTypes = unique([...methodTypes, ...anchorFacts.referencedTypes]);
+    // A method relation is the strongest signal. Task-named imports cover
+    // static mapper calls and generic return types that tree-sitter cannot
+    // always express as a direct method type.  They are still exact imports,
+    // not a lexical repository scan.
+    const referencedTypes = unique([
+      ...methodTypes,
+      ...anchorFacts.referencedTypes,
+      ...anchorFacts.imports
+        .filter(imported => matchesAny(simpleTypeName(imported), options.taskKeywords))
+    ]);
     const referencedTypeOrder = new Map<string, number>();
     referencedTypes.forEach((type, index) => {
       const simple = simpleTypeName(type);
@@ -83,81 +104,102 @@ export async function collectTypeReferenceCandidates(input: CollectTypeReference
         referencedTypeOrder.set(simple, index);
       }
     });
-    const existingTypeNames = await candidateTypeNames(javaIndex, candidates, generation);
-    const existingReferencedTypes = new Set(referencedTypes.map(simpleTypeName).filter(type => existingTypeNames.has(type)));
-    if (canReinforceExistingTypeReferences) {
-      for (const existing of [...candidates.values()]) {
-        if (existing.absolutePath === anchor.absolutePath) {
-          continue;
-        }
-        let existingFacts: JavaSourceFacts;
-        try {
-          existingFacts = await javaIndex.factsFor(existing.absolutePath, generation);
-        } catch {
-          continue;
-        }
-        if (existingFacts.typeName && existingReferencedTypes.has(simpleTypeName(existingFacts.typeName))) {
-          const orderBonus = canUseReferenceOrderBonus ? typeReferenceOrderBonus(referencedTypeOrder.get(simpleTypeName(existingFacts.typeName))) : 0;
-          const candidate = candidateFromFacts(existingFacts, scoreBase(routingPolicy, "semantic", existingFacts, anchor, options) + 55 + orderBonus, "typeReference");
-          mergeCandidate(candidates, candidate);
-          if (shouldLookupReferencedImplementers(existingFacts, options)) {
-            for (const implFacts of await javaIndex.findImplementers(existingFacts.typeName, 8, true)) {
-              if (implementationLookupInScope(implFacts, anchor, options)) {
-                const implCandidate = candidateFromFacts(implFacts, scoreBase(routingPolicy, "semantic", implFacts, anchor, options) + 70, "typeGraph");
-                implCandidate.reasons = ["typeGraph:implementation-lookup"];
-                mergeCandidate(candidates, implCandidate);
-              }
-            }
-          }
-        }
-      }
-    }
-    const missingTypes = referencedTypes.filter(type => !existingTypeNames.has(simpleTypeName(type)));
-    metrics.skippedExisting += referencedTypes.length - missingTypes.length;
-    if (missingTypes.length > 0) {
+    reinforceImportedCandidates({
+      candidates,
+      anchor,
+      options,
+      routingPolicy,
+      importedTypes: referencedTypes,
+      referencedTypeOrder,
+      canUseReferenceOrderBonus
+    });
+    // Candidate names used to be resolved by foreground-parsing every rg
+    // result.  That makes the V2 worker parse arbitrary lexical matches just
+    // to discover whether they are a referenced type.  Querying definitions
+    // is both exact and indexed; merge the returned fact even when rg already
+    // found the same path so the evidence and implementation lookup survive.
+    if (canQueryStaticIndex && referencedTypes.length > 0) {
       metrics.scannedPatterns += 1;
     }
-    for (const facts of await javaIndex.findTypeDefinitions(missingTypes, 20)) {
+    const definitions = canQueryStaticIndex
+      ? await javaIndex.findTypeDefinitions(referencedTypes, 20)
+      : [];
+    for (const facts of definitions) {
       if (facts.absolutePath === anchor.absolutePath) {
         continue;
       }
-      if (candidates.has(facts.absolutePath)) {
+      const alreadyCandidate = candidates.has(facts.absolutePath);
+      if (alreadyCandidate) {
         metrics.skippedExisting += 1;
-        continue;
       }
       const orderBonus = canUseReferenceOrderBonus ? typeReferenceOrderBonus(referencedTypeOrder.get(simpleTypeName(facts.typeName || ""))) : 0;
       const candidate = candidateFromFacts(facts, scoreBase(routingPolicy, "semantic", facts, anchor, options) + 55 + orderBonus, "typeReference");
       mergeCandidate(candidates, candidate);
-      metrics.addedCandidates += 1;
+      if (!alreadyCandidate) {
+        metrics.addedCandidates += 1;
+      }
       if (canReinforceExistingTypeReferences && facts.kind === "interface" && facts.typeName) {
-        for (const implFacts of await javaIndex.findImplementers(facts.typeName, 8, true)) {
-          mergeCandidate(candidates, candidateFromFacts(implFacts, scoreBase(routingPolicy, "semantic", implFacts, anchor, options) + 70, "typeGraph"));
+        const qualifiedTypeName = facts.packageName ? `${facts.packageName}.${facts.typeName}` : facts.typeName;
+        for (const implFacts of await javaIndex.findImplementers(qualifiedTypeName, 8, anchor.absolutePath)) {
+          const implementation = candidateFromFacts(implFacts, scoreBase(routingPolicy, "semantic", implFacts, anchor, options) + 70, "typeGraph");
+          implementation.reasons = ["typeGraph:implementation-lookup"];
+          mergeCandidate(candidates, implementation);
         }
       }
     }
   }
 }
 
-async function candidateTypeNames(
-  javaIndex: RouterIndex,
-  candidates: Map<string, CandidateFile>,
-  generation?: number
-): Promise<Set<string>> {
-  const typeNames = new Set<string>();
-  for (const candidate of candidates.values()) {
-    if (!candidate.absolutePath.endsWith(".java")) {
-      continue;
-    }
-    try {
-      const typeName = (await javaIndex.factsFor(candidate.absolutePath, generation)).typeName;
-      if (typeName) {
-        typeNames.add(typeName);
-      }
-    } catch {
-      continue;
+type ReinforceImportedCandidatesInput = {
+  candidates: Map<string, CandidateFile>;
+  anchor: ResolvedAnchor;
+  options: ImpactOptions;
+  routingPolicy: RoutingPolicy;
+  importedTypes: readonly string[];
+  referencedTypeOrder: ReadonlyMap<string, number>;
+  canUseReferenceOrderBonus: boolean;
+};
+
+/**
+ * A candidate can be proven as a direct type reference from the anchor's
+ * explicit import and its already-known path.  This is intentionally path
+ * matching rather than `factsFor(candidate)`: the latter turns every rg hit
+ * into an on-demand parse before read-plan selection.
+ */
+function reinforceImportedCandidates(input: ReinforceImportedCandidatesInput): void {
+  const importedPaths = new Map<string, string>();
+  for (const importedType of input.importedTypes) {
+    const simple = simpleTypeName(importedType);
+    if (importedType.includes(".")) {
+      importedPaths.set(simple, `${importedType.replace(/\./g, "/")}.java`);
     }
   }
-  return typeNames;
+  if (importedPaths.size === 0) {
+    return;
+  }
+  for (const existing of [...input.candidates.values()]) {
+    const candidatePath = (existing.path || existing.absolutePath).replace(/\\/g, "/");
+    const matched = [...importedPaths.entries()].find(([, importedPath]) => candidatePath.endsWith(importedPath));
+    if (!matched) {
+      continue;
+    }
+    const [typeName] = matched;
+    const orderBonus = input.canUseReferenceOrderBonus
+      ? typeReferenceOrderBonus(input.referencedTypeOrder.get(typeName))
+      : 0;
+    const score = scoreBase(input.routingPolicy, "semantic", existing, input.anchor, input.options) + 55 + orderBonus;
+    mergeCandidate(input.candidates, {
+      ...existing,
+      score,
+      matchCount: 0,
+      positions: [],
+      categories: ["semantic"],
+      reasons: ["typeReference"],
+      confidence: "medium",
+      verifiedBy: ["typeReference"],
+      scoreBreakdown: [breakdown("semantic.typeReference", "semantic-seed", score, "anchor explicit import")]
+    });
+  }
 }
 
 function shouldUseTypeReference(anchor: ResolvedAnchor): boolean {

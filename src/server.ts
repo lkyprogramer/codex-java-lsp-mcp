@@ -36,13 +36,13 @@ const server = new McpServer({
 
 register("java_status", {
   title: "Java Status",
-  description: "Return repo, JDT LS, watcher, source index, and router cache status; pass start=true to start JDT LS.",
+  description: "Return repo, JDT LS, watcher, JavaIndex, and router cache status; pass start=true to start JDT LS.",
   inputSchema: statusSchema
 }, args => javaStatusFor(args));
 
 register("java_impact", {
   title: "Java Impact",
-  description: "Build a compact Java impact plan with source-index routing, internal rg summary, optional bounded LSP enrichment, and read plan.",
+  description: "Build a compact Java impact plan with JavaIndex routing, internal rg summary, optional bounded LSP enrichment, and read plan.",
   inputSchema: impactSchema
 }, args => withContext(args, (context, request) => javaImpact(context, args, request), {
   mayStartLsp: args.semanticPolicy !== "fast",

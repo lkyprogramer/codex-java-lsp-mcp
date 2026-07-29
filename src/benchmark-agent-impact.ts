@@ -10,16 +10,12 @@ import { AgentRouter } from "./agent-router/index.js";
 import type { ImpactOptions } from "./agent-types.js";
 import { readRuntimeBuild } from "./build-info.js";
 import { JavaIndexClient } from "./java-index/java-index-client.js";
-import { RouterJavaIndex, type RouterIndex } from "./java-index/router-java-index.js";
+import type { JavaIndexStatus } from "./java-index/index-types.js";
+import { RouterJavaIndex } from "./java-index/router-java-index.js";
 import { repoCacheRoot } from "./repo-layout.js";
 import { DeadlineBudget } from "./runtime/deadline-budget.js";
 import { createRequestContext, defaultDeadlineMs, MAX_REQUEST_DEADLINE_MS } from "./runtime/request-context.js";
 import { JdtlsSession } from "./jdtls-session.js";
-import { SourceIndex } from "./source-index.js";
-import { wrapSourceIndex } from "./source-index-router-adapter.js";
-
-/** Mirrors RepoRuntimeManager's Step 7 gate flag so this benchmark measures whichever backend the flag selects. */
-const JAVA_INDEX_BACKEND: "v1" | "v2" = process.env.JAVA_LSP_INDEX_BACKEND === "v1" ? "v1" : "v2";
 
 type WarmState = "cold-nolsp" | "cold-lsp" | "warm-auto" | "warm-required";
 type BenchmarkStrategy = "impact" | "no-lsp";
@@ -66,6 +62,8 @@ type GoldenAttributionContext = {
 
 type Cli = {
   repoRoot: string;
+  /** Optional benchmark-only cache root so fresh/snapshot runs never touch the normal runtime cache. */
+  indexCacheDir: string;
   scenarioFile: string;
   projectId: string;
   layoutProfile: string;
@@ -78,7 +76,11 @@ type Cli = {
   listScenarios: boolean;
   strategy: BenchmarkStrategy;
   deadlineMs: number;
+  /** Startup reconciliation is excluded from request P95 but must finish before the steady-state sample. */
+  indexPrepareTimeoutMs: number;
 };
+
+const DEFAULT_INDEX_PREPARE_TIMEOUT_MS = 600_000;
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const projectDir = path.resolve(scriptDir, "..");
@@ -88,6 +90,7 @@ const runtimeBuild = readRuntimeBuild();
 const metadata = {
   generatedAt: new Date().toISOString(),
   repoRoot: cli.repoRoot,
+  indexCacheDir: cli.indexCacheDir,
   repoCommit: git(cli.repoRoot, ["rev-parse", "--short=12", "HEAD"]) || "unknown",
   projectId: cli.projectId,
   layoutProfile: cli.layoutProfile,
@@ -96,12 +99,20 @@ const metadata = {
   semanticPolicy: effectiveSemanticPolicy(cli),
   verbosity: cli.verbosity,
   strategy: cli.strategy,
+  indexBackend: "v2",
   // Recorded so a run is comparable only against runs with the same budget.
   deadlineMs: cli.deadlineMs,
   runs: cli.runs,
   readPlanMaxItems: cli.readPlanMaxItems,
   scenarioFile: cli.scenarioFile,
   runtimeBuild,
+  // The V2 runtime reconciles its static index before serving requests.  This
+  // records that one-time setup separately from request P50/P95 (Task 22
+  // explicitly forbids folding the initial sweep into steady impact latency).
+  prepareJavaIndexMs: 0,
+  prepareJavaIndexReconciled: false,
+  prepareJavaIndexStatus: undefined as JavaIndexStatus | undefined,
+  indexPrepareTimeoutMs: cli.indexPrepareTimeoutMs,
   prepareWarmMs: 0,
   prepareWarmPhaseMs: {} as Record<string, number>
 };
@@ -124,17 +135,23 @@ if (cli.listScenarios) {
 }
 
 const session = cli.strategy === "impact" ? new JdtlsSession(cli.repoRoot) : undefined;
-// Kept separate from `javaIndex` (the router-facing RouterIndex, which may be
-// the V1 adapter with nothing to close): a real V2 run spawns a worker_threads
-// Worker, which otherwise keeps this CLI process alive forever after its
-// output is printed - there is no coordinator here to close it for us.
-const javaIndexClient = session && JAVA_INDEX_BACKEND === "v2"
-  ? new JavaIndexClient(cli.repoRoot, repoCacheRoot(cli.repoRoot))
+// A benchmark has no runtime coordinator, so it must close the worker itself
+// after printing its results.
+const javaIndexClient = session
+  ? new JavaIndexClient(cli.repoRoot, cli.indexCacheDir)
   : undefined;
-const javaIndex: RouterIndex | undefined = session
-  ? (javaIndexClient ? new RouterJavaIndex(cli.repoRoot, javaIndexClient) : wrapSourceIndex(new SourceIndex(cli.repoRoot)))
+const routerJavaIndex = session && javaIndexClient
+  ? new RouterJavaIndex(cli.repoRoot, javaIndexClient)
   : undefined;
+const javaIndex = routerJavaIndex;
 const router = session && javaIndex ? new AgentRouter(cli.repoRoot, session, javaIndex) : undefined;
+if (routerJavaIndex && javaIndexClient) {
+  const startedAt = performance.now();
+  const preparation = await prepareJavaIndex(cli, routerJavaIndex, javaIndexClient);
+  metadata.prepareJavaIndexMs = performance.now() - startedAt;
+  metadata.prepareJavaIndexReconciled = preparation.reconciled;
+  metadata.prepareJavaIndexStatus = preparation.status;
+}
 if (session && cli.warmState !== "cold-nolsp") {
   const startedAt = performance.now();
   await prepareWarmState(cli, session, scenarios);
@@ -192,8 +209,18 @@ function parseCli(args: string[], root: string): Cli {
   // request is forced to fast and budgets 2000ms.
   const effectivePolicy: "fast" | "auto" | "required" =
     warmState === "cold-nolsp" ? "fast" : warmState === "warm-required" ? "required" : semanticPolicy;
+  const repoRoot = stringArg(
+    values,
+    "--repo-root",
+    process.env.JAVA_LSP_BENCH_REPO_ROOT || process.env.LISHUEDU_ROOT || path.resolve(root, "..", "..")
+  );
   return {
-    repoRoot: stringArg(values, "--repo-root", process.env.JAVA_LSP_BENCH_REPO_ROOT || process.env.LISHUEDU_ROOT || path.resolve(root, "..", "..")),
+    repoRoot,
+    indexCacheDir: path.resolve(stringArg(
+      values,
+      "--index-cache-dir",
+      process.env.JAVA_LSP_BENCH_INDEX_CACHE_DIR || repoCacheRoot(repoRoot)
+    )),
     scenarioFile: stringArg(values, "--scenarios", process.env.JAVA_LSP_BENCH_SCENARIOS || path.join(root, "golden", `${projectId}.scenarios.jsonl`)),
     projectId,
     layoutProfile: stringArg(values, "--layout-profile", process.env.JAVA_LSP_BENCH_LAYOUT_PROFILE || (projectId === "exam-parent-v3" ? "maven-reactor" : projectId === "generic-java" ? "generic-java" : "ddd-gradle")),
@@ -211,7 +238,16 @@ function parseCli(args: string[], root: string): Cli {
       MAX_REQUEST_DEADLINE_MS,
       optionalPositiveIntegerArg(values, "--deadline-ms", process.env.JAVA_LSP_BENCH_DEADLINE_MS)
         ?? defaultDeadlineMs(mode, effectivePolicy)
-    )
+    ),
+    // This is startup-only work and is deliberately excluded from steady P95.
+    // Large real repositories can legitimately need longer than the old 120s
+    // hard stop for their first snapshot; callers can lower it for a bounded
+    // diagnostic run without changing the benchmark's request budget.
+    indexPrepareTimeoutMs: optionalPositiveIntegerArg(
+      values,
+      "--index-prepare-timeout-ms",
+      process.env.JAVA_LSP_BENCH_INDEX_PREPARE_TIMEOUT_MS
+    ) ?? DEFAULT_INDEX_PREPARE_TIMEOUT_MS
   };
 }
 
@@ -365,6 +401,39 @@ async function prepareWarmState(cli: Cli, session: JdtlsSession, items: Scenario
       await session.documentSymbolsWithRetry(path.resolve(cli.repoRoot, scenario.anchor.file), 45000);
     }
   }
+}
+
+/**
+ * Mirrors RepoRuntimeManager's V2 OPEN/reconcile lifecycle without starting
+ * JDTLS.  The static sweep is startup work, not an impact request, so the
+ * benchmark reports it in metadata and only times the steady router calls.
+ */
+async function prepareJavaIndex(
+  cli: Cli,
+  index: RouterJavaIndex,
+  client: JavaIndexClient
+): Promise<{ reconciled: boolean; status: JavaIndexStatus }> {
+  await index.open(0);
+  let reconciled = false;
+  const opened = await index.routerStatus();
+  if (opened.coverage !== "complete" && !opened.javaIndex.snapshotVerificationPending) {
+    await index.reconcile(0);
+    reconciled = true;
+  }
+  return { reconciled, status: await waitForJavaIndexIdle(client, cli.indexPrepareTimeoutMs) };
+}
+
+async function waitForJavaIndexIdle(client: JavaIndexClient, timeoutMs: number): Promise<JavaIndexStatus> {
+  const deadline = Date.now() + timeoutMs;
+  let status = await client.status();
+  while (status.pendingForeground > 0 || status.pendingBackground > 0) {
+    if (Date.now() >= deadline) {
+      throw new Error(`JavaIndex did not finish startup reconciliation within ${timeoutMs}ms`);
+    }
+    await new Promise(resolve => setTimeout(resolve, 100));
+    status = await client.status();
+  }
+  return status;
 }
 
 async function waitForProgressIdle(session: JdtlsSession, timeoutMs: number): Promise<void> {
