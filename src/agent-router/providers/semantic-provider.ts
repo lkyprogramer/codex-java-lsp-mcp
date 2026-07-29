@@ -18,6 +18,40 @@ import { isTouchedCandidate, nextSignalId } from "./shared.js";
 export const SEMANTIC_PROVIDER_ID = "semantic";
 export const SEMANTIC_PROVIDER_VERSION = "1";
 
+/**
+ * Task 25 item 5: weight extracted from candidate-collectors.ts's
+ * persistedEdgeScoreBonus(edge.kind), the fixed bonus collectPersistedSemanticCandidates
+ * adds on top of scoreBase() for a persisted edge. Unlike scoreBase() itself
+ * (routing-policy/profile/module/task dependent - not reused as a signal
+ * weight per item 5), this bonus was already a context-independent constant,
+ * so it carries over unchanged as the signal's weight.
+ */
+function persistedEdgeWeightBonus(rawKind: string): number {
+  if (rawKind === "implementation") {
+    return 90;
+  }
+  if (rawKind === "typeHierarchy") {
+    return 70;
+  }
+  return 10;
+}
+
+/**
+ * Task 25 item 5: weight extracted from semantic.ts:226's
+ * `scoreBase(...) + (reason === "implementation" ? 120 : reason === "typeHierarchy" ? 110 : 80)`.
+ * Same rationale as persistedEdgeWeightBonus above - only the fixed bonus
+ * term is context-independent, so only it becomes the signal's weight.
+ */
+function liveSemanticWeightBonus(rawReason: string): number {
+  if (rawReason === "implementation") {
+    return 120;
+  }
+  if (rawReason === "typeHierarchy") {
+    return 110;
+  }
+  return 80;
+}
+
 export async function collectPersistedSemanticEvidence(input: ProviderInput): Promise<ProviderOutcome> {
   const startedAt = Date.now();
   const candidates = new Map<string, CandidateFile>();
@@ -32,23 +66,26 @@ export async function collectPersistedSemanticEvidence(input: ProviderInput): Pr
   }));
   const touched = [...candidates.values()].filter(isTouchedCandidate);
   const anchorId = input.anchors[0]?.id ?? "A1";
-  const evidence: EvidenceSignal[] = touched.map(candidate => ({
-    signalId: nextSignalId(SEMANTIC_PROVIDER_ID),
-    candidateFile: candidate.absolutePath,
-    anchorId,
-    kind: (candidate.verifiedBy?.[0] ?? "persisted").replace(/^persisted-/, "").toUpperCase(),
-    family: "EXACT_SEMANTIC",
-    provenance: "PERSISTED_JDT",
-    confidence: 0.9,
-    completeness: "COMPLETE",
-    weight: candidate.score,
-    sourceFile: candidate.absolutePath,
-    positions: candidate.positions,
-    providerId: SEMANTIC_PROVIDER_ID,
-    providerVersion: SEMANTIC_PROVIDER_VERSION,
-    generation: input.generation,
-    detail: candidate.verifiedBy?.[0]
-  }));
+  const evidence: EvidenceSignal[] = touched.map(candidate => {
+    const rawKind = (candidate.verifiedBy?.[0] ?? "persisted").replace(/^persisted-/, "");
+    return {
+      signalId: nextSignalId(SEMANTIC_PROVIDER_ID),
+      candidateFile: candidate.absolutePath,
+      anchorId,
+      kind: rawKind.toUpperCase(),
+      family: "EXACT_SEMANTIC" as const,
+      provenance: "PERSISTED_JDT" as const,
+      confidence: 0.9,
+      completeness: "COMPLETE" as const,
+      weight: persistedEdgeWeightBonus(rawKind),
+      sourceFile: candidate.absolutePath,
+      positions: candidate.positions,
+      providerId: SEMANTIC_PROVIDER_ID,
+      providerVersion: SEMANTIC_PROVIDER_VERSION,
+      generation: input.generation,
+      detail: candidate.verifiedBy?.[0]
+    };
+  });
   return {
     providerId: SEMANTIC_PROVIDER_ID,
     providerVersion: SEMANTIC_PROVIDER_VERSION,
@@ -87,23 +124,26 @@ export async function collectLiveSemanticEvidence(input: ProviderInput): Promise
   });
   const touched = [...candidates.values()].filter(isTouchedCandidate);
   const anchorId = input.anchors[0]?.id ?? "A1";
-  const evidence: EvidenceSignal[] = touched.map(candidate => ({
-    signalId: nextSignalId(SEMANTIC_PROVIDER_ID),
-    candidateFile: candidate.absolutePath,
-    anchorId,
-    kind: (candidate.reasons[0] ?? "reference").toUpperCase(),
-    family: "EXACT_SEMANTIC",
-    provenance: "JDT_EXACT",
-    confidence: 0.95,
-    completeness: input.metrics.semantic.timeout ? "PARTIAL" : "COMPLETE",
-    weight: candidate.score,
-    sourceFile: candidate.absolutePath,
-    positions: candidate.positions,
-    providerId: SEMANTIC_PROVIDER_ID,
-    providerVersion: SEMANTIC_PROVIDER_VERSION,
-    generation: input.generation,
-    detail: candidate.reasons[0]
-  }));
+  const evidence: EvidenceSignal[] = touched.map(candidate => {
+    const rawReason = candidate.reasons[0] ?? "reference";
+    return {
+      signalId: nextSignalId(SEMANTIC_PROVIDER_ID),
+      candidateFile: candidate.absolutePath,
+      anchorId,
+      kind: rawReason.toUpperCase(),
+      family: "EXACT_SEMANTIC" as const,
+      provenance: "JDT_EXACT" as const,
+      confidence: 0.95,
+      completeness: input.metrics.semantic.timeout ? "PARTIAL" as const : "COMPLETE" as const,
+      weight: liveSemanticWeightBonus(rawReason),
+      sourceFile: candidate.absolutePath,
+      positions: candidate.positions,
+      providerId: SEMANTIC_PROVIDER_ID,
+      providerVersion: SEMANTIC_PROVIDER_VERSION,
+      generation: input.generation,
+      detail: candidate.reasons[0]
+    };
+  });
   return {
     providerId: SEMANTIC_PROVIDER_ID,
     providerVersion: SEMANTIC_PROVIDER_VERSION,

@@ -52,6 +52,16 @@ export async function collectLexicalEvidence(input: ProviderInput): Promise<Lexi
     provenance: "LEXICAL_RG",
     confidence,
     completeness,
+    // Task 25 item 5: deliberately NOT unified yet. Unlike semantic-provider's
+    // weight (extracted as a fixed post-scoreBase() bonus, see
+    // persistedEdgeWeightBonus/liveSemanticWeightBonus), rg's candidate.score
+    // *is* scoreBase() with no additive bonus on top - there is no
+    // context-independent constant to pull out. Its entire weight came from
+    // routing-policy context (category base + profile/module/task rules),
+    // which is exactly what sourceSetDelta/sameModuleDelta/family caps now
+    // own. Picking a replacement number here without the item 6 three-repo
+    // shadow data would be an unverified guess, so this stays candidate.score
+    // until that data exists.
     weight: candidate.score,
     sourceFile: candidate.absolutePath,
     positions: candidate.positions,
