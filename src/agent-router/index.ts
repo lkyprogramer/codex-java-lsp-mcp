@@ -34,7 +34,10 @@ import type { SearchResult } from "../search/search-types.js";
 import { positiveInteger, timed } from "./runtime.js";
 import { normalizeEvidence } from "./evidence-normalizer.js";
 import type { ProviderInput, ProviderOutcome } from "./evidence.js";
-import { collectStaticEvidence } from "./providers/static-provider.js";
+import {
+  collectStaticStructureEvidence,
+  collectTypeReferenceEvidence
+} from "./providers/static-provider.js";
 import { collectLexicalEvidence } from "./providers/lexical-provider.js";
 import { collectLiveSemanticEvidence, collectPersistedSemanticEvidence } from "./providers/semantic-provider.js";
 import { collectSupportEvidence } from "./providers/support-provider.js";
@@ -161,22 +164,21 @@ export class AgentRouter {
     };
     const anchorPaths = anchors.map(anchor => anchor.absolutePath);
 
-    // Provider order matters: collectTypeReferenceCandidates' reinforcement
-    // step (inside the static provider) reads the paths already nominated by
-    // earlier providers, exactly like the pre-Task-24 shared candidate map
-    // did (persistedSemantic -> typeGraph -> importGraph -> naming recall ->
-    // typeReference). Persisted-edge and lexical evidence run first here so
-    // the static provider's `existingCandidatePaths` sees the same paths the
-    // old sequential mutation would have by the time it reached typeReference.
+    // Provider order matters: type-reference reinforcement reads the paths
+    // naming recall has already nominated. Keep the pre-Task-24 shared-map
+    // sequence exactly: persistedSemantic -> typeGraph -> importGraph ->
+    // naming recall -> typeReference.
     const persistedOutcome = await collectPersistedSemanticEvidence({ ...providerInputBase, existingCandidatePaths: anchorPaths });
     const afterPersistedPaths = unionPaths(anchorPaths, persistedOutcome);
-    const lexicalOutcome = await collectLexicalEvidence({ ...providerInputBase, existingCandidatePaths: afterPersistedPaths });
-    const afterLexicalPaths = unionPaths(afterPersistedPaths, lexicalOutcome);
-    const staticOutcome = await collectStaticEvidence({ ...providerInputBase, existingCandidatePaths: afterLexicalPaths });
-    const afterStaticPaths = unionPaths(afterLexicalPaths, staticOutcome);
+    const staticStructureOutcome = await collectStaticStructureEvidence({ ...providerInputBase, existingCandidatePaths: afterPersistedPaths });
+    const afterStaticStructurePaths = unionPaths(afterPersistedPaths, staticStructureOutcome);
+    const lexicalOutcome = await collectLexicalEvidence({ ...providerInputBase, existingCandidatePaths: afterStaticStructurePaths });
+    const afterLexicalPaths = unionPaths(afterStaticStructurePaths, lexicalOutcome);
+    const typeReferenceOutcome = await collectTypeReferenceEvidence({ ...providerInputBase, existingCandidatePaths: afterLexicalPaths });
+    const afterStaticPaths = unionPaths(afterLexicalPaths, typeReferenceOutcome);
     updateCollectorElapsed(phaseMs, typeReference, importGraph, persistedSemantic);
 
-    const phaseOneOutcomes: ProviderOutcome[] = [persistedOutcome, lexicalOutcome, staticOutcome];
+    const phaseOneOutcomes: ProviderOutcome[] = [persistedOutcome, staticStructureOutcome, lexicalOutcome, typeReferenceOutcome];
     const protectedReadPlanPaths = await timed(phaseMs, "nonLspReadPlan", async () => nonLspReadPlanPaths({
       candidates: foldProviderCandidates(anchors, phaseOneOutcomes),
       anchor: anchors[0]!,
@@ -197,14 +199,14 @@ export class AgentRouter {
     // for Task 25 to score from directly; ranking below still folds
     // `outcome.candidates` through the unchanged finalizeRank/finalizeScore
     // pipeline (plan Task 24 Step 8: "rankCandidates may adapt old scoring").
-    normalizeEvidence(outcomes.flatMap(outcome => outcome.evidence));
+    const normalized = normalizeEvidence(outcomes.flatMap(outcome => outcome.evidence));
 
     const suppressed = {
       deferredTests: 0,
       crossModuleConsumers: 0,
       excludedModules: 0
     };
-    const ranked = await timed(phaseMs, "finalizeRank", async () => rankCandidates(outcomes, {
+    const ranked = await timed(phaseMs, "finalizeRank", async () => rankCandidates(normalized, outcomes, {
       anchors,
       options,
       suppressed,

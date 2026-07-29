@@ -6,7 +6,8 @@ import type { RouterIndex } from "../java-index/router-java-index.js";
 import type { RoutingPolicy } from "../routing-policy.js";
 import { candidateFromAnchor } from "./candidate-collectors.js";
 import { mergeCandidate } from "./candidate-helpers.js";
-import type { ProviderOutcome } from "./evidence.js";
+import { normalizeEvidence } from "./evidence-normalizer.js";
+import type { CandidateEvidence, ProviderOutcome } from "./evidence.js";
 import { finalizeRank } from "./finalize-rank.js";
 
 export type RankCandidatesContext = {
@@ -28,7 +29,8 @@ export type RankCandidatesContext = {
  */
 export function foldProviderCandidates(
   anchors: readonly ResolvedAnchor[],
-  outcomes: readonly ProviderOutcome[]
+  outcomes: readonly ProviderOutcome[],
+  normalized: ReadonlyMap<string, CandidateEvidence> = normalizeEvidence(outcomes.flatMap(outcome => outcome.evidence))
 ): Map<string, CandidateFile> {
   const candidates = new Map<string, CandidateFile>();
   for (const anchor of anchors) {
@@ -36,6 +38,13 @@ export function foldProviderCandidates(
   }
   for (const outcome of outcomes) {
     for (const candidate of outcome.candidates) {
+      const retainedSignalIds = new Set(normalized.get(candidate.absolutePath)?.signals.map(signal => signal.signalId));
+      const contributionSurvivedNormalization = outcome.evidence.some(signal =>
+        signal.candidateFile === candidate.absolutePath
+        && retainedSignalIds.has(signal.signalId));
+      if (!contributionSurvivedNormalization) {
+        continue;
+      }
       mergeCandidate(candidates, candidate);
     }
   }
@@ -43,10 +52,11 @@ export function foldProviderCandidates(
 }
 
 export async function rankCandidates(
+  normalized: ReadonlyMap<string, CandidateEvidence>,
   outcomes: readonly ProviderOutcome[],
   context: RankCandidatesContext
 ): Promise<CandidateFile[]> {
-  const candidates = foldProviderCandidates(context.anchors, outcomes);
+  const candidates = foldProviderCandidates(context.anchors, outcomes, normalized);
   return finalizeRank({
     candidates,
     anchor: context.anchors[0]!,

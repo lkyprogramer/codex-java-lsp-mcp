@@ -52,6 +52,18 @@ test("normalizer preserves independent evidence families", () => {
   assert.equal(result.get("A.java")!.signals.length, 2);
 });
 
+test("normalizer preserves the same evidence for distinct anchors", () => {
+  const result = normalizeEvidence([
+    signal({ anchorId: "A1", signalId: "anchor-one" }),
+    signal({ anchorId: "A2", signalId: "anchor-two" })
+  ]);
+  assert.equal(
+    result.get("A.java")!.signals.length,
+    2,
+    "the same candidate relationship must remain attributable to every anchor that supplied it"
+  );
+});
+
 test("normalizer groups signals by candidate file", () => {
   const result = normalizeEvidence([
     signal({ candidateFile: "A.java" }),

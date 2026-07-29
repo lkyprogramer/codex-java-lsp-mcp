@@ -40,12 +40,6 @@ export async function finalizeScore(input: FinalizeScoreInput): Promise<Candidat
   let score = candidate.score;
   const matchCountDelta = Math.min(40, candidate.matchCount * 2);
   score += addScoreDelta(scoreBreakdown, "finalize.match-count", matchCountDelta, "match count");
-  if (candidate.module && options.focusModules.includes(candidate.module)) {
-    score += addScoreDelta(scoreBreakdown, "finalize.focus-module", 35, "focus module");
-  }
-  if (candidate.path && matchesAny(candidate.path, options.taskKeywords)) {
-    score += addScoreDelta(scoreBreakdown, "finalize.task-keyword", 30, "task keyword");
-  }
   const directDelta = Math.max(
     directCollaboratorDelta(candidate, anchor, options),
     anchor.profile === "service" ? directReferencedTypeDelta(candidate, anchorFacts) : 0

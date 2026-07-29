@@ -47,6 +47,7 @@ function evidenceIdentity(signal: EvidenceSignal): string {
   return JSON.stringify({
     candidateFile: signal.candidateFile,
     candidateNodeId: signal.candidateNodeId,
+    anchorId: signal.anchorId,
     kind: signal.kind,
     family: signal.family,
     provenance: signal.provenance,
