@@ -158,6 +158,28 @@ test("a candidate whose only evidence is in one family ranks below a candidate c
 
   assert.equal(a.selectedByReadPlan, true, "A is picked by the shadow read-plan under a 2-item budget (anchor + A)");
   assert.equal(b.selectedByReadPlan, false, "B (lower priority, lower rank) is not picked under a 2-item budget");
+  assert.deepEqual(result.productionCandidatesWithoutEvidence, [], "A and B both have evidence, so nothing should be reported missing");
+});
+
+test("a production candidate the shadow pass never received evidence for (e.g. the anchor itself) is reported, not silently dropped", async () => {
+  const anchorFile = anchor();
+  const candidateA = candidate(`${repoRoot}/src/main/java/demo/AlphaWidget.java`, { verifiedBy: ["typeGraph"] });
+  const outcomes: ProviderOutcome[] = [
+    outcome([signal({ candidateFile: candidateA.absolutePath, family: "STATIC_STRUCTURE", weight: 100, providerId: "test-static" })])
+  ];
+  // The anchor itself is folded into production's `ranked` (candidateFromAnchor,
+  // called separately in index.ts/materialize-candidates.ts) but never carries
+  // an EvidenceSignal - this is the one guaranteed, by-design case where a
+  // production candidate has no shadow evidence row.
+  const anchorAsCandidate = candidate(anchorFile.absolutePath, { reasons: ["target"], verifiedBy: ["anchor"], score: 1000 });
+
+  const result = await buildShadowRanking(baseInput({
+    outcomes,
+    ranked: [anchorAsCandidate, candidateA]
+  }));
+
+  assert.deepEqual(result.productionCandidatesWithoutEvidence, [anchorFile.absolutePath]);
+  assert.equal(result.candidates.some(item => item.path === anchorFile.absolutePath), false);
 });
 
 test("relationship-provider evidence for the candidate set folds into the same shadow ranking without duplicating other providers' identities", async () => {

@@ -46,6 +46,20 @@ export type ShadowRankingDiagnostics = {
    * so it isn't misread as a ranking signal.
    */
   categoryFidelity: "approximate";
+  /**
+   * Paths present in production's `ranked` but with no row in `candidates`
+   * below (no EvidenceSignal at all in this shadow pass - a legacy collector
+   * can still fold a path into production's `ranked` via a
+   * `matchCount`/`positions` mutation that a provider's evidence-emission
+   * logic did not also turn into a signal). Diffed empirically against a
+   * real fixture: the anchor itself is always in this list (anchors carry no
+   * evidence signals by design - materialize-candidates.ts injects it
+   * separately), so an anchor entry here is expected, not a gap. Any *other*
+   * path here is a genuine evidence-coverage gap worth investigating before
+   * reading a missing file from a production/shadow diff as a ranking
+   * regression.
+   */
+  productionCandidatesWithoutEvidence: string[];
   candidates: ShadowRankingCandidate[];
 };
 
@@ -127,7 +141,12 @@ export async function buildShadowRanking(input: BuildShadowRankingInput): Promis
     };
   });
 
-  return { categoryFidelity: "approximate", candidates };
+  const evidencedPaths = new Set(candidates.map(candidate => candidate.path));
+  const productionCandidatesWithoutEvidence = input.ranked
+    .map(file => file.absolutePath)
+    .filter(path => !evidencedPaths.has(path));
+
+  return { categoryFidelity: "approximate", productionCandidatesWithoutEvidence, candidates };
 }
 
 function ablatePolicy(policy: FamilyRankPolicy, family: EvidenceFamily): FamilyRankPolicy {
