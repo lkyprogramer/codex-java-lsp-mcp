@@ -269,6 +269,87 @@ test("complete JavaIndex resolves implementation relations even when naming reca
   }
 });
 
+test("shadowRanking is populated end-to-end only when JAVA_LSP_SHADOW_RANKING=1 and verbosity=diagnostic, and never leaks into standard verbosity", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-index-router-shadow-ranking-"));
+  const request = await writeJava(root, "src/main/java/demo/api/OrderRequest.java", [
+    "package demo.api;",
+    "",
+    "public record OrderRequest(String id) {}",
+    ""
+  ].join("\n"));
+  const processor = await writeJava(root, "src/main/java/demo/service/OrderProcessor.java", [
+    "package demo.service;",
+    "",
+    "import demo.api.*;",
+    "",
+    "public final class OrderProcessor {",
+    "  public void process(OrderRequest request) {}",
+    "}",
+    ""
+  ].join("\n"));
+  const index = new RouterJavaIndex(root, new JavaIndexClient(root, path.join(root, ".cache")));
+  const previousFlag = process.env.JAVA_LSP_SHADOW_RANKING;
+  try {
+    await index.open(0);
+    await index.reconcile(0);
+    await waitForCompleteIndex(index);
+
+    const router = new AgentRouter(
+      root,
+      new NoLspSession() as never,
+      index,
+      undefined,
+      undefined,
+      undefined,
+      new FixedFileRgRunner(processor)
+    );
+    const anchors = [{ file: request, line: 3, column: 15 }];
+
+    process.env.JAVA_LSP_SHADOW_RANKING = "1";
+    const diagnosticImpact = await router.impact(options({
+      anchors,
+      profile: "dto",
+      mode: "balanced",
+      readPlanMaxItems: 2,
+      verbosity: "diagnostic"
+    }));
+    assert.ok(diagnosticImpact.shadowRanking, "flag on + diagnostic verbosity must populate shadowRanking");
+    const shadow = diagnosticImpact.shadowRanking as { categoryFidelity: string; candidates: Array<{ path: string }> };
+    assert.equal(shadow.categoryFidelity, "approximate");
+    assert.ok(
+      shadow.candidates.some(item => item.path.endsWith("OrderProcessor.java")),
+      "the naming-recall candidate must appear in the shadow ranking too"
+    );
+
+    const standardImpact = await router.impact(options({
+      anchors,
+      profile: "dto",
+      mode: "balanced",
+      readPlanMaxItems: 2,
+      verbosity: "standard"
+    }));
+    assert.equal(standardImpact.shadowRanking, undefined, "standard verbosity must never carry shadowRanking, flag or not");
+
+    delete process.env.JAVA_LSP_SHADOW_RANKING;
+    const flagOffImpact = await router.impact(options({
+      anchors,
+      profile: "dto",
+      mode: "balanced",
+      readPlanMaxItems: 2,
+      verbosity: "diagnostic"
+    }));
+    assert.equal(flagOffImpact.shadowRanking, undefined, "diagnostic verbosity without the flag must not compute shadowRanking");
+  } finally {
+    if (previousFlag === undefined) {
+      delete process.env.JAVA_LSP_SHADOW_RANKING;
+    } else {
+      process.env.JAVA_LSP_SHADOW_RANKING = previousFlag;
+    }
+    await index.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("V2 type-reference evidence upgrades a candidate that naming recall found first", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "java-index-router-static-merge-"));
   const request = await writeJava(root, "src/main/java/demo/api/OrderRequest.java", [

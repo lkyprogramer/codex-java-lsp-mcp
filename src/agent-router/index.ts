@@ -41,6 +41,7 @@ import {
 import { collectLexicalEvidence } from "./providers/lexical-provider.js";
 import { collectLiveSemanticEvidence, collectPersistedSemanticEvidence } from "./providers/semantic-provider.js";
 import { collectSupportEvidence } from "./providers/support-provider.js";
+import { buildShadowRanking } from "./shadow-ranking.js";
 import {
   type ImpactOptions,
   type ImpactResult,
@@ -57,6 +58,24 @@ type RouterStatus = {
   ttlMs: number;
 };
 
+/**
+ * Task 25 item 6: an explicit opt-in, independent of `verbosity`. The family
+ * ranker's shadow pass re-fetches JavaIndex facts through its own cache
+ * (see shadow-ranking.ts) rather than reusing finalizeScore's, so leaving
+ * this on by default would add a second facts-fetch pass to every
+ * diagnostic-verbosity call - including the benchmark harness's quality-
+ * comparison runs, which do set verbosity=diagnostic. The P95 gate itself
+ * defaults to verbosity=standard (src/benchmark-agent-impact.ts), so this
+ * flag is a second, independent safety net on top of the verbosity gate
+ * below, not a substitute for it.
+ *
+ * Read live per request, not cached at module load: this toggle exists to be
+ * flipped on a running process for a comparison window and back off again,
+ * not to be fixed for the process lifetime like RG_CACHE_TTL_MS below.
+ */
+function shadowRankingEnabled(): boolean {
+  return process.env.JAVA_LSP_SHADOW_RANKING === "1";
+}
 const RG_CACHE_TTL_MS = positiveInteger(process.env.AGENT_RG_CACHE_TTL_MS, 300000);
 const RG_CONCURRENCY = positiveInteger(process.env.JAVA_LSP_RG_CONCURRENCY, Math.min(4, availableParallelism()));
 // Used only when a caller does not supply the request budget (benchmarks, tests).
@@ -228,6 +247,22 @@ export class AgentRouter {
     const rgAfter = await timed(phaseMs, "rgCacheAfter", async () => this.rgCacheStatus());
     const sourceAfter = await timed(phaseMs, "sourceStatusAfter", async () => this.javaIndex.routerStatus());
 
+    // Not yet consulted by production ranking - see shadowRankingEnabled()'s
+    // comment for why this double gate exists.
+    const shadowRanking = shadowRankingEnabled() && options.verbosity === "diagnostic"
+      ? await timed(phaseMs, "shadowRanking", async () => buildShadowRanking({
+        repoRoot: this.repoRoot,
+        anchors,
+        options,
+        javaIndex: this.javaIndex,
+        generation,
+        outcomes,
+        ranked,
+        protectedReadPlanPaths,
+        relationshipProviderInput: { ...providerInputBase, existingCandidatePaths: ranked.map(file => file.absolutePath) }
+      }))
+      : undefined;
+
     return buildImpactResult({
       startedAt,
       phaseMs,
@@ -238,6 +273,7 @@ export class AgentRouter {
       rgExecution: lexicalOutcome.rgExecution,
       suppressed,
       evidenceGaps: evidenceGaps(anchors, options, semantic),
+      shadowRanking,
       metrics: {
         semantic,
         typeReference,

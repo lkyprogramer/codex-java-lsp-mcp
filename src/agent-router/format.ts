@@ -21,6 +21,7 @@ type BuildImpactResultInput = {
   readonly rgExecution: RgExecutionResult;
   readonly suppressed: Record<string, number>;
   readonly evidenceGaps: string[];
+  readonly shadowRanking?: Record<string, unknown>;
   readonly metrics: {
     readonly semantic: Record<string, unknown>;
     readonly typeReference: TypeReferenceMetrics;
@@ -68,6 +69,7 @@ export function buildImpactResult(input: BuildImpactResultInput): ImpactResult {
     },
     suppressed: input.suppressed,
     evidenceGaps: input.evidenceGaps,
+    shadowRanking: input.shadowRanking,
     metrics: {
       routingVersion: 5,
       elapsedMs: Date.now() - input.startedAt,
@@ -130,6 +132,10 @@ export function applyVerbosity(payload: ImpactResult, verbosity: ImpactVerbosity
   if (verbosity === "diagnostic") {
     return;
   }
+  // Defense in depth: index.ts only computes shadowRanking for
+  // verbosity="diagnostic" callers, but a non-diagnostic verbosity must never
+  // carry it regardless of what the caller passed in.
+  payload.shadowRanking = undefined;
   payload.rgSummary.sections = payload.rgSummary.sections.map(section => ({
     ...section,
     files: []
