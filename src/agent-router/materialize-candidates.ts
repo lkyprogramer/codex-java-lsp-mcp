@@ -13,18 +13,23 @@ import type { CandidateEvidence, EvidenceFamily } from "./evidence.js";
  * `ranking-signals.ts`/`read-plan-budget.ts` check these ids' *presence*
  * (delta > 0), not their numeric provenance - see Task 25 item 3 review.
  *
- * Only IMPLEMENTS is mapped: static-provider's typeGraph stage looks up
- * implementers of the *anchor's own type*, which is exactly what
- * `finalize.type-relation` used to detect (candidate extends/implements
- * anchor.className). `finalize.direct-collaborator`, `finalize.method-relation`,
- * and the three `finalize.structural.*` ids need anchor context (profile,
- * className, method relations, annotations) a kind string alone cannot carry -
- * those need a real relationship-evidence provider (item 4), not a lookup
- * table. Leaving them unmapped here is the intended, honest state until then,
- * not an oversight.
+ * IMPLEMENTS (static-provider's typeGraph stage: implementers of the
+ * anchor's own type) and TYPE_RELATION (relationship-provider's
+ * structuralDeltas, item 4: any typeReference-verified candidate that
+ * implements/extends anchor.className, for anchor profiles typeGraph skips)
+ * are two different discovery paths to the same relationship, so both map
+ * to `finalize.type-relation` - `legacyCompatEntries` takes the max delta
+ * per id, matching the old `Math.max()` between directCollaboratorDelta and
+ * directReferencedTypeDelta, not a sum.
  */
 const KIND_TO_LEGACY_ID: Partial<Record<string, { id: string; reason: string }>> = {
-  IMPLEMENTS: { id: "finalize.type-relation", reason: "implements or extends anchor type" }
+  IMPLEMENTS: { id: "finalize.type-relation", reason: "implements or extends anchor type" },
+  TYPE_RELATION: { id: "finalize.type-relation", reason: "implements or extends anchor type" },
+  DIRECT_COLLABORATOR: { id: "finalize.direct-collaborator", reason: "direct type-name collaborator" },
+  METHOD_RELATION: { id: "finalize.method-relation", reason: "method relation" },
+  ANNOTATION_COLLABORATION: { id: "finalize.structural.annotation", reason: "stereotype collaboration" },
+  PACKAGE_PROXIMITY: { id: "finalize.structural.package", reason: "package proximity" },
+  KIND_PAIRING: { id: "finalize.structural.kind", reason: "interface-impl pairing" }
 };
 
 /**
@@ -97,17 +102,18 @@ function materializeOne(candidate: CandidateEvidence, repoRoot: string): Candida
 }
 
 function legacyCompatEntries(candidate: CandidateEvidence): ScoreBreakdownItem[] {
-  const seen = new Set<string>();
-  const entries: ScoreBreakdownItem[] = [];
+  const bestById = new Map<string, ScoreBreakdownItem>();
   for (const signal of candidate.signals) {
     const mapped = KIND_TO_LEGACY_ID[signal.kind];
-    if (!mapped || seen.has(mapped.id)) {
+    if (!mapped) {
       continue;
     }
-    seen.add(mapped.id);
-    entries.push({ id: mapped.id, source: "finalize", delta: signal.weight, reason: mapped.reason });
+    const current = bestById.get(mapped.id);
+    if (!current || signal.weight > current.delta) {
+      bestById.set(mapped.id, { id: mapped.id, source: "finalize", delta: signal.weight, reason: mapped.reason });
+    }
   }
-  return entries;
+  return [...bestById.values()];
 }
 
 function dedupePositions(positions: readonly RouterPosition[]): RouterPosition[] {

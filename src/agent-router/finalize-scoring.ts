@@ -75,7 +75,13 @@ export async function finalizeScore(input: FinalizeScoreInput): Promise<Candidat
   return { ...candidate, score: finalScore, scoreBreakdown };
 }
 
-async function structuralDeltas(
+/**
+ * Exported for providers/relationship-provider.ts (Task 25 item 4): the
+ * relationship-evidence provider reuses this unchanged rather than
+ * reimplementing the verifiedBy-gated candidate-facts fetch and the four
+ * structural checks it bundles.
+ */
+export async function structuralDeltas(
   javaIndex: RouterIndex,
   candidate: CandidateFile,
   anchor: ResolvedAnchor,
@@ -116,7 +122,8 @@ async function structuralDeltas(
   }
 }
 
-function directCollaboratorDelta(candidate: CandidateFile, anchor: ResolvedAnchor, options: ImpactOptions): number {
+/** Exported for providers/relationship-provider.ts (Task 25 item 4) - see structuralDeltas' export comment. */
+export function directCollaboratorDelta(candidate: CandidateFile, anchor: ResolvedAnchor, options: ImpactOptions): number {
   const candidatePath = candidate.path || candidate.absolutePath;
   if (!candidatePath.endsWith(".java")) {
     return 0;
@@ -146,7 +153,8 @@ function directCollaboratorDelta(candidate: CandidateFile, anchor: ResolvedAncho
   return delta;
 }
 
-function directReferencedTypeDelta(candidate: CandidateFile, anchorFacts: JavaSourceFacts | undefined): number {
+/** Exported for providers/relationship-provider.ts (Task 25 item 4) - see structuralDeltas' export comment. */
+export function directReferencedTypeDelta(candidate: CandidateFile, anchorFacts: JavaSourceFacts | undefined): number {
   if (!anchorFacts || !(candidate.verifiedBy || []).includes("typeReference")) {
     return 0;
   }
@@ -159,7 +167,8 @@ function directReferencedTypeDelta(candidate: CandidateFile, anchorFacts: JavaSo
   return referencedTypes.has(typeName) ? 140 : 0;
 }
 
-async function methodRelationDelta(
+/** Exported for providers/relationship-provider.ts (Task 25 item 4) - see structuralDeltas' export comment. */
+export async function methodRelationDelta(
   candidate: CandidateFile,
   anchor: ResolvedAnchor,
   javaIndex: RouterIndex,

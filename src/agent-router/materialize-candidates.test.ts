@@ -93,6 +93,42 @@ test("finalScore becomes the CandidateFile score, and positions are deduplicated
   assert.deepEqual(materialized.positions, [{ line: 1, column: 1 }, { line: 2, column: 5 }]);
 });
 
+test("IMPLEMENTS and TYPE_RELATION signals for the same candidate collapse to one finalize.type-relation entry at the max weight", () => {
+  const other = candidateEvidence(
+    path.join(repoRoot, "src/main/java/com/example/Impl.java"),
+    [
+      signal({ kind: "IMPLEMENTS", weight: 70 }),
+      signal({ kind: "TYPE_RELATION", weight: 95 })
+    ]
+  );
+  const result = materializeRankedCandidates([other], [anchor()], repoRoot);
+  const materialized = result.find(file => file.absolutePath === other.file)!;
+  const entries = materialized.scoreBreakdown!.filter(item => item.id === "finalize.type-relation");
+  assert.equal(entries.length, 1, "the two discovery paths to the same relationship must not double the score");
+  assert.equal(entries[0]!.delta, 95, "must take the max delta, matching the old Math.max() between the two old conditions");
+});
+
+test("relationship-provider kinds map to their compatible finalize.* scoreBreakdown ids", () => {
+  const other = candidateEvidence(
+    path.join(repoRoot, "src/main/java/com/example/Related.java"),
+    [
+      signal({ kind: "DIRECT_COLLABORATOR", weight: 170 }),
+      signal({ kind: "METHOD_RELATION", weight: 160 }),
+      signal({ kind: "ANNOTATION_COLLABORATION", weight: 50 }),
+      signal({ kind: "PACKAGE_PROXIMITY", weight: 30 }),
+      signal({ kind: "KIND_PAIRING", weight: 20 })
+    ]
+  );
+  const result = materializeRankedCandidates([other], [anchor()], repoRoot);
+  const materialized = result.find(file => file.absolutePath === other.file)!;
+  const idsById = new Map(materialized.scoreBreakdown!.map(item => [item.id, item.delta]));
+  assert.equal(idsById.get("finalize.direct-collaborator"), 170);
+  assert.equal(idsById.get("finalize.method-relation"), 160);
+  assert.equal(idsById.get("finalize.structural.annotation"), 50);
+  assert.equal(idsById.get("finalize.structural.package"), 30);
+  assert.equal(idsById.get("finalize.structural.kind"), 20);
+});
+
 test("an IMPLEMENTS signal produces a compatible finalize.type-relation scoreBreakdown entry", () => {
   const other = candidateEvidence(
     path.join(repoRoot, "src/main/java/com/example/Impl.java"),
