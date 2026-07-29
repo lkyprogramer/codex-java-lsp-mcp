@@ -8,17 +8,10 @@ import { EdgeStore } from "../edge-store.js";
 import { probeLayout, type LayoutContext } from "../layout-probe.js";
 import { resolveRoutingPolicy, type RoutingPolicy } from "../routing-policy.js";
 import { resolveAnchor } from "./anchor.js";
-import {
-  candidateFromAnchor,
-  collectImportGraphCandidates,
-  collectPersistedSemanticCandidates,
-  collectTypeGraphCandidates,
-  type ImportGraphMetrics
-} from "./candidate-collectors.js";
 import { buildReadPlan } from "./read-plan.js";
-import { mergeCandidate } from "./candidate-helpers.js";
 import { evidenceGaps } from "./evidence-gaps.js";
-import { finalizeRank, nonLspReadPlanPaths } from "./finalize-rank.js";
+import { nonLspReadPlanPaths } from "./finalize-rank.js";
+import { foldProviderCandidates, rankCandidates } from "./rank-candidates.js";
 import { buildImpactResult } from "./format.js";
 import {
   createImportGraphMetrics,
@@ -28,11 +21,9 @@ import {
   rgCacheDelta,
   sessionCacheDelta,
   sourceFactsDelta,
-  updateCollectorElapsed,
-  updateTypeReferenceCacheMetrics
+  updateCollectorElapsed
 } from "./impact-metrics.js";
-import { collectNamingRecall } from "./naming-recall.js";
-import { runRgSection, type RgExecutionResult } from "./rg-execution.js";
+import { runRgSection } from "./rg-execution.js";
 import { summaryFromSearchResult, type RgCommandSummary } from "./rg-plan.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import type { RepoChangeBatch } from "../repo-generation.js";
@@ -41,10 +32,13 @@ import { GenerationRgCache } from "../search/rg-cache.js";
 import { RgRunner } from "../search/rg-runner.js";
 import type { SearchResult } from "../search/search-types.js";
 import { positiveInteger, timed } from "./runtime.js";
-import { collectSemanticSeed, semanticVerify } from "./semantic.js";
-import { collectTypeReferenceCandidates } from "./type-reference.js";
+import { normalizeEvidence } from "./evidence-normalizer.js";
+import type { ProviderInput, ProviderOutcome } from "./evidence.js";
+import { collectStaticEvidence } from "./providers/static-provider.js";
+import { collectLexicalEvidence } from "./providers/lexical-provider.js";
+import { collectLiveSemanticEvidence, collectPersistedSemanticEvidence } from "./providers/semantic-provider.js";
+import { collectSupportEvidence } from "./providers/support-provider.js";
 import {
-  type CandidateFile,
   type ImpactOptions,
   type ImpactResult,
   type ResolvedAnchor,
@@ -148,66 +142,43 @@ export class AgentRouter {
       id: `A${index + 1}`,
       generation
     }))));
-    const candidates = new Map<string, CandidateFile>();
-    for (const anchor of anchors) {
-      mergeCandidate(candidates, candidateFromAnchor(anchor));
-    }
 
-    await timed(phaseMs, "persistedSemantic", async () => collectPersistedSemanticCandidates({
-      candidates,
-      anchors,
-      options,
+    const providerInputBase: Omit<ProviderInput, "existingCandidatePaths"> = {
       repoRoot: this.repoRoot,
-      routingPolicy: this.routingPolicy,
-      edgeStore: this.edgeStore,
-      metrics: persistedSemantic
-    }));
-    await timed(phaseMs, "typeGraph", async () => collectTypeGraphCandidates({
-      candidates,
       anchors,
       options,
       javaIndex: this.javaIndex,
       routingPolicy: this.routingPolicy,
-      generation
-    }));
-    await timed(phaseMs, "importGraph", async () => collectImportGraphCandidates({
-      candidates,
-      anchors,
-      options,
-      javaIndex: this.javaIndex,
-      routingPolicy: this.routingPolicy,
-      metrics: importGraph,
-      generation
-    }));
-    // JavaIndex replaces only static relation discovery.  Naming recall stays
-    // a first-class asynchronous collector: conventions, config, and broad
-    // consumers are not a fallback for implementer/type lookup.  Suppressing
-    // it for a complete port index silently regressed the established V1
-    // candidate-recall baseline on real multi-module repositories.
-    const rgExecution = await collectNamingRecall({
-      candidates,
-      anchors,
-      options,
-      phaseMs,
-      repoRoot: this.repoRoot,
       layoutContext: this.layoutContext,
+      generation,
+      budget,
+      phaseMs,
+      session: this.session,
+      edgeStore: this.edgeStore,
       concurrency: RG_CONCURRENCY,
-      loadSummary: (section, currentOptions, currentAnchors) => this.rgSummary(section, currentOptions, currentAnchors, budget, freshness)
-    });
-    const typeReferenceBefore = await this.javaIndex.routerStatus();
-    await timed(phaseMs, "typeReference", async () => collectTypeReferenceCandidates({
-      candidates,
-      anchors,
-      options,
-      metrics: typeReference,
-      javaIndex: this.javaIndex,
-      routingPolicy: this.routingPolicy,
-      generation
-    }));
-    const typeReferenceAfter = await this.javaIndex.routerStatus();
+      loadRgSummary: (section, currentOptions, currentAnchors) => this.rgSummary(section, currentOptions, currentAnchors, budget, freshness),
+      metrics: { typeReference, importGraph, persistedSemantic, semantic }
+    };
+    const anchorPaths = anchors.map(anchor => anchor.absolutePath);
+
+    // Provider order matters: collectTypeReferenceCandidates' reinforcement
+    // step (inside the static provider) reads the paths already nominated by
+    // earlier providers, exactly like the pre-Task-24 shared candidate map
+    // did (persistedSemantic -> typeGraph -> importGraph -> naming recall ->
+    // typeReference). Persisted-edge and lexical evidence run first here so
+    // the static provider's `existingCandidatePaths` sees the same paths the
+    // old sequential mutation would have by the time it reached typeReference.
+    const persistedOutcome = await collectPersistedSemanticEvidence({ ...providerInputBase, existingCandidatePaths: anchorPaths });
+    const afterPersistedPaths = unionPaths(anchorPaths, persistedOutcome);
+    const lexicalOutcome = await collectLexicalEvidence({ ...providerInputBase, existingCandidatePaths: afterPersistedPaths });
+    const afterLexicalPaths = unionPaths(afterPersistedPaths, lexicalOutcome);
+    const staticOutcome = await collectStaticEvidence({ ...providerInputBase, existingCandidatePaths: afterLexicalPaths });
+    const afterStaticPaths = unionPaths(afterLexicalPaths, staticOutcome);
     updateCollectorElapsed(phaseMs, typeReference, importGraph, persistedSemantic);
+
+    const phaseOneOutcomes: ProviderOutcome[] = [persistedOutcome, lexicalOutcome, staticOutcome];
     const protectedReadPlanPaths = await timed(phaseMs, "nonLspReadPlan", async () => nonLspReadPlanPaths({
-      candidates,
+      candidates: foldProviderCandidates(anchors, phaseOneOutcomes),
       anchor: anchors[0]!,
       options,
       javaIndex: this.javaIndex,
@@ -215,38 +186,26 @@ export class AgentRouter {
       generation
     }));
 
-    await collectSemanticSeed({
-      candidates,
-      anchors,
-      options,
-      semantic,
-      phaseMs,
-      repoRoot: this.repoRoot,
-      session: this.session,
-      routingPolicy: this.routingPolicy,
-      budget
-    });
-    await semanticVerify({
-      candidates,
-      anchors,
-      options,
-      semantic,
-      phaseMs,
-      repoRoot: this.repoRoot,
-      session: this.session,
-      routingPolicy: this.routingPolicy,
-      edgeStore: this.edgeStore,
-      budget
-    });
+    // Live JDT budget is spent only after the protected read-plan paths are
+    // already pinned from cheaper evidence, matching the pre-Task-24 order.
+    const liveSemanticOutcome = await collectLiveSemanticEvidence({ ...providerInputBase, existingCandidatePaths: afterStaticPaths });
+    const afterSemanticPaths = unionPaths(afterStaticPaths, liveSemanticOutcome);
+    const supportOutcome = await collectSupportEvidence({ ...providerInputBase, existingCandidatePaths: afterSemanticPaths });
+
+    const outcomes: ProviderOutcome[] = [...phaseOneOutcomes, liveSemanticOutcome, supportOutcome];
+    // Steps 1-4's normalizer validates and dedupes the typed evidence surface
+    // for Task 25 to score from directly; ranking below still folds
+    // `outcome.candidates` through the unchanged finalizeRank/finalizeScore
+    // pipeline (plan Task 24 Step 8: "rankCandidates may adapt old scoring").
+    normalizeEvidence(outcomes.flatMap(outcome => outcome.evidence));
 
     const suppressed = {
       deferredTests: 0,
       crossModuleConsumers: 0,
       excludedModules: 0
     };
-    const ranked = await timed(phaseMs, "finalizeRank", async () => finalizeRank({
-      candidates,
-      anchor: anchors[0]!,
+    const ranked = await timed(phaseMs, "finalizeRank", async () => rankCandidates(outcomes, {
+      anchors,
       options,
       suppressed,
       extraProtectedPaths: protectedReadPlanPaths,
@@ -266,7 +225,6 @@ export class AgentRouter {
     const cacheAfter = await timed(phaseMs, "sessionCacheAfter", async () => this.session.cacheStatus());
     const rgAfter = await timed(phaseMs, "rgCacheAfter", async () => this.rgCacheStatus());
     const sourceAfter = await timed(phaseMs, "sourceStatusAfter", async () => this.javaIndex.routerStatus());
-    updateTypeReferenceCacheMetrics(typeReference, typeReferenceBefore, typeReferenceAfter);
 
     return buildImpactResult({
       startedAt,
@@ -275,7 +233,7 @@ export class AgentRouter {
       options,
       ranked,
       readPlan,
-      rgExecution,
+      rgExecution: lexicalOutcome.rgExecution,
       suppressed,
       evidenceGaps: evidenceGaps(anchors, options, semantic),
       metrics: {
@@ -353,3 +311,7 @@ type RouterFreshness = {
   freshnessMode: RequestContext["freshnessMode"];
   indexOpenSource?: RequestContext["indexOpenSource"];
 };
+
+function unionPaths(known: readonly string[], outcome: ProviderOutcome): string[] {
+  return [...new Set([...known, ...outcome.candidates.map(candidate => candidate.absolutePath)])];
+}
