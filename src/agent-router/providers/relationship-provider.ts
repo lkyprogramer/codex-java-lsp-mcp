@@ -36,11 +36,16 @@ export type RelationshipProviderInput = ProviderInput & {
 
 /** Fixed, context-independent relationship weights - unlike scoreBase()-derived weights, these were never routing-policy-dependent, so item 5's weight-unification does not need to touch them. */
 const SIGNAL_POLICY: Record<string, { family: EvidenceFamily; provenance: EvidenceProvenance; confidence: number }> = {
-  DIRECT_COLLABORATOR: { family: "FRAMEWORK", provenance: "FRAMEWORK_INFERRED", confidence: 0.75 },
+  // directCollaboratorDelta is a class-name/task-stem match, not a resolved
+  // framework edge.  Keep the legacy compatibility marker for read-plan
+  // protection, but put its rank effect in the capped SUPPORT family so a
+  // broad name match cannot consume the FRAMEWORK budget.
+  DIRECT_COLLABORATOR: { family: "SUPPORT", provenance: "LEXICAL_RG", confidence: 0.75 },
   METHOD_RELATION: { family: "STATIC_STRUCTURE", provenance: "AST_RESOLVED", confidence: 0.9 },
   ANNOTATION_COLLABORATION: { family: "FRAMEWORK", provenance: "FRAMEWORK_INFERRED", confidence: 0.6 },
   PACKAGE_PROXIMITY: { family: "STATIC_STRUCTURE", provenance: "AST_RESOLVED", confidence: 0.5 },
   TYPE_RELATION: { family: "STATIC_STRUCTURE", provenance: "AST_RESOLVED", confidence: 0.85 },
+  TYPE_SYMMETRIC: { family: "STATIC_STRUCTURE", provenance: "AST_RESOLVED", confidence: 0.9 },
   KIND_PAIRING: { family: "STATIC_STRUCTURE", provenance: "AST_RESOLVED", confidence: 0.7 }
 };
 
@@ -87,6 +92,11 @@ export async function collectRelationshipEvidence(input: RelationshipProviderInp
     // not sum) and family-ranker.ts saturates per family anyway, so emitting
     // both when they overlap does not double-count.
     pushIfPositive(evidence, input, anchor.id, candidate, "TYPE_RELATION", structural.typeRelation);
+    // This is the inverse direction: the anchor implements/extends the
+    // candidate type. It is the concrete implementation -> interface/parent
+    // relationship that old finalizeScore exposed as
+    // finalize.structural.type-symmetric, and must not disappear in shadow.
+    pushIfPositive(evidence, input, anchor.id, candidate, "TYPE_SYMMETRIC", structural.typeSymmetric);
     pushIfPositive(evidence, input, anchor.id, candidate, "KIND_PAIRING", structural.kind);
   }
 

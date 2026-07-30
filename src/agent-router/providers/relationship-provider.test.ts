@@ -99,7 +99,7 @@ function noopJavaIndex(overrides: Record<string, unknown> = {}): Record<string, 
   };
 }
 
-test("a name-matched direct collaborator earns a DIRECT_COLLABORATOR signal for any already-known candidate", () => {
+test("a name-matched direct collaborator is weak lexical support, not framework evidence", () => {
   return (async () => {
     const service = anchor();
     const controller = candidate("/repo/src/main/java/demo/OrderController.java", { verifiedBy: ["rg"] });
@@ -111,8 +111,35 @@ test("a name-matched direct collaborator earns a DIRECT_COLLABORATOR signal for 
     ));
     const signal = result.evidence.find(item => item.candidateFile === controller.absolutePath);
     assert.equal(signal?.kind, "DIRECT_COLLABORATOR");
-    assert.equal(signal?.family, "FRAMEWORK");
+    assert.equal(signal?.family, "SUPPORT");
+    assert.equal(signal?.provenance, "LEXICAL_RG");
     assert.ok(signal!.weight > 0);
+  })();
+});
+
+test("an anchor implementing the candidate interface earns a TYPE_SYMMETRIC structural signal", () => {
+  return (async () => {
+    const implementation = anchor({
+      absolutePath: "/repo/src/main/java/demo/OrderServiceImpl.java",
+      path: "src/main/java/demo/OrderServiceImpl.java",
+      className: "OrderServiceImpl",
+      kind: "class"
+    });
+    const service = candidate("/repo/src/main/java/demo/OrderService.java");
+    const result = await collectRelationshipEvidence(providerInput(
+      [implementation],
+      [],
+      [service],
+      noopJavaIndex({
+        factsFor: async (file: string) => file === implementation.absolutePath
+          ? facts(implementation.absolutePath, { typeName: "OrderServiceImpl", implementsTypes: ["demo.OrderService"] })
+          : facts(service.absolutePath, { typeName: "OrderService", kind: "interface" })
+      })
+    ));
+    const signal = result.evidence.find(item => item.candidateFile === service.absolutePath && item.kind === "TYPE_SYMMETRIC");
+    assert.ok(signal, "expected a TYPE_SYMMETRIC signal for the interface implemented by the anchor");
+    assert.equal(signal!.family, "STATIC_STRUCTURE");
+    assert.equal(signal!.weight, 95);
   })();
 });
 

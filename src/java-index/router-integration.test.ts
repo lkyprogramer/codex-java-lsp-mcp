@@ -315,7 +315,7 @@ test("shadowRanking is populated end-to-end only when JAVA_LSP_SHADOW_RANKING=1 
     }));
     assert.ok(diagnosticImpact.shadowRanking, "flag on + diagnostic verbosity must populate shadowRanking");
     const shadow = diagnosticImpact.shadowRanking as { categoryFidelity: string; candidates: Array<{ path: string }> };
-    assert.equal(shadow.categoryFidelity, "approximate");
+    assert.equal(shadow.categoryFidelity, "preserved");
     assert.ok(
       shadow.candidates.some(item => item.path.endsWith("OrderProcessor.java")),
       "the naming-recall candidate must appear in the shadow ranking too"

@@ -264,7 +264,8 @@ test("impact benchmark exposes timing diagnostics", async () => {
     "--read-plan-max-items", "1"
   ], {
     cwd: path.resolve(import.meta.dirname, ".."),
-    encoding: "utf8"
+    encoding: "utf8",
+    env: { ...process.env, JAVA_LSP_SHADOW_RANKING: "1" }
   });
 
   assert.equal(result.status, 0, result.stderr);
@@ -291,4 +292,7 @@ test("impact benchmark exposes timing diagnostics", async () => {
   assert.equal(typeof timing.persistedSemantic, "object");
   assert.equal(typeof timing.persistedSemantic.elapsedMs, "number");
   assert.equal(typeof timing.persistedSemantic.edgesSeen, "number");
+  assert.equal(typeof attempt.shadowRanking, "object", "diagnostic benchmark attempts must retain opted-in shadow diagnostics");
+  assert.equal(typeof attempt.shadowQuality, "object", "benchmark must score the shadow candidate and read-plan outputs against the same golden scenario");
+  assert.equal(attempt.shadowQuality.rReadMust, 1);
 });

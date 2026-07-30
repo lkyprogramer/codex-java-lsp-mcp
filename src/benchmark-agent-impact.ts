@@ -289,12 +289,49 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
   const candidatePaths = result.files.map(file => String(file.path));
   const readFiles = distinctReadFiles(result);
   const quality = evaluate(candidatePaths, readFiles, scenario);
+  const shadowQuality = qualityForShadowRanking(result.shadowRanking, cli.repoRoot, scenario);
   const sessionPhaseMs = session.drainPhaseMetrics();
   return {
     ...attemptPayload("impact", quality, rawSearchPayload, readingPayload, elapsedMs, 1 + result.readPlan.length, result.readPlan.length, Number(result.counts.totalRgRawBytes || 0), 0),
     timing: timingPayload(result, sessionPhaseMs),
-    goldenAttribution: goldenAttributionForImpact(cli.repoRoot, result, scenario)
+    goldenAttribution: goldenAttributionForImpact(cli.repoRoot, result, scenario),
+    // Task 25's counterfactual rank diagnostics are deliberately opt-in at
+    // the router boundary. Preserve them in the benchmark attempt when that
+    // boundary supplied them; standard requests still serialize no field.
+    shadowRanking: result.shadowRanking,
+    shadowQuality
   };
+}
+
+/**
+ * Scores the shadow ranker's candidate and read-plan decisions against the
+ * exact same golden scenario as production. The shadow payload uses absolute
+ * paths while `evaluate()` deliberately consumes repo-relative golden paths.
+ */
+function qualityForShadowRanking(
+  shadowRanking: Record<string, unknown> | undefined,
+  repoRoot: string,
+  scenario: Scenario
+): Record<string, number> | undefined {
+  const rawCandidates = shadowRanking?.candidates;
+  if (!Array.isArray(rawCandidates)) {
+    return undefined;
+  }
+  const candidates = rawCandidates.flatMap(item => {
+    if (!item || typeof item !== "object") {
+      return [];
+    }
+    const value = item as Record<string, unknown>;
+    if (typeof value.path !== "string") {
+      return [];
+    }
+    return [{ path: path.relative(repoRoot, value.path), selectedByReadPlan: value.selectedByReadPlan === true }];
+  });
+  return evaluate(
+    candidates.map(candidate => candidate.path),
+    candidates.filter(candidate => candidate.selectedByReadPlan).map(candidate => candidate.path),
+    scenario
+  );
 }
 
 function noLspAttempt(repoRoot: string, scenario: Scenario): Record<string, unknown> {

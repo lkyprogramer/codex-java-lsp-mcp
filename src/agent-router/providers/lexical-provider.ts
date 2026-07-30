@@ -10,6 +10,22 @@ import { nextSignalId } from "./shared.js";
 export const LEXICAL_PROVIDER_ID = "lexical";
 export const LEXICAL_PROVIDER_VERSION = "1";
 
+/**
+ * Base strength of a completed rg section. These are deliberately the
+ * category bases only: same-module/source-set/profile/task adjustments in
+ * the legacy `candidate.score` are applied exactly once by family-ranker.ts
+ * or TASK_CONTEXT evidence, never folded into a lexical signal weight.
+ */
+const LEXICAL_CATEGORY_WEIGHTS: Record<string, number> = {
+  persistence: 70,
+  protocol: 64,
+  java: 56,
+  semantic: 80,
+  tests: 24,
+  config: 18,
+  nonJava: 18
+};
+
 export type LexicalProviderOutcome = ProviderOutcome & {
   rgExecution: RgExecutionResult;
 };
@@ -43,33 +59,23 @@ export async function collectLexicalEvidence(input: ProviderInput): Promise<Lexi
   const anchorId = input.anchors[0]?.id ?? "A1";
   const completeness = rgExecution.completion === "COMPLETE" ? "COMPLETE" : "PARTIAL";
   const confidence = lexicalConfidence();
-  const evidence: EvidenceSignal[] = rgExecution.files.map(candidate => ({
+  const evidence: EvidenceSignal[] = rgExecution.files.flatMap(candidate => lexicalCategories(candidate.categories).map(category => ({
     signalId: nextSignalId(LEXICAL_PROVIDER_ID),
     candidateFile: candidate.absolutePath,
     anchorId,
-    kind: "NAME_MATCH",
+    kind: `LEXICAL:${category}`,
     family: "LEXICAL",
     provenance: "LEXICAL_RG",
     confidence,
     completeness,
-    // Task 25 item 5: deliberately NOT unified yet. Unlike semantic-provider's
-    // weight (extracted as a fixed post-scoreBase() bonus, see
-    // persistedEdgeWeightBonus/liveSemanticWeightBonus), rg's candidate.score
-    // *is* scoreBase() with no additive bonus on top - there is no
-    // context-independent constant to pull out. Its entire weight came from
-    // routing-policy context (category base + profile/module/task rules),
-    // which is exactly what sourceSetDelta/sameModuleDelta/family caps now
-    // own. Picking a replacement number here without the item 6 three-repo
-    // shadow data would be an unverified guess, so this stays candidate.score
-    // until that data exists.
-    weight: candidate.score,
+    weight: LEXICAL_CATEGORY_WEIGHTS[category]!,
     sourceFile: candidate.absolutePath,
     positions: candidate.positions,
     providerId: LEXICAL_PROVIDER_ID,
     providerVersion: LEXICAL_PROVIDER_VERSION,
     generation: input.generation,
     detail: candidate.reasons.join(",")
-  }));
+  })));
 
   return {
     providerId: LEXICAL_PROVIDER_ID,
@@ -80,4 +86,9 @@ export async function collectLexicalEvidence(input: ProviderInput): Promise<Lexi
     elapsedMs: Date.now() - startedAt,
     rgExecution
   };
+}
+
+function lexicalCategories(categories: readonly string[]): string[] {
+  const selected = categories.filter(category => LEXICAL_CATEGORY_WEIGHTS[category] !== undefined);
+  return selected.length > 0 ? [...new Set(selected)] : ["java"];
 }

@@ -9,7 +9,7 @@
 //      P95 benchmark path, which defaults to verbosity "standard" (src/benchmark-agent-impact.ts).
 import type { CandidateFile, ImpactOptions, ResolvedAnchor } from "../agent-types.js";
 import type { RouterIndex } from "../java-index/router-java-index.js";
-import { buildReadPlan } from "./read-plan.js";
+import { buildReadPlan, defaultReadPlanMax, selectReadPlanFiles } from "./read-plan.js";
 import { normalizeEvidence } from "./evidence-normalizer.js";
 import type { EvidenceFamily, ProviderOutcome } from "./evidence.js";
 import { collectRelationshipEvidence, type RelationshipProviderInput } from "./providers/relationship-provider.js";
@@ -37,15 +37,11 @@ export type ShadowRankingCandidate = {
 
 export type ShadowRankingDiagnostics = {
   /**
-   * materialize-candidates.ts derives `categories` from `EvidenceFamily`
-   * (coarser than the old per-rg-section categories - persistence/config/
-   * nonJava/tests were distinguished by which rg section matched, not by a
-   * single family). read-plan.ts prioritizes on the persistence category, so
-   * `selectedByReadPlan` divergence from production can come from this
-   * adapter gap, not from the ranker - keep this note attached to the output
-   * so it isn't misread as a ranking signal.
+   * The shadow adapter retains the category/reason/verification metadata
+   * already discovered by the production provider fold. Its read-plan diff
+   * therefore measures family ranking and not a lossy metadata rebuild.
    */
-  categoryFidelity: "approximate";
+  categoryFidelity: "preserved";
   /**
    * Paths present in production's `ranked` but with no row in `candidates`
    * below (no EvidenceSignal at all in this shadow pass - a legacy collector
@@ -110,17 +106,13 @@ export async function buildShadowRanking(input: BuildShadowRankingInput): Promis
     rankWithoutFamily.set(family, new Map(ablated.map((candidate, index) => [candidate.file, index + 1])));
   }
 
-  const materialized = materializeRankedCandidates(primary, input.anchors, input.repoRoot);
-  const idByPath = new Map(materialized.map((file, index) => [file.absolutePath, `S${index + 1}`]));
-  const shadowReadPlan = await buildReadPlan({
-    files: materialized,
-    ids: idByPath,
-    options: input.options,
-    javaIndex: input.javaIndex,
-    protectedPaths: input.protectedReadPlanPaths,
-    generation: input.generation
-  });
-  const shadowReadPlanIds = new Set(shadowReadPlan.map(item => item.fileId));
+  const materialized = materializeRankedCandidates(
+    primary,
+    input.anchors,
+    input.repoRoot,
+    new Map(input.ranked.map(candidate => [candidate.absolutePath, candidate]))
+  );
+  const selectedShadowPaths = await selectedReadPlanPaths(materialized, input);
 
   const candidates: ShadowRankingCandidate[] = primary.map(candidate => {
     const rankWithoutEachFamily: Partial<Record<EvidenceFamily, number>> = {};
@@ -130,14 +122,13 @@ export async function buildShadowRanking(input: BuildShadowRankingInput): Promis
         rankWithoutEachFamily[family] = rank;
       }
     }
-    const fileId = idByPath.get(candidate.file);
     return {
       path: candidate.file,
       finalScore: candidate.finalScore,
       rank: rankByPath.get(candidate.file)!,
       familyScores: candidate.familyScores,
       rankWithoutEachFamily,
-      selectedByReadPlan: fileId !== undefined && shadowReadPlanIds.has(fileId)
+      selectedByReadPlan: selectedShadowPaths.has(candidate.file)
     };
   });
 
@@ -146,7 +137,35 @@ export async function buildShadowRanking(input: BuildShadowRankingInput): Promis
     .map(file => file.absolutePath)
     .filter(path => !evidencedPaths.has(path));
 
-  return { categoryFidelity: "approximate", productionCandidatesWithoutEvidence, candidates };
+  return { categoryFidelity: "preserved", productionCandidatesWithoutEvidence, candidates };
+}
+
+async function selectedReadPlanPaths(
+  files: readonly CandidateFile[],
+  input: BuildShadowRankingInput
+): Promise<Set<string>> {
+  if (input.options.semanticPolicy !== "required") {
+    return new Set(selectReadPlanFiles({
+      files,
+      options: input.options,
+      maxItems: input.options.readPlanMaxItems ?? defaultReadPlanMax(input.options.mode),
+      protectedPaths: input.protectedReadPlanPaths
+    }).map(file => file.absolutePath));
+  }
+
+  // `required` retains buildReadPlan's legacy selection branch. The normal
+  // cold/fast shadow path above needs only selected paths, not AST windows.
+  const ids = new Map(files.map((file, index) => [file.absolutePath, `S${index + 1}`]));
+  const pathsById = new Map([...ids].map(([path, id]) => [id, path]));
+  const plan = await buildReadPlan({
+    files,
+    ids,
+    options: input.options,
+    javaIndex: input.javaIndex,
+    protectedPaths: input.protectedReadPlanPaths,
+    generation: input.generation
+  });
+  return new Set(plan.map(item => pathsById.get(item.fileId)).filter((path): path is string => Boolean(path)));
 }
 
 function ablatePolicy(policy: FamilyRankPolicy, family: EvidenceFamily): FamilyRankPolicy {

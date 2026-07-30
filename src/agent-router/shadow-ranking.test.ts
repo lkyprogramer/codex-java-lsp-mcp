@@ -142,7 +142,7 @@ test("a candidate whose only evidence is in one family ranks below a candidate c
     options: { ...baseInput().options, readPlanMaxItems: 2 }
   }));
 
-  assert.equal(result.categoryFidelity, "approximate");
+  assert.equal(result.categoryFidelity, "preserved");
   const byPath = new Map(result.candidates.map(item => [item.path, item]));
   const a = byPath.get(candidateA.absolutePath)!;
   const b = byPath.get(candidateB.absolutePath)!;
@@ -159,6 +159,33 @@ test("a candidate whose only evidence is in one family ranks below a candidate c
   assert.equal(a.selectedByReadPlan, true, "A is picked by the shadow read-plan under a 2-item budget (anchor + A)");
   assert.equal(b.selectedByReadPlan, false, "B (lower priority, lower rank) is not picked under a 2-item budget");
   assert.deepEqual(result.productionCandidatesWithoutEvidence, [], "A and B both have evidence, so nothing should be reported missing");
+});
+
+test("shadow selection does not query Java ranges when it only needs selected paths", async () => {
+  let factsForCalls = 0;
+  const javaIndex = {
+    factsFor: async () => {
+      factsForCalls += 1;
+      return undefined;
+    },
+    methodAt: async () => undefined
+  };
+  const candidateA = candidate(`${repoRoot}/src/main/java/demo/AlphaWidget.java`, { verifiedBy: ["rg"] });
+  const outcomes: ProviderOutcome[] = [
+    outcome([signal({ candidateFile: candidateA.absolutePath, family: "LEXICAL", kind: "NAME_MATCH", weight: 40, confidence: 0.6 })])
+  ];
+  const defaults = baseInput();
+  const input = baseInput({
+    javaIndex: javaIndex as never,
+    outcomes,
+    ranked: [candidateA],
+    options: { ...defaults.options, readPlanMaxItems: 2 },
+    relationshipProviderInput: { ...defaults.relationshipProviderInput, javaIndex } as never
+  });
+
+  await buildShadowRanking(input);
+
+  assert.equal(factsForCalls, 1, "only the relationship provider's anchor-facts lookup is needed; read-window facts are irrelevant to selection");
 });
 
 test("a production candidate the shadow pass never received evidence for (e.g. the anchor itself) is reported, not silently dropped", async () => {

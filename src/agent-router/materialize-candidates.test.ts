@@ -116,6 +116,7 @@ test("relationship-provider kinds map to their compatible finalize.* scoreBreakd
       signal({ kind: "METHOD_RELATION", weight: 160 }),
       signal({ kind: "ANNOTATION_COLLABORATION", weight: 50 }),
       signal({ kind: "PACKAGE_PROXIMITY", weight: 30 }),
+      signal({ kind: "TYPE_SYMMETRIC", weight: 95 }),
       signal({ kind: "KIND_PAIRING", weight: 20 })
     ]
   );
@@ -126,6 +127,7 @@ test("relationship-provider kinds map to their compatible finalize.* scoreBreakd
   assert.equal(idsById.get("finalize.method-relation"), 160);
   assert.equal(idsById.get("finalize.structural.annotation"), 50);
   assert.equal(idsById.get("finalize.structural.package"), 30);
+  assert.equal(idsById.get("finalize.structural.type-symmetric"), 95);
   assert.equal(idsById.get("finalize.structural.kind"), 20);
 });
 
@@ -149,4 +151,63 @@ test("a REFERENCE-only candidate does not fabricate a finalize.type-relation ent
   const result = materializeRankedCandidates([other], [anchor()], repoRoot);
   const materialized = result.find(file => file.absolutePath === other.file)!;
   assert.equal(materialized.scoreBreakdown!.some(item => item.id === "finalize.type-relation"), false);
+});
+
+test("lexical section categories and task-keyword utility survive materialization", () => {
+  const other = candidateEvidence(
+    path.join(repoRoot, "src/main/java/com/example/OrderMapper.java"),
+    [
+      signal({ kind: "LEXICAL:persistence", family: "LEXICAL", weight: 70 }),
+      signal({ kind: "TASK_KEYWORD", family: "TASK_CONTEXT", weight: 30 })
+    ]
+  );
+  const result = materializeRankedCandidates([other], [anchor()], repoRoot);
+  const materialized = result.find(file => file.absolutePath === other.file)!;
+  assert.ok(materialized.categories.includes("persistence"), "read-plan must retain the original lexical section category");
+  assert.ok(materialized.reasons.includes("rg:persistence"));
+  assert.ok(materialized.scoreBreakdown!.some(item => item.id === "finalize.task-keyword" && item.delta > 0));
+});
+
+test("provider candidate metadata survives materialization while the family score remains authoritative", () => {
+  const file = path.join(repoRoot, "modules/report/src/main/java/com/example/ReportTask.java");
+  const ranked = candidateEvidence(file, [signal({
+    candidateFile: file,
+    kind: "LEXICAL:java",
+    family: "LEXICAL",
+    weight: 56
+  })], 77);
+  const legacy = {
+    absolutePath: file,
+    path: "modules/report/src/main/java/com/example/ReportTask.java",
+    module: "report",
+    layer: "persistence",
+    sourceSet: "main" as const,
+    score: 999,
+    matchCount: 4,
+    positions: [{ line: 41, column: 3 }],
+    categories: ["persistence"],
+    reasons: ["typeReference", "rg:persistence"],
+    verifiedBy: ["typeReference"]
+  };
+
+  const result = materializeRankedCandidates([ranked], [anchor()], repoRoot, new Map([[file, legacy]]));
+  const materialized = result.find(item => item.absolutePath === file)!;
+  assert.equal(materialized.score, 77, "ranker score must not be replaced by legacy score");
+  assert.ok(materialized.categories.includes("persistence"));
+  assert.ok(materialized.reasons.includes("typeReference"));
+  assert.ok(materialized.verifiedBy!.includes("typeReference"));
+  assert.deepEqual(materialized.positions, [{ line: 3, column: 1 }, { line: 41, column: 3 }]);
+});
+
+test("weak name support does not misclassify a Java collaborator as config", () => {
+  const file = path.join(repoRoot, "src/main/java/com/example/OrderCommand.java");
+  const ranked = candidateEvidence(file, [signal({
+    candidateFile: file,
+    kind: "DIRECT_COLLABORATOR",
+    family: "SUPPORT",
+    weight: 170
+  })]);
+  const result = materializeRankedCandidates([ranked], [anchor()], repoRoot);
+  const materialized = result.find(item => item.absolutePath === file)!;
+  assert.equal(materialized.categories.includes("config"), false);
 });
