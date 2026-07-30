@@ -2,6 +2,7 @@
 // output: Async JavaIndex facts for AgentRouter collectors and scoring.
 // pos: Task 22 cutover facade between V2 worker queries and router call sites.
 import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { normalizeRepoFile, repoCacheRoot } from "../repo-layout.js";
 import { JavaIndexClient, type JavaIndexOpenOptions } from "./java-index-client.js";
@@ -12,6 +13,19 @@ import type {
   JavaTypeFacts,
   StaticEdgeKind
 } from "./index-types.js";
+import {
+  CALLEES_LIMIT_DEFAULT,
+  bundleToFrameworkFileFacts,
+  bundlesToRequestedDeclarations,
+  fqnOfTypeId,
+  ownerTypeIdOf,
+  relativePathOfLocalTypeId,
+  type FrameworkCallees,
+  type FrameworkDeclarations,
+  type FrameworkFileFacts,
+  type FrameworkIndexStatus,
+  type FrameworkIndexView
+} from "./framework-index-view.js";
 import {
   openSourceFromStatus,
   summarizeCoverage,
@@ -26,6 +40,17 @@ import {
   type JavaMethodFact,
   type JavaSourceFacts
 } from "./router-facts.js";
+
+/** Bounds a single marker file read (e.g. pom.xml) - repositoryMarkers is meant for small dependency-declaration files, not arbitrary large sources. */
+const REPOSITORY_MARKER_MAX_BYTES = 65_536;
+
+// declarationsById is a bounded, batched lookup, not an arbitrary bulk
+// export: an uncapped id list (e.g. every callee of a hot method) could
+// resolve to hundreds of distinct files and pull their full bundles across
+// the worker IPC boundary in one call. Mirrors findTypeDefinitions' existing
+// `.slice(0, 64)` convention on its own input list.
+const MAX_DECLARATION_IDS = 64;
+const MAX_DECLARATION_PATHS = 64;
 
 const TYPE_REFERENCE_EDGE_KINDS: StaticEdgeKind[] = [
   "FIELD_TYPE",
@@ -70,7 +95,7 @@ export interface RouterIndex {
  * High-level async index used by AgentRouter. Wraps JavaIndexClient and maps
  * V2 queries into the fact shapes collectors already understand.
  */
-export class RouterJavaIndex implements JavaIndexView, RouterIndex {
+export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkIndexView {
   private generation = 0;
   private opened = false;
   private openSource: JavaIndexOpenSource = "cold";
@@ -82,6 +107,10 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex {
   private readonly freshGenerationByPath = new Map<string, number>();
   /** Router facts are immutable for one generation; retain them across ranking phases. */
   private readonly factsByPath = new Map<string, { generation: number; facts: JavaSourceFacts }>();
+  /** Framework-view projection cache, generation-scoped like factsByPath - cleared alongside it in refresh/reconcile/close so a Slice C/D adapter never reads stale facts across a generation bump. */
+  private readonly frameworkFactsByPath = new Map<string, { generation: number; facts: FrameworkFileFacts }>();
+  /** Build/dependency marker files (e.g. pom.xml) rarely change mid-session and aren't Java-generation-scoped - kept until close(), not cleared on refresh/reconcile. */
+  private readonly repositoryMarkerCache = new Map<string, string>();
 
   constructor(
     private readonly repoRoot: string,
@@ -221,11 +250,13 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex {
       const absolute = normalizeRepoFile(this.repoRoot, file);
       this.freshGenerationByPath.set(absolute, generation);
       this.factsByPath.delete(absolute);
+      this.frameworkFactsByPath.delete(absolute);
     }
     for (const file of deleted) {
       const absolute = normalizeRepoFile(this.repoRoot, file);
       this.freshGenerationByPath.delete(absolute);
       this.factsByPath.delete(absolute);
+      this.frameworkFactsByPath.delete(absolute);
     }
     this.generation = Math.max(generation, status.indexedGeneration);
     return status;
@@ -236,6 +267,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex {
     const status = await this.client.reconcile(generation);
     this.freshGenerationByPath.clear();
     this.factsByPath.clear();
+    this.frameworkFactsByPath.clear();
     this.generation = Math.max(generation, status.indexedGeneration);
     return status;
   }
@@ -245,6 +277,8 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex {
     this.opened = false;
     this.freshGenerationByPath.clear();
     this.factsByPath.clear();
+    this.frameworkFactsByPath.clear();
+    this.repositoryMarkerCache.clear();
   }
 
   async factsFor(inputFile: string, generation = this.generation): Promise<JavaSourceFacts> {
@@ -445,6 +479,127 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex {
       }
       throw new Error("Java index is unavailable");
     }
+  }
+
+  async frameworkFactsFor(inputFile: string, generation = this.generation): Promise<FrameworkFileFacts> {
+    const absolutePath = normalizeRepoFile(this.repoRoot, inputFile);
+    if (!existsSync(absolutePath)) {
+      throw new Error(`Java source file does not exist: ${inputFile}`);
+    }
+    const cached = this.frameworkFactsByPath.get(absolutePath);
+    if (cached?.generation === generation) return cached.facts;
+    await this.ensureFresh([absolutePath], generation);
+    const bundles = await this.client.queryFiles([absolutePath]);
+    const bundle = bundles[0];
+    const facts: FrameworkFileFacts = bundle
+      ? bundleToFrameworkFileFacts(bundle)
+      : {
+        types: [],
+        methods: [],
+        fields: [],
+        missingIds: [],
+        truncated: false,
+        relativePath: path.relative(this.repoRoot, absolutePath).replace(/\\/g, "/"),
+        module: "",
+        sourceSet: "unknown",
+        coverage: "DEGRADED"
+      };
+    this.frameworkFactsByPath.set(absolutePath, { generation, facts });
+    return facts;
+  }
+
+  /**
+   * Batch-hydrates arbitrary type/method/field ids (e.g. resolvedCallees'
+   * targetId values) into their declarations. A "type:<fqn>" owner resolves
+   * via one batched exact-fqn queryTypes() call (QUALIFIED strategy matches
+   * typeIdByFqn directly, so this cannot come back AMBIGUOUS); a
+   * "type-local:<path>:.." owner's file is already embedded in the id. Both
+   * paths converge on a single batched queryFiles() call, mirroring
+   * typesToFacts()'s existing group-by-file-then-hydrate-once pattern.
+   *
+   * Bounded at both ends: more than MAX_DECLARATION_IDS ids are never even
+   * looked up (reported via `truncated`, not silently accepted), and if the
+   * looked-up ids still resolve to more than MAX_DECLARATION_PATHS distinct
+   * files, only the first MAX_DECLARATION_PATHS (by id order) are fetched -
+   * ids whose file got excluded that way land in `missingIds`, same as a
+   * genuinely-absent id, since which specific ids that affects depends on an
+   * arbitrary file-count cutoff, not on anything meaningful about those ids.
+   */
+  async declarationsById(ids: readonly string[]): Promise<FrameworkDeclarations> {
+    await this.ensureOpened(this.generation);
+    const uniqueIds = unique([...ids]);
+    const boundedIds = uniqueIds.slice(0, MAX_DECLARATION_IDS);
+    const relativePaths = new Set<string>();
+    const fqnsNeedingLookup = new Set<string>();
+    for (const id of boundedIds) {
+      const ownerTypeId = ownerTypeIdOf(id);
+      if (!ownerTypeId) continue;
+      const localPath = relativePathOfLocalTypeId(ownerTypeId);
+      if (localPath) {
+        relativePaths.add(localPath);
+        continue;
+      }
+      const fqn = fqnOfTypeId(ownerTypeId);
+      if (fqn) fqnsNeedingLookup.add(fqn);
+    }
+    if (fqnsNeedingLookup.size > 0) {
+      const lookups = await this.client.queryTypes([...fqnsNeedingLookup].map(typeText => ({ typeText })));
+      for (const lookup of lookups) {
+        if (lookup.state === "RESOLVED") relativePaths.add(relativePathOfFileId(lookup.type.fileId));
+      }
+    }
+    const boundedPaths = [...relativePaths].slice(0, MAX_DECLARATION_PATHS);
+    const absolutePaths = boundedPaths.map(relative => path.resolve(this.repoRoot, relative));
+    const bundles = absolutePaths.length > 0 ? await this.client.queryFiles(absolutePaths) : [];
+    const result = bundlesToRequestedDeclarations(bundles, boundedIds);
+    return {
+      ...result,
+      missingIds: [...result.missingIds, ...uniqueIds.slice(MAX_DECLARATION_IDS)],
+      truncated: uniqueIds.length > MAX_DECLARATION_IDS
+    };
+  }
+
+  /**
+   * Requests one more than `limit` so truncation is an exact fact, not a
+   * `length === limit` guess - a caller relying on "exactly one resolved
+   * call target" (Slice D's SPRING_CALL_PATH rule) must know for certain
+   * whether a second callee might exist beyond index-store.ts's own cap.
+   */
+  async resolvedCallees(methodId: string, limit = CALLEES_LIMIT_DEFAULT): Promise<FrameworkCallees> {
+    await this.ensureOpened(this.generation);
+    const raw = await this.client.queryCallees(methodId, limit + 1);
+    return { callees: raw.slice(0, limit), truncated: raw.length > limit };
+  }
+
+  /**
+   * Small, direct filesystem reads of caller-specified files - no worker
+   * round-trip, no directory scan, so an inactive/no-framework repo's cost
+   * here is exactly the handful of reads the caller chooses to make (e.g.
+   * a Spring pack checking pom.xml/build.gradle for a dependency string).
+   */
+  async repositoryMarkers(relativePaths: readonly string[]): Promise<Map<string, string>> {
+    const result = new Map<string, string>();
+    for (const relativePath of relativePaths) {
+      const cached = this.repositoryMarkerCache.get(relativePath);
+      if (cached !== undefined) {
+        result.set(relativePath, cached);
+        continue;
+      }
+      try {
+        const content = await readFile(path.resolve(this.repoRoot, relativePath), "utf8");
+        const bounded = content.length > REPOSITORY_MARKER_MAX_BYTES ? content.slice(0, REPOSITORY_MARKER_MAX_BYTES) : content;
+        this.repositoryMarkerCache.set(relativePath, bounded);
+        result.set(relativePath, bounded);
+      } catch {
+        // Missing/unreadable marker file - omitted from the result, not an error.
+      }
+    }
+    return result;
+  }
+
+  async frameworkStatus(): Promise<FrameworkIndexStatus> {
+    const routerStatus = await this.routerStatus();
+    return { coverage: routerStatus.coverage };
   }
 
   /**
