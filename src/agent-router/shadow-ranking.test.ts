@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { CandidateFile, ImpactOptions, ResolvedAnchor } from "../agent-types.js";
 import type { EvidenceSignal, ProviderOutcome } from "./evidence.js";
+import { genericFamilyRankPolicy } from "./family-ranker.js";
 import { buildShadowRanking, type BuildShadowRankingInput } from "./shadow-ranking.js";
 
 const repoRoot = "/repo";
@@ -101,23 +102,7 @@ function baseInput(overrides: Partial<BuildShadowRankingInput> = {}): BuildShado
     outcomes: [],
     ranked: [],
     protectedReadPlanPaths: new Set<string>(),
-    relationshipProviderInput: {
-      repoRoot,
-      anchors: [anchor()],
-      options,
-      javaIndex: noopJavaIndex(),
-      routingPolicy: {} as never,
-      existingCandidatePaths: [],
-      generation: 1,
-      layoutContext: {} as never,
-      budget: {} as never,
-      phaseMs: {},
-      session: {} as never,
-      edgeStore: {} as never,
-      concurrency: 1,
-      loadRgSummary: async () => ({}) as never,
-      metrics: {} as never
-    } as never,
+    familyRankPolicy: genericFamilyRankPolicy,
     ...overrides
   };
 }
@@ -179,13 +164,12 @@ test("shadow selection does not query Java ranges when it only needs selected pa
     javaIndex: javaIndex as never,
     outcomes,
     ranked: [candidateA],
-    options: { ...defaults.options, readPlanMaxItems: 2 },
-    relationshipProviderInput: { ...defaults.relationshipProviderInput, javaIndex } as never
+    options: { ...defaults.options, readPlanMaxItems: 2 }
   });
 
   await buildShadowRanking(input);
 
-  assert.equal(factsForCalls, 1, "only the relationship provider's anchor-facts lookup is needed; read-window facts are irrelevant to selection");
+  assert.equal(factsForCalls, 0, "counterfactual selection must reuse production evidence without reading Java facts again");
 });
 
 test("a production candidate the shadow pass never received evidence for (e.g. the anchor itself) is reported, not silently dropped", async () => {
@@ -209,7 +193,7 @@ test("a production candidate the shadow pass never received evidence for (e.g. t
   assert.equal(result.candidates.some(item => item.path === anchorFile.absolutePath), false);
 });
 
-test("relationship-provider evidence for the candidate set folds into the same shadow ranking without duplicating other providers' identities", async () => {
+test("production relationship evidence folds into the same shadow ranking without duplicating other providers' identities", async () => {
   const candidateA = candidate(`${repoRoot}/src/main/java/demo/AlphaWidget.java`, { verifiedBy: ["typeGraph"] });
   const outcomes: ProviderOutcome[] = [
     outcome([signal({ candidateFile: candidateA.absolutePath, family: "LEXICAL", kind: "NAME_MATCH", weight: 40, confidence: 0.6, providerId: "test-lexical" })])

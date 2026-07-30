@@ -19,12 +19,12 @@ export const SEMANTIC_PROVIDER_ID = "semantic";
 export const SEMANTIC_PROVIDER_VERSION = "1";
 
 /**
- * Task 25 item 5: weight extracted from candidate-collectors.ts's
- * persistedEdgeScoreBonus(edge.kind), the fixed bonus collectPersistedSemanticCandidates
- * adds on top of scoreBase() for a persisted edge. Unlike scoreBase() itself
- * (routing-policy/profile/module/task dependent - not reused as a signal
- * weight per item 5), this bonus was already a context-independent constant,
- * so it carries over unchanged as the signal's weight.
+ * The additive implementation's `reference` bonus (10) rode on top of a
+ * context-dependent base score. A standalone COMPLETE persisted JDT edge
+ * needs an evidence-native fixed weight instead: 80 reaches the exact-
+ * semantic high-confidence threshold after its 0.9 confidence factor, while
+ * family caps still bound repeated persisted references. Implementation and
+ * hierarchy preserve their established fixed strength ordering.
  */
 function persistedEdgeWeightBonus(rawKind: string): number {
   if (rawKind === "implementation") {
@@ -33,7 +33,7 @@ function persistedEdgeWeightBonus(rawKind: string): number {
   if (rawKind === "typeHierarchy") {
     return 70;
   }
-  return 10;
+  return 80;
 }
 
 /**

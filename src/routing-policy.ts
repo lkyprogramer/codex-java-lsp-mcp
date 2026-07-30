@@ -4,6 +4,7 @@
 import path from "node:path";
 import type { ImpactOptions, ResolvedAnchor, ResolvedImpactProfile } from "./agent-types.js";
 import type { PathContext } from "./repo-layout.js";
+import { genericFamilyRankPolicy, lishueduFamilyRankPolicy, type FamilyRankPolicy } from "./agent-router/family-ranker.js";
 
 export type Confidence = "high" | "medium" | "low";
 export type ScoreCategory = "java" | "protocol" | "persistence" | "config" | "tests" | "semantic" | "nonJava";
@@ -27,7 +28,7 @@ export type ScoreRule = {
 };
 
 export type RoutingPolicy = {
-  id: "lishuedu-legacy" | "generic-java" | "maven-reactor" | "ddd-gradle";
+  id: "lishuedu" | "generic-java";
   categoryBase: Record<ScoreCategory, number>;
   confidenceDeltas: Record<Confidence, number>;
   scoreRules: ScoreRule[];
@@ -63,8 +64,8 @@ const sharedScoreRules: ScoreRule[] = [
   rule("structure.common-penalty", { moduleEquals: "common" }, -20, "common module penalty")
 ];
 
-export const lishueduLegacyPolicy: RoutingPolicy = {
-  id: "lishuedu-legacy",
+export const lishueduPolicy: RoutingPolicy = {
+  id: "lishuedu",
   categoryBase: sharedCategoryBase,
   confidenceDeltas: sharedConfidenceDeltas,
   scoreRules: [
@@ -89,17 +90,26 @@ export const genericJavaPolicy: RoutingPolicy = {
   ]
 };
 
-export const legacyRoutingPolicy = lishueduLegacyPolicy;
-
 export function resolveRoutingPolicy(repoRoot: string): RoutingPolicy {
   const override = process.env.JAVA_LSP_ROUTING_POLICY;
-  if (override === "lishuedu-legacy") {
-    return lishueduLegacyPolicy;
+  // Keep the former override string as an input compatibility alias, but do
+  // not let it reintroduce a third, obsolete policy identity downstream.
+  if (override === "lishuedu" || override === "lishuedu-legacy") {
+    return lishueduPolicy;
   }
   if (override === "generic-java") {
     return genericJavaPolicy;
   }
-  return path.basename(repoRoot) === "lishuedu" ? lishueduLegacyPolicy : genericJavaPolicy;
+  return path.basename(repoRoot) === "lishuedu" ? lishueduPolicy : genericJavaPolicy;
+}
+
+/**
+ * Final ranking never reads `scoreRules`: candidate discovery may retain the
+ * legacy policy while providers are being decomposed, but the returned
+ * candidate/read-plan order must use one explicit family-saturation pack.
+ */
+export function resolveFamilyRankPolicy(policy: Pick<RoutingPolicy, "id">): FamilyRankPolicy {
+  return policy.id === "lishuedu" ? lishueduFamilyRankPolicy : genericFamilyRankPolicy;
 }
 
 export function scoreWithPolicy(policy: RoutingPolicy, category: ScoreCategory, context: PathContext, anchor: ResolvedAnchor, options: ImpactOptions): number {

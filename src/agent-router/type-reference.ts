@@ -48,10 +48,13 @@ export async function collectTypeReferenceCandidates(input: CollectTypeReference
     if (!shouldUseTypeReference(anchor)) {
       continue;
     }
-    const canReinforceExistingTypeReferences = routingPolicy.id !== "lishuedu-legacy";
-    // The legacy controller policy historically disabled broad static
-    // reinforcement.  Keep that restraint, but still use an exact explicit
-    // import whose already-recalled path proves it is a direct collaborator.
+    // Final ranking uses family evidence, but candidate discovery still has a
+    // bounded foreground read-plan. Lishuedu controller anchors keep their
+    // established narrow discovery budget: broad static reinforcement would
+    // crowd must-read persistence files before family ranking sees them.
+    // This is an explicit policy-level discovery constraint, not a hidden
+    // routing-policy score adjustment.
+    const canReinforceExistingTypeReferences = routingPolicy.id !== "lishuedu";
     const canQueryStaticIndex = canReinforceExistingTypeReferences || anchor.profile !== "controller";
     const canUseReferenceOrderBonus = canReinforceExistingTypeReferences && anchor.profile === "controller";
     const typeName = anchor.className || path.basename(anchor.absolutePath, ".java");

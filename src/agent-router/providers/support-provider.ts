@@ -1,7 +1,7 @@
 // input: The path set already discovered by other providers this request.
 // output: ProviderOutcome carrying SUPPORT/TASK_CONTEXT EvidenceSignal[] with zero score effect.
 // pos: Task 24 Step 7 - a tiny context provider; focusModules/taskKeywords stop being direct
-//      finalizeScore deltas only once Task 25's ranker consumes these signals instead (plan line 7434).
+//      direct final-score deltas; Task 25's ranker consumes these signals instead (plan line 7434).
 import { classifyPath } from "../../repo-layout.js";
 import type { CandidateFile } from "../../agent-types.js";
 import { breakdown, matchesAny, mergeCandidate } from "../candidate-helpers.js";
@@ -27,8 +27,11 @@ export async function collectSupportEvidence(input: ProviderInput): Promise<Prov
     const focusMatch = Boolean(context.module && input.options.focusModules.includes(context.module));
     const keywordMatch = matchesAny(relativePath, input.options.taskKeywords);
     if (focusMatch) {
-      evidence.push(makeSignal(input, anchorId, absolutePath, "FOCUS_MODULE", "TASK_CONTEXT", 35));
-      mergeCandidate(candidates, contextCandidate(context, "taskContext:focusModule", 35));
+      // A focus module is an explicit caller scope, unlike a lexical keyword.
+      // Its bounded TASK_CONTEXT family contribution offsets, but never waives,
+      // the family ranker's cross-module penalty for multi-module tasks.
+      evidence.push(makeSignal(input, anchorId, absolutePath, "FOCUS_MODULE", "TASK_CONTEXT", 55));
+      mergeCandidate(candidates, contextCandidate(context, "taskContext:focusModule", 55));
     }
     if (keywordMatch) {
       evidence.push(makeSignal(input, anchorId, absolutePath, "TASK_KEYWORD", "TASK_CONTEXT", 30));
@@ -42,7 +45,7 @@ export async function collectSupportEvidence(input: ProviderInput): Promise<Prov
     // Context only reinforces paths that an earlier provider found.  It does
     // not create broad lexical candidates, but its contribution must flow
     // through the same normalized evidence/ranking boundary as every other
-    // provider instead of being re-applied in finalizeScore.
+    // provider instead of being re-applied after ranking.
     candidates: [...candidates.values()],
     completion: "COMPLETE",
     elapsedMs: Date.now() - startedAt
@@ -86,7 +89,7 @@ function makeSignal(
     kind,
     family,
     provenance: "FRAMEWORK_INFERRED",
-    confidence: 0.5,
+    confidence: kind === "FOCUS_MODULE" ? 0.9 : 0.5,
     completeness: "COMPLETE",
     weight,
     sourceFile: absolutePath,

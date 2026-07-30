@@ -6,12 +6,11 @@ import { JdtlsSession } from "../jdtls-session.js";
 import type { RouterIndex } from "../java-index/router-java-index.js";
 import { EdgeStore } from "../edge-store.js";
 import { probeLayout, type LayoutContext } from "../layout-probe.js";
-import { resolveRoutingPolicy, type RoutingPolicy } from "../routing-policy.js";
+import { resolveFamilyRankPolicy, resolveRoutingPolicy, type RoutingPolicy } from "../routing-policy.js";
 import { resolveAnchor } from "./anchor.js";
 import { buildReadPlan } from "./read-plan.js";
 import { evidenceGaps } from "./evidence-gaps.js";
-import { nonLspReadPlanPaths } from "./finalize-rank.js";
-import { foldProviderCandidates, rankCandidates } from "./rank-candidates.js";
+import { familyReadPlanProtectedPaths, foldProviderCandidates, rankCandidates } from "./rank-candidates.js";
 import { buildImpactResult } from "./format.js";
 import {
   createImportGraphMetrics,
@@ -41,6 +40,7 @@ import {
 import { collectLexicalEvidence } from "./providers/lexical-provider.js";
 import { collectLiveSemanticEvidence, collectPersistedSemanticEvidence } from "./providers/semantic-provider.js";
 import { collectSupportEvidence } from "./providers/support-provider.js";
+import { collectRelationshipEvidence } from "./providers/relationship-provider.js";
 import { buildShadowRanking } from "./shadow-ranking.js";
 import {
   type ImpactOptions,
@@ -60,14 +60,12 @@ type RouterStatus = {
 
 /**
  * Task 25 item 6: an explicit opt-in, independent of `verbosity`. The family
- * ranker's shadow pass re-fetches JavaIndex facts through its own cache
- * (see shadow-ranking.ts) rather than reusing finalizeScore's, so leaving
- * this on by default would add a second facts-fetch pass to every
- * diagnostic-verbosity call - including the benchmark harness's quality-
- * comparison runs, which do set verbosity=diagnostic. The P95 gate itself
- * defaults to verbosity=standard (src/benchmark-agent-impact.ts), so this
- * flag is a second, independent safety net on top of the verbosity gate
- * below, not a substitute for it.
+ * diagnostics calculate counterfactual attribution from the outcomes and
+ * ranked candidates already produced by this request. Keeping it opt-in
+ * still avoids the payload and CPU cost of per-family ablations on ordinary
+ * diagnostic requests. The P95 gate defaults to verbosity=standard
+ * (src/benchmark-agent-impact.ts), so this flag remains an independent
+ * safety net on top of the verbosity gate below.
  *
  * Read live per request, not cached at module load: this toggle exists to be
  * flipped on a running process for a comparison window and back off again,
@@ -198,14 +196,19 @@ export class AgentRouter {
     updateCollectorElapsed(phaseMs, typeReference, importGraph, persistedSemantic);
 
     const phaseOneOutcomes: ProviderOutcome[] = [persistedOutcome, staticStructureOutcome, lexicalOutcome, typeReferenceOutcome];
-    const protectedReadPlanPaths = await timed(phaseMs, "nonLspReadPlan", async () => nonLspReadPlanPaths({
-      candidates: foldProviderCandidates(anchors, phaseOneOutcomes),
-      anchor: anchors[0]!,
-      options,
-      javaIndex: this.javaIndex,
-      routingPolicy: this.routingPolicy,
-      generation
-    }));
+    const familyRankPolicy = resolveFamilyRankPolicy(this.routingPolicy);
+    const phaseOneNormalized = normalizeEvidence(phaseOneOutcomes.flatMap(outcome => outcome.evidence), this.repoRoot);
+    const protectedReadPlanPaths = await timed(phaseMs, "nonLspReadPlan", async () => familyReadPlanProtectedPaths(
+      phaseOneNormalized,
+      phaseOneOutcomes,
+      {
+        anchors,
+        options,
+        suppressed: { deferredTests: 0, crossModuleConsumers: 0, excludedModules: 0 },
+        repoRoot: this.repoRoot,
+        familyRankPolicy
+      }
+    ));
 
     // Live JDT budget is spent only after the protected read-plan paths are
     // already pinned from cheaper evidence, matching the pre-Task-24 order.
@@ -213,7 +216,16 @@ export class AgentRouter {
     const afterSemanticPaths = unionPaths(afterStaticPaths, liveSemanticOutcome);
     const supportOutcome = await collectSupportEvidence({ ...providerInputBase, existingCandidatePaths: afterSemanticPaths });
 
-    const outcomes: ProviderOutcome[] = [...phaseOneOutcomes, liveSemanticOutcome, supportOutcome];
+    const nonRelationshipOutcomes: ProviderOutcome[] = [...phaseOneOutcomes, liveSemanticOutcome, supportOutcome];
+    const relationshipCandidates = [...foldProviderCandidates(anchors, nonRelationshipOutcomes).values()];
+    const relationshipOutcome = await timed(phaseMs, "relationshipEvidence", async () => collectRelationshipEvidence({
+      ...providerInputBase,
+      existingCandidatePaths: relationshipCandidates.map(candidate => candidate.absolutePath),
+      allCandidates: relationshipCandidates,
+      staticVerifiedCandidates: relationshipCandidates.filter(candidate =>
+        (candidate.verifiedBy || []).some(source => source === "typeGraph" || source === "typeReference"))
+    }));
+    const outcomes: ProviderOutcome[] = [...nonRelationshipOutcomes, relationshipOutcome];
     // Steps 1-4's normalizer validates and dedupes the typed evidence surface;
     // family-ranker.ts scores directly from it (Task 25 cutover). repoRoot is
     // required here - it populates module/layer/sourceSet via classifyPath,
@@ -225,12 +237,13 @@ export class AgentRouter {
       crossModuleConsumers: 0,
       excludedModules: 0
     };
-    const ranked = await timed(phaseMs, "finalizeRank", async () => rankCandidates(normalized, outcomes, {
+    const ranked = await timed(phaseMs, "familyRank", async () => rankCandidates(normalized, outcomes, {
       anchors,
       options,
       suppressed,
       extraProtectedPaths: protectedReadPlanPaths,
-      repoRoot: this.repoRoot
+      repoRoot: this.repoRoot,
+      familyRankPolicy
     }));
     const idByPath = new Map(ranked.map((file, index) => [file.absolutePath, `F${index + 1}`]));
     const readPlan = await timed(phaseMs, "buildReadPlan", async () => buildReadPlan({
@@ -245,8 +258,9 @@ export class AgentRouter {
     const rgAfter = await timed(phaseMs, "rgCacheAfter", async () => this.rgCacheStatus());
     const sourceAfter = await timed(phaseMs, "sourceStatusAfter", async () => this.javaIndex.routerStatus());
 
-    // Not yet consulted by production ranking - see shadowRankingEnabled()'s
-    // comment for why this double gate exists.
+    // Diagnostic only: production ranking above has already used the same
+    // normalized outcomes. Shadow output adds counterfactual attribution; it
+    // must never cause a second provider/facts collection pass.
     const shadowRanking = shadowRankingEnabled() && options.verbosity === "diagnostic"
       ? await timed(phaseMs, "shadowRanking", async () => buildShadowRanking({
         repoRoot: this.repoRoot,
@@ -257,7 +271,7 @@ export class AgentRouter {
         outcomes,
         ranked,
         protectedReadPlanPaths,
-        relationshipProviderInput: { ...providerInputBase, existingCandidatePaths: ranked.map(file => file.absolutePath) }
+        familyRankPolicy
       }))
       : undefined;
 

@@ -25,10 +25,13 @@ test("support provider carries focus-module and task-keyword score through its o
   } as unknown as ProviderInput);
 
   assert.equal(result.candidates.length, 1);
-  assert.equal(result.candidates[0]!.score, 65);
+  assert.equal(result.candidates[0]!.score, 85);
   assert.deepEqual(
     result.candidates[0]!.reasons,
     ["taskContext:focusModule", "taskContext:taskKeyword"]
   );
-  assert.deepEqual(result.evidence.map(signal => signal.weight), [35, 30]);
+  assert.deepEqual(result.evidence.map(signal => [signal.kind, signal.weight, signal.confidence]), [
+    ["FOCUS_MODULE", 55, 0.9],
+    ["TASK_KEYWORD", 30, 0.5]
+  ]);
 });

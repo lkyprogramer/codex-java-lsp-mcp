@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import * as candidateRanking from "./rank-candidates.js";
 import { foldProviderCandidates, rankCandidates } from "./rank-candidates.js";
 import type { CandidateFile, ImpactOptions, ResolvedAnchor } from "../agent-types.js";
 import type { CandidateEvidence, EvidenceSignal, ProviderOutcome } from "./evidence.js";
@@ -234,4 +235,91 @@ test("rankCandidates truncates the candidate tail by family-ranker score while p
       `structural evidence at ${file} must survive tail truncation`
     );
   }
+});
+
+test("candidate tail retains bounded main-source representatives from every explicit focus module", async () => {
+  const anchorEntry = anchor({
+    absolutePath: "/repo/benefits/src/main/java/demo/Anchor.java",
+    module: "benefits",
+    profile: "dto"
+  });
+  const entries: [string, CandidateEvidence][] = [];
+  for (let index = 0; index < 30; index += 1) {
+    const file = `/repo/benefits/src/main/java/demo/Dominant${index}.java`;
+    entries.push([file, evidenceCandidate(file, [
+      signal({ candidateFile: file, family: "STATIC_STRUCTURE", kind: "REFERENCE", weight: 70, confidence: 0.9 })
+    ], { module: "benefits", sourceSet: "main" })]);
+  }
+  const focusPaths = ["ProductView", "ProductQueryService", "ProductAssembler"].map(name =>
+    `/repo/product/src/main/java/demo/${name}.java`
+  );
+  for (const file of focusPaths) {
+    entries.push([file, evidenceCandidate(file, [
+      signal({ candidateFile: file, family: "LEXICAL", kind: "LEXICAL:java", weight: 56, confidence: 0.6 }),
+      signal({ candidateFile: file, family: "TASK_CONTEXT", kind: "FOCUS_MODULE", weight: 55, confidence: 0.9 })
+    ], { module: "product", sourceSet: "main" })]);
+  }
+
+  const ranked = await rankCandidates(new Map(entries), [], {
+    anchors: [anchorEntry],
+    options: options({ mode: "balanced", focusModules: ["benefits", "product"] }),
+    suppressed: emptySuppressed(),
+    repoRoot: "/repo"
+  });
+
+  assert.ok(ranked.length <= 24, "dto balanced candidate limit remains bounded");
+  for (const file of focusPaths) {
+    assert.ok(
+      ranked.some(candidate => candidate.absolutePath === file),
+      `explicit focus module representative ${file} must survive tail truncation`
+    );
+  }
+});
+
+test("pre-semantic protection ignores a score that exists only in the retired additive policy", async () => {
+  const familyReadPlanProtectedPaths = (candidateRanking as unknown as {
+    familyReadPlanProtectedPaths?: (
+      normalized: ReadonlyMap<string, CandidateEvidence>,
+      outcomes: readonly ProviderOutcome[],
+      context: Parameters<typeof rankCandidates>[2]
+    ) => Promise<ReadonlySet<string>>;
+  }).familyReadPlanProtectedPaths;
+  assert.equal(
+    typeof familyReadPlanProtectedPaths,
+    "function",
+    "production must derive pre-semantic protection from family ranking rather than finalizeRank"
+  );
+
+  const names = ["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "ZLegacyBoost"];
+  const files = names.map(name => `/repo/module-a/src/main/java/demo/${name}.java`);
+  const signals = files.map(file => signal({
+    candidateFile: file,
+    family: "LEXICAL",
+    kind: "LEXICAL:java",
+    provenance: "LEXICAL_RG",
+    confidence: 0.6,
+    weight: 56
+  }));
+  const normalized = new Map(files.map((file, index) => [file, evidenceCandidate(file, [signals[index]!], {
+    module: "module-a",
+    sourceSet: "main"
+  })]));
+  const fragments = files.map((absolutePath, index) => ({
+    ...candidate(absolutePath, index === files.length - 1 ? 10_000 : 1),
+    categories: ["java"],
+    reasons: ["rg:java"],
+    verifiedBy: ["rg"]
+  }));
+  const protectedPaths = await familyReadPlanProtectedPaths!(normalized, [outcome({ evidence: signals, candidates: fragments })], {
+    anchors: [anchor()],
+    options: options({ mode: "minimal", readPlanMaxItems: 4 }),
+    suppressed: emptySuppressed(),
+    repoRoot: "/repo"
+  });
+
+  assert.equal(
+    protectedPaths.has(files.at(-1)!),
+    false,
+    "the high legacy fragment score must not reserve a read-plan slot when its family evidence ties the other lexical candidates"
+  );
 });

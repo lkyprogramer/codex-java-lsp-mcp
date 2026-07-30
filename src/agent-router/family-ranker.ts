@@ -1,11 +1,12 @@
 // input: Normalized CandidateEvidence (one entry per candidate file, deduplicated signals).
 // output: Family-saturated final score, replacing bare additive scoring.
-// pos: Task 25 Steps 1-6 - pure ranking math only. Not yet wired into rank-candidates.ts/index.ts:
-//      finalize-scoring.ts, routing-policy.ts, and the live orchestration are untouched by this file.
+// pos: Task 25 production ranking math, consumed by rank-candidates.ts and
+//      the pre-semantic read-plan protection path in index.ts.
 import type { Confidence } from "../agent-types.js";
 import type { CandidateEvidence, EvidenceCompleteness, EvidenceFamily, EvidenceSignal } from "./evidence.js";
 
 export type FamilyRankPolicy = {
+  id: "generic-java" | "lishuedu";
   baseScore: number;
   familyCaps: Record<EvidenceFamily, number>;
   diversityBonus: Record<EvidenceFamily, number>;
@@ -17,6 +18,7 @@ export type FamilyRankPolicy = {
 };
 
 export const genericFamilyRankPolicy: FamilyRankPolicy = {
+  id: "generic-java",
   baseScore: 1,
   familyCaps: {
     EXACT_SEMANTIC: 150,
@@ -43,6 +45,21 @@ export const genericFamilyRankPolicy: FamilyRankPolicy = {
   sameModuleDelta: 24,
   crossModulePenalty: -18,
   testDeferPenalty: -12
+};
+
+/**
+ * The lishuedu pack is deliberately an explicit policy selection point even
+ * while it shares the calibrated generic saturation values.  Repository
+ * specific behavior must enter through tested provider signals, not through
+ * a hidden additive score rule at the final ranking boundary.
+ */
+export const lishueduFamilyRankPolicy: FamilyRankPolicy = {
+  ...genericFamilyRankPolicy,
+  id: "lishuedu",
+  familyCaps: { ...genericFamilyRankPolicy.familyCaps },
+  diversityBonus: { ...genericFamilyRankPolicy.diversityBonus },
+  completenessFactor: { ...genericFamilyRankPolicy.completenessFactor },
+  sourceSetDelta: { ...genericFamilyRankPolicy.sourceSetDelta }
 };
 
 /**
@@ -116,11 +133,9 @@ export function confidenceLabel(
 }
 
 /**
- * Ranks normalized candidates by family-saturated score. Not yet consulted by
- * `rank-candidates.ts` - Task 25 Step 7-9 wires this in once `routing-policy.ts`'s
- * profile-specific rules are migrated into provider signal weights and the
- * three-repo benchmark confirms no regression (that decision and its
- * verification cannot happen from this pure-function layer).
+ * Ranks normalized candidates by family-saturated score. Final ranking and
+ * pre-semantic read-plan protection call this shared pure function so policy
+ * rules cannot affect one path but not the other.
  */
 export function rankCandidates(candidates: readonly CandidateEvidence[], context: RankContext): CandidateEvidence[] {
   const policy = context.policy;

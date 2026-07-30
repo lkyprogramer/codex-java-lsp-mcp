@@ -1,7 +1,7 @@
 // input: Already-discovered candidates (from every provider) plus the subset static-provider verified via typeGraph/typeReference.
-// output: ProviderOutcome carrying the direct-collaborator/method-relation/structural-pairing EvidenceSignal[] finalize-scoring.ts used to compute as post-hoc deltas.
-// pos: Task 25 item 4 - reuses finalize-scoring.ts's pure/async delta functions unchanged; only the emission shape (evidence, not a direct score mutation) is new.
-//      Not called from index.ts/rank-candidates.ts yet - stays behind the item 6 shadow boundary alongside family-ranker.ts/materialize-candidates.ts.
+// output: ProviderOutcome carrying direct-collaborator/method-relation/structural-pairing EvidenceSignal[].
+// pos: Task 25 production relationship-evidence provider. Relationship strength
+//      extraction is isolated from final ranking in relationship-deltas.ts.
 import type { CandidateFile } from "../../agent-types.js";
 import type { JavaMethodFact, JavaSourceFacts } from "../../java-index/router-facts.js";
 import type { EvidenceFamily, EvidenceProvenance, EvidenceSignal, ProviderInput, ProviderOutcome } from "../evidence.js";
@@ -10,7 +10,7 @@ import {
   directReferencedTypeDelta,
   methodRelationDelta,
   structuralDeltas
-} from "../finalize-scoring.js";
+} from "../relationship-deltas.js";
 import { nextSignalId } from "./shared.js";
 
 export const RELATIONSHIP_PROVIDER_ID = "relationship";
@@ -20,7 +20,7 @@ export type RelationshipProviderInput = ProviderInput & {
   /**
    * Every candidate already discovered this request, from every provider.
    * directCollaboratorDelta/directReferencedTypeDelta are pure name/path
-   * matching and ran unconditionally in finalize-scoring.ts - no verifiedBy
+   * matching and runs without a verifiedBy
    * gate, so this provider runs them the same way, on the full set.
    */
   readonly allCandidates: readonly CandidateFile[];
@@ -28,7 +28,7 @@ export type RelationshipProviderInput = ProviderInput & {
    * Candidates static-provider tagged verifiedBy typeGraph/typeReference.
    * The facts-based checks (method relation, annotation, package proximity,
    * type symmetry, kind pairing) fetch each candidate's parsed facts, so
-   * finalize-scoring.ts gated them to this subset to avoid foreground-parsing
+   * relationship extraction gates them to this subset to avoid foreground-parsing
    * a lexical-only rg hit just to rank it. This provider keeps that gate.
    */
   readonly staticVerifiedCandidates: readonly CandidateFile[];
@@ -94,8 +94,7 @@ export async function collectRelationshipEvidence(input: RelationshipProviderInp
     pushIfPositive(evidence, input, anchor.id, candidate, "TYPE_RELATION", structural.typeRelation);
     // This is the inverse direction: the anchor implements/extends the
     // candidate type. It is the concrete implementation -> interface/parent
-    // relationship that old finalizeScore exposed as
-    // finalize.structural.type-symmetric, and must not disappear in shadow.
+    // relationship that must remain visible in production ranking.
     pushIfPositive(evidence, input, anchor.id, candidate, "TYPE_SYMMETRIC", structural.typeSymmetric);
     pushIfPositive(evidence, input, anchor.id, candidate, "KIND_PAIRING", structural.kind);
   }

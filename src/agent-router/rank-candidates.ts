@@ -3,15 +3,14 @@
 // output: Score-sorted candidates with protected read-plan paths, via family-ranker.ts's family-saturated score.
 // pos: Task 25's production cutover - foldProviderCandidates still supplies category/reason/verification
 //      metadata (materialize-candidates.ts's legacyCandidates param), but ranking itself comes from
-//      family-ranker.ts, not finalizeRank/finalizeScore. See finalize-rank.ts's nonLspReadPlanPaths -
-//      that pre-pass is a budget-gating heuristic over phase-one evidence only, deliberately left on the
-//      old scorer for this cutover (it never reaches the agent as ranked/readPlan output).
+//      family-ranker.ts, not the retired additive final scorer. The same
+//      family path also derives the pre-semantic protected read-plan paths.
 import type { CandidateFile, ImpactOptions, ResolvedAnchor } from "../agent-types.js";
 import { candidateFromAnchor } from "./candidate-collectors.js";
 import { mergeCandidate } from "./candidate-helpers.js";
 import { normalizeEvidence } from "./evidence-normalizer.js";
 import type { CandidateEvidence, ProviderOutcome } from "./evidence.js";
-import { genericFamilyRankPolicy, rankCandidates as rankByFamily, type RankContext } from "./family-ranker.js";
+import { genericFamilyRankPolicy, rankCandidates as rankByFamily, type FamilyRankPolicy, type RankContext } from "./family-ranker.js";
 import { materializeRankedCandidates } from "./materialize-candidates.js";
 import { candidateLimit, defaultReadPlanMax, legacyReadPlanSorted, selectReadPlanFiles } from "./read-plan.js";
 import { truncateCandidateTail } from "./ranking-signals.js";
@@ -30,6 +29,7 @@ export type RankCandidatesContext = {
   readonly options: ImpactOptions;
   readonly suppressed: Record<string, number>;
   readonly repoRoot: string;
+  readonly familyRankPolicy?: FamilyRankPolicy;
   readonly extraProtectedPaths?: ReadonlySet<string>;
 };
 
@@ -87,7 +87,7 @@ export async function rankCandidates(
   // family-ranker.ts's pure math has no suppressed-counter side channel;
   // mirror its own sameModule/crossModulePolicy/testReadMode conditions here
   // so the diagnostic counters in the result payload keep meaning what they
-  // meant under finalizeScore, without threading a counter into the ranker.
+  // meant under the prior final scorer, without threading a counter into the ranker.
   for (const candidate of evidenceCandidates) {
     if (candidate.sourceSet === "test" && context.options.testReadMode === "defer") {
       context.suppressed.deferredTests += 1;
@@ -103,7 +103,7 @@ export async function rankCandidates(
   }
 
   const rankContext: RankContext = {
-    policy: genericFamilyRankPolicy,
+    policy: context.familyRankPolicy ?? genericFamilyRankPolicy,
     anchorModule: anchor.module,
     crossModulePolicy: context.options.crossModulePolicy,
     testReadMode: context.options.testReadMode
@@ -128,5 +128,68 @@ export async function rankCandidates(
       readPlanCovered.add(file);
     }
   }
-  return truncateCandidateTail(ranked, readPlanCovered, candidateLimit(context.options.mode, anchor.profile));
+  const limit = candidateLimit(context.options.mode, anchor.profile);
+  for (const file of focusModuleRepresentatives(ranked, context.options.focusModules, limit, readPlanCovered)) {
+    readPlanCovered.add(file);
+  }
+  return truncateCandidateTail(ranked, readPlanCovered, limit);
+}
+
+const FOCUS_MODULE_REPRESENTATIVES = 3;
+
+/**
+ * Candidate-tail truncation must not erase an entire module the caller
+ * explicitly named in `focusModules`. Preserve a small, round-robin set of
+ * its highest-ranked main-source candidates for candidate recall only; these
+ * representatives do not become protected read-plan slots.
+ */
+function focusModuleRepresentatives(
+  ranked: readonly CandidateFile[],
+  focusModules: readonly string[],
+  limit: number,
+  alreadyCovered: ReadonlySet<CandidateFile>
+): CandidateFile[] {
+  const modules = [...new Set(focusModules.filter(module => module.length > 0))];
+  const capacity = Math.max(0, limit - alreadyCovered.size);
+  if (modules.length === 0 || capacity === 0) {
+    return [];
+  }
+  const byModule = new Map(modules.map(module => [module, ranked.filter(file =>
+    file.module === module
+    && file.sourceSet === "main"
+    && !alreadyCovered.has(file)
+  )]));
+  const result: CandidateFile[] = [];
+  for (let offset = 0; offset < FOCUS_MODULE_REPRESENTATIVES && result.length < capacity; offset += 1) {
+    for (const module of modules) {
+      if (result.length >= capacity) {
+        break;
+      }
+      const file = byModule.get(module)?.[offset];
+      if (file) {
+        result.push(file);
+      }
+    }
+  }
+  return result;
+}
+
+/**
+ * Selects the non-LSP protection set from the same family-ranked candidates
+ * production will later return. This replaces the retired additive
+ * pre-pass, whose result previously leaked legacy policy scores back into
+ * the real tail and read-plan selection.
+ */
+export async function familyReadPlanProtectedPaths(
+  normalized: ReadonlyMap<string, CandidateEvidence>,
+  outcomes: readonly ProviderOutcome[],
+  context: RankCandidatesContext
+): Promise<ReadonlySet<string>> {
+  const ranked = await rankCandidates(normalized, outcomes, {
+    ...context,
+    extraProtectedPaths: undefined
+  });
+  const maxItems = context.options.readPlanMaxItems ?? defaultReadPlanMax(context.options.mode);
+  return new Set(selectReadPlanFiles({ files: ranked, options: context.options, maxItems })
+    .map(file => file.absolutePath));
 }

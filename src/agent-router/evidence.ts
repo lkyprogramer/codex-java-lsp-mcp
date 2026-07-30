@@ -58,12 +58,10 @@ export type ProviderOutcome = {
   providerVersion: string;
   evidence: EvidenceSignal[];
   /**
-   * Task 24 transitional field: the `CandidateFile` fragments this provider's
-   * wrapped (unchanged) collector produced, in `mergeCandidate`-foldable form
-   * so `rankCandidates` can reuse the existing `finalizeRank`/`finalizeScore`
-   * pipeline byte-for-byte instead of re-deriving scoring from `evidence`.
-   * Task 25's family-saturating ranker scores from `evidence` directly and
-   * deletes this field.
+   * Transitional metadata from a provider's wrapped collector, in
+   * `mergeCandidate`-foldable form. Task 25 ranks only typed `evidence`, but
+   * materialization still needs categories, reasons, positions and
+   * verification provenance that are not yet reconstructable from families.
    */
   candidates: CandidateFile[];
   completion: Completion;

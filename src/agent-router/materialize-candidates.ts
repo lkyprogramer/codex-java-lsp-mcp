@@ -1,7 +1,7 @@
 // input: family-ranker.ts's ranked CandidateEvidence[] (module/layer/sourceSet populated by normalizeEvidence(..., repoRoot)).
 // output: CandidateFile[] compatible with read-plan.ts/format.ts/ranking-signals.ts/read-plan-budget.ts.
-// pos: Task 25 item 3 - the boundary between the new evidence ranker and every existing CandidateFile consumer.
-//      Not called from index.ts/rank-candidates.ts yet - stays behind the item 6 shadow boundary.
+// pos: Task 25 production boundary between the evidence ranker and existing CandidateFile consumers.
+//      rank-candidates.ts calls this after evidence normalization.
 import { classifyPath } from "../repo-layout.js";
 import type { CandidateFile, ResolvedAnchor, RouterPosition, ScoreBreakdownItem } from "../agent-types.js";
 import { candidateFromAnchor } from "./candidate-collectors.js";

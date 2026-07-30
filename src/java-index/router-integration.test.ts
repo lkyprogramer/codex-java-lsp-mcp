@@ -253,7 +253,8 @@ test("complete JavaIndex resolves implementation relations even when naming reca
     const impact = await router.impact(options({
       anchors: [{ file: gateway, line: 4, column: 18 }],
       profile: "port",
-      taskKeywords: ["payment"]
+      taskKeywords: ["payment"],
+      verbosity: "diagnostic"
     }));
 
     assert.ok(rg.calls > 0, "normal naming recall remains a separate asynchronous collector");
@@ -262,6 +263,13 @@ test("complete JavaIndex resolves implementation relations even when naming reca
     assert.ok(
       Array.isArray(implementationCandidate.reasons) && implementationCandidate.reasons.includes("typeGraph:implementation-lookup"),
       "interface implementations must retain their protected static-evidence reason"
+    );
+    const commandCandidate = impact.files.find(file => String(file.path).endsWith("PaymentCommand.java"));
+    assert.ok(commandCandidate, "the method parameter must be a production candidate");
+    assert.ok(
+      Array.isArray(commandCandidate.scoreBreakdown)
+      && commandCandidate.scoreBreakdown.some(item => item.id === "finalize.method-relation" && item.delta > 0),
+      "standard production ranking must retain method-relation evidence rather than only adding it in shadow diagnostics"
     );
   } finally {
     await index.close();
