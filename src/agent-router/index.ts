@@ -214,11 +214,11 @@ export class AgentRouter {
     const supportOutcome = await collectSupportEvidence({ ...providerInputBase, existingCandidatePaths: afterSemanticPaths });
 
     const outcomes: ProviderOutcome[] = [...phaseOneOutcomes, liveSemanticOutcome, supportOutcome];
-    // Steps 1-4's normalizer validates and dedupes the typed evidence surface
-    // for Task 25 to score from directly; ranking below still folds
-    // `outcome.candidates` through the unchanged finalizeRank/finalizeScore
-    // pipeline (plan Task 24 Step 8: "rankCandidates may adapt old scoring").
-    const normalized = normalizeEvidence(outcomes.flatMap(outcome => outcome.evidence));
+    // Steps 1-4's normalizer validates and dedupes the typed evidence surface;
+    // family-ranker.ts scores directly from it (Task 25 cutover). repoRoot is
+    // required here - it populates module/layer/sourceSet via classifyPath,
+    // which family-ranker.ts's sameModule/crossModule/sourceSet terms need.
+    const normalized = normalizeEvidence(outcomes.flatMap(outcome => outcome.evidence), this.repoRoot);
 
     const suppressed = {
       deferredTests: 0,
@@ -230,9 +230,7 @@ export class AgentRouter {
       options,
       suppressed,
       extraProtectedPaths: protectedReadPlanPaths,
-      javaIndex: this.javaIndex,
-      routingPolicy: this.routingPolicy,
-      generation
+      repoRoot: this.repoRoot
     }));
     const idByPath = new Map(ranked.map((file, index) => [file.absolutePath, `F${index + 1}`]));
     const readPlan = await timed(phaseMs, "buildReadPlan", async () => buildReadPlan({
