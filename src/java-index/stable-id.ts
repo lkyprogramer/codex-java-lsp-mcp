@@ -35,6 +35,15 @@ export function javaFieldId(ownerTypeId: string, fieldName: string): string {
   return `field:${ownerTypeId}#${fieldName}`;
 }
 
+// Parameters have no fact-store entry of their own (unlike fields/methods) -
+// this id only anchors ANNOTATED_WITH edges from a parameter's annotations
+// (e.g. @Autowired/@Qualifier/@Value for Spring injection detection) back to
+// their owning method, positionally. Stable as long as the method's own id
+// is: a parameter reorder changes signatureKey, which changes methodId too.
+export function javaParameterId(methodId: string, index: number): string {
+  return `${methodId}#p${index}`;
+}
+
 export function javaEdgeId(input: {
   kind: string;
   fromId: string;

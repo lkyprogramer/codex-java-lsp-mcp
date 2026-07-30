@@ -61,6 +61,14 @@ export type JavaCallSiteFact = {
   receiverText?: string;
   receiverDeclaredType?: JavaTypeRef;
   arity: number;
+  /**
+   * One entry per argument, aligned by index with the call's actual argument
+   * list (`argumentTypeHints.length === arity`). An argument whose type
+   * cannot be determined from local syntax (anything but a direct
+   * `new T(...)` or an identifier already in scope as a parameter/field/
+   * local variable) gets an UNRESOLVED placeholder rather than an omitted
+   * slot, so callers can index into this array without losing alignment.
+   */
   argumentTypeHints: JavaTypeRef[];
   range: SourceRange;
 };
@@ -87,7 +95,7 @@ export type JavaMethodFacts = {
   annotations: JavaAnnotationFact[];
   typeParameters: JavaTypeParameterFact[];
   returnType?: JavaTypeRef;
-  parameters: Array<{ name: string; type: JavaTypeRef; varargs: boolean; range: SourceRange }>;
+  parameters: Array<{ name: string; type: JavaTypeRef; varargs: boolean; annotations: JavaAnnotationFact[]; range: SourceRange }>;
   throws: JavaTypeRef[];
   callSites: JavaCallSiteFact[];
   localTypes: JavaTypeRef[];

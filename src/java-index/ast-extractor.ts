@@ -401,7 +401,9 @@ function buildMethod(node: JavaSyntaxNode, context: ExtractContext, ownerTypeId:
 function buildParameter(
   node: JavaSyntaxNode,
   source: string
-): { name: string; type: JavaTypeRef; varargs: boolean; range: SourceRange } {
+): { name: string; type: JavaTypeRef; varargs: boolean; annotations: JavaAnnotationFact[]; range: SourceRange } {
+  const modifiersNode = findChildOfType(node, "modifiers");
+  const annotations = extractAnnotations(modifiersNode, source);
   if (node.type === "spread_parameter") {
     const typeNode = node.namedChildren[0];
     const declaratorNode = findChildOfType(node, "variable_declarator");
@@ -412,6 +414,7 @@ function buildParameter(
       name,
       type: { ...elementType, arrayDepth: elementType.arrayDepth + 1 },
       varargs: true,
+      annotations,
       range: rangeOf(node)
     };
   }
@@ -419,7 +422,7 @@ function buildParameter(
   const nameNode = node.childForFieldName("name");
   const name = nameNode ? textOf(nameNode, source) : "";
   const type = typeNode ? buildTypeRef(typeNode, source) : unknownTypeRef(rangeOf(node));
-  return { name, type, varargs: false, range: rangeOf(node) };
+  return { name, type, varargs: false, annotations, range: rangeOf(node) };
 }
 
 function erasedTypeText(type: JavaTypeRef): string {
@@ -543,31 +546,33 @@ function collectCallSites(
       const nameNode = node.childForFieldName("name");
       const objectNode = node.childForFieldName("object");
       const argsNode = node.childForFieldName("arguments");
+      const argumentNodes = argsNode ? argumentNodesOf(argsNode) : [];
       const receiverDeclaredType = objectNode ? receiverTypeOf(objectNode, scope, context) : undefined;
       callSites.push({
         kind: "METHOD_INVOCATION",
         name: nameNode ? textOf(nameNode, context.source) : "",
         ...(objectNode ? { receiverText: textOf(objectNode, context.source) } : {}),
         ...(receiverDeclaredType ? { receiverDeclaredType } : {}),
-        arity: argsNode ? argsNode.namedChildren.length : 0,
-        argumentTypeHints: [],
+        arity: argumentNodes.length,
+        argumentTypeHints: argumentNodes.map(arg => argumentTypeHintOf(arg, scope, context)),
         range: rangeOf(node)
       });
       if (objectNode) collectCallSites(objectNode, context, scope, callSites, localTypes);
-      if (argsNode) for (const arg of argsNode.namedChildren) collectCallSites(arg, context, scope, callSites, localTypes);
+      for (const arg of argumentNodes) collectCallSites(arg, context, scope, callSites, localTypes);
       return;
     }
     case "object_creation_expression": {
       const typeNode = node.childForFieldName("type");
       const argsNode = node.childForFieldName("arguments");
+      const argumentNodes = argsNode ? argumentNodesOf(argsNode) : [];
       callSites.push({
         kind: "CONSTRUCTOR_INVOCATION",
         name: typeNode ? simpleNameOf(textOf(typeNode, context.source)) : "",
-        arity: argsNode ? argsNode.namedChildren.length : 0,
-        argumentTypeHints: [],
+        arity: argumentNodes.length,
+        argumentTypeHints: argumentNodes.map(arg => argumentTypeHintOf(arg, scope, context)),
         range: rangeOf(node)
       });
-      if (argsNode) for (const arg of argsNode.namedChildren) collectCallSites(arg, context, scope, callSites, localTypes);
+      for (const arg of argumentNodes) collectCallSites(arg, context, scope, callSites, localTypes);
       return;
     }
     case "method_reference": {
@@ -597,6 +602,31 @@ function collectCallSites(
 function receiverTypeOf(node: JavaSyntaxNode, scope: Scope, context: ExtractContext): JavaTypeRef | undefined {
   if (node.type !== "identifier") return undefined;
   return scope.get(textOf(node, context.source));
+}
+
+// tree-sitter-java counts comments as named children of an argument_list, so
+// a raw `namedChildren` read shifts every argument after a leading/interior
+// comment out of position - both `arity` and argumentTypeHints' positional
+// alignment need this filtered view, not just one of them.
+function argumentNodesOf(argsNode: JavaSyntaxNode): JavaSyntaxNode[] {
+  return argsNode.namedChildren.filter(n => n.type !== "line_comment" && n.type !== "block_comment");
+}
+
+// Only the two syntactic shapes an argument's type can be read off directly,
+// without evaluating expressions: a direct `new T(...)` construction, or an
+// identifier already bound in scope (parameter/field/local variable). Every
+// other argument shape (literals, nested calls, casts, field access chains)
+// stays UNRESOLVED rather than guessed - the same "no guessing" contract
+// `buildTypeRef`'s callers already rely on elsewhere in this file.
+function argumentTypeHintOf(node: JavaSyntaxNode, scope: Scope, context: ExtractContext): JavaTypeRef {
+  if (node.type === "object_creation_expression") {
+    const typeNode = node.childForFieldName("type");
+    return typeNode ? buildTypeRef(typeNode, context.source) : unknownTypeRef(rangeOf(node));
+  }
+  if (node.type === "identifier") {
+    return scope.get(textOf(node, context.source)) ?? unknownTypeRef(rangeOf(node));
+  }
+  return unknownTypeRef(rangeOf(node));
 }
 
 function countErrorNodes(node: JavaSyntaxNode): number {

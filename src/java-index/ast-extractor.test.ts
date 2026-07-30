@@ -129,6 +129,97 @@ test("extracted ranges are exact across Chinese text and a surrogate-pair emoji 
   assert.equal(method!.range.start.column, expectedColumn);
 });
 
+test("extractJavaFile extracts parameter annotations, including on a varargs parameter", async () => {
+  const backend = await createJavaParserBackend();
+  const content = [
+    "package demo;",
+    "",
+    "class ParamAnnotations {",
+    "  ParamAnnotations(@Autowired @Qualifier(\"primary\") Service svc) {}",
+    "  void handle(@RequestParam(value = \"id\") String id, @NonNull String... tags) {}",
+    "}",
+    ""
+  ].join("\n");
+  const input = baseInput({ content, relativePath: "src/main/java/demo/ParamAnnotations.java" });
+
+  const result = extractJavaFile(input, backend);
+
+  const ctor = result.methods.find(m => m.constructor)!;
+  assert.deepEqual(ctor.parameters[0]!.annotations.map(a => a.name), ["Autowired", "Qualifier"]);
+
+  const handle = result.methods.find(m => m.name === "handle")!;
+  assert.equal(handle.parameters.length, 2);
+  assert.deepEqual(handle.parameters[0]!.annotations.map(a => a.name), ["RequestParam"]);
+  assert.match(handle.parameters[0]!.annotations[0]!.argumentsText ?? "", /value = "id"/);
+  assert.equal(handle.parameters[1]!.varargs, true);
+  assert.deepEqual(handle.parameters[1]!.annotations.map(a => a.name), ["NonNull"]);
+});
+
+test("a leading block comment in an argument list does not shift arity or argumentTypeHints out of position", async () => {
+  const backend = await createJavaParserBackend();
+  const content = [
+    "package demo;",
+    "",
+    "class CommentedCall {",
+    "  void handle(Order order) {",
+    "    publish(/* note */ order);",
+    "  }",
+    "  void publish(Order o) {}",
+    "}",
+    ""
+  ].join("\n");
+  const input = baseInput({ content, relativePath: "src/main/java/demo/CommentedCall.java" });
+
+  const result = extractJavaFile(input, backend);
+  const publishCall = result.methods.find(m => m.name === "handle")!.callSites.find(c => c.name === "publish")!;
+
+  assert.equal(publishCall.arity, 1, "the comment must not be counted as an argument");
+  assert.equal(publishCall.argumentTypeHints.length, 1);
+  assert.equal(publishCall.argumentTypeHints[0]!.simpleName, "Order");
+});
+
+test("extractJavaFile binds call-site arguments to their type where the syntax makes it unambiguous", async () => {
+  const backend = await createJavaParserBackend();
+  const content = [
+    "package demo;",
+    "",
+    "class ArgHints {",
+    "  private Publisher publisher;",
+    "  void handle(Order order) {",
+    "    Order local = order;",
+    "    publisher.publishNew(new OrderCreated(order));",
+    "    publisher.publishParam(order);",
+    "    publisher.publishLocal(local);",
+    "    publisher.publishField(publisher);",
+    "    publisher.publishUnknown(order.toString());",
+    "  }",
+    "}",
+    ""
+  ].join("\n");
+  const input = baseInput({ content, relativePath: "src/main/java/demo/ArgHints.java" });
+
+  const result = extractJavaFile(input, backend);
+  const handle = result.methods.find(m => m.name === "handle")!;
+  const callSite = (name: string) => handle.callSites.find(c => c.name === name)!;
+
+  // A direct `new T(...)` argument's type is read off the constructed type itself.
+  assert.equal(callSite("publishNew").argumentTypeHints[0]!.simpleName, "OrderCreated");
+  // An identifier already bound in scope as a parameter/local/field resolves
+  // to that binding's declared type, not the constructed argument's type.
+  assert.equal(callSite("publishParam").argumentTypeHints[0]!.simpleName, "Order");
+  assert.equal(callSite("publishLocal").argumentTypeHints[0]!.simpleName, "Order");
+  assert.equal(callSite("publishField").argumentTypeHints[0]!.simpleName, "Publisher");
+  // A nested call's result type is not guessed - stays an UNRESOLVED placeholder.
+  const unknownHint = callSite("publishUnknown").argumentTypeHints[0]!;
+  assert.equal(unknownHint.simpleName, "");
+  assert.equal(unknownHint.resolution.state, "UNRESOLVED");
+  // Every call in this test has exactly one argument - alignment must hold even
+  // for the unresolved case, not just the resolvable ones.
+  for (const name of ["publishNew", "publishParam", "publishLocal", "publishField", "publishUnknown"]) {
+    assert.equal(callSite(name).argumentTypeHints.length, callSite(name).arity);
+  }
+});
+
 function lineColToIndex(text: string, position: { line: number; column: number }): number {
   const lines = text.split("\n");
   let index = 0;

@@ -25,6 +25,14 @@ const BUILD_MARKER_RELATIVE_PATHS = [
   ".mvn/jvm.config"
 ];
 
+// Bumped whenever ast-extractor.ts's fact shape changes in a way that isn't
+// already covered by a schemaVersion bump. `extractor-code-${gitSha}` below
+// only changes on a new commit (git rev-parse HEAD, blind to uncommitted or
+// same-commit source edits) - this is the mechanism that reliably
+// invalidates snapshots produced by an older extractor even when gitSha
+// hasn't moved. Bump on every extractor fact-shape change, not just this one.
+const JAVA_FACTS_REVISION = 2;
+
 // Process-wide and constant for the life of this runtime: identifies the
 // exact parser/extractor combination that produced a snapshot's facts, so a
 // parser or extractor-code fix invalidates old AST caches rather than
@@ -33,7 +41,7 @@ export function computeExtractorVersion(): string {
   const treeSitterVersion = (require("tree-sitter/package.json") as { version: string }).version;
   const treeSitterJavaVersion = (require("tree-sitter-java/package.json") as { version: string }).version;
   const buildHash = readRuntimeBuild().gitSha;
-  return `schema-2|tree-sitter-${treeSitterVersion}|tree-sitter-java-${treeSitterJavaVersion}|extractor-code-${buildHash}`;
+  return `schema-2|facts-${JAVA_FACTS_REVISION}|tree-sitter-${treeSitterVersion}|tree-sitter-java-${treeSitterJavaVersion}|extractor-code-${buildHash}`;
 }
 
 /**

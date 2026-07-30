@@ -8,6 +8,7 @@ import { extractJavaFile, type ExtractedJavaFile, type ExtractJavaInput } from "
 import { JavaNameResolver, buildTypeRegistryView } from "./name-resolver.js";
 import { buildStaticEdges, resolveFileRefs } from "./edge-builder.js";
 import type { StaticEdge, StaticEdgeKind } from "./index-types.js";
+import { javaParameterId } from "./stable-id.js";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const fixturesRoot = path.resolve(dirname, "..", "..", "fixtures", "java-index-v2");
@@ -206,6 +207,121 @@ test("IMPORTS and ANNOTATED_WITH edges resolve to external: nodes for names neve
   assert.ok(annotatedWithEdge, "expected an ANNOTATED_WITH edge from ComplexJava to external:java.lang.Deprecated");
   assert.equal(annotatedWithEdge!.confidence, 0.98);
   assert.equal(annotatedWithEdge!.resolution.typeStrategy, "JAVA_LANG");
+});
+
+test("a constructor parameter annotation produces an ANNOTATED_WITH edge from the parameter's synthetic id", async () => {
+  const backend = await createJavaParserBackend();
+  const source = [
+    "package demo;",
+    "",
+    "import org.springframework.beans.factory.annotation.Autowired;",
+    "",
+    "class ParamAnnotationEdges {",
+    "  ParamAnnotationEdges(@Autowired Service svc) {}",
+    "}",
+    ""
+  ].join("\n");
+  const raw = extractFromRawSource(backend, source, "src/main/java/demo/ParamAnnotationEdges.java");
+  const registry = buildTypeRegistryView(raw.types, raw.methods);
+  const resolver = new JavaNameResolver(registry);
+  const resolved = resolveFileRefs(raw, resolver, registry);
+  const resolvedRegistry = buildTypeRegistryView(resolved.types, resolved.methods);
+  const edges = buildStaticEdges(resolved, resolvedRegistry, resolver);
+
+  const ctor = resolved.methods.find(m => m.constructor)!;
+  const paramId = javaParameterId(ctor.methodId, 0);
+
+  const edge = findEdge(edges, paramId, "external:org.springframework.beans.factory.annotation.Autowired", "ANNOTATED_WITH");
+  assert.ok(edge, "expected an ANNOTATED_WITH edge from the constructor's first parameter to the resolved @Autowired import");
+  assert.equal(edge!.resolution.typeStrategy, "EXPLICIT_IMPORT");
+});
+
+test("a repo-defined parameter annotation (e.g. a custom @CurrentUser) resolves to the repo type, not an external: node", async () => {
+  const backend = await createJavaParserBackend();
+  const source = [
+    "package demo;",
+    "",
+    "class RepoParamAnnotation {",
+    "  void handle(@CurrentUser User caller) {}",
+    "}",
+    "",
+    "@interface CurrentUser {}",
+    ""
+  ].join("\n");
+  const raw = extractFromRawSource(backend, source, "src/main/java/demo/RepoParamAnnotation.java");
+  const registry = buildTypeRegistryView(raw.types, raw.methods);
+  const resolver = new JavaNameResolver(registry);
+  const resolved = resolveFileRefs(raw, resolver, registry);
+  const resolvedRegistry = buildTypeRegistryView(resolved.types, resolved.methods);
+  const edges = buildStaticEdges(resolved, resolvedRegistry, resolver);
+
+  const owner = resolved.types.find(t => t.simpleName === "RepoParamAnnotation")!;
+  const currentUser = resolved.types.find(t => t.simpleName === "CurrentUser")!;
+  const handle = resolved.methods.find(m => m.ownerTypeId === owner.typeId && m.name === "handle")!;
+  const paramId = javaParameterId(handle.methodId, 0);
+
+  const edge = findEdge(edges, paramId, currentUser.typeId, "ANNOTATED_WITH");
+  assert.ok(edge, "expected a repo-defined parameter annotation to resolve RESOLVED_REPO, not external:");
+  assert.equal(edge!.resolution.kind, "TYPE_REFERENCE");
+});
+
+test("an ambiguous/unimported parameter annotation produces no ANNOTATED_WITH edge", async () => {
+  const backend = await createJavaParserBackend();
+  const source = [
+    "package demo;",
+    "",
+    "class UnresolvedParamAnnotation {",
+    "  UnresolvedParamAnnotation(@Qualifier(\"x\") Service svc) {}",
+    "}",
+    ""
+  ].join("\n");
+  const raw = extractFromRawSource(backend, source, "src/main/java/demo/UnresolvedParamAnnotation.java");
+  const registry = buildTypeRegistryView(raw.types, raw.methods);
+  const resolver = new JavaNameResolver(registry);
+  const resolved = resolveFileRefs(raw, resolver, registry);
+  const resolvedRegistry = buildTypeRegistryView(resolved.types, resolved.methods);
+  const edges = buildStaticEdges(resolved, resolvedRegistry, resolver);
+
+  const ctor = resolved.methods.find(m => m.constructor)!;
+  const paramId = javaParameterId(ctor.methodId, 0);
+
+  assert.equal(
+    edges.filter(e => e.fromId === paramId && e.kind === "ANNOTATED_WITH").length,
+    0,
+    "a short annotation name with no matching import must not guess a target"
+  );
+});
+
+test("a call argument's structured type hint resolves to its repo type via the same pass that resolves method parameters", async () => {
+  const backend = await createJavaParserBackend();
+  const source = [
+    "package demo;",
+    "",
+    "class ArgHintCaller {",
+    "  void handle() {",
+    "    publish(new Marker());",
+    "  }",
+    "  void publish(Object o) {}",
+    "}",
+    "",
+    "class Marker {}",
+    ""
+  ].join("\n");
+  const raw = extractFromRawSource(backend, source, "src/main/java/demo/ArgHintCaller.java");
+  const registry = buildTypeRegistryView(raw.types, raw.methods);
+  const resolver = new JavaNameResolver(registry);
+  const resolved = resolveFileRefs(raw, resolver, registry);
+
+  const caller = resolved.types.find(t => t.simpleName === "ArgHintCaller")!;
+  const marker = resolved.types.find(t => t.simpleName === "Marker")!;
+  const handle = resolved.methods.find(m => m.ownerTypeId === caller.typeId && m.name === "handle")!;
+  const publishCall = handle.callSites.find(c => c.name === "publish")!;
+
+  const hint = publishCall.argumentTypeHints[0]!;
+  assert.equal(hint.resolution.state, "RESOLVED_REPO");
+  if (hint.resolution.state === "RESOLVED_REPO") {
+    assert.equal(hint.resolution.typeId, marker.typeId);
+  }
 });
 
 function extractFromRawSource(backend: JavaParserBackend, content: string, relativePath: string): ExtractedJavaFile {

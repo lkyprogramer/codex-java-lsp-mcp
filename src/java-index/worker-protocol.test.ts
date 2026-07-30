@@ -163,12 +163,14 @@ function fullBundle(): JavaFileBundle {
         name: "id",
         type: stringRef,
         varargs: false,
+        annotations: [annotation],
         range: { start: { line: 10, column: 15 }, end: { line: 10, column: 25 } }
       },
       {
         name: "rest",
         type: typeVarRef,
         varargs: true,
+        annotations: [],
         range: { start: { line: 10, column: 26 }, end: { line: 10, column: 35 } }
       }
     ],

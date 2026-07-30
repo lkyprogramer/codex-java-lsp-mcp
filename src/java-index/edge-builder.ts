@@ -9,7 +9,7 @@ import type {
   TypeResolutionStrategy
 } from "./index-types.js";
 import type { SourceRange } from "../runtime/source-range.js";
-import { javaEdgeId } from "./stable-id.js";
+import { javaEdgeId, javaParameterId } from "./stable-id.js";
 import { JavaNameResolver, type JavaResolutionContext, type TypeRegistryView } from "./name-resolver.js";
 
 // Confidence keys on strategy name, not resolution state - EXTERNAL/QUALIFIED
@@ -353,10 +353,11 @@ export function buildStaticEdges(
       const target = repoEdgeTarget(method.returnType);
       if (target) pushEdge(method.methodId, target.toId, "RETURN_TYPE", target.confidence, method.returnType.range, "TYPE_REFERENCE", target.typeStrategy);
     }
-    for (const param of method.parameters) {
+    method.parameters.forEach((param, index) => {
       const target = repoEdgeTarget(param.type);
       if (target) pushEdge(method.methodId, target.toId, "PARAM_TYPE", target.confidence, param.type.range, "TYPE_REFERENCE", target.typeStrategy);
-    }
+      annotationEdges(javaParameterId(method.methodId, index), param.annotations, methodCtx);
+    });
     for (const ref of method.throws) {
       const target = repoEdgeTarget(ref);
       if (target) pushEdge(method.methodId, target.toId, "THROWS_TYPE", target.confidence, ref.range, "TYPE_REFERENCE", target.typeStrategy);

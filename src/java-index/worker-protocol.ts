@@ -326,14 +326,17 @@ function validateJavaFieldFacts(value: unknown, context: string): JavaFieldFacts
 function validateJavaMethodParameter(
   value: unknown,
   context: string
-): { name: string; type: JavaTypeRef; varargs: boolean; range: SourceRange } {
+): { name: string; type: JavaTypeRef; varargs: boolean; annotations: JavaAnnotationFact[]; range: SourceRange } {
   const source = record(value, context);
   if (!isString(source.name)) invalid(context, "name");
   if (!isBoolean(source.varargs)) invalid(context, "varargs");
+  const annotations = array(source.annotations, `${context}.annotations`)
+    .map((entry, index) => validateJavaAnnotationFact(entry, `${context}.annotations[${index}]`));
   return {
     name: source.name,
     type: validateJavaTypeRef(source.type, `${context}.type`),
     varargs: source.varargs,
+    annotations,
     range: validateSourceRange(source.range, `${context}.range`)
   };
 }

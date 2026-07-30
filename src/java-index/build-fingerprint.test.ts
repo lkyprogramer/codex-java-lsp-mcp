@@ -16,9 +16,9 @@ function write(root: string, relativePath: string, content: string): void {
   writeFileSync(absolutePath, content);
 }
 
-test("computeExtractorVersion follows the schema-2|tree-sitter-<v>|tree-sitter-java-<v>|extractor-code-<hash> format", () => {
+test("computeExtractorVersion follows the schema-2|facts-<n>|tree-sitter-<v>|tree-sitter-java-<v>|extractor-code-<hash> format", () => {
   const version = computeExtractorVersion();
-  assert.match(version, /^schema-2\|tree-sitter-[^|]+\|tree-sitter-java-[^|]+\|extractor-code-.+$/);
+  assert.match(version, /^schema-2\|facts-\d+\|tree-sitter-[^|]+\|tree-sitter-java-[^|]+\|extractor-code-.+$/);
   assert.equal(computeExtractorVersion(), version, "must be stable across calls within one process");
 });
 
