@@ -21,15 +21,22 @@ export const SPRING_MAPPING_ANNOTATIONS: ReadonlyMap<string, string> = new Map([
   ["org.springframework.web.bind.annotation.PatchMapping", "PATCH"]
 ]);
 
+export const SPRING_REQUEST_MAPPING_FQN = "org.springframework.web.bind.annotation.RequestMapping";
+export const SPRING_REQUEST_BODY_FQN = "org.springframework.web.bind.annotation.RequestBody";
+export const SPRING_EVENT_LISTENER_FQN = "org.springframework.context.event.EventListener";
+export const SPRING_BEAN_FQN = "org.springframework.context.annotation.Bean";
+export const SPRING_TRANSACTIONAL_FQN = "org.springframework.transaction.annotation.Transactional";
+export const SPRING_AUTOWIRED_FQN = "org.springframework.beans.factory.annotation.Autowired";
+
 export const SPRING_ANNOTATIONS: ReadonlySet<string> = new Set([
   ...SPRING_STEREOTYPE_ANNOTATIONS,
   ...SPRING_MAPPING_ANNOTATIONS.keys(),
-  "org.springframework.web.bind.annotation.RequestMapping",
-  "org.springframework.web.bind.annotation.RequestBody",
-  "org.springframework.context.event.EventListener",
-  "org.springframework.context.annotation.Bean",
-  "org.springframework.transaction.annotation.Transactional",
-  "org.springframework.beans.factory.annotation.Autowired"
+  SPRING_REQUEST_MAPPING_FQN,
+  SPRING_REQUEST_BODY_FQN,
+  SPRING_EVENT_LISTENER_FQN,
+  SPRING_BEAN_FQN,
+  SPRING_TRANSACTIONAL_FQN,
+  SPRING_AUTOWIRED_FQN
 ]);
 
 export function findAnnotation(

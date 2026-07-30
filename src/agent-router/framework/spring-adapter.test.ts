@@ -193,8 +193,9 @@ test("springAdapter.collect emits SPRING_INJECTION for OrderController->OrderSer
     const context = await frameworkContextFor(router, repoRoot, [anchor(candidateFiles[0]!)], candidateFiles);
 
     const result = await springAdapter.collect(context);
+    const injections = result.outcome.evidence.filter(s => s.kind === "SPRING_INJECTION");
 
-    const byTarget = new Map(result.outcome.evidence.map(s => [s.candidateFile, s]));
+    const byTarget = new Map(injections.map(s => [s.candidateFile, s]));
     const toService = byTarget.get(file("src/main/java/demo/OrderService.java"));
     assert.ok(toService, "OrderController's constructor injects OrderService");
     assert.equal(toService!.kind, "SPRING_INJECTION");
@@ -209,11 +210,134 @@ test("springAdapter.collect emits SPRING_INJECTION for OrderController->OrderSer
 
     // ApplicationEventPublisher is Spring's own external type - no repo file
     // exists to recommend, so it must not produce a broken/guessed signal.
-    assert.equal(result.outcome.evidence.length, 2, "exactly the two repo-resolved injection targets, nothing for the external publisher");
+    assert.equal(injections.length, 2, "exactly the two repo-resolved injection targets, nothing for the external publisher");
     assert.equal(result.outcome.completion, "COMPLETE");
+  } finally {
+    await router.close();
+  }
+});
 
-    const candidatePaths = result.outcome.candidates.map(c => c.absolutePath).sort();
-    assert.deepEqual(candidatePaths, [file("src/main/java/demo/OrderRepository.java"), file("src/main/java/demo/OrderService.java")].sort());
+test("springAdapter.collect emits SPRING_CALL_PATH only for OrderController.create -> OrderService.create, not for OrderService.create (which has three resolved calls, not one)", async () => {
+  const router = await readyRouter();
+  try {
+    const controller = await router.frameworkFactsFor(file("src/main/java/demo/OrderController.java"));
+    const createMethod = controller.methods.find(m => m.name === "create")!;
+    const { callees: expectedCallees } = await router.resolvedCallees(createMethod.methodId, 80);
+    const expectedConfidence = expectedCallees.find(c => c.kind === "CALLS")!.confidence;
+
+    const candidateFiles = [
+      file("src/main/java/demo/OrderController.java"),
+      file("src/main/java/demo/OrderService.java")
+    ];
+    const context = await frameworkContextFor(router, repoRoot, [anchor(candidateFiles[0]!)], candidateFiles);
+
+    const result = await springAdapter.collect(context);
+    const callPaths = result.outcome.evidence.filter(s => s.kind === "SPRING_CALL_PATH");
+
+    assert.equal(callPaths.length, 1, "OrderService.create's three resolved calls must not produce a false 'exactly one' call path");
+    assert.equal(callPaths[0]!.sourceFile, file("src/main/java/demo/OrderController.java"));
+    assert.equal(callPaths[0]!.candidateFile, file("src/main/java/demo/OrderService.java"));
+    assert.equal(callPaths[0]!.family, "FRAMEWORK");
+    assert.equal(callPaths[0]!.weight, 100);
+    assert.equal(callPaths[0]!.confidence, expectedConfidence, "confidence must be the CALLS edge's own resolved confidence, not an invented number");
+  } finally {
+    await router.close();
+  }
+});
+
+test("springAdapter.collect emits SPRING_REQUEST_BODY (OrderController.create -> OrderRequest) and SPRING_RESPONSE_TYPE (OrderController.create -> OrderResponse)", async () => {
+  const router = await readyRouter();
+  try {
+    const candidateFiles = [file("src/main/java/demo/OrderController.java")];
+    const context = await frameworkContextFor(router, repoRoot, [anchor(candidateFiles[0]!)], candidateFiles);
+
+    const result = await springAdapter.collect(context);
+
+    const requestBody = result.outcome.evidence.find(s => s.kind === "SPRING_REQUEST_BODY");
+    assert.ok(requestBody);
+    assert.equal(requestBody!.candidateFile, file("src/main/java/demo/OrderRequest.java"));
+    assert.equal(requestBody!.sourceFile, file("src/main/java/demo/OrderController.java"));
+    assert.equal(requestBody!.weight, 70);
+
+    const responseType = result.outcome.evidence.find(s => s.kind === "SPRING_RESPONSE_TYPE");
+    assert.ok(responseType);
+    assert.equal(responseType!.candidateFile, file("src/main/java/demo/OrderResponse.java"));
+    assert.equal(responseType!.weight, 70);
+
+    assert.deepEqual(result.metadata, {
+      endpoints: [{ methodId: (await router.frameworkFactsFor(candidateFiles[0]!)).methods.find(m => m.name === "create")!.methodId, httpMethods: ["POST"], paths: ["/orders"] }],
+      transactionalMethodIds: []
+    });
+  } finally {
+    await router.close();
+  }
+});
+
+test("springAdapter.collect emits SPRING_PUBLISHES_EVENT (OrderService.create -> OrderCreated) and SPRING_CONSUMES_EVENT (OrderListener.on -> OrderCreated), merged onto one candidate", async () => {
+  const router = await readyRouter();
+  try {
+    const candidateFiles = [
+      file("src/main/java/demo/OrderService.java"),
+      file("src/main/java/demo/OrderListener.java")
+    ];
+    const context = await frameworkContextFor(router, repoRoot, [anchor(candidateFiles[0]!)], candidateFiles);
+
+    const result = await springAdapter.collect(context);
+
+    const publishes = result.outcome.evidence.find(s => s.kind === "SPRING_PUBLISHES_EVENT");
+    assert.ok(publishes);
+    assert.equal(publishes!.sourceFile, file("src/main/java/demo/OrderService.java"));
+    assert.equal(publishes!.candidateFile, file("src/main/java/demo/OrderCreated.java"));
+    assert.equal(publishes!.weight, 85);
+
+    const consumes = result.outcome.evidence.find(s => s.kind === "SPRING_CONSUMES_EVENT");
+    assert.ok(consumes);
+    assert.equal(consumes!.sourceFile, file("src/main/java/demo/OrderListener.java"));
+    assert.equal(consumes!.candidateFile, file("src/main/java/demo/OrderCreated.java"));
+    assert.equal(consumes!.weight, 85);
+
+    const merged = result.outcome.candidates.find(c => c.absolutePath === file("src/main/java/demo/OrderCreated.java"));
+    assert.ok(merged, "both edges point at the same event type, so they must merge into one candidate");
+    assert.deepEqual(merged!.reasons.sort(), ["SPRING_CONSUMES_EVENT", "SPRING_PUBLISHES_EVENT"]);
+
+    assert.deepEqual(result.metadata, {
+      endpoints: [],
+      transactionalMethodIds: [(await router.frameworkFactsFor(candidateFiles[0]!)).methods.find(m => m.name === "create")!.methodId]
+    });
+  } finally {
+    await router.close();
+  }
+});
+
+test("springAdapter.collect emits SPRING_BEAN_PRODUCES for a @Bean method's return type", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "spring-adapter-bean-"));
+  write(root, "src/main/java/demo/Client.java", "package demo;\nclass Client {}\n");
+  write(
+    root,
+    "src/main/java/demo/AppConfig.java",
+    [
+      "package demo;",
+      "",
+      "import org.springframework.context.annotation.Bean;",
+      "",
+      "class AppConfig {",
+      "  @Bean",
+      "  Client client() { return new Client(); }",
+      "}",
+      ""
+    ].join("\n")
+  );
+  const router = await readyRouterAt(root);
+  try {
+    const candidateFile = path.join(root, "src/main/java/demo/AppConfig.java");
+    const context = await frameworkContextFor(router, root, [anchor(candidateFile)], [candidateFile]);
+
+    const result = await springAdapter.collect(context);
+    const produces = result.outcome.evidence.find(s => s.kind === "SPRING_BEAN_PRODUCES");
+
+    assert.ok(produces, "a @Bean method must produce evidence even though AppConfig itself carries no recognized stereotype annotation");
+    assert.equal(produces!.candidateFile, path.join(root, "src/main/java/demo/Client.java"));
+    assert.equal(produces!.weight, 75);
   } finally {
     await router.close();
   }
@@ -273,17 +397,19 @@ test("springAdapter.collect produces no injection signal for a plain (non-stereo
   }
 });
 
-test("running springAdapter through runFrameworkAdapters against the real fixture yields the same SPRING_INJECTION evidence as a direct collect() call", async () => {
+test("running springAdapter through runFrameworkAdapters against the real fixture yields the same evidence as a direct collect() call", async () => {
   const router = await readyRouter();
   try {
     const candidateFiles = [file("src/main/java/demo/OrderController.java"), file("src/main/java/demo/OrderService.java")];
     const context = await frameworkContextFor(router, repoRoot, [anchor(candidateFiles[0]!)], candidateFiles);
 
+    const directResult = await springAdapter.collect(context);
     const runResult = await runFrameworkAdapters([springAdapter], context);
 
     assert.equal(runResult.outcome.providerId, "framework");
-    assert.equal(runResult.outcome.evidence.length, 2);
-    assert.ok(runResult.outcome.evidence.every(s => s.kind === "SPRING_INJECTION"));
+    assert.deepEqual(runResult.outcome.evidence, directResult.outcome.evidence);
+    assert.ok(runResult.outcome.evidence.length > 1, "the full rule set (injection, call path, request body, response type, publishes event) must all be present, not just one kind");
+    assert.deepEqual(new Set(runResult.outcome.evidence.map(s => s.kind)), new Set(["SPRING_INJECTION", "SPRING_CALL_PATH", "SPRING_REQUEST_BODY", "SPRING_RESPONSE_TYPE", "SPRING_PUBLISHES_EVENT"]));
     assert.deepEqual(runResult.diagnostics, []);
   } finally {
     await router.close();

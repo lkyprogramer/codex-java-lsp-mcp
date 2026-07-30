@@ -61,6 +61,8 @@ export type FrameworkMethodDeclaration = {
   constructor: boolean;
   annotations: FrameworkAnnotation[];
   parameters: FrameworkParameter[];
+  /** Absent for void methods and constructors - mirrors JavaMethodFacts.returnType's own "no entry for void" convention, so a caller can gate on presence alone. */
+  returnType?: FrameworkTypeRef;
   callSites: FrameworkCallSite[];
 };
 
@@ -326,6 +328,7 @@ function bundleToDeclarations(bundle: JavaFileBundle): FrameworkDeclarations {
       name: method.name,
       constructor: method.constructor,
       annotations: toFrameworkAnnotations(method.methodId, method.annotations, annotatedWithByFromId),
+      ...(method.returnType ? { returnType: toFrameworkTypeRef(method.returnType) } : {}),
       parameters: method.parameters.map((param, index) => ({
         name: param.name,
         type: toFrameworkTypeRef(param.type),
