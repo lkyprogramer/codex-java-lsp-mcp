@@ -15,6 +15,7 @@ import type {
 } from "./index-types.js";
 import {
   CALLEES_LIMIT_DEFAULT,
+  MAX_DECLARATION_IDS_PER_CALL,
   bundleToFrameworkFileFacts,
   bundlesToRequestedDeclarations,
   fqnOfTypeId,
@@ -47,9 +48,12 @@ const REPOSITORY_MARKER_MAX_BYTES = 65_536;
 // declarationsById is a bounded, batched lookup, not an arbitrary bulk
 // export: an uncapped id list (e.g. every callee of a hot method) could
 // resolve to hundreds of distinct files and pull their full bundles across
-// the worker IPC boundary in one call. Mirrors findTypeDefinitions' existing
-// `.slice(0, 64)` convention on its own input list.
-const MAX_DECLARATION_IDS = 64;
+// the worker IPC boundary in one call. The id cap itself is
+// MAX_DECLARATION_IDS_PER_CALL, exported from framework-index-view.ts so a
+// batching caller can chunk against the same number instead of duplicating
+// it; MAX_DECLARATION_PATHS is a second, independent bound purely internal
+// to this method (how many distinct files the bounded ids may still resolve
+// into), so it stays local.
 const MAX_DECLARATION_PATHS = 64;
 
 const TYPE_REFERENCE_EDGE_KINDS: StaticEdgeKind[] = [
@@ -517,7 +521,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
    * paths converge on a single batched queryFiles() call, mirroring
    * typesToFacts()'s existing group-by-file-then-hydrate-once pattern.
    *
-   * Bounded at both ends: more than MAX_DECLARATION_IDS ids are never even
+   * Bounded at both ends: more than MAX_DECLARATION_IDS_PER_CALL ids are never even
    * looked up (reported via `truncated`, not silently accepted), and if the
    * looked-up ids still resolve to more than MAX_DECLARATION_PATHS distinct
    * files, only the first MAX_DECLARATION_PATHS (by id order) are fetched -
@@ -528,7 +532,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
   async declarationsById(ids: readonly string[]): Promise<FrameworkDeclarations> {
     await this.ensureOpened(this.generation);
     const uniqueIds = unique([...ids]);
-    const boundedIds = uniqueIds.slice(0, MAX_DECLARATION_IDS);
+    const boundedIds = uniqueIds.slice(0, MAX_DECLARATION_IDS_PER_CALL);
     const relativePaths = new Set<string>();
     const fqnsNeedingLookup = new Set<string>();
     for (const id of boundedIds) {
@@ -554,8 +558,8 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     const result = bundlesToRequestedDeclarations(bundles, boundedIds);
     return {
       ...result,
-      missingIds: [...result.missingIds, ...uniqueIds.slice(MAX_DECLARATION_IDS)],
-      truncated: uniqueIds.length > MAX_DECLARATION_IDS
+      missingIds: [...result.missingIds, ...uniqueIds.slice(MAX_DECLARATION_IDS_PER_CALL)],
+      truncated: uniqueIds.length > MAX_DECLARATION_IDS_PER_CALL
     };
   }
 

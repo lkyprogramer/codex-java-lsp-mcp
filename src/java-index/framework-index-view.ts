@@ -147,6 +147,17 @@ export interface FrameworkIndexView {
 
 export const CALLEES_LIMIT_DEFAULT = 80;
 
+/**
+ * declarationsById's own per-call cap (mirrors findTypeDefinitions' existing
+ * `.slice(0, 64)` convention) - exported so a caller that expects to name
+ * more than this many ids in one request (e.g. an adapter batching every
+ * evidence target across up to MAX_FRAMEWORK_TRAVERSAL_FILES candidate
+ * files) can chunk its own calls instead of silently losing ids past the
+ * cap, the same way CALLEES_LIMIT_DEFAULT lets a caller reuse the router's
+ * own bound rather than duplicating the number.
+ */
+export const MAX_DECLARATION_IDS_PER_CALL = 64;
+
 /** The owning type id embedded in a "type:"/"type-local:" id (itself) or a "field:"/"method:" id (the prefix before its first "#"). undefined for anything else (e.g. a parameter id - declarationsById does not resolve those; parameters are reached via their owning method). */
 export function ownerTypeIdOf(id: string): string | undefined {
   if (id.startsWith("type:") || id.startsWith("type-local:")) return id;

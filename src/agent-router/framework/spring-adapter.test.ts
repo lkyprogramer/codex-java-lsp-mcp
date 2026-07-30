@@ -343,6 +343,71 @@ test("springAdapter.collect emits SPRING_BEAN_PRODUCES for a @Bean method's retu
   }
 });
 
+test("springAdapter.collect chunks declarationsById past its 64-id-per-call cap instead of silently losing evidence targets beyond it", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "spring-adapter-many-targets-"));
+  const TARGET_COUNT = 70; // > MAX_DECLARATION_IDS_PER_CALL (64) - the whole point of this test
+  const candidateFiles: string[] = [];
+  for (let i = 0; i < TARGET_COUNT; i++) {
+    write(root, `src/main/java/demo/Dep${i}.java`, `package demo;\nclass Dep${i} {}\n`);
+    const servicePath = `src/main/java/demo/Service${i}.java`;
+    write(
+      root,
+      servicePath,
+      [
+        "package demo;",
+        "",
+        "import org.springframework.stereotype.Service;",
+        "",
+        "@Service",
+        `class Service${i} {`,
+        `  private final Dep${i} dep;`,
+        `  Service${i}(Dep${i} dep) { this.dep = dep; }`,
+        "}",
+        ""
+      ].join("\n")
+    );
+    candidateFiles.push(path.join(root, servicePath));
+  }
+  const router = await readyRouterAt(root);
+  try {
+    const context = await frameworkContextFor(router, root, [anchor(candidateFiles[0]!)], candidateFiles);
+
+    const result = await springAdapter.collect(context);
+    const injections = result.outcome.evidence.filter(s => s.kind === "SPRING_INJECTION");
+
+    assert.equal(injections.length, TARGET_COUNT, "every one of the 70 distinct injection targets must resolve, not just the first 64");
+    assert.equal(result.outcome.completion, "COMPLETE");
+    assert.deepEqual(result.diagnostics, []);
+  } finally {
+    await router.close();
+  }
+});
+
+test("springAdapter.collect stops at an already-exhausted deadline instead of scanning any candidate file, and reports PARTIAL_TIMEOUT", async () => {
+  const router = await readyRouter();
+  try {
+    const candidateFiles = [
+      file("src/main/java/demo/OrderController.java"),
+      file("src/main/java/demo/OrderService.java")
+    ];
+    let clockCalls = 0;
+    const expiredNow = () => (clockCalls++ === 0 ? 0 : 1_000_000); // first call is fromTimeout's own deadline computation; every call after is already past it
+    const context: FrameworkAdapterContext = {
+      ...(await frameworkContextFor(router, repoRoot, [anchor(candidateFiles[0]!)], candidateFiles)),
+      budget: DeadlineBudget.fromTimeout(1, expiredNow)
+    };
+
+    const result = await springAdapter.collect(context);
+
+    assert.deepEqual(result.outcome.evidence, [], "a budget that is already exhausted before the first file must not scan any candidate file");
+    assert.equal(result.outcome.completion, "PARTIAL_TIMEOUT");
+    assert.equal(result.diagnostics.length, 1);
+    assert.match(result.diagnostics[0]!, /deadline exhausted after scanning 0 of 2 candidate files/);
+  } finally {
+    await router.close();
+  }
+});
+
 test("springAdapter.collect produces no injection signal for a stereotype class with two constructors and none @Autowired (ambiguous)", async () => {
   const root = mkdtempSync(path.join(tmpdir(), "spring-adapter-ambiguous-ctor-"));
   write(root, "src/main/java/demo/Dep.java", "package demo;\nclass Dep {}\n");

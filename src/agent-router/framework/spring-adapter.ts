@@ -11,7 +11,15 @@ import type { CandidateFile } from "../../agent-types.js";
 import { classifyPath } from "../../repo-layout.js";
 import { breakdown, mergeCandidate } from "../candidate-helpers.js";
 import type { EvidenceCompleteness, EvidenceSignal } from "../evidence.js";
-import type { FrameworkMethodDeclaration, FrameworkTypeRef } from "../../java-index/framework-index-view.js";
+import {
+  MAX_DECLARATION_IDS_PER_CALL,
+  type FrameworkDeclarations,
+  type FrameworkFieldDeclaration,
+  type FrameworkIndexView,
+  type FrameworkMethodDeclaration,
+  type FrameworkTypeDeclaration,
+  type FrameworkTypeRef
+} from "../../java-index/framework-index-view.js";
 import type { TypeResolutionStrategy } from "../../java-index/index-types.js";
 import type { FrameworkAdapter, FrameworkAdapterContext, FrameworkCollectResult } from "./adapter.js";
 import {
@@ -125,6 +133,35 @@ function injectingConstructorOf(ownMethods: readonly FrameworkMethodDeclaration[
   return undefined;
 }
 
+/**
+ * declarationsById caps a single call at MAX_DECLARATION_IDS_PER_CALL (ids
+ * past that are never even looked up) - a request spanning up to
+ * MAX_FRAMEWORK_TRAVERSAL_FILES candidate files across seven rules can
+ * easily name more distinct targets than that in one request, so this
+ * chunks rather than risk silently losing evidence past the cap. Each chunk
+ * is already deduplicated and sized to the cap, so no chunk can itself
+ * report `truncated` (64 ids resolve to at most 64 distinct files, the
+ * router's other, independent bound) - the OR below is defensive, not
+ * expected to ever fire.
+ */
+async function resolveTargets(frameworkIndex: FrameworkIndexView, targetIds: readonly string[]): Promise<FrameworkDeclarations> {
+  const types: FrameworkTypeDeclaration[] = [];
+  const methods: FrameworkMethodDeclaration[] = [];
+  const fields: FrameworkFieldDeclaration[] = [];
+  const missingIds: string[] = [];
+  let truncated = false;
+  for (let offset = 0; offset < targetIds.length; offset += MAX_DECLARATION_IDS_PER_CALL) {
+    const chunk = targetIds.slice(offset, offset + MAX_DECLARATION_IDS_PER_CALL);
+    const result = await frameworkIndex.declarationsById(chunk);
+    types.push(...result.types);
+    methods.push(...result.methods);
+    fields.push(...result.fields);
+    missingIds.push(...result.missingIds);
+    truncated = truncated || result.truncated;
+  }
+  return { types, methods, fields, missingIds, truncated };
+}
+
 async function collect(context: FrameworkAdapterContext): Promise<FrameworkCollectResult> {
   const startedAt = Date.now();
   const status = await context.frameworkIndex.frameworkStatus();
@@ -136,8 +173,20 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
   const transactionalMethodIds: string[] = [];
   const diagnostics: string[] = [];
   let anyCalleesTruncated = false;
+  let timedOut = false;
 
-  for (const absolutePath of context.candidateFiles) {
+  for (const [index, absolutePath] of context.candidateFiles.entries()) {
+    // Per-file, matching runner.ts's own convention ("deadline checked
+    // before each adapter, not mid-adapter... an adapter's own collect() is
+    // responsible for respecting the same budget internally") - the hot path
+    // below is one resolvedCallees worker round-trip per method of every
+    // stereotype type, so a large candidate set is this adapter's real P95
+    // exposure, not the file scan itself.
+    if (context.budget.expired()) {
+      timedOut = true;
+      diagnostics.push(`spring adapter: deadline exhausted after scanning ${index} of ${context.candidateFiles.length} candidate files`);
+      break;
+    }
     const facts = await context.frameworkIndex.frameworkFactsFor(absolutePath, context.generation);
 
     for (const type of facts.types) {
@@ -270,14 +319,13 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
     }
   }
 
-  // Batched, not per-item: a targetId names a type or a method, not
-  // necessarily a repo file (ApplicationEventPublisher et al. are external)
-  // - one declarationsById call resolves every distinct target at once, same
-  // convention as findTypeDefinitions/resolvedCallees consumers elsewhere.
+  // Batched (chunked, not one unbounded call - see resolveTargets): a
+  // targetId names a type or a method, not necessarily a repo file
+  // (ApplicationEventPublisher et al. are external) - resolving every
+  // distinct target this way is the same convention as
+  // findTypeDefinitions/resolvedCallees consumers elsewhere.
   const targetIds = [...new Set(pending.map(item => item.targetId))];
-  const declarations = targetIds.length > 0
-    ? await context.frameworkIndex.declarationsById(targetIds)
-    : { types: [], methods: [], fields: [], missingIds: [], truncated: false };
+  const declarations = await resolveTargets(context.frameworkIndex, targetIds);
   const relativePathById = new Map<string, string>();
   for (const type of declarations.types) relativePathById.set(type.typeId, type.relativePath);
   for (const method of declarations.methods) relativePathById.set(method.methodId, method.relativePath);
@@ -326,7 +374,7 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
       providerVersion: SPRING_ADAPTER_VERSION,
       evidence,
       candidates: [...candidates.values()],
-      completion: declarations.truncated ? "PARTIAL_LIMIT" : "COMPLETE",
+      completion: timedOut ? "PARTIAL_TIMEOUT" : declarations.truncated ? "PARTIAL_LIMIT" : "COMPLETE",
       elapsedMs: Date.now() - startedAt
     },
     metadata,
