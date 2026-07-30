@@ -7,6 +7,7 @@ import type { RoutingPolicy } from "../routing-policy.js";
 import type { DeadlineBudget } from "../runtime/deadline-budget.js";
 import type { CandidateFile, ImpactMode, ImpactOptions, ResolvedAnchor, SemanticPolicy } from "../agent-types.js";
 import { breakdown, mergeCandidate, scoreBase } from "./candidate-helpers.js";
+import { rankReferenceFiles, referenceFileLimit, type ReferenceLocation } from "./reference-ranking.js";
 
 type SemanticSuppressed = {
   /** Locations JDT returned that resolve outside this repository. */
@@ -28,6 +29,11 @@ type SemanticVerifyState = {
   timeout: boolean;
   errorCode?: string;
   externalLocationsSuppressed: number;
+  referenceRawLocations: number;
+  referenceCollapsedFiles: number;
+  referenceReturnedFiles: number;
+  referenceTruncatedByLimit: boolean;
+  referenceRankingMs: number;
 };
 
 type SemanticInput = {
@@ -123,20 +129,43 @@ export async function semanticVerify(input: SemanticVerifyInput): Promise<void> 
       try {
         const references = await input.session.references(anchor.absolutePath, anchor.line, anchor.column, false, input.options.semanticTimeoutMs);
         input.semantic.timeout ||= Date.now() - before >= input.options.semanticTimeoutMs;
-        for (const location of references.items.slice(0, 40)) {
-          const candidate = locationCandidate({ location, reason: "reference", anchor, options: input.options, repoRoot: input.repoRoot, routingPolicy: input.routingPolicy, suppressed });
-          if (candidate) {
-            candidate.confidence = "high";
-            candidate.verifiedBy = ["reference"];
-            mergeCandidate(input.candidates, candidate);
-            if (candidate.absolutePath !== anchor.absolutePath) {
-              verifiedEdges.push({
-                to: candidate.absolutePath,
-                kind: "reference",
-                line: candidate.positions[0]?.line || 1,
-                column: candidate.positions[0]?.column || 1
-              });
-            }
+        const referenceRankingStarted = Date.now();
+        const rawLocations: ReferenceLocation[] = [];
+        const rawItems = references.items.slice(0, MAX_RAW_REFERENCE_LOCATIONS);
+        const truncatedRaw = references.items.length > MAX_RAW_REFERENCE_LOCATIONS;
+        for (const location of rawItems) {
+          const normalized = containedReferenceLocation(input.repoRoot, location, suppressed);
+          if (normalized) {
+            rawLocations.push(normalized);
+          }
+        }
+        const rankedFiles = rankReferenceFiles(rawLocations, {
+          anchorModule: anchor.module,
+          focusModules: input.options.focusModules,
+          taskKeywords: input.options.taskKeywords,
+          testReadMode: input.options.testReadMode,
+          limitFiles: referenceFileLimit(input.options.mode)
+        });
+        input.semantic.referenceRawLocations += rawItems.length;
+        input.semantic.referenceCollapsedFiles += new Set(rawLocations.map(location => location.absolutePath)).size;
+        input.semantic.referenceReturnedFiles += rankedFiles.length;
+        input.semantic.referenceTruncatedByLimit ||= truncatedRaw;
+        input.semantic.referenceRankingMs += Date.now() - referenceRankingStarted;
+        for (const file of rankedFiles) {
+          const candidate = candidateFromRankedReference(file, anchor, input.options, input.repoRoot, input.routingPolicy);
+          candidate.confidence = "high";
+          candidate.verifiedBy = ["reference"];
+          mergeCandidate(input.candidates, candidate);
+          // maxRawLocations truncation means this outcome did not see every
+          // reference JDT has - persisting it as a complete edge would let a
+          // later request trust an incomplete reference set from cache.
+          if (!truncatedRaw && candidate.absolutePath !== anchor.absolutePath) {
+            verifiedEdges.push({
+              to: candidate.absolutePath,
+              kind: "reference",
+              line: candidate.positions[0]?.line || 1,
+              column: candidate.positions[0]?.column || 1
+            });
           }
         }
         if (shouldUseTypeHierarchyVerify(anchor, input.options)) {
@@ -238,6 +267,76 @@ function locationCandidate(input: LocationCandidateInput): CandidateFile | undef
     confidence: "high",
     verifiedBy: [semanticVerifiedBy(input.reason)],
     scoreBreakdown: [breakdown(`semantic.${input.reason}`, "semantic-seed", score, input.reason)]
+  };
+}
+
+/**
+ * Task 26 Step 4's resource guard: a request pathologically referenced from
+ * thousands of locations must not spend unbounded collapse/rank time or
+ * memory. This is separate from `referenceFileLimit` - that is the value
+ * truncation every request hits; this is a rare safety cap that also voids
+ * this outcome's persisted-edge writes (see the `truncatedRaw` check at the
+ * call site) because a result built from a truncated raw set cannot be
+ * trusted as a complete reference edge for later cache reuse.
+ */
+const MAX_RAW_REFERENCE_LOCATIONS = 5000;
+
+/** The containment-check half of locationCandidate, without its scoring - reference ranking scores by file, not by raw location. */
+function containedReferenceLocation(
+  repoRoot: string,
+  location: LspLocation | LspLocationLink,
+  suppressed: SemanticSuppressed
+): ReferenceLocation | undefined {
+  const normalized = normalizeRepoLocation(repoRoot, location);
+  if (!normalized) {
+    suppressed.externalLocations += 1;
+    return undefined;
+  }
+  const context = classifyPath(repoRoot, normalized.absolutePath);
+  return {
+    absolutePath: normalized.absolutePath,
+    line: normalized.range.start.line,
+    column: normalized.range.start.column,
+    module: context.module,
+    layer: context.layer,
+    sourceSet: context.sourceSet
+  };
+}
+
+/**
+ * Positions keep every raw occurrence in encounter order, capped by
+ * candidate-helpers' downstream MAX_POSITIONS truncation - not yet the
+ * "first method-body / first type-level / first remaining" preference plan
+ * Step 2 describes. That preference needs a JavaIndex range lookup per
+ * position; doing it before this file already survived value-ranking would
+ * spend it on the hundreds of low-value files rankReferenceFiles is about to
+ * discard. Deferred rather than threading a new JavaIndex dependency into
+ * this JDT-only module for a display-order refinement.
+ */
+function candidateFromRankedReference(
+  file: { path: string; module?: string; layer?: string; sourceSet?: string; totalReferences: number; positions: Array<{ line: number; column: number }> },
+  anchor: ResolvedAnchor,
+  options: ImpactOptions,
+  repoRoot: string,
+  routingPolicy: RoutingPolicy
+): CandidateFile {
+  const context = classifyPath(repoRoot, file.path);
+  const score = scoreBase(routingPolicy, "semantic", context, anchor, options) + 80;
+  return {
+    absolutePath: file.path,
+    path: context.relativePath,
+    module: context.module ?? file.module,
+    layer: context.layer ?? file.layer,
+    sourceSet: context.sourceSet ?? file.sourceSet,
+    score,
+    matchCount: file.totalReferences,
+    // Plan Step 2: up to 3 representative positions per file.
+    positions: file.positions.slice(0, 3).map(position => ({ line: position.line, column: position.column })),
+    categories: ["semantic"],
+    reasons: ["reference"],
+    confidence: "high",
+    verifiedBy: [semanticVerifiedBy("reference")],
+    scoreBreakdown: [breakdown("semantic.reference", "semantic-seed", score, "reference")]
   };
 }
 

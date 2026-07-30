@@ -14,6 +14,16 @@ export type SemanticMetrics = {
   externalLocationsSuppressed: number;
   /** Classification of the last semantic failure, if any. */
   errorCode?: string;
+  /** Task 26: raw repo-contained reference locations processed, capped at maxRawLocations. */
+  referenceRawLocations: number;
+  /** Distinct files those locations collapsed into, before value-ranking truncation. */
+  referenceCollapsedFiles: number;
+  /** Files actually turned into candidates after rankReferenceFiles's limitFiles truncation. */
+  referenceReturnedFiles: number;
+  /** True when raw JDT reference locations exceeded maxRawLocations=5000 for any anchor this request. */
+  referenceTruncatedByLimit: boolean;
+  /** Time spent collapsing and value-ranking reference locations, across all anchors. */
+  referenceRankingMs: number;
 };
 
 export type PersistedSemanticMetrics = {
@@ -55,7 +65,12 @@ export function createSemanticMetrics(options: ImpactOptions): SemanticMetrics {
     verifySkipped: false,
     policy: options.semanticPolicy,
     timeoutMs: options.semanticTimeoutMs,
-    externalLocationsSuppressed: 0
+    externalLocationsSuppressed: 0,
+    referenceRawLocations: 0,
+    referenceCollapsedFiles: 0,
+    referenceReturnedFiles: 0,
+    referenceTruncatedByLimit: false,
+    referenceRankingMs: 0
   };
 }
 

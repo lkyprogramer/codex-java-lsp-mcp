@@ -134,7 +134,10 @@ export async function collectLiveSemanticEvidence(input: ProviderInput): Promise
       family: "EXACT_SEMANTIC" as const,
       provenance: "JDT_EXACT" as const,
       confidence: 0.95,
-      completeness: input.metrics.semantic.timeout ? "PARTIAL" as const : "COMPLETE" as const,
+      completeness: input.metrics.semantic.timeout
+        || (rawReason === "reference" && input.metrics.semantic.referenceTruncatedByLimit)
+        ? "PARTIAL" as const
+        : "COMPLETE" as const,
       weight: liveSemanticWeightBonus(rawReason),
       sourceFile: candidate.absolutePath,
       positions: candidate.positions,
@@ -149,7 +152,11 @@ export async function collectLiveSemanticEvidence(input: ProviderInput): Promise
     providerVersion: SEMANTIC_PROVIDER_VERSION,
     evidence,
     candidates: touched,
-    completion: input.metrics.semantic.timeout ? "PARTIAL_TIMEOUT" : "COMPLETE",
+    completion: input.metrics.semantic.timeout
+      ? "PARTIAL_TIMEOUT"
+      : input.metrics.semantic.referenceTruncatedByLimit
+        ? "PARTIAL_LIMIT"
+        : "COMPLETE",
     elapsedMs: Date.now() - startedAt
   };
 }
