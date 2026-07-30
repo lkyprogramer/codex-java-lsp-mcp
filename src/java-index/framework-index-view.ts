@@ -13,7 +13,8 @@ import type {
   JavaSourceSet,
   JavaTypeKind,
   JavaTypeRef,
-  StaticEdge
+  StaticEdge,
+  TypeResolutionStrategy
 } from "./index-types.js";
 import { javaParameterId } from "./stable-id.js";
 
@@ -32,6 +33,8 @@ export type FrameworkAnnotation = {
 export type FrameworkTypeRef = {
   text: string;
   resolvedFqn?: string;
+  /** Only set alongside resolvedFqn - a QUALIFIED/EXPLICIT_IMPORT/SAME_PACKAGE/ENCLOSING_TYPE/JAVA_LANG resolution is high-confidence; WILDCARD_IMPORT/REPO_UNIQUE_SIMPLE_NAME is a fallback strategy a consumer may want to discount. */
+  strategy?: TypeResolutionStrategy;
 };
 
 export type FrameworkParameter = {
@@ -52,6 +55,8 @@ export type FrameworkCallSite = {
 export type FrameworkMethodDeclaration = {
   methodId: string;
   ownerTypeId: string;
+  /** Repo-relative path of the file this method is declared in - declarationsById's point lookups (e.g. resolvedCallees' targets) have no other way to name the file an EvidenceSignal.candidateFile must point at. */
+  relativePath: string;
   name: string;
   constructor: boolean;
   annotations: FrameworkAnnotation[];
@@ -62,6 +67,7 @@ export type FrameworkMethodDeclaration = {
 export type FrameworkFieldDeclaration = {
   fieldId: string;
   ownerTypeId: string;
+  relativePath: string;
   name: string;
   type: FrameworkTypeRef;
   annotations: FrameworkAnnotation[];
@@ -70,6 +76,7 @@ export type FrameworkFieldDeclaration = {
 export type FrameworkTypeDeclaration = {
   typeId: string;
   fqn?: string;
+  relativePath: string;
   simpleName: string;
   kind: JavaTypeKind;
   annotations: FrameworkAnnotation[];
@@ -174,8 +181,15 @@ function resolvedFqnOfRef(ref: JavaTypeRef): string | undefined {
   return undefined;
 }
 
+function strategyOfRef(ref: JavaTypeRef): TypeResolutionStrategy | undefined {
+  if (ref.resolution.state === "EXTERNAL" || ref.resolution.state === "RESOLVED_REPO") return ref.resolution.strategy;
+  return undefined;
+}
+
 function toFrameworkTypeRef(ref: JavaTypeRef): FrameworkTypeRef {
-  return { text: ref.text, ...(resolvedFqnOfRef(ref) ? { resolvedFqn: resolvedFqnOfRef(ref) } : {}) };
+  const resolvedFqn = resolvedFqnOfRef(ref);
+  const strategy = strategyOfRef(ref);
+  return { text: ref.text, ...(resolvedFqn ? { resolvedFqn } : {}), ...(strategy ? { strategy } : {}) };
 }
 
 /** external:<fqn> / type:<fqn> edge targets both resolve to a plain fqn string here - type-local: targets (an annotation type that is itself a local/anonymous declaration) are left unresolved rather than guessed, consistent with the resolver's existing contract. */
@@ -237,7 +251,7 @@ function coverageOfParseState(parseState: "COMPLETE" | "RECOVERED" | "FAILED"): 
  * is included, `missingIds` is always empty (nothing was "requested").
  */
 export function bundleToFrameworkFileFacts(bundle: JavaFileBundle): FrameworkFileFacts {
-  const declarations = bundleToDeclarations(bundle.types, bundle.fields, bundle.methods, bundle.edges);
+  const declarations = bundleToDeclarations(bundle);
   return {
     ...declarations,
     relativePath: bundle.file.relativePath,
@@ -262,7 +276,7 @@ export function bundlesToRequestedDeclarations(
   const methodsById = new Map<string, FrameworkMethodDeclaration>();
   const fieldsById = new Map<string, FrameworkFieldDeclaration>();
   for (const bundle of bundles) {
-    const declarations = bundleToDeclarations(bundle.types, bundle.fields, bundle.methods, bundle.edges);
+    const declarations = bundleToDeclarations(bundle);
     for (const type of declarations.types) typesById.set(type.typeId, type);
     for (const method of declarations.methods) methodsById.set(method.methodId, method);
     for (const field of declarations.fields) fieldsById.set(field.fieldId, field);
@@ -283,33 +297,32 @@ export function bundlesToRequestedDeclarations(
   return { types, methods, fields, missingIds, truncated: false };
 }
 
-function bundleToDeclarations(
-  types: JavaFileBundle["types"],
-  fields: JavaFileBundle["fields"],
-  methods: JavaFileBundle["methods"],
-  edges: readonly StaticEdge[]
-): FrameworkDeclarations {
-  const annotatedWithByFromId = annotatedWithEdgesByFromId(edges);
+function bundleToDeclarations(bundle: JavaFileBundle): FrameworkDeclarations {
+  const relativePath = bundle.file.relativePath;
+  const annotatedWithByFromId = annotatedWithEdgesByFromId(bundle.edges);
   return {
-    types: types.map(type => ({
+    types: bundle.types.map(type => ({
       typeId: type.typeId,
       ...(type.fqn ? { fqn: type.fqn } : {}),
+      relativePath,
       simpleName: type.simpleName,
       kind: type.kind,
       annotations: toFrameworkAnnotations(type.typeId, type.annotations, annotatedWithByFromId),
       methodIds: type.methodIds,
       fieldIds: type.fieldIds
     })),
-    fields: fields.map(field => ({
+    fields: bundle.fields.map(field => ({
       fieldId: field.fieldId,
       ownerTypeId: field.ownerTypeId,
+      relativePath,
       name: field.name,
       type: toFrameworkTypeRef(field.type),
       annotations: toFrameworkAnnotations(field.fieldId, field.annotations, annotatedWithByFromId)
     })),
-    methods: methods.map(method => ({
+    methods: bundle.methods.map(method => ({
       methodId: method.methodId,
       ownerTypeId: method.ownerTypeId,
+      relativePath,
       name: method.name,
       constructor: method.constructor,
       annotations: toFrameworkAnnotations(method.methodId, method.annotations, annotatedWithByFromId),
