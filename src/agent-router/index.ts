@@ -4,6 +4,7 @@
 import { availableParallelism } from "node:os";
 import { JdtlsSession } from "../jdtls-session.js";
 import type { RouterIndex } from "../java-index/router-java-index.js";
+import type { FrameworkIndexView } from "../java-index/framework-index-view.js";
 import { EdgeStore } from "../edge-store.js";
 import { probeLayout, type LayoutContext } from "../layout-probe.js";
 import { resolveFamilyRankPolicy, resolveRoutingPolicy, type RoutingPolicy } from "../routing-policy.js";
@@ -41,6 +42,7 @@ import { collectLexicalEvidence } from "./providers/lexical-provider.js";
 import { collectLiveSemanticEvidence, collectPersistedSemanticEvidence } from "./providers/semantic-provider.js";
 import { collectSupportEvidence } from "./providers/support-provider.js";
 import { collectRelationshipEvidence } from "./providers/relationship-provider.js";
+import { collectFrameworkEvidence } from "./providers/framework-provider.js";
 import { buildShadowRanking } from "./shadow-ranking.js";
 import {
   type ImpactOptions,
@@ -87,7 +89,11 @@ export class AgentRouter {
   constructor(
     private readonly repoRoot: string,
     private readonly session: JdtlsSession,
-    private readonly javaIndex: RouterIndex,
+    // Every real caller passes a RouterJavaIndex, which implements both -
+    // a separate constructor param for the same underlying object would
+    // just be two names for one instance. See evidence.ts's ProviderInput
+    // comment for why providers still see these as two distinct fields.
+    private readonly javaIndex: RouterIndex & FrameworkIndexView,
     private readonly layoutContext: LayoutContext = probeLayout(repoRoot),
     private readonly edgeStore: EdgeStore = new EdgeStore(repoRoot),
     private readonly routingPolicy: RoutingPolicy = resolveRoutingPolicy(repoRoot),
@@ -168,6 +174,7 @@ export class AgentRouter {
       anchors,
       options,
       javaIndex: this.javaIndex,
+      frameworkIndex: this.javaIndex,
       routingPolicy: this.routingPolicy,
       layoutContext: this.layoutContext,
       generation,
@@ -195,7 +202,19 @@ export class AgentRouter {
     const afterStaticPaths = unionPaths(afterLexicalPaths, typeReferenceOutcome);
     updateCollectorElapsed(phaseMs, typeReference, importGraph, persistedSemantic);
 
-    const phaseOneOutcomes: ProviderOutcome[] = [persistedOutcome, staticStructureOutcome, lexicalOutcome, typeReferenceOutcome];
+    // Task 27 Slice C: an empty adapter registry until Slice D registers the
+    // Spring pack, so this is inert scaffolding today - see
+    // providers/framework-provider.ts. metadata/diagnostics are a
+    // request-scoped side channel, not yet threaded into ImpactResult
+    // (Task 31 decides external exposure); only `outcome` joins ranking.
+    const frameworkResult = await timed(phaseMs, "frameworkEvidence", async () => collectFrameworkEvidence({
+      ...providerInputBase,
+      existingCandidatePaths: afterStaticPaths
+    }));
+    const frameworkOutcome = frameworkResult.outcome;
+    const afterFrameworkPaths = unionPaths(afterStaticPaths, frameworkOutcome);
+
+    const phaseOneOutcomes: ProviderOutcome[] = [persistedOutcome, staticStructureOutcome, lexicalOutcome, typeReferenceOutcome, frameworkOutcome];
     const familyRankPolicy = resolveFamilyRankPolicy(this.routingPolicy);
     const phaseOneNormalized = normalizeEvidence(phaseOneOutcomes.flatMap(outcome => outcome.evidence), this.repoRoot);
     const protectedReadPlanPaths = await timed(phaseMs, "nonLspReadPlan", async () => familyReadPlanProtectedPaths(
@@ -212,7 +231,7 @@ export class AgentRouter {
 
     // Live JDT budget is spent only after the protected read-plan paths are
     // already pinned from cheaper evidence, matching the pre-Task-24 order.
-    const liveSemanticOutcome = await collectLiveSemanticEvidence({ ...providerInputBase, existingCandidatePaths: afterStaticPaths });
+    const liveSemanticOutcome = await collectLiveSemanticEvidence({ ...providerInputBase, existingCandidatePaths: afterFrameworkPaths });
     const afterSemanticPaths = unionPaths(afterStaticPaths, liveSemanticOutcome);
     const supportOutcome = await collectSupportEvidence({ ...providerInputBase, existingCandidatePaths: afterSemanticPaths });
 

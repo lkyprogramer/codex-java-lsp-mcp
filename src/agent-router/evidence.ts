@@ -3,6 +3,7 @@
 // pos: Task 24 - single typed contract providers emit instead of mutating a shared candidate map.
 import type { Completion } from "../runtime/completion.js";
 import type { SourceRange } from "../java-index/index-types.js";
+import type { FrameworkIndexView } from "../java-index/framework-index-view.js";
 import type { RouterIndex } from "../java-index/router-java-index.js";
 import type { LayoutContext } from "../layout-probe.js";
 import type { RoutingPolicy } from "../routing-policy.js";
@@ -89,6 +90,14 @@ export type ProviderInput = {
   readonly anchors: readonly ResolvedAnchor[];
   readonly options: ImpactOptions;
   readonly javaIndex: RouterIndex;
+  /**
+   * Bounded, read-only projection over the same underlying JavaIndex as
+   * javaIndex - a separate field, not an intersection type on javaIndex,
+   * so only a framework-adapter provider reaches frameworkFactsFor/
+   * declarationsById/etc.; the other six providers keep the narrower
+   * RouterIndex surface they already had (Task 27 Slice B/C).
+   */
+  readonly frameworkIndex: FrameworkIndexView;
   readonly routingPolicy: RoutingPolicy;
   readonly layoutContext: LayoutContext;
   readonly generation: number;

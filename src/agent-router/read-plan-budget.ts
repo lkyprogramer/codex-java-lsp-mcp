@@ -35,6 +35,14 @@ export function evidenceClassOf(file: CandidateFile): EvidenceClass {
   if (verifiedBy.some(item => VERIFIED_EVIDENCE.has(item))) {
     return "verified";
   }
+  // Category-based, not verifiedBy-string-based (Task 27 Slice C): a
+  // framework adapter's `kind` vocabulary is pack-specific (Spring, later
+  // MyBatis/JPA) and unknown to this generic module, but every pack routes
+  // through the same "framework" category (materialize-candidates.ts), so
+  // checking that one string covers every pack without listing any of them.
+  if (file.categories.includes("framework")) {
+    return "verified";
+  }
   if (verifiedBy.includes("typeGraph") && file.reasons.includes("typeGraph:implementation-lookup")) {
     return "naming";
   }

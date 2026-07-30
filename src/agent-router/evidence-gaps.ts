@@ -8,7 +8,7 @@ type EvidenceGapState = {
 export function evidenceGaps(anchors: readonly ResolvedAnchor[], options: ImpactOptions, semantic: EvidenceGapState): string[] {
   const gaps = [
     "Run Gradle compile/test before claiming behavior.",
-    "Use rg/runtime evidence for Spring wiring, SQL/XML/YAML, logs, Nacos, and DB state."
+    "Framework wiring (e.g. Spring injection/call paths) is covered by JavaIndex facts where resolvable; use rg/runtime evidence for SQL/XML/YAML, logs, Nacos, and DB state."
   ];
   if (semantic.skipped) {
     gaps.push("LSP semantic enrichment was skipped by policy; raise semanticPolicy or mode if exact symbol binding is required.");

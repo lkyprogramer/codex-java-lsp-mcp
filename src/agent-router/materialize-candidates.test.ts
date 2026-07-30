@@ -211,3 +211,19 @@ test("weak name support does not misclassify a Java collaborator as config", () 
   const materialized = result.find(item => item.absolutePath === file)!;
   assert.equal(materialized.categories.includes("config"), false);
 });
+
+test("a FRAMEWORK-family signal materializes into a generic 'framework' category, not a Spring-specific one", () => {
+  const file = path.join(repoRoot, "src/main/java/com/example/OrderService.java");
+  const ranked = candidateEvidence(file, [signal({
+    candidateFile: file,
+    kind: "SPRING_INJECTION",
+    family: "FRAMEWORK",
+    provenance: "FRAMEWORK_INFERRED",
+    weight: 80
+  })]);
+  const result = materializeRankedCandidates([ranked], [anchor()], repoRoot);
+  const materialized = result.find(item => item.absolutePath === file)!;
+  assert.ok(materialized.categories.includes("framework"));
+  assert.ok(materialized.reasons.includes("SPRING_INJECTION"));
+  assert.ok((materialized.verifiedBy ?? []).includes("SPRING_INJECTION"));
+});

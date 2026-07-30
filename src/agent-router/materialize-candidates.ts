@@ -46,6 +46,13 @@ const FAMILY_TO_CATEGORY: Partial<Record<EvidenceFamily, string>> = {
   EXACT_SEMANTIC: "semantic",
   STATIC_STRUCTURE: "semantic",
   TASK_CONTEXT: "task-context",
+  // Generic adapter vocabulary (Task 27 Slice C) - not "spring", since
+  // Task 28/29's MyBatis/JPA packs will emit the same family through the
+  // same runner. read-plan-budget.ts's evidenceClassOf treats this category
+  // as "verified": by the time a signal reaches here it already passed an
+  // adapter's own high-confidence gate (informational/low-confidence facts
+  // go to FrameworkCollectResult.metadata, never to evidence at all).
+  FRAMEWORK: "framework",
 };
 
 const MAX_POSITIONS = 8;
