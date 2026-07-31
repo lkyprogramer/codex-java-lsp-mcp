@@ -15,6 +15,7 @@ import { DeadlineBudget } from "../../runtime/deadline-budget.js";
 import type { FrameworkAdapterContext } from "./adapter.js";
 import type { CandidateEvidence } from "../evidence.js";
 import { runFrameworkAdapters } from "./runner.js";
+import { mybatisAdapter } from "./mybatis-adapter.js";
 import { springAdapter } from "./spring-adapter.js";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -793,6 +794,23 @@ test("running springAdapter through runFrameworkAdapters against the real fixtur
     assert.ok(runResult.outcome.evidence.length > 1, "the full rule set (injection, call path, request body, response type, publishes event) must all be present, not just one kind");
     assert.deepEqual(new Set(runResult.outcome.evidence.map(s => s.kind)), new Set(["SPRING_INJECTION", "SPRING_CALL_PATH", "SPRING_REQUEST_BODY", "SPRING_RESPONSE_TYPE", "SPRING_PUBLISHES_EVENT", "SPRING_EVENT_LISTENER"]));
     assert.deepEqual(runResult.diagnostics, []);
+  } finally {
+    await router.close();
+  }
+});
+
+test("registering mybatisAdapter alongside springAdapter does not change Spring's evidence on a MyBatis-inactive fixture", async () => {
+  const router = await readyRouter();
+  try {
+    const candidateFiles = [file("src/main/java/demo/OrderController.java"), file("src/main/java/demo/OrderService.java")];
+    const context = await frameworkContextFor(router, repoRoot, [anchor(candidateFiles[0]!)], candidateFiles);
+
+    const springOnly = await runFrameworkAdapters([springAdapter], context);
+    const combined = await runFrameworkAdapters([springAdapter, mybatisAdapter], context);
+
+    assert.deepEqual(combined.outcome.evidence, springOnly.outcome.evidence);
+    assert.deepEqual(combined.outcome.candidates, springOnly.outcome.candidates);
+    assert.equal(combined.metadata.mybatis, undefined, "mybatisAdapter must not activate on the Spring fixture (no MyBatis build marker or import/annotation)");
   } finally {
     await router.close();
   }

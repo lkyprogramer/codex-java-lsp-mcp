@@ -16,6 +16,7 @@ import type { FrameworkAdapterContext } from "./adapter.js";
 import type { CandidateEvidence, EvidenceSignal } from "../evidence.js";
 import { runFrameworkAdapters } from "./runner.js";
 import { mybatisAdapter } from "./mybatis-adapter.js";
+import { springAdapter } from "./spring-adapter.js";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(dirname, "..", "..", "..", "fixtures", "framework-mybatis");
@@ -197,6 +198,23 @@ test("collect scopes MYBATIS_STATEMENT_METHOD to the anchored method, but not ty
     // Both findById's and insert's type-kind evidence still fire regardless of the method anchor.
     assert.equal(signalsOf(result.outcome.evidence, "MYBATIS_PARAMETER_TYPE").length, 1);
     assert.equal(signalsOf(result.outcome.evidence, "MYBATIS_RESULT_MAP").length, 1);
+  } finally {
+    await router.close();
+  }
+});
+
+test("registering springAdapter alongside mybatisAdapter does not change MyBatis's evidence on a Spring-inactive fixture", async () => {
+  const router = await readyRouter();
+  try {
+    const orderMapperFile = file("src/main/java/demo/OrderMapper.java");
+    const context = await frameworkContextFor(router, repoRoot, [anchor(orderMapperFile)], [orderMapperFile]);
+
+    const mybatisOnly = await runFrameworkAdapters([mybatisAdapter], context);
+    const combined = await runFrameworkAdapters([mybatisAdapter, springAdapter], context);
+
+    assert.deepEqual(combined.outcome.evidence, mybatisOnly.outcome.evidence);
+    assert.deepEqual(combined.outcome.candidates, mybatisOnly.outcome.candidates);
+    assert.equal(combined.metadata.spring, undefined, "springAdapter must not activate on the MyBatis fixture (no Spring build marker or import/annotation)");
   } finally {
     await router.close();
   }

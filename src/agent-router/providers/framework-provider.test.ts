@@ -9,6 +9,7 @@ import type { ResolvedAnchor } from "../../agent-types.js";
 import type { FrameworkIndexView } from "../../java-index/framework-index-view.js";
 import { DeadlineBudget } from "../../runtime/deadline-budget.js";
 import type { FrameworkAdapter, FrameworkAdapterContext } from "../framework/adapter.js";
+import { mybatisAdapter } from "../framework/mybatis-adapter.js";
 import { springAdapter } from "../framework/spring-adapter.js";
 import type { ProviderInput } from "../evidence.js";
 import { collectFrameworkEvidence, FRAMEWORK_ADAPTERS } from "./framework-provider.js";
@@ -48,8 +49,8 @@ function input(overrides: Partial<ProviderInput> = {}): ProviderInput {
   } as unknown as ProviderInput;
 }
 
-test("the exported default FRAMEWORK_ADAPTERS registry contains the registered Spring pack", () => {
-  assert.deepEqual(FRAMEWORK_ADAPTERS, [springAdapter]);
+test("the exported default FRAMEWORK_ADAPTERS registry contains the registered Spring and MyBatis packs", () => {
+  assert.deepEqual(FRAMEWORK_ADAPTERS, [springAdapter, mybatisAdapter]);
 });
 
 test("collectFrameworkEvidence with an explicitly empty adapters list returns a zero-evidence COMPLETE outcome and never touches frameworkIndex", async () => {
@@ -61,7 +62,7 @@ test("collectFrameworkEvidence with an explicitly empty adapters list returns a 
   assert.deepEqual(result.metadata, {});
 });
 
-test("collectFrameworkEvidence with the default (registered) adapters runs springAdapter.isActive, which is false and adds no evidence for a non-Spring repo", async () => {
+test("collectFrameworkEvidence with the default (registered) adapters runs both packs' isActive, which are false and add no evidence for a non-Spring, non-MyBatis repo", async () => {
   const result = await collectFrameworkEvidence(input());
 
   assert.deepEqual(result.outcome.evidence, []);
