@@ -7,15 +7,22 @@ import type {
   JavaFileFacts,
   JavaMethodFacts,
   JavaTypeFacts,
+  MyBatisResourceCoverage,
   SourceRootCoverage,
   StaticEdge
 } from "./index-types.js";
+import type { MyBatisMapperResourceFacts } from "./mybatis-types.js";
 
 const gzipAsync = promisify(gzip);
 const gunzipAsync = promisify(gunzip);
 
-export type JavaIndexSnapshotV2 = {
-  schemaVersion: 2;
+/**
+ * schemaVersion 3 (Task 28 Slice C) added myBatisResources/resourceCoverage;
+ * there is no migration from schema 2 - a mismatch is deleted and rebuilt
+ * (parseSnapshotFile below), so no schema-2 type is kept around.
+ */
+export type JavaIndexSnapshotV3 = {
+  schemaVersion: 3;
   extractorVersion: string;
   stableIdVersion: number;
   canonicalRepoRoot: string;
@@ -29,6 +36,8 @@ export type JavaIndexSnapshotV2 = {
   fields: JavaFieldFacts[];
   methods: JavaMethodFacts[];
   edges: StaticEdge[];
+  myBatisResources: MyBatisMapperResourceFacts[];
+  resourceCoverage: MyBatisResourceCoverage[];
 };
 
 /**
@@ -65,7 +74,7 @@ export type SnapshotWriteHooks = {
  */
 export async function writeSnapshotAtomic(
   target: string,
-  value: JavaIndexSnapshotV2,
+  value: JavaIndexSnapshotV3,
   hooks: SnapshotWriteHooks = {}
 ): Promise<number> {
   const directory = path.dirname(target);
@@ -98,7 +107,7 @@ export async function writeSnapshotAtomic(
  */
 export async function writeSnapshotIfManifestCurrent(
   target: string,
-  value: JavaIndexSnapshotV2,
+  value: JavaIndexSnapshotV3,
   currentManifestFingerprint: () => Promise<string>
 ): Promise<number> {
   return writeSnapshotAtomic(target, value, {
@@ -130,7 +139,7 @@ async function discard(target: string, reason: string): Promise<undefined> {
   return undefined;
 }
 
-type ParsedSnapshot = { snapshot: Partial<JavaIndexSnapshotV2> } | { error: string };
+type ParsedSnapshot = { snapshot: Partial<JavaIndexSnapshotV3> } | { error: string };
 
 // Shared by both loaders: reads, gunzips, JSON-parses, and checks
 // schemaVersion. Never throws - a missing file is `undefined` (a miss, not
@@ -158,8 +167,8 @@ async function parseSnapshotFile(target: string): Promise<ParsedSnapshot | undef
   if (typeof parsed !== "object" || parsed === null) {
     return { error: "payload is not an object" };
   }
-  const snapshot = parsed as Partial<JavaIndexSnapshotV2>;
-  if (snapshot.schemaVersion !== 2) {
+  const snapshot = parsed as Partial<JavaIndexSnapshotV3>;
+  if (snapshot.schemaVersion !== 3) {
     return { error: `unsupported schemaVersion ${String(snapshot.schemaVersion)}` };
   }
   return { snapshot };
@@ -186,7 +195,7 @@ async function parseSnapshotFile(target: string): Promise<ParsedSnapshot | undef
 export async function loadSnapshot(
   target: string,
   expected: SnapshotIdentity
-): Promise<JavaIndexSnapshotV2 | undefined> {
+): Promise<JavaIndexSnapshotV3 | undefined> {
   const parsed = await parseSnapshotFile(target);
   if (!parsed) return undefined;
   if ("error" in parsed) return discard(target, parsed.error);
@@ -203,7 +212,7 @@ export async function loadSnapshot(
   if (snapshot.buildFingerprint !== expected.buildFingerprint) {
     return discard(target, "buildFingerprint mismatch");
   }
-  return snapshot as JavaIndexSnapshotV2;
+  return snapshot as JavaIndexSnapshotV3;
 }
 
 /** The identity a sibling worktree's snapshot must match to be seed-eligible; `canonicalRepoRoot` is deliberately excluded - a sibling legitimately has a different one. */
@@ -220,12 +229,12 @@ export type SiblingSnapshotIdentity = Omit<SnapshotIdentity, "canonicalRepoRoot"
 export async function loadSiblingSnapshot(
   target: string,
   expected: SiblingSnapshotIdentity
-): Promise<JavaIndexSnapshotV2 | undefined> {
+): Promise<JavaIndexSnapshotV3 | undefined> {
   const parsed = await parseSnapshotFile(target);
   if (!parsed || "error" in parsed) return undefined;
   const snapshot = parsed.snapshot;
   if (snapshot.extractorVersion !== expected.extractorVersion) return undefined;
   if (snapshot.stableIdVersion !== expected.stableIdVersion) return undefined;
   if (snapshot.buildFingerprint !== expected.buildFingerprint) return undefined;
-  return snapshot as JavaIndexSnapshotV2;
+  return snapshot as JavaIndexSnapshotV3;
 }

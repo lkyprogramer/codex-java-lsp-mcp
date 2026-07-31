@@ -444,6 +444,25 @@ test("toSnapshotData returns arrays sorted by id/path regardless of insertion or
   assert.deepEqual(storeA.toSnapshotData(), storeB.toSnapshotData());
 });
 
+test("toSnapshotData sorts myBatisResources by relativePath regardless of insertion order", () => {
+  const b = myBatisResource({ relativePath: "src/main/resources/mapper/B.xml", namespace: "demo.B" });
+  const a = myBatisResource({ relativePath: "src/main/resources/mapper/A.xml", namespace: "demo.A" });
+
+  const storeA = new JavaIndexStore();
+  storeA.replaceMyBatisResource(b);
+  storeA.replaceMyBatisResource(a);
+
+  const storeB = new JavaIndexStore();
+  storeB.replaceMyBatisResource(a);
+  storeB.replaceMyBatisResource(b);
+
+  assert.deepEqual(storeA.toSnapshotData().myBatisResources, storeB.toSnapshotData().myBatisResources);
+  assert.deepEqual(storeA.toSnapshotData().myBatisResources.map(r => r.relativePath), [
+    "src/main/resources/mapper/A.xml",
+    "src/main/resources/mapper/B.xml"
+  ]);
+});
+
 test("loadSnapshotData rebuilds a store whose queries behave identically to the original", () => {
   const original = new JavaIndexStore();
   const gateway = emptyBundle("src/main/java/demo/Gateway.java", "Gateway");
@@ -469,7 +488,7 @@ test("loadSnapshotData replaces whatever the store previously held", () => {
   store.replaceFile(emptyBundle("src/main/java/demo/Old.java", "Old"));
 
   const fresh = emptyBundle("src/main/java/demo/New.java", "New");
-  store.loadSnapshotData({ files: [fresh.file], types: fresh.types, fields: [], methods: [], edges: [] });
+  store.loadSnapshotData({ files: [fresh.file], types: fresh.types, fields: [], methods: [], edges: [], myBatisResources: [] });
 
   assert.equal(store.file("src/main/java/demo/Old.java"), undefined);
   assert.ok(store.file("src/main/java/demo/New.java"));
@@ -484,9 +503,41 @@ test("loadSnapshotData rejects a snapshot with a duplicate type id", () => {
     types: [bundle.types[0]!, bundle.types[0]!],
     fields: [],
     methods: [],
-    edges: []
+    edges: [],
+    myBatisResources: []
   };
   assert.throws(() => store.loadSnapshotData(data), /duplicate type id/);
+});
+
+test("loadSnapshotData round-trips MyBatis resources and clears whatever the store previously held", () => {
+  const store = new JavaIndexStore();
+  store.replaceMyBatisResource(myBatisResource({
+    relativePath: "src/main/resources/mapper/Old.xml",
+    namespace: "demo.OldMapper",
+    statements: [{ statementId: "mybatis-statement:demo.OldMapper.x", namespace: "demo.OldMapper", id: "x", kind: "select" }]
+  }));
+
+  const fresh = myBatisResource({
+    relativePath: "src/main/resources/mapper/OrderMapper.xml",
+    namespace: "demo.OrderMapper",
+    statements: [{ statementId: "mybatis-statement:demo.OrderMapper.findById", namespace: "demo.OrderMapper", id: "findById", kind: "select" }]
+  });
+  store.loadSnapshotData({ files: [], types: [], fields: [], methods: [], edges: [], myBatisResources: [fresh] });
+
+  assert.equal(store.myBatisResource("src/main/resources/mapper/Old.xml"), undefined);
+  assert.equal(store.myBatisResourcesByNamespace.get("demo.OldMapper"), undefined);
+  assert.deepEqual(store.myBatisResource("src/main/resources/mapper/OrderMapper.xml"), fresh);
+  assert.equal(store.myBatisStatement("demo.OrderMapper", "findById")?.statementId, "mybatis-statement:demo.OrderMapper.findById");
+  assert.deepEqual([...(store.myBatisResourcesByNamespace.get("demo.OrderMapper") ?? [])], ["src/main/resources/mapper/OrderMapper.xml"]);
+});
+
+test("loadSnapshotData rejects a snapshot with a duplicate mybatis resource relativePath", () => {
+  const store = new JavaIndexStore();
+  const resource = myBatisResource({ relativePath: "src/main/resources/mapper/Dup.xml" });
+  assert.throws(
+    () => store.loadSnapshotData({ files: [], types: [], fields: [], methods: [], edges: [], myBatisResources: [resource, resource] }),
+    /duplicate mybatis resource/
+  );
 });
 
 function myBatisResource(overrides: Partial<import("./mybatis-types.js").MyBatisMapperResourceFacts> & { relativePath: string }) {

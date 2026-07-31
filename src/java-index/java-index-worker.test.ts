@@ -779,3 +779,39 @@ test("refreshResources removes a resource once its file is deleted, idempotently
 
   await client.close();
 });
+
+test("an own-snapshot restore re-derives MyBatis resources even when Java facts verify clean and queue no reconcile", async () => {
+  const repoRoot = tempRepo("java-index-worker-mybatis-restore-");
+  writeJavaFile(repoRoot, "src/main/java/demo/Gateway.java", "package demo;\n\ninterface Gateway {}\n");
+  const relativePath = "src/main/resources/mapper/OrderMapper.xml";
+  writeResourceFile(repoRoot, relativePath, ORDER_MAPPER_XML);
+  const cacheDir = tempCacheDir();
+
+  const first = new JavaIndexClient(repoRoot, cacheDir);
+  await first.open(1);
+  await first.reconcile(1);
+  await waitFor(async () => (await first.status()).pendingBackground === 0, 5000);
+  assert.deepEqual((await first.queryMyBatisResource(relativePath))?.statements.map(s => s.id), ["findById"]);
+  await first.close();
+
+  // Edited while the process was closed - Java facts are untouched, so the
+  // restore's Java-side verification takes the fast metadata-match path and
+  // queues no reconcile. Only the explicit MyBatis re-derivation call (not
+  // gated on Java's own verification outcome) can pick this up.
+  const changed = '<mapper namespace="demo.OrderMapper"><select id="findById">x</select><insert id="insert">y</insert></mapper>';
+  writeResourceFile(repoRoot, relativePath, changed);
+
+  const second = new JavaIndexClient(repoRoot, cacheDir);
+  await second.open(1);
+  await waitFor(async () => (await second.status()).pendingBackground === 0, 5000);
+  const restoredStatus = await second.status();
+  assert.ok(
+    restoredStatus.coverage.every(entry => entry.state === "COMPLETE"),
+    `expected the unrelated Java restore to still take the clean fast path, got ${JSON.stringify(restoredStatus.coverage)}`
+  );
+
+  const facts = await second.queryMyBatisResource(relativePath);
+  assert.deepEqual(facts?.statements.map(s => s.id).sort(), ["findById", "insert"], "the changed mapper must be re-derived, not served stale from the restored snapshot");
+
+  await second.close();
+});

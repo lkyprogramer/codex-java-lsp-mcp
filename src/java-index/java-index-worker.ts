@@ -34,7 +34,7 @@ import { JavaNameResolver, buildTypeRegistryView, type TypeRegistryView } from "
 import {
   loadSnapshot,
   writeSnapshotIfManifestCurrent,
-  type JavaIndexSnapshotV2,
+  type JavaIndexSnapshotV3,
   type SnapshotIdentity
 } from "./snapshot.js";
 import { STABLE_ID_VERSION } from "./stable-id.js";
@@ -448,8 +448,8 @@ async function flushSnapshotNow(): Promise<void> {
       const manifestFingerprint = computeManifestFingerprint(
         data.files.map(file => ({ relativePath: file.relativePath, contentHash: file.contentHash, sourceRoot: file.sourceRoot }))
       );
-      const value: JavaIndexSnapshotV2 = {
-        schemaVersion: 2,
+      const value: JavaIndexSnapshotV3 = {
+        schemaVersion: 3,
         extractorVersion: computeExtractorVersion(),
         stableIdVersion: STABLE_ID_VERSION,
         canonicalRepoRoot: repoRoot,
@@ -458,6 +458,9 @@ async function flushSnapshotNow(): Promise<void> {
         indexedGeneration: generationAtSerialize,
         createdAt: new Date().toISOString(),
         coverage: coverage.snapshot(),
+        // No CoverageTracker for resources yet (Task 28 Slice C only
+        // declares the field) - always empty until a later slice populates it.
+        resourceCoverage: [],
         ...data
       };
       try {
@@ -611,7 +614,7 @@ async function handleRefreshResources(request: Extract<JavaIndexRequest, { type:
  *   BUILDING, not COMPLETE.
  */
 async function verifyOwnSnapshot(
-  snapshotData: JavaIndexSnapshotV2,
+  snapshotData: JavaIndexSnapshotV3,
   canApply: () => boolean = () => true
 ): Promise<number | undefined> {
   if (!layout || !store) return snapshotData.indexedGeneration;
@@ -722,7 +725,18 @@ function startOwnSnapshotHydration(
         return;
       }
       store = new JavaIndexStore();
-      store.loadSnapshotData(loaded);
+      // MyBatis resource facts are deliberately not restored here (an empty
+      // array overrides whatever `loaded.myBatisResources` holds):
+      // verifyOwnSnapshot below only re-verifies Java files via
+      // scanSnapshotManifestDiff, so trusting restored resource facts
+      // without any freshness check would let a mapper XML edited while
+      // the process was closed serve stale facts for the rest of the
+      // session, even when Java's own verification is a clean, no-reconcile
+      // metadata match. indexMyBatisResources re-derives them fresh instead,
+      // unconditionally and independently of Java's own verification
+      // outcome - cheap relative to a full Java re-parse, and run
+      // concurrently with it, not serialized after it.
+      store.loadSnapshotData({ ...loaded, myBatisResources: [] });
       for (const entry of loaded.coverage) coverage.restoreProvisional(entry);
       const expectedGeneration = Math.max(requestedGeneration, loaded.indexedGeneration);
       status = { ...status, indexedGeneration: expectedGeneration };
@@ -730,7 +744,9 @@ function startOwnSnapshotHydration(
         !closing
         && !ownSnapshotVerificationStale
         && status.indexedGeneration === expectedGeneration;
+      const resourceReindex = layout ? indexMyBatisResources(store, layout, expectedGeneration) : Promise.resolve();
       const verifiedGeneration = await verifyOwnSnapshot(loaded, canApply);
+      await resourceReindex;
       if (verifiedGeneration !== undefined && canApply()) {
         status = { ...status, indexedGeneration: verifiedGeneration };
         if (!ownSnapshotCoverageFullyRestored(verifiedGeneration)) {

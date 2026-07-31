@@ -175,7 +175,13 @@ export class WorktreeSnapshotSeeder {
       types: snapshot.types,
       fields: snapshot.fields,
       methods: snapshot.methods,
-      edges: snapshot.edges
+      edges: snapshot.edges,
+      // Sibling-seeded MyBatis resource reuse is not implemented yet
+      // (Task 28 Slice C's own-snapshot-only cut); a linked worktree opened
+      // from a sibling always re-derives its resource facts via the normal
+      // background sweep instead of trusting the source's, exactly like a
+      // cold open with no snapshot at all.
+      myBatisResources: []
     });
 
     const reusedPaths: string[] = [];

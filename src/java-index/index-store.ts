@@ -566,13 +566,15 @@ export class JavaIndexStore {
     fields: JavaFieldFacts[];
     methods: JavaMethodFacts[];
     edges: StaticEdge[];
+    myBatisResources: MyBatisMapperResourceFacts[];
   } {
     return {
       files: [...this.filesByPath.values()].sort((a, b) => a.relativePath.localeCompare(b.relativePath)),
       types: [...this.typesById.values()].sort((a, b) => a.typeId.localeCompare(b.typeId)),
       fields: [...this.fieldsById.values()].sort((a, b) => a.fieldId.localeCompare(b.fieldId)),
       methods: [...this.methodsById.values()].sort((a, b) => a.methodId.localeCompare(b.methodId)),
-      edges: [...this.edgesById.values()].sort((a, b) => a.edgeId.localeCompare(b.edgeId))
+      edges: [...this.edgesById.values()].sort((a, b) => a.edgeId.localeCompare(b.edgeId)),
+      myBatisResources: [...this.myBatisResourcesByPath.values()].sort((a, b) => a.relativePath.localeCompare(b.relativePath))
     };
   }
 
@@ -591,6 +593,7 @@ export class JavaIndexStore {
     fields: readonly JavaFieldFacts[];
     methods: readonly JavaMethodFacts[];
     edges: readonly StaticEdge[];
+    myBatisResources: readonly MyBatisMapperResourceFacts[];
   }): void {
     this.filesByPath.clear();
     this.typesById.clear();
@@ -604,12 +607,28 @@ export class JavaIndexStore {
     this.inEdgeIdsByNode.clear();
     this.fileOwnedNodeIds.clear();
     this.fileOwnedEdgeIds.clear();
+    this.myBatisResourcesByPath.clear();
+    this.myBatisStatementsByQualifiedId.clear();
+    this.myBatisResourcesByNamespace.clear();
 
     for (const file of data.files) {
       if (this.filesByPath.has(file.relativePath)) {
         throw new Error(`duplicate file in snapshot: ${file.relativePath}`);
       }
       this.filesByPath.set(file.relativePath, file);
+    }
+    for (const resource of data.myBatisResources) {
+      if (this.myBatisResourcesByPath.has(resource.relativePath)) {
+        throw new Error(`duplicate mybatis resource in snapshot: ${resource.relativePath}`);
+      }
+      this.myBatisResourcesByPath.set(resource.relativePath, resource);
+      for (const statement of resource.statements) {
+        this.myBatisStatementsByQualifiedId.set(
+          myBatisQualifiedId(resource.namespace, statement.id),
+          { relativePath: resource.relativePath, statement }
+        );
+      }
+      if (resource.namespace) addToSetMap(this.myBatisResourcesByNamespace, resource.namespace, resource.relativePath);
     }
     for (const type of data.types) {
       if (this.typesById.has(type.typeId)) throw new Error(`duplicate type id in snapshot: ${type.typeId}`);

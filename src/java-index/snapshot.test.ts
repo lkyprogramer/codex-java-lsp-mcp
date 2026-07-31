@@ -11,7 +11,7 @@ import {
   loadSnapshot,
   writeSnapshotAtomic,
   writeSnapshotIfManifestCurrent,
-  type JavaIndexSnapshotV2,
+  type JavaIndexSnapshotV3,
   type SnapshotIdentity
 } from "./snapshot.js";
 
@@ -20,10 +20,10 @@ function tempFile(): string {
   return path.join(dir, "nested", "java-index-snapshot.json.gz");
 }
 
-function snapshot(overrides: Partial<JavaIndexSnapshotV2> = {}): JavaIndexSnapshotV2 {
+function snapshot(overrides: Partial<JavaIndexSnapshotV3> = {}): JavaIndexSnapshotV3 {
   return {
-    schemaVersion: 2,
-    extractorVersion: "schema-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-abc123",
+    schemaVersion: 3,
+    extractorVersion: "schema-3|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-abc123",
     stableIdVersion: 1,
     canonicalRepoRoot: "/repo",
     buildFingerprint: "build-a",
@@ -36,11 +36,13 @@ function snapshot(overrides: Partial<JavaIndexSnapshotV2> = {}): JavaIndexSnapsh
     fields: [],
     methods: [],
     edges: [],
+    myBatisResources: [],
+    resourceCoverage: [],
     ...overrides
   };
 }
 
-function identityFor(value: JavaIndexSnapshotV2): SnapshotIdentity {
+function identityFor(value: JavaIndexSnapshotV3): SnapshotIdentity {
   return {
     extractorVersion: value.extractorVersion,
     stableIdVersion: value.stableIdVersion,
@@ -140,11 +142,20 @@ test("valid gzip but invalid JSON is discarded as a miss", async () => {
 
 test("schemaVersion 1 is rejected and the file is deleted", async () => {
   const target = tempFile();
-  const legacy = { ...snapshot(), schemaVersion: 1 } as unknown as JavaIndexSnapshotV2;
+  const legacy = { ...snapshot(), schemaVersion: 1 } as unknown as JavaIndexSnapshotV3;
   await writeSnapshotAtomic(target, legacy);
   const loaded = await loadSnapshot(target, identityFor(snapshot()));
   assert.equal(loaded, undefined);
   assert.equal(existsSync(target), false);
+});
+
+test("the pre-Task-28 schemaVersion 2 (no myBatisResources/resourceCoverage) is rejected, not migrated", async () => {
+  const target = tempFile();
+  const legacyV2 = { ...snapshot(), schemaVersion: 2 } as unknown as JavaIndexSnapshotV3;
+  await writeSnapshotAtomic(target, legacyV2);
+  const loaded = await loadSnapshot(target, identityFor(snapshot()));
+  assert.equal(loaded, undefined);
+  assert.equal(existsSync(target), false, "a schema-2 snapshot must be deleted, never migrated in place");
 });
 
 test("an extractorVersion mismatch is rejected", async () => {

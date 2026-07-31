@@ -192,6 +192,22 @@ export type SourceRootCoverage = {
   completedAt?: string;
 };
 
+/**
+ * Task 28 Slice C: per-resource-root coverage, tracked independently of
+ * SourceRootCoverage above - no producer/CoverageTracker instance exists
+ * yet (Slice C only declares the snapshot field and always persists `[]`);
+ * a later slice owns populating and consuming it, the same "declared, not
+ * yet wired" pattern JavaIndexStore.dependentFilesByTypeName already uses.
+ */
+export type MyBatisResourceCoverage = {
+  root: string;
+  generation: number;
+  state: "UNKNOWN" | "BUILDING" | "COMPLETE" | "DEGRADED";
+  discoveredFiles: number;
+  indexedFiles: number;
+  failedFiles: number;
+};
+
 /** Task 21a diagnostic summary of the OPEN-time sibling-worktree seed attempt, if any. */
 export type WorktreeSeedStatus = {
   attempted: boolean;

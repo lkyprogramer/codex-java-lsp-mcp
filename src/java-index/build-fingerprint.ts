@@ -41,7 +41,7 @@ export function computeExtractorVersion(): string {
   const treeSitterVersion = (require("tree-sitter/package.json") as { version: string }).version;
   const treeSitterJavaVersion = (require("tree-sitter-java/package.json") as { version: string }).version;
   const buildHash = readRuntimeBuild().gitSha;
-  return `schema-2|facts-${JAVA_FACTS_REVISION}|tree-sitter-${treeSitterVersion}|tree-sitter-java-${treeSitterJavaVersion}|extractor-code-${buildHash}`;
+  return `schema-3|facts-${JAVA_FACTS_REVISION}|tree-sitter-${treeSitterVersion}|tree-sitter-java-${treeSitterJavaVersion}|extractor-code-${buildHash}`;
 }
 
 /**
