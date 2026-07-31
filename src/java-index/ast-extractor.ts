@@ -596,12 +596,17 @@ function collectCallSites(
   }
 }
 
-// Covers parameter, field and local-variable receivers per Task 16 Step 7.
-// `this`/`super`/explicit-type-name receivers are left unresolved here and
-// are a Task 17 (name resolver) concern, not an AST-extraction concern.
+// Covers parameter, field and local-variable receivers, including `this.x`
+// where x is already present in the member scope. Explicit type-name/static
+// receivers remain intentionally unresolved.
 function receiverTypeOf(node: JavaSyntaxNode, scope: Scope, context: ExtractContext): JavaTypeRef | undefined {
-  if (node.type !== "identifier") return undefined;
-  return scope.get(textOf(node, context.source));
+  if (node.type === "identifier") return scope.get(textOf(node, context.source));
+  if (node.type === "field_access") {
+    const object = node.childForFieldName("object");
+    const field = node.childForFieldName("field");
+    if (object?.type === "this" && field) return scope.get(textOf(field, context.source));
+  }
+  return undefined;
 }
 
 // tree-sitter-java counts comments as named children of an argument_list, so

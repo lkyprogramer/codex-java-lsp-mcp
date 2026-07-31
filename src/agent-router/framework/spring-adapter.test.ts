@@ -13,6 +13,7 @@ import type { ResolvedAnchor } from "../../agent-types.js";
 import { RouterJavaIndex } from "../../java-index/router-java-index.js";
 import { DeadlineBudget } from "../../runtime/deadline-budget.js";
 import type { FrameworkAdapterContext } from "./adapter.js";
+import type { CandidateEvidence } from "../evidence.js";
 import { runFrameworkAdapters } from "./runner.js";
 import { springAdapter } from "./spring-adapter.js";
 
@@ -68,6 +69,14 @@ async function frameworkContextFor(
     repoRoot: repo,
     anchors,
     candidateFiles,
+    staticEvidence: candidateFiles.map(candidate => ({
+      file: candidate,
+      signals: [],
+      familyScores: { STATIC_STRUCTURE: 1 },
+      finalScore: 1,
+      confidence: "medium",
+      degradation: []
+    } satisfies CandidateEvidence)),
     frameworkIndex: router,
     generation: 1,
     budget: DeadlineBudget.fromTimeout(5_000)
@@ -104,6 +113,69 @@ test("fixture facts: OrderController/OrderService/OrderRepository carry resolved
     const repository = await router.frameworkFactsFor(file("src/main/java/demo/OrderRepository.java"));
     const repositoryType = repository.types.find(t => t.simpleName === "OrderRepository")!;
     assert.deepEqual(repositoryType.annotations.map(a => a.resolvedFqn), ["org.springframework.stereotype.Repository"]);
+  } finally {
+    await router.close();
+  }
+});
+
+test("springAdapter.collect does not expand a lexical-only Spring candidate", async () => {
+  const router = await readyRouter();
+  try {
+    const domain = file("src/main/java/demo/Order.java");
+    const controller = file("src/main/java/demo/OrderController.java");
+    const base = await frameworkContextFor(router, repoRoot, [anchor(domain)], [domain, controller]);
+    const result = await springAdapter.collect({
+      ...base,
+      staticEvidence: base.staticEvidence.filter(candidate => candidate.file === domain)
+    });
+
+    assert.deepEqual(
+      result.outcome.evidence,
+      [],
+      "a controller found only through lexical recall must not create an unrelated framework traversal"
+    );
+  } finally {
+    await router.close();
+  }
+});
+
+test("springAdapter.collect confines method-level endpoint evidence to the anchored method", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "spring-adapter-method-scope-"));
+  write(root, "pom.xml", "<project><dependencies><dependency><groupId>org.springframework.boot</groupId></dependency></dependencies></project>");
+  write(root, "src/main/java/demo/FirstRequest.java", "package demo; class FirstRequest {}\n");
+  write(root, "src/main/java/demo/FirstResponse.java", "package demo; class FirstResponse {}\n");
+  write(root, "src/main/java/demo/SecondRequest.java", "package demo; class SecondRequest {}\n");
+  write(root, "src/main/java/demo/SecondResponse.java", "package demo; class SecondResponse {}\n");
+  write(
+    root,
+    "src/main/java/demo/ScopedController.java",
+    [
+      "package demo;",
+      "import org.springframework.web.bind.annotation.PostMapping;",
+      "import org.springframework.web.bind.annotation.RequestBody;",
+      "import org.springframework.web.bind.annotation.RestController;",
+      "@RestController class ScopedController {",
+      "  @PostMapping FirstResponse first(@RequestBody FirstRequest request) { return null; }",
+      "  @PostMapping SecondResponse second(@RequestBody SecondRequest request) { return null; }",
+      "}"
+    ].join("\n")
+  );
+  const router = await readyRouterAt(root);
+  try {
+    const source = path.join(root, "src/main/java/demo/ScopedController.java");
+    const result = await springAdapter.collect(await frameworkContextFor(
+      router,
+      root,
+      [anchor(source, { line: 6, column: 26, kind: "Method", methodName: "first" })],
+      [source]
+    ));
+    const targets = result.outcome.evidence.map(signal => signal.candidateFile).sort();
+
+    assert.deepEqual(targets, [
+      path.join(root, "src/main/java/demo/FirstRequest.java"),
+      path.join(root, "src/main/java/demo/FirstResponse.java")
+    ]);
+    assert.equal((result.metadata as { endpoints?: unknown[] }).endpoints?.length, 1);
   } finally {
     await router.close();
   }
@@ -183,6 +255,23 @@ test("springAdapter.isActive is true for the Spring fixture (pom.xml dependency)
   }
 });
 
+test("springAdapter.isActive probes the source module's build marker, not only the aggregator root", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "spring-adapter-module-detection-"));
+  write(root, "pom.xml", "<project><modules><module>orders</module></modules></project>");
+  write(root, "orders/pom.xml", "<project><dependency><groupId>org.springframework</groupId></dependency></project>");
+  write(root, "orders/src/main/java/demo/OrderService.java", "package demo;\nclass OrderService {}\n");
+  const router = await readyRouterAt(root);
+  try {
+    const source = path.join(root, "orders/src/main/java/demo/OrderService.java");
+    assert.equal(
+      await springAdapter.isActive(await frameworkContextFor(router, root, [anchor(source)], [source])),
+      true
+    );
+  } finally {
+    await router.close();
+  }
+});
+
 test("springAdapter.collect emits SPRING_INJECTION for OrderController->OrderService and OrderService->OrderRepository, but not for the external ApplicationEventPublisher parameter", async () => {
   const router = await readyRouter();
   try {
@@ -217,7 +306,7 @@ test("springAdapter.collect emits SPRING_INJECTION for OrderController->OrderSer
   }
 });
 
-test("springAdapter.collect emits SPRING_CALL_PATH only for OrderController.create -> OrderService.create, not for OrderService.create (which has three resolved calls, not one)", async () => {
+test("springAdapter.collect emits SPRING_CALL_PATH for every invocation whose receiver is a confirmed injection target", async () => {
   const router = await readyRouter();
   try {
     const controller = await router.frameworkFactsFor(file("src/main/java/demo/OrderController.java"));
@@ -234,12 +323,15 @@ test("springAdapter.collect emits SPRING_CALL_PATH only for OrderController.crea
     const result = await springAdapter.collect(context);
     const callPaths = result.outcome.evidence.filter(s => s.kind === "SPRING_CALL_PATH");
 
-    assert.equal(callPaths.length, 1, "OrderService.create's three resolved calls must not produce a false 'exactly one' call path");
-    assert.equal(callPaths[0]!.sourceFile, file("src/main/java/demo/OrderController.java"));
-    assert.equal(callPaths[0]!.candidateFile, file("src/main/java/demo/OrderService.java"));
-    assert.equal(callPaths[0]!.family, "FRAMEWORK");
-    assert.equal(callPaths[0]!.weight, 100);
-    assert.equal(callPaths[0]!.confidence, expectedConfidence, "confidence must be the CALLS edge's own resolved confidence, not an invented number");
+    assert.deepEqual(
+      new Set(callPaths.map(signal => `${signal.sourceFile}->${signal.candidateFile}`)),
+      new Set([
+        `${file("src/main/java/demo/OrderController.java")}->${file("src/main/java/demo/OrderService.java")}`,
+        `${file("src/main/java/demo/OrderService.java")}->${file("src/main/java/demo/OrderRepository.java")}`
+      ])
+    );
+    assert.ok(callPaths.every(signal => signal.family === "FRAMEWORK" && signal.weight === 100));
+    assert.ok(callPaths.some(signal => signal.confidence === expectedConfidence), "confidence must come from the matching CALLS edge, not an invented number");
   } finally {
     await router.close();
   }
@@ -402,7 +494,7 @@ test("springAdapter.collect stops at an already-exhausted deadline instead of sc
     assert.deepEqual(result.outcome.evidence, [], "a budget that is already exhausted before the first file must not scan any candidate file");
     assert.equal(result.outcome.completion, "PARTIAL_TIMEOUT");
     assert.equal(result.diagnostics.length, 1);
-    assert.match(result.diagnostics[0]!, /deadline exhausted after scanning 0 of 2 candidate files/);
+    assert.match(result.diagnostics[0]!, /deadline exhausted/);
   } finally {
     await router.close();
   }
@@ -462,6 +554,231 @@ test("springAdapter.collect produces no injection signal for a plain (non-stereo
   }
 });
 
+test("springAdapter.collect emits a call path for an injected receiver even when the method also calls a local helper", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "spring-adapter-injected-call-"));
+  write(root, "src/main/java/demo/Service.java", "package demo;\nclass Service { void run() {} }\n");
+  write(
+    root,
+    "src/main/java/demo/Controller.java",
+    [
+      "package demo;",
+      "import org.springframework.stereotype.Controller;",
+      "@Controller class Controller {",
+      "  private final Service service;",
+      "  Controller(Service service) { this.service = service; }",
+      "  void handle() { service.run(); audit(); }",
+      "  void audit() {}",
+      "}",
+      ""
+    ].join("\n")
+  );
+  const router = await readyRouterAt(root);
+  try {
+    const source = path.join(root, "src/main/java/demo/Controller.java");
+    const result = await springAdapter.collect(await frameworkContextFor(router, root, [anchor(source)], [source]));
+    assert.deepEqual(
+      result.outcome.evidence.filter(signal => signal.kind === "SPRING_CALL_PATH").map(signal => signal.candidateFile),
+      [path.join(root, "src/main/java/demo/Service.java")]
+    );
+  } finally {
+    await router.close();
+  }
+});
+
+test("springAdapter.collect does not label a component's non-injected helper call as a Spring call path", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "spring-adapter-helper-call-"));
+  write(
+    root,
+    "src/main/java/demo/Controller.java",
+    [
+      "package demo;",
+      "import org.springframework.stereotype.Controller;",
+      "@Controller class Controller {",
+      "  void handle() { helper(); }",
+      "  void helper() {}",
+      "}",
+      ""
+    ].join("\n")
+  );
+  const router = await readyRouterAt(root);
+  try {
+    const source = path.join(root, "src/main/java/demo/Controller.java");
+    const result = await springAdapter.collect(await frameworkContextFor(router, root, [anchor(source)], [source]));
+    assert.deepEqual(result.outcome.evidence.filter(signal => signal.kind === "SPRING_CALL_PATH"), []);
+  } finally {
+    await router.close();
+  }
+});
+
+test("springAdapter.collect binds a call path only to this component's plain or this-qualified injection receiver", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "spring-adapter-receiver-identity-"));
+  write(root, "src/main/java/demo/OrderService.java", "package demo;\nclass OrderService { void run() {} }\n");
+  write(
+    root,
+    "src/main/java/demo/Handler.java",
+    [
+      "package demo;",
+      "import org.springframework.stereotype.Service;",
+      "@Service",
+      "class Handler {",
+      "  private final OrderService service;",
+      "  private final Other other;",
+      "  Handler(OrderService service, Other other) { this.service = service; this.other = other; }",
+      "  void run() { other.service.run(); }",
+      "}",
+      "class Other { OrderService service; }",
+      ""
+    ].join("\n")
+  );
+  const router = await readyRouterAt(root);
+  try {
+    const source = path.join(root, "src/main/java/demo/Handler.java");
+    const result = await springAdapter.collect(await frameworkContextFor(router, root, [anchor(source)], [source]));
+
+    assert.deepEqual(
+      result.outcome.evidence.filter(signal => signal.kind === "SPRING_CALL_PATH"),
+      [],
+      "other.service is not Handler's injected service field, even though its declared type happens to match"
+    );
+  } finally {
+    await router.close();
+  }
+});
+
+test("springAdapter.collect requires an injected ApplicationEventPublisher receiver before emitting an event", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "spring-adapter-custom-publisher-"));
+  write(root, "src/main/java/demo/Created.java", "package demo;\nclass Created {}\n");
+  write(root, "src/main/java/demo/CustomPublisher.java", "package demo;\nclass CustomPublisher { void publishEvent(Created event) {} }\n");
+  write(
+    root,
+    "src/main/java/demo/Service.java",
+    [
+      "package demo;",
+      "import org.springframework.stereotype.Service;",
+      "@Service class Service {",
+      "  private final CustomPublisher publisher;",
+      "  Service(CustomPublisher publisher) { this.publisher = publisher; }",
+      "  void run() { publisher.publishEvent(new Created()); }",
+      "}",
+      ""
+    ].join("\n")
+  );
+  const router = await readyRouterAt(root);
+  try {
+    const source = path.join(root, "src/main/java/demo/Service.java");
+    const result = await springAdapter.collect(await frameworkContextFor(router, root, [anchor(source)], [source]));
+    assert.deepEqual(result.outcome.evidence.filter(signal => signal.kind === "SPRING_PUBLISHES_EVENT"), []);
+  } finally {
+    await router.close();
+  }
+});
+
+test("springAdapter.collect discovers an event listener outside the initial candidate set", async () => {
+  const router = await readyRouter();
+  try {
+    const service = file("src/main/java/demo/OrderService.java");
+    const result = await springAdapter.collect(await frameworkContextFor(router, repoRoot, [anchor(service)], [service]));
+    assert.ok(
+      result.outcome.evidence.some(signal => signal.candidateFile === file("src/main/java/demo/OrderListener.java")),
+      "publishing an event must surface its listener even when upstream providers did not nominate that file"
+    );
+  } finally {
+    await router.close();
+  }
+});
+
+test("springAdapter.collect retains a wildcard-imported listener discovered outside the initial candidate set", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "spring-adapter-wildcard-listener-"));
+  write(root, "pom.xml", "<project><dependency><groupId>org.springframework</groupId></dependency></project>");
+  write(root, "src/main/java/demo/Created.java", "package demo;\nclass Created {}\n");
+  write(
+    root,
+    "src/main/java/demo/Publisher.java",
+    [
+      "package demo;",
+      "import org.springframework.stereotype.Service;",
+      "import org.springframework.context.ApplicationEventPublisher;",
+      "@Service class Publisher {",
+      "  private final ApplicationEventPublisher publisher;",
+      "  Publisher(ApplicationEventPublisher publisher) { this.publisher = publisher; }",
+      "  void publish() { publisher.publishEvent(new Created()); }",
+      "}",
+      ""
+    ].join("\n")
+  );
+  write(
+    root,
+    "src/main/java/demo/CreatedListener.java",
+    [
+      "package demo;",
+      "import org.springframework.context.event.*;",
+      "class CreatedListener { @EventListener void on(Created event) {} }",
+      ""
+    ].join("\n")
+  );
+  const router = await readyRouterAt(root);
+  try {
+    const publisher = path.join(root, "src/main/java/demo/Publisher.java");
+    const listener = path.join(root, "src/main/java/demo/CreatedListener.java");
+    const result = await springAdapter.collect(await frameworkContextFor(router, root, [anchor(publisher)], [publisher]));
+
+    assert.ok(
+      result.outcome.evidence.some(signal => signal.kind === "SPRING_EVENT_LISTENER" && signal.candidateFile === listener),
+      "reverse discovery must preserve a COMPLETE wildcard-imported @EventListener rather than treating it as absent"
+    );
+  } finally {
+    await router.close();
+  }
+});
+
+test("springAdapter.collect emits request/response evidence only for mapped controller methods", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "spring-adapter-request-body-scope-"));
+  write(root, "src/main/java/demo/Payload.java", "package demo;\nclass Payload {}\n");
+  write(
+    root,
+    "src/main/java/demo/Service.java",
+    [
+      "package demo;",
+      "import org.springframework.stereotype.Service;",
+      "import org.springframework.web.bind.annotation.RequestBody;",
+      "@Service class Service { void consume(@RequestBody Payload payload) {} }",
+      ""
+    ].join("\n")
+  );
+  const router = await readyRouterAt(root);
+  try {
+    const source = path.join(root, "src/main/java/demo/Service.java");
+    const result = await springAdapter.collect(await frameworkContextFor(router, root, [anchor(source)], [source]));
+    assert.deepEqual(result.outcome.evidence.filter(signal => signal.kind === "SPRING_REQUEST_BODY" || signal.kind === "SPRING_RESPONSE_TYPE"), []);
+  } finally {
+    await router.close();
+  }
+});
+
+test("springAdapter.collect records type-level transaction methods as metadata", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "spring-adapter-type-transaction-"));
+  write(
+    root,
+    "src/main/java/demo/Service.java",
+    [
+      "package demo;",
+      "import org.springframework.stereotype.Service;",
+      "import org.springframework.transaction.annotation.Transactional;",
+      "@Service @Transactional class Service { void run() {} }",
+      ""
+    ].join("\n")
+  );
+  const router = await readyRouterAt(root);
+  try {
+    const source = path.join(root, "src/main/java/demo/Service.java");
+    const result = await springAdapter.collect(await frameworkContextFor(router, root, [anchor(source)], [source]));
+    const methodId = (await router.frameworkFactsFor(source)).methods.find(method => method.name === "run")!.methodId;
+    assert.deepEqual((result.metadata as { transactionalMethodIds: string[] }).transactionalMethodIds, [methodId]);
+  } finally {
+    await router.close();
+  }
+});
+
 test("running springAdapter through runFrameworkAdapters against the real fixture yields the same evidence as a direct collect() call", async () => {
   const router = await readyRouter();
   try {
@@ -474,7 +791,7 @@ test("running springAdapter through runFrameworkAdapters against the real fixtur
     assert.equal(runResult.outcome.providerId, "framework");
     assert.deepEqual(runResult.outcome.evidence, directResult.outcome.evidence);
     assert.ok(runResult.outcome.evidence.length > 1, "the full rule set (injection, call path, request body, response type, publishes event) must all be present, not just one kind");
-    assert.deepEqual(new Set(runResult.outcome.evidence.map(s => s.kind)), new Set(["SPRING_INJECTION", "SPRING_CALL_PATH", "SPRING_REQUEST_BODY", "SPRING_RESPONSE_TYPE", "SPRING_PUBLISHES_EVENT"]));
+    assert.deepEqual(new Set(runResult.outcome.evidence.map(s => s.kind)), new Set(["SPRING_INJECTION", "SPRING_CALL_PATH", "SPRING_REQUEST_BODY", "SPRING_RESPONSE_TYPE", "SPRING_PUBLISHES_EVENT", "SPRING_EVENT_LISTENER"]));
     assert.deepEqual(runResult.diagnostics, []);
   } finally {
     await router.close();

@@ -191,5 +191,17 @@ export async function familyReadPlanProtectedPaths(
   });
   const maxItems = context.options.readPlanMaxItems ?? defaultReadPlanMax(context.options.mode);
   return new Set(selectReadPlanFiles({ files: ranked, options: context.options, maxItems })
+    .filter(file => frameworkEligibleForPreSemanticProtection(normalized.get(file.absolutePath)))
     .map(file => file.absolutePath));
+}
+
+function frameworkEligibleForPreSemanticProtection(candidate: CandidateEvidence | undefined): boolean {
+  if (!candidate) return false;
+  const frameworkSignals = candidate.signals.filter(signal => signal.family === "FRAMEWORK");
+  if (frameworkSignals.length === 0) return true;
+  // A candidate with independent non-framework evidence keeps its existing
+  // protection semantics. Framework-only candidates need one of the two
+  // exact relationships approved for the pre-semantic budget.
+  if (candidate.signals.some(signal => signal.family !== "FRAMEWORK")) return true;
+  return frameworkSignals.some(signal => signal.kind === "SPRING_CALL_PATH" || signal.kind === "SPRING_INJECTION");
 }

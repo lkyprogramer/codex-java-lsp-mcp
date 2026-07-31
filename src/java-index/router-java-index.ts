@@ -15,7 +15,9 @@ import type {
 } from "./index-types.js";
 import {
   CALLEES_LIMIT_DEFAULT,
+  MAX_FRAMEWORK_CALLEE_METHODS,
   MAX_DECLARATION_IDS_PER_CALL,
+  MAX_FRAMEWORK_FACT_FILES,
   bundleToFrameworkFileFacts,
   bundlesToRequestedDeclarations,
   fqnOfTypeId,
@@ -25,6 +27,8 @@ import {
   type FrameworkDeclarations,
   type FrameworkFileFacts,
   type FrameworkIndexStatus,
+  type FrameworkMethodDeclaration,
+  type FrameworkRepositoryFactMarkers,
   type FrameworkIndexView
 } from "./framework-index-view.js";
 import {
@@ -113,8 +117,10 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
   private readonly factsByPath = new Map<string, { generation: number; facts: JavaSourceFacts }>();
   /** Framework-view projection cache, generation-scoped like factsByPath - cleared alongside it in refresh/reconcile/close so a Slice C/D adapter never reads stale facts across a generation bump. */
   private readonly frameworkFactsByPath = new Map<string, { generation: number; facts: FrameworkFileFacts }>();
-  /** Build/dependency marker files (e.g. pom.xml) rarely change mid-session and aren't Java-generation-scoped - kept until close(), not cleared on refresh/reconcile. */
-  private readonly repositoryMarkerCache = new Map<string, string>();
+  /** Build/dependency marker files are cached only until the next observed refresh/reconcile. */
+  private readonly repositoryMarkerCache = new Map<string, string | null>();
+  /** Store-local import/annotation summary, one worker request per key and generation. */
+  private readonly repositoryFactMarkerCache = new Map<string, { generation: number; markers: FrameworkRepositoryFactMarkers }>();
 
   constructor(
     private readonly repoRoot: string,
@@ -262,6 +268,8 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
       this.factsByPath.delete(absolute);
       this.frameworkFactsByPath.delete(absolute);
     }
+    this.repositoryMarkerCache.clear();
+    this.repositoryFactMarkerCache.clear();
     this.generation = Math.max(generation, status.indexedGeneration);
     return status;
   }
@@ -272,6 +280,8 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     this.freshGenerationByPath.clear();
     this.factsByPath.clear();
     this.frameworkFactsByPath.clear();
+    this.repositoryMarkerCache.clear();
+    this.repositoryFactMarkerCache.clear();
     this.generation = Math.max(generation, status.indexedGeneration);
     return status;
   }
@@ -283,6 +293,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     this.factsByPath.clear();
     this.frameworkFactsByPath.clear();
     this.repositoryMarkerCache.clear();
+    this.repositoryFactMarkerCache.clear();
   }
 
   async factsFor(inputFile: string, generation = this.generation): Promise<JavaSourceFacts> {
@@ -486,30 +497,48 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
   }
 
   async frameworkFactsFor(inputFile: string, generation = this.generation): Promise<FrameworkFileFacts> {
-    const absolutePath = normalizeRepoFile(this.repoRoot, inputFile);
-    if (!existsSync(absolutePath)) {
-      throw new Error(`Java source file does not exist: ${inputFile}`);
-    }
-    const cached = this.frameworkFactsByPath.get(absolutePath);
-    if (cached?.generation === generation) return cached.facts;
-    await this.ensureFresh([absolutePath], generation);
-    const bundles = await this.client.queryFiles([absolutePath]);
-    const bundle = bundles[0];
-    const facts: FrameworkFileFacts = bundle
-      ? bundleToFrameworkFileFacts(bundle)
-      : {
-        types: [],
-        methods: [],
-        fields: [],
-        missingIds: [],
-        truncated: false,
-        relativePath: path.relative(this.repoRoot, absolutePath).replace(/\\/g, "/"),
-        module: "",
-        sourceSet: "unknown",
-        coverage: "DEGRADED"
-      };
-    this.frameworkFactsByPath.set(absolutePath, { generation, facts });
+    const [facts] = await this.frameworkFactsForFiles([inputFile], generation);
+    if (!facts) throw new Error(`Java source file does not exist: ${inputFile}`);
     return facts;
+  }
+
+  async frameworkFactsForFiles(inputFiles: readonly string[], generation = this.generation): Promise<FrameworkFileFacts[]> {
+    const absolutePaths = unique([...inputFiles]
+      .map(file => {
+        try {
+          return normalizeRepoFile(this.repoRoot, file);
+        } catch {
+          return undefined;
+        }
+      })
+      .filter((file): file is string => file !== undefined && existsSync(file)))
+      .slice(0, MAX_FRAMEWORK_FACT_FILES);
+    const uncached = absolutePaths.filter(file => this.frameworkFactsByPath.get(file)?.generation !== generation);
+    if (uncached.length > 0) {
+      await this.ensureFresh(uncached, generation);
+      const bundles = await this.client.queryFiles(uncached);
+      const bundleByPath = new Map(bundles.map(bundle => [path.resolve(this.repoRoot, bundle.file.relativePath), bundle]));
+      for (const absolutePath of uncached) {
+        const bundle = bundleByPath.get(absolutePath);
+        const facts: FrameworkFileFacts = bundle
+          ? bundleToFrameworkFileFacts(bundle)
+          : {
+            types: [],
+            methods: [],
+            fields: [],
+            missingIds: [],
+            truncated: false,
+            relativePath: path.relative(this.repoRoot, absolutePath).replace(/\\/g, "/"),
+            module: "",
+            sourceSet: "unknown",
+            packageName: "",
+            imports: [],
+            coverage: "DEGRADED"
+          };
+        this.frameworkFactsByPath.set(absolutePath, { generation, facts });
+      }
+    }
+    return absolutePaths.map(file => this.frameworkFactsByPath.get(file)!.facts);
   }
 
   /**
@@ -570,9 +599,22 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
    * whether a second callee might exist beyond index-store.ts's own cap.
    */
   async resolvedCallees(methodId: string, limit = CALLEES_LIMIT_DEFAULT): Promise<FrameworkCallees> {
+    return (await this.resolvedCalleesFor([methodId], limit)).get(methodId) ?? { callees: [], truncated: false };
+  }
+
+  async resolvedCalleesFor(methodIds: readonly string[], limit = CALLEES_LIMIT_DEFAULT): Promise<Map<string, FrameworkCallees>> {
     await this.ensureOpened(this.generation);
-    const raw = await this.client.queryCallees(methodId, limit + 1);
-    return { callees: raw.slice(0, limit), truncated: raw.length > limit };
+    const boundedLimit = Math.max(1, Math.min(CALLEES_LIMIT_DEFAULT, Math.floor(limit)));
+    const boundedMethodIds = unique([...methodIds]).slice(0, MAX_FRAMEWORK_CALLEE_METHODS);
+    const raw = await this.client.queryCalleesBatch(boundedMethodIds, boundedLimit + 1);
+    const result = new Map<string, FrameworkCallees>();
+    for (const entry of raw) {
+      result.set(entry.methodId, {
+        callees: entry.callees.slice(0, boundedLimit),
+        truncated: entry.callees.length > boundedLimit
+      });
+    }
+    return result;
   }
 
   /**
@@ -586,7 +628,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     for (const relativePath of relativePaths) {
       const cached = this.repositoryMarkerCache.get(relativePath);
       if (cached !== undefined) {
-        result.set(relativePath, cached);
+        if (cached !== null) result.set(relativePath, cached);
         continue;
       }
       try {
@@ -595,10 +637,32 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
         this.repositoryMarkerCache.set(relativePath, bounded);
         result.set(relativePath, bounded);
       } catch {
-        // Missing/unreadable marker file - omitted from the result, not an error.
+        this.repositoryMarkerCache.set(relativePath, null);
       }
     }
     return result;
+  }
+
+  async repositoryFactMarkers(input: { importPrefixes: readonly string[]; annotationPrefixes: readonly string[] }): Promise<FrameworkRepositoryFactMarkers> {
+    await this.ensureOpened(this.generation);
+    const importPrefixes = unique([...input.importPrefixes]).slice(0, 16);
+    const annotationPrefixes = unique([...input.annotationPrefixes]).slice(0, 16);
+    const key = `${importPrefixes.join("\u0000")}|${annotationPrefixes.join("\u0000")}`;
+    const cached = this.repositoryFactMarkerCache.get(key);
+    if (cached?.generation === this.generation) return cached.markers;
+    const markers = await this.client.queryRepositoryFactMarkers(importPrefixes, annotationPrefixes);
+    this.repositoryFactMarkerCache.set(key, { generation: this.generation, markers });
+    return markers;
+  }
+
+  async methodsWithParameterTypes(typeFqns: readonly string[], limit = 32): Promise<FrameworkMethodDeclaration[]> {
+    await this.ensureOpened(this.generation);
+    const boundedLimit = Math.max(1, Math.min(64, Math.floor(limit)));
+    const lookups = await this.client.queryTypes(unique([...typeFqns]).slice(0, boundedLimit).map(typeText => ({ typeText })));
+    const typeIds = lookups.filter((lookup): lookup is Extract<typeof lookup, { state: "RESOLVED" }> => lookup.state === "RESOLVED")
+      .map(lookup => lookup.type.typeId);
+    const methodIds = await this.client.queryMethodsWithParameterTypes(typeIds, boundedLimit);
+    return (await this.declarationsById(methodIds)).methods;
   }
 
   async frameworkStatus(): Promise<FrameworkIndexStatus> {

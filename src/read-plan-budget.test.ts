@@ -30,13 +30,18 @@ test("evidenceClassOf classifies anchor, verified, structural, naming, and suppo
   assert.equal(evidenceClassOf(candidate({ absolutePath: "/h", sourceSet: "test", verifiedBy: ["reference"] })), "support");
 });
 
-test("evidenceClassOf treats a framework-category candidate as verified regardless of the adapter pack's own verifiedBy/kind vocabulary", () => {
-  // Deliberately no "framework" entry in VERIFIED_EVIDENCE - the classification
-  // is category-based (Task 27 Slice C) so it works for any pack (Spring,
-  // later MyBatis/JPA) without read-plan-budget.ts knowing their kind strings.
+test("evidenceClassOf gives only an exact framework call path the verified quota", () => {
   assert.equal(
-    evidenceClassOf(candidate({ absolutePath: "/i", categories: ["framework"], verifiedBy: ["SPRING_INJECTION"], reasons: ["SPRING_INJECTION"] })),
+    evidenceClassOf(candidate({ absolutePath: "/i", categories: ["framework"], verifiedBy: ["SPRING_CALL_PATH"], reasons: ["SPRING_CALL_PATH"] })),
     "verified"
+  );
+  assert.equal(
+    evidenceClassOf(candidate({ absolutePath: "/injection", categories: ["framework"], verifiedBy: ["SPRING_INJECTION"], reasons: ["SPRING_INJECTION"] })),
+    "structural"
+  );
+  assert.equal(
+    evidenceClassOf(candidate({ absolutePath: "/request", categories: ["framework"], verifiedBy: ["SPRING_REQUEST_BODY"], reasons: ["SPRING_REQUEST_BODY"] })),
+    "structural"
   );
   // sourceSet=test / SUPPORT_CATEGORIES still take priority over "framework".
   assert.equal(

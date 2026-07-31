@@ -10,6 +10,7 @@ import type {
   JavaAnnotationFact,
   JavaCallSiteKind,
   JavaFileBundle,
+  JavaImportFact,
   JavaSourceSet,
   JavaTypeKind,
   JavaTypeRef,
@@ -35,7 +36,11 @@ export type FrameworkTypeRef = {
   resolvedFqn?: string;
   /** Only set alongside resolvedFqn - a QUALIFIED/EXPLICIT_IMPORT/SAME_PACKAGE/ENCLOSING_TYPE/JAVA_LANG resolution is high-confidence; WILDCARD_IMPORT/REPO_UNIQUE_SIMPLE_NAME is a fallback strategy a consumer may want to discount. */
   strategy?: TypeResolutionStrategy;
+  typeArguments: FrameworkTypeRef[];
+  arrayDepth: number;
 };
+
+export type FrameworkImport = Pick<JavaImportFact, "qualifiedName" | "wildcard" | "static">;
 
 export type FrameworkParameter = {
   name: string;
@@ -48,8 +53,11 @@ export type FrameworkCallSite = {
   kind: JavaCallSiteKind;
   name: string;
   arity: number;
+  receiverText?: string;
+  receiverDeclaredType?: FrameworkTypeRef;
   /** Aligned by index with the call's argument list - see JavaCallSiteFact.argumentTypeHints. */
   argumentTypeHints: FrameworkTypeRef[];
+  range: SourceRange;
 };
 
 export type FrameworkMethodDeclaration = {
@@ -59,6 +67,8 @@ export type FrameworkMethodDeclaration = {
   relativePath: string;
   name: string;
   constructor: boolean;
+  /** Full declaration/body range, used to confine method-level adapter evidence to a method anchor. */
+  range: SourceRange;
   annotations: FrameworkAnnotation[];
   parameters: FrameworkParameter[];
   /** Absent for void methods and constructors - mirrors JavaMethodFacts.returnType's own "no entry for void" convention, so a caller can gate on presence alone. */
@@ -105,6 +115,8 @@ export type FrameworkFileFacts = FrameworkDeclarations & {
   relativePath: string;
   module: string;
   sourceSet: JavaSourceSet;
+  packageName: string;
+  imports: FrameworkImport[];
   /**
    * COMPLETE for a clean parse, PARTIAL for a recovered one, DEGRADED when
    * no facts could be trusted. Derived from this file's own parseState only
@@ -131,6 +143,11 @@ export type FrameworkIndexStatus = {
   coverage: "complete" | "partial" | "degraded";
 };
 
+export type FrameworkRepositoryFactMarkers = {
+  importPrefixFound: boolean;
+  annotationPrefixFound: boolean;
+};
+
 /**
  * Bounded, read-only, framework-agnostic view over JavaIndex facts. Adapter
  * packs (Slice D) read through this instead of RouterIndex/JavaIndexClient
@@ -139,13 +156,19 @@ export type FrameworkIndexStatus = {
  */
 export interface FrameworkIndexView {
   frameworkFactsFor(file: string, generation?: number): Promise<FrameworkFileFacts>;
+  frameworkFactsForFiles(files: readonly string[], generation?: number): Promise<FrameworkFileFacts[]>;
   declarationsById(ids: readonly string[]): Promise<FrameworkDeclarations>;
   resolvedCallees(methodId: string, limit?: number): Promise<FrameworkCallees>;
+  resolvedCalleesFor(methodIds: readonly string[], limit?: number): Promise<Map<string, FrameworkCallees>>;
   repositoryMarkers(relativePaths: readonly string[]): Promise<Map<string, string>>;
+  repositoryFactMarkers(input: { importPrefixes: readonly string[]; annotationPrefixes: readonly string[] }): Promise<FrameworkRepositoryFactMarkers>;
+  methodsWithParameterTypes(typeFqns: readonly string[], limit?: number): Promise<FrameworkMethodDeclaration[]>;
   frameworkStatus(): Promise<FrameworkIndexStatus>;
 }
 
 export const CALLEES_LIMIT_DEFAULT = 80;
+export const MAX_FRAMEWORK_FACT_FILES = 200;
+export const MAX_FRAMEWORK_CALLEE_METHODS = 512;
 
 /**
  * declarationsById's own per-call cap (mirrors findTypeDefinitions' existing
@@ -202,7 +225,13 @@ function strategyOfRef(ref: JavaTypeRef): TypeResolutionStrategy | undefined {
 function toFrameworkTypeRef(ref: JavaTypeRef): FrameworkTypeRef {
   const resolvedFqn = resolvedFqnOfRef(ref);
   const strategy = strategyOfRef(ref);
-  return { text: ref.text, ...(resolvedFqn ? { resolvedFqn } : {}), ...(strategy ? { strategy } : {}) };
+  return {
+    text: ref.text,
+    ...(resolvedFqn ? { resolvedFqn } : {}),
+    ...(strategy ? { strategy } : {}),
+    typeArguments: ref.typeArguments.map(toFrameworkTypeRef),
+    arrayDepth: ref.arrayDepth
+  };
 }
 
 /** external:<fqn> / type:<fqn> edge targets both resolve to a plain fqn string here - type-local: targets (an annotation type that is itself a local/anonymous declaration) are left unresolved rather than guessed, consistent with the resolver's existing contract. */
@@ -270,6 +299,8 @@ export function bundleToFrameworkFileFacts(bundle: JavaFileBundle): FrameworkFil
     relativePath: bundle.file.relativePath,
     module: bundle.file.module,
     sourceSet: bundle.file.sourceSet,
+    packageName: bundle.file.packageName,
+    imports: bundle.file.imports.map(({ qualifiedName, wildcard, static: isStatic }) => ({ qualifiedName, wildcard, static: isStatic })),
     coverage: coverageOfParseState(bundle.file.parseState)
   };
 }
@@ -338,6 +369,7 @@ function bundleToDeclarations(bundle: JavaFileBundle): FrameworkDeclarations {
       relativePath,
       name: method.name,
       constructor: method.constructor,
+      range: method.range,
       annotations: toFrameworkAnnotations(method.methodId, method.annotations, annotatedWithByFromId),
       ...(method.returnType ? { returnType: toFrameworkTypeRef(method.returnType) } : {}),
       parameters: method.parameters.map((param, index) => ({
@@ -354,7 +386,10 @@ function bundleToDeclarations(bundle: JavaFileBundle): FrameworkDeclarations {
         kind: callSite.kind,
         name: callSite.name,
         arity: callSite.arity,
-        argumentTypeHints: callSite.argumentTypeHints.map(toFrameworkTypeRef)
+        ...(callSite.receiverText ? { receiverText: callSite.receiverText } : {}),
+        ...(callSite.receiverDeclaredType ? { receiverDeclaredType: toFrameworkTypeRef(callSite.receiverDeclaredType) } : {}),
+        argumentTypeHints: callSite.argumentTypeHints.map(toFrameworkTypeRef),
+        range: callSite.range
       }))
     })),
     missingIds: [],

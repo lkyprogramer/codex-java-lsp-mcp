@@ -42,7 +42,7 @@ import { collectLexicalEvidence } from "./providers/lexical-provider.js";
 import { collectLiveSemanticEvidence, collectPersistedSemanticEvidence } from "./providers/semantic-provider.js";
 import { collectSupportEvidence } from "./providers/support-provider.js";
 import { collectRelationshipEvidence } from "./providers/relationship-provider.js";
-import { collectFrameworkEvidence } from "./providers/framework-provider.js";
+import { collectFrameworkEvidence, FRAMEWORK_ADAPTERS } from "./providers/framework-provider.js";
 import { buildShadowRanking } from "./shadow-ranking.js";
 import {
   type ImpactOptions,
@@ -202,6 +202,16 @@ export class AgentRouter {
     const afterStaticPaths = unionPaths(afterLexicalPaths, typeReferenceOutcome);
     updateCollectorElapsed(phaseMs, typeReference, importGraph, persistedSemantic);
 
+    // A framework adapter may only expand an anchor or a candidate that the
+    // static provider has already connected structurally.  Passing the
+    // normalized static surface (rather than all lexical recall) prevents an
+    // unrelated Spring bean found by name-search from displacing a task's
+    // established read-plan candidates.
+    const normalizedStaticEvidence = normalizeEvidence(
+      [...staticStructureOutcome.evidence, ...typeReferenceOutcome.evidence],
+      this.repoRoot
+    );
+
     // Task 27 Slice C: an empty adapter registry until Slice D registers the
     // Spring pack, so this is inert scaffolding today - see
     // providers/framework-provider.ts. metadata/diagnostics are a
@@ -210,7 +220,7 @@ export class AgentRouter {
     const frameworkResult = await timed(phaseMs, "frameworkEvidence", async () => collectFrameworkEvidence({
       ...providerInputBase,
       existingCandidatePaths: afterStaticPaths
-    }));
+    }, FRAMEWORK_ADAPTERS, [...normalizedStaticEvidence.values()]));
     const frameworkOutcome = frameworkResult.outcome;
     const afterFrameworkPaths = unionPaths(afterStaticPaths, frameworkOutcome);
 
@@ -232,7 +242,7 @@ export class AgentRouter {
     // Live JDT budget is spent only after the protected read-plan paths are
     // already pinned from cheaper evidence, matching the pre-Task-24 order.
     const liveSemanticOutcome = await collectLiveSemanticEvidence({ ...providerInputBase, existingCandidatePaths: afterFrameworkPaths });
-    const afterSemanticPaths = unionPaths(afterStaticPaths, liveSemanticOutcome);
+    const afterSemanticPaths = unionPaths(afterFrameworkPaths, liveSemanticOutcome);
     const supportOutcome = await collectSupportEvidence({ ...providerInputBase, existingCandidatePaths: afterSemanticPaths });
 
     const nonRelationshipOutcomes: ProviderOutcome[] = [...phaseOneOutcomes, liveSemanticOutcome, supportOutcome];
@@ -325,6 +335,11 @@ export class AgentRouter {
           files: sourceAfter.javaIndex.files,
           coverage: sourceAfter.coverage,
           openSource: sourceAfter.openSource
+        },
+        framework: {
+          metadata: frameworkResult.metadata,
+          diagnostics: frameworkResult.diagnostics,
+          completion: frameworkOutcome.completion
         }
       }
     });

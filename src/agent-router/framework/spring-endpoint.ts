@@ -14,11 +14,13 @@ export type SpringEndpointFact = {
   paths: string[];
 };
 
-type SpringMapping = { httpMethods: string[]; paths: string[] };
+type SpringMapping = { httpMethods: string[]; paths: string[]; unknownPath?: true };
 
 const STRING_LITERAL = /"((?:[^"\\]|\\.)*)"/g;
 const NAMED_VALUE_OR_PATH = /(?:^|,)\s*(?:value|path)\s*=\s*("(?:[^"\\]|\\.)*"|\{[^{}]*\})/;
 const HAS_NAMED_ARGUMENT = /^[A-Za-z_]\w*\s*=/;
+const PLAIN_STRING_LITERAL = /^"(?:[^"\\]|\\.)*"$/;
+const PLAIN_STRING_ARRAY = /^\{\s*"(?:[^"\\]|\\.)*"\s*(?:,\s*"(?:[^"\\]|\\.)*"\s*)*\}$/;
 const REQUEST_METHOD_CONSTANT = /RequestMethod\.(\w+)/g;
 
 function stringLiteralsIn(text: string): string[] {
@@ -31,13 +33,24 @@ function stringLiteralsIn(text: string): string[] {
  * than a guess - this is the one place the plan's "conservative" instruction is load-bearing.
  */
 export function pathsFromArgumentsText(argumentsText: string | undefined): string[] {
-  if (!argumentsText) return [];
+  return pathsFromMappingArguments(argumentsText).paths;
+}
+
+function pathsFromMappingArguments(argumentsText: string | undefined): Pick<SpringMapping, "paths" | "unknownPath"> {
+  if (!argumentsText) return { paths: [] };
   const inner = argumentsText.slice(1, -1).trim();
-  if (!inner) return [];
+  if (!inner) return { paths: [] };
   const named = NAMED_VALUE_OR_PATH.exec(inner);
-  if (named) return stringLiteralsIn(named[1]!);
-  if (HAS_NAMED_ARGUMENT.test(inner)) return [];
-  return stringLiteralsIn(inner);
+  if (named) return { paths: literalPaths(named[1]!) };
+  if (/(?:^|,)\s*(?:value|path)\s*=/.test(inner)) return { paths: [], unknownPath: true };
+  if (HAS_NAMED_ARGUMENT.test(inner)) return { paths: [] };
+  const paths = literalPaths(inner);
+  return paths.length > 0 ? { paths } : { paths: [], unknownPath: true };
+}
+
+function literalPaths(value: string): string[] {
+  if (!PLAIN_STRING_LITERAL.test(value) && !PLAIN_STRING_ARRAY.test(value)) return [];
+  return stringLiteralsIn(value);
 }
 
 /** Only the `RequestMethod.GET`-shaped enum-qualified form is recognized - a bare `GET` via static import is left undetected rather than guessed. */
@@ -51,11 +64,11 @@ export function mappingOf(annotations: readonly FrameworkAnnotation[]): SpringMa
   for (const annotation of annotations) {
     if (!annotation.resolvedFqn) continue;
     const verb = SPRING_MAPPING_ANNOTATIONS.get(annotation.resolvedFqn);
-    if (verb) return { httpMethods: [verb], paths: pathsFromArgumentsText(annotation.argumentsText) };
+    if (verb) return { httpMethods: [verb], ...pathsFromMappingArguments(annotation.argumentsText) };
     if (annotation.resolvedFqn === SPRING_REQUEST_MAPPING_FQN) {
       return {
         httpMethods: httpMethodsFromArgumentsText(annotation.argumentsText),
-        paths: pathsFromArgumentsText(annotation.argumentsText)
+        ...pathsFromMappingArguments(annotation.argumentsText)
       };
     }
   }
@@ -70,6 +83,10 @@ function joinPath(base: string, sub: string): string {
 
 /** Composes a class-level `@RequestMapping` prefix (if any) with a method-level mapping - a bare method mapping (`classMapping` undefined) is used as-is. */
 export function composeEndpointFact(methodId: string, classMapping: SpringMapping | undefined, methodMapping: SpringMapping): SpringEndpointFact {
+  if (classMapping?.unknownPath || methodMapping.unknownPath) {
+    const httpMethods = methodMapping.httpMethods.length > 0 ? methodMapping.httpMethods : classMapping?.httpMethods ?? [];
+    return { methodId, httpMethods, paths: [] };
+  }
   const basePaths = classMapping?.paths ?? [];
   const subPaths = methodMapping.paths;
   const paths = basePaths.length > 0 && subPaths.length > 0

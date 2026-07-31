@@ -57,7 +57,10 @@ export type JavaIndexRequest =
   | { id: number; type: "QUERY_TYPE_REFERENCERS"; typeId: string; edgeKinds: StaticEdgeKind[]; limit: number }
   | { id: number; type: "QUERY_CALLERS"; methodId: string; limit: number }
   | { id: number; type: "QUERY_CALLEES"; methodId: string; limit: number }
+  | { id: number; type: "QUERY_CALLEES_BATCH"; methodIds: string[]; limit: number }
+  | { id: number; type: "QUERY_METHODS_WITH_PARAMETER_TYPES"; typeIds: string[]; limit: number }
   | { id: number; type: "QUERY_FILES"; files: string[] }
+  | { id: number; type: "QUERY_REPOSITORY_FACT_MARKERS"; importPrefixes: string[]; annotationPrefixes: string[] }
   | { id: number; type: "STATUS" }
   | { id: number; type: "FLUSH" }
   | { id: number; type: "CLOSE" };
@@ -94,6 +97,11 @@ function isBoolean(value: unknown): value is boolean {
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every(isString);
+}
+
+export function validateStringArray(value: unknown): string[] {
+  if (!isStringArray(value)) invalid("string[]", "expected an array of strings");
+  return value;
 }
 
 function isOneOf<T extends string>(value: unknown, options: readonly T[]): value is T {
@@ -715,6 +723,26 @@ export function validateIndexedReferenceArray(value: unknown): IndexedReference[
       generation: source.generation
     };
   });
+}
+
+export type IndexedReferenceBatch = Array<{ methodId: string; callees: IndexedReference[] }>;
+
+export function validateIndexedReferenceBatch(value: unknown): IndexedReferenceBatch {
+  return array(value, "IndexedReferenceBatch").map((entry, index) => {
+    const source = record(entry, `IndexedReferenceBatch[${index}]`);
+    if (!isString(source.methodId)) invalid(`IndexedReferenceBatch[${index}]`, "methodId");
+    return {
+      methodId: source.methodId,
+      callees: validateIndexedReferenceArray(source.callees)
+    };
+  });
+}
+
+export function validateRepositoryFactMarkers(value: unknown): { importPrefixFound: boolean; annotationPrefixFound: boolean } {
+  const source = record(value, "RepositoryFactMarkers");
+  if (!isBoolean(source.importPrefixFound)) invalid("RepositoryFactMarkers", "importPrefixFound");
+  if (!isBoolean(source.annotationPrefixFound)) invalid("RepositoryFactMarkers", "annotationPrefixFound");
+  return { importPrefixFound: source.importPrefixFound, annotationPrefixFound: source.annotationPrefixFound };
 }
 
 export function validateFileBundleArray(value: unknown): JavaFileBundle[] {

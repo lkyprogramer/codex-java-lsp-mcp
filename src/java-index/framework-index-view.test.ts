@@ -182,6 +182,7 @@ test("bundleToFrameworkFileFacts joins parameter annotations by the parameter's 
   const projectedMethod = facts.methods[0]!;
 
   assert.equal(projectedMethod.parameters[0]!.annotations[0]!.resolvedFqn, "org.springframework.beans.factory.annotation.Autowired");
+  assert.deepEqual(projectedMethod.range, RANGE);
   assert.equal(projectedMethod.parameters[0]!.type.resolvedFqn, "demo.Order");
   assert.equal(projectedMethod.callSites[0]!.argumentTypeHints[0]!.resolvedFqn, "java.time.Instant");
   assert.equal(projectedMethod.callSites[0]!.argumentTypeHints[1]!.resolvedFqn, undefined);

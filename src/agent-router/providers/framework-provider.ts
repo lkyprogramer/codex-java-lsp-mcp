@@ -16,14 +16,15 @@
 import type { FrameworkAdapter, FrameworkCollectResult } from "../framework/adapter.js";
 import { runFrameworkAdapters } from "../framework/runner.js";
 import { springAdapter } from "../framework/spring-adapter.js";
-import type { ProviderInput } from "../evidence.js";
+import type { CandidateEvidence, ProviderInput } from "../evidence.js";
 
 /** Every registered framework pack (Slice D's Spring pack; later Task 28/29 append theirs here). */
 export const FRAMEWORK_ADAPTERS: readonly FrameworkAdapter[] = [springAdapter];
 
 export async function collectFrameworkEvidence(
   input: ProviderInput,
-  adapters: readonly FrameworkAdapter[] = FRAMEWORK_ADAPTERS
+  adapters: readonly FrameworkAdapter[] = FRAMEWORK_ADAPTERS,
+  staticEvidence: readonly CandidateEvidence[] = []
 ): Promise<FrameworkCollectResult> {
   if (adapters.length === 0) {
     return {
@@ -43,6 +44,7 @@ export async function collectFrameworkEvidence(
     repoRoot: input.repoRoot,
     anchors: input.anchors,
     candidateFiles: input.existingCandidatePaths,
+    staticEvidence,
     frameworkIndex: input.frameworkIndex,
     generation: input.generation,
     budget: input.budget

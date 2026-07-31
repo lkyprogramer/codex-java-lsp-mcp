@@ -32,6 +32,7 @@ type BuildImpactResultInput = {
     readonly sourceFacts: Record<string, unknown>;
     readonly freshness: Record<string, unknown>;
     readonly javaIndex: Record<string, unknown>;
+    readonly framework?: Record<string, unknown>;
   };
 };
 
@@ -83,6 +84,7 @@ export function buildImpactResult(input: BuildImpactResultInput): ImpactResult {
       sourceFacts: input.metrics.sourceFacts,
       freshness: input.metrics.freshness,
       javaIndex: input.metrics.javaIndex,
+      framework: input.metrics.framework,
       outputBytes: 0
     }
   };

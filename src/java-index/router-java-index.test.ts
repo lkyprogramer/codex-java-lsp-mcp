@@ -176,3 +176,31 @@ test("repositoryMarkers reads a small marker file's content and caches it indepe
     await router.close();
   }
 });
+
+test("framework activation marker caches are invalidated by both BUILD and JAVA refresh batches", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "framework-view-marker-refresh-"));
+  const javaPath = "src/main/java/demo/Springy.java";
+  write(repoRoot, "pom.xml", "<project><dependency><groupId>org.springframework</groupId></dependency></project>");
+  write(repoRoot, javaPath, "package demo;\nimport org.springframework.stereotype.Service;\n@Service class Springy {}\n");
+  const router = await readyRouter(repoRoot);
+  try {
+    assert.match((await router.repositoryMarkers(["pom.xml"])).get("pom.xml") ?? "", /org\.springframework/);
+    assert.deepEqual(
+      await router.repositoryFactMarkers({ importPrefixes: ["org.springframework."], annotationPrefixes: ["org.springframework."] }),
+      { importPrefixFound: true, annotationPrefixFound: true }
+    );
+
+    write(repoRoot, "pom.xml", "<project><artifactId>plain</artifactId></project>");
+    write(repoRoot, javaPath, "package demo;\nclass Springy {}\n");
+    await router.refresh(2, ["pom.xml", javaPath], []);
+
+    assert.doesNotMatch((await router.repositoryMarkers(["pom.xml"])).get("pom.xml") ?? "", /org\.springframework/);
+    assert.deepEqual(
+      await router.repositoryFactMarkers({ importPrefixes: ["org.springframework."], annotationPrefixes: ["org.springframework."] }),
+      { importPrefixFound: false, annotationPrefixFound: false },
+      "a cached positive activation fact must not survive either build-marker or Java-facts refresh"
+    );
+  } finally {
+    await router.close();
+  }
+});

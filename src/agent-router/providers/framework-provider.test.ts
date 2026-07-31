@@ -18,11 +18,15 @@ function fakeFrameworkIndex(): FrameworkIndexView {
   return {
     frameworkFactsFor: async () => ({
       types: [], methods: [], fields: [], missingIds: [], truncated: false,
-      relativePath: "module-a/src/main/java/demo/Anchor.java", module: "module-a", sourceSet: "main", coverage: "COMPLETE"
+      relativePath: "module-a/src/main/java/demo/Anchor.java", module: "module-a", sourceSet: "main", packageName: "demo", imports: [], coverage: "COMPLETE"
     }),
+    frameworkFactsForFiles: async () => [],
     declarationsById: async () => ({ types: [], methods: [], fields: [], missingIds: [], truncated: false }),
     resolvedCallees: async () => ({ callees: [], truncated: false }),
+    resolvedCalleesFor: async () => new Map(),
     repositoryMarkers: async () => new Map(),
+    repositoryFactMarkers: async () => ({ importPrefixFound: false, annotationPrefixFound: false }),
+    methodsWithParameterTypes: async () => [],
     frameworkStatus: async () => ({ coverage: "complete" })
   };
 }
@@ -83,5 +87,6 @@ test("collectFrameworkEvidence maps ProviderInput fields onto FrameworkAdapterCo
   assert.equal(seenContext?.repoRoot, "/repo");
   assert.equal(seenContext?.generation, 3);
   assert.deepEqual(seenContext?.candidateFiles, ["/repo/module-a/src/main/java/demo/Service.java"]);
+  assert.deepEqual(seenContext?.staticEvidence, []);
   assert.strictEqual(seenContext?.frameworkIndex, providerInput.frameworkIndex);
 });

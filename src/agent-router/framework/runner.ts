@@ -56,7 +56,9 @@ export async function runFrameworkAdapters(
   const startedAt = Date.now();
   const boundedContext: FrameworkAdapterContext = {
     ...context,
-    candidateFiles: context.candidateFiles.slice(0, MAX_FRAMEWORK_TRAVERSAL_FILES)
+    candidateFiles: context.candidateFiles.slice(0, MAX_FRAMEWORK_TRAVERSAL_FILES),
+    staticEvidence: context.staticEvidence.filter(candidate =>
+      context.candidateFiles.slice(0, MAX_FRAMEWORK_TRAVERSAL_FILES).includes(candidate.file))
   };
   const evidence: ProviderOutcome["evidence"] = [];
   const candidates: ProviderOutcome["candidates"] = [];
@@ -76,6 +78,11 @@ export async function runFrameworkAdapters(
     } catch (error) {
       diagnostics.push(`framework adapter "${adapter.id}" isActive() threw: ${errorMessage(error)}`);
       continue;
+    }
+    if (context.budget.expired()) {
+      completion = worseCompletion(completion, "PARTIAL_TIMEOUT");
+      diagnostics.push(`framework adapter runner: deadline exhausted while adapter "${adapter.id}" was activating`);
+      break;
     }
     if (!active) continue;
     try {

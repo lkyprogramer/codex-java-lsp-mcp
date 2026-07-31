@@ -35,13 +35,11 @@ export function evidenceClassOf(file: CandidateFile): EvidenceClass {
   if (verifiedBy.some(item => VERIFIED_EVIDENCE.has(item))) {
     return "verified";
   }
-  // Category-based, not verifiedBy-string-based (Task 27 Slice C): a
-  // framework adapter's `kind` vocabulary is pack-specific (Spring, later
-  // MyBatis/JPA) and unknown to this generic module, but every pack routes
-  // through the same "framework" category (materialize-candidates.ts), so
-  // checking that one string covers every pack without listing any of them.
+  // Framework evidence has mixed strength. Only a pack's exact resolved call
+  // path may spend a verified slot; injection and DTO/event/bean relations are
+  // structural so they cannot evict JDT-verified evidence as a group.
   if (file.categories.includes("framework")) {
-    return "verified";
+    return file.reasons.includes("SPRING_CALL_PATH") ? "verified" : "structural";
   }
   if (verifiedBy.includes("typeGraph") && file.reasons.includes("typeGraph:implementation-lookup")) {
     return "naming";

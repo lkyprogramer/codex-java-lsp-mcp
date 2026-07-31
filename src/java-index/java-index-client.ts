@@ -13,8 +13,11 @@ import {
   isJavaIndexResponse,
   validateAnchorFacts,
   validateFileBundleArray,
+  validateIndexedReferenceBatch,
   validateIndexedReferenceArray,
   validateJavaIndexStatus,
+  validateRepositoryFactMarkers,
+  validateStringArray,
   validateTypeFactsArray,
   validateTypeLookup,
   validateTypeLookupArray,
@@ -170,9 +173,32 @@ export class JavaIndexClient {
     return this.request({ type: "QUERY_CALLEES", methodId, limit }, validateIndexedReferenceArray);
   }
 
+  async queryCalleesBatch(methodIds: string[], limit: number): Promise<Array<{ methodId: string; callees: IndexedReference[] }>> {
+    await this.ensureOpen();
+    if (methodIds.length === 0) return [];
+    return this.request({ type: "QUERY_CALLEES_BATCH", methodIds, limit }, validateIndexedReferenceBatch);
+  }
+
+  async queryMethodsWithParameterTypes(typeIds: string[], limit: number): Promise<string[]> {
+    await this.ensureOpen();
+    if (typeIds.length === 0) return [];
+    return this.request({ type: "QUERY_METHODS_WITH_PARAMETER_TYPES", typeIds, limit }, validateStringArray);
+  }
+
   async queryFiles(files: string[]): Promise<JavaFileBundle[]> {
     await this.ensureOpen();
     return this.request({ type: "QUERY_FILES", files }, validateFileBundleArray);
+  }
+
+  async queryRepositoryFactMarkers(
+    importPrefixes: string[],
+    annotationPrefixes: string[]
+  ): Promise<{ importPrefixFound: boolean; annotationPrefixFound: boolean }> {
+    await this.ensureOpen();
+    return this.request(
+      { type: "QUERY_REPOSITORY_FACT_MARKERS", importPrefixes, annotationPrefixes },
+      validateRepositoryFactMarkers
+    );
   }
 
   async close(): Promise<void> {

@@ -315,7 +315,7 @@ test("refreshing a declaration preserves inbound implementation edges when its s
   await client.close();
 });
 
-test("Task 19's query commands (anchor/type/implementers/referencers/callers/callees) answer through a real worker thread", async () => {
+test("Task 19/27 query commands (anchor/type/implementers/referencers/callers/callees/batched parameter methods) answer through a real worker thread", async () => {
   const absolutePath = path.join(fixturesRepoRoot, "src/main/java/demo/PaymentGateway.java");
   const client = new JavaIndexClient(fixturesRepoRoot, mkdtempSync(path.join(tmpdir(), "java-index-query-cache-")));
   await client.open(1);
@@ -348,6 +348,12 @@ test("Task 19's query commands (anchor/type/implementers/referencers/callers/cal
   const typeLookup = await client.queryType("PaymentGateway", absolutePath);
   assert.equal(typeLookup.state, "RESOLVED");
   assert.equal((typeLookup as { type: { typeId: string } }).type.typeId, paymentGateway.typeId);
+
+  const commandLookup = await client.queryType("PaymentCommand", absolutePath);
+  assert.equal(commandLookup.state, "RESOLVED");
+  const parameterMethods = await client.queryMethodsWithParameterTypes([(commandLookup as { type: { typeId: string } }).type.typeId], 10);
+  assert.ok(parameterMethods.includes(gatewayPayMethod.methodId));
+  assert.ok(parameterMethods.includes(servicePayMethod.methodId));
 
   await client.close();
 });

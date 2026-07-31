@@ -26,6 +26,7 @@ function context(overrides: Partial<FrameworkAdapterContext> = {}): FrameworkAda
     repoRoot: "/repo",
     anchors: [anchor()],
     candidateFiles: ["/repo/module-a/src/main/java/demo/Service.java"],
+    staticEvidence: [],
     frameworkIndex: {} as FrameworkIndexView,
     generation: 1,
     budget: DeadlineBudget.fromTimeout(5_000),

@@ -299,6 +299,43 @@ test("typeByFqn, implementers, typeReferencers, callers, callees and files answe
   assert.equal(bundles[0]!.edges.length, 3);
 });
 
+test("methodsWithParameterTypes unions bounded PARAM_TYPE reverse indexes without a per-type caller scan", () => {
+  const store = new JavaIndexStore();
+  const firstEvent = emptyBundle("src/main/java/demo/FirstEvent.java", "FirstEvent");
+  const secondEvent = emptyBundle("src/main/java/demo/SecondEvent.java", "SecondEvent");
+  const firstListener = emptyBundle("src/main/java/demo/FirstListener.java", "FirstListener");
+  const secondListener = emptyBundle("src/main/java/demo/SecondListener.java", "SecondListener");
+  const firstMethod = addMethod(firstListener, "onFirst");
+  const secondMethod = addMethod(secondListener, "onSecond");
+  firstMethod.parameters.push({
+    name: "event",
+    type: { text: "FirstEvent", simpleName: "FirstEvent", typeArguments: [], arrayDepth: 0, resolution: { state: "RESOLVED_REPO", typeId: firstEvent.types[0]!.typeId, strategy: "SAME_PACKAGE" } },
+    varargs: false,
+    annotations: [],
+    range: RANGE
+  });
+  secondMethod.parameters.push({
+    name: "event",
+    type: { text: "SecondEvent", simpleName: "SecondEvent", typeArguments: [], arrayDepth: 0, resolution: { state: "RESOLVED_REPO", typeId: secondEvent.types[0]!.typeId, strategy: "SAME_PACKAGE" } },
+    varargs: false,
+    annotations: [],
+    range: RANGE
+  });
+  addEdge(firstListener, { fromId: firstMethod.methodId, toId: firstEvent.types[0]!.typeId, kind: "PARAM_TYPE", confidence: 1, range: RANGE });
+  addEdge(secondListener, { fromId: secondMethod.methodId, toId: secondEvent.types[0]!.typeId, kind: "PARAM_TYPE", confidence: 1, range: RANGE });
+  for (const bundle of [firstEvent, secondEvent, firstListener, secondListener]) store.replaceFile(bundle);
+
+  assert.deepEqual(
+    store.methodsWithParameterTypes([firstEvent.types[0]!.typeId, secondEvent.types[0]!.typeId], 8),
+    [firstMethod.methodId, secondMethod.methodId]
+  );
+  assert.deepEqual(
+    store.methodsWithParameterTypes([firstEvent.types[0]!.typeId, secondEvent.types[0]!.typeId], 1),
+    [firstMethod.methodId],
+    "the shared batch bound applies after deduplication and deterministic ordering"
+  );
+});
+
 // emptyBundle hardcodes package "demo" (matching the plan's Step 1 fixtures,
 // all in one package); this test needs distinct packages "a"/"b"/"use" to
 // exercise explicit-import vs same-package-name vs collision, so it builds

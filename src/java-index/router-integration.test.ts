@@ -2,10 +2,11 @@
 // output: End-to-end proof that AgentRouter consumes async V2 facts without falling back to a repository scan.
 // pos: Task 22 router integration and no-hidden-rg-fallback coverage.
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { gunzipSync, gzipSync } from "node:zlib";
 import { AgentRouter } from "../agent-router/index.js";
 import type { ImpactOptions } from "../agent-types.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
@@ -108,6 +109,17 @@ async function waitForBackgroundSweep(client: JavaIndexClient): Promise<void> {
     await new Promise(resolve => setTimeout(resolve, 20));
   }
   assert.fail("fixture JavaIndex background sweep did not settle within 2 seconds");
+}
+
+async function buildCompleteSnapshot(root: string, cacheDir: string): Promise<void> {
+  const client = new JavaIndexClient(root, cacheDir);
+  try {
+    await client.open(0);
+    await client.reconcile(0);
+    await waitForBackgroundSweep(client);
+  } finally {
+    await client.close();
+  }
 }
 
 async function writeJava(root: string, relativePath: string, content: string): Promise<string> {
@@ -273,6 +285,52 @@ test("complete JavaIndex resolves implementation relations even when naming reca
     );
   } finally {
     await index.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a rejected own snapshot stays pending until its replacement sweep has been installed", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-index-snapshot-reconcile-race-"));
+  const cacheDir = path.join(root, ".cache");
+  let replacementClient: JavaIndexClient | undefined;
+  try {
+    for (let index = 0; index < 300; index += 1) {
+      await writeJava(
+        root,
+        `src/main/java/demo/Type${index}.java`,
+        `package demo; class Type${index} {}`
+      );
+    }
+    await buildCompleteSnapshot(root, cacheDir);
+
+    const snapshotPath = path.join(cacheDir, "java-index-snapshot.json.gz");
+    const snapshot = JSON.parse(gunzipSync(await readFile(snapshotPath)).toString("utf8")) as Record<string, unknown>;
+    snapshot.extractorVersion = "intentionally-stale";
+    await writeFile(snapshotPath, gzipSync(JSON.stringify(snapshot)));
+
+    replacementClient = new JavaIndexClient(root, cacheDir);
+    const replacementIndex = new RouterJavaIndex(root, replacementClient);
+    await replacementIndex.open(0);
+
+    let observedIdleEmptyIndex = false;
+    for (let attempt = 0; attempt < 500; attempt += 1) {
+      const status = await replacementClient.status();
+      if (status.pendingBackground === 0 && status.files === 0) {
+        observedIdleEmptyIndex = true;
+        break;
+      }
+      if (status.files === 300 && status.pendingBackground === 0) break;
+      await new Promise(resolve => setTimeout(resolve, 1));
+    }
+
+    assert.equal(
+      observedIdleEmptyIndex,
+      false,
+      "a caller must not observe an idle empty index between rejected snapshot hydration and its replacement sweep"
+    );
+    await waitForCompleteIndex(replacementIndex);
+  } finally {
+    await replacementClient?.close().catch(() => undefined);
     await rm(root, { recursive: true, force: true });
   }
 });

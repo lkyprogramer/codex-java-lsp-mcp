@@ -694,13 +694,25 @@ function startOwnSnapshotHydration(
       lastRefreshError = `failed to verify restored snapshot: ${error instanceof Error ? error.message : String(error)}`;
       if (!closing) queueSnapshotVerificationReconcile(status.indexedGeneration);
     } finally {
-      ownSnapshotVerificationPending = false;
-      ownSnapshotVerificationStale = false;
-      const reconcileGeneration = queuedReconcileAfterSnapshotVerification;
-      queuedReconcileAfterSnapshotVerification = undefined;
-      if (reconcileGeneration !== undefined && !closing) {
-        await beginBackgroundSweep(reconcileGeneration);
-        status = { ...status, indexedGeneration: Math.max(status.indexedGeneration, reconcileGeneration) };
+      // Keep OPEN observably pending until a queued fallback sweep has been
+      // installed.  Clearing this first creates a status window with neither
+      // a verification nor a sweep, so an ordinary caller can mistake an
+      // empty store for an idle, usable index after a rejected snapshot.
+      try {
+        let reconcileGeneration = queuedReconcileAfterSnapshotVerification;
+        queuedReconcileAfterSnapshotVerification = undefined;
+        while (reconcileGeneration !== undefined && !closing) {
+          await beginBackgroundSweep(reconcileGeneration);
+          status = { ...status, indexedGeneration: Math.max(status.indexedGeneration, reconcileGeneration) };
+          // RECONCILE requests can arrive while discovery above yields. Fold
+          // their latest generation into the just-installed sweep before
+          // exposing the worker as no longer pending.
+          reconcileGeneration = queuedReconcileAfterSnapshotVerification;
+          queuedReconcileAfterSnapshotVerification = undefined;
+        }
+      } finally {
+        ownSnapshotVerificationPending = false;
+        ownSnapshotVerificationStale = false;
       }
     }
   })();
@@ -1107,6 +1119,22 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         respond({ id: request.id, ok: true, value: store?.callees(request.methodId, request.limit) ?? [] });
         return;
       }
+      case "QUERY_CALLEES_BATCH": {
+        respond({
+          id: request.id,
+          ok: true,
+          value: request.methodIds.map(methodId => ({ methodId, callees: store?.callees(methodId, request.limit) ?? [] }))
+        });
+        return;
+      }
+      case "QUERY_METHODS_WITH_PARAMETER_TYPES": {
+        respond({
+          id: request.id,
+          ok: true,
+          value: store?.methodsWithParameterTypes(request.typeIds, request.limit) ?? []
+        });
+        return;
+      }
       case "QUERY_FILES": {
         const relativePaths = request.files
           .map(inputPath => {
@@ -1120,6 +1148,15 @@ async function handle(request: JavaIndexRequest): Promise<void> {
           })
           .filter((relativePath): relativePath is string => relativePath !== undefined);
         respond({ id: request.id, ok: true, value: store?.files(relativePaths) ?? [] });
+        return;
+      }
+      case "QUERY_REPOSITORY_FACT_MARKERS": {
+        respond({
+          id: request.id,
+          ok: true,
+          value: store?.repositoryFactMarkers(request.importPrefixes, request.annotationPrefixes)
+            ?? { importPrefixFound: false, annotationPrefixFound: false }
+        });
         return;
       }
       default: {

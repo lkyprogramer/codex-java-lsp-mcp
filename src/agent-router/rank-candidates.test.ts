@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as candidateRanking from "./rank-candidates.js";
-import { foldProviderCandidates, rankCandidates } from "./rank-candidates.js";
+import { familyReadPlanProtectedPaths, foldProviderCandidates, rankCandidates } from "./rank-candidates.js";
 import type { CandidateFile, ImpactOptions, ResolvedAnchor } from "../agent-types.js";
 import type { CandidateEvidence, EvidenceSignal, ProviderOutcome } from "./evidence.js";
 
@@ -322,4 +322,43 @@ test("pre-semantic protection ignores a score that exists only in the retired ad
     false,
     "the high legacy fragment score must not reserve a read-plan slot when its family evidence ties the other lexical candidates"
   );
+});
+
+test("pre-semantic protection admits exact Spring injection but not framework response metadata-like relations", async () => {
+  const injectionFile = "/repo/module-a/src/main/java/demo/InjectedService.java";
+  const responseFile = "/repo/module-a/src/main/java/demo/OrderResponse.java";
+  const injectionSignal = signal({
+    candidateFile: injectionFile,
+    kind: "SPRING_INJECTION",
+    family: "FRAMEWORK",
+    provenance: "FRAMEWORK_INFERRED",
+    weight: 90,
+    confidence: 0.97
+  });
+  const responseSignal = signal({
+    candidateFile: responseFile,
+    kind: "SPRING_RESPONSE_TYPE",
+    family: "FRAMEWORK",
+    provenance: "FRAMEWORK_INFERRED",
+    weight: 70,
+    confidence: 0.95
+  });
+  const normalized = new Map<string, CandidateEvidence>([
+    [injectionFile, evidenceCandidate(injectionFile, [injectionSignal], { module: "module-a", sourceSet: "main" })],
+    [responseFile, evidenceCandidate(responseFile, [responseSignal], { module: "module-a", sourceSet: "main" })]
+  ]);
+  const fragments = [
+    { ...candidate(injectionFile, 1), categories: ["framework"], reasons: ["SPRING_INJECTION"], verifiedBy: ["SPRING_INJECTION"] },
+    { ...candidate(responseFile, 1), categories: ["framework"], reasons: ["SPRING_RESPONSE_TYPE"], verifiedBy: ["SPRING_RESPONSE_TYPE"] }
+  ];
+
+  const protectedPaths = await familyReadPlanProtectedPaths(normalized, [outcome({ evidence: [injectionSignal, responseSignal], candidates: fragments })], {
+    anchors: [anchor()],
+    options: options({ mode: "minimal", readPlanMaxItems: 3 }),
+    suppressed: emptySuppressed(),
+    repoRoot: "/repo"
+  });
+
+  assert.equal(protectedPaths.has(injectionFile), true);
+  assert.equal(protectedPaths.has(responseFile), false);
 });

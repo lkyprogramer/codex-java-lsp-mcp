@@ -416,6 +416,70 @@ export class JavaIndexStore {
     return this.referencesFrom(methodId, new Set<StaticEdgeKind>(["CALLS", "CONSTRUCTS", "METHOD_REFERENCE"]), limit);
   }
 
+  /**
+   * One bounded union over the existing PARAM_TYPE reverse indexes. Framework
+   * packs use this for event-listener discovery so an N-event publication does
+   * not become N separate worker requests. The returned method ids are sorted
+   * by source location before the shared limit is applied.
+   */
+  methodsWithParameterTypes(typeIds: readonly string[], limit = 64): string[] {
+    const methodIds = new Set<string>();
+    for (const typeId of typeIds) {
+      for (const edgeId of this.inEdgeIdsByNode.get(typeId) ?? []) {
+        const edge = this.edgesById.get(edgeId);
+        if (edge?.kind === "PARAM_TYPE" && this.methodsById.has(edge.fromId)) {
+          methodIds.add(edge.fromId);
+        }
+      }
+    }
+    return [...methodIds]
+      .map(methodId => this.methodsById.get(methodId)!)
+      .sort((left, right) => {
+        const leftFileId = this.typesById.get(left.ownerTypeId)?.fileId ?? "";
+        const rightFileId = this.typesById.get(right.ownerTypeId)?.fileId ?? "";
+        return compareByLocation(leftFileId, left.range, left.methodId, rightFileId, right.range, right.methodId);
+      })
+      .slice(0, Math.max(0, limit))
+      .map(method => method.methodId);
+  }
+
+  /**
+   * A bounded summary for framework activation. The worker performs this
+   * store-local scan once per RouterJavaIndex generation and the router
+   * caches the boolean result, so packs never reread or parse Java source.
+   */
+  repositoryFactMarkers(importPrefixes: readonly string[], annotationPrefixes: readonly string[]): {
+    importPrefixFound: boolean;
+    annotationPrefixFound: boolean;
+  } {
+    const hasPrefix = (value: string | undefined, prefixes: readonly string[]) =>
+      value !== undefined && prefixes.some(prefix => value.startsWith(prefix));
+    let importPrefixFound = false;
+    let annotationPrefixFound = false;
+    for (const file of this.filesByPath.values()) {
+      if (!importPrefixFound && file.imports.some(imp => hasPrefix(imp.qualifiedName, importPrefixes))) {
+        importPrefixFound = true;
+      }
+      if (importPrefixFound) break;
+    }
+    annotationPrefixFound = [...this.typesById.values()].some(type => type.annotations.some(annotation => hasPrefix(annotation.qualifiedName, annotationPrefixes)))
+      || [...this.fieldsById.values()].some(field => field.annotations.some(annotation => hasPrefix(annotation.qualifiedName, annotationPrefixes)))
+      || [...this.methodsById.values()].some(method =>
+        method.annotations.some(annotation => hasPrefix(annotation.qualifiedName, annotationPrefixes))
+        || method.parameters.some(parameter => parameter.annotations.some(annotation => hasPrefix(annotation.qualifiedName, annotationPrefixes)))
+      )
+      // A short annotation imported from a framework package is stored as an
+      // AST name plus its resolved ANNOTATED_WITH edge; its raw qualifiedName
+      // is intentionally not rewritten. Consult that resolved edge as well,
+      // otherwise `import org.springframework...; @Service` is invisible to
+      // repository activation despite being exact JavaIndex evidence.
+      || [...this.edgesById.values()].some(edge =>
+        edge.kind === "ANNOTATED_WITH"
+        && hasPrefix(edge.toId.startsWith("external:") ? edge.toId.slice("external:".length) : undefined, annotationPrefixes)
+      );
+    return { importPrefixFound, annotationPrefixFound };
+  }
+
   files(paths: readonly string[]): JavaFileBundle[] {
     const results: JavaFileBundle[] = [];
     for (const relativePath of paths) {

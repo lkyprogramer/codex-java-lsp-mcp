@@ -5,7 +5,7 @@
 import type { ResolvedAnchor } from "../../agent-types.js";
 import type { FrameworkIndexView } from "../../java-index/framework-index-view.js";
 import type { DeadlineBudget } from "../../runtime/deadline-budget.js";
-import type { ProviderOutcome } from "../evidence.js";
+import type { CandidateEvidence, ProviderOutcome } from "../evidence.js";
 
 export type FrameworkAdapterMetadata = Record<string, unknown>;
 
@@ -30,6 +30,12 @@ export type FrameworkAdapterContext = {
   readonly anchors: readonly ResolvedAnchor[];
   /** Absolute paths already discovered by earlier providers this request - the traversal seed, not a fresh scan. */
   readonly candidateFiles: readonly string[];
+  /**
+   * Normalized structural evidence from the static provider. Framework packs
+   * may expand only an anchor or a file that already has structural support;
+   * a lexical-only filename match is not a safe framework traversal seed.
+   */
+  readonly staticEvidence: readonly CandidateEvidence[];
   readonly frameworkIndex: FrameworkIndexView;
   readonly generation: number;
   readonly budget: DeadlineBudget;
