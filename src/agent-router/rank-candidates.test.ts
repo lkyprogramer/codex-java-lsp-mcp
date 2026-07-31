@@ -362,3 +362,42 @@ test("pre-semantic protection admits exact Spring injection but not framework re
   assert.equal(protectedPaths.has(injectionFile), true);
   assert.equal(protectedPaths.has(responseFile), false);
 });
+
+test("pre-semantic protection admits exact MyBatis namespace/statement matches but not parameter-type relations", async () => {
+  const namespaceFile = "/repo/module-a/src/main/java/demo/OrderMapper.java";
+  const paramTypeFile = "/repo/module-a/src/main/java/demo/OrderEntity.java";
+  const namespaceSignal = signal({
+    candidateFile: namespaceFile,
+    kind: "MYBATIS_NAMESPACE",
+    family: "FRAMEWORK",
+    provenance: "FRAMEWORK_INFERRED",
+    weight: 100,
+    confidence: 0.98
+  });
+  const paramTypeSignal = signal({
+    candidateFile: paramTypeFile,
+    kind: "MYBATIS_PARAMETER_TYPE",
+    family: "FRAMEWORK",
+    provenance: "FRAMEWORK_INFERRED",
+    weight: 75,
+    confidence: 0.95
+  });
+  const normalized = new Map<string, CandidateEvidence>([
+    [namespaceFile, evidenceCandidate(namespaceFile, [namespaceSignal], { module: "module-a", sourceSet: "main" })],
+    [paramTypeFile, evidenceCandidate(paramTypeFile, [paramTypeSignal], { module: "module-a", sourceSet: "main" })]
+  ]);
+  const fragments = [
+    { ...candidate(namespaceFile, 1), categories: ["framework"], reasons: ["MYBATIS_NAMESPACE"], verifiedBy: ["MYBATIS_NAMESPACE"] },
+    { ...candidate(paramTypeFile, 1), categories: ["framework"], reasons: ["MYBATIS_PARAMETER_TYPE"], verifiedBy: ["MYBATIS_PARAMETER_TYPE"] }
+  ];
+
+  const protectedPaths = await familyReadPlanProtectedPaths(normalized, [outcome({ evidence: [namespaceSignal, paramTypeSignal], candidates: fragments })], {
+    anchors: [anchor()],
+    options: options({ mode: "minimal", readPlanMaxItems: 3 }),
+    suppressed: emptySuppressed(),
+    repoRoot: "/repo"
+  });
+
+  assert.equal(protectedPaths.has(namespaceFile), true);
+  assert.equal(protectedPaths.has(paramTypeFile), false);
+});

@@ -14,6 +14,15 @@ const VERIFIED_EVIDENCE = new Set([
 
 const STRUCTURAL_EVIDENCE = new Set(["typeGraph", "importGraph", "typeReference"]);
 
+/**
+ * Framework evidence has mixed strength. Only a pack's exact structural
+ * match - a resolved CALLS edge (Spring) or a resolved namespace/statement-id
+ * name match (MyBatis) - may spend the shared "verified" read-plan quota;
+ * weaker relationships (DI injection, XML parameter/result type references)
+ * stay structural so they cannot evict JDT-verified evidence as a group.
+ */
+const FRAMEWORK_VERIFIED_REASONS = new Set(["SPRING_CALL_PATH", "MYBATIS_NAMESPACE", "MYBATIS_STATEMENT_METHOD"]);
+
 const SUPPORT_CATEGORIES = new Set(["config", "persistence", "nonJava"]);
 
 const READ_PLAN_UTILITY_SCORE_IDS = new Set([
@@ -35,11 +44,8 @@ export function evidenceClassOf(file: CandidateFile): EvidenceClass {
   if (verifiedBy.some(item => VERIFIED_EVIDENCE.has(item))) {
     return "verified";
   }
-  // Framework evidence has mixed strength. Only a pack's exact resolved call
-  // path may spend a verified slot; injection and DTO/event/bean relations are
-  // structural so they cannot evict JDT-verified evidence as a group.
   if (file.categories.includes("framework")) {
-    return file.reasons.includes("SPRING_CALL_PATH") ? "verified" : "structural";
+    return file.reasons.some(reason => FRAMEWORK_VERIFIED_REASONS.has(reason)) ? "verified" : "structural";
   }
   if (verifiedBy.includes("typeGraph") && file.reasons.includes("typeGraph:implementation-lookup")) {
     return "naming";

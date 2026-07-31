@@ -195,13 +195,21 @@ export async function familyReadPlanProtectedPaths(
     .map(file => file.absolutePath));
 }
 
+/** Framework evidence kinds strong enough to protect a framework-only candidate's read-plan slot before semantic ranking runs - a curated allowlist, not a strict "exact match only" filter (SPRING_INJECTION is weaker than SPRING_CALL_PATH but still approved here). */
+const FRAMEWORK_PRE_SEMANTIC_PROTECTED_KINDS = new Set([
+  "SPRING_CALL_PATH",
+  "SPRING_INJECTION",
+  "MYBATIS_NAMESPACE",
+  "MYBATIS_STATEMENT_METHOD"
+]);
+
 function frameworkEligibleForPreSemanticProtection(candidate: CandidateEvidence | undefined): boolean {
   if (!candidate) return false;
   const frameworkSignals = candidate.signals.filter(signal => signal.family === "FRAMEWORK");
   if (frameworkSignals.length === 0) return true;
   // A candidate with independent non-framework evidence keeps its existing
-  // protection semantics. Framework-only candidates need one of the two
-  // exact relationships approved for the pre-semantic budget.
+  // protection semantics. Framework-only candidates need one of the
+  // approved relationships for the pre-semantic budget.
   if (candidate.signals.some(signal => signal.family !== "FRAMEWORK")) return true;
-  return frameworkSignals.some(signal => signal.kind === "SPRING_CALL_PATH" || signal.kind === "SPRING_INJECTION");
+  return frameworkSignals.some(signal => FRAMEWORK_PRE_SEMANTIC_PROTECTED_KINDS.has(signal.kind));
 }
