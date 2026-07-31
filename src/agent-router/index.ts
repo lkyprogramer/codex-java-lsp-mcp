@@ -43,6 +43,7 @@ import { collectLiveSemanticEvidence, collectPersistedSemanticEvidence } from ".
 import { collectSupportEvidence } from "./providers/support-provider.js";
 import { collectRelationshipEvidence } from "./providers/relationship-provider.js";
 import { collectFrameworkEvidence, FRAMEWORK_ADAPTERS } from "./providers/framework-provider.js";
+import { lombokCompleteness } from "./framework/lombok-adapter.js";
 import { buildShadowRanking } from "./shadow-ranking.js";
 import {
   type ImpactOptions,
@@ -286,6 +287,8 @@ export class AgentRouter {
     const cacheAfter = await timed(phaseMs, "sessionCacheAfter", async () => this.session.cacheStatus());
     const rgAfter = await timed(phaseMs, "rgCacheAfter", async () => this.rgCacheStatus());
     const sourceAfter = await timed(phaseMs, "sourceStatusAfter", async () => this.javaIndex.routerStatus());
+    const lombok = await timed(phaseMs, "lombokCompleteness", async () =>
+      lombokCompleteness(this.repoRoot, anchorPaths, this.javaIndex, generation));
 
     // Diagnostic only: production ranking above has already used the same
     // normalized outcomes. Shadow output adds counterfactual attribution; it
@@ -313,7 +316,7 @@ export class AgentRouter {
       readPlan,
       rgExecution: lexicalOutcome.rgExecution,
       suppressed,
-      evidenceGaps: evidenceGaps(anchors, options, semantic),
+      evidenceGaps: evidenceGaps(anchors, options, { ...semantic, lombokIncomplete: lombok.taskGapDetected }),
       shadowRanking,
       metrics: {
         semantic,
@@ -339,7 +342,8 @@ export class AgentRouter {
         framework: {
           metadata: frameworkResult.metadata,
           diagnostics: frameworkResult.diagnostics,
-          completion: frameworkOutcome.completion
+          completion: frameworkOutcome.completion,
+          generatedCode: { semantics: lombok.semantics, taskGapDetected: lombok.taskGapDetected }
         }
       }
     });

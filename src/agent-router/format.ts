@@ -216,5 +216,8 @@ function shortEvidenceGap(gap: string): string {
   if (gap === "Tests are returned as lower-priority candidates; use testReadMode=priority when verification planning is the main task.") {
     return "Tests are lower-priority; use testReadMode=priority for verification.";
   }
+  if (gap === "Lombok is detected but the JDT javaagent is missing/disabled; generated members (getters/setters/builders) on types in scope may not resolve - verify with a full compile before assuming a member is absent.") {
+    return "Lombok agent missing; generated members may not resolve.";
+  }
   return gap;
 }

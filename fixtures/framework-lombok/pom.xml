@@ -1,0 +1,18 @@
+<!--
+  Uses a version that is not a real published Lombok release, so this
+  fixture's "agent missing" scenario stays deterministic regardless of
+  what a developer's local ~/.m2 or ~/.gradle cache happens to contain.
+-->
+<project>
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>demo</groupId>
+  <artifactId>framework-lombok-fixture</artifactId>
+  <version>1.0.0</version>
+  <dependencies>
+    <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
+      <version>999.999.999-nonexistent-test-fixture</version>
+    </dependency>
+  </dependencies>
+</project>

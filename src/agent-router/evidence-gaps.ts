@@ -3,6 +3,7 @@ import type { ImpactOptions, ResolvedAnchor } from "../agent-types.js";
 type EvidenceGapState = {
   readonly skipped: boolean;
   readonly timeout: boolean;
+  readonly lombokIncomplete?: boolean;
 };
 
 export function evidenceGaps(anchors: readonly ResolvedAnchor[], options: ImpactOptions, semantic: EvidenceGapState): string[] {
@@ -24,6 +25,9 @@ export function evidenceGaps(anchors: readonly ResolvedAnchor[], options: Impact
   }
   if (options.testReadMode === "defer") {
     gaps.push("Tests are returned as lower-priority candidates; use testReadMode=priority when verification planning is the main task.");
+  }
+  if (semantic.lombokIncomplete) {
+    gaps.push("Lombok is detected but the JDT javaagent is missing/disabled; generated members (getters/setters/builders) on types in scope may not resolve - verify with a full compile before assuming a member is absent.");
   }
   return gaps;
 }
