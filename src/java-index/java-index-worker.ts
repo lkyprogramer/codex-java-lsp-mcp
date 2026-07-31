@@ -22,9 +22,11 @@ import {
   computeCurrentManifestFingerprint,
   computeManifestFingerprint,
   discoverJavaFiles,
+  discoverMyBatisResourceFiles,
   scanSnapshotManifestDiff,
   type DiscoveredJavaFile
 } from "./manifest.js";
+import { extractMyBatisMapperFacts } from "./mybatis-xml-extractor.js";
 import { effectiveParseTreeSourceBudget, ParseTreeCache, refreshParseTree } from "./parse-tree-cache.js";
 import { buildStaticEdges, resolveFileRefs } from "./edge-builder.js";
 import { JavaIndexStore } from "./index-store.js";
@@ -48,6 +50,14 @@ const SWEEP_CHUNK_SIZE = 50;
 // giving up on this sweep for now; a later reconcile() call starts a fresh one.
 const SWEEP_LEASE_WAIT_MS = 10000;
 const SNAPSHOT_FILE_NAME = "java-index-snapshot.json.gz";
+// Bounds a sweep's MyBatis resource re-scan the same way MAX_FRAMEWORK_TRAVERSAL_FILES
+// bounds a framework adapter's candidate set - a repo with an unusually large
+// src/main/resources tree (most of it not MyBatis mappers) must not turn every
+// sweep into an unbounded directory walk plus a full-file read per XML file.
+// Not yet measured against a real repo's cold-open cost (Task 27's isActive()
+// gate covers a different code path) - a follow-up concern for whoever
+// benchmarks Task 28, same as Task 27's own P95 gate.
+const MAX_MYBATIS_RESOURCE_FILES = 500;
 // Debounced so a burst of foreground refreshes (a save, then a formatter
 // re-save moments later) coalesces into one write instead of one per event.
 const SNAPSHOT_FLUSH_DEBOUNCE_MS = 1000;
@@ -540,6 +550,45 @@ async function handleRefresh(request: Extract<JavaIndexRequest, { type: "REFRESH
 }
 
 /**
+ * Foreground upsert/delete for a batch of MyBatis resource paths (Task 28
+ * Slice B). Unlike REFRESH's changed/deleted split, RESOURCE_CHANGE does not
+ * distinguish add/change/delete at the coordinator layer, so each path is
+ * resolved here via a stat - and every branch is written to be idempotent
+ * under a race between the watcher event and this handler observing the
+ * file (a delete-then-recreate, or an editor's non-atomic write): an ENOENT
+ * on a path this store never indexed is a no-op, and re-extracting a path
+ * whose content hash has not changed is skipped rather than re-inserted, so
+ * a wrong guess about add-vs-change self-corrects on the next event instead
+ * of leaving a stale namespace/statement entry behind.
+ */
+async function handleRefreshResources(request: Extract<JavaIndexRequest, { type: "REFRESH_RESOURCES" }>): Promise<void> {
+  if (!store) return;
+  for (const inputPath of request.paths) {
+    let relativePath: string;
+    try {
+      relativePath = path.relative(repoRoot, inputPath).split(path.sep).join("/");
+    } catch {
+      continue;
+    }
+    try {
+      const content = await readFile(inputPath, "utf8");
+      const contentHash = createHash("sha256").update(content, "utf8").digest("hex");
+      if (store.myBatisResource(relativePath)?.contentHash === contentHash) continue;
+      const facts = extractMyBatisMapperFacts({ relativePath, content, contentHash, generation: request.generation });
+      if (facts) store.replaceMyBatisResource(facts);
+      else store.removeMyBatisResources([relativePath]);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
+        store.removeMyBatisResources([relativePath]);
+        continue;
+      }
+      lastRefreshError = `failed to refresh mybatis resource ${inputPath}: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
+  scheduleSnapshotFlush();
+}
+
+/**
  * Step 6a: verifies a just-restored snapshot's facts against the repo's
  * *current* files on disk (an independent metadata re-scan, not a re-parse) and
  * returns the generation OPEN should report. Facts were already installed
@@ -802,6 +851,67 @@ function emptyWorktreeSeedStatus(completion: WorktreeSeedStatus["completion"]): 
   };
 }
 
+/**
+ * Discovers and (re-)extracts every MyBatis mapper XML under the repo's
+ * resource roots, unconditionally on every sweep - the same "reconcile
+ * re-derives everything discovered, nothing is assumed clean" contract
+ * discoverJavaFiles' own sweep already has, not an incremental diff. Bounded
+ * by MAX_MYBATIS_RESOURCE_FILES; a file beyond the cap is treated the same
+ * as one that does not exist (evicted if it was previously indexed from a
+ * sweep before the repo grew past the cap) - deterministic since discovery
+ * is sorted by relativePath, not flapping between sweeps. A single file's
+ * read/parse failure is recorded to lastRefreshError and skipped - it never
+ * blocks the rest of the scan and never touches Java root coverage, which
+ * this function does not read or write at all.
+ *
+ * `target` is captured once by the caller rather than read from the module
+ * `store` variable on every iteration - OPEN/attemptSiblingSeed can reassign
+ * `store` while this function is mid-await (a fresh OPEN, a sibling reseed),
+ * and a stale read partway through would evict paths from the *new* store
+ * using a `seenPaths` set computed against the *old* one. Writing to an
+ * orphaned old store for the rest of this call is the safe failure mode;
+ * corrupting the live one is not.
+ *
+ * Awaited by its only caller (beginBackgroundSweep), which blocks RECONCILE's
+ * response on this - unlike Java's own sweep, which only blocks RECONCILE on
+ * the (cheap) directory walk and backgrounds the actual per-file parsing via
+ * startBackgroundLoop. A fire-and-forget version was considered and rejected:
+ * CLOSE only awaits `backgroundLoopPromise`, so an un-awaited scan would have
+ * nothing holding the worker open against a mid-scan store teardown. This is
+ * a real, currently unmeasured latency cost on every reconcile()/RECONCILE
+ * call (not just the first), bounded only by the file cap above - the same
+ * class of "flag it, let the three-repo gate measure it" item Task 27's
+ * isActive() cost was.
+ */
+async function indexMyBatisResources(target: JavaIndexStore, layout: LayoutContext, generation: number): Promise<void> {
+  let discovered;
+  try {
+    discovered = await discoverMyBatisResourceFiles(repoRoot, layout);
+  } catch (error) {
+    lastRefreshError = `failed to discover MyBatis resources: ${error instanceof Error ? error.message : String(error)}`;
+    return;
+  }
+  const bounded = discovered.slice(0, MAX_MYBATIS_RESOURCE_FILES);
+  const seenPaths = new Set<string>();
+  for (const file of bounded) {
+    if (closing) return;
+    seenPaths.add(file.relativePath);
+    try {
+      const content = await readFile(file.absolutePath, "utf8");
+      const contentHash = createHash("sha256").update(content, "utf8").digest("hex");
+      const facts = extractMyBatisMapperFacts({ relativePath: file.relativePath, content, contentHash, generation });
+      if (facts) target.replaceMyBatisResource(facts);
+      else target.removeMyBatisResources([file.relativePath]);
+    } catch (error) {
+      lastRefreshError = `failed to index mybatis resource ${file.relativePath}: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
+  if (closing) return;
+  for (const relativePath of [...target.myBatisResourcesByPath.keys()]) {
+    if (!seenPaths.has(relativePath)) target.removeMyBatisResources([relativePath]);
+  }
+}
+
 async function beginBackgroundSweep(generation: number): Promise<void> {
   if (backgroundSweep) {
     // A sweep is already in flight: piggyback on it rather than starting a
@@ -834,6 +944,13 @@ async function beginBackgroundSweep(generation: number): Promise<void> {
     parsedFiles: 0
   };
   startBackgroundLoop();
+  // Only after `backgroundSweep` is installed and the Java chunk loop is
+  // running: this function's own `if (backgroundSweep)` piggyback guard at
+  // the top must already be closed before an awaited resource scan begins,
+  // otherwise a second RECONCILE landing mid-scan would see backgroundSweep
+  // still undefined, skip the guard, and start a second concurrent resource
+  // scan (and a second Java sweep) racing this one.
+  if (store) await indexMyBatisResources(store, layout, generation);
 }
 
 async function processBackgroundChunk(sweep: BackgroundSweep): Promise<void> {
@@ -1043,6 +1160,16 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         respond({ id: request.id, ok: true, value: currentStatus() });
         return;
       }
+      case "REFRESH_RESOURCES": {
+        // Deliberately does not call invalidateOwnSnapshotVerification: the
+        // persisted own-snapshot (schema 2) carries no resource facts at
+        // all, so a mapper XML change cannot make its Java-facts
+        // verification stale.
+        await handleRefreshResources(request);
+        status = { ...status, indexedGeneration: Math.max(status.indexedGeneration, request.generation) };
+        respond({ id: request.id, ok: true, value: currentStatus() });
+        return;
+      }
       case "RECONCILE": {
         if (ownSnapshotVerificationPending) {
           invalidateOwnSnapshotVerification(request.generation);
@@ -1148,6 +1275,10 @@ async function handle(request: JavaIndexRequest): Promise<void> {
           })
           .filter((relativePath): relativePath is string => relativePath !== undefined);
         respond({ id: request.id, ok: true, value: store?.files(relativePaths) ?? [] });
+        return;
+      }
+      case "QUERY_MYBATIS_RESOURCE": {
+        respond({ id: request.id, ok: true, value: store?.myBatisResource(request.relativePath) });
         return;
       }
       case "QUERY_REPOSITORY_FACT_MARKERS": {

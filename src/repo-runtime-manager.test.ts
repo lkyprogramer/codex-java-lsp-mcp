@@ -75,6 +75,48 @@ test("RepoRuntimeManager starts and flushes the coordinator around Java index OP
   await manager.shutdownAll();
 });
 
+test("RepoRuntimeManager routes a RESOURCE_CHANGE batch to refreshResources, separately from a JAVA_CHANGE batch's refresh", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const coordinator = new FakeCoordinator();
+  const javaIndex = new RecordingJavaIndex(() => coordinator.starts);
+  const manager = new RepoRuntimeManager(
+    fakeResolver(),
+    { idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
+    resolved => ({ generation: new GenerationClock(), coordinator, layout: fakeLayoutSource(resolved.repoRoot) }),
+    new NoopCrossProcessLeaseStore()
+  );
+
+  await manager.contextFor({ repoRoot: "/repo-a" });
+
+  await coordinator.emit({
+    generation: 2,
+    observedAt: new Date().toISOString(),
+    changes: [{ kind: "RESOURCE_CHANGE", absolutePath: "/repo-a/src/main/resources/mapper/OrderMapper.xml" }],
+    storm: false,
+    affectedRoots: []
+  });
+
+  assert.ok(javaIndex.calls.includes("refreshResources:2:1"), "a RESOURCE_CHANGE-only batch must reach refreshResources");
+  assert.ok(!javaIndex.calls.some(call => call.startsWith("refresh:")), "a RESOURCE_CHANGE-only batch must not also call refresh");
+
+  await coordinator.emit({
+    generation: 3,
+    observedAt: new Date().toISOString(),
+    changes: [
+      { kind: "JAVA_CHANGE", absolutePath: "/repo-a/src/main/java/demo/Changed.java" },
+      { kind: "RESOURCE_CHANGE", absolutePath: "/repo-a/src/main/resources/mapper/OrderMapper.xml" }
+    ],
+    storm: false,
+    affectedRoots: []
+  });
+
+  assert.ok(javaIndex.calls.includes("refresh:3:1:0"), "a mixed batch must still refresh its Java path");
+  assert.ok(javaIndex.calls.includes("refreshResources:3:1"), "a mixed batch must still refresh its resource path");
+
+  await manager.shutdownAll();
+});
+
 test("RepoRuntimeManager fails fast when all active runtimes are in use", async () => {
   const sessions = new Map<string, FakeSession>();
   const manager = new RepoRuntimeManager(fakeResolver(), {
@@ -715,6 +757,9 @@ class RecordingJavaIndex {
   async reconcile(generation: number): Promise<void> { this.calls.push(`reconcile:${generation}`); }
   async refresh(generation: number, changed: string[], deleted: string[]): Promise<void> {
     this.calls.push(`refresh:${generation}:${changed.length}:${deleted.length}`);
+  }
+  async refreshResources(generation: number, paths: string[]): Promise<void> {
+    this.calls.push(`refreshResources:${generation}:${paths.length}`);
   }
   async close(): Promise<void> { this.calls.push("close"); }
 }

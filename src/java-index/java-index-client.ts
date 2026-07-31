@@ -9,6 +9,7 @@ import type {
   JavaTypeLookupResult,
   StaticEdgeKind
 } from "./index-types.js";
+import type { MyBatisMapperResourceFacts } from "./mybatis-types.js";
 import {
   isJavaIndexResponse,
   validateAnchorFacts,
@@ -16,6 +17,7 @@ import {
   validateIndexedReferenceBatch,
   validateIndexedReferenceArray,
   validateJavaIndexStatus,
+  validateMyBatisMapperResourceFacts,
   validateRepositoryFactMarkers,
   validateStringArray,
   validateTypeFactsArray,
@@ -108,6 +110,25 @@ export class JavaIndexClient {
   }
 
   /**
+   * Foreground upsert/delete for MyBatis mapper resource paths (Task 28
+   * Slice B) - a separate call from `refresh` since resource facts carry no
+   * Java-graph dependents to re-resolve and never touch Java root coverage.
+   * `paths` is unclassified add/change/delete (RESOURCE_CHANGE does not
+   * distinguish them at the coordinator layer); the worker resolves each via
+   * a stat, idempotently.
+   */
+  async refreshResources(generation: number, paths: string[]): Promise<JavaIndexStatus> {
+    if (paths.length === 0) return this.lastKnownStatus ?? await this.status();
+    await this.ensureOpen();
+    const status = await this.request(
+      { type: "REFRESH_RESOURCES", generation, paths },
+      validateJavaIndexStatus
+    );
+    this.lastKnownStatus = status;
+    return status;
+  }
+
+  /**
    * Request-path foreground refresh for the given files at `generation`.
    * Empty input is a no-op so callers can always pair ensureFresh with a query.
    */
@@ -188,6 +209,11 @@ export class JavaIndexClient {
   async queryFiles(files: string[]): Promise<JavaFileBundle[]> {
     await this.ensureOpen();
     return this.request({ type: "QUERY_FILES", files }, validateFileBundleArray);
+  }
+
+  async queryMyBatisResource(relativePath: string): Promise<MyBatisMapperResourceFacts | undefined> {
+    await this.ensureOpen();
+    return this.request({ type: "QUERY_MYBATIS_RESOURCE", relativePath }, validateMyBatisMapperResourceFacts);
   }
 
   async queryRepositoryFactMarkers(

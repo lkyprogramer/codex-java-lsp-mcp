@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { gunzipSync, gzipSync } from "node:zlib";
@@ -674,6 +674,108 @@ test("a malformed sibling snapshot fails the seed attempt softly - OPEN still su
   assert.equal(openStatus.state, "READY", "OPEN must succeed even when the only sibling candidate is malformed");
   assert.equal(openStatus.worktreeSeed?.completion, "FAILED");
   assert.equal(openStatus.files, 0, "a failed seed must fall back to an empty store, never partial/garbage facts");
+
+  await client.close();
+});
+
+function writeResourceFile(repoRoot: string, relativePath: string, content: string): void {
+  const absolutePath = path.join(repoRoot, relativePath);
+  mkdirSync(path.dirname(absolutePath), { recursive: true });
+  writeFileSync(absolutePath, content);
+}
+
+const ORDER_MAPPER_XML = '<mapper namespace="demo.OrderMapper"><select id="findById" resultType="demo.OrderEntity">select 1</select></mapper>';
+
+test("reconcile()'s full sweep discovers and indexes MyBatis mapper resources, but not a well-formed non-mapper XML resource", async () => {
+  const repoRoot = tempRepo("java-index-worker-mybatis-sweep-");
+  writeResourceFile(repoRoot, "src/main/resources/mapper/OrderMapper.xml", ORDER_MAPPER_XML);
+  writeResourceFile(repoRoot, "src/main/resources/beans.xml", '<beans><bean id="x"/></beans>');
+
+  const client = new JavaIndexClient(repoRoot, tempCacheDir());
+  await client.open(1);
+  await client.reconcile(1);
+  await waitFor(async () => (await client.status()).pendingBackground === 0, 5000);
+
+  const facts = await client.queryMyBatisResource("src/main/resources/mapper/OrderMapper.xml");
+  assert.equal(facts?.namespace, "demo.OrderMapper");
+  assert.deepEqual(facts?.statements.map(s => s.id), ["findById"]);
+  assert.equal(facts?.parseState, "COMPLETE");
+
+  assert.equal(await client.queryMyBatisResource("src/main/resources/beans.xml"), undefined);
+
+  await client.close();
+});
+
+test("refreshResources upserts a mapper resource written after OPEN, without requiring a full reconcile", async () => {
+  const repoRoot = tempRepo("java-index-worker-mybatis-refresh-add-");
+  const client = new JavaIndexClient(repoRoot, tempCacheDir());
+  await client.open(1);
+
+  writeResourceFile(repoRoot, "src/main/resources/mapper/OrderMapper.xml", ORDER_MAPPER_XML);
+  await client.refreshResources(2, [path.join(repoRoot, "src/main/resources/mapper/OrderMapper.xml")]);
+
+  const facts = await client.queryMyBatisResource("src/main/resources/mapper/OrderMapper.xml");
+  assert.equal(facts?.namespace, "demo.OrderMapper");
+  assert.deepEqual(facts?.statements.map(s => s.id), ["findById"]);
+
+  await client.close();
+});
+
+test("refreshResources on a path that was never indexed and does not exist on disk is an idempotent no-op", async () => {
+  const repoRoot = tempRepo("java-index-worker-mybatis-refresh-noop-");
+  const client = new JavaIndexClient(repoRoot, tempCacheDir());
+  await client.open(1);
+
+  const missingPath = path.join(repoRoot, "src/main/resources/mapper/NeverCreated.xml");
+  await assert.doesNotReject(() => client.refreshResources(2, [missingPath]));
+  assert.equal(await client.queryMyBatisResource("src/main/resources/mapper/NeverCreated.xml"), undefined);
+  // Repeating the same no-op refresh must stay a no-op, not accumulate state or throw.
+  await assert.doesNotReject(() => client.refreshResources(3, [missingPath]));
+  assert.equal(await client.queryMyBatisResource("src/main/resources/mapper/NeverCreated.xml"), undefined);
+
+  await client.close();
+});
+
+test("refreshResources re-extracts a changed mapper file and leaves an unchanged one intact", async () => {
+  const repoRoot = tempRepo("java-index-worker-mybatis-refresh-change-");
+  const relativePath = "src/main/resources/mapper/OrderMapper.xml";
+  writeResourceFile(repoRoot, relativePath, ORDER_MAPPER_XML);
+  const client = new JavaIndexClient(repoRoot, tempCacheDir());
+  await client.open(1);
+  await client.refreshResources(2, [path.join(repoRoot, relativePath)]);
+  assert.deepEqual((await client.queryMyBatisResource(relativePath))?.statements.map(s => s.id), ["findById"]);
+
+  // Same content again - must remain correct, not just "not throw".
+  await client.refreshResources(3, [path.join(repoRoot, relativePath)]);
+  assert.deepEqual((await client.queryMyBatisResource(relativePath))?.statements.map(s => s.id), ["findById"]);
+
+  const changed = '<mapper namespace="demo.OrderMapper"><select id="findById">x</select><insert id="insert">y</insert></mapper>';
+  writeResourceFile(repoRoot, relativePath, changed);
+  await client.refreshResources(4, [path.join(repoRoot, relativePath)]);
+  assert.deepEqual((await client.queryMyBatisResource(relativePath))?.statements.map(s => s.id).sort(), ["findById", "insert"]);
+
+  await client.close();
+});
+
+test("refreshResources removes a resource once its file is deleted, idempotently across repeated events", async () => {
+  const repoRoot = tempRepo("java-index-worker-mybatis-refresh-delete-");
+  const relativePath = "src/main/resources/mapper/OrderMapper.xml";
+  const absolutePath = path.join(repoRoot, relativePath);
+  writeResourceFile(repoRoot, relativePath, ORDER_MAPPER_XML);
+  const client = new JavaIndexClient(repoRoot, tempCacheDir());
+  await client.open(1);
+  await client.refreshResources(2, [absolutePath]);
+  assert.ok(await client.queryMyBatisResource(relativePath));
+
+  rmSync(absolutePath);
+  await client.refreshResources(3, [absolutePath]);
+  assert.equal(await client.queryMyBatisResource(relativePath), undefined);
+
+  // A second delete event for the same already-absent path (a duplicate
+  // watcher event, or the unlink racing a later re-create that hasn't
+  // landed yet) must stay a clean no-op.
+  await assert.doesNotReject(() => client.refreshResources(4, [absolutePath]));
+  assert.equal(await client.queryMyBatisResource(relativePath), undefined);
 
   await client.close();
 });

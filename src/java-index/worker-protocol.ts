@@ -26,6 +26,7 @@ import type {
   TypeResolutionStrategy,
   WorktreeSeedStatus
 } from "./index-types.js";
+import type { MyBatisMapperResourceFacts, MyBatisResultMapFact, MyBatisStatementFact, MyBatisStatementKind } from "./mybatis-types.js";
 
 /** Worker-thread-safe subset of WorktreeIdentity: plain strings/booleans, never the live identity cache. */
 export type JavaIndexWorktreeIdentity = {
@@ -49,6 +50,7 @@ export type JavaIndexRequest =
       siblingCacheBase?: string;
     }
   | { id: number; type: "REFRESH"; generation: number; changed: string[]; deleted: string[] }
+  | { id: number; type: "REFRESH_RESOURCES"; generation: number; paths: string[] }
   | { id: number; type: "RECONCILE"; generation: number }
   | { id: number; type: "QUERY_ANCHOR"; file: string; line: number; column: number }
   | { id: number; type: "QUERY_TYPE"; typeText: string; scopeFile?: string }
@@ -60,6 +62,7 @@ export type JavaIndexRequest =
   | { id: number; type: "QUERY_CALLEES_BATCH"; methodIds: string[]; limit: number }
   | { id: number; type: "QUERY_METHODS_WITH_PARAMETER_TYPES"; typeIds: string[]; limit: number }
   | { id: number; type: "QUERY_FILES"; files: string[] }
+  | { id: number; type: "QUERY_MYBATIS_RESOURCE"; relativePath: string }
   | { id: number; type: "QUERY_REPOSITORY_FACT_MARKERS"; importPrefixes: string[]; annotationPrefixes: string[] }
   | { id: number; type: "STATUS" }
   | { id: number; type: "FLUSH" }
@@ -748,4 +751,71 @@ export function validateRepositoryFactMarkers(value: unknown): { importPrefixFou
 export function validateFileBundleArray(value: unknown): JavaFileBundle[] {
   const context = "JavaFileBundle[]";
   return array(value, context).map((entry, index) => validateJavaFileBundle(entry, `${context}[${index}]`));
+}
+
+const MYBATIS_STATEMENT_KINDS = ["select", "insert", "update", "delete"] as const satisfies readonly MyBatisStatementKind[];
+
+function validateMyBatisStatementFact(value: unknown, context: string): MyBatisStatementFact {
+  const source = record(value, context);
+  if (!isString(source.statementId)) invalid(context, "statementId");
+  if (!isString(source.namespace)) invalid(context, "namespace");
+  if (!isString(source.id)) invalid(context, "id");
+  if (!isOneOf(source.kind, MYBATIS_STATEMENT_KINDS)) invalid(context, "kind");
+  return {
+    statementId: source.statementId,
+    namespace: source.namespace,
+    id: source.id,
+    kind: source.kind,
+    ...withOptional("parameterType", optional(source.parameterType, `${context}.parameterType`, v => isString(v) ? v : invalid(context, "parameterType"))),
+    ...withOptional("resultType", optional(source.resultType, `${context}.resultType`, v => isString(v) ? v : invalid(context, "resultType"))),
+    ...withOptional("resultMap", optional(source.resultMap, `${context}.resultMap`, v => isString(v) ? v : invalid(context, "resultMap"))),
+    ...withOptional("range", optional(source.range, `${context}.range`, validateSourceRange))
+  };
+}
+
+function validateMyBatisResultMapFact(value: unknown, context: string): MyBatisResultMapFact {
+  const source = record(value, context);
+  if (!isString(source.resultMapId)) invalid(context, "resultMapId");
+  if (!isString(source.namespace)) invalid(context, "namespace");
+  if (!isString(source.id)) invalid(context, "id");
+  return {
+    resultMapId: source.resultMapId,
+    namespace: source.namespace,
+    id: source.id,
+    ...withOptional("type", optional(source.type, `${context}.type`, v => isString(v) ? v : invalid(context, "type"))),
+    ...withOptional("range", optional(source.range, `${context}.range`, validateSourceRange))
+  };
+}
+
+export function validateMyBatisMapperResourceFacts(value: unknown): MyBatisMapperResourceFacts | undefined {
+  if (value === undefined || value === null) return undefined;
+  const context = "MyBatisMapperResourceFacts";
+  const source = record(value, context);
+  if (!isString(source.resourceId)) invalid(context, "resourceId");
+  if (!isString(source.relativePath)) invalid(context, "relativePath");
+  if (!isString(source.namespace)) invalid(context, "namespace");
+  if (!isString(source.contentHash)) invalid(context, "contentHash");
+  if (!isNumber(source.generation)) invalid(context, "generation");
+  if (!isOneOf(source.parseState, ["COMPLETE", "FAILED"] as const)) invalid(context, "parseState");
+  const statements = array(source.statements, `${context}.statements`)
+    .map((entry, index) => validateMyBatisStatementFact(entry, `${context}.statements[${index}]`));
+  const resultMaps = array(source.resultMaps, `${context}.resultMaps`)
+    .map((entry, index) => validateMyBatisResultMapFact(entry, `${context}.resultMaps[${index}]`));
+  const includes = array(source.includes, `${context}.includes`).map((entry, index) => {
+    const includeSource = record(entry, `${context}.includes[${index}]`);
+    if (!isString(includeSource.fromStatementId)) invalid(`${context}.includes[${index}]`, "fromStatementId");
+    if (!isString(includeSource.refid)) invalid(`${context}.includes[${index}]`, "refid");
+    return { fromStatementId: includeSource.fromStatementId, refid: includeSource.refid };
+  });
+  return {
+    resourceId: source.resourceId,
+    relativePath: source.relativePath,
+    namespace: source.namespace,
+    statements,
+    resultMaps,
+    includes,
+    contentHash: source.contentHash,
+    generation: source.generation,
+    parseState: source.parseState
+  };
 }

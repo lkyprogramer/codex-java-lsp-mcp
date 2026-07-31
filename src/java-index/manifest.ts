@@ -12,6 +12,48 @@ const IGNORED_DIRECTORY_NAMES = new Set([
   ".git", ".gradle", "build", "target", "out", "bin", "node_modules", "dist"
 ]);
 
+export type DiscoveredResourceFile = {
+  absolutePath: string;
+  /** Repo-relative, forward-slash-joined - the same convention as JavaFileFacts.relativePath. */
+  relativePath: string;
+};
+
+/**
+ * Recursively discovers every .xml file under the repo's known resource
+ * roots (LayoutContext.resourceRoots - src/main/resources per module, never
+ * src/test/resources). A file being discovered here does not mean it is a
+ * MyBatis mapper - the extractor decides that per-file from the parsed root
+ * element; this is the same "discover broadly, filter narrowly" split
+ * discoverJavaFiles already uses for build-artifact directories.
+ */
+export async function discoverMyBatisResourceFiles(repoRoot: string, layout: LayoutContext): Promise<DiscoveredResourceFile[]> {
+  const files: DiscoveredResourceFile[] = [];
+  for (const resourceRoot of layout.resourceRoots) {
+    await walkResourceDirectory(path.join(repoRoot, resourceRoot), repoRoot, files);
+  }
+  files.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+  return files;
+}
+
+async function walkResourceDirectory(absoluteDir: string, repoRoot: string, files: DiscoveredResourceFile[]): Promise<void> {
+  let dir;
+  try {
+    dir = await opendir(absoluteDir);
+  } catch {
+    return;
+  }
+  for await (const entry of dir) {
+    if (entry.isDirectory()) {
+      if (IGNORED_DIRECTORY_NAMES.has(entry.name)) continue;
+      await walkResourceDirectory(path.join(absoluteDir, entry.name), repoRoot, files);
+    } else if (entry.isFile() && entry.name.endsWith(".xml")) {
+      const absolutePath = path.join(absoluteDir, entry.name);
+      const relativePath = path.relative(repoRoot, absolutePath).split(path.sep).join("/");
+      files.push({ absolutePath, relativePath });
+    }
+  }
+}
+
 export type DiscoveredJavaFile = {
   absolutePath: string;
   /** Repo-relative, forward-slash-joined - the same convention as JavaFileFacts.relativePath. */

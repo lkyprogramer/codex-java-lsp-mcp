@@ -488,3 +488,74 @@ test("loadSnapshotData rejects a snapshot with a duplicate type id", () => {
   };
   assert.throws(() => store.loadSnapshotData(data), /duplicate type id/);
 });
+
+function myBatisResource(overrides: Partial<import("./mybatis-types.js").MyBatisMapperResourceFacts> & { relativePath: string }) {
+  return {
+    resourceId: `mybatis-resource:${overrides.relativePath}`,
+    namespace: "demo.OrderMapper",
+    statements: [],
+    resultMaps: [],
+    includes: [],
+    contentHash: "h1",
+    generation: 1,
+    parseState: "COMPLETE" as const,
+    ...overrides
+  };
+}
+
+test("replaceMyBatisResource indexes statements by namespace.id and the resource by namespace", () => {
+  const store = new JavaIndexStore();
+  const facts = myBatisResource({
+    relativePath: "src/main/resources/mapper/OrderMapper.xml",
+    statements: [{ statementId: "mybatis-statement:demo.OrderMapper.findById", namespace: "demo.OrderMapper", id: "findById", kind: "select" }]
+  });
+
+  store.replaceMyBatisResource(facts);
+
+  assert.deepEqual(store.myBatisResource("src/main/resources/mapper/OrderMapper.xml"), facts);
+  assert.equal(store.myBatisStatement("demo.OrderMapper", "findById")?.statementId, "mybatis-statement:demo.OrderMapper.findById");
+  assert.deepEqual([...(store.myBatisResourcesByNamespace.get("demo.OrderMapper") ?? [])], ["src/main/resources/mapper/OrderMapper.xml"]);
+});
+
+test("replacing a MyBatis resource evicts its previous version's statements and namespace entry, keyed by the old facts", () => {
+  const store = new JavaIndexStore();
+  const relativePath = "src/main/resources/mapper/OrderMapper.xml";
+  store.replaceMyBatisResource(myBatisResource({
+    relativePath,
+    namespace: "demo.OrderMapper",
+    statements: [{ statementId: "mybatis-statement:demo.OrderMapper.findById", namespace: "demo.OrderMapper", id: "findById", kind: "select" }]
+  }));
+
+  // Same file, namespace renamed and the old statement id dropped.
+  store.replaceMyBatisResource(myBatisResource({
+    relativePath,
+    namespace: "demo.RenamedMapper",
+    statements: [{ statementId: "mybatis-statement:demo.RenamedMapper.insert", namespace: "demo.RenamedMapper", id: "insert", kind: "insert" }]
+  }));
+
+  assert.equal(store.myBatisStatement("demo.OrderMapper", "findById"), undefined);
+  assert.equal(store.myBatisResourcesByNamespace.get("demo.OrderMapper"), undefined);
+  assert.equal(store.myBatisStatement("demo.RenamedMapper", "insert")?.statementId, "mybatis-statement:demo.RenamedMapper.insert");
+  assert.deepEqual([...(store.myBatisResourcesByNamespace.get("demo.RenamedMapper") ?? [])], [relativePath]);
+});
+
+test("removing a MyBatis resource does not evict a qualifiedId claimed by a different resource with the same (namespace, id)", () => {
+  const store = new JavaIndexStore();
+  const statement = { statementId: "mybatis-statement:demo.Dup.x", namespace: "demo.Dup", id: "x", kind: "select" as const };
+  store.replaceMyBatisResource(myBatisResource({ relativePath: "a.xml", namespace: "demo.Dup", statements: [statement] }));
+  // A second, malformed-repo resource claims the exact same qualified id.
+  store.replaceMyBatisResource(myBatisResource({ relativePath: "b.xml", namespace: "demo.Dup", statements: [statement] }));
+
+  store.removeMyBatisResources(["a.xml"]);
+
+  assert.equal(store.myBatisResource("a.xml"), undefined);
+  assert.equal(store.myBatisResource("b.xml")?.relativePath, "b.xml");
+  assert.equal(store.myBatisStatement("demo.Dup", "x")?.statementId, "mybatis-statement:demo.Dup.x");
+  assert.deepEqual([...(store.myBatisResourcesByNamespace.get("demo.Dup") ?? [])], ["b.xml"]);
+});
+
+test("removeMyBatisResources on an unindexed path is a no-op", () => {
+  const store = new JavaIndexStore();
+  assert.doesNotThrow(() => store.removeMyBatisResources(["never-indexed.xml"]));
+  assert.equal(store.myBatisResource("never-indexed.xml"), undefined);
+});

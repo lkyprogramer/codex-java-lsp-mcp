@@ -546,12 +546,21 @@ export class RepoRuntimeManager {
     }
     const changed: string[] = [];
     const deleted: string[] = [];
+    const resources: string[] = [];
     for (const change of batch.changes) {
       if (change.kind === "JAVA_ADD" || change.kind === "JAVA_CHANGE") changed.push(change.absolutePath);
       else if (change.kind === "JAVA_DELETE") deleted.push(change.absolutePath);
+      else if (change.kind === "RESOURCE_CHANGE") resources.push(change.absolutePath);
     }
     if (changed.length > 0 || deleted.length > 0) {
       await javaIndex.refresh(batch.generation, changed, deleted);
+    }
+    // RESOURCE_CHANGE does not distinguish add/change/delete (repo-change-
+    // coordinator.ts's classify() collapses all three into one kind); the
+    // worker resolves each path via its own stat, idempotently (Task 28
+    // Slice B).
+    if (resources.length > 0) {
+      await javaIndex.refreshResources(batch.generation, resources);
     }
   }
 

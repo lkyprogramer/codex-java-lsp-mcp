@@ -1,5 +1,6 @@
 import { javaEdgeId, javaFieldId, javaFileId, javaMethodId, javaTypeId } from "./stable-id.js";
 import { JavaNameResolver, type JavaResolutionContext, type TypeRegistryView } from "./name-resolver.js";
+import { myBatisQualifiedId, type MyBatisMapperResourceFacts } from "./mybatis-types.js";
 import type {
   AnchorFacts,
   IndexedReference,
@@ -132,6 +133,58 @@ export class JavaIndexStore {
   // both populating and consuming it as part of the refresh pipeline it
   // already owns.
   readonly dependentFilesByTypeName = new Map<string, Set<string>>();
+
+  // MyBatis mapper resource facts (Task 28 Slice B) - a second, independent
+  // fact family alongside the Java one above. Deliberately not woven into
+  // filesByPath/fileOwnedNodeIds: a mapper XML resource is not a Java file,
+  // carries no static edges into the Java graph, and its own reuse/dirty
+  // story (Slice C) is resource-path + resource-contentHash keyed, not
+  // Java's node-id-based one.
+  readonly myBatisResourcesByPath = new Map<string, MyBatisMapperResourceFacts>();
+  // statementId is deterministic from (namespace, id) alone - two different
+  // resource files can claim the exact same qualifiedId (a malformed repo),
+  // so the owning relativePath (not the statement's own id) is what removal
+  // must compare against to know whether it is still the current claimant.
+  readonly myBatisStatementsByQualifiedId = new Map<string, { relativePath: string; statement: MyBatisMapperResourceFacts["statements"][number] }>();
+  readonly myBatisResourcesByNamespace = new Map<string, Set<string>>();
+
+  myBatisResource(relativePath: string): MyBatisMapperResourceFacts | undefined {
+    return this.myBatisResourcesByPath.get(relativePath);
+  }
+
+  myBatisStatement(namespace: string, id: string): MyBatisMapperResourceFacts["statements"][number] | undefined {
+    return this.myBatisStatementsByQualifiedId.get(myBatisQualifiedId(namespace, id))?.statement;
+  }
+
+  /** Replaces one mapper resource's facts, evicting its previous version's derived-index entries first (mirrors replaceFile/removeFileInternal's own evict-before-insert pattern). */
+  replaceMyBatisResource(facts: MyBatisMapperResourceFacts): void {
+    this.removeMyBatisResourceInternal(facts.relativePath);
+    this.myBatisResourcesByPath.set(facts.relativePath, facts);
+    for (const statement of facts.statements) {
+      this.myBatisStatementsByQualifiedId.set(myBatisQualifiedId(facts.namespace, statement.id), { relativePath: facts.relativePath, statement });
+    }
+    if (facts.namespace) addToSetMap(this.myBatisResourcesByNamespace, facts.namespace, facts.relativePath);
+  }
+
+  removeMyBatisResources(relativePaths: readonly string[]): void {
+    for (const relativePath of relativePaths) this.removeMyBatisResourceInternal(relativePath);
+  }
+
+  private removeMyBatisResourceInternal(relativePath: string): void {
+    const existing = this.myBatisResourcesByPath.get(relativePath);
+    if (!existing) return;
+    this.myBatisResourcesByPath.delete(relativePath);
+    for (const statement of existing.statements) {
+      const qualifiedId = myBatisQualifiedId(existing.namespace, statement.id);
+      // Only evict if this resource is still the current claimant - a
+      // different resource may already have claimed the same (namespace,
+      // id) pair (a malformed repo), and must not be evicted by this removal.
+      if (this.myBatisStatementsByQualifiedId.get(qualifiedId)?.relativePath === relativePath) {
+        this.myBatisStatementsByQualifiedId.delete(qualifiedId);
+      }
+    }
+    if (existing.namespace) removeFromSetMap(this.myBatisResourcesByNamespace, existing.namespace, relativePath);
+  }
 
   /**
    * Replaces one file's facts and returns surviving files whose static edges
