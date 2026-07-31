@@ -134,6 +134,76 @@ test("collect links OrderMapper.toResponse's parameter as SOURCE and its return 
   }
 });
 
+test("collect links @Mapper(uses = AddressMapper.class) to the used mapper via the same-package fallback (no import needed)", async () => {
+  const router = await readyRouter();
+  try {
+    const orderMapperFile = file("src/main/java/demo/OrderMapper.java");
+    const addressMapperFile = file("src/main/java/demo/AddressMapper.java");
+    const context = await frameworkContextFor(router, repoRoot, [anchor(orderMapperFile)], [orderMapperFile]);
+
+    const result = await runFrameworkAdapters([mapstructAdapter], context);
+
+    const uses = signalsOf(result.outcome.evidence, "MAPSTRUCT_USES");
+    assert.equal(uses.length, 1);
+    assert.equal(uses[0]!.candidateFile, addressMapperFile);
+    assert.equal(uses[0]!.sourceFile, orderMapperFile);
+  } finally {
+    await router.close();
+  }
+});
+
+test("collect resolves an unqualified uses= class literal via an explicit cross-package import", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "mapstruct-uses-explicit-import-"));
+  write(root, "pom.xml", "<project><dependencies><dependency><groupId>org.mapstruct</groupId></dependency></dependencies></project>");
+  write(root, "src/main/java/other/AddressMapper.java", "package other;\nimport org.mapstruct.Mapper;\n@Mapper\npublic interface AddressMapper {}\n");
+  write(
+    root,
+    "src/main/java/demo/OrderMapper.java",
+    "package demo;\nimport org.mapstruct.Mapper;\nimport other.AddressMapper;\n@Mapper(uses = AddressMapper.class)\ninterface OrderMapper {}\n"
+  );
+  const router = await readyRouterAt(root);
+  try {
+    const orderMapperFile = path.join(root, "src/main/java/demo/OrderMapper.java");
+    const addressMapperFile = path.join(root, "src/main/java/other/AddressMapper.java");
+    const context = await frameworkContextFor(router, root, [anchor(orderMapperFile)], [orderMapperFile]);
+
+    const result = await runFrameworkAdapters([mapstructAdapter], context);
+
+    const uses = signalsOf(result.outcome.evidence, "MAPSTRUCT_USES");
+    assert.equal(uses.length, 1, "AddressMapper is in a different package - only its explicit import can resolve it, the same-package guess would be wrong");
+    assert.equal(uses[0]!.candidateFile, addressMapperFile);
+  } finally {
+    await router.close();
+  }
+});
+
+test("collect resolves multiple uses= class literals from a brace-list", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "mapstruct-uses-multiple-"));
+  write(root, "pom.xml", "<project><dependencies><dependency><groupId>org.mapstruct</groupId></dependency></dependencies></project>");
+  write(root, "src/main/java/demo/AddressMapper.java", "package demo;\nimport org.mapstruct.Mapper;\n@Mapper\ninterface AddressMapper {}\n");
+  write(root, "src/main/java/demo/ContactMapper.java", "package demo;\nimport org.mapstruct.Mapper;\n@Mapper\ninterface ContactMapper {}\n");
+  write(
+    root,
+    "src/main/java/demo/OrderMapper.java",
+    "package demo;\nimport org.mapstruct.Mapper;\n@Mapper(uses = {AddressMapper.class, ContactMapper.class})\ninterface OrderMapper {}\n"
+  );
+  const router = await readyRouterAt(root);
+  try {
+    const orderMapperFile = path.join(root, "src/main/java/demo/OrderMapper.java");
+    const context = await frameworkContextFor(router, root, [anchor(orderMapperFile)], [orderMapperFile]);
+
+    const result = await runFrameworkAdapters([mapstructAdapter], context);
+
+    const uses = signalsOf(result.outcome.evidence, "MAPSTRUCT_USES");
+    assert.deepEqual(
+      new Set(uses.map(s => path.basename(s.candidateFile))),
+      new Set(["AddressMapper.java", "ContactMapper.java"])
+    );
+  } finally {
+    await router.close();
+  }
+});
+
 test("collect treats a @MappingTarget parameter as TARGET, not SOURCE, on a void update method", async () => {
   const router = await readyRouter();
   try {

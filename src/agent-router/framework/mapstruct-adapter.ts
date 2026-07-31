@@ -1,13 +1,16 @@
 // input: FrameworkAdapterContext (bounded FrameworkIndexView + request-scoped anchors/candidates/budget).
 // output: EvidenceSignal/CandidateFile pairs linking a @Mapper interface's mapping methods to their
-//         source/target types.
-// pos: Task 29 commit 2a. buildMarkerPaths/frameworkSeedFiles/resolveTargets below mirror
+//         source/target types, and @Mapper(uses = ...) to the mapper classes it delegates to.
+// pos: Task 29 commit 2a/2b. buildMarkerPaths/frameworkSeedFiles/resolveTargets below mirror
 //      spring-adapter.ts's own private helpers of the same name - duplicated, not imported, so
 //      each framework pack stays an independently removable unit (same choice mybatis-adapter.ts
-//      already made). MAPSTRUCT_USES (the @Mapper(uses=...) annotation-argument class-literal
-//      rule) is a separate follow-up commit - this one only covers method parameter/return types,
-//      which need no new resolution technique (they are already-resolved FrameworkTypeRefs, same
-//      as every other pack reads).
+//      already made). MAPSTRUCT_USES is the one kind needing a technique no other pack uses:
+//      FrameworkAnnotation.argumentsText is raw, unparsed source text (confirmed via a real-worker
+//      probe before writing the regex: `"(uses = AddressMapper.class)"` /
+//      `"(uses = {AddressMapper.class, ContactMapper.class})"`, parens included). A dotted capture
+//      is already qualified; a bare simple name is resolved via the file's own explicit import or
+//      a same-package guess, then verified through the same declarationsById batch as SOURCE/TARGET -
+//      an unresolved candidate produces no evidence, never a guess.
 import path from "node:path";
 import type { CandidateFile } from "../../agent-types.js";
 import { classifyPath } from "../../repo-layout.js";
@@ -18,6 +21,7 @@ import {
   type FrameworkAnnotation,
   type FrameworkDeclarations,
   type FrameworkFileFacts,
+  type FrameworkImport,
   type FrameworkIndexView
 } from "../../java-index/framework-index-view.js";
 import type { FrameworkAdapter, FrameworkAdapterContext, FrameworkCollectResult } from "./adapter.js";
@@ -32,9 +36,12 @@ const MAPSTRUCT_MAPPING_TARGET_FQN = "org.mapstruct.MappingTarget";
 
 const MAPSTRUCT_SOURCE_WEIGHT = 75;
 const MAPSTRUCT_TARGET_WEIGHT = 80;
+const MAPSTRUCT_USES_WEIGHT = 70;
 const CONFIDENCE = 0.95;
 
-type MapStructEvidenceKind = "MAPSTRUCT_SOURCE" | "MAPSTRUCT_TARGET";
+const CLASS_LITERAL_PATTERN = /([\w.]+)\.class/g;
+
+type MapStructEvidenceKind = "MAPSTRUCT_SOURCE" | "MAPSTRUCT_TARGET" | "MAPSTRUCT_USES";
 
 type PendingEvidence = {
   kind: MapStructEvidenceKind;
@@ -46,6 +53,41 @@ type PendingEvidence = {
 
 function hasAnnotation(annotations: readonly FrameworkAnnotation[], fqn: string): boolean {
   return annotations.some(a => a.resolvedFqn === fqn);
+}
+
+/**
+ * `@Mapper(uses = ...)`'s class literals, resolved to candidate "type:<fqn>"
+ * ids - never guessed past what the file's own imports/package prove. A
+ * dotted capture (e.g. "demo.mappers.AddressMapper") is already qualified.
+ * A bare simple name resolves via an explicit (non-wildcard) import match,
+ * else falls back to the annotated type's own package - the same-package
+ * assumption a bare reference makes in real Java source. Wildcard imports
+ * are not consulted (unlike normalizeSpringAnnotations' annotation-name
+ * resolution): a `uses=` class literal is a plain type reference, and the
+ * existing resolver already leaves an ambiguous wildcard candidate
+ * unresolved elsewhere in this codebase rather than guessing.
+ */
+function usesClassLiteralTargetIds(annotation: FrameworkAnnotation, facts: FrameworkFileFacts): string[] {
+  const text = annotation.argumentsText;
+  if (!text) return [];
+  const explicitImports = facts.imports.filter((imp): imp is FrameworkImport => !imp.wildcard && !imp.static);
+  const targetIds: string[] = [];
+  for (const match of text.matchAll(CLASS_LITERAL_PATTERN)) {
+    const captured = match[1]!;
+    if (captured.includes(".")) {
+      targetIds.push(`type:${captured}`);
+      continue;
+    }
+    const explicitImport = explicitImports.find(imp => imp.qualifiedName.endsWith(`.${captured}`) || imp.qualifiedName === captured);
+    if (explicitImport) {
+      targetIds.push(`type:${explicitImport.qualifiedName}`);
+    } else if (facts.packageName) {
+      targetIds.push(`type:${facts.packageName}.${captured}`);
+    } else {
+      targetIds.push(`type:${captured}`);
+    }
+  }
+  return targetIds;
 }
 
 // mirrors spring-adapter.ts's frameworkSeedFiles.
@@ -135,7 +177,17 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
       }
       const absolutePath = path.resolve(context.repoRoot, factsForFile.relativePath);
       for (const type of factsForFile.types) {
-        if (!hasAnnotation(type.annotations, MAPSTRUCT_MAPPER_FQN)) continue;
+        const mapperAnnotation = type.annotations.find(a => a.resolvedFqn === MAPSTRUCT_MAPPER_FQN);
+        if (!mapperAnnotation) continue;
+        for (const targetId of usesClassLiteralTargetIds(mapperAnnotation, factsForFile)) {
+          pending.push({
+            kind: "MAPSTRUCT_USES",
+            sourceFile: absolutePath,
+            targetId,
+            weight: MAPSTRUCT_USES_WEIGHT,
+            detail: `${type.simpleName} @Mapper(uses = ...)`
+          });
+        }
         for (const method of factsForFile.methods) {
           if (method.ownerTypeId !== type.typeId) continue;
           for (const parameter of method.parameters) {
