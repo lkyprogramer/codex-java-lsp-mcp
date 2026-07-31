@@ -589,6 +589,8 @@ function validateWorktreeSeedStatus(value: unknown, context: string): WorktreeSe
   if (!isNumber(source.droppedCrossFileEdges)) invalid(context, "droppedCrossFileEdges");
   if (!isNumber(source.manifestValidationMs)) invalid(context, "manifestValidationMs");
   if (!isNumber(source.deltaParsedFiles)) invalid(context, "deltaParsedFiles");
+  if (!isNumber(source.reusedResources)) invalid(context, "reusedResources");
+  if (!isNumber(source.dirtyResources)) invalid(context, "dirtyResources");
   if (!isOneOf(source.completion, WORKTREE_SEED_COMPLETIONS)) invalid(context, "completion");
   return {
     attempted: source.attempted,
@@ -599,6 +601,8 @@ function validateWorktreeSeedStatus(value: unknown, context: string): WorktreeSe
     droppedCrossFileEdges: source.droppedCrossFileEdges,
     manifestValidationMs: source.manifestValidationMs,
     deltaParsedFiles: source.deltaParsedFiles,
+    reusedResources: source.reusedResources,
+    dirtyResources: source.dirtyResources,
     completion: source.completion
   };
 }

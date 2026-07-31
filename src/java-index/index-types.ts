@@ -219,6 +219,9 @@ export type WorktreeSeedStatus = {
   manifestValidationMs: number;
   /** Files actually passed through the target's post-seed reconciliation sweep. */
   deltaParsedFiles: number;
+  /** Task 28 Slice C: MyBatis resources reused (content-hash matched) vs. left for the normal post-seed sweep to re-derive. */
+  reusedResources: number;
+  dirtyResources: number;
   completion: "NOT_ATTEMPTED" | "SEEDED_DEGRADED" | "RECONCILED_COMPLETE" | "NO_VALID_SOURCE" | "FAILED";
 };
 

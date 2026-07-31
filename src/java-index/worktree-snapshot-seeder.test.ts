@@ -273,3 +273,115 @@ test("a path scanCurrentManifestStable reports as unstable is excluded from entr
   assert.equal(unstablePaths.length, 0, "a quiet file must not be reported unstable");
   assert.equal(entries.length, discovered.length);
 });
+
+const MAPPER_RELATIVE_PATH = "src/main/resources/mapper/OrderMapper.xml";
+const ORIGINAL_MAPPER_XML = '<mapper namespace="demo.OrderMapper"><select id="findById">select 1</select></mapper>';
+const CHANGED_MAPPER_XML = '<mapper namespace="demo.OrderMapper"><select id="findById">x</select><insert id="insert">y</insert></mapper>';
+
+/** Same as seedableFamily(), plus an unchanged Java mapper interface and a MyBatis mapper resource on both sides. */
+async function seedableFamilyWithResource(): Promise<{
+  family: Awaited<ReturnType<typeof createGitWorktreeFamily>>;
+  cacheBase: string;
+}> {
+  const family = await createGitWorktreeFamily();
+  rmSync(path.join(family.primary, "src/main/java/demo/A.java"), { force: true });
+  rmSync(path.join(family.linked, "src/main/java/demo/A.java"), { force: true });
+  for (const root of [family.primary, family.linked]) {
+    write(root, "src/main/java/demo/OrderMapper.java", "package demo;\npublic interface OrderMapper { Object findById(Long id); }\n");
+    write(root, MAPPER_RELATIVE_PATH, ORIGINAL_MAPPER_XML);
+  }
+  const cacheBase = tempCacheBase();
+  const primaryCacheDir = path.join(cacheBase, "primary");
+  await buildCompleteSnapshot(family.primary, primaryCacheDir);
+  await writeRepoMeta(primaryCacheDir, family.primary);
+  return { family, cacheBase };
+}
+
+test("sibling seed reuses an unchanged MyBatis resource by content hash and counts it separately from Java files", async () => {
+  const { family, cacheBase } = await seedableFamilyWithResource();
+
+  const targetIdentity = await resolveWorktreeIdentity(family.linked);
+  const { identity, layout } = await seedIdentityFor(family.linked);
+  const seeder = new WorktreeSnapshotSeeder();
+  const candidate = await seeder.findCandidate(targetIdentity, identity, cacheBase);
+  assert.ok(candidate);
+
+  const { result, store } = await seeder.seedValidatedFacts(candidate!, identity, family.linked, layout, 2);
+
+  assert.equal(result.reusedResources, 1);
+  assert.equal(result.dirtyResources, 0);
+  const resource = store.myBatisResource(MAPPER_RELATIVE_PATH);
+  assert.equal(resource?.namespace, "demo.OrderMapper");
+  assert.equal(resource?.generation, 2, "a reused resource must be stamped into the target's current generation");
+});
+
+test("sibling seed does not reuse a MyBatis resource changed on the target - the Java mapper interface is unaffected", async () => {
+  const { family, cacheBase } = await seedableFamilyWithResource();
+  write(family.linked, MAPPER_RELATIVE_PATH, CHANGED_MAPPER_XML);
+
+  const targetIdentity = await resolveWorktreeIdentity(family.linked);
+  const { identity, layout } = await seedIdentityFor(family.linked);
+  const seeder = new WorktreeSnapshotSeeder();
+  const candidate = await seeder.findCandidate(targetIdentity, identity, cacheBase);
+  assert.ok(candidate);
+
+  const { result, store } = await seeder.seedValidatedFacts(candidate!, identity, family.linked, layout, 2);
+
+  assert.equal(result.reusedResources, 0);
+  assert.equal(result.dirtyResources, 1);
+  assert.equal(store.myBatisResource(MAPPER_RELATIVE_PATH), undefined, "a changed resource must not be seeded from stale source facts");
+  // The unrelated, unchanged Java mapper interface must still be reused -
+  // a dirty resource must never force its owning Java file to be dropped.
+  assert.ok(store.file("src/main/java/demo/OrderMapper.java"), "the unchanged Java mapper interface must still be reused");
+});
+
+test("final stable revalidation drops a reused MyBatis resource changed after its initial hash and before seed publication", async () => {
+  const { family, cacheBase } = await seedableFamilyWithResource();
+  const targetIdentity = await resolveWorktreeIdentity(family.linked);
+  const { identity, layout } = await seedIdentityFor(family.linked);
+  const seeder = new WorktreeSnapshotSeeder();
+  const candidate = await seeder.findCandidate(targetIdentity, identity, cacheBase);
+  assert.ok(candidate);
+
+  const { result, store } = await seeder.seedValidatedFacts(candidate!, identity, family.linked, layout, 2, {
+    beforeFinalValidation: () => write(family.linked, MAPPER_RELATIVE_PATH, CHANGED_MAPPER_XML)
+  });
+
+  assert.equal(result.reusedResources, 0);
+  assert.equal(store.myBatisResource(MAPPER_RELATIVE_PATH), undefined, "no stale resource facts may survive the final validation boundary");
+});
+
+test("a linked worktree opened via siblingCacheBase reuses an unchanged mapper resource, then re-derives a changed one once the post-seed sweep completes", async () => {
+  const { family, cacheBase } = await seedableFamilyWithResource();
+  write(family.linked, MAPPER_RELATIVE_PATH, CHANGED_MAPPER_XML);
+
+  const identity = await resolveWorktreeIdentity(family.linked);
+  const client = new JavaIndexClient(family.linked, tempCacheBase());
+  try {
+    const openStatus = await client.open(1, { worktree: identity, siblingCacheBase: cacheBase });
+
+    assert.equal(openStatus.worktreeSeed?.completion, "SEEDED_DEGRADED");
+    assert.equal(openStatus.worktreeSeed?.dirtyResources, 1);
+
+    // client.open() alone never triggers a follow-up reconcile - that
+    // orchestration lives in repo-runtime-manager.ts (driven by the
+    // restored coverage's own DEGRADED state), not the worker/client pair
+    // this test talks to directly. Drive it explicitly, matching this
+    // file's own buildCompleteSnapshot helper.
+    await client.reconcile(1);
+    await waitFor(async () => (await client.status()).pendingBackground === 0, 15000);
+    const settledStatus = await client.status();
+    assert.equal(settledStatus.worktreeSeed?.completion, "RECONCILED_COMPLETE");
+
+    const facts = await client.queryMyBatisResource(MAPPER_RELATIVE_PATH);
+    assert.deepEqual(
+      facts?.statements.map(s => s.id).sort(),
+      ["findById", "insert"],
+      "the resource must be re-derived with the target's real content once the post-seed sweep finishes"
+    );
+  } finally {
+    // A worker thread left open by a mid-test failure keeps the whole test
+    // process alive well past this test's own timeout - always close it.
+    await client.close();
+  }
+});

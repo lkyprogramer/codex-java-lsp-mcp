@@ -7,7 +7,7 @@ import path from "node:path";
 import type { LayoutContext } from "../layout-probe.js";
 import type { WorktreeIdentity } from "../worktree-identity.js";
 import { JavaIndexStore } from "./index-store.js";
-import { scanCurrentManifestStable } from "./manifest.js";
+import { scanCurrentManifestStable, scanCurrentMyBatisManifestStable } from "./manifest.js";
 import { loadSiblingSnapshot, type SiblingSnapshotIdentity } from "./snapshot.js";
 
 const SNAPSHOT_FILE_NAME = "java-index-snapshot.json.gz";
@@ -33,6 +33,21 @@ export type WorktreeSeedResult = {
   droppedCrossFileEdges: number;
   manifestValidationMs: number;
   reusedFiles: number;
+  /**
+   * MyBatis resources reused from the sibling's snapshot / re-derived fresh
+   * because they were missing, changed, or new since the sibling indexed
+   * them (Task 28 Slice C). No `droppedFrameworkEdges` field: unlike Java's
+   * static edges, a MyBatis Java<->XML relationship is never a persisted
+   * store edge - the adapter (Task 28 Slice D) name-matches Java and
+   * resource facts fresh at read time, the same as the Spring pack does for
+   * its own framework relationships - so there is no edge for seeding to
+   * drop, and a `resourceCoverage`-gated relink queue is unnecessary: a
+   * dirty resource simply is not loaded into the store at all here, and the
+   * caller's normal post-seed sweep (Task 28 Slice B's indexMyBatisResources)
+   * re-derives it exactly like a cold open would.
+   */
+  reusedResources: number;
+  dirtyResources: number;
   coverage: "DEGRADED";
   negativeLookupAllowed: false;
 };
@@ -52,6 +67,8 @@ function emptySeedResult(targetGeneration: number): WorktreeSeedResult {
     droppedCrossFileEdges: 0,
     manifestValidationMs: 0,
     reusedFiles: 0,
+    reusedResources: 0,
+    dirtyResources: 0,
     coverage: "DEGRADED",
     negativeLookupAllowed: false
   };
@@ -165,9 +182,14 @@ export class WorktreeSnapshotSeeder {
       return { result: emptySeedResult(targetGeneration), store: new JavaIndexStore() };
     }
 
-    const { entries, unstablePaths } = await scanCurrentManifestStable(targetRepoRoot, targetLayout);
+    const [{ entries, unstablePaths }, resourceManifest] = await Promise.all([
+      scanCurrentManifestStable(targetRepoRoot, targetLayout),
+      scanCurrentMyBatisManifestStable(targetRepoRoot, targetLayout)
+    ]);
     const unstable = new Set(unstablePaths);
     const targetEntryByPath = new Map(entries.map(entry => [entry.relativePath, entry]));
+    const resourceUnstable = new Set(resourceManifest.unstablePaths);
+    const targetResourceEntryByPath = new Map(resourceManifest.entries.map(entry => [entry.relativePath, entry]));
 
     const store = new JavaIndexStore();
     store.loadSnapshotData({
@@ -176,12 +198,7 @@ export class WorktreeSnapshotSeeder {
       fields: snapshot.fields,
       methods: snapshot.methods,
       edges: snapshot.edges,
-      // Sibling-seeded MyBatis resource reuse is not implemented yet
-      // (Task 28 Slice C's own-snapshot-only cut); a linked worktree opened
-      // from a sibling always re-derives its resource facts via the normal
-      // background sweep instead of trusting the source's, exactly like a
-      // cold open with no snapshot at all.
-      myBatisResources: []
+      myBatisResources: snapshot.myBatisResources
     });
 
     const reusedPaths: string[] = [];
@@ -195,6 +212,22 @@ export class WorktreeSnapshotSeeder {
       if (reusable) reusedPaths.push(file.relativePath);
       else nonReusedSourcePaths.push(file.relativePath);
     }
+
+    // MyBatis resources have no persisted cross-resource edges (Slice D
+    // name-matches Java and resource facts fresh at read time, not via a
+    // stored graph), so reuse here is a plain content-hash filter - no
+    // relink/dangling-edge bookkeeping like the Java loop above needs.
+    const reusedResourcePaths: string[] = [];
+    const nonReusedResourcePaths: string[] = [];
+    for (const resource of snapshot.myBatisResources) {
+      const targetEntry = targetResourceEntryByPath.get(resource.relativePath);
+      const reusable = !resourceUnstable.has(resource.relativePath)
+        && targetEntry !== undefined
+        && targetEntry.contentHash === resource.contentHash;
+      if (reusable) reusedResourcePaths.push(resource.relativePath);
+      else nonReusedResourcePaths.push(resource.relativePath);
+    }
+    store.removeMyBatisResources(nonReusedResourcePaths);
 
     const edgesBeforeRemoval = store.edgesById.size;
     let relinkPaths = store.removeFiles(nonReusedSourcePaths);
@@ -210,7 +243,10 @@ export class WorktreeSnapshotSeeder {
     // store is installed by the worker. Re-scan at that exact publication
     // boundary and evict any formerly reusable facts that no longer match.
     await hooks.beforeFinalValidation?.();
-    const finalManifest = await scanCurrentManifestStable(targetRepoRoot, targetLayout);
+    const [finalManifest, finalResourceManifest] = await Promise.all([
+      scanCurrentManifestStable(targetRepoRoot, targetLayout),
+      scanCurrentMyBatisManifestStable(targetRepoRoot, targetLayout)
+    ]);
     const finalUnstable = new Set(finalManifest.unstablePaths);
     const finalEntriesByPath = new Map(finalManifest.entries.map(entry => [entry.relativePath, entry]));
     const snapshotFilesByPath = new Map(snapshot.files.map(file => [file.relativePath, file]));
@@ -236,6 +272,29 @@ export class WorktreeSnapshotSeeder {
     }
     store.stampGeneration(reusedPaths, targetGeneration);
 
+    const finalResourceUnstable = new Set(finalResourceManifest.unstablePaths);
+    const finalResourceEntriesByPath = new Map(finalResourceManifest.entries.map(entry => [entry.relativePath, entry]));
+    const snapshotResourcesByPath = new Map(snapshot.myBatisResources.map(resource => [resource.relativePath, resource]));
+    const invalidatedResourceReusePaths = reusedResourcePaths.filter(relativePath => {
+      const snapshotResource = snapshotResourcesByPath.get(relativePath);
+      const finalEntry = finalResourceEntriesByPath.get(relativePath);
+      return finalResourceUnstable.has(relativePath)
+        || !snapshotResource
+        || !finalEntry
+        || finalEntry.contentHash !== snapshotResource.contentHash;
+    });
+    if (invalidatedResourceReusePaths.length > 0) {
+      store.removeMyBatisResources(invalidatedResourceReusePaths);
+      const invalidated = new Set(invalidatedResourceReusePaths);
+      for (let index = reusedResourcePaths.length - 1; index >= 0; index -= 1) {
+        if (invalidated.has(reusedResourcePaths[index]!)) reusedResourcePaths.splice(index, 1);
+      }
+    }
+    for (const relativePath of reusedResourcePaths) {
+      const resource = store.myBatisResource(relativePath);
+      if (resource) store.replaceMyBatisResource({ ...resource, generation: targetGeneration });
+    }
+
     const reusedSet = new Set(reusedPaths);
     const dirtyPaths = finalManifest.discovered
       .map(file => file.relativePath)
@@ -243,6 +302,11 @@ export class WorktreeSnapshotSeeder {
     const sourcePaths = new Set(snapshot.files.map(file => file.relativePath));
     const finalTargetPaths = new Set(finalManifest.discovered.map(file => file.relativePath));
     const deletedSourcePaths = [...sourcePaths].filter(relativePath => !finalTargetPaths.has(relativePath));
+
+    const reusedResourceSet = new Set(reusedResourcePaths);
+    const dirtyResources = finalResourceManifest.discovered
+      .map(file => file.relativePath)
+      .filter(relativePath => !reusedResourceSet.has(relativePath)).length;
 
     const result: WorktreeSeedResult = {
       sourceRepoHash: candidate.sourceRepoHash,
@@ -254,6 +318,8 @@ export class WorktreeSnapshotSeeder {
       droppedCrossFileEdges,
       manifestValidationMs: Date.now() - start,
       reusedFiles: reusedPaths.length,
+      reusedResources: reusedResourcePaths.length,
+      dirtyResources,
       coverage: "DEGRADED",
       negativeLookupAllowed: false
     };

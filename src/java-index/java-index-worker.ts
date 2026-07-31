@@ -845,6 +845,8 @@ async function attemptSiblingSeed(
       droppedCrossFileEdges: seeded.result.droppedCrossFileEdges,
       manifestValidationMs: seeded.result.manifestValidationMs,
       deltaParsedFiles: 0,
+      reusedResources: seeded.result.reusedResources,
+      dirtyResources: seeded.result.dirtyResources,
       completion: "SEEDED_DEGRADED"
     };
   } catch {
@@ -863,6 +865,8 @@ function emptyWorktreeSeedStatus(completion: WorktreeSeedStatus["completion"]): 
     droppedCrossFileEdges: 0,
     manifestValidationMs: 0,
     deltaParsedFiles: 0,
+    reusedResources: 0,
+    dirtyResources: 0,
     completion
   };
 }

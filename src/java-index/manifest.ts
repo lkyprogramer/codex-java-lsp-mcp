@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { open, opendir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import type { LayoutContext } from "../layout-probe.js";
+import { isMyBatisMapperFile } from "./mybatis-xml-extractor.js";
 
 // Build artifacts and tool caches that must never be walked into, even if
 // they happen to sit inside a detected source root (e.g. a broken build
@@ -287,6 +288,44 @@ export async function scanCurrentManifestStable(
     }
     const contentHash = createHash("sha256").update(read.content, "utf8").digest("hex");
     entries.push({ relativePath: file.relativePath, contentHash, sourceRoot: file.sourceRoot });
+  }
+  return { discovered, entries, unstablePaths };
+}
+
+export type MyBatisManifestEntry = {
+  relativePath: string;
+  contentHash: string;
+};
+
+/**
+ * Same stable-read contract as `scanCurrentManifestStable`, for MyBatis
+ * mapper resources instead of Java files: `discoverMyBatisResourceFiles`
+ * finds every `.xml` under the resource roots, but only ones whose content
+ * passes `isMyBatisMapperFile` (the same inclusion check the extractor and
+ * the store's own indexing already use) become an entry - a non-mapper
+ * resource XML changing must never affect this manifest, since the store
+ * never held a fact for it to begin with. `sourceRoot` is deliberately not
+ * part of the entry (unlike Java's): MyBatisMapperResourceFacts carries no
+ * module/sourceSet attribution for anything to key on.
+ */
+export async function scanCurrentMyBatisManifestStable(
+  repoRoot: string,
+  layout: LayoutContext
+): Promise<{ discovered: DiscoveredResourceFile[]; entries: MyBatisManifestEntry[]; unstablePaths: string[] }> {
+  const allDiscovered = await discoverMyBatisResourceFiles(repoRoot, layout);
+  const discovered: DiscoveredResourceFile[] = [];
+  const entries: MyBatisManifestEntry[] = [];
+  const unstablePaths: string[] = [];
+  for (const file of allDiscovered) {
+    const read = await readFileStable(file.absolutePath);
+    if (!read || !read.stable) {
+      unstablePaths.push(file.relativePath);
+      continue;
+    }
+    if (!isMyBatisMapperFile(read.content)) continue;
+    discovered.push(file);
+    const contentHash = createHash("sha256").update(read.content, "utf8").digest("hex");
+    entries.push({ relativePath: file.relativePath, contentHash });
   }
   return { discovered, entries, unstablePaths };
 }

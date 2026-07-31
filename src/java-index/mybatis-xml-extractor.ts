@@ -45,6 +45,16 @@ function sniffRootTagName(xml: string): string | undefined {
   return /<\s*([A-Za-z][\w.-]*)/.exec(xml.replace(PROLOG_OR_COMMENT, ""))?.[1];
 }
 
+/**
+ * The same cheap root-tag check extractMyBatisMapperFacts uses to decide
+ * whether a file is its concern at all - exported so a manifest scan (which
+ * only needs "does this file count as a resource", not a full parse) can
+ * reuse the exact inclusion criterion instead of duplicating it.
+ */
+export function isMyBatisMapperFile(xml: string): boolean {
+  return sniffRootTagName(xml) === "mapper";
+}
+
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }
