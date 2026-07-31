@@ -142,6 +142,43 @@ test("bundleToFrameworkFileFacts resolves a type annotation's edge target but le
   assert.equal(projected.annotations[1]!.argumentsText, '("x")');
 });
 
+test("bundleToFrameworkFileFacts projects extends/implements, each resolving independently of its own type arguments", () => {
+  const jpaRepositoryRef: JavaTypeRef = {
+    text: "JpaRepository<OrderEntity, Long>",
+    simpleName: "JpaRepository",
+    typeArguments: [repoRef("OrderEntity", "type:demo.OrderEntity"), externalRef("Long", "java.lang.Long")],
+    arrayDepth: 0,
+    resolution: { state: "EXTERNAL", qualifiedName: "org.springframework.data.jpa.repository.JpaRepository", strategy: "EXPLICIT_IMPORT" }
+  };
+  const type: JavaTypeFacts = {
+    typeId: "type:demo.OrderRepository",
+    fqn: "demo.OrderRepository",
+    simpleName: "OrderRepository",
+    kind: "interface",
+    fileId: "file:src/main/java/demo/OrderRepository.java",
+    range: RANGE,
+    modifiers: [],
+    annotations: [],
+    typeParameters: [],
+    extends: [jpaRepositoryRef],
+    implements: [],
+    permits: [],
+    fieldIds: [],
+    methodIds: [],
+    confidence: 1
+  };
+  const bundle: JavaFileBundle = { file: file(), types: [type], fields: [], methods: [], edges: [] };
+
+  const projected = bundleToFrameworkFileFacts(bundle).types[0]!;
+
+  assert.equal(projected.extends.length, 1);
+  assert.equal(projected.implements.length, 0);
+  const base = projected.extends[0]!;
+  assert.equal(base.resolvedFqn, "org.springframework.data.jpa.repository.JpaRepository", "the base type resolves EXTERNAL, independent of its type arguments");
+  assert.equal(base.typeArguments[0]!.resolvedFqn, "demo.OrderEntity", "a repo-resolved type argument keeps its own RESOLVED_REPO fqn");
+  assert.equal(base.typeArguments[1]!.resolvedFqn, "java.lang.Long", "an external type argument keeps its own EXTERNAL fqn");
+});
+
 test("bundleToFrameworkFileFacts joins parameter annotations by the parameter's synthetic id, not by position among all annotations", () => {
   const methodId = "method:type:demo.Widget#handle(demo.Order)";
   const method: JavaMethodFacts = {

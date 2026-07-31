@@ -95,6 +95,9 @@ export type FrameworkTypeDeclaration = {
   annotations: FrameworkAnnotation[];
   methodIds: string[];
   fieldIds: string[];
+  /** The extends clause's type ref(s) - a class has at most one, an interface may have several. Each ref's own resolvedFqn/typeArguments resolve independently (e.g. an external generic base with a repo-resolved type argument), same as any other FrameworkTypeRef. */
+  extends: FrameworkTypeRef[];
+  implements: FrameworkTypeRef[];
 };
 
 export type FrameworkDeclarations = {
@@ -357,7 +360,9 @@ function bundleToDeclarations(bundle: JavaFileBundle): FrameworkDeclarations {
       kind: type.kind,
       annotations: toFrameworkAnnotations(type.typeId, type.annotations, annotatedWithByFromId),
       methodIds: type.methodIds,
-      fieldIds: type.fieldIds
+      fieldIds: type.fieldIds,
+      extends: type.extends.map(toFrameworkTypeRef),
+      implements: type.implements.map(toFrameworkTypeRef)
     })),
     fields: bundle.fields.map(field => ({
       fieldId: field.fieldId,

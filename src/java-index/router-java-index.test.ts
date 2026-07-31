@@ -78,6 +78,35 @@ test("frameworkFactsFor resolves annotations (incl. a parameter annotation) and 
   }
 });
 
+test("frameworkFactsFor projects an extends clause's base and its type arguments as independently-resolved refs", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "framework-view-extends-repo-"));
+  write(repoRoot, "src/main/java/demo/OrderEntity.java", "package demo;\nclass OrderEntity {}\n");
+  write(
+    repoRoot,
+    "src/main/java/demo/OrderRepository.java",
+    [
+      "package demo;",
+      "import org.springframework.data.jpa.repository.JpaRepository;",
+      "interface OrderRepository extends JpaRepository<OrderEntity, Long> {}",
+      ""
+    ].join("\n")
+  );
+  const router = await readyRouter(repoRoot);
+  try {
+    const facts = await router.frameworkFactsFor(path.join(repoRoot, "src/main/java/demo/OrderRepository.java"));
+    const repository = facts.types.find(t => t.simpleName === "OrderRepository")!;
+
+    assert.equal(repository.implements.length, 0);
+    assert.equal(repository.extends.length, 1);
+    const base = repository.extends[0]!;
+    assert.equal(base.resolvedFqn, "org.springframework.data.jpa.repository.JpaRepository");
+    assert.equal(base.typeArguments[0]!.resolvedFqn, "demo.OrderEntity", "a repo-resolved generic argument resolves RESOLVED_REPO independent of the external base");
+    assert.equal(base.typeArguments[1]!.resolvedFqn, "java.lang.Long");
+  } finally {
+    await router.close();
+  }
+});
+
 test("frameworkFactsFor caches within a generation and drops the cache entry on refresh", async () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), "framework-view-cache-repo-"));
   const relativePath = "src/main/java/demo/Cached.java";
