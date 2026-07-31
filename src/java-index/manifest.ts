@@ -17,6 +17,8 @@ export type DiscoveredResourceFile = {
   absolutePath: string;
   /** Repo-relative, forward-slash-joined - the same convention as JavaFileFacts.relativePath. */
   relativePath: string;
+  /** The resource root that owns the XML file, needed by the typed snapshot manifest. */
+  sourceRoot: string;
 };
 
 /**
@@ -30,13 +32,26 @@ export type DiscoveredResourceFile = {
 export async function discoverMyBatisResourceFiles(repoRoot: string, layout: LayoutContext): Promise<DiscoveredResourceFile[]> {
   const files: DiscoveredResourceFile[] = [];
   for (const resourceRoot of layout.resourceRoots) {
-    await walkResourceDirectory(path.join(repoRoot, resourceRoot), repoRoot, files);
+    await walkResourceDirectory(path.join(repoRoot, resourceRoot), repoRoot, resourceRoot, files);
   }
   files.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
   return files;
 }
 
-async function walkResourceDirectory(absoluteDir: string, repoRoot: string, files: DiscoveredResourceFile[]): Promise<void> {
+export function resourceSourceRoot(relativePath: string, layout: LayoutContext): string | undefined {
+  const normalizedPath = relativePath.replace(/\\/g, "/");
+  return [...layout.resourceRoots]
+    .map(root => root.replace(/\\/g, "/"))
+    .sort((left, right) => right.length - left.length || left.localeCompare(right))
+    .find(root => normalizedPath === root || normalizedPath.startsWith(`${root}/`));
+}
+
+async function walkResourceDirectory(
+  absoluteDir: string,
+  repoRoot: string,
+  sourceRoot: string,
+  files: DiscoveredResourceFile[]
+): Promise<void> {
   let dir;
   try {
     dir = await opendir(absoluteDir);
@@ -46,11 +61,11 @@ async function walkResourceDirectory(absoluteDir: string, repoRoot: string, file
   for await (const entry of dir) {
     if (entry.isDirectory()) {
       if (IGNORED_DIRECTORY_NAMES.has(entry.name)) continue;
-      await walkResourceDirectory(path.join(absoluteDir, entry.name), repoRoot, files);
+      await walkResourceDirectory(path.join(absoluteDir, entry.name), repoRoot, sourceRoot, files);
     } else if (entry.isFile() && entry.name.endsWith(".xml")) {
       const absolutePath = path.join(absoluteDir, entry.name);
       const relativePath = path.relative(repoRoot, absolutePath).split(path.sep).join("/");
-      files.push({ absolutePath, relativePath });
+      files.push({ absolutePath, relativePath, sourceRoot });
     }
   }
 }
@@ -105,7 +120,11 @@ async function walkDirectory(
   }
 }
 
+export type SnapshotManifestKind = "JAVA" | "MYBATIS_XML";
+
 export type ManifestEntry = {
+  /** Omitted only by pre-Task-28 Java callers; snapshot V3 always supplies it. */
+  kind?: SnapshotManifestKind;
   relativePath: string;
   contentHash: string;
   sourceRoot: string;
@@ -184,7 +203,7 @@ export async function scanSnapshotManifestDiff(
 }
 
 /**
- * Hashes sorted `relativePath + contentHash + sourceRoot` triples - the
+ * Hashes sorted typed `kind + relativePath + contentHash + sourceRoot` entries - the
  * "target manifest" fingerprint used to decide whether an own snapshot's
  * facts still match the repo's current files (Step 6a) without a full AST
  * sweep. This is the single normalization point both sides must share:
@@ -195,7 +214,7 @@ export async function scanSnapshotManifestDiff(
  */
 export function computeManifestFingerprint(entries: readonly ManifestEntry[]): string {
   const lines = entries
-    .map(entry => `${entry.relativePath}:${entry.contentHash}:${entry.sourceRoot}`)
+    .map(entry => `${entry.kind ?? "JAVA"}:${entry.relativePath}:${entry.contentHash}:${entry.sourceRoot}`)
     .sort();
   return createHash("sha256").update(lines.join("\n")).digest("hex");
 }
@@ -295,6 +314,7 @@ export async function scanCurrentManifestStable(
 export type MyBatisManifestEntry = {
   relativePath: string;
   contentHash: string;
+  sourceRoot: string;
 };
 
 /**
@@ -325,7 +345,34 @@ export async function scanCurrentMyBatisManifestStable(
     if (!isMyBatisMapperFile(read.content)) continue;
     discovered.push(file);
     const contentHash = createHash("sha256").update(read.content, "utf8").digest("hex");
-    entries.push({ relativePath: file.relativePath, contentHash });
+    entries.push({ relativePath: file.relativePath, contentHash, sourceRoot: file.sourceRoot });
   }
   return { discovered, entries, unstablePaths };
+}
+
+/**
+ * Builds the schema-3 typed manifest from the worker's already-indexed facts.
+ * A resource outside a discovered resource root is not snapshot-safe: omitting
+ * it would make the snapshot claim a smaller manifest than the facts it holds.
+ */
+export function snapshotManifestEntries(
+  javaEntries: readonly ManifestEntry[],
+  resourceEntries: readonly MyBatisManifestEntry[]
+): ManifestEntry[] {
+  return [
+    ...javaEntries.map(entry => ({ ...entry, kind: "JAVA" as const })),
+    ...resourceEntries.map(entry => ({ ...entry, kind: "MYBATIS_XML" as const }))
+  ];
+}
+
+/** Re-hashes the current Java and mapper XML manifest together for snapshot publication. */
+export async function computeCurrentSnapshotManifestFingerprint(repoRoot: string, layout: LayoutContext): Promise<string> {
+  const [{ entries: javaEntries }, resources] = await Promise.all([
+    scanCurrentManifest(repoRoot, layout),
+    scanCurrentMyBatisManifestStable(repoRoot, layout)
+  ]);
+  if (resources.unstablePaths.length > 0) {
+    throw new Error(`mapper resources changed while snapshot manifest was read: ${resources.unstablePaths.join(", ")}`);
+  }
+  return computeManifestFingerprint(snapshotManifestEntries(javaEntries, resources.entries));
 }

@@ -231,7 +231,7 @@ test("myBatisResourcesByNamespaces batches a namespace lookup against real backg
   }
 });
 
-test("myBatisResourcesByNamespaces resolves a namespace collision deterministically by the lexicographically-smallest relativePath", async () => {
+test("myBatisResourcesByNamespaces omits a namespace collision rather than returning arbitrary XML", async () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), "framework-view-mybatis-collision-"));
   write(repoRoot, "src/main/java/demo/Marker.java", "package demo;\nclass Marker {}\n");
   const mapperXml = ['<?xml version="1.0" encoding="UTF-8"?>', '<mapper namespace="demo.Dup"></mapper>', ""].join("\n");
@@ -240,11 +240,7 @@ test("myBatisResourcesByNamespaces resolves a namespace collision deterministica
   const router = await readyRouter(repoRoot);
   try {
     const found = await router.myBatisResourcesByNamespaces(["demo.Dup"]);
-    assert.equal(
-      found.get("demo.Dup")?.relativePath,
-      "src/main/resources/mapper/a-first.xml",
-      "a namespace collision must resolve to the same file across repeated calls, not whichever file the scan happened to visit first"
-    );
+    assert.equal(found.get("demo.Dup"), undefined);
   } finally {
     await router.close();
   }

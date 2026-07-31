@@ -192,13 +192,7 @@ export type SourceRootCoverage = {
   completedAt?: string;
 };
 
-/**
- * Task 28 Slice C: per-resource-root coverage, tracked independently of
- * SourceRootCoverage above - no producer/CoverageTracker instance exists
- * yet (Slice C only declares the snapshot field and always persists `[]`);
- * a later slice owns populating and consuming it, the same "declared, not
- * yet wired" pattern JavaIndexStore.dependentFilesByTypeName already uses.
- */
+/** Per-resource-root MyBatis coverage, independent from Java source coverage. */
 export type MyBatisResourceCoverage = {
   root: string;
   generation: number;
@@ -216,6 +210,7 @@ export type WorktreeSeedStatus = {
   dirtyFiles: number;
   relinkFiles: number;
   droppedCrossFileEdges: number;
+  droppedFrameworkEdges: number;
   manifestValidationMs: number;
   /** Files actually passed through the target's post-seed reconciliation sweep. */
   deltaParsedFiles: number;
@@ -238,6 +233,7 @@ export type JavaIndexStatus = {
   /** Own-snapshot manifest validation still running after OPEN returned. */
   snapshotVerificationPending?: boolean;
   coverage: SourceRootCoverage[];
+  resourceCoverage: MyBatisResourceCoverage[];
   lastError?: string;
   worktreeSeed?: WorktreeSeedStatus;
 };

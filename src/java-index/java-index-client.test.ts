@@ -22,7 +22,8 @@ function validStatus(generation: number): JavaIndexStatus {
     snapshotBytes: 0,
     pendingForeground: 0,
     pendingBackground: 0,
-    coverage: []
+    coverage: [],
+    resourceCoverage: []
   };
 }
 

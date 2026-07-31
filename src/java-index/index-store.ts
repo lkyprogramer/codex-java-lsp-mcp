@@ -156,12 +156,11 @@ export class JavaIndexStore {
     return this.myBatisStatementsByQualifiedId.get(myBatisQualifiedId(namespace, id))?.statement;
   }
 
-  /** One resource per namespace. A namespace collision (two resources declaring the same namespace - a malformed repo) is resolved deterministically by relativePath rather than Set insertion order, which is not sorted and would otherwise vary across sweeps. */
+  /** A namespace is exact only when one mapper resource claims it. */
   myBatisResourceForNamespace(namespace: string): MyBatisMapperResourceFacts | undefined {
     const paths = this.myBatisResourcesByNamespace.get(namespace);
-    if (!paths || paths.size === 0) return undefined;
-    const chosenPath = [...paths].sort()[0];
-    return this.myBatisResourcesByPath.get(chosenPath);
+    if (!paths || paths.size !== 1) return undefined;
+    return this.myBatisResourcesByPath.get([...paths][0]!);
   }
 
   /** Replaces one mapper resource's facts, evicting its previous version's derived-index entries first (mirrors replaceFile/removeFileInternal's own evict-before-insert pattern). */

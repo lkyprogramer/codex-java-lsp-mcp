@@ -619,12 +619,10 @@ test("myBatisResourceForNamespace returns the sole resource claiming a namespace
   assert.equal(store.myBatisResourceForNamespace("demo.NoSuchMapper"), undefined);
 });
 
-test("myBatisResourceForNamespace resolves a namespace collision deterministically by relativePath, not Set insertion order", () => {
+test("myBatisResourceForNamespace treats a namespace collision as ambiguous instead of guessing", () => {
   const store = new JavaIndexStore();
-  // Insert the lexicographically-later path first, so a correct implementation
-  // must actively sort rather than merely returning whichever was seen first.
   store.replaceMyBatisResource(myBatisResource({ relativePath: "z-second.xml", namespace: "demo.Dup" }));
   store.replaceMyBatisResource(myBatisResource({ relativePath: "a-first.xml", namespace: "demo.Dup" }));
 
-  assert.equal(store.myBatisResourceForNamespace("demo.Dup")?.relativePath, "a-first.xml");
+  assert.equal(store.myBatisResourceForNamespace("demo.Dup"), undefined);
 });

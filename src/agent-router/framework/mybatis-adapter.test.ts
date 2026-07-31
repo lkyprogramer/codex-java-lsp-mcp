@@ -203,6 +203,27 @@ test("collect scopes MYBATIS_STATEMENT_METHOD to the anchored method, but not ty
   }
 });
 
+test("collect resolves a resultMap type through another mapper namespace", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "mybatis-cross-result-map-"));
+  write(root, "pom.xml", "<project><dependencies><dependency><groupId>org.mybatis</groupId></dependency></dependencies></project>");
+  write(root, "src/main/java/demo/OrderMapper.java", "package demo; public interface OrderMapper { OrderEntity find(); }\n");
+  write(root, "src/main/java/demo/OrderEntity.java", "package demo; public class OrderEntity {}\n");
+  write(root, "src/main/resources/mapper/OrderMapper.xml", '<mapper namespace="demo.OrderMapper"><select id="find" resultMap="demo.SharedMaps.OrderMap">select 1</select></mapper>');
+  write(root, "src/main/resources/mapper/SharedMaps.xml", '<mapper namespace="demo.SharedMaps"><resultMap id="OrderMap" type="demo.OrderEntity"/></mapper>');
+  const router = await readyRouterAt(root);
+  try {
+    const mapper = path.join(root, "src/main/java/demo/OrderMapper.java");
+    const entity = path.join(root, "src/main/java/demo/OrderEntity.java");
+    const result = await runFrameworkAdapters([mybatisAdapter], await frameworkContextFor(router, root, [anchor(mapper)], [mapper]));
+
+    const resultMap = signalsOf(result.outcome.evidence, "MYBATIS_RESULT_MAP");
+    assert.equal(resultMap.length, 1);
+    assert.equal(resultMap[0]!.candidateFile, entity);
+  } finally {
+    await router.close();
+  }
+});
+
 test("registering springAdapter alongside mybatisAdapter does not change MyBatis's evidence on a Spring-inactive fixture", async () => {
   const router = await readyRouter();
   try {

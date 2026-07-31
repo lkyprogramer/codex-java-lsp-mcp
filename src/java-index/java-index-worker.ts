@@ -19,14 +19,18 @@ import { extractFromParsedTree, type ExtractJavaInput } from "./ast-extractor.js
 import { computeBuildFingerprint, computeExtractorVersion } from "./build-fingerprint.js";
 import { CoverageTracker } from "./coverage.js";
 import {
-  computeCurrentManifestFingerprint,
+  computeCurrentSnapshotManifestFingerprint,
   computeManifestFingerprint,
   discoverJavaFiles,
   discoverMyBatisResourceFiles,
+  readFileStable,
+  resourceSourceRoot,
   scanSnapshotManifestDiff,
+  snapshotManifestEntries,
   type DiscoveredJavaFile
 } from "./manifest.js";
 import { extractMyBatisMapperFacts } from "./mybatis-xml-extractor.js";
+import type { MyBatisMapperResourceFacts } from "./mybatis-types.js";
 import { effectiveParseTreeSourceBudget, ParseTreeCache, refreshParseTree } from "./parse-tree-cache.js";
 import { buildStaticEdges, resolveFileRefs } from "./edge-builder.js";
 import { JavaIndexStore } from "./index-store.js";
@@ -39,7 +43,7 @@ import {
 } from "./snapshot.js";
 import { STABLE_ID_VERSION } from "./stable-id.js";
 import { WorktreeSnapshotSeeder } from "./worktree-snapshot-seeder.js";
-import type { JavaIndexStatus, JavaSourceSet, JavaTypeLookupResult, SourceRootCoverage, WorktreeSeedStatus } from "./index-types.js";
+import type { JavaIndexStatus, JavaSourceSet, JavaTypeLookupResult, MyBatisResourceCoverage, SourceRootCoverage, WorktreeSeedStatus } from "./index-types.js";
 import type { JavaIndexRequest, JavaIndexResponse } from "./worker-protocol.js";
 
 // A full sweep processes this many files before yielding to the message loop
@@ -50,14 +54,6 @@ const SWEEP_CHUNK_SIZE = 50;
 // giving up on this sweep for now; a later reconcile() call starts a fresh one.
 const SWEEP_LEASE_WAIT_MS = 10000;
 const SNAPSHOT_FILE_NAME = "java-index-snapshot.json.gz";
-// Bounds a sweep's MyBatis resource re-scan the same way MAX_FRAMEWORK_TRAVERSAL_FILES
-// bounds a framework adapter's candidate set - a repo with an unusually large
-// src/main/resources tree (most of it not MyBatis mappers) must not turn every
-// sweep into an unbounded directory walk plus a full-file read per XML file.
-// Not yet measured against a real repo's cold-open cost (Task 27's isActive()
-// gate covers a different code path) - a follow-up concern for whoever
-// benchmarks Task 28, same as Task 27's own P95 gate.
-const MAX_MYBATIS_RESOURCE_FILES = 500;
 // Debounced so a burst of foreground refreshes (a save, then a formatter
 // re-save moments later) coalesces into one write instead of one per event.
 const SNAPSHOT_FLUSH_DEBOUNCE_MS = 1000;
@@ -87,7 +83,8 @@ let status: JavaIndexStatus = {
   snapshotBytes: 0,
   pendingForeground: 0,
   pendingBackground: 0,
-  coverage: []
+  coverage: [],
+  resourceCoverage: []
 };
 
 let repoRoot = "";
@@ -104,6 +101,7 @@ let worktreeSeedStatus: WorktreeSeedStatus | undefined;
 // final batch re-link still revisits every discovered fact without AST work.
 let seededReconcilePlan: { reusedPaths: Set<string> } | undefined;
 const coverage = new CoverageTracker();
+let resourceCoverage: MyBatisResourceCoverage[] = [];
 // A single unreadable/unparsable file must not fail the whole REFRESH batch
 // (its previous cached state, if any, is left untouched), but a silently
 // swallowed failure is worse than a surfaced one: the most recent failure is
@@ -260,6 +258,7 @@ function currentStatus(overrides: Partial<JavaIndexStatus> = {}): JavaIndexStatu
     ...status,
     ...summarizeFiles(),
     coverage: coverage.snapshot(),
+    resourceCoverage,
     pendingForeground: foregroundQueue.length,
     pendingBackground: pendingSweep
       + (ownSnapshotVerificationPending ? 1 : 0)
@@ -445,9 +444,17 @@ async function flushSnapshotNow(): Promise<void> {
       const buildFingerprint = await computeBuildFingerprint(repoRoot, currentLayout).catch(() => undefined);
       if (buildFingerprint === undefined || !store) return;
       const data = store.toSnapshotData();
-      const manifestFingerprint = computeManifestFingerprint(
-        data.files.map(file => ({ relativePath: file.relativePath, contentHash: file.contentHash, sourceRoot: file.sourceRoot }))
-      );
+      const resourceEntries = data.myBatisResources.map(resource => {
+        const sourceRoot = resourceSourceRoot(resource.relativePath, currentLayout);
+        if (!sourceRoot) {
+          throw new Error(`indexed MyBatis resource is outside a resource root: ${resource.relativePath}`);
+        }
+        return { relativePath: resource.relativePath, contentHash: resource.contentHash, sourceRoot };
+      });
+      const manifestFingerprint = computeManifestFingerprint(snapshotManifestEntries(
+        data.files.map(file => ({ relativePath: file.relativePath, contentHash: file.contentHash, sourceRoot: file.sourceRoot })),
+        resourceEntries
+      ));
       const value: JavaIndexSnapshotV3 = {
         schemaVersion: 3,
         extractorVersion: computeExtractorVersion(),
@@ -458,16 +465,14 @@ async function flushSnapshotNow(): Promise<void> {
         indexedGeneration: generationAtSerialize,
         createdAt: new Date().toISOString(),
         coverage: coverage.snapshot(),
-        // No CoverageTracker for resources yet (Task 28 Slice C only
-        // declares the field) - always empty until a later slice populates it.
-        resourceCoverage: [],
+        resourceCoverage,
         ...data
       };
       try {
         const bytes = await writeSnapshotIfManifestCurrent(
           target,
           value,
-          () => computeCurrentManifestFingerprint(repoRoot, currentLayout)
+          () => computeCurrentSnapshotManifestFingerprint(repoRoot, currentLayout)
         );
         status = { ...status, snapshotBytes: bytes };
       } catch {
@@ -564,6 +569,34 @@ async function handleRefresh(request: Extract<JavaIndexRequest, { type: "REFRESH
  * a wrong guess about add-vs-change self-corrects on the next event instead
  * of leaving a stale namespace/statement entry behind.
  */
+function updateResourceCoverageAfterRefresh(
+  relativePath: string,
+  before: MyBatisMapperResourceFacts | undefined,
+  after: MyBatisMapperResourceFacts | undefined,
+  generation: number,
+  failed: boolean
+): void {
+  if (!layout) return;
+  const root = resourceSourceRoot(relativePath, layout);
+  const entry = root ? resourceCoverage.find(candidate => candidate.root === root) : undefined;
+  if (!entry) return;
+  entry.generation = generation;
+  const previousComplete = before?.parseState === "COMPLETE" ? 1 : 0;
+  const previousFailed = before?.parseState === "FAILED" ? 1 : 0;
+  const nextComplete = after?.parseState === "COMPLETE" ? 1 : 0;
+  const nextFailed = after?.parseState === "FAILED" ? 1 : 0;
+  if (before || after) {
+    entry.discoveredFiles = Math.max(0, entry.discoveredFiles + (after ? 1 : 0) - (before ? 1 : 0));
+    entry.indexedFiles = Math.max(0, entry.indexedFiles + nextComplete - previousComplete);
+    entry.failedFiles = Math.max(0, entry.failedFiles + nextFailed - previousFailed);
+  }
+  if (failed) {
+    entry.state = "DEGRADED";
+    return;
+  }
+  entry.state = entry.failedFiles > 0 ? "DEGRADED" : "COMPLETE";
+}
+
 async function handleRefreshResources(request: Extract<JavaIndexRequest, { type: "REFRESH_RESOURCES" }>): Promise<void> {
   if (!store) return;
   for (const inputPath of request.paths) {
@@ -573,18 +606,26 @@ async function handleRefreshResources(request: Extract<JavaIndexRequest, { type:
     } catch {
       continue;
     }
+    const before = store.myBatisResource(relativePath);
     try {
       const content = await readFile(inputPath, "utf8");
       const contentHash = createHash("sha256").update(content, "utf8").digest("hex");
-      if (store.myBatisResource(relativePath)?.contentHash === contentHash) continue;
+      if (before?.contentHash === contentHash) {
+        updateResourceCoverageAfterRefresh(relativePath, before, before, request.generation, false);
+        continue;
+      }
       const facts = extractMyBatisMapperFacts({ relativePath, content, contentHash, generation: request.generation });
       if (facts) store.replaceMyBatisResource(facts);
       else store.removeMyBatisResources([relativePath]);
+      updateResourceCoverageAfterRefresh(relativePath, before, facts, request.generation, false);
     } catch (error) {
       if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
         store.removeMyBatisResources([relativePath]);
+        updateResourceCoverageAfterRefresh(relativePath, before, undefined, request.generation, false);
         continue;
       }
+      store.removeMyBatisResources([relativePath]);
+      updateResourceCoverageAfterRefresh(relativePath, before, undefined, request.generation, true);
       lastRefreshError = `failed to refresh mybatis resource ${inputPath}: ${error instanceof Error ? error.message : String(error)}`;
     }
   }
@@ -725,17 +766,10 @@ function startOwnSnapshotHydration(
         return;
       }
       store = new JavaIndexStore();
-      // MyBatis resource facts are deliberately not restored here (an empty
-      // array overrides whatever `loaded.myBatisResources` holds):
-      // verifyOwnSnapshot below only re-verifies Java files via
-      // scanSnapshotManifestDiff, so trusting restored resource facts
-      // without any freshness check would let a mapper XML edited while
-      // the process was closed serve stale facts for the rest of the
-      // session, even when Java's own verification is a clean, no-reconcile
-      // metadata match. indexMyBatisResources re-derives them fresh instead,
-      // unconditionally and independently of Java's own verification
-      // outcome - cheap relative to a full Java re-parse, and run
-      // concurrently with it, not serialized after it.
+      // XML facts stay out of the provisional store until a stable target-side
+      // read confirms their content hash. `indexMyBatisResources` can then
+      // reuse exact snapshot facts without re-parsing them, while changed XML
+      // is extracted fresh and is never visible through the interim store.
       store.loadSnapshotData({ ...loaded, myBatisResources: [] });
       for (const entry of loaded.coverage) coverage.restoreProvisional(entry);
       const expectedGeneration = Math.max(requestedGeneration, loaded.indexedGeneration);
@@ -744,7 +778,9 @@ function startOwnSnapshotHydration(
         !closing
         && !ownSnapshotVerificationStale
         && status.indexedGeneration === expectedGeneration;
-      const resourceReindex = layout ? indexMyBatisResources(store, layout, expectedGeneration) : Promise.resolve();
+      const resourceReindex = layout
+        ? indexMyBatisResources(store, layout, expectedGeneration, new Map(loaded.myBatisResources.map(resource => [resource.relativePath, resource])))
+        : Promise.resolve();
       const verifiedGeneration = await verifyOwnSnapshot(loaded, canApply);
       await resourceReindex;
       if (verifiedGeneration !== undefined && canApply()) {
@@ -843,6 +879,7 @@ async function attemptSiblingSeed(
       dirtyFiles: seeded.result.dirtyPaths.length,
       relinkFiles: seeded.result.relinkPaths.length,
       droppedCrossFileEdges: seeded.result.droppedCrossFileEdges,
+      droppedFrameworkEdges: seeded.result.droppedFrameworkEdges,
       manifestValidationMs: seeded.result.manifestValidationMs,
       deltaParsedFiles: 0,
       reusedResources: seeded.result.reusedResources,
@@ -863,6 +900,7 @@ function emptyWorktreeSeedStatus(completion: WorktreeSeedStatus["completion"]): 
     dirtyFiles: 0,
     relinkFiles: 0,
     droppedCrossFileEdges: 0,
+    droppedFrameworkEdges: 0,
     manifestValidationMs: 0,
     deltaParsedFiles: 0,
     reusedResources: 0,
@@ -872,57 +910,77 @@ function emptyWorktreeSeedStatus(completion: WorktreeSeedStatus["completion"]): 
 }
 
 /**
- * Discovers and (re-)extracts every MyBatis mapper XML under the repo's
- * resource roots, unconditionally on every sweep - the same "reconcile
- * re-derives everything discovered, nothing is assumed clean" contract
- * discoverJavaFiles' own sweep already has, not an incremental diff. Bounded
- * by MAX_MYBATIS_RESOURCE_FILES; a file beyond the cap is treated the same
- * as one that does not exist (evicted if it was previously indexed from a
- * sweep before the repo grew past the cap) - deterministic since discovery
- * is sorted by relativePath, not flapping between sweeps. A single file's
- * read/parse failure is recorded to lastRefreshError and skipped - it never
- * blocks the rest of the scan and never touches Java root coverage, which
- * this function does not read or write at all.
- *
- * `target` is captured once by the caller rather than read from the module
- * `store` variable on every iteration - OPEN/attemptSiblingSeed can reassign
- * `store` while this function is mid-await (a fresh OPEN, a sibling reseed),
- * and a stale read partway through would evict paths from the *new* store
- * using a `seenPaths` set computed against the *old* one. Writing to an
- * orphaned old store for the rest of this call is the safe failure mode;
- * corrupting the live one is not.
- *
- * Awaited by its only caller (beginBackgroundSweep), which blocks RECONCILE's
- * response on this - unlike Java's own sweep, which only blocks RECONCILE on
- * the (cheap) directory walk and backgrounds the actual per-file parsing via
- * startBackgroundLoop. A fire-and-forget version was considered and rejected:
- * CLOSE only awaits `backgroundLoopPromise`, so an un-awaited scan would have
- * nothing holding the worker open against a mid-scan store teardown. This is
- * a real, currently unmeasured latency cost on every reconcile()/RECONCILE
- * call (not just the first), bounded only by the file cap above - the same
- * class of "flag it, let the three-repo gate measure it" item Task 27's
- * isActive() cost was.
+ * Reconciles every XML resource under every discovered resource root. Snapshot
+ * facts can be supplied as `reusable`: they are installed only after an exact,
+ * stable target-side content read confirms their hash, so an own snapshot never
+ * exposes XML facts that changed while the worker was closed.
  */
-async function indexMyBatisResources(target: JavaIndexStore, layout: LayoutContext, generation: number): Promise<void> {
+async function indexMyBatisResources(
+  target: JavaIndexStore,
+  layout: LayoutContext,
+  generation: number,
+  reusable: ReadonlyMap<string, MyBatisMapperResourceFacts> = new Map()
+): Promise<void> {
   let discovered;
   try {
     discovered = await discoverMyBatisResourceFiles(repoRoot, layout);
   } catch (error) {
     lastRefreshError = `failed to discover MyBatis resources: ${error instanceof Error ? error.message : String(error)}`;
+    resourceCoverage = layout.resourceRoots.map(root => ({
+      root,
+      generation,
+      state: "DEGRADED",
+      discoveredFiles: 0,
+      indexedFiles: 0,
+      failedFiles: 1
+    }));
     return;
   }
-  const bounded = discovered.slice(0, MAX_MYBATIS_RESOURCE_FILES);
+  const coverageByRoot = new Map<string, MyBatisResourceCoverage>(
+    layout.resourceRoots.map(root => [root, {
+      root,
+      generation,
+      state: "BUILDING" as const,
+      discoveredFiles: 0,
+      indexedFiles: 0,
+      failedFiles: 0
+    }])
+  );
+  resourceCoverage = [...coverageByRoot.values()];
   const seenPaths = new Set<string>();
-  for (const file of bounded) {
+  for (const file of discovered) {
     if (closing) return;
     seenPaths.add(file.relativePath);
+    const rootCoverage = coverageByRoot.get(file.sourceRoot);
     try {
-      const content = await readFile(file.absolutePath, "utf8");
-      const contentHash = createHash("sha256").update(content, "utf8").digest("hex");
-      const facts = extractMyBatisMapperFacts({ relativePath: file.relativePath, content, contentHash, generation });
-      if (facts) target.replaceMyBatisResource(facts);
-      else target.removeMyBatisResources([file.relativePath]);
+      const read = await readFileStable(file.absolutePath);
+      if (!read?.stable) {
+        target.removeMyBatisResources([file.relativePath]);
+        if (rootCoverage) rootCoverage.failedFiles += 1;
+        continue;
+      }
+      const contentHash = createHash("sha256").update(read.content, "utf8").digest("hex");
+      const reusableFacts = reusable.get(file.relativePath);
+      const currentFacts = target.myBatisResource(file.relativePath);
+      const facts = reusableFacts?.contentHash === contentHash
+        ? { ...reusableFacts, generation }
+        : currentFacts?.contentHash === contentHash
+          ? currentFacts
+          : extractMyBatisMapperFacts({ relativePath: file.relativePath, content: read.content, contentHash, generation });
+      if (facts) {
+        target.replaceMyBatisResource(facts);
+        if (rootCoverage) rootCoverage.discoveredFiles += 1;
+        if (facts.parseState === "COMPLETE") {
+          if (rootCoverage) rootCoverage.indexedFiles += 1;
+        } else if (rootCoverage) {
+          rootCoverage.failedFiles += 1;
+        }
+      } else {
+        target.removeMyBatisResources([file.relativePath]);
+      }
     } catch (error) {
+      target.removeMyBatisResources([file.relativePath]);
+      if (rootCoverage) rootCoverage.failedFiles += 1;
       lastRefreshError = `failed to index mybatis resource ${file.relativePath}: ${error instanceof Error ? error.message : String(error)}`;
     }
   }
@@ -930,6 +988,10 @@ async function indexMyBatisResources(target: JavaIndexStore, layout: LayoutConte
   for (const relativePath of [...target.myBatisResourcesByPath.keys()]) {
     if (!seenPaths.has(relativePath)) target.removeMyBatisResources([relativePath]);
   }
+  resourceCoverage = [...coverageByRoot.values()].map(entry => ({
+    ...entry,
+    state: entry.failedFiles > 0 ? "DEGRADED" : "COMPLETE"
+  }));
 }
 
 async function beginBackgroundSweep(generation: number): Promise<void> {

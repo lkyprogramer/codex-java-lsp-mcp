@@ -31,20 +31,16 @@ export type WorktreeSeedResult = {
   deletedSourcePaths: string[];
   relinkPaths: string[];
   droppedCrossFileEdges: number;
+  /** Framework relationships are derived from facts at request time, never persisted as store edges. */
+  droppedFrameworkEdges: number;
   manifestValidationMs: number;
   reusedFiles: number;
   /**
    * MyBatis resources reused from the sibling's snapshot / re-derived fresh
    * because they were missing, changed, or new since the sibling indexed
-   * them (Task 28 Slice C). No `droppedFrameworkEdges` field: unlike Java's
-   * static edges, a MyBatis Java<->XML relationship is never a persisted
-   * store edge - the adapter (Task 28 Slice D) name-matches Java and
-   * resource facts fresh at read time, the same as the Spring pack does for
-   * its own framework relationships - so there is no edge for seeding to
-   * drop, and a `resourceCoverage`-gated relink queue is unnecessary: a
-   * dirty resource simply is not loaded into the store at all here, and the
-   * caller's normal post-seed sweep (Task 28 Slice B's indexMyBatisResources)
-   * re-derives it exactly like a cold open would.
+   * them (Task 28 Slice C). Framework evidence is derived from those facts at
+   * request time, so `droppedFrameworkEdges` is always zero rather than a
+   * hidden/omitted metric.
    */
   reusedResources: number;
   dirtyResources: number;
@@ -65,6 +61,7 @@ function emptySeedResult(targetGeneration: number): WorktreeSeedResult {
     deletedSourcePaths: [],
     relinkPaths: [],
     droppedCrossFileEdges: 0,
+    droppedFrameworkEdges: 0,
     manifestValidationMs: 0,
     reusedFiles: 0,
     reusedResources: 0,
@@ -316,6 +313,7 @@ export class WorktreeSnapshotSeeder {
       deletedSourcePaths: deletedSourcePaths.sort(),
       relinkPaths: relinkPaths.sort(),
       droppedCrossFileEdges,
+      droppedFrameworkEdges: 0,
       manifestValidationMs: Date.now() - start,
       reusedFiles: reusedPaths.length,
       reusedResources: reusedResourcePaths.length,

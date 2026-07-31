@@ -329,6 +329,11 @@ test("sibling seed does not reuse a MyBatis resource changed on the target - the
 
   assert.equal(result.reusedResources, 0);
   assert.equal(result.dirtyResources, 1);
+  assert.equal(
+    (result as { droppedFrameworkEdges?: number }).droppedFrameworkEdges,
+    0,
+    "framework links are derived at request time, but the required seed diagnostic must report that explicitly"
+  );
   assert.equal(store.myBatisResource(MAPPER_RELATIVE_PATH), undefined, "a changed resource must not be seeded from stale source facts");
   // The unrelated, unchanged Java mapper interface must still be reused -
   // a dirty resource must never force its owning Java file to be dropped.

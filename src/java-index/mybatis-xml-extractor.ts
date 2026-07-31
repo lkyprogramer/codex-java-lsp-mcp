@@ -7,7 +7,7 @@
 // pos: Task 28 Slice A. fast-xml-parser has no offset/range API (plan's own note), so
 //      locateMapperElementRange re-scans the original UTF-8 text with a small hand-rolled
 //      tokenizer purely for source ranges; every fact value itself comes from the real parser.
-import { XMLParser } from "fast-xml-parser";
+import { XMLParser, XMLValidator } from "fast-xml-parser";
 import type { SourcePosition, SourceRange } from "../runtime/source-range.js";
 import {
   myBatisResourceId,
@@ -68,6 +68,24 @@ function attr(record: Record<string, unknown> | undefined, name: string): string
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
+function collectStatementIncludes(value: unknown, statementId: string, includes: Array<{ fromStatementId: string; refid: string }>): void {
+  if (Array.isArray(value)) {
+    for (const item of value) collectStatementIncludes(item, statementId, includes);
+    return;
+  }
+  const record = asRecord(value);
+  if (!record) return;
+  for (const [name, child] of Object.entries(record)) {
+    if (name === "include") {
+      for (const includeNode of asArray(child)) {
+        const refid = attr(asRecord(includeNode), "refid");
+        if (refid) includes.push({ fromStatementId: statementId, refid });
+      }
+    }
+    collectStatementIncludes(child, statementId, includes);
+  }
+}
+
 /**
  * Only a well-formed root <mapper namespace="..."> is a MyBatis resource.
  * A file that looks like it intends to be one (root tag sniffs as "mapper")
@@ -89,6 +107,8 @@ export function extractMyBatisMapperFacts(input: ExtractMyBatisInput): MyBatisMa
     generation: input.generation,
     parseState: "FAILED"
   });
+
+  if (XMLValidator.validate(input.content) !== true) return failed();
 
   let parsed: unknown;
   try {
@@ -122,10 +142,7 @@ export function extractMyBatisMapperFacts(input: ExtractMyBatisInput): MyBatisMa
         ...(resultMap ? { resultMap } : {}),
         ...(range ? { range } : {})
       });
-      for (const includeNode of asArray(record.include)) {
-        const refid = attr(asRecord(includeNode), "refid");
-        if (refid) includes.push({ fromStatementId: statementId, refid });
-      }
+      collectStatementIncludes(record, statementId, includes);
     }
   }
 

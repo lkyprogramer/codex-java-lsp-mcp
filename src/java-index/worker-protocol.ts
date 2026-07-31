@@ -17,6 +17,7 @@ import type {
   JavaTypeLookupResult,
   JavaTypeParameterFact,
   JavaTypeRef,
+  MyBatisResourceCoverage,
   SourcePosition,
   SourceRange,
   SourceRootCoverage,
@@ -560,6 +561,25 @@ function validateSourceRootCoverage(value: unknown, context: string): SourceRoot
   };
 }
 
+function validateMyBatisResourceCoverage(value: unknown, context: string): MyBatisResourceCoverage {
+  const source = record(value, context);
+  if (!isString(source.root)) invalid(context, "root");
+  if (!isNumber(source.generation)) invalid(context, "generation");
+  const states = ["UNKNOWN", "BUILDING", "COMPLETE", "DEGRADED"] as const;
+  if (!isOneOf(source.state, states)) invalid(context, "state");
+  if (!isNumber(source.discoveredFiles)) invalid(context, "discoveredFiles");
+  if (!isNumber(source.indexedFiles)) invalid(context, "indexedFiles");
+  if (!isNumber(source.failedFiles)) invalid(context, "failedFiles");
+  return {
+    root: source.root,
+    generation: source.generation,
+    state: source.state,
+    discoveredFiles: source.discoveredFiles,
+    indexedFiles: source.indexedFiles,
+    failedFiles: source.failedFiles
+  };
+}
+
 function validateJavaFileBundle(value: unknown, context: string): JavaFileBundle {
   const source = record(value, context);
   const types = array(source.types, `${context}.types`)
@@ -588,6 +608,7 @@ function validateWorktreeSeedStatus(value: unknown, context: string): WorktreeSe
   if (!isNumber(source.dirtyFiles)) invalid(context, "dirtyFiles");
   if (!isNumber(source.relinkFiles)) invalid(context, "relinkFiles");
   if (!isNumber(source.droppedCrossFileEdges)) invalid(context, "droppedCrossFileEdges");
+  if (!isNumber(source.droppedFrameworkEdges)) invalid(context, "droppedFrameworkEdges");
   if (!isNumber(source.manifestValidationMs)) invalid(context, "manifestValidationMs");
   if (!isNumber(source.deltaParsedFiles)) invalid(context, "deltaParsedFiles");
   if (!isNumber(source.reusedResources)) invalid(context, "reusedResources");
@@ -600,6 +621,7 @@ function validateWorktreeSeedStatus(value: unknown, context: string): WorktreeSe
     dirtyFiles: source.dirtyFiles,
     relinkFiles: source.relinkFiles,
     droppedCrossFileEdges: source.droppedCrossFileEdges,
+    droppedFrameworkEdges: source.droppedFrameworkEdges,
     manifestValidationMs: source.manifestValidationMs,
     deltaParsedFiles: source.deltaParsedFiles,
     reusedResources: source.reusedResources,
@@ -633,6 +655,8 @@ export function validateJavaIndexStatus(value: unknown): JavaIndexStatus {
   );
   const coverage = array(source.coverage, `${context}.coverage`)
     .map((entry, index) => validateSourceRootCoverage(entry, `${context}.coverage[${index}]`));
+  const resourceCoverage = array(source.resourceCoverage, `${context}.resourceCoverage`)
+    .map((entry, index) => validateMyBatisResourceCoverage(entry, `${context}.resourceCoverage[${index}]`));
   return {
     state: source.state,
     indexedGeneration: source.indexedGeneration,
@@ -645,6 +669,7 @@ export function validateJavaIndexStatus(value: unknown): JavaIndexStatus {
     pendingBackground: source.pendingBackground,
     ...withOptional("snapshotVerificationPending", snapshotVerificationPending),
     coverage,
+    resourceCoverage,
     ...withOptional("lastError", optional(source.lastError, `${context}.lastError`, isAssertString)),
     ...withOptional("worktreeSeed", optional(source.worktreeSeed, `${context}.worktreeSeed`, validateWorktreeSeedStatus))
   };

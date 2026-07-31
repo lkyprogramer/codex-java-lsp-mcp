@@ -45,7 +45,8 @@ function validStatus(): JavaIndexStatus {
       failedFiles: 0,
       recoveredFiles: 0,
       extractorVersion: "1"
-    }]
+    }],
+    resourceCoverage: []
   };
 }
 

@@ -72,6 +72,30 @@ test("malformed content under a <mapper> root returns FAILED and never throws", 
   assert.equal(unterminated?.parseState, "FAILED");
 });
 
+test("a mapper with mismatched closing tags returns FAILED instead of trusted facts", () => {
+  const facts = extract(`
+<mapper namespace="demo.OrderMapper">
+  <select id="findById"></insert>
+</mapper>`);
+
+  assert.equal(facts?.parseState, "FAILED");
+  assert.deepEqual(facts?.statements, []);
+});
+
+test("extractMyBatisMapperFacts collects includes nested below dynamic statement elements", () => {
+  const facts = extract(`
+<mapper namespace="demo.OrderMapper">
+  <select id="findById">
+    <if test="enabled"><include refid="enabledColumns"/></if>
+  </select>
+</mapper>`);
+
+  assert.deepEqual(facts?.includes, [{
+    fromStatementId: "mybatis-statement:demo.OrderMapper.findById",
+    refid: "enabledColumns"
+  }]);
+});
+
 test("locateMapperElementRange returns undefined for a duplicate (tag, id) pair rather than guessing", () => {
   const xml = '<mapper namespace="demo.X"><select id="dup">a</select><select id="dup">b</select></mapper>';
   assert.equal(locateMapperElementRange(xml, "select", "dup"), undefined);

@@ -163,6 +163,12 @@ function qualifiedTypeId(rawText: string | undefined): string | undefined {
   return `type:${rawText}`;
 }
 
+function crossNamespaceResultMapReference(resultMap: string): { namespace: string; id: string } | undefined {
+  const separator = resultMap.lastIndexOf(".");
+  if (separator <= 0 || separator === resultMap.length - 1) return undefined;
+  return { namespace: resultMap.slice(0, separator), id: resultMap.slice(separator + 1) };
+}
+
 async function collect(context: FrameworkAdapterContext): Promise<FrameworkCollectResult> {
   const startedAt = Date.now();
   const status = await context.frameworkIndex.frameworkStatus();
@@ -207,6 +213,26 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
     ? new Map()
     : await context.frameworkIndex.myBatisResourcesByNamespaces(namespaceCandidates.slice(0, MAX_FRAMEWORK_MYBATIS_NAMESPACES));
   if (!timedOut && context.budget.expired()) timedOut = true;
+
+  const externalResultMapNamespaces = new Set<string>();
+  for (const resource of resourceByNamespace.values()) {
+    for (const statement of resource.statements) {
+      if (!statement.resultMap || resource.resultMaps.some(resultMap => resultMap.id === statement.resultMap)) continue;
+      const reference = crossNamespaceResultMapReference(statement.resultMap);
+      if (reference) externalResultMapNamespaces.add(reference.namespace);
+    }
+  }
+  if (!timedOut && externalResultMapNamespaces.size > 0) {
+    if (externalResultMapNamespaces.size > MAX_FRAMEWORK_MYBATIS_NAMESPACES) {
+      limited = true;
+      diagnostics.push(`mybatis adapter: cross-namespace resultMap lookup capped at ${MAX_FRAMEWORK_MYBATIS_NAMESPACES} namespaces`);
+    }
+    const externalResources = await context.frameworkIndex.myBatisResourcesByNamespaces(
+      [...externalResultMapNamespaces].slice(0, MAX_FRAMEWORK_MYBATIS_NAMESPACES)
+    );
+    for (const [namespace, resource] of externalResources) resourceByNamespace.set(namespace, resource);
+    if (context.budget.expired()) timedOut = true;
+  }
 
   const resolvedEvidence: ResolvedEvidence[] = [];
   const pendingTypeTargets: PendingTypeEvidence[] = [];
@@ -264,11 +290,14 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
         pendingTypeTargets.push({ kind: "MYBATIS_RESULT_TYPE", sourceFile: resourceAbsolutePath, targetId: resultTypeId, weight: MYBATIS_RESULT_TYPE_WEIGHT, confidence: RESOLVED_TYPE_CONFIDENCE, detail: `${resource.namespace}.${statement.id} resultType` });
       }
       if (statement.resultMap) {
-        // resultMap ids are only ever resolved within the declaring resource's
-        // own namespace - a qualified cross-namespace ref (e.g. "other.ns.Map")
-        // never matches an entry here, which is correct: no cross-namespace
-        // resolution is attempted.
-        const resultMapFact = resource.resultMaps.find(candidate => candidate.id === statement.resultMap);
+        const localResultMap = resource.resultMaps.find(candidate => candidate.id === statement.resultMap);
+        const externalReference = localResultMap ? undefined : crossNamespaceResultMapReference(statement.resultMap);
+        // A qualified reference is accepted only when its exact namespace was
+        // indexed and the target mapper declares the exact resultMap id.
+        const resultMapFact = localResultMap
+          ?? (externalReference
+            ? resourceByNamespace.get(externalReference.namespace)?.resultMaps.find(candidate => candidate.id === externalReference.id)
+            : undefined);
         const resultMapTypeId = qualifiedTypeId(resultMapFact?.type);
         if (resultMapTypeId) {
           pendingTypeTargets.push({ kind: "MYBATIS_RESULT_MAP", sourceFile: resourceAbsolutePath, targetId: resultMapTypeId, weight: MYBATIS_RESULT_MAP_WEIGHT, confidence: RESOLVED_TYPE_CONFIDENCE, detail: `${resource.namespace}.${statement.id} resultMap ${statement.resultMap}` });

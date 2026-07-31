@@ -7,6 +7,7 @@ import path from "node:path";
 import { probeLayout } from "../layout-probe.js";
 import {
   computeCurrentManifestFingerprint,
+  computeCurrentSnapshotManifestFingerprint,
   computeManifestFingerprint,
   discoverJavaFiles,
   discoverMyBatisResourceFiles,
@@ -116,6 +117,22 @@ test("computeManifestFingerprint changes when a content hash, path, or source ro
   );
 });
 
+test("computeManifestFingerprint keeps Java and mapper XML entries distinct even when their path and hash match", () => {
+  const shared = {
+    relativePath: "src/main/resources/mapper/OrderMapper.xml",
+    contentHash: "same-content",
+    sourceRoot: "src/main/resources"
+  };
+  const javaEntry = { ...shared, kind: "JAVA" as const };
+  const mapperEntry = { ...shared, kind: "MYBATIS_XML" as const };
+
+  assert.notEqual(
+    computeManifestFingerprint([javaEntry]),
+    computeManifestFingerprint([mapperEntry]),
+    "schema-3 snapshot manifests must be a typed entry stream"
+  );
+});
+
 test("computeCurrentManifestFingerprint reflects an independent re-scan of the current files on disk", async () => {
   const root = mkdtempSync(path.join(tmpdir(), "java-manifest-fingerprint-"));
   write(root, "src/main/java/demo/A.java", "class A {}");
@@ -132,6 +149,20 @@ test("computeCurrentManifestFingerprint reflects an independent re-scan of the c
   write(root, "src/main/java/demo/B.java", "class B {}");
   const afterAdd = await computeCurrentManifestFingerprint(root, probeLayout(root));
   assert.notEqual(afterEdit, afterAdd, "a newly added file must change the fingerprint");
+});
+
+test("computeCurrentSnapshotManifestFingerprint changes when a supported mapper XML changes", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "java-snapshot-manifest-fingerprint-"));
+  write(root, "src/main/java/demo/A.java", "class A {}");
+  const mapper = "src/main/resources/mapper/OrderMapper.xml";
+  write(root, mapper, '<mapper namespace="demo.OrderMapper"><select id="find">one</select></mapper>');
+  const layout = probeLayout(root);
+
+  const before = await computeCurrentSnapshotManifestFingerprint(root, layout);
+  write(root, mapper, '<mapper namespace="demo.OrderMapper"><select id="find">two</select></mapper>');
+  const after = await computeCurrentSnapshotManifestFingerprint(root, layout);
+
+  assert.notEqual(before, after);
 });
 
 test("the write-side and disk-rescan manifest fingerprints agree for identical repo state", async () => {

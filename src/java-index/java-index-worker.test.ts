@@ -13,7 +13,7 @@ import type { WorktreeIdentity } from "../worktree-identity.js";
 import { probeLayout } from "../layout-probe.js";
 import { computeBuildFingerprint, computeExtractorVersion } from "./build-fingerprint.js";
 import { JavaIndexClient } from "./java-index-client.js";
-import { computeCurrentManifestFingerprint } from "./manifest.js";
+import { computeCurrentManifestFingerprint, computeCurrentSnapshotManifestFingerprint } from "./manifest.js";
 import { loadSnapshot } from "./snapshot.js";
 import { STABLE_ID_VERSION } from "./stable-id.js";
 
@@ -97,7 +97,8 @@ test("a clean full sweep re-links an early source file after its later declarati
   // unresolved type reference once all declarations are present.
   writeJavaFile(repoRoot, "src/main/java/demo/ZProvider.java", "package demo;\nclass ZProvider {}\n");
 
-  const client = new JavaIndexClient(repoRoot, tempCacheDir());
+  const cacheDir = tempCacheDir();
+  const client = new JavaIndexClient(repoRoot, cacheDir);
   await client.open(1);
   await client.reconcile(1);
   await waitFor(async () => (await client.status()).pendingBackground === 0, 5000);
@@ -691,7 +692,8 @@ test("reconcile()'s full sweep discovers and indexes MyBatis mapper resources, b
   writeResourceFile(repoRoot, "src/main/resources/mapper/OrderMapper.xml", ORDER_MAPPER_XML);
   writeResourceFile(repoRoot, "src/main/resources/beans.xml", '<beans><bean id="x"/></beans>');
 
-  const client = new JavaIndexClient(repoRoot, tempCacheDir());
+  const cacheDir = tempCacheDir();
+  const client = new JavaIndexClient(repoRoot, cacheDir);
   await client.open(1);
   await client.reconcile(1);
   await waitFor(async () => (await client.status()).pendingBackground === 0, 5000);
@@ -703,7 +705,51 @@ test("reconcile()'s full sweep discovers and indexes MyBatis mapper resources, b
 
   assert.equal(await client.queryMyBatisResource("src/main/resources/beans.xml"), undefined);
 
+  const status = await client.status();
+  assert.deepEqual(status.resourceCoverage, [{
+    root: "src/main/resources",
+    generation: 1,
+    state: "COMPLETE",
+    discoveredFiles: 1,
+    indexedFiles: 1,
+    failedFiles: 0
+  }]);
+
+  await client.flush();
+  const snapshot = await loadSnapshot(path.join(cacheDir, SNAPSHOT_FILE_NAME), {
+    extractorVersion: computeExtractorVersion(),
+    stableIdVersion: STABLE_ID_VERSION,
+    canonicalRepoRoot: repoRoot,
+    buildFingerprint: await computeBuildFingerprint(repoRoot, probeLayout(repoRoot))
+  });
+  assert.deepEqual(snapshot?.resourceCoverage, status.resourceCoverage);
+  assert.equal(snapshot?.manifestFingerprint, await computeCurrentSnapshotManifestFingerprint(repoRoot, probeLayout(repoRoot)));
+
   await client.close();
+});
+
+test("reconcile() indexes a mapper even when more than 500 non-mapper XML resources sort before it", async () => {
+  const repoRoot = tempRepo("java-index-worker-mybatis-many-resources-");
+  for (let index = 0; index <= 500; index += 1) {
+    writeResourceFile(repoRoot, `src/main/resources/a-${String(index).padStart(3, "0")}.xml`, "<beans/>");
+  }
+  const mapperPath = "src/main/resources/z-mapper/OrderMapper.xml";
+  writeResourceFile(repoRoot, mapperPath, ORDER_MAPPER_XML);
+
+  const client = new JavaIndexClient(repoRoot, tempCacheDir());
+  try {
+    await client.open(1);
+    await client.reconcile(1);
+    await waitFor(async () => (await client.status()).pendingBackground === 0, 15000);
+
+    assert.equal(
+      (await client.queryMyBatisResource(mapperPath))?.namespace,
+      "demo.OrderMapper",
+      "a mapper must never be silently dropped by an XML-count cap"
+    );
+  } finally {
+    await client.close();
+  }
 });
 
 test("refreshResources upserts a mapper resource written after OPEN, without requiring a full reconcile", async () => {

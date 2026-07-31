@@ -54,6 +54,10 @@ export function openSourceFromStatus(status: JavaIndexStatus): JavaIndexOpenSour
 export function summarizeCoverage(
   status: JavaIndexStatus
 ): "complete" | "partial" | "degraded" {
+  // Status may be supplied by an older in-process test/runtime seam during a
+  // rolling update. No resource roots is equivalent to an empty coverage set;
+  // do not turn an otherwise valid Java summary into a TypeError.
+  const resourceCoverage = status.resourceCoverage ?? [];
   if (status.state === "DEGRADED" || status.lastError) {
     return "degraded";
   }
@@ -62,11 +66,16 @@ export function summarizeCoverage(
   }
   const allComplete = status.coverage.every(
     entry => entry.state === "COMPLETE" && entry.failedFiles === 0
+  ) && resourceCoverage.every(
+    entry => entry.state === "COMPLETE" && entry.failedFiles === 0
   );
   if (allComplete && status.pendingForeground === 0 && status.pendingBackground === 0) {
     return "complete";
   }
-  if (status.coverage.some(entry => entry.state === "DEGRADED" || entry.failedFiles > 0)) {
+  if (
+    status.coverage.some(entry => entry.state === "DEGRADED" || entry.failedFiles > 0)
+    || resourceCoverage.some(entry => entry.state === "DEGRADED" || entry.failedFiles > 0)
+  ) {
     return "degraded";
   }
   return "partial";
