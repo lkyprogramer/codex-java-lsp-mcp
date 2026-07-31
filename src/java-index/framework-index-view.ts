@@ -17,6 +17,7 @@ import type {
   StaticEdge,
   TypeResolutionStrategy
 } from "./index-types.js";
+import type { MyBatisMapperResourceFacts } from "./mybatis-types.js";
 import { javaParameterId } from "./stable-id.js";
 
 export type FrameworkAnnotation = {
@@ -163,12 +164,15 @@ export interface FrameworkIndexView {
   repositoryMarkers(relativePaths: readonly string[]): Promise<Map<string, string>>;
   repositoryFactMarkers(input: { importPrefixes: readonly string[]; annotationPrefixes: readonly string[] }): Promise<FrameworkRepositoryFactMarkers>;
   methodsWithParameterTypes(typeFqns: readonly string[], limit?: number): Promise<FrameworkMethodDeclaration[]>;
+  /** One MyBatis mapper resource per requested namespace - a namespace with no indexed resource, or resolved to a repo without any mapper XML, is simply absent from the returned map (not an error). */
+  myBatisResourcesByNamespaces(namespaces: readonly string[]): Promise<Map<string, MyBatisMapperResourceFacts>>;
   frameworkStatus(): Promise<FrameworkIndexStatus>;
 }
 
 export const CALLEES_LIMIT_DEFAULT = 80;
 export const MAX_FRAMEWORK_FACT_FILES = 200;
 export const MAX_FRAMEWORK_CALLEE_METHODS = 512;
+export const MAX_FRAMEWORK_MYBATIS_NAMESPACES = 256;
 
 /**
  * declarationsById's own per-call cap (mirrors findTypeDefinitions' existing

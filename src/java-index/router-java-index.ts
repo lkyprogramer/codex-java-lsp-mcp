@@ -18,6 +18,7 @@ import {
   MAX_FRAMEWORK_CALLEE_METHODS,
   MAX_DECLARATION_IDS_PER_CALL,
   MAX_FRAMEWORK_FACT_FILES,
+  MAX_FRAMEWORK_MYBATIS_NAMESPACES,
   bundleToFrameworkFileFacts,
   bundlesToRequestedDeclarations,
   fqnOfTypeId,
@@ -31,6 +32,7 @@ import {
   type FrameworkRepositoryFactMarkers,
   type FrameworkIndexView
 } from "./framework-index-view.js";
+import type { MyBatisMapperResourceFacts } from "./mybatis-types.js";
 import {
   openSourceFromStatus,
   summarizeCoverage,
@@ -663,6 +665,17 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
       .map(lookup => lookup.type.typeId);
     const methodIds = await this.client.queryMethodsWithParameterTypes(typeIds, boundedLimit);
     return (await this.declarationsById(methodIds)).methods;
+  }
+
+  async myBatisResourcesByNamespaces(namespaces: readonly string[]): Promise<Map<string, MyBatisMapperResourceFacts>> {
+    await this.ensureOpened(this.generation);
+    const boundedNamespaces = unique([...namespaces]).slice(0, MAX_FRAMEWORK_MYBATIS_NAMESPACES);
+    const raw = await this.client.queryMyBatisResourcesByNamespace(boundedNamespaces);
+    const result = new Map<string, MyBatisMapperResourceFacts>();
+    for (const entry of raw) {
+      if (entry.resource) result.set(entry.namespace, entry.resource);
+    }
+    return result;
   }
 
   async frameworkStatus(): Promise<FrameworkIndexStatus> {

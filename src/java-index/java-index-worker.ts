@@ -1301,6 +1301,17 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         respond({ id: request.id, ok: true, value: store?.myBatisResource(request.relativePath) });
         return;
       }
+      case "QUERY_MYBATIS_RESOURCES_BY_NAMESPACE": {
+        respond({
+          id: request.id,
+          ok: true,
+          value: request.namespaces.map(namespace => {
+            const resource = store?.myBatisResourceForNamespace(namespace);
+            return resource ? { namespace, resource } : { namespace };
+          })
+        });
+        return;
+      }
       case "QUERY_REPOSITORY_FACT_MARKERS": {
         respond({
           id: request.id,

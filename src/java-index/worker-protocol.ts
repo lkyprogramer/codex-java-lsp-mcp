@@ -63,6 +63,7 @@ export type JavaIndexRequest =
   | { id: number; type: "QUERY_METHODS_WITH_PARAMETER_TYPES"; typeIds: string[]; limit: number }
   | { id: number; type: "QUERY_FILES"; files: string[] }
   | { id: number; type: "QUERY_MYBATIS_RESOURCE"; relativePath: string }
+  | { id: number; type: "QUERY_MYBATIS_RESOURCES_BY_NAMESPACE"; namespaces: string[] }
   | { id: number; type: "QUERY_REPOSITORY_FACT_MARKERS"; importPrefixes: string[]; annotationPrefixes: string[] }
   | { id: number; type: "STATUS" }
   | { id: number; type: "FLUSH" }
@@ -822,4 +823,16 @@ export function validateMyBatisMapperResourceFacts(value: unknown): MyBatisMappe
     generation: source.generation,
     parseState: source.parseState
   };
+}
+
+export type MyBatisResourceByNamespaceBatch = Array<{ namespace: string; resource?: MyBatisMapperResourceFacts }>;
+
+export function validateMyBatisResourceByNamespaceBatch(value: unknown): MyBatisResourceByNamespaceBatch {
+  return array(value, "MyBatisResourceByNamespaceBatch").map((entry, index) => {
+    const context = `MyBatisResourceByNamespaceBatch[${index}]`;
+    const source = record(entry, context);
+    if (!isString(source.namespace)) invalid(context, "namespace");
+    const resource = validateMyBatisMapperResourceFacts(source.resource);
+    return resource ? { namespace: source.namespace, resource } : { namespace: source.namespace };
+  });
 }

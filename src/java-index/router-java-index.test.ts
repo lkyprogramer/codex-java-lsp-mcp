@@ -204,3 +204,48 @@ test("framework activation marker caches are invalidated by both BUILD and JAVA 
     await router.close();
   }
 });
+
+test("myBatisResourcesByNamespaces batches a namespace lookup against real background-swept mapper XML", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "framework-view-mybatis-repo-"));
+  write(repoRoot, "src/main/java/demo/OrderMapper.java", "package demo;\ninterface OrderMapper {}\n");
+  write(
+    repoRoot,
+    "src/main/resources/mapper/OrderMapper.xml",
+    [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<mapper namespace="demo.OrderMapper">',
+      '  <select id="findById" resultType="demo.OrderMapper">select 1</select>',
+      "</mapper>",
+      ""
+    ].join("\n")
+  );
+  const router = await readyRouter(repoRoot);
+  try {
+    const found = await router.myBatisResourcesByNamespaces(["demo.OrderMapper", "demo.NoSuchMapper"]);
+    assert.equal(found.size, 1, "an unindexed namespace is simply absent from the result, not an error");
+    const resource = found.get("demo.OrderMapper");
+    assert.equal(resource?.relativePath, "src/main/resources/mapper/OrderMapper.xml");
+    assert.deepEqual(resource?.statements.map(s => s.id), ["findById"]);
+  } finally {
+    await router.close();
+  }
+});
+
+test("myBatisResourcesByNamespaces resolves a namespace collision deterministically by the lexicographically-smallest relativePath", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "framework-view-mybatis-collision-"));
+  write(repoRoot, "src/main/java/demo/Marker.java", "package demo;\nclass Marker {}\n");
+  const mapperXml = ['<?xml version="1.0" encoding="UTF-8"?>', '<mapper namespace="demo.Dup"></mapper>', ""].join("\n");
+  write(repoRoot, "src/main/resources/mapper/z-second.xml", mapperXml);
+  write(repoRoot, "src/main/resources/mapper/a-first.xml", mapperXml);
+  const router = await readyRouter(repoRoot);
+  try {
+    const found = await router.myBatisResourcesByNamespaces(["demo.Dup"]);
+    assert.equal(
+      found.get("demo.Dup")?.relativePath,
+      "src/main/resources/mapper/a-first.xml",
+      "a namespace collision must resolve to the same file across repeated calls, not whichever file the scan happened to visit first"
+    );
+  } finally {
+    await router.close();
+  }
+});

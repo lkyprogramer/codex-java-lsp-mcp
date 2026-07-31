@@ -27,6 +27,7 @@ function fakeFrameworkIndex(): FrameworkIndexView {
     repositoryMarkers: async () => new Map(),
     repositoryFactMarkers: async () => ({ importPrefixFound: false, annotationPrefixFound: false }),
     methodsWithParameterTypes: async () => [],
+    myBatisResourcesByNamespaces: async () => new Map(),
     frameworkStatus: async () => ({ coverage: "complete" })
   };
 }

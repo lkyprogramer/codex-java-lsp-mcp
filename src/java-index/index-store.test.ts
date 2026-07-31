@@ -610,3 +610,21 @@ test("removeMyBatisResources on an unindexed path is a no-op", () => {
   assert.doesNotThrow(() => store.removeMyBatisResources(["never-indexed.xml"]));
   assert.equal(store.myBatisResource("never-indexed.xml"), undefined);
 });
+
+test("myBatisResourceForNamespace returns the sole resource claiming a namespace", () => {
+  const store = new JavaIndexStore();
+  store.replaceMyBatisResource(myBatisResource({ relativePath: "src/main/resources/mapper/OrderMapper.xml", namespace: "demo.OrderMapper" }));
+
+  assert.equal(store.myBatisResourceForNamespace("demo.OrderMapper")?.relativePath, "src/main/resources/mapper/OrderMapper.xml");
+  assert.equal(store.myBatisResourceForNamespace("demo.NoSuchMapper"), undefined);
+});
+
+test("myBatisResourceForNamespace resolves a namespace collision deterministically by relativePath, not Set insertion order", () => {
+  const store = new JavaIndexStore();
+  // Insert the lexicographically-later path first, so a correct implementation
+  // must actively sort rather than merely returning whichever was seen first.
+  store.replaceMyBatisResource(myBatisResource({ relativePath: "z-second.xml", namespace: "demo.Dup" }));
+  store.replaceMyBatisResource(myBatisResource({ relativePath: "a-first.xml", namespace: "demo.Dup" }));
+
+  assert.equal(store.myBatisResourceForNamespace("demo.Dup")?.relativePath, "a-first.xml");
+});

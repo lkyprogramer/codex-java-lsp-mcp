@@ -18,6 +18,7 @@ import {
   validateIndexedReferenceArray,
   validateJavaIndexStatus,
   validateMyBatisMapperResourceFacts,
+  validateMyBatisResourceByNamespaceBatch,
   validateRepositoryFactMarkers,
   validateStringArray,
   validateTypeFactsArray,
@@ -25,7 +26,8 @@ import {
   validateTypeLookupArray,
   type JavaIndexCommand,
   type JavaIndexValueValidator,
-  type JavaIndexWorktreeIdentity
+  type JavaIndexWorktreeIdentity,
+  type MyBatisResourceByNamespaceBatch
 } from "./worker-protocol.js";
 
 export type JavaIndexOpenOptions = {
@@ -214,6 +216,12 @@ export class JavaIndexClient {
   async queryMyBatisResource(relativePath: string): Promise<MyBatisMapperResourceFacts | undefined> {
     await this.ensureOpen();
     return this.request({ type: "QUERY_MYBATIS_RESOURCE", relativePath }, validateMyBatisMapperResourceFacts);
+  }
+
+  async queryMyBatisResourcesByNamespace(namespaces: string[]): Promise<MyBatisResourceByNamespaceBatch> {
+    await this.ensureOpen();
+    if (namespaces.length === 0) return [];
+    return this.request({ type: "QUERY_MYBATIS_RESOURCES_BY_NAMESPACE", namespaces }, validateMyBatisResourceByNamespaceBatch);
   }
 
   async queryRepositoryFactMarkers(
