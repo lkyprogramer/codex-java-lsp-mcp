@@ -295,4 +295,9 @@ test("impact benchmark exposes timing diagnostics", async () => {
   assert.equal(typeof attempt.shadowRanking, "object", "diagnostic benchmark attempts must retain opted-in shadow diagnostics");
   assert.equal(typeof attempt.shadowQuality, "object", "benchmark must score the shadow candidate and read-plan outputs against the same golden scenario");
   assert.equal(attempt.shadowQuality.rReadMust, 1);
+  assert.deepEqual(
+    attempt.frameworkEvidence.mapstruct,
+    { selected: 0, readPlan: 0, golden: 0, byKind: {} },
+    "every impact attempt emits a stable MapStruct evidence summary, including zero-use repositories"
+  );
 });

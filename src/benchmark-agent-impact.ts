@@ -295,6 +295,7 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
     ...attemptPayload("impact", quality, rawSearchPayload, readingPayload, elapsedMs, 1 + result.readPlan.length, result.readPlan.length, Number(result.counts.totalRgRawBytes || 0), 0),
     timing: timingPayload(result, sessionPhaseMs),
     goldenAttribution: goldenAttributionForImpact(cli.repoRoot, result, scenario),
+    frameworkEvidence: { mapstruct: mapstructEvidenceSummary(result, scenario) },
     // Task 25's counterfactual rank diagnostics are deliberately opt-in at
     // the router boundary. Preserve them in the benchmark attempt when that
     // boundary supplied them; standard requests still serialize no field.
@@ -531,6 +532,57 @@ function timingPayload(result: Awaited<ReturnType<AgentRouter["impact"]>>, sessi
     importGraph: metrics.importGraph,
     persistedSemantic: metrics.persistedSemantic
   });
+}
+
+type MapstructEvidenceCounts = {
+  selected: number;
+  readPlan: number;
+  golden: number;
+  byKind: Record<string, { selected: number; readPlan: number; golden: number }>;
+};
+
+/**
+ * Preserves framework evidence outcomes separately from generic recall. A
+ * golden file may already be recalled through imports/rg, while a MapStruct
+ * signal still changes its rank; selected/readPlan/golden counts make that
+ * distinction explicit for canary comparisons without changing router output.
+ */
+function mapstructEvidenceSummary(
+  result: Awaited<ReturnType<AgentRouter["impact"]>>,
+  scenario: Scenario
+): MapstructEvidenceCounts {
+  const readFileIds = new Set(result.readPlan.map(item => item.fileId));
+  const goldenPaths = new Set(goldenEntries(scenario).map(entry => entry.file));
+  const selectedPaths = new Set<string>();
+  const readPaths = new Set<string>();
+  const goldenSelectedPaths = new Set<string>();
+  const byKind: MapstructEvidenceCounts["byKind"] = {};
+
+  for (const file of result.files) {
+    const filePath = typeof file.path === "string" ? file.path : "";
+    const reasons = Array.isArray(file.reasons)
+      ? file.reasons.filter((reason): reason is string => typeof reason === "string" && reason.startsWith("MAPSTRUCT_"))
+      : [];
+    if (!filePath || reasons.length === 0) continue;
+    const inReadPlan = readFileIds.has(String(file.id));
+    const inGolden = goldenPaths.has(filePath);
+    selectedPaths.add(filePath);
+    if (inReadPlan) readPaths.add(filePath);
+    if (inGolden) goldenSelectedPaths.add(filePath);
+    for (const kind of new Set(reasons)) {
+      const counts = byKind[kind] ??= { selected: 0, readPlan: 0, golden: 0 };
+      counts.selected += 1;
+      if (inReadPlan) counts.readPlan += 1;
+      if (inGolden) counts.golden += 1;
+    }
+  }
+
+  return {
+    selected: selectedPaths.size,
+    readPlan: readPaths.size,
+    golden: goldenSelectedPaths.size,
+    byKind
+  };
 }
 
 function goldenAttributionForImpact(repoRoot: string, result: Awaited<ReturnType<AgentRouter["impact"]>>, scenario: Scenario): Array<Record<string, unknown>> {

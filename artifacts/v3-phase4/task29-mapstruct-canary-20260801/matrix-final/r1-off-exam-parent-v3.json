@@ -1,0 +1,3543 @@
+{
+  "metadata": {
+    "generatedAt": "2026-08-01T02:33:51.484Z",
+    "repoRoot": "/Users/luo/Documents/program/exam-parent-v3",
+    "indexCacheDir": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task29-mapstruct-canary-20260801/matrix-final/cache-r1-off-exam-parent-v3",
+    "repoCommit": "629a9cce1117",
+    "projectId": "exam-parent-v3",
+    "layoutProfile": "maven-reactor",
+    "warmState": "cold-nolsp",
+    "mode": "balanced",
+    "semanticPolicy": "fast",
+    "verbosity": "standard",
+    "strategy": "impact",
+    "indexBackend": "v2",
+    "deadlineMs": 2000,
+    "runs": 5,
+    "scenarioFile": "golden/exam-parent-v3.scenarios.jsonl",
+    "runtimeBuild": {
+      "gitSha": "unknown",
+      "generatedAt": "1970-01-01T00:00:00.000Z",
+      "defaults": {
+        "idleTtlMs": 2700000,
+        "importConcurrency": 2,
+        "jdtlsXmx": "2g",
+        "maxActiveRepos": 3
+      },
+      "defaultsFingerprint": "e5835394a86f",
+      "stampPath": "/private/tmp/codex-task29-mapstruct-off/dist/build-stamp.json",
+      "missing": true
+    },
+    "prepareJavaIndexMs": 6405.661791,
+    "prepareJavaIndexReconciled": true,
+    "prepareJavaIndexStatus": {
+      "state": "READY",
+      "indexedGeneration": 0,
+      "files": 1338,
+      "types": 1441,
+      "methods": 4295,
+      "edges": 45448,
+      "snapshotBytes": 4228390,
+      "pendingForeground": 0,
+      "pendingBackground": 0,
+      "coverage": [
+        {
+          "root": "exam-candidate/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 24,
+          "indexedFiles": 24,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:57.807Z"
+        },
+        {
+          "root": "exam-candidate/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 6,
+          "indexedFiles": 6,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:57.807Z"
+        },
+        {
+          "root": "exam-checker/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 10,
+          "indexedFiles": 10,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:57.807Z"
+        },
+        {
+          "root": "exam-checkRule/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 11,
+          "indexedFiles": 11,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:57.807Z"
+        },
+        {
+          "root": "exam-checkRule/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 1,
+          "indexedFiles": 1,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:57.807Z"
+        },
+        {
+          "root": "exam-common/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 683,
+          "indexedFiles": 683,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:57.807Z"
+        },
+        {
+          "root": "exam-data/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 211,
+          "indexedFiles": 211,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:57.807Z"
+        },
+        {
+          "root": "exam-data/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 3,
+          "indexedFiles": 3,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:57.807Z"
+        },
+        {
+          "root": "exam-gateway/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 5,
+          "indexedFiles": 5,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:57.807Z"
+        },
+        {
+          "root": "exam-management/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 54,
+          "indexedFiles": 54,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:57.807Z"
+        },
+        {
+          "root": "exam-management/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 7,
+          "indexedFiles": 7,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:57.807Z"
+        },
+        {
+          "root": "exam-service/exam-service-basic/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 58,
+          "indexedFiles": 58,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:57.807Z"
+        },
+        {
+          "root": "exam-service/exam-service-basic/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 17,
+          "indexedFiles": 17,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:57.807Z"
+        },
+        {
+          "root": "exam-service/exam-service-candidate/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 23,
+          "indexedFiles": 23,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:57.807Z"
+        },
+        {
+          "root": "exam-service/exam-service-candidate/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 6,
+          "indexedFiles": 6,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:57.807Z"
+        },
+        {
+          "root": "exam-service/exam-service-check/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 19,
+          "indexedFiles": 19,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:57.807Z"
+        },
+        {
+          "root": "exam-service/exam-service-check/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 3,
+          "indexedFiles": 3,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:57.807Z"
+        },
+        {
+          "root": "exam-service/exam-service-exam-site/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 13,
+          "indexedFiles": 13,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:57.807Z"
+        },
+        {
+          "root": "exam-service/exam-service-examination/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 42,
+          "indexedFiles": 42,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:57.807Z"
+        },
+        {
+          "root": "exam-service/exam-service-examination/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 11,
+          "indexedFiles": 11,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:57.807Z"
+        },
+        {
+          "root": "exam-service/exam-service-management/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 28,
+          "indexedFiles": 28,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:57.807Z"
+        },
+        {
+          "root": "exam-service/exam-service-management/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 2,
+          "indexedFiles": 2,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:57.807Z"
+        },
+        {
+          "root": "exam-service/exam-service-order/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 92,
+          "indexedFiles": 92,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:57.807Z"
+        },
+        {
+          "root": "exam-service/exam-service-order/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 2,
+          "indexedFiles": 2,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:57.807Z"
+        },
+        {
+          "root": "exam-service/exam-service-statistics/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 6,
+          "indexedFiles": 6,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:57.807Z"
+        },
+        {
+          "root": "exam-service/exam-service-statistics/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 1,
+          "indexedFiles": 1,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:57.807Z"
+        }
+      ],
+      "resourceCoverage": [
+        {
+          "root": "exam-candidate/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "exam-checkRule/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "exam-checker/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "exam-common/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "exam-data-transfer/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "exam-data/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "exam-gateway/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "exam-management/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "exam-service/exam-service-basic/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "exam-service/exam-service-candidate/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "exam-service/exam-service-check/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "exam-service/exam-service-exam-site/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "exam-service/exam-service-examination/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "exam-service/exam-service-management/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "exam-service/exam-service-order/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "exam-service/exam-service-statistics/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        }
+      ]
+    },
+    "indexPrepareTimeoutMs": 600000,
+    "prepareWarmMs": 0,
+    "prepareWarmPhaseMs": {}
+  },
+  "totals": {
+    "rawSearchPayload": 12288.16,
+    "readingPayload": 7468.8,
+    "totalAgentVisiblePayload": 19756.96,
+    "estimatedTokens": 4939.4,
+    "elapsedMs": 52.39532332000013,
+    "roundTrips": 7,
+    "returnedFiles": 22.8,
+    "hitFiles": 5.8,
+    "precision": 0.26394634776987713,
+    "recall": 0.8999999999999999,
+    "pCandAt5": 0.6400000000000001,
+    "pCandAt10": 0.45999999999999985,
+    "rCand": 0.8999999999999999,
+    "pRead": 0.6666666666666665,
+    "rReadMust": 1,
+    "readPlanItems": 6,
+    "rgRawBytesSuppressed": 65001.2,
+    "rgRawBytesExposed": 0,
+    "elapsedMsP50": 45.50312499999927,
+    "elapsedMsP95": 128.30604200000016,
+    "rawSearchPayloadP50": 12332,
+    "rawSearchPayloadP95": 14176,
+    "readingPayloadP50": 6710,
+    "readingPayloadP95": 10365,
+    "totalAgentVisiblePayloadP50": 19510,
+    "totalAgentVisiblePayloadP95": 23779,
+    "estimatedTokensP50": 4878,
+    "estimatedTokensP95": 5945
+  },
+  "rows": [
+    {
+      "id": "rule-engine-execute",
+      "name": "RuleEngine#execute",
+      "attempts": [
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 9632,
+          "readingPayload": 6601,
+          "totalAgentVisiblePayload": 16233,
+          "estimatedTokens": 4058,
+          "elapsedMs": 88.18516600000021,
+          "roundTrips": 7,
+          "returnedFiles": 17,
+          "hitFiles": 7,
+          "precision": 0.4117647058823529,
+          "recall": 1,
+          "pCandAt5": 0.8,
+          "pCandAt10": 0.6,
+          "rCand": 1,
+          "pRead": 0.6666666666666666,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 58129,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/execute/RuleEngine.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/execute/RuleExecutor.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/common/CheckResult.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/common/FinalCheckResult.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/execute/impl/StringRuleExecutor.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/execute/impl/NumberRuleExecute.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/test/java/com/hhtele/exam/check/rule/RuleTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "service",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 9632,
+          "readingPayload": 6601,
+          "totalAgentVisiblePayload": 16233,
+          "estimatedTokens": 4058,
+          "elapsedMs": 29.644500000000335,
+          "roundTrips": 7,
+          "returnedFiles": 17,
+          "hitFiles": 7,
+          "precision": 0.4117647058823529,
+          "recall": 1,
+          "pCandAt5": 0.8,
+          "pCandAt10": 0.6,
+          "rCand": 1,
+          "pRead": 0.6666666666666666,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 58129,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/execute/RuleEngine.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/execute/RuleExecutor.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/common/CheckResult.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/common/FinalCheckResult.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/execute/impl/StringRuleExecutor.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/execute/impl/NumberRuleExecute.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/test/java/com/hhtele/exam/check/rule/RuleTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "service",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 9632,
+          "readingPayload": 6601,
+          "totalAgentVisiblePayload": 16233,
+          "estimatedTokens": 4058,
+          "elapsedMs": 24.80066700000043,
+          "roundTrips": 7,
+          "returnedFiles": 17,
+          "hitFiles": 7,
+          "precision": 0.4117647058823529,
+          "recall": 1,
+          "pCandAt5": 0.8,
+          "pCandAt10": 0.6,
+          "rCand": 1,
+          "pRead": 0.6666666666666666,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 58129,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/execute/RuleEngine.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/execute/RuleExecutor.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/common/CheckResult.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/common/FinalCheckResult.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/execute/impl/StringRuleExecutor.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/execute/impl/NumberRuleExecute.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/test/java/com/hhtele/exam/check/rule/RuleTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "service",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 9632,
+          "readingPayload": 6601,
+          "totalAgentVisiblePayload": 16233,
+          "estimatedTokens": 4058,
+          "elapsedMs": 23.805749999999534,
+          "roundTrips": 7,
+          "returnedFiles": 17,
+          "hitFiles": 7,
+          "precision": 0.4117647058823529,
+          "recall": 1,
+          "pCandAt5": 0.8,
+          "pCandAt10": 0.6,
+          "rCand": 1,
+          "pRead": 0.6666666666666666,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 58129,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/execute/RuleEngine.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/execute/RuleExecutor.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/common/CheckResult.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/common/FinalCheckResult.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/execute/impl/StringRuleExecutor.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/execute/impl/NumberRuleExecute.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/test/java/com/hhtele/exam/check/rule/RuleTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "service",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 9632,
+          "readingPayload": 6601,
+          "totalAgentVisiblePayload": 16233,
+          "estimatedTokens": 4058,
+          "elapsedMs": 24.478291000000354,
+          "roundTrips": 7,
+          "returnedFiles": 17,
+          "hitFiles": 7,
+          "precision": 0.4117647058823529,
+          "recall": 1,
+          "pCandAt5": 0.8,
+          "pCandAt10": 0.6,
+          "rCand": 1,
+          "pRead": 0.6666666666666666,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 58129,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/execute/RuleEngine.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/execute/RuleExecutor.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/common/CheckResult.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/common/FinalCheckResult.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/execute/impl/StringRuleExecutor.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/execute/impl/NumberRuleExecute.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "RuleEngine#execute",
+              "file": "exam-checkRule/src/test/java/com/hhtele/exam/check/rule/RuleTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "service",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        }
+      ],
+      "summary": {
+        "rawSearchPayload": 9632,
+        "readingPayload": 6601,
+        "totalAgentVisiblePayload": 16233,
+        "estimatedTokens": 4058,
+        "elapsedMs": 38.18287480000017,
+        "roundTrips": 7,
+        "returnedFiles": 17,
+        "hitFiles": 7,
+        "precision": 0.4117647058823529,
+        "recall": 1,
+        "pCandAt5": 0.8,
+        "pCandAt10": 0.6,
+        "rCand": 1,
+        "pRead": 0.6666666666666666,
+        "rReadMust": 1,
+        "readPlanItems": 6,
+        "rgRawBytesSuppressed": 58129,
+        "rgRawBytesExposed": 0,
+        "elapsedMsP50": 24.80066700000043,
+        "elapsedMsP95": 88.18516600000021,
+        "rawSearchPayloadP50": 9632,
+        "rawSearchPayloadP95": 9632,
+        "readingPayloadP50": 6601,
+        "readingPayloadP95": 6601,
+        "totalAgentVisiblePayloadP50": 16233,
+        "totalAgentVisiblePayloadP95": 16233,
+        "estimatedTokensP50": 4058,
+        "estimatedTokensP95": 4058
+      }
+    },
+    {
+      "id": "candidate-position-select",
+      "name": "ExaminationController#selectApplySite",
+      "attempts": [
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 11887,
+          "readingPayload": 6490,
+          "totalAgentVisiblePayload": 18377,
+          "estimatedTokens": 4594,
+          "elapsedMs": 184.7953749999997,
+          "roundTrips": 7,
+          "returnedFiles": 21,
+          "hitFiles": 5,
+          "precision": 0.23809523809523808,
+          "recall": 1,
+          "pCandAt5": 0.4,
+          "pCandAt10": 0.5,
+          "rCand": 1,
+          "pRead": 0.5,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 15505,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "ExaminationController#selectApplySite",
+              "file": "exam-candidate/src/main/java/com/hhtele/exam/candidate/controller/examination/ExaminationController.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ExaminationController#selectApplySite",
+              "file": "exam-service/exam-service-candidate/src/main/java/com/hhtele/exam/service/candidate/PositionService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ExaminationController#selectApplySite",
+              "file": "exam-common/src/main/java/com/hhtele/exam/dto/examination/PositionPageDTO.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ExaminationController#selectApplySite",
+              "file": "exam-service/exam-service-candidate/src/main/java/com/hhtele/exam/service/candidate/impl/PositionServiceImpl.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ExaminationController#selectApplySite",
+              "file": "exam-candidate/src/test/java/com/hhtele/exam/candidate/controller/examination/ExaminationControllerTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 11886,
+          "readingPayload": 6490,
+          "totalAgentVisiblePayload": 18376,
+          "estimatedTokens": 4594,
+          "elapsedMs": 87.91675000000032,
+          "roundTrips": 7,
+          "returnedFiles": 21,
+          "hitFiles": 5,
+          "precision": 0.23809523809523808,
+          "recall": 1,
+          "pCandAt5": 0.4,
+          "pCandAt10": 0.5,
+          "rCand": 1,
+          "pRead": 0.5,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 15505,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "ExaminationController#selectApplySite",
+              "file": "exam-candidate/src/main/java/com/hhtele/exam/candidate/controller/examination/ExaminationController.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ExaminationController#selectApplySite",
+              "file": "exam-service/exam-service-candidate/src/main/java/com/hhtele/exam/service/candidate/PositionService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ExaminationController#selectApplySite",
+              "file": "exam-common/src/main/java/com/hhtele/exam/dto/examination/PositionPageDTO.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ExaminationController#selectApplySite",
+              "file": "exam-service/exam-service-candidate/src/main/java/com/hhtele/exam/service/candidate/impl/PositionServiceImpl.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ExaminationController#selectApplySite",
+              "file": "exam-candidate/src/test/java/com/hhtele/exam/candidate/controller/examination/ExaminationControllerTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 11886,
+          "readingPayload": 6490,
+          "totalAgentVisiblePayload": 18376,
+          "estimatedTokens": 4594,
+          "elapsedMs": 85.1889170000004,
+          "roundTrips": 7,
+          "returnedFiles": 21,
+          "hitFiles": 5,
+          "precision": 0.23809523809523808,
+          "recall": 1,
+          "pCandAt5": 0.4,
+          "pCandAt10": 0.5,
+          "rCand": 1,
+          "pRead": 0.5,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 15505,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "ExaminationController#selectApplySite",
+              "file": "exam-candidate/src/main/java/com/hhtele/exam/candidate/controller/examination/ExaminationController.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ExaminationController#selectApplySite",
+              "file": "exam-service/exam-service-candidate/src/main/java/com/hhtele/exam/service/candidate/PositionService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ExaminationController#selectApplySite",
+              "file": "exam-common/src/main/java/com/hhtele/exam/dto/examination/PositionPageDTO.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ExaminationController#selectApplySite",
+              "file": "exam-service/exam-service-candidate/src/main/java/com/hhtele/exam/service/candidate/impl/PositionServiceImpl.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ExaminationController#selectApplySite",
+              "file": "exam-candidate/src/test/java/com/hhtele/exam/candidate/controller/examination/ExaminationControllerTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 11886,
+          "readingPayload": 6490,
+          "totalAgentVisiblePayload": 18376,
+          "estimatedTokens": 4594,
+          "elapsedMs": 81.33199999999943,
+          "roundTrips": 7,
+          "returnedFiles": 21,
+          "hitFiles": 5,
+          "precision": 0.23809523809523808,
+          "recall": 1,
+          "pCandAt5": 0.4,
+          "pCandAt10": 0.5,
+          "rCand": 1,
+          "pRead": 0.5,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 15505,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "ExaminationController#selectApplySite",
+              "file": "exam-candidate/src/main/java/com/hhtele/exam/candidate/controller/examination/ExaminationController.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ExaminationController#selectApplySite",
+              "file": "exam-service/exam-service-candidate/src/main/java/com/hhtele/exam/service/candidate/PositionService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ExaminationController#selectApplySite",
+              "file": "exam-common/src/main/java/com/hhtele/exam/dto/examination/PositionPageDTO.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ExaminationController#selectApplySite",
+              "file": "exam-service/exam-service-candidate/src/main/java/com/hhtele/exam/service/candidate/impl/PositionServiceImpl.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ExaminationController#selectApplySite",
+              "file": "exam-candidate/src/test/java/com/hhtele/exam/candidate/controller/examination/ExaminationControllerTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 11886,
+          "readingPayload": 6490,
+          "totalAgentVisiblePayload": 18376,
+          "estimatedTokens": 4594,
+          "elapsedMs": 83.01087499999994,
+          "roundTrips": 7,
+          "returnedFiles": 21,
+          "hitFiles": 5,
+          "precision": 0.23809523809523808,
+          "recall": 1,
+          "pCandAt5": 0.4,
+          "pCandAt10": 0.5,
+          "rCand": 1,
+          "pRead": 0.5,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 15505,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "ExaminationController#selectApplySite",
+              "file": "exam-candidate/src/main/java/com/hhtele/exam/candidate/controller/examination/ExaminationController.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ExaminationController#selectApplySite",
+              "file": "exam-service/exam-service-candidate/src/main/java/com/hhtele/exam/service/candidate/PositionService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ExaminationController#selectApplySite",
+              "file": "exam-common/src/main/java/com/hhtele/exam/dto/examination/PositionPageDTO.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ExaminationController#selectApplySite",
+              "file": "exam-service/exam-service-candidate/src/main/java/com/hhtele/exam/service/candidate/impl/PositionServiceImpl.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ExaminationController#selectApplySite",
+              "file": "exam-candidate/src/test/java/com/hhtele/exam/candidate/controller/examination/ExaminationControllerTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        }
+      ],
+      "summary": {
+        "rawSearchPayload": 11886.2,
+        "readingPayload": 6490,
+        "totalAgentVisiblePayload": 18376.2,
+        "estimatedTokens": 4594,
+        "elapsedMs": 104.44878339999995,
+        "roundTrips": 7,
+        "returnedFiles": 21,
+        "hitFiles": 5,
+        "precision": 0.23809523809523808,
+        "recall": 1,
+        "pCandAt5": 0.4,
+        "pCandAt10": 0.5,
+        "rCand": 1,
+        "pRead": 0.5,
+        "rReadMust": 1,
+        "readPlanItems": 6,
+        "rgRawBytesSuppressed": 15505,
+        "rgRawBytesExposed": 0,
+        "elapsedMsP50": 85.1889170000004,
+        "elapsedMsP95": 184.7953749999997,
+        "rawSearchPayloadP50": 11886,
+        "rawSearchPayloadP95": 11887,
+        "readingPayloadP50": 6490,
+        "readingPayloadP95": 6490,
+        "totalAgentVisiblePayloadP50": 18376,
+        "totalAgentVisiblePayloadP95": 18377,
+        "estimatedTokensP50": 4594,
+        "estimatedTokensP95": 4594
+      }
+    },
+    {
+      "id": "apply-info-save-basic-service",
+      "name": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+      "attempts": [
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 13415,
+          "readingPayload": 10365,
+          "totalAgentVisiblePayload": 23780,
+          "estimatedTokens": 5945,
+          "elapsedMs": 128.30604200000016,
+          "roundTrips": 7,
+          "returnedFiles": 26,
+          "hitFiles": 8,
+          "precision": 0.3076923076923077,
+          "recall": 1,
+          "pCandAt5": 1,
+          "pCandAt10": 0.6,
+          "rCand": 1,
+          "pRead": 1,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 52465,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-service/exam-service-candidate/src/main/java/com/hhtele/exam/service/candidate/impl/ApplyInfoServiceImpl.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-service/exam-service-candidate/src/main/java/com/hhtele/exam/service/candidate/ApplyInfoService.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-common/src/main/java/com/hhtele/exam/dto/examination/ApplyInfoUpdateDTO.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/ApplyInfo.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/ApplyInfoRepository.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/ExaminationTemplate.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/PositionTemplate.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-service/exam-service-candidate/src/test/java/com/hhtele/exam/service/candidate/impl/ApplyInfoServiceImplTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "service",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 13414,
+          "readingPayload": 10365,
+          "totalAgentVisiblePayload": 23779,
+          "estimatedTokens": 5945,
+          "elapsedMs": 54.40633399999933,
+          "roundTrips": 7,
+          "returnedFiles": 26,
+          "hitFiles": 8,
+          "precision": 0.3076923076923077,
+          "recall": 1,
+          "pCandAt5": 1,
+          "pCandAt10": 0.6,
+          "rCand": 1,
+          "pRead": 1,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 52465,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-service/exam-service-candidate/src/main/java/com/hhtele/exam/service/candidate/impl/ApplyInfoServiceImpl.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-service/exam-service-candidate/src/main/java/com/hhtele/exam/service/candidate/ApplyInfoService.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-common/src/main/java/com/hhtele/exam/dto/examination/ApplyInfoUpdateDTO.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/ApplyInfo.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/ApplyInfoRepository.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/ExaminationTemplate.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/PositionTemplate.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-service/exam-service-candidate/src/test/java/com/hhtele/exam/service/candidate/impl/ApplyInfoServiceImplTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "service",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 13414,
+          "readingPayload": 10365,
+          "totalAgentVisiblePayload": 23779,
+          "estimatedTokens": 5945,
+          "elapsedMs": 55.80208300000049,
+          "roundTrips": 7,
+          "returnedFiles": 26,
+          "hitFiles": 8,
+          "precision": 0.3076923076923077,
+          "recall": 1,
+          "pCandAt5": 1,
+          "pCandAt10": 0.6,
+          "rCand": 1,
+          "pRead": 1,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 52465,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-service/exam-service-candidate/src/main/java/com/hhtele/exam/service/candidate/impl/ApplyInfoServiceImpl.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-service/exam-service-candidate/src/main/java/com/hhtele/exam/service/candidate/ApplyInfoService.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-common/src/main/java/com/hhtele/exam/dto/examination/ApplyInfoUpdateDTO.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/ApplyInfo.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/ApplyInfoRepository.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/ExaminationTemplate.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/PositionTemplate.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-service/exam-service-candidate/src/test/java/com/hhtele/exam/service/candidate/impl/ApplyInfoServiceImplTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "service",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 13414,
+          "readingPayload": 10365,
+          "totalAgentVisiblePayload": 23779,
+          "estimatedTokens": 5945,
+          "elapsedMs": 56.82274999999936,
+          "roundTrips": 7,
+          "returnedFiles": 26,
+          "hitFiles": 8,
+          "precision": 0.3076923076923077,
+          "recall": 1,
+          "pCandAt5": 1,
+          "pCandAt10": 0.6,
+          "rCand": 1,
+          "pRead": 1,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 52465,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-service/exam-service-candidate/src/main/java/com/hhtele/exam/service/candidate/impl/ApplyInfoServiceImpl.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-service/exam-service-candidate/src/main/java/com/hhtele/exam/service/candidate/ApplyInfoService.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-common/src/main/java/com/hhtele/exam/dto/examination/ApplyInfoUpdateDTO.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/ApplyInfo.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/ApplyInfoRepository.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/ExaminationTemplate.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/PositionTemplate.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-service/exam-service-candidate/src/test/java/com/hhtele/exam/service/candidate/impl/ApplyInfoServiceImplTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "service",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 13414,
+          "readingPayload": 10365,
+          "totalAgentVisiblePayload": 23779,
+          "estimatedTokens": 5945,
+          "elapsedMs": 58.428665999999794,
+          "roundTrips": 7,
+          "returnedFiles": 26,
+          "hitFiles": 8,
+          "precision": 0.3076923076923077,
+          "recall": 1,
+          "pCandAt5": 1,
+          "pCandAt10": 0.6,
+          "rCand": 1,
+          "pRead": 1,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 52465,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-service/exam-service-candidate/src/main/java/com/hhtele/exam/service/candidate/impl/ApplyInfoServiceImpl.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-service/exam-service-candidate/src/main/java/com/hhtele/exam/service/candidate/ApplyInfoService.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-common/src/main/java/com/hhtele/exam/dto/examination/ApplyInfoUpdateDTO.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/ApplyInfo.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/ApplyInfoRepository.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/ExaminationTemplate.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/PositionTemplate.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "service",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+              "file": "exam-service/exam-service-candidate/src/test/java/com/hhtele/exam/service/candidate/impl/ApplyInfoServiceImplTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "service",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        }
+      ],
+      "summary": {
+        "rawSearchPayload": 13414.2,
+        "readingPayload": 10365,
+        "totalAgentVisiblePayload": 23779.2,
+        "estimatedTokens": 5945,
+        "elapsedMs": 70.75317499999983,
+        "roundTrips": 7,
+        "returnedFiles": 26,
+        "hitFiles": 8,
+        "precision": 0.3076923076923077,
+        "recall": 1,
+        "pCandAt5": 1,
+        "pCandAt10": 0.6,
+        "rCand": 1,
+        "pRead": 1,
+        "rReadMust": 1,
+        "readPlanItems": 6,
+        "rgRawBytesSuppressed": 52465,
+        "rgRawBytesExposed": 0,
+        "elapsedMsP50": 56.82274999999936,
+        "elapsedMsP95": 128.30604200000016,
+        "rawSearchPayloadP50": 13414,
+        "rawSearchPayloadP95": 13415,
+        "readingPayloadP50": 10365,
+        "readingPayloadP95": 10365,
+        "totalAgentVisiblePayloadP50": 23779,
+        "totalAgentVisiblePayloadP95": 23780,
+        "estimatedTokensP50": 5945,
+        "estimatedTokensP95": 5945
+      }
+    },
+    {
+      "id": "position-repository-exists",
+      "name": "PositionRepository#existsByExamId",
+      "attempts": [
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 14176,
+          "readingPayload": 6710,
+          "totalAgentVisiblePayload": 20886,
+          "estimatedTokens": 5222,
+          "elapsedMs": 61.919458000000304,
+          "roundTrips": 7,
+          "returnedFiles": 26,
+          "hitFiles": 4,
+          "precision": 0.15384615384615385,
+          "recall": 0.6666666666666666,
+          "pCandAt5": 0.4,
+          "pCandAt10": 0.2,
+          "rCand": 0.6666666666666666,
+          "pRead": 0.5,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 105474,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "PositionRepository#existsByExamId",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/PositionRepository.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "PositionRepository#existsByExamId",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/Position.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "PositionRepository#existsByExamId",
+              "file": "exam-service/exam-service-examination/src/main/java/com/hhtele/exam/service/examination/service/impl/ExamProgressServiceImpl.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "PositionRepository#existsByExamId",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/ApplyFormRepository.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "PositionRepository#existsByExamId",
+              "file": "exam-common/src/main/java/com/hhtele/exam/vo/examination/ExamPrepareVO.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "cross-module-cold",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "PositionRepository#existsByExamId",
+              "file": "exam-service/exam-service-examination/src/test/java/com/hhtele/exam/service/examination/service/impl/ExamProgressServiceImplTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 14176,
+          "readingPayload": 6710,
+          "totalAgentVisiblePayload": 20886,
+          "estimatedTokens": 5222,
+          "elapsedMs": 25.71862499999952,
+          "roundTrips": 7,
+          "returnedFiles": 26,
+          "hitFiles": 4,
+          "precision": 0.15384615384615385,
+          "recall": 0.6666666666666666,
+          "pCandAt5": 0.4,
+          "pCandAt10": 0.2,
+          "rCand": 0.6666666666666666,
+          "pRead": 0.5,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 105474,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "PositionRepository#existsByExamId",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/PositionRepository.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "PositionRepository#existsByExamId",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/Position.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "PositionRepository#existsByExamId",
+              "file": "exam-service/exam-service-examination/src/main/java/com/hhtele/exam/service/examination/service/impl/ExamProgressServiceImpl.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "PositionRepository#existsByExamId",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/ApplyFormRepository.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "PositionRepository#existsByExamId",
+              "file": "exam-common/src/main/java/com/hhtele/exam/vo/examination/ExamPrepareVO.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "cross-module-cold",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "PositionRepository#existsByExamId",
+              "file": "exam-service/exam-service-examination/src/test/java/com/hhtele/exam/service/examination/service/impl/ExamProgressServiceImplTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 14176,
+          "readingPayload": 6710,
+          "totalAgentVisiblePayload": 20886,
+          "estimatedTokens": 5222,
+          "elapsedMs": 25.088958000000275,
+          "roundTrips": 7,
+          "returnedFiles": 26,
+          "hitFiles": 4,
+          "precision": 0.15384615384615385,
+          "recall": 0.6666666666666666,
+          "pCandAt5": 0.4,
+          "pCandAt10": 0.2,
+          "rCand": 0.6666666666666666,
+          "pRead": 0.5,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 105474,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "PositionRepository#existsByExamId",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/PositionRepository.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "PositionRepository#existsByExamId",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/Position.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "PositionRepository#existsByExamId",
+              "file": "exam-service/exam-service-examination/src/main/java/com/hhtele/exam/service/examination/service/impl/ExamProgressServiceImpl.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "PositionRepository#existsByExamId",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/ApplyFormRepository.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "PositionRepository#existsByExamId",
+              "file": "exam-common/src/main/java/com/hhtele/exam/vo/examination/ExamPrepareVO.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "cross-module-cold",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "PositionRepository#existsByExamId",
+              "file": "exam-service/exam-service-examination/src/test/java/com/hhtele/exam/service/examination/service/impl/ExamProgressServiceImplTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 14176,
+          "readingPayload": 6710,
+          "totalAgentVisiblePayload": 20886,
+          "estimatedTokens": 5222,
+          "elapsedMs": 23.564667000000554,
+          "roundTrips": 7,
+          "returnedFiles": 26,
+          "hitFiles": 4,
+          "precision": 0.15384615384615385,
+          "recall": 0.6666666666666666,
+          "pCandAt5": 0.4,
+          "pCandAt10": 0.2,
+          "rCand": 0.6666666666666666,
+          "pRead": 0.5,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 105474,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "PositionRepository#existsByExamId",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/PositionRepository.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "PositionRepository#existsByExamId",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/Position.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "PositionRepository#existsByExamId",
+              "file": "exam-service/exam-service-examination/src/main/java/com/hhtele/exam/service/examination/service/impl/ExamProgressServiceImpl.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "PositionRepository#existsByExamId",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/ApplyFormRepository.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "PositionRepository#existsByExamId",
+              "file": "exam-common/src/main/java/com/hhtele/exam/vo/examination/ExamPrepareVO.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "cross-module-cold",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "PositionRepository#existsByExamId",
+              "file": "exam-service/exam-service-examination/src/test/java/com/hhtele/exam/service/examination/service/impl/ExamProgressServiceImplTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 14176,
+          "readingPayload": 6710,
+          "totalAgentVisiblePayload": 20886,
+          "estimatedTokens": 5222,
+          "elapsedMs": 25.794000000001688,
+          "roundTrips": 7,
+          "returnedFiles": 26,
+          "hitFiles": 4,
+          "precision": 0.15384615384615385,
+          "recall": 0.6666666666666666,
+          "pCandAt5": 0.4,
+          "pCandAt10": 0.2,
+          "rCand": 0.6666666666666666,
+          "pRead": 0.5,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 105474,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "PositionRepository#existsByExamId",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/PositionRepository.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "PositionRepository#existsByExamId",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/Position.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "PositionRepository#existsByExamId",
+              "file": "exam-service/exam-service-examination/src/main/java/com/hhtele/exam/service/examination/service/impl/ExamProgressServiceImpl.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "PositionRepository#existsByExamId",
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/ApplyFormRepository.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "PositionRepository#existsByExamId",
+              "file": "exam-common/src/main/java/com/hhtele/exam/vo/examination/ExamPrepareVO.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "cross-module-cold",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "PositionRepository#existsByExamId",
+              "file": "exam-service/exam-service-examination/src/test/java/com/hhtele/exam/service/examination/service/impl/ExamProgressServiceImplTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        }
+      ],
+      "summary": {
+        "rawSearchPayload": 14176,
+        "readingPayload": 6710,
+        "totalAgentVisiblePayload": 20886,
+        "estimatedTokens": 5222,
+        "elapsedMs": 32.41714160000047,
+        "roundTrips": 7,
+        "returnedFiles": 26,
+        "hitFiles": 4,
+        "precision": 0.15384615384615385,
+        "recall": 0.6666666666666666,
+        "pCandAt5": 0.4,
+        "pCandAt10": 0.2,
+        "rCand": 0.6666666666666666,
+        "pRead": 0.5,
+        "rReadMust": 1,
+        "readPlanItems": 6,
+        "rgRawBytesSuppressed": 105474,
+        "rgRawBytesExposed": 0,
+        "elapsedMsP50": 25.71862499999952,
+        "elapsedMsP95": 61.919458000000304,
+        "rawSearchPayloadP50": 14176,
+        "rawSearchPayloadP95": 14176,
+        "readingPayloadP50": 6710,
+        "readingPayloadP95": 6710,
+        "totalAgentVisiblePayloadP50": 20886,
+        "totalAgentVisiblePayloadP95": 20886,
+        "estimatedTokensP50": 5222,
+        "estimatedTokensP95": 5222
+      }
+    },
+    {
+      "id": "ceb-order-create-dto",
+      "name": "CebOrderRequest/CebOrderCreateResponse",
+      "attempts": [
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 12333,
+          "readingPayload": 7178,
+          "totalAgentVisiblePayload": 19511,
+          "estimatedTokens": 4878,
+          "elapsedMs": 45.50312499999927,
+          "roundTrips": 7,
+          "returnedFiles": 24,
+          "hitFiles": 5,
+          "precision": 0.20833333333333334,
+          "recall": 0.8333333333333334,
+          "pCandAt5": 0.6,
+          "pCandAt10": 0.4,
+          "rCand": 0.8333333333333334,
+          "pRead": 0.6666666666666666,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 93433,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "CebOrderRequest/CebOrderCreateResponse",
+              "file": "exam-common/src/main/java/com/hhtele/exam/dto/order/ceb/CebOrderRequest.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "CebOrderRequest/CebOrderCreateResponse",
+              "file": "exam-common/src/main/java/com/hhtele/exam/dto/order/ceb/CebOrderCreateResponse.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "CebOrderRequest/CebOrderCreateResponse",
+              "file": "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/impl/CebPayServiceImpl.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "CebOrderRequest/CebOrderCreateResponse",
+              "file": "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/CebPayService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "CebOrderRequest/CebOrderCreateResponse",
+              "file": "exam-common/src/main/java/com/hhtele/exam/dto/order/ceb/CebPayRequestDTO.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "CebOrderRequest/CebOrderCreateResponse",
+              "file": "exam-common/src/main/java/com/hhtele/exam/dto/order/ceb/CebCommonRequest.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 12332,
+          "readingPayload": 7178,
+          "totalAgentVisiblePayload": 19510,
+          "estimatedTokens": 4878,
+          "elapsedMs": 8.52179200000137,
+          "roundTrips": 7,
+          "returnedFiles": 24,
+          "hitFiles": 5,
+          "precision": 0.20833333333333334,
+          "recall": 0.8333333333333334,
+          "pCandAt5": 0.6,
+          "pCandAt10": 0.4,
+          "rCand": 0.8333333333333334,
+          "pRead": 0.6666666666666666,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 93433,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "CebOrderRequest/CebOrderCreateResponse",
+              "file": "exam-common/src/main/java/com/hhtele/exam/dto/order/ceb/CebOrderRequest.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "CebOrderRequest/CebOrderCreateResponse",
+              "file": "exam-common/src/main/java/com/hhtele/exam/dto/order/ceb/CebOrderCreateResponse.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "CebOrderRequest/CebOrderCreateResponse",
+              "file": "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/impl/CebPayServiceImpl.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "CebOrderRequest/CebOrderCreateResponse",
+              "file": "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/CebPayService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "CebOrderRequest/CebOrderCreateResponse",
+              "file": "exam-common/src/main/java/com/hhtele/exam/dto/order/ceb/CebPayRequestDTO.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "CebOrderRequest/CebOrderCreateResponse",
+              "file": "exam-common/src/main/java/com/hhtele/exam/dto/order/ceb/CebCommonRequest.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 12332,
+          "readingPayload": 7178,
+          "totalAgentVisiblePayload": 19510,
+          "estimatedTokens": 4878,
+          "elapsedMs": 8.928916999999274,
+          "roundTrips": 7,
+          "returnedFiles": 24,
+          "hitFiles": 5,
+          "precision": 0.20833333333333334,
+          "recall": 0.8333333333333334,
+          "pCandAt5": 0.6,
+          "pCandAt10": 0.4,
+          "rCand": 0.8333333333333334,
+          "pRead": 0.6666666666666666,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 93433,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "CebOrderRequest/CebOrderCreateResponse",
+              "file": "exam-common/src/main/java/com/hhtele/exam/dto/order/ceb/CebOrderRequest.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "CebOrderRequest/CebOrderCreateResponse",
+              "file": "exam-common/src/main/java/com/hhtele/exam/dto/order/ceb/CebOrderCreateResponse.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "CebOrderRequest/CebOrderCreateResponse",
+              "file": "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/impl/CebPayServiceImpl.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "CebOrderRequest/CebOrderCreateResponse",
+              "file": "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/CebPayService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "CebOrderRequest/CebOrderCreateResponse",
+              "file": "exam-common/src/main/java/com/hhtele/exam/dto/order/ceb/CebPayRequestDTO.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "CebOrderRequest/CebOrderCreateResponse",
+              "file": "exam-common/src/main/java/com/hhtele/exam/dto/order/ceb/CebCommonRequest.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 12332,
+          "readingPayload": 7178,
+          "totalAgentVisiblePayload": 19510,
+          "estimatedTokens": 4878,
+          "elapsedMs": 8.448500000000422,
+          "roundTrips": 7,
+          "returnedFiles": 24,
+          "hitFiles": 5,
+          "precision": 0.20833333333333334,
+          "recall": 0.8333333333333334,
+          "pCandAt5": 0.6,
+          "pCandAt10": 0.4,
+          "rCand": 0.8333333333333334,
+          "pRead": 0.6666666666666666,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 93433,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "CebOrderRequest/CebOrderCreateResponse",
+              "file": "exam-common/src/main/java/com/hhtele/exam/dto/order/ceb/CebOrderRequest.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "CebOrderRequest/CebOrderCreateResponse",
+              "file": "exam-common/src/main/java/com/hhtele/exam/dto/order/ceb/CebOrderCreateResponse.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "CebOrderRequest/CebOrderCreateResponse",
+              "file": "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/impl/CebPayServiceImpl.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "CebOrderRequest/CebOrderCreateResponse",
+              "file": "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/CebPayService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "CebOrderRequest/CebOrderCreateResponse",
+              "file": "exam-common/src/main/java/com/hhtele/exam/dto/order/ceb/CebPayRequestDTO.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "CebOrderRequest/CebOrderCreateResponse",
+              "file": "exam-common/src/main/java/com/hhtele/exam/dto/order/ceb/CebCommonRequest.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 12333,
+          "readingPayload": 7178,
+          "totalAgentVisiblePayload": 19511,
+          "estimatedTokens": 4878,
+          "elapsedMs": 9.470875000000888,
+          "roundTrips": 7,
+          "returnedFiles": 24,
+          "hitFiles": 5,
+          "precision": 0.20833333333333334,
+          "recall": 0.8333333333333334,
+          "pCandAt5": 0.6,
+          "pCandAt10": 0.4,
+          "rCand": 0.8333333333333334,
+          "pRead": 0.6666666666666666,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 93433,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "CebOrderRequest/CebOrderCreateResponse",
+              "file": "exam-common/src/main/java/com/hhtele/exam/dto/order/ceb/CebOrderRequest.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "CebOrderRequest/CebOrderCreateResponse",
+              "file": "exam-common/src/main/java/com/hhtele/exam/dto/order/ceb/CebOrderCreateResponse.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "CebOrderRequest/CebOrderCreateResponse",
+              "file": "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/impl/CebPayServiceImpl.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "CebOrderRequest/CebOrderCreateResponse",
+              "file": "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/CebPayService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "CebOrderRequest/CebOrderCreateResponse",
+              "file": "exam-common/src/main/java/com/hhtele/exam/dto/order/ceb/CebPayRequestDTO.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "CebOrderRequest/CebOrderCreateResponse",
+              "file": "exam-common/src/main/java/com/hhtele/exam/dto/order/ceb/CebCommonRequest.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        }
+      ],
+      "summary": {
+        "rawSearchPayload": 12332.4,
+        "readingPayload": 7178,
+        "totalAgentVisiblePayload": 19510.4,
+        "estimatedTokens": 4878,
+        "elapsedMs": 16.174641800000245,
+        "roundTrips": 7,
+        "returnedFiles": 24,
+        "hitFiles": 5,
+        "precision": 0.20833333333333334,
+        "recall": 0.8333333333333334,
+        "pCandAt5": 0.6,
+        "pCandAt10": 0.4,
+        "rCand": 0.8333333333333334,
+        "pRead": 0.6666666666666666,
+        "rReadMust": 1,
+        "readPlanItems": 6,
+        "rgRawBytesSuppressed": 93433,
+        "rgRawBytesExposed": 0,
+        "elapsedMsP50": 8.928916999999274,
+        "elapsedMsP95": 45.50312499999927,
+        "rawSearchPayloadP50": 12332,
+        "rawSearchPayloadP95": 12333,
+        "readingPayloadP50": 7178,
+        "readingPayloadP95": 7178,
+        "totalAgentVisiblePayloadP50": 19510,
+        "totalAgentVisiblePayloadP95": 19511,
+        "estimatedTokensP50": 4878,
+        "estimatedTokensP95": 4878
+      }
+    }
+  ]
+}

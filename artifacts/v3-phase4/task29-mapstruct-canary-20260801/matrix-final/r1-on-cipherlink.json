@@ -1,0 +1,3740 @@
+{
+  "metadata": {
+    "generatedAt": "2026-08-01T02:33:39.457Z",
+    "repoRoot": "/Users/luo/Documents/program/cipherlink",
+    "indexCacheDir": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task29-mapstruct-canary-20260801/matrix-final/cache-r1-on-cipherlink",
+    "repoCommit": "fa433982e92e",
+    "projectId": "cipherlink",
+    "layoutProfile": "ddd-gradle",
+    "warmState": "cold-nolsp",
+    "mode": "balanced",
+    "semanticPolicy": "fast",
+    "verbosity": "standard",
+    "strategy": "impact",
+    "indexBackend": "v2",
+    "deadlineMs": 2000,
+    "runs": 5,
+    "scenarioFile": "golden/cipherlink.scenarios.jsonl",
+    "runtimeBuild": {
+      "gitSha": "unknown",
+      "generatedAt": "1970-01-01T00:00:00.000Z",
+      "defaults": {
+        "idleTtlMs": 2700000,
+        "importConcurrency": 2,
+        "jdtlsXmx": "2g",
+        "maxActiveRepos": 3
+      },
+      "defaultsFingerprint": "e5835394a86f",
+      "stampPath": "/private/tmp/codex-task29-mapstruct-on/dist/build-stamp.json",
+      "missing": true
+    },
+    "prepareJavaIndexMs": 2934.0170829999997,
+    "prepareJavaIndexReconciled": true,
+    "prepareJavaIndexStatus": {
+      "state": "READY",
+      "indexedGeneration": 0,
+      "files": 629,
+      "types": 761,
+      "methods": 3098,
+      "edges": 21099,
+      "snapshotBytes": 2159305,
+      "pendingForeground": 0,
+      "pendingBackground": 0,
+      "coverage": [
+        {
+          "root": "apps/cipherlink-backend/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 32,
+          "indexedFiles": 32,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:42.655Z"
+        },
+        {
+          "root": "apps/cipherlink-backend/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 17,
+          "indexedFiles": 17,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:42.655Z"
+        },
+        {
+          "root": "apps/cipherlink-gateway/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 6,
+          "indexedFiles": 6,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:42.655Z"
+        },
+        {
+          "root": "apps/cipherlink-gateway/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 3,
+          "indexedFiles": 3,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:42.655Z"
+        },
+        {
+          "root": "modules/account/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 74,
+          "indexedFiles": 74,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:42.655Z"
+        },
+        {
+          "root": "modules/account/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 13,
+          "indexedFiles": 13,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:42.655Z"
+        },
+        {
+          "root": "modules/audit/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 22,
+          "indexedFiles": 22,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:42.655Z"
+        },
+        {
+          "root": "modules/audit/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 6,
+          "indexedFiles": 6,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:42.655Z"
+        },
+        {
+          "root": "modules/auth/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 47,
+          "indexedFiles": 47,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:42.655Z"
+        },
+        {
+          "root": "modules/auth/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 7,
+          "indexedFiles": 7,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:42.655Z"
+        },
+        {
+          "root": "modules/client/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 39,
+          "indexedFiles": 39,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:42.655Z"
+        },
+        {
+          "root": "modules/client/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 10,
+          "indexedFiles": 10,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:42.655Z"
+        },
+        {
+          "root": "modules/common/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 38,
+          "indexedFiles": 38,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:42.655Z"
+        },
+        {
+          "root": "modules/common/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 16,
+          "indexedFiles": 16,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:42.655Z"
+        },
+        {
+          "root": "modules/integration/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 31,
+          "indexedFiles": 31,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:42.655Z"
+        },
+        {
+          "root": "modules/integration/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 12,
+          "indexedFiles": 12,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:42.655Z"
+        },
+        {
+          "root": "modules/organization/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 59,
+          "indexedFiles": 59,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:42.655Z"
+        },
+        {
+          "root": "modules/organization/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 11,
+          "indexedFiles": 11,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:42.655Z"
+        },
+        {
+          "root": "modules/rbac/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 45,
+          "indexedFiles": 45,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:42.655Z"
+        },
+        {
+          "root": "modules/rbac/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 3,
+          "indexedFiles": 3,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:42.655Z"
+        },
+        {
+          "root": "modules/storage/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 40,
+          "indexedFiles": 40,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:42.655Z"
+        },
+        {
+          "root": "modules/storage/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 13,
+          "indexedFiles": 13,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:42.655Z"
+        },
+        {
+          "root": "modules/transfer/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 60,
+          "indexedFiles": 60,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:42.655Z"
+        },
+        {
+          "root": "modules/transfer/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 7,
+          "indexedFiles": 7,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:42.655Z"
+        },
+        {
+          "root": "modules/worker/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 14,
+          "indexedFiles": 14,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:42.655Z"
+        },
+        {
+          "root": "modules/worker/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 3,
+          "indexedFiles": 3,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:42.655Z"
+        },
+        {
+          "root": "src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 1,
+          "indexedFiles": 1,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:33:42.655Z"
+        }
+      ],
+      "resourceCoverage": [
+        {
+          "root": "apps/cipherlink-backend/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "apps/cipherlink-gateway/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "docs/sql",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        }
+      ]
+    },
+    "indexPrepareTimeoutMs": 600000,
+    "prepareWarmMs": 0,
+    "prepareWarmPhaseMs": {}
+  },
+  "totals": {
+    "rawSearchPayload": 11321.28,
+    "readingPayload": 6049.4,
+    "totalAgentVisiblePayload": 17370.68,
+    "estimatedTokens": 4342.8,
+    "elapsedMs": 39.79173671999995,
+    "roundTrips": 7,
+    "returnedFiles": 17.8,
+    "hitFiles": 6.6,
+    "precision": 0.3734886458570669,
+    "recall": 0.8964285714285716,
+    "pCandAt5": 0.7200000000000004,
+    "pCandAt10": 0.5199999999999999,
+    "rCand": 0.8964285714285716,
+    "pRead": 0.6666666666666669,
+    "rReadMust": 1,
+    "readPlanItems": 6,
+    "rgRawBytesSuppressed": 156560.4,
+    "rgRawBytesExposed": 0,
+    "elapsedMsP50": 32.24987500000043,
+    "elapsedMsP95": 96.03583300000037,
+    "rawSearchPayloadP50": 11589,
+    "rawSearchPayloadP95": 13670,
+    "readingPayloadP50": 5066,
+    "readingPayloadP95": 8984,
+    "totalAgentVisiblePayloadP50": 17513,
+    "totalAgentVisiblePayloadP95": 22654,
+    "estimatedTokensP50": 4378,
+    "estimatedTokensP95": 5664
+  },
+  "rows": [
+    {
+      "id": "client-update-check",
+      "name": "ClientUpdateController#check",
+      "attempts": [
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 10298,
+          "readingPayload": 4910,
+          "totalAgentVisiblePayload": 15208,
+          "estimatedTokens": 3802,
+          "elapsedMs": 58.77208400000018,
+          "roundTrips": 7,
+          "returnedFiles": 16,
+          "hitFiles": 6,
+          "precision": 0.375,
+          "recall": 1,
+          "pCandAt5": 1,
+          "pCandAt10": 0.6,
+          "rCand": 1,
+          "pRead": 0.8333333333333334,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 37280,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "ClientUpdateController#check",
+              "file": "modules/client/src/main/java/com/hhtele/cipherlink/client/interfaces/web/ClientUpdateController.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ClientUpdateController#check",
+              "file": "modules/client/src/main/java/com/hhtele/cipherlink/client/interfaces/dto/ClientUpdateCheckRequest.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ClientUpdateController#check",
+              "file": "modules/client/src/main/java/com/hhtele/cipherlink/client/interfaces/dto/ClientUpdateCheckResponse.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ClientUpdateController#check",
+              "file": "modules/client/src/main/java/com/hhtele/cipherlink/client/interfaces/ClientResponseAssembler.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ClientUpdateController#check",
+              "file": "modules/client/src/main/java/com/hhtele/cipherlink/client/application/ClientUpdateAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ClientUpdateController#check",
+              "file": "modules/client/src/main/java/com/hhtele/cipherlink/client/application/CheckClientUpdateCommand.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 10298,
+          "readingPayload": 4910,
+          "totalAgentVisiblePayload": 15208,
+          "estimatedTokens": 3802,
+          "elapsedMs": 15.666249999999764,
+          "roundTrips": 7,
+          "returnedFiles": 16,
+          "hitFiles": 6,
+          "precision": 0.375,
+          "recall": 1,
+          "pCandAt5": 1,
+          "pCandAt10": 0.6,
+          "rCand": 1,
+          "pRead": 0.8333333333333334,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 37280,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "ClientUpdateController#check",
+              "file": "modules/client/src/main/java/com/hhtele/cipherlink/client/interfaces/web/ClientUpdateController.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ClientUpdateController#check",
+              "file": "modules/client/src/main/java/com/hhtele/cipherlink/client/interfaces/dto/ClientUpdateCheckRequest.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ClientUpdateController#check",
+              "file": "modules/client/src/main/java/com/hhtele/cipherlink/client/interfaces/dto/ClientUpdateCheckResponse.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ClientUpdateController#check",
+              "file": "modules/client/src/main/java/com/hhtele/cipherlink/client/interfaces/ClientResponseAssembler.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ClientUpdateController#check",
+              "file": "modules/client/src/main/java/com/hhtele/cipherlink/client/application/ClientUpdateAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ClientUpdateController#check",
+              "file": "modules/client/src/main/java/com/hhtele/cipherlink/client/application/CheckClientUpdateCommand.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 10298,
+          "readingPayload": 4910,
+          "totalAgentVisiblePayload": 15208,
+          "estimatedTokens": 3802,
+          "elapsedMs": 15.578874999999698,
+          "roundTrips": 7,
+          "returnedFiles": 16,
+          "hitFiles": 6,
+          "precision": 0.375,
+          "recall": 1,
+          "pCandAt5": 1,
+          "pCandAt10": 0.6,
+          "rCand": 1,
+          "pRead": 0.8333333333333334,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 37280,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "ClientUpdateController#check",
+              "file": "modules/client/src/main/java/com/hhtele/cipherlink/client/interfaces/web/ClientUpdateController.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ClientUpdateController#check",
+              "file": "modules/client/src/main/java/com/hhtele/cipherlink/client/interfaces/dto/ClientUpdateCheckRequest.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ClientUpdateController#check",
+              "file": "modules/client/src/main/java/com/hhtele/cipherlink/client/interfaces/dto/ClientUpdateCheckResponse.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ClientUpdateController#check",
+              "file": "modules/client/src/main/java/com/hhtele/cipherlink/client/interfaces/ClientResponseAssembler.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ClientUpdateController#check",
+              "file": "modules/client/src/main/java/com/hhtele/cipherlink/client/application/ClientUpdateAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ClientUpdateController#check",
+              "file": "modules/client/src/main/java/com/hhtele/cipherlink/client/application/CheckClientUpdateCommand.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 10298,
+          "readingPayload": 4910,
+          "totalAgentVisiblePayload": 15208,
+          "estimatedTokens": 3802,
+          "elapsedMs": 13.851874999999836,
+          "roundTrips": 7,
+          "returnedFiles": 16,
+          "hitFiles": 6,
+          "precision": 0.375,
+          "recall": 1,
+          "pCandAt5": 1,
+          "pCandAt10": 0.6,
+          "rCand": 1,
+          "pRead": 0.8333333333333334,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 37280,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "ClientUpdateController#check",
+              "file": "modules/client/src/main/java/com/hhtele/cipherlink/client/interfaces/web/ClientUpdateController.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ClientUpdateController#check",
+              "file": "modules/client/src/main/java/com/hhtele/cipherlink/client/interfaces/dto/ClientUpdateCheckRequest.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ClientUpdateController#check",
+              "file": "modules/client/src/main/java/com/hhtele/cipherlink/client/interfaces/dto/ClientUpdateCheckResponse.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ClientUpdateController#check",
+              "file": "modules/client/src/main/java/com/hhtele/cipherlink/client/interfaces/ClientResponseAssembler.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ClientUpdateController#check",
+              "file": "modules/client/src/main/java/com/hhtele/cipherlink/client/application/ClientUpdateAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ClientUpdateController#check",
+              "file": "modules/client/src/main/java/com/hhtele/cipherlink/client/application/CheckClientUpdateCommand.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 10298,
+          "readingPayload": 4910,
+          "totalAgentVisiblePayload": 15208,
+          "estimatedTokens": 3802,
+          "elapsedMs": 14.091207999999824,
+          "roundTrips": 7,
+          "returnedFiles": 16,
+          "hitFiles": 6,
+          "precision": 0.375,
+          "recall": 1,
+          "pCandAt5": 1,
+          "pCandAt10": 0.6,
+          "rCand": 1,
+          "pRead": 0.8333333333333334,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 37280,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "ClientUpdateController#check",
+              "file": "modules/client/src/main/java/com/hhtele/cipherlink/client/interfaces/web/ClientUpdateController.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ClientUpdateController#check",
+              "file": "modules/client/src/main/java/com/hhtele/cipherlink/client/interfaces/dto/ClientUpdateCheckRequest.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ClientUpdateController#check",
+              "file": "modules/client/src/main/java/com/hhtele/cipherlink/client/interfaces/dto/ClientUpdateCheckResponse.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ClientUpdateController#check",
+              "file": "modules/client/src/main/java/com/hhtele/cipherlink/client/interfaces/ClientResponseAssembler.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ClientUpdateController#check",
+              "file": "modules/client/src/main/java/com/hhtele/cipherlink/client/application/ClientUpdateAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ClientUpdateController#check",
+              "file": "modules/client/src/main/java/com/hhtele/cipherlink/client/application/CheckClientUpdateCommand.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        }
+      ],
+      "summary": {
+        "rawSearchPayload": 10298,
+        "readingPayload": 4910,
+        "totalAgentVisiblePayload": 15208,
+        "estimatedTokens": 3802,
+        "elapsedMs": 23.59205839999986,
+        "roundTrips": 7,
+        "returnedFiles": 16,
+        "hitFiles": 6,
+        "precision": 0.375,
+        "recall": 1,
+        "pCandAt5": 1,
+        "pCandAt10": 0.6,
+        "rCand": 1,
+        "pRead": 0.8333333333333334,
+        "rReadMust": 1,
+        "readPlanItems": 6,
+        "rgRawBytesSuppressed": 37280,
+        "rgRawBytesExposed": 0,
+        "elapsedMsP50": 15.578874999999698,
+        "elapsedMsP95": 58.77208400000018,
+        "rawSearchPayloadP50": 10298,
+        "rawSearchPayloadP95": 10298,
+        "readingPayloadP50": 4910,
+        "readingPayloadP95": 4910,
+        "totalAgentVisiblePayloadP50": 15208,
+        "totalAgentVisiblePayloadP95": 15208,
+        "estimatedTokensP50": 3802,
+        "estimatedTokensP95": 3802
+      }
+    },
+    {
+      "id": "transfer-upload-init",
+      "name": "TransferUploadController#init",
+      "attempts": [
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 11589,
+          "readingPayload": 7026,
+          "totalAgentVisiblePayload": 18615,
+          "estimatedTokens": 4654,
+          "elapsedMs": 96.03583300000037,
+          "roundTrips": 7,
+          "returnedFiles": 18,
+          "hitFiles": 7,
+          "precision": 0.3888888888888889,
+          "recall": 1,
+          "pCandAt5": 0.8,
+          "pCandAt10": 0.6,
+          "rCand": 1,
+          "pRead": 0.6666666666666666,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 111078,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/interfaces/web/TransferUploadController.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/application/TransferAppService.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/interfaces/dto/InitUploadRequest.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/interfaces/dto/InitUploadResponse.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/application/DefaultTransferAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/application/TransferRepository.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/test/java/com/hhtele/cipherlink/transfer/interfaces/web/TransferUploadControllerTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 11589,
+          "readingPayload": 7026,
+          "totalAgentVisiblePayload": 18615,
+          "estimatedTokens": 4654,
+          "elapsedMs": 38.16199999999981,
+          "roundTrips": 7,
+          "returnedFiles": 18,
+          "hitFiles": 7,
+          "precision": 0.3888888888888889,
+          "recall": 1,
+          "pCandAt5": 0.8,
+          "pCandAt10": 0.6,
+          "rCand": 1,
+          "pRead": 0.6666666666666666,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 111078,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/interfaces/web/TransferUploadController.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/application/TransferAppService.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/interfaces/dto/InitUploadRequest.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/interfaces/dto/InitUploadResponse.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/application/DefaultTransferAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/application/TransferRepository.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/test/java/com/hhtele/cipherlink/transfer/interfaces/web/TransferUploadControllerTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 11589,
+          "readingPayload": 7026,
+          "totalAgentVisiblePayload": 18615,
+          "estimatedTokens": 4654,
+          "elapsedMs": 34.38524999999936,
+          "roundTrips": 7,
+          "returnedFiles": 18,
+          "hitFiles": 7,
+          "precision": 0.3888888888888889,
+          "recall": 1,
+          "pCandAt5": 0.8,
+          "pCandAt10": 0.6,
+          "rCand": 1,
+          "pRead": 0.6666666666666666,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 111078,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/interfaces/web/TransferUploadController.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/application/TransferAppService.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/interfaces/dto/InitUploadRequest.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/interfaces/dto/InitUploadResponse.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/application/DefaultTransferAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/application/TransferRepository.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/test/java/com/hhtele/cipherlink/transfer/interfaces/web/TransferUploadControllerTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 11589,
+          "readingPayload": 7026,
+          "totalAgentVisiblePayload": 18615,
+          "estimatedTokens": 4654,
+          "elapsedMs": 38.21124999999938,
+          "roundTrips": 7,
+          "returnedFiles": 18,
+          "hitFiles": 7,
+          "precision": 0.3888888888888889,
+          "recall": 1,
+          "pCandAt5": 0.8,
+          "pCandAt10": 0.6,
+          "rCand": 1,
+          "pRead": 0.6666666666666666,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 111078,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/interfaces/web/TransferUploadController.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/application/TransferAppService.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/interfaces/dto/InitUploadRequest.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/interfaces/dto/InitUploadResponse.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/application/DefaultTransferAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/application/TransferRepository.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/test/java/com/hhtele/cipherlink/transfer/interfaces/web/TransferUploadControllerTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 11589,
+          "readingPayload": 7026,
+          "totalAgentVisiblePayload": 18615,
+          "estimatedTokens": 4654,
+          "elapsedMs": 33.28670899999997,
+          "roundTrips": 7,
+          "returnedFiles": 18,
+          "hitFiles": 7,
+          "precision": 0.3888888888888889,
+          "recall": 1,
+          "pCandAt5": 0.8,
+          "pCandAt10": 0.6,
+          "rCand": 1,
+          "pRead": 0.6666666666666666,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 111078,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/interfaces/web/TransferUploadController.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/application/TransferAppService.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/interfaces/dto/InitUploadRequest.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/interfaces/dto/InitUploadResponse.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/application/DefaultTransferAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/application/TransferRepository.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "TransferUploadController#init",
+              "file": "modules/transfer/src/test/java/com/hhtele/cipherlink/transfer/interfaces/web/TransferUploadControllerTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        }
+      ],
+      "summary": {
+        "rawSearchPayload": 11589,
+        "readingPayload": 7026,
+        "totalAgentVisiblePayload": 18615,
+        "estimatedTokens": 4654,
+        "elapsedMs": 48.016208399999776,
+        "roundTrips": 7,
+        "returnedFiles": 18,
+        "hitFiles": 7,
+        "precision": 0.3888888888888889,
+        "recall": 1,
+        "pCandAt5": 0.8,
+        "pCandAt10": 0.6,
+        "rCand": 1,
+        "pRead": 0.6666666666666666,
+        "rReadMust": 1,
+        "readPlanItems": 6,
+        "rgRawBytesSuppressed": 111078,
+        "rgRawBytesExposed": 0,
+        "elapsedMsP50": 38.16199999999981,
+        "elapsedMsP95": 96.03583300000037,
+        "rawSearchPayloadP50": 11589,
+        "rawSearchPayloadP95": 11589,
+        "readingPayloadP50": 7026,
+        "readingPayloadP95": 7026,
+        "totalAgentVisiblePayloadP50": 18615,
+        "totalAgentVisiblePayloadP95": 18615,
+        "estimatedTokensP50": 4654,
+        "estimatedTokensP95": 4654
+      }
+    },
+    {
+      "id": "transfer-upload-session-repository",
+      "name": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+      "attempts": [
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 13671,
+          "readingPayload": 8984,
+          "totalAgentVisiblePayload": 22655,
+          "estimatedTokens": 5664,
+          "elapsedMs": 145.68041699999958,
+          "roundTrips": 7,
+          "returnedFiles": 22,
+          "hitFiles": 6,
+          "precision": 0.2727272727272727,
+          "recall": 0.8571428571428571,
+          "pCandAt5": 0.4,
+          "pCandAt10": 0.3,
+          "rCand": 0.8571428571428571,
+          "pRead": 0.5,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 463615,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/application/TransferRepository.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/infrastructure/persistence/MybatisTransferRepository.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/infrastructure/persistence/mapper/UploadSessionMapper.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/infrastructure/persistence/UploadSessionViewDO.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/application/DefaultTransferAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/infrastructure/persistence/UploadSessionDO.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": false
+            },
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/test/java/com/hhtele/cipherlink/transfer/application/DefaultTransferAppServiceTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 13670,
+          "readingPayload": 8984,
+          "totalAgentVisiblePayload": 22654,
+          "estimatedTokens": 5664,
+          "elapsedMs": 58.14958399999978,
+          "roundTrips": 7,
+          "returnedFiles": 22,
+          "hitFiles": 6,
+          "precision": 0.2727272727272727,
+          "recall": 0.8571428571428571,
+          "pCandAt5": 0.4,
+          "pCandAt10": 0.3,
+          "rCand": 0.8571428571428571,
+          "pRead": 0.5,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 463615,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/application/TransferRepository.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/infrastructure/persistence/MybatisTransferRepository.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/infrastructure/persistence/mapper/UploadSessionMapper.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/infrastructure/persistence/UploadSessionViewDO.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/application/DefaultTransferAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/infrastructure/persistence/UploadSessionDO.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": false
+            },
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/test/java/com/hhtele/cipherlink/transfer/application/DefaultTransferAppServiceTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 13670,
+          "readingPayload": 8984,
+          "totalAgentVisiblePayload": 22654,
+          "estimatedTokens": 5664,
+          "elapsedMs": 54.740082999999686,
+          "roundTrips": 7,
+          "returnedFiles": 22,
+          "hitFiles": 6,
+          "precision": 0.2727272727272727,
+          "recall": 0.8571428571428571,
+          "pCandAt5": 0.4,
+          "pCandAt10": 0.3,
+          "rCand": 0.8571428571428571,
+          "pRead": 0.5,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 463615,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/application/TransferRepository.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/infrastructure/persistence/MybatisTransferRepository.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/infrastructure/persistence/mapper/UploadSessionMapper.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/infrastructure/persistence/UploadSessionViewDO.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/application/DefaultTransferAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/infrastructure/persistence/UploadSessionDO.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": false
+            },
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/test/java/com/hhtele/cipherlink/transfer/application/DefaultTransferAppServiceTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 13670,
+          "readingPayload": 8984,
+          "totalAgentVisiblePayload": 22654,
+          "estimatedTokens": 5664,
+          "elapsedMs": 58.609375,
+          "roundTrips": 7,
+          "returnedFiles": 22,
+          "hitFiles": 6,
+          "precision": 0.2727272727272727,
+          "recall": 0.8571428571428571,
+          "pCandAt5": 0.4,
+          "pCandAt10": 0.3,
+          "rCand": 0.8571428571428571,
+          "pRead": 0.5,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 463615,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/application/TransferRepository.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/infrastructure/persistence/MybatisTransferRepository.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/infrastructure/persistence/mapper/UploadSessionMapper.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/infrastructure/persistence/UploadSessionViewDO.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/application/DefaultTransferAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/infrastructure/persistence/UploadSessionDO.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": false
+            },
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/test/java/com/hhtele/cipherlink/transfer/application/DefaultTransferAppServiceTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 13670,
+          "readingPayload": 8984,
+          "totalAgentVisiblePayload": 22654,
+          "estimatedTokens": 5664,
+          "elapsedMs": 51.33179199999995,
+          "roundTrips": 7,
+          "returnedFiles": 22,
+          "hitFiles": 6,
+          "precision": 0.2727272727272727,
+          "recall": 0.8571428571428571,
+          "pCandAt5": 0.4,
+          "pCandAt10": 0.3,
+          "rCand": 0.8571428571428571,
+          "pRead": 0.5,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 463615,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/application/TransferRepository.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/infrastructure/persistence/MybatisTransferRepository.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/infrastructure/persistence/mapper/UploadSessionMapper.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/infrastructure/persistence/UploadSessionViewDO.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/application/DefaultTransferAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/infrastructure/persistence/UploadSessionDO.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": false
+            },
+            {
+              "scenario": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+              "file": "modules/transfer/src/test/java/com/hhtele/cipherlink/transfer/application/DefaultTransferAppServiceTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        }
+      ],
+      "summary": {
+        "rawSearchPayload": 13670.2,
+        "readingPayload": 8984,
+        "totalAgentVisiblePayload": 22654.2,
+        "estimatedTokens": 5664,
+        "elapsedMs": 73.7022501999998,
+        "roundTrips": 7,
+        "returnedFiles": 22,
+        "hitFiles": 6,
+        "precision": 0.2727272727272727,
+        "recall": 0.8571428571428571,
+        "pCandAt5": 0.4,
+        "pCandAt10": 0.3,
+        "rCand": 0.8571428571428571,
+        "pRead": 0.5,
+        "rReadMust": 1,
+        "readPlanItems": 6,
+        "rgRawBytesSuppressed": 463615,
+        "rgRawBytesExposed": 0,
+        "elapsedMsP50": 58.14958399999978,
+        "elapsedMsP95": 145.68041699999958,
+        "rawSearchPayloadP50": 13670,
+        "rawSearchPayloadP95": 13671,
+        "readingPayloadP50": 8984,
+        "readingPayloadP95": 8984,
+        "totalAgentVisiblePayloadP50": 22654,
+        "totalAgentVisiblePayloadP95": 22655,
+        "estimatedTokensP50": 5664,
+        "estimatedTokensP95": 5664
+      }
+    },
+    {
+      "id": "aliyun-sms-gateway-send",
+      "name": "AliyunSmsGateway#send",
+      "attempts": [
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 12447,
+          "readingPayload": 5066,
+          "totalAgentVisiblePayload": 17513,
+          "estimatedTokens": 4378,
+          "elapsedMs": 88.53708300000017,
+          "roundTrips": 7,
+          "returnedFiles": 19,
+          "hitFiles": 9,
+          "precision": 0.47368421052631576,
+          "recall": 1,
+          "pCandAt5": 0.8,
+          "pCandAt10": 0.7,
+          "rCand": 1,
+          "pRead": 0.8333333333333334,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 135939,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/infrastructure/sms/aliyun/AliyunSmsGateway.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/application/sms/SmsGateway.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/application/sms/SmsSendCommand.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/application/sms/SmsSendResult.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/infrastructure/sms/aliyun/AliyunSmsErrorMapper.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/infrastructure/sms/aliyun/AliyunSmsProviderRequest.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/infrastructure/sms/aliyun/AliyunSmsProviderResponse.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/infrastructure/sms/aliyun/SmsIntegrationProperties.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/test/java/com/hhtele/cipherlink/integration/infrastructure/sms/aliyun/AliyunSmsGatewayTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "port",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 12447,
+          "readingPayload": 5066,
+          "totalAgentVisiblePayload": 17513,
+          "estimatedTokens": 4378,
+          "elapsedMs": 32.24987500000043,
+          "roundTrips": 7,
+          "returnedFiles": 19,
+          "hitFiles": 9,
+          "precision": 0.47368421052631576,
+          "recall": 1,
+          "pCandAt5": 0.8,
+          "pCandAt10": 0.7,
+          "rCand": 1,
+          "pRead": 0.8333333333333334,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 135939,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/infrastructure/sms/aliyun/AliyunSmsGateway.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/application/sms/SmsGateway.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/application/sms/SmsSendCommand.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/application/sms/SmsSendResult.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/infrastructure/sms/aliyun/AliyunSmsErrorMapper.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/infrastructure/sms/aliyun/AliyunSmsProviderRequest.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/infrastructure/sms/aliyun/AliyunSmsProviderResponse.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/infrastructure/sms/aliyun/SmsIntegrationProperties.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/test/java/com/hhtele/cipherlink/integration/infrastructure/sms/aliyun/AliyunSmsGatewayTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "port",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 12447,
+          "readingPayload": 5066,
+          "totalAgentVisiblePayload": 17513,
+          "estimatedTokens": 4378,
+          "elapsedMs": 31.342999999999847,
+          "roundTrips": 7,
+          "returnedFiles": 19,
+          "hitFiles": 9,
+          "precision": 0.47368421052631576,
+          "recall": 1,
+          "pCandAt5": 0.8,
+          "pCandAt10": 0.7,
+          "rCand": 1,
+          "pRead": 0.8333333333333334,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 135939,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/infrastructure/sms/aliyun/AliyunSmsGateway.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/application/sms/SmsGateway.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/application/sms/SmsSendCommand.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/application/sms/SmsSendResult.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/infrastructure/sms/aliyun/AliyunSmsErrorMapper.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/infrastructure/sms/aliyun/AliyunSmsProviderRequest.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/infrastructure/sms/aliyun/AliyunSmsProviderResponse.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/infrastructure/sms/aliyun/SmsIntegrationProperties.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/test/java/com/hhtele/cipherlink/integration/infrastructure/sms/aliyun/AliyunSmsGatewayTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "port",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 12447,
+          "readingPayload": 5066,
+          "totalAgentVisiblePayload": 17513,
+          "estimatedTokens": 4378,
+          "elapsedMs": 29.41620800000055,
+          "roundTrips": 7,
+          "returnedFiles": 19,
+          "hitFiles": 9,
+          "precision": 0.47368421052631576,
+          "recall": 1,
+          "pCandAt5": 0.8,
+          "pCandAt10": 0.7,
+          "rCand": 1,
+          "pRead": 0.8333333333333334,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 135939,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/infrastructure/sms/aliyun/AliyunSmsGateway.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/application/sms/SmsGateway.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/application/sms/SmsSendCommand.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/application/sms/SmsSendResult.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/infrastructure/sms/aliyun/AliyunSmsErrorMapper.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/infrastructure/sms/aliyun/AliyunSmsProviderRequest.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/infrastructure/sms/aliyun/AliyunSmsProviderResponse.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/infrastructure/sms/aliyun/SmsIntegrationProperties.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/test/java/com/hhtele/cipherlink/integration/infrastructure/sms/aliyun/AliyunSmsGatewayTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "port",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 12447,
+          "readingPayload": 5066,
+          "totalAgentVisiblePayload": 17513,
+          "estimatedTokens": 4378,
+          "elapsedMs": 30.080332999999882,
+          "roundTrips": 7,
+          "returnedFiles": 19,
+          "hitFiles": 9,
+          "precision": 0.47368421052631576,
+          "recall": 1,
+          "pCandAt5": 0.8,
+          "pCandAt10": 0.7,
+          "rCand": 1,
+          "pRead": 0.8333333333333334,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 135939,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/infrastructure/sms/aliyun/AliyunSmsGateway.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/application/sms/SmsGateway.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/application/sms/SmsSendCommand.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/application/sms/SmsSendResult.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/infrastructure/sms/aliyun/AliyunSmsErrorMapper.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/infrastructure/sms/aliyun/AliyunSmsProviderRequest.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/infrastructure/sms/aliyun/AliyunSmsProviderResponse.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/infrastructure/sms/aliyun/SmsIntegrationProperties.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "AliyunSmsGateway#send",
+              "file": "modules/integration/src/test/java/com/hhtele/cipherlink/integration/infrastructure/sms/aliyun/AliyunSmsGatewayTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "port",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        }
+      ],
+      "summary": {
+        "rawSearchPayload": 12447,
+        "readingPayload": 5066,
+        "totalAgentVisiblePayload": 17513,
+        "estimatedTokens": 4378,
+        "elapsedMs": 42.325299800000174,
+        "roundTrips": 7,
+        "returnedFiles": 19,
+        "hitFiles": 9,
+        "precision": 0.47368421052631576,
+        "recall": 1,
+        "pCandAt5": 0.8,
+        "pCandAt10": 0.7,
+        "rCand": 1,
+        "pRead": 0.8333333333333334,
+        "rReadMust": 1,
+        "readPlanItems": 6,
+        "rgRawBytesSuppressed": 135939,
+        "rgRawBytesExposed": 0,
+        "elapsedMsP50": 31.342999999999847,
+        "elapsedMsP95": 88.53708300000017,
+        "rawSearchPayloadP50": 12447,
+        "rawSearchPayloadP95": 12447,
+        "readingPayloadP50": 5066,
+        "readingPayloadP95": 5066,
+        "totalAgentVisiblePayloadP50": 17513,
+        "totalAgentVisiblePayloadP95": 17513,
+        "estimatedTokensP50": 4378,
+        "estimatedTokensP95": 4378
+      }
+    },
+    {
+      "id": "operation-log-response-dto",
+      "name": "OperationLogResponse#from",
+      "attempts": [
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 8603,
+          "readingPayload": 4261,
+          "totalAgentVisiblePayload": 12864,
+          "estimatedTokens": 3216,
+          "elapsedMs": 23.39954200000011,
+          "roundTrips": 7,
+          "returnedFiles": 14,
+          "hitFiles": 5,
+          "precision": 0.35714285714285715,
+          "recall": 0.625,
+          "pCandAt5": 0.6,
+          "pCandAt10": 0.4,
+          "rCand": 0.625,
+          "pRead": 0.5,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 34890,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/interfaces/dto/OperationLogResponse.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/interfaces/web/OperationLogController.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/OperationLogRecord.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/interfaces/dto/OperationLogPageResponse.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/OperationLogQueryService.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/DefaultOperationLogAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/interfaces/dto/OperationLogQueryRequest.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": false
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/test/java/com/hhtele/cipherlink/audit/application/DefaultOperationLogAppServiceTest.java",
+              "kind": "side",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "dto",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 8602,
+          "readingPayload": 4261,
+          "totalAgentVisiblePayload": 12863,
+          "estimatedTokens": 3216,
+          "elapsedMs": 9.104417000000467,
+          "roundTrips": 7,
+          "returnedFiles": 14,
+          "hitFiles": 5,
+          "precision": 0.35714285714285715,
+          "recall": 0.625,
+          "pCandAt5": 0.6,
+          "pCandAt10": 0.4,
+          "rCand": 0.625,
+          "pRead": 0.5,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 34890,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/interfaces/dto/OperationLogResponse.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/interfaces/web/OperationLogController.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/OperationLogRecord.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/interfaces/dto/OperationLogPageResponse.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/OperationLogQueryService.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/DefaultOperationLogAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/interfaces/dto/OperationLogQueryRequest.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": false
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/test/java/com/hhtele/cipherlink/audit/application/DefaultOperationLogAppServiceTest.java",
+              "kind": "side",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "dto",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 8602,
+          "readingPayload": 4261,
+          "totalAgentVisiblePayload": 12863,
+          "estimatedTokens": 3216,
+          "elapsedMs": 8.169167000000016,
+          "roundTrips": 7,
+          "returnedFiles": 14,
+          "hitFiles": 5,
+          "precision": 0.35714285714285715,
+          "recall": 0.625,
+          "pCandAt5": 0.6,
+          "pCandAt10": 0.4,
+          "rCand": 0.625,
+          "pRead": 0.5,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 34890,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/interfaces/dto/OperationLogResponse.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/interfaces/web/OperationLogController.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/OperationLogRecord.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/interfaces/dto/OperationLogPageResponse.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/OperationLogQueryService.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/DefaultOperationLogAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/interfaces/dto/OperationLogQueryRequest.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": false
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/test/java/com/hhtele/cipherlink/audit/application/DefaultOperationLogAppServiceTest.java",
+              "kind": "side",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "dto",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 8602,
+          "readingPayload": 4261,
+          "totalAgentVisiblePayload": 12863,
+          "estimatedTokens": 3216,
+          "elapsedMs": 8.581750000000284,
+          "roundTrips": 7,
+          "returnedFiles": 14,
+          "hitFiles": 5,
+          "precision": 0.35714285714285715,
+          "recall": 0.625,
+          "pCandAt5": 0.6,
+          "pCandAt10": 0.4,
+          "rCand": 0.625,
+          "pRead": 0.5,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 34890,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/interfaces/dto/OperationLogResponse.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/interfaces/web/OperationLogController.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/OperationLogRecord.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/interfaces/dto/OperationLogPageResponse.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/OperationLogQueryService.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/DefaultOperationLogAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/interfaces/dto/OperationLogQueryRequest.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": false
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/test/java/com/hhtele/cipherlink/audit/application/DefaultOperationLogAppServiceTest.java",
+              "kind": "side",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "dto",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 8602,
+          "readingPayload": 4261,
+          "totalAgentVisiblePayload": 12863,
+          "estimatedTokens": 3216,
+          "elapsedMs": 7.359457999999904,
+          "roundTrips": 7,
+          "returnedFiles": 14,
+          "hitFiles": 5,
+          "precision": 0.35714285714285715,
+          "recall": 0.625,
+          "pCandAt5": 0.6,
+          "pCandAt10": 0.4,
+          "rCand": 0.625,
+          "pRead": 0.5,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 34890,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/interfaces/dto/OperationLogResponse.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/interfaces/web/OperationLogController.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/OperationLogRecord.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/interfaces/dto/OperationLogPageResponse.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/OperationLogQueryService.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/DefaultOperationLogAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/interfaces/dto/OperationLogQueryRequest.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": false
+            },
+            {
+              "scenario": "OperationLogResponse#from",
+              "file": "modules/audit/src/test/java/com/hhtele/cipherlink/audit/application/DefaultOperationLogAppServiceTest.java",
+              "kind": "side",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "dto",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        }
+      ],
+      "summary": {
+        "rawSearchPayload": 8602.2,
+        "readingPayload": 4261,
+        "totalAgentVisiblePayload": 12863.2,
+        "estimatedTokens": 3216,
+        "elapsedMs": 11.322866800000156,
+        "roundTrips": 7,
+        "returnedFiles": 14,
+        "hitFiles": 5,
+        "precision": 0.35714285714285715,
+        "recall": 0.625,
+        "pCandAt5": 0.6,
+        "pCandAt10": 0.4,
+        "rCand": 0.625,
+        "pRead": 0.5,
+        "rReadMust": 1,
+        "readPlanItems": 6,
+        "rgRawBytesSuppressed": 34890,
+        "rgRawBytesExposed": 0,
+        "elapsedMsP50": 8.581750000000284,
+        "elapsedMsP95": 23.39954200000011,
+        "rawSearchPayloadP50": 8602,
+        "rawSearchPayloadP95": 8603,
+        "readingPayloadP50": 4261,
+        "readingPayloadP95": 4261,
+        "totalAgentVisiblePayloadP50": 12863,
+        "totalAgentVisiblePayloadP95": 12864,
+        "estimatedTokensP50": 3216,
+        "estimatedTokensP95": 3216
+      }
+    }
+  ]
+}
