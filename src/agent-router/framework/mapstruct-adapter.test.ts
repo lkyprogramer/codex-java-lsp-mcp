@@ -12,6 +12,7 @@ import type { ResolvedAnchor } from "../../agent-types.js";
 import { RouterJavaIndex } from "../../java-index/router-java-index.js";
 import { DeadlineBudget } from "../../runtime/deadline-budget.js";
 import type { FrameworkAdapterContext } from "./adapter.js";
+import type { FrameworkIndexView } from "../../java-index/framework-index-view.js";
 import type { CandidateEvidence, EvidenceSignal } from "../evidence.js";
 import { runFrameworkAdapters } from "./runner.js";
 import { mapstructAdapter } from "./mapstruct-adapter.js";
@@ -109,6 +110,45 @@ test("isActive is false for a fully-indexed repo with no MapStruct build marker 
   }
 });
 
+test("isActive detects a MapStruct import from bounded request facts without scanning the whole index", async () => {
+  let globalScanCalls = 0;
+  const mapper = "/repo/src/main/java/demo/OrderMapper.java";
+  const context: FrameworkAdapterContext = {
+    repoRoot: "/repo",
+    anchors: [anchor("/repo/src/main/java/demo/Controller.java")],
+    candidateFiles: [mapper],
+    staticEvidence: [{
+      file: mapper,
+      signals: [{ family: "STATIC_STRUCTURE" } as EvidenceSignal],
+      familyScores: {},
+      finalScore: 0,
+      confidence: "medium",
+      degradation: []
+    }],
+    frameworkIndex: {
+      repositoryMarkers: async () => new Map(),
+      frameworkFactsForFiles: async () => [{
+        relativePath: "src/main/java/demo/OrderMapper.java",
+        module: "",
+        sourceSet: "main",
+        packageName: "demo",
+        imports: [{ qualifiedName: "org.mapstruct.Mapper", wildcard: false, static: false }],
+        types: [], methods: [], fields: [], missingIds: [], truncated: false, coverage: "COMPLETE"
+      }],
+      frameworkStatus: async () => ({ coverage: "complete" }),
+      repositoryFactMarkers: async () => {
+        globalScanCalls += 1;
+        return { importPrefixFound: false, annotationPrefixFound: false };
+      }
+    } as unknown as FrameworkIndexView,
+    generation: 1,
+    budget: DeadlineBudget.fromTimeout(5_000)
+  };
+
+  assert.equal(await mapstructAdapter.isActive(context), true);
+  assert.equal(globalScanCalls, 0, "a non-MapStruct request must not pay a whole-store marker scan");
+});
+
 test("collect links OrderMapper.toResponse's parameter as SOURCE and its return type as TARGET", async () => {
   const router = await readyRouter();
   try {
@@ -198,6 +238,143 @@ test("collect resolves multiple uses= class literals from a brace-list", async (
     assert.deepEqual(
       new Set(uses.map(s => path.basename(s.candidateFile))),
       new Set(["AddressMapper.java", "ContactMapper.java"])
+    );
+  } finally {
+    await router.close();
+  }
+});
+
+test("collect expands a structurally signaled mapper before family scores are materialized", async () => {
+  const router = await readyRouter();
+  try {
+    const orderMapperFile = file("src/main/java/demo/OrderMapper.java");
+    const addressMapperFile = file("src/main/java/demo/AddressMapper.java");
+    const base = await frameworkContextFor(router, repoRoot, [anchor(file("src/main/java/demo/OrderService.java"))], [orderMapperFile]);
+    const context: FrameworkAdapterContext = {
+      ...base,
+      staticEvidence: [{
+        ...base.staticEvidence[0]!,
+        familyScores: {},
+        // The router invokes framework adapters before rankCandidates(), so
+        // normalization has preserved the structural signal but has not yet
+        // populated familyScores.
+        signals: [{ family: "STATIC_STRUCTURE" } as EvidenceSignal]
+      }]
+    };
+
+    const result = await runFrameworkAdapters([mapstructAdapter], context);
+
+    assert.ok(
+      signalsOf(result.outcome.evidence, "MAPSTRUCT_USES").some(signal => signal.candidateFile === addressMapperFile),
+      "a static provider signal must seed the MapStruct traversal before family scoring"
+    );
+  } finally {
+    await router.close();
+  }
+});
+
+test("collect resolves a cross-module uses declaration before the background reconcile reaches its source root", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "mapstruct-cold-cross-module-"));
+  write(root, "pom.xml", "<project><dependencies><dependency><groupId>org.mapstruct</groupId></dependency></dependencies></project>");
+  write(root, "modules/common/src/main/java/common/IdConverter.java", "package common;\npublic class IdConverter {}\n");
+  write(
+    root,
+    "modules/school/src/main/java/school/OrderMapper.java",
+    "package school;\nimport org.mapstruct.Mapper;\nimport common.IdConverter;\n@Mapper(uses = IdConverter.class)\ninterface OrderMapper {}\n"
+  );
+  const cacheDir = mkdtempSync(path.join(tmpdir(), "mapstruct-cold-cross-module-cache-"));
+  const router = RouterJavaIndex.create(root, cacheDir);
+  await router.open(1);
+  try {
+    const mapper = path.join(root, "modules/school/src/main/java/school/OrderMapper.java");
+    const result = await runFrameworkAdapters([mapstructAdapter], await frameworkContextFor(router, root, [anchor(mapper)], [mapper]));
+
+    assert.ok(
+      signalsOf(result.outcome.evidence, "MAPSTRUCT_USES").some(signal => signal.candidateFile.endsWith("modules/common/src/main/java/common/IdConverter.java")),
+      "an explicit cross-module class literal must not wait for the background sweep to discover its conventional source path"
+    );
+  } finally {
+    await router.close();
+  }
+});
+
+test("collect limits a non-anchor mapper to mapping methods that touch the anchor type", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "mapstruct-anchor-scoped-"));
+  write(root, "pom.xml", "<project><dependencies><dependency><groupId>org.mapstruct</groupId></dependency></dependencies></project>");
+  write(root, "src/main/java/demo/Anchor.java", "package demo;\nclass Anchor {}\n");
+  write(root, "src/main/java/demo/Other.java", "package demo;\nclass Other {}\n");
+  write(root, "src/main/java/demo/Response.java", "package demo;\nclass Response {}\n");
+  write(root, "src/main/java/demo/DelegateMapper.java", "package demo;\nclass DelegateMapper {}\n");
+  write(
+    root,
+    "src/main/java/demo/OrderMapper.java",
+    "package demo;\nimport org.mapstruct.Mapper;\nimport demo.DelegateMapper;\n@Mapper(uses = DelegateMapper.class)\ninterface OrderMapper { Response mapOther(Other value); Response mapAnchor(Anchor value); }\n"
+  );
+  const router = await readyRouterAt(root);
+  try {
+    const mapper = path.join(root, "src/main/java/demo/OrderMapper.java");
+    const anchorFile = path.join(root, "src/main/java/demo/Anchor.java");
+    const context = await frameworkContextFor(router, root, [anchor(anchorFile)], [anchorFile, mapper]);
+    const result = await runFrameworkAdapters([mapstructAdapter], context);
+
+    const source = signalsOf(result.outcome.evidence, "MAPSTRUCT_SOURCE");
+    assert.equal(source.length, 1);
+    assert.equal(path.basename(source[0]!.candidateFile), "Anchor.java");
+    const target = signalsOf(result.outcome.evidence, "MAPSTRUCT_TARGET");
+    assert.equal(target.length, 1, "only mapAnchor's return type is in the anchor-scoped mapping path");
+    assert.equal(path.basename(target[0]!.candidateFile), "Response.java");
+    assert.equal(signalsOf(result.outcome.evidence, "MAPSTRUCT_USES").length, 1, "uses remains valid for the structurally connected mapper");
+  } finally {
+    await router.close();
+  }
+});
+
+test("collect ignores @Mapper config class literals that are not uses dependencies", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "mapstruct-config-not-uses-"));
+  write(root, "pom.xml", "<project><dependencies><dependency><groupId>org.mapstruct</groupId></dependency></dependencies></project>");
+  write(root, "src/main/java/demo/MapperConfig.java", "package demo;\nclass MapperConfig {}\n");
+  write(
+    root,
+    "src/main/java/demo/OrderMapper.java",
+    "package demo;\nimport org.mapstruct.Mapper;\n@Mapper(config = MapperConfig.class)\ninterface OrderMapper {}\n"
+  );
+  const router = await readyRouterAt(root);
+  try {
+    const orderMapperFile = path.join(root, "src/main/java/demo/OrderMapper.java");
+    const context = await frameworkContextFor(router, root, [anchor(orderMapperFile)], [orderMapperFile]);
+
+    const result = await runFrameworkAdapters([mapstructAdapter], context);
+
+    assert.equal(
+      signalsOf(result.outcome.evidence, "MAPSTRUCT_USES").length,
+      0,
+      "only @Mapper(uses = ...) may produce MAPSTRUCT_USES evidence"
+    );
+  } finally {
+    await router.close();
+  }
+});
+
+test("collect ignores @Mapper imports class literals that are not uses dependencies", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "mapstruct-imports-not-uses-"));
+  write(root, "pom.xml", "<project><dependencies><dependency><groupId>org.mapstruct</groupId></dependency></dependencies></project>");
+  write(root, "src/main/java/demo/MapperImport.java", "package demo;\nclass MapperImport {}\n");
+  write(
+    root,
+    "src/main/java/demo/OrderMapper.java",
+    "package demo;\nimport org.mapstruct.Mapper;\n@Mapper(imports = MapperImport.class)\ninterface OrderMapper {}\n"
+  );
+  const router = await readyRouterAt(root);
+  try {
+    const orderMapperFile = path.join(root, "src/main/java/demo/OrderMapper.java");
+    const context = await frameworkContextFor(router, root, [anchor(orderMapperFile)], [orderMapperFile]);
+
+    const result = await runFrameworkAdapters([mapstructAdapter], context);
+
+    assert.equal(
+      signalsOf(result.outcome.evidence, "MAPSTRUCT_USES").length,
+      0,
+      "only @Mapper(uses = ...) may produce MAPSTRUCT_USES evidence"
     );
   } finally {
     await router.close();

@@ -109,6 +109,15 @@ test("hasProtectedStructuralSignal reads positive protected deltas from scoreBre
     true,
     "an exact persisted semantic reference must survive candidate-tail trimming"
   );
+  const mapstructUses = noise("/i.java", 10);
+  mapstructUses.categories = ["framework"];
+  mapstructUses.reasons = ["MAPSTRUCT_USES"];
+  mapstructUses.verifiedBy = ["MAPSTRUCT_USES"];
+  assert.equal(
+    hasProtectedStructuralSignal(mapstructUses),
+    true,
+    "an explicitly resolved @Mapper(uses = Type.class) edge must survive lexical candidate-tail trimming"
+  );
 });
 
 test("truncateCandidateTail returns input unchanged when 10 or fewer candidates", () => {
@@ -177,6 +186,50 @@ test("truncateCandidateTail skips tail trimming when structural evidence is too 
   const ranked = [...struct, ...tail];
   const result = truncateCandidateTail(ranked, new Set<CandidateFile>(), 20);
   assert.equal(result.length, 12);
+});
+
+test("a retained MapStruct uses edge does not by itself trigger the structural-tail compression threshold", () => {
+  const direct = Array.from({ length: 5 }, (_, i) => strong(`/s/S${i}.java`, 300 - i));
+  const mapstructUses = Array.from({ length: 2 }, (_, i) => {
+    const file = noise(`/m/Converter${i}.java`, 70 - i);
+    file.categories = ["framework"];
+    file.reasons = ["MAPSTRUCT_USES"];
+    file.verifiedBy = ["MAPSTRUCT_USES"];
+    return file;
+  });
+  const lexicalTail = Array.from({ length: 9 }, (_, i) => noise(`/n/N${i}.java`, 50 - i));
+
+  const result = truncateCandidateTail([...direct, ...mapstructUses, ...lexicalTail], new Set<CandidateFile>(), 20);
+
+  assert.equal(
+    result.length,
+    16,
+    "retaining an explicit MapStruct edge must not shrink unrelated candidates merely by crossing the dynamic-tail threshold"
+  );
+  assert.ok(mapstructUses.every(file => result.includes(file)));
+});
+
+test("MapStruct uses protection remains deterministic without exceeding the caller candidate limit", () => {
+  const anchor = noise("/anchor/OrderMapper.java", 1);
+  anchor.reasons = ["target"];
+  const mapstructUses = Array.from({ length: 25 }, (_, i) => {
+    const file = noise(`/m/Converter${String(i).padStart(2, "0")}.java`, 100 - i);
+    file.categories = ["framework"];
+    file.reasons = ["MAPSTRUCT_USES"];
+    file.verifiedBy = ["MAPSTRUCT_USES"];
+    return file;
+  });
+
+  const result = truncateCandidateTail(
+    [anchor, ...mapstructUses],
+    new Set<CandidateFile>([anchor]),
+    18
+  );
+
+  assert.equal(result.length, 18, "protected framework edges must not break candidateLimit");
+  assert.ok(result.includes(anchor), "a read-plan-covered anchor remains mandatory even with lower score");
+  assert.ok(result.includes(mapstructUses[0]!));
+  assert.ok(!result.includes(mapstructUses.at(-1)!));
 });
 
 test("truncateCandidateTail applies limit to focus-only candidates", () => {

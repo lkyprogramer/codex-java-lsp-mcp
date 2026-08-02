@@ -4,6 +4,7 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { probeLayout } from "../layout-probe.js";
 import { normalizeRepoFile, repoCacheRoot } from "../repo-layout.js";
 import { JavaIndexClient, type JavaIndexOpenOptions } from "./java-index-client.js";
 import type {
@@ -61,6 +62,9 @@ const REPOSITORY_MARKER_MAX_BYTES = 65_536;
 // to this method (how many distinct files the bounded ids may still resolve
 // into), so it stays local.
 const MAX_DECLARATION_PATHS = 64;
+/** A cold partial index may have parsed an anchor before its imported module; retry only a small exact-FQN set through conventional source paths. */
+const MAX_COLD_DECLARATION_FQN_RETRIES = 16;
+const MAX_COLD_DECLARATION_PATH_CHECKS = 512;
 
 const TYPE_REFERENCE_EDGE_KINDS: StaticEdgeKind[] = [
   "FIELD_TYPE",
@@ -123,12 +127,16 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
   private readonly repositoryMarkerCache = new Map<string, string | null>();
   /** Store-local import/annotation summary, one worker request per key and generation. */
   private readonly repositoryFactMarkerCache = new Map<string, { generation: number; markers: FrameworkRepositoryFactMarkers }>();
+  /** Layout-probe source roots are stable through a request and let cold declaration lookup refresh only an exact conventional source path. */
+  private readonly conventionalDeclarationRoots: readonly string[];
 
   constructor(
     private readonly repoRoot: string,
     private readonly client: JavaIndexClient,
     private readonly openOptions: JavaIndexOpenOptions = {}
-  ) {}
+  ) {
+    this.conventionalDeclarationRoots = probeLayout(repoRoot).sourceRoots.map(root => root.relativePath);
+  }
 
   static create(repoRoot: string, cacheDir = repoCacheRoot(repoRoot), openOptions: JavaIndexOpenOptions = {}): RouterJavaIndex {
     return new RouterJavaIndex(repoRoot, new JavaIndexClient(repoRoot, cacheDir), openOptions);
@@ -578,9 +586,28 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
       if (fqn) fqnsNeedingLookup.add(fqn);
     }
     if (fqnsNeedingLookup.size > 0) {
-      const lookups = await this.client.queryTypes([...fqnsNeedingLookup].map(typeText => ({ typeText })));
+      const fqnLookups = [...fqnsNeedingLookup];
+      const lookups = await this.client.queryTypes(fqnLookups.map(typeText => ({ typeText })));
       for (const lookup of lookups) {
         if (lookup.state === "RESOLVED") relativePaths.add(relativePathOfFileId(lookup.type.fileId));
+      }
+      // A request may foreground-refresh its mapper/anchor while the initial
+      // background reconcile has not reached a dependent module yet. The
+      // mapper's import is then visible but its exact FQN declaration is not
+      // in the store. Try only the normal top-level Java path under already
+      // discovered source roots, refresh files that actually exist, then
+      // repeat the exact lookup once. This is deliberately not a name scan
+      // and never guesses an arbitrary binding.
+      const unresolvedFqns = fqnLookups.filter((_, index) => lookups[index]?.state !== "RESOLVED");
+      if (unresolvedFqns.length > 0 && summarizeCoverage(this.client.localStatus()) !== "complete") {
+        const candidates = this.conventionalDeclarationCandidates(unresolvedFqns);
+        if (candidates.length > 0) {
+          await this.ensureFresh(candidates, this.generation);
+          const retries = await this.client.queryTypes(unresolvedFqns.map(typeText => ({ typeText })));
+          for (const lookup of retries) {
+            if (lookup.state === "RESOLVED") relativePaths.add(relativePathOfFileId(lookup.type.fileId));
+          }
+        }
       }
     }
     const boundedPaths = [...relativePaths].slice(0, MAX_DECLARATION_PATHS);
@@ -701,6 +728,28 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
       && root.generation >= generation
       && (relativePath === root.root || relativePath.startsWith(`${root.root}/`))
     );
+  }
+
+  private conventionalDeclarationCandidates(fqns: readonly string[]): string[] {
+    const candidates: string[] = [];
+    let pathChecks = 0;
+    for (const fqn of fqns.slice(0, MAX_COLD_DECLARATION_FQN_RETRIES)) {
+      const topLevelFqn = fqn.split("$")[0] ?? "";
+      const segments = topLevelFqn.split(".");
+      if (segments.length === 0 || segments.some(segment => !/^[A-Za-z_$][\w$]*$/.test(segment))) {
+        continue;
+      }
+      const suffix = `${segments.join(path.sep)}.java`;
+      for (const sourceRoot of this.conventionalDeclarationRoots) {
+        if (pathChecks >= MAX_COLD_DECLARATION_PATH_CHECKS) {
+          return candidates;
+        }
+        pathChecks += 1;
+        const absolutePath = path.join(this.repoRoot, sourceRoot, suffix);
+        if (existsSync(absolutePath)) candidates.push(absolutePath);
+      }
+    }
+    return unique(candidates);
   }
 }
 

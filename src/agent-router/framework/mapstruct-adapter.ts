@@ -22,9 +22,10 @@ import {
   type FrameworkDeclarations,
   type FrameworkFileFacts,
   type FrameworkImport,
-  type FrameworkIndexView
+  type FrameworkIndexView,
+  type FrameworkTypeRef
 } from "../../java-index/framework-index-view.js";
-import type { FrameworkAdapter, FrameworkAdapterContext, FrameworkCollectResult } from "./adapter.js";
+import { hasStaticStructureEvidence, type FrameworkAdapter, type FrameworkAdapterContext, type FrameworkCollectResult } from "./adapter.js";
 
 export const MAPSTRUCT_ADAPTER_ID = "mapstruct";
 export const MAPSTRUCT_ADAPTER_VERSION = "1";
@@ -72,8 +73,7 @@ function usesClassLiteralTargetIds(annotation: FrameworkAnnotation, facts: Frame
   if (!text) return [];
   const explicitImports = facts.imports.filter((imp): imp is FrameworkImport => !imp.wildcard && !imp.static);
   const targetIds: string[] = [];
-  for (const match of text.matchAll(CLASS_LITERAL_PATTERN)) {
-    const captured = match[1]!;
+  for (const captured of usesClassLiterals(text)) {
     if (captured.includes(".")) {
       targetIds.push(`type:${captured}`);
       continue;
@@ -90,11 +90,36 @@ function usesClassLiteralTargetIds(annotation: FrameworkAnnotation, facts: Frame
   return targetIds;
 }
 
+/** Extract only the value assigned to @Mapper's `uses` attribute. `config`,
+ * `imports`, and any future class-valued attributes are not mapper
+ * dependencies and must never create MAPSTRUCT_USES evidence. */
+function usesClassLiterals(argumentsText: string): string[] {
+  const match = /\buses\s*=\s*/.exec(argumentsText);
+  if (!match) return [];
+  let start = match.index + match[0].length;
+  while (/\s/.test(argumentsText[start] ?? "")) start += 1;
+  let end = start;
+  if (argumentsText[start] === "{") {
+    let depth = 0;
+    for (; end < argumentsText.length; end += 1) {
+      const character = argumentsText[end]!;
+      if (character === "{") depth += 1;
+      if (character === "}" && --depth === 0) {
+        end += 1;
+        break;
+      }
+    }
+  } else {
+    while (end < argumentsText.length && argumentsText[end] !== "," && argumentsText[end] !== ")") end += 1;
+  }
+  return [...argumentsText.slice(start, end).matchAll(CLASS_LITERAL_PATTERN)].map(item => item[1]!);
+}
+
 // mirrors spring-adapter.ts's frameworkSeedFiles.
 function frameworkSeedFiles(context: FrameworkAdapterContext): Set<string> {
   const seeds = new Set(context.anchors.map(anchor => anchor.absolutePath));
   for (const candidate of context.staticEvidence) {
-    if ((candidate.familyScores.STATIC_STRUCTURE ?? 0) > 0) {
+    if (hasStaticStructureEvidence(candidate)) {
       seeds.add(candidate.file);
     }
   }
@@ -119,15 +144,33 @@ async function isActive(context: FrameworkAdapterContext): Promise<boolean> {
   const buildMarkers = await context.frameworkIndex.repositoryMarkers(buildMarkerPaths(context));
   if ([...buildMarkers.values()].some(content => MAPSTRUCT_DEPENDENCY_PATTERN.test(content))) return true;
   if (context.budget.expired()) return false;
-  const factMarkers = await context.frameworkIndex.repositoryFactMarkers({
-    importPrefixes: ["org.mapstruct."],
-    annotationPrefixes: ["org.mapstruct."]
-  });
-  if (factMarkers.importPrefixFound || factMarkers.annotationPrefixFound) return true;
+  // Do not scan the complete index just to decide whether this pack runs.
+  // The pack can only produce task-relevant evidence from an anchor or a
+  // structurally connected candidate, so this same bounded surface is both
+  // sufficient for activation and already paid by collect() on a hit.
+  const facts = await context.frameworkIndex.frameworkFactsForFiles([...frameworkSeedFiles(context)], context.generation);
+  if (facts.some(hasMapStructFacts)) return true;
+  if (context.budget.expired()) return false;
   // A partial index cannot prove that MapStruct is absent. Running a bounded pack
   // is safe; treating the absence as definitive would not be.
   const status = await context.frameworkIndex.frameworkStatus();
   return status.coverage !== "complete";
+}
+
+function hasMapStructFacts(facts: FrameworkFileFacts): boolean {
+  return facts.imports.some(imp => imp.qualifiedName === MAPSTRUCT_MAPPER_FQN || imp.qualifiedName.startsWith("org.mapstruct."))
+    || facts.types.some(type => type.annotations.some(annotation => annotation.resolvedFqn?.startsWith("org.mapstruct.") === true));
+}
+
+function typeTouchesAnchor(type: FrameworkTypeRef | undefined, anchorTypeFqns: ReadonlySet<string>): boolean {
+  if (!type) return false;
+  return (type.resolvedFqn !== undefined && anchorTypeFqns.has(type.resolvedFqn))
+    || type.typeArguments.some(argument => typeTouchesAnchor(argument, anchorTypeFqns));
+}
+
+function mappingMethodTouchesAnchor(method: { parameters: readonly { type: FrameworkTypeRef }[]; returnType?: FrameworkTypeRef }, anchorTypeFqns: ReadonlySet<string>): boolean {
+  return method.parameters.some(parameter => typeTouchesAnchor(parameter.type, anchorTypeFqns))
+    || typeTouchesAnchor(method.returnType, anchorTypeFqns);
 }
 
 // mirrors spring-adapter.ts's resolveTargets.
@@ -163,9 +206,20 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
   let timedOut = context.budget.expired();
 
   const seeds = frameworkSeedFiles(context);
-  const candidateFiles = context.candidateFiles.filter(candidate => seeds.has(candidate));
+  // Anchor facts are needed to keep a mapper discovered through a structural
+  // candidate from fanning out across unrelated mapping methods. The runner
+  // has already capped candidates, and FrameworkIndexView applies its own
+  // bounded input cap, so this remains request-bounded.
+  const candidateFiles = [...seeds];
   const facts: FrameworkFileFacts[] = timedOut ? [] : await context.frameworkIndex.frameworkFactsForFiles(candidateFiles, context.generation);
   if (!timedOut && context.budget.expired()) timedOut = true;
+
+  const anchorPaths = new Set(context.anchors.map(anchor => path.resolve(anchor.absolutePath)));
+  const anchorTypeFqns = new Set(
+    facts
+      .filter(factsForFile => anchorPaths.has(path.resolve(context.repoRoot, factsForFile.relativePath)))
+      .flatMap(factsForFile => factsForFile.types.map(type => type.fqn).filter((fqn): fqn is string => fqn !== undefined))
+  );
 
   const pending: PendingEvidence[] = [];
   if (!timedOut) {
@@ -176,6 +230,7 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
         break;
       }
       const absolutePath = path.resolve(context.repoRoot, factsForFile.relativePath);
+      const mapperIsAnchor = anchorPaths.has(absolutePath);
       for (const type of factsForFile.types) {
         const mapperAnnotation = type.annotations.find(a => a.resolvedFqn === MAPSTRUCT_MAPPER_FQN);
         if (!mapperAnnotation) continue;
@@ -190,6 +245,13 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
         }
         for (const method of factsForFile.methods) {
           if (method.ownerTypeId !== type.typeId) continue;
+          // A mapper nominated through a structural edge is relevant, but its
+          // entire method inventory is not automatically relevant to the
+          // task. Follow only a mapping method that actually names an anchor
+          // type; an explicit mapper anchor still exposes its complete local
+          // mapping surface. This prevents one busy mapper from evicting the
+          // task's independently discovered candidate tail.
+          if (!mapperIsAnchor && !mappingMethodTouchesAnchor(method, anchorTypeFqns)) continue;
           for (const parameter of method.parameters) {
             if (!parameter.type.resolvedFqn) continue;
             const kind: MapStructEvidenceKind = hasAnnotation(parameter.annotations, MAPSTRUCT_MAPPING_TARGET_FQN)

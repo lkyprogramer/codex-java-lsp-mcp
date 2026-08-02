@@ -131,6 +131,11 @@ export function formatAnchor(anchor: ResolvedAnchor): Record<string, unknown> {
 
 export function applyVerbosity(payload: ImpactResult, verbosity: ImpactVerbosity): void {
   payload.evidenceGaps = unique(payload.evidenceGaps);
+  const framework = payload.metrics.framework as Record<string, unknown> | undefined;
+  const generatedCode = framework?.generatedCode as Record<string, unknown> | undefined;
+  if (generatedCode?.semantics !== undefined) {
+    payload.metrics.generatedSemantics = generatedCode.semantics;
+  }
   if (verbosity === "diagnostic") {
     return;
   }
@@ -142,7 +147,9 @@ export function applyVerbosity(payload: ImpactResult, verbosity: ImpactVerbosity
     ...section,
     files: []
   }));
-  payload.evidenceGaps = payload.evidenceGaps.map(shortEvidenceGap);
+  const preservedGaps = payload.evidenceGaps.filter(isLombokCompletenessGap);
+  const ordinaryGaps = payload.evidenceGaps.filter(gap => !isLombokCompletenessGap(gap));
+  payload.evidenceGaps = [...preservedGaps, ...ordinaryGaps].map(shortEvidenceGap);
   payload.evidenceGaps = payload.evidenceGaps.slice(0, verbosity === "compact" ? 2 : 3);
   payload.metrics = compact({
     routingVersion: payload.metrics.routingVersion,
@@ -151,6 +158,7 @@ export function applyVerbosity(payload: ImpactResult, verbosity: ImpactVerbosity
     // Freshness is a small correctness signal; keep it in every verbosity.
     freshness: payload.metrics.freshness,
     javaIndex: slimJavaIndex(payload.metrics.javaIndex),
+    generatedSemantics: generatedCode?.semantics,
     outputBytes: payload.metrics.outputBytes
   });
 }
@@ -220,4 +228,8 @@ function shortEvidenceGap(gap: string): string {
     return "Lombok agent missing; generated members may not resolve.";
   }
   return gap;
+}
+
+function isLombokCompletenessGap(gap: string): boolean {
+  return gap.startsWith("Lombok is detected but the JDT javaagent is missing/disabled;");
 }

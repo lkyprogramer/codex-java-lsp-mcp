@@ -137,7 +137,7 @@ test("collect emits JPA_DERIVED_QUERY only for the anchored method, scoped like 
   try {
     const repositoryFile = file("src/main/java/demo/OrderRepository.java");
     const entityFile = file("src/main/java/demo/OrderEntity.java");
-    const findByAnchor = anchor(repositoryFile, { kind: "method", symbolName: "findByCustomerId", line: 7 });
+    const findByAnchor = anchor(repositoryFile, { kind: "method", symbolName: "findByCustomerId", line: 11 });
     const context = await frameworkContextFor(router, repoRoot, [findByAnchor], [repositoryFile]);
 
     const result = await runFrameworkAdapters([jpaAdapter], context);
@@ -149,6 +149,27 @@ test("collect emits JPA_DERIVED_QUERY only for the anchored method, scoped like 
 
     // Repository-entity evidence is type-level, unaffected by the method anchor.
     assert.equal(signalsOf(result.outcome.evidence, "JPA_REPOSITORY_ENTITY").length, 1);
+  } finally {
+    await router.close();
+  }
+});
+
+test("collect requires By after a derived-query prefix, excluding findAll and getFoo", async () => {
+  const router = await readyRouter();
+  try {
+    const repositoryFile = file("src/main/java/demo/OrderRepository.java");
+    const context = await frameworkContextFor(router, repoRoot, [anchor(repositoryFile)], [repositoryFile]);
+
+    const result = await runFrameworkAdapters([jpaAdapter], context);
+
+    assert.deepEqual(
+      signalsOf(result.outcome.evidence, "JPA_DERIVED_QUERY").map(signal => signal.detail).sort(),
+      [
+        "OrderRepository.countByCustomerId() derived query",
+        "OrderRepository.findByCustomerId() derived query"
+      ],
+      "findAll and getFoo are repository methods, not conservative prefix-plus-By derived-query matches"
+    );
   } finally {
     await router.close();
   }

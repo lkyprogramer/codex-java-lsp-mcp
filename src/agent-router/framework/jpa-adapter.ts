@@ -25,7 +25,7 @@ import {
   normalizeJpaAnnotations,
   JPA_REPOSITORY_BASE_FQNS
 } from "./jpa-annotations.js";
-import type { FrameworkAdapter, FrameworkAdapterContext, FrameworkCollectResult } from "./adapter.js";
+import { hasStaticStructureEvidence, type FrameworkAdapter, type FrameworkAdapterContext, type FrameworkCollectResult } from "./adapter.js";
 
 export const JPA_ADAPTER_ID = "jpa";
 export const JPA_ADAPTER_VERSION = "1";
@@ -63,7 +63,7 @@ type PendingEvidence = {
 function frameworkSeedFiles(context: FrameworkAdapterContext): Set<string> {
   const seeds = new Set(context.anchors.map(anchor => anchor.absolutePath));
   for (const candidate of context.staticEvidence) {
-    if ((candidate.familyScores.STATIC_STRUCTURE ?? 0) > 0) {
+    if (hasStaticStructureEvidence(candidate)) {
       seeds.add(candidate.file);
     }
   }
@@ -157,9 +157,8 @@ function relatedEntityRef(fieldType: FrameworkTypeRef): FrameworkTypeRef {
 
 function isDerivedQueryMethodName(name: string): boolean {
   return DERIVED_QUERY_PREFIXES.some(prefix => {
-    if (!name.startsWith(prefix)) return false;
-    const rest = name.slice(prefix.length);
-    return rest.length === 0 || /^[A-Z]/.test(rest);
+    const marker = `${prefix}By`;
+    return name.startsWith(marker) && /^[A-Z]/.test(name.slice(marker.length));
   });
 }
 

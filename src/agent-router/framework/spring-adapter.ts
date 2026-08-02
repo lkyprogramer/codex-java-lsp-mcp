@@ -16,7 +16,7 @@ import {
 } from "../../java-index/framework-index-view.js";
 import type { SourceRange } from "../../runtime/source-range.js";
 import type { TypeResolutionStrategy } from "../../java-index/index-types.js";
-import type { FrameworkAdapter, FrameworkAdapterContext, FrameworkCollectResult } from "./adapter.js";
+import { hasStaticStructureEvidence, type FrameworkAdapter, type FrameworkAdapterContext, type FrameworkCollectResult } from "./adapter.js";
 import {
   hasAnnotation,
   isController,
@@ -102,7 +102,7 @@ type TypeContext = {
 function frameworkSeedFiles(context: FrameworkAdapterContext): Set<string> {
   const seeds = new Set(context.anchors.map(anchor => anchor.absolutePath));
   for (const candidate of context.staticEvidence) {
-    if ((candidate.familyScores.STATIC_STRUCTURE ?? 0) > 0) {
+    if (hasStaticStructureEvidence(candidate)) {
       seeds.add(candidate.file);
     }
   }

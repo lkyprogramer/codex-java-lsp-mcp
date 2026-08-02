@@ -154,6 +154,28 @@ test("declarationsById hydrates a method/field/type id across two files with one
   }
 });
 
+test("declarationsById foreground-refreshes a conventional cross-module type path while the initial sweep is incomplete", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "framework-view-cold-decl-repo-"));
+  write(repoRoot, "modules/school/src/main/java/school/Mapper.java", "package school;\nimport common.IdConverter;\nclass Mapper {}\n");
+  write(repoRoot, "modules/common/src/main/java/common/IdConverter.java", "package common;\npublic class IdConverter {}\n");
+  const cacheDir = mkdtempSync(path.join(tmpdir(), "framework-view-cold-decl-cache-"));
+  const router = RouterJavaIndex.create(repoRoot, cacheDir);
+  await router.open(1);
+  try {
+    // This is the production ordering: an anchor may be foreground-refreshed
+    // before the background reconcile reaches its imported module.
+    await router.frameworkFactsFor(path.join(repoRoot, "modules/school/src/main/java/school/Mapper.java"), 1);
+
+    const result = await router.declarationsById(["type:common.IdConverter"]);
+
+    assert.deepEqual(result.missingIds, []);
+    assert.deepEqual(result.types.map(type => type.fqn), ["common.IdConverter"]);
+    assert.equal(result.truncated, false);
+  } finally {
+    await router.close();
+  }
+});
+
 test("declarationsById caps an oversized id list rather than issuing an unbounded worker query, and reports it as truncated", async () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), "framework-view-decl-cap-repo-"));
   write(repoRoot, "src/main/java/demo/Only.java", "package demo;\nclass Only {\n  void run() {}\n}\n");

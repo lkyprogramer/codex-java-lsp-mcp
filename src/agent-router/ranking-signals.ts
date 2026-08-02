@@ -118,6 +118,29 @@ export function hasProtectedStructuralSignal(candidate: CandidateFile): boolean 
   if ((candidate.verifiedBy || []).some(source => source === "persisted-reference" || source === "persisted-implementation" || source === "persisted-typeHierarchy")) {
     return true;
   }
+  // MapStruct's `uses = Type.class` is an explicit annotation class literal
+  // whose target has already been resolved to a repository declaration. It
+  // is generated-code structural evidence, not a name-search hit; keep it
+  // visible even when the lexical tail is dense. It intentionally remains a
+  // structural (not verified-quota) read-plan class in read-plan-budget.ts.
+  if (candidate.reasons.includes("MAPSTRUCT_USES") && (candidate.verifiedBy || []).includes("MAPSTRUCT_USES")) {
+    return true;
+  }
+  return (candidate.scoreBreakdown || []).some(item => item.delta > 0 && STRUCTURAL_SIGNAL_IDS.has(item.id));
+}
+
+/**
+ * Retention and evidence density are deliberately different questions. An
+ * explicit MapStruct `uses` edge deserves tail retention, but it is a
+ * mapper-to-helper declaration rather than another independent direct path
+ * from the task anchor. Counting it toward the density threshold makes the
+ * threshold discontinuous: adding a valid helper can suddenly discard an
+ * otherwise unchanged lexical tail.
+ */
+function countsTowardStructuralTailDensity(candidate: CandidateFile): boolean {
+  if ((candidate.verifiedBy || []).some(source => source === "persisted-reference" || source === "persisted-implementation" || source === "persisted-typeHierarchy")) {
+    return true;
+  }
   return (candidate.scoreBreakdown || []).some(item => item.delta > 0 && STRUCTURAL_SIGNAL_IDS.has(item.id));
 }
 
@@ -126,9 +149,6 @@ export function truncateCandidateTail(
   readPlanCovered: Set<CandidateFile>,
   limit = ranked.length
 ): CandidateFile[] {
-  if (ranked.length <= 10) {
-    return ranked;
-  }
   const isProtected = (file: CandidateFile): boolean =>
     readPlanCovered.has(file)
     || hasProtectedStructuralSignal(file)
@@ -140,9 +160,13 @@ export function truncateCandidateTail(
     (isProtected(file) ? protectedFiles : discardable).push(file);
   }
 
-  const structuralCount = ranked.filter(hasProtectedStructuralSignal).length;
+  if (ranked.length <= 10) {
+    return limitKeepingProtected(sortByScore(ranked), protectedFiles, readPlanCovered, limit);
+  }
+
+  const structuralCount = ranked.filter(countsTowardStructuralTailDensity).length;
   if (structuralCount < MIN_STRUCTURAL_EVIDENCE_FOR_TAIL_TRUNCATION) {
-    return limitKeepingProtected(sortByScore(ranked), protectedFiles, limit);
+    return limitKeepingProtected(sortByScore(ranked), protectedFiles, readPlanCovered, limit);
   }
   const dynamicBudget = Math.min(Math.floor(structuralCount * 0.5), 4);
   let cliffIdx = discardable.length;
@@ -159,23 +183,36 @@ export function truncateCandidateTail(
     kept = [...kept, ...discardable.slice(keep, keep + (floor - kept.length))];
   }
 
-  return limitKeepingProtected(sortByScore(kept), protectedFiles, limit);
+  return limitKeepingProtected(sortByScore(kept), protectedFiles, readPlanCovered, limit);
 }
 
-function limitKeepingProtected(sorted: CandidateFile[], protectedFiles: CandidateFile[], limit: number): CandidateFile[] {
+function limitKeepingProtected(
+  sorted: CandidateFile[],
+  protectedFiles: CandidateFile[],
+  requiredFiles: ReadonlySet<CandidateFile>,
+  limit: number
+): CandidateFile[] {
   if (sorted.length <= limit) {
     return sorted;
   }
   const protectedSet = new Set(protectedFiles);
-  const limited = sorted.filter(file => protectedSet.has(file));
-  for (const file of sorted) {
-    if (limited.length >= limit) {
-      break;
+  const limited: CandidateFile[] = [];
+  const selected = new Set<CandidateFile>();
+  const addUntilLimit = (predicate: (file: CandidateFile) => boolean): void => {
+    for (const file of sorted) {
+      if (limited.length >= limit) return;
+      if (predicate(file) && !selected.has(file)) {
+        limited.push(file);
+        selected.add(file);
+      }
     }
-    if (!protectedSet.has(file)) {
-      limited.push(file);
-    }
-  }
+  };
+  // Read-plan-covered files include the anchor and are mandatory. Other exact
+  // structural/framework evidence remains preferred, but a large protected
+  // set must not turn candidateLimit into a soft suggestion.
+  addUntilLimit(file => requiredFiles.has(file));
+  addUntilLimit(file => protectedSet.has(file));
+  addUntilLimit(() => true);
   return sortByScore(limited);
 }
 

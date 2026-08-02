@@ -276,6 +276,7 @@ export class AgentRouter {
       familyRankPolicy
     }));
     const idByPath = new Map(ranked.map((file, index) => [file.absolutePath, `F${index + 1}`]));
+    const pathById = new Map([...idByPath].map(([absolutePath, id]) => [id, absolutePath]));
     const readPlan = await timed(phaseMs, "buildReadPlan", async () => buildReadPlan({
       files: ranked,
       ids: idByPath,
@@ -287,8 +288,16 @@ export class AgentRouter {
     const cacheAfter = await timed(phaseMs, "sessionCacheAfter", async () => this.session.cacheStatus());
     const rgAfter = await timed(phaseMs, "rgCacheAfter", async () => this.rgCacheStatus());
     const sourceAfter = await timed(phaseMs, "sourceStatusAfter", async () => this.javaIndex.routerStatus());
+    // The result-level Lombok gap is about the files this request will expose
+    // to the agent, not only the anchor declaration.  A service can call a
+    // Lombok-generated getter on a selected DTO/entity without carrying any
+    // Lombok annotation itself.
+    const lombokScopePaths = [...new Set([
+      ...anchorPaths,
+      ...readPlan.map(item => pathById.get(item.fileId)).filter((item): item is string => item !== undefined)
+    ])];
     const lombok = await timed(phaseMs, "lombokCompleteness", async () =>
-      lombokCompleteness(this.repoRoot, anchorPaths, this.javaIndex, generation));
+      lombokCompleteness(this.session.status().generatedCode, lombokScopePaths, this.javaIndex, generation, budget));
 
     // Diagnostic only: production ranking above has already used the same
     // normalized outcomes. Shadow output adds counterfactual attribution; it

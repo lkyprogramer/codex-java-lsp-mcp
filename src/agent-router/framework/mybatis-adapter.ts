@@ -26,7 +26,7 @@ import {
   type FrameworkTypeDeclaration
 } from "../../java-index/framework-index-view.js";
 import type { MyBatisMapperResourceFacts } from "../../java-index/mybatis-types.js";
-import type { FrameworkAdapter, FrameworkAdapterContext, FrameworkCollectResult } from "./adapter.js";
+import { hasStaticStructureEvidence, type FrameworkAdapter, type FrameworkAdapterContext, type FrameworkCollectResult } from "./adapter.js";
 
 export const MYBATIS_ADAPTER_ID = "mybatis";
 export const MYBATIS_ADAPTER_VERSION = "1";
@@ -80,7 +80,7 @@ type TypeContext = {
 function frameworkSeedFiles(context: FrameworkAdapterContext): Set<string> {
   const seeds = new Set(context.anchors.map(anchor => anchor.absolutePath));
   for (const candidate of context.staticEvidence) {
-    if ((candidate.familyScores.STATIC_STRUCTURE ?? 0) > 0) {
+    if (hasStaticStructureEvidence(candidate)) {
       seeds.add(candidate.file);
     }
   }

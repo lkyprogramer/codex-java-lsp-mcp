@@ -41,6 +41,18 @@ export type FrameworkAdapterContext = {
   readonly budget: DeadlineBudget;
 };
 
+/**
+ * Framework adapters run after evidence normalization but before family
+ * ranking.  At that point the authoritative structural fact is a signal;
+ * familyScores is deliberately still empty until rankCandidates() runs.
+ * Keep the score fallback for direct adapter callers that provide already
+ * materialized evidence.
+ */
+export function hasStaticStructureEvidence(candidate: CandidateEvidence): boolean {
+  return candidate.signals.some(signal => signal.family === "STATIC_STRUCTURE")
+    || (candidate.familyScores.STATIC_STRUCTURE ?? 0) > 0;
+}
+
 export interface FrameworkAdapter {
   readonly id: string;
   readonly version: string;
