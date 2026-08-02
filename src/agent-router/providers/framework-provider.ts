@@ -20,12 +20,13 @@
 //      quota on a DI-heavy Spring or MyBatis-heavy repo.
 import type { FrameworkAdapter, FrameworkCollectResult } from "../framework/adapter.js";
 import { runFrameworkAdapters } from "../framework/runner.js";
+import { mapstructAdapter } from "../framework/mapstruct-adapter.js";
 import { mybatisAdapter } from "../framework/mybatis-adapter.js";
 import { springAdapter } from "../framework/spring-adapter.js";
 import type { CandidateEvidence, ProviderInput } from "../evidence.js";
 
 /** Every registered framework pack (Task 27 Slice D's Spring pack, Task 28 Slice D's MyBatis pack; later Task 29 appends theirs here). */
-export const FRAMEWORK_ADAPTERS: readonly FrameworkAdapter[] = [springAdapter, mybatisAdapter];
+export const FRAMEWORK_ADAPTERS: readonly FrameworkAdapter[] = [springAdapter, mybatisAdapter, mapstructAdapter];
 
 export async function collectFrameworkEvidence(
   input: ProviderInput,
