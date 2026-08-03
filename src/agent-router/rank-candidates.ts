@@ -30,7 +30,6 @@ export type RankCandidatesContext = {
   readonly suppressed: Record<string, number>;
   readonly repoRoot: string;
   readonly familyRankPolicy?: FamilyRankPolicy;
-  readonly extraProtectedPaths?: ReadonlySet<string>;
 };
 
 /**
@@ -141,11 +140,6 @@ export function truncateRankedCandidatePool(
   for (const file of ranked) {
     if (requiredPaths.has(file.absolutePath)
       || file.reasons.includes("typeGraph:implementation-lookup")) {
-      readPlanCovered.add(file);
-    }
-  }
-  for (const file of ranked) {
-    if (context.extraProtectedPaths?.has(file.absolutePath)) {
       readPlanCovered.add(file);
     }
   }
@@ -296,6 +290,9 @@ function isPreSemanticProtectedSignal(
   if (signal.family === "STATIC_STRUCTURE" && signal.kind === "DIRECT_DECLARATION") {
     return anchors.some(anchor => EXECUTION_ROOT_PROFILES.has(anchor.profile)
       && anchor.absolutePath === signal.sourceFile);
+  }
+  if (signal.family === "STATIC_STRUCTURE" && signal.kind === "REFERENCE") {
+    return anchors.some(anchor => anchor.absolutePath === signal.sourceFile);
   }
   return signal.family === "STATIC_STRUCTURE"
     && (signal.kind === "IMPLEMENTS"

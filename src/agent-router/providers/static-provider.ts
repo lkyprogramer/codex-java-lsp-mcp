@@ -354,11 +354,13 @@ function evidenceForCandidate(
       confidence: policy.confidence,
       completeness: "COMPLETE",
       weight: policy.weight,
-      // An import-graph declaration is a direct AST edge *from the anchor's
-      // import list* to this candidate. Keeping that source lets the planner
-      // distinguish it from a declaration reached while expanding another
-      // structural candidate.
-      sourceFile: reason === "importGraph" ? anchor.absolutePath : candidate.absolutePath,
+      // Import declarations and direct JavaIndex type references both start
+      // at the request anchor. Retaining that source lets the planner reserve
+      // a bounded core slot for the direct edge while keeping relationships
+      // discovered from a structural expansion as ordinary ranking evidence.
+      sourceFile: reason === "importGraph" || reason === "typeReference"
+        ? anchor.absolutePath
+        : candidate.absolutePath,
       positions: candidate.positions,
       providerId: STATIC_PROVIDER_ID,
       providerVersion: STATIC_PROVIDER_VERSION,

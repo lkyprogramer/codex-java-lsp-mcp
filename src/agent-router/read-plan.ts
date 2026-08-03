@@ -47,7 +47,6 @@ const PROTECTED_CORE_KINDS = new Set([
 // and return types are useful follow-up context, but must not consume the
 // small protected core before the concrete alternatives themselves.
 const FIRST_HOP_IMPLEMENTATION_KINDS = new Set([
-  "DIRECT_DECLARATION",
   "IMPLEMENTS",
   "IMPLEMENTATION",
   "TYPE_RELATION"
@@ -245,7 +244,7 @@ function shortlistCandidates(
       && !isDeferredTest(file, options)
       && (isProtectedCore(file, options) || protectedPaths.has(file.absolutePath)))
     .sort((left, right) =>
-      protectedCorePriority(right) - protectedCorePriority(left)
+      protectedCorePriority(right, options) - protectedCorePriority(left, options)
       || right.score - left.score
       || left.absolutePath.localeCompare(right.absolutePath));
   protectedCandidates.forEach(add);
@@ -356,7 +355,7 @@ function selectTokenAwarePlan(
     Math.min(budget.maxFiles - selected.length, BUCKET_RULES.core.max - bucketCounts.core)
   );
   core.sort((left, right) =>
-    protectedCorePriority(right.file) - protectedCorePriority(left.file)
+    protectedCorePriority(right.file, options) - protectedCorePriority(left.file, options)
     || compareUtilityAndDensity(protectedUtility(left), left.bytes, protectedUtility(right), right.bytes, coreUsesByteDensity)
     || left.file.absolutePath.localeCompare(right.file.absolutePath));
   for (const window of core) {
@@ -470,7 +469,7 @@ function compareUtilityAndDensity(
     : utilityDelta || densityDelta || leftBytes - rightBytes;
 }
 
-function protectedCorePriority(file: CandidateFile): number {
+function protectedCorePriority(file: CandidateFile, options: Pick<ImpactOptions, "anchors">): number {
   const kinds = new Set(file.plannerEvidence?.map(evidence => evidence.kind) || [
     ...file.reasons,
     ...(file.verifiedBy || [])
@@ -481,10 +480,25 @@ function protectedCorePriority(file: CandidateFile): number {
     || kind === "persisted-implementation")) {
     return 2;
   }
+  if (hasDirectAnchorTypeReference(file, options) || kinds.has("METHOD_RELATION")) {
+    return 2;
+  }
+  if (kinds.has("DIRECT_DECLARATION")) {
+    return 2;
+  }
   if ([...kinds].some(kind => SECOND_HOP_IMPLEMENTATION_KINDS.has(kind))) {
     return 1;
   }
   return 0;
+}
+
+function hasDirectAnchorTypeReference(
+  file: CandidateFile,
+  options: Pick<ImpactOptions, "anchors">
+): boolean {
+  return file.plannerEvidence?.some(evidence => evidence.family === "STATIC_STRUCTURE"
+    && evidence.kind === "REFERENCE"
+    && options.anchors.some((anchor, index) => evidence.sourceTarget.startsWith(`A${index + 1}:${anchor.file}->`))) ?? false;
 }
 
 function marginalUtility(candidate: CandidateWindow, selected: readonly CandidateWindow[]): number {

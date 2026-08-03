@@ -593,6 +593,44 @@ test("pre-semantic protection retains direct imported declarations only from the
   assert.equal(protectedPaths.has(nestedImportFile), false);
 });
 
+test("pre-semantic protection retains direct JavaIndex type references only from the request anchor", async () => {
+  const anchorEntry = anchor();
+  const directReferenceFile = "/repo/module-a/src/main/java/demo/DirectReference.java";
+  const nestedReferenceFile = "/repo/module-a/src/main/java/demo/NestedReference.java";
+  const directReference = signal({
+    candidateFile: directReferenceFile,
+    kind: "REFERENCE",
+    family: "STATIC_STRUCTURE",
+    provenance: "AST_RESOLVED",
+    confidence: 0.8,
+    weight: 55,
+    sourceFile: anchorEntry.absolutePath
+  });
+  const nestedReference = signal({
+    candidateFile: nestedReferenceFile,
+    kind: "REFERENCE",
+    family: "STATIC_STRUCTURE",
+    provenance: "AST_RESOLVED",
+    confidence: 0.8,
+    weight: 55,
+    sourceFile: "/repo/module-a/src/main/java/demo/StructuralSeed.java"
+  });
+  const normalized = new Map<string, CandidateEvidence>([
+    [directReferenceFile, evidenceCandidate(directReferenceFile, [directReference], { module: "module-a", sourceSet: "main" })],
+    [nestedReferenceFile, evidenceCandidate(nestedReferenceFile, [nestedReference], { module: "module-a", sourceSet: "main" })]
+  ]);
+
+  const protectedPaths = await familyReadPlanProtectedPaths(normalized, [], {
+    anchors: [anchorEntry],
+    options: options({ mode: "minimal", readPlanMaxItems: 3 }),
+    suppressed: emptySuppressed(),
+    repoRoot: "/repo"
+  });
+
+  assert.equal(protectedPaths.has(directReferenceFile), true);
+  assert.equal(protectedPaths.has(nestedReferenceFile), false);
+});
+
 test("contract anchors leave direct imports outside the protected execution core", async () => {
   const contractAnchor = anchor({ profile: "repository", kind: "Method" });
   const directImportFile = "/repo/module-a/src/main/java/demo/ReportTask.java";

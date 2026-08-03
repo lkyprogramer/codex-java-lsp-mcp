@@ -293,7 +293,6 @@ export class AgentRouter {
       anchors,
       options,
       suppressed,
-      extraProtectedPaths: protectedReadPlanPaths,
       repoRoot: this.repoRoot,
       familyRankPolicy
     };

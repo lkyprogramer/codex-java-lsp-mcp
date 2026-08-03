@@ -132,6 +132,24 @@ test("static provider classifies direct imported declarations as exact AST evide
   assert.equal(evidence?.sourceFile, request.absolutePath, "the import declaration belongs to the anchor file, not the imported declaration");
 });
 
+test("static provider records direct type references as anchored AST relationships", async () => {
+  const request = anchor("A1", "Request", "service");
+  const referenced = facts("/repo/src/main/java/demo/RequestConsumer.java");
+  const result = await collectStaticEvidence(providerInput([request], {
+    factsFor: async (file: string) => facts(file),
+    findImplementers: async () => [],
+    findTypeDefinitions: async () => [],
+    findImporters: async () => [],
+    findTypeReferences: async () => [referenced],
+    methodAt: async () => undefined,
+    routerStatus: async () => emptyRouterStatus()
+  }));
+
+  const evidence = result.evidence.find(signal => signal.candidateFile === referenced.absolutePath);
+  assert.equal(evidence?.kind, "REFERENCE");
+  assert.equal(evidence?.sourceFile, request.absolutePath, "the direct JavaIndex edge must retain its request-anchor source");
+});
+
 test("a resolved implementation exposes its exact field and anchored-method collaborators", async () => {
   const repository = { ...anchor("A1", "OrderPort", "port"), methodName: "findById", symbolName: "findById" };
   const implementation = {

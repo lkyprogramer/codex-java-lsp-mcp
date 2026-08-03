@@ -689,6 +689,95 @@ test("direct implementations take the bounded core ahead of higher-scoring secon
   );
 });
 
+test("a direct anchor type reference outranks a lower-value import when protected core is full", async () => {
+  const anchor = candidate({
+    absolutePath: "/repo/src/main/java/demo/Anchor.java",
+    path: "src/main/java/demo/Anchor.java",
+    reasons: ["target"],
+    categories: ["target"],
+    score: 1_000
+  });
+  const implementation = candidate({
+    absolutePath: "/repo/src/main/java/demo/AnchorImpl.java",
+    path: "src/main/java/demo/AnchorImpl.java",
+    reasons: ["IMPLEMENTS"],
+    score: 100,
+    plannerEvidence: [{ family: "STATIC_STRUCTURE", kind: "IMPLEMENTS", sourceTarget: "A1:/repo/src/main/java/demo/Anchor.java->/repo/src/main/java/demo/AnchorImpl.java" }]
+  });
+  const directImportA = candidate({
+    absolutePath: "/repo/src/main/java/demo/ImportA.java",
+    path: "src/main/java/demo/ImportA.java",
+    reasons: ["DIRECT_DECLARATION"],
+    score: 300,
+    plannerEvidence: [{ family: "STATIC_STRUCTURE", kind: "DIRECT_DECLARATION", sourceTarget: "A1:/repo/src/main/java/demo/Anchor.java->/repo/src/main/java/demo/ImportA.java" }]
+  });
+  const directImportB = candidate({
+    absolutePath: "/repo/src/main/java/demo/ImportB.java",
+    path: "src/main/java/demo/ImportB.java",
+    reasons: ["DIRECT_DECLARATION"],
+    score: 299,
+    plannerEvidence: [{ family: "STATIC_STRUCTURE", kind: "DIRECT_DECLARATION", sourceTarget: "A1:/repo/src/main/java/demo/Anchor.java->/repo/src/main/java/demo/ImportB.java" }]
+  });
+  const directReference = candidate({
+    absolutePath: "/repo/src/main/java/demo/DirectReference.java",
+    path: "src/main/java/demo/DirectReference.java",
+    reasons: ["REFERENCE"],
+    score: 298,
+    plannerEvidence: [{ family: "STATIC_STRUCTURE", kind: "REFERENCE", sourceTarget: "A1:/repo/src/main/java/demo/Anchor.java->/repo/src/main/java/demo/DirectReference.java" }]
+  });
+  const lowerImport = candidate({
+    absolutePath: "/repo/src/main/java/demo/LowerImport.java",
+    path: "src/main/java/demo/LowerImport.java",
+    reasons: ["DIRECT_DECLARATION"],
+    score: 200,
+    plannerEvidence: [{ family: "STATIC_STRUCTURE", kind: "DIRECT_DECLARATION", sourceTarget: "A1:/repo/src/main/java/demo/Anchor.java->/repo/src/main/java/demo/LowerImport.java" }]
+  });
+  const files = [anchor, implementation, directImportA, directImportB, directReference, lowerImport];
+  const plan = await buildReadPlan({
+    files,
+    ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
+    options: optionsFor(anchor, { mode: "balanced", readPlanMaxItems: 4, readPlanMaxBytes: 10_000 }),
+    javaIndex: fixedRangeIndex(),
+    protectedPaths: new Set(files.slice(1).map(file => file.absolutePath))
+  });
+
+  assert.deepEqual(plan.items.map(item => item.fileId), ["F1", "F3", "F4", "F5"]);
+});
+
+test("an exact anchor method relation outranks a lower-value import in protected core", async () => {
+  const anchor = candidate({
+    absolutePath: "/repo/src/main/java/demo/Anchor.java",
+    path: "src/main/java/demo/Anchor.java",
+    reasons: ["target"],
+    categories: ["target"],
+    score: 1_000
+  });
+  const methodRelation = candidate({
+    absolutePath: "/repo/src/main/java/demo/MethodCollaborator.java",
+    path: "src/main/java/demo/MethodCollaborator.java",
+    reasons: ["METHOD_RELATION"],
+    score: 200,
+    plannerEvidence: [{ family: "STATIC_STRUCTURE", kind: "METHOD_RELATION", sourceTarget: "A1:/repo/src/main/java/demo/Anchor.java->/repo/src/main/java/demo/MethodCollaborator.java" }]
+  });
+  const lowerImport = candidate({
+    absolutePath: "/repo/src/main/java/demo/LowerImport.java",
+    path: "src/main/java/demo/LowerImport.java",
+    reasons: ["DIRECT_DECLARATION"],
+    score: 100,
+    plannerEvidence: [{ family: "STATIC_STRUCTURE", kind: "DIRECT_DECLARATION", sourceTarget: "A1:/repo/src/main/java/demo/Anchor.java->/repo/src/main/java/demo/LowerImport.java" }]
+  });
+  const files = [anchor, methodRelation, lowerImport];
+  const plan = await buildReadPlan({
+    files,
+    ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
+    options: optionsFor(anchor, { mode: "minimal", readPlanMaxItems: 2 }),
+    javaIndex: fixedRangeIndex(),
+    protectedPaths: new Set(files.slice(1).map(file => file.absolutePath))
+  });
+
+  assert.deepEqual(plan.items.map(item => item.fileId), ["F1", "F2"]);
+});
+
 test("only method-level dependencies of a resolved implementation receive protected core slots", async () => {
   const anchor = candidate({
     absolutePath: "/repo/src/main/java/demo/OrderPort.java",
