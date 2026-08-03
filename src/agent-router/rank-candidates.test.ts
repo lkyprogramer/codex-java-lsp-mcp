@@ -345,6 +345,52 @@ test("output-tail compatibility retains a legacy direct collaborator without mak
   assert.ok(ranked.some(file => file.absolutePath === collaborator));
 });
 
+test("candidate tail retains an exact main-source type reference without promoting it into V6 core", async () => {
+  const anchorEntry = anchor();
+  const entries: [string, CandidateEvidence][] = [];
+  for (let index = 0; index < 6; index += 1) {
+    const file = `/repo/module-a/src/main/java/demo/Structural${index}.java`;
+    entries.push([file, evidenceCandidate(file, [
+      signal({ candidateFile: file, family: "STATIC_STRUCTURE", kind: "METHOD_RELATION", weight: 120, confidence: 0.9 })
+    ], { module: "module-a", sourceSet: "main" })]);
+  }
+  for (let index = 0; index < 30; index += 1) {
+    const file = `/repo/module-a/src/main/java/demo/Lexical${index}.java`;
+    entries.push([file, evidenceCandidate(file, [
+      signal({ candidateFile: file, family: "LEXICAL", kind: "LEXICAL:java", weight: 80 - index, confidence: 0.6 })
+    ], { module: "module-a", sourceSet: "main" })]);
+  }
+  const directReference = "/repo/module-a/src/main/java/demo/ExactReference.java";
+  const referenceSignal = signal({
+    candidateFile: directReference,
+    anchorId: anchorEntry.id,
+    family: "STATIC_STRUCTURE",
+    kind: "REFERENCE",
+    provenance: "AST_RESOLVED",
+    confidence: 0.8,
+    weight: 1,
+    sourceFile: anchorEntry.absolutePath
+  });
+  entries.push([directReference, evidenceCandidate(directReference, [referenceSignal], { module: "module-a", sourceSet: "main" })]);
+  const fragment = {
+    ...candidate(directReference, 1),
+    module: "module-a",
+    sourceSet: "main" as const,
+    reasons: ["typeReference"],
+    verifiedBy: ["typeReference"]
+  };
+
+  const ranked = await rankCandidates(new Map(entries), [outcome({ evidence: [referenceSignal], candidates: [fragment] })], {
+    anchors: [anchorEntry],
+    options: options({ mode: "minimal" }),
+    suppressed: emptySuppressed(),
+    repoRoot: "/repo"
+  });
+
+  assert.ok(ranked.length <= 18);
+  assert.ok(ranked.some(file => file.absolutePath === directReference));
+});
+
 test("candidate tail retains bounded main-source representatives from every explicit focus module", async () => {
   const anchorEntry = anchor({
     absolutePath: "/repo/benefits/src/main/java/demo/Anchor.java",

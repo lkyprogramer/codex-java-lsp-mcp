@@ -155,7 +155,7 @@ export function truncateCandidateTail(
   const isProtected = (file: CandidateFile): boolean =>
     readPlanCovered.has(file)
     || hasProtectedStructuralSignal(file)
-    || hasExactDeferredTestReference(file);
+    || hasExactTypeReference(file);
 
   const protectedFiles: CandidateFile[] = [];
   const discardable: CandidateFile[] = [];
@@ -228,11 +228,12 @@ function isResolvedMapstructUses(candidate: CandidateFile): boolean {
     && (candidate.verifiedBy || []).includes("MAPSTRUCT_USES");
 }
 
-function hasExactDeferredTestReference(candidate: CandidateFile): boolean {
-  // A deferred test stays out of the bounded foreground read plan, but an exact
-  // JavaIndex type edge is still useful candidate evidence. Keep it visible
-  // when trimming the noisy tail without broadening the read-plan budget.
-  return candidate.sourceSet === "test" && (candidate.verifiedBy || []).includes("typeReference");
+function hasExactTypeReference(candidate: CandidateFile): boolean {
+  // A direct JavaIndex type edge remains useful candidate evidence even when
+  // the byte-aware V6 planner chooses a different bounded read set. Retain it
+  // in the public tail for both main and deferred-test source, without adding
+  // it to read-plan core quotas (this helper is tail-only).
+  return (candidate.verifiedBy || []).includes("typeReference");
 }
 
 function simpleName(value: string): string {
