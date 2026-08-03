@@ -12,10 +12,12 @@ import { resolveAnchor } from "./anchor.js";
 import { buildReadPlan } from "./read-plan.js";
 import { evidenceGaps } from "./evidence-gaps.js";
 import {
+  baselineReadPlanSafePaths,
   familyReadPlanProtectedPaths,
   foldProviderCandidates,
   rankCandidatePool,
-  truncateRankedCandidatePool
+  truncateRankedCandidatePool,
+  type RankCandidatesContext
 } from "./rank-candidates.js";
 import { buildImpactResult } from "./format.js";
 import {
@@ -51,6 +53,7 @@ import { collectFrameworkEvidence, FRAMEWORK_ADAPTERS } from "./providers/framew
 import { lombokCompleteness } from "./framework/lombok-adapter.js";
 import { buildShadowRanking } from "./shadow-ranking.js";
 import {
+  type CandidateFile,
   type ImpactOptions,
   type ImpactResult,
   type ResolvedAnchor,
@@ -86,6 +89,20 @@ const RG_CACHE_TTL_MS = positiveInteger(process.env.AGENT_RG_CACHE_TTL_MS, 30000
 const RG_CONCURRENCY = positiveInteger(process.env.JAVA_LSP_RG_CONCURRENCY, Math.min(4, availableParallelism()));
 // Used only when a caller does not supply the request budget (benchmarks, tests).
 const DEFAULT_ROUTER_DEADLINE_MS = positiveInteger(process.env.JAVA_LSP_ROUTER_DEADLINE_MS, 15000);
+
+/**
+ * Carries only the legacy planner's already-selected high-confidence exact
+ * facts into V6's bounded protected core. This is deliberately a union, not
+ * a second ranking path: buildReadPlan still applies its normal file and byte
+ * limits when choosing which protected files can fit.
+ */
+export function readPlanProtectedPaths(
+  rankedPool: readonly CandidateFile[],
+  familyProtectedPaths: ReadonlySet<string>,
+  context: RankCandidatesContext
+): ReadonlySet<string> {
+  return new Set([...familyProtectedPaths, ...baselineReadPlanSafePaths(rankedPool, context)]);
+}
 
 export class AgentRouter {
   private readonly rgCache = new GenerationRgCache(RG_CACHE_TTL_MS);
@@ -281,13 +298,14 @@ export class AgentRouter {
       familyRankPolicy
     };
     const rankedPool = await timed(phaseMs, "familyRank", async () => rankCandidatePool(normalized, outcomes, rankContext));
+    const plannerProtectedPaths = readPlanProtectedPaths(rankedPool, protectedReadPlanPaths, rankContext);
     const poolIdByPath = new Map(rankedPool.map((file, index) => [file.absolutePath, `P${index + 1}`]));
     const readPlanResult = await timed(phaseMs, "buildReadPlan", async () => buildReadPlan({
       files: rankedPool,
       ids: poolIdByPath,
       options,
       javaIndex: this.javaIndex,
-      protectedPaths: protectedReadPlanPaths,
+      protectedPaths: plannerProtectedPaths,
       generation
     }));
     const ranked = truncateRankedCandidatePool(rankedPool, rankContext, new Set(readPlanResult.selectedPaths));
