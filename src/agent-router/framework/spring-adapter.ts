@@ -16,7 +16,7 @@ import {
 } from "../../java-index/framework-index-view.js";
 import type { SourceRange } from "../../runtime/source-range.js";
 import type { TypeResolutionStrategy } from "../../java-index/index-types.js";
-import { hasStaticStructureEvidence, type FrameworkAdapter, type FrameworkAdapterContext, type FrameworkCollectResult } from "./adapter.js";
+import { frameworkFactsForFiles, hasStaticStructureEvidence, type FrameworkAdapter, type FrameworkAdapterContext, type FrameworkCollectResult } from "./adapter.js";
 import {
   hasAnnotation,
   isController,
@@ -245,7 +245,7 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
 
   const seeds = frameworkSeedFiles(context);
   const candidateFiles = context.candidateFiles.filter(candidate => seeds.has(candidate));
-  const facts = timedOut ? [] : await context.frameworkIndex.frameworkFactsForFiles(candidateFiles, context.generation);
+  const facts = timedOut ? [] : await frameworkFactsForFiles(context, candidateFiles);
   if (!timedOut && context.budget.expired()) timedOut = true;
   const typeContexts: TypeContext[] = [];
   if (!timedOut) {
@@ -374,10 +374,7 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
     // short name as absence (or issuing one IPC request per listener).
     const listenerFacts = timedOut
       ? []
-      : await context.frameworkIndex.frameworkFactsForFiles(
-        listeners.map(listener => path.resolve(context.repoRoot, listener.relativePath)),
-        context.generation
-      );
+      : await frameworkFactsForFiles(context, listeners.map(listener => path.resolve(context.repoRoot, listener.relativePath)));
     if (!timedOut && context.budget.expired()) timedOut = true;
     const listenerByMethodId = new Map(
       listenerFacts.flatMap(factsForFile => factsForFile.methods.map(method => [method.methodId, { method, factsForFile }] as const))

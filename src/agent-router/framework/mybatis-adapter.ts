@@ -26,7 +26,7 @@ import {
   type FrameworkTypeDeclaration
 } from "../../java-index/framework-index-view.js";
 import type { MyBatisMapperResourceFacts } from "../../java-index/mybatis-types.js";
-import { hasStaticStructureEvidence, type FrameworkAdapter, type FrameworkAdapterContext, type FrameworkCollectResult } from "./adapter.js";
+import { frameworkFactsForFiles, hasStaticStructureEvidence, type FrameworkAdapter, type FrameworkAdapterContext, type FrameworkCollectResult } from "./adapter.js";
 
 export const MYBATIS_ADAPTER_ID = "mybatis";
 export const MYBATIS_ADAPTER_VERSION = "1";
@@ -179,7 +179,7 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
 
   const seeds = frameworkSeedFiles(context);
   const candidateFiles = context.candidateFiles.filter(candidate => seeds.has(candidate));
-  const facts: FrameworkFileFacts[] = timedOut ? [] : await context.frameworkIndex.frameworkFactsForFiles(candidateFiles, context.generation);
+  const facts: FrameworkFileFacts[] = timedOut ? [] : await frameworkFactsForFiles(context, candidateFiles);
   if (!timedOut && context.budget.expired()) timedOut = true;
 
   const typeContexts: TypeContext[] = [];

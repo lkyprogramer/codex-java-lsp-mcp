@@ -3,7 +3,7 @@
 // pos: Task 27 Slice C - deliberately has no framework-specific vocabulary; that belongs to
 //      the packs implementing this interface (Slice D and Task 28/29), not to the contract itself.
 import type { ResolvedAnchor } from "../../agent-types.js";
-import type { FrameworkIndexView } from "../../java-index/framework-index-view.js";
+import type { FrameworkFileFacts, FrameworkIndexView } from "../../java-index/framework-index-view.js";
 import type { DeadlineBudget } from "../../runtime/deadline-budget.js";
 import type { CandidateEvidence, ProviderOutcome } from "../evidence.js";
 
@@ -37,9 +37,23 @@ export type FrameworkAdapterContext = {
    */
   readonly staticEvidence: readonly CandidateEvidence[];
   readonly frameworkIndex: FrameworkIndexView;
+  /**
+   * Runner-provided request-local reuse for whole-file framework facts. This
+   * is optional so direct adapter callers retain the FrameworkIndexView API.
+   */
+  readonly requestFrameworkFactsForFiles?: (files: readonly string[], generation?: number) => Promise<FrameworkFileFacts[]>;
   readonly generation: number;
   readonly budget: DeadlineBudget;
 };
+
+/** Uses the runner cache where available, otherwise reads from the stable index view. */
+export function frameworkFactsForFiles(
+  context: FrameworkAdapterContext,
+  files: readonly string[]
+): Promise<FrameworkFileFacts[]> {
+  return context.requestFrameworkFactsForFiles?.(files, context.generation)
+    ?? context.frameworkIndex.frameworkFactsForFiles(files, context.generation);
+}
 
 /**
  * Framework adapters run after evidence normalization but before family

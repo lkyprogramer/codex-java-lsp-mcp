@@ -6,7 +6,7 @@ import test from "node:test";
 import type { ResolvedAnchor } from "../../agent-types.js";
 import type { FrameworkIndexView } from "../../java-index/framework-index-view.js";
 import { DeadlineBudget } from "../../runtime/deadline-budget.js";
-import type { FrameworkAdapter, FrameworkAdapterContext, FrameworkCollectResult } from "./adapter.js";
+import { frameworkFactsForFiles, type FrameworkAdapter, type FrameworkAdapterContext, type FrameworkCollectResult } from "./adapter.js";
 import { MAX_FRAMEWORK_TRAVERSAL_FILES, runFrameworkAdapters } from "./runner.js";
 
 function anchor(): ResolvedAnchor {
@@ -135,4 +135,67 @@ test("candidateFiles handed to an adapter is capped at MAX_FRAMEWORK_TRAVERSAL_F
   await runFrameworkAdapters([capturingAdapter], context({ candidateFiles: oversized }));
 
   assert.equal(seenLength, MAX_FRAMEWORK_TRAVERSAL_FILES);
+});
+
+test("reuses one identical framework-facts query across adapters in a request", async () => {
+  let queries = 0;
+  const frameworkIndex = {
+    frameworkFactsForFiles: async () => {
+      queries += 1;
+      return [];
+    }
+  } as unknown as FrameworkIndexView;
+  const files = ["/repo/module-a/src/main/java/demo/Service.java"];
+  const queryFacts = fakeAdapter({
+    id: "first",
+    isActive: async ctx => {
+      await frameworkFactsForFiles(ctx, files);
+      return false;
+    }
+  });
+  const queryFactsAgain = fakeAdapter({
+    id: "second",
+    isActive: async ctx => {
+      await frameworkFactsForFiles(ctx, files);
+      return false;
+    }
+  });
+
+  await runFrameworkAdapters([queryFacts, queryFactsAgain], context({ frameworkIndex }));
+
+  assert.equal(queries, 1);
+});
+
+test("does not retain a failed framework-facts query for a later adapter", async () => {
+  let queries = 0;
+  const frameworkIndex = {
+    frameworkFactsForFiles: async () => {
+      queries += 1;
+      if (queries === 1) throw new Error("transient worker failure");
+      return [];
+    }
+  } as unknown as FrameworkIndexView;
+  const files = ["/repo/module-a/src/main/java/demo/Service.java"];
+  const failedQuery = fakeAdapter({
+    id: "first",
+    isActive: async ctx => {
+      try {
+        await frameworkFactsForFiles(ctx, files);
+      } catch {
+        return false;
+      }
+      return true;
+    }
+  });
+  const retriedQuery = fakeAdapter({
+    id: "second",
+    isActive: async ctx => {
+      await frameworkFactsForFiles(ctx, files);
+      return false;
+    }
+  });
+
+  await runFrameworkAdapters([failedQuery, retriedQuery], context({ frameworkIndex }));
+
+  assert.equal(queries, 2);
 });

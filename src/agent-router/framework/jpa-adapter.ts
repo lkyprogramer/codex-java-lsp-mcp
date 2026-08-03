@@ -25,7 +25,7 @@ import {
   normalizeJpaAnnotations,
   JPA_REPOSITORY_BASE_FQNS
 } from "./jpa-annotations.js";
-import { hasStaticStructureEvidence, type FrameworkAdapter, type FrameworkAdapterContext, type FrameworkCollectResult } from "./adapter.js";
+import { frameworkFactsForFiles, hasStaticStructureEvidence, type FrameworkAdapter, type FrameworkAdapterContext, type FrameworkCollectResult } from "./adapter.js";
 
 export const JPA_ADAPTER_ID = "jpa";
 export const JPA_ADAPTER_VERSION = "1";
@@ -171,7 +171,7 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
 
   const seeds = frameworkSeedFiles(context);
   const candidateFiles = context.candidateFiles.filter(candidate => seeds.has(candidate));
-  const facts: FrameworkFileFacts[] = timedOut ? [] : await context.frameworkIndex.frameworkFactsForFiles(candidateFiles, context.generation);
+  const facts: FrameworkFileFacts[] = timedOut ? [] : await frameworkFactsForFiles(context, candidateFiles);
   if (!timedOut && context.budget.expired()) timedOut = true;
 
   const pending: PendingEvidence[] = [];

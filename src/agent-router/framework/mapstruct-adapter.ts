@@ -25,7 +25,7 @@ import {
   type FrameworkIndexView,
   type FrameworkTypeRef
 } from "../../java-index/framework-index-view.js";
-import { hasStaticStructureEvidence, type FrameworkAdapter, type FrameworkAdapterContext, type FrameworkCollectResult } from "./adapter.js";
+import { frameworkFactsForFiles, hasStaticStructureEvidence, type FrameworkAdapter, type FrameworkAdapterContext, type FrameworkCollectResult } from "./adapter.js";
 
 export const MAPSTRUCT_ADAPTER_ID = "mapstruct";
 export const MAPSTRUCT_ADAPTER_VERSION = "1";
@@ -148,7 +148,7 @@ async function isActive(context: FrameworkAdapterContext): Promise<boolean> {
   // The pack can only produce task-relevant evidence from an anchor or a
   // structurally connected candidate, so this same bounded surface is both
   // sufficient for activation and already paid by collect() on a hit.
-  const facts = await context.frameworkIndex.frameworkFactsForFiles([...frameworkSeedFiles(context)], context.generation);
+  const facts = await frameworkFactsForFiles(context, [...frameworkSeedFiles(context)]);
   if (facts.some(hasMapStructFacts)) return true;
   if (context.budget.expired()) return false;
   // A partial index cannot prove that MapStruct is absent. Running a bounded pack
@@ -211,7 +211,7 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
   // has already capped candidates, and FrameworkIndexView applies its own
   // bounded input cap, so this remains request-bounded.
   const candidateFiles = [...seeds];
-  const facts: FrameworkFileFacts[] = timedOut ? [] : await context.frameworkIndex.frameworkFactsForFiles(candidateFiles, context.generation);
+  const facts: FrameworkFileFacts[] = timedOut ? [] : await frameworkFactsForFiles(context, candidateFiles);
   if (!timedOut && context.budget.expired()) timedOut = true;
 
   const anchorPaths = new Set(context.anchors.map(anchor => path.resolve(anchor.absolutePath)));

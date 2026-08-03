@@ -3,6 +3,7 @@
 //         special-casing) plus side-channel metadata/diagnostics per adapter.
 // pos: Task 27 Slice C - generic runner; registers/runs adapters, never interprets their output.
 import type { Completion } from "../../runtime/completion.js";
+import type { FrameworkIndexView } from "../../java-index/framework-index-view.js";
 import type { ProviderOutcome } from "../evidence.js";
 import type { FrameworkAdapter, FrameworkAdapterContext, FrameworkAdapterMetadata } from "./adapter.js";
 
@@ -18,6 +19,26 @@ export type FrameworkRunResult = {
   metadata: Record<string, FrameworkAdapterMetadata>;
   diagnostics: string[];
 };
+
+/**
+ * Adapters often need the same bounded whole-file facts for activation and
+ * collection.  Preserve the index boundary, but reuse an identical request
+ * within this router invocation so framework packs do not pay duplicate
+ * worker serialization/deserialization cost.  A rejected query is evicted:
+ * an adapter's fail-soft retry opportunity must remain independent.
+ */
+function requestMemoizedFrameworkFacts(index: FrameworkIndexView) {
+  const factsByRequest = new Map<string, Promise<Awaited<ReturnType<FrameworkIndexView["frameworkFactsForFiles"]>>>>();
+  return (files: readonly string[], generation?: number) => {
+    const key = `${generation ?? ""}\0${files.join("\0")}`;
+    const cached = factsByRequest.get(key);
+    if (cached) return cached;
+    const request = index.frameworkFactsForFiles(files, generation);
+    factsByRequest.set(key, request);
+    void request.catch(() => factsByRequest.delete(key));
+    return request;
+  };
+}
 
 // Completion vocabulary has no inherent order; this is the runner's own
 // "how whole is the merged result" ranking, worst first, used only to fold
@@ -56,6 +77,7 @@ export async function runFrameworkAdapters(
   const startedAt = Date.now();
   const boundedContext: FrameworkAdapterContext = {
     ...context,
+    requestFrameworkFactsForFiles: requestMemoizedFrameworkFacts(context.frameworkIndex),
     candidateFiles: context.candidateFiles.slice(0, MAX_FRAMEWORK_TRAVERSAL_FILES),
     staticEvidence: context.staticEvidence.filter(candidate =>
       context.candidateFiles.slice(0, MAX_FRAMEWORK_TRAVERSAL_FILES).includes(candidate.file))
