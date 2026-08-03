@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as candidateRanking from "./rank-candidates.js";
-import { familyReadPlanProtectedPaths, foldProviderCandidates, rankCandidates } from "./rank-candidates.js";
+import {
+  familyReadPlanProtectedPaths,
+  foldProviderCandidates,
+  rankCandidatePool,
+  rankCandidates,
+  truncateRankedCandidatePool
+} from "./rank-candidates.js";
 import type { CandidateFile, ImpactOptions, ResolvedAnchor } from "../agent-types.js";
 import type { CandidateEvidence, EvidenceSignal, ProviderOutcome } from "./evidence.js";
 
@@ -235,6 +241,108 @@ test("rankCandidates truncates the candidate tail by family-ranker score while p
       `structural evidence at ${file} must survive tail truncation`
     );
   }
+});
+
+test("the V6 planner can select from the complete ranked pool before output-tail truncation", async () => {
+  const entries: [string, CandidateEvidence][] = [];
+  for (let index = 0; index < 25; index += 1) {
+    const file = `/repo/module-a/src/main/java/demo/Candidate${index}.java`;
+    entries.push([file, evidenceCandidate(file, [
+      signal({ candidateFile: file, family: "LEXICAL", kind: "LEXICAL:java", weight: 80 - index, confidence: 0.6 })
+    ], { module: "module-a", sourceSet: "main" })]);
+  }
+  const rankContext = {
+    anchors: [anchor()],
+    options: options({ mode: "minimal" }),
+    suppressed: emptySuppressed(),
+    repoRoot: "/repo"
+  };
+  const pool = await rankCandidatePool(new Map(entries), [], rankContext);
+  const requiredPath = "/repo/module-a/src/main/java/demo/Candidate24.java";
+  const truncated = truncateRankedCandidatePool(pool, rankContext, new Set([requiredPath]));
+
+  assert.equal(pool.length, 26, "the pool contains the anchor and every evidenced candidate");
+  assert.ok(truncated.length <= 18, "the public candidate payload remains bounded by the legacy candidate limit");
+  assert.ok(truncated.some(file => file.absolutePath === requiredPath), "a low-ranked file selected by V6 must survive output-tail truncation");
+});
+
+test("output-tail truncation retains the seed read-plan coverage independently of V6 selections", () => {
+  const anchorFile = {
+    ...candidate("/repo/module-a/src/main/java/demo/Anchor.java", 1_000),
+    module: "module-a",
+    sourceSet: "main" as const,
+    reasons: ["target"]
+  };
+  const legacyCovered = {
+    ...candidate("/repo/module-a/src/main/java/demo/ReferencedType.java", 1),
+    module: "module-a",
+    sourceSet: "main" as const,
+    reasons: ["typeReference"],
+    verifiedBy: ["typeReference"]
+  };
+  const lexical = Array.from({ length: 20 }, (_, index) => ({
+    ...candidate(`/repo/module-a/src/main/java/demo/Lexical${index}.java`, 800 - index),
+    module: "module-a",
+    sourceSet: "main" as const,
+    reasons: ["rg:java"],
+    verifiedBy: ["rg"]
+  }));
+  const ranked = [anchorFile, ...lexical, legacyCovered];
+  const context = {
+    anchors: [anchor({
+      absolutePath: anchorFile.absolutePath,
+      module: "module-a",
+      profile: "service"
+    })],
+    options: options({
+      mode: "minimal",
+      profile: "service",
+      anchors: [{ file: anchorFile.absolutePath, line: 1, column: 1 }]
+    }),
+    suppressed: emptySuppressed(),
+    repoRoot: "/repo"
+  };
+
+  const truncated = truncateRankedCandidatePool(ranked, context, new Set([lexical.at(-1)!.absolutePath]));
+
+  assert.ok(truncated.length <= 18);
+  assert.ok(truncated.some(file => file.absolutePath === lexical.at(-1)!.absolutePath), "V6-selected file remains required");
+  assert.ok(truncated.some(file => file.absolutePath === legacyCovered.absolutePath), "Task 29 candidate-output coverage remains required");
+});
+
+test("output-tail compatibility retains a legacy direct collaborator without making it V6 protected core", async () => {
+  const entries: [string, CandidateEvidence][] = [];
+  for (let index = 0; index < 25; index += 1) {
+    const file = `/repo/module-a/src/main/java/demo/High${index}.java`;
+    entries.push([file, evidenceCandidate(file, [
+      signal({ candidateFile: file, family: "LEXICAL", kind: "LEXICAL:java", weight: 90 - index, confidence: 0.6 })
+    ], { module: "module-a", sourceSet: "main" })]);
+  }
+  const collaborator = "/repo/module-a/src/main/java/demo/LowCollaborator.java";
+  const collaboratorSignal = signal({
+    candidateFile: collaborator,
+    family: "SUPPORT",
+    kind: "DIRECT_COLLABORATOR",
+    provenance: "LEXICAL_RG",
+    weight: 1,
+    confidence: 0.5
+  });
+  entries.push([collaborator, evidenceCandidate(collaborator, [collaboratorSignal], { module: "module-a", sourceSet: "main" })]);
+  const fragment = {
+    ...candidate(collaborator, 1),
+    reasons: ["DIRECT_COLLABORATOR"],
+    verifiedBy: ["DIRECT_COLLABORATOR"],
+    scoreBreakdown: [{ id: "finalize.direct-collaborator", source: "finalize" as const, delta: 1, reason: "legacy output retention" }]
+  };
+
+  const ranked = await rankCandidates(new Map(entries), [outcome({ evidence: [collaboratorSignal], candidates: [fragment] })], {
+    anchors: [anchor()],
+    options: options({ mode: "minimal" }),
+    suppressed: emptySuppressed(),
+    repoRoot: "/repo"
+  });
+
+  assert.ok(ranked.some(file => file.absolutePath === collaborator));
 });
 
 test("candidate tail retains bounded main-source representatives from every explicit focus module", async () => {

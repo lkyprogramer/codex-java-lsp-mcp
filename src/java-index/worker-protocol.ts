@@ -1,5 +1,7 @@
 import type {
   AnchorFacts,
+  IndexedReadRange,
+  IndexedReadRangeResult,
   IndexedReference,
   JavaAnnotationFact,
   JavaCallSiteFact,
@@ -63,6 +65,7 @@ export type JavaIndexRequest =
   | { id: number; type: "QUERY_CALLEES_BATCH"; methodIds: string[]; limit: number }
   | { id: number; type: "QUERY_METHODS_WITH_PARAMETER_TYPES"; typeIds: string[]; limit: number }
   | { id: number; type: "QUERY_FILES"; files: string[] }
+  | { id: number; type: "QUERY_READ_RANGES"; requests: Array<{ file: string; positions: SourcePosition[] }> }
   | { id: number; type: "QUERY_MYBATIS_RESOURCE"; relativePath: string }
   | { id: number; type: "QUERY_MYBATIS_RESOURCES_BY_NAMESPACE"; namespaces: string[] }
   | { id: number; type: "QUERY_REPOSITORY_FACT_MARKERS"; importPrefixes: string[]; annotationPrefixes: string[] }
@@ -781,6 +784,47 @@ export function validateRepositoryFactMarkers(value: unknown): { importPrefixFou
 export function validateFileBundleArray(value: unknown): JavaFileBundle[] {
   const context = "JavaFileBundle[]";
   return array(value, context).map((entry, index) => validateJavaFileBundle(entry, `${context}[${index}]`));
+}
+
+const INDEXED_READ_RANGE_KINDS = ["method", "type", "xml-statement", "xml-resultMap", "fallback"] as const;
+
+function validateIndexedReadRange(value: unknown, context: string): IndexedReadRange {
+  const source = record(value, context);
+  if (!isNumber(source.startLine) || !isNumber(source.endLine) || source.startLine < 1 || source.endLine < source.startLine) {
+    invalid(context, "expected an inclusive positive line range");
+  }
+  if (!isOneOf(source.kind, INDEXED_READ_RANGE_KINDS)) invalid(context, "kind");
+  const kinds = optional(source.kinds, `${context}.kinds`, (item, itemContext) =>
+    array(item, itemContext).map((kind, index) => {
+      if (!isOneOf(kind, INDEXED_READ_RANGE_KINDS)) invalid(`${itemContext}[${index}]`, "kind");
+      return kind;
+    }));
+  if (!isNumber(source.estimatedBytes) || source.estimatedBytes < 0) invalid(context, "estimatedBytes");
+  return {
+    startLine: source.startLine,
+    endLine: source.endLine,
+    kind: source.kind,
+    ...withOptional("kinds", kinds),
+    estimatedBytes: source.estimatedBytes
+  };
+}
+
+export function validateIndexedReadRangeResults(value: unknown): IndexedReadRangeResult[] {
+  return array(value, "IndexedReadRangeResult[]").map((entry, index) => {
+    const context = `IndexedReadRangeResult[${index}]`;
+    const source = record(entry, context);
+    if (!isString(source.file)) invalid(context, "file");
+    const extremeMethod = optional(source.extremeMethod, `${context}.extremeMethod`, (item, itemContext) => {
+      if (!isBoolean(item)) invalid(itemContext, "expected boolean");
+      return item;
+    });
+    return {
+      file: source.file,
+      ranges: array(source.ranges, `${context}.ranges`).map((range, rangeIndex) =>
+        validateIndexedReadRange(range, `${context}.ranges[${rangeIndex}]`)),
+      ...withOptional("extremeMethod", extremeMethod)
+    };
+  });
 }
 
 const MYBATIS_STATEMENT_KINDS = ["select", "insert", "update", "delete"] as const satisfies readonly MyBatisStatementKind[];

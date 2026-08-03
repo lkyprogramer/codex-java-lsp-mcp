@@ -3,7 +3,7 @@
 // pos: Task 25 production boundary between the evidence ranker and existing CandidateFile consumers.
 //      rank-candidates.ts calls this after evidence normalization.
 import { classifyPath } from "../repo-layout.js";
-import type { CandidateFile, ResolvedAnchor, RouterPosition, ScoreBreakdownItem } from "../agent-types.js";
+import type { CandidateEvidenceKey, CandidateFile, ResolvedAnchor, RouterPosition, ScoreBreakdownItem } from "../agent-types.js";
 import { candidateFromAnchor } from "./candidate-collectors.js";
 import type { CandidateEvidence, EvidenceFamily } from "./evidence.js";
 
@@ -75,8 +75,18 @@ export function materializeRankedCandidates(
    */
   legacyCandidates: ReadonlyMap<string, CandidateFile> = new Map()
 ): CandidateFile[] {
-  const anchorFiles = anchors.map(candidateFromAnchor);
-  const anchorPaths = new Set(anchorFiles.map(file => file.absolutePath));
+  const anchorFilesByPath = new Map<string, CandidateFile>();
+  for (const anchor of anchors) {
+    const incoming = candidateFromAnchor(anchor);
+    const existing = anchorFilesByPath.get(incoming.absolutePath);
+    if (!existing) {
+      anchorFilesByPath.set(incoming.absolutePath, incoming);
+      continue;
+    }
+    existing.positions = dedupePositions([...existing.positions, ...incoming.positions]);
+  }
+  const anchorFiles = [...anchorFilesByPath.values()];
+  const anchorPaths = new Set(anchorFilesByPath.keys());
   const rest = ranked
     .filter(candidate => !anchorPaths.has(candidate.file))
     .map(candidate => materializeOne(candidate, repoRoot, legacyCandidates.get(candidate.file)));
@@ -106,7 +116,7 @@ function materializeOne(candidate: CandidateEvidence, repoRoot: string, legacy?:
     { id: "family-ranker.final-score", source: "policy", delta: candidate.finalScore, reason: "family-saturated score" },
     ...legacyCompatEntries(candidate)
   ];
-  return {
+  const materialized: CandidateFile = {
     absolutePath: candidate.file,
     path,
     module: candidate.module ?? legacy?.module,
@@ -121,6 +131,25 @@ function materializeOne(candidate: CandidateEvidence, repoRoot: string, legacy?:
     verifiedBy: unique([...(legacy?.verifiedBy ?? []), ...reasons]),
     scoreBreakdown
   };
+  Object.defineProperty(materialized, "plannerEvidence", {
+    value: plannerEvidence(candidate),
+    enumerable: false,
+    configurable: false,
+    writable: false
+  });
+  return materialized;
+}
+
+function plannerEvidence(candidate: CandidateEvidence): CandidateEvidenceKey[] {
+  const evidence = new Map<string, CandidateEvidenceKey>();
+  for (const signal of candidate.signals) {
+    const sourceTarget = signal.family === "LEXICAL" || signal.family === "TASK_CONTEXT" || signal.family === "SUPPORT"
+      ? `${signal.anchorId}->${signal.kind}`
+      : `${signal.anchorId}:${signal.sourceFile}->${signal.candidateNodeId ?? signal.candidateFile}`;
+    const item = { family: signal.family, kind: signal.kind, sourceTarget };
+    evidence.set(`${item.family}\0${item.kind}\0${item.sourceTarget}`, item);
+  }
+  return [...evidence.values()];
 }
 
 function lexicalCategory(kind: string): string | undefined {

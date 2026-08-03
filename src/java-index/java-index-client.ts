@@ -2,6 +2,7 @@ import { Worker } from "node:worker_threads";
 import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
 import type {
   AnchorFacts,
+  IndexedReadRangeResult,
   IndexedReference,
   JavaFileBundle,
   JavaIndexStatus,
@@ -14,6 +15,7 @@ import {
   isJavaIndexResponse,
   validateAnchorFacts,
   validateFileBundleArray,
+  validateIndexedReadRangeResults,
   validateIndexedReferenceBatch,
   validateIndexedReferenceArray,
   validateJavaIndexStatus,
@@ -212,6 +214,14 @@ export class JavaIndexClient {
   async queryFiles(files: string[]): Promise<JavaFileBundle[]> {
     await this.ensureOpen();
     return this.request({ type: "QUERY_FILES", files }, validateFileBundleArray);
+  }
+
+  async queryReadRanges(
+    requests: Array<{ file: string; positions: Array<{ line: number; column: number }> }>
+  ): Promise<IndexedReadRangeResult[]> {
+    await this.ensureOpen();
+    if (requests.length === 0) return [];
+    return this.request({ type: "QUERY_READ_RANGES", requests }, validateIndexedReadRangeResults);
   }
 
   async queryMyBatisResource(relativePath: string): Promise<MyBatisMapperResourceFacts | undefined> {

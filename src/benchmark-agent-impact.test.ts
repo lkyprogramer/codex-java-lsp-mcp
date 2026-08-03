@@ -37,6 +37,7 @@ test("benchmark loads scenarios from external jsonl and prints metadata", async 
     "--scenarios", scenarioFile,
     "--project-id", "generic-java",
     "--warm-state", "cold-nolsp",
+    "--read-plan-max-bytes", "2048",
     "--list-scenarios"
   ], {
     cwd: path.resolve(import.meta.dirname, ".."),
@@ -49,6 +50,7 @@ test("benchmark loads scenarios from external jsonl and prints metadata", async 
   assert.equal(payload.metadata.warmState, "cold-nolsp");
   assert.equal(payload.metadata.indexBackend, "v2");
   assert.equal(payload.metadata.indexPrepareTimeoutMs, 600000);
+  assert.equal(payload.metadata.readPlanMaxBytes, 2048);
   assert.equal(payload.scenarios[0].id, "demo");
 });
 
@@ -261,7 +263,8 @@ test("impact benchmark exposes timing diagnostics", async () => {
     "--strategy", "impact",
     "--runs", "1",
     "--verbosity", "diagnostic",
-    "--read-plan-max-items", "1"
+    "--read-plan-max-items", "1",
+    "--read-plan-max-bytes", "2048"
   ], {
     cwd: path.resolve(import.meta.dirname, ".."),
     encoding: "utf8",
@@ -277,7 +280,14 @@ test("impact benchmark exposes timing diagnostics", async () => {
   assert.ok(payload.metadata.prepareJavaIndexMs >= 0);
   assert.equal(payload.metadata.prepareJavaIndexStatus.pendingBackground, 0);
   assert.equal(payload.metadata.readPlanMaxItems, 1);
+  assert.equal(payload.metadata.readPlanMaxBytes, 2048);
   assert.equal(attempt.readPlanItems, 1);
+  assert.equal(attempt.readPlanFiles, 1);
+  assert.ok(attempt.readPlanRanges >= 1);
+  assert.ok(attempt.readPlanBytes > 0);
+  assert.ok(attempt.budgetUtilization > 0 && attempt.budgetUtilization <= 1);
+  assert.equal(typeof attempt.budgetExceededByAnchor, "boolean");
+  assert.equal(typeof attempt.marginalUtilityBySelectedFile, "object");
   assert.equal(attempt.roundTrips, 2);
   assert.equal(typeof timing.phaseMs, "object");
   assert.equal(timing.semantic.policy, "fast");

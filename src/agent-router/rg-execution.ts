@@ -20,6 +20,8 @@ const DEFAULT_EXCLUDE_GLOBS = [
 
 export type RgExecutionResult = {
   files: CandidateFile[];
+  /** Full, non-rendered match attribution used by the lexical evidence provider. */
+  evidenceMatches: Array<{ file: CandidateFile; anchorId: string; category: RgPlanSection["category"] }>;
   sections: RgSectionSummary[];
   rawBytes: number;
   totalMatches: number;
@@ -49,6 +51,7 @@ type RunRgSectionInput = {
 
 export async function executeRgPlan(input: ExecuteRgPlanInput): Promise<RgExecutionResult> {
   const fileMap = new Map<string, CandidateFile>();
+  const evidenceMatches: RgExecutionResult["evidenceMatches"] = [];
   const sections: RgSectionSummary[] = [];
   let rawBytes = 0;
   let totalMatches = 0;
@@ -65,6 +68,11 @@ export async function executeRgPlan(input: ExecuteRgPlanInput): Promise<RgExecut
     completions.push(summary.completion);
     for (const file of summary.files) {
       mergeCandidate(fileMap, file);
+      evidenceMatches.push({
+        file,
+        anchorId: item.anchorId ?? input.anchors[0]?.id ?? "A1",
+        category: item.category
+      });
     }
     sections.push({
       category: item.category,
@@ -90,6 +98,7 @@ export async function executeRgPlan(input: ExecuteRgPlanInput): Promise<RgExecut
   }
   return {
     files: [...fileMap.values()],
+    evidenceMatches,
     sections,
     rawBytes,
     totalMatches,

@@ -63,6 +63,19 @@ test("a candidate that is also the anchor path is not listed twice", () => {
   assert.equal(result.filter(file => file.absolutePath === anchorPath).length, 1);
 });
 
+test("two anchors in the same file share one candidate and retain both positions", () => {
+  const first = anchor();
+  const second = { ...anchor(), id: "A2", line: 42, column: 7, methodName: "second" };
+
+  const result = materializeRankedCandidates([], [first, second], repoRoot);
+
+  assert.equal(result.length, 1);
+  assert.deepEqual(result[0]!.positions, [
+    { line: first.line, column: first.column },
+    { line: second.line, column: second.column }
+  ]);
+});
+
 test("module/layer/sourceSet thread through from the normalized evidence entry", () => {
   const other = {
     ...candidateEvidence(path.join(repoRoot, "src/test/java/com/example/OtherTest.java"), [signal({})]),
@@ -226,4 +239,42 @@ test("a FRAMEWORK-family signal materializes into a generic 'framework' category
   assert.ok(materialized.categories.includes("framework"));
   assert.ok(materialized.reasons.includes("SPRING_INJECTION"));
   assert.ok((materialized.verifiedBy ?? []).includes("SPRING_INJECTION"));
+});
+
+test("planner evidence preserves family, kind, and source-target identity", () => {
+  const file = path.join(repoRoot, "src/main/java/com/example/OrderService.java");
+  const ranked = candidateEvidence(file, [
+    signal({
+      candidateFile: file,
+      anchorId: "A1",
+      sourceFile: path.join(repoRoot, "src/main/java/com/example/OrderController.java"),
+      candidateNodeId: "type:demo.OrderService",
+      kind: "SPRING_CALL_PATH",
+      family: "FRAMEWORK",
+      provenance: "FRAMEWORK_INFERRED"
+    }),
+    signal({
+      candidateFile: file,
+      anchorId: "A1",
+      sourceFile: path.join(repoRoot, "src/main/java/com/example/OrderController.java"),
+      candidateNodeId: "type:demo.OrderService",
+      kind: "SPRING_CALL_PATH",
+      family: "FRAMEWORK",
+      provenance: "FRAMEWORK_INFERRED"
+    })
+  ]);
+
+  const materialized = materializeRankedCandidates([ranked], [anchor()], repoRoot)
+    .find(item => item.absolutePath === file)!;
+
+  assert.deepEqual(materialized.plannerEvidence, [{
+    family: "FRAMEWORK",
+    kind: "SPRING_CALL_PATH",
+    sourceTarget: `A1:${path.join(repoRoot, "src/main/java/com/example/OrderController.java")}->type:demo.OrderService`
+  }]);
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(JSON.parse(JSON.stringify(materialized)), "plannerEvidence"),
+    false,
+    "planner-only identity must not widen the public CandidateFile JSON schema"
+  );
 });

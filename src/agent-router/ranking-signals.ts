@@ -30,10 +30,13 @@ const STEREOTYPE_COLLABORATION: Record<string, string[]> = {
 };
 
 const STRUCTURAL_SIGNAL_IDS = new Set([
+  // Candidate-output compatibility only: Task 30's V6 planner does not call
+  // hasProtectedStructuralSignal(), so this name-derived relation cannot
+  // enter its protected core or alter its shortlist priority.
+  "finalize.direct-collaborator",
   "finalize.structural.type-symmetric",
   "finalize.structural.kind",
   "finalize.type-relation",
-  "finalize.direct-collaborator",
   // A method parameter or return type is an exact AST relationship to the
   // anchor. It must not be discarded merely because a dense static graph has
   // already filled the small read-plan budget.

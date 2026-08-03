@@ -43,7 +43,19 @@ import {
 } from "./snapshot.js";
 import { STABLE_ID_VERSION } from "./stable-id.js";
 import { WorktreeSnapshotSeeder } from "./worktree-snapshot-seeder.js";
-import type { JavaIndexStatus, JavaSourceSet, JavaTypeLookupResult, MyBatisResourceCoverage, SourceRootCoverage, WorktreeSeedStatus } from "./index-types.js";
+import type {
+  IndexedReadRange,
+  IndexedReadRangeResult,
+  JavaFileBundle,
+  JavaIndexStatus,
+  JavaSourceSet,
+  JavaTypeLookupResult,
+  MyBatisResourceCoverage,
+  SourcePosition,
+  SourceRange,
+  SourceRootCoverage,
+  WorktreeSeedStatus
+} from "./index-types.js";
 import type { JavaIndexRequest, JavaIndexResponse } from "./worker-protocol.js";
 
 // A full sweep processes this many files before yielding to the message loop
@@ -240,6 +252,183 @@ function deriveSourceLayout(
     : "unknown";
   const sourceRoot = resolveSourceRoot(relativePath, module, context.sourceSet);
   return { absolutePath, relativePath, sourceRoot, module, sourceSet };
+}
+
+const EXTREME_METHOD_LINES = 300;
+const EXTREME_METHOD_WINDOW_LINES = 40;
+const READ_RANGE_MERGE_GAP_LINES = 3;
+
+/**
+ * One worker-side round trip computes the AST/XML windows and their exact
+ * UTF-8 byte cost. The router never opens candidate files just to price a
+ * bounded read plan.
+ */
+async function queryReadRanges(
+  requests: Array<{ file: string; positions: SourcePosition[] }>
+): Promise<IndexedReadRangeResult[]> {
+  return Promise.all(requests.map(async request => {
+    try {
+      const source = deriveSourceLayout(request.file);
+      // Java refresh already retains bounded source bytes beside the parsed
+      // tree; reuse them when present. XML/fallback files have no parse-tree
+      // cache entry, so this remains one asynchronous worker read per batch
+      // request rather than an MCP-thread read.
+      const content = cache?.get(source.relativePath)?.source ?? await readFile(source.absolutePath, "utf8");
+      const positions = request.positions.length > 0 ? request.positions : [{ line: 1, column: 1 }];
+      const bundle = source.absolutePath.endsWith(".java") ? store?.files([source.relativePath])[0] : undefined;
+      const resource = bundle ? undefined : store?.myBatisResource(source.relativePath);
+      const java = bundle ? javaReadRanges(bundle, positions) : { ranges: [], extremeMethod: false };
+      const xmlRanges = !bundle && resource ? xmlReadRanges(resource, positions) : [];
+      const unmerged = java.ranges.length > 0 || xmlRanges.length > 0
+        ? [...java.ranges, ...xmlRanges]
+        : positions.map(position => fallbackReadRange(position));
+      const starts = lineStartOffsets(content);
+      const ranges = mergeWorkerReadRanges(unmerged).map(range => ({
+        ...range,
+        estimatedBytes: utf8BytesForLines(content, starts, range.startLine, range.endLine)
+      }));
+      return { file: request.file, ranges, ...(java.extremeMethod ? { extremeMethod: true } : {}) };
+    } catch {
+      // An unreadable or no-longer-existing candidate is not allowed to fail
+      // the whole planner batch. The omitted file becomes an explicit gap in
+      // the router; no MCP-thread fallback read is attempted here.
+      return { file: request.file, ranges: [] };
+    }
+  }));
+}
+
+function javaReadRanges(bundle: JavaFileBundle, positions: SourcePosition[]): { ranges: IndexedReadRange[]; extremeMethod: boolean } {
+  const ranges: IndexedReadRange[] = [];
+  const headerTypes = new Set<string>();
+  let extremeMethod = false;
+  for (const position of positions) {
+    const method = bundle.methods
+      .filter(item => rangeContainsLine(item.range, position.line))
+      .sort((left, right) => right.range.start.line - left.range.start.line)[0];
+    if (method) {
+      const endLine = methodRangeEnd(method.range, method.bodyRange);
+      if (endLine - method.range.start.line + 1 > EXTREME_METHOD_LINES) {
+        extremeMethod = true;
+        ranges.push({
+          startLine: method.range.start.line,
+          endLine: Math.min(endLine, method.range.start.line + EXTREME_METHOD_WINDOW_LINES - 1),
+          kind: "method",
+          estimatedBytes: 0
+        });
+        ranges.push({
+          startLine: Math.max(method.range.start.line + EXTREME_METHOD_WINDOW_LINES, endLine - EXTREME_METHOD_WINDOW_LINES + 1),
+          endLine,
+          kind: "method",
+          estimatedBytes: 0
+        });
+      } else {
+        ranges.push({ startLine: method.range.start.line, endLine, kind: "method", estimatedBytes: 0 });
+      }
+      const owner = bundle.types.find(type => type.typeId === method.ownerTypeId);
+      if (owner && !headerTypes.has(owner.typeId)) {
+        ranges.push(typeHeaderRange(owner.range));
+        headerTypes.add(owner.typeId);
+      }
+      continue;
+    }
+    const owner = bundle.types
+      .filter(type => rangeContainsLine(type.range, position.line))
+      .sort((left, right) => right.range.start.line - left.range.start.line)[0];
+    if (owner) {
+      ranges.push(typeHeaderRange(owner.range));
+      headerTypes.add(owner.typeId);
+    } else {
+      ranges.push(fallbackReadRange(position));
+    }
+  }
+  return { ranges, extremeMethod };
+}
+
+function xmlReadRanges(
+  resource: NonNullable<ReturnType<JavaIndexStore["myBatisResource"]>>,
+  positions: SourcePosition[]
+): IndexedReadRange[] {
+  const ranges: IndexedReadRange[] = [];
+  for (const position of positions) {
+    const statement = resource.statements.find(item => item.range && rangeContainsLine(item.range, position.line));
+    if (statement?.range) {
+      ranges.push({
+        startLine: statement.range.start.line,
+        endLine: statement.range.end.line,
+        kind: "xml-statement",
+        estimatedBytes: 0
+      });
+      continue;
+    }
+    const resultMap = resource.resultMaps.find(item => item.range && rangeContainsLine(item.range, position.line));
+    if (resultMap?.range) {
+      ranges.push({
+        startLine: resultMap.range.start.line,
+        endLine: resultMap.range.end.line,
+        kind: "xml-resultMap",
+        estimatedBytes: 0
+      });
+      continue;
+    }
+    ranges.push(fallbackReadRange(position));
+  }
+  return ranges;
+}
+
+function methodRangeEnd(range: SourceRange, bodyRange: SourceRange | undefined): number {
+  return bodyRange?.end.line ?? range.end.line;
+}
+
+function rangeContainsLine(range: SourceRange, line: number): boolean {
+  return range.start.line <= line && line <= range.end.line;
+}
+
+function typeHeaderRange(range: SourceRange): IndexedReadRange {
+  return {
+    startLine: range.start.line,
+    endLine: Math.min(range.end.line, range.start.line + 12),
+    kind: "type",
+    estimatedBytes: 0
+  };
+}
+
+function fallbackReadRange(position: SourcePosition): IndexedReadRange {
+  return {
+    startLine: Math.max(1, position.line - 10),
+    endLine: Math.max(1, position.line + 22),
+    kind: "fallback",
+    estimatedBytes: 0
+  };
+}
+
+function mergeWorkerReadRanges(ranges: IndexedReadRange[]): IndexedReadRange[] {
+  const merged: IndexedReadRange[] = [];
+  for (const current of [...ranges].sort((left, right) => left.startLine - right.startLine || left.endLine - right.endLine)) {
+    const previous = merged.at(-1);
+    if (previous && current.startLine <= previous.endLine + READ_RANGE_MERGE_GAP_LINES + 1) {
+      previous.endLine = Math.max(previous.endLine, current.endLine);
+      previous.kind = previous.kind === "method" || current.kind !== "method" ? previous.kind : current.kind;
+      previous.kinds = [...new Set([...(previous.kinds ?? [previous.kind]), ...(current.kinds ?? [current.kind])])];
+    } else {
+      merged.push({ ...current, kinds: [...new Set(current.kinds ?? [current.kind])] });
+    }
+  }
+  return merged;
+}
+
+/** One O(content.length) scan per file, reused across every merged range in that file. */
+function lineStartOffsets(content: string): number[] {
+  const starts = [0];
+  for (let index = 0; index < content.length; index += 1) {
+    if (content.charCodeAt(index) === 10) starts.push(index + 1);
+  }
+  return starts;
+}
+
+function utf8BytesForLines(content: string, starts: readonly number[], startLine: number, endLine: number): number {
+  const start = starts[Math.min(Math.max(startLine - 1, 0), starts.length - 1)]!;
+  const end = endLine < starts.length ? starts[endLine]! : content.length;
+  return Buffer.byteLength(content.slice(start, Math.max(start, end)), "utf8");
 }
 
 function summarizeFiles(): Pick<JavaIndexStatus, "files" | "types" | "methods" | "edges"> {
@@ -1357,6 +1546,10 @@ async function handle(request: JavaIndexRequest): Promise<void> {
           })
           .filter((relativePath): relativePath is string => relativePath !== undefined);
         respond({ id: request.id, ok: true, value: store?.files(relativePaths) ?? [] });
+        return;
+      }
+      case "QUERY_READ_RANGES": {
+        respond({ id: request.id, ok: true, value: await queryReadRanges(request.requests) });
         return;
       }
       case "QUERY_MYBATIS_RESOURCE": {

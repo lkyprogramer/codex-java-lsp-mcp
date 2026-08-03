@@ -151,7 +151,7 @@ async function selectedReadPlanPaths(
     protectedPaths: input.protectedReadPlanPaths,
     generation: input.generation
   });
-  return new Set(plan.map(item => pathsById.get(item.fileId)).filter((path): path is string => Boolean(path)));
+  return new Set(plan.items.map(item => pathsById.get(item.fileId)).filter((path): path is string => Boolean(path)));
 }
 
 function ablatePolicy(policy: FamilyRankPolicy, family: EvidenceFamily): FamilyRankPolicy {

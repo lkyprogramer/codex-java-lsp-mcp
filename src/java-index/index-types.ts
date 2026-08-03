@@ -275,3 +275,20 @@ export type IndexedReference = {
   range?: SourceRange;
   generation: number;
 };
+
+/** A worker-computed source window with bytes counted from the exact UTF-8 source slice. */
+export type IndexedReadRange = {
+  startLine: number;
+  endLine: number;
+  kind: "method" | "type" | "xml-statement" | "xml-resultMap" | "fallback";
+  /** Every source-window kind merged into this range, retained for planner reason fidelity. */
+  kinds?: Array<"method" | "type" | "xml-statement" | "xml-resultMap" | "fallback">;
+  estimatedBytes: number;
+};
+
+export type IndexedReadRangeResult = {
+  file: string;
+  ranges: IndexedReadRange[];
+  /** An extreme method is represented by bounded first/last windows instead of a broken body fragment. */
+  extremeMethod?: boolean;
+};

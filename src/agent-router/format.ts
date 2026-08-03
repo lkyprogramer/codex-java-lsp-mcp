@@ -32,6 +32,7 @@ type BuildImpactResultInput = {
     readonly sourceFacts: Record<string, unknown>;
     readonly freshness: Record<string, unknown>;
     readonly javaIndex: Record<string, unknown>;
+    readonly readPlan?: unknown;
     readonly framework?: Record<string, unknown>;
   };
 };
@@ -84,6 +85,7 @@ export function buildImpactResult(input: BuildImpactResultInput): ImpactResult {
       sourceFacts: input.metrics.sourceFacts,
       freshness: input.metrics.freshness,
       javaIndex: input.metrics.javaIndex,
+      readPlan: input.metrics.readPlan,
       framework: input.metrics.framework,
       outputBytes: 0
     }
@@ -132,6 +134,7 @@ export function formatAnchor(anchor: ResolvedAnchor): Record<string, unknown> {
 export function applyVerbosity(payload: ImpactResult, verbosity: ImpactVerbosity): void {
   payload.evidenceGaps = unique(payload.evidenceGaps);
   const framework = payload.metrics.framework as Record<string, unknown> | undefined;
+  const readPlan = payload.metrics.readPlan as Record<string, unknown> | undefined;
   const generatedCode = framework?.generatedCode as Record<string, unknown> | undefined;
   if (generatedCode?.semantics !== undefined) {
     payload.metrics.generatedSemantics = generatedCode.semantics;
@@ -158,8 +161,19 @@ export function applyVerbosity(payload: ImpactResult, verbosity: ImpactVerbosity
     // Freshness is a small correctness signal; keep it in every verbosity.
     freshness: payload.metrics.freshness,
     javaIndex: slimJavaIndex(payload.metrics.javaIndex),
+    readPlan: slimReadPlan(readPlan),
     generatedSemantics: generatedCode?.semantics,
     outputBytes: payload.metrics.outputBytes
+  });
+}
+
+function slimReadPlan(value: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+  if (!value) return undefined;
+  return compact({
+    totalBytes: value.totalBytes,
+    maxReadBytes: value.maxReadBytes,
+    maxFiles: value.maxFiles,
+    budgetExceededByAnchor: value.budgetExceededByAnchor
   });
 }
 

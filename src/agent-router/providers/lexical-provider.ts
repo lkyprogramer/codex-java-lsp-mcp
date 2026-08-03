@@ -56,26 +56,29 @@ export async function collectLexicalEvidence(input: ProviderInput): Promise<Lexi
     concurrency: input.concurrency,
     loadSummary: input.loadRgSummary
   }));
-  const anchorId = input.anchors[0]?.id ?? "A1";
   const completeness = rgExecution.completion === "COMPLETE" ? "COMPLETE" : "PARTIAL";
   const confidence = lexicalConfidence();
-  const evidence: EvidenceSignal[] = rgExecution.files.flatMap(candidate => lexicalCategories(candidate.categories).map(category => ({
+  const attributedMatches = new Map<string, RgExecutionResult["evidenceMatches"][number]>();
+  for (const match of rgExecution.evidenceMatches) {
+    attributedMatches.set(`${match.file.absolutePath}\0${match.anchorId}\0${match.category}`, match);
+  }
+  const evidence: EvidenceSignal[] = [...attributedMatches.values()].map(({ file: candidate, anchorId, category }) => ({
     signalId: nextSignalId(LEXICAL_PROVIDER_ID),
     candidateFile: candidate.absolutePath,
     anchorId,
-    kind: `LEXICAL:${category}`,
+    kind: `LEXICAL:${lexicalCategory(category)}`,
     family: "LEXICAL",
     provenance: "LEXICAL_RG",
     confidence,
     completeness,
-    weight: LEXICAL_CATEGORY_WEIGHTS[category]!,
+    weight: LEXICAL_CATEGORY_WEIGHTS[lexicalCategory(category)]!,
     sourceFile: candidate.absolutePath,
     positions: candidate.positions,
     providerId: LEXICAL_PROVIDER_ID,
     providerVersion: LEXICAL_PROVIDER_VERSION,
     generation: input.generation,
     detail: candidate.reasons.join(",")
-  })));
+  }));
 
   return {
     providerId: LEXICAL_PROVIDER_ID,
@@ -91,4 +94,8 @@ export async function collectLexicalEvidence(input: ProviderInput): Promise<Lexi
 function lexicalCategories(categories: readonly string[]): string[] {
   const selected = categories.filter(category => LEXICAL_CATEGORY_WEIGHTS[category] !== undefined);
   return selected.length > 0 ? [...new Set(selected)] : ["java"];
+}
+
+function lexicalCategory(category: string): string {
+  return LEXICAL_CATEGORY_WEIGHTS[category] !== undefined ? category : "java";
 }

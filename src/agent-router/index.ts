@@ -11,7 +11,13 @@ import { resolveFamilyRankPolicy, resolveRoutingPolicy, type RoutingPolicy } fro
 import { resolveAnchor } from "./anchor.js";
 import { buildReadPlan } from "./read-plan.js";
 import { evidenceGaps } from "./evidence-gaps.js";
-import { familyReadPlanProtectedPaths, foldProviderCandidates, rankCandidates } from "./rank-candidates.js";
+import {
+  baselineReadPlanSafePaths,
+  familyReadPlanProtectedPaths,
+  foldProviderCandidates,
+  rankCandidatePool,
+  truncateRankedCandidatePool
+} from "./rank-candidates.js";
 import { buildImpactResult } from "./format.js";
 import {
   createImportGraphMetrics,
@@ -267,23 +273,32 @@ export class AgentRouter {
       crossModuleConsumers: 0,
       excludedModules: 0
     };
-    const ranked = await timed(phaseMs, "familyRank", async () => rankCandidates(normalized, outcomes, {
+    const rankContext = {
       anchors,
       options,
       suppressed,
       extraProtectedPaths: protectedReadPlanPaths,
       repoRoot: this.repoRoot,
       familyRankPolicy
-    }));
-    const idByPath = new Map(ranked.map((file, index) => [file.absolutePath, `F${index + 1}`]));
-    const pathById = new Map([...idByPath].map(([absolutePath, id]) => [id, absolutePath]));
-    const readPlan = await timed(phaseMs, "buildReadPlan", async () => buildReadPlan({
-      files: ranked,
-      ids: idByPath,
+    };
+    const rankedPool = await timed(phaseMs, "familyRank", async () => rankCandidatePool(normalized, outcomes, rankContext));
+    const baselineSafePaths = baselineReadPlanSafePaths(rankedPool, rankContext);
+    const plannerProtectedPaths = new Set([...protectedReadPlanPaths, ...baselineSafePaths]);
+    const poolIdByPath = new Map(rankedPool.map((file, index) => [file.absolutePath, `P${index + 1}`]));
+    const readPlanResult = await timed(phaseMs, "buildReadPlan", async () => buildReadPlan({
+      files: rankedPool,
+      ids: poolIdByPath,
       options,
       javaIndex: this.javaIndex,
-      protectedPaths: protectedReadPlanPaths,
+      protectedPaths: plannerProtectedPaths,
       generation
+    }));
+    const ranked = truncateRankedCandidatePool(rankedPool, rankContext, new Set(readPlanResult.selectedPaths));
+    const idByPath = new Map(ranked.map((file, index) => [file.absolutePath, `F${index + 1}`]));
+    const pathById = new Map([...idByPath].map(([absolutePath, id]) => [id, absolutePath]));
+    const readPlan = readPlanResult.items.map((item, index) => ({
+      ...item,
+      fileId: idByPath.get(readPlanResult.selectedPaths[index]!) || "F?"
     }));
     const cacheAfter = await timed(phaseMs, "sessionCacheAfter", async () => this.session.cacheStatus());
     const rgAfter = await timed(phaseMs, "rgCacheAfter", async () => this.rgCacheStatus());
@@ -325,7 +340,10 @@ export class AgentRouter {
       readPlan,
       rgExecution: lexicalOutcome.rgExecution,
       suppressed,
-      evidenceGaps: evidenceGaps(anchors, options, { ...semantic, lombokIncomplete: lombok.taskGapDetected }),
+      evidenceGaps: [
+        ...evidenceGaps(anchors, options, { ...semantic, lombokIncomplete: lombok.taskGapDetected }),
+        ...readPlanResult.evidenceGaps
+      ],
       shadowRanking,
       metrics: {
         semantic,
@@ -348,6 +366,7 @@ export class AgentRouter {
           coverage: sourceAfter.coverage,
           openSource: sourceAfter.openSource
         },
+        readPlan: readPlanResult,
         framework: {
           metadata: frameworkResult.metadata,
           diagnostics: frameworkResult.diagnostics,

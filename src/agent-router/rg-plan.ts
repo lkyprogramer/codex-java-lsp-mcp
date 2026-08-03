@@ -97,7 +97,9 @@ export function buildRgPlan(input: BuildRgPlanInput): RgPlanSection[] {
   if (options.mode === "recall") {
     sections.push(section("config", "runtime configuration evidence", expand([base, stem]), layoutContext.broadRoots, ["*.yml", "*.yaml", "*.properties", "*.xml"]));
   }
-  return sections.filter(item => item.paths.length > 0 && item.pattern.length > 0);
+  return sections
+    .filter(item => item.paths.length > 0 && item.pattern.length > 0)
+    .map(item => ({ ...item, anchorId: anchor.id }));
 }
 
 export function summaryFromSearchResult(input: SummaryFromSearchResultInput): RgCommandSummary {

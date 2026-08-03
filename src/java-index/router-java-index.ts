@@ -9,6 +9,7 @@ import { normalizeRepoFile, repoCacheRoot } from "../repo-layout.js";
 import { JavaIndexClient, type JavaIndexOpenOptions } from "./java-index-client.js";
 import type {
   AnchorFacts,
+  IndexedReadRangeResult,
   IndexedReference,
   JavaIndexStatus,
   JavaTypeFacts,
@@ -96,6 +97,10 @@ export type RouterIndexStatus = {
 export interface RouterIndex {
   ensureFresh(files: string[], generation: number): Promise<void>;
   queryAnchor(file: string, line: number, column: number): Promise<AnchorFacts | undefined>;
+  queryReadRanges(
+    requests: Array<{ file: string; positions: Array<{ line: number; column: number }> }>,
+    generation?: number
+  ): Promise<IndexedReadRangeResult[]>;
   factsFor(inputFile: string, generation?: number): Promise<JavaSourceFacts>;
   methodAt(inputFile: string, line: number, generation?: number): Promise<JavaMethodFact | undefined>;
   findImplementers(typeName: string, limit?: number, scopeFile?: string): Promise<JavaSourceFacts[]>;
@@ -199,6 +204,15 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
   async queryAnchor(file: string, line: number, column: number) {
     await this.ensureOpened(this.generation);
     return this.client.queryAnchor(file, line, column);
+  }
+
+  async queryReadRanges(
+    requests: Array<{ file: string; positions: Array<{ line: number; column: number }> }>,
+    generation = this.generation
+  ): Promise<IndexedReadRangeResult[]> {
+    const files = requests.map(request => normalizeRepoFile(this.repoRoot, request.file));
+    await this.ensureOpened(generation);
+    return this.client.queryReadRanges(requests.map((request, index) => ({ ...request, file: files[index]! })));
   }
 
   async queryType(typeText: string, scopeFile?: string) {

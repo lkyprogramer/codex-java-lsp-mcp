@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
 import type { JavaIndexStatus } from "./index-types.js";
 import { JavaIndexClient, type WorkerLike } from "./java-index-client.js";
+import { RouterJavaIndex } from "./router-java-index.js";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const fixturesRepoRoot = path.resolve(dirname, "..", "..", "fixtures", "java-index-v2");
@@ -256,6 +257,123 @@ test("REFRESH end-to-end through a real worker thread: reads, parses, extracts, 
   assert.equal(bundlesAfterDelete.length, 0);
 
   await client.close();
+});
+
+test("QUERY_READ_RANGES returns exact UTF-8 Java/XML/fallback windows in one worker batch", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "java-index-read-ranges-"));
+  const cacheDir = mkdtempSync(path.join(tmpdir(), "java-index-read-ranges-cache-"));
+  const javaDir = path.join(repoRoot, "src/main/java/demo");
+  const resourceDir = path.join(repoRoot, "src/main/resources/mapper");
+  mkdirSync(javaDir, { recursive: true });
+  mkdirSync(resourceDir, { recursive: true });
+  const javaPath = path.join(javaDir, "UnicodeService.java");
+  const secondMethodLine = 36;
+  const javaSource = [
+    "package demo;",
+    "",
+    "public class UnicodeService {",
+    "  String first() { return \"汉字\"; }",
+    ...Array.from({ length: 31 }, () => ""),
+    "  String second() { return \"done\"; }",
+    "}",
+    ""
+  ].join("\n");
+  const xmlPath = path.join(resourceDir, "OrderMapper.xml");
+  const xmlSource = [
+    "<mapper namespace=\"demo.OrderMapper\">",
+    "  <select id=\"find\" resultType=\"string\">",
+    "    SELECT '汉字'",
+    "  </select>",
+    "</mapper>",
+    ""
+  ].join("\n");
+  const fallbackPath = path.join(repoRoot, "notes.txt");
+  writeFileSync(javaPath, javaSource);
+  writeFileSync(xmlPath, xmlSource);
+  writeFileSync(fallbackPath, "first\nsecond\nthird\n");
+
+  const client = new JavaIndexClient(repoRoot, cacheDir);
+  try {
+    await client.open(1);
+    await client.refresh(2, [javaPath], []);
+    await client.refreshResources(2, [xmlPath]);
+    const results = await client.queryReadRanges([
+      { file: javaPath, positions: [{ line: 4, column: 3 }, { line: secondMethodLine, column: 3 }] },
+      { file: xmlPath, positions: [{ line: 2, column: 3 }] },
+      { file: fallbackPath, positions: [{ line: 2, column: 1 }] }
+    ]);
+
+    const javaRanges = results.find(result => result.file === javaPath)!.ranges;
+    assert.ok(javaRanges.length >= 2, "distant Java methods remain separate read ranges");
+    assert.ok(javaRanges.some(range => range.kind === "method"));
+    const javaRangeWithCjk = javaRanges.find(range => range.startLine <= 4 && range.endLine >= 4)!;
+    assert.deepEqual(
+      new Set(javaRangeWithCjk.kinds),
+      new Set(["method", "type"]),
+      "merged method and owner-header windows must retain both reason kinds"
+    );
+    const lineStarts = [0];
+    for (let index = 0; index < javaSource.length; index += 1) if (javaSource.charCodeAt(index) === 10) lineStarts.push(index + 1);
+    const expectedBytes = Buffer.byteLength(javaSource.slice(lineStarts[javaRangeWithCjk.startLine - 1], lineStarts[javaRangeWithCjk.endLine] ?? javaSource.length), "utf8");
+    assert.equal(javaRangeWithCjk.estimatedBytes, expectedBytes, "CJK source is accounted in UTF-8 bytes, not JS character count");
+
+    const xmlRange = results.find(result => result.file === xmlPath)!.ranges[0]!;
+    assert.equal(xmlRange.kind, "xml-statement");
+    assert.ok(xmlRange.estimatedBytes > 0);
+    assert.equal(results.find(result => result.file === fallbackPath)!.ranges[0]!.kind, "fallback");
+  } finally {
+    await client.close();
+  }
+});
+
+test("RouterJavaIndex rejects outside-repository range requests before forwarding to the worker", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "java-index-read-ranges-boundary-"));
+  const forwarded: unknown[] = [];
+  const client = {
+    localStatus: () => validStatus(0),
+    queryReadRanges: async (requests: unknown[]) => {
+      forwarded.push(...requests);
+      return [];
+    }
+  } as never;
+  const router = new RouterJavaIndex(repoRoot, client);
+
+  await assert.rejects(
+    router.queryReadRanges([{
+      file: path.resolve(repoRoot, "..", "outside", "Secret.java"),
+      positions: [{ line: 1, column: 1 }]
+    }]),
+    /outside|repository|repo/i
+  );
+  assert.equal(forwarded.length, 0);
+});
+
+test("QUERY_READ_RANGES bounds an extreme Java method to first and last windows", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "java-index-extreme-range-"));
+  const cacheDir = mkdtempSync(path.join(tmpdir(), "java-index-extreme-range-cache-"));
+  const sourceDir = path.join(repoRoot, "src/main/java/demo");
+  mkdirSync(sourceDir, { recursive: true });
+  const sourcePath = path.join(sourceDir, "HugeService.java");
+  writeFileSync(sourcePath, [
+    "package demo;",
+    "public class HugeService {",
+    "  void huge() {",
+    ...Array.from({ length: 305 }, () => "    System.out.println(\"x\");"),
+    "  }",
+    "}",
+    ""
+  ].join("\n"));
+  const client = new JavaIndexClient(repoRoot, cacheDir);
+  try {
+    await client.open(1);
+    await client.refresh(2, [sourcePath], []);
+    const result = (await client.queryReadRanges([{ file: sourcePath, positions: [{ line: 3, column: 3 }] }]))[0]!;
+    assert.equal(result.extremeMethod, true);
+    assert.ok(result.ranges.length >= 2, "extreme method must not become one oversized body range");
+    assert.ok(result.ranges.every(range => range.endLine - range.startLine + 1 <= 41));
+  } finally {
+    await client.close();
+  }
 });
 
 test("deleting a type's sole source file drops the now-stale IMPLEMENTS edge from its implementer", async () => {

@@ -69,6 +69,20 @@ export async function rankCandidates(
   outcomes: readonly ProviderOutcome[],
   context: RankCandidatesContext
 ): Promise<CandidateFile[]> {
+  const ranked = await rankCandidatePool(normalized, outcomes, context);
+  return truncateRankedCandidatePool(ranked, context);
+}
+
+/**
+ * Materializes the complete family-ranked pool. Task 30's byte-aware planner
+ * consumes this pool before candidate-tail truncation so a low-byte, diverse
+ * candidate cannot disappear through the legacy file-slot selector.
+ */
+export async function rankCandidatePool(
+  normalized: ReadonlyMap<string, CandidateEvidence>,
+  outcomes: readonly ProviderOutcome[],
+  context: RankCandidatesContext
+): Promise<CandidateFile[]> {
   const anchor = context.anchors[0]!;
   // Candidate discovery metadata (categories/reasons/verifiedBy/positions) is
   // not yet fully reconstructable from EvidenceFamily alone (materialize-
@@ -109,17 +123,24 @@ export async function rankCandidates(
     testReadMode: context.options.testReadMode
   };
   const familyRanked = rankByFamily(evidenceCandidates, rankContext);
-  const ranked = materializeRankedCandidates(familyRanked, context.anchors, context.repoRoot, legacyCandidates);
+  return materializeRankedCandidates(familyRanked, context.anchors, context.repoRoot, legacyCandidates);
+}
 
-  const maxItems = context.options.readPlanMaxItems ?? defaultReadPlanMax(context.options.mode);
-  const sortedForPlan = legacyReadPlanSorted(ranked, context.options);
-  const readPlanCovered = new Set(selectReadPlanFiles({ files: sortedForPlan, options: context.options, maxItems }));
-  // An interface implementation is static JavaIndex evidence worth exposing
-  // even when its lower score does not earn one of the small read-plan
-  // windows. Candidate-tail truncation must not erase that relation; callers
-  // can then choose it deliberately without spending read-plan budget.
+/** Applies the output candidate cap only after Task 30 has chosen its plan. */
+export function truncateRankedCandidatePool(
+  ranked: CandidateFile[],
+  context: RankCandidatesContext,
+  requiredPaths: ReadonlySet<string> = new Set<string>()
+): CandidateFile[] {
+  const anchor = context.anchors[0]!;
+  // Preserve Task 29's public candidate-tail contract independently of the
+  // V6 byte planner. The legacy file-slot selector is used only to decide
+  // which CandidateFile records survive the output cap; it does not feed the
+  // V6 shortlist, buckets, utility, or byte budget.
+  const readPlanCovered = new Set(baselineReadPlanCoverage(ranked, context));
   for (const file of ranked) {
-    if (file.reasons.includes("typeGraph:implementation-lookup")) {
+    if (requiredPaths.has(file.absolutePath)
+      || file.reasons.includes("typeGraph:implementation-lookup")) {
       readPlanCovered.add(file);
     }
   }
@@ -133,6 +154,55 @@ export async function rankCandidates(
     readPlanCovered.add(file);
   }
   return truncateCandidateTail(ranked, readPlanCovered, limit);
+}
+
+/**
+ * Seed file-slot coverage is retained only at the public CandidateFile tail.
+ * V6 uses the filtered high-confidence subset below as safe slots.
+ */
+function baselineReadPlanCoverage(
+  ranked: readonly CandidateFile[],
+  context: RankCandidatesContext
+): CandidateFile[] {
+  const maxItems = context.options.readPlanMaxItems ?? defaultReadPlanMax(context.options.mode);
+  return selectReadPlanFiles({
+    files: legacyReadPlanSorted(ranked, context.options),
+    options: context.options,
+    maxItems
+  });
+}
+
+export function baselineReadPlanSafePaths(
+  ranked: readonly CandidateFile[],
+  context: RankCandidatesContext
+): ReadonlySet<string> {
+  return new Set(baselineReadPlanCoverage(ranked, context)
+    .filter(file => isBaselineSafeCore(file, context.options))
+    .map(file => file.absolutePath));
+}
+
+function isBaselineSafeCore(file: CandidateFile, options: ImpactOptions): boolean {
+  if (file.reasons.includes("target")) return true;
+  if (file.sourceSet === "test" && options.testReadMode === "defer") return false;
+  if ((file.verifiedBy || []).some(source => source === "reference"
+    || source === "typeReference"
+    || source === "typeHierarchy"
+    || source === "semantic-definition"
+    || source === "semantic-implementation"
+    || source === "persisted-reference"
+    || source === "persisted-implementation"
+    || source === "persisted-typeHierarchy")) return true;
+  if (file.reasons.some(reason => reason === "typeGraph:implementation-lookup"
+    || reason === "implementation"
+    || reason === "SPRING_CALL_PATH"
+    || reason === "MYBATIS_NAMESPACE"
+    || reason === "MYBATIS_STATEMENT_METHOD"
+    || reason === "JPA_REPOSITORY_ENTITY")) return true;
+  return (file.scoreBreakdown || []).some(item => item.delta > 0 && (
+    item.id === "finalize.type-relation"
+    || item.id === "finalize.method-relation"
+    || item.id === "finalize.structural.type-symmetric"
+  ));
 }
 
 const FOCUS_MODULE_REPRESENTATIVES = 3;
@@ -182,17 +252,12 @@ function focusModuleRepresentatives(
  */
 export async function familyReadPlanProtectedPaths(
   normalized: ReadonlyMap<string, CandidateEvidence>,
-  outcomes: readonly ProviderOutcome[],
-  context: RankCandidatesContext
+  _outcomes: readonly ProviderOutcome[],
+  _context: RankCandidatesContext
 ): Promise<ReadonlySet<string>> {
-  const ranked = await rankCandidates(normalized, outcomes, {
-    ...context,
-    extraProtectedPaths: undefined
-  });
-  const maxItems = context.options.readPlanMaxItems ?? defaultReadPlanMax(context.options.mode);
-  return new Set(selectReadPlanFiles({ files: ranked, options: context.options, maxItems })
-    .filter(file => frameworkEligibleForPreSemanticProtection(normalized.get(file.absolutePath)))
-    .map(file => file.absolutePath));
+  return new Set([...normalized.values()]
+    .filter(candidate => candidate.signals.some(isPreSemanticProtectedSignal))
+    .map(candidate => candidate.file));
 }
 
 /** Framework evidence kinds strong enough to protect a framework-only candidate's read-plan slot before semantic ranking runs - a curated allowlist, not a strict "exact match only" filter (SPRING_INJECTION is weaker than SPRING_CALL_PATH but still approved here). */
@@ -203,13 +268,16 @@ const FRAMEWORK_PRE_SEMANTIC_PROTECTED_KINDS = new Set([
   "MYBATIS_STATEMENT_METHOD"
 ]);
 
-function frameworkEligibleForPreSemanticProtection(candidate: CandidateEvidence | undefined): boolean {
-  if (!candidate) return false;
-  const frameworkSignals = candidate.signals.filter(signal => signal.family === "FRAMEWORK");
-  if (frameworkSignals.length === 0) return true;
-  // A candidate with independent non-framework evidence keeps its existing
-  // protection semantics. Framework-only candidates need one of the
-  // approved relationships for the pre-semantic budget.
-  if (candidate.signals.some(signal => signal.family !== "FRAMEWORK")) return true;
-  return frameworkSignals.some(signal => FRAMEWORK_PRE_SEMANTIC_PROTECTED_KINDS.has(signal.kind));
+function isPreSemanticProtectedSignal(signal: CandidateEvidence["signals"][number]): boolean {
+  if (signal.family === "FRAMEWORK") {
+    return FRAMEWORK_PRE_SEMANTIC_PROTECTED_KINDS.has(signal.kind);
+  }
+  if (signal.family === "EXACT_SEMANTIC") {
+    return signal.kind === "DEFINITION" || signal.kind === "IMPLEMENTATION" || signal.kind === "TYPEHIERARCHY";
+  }
+  return signal.family === "STATIC_STRUCTURE"
+    && (signal.kind === "IMPLEMENTS"
+      || signal.kind === "METHOD_RELATION"
+      || signal.kind === "TYPE_RELATION"
+      || signal.kind === "TYPE_SYMMETRIC");
 }

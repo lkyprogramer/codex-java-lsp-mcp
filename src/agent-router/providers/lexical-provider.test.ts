@@ -83,3 +83,31 @@ test("lexical provider emits a category evidence weight instead of the legacy po
     [{ kind: "LEXICAL:java", weight: 56 }]
   );
 });
+
+test("lexical evidence retains the anchor that produced each matching plan section", async () => {
+  const candidate: CandidateFile = {
+    absolutePath: "/repo/src/main/java/demo/SharedFacade.java",
+    path: "src/main/java/demo/SharedFacade.java",
+    module: ".",
+    sourceSet: "main",
+    score: 56,
+    matchCount: 1,
+    positions: [{ line: 1, column: 1 }],
+    categories: ["java"],
+    reasons: ["rg:java"],
+    verifiedBy: ["rg"]
+  };
+  const secondAnchor: ResolvedAnchor = {
+    ...anchor,
+    id: "A2",
+    absolutePath: "/repo/src/main/java/demo/InvoiceService.java",
+    path: "src/main/java/demo/InvoiceService.java",
+    symbolName: "InvoiceService",
+    className: "InvoiceService"
+  };
+  const input = providerInput(candidate);
+
+  const result = await collectLexicalEvidence({ ...input, anchors: [anchor, secondAnchor] });
+
+  assert.deepEqual(new Set(result.evidence.map(signal => signal.anchorId)), new Set(["A1", "A2"]));
+});

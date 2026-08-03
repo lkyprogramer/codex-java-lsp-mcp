@@ -34,6 +34,8 @@ export type ImpactOptions = {
   semanticPolicy: SemanticPolicy;
   semanticTimeoutMs: number;
   readPlanMaxItems?: number;
+  /** Internal/benchmark override; the MCP schema deliberately exposes no byte knob. */
+  readPlanMaxBytes?: number;
   testReadMode: TestReadMode;
   focusModules: string[];
   excludeModules: string[];
@@ -79,6 +81,8 @@ export type CandidateFile = {
   confidence?: Confidence;
   verifiedBy?: string[];
   scoreBreakdown?: ScoreBreakdownItem[];
+  /** Internal planner identity; formatCandidate never exposes this field. */
+  plannerEvidence?: CandidateEvidenceKey[];
 };
 
 export type RoutedCandidate = CandidateFile & {
@@ -87,15 +91,40 @@ export type RoutedCandidate = CandidateFile & {
   scoreBreakdown?: ScoreBreakdownItem[];
 };
 
-export type ReadPlanItem = {
-  priority: ReadPriority;
-  fileId: string;
+/** Internal Task 30 evidence identity used for diversity/overlap decisions. */
+export type CandidateEvidenceKey = {
+  family: string;
+  kind: string;
+  sourceTarget: string;
+};
+
+export type ReadRange = {
   startLine: number;
   endLine: number;
   reason: string;
+  estimatedBytes: number;
+};
+
+export type ReadPlanItemV6 = {
+  priority: ReadPriority;
+  fileId: string;
+  ranges: ReadRange[];
+  reason: string;
+  expectedEvidence: string[];
+  estimatedBytes: number;
+};
+
+/** Task 30 keeps the public field name while upgrading its item payload to V6. */
+export type ReadPlanItem = ReadPlanItemV6;
+
+export type ReadPlanBudget = {
+  maxFiles: number;
+  maxReadBytes: number;
 };
 
 export type RgPlanSection = {
+  /** Internal producer identity for multi-anchor lexical evidence attribution. */
+  anchorId?: string;
   category: "java" | "protocol" | "persistence" | "config" | "tests" | "nonJava";
   reason: string;
   pattern: string;

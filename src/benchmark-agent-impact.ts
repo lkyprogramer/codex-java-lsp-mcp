@@ -73,6 +73,7 @@ type Cli = {
   verbosity: NonNullable<ImpactOptions["verbosity"]>;
   runs: number;
   readPlanMaxItems?: number;
+  readPlanMaxBytes?: number;
   listScenarios: boolean;
   strategy: BenchmarkStrategy;
   deadlineMs: number;
@@ -104,6 +105,7 @@ const metadata = {
   deadlineMs: cli.deadlineMs,
   runs: cli.runs,
   readPlanMaxItems: cli.readPlanMaxItems,
+  readPlanMaxBytes: cli.readPlanMaxBytes,
   scenarioFile: cli.scenarioFile,
   runtimeBuild,
   // The V2 runtime reconciles its static index before serving requests.  This
@@ -230,6 +232,7 @@ function parseCli(args: string[], root: string): Cli {
     verbosity: stringArg(values, "--verbosity", process.env.JAVA_LSP_BENCH_VERBOSITY || "standard") as NonNullable<ImpactOptions["verbosity"]>,
     runs: Number(stringArg(values, "--runs", process.env.JAVA_LSP_BENCH_RUNS || "1")),
     readPlanMaxItems: optionalPositiveIntegerArg(values, "--read-plan-max-items", process.env.JAVA_LSP_BENCH_READ_PLAN_MAX_ITEMS),
+    readPlanMaxBytes: optionalPositiveIntegerArg(values, "--read-plan-max-bytes", process.env.JAVA_LSP_BENCH_READ_PLAN_MAX_BYTES),
     listScenarios: values.get("--list-scenarios") === true,
     strategy: stringArg(values, "--strategy", process.env.JAVA_LSP_BENCH_STRATEGY || "impact") as BenchmarkStrategy,
     // The same absolute deadline java_impact gives a real caller in this warm
@@ -266,7 +269,8 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
       taskKeywords: scenario.anchor.taskKeywords || [],
       crossModulePolicy: "auto",
       verbosity: cli.verbosity,
-      readPlanMaxItems: cli.readPlanMaxItems
+      readPlanMaxItems: cli.readPlanMaxItems,
+      readPlanMaxBytes: cli.readPlanMaxBytes
     },
     // The benchmark has no live watcher, so it uses generation 0 with caches
     // enabled — the pre-freshness behavior — under the same production budget.
@@ -285,7 +289,7 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
   );
   const elapsedMs = performance.now() - startedAt;
   const rawSearchPayload = Buffer.byteLength(JSON.stringify(result), "utf8");
-  const readingPayload = readPlanBytes(cli.repoRoot, result);
+  const readingPayload = readPlanBytes(result);
   const candidatePaths = result.files.map(file => String(file.path));
   const readFiles = distinctReadFiles(result);
   const quality = evaluate(candidatePaths, readFiles, scenario);
@@ -293,6 +297,7 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
   const sessionPhaseMs = session.drainPhaseMetrics();
   return {
     ...attemptPayload("impact", quality, rawSearchPayload, readingPayload, elapsedMs, 1 + result.readPlan.length, result.readPlan.length, Number(result.counts.totalRgRawBytes || 0), 0),
+    ...readPlanMetrics(result),
     timing: timingPayload(result, sessionPhaseMs),
     goldenAttribution: goldenAttributionForImpact(cli.repoRoot, result, scenario),
     frameworkEvidence: { mapstruct: mapstructEvidenceSummary(result, scenario) },
@@ -485,22 +490,22 @@ async function waitForProgressIdle(session: JdtlsSession, timeoutMs: number): Pr
   }
 }
 
-function readPlanBytes(repoRoot: string, result: Awaited<ReturnType<AgentRouter["impact"]>>): number {
-  const files = new Map(result.files.map(file => [String(file.id), String(file.path)]));
-  let bytes = 0;
-  for (const item of result.readPlan) {
-    const file = files.get(item.fileId);
-    if (!file) {
-      continue;
-    }
-    const absolutePath = path.join(repoRoot, file);
-    if (!existsSync(absolutePath)) {
-      continue;
-    }
-    const lines = readFileSync(absolutePath, "utf8").split(/\r?\n/);
-    bytes += Buffer.byteLength(lines.slice(item.startLine - 1, item.endLine).join("\n"), "utf8");
-  }
-  return bytes;
+function readPlanBytes(result: Awaited<ReturnType<AgentRouter["impact"]>>): number {
+  return result.readPlan.reduce((sum, item) => sum + item.estimatedBytes, 0);
+}
+
+function readPlanMetrics(result: Awaited<ReturnType<AgentRouter["impact"]>>): Record<string, unknown> {
+  const readPlan = result.metrics.readPlan as Record<string, unknown> | undefined;
+  const bytes = readPlanBytes(result);
+  const maxReadBytes = Number(readPlan?.maxReadBytes || 0);
+  return {
+    readPlanFiles: new Set(result.readPlan.map(item => item.fileId)).size,
+    readPlanRanges: result.readPlan.reduce((sum, item) => sum + item.ranges.length, 0),
+    readPlanBytes: bytes,
+    budgetUtilization: maxReadBytes > 0 ? bytes / maxReadBytes : 0,
+    budgetExceededByAnchor: readPlan?.budgetExceededByAnchor === true,
+    marginalUtilityBySelectedFile: readPlan?.marginalUtilityBySelectedFile
+  };
 }
 
 function readMatchedFilesBytes(repoRoot: string, files: string[], lineByPath: Map<string, number>, scenario: Scenario): number {
