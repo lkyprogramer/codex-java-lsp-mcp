@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -288,9 +288,12 @@ test("QUERY_READ_RANGES returns exact UTF-8 Java/XML/fallback windows in one wor
     ""
   ].join("\n");
   const fallbackPath = path.join(repoRoot, "notes.txt");
+  const crlfFallbackPath = path.join(repoRoot, "notes-crlf.txt");
   writeFileSync(javaPath, javaSource);
   writeFileSync(xmlPath, xmlSource);
   writeFileSync(fallbackPath, "first\nsecond\nthird\n");
+  const crlfFallbackSource = "first\r\nsecond\r\nthird";
+  writeFileSync(crlfFallbackPath, crlfFallbackSource);
 
   const client = new JavaIndexClient(repoRoot, cacheDir);
   try {
@@ -300,7 +303,8 @@ test("QUERY_READ_RANGES returns exact UTF-8 Java/XML/fallback windows in one wor
     const results = await client.queryReadRanges([
       { file: javaPath, positions: [{ line: 4, column: 3 }, { line: secondMethodLine, column: 3 }] },
       { file: xmlPath, positions: [{ line: 2, column: 3 }] },
-      { file: fallbackPath, positions: [{ line: 2, column: 1 }] }
+      { file: fallbackPath, positions: [{ line: 2, column: 1 }] },
+      { file: crlfFallbackPath, positions: [{ line: 2, column: 1 }] }
     ]);
 
     const javaRanges = results.find(result => result.file === javaPath)!.ranges;
@@ -321,6 +325,13 @@ test("QUERY_READ_RANGES returns exact UTF-8 Java/XML/fallback windows in one wor
     assert.equal(xmlRange.kind, "xml-statement");
     assert.ok(xmlRange.estimatedBytes > 0);
     assert.equal(results.find(result => result.file === fallbackPath)!.ranges[0]!.kind, "fallback");
+    const crlfFallbackRange = results.find(result => result.file === crlfFallbackPath)!.ranges[0]!;
+    assert.equal(crlfFallbackRange.kind, "fallback");
+    assert.equal(
+      crlfFallbackRange.estimatedBytes,
+      Buffer.byteLength(crlfFallbackSource, "utf8"),
+      "CRLF source without a terminal newline is priced in its exact UTF-8 byte representation"
+    );
   } finally {
     await client.close();
   }
@@ -346,6 +357,46 @@ test("RouterJavaIndex rejects outside-repository range requests before forwardin
     /outside|repository|repo/i
   );
   assert.equal(forwarded.length, 0);
+});
+
+test("QUERY_READ_RANGES does not read an in-repository symlink whose target escapes the repository", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "java-index-read-ranges-symlink-root-"));
+  const outsideRoot = mkdtempSync(path.join(tmpdir(), "java-index-read-ranges-symlink-outside-"));
+  const outsideFile = path.join(outsideRoot, "Secret.java");
+  const symlinkPath = path.join(repoRoot, "LinkedSecret.java");
+  writeFileSync(outsideFile, "class Secret {}\n");
+  symlinkSync(outsideFile, symlinkPath);
+  const client = new JavaIndexClient(repoRoot, mkdtempSync(path.join(tmpdir(), "java-index-read-ranges-symlink-cache-")));
+  const router = new RouterJavaIndex(repoRoot, client);
+  try {
+    await router.open(1);
+    assert.deepEqual(
+      await router.queryReadRanges([{ file: symlinkPath, positions: [{ line: 1, column: 1 }] }]),
+      [{ file: symlinkPath, ranges: [] }]
+    );
+  } finally {
+    await client.close();
+  }
+});
+
+test("REFRESH does not parse an in-repository symlink whose target escapes the repository", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "java-index-refresh-symlink-root-"));
+  const outsideRoot = mkdtempSync(path.join(tmpdir(), "java-index-refresh-symlink-outside-"));
+  const sourceDir = path.join(repoRoot, "src/main/java/demo");
+  const outsideFile = path.join(outsideRoot, "Secret.java");
+  const symlinkPath = path.join(sourceDir, "Secret.java");
+  mkdirSync(sourceDir, { recursive: true });
+  writeFileSync(outsideFile, "package demo; public class Secret {}\n");
+  symlinkSync(outsideFile, symlinkPath);
+  const client = new JavaIndexClient(repoRoot, mkdtempSync(path.join(tmpdir(), "java-index-refresh-symlink-cache-")));
+  try {
+    await client.open(1);
+    await assert.doesNotReject(() => client.refresh(2, [symlinkPath], []));
+    assert.deepEqual(await client.queryFiles([symlinkPath]), []);
+    assert.equal((await client.status()).files, 0);
+  } finally {
+    await client.close();
+  }
 });
 
 test("QUERY_READ_RANGES bounds an extreme Java method to first and last windows", async () => {

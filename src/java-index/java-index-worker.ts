@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parentPort } from "node:worker_threads";
 import {
@@ -100,6 +100,10 @@ let status: JavaIndexStatus = {
 };
 
 let repoRoot = "";
+// The repository root cannot change during one worker lifetime. Resolve it
+// once at OPEN so physical containment checks for a batched read plan never
+// add a repeated root filesystem lookup to every candidate.
+let resolvedRepoRoot = "";
 let backend: JavaParserBackend | undefined;
 let cache: ParseTreeCache | undefined;
 let store: JavaIndexStore | undefined;
@@ -269,11 +273,13 @@ async function queryReadRanges(
   return Promise.all(requests.map(async request => {
     try {
       const source = deriveSourceLayout(request.file);
+      const readablePath = await resolvedPathWithinRepo(source.absolutePath);
+      if (!readablePath) return { file: request.file, ranges: [] };
       // Java refresh already retains bounded source bytes beside the parsed
       // tree; reuse them when present. XML/fallback files have no parse-tree
       // cache entry, so this remains one asynchronous worker read per batch
       // request rather than an MCP-thread read.
-      const content = cache?.get(source.relativePath)?.source ?? await readFile(source.absolutePath, "utf8");
+      const content = cache?.get(source.relativePath)?.source ?? await readFile(readablePath, "utf8");
       const positions = request.positions.length > 0 ? request.positions : [{ line: 1, column: 1 }];
       const bundle = source.absolutePath.endsWith(".java") ? store?.files([source.relativePath])[0] : undefined;
       const resource = bundle ? undefined : store?.myBatisResource(source.relativePath);
@@ -295,6 +301,22 @@ async function queryReadRanges(
       return { file: request.file, ranges: [] };
     }
   }));
+}
+
+/**
+ * normalizeRepoFile deliberately uses lexical containment, which is right for
+ * normal router paths but cannot answer where an in-repository symlink leads.
+ * QUERY_READ_RANGES opens a file, so it makes that physical-path check here,
+ * in the worker that performs the read.  Reading the resolved path also closes
+ * the check-then-use window for a symlink retargeted after this validation.
+ */
+async function resolvedPathWithinRepo(absolutePath: string): Promise<string | undefined> {
+  const resolvedFile = await realpath(absolutePath);
+  const relative = path.relative(resolvedRepoRoot, resolvedFile);
+  if (relative === "" || relative.startsWith(`..${path.sep}`) || relative === ".." || path.isAbsolute(relative)) {
+    return undefined;
+  }
+  return resolvedFile;
 }
 
 function javaReadRanges(bundle: JavaFileBundle, positions: SourcePosition[]): { ranges: IndexedReadRange[]; extremeMethod: boolean } {
@@ -467,9 +489,11 @@ type RefreshedFile = {
 async function refreshFile(inputPath: string, generation: number): Promise<RefreshedFile> {
   if (!backend || !cache || !store) throw new Error("refreshFile called before OPEN");
   const { absolutePath, relativePath, sourceRoot, module, sourceSet } = deriveSourceLayout(inputPath);
+  const readablePath = await resolvedPathWithinRepo(absolutePath);
+  if (!readablePath) throw new Error(`Java source resolves outside repo root: ${inputPath}`);
   const [content, stats] = await Promise.all([
-    readFile(absolutePath, "utf8"),
-    stat(absolutePath)
+    readFile(readablePath, "utf8"),
+    stat(readablePath)
   ]);
   const contentHash = createHash("sha256").update(content, "utf8").digest("hex");
   const { tree } = refreshParseTree(cache, backend, relativePath, content);
@@ -1337,6 +1361,7 @@ async function handle(request: JavaIndexRequest): Promise<void> {
     switch (request.type) {
       case "OPEN": {
         repoRoot = request.repoRoot;
+        resolvedRepoRoot = await realpath(repoRoot).catch(() => path.resolve(repoRoot));
         backend = await createJavaParserBackend();
         cache = new ParseTreeCache();
         store = new JavaIndexStore();

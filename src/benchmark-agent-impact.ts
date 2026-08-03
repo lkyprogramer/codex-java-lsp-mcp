@@ -296,7 +296,10 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
   const shadowQuality = qualityForShadowRanking(result.shadowRanking, cli.repoRoot, scenario);
   const sessionPhaseMs = session.drainPhaseMetrics();
   return {
-    ...attemptPayload("impact", quality, rawSearchPayload, readingPayload, elapsedMs, 1 + result.readPlan.length, result.readPlan.length, Number(result.counts.totalRgRawBytes || 0), 0),
+    // Task 30 makes the whole read-plan range lookup one batched worker
+    // request. `roundTrips` measures the agent-visible impact exchange plus
+    // that range batch; it must not grow with selected read-plan files.
+    ...attemptPayload("impact", quality, rawSearchPayload, readingPayload, elapsedMs, 2, result.readPlan.length, Number(result.counts.totalRgRawBytes || 0), 0),
     ...readPlanMetrics(result),
     timing: timingPayload(result, sessionPhaseMs),
     goldenAttribution: goldenAttributionForImpact(cli.repoRoot, result, scenario),

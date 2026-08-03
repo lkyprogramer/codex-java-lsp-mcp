@@ -87,6 +87,11 @@ type CandidateWindow = {
   readonly extremeMethod: boolean;
 };
 
+type ShortlistResult = {
+  readonly files: CandidateFile[];
+  readonly omittedProtected: number;
+};
+
 export type ReadPlanBuildResult = {
   items: ReadPlanItemV6[];
   /** Internal path identity used to re-key fileIds after output-tail truncation. */
@@ -116,14 +121,20 @@ export async function buildReadPlan(input: BuildReadPlanInput): Promise<ReadPlan
     maxFiles: Math.max(configuredBudget.maxFiles, anchorFileCount)
   };
   const shortlist = shortlistCandidates(input.files, input.options, selectionBudget.maxFiles, protectedPaths);
-  const rangeResults = shortlist.length === 0
+  const rangeResults = shortlist.files.length === 0
     ? []
     : await input.javaIndex.queryReadRanges(
-      shortlist.map(file => ({ file: file.absolutePath, positions: file.positions })),
+      shortlist.files.map(file => ({ file: file.absolutePath, positions: file.positions })),
       input.generation
     );
-  const windows = materializeWindows(shortlist, rangeResults);
+  const windows = materializeWindows(shortlist.files, rangeResults);
   const result = selectTokenAwarePlan(windows, input.ids, input.options, selectionBudget, protectedPaths);
+  if (shortlist.omittedProtected > 0) {
+    result.evidenceGaps = [...new Set([
+      `Protected candidates exceeded shortlist capacity; ${shortlist.omittedProtected} candidate(s) were not range-planned.`,
+      ...result.evidenceGaps
+    ])];
+  }
   if (anchorFileCount > configuredBudget.maxFiles) {
     result.maxFiles = configuredBudget.maxFiles;
     result.budgetExceededByAnchor = true;
@@ -216,7 +227,7 @@ function shortlistCandidates(
   options: ImpactOptions,
   maxFiles: number,
   protectedPaths: ReadonlySet<string>
-): CandidateFile[] {
+): ShortlistResult {
   const limit = Math.max(1, maxFiles * SHORTLIST_MULTIPLIER);
   const ordered = sortedForV6Shortlist(files, options);
   const shortlisted: CandidateFile[] = [];
@@ -229,11 +240,16 @@ function shortlistCandidates(
   };
   // Anchors and protected core cannot be displaced before the byte-aware pass.
   ordered.filter(file => isAnchor(file, options)).forEach(add);
-  ordered.filter(file => isProtectedCore(file, options)).forEach(add);
-  // The seed planner's high-confidence core is a bounded compatibility set,
-  // not a second output plan. Keep it inside the one worker shortlist so the
-  // V6 byte pass can preserve safe slots without reading more candidates.
-  ordered.filter(file => protectedPaths.has(file.absolutePath) && !isDeferredTest(file, options)).forEach(add);
+  const protectedCandidates = ordered
+    .filter(file => !isAnchor(file, options)
+      && !isDeferredTest(file, options)
+      && (isProtectedCore(file, options) || protectedPaths.has(file.absolutePath)))
+    .sort((left, right) =>
+      protectedCorePriority(right) - protectedCorePriority(left)
+      || right.score - left.score
+      || left.absolutePath.localeCompare(right.absolutePath));
+  protectedCandidates.forEach(add);
+  const omittedProtected = protectedCandidates.filter(file => !selected.has(file.absolutePath)).length;
   // Preserve early representation for each evidence bucket, but never force
   // a representative into the final budgeted plan.
   for (const bucket of Object.keys(BUCKET_RULES) as ReadPlanBucket[]) {
@@ -244,7 +260,7 @@ function shortlistCandidates(
     if (representative) add(representative);
   }
   ordered.forEach(add);
-  return shortlisted;
+  return { files: shortlisted, omittedProtected };
 }
 
 function materializeWindows(files: readonly CandidateFile[], results: readonly IndexedReadRangeResult[]): CandidateWindow[] {
@@ -335,6 +351,7 @@ function selectTokenAwarePlan(
       && !isDeferredTest(window.file, options))
     .sort((left, right) =>
       protectedCorePriority(right.file) - protectedCorePriority(left.file)
+      || utilityPerByte(protectedUtility(right), right.bytes) - utilityPerByte(protectedUtility(left), left.bytes)
       || protectedUtility(right) - protectedUtility(left)
       || left.bytes - right.bytes);
   for (const window of core) {
@@ -353,7 +370,8 @@ function selectTokenAwarePlan(
       .filter(window => canSelect(window) && (!requireNovelEvidence || hasNovelEvidence(window.file, selected)))
       .map(window => ({ window, utility: marginalUtility(window, selected) }))
       .sort((left, right) =>
-        right.utility - left.utility
+        utilityPerByte(right.utility, right.window.bytes) - utilityPerByte(left.utility, left.window.bytes)
+        || right.utility - left.utility
         || right.window.file.score - left.window.file.score
         || left.window.file.absolutePath.localeCompare(right.window.file.absolutePath))[0];
   while (true) {
@@ -398,6 +416,10 @@ function toPlanItem(window: CandidateWindow, ids: ReadonlyMap<string, string>, o
 
 function protectedUtility(window: CandidateWindow): number {
   return window.file.score + familyKeys(window.file).size * 10;
+}
+
+function utilityPerByte(utility: number, bytes: number): number {
+  return utility / Math.max(256, bytes);
 }
 
 function protectedCorePriority(file: CandidateFile): number {
@@ -499,7 +521,7 @@ function isProtectedCoreEvidence(
   options: Pick<ImpactOptions, "anchors">
 ): boolean {
   if (!PROTECTED_CORE_KINDS.has(evidence.kind)) return false;
-  if (evidence.kind !== "SPRING_CALL_PATH" && evidence.kind !== "SPRING_INJECTION") return true;
+  if (evidence.kind !== "SPRING_CALL_PATH") return true;
   const arrow = evidence.sourceTarget.indexOf("->");
   if (arrow <= 0) return false;
   const source = evidence.sourceTarget.slice(0, arrow);

@@ -263,7 +263,7 @@ test("impact benchmark exposes timing diagnostics", async () => {
     "--strategy", "impact",
     "--runs", "1",
     "--verbosity", "diagnostic",
-    "--read-plan-max-items", "1",
+    "--read-plan-max-items", "3",
     "--read-plan-max-bytes", "2048"
   ], {
     cwd: path.resolve(import.meta.dirname, ".."),
@@ -279,16 +279,16 @@ test("impact benchmark exposes timing diagnostics", async () => {
   assert.equal(typeof payload.metadata.prepareJavaIndexMs, "number");
   assert.ok(payload.metadata.prepareJavaIndexMs >= 0);
   assert.equal(payload.metadata.prepareJavaIndexStatus.pendingBackground, 0);
-  assert.equal(payload.metadata.readPlanMaxItems, 1);
+  assert.equal(payload.metadata.readPlanMaxItems, 3);
   assert.equal(payload.metadata.readPlanMaxBytes, 2048);
-  assert.equal(attempt.readPlanItems, 1);
-  assert.equal(attempt.readPlanFiles, 1);
+  assert.ok(attempt.readPlanItems > 1, "the fixture must exercise a multi-file range batch");
+  assert.ok(attempt.readPlanFiles > 1);
   assert.ok(attempt.readPlanRanges >= 1);
   assert.ok(attempt.readPlanBytes > 0);
   assert.ok(attempt.budgetUtilization > 0 && attempt.budgetUtilization <= 1);
   assert.equal(typeof attempt.budgetExceededByAnchor, "boolean");
   assert.equal(typeof attempt.marginalUtilityBySelectedFile, "object");
-  assert.equal(attempt.roundTrips, 2);
+  assert.equal(attempt.roundTrips, 2, "one impact request and one batched range query replace per-read-plan-item round trips");
   assert.equal(typeof timing.phaseMs, "object");
   assert.equal(timing.semantic.policy, "fast");
   assert.equal(timing.semantic.used, false);

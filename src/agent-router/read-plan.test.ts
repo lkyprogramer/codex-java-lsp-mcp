@@ -436,10 +436,9 @@ test("token-aware read plan caps protected core at four and releases the remaini
   assert.ok(result.items.some(item => item.fileId === "F7"), "unused core capacity must be available to a useful non-core candidate");
 });
 
-test("protected core is ordered by absolute utility, not utility/byte ratio, when only one of two mutually exclusive candidates fits", async () => {
-  // A small, low-value core candidate must not displace a much more valuable
-  // implementation merely because it is cheaper. The byte cap still decides
-  // whether the chosen candidate fits; it must not decide the priority.
+test("protected core is ordered by family utility per byte when only one of two candidates fits", async () => {
+  // The Task 30 protected-core rule is utility/byte. A small, lower-score
+  // collaborator must therefore win when it yields more evidence per byte.
   const anchor = candidate({ absolutePath: "/repo/src/main/java/demo/Anchor.java", path: "src/main/java/demo/Anchor.java", reasons: ["target"], categories: ["target"], score: 1_000 });
   const highValue = candidate({ absolutePath: "/repo/src/main/java/demo/Implementation.java", path: "src/main/java/demo/Implementation.java", reasons: ["SPRING_CALL_PATH"], verifiedBy: ["SPRING_CALL_PATH"], score: 500 });
   const cheapLowValue = candidate({ absolutePath: "/repo/src/main/java/demo/Mapper.java", path: "src/main/java/demo/Mapper.java", reasons: ["SPRING_CALL_PATH"], verifiedBy: ["SPRING_CALL_PATH"], score: 50 });
@@ -464,7 +463,35 @@ test("protected core is ordered by absolute utility, not utility/byte ratio, whe
     } as never
   });
 
-  assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F2"], "the high-utility implementation must win the shared byte budget over the cheaper mapper");
+  assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F3"], "the higher utility-per-byte core candidate must win the shared byte budget");
+});
+
+test("Spring injection remains structural and cannot displace resolved JDT core evidence", async () => {
+  const anchor = candidate({ absolutePath: "/repo/src/main/java/demo/Anchor.java", path: "src/main/java/demo/Anchor.java", reasons: ["target"], categories: ["target"], score: 1_000 });
+  const definition = candidate({
+    absolutePath: "/repo/src/main/java/demo/ResolvedDefinition.java",
+    path: "src/main/java/demo/ResolvedDefinition.java",
+    reasons: ["DEFINITION"],
+    score: 200,
+    plannerEvidence: [{ family: "EXACT_SEMANTIC", kind: "DEFINITION", sourceTarget: "A1->type:ResolvedDefinition" }]
+  });
+  const injection = candidate({
+    absolutePath: "/repo/src/main/java/demo/InjectedService.java",
+    path: "src/main/java/demo/InjectedService.java",
+    categories: ["framework"],
+    reasons: ["SPRING_INJECTION"],
+    score: 900
+  });
+  const files = [anchor, definition, injection];
+
+  const result = await buildReadPlan({
+    files,
+    ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
+    options: optionsFor(anchor, { mode: "minimal", readPlanMaxItems: 2 }),
+    javaIndex: fixedRangeIndex()
+  });
+
+  assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F2"]);
 });
 
 test("structured JDT definition evidence is protected core without legacy reason aliases", async () => {
@@ -1019,9 +1046,9 @@ test("marginal selection recomputes overlap after each selected file", async () 
   assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F2", "F4"]);
 });
 
-test("marginal selection is ordered by absolute utility, not utility/byte ratio, when only one of two mutually exclusive candidates fits", async () => {
-  // The same rule applies after marginal utility is calculated: a fitting
-  // high-value collaborator is preferred over a smaller, lower-value one.
+test("marginal selection is ordered by utility per byte when only one of two candidates fits", async () => {
+  // The Task 30 marginal pass uses the same utility-per-byte policy as the
+  // protected core, after recomputing diversity and overlap.
   const anchor = candidate({ absolutePath: "/repo/src/main/java/demo/Anchor.java", path: "src/main/java/demo/Anchor.java", reasons: ["target"], categories: ["target"], score: 1_000 });
   const highValue = candidate({ absolutePath: "/repo/src/main/java/demo/BigCollaborator.java", path: "src/main/java/demo/BigCollaborator.java", reasons: ["framework:repository"], categories: ["framework"], score: 500 });
   const cheapLowValue = candidate({ absolutePath: "/repo/src/main/java/demo/TinyCollaborator.java", path: "src/main/java/demo/TinyCollaborator.java", reasons: ["framework:repository"], categories: ["framework"], score: 50 });
@@ -1045,7 +1072,7 @@ test("marginal selection is ordered by absolute utility, not utility/byte ratio,
     } as never
   });
 
-  assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F2"], "the high-utility collaborator must win the shared byte budget over the cheaper alternative");
+  assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F3"], "the higher utility-per-byte collaborator must win the shared byte budget");
 });
 
 test("same evidence kind with a different source-target remains independently useful", async () => {
@@ -1162,6 +1189,44 @@ test("semanticPolicy required still uses one bounded V6 range batch", async () =
   assert.equal(queryCount, 1);
   assert.equal(querySize, 8, "shortlist is capped at maxFiles times four");
   assert.ok(result.items.every(item => item.ranges.length > 0));
+});
+
+test("protected candidates omitted by the bounded shortlist produce an evidence gap", async () => {
+  const anchor = candidate({
+    absolutePath: "/repo/src/main/java/demo/Anchor.java",
+    path: "src/main/java/demo/Anchor.java",
+    reasons: ["target"],
+    categories: ["target"],
+    score: 1_000
+  });
+  const core = Array.from({ length: 6 }, (_, index) => candidate({
+    absolutePath: `/repo/src/main/java/demo/Call${index}.java`,
+    path: `src/main/java/demo/Call${index}.java`,
+    reasons: ["SPRING_CALL_PATH"],
+    verifiedBy: ["SPRING_CALL_PATH"],
+    score: 900 - index,
+    plannerEvidence: [{ family: "FRAMEWORK", kind: "SPRING_CALL_PATH", sourceTarget: `A1:${anchor.absolutePath}->call:${index}` }]
+  }));
+  const files = [anchor, ...core];
+  let querySize = 0;
+
+  const result = await buildReadPlan({
+    files,
+    ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
+    options: optionsFor(anchor, { mode: "minimal", readPlanMaxItems: 1 }),
+    javaIndex: {
+      async queryReadRanges(requests: Array<{ file: string }>) {
+        querySize = requests.length;
+        return requests.map(request => ({
+          file: request.file,
+          ranges: [{ startLine: 1, endLine: 4, kind: "method" as const, estimatedBytes: 256 }]
+        }));
+      }
+    } as never
+  });
+
+  assert.equal(querySize, 4, "the worker range batch remains capped at maxFiles times four");
+  assert.ok(result.evidenceGaps.some(gap => gap.includes("shortlist capacity")));
 });
 
 test("V6 shortlist does not promote a repository filename without protected structural evidence", async () => {
