@@ -129,6 +129,7 @@ test("static provider classifies direct imported declarations as exact AST evide
   assert.equal(evidence?.kind, "DIRECT_DECLARATION");
   assert.equal(evidence?.provenance, "AST_EXACT");
   assert.equal(evidence?.confidence, 0.98);
+  assert.equal(evidence?.sourceFile, request.absolutePath, "the import declaration belongs to the anchor file, not the imported declaration");
 });
 
 test("a resolved implementation exposes its exact field and anchored-method collaborators", async () => {

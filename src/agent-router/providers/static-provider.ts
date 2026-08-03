@@ -174,7 +174,7 @@ async function collectPerAnchor(
       if (!changedSince(candidate, prior)) {
         continue;
       }
-      evidence.push(...evidenceForCandidate(input, candidate, anchor.id, stage, prior));
+      evidence.push(...evidenceForCandidate(input, candidate, anchor, stage, prior));
     }
   }
 }
@@ -323,7 +323,7 @@ function changedSince(candidate: CandidateFile, prior: CandidateSnapshot | undef
 function evidenceForCandidate(
   input: ProviderInput,
   candidate: CandidateFile,
-  anchorId: string,
+  anchor: ResolvedAnchor,
   stage: StaticStage,
   prior: CandidateSnapshot | undefined
 ): EvidenceSignal[] {
@@ -347,14 +347,18 @@ function evidenceForCandidate(
     signals.push({
       signalId: nextSignalId(STATIC_PROVIDER_ID),
       candidateFile: candidate.absolutePath,
-      anchorId,
+      anchorId: anchor.id,
       kind: policy.kind,
       family: policy.family,
       provenance: policy.provenance,
       confidence: policy.confidence,
       completeness: "COMPLETE",
       weight: policy.weight,
-      sourceFile: candidate.absolutePath,
+      // An import-graph declaration is a direct AST edge *from the anchor's
+      // import list* to this candidate. Keeping that source lets the planner
+      // distinguish it from a declaration reached while expanding another
+      // structural candidate.
+      sourceFile: reason === "importGraph" ? anchor.absolutePath : candidate.absolutePath,
       positions: candidate.positions,
       providerId: STATIC_PROVIDER_ID,
       providerVersion: STATIC_PROVIDER_VERSION,

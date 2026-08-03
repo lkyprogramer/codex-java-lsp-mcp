@@ -796,6 +796,85 @@ test("deferred tests never consume protected core quota", async () => {
   assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F6", "F7"]);
 });
 
+test("externally protected deferred tests cannot displace an exact main-source core file", async () => {
+  const anchor = candidate({
+    absolutePath: "/repo/src/main/java/demo/Anchor.java",
+    path: "src/main/java/demo/Anchor.java",
+    reasons: ["target"],
+    categories: ["target"],
+    score: 1_000
+  });
+  const deferredTest = candidate({
+    absolutePath: "/repo/src/test/java/demo/AnchorTest.java",
+    path: "src/test/java/demo/AnchorTest.java",
+    sourceSet: "test",
+    reasons: ["IMPLEMENTATION"],
+    score: 900,
+    plannerEvidence: [{ family: "EXACT_SEMANTIC", kind: "IMPLEMENTATION", sourceTarget: "A1->test" }]
+  });
+  const mainImplementation = candidate({
+    absolutePath: "/repo/src/main/java/demo/AnchorImplementation.java",
+    path: "src/main/java/demo/AnchorImplementation.java",
+    sourceSet: "main",
+    reasons: ["IMPLEMENTATION"],
+    score: 400,
+    plannerEvidence: [{ family: "EXACT_SEMANTIC", kind: "IMPLEMENTATION", sourceTarget: "A1->main" }]
+  });
+  const files = [anchor, deferredTest, mainImplementation];
+
+  const result = await buildReadPlan({
+    files,
+    ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
+    options: optionsFor(anchor, { mode: "minimal", readPlanMaxItems: 2, testReadMode: "defer" }),
+    javaIndex: fixedRangeIndex(),
+    protectedPaths: new Set([deferredTest.absolutePath])
+  });
+
+  assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F3"]);
+});
+
+test("direct anchor declarations compete with one-hop implementations before second-hop evidence", async () => {
+  const anchor = candidate({
+    absolutePath: "/repo/src/main/java/demo/Anchor.java",
+    path: "src/main/java/demo/Anchor.java",
+    reasons: ["target"],
+    categories: ["target"],
+    score: 1_000
+  });
+  const directDeclaration = candidate({
+    absolutePath: "/repo/src/main/java/demo/Request.java",
+    path: "src/main/java/demo/Request.java",
+    reasons: ["DIRECT_DECLARATION"],
+    score: 300,
+    plannerEvidence: [{ family: "STATIC_STRUCTURE", kind: "DIRECT_DECLARATION", sourceTarget: "A1:/repo/src/main/java/demo/Anchor.java->Request" }]
+  });
+  const implementation = candidate({
+    absolutePath: "/repo/src/main/java/demo/AnchorImplementation.java",
+    path: "src/main/java/demo/AnchorImplementation.java",
+    reasons: ["IMPLEMENTS"],
+    score: 200,
+    plannerEvidence: [{ family: "STATIC_STRUCTURE", kind: "IMPLEMENTS", sourceTarget: "A1:/repo/src/main/java/demo/AnchorImplementation.java->Anchor" }]
+  });
+  const secondHop = candidate({
+    absolutePath: "/repo/src/main/java/demo/Result.java",
+    path: "src/main/java/demo/Result.java",
+    reasons: ["IMPLEMENTATION_METHOD_TYPE"],
+    score: 900,
+    plannerEvidence: [{ family: "STATIC_STRUCTURE", kind: "IMPLEMENTATION_METHOD_TYPE", sourceTarget: "A1:/repo/src/main/java/demo/AnchorImplementation.java->Result" }]
+  });
+  const files = [anchor, directDeclaration, implementation, secondHop];
+
+  const result = await buildReadPlan({
+    files,
+    ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
+    options: optionsFor(anchor, { mode: "minimal", readPlanMaxItems: 2 }),
+    javaIndex: fixedRangeIndex(),
+    protectedPaths: new Set([directDeclaration.absolutePath])
+  });
+
+  assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F2"]);
+});
+
 test("legacy tail protection does not promote application service suffixes without direct evidence", () => {
   const anchor = candidate({ absolutePath: "/repo/modules/orders/src/main/java/demo/OrderRepository.java", path: "modules/orders/src/main/java/demo/OrderRepository.java", module: "orders", sourceSet: "main", reasons: ["target"], score: 1_000 });
   const nameOnlyService = candidate({

@@ -509,6 +509,70 @@ test("pre-semantic Spring call protection is limited to a call sourced by the re
   assert.equal(protectedPaths.has(nestedCallFile), false);
 });
 
+test("pre-semantic protection retains direct imported declarations only from the request anchor", async () => {
+  const anchorEntry = anchor();
+  const directImportFile = "/repo/module-a/src/main/java/demo/DirectRequest.java";
+  const nestedImportFile = "/repo/module-a/src/main/java/demo/NestedRequest.java";
+  const directImport = signal({
+    candidateFile: directImportFile,
+    kind: "DIRECT_DECLARATION",
+    family: "STATIC_STRUCTURE",
+    provenance: "AST_EXACT",
+    confidence: 0.98,
+    weight: 65,
+    sourceFile: anchorEntry.absolutePath
+  });
+  const nestedImport = signal({
+    candidateFile: nestedImportFile,
+    kind: "DIRECT_DECLARATION",
+    family: "STATIC_STRUCTURE",
+    provenance: "AST_EXACT",
+    confidence: 0.98,
+    weight: 65,
+    sourceFile: "/repo/module-a/src/main/java/demo/StructuralSeed.java"
+  });
+  const normalized = new Map<string, CandidateEvidence>([
+    [directImportFile, evidenceCandidate(directImportFile, [directImport], { module: "module-a", sourceSet: "main" })],
+    [nestedImportFile, evidenceCandidate(nestedImportFile, [nestedImport], { module: "module-a", sourceSet: "main" })]
+  ]);
+
+  const protectedPaths = await familyReadPlanProtectedPaths(normalized, [], {
+    anchors: [anchorEntry],
+    options: options({ mode: "minimal", readPlanMaxItems: 3 }),
+    suppressed: emptySuppressed(),
+    repoRoot: "/repo"
+  });
+
+  assert.equal(protectedPaths.has(directImportFile), true);
+  assert.equal(protectedPaths.has(nestedImportFile), false);
+});
+
+test("contract anchors leave direct imports outside the protected execution core", async () => {
+  const contractAnchor = anchor({ profile: "repository", kind: "Method" });
+  const directImportFile = "/repo/module-a/src/main/java/demo/ReportTask.java";
+  const directImport = signal({
+    candidateFile: directImportFile,
+    kind: "DIRECT_DECLARATION",
+    family: "STATIC_STRUCTURE",
+    provenance: "AST_EXACT",
+    confidence: 0.98,
+    weight: 65,
+    sourceFile: contractAnchor.absolutePath
+  });
+  const normalized = new Map<string, CandidateEvidence>([
+    [directImportFile, evidenceCandidate(directImportFile, [directImport], { module: "module-a", sourceSet: "main" })]
+  ]);
+
+  const protectedPaths = await familyReadPlanProtectedPaths(normalized, [], {
+    anchors: [contractAnchor],
+    options: options({ mode: "minimal", readPlanMaxItems: 3, profile: "repository" }),
+    suppressed: emptySuppressed(),
+    repoRoot: "/repo"
+  });
+
+  assert.equal(protectedPaths.has(directImportFile), false);
+});
+
 test("pre-semantic protection retains only method-level second-hop implementation dependencies", async () => {
   const mapperFile = "/repo/module-a/src/main/java/demo/OrderMapper.java";
   const entityFile = "/repo/module-a/src/main/java/demo/OrderEntity.java";

@@ -267,6 +267,17 @@ const FRAMEWORK_PRE_SEMANTIC_PROTECTED_KINDS = new Set([
   "MYBATIS_STATEMENT_METHOD"
 ]);
 
+// Imports at an execution root are immediate request collaborators.  On a
+// contract root (port/repository/mapper), imports instead describe the
+// contract vocabulary; the resolved implementation chain is the actionable
+// first hop and must retain the bounded core slots.
+const EXECUTION_ROOT_PROFILES = new Set([
+  "controller",
+  "service",
+  "listener",
+  "job"
+]);
+
 function isPreSemanticProtectedSignal(
   signal: CandidateEvidence["signals"][number],
   anchors: readonly ResolvedAnchor[]
@@ -281,6 +292,10 @@ function isPreSemanticProtectedSignal(
   }
   if (signal.family === "EXACT_SEMANTIC") {
     return signal.kind === "DEFINITION" || signal.kind === "IMPLEMENTATION" || signal.kind === "TYPEHIERARCHY";
+  }
+  if (signal.family === "STATIC_STRUCTURE" && signal.kind === "DIRECT_DECLARATION") {
+    return anchors.some(anchor => EXECUTION_ROOT_PROFILES.has(anchor.profile)
+      && anchor.absolutePath === signal.sourceFile);
   }
   return signal.family === "STATIC_STRUCTURE"
     && (signal.kind === "IMPLEMENTS"

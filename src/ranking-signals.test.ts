@@ -209,6 +209,28 @@ test("a retained MapStruct uses edge does not by itself trigger the structural-t
   assert.ok(mapstructUses.every(file => result.includes(file)));
 });
 
+test("truncateCandidateTail gives resolved MapStruct uses edges priority over generic structural retention", () => {
+  const anchor = noise("/anchor/OrderController.java", 1);
+  anchor.reasons = ["target"];
+  const genericStructural = Array.from({ length: 8 }, (_, index) => strong(`/structural/S${index}.java`, 200 - index));
+  const mapstructUses = ["IdConverter", "DateTimeConverter"].map(name => {
+    const file = noise(`/mapper/${name}.java`, 1);
+    file.categories = ["framework"];
+    file.reasons = ["MAPSTRUCT_USES"];
+    file.verifiedBy = ["MAPSTRUCT_USES"];
+    return file;
+  });
+
+  const result = truncateCandidateTail(
+    [anchor, ...genericStructural, ...mapstructUses],
+    new Set<CandidateFile>([anchor]),
+    6
+  );
+
+  assert.equal(result.length, 6);
+  assert.ok(mapstructUses.every(file => result.includes(file)), "both resolved helpers must survive a dense generic structural tail");
+});
+
 test("MapStruct uses protection remains deterministic without exceeding the caller candidate limit", () => {
   const anchor = noise("/anchor/OrderMapper.java", 1);
   anchor.reasons = ["target"];

@@ -126,7 +126,7 @@ export function hasProtectedStructuralSignal(candidate: CandidateFile): boolean 
   // is generated-code structural evidence, not a name-search hit; keep it
   // visible even when the lexical tail is dense. It intentionally remains a
   // structural (not verified-quota) read-plan class in read-plan-budget.ts.
-  if (candidate.reasons.includes("MAPSTRUCT_USES") && (candidate.verifiedBy || []).includes("MAPSTRUCT_USES")) {
+  if (isResolvedMapstructUses(candidate)) {
     return true;
   }
   return (candidate.scoreBreakdown || []).some(item => item.delta > 0 && STRUCTURAL_SIGNAL_IDS.has(item.id));
@@ -214,9 +214,18 @@ function limitKeepingProtected(
   // structural/framework evidence remains preferred, but a large protected
   // set must not turn candidateLimit into a soft suggestion.
   addUntilLimit(file => requiredFiles.has(file));
+  // A resolved `@Mapper(uses = Type.class)` edge is an explicit compile-time
+  // dependency. Retain it before generic structural compatibility evidence so
+  // one mapper's bounded helper set is not silently split by the public tail.
+  addUntilLimit(isResolvedMapstructUses);
   addUntilLimit(file => protectedSet.has(file));
   addUntilLimit(() => true);
   return sortByScore(limited);
+}
+
+function isResolvedMapstructUses(candidate: CandidateFile): boolean {
+  return candidate.reasons.includes("MAPSTRUCT_USES")
+    && (candidate.verifiedBy || []).includes("MAPSTRUCT_USES");
 }
 
 function hasExactDeferredTestReference(candidate: CandidateFile): boolean {

@@ -47,6 +47,7 @@ const PROTECTED_CORE_KINDS = new Set([
 // and return types are useful follow-up context, but must not consume the
 // small protected core before the concrete alternatives themselves.
 const FIRST_HOP_IMPLEMENTATION_KINDS = new Set([
+  "DIRECT_DECLARATION",
   "IMPLEMENTS",
   "IMPLEMENTATION",
   "TYPE_RELATION"
@@ -232,7 +233,7 @@ function shortlistCandidates(
   // The seed planner's high-confidence core is a bounded compatibility set,
   // not a second output plan. Keep it inside the one worker shortlist so the
   // V6 byte pass can preserve safe slots without reading more candidates.
-  ordered.filter(file => protectedPaths.has(file.absolutePath)).forEach(add);
+  ordered.filter(file => protectedPaths.has(file.absolutePath) && !isDeferredTest(file, options)).forEach(add);
   // Preserve early representation for each evidence bucket, but never force
   // a representative into the final budgeted plan.
   for (const bucket of Object.keys(BUCKET_RULES) as ReadPlanBucket[]) {
@@ -330,7 +331,8 @@ function selectTokenAwarePlan(
   };
   const core = readableWindows
     .filter(window => (isProtectedCore(window.file, options) || protectedPaths.has(window.file.absolutePath))
-      && !isAnchor(window.file, options))
+      && !isAnchor(window.file, options)
+      && !isDeferredTest(window.file, options))
     .sort((left, right) =>
       protectedCorePriority(right.file) - protectedCorePriority(left.file)
       || protectedUtility(right) - protectedUtility(left)
@@ -464,6 +466,13 @@ function isAnchor(
 ): boolean {
   return file.reasons.includes("target")
     || options.anchors.some(anchor => anchor.file === file.absolutePath || anchor.file === file.path);
+}
+
+function isDeferredTest(
+  file: Pick<CandidateFile, "sourceSet">,
+  options: Pick<ImpactOptions, "testReadMode">
+): boolean {
+  return file.sourceSet === "test" && options.testReadMode === "defer";
 }
 
 function isProtectedCore(file: CandidateFile, options: Pick<ImpactOptions, "testReadMode" | "anchors">): boolean {
