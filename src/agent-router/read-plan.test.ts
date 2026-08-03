@@ -466,6 +466,33 @@ test("protected core is ordered by family utility per byte when only one of two 
   assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F3"], "the higher utility-per-byte core candidate must win the shared byte budget");
 });
 
+test("protected core favors utility when the file cap binds but every candidate can fit in the remaining byte budget", async () => {
+  const anchor = candidate({ absolutePath: "/repo/src/main/java/demo/Anchor.java", path: "src/main/java/demo/Anchor.java", reasons: ["target"], categories: ["target"], score: 1_000 });
+  const highValue = candidate({ absolutePath: "/repo/src/main/java/demo/Implementation.java", path: "src/main/java/demo/Implementation.java", reasons: ["SPRING_CALL_PATH"], verifiedBy: ["SPRING_CALL_PATH"], score: 500 });
+  const cheapLowValue = candidate({ absolutePath: "/repo/src/main/java/demo/Mapper.java", path: "src/main/java/demo/Mapper.java", reasons: ["SPRING_CALL_PATH"], verifiedBy: ["SPRING_CALL_PATH"], score: 50 });
+  const files = [anchor, highValue, cheapLowValue];
+  const result = await buildReadPlan({
+    files,
+    ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
+    options: optionsFor(anchor, { mode: "balanced", readPlanMaxItems: 2, readPlanMaxBytes: 20_000 }),
+    javaIndex: {
+      async queryReadRanges(requests: Array<{ file: string }>) {
+        return requests.map(request => ({
+          file: request.file,
+          ranges: [{
+            startLine: 1,
+            endLine: 4,
+            kind: "method" as const,
+            estimatedBytes: request.file.includes("Anchor") ? 100 : request.file.includes("Implementation") ? 6_000 : 200
+          }]
+        }));
+      }
+    } as never
+  });
+
+  assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F2"]);
+});
+
 test("Spring injection remains structural and cannot displace resolved JDT core evidence", async () => {
   const anchor = candidate({ absolutePath: "/repo/src/main/java/demo/Anchor.java", path: "src/main/java/demo/Anchor.java", reasons: ["target"], categories: ["target"], score: 1_000 });
   const definition = candidate({
@@ -1073,6 +1100,33 @@ test("marginal selection is ordered by utility per byte when only one of two can
   });
 
   assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F3"], "the higher utility-per-byte collaborator must win the shared byte budget");
+});
+
+test("marginal selection favors utility when the file cap binds but byte budget has slack", async () => {
+  const anchor = candidate({ absolutePath: "/repo/src/main/java/demo/Anchor.java", path: "src/main/java/demo/Anchor.java", reasons: ["target"], categories: ["target"], score: 1_000 });
+  const highValue = candidate({ absolutePath: "/repo/src/main/java/demo/BigCollaborator.java", path: "src/main/java/demo/BigCollaborator.java", reasons: ["framework:repository"], categories: ["framework"], score: 500 });
+  const cheapLowValue = candidate({ absolutePath: "/repo/src/main/java/demo/TinyCollaborator.java", path: "src/main/java/demo/TinyCollaborator.java", reasons: ["framework:repository"], categories: ["framework"], score: 50 });
+  const files = [anchor, highValue, cheapLowValue];
+  const result = await buildReadPlan({
+    files,
+    ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
+    options: optionsFor(anchor, { mode: "balanced", readPlanMaxItems: 2, readPlanMaxBytes: 20_000 }),
+    javaIndex: {
+      async queryReadRanges(requests: Array<{ file: string }>) {
+        return requests.map(request => ({
+          file: request.file,
+          ranges: [{
+            startLine: 1,
+            endLine: 4,
+            kind: "method" as const,
+            estimatedBytes: request.file.includes("Anchor") ? 100 : request.file.includes("Big") ? 6_000 : 200
+          }]
+        }));
+      }
+    } as never
+  });
+
+  assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F2"]);
 });
 
 test("same evidence kind with a different source-target remains independently useful", async () => {

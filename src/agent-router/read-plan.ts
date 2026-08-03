@@ -348,17 +348,22 @@ function selectTokenAwarePlan(
   const core = readableWindows
     .filter(window => (isProtectedCore(window.file, options) || protectedPaths.has(window.file.absolutePath))
       && !isAnchor(window.file, options)
-      && !isDeferredTest(window.file, options))
-    .sort((left, right) =>
-      protectedCorePriority(right.file) - protectedCorePriority(left.file)
-      || utilityPerByte(protectedUtility(right), right.bytes) - utilityPerByte(protectedUtility(left), left.bytes)
-      || protectedUtility(right) - protectedUtility(left)
-      || left.bytes - right.bytes);
+      && !isDeferredTest(window.file, options));
+  const coreUsesByteDensity = byteBudgetCanConstrainSelection(
+    core,
+    totalBytes,
+    budget,
+    Math.min(budget.maxFiles - selected.length, BUCKET_RULES.core.max - bucketCounts.core)
+  );
+  core.sort((left, right) =>
+    protectedCorePriority(right.file) - protectedCorePriority(left.file)
+    || compareUtilityAndDensity(protectedUtility(left), left.bytes, protectedUtility(right), right.bytes, coreUsesByteDensity)
+    || left.file.absolutePath.localeCompare(right.file.absolutePath));
   for (const window of core) {
     if (canAdd(window)) add(window, protectedUtility(window));
   }
   if (core.some(window => !selectedPaths.has(window.file.absolutePath))) {
-    evidenceGaps.push("Protected core exceeded read budget; lower-value core files were omitted.");
+    evidenceGaps.push("Protected core exceeded read-plan limits; lower-value core files were omitted.");
   }
 
   const remaining = readableWindows.filter(window => !selectedPaths.has(window.file.absolutePath));
@@ -366,14 +371,21 @@ function selectTokenAwarePlan(
     canSelect: (window: CandidateWindow) => boolean,
     requireNovelEvidence = false
   ): { window: CandidateWindow; utility: number } | undefined =>
-    remaining
+    {
+      const eligible = remaining
       .filter(window => canSelect(window) && (!requireNovelEvidence || hasNovelEvidence(window.file, selected)))
-      .map(window => ({ window, utility: marginalUtility(window, selected) }))
-      .sort((left, right) =>
-        utilityPerByte(right.utility, right.window.bytes) - utilityPerByte(left.utility, left.window.bytes)
-        || right.utility - left.utility
+      .map(window => ({ window, utility: marginalUtility(window, selected) }));
+      const preferDensity = byteBudgetCanConstrainSelection(
+        eligible.map(item => item.window),
+        totalBytes,
+        budget,
+        budget.maxFiles - selected.length
+      );
+      return eligible.sort((left, right) =>
+        compareUtilityAndDensity(left.utility, left.window.bytes, right.utility, right.window.bytes, preferDensity)
         || right.window.file.score - left.window.file.score
         || left.window.file.absolutePath.localeCompare(right.window.file.absolutePath))[0];
+    };
   while (true) {
     const next = nextByMarginalUtility(canAdd);
     if (!next) break;
@@ -420,6 +432,42 @@ function protectedUtility(window: CandidateWindow): number {
 
 function utilityPerByte(utility: number, bytes: number): number {
   return utility / Math.max(256, bytes);
+}
+
+/**
+ * The planner has two independent caps. Density is the right primary value
+ * only when the byte cap can exclude an otherwise selectable combination.
+ * If even the largest possible remaining file set fits, the file cap is the
+ * active constraint, so selecting the greater absolute utility avoids a
+ * cheap low-value window displacing a more useful collaborator.
+ */
+function byteBudgetCanConstrainSelection(
+  candidates: readonly CandidateWindow[],
+  selectedBytes: number,
+  budget: ReadPlanBudget,
+  remainingSlots: number
+): boolean {
+  if (remainingSlots <= 0) return false;
+  const maximumPotentialBytes = [...candidates]
+    .map(candidate => candidate.bytes)
+    .sort((left, right) => right - left)
+    .slice(0, remainingSlots)
+    .reduce((sum, bytes) => sum + bytes, 0);
+  return selectedBytes + maximumPotentialBytes > budget.maxReadBytes;
+}
+
+function compareUtilityAndDensity(
+  leftUtility: number,
+  leftBytes: number,
+  rightUtility: number,
+  rightBytes: number,
+  preferDensity: boolean
+): number {
+  const densityDelta = utilityPerByte(rightUtility, rightBytes) - utilityPerByte(leftUtility, leftBytes);
+  const utilityDelta = rightUtility - leftUtility;
+  return preferDensity
+    ? densityDelta || utilityDelta || leftBytes - rightBytes
+    : utilityDelta || densityDelta || leftBytes - rightBytes;
 }
 
 function protectedCorePriority(file: CandidateFile): number {
