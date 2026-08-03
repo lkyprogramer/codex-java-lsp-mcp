@@ -42,6 +42,17 @@ const PROTECTED_CORE_KINDS = new Set([
   "JPA_REPOSITORY_ENTITY"
 ]);
 
+// A concrete class that directly implements or extends the anchor's type is
+// the first actionable hop for an interface/port task. Its method parameter
+// and return types are useful follow-up context, but must not consume the
+// small protected core before the concrete alternatives themselves.
+const FIRST_HOP_IMPLEMENTATION_KINDS = new Set([
+  "IMPLEMENTS",
+  "IMPLEMENTATION",
+  "TYPE_RELATION"
+]);
+const SECOND_HOP_IMPLEMENTATION_KINDS = new Set(["IMPLEMENTATION_METHOD_TYPE"]);
+
 const BUCKET_RULES = {
   anchor: { min: 1, max: 1 },
   core: { min: 2, max: 4 },
@@ -321,7 +332,8 @@ function selectTokenAwarePlan(
     .filter(window => (isProtectedCore(window.file, options) || protectedPaths.has(window.file.absolutePath))
       && !isAnchor(window.file, options))
     .sort((left, right) =>
-      protectedUtility(right) - protectedUtility(left)
+      protectedCorePriority(right.file) - protectedCorePriority(left.file)
+      || protectedUtility(right) - protectedUtility(left)
       || left.bytes - right.bytes);
   for (const window of core) {
     if (canAdd(window)) add(window, protectedUtility(window));
@@ -384,6 +396,23 @@ function toPlanItem(window: CandidateWindow, ids: ReadonlyMap<string, string>, o
 
 function protectedUtility(window: CandidateWindow): number {
   return window.file.score + familyKeys(window.file).size * 10;
+}
+
+function protectedCorePriority(file: CandidateFile): number {
+  const kinds = new Set(file.plannerEvidence?.map(evidence => evidence.kind) || [
+    ...file.reasons,
+    ...(file.verifiedBy || [])
+  ]);
+  if ([...kinds].some(kind => FIRST_HOP_IMPLEMENTATION_KINDS.has(kind)
+    || kind === "typeGraph:implementation-lookup"
+    || kind === "implementation"
+    || kind === "persisted-implementation")) {
+    return 2;
+  }
+  if ([...kinds].some(kind => SECOND_HOP_IMPLEMENTATION_KINDS.has(kind))) {
+    return 1;
+  }
+  return 0;
 }
 
 function marginalUtility(candidate: CandidateWindow, selected: readonly CandidateWindow[]): number {

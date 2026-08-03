@@ -583,6 +583,58 @@ test("a Spring call path from a structural seed does not displace an anchor's di
   assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F2"]);
 });
 
+test("direct implementations take the bounded core ahead of higher-scoring second-hop method types", async () => {
+  const anchor = candidate({
+    absolutePath: "/repo/src/main/java/demo/StorageGateway.java",
+    path: "src/main/java/demo/StorageGateway.java",
+    reasons: ["target"],
+    categories: ["target"],
+    score: 1_000
+  });
+  const firstImplementation = candidate({
+    absolutePath: "/repo/src/main/java/demo/AliyunStorageGateway.java",
+    path: "src/main/java/demo/AliyunStorageGateway.java",
+    reasons: ["IMPLEMENTS"],
+    score: 100,
+    plannerEvidence: [{ family: "STATIC_STRUCTURE", kind: "IMPLEMENTS", sourceTarget: "A1:/repo/StorageGateway.java->/repo/AliyunStorageGateway.java" }]
+  });
+  const secondImplementation = candidate({
+    absolutePath: "/repo/src/main/java/demo/StubStorageGateway.java",
+    path: "src/main/java/demo/StubStorageGateway.java",
+    reasons: ["IMPLEMENTS"],
+    score: 100,
+    plannerEvidence: [{ family: "STATIC_STRUCTURE", kind: "IMPLEMENTS", sourceTarget: "A1:/repo/StorageGateway.java->/repo/StubStorageGateway.java" }]
+  });
+  const command = candidate({
+    absolutePath: "/repo/src/main/java/demo/StorageCommand.java",
+    path: "src/main/java/demo/StorageCommand.java",
+    reasons: ["IMPLEMENTATION_METHOD_TYPE"],
+    score: 300,
+    plannerEvidence: [{ family: "STATIC_STRUCTURE", kind: "IMPLEMENTATION_METHOD_TYPE", sourceTarget: "A1:/repo/AliyunStorageGateway.java->/repo/StorageCommand.java" }]
+  });
+  const result = candidate({
+    absolutePath: "/repo/src/main/java/demo/StorageResult.java",
+    path: "src/main/java/demo/StorageResult.java",
+    reasons: ["IMPLEMENTATION_METHOD_TYPE"],
+    score: 300,
+    plannerEvidence: [{ family: "STATIC_STRUCTURE", kind: "IMPLEMENTATION_METHOD_TYPE", sourceTarget: "A1:/repo/AliyunStorageGateway.java->/repo/StorageResult.java" }]
+  });
+  const files = [anchor, firstImplementation, secondImplementation, command, result];
+
+  const plan = await buildReadPlan({
+    files,
+    ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
+    options: optionsFor(anchor, { mode: "minimal", readPlanMaxItems: 3 }),
+    javaIndex: fixedRangeIndex()
+  });
+
+  assert.deepEqual(
+    plan.items.map(item => item.fileId),
+    ["F1", "F2", "F3"],
+    "the first-hop concrete implementations are the actionable alternatives for an interface task"
+  );
+});
+
 test("only method-level dependencies of a resolved implementation receive protected core slots", async () => {
   const anchor = candidate({
     absolutePath: "/repo/src/main/java/demo/OrderPort.java",
