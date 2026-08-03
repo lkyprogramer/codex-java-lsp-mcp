@@ -63,8 +63,14 @@ export function candidateFromAnchor(anchor: ResolvedAnchor): CandidateFile {
   };
 }
 
-export async function collectTypeGraphCandidates(input: CollectCandidatesInput): Promise<void> {
+/**
+ * Returns exactly the implementation facts merged into `candidates`.  The
+ * provider needs that identity for a bounded, exact second hop; deriving it
+ * later from score/reason deltas is lossy when providers share candidates.
+ */
+export async function collectTypeGraphCandidates(input: CollectCandidatesInput): Promise<JavaSourceFacts[]> {
   const { candidates, anchors, options, javaIndex, routingPolicy, generation } = input;
+  const implementations: JavaSourceFacts[] = [];
   for (const anchor of anchors) {
     if (!shouldUseTypeGraph(anchor)) {
       continue;
@@ -78,6 +84,7 @@ export async function collectTypeGraphCandidates(input: CollectCandidatesInput):
     }
     const typeName = anchor.className || path.basename(anchor.absolutePath, ".java");
     for (const facts of (await javaIndex.findImplementers(typeName, 20, anchor.absolutePath))) {
+      implementations.push(facts);
       const candidate = candidateFromFacts(facts, scoreBase(routingPolicy, "semantic", facts, anchor, options) + 70, "typeGraph");
       if (isInterface) {
         candidate.reasons = ["typeGraph:implementation-lookup"];
@@ -85,6 +92,7 @@ export async function collectTypeGraphCandidates(input: CollectCandidatesInput):
       mergeCandidate(candidates, candidate);
     }
   }
+  return implementations;
 }
 
 export async function collectImportGraphCandidates(input: CollectImportGraphInput): Promise<void> {

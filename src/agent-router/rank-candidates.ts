@@ -253,24 +253,31 @@ function focusModuleRepresentatives(
 export async function familyReadPlanProtectedPaths(
   normalized: ReadonlyMap<string, CandidateEvidence>,
   _outcomes: readonly ProviderOutcome[],
-  _context: RankCandidatesContext
+  context: RankCandidatesContext
 ): Promise<ReadonlySet<string>> {
   return new Set([...normalized.values()]
-    .filter(candidate => candidate.signals.some(isPreSemanticProtectedSignal))
+    .filter(candidate => candidate.signals.some(signal => isPreSemanticProtectedSignal(signal, context.anchors)))
     .map(candidate => candidate.file));
 }
 
-/** Framework evidence kinds strong enough to protect a framework-only candidate's read-plan slot before semantic ranking runs - a curated allowlist, not a strict "exact match only" filter (SPRING_INJECTION is weaker than SPRING_CALL_PATH but still approved here). */
+/** Framework evidence kinds with a resolved call or mapper target strong enough to protect a pre-semantic read-plan slot. */
 const FRAMEWORK_PRE_SEMANTIC_PROTECTED_KINDS = new Set([
   "SPRING_CALL_PATH",
-  "SPRING_INJECTION",
   "MYBATIS_NAMESPACE",
   "MYBATIS_STATEMENT_METHOD"
 ]);
 
-function isPreSemanticProtectedSignal(signal: CandidateEvidence["signals"][number]): boolean {
+function isPreSemanticProtectedSignal(
+  signal: CandidateEvidence["signals"][number],
+  anchors: readonly ResolvedAnchor[]
+): boolean {
   if (signal.family === "FRAMEWORK") {
-    return FRAMEWORK_PRE_SEMANTIC_PROTECTED_KINDS.has(signal.kind);
+    if (!FRAMEWORK_PRE_SEMANTIC_PROTECTED_KINDS.has(signal.kind)) return false;
+    // A call path emitted while a framework adapter expands a structural seed
+    // remains valid framework evidence, but only a call originating at this
+    // request's anchor can reserve a pre-semantic core slot.
+    return signal.kind !== "SPRING_CALL_PATH"
+      || anchors.some(anchor => anchor.absolutePath === signal.sourceFile);
   }
   if (signal.family === "EXACT_SEMANTIC") {
     return signal.kind === "DEFINITION" || signal.kind === "IMPLEMENTATION" || signal.kind === "TYPEHIERARCHY";
@@ -279,5 +286,10 @@ function isPreSemanticProtectedSignal(signal: CandidateEvidence["signals"][numbe
     && (signal.kind === "IMPLEMENTS"
       || signal.kind === "METHOD_RELATION"
       || signal.kind === "TYPE_RELATION"
-      || signal.kind === "TYPE_SYMMETRIC");
+      || signal.kind === "TYPE_SYMMETRIC"
+      // A bounded second hop is protected only for a method-level relation
+      // after the first hop resolved an implementation by exact FQN. Field
+      // types remain ranking evidence, but can otherwise crowd out sibling
+      // direct implementations from the small protected-core quota.
+      || signal.kind === "IMPLEMENTATION_METHOD_TYPE");
 }

@@ -437,12 +437,9 @@ test("token-aware read plan caps protected core at four and releases the remaini
 });
 
 test("protected core is ordered by absolute utility, not utility/byte ratio, when only one of two mutually exclusive candidates fits", async () => {
-  // Regression for the three-repo canary finding: a small, low-value core
-  // candidate (e.g. a coarse mapper) must not out-rank a large, high-value
-  // one (e.g. a resolved implementation) merely because it is cheaper - a
-  // ratio-primary sort picks the cheap file first, consuming just enough
-  // budget to starve the valuable one even though nothing here is actually
-  // byte-constrained in aggregate.
+  // A small, low-value core candidate must not displace a much more valuable
+  // implementation merely because it is cheaper. The byte cap still decides
+  // whether the chosen candidate fits; it must not decide the priority.
   const anchor = candidate({ absolutePath: "/repo/src/main/java/demo/Anchor.java", path: "src/main/java/demo/Anchor.java", reasons: ["target"], categories: ["target"], score: 1_000 });
   const highValue = candidate({ absolutePath: "/repo/src/main/java/demo/Implementation.java", path: "src/main/java/demo/Implementation.java", reasons: ["SPRING_CALL_PATH"], verifiedBy: ["SPRING_CALL_PATH"], score: 500 });
   const cheapLowValue = candidate({ absolutePath: "/repo/src/main/java/demo/Mapper.java", path: "src/main/java/demo/Mapper.java", reasons: ["SPRING_CALL_PATH"], verifiedBy: ["SPRING_CALL_PATH"], score: 50 });
@@ -467,7 +464,7 @@ test("protected core is ordered by absolute utility, not utility/byte ratio, whe
     } as never
   });
 
-  assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F2"], "the high-utility implementation must win the shared byte budget over the cheaper, lower-value mapper");
+  assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F2"], "the high-utility implementation must win the shared byte budget over the cheaper mapper");
 });
 
 test("structured JDT definition evidence is protected core without legacy reason aliases", async () => {
@@ -503,7 +500,7 @@ test("structured JDT definition evidence is protected core without legacy reason
   assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F3"]);
 });
 
-test("non-protected static evidence uses core capacity instead of the lexical quota", async () => {
+test("non-protected static evidence does not consume protected core quota", async () => {
   const anchor = candidate({
     absolutePath: "/repo/src/main/java/demo/Anchor.java",
     path: "src/main/java/demo/Anchor.java",
@@ -525,16 +522,111 @@ test("non-protected static evidence uses core capacity instead of the lexical qu
     score: 900 - index,
     plannerEvidence: [{ family: "LEXICAL", kind: "LEXICAL:java", sourceTarget: "A1->LEXICAL:java" }]
   }));
-  const files = [anchor, ...lexical, ...structural];
+  const protectedCore = candidate({
+    absolutePath: "/repo/src/main/java/demo/ResolvedCollaborator.java",
+    path: "src/main/java/demo/ResolvedCollaborator.java",
+    reasons: ["SPRING_CALL_PATH"],
+    verifiedBy: ["SPRING_CALL_PATH"],
+    score: 800
+  });
+  const files = [anchor, ...lexical, ...structural, protectedCore];
 
   const result = await buildReadPlan({
     files,
     ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
-    options: optionsFor(anchor, { mode: "minimal", readPlanMaxItems: 5 }),
+    options: optionsFor(anchor, { mode: "minimal", readPlanMaxItems: 3 }),
     javaIndex: fixedRangeIndex()
   });
 
-  assert.equal(result.items.filter(item => ["F5", "F6", "F7"].includes(item.fileId)).length, 3);
+  assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F8", "F2"]);
+});
+
+test("a Spring call path from a structural seed does not displace an anchor's direct implementation core", async () => {
+  const anchor = candidate({
+    absolutePath: "/repo/src/main/java/demo/OrderPort.java",
+    path: "src/main/java/demo/OrderPort.java",
+    reasons: ["target"],
+    categories: ["target"],
+    score: 1_000
+  });
+  const implementation = candidate({
+    absolutePath: "/repo/src/main/java/demo/OrderPortImpl.java",
+    path: "src/main/java/demo/OrderPortImpl.java",
+    reasons: ["IMPLEMENTS"],
+    score: 400,
+    plannerEvidence: [{
+      family: "STATIC_STRUCTURE",
+      kind: "IMPLEMENTS",
+      sourceTarget: "A1:/repo/src/main/java/demo/OrderPortImpl.java->/repo/src/main/java/demo/OrderPortImpl.java"
+    }]
+  });
+  const nestedSpringCall = candidate({
+    absolutePath: "/repo/src/main/java/demo/OtherPort.java",
+    path: "src/main/java/demo/OtherPort.java",
+    reasons: ["SPRING_CALL_PATH"],
+    score: 900,
+    plannerEvidence: [{
+      family: "FRAMEWORK",
+      kind: "SPRING_CALL_PATH",
+      sourceTarget: "A1:/repo/src/main/java/demo/OrderPortImpl.java->method:demo.OtherPort.lookup"
+    }]
+  });
+  const files = [anchor, implementation, nestedSpringCall];
+
+  const result = await buildReadPlan({
+    files,
+    ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
+    options: optionsFor(anchor, { mode: "minimal", readPlanMaxItems: 2 }),
+    javaIndex: fixedRangeIndex()
+  });
+
+  assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F2"]);
+});
+
+test("only method-level dependencies of a resolved implementation receive protected core slots", async () => {
+  const anchor = candidate({
+    absolutePath: "/repo/src/main/java/demo/OrderPort.java",
+    path: "src/main/java/demo/OrderPort.java",
+    reasons: ["target"],
+    categories: ["target"],
+    score: 1_000
+  });
+  const mapper = candidate({
+    absolutePath: "/repo/src/main/java/demo/OrderMapper.java",
+    path: "src/main/java/demo/OrderMapper.java",
+    reasons: ["implementationField"],
+    score: 80,
+    plannerEvidence: [{ family: "STATIC_STRUCTURE", kind: "FIELD_TYPE", sourceTarget: "A1:/repo/src/main/java/demo/OrderPortImpl.java->/repo/src/main/java/demo/OrderMapper.java" }]
+  });
+  const entity = candidate({
+    absolutePath: "/repo/src/main/java/demo/OrderEntity.java",
+    path: "src/main/java/demo/OrderEntity.java",
+    reasons: ["implementationMethodType"],
+    score: 70,
+    plannerEvidence: [{ family: "STATIC_STRUCTURE", kind: "IMPLEMENTATION_METHOD_TYPE", sourceTarget: "A1:/repo/src/main/java/demo/OrderPortImpl.java->/repo/src/main/java/demo/OrderEntity.java" }]
+  });
+  const highScoringContext = candidate({
+    absolutePath: "/repo/src/main/java/demo/UnrelatedContext.java",
+    path: "src/main/java/demo/UnrelatedContext.java",
+    reasons: ["SPRING_RESPONSE_TYPE"],
+    categories: ["framework"],
+    score: 900,
+    plannerEvidence: [{ family: "FRAMEWORK", kind: "SPRING_RESPONSE_TYPE", sourceTarget: "A1:/repo/src/main/java/demo/OrderPort.java->/repo/src/main/java/demo/UnrelatedContext.java" }]
+  });
+  const files = [anchor, mapper, entity, highScoringContext];
+
+  const result = await buildReadPlan({
+    files,
+    ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
+    options: optionsFor(anchor, { mode: "minimal", readPlanMaxItems: 3 }),
+    javaIndex: fixedRangeIndex()
+  });
+
+  assert.deepEqual(
+    result.items.map(item => item.fileId),
+    ["F1", "F3", "F4"],
+    "a field-type collaborator remains useful evidence but cannot displace a direct implementation or framework context from the bounded core"
+  );
 });
 
 test("framework evidence keeps its own quota when the same candidate also has static evidence", async () => {
@@ -576,7 +668,7 @@ test("framework evidence keeps its own quota when the same candidate also has st
   assert.deepEqual(new Set(result.items.map(item => item.fileId)), new Set(["F1", "F2", "F3", "F4", "F5", "F6"]));
 });
 
-test("baseline-safe structural paths reserve only the bounded core slots", async () => {
+test("missing buckets release capacity after bounded baseline-safe core slots", async () => {
   const anchor = candidate({
     absolutePath: "/repo/src/main/java/demo/Anchor.java",
     path: "src/main/java/demo/Anchor.java",
@@ -604,7 +696,7 @@ test("baseline-safe structural paths reserve only the bounded core slots", async
   const result = await buildReadPlan({
     files,
     ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
-    options: optionsFor(anchor, { mode: "balanced", readPlanMaxItems: 6, readPlanMaxBytes: 10_000 }),
+    options: optionsFor(anchor, { mode: "balanced", readPlanMaxItems: 8, readPlanMaxBytes: 10_000 }),
     javaIndex: fixedRangeIndex(),
     protectedPaths: new Set(baselineSafe.map(file => file.absolutePath))
   });
@@ -613,7 +705,7 @@ test("baseline-safe structural paths reserve only the bounded core slots", async
     const fileId = `F${files.indexOf(file) + 1}`;
     assert.ok(result.items.some(item => item.fileId === fileId), `${file.path} must retain its seed safe slot`);
   }
-  assert.equal(result.items.length, 5, "safe slots remain bounded; an absent non-core bucket does not force a low-value file");
+  assert.equal(result.items.length, 8, "missing buckets must release their capacity to useful remaining candidates");
 });
 
 test("deferred tests never consume protected core quota", async () => {
@@ -797,11 +889,8 @@ test("marginal selection recomputes overlap after each selected file", async () 
 });
 
 test("marginal selection is ordered by absolute utility, not utility/byte ratio, when only one of two mutually exclusive candidates fits", async () => {
-  // Same regression as the protected-core case above, for the generic
-  // (non-core) marginal-utility loop: marginalUtility() already subtracts a
-  // modest log-scaled byte penalty, so dividing by raw bytes again on top of
-  // that let a cheap, low-utility candidate starve a large, high-utility one
-  // whenever they could not both fit, even with ample budget headroom.
+  // The same rule applies after marginal utility is calculated: a fitting
+  // high-value collaborator is preferred over a smaller, lower-value one.
   const anchor = candidate({ absolutePath: "/repo/src/main/java/demo/Anchor.java", path: "src/main/java/demo/Anchor.java", reasons: ["target"], categories: ["target"], score: 1_000 });
   const highValue = candidate({ absolutePath: "/repo/src/main/java/demo/BigCollaborator.java", path: "src/main/java/demo/BigCollaborator.java", reasons: ["framework:repository"], categories: ["framework"], score: 500 });
   const cheapLowValue = candidate({ absolutePath: "/repo/src/main/java/demo/TinyCollaborator.java", path: "src/main/java/demo/TinyCollaborator.java", reasons: ["framework:repository"], categories: ["framework"], score: 50 });
@@ -825,7 +914,7 @@ test("marginal selection is ordered by absolute utility, not utility/byte ratio,
     } as never
   });
 
-  assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F2"], "the high-utility collaborator must win the shared byte budget over the cheaper, lower-value one");
+  assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F2"], "the high-utility collaborator must win the shared byte budget over the cheaper alternative");
 });
 
 test("same evidence kind with a different source-target remains independently useful", async () => {

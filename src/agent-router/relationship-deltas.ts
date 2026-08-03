@@ -103,12 +103,12 @@ export async function methodRelationDelta(
   anchor: ResolvedAnchor,
   javaIndex: RouterIndex,
   generation: number | undefined,
-  methodCache: Map<string, JavaMethodFact | undefined> | undefined
+  methodCache: Map<string, JavaMethodFact | undefined> | undefined,
+  factsCache: Map<string, JavaSourceFacts | undefined> | undefined
 ): Promise<number> {
   if (!(candidate.verifiedBy || []).includes("typeReference")) {
     return 0;
   }
-  const typeName = path.basename(candidate.path || candidate.absolutePath, ".java");
   let method: JavaMethodFact | undefined;
   try {
     const cacheKey = `${anchor.absolutePath}:${anchor.line}`;
@@ -121,7 +121,11 @@ export async function methodRelationDelta(
   } catch {
     return 0;
   }
-  const relation = method?.relations.find(item => simpleTypeName(item.typeName) === typeName);
+  const candidateFacts = await cachedFacts(javaIndex, candidate.absolutePath, generation, factsCache);
+  if (!candidateFacts?.typeId) {
+    return 0;
+  }
+  const relation = method?.relations.find(item => item.typeId === candidateFacts.typeId);
   if (!relation) {
     return 0;
   }

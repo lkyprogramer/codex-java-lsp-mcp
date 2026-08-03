@@ -12,7 +12,6 @@ import { resolveAnchor } from "./anchor.js";
 import { buildReadPlan } from "./read-plan.js";
 import { evidenceGaps } from "./evidence-gaps.js";
 import {
-  baselineReadPlanSafePaths,
   familyReadPlanProtectedPaths,
   foldProviderCandidates,
   rankCandidatePool,
@@ -282,15 +281,13 @@ export class AgentRouter {
       familyRankPolicy
     };
     const rankedPool = await timed(phaseMs, "familyRank", async () => rankCandidatePool(normalized, outcomes, rankContext));
-    const baselineSafePaths = baselineReadPlanSafePaths(rankedPool, rankContext);
-    const plannerProtectedPaths = new Set([...protectedReadPlanPaths, ...baselineSafePaths]);
     const poolIdByPath = new Map(rankedPool.map((file, index) => [file.absolutePath, `P${index + 1}`]));
     const readPlanResult = await timed(phaseMs, "buildReadPlan", async () => buildReadPlan({
       files: rankedPool,
       ids: poolIdByPath,
       options,
       javaIndex: this.javaIndex,
-      protectedPaths: plannerProtectedPaths,
+      protectedPaths: protectedReadPlanPaths,
       generation
     }));
     const ranked = truncateRankedCandidatePool(rankedPool, rankContext, new Set(readPlanResult.selectedPaths));

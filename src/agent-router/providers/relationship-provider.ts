@@ -77,7 +77,7 @@ export async function collectRelationshipEvidence(input: RelationshipProviderInp
   }
 
   for (const candidate of input.staticVerifiedCandidates) {
-    const methodDelta = await methodRelationDelta(candidate, anchor, input.javaIndex, input.generation, methodCache);
+    const methodDelta = await methodRelationDelta(candidate, anchor, input.javaIndex, input.generation, methodCache, factsCache);
     pushIfPositive(evidence, input, anchor.id, candidate, "METHOD_RELATION", methodDelta);
 
     const structural = await structuralDeltas(input.javaIndex, candidate, anchor, anchorFacts, input.generation, factsCache);

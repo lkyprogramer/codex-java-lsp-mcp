@@ -7,6 +7,7 @@ import {
   collectImportGraphCandidates,
   collectTypeGraphCandidates
 } from "../candidate-collectors.js";
+import { candidateFromFacts, mergeCandidate, scoreBase } from "../candidate-helpers.js";
 import { collectTypeReferenceCandidates } from "../type-reference.js";
 import { timed } from "../runtime.js";
 import { updateTypeReferenceCacheMetrics } from "../impact-metrics.js";
@@ -16,6 +17,19 @@ export const STATIC_PROVIDER_ID = "static";
 export const STATIC_PROVIDER_VERSION = "1";
 
 type StaticStage = "typeGraph" | "importGraph" | "typeReference";
+
+type ImplementationDependencyKind = "FIELD_TYPE" | "IMPLEMENTATION_METHOD_TYPE";
+
+type ImplementationDependency = {
+  readonly anchorId: string;
+  readonly anchor: ResolvedAnchor;
+  readonly sourceFile: string;
+  readonly qualifiedTypeName: string;
+  readonly kind: ImplementationDependencyKind;
+};
+
+const MAX_IMPLEMENTATIONS_PER_ANCHOR = 4;
+const MAX_IMPLEMENTATION_DEPENDENCY_TYPES = 24;
 
 /**
  * Mirrors the old per-reason score bonuses (candidate-collectors.ts/type-reference.ts).
@@ -54,10 +68,11 @@ export async function collectStaticStructureEvidence(input: ProviderInput): Prom
   const startedAt = Date.now();
   const candidates = seedZeroStubs(input.repoRoot, input.existingCandidatePaths);
   const evidence: EvidenceSignal[] = [];
+  const implementationPathsByAnchor = new Map<string, Set<string>>();
 
   await timed(input.phaseMs, "typeGraph", async () => {
     await collectPerAnchor(input, candidates, evidence, "typeGraph", async anchor => {
-      await collectTypeGraphCandidates({
+      const implementations = await collectTypeGraphCandidates({
         candidates,
         anchors: [anchor],
         options: input.options,
@@ -65,7 +80,18 @@ export async function collectStaticStructureEvidence(input: ProviderInput): Prom
         routingPolicy: input.routingPolicy,
         generation: input.generation
       });
+      // Defer-mode test implementations remain visible as ordinary recall,
+      // but must not fan their fixtures/mocks into the main-source core.
+      const paths = new Set(implementations
+        .filter(implementation => implementation.sourceSet !== "test" || input.options.testReadMode !== "defer")
+        .map(implementation => implementation.absolutePath));
+      if (paths.size > 0) {
+        implementationPathsByAnchor.set(anchor.id, paths);
+      }
     });
+  });
+  await timed(input.phaseMs, "implementationDependencies", async () => {
+    await collectImplementationDependencies(input, candidates, evidence, implementationPathsByAnchor);
   });
   await timed(input.phaseMs, "importGraph", async () => {
     await collectPerAnchor(input, candidates, evidence, "importGraph", async anchor => {
@@ -151,6 +177,113 @@ async function collectPerAnchor(
       evidence.push(...evidenceForCandidate(input, candidate, anchor.id, stage, prior));
     }
   }
+}
+
+/**
+ * A resolved implementation is the first exact hop from an interface/port
+ * method.  Its injected field types and the explicit-import types used by
+ * the matching implementation method are a bounded second hop; this lets a
+ * repository task reach its mapper/entity chain without filename inference
+ * or a workspace-wide reference scan.
+ */
+async function collectImplementationDependencies(
+  input: ProviderInput,
+  candidates: Map<string, CandidateFile>,
+  evidence: EvidenceSignal[],
+  implementationPathsByAnchor: ReadonlyMap<string, ReadonlySet<string>>
+): Promise<void> {
+  const dependencies: ImplementationDependency[] = [];
+  for (const anchor of input.anchors) {
+    if (!anchor.methodName || input.budget.expired()) continue;
+    const implementationPaths = [...(implementationPathsByAnchor.get(anchor.id) ?? [])]
+      .slice(0, MAX_IMPLEMENTATIONS_PER_ANCHOR);
+    for (const implementationPath of implementationPaths) {
+      if (input.budget.expired()) break;
+      let implementation;
+      try {
+        implementation = await input.javaIndex.factsFor(implementationPath, input.generation);
+      } catch {
+        continue;
+      }
+      for (const field of implementation.fieldTypes ?? []) {
+        if (field.qualifiedName && field.typeId) {
+          dependencies.push({
+            anchorId: anchor.id,
+            anchor,
+            sourceFile: implementation.absolutePath,
+            qualifiedTypeName: field.qualifiedName,
+            kind: "FIELD_TYPE"
+          });
+        }
+      }
+      const importsBySimpleName = new Map(implementation.imports.map(imported => [simpleTypeName(imported), imported]));
+      for (const method of implementation.methods.filter(method => method.name === anchor.methodName)) {
+        for (const typeName of method.referencedTypes) {
+          const qualifiedTypeName = importsBySimpleName.get(simpleTypeName(typeName));
+          if (!qualifiedTypeName) continue;
+          dependencies.push({
+            anchorId: anchor.id,
+            anchor,
+            sourceFile: implementation.absolutePath,
+            qualifiedTypeName,
+            kind: "IMPLEMENTATION_METHOD_TYPE"
+          });
+        }
+      }
+    }
+  }
+  const bounded = dedupeImplementationDependencies(dependencies).slice(0, MAX_IMPLEMENTATION_DEPENDENCY_TYPES);
+  if (bounded.length === 0) return;
+  const dependenciesByType = new Map<string, ImplementationDependency[]>();
+  for (const dependency of bounded) {
+    const values = dependenciesByType.get(dependency.qualifiedTypeName) ?? [];
+    values.push(dependency);
+    dependenciesByType.set(dependency.qualifiedTypeName, values);
+  }
+  const definitions = await input.javaIndex.findTypeDefinitions([...dependenciesByType.keys()], MAX_IMPLEMENTATION_DEPENDENCY_TYPES, false);
+  for (const definition of definitions) {
+    const qualifiedTypeName = definition.qualifiedName;
+    if (!qualifiedTypeName) continue;
+    for (const dependency of dependenciesByType.get(qualifiedTypeName) ?? []) {
+      const weight = dependency.kind === "FIELD_TYPE" ? 70 : 65;
+      const candidate = candidateFromFacts(
+        definition,
+        scoreBase(input.routingPolicy, "semantic", definition, dependency.anchor, input.options) + weight,
+        dependency.kind === "FIELD_TYPE" ? "implementationField" : "implementationMethodType"
+      );
+      mergeCandidate(candidates, candidate);
+      evidence.push({
+        signalId: nextSignalId(STATIC_PROVIDER_ID),
+        candidateFile: definition.absolutePath,
+        anchorId: dependency.anchorId,
+        kind: dependency.kind,
+        family: "STATIC_STRUCTURE",
+        provenance: "AST_RESOLVED",
+        confidence: dependency.kind === "FIELD_TYPE" ? 0.95 : 0.9,
+        completeness: "COMPLETE",
+        weight,
+        sourceFile: dependency.sourceFile,
+        positions: candidate.positions,
+        providerId: STATIC_PROVIDER_ID,
+        providerVersion: STATIC_PROVIDER_VERSION,
+        generation: input.generation,
+        detail: "resolved implementation dependency"
+      });
+    }
+  }
+}
+
+function dedupeImplementationDependencies(dependencies: readonly ImplementationDependency[]): ImplementationDependency[] {
+  const unique = new Map<string, ImplementationDependency>();
+  for (const dependency of dependencies) {
+    unique.set(`${dependency.anchorId}\0${dependency.sourceFile}\0${dependency.kind}\0${dependency.qualifiedTypeName}`, dependency);
+  }
+  return [...unique.values()];
+}
+
+function simpleTypeName(value: string): string {
+  const normalized = value.replace(/<.*>/, "").replace(/\[\]$/, "");
+  return normalized.slice(normalized.lastIndexOf(".") + 1);
 }
 
 function outcome(

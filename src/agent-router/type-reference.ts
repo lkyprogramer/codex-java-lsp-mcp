@@ -48,19 +48,12 @@ export async function collectTypeReferenceCandidates(input: CollectTypeReference
     if (!shouldUseTypeReference(anchor)) {
       continue;
     }
-    // Final ranking uses family evidence, but candidate discovery still has a
-    // bounded foreground read-plan. Lishuedu controller anchors keep their
-    // established narrow discovery budget: broad static reinforcement would
-    // crowd must-read persistence files before family ranking sees them.
-    // This is an explicit policy-level discovery constraint, not a hidden
-    // routing-policy score adjustment.
-    const canReinforceExistingTypeReferences = routingPolicy.id !== "lishuedu";
-    const canQueryStaticIndex = canReinforceExistingTypeReferences || anchor.profile !== "controller";
-    const canUseReferenceOrderBonus = canReinforceExistingTypeReferences && anchor.profile === "controller";
+    // Direct type references are index-resolved facts.  Candidate discovery
+    // must not suppress them by repository identity: the read-plan's bounded
+    // selection decides whether a discovered file is worth reading.
+    const canUseReferenceOrderBonus = anchor.profile === "controller";
     const typeName = anchor.className || path.basename(anchor.absolutePath, ".java");
-    const typeReferenceFacts = canQueryStaticIndex
-      ? javaIndex.findTypeReferences(typeName, 20)
-      : Promise.resolve<JavaSourceFacts[]>([]);
+    const typeReferenceFacts = javaIndex.findTypeReferences(typeName, 20);
     let anchorFacts: JavaSourceFacts;
     try {
       anchorFacts = await javaIndex.factsFor(anchor.absolutePath, generation);
@@ -70,23 +63,19 @@ export async function collectTypeReferenceCandidates(input: CollectTypeReference
       await typeReferenceFacts.catch(() => undefined);
       continue;
     }
-    if (canQueryStaticIndex) {
-      metrics.scannedPatterns += 1;
-      for (const facts of await typeReferenceFacts) {
-        const alreadyCandidate = candidates.has(facts.absolutePath);
-        if (alreadyCandidate) {
-          metrics.skippedExisting += 1;
-        }
-        const candidate = candidateFromFacts(facts, scoreBase(routingPolicy, "semantic", facts, anchor, options) + 60, "typeReference");
-        mergeCandidate(candidates, candidate);
-        if (!alreadyCandidate) {
-          metrics.addedCandidates += 1;
-        }
+    metrics.scannedPatterns += 1;
+    for (const facts of await typeReferenceFacts) {
+      const alreadyCandidate = candidates.has(facts.absolutePath);
+      if (alreadyCandidate) {
+        metrics.skippedExisting += 1;
+      }
+      const candidate = candidateFromFacts(facts, scoreBase(routingPolicy, "semantic", facts, anchor, options) + 60, "typeReference");
+      mergeCandidate(candidates, candidate);
+      if (!alreadyCandidate) {
+        metrics.addedCandidates += 1;
       }
     }
-    const methodFact = canReinforceExistingTypeReferences
-      ? await javaIndex.methodAt(anchor.absolutePath, anchor.line, generation)
-      : undefined;
+    const methodFact = await javaIndex.methodAt(anchor.absolutePath, anchor.line, generation);
     const methodTypes = methodFact
       ? unique([...methodFact.relations.map(relation => relation.typeName), ...methodFact.referencedTypes])
       : [];
@@ -121,12 +110,10 @@ export async function collectTypeReferenceCandidates(input: CollectTypeReference
     // to discover whether they are a referenced type.  Querying definitions
     // is both exact and indexed; merge the returned fact even when rg already
     // found the same path so the evidence and implementation lookup survive.
-    if (canQueryStaticIndex && referencedTypes.length > 0) {
+    if (referencedTypes.length > 0) {
       metrics.scannedPatterns += 1;
     }
-    const definitions = canQueryStaticIndex
-      ? await javaIndex.findTypeDefinitions(referencedTypes, 20)
-      : [];
+    const definitions = await javaIndex.findTypeDefinitions(referencedTypes, 20);
     for (const facts of definitions) {
       if (facts.absolutePath === anchor.absolutePath) {
         continue;
@@ -141,7 +128,7 @@ export async function collectTypeReferenceCandidates(input: CollectTypeReference
       if (!alreadyCandidate) {
         metrics.addedCandidates += 1;
       }
-      if (canReinforceExistingTypeReferences && facts.kind === "interface" && facts.typeName) {
+      if (facts.kind === "interface" && facts.typeName) {
         const qualifiedTypeName = facts.packageName ? `${facts.packageName}.${facts.typeName}` : facts.typeName;
         for (const implFacts of await javaIndex.findImplementers(qualifiedTypeName, 8, anchor.absolutePath)) {
           const implementation = candidateFromFacts(implFacts, scoreBase(routingPolicy, "semantic", implFacts, anchor, options) + 70, "typeGraph");

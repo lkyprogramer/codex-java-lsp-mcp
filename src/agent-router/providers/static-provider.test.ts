@@ -4,7 +4,7 @@ import type { ImpactOptions, ResolvedAnchor } from "../../agent-types.js";
 import { resolveRoutingPolicy } from "../../routing-policy.js";
 import type { ProviderInput } from "../evidence.js";
 import type { JavaSourceFacts } from "../../java-index/router-facts.js";
-import { collectStaticEvidence } from "./static-provider.js";
+import { collectStaticEvidence, collectStaticStructureEvidence } from "./static-provider.js";
 
 const options: ImpactOptions = {
   anchors: [],
@@ -36,12 +36,14 @@ function anchor(id: string, className: string, profile: ResolvedAnchor["profile"
 }
 
 function facts(absolutePath: string, overrides: Partial<JavaSourceFacts> = {}): JavaSourceFacts {
+  const typeName = absolutePath.split("/").at(-1)!.replace(/\.java$/, "");
   return {
     absolutePath,
     path: absolutePath.slice("/repo/".length),
     sourceSet: "main",
     packageName: "demo",
-    typeName: absolutePath.split("/").at(-1)!.replace(/\.java$/, ""),
+    typeName,
+    qualifiedName: `demo.${typeName}`,
     kind: "class",
     implementsTypes: [],
     referencedTypes: [],
@@ -63,6 +65,7 @@ function providerInput(anchors: ResolvedAnchor[], javaIndex: Record<string, unkn
     routingPolicy: resolveRoutingPolicy("/repo"),
     existingCandidatePaths: [],
     generation: 0,
+    budget: { expired: () => false },
     phaseMs: {},
     metrics: {
       importGraph: { scannedAnchors: 0, addedCandidates: 0, skippedExisting: 0, elapsedMs: 0 },
@@ -126,4 +129,70 @@ test("static provider classifies direct imported declarations as exact AST evide
   assert.equal(evidence?.kind, "DIRECT_DECLARATION");
   assert.equal(evidence?.provenance, "AST_EXACT");
   assert.equal(evidence?.confidence, 0.98);
+});
+
+test("a resolved implementation exposes its exact field and anchored-method collaborators", async () => {
+  const repository = { ...anchor("A1", "OrderPort", "port"), methodName: "findById", symbolName: "findById" };
+  const implementation = {
+    ...facts("/repo/src/main/java/demo/OrderPortImpl.java", {
+      imports: ["demo.OrderMapper", "demo.OrderEntity"],
+      methods: [{
+        name: "findById",
+        line: 20,
+        endLine: 30,
+        referencedTypes: ["OrderEntity"],
+        relations: [],
+        methodId: "method:demo.OrderPortImpl.findById"
+      }]
+    }),
+    fieldTypes: [{ typeName: "OrderMapper", qualifiedName: "demo.OrderMapper", typeId: "type:demo.OrderMapper" }]
+  } as JavaSourceFacts;
+  const mapper = facts("/repo/src/main/java/demo/OrderMapper.java");
+  const entity = facts("/repo/src/main/java/demo/OrderEntity.java");
+  const result = await collectStaticStructureEvidence(providerInput([repository], {
+    factsFor: async (file: string) => file === repository.absolutePath ? facts(file, { kind: "interface" }) : implementation,
+    findImplementers: async () => [implementation],
+    findTypeDefinitions: async (names: readonly string[]) => [
+      ...(names.includes("demo.OrderMapper") ? [mapper] : []),
+      ...(names.includes("demo.OrderEntity") ? [entity] : [])
+    ],
+    findImporters: async () => [],
+    findTypeReferences: async () => [],
+    methodAt: async () => undefined,
+    routerStatus: async () => emptyRouterStatus()
+  }));
+
+  assert.ok(result.evidence.some(signal => signal.candidateFile === mapper.absolutePath && signal.kind === "FIELD_TYPE"));
+  assert.ok(result.evidence.some(signal => signal.candidateFile === entity.absolutePath && signal.kind === "IMPLEMENTATION_METHOD_TYPE"));
+});
+
+test("deferred test implementations do not fan out their collaborators into a main-source request", async () => {
+  const repository = { ...anchor("A1", "OrderPort", "port"), methodName: "findById", symbolName: "findById" };
+  const mainImplementation = {
+    ...facts("/repo/src/main/java/demo/OrderPortImpl.java"),
+    fieldTypes: [{ typeName: "MainMapper", qualifiedName: "demo.MainMapper", typeId: "type:demo.MainMapper" }]
+  } as JavaSourceFacts;
+  const testImplementation = {
+    ...facts("/repo/src/test/java/demo/TestOrderPort.java", { sourceSet: "test" }),
+    fieldTypes: [{ typeName: "TestMapper", qualifiedName: "demo.TestMapper", typeId: "type:demo.TestMapper" }]
+  } as JavaSourceFacts;
+  const mainMapper = facts("/repo/src/main/java/demo/MainMapper.java");
+  const testMapper = facts("/repo/src/test/java/demo/TestMapper.java", { sourceSet: "test" });
+  const result = await collectStaticStructureEvidence(providerInput([repository], {
+    factsFor: async (file: string) => file === repository.absolutePath
+      ? facts(file, { kind: "interface" })
+      : file === mainImplementation.absolutePath ? mainImplementation : testImplementation,
+    findImplementers: async () => [mainImplementation, testImplementation],
+    findTypeDefinitions: async (names: readonly string[]) => [
+      ...(names.includes("demo.MainMapper") ? [mainMapper] : []),
+      ...(names.includes("demo.TestMapper") ? [testMapper] : [])
+    ],
+    findImporters: async () => [],
+    findTypeReferences: async () => [],
+    methodAt: async () => undefined,
+    routerStatus: async () => emptyRouterStatus()
+  }));
+
+  assert.ok(result.evidence.some(signal => signal.candidateFile === mainMapper.absolutePath && signal.kind === "FIELD_TYPE"));
+  assert.equal(result.evidence.some(signal => signal.candidateFile === testMapper.absolutePath), false);
 });

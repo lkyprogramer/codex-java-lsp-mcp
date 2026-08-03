@@ -163,18 +163,48 @@ test("a candidate type in the anchor's own method relations earns a METHOD_RELAT
     line: 1,
     endLine: 5,
     referencedTypes: [],
-    relations: [{ kind: "parameter", typeName: "demo.OrderRequest", line: 1, confidence: "high", source: "ast" }]
+    relations: [{ kind: "parameter", typeName: "OrderRequest", typeId: "type:demo.OrderRequest", line: 1, confidence: "high", source: "ast" }]
   };
   const result = await collectRelationshipEvidence(providerInput(
     [service],
     [],
     [paramType],
-    noopJavaIndex({ methodAt: async () => method })
+    noopJavaIndex({
+      methodAt: async () => method,
+      factsFor: async (file: string) => file === paramType.absolutePath
+        ? facts(file, { typeId: "type:demo.OrderRequest" })
+        : undefined
+    })
   ));
   const signal = result.evidence.find(item => item.candidateFile === paramType.absolutePath && item.kind === "METHOD_RELATION");
   assert.ok(signal, "expected a METHOD_RELATION signal for a candidate the anchor's own method references");
   assert.equal(signal!.family, "STATIC_STRUCTURE");
   assert.equal(signal!.weight, 160);
+});
+
+test("a method relation never binds a same-simple-name candidate from another package", async () => {
+  const service = anchor();
+  const collision = candidate("/repo/src/main/java/other/OrderRequest.java");
+  const method: JavaMethodFact = {
+    name: "place",
+    line: 1,
+    endLine: 5,
+    referencedTypes: [],
+    relations: [{ kind: "parameter", typeName: "OrderRequest", line: 1, confidence: "high", source: "ast" }]
+  };
+  const result = await collectRelationshipEvidence(providerInput(
+    [service],
+    [],
+    [collision],
+    noopJavaIndex({
+      methodAt: async () => method,
+      factsFor: async (file: string) => file === collision.absolutePath
+        ? facts(file, { packageName: "other", typeId: "type:other.OrderRequest" })
+        : facts(service.absolutePath, { typeId: "type:demo.OrderService" })
+    })
+  ));
+
+  assert.equal(result.evidence.some(item => item.candidateFile === collision.absolutePath && item.kind === "METHOD_RELATION"), false);
 });
 
 test("a candidate implementing the anchor's type earns a TYPE_RELATION signal even when it is not verifiedBy typeGraph", () => {

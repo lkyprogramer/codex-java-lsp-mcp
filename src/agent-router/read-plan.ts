@@ -32,11 +32,11 @@ const PROTECTED_CORE_KINDS = new Set([
   "TYPE_RELATION",
   "TYPE_SYMMETRIC",
   "METHOD_RELATION",
+  "IMPLEMENTATION_METHOD_TYPE",
   "definition",
   "implementation",
   "typeHierarchy",
   "typeGraph:implementation-lookup",
-  "SPRING_INJECTION",
   "SPRING_CALL_PATH",
   "MYBATIS_STATEMENT_METHOD",
   "JPA_REPOSITORY_ENTITY"
@@ -215,7 +215,7 @@ function shortlistCandidates(
       selected.add(file.absolutePath);
     }
   };
-  // Anchor and direct core cannot be displaced before the byte-aware pass.
+  // Anchors and protected core cannot be displaced before the byte-aware pass.
   ordered.filter(file => isAnchor(file, options)).forEach(add);
   ordered.filter(file => isProtectedCore(file, options)).forEach(add);
   // The seed planner's high-confidence core is a bounded compatibility set,
@@ -223,7 +223,7 @@ function shortlistCandidates(
   // V6 byte pass can preserve safe slots without reading more candidates.
   ordered.filter(file => protectedPaths.has(file.absolutePath)).forEach(add);
   // Preserve early representation for each evidence bucket, but never force
-  // one into the final plan when utility/bytes says it is not worthwhile.
+  // a representative into the final budgeted plan.
   for (const bucket of Object.keys(BUCKET_RULES) as ReadPlanBucket[]) {
     const representative = ordered.find(file =>
       bucketOf(file, options, protectedPaths) === bucket
@@ -301,24 +301,28 @@ function selectTokenAwarePlan(
     }
   }
 
-  const canAdd = (window: CandidateWindow): boolean =>
+  const fitsPlanBudget = (window: CandidateWindow): boolean =>
     !selectedPaths.has(window.file.absolutePath)
     && selected.length < budget.maxFiles
     && !budgetExceededByAnchor
-    && totalBytes + window.bytes <= budget.maxReadBytes
-    && bucketCounts[bucketOf(window.file, options, protectedPaths)] < BUCKET_RULES[bucketOf(window.file, options, protectedPaths)].max;
-  // Ordered by absolute utility, not utility/byte ratio: the fleet-wide
-  // matrix showed cell-total budget utilization averaging ~0.53 (max 0.86)
-  // while a ratio-primary sort still let a small, low-value core candidate
-  // (e.g. a coarse mapper) outrank a large, high-value one (e.g. a resolved
-  // implementation) whenever it was merely cheaper - the byte constraint was
-  // rarely binding, so optimizing for it first was optimizing the wrong
-  // thing. `canAdd` below still enforces the hard byte budget per candidate;
-  // this only changes which candidate is considered first when several fit.
+    && totalBytes + window.bytes <= budget.maxReadBytes;
+  const canAdd = (window: CandidateWindow): boolean => {
+    const bucket = bucketOf(window.file, options, protectedPaths);
+    return fitsPlanBudget(window) && bucketCounts[bucket] < BUCKET_RULES[bucket].max;
+  };
+  // Core is a hard maximum: quota release may fill missing framework/support/
+  // lexical slots, but must not dilute the bounded exact-evidence core.
+  const canAddAfterQuotaRelease = (window: CandidateWindow): boolean => {
+    const bucket = bucketOf(window.file, options, protectedPaths);
+    return fitsPlanBudget(window)
+      && (bucket !== "core" || bucketCounts.core < BUCKET_RULES.core.max);
+  };
   const core = readableWindows
     .filter(window => (isProtectedCore(window.file, options) || protectedPaths.has(window.file.absolutePath))
       && !isAnchor(window.file, options))
-    .sort((left, right) => protectedUtility(right) - protectedUtility(left) || left.bytes - right.bytes);
+    .sort((left, right) =>
+      protectedUtility(right) - protectedUtility(left)
+      || left.bytes - right.bytes);
   for (const window of core) {
     if (canAdd(window)) add(window, protectedUtility(window));
   }
@@ -327,17 +331,28 @@ function selectTokenAwarePlan(
   }
 
   const remaining = readableWindows.filter(window => !selectedPaths.has(window.file.absolutePath));
-  while (true) {
-    // Same reasoning as the core sort above: marginalUtility() already
-    // subtracts a modest log-scaled bytePenalty, so a further linear
-    // division by raw bytes double-penalizes size and is dropped here too.
-    const next = remaining
-      .filter(canAdd)
+  const nextByMarginalUtility = (
+    canSelect: (window: CandidateWindow) => boolean,
+    requireNovelEvidence = false
+  ): { window: CandidateWindow; utility: number } | undefined =>
+    remaining
+      .filter(window => canSelect(window) && (!requireNovelEvidence || hasNovelEvidence(window.file, selected)))
       .map(window => ({ window, utility: marginalUtility(window, selected) }))
       .sort((left, right) =>
         right.utility - left.utility
         || right.window.file.score - left.window.file.score
         || left.window.file.absolutePath.localeCompare(right.window.file.absolutePath))[0];
+  while (true) {
+    const next = nextByMarginalUtility(canAdd);
+    if (!next) break;
+    add(next.window, next.utility);
+    remaining.splice(remaining.indexOf(next.window), 1);
+  }
+  // Bucket caps create representation, not dead capacity. Once the bounded
+  // pass is exhausted, unavailable bucket capacity is released to the best
+  // remaining non-core evidence while retaining every hard file/byte limit.
+  while (true) {
+    const next = nextByMarginalUtility(canAddAfterQuotaRelease, true);
     if (!next) break;
     add(next.window, next.utility);
     remaining.splice(remaining.indexOf(next.window), 1);
@@ -390,6 +405,11 @@ function evidenceOverlap(left: CandidateFile, right: CandidateFile): number {
   return leftKeys.filter(key => rightKeys.has(key)).length / leftKeys.length;
 }
 
+function hasNovelEvidence(candidate: CandidateFile, selected: readonly CandidateWindow[]): boolean {
+  const selectedKeys = new Set(selected.flatMap(window => plannerEvidenceKeys(window.file)));
+  return plannerEvidenceKeys(candidate).some(key => !selectedKeys.has(key));
+}
+
 function plannerEvidenceKeys(file: CandidateFile): string[] {
   if ((file.plannerEvidence?.length ?? 0) > 0) {
     return file.plannerEvidence!.map(item => `${item.family}\0${item.kind}\0${item.sourceTarget}`);
@@ -417,9 +437,16 @@ function isAnchor(
     || options.anchors.some(anchor => anchor.file === file.absolutePath || anchor.file === file.path);
 }
 
-function isProtectedCore(file: CandidateFile, options: Pick<ImpactOptions, "testReadMode">): boolean {
+function isProtectedCore(file: CandidateFile, options: Pick<ImpactOptions, "testReadMode" | "anchors">): boolean {
   if (file.sourceSet === "test" && options.testReadMode === "defer") return false;
-  if ((file.plannerEvidence ?? []).some(evidence => PROTECTED_CORE_KINDS.has(evidence.kind))) return true;
+  // Planner evidence retains the source of framework links.  A Spring call
+  // discovered while expanding a structural seed is useful framework context,
+  // but is not a call on this request's anchor path and therefore must not
+  // consume the bounded protected-core quota.  Legacy candidates without the
+  // structured projection retain their compatibility fallback below.
+  if ((file.plannerEvidence?.length ?? 0) > 0) {
+    return file.plannerEvidence!.some(evidence => isProtectedCoreEvidence(evidence, options));
+  }
   if (file.reasons.some(reason => PROTECTED_CORE_KINDS.has(reason))
     || (file.verifiedBy || []).some(reason => PROTECTED_CORE_KINDS.has(reason))) return true;
   return (file.scoreBreakdown || []).some(item => item.delta > 0 && (
@@ -429,13 +456,23 @@ function isProtectedCore(file: CandidateFile, options: Pick<ImpactOptions, "test
   ));
 }
 
+function isProtectedCoreEvidence(
+  evidence: NonNullable<CandidateFile["plannerEvidence"]>[number],
+  options: Pick<ImpactOptions, "anchors">
+): boolean {
+  if (!PROTECTED_CORE_KINDS.has(evidence.kind)) return false;
+  if (evidence.kind !== "SPRING_CALL_PATH" && evidence.kind !== "SPRING_INJECTION") return true;
+  const arrow = evidence.sourceTarget.indexOf("->");
+  if (arrow <= 0) return false;
+  const source = evidence.sourceTarget.slice(0, arrow);
+  return options.anchors.some((anchor, index) => source === `A${index + 1}:${anchor.file}`);
+}
+
 function bucketOf(file: CandidateFile, options: ImpactOptions, protectedPaths: ReadonlySet<string>): ReadPlanBucket {
   if (isAnchor(file, options)) return "anchor";
   if (file.sourceSet === "test" && options.testReadMode === "defer") return "support";
   if (isProtectedCore(file, options) || protectedPaths.has(file.absolutePath)) return "core";
   if (file.categories.includes("framework") || file.reasons.some(reason => reason.startsWith("SPRING_") || reason.startsWith("MYBATIS_") || reason.startsWith("JPA_"))) return "framework";
-  if ((file.plannerEvidence ?? []).some(evidence =>
-    evidence.family === "STATIC_STRUCTURE" || evidence.family === "EXACT_SEMANTIC")) return "core";
   if (file.sourceSet === "test" || file.categories.some(category => category === "config" || category === "persistence" || category === "nonJava")) return "support";
   return "lexical";
 }

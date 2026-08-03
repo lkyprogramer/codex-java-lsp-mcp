@@ -432,7 +432,7 @@ test("pre-semantic protection ignores a score that exists only in the retired ad
   );
 });
 
-test("pre-semantic protection admits exact Spring injection but not framework response metadata-like relations", async () => {
+test("pre-semantic protection reserves resolved Spring call paths, not injection metadata", async () => {
   const injectionFile = "/repo/module-a/src/main/java/demo/InjectedService.java";
   const responseFile = "/repo/module-a/src/main/java/demo/OrderResponse.java";
   const injectionSignal = signal({
@@ -467,8 +467,82 @@ test("pre-semantic protection admits exact Spring injection but not framework re
     repoRoot: "/repo"
   });
 
-  assert.equal(protectedPaths.has(injectionFile), true);
+  assert.equal(protectedPaths.has(injectionFile), false);
   assert.equal(protectedPaths.has(responseFile), false);
+});
+
+test("pre-semantic Spring call protection is limited to a call sourced by the request anchor", async () => {
+  const anchorEntry = anchor();
+  const directCallFile = "/repo/module-a/src/main/java/demo/DirectRepository.java";
+  const nestedCallFile = "/repo/module-a/src/main/java/demo/NestedRepository.java";
+  const directCall = signal({
+    candidateFile: directCallFile,
+    kind: "SPRING_CALL_PATH",
+    family: "FRAMEWORK",
+    provenance: "FRAMEWORK_INFERRED",
+    confidence: 0.98,
+    weight: 100,
+    sourceFile: anchorEntry.absolutePath
+  });
+  const nestedCall = signal({
+    candidateFile: nestedCallFile,
+    kind: "SPRING_CALL_PATH",
+    family: "FRAMEWORK",
+    provenance: "FRAMEWORK_INFERRED",
+    confidence: 0.98,
+    weight: 100,
+    sourceFile: "/repo/module-a/src/main/java/demo/StructuralSeed.java"
+  });
+  const normalized = new Map<string, CandidateEvidence>([
+    [directCallFile, evidenceCandidate(directCallFile, [directCall], { module: "module-a", sourceSet: "main" })],
+    [nestedCallFile, evidenceCandidate(nestedCallFile, [nestedCall], { module: "module-a", sourceSet: "main" })]
+  ]);
+
+  const protectedPaths = await familyReadPlanProtectedPaths(normalized, [], {
+    anchors: [anchorEntry],
+    options: options({ mode: "minimal", readPlanMaxItems: 3 }),
+    suppressed: emptySuppressed(),
+    repoRoot: "/repo"
+  });
+
+  assert.equal(protectedPaths.has(directCallFile), true);
+  assert.equal(protectedPaths.has(nestedCallFile), false);
+});
+
+test("pre-semantic protection retains only method-level second-hop implementation dependencies", async () => {
+  const mapperFile = "/repo/module-a/src/main/java/demo/OrderMapper.java";
+  const entityFile = "/repo/module-a/src/main/java/demo/OrderEntity.java";
+  const mapper = signal({
+    candidateFile: mapperFile,
+    kind: "FIELD_TYPE",
+    family: "STATIC_STRUCTURE",
+    provenance: "AST_RESOLVED",
+    confidence: 0.95,
+    weight: 70,
+    sourceFile: "/repo/module-a/src/main/java/demo/OrderPortImpl.java"
+  });
+  const entity = signal({
+    candidateFile: entityFile,
+    kind: "IMPLEMENTATION_METHOD_TYPE",
+    family: "STATIC_STRUCTURE",
+    provenance: "AST_RESOLVED",
+    confidence: 0.9,
+    weight: 65,
+    sourceFile: "/repo/module-a/src/main/java/demo/OrderPortImpl.java"
+  });
+  const normalized = new Map<string, CandidateEvidence>([
+    [mapperFile, evidenceCandidate(mapperFile, [mapper], { module: "module-a", sourceSet: "main" })],
+    [entityFile, evidenceCandidate(entityFile, [entity], { module: "module-a", sourceSet: "main" })]
+  ]);
+
+  const protectedPaths = await familyReadPlanProtectedPaths(normalized, [], {
+    anchors: [anchor()],
+    options: options({ mode: "minimal", readPlanMaxItems: 3 }),
+    suppressed: emptySuppressed(),
+    repoRoot: "/repo"
+  });
+
+  assert.deepEqual(protectedPaths, new Set([entityFile]));
 });
 
 test("pre-semantic protection admits exact MyBatis namespace/statement matches but not parameter-type relations", async () => {
