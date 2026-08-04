@@ -68,6 +68,10 @@ export function repoCacheRoot(repoRoot: string): string {
 }
 
 export function repoCacheBase(): string {
+  const configured = process.env.JAVA_LSP_CACHE_ROOT?.trim();
+  if (configured) {
+    return path.resolve(configured);
+  }
   return path.join(homedir(), "Library", "Caches", "codex-java-lsp");
 }
 

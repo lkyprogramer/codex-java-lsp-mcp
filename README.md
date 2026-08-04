@@ -261,6 +261,7 @@ benchmark 入口：
 ```bash
 npm run benchmark:agent-impact -- --repo-root /absolute/path/to/java-repo --project-id <id> --warm-state cold-nolsp --strategy impact --runs 5 --verbosity diagnostic
 npm run benchmark:impact-attribution -- --repo-root /absolute/path/to/java-repo --project-id <id>
+npm run benchmark:three-repo-matrix -- --baseline <approved-baseline-sha> --lishuedu <repo-root> --cipherlink <repo-root> --exam-parent-v3 <repo-root>
 ```
 
 当前 benchmark 口径：
@@ -268,6 +269,7 @@ npm run benchmark:impact-attribution -- --repo-root /absolute/path/to/java-repo 
 - hard gate 是 `R_read_must=1.0000`；side/test/SQL/config 证据只参与诊断，不进 hard gate。
 - `goldenAttribution[]` 用于判断缺口是 `absent`、`readplan-full` 还是已命中 `readPlan`。
 - `timing.phaseMs/sessionPhaseMs` 用于 warm 延迟归因；`warm-auto` 已去掉 no-seed semantic verify 固定成本，`warm-required` 仍因 first-touch references P95 超过 `800ms` 而不可默认化。
+- 三仓 paired gate 使用 [`docs/three-repo-cold-matrix-runbook.md`](docs/three-repo-cold-matrix-runbook.md)：old/new 必须共享冻结的 `--scenarios` 文件，固定 AB/BA/AB、3 轮 × 每格 5 runs，且由脚本逐仓判定 quality/P95 硬门。
 
 最新验证报告：
 

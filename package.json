@@ -13,12 +13,15 @@
     "test": "node --test \"dist/**/*.test.js\"",
     "benchmark:agent-impact": "node dist/benchmark-agent-impact.js",
     "benchmark:agent-summary": "node scripts/summarize-impact-benchmark.mjs",
+    "benchmark:three-repo-matrix": "node scripts/run-three-repo-cold-matrix.mjs",
+    "benchmark:three-repo-verify": "node scripts/verify-three-repo-cold-matrix.mjs",
     "benchmark:impact-attribution": "node scripts/attribute-impact-payload.mjs",
     "benchmark:lsp-performance": "node dist/benchmark-lsp-performance.js",
     "benchmark:edit-to-visible": "node scripts/edit-to-visible-benchmark.mjs",
     "smoke": "node dist/smoke.js",
     "smoke:lease-subprocess": "node scripts/lease-subprocess-smoke.mjs",
     "measure:tool-schema": "node scripts/measure-tool-schema.mjs",
+    "test:three-repo-matrix": "node --test scripts/verify-three-repo-cold-matrix.test.mjs",
     "start": "node dist/server.js"
   },
   "dependencies": {
