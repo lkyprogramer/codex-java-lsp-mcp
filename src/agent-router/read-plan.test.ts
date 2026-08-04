@@ -823,15 +823,25 @@ test("deferred tests stay in candidate output but never consume a V6 read-plan s
     score: 100
   });
   const files = [anchor, deferredTest, mainContext];
+  const requestedPaths: string[] = [];
+  const index = fixedRangeIndex();
+  index.queryReadRanges = async (requests: Array<{ file: string }>) => {
+    requestedPaths.push(...requests.map(request => request.file));
+    return requests.map(request => ({
+      file: request.file,
+      ranges: [{ startLine: 1, endLine: 4, kind: "method" as const, estimatedBytes: 256 }]
+    }));
+  };
 
   const result = await buildReadPlan({
     files,
     ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
     options: optionsFor(anchor, { mode: "minimal", readPlanMaxItems: 2, testReadMode: "defer" }),
-    javaIndex: fixedRangeIndex()
+    javaIndex: index
   });
 
   assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F3"]);
+  assert.ok(requestedPaths.includes(deferredTest.absolutePath), "deferred tests remain in discovery so they cannot reshape the main-source shortlist");
 });
 
 test("externally protected deferred tests cannot displace an exact main-source core file", async () => {

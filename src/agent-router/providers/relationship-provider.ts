@@ -1,13 +1,11 @@
-// input: Already-discovered candidates (from every provider) plus the subset static-provider verified via typeGraph/typeReference.
-// output: ProviderOutcome carrying direct-collaborator/method-relation/structural-pairing EvidenceSignal[].
+// input: The subset static-provider verified via typeGraph/typeReference.
+// output: ProviderOutcome carrying exact call/method-relation/structural-pairing EvidenceSignal[].
 // pos: Task 25 production relationship-evidence provider. Relationship strength
 //      extraction is isolated from final ranking in relationship-deltas.ts.
-import type { CandidateFile } from "../../agent-types.js";
+import type { CandidateFile, ResolvedAnchor } from "../../agent-types.js";
 import type { JavaMethodFact, JavaSourceFacts } from "../../java-index/router-facts.js";
 import type { EvidenceFamily, EvidenceProvenance, EvidenceSignal, ProviderInput, ProviderOutcome } from "../evidence.js";
 import {
-  directCollaboratorDelta,
-  directReferencedTypeDelta,
   methodRelationDelta,
   structuralDeltas
 } from "../relationship-deltas.js";
@@ -17,12 +15,7 @@ export const RELATIONSHIP_PROVIDER_ID = "relationship";
 export const RELATIONSHIP_PROVIDER_VERSION = "1";
 
 export type RelationshipProviderInput = ProviderInput & {
-  /**
-   * Every candidate already discovered this request, from every provider.
-   * directCollaboratorDelta/directReferencedTypeDelta are pure name/path
-   * matching and runs without a verifiedBy
-   * gate, so this provider runs them the same way, on the full set.
-   */
+  /** Retained request pool metadata for provider sequencing compatibility. */
   readonly allCandidates: readonly CandidateFile[];
   /**
    * Candidates static-provider tagged verifiedBy typeGraph/typeReference.
@@ -36,11 +29,7 @@ export type RelationshipProviderInput = ProviderInput & {
 
 /** Fixed, context-independent relationship weights - unlike scoreBase()-derived weights, these were never routing-policy-dependent, so item 5's weight-unification does not need to touch them. */
 const SIGNAL_POLICY: Record<string, { family: EvidenceFamily; provenance: EvidenceProvenance; confidence: number }> = {
-  // directCollaboratorDelta is a class-name/task-stem match, not a resolved
-  // framework edge.  Keep the legacy compatibility marker for read-plan
-  // protection, but put its rank effect in the capped SUPPORT family so a
-  // broad name match cannot consume the FRAMEWORK budget.
-  DIRECT_COLLABORATOR: { family: "SUPPORT", provenance: "LEXICAL_RG", confidence: 0.75 },
+  CALLS: { family: "STATIC_STRUCTURE", provenance: "AST_RESOLVED", confidence: 0.98 },
   METHOD_RELATION: { family: "STATIC_STRUCTURE", provenance: "AST_RESOLVED", confidence: 0.9 },
   ANNOTATION_COLLABORATION: { family: "FRAMEWORK", provenance: "FRAMEWORK_INFERRED", confidence: 0.6 },
   PACKAGE_PROXIMITY: { family: "STATIC_STRUCTURE", provenance: "AST_RESOLVED", confidence: 0.5 },
@@ -68,15 +57,15 @@ export async function collectRelationshipEvidence(input: RelationshipProviderInp
   }
 
   const evidence: EvidenceSignal[] = [];
-  for (const candidate of input.allCandidates) {
-    const directDelta = Math.max(
-      directCollaboratorDelta(candidate, anchor, input.options),
-      anchor.profile === "service" ? directReferencedTypeDelta(candidate, anchorFacts) : 0
-    );
-    pushIfPositive(evidence, input, anchor.id, candidate, "DIRECT_COLLABORATOR", directDelta);
-  }
+  const resolvedCallTargets = await resolvedAnchorCallTargets(input, anchor, methodCache);
 
   for (const candidate of input.staticVerifiedCandidates) {
+    if (resolvedCallTargets.size > 0) {
+      const candidateFacts = await cachedFacts(input.javaIndex, candidate.absolutePath, input.generation, factsCache);
+      if (candidateFacts?.methods.some(method => method.methodId && resolvedCallTargets.has(method.methodId))) {
+        pushIfPositive(evidence, input, anchor.id, candidate, "CALLS", 120);
+      }
+    }
     const methodDelta = await methodRelationDelta(candidate, anchor, input.javaIndex, input.generation, methodCache, factsCache);
     pushIfPositive(evidence, input, anchor.id, candidate, "METHOD_RELATION", methodDelta);
 
@@ -110,6 +99,66 @@ export async function collectRelationshipEvidence(input: RelationshipProviderInp
     completion: "COMPLETE",
     elapsedMs: Date.now() - startedAt
   };
+}
+
+/**
+ * Calls are protected only when the Java index resolved the CALLS edge from
+ * the request anchor's method. We intentionally ignore a truncated result:
+ * treating a partial callee list as exact would turn an implementation cap
+ * into an unsound read-plan guarantee.
+ */
+async function resolvedAnchorCallTargets(
+  input: RelationshipProviderInput,
+  anchor: ResolvedAnchor,
+  methodCache: Map<string, JavaMethodFact | undefined>
+): Promise<ReadonlySet<string>> {
+  if (!input.javaIndex.resolvedCallees || input.budget?.expired()) {
+    return new Set();
+  }
+  const key = `${anchor.absolutePath}:${anchor.line}`;
+  let method = methodCache.get(key);
+  if (!methodCache.has(key)) {
+    try {
+      method = await input.javaIndex.methodAt(anchor.absolutePath, anchor.line, input.generation);
+      methodCache.set(key, method);
+    } catch {
+      method = undefined;
+      methodCache.set(key, method);
+    }
+  }
+  if (!method?.methodId || input.budget?.expired()) {
+    return new Set();
+  }
+  try {
+    const result = await input.javaIndex.resolvedCallees(method.methodId, 16);
+    if (result.truncated || input.budget?.expired()) {
+      return new Set();
+    }
+    return new Set(result.callees
+      .filter(edge => edge.kind === "CALLS")
+      .map(edge => edge.targetId));
+  } catch {
+    return new Set();
+  }
+}
+
+async function cachedFacts(
+  javaIndex: ProviderInput["javaIndex"],
+  absolutePath: string,
+  generation: number,
+  cache: Map<string, JavaSourceFacts | undefined>
+): Promise<JavaSourceFacts | undefined> {
+  if (cache.has(absolutePath)) {
+    return cache.get(absolutePath);
+  }
+  try {
+    const facts = await javaIndex.factsFor(absolutePath, generation);
+    cache.set(absolutePath, facts);
+    return facts;
+  } catch {
+    cache.set(absolutePath, undefined);
+    return undefined;
+  }
 }
 
 function pushIfPositive(

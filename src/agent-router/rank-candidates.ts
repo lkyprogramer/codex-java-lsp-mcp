@@ -178,9 +178,7 @@ export function baselineReadPlanSafePaths(
 function isBaselineSafeCore(file: CandidateFile, options: ImpactOptions): boolean {
   if (file.reasons.includes("target")) return true;
   if (file.sourceSet === "test" && options.testReadMode === "defer") return false;
-  if ((file.verifiedBy || []).some(source => source === "reference"
-    || source === "typeReference"
-    || source === "typeHierarchy"
+  if ((file.verifiedBy || []).some(source => source === "typeHierarchy"
     || source === "semantic-definition"
     || source === "semantic-implementation"
     || source === "persisted-reference"
@@ -188,14 +186,14 @@ function isBaselineSafeCore(file: CandidateFile, options: ImpactOptions): boolea
     || source === "persisted-typeHierarchy")) return true;
   if (file.reasons.some(reason => reason === "typeGraph:implementation-lookup"
     || reason === "implementation"
+    || reason === "CALLS"
+    || reason === "SPRING_INJECTION"
     || reason === "SPRING_CALL_PATH"
-    || reason === "MYBATIS_NAMESPACE"
     || reason === "MYBATIS_STATEMENT_METHOD"
     || reason === "JPA_REPOSITORY_ENTITY")) return true;
   return (file.scoreBreakdown || []).some(item => item.delta > 0 && (
     item.id === "finalize.type-relation"
     || item.id === "finalize.method-relation"
-    || item.id === "finalize.structural.type-symmetric"
   ));
 }
 
@@ -254,22 +252,11 @@ export async function familyReadPlanProtectedPaths(
     .map(candidate => candidate.file));
 }
 
-/** Framework evidence kinds with a resolved call or mapper target strong enough to protect a pre-semantic read-plan slot. */
+/** Framework evidence kinds strong enough to protect a pre-semantic read-plan slot. */
 const FRAMEWORK_PRE_SEMANTIC_PROTECTED_KINDS = new Set([
   "SPRING_CALL_PATH",
   "MYBATIS_NAMESPACE",
   "MYBATIS_STATEMENT_METHOD"
-]);
-
-// Imports at an execution root are immediate request collaborators.  On a
-// contract root (port/repository/mapper), imports instead describe the
-// contract vocabulary; the resolved implementation chain is the actionable
-// first hop and must retain the bounded core slots.
-const EXECUTION_ROOT_PROFILES = new Set([
-  "controller",
-  "service",
-  "listener",
-  "job"
 ]);
 
 function isPreSemanticProtectedSignal(
@@ -287,21 +274,11 @@ function isPreSemanticProtectedSignal(
   if (signal.family === "EXACT_SEMANTIC") {
     return signal.kind === "DEFINITION" || signal.kind === "IMPLEMENTATION" || signal.kind === "TYPEHIERARCHY";
   }
-  if (signal.family === "STATIC_STRUCTURE" && signal.kind === "DIRECT_DECLARATION") {
-    return anchors.some(anchor => EXECUTION_ROOT_PROFILES.has(anchor.profile)
-      && anchor.absolutePath === signal.sourceFile);
-  }
-  if (signal.family === "STATIC_STRUCTURE" && signal.kind === "REFERENCE") {
-    return anchors.some(anchor => anchor.absolutePath === signal.sourceFile);
-  }
   return signal.family === "STATIC_STRUCTURE"
     && (signal.kind === "IMPLEMENTS"
       || signal.kind === "METHOD_RELATION"
       || signal.kind === "TYPE_RELATION"
       || signal.kind === "TYPE_SYMMETRIC"
-      // A bounded second hop is protected only for a method-level relation
-      // after the first hop resolved an implementation by exact FQN. Field
-      // types remain ranking evidence, but can otherwise crowd out sibling
-      // direct implementations from the small protected-core quota.
-      || signal.kind === "IMPLEMENTATION_METHOD_TYPE");
+      || signal.kind === "IMPLEMENTATION_METHOD_TYPE"
+      || signal.kind === "CALLS");
 }

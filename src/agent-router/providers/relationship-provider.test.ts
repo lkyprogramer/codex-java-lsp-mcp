@@ -99,7 +99,7 @@ function noopJavaIndex(overrides: Record<string, unknown> = {}): Record<string, 
   };
 }
 
-test("a name-matched direct collaborator is weak lexical support, not framework evidence", () => {
+test("filename similarity alone never creates relationship evidence", () => {
   return (async () => {
     const service = anchor();
     const controller = candidate("/repo/src/main/java/demo/OrderController.java", { verifiedBy: ["rg"] });
@@ -109,11 +109,7 @@ test("a name-matched direct collaborator is weak lexical support, not framework 
       [],
       noopJavaIndex()
     ));
-    const signal = result.evidence.find(item => item.candidateFile === controller.absolutePath);
-    assert.equal(signal?.kind, "DIRECT_COLLABORATOR");
-    assert.equal(signal?.family, "SUPPORT");
-    assert.equal(signal?.provenance, "LEXICAL_RG");
-    assert.ok(signal!.weight > 0);
+    assert.equal(result.evidence.some(item => item.candidateFile === controller.absolutePath), false);
   })();
 });
 
@@ -143,7 +139,7 @@ test("an anchor implementing the candidate interface earns a TYPE_SYMMETRIC stru
   })();
 });
 
-test("an unrelated candidate name earns no DIRECT_COLLABORATOR signal", async () => {
+test("an unrelated candidate has no relationship evidence", async () => {
   const service = anchor();
   const unrelated = candidate("/repo/src/main/java/demo/Whatever.java", { verifiedBy: ["rg"] });
   const result = await collectRelationshipEvidence(providerInput(
@@ -153,6 +149,56 @@ test("an unrelated candidate name earns no DIRECT_COLLABORATOR signal", async ()
     noopJavaIndex()
   ));
   assert.equal(result.evidence.some(item => item.candidateFile === unrelated.absolutePath), false);
+});
+
+test("an AST-resolved CALLS edge from the anchor method protects the target declaration", async () => {
+  const service = anchor();
+  const target = candidate("/repo/src/main/java/demo/OrderClient.java");
+  const anchorMethod: JavaMethodFact = {
+    name: "place",
+    line: 1,
+    endLine: 5,
+    methodId: "method:type:demo.OrderService#place()",
+    referencedTypes: [],
+    relations: []
+  };
+  const result = await collectRelationshipEvidence(providerInput(
+    [service],
+    [target],
+    [target],
+    noopJavaIndex({
+      methodAt: async () => anchorMethod,
+      resolvedCallees: async () => ({
+        callees: [{
+          sourceId: anchorMethod.methodId!,
+          targetId: "method:type:demo.OrderClient#execute()",
+          sourceFile: service.path,
+          sourceModule: "demo",
+          sourceSet: "main",
+          kind: "CALLS",
+          confidence: 0.98,
+          generation: 0
+        }],
+        truncated: false
+      }),
+      factsFor: async (file: string) => file === target.absolutePath
+        ? facts(file, {
+          methods: [{
+            name: "execute",
+            line: 1,
+            endLine: 3,
+            methodId: "method:type:demo.OrderClient#execute()",
+            referencedTypes: [],
+            relations: []
+          }]
+        })
+        : facts(service.absolutePath)
+    })
+  ));
+  const signal = result.evidence.find(item => item.candidateFile === target.absolutePath && item.kind === "CALLS");
+  assert.ok(signal);
+  assert.equal(signal!.family, "STATIC_STRUCTURE");
+  assert.equal(signal!.weight, 120);
 });
 
 test("a candidate type in the anchor's own method relations earns a METHOD_RELATION signal", async () => {

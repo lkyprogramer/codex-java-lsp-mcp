@@ -33,10 +33,12 @@ const PROTECTED_CORE_KINDS = new Set([
   "TYPE_SYMMETRIC",
   "METHOD_RELATION",
   "IMPLEMENTATION_METHOD_TYPE",
+  "CALLS",
   "definition",
   "implementation",
   "typeHierarchy",
   "typeGraph:implementation-lookup",
+  "SPRING_INJECTION",
   "SPRING_CALL_PATH",
   "MYBATIS_STATEMENT_METHOD",
   "JPA_REPOSITORY_ENTITY"
@@ -52,7 +54,6 @@ const FIRST_HOP_IMPLEMENTATION_KINDS = new Set([
   "TYPE_RELATION"
 ]);
 const SECOND_HOP_IMPLEMENTATION_KINDS = new Set(["IMPLEMENTATION_METHOD_TYPE"]);
-
 const BUCKET_RULES = {
   anchor: { min: 1, max: 1 },
   core: { min: 2, max: 4 },
@@ -239,7 +240,6 @@ function shortlistCandidates(
   ordered.filter(file => isAnchor(file, options)).forEach(add);
   const protectedCandidates = ordered
     .filter(file => !isAnchor(file, options)
-      && !isDeferredTest(file, options)
       && (isProtectedCore(file, options) || protectedPaths.has(file.absolutePath)))
     .sort((left, right) =>
       protectedCorePriority(right, options) - protectedCorePriority(left, options)
@@ -253,11 +253,10 @@ function shortlistCandidates(
     const representative = ordered.find(file =>
       bucketOf(file, options, protectedPaths) === bucket
       && !selected.has(file.absolutePath)
-      && !isAnchor(file, options)
-      && !isDeferredTest(file, options));
+      && !isAnchor(file, options));
     if (representative) add(representative);
   }
-  ordered.filter(file => !isDeferredTest(file, options)).forEach(add);
+  ordered.forEach(add);
   return { files: shortlisted, omittedProtected };
 }
 
@@ -320,11 +319,10 @@ function selectTokenAwarePlan(
       evidenceGaps.push("Anchor range exceeded the read byte budget; no additional file was forced into the plan.");
   }
 
-  // Deferred tests remain visible in the candidate response but do not spend
-  // a source-reading slot or a range-query round trip. Callers that need
-  // verification context opt in with testReadMode=priority.
-  const readableWindows = windows.filter(window =>
-    window.ranges.length > 0 && !isDeferredTest(window.file, options));
+  // Keep deferred tests in discovery and range materialization. Removing them
+  // earlier reshapes the bounded shortlist and can displace unrelated main
+  // evidence. They are ineligible only when consuming a read-plan slot.
+  const readableWindows = windows.filter(window => window.ranges.length > 0);
   for (const window of windows) {
     if (!isAnchor(window.file, options) && window.ranges.length === 0) {
       evidenceGaps.push(`Read range unavailable for ${window.file.path || window.file.absolutePath}; candidate was omitted.`);
@@ -338,13 +336,16 @@ function selectTokenAwarePlan(
     && totalBytes + window.bytes <= budget.maxReadBytes;
   const canAdd = (window: CandidateWindow): boolean => {
     const bucket = bucketOf(window.file, options, protectedPaths);
-    return fitsPlanBudget(window) && bucketCounts[bucket] < BUCKET_RULES[bucket].max;
+    return !isDeferredTest(window.file, options)
+      && fitsPlanBudget(window)
+      && bucketCounts[bucket] < BUCKET_RULES[bucket].max;
   };
   // Core is a hard maximum: quota release may fill missing framework/support/
   // lexical slots, but must not dilute the bounded exact-evidence core.
   const canAddAfterQuotaRelease = (window: CandidateWindow): boolean => {
     const bucket = bucketOf(window.file, options, protectedPaths);
-    return fitsPlanBudget(window)
+    return !isDeferredTest(window.file, options)
+      && fitsPlanBudget(window)
       && (bucket !== "core" || bucketCounts.core < BUCKET_RULES.core.max);
   };
   const core = readableWindows
@@ -446,6 +447,14 @@ function protectedCorePriority(file: CandidateFile, options: Pick<ImpactOptions,
     ...file.reasons,
     ...(file.verifiedBy || [])
   ]);
+  if ([...kinds].some(kind => kind === "DEFINITION"
+    || kind === "IMPLEMENTATION"
+    || kind === "TYPEHIERARCHY"
+    || kind === "definition"
+    || kind === "implementation"
+    || kind === "typeHierarchy")) {
+    return 3;
+  }
   if ([...kinds].some(kind => FIRST_HOP_IMPLEMENTATION_KINDS.has(kind)
     || kind === "typeGraph:implementation-lookup"
     || kind === "implementation"
@@ -456,6 +465,9 @@ function protectedCorePriority(file: CandidateFile, options: Pick<ImpactOptions,
     return 2;
   }
   if ([...kinds].some(kind => SECOND_HOP_IMPLEMENTATION_KINDS.has(kind))) {
+    return 1;
+  }
+  if (kinds.has("SPRING_INJECTION")) {
     return 1;
   }
   return 0;

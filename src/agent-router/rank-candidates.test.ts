@@ -555,7 +555,7 @@ test("pre-semantic Spring call protection is limited to a call sourced by the re
   assert.equal(protectedPaths.has(nestedCallFile), false);
 });
 
-test("pre-semantic protection retains direct imported declarations only from the request anchor", async () => {
+test("direct imports remain candidate evidence rather than V6 protected core", async () => {
   const anchorEntry = anchor();
   const directImportFile = "/repo/module-a/src/main/java/demo/DirectRequest.java";
   const nestedImportFile = "/repo/module-a/src/main/java/demo/NestedRequest.java";
@@ -589,11 +589,11 @@ test("pre-semantic protection retains direct imported declarations only from the
     repoRoot: "/repo"
   });
 
-  assert.equal(protectedPaths.has(directImportFile), true);
+  assert.equal(protectedPaths.has(directImportFile), false);
   assert.equal(protectedPaths.has(nestedImportFile), false);
 });
 
-test("pre-semantic protection retains direct JavaIndex type references only from the request anchor", async () => {
+test("generic JavaIndex type references remain candidate evidence rather than V6 protected core", async () => {
   const anchorEntry = anchor();
   const directReferenceFile = "/repo/module-a/src/main/java/demo/DirectReference.java";
   const nestedReferenceFile = "/repo/module-a/src/main/java/demo/NestedReference.java";
@@ -627,7 +627,7 @@ test("pre-semantic protection retains direct JavaIndex type references only from
     repoRoot: "/repo"
   });
 
-  assert.equal(protectedPaths.has(directReferenceFile), true);
+  assert.equal(protectedPaths.has(directReferenceFile), false);
   assert.equal(protectedPaths.has(nestedReferenceFile), false);
 });
 

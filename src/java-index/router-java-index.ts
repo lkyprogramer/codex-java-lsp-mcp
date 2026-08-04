@@ -107,6 +107,12 @@ export interface RouterIndex {
   findTypeReferences(typeName: string, limit?: number): Promise<JavaSourceFacts[]>;
   findImporters(typeName: string, limit?: number): Promise<JavaSourceFacts[]>;
   findTypeDefinitions(typeNames: readonly string[], limit?: number, hydrate?: boolean): Promise<JavaSourceFacts[]>;
+  /**
+   * Bounded AST-resolved calls for one anchor method. Optional preserves the
+   * V1 compatibility adapter; V2 exposes the same fact through its generic
+   * router surface rather than requiring a framework pack.
+   */
+  resolvedCallees?(methodId: string, limit?: number): Promise<FrameworkCallees>;
   routerStatus(): Promise<RouterIndexStatus>;
 }
 
