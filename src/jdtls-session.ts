@@ -293,7 +293,7 @@ export class JdtlsSession {
         throw new JavaIntelligenceError(
           gate.blockedUntilExplicitReset ? "JDT_CONFIG_ERROR" : "JDT_BACKOFF",
           gate.blockedUntilExplicitReset
-            ? "JDT start is blocked until configuration changes or java_restart"
+            ? "JDT start is blocked until configuration changes or java_runtime(action=restart)"
             : `JDT restart is backing off for ${gate.retryAfterMs}ms`
         );
       }

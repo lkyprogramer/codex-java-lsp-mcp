@@ -11,7 +11,7 @@ const projectDir = path.resolve(scriptDir, "..");
 const repoRoot = process.env.JAVA_LSP_SMOKE_REPO_ROOT || process.env.JAVA_LSP_TEST_REPO_ROOT || process.env.LISHUEDU_ROOT || process.cwd();
 const projectId = process.env.JAVA_LSP_SMOKE_PROJECT_ID;
 const start = process.env.JAVA_LSP_SMOKE_START === "true";
-const expectedTools = ["java_status", "java_impact", "java_symbol", "java_references", "java_diagnostics", "java_restart", "java_shutdown"];
+const expectedTools = ["java_status", "java_impact", "java_symbol", "java_diagnostics", "java_runtime"];
 
 const transport = new StdioClientTransport({
   command: process.execPath,
@@ -35,11 +35,11 @@ try {
     throw new Error(`Unexpected tools: ${names.join(", ")}`);
   }
   const selector = projectId ? { projectId, start } : { repoRoot, start };
-  const shutdownSelector = projectId ? { projectId } : { repoRoot };
+  const shutdownSelector = projectId ? { projectId, action: "shutdown" } : { repoRoot, action: "shutdown" };
   const status = await client.callTool({ name: "java_status", arguments: selector }, undefined, {
     timeout: 180000
   });
-  const shutdown = await client.callTool({ name: "java_shutdown", arguments: shutdownSelector }, undefined, {
+  const shutdown = await client.callTool({ name: "java_runtime", arguments: shutdownSelector }, undefined, {
     timeout: 180000
   });
   console.log(JSON.stringify({

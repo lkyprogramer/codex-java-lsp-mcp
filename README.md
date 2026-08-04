@@ -27,7 +27,7 @@
 ## 核心能力
 
 - 注册一个 Codex MCP server：`codex-java-lsp`。
-- 提供 7 个 public tools：`java_status`、`java_impact`、`java_symbol`、`java_references`、`java_diagnostics`、`java_restart`、`java_shutdown`。
+- 提供 5 个 public tools：`java_status`、`java_impact`、`java_symbol`（operation=query\|position\|references）、`java_diagnostics`、`java_runtime`（action=restart\|shutdown）。Task 31 Step 7 将原 7 个工具中的 `java_references` 折叠进 `java_symbol`、`java_restart`/`java_shutdown` 折叠进 `java_runtime`，实测 `tools/list` 节省 235 tokens，达到 ≥200 tokens 的合并门槛。
 - 默认推荐入口是 `java_impact`，用于生成影响面、候选文件、`readPlan`、证据缺口和指标。
 - benchmark harness 固化 15 个真实 golden 场景，并输出 per-golden attribution、warm prepare/router/session phase timing 和 runtime build metadata。
 - 未启用 LSP 的 Java repo 仍可走 fast path：repo/root/layout/JDK/generated-code 探测、SourceIndex、内部 `rg` 摘要。
@@ -36,8 +36,8 @@
 
 ## 设计边界
 
-- public MCP surface 保持 7 个工具；除非有明确需求，不扩展工具面。
-- 所有工具都不修改目标 Java repo；`java_restart` 和 `java_shutdown` 只影响本 MCP 管理的 JDT LS 进程。
+- public MCP surface 保持 5 个工具；除非有明确需求（测过 `tools/list` token 成本或有真实误选证据），不扩展或再拆分工具面。
+- 所有工具都不修改目标 Java repo；`java_runtime`（action=restart\|shutdown）只影响本 MCP 管理的 JDT LS 进程。
 - JDT LS 启动必须显式启用：`lspEnabled=true`，或命中同一 Git `common-dir` 的 worktree family 继承。
 - SourceIndex 是冷启动事实来源；JDT LS 是可选增强，不是路由正确性的唯一来源。
 - JDT LS runtime JDK 与项目 JDK 分开处理，避免把语言服务器运行环境误当成项目编译环境。
@@ -147,11 +147,9 @@ hook 行为：
 | --- | --- | --- |
 | `java_status` | 查看 server、repo、JDT LS、watcher、SourceIndex、resource 摘要；`start=true` 时尝试启动 JDT LS；`detail=diagnostic` 返回完整排障字段。 | 否；启动时需要启用 |
 | `java_impact` | 推荐入口。生成 Java 影响面、候选文件、内部 `rg` 摘要、可读计划、证据缺口和指标。 | `semanticPolicy=fast` 不要求；`required` 要求 |
-| `java_symbol` | 按 query 搜索 workspace symbols，或按 file/line/column 查 hover、definition、implementation；默认返回 repo-relative 位置。 | 是 |
-| `java_references` | 对精确 Java 符号位置返回 summary-only references；默认隐藏 raw URI/range。 | 是 |
+| `java_symbol` | `operation=query`（默认，给了 query）按 query 搜索 workspace symbols；`operation=position`（默认，给了 file/line/column）查 hover、definition、implementation；`operation=references` 对精确符号位置返回 summary-only references。默认返回 repo-relative 位置、隐藏 raw URI/range。 | 是 |
 | `java_diagnostics` | 打开 Java 文件并等待短时间返回 JDT LS diagnostics；默认按 repo-relative 文件聚合。 | 是 |
-| `java_restart` | 重启当前 repo 的 JDT LS session；默认返回动作摘要，只有显式参数才清 cache。 | 是 |
-| `java_shutdown` | 停止当前或全部 JDT LS 子进程，MCP server 保持存活；默认返回动作摘要。 | 否 |
+| `java_runtime` | `action=restart` 重启当前 repo 的 JDT LS session（默认返回动作摘要，只有显式参数才清 cache）；`action=shutdown` 停止当前或全部（`all=true`）JDT LS 子进程，MCP server 保持存活。 | restart 是；shutdown 否 |
 
 推荐默认调用顺序：
 
@@ -166,7 +164,7 @@ hook 行为：
 {"tool":"java_status","arguments":{"repoRoot":"/absolute/repo","start":false,"detail":"diagnostic"}}
 ```
 
-默认不要在每次查询后调用 `java_shutdown`；让 idle TTL 回收 JDT LS，才能复用 workspace import、JDT LS 内存索引和 SourceIndex 缓存。
+默认不要在每次查询后调用 `java_runtime(action=shutdown)`；让 idle TTL 回收 JDT LS，才能复用 workspace import、JDT LS 内存索引和 SourceIndex 缓存。
 
 需要强语义结果时：
 
@@ -298,7 +296,7 @@ npm run benchmark:three-repo-matrix -- --baseline <approved-baseline-sha> --lish
 ## 贡献规范
 
 - 保持改动小而可审阅；不要为单次需求提前抽象。
-- 不要扩大 7 个 public tools 的工具面，除非 issue 或设计说明给出明确需求。
+- 不要扩大 5 个 public tools 的工具面，除非 issue 或设计说明给出明确需求。
 - 优先补定向测试：repo 解析、worktree 继承、资源限制、JDK 解析、SourceIndex、tool handler 行为。
 - 提交前至少运行：
 

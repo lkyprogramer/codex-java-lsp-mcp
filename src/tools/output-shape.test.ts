@@ -6,9 +6,7 @@ import { pathToFileURL } from "node:url";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { javaDiagnostics } from "./diagnostics.js";
 import { javaImpact } from "./impact.js";
-import { javaReferences } from "./references.js";
-import { javaRestart } from "./restart.js";
-import { javaShutdown } from "./shutdown.js";
+import { javaRuntime } from "./runtime.js";
 import { javaSymbol } from "./symbol.js";
 import type { ToolContext } from "./context.js";
 import { AgentRouter } from "../agent-router/index.js";
@@ -49,9 +47,9 @@ test("action tools return summaries by default and diagnostic status on request"
     }
   } as unknown as ToolContext;
 
-  const restartSummary = record(await javaRestart(restartContext, { clearCache: false }));
-  const restartDiagnostic = record(await javaRestart(restartContext, { clearCache: false, detail: "diagnostic" }));
-  const shutdownSummary = record(await javaShutdown(shutdownContext, { all: false }));
+  const restartSummary = record(await javaRuntime(restartContext, { action: "restart", clearCache: false, all: false }));
+  const restartDiagnostic = record(await javaRuntime(restartContext, { action: "restart", clearCache: false, all: false, detail: "diagnostic" }));
+  const shutdownSummary = record(await javaRuntime(shutdownContext, { action: "shutdown", clearCache: false, all: false }));
 
   assert.equal(restartSummary.restarted, true);
   assert.equal(Object.hasOwn(restartSummary, "dataDir"), false);
@@ -95,7 +93,7 @@ test("java_diagnostics summarizes repo-relative diagnostics by default", async (
   assert.equal(Object.hasOwn(diagnostic, "diagnostics"), true);
 });
 
-test("java_symbol and java_references omit raw uri ranges unless diagnostic is requested", async () => {
+test("java_symbol (query/position/references operations) omits raw uri ranges unless diagnostic is requested", async () => {
   const context = {
     repoRoot,
     session: {
@@ -126,11 +124,11 @@ test("java_symbol and java_references omit raw uri ranges unless diagnostic is r
     }
   } as unknown as ToolContext;
 
-  const symbolSummary = record(await javaSymbol(context, { query: "DemoService", semanticTimeoutMs: 3000 }));
-  const symbolDiagnostic = record(await javaSymbol(context, { query: "DemoService", semanticTimeoutMs: 3000, detail: "diagnostic" }));
-  const positionSummary = record(await javaSymbol(context, { file: "src/main/java/demo/DemoService.java", line: 5, column: 9, semanticTimeoutMs: 3000 }));
-  const referencesSummary = record(await javaReferences(context, { file: "src/main/java/demo/DemoService.java", line: 5, column: 9, includeDeclaration: false, positionsPerFile: 3 }));
-  const referencesDiagnostic = record(await javaReferences(context, { file: "src/main/java/demo/DemoService.java", line: 5, column: 9, includeDeclaration: false, positionsPerFile: 3, detail: "diagnostic" }));
+  const symbolSummary = record(await javaSymbol(context, { operation: "query", query: "DemoService", semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3 }));
+  const symbolDiagnostic = record(await javaSymbol(context, { operation: "query", query: "DemoService", semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3, detail: "diagnostic" }));
+  const positionSummary = record(await javaSymbol(context, { operation: "position", file: "src/main/java/demo/DemoService.java", line: 5, column: 9, semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3 }));
+  const referencesSummary = record(await javaSymbol(context, { operation: "references", file: "src/main/java/demo/DemoService.java", line: 5, column: 9, semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3 }));
+  const referencesDiagnostic = record(await javaSymbol(context, { operation: "references", file: "src/main/java/demo/DemoService.java", line: 5, column: 9, semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3, detail: "diagnostic" }));
 
   const symbolLocation = ((symbolSummary.items as Array<Record<string, unknown>>)[0]?.location) as Record<string, unknown>;
   const diagnosticLocation = ((symbolDiagnostic.items as Array<Record<string, unknown>>)[0]?.location) as Record<string, unknown>;
@@ -188,12 +186,12 @@ test("semantic tools never emit locations from outside the repository", async ()
   } as unknown as ToolContext;
 
   const results = [
-    record(await javaSymbol(context, { query: "Library", semanticTimeoutMs: 3000 })),
-    record(await javaSymbol(context, { query: "Library", semanticTimeoutMs: 3000, detail: "diagnostic" })),
-    record(await javaSymbol(context, { file: "src/main/java/demo/DemoService.java", line: 5, column: 9, semanticTimeoutMs: 3000 })),
-    record(await javaSymbol(context, { file: "src/main/java/demo/DemoService.java", line: 5, column: 9, semanticTimeoutMs: 3000, detail: "diagnostic" })),
-    record(await javaReferences(context, { file: "src/main/java/demo/DemoService.java", line: 5, column: 9, includeDeclaration: false, positionsPerFile: 3 })),
-    record(await javaReferences(context, { file: "src/main/java/demo/DemoService.java", line: 5, column: 9, includeDeclaration: false, positionsPerFile: 3, detail: "diagnostic" }))
+    record(await javaSymbol(context, { operation: "query", query: "Library", semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3 })),
+    record(await javaSymbol(context, { operation: "query", query: "Library", semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3, detail: "diagnostic" })),
+    record(await javaSymbol(context, { operation: "position", file: "src/main/java/demo/DemoService.java", line: 5, column: 9, semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3 })),
+    record(await javaSymbol(context, { operation: "position", file: "src/main/java/demo/DemoService.java", line: 5, column: 9, semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3, detail: "diagnostic" })),
+    record(await javaSymbol(context, { operation: "references", file: "src/main/java/demo/DemoService.java", line: 5, column: 9, semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3 })),
+    record(await javaSymbol(context, { operation: "references", file: "src/main/java/demo/DemoService.java", line: 5, column: 9, semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3, detail: "diagnostic" }))
   ];
 
   for (const result of results) {

@@ -116,7 +116,7 @@ function startupProfiles(): Array<{ id: string; env: Record<string, string> }> {
 async function startupRun(id: string, env: Record<string, string>): Promise<Measurement> {
   return withServer(env, async client => {
     const status = await timed(() => callTool(client, "java_status", { repoRoot, start: true }, 180000));
-    await callTool(client, "java_shutdown", { repoRoot }, 180000).catch(() => undefined);
+    await callTool(client, "java_runtime", { repoRoot, action: "shutdown" }, 180000).catch(() => undefined);
     return {
       id,
       kind: "startup",
@@ -140,7 +140,7 @@ async function impactRun(id: string, env: Record<string, string>, clearWorkspace
     }
     const impact = await timed(() => callTool(client, "java_impact", impactArgs(), 180000));
     const warmImpact = await timed(() => callTool(client, "java_impact", impactArgs(), 180000));
-    await callTool(client, "java_shutdown", { repoRoot }, 180000).catch(() => undefined);
+    await callTool(client, "java_runtime", { repoRoot, action: "shutdown" }, 180000).catch(() => undefined);
     return {
       id,
       kind: "impact",

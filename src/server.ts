@@ -1,5 +1,5 @@
 // input: Codex MCP stdio tool calls for Java analysis.
-// output: Seven read-only v5 Java navigation tools backed by source index, rg, and bounded JDT LS.
+// output: Five read-only Java navigation tools backed by source index, rg, and bounded JDT LS.
 // pos: Thin MCP server registration entrypoint.
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -10,9 +10,7 @@ import { RepoRuntimeManager, type RequestOptionsInput } from "./repo-runtime-man
 import type { RequestContext } from "./runtime/request-context.js";
 import { diagnosticsSchema, javaDiagnostics } from "./tools/diagnostics.js";
 import { impactSchema, javaImpact } from "./tools/impact.js";
-import { javaReferences, referencesSchema } from "./tools/references.js";
-import { javaRestart, restartSchema } from "./tools/restart.js";
-import { javaShutdown, shutdownSchema } from "./tools/shutdown.js";
+import { javaRuntime, runtimeSchema } from "./tools/runtime.js";
 import { javaStatus, statusSchema, summarizeResourceStatus } from "./tools/status.js";
 import { isDiagnosticDetail } from "./tools/shared.js";
 import { javaSymbol, symbolSchema } from "./tools/symbol.js";
@@ -56,15 +54,9 @@ register("java_impact", {
 
 register("java_symbol", {
   title: "Java Symbol",
-  description: "Search workspace symbols by query or inspect hover/definition/implementation at a file position.",
+  description: "operation=query (default): search workspace symbols. operation=position (default with file/line/column): hover/definition/implementation at a position. operation=references: summary-only references.",
   inputSchema: symbolSchema
 }, args => withContext(args, context => javaSymbol(context, args), { mayStartLsp: true, requireLspEnabled: true }));
-
-register("java_references", {
-  title: "Java References",
-  description: "Return summary-only references for a precise Java symbol position.",
-  inputSchema: referencesSchema
-}, args => withContext(args, context => javaReferences(context, args), { mayStartLsp: true, requireLspEnabled: true }));
 
 register("java_diagnostics", {
   title: "Java Diagnostics",
@@ -72,17 +64,11 @@ register("java_diagnostics", {
   inputSchema: diagnosticsSchema
 }, args => withContext(args, context => javaDiagnostics(context, args), { mayStartLsp: true, requireLspEnabled: true }));
 
-register("java_restart", {
-  title: "Java Restart",
-  description: "Restart the current JDT LS session; clear cache only when explicitly requested.",
-  inputSchema: restartSchema
-}, args => withContext(args, context => javaRestart(context, args), { mayStartLsp: true, requireLspEnabled: true }));
-
-register("java_shutdown", {
-  title: "Java Shutdown",
-  description: "Stop the current JDT LS child process while keeping the MCP server alive.",
-  inputSchema: shutdownSchema
-}, args => shutdownFor(args));
+register("java_runtime", {
+  title: "Java Runtime",
+  description: "action=restart: restart JDT LS (clearCache=true also clears cache). action=shutdown: stop JDT LS (all=true stops every active repo).",
+  inputSchema: runtimeSchema
+}, args => runtimeFor(args));
 
 let startupCleanup: WorktreeCacheCleanupResult | undefined;
 
@@ -149,13 +135,16 @@ async function javaStatusFor(args: z.infer<z.ZodObject<typeof statusSchema>>): P
   }, { mayStartLsp: args.start });
 }
 
-async function shutdownFor(args: z.infer<z.ZodObject<typeof shutdownSchema>>): Promise<unknown> {
-  if (args.all) {
-    const activeRepos = runtimes.activeRepos();
-    await runtimes.shutdownAll();
-    return { stoppedRepos: activeRepos };
+async function runtimeFor(args: z.infer<z.ZodObject<typeof runtimeSchema>>): Promise<unknown> {
+  if (args.action === "shutdown") {
+    if (args.all) {
+      const activeRepos = runtimes.activeRepos();
+      await runtimes.shutdownAll();
+      return { stoppedRepos: activeRepos };
+    }
+    return withContext(args, context => javaRuntime(context, args));
   }
-  return withContext(args, context => javaShutdown(context, args));
+  return withContext(args, context => javaRuntime(context, args), { mayStartLsp: true, requireLspEnabled: true });
 }
 
 async function withContext<T>(
