@@ -128,7 +128,7 @@ test("service task that reads a Lombok-generated getter keeps its selected DTO a
       result.evidenceGaps.some(gap => gap.includes("Lombok")),
       "the selected Lombok DTO makes the task dependent on generated-member binding"
     );
-    assert.equal(result.metrics.generatedSemantics, "INCOMPLETE");
+    assert.equal(result.metrics?.generatedSemantics, "INCOMPLETE");
   } finally {
     await index.close();
     await rm(root, { recursive: true, force: true });

@@ -293,13 +293,14 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
   const candidatePaths = result.files.map(file => String(file.path));
   const readFiles = distinctReadFiles(result);
   const quality = evaluate(candidatePaths, readFiles, scenario);
-  const shadowQuality = qualityForShadowRanking(result.shadowRanking, cli.repoRoot, scenario);
+  const shadowRanking = result.metrics?.shadowRanking;
+  const shadowQuality = qualityForShadowRanking(shadowRanking, cli.repoRoot, scenario);
   const sessionPhaseMs = session.drainPhaseMetrics();
   return {
     // Task 30 makes the whole read-plan range lookup one batched worker
     // request. `roundTrips` measures the agent-visible impact exchange plus
     // that range batch; it must not grow with selected read-plan files.
-    ...attemptPayload("impact", quality, rawSearchPayload, readingPayload, elapsedMs, 2, result.readPlan.length, Number(result.counts.totalRgRawBytes || 0), 0),
+    ...attemptPayload("impact", quality, rawSearchPayload, readingPayload, elapsedMs, 2, result.readPlan.length, result.cost.suppressedRawBytes, 0),
     ...readPlanMetrics(result),
     timing: timingPayload(result, sessionPhaseMs),
     goldenAttribution: goldenAttributionForImpact(cli.repoRoot, result, scenario),
@@ -307,7 +308,7 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
     // Task 25's counterfactual rank diagnostics are deliberately opt-in at
     // the router boundary. Preserve them in the benchmark attempt when that
     // boundary supplied them; standard requests still serialize no field.
-    shadowRanking: result.shadowRanking,
+    shadowRanking,
     shadowQuality
   };
 }
@@ -498,7 +499,7 @@ function readPlanBytes(result: Awaited<ReturnType<AgentRouter["impact"]>>): numb
 }
 
 function readPlanMetrics(result: Awaited<ReturnType<AgentRouter["impact"]>>): Record<string, unknown> {
-  const readPlan = result.metrics.readPlan as Record<string, unknown> | undefined;
+  const readPlan = result.metrics?.readPlan;
   const bytes = readPlanBytes(result);
   const maxReadBytes = Number(readPlan?.maxReadBytes || 0);
   return {
@@ -531,14 +532,14 @@ function distinctReadFiles(result: Awaited<ReturnType<AgentRouter["impact"]>>): 
 }
 
 function timingPayload(result: Awaited<ReturnType<AgentRouter["impact"]>>, sessionPhaseMs: Record<string, number>): Record<string, unknown> {
-  const metrics = result.metrics || {};
+  const metrics = result.metrics;
   return compactRecord({
-    phaseMs: metrics.phaseMs,
+    phaseMs: metrics?.phaseMs,
     sessionPhaseMs,
-    semantic: metrics.semantic,
-    typeReference: metrics.typeReference,
-    importGraph: metrics.importGraph,
-    persistedSemantic: metrics.persistedSemantic
+    semantic: metrics?.semantic,
+    typeReference: metrics?.typeReference,
+    importGraph: metrics?.importGraph,
+    persistedSemantic: metrics?.persistedSemantic
   });
 }
 
@@ -597,8 +598,7 @@ function goldenAttributionForImpact(repoRoot: string, result: Awaited<ReturnType
   const fileByPath = new Map(result.files.map(file => [String(file.path), file]));
   const pathById = new Map(result.files.map(file => [String(file.id), String(file.path)]));
   const readSet = new Set(result.readPlan.map(item => pathById.get(item.fileId)).filter(Boolean));
-  const semanticUsed = semanticWasUsed(result.metrics);
-  const context = { repoRoot, semanticPolicy: semanticPolicyOf(result.options), semanticUsed };
+  const context = { repoRoot, semanticPolicy: result.semantic.policy, semanticUsed: result.semantic.used };
   return goldenEntries(scenario).map(({ file, kind }) => {
     const candidate = fileByPath.get(file);
     const inReadPlan = readSet.has(file);
@@ -752,16 +752,6 @@ function goldenSource(candidate: Record<string, unknown>): GoldenSource {
     return "rg";
   }
   return "unknown";
-}
-
-function semanticWasUsed(metrics: Record<string, unknown>): boolean {
-  const semantic = metrics.semantic;
-  return Boolean(semantic && typeof semantic === "object" && (semantic as Record<string, unknown>).used);
-}
-
-function semanticPolicyOf(options: Record<string, unknown>): string | undefined {
-  const value = options.semanticPolicy;
-  return typeof value === "string" ? value : undefined;
 }
 
 function runNoLspRg(repoRoot: string, scenario: Scenario): { stdout: string; files: string[]; lineByPath: Map<string, number> } {

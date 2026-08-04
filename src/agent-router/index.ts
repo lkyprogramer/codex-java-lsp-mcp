@@ -322,6 +322,9 @@ export class AgentRouter {
     const cacheAfter = await timed(phaseMs, "sessionCacheAfter", async () => this.session.cacheStatus());
     const rgAfter = await timed(phaseMs, "rgCacheAfter", async () => this.rgCacheStatus());
     const sourceAfter = await timed(phaseMs, "sourceStatusAfter", async () => this.javaIndex.routerStatus());
+    // One status() call shared by the Lombok gap and semantic.readiness below -
+    // both want the same JDT session snapshot, and status() is not free.
+    const sessionStatus = this.session.status();
     // The result-level Lombok gap is about the files this request will expose
     // to the agent, not only the anchor declaration.  A service can call a
     // Lombok-generated getter on a selected DTO/entity without carrying any
@@ -331,7 +334,7 @@ export class AgentRouter {
       ...readPlan.map(item => pathById.get(item.fileId)).filter((item): item is string => item !== undefined)
     ])];
     const lombok = await timed(phaseMs, "lombokCompleteness", async () =>
-      lombokCompleteness(this.session.status().generatedCode, lombokScopePaths, this.javaIndex, generation, budget));
+      lombokCompleteness(sessionStatus.generatedCode, lombokScopePaths, this.javaIndex, generation, budget));
 
     // Diagnostic only: production ranking above has already used the same
     // normalized outcomes. Shadow output adds counterfactual attribution; it
@@ -364,6 +367,14 @@ export class AgentRouter {
         ...readPlanResult.evidenceGaps
       ],
       shadowRanking,
+      freshness: {
+        requestGeneration: freshness.generation,
+        indexedGeneration: sourceAfter.javaIndex.indexedGeneration,
+        coverage: coverageV6(sourceAfter.coverage),
+        changedDuringRequest: sourceAfter.javaIndex.indexedGeneration !== sourceBefore.javaIndex.indexedGeneration
+      },
+      semanticCompletion: liveSemanticOutcome.completion,
+      semanticReadiness: sessionStatus.state,
       metrics: {
         semantic,
         typeReference,
@@ -372,13 +383,6 @@ export class AgentRouter {
         cache: sessionCacheDelta(cacheBefore, cacheAfter),
         rgCache: rgCacheDelta(rgBefore, rgAfter),
         sourceFacts: sourceFactsDelta(sourceBefore, sourceAfter, anchors),
-        freshness: {
-          requestGeneration: freshness.generation,
-          freshnessMode: freshness.freshnessMode,
-          cacheReadAllowed: freshness.cacheReadAllowed,
-          cacheWriteAllowed: freshness.cacheWriteAllowed,
-          indexOpenSource: freshness.indexOpenSource ?? sourceAfter.openSource
-        },
         javaIndex: {
           state: sourceAfter.javaIndex.state,
           files: sourceAfter.javaIndex.files,
@@ -449,4 +453,8 @@ type RouterFreshness = {
 
 function unionPaths(known: readonly string[], outcome: ProviderOutcome): string[] {
   return [...new Set([...known, ...outcome.candidates.map(candidate => candidate.absolutePath)])];
+}
+
+function coverageV6(coverage: "complete" | "partial" | "degraded"): "COMPLETE" | "PARTIAL" | "DEGRADED" {
+  return coverage.toUpperCase() as "COMPLETE" | "PARTIAL" | "DEGRADED";
 }

@@ -1,7 +1,8 @@
 // input: Public java_impact options and internal routing state.
-// output: Shared v5 agent router types.
-// pos: Type contracts for the lishuedu JDT LS MCP v5 router.
+// output: Shared agent router types, including the public ImpactResultV6 output contract.
+// pos: Type contracts for the lishuedu JDT LS MCP router.
 import type { Completion } from "./runtime/completion.js";
+import type { SourceRange } from "./runtime/source-range.js";
 
 export type ImpactMode = "minimal" | "balanced" | "precision" | "recall";
 export type ImpactProfile = "auto" | "controller" | "service" | "port" | "repository" | "parser" | "dto" | "entity" | "mapper" | "vo" | "job" | "listener";
@@ -136,6 +137,7 @@ export type RgPlanSection = {
   globs: string[];
 };
 
+/** Internal shape of RgExecutionResult.sections - no longer part of the public output contract (Task 31), still used by rg-execution.ts. */
 export type RgSectionSummary = {
   category: string;
   reason: string;
@@ -148,19 +150,89 @@ export type RgSectionSummary = {
   files: Array<Record<string, unknown>>;
 };
 
-export type ImpactResult = {
-  target: Record<string, unknown>;
-  options: Record<string, unknown>;
-  counts: Record<string, unknown>;
-  files: Array<Record<string, unknown>>;
-  readPlan: ReadPlanItem[];
-  rgSummary: {
-    sections: RgSectionSummary[];
-    suppressed: Record<string, unknown>;
-  };
-  suppressed: Record<string, unknown>;
-  evidenceGaps: string[];
-  metrics: Record<string, unknown>;
+// --- ImpactResultV6 (Task 31) - architecture V3.1 §15.2-15.5. ---
+
+export type ImpactTargetV6 = {
+  file: string;
+  symbol: string;
+  type?: string;
+  method?: string;
+  profile: string;
+  range: SourceRange;
+};
+
+export type ImpactFreshnessV6 = {
+  requestGeneration: number;
+  indexedGeneration: number;
+  coverage: "COMPLETE" | "PARTIAL" | "DEGRADED";
+  changedDuringRequest: boolean;
+};
+
+export type ImpactSemanticV6 = {
+  policy: SemanticPolicy;
+  used: boolean;
+  completion: Completion;
+  readiness?: string;
+};
+
+export type ImpactFileV6 = {
+  id: string;
+  path: string;
+  role: string;
+  confidence: Confidence;
+  evidence: string[];
+  locations: Array<{ line: number; column: number }>;
+  /** Diagnostic-only (verbosity="diagnostic"): raw provider-attribution kind strings behind `evidence`'s human phrases. Internal tooling (the benchmark harness) classifies by these, not by parsing phrases. */
+  reasons?: string[];
+  verifiedBy?: string[];
+  scoreBreakdown?: ScoreBreakdownItem[];
+};
+
+export type ImpactCostV6 = {
+  resultBytes: number;
+  readBytes: number;
+  estimatedTokens: number;
+  suppressedRawBytes: number;
+};
+
+/**
+ * `metrics` stays populated at every verbosity (routingVersion/elapsedMs/
+ * generatedSemantics are load-bearing outside diagnostic mode - the Lombok
+ * completeness signal from Task 29 must survive standard/compact requests),
+ * but only diagnostic requests get the larger diagnostic-only sections.
+ * Optional (`?`) reflects that a caller must not assume any single section
+ * is present, not that the whole object is diagnostic-exclusive.
+ */
+export type ImpactDiagnosticMetrics = {
+  routingVersion: number;
+  elapsedMs: number;
+  generatedSemantics?: "OK" | "INCOMPLETE" | "NOT_DETECTED";
+  phaseMs?: Record<string, number>;
+  semantic?: Record<string, unknown>;
+  typeReference?: Record<string, unknown>;
+  importGraph?: Record<string, unknown>;
+  persistedSemantic?: Record<string, unknown>;
+  javaIndex?: Record<string, unknown>;
+  readPlan?: Record<string, unknown>;
+  framework?: Record<string, unknown>;
+  cache?: Record<string, unknown>;
+  rgCache?: Record<string, unknown>;
+  sourceFacts?: Record<string, unknown>;
+  suppressed?: Record<string, unknown>;
   /** Task 25 item 6: present only for verbosity="diagnostic" requests opted into JAVA_LSP_SHADOW_RANKING=1 - see shadow-ranking.ts. */
   shadowRanking?: Record<string, unknown>;
 };
+
+export type ImpactResultV6 = {
+  version: 6;
+  target: ImpactTargetV6;
+  freshness: ImpactFreshnessV6;
+  semantic: ImpactSemanticV6;
+  files: ImpactFileV6[];
+  readPlan: ReadPlanItemV6[];
+  evidenceGaps: string[];
+  cost: ImpactCostV6;
+  metrics?: ImpactDiagnosticMetrics;
+};
+
+export type ImpactResult = ImpactResultV6;

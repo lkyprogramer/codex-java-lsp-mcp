@@ -1,13 +1,17 @@
 import type {
   CandidateFile,
-  ImpactResult,
+  ImpactFreshnessV6,
   ImpactOptions,
+  ImpactResult,
   ImpactVerbosity,
   ReadPlanItem,
   ResolvedAnchor
 } from "../agent-types.js";
+import type { Completion } from "../runtime/completion.js";
 import { unique } from "./candidate-helpers.js";
 import type { ImportGraphMetrics } from "./candidate-collectors.js";
+import type { SemanticMetrics } from "./impact-metrics.js";
+import { buildImpactFileV6, buildImpactTargetV6, withConvergedCostV6 } from "./output-v6.js";
 import type { RgExecutionResult } from "./rg-execution.js";
 import type { TypeReferenceMetrics } from "./type-reference.js";
 
@@ -22,15 +26,17 @@ type BuildImpactResultInput = {
   readonly suppressed: Record<string, number>;
   readonly evidenceGaps: string[];
   readonly shadowRanking?: Record<string, unknown>;
+  readonly freshness: ImpactFreshnessV6;
+  readonly semanticCompletion: Completion;
+  readonly semanticReadiness?: string;
   readonly metrics: {
-    readonly semantic: Record<string, unknown>;
+    readonly semantic: SemanticMetrics;
     readonly typeReference: TypeReferenceMetrics;
     readonly importGraph: ImportGraphMetrics;
     readonly persistedSemantic: Record<string, unknown>;
     readonly cache: Record<string, unknown>;
     readonly rgCache: Record<string, unknown>;
     readonly sourceFacts: Record<string, unknown>;
-    readonly freshness: Record<string, unknown>;
     readonly javaIndex: Record<string, unknown>;
     readonly readPlan?: unknown;
     readonly framework?: Record<string, unknown>;
@@ -39,42 +45,29 @@ type BuildImpactResultInput = {
 
 export function buildImpactResult(input: BuildImpactResultInput): ImpactResult {
   const verbosity = input.options.verbosity || "standard";
-  const formattedFiles = input.ranked.map((file, index) => formatCandidate(file, `F${index + 1}`, verbosity));
+  const formattedFiles = input.ranked.map((file, index) => buildImpactFileV6(file, `F${index + 1}`, verbosity));
+  const framework = input.metrics.framework;
+  const generatedCode = framework?.generatedCode as Record<string, unknown> | undefined;
+  const generatedSemantics = generatedCode?.semantics as "OK" | "INCOMPLETE" | "NOT_DETECTED" | undefined;
+
   const payload: ImpactResult = {
-    target: formatAnchor(input.anchors[0]),
-    options: {
-      mode: input.options.mode,
-      profile: input.options.profile,
-      semanticPolicy: input.options.semanticPolicy,
-      readPlanMaxItems: input.readPlan.length,
-      testReadMode: input.options.testReadMode,
-      focusModules: input.options.focusModules,
-      excludeModules: input.options.excludeModules,
-      taskKeywords: input.options.taskKeywords,
-      crossModulePolicy: input.options.crossModulePolicy,
-      verbosity
-    },
-    counts: {
-      anchors: input.anchors.length,
-      rgCommands: input.rgExecution.commandCount,
-      rgFiles: input.rgExecution.files.length,
-      totalRgMatches: input.rgExecution.totalMatches,
-      totalRgRawBytes: input.rgExecution.rawBytes,
-      returnedFiles: formattedFiles.length,
-      readPlanItems: input.readPlan.length
+    version: 6,
+    target: buildImpactTargetV6(input.anchors[0]!),
+    freshness: input.freshness,
+    semantic: {
+      policy: input.options.semanticPolicy,
+      used: input.metrics.semantic.used,
+      completion: input.semanticCompletion,
+      readiness: input.semanticReadiness
     },
     files: formattedFiles,
     readPlan: input.readPlan,
-    rgSummary: {
-      sections: input.rgExecution.sections,
-      suppressed: input.rgExecution.suppressed
-    },
-    suppressed: input.suppressed,
-    evidenceGaps: input.evidenceGaps,
-    shadowRanking: input.shadowRanking,
+    evidenceGaps: unique(input.evidenceGaps),
+    cost: { resultBytes: 0, readBytes: 0, estimatedTokens: 0, suppressedRawBytes: 0 },
     metrics: {
-      routingVersion: 5,
+      routingVersion: 6,
       elapsedMs: Date.now() - input.startedAt,
+      generatedSemantics,
       phaseMs: input.phaseMs,
       semantic: input.metrics.semantic,
       typeReference: input.metrics.typeReference,
@@ -83,137 +76,42 @@ export function buildImpactResult(input: BuildImpactResultInput): ImpactResult {
       cache: input.metrics.cache,
       rgCache: input.metrics.rgCache,
       sourceFacts: input.metrics.sourceFacts,
-      freshness: input.metrics.freshness,
       javaIndex: input.metrics.javaIndex,
-      readPlan: input.metrics.readPlan,
+      readPlan: input.metrics.readPlan as Record<string, unknown> | undefined,
       framework: input.metrics.framework,
-      outputBytes: 0
+      suppressed: input.suppressed,
+      shadowRanking: input.shadowRanking
     }
   };
   applyVerbosity(payload, verbosity);
-  updateOutputBytes(payload);
-  return payload;
+  return withConvergedCostV6(payload, readPlanBytes(input.readPlan), input.rgExecution.rawBytes);
 }
 
-export function formatCandidate(file: CandidateFile, id: string, verbosity: ImpactVerbosity): Record<string, unknown> {
-  return compact({
-    id,
-    path: file.path || file.absolutePath,
-    module: file.module,
-    layer: file.layer,
-    sourceSet: file.sourceSet,
-    score: Math.round(file.score),
-    matchCount: file.matchCount,
-    categories: file.categories,
-    reasons: file.reasons,
-    positions: file.positions.slice(0, 3),
-    confidence: verbosity === "diagnostic" ? file.confidence || "medium" : undefined,
-    verifiedBy: verbosity === "diagnostic" ? file.verifiedBy || [] : undefined,
-    scoreBreakdown: verbosity === "diagnostic" ? file.scoreBreakdown : undefined
-  });
+function readPlanBytes(readPlan: ReadPlanItem[]): number {
+  return readPlan.reduce((sum, item) => sum + item.estimatedBytes, 0);
 }
 
-export function formatAnchor(anchor: ResolvedAnchor): Record<string, unknown> {
-  return compact({
-    id: anchor.id,
-    path: anchor.path || anchor.absolutePath,
-    module: anchor.module,
-    layer: anchor.layer,
-    sourceSet: anchor.sourceSet,
-    line: anchor.line,
-    column: anchor.column,
-    profile: anchor.profile,
-    symbolName: anchor.symbolName,
-    methodName: anchor.methodName,
-    className: anchor.className,
-    factSource: anchor.factSource,
-    kind: anchor.kind
-  });
-}
-
+/**
+ * Diagnostic mode returns every metrics section as collected. Standard/compact
+ * keep only generatedSemantics (Task 29's Lombok completeness signal must
+ * survive every verbosity - it is not a diagnostic-only detail) alongside the
+ * two bookkeeping fields already present at every verbosity pre-V6.
+ */
 export function applyVerbosity(payload: ImpactResult, verbosity: ImpactVerbosity): void {
-  payload.evidenceGaps = unique(payload.evidenceGaps);
-  const framework = payload.metrics.framework as Record<string, unknown> | undefined;
-  const readPlan = payload.metrics.readPlan as Record<string, unknown> | undefined;
-  const generatedCode = framework?.generatedCode as Record<string, unknown> | undefined;
-  if (generatedCode?.semantics !== undefined) {
-    payload.metrics.generatedSemantics = generatedCode.semantics;
-  }
+  const metrics = payload.metrics!;
   if (verbosity === "diagnostic") {
     return;
   }
-  // Defense in depth: index.ts only computes shadowRanking for
-  // verbosity="diagnostic" callers, but a non-diagnostic verbosity must never
-  // carry it regardless of what the caller passed in.
-  payload.shadowRanking = undefined;
-  payload.rgSummary.sections = payload.rgSummary.sections.map(section => ({
-    ...section,
-    files: []
-  }));
   const preservedGaps = payload.evidenceGaps.filter(isLombokCompletenessGap);
   const ordinaryGaps = payload.evidenceGaps.filter(gap => !isLombokCompletenessGap(gap));
-  payload.evidenceGaps = [...preservedGaps, ...ordinaryGaps].map(shortEvidenceGap);
-  payload.evidenceGaps = payload.evidenceGaps.slice(0, verbosity === "compact" ? 2 : 3);
-  payload.metrics = compact({
-    routingVersion: payload.metrics.routingVersion,
-    elapsedMs: payload.metrics.elapsedMs,
-    semantic: slimSemantic(payload.metrics.semantic),
-    // Freshness is a small correctness signal; keep it in every verbosity.
-    freshness: payload.metrics.freshness,
-    javaIndex: slimJavaIndex(payload.metrics.javaIndex),
-    readPlan: slimReadPlan(readPlan),
-    generatedSemantics: generatedCode?.semantics,
-    outputBytes: payload.metrics.outputBytes
-  });
-}
-
-function slimReadPlan(value: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
-  if (!value) return undefined;
-  return compact({
-    totalBytes: value.totalBytes,
-    maxReadBytes: value.maxReadBytes,
-    maxFiles: value.maxFiles,
-    budgetExceededByAnchor: value.budgetExceededByAnchor
-  });
-}
-
-export function updateOutputBytes(payload: ImpactResult): void {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const outputBytes = Buffer.byteLength(JSON.stringify(payload), "utf8");
-    if (payload.metrics.outputBytes === outputBytes) {
-      return;
-    }
-    payload.metrics.outputBytes = outputBytes;
-  }
-}
-
-function compact(value: Record<string, unknown>): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined));
-}
-
-function slimJavaIndex(value: unknown): Record<string, unknown> | undefined {
-  if (!value || typeof value !== "object") {
-    return undefined;
-  }
-  const javaIndex = value as Record<string, unknown>;
-  return compact({
-    state: javaIndex.state,
-    files: javaIndex.files,
-    coverage: javaIndex.coverage
-  });
-}
-
-function slimSemantic(value: unknown): Record<string, unknown> | undefined {
-  if (!value || typeof value !== "object") {
-    return undefined;
-  }
-  const semantic = value as Record<string, unknown>;
-  return compact({
-    used: semantic.used,
-    skipped: semantic.skipped,
-    timeout: semantic.timeout,
-    policy: semantic.policy
-  });
+  payload.evidenceGaps = [...preservedGaps, ...ordinaryGaps]
+    .map(shortEvidenceGap)
+    .slice(0, verbosity === "compact" ? 2 : 3);
+  payload.metrics = {
+    routingVersion: metrics.routingVersion,
+    elapsedMs: metrics.elapsedMs,
+    ...(metrics.generatedSemantics === undefined ? {} : { generatedSemantics: metrics.generatedSemantics })
+  };
 }
 
 function shortEvidenceGap(gap: string): string {
@@ -232,7 +130,7 @@ function shortEvidenceGap(gap: string): string {
   if (gap === "Some source facts used the degraded fallback because JavaIndex facts were unavailable.") {
     return "Some source facts used fallback evidence.";
   }
-  if (gap === "Review persistence/config evidence from rgSummary before changing behavior.") {
+  if (gap === "Review persistence/config evidence in the returned files (role=config or framework) before changing behavior.") {
     return "Review persistence/config evidence.";
   }
   if (gap === "Tests are returned as lower-priority candidates; use testReadMode=priority when verification planning is the main task.") {

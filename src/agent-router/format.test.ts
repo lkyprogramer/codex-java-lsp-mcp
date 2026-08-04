@@ -7,27 +7,37 @@ const LOMBOK_GAP = "Lombok is detected but the JDT javaagent is missing/disabled
 
 function resultWithLombokGap(): ImpactResult {
   return {
-    target: {},
-    options: {},
-    counts: {},
+    version: 6,
+    target: {
+      file: "src/main/java/demo/DemoService.java",
+      symbol: "DemoService#process",
+      profile: "service",
+      range: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
+    },
+    freshness: {
+      requestGeneration: 0,
+      indexedGeneration: 0,
+      coverage: "COMPLETE",
+      changedDuringRequest: false
+    },
+    semantic: {
+      policy: "fast",
+      used: false,
+      completion: "COMPLETE"
+    },
     files: [],
     readPlan: [],
-    rgSummary: { sections: [], suppressed: {} },
-    suppressed: {},
     evidenceGaps: [
       "Run Gradle compile/test before claiming behavior.",
       "LSP semantic enrichment was skipped by policy; raise semanticPolicy or mode if exact symbol binding is required.",
-      "Review persistence/config evidence from rgSummary before changing behavior.",
+      "Review persistence/config evidence in the returned files (role=config or framework) before changing behavior.",
       LOMBOK_GAP
     ],
+    cost: { resultBytes: 0, readBytes: 0, estimatedTokens: 0, suppressedRawBytes: 0 },
     metrics: {
-      routingVersion: 5,
+      routingVersion: 6,
       elapsedMs: 1,
-      semantic: { skipped: true, timeout: false, policy: "fast" },
-      freshness: {},
-      javaIndex: {},
-      framework: { generatedCode: { semantics: "INCOMPLETE", taskGapDetected: true } },
-      outputBytes: 0
+      generatedSemantics: "INCOMPLETE"
     }
   };
 }
@@ -37,7 +47,7 @@ test("standard output preserves the Lombok completeness state and advisory", () 
 
   applyVerbosity(result, "standard");
 
-  assert.equal(result.metrics.generatedSemantics, "INCOMPLETE");
+  assert.equal(result.metrics?.generatedSemantics, "INCOMPLETE");
   assert.ok(result.evidenceGaps.some(gap => gap.includes("Lombok")));
 });
 
@@ -46,7 +56,7 @@ test("compact output preserves a task-relevant Lombok advisory", () => {
 
   applyVerbosity(result, "compact");
 
-  assert.equal(result.metrics.generatedSemantics, "INCOMPLETE");
+  assert.equal(result.metrics?.generatedSemantics, "INCOMPLETE");
   assert.ok(result.evidenceGaps.some(gap => gap.includes("Lombok")));
 });
 
@@ -55,6 +65,6 @@ test("diagnostic output exposes generated semantics at the common metrics path",
 
   applyVerbosity(result, "diagnostic");
 
-  assert.equal(result.metrics.generatedSemantics, "INCOMPLETE");
+  assert.equal(result.metrics?.generatedSemantics, "INCOMPLETE");
   assert.ok(result.evidenceGaps.some(gap => gap.includes("Lombok")));
 });

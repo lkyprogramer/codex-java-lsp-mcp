@@ -2,6 +2,7 @@
 // output: v5 JavaIndex plus rg plus optional LSP impact result.
 // pos: Public recommended impact tool handler.
 import { z } from "zod";
+import { withConvergedCostV6 } from "../agent-router/output-v6.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import { defaultDeadlineMs, MAX_REQUEST_DEADLINE_MS, type RequestContext } from "../runtime/request-context.js";
 import type { ToolContext } from "./context.js";
@@ -73,7 +74,7 @@ export async function javaImpact(
   };
   const result = await context.router.impact(options, request);
   mergePhaseMs(phaseMs, context.session.drainPhaseMetrics());
-  return withPhaseMs(result, phaseMs);
+  return withPhaseMs(result, phaseMs, args.verbosity);
 }
 
 function normalizeAnchors(args: z.infer<z.ZodObject<typeof impactSchema>>): ImpactAnchorInput[] {
@@ -95,42 +96,22 @@ function mergePhaseMs(target: Record<string, number>, source: Record<string, num
   }
 }
 
-function withPhaseMs(result: unknown, phases: Record<string, number>): unknown {
+/**
+ * V6 has no top-level `options`, so verbosity is threaded through explicitly
+ * from the same args the caller already validated, rather than read back out
+ * of the result the way the pre-V6 wrapper did.
+ */
+function withPhaseMs(result: unknown, phases: Record<string, number>, verbosity: ImpactVerbosity): unknown {
   if (!result || typeof result !== "object") {
     return result;
   }
   const payload = result as ImpactResult;
-  if (impactVerbosity(payload) !== "diagnostic") {
-    updateOutputBytes(payload);
-    return payload;
+  if (verbosity === "diagnostic" && payload.metrics && Object.keys(phases).length > 0) {
+    const existingPhaseMs = payload.metrics.phaseMs ?? {};
+    payload.metrics = {
+      ...payload.metrics,
+      phaseMs: { ...phases, ...existingPhaseMs }
+    };
   }
-  if (Object.keys(phases).length === 0) {
-    return result;
-  }
-  const metrics = payload.metrics || {};
-  const phaseMs = metrics.phaseMs && typeof metrics.phaseMs === "object" ? metrics.phaseMs as Record<string, number> : {};
-  payload.metrics = {
-    ...metrics,
-    phaseMs: {
-      ...phases,
-      ...phaseMs
-    }
-  };
-  updateOutputBytes(payload);
-  return payload;
-}
-
-function impactVerbosity(result: ImpactResult): ImpactVerbosity {
-  const value = result.options?.verbosity;
-  return value === "compact" || value === "diagnostic" ? value : "standard";
-}
-
-function updateOutputBytes(payload: ImpactResult): void {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const outputBytes = Buffer.byteLength(JSON.stringify(payload), "utf8");
-    if (payload.metrics.outputBytes === outputBytes) {
-      return;
-    }
-    payload.metrics.outputBytes = outputBytes;
-  }
+  return withConvergedCostV6(payload, payload.cost.readBytes, payload.cost.suppressedRawBytes);
 }

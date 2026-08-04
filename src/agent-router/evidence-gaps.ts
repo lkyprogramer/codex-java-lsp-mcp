@@ -21,7 +21,7 @@ export function evidenceGaps(anchors: readonly ResolvedAnchor[], options: Impact
     gaps.push("Some source facts used the degraded fallback because JavaIndex facts were unavailable.");
   }
   if (anchors.some(anchor => anchor.profile === "repository" || anchor.profile === "port")) {
-    gaps.push("Review persistence/config evidence from rgSummary before changing behavior.");
+    gaps.push("Review persistence/config evidence in the returned files (role=config or framework) before changing behavior.");
   }
   if (options.testReadMode === "defer") {
     gaps.push("Tests are returned as lower-priority candidates; use testReadMode=priority when verification planning is the main task.");

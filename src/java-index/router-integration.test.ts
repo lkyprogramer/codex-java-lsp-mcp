@@ -379,8 +379,8 @@ test("shadowRanking is populated end-to-end only when JAVA_LSP_SHADOW_RANKING=1 
       readPlanMaxItems: 2,
       verbosity: "diagnostic"
     }));
-    assert.ok(diagnosticImpact.shadowRanking, "flag on + diagnostic verbosity must populate shadowRanking");
-    const shadow = diagnosticImpact.shadowRanking as { categoryFidelity: string; candidates: Array<{ path: string }> };
+    assert.ok(diagnosticImpact.metrics?.shadowRanking, "flag on + diagnostic verbosity must populate shadowRanking");
+    const shadow = diagnosticImpact.metrics!.shadowRanking as { categoryFidelity: string; candidates: Array<{ path: string }> };
     assert.equal(shadow.categoryFidelity, "preserved");
     assert.ok(
       shadow.candidates.some(item => item.path.endsWith("OrderProcessor.java")),
@@ -394,7 +394,7 @@ test("shadowRanking is populated end-to-end only when JAVA_LSP_SHADOW_RANKING=1 
       readPlanMaxItems: 2,
       verbosity: "standard"
     }));
-    assert.equal(standardImpact.shadowRanking, undefined, "standard verbosity must never carry shadowRanking, flag or not");
+    assert.equal(standardImpact.metrics?.shadowRanking, undefined, "standard verbosity must never carry shadowRanking, flag or not");
 
     delete process.env.JAVA_LSP_SHADOW_RANKING;
     const flagOffImpact = await router.impact(options({
@@ -404,7 +404,7 @@ test("shadowRanking is populated end-to-end only when JAVA_LSP_SHADOW_RANKING=1 
       readPlanMaxItems: 2,
       verbosity: "diagnostic"
     }));
-    assert.equal(flagOffImpact.shadowRanking, undefined, "diagnostic verbosity without the flag must not compute shadowRanking");
+    assert.equal(flagOffImpact.metrics?.shadowRanking, undefined, "diagnostic verbosity without the flag must not compute shadowRanking");
   } finally {
     if (previousFlag === undefined) {
       delete process.env.JAVA_LSP_SHADOW_RANKING;

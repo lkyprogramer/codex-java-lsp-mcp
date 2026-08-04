@@ -3,12 +3,20 @@ import test from "node:test";
 import path from "node:path";
 import { homedir, tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { javaDiagnostics } from "./diagnostics.js";
+import { javaImpact } from "./impact.js";
 import { javaReferences } from "./references.js";
 import { javaRestart } from "./restart.js";
 import { javaShutdown } from "./shutdown.js";
 import { javaSymbol } from "./symbol.js";
 import type { ToolContext } from "./context.js";
+import { AgentRouter } from "../agent-router/index.js";
+import { JavaIndexClient } from "../java-index/java-index-client.js";
+import { RouterJavaIndex } from "../java-index/router-java-index.js";
+import { RgRunner } from "../search/rg-runner.js";
+import type { RgQuery, SearchResult } from "../search/search-types.js";
+import { DeadlineBudget } from "../runtime/deadline-budget.js";
 
 const repoRoot = "/tmp/demo";
 const sourceFile = path.join(repoRoot, "src", "main", "java", "demo", "DemoService.java");
@@ -210,6 +218,125 @@ test("semantic tools never emit locations from outside the repository", async ()
   assert.equal(referencesResult.totalReferences, 3, "the raw JDT total is still reported");
   assert.equal(referencesResult.matchedReferences, 1);
   assert.equal(referencesResult.externalReferencesSuppressed, 2);
+});
+
+class NoLspSession {
+  cacheStatus(): { invalidations: number; entries: number; hits: number; misses: number } {
+    return { invalidations: 0, entries: 0, hits: 0, misses: 0 };
+  }
+
+  status(): { started: boolean; progress: { active: number }; generatedCode: { lombok: { detected: false } } } {
+    return { started: false, progress: { active: 0 }, generatedCode: { lombok: { detected: false } } };
+  }
+
+  drainPhaseMetrics(): Record<string, number> {
+    return {};
+  }
+}
+
+class EmptyRgRunner extends RgRunner {
+  override async run(_query: RgQuery, _budget: DeadlineBudget): Promise<SearchResult> {
+    return { files: [], completion: "COMPLETE", rawBytes: 0, totalMatches: 0, elapsedMs: 0 };
+  }
+}
+
+async function waitForCompleteIndex(index: RouterJavaIndex): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if ((await index.routerStatus()).coverage === "complete") return;
+    await new Promise(resolve => setTimeout(resolve, 20));
+  }
+  assert.fail("fixture JavaIndex did not reach complete coverage within 2 seconds");
+}
+
+test("java_impact standard output matches the ImpactResultV6 contract - present/absent fields per architecture V3.1 §15", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "impact-shape-"));
+  const sourceDir = path.join(root, "src", "main", "java", "demo");
+  const serviceFile = path.join(sourceDir, "DemoService.java");
+  const repositoryFile = path.join(sourceDir, "DemoRepository.java");
+  const index = new RouterJavaIndex(root, new JavaIndexClient(root, path.join(root, ".cache")));
+  try {
+    await mkdir(sourceDir, { recursive: true });
+    await writeFile(path.join(root, "pom.xml"), "<project></project>\n");
+    await writeFile(repositoryFile, [
+      "package demo;",
+      "",
+      "public class DemoRepository {",
+      "  public String findById(String id) {",
+      "    return id;",
+      "  }",
+      "}",
+      ""
+    ].join("\n"));
+    await writeFile(serviceFile, [
+      "package demo;",
+      "",
+      "public class DemoService {",
+      "  private final DemoRepository repository = new DemoRepository();",
+      "",
+      "  public String process(String id) {",
+      "    return repository.findById(id);",
+      "  }",
+      "}",
+      ""
+    ].join("\n"));
+    await index.open(0);
+    await index.reconcile(0);
+    await waitForCompleteIndex(index);
+
+    const session = new NoLspSession();
+    const router = new AgentRouter(root, session as never, index, undefined, undefined, undefined, new EmptyRgRunner());
+    const context = { repoRoot: root, session, router } as unknown as ToolContext;
+
+    const impactArgs = {
+      anchors: [{ file: serviceFile, line: 6, column: 21 }],
+      mode: "balanced" as const,
+      profile: "auto" as const,
+      semanticPolicy: "fast" as const,
+      testReadMode: "defer" as const,
+      focusModules: [],
+      excludeModules: [],
+      taskKeywords: [],
+      crossModulePolicy: "auto" as const
+    };
+
+    const standard = record(await javaImpact(context, { ...impactArgs, verbosity: "standard" }));
+    const diagnostic = record(await javaImpact(context, { ...impactArgs, verbosity: "diagnostic" }));
+
+    for (const key of ["version", "target", "freshness", "semantic", "files", "readPlan", "evidenceGaps", "cost"]) {
+      assert.equal(Object.hasOwn(standard, key), true, `standard output must carry top-level "${key}"`);
+    }
+    assert.equal(Object.hasOwn(standard, "options"), false, "v5's top-level options is retired in V6");
+    assert.equal(Object.hasOwn(standard, "counts"), false, "v5's top-level counts is retired in V6");
+    assert.equal(Object.hasOwn(standard, "rgSummary"), false, "v5's top-level rgSummary is retired in V6");
+    assert.equal(Object.hasOwn(standard, "suppressed"), false, "v5's top-level suppressed is retired in V6");
+
+    const files = standard.files as Array<Record<string, unknown>>;
+    assert.ok(files.length > 0, "the fixture's direct field-receiver call must produce at least one candidate, or the absence assertions below are untested");
+    for (const file of files) {
+      assert.equal(Object.hasOwn(file, "score"), false);
+      assert.equal(Object.hasOwn(file, "scoreBreakdown"), false);
+      assert.equal(Object.hasOwn(file, "reasons"), false);
+      assert.equal(Object.hasOwn(file, "verifiedBy"), false);
+      assert.equal(Object.hasOwn(file, "absolutePath"), false);
+    }
+    const standardMetrics = (standard.metrics ?? {}) as Record<string, unknown>;
+    assert.equal(Object.hasOwn(standardMetrics, "phaseMs"), false);
+    assert.equal(Object.hasOwn(standardMetrics, "cache"), false);
+
+    const serializedStandard = JSON.stringify(standard);
+    assert.equal(serializedStandard.includes(root), false, "standard output must never leak the repo's absolute filesystem path");
+    assert.equal(serializedStandard.includes(".m2/repository"), false, "no Maven jar cache path leaks");
+    assert.equal(serializedStandard.includes("JavaVirtualMachines"), false, "no JDK source path leaks");
+
+    // Diagnostic mode is additive on top of the same base contract, not a
+    // different shape - the file-level provider attribution reappears, but
+    // the top-level V6 fields are unchanged.
+    const diagnosticFiles = diagnostic.files as Array<Record<string, unknown>>;
+    assert.ok(diagnosticFiles.some(file => Object.hasOwn(file, "reasons")), "diagnostic mode must expose provider attribution the standard mode hides");
+  } finally {
+    await index.close();
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 function locationAt(line: number, column: number) {
