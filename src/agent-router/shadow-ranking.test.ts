@@ -145,7 +145,43 @@ test("a candidate whose only evidence is in one family ranks below a candidate c
   assert.equal(b.selectedByReadPlan, false, "B (lower priority, lower rank) is not picked under a 2-item budget");
   assert.deepEqual(a.providers, ["test-static"], "providers reflects the real providerId of each candidate's evidence signals");
   assert.deepEqual(b.providers, ["test-lexical"]);
+
+  // B is sourceSet=test with testReadMode=defer, so selectReadPlanFiles's
+  // priority tier (P1 main vs P2 deferred-test) always keeps A ahead of B
+  // regardless of family score - ablation can move B to rank 1 without ever
+  // giving it A's read-plan slot. The dedicated cross-family-flip test below
+  // covers the case where ablation *does* change the read-plan outcome.
+  assert.equal(a.selectedByReadPlanWithoutEachFamily?.STATIC_STRUCTURE, true, "A's read-plan slot survives ablation of its own family: B is priority-tier-ineligible to take it regardless of rank");
+  assert.equal(b.selectedByReadPlanWithoutEachFamily?.STATIC_STRUCTURE, false, "B still loses despite outranking A post-ablation, because deferred tests never win a main file's slot");
+  assert.equal(a.selectedByReadPlanWithoutEachFamily?.LEXICAL, true, "ablating a family A has no evidence in must not change A's selection");
   assert.deepEqual(result.productionCandidatesWithoutEvidence, [], "A and B both have evidence, so nothing should be reported missing");
+});
+
+test("ablating a candidate's sole family can flip which of two same-tier candidates wins the shared read-plan slot", async () => {
+  const candidateC = candidate(`${repoRoot}/src/main/java/demo/Charlie.java`);
+  const candidateD = candidate(`${repoRoot}/src/main/java/demo/Delta.java`);
+  const outcomes: ProviderOutcome[] = [
+    outcome([signal({ candidateFile: candidateC.absolutePath, family: "STATIC_STRUCTURE", weight: 100, providerId: "p-static" })]),
+    outcome([signal({ candidateFile: candidateD.absolutePath, family: "FRAMEWORK", weight: 30, providerId: "p-framework" })])
+  ];
+
+  const result = await buildShadowRanking(baseInput({
+    outcomes,
+    ranked: [candidateC, candidateD],
+    options: { ...baseInput().options, readPlanMaxItems: 2 }
+  }));
+
+  const byPath = new Map(result.candidates.map(item => [item.path, item]));
+  const c = byPath.get(candidateC.absolutePath)!;
+  const d = byPath.get(candidateD.absolutePath)!;
+
+  assert.equal(c.selectedByReadPlan, true, "C's stronger STATIC_STRUCTURE evidence wins the one shared slot under the 2-item budget (anchor + 1)");
+  assert.equal(d.selectedByReadPlan, false);
+
+  assert.equal(c.selectedByReadPlanWithoutEachFamily?.STATIC_STRUCTURE, false, "C loses the slot once its sole family is ablated");
+  assert.equal(d.selectedByReadPlanWithoutEachFamily?.STATIC_STRUCTURE, true, "D gains the slot C vacated - the real task-output-changing counterfactual gain Step 3 needs, not just a rank delta");
+  assert.equal(c.selectedByReadPlanWithoutEachFamily?.FRAMEWORK, true, "ablating D's family (which C does not carry) must not affect C's own selection");
+  assert.equal(d.selectedByReadPlanWithoutEachFamily?.FRAMEWORK, false, "D was already losing before this ablation and stays losing");
 });
 
 test("shadow selection does not query Java ranges when it only needs selected paths", async () => {
@@ -172,6 +208,34 @@ test("shadow selection does not query Java ranges when it only needs selected pa
   await buildShadowRanking(input);
 
   assert.equal(factsForCalls, 0, "counterfactual selection must reuse production evidence without reading Java facts again");
+});
+
+test("required-policy requests omit selectedByReadPlanWithoutEachFamily instead of paying for six extra queryReadRanges calls", async () => {
+  let queryReadRangesCalls = 0;
+  const javaIndex = {
+    factsFor: async () => undefined,
+    methodAt: async () => undefined,
+    queryReadRanges: async (files: Array<{ file: string }>) => {
+      queryReadRangesCalls += 1;
+      return files.map(file => ({ file: file.file, ranges: [], extremeMethod: false }));
+    }
+  };
+  const candidateA = candidate(`${repoRoot}/src/main/java/demo/AlphaWidget.java`, { verifiedBy: ["typeGraph"] });
+  const outcomes: ProviderOutcome[] = [
+    outcome([signal({ candidateFile: candidateA.absolutePath, family: "STATIC_STRUCTURE", weight: 100 })])
+  ];
+  const defaults = baseInput();
+
+  const result = await buildShadowRanking(baseInput({
+    javaIndex: javaIndex as never,
+    outcomes,
+    ranked: [candidateA],
+    options: { ...defaults.options, semanticPolicy: "required" }
+  }));
+
+  const a = result.candidates.find(item => item.path === candidateA.absolutePath)!;
+  assert.equal(a.selectedByReadPlanWithoutEachFamily, undefined, "required-policy ablation is skipped entirely, not computed with an empty per-family map");
+  assert.equal(queryReadRangesCalls, 1, "only the one real (non-ablated) selection may call queryReadRanges - the six ablations must not each pay for their own worker round trip");
 });
 
 test("a production candidate the shadow pass never received evidence for (e.g. the anchor itself) is reported, not silently dropped", async () => {

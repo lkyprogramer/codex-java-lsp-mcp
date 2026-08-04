@@ -9,7 +9,7 @@ import path from "node:path";
 import type { ImpactMode } from "../agent-types.js";
 import type { EvidenceFamily } from "../agent-router/evidence.js";
 import { candidateLimit } from "../agent-router/read-plan.js";
-import type { ShadowRankingDiagnostics } from "../agent-router/shadow-ranking.js";
+import { ALL_FAMILIES, type ShadowRankingDiagnostics } from "../agent-router/shadow-ranking.js";
 import type { SourceRootCoverage } from "../java-index/index-types.js";
 import { goldenEntries, type GoldenKind, type Scenario } from "./golden-scenario.js";
 
@@ -122,4 +122,74 @@ function absentReason(
     return "coverage-partial";
   }
   return "no-static-edge";
+}
+
+/**
+ * Task 32 Step 3. `candidateHitLost`/`readPlanHitLost` are the golden files
+ * whose status flips from "counted" to "lost" once this one family is
+ * ablated - never a rank delta by itself, since a rank change that never
+ * crosses the candidateLimit/read-plan boundary changed nothing a caller can
+ * observe. `readPlanHitLost` is the metric Step 8's "framework provider must
+ * produce at least one real-repo counterfactual gain" gate reads: a
+ * provider that only ever reorders candidates without ever being the
+ * difference between a golden file being read or not contributes no
+ * measured gain.
+ */
+export type CounterfactualResult = {
+  candidateHitLost: string[];
+  readPlanHitLost: string[];
+  /** False when this request skipped read-plan ablation (semanticPolicy=required); readPlanHitLost is then always empty and must not be read as "no gain". */
+  measured: boolean;
+};
+
+export type GoldenCounterfactualV3 = {
+  withoutExactSemantic: CounterfactualResult;
+  withoutStaticStructure: CounterfactualResult;
+  withoutFramework: CounterfactualResult;
+  withoutLexical: CounterfactualResult;
+  withoutTaskContext: CounterfactualResult;
+  withoutSupport: CounterfactualResult;
+};
+
+const COUNTERFACTUAL_KEY_BY_FAMILY: Record<EvidenceFamily, keyof GoldenCounterfactualV3> = {
+  EXACT_SEMANTIC: "withoutExactSemantic",
+  STATIC_STRUCTURE: "withoutStaticStructure",
+  FRAMEWORK: "withoutFramework",
+  LEXICAL: "withoutLexical",
+  TASK_CONTEXT: "withoutTaskContext",
+  SUPPORT: "withoutSupport"
+};
+
+export function buildGoldenCounterfactualV3(
+  scenario: Scenario,
+  shadowRanking: ShadowRankingDiagnostics,
+  context: Pick<AttributionV3Context, "repoRoot" | "mode" | "profile">
+): GoldenCounterfactualV3 {
+  const candidateByPath = new Map(shadowRanking.candidates.map(candidate => [candidate.path, candidate]));
+  const limit = candidateLimit(context.mode, resolvedProfile(context.profile));
+  const entries = goldenEntries(scenario);
+  const measured = shadowRanking.candidates.some(candidate => candidate.selectedByReadPlanWithoutEachFamily !== undefined);
+
+  const results = {} as GoldenCounterfactualV3;
+  for (const family of ALL_FAMILIES) {
+    const candidateHitLost: string[] = [];
+    const readPlanHitLost: string[] = [];
+    for (const { file } of entries) {
+      const candidate = candidateByPath.get(path.join(context.repoRoot, file));
+      if (!candidate) continue;
+
+      const wasCandidateHit = candidate.rank <= limit;
+      const ablatedRank = candidate.rankWithoutEachFamily[family];
+      const isCandidateHitAblated = ablatedRank !== undefined && ablatedRank <= limit;
+      if (wasCandidateHit && !isCandidateHitAblated) {
+        candidateHitLost.push(file);
+      }
+
+      if (candidate.selectedByReadPlan && candidate.selectedByReadPlanWithoutEachFamily?.[family] === false) {
+        readPlanHitLost.push(file);
+      }
+    }
+    results[COUNTERFACTUAL_KEY_BY_FAMILY[family]] = { candidateHitLost, readPlanHitLost, measured };
+  }
+  return results;
 }

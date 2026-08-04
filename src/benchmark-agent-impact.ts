@@ -10,7 +10,7 @@ import { AgentRouter } from "./agent-router/index.js";
 import type { ShadowRankingDiagnostics } from "./agent-router/shadow-ranking.js";
 import type { ImpactOptions } from "./agent-types.js";
 import { readRuntimeBuild } from "./build-info.js";
-import { buildGoldenAttributionV3 } from "./benchmark/attribution-v3.js";
+import { buildGoldenAttributionV3, buildGoldenCounterfactualV3 } from "./benchmark/attribution-v3.js";
 import { type GoldenKind, type Scenario, type WarmState, goldenEntries, goldenFiles, loadScenarios } from "./benchmark/golden-scenario.js";
 import { JavaIndexClient } from "./java-index/java-index-client.js";
 import type { JavaIndexStatus } from "./java-index/index-types.js";
@@ -270,6 +270,14 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
   const shadowRankingTyped = asShadowRankingDiagnostics(shadowRanking);
   const shadowQuality = qualityForShadowRanking(shadowRanking, cli.repoRoot, scenario);
   const sessionPhaseMs = session.drainPhaseMetrics();
+  const attributionContext = shadowRankingTyped && {
+    repoRoot: cli.repoRoot,
+    mode: cli.mode,
+    profile: scenario.anchor.profile,
+    semanticUsed: result.semantic.used,
+    semanticTimeout: result.metrics?.semantic?.timeout === true,
+    coverage: metadata.prepareJavaIndexStatus?.coverage ?? []
+  };
   return {
     // Task 30 makes the whole read-plan range lookup one batched worker
     // request. `roundTrips` measures the agent-visible impact exchange plus
@@ -277,19 +285,16 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
     ...attemptPayload("impact", quality, rawSearchPayload, readingPayload, elapsedMs, 2, result.readPlan.length, result.cost.suppressedRawBytes, 0),
     ...readPlanMetrics(result),
     timing: timingPayload(result, sessionPhaseMs),
-    // V3 attribution (Task 32 Step 2) needs the same shadow-ranking pass this
-    // request already computed; it has no fallback when that pass is off
-    // (verbosity=standard or JAVA_LSP_SHADOW_RANKING unset), matching
-    // shadowRanking/shadowQuality's own gating below.
-    goldenAttribution: shadowRankingTyped
-      ? buildGoldenAttributionV3(scenario, shadowRankingTyped, {
-        repoRoot: cli.repoRoot,
-        mode: cli.mode,
-        profile: scenario.anchor.profile,
-        semanticUsed: result.semantic.used,
-        semanticTimeout: result.metrics?.semantic?.timeout === true,
-        coverage: metadata.prepareJavaIndexStatus?.coverage ?? []
-      })
+    // V3 attribution/counterfactual (Task 32 Steps 2-3) need the same
+    // shadow-ranking pass this request already computed; they have no
+    // fallback when that pass is off (verbosity=standard or
+    // JAVA_LSP_SHADOW_RANKING unset), matching shadowRanking/shadowQuality's
+    // own gating below.
+    goldenAttribution: attributionContext && shadowRankingTyped
+      ? buildGoldenAttributionV3(scenario, shadowRankingTyped, attributionContext)
+      : undefined,
+    counterfactual: attributionContext && shadowRankingTyped
+      ? buildGoldenCounterfactualV3(scenario, shadowRankingTyped, attributionContext)
       : undefined,
     frameworkEvidence: { mapstruct: mapstructEvidenceSummary(result, scenario) },
     // Task 25's counterfactual rank diagnostics are deliberately opt-in at

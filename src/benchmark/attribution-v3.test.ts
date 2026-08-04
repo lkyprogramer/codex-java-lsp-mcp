@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import type { ShadowRankingCandidate, ShadowRankingDiagnostics } from "../agent-router/shadow-ranking.js";
-import { type AttributionV3Context, buildGoldenAttributionV3 } from "./attribution-v3.js";
+import { type AttributionV3Context, buildGoldenAttributionV3, buildGoldenCounterfactualV3 } from "./attribution-v3.js";
 import type { Scenario } from "./golden-scenario.js";
 
 function shadowCandidate(overrides: Partial<ShadowRankingCandidate>): ShadowRankingCandidate {
@@ -129,6 +129,78 @@ test("absentReason: semantic-not-used and semantic-timeout come from the real re
 
   const timedOut = buildGoldenAttributionV3(scenarioV3, shadow, baseContext({ repoRoot: root, semanticUsed: true, semanticTimeout: true }));
   assert.equal(timedOut[0]!.absentReason, "semantic-timeout");
+});
+
+test("counterfactual readPlanHitLost only records a real selection flip, not a rank-only movement", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "attribution-v3-counterfactual-"));
+  await mkdir(path.join(root, "src/main/java/demo"), { recursive: true });
+  await writeFile(path.join(root, "src/main/java/demo/C.java"), "package demo; class C {}\n");
+  await writeFile(path.join(root, "src/main/java/demo/D.java"), "package demo; class D {}\n");
+  const scenarioV3 = scenario({ mustHit: ["src/main/java/demo/C.java", "src/main/java/demo/D.java"], taskBlocking: [], shouldHit: [], support: [] });
+
+  // Mirrors an empirically observed shadow-ranking.ts result: C wins the
+  // shared read-plan slot on STATIC_STRUCTURE; ablating it hands the slot to D.
+  const shadow = diagnostics([
+    shadowCandidate({
+      path: path.join(root, "src/main/java/demo/C.java"),
+      rank: 1,
+      selectedByReadPlan: true,
+      rankWithoutEachFamily: { STATIC_STRUCTURE: 2, FRAMEWORK: 1 },
+      selectedByReadPlanWithoutEachFamily: { STATIC_STRUCTURE: false, FRAMEWORK: true }
+    }),
+    shadowCandidate({
+      path: path.join(root, "src/main/java/demo/D.java"),
+      rank: 2,
+      selectedByReadPlan: false,
+      rankWithoutEachFamily: { STATIC_STRUCTURE: 1, FRAMEWORK: 2 },
+      selectedByReadPlanWithoutEachFamily: { STATIC_STRUCTURE: true, FRAMEWORK: false }
+    })
+  ]);
+
+  const counterfactual = buildGoldenCounterfactualV3(scenarioV3, shadow, baseContext({ repoRoot: root }));
+  assert.deepEqual(counterfactual.withoutStaticStructure.readPlanHitLost, ["src/main/java/demo/C.java"], "C's rank moving is not enough by itself - only losing its actual selection counts as a task-output-changing loss");
+  assert.equal(counterfactual.withoutStaticStructure.measured, true);
+  assert.deepEqual(counterfactual.withoutFramework.readPlanHitLost, [], "D was never selected primarily, so ablating its own family cannot lose a hit it never had");
+});
+
+test("counterfactual candidateHitLost fires when ablation pushes a candidate's rank past the real production candidateLimit boundary", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "attribution-v3-limit-"));
+  await mkdir(path.join(root, "src/main/java/demo"), { recursive: true });
+  await writeFile(path.join(root, "src/main/java/demo/E.java"), "package demo; class E {}\n");
+  const scenarioV3 = scenario({ mustHit: ["src/main/java/demo/E.java"], taskBlocking: [], shouldHit: [], support: [] });
+
+  // mode "minimal" -> candidateLimit(...) === 18.
+  const shadow = diagnostics([
+    shadowCandidate({
+      path: path.join(root, "src/main/java/demo/E.java"),
+      rank: 18,
+      selectedByReadPlan: false,
+      rankWithoutEachFamily: { LEXICAL: 19 }
+    })
+  ]);
+
+  const counterfactual = buildGoldenCounterfactualV3(scenarioV3, shadow, baseContext({ repoRoot: root }));
+  assert.deepEqual(counterfactual.withoutLexical.candidateHitLost, ["src/main/java/demo/E.java"], "rank 18 is within the limit, rank 19 is not - ablation demotes E out of the usable candidate pool");
+});
+
+test("counterfactual reports measured=false instead of a false readPlanHitLost=[] when read-plan ablation was skipped", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "attribution-v3-unmeasured-"));
+  await mkdir(path.join(root, "src/main/java/demo"), { recursive: true });
+  await writeFile(path.join(root, "src/main/java/demo/F.java"), "package demo; class F {}\n");
+  const scenarioV3 = scenario({ mustHit: ["src/main/java/demo/F.java"], taskBlocking: [], shouldHit: [], support: [] });
+
+  const shadow = diagnostics([
+    shadowCandidate({
+      path: path.join(root, "src/main/java/demo/F.java"),
+      rank: 1,
+      selectedByReadPlan: true,
+      selectedByReadPlanWithoutEachFamily: undefined
+    })
+  ]);
+
+  const counterfactual = buildGoldenCounterfactualV3(scenarioV3, shadow, baseContext({ repoRoot: root }));
+  assert.equal(counterfactual.withoutStaticStructure.measured, false, "semanticPolicy=required requests skip ablated read-plan selection entirely");
+  assert.deepEqual(counterfactual.withoutStaticStructure.readPlanHitLost, [], "an empty array here must be read as unmeasured, not as a verified zero-gain result");
 });
 
 test("absentReason: coverage-partial when the file's source root has not finished indexing, no-static-edge otherwise", async () => {
