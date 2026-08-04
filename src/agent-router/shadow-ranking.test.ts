@@ -143,6 +143,8 @@ test("a candidate whose only evidence is in one family ranks below a candidate c
 
   assert.equal(a.selectedByReadPlan, true, "A is picked by the shadow read-plan under a 2-item budget (anchor + A)");
   assert.equal(b.selectedByReadPlan, false, "B (lower priority, lower rank) is not picked under a 2-item budget");
+  assert.deepEqual(a.providers, ["test-static"], "providers reflects the real providerId of each candidate's evidence signals");
+  assert.deepEqual(b.providers, ["test-lexical"]);
   assert.deepEqual(result.productionCandidatesWithoutEvidence, [], "A and B both have evidence, so nothing should be reported missing");
 });
 

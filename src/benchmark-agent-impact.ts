@@ -7,8 +7,11 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import { AgentRouter } from "./agent-router/index.js";
+import type { ShadowRankingDiagnostics } from "./agent-router/shadow-ranking.js";
 import type { ImpactOptions } from "./agent-types.js";
 import { readRuntimeBuild } from "./build-info.js";
+import { buildGoldenAttributionV3 } from "./benchmark/attribution-v3.js";
+import { type GoldenKind, type Scenario, type WarmState, goldenEntries, goldenFiles, loadScenarios } from "./benchmark/golden-scenario.js";
 import { JavaIndexClient } from "./java-index/java-index-client.js";
 import type { JavaIndexStatus } from "./java-index/index-types.js";
 import { RouterJavaIndex } from "./java-index/router-java-index.js";
@@ -17,37 +20,8 @@ import { DeadlineBudget } from "./runtime/deadline-budget.js";
 import { createRequestContext, defaultDeadlineMs, MAX_REQUEST_DEADLINE_MS } from "./runtime/request-context.js";
 import { JdtlsSession } from "./jdtls-session.js";
 
-type WarmState = "cold-nolsp" | "cold-lsp" | "warm-auto" | "warm-required";
 type BenchmarkStrategy = "impact" | "no-lsp";
 
-type Scenario = {
-  id: string;
-  name: string;
-  projectId?: string;
-  layoutProfile?: string;
-  repoCommit?: string;
-  scenarioVersion?: number;
-  warmState?: WarmState;
-  skippedProfiles?: string[];
-  anchor: {
-    file: string;
-    line: number;
-    column: number;
-    profile: ImpactOptions["profile"];
-    focusModules?: string[];
-    taskKeywords?: string[];
-  };
-  golden?: {
-    mustHit?: string[];
-    taskBlocking?: string[];
-    shouldHit?: string[];
-    support?: string[];
-    mustReadRanges?: Record<string, Array<{ startLine: number; endLine: number }>>;
-  };
-  groundTruth?: string[];
-};
-
-type GoldenKind = "must" | "taskBlocking" | "should" | "support";
 type GoldenSource = "calls" | "methodRelation" | "framework" | "rg" | "typeGraph" | "importGraph" | "seed" | "reference" | "typeHierarchy" | "typeReference" | "no-lsp" | "absent" | "unknown";
 type GoldenBlockedBy = "hit" | "readplan-full" | "absent";
 type GoldenAbsentReason = "not-recalled-implementer" | "no-type-edge" | "cross-module-cold" | "profile-gate" | "golden-stale-or-low-value";
@@ -293,6 +267,7 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
   const readFiles = distinctReadFiles(result);
   const quality = evaluate(candidatePaths, readFiles, scenario);
   const shadowRanking = result.metrics?.shadowRanking;
+  const shadowRankingTyped = asShadowRankingDiagnostics(shadowRanking);
   const shadowQuality = qualityForShadowRanking(shadowRanking, cli.repoRoot, scenario);
   const sessionPhaseMs = session.drainPhaseMetrics();
   return {
@@ -302,7 +277,20 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
     ...attemptPayload("impact", quality, rawSearchPayload, readingPayload, elapsedMs, 2, result.readPlan.length, result.cost.suppressedRawBytes, 0),
     ...readPlanMetrics(result),
     timing: timingPayload(result, sessionPhaseMs),
-    goldenAttribution: goldenAttributionForImpact(cli.repoRoot, result, scenario),
+    // V3 attribution (Task 32 Step 2) needs the same shadow-ranking pass this
+    // request already computed; it has no fallback when that pass is off
+    // (verbosity=standard or JAVA_LSP_SHADOW_RANKING unset), matching
+    // shadowRanking/shadowQuality's own gating below.
+    goldenAttribution: shadowRankingTyped
+      ? buildGoldenAttributionV3(scenario, shadowRankingTyped, {
+        repoRoot: cli.repoRoot,
+        mode: cli.mode,
+        profile: scenario.anchor.profile,
+        semanticUsed: result.semantic.used,
+        semanticTimeout: result.metrics?.semantic?.timeout === true,
+        coverage: metadata.prepareJavaIndexStatus?.coverage ?? []
+      })
+      : undefined,
     frameworkEvidence: { mapstruct: mapstructEvidenceSummary(result, scenario) },
     // Task 25's counterfactual rank diagnostics are deliberately opt-in at
     // the router boundary. Preserve them in the benchmark attempt when that
@@ -310,6 +298,20 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
     shadowRanking,
     shadowQuality
   };
+}
+
+/**
+ * `metrics.shadowRanking` is typed as an opaque `Record<string, unknown>` on
+ * `ImpactResultV6` (a diagnostic-only field never meant to widen the public
+ * result type), but the benchmark calls `router.impact()` in-process - this
+ * is the exact object `buildShadowRanking()` returned, not a JSON round
+ * trip. The array check below is the only real uncertainty worth guarding.
+ */
+function asShadowRankingDiagnostics(value: Record<string, unknown> | undefined): ShadowRankingDiagnostics | undefined {
+  if (!value || !Array.isArray(value.candidates)) {
+    return undefined;
+  }
+  return value as unknown as ShadowRankingDiagnostics;
 }
 
 /**
@@ -407,23 +409,6 @@ function optionalPositiveIntegerArg(values: Map<string, string | true>, name: st
     throw new Error(`${name} must be a positive integer`);
   }
   return parsed;
-}
-
-function loadScenarios(file: string): Scenario[] {
-  if (!existsSync(file)) {
-    throw new Error(`Scenario file does not exist: ${file}`);
-  }
-  return readFileSync(file, "utf8")
-    .split(/\r?\n/)
-    .map(line => line.trim())
-    .filter(Boolean)
-    .map((line, index) => {
-      try {
-        return JSON.parse(line) as Scenario;
-      } catch (error) {
-        throw new Error(`Invalid scenario JSON at ${file}:${index + 1}: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    });
 }
 
 function effectiveSemanticPolicy(cli: Cli): ImpactOptions["semanticPolicy"] {
@@ -593,18 +578,6 @@ function mapstructEvidenceSummary(
   };
 }
 
-function goldenAttributionForImpact(repoRoot: string, result: Awaited<ReturnType<AgentRouter["impact"]>>, scenario: Scenario): Array<Record<string, unknown>> {
-  const fileByPath = new Map(result.files.map(file => [String(file.path), file]));
-  const pathById = new Map(result.files.map(file => [String(file.id), String(file.path)]));
-  const readSet = new Set(result.readPlan.map(item => pathById.get(item.fileId)).filter(Boolean));
-  const context = { repoRoot, semanticPolicy: result.semantic.policy, semanticUsed: result.semantic.used };
-  return goldenEntries(scenario).map(({ file, kind }) => {
-    const candidate = fileByPath.get(file);
-    const inReadPlan = readSet.has(file);
-    return goldenAttributionRow(scenario, file, kind, Boolean(candidate), inReadPlan, candidate ? goldenSource(candidate) : "absent", context);
-  });
-}
-
 function goldenAttributionForNoLsp(repoRoot: string, candidatePaths: string[], readFiles: string[], scenario: Scenario): Array<Record<string, unknown>> {
   const candidates = new Set(candidatePaths);
   const readSet = new Set(readFiles);
@@ -638,15 +611,6 @@ function goldenAttributionRow(
     profile: scenario.anchor.profile,
     semanticUsed: context.semanticUsed
   });
-}
-
-function goldenEntries(scenario: Scenario): Array<{ file: string; kind: GoldenKind }> {
-  return [
-    ...goldenFiles(scenario, "mustHit").map(file => ({ file, kind: "must" as const })),
-    ...goldenFiles(scenario, "taskBlocking").map(file => ({ file, kind: "taskBlocking" as const })),
-    ...goldenFiles(scenario, "shouldHit").map(file => ({ file, kind: "should" as const })),
-    ...goldenFiles(scenario, "support").map(file => ({ file, kind: "support" as const }))
-  ];
 }
 
 function blockedBy(inFiles: boolean, inReadPlan: boolean): GoldenBlockedBy {
@@ -705,50 +669,6 @@ function moduleName(file: string): string | undefined {
   }
   const srcIndex = segments.indexOf("src");
   return srcIndex > 0 ? segments.slice(0, srcIndex).join("/") : undefined;
-}
-
-function goldenSource(candidate: Record<string, unknown>): GoldenSource {
-  const verifiedBy = Array.isArray(candidate.verifiedBy) ? candidate.verifiedBy.map(String) : [];
-  const reasons = Array.isArray(candidate.reasons) ? candidate.reasons.map(String) : [];
-  const sources = Array.isArray(candidate.scoreBreakdown)
-    ? candidate.scoreBreakdown
-      .map(item => item && typeof item === "object" ? (item as Record<string, unknown>).source : undefined)
-      .map(String)
-    : [];
-  // Preserve exact relationship attribution before the generic static source
-  // labels below. A file commonly carries both typeReference and CALLS; the
-  // latter is what explains a Task 30 protected-core selection.
-  if (verifiedBy.includes("CALLS") || reasons.includes("CALLS")) {
-    return "calls";
-  }
-  if (verifiedBy.includes("METHOD_RELATION") || reasons.includes("METHOD_RELATION")) {
-    return "methodRelation";
-  }
-  if (reasons.some(reason => /^(?:SPRING|MYBATIS|JPA|MAPSTRUCT)_/.test(reason))) {
-    return "framework";
-  }
-  if (verifiedBy.includes("reference")) {
-    return "reference";
-  }
-  if (verifiedBy.includes("typeHierarchy")) {
-    return "typeHierarchy";
-  }
-  if (verifiedBy.includes("typeReference")) {
-    return "typeReference";
-  }
-  if (verifiedBy.includes("importGraph")) {
-    return "importGraph";
-  }
-  if (verifiedBy.includes("semantic-definition") || verifiedBy.includes("semantic-implementation") || sources.includes("semantic-seed")) {
-    return "seed";
-  }
-  if (verifiedBy.includes("typeGraph")) {
-    return "typeGraph";
-  }
-  if (sources.includes("rg")) {
-    return "rg";
-  }
-  return "unknown";
 }
 
 function runNoLspRg(repoRoot: string, scenario: Scenario): { stdout: string; files: string[]; lineByPath: Map<string, number> } {
@@ -812,13 +732,6 @@ function evaluate(candidateFiles: string[], readFiles: string[], scenario: Scena
     pRead: readFiles.length ? readFiles.filter(file => goldenAll.has(file)).length / readFiles.length : 1,
     rReadMust: mustHit.size ? readFiles.filter(file => mustHit.has(file)).length / mustHit.size : 1
   };
-}
-
-function goldenFiles(scenario: Scenario, key: "mustHit" | "taskBlocking" | "shouldHit" | "support"): string[] {
-  if (scenario.golden) {
-    return scenario.golden[key] || [];
-  }
-  return key === "mustHit" ? scenario.groundTruth || [] : [];
 }
 
 function precisionAt(files: string[], expected: Set<string>, limit: number): number {

@@ -28,6 +28,8 @@ export type ShadowRankingCandidate = {
   /** This candidate's rank if that one family's contribution were zeroed - how load-bearing each family is for it. */
   rankWithoutEachFamily: Partial<Record<EvidenceFamily, number>>;
   selectedByReadPlan: boolean;
+  /** Distinct providerId of every evidence signal this candidate carries - Task 32's real (non-regex) attribution source. */
+  providers: string[];
 };
 
 export type ShadowRankingDiagnostics = {
@@ -114,7 +116,8 @@ export async function buildShadowRanking(input: BuildShadowRankingInput): Promis
       rank: rankByPath.get(candidate.file)!,
       familyScores: candidate.familyScores,
       rankWithoutEachFamily,
-      selectedByReadPlan: selectedShadowPaths.has(candidate.file)
+      selectedByReadPlan: selectedShadowPaths.has(candidate.file),
+      providers: [...new Set(candidate.signals.map(signal => signal.providerId))]
     };
   });
 
