@@ -18,6 +18,7 @@
     "benchmark:edit-to-visible": "node scripts/edit-to-visible-benchmark.mjs",
     "smoke": "node dist/smoke.js",
     "smoke:lease-subprocess": "node scripts/lease-subprocess-smoke.mjs",
+    "measure:tool-schema": "node scripts/measure-tool-schema.mjs",
     "start": "node dist/server.js"
   },
   "dependencies": {
