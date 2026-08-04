@@ -184,8 +184,7 @@ export function protectedReadPlanPaths(
       || (file.verifiedBy || []).includes("typeReference")
       || file.reasons.includes("persisted-implementation")
       || file.reasons.includes("persisted-typeHierarchy")
-      || file.reasons.includes("implementation")
-      || isTaskLocalRepositoryPersistence(file, options)) {
+      || file.reasons.includes("implementation")) {
       paths.add(file.absolutePath);
     }
   }
@@ -197,8 +196,7 @@ export function readPriority(file: CandidateFile, options: ImpactOptions): ReadP
   if (file.categories.includes("config") || file.categories.includes("nonJava")) return "P2";
   if (isPureIndexRecall(file)) return "P2";
   if (file.reasons.includes("target")
-    || (file.reasons.includes("implementation") && file.sourceSet === "main")
-    || isTaskLocalRepositoryPersistence(file, options)) return "P0";
+    || (file.reasons.includes("implementation") && file.sourceSet === "main")) return "P0";
   return file.sourceSet === "main" ? "P1" : "P2";
 }
 
@@ -255,10 +253,11 @@ function shortlistCandidates(
     const representative = ordered.find(file =>
       bucketOf(file, options, protectedPaths) === bucket
       && !selected.has(file.absolutePath)
-      && !isAnchor(file, options));
+      && !isAnchor(file, options)
+      && !isDeferredTest(file, options));
     if (representative) add(representative);
   }
-  ordered.forEach(add);
+  ordered.filter(file => !isDeferredTest(file, options)).forEach(add);
   return { files: shortlisted, omittedProtected };
 }
 
@@ -321,7 +320,11 @@ function selectTokenAwarePlan(
       evidenceGaps.push("Anchor range exceeded the read byte budget; no additional file was forced into the plan.");
   }
 
-  const readableWindows = windows.filter(window => window.ranges.length > 0);
+  // Deferred tests remain visible in the candidate response but do not spend
+  // a source-reading slot or a range-query round trip. Callers that need
+  // verification context opt in with testReadMode=priority.
+  const readableWindows = windows.filter(window =>
+    window.ranges.length > 0 && !isDeferredTest(window.file, options));
   for (const window of windows) {
     if (!isAnchor(window.file, options) && window.ranges.length === 0) {
       evidenceGaps.push(`Read range unavailable for ${window.file.path || window.file.absolutePath}; candidate was omitted.`);
@@ -348,15 +351,9 @@ function selectTokenAwarePlan(
     .filter(window => (isProtectedCore(window.file, options) || protectedPaths.has(window.file.absolutePath))
       && !isAnchor(window.file, options)
       && !isDeferredTest(window.file, options));
-  const coreUsesByteDensity = byteBudgetCanConstrainSelection(
-    core,
-    totalBytes,
-    budget,
-    Math.min(budget.maxFiles - selected.length, BUCKET_RULES.core.max - bucketCounts.core)
-  );
   core.sort((left, right) =>
     protectedCorePriority(right.file, options) - protectedCorePriority(left.file, options)
-    || compareUtilityAndDensity(protectedUtility(left), left.bytes, protectedUtility(right), right.bytes, coreUsesByteDensity)
+    || compareUtilityAndDensity(protectedUtility(left), left.bytes, protectedUtility(right), right.bytes)
     || left.file.absolutePath.localeCompare(right.file.absolutePath));
   for (const window of core) {
     if (canAdd(window)) add(window, protectedUtility(window));
@@ -374,14 +371,8 @@ function selectTokenAwarePlan(
       const eligible = remaining
       .filter(window => canSelect(window) && (!requireNovelEvidence || hasNovelEvidence(window.file, selected)))
       .map(window => ({ window, utility: marginalUtility(window, selected) }));
-      const preferDensity = byteBudgetCanConstrainSelection(
-        eligible.map(item => item.window),
-        totalBytes,
-        budget,
-        budget.maxFiles - selected.length
-      );
       return eligible.sort((left, right) =>
-        compareUtilityAndDensity(left.utility, left.window.bytes, right.utility, right.window.bytes, preferDensity)
+        compareUtilityAndDensity(left.utility, left.window.bytes, right.utility, right.window.bytes)
         || right.window.file.score - left.window.file.score
         || left.window.file.absolutePath.localeCompare(right.window.file.absolutePath))[0];
     };
@@ -434,39 +425,20 @@ function utilityPerByte(utility: number, bytes: number): number {
 }
 
 /**
- * The planner has two independent caps. Density is the right primary value
- * only when the byte cap can exclude an otherwise selectable combination.
- * If even the largest possible remaining file set fits, the file cap is the
- * active constraint, so selecting the greater absolute utility avoids a
- * cheap low-value window displacing a more useful collaborator.
+ * Task 30 ranks both protected and marginal candidates by utility density.
+ * File-count limits remain hard constraints, but do not change the value unit:
+ * the same bounded byte/token budget must yield comparable choices in every
+ * mode and repository.
  */
-function byteBudgetCanConstrainSelection(
-  candidates: readonly CandidateWindow[],
-  selectedBytes: number,
-  budget: ReadPlanBudget,
-  remainingSlots: number
-): boolean {
-  if (remainingSlots <= 0) return false;
-  const maximumPotentialBytes = [...candidates]
-    .map(candidate => candidate.bytes)
-    .sort((left, right) => right - left)
-    .slice(0, remainingSlots)
-    .reduce((sum, bytes) => sum + bytes, 0);
-  return selectedBytes + maximumPotentialBytes > budget.maxReadBytes;
-}
-
 function compareUtilityAndDensity(
   leftUtility: number,
   leftBytes: number,
   rightUtility: number,
-  rightBytes: number,
-  preferDensity: boolean
+  rightBytes: number
 ): number {
   const densityDelta = utilityPerByte(rightUtility, rightBytes) - utilityPerByte(leftUtility, leftBytes);
   const utilityDelta = rightUtility - leftUtility;
-  return preferDensity
-    ? densityDelta || utilityDelta || leftBytes - rightBytes
-    : utilityDelta || densityDelta || leftBytes - rightBytes;
+  return densityDelta || utilityDelta || leftBytes - rightBytes;
 }
 
 function protectedCorePriority(file: CandidateFile, options: Pick<ImpactOptions, "anchors">): number {
@@ -481,9 +453,6 @@ function protectedCorePriority(file: CandidateFile, options: Pick<ImpactOptions,
     return 2;
   }
   if (hasDirectAnchorTypeReference(file, options) || kinds.has("METHOD_RELATION")) {
-    return 2;
-  }
-  if (kinds.has("DIRECT_DECLARATION")) {
     return 2;
   }
   if ([...kinds].some(kind => SECOND_HOP_IMPLEMENTATION_KINDS.has(kind))) {
@@ -637,42 +606,6 @@ const INDEX_RECALL_REASONS = new Set(["typeReference", "importGraph", "importGra
 
 function isPureIndexRecall(file: CandidateFile): boolean {
   return file.reasons.length > 0 && file.reasons.every(reason => INDEX_RECALL_REASONS.has(reason));
-}
-
-function isTaskLocalRepositoryPersistence(
-  file: CandidateFile,
-  options: Pick<ImpactOptions, "anchors" | "profile" | "focusModules">
-): boolean {
-  const candidatePath = file.path || file.absolutePath;
-  const persistencePath = /(?:^|\/)(?:persistence|entity|mapper)(?:\/|$)/.test(candidatePath)
-    || /(?:DO|Entity|Mapper)\.java$/.test(candidatePath);
-  if (options.profile !== "repository" || file.sourceSet !== "main" || !persistencePath || !file.module) return false;
-  if (options.focusModules.length > 0 && !options.focusModules.includes(file.module)) return false;
-  const candidateType = javaTypeName(file);
-  const anchorTypes = options.anchors.map(anchor => repositoryAnchorTypeName(anchor.file)).filter(name => name.length >= 3);
-  const exactAnchorMatch = anchorTypes.some(anchorType => candidateType === anchorType || candidateType.endsWith(anchorType));
-  const anchorFamilies = anchorTypes.map(repositoryAnchorFamily).filter((family): family is string => family.length >= 3);
-  const exactFamilyMatch = anchorFamilies.some(family => candidateType === family);
-  const derivativeFamilyMatch = anchorFamilies.some(family => candidateType.startsWith(family) || candidateType.endsWith(family));
-  const hasDirectCollaborator = (file.scoreBreakdown || []).some(item =>
-    item.id === "finalize.direct-collaborator" && item.delta > 0);
-  const taskDiscoveredMapper = /(?:^|\/)mapper(?:\/|$)/.test(candidatePath)
-    && file.reasons.includes("rg:persistence")
-    && hasDirectCollaborator;
-  return exactAnchorMatch || exactFamilyMatch || (derivativeFamilyMatch && hasDirectCollaborator) || taskDiscoveredMapper;
-}
-
-function repositoryAnchorTypeName(anchorPath: string): string {
-  return anchorPath.slice(anchorPath.lastIndexOf("/") + 1).replace(/\.java$/, "");
-}
-
-function repositoryAnchorFamily(anchorType: string): string {
-  return anchorType.replace(/(?:Repository|Mapper|Service|Controller|Handler|Adapter)(?:Impl)?$/, "");
-}
-
-function javaTypeName(file: CandidateFile): string {
-  const candidatePath = file.path || file.absolutePath;
-  return candidatePath.slice(candidatePath.lastIndexOf("/") + 1).replace(/\.java$/, "");
 }
 
 function readReason(file: CandidateFile, priority: ReadPriority): string {

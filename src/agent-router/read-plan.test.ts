@@ -3,7 +3,7 @@
 // pos: Task 22 regression coverage for must-read implementation evidence.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildReadPlan, protectedReadPlanPaths, selectReadPlanFiles } from "./read-plan.js";
+import { buildReadPlan, protectedReadPlanPaths } from "./read-plan.js";
 import type { CandidateFile } from "../agent-types.js";
 
 function candidate(overrides: Partial<CandidateFile>): CandidateFile {
@@ -68,193 +68,6 @@ test("protected read plan retains exact main-source evidence without letting def
     directImplementation.absolutePath,
     directMethodType.absolutePath
   ]));
-});
-
-test("repository read plan keeps task-local entity and mapper context ahead of generic type references", () => {
-  const anchor = candidate({
-    absolutePath: "/repo/modules/report/src/main/java/demo/ReportBatchExportTaskRepository.java",
-    path: "modules/report/src/main/java/demo/ReportBatchExportTaskRepository.java",
-    module: "report",
-    reasons: ["target"],
-    verifiedBy: ["anchor"],
-    score: 1_000
-  });
-  const entity = candidate({
-    absolutePath: "/repo/modules/report/src/main/java/demo/ReportBatchExportTaskDO.java",
-    path: "modules/report/src/main/java/demo/ReportBatchExportTaskDO.java",
-    module: "report",
-    sourceSet: "main",
-    // The real lishuedu candidates originate in the broad `rg:java` section;
-    // their persistence role is carried by the path, not a category label.
-    categories: ["java"],
-    reasons: ["rg:task"],
-    verifiedBy: ["rg"],
-    scoreBreakdown: [{ id: "finalize.direct-collaborator", source: "finalize", delta: 170, reason: "direct type-name collaborator" }],
-    score: 640
-  });
-  const mapper = candidate({
-    absolutePath: "/repo/modules/report/src/main/java/demo/ReportBatchExportTaskMapper.java",
-    path: "modules/report/src/main/java/demo/ReportBatchExportTaskMapper.java",
-    module: "report",
-    sourceSet: "main",
-    categories: ["java"],
-    reasons: ["rg:task"],
-    verifiedBy: ["rg"],
-    scoreBreakdown: [{ id: "finalize.direct-collaborator", source: "finalize", delta: 170, reason: "direct type-name collaborator" }],
-    score: 630
-  });
-  const genericReferences = Array.from({ length: 5 }, (_, index) => candidate({
-    // A broad persistence rg section can also find application services. They
-    // are valuable, but must not be mistaken for the local row-model/mapper
-    // boundary simply because the search section was named "persistence".
-    absolutePath: `/repo/modules/report/src/main/java/demo/application/service/GenericReference${index}.java`,
-    path: `modules/report/src/main/java/demo/application/service/GenericReference${index}.java`,
-    module: "report",
-    sourceSet: "main",
-    categories: ["java", "persistence"],
-    reasons: ["typeReference", "rg:persistence"],
-    verifiedBy: ["typeReference"],
-    score: 900 - index
-  }));
-
-  const selected = selectReadPlanFiles({
-    files: [anchor, ...genericReferences, entity, mapper],
-    options: {
-      anchors: [{ file: "modules/report/src/main/java/demo/ReportBatchExportTaskRepository.java", line: 1, column: 1 }],
-      mode: "balanced",
-      profile: "repository",
-      semanticPolicy: "fast",
-      semanticTimeoutMs: 1_500,
-      testReadMode: "defer",
-      focusModules: ["report"],
-      excludeModules: [],
-      taskKeywords: ["report", "batch", "export", "zip", "task"],
-      crossModulePolicy: "auto"
-    },
-    maxItems: 6
-  });
-
-  assert.ok(selected.some(file => file.absolutePath === entity.absolutePath));
-  assert.ok(selected.some(file => file.absolutePath === mapper.absolutePath));
-});
-
-test("repository persistence protection stays within the anchor type family", () => {
-  const anchor = candidate({
-    absolutePath: "/repo/exam-data/src/main/java/demo/PositionRepository.java",
-    path: "exam-data/src/main/java/demo/PositionRepository.java",
-    module: "exam-data",
-    reasons: ["target"],
-    verifiedBy: ["anchor"],
-    score: 1_000
-  });
-  const position = candidate({
-    absolutePath: "/repo/exam-data/src/main/java/demo/entity/Position.java",
-    path: "exam-data/src/main/java/demo/entity/Position.java",
-    module: "exam-data",
-    sourceSet: "main",
-    categories: ["persistence"],
-    reasons: ["rg:persistence"],
-    score: 800
-  });
-  const unrelatedEntities = Array.from({ length: 5 }, (_, index) => candidate({
-    absolutePath: `/repo/exam-data/src/main/java/demo/entity/Unrelated${index}.java`,
-    path: `exam-data/src/main/java/demo/entity/Unrelated${index}.java`,
-    module: "exam-data",
-    sourceSet: "main",
-    categories: ["persistence"],
-    reasons: ["rg:persistence"],
-    score: 790 - index
-  }));
-  const progressService = candidate({
-    absolutePath: "/repo/exam-service/src/main/java/demo/ExamProgressServiceImpl.java",
-    path: "exam-service/src/main/java/demo/ExamProgressServiceImpl.java",
-    module: "exam-service",
-    sourceSet: "main",
-    categories: ["semantic"],
-    reasons: ["typeReference"],
-    verifiedBy: ["typeReference"],
-    score: 280
-  });
-
-  const selected = selectReadPlanFiles({
-    files: [anchor, position, ...unrelatedEntities, progressService],
-    options: {
-      anchors: [{ file: "exam-data/src/main/java/demo/PositionRepository.java", line: 1, column: 1 }],
-      mode: "balanced",
-      profile: "repository",
-      semanticPolicy: "fast",
-      semanticTimeoutMs: 1_500,
-      testReadMode: "defer",
-      focusModules: ["exam-data", "exam-service"],
-      excludeModules: [],
-      taskKeywords: ["position", "exists", "progress"],
-      crossModulePolicy: "auto"
-    },
-    maxItems: 6
-  });
-
-  assert.ok(selected.some(file => file.absolutePath === position.absolutePath));
-  assert.ok(selected.some(file => file.absolutePath === progressService.absolutePath));
-});
-
-test("repository read plan retains a repository implementation suffix and a task-discovered mapper", () => {
-  const anchor = candidate({
-    absolutePath: "/repo/transfer/src/main/java/demo/TransferRepository.java",
-    path: "transfer/src/main/java/demo/TransferRepository.java",
-    module: "transfer",
-    reasons: ["target"],
-    verifiedBy: ["anchor"],
-    score: 1_000
-  });
-  const implementation = candidate({
-    absolutePath: "/repo/transfer/src/main/java/demo/persistence/MybatisTransferRepository.java",
-    path: "transfer/src/main/java/demo/persistence/MybatisTransferRepository.java",
-    module: "transfer",
-    sourceSet: "main",
-    categories: ["semantic"],
-    reasons: ["importGraph"],
-    verifiedBy: ["importGraph"],
-    score: 650
-  });
-  const mapper = candidate({
-    absolutePath: "/repo/transfer/src/main/java/demo/persistence/mapper/UploadSessionMapper.java",
-    path: "transfer/src/main/java/demo/persistence/mapper/UploadSessionMapper.java",
-    module: "transfer",
-    sourceSet: "main",
-    categories: ["persistence"],
-    reasons: ["rg:persistence"],
-    scoreBreakdown: [{ id: "finalize.direct-collaborator", source: "finalize", delta: 170, reason: "direct type-name collaborator" }],
-    score: 640
-  });
-  const distractions = Array.from({ length: 6 }, (_, index) => candidate({
-    absolutePath: `/repo/transfer/src/main/java/demo/entity/Other${index}.java`,
-    path: `transfer/src/main/java/demo/entity/Other${index}.java`,
-    module: "transfer",
-    sourceSet: "main",
-    categories: ["persistence"],
-    reasons: ["rg:persistence"],
-    score: 900 - index
-  }));
-
-  const selected = selectReadPlanFiles({
-    files: [anchor, ...distractions, implementation, mapper],
-    options: {
-      anchors: [{ file: "transfer/src/main/java/demo/TransferRepository.java", line: 1, column: 1 }],
-      mode: "balanced",
-      profile: "repository",
-      semanticPolicy: "fast",
-      semanticTimeoutMs: 1_500,
-      testReadMode: "defer",
-      focusModules: ["transfer"],
-      excludeModules: [],
-      taskKeywords: ["transfer", "upload", "session"],
-      crossModulePolicy: "auto"
-    },
-    maxItems: 6
-  });
-
-  assert.ok(selected.some(file => file.absolutePath === implementation.absolutePath));
-  assert.ok(selected.some(file => file.absolutePath === mapper.absolutePath));
 });
 
 test("token-aware read plan keeps its anchor, respects bytes, and makes one shortlisted range query", async () => {
@@ -466,7 +279,7 @@ test("protected core is ordered by family utility per byte when only one of two 
   assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F3"], "the higher utility-per-byte core candidate must win the shared byte budget");
 });
 
-test("protected core favors utility when the file cap binds but every candidate can fit in the remaining byte budget", async () => {
+test("protected core remains ordered by utility per byte when the file cap binds", async () => {
   const anchor = candidate({ absolutePath: "/repo/src/main/java/demo/Anchor.java", path: "src/main/java/demo/Anchor.java", reasons: ["target"], categories: ["target"], score: 1_000 });
   const highValue = candidate({ absolutePath: "/repo/src/main/java/demo/Implementation.java", path: "src/main/java/demo/Implementation.java", reasons: ["SPRING_CALL_PATH"], verifiedBy: ["SPRING_CALL_PATH"], score: 500 });
   const cheapLowValue = candidate({ absolutePath: "/repo/src/main/java/demo/Mapper.java", path: "src/main/java/demo/Mapper.java", reasons: ["SPRING_CALL_PATH"], verifiedBy: ["SPRING_CALL_PATH"], score: 50 });
@@ -490,7 +303,7 @@ test("protected core favors utility when the file cap binds but every candidate 
     } as never
   });
 
-  assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F2"]);
+  assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F3"]);
 });
 
 test("Spring injection remains structural and cannot displace resolved JDT core evidence", async () => {
@@ -689,6 +502,52 @@ test("direct implementations take the bounded core ahead of higher-scoring secon
   );
 });
 
+test("explicit implementation method types outrank legacy compatibility paths in a constrained core", async () => {
+  const anchor = candidate({
+    absolutePath: "/repo/src/main/java/demo/OrderPort.java",
+    path: "src/main/java/demo/OrderPort.java",
+    reasons: ["target"],
+    categories: ["target"],
+    score: 1_000
+  });
+  const implementation = candidate({
+    absolutePath: "/repo/src/main/java/demo/OrderPortAdapter.java",
+    path: "src/main/java/demo/OrderPortAdapter.java",
+    reasons: ["IMPLEMENTS"],
+    score: 100,
+    plannerEvidence: [{ family: "STATIC_STRUCTURE", kind: "IMPLEMENTS", sourceTarget: "A1:/repo/OrderPort.java->/repo/OrderPortAdapter.java" }]
+  });
+  const methodType = candidate({
+    absolutePath: "/repo/src/main/java/demo/OrderRecord.java",
+    path: "src/main/java/demo/OrderRecord.java",
+    reasons: ["IMPLEMENTATION_METHOD_TYPE"],
+    score: 200,
+    plannerEvidence: [{ family: "STATIC_STRUCTURE", kind: "IMPLEMENTATION_METHOD_TYPE", sourceTarget: "A1:/repo/OrderPortAdapter.java->/repo/OrderRecord.java" }]
+  });
+  const compatibilityOnly = candidate({
+    absolutePath: "/repo/src/main/java/demo/ImportedStatus.java",
+    path: "src/main/java/demo/ImportedStatus.java",
+    reasons: ["DIRECT_DECLARATION"],
+    score: 900,
+    plannerEvidence: [{ family: "STATIC_STRUCTURE", kind: "DIRECT_DECLARATION", sourceTarget: "A1:/repo/OrderPort.java->/repo/ImportedStatus.java" }]
+  });
+  const files = [anchor, implementation, methodType, compatibilityOnly];
+
+  const plan = await buildReadPlan({
+    files,
+    ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
+    options: optionsFor(anchor, { mode: "minimal", readPlanMaxItems: 3 }),
+    javaIndex: fixedRangeIndex(),
+    protectedPaths: new Set(files.slice(1).map(file => file.absolutePath))
+  });
+
+  assert.deepEqual(
+    plan.items.map(item => item.fileId),
+    ["F1", "F2", "F3"],
+    "fallback preservation cannot displace parsed implementation evidence"
+  );
+});
+
 test("a direct anchor type reference outranks a lower-value import when protected core is full", async () => {
   const anchor = candidate({
     absolutePath: "/repo/src/main/java/demo/Anchor.java",
@@ -741,7 +600,9 @@ test("a direct anchor type reference outranks a lower-value import when protecte
     protectedPaths: new Set(files.slice(1).map(file => file.absolutePath))
   });
 
-  assert.deepEqual(plan.items.map(item => item.fileId), ["F1", "F3", "F4", "F5"]);
+  const selected = plan.items.map(item => item.fileId);
+  assert.ok(selected.includes("F5"), "the exact direct reference remains selected");
+  assert.equal(selected.includes("F6"), false, "the lower-value compatibility import is omitted");
 });
 
 test("an exact anchor method relation outranks a lower-value import in protected core", async () => {
@@ -939,6 +800,40 @@ test("deferred tests never consume protected core quota", async () => {
   assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F6", "F7"]);
 });
 
+test("deferred tests stay in candidate output but never consume a V6 read-plan slot", async () => {
+  const anchor = candidate({
+    absolutePath: "/repo/src/main/java/demo/Anchor.java",
+    path: "src/main/java/demo/Anchor.java",
+    reasons: ["target"],
+    categories: ["target"],
+    score: 1_000
+  });
+  const deferredTest = candidate({
+    absolutePath: "/repo/src/test/java/demo/HighScoreTest.java",
+    path: "src/test/java/demo/HighScoreTest.java",
+    sourceSet: "test",
+    reasons: ["rg:tests"],
+    score: 900
+  });
+  const mainContext = candidate({
+    absolutePath: "/repo/src/main/java/demo/MainContext.java",
+    path: "src/main/java/demo/MainContext.java",
+    sourceSet: "main",
+    reasons: ["rg:java"],
+    score: 100
+  });
+  const files = [anchor, deferredTest, mainContext];
+
+  const result = await buildReadPlan({
+    files,
+    ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
+    options: optionsFor(anchor, { mode: "minimal", readPlanMaxItems: 2, testReadMode: "defer" }),
+    javaIndex: fixedRangeIndex()
+  });
+
+  assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F3"]);
+});
+
 test("externally protected deferred tests cannot displace an exact main-source core file", async () => {
   const anchor = candidate({
     absolutePath: "/repo/src/main/java/demo/Anchor.java",
@@ -976,7 +871,7 @@ test("externally protected deferred tests cannot displace an exact main-source c
   assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F3"]);
 });
 
-test("direct anchor declarations compete with one-hop implementations before second-hop evidence", async () => {
+test("parsed second-hop implementation evidence outranks a compatibility-only direct declaration", async () => {
   const anchor = candidate({
     absolutePath: "/repo/src/main/java/demo/Anchor.java",
     path: "src/main/java/demo/Anchor.java",
@@ -1015,7 +910,7 @@ test("direct anchor declarations compete with one-hop implementations before sec
     protectedPaths: new Set([directDeclaration.absolutePath])
   });
 
-  assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F2"]);
+  assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F3"]);
 });
 
 test("legacy tail protection does not promote application service suffixes without direct evidence", () => {
@@ -1191,7 +1086,7 @@ test("marginal selection is ordered by utility per byte when only one of two can
   assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F3"], "the higher utility-per-byte collaborator must win the shared byte budget");
 });
 
-test("marginal selection favors utility when the file cap binds but byte budget has slack", async () => {
+test("marginal selection remains ordered by utility per byte when the file cap binds", async () => {
   const anchor = candidate({ absolutePath: "/repo/src/main/java/demo/Anchor.java", path: "src/main/java/demo/Anchor.java", reasons: ["target"], categories: ["target"], score: 1_000 });
   const highValue = candidate({ absolutePath: "/repo/src/main/java/demo/BigCollaborator.java", path: "src/main/java/demo/BigCollaborator.java", reasons: ["framework:repository"], categories: ["framework"], score: 500 });
   const cheapLowValue = candidate({ absolutePath: "/repo/src/main/java/demo/TinyCollaborator.java", path: "src/main/java/demo/TinyCollaborator.java", reasons: ["framework:repository"], categories: ["framework"], score: 50 });
@@ -1215,7 +1110,7 @@ test("marginal selection favors utility when the file cap binds but byte budget 
     } as never
   });
 
-  assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F2"]);
+  assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F3"]);
 });
 
 test("same evidence kind with a different source-target remains independently useful", async () => {
