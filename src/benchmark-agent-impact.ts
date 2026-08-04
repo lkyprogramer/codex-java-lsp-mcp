@@ -39,17 +39,15 @@ type Scenario = {
   };
   golden?: {
     mustHit?: string[];
+    taskBlocking?: string[];
     shouldHit?: string[];
-    side?: string[];
+    support?: string[];
+    mustReadRanges?: Record<string, Array<{ startLine: number; endLine: number }>>;
   };
-  goldenMeta?: Record<string, {
-    shouldBlocksTask?: boolean;
-    note?: string;
-  }>;
   groundTruth?: string[];
 };
 
-type GoldenKind = "must" | "should" | "side";
+type GoldenKind = "must" | "taskBlocking" | "should" | "support";
 type GoldenSource = "calls" | "methodRelation" | "framework" | "rg" | "typeGraph" | "importGraph" | "seed" | "reference" | "typeHierarchy" | "typeReference" | "no-lsp" | "absent" | "unknown";
 type GoldenBlockedBy = "hit" | "readplan-full" | "absent";
 type GoldenAbsentReason = "not-recalled-implementer" | "no-type-edge" | "cross-module-cold" | "profile-gate" | "golden-stale-or-low-value";
@@ -129,8 +127,9 @@ if (cli.listScenarios) {
       layoutProfile: scenario.layoutProfile,
       warmState: scenario.warmState,
       mustHit: goldenFiles(scenario, "mustHit").length,
+      taskBlocking: goldenFiles(scenario, "taskBlocking").length,
       shouldHit: goldenFiles(scenario, "shouldHit").length,
-      side: goldenFiles(scenario, "side").length
+      support: goldenFiles(scenario, "support").length
     }))
   }, null, 2));
   process.exit(0);
@@ -626,7 +625,6 @@ function goldenAttributionRow(
   source: GoldenSource,
   context: GoldenAttributionContext
 ): Record<string, unknown> {
-  const shouldBlocksTask = kind === "should" ? scenario.goldenMeta?.[file]?.shouldBlocksTask : undefined;
   const blocked = blockedBy(inFiles, inReadPlan);
   return compactRecord({
     scenario: scenario.name,
@@ -638,16 +636,16 @@ function goldenAttributionRow(
     blockedBy: blocked,
     absentReason: blocked === "absent" ? goldenAbsentReason(context, scenario, file, kind) : undefined,
     profile: scenario.anchor.profile,
-    semanticUsed: context.semanticUsed,
-    shouldBlocksTask
+    semanticUsed: context.semanticUsed
   });
 }
 
 function goldenEntries(scenario: Scenario): Array<{ file: string; kind: GoldenKind }> {
   return [
     ...goldenFiles(scenario, "mustHit").map(file => ({ file, kind: "must" as const })),
+    ...goldenFiles(scenario, "taskBlocking").map(file => ({ file, kind: "taskBlocking" as const })),
     ...goldenFiles(scenario, "shouldHit").map(file => ({ file, kind: "should" as const })),
-    ...goldenFiles(scenario, "side").map(file => ({ file, kind: "side" as const }))
+    ...goldenFiles(scenario, "support").map(file => ({ file, kind: "support" as const }))
   ];
 }
 
@@ -656,9 +654,8 @@ function blockedBy(inFiles: boolean, inReadPlan: boolean): GoldenBlockedBy {
 }
 
 function goldenAbsentReason(context: GoldenAttributionContext, scenario: Scenario, file: string, kind: GoldenKind): GoldenAbsentReason {
-  const shouldBlocksTask = kind === "should" ? scenario.goldenMeta?.[file]?.shouldBlocksTask : undefined;
   const absolutePath = path.join(context.repoRoot, file);
-  if (!existsSync(absolutePath) || kind === "side" || shouldBlocksTask === false) {
+  if (!existsSync(absolutePath) || kind === "support") {
     return "golden-stale-or-low-value";
   }
 
@@ -797,7 +794,12 @@ function normalizeRelative(file: string): string {
 
 function evaluate(candidateFiles: string[], readFiles: string[], scenario: Scenario): Record<string, number> {
   const candidates = new Set(candidateFiles);
-  const goldenAll = new Set([...goldenFiles(scenario, "mustHit"), ...goldenFiles(scenario, "shouldHit"), ...goldenFiles(scenario, "side")]);
+  const goldenAll = new Set([
+    ...goldenFiles(scenario, "mustHit"),
+    ...goldenFiles(scenario, "taskBlocking"),
+    ...goldenFiles(scenario, "shouldHit"),
+    ...goldenFiles(scenario, "support")
+  ]);
   const mustHit = new Set(goldenFiles(scenario, "mustHit"));
   const hitFiles = [...candidates].filter(file => goldenAll.has(file)).length;
   return {
@@ -812,7 +814,7 @@ function evaluate(candidateFiles: string[], readFiles: string[], scenario: Scena
   };
 }
 
-function goldenFiles(scenario: Scenario, key: "mustHit" | "shouldHit" | "side"): string[] {
+function goldenFiles(scenario: Scenario, key: "mustHit" | "taskBlocking" | "shouldHit" | "support"): string[] {
   if (scenario.golden) {
     return scenario.golden[key] || [];
   }

@@ -26,8 +26,9 @@ test("benchmark loads scenarios from external jsonl and prints metadata", async 
     },
     golden: {
       mustHit: ["src/main/java/demo/Demo.java"],
+      taskBlocking: [],
       shouldHit: [],
-      side: []
+      support: []
     }
   })}\n`);
 
@@ -128,20 +129,9 @@ test("benchmark can run a no-lsp token baseline", async () => {
     },
     golden: {
       mustHit: ["src/main/java/demo/DemoController.java", "src/main/java/demo/DemoRequest.java", "src/main/java/demo/DemoResponse.java"],
-      shouldHit: ["src/main/java/demo/MissingService.java", "src/main/java/hidden/HiddenDto.java", "modules/billing/src/main/java/external/BillingClient.java"],
-      side: []
-    },
-    goldenMeta: {
-      "src/main/java/demo/MissingService.java": {
-        shouldBlocksTask: false,
-        note: "not needed for this fixture"
-      },
-      "src/main/java/hidden/HiddenDto.java": {
-        shouldBlocksTask: true
-      },
-      "modules/billing/src/main/java/external/BillingClient.java": {
-        shouldBlocksTask: true
-      }
+      taskBlocking: ["src/main/java/hidden/HiddenDto.java", "modules/billing/src/main/java/external/BillingClient.java"],
+      shouldHit: ["src/main/java/demo/MissingService.java"],
+      support: []
     }
   })}\n`);
 
@@ -186,34 +176,31 @@ test("benchmark can run a no-lsp token baseline", async () => {
     blockedBy: "absent",
     absentReason: "golden-stale-or-low-value",
     profile: "controller",
-    semanticUsed: false,
-    shouldBlocksTask: false
+    semanticUsed: false
   });
   assert.deepEqual(attempt.goldenAttribution.find((item: Record<string, unknown>) => item.file === "src/main/java/hidden/HiddenDto.java"), {
     scenario: "DemoController#updateDemo",
     file: "src/main/java/hidden/HiddenDto.java",
-    kind: "should",
+    kind: "taskBlocking",
     inFiles: false,
     inReadPlan: false,
     source: "absent",
     blockedBy: "absent",
     absentReason: "no-type-edge",
     profile: "controller",
-    semanticUsed: false,
-    shouldBlocksTask: true
+    semanticUsed: false
   });
   assert.deepEqual(attempt.goldenAttribution.find((item: Record<string, unknown>) => item.file === "modules/billing/src/main/java/external/BillingClient.java"), {
     scenario: "DemoController#updateDemo",
     file: "modules/billing/src/main/java/external/BillingClient.java",
-    kind: "should",
+    kind: "taskBlocking",
     inFiles: false,
     inReadPlan: false,
     source: "absent",
     blockedBy: "absent",
     absentReason: "cross-module-cold",
     profile: "controller",
-    semanticUsed: false,
-    shouldBlocksTask: true
+    semanticUsed: false
   });
 });
 
@@ -249,8 +236,9 @@ test("impact benchmark exposes timing diagnostics", async () => {
     },
     golden: {
       mustHit: ["src/main/java/demo/DemoService.java"],
+      taskBlocking: [],
       shouldHit: [],
-      side: []
+      support: []
     }
   })}\n`);
 
