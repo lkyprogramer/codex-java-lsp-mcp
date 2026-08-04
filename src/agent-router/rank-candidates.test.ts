@@ -555,6 +555,46 @@ test("pre-semantic Spring call protection is limited to a call sourced by the re
   assert.equal(protectedPaths.has(nestedCallFile), false);
 });
 
+test("pre-semantic protection leaves deferred-test direct calls out of the range-query core", async () => {
+  const anchorEntry = anchor();
+  const mainFile = "/repo/module-a/src/main/java/demo/OrderClient.java";
+  const deferredTestFile = "/repo/module-a/src/test/java/demo/OrderClientTest.java";
+  const mainCall = signal({
+    candidateFile: mainFile,
+    kind: "CALLS",
+    family: "STATIC_STRUCTURE",
+    provenance: "AST_RESOLVED",
+    confidence: 0.98,
+    weight: 120,
+    sourceFile: anchorEntry.absolutePath,
+    callDepth: 0
+  });
+  const deferredTestCall = signal({
+    candidateFile: deferredTestFile,
+    kind: "CALLS",
+    family: "STATIC_STRUCTURE",
+    provenance: "AST_RESOLVED",
+    confidence: 0.98,
+    weight: 120,
+    sourceFile: anchorEntry.absolutePath,
+    callDepth: 0
+  });
+  const normalized = new Map<string, CandidateEvidence>([
+    [mainFile, evidenceCandidate(mainFile, [mainCall], { module: "module-a", sourceSet: "main" })],
+    [deferredTestFile, evidenceCandidate(deferredTestFile, [deferredTestCall], { module: "module-a", sourceSet: "test" })]
+  ]);
+
+  const protectedPaths = await familyReadPlanProtectedPaths(normalized, [], {
+    anchors: [anchorEntry],
+    options: options({ mode: "minimal", testReadMode: "defer" }),
+    suppressed: emptySuppressed(),
+    repoRoot: "/repo"
+  });
+
+  assert.equal(protectedPaths.has(mainFile), true);
+  assert.equal(protectedPaths.has(deferredTestFile), false);
+});
+
 test("direct imports remain candidate evidence rather than V6 protected core", async () => {
   const anchorEntry = anchor();
   const directImportFile = "/repo/module-a/src/main/java/demo/DirectRequest.java";

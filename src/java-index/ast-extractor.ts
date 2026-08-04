@@ -597,10 +597,23 @@ function collectCallSites(
 }
 
 // Covers parameter, field and local-variable receivers, including `this.x`
-// where x is already present in the member scope. Explicit type-name/static
-// receivers remain intentionally unresolved.
+// where x is already present in the member scope. A bare identifier that is
+// not a value in that scope can additionally be an explicitly imported type
+// used for a static call (for example `Converters.map(...)`). Preserve that
+// as a normal type ref and let the resolver apply its existing exact-import
+// rules. Wildcard imports, qualified expression chains and unknown names stay
+// unresolved: this extractor must not infer a type receiver from spelling.
 function receiverTypeOf(node: JavaSyntaxNode, scope: Scope, context: ExtractContext): JavaTypeRef | undefined {
-  if (node.type === "identifier") return scope.get(textOf(node, context.source));
+  if (node.type === "identifier") {
+    const name = textOf(node, context.source);
+    const boundType = scope.get(name);
+    if (boundType) return boundType;
+    const explicitImports = new Set(context.imports
+      .filter(imported => !imported.static && !imported.wildcard)
+      .filter(imported => imported.qualifiedName.slice(imported.qualifiedName.lastIndexOf(".") + 1) === name)
+      .map(imported => imported.qualifiedName));
+    return explicitImports.size === 1 ? buildTypeRef(node, context.source) : undefined;
+  }
   if (node.type === "field_access") {
     const object = node.childForFieldName("object");
     const field = node.childForFieldName("field");

@@ -1,6 +1,6 @@
 // input: Family-derived protected paths and the ranked candidate pool before V6 planning.
 // output: The bounded compatibility core passed to the token-aware ReadPlan planner.
-// pos: Task 30 regression coverage for retained exact static reference evidence.
+// pos: Task 30 regression coverage for the final V6 protected-core boundary.
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { CandidateFile, ImpactOptions, ResolvedAnchor } from "../agent-types.js";
@@ -51,7 +51,7 @@ function candidate(absolutePath: string, overrides: Partial<CandidateFile> = {})
   };
 }
 
-test("planner retains a seed-selected exact reference when family protection has no matching signal", () => {
+test("generic seed references stay outside the V6 protected core", () => {
   const target = candidate(anchor.absolutePath, {
     score: 1_000,
     reasons: ["target"],
@@ -78,9 +78,10 @@ test("planner retains a seed-selected exact reference when family protection has
     context
   );
 
-  assert.ok(
+  assert.equal(
     protectedPaths.has(exactReference.absolutePath),
-    "a seed-selected exact reference must remain eligible for the bounded V6 protected core"
+    false,
+    "a generic type reference must remain candidate evidence, not consume Task 30's protected core"
   );
   assert.equal(
     protectedPaths.has(lexicalOnly.absolutePath),

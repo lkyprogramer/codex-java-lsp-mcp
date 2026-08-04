@@ -220,6 +220,47 @@ test("extractJavaFile binds call-site arguments to their type where the syntax m
   }
 });
 
+test("an unshadowed explicit type import is retained as the receiver of a static call", async () => {
+  const backend = await createJavaParserBackend();
+  const content = [
+    "package demo;",
+    "",
+    "import tools.Converters;",
+    "",
+    "class StaticCaller {",
+    "  void run() {",
+    "    Converters.map();",
+    "  }",
+    "}",
+    ""
+  ].join("\n");
+  const result = extractJavaFile(baseInput({ content, relativePath: "src/main/java/demo/StaticCaller.java" }), backend);
+  const call = result.methods.find(method => method.name === "run")!.callSites.find(site => site.name === "map")!;
+
+  assert.equal(call.receiverText, "Converters");
+  assert.equal(call.receiverDeclaredType?.text, "Converters");
+});
+
+test("a value binding shadows an explicit import when extracting a call receiver", async () => {
+  const backend = await createJavaParserBackend();
+  const content = [
+    "package demo;",
+    "",
+    "import tools.Converters;",
+    "",
+    "class ShadowedStaticCaller {",
+    "  void run(Other Converters) {",
+    "    Converters.map();",
+    "  }",
+    "}",
+    ""
+  ].join("\n");
+  const result = extractJavaFile(baseInput({ content, relativePath: "src/main/java/demo/ShadowedStaticCaller.java" }), backend);
+  const call = result.methods.find(method => method.name === "run")!.callSites.find(site => site.name === "map")!;
+
+  assert.equal(call.receiverDeclaredType?.text, "Other");
+});
+
 function lineColToIndex(text: string, position: { line: number; column: number }): number {
   const lines = text.split("\n");
   let index = 0;

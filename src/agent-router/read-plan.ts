@@ -182,7 +182,6 @@ export function protectedReadPlanPaths(
   for (const file of files) {
     if (file.sourceSet === "test" && options.testReadMode === "defer") continue;
     if (hasProtectedStructuralSignal(file)
-      || (file.verifiedBy || []).includes("typeReference")
       || file.reasons.includes("persisted-implementation")
       || file.reasons.includes("persisted-typeHierarchy")
       || file.reasons.includes("implementation")) {
@@ -240,6 +239,7 @@ function shortlistCandidates(
   ordered.filter(file => isAnchor(file, options)).forEach(add);
   const protectedCandidates = ordered
     .filter(file => !isAnchor(file, options)
+      && !isDeferredTest(file, options)
       && (isProtectedCore(file, options) || protectedPaths.has(file.absolutePath)))
     .sort((left, right) =>
       protectedCorePriority(right, options) - protectedCorePriority(left, options)
@@ -352,9 +352,15 @@ function selectTokenAwarePlan(
     .filter(window => (isProtectedCore(window.file, options) || protectedPaths.has(window.file.absolutePath))
       && !isAnchor(window.file, options)
       && !isDeferredTest(window.file, options));
+  const coreUsesByteDensity = byteBudgetCanConstrainSelection(
+    core,
+    totalBytes,
+    budget,
+    Math.min(budget.maxFiles - selected.length, BUCKET_RULES.core.max - bucketCounts.core)
+  );
   core.sort((left, right) =>
     protectedCorePriority(right.file, options) - protectedCorePriority(left.file, options)
-    || compareUtilityAndDensity(protectedUtility(left), left.bytes, protectedUtility(right), right.bytes)
+    || compareUtilityAndDensity(protectedUtility(left), left.bytes, protectedUtility(right), right.bytes, coreUsesByteDensity)
     || left.file.absolutePath.localeCompare(right.file.absolutePath));
   for (const window of core) {
     if (canAdd(window)) add(window, protectedUtility(window));
@@ -372,8 +378,14 @@ function selectTokenAwarePlan(
       const eligible = remaining
       .filter(window => canSelect(window) && (!requireNovelEvidence || hasNovelEvidence(window.file, selected)))
       .map(window => ({ window, utility: marginalUtility(window, selected) }));
+      const preferDensity = byteBudgetCanConstrainSelection(
+        eligible.map(item => item.window),
+        totalBytes,
+        budget,
+        budget.maxFiles - selected.length
+      );
       return eligible.sort((left, right) =>
-        compareUtilityAndDensity(left.utility, left.window.bytes, right.utility, right.window.bytes)
+        compareUtilityAndDensity(left.utility, left.window.bytes, right.utility, right.window.bytes, preferDensity)
         || right.window.file.score - left.window.file.score
         || left.window.file.absolutePath.localeCompare(right.window.file.absolutePath))[0];
     };
@@ -426,20 +438,39 @@ function utilityPerByte(utility: number, bytes: number): number {
 }
 
 /**
- * Task 30 ranks both protected and marginal candidates by utility density.
- * File-count limits remain hard constraints, but do not change the value unit:
- * the same bounded byte/token budget must yield comparable choices in every
- * mode and repository.
+ * The planner has two independent hard caps. Density breaks ties only while
+ * the byte cap can actually exclude a feasible choice. When the active limit
+ * is file count, favouring a cheap lower-value file would double-count byte
+ * cost (marginalUtility already carries a bounded byte penalty) and starve a
+ * stronger exact collaborator despite unused byte budget.
  */
+function byteBudgetCanConstrainSelection(
+  candidates: readonly CandidateWindow[],
+  selectedBytes: number,
+  budget: ReadPlanBudget,
+  remainingSlots: number
+): boolean {
+  if (remainingSlots <= 0) return false;
+  const maximumPotentialBytes = [...candidates]
+    .map(candidate => candidate.bytes)
+    .sort((left, right) => right - left)
+    .slice(0, remainingSlots)
+    .reduce((sum, bytes) => sum + bytes, 0);
+  return selectedBytes + maximumPotentialBytes > budget.maxReadBytes;
+}
+
 function compareUtilityAndDensity(
   leftUtility: number,
   leftBytes: number,
   rightUtility: number,
-  rightBytes: number
+  rightBytes: number,
+  preferDensity: boolean
 ): number {
   const densityDelta = utilityPerByte(rightUtility, rightBytes) - utilityPerByte(leftUtility, leftBytes);
   const utilityDelta = rightUtility - leftUtility;
-  return densityDelta || utilityDelta || leftBytes - rightBytes;
+  return preferDensity
+    ? densityDelta || utilityDelta || leftBytes - rightBytes
+    : utilityDelta || densityDelta || leftBytes - rightBytes;
 }
 
 function protectedCorePriority(file: CandidateFile, options: Pick<ImpactOptions, "anchors">): number {
@@ -455,31 +486,45 @@ function protectedCorePriority(file: CandidateFile, options: Pick<ImpactOptions,
     || kind === "typeHierarchy")) {
     return 3;
   }
+  // A concrete anchor's directly declared interface/parent is its public
+  // contract, not a downstream expansion. Keep this inverse type edge ahead
+  // of implementation alternatives and field context when the bounded core
+  // must choose.
+  if (kinds.has("TYPE_SYMMETRIC")) {
+    return 2.75;
+  }
   if ([...kinds].some(kind => FIRST_HOP_IMPLEMENTATION_KINDS.has(kind)
     || kind === "typeGraph:implementation-lookup"
     || kind === "implementation"
     || kind === "persisted-implementation")) {
     return 2;
   }
-  if (hasDirectAnchorTypeReference(file, options) || kinds.has("METHOD_RELATION")) {
+  if (kinds.has("METHOD_RELATION")) {
     return 2;
   }
-  if ([...kinds].some(kind => SECOND_HOP_IMPLEMENTATION_KINDS.has(kind))) {
-    return 1;
+  // An anchor-body call has stronger locality than an implementation merely
+  // related to the anchor's declared type: it proves the exact receiver used
+  // by this task. Syntax nesting alone does not weaken that fact (response
+  // wrappers commonly contain the real receiver call). One-hop continuation
+  // calls intentionally remain below the first implementation alternatives,
+  // because they are downstream context.
+  if (file.plannerEvidence?.some(evidence => evidence.kind === "CALLS"
+    && (evidence.callOrigin === "anchor" || (evidence.callOrigin === undefined && evidence.callDepth === 0))
+    && (evidence.callDepth ?? Infinity) <= 1)) {
+    return 2.5;
   }
+  if (file.plannerEvidence?.some(evidence => evidence.kind === "CALLS" && evidence.callDepth === 1)) {
+    return 1.75;
+  }
+  if ([...kinds].some(kind => SECOND_HOP_IMPLEMENTATION_KINDS.has(kind))) {
+    return 1.5;
+  }
+  // Framework inference may reserve a core slot, but never ranks ahead of a
+  // resolved call or method-local implementation dependency.
   if (kinds.has("SPRING_INJECTION")) {
     return 1;
   }
   return 0;
-}
-
-function hasDirectAnchorTypeReference(
-  file: CandidateFile,
-  options: Pick<ImpactOptions, "anchors">
-): boolean {
-  return file.plannerEvidence?.some(evidence => evidence.family === "STATIC_STRUCTURE"
-    && evidence.kind === "REFERENCE"
-    && options.anchors.some((anchor, index) => evidence.sourceTarget.startsWith(`A${index + 1}:${anchor.file}->`))) ?? false;
 }
 
 function marginalUtility(candidate: CandidateWindow, selected: readonly CandidateWindow[]): number {
@@ -508,7 +553,7 @@ function hasNovelEvidence(candidate: CandidateFile, selected: readonly Candidate
 
 function plannerEvidenceKeys(file: CandidateFile): string[] {
   if ((file.plannerEvidence?.length ?? 0) > 0) {
-    return file.plannerEvidence!.map(item => `${item.family}\0${item.kind}\0${item.sourceTarget}`);
+    return file.plannerEvidence!.map(item => `${item.family}\0${item.kind}\0${item.sourceTarget}\0${item.callOrigin ?? ""}`);
   }
   return evidenceKeys(file);
 }
@@ -564,6 +609,13 @@ function isProtectedCoreEvidence(
   options: Pick<ImpactOptions, "anchors">
 ): boolean {
   if (!PROTECTED_CORE_KINDS.has(evidence.kind)) return false;
+  // A CALLS edge receives a protected slot only when relationship-provider
+  // retained an exact, shallow anchor path. Native edge IDs without that
+  // call-site metadata may still rank normally, but cannot turn a deep
+  // getter or generic wrapper into protected core merely by sharing CALLS.
+  if (evidence.kind === "CALLS") {
+    return (evidence.callDepth ?? Infinity) <= 1;
+  }
   if (evidence.kind !== "SPRING_CALL_PATH") return true;
   const arrow = evidence.sourceTarget.indexOf("->");
   if (arrow <= 0) return false;

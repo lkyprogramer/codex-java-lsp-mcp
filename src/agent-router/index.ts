@@ -247,7 +247,21 @@ export class AgentRouter {
     const frameworkOutcome = frameworkResult.outcome;
     const afterFrameworkPaths = unionPaths(afterStaticPaths, frameworkOutcome);
 
-    const phaseOneOutcomes: ProviderOutcome[] = [persistedOutcome, staticStructureOutcome, lexicalOutcome, typeReferenceOutcome, frameworkOutcome];
+    const preRelationshipOutcomes: ProviderOutcome[] = [persistedOutcome, staticStructureOutcome, lexicalOutcome, typeReferenceOutcome, frameworkOutcome];
+    // Relationship evidence depends only on the anchor and the static
+    // candidate surface. Collect it before the live semantic phase so exact
+    // CALLS/METHOD_RELATION facts can participate in the protected read-plan
+    // set that governs that later budget. Re-running it after live semantic
+    // was both redundant and too late for Task 30's protected-core contract.
+    const relationshipCandidates = [...foldProviderCandidates(anchors, preRelationshipOutcomes).values()];
+    const relationshipOutcome = await timed(phaseMs, "relationshipEvidence", async () => collectRelationshipEvidence({
+      ...providerInputBase,
+      existingCandidatePaths: relationshipCandidates.map(candidate => candidate.absolutePath),
+      allCandidates: relationshipCandidates,
+      staticVerifiedCandidates: relationshipCandidates.filter(candidate =>
+        (candidate.verifiedBy || []).some(source => source === "typeGraph" || source === "typeReference"))
+    }));
+    const phaseOneOutcomes: ProviderOutcome[] = [...preRelationshipOutcomes, relationshipOutcome];
     const familyRankPolicy = resolveFamilyRankPolicy(this.routingPolicy);
     const phaseOneNormalized = normalizeEvidence(phaseOneOutcomes.flatMap(outcome => outcome.evidence), this.repoRoot);
     const protectedReadPlanPaths = await timed(phaseMs, "nonLspReadPlan", async () => familyReadPlanProtectedPaths(
@@ -268,16 +282,7 @@ export class AgentRouter {
     const afterSemanticPaths = unionPaths(afterFrameworkPaths, liveSemanticOutcome);
     const supportOutcome = await collectSupportEvidence({ ...providerInputBase, existingCandidatePaths: afterSemanticPaths });
 
-    const nonRelationshipOutcomes: ProviderOutcome[] = [...phaseOneOutcomes, liveSemanticOutcome, supportOutcome];
-    const relationshipCandidates = [...foldProviderCandidates(anchors, nonRelationshipOutcomes).values()];
-    const relationshipOutcome = await timed(phaseMs, "relationshipEvidence", async () => collectRelationshipEvidence({
-      ...providerInputBase,
-      existingCandidatePaths: relationshipCandidates.map(candidate => candidate.absolutePath),
-      allCandidates: relationshipCandidates,
-      staticVerifiedCandidates: relationshipCandidates.filter(candidate =>
-        (candidate.verifiedBy || []).some(source => source === "typeGraph" || source === "typeReference"))
-    }));
-    const outcomes: ProviderOutcome[] = [...nonRelationshipOutcomes, relationshipOutcome];
+    const outcomes: ProviderOutcome[] = [...phaseOneOutcomes, liveSemanticOutcome, supportOutcome];
     // Steps 1-4's normalizer validates and dedupes the typed evidence surface;
     // family-ranker.ts scores directly from it (Task 25 cutover). repoRoot is
     // required here - it populates module/layer/sourceSet via classifyPath,

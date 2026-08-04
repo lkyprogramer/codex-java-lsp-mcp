@@ -146,8 +146,20 @@ function plannerEvidence(candidate: CandidateEvidence): CandidateEvidenceKey[] {
     const sourceTarget = signal.family === "LEXICAL" || signal.family === "TASK_CONTEXT" || signal.family === "SUPPORT"
       ? `${signal.anchorId}->${signal.kind}`
       : `${signal.anchorId}:${signal.sourceFile}->${signal.candidateNodeId ?? signal.candidateFile}`;
-    const item = { family: signal.family, kind: signal.kind, sourceTarget };
-    evidence.set(`${item.family}\0${item.kind}\0${item.sourceTarget}`, item);
+    const item = {
+      family: signal.family,
+      kind: signal.kind,
+      sourceTarget,
+      ...(signal.callDepth === undefined ? {} : { callDepth: signal.callDepth }),
+      ...(signal.callOrigin === undefined ? {} : { callOrigin: signal.callOrigin })
+    };
+    const key = `${item.family}\0${item.kind}\0${item.sourceTarget}\0${item.callOrigin ?? ""}`;
+    const current = evidence.get(key);
+    // Multiple resolved calls to the same candidate collapse to one planner
+    // identity; retain the shallowest AST call as the strongest direct path.
+    if (!current || (item.callDepth ?? Infinity) < (current.callDepth ?? Infinity)) {
+      evidence.set(key, item);
+    }
   }
   return [...evidence.values()];
 }

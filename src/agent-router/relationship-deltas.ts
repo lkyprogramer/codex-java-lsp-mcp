@@ -84,7 +84,11 @@ export async function methodRelationDelta(
   if (!relation) {
     return 0;
   }
-  return relation.kind === "parameter" || relation.kind === "return" ? 160 : 120;
+  // Task 30's protected core is deliberately narrower than generic
+  // method-body proximity: only a signature parameter/return declaration is
+  // a direct collaborator. A local receiver may be incidental to one branch
+  // and is covered separately by a resolved CALLS edge when one exists.
+  return relation.kind === "parameter" || relation.kind === "return" ? 160 : 0;
 }
 
 async function cachedFacts(

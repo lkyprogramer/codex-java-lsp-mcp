@@ -50,7 +50,7 @@ type Scenario = {
 };
 
 type GoldenKind = "must" | "should" | "side";
-type GoldenSource = "rg" | "typeGraph" | "importGraph" | "seed" | "reference" | "typeHierarchy" | "typeReference" | "no-lsp" | "absent" | "unknown";
+type GoldenSource = "calls" | "methodRelation" | "framework" | "rg" | "typeGraph" | "importGraph" | "seed" | "reference" | "typeHierarchy" | "typeReference" | "no-lsp" | "absent" | "unknown";
 type GoldenBlockedBy = "hit" | "readplan-full" | "absent";
 type GoldenAbsentReason = "not-recalled-implementer" | "no-type-edge" | "cross-module-cold" | "profile-gate" | "golden-stale-or-low-value";
 
@@ -712,11 +712,24 @@ function moduleName(file: string): string | undefined {
 
 function goldenSource(candidate: Record<string, unknown>): GoldenSource {
   const verifiedBy = Array.isArray(candidate.verifiedBy) ? candidate.verifiedBy.map(String) : [];
+  const reasons = Array.isArray(candidate.reasons) ? candidate.reasons.map(String) : [];
   const sources = Array.isArray(candidate.scoreBreakdown)
     ? candidate.scoreBreakdown
       .map(item => item && typeof item === "object" ? (item as Record<string, unknown>).source : undefined)
       .map(String)
     : [];
+  // Preserve exact relationship attribution before the generic static source
+  // labels below. A file commonly carries both typeReference and CALLS; the
+  // latter is what explains a Task 30 protected-core selection.
+  if (verifiedBy.includes("CALLS") || reasons.includes("CALLS")) {
+    return "calls";
+  }
+  if (verifiedBy.includes("METHOD_RELATION") || reasons.includes("METHOD_RELATION")) {
+    return "methodRelation";
+  }
+  if (reasons.some(reason => /^(?:SPRING|MYBATIS|JPA|MAPSTRUCT)_/.test(reason))) {
+    return "framework";
+  }
   if (verifiedBy.includes("reference")) {
     return "reference";
   }

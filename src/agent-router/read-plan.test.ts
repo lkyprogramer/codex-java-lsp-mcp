@@ -19,7 +19,7 @@ function candidate(overrides: Partial<CandidateFile>): CandidateFile {
   };
 }
 
-test("protected read plan retains exact main-source evidence without letting deferred tests consume the budget", () => {
+test("protected read plan retains exact structural evidence without turning a generic type reference into core", () => {
   const direct = candidate({
     absolutePath: "/repo/src/main/java/demo/Command.java",
     reasons: ["typeReference"],
@@ -63,11 +63,53 @@ test("protected read plan retains exact main-source evidence without letting def
   ]);
 
   assert.deepEqual(protectedPaths, new Set([
-    direct.absolutePath,
     implementation.absolutePath,
     directImplementation.absolutePath,
     directMethodType.absolutePath
   ]));
+});
+
+test("an indexed direct CALLS edge receives a core slot while an unlocated legacy CALLS edge does not", async () => {
+  const anchor = candidate({
+    absolutePath: "/repo/src/main/java/demo/OrderService.java",
+    path: "src/main/java/demo/OrderService.java",
+    categories: ["target"],
+    reasons: ["target"],
+    score: 1_000
+  });
+  const direct = candidate({
+    absolutePath: "/repo/src/main/java/demo/OrderClient.java",
+    path: "src/main/java/demo/OrderClient.java",
+    reasons: ["CALLS"],
+    score: 100,
+    plannerEvidence: [{
+      family: "STATIC_STRUCTURE",
+      kind: "CALLS",
+      sourceTarget: `A1:${anchor.absolutePath}->/repo/src/main/java/demo/OrderClient.java`,
+      callDepth: 0,
+      callOrigin: "anchor"
+    }]
+  });
+  const unknownDepth = candidate({
+    absolutePath: "/repo/src/main/java/demo/LegacyCall.java",
+    path: "src/main/java/demo/LegacyCall.java",
+    reasons: ["CALLS"],
+    score: 900,
+    plannerEvidence: [{
+      family: "STATIC_STRUCTURE",
+      kind: "CALLS",
+      sourceTarget: `A1:${anchor.absolutePath}->/repo/src/main/java/demo/LegacyCall.java`
+    }]
+  });
+  const files = [anchor, direct, unknownDepth];
+  const result = await buildReadPlan({
+    files,
+    ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
+    options: optionsFor(anchor, { mode: "minimal", readPlanMaxItems: 2 }),
+    javaIndex: fixedRangeIndex()
+  });
+
+  assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F2"]);
 });
 
 test("token-aware read plan keeps its anchor, respects bytes, and makes one shortlisted range query", async () => {
@@ -279,7 +321,7 @@ test("protected core is ordered by family utility per byte when only one of two 
   assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F3"], "the higher utility-per-byte core candidate must win the shared byte budget");
 });
 
-test("protected core remains ordered by utility per byte when the file cap binds", async () => {
+test("protected core uses absolute utility when the file cap binds but bytes do not", async () => {
   const anchor = candidate({ absolutePath: "/repo/src/main/java/demo/Anchor.java", path: "src/main/java/demo/Anchor.java", reasons: ["target"], categories: ["target"], score: 1_000 });
   const highValue = candidate({ absolutePath: "/repo/src/main/java/demo/Implementation.java", path: "src/main/java/demo/Implementation.java", reasons: ["SPRING_CALL_PATH"], verifiedBy: ["SPRING_CALL_PATH"], score: 500 });
   const cheapLowValue = candidate({ absolutePath: "/repo/src/main/java/demo/Mapper.java", path: "src/main/java/demo/Mapper.java", reasons: ["SPRING_CALL_PATH"], verifiedBy: ["SPRING_CALL_PATH"], score: 50 });
@@ -303,7 +345,7 @@ test("protected core remains ordered by utility per byte when the file cap binds
     } as never
   });
 
-  assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F3"]);
+  assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F2"]);
 });
 
 test("Spring injection remains structural and cannot displace resolved JDT core evidence", async () => {
@@ -450,6 +492,50 @@ test("a Spring call path from a structural seed does not displace an anchor's di
   assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F2"]);
 });
 
+test("a resolved shallow call outranks an anchor Spring call path in a constrained core", async () => {
+  const anchor = candidate({
+    absolutePath: "/repo/src/main/java/demo/OrderPort.java",
+    path: "src/main/java/demo/OrderPort.java",
+    reasons: ["target"],
+    categories: ["target"],
+    score: 1_000
+  });
+  const mapper = candidate({
+    absolutePath: "/repo/src/main/java/demo/OrderMapper.java",
+    path: "src/main/java/demo/OrderMapper.java",
+    reasons: ["CALLS"],
+    score: 200,
+    plannerEvidence: [{
+      family: "STATIC_STRUCTURE",
+      kind: "CALLS",
+      sourceTarget: "A1:/repo/src/main/java/demo/OrderPortImpl.java->/repo/src/main/java/demo/OrderMapper.java",
+      callDepth: 1
+    }]
+  });
+  const springPath = candidate({
+    absolutePath: "/repo/src/main/java/demo/ExpensiveService.java",
+    path: "src/main/java/demo/ExpensiveService.java",
+    categories: ["framework"],
+    reasons: ["SPRING_CALL_PATH"],
+    score: 900,
+    plannerEvidence: [{
+      family: "FRAMEWORK",
+      kind: "SPRING_CALL_PATH",
+      sourceTarget: "A1:/repo/src/main/java/demo/OrderPort.java->method:demo.ExpensiveService.run"
+    }]
+  });
+  const files = [anchor, mapper, springPath];
+
+  const result = await buildReadPlan({
+    files,
+    ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
+    options: optionsFor(anchor, { mode: "minimal", readPlanMaxItems: 2 }),
+    javaIndex: fixedRangeIndex()
+  });
+
+  assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F2"]);
+});
+
 test("direct implementations take the bounded core ahead of higher-scoring second-hop method types", async () => {
   const anchor = candidate({
     absolutePath: "/repo/src/main/java/demo/StorageGateway.java",
@@ -548,7 +634,7 @@ test("explicit implementation method types outrank legacy compatibility paths in
   );
 });
 
-test("a direct anchor type reference outranks a lower-value import when protected core is full", async () => {
+test("a generic anchor reference cannot displace a direct method relation from protected core", async () => {
   const anchor = candidate({
     absolutePath: "/repo/src/main/java/demo/Anchor.java",
     path: "src/main/java/demo/Anchor.java",
@@ -556,53 +642,153 @@ test("a direct anchor type reference outranks a lower-value import when protecte
     categories: ["target"],
     score: 1_000
   });
-  const implementation = candidate({
-    absolutePath: "/repo/src/main/java/demo/AnchorImpl.java",
-    path: "src/main/java/demo/AnchorImpl.java",
-    reasons: ["IMPLEMENTS"],
-    score: 100,
-    plannerEvidence: [{ family: "STATIC_STRUCTURE", kind: "IMPLEMENTS", sourceTarget: "A1:/repo/src/main/java/demo/Anchor.java->/repo/src/main/java/demo/AnchorImpl.java" }]
-  });
-  const directImportA = candidate({
-    absolutePath: "/repo/src/main/java/demo/ImportA.java",
-    path: "src/main/java/demo/ImportA.java",
-    reasons: ["DIRECT_DECLARATION"],
-    score: 300,
-    plannerEvidence: [{ family: "STATIC_STRUCTURE", kind: "DIRECT_DECLARATION", sourceTarget: "A1:/repo/src/main/java/demo/Anchor.java->/repo/src/main/java/demo/ImportA.java" }]
-  });
-  const directImportB = candidate({
-    absolutePath: "/repo/src/main/java/demo/ImportB.java",
-    path: "src/main/java/demo/ImportB.java",
-    reasons: ["DIRECT_DECLARATION"],
-    score: 299,
-    plannerEvidence: [{ family: "STATIC_STRUCTURE", kind: "DIRECT_DECLARATION", sourceTarget: "A1:/repo/src/main/java/demo/Anchor.java->/repo/src/main/java/demo/ImportB.java" }]
+  const methodRelation = candidate({
+    absolutePath: "/repo/src/main/java/demo/MethodCollaborator.java",
+    path: "src/main/java/demo/MethodCollaborator.java",
+    reasons: ["METHOD_RELATION"],
+    score: 200,
+    plannerEvidence: [{ family: "STATIC_STRUCTURE", kind: "METHOD_RELATION", sourceTarget: "A1:/repo/src/main/java/demo/Anchor.java->/repo/src/main/java/demo/MethodCollaborator.java" }]
   });
   const directReference = candidate({
     absolutePath: "/repo/src/main/java/demo/DirectReference.java",
     path: "src/main/java/demo/DirectReference.java",
     reasons: ["REFERENCE"],
-    score: 298,
+    score: 900,
     plannerEvidence: [{ family: "STATIC_STRUCTURE", kind: "REFERENCE", sourceTarget: "A1:/repo/src/main/java/demo/Anchor.java->/repo/src/main/java/demo/DirectReference.java" }]
   });
-  const lowerImport = candidate({
-    absolutePath: "/repo/src/main/java/demo/LowerImport.java",
-    path: "src/main/java/demo/LowerImport.java",
-    reasons: ["DIRECT_DECLARATION"],
-    score: 200,
-    plannerEvidence: [{ family: "STATIC_STRUCTURE", kind: "DIRECT_DECLARATION", sourceTarget: "A1:/repo/src/main/java/demo/Anchor.java->/repo/src/main/java/demo/LowerImport.java" }]
-  });
-  const files = [anchor, implementation, directImportA, directImportB, directReference, lowerImport];
+  const files = [anchor, methodRelation, directReference];
   const plan = await buildReadPlan({
     files,
     ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
-    options: optionsFor(anchor, { mode: "balanced", readPlanMaxItems: 4, readPlanMaxBytes: 10_000 }),
+    options: optionsFor(anchor, { mode: "balanced", readPlanMaxItems: 2, readPlanMaxBytes: 10_000 }),
+    javaIndex: fixedRangeIndex(),
+    protectedPaths: new Set([methodRelation.absolutePath])
+  });
+
+  assert.deepEqual(plan.items.map(item => item.fileId), ["F1", "F2"]);
+});
+
+test("a shallow resolved CALLS path outranks a deeper call when the protected core is constrained", async () => {
+  const anchor = candidate({
+    absolutePath: "/repo/src/main/java/demo/Anchor.java",
+    path: "src/main/java/demo/Anchor.java",
+    reasons: ["target"],
+    categories: ["target"],
+    score: 1_000
+  });
+  const shallowCall = candidate({
+    absolutePath: "/repo/src/main/java/demo/ResponseAssembler.java",
+    path: "src/main/java/demo/ResponseAssembler.java",
+    reasons: ["CALLS"],
+    score: 200,
+    plannerEvidence: [{ family: "STATIC_STRUCTURE", kind: "CALLS", sourceTarget: "A1:/repo/src/main/java/demo/Anchor.java->/repo/src/main/java/demo/ResponseAssembler.java", callDepth: 1 }]
+  });
+  const nestedCall = candidate({
+    absolutePath: "/repo/src/main/java/demo/ApplicationService.java",
+    path: "src/main/java/demo/ApplicationService.java",
+    reasons: ["CALLS"],
+    score: 900,
+    plannerEvidence: [{ family: "STATIC_STRUCTURE", kind: "CALLS", sourceTarget: "A1:/repo/src/main/java/demo/Anchor.java->/repo/src/main/java/demo/ApplicationService.java", callDepth: 2 }]
+  });
+  const files = [anchor, shallowCall, nestedCall];
+
+  const plan = await buildReadPlan({
+    files,
+    ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
+    options: optionsFor(anchor, { mode: "minimal", readPlanMaxItems: 2 }),
     javaIndex: fixedRangeIndex(),
     protectedPaths: new Set(files.slice(1).map(file => file.absolutePath))
   });
 
-  const selected = plan.items.map(item => item.fileId);
-  assert.ok(selected.includes("F5"), "the exact direct reference remains selected");
-  assert.equal(selected.includes("F6"), false, "the lower-value compatibility import is omitted");
+  assert.deepEqual(plan.items.map(item => item.fileId), ["F1", "F2"]);
+});
+
+test("a direct anchor CALLS receiver outranks an unrelated implementation expansion in a constrained core", async () => {
+  const anchor = candidate({
+    absolutePath: "/repo/src/main/java/demo/OrderController.java",
+    path: "src/main/java/demo/OrderController.java",
+    reasons: ["target"],
+    categories: ["target"],
+    score: 1_000
+  });
+  const directReceiver = candidate({
+    absolutePath: "/repo/src/main/java/demo/OrderQueryPort.java",
+    path: "src/main/java/demo/OrderQueryPort.java",
+    reasons: ["CALLS"],
+    score: 120,
+    plannerEvidence: [{
+      family: "STATIC_STRUCTURE",
+      kind: "CALLS",
+      sourceTarget: `A1:${anchor.absolutePath}->/repo/src/main/java/demo/OrderQueryPort.java`,
+      callDepth: 1,
+      callOrigin: "anchor"
+    }]
+  });
+  const unrelatedImplementation = candidate({
+    absolutePath: "/repo/src/main/java/demo/OtherQueryServiceImpl.java",
+    path: "src/main/java/demo/OtherQueryServiceImpl.java",
+    reasons: ["typeGraph:implementation-lookup"],
+    score: 900,
+    plannerEvidence: [{
+      family: "STATIC_STRUCTURE",
+      kind: "IMPLEMENTS",
+      sourceTarget: `A1:${anchor.absolutePath}->/repo/src/main/java/demo/OtherQueryServiceImpl.java`
+    }]
+  });
+  const files = [anchor, directReceiver, unrelatedImplementation];
+  const plan = await buildReadPlan({
+    files,
+    ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
+    options: optionsFor(anchor, { mode: "minimal", readPlanMaxItems: 2, readPlanMaxBytes: 10_000 }),
+    javaIndex: fixedRangeIndex()
+  });
+
+  assert.deepEqual(
+    plan.items.map(item => item.fileId),
+    ["F1", "F2"],
+    "the exact receiver called by the anchor must survive before unrelated type-graph expansion"
+  );
+});
+
+test("a concrete anchor's declared interface contract outranks downstream implementation context", async () => {
+  const anchor = candidate({
+    absolutePath: "/repo/src/main/java/demo/CloudSmsGateway.java",
+    path: "src/main/java/demo/CloudSmsGateway.java",
+    reasons: ["target"],
+    categories: ["target"],
+    score: 1_000
+  });
+  const contract = candidate({
+    absolutePath: "/repo/src/main/java/demo/SmsGateway.java",
+    path: "src/main/java/demo/SmsGateway.java",
+    reasons: ["TYPE_SYMMETRIC"],
+    score: 100,
+    plannerEvidence: [{
+      family: "STATIC_STRUCTURE",
+      kind: "TYPE_SYMMETRIC",
+      sourceTarget: `A1:${anchor.absolutePath}->/repo/src/main/java/demo/SmsGateway.java`
+    }]
+  });
+  const downstream = candidate({
+    absolutePath: "/repo/src/main/java/demo/DefaultSmsClientFactory.java",
+    path: "src/main/java/demo/DefaultSmsClientFactory.java",
+    reasons: ["IMPLEMENTS"],
+    score: 900,
+    plannerEvidence: [{
+      family: "STATIC_STRUCTURE",
+      kind: "IMPLEMENTS",
+      sourceTarget: `A1:${anchor.absolutePath}->/repo/src/main/java/demo/DefaultSmsClientFactory.java`
+    }]
+  });
+  const files = [anchor, contract, downstream];
+  const plan = await buildReadPlan({
+    files,
+    ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
+    options: optionsFor(anchor, { mode: "minimal", readPlanMaxItems: 2, readPlanMaxBytes: 10_000 }),
+    javaIndex: fixedRangeIndex()
+  });
+
+  assert.deepEqual(plan.items.map(item => item.fileId), ["F1", "F2"]);
 });
 
 test("an exact anchor method relation outranks a lower-value import in protected core", async () => {
@@ -881,6 +1067,52 @@ test("externally protected deferred tests cannot displace an exact main-source c
   assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F3"]);
 });
 
+test("deferred externally protected tests cannot exhaust the bounded range shortlist", async () => {
+  const anchor = candidate({
+    absolutePath: "/repo/src/main/java/demo/Anchor.java",
+    path: "src/main/java/demo/Anchor.java",
+    reasons: ["target"],
+    categories: ["target"],
+    score: 1_000
+  });
+  const deferredTests = Array.from({ length: 8 }, (_, index) => candidate({
+    absolutePath: `/repo/src/test/java/demo/Anchor${index}Test.java`,
+    path: `src/test/java/demo/Anchor${index}Test.java`,
+    sourceSet: "test",
+    reasons: ["CALLS"],
+    score: 900 - index,
+    plannerEvidence: [{ family: "STATIC_STRUCTURE", kind: "CALLS", sourceTarget: `A1->test:${index}`, callDepth: 0 }]
+  }));
+  const mainContext = candidate({
+    absolutePath: "/repo/src/main/java/demo/MainContext.java",
+    path: "src/main/java/demo/MainContext.java",
+    sourceSet: "main",
+    reasons: ["rg:java"],
+    score: 10
+  });
+  const files = [anchor, ...deferredTests, mainContext];
+  const requestedPaths: string[] = [];
+  const index = fixedRangeIndex();
+  index.queryReadRanges = async (requests: Array<{ file: string }>) => {
+    requestedPaths.push(...requests.map(request => request.file));
+    return requests.map(request => ({
+      file: request.file,
+      ranges: [{ startLine: 1, endLine: 4, kind: "method" as const, estimatedBytes: 256 }]
+    }));
+  };
+
+  const result = await buildReadPlan({
+    files,
+    ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
+    options: optionsFor(anchor, { mode: "minimal", readPlanMaxItems: 2, testReadMode: "defer" }),
+    javaIndex: index,
+    protectedPaths: new Set(deferredTests.map(file => file.absolutePath))
+  });
+
+  assert.ok(requestedPaths.includes(mainContext.absolutePath));
+  assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F10"]);
+});
+
 test("parsed second-hop implementation evidence outranks a compatibility-only direct declaration", async () => {
   const anchor = candidate({
     absolutePath: "/repo/src/main/java/demo/Anchor.java",
@@ -1096,7 +1328,7 @@ test("marginal selection is ordered by utility per byte when only one of two can
   assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F3"], "the higher utility-per-byte collaborator must win the shared byte budget");
 });
 
-test("marginal selection remains ordered by utility per byte when the file cap binds", async () => {
+test("marginal selection uses absolute utility when the file cap binds but bytes do not", async () => {
   const anchor = candidate({ absolutePath: "/repo/src/main/java/demo/Anchor.java", path: "src/main/java/demo/Anchor.java", reasons: ["target"], categories: ["target"], score: 1_000 });
   const highValue = candidate({ absolutePath: "/repo/src/main/java/demo/BigCollaborator.java", path: "src/main/java/demo/BigCollaborator.java", reasons: ["framework:repository"], categories: ["framework"], score: 500 });
   const cheapLowValue = candidate({ absolutePath: "/repo/src/main/java/demo/TinyCollaborator.java", path: "src/main/java/demo/TinyCollaborator.java", reasons: ["framework:repository"], categories: ["framework"], score: 50 });
@@ -1120,7 +1352,7 @@ test("marginal selection remains ordered by utility per byte when the file cap b
     } as never
   });
 
-  assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F3"]);
+  assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F2"]);
 });
 
 test("same evidence kind with a different source-target remains independently useful", async () => {

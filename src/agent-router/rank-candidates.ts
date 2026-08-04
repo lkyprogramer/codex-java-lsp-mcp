@@ -186,7 +186,6 @@ function isBaselineSafeCore(file: CandidateFile, options: ImpactOptions): boolea
     || source === "persisted-typeHierarchy")) return true;
   if (file.reasons.some(reason => reason === "typeGraph:implementation-lookup"
     || reason === "implementation"
-    || reason === "CALLS"
     || reason === "SPRING_INJECTION"
     || reason === "SPRING_CALL_PATH"
     || reason === "MYBATIS_STATEMENT_METHOD"
@@ -248,6 +247,11 @@ export async function familyReadPlanProtectedPaths(
   context: RankCandidatesContext
 ): Promise<ReadonlySet<string>> {
   return new Set([...normalized.values()]
+    // Deferred tests remain available to candidate discovery, but they cannot
+    // consume a read-plan slot. Do not let a pre-semantic signal reserve one
+    // of the bounded range-query shortlist entries for a file the planner
+    // will necessarily omit later.
+    .filter(candidate => candidate.sourceSet !== "test" || context.options.testReadMode !== "defer")
     .filter(candidate => candidate.signals.some(signal => isPreSemanticProtectedSignal(signal, context.anchors)))
     .map(candidate => candidate.file));
 }
@@ -280,5 +284,5 @@ function isPreSemanticProtectedSignal(
       || signal.kind === "TYPE_RELATION"
       || signal.kind === "TYPE_SYMMETRIC"
       || signal.kind === "IMPLEMENTATION_METHOD_TYPE"
-      || signal.kind === "CALLS");
+      || (signal.kind === "CALLS" && (signal.callDepth ?? Infinity) <= 1));
 }

@@ -109,6 +109,50 @@ test("bounded call resolution: declared-receiver CALLS and constructor CONSTRUCT
   assert.equal(constructsEdge!.resolution.kind, "CONSTRUCTOR_TYPE");
 });
 
+test("an unshadowed explicit imported type receiver resolves a static CALLS edge", async () => {
+  const backend = await createJavaParserBackend();
+  const callerRaw = extractFromRawSource(backend, [
+    "package demo;",
+    "",
+    "import tools.Converters;",
+    "",
+    "class StaticCaller {",
+    "  void run() {",
+    "    Converters.map();",
+    "  }",
+    "}",
+    ""
+  ].join("\n"), "src/main/java/demo/StaticCaller.java");
+  const targetRaw = extractFromRawSource(backend, [
+    "package tools;",
+    "",
+    "public class Converters {",
+    "  public static void map() {}",
+    "}",
+    ""
+  ].join("\n"), "src/main/java/tools/Converters.java");
+  const registry = buildTypeRegistryView(
+    [...callerRaw.types, ...targetRaw.types],
+    [...callerRaw.methods, ...targetRaw.methods]
+  );
+  const resolver = new JavaNameResolver(registry);
+  const caller = resolveFileRefs(callerRaw, resolver, registry);
+  const target = resolveFileRefs(targetRaw, resolver, registry);
+  const resolvedRegistry = buildTypeRegistryView(
+    [...caller.types, ...target.types],
+    [...caller.methods, ...target.methods]
+  );
+  const edges = buildStaticEdges(caller, resolvedRegistry, resolver);
+  const callerType = caller.types.find(type => type.simpleName === "StaticCaller")!;
+  const converterType = target.types.find(type => type.simpleName === "Converters")!;
+  const run = caller.methods.find(method => method.ownerTypeId === callerType.typeId && method.name === "run")!;
+  const map = target.methods.find(method => method.ownerTypeId === converterType.typeId && method.name === "map")!;
+
+  const edge = findEdge(edges, run.methodId, map.methodId, "CALLS");
+  assert.ok(edge, "expected StaticCaller#run CALLS Converters#map via an unshadowed explicit import");
+  assert.equal(edge!.resolution.kind, "DECLARED_RECEIVER_NAME_ARITY");
+});
+
 test("an unqualified call matching two same-arity overloads produces no CALLS edge", async () => {
   const { resolved, edges } = await loadPaymentBundle();
   const paymentService = resolved.types.find(t => t.simpleName === "PaymentService")!;

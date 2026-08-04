@@ -66,6 +66,7 @@ function evidenceIdentity(signal: EvidenceSignal): string {
     provenance: signal.provenance,
     sourceFile: signal.sourceFile,
     sourceRange: signal.sourceRange,
+    callOrigin: signal.callOrigin,
     providerId: signal.providerId
   });
 }

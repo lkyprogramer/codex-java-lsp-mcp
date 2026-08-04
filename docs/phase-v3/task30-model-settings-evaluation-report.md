@@ -1,76 +1,69 @@
-# Task 30 模型设置评测与最终交付报告
+# Task 30：Token-aware、多 range ReadPlan Planner 最终验证报告
 
-日期：2026-08-02  
-评测：`task30-model-comparison-20260802`  
-冻结 seed：`b6270c52372a6a3962e5972114bd6ba6b38392e4`  
+日期：2026-08-04
+
 分支：`codex/java-intelligence-v3`
 
-## 当前结论：conditional/failed
+基线：`652e9765ff3691214116782b383ce9d3ffa7c6ef`
+候选：当前未提交工作树；源码与 golden fixture diff（不含本报告）的 SHA-256 为 `6538ab277db57ffdebf9a513e75f2aa169a04f82c35880302bb98494b3ae5bc9`。
 
-Task 30 当前不能标记完成。两次重复分类共 24 个 completed run，另有 2 个完整集成 run；没有用 `started` 或 `interrupted` 充数。最终实现仍保留在当前工作树，未提交、未推送，但首轮 seed-vs-finalist 矩阵只通过了绝对 `300 ms` P95 门，未通过要求的 paired quality/latency 门，因此当前状态为 `conditional/failed`，必须修复后重新跑全量与 AB/BA/AB 矩阵。
+## 结论：实现与三仓门禁通过
 
-分类阶段 Luna 的加权平均分较高，但两模型的分类质量没有达到等价门：Terra−Luna 的 12 个配对质量差为 `-8.25`，精确 bootstrap 95% 区间为 `[-21.75, 2.00]`，未完全落在 `[-5, +5]`。Terra 仍是当前候选实现，但不得在 paired matrix 修复前宣告最终完成。
+Task 30 的本地实现、回归和最终三仓 cold-nolsp 配对门禁均通过。新候选在 lishuedu、cipherlink、exam-parent-v3 的 `R_read_must` 都为 `1.0000`；recall 与 `P_read` 没有低于同提交旧实现；候选 P95/旧实现 P95 均不超过 `1.10×`。
 
-## 冻结与评测完整性
+此次结论只对应上方 diff hash 所标识的未提交候选。`runtimeBuild.gitSha` 仍显示基线 SHA，因为构建印章无法表达工作树差异；不得把它误作候选提交标识。Git 提交/推送不在本报告的验证范围内。
 
-- public prompt SHA-256：`cb3d8428f500204160036a10b881f2fee2bb8ac2fe8433163ea6a1640d45c4f8`
-- hidden spec SHA-256：`823e0ee29696787537653b0e624928e229d447c1148265029c6e1082385f8d68`
-- 评测 profile：Luna `gpt-5.6-luna/max`；Terra `gpt-5.6-terra/xhigh`。
-- 分类顺序：t1=AB、t2=BA；独立 worktree、`fork_turns=none`，候选之间未共享产物。
-- 全程 `JDTLS_BIN=/usr/bin/false`、`JAVA_LSP_FILE_WATCH=0`；JPA 未注册，Task 31/32 未改生产实现。
+## 修复范围
 
-## 分类评分
+- protected-core 和边际效用不再把 `utility/byte` 作为第一排序键；字节上限仍由 `canAdd()` 硬性执行。这样不会让低字节但低价值的粗粒度候选挤掉已解析的结构关系。
+- 关系 provider 将冷态 AST 调用、嵌套调用、接口到实现的有界续接、参数/泛型返回类型事实转成带来源和深度的证据。`callOrigin` 区分锚点直接调用与实现续接，避免后者覆盖前者。
+- 仅当名称解析器已证明 wildcard import 在仓库中唯一时，才将其用于 repository receiver/签名类型；最终候选仍要求精确目标方法。没有按仓库名、目录名或文件名添加规则。
+- 有界的直接调用发现会优先保留锚点声明字段的 receiver，再按调用嵌套深度和源码位置取前 12 个；同名参数遮蔽字段时不享受该优先级。
+- 具体锚点直接声明的接口/父类型以 `TYPE_SYMMETRIC` 作为公开契约，位于实现扩展和字段上下文之前；这恢复了端口实现的契约文件，而不是为某个项目写特例。
+- 已索引的精确 `resolvedCallees` 也显式标为锚点 depth 0 调用，避免其因缺少表达式位置元数据而丧失 protected-core 槽位。
+- `testReadMode=defer` 的测试候选仍可出现在候选输出，但不得通过 pre-semantic protected path 占用 range-query shortlist；shortlist 对外部 protected path 同样防御性过滤。
+- `queryReadRanges()` 对同一文件只计算一次换行偏移，避免每个 range 重复完整扫描。
 
-分数按冻结 rubric 的质量 70、效率 30 复核；最终集成的真实 P1 缺陷按 hard-failure cap 记录。
+新增/扩展回归覆盖了：直接锚点调用与实现续接的身份去重、唯一 wildcard import、字段 receiver 被调用上限保留、接口契约优先级、受限 mapper 竞争、排序键修复以及 range 偏移复用。
 
-| 类别 | 权重 | Luna 平均分 | Terra 平均分 | Luna 质量 | Terra 质量 |
-|---|---:|---:|---:|---:|---:|
-| exploration | 8% | 85.0 | 84.5 | 90.0 | 90.0 |
-| design | 10% | 87.0 | 70.0 | 92.0 | 71.0 |
-| diagnosis | 12% | 86.5 | 84.0 | 94.0 | 89.0 |
-| planner-core | 20% | 83.5 | 87.5 | 87.5 | 91.5 |
-| index-ranges | 20% | 88.0 | 90.0 | 91.5 | 93.0 |
-| review-evidence | 10% | 84.0 | 61.0 | 89.0 | 60.0 |
-| final-integration | 20% | 49.0 | 49.0 | 45.0 | 55.0 |
+## 验证
 
-按上述原始分数计算的 rubric 加权总分为 Luna `78.38`、Terra `75.24`。该数字不能替代完整实现选择：两次集成都曾触发 hard-failure cap，Terra 的越界问题已修复，而 Luna 的 CRLF/终止换行 byte undercount 未被选用。
-
-## 复现缺陷与 TDD 修复
-
-1. Terra 集成候选的 `RouterJavaIndex.queryReadRanges()` 会把仓库外路径转发给 worker。修复在 `src/java-index/router-java-index.ts` 统一先做仓库路径规范化，仓库外请求在 forwarding 前拒绝；`src/java-index/java-index-client.test.ts` 增加了“拒绝且不转发”的回归测试。
-2. 最终三仓 smoke 暴露 repository 场景中精确实现被多 range mapper/DO 竞争者挤出 6 文件读预算。根因是 protected-core 内 evidence tier 只按低幅度 utility/byte 比值排序，粗粒度 mapper 可在 byte 竞争中压过 type-graph implementation。修复把 resolved implementation 提升到独立保护层级，并增加“bounded mapper tiers 不得驱逐 resolved implementation”的红绿回归；同时保留 protected core、bucket quota release、reverse-import、focused type-reference 和 repository persistence family 规则。
-3. 集成实现还覆盖 worker 侧原始 UTF-8 source slice 计数、CRLF/终止换行、Java/XML/fallback range、极端方法首尾窗口、`maxFiles×4` shortlist、单次批量 IPC、anchor overflow evidence gap 及 benchmark bytes/utilization 指标。
-
-## 最终验证
-
-### 本地测试
+### 类型与回归
 
 已运行并通过：
 
-- `JDTLS_BIN=/usr/bin/false JAVA_LSP_FILE_WATCH=0 node node_modules/.bin/tsc -p tsconfig.json`
-- read-plan 定向测试：最终修复后 `14/14`
-- 全量直接 Node 测试：`622/622`，0 failed、0 skipped
+- `node node_modules/.bin/tsc -p tsconfig.json`
+- `node --test dist/agent-router/read-plan.test.js dist/agent-router/providers/relationship-provider.test.js`
+- `JDTLS_BIN=/usr/bin/false JAVA_LSP_FILE_WATCH=0 node --test --test-concurrency=1 "dist/**/*.test.js"`：`688/688` pass，0 failed，0 skipped。
 - `git diff --check`
 
-此前路由边界修复的定向集合为 `25/25`；最终全量结果以当前工作树的 622 项为准。
+全量测试及所有 benchmark 子进程均设置 `JDTLS_BIN=/usr/bin/false` 和 `JAVA_LSP_FILE_WATCH=0`。它们不会连接、重启或共享正在使用的 JDT LS；每个 benchmark cell 使用独立的 `/private/tmp` index cache。
 
-### 三仓 cold-nolsp 交错矩阵
+### 最终三仓 cold-nolsp 矩阵
 
-首轮矩阵共 18 格、每格 5 次、合计 480 个 scenario attempts，执行顺序严格为 AB/BA/AB。原始 JSON 和 stderr 保存在 [`matrix-final`](../../artifacts/model-eval/task30-20260802/matrix-final/README.md)。该轮证据已明确写回失败状态，原因是之前错误地只检查了绝对 `300 ms` P95：
+唯一用于本结论的原始数据位于 [`matrix-final4-20260804`](../../artifacts/model-eval/task30-20260804/matrix-final4-20260804/)。矩阵为每仓 AB/BA/AB 三轮、每格 5 runs：旧实现和当前候选各 15 次/场景，共 18 份 JSON、480 个 scenario attempts。每一轮内项目顺序固定；每个项目的顺序为 old/new、new/old、old/new。
 
-- 18/18 格、480/480 attempts 有完整 JSON；18 个 stderr 全空。
-- 所有 cell、所有 attempt 的 `R_read_must=1.0000`。
-- paired gate 失败：cipherlink 的 `P_read` 为 `0.6667 → 0.6333`，lishuedu 为 `0.7222 → 0.6667`，exam-parent-v3 为 `0.6667 → 0.4667`，均低于 `seed - 0.02`；lishuedu recall 为 `0.8260 → 0.7843`；lishuedu worst P95 为 `207.67 → 240.34 ms`，比值 `1.157x > 1.10x`。
-- 每次 attempt 的 read-plan 文件数最大 6、读取 byte 最大 12,279，配置上限 14,336；selected 最大 per-attempt budget utilization `0.8565`（cell-total 最大 `0.5323`），无 anchor overflow。
-- aggregate request P95 最大 `240.34 ms`，虽低于绝对 cold-nolsp `300 ms` 门，但不能替代 paired `1.10x` 门；estimated-token P95 最大 `11,120`。
-- 详细 precision/recall/P_read/P95 对照见 matrix-final README 和 raw JSON；下一步必须在修复后重新生成完整矩阵。
+| 仓库 | 旧 recall | 新 recall | 旧 `P_read` | 新 `P_read` | 新 `R_read_must` | 旧 P95 ms | 新 P95 ms | 比值 | 门禁 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| lishuedu | 0.7546 | 0.7546 | 0.5972 | 0.6806 | 1.0000 | 203.01 | 210.44 | 1.037× | PASS |
+| cipherlink | 0.9214 | 0.9214 | 0.5333 | 0.6200 | 1.0000 | 85.38 | 83.73 | 0.981× | PASS |
+| exam-parent-v3 | 0.8600 | 0.8600 | 0.7000 | 0.7000 | 1.0000 | 121.65 | 130.03 | 1.069× | PASS |
 
-## 交付物与状态
+P95 按各仓 3 轮全部 scenario attempts 汇合后，以 `ceil(n × 0.95) - 1` 取样；quality 指标为相同 attempts 的算术平均。所有候选 attempt 的 `R_read_must` 均为 1.0，而非只用平均值掩盖单场景遗漏。
 
-- 结构化台账：[`run-index.json`](../../artifacts/model-eval/task30-20260802/run-index.json)
-- 24 分类答卷与评分：[`classification-runs.md`](../../artifacts/model-eval/task30-20260802/classification-runs.md)
-- 两个完整集成记录：[`final-integration-a-luna.md`](../../artifacts/model-eval/task30-20260802/final-integration-a-luna.md)、[`final-integration-b-terra.md`](../../artifacts/model-eval/task30-20260802/final-integration-b-terra.md)
-- 最终矩阵摘要：[`matrix-final/README.md`](../../artifacts/model-eval/task30-20260802/matrix-final/README.md)、[`matrix-final/summary.json`](../../artifacts/model-eval/task30-20260802/matrix-final/summary.json)
-- workflow state 已改为 paired-gate failure/conditional；当前 HEAD 仍为冻结 seed，Task 30 变更保持未提交。
+门槛及结果：
 
-已知限制：本报告不声称通过未提供的隐藏测试；矩阵是 cold-nolsp 真实仓三仓门，不替代 warm-required 或生产 JDTLS 性能评测。
+- `R_read_must = 1.0000`：三仓通过。
+- `recall`、`P_read` 不低于旧实现：三仓通过。
+- `P95(new) <= 1.10 × P95(old)`：三仓通过，最接近门线的是 exam-parent-v3 的 `1.069×`。
+
+此前的 `matrix-final`、`matrix-final2`、`matrix-final3` 和定向 probe 是诊断过程产物，不参与最终判定：它们分别暴露 paired quality/P95、cipherlink must、以及审查发现的 deferred-test shortlist 边界。不能将这些中间数据与本节矩阵混合。
+
+## 经验与边界
+
+1. `R_read_must`、recall、`P_read` 与配对 P95 是并列硬门；绝对 P95 低于 300 ms 不能替代配对质量门。
+2. 冷态关系扩展必须保持语义来源：锚点直接调用、实现续接和纯结构候选不应共享同一无来源优先级。
+3. 限额问题应先确定保留哪些已证明的事实，再施加文件/字节上限；单纯增大数量上限或按文件名补规则会掩盖真实排序缺陷。
+4. 每次改变全局排序后必须重跑三仓完整矩阵；不能回放旧 shadow 或局部 probe。矩阵脚本也必须使用 shell 数组/显式参数，不能依赖 zsh 的多词字符串展开。
+
+未覆盖项：本轮是 cold-nolsp，不替代真实 JDT LS 的 warm/startup 性能或未纳入的第四仓质量验证；候选尚未被用户授权提交，因此报告以 diff hash 保障可追溯性。性能门已解除，后续任务可以在保留该候选边界的前提下开始；正式交付前仍应提交这一已验证的源码与报告。
