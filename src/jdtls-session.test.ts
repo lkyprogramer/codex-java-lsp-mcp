@@ -638,3 +638,128 @@ test("lifecycleGateFromRestartBackoffStatus maps backoff, config-block and allow
     { allowed: false, code: "JDT_CONFIG_ERROR", message: "JDT start is blocked until configuration changes or java_runtime(action=restart)" }
   );
 });
+
+// --- references() cutover onto SemanticGateway (Task 33 Step 7) -----------
+
+test("references() returns the same shape as before, backed by the gateway", async () => {
+  const location = { uri: "file:///repo/A.java", range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } } };
+  const factory = fakeTransportFactory({
+    initializeResult: { capabilities: {} },
+    responses: { "textDocument/references": [location, location] }
+  });
+  const { session, repoRoot } = harness(factory);
+  writeFileSync(path.join(repoRoot, "A.java"), "class A {}\n");
+
+  const result = await session.references(path.join(repoRoot, "A.java"), 3, 7, false);
+
+  assert.equal(result.items.length, 2);
+  assert.equal(result.totalReferences, 2);
+  assert.equal(result.truncated, false);
+  await session.stop();
+});
+
+test("references() shares one backend request across identical concurrent calls and caches the result", async () => {
+  const location = { uri: "file:///repo/A.java", range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } } };
+  const factory = fakeTransportFactory({
+    initializeResult: { capabilities: {} },
+    responses: { "textDocument/references": [location] }
+  });
+  const { session, repoRoot, factory: harnessFactory } = harness(factory);
+  writeFileSync(path.join(repoRoot, "A.java"), "class A {}\n");
+  const file = path.join(repoRoot, "A.java");
+
+  const [first, second] = await Promise.all([
+    session.references(file, 3, 7, false),
+    session.references(file, 3, 7, false)
+  ]);
+  assert.equal(first.items.length, 1);
+  assert.equal(second.items.length, 1);
+  assert.equal(harnessFactory.connections[0].count("textDocument/references"), 1, "concurrent identical requests join one backend call");
+
+  await session.references(file, 3, 7, false);
+  assert.equal(harnessFactory.connections[0].count("textDocument/references"), 1, "a subsequent call is served from the complete-only cache");
+
+  await session.stop();
+});
+
+test("references() with includeDeclaration true/false are independent cache entries", async () => {
+  const factory = fakeTransportFactory({
+    initializeResult: { capabilities: {} },
+    handlers: {
+      "textDocument/references": (params: unknown) => {
+        const context = (params as { context?: { includeDeclaration?: boolean } }).context;
+        return context?.includeDeclaration ? [] : [];
+      }
+    }
+  });
+  const { session, repoRoot, factory: harnessFactory } = harness(factory);
+  writeFileSync(path.join(repoRoot, "A.java"), "class A {}\n");
+  const file = path.join(repoRoot, "A.java");
+
+  await session.references(file, 3, 7, false);
+  await session.references(file, 3, 7, true);
+  assert.equal(harnessFactory.connections[0].count("textDocument/references"), 2);
+
+  await session.stop();
+});
+
+test("references() throws a classified error instead of silently returning partial data", async () => {
+  const factory = fakeTransportFactory({
+    initializeResult: { capabilities: {} },
+    errors: { "textDocument/references": new Error("Internal error in JDT") }
+  });
+  const { session, repoRoot } = harness(factory);
+  writeFileSync(path.join(repoRoot, "A.java"), "class A {}\n");
+
+  await assert.rejects(
+    () => session.references(path.join(repoRoot, "A.java"), 3, 7, false),
+    (error: unknown) => error instanceof JavaIntelligenceError && error.code === "JDT_SERVER_ERROR"
+  );
+
+  await session.stop();
+});
+
+test("a storm/BUILD_CHANGE invalidation forces a fresh references() request even for an unchanged file", async () => {
+  let calls = 0;
+  const factory = fakeTransportFactory({
+    initializeResult: { capabilities: {} },
+    handlers: {
+      "textDocument/references": () => { calls += 1; return []; }
+    }
+  });
+  const { session, repoRoot } = harness(factory);
+  writeFileSync(path.join(repoRoot, "A.java"), "class A {}\n");
+  const file = path.join(repoRoot, "A.java");
+
+  await session.references(file, 3, 7, false);
+  assert.equal(calls, 1);
+  await session.references(file, 3, 7, false);
+  assert.equal(calls, 1, "second call is a cache hit");
+
+  session.invalidateForRepoChanges({ changes: [{ kind: "BUILD_CHANGE", absolutePath: file }] });
+
+  await session.references(file, 3, 7, false);
+  assert.equal(calls, 2, "the build-change generation bump invalidates the gateway cache even though the file itself is unchanged");
+
+  await session.stop();
+});
+
+test("references() during an active restart backoff fails fast without a backend request", async () => {
+  const factory = sequenceTransportFactory([
+    { initializeError: new Error("boom") },
+    { initializeResult: { capabilities: {} }, responses: { "textDocument/references": [] } }
+  ]);
+  const { session, repoRoot } = harness(factory);
+  writeFileSync(path.join(repoRoot, "A.java"), "class A {}\n");
+
+  await assert.rejects(() => session.ensureStarted(DeadlineBudget.fromTimeout(5000)), /boom/);
+  assert.equal(session.status().restartBackoff.consecutiveFailures, 1);
+
+  await assert.rejects(
+    () => session.references(path.join(repoRoot, "A.java"), 3, 7, false),
+    (error: unknown) => error instanceof JavaIntelligenceError && error.code === "JDT_BACKOFF"
+  );
+  assert.equal(factory.spawnCalls, 1, "the gateway's lifecycle gate skipped a second start attempt");
+
+  await session.stop();
+});

@@ -42,12 +42,14 @@ import { fromFileUri, repoCacheRoot, toFileUri } from "./repo-layout.js";
 import { resourceDefaults } from "./resource-defaults.js";
 import { touchRepoCache } from "./worktree-cache-cleanup.js";
 import type { WorktreeIdentity } from "./worktree-identity.js";
-import type {
-  SemanticBackend,
-  SemanticBackendResult,
-  SemanticBackendValue,
-  SemanticGatewayOptions,
-  SemanticValueMap
+import {
+  SemanticGateway,
+  type SemanticBackend,
+  type SemanticBackendResult,
+  type SemanticBackendValue,
+  type SemanticCacheKey,
+  type SemanticGatewayOptions,
+  type SemanticValueMap
 } from "./semantic-gateway.js";
 
 export type LspPosition = {
@@ -224,6 +226,17 @@ export class JdtlsSession {
   private phaseMetrics: Record<string, number> = {};
   private pendingLease?: CompositeJdtLease;
   private readonly worktree: WorktreeIdentity;
+  /**
+   * Independent staleness signal for SemanticGateway-owned operations,
+   * alongside each key's own fileFingerprint. Mirrors clearCache()'s
+   * existing storm/BUILD_CHANGE/stop semantics (a full clear bumps this;
+   * a single changed file is still caught by that file's own
+   * fileFingerprint dimension, same as the old cache's per-dependency
+   * invalidation) rather than threading the external repo-generation
+   * clock through call sites that do not currently share it.
+   */
+  private cacheGeneration = 1;
+  private readonly semanticGateway: SemanticGateway;
 
   constructor(
     private readonly repoRoot: string,
@@ -235,6 +248,12 @@ export class JdtlsSession {
   ) {
     this.worktree = worktree ?? { repoRoot, repoHash: repoHash(repoRoot), isLinkedWorktree: false };
     this.restartBackoff = new JdtRestartBackoff(now);
+    this.semanticGateway = new SemanticGateway(createJdtlsSemanticBackend(this), {
+      now,
+      ttlMs: DEFAULT_CACHE_TTL_MS,
+      absoluteCapMs: DEFAULT_LSP_REQUEST_TIMEOUT_MS,
+      lifecycleGate: () => lifecycleGateFromRestartBackoffStatus(this.restartBackoff.status())
+    });
     const cacheRoot = repoCacheRoot(repoRoot);
     this.dataDir = process.env.JDTLS_DATA_DIR || path.join(cacheRoot, "workspace");
     this.logDir = process.env.JDTLS_LOG_DIR || path.join(cacheRoot, "logs");
@@ -553,19 +572,41 @@ export class JdtlsSession {
     throw lastError instanceof Error ? lastError : new Error("Timed out waiting for textDocument/documentSymbol retry budget.");
   }
 
+  /**
+   * Task 33 Step 7 cutover: routed through SemanticGateway instead of the
+   * generic cached() TTL wrapper - singleflight, complete-only cache,
+   * lifecycle-gate short-circuit. Return shape and throw-on-non-COMPLETE
+   * behavior are preserved exactly so no caller (semantic.ts, symbol.ts)
+   * needed a code change.
+   */
   async references(file: string, line: number, column: number, includeDeclaration: boolean, timeoutMs = DEFAULT_LSP_REQUEST_TIMEOUT_MS): Promise<{
     items: LspLocation[];
     totalReferences: number;
     truncated: boolean;
   }> {
-    return this.cached("references", [file, line, column, includeDeclaration, timeoutMs], [file], async () => {
-      const items = await this.rawReferences(file, line, column, includeDeclaration, timeoutMs);
-      return {
-        items,
-        totalReferences: items.length,
-        truncated: false
-      };
-    });
+    const key: SemanticCacheKey<"references"> = {
+      repoHash: this.worktree.repoHash,
+      generation: this.cacheGeneration,
+      operation: "references",
+      file,
+      fileFingerprint: fileFingerprint(file),
+      line,
+      column,
+      optionsKey: `includeDeclaration=${includeDeclaration}`
+    };
+    const outcome = await this.semanticGateway.execute(key, DeadlineBudget.fromTimeout(timeoutMs), timeoutMs);
+    if (outcome.completion !== "COMPLETE") {
+      throw new JavaIntelligenceError(
+        outcome.errorCode ?? "JDT_SERVER_ERROR",
+        `textDocument/references did not complete (completion=${outcome.completion})`
+      );
+    }
+    const items = [...outcome.value];
+    return {
+      items,
+      totalReferences: items.length,
+      truncated: false
+    };
   }
 
   /**
@@ -1349,6 +1390,11 @@ export class JdtlsSession {
       this.lastCacheInvalidatedAt = new Date();
     }
     this.cache.clear();
+    // Independent of the old per-method cache above: every SemanticGateway
+    // cache key is stamped with this generation, so a storm/BUILD_CHANGE/
+    // stop (every clearCache() caller) invalidates gateway-owned operations
+    // too, without a per-key scan.
+    this.cacheGeneration += 1;
   }
 
   private evictExpiredCacheEntries(): void {
