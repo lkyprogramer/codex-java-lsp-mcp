@@ -58,8 +58,9 @@ export function buildGoldenAttributionV3(
 ): GoldenAttributionV3[] {
   const candidateByPath = new Map(shadowRanking.candidates.map(candidate => [candidate.path, candidate]));
   const limit = candidateLimit(context.mode, resolvedProfile(context.profile));
+  const repoRoot = path.resolve(context.repoRoot);
   return goldenEntries(scenario).map(({ file, kind }) => {
-    const absolutePath = path.join(context.repoRoot, file);
+    const absolutePath = path.join(repoRoot, file);
     const candidate = candidateByPath.get(absolutePath);
     const inCandidates = candidate !== undefined;
     const inReadPlan = candidate?.selectedByReadPlan === true;
@@ -167,6 +168,7 @@ export function buildGoldenCounterfactualV3(
 ): GoldenCounterfactualV3 {
   const candidateByPath = new Map(shadowRanking.candidates.map(candidate => [candidate.path, candidate]));
   const limit = candidateLimit(context.mode, resolvedProfile(context.profile));
+  const repoRoot = path.resolve(context.repoRoot);
   const entries = goldenEntries(scenario);
   const measured = shadowRanking.candidates.some(candidate => candidate.selectedByReadPlanWithoutEachFamily !== undefined);
 
@@ -175,7 +177,7 @@ export function buildGoldenCounterfactualV3(
     const candidateHitLost: string[] = [];
     const readPlanHitLost: string[] = [];
     for (const { file } of entries) {
-      const candidate = candidateByPath.get(path.join(context.repoRoot, file));
+      const candidate = candidateByPath.get(path.join(repoRoot, file));
       if (!candidate) continue;
 
       const wasCandidateHit = candidate.rank <= limit;

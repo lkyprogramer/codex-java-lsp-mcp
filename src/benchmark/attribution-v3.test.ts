@@ -83,6 +83,24 @@ test("blockedBy distinguishes hit, readplan-budget, and candidate-limit using th
   assert.equal(byFile.get("src/main/java/demo/C.java")?.kind, "should");
 });
 
+test("a relative context.repoRoot still matches shadowRanking's absolute candidate paths instead of silently reporting every golden file absent", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "attribution-v3-relative-"));
+  await mkdir(path.join(root, "src/main/java/demo"), { recursive: true });
+  await writeFile(path.join(root, "src/main/java/demo/A.java"), "package demo; class A {}\n");
+  const scenarioV3 = scenario({ mustHit: ["src/main/java/demo/A.java"], taskBlocking: [], shouldHit: [], support: [] });
+  const shadow = diagnostics([
+    // ShadowRankingCandidate.path is always absolute in production (candidateFile is always
+    // set from CandidateFile.absolutePath by every provider) - a relative repoRoot must not
+    // be joined against it as if both were the same kind of path.
+    shadowCandidate({ path: path.join(root, "src/main/java/demo/A.java"), rank: 1, selectedByReadPlan: true, familyScores: { LEXICAL: 5 } })
+  ]);
+
+  const relativeRoot = path.relative(process.cwd(), root);
+  const rows = buildGoldenAttributionV3(scenarioV3, shadow, baseContext({ repoRoot: relativeRoot }));
+  assert.equal(rows[0]!.inCandidates, true, "a relative repoRoot must resolve to the same absolute path shadowRanking already uses, not silently fail every lookup");
+  assert.equal(rows[0]!.blockedBy, "hit");
+});
+
 test("a family with a zero score is excluded from sourceFamilies", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "attribution-v3-zero-"));
   await mkdir(path.join(root, "src/main/java/demo"), { recursive: true });
