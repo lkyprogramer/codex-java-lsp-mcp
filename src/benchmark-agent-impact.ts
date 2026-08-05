@@ -11,7 +11,18 @@ import type { ShadowRankingDiagnostics } from "./agent-router/shadow-ranking.js"
 import type { ImpactOptions } from "./agent-types.js";
 import { readRuntimeBuild } from "./build-info.js";
 import { buildGoldenAttributionV3, buildGoldenCounterfactualV3 } from "./benchmark/attribution-v3.js";
-import { type GoldenKind, type Scenario, type WarmState, goldenEntries, goldenFiles, loadScenarios } from "./benchmark/golden-scenario.js";
+import {
+  firstTaskBlockingRank,
+  goldenEntries,
+  goldenFiles,
+  loadScenarios,
+  ndcgReadAt6,
+  readPlanRangeRecall,
+  taskBlockingFiles,
+  type GoldenKind,
+  type Scenario,
+  type WarmState
+} from "./benchmark/golden-scenario.js";
 import { JavaIndexClient } from "./java-index/java-index-client.js";
 import type { JavaIndexStatus } from "./java-index/index-types.js";
 import { RouterJavaIndex } from "./java-index/router-java-index.js";
@@ -266,6 +277,15 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
   const candidatePaths = result.files.map(file => String(file.path));
   const readFiles = distinctReadFiles(result);
   const quality = evaluate(candidatePaths, readFiles, scenario);
+  const kibVisible = (rawSearchPayload + readingPayload) / 1024;
+  const blockingHitsInReadPlan = readFiles.filter(file => taskBlockingFiles(scenario).has(file)).length;
+  const qualityV3 = {
+    "NDCG_read@6": ndcgReadAt6(scenario, readFiles),
+    firstTaskBlockingRank: firstTaskBlockingRank(scenario, candidatePaths),
+    readPlanRangeRecall: readPlanRangeRecall(scenario, selectedRangesByFile(result)),
+    evidencePerKiB: kibVisible > 0 ? quality.hitFiles / kibVisible : 0,
+    taskBlockingHitsPerKiB: kibVisible > 0 ? blockingHitsInReadPlan / kibVisible : 0
+  };
   const shadowRanking = result.metrics?.shadowRanking;
   const shadowRankingTyped = asShadowRankingDiagnostics(shadowRanking);
   const shadowQuality = qualityForShadowRanking(shadowRanking, cli.repoRoot, scenario);
@@ -284,6 +304,7 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
     // that range batch; it must not grow with selected read-plan files.
     ...attemptPayload("impact", quality, rawSearchPayload, readingPayload, elapsedMs, 2, result.readPlan.length, result.cost.suppressedRawBytes, 0),
     ...readPlanMetrics(result),
+    ...qualityV3,
     timing: timingPayload(result, sessionPhaseMs),
     // V3 attribution/counterfactual (Task 32 Steps 2-3) need the same
     // shadow-ranking pass this request already computed; they have no
@@ -358,8 +379,17 @@ function noLspAttempt(repoRoot: string, scenario: Scenario): Record<string, unkn
   const readingPayload = readMatchedFilesBytes(repoRoot, readFiles, rg.lineByPath, scenario);
   const rawSearchPayload = Buffer.byteLength(rg.stdout, "utf8");
   const quality = evaluate(candidatePaths, readFiles, scenario);
+  const kibVisible = (rawSearchPayload + readingPayload) / 1024;
+  const blockingHitsInReadPlan = readFiles.filter(file => taskBlockingFiles(scenario).has(file)).length;
   return {
     ...attemptPayload("no-lsp", quality, rawSearchPayload, readingPayload, performance.now() - startedAt, 1 + readFiles.length, readFiles.length, 0, rawSearchPayload),
+    "NDCG_read@6": ndcgReadAt6(scenario, readFiles),
+    firstTaskBlockingRank: firstTaskBlockingRank(scenario, candidatePaths),
+    // no-lsp has no range-aware read plan at all - a scenario that later
+    // carries mustReadRanges genuinely gets 0 coverage here, not "unmeasured".
+    readPlanRangeRecall: readPlanRangeRecall(scenario, new Map()),
+    evidencePerKiB: kibVisible > 0 ? quality.hitFiles / kibVisible : 0,
+    taskBlockingHitsPerKiB: kibVisible > 0 ? blockingHitsInReadPlan / kibVisible : 0,
     goldenAttribution: goldenAttributionForNoLsp(repoRoot, candidatePaths, readFiles, scenario)
   };
 }
@@ -499,6 +529,19 @@ function readPlanMetrics(result: Awaited<ReturnType<AgentRouter["impact"]>>): Re
     budgetExceededByAnchor: readPlan?.budgetExceededByAnchor === true,
     marginalUtilityBySelectedFile: readPlan?.marginalUtilityBySelectedFile
   };
+}
+
+function selectedRangesByFile(result: Awaited<ReturnType<AgentRouter["impact"]>>): Map<string, Array<{ startLine: number; endLine: number }>> {
+  const pathById = new Map(result.files.map(file => [String(file.id), String(file.path)]));
+  const byFile = new Map<string, Array<{ startLine: number; endLine: number }>>();
+  for (const item of result.readPlan) {
+    const file = pathById.get(item.fileId);
+    if (!file) continue;
+    const ranges = byFile.get(file) ?? [];
+    ranges.push(...item.ranges.map(range => ({ startLine: range.startLine, endLine: range.endLine })));
+    byFile.set(file, ranges);
+  }
+  return byFile;
 }
 
 function readMatchedFilesBytes(repoRoot: string, files: string[], lineByPath: Map<string, number>, scenario: Scenario): number {
@@ -726,6 +769,7 @@ function evaluate(candidateFiles: string[], readFiles: string[], scenario: Scena
     ...goldenFiles(scenario, "support")
   ]);
   const mustHit = new Set(goldenFiles(scenario, "mustHit"));
+  const blocking = taskBlockingFiles(scenario);
   const hitFiles = [...candidates].filter(file => goldenAll.has(file)).length;
   return {
     returnedFiles: candidates.size,
@@ -735,7 +779,11 @@ function evaluate(candidateFiles: string[], readFiles: string[], scenario: Scena
     pCandAt5: precisionAt(candidateFiles, goldenAll, 5),
     pCandAt10: precisionAt(candidateFiles, goldenAll, 10),
     pRead: readFiles.length ? readFiles.filter(file => goldenAll.has(file)).length / readFiles.length : 1,
-    rReadMust: mustHit.size ? readFiles.filter(file => mustHit.has(file)).length / mustHit.size : 1
+    rReadMust: mustHit.size ? readFiles.filter(file => mustHit.has(file)).length / mustHit.size : 1,
+    // Task 32 Step 7: the stricter superset gate metric - mustHit alone can
+    // read 1.0 while a real shouldBlocksTask file the task also needs is
+    // silently missed.
+    rTaskBlocking: blocking.size ? readFiles.filter(file => blocking.has(file)).length / blocking.size : 1
   };
 }
 
