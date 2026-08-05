@@ -1,0 +1,366 @@
+diff --git a/src/jdtls-session.ts b/src/jdtls-session.ts
+index 1cc7ef7..ec1b68f 100644
+--- a/src/jdtls-session.ts
++++ b/src/jdtls-session.ts
+@@ -22,7 +22,7 @@ import {
+ } from "./jdtls-transport.js";
+ import { repoHash } from "./path-utils.js";
+ import { DeadlineBudget } from "./runtime/deadline-budget.js";
+-import { isCacheableCompletion, type Completion } from "./runtime/completion.js";
++import type { Completion } from "./runtime/completion.js";
+ import {
+   classifySemanticError,
+   JavaIntelligenceError,
+@@ -701,6 +701,16 @@ export class JdtlsSession {
+     return result;
+   }
+ 
++  /**
++   * Task 33 Step 7 cutover, hierarchy variant: routed through SemanticGateway
++   * for its completed-at TTL cache and lifecycle-gate short-circuit only -
++   * NOT its singleflight join (see NON_SHARED_OPERATIONS in
++   * semantic-gateway.ts for why walkHierarchy's "resolve with partial edges
++   * on the caller's own deadline" contract cannot share a backend call
++   * across callers with different deadlines). `operationCapMs` is the
++   * caller's own remaining budget, so the caller awaiting the gateway
++   * outcome is equivalent to the caller awaiting the raw walk directly.
++   */
+   async callHierarchy(
+     file: string,
+     line: number,
+@@ -710,8 +720,26 @@ export class JdtlsSession {
+     limit: number,
+     budget: DeadlineBudget
+   ): Promise<HierarchyResult> {
+-    return this.cachedHierarchy("callHierarchy", [file, line, column, direction, depth, limit], file, () =>
+-      this.rawCallHierarchy(file, line, column, direction, depth, limit, budget));
++    const key: SemanticCacheKey<"callHierarchy"> = {
++      repoHash: this.worktree.repoHash,
++      generation: this.cacheGeneration,
++      operation: "callHierarchy",
++      file,
++      fileFingerprint: fileFingerprint(file),
++      line,
++      column,
++      optionsKey: `direction=${direction}&depth=${depth}&limit=${limit}`
++    };
++    const outcome = await this.semanticGateway.execute(key, budget, budget.remainingMs());
++    return {
++      roots: [...outcome.value.roots],
++      edges: [...outcome.value.edges],
++      completion: outcome.completion,
++      truncated: outcome.value.truncated,
++      requests: outcome.value.requests,
++      visited: outcome.value.visited,
++      errorCode: outcome.errorCode
++    };
+   }
+ 
+   /** Uncached primitive for SemanticGateway; see rawReferences. */
+@@ -748,6 +776,7 @@ export class JdtlsSession {
+     });
+   }
+ 
++  /** Task 33 Step 7 cutover, hierarchy variant: see callHierarchy()'s doc comment. */
+   async typeHierarchy(
+     file: string,
+     line: number,
+@@ -757,8 +786,26 @@ export class JdtlsSession {
+     limit: number,
+     budget: DeadlineBudget
+   ): Promise<HierarchyResult> {
+-    return this.cachedHierarchy("typeHierarchy", [file, line, column, direction, depth, limit], file, () =>
+-      this.rawTypeHierarchy(file, line, column, direction, depth, limit, budget));
++    const key: SemanticCacheKey<"typeHierarchy"> = {
++      repoHash: this.worktree.repoHash,
++      generation: this.cacheGeneration,
++      operation: "typeHierarchy",
++      file,
++      fileFingerprint: fileFingerprint(file),
++      line,
++      column,
++      optionsKey: `direction=${direction}&depth=${depth}&limit=${limit}`
++    };
++    const outcome = await this.semanticGateway.execute(key, budget, budget.remainingMs());
++    return {
++      roots: [...outcome.value.roots],
++      edges: [...outcome.value.edges],
++      completion: outcome.completion,
++      truncated: outcome.value.truncated,
++      requests: outcome.value.requests,
++      visited: outcome.value.visited,
++      errorCode: outcome.errorCode
++    };
+   }
+ 
+   /** Uncached primitive for SemanticGateway; see rawReferences. */
+@@ -791,22 +838,6 @@ export class JdtlsSession {
+     });
+   }
+ 
+-  /** Only COMPLETE hierarchies may be reused; a truncated walk must be retried. */
+-  private async cachedHierarchy(
+-    method: string,
+-    parts: unknown[],
+-    file: string,
+-    compute: () => Promise<HierarchyResult>
+-  ): Promise<HierarchyResult> {
+-    return this.cached(
+-      method,
+-      parts,
+-      [file],
+-      compute,
+-      result => isCacheableCompletion(result.completion)
+-    );
+-  }
+-
+   private async walkHierarchy(input: {
+     file: string;
+     line: number;
+@@ -1796,7 +1827,7 @@ export function createJdtlsSemanticBackend(session: JdtlsSession): SemanticBacke
+           const result = await session.rawTypeHierarchy(key.file, line, column, direction, depth, limit, DeadlineBudget.fromTimeout(timeoutMs));
+           return {
+             completion: result.completion,
+-            value: { roots: result.roots, edges: result.edges, truncated: result.truncated },
++            value: { roots: result.roots, edges: result.edges, truncated: result.truncated, requests: result.requests, visited: result.visited },
+             errorCode: result.errorCode
+           };
+         }
+@@ -1808,7 +1839,7 @@ export function createJdtlsSemanticBackend(session: JdtlsSession): SemanticBacke
+           const result = await session.rawCallHierarchy(key.file, line, column, direction, depth, limit, DeadlineBudget.fromTimeout(timeoutMs));
+           return {
+             completion: result.completion,
+-            value: { roots: result.roots, edges: result.edges, truncated: result.truncated },
++            value: { roots: result.roots, edges: result.edges, truncated: result.truncated, requests: result.requests, visited: result.visited },
+             errorCode: result.errorCode
+           };
+         }
+diff --git a/src/semantic-gateway.test.ts b/src/semantic-gateway.test.ts
+index 3a23b46..e49f87d 100644
+--- a/src/semantic-gateway.test.ts
++++ b/src/semantic-gateway.test.ts
+@@ -31,6 +31,27 @@ const baseKey: SemanticCacheKey<"references"> = {
+   optionsKey: "includeDeclaration=false"
+ };
+ 
++function hierarchy(names: string[]): SemanticValueMap["typeHierarchy"] {
++  return {
++    roots: [],
++    edges: names.map(name => ({ from: name, to: name, depth: 1 })),
++    truncated: false,
++    requests: names.length,
++    visited: names.length
++  };
++}
++
++const hierarchyKey: SemanticCacheKey<"typeHierarchy"> = {
++  repoHash: "repo",
++  generation: 1,
++  operation: "typeHierarchy",
++  file: "/repo/A.java",
++  fileFingerprint: "10:1",
++  line: 3,
++  column: 7,
++  optionsKey: "direction=subtypes&depth=1&limit=10"
++};
++
+ test("identical concurrent semantic requests share one backend call", async () => {
+   const pending = deferred<SemanticBackendResult<SemanticValueMap["references"]>>();
+   let backendCalls = 0;
+@@ -195,3 +216,62 @@ test("busy-other-session lifecycle outcome is reported distinctly from backoff",
+   assert.equal(status.busyOtherSessionSkips, 1);
+   assert.equal(status.lifecycleBackoffSkips, 0);
+ });
++
++test("typeHierarchy/callHierarchy never join an in-flight entry: identical concurrent calls each get their own backend execution", async () => {
++  const pendings: Array<ReturnType<typeof deferred<SemanticBackendResult<SemanticValueMap["typeHierarchy"]>>>> = [];
++  let backendCalls = 0;
++  const gateway = new SemanticGateway({
++    async execute() {
++      const pending = deferred<SemanticBackendResult<SemanticValueMap["typeHierarchy"]>>();
++      pendings.push(pending);
++      backendCalls += 1;
++      return pending.promise;
++    }
++  }, { ttlMs: 1000, absoluteCapMs: 1000 });
++
++  const first = gateway.execute(hierarchyKey, DeadlineBudget.fromTimeout(1000), 1000);
++  const second = gateway.execute(hierarchyKey, DeadlineBudget.fromTimeout(1000), 1000);
++  assert.equal(backendCalls, 2, "hierarchy calls must not join - each gets its own backend execution");
++
++  pendings[0]!.resolve({ completion: "COMPLETE", value: hierarchy(["A"]) });
++  pendings[1]!.resolve({ completion: "COMPLETE", value: hierarchy(["B"]) });
++  const [left, right] = await Promise.all([first, second]);
++  assert.equal(left.shared, false);
++  assert.equal(right.shared, false);
++  assert.deepEqual(left.value.edges.map(edge => edge.from), ["A"]);
++  assert.deepEqual(right.value.edges.map(edge => edge.from), ["B"]);
++});
++
++test("a typeHierarchy caller's own deadline never rejects the call - it resolves with whatever the backend returns, even PARTIAL_TIMEOUT", async () => {
++  const gateway = new SemanticGateway({
++    async execute() {
++      return { completion: "PARTIAL_TIMEOUT", value: hierarchy(["partial"]), errorCode: "DEADLINE_EXCEEDED" };
++    }
++  }, { ttlMs: 1000, absoluteCapMs: 1000 });
++
++  // Under the shared join/race path this 1ms budget would reject with
++  // DEADLINE_EXCEEDED (see "one caller deadline does not cancel another
++  // caller..." above). Hierarchy must resolve instead, preserving
++  // walkHierarchy's "partial edges on the caller's own deadline" contract.
++  const outcome = await gateway.execute(hierarchyKey, DeadlineBudget.fromTimeout(1), 1000);
++  assert.equal(outcome.completion, "PARTIAL_TIMEOUT");
++  assert.equal(outcome.errorCode, "DEADLINE_EXCEEDED");
++  assert.deepEqual(outcome.value.edges.map(edge => edge.from), ["partial"]);
++});
++
++test("PARTIAL_TIMEOUT hierarchy outcomes are never cached, matching every other operation's cacheability rule", async () => {
++  let calls = 0;
++  const gateway = new SemanticGateway({
++    async execute() {
++      calls += 1;
++      return calls === 1
++        ? { completion: "PARTIAL_TIMEOUT" as const, value: hierarchy(["partial"]), errorCode: "DEADLINE_EXCEEDED" as const }
++        : { completion: "COMPLETE" as const, value: hierarchy(["complete"]) };
++    }
++  }, { ttlMs: 1000, absoluteCapMs: 1000 });
++
++  await gateway.execute(hierarchyKey, DeadlineBudget.fromTimeout(1000), 1000);
++  const second = await gateway.execute(hierarchyKey, DeadlineBudget.fromTimeout(1000), 1000);
++  assert.equal(second.cacheHit, false);
++  assert.equal(calls, 2);
++});
+diff --git a/src/semantic-gateway.ts b/src/semantic-gateway.ts
+index 2984c1c..ee0b339 100644
+--- a/src/semantic-gateway.ts
++++ b/src/semantic-gateway.ts
+@@ -54,6 +54,8 @@ export type SemanticHierarchy = {
+   roots: readonly unknown[];
+   edges: readonly HierarchyEdge[];
+   truncated: boolean;
++  requests: number;
++  visited: number;
+ };
+ 
+ export type SemanticValueMap = {
+@@ -144,6 +146,25 @@ const DEFAULT_TTL_MS = 5 * 60_000;
+ const DEFAULT_ABSOLUTE_CAP_MS = 20_000;
+ const ALWAYS_ALLOWED: SemanticLifecycleGate = () => ({ allowed: true });
+ 
++/**
++ * typeHierarchy/callHierarchy walk JDT step by step and, on the caller's own
++ * deadline expiring mid-walk, RESOLVE with whatever edges were already
++ * collected (completion PARTIAL_TIMEOUT) - see jdtls-hierarchy.test.ts's
++ * "an expired hierarchy budget returns partial edges rather than throwing".
++ * Every other operation's caller REJECTs on its own deadline instead
++ * (`callerBudget.race()` below), which is correct when a backend call is
++ * shared: one caller giving up must not cancel work another waiter still
++ * needs. Those two contracts cannot both apply to one shared backend call -
++ * a caller whose deadline just fired cannot both "get back partial edges"
++ * and "not affect the other waiter". So these two operations skip
++ * singleflight/join entirely: each call gets its own backend operation,
++ * capped by the caller's own remaining budget, and the caller simply awaits
++ * it to completion instead of racing a second, independent clock against it.
++ * They still read and write the completed-at TTL cache like every other
++ * operation - only the in-flight join is skipped.
++ */
++const NON_SHARED_OPERATIONS: ReadonlySet<SemanticOperation> = new Set(["typeHierarchy", "callHierarchy"]);
++
+ export class SemanticGateway implements SemanticGatewayApi {
+   private readonly inflight = new Map<string, InflightEntry>();
+   private readonly completed = new Map<string, CompletedEntry>();
+@@ -185,6 +206,10 @@ export class SemanticGateway implements SemanticGatewayApi {
+     if (cachedEntry) this.completed.delete(cacheKey);
+     this.cacheMisses += 1;
+ 
++    if (NON_SHARED_OPERATIONS.has(key.operation)) {
++      return this.executeUnshared(key, cacheKey, operationCapMs) as Promise<SemanticOutcome<SemanticValueMap[Operation]>>;
++    }
++
+     let entry = this.inflight.get(cacheKey);
+     let shared = true;
+     if (!entry) {
+@@ -228,6 +253,35 @@ export class SemanticGateway implements SemanticGatewayApi {
+     }
+   }
+ 
++  /** See NON_SHARED_OPERATIONS: no join, no race - just cache read/write around one dedicated, caller-bounded backend call. */
++  private async executeUnshared<Operation extends SemanticOperation>(
++    key: SemanticCacheKey<Operation>,
++    cacheKey: string,
++    operationCapMs: number
++  ): Promise<SemanticOutcome<SemanticValueMap[Operation]>> {
++    const gate = this.lifecycleGate();
++    if (!gate.allowed) {
++      if (gate.code === "JDT_BACKOFF" || gate.code === "JDT_CONFIG_ERROR") {
++        this.lifecycleBackoffSkips += 1;
++      } else {
++        this.busyOtherSessionSkips += 1;
++      }
++      return {
++        completion: "FAILED",
++        value: emptyValueFor(key.operation) as SemanticValueMap[Operation],
++        elapsedMs: 0,
++        cacheHit: false,
++        shared: false,
++        errorCode: gate.code
++      };
++    }
++    const backendCapMs = Math.max(1, Math.min(operationCapMs, this.absoluteCapMs));
++    const controller = new AbortController();
++    const settled = await this.runBackend(key, backendCapMs, controller.signal);
++    this.writeCache(cacheKey, settled);
++    return toOutcome(settled, false, false) as SemanticOutcome<SemanticValueMap[Operation]>;
++  }
++
+   private createInflightEntry(
+     key: SemanticCacheKey,
+     cacheKey: string,
+@@ -235,8 +289,23 @@ export class SemanticGateway implements SemanticGatewayApi {
+   ): InflightEntry {
+     const controller = new AbortController();
+     const backendCapMs = Math.max(1, Math.min(operationCapMs, this.absoluteCapMs));
++    const promise = this.runBackend(key, backendCapMs, controller.signal);
++    const entry: InflightEntry = { controller, promise, waiters: 0 };
++    this.inflight.set(cacheKey, entry);
++    promise.then(settled => {
++      if (this.inflight.get(cacheKey) === entry) this.inflight.delete(cacheKey);
++      this.writeCache(cacheKey, settled);
++    });
++    return entry;
++  }
++
++  private runBackend(
++    key: SemanticCacheKey,
++    backendCapMs: number,
++    signal: AbortSignal
++  ): Promise<BackendSettled<SemanticBackendValue>> {
+     const startedAt = this.now();
+-    const promise = this.backend.execute(key, backendCapMs, controller.signal)
++    return this.backend.execute(key, backendCapMs, signal)
+       .then((result): BackendSettled<SemanticBackendValue> => ({
+         completion: result.completion,
+         value: result.value,
+@@ -252,13 +321,6 @@ export class SemanticGateway implements SemanticGatewayApi {
+           errorCode: classified.code
+         };
+       });
+-    const entry: InflightEntry = { controller, promise, waiters: 0 };
+-    this.inflight.set(cacheKey, entry);
+-    promise.then(settled => {
+-      if (this.inflight.get(cacheKey) === entry) this.inflight.delete(cacheKey);
+-      this.writeCache(cacheKey, settled);
+-    });
+-    return entry;
+   }
+ 
+   private writeCache(cacheKey: string, settled: BackendSettled<SemanticBackendValue>): void {
+@@ -320,7 +382,7 @@ function completionForCode(code: JavaIntelligenceErrorCode): Completion {
+ function emptyValueFor(operation: SemanticOperation): SemanticBackendValue {
+   if (operation === "hover") return null;
+   if (operation === "typeHierarchy" || operation === "callHierarchy") {
+-    return { roots: [], edges: [], truncated: false };
++    return { roots: [], edges: [], truncated: false, requests: 0, visited: 0 };
+   }
+   return [];
+ }
