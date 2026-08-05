@@ -857,3 +857,38 @@ test("symbolContext()'s 3 concurrent raw requests for a not-yet-open file open t
 
   await session.stop();
 });
+
+test("status() exposes SemanticGateway's aggregate counters, with no per-query file path", async () => {
+  const location = { uri: "file:///repo/A.java", range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } } };
+  const factory = fakeTransportFactory({
+    initializeResult: { capabilities: {} },
+    responses: { "textDocument/references": [location] }
+  });
+  const { session, repoRoot } = harness(factory);
+  writeFileSync(path.join(repoRoot, "A.java"), "class A {}\n");
+  const file = path.join(repoRoot, "A.java");
+
+  assert.deepEqual(session.status().semanticGateway, {
+    inflight: 0,
+    completedEntries: 0,
+    cacheHits: 0,
+    cacheMisses: 0,
+    sharedJoins: 0,
+    abortedNoWaiters: 0,
+    completeWrites: 0,
+    rejectedWrites: 0,
+    lifecycleBackoffSkips: 0,
+    busyOtherSessionSkips: 0
+  });
+
+  await session.references(file, 3, 7, false);
+  await session.references(file, 3, 7, false);
+
+  const gatewayStatus = session.status().semanticGateway;
+  assert.equal(gatewayStatus.completeWrites, 1);
+  assert.equal(gatewayStatus.cacheMisses, 1);
+  assert.equal(gatewayStatus.cacheHits, 1);
+  assert.equal(JSON.stringify(gatewayStatus).includes(file), false, "no per-query file path leaks into the aggregate status");
+
+  await session.stop();
+});

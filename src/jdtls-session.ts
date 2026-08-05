@@ -49,6 +49,7 @@ import {
   type SemanticBackendValue,
   type SemanticCacheKey,
   type SemanticGatewayOptions,
+  type SemanticGatewayStatus,
   type SemanticValueMap
 } from "./semantic-gateway.js";
 
@@ -132,6 +133,8 @@ type JdtlsStatus = {
   startedAt?: string;
   fileWatcher: FileWatcherStatus;
   cache: JdtlsCacheStatus;
+  /** Task 33 Step 9. Aggregate counters only - no per-query file path, matching the plan's diagnostic-output constraint. */
+  semanticGateway: SemanticGatewayStatus;
   buildSystem: BuildSystem;
   projectJdk: ProjectJdkStatus;
   generatedCode: GeneratedCodeStatus;
@@ -292,6 +295,7 @@ export class JdtlsSession {
         lastFlushSize: 0
       },
       cache: this.cacheStatus(),
+      semanticGateway: this.semanticGateway.status(),
       buildSystem: this.buildSystem,
       projectJdk: this.projectJdk,
       generatedCode: this.generatedCode,
