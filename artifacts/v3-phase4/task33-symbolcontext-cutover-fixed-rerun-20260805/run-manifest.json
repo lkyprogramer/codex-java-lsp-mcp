@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "createdAt": "2026-08-05T09:08:34.890Z",
+  "sourceRoot": "/Users/luo/Documents/github/codex-java-lsp-mcp",
+  "baseline": "640370e",
+  "candidateHead": "4c23c75a56b964218083c6e9a4b99494d9ec3587",
+  "candidatePatchSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "runs": 5,
+  "rounds": [
+    "old/new",
+    "new/old",
+    "old/new"
+  ],
+  "repositories": {
+    "lishuedu": "/Users/luo/Documents/program/lishu/lishuedu",
+    "cipherlink": "/Users/luo/Documents/program/cipherlink",
+    "exam-parent-v3": "/Users/luo/Documents/program/exam-parent-v3"
+  },
+  "scenarios": {
+    "lishuedu": "9894d0adde877119c81c3d4d199c2873125b88a4c377d5855f375cdc4b0116be",
+    "cipherlink": "b3d4ef9476be164b026f1fee220170c98b1c116ff896a695909dc82f54093bd3",
+    "exam-parent-v3": "449b695f860f21a7d91ff60bbcdb36dcadf641443ae52c89a995f6507cd95b32"
+  },
+  "jdtlsDisabled": true,
+  "workspaceRoot": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-mcp-three-repo-km5zpH"
+}
