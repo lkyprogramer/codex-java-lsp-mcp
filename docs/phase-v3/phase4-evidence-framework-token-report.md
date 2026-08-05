@@ -8,20 +8,37 @@
 **Task 32 判定为 KEEP，Iteration D（Task 24-32）关闭。**
 
 - 三仓 `R_read_must=1.000000`（每个 scenario、每次 run 均为 1，非均值达标——`verify-three-repo-cold-matrix.mjs` 用的是 `Math.min()`，本报告的 gate 脚本同样按无条件下限校验，全部 24×5 次尝试无一低于 1.0）。
-- Task 32 本身（Step 1-7：golden schema V3、Attribution V3、counterfactual、matrix-runner、新指标）**未引入任何排序/候选/read-plan 行为改变**：在未改动的原 16 条 scenario 上，当前 HEAD 的 recall/rReadMust 与 Task 31 已验证通过的 `e1dd73c` 门禁（`artifacts/model-eval/task31-formal-matrix-20260804/matrix-summary.json`）逐仓完全一致（见第 3 节），证明 Task 32 只新增诊断字段，未触碰生产排序逻辑。
+- Task 32 本身（Step 1-7：golden schema V3、Attribution V3、counterfactual、matrix-runner、新指标）**未引入任何排序/候选/read-plan 行为改变**：使用项目标准的 `scripts/run-three-repo-cold-matrix.mjs` 三仓 old-vs-new 配对回归门禁，以 V3 schema 迁移刚完成的 `516006c`（Task 32 Step 1 收尾，Step 2 及以后尚未开始）为 baseline、当前 HEAD 为 candidate，三轮 old/new 交替、独立隔离缓存、同一份冻结 golden 文件，三仓 recall/pRead 逐位完全相同、`R_read_must=1.0000`、P95 比值 0.707-0.907（均 ≤1.10），gate 四项全 PASS（见第 3 节）。这是该项目 Task 25/30/31 一直使用的标准配对回归协议，证据强度高于历史归档数字对比。
 - 框架 provider（MyBatis/MapStruct）价值门禁满足："framework provider must produce at least one real-repo counterfactual gain" —— 在真实仓库 lishuedu 上找到并五次运行稳定复现的证据（第 5 节）。
 - 新增的 8 条真实仓库 scenario（Step 5）按计划要求专门覆盖当前阶段的已知缺口（exam-parent-v3 service/controller/type-edge、cipherlink readPlan-full port/dto/repository、lishuedu framework 竞争槽位 + 词法精度案例），这些 scenario 的 recall/pRead 明显低于原有 16 条——这是**设计意图**（刻意选择尚未被覆盖、更难的真实缺口），不是回归，详见第 4 节。
 - 与 Phase 3（`86fef13`，Task 23 收尾时的历史报告）直接比较 recall/P_read 的机械式硬门禁（`src/benchmark/run-matrix-report.ts` 的 `phase3RegressionGate`）在多个 cell 上报告 FAIL——这是**预期且可解释的**：Phase 3 早于 Task 24-31 的整套排序重写（family-ranker 切换、Spring/MyBatis/JPA/MapStruct 框架包、token-aware read-plan planner），跨越如此大的算法变更后与历史报告直接比较不是有意义的回归信号；每个任务当时都已各自通过独立的三仓门禁（Task 25/30/31）。本报告采用 Task 31 的 `e1dd73c` 门禁结果作为"Task 32 自身是否引入回归"的正确对照组，而不是 Phase 3。
 
-原始产物见 [artifacts/v3-phase4/task32-step8-gate-20260805](../../artifacts/v3-phase4/task32-step8-gate-20260805)（`matrix/*.json` 为每仓原始诊断输出，`matrix-run-summary.json`/`phase4-gate-report.md` 为 `run-matrix-report.ts` 的机器可读与渲染产物）；Step 5 场景构造时的独立验证探针见 [artifacts/v3-phase4/step5-*-validation.json](../../artifacts/v3-phase4)。
+原始产物见：
+- [artifacts/v3-phase4/task32-three-repo-paired-20260805](../../artifacts/v3-phase4/task32-three-repo-paired-20260805) —— 标准三仓 old-vs-new 配对回归门禁（第 3 节主证据）：`matrix-summary.json` 为 `verify-three-repo-cold-matrix.mjs` 的完整判定结果，`matrix/*.json` 为 18 个 cell（3 仓 × 3 轮 × old/new）的原始诊断输出，`frozen-scenarios/` 为两侧共用的冻结 golden 文件，`run-manifest.json` 记录 baseline/candidate commit 与仓库路径。
+- [artifacts/v3-phase4/task32-step8-gate-20260805](../../artifacts/v3-phase4/task32-step8-gate-20260805) —— HEAD 单臂诊断运行（`JAVA_LSP_SHADOW_RANKING=1`，第 4-6 节的 attribution/counterfactual/provider 证据来源；`run-three-repo-cold-matrix.mjs` 硬编码关闭 shadow ranking，无法产出这些字段，因此需要这次额外的单臂运行）。
+- Step 5 场景构造时的独立验证探针：[artifacts/v3-phase4/step5-*-validation.json](../../artifacts/v3-phase4)。
 
 ## 2. 变更边界与反定制检查
 
 本轮（Task 32）未读取仓名、golden 文件名或任务关键词来决定候选、排序或 read-plan 选择路径——`goldenAttribution`/`counterfactual` 是纯诊断只读投影，`shadow-ranking.ts` 的 ablation 只在内存中对已收集证据重新打分/重选，不发起任何额外 provider 或索引查询（`semanticPolicy=required` 除外，此时直接跳过 read-plan ablation 而非付出六次额外 `queryReadRanges`）。
 
-## 3. Task 32 未引入排序回归（对照 Task 31 的 `e1dd73c` 门禁）
+## 3. Task 32 未引入排序回归
 
-来源：原 16 条 scenario（Step 5 之前就存在、golden 定义完全未改动）在当前 HEAD 上重新测量，与 Task 31 收尾时已验证通过的门禁结果逐项对比。
+### 3.1 主证据：标准三仓 old-vs-new 配对回归门禁
+
+来源：`scripts/run-three-repo-cold-matrix.mjs --baseline 516006c`（V3 golden schema 迁移刚完成、Task 32 Step 2 及以后尚未开始的 commit）对比当前 HEAD（`423fd8c`）。两侧使用同一份从 candidate worktree 冻结的 24-scenario golden 文件、独立 worktree、独立缓存，三轮 old/new/old 交替，每轮每仓 5 次 —— 这是 Task 25/30/31 一直使用的标准协议（此前误以为该脚本因 baseline 早于 V3 schema 迁移而无法使用，选用 `516006c` 而非更早的历史 commit 后即可正常运行）。
+
+| 仓库 | oldRecall | newRecall | oldPRead | newPRead | new R_read_must | P95 比值（new/old） | gate |
+|---|---:|---:|---:|---:|---:|---:|---|
+| lishuedu | .7847 | .7847 | .6771 | .6771 | 1.0000 | 0.907 | PASS |
+| cipherlink | .8322 | .8322 | .6375 | .6375 | 1.0000 | 0.707 | PASS |
+| exam-parent-v3 | .7790 | .7790 | .6042 | .6042 | 1.0000 | 0.724 | PASS |
+
+三仓 old/new 的 recall、pRead 逐位完全相同，`R_read_must`（old/new 均为逐次 `min`）均为 1.0000，P95 比值全部 ≤1.10（且均 <1，new 侧更快），`verify-three-repo-cold-matrix.mjs` 的四项 gate（`rReadMust`/`recall`/`pRead`/`p95`）三仓全部 PASS，`warnings: []`，`passed: true`。
+
+### 3.2 交叉验证：与 Task 31 已验证通过的 `e1dd73c` 门禁对比
+
+独立于 3.1，用原 16 条 scenario（Step 5 之前就存在、golden 定义完全未改动）与 Task 31 收尾时的门禁存档（`artifacts/model-eval/task31-formal-matrix-20260804/matrix-summary.json`）逐项对比，作为不同方法论下的交叉印证：
 
 | 仓库 | 指标 | Task 31 门禁（`e1dd73c`） | 当前 HEAD（原 16 条子集） | 差异 |
 |---|---:|---:|---:|---|
@@ -35,7 +52,7 @@
 | exam-parent-v3 | pRead | .700000 | .700000 | 0（完全一致） |
 | exam-parent-v3 | rReadMust | 1.000000 | 1.000000 | 0 |
 
-**结论：Task 32 对生产排序/候选/read-plan 选择行为的净影响为零**，三仓 9/9 项指标（recall/pRead/rReadMust × 3 仓）与 Task 31 已验证通过的门禁逐位完全一致。
+**结论：Task 32 对生产排序/候选/read-plan 选择行为的净影响为零**——3.1 节的标准配对门禁（同一次运行内 old/new 隔离对照）与 3.2 节的历史存档交叉对比（不同运行、不同协议）两种独立方法论给出完全一致的结论。
 
 ## 4. Step 5 新增 8 条 scenario：recall/pRead 下降是刻意暴露缺口，非回归
 
@@ -99,7 +116,7 @@ Step 8 门禁要求："framework provider must produce at least one real-repo co
 2. **`R_task_blocking` 无 Phase 3 历史基线**：`taskBlocking` 是 V3 golden schema 新增的分桶（V2 的 `shouldBlocksTask=true` 才转换而来），Phase 3 报告的年代早于该字段存在。计划文本中 "R_task_blocking each repo >= Phase 3" 一行在本迭代无法作为回归检查执行，第 4 节的数值应视为本迭代建立的新基线。
 3. **`estimatedTokens` 无 Phase 3 历史基线**：同样是 Task 32 Step 7 新增指标，Phase 3 报告未测量过。第 4 节数值同样是新基线，不是回归对照。
 4. **Step 5 场景扩容改变了 recall/estimatedTokens 的分母**：16→24 条 scenario，与 Phase 3 归档的聚合数字不再是同一测量协议下的可比对象；本报告第 3 节改用 Task 31 的 `e1dd73c` 门禁结果（同一套原 16 条 scenario、无 golden 定义改动）作为回归对照，而非直接比较 Phase 3 归档数字。
-5. **`scripts/run-three-repo-cold-matrix.mjs` 无法用于本迭代的 old-vs-new 配对门禁**：该脚本的 baseline commit 必须是 HEAD 的祖先且能被 `git worktree` 检出；`86fef13`（Phase 3/Task 23 收尾）早于 V3 golden schema 迁移（`516006c`），其 `benchmark-agent-impact.ts` 仍是 V2 reader（`goldenMeta`/`shouldBlocksTask`/`kind==="side"`），无法解析当前 `golden/*.scenarios.jsonl` 的 V3 结构。因此本次 Step 8 改用 `src/benchmark/run-matrix-report.ts`（Task 32 Step 6 基础设施的真实 CLI 封装）对 HEAD 单独测量，并将 `JAVA_LSP_SHADOW_RANKING=1` 全程开启以保留 attribution 数据；该脚本硬编码 `JAVA_LSP_SHADOW_RANKING="0"`，无法产出任何 attribution/counterfactual 数据，第 5 节的框架价值证据完全来自本次 ad hoc 运行。
+5. **`scripts/run-three-repo-cold-matrix.mjs` 以 Phase 3 的 `86fef13` 为 baseline 无法使用，但选用 V3 schema 迁移后的 commit 可以**：该脚本的 baseline commit 必须是 HEAD 的祖先且能被 `git worktree` 检出；`86fef13`（Phase 3/Task 23 收尾）早于 V3 golden schema 迁移（`516006c`），其 `benchmark-agent-impact.ts` 仍是 V2 reader（`goldenMeta`/`shouldBlocksTask`/`kind==="side"`），无法解析当前 `golden/*.scenarios.jsonl` 的 V3 结构，因此**无法**用它对照 Phase 3。改用 `516006c`（V3 schema 迁移刚完成、Task 32 Step 2 及以后尚未开始）为 baseline 后，该脚本可以正常运行并产出第 3.1 节的标准配对回归结果——这是本报告初稿遗漏、经复核后补跑的部分。该脚本仍然硬编码 `JAVA_LSP_SHADOW_RANKING="0"`，无法产出任何 attribution/counterfactual 数据；第 5-6 节的框架价值证据因此仍然来自 `src/benchmark/run-matrix-report.ts`（Task 32 Step 6 基础设施的真实 CLI 封装）对 HEAD 的单独诊断运行，与 3.1 节的配对回归门禁是两次独立运行、互相补充，不是同一份产物。
 6. **Provider 级别耗时覆盖不全**：见第 6 节，仅 `framework`/`relationship` 有独立 phase 计时；其余 provider 的耗时字段为 `undefined`（`n/a`），非伪造的 0。
 7. **`readPlanRangeRecall`（Step 7 新增指标）在全部 24 条真实 scenario 上处于未激活状态**：该指标只在 `scenario.golden.mustReadRanges` 非空时才产出数值，本轮新旧 24 条 scenario 均未填写 `mustReadRanges`，因此该字段在本次门禁中始终为 `undefined`（符合"未测量返回 undefined 而非 0"的既定约定），尚无真实仓库数据可报告。
 
