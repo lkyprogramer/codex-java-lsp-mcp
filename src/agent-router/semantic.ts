@@ -5,6 +5,13 @@ import type { EdgeStore, SemanticEdgeInput } from "../edge-store.js";
 import type { JdtlsSession, LspLocation, LspLocationLink } from "../jdtls-session.js";
 import type { RoutingPolicy } from "../routing-policy.js";
 import type { DeadlineBudget } from "../runtime/deadline-budget.js";
+import type { RouterIndex } from "../java-index/router-java-index.js";
+import {
+  mapSemanticEdgeForPersistence,
+  type RawSemanticEdgeCandidate,
+  type SemanticEdgeStoreV2,
+  type SymbolAnchorResolver
+} from "../semantic-edge-store.js";
 import type { CandidateFile, ImpactMode, ImpactOptions, ResolvedAnchor, SemanticPolicy } from "../agent-types.js";
 import { breakdown, mergeCandidate, scoreBase } from "./candidate-helpers.js";
 import { rankReferenceFiles, referenceFileLimit, type ReferenceLocation } from "./reference-ranking.js";
@@ -54,6 +61,20 @@ type SemanticSeedInput = SemanticInput & {
 type SemanticVerifyInput = SemanticInput & {
   readonly semantic: SemanticVerifyState;
   readonly edgeStore: EdgeStore;
+  /**
+   * Task 33 Step 8 dual-write (see semantic-edge-store.ts): resolves a
+   * location to a stable JavaIndex symbol ID and persists COMPLETE,
+   * repo-contained edges into SemanticEdgeStoreV2 alongside (not instead of)
+   * the legacy `edgeStore` above. `javaIndex` is the same underlying
+   * RouterIndex every other provider already sees via ProviderInput -
+   * SemanticVerifyInput just hadn't needed it before this.
+   */
+  readonly javaIndex: RouterIndex;
+  readonly edgeStoreV2: SemanticEdgeStoreV2;
+  /** Cached once per repo-runtime by the caller (see AgentRouter) - never recomputed per request. */
+  readonly buildFingerprint: string;
+  /** The RepoChangeBatch-derived freshness clock (ProviderInput.generation), distinct from JdtlsSession's own internal cacheGeneration. */
+  readonly generation: number;
 };
 
 type LocationCandidateInput = {
@@ -122,10 +143,18 @@ export async function semanticVerify(input: SemanticVerifyInput): Promise<void> 
   }
   input.semantic.verifyUsed = true;
   const suppressed: SemanticSuppressed = { externalLocations: 0 };
+  // Shared across every anchor in this call: mapSemanticEdgeForPersistence
+  // resolves both endpoints of every candidate edge, but every edge from one
+  // anchor shares that anchor's source position - memoizing collapses what
+  // would otherwise be one JavaIndex worker round-trip per edge into one per
+  // distinct (file,line,column), matching the openDocument lesson from the
+  // gateway cutover (see v3-iteration-e-status memory).
+  const resolveAnchorSymbol = createMemoizedAnchorResolver(input.javaIndex);
   await timed(input.phaseMs, "semanticVerify", async () => {
     for (const anchor of input.anchors) {
       const before = Date.now();
       const verifiedEdges: SemanticEdgeInput[] = [];
+      const edgeCandidatesForPersistence: RawSemanticEdgeCandidate[] = [];
       try {
         const references = await input.session.references(anchor.absolutePath, anchor.line, anchor.column, false, input.options.semanticTimeoutMs);
         input.semantic.timeout ||= Date.now() - before >= input.options.semanticTimeoutMs;
@@ -160,11 +189,22 @@ export async function semanticVerify(input: SemanticVerifyInput): Promise<void> 
           // reference JDT has - persisting it as a complete edge would let a
           // later request trust an incomplete reference set from cache.
           if (!truncatedRaw && candidate.absolutePath !== anchor.absolutePath) {
-            verifiedEdges.push({
-              to: candidate.absolutePath,
-              kind: "reference",
-              line: candidate.positions[0]?.line || 1,
-              column: candidate.positions[0]?.column || 1
+            const line = candidate.positions[0]?.line || 1;
+            const column = candidate.positions[0]?.column || 1;
+            verifiedEdges.push({ to: candidate.absolutePath, kind: "reference", line, column });
+            // references() throws on any non-COMPLETE outcome (Task 33 cutover),
+            // so reaching here already proves this batch was COMPLETE.
+            edgeCandidatesForPersistence.push({
+              sourceFile: anchor.absolutePath,
+              sourceLine: anchor.line,
+              sourceColumn: anchor.column,
+              targetFile: candidate.absolutePath,
+              targetLine: line,
+              targetColumn: column,
+              relation: "JDT_REFERENCE",
+              completion: "COMPLETE",
+              buildFingerprint: input.buildFingerprint,
+              generation: input.generation
             });
           }
         }
@@ -189,11 +229,26 @@ export async function semanticVerify(input: SemanticVerifyInput): Promise<void> 
               candidate.verifiedBy = ["typeHierarchy"];
               mergeCandidate(input.candidates, candidate);
               if (candidate.absolutePath !== anchor.absolutePath) {
-                verifiedEdges.push({
-                  to: candidate.absolutePath,
-                  kind: "typeHierarchy",
-                  line: candidate.positions[0]?.line || 1,
-                  column: candidate.positions[0]?.column || 1
+                const line = candidate.positions[0]?.line || 1;
+                const column = candidate.positions[0]?.column || 1;
+                verifiedEdges.push({ to: candidate.absolutePath, kind: "typeHierarchy", line, column });
+                // Unlike references() above, typeHierarchy() resolves (never
+                // throws) on a caller-deadline timeout, so completion varies
+                // per anchor - mapSemanticEdgeForPersistence itself rejects
+                // anything but COMPLETE, matching the legacy store's own
+                // "only ever fed already-verified edges" invariant more
+                // strictly than the legacy store enforces today.
+                edgeCandidatesForPersistence.push({
+                  sourceFile: anchor.absolutePath,
+                  sourceLine: anchor.line,
+                  sourceColumn: anchor.column,
+                  targetFile: candidate.absolutePath,
+                  targetLine: line,
+                  targetColumn: column,
+                  relation: "JDT_TYPE_HIERARCHY",
+                  completion: hierarchy.completion,
+                  buildFingerprint: input.buildFingerprint,
+                  generation: input.generation
                 });
               }
             }
@@ -207,6 +262,22 @@ export async function semanticVerify(input: SemanticVerifyInput): Promise<void> 
           input.edgeStore.recordEdges(anchor.absolutePath, verifiedEdges);
         } catch {
           continue;
+        }
+      }
+      if (edgeCandidatesForPersistence.length > 0) {
+        try {
+          const bounded = edgeCandidatesForPersistence.slice(0, MAX_PERSISTED_EDGES_PER_ANCHOR);
+          const mapped = await Promise.all(
+            bounded.map(candidate => mapSemanticEdgeForPersistence(candidate, input.repoRoot, resolveAnchorSymbol))
+          );
+          const persistable = mapped.filter((edge): edge is NonNullable<typeof edge> => edge !== undefined);
+          if (persistable.length > 0) {
+            await input.edgeStoreV2.putComplete(persistable, input.generation);
+          }
+        } catch {
+          // Best-effort dual-write (Task 33 Step 8): a V2 persistence
+          // failure must never affect this anchor's candidates or the
+          // legacy edgeStore write above.
         }
       }
     }
@@ -280,6 +351,32 @@ function locationCandidate(input: LocationCandidateInput): CandidateFile | undef
  * trusted as a complete reference edge for later cache reuse.
  */
 const MAX_RAW_REFERENCE_LOCATIONS = 5000;
+
+/**
+ * Task 33 Step 8's own bound on top of MAX_RAW_REFERENCE_LOCATIONS: each
+ * persisted-edge candidate costs a JavaIndex worker round-trip to resolve
+ * its target symbol ID (source-side is deduped via the shared memoized
+ * resolver, but targets are not). referenceFileLimit(mode) alone already
+ * reaches 60 in recall mode, plus up to 40 typeHierarchy edges - capping
+ * here keeps the dual-write's added request-path cost bounded regardless of
+ * mode. A partial persisted set is fine: every edge is independently valid,
+ * and putComplete is additive across requests.
+ */
+const MAX_PERSISTED_EDGES_PER_ANCHOR = 30;
+
+/** Shared per semanticVerify() call: every edge from one anchor shares that anchor's source position. */
+function createMemoizedAnchorResolver(javaIndex: RouterIndex): SymbolAnchorResolver {
+  const cache = new Map<string, Promise<{ symbolId: string } | undefined>>();
+  return (file, line, column) => {
+    const key = `${file}\0${line}\0${column}`;
+    let pending = cache.get(key);
+    if (!pending) {
+      pending = javaIndex.queryAnchor(file, line, column).then(anchor => anchor ? { symbolId: anchor.symbolId } : undefined);
+      cache.set(key, pending);
+    }
+    return pending;
+  };
+}
 
 /** The containment-check half of locationCandidate, without its scoring - reference ranking scores by file, not by raw location. */
 function containedReferenceLocation(

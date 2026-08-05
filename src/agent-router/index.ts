@@ -6,6 +6,8 @@ import { JdtlsSession } from "../jdtls-session.js";
 import type { RouterIndex } from "../java-index/router-java-index.js";
 import type { FrameworkIndexView } from "../java-index/framework-index-view.js";
 import { EdgeStore } from "../edge-store.js";
+import { FileSemanticEdgeStoreV2, type SemanticEdgeStoreV2 } from "../semantic-edge-store.js";
+import { computeBuildFingerprint } from "../java-index/build-fingerprint.js";
 import { probeLayout, type LayoutContext } from "../layout-probe.js";
 import { resolveFamilyRankPolicy, resolveRoutingPolicy, type RoutingPolicy } from "../routing-policy.js";
 import { resolveAnchor } from "./anchor.js";
@@ -120,8 +122,27 @@ export class AgentRouter {
     private readonly layoutContext: LayoutContext = probeLayout(repoRoot),
     private readonly edgeStore: EdgeStore = new EdgeStore(repoRoot),
     private readonly routingPolicy: RoutingPolicy = resolveRoutingPolicy(repoRoot),
-    private readonly rgRunner: RgRunner = new RgRunner()
+    private readonly rgRunner: RgRunner = new RgRunner(),
+    // Appended last (not inserted among the params above) so every existing
+    // positional call site - several tests pass rgRunner positionally with
+    // `undefined` placeholders before it - keeps working unchanged.
+    private readonly edgeStoreV2: SemanticEdgeStoreV2 = new FileSemanticEdgeStoreV2(repoRoot)
   ) {}
+
+  /**
+   * Computed once per AgentRouter instance (i.e. once per repo-runtime) and
+   * cached - computeBuildFingerprint() does real file I/O, so this must
+   * never run per request. Reset to undefined only by a BUILD_CHANGE batch
+   * in onRepoChanged().
+   */
+  private buildFingerprintCache: Promise<string> | undefined;
+
+  private buildFingerprint(): Promise<string> {
+    if (!this.buildFingerprintCache) {
+      this.buildFingerprintCache = computeBuildFingerprint(this.repoRoot, this.layoutContext);
+    }
+    return this.buildFingerprintCache;
+  }
 
   rgCacheStatus(): RouterStatus {
     this.rgCache.evictExpired();
@@ -139,6 +160,17 @@ export class AgentRouter {
     this.rgCache.clear();
   }
 
+  /**
+   * SemanticEdgeStoreV2's writes are debounced in-memory (see
+   * semantic-edge-store.ts's scheduleFlush) - this forces the pending gzip
+   * write immediately, for repo-runtime shutdown. A failed flush must never
+   * fail shutdown; callers are expected to `.catch()` this like the
+   * neighboring javaIndexClient?.close() call.
+   */
+  async flushSemanticEdgeStore(): Promise<void> {
+    await this.edgeStoreV2.flush();
+  }
+
   /** Drop cache entries taken before the current generation. */
   invalidateGeneration(generation: number): void {
     this.rgCache.invalidateBefore(generation);
@@ -146,8 +178,16 @@ export class AgentRouter {
 
   /**
    * Applies a coordinator change batch: the rg cache is invalidated below the
-   * new generation, and any Java or build change clears the semantic edge store.
-   * Iteration B keeps this deliberately coarse; Task 33 adds selective eviction.
+   * new generation, and any Java or build change clears the legacy semantic
+   * edge store. Iteration B keeps the legacy store deliberately coarse.
+   *
+   * SemanticEdgeStoreV2 (Task 33 Step 8) is more precise: a BUILD_CHANGE
+   * anywhere in the batch treats the whole batch as a build change (every
+   * prior buildFingerprint is suspect, so a full wipe via
+   * clearForBuildChange matches putComplete()'s own per-edge fingerprint
+   * semantics) and also invalidates the cached buildFingerprint so the next
+   * request recomputes it; otherwise applyChanges() does dependency-based
+   * selective invalidation instead of a full wipe.
    */
   onRepoChanged(batch: RepoChangeBatch): void {
     this.rgCache.invalidateBefore(batch.generation);
@@ -157,6 +197,12 @@ export class AgentRouter {
       || change.kind === "JAVA_DELETE"
       || change.kind === "BUILD_CHANGE");
     if (semantic) this.edgeStore.invalidateAll();
+    if (batch.changes.some(change => change.kind === "BUILD_CHANGE")) {
+      this.edgeStoreV2.clearForBuildChange(batch.generation);
+      this.buildFingerprintCache = undefined;
+    } else {
+      this.edgeStoreV2.applyChanges(batch);
+    }
   }
 
   async impact(
@@ -183,6 +229,7 @@ export class AgentRouter {
     const typeReference = createTypeReferenceMetrics();
     const importGraph = createImportGraphMetrics();
     const persistedSemantic = createPersistedSemanticMetrics();
+    const buildFingerprint = await this.buildFingerprint();
     const anchors = await timed(phaseMs, "resolveAnchors", async () => Promise.all(options.anchors.map((anchor, index) => resolveAnchor({
       repoRoot: this.repoRoot,
       javaIndex: this.javaIndex,
@@ -205,6 +252,8 @@ export class AgentRouter {
       phaseMs,
       session: this.session,
       edgeStore: this.edgeStore,
+      edgeStoreV2: this.edgeStoreV2,
+      buildFingerprint,
       concurrency: RG_CONCURRENCY,
       loadRgSummary: (section, currentOptions, currentAnchors) => this.rgSummary(section, currentOptions, currentAnchors, budget, freshness),
       metrics: { typeReference, importGraph, persistedSemantic, semantic }

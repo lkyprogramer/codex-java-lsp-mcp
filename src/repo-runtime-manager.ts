@@ -353,6 +353,7 @@ export class RepoRuntimeManager {
     await this.stopEntry(entry);
     await entry.coordinator.close();
     await entry.context.javaIndexClient?.close().catch(() => undefined);
+    await entry.context.router.flushSemanticEdgeStore().catch(() => undefined);
     await entry.runtimeLease?.release();
     entry.runtimeLease = undefined;
     // This process's PID would otherwise keep looking alive to the janitor's
@@ -386,6 +387,7 @@ export class RepoRuntimeManager {
     await Promise.all([...this.runtimes.values()].map(async entry => {
       await entry.coordinator.close();
       await entry.context.javaIndexClient?.close().catch(() => undefined);
+      await entry.context.router.flushSemanticEdgeStore().catch(() => undefined);
       await entry.runtimeLease?.release();
       entry.runtimeLease = undefined;
       touchRepoCache(entry.context.repoRoot, { ownerPid: undefined, ownerToken: undefined });

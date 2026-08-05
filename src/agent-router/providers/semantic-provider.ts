@@ -120,7 +120,11 @@ export async function collectLiveSemanticEvidence(input: ProviderInput): Promise
     session: input.session,
     routingPolicy: input.routingPolicy,
     edgeStore: input.edgeStore,
-    budget: input.budget
+    budget: input.budget,
+    javaIndex: input.javaIndex,
+    edgeStoreV2: input.edgeStoreV2,
+    buildFingerprint: input.buildFingerprint,
+    generation: input.generation
   });
   const touched = [...candidates.values()].filter(isTouchedCandidate);
   const anchorId = input.anchors[0]?.id ?? "A1";

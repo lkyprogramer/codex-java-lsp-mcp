@@ -489,7 +489,7 @@ test("reconcileIfDirty runs once under two concurrent requests and clears dirty 
       lsp: resolved.lsp,
       session: new FakeSession() as never,
       javaIndexClient: javaIndexClientStub as never,
-      router: { clearRgCache() {} } as never,
+      router: { clearRgCache() {}, async flushSemanticEdgeStore() {} } as never,
       javaIndex: { routerStatus: async () => ({}) } as never
     }),
     () => ({ generation: clock, coordinator, layout: { current: () => layout, refresh: () => ({ changed: false, layout }) } }),
@@ -536,7 +536,7 @@ test("reconcileIfDirty leaves dirty set when reconcile fails, without failing th
       lsp: resolved.lsp,
       session: new FakeSession() as never,
       javaIndexClient: javaIndexClientStub as never,
-      router: { clearRgCache() {} } as never,
+      router: { clearRgCache() {}, async flushSemanticEdgeStore() {} } as never,
       javaIndex: { routerStatus: async () => ({}) } as never
     }),
     () => ({ generation: clock, coordinator, layout: { current: () => layout, refresh: () => ({ changed: false, layout }) } }),
@@ -584,7 +584,7 @@ test("V2 runtime reconciles only JavaIndex and records its OPEN source on the re
           return { openSource: "sibling-seed" };
         }
       } as never,
-      router: { clearRgCache() {}, onRepoChanged() {} } as never
+      router: { clearRgCache() {}, onRepoChanged() {}, async flushSemanticEdgeStore() {} } as never
     }),
     () => ({ generation: clock, coordinator, layout: { current: () => layout, refresh: () => ({ changed: false, layout }) } }),
     new NoopCrossProcessLeaseStore()
@@ -637,7 +637,7 @@ test("own snapshot verification stays worker-owned after OPEN instead of trigger
       session: new FakeSession() as never,
       javaIndexClient: javaIndexClient as never,
       javaIndex: { routerStatus: async () => ({ openSource: "own-snapshot" }) } as never,
-      router: { clearRgCache() {}, onRepoChanged() {} } as never
+      router: { clearRgCache() {}, onRepoChanged() {}, async flushSemanticEdgeStore() {} } as never
     }),
     () => ({ generation: clock, coordinator, layout: { current: () => layout, refresh: () => ({ changed: false, layout }) } }),
     new NoopCrossProcessLeaseStore()
@@ -810,7 +810,8 @@ function fakeContext(
     session: session as never,
     router: {
       clearRgCache() {},
-      onRepoChanged() {}
+      onRepoChanged() {},
+      async flushSemanticEdgeStore() {}
     } as never,
     javaIndex: {
       routerStatus: async () => ({ entries: 0 })

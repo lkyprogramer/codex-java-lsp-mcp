@@ -81,6 +81,34 @@ function fakeEdgeStore(): { recordEdges: EdgeStore["recordEdges"]; calls: Array<
   };
 }
 
+/** No symbol ever resolves, so mapSemanticEdgeForPersistence always returns undefined and edgeStoreV2 never gets a real edge - these tests exercise the legacy edgeStore path only, matching their pre-Task-33-Step-8 assertions. */
+function fakeJavaIndex(): { queryAnchor: (file: string, line: number, column: number) => Promise<undefined> } {
+  return { queryAnchor: async () => undefined };
+}
+
+function fakeEdgeStoreV2(): { putComplete: (edges: readonly unknown[], generation: number) => Promise<void>; calls: unknown[][] } {
+  const calls: unknown[][] = [];
+  return {
+    calls,
+    putComplete: async (edges: readonly unknown[]) => {
+      calls.push([...edges]);
+    }
+  };
+}
+
+/** Every position resolves to a distinct symbol ID derived from its own coordinates - lets a test assert exactly which positions were (and were not) re-resolved. */
+function resolvingJavaIndex(): { queryAnchor: (file: string, line: number, column: number) => Promise<{ symbolId: string }>; calls: string[] } {
+  const calls: string[] = [];
+  return {
+    calls,
+    queryAnchor: async (file: string, line: number, column: number) => {
+      const key = `${file}:${line}:${column}`;
+      calls.push(key);
+      return { symbolId: key };
+    }
+  };
+}
+
 test("semanticVerify ranks reference candidates by value instead of JDT server order", async () => {
   const lowValueRefs = Array.from({ length: 60 }, (_, i) =>
     location(`${repoRoot}/module-x/src/test/java/T${i}.java`, 1));
@@ -98,7 +126,11 @@ test("semanticVerify ranks reference candidates by value instead of JDT server o
     session: fakeSession([...lowValueRefs, highValueRef]) as never,
     routingPolicy: resolveRoutingPolicy(repoRoot),
     edgeStore: edgeStore as unknown as EdgeStore,
-    budget: DeadlineBudget.fromTimeout(5_000)
+    budget: DeadlineBudget.fromTimeout(5_000),
+    javaIndex: fakeJavaIndex() as never,
+    edgeStoreV2: fakeEdgeStoreV2() as never,
+    buildFingerprint: "test-fingerprint",
+    generation: 1
   });
 
   assert.ok(
@@ -124,7 +156,11 @@ test("semanticVerify skips persisted-edge writes when raw reference locations hi
     session: fakeSession(manyRefs) as never,
     routingPolicy: resolveRoutingPolicy(repoRoot),
     edgeStore: edgeStore as unknown as EdgeStore,
-    budget: DeadlineBudget.fromTimeout(5_000)
+    budget: DeadlineBudget.fromTimeout(5_000),
+    javaIndex: fakeJavaIndex() as never,
+    edgeStoreV2: fakeEdgeStoreV2() as never,
+    buildFingerprint: "test-fingerprint",
+    generation: 1
   });
 
   assert.equal(semantic.referenceTruncatedByLimit, true);
@@ -152,11 +188,53 @@ test("semanticVerify caps returned reference files at referenceFileLimit(mode) a
     session: fakeSession(refs) as never,
     routingPolicy: resolveRoutingPolicy(repoRoot),
     edgeStore: fakeEdgeStore() as unknown as EdgeStore,
-    budget: DeadlineBudget.fromTimeout(5_000)
+    budget: DeadlineBudget.fromTimeout(5_000),
+    javaIndex: fakeJavaIndex() as never,
+    edgeStoreV2: fakeEdgeStoreV2() as never,
+    buildFingerprint: "test-fingerprint",
+    generation: 1
   });
 
   // referenceFileLimit("minimal") is 12 (reference-ranking.ts).
   assert.equal(semantic.referenceReturnedFiles, 12);
   assert.equal(semantic.referenceCollapsedFiles, 80);
   assert.equal(semantic.referenceRawLocations, 80);
+});
+
+test("semanticVerify dual-writes resolvable reference edges into edgeStoreV2, resolving the shared anchor source position only once", async () => {
+  const refs = [
+    location(`${repoRoot}/module-a/src/main/java/demo/One.java`, 10),
+    location(`${repoRoot}/module-a/src/main/java/demo/Two.java`, 20),
+    location(`${repoRoot}/module-a/src/main/java/demo/Three.java`, 30)
+  ];
+  const candidates = new Map<string, CandidateFile>();
+  const javaIndex = resolvingJavaIndex();
+  const edgeStoreV2 = fakeEdgeStoreV2();
+  const theAnchor = anchor();
+
+  await semanticVerify({
+    candidates,
+    anchors: [theAnchor],
+    options: options(),
+    semantic: semanticState(),
+    phaseMs: {},
+    repoRoot,
+    session: fakeSession(refs) as never,
+    routingPolicy: resolveRoutingPolicy(repoRoot),
+    edgeStore: fakeEdgeStore() as unknown as EdgeStore,
+    budget: DeadlineBudget.fromTimeout(5_000),
+    javaIndex: javaIndex as never,
+    edgeStoreV2: edgeStoreV2 as never,
+    buildFingerprint: "test-fingerprint",
+    generation: 7
+  });
+
+  assert.equal(edgeStoreV2.calls.length, 1, "one putComplete call for this anchor's batch");
+  assert.equal(edgeStoreV2.calls[0]?.length, 3, "all three resolvable reference edges are persisted");
+  const sourceKey = `${theAnchor.absolutePath}:${theAnchor.line}:${theAnchor.column}`;
+  assert.equal(
+    javaIndex.calls.filter(call => call === sourceKey).length,
+    1,
+    "the shared source anchor position is resolved exactly once across all three edges, not once per edge"
+  );
 });

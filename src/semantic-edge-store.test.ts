@@ -194,3 +194,50 @@ test("a failed atomic write leaves the previous snapshot readable", async () => 
   assert.equal(survivors.length, 1);
   assert.equal(survivors[0].relation, "JDT_REFERENCE");
 });
+
+test("putComplete() loads the existing snapshot before its first write, even if load() was never called explicitly", async () => {
+  const repoRoot = scratchRepo();
+  const resolver = async (file: string, line: number, column: number) => ({ symbolId: `${path.basename(file)}:${line}:${column}` });
+  const firstEdge = await mapSemanticEdgeForPersistence(candidateFor(repoRoot), repoRoot, resolver);
+
+  const first = new FileSemanticEdgeStoreV2(repoRoot);
+  await first.load();
+  await first.putComplete([firstEdge!], 1);
+  await first.flush();
+
+  // A second store instance for the same repo, used the way a fresh
+  // AgentRouter/AgentRouter-in-a-new-process would: putComplete() is called
+  // directly, without an explicit load() first. If putComplete() did not
+  // load the snapshot before its first write, this second store's own
+  // flush() below would overwrite the on-disk snapshot with only its own
+  // edge, silently discarding `firstEdge` from the prior session.
+  const secondCandidate = candidateFor(repoRoot, { relation: "JDT_IMPLEMENTATION", targetLine: 2 });
+  const secondEdge = await mapSemanticEdgeForPersistence(secondCandidate, repoRoot, resolver);
+  const second = new FileSemanticEdgeStoreV2(repoRoot);
+  await second.putComplete([secondEdge!], 1);
+  await second.flush();
+
+  const reloaded = new FileSemanticEdgeStoreV2(repoRoot);
+  await reloaded.load();
+  const survivors = reloaded.findFrom(firstEdge!.sourceSymbolId, 1);
+  assert.equal(survivors.length, 2, "both the prior session's edge and this session's new edge must survive");
+  assert.deepEqual(survivors.map(edge => edge.relation).sort(), ["JDT_IMPLEMENTATION", "JDT_REFERENCE"]);
+});
+
+test("a debounced flush fires automatically after putComplete(), without an explicit flush() call", async () => {
+  const repoRoot = scratchRepo();
+  const candidate = candidateFor(repoRoot);
+  const edge = await mapSemanticEdgeForPersistence(candidate, repoRoot, async (file, line, column) => ({
+    symbolId: `${path.basename(file)}:${line}:${column}`
+  }));
+
+  const store = new FileSemanticEdgeStoreV2(repoRoot, { flushDebounceMs: 10 });
+  await store.load();
+  await store.putComplete([edge!], 1);
+  // No explicit store.flush() call.
+  await new Promise(resolve => setTimeout(resolve, 50));
+
+  const reloaded = new FileSemanticEdgeStoreV2(repoRoot);
+  await reloaded.load();
+  assert.equal(reloaded.findFrom(edge!.sourceSymbolId, 1).length, 1, "the debounced timer must have flushed to disk on its own");
+});
