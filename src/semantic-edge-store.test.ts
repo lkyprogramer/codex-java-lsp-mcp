@@ -93,6 +93,7 @@ test("a changed or deleted dependency removes the edge", async () => {
 
   assert.equal(store.findFrom(edge!.sourceSymbolId, 1).length, 0);
   assert.equal(store.status().invalidations, 1);
+  assert.equal(store.status().generation, 2, "applyChanges advances the store's generation from the batch, matching putComplete/clearForBuildChange");
 });
 
 test("a build fingerprint change clears the store", async () => {

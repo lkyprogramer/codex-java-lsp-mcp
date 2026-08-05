@@ -5,9 +5,11 @@
 //      nonzero exit if any hard gate fails") - matrix-runner.ts/phase-report.ts stayed
 //      pure/injectable per the plan's own testing requirement, so this is the thin real-I/O
 //      wrapper around them. Distinct from scripts/run-three-repo-cold-matrix.mjs (an old-vs-new
-//      regression gate whose baseline commit predates the V3 golden schema and therefore cannot
-//      read golden/*.scenarios.jsonl at all - see docs/phase-v3/phase4-evidence-framework-token-report.md
-//      for why this run compares HEAD against archived Phase 3 numbers instead of a paired arm).
+//      paired regression gate that DOES work for this iteration - baseline 516006c, right after
+//      the V3 golden schema migration, is a valid ancestor; only two specific later commits
+//      (86fef13, e1dd73c) predate that migration and can't be used as a baseline. This runner
+//      compares HEAD against archived Phase 3 numbers as an *additional* single-arm diagnostic,
+//      not because the paired gate is unavailable - see docs/phase-v3/phase4-evidence-framework-token-report.md).
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -124,7 +126,7 @@ async function main(): Promise<void> {
     "R_task_blocking has no Phase 3 baseline (taskBlocking is a new V3 golden-schema bucket) - reported as a new baseline this iteration, not gated as a regression.",
     "estimatedTokens has no Phase 3 baseline (new V3 Step 7 metric) - reported as a new baseline this iteration, not gated as a regression.",
     "recall/P_read comparisons are against the archived Phase 3 figures measured on a 16-scenario golden set; Step 5 expanded the set to 24 scenarios, so this is a denominator-changed comparison, not a strict paired regression.",
-    "This run uses scripts unrelated to run-three-repo-cold-matrix.mjs's old-vs-new paired arm: that script's baseline commit (86fef13) predates the V3 golden schema and cannot parse golden/*.scenarios.jsonl, so no valid paired comparison exists for this iteration - see phase4 report for detail.",
+    "This run is a single-arm HEAD diagnostic, separate from run-three-repo-cold-matrix.mjs's old-vs-new paired regression gate (that gate DOES work for this iteration using baseline 516006c - see phase4 report section 3.1 for the actual paired-gate evidence); this runner exists for the provider-value/attribution breakdown the paired script's hardcoded JAVA_LSP_SHADOW_RANKING=0 cannot produce.",
     "Shadow-ranking's non-required read-plan selection does not replicate production's buildReadPlan() shortlist bucket-representative guarantee or byte-budget trim, so goldenAttribution.inReadPlan/counterfactual.readPlanHitLost can under-report real production hits (reproduced on lishuedu's audit-order-repository-mapper-rule-type scenario)."
   ];
 
