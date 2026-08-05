@@ -198,7 +198,7 @@ function parseCli(args: string[], root: string): Cli {
     )),
     scenarioFile: stringArg(values, "--scenarios", process.env.JAVA_LSP_BENCH_SCENARIOS || path.join(root, "golden", `${projectId}.scenarios.jsonl`)),
     projectId,
-    layoutProfile: stringArg(values, "--layout-profile", process.env.JAVA_LSP_BENCH_LAYOUT_PROFILE || (projectId === "exam-parent-v3" ? "maven-reactor" : projectId === "generic-java" ? "generic-java" : "ddd-gradle")),
+    layoutProfile: stringArg(values, "--layout-profile", process.env.JAVA_LSP_BENCH_LAYOUT_PROFILE || (projectId === "exam-parent-v3" ? "maven-reactor" : projectId === "generic-java" || projectId === "java-index-v2" ? "generic-java" : "ddd-gradle")),
     warmState,
     mode,
     semanticPolicy,

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="demomybatis.OrderMapper">
+  <sql id="orderColumns">id</sql>
+
+  <resultMap id="OrderMap" type="demomybatis.OrderEntity">
+    <id property="id" column="id"/>
+  </resultMap>
+
+  <select id="findById" parameterType="java.lang.Long" resultMap="OrderMap">
+    select <include refid="orderColumns"/> from orders where id = #{id}
+  </select>
+
+  <insert id="insert" parameterType="demomybatis.OrderEntity">
+    insert into orders(id) values(#{id})
+  </insert>
+</mapper>
