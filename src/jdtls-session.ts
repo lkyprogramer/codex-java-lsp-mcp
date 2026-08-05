@@ -42,6 +42,13 @@ import { fromFileUri, repoCacheRoot, toFileUri } from "./repo-layout.js";
 import { resourceDefaults } from "./resource-defaults.js";
 import { touchRepoCache } from "./worktree-cache-cleanup.js";
 import type { WorktreeIdentity } from "./worktree-identity.js";
+import type {
+  SemanticBackend,
+  SemanticBackendResult,
+  SemanticBackendValue,
+  SemanticGatewayOptions,
+  SemanticValueMap
+} from "./semantic-gateway.js";
 
 export type LspPosition = {
   line: number;
@@ -514,14 +521,17 @@ export class JdtlsSession {
   }
 
   async documentSymbols(file: string, timeoutMs = 2000): Promise<LspDocumentSymbol[]> {
-    return this.cached("documentSymbols", [file, timeoutMs], [file], async () => {
-      await this.ensureStarted();
-      const uri = await this.openDocument(file);
-      const symbols = await this.request<LspDocumentSymbol[]>("textDocument/documentSymbol", {
-        textDocument: { uri }
-      }, timeoutMs);
-      return symbols || [];
-    });
+    return this.cached("documentSymbols", [file, timeoutMs], [file], async () => this.rawDocumentSymbols(file, timeoutMs));
+  }
+
+  /** Uncached primitive for SemanticGateway; see rawReferences. */
+  async rawDocumentSymbols(file: string, timeoutMs = 2000): Promise<LspDocumentSymbol[]> {
+    await this.ensureStarted();
+    const uri = await this.openDocument(file);
+    const symbols = await this.request<LspDocumentSymbol[]>("textDocument/documentSymbol", {
+      textDocument: { uri }
+    }, timeoutMs);
+    return symbols || [];
   }
 
   async documentSymbolsWithRetry(file: string, totalTimeoutMs = 20000): Promise<LspDocumentSymbol[]> {
@@ -549,19 +559,52 @@ export class JdtlsSession {
     truncated: boolean;
   }> {
     return this.cached("references", [file, line, column, includeDeclaration, timeoutMs], [file], async () => {
-      await this.ensureStarted();
-      const params = await this.textDocumentPositionParams(file, line, column) as Record<string, unknown>;
-      const items = await this.request<LspLocation[]>("textDocument/references", {
-        ...params,
-        context: { includeDeclaration }
-      }, timeoutMs);
-      const references = items || [];
+      const items = await this.rawReferences(file, line, column, includeDeclaration, timeoutMs);
       return {
-        items: references,
-        totalReferences: references.length,
+        items,
+        totalReferences: items.length,
         truncated: false
       };
     });
+  }
+
+  /**
+   * Uncached primitive behind `references()`. Package-internal: exists so
+   * SemanticGateway (Task 33) can own its own singleflight/complete-only
+   * cache for this operation instead of going through the generic TTL cache
+   * a second time.
+   */
+  async rawReferences(file: string, line: number, column: number, includeDeclaration: boolean, timeoutMs = DEFAULT_LSP_REQUEST_TIMEOUT_MS): Promise<LspLocation[]> {
+    await this.ensureStarted();
+    const params = await this.textDocumentPositionParams(file, line, column) as Record<string, unknown>;
+    const items = await this.request<LspLocation[]>("textDocument/references", {
+      ...params,
+      context: { includeDeclaration }
+    }, timeoutMs);
+    return items || [];
+  }
+
+  /** Uncached primitive for SemanticGateway; see rawReferences. */
+  async rawHover(file: string, line: number, column: number, timeoutMs = DEFAULT_LSP_REQUEST_TIMEOUT_MS): Promise<unknown> {
+    await this.ensureStarted();
+    const params = await this.textDocumentPositionParams(file, line, column);
+    return this.request<unknown>("textDocument/hover", params, timeoutMs);
+  }
+
+  /** Uncached primitive for SemanticGateway; see rawReferences. */
+  async rawDefinition(file: string, line: number, column: number, timeoutMs = DEFAULT_LSP_REQUEST_TIMEOUT_MS): Promise<Array<LspLocation | LspLocationLink>> {
+    await this.ensureStarted();
+    const params = await this.textDocumentPositionParams(file, line, column) as Record<string, unknown>;
+    const result = await this.request<unknown>("textDocument/definition", params, timeoutMs);
+    return normalizeLocations(result);
+  }
+
+  /** Uncached primitive for SemanticGateway; see rawReferences. */
+  async rawImplementation(file: string, line: number, column: number, timeoutMs = DEFAULT_LSP_REQUEST_TIMEOUT_MS): Promise<Array<LspLocation | LspLocationLink>> {
+    await this.ensureStarted();
+    const params = await this.textDocumentPositionParams(file, line, column) as Record<string, unknown>;
+    const result = await this.request<unknown>("textDocument/implementation", params, timeoutMs);
+    return normalizeLocations(result);
   }
 
   async diagnosticsFor(files: string[], waitMs: number): Promise<Record<string, LspDiagnostic[]>> {
@@ -588,29 +631,41 @@ export class JdtlsSession {
     limit: number,
     budget: DeadlineBudget
   ): Promise<HierarchyResult> {
-    return this.cachedHierarchy("callHierarchy", [file, line, column, direction, depth, limit], file, async () => {
-      const method = direction === "incoming" ? "callHierarchy/incomingCalls" : "callHierarchy/outgoingCalls";
-      return this.walkHierarchy({
-        file,
-        line,
-        column,
-        prepareMethod: "textDocument/prepareCallHierarchy",
-        method,
-        depth,
-        limit,
-        budget,
-        expand: (item, related) => (related as Array<{ from?: unknown; to?: unknown; fromRanges?: LspRange[] }>).map(call => {
-          const next = direction === "incoming" ? call.from : call.to;
-          return {
-            next,
-            edge: {
-              from: direction === "incoming" ? next : item,
-              to: direction === "incoming" ? item : next,
-              ranges: call.fromRanges
-            }
-          };
-        })
-      });
+    return this.cachedHierarchy("callHierarchy", [file, line, column, direction, depth, limit], file, () =>
+      this.rawCallHierarchy(file, line, column, direction, depth, limit, budget));
+  }
+
+  /** Uncached primitive for SemanticGateway; see rawReferences. */
+  async rawCallHierarchy(
+    file: string,
+    line: number,
+    column: number,
+    direction: "incoming" | "outgoing",
+    depth: number,
+    limit: number,
+    budget: DeadlineBudget
+  ): Promise<HierarchyResult> {
+    const method = direction === "incoming" ? "callHierarchy/incomingCalls" : "callHierarchy/outgoingCalls";
+    return this.walkHierarchy({
+      file,
+      line,
+      column,
+      prepareMethod: "textDocument/prepareCallHierarchy",
+      method,
+      depth,
+      limit,
+      budget,
+      expand: (item, related) => (related as Array<{ from?: unknown; to?: unknown; fromRanges?: LspRange[] }>).map(call => {
+        const next = direction === "incoming" ? call.from : call.to;
+        return {
+          next,
+          edge: {
+            from: direction === "incoming" ? next : item,
+            to: direction === "incoming" ? item : next,
+            ranges: call.fromRanges
+          }
+        };
+      })
     });
   }
 
@@ -623,25 +678,37 @@ export class JdtlsSession {
     limit: number,
     budget: DeadlineBudget
   ): Promise<HierarchyResult> {
-    return this.cachedHierarchy("typeHierarchy", [file, line, column, direction, depth, limit], file, async () => {
-      const method = direction === "supertypes" ? "typeHierarchy/supertypes" : "typeHierarchy/subtypes";
-      return this.walkHierarchy({
-        file,
-        line,
-        column,
-        prepareMethod: "textDocument/prepareTypeHierarchy",
-        method,
-        depth,
-        limit,
-        budget,
-        expand: (item, related) => (related as unknown[]).map(next => ({
-          next,
-          edge: {
-            from: direction === "supertypes" ? item : next,
-            to: direction === "supertypes" ? next : item
-          }
-        }))
-      });
+    return this.cachedHierarchy("typeHierarchy", [file, line, column, direction, depth, limit], file, () =>
+      this.rawTypeHierarchy(file, line, column, direction, depth, limit, budget));
+  }
+
+  /** Uncached primitive for SemanticGateway; see rawReferences. */
+  async rawTypeHierarchy(
+    file: string,
+    line: number,
+    column: number,
+    direction: "supertypes" | "subtypes",
+    depth: number,
+    limit: number,
+    budget: DeadlineBudget
+  ): Promise<HierarchyResult> {
+    const method = direction === "supertypes" ? "typeHierarchy/supertypes" : "typeHierarchy/subtypes";
+    return this.walkHierarchy({
+      file,
+      line,
+      column,
+      prepareMethod: "textDocument/prepareTypeHierarchy",
+      method,
+      depth,
+      limit,
+      budget,
+      expand: (item, related) => (related as unknown[]).map(next => ({
+        next,
+        edge: {
+          from: direction === "supertypes" ? item : next,
+          to: direction === "supertypes" ? next : item
+        }
+      }))
     });
   }
 
@@ -1540,6 +1607,120 @@ export function classifyJdtStartError(error: unknown): JavaIntelligenceError {
     return new JavaIntelligenceError("JDT_BROKEN", message, error);
   }
   return new JavaIntelligenceError("JDT_SERVER_ERROR", message, error);
+}
+
+/**
+ * Task 33 Step 6: SemanticGateway does not own JDT restart state - it only
+ * reads it before creating a backend operation. This bridges the session's
+ * existing (already-tested) restartBackoff.status() into the gateway's gate
+ * contract. Cross-process lease busy-ness is deliberately NOT latched here:
+ * "a rejected lease acquisition ... does not gate future retries" is an
+ * existing, load-bearing jdtls-session.test.ts contract (another session may
+ * release the lease at any moment), so JDT_BUSY_OTHER_SESSION is discovered
+ * per-attempt through the normal execute()/classify path instead of a
+ * pre-check, relying on the gateway's own singleflight to avoid redundant
+ * concurrent lease attempts for the same key.
+ */
+export function lifecycleGateFromRestartBackoffStatus(
+  status: JdtRestartBackoffStatus
+): { allowed: true } | { allowed: false; code: "JDT_BACKOFF" | "JDT_CONFIG_ERROR"; message: string } {
+  if (status.blockedUntilExplicitReset) {
+    return {
+      allowed: false,
+      code: "JDT_CONFIG_ERROR",
+      message: "JDT start is blocked until configuration changes or java_runtime(action=restart)"
+    };
+  }
+  if (status.retryAfterMs !== undefined) {
+    return {
+      allowed: false,
+      code: "JDT_BACKOFF",
+      message: `JDT restart is backing off for ${status.retryAfterMs}ms`
+    };
+  }
+  return { allowed: true };
+}
+
+/** Convenience for wiring: a lifecycleGate reading the session's live restartBackoff state on every check. */
+export function semanticLifecycleGateFor(session: JdtlsSession): SemanticGatewayOptions["lifecycleGate"] {
+  return () => lifecycleGateFromRestartBackoffStatus(session.status().restartBackoff);
+}
+
+function parseOptionsKey(optionsKey: string): URLSearchParams {
+  return new URLSearchParams(optionsKey);
+}
+
+function requirePosition(line: number | undefined, column: number | undefined, operation: string): { line: number; column: number } {
+  if (line === undefined || column === undefined) {
+    throw new JavaIntelligenceError("INVALID_INPUT", `${operation} requires a line and column`);
+  }
+  return { line, column };
+}
+
+/**
+ * Task 33 Step 7: the only production bridge from SemanticGateway's typed
+ * operations to JdtlsSession's raw (uncached) request methods. Exhaustive
+ * switch over SemanticOperation so an unhandled operation is a compile error,
+ * not a silent runtime miss. Errors are intentionally left to propagate:
+ * SemanticGateway's own catch path classifies and maps them (Step 5).
+ */
+export function createJdtlsSemanticBackend(session: JdtlsSession): SemanticBackend {
+  return {
+    async execute(key, timeoutMs): Promise<SemanticBackendResult<SemanticBackendValue>> {
+      const options = parseOptionsKey(key.optionsKey);
+      switch (key.operation) {
+        case "hover": {
+          const { line, column } = requirePosition(key.line, key.column, "hover");
+          const value = await session.rawHover(key.file, line, column, timeoutMs) as SemanticValueMap["hover"];
+          return { completion: "COMPLETE", value };
+        }
+        case "definition": {
+          const { line, column } = requirePosition(key.line, key.column, "definition");
+          const value = await session.rawDefinition(key.file, line, column, timeoutMs);
+          return { completion: "COMPLETE", value };
+        }
+        case "implementation": {
+          const { line, column } = requirePosition(key.line, key.column, "implementation");
+          const value = await session.rawImplementation(key.file, line, column, timeoutMs);
+          return { completion: "COMPLETE", value };
+        }
+        case "references": {
+          const { line, column } = requirePosition(key.line, key.column, "references");
+          const includeDeclaration = options.get("includeDeclaration") === "true";
+          const value = await session.rawReferences(key.file, line, column, includeDeclaration, timeoutMs);
+          return { completion: "COMPLETE", value };
+        }
+        case "documentSymbol": {
+          const value = await session.rawDocumentSymbols(key.file, timeoutMs);
+          return { completion: "COMPLETE", value };
+        }
+        case "typeHierarchy": {
+          const { line, column } = requirePosition(key.line, key.column, "typeHierarchy");
+          const direction = options.get("direction") === "subtypes" ? "subtypes" : "supertypes";
+          const depth = Number(options.get("depth") ?? "1");
+          const limit = Number(options.get("limit") ?? "50");
+          const result = await session.rawTypeHierarchy(key.file, line, column, direction, depth, limit, DeadlineBudget.fromTimeout(timeoutMs));
+          return {
+            completion: result.completion,
+            value: { roots: result.roots, edges: result.edges, truncated: result.truncated },
+            errorCode: result.errorCode
+          };
+        }
+        case "callHierarchy": {
+          const { line, column } = requirePosition(key.line, key.column, "callHierarchy");
+          const direction = options.get("direction") === "outgoing" ? "outgoing" : "incoming";
+          const depth = Number(options.get("depth") ?? "1");
+          const limit = Number(options.get("limit") ?? "50");
+          const result = await session.rawCallHierarchy(key.file, line, column, direction, depth, limit, DeadlineBudget.fromTimeout(timeoutMs));
+          return {
+            completion: result.completion,
+            value: { roots: result.roots, edges: result.edges, truncated: result.truncated },
+            errorCode: result.errorCode
+          };
+        }
+      }
+    }
+  };
 }
 
 function leaseAcquireResultToError(result: Exclude<JdtLeaseAcquireResult, { kind: "ACQUIRED" }>): JavaIntelligenceError {

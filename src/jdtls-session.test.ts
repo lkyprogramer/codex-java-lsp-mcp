@@ -3,7 +3,13 @@ import test from "node:test";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { JdtlsSession, filterGeneratedCodeDiagnostics } from "./jdtls-session.js";
+import {
+  JdtlsSession,
+  createJdtlsSemanticBackend,
+  filterGeneratedCodeDiagnostics,
+  lifecycleGateFromRestartBackoffStatus
+} from "./jdtls-session.js";
+import type { SemanticCacheKey } from "./semantic-gateway.js";
 import { JavaIntelligenceError } from "./runtime/intelligence-error.js";
 import { DeadlineBudget } from "./runtime/deadline-budget.js";
 import {
@@ -514,4 +520,121 @@ test("lifecycle listeners observe every transition and can unsubscribe", async (
   unsubscribe();
   await session.stop();
   assert.deepEqual(seen, ["STARTING", "READY"]);
+});
+
+// --- createJdtlsSemanticBackend (Task 33 Step 7) ---------------------------
+
+function baseKeyFor(repoRoot: string, overrides: Partial<SemanticCacheKey> = {}): SemanticCacheKey {
+  return {
+    repoHash: "repo",
+    generation: 1,
+    operation: "references",
+    file: path.join(repoRoot, "A.java"),
+    fileFingerprint: "irrelevant",
+    line: 3,
+    column: 7,
+    optionsKey: "",
+    ...overrides
+  };
+}
+
+test("createJdtlsSemanticBackend routes each operation to its matching raw JDT request", async () => {
+  const location = { uri: "file:///repo/A.java", range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } } };
+  const factory = fakeTransportFactory({
+    initializeResult: { capabilities: {} },
+    responses: {
+      "textDocument/hover": { contents: "docs" },
+      "textDocument/definition": [location],
+      "textDocument/implementation": [location],
+      "textDocument/documentSymbol": [{ name: "A", kind: 5, range: location.range }]
+    },
+    handlers: {
+      "textDocument/references": (params: unknown) => {
+        const context = (params as { context?: { includeDeclaration?: boolean } }).context;
+        return context?.includeDeclaration ? [location, location] : [location];
+      }
+    }
+  });
+  const { session, repoRoot } = harness(factory);
+  writeFileSync(path.join(repoRoot, "A.java"), "class A {}\n");
+  const backend = createJdtlsSemanticBackend(session);
+
+  const hover = await backend.execute(baseKeyFor(repoRoot, { operation: "hover" }), 5000, new AbortController().signal);
+  assert.equal(hover.completion, "COMPLETE");
+  assert.deepEqual(hover.value, { contents: "docs" });
+
+  const definition = await backend.execute(baseKeyFor(repoRoot, { operation: "definition" }), 5000, new AbortController().signal);
+  assert.equal(definition.completion, "COMPLETE");
+  assert.deepEqual((definition.value as unknown[]).length, 1);
+
+  const implementation = await backend.execute(baseKeyFor(repoRoot, { operation: "implementation" }), 5000, new AbortController().signal);
+  assert.equal(implementation.completion, "COMPLETE");
+  assert.deepEqual((implementation.value as unknown[]).length, 1);
+
+  const documentSymbol = await backend.execute(baseKeyFor(repoRoot, { operation: "documentSymbol", line: undefined, column: undefined }), 5000, new AbortController().signal);
+  assert.equal(documentSymbol.completion, "COMPLETE");
+  assert.equal((documentSymbol.value as ReadonlyArray<{ name: string }>)[0]?.name, "A");
+
+  const referencesWithoutDeclaration = await backend.execute(baseKeyFor(repoRoot, { optionsKey: "includeDeclaration=false" }), 5000, new AbortController().signal);
+  assert.equal((referencesWithoutDeclaration.value as unknown[]).length, 1);
+
+  const referencesWithDeclaration = await backend.execute(baseKeyFor(repoRoot, { optionsKey: "includeDeclaration=true" }), 5000, new AbortController().signal);
+  assert.equal((referencesWithDeclaration.value as unknown[]).length, 2);
+
+  await session.stop();
+});
+
+test("createJdtlsSemanticBackend forwards hierarchy completion and honours direction/depth/limit from optionsKey", async () => {
+  const item = { name: "Base", uri: "file:///repo/Base.java", range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } } };
+  const factory = fakeTransportFactory({
+    initializeResult: { capabilities: {} },
+    handlers: {
+      "textDocument/prepareTypeHierarchy": () => [item],
+      "typeHierarchy/subtypes": () => [],
+      "typeHierarchy/supertypes": () => []
+    }
+  });
+  const { session, repoRoot, factory: harnessFactory } = harness(factory);
+  writeFileSync(path.join(repoRoot, "A.java"), "class A {}\n");
+  const backend = createJdtlsSemanticBackend(session);
+
+  const result = await backend.execute(
+    baseKeyFor(repoRoot, { operation: "typeHierarchy", optionsKey: "direction=subtypes&depth=2&limit=10" }),
+    5000,
+    new AbortController().signal
+  );
+
+  assert.equal(result.completion, "COMPLETE");
+  assert.equal(harnessFactory.connections[0].count("typeHierarchy/subtypes"), 1);
+  assert.equal(harnessFactory.connections[0].count("typeHierarchy/supertypes"), 0);
+
+  await session.stop();
+});
+
+test("createJdtlsSemanticBackend rejects a position-requiring operation missing line/column", async () => {
+  const factory = fakeTransportFactory({ initializeResult: { capabilities: {} } });
+  const { session, repoRoot } = harness(factory);
+  const backend = createJdtlsSemanticBackend(session);
+
+  await assert.rejects(
+    () => backend.execute(baseKeyFor(repoRoot, { operation: "hover", line: undefined, column: undefined }), 5000, new AbortController().signal),
+    (error: unknown) => error instanceof JavaIntelligenceError && error.code === "INVALID_INPUT"
+  );
+
+  await session.stop();
+});
+
+test("lifecycleGateFromRestartBackoffStatus maps backoff, config-block and allowed states", () => {
+  assert.deepEqual(
+    lifecycleGateFromRestartBackoffStatus({ consecutiveFailures: 0, blockedUntilExplicitReset: false }),
+    { allowed: true }
+  );
+  assert.deepEqual(
+    lifecycleGateFromRestartBackoffStatus({ consecutiveFailures: 2, retryAfterMs: 1200, blockedUntilExplicitReset: false }),
+    { allowed: false, code: "JDT_BACKOFF", message: "JDT restart is backing off for 1200ms" }
+  );
+  assert.deepEqual(
+    lifecycleGateFromRestartBackoffStatus({ consecutiveFailures: 1, blockedUntilExplicitReset: true, lastErrorCode: "JDT_CONFIG_ERROR" }),
+    { allowed: false, code: "JDT_CONFIG_ERROR", message: "JDT start is blocked until configuration changes or java_runtime(action=restart)" }
+  );
 });
