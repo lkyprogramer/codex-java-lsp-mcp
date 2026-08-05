@@ -205,6 +205,7 @@ export class JdtlsSession {
   );
   private startedAt?: Date;
   private readonly openDocuments = new Map<string, OpenDocument>();
+  private readonly openDocumentInflight = new Map<string, Promise<string>>();
   private readonly diagnostics = new Map<string, LspDiagnostic[]>();
   private readonly dataDir: string;
   private readonly logDir: string;
@@ -1213,8 +1214,27 @@ export class JdtlsSession {
     };
   }
 
+  /**
+   * Singleflighted: Task 33's per-operation gateway split means 2-3 raw
+   * requests for the same position (hover/definition/implementation) now
+   * call this concurrently instead of sharing one caller-side read, same as
+   * references()/typeHierarchy() always did standalone. Without joining,
+   * each concurrent call for a not-yet-open file would independently
+   * readFile() and could each fire a duplicate didOpen notification -
+   * caught by a real three-repo P95 regression (1.4-1.6x) before landing.
+   */
   private async openDocument(file: string): Promise<string> {
     const uri = toFileUri(file);
+    const inflight = this.openDocumentInflight.get(uri);
+    if (inflight) return inflight;
+    const promise = this.syncOpenDocument(file, uri).finally(() => {
+      if (this.openDocumentInflight.get(uri) === promise) this.openDocumentInflight.delete(uri);
+    });
+    this.openDocumentInflight.set(uri, promise);
+    return promise;
+  }
+
+  private async syncOpenDocument(file: string, uri: string): Promise<string> {
     const text = await readFile(file, "utf8");
     const existing = this.openDocuments.get(uri);
     if (!existing) {

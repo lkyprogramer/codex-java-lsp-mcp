@@ -832,3 +832,28 @@ test("semanticLocations() skips implementation entirely when includeImplementati
 
   await session.stop();
 });
+
+test("symbolContext()'s 3 concurrent raw requests for a not-yet-open file open the document exactly once", async () => {
+  const location = { uri: "file:///repo/A.java", range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } } };
+  const factory = fakeTransportFactory({
+    initializeResult: { capabilities: {} },
+    responses: {
+      "textDocument/hover": { contents: "docs" },
+      "textDocument/definition": [location],
+      "textDocument/implementation": [location]
+    }
+  });
+  const { session, repoRoot, factory: harnessFactory } = harness(factory);
+  writeFileSync(path.join(repoRoot, "A.java"), "class A {}\n");
+
+  await session.symbolContext(path.join(repoRoot, "A.java"), 3, 7);
+
+  const connection = harnessFactory.connections[0];
+  assert.equal(
+    connection.notifications.filter(method => method === "textDocument/didOpen").length,
+    1,
+    "3 concurrent hover/definition/implementation requests for the same never-before-opened file must join one didOpen, not send it 3 times"
+  );
+
+  await session.stop();
+});
