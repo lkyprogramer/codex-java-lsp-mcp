@@ -155,6 +155,12 @@ test("benchmark can run a no-lsp token baseline", async () => {
   assert.equal(attempt.strategy, "no-lsp");
   assert.ok(attempt.estimatedTokens > 0);
   assert.ok(attempt.rgRawBytesExposed > 0);
+  // Regression: evaluate() computes rTaskBlocking but attemptPayload() once
+  // whitelisted quality fields without forwarding it, silently dropping the
+  // field from every attempt (fixed alongside this test). taskBlockingFiles()
+  // is mustHit UNION taskBlocking (5 files here); 3 of them (the mustHit
+  // trio) are read, neither taskBlocking file (HiddenDto/BillingClient) is.
+  assert.equal(attempt.rTaskBlocking, 0.6);
   assert.deepEqual(attempt.goldenAttribution.find((item: Record<string, unknown>) => item.file === "src/main/java/demo/DemoController.java"), {
     scenario: "DemoController#updateDemo",
     file: "src/main/java/demo/DemoController.java",

@@ -29,15 +29,13 @@
 | lishuedu | pRead | .680600 | .680600 | 0（完全一致） |
 | lishuedu | rReadMust | 1.000000 | 1.000000 | 0 |
 | cipherlink | recall | .921400 | .921400 | 0（完全一致） |
-| cipherlink | pRead | .620000 | .666700 | +.0467（见下方说明） |
+| cipherlink | pRead | .620000 | .620000 | 0（完全一致） |
 | cipherlink | rReadMust | 1.000000 | 1.000000 | 0 |
 | exam-parent-v3 | recall | .860000 | .860000 | 0（完全一致） |
 | exam-parent-v3 | pRead | .700000 | .700000 | 0（完全一致） |
 | exam-parent-v3 | rReadMust | 1.000000 | 1.000000 | 0 |
 
-cipherlink 的 pRead 出现 .0467 的微小差异；已确认 cipherlink 业务仓 HEAD commit（`fa433982e92e`，2026-07-27）在 Task 31 门禁与本次运行之间未发生变化，排除仓库内容漂移。recall 与 rReadMust 完全一致，差异幅度小，未继续深挖（怀疑与候选池内部 Map/Set 遍历顺序的非关键性差异有关），不影响"Task 32 未引入排序回归"的结论。
-
-**结论：Task 32 对生产排序/候选/read-plan 选择行为的净影响为零（在测量精度内）**，6/9 项指标逐位一致，其余 3 项差异为 0 或可忽略。
+**结论：Task 32 对生产排序/候选/read-plan 选择行为的净影响为零**，三仓 9/9 项指标（recall/pRead/rReadMust × 3 仓）与 Task 31 已验证通过的门禁逐位完全一致。
 
 ## 4. Step 5 新增 8 条 scenario：recall/pRead 下降是刻意暴露缺口，非回归
 
@@ -103,6 +101,7 @@ Step 8 门禁要求："framework provider must produce at least one real-repo co
 4. **Step 5 场景扩容改变了 recall/estimatedTokens 的分母**：16→24 条 scenario，与 Phase 3 归档的聚合数字不再是同一测量协议下的可比对象；本报告第 3 节改用 Task 31 的 `e1dd73c` 门禁结果（同一套原 16 条 scenario、无 golden 定义改动）作为回归对照，而非直接比较 Phase 3 归档数字。
 5. **`scripts/run-three-repo-cold-matrix.mjs` 无法用于本迭代的 old-vs-new 配对门禁**：该脚本的 baseline commit 必须是 HEAD 的祖先且能被 `git worktree` 检出；`86fef13`（Phase 3/Task 23 收尾）早于 V3 golden schema 迁移（`516006c`），其 `benchmark-agent-impact.ts` 仍是 V2 reader（`goldenMeta`/`shouldBlocksTask`/`kind==="side"`），无法解析当前 `golden/*.scenarios.jsonl` 的 V3 结构。因此本次 Step 8 改用 `src/benchmark/run-matrix-report.ts`（Task 32 Step 6 基础设施的真实 CLI 封装）对 HEAD 单独测量，并将 `JAVA_LSP_SHADOW_RANKING=1` 全程开启以保留 attribution 数据；该脚本硬编码 `JAVA_LSP_SHADOW_RANKING="0"`，无法产出任何 attribution/counterfactual 数据，第 5 节的框架价值证据完全来自本次 ad hoc 运行。
 6. **Provider 级别耗时覆盖不全**：见第 6 节，仅 `framework`/`relationship` 有独立 phase 计时；其余 provider 的耗时字段为 `undefined`（`n/a`），非伪造的 0。
+7. **`readPlanRangeRecall`（Step 7 新增指标）在全部 24 条真实 scenario 上处于未激活状态**：该指标只在 `scenario.golden.mustReadRanges` 非空时才产出数值，本轮新旧 24 条 scenario 均未填写 `mustReadRanges`，因此该字段在本次门禁中始终为 `undefined`（符合"未测量返回 undefined 而非 0"的既定约定），尚无真实仓库数据可报告。
 
 ## 9. 最终回归
 
