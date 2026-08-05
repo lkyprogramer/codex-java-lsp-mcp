@@ -763,3 +763,72 @@ test("references() during an active restart backoff fails fast without a backend
 
   await session.stop();
 });
+
+// --- symbolContext()/semanticLocations() cutover onto SemanticGateway -----
+
+test("symbolContext() returns hover/definitions/implementations from independently gateway-cached operations", async () => {
+  const location = { uri: "file:///repo/A.java", range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } } };
+  const factory = fakeTransportFactory({
+    initializeResult: { capabilities: {} },
+    responses: {
+      "textDocument/hover": { contents: "docs" },
+      "textDocument/definition": [location],
+      "textDocument/implementation": [location, location]
+    }
+  });
+  const { session, repoRoot } = harness(factory);
+  writeFileSync(path.join(repoRoot, "A.java"), "class A {}\n");
+
+  const result = await session.symbolContext(path.join(repoRoot, "A.java"), 3, 7);
+
+  assert.deepEqual(result.hover, { contents: "docs" });
+  assert.equal(result.definitions.length, 1);
+  assert.equal(result.implementations.length, 2);
+  await session.stop();
+});
+
+test("symbolContext() never throws: a per-field JDT failure degrades that field to absent, not a rejected call", async () => {
+  const factory = fakeTransportFactory({
+    initializeResult: { capabilities: {} },
+    responses: { "textDocument/definition": [] },
+    errors: {
+      "textDocument/hover": new Error("hover exploded"),
+      "textDocument/implementation": new Error("implementation exploded")
+    }
+  });
+  const { session, repoRoot } = harness(factory);
+  writeFileSync(path.join(repoRoot, "A.java"), "class A {}\n");
+
+  const result = await session.symbolContext(path.join(repoRoot, "A.java"), 3, 7);
+
+  assert.equal(result.hover, undefined);
+  assert.deepEqual(result.definitions, []);
+  assert.deepEqual(result.implementations, []);
+  await session.stop();
+});
+
+test("semanticLocations() skips implementation entirely when includeImplementations is false, and shares the definition cache entry with symbolContext()", async () => {
+  const location = { uri: "file:///repo/A.java", range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } } };
+  let implementationCalls = 0;
+  const factory = fakeTransportFactory({
+    initializeResult: { capabilities: {} },
+    handlers: {
+      "textDocument/definition": () => [location],
+      "textDocument/implementation": () => { implementationCalls += 1; return [location]; }
+    },
+    responses: { "textDocument/hover": { contents: "docs" } }
+  });
+  const { session, repoRoot, factory: harnessFactory } = harness(factory);
+  writeFileSync(path.join(repoRoot, "A.java"), "class A {}\n");
+  const file = path.join(repoRoot, "A.java");
+
+  const locations = await session.semanticLocations(file, 3, 7, 5000, false);
+  assert.equal(locations.definitions.length, 1);
+  assert.deepEqual(locations.implementations, []);
+  assert.equal(implementationCalls, 0, "implementation is never requested when includeImplementations is false");
+
+  await session.symbolContext(file, 3, 7);
+  assert.equal(harnessFactory.connections[0].count("textDocument/definition"), 1, "symbolContext's definition request is served from semanticLocations' cache entry - same position, same operation");
+
+  await session.stop();
+});

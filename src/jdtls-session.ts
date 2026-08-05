@@ -500,43 +500,76 @@ export class JdtlsSession {
     });
   }
 
+  /**
+   * Task 33 Step 7 cutover: hover/definition/implementation are now three
+   * independently gateway-cached operations instead of one bundled
+   * cached("symbolContext", ...) entry. A per-suboperation failure or
+   * caller-deadline timeout degrades to absent (matching the old
+   * requestSettled() behavior exactly) rather than failing the whole call -
+   * symbolContext() itself still never throws.
+   */
   async symbolContext(file: string, line: number, column: number, timeoutMs = DEFAULT_LSP_REQUEST_TIMEOUT_MS): Promise<{
     hover: unknown;
     definitions: Array<LspLocation | LspLocationLink>;
     implementations: Array<LspLocation | LspLocationLink>;
   }> {
-    return this.cached("symbolContext", [file, line, column, timeoutMs], [file], async () => {
-      await this.ensureStarted();
-      const params = await this.textDocumentPositionParams(file, line, column) as Record<string, unknown>;
-      const [hover, definitions, implementations] = await Promise.all([
-        this.requestSettled<unknown>("textDocument/hover", params, timeoutMs),
-        this.requestSettled<unknown>("textDocument/definition", params, timeoutMs),
-        this.requestSettled<unknown>("textDocument/implementation", params, timeoutMs)
-      ]);
-      return {
-        hover,
-        definitions: normalizeLocations(definitions),
-        implementations: normalizeLocations(implementations)
-      };
-    });
+    const [hover, definitions, implementations] = await Promise.all([
+      this.gatewaySemanticValue("hover", file, line, column, timeoutMs),
+      this.gatewaySemanticValue("definition", file, line, column, timeoutMs),
+      this.gatewaySemanticValue("implementation", file, line, column, timeoutMs)
+    ]);
+    return {
+      hover,
+      definitions: definitions ? [...definitions] : [],
+      implementations: implementations ? [...implementations] : []
+    };
   }
 
+  /** Same cutover as symbolContext(); see its comment. Shares the same "definition"/"implementation" gateway cache entries when called for the same position - a natural improvement over the old bundled per-method caches, which never overlapped even when asking the identical LSP question. */
   async semanticLocations(file: string, line: number, column: number, timeoutMs = DEFAULT_LSP_REQUEST_TIMEOUT_MS, includeImplementations = false): Promise<{
     definitions: Array<LspLocation | LspLocationLink>;
     implementations: Array<LspLocation | LspLocationLink>;
   }> {
-    return this.cached("semanticLocations", [file, line, column, timeoutMs, includeImplementations], [file], async () => {
-      await this.ensureStarted();
-      const params = await this.textDocumentPositionParams(file, line, column) as Record<string, unknown>;
-      const definitions = await this.requestSettled<unknown>("textDocument/definition", params, timeoutMs);
-      const implementations = includeImplementations
-        ? await this.requestSettled<unknown>("textDocument/implementation", params, timeoutMs)
-        : undefined;
-      return {
-        definitions: normalizeLocations(definitions),
-        implementations: normalizeLocations(implementations)
-      };
-    });
+    const [definitions, implementations] = await Promise.all([
+      this.gatewaySemanticValue("definition", file, line, column, timeoutMs),
+      includeImplementations ? this.gatewaySemanticValue("implementation", file, line, column, timeoutMs) : Promise.resolve(undefined)
+    ]);
+    return {
+      definitions: definitions ? [...definitions] : [],
+      implementations: implementations ? [...implementations] : []
+    };
+  }
+
+  /**
+   * Shared primitive behind symbolContext/semanticLocations: a single
+   * gateway-owned operation at this position, degrading to `undefined` on
+   * any non-COMPLETE outcome (backend failure) or caller-deadline rejection -
+   * matching requestSettled()'s "never throws, absent on any trouble"
+   * contract these two callers both rely on.
+   */
+  private async gatewaySemanticValue<Operation extends "hover" | "definition" | "implementation">(
+    operation: Operation,
+    file: string,
+    line: number,
+    column: number,
+    timeoutMs: number
+  ): Promise<SemanticValueMap[Operation] | undefined> {
+    const key: SemanticCacheKey<Operation> = {
+      repoHash: this.worktree.repoHash,
+      generation: this.cacheGeneration,
+      operation,
+      file,
+      fileFingerprint: fileFingerprint(file),
+      line,
+      column,
+      optionsKey: ""
+    };
+    try {
+      const outcome = await this.semanticGateway.execute(key, DeadlineBudget.fromTimeout(timeoutMs), timeoutMs);
+      return outcome.completion === "COMPLETE" ? outcome.value : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   async documentSymbols(file: string, timeoutMs = 2000): Promise<LspDocumentSymbol[]> {
@@ -1288,8 +1321,8 @@ export class JdtlsSession {
     const cancellation = new CancellationTokenSource();
     const startedAt = Date.now();
     // Hold the raw promise so backend settlement can still be measured after the
-    // client gives up. requestSettled() is unusable here: its `undefined` return
-    // would lose the timeout/cancel/server-error classification.
+    // client gives up, and so the timeout/cancel/server-error classification
+    // below is never lost behind an undefined-on-any-failure return.
     const backend = this.connection.sendRequest(method, params, cancellation.token);
     let backendSettledAt: number | undefined;
     const markSettled = (): void => { backendSettledAt = Date.now(); };
@@ -1309,15 +1342,6 @@ export class JdtlsSession {
         backend.then(recordOvershoot, recordOvershoot);
       }
       cancellation.dispose();
-    }
-  }
-
-  private async requestSettled<T>(method: string, params?: unknown, timeoutMs = DEFAULT_LSP_REQUEST_TIMEOUT_MS): Promise<T | undefined> {
-    try {
-      return await this.request<T>(method, params, timeoutMs);
-    } catch (error) {
-      console.error(`[codex-java-lsp] ${method} failed`, error);
-      return undefined;
     }
   }
 
