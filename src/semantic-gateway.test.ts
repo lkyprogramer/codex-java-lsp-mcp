@@ -31,6 +31,27 @@ const baseKey: SemanticCacheKey<"references"> = {
   optionsKey: "includeDeclaration=false"
 };
 
+function hierarchy(names: string[]): SemanticValueMap["typeHierarchy"] {
+  return {
+    roots: [],
+    edges: names.map(name => ({ from: name, to: name, depth: 1 })),
+    truncated: false,
+    requests: names.length,
+    visited: names.length
+  };
+}
+
+const hierarchyKey: SemanticCacheKey<"typeHierarchy"> = {
+  repoHash: "repo",
+  generation: 1,
+  operation: "typeHierarchy",
+  file: "/repo/A.java",
+  fileFingerprint: "10:1",
+  line: 3,
+  column: 7,
+  optionsKey: "direction=subtypes&depth=1&limit=10"
+};
+
 test("identical concurrent semantic requests share one backend call", async () => {
   const pending = deferred<SemanticBackendResult<SemanticValueMap["references"]>>();
   let backendCalls = 0;
@@ -194,4 +215,63 @@ test("busy-other-session lifecycle outcome is reported distinctly from backoff",
   const status = gateway.status();
   assert.equal(status.busyOtherSessionSkips, 1);
   assert.equal(status.lifecycleBackoffSkips, 0);
+});
+
+test("typeHierarchy/callHierarchy never join an in-flight entry: identical concurrent calls each get their own backend execution", async () => {
+  const pendings: Array<ReturnType<typeof deferred<SemanticBackendResult<SemanticValueMap["typeHierarchy"]>>>> = [];
+  let backendCalls = 0;
+  const gateway = new SemanticGateway({
+    async execute() {
+      const pending = deferred<SemanticBackendResult<SemanticValueMap["typeHierarchy"]>>();
+      pendings.push(pending);
+      backendCalls += 1;
+      return pending.promise;
+    }
+  }, { ttlMs: 1000, absoluteCapMs: 1000 });
+
+  const first = gateway.execute(hierarchyKey, DeadlineBudget.fromTimeout(1000), 1000);
+  const second = gateway.execute(hierarchyKey, DeadlineBudget.fromTimeout(1000), 1000);
+  assert.equal(backendCalls, 2, "hierarchy calls must not join - each gets its own backend execution");
+
+  pendings[0]!.resolve({ completion: "COMPLETE", value: hierarchy(["A"]) });
+  pendings[1]!.resolve({ completion: "COMPLETE", value: hierarchy(["B"]) });
+  const [left, right] = await Promise.all([first, second]);
+  assert.equal(left.shared, false);
+  assert.equal(right.shared, false);
+  assert.deepEqual(left.value.edges.map(edge => edge.from), ["A"]);
+  assert.deepEqual(right.value.edges.map(edge => edge.from), ["B"]);
+});
+
+test("a typeHierarchy caller's own deadline never rejects the call - it resolves with whatever the backend returns, even PARTIAL_TIMEOUT", async () => {
+  const gateway = new SemanticGateway({
+    async execute() {
+      return { completion: "PARTIAL_TIMEOUT", value: hierarchy(["partial"]), errorCode: "DEADLINE_EXCEEDED" };
+    }
+  }, { ttlMs: 1000, absoluteCapMs: 1000 });
+
+  // Under the shared join/race path this 1ms budget would reject with
+  // DEADLINE_EXCEEDED (see "one caller deadline does not cancel another
+  // caller..." above). Hierarchy must resolve instead, preserving
+  // walkHierarchy's "partial edges on the caller's own deadline" contract.
+  const outcome = await gateway.execute(hierarchyKey, DeadlineBudget.fromTimeout(1), 1000);
+  assert.equal(outcome.completion, "PARTIAL_TIMEOUT");
+  assert.equal(outcome.errorCode, "DEADLINE_EXCEEDED");
+  assert.deepEqual(outcome.value.edges.map(edge => edge.from), ["partial"]);
+});
+
+test("PARTIAL_TIMEOUT hierarchy outcomes are never cached, matching every other operation's cacheability rule", async () => {
+  let calls = 0;
+  const gateway = new SemanticGateway({
+    async execute() {
+      calls += 1;
+      return calls === 1
+        ? { completion: "PARTIAL_TIMEOUT" as const, value: hierarchy(["partial"]), errorCode: "DEADLINE_EXCEEDED" as const }
+        : { completion: "COMPLETE" as const, value: hierarchy(["complete"]) };
+    }
+  }, { ttlMs: 1000, absoluteCapMs: 1000 });
+
+  await gateway.execute(hierarchyKey, DeadlineBudget.fromTimeout(1000), 1000);
+  const second = await gateway.execute(hierarchyKey, DeadlineBudget.fromTimeout(1000), 1000);
+  assert.equal(second.cacheHit, false);
+  assert.equal(calls, 2);
 });

@@ -22,7 +22,7 @@ import {
 } from "./jdtls-transport.js";
 import { repoHash } from "./path-utils.js";
 import { DeadlineBudget } from "./runtime/deadline-budget.js";
-import { isCacheableCompletion, type Completion } from "./runtime/completion.js";
+import type { Completion } from "./runtime/completion.js";
 import {
   classifySemanticError,
   JavaIntelligenceError,
@@ -701,6 +701,16 @@ export class JdtlsSession {
     return result;
   }
 
+  /**
+   * Task 33 Step 7 cutover, hierarchy variant: routed through SemanticGateway
+   * for its completed-at TTL cache and lifecycle-gate short-circuit only -
+   * NOT its singleflight join (see NON_SHARED_OPERATIONS in
+   * semantic-gateway.ts for why walkHierarchy's "resolve with partial edges
+   * on the caller's own deadline" contract cannot share a backend call
+   * across callers with different deadlines). `operationCapMs` is the
+   * caller's own remaining budget, so the caller awaiting the gateway
+   * outcome is equivalent to the caller awaiting the raw walk directly.
+   */
   async callHierarchy(
     file: string,
     line: number,
@@ -710,8 +720,26 @@ export class JdtlsSession {
     limit: number,
     budget: DeadlineBudget
   ): Promise<HierarchyResult> {
-    return this.cachedHierarchy("callHierarchy", [file, line, column, direction, depth, limit], file, () =>
-      this.rawCallHierarchy(file, line, column, direction, depth, limit, budget));
+    const key: SemanticCacheKey<"callHierarchy"> = {
+      repoHash: this.worktree.repoHash,
+      generation: this.cacheGeneration,
+      operation: "callHierarchy",
+      file,
+      fileFingerprint: fileFingerprint(file),
+      line,
+      column,
+      optionsKey: `direction=${direction}&depth=${depth}&limit=${limit}`
+    };
+    const outcome = await this.semanticGateway.execute(key, budget, budget.remainingMs());
+    return {
+      roots: [...outcome.value.roots],
+      edges: [...outcome.value.edges],
+      completion: outcome.completion,
+      truncated: outcome.value.truncated,
+      requests: outcome.value.requests,
+      visited: outcome.value.visited,
+      errorCode: outcome.errorCode
+    };
   }
 
   /** Uncached primitive for SemanticGateway; see rawReferences. */
@@ -748,6 +776,7 @@ export class JdtlsSession {
     });
   }
 
+  /** Task 33 Step 7 cutover, hierarchy variant: see callHierarchy()'s doc comment. */
   async typeHierarchy(
     file: string,
     line: number,
@@ -757,8 +786,26 @@ export class JdtlsSession {
     limit: number,
     budget: DeadlineBudget
   ): Promise<HierarchyResult> {
-    return this.cachedHierarchy("typeHierarchy", [file, line, column, direction, depth, limit], file, () =>
-      this.rawTypeHierarchy(file, line, column, direction, depth, limit, budget));
+    const key: SemanticCacheKey<"typeHierarchy"> = {
+      repoHash: this.worktree.repoHash,
+      generation: this.cacheGeneration,
+      operation: "typeHierarchy",
+      file,
+      fileFingerprint: fileFingerprint(file),
+      line,
+      column,
+      optionsKey: `direction=${direction}&depth=${depth}&limit=${limit}`
+    };
+    const outcome = await this.semanticGateway.execute(key, budget, budget.remainingMs());
+    return {
+      roots: [...outcome.value.roots],
+      edges: [...outcome.value.edges],
+      completion: outcome.completion,
+      truncated: outcome.value.truncated,
+      requests: outcome.value.requests,
+      visited: outcome.value.visited,
+      errorCode: outcome.errorCode
+    };
   }
 
   /** Uncached primitive for SemanticGateway; see rawReferences. */
@@ -789,22 +836,6 @@ export class JdtlsSession {
         }
       }))
     });
-  }
-
-  /** Only COMPLETE hierarchies may be reused; a truncated walk must be retried. */
-  private async cachedHierarchy(
-    method: string,
-    parts: unknown[],
-    file: string,
-    compute: () => Promise<HierarchyResult>
-  ): Promise<HierarchyResult> {
-    return this.cached(
-      method,
-      parts,
-      [file],
-      compute,
-      result => isCacheableCompletion(result.completion)
-    );
   }
 
   private async walkHierarchy(input: {
@@ -1796,7 +1827,7 @@ export function createJdtlsSemanticBackend(session: JdtlsSession): SemanticBacke
           const result = await session.rawTypeHierarchy(key.file, line, column, direction, depth, limit, DeadlineBudget.fromTimeout(timeoutMs));
           return {
             completion: result.completion,
-            value: { roots: result.roots, edges: result.edges, truncated: result.truncated },
+            value: { roots: result.roots, edges: result.edges, truncated: result.truncated, requests: result.requests, visited: result.visited },
             errorCode: result.errorCode
           };
         }
@@ -1808,7 +1839,7 @@ export function createJdtlsSemanticBackend(session: JdtlsSession): SemanticBacke
           const result = await session.rawCallHierarchy(key.file, line, column, direction, depth, limit, DeadlineBudget.fromTimeout(timeoutMs));
           return {
             completion: result.completion,
-            value: { roots: result.roots, edges: result.edges, truncated: result.truncated },
+            value: { roots: result.roots, edges: result.edges, truncated: result.truncated, requests: result.requests, visited: result.visited },
             errorCode: result.errorCode
           };
         }
