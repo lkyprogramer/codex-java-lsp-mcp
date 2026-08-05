@@ -1,0 +1,74 @@
+{
+  "generatedAt": "2026-08-05T03:19:32.305Z",
+  "runtimeCommit": "a1e6e4be6b43",
+  "projects": [
+    {
+      "project": "lishuedu",
+      "repoRoot": "/Users/luo/Documents/program/lishu/lishuedu",
+      "warmStates": [
+        {
+          "warmState": "cold-nolsp",
+          "runs": 5,
+          "recall": 0.784672619047619,
+          "pRead": 0.6770833333333335,
+          "rReadMust": 1,
+          "rTaskBlocking": 0.6045634920634924,
+          "estimatedTokensP50": 23482,
+          "estimatedTokensP95": 34027,
+          "elapsedMsP50": 34.122583999997005,
+          "elapsedMsP95": 218.0829589999994,
+          "artifactFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task32-step8-gate-20260805/matrix/lishuedu-cold-nolsp.json"
+        }
+      ]
+    },
+    {
+      "project": "cipherlink",
+      "repoRoot": "/Users/luo/Documents/program/cipherlink",
+      "warmStates": [
+        {
+          "warmState": "cold-nolsp",
+          "runs": 5,
+          "recall": 0.8322229853479858,
+          "pRead": 0.6375,
+          "rReadMust": 1,
+          "rTaskBlocking": 0.4914186507936506,
+          "estimatedTokensP50": 14046,
+          "estimatedTokensP95": 25407,
+          "elapsedMsP50": 67.74699999999939,
+          "elapsedMsP95": 168.1610840000003,
+          "artifactFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task32-step8-gate-20260805/matrix/cipherlink-cold-nolsp.json"
+        }
+      ]
+    },
+    {
+      "project": "exam-parent-v3",
+      "repoRoot": "/Users/luo/Documents/program/exam-parent-v3",
+      "warmStates": [
+        {
+          "warmState": "cold-nolsp",
+          "runs": 5,
+          "recall": 0.7789772727272728,
+          "pRead": 0.6041666666666665,
+          "rReadMust": 1,
+          "rTaskBlocking": 0.5002976190476186,
+          "estimatedTokensP50": 14742,
+          "estimatedTokensP95": 21744,
+          "elapsedMsP50": 37.91479199999958,
+          "elapsedMsP95": 152.72750000000087,
+          "artifactFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task32-step8-gate-20260805/matrix/exam-parent-v3-cold-nolsp.json"
+        }
+      ]
+    }
+  ],
+  "hardGateFailures": [
+    "lishuedu/cold-nolsp: P_read 0.6771 < Phase3 0.8333 - 0.02",
+    "lishuedu/cold-nolsp: recall 0.7847 < Phase3 0.8220 (NOTE: golden set grew 16->24 scenarios in Step 5, see report for denominator caveat)",
+    "cipherlink/cold-nolsp: P_read 0.6375 < Phase3 0.7000 - 0.02",
+    "exam-parent-v3/cold-nolsp: recall 0.7790 < Phase3 0.9000 (NOTE: golden set grew 16->24 scenarios in Step 5, see report for denominator caveat)"
+  ],
+  "artifactFiles": [
+    "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task32-step8-gate-20260805/matrix/lishuedu-cold-nolsp.json",
+    "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task32-step8-gate-20260805/matrix/cipherlink-cold-nolsp.json",
+    "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task32-step8-gate-20260805/matrix/exam-parent-v3-cold-nolsp.json"
+  ]
+}
