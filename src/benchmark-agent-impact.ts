@@ -422,6 +422,7 @@ function attemptPayload(
     rCand: quality.recall,
     pRead: quality.pRead,
     rReadMust: quality.rReadMust,
+    rTaskBlocking: quality.rTaskBlocking,
     readPlanItems,
     rgRawBytesSuppressed,
     rgRawBytesExposed
