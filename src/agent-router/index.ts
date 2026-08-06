@@ -5,7 +5,6 @@ import { availableParallelism } from "node:os";
 import { JdtlsSession } from "../jdtls-session.js";
 import type { RouterIndex } from "../java-index/router-java-index.js";
 import type { FrameworkIndexView } from "../java-index/framework-index-view.js";
-import { EdgeStore } from "../edge-store.js";
 import { FileSemanticEdgeStoreV2, type SemanticEdgeStoreV2 } from "../semantic-edge-store.js";
 import { computeBuildFingerprint } from "../java-index/build-fingerprint.js";
 import { probeLayout, type LayoutContext } from "../layout-probe.js";
@@ -120,7 +119,6 @@ export class AgentRouter {
     // comment for why providers still see these as two distinct fields.
     private readonly javaIndex: RouterIndex & FrameworkIndexView,
     private readonly layoutContext: LayoutContext = probeLayout(repoRoot),
-    private readonly edgeStore: EdgeStore = new EdgeStore(repoRoot),
     private readonly routingPolicy: RoutingPolicy = resolveRoutingPolicy(repoRoot),
     private readonly rgRunner: RgRunner = new RgRunner(),
     // Appended last (not inserted among the params above) so every existing
@@ -178,12 +176,9 @@ export class AgentRouter {
 
   /**
    * Applies a coordinator change batch: the rg cache is invalidated below the
-   * new generation, and any Java or build change clears the legacy semantic
-   * edge store. Iteration B keeps the legacy store deliberately coarse.
-   *
-   * SemanticEdgeStoreV2 (Task 33 Step 8) is more precise: a BUILD_CHANGE
-   * anywhere in the batch treats the whole batch as a build change (every
-   * prior buildFingerprint is suspect, so a full wipe via
+   * new generation, and SemanticEdgeStoreV2 is invalidated to match. A
+   * BUILD_CHANGE anywhere in the batch treats the whole batch as a build
+   * change (every prior buildFingerprint is suspect, so a full wipe via
    * clearForBuildChange matches putComplete()'s own per-edge fingerprint
    * semantics) and also invalidates the cached buildFingerprint so the next
    * request recomputes it; otherwise applyChanges() does dependency-based
@@ -191,12 +186,6 @@ export class AgentRouter {
    */
   onRepoChanged(batch: RepoChangeBatch): void {
     this.rgCache.invalidateBefore(batch.generation);
-    const semantic = batch.changes.some(change =>
-      change.kind === "JAVA_ADD"
-      || change.kind === "JAVA_CHANGE"
-      || change.kind === "JAVA_DELETE"
-      || change.kind === "BUILD_CHANGE");
-    if (semantic) this.edgeStore.invalidateAll();
     if (batch.changes.some(change => change.kind === "BUILD_CHANGE")) {
       this.edgeStoreV2.clearForBuildChange(batch.generation);
       this.buildFingerprintCache = undefined;
@@ -251,7 +240,6 @@ export class AgentRouter {
       budget,
       phaseMs,
       session: this.session,
-      edgeStore: this.edgeStore,
       edgeStoreV2: this.edgeStoreV2,
       buildFingerprint,
       concurrency: RG_CONCURRENCY,

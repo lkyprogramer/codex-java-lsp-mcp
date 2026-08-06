@@ -261,7 +261,7 @@ test("complete JavaIndex resolves implementation relations even when naming reca
     assert.equal((await index.routerStatus()).coverage, "complete");
 
     const rg = new EmptyRgRunner();
-    const router = new AgentRouter(root, new NoLspSession() as never, index, undefined, undefined, undefined, rg);
+    const router = new AgentRouter(root, new NoLspSession() as never, index, undefined, undefined, rg);
     const impact = await router.impact(options({
       anchors: [{ file: gateway, line: 4, column: 18 }],
       profile: "port",
@@ -366,7 +366,6 @@ test("shadowRanking is populated end-to-end only when JAVA_LSP_SHADOW_RANKING=1 
       index,
       undefined,
       undefined,
-      undefined,
       new FixedFileRgRunner(processor)
     );
     const anchors = [{ file: request, line: 3, column: 15 }];
@@ -444,7 +443,6 @@ test("V2 type-reference evidence upgrades a candidate that naming recall found f
       root,
       new NoLspSession() as never,
       index,
-      undefined,
       undefined,
       undefined,
       new FixedFileRgRunner(processor)
@@ -578,7 +576,6 @@ test("sibling-seeded V2 router never returns a stale implementation before its f
       family.linked,
       new NoLspSession() as never,
       linkedIndex,
-      undefined,
       undefined,
       undefined,
       new EmptyRgRunner()

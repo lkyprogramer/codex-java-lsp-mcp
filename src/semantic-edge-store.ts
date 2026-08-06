@@ -5,8 +5,9 @@
 //         source symbol ID, surviving process restarts via an atomic gzip snapshot.
 // pos: Task 33 Step 8. Deliberately separate from the JavaIndex static snapshot
 //      (different lifecycle: these edges come from live JDT requests, not the AST
-//      extractor) and from src/edge-store.ts's legacy file-path-keyed store (kept
-//      side-by-side until this is validated in production, then Task 33 retires it).
+//      extractor). Task 33's read-path cutover retired the legacy file-path-keyed
+//      src/edge-store.ts once this store's read side was validated end-to-end;
+//      this is now the sole persisted-semantic-edge store.
 import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import { statSync } from "node:fs";
 import path from "node:path";
@@ -87,7 +88,7 @@ export type RawSemanticEdgeCandidate = {
  * outcome, an unresolvable symbol on either side, or an out-of-repo location
  * is never turned into a persistable edge - it is used for the current
  * request only. `putComplete` itself re-checks containment as a second line
- * of defence (matching the discipline src/edge-store.ts already applies).
+ * of defence.
  */
 export async function mapSemanticEdgeForPersistence(
   candidate: RawSemanticEdgeCandidate,

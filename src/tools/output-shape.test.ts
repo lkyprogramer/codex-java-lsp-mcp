@@ -282,7 +282,7 @@ test("java_impact standard output matches the ImpactResultV6 contract - present/
     await waitForCompleteIndex(index);
 
     const session = new NoLspSession();
-    const router = new AgentRouter(root, session as never, index, undefined, undefined, undefined, new EmptyRgRunner());
+    const router = new AgentRouter(root, session as never, index, undefined, undefined, new EmptyRgRunner());
     const context = { repoRoot: root, session, router } as unknown as ToolContext;
 
     const impactArgs = {

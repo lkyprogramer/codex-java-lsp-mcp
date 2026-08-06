@@ -103,7 +103,6 @@ test("service task that reads a Lombok-generated getter keeps its selected DTO a
       index,
       undefined,
       undefined,
-      undefined,
       new EmptyRgRunner()
     );
     const result = await router.impact(options({

@@ -9,7 +9,6 @@ import type { LayoutContext } from "../layout-probe.js";
 import type { RoutingPolicy } from "../routing-policy.js";
 import type { DeadlineBudget } from "../runtime/deadline-budget.js";
 import type { JdtlsSession } from "../jdtls-session.js";
-import type { EdgeStore } from "../edge-store.js";
 import type { SemanticEdgeStoreV2 } from "../semantic-edge-store.js";
 import type { CandidateFile, Confidence, ImpactOptions, ResolvedAnchor, RgPlanSection } from "../agent-types.js";
 import type { RgCommandSummary } from "./rg-plan.js";
@@ -82,7 +81,7 @@ export type ProviderOutcome = {
  * already a candidate (e.g. to skip re-emitting it) reads this list, never a
  * live Map another provider could still be writing to.
  *
- * `phaseMs`/`metrics`/`session`/`edgeStore`/`concurrency`/`loadRgSummary` are
+ * `phaseMs`/`metrics`/`session`/`edgeStoreV2`/`concurrency`/`loadRgSummary` are
  * Task 24 wrapping plumbing: they let each provider drive its unchanged old
  * collector (which expects these exact side channels) so `ImpactResult`'s
  * `metrics` block and per-phase timings stay byte-identical to the
@@ -110,8 +109,7 @@ export type ProviderInput = {
   readonly existingCandidatePaths: readonly string[];
   readonly phaseMs: Record<string, number>;
   readonly session: JdtlsSession;
-  readonly edgeStore: EdgeStore;
-  /** Task 33 Step 8 dual-write target; see semantic.ts's SemanticVerifyInput doc comment. */
+  /** Task 33's persisted-semantic evidence source: dual-write target for live semantic verify, sole read source for collectPersistedSemanticEvidence. */
   readonly edgeStoreV2: SemanticEdgeStoreV2;
   /** Cached once per repo-runtime (AgentRouter), recomputed only on a BUILD_CHANGE batch - never per request. */
   readonly buildFingerprint: string;
