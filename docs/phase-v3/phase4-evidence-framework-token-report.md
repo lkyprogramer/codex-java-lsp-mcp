@@ -97,11 +97,11 @@ Step 8 门禁要求："framework provider must produce at least one real-repo co
 | lexical | 645 | 355 | 355 | 15 | n/a | n/a | KEEP |
 | spring | 140 | 75 | 75 | 0 | n/a | n/a | KEEP |
 | mapstruct | 50 | 35 | 35 | 15 | n/a | n/a | KEEP |
-| framework（通用/未细分） | 0 | 0 | 0 | 0 | 5 | 39 | MODIFY（见下） |
+| framework（聚合阶段耗时行，非独立 provider） | 0 | 0 | 0 | 0 | 5 | 39 | N/A（见下，2026-08-06 复核更正） |
 
 - `static`/`relationship`/`lexical`/`support` 四个核心 provider 在 24 个真实场景上均有大量 `golden hits`，为主力证据来源，明确 **KEEP**。
 - `spring`/`mapstruct` 均产生真实 golden hits（75、35），`mapstruct` 还有直接测得的 `counterfactualGain=15`；`spring` 的 `counterfactualGain=0` 与第 5 节描述的 shadow read-plan 复现缺口一致（该缺口会系统性低估依赖 shortlist bucket-representative 机制获胜的 FRAMEWORK 证据），不代表真实价值为零——**KEEP**，理由与依据见第 5 节。
-- 通用 `framework`（providerId `"framework"`，`framework-provider.ts` 中定义）在全部 24×5=120 次尝试中 added/selected/goldenHits/counterfactualGain 均为 0，仅有耗时开销（P50 5ms/P95 39ms）。这与 `spring`/`mapstruct`/`mybatis`（经由其他 providerId 归因）形成对比，怀疑其功能已被更细分的框架 adapter 取代或从未在这三个真实仓库的场景分布中被真正触发。**MODIFY**：本轮证据不足以支撑直接 REJECT（删除代码是更大的决定，需要独立于本报告的专门调查确认该 provider 在其设计场景下是否仍有存在必要），但应作为后续 Iteration 的调查项标记，而非无条件保留。
+- **2026-08-06 复核更正**：本节最初把 `framework` 一行标记为 MODIFY，怀疑其"已被更细分的框架 adapter 取代或从未被真正触发"——复核后确认这是对 `matrix-runner.ts` 自身归因机制的误读，不是真实的生产问题。逐层追踪：每个 adapter 发出的 `EvidenceSignal.providerId` 各自是 `"spring"`/`"mybatis"`/`"mapstruct"`（`spring-adapter.ts`/`mybatis-adapter.ts`/`mapstruct-adapter.ts` 各自硬编码），`shadow-ranking.ts:141` 用这些真实 id 去重后填入 `GoldenAttributionV3.providers`，`buildProviderValueRows()` 的 added/selected/goldenHits/counterfactualGain 四列**只**从这个字段统计——字符串 `"framework"` 从未出现在任何 `EvidenceSignal.providerId` 上（`runner.ts` 里的 `FRAMEWORK_PROVIDER_ID="framework"` 只是外层合并后 `ProviderOutcome` 的包装 id，从不写入单条证据）。这一行之所以存在，纯粹是因为 `matrix-runner.ts` 的 `PROVIDER_PHASE_MS_KEY = { framework: "frameworkEvidence", relationship: "relationshipEvidence" }` 把"整个框架阶段的耗时"也计入 provider 名字空间做展示——它是**框架阶段的聚合耗时统计行**，结构上永远不会有非零的 added/selected/goldenHits/counterfactualGain，这是设计如此，不是缺陷或遗漏（`matrix-runner.test.ts` 第 219 行的 `"framework gets a cost row from phaseMs even with zero goldenAttribution hits"` 已经把这一行为断言为预期行为）。真正的 Spring/MyBatis/MapStruct 价值已经分别体现在各自的行里，无需也不应该单独对这一行做 KEEP/REJECT/MODIFY 判定。
 - Provider 级别耗时（cost P50/P95）目前只有 `framework`（对应 `frameworkEvidence` phase）与 `relationship`（对应 `relationshipEvidence` phase）有独立计时；`static`/`lexical`/`support`/`spring`/`mapstruct` 没有专门的 phase 计时点，`matrix-runner.ts` 的 `buildProviderValueRows()` 按设计对此类未测得的开销返回 `undefined`（渲染为 `n/a`），不伪造精度——这也是本迭代的一项已知局限。
 
 ## 7. 拒绝的规则

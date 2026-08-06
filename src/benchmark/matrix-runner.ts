@@ -226,7 +226,20 @@ const COUNTERFACTUAL_KEYS: ReadonlyArray<keyof GoldenCounterfactualV3> = [
   "withoutSupport"
 ];
 
-/** Only "framework" and "relationship" get a discrete phase timer (agent-router/index.ts's frameworkEvidence/relationshipEvidence phases); static/semantic/lexical/support share untimed phases, so their cost is left undefined rather than a fabricated number. */
+/**
+ * Only "framework" and "relationship" get a discrete phase timer (agent-router/index.ts's
+ * frameworkEvidence/relationshipEvidence phases); static/semantic/lexical/support share untimed
+ * phases, so their cost is left undefined rather than a fabricated number.
+ *
+ * "framework" here labels the *aggregate* framework-adapter-runner phase, not a real per-adapter
+ * provider id - no EvidenceSignal ever carries providerId "framework" (each adapter emits its own,
+ * e.g. "spring"/"mybatis"/"mapstruct" - see shadow-ranking.ts's providers field, sourced from
+ * signal.providerId). The row this key produces below will therefore always show
+ * added/selected/goldenHits/counterfactualGain=0 with only cost populated - that is expected, not
+ * a sign the framework runner is dead or unused (confirmed 2026-08-06 after
+ * phase4-evidence-framework-token-report.md's original MODIFY flag on this row turned out to be a
+ * misreading of this exact mechanism, not a real production gap).
+ */
 const PROVIDER_PHASE_MS_KEY: Readonly<Record<string, string>> = {
   framework: "frameworkEvidence",
   relationship: "relationshipEvidence"
