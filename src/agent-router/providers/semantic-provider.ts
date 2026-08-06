@@ -1,6 +1,8 @@
-// input: Anchors, the persisted semantic EdgeStore, and (phase two) the live JDT gateway.
+// input: Anchors, the persisted SemanticEdgeStoreV2, and (phase two) the live JDT gateway.
 // output: ProviderOutcome carrying EXACT_SEMANTIC/JDT_EXACT/PERSISTED_JDT EvidenceSignal[].
-// pos: Task 24 Step 7 - wraps semantic.ts/collectPersistedSemanticCandidates unchanged behind the evidence contract.
+// pos: Task 24 Step 7 wraps semantic.ts/collectPersistedSemanticCandidates behind the evidence
+//      contract; Task 33's read-path cutover moved the persisted read off the legacy
+//      file-path-keyed edge-store onto the symbolId-keyed SemanticEdgeStoreV2.
 //
 // Split into two entry points, not one collect(): the legacy pipeline queries
 // the persisted edge store *before* static/lexical discovery (so
@@ -61,7 +63,9 @@ export async function collectPersistedSemanticEvidence(input: ProviderInput): Pr
     options: input.options,
     repoRoot: input.repoRoot,
     routingPolicy: input.routingPolicy,
-    edgeStore: input.edgeStore,
+    javaIndex: input.javaIndex,
+    edgeStoreV2: input.edgeStoreV2,
+    generation: input.generation,
     metrics: input.metrics.persistedSemantic
   }));
   const touched = [...candidates.values()].filter(isTouchedCandidate);
@@ -119,7 +123,6 @@ export async function collectLiveSemanticEvidence(input: ProviderInput): Promise
     repoRoot: input.repoRoot,
     session: input.session,
     routingPolicy: input.routingPolicy,
-    edgeStore: input.edgeStore,
     budget: input.budget,
     javaIndex: input.javaIndex,
     edgeStoreV2: input.edgeStoreV2,

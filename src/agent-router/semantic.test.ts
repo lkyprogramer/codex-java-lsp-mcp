@@ -5,7 +5,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { CandidateFile, ImpactOptions, ResolvedAnchor } from "../agent-types.js";
-import type { EdgeStore, SemanticEdgeInput } from "../edge-store.js";
 import type { LspLocation } from "../jdtls-session.js";
 import { toFileUri } from "../repo-layout.js";
 import { resolveRoutingPolicy } from "../routing-policy.js";
@@ -71,16 +70,6 @@ function fakeSession(referenceItems: LspLocation[]) {
   };
 }
 
-function fakeEdgeStore(): { recordEdges: EdgeStore["recordEdges"]; calls: Array<{ fromFile: string; edges: SemanticEdgeInput[] }> } {
-  const calls: Array<{ fromFile: string; edges: SemanticEdgeInput[] }> = [];
-  return {
-    calls,
-    recordEdges: (fromFile: string, edges: SemanticEdgeInput[]) => {
-      calls.push({ fromFile, edges });
-    }
-  };
-}
-
 /** No symbol ever resolves, so mapSemanticEdgeForPersistence always returns undefined and edgeStoreV2 never gets a real edge - these tests exercise the legacy edgeStore path only, matching their pre-Task-33-Step-8 assertions. */
 function fakeJavaIndex(): { queryAnchor: (file: string, line: number, column: number) => Promise<undefined> } {
   return { queryAnchor: async () => undefined };
@@ -114,7 +103,6 @@ test("semanticVerify ranks reference candidates by value instead of JDT server o
     location(`${repoRoot}/module-x/src/test/java/T${i}.java`, 1));
   const highValueRef = location(`${repoRoot}/module-a/src/main/java/demo/OrderService.java`, 80);
   const candidates = new Map<string, CandidateFile>();
-  const edgeStore = fakeEdgeStore();
 
   await semanticVerify({
     candidates,
@@ -125,7 +113,6 @@ test("semanticVerify ranks reference candidates by value instead of JDT server o
     repoRoot,
     session: fakeSession([...lowValueRefs, highValueRef]) as never,
     routingPolicy: resolveRoutingPolicy(repoRoot),
-    edgeStore: edgeStore as unknown as EdgeStore,
     budget: DeadlineBudget.fromTimeout(5_000),
     javaIndex: fakeJavaIndex() as never,
     edgeStoreV2: fakeEdgeStoreV2() as never,
@@ -143,7 +130,7 @@ test("semanticVerify skips persisted-edge writes when raw reference locations hi
   const manyRefs = Array.from({ length: 5_001 }, (_, i) =>
     location(`${repoRoot}/module-a/src/main/java/demo/File${i}.java`, 1));
   const candidates = new Map<string, CandidateFile>();
-  const edgeStore = fakeEdgeStore();
+  const edgeStoreV2 = fakeEdgeStoreV2();
   const semantic = semanticState();
 
   await semanticVerify({
@@ -155,18 +142,17 @@ test("semanticVerify skips persisted-edge writes when raw reference locations hi
     repoRoot,
     session: fakeSession(manyRefs) as never,
     routingPolicy: resolveRoutingPolicy(repoRoot),
-    edgeStore: edgeStore as unknown as EdgeStore,
     budget: DeadlineBudget.fromTimeout(5_000),
-    javaIndex: fakeJavaIndex() as never,
-    edgeStoreV2: fakeEdgeStoreV2() as never,
+    javaIndex: resolvingJavaIndex() as never,
+    edgeStoreV2: edgeStoreV2 as never,
     buildFingerprint: "test-fingerprint",
     generation: 1
   });
 
   assert.equal(semantic.referenceTruncatedByLimit, true);
   assert.equal(
-    edgeStore.calls.some(call => call.edges.some(edge => edge.kind === "reference")),
-    false,
+    edgeStoreV2.calls.length,
+    0,
     "a reference set built from a truncated raw location list must not be persisted as a complete edge"
   );
   assert.ok(candidates.size > 1, "truncation still yields ranked candidates - only edge persistence is suppressed");
@@ -187,7 +173,6 @@ test("semanticVerify caps returned reference files at referenceFileLimit(mode) a
     repoRoot,
     session: fakeSession(refs) as never,
     routingPolicy: resolveRoutingPolicy(repoRoot),
-    edgeStore: fakeEdgeStore() as unknown as EdgeStore,
     budget: DeadlineBudget.fromTimeout(5_000),
     javaIndex: fakeJavaIndex() as never,
     edgeStoreV2: fakeEdgeStoreV2() as never,
@@ -221,7 +206,6 @@ test("semanticVerify dual-writes resolvable reference edges into edgeStoreV2, re
     repoRoot,
     session: fakeSession(refs) as never,
     routingPolicy: resolveRoutingPolicy(repoRoot),
-    edgeStore: fakeEdgeStore() as unknown as EdgeStore,
     budget: DeadlineBudget.fromTimeout(5_000),
     javaIndex: javaIndex as never,
     edgeStoreV2: edgeStoreV2 as never,

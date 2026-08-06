@@ -1,7 +1,6 @@
 import { classifyPath } from "../repo-layout.js";
 import { normalizeRepoLocation } from "../semantic-location.js";
 import { classifySemanticError, isExpectedSemanticOutcome } from "../runtime/intelligence-error.js";
-import type { EdgeStore, SemanticEdgeInput } from "../edge-store.js";
 import type { JdtlsSession, LspLocation, LspLocationLink } from "../jdtls-session.js";
 import type { RoutingPolicy } from "../routing-policy.js";
 import type { DeadlineBudget } from "../runtime/deadline-budget.js";
@@ -60,14 +59,13 @@ type SemanticSeedInput = SemanticInput & {
 
 type SemanticVerifyInput = SemanticInput & {
   readonly semantic: SemanticVerifyState;
-  readonly edgeStore: EdgeStore;
   /**
-   * Task 33 Step 8 dual-write (see semantic-edge-store.ts): resolves a
-   * location to a stable JavaIndex symbol ID and persists COMPLETE,
-   * repo-contained edges into SemanticEdgeStoreV2 alongside (not instead of)
-   * the legacy `edgeStore` above. `javaIndex` is the same underlying
-   * RouterIndex every other provider already sees via ProviderInput -
-   * SemanticVerifyInput just hadn't needed it before this.
+   * Task 33 Step 8/9 (see semantic-edge-store.ts): resolves a location to a
+   * stable JavaIndex symbol ID and persists COMPLETE, repo-contained edges
+   * into SemanticEdgeStoreV2 - the sole persisted-semantic store since the
+   * legacy file-path-keyed edge-store's read path was retired. `javaIndex`
+   * is the same underlying RouterIndex every other provider already sees
+   * via ProviderInput.
    */
   readonly javaIndex: RouterIndex;
   readonly edgeStoreV2: SemanticEdgeStoreV2;
@@ -153,7 +151,6 @@ export async function semanticVerify(input: SemanticVerifyInput): Promise<void> 
   await timed(input.phaseMs, "semanticVerify", async () => {
     for (const anchor of input.anchors) {
       const before = Date.now();
-      const verifiedEdges: SemanticEdgeInput[] = [];
       const edgeCandidatesForPersistence: RawSemanticEdgeCandidate[] = [];
       try {
         const references = await input.session.references(anchor.absolutePath, anchor.line, anchor.column, false, input.options.semanticTimeoutMs);
@@ -191,7 +188,6 @@ export async function semanticVerify(input: SemanticVerifyInput): Promise<void> 
           if (!truncatedRaw && candidate.absolutePath !== anchor.absolutePath) {
             const line = candidate.positions[0]?.line || 1;
             const column = candidate.positions[0]?.column || 1;
-            verifiedEdges.push({ to: candidate.absolutePath, kind: "reference", line, column });
             // references() throws on any non-COMPLETE outcome (Task 33 cutover),
             // so reaching here already proves this batch was COMPLETE.
             edgeCandidatesForPersistence.push({
@@ -201,6 +197,7 @@ export async function semanticVerify(input: SemanticVerifyInput): Promise<void> 
               targetFile: candidate.absolutePath,
               targetLine: line,
               targetColumn: column,
+              targetRanges: [{ start: { line, column }, end: { line, column } }],
               relation: "JDT_REFERENCE",
               completion: "COMPLETE",
               buildFingerprint: input.buildFingerprint,
@@ -231,13 +228,10 @@ export async function semanticVerify(input: SemanticVerifyInput): Promise<void> 
               if (candidate.absolutePath !== anchor.absolutePath) {
                 const line = candidate.positions[0]?.line || 1;
                 const column = candidate.positions[0]?.column || 1;
-                verifiedEdges.push({ to: candidate.absolutePath, kind: "typeHierarchy", line, column });
                 // Unlike references() above, typeHierarchy() resolves (never
                 // throws) on a caller-deadline timeout, so completion varies
                 // per anchor - mapSemanticEdgeForPersistence itself rejects
-                // anything but COMPLETE, matching the legacy store's own
-                // "only ever fed already-verified edges" invariant more
-                // strictly than the legacy store enforces today.
+                // anything but COMPLETE.
                 edgeCandidatesForPersistence.push({
                   sourceFile: anchor.absolutePath,
                   sourceLine: anchor.line,
@@ -245,6 +239,7 @@ export async function semanticVerify(input: SemanticVerifyInput): Promise<void> 
                   targetFile: candidate.absolutePath,
                   targetLine: line,
                   targetColumn: column,
+                  targetRanges: [{ start: { line, column }, end: { line, column } }],
                   relation: "JDT_TYPE_HIERARCHY",
                   completion: hierarchy.completion,
                   buildFingerprint: input.buildFingerprint,
@@ -257,13 +252,6 @@ export async function semanticVerify(input: SemanticVerifyInput): Promise<void> 
       } catch (error) {
         recordSemanticFailure(input.semantic, error);
       }
-      if (verifiedEdges.length > 0) {
-        try {
-          input.edgeStore.recordEdges(anchor.absolutePath, verifiedEdges);
-        } catch {
-          continue;
-        }
-      }
       if (edgeCandidatesForPersistence.length > 0) {
         try {
           const bounded = edgeCandidatesForPersistence.slice(0, MAX_PERSISTED_EDGES_PER_ANCHOR);
@@ -275,9 +263,7 @@ export async function semanticVerify(input: SemanticVerifyInput): Promise<void> 
             await input.edgeStoreV2.putComplete(persistable, input.generation);
           }
         } catch {
-          // Best-effort dual-write (Task 33 Step 8): a V2 persistence
-          // failure must never affect this anchor's candidates or the
-          // legacy edgeStore write above.
+          // A persistence failure must never affect this anchor's candidates.
         }
       }
     }

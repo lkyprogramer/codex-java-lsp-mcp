@@ -1,12 +1,13 @@
-// input: Anchors, JavaIndex facts, routing policy, and optional JDT edge store.
+// input: Anchors, JavaIndex facts, routing policy, and the persisted SemanticEdgeStoreV2.
 // output: Candidate map mutations for type graph, import graph, and persisted semantic edges.
-// pos: Static candidate collectors for AgentRouter (Task 22: async JavaIndex V2).
+// pos: Static candidate collectors for AgentRouter (Task 22: async JavaIndex V2; Task 33
+//      moved collectPersistedSemanticCandidates's read off the legacy edge-store).
 import path from "node:path";
 import { classifyPath } from "../repo-layout.js";
-import type { EdgeStore, SemanticEdgeKind } from "../edge-store.js";
 import type { RoutingPolicy } from "../routing-policy.js";
 import type { RouterIndex } from "../java-index/router-java-index.js";
 import type { JavaSourceFacts } from "../java-index/router-facts.js";
+import type { PersistedSemanticEdgeRelation, SemanticEdgeStoreV2 } from "../semantic-edge-store.js";
 import type { CandidateFile, ImpactOptions, ResolvedAnchor } from "../agent-types.js";
 import {
   breakdown,
@@ -41,7 +42,9 @@ type CollectPersistedSemanticInput = {
   readonly options: ImpactOptions;
   readonly repoRoot: string;
   readonly routingPolicy: RoutingPolicy;
-  readonly edgeStore: EdgeStore;
+  readonly javaIndex: RouterIndex;
+  readonly edgeStoreV2: SemanticEdgeStoreV2;
+  readonly generation: number;
   readonly metrics: { edgesSeen: number; addedCandidates: number };
 };
 
@@ -146,43 +149,60 @@ export async function collectImportGraphCandidates(input: CollectImportGraphInpu
   }
 }
 
-export function collectPersistedSemanticCandidates(input: CollectPersistedSemanticInput): void {
-  const { candidates, anchors, options, repoRoot, routingPolicy, edgeStore, metrics } = input;
+export async function collectPersistedSemanticCandidates(input: CollectPersistedSemanticInput): Promise<void> {
+  const { candidates, anchors, options, repoRoot, routingPolicy, javaIndex, edgeStoreV2, generation, metrics } = input;
   if (options.semanticPolicy === "required") {
     return;
   }
   for (const anchor of anchors) {
+    let anchorSymbol: { symbolId: string } | undefined;
+    try {
+      anchorSymbol = await javaIndex.queryAnchor(anchor.absolutePath, anchor.line, anchor.column);
+    } catch {
+      continue;
+    }
+    if (!anchorSymbol) {
+      continue;
+    }
     const seenEdges = new Set<string>();
     let uniqueEdges = 0;
-    for (const edge of edgeStore.edgesFor(anchor.absolutePath)) {
+    for (const edge of edgeStoreV2.findFrom(anchorSymbol.symbolId, generation)) {
       metrics.edgesSeen += 1;
-      const edgeKey = `${edge.kind}\0${edge.to}`;
+      const kind = persistedRelationToKind(edge.relation);
+      if (!kind) {
+        continue;
+      }
+      const edgeKey = `${kind}\0${edge.targetFile}`;
       if (seenEdges.has(edgeKey)) {
         continue;
       }
       seenEdges.add(edgeKey);
-      if (edge.to === anchor.absolutePath) {
+      if (edge.targetFile === anchor.absolutePath) {
         continue;
       }
       if (uniqueEdges >= 40) {
         break;
       }
-      const context = classifyPath(repoRoot, edge.to);
-      const score = scoreBase(routingPolicy, "semantic", context, anchor, options) + persistedEdgeScoreBonus(edge.kind);
+      const context = classifyPath(repoRoot, edge.targetFile);
+      const score = scoreBase(routingPolicy, "semantic", context, anchor, options) + persistedEdgeScoreBonus(kind);
+      // Edges written before targetRanges was added to the dual-write (Task
+      // 33 read-cutover) still carry an empty array; this rebuildable cache
+      // just falls back to {1,1} for those until they age out or are rewritten.
+      const range = edge.targetRanges[0]?.start ?? { line: 1, column: 1 };
       mergeCandidate(candidates, {
-        absolutePath: edge.to,
+        absolutePath: edge.targetFile,
         path: context.relativePath,
         module: context.module,
         layer: context.layer,
         sourceSet: context.sourceSet,
         score,
         matchCount: 0,
-        positions: [{ line: edge.line, column: edge.column }],
+        positions: [{ line: range.line, column: range.column }],
         categories: ["semantic"],
-        reasons: [`persisted-${edge.kind}`],
+        reasons: [`persisted-${kind}`],
         confidence: "high",
-        verifiedBy: [`persisted-${edge.kind}`],
-        scoreBreakdown: [breakdown(`semantic.persisted-${edge.kind}`, "semantic-seed", score, `persisted ${edge.kind} edge`)]
+        verifiedBy: [`persisted-${kind}`],
+        scoreBreakdown: [breakdown(`semantic.persisted-${kind}`, "semantic-seed", score, `persisted ${kind} edge`)]
       });
       metrics.addedCandidates += 1;
       uniqueEdges += 1;
@@ -204,7 +224,22 @@ function projectLocalImports(imports: string[], packageName: string | undefined)
   return imports.filter(value => value.startsWith(`${prefix}.`));
 }
 
-function persistedEdgeScoreBonus(kind: SemanticEdgeKind): number {
+type PersistedEdgeKind = "reference" | "implementation" | "typeHierarchy";
+
+function persistedRelationToKind(relation: PersistedSemanticEdgeRelation): PersistedEdgeKind | undefined {
+  if (relation === "JDT_REFERENCE") {
+    return "reference";
+  }
+  if (relation === "JDT_IMPLEMENTATION") {
+    return "implementation";
+  }
+  if (relation === "JDT_TYPE_HIERARCHY") {
+    return "typeHierarchy";
+  }
+  return undefined;
+}
+
+function persistedEdgeScoreBonus(kind: PersistedEdgeKind): number {
   if (kind === "implementation") {
     return 90;
   }
