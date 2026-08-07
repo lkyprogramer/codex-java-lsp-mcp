@@ -17,6 +17,17 @@ import { compact, detailSchema, isDiagnosticDetail } from "./shared.js";
 
 type SessionStatus = ReturnType<ToolContext["session"]["status"]>;
 
+/**
+ * Task 35 (Phase 5 decision KEEP_EXPLICIT): a real fresh-workspace first
+ * "references" request took 32-42s against a real repo - the plan's Step 8
+ * "java_status exposes why auto skipped" requirement, satisfied as a static
+ * policy explanation since the skip/run decision itself
+ * (agent-router/semantic.ts's shouldUseSemantic) never depends on live
+ * session state, only on options.semanticPolicy/mode/anchor.profile.
+ */
+const AUTO_SEMANTIC_POLICY_EXPLANATION =
+  "semanticPolicy=auto runs live JDT semantic lookups only for service-profile anchors, never merely because JDT reports READY (READY precedes real project import, which can take tens of seconds on a cold workspace - see docs/phase-v3/phase5-semantic-first-touch-decision.md). semanticPolicy=required (or mode=precision/recall) always runs it within the request deadline; semanticPolicy=fast never does.";
+
 type DisabledStatus = {
   readonly repoRoot: string;
   readonly rootSource?: ToolContext["rootSource"];
@@ -87,6 +98,7 @@ export async function javaStatus(context: ToolContext, _args: z.infer<z.ZodObjec
     javaIndex,
     watcher: context.watcher,
     rgCache: context.router.rgCacheStatus(),
+    semanticAutoPolicy: AUTO_SEMANTIC_POLICY_EXPLANATION,
     note: "This MCP server is read-only and exposes the Java impact router."
   };
   return isDiagnosticDetail(_args.detail)

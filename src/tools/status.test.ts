@@ -132,6 +132,9 @@ test("java_status returns summary by default and keeps diagnostics explicit", as
   assert.equal(diagnostic.dataDir, "/tmp/demo/.jdtls");
   assert.deepEqual((diagnostic.fileWatcher as Record<string, unknown>).watchedRoots, ["/tmp/demo/src/main/java"]);
   assert.equal(Object.hasOwn(diagnostic, "rgCache"), true);
+  // Task 35 Step 8 (Phase 5 KEEP_EXPLICIT decision): java_status must explain
+  // why semanticPolicy=auto skips semantic work, not just that it did.
+  assert.match(diagnostic.semanticAutoPolicy as string, /auto runs live JDT semantic lookups only for service-profile anchors/);
 });
 
 test("java_status exposes sibling-seed progress without requiring diagnostic detail", async () => {

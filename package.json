@@ -17,6 +17,7 @@
     "benchmark:three-repo-verify": "node scripts/verify-three-repo-cold-matrix.mjs",
     "benchmark:impact-attribution": "node scripts/attribute-impact-payload.mjs",
     "benchmark:lsp-performance": "node dist/benchmark-lsp-performance.js",
+    "benchmark:semantic-first-touch": "node dist/benchmark/semantic-first-touch.js",
     "benchmark:edit-to-visible": "node scripts/edit-to-visible-benchmark.mjs",
     "smoke": "node dist/smoke.js",
     "smoke:lease-subprocess": "node scripts/lease-subprocess-smoke.mjs",
