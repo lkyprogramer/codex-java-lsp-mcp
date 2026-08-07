@@ -36,6 +36,7 @@ import {
   type FileWatcherStatus,
   type WatchedFileChange
 } from "./file-watcher.js";
+import { DocumentLru } from "./document-lru.js";
 import { detectGeneratedCode, type GeneratedCodeStatus } from "./generated-code.js";
 import { detectBuildSystem, resolveProjectJdk, type BuildSystem, type ProjectJdkStatus } from "./project-jdk.js";
 import { fromFileUri, repoCacheRoot, toFileUri } from "./repo-layout.js";
@@ -102,11 +103,6 @@ export type DiagnosticFilterInput = {
   readonly generatedCode: GeneratedCodeStatus;
   readonly source?: string;
   readonly diagnostics: readonly LspDiagnostic[];
-};
-
-type OpenDocument = {
-  version: number;
-  text: string;
 };
 
 export type JdtlsLifecycleState =
@@ -207,8 +203,7 @@ export class JdtlsSession {
     120_000
   );
   private startedAt?: Date;
-  private readonly openDocuments = new Map<string, OpenDocument>();
-  private readonly openDocumentInflight = new Map<string, Promise<string>>();
+  private readonly documents: DocumentLru;
   private readonly diagnostics = new Map<string, LspDiagnostic[]>();
   private readonly dataDir: string;
   private readonly logDir: string;
@@ -252,6 +247,10 @@ export class JdtlsSession {
   ) {
     this.worktree = worktree ?? { repoRoot, repoHash: repoHash(repoRoot), isLinkedWorktree: false };
     this.restartBackoff = new JdtRestartBackoff(now);
+    this.documents = new DocumentLru({
+      maxOpen: positiveInteger(process.env.JDTLS_MAX_OPEN_DOCUMENTS, 64),
+      notify: (method, params) => this.connection?.sendNotification(method, params)
+    });
     this.semanticGateway = new SemanticGateway(createJdtlsSemanticBackend(this), {
       now,
       ttlMs: DEFAULT_CACHE_TTL_MS,
@@ -285,7 +284,7 @@ export class JdtlsSession {
       startingPid: state === "STARTING" ? this.startAttempt?.child.pid : undefined,
       restartBackoff: this.restartBackoff.status(),
       knownDiagnostics: [...this.diagnostics.values()].reduce((sum, value) => sum + value.length, 0),
-      openDocuments: this.openDocuments.size,
+      openDocuments: this.documents.status().open,
       startedAt: this.startedAt?.toISOString(),
       fileWatcher: this.fileWatcher?.status() ?? {
         enabled: isFileWatchEnabled(),
@@ -493,7 +492,7 @@ export class JdtlsSession {
     // release path when stop() is called on an already-READY session.
     await this.releasePendingLease();
     touchRepoCache(this.repoRoot, { jdtlsPid: undefined });
-    this.openDocuments.clear();
+    this.documents.closeAll();
     this.diagnostics.clear();
   }
 
@@ -584,10 +583,9 @@ export class JdtlsSession {
   /** Uncached primitive for SemanticGateway; see rawReferences. */
   async rawDocumentSymbols(file: string, timeoutMs = 2000): Promise<LspDocumentSymbol[]> {
     await this.ensureStarted();
-    const uri = await this.openDocument(file);
-    const symbols = await this.request<LspDocumentSymbol[]>("textDocument/documentSymbol", {
-      textDocument: { uri }
-    }, timeoutMs);
+    const symbols = await this.withDocument(file, uri =>
+      this.request<LspDocumentSymbol[]>("textDocument/documentSymbol", { textDocument: { uri } }, timeoutMs)
+    );
     return symbols || [];
   }
 
@@ -655,41 +653,42 @@ export class JdtlsSession {
    */
   async rawReferences(file: string, line: number, column: number, includeDeclaration: boolean, timeoutMs = DEFAULT_LSP_REQUEST_TIMEOUT_MS): Promise<LspLocation[]> {
     await this.ensureStarted();
-    const params = await this.textDocumentPositionParams(file, line, column) as Record<string, unknown>;
-    const items = await this.request<LspLocation[]>("textDocument/references", {
-      ...params,
-      context: { includeDeclaration }
-    }, timeoutMs);
+    const items = await this.withDocumentPosition(file, line, column, params =>
+      this.request<LspLocation[]>("textDocument/references", { ...params, context: { includeDeclaration } }, timeoutMs)
+    );
     return items || [];
   }
 
   /** Uncached primitive for SemanticGateway; see rawReferences. */
   async rawHover(file: string, line: number, column: number, timeoutMs = DEFAULT_LSP_REQUEST_TIMEOUT_MS): Promise<unknown> {
     await this.ensureStarted();
-    const params = await this.textDocumentPositionParams(file, line, column);
-    return this.request<unknown>("textDocument/hover", params, timeoutMs);
+    return this.withDocumentPosition(file, line, column, params =>
+      this.request<unknown>("textDocument/hover", params, timeoutMs)
+    );
   }
 
   /** Uncached primitive for SemanticGateway; see rawReferences. */
   async rawDefinition(file: string, line: number, column: number, timeoutMs = DEFAULT_LSP_REQUEST_TIMEOUT_MS): Promise<Array<LspLocation | LspLocationLink>> {
     await this.ensureStarted();
-    const params = await this.textDocumentPositionParams(file, line, column) as Record<string, unknown>;
-    const result = await this.request<unknown>("textDocument/definition", params, timeoutMs);
+    const result = await this.withDocumentPosition(file, line, column, params =>
+      this.request<unknown>("textDocument/definition", params, timeoutMs)
+    );
     return normalizeLocations(result);
   }
 
   /** Uncached primitive for SemanticGateway; see rawReferences. */
   async rawImplementation(file: string, line: number, column: number, timeoutMs = DEFAULT_LSP_REQUEST_TIMEOUT_MS): Promise<Array<LspLocation | LspLocationLink>> {
     await this.ensureStarted();
-    const params = await this.textDocumentPositionParams(file, line, column) as Record<string, unknown>;
-    const result = await this.request<unknown>("textDocument/implementation", params, timeoutMs);
+    const result = await this.withDocumentPosition(file, line, column, params =>
+      this.request<unknown>("textDocument/implementation", params, timeoutMs)
+    );
     return normalizeLocations(result);
   }
 
   async diagnosticsFor(files: string[], waitMs: number): Promise<Record<string, LspDiagnostic[]>> {
     await this.ensureStarted();
     for (const file of files) {
-      await this.openDocument(file);
+      await this.withDocument(file, async () => undefined);
     }
     if (waitMs > 0) {
       await delay(Math.min(waitMs, 10000));
@@ -862,11 +861,8 @@ export class JdtlsSession {
     let roots: unknown[];
     try {
       await this.ensureStarted(input.budget);
-      const params = await this.textDocumentPositionParams(input.file, input.line, input.column);
-      roots = await this.request<unknown[]>(
-        input.prepareMethod,
-        params,
-        input.budget.remainingMs(HIERARCHY_PREPARE_CAP_MS)
+      roots = await this.withDocumentPosition(input.file, input.line, input.column, params =>
+        this.request<unknown[]>(input.prepareMethod, params, input.budget.remainingMs(HIERARCHY_PREPARE_CAP_MS))
       ) || [];
     } catch (error) {
       // A prepare that never answered means there is nothing to traverse.
@@ -1238,60 +1234,41 @@ export class JdtlsSession {
     };
   }
 
-  private async textDocumentPositionParams(file: string, line: number, column: number): Promise<unknown> {
-    const uri = await this.openDocument(file);
-    return {
+  /**
+   * Task 34: acquires a bounded, LRU-evicted lease for one file and releases
+   * it once `action` settles, so a request never holds a document open past
+   * its own lifetime. DocumentLru itself singleflights concurrent acquires
+   * for the same uri (see its class doc) - the join Task 33 added here to
+   * avoid a measured 1.4-1.6x three-repo P95 regression from duplicate
+   * didOpen now lives there instead.
+   */
+  private async withDocument<T>(file: string, action: (uri: string) => Promise<T>): Promise<T> {
+    const text = await readFile(file, "utf8");
+    const lease = await this.documents.acquire(file, text);
+    try {
+      return await action(lease.uri);
+    } finally {
+      lease.release();
+    }
+  }
+
+  private async withDocumentPosition<T>(
+    file: string,
+    line: number,
+    column: number,
+    action: (params: { textDocument: { uri: string }; position: { line: number; character: number } }) => Promise<T>
+  ): Promise<T> {
+    return this.withDocument(file, uri => action({
       textDocument: { uri },
       position: {
         line: Math.max(0, line - 1),
         character: Math.max(0, column - 1)
       }
-    };
-  }
-
-  /**
-   * Singleflighted: Task 33's per-operation gateway split means 2-3 raw
-   * requests for the same position (hover/definition/implementation) now
-   * call this concurrently instead of sharing one caller-side read, same as
-   * references()/typeHierarchy() always did standalone. Without joining,
-   * each concurrent call for a not-yet-open file would independently
-   * readFile() and could each fire a duplicate didOpen notification -
-   * caught by a real three-repo P95 regression (1.4-1.6x) before landing.
-   */
-  private async openDocument(file: string): Promise<string> {
-    const uri = toFileUri(file);
-    const inflight = this.openDocumentInflight.get(uri);
-    if (inflight) return inflight;
-    const promise = this.syncOpenDocument(file, uri).finally(() => {
-      if (this.openDocumentInflight.get(uri) === promise) this.openDocumentInflight.delete(uri);
-    });
-    this.openDocumentInflight.set(uri, promise);
-    return promise;
-  }
-
-  private async syncOpenDocument(file: string, uri: string): Promise<string> {
-    const text = await readFile(file, "utf8");
-    const existing = this.openDocuments.get(uri);
-    if (!existing) {
-      this.openDocuments.set(uri, { version: 1, text });
-      this.connection?.sendNotification("textDocument/didOpen", {
-        textDocument: { uri, languageId: "java", version: 1, text }
-      });
-      return uri;
-    }
-    if (existing.text !== text) {
-      const version = existing.version + 1;
-      this.openDocuments.set(uri, { version, text });
-      this.connection?.sendNotification("textDocument/didChange", {
-        textDocument: { uri, version },
-        contentChanges: [{ text }]
-      });
-    }
-    return uri;
+    }));
   }
 
   private sourceTextForUri(uri: string): string | undefined {
-    const opened = this.openDocuments.get(uri)?.text;
+    const opened = this.documents.textForUri(uri);
     if (opened !== undefined) {
       return opened;
     }
@@ -1338,17 +1315,13 @@ export class JdtlsSession {
   }
 
   private async syncOpenDocumentFromDisk(change: WatchedFileChange): Promise<void> {
-    const existing = this.openDocuments.get(change.uri);
-    if (!existing || !this.connection) {
+    if (!this.documents.has(change.filePath) || !this.connection) {
       return;
     }
 
     if (change.type === WatchedFileChangeType.Deleted) {
-      this.openDocuments.delete(change.uri);
+      this.documents.delete(change.filePath);
       this.diagnostics.delete(change.uri);
-      this.connection.sendNotification("textDocument/didClose", {
-        textDocument: { uri: change.uri }
-      });
       return;
     }
 
@@ -1356,17 +1329,9 @@ export class JdtlsSession {
       return;
     }
 
-    const text = await readFile(change.filePath, "utf8");
-    if (existing.text === text) {
-      return;
-    }
-
-    const version = existing.version + 1;
-    this.openDocuments.set(change.uri, { version, text });
-    this.connection.sendNotification("textDocument/didChange", {
-      textDocument: { uri: change.uri, version },
-      contentChanges: [{ text }]
-    });
+    // acquire()/release() folds the disk-driven resync into DocumentLru's own
+    // didOpen/didChange join and recency tracking instead of duplicating it.
+    await this.withDocument(change.filePath, async () => undefined);
   }
 
   private async request<T>(method: string, params?: unknown, timeoutMs = DEFAULT_LSP_REQUEST_TIMEOUT_MS): Promise<T> {
@@ -1514,7 +1479,8 @@ export class JdtlsSession {
     this.phaseMetrics[name] = (this.phaseMetrics[name] || 0) + elapsedMs;
   }
 
-  private async waitForProgressIdle(maxWaitMs: number): Promise<void> {
+  /** Public for Task 35's first-touch benchmark, whose "progress-idle" prepare mode needs this wait without also issuing a documentSymbols request. */
+  async waitForProgressIdle(maxWaitMs: number): Promise<void> {
     const idleMs = positiveInteger(process.env.JAVA_LSP_PROGRESS_IDLE_MS, 1500);
     const minimumWaitMs = positiveInteger(process.env.JAVA_LSP_MIN_SEMANTIC_WAIT_MS, 1000);
     const started = Date.now();

@@ -91,7 +91,7 @@ type Harness = {
 
 function harness(
   factory: FakeJdtlsTransportFactory,
-  options: { readyStabilityMs?: number; leaseStore?: CrossProcessLeaseStore } = {}
+  options: { readyStabilityMs?: number; leaseStore?: CrossProcessLeaseStore; maxOpenDocuments?: number } = {}
 ): Harness {
   const scratch = mkdtempSync(path.join(tmpdir(), "jdtls-session-"));
   const repoRoot = path.join(scratch, "repo");
@@ -105,7 +105,8 @@ function harness(
     logDir: process.env.JDTLS_LOG_DIR,
     javaHome: process.env.JAVA_LSP_PROJECT_JAVA_HOME,
     stability: process.env.JDTLS_READY_STABILITY_MS,
-    watch: process.env.JAVA_LSP_FILE_WATCH
+    watch: process.env.JAVA_LSP_FILE_WATCH,
+    maxOpenDocuments: process.env.JDTLS_MAX_OPEN_DOCUMENTS
   };
   process.env.JDTLS_BIN = path.join(scratch, "fake-jdtls");
   process.env.JDTLS_DATA_DIR = path.join(scratch, "workspace");
@@ -114,6 +115,9 @@ function harness(
   process.env.JAVA_LSP_FILE_WATCH = "0";
   if (options.readyStabilityMs !== undefined) {
     process.env.JDTLS_READY_STABILITY_MS = String(options.readyStabilityMs);
+  }
+  if (options.maxOpenDocuments !== undefined) {
+    process.env.JDTLS_MAX_OPEN_DOCUMENTS = String(options.maxOpenDocuments);
   }
 
   let now = 1_000_000;
@@ -125,7 +129,8 @@ function harness(
     JDTLS_LOG_DIR: previous.logDir,
     JAVA_LSP_PROJECT_JAVA_HOME: previous.javaHome,
     JDTLS_READY_STABILITY_MS: previous.stability,
-    JAVA_LSP_FILE_WATCH: previous.watch
+    JAVA_LSP_FILE_WATCH: previous.watch,
+    JDTLS_MAX_OPEN_DOCUMENTS: previous.maxOpenDocuments
   })) {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;
@@ -283,6 +288,37 @@ test("invalidateForRepoChanges clears the whole cache on a storm instead of only
   // work than one clear once this many files changed at once.
   session.invalidateForRepoChanges({ changes: [{ kind: "JAVA_CHANGE", absolutePath: fileA }], storm: true });
   assert.equal(session.cacheStatus().entries, 0, "a storm clears the whole cache regardless of which paths it lists");
+
+  await session.stop();
+});
+
+test("Task 34: opening a third document past a bounded max evicts the least recently used one, end to end through the real notification path", async () => {
+  const factory = fakeTransportFactory({
+    initializeResult: { capabilities: {} },
+    responses: { "textDocument/documentSymbol": [] }
+  });
+  const { session, repoRoot } = harness(factory, { maxOpenDocuments: 2 });
+  await session.ensureStarted(DeadlineBudget.fromTimeout(5000));
+
+  const fileA = path.join(repoRoot, "A.java");
+  const fileB = path.join(repoRoot, "B.java");
+  const fileC = path.join(repoRoot, "C.java");
+  writeFileSync(fileA, "class A {}\n");
+  writeFileSync(fileB, "class B {}\n");
+  writeFileSync(fileC, "class C {}\n");
+
+  await session.rawDocumentSymbols(fileA);
+  await session.rawDocumentSymbols(fileB);
+  assert.equal(session.status().openDocuments, 2);
+
+  await session.rawDocumentSymbols(fileC);
+  assert.equal(session.status().openDocuments, 2, "opening a third document must not exceed the configured max");
+
+  const connection = factory.connections[0];
+  const opens = connection.notifications.filter(method => method === "textDocument/didOpen").length;
+  const closes = connection.notifications.filter(method => method === "textDocument/didClose").length;
+  assert.equal(opens, 3, "each distinct file sends its own didOpen");
+  assert.equal(closes, 1, "the least recently used document is closed exactly once to stay under the max");
 
   await session.stop();
 });
