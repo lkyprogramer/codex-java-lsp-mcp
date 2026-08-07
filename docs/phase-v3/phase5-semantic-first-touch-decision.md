@@ -59,13 +59,53 @@ nothing about whether project import has finished.
 
 ## Quality Delta
 
-Not measured. Step 6 ("re-run existing 3-repo golden matrix with `warm-required` diagnostic
-runs") requires real JDT across all three repos and was skipped once Step 4's fresh-workspace
-result already made the Step 7 decision unambiguous by roughly a 40-50x margin on the single most
-expensive gate. Re-running the full quality matrix would spend real wall-clock time (each real
-`warm-required` diagnostic run needs the same tens-of-seconds-per-attempt JDT cold start, times 3
-repos times N scenarios) without being able to change a decision already forced by a gate that
-already fails by that large a margin. See Known Limits.
+**2026-08-07 follow-up** (user pushed back on leaving this unmeasured - fair, since "does
+`required` even help" is a separate question from "should it be the default", and the KEEP_EXPLICIT
+decision only answered the latter). Ran Step 6's comparison for real - `cold-nolsp` /
+`warm-auto` / `warm-required`, 5 runs, cipherlink's full 8-scenario golden set, same isolated
+worktree/cache discipline as the rest of this report:
+
+| warmState | recall | pRead | rReadMust | rTaskBlocking | estimatedTokens P50 | elapsedMs P95 |
+|---|---|---|---|---|---|---|
+| cold-nolsp | 0.8322 | 0.6375 | **1.0000** | 0.4914 | 15201 | 220 |
+| warm-auto | 0.8322 | 0.6375 | **1.0000** | 0.4914 | 15202 | 3483 |
+| warm-required | 0.8790 | 0.6771 | **0.9063** | 0.5286 | 10825 | 2015 |
+
+Two findings, both real and reproducible (deterministic across all 5 runs, not noise):
+
+1. **`warm-auto` moved zero quality metrics on this golden set** - recall/pRead/rReadMust/
+   rTaskBlocking/tokens are bit-identical to `cold-nolsp`, while P95 latency jumped 220ms to
+   3483ms. `auto`'s profile-gated semantic calls did fire (that's where the latency went) but
+   never changed which files got ranked into the read plan for any of these 8 scenarios - on this
+   evidence, `auto`'s selective semantic usage is paying real latency for zero measured benefit
+   here (small sample; see Known Limits).
+2. **`warm-required` traded `R_read_must` - the single metric this project gates hardest
+   everywhere else (`=1.0000` is a non-negotiable elsewhere) - for gains everywhere else.**
+   Root-caused to the exact file level: `aliyun-sms-gateway-send` and
+   `organization-create-member-cross-module` each dropped exactly one golden "must" file from the
+   read plan under `warm-required` - `SmsGateway.java` and `OrganizationAppService.java`
+   respectively. Both are **the interface/port the anchor class implements** - not implementation
+   detail, the literal contract a reader needs. Diffing `goldenAttribution` between `cold-nolsp`
+   and `warm-required` for `aliyun-sms-gateway-send` shows every other file's `inReadPlan` flag
+   identical; only the interface flips `true`->`false`, meaning a non-golden candidate that
+   picked up real semantic evidence outranked it for the last read-plan slot. This is a real
+   ranker interaction, not a fluke: real semantic edges add confidence to whichever candidate
+   happens to receive them, and an interface definition (often only lexically discoverable, no
+   direct call/reference edge from the anchor to it) is not guaranteed to be one of them.
+
+Net read: `warm-required` is not simply "better" - it measurably improves aggregate recall/
+precision/token-efficiency while measurably degrading the one metric this project treats as an
+absolute floor everywhere else, via a concrete, understood mechanism (interface files losing a
+semantic-evidence popularity contest). This is not disqualifying for keeping the option
+`semanticPolicy=required` as an explicit, opt-in escape hatch (that decision is about defaults,
+made in the Decision section on latency grounds alone), but it is a real caveat for anyone
+choosing to use `required` expecting a strict quality upgrade, and a legitimate candidate for
+separate follow-up work on the ranker (e.g. protecting golden-tier "must" files, or interface
+files specifically, from eviction once semantic evidence is present) - not attempted here, out of
+scope for a warm-default decision.
+
+Only `cipherlink` was measured (see Known Limits); `lishuedu`/`exam-parent-v3` were not run for
+this follow-up.
 
 ## Timeout and Cancellation Settlement
 
@@ -151,13 +191,13 @@ machinery was added, per the plan's explicit instruction for the `KEEP_EXPLICIT`
    the plan's own P95 semantics, but the run count was cut given the decisive early margin - this
    is explicitly permitted by the plan ("This is a decision experiment, not a benchmark product...
    Do not run every profile/operation Cartesian product").
-4. **Step 6's full quality-matrix re-run under `warm-required` was not performed** - see Quality
-   Delta. `R_read_must`/`R_task_blocking`/`recall`/`P_read`/`NDCG_read@6`/`estimatedTokens` deltas
-   between `cold-nolsp`/`warm-auto`/`warm-required` are therefore unmeasured. This does not affect
-   the `KEEP_EXPLICIT` decision (already forced by the fresh-first-touch gate alone) but means "a
-   latency improvement without task-level quality gain is not sufficient for defaulting required
-   semantics" (plan line 9718) was never reached as a question - the latency side alone already
-   settled it.
+4. **Step 6's quality-matrix re-run under `warm-required` was performed for `cipherlink` only**,
+   not all three repos (see Quality Delta for the 2026-08-07 follow-up and its
+   `R_read_must` regression finding) - `lishuedu`/`exam-parent-v3` deltas remain unmeasured. This
+   does not affect the `KEEP_EXPLICIT` decision (already forced by the fresh-first-touch gate
+   alone, and the quality follow-up only concerns whether `required` is worth using at all, not
+   whether it should default on), but the interface-file-eviction mechanism found on cipherlink
+   is not yet confirmed to generalize to the other two repos' evidence-signal mixes.
 5. **The `reused` cell's fast numbers (177-182ms) repeat the identical query position**, so they
    are optimistic for "reused workspace, distinct new query" - real JDT-side caching for an
    already-answered exact position is a favorable case, not necessarily representative of a
