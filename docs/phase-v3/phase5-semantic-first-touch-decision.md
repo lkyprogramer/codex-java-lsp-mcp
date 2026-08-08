@@ -63,49 +63,116 @@ nothing about whether project import has finished.
 `required` even help" is a separate question from "should it be the default", and the KEEP_EXPLICIT
 decision only answered the latter). Ran Step 6's comparison for real - `cold-nolsp` /
 `warm-auto` / `warm-required`, 5 runs, cipherlink's full 8-scenario golden set, same isolated
-worktree/cache discipline as the rest of this report:
+worktree/cache discipline as the rest of this report.
 
-| warmState | recall | pRead | rReadMust | rTaskBlocking | estimatedTokens P50 | elapsedMs P95 |
-|---|---|---|---|---|---|---|
-| cold-nolsp | 0.8322 | 0.6375 | **1.0000** | 0.4914 | 15201 | 220 |
-| warm-auto | 0.8322 | 0.6375 | **1.0000** | 0.4914 | 15202 | 3483 |
-| warm-required | 0.8790 | 0.6771 | **0.9063** | 0.5286 | 10825 | 2015 |
+**2026-08-08 follow-up** (user asked whether the finding generalizes past one repo): reran the
+identical matrix against isolated worktrees of `exam-parent-v3` (1397 `.java` files, 8 scenarios)
+and `lishuedu` (5337 `.java` files, 8 scenarios - see corrected Known Limits #1, the 26854 figure
+below was wrong). Same isolation discipline (`JAVA_LSP_CACHE_ROOT` per repo, detached worktrees,
+never the live checkout).
 
-Two findings, both real and reproducible (deterministic across all 5 runs, not noise):
+| project | warmState | recall | pRead | rReadMust | rTaskBlocking | estimatedTokens P50 | elapsedMs P95 |
+|---|---|---|---|---|---|---|---|
+| cipherlink | cold-nolsp | 0.8322 | 0.6375 | **1.0000** | 0.4914 | 15201 | 220 |
+| cipherlink | warm-auto | 0.8322 | 0.6375 | **1.0000** | 0.4914 | 15202 | 3483 |
+| cipherlink | warm-required | 0.8790 | 0.6771 | **0.9063** | 0.5286 | 10825 | 2015 |
+| exam-parent-v3 | cold-nolsp | 0.7790 | 0.6042 | **1.0000** | 0.5003 | 16448 | 152 |
+| exam-parent-v3 | warm-auto | 0.7835 | 0.6042 | **1.0000** | 0.5003 | 16450 | 3189 |
+| exam-parent-v3 | warm-required | 0.6275 | 0.6433 | **0.8708** | 0.4658 | 11075 | 2034 |
+| lishuedu | cold-nolsp | 0.7847 | 0.6771 | **1.0000** | 0.6046 | 26180 | 196 |
+| lishuedu | warm-auto | 0.7847 | 0.6771 | **1.0000** | 0.6046 | 26181 | 287 |
+| lishuedu | warm-required | 0.7378 | 0.7104 | **0.8854** | 0.5478 | 21059 | 5198 |
 
-1. **`warm-auto` moved zero quality metrics on this golden set** - recall/pRead/rReadMust/
-   rTaskBlocking/tokens are bit-identical to `cold-nolsp`, while P95 latency jumped 220ms to
-   3483ms. `auto`'s profile-gated semantic calls did fire (that's where the latency went) but
-   never changed which files got ranked into the read plan for any of these 8 scenarios - on this
-   evidence, `auto`'s selective semantic usage is paying real latency for zero measured benefit
-   here (small sample; see Known Limits).
-2. **`warm-required` traded `R_read_must` - the single metric this project gates hardest
-   everywhere else (`=1.0000` is a non-negotiable elsewhere) - for gains everywhere else.**
-   Root-caused to the exact file level: `aliyun-sms-gateway-send` and
-   `organization-create-member-cross-module` each dropped exactly one golden "must" file from the
-   read plan under `warm-required` - `SmsGateway.java` and `OrganizationAppService.java`
-   respectively. Both are **the interface/port the anchor class implements** - not implementation
-   detail, the literal contract a reader needs. Diffing `goldenAttribution` between `cold-nolsp`
-   and `warm-required` for `aliyun-sms-gateway-send` shows every other file's `inReadPlan` flag
-   identical; only the interface flips `true`->`false`, meaning a non-golden candidate that
-   picked up real semantic evidence outranked it for the last read-plan slot. This is a real
-   ranker interaction, not a fluke: real semantic edges add confidence to whichever candidate
-   happens to receive them, and an interface definition (often only lexically discoverable, no
-   direct call/reference edge from the anchor to it) is not guaranteed to be one of them.
+Three findings. The first two replicate across all three repos (deterministic across all 5 runs
+per cell, not noise); the third was found while root-causing the second and changes how it should
+be read:
 
-Net read: `warm-required` is not simply "better" - it measurably improves aggregate recall/
-precision/token-efficiency while measurably degrading the one metric this project treats as an
-absolute floor everywhere else, via a concrete, understood mechanism (interface files losing a
-semantic-evidence popularity contest). This is not disqualifying for keeping the option
-`semanticPolicy=required` as an explicit, opt-in escape hatch (that decision is about defaults,
-made in the Decision section on latency grounds alone), but it is a real caveat for anyone
-choosing to use `required` expecting a strict quality upgrade, and a legitimate candidate for
-separate follow-up work on the ranker (e.g. protecting golden-tier "must" files, or interface
-files specifically, from eviction once semantic evidence is present) - not attempted here, out of
-scope for a warm-default decision.
+1. **`warm-auto` moved zero quality metrics on any of the three golden sets** -
+   recall/pRead/rReadMust/rTaskBlocking/tokens are bit-identical to `cold-nolsp` on every repo,
+   while P95 latency jumped (220ms->3483ms cipherlink, 152ms->3189ms exam-parent-v3,
+   196ms->287ms lishuedu). `auto`'s profile-gated semantic calls did fire (that's where the
+   latency went) but never changed which files got ranked into the read plan for any of these 24
+   scenarios - on this evidence, `auto`'s selective semantic usage is paying real latency for zero
+   measured benefit here (still a modest sample - 3 repos, 8 scenarios each - see Known Limits).
+2. **`warm-required` regresses `R_read_must` - the single metric this project gates hardest
+   everywhere else (`=1.0000` is a non-negotiable floor elsewhere) - on all three repos**, from a
+   modest 0.9063 (cipherlink) down to 0.8708 (exam-parent-v3) and 0.8854 (lishuedu). recall and
+   pRead move in *different* directions per repo (cipherlink's recall improves 0.8322->0.8790;
+   exam-parent-v3's and lishuedu's both regress, 0.7835->0.6275 and 0.7847->0.7378), so
+   `warm-required` is not a clean "trade recall for rReadMust" story either - it is a real,
+   repo-dependent reshuffling of the read plan, not a single consistent direction of improvement.
+3. **Root cause, verified in source, not inferred from ranking output: `semanticPolicy=required`
+   unconditionally disables the `typeReference` evidence provider.**
+   `src/agent-router/type-reference.ts:44-46` -
+   `collectTypeReferenceCandidates()` opens with `if (options.semanticPolicy === "required") return;`
+   - a deliberate, tested branch (`docs/java-lsp-mcp-readplan-task4-type-reference-report-2026-07-01.md`,
+   test: `"required semantic policy skips local type reference expansion"`), not new and not an
+   accident. Its effect: candidates lose the `STATIC_STRUCTURE` evidence signal that
+   `typeReference` (not `staticStructure`, a different provider that keeps running) contributes -
+   observed directly as the `"static"` entry disappearing from `goldenAttribution[].providers` for
+   the same file across `warm-auto` -> `warm-required`, on all three repos (e.g. cipherlink's
+   `SmsGateway.java` `["static","lexical","relationship","support"]` ->
+   `["lexical","support"]`; exam-parent-v3's `ApplyInfoService.java` and `ApplyInfo.java` lose the
+   same `static` tag; lishuedu's `BenefitEntitlementAssembler.java` loses both `static` and
+   `relationship`, dropping 2 of 3 must files in `benefit-product-code-dto`, the single worst
+   regression observed in this follow-up). Files that depend on `typeReference`'s referenced-type
+   reinforcement rather than a direct call/relationship edge - interfaces/ports and
+   entity/DTO/record types the anchor method references by type but never calls - are exactly the
+   ones that can lose their only static-evidence source this way and fall out of the read plan
+   under budget pressure, even though the same request's live semantic calls fired successfully.
 
-Only `cipherlink` was measured (see Known Limits); `lishuedu`/`exam-parent-v3` were not run for
-this follow-up.
+   **Correction to this report's original (2026-08-07) framing of finding 2**, which is factually
+   wrong and should not be relied on: it attributed `SmsGateway.java`'s and
+   `OrganizationAppService.java`'s drop to "a non-golden candidate that picked up real semantic
+   evidence outranked it," cited as visible by diffing `goldenAttribution`'s `inReadPlan` flags.
+   That citation does not hold up: for `organization-create-member-cross-module`,
+   `goldenAttribution` shows `OrganizationAppService.java` `inReadPlan: false` in **both**
+   `cold-nolsp` and `warm-required`, i.e. no flip is visible in that diagnostic at all - yet the
+   real `rReadMust` metric (which does not read `goldenAttribution`) drops exactly one file
+   (1.0 -> 0.75) between those two states. A ground-truth check (temporary debug field surfacing
+   `result.readPlan`'s actual file list, the same data `evaluate()`'s real `rReadMust` computation
+   uses) confirms `OrganizationAppService.java` **is** in the real read plan under `cold-nolsp` and
+   **is not** under `warm-required` - the file-level claim was right, but `goldenAttribution` never
+   showed it, and the "outranked by a competitor" mechanism was speculation that filled the gap
+   left by that diagnostic's blind spot. The real mechanism is the `typeReference` skip above,
+   confirmed in source, not inferred from a diagnostic. The same isolated single-run probe (a
+   separate process invocation, filtered to just these two scenarios) reproduced both scenarios'
+   exact `rReadMust` values from the 5-run matrix - 0.75 for
+   `organization-create-member-cross-module`, 0.5 for `aliyun-sms-gateway-send` - independent
+   replication that these are not run-to-run noise.
+
+   **This surfaced a separate, pre-existing tooling defect worth flagging on its own**:
+   `src/agent-router/shadow-ranking.ts`'s `selectedReadPlanPaths()` (used to compute
+   `goldenAttribution[].inReadPlan`/`blockedBy`, Task 32 Step 2) calls the lightweight
+   `selectReadPlanFiles()` for every policy except `required`, but production's real
+   `index.ts` always calls the full token-aware `buildReadPlan()` regardless of policy
+   (`src/agent-router/index.ts:344`) - two different selection algorithms. For `required`
+   specifically the shadow path also calls `buildReadPlan()` (`shadow-ranking.ts:170`), so its
+   diagnostic happens to be reliable there; for `cold-nolsp`/`warm-auto` it is not. Net effect:
+   **`goldenAttribution[].inReadPlan`/`blockedBy` cannot be trusted for `cold-nolsp` or
+   `warm-auto` attempts** - only the real `rReadMust`/`recall`/`pRead`/`rTaskBlocking` aggregate
+   metrics (sourced from `result.readPlan` via `evaluate()`, not from `goldenAttribution`) and the
+   per-file `providers`/`sourceFamilies` arrays (sourced from real evidence signals, unaffected by
+   this) are reliable for non-`required` states. This is a genuine, reproducible defect in this
+   project's own benchmark/attribution tooling (Task 32), not in production ranking, and not fixed
+   here - flagged as a separate follow-up candidate, out of scope for this decision.
+
+Net read: `warm-required` is not simply "better" - it measurably changes aggregate recall/pRead/
+token-efficiency (direction varies by repo) while measurably degrading `R_read_must` on all three
+repos measured, via a concrete, source-verified mechanism (the `typeReference` provider being
+unconditionally disabled under `required`, removing static evidence some interface/DTO-shaped
+golden files depend on). This is not disqualifying for keeping `semanticPolicy=required` as an
+explicit, opt-in escape hatch (that decision is about defaults, made in the Decision section on
+latency grounds alone, unaffected by this), but it is a real, now three-repo-replicated caveat for
+anyone choosing `required` expecting a strict quality upgrade. The `typeReference`-skip branch
+(`type-reference.ts:44-46`) was validated in July 2026 against a smaller/differently-schemaed
+golden set under the pre-family-ranker-cutover ranking pipeline (see Known Limits #7) - that
+validation no longer describes the current pipeline, so the branch is currently unvalidated rather
+than freshly proven wrong; either the ranker fix (protecting must-tier / interface-typed files
+from losing their only static-evidence source under `required`) or the shadow-ranking.ts
+selection-function fix above are legitimate separate follow-ups, neither attempted here.
+
+All three repos were measured in this follow-up (see Known Limits #4, now resolved).
 
 ## Timeout and Cancellation Settlement
 
@@ -175,11 +242,14 @@ machinery was added, per the plan's explicit instruction for the `KEEP_EXPLICIT`
 
 ## Known Limits
 
-1. **Single repo, single anchor.** Only `cipherlink` was measured with the real tool; `lishuedu`
-   (26854 `.java` files) and `exam-parent-v3` (1397 files) were not. `cipherlink` is the smallest
-   of the three, so if anything this understates how bad fresh first-touch is on the larger repos -
-   this asymmetry cannot flip the decision, only strengthen it, so it was not chased further given
-   the already-decisive margin.
+1. **Single repo, single anchor for the fresh-first-touch latency matrix specifically.** Only
+   `cipherlink` was measured with the real `semantic-first-touch.ts` tool; `lishuedu` (5337
+   `.java` files - corrected 2026-08-08, the `26854` figure previously here was wrong) and
+   `exam-parent-v3` (1397 files) were not. `cipherlink` is the smallest of the three, so if
+   anything this understates how bad fresh first-touch is on the larger repos - this asymmetry
+   cannot flip the decision, only strengthen it, so it was not chased further given the already-
+   decisive margin. (The separate quality-delta matrix below *was* run on all three repos - see
+   item 4.)
 2. **Only `references` was measured** with the committed tool, not `definition` / `implementation`
    / `type-hierarchy`. All four ultimately route through the same JDT-side import/indexing
    bottleneck this report's data traces the slowness to, so there is no specific reason to expect
@@ -191,21 +261,40 @@ machinery was added, per the plan's explicit instruction for the `KEEP_EXPLICIT`
    the plan's own P95 semantics, but the run count was cut given the decisive early margin - this
    is explicitly permitted by the plan ("This is a decision experiment, not a benchmark product...
    Do not run every profile/operation Cartesian product").
-4. **Step 6's quality-matrix re-run under `warm-required` was performed for `cipherlink` only**,
-   not all three repos (see Quality Delta for the 2026-08-07 follow-up and its
-   `R_read_must` regression finding) - `lishuedu`/`exam-parent-v3` deltas remain unmeasured. This
-   does not affect the `KEEP_EXPLICIT` decision (already forced by the fresh-first-touch gate
+4. **RESOLVED 2026-08-08.** Step 6's quality-matrix re-run under `warm-required` originally
+   covered `cipherlink` only; the 2026-08-08 follow-up in Quality Delta reran the identical matrix
+   on `exam-parent-v3` and `lishuedu` too. The `R_read_must` regression replicates on all three
+   (0.9063 / 0.8708 / 0.8854); the root cause (`typeReference` provider disabled under
+   `semanticPolicy=required`, `type-reference.ts:44-46`) is confirmed in source, not repo-specific.
+   This does not affect the `KEEP_EXPLICIT` decision (already forced by the fresh-first-touch gate
    alone, and the quality follow-up only concerns whether `required` is worth using at all, not
-   whether it should default on), but the interface-file-eviction mechanism found on cipherlink
-   is not yet confirmed to generalize to the other two repos' evidence-signal mixes.
-5. **The `reused` cell's fast numbers (177-182ms) repeat the identical query position**, so they
+   whether it should default on).
+5. **The per-file `goldenAttribution[].inReadPlan`/`blockedBy` diagnostic is unreliable for
+   `cold-nolsp`/`warm-auto` attempts** (see Quality Delta finding 3's tooling-defect note) - a
+   selection-function mismatch between `shadow-ranking.ts` (uses `selectReadPlanFiles()` for
+   non-`required` policies) and production `index.ts` (always uses `buildReadPlan()`). Verified by
+   a ground-truth cross-check for two cipherlink scenarios only; not independently re-verified for
+   every flip claimed on exam-parent-v3/lishuedu in Quality Delta finding 3 - those repos' claims
+   rest on the `providers` array (evidence signals, unaffected by this defect) rather than on
+   `inReadPlan` flags, which is why they are stated as "loses the `static` provider tag" rather
+   than "flips `inReadPlan` true->false."
+6. **The `typeReference`-skip-under-`required` branch was validated once, in July 2026**
+   (`docs/java-lsp-mcp-readplan-task4-type-reference-report-2026-07-01.md`), against a golden
+   scenario set that has since been migrated to schema V3 and expanded 16->24 scenarios (Task 32
+   Steps 1 and 5) and under a ranking pipeline from before the family-ranker cutover (Task 25) and
+   Task 30's token-aware planner both landed. That validation's `exam-parent-v3 warm-required
+   rReadMust=1.0000` result describes a system that no longer exists in that form; it is not
+   evidence that the current 0.8708 finding is a regression from a known-good 1.0000 baseline -
+   the two numbers are not comparable. The correct reading is: the skip's original justification
+   is currently unvalidated against the present pipeline, not disproven by a specific delta.
+7. **The `reused` cell's fast numbers (177-182ms) repeat the identical query position**, so they
    are optimistic for "reused workspace, distinct new query" - real JDT-side caching for an
    already-answered exact position is a favorable case, not necessarily representative of a
    different query against an already-warm project. The `cacheHit`/`shared` fields on every
    attempt are hardcoded `false` by construction (raw, non-gateway calls were used deliberately so
    first-touch measurements are never shortened by this project's own SemanticGateway cache) - do
    not read them as "the gateway cache was cold," they simply do not apply to the raw path.
-6. **No `.classpath`/`.project`/`.settings` files were observed written into the worktree** across
+8. **No `.classpath`/`.project`/`.settings` files were observed written into the worktree** across
    these runs (`git status --short` stayed empty throughout). This project isolates via worktree
    regardless, matching this repo's own `scripts/run-three-repo-cold-matrix.mjs` convention. Do
    not treat "worktree stayed clean" as proof that a longer-running import on a different repo or
