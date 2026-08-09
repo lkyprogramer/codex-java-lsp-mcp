@@ -6,6 +6,7 @@ import type { Completion } from "../../runtime/completion.js";
 import type { FrameworkIndexView } from "../../java-index/framework-index-view.js";
 import type { ProviderOutcome } from "../evidence.js";
 import type { FrameworkAdapter, FrameworkAdapterContext, FrameworkAdapterMetadata } from "./adapter.js";
+import { createFrameworkPreflight } from "./shared.js";
 
 export const FRAMEWORK_PROVIDER_ID = "framework";
 export const FRAMEWORK_PROVIDER_VERSION = "1";
@@ -61,9 +62,11 @@ function errorMessage(error: unknown): string {
 
 /**
  * Runs every registered adapter against one bounded context, fail-soft: an
- * adapter that throws (from isActive or collect) is skipped, logged to
- * diagnostics, and never fails the request - one broken framework pack must
- * not take down candidate discovery for every other evidence source. A
+ * adapter that throws is logged and never fails the request - one broken
+ * framework pack must not take down candidate discovery for every other
+ * evidence source. Activation failures run the bounded collector
+ * conservatively, because skipping would turn an unknown framework state into
+ * a false negative. A
  * deadline check before each adapter stops the loop early (not mid-adapter;
  * an adapter's own collect() is responsible for respecting the same budget
  * internally, same convention as every other provider in this codebase) and
@@ -75,8 +78,23 @@ export async function runFrameworkAdapters(
   context: FrameworkAdapterContext
 ): Promise<FrameworkRunResult> {
   const startedAt = Date.now();
+  if (adapters.length === 0) {
+    return {
+      outcome: {
+        providerId: FRAMEWORK_PROVIDER_ID,
+        providerVersion: FRAMEWORK_PROVIDER_VERSION,
+        evidence: [],
+        completion: "COMPLETE",
+        elapsedMs: Date.now() - startedAt
+      },
+      metadata: {},
+      diagnostics: []
+    };
+  }
+  const preflight = createFrameworkPreflight(context.frameworkIndex);
   const boundedContext: FrameworkAdapterContext = {
     ...context,
+    preflight,
     requestFrameworkFactsForFiles: requestMemoizedFrameworkFacts(context.frameworkIndex),
     candidateFiles: context.candidateFiles.slice(0, MAX_FRAMEWORK_TRAVERSAL_FILES),
     staticEvidence: context.staticEvidence.filter(candidate =>
@@ -98,7 +116,11 @@ export async function runFrameworkAdapters(
       active = await adapter.isActive(boundedContext);
     } catch (error) {
       diagnostics.push(`framework adapter "${adapter.id}" isActive() threw: ${errorMessage(error)}`);
-      continue;
+      completion = worseCompletion(completion, "FAILED");
+      active = !context.budget.expired();
+      if (active) {
+        diagnostics.push(`framework adapter "${adapter.id}" is running conservatively after activation failure`);
+      }
     }
     if (context.budget.expired()) {
       completion = worseCompletion(completion, "PARTIAL_TIMEOUT");
@@ -117,6 +139,11 @@ export async function runFrameworkAdapters(
       completion = worseCompletion(completion, "FAILED");
     }
   }
+
+  if (preflight.statusUnavailable()) {
+    completion = worseCompletion(completion, "FAILED");
+  }
+  diagnostics.push(...preflight.diagnostics());
 
   return {
     outcome: {

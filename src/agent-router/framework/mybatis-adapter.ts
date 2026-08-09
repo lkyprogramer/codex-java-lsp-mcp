@@ -1,10 +1,8 @@
 // input: FrameworkAdapterContext (bounded FrameworkIndexView + request-scoped anchors/candidates/budget).
 // output: EvidenceSignals linking Java MyBatis mapper interfaces to their
 //         mapper XML resources by namespace/statement-id/parameter-and-result-type name match.
-// pos: Task 28 Slice D. buildMarkerPaths/frameworkSeedFiles/isMethodAnchor/rankableMethodsFor/
-//      resolveTargets below mirror spring-adapter.ts's own private helpers of the same name -
-//      duplicated, not imported, so each framework pack stays an independently removable unit;
-//      read them as "same generic policy", not as an intentional divergence from Spring's version.
+// pos: Task 28 Slice D. Framework discovery and bounded index queries use the
+//      request-local shared preflight; MyBatis-specific XML matching remains removable here.
 //      Deliberately has no mybatis-annotations.ts sibling: plan Step 7's third isActive()
 //      criterion ("Java type has @Mapper") is subsumed by the repo-level
 //      repositoryFactMarkers() prefix scan below (org.apache.ibatis./org.mybatis.), which is
@@ -14,16 +12,22 @@
 import path from "node:path";
 import type { EvidenceCompleteness, EvidenceSignal } from "../evidence.js";
 import {
-  MAX_DECLARATION_IDS_PER_CALL,
   MAX_FRAMEWORK_MYBATIS_NAMESPACES,
-  type FrameworkDeclarations,
   type FrameworkFileFacts,
-  type FrameworkIndexView,
   type FrameworkMethodDeclaration,
   type FrameworkTypeDeclaration
 } from "../../java-index/framework-index-view.js";
 import type { MyBatisMapperResourceFacts } from "../../java-index/mybatis-types.js";
-import { frameworkFactsForFiles, hasStaticStructureEvidence, type FrameworkAdapter, type FrameworkAdapterContext, type FrameworkCollectResult } from "./adapter.js";
+import { frameworkEvidenceOriginIds, frameworkFactsForFiles, type FrameworkAdapter, type FrameworkAdapterContext, type FrameworkCollectResult } from "./adapter.js";
+import {
+  frameworkBuildMarkerPaths,
+  frameworkRepositoryFactMarkers,
+  frameworkRepositoryMarkers,
+  frameworkSeedFiles,
+  frameworkStatus,
+  rankableFrameworkMethods,
+  resolveFrameworkTargets
+} from "./shared.js";
 
 export const MYBATIS_ADAPTER_ID = "mybatis";
 export const MYBATIS_ADAPTER_VERSION = "1";
@@ -54,6 +58,7 @@ type ResolvedEvidence = {
   weight: number;
   confidence: number;
   detail: string;
+  anchorIds: readonly string[];
 };
 
 /** A raw XML type-name string still needing declarationsById resolution against the Java graph. */
@@ -64,94 +69,30 @@ type PendingTypeEvidence = {
   weight: number;
   confidence: number;
   detail: string;
+  anchorIds: readonly string[];
 };
 
 type TypeContext = {
   absolutePath: string;
+  anchorIds: readonly string[];
   type: FrameworkTypeDeclaration;
   methods: FrameworkMethodDeclaration[];
 };
 
-// mirrors spring-adapter.ts's frameworkSeedFiles - which files earlier providers
-// already surfaced as worth spending JavaIndex-facts-fetching effort on.
-function frameworkSeedFiles(context: FrameworkAdapterContext): Set<string> {
-  const seeds = new Set(context.anchors.map(anchor => anchor.absolutePath));
-  for (const candidate of context.staticEvidence) {
-    if (hasStaticStructureEvidence(candidate)) {
-      seeds.add(candidate.file);
-    }
-  }
-  return seeds;
-}
-
-// mirrors spring-adapter.ts's buildMarkerPaths.
-function buildMarkerPaths(context: FrameworkAdapterContext): string[] {
-  const paths = new Set<string>(BUILD_MARKER_NAMES);
-  for (const source of [...context.anchors.map(anchor => anchor.absolutePath), ...context.candidateFiles]) {
-    const relative = path.relative(context.repoRoot, source).replace(/\\/g, "/");
-    const sourceRootIndex = relative.indexOf("/src/");
-    if (sourceRootIndex <= 0) continue;
-    const moduleRoot = relative.slice(0, sourceRootIndex);
-    for (const marker of BUILD_MARKER_NAMES) paths.add(`${moduleRoot}/${marker}`);
-  }
-  return [...paths];
-}
-
 async function isActive(context: FrameworkAdapterContext): Promise<boolean> {
   if (context.budget.expired()) return false;
-  const buildMarkers = await context.frameworkIndex.repositoryMarkers(buildMarkerPaths(context));
+  const buildMarkers = await frameworkRepositoryMarkers(context, frameworkBuildMarkerPaths(context, BUILD_MARKER_NAMES));
   if ([...buildMarkers.values()].some(content => MYBATIS_DEPENDENCY_PATTERN.test(content))) return true;
   if (context.budget.expired()) return false;
-  const factMarkers = await context.frameworkIndex.repositoryFactMarkers({
+  const factMarkers = await frameworkRepositoryFactMarkers(context, {
     importPrefixes: ["org.apache.ibatis.", "org.mybatis."],
     annotationPrefixes: ["org.apache.ibatis.", "org.mybatis."]
   });
   if (factMarkers.importPrefixFound || factMarkers.annotationPrefixFound) return true;
   // A partial index cannot prove that MyBatis is absent. Running a bounded pack
   // is safe; treating the absence as definitive would not be.
-  const status = await context.frameworkIndex.frameworkStatus();
+  const status = await frameworkStatus(context);
   return status.coverage !== "complete";
-}
-
-// mirrors spring-adapter.ts's isMethodAnchor/rankableMethodsFor.
-function isMethodAnchor(anchor: FrameworkAdapterContext["anchors"][number], absolutePath: string): boolean {
-  return anchor.absolutePath === absolutePath && anchor.kind.toLowerCase() === "method";
-}
-
-function rankableMethodsFor(
-  context: FrameworkAdapterContext,
-  absolutePath: string,
-  methods: readonly FrameworkMethodDeclaration[]
-): FrameworkMethodDeclaration[] {
-  const methodAnchors = context.anchors.filter(anchor => isMethodAnchor(anchor, absolutePath));
-  if (methodAnchors.length === 0) return [...methods];
-  return methods.filter(method => methodAnchors.some(anchor =>
-    method.range.start.line <= anchor.line && anchor.line <= method.range.end.line));
-}
-
-// mirrors spring-adapter.ts's resolveTargets.
-async function resolveTargets(
-  frameworkIndex: FrameworkIndexView,
-  targetIds: readonly string[],
-  context: FrameworkAdapterContext
-): Promise<{ declarations: FrameworkDeclarations; timedOut: boolean }> {
-  const types: FrameworkDeclarations["types"] = [];
-  const methods: FrameworkDeclarations["methods"] = [];
-  const fields: FrameworkDeclarations["fields"] = [];
-  const missingIds: string[] = [];
-  let truncated = false;
-  for (let offset = 0; offset < targetIds.length; offset += MAX_DECLARATION_IDS_PER_CALL) {
-    if (context.budget.expired()) {
-      return { declarations: { types, methods, fields, missingIds, truncated }, timedOut: true };
-    }
-    const result = await frameworkIndex.declarationsById(targetIds.slice(offset, offset + MAX_DECLARATION_IDS_PER_CALL));
-    types.push(...result.types);
-    methods.push(...result.methods);
-    fields.push(...result.fields);
-    missingIds.push(...result.missingIds);
-    truncated = truncated || result.truncated;
-  }
-  return { declarations: { types, methods, fields, missingIds, truncated }, timedOut: false };
 }
 
 /** A dot-qualified name is the only shape MyBatis XML parameterType/resultType/resultMap-type text can safely be treated as a fully-qualified Java type - built-in aliases ("string", "long", "map") and bare simple names are never guessed at. */
@@ -168,7 +109,7 @@ function crossNamespaceResultMapReference(resultMap: string): { namespace: strin
 
 async function collect(context: FrameworkAdapterContext): Promise<FrameworkCollectResult> {
   const startedAt = Date.now();
-  const status = await context.frameworkIndex.frameworkStatus();
+  const status = await frameworkStatus(context);
   const completeness: EvidenceCompleteness = status.coverage === "complete" ? "COMPLETE" : status.coverage === "degraded" ? "UNKNOWN" : "PARTIAL";
   const diagnostics: string[] = [];
   let timedOut = context.budget.expired();
@@ -194,6 +135,7 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
         if (type.kind !== "interface" || !type.fqn) continue;
         typeContexts.push({
           absolutePath,
+          anchorIds: frameworkEvidenceOriginIds(context, absolutePath),
           type,
           methods: factsForFile.methods.filter(method => method.ownerTypeId === type.typeId)
         });
@@ -248,7 +190,8 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
       targetAbsolutePath: resourceAbsolutePath,
       weight: MYBATIS_NAMESPACE_WEIGHT,
       confidence: EXACT_MATCH_CONFIDENCE,
-      detail: `${typeContext.type.simpleName} mapper namespace ${resource.namespace}`
+      detail: `${typeContext.type.simpleName} mapper namespace ${resource.namespace}`,
+      anchorIds: typeContext.anchorIds
     });
 
     const methodsByName = new Map<string, FrameworkMethodDeclaration[]>();
@@ -260,7 +203,7 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
     // Ambiguity (overloaded methods sharing a statement id) is a structural
     // property of the interface's own signatures, so it is checked against
     // every declared method - never narrowed to the currently anchored subset.
-    const rankableMethodIds = new Set(rankableMethodsFor(context, typeContext.absolutePath, typeContext.methods).map(method => method.methodId));
+    const rankableMethodIds = new Set(rankableFrameworkMethods(context, typeContext.absolutePath, typeContext.methods).map(method => method.methodId));
 
     for (const statement of resource.statements) {
       const matches = methodsByName.get(statement.id) ?? [];
@@ -271,7 +214,8 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
           targetAbsolutePath: resourceAbsolutePath,
           weight: MYBATIS_STATEMENT_METHOD_WEIGHT,
           confidence: EXACT_MATCH_CONFIDENCE,
-          detail: `${typeContext.type.simpleName}.${statement.id}() statement`
+          detail: `${typeContext.type.simpleName}.${statement.id}() statement`,
+          anchorIds: frameworkEvidenceOriginIds(context, typeContext.absolutePath, matches[0]!.range)
         });
       }
 
@@ -280,11 +224,11 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
       // the ambiguity/rankability check above.
       const parameterTypeId = qualifiedTypeId(statement.parameterType);
       if (parameterTypeId) {
-        pendingTypeTargets.push({ kind: "MYBATIS_PARAMETER_TYPE", sourceFile: resourceAbsolutePath, targetId: parameterTypeId, weight: MYBATIS_PARAMETER_TYPE_WEIGHT, confidence: RESOLVED_TYPE_CONFIDENCE, detail: `${resource.namespace}.${statement.id} parameterType` });
+        pendingTypeTargets.push({ kind: "MYBATIS_PARAMETER_TYPE", sourceFile: resourceAbsolutePath, targetId: parameterTypeId, weight: MYBATIS_PARAMETER_TYPE_WEIGHT, confidence: RESOLVED_TYPE_CONFIDENCE, detail: `${resource.namespace}.${statement.id} parameterType`, anchorIds: typeContext.anchorIds });
       }
       const resultTypeId = qualifiedTypeId(statement.resultType);
       if (resultTypeId) {
-        pendingTypeTargets.push({ kind: "MYBATIS_RESULT_TYPE", sourceFile: resourceAbsolutePath, targetId: resultTypeId, weight: MYBATIS_RESULT_TYPE_WEIGHT, confidence: RESOLVED_TYPE_CONFIDENCE, detail: `${resource.namespace}.${statement.id} resultType` });
+        pendingTypeTargets.push({ kind: "MYBATIS_RESULT_TYPE", sourceFile: resourceAbsolutePath, targetId: resultTypeId, weight: MYBATIS_RESULT_TYPE_WEIGHT, confidence: RESOLVED_TYPE_CONFIDENCE, detail: `${resource.namespace}.${statement.id} resultType`, anchorIds: typeContext.anchorIds });
       }
       if (statement.resultMap) {
         const localResultMap = resource.resultMaps.find(candidate => candidate.id === statement.resultMap);
@@ -297,7 +241,7 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
             : undefined);
         const resultMapTypeId = qualifiedTypeId(resultMapFact?.type);
         if (resultMapTypeId) {
-          pendingTypeTargets.push({ kind: "MYBATIS_RESULT_MAP", sourceFile: resourceAbsolutePath, targetId: resultMapTypeId, weight: MYBATIS_RESULT_MAP_WEIGHT, confidence: RESOLVED_TYPE_CONFIDENCE, detail: `${resource.namespace}.${statement.id} resultMap ${statement.resultMap}` });
+          pendingTypeTargets.push({ kind: "MYBATIS_RESULT_MAP", sourceFile: resourceAbsolutePath, targetId: resultMapTypeId, weight: MYBATIS_RESULT_MAP_WEIGHT, confidence: RESOLVED_TYPE_CONFIDENCE, detail: `${resource.namespace}.${statement.id} resultMap ${statement.resultMap}`, anchorIds: typeContext.anchorIds });
         }
       }
     }
@@ -306,7 +250,7 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
   const targetIds = [...new Set(pendingTypeTargets.map(item => item.targetId))];
   const resolved = timedOut || targetIds.length === 0
     ? { declarations: { types: [], methods: [], fields: [], missingIds: [], truncated: false }, timedOut }
-    : await resolveTargets(context.frameworkIndex, targetIds, context);
+    : await resolveFrameworkTargets(context, targetIds);
   timedOut = timedOut || resolved.timedOut;
   const relativePathByTypeId = new Map(resolved.declarations.types.map(type => [type.typeId, type.relativePath]));
   for (const item of pendingTypeTargets) {
@@ -318,33 +262,35 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
       targetAbsolutePath: path.resolve(context.repoRoot, relativePath),
       weight: item.weight,
       confidence: item.confidence,
-      detail: item.detail
+      detail: item.detail,
+      anchorIds: item.anchorIds
     });
   }
 
   const evidence: EvidenceSignal[] = [];
-  const anchorId = context.anchors[0]?.id ?? "A1";
   let signalSeq = 0;
   for (const item of resolvedEvidence) {
-    signalSeq += 1;
-    evidence.push({
-      signalId: `${MYBATIS_ADAPTER_ID}:${signalSeq}`,
-      candidateFile: item.targetAbsolutePath,
-      anchorId,
-      kind: item.kind,
-      family: "FRAMEWORK",
-      provenance: "FRAMEWORK_INFERRED",
-      confidence: item.confidence,
-      completeness,
-      weight: item.weight,
-      sourceFile: item.sourceFile,
-      positions: [],
-      providerId: MYBATIS_ADAPTER_ID,
-      providerVersion: MYBATIS_ADAPTER_VERSION,
-      generation: context.generation,
-      detail: item.detail,
-      candidateMetadata: { categories: ["framework"], reasons: [item.kind], verifiedBy: [item.kind], matchCount: 0 }
-    });
+    for (const anchorId of item.anchorIds) {
+      signalSeq += 1;
+      evidence.push({
+        signalId: `${MYBATIS_ADAPTER_ID}:${signalSeq}`,
+        candidateFile: item.targetAbsolutePath,
+        anchorId,
+        kind: item.kind,
+        family: "FRAMEWORK",
+        provenance: "FRAMEWORK_INFERRED",
+        confidence: item.confidence,
+        completeness,
+        weight: item.weight,
+        sourceFile: item.sourceFile,
+        positions: [],
+        providerId: MYBATIS_ADAPTER_ID,
+        providerVersion: MYBATIS_ADAPTER_VERSION,
+        generation: context.generation,
+        detail: item.detail,
+        candidateMetadata: { categories: ["framework"], reasons: [item.kind], verifiedBy: [item.kind], matchCount: 0 }
+      });
+    }
   }
 
   if (resolved.declarations.truncated) diagnostics.push(`mybatis adapter: declarationsById truncated while resolving ${targetIds.length} evidence targets`);

@@ -283,6 +283,35 @@ test("complete JavaIndex resolves implementation relations even when naming reca
       && commandCandidate.scoreBreakdown.some(item => item.id === "finalize.method-relation" && item.delta > 0),
       "standard production ranking must retain method-relation evidence rather than only adding it in shadow diagnostics"
     );
+
+    const multiAnchorOptions = options({
+      anchors: [
+        { file: gateway, line: 4, column: 18 },
+        { file: service, line: 6, column: 17 }
+      ],
+      profile: "auto",
+      taskKeywords: ["payment"],
+      verbosity: "diagnostic"
+    });
+    const forward = await router.impact(multiAnchorOptions);
+    const reversed = await router.impact({
+      ...multiAnchorOptions,
+      anchors: [...multiAnchorOptions.anchors].reverse()
+    });
+    assert.deepEqual(
+      forward.files.map(file => file.path),
+      reversed.files.map(file => file.path),
+      "swapping A1/A2 must not change the candidate order"
+    );
+    assert.deepEqual(
+      forward.readPlan.map(item => forward.files.find(file => file.id === item.fileId)?.path),
+      reversed.readPlan.map(item => reversed.files.find(file => file.id === item.fileId)?.path),
+      "swapping A1/A2 must not change the read-plan order"
+    );
+    const readPlanPaths = forward.readPlan.map(item =>
+      forward.files.find(file => file.id === item.fileId)?.path ?? "");
+    assert.ok(readPlanPaths.some(file => file.endsWith("Gateway.java")));
+    assert.ok(readPlanPaths.some(file => file.endsWith("PaymentService.java")));
   } finally {
     await index.close();
     await rm(root, { recursive: true, force: true });

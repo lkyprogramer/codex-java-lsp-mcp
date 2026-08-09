@@ -41,8 +41,8 @@ import { GenerationRgCache } from "../search/rg-cache.js";
 import { RgRunner } from "../search/rg-runner.js";
 import type { SearchResult } from "../search/search-types.js";
 import { positiveInteger, timed } from "./runtime.js";
-import { normalizeEvidence } from "./evidence-normalizer.js";
-import type { ProviderInput, ProviderOutcome } from "./evidence.js";
+import type { ProviderInput } from "./evidence.js";
+import { EvidenceLedger } from "./evidence-ledger.js";
 import {
   collectStaticStructureEvidence,
   collectTypeReferenceEvidence
@@ -275,19 +275,20 @@ export class AgentRouter {
       metrics: { typeReference, importGraph, persistedSemantic, semantic }
     };
     const anchorPaths = anchors.map(anchor => anchor.absolutePath);
+    const evidenceLedger = new EvidenceLedger(this.repoRoot, anchorPaths);
 
     // Provider order matters: type-reference reinforcement reads the paths
     // naming recall has already nominated. Keep the pre-Task-24 shared-map
     // sequence exactly: persistedSemantic -> typeGraph -> importGraph ->
     // naming recall -> typeReference.
     const persistedOutcome = await collectPersistedSemanticEvidence({ ...providerInputBase, existingCandidatePaths: anchorPaths });
-    const afterPersistedPaths = unionPaths(anchorPaths, persistedOutcome);
-    const staticStructureOutcome = await collectStaticStructureEvidence({ ...providerInputBase, existingCandidatePaths: afterPersistedPaths });
-    const afterStaticStructurePaths = unionPaths(afterPersistedPaths, staticStructureOutcome);
-    const lexicalOutcome = await collectLexicalEvidence({ ...providerInputBase, existingCandidatePaths: afterStaticStructurePaths });
-    const afterLexicalPaths = unionPaths(afterStaticStructurePaths, lexicalOutcome);
-    const typeReferenceOutcome = await collectTypeReferenceEvidence({ ...providerInputBase, existingCandidatePaths: afterLexicalPaths });
-    const afterStaticPaths = unionPaths(afterLexicalPaths, typeReferenceOutcome);
+    evidenceLedger.append(persistedOutcome);
+    const staticStructureOutcome = await collectStaticStructureEvidence({ ...providerInputBase, existingCandidatePaths: evidenceLedger.paths() });
+    evidenceLedger.append(staticStructureOutcome);
+    const lexicalOutcome = await collectLexicalEvidence({ ...providerInputBase, existingCandidatePaths: evidenceLedger.paths() });
+    evidenceLedger.append(lexicalOutcome);
+    const typeReferenceOutcome = await collectTypeReferenceEvidence({ ...providerInputBase, existingCandidatePaths: evidenceLedger.paths() });
+    evidenceLedger.append(typeReferenceOutcome);
     updateCollectorElapsed(phaseMs, typeReference, importGraph, persistedSemantic);
 
     // A framework adapter may only expand an anchor or a candidate that the
@@ -295,10 +296,8 @@ export class AgentRouter {
     // normalized static surface (rather than all lexical recall) prevents an
     // unrelated Spring bean found by name-search from displacing a task's
     // established read-plan candidates.
-    const normalizedStaticEvidence = normalizeEvidence(
-      [...staticStructureOutcome.evidence, ...typeReferenceOutcome.evidence],
-      this.repoRoot
-    );
+    const normalizedStaticEvidence = new Map([...evidenceLedger.normalized()]
+      .filter(([, candidate]) => candidate.signals.some(signal => signal.family === "STATIC_STRUCTURE")));
 
     // Task 27 Slice C: an empty adapter registry until Slice D registers the
     // Spring pack, so this is inert scaffolding today - see
@@ -307,20 +306,18 @@ export class AgentRouter {
     // (Task 31 decides external exposure); only `outcome` joins ranking.
     const frameworkResult = await timed(phaseMs, "frameworkEvidence", async () => collectFrameworkEvidence({
       ...providerInputBase,
-      existingCandidatePaths: afterStaticPaths
+      existingCandidatePaths: evidenceLedger.paths()
     }, FRAMEWORK_ADAPTERS, [...normalizedStaticEvidence.values()]));
     const frameworkOutcome = frameworkResult.outcome;
-    const afterFrameworkPaths = unionPaths(afterStaticPaths, frameworkOutcome);
+    evidenceLedger.append(frameworkOutcome);
 
-    const preRelationshipOutcomes: ProviderOutcome[] = [persistedOutcome, staticStructureOutcome, lexicalOutcome, typeReferenceOutcome, frameworkOutcome];
     const familyRankPolicy = resolveFamilyRankPolicy(this.routingPolicy);
     // Relationship evidence depends only on the anchor and the static
     // candidate surface. Collect it before the live semantic phase so exact
     // CALLS/METHOD_RELATION facts can participate in the protected read-plan
     // set that governs that later budget. Re-running it after live semantic
     // was both redundant and too late for Task 30's protected-core contract.
-    const preRelationshipNormalized = normalizeEvidence(preRelationshipOutcomes.flatMap(outcome => outcome.evidence), this.repoRoot);
-    const relationshipCandidates = await rankCandidatePool(preRelationshipNormalized, {
+    const relationshipCandidates = await rankCandidatePool(evidenceLedger.normalized(), {
       anchors,
       options,
       suppressed: { deferredTests: 0, crossModuleConsumers: 0, excludedModules: 0 },
@@ -334,10 +331,9 @@ export class AgentRouter {
       staticVerifiedCandidates: relationshipCandidates.filter(candidate =>
         (candidate.verifiedBy || []).some(source => source === "typeGraph" || source === "typeReference"))
     }));
-    const phaseOneOutcomes: ProviderOutcome[] = [...preRelationshipOutcomes, relationshipOutcome];
-    const phaseOneNormalized = normalizeEvidence(phaseOneOutcomes.flatMap(outcome => outcome.evidence), this.repoRoot);
+    evidenceLedger.append(relationshipOutcome);
     const protectedReadPlanPaths = await timed(phaseMs, "nonLspReadPlan", async () => familyReadPlanProtectedPaths(
-      phaseOneNormalized,
+      evidenceLedger.normalized(),
       {
         anchors,
         options,
@@ -356,20 +352,20 @@ export class AgentRouter {
     const collectLiveSemantic = () => collectLiveSemanticEvidence({
       ...providerInputBase,
       budget: liveSemanticBudget,
-      existingCandidatePaths: afterFrameworkPaths
+      existingCandidatePaths: evidenceLedger.paths()
     });
     const liveSemanticOutcome = await (this.javaIndex.withRequestOptions
       ? this.javaIndex.withRequestOptions({ budget: liveSemanticBudget }, collectLiveSemantic)
       : collectLiveSemantic());
-    const afterSemanticPaths = unionPaths(afterFrameworkPaths, liveSemanticOutcome);
-    const supportOutcome = await collectSupportEvidence({ ...providerInputBase, existingCandidatePaths: afterSemanticPaths });
+    evidenceLedger.append(liveSemanticOutcome);
+    const supportOutcome = await collectSupportEvidence({ ...providerInputBase, existingCandidatePaths: evidenceLedger.paths() });
+    evidenceLedger.append(supportOutcome);
 
-    const outcomes: ProviderOutcome[] = [...phaseOneOutcomes, liveSemanticOutcome, supportOutcome];
     // Steps 1-4's normalizer validates and dedupes the typed evidence surface;
     // family-ranker.ts scores directly from it (Task 25 cutover). repoRoot is
     // required here - it populates module/layer/sourceSet via classifyPath,
     // which family-ranker.ts's sameModule/crossModule/sourceSet terms need.
-    const normalized = normalizeEvidence(outcomes.flatMap(outcome => outcome.evidence), this.repoRoot);
+    const normalized = evidenceLedger.normalized();
 
     const suppressed = {
       deferredTests: 0,
@@ -428,7 +424,7 @@ export class AgentRouter {
         repoRoot: this.repoRoot,
         anchors,
         options,
-        outcomes,
+        outcomes: evidenceLedger.outcomes(),
         ranked,
         productionSelectedPaths: new Set(readPlanResult.selectedPaths),
         familyRankPolicy
@@ -533,10 +529,6 @@ type RouterFreshness = {
   freshnessMode: RequestContext["freshnessMode"];
   indexOpenSource?: RequestContext["indexOpenSource"];
 };
-
-function unionPaths(known: readonly string[], outcome: ProviderOutcome): string[] {
-  return [...new Set([...known, ...outcome.evidence.map(signal => signal.candidateFile)])];
-}
 
 function coverageV6(coverage: "complete" | "partial" | "degraded"): "COMPLETE" | "PARTIAL" | "DEGRADED" {
   return coverage.toUpperCase() as "COMPLETE" | "PARTIAL" | "DEGRADED";

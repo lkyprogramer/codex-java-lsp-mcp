@@ -82,10 +82,10 @@ export async function buildShadowRanking(input: BuildShadowRankingInput): Promis
     input.repoRoot
   ).values()];
 
-  const anchor = input.anchors[0];
   const context: RankContext = {
     policy: input.familyRankPolicy,
-    anchorModule: anchor?.module,
+    anchorModules: [...new Set(input.anchors.flatMap(anchor =>
+      anchor.module === undefined ? [] : [anchor.module]))],
     crossModulePolicy: input.options.crossModulePolicy,
     testReadMode: input.options.testReadMode
   };

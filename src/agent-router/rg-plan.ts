@@ -3,6 +3,7 @@ import { classifyPath } from "../repo-layout.js";
 import type { LayoutContext } from "../layout-probe.js";
 import type { RoutingPolicy } from "../routing-policy.js";
 import type { Completion } from "../runtime/completion.js";
+import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
 import type { SearchResult } from "../search/search-types.js";
 import type { CandidateFile, ImpactOptions, ResolvedAnchor, RgPlanSection } from "../agent-types.js";
 import { breakdown, scoreBase, unique } from "./candidate-helpers.js";
@@ -104,9 +105,16 @@ export function buildRgPlan(input: BuildRgPlanInput): RgPlanSection[] {
 
 export function summaryFromSearchResult(input: SummaryFromSearchResultInput): RgCommandSummary {
   const files: CandidateFile[] = [];
+  const anchor = input.anchors.find(candidate => candidate.id === input.section.anchorId);
+  if (!anchor) {
+    throw new JavaIntelligenceError(
+      "INVALID_INPUT",
+      `rg plan section has unknown anchor ${String(input.section.anchorId)}`
+    );
+  }
   for (const match of input.result.files) {
     const context = classifyPath(input.repoRoot, match.absolutePath);
-    const score = scoreBase(input.policy, input.section.category, context, input.anchors[0], input.options);
+    const score = scoreBase(input.policy, input.section.category, context, anchor, input.options);
     files.push({
       absolutePath: match.absolutePath,
       path: context.relativePath,

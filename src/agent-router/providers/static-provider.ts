@@ -2,6 +2,8 @@
 // output: ProviderOutcome carrying static-structure EvidenceSignal[] and typed candidate metadata.
 // pos: Task 24 Step 5 - wraps candidate-collectors.ts/type-reference.ts unchanged behind the evidence contract.
 import type { CandidateFile, ResolvedAnchor } from "../../agent-types.js";
+import type { RouterIndexStatus } from "../../java-index/router-java-index.js";
+import type { JavaSourceFacts } from "../../java-index/router-facts.js";
 import type { EvidenceFamily, EvidenceProvenance, EvidenceSignal, ProviderInput, ProviderOutcome } from "../evidence.js";
 import {
   collectImportGraphCandidates,
@@ -69,9 +71,10 @@ export async function collectStaticStructureEvidence(input: ProviderInput): Prom
   const candidates = seedZeroStubs(input.repoRoot, input.existingCandidatePaths);
   const evidence: EvidenceSignal[] = [];
   const implementationPathsByAnchor = new Map<string, Set<string>>();
+  const failedAnchors = new Set<string>();
 
   await timed(input.phaseMs, "typeGraph", async () => {
-    await collectPerAnchor(input, candidates, evidence, "typeGraph", async anchor => {
+    await collectPerAnchor(input, candidates, evidence, failedAnchors, "typeGraph", async anchor => {
       const implementations = await collectTypeGraphCandidates({
         candidates,
         anchors: [anchor],
@@ -91,10 +94,12 @@ export async function collectStaticStructureEvidence(input: ProviderInput): Prom
     });
   });
   await timed(input.phaseMs, "implementationDependencies", async () => {
-    await collectImplementationDependencies(input, candidates, evidence, implementationPathsByAnchor);
+    for (const anchorId of await collectImplementationDependencies(input, candidates, evidence, implementationPathsByAnchor)) {
+      failedAnchors.add(anchorId);
+    }
   });
   await timed(input.phaseMs, "importGraph", async () => {
-    await collectPerAnchor(input, candidates, evidence, "importGraph", async anchor => {
+    await collectPerAnchor(input, candidates, evidence, failedAnchors, "importGraph", async anchor => {
       await collectImportGraphCandidates({
         candidates,
         anchors: [anchor],
@@ -107,7 +112,7 @@ export async function collectStaticStructureEvidence(input: ProviderInput): Prom
     });
   });
 
-  return outcome(candidates, evidence, startedAt);
+  return outcome(evidence, startedAt, failedAnchors);
 }
 
 /**
@@ -118,9 +123,10 @@ export async function collectTypeReferenceEvidence(input: ProviderInput): Promis
   const startedAt = Date.now();
   const candidates = seedZeroStubs(input.repoRoot, input.existingCandidatePaths);
   const evidence: EvidenceSignal[] = [];
-  const typeReferenceBefore = await input.javaIndex.routerStatus();
+  const failedAnchors = new Set<string>();
+  const typeReferenceBefore = await safeRouterStatus(input);
   await timed(input.phaseMs, "typeReference", async () => {
-    await collectPerAnchor(input, candidates, evidence, "typeReference", async anchor => {
+    await collectPerAnchor(input, candidates, evidence, failedAnchors, "typeReference", async anchor => {
       await collectTypeReferenceCandidates({
         candidates,
         anchors: [anchor],
@@ -132,9 +138,11 @@ export async function collectTypeReferenceEvidence(input: ProviderInput): Promis
       });
     });
   });
-  const typeReferenceAfter = await input.javaIndex.routerStatus();
-  updateTypeReferenceCacheMetrics(input.metrics.typeReference, typeReferenceBefore, typeReferenceAfter);
-  return outcome(candidates, evidence, startedAt);
+  const typeReferenceAfter = await safeRouterStatus(input);
+  if (typeReferenceBefore && typeReferenceAfter) {
+    updateTypeReferenceCacheMetrics(input.metrics.typeReference, typeReferenceBefore, typeReferenceAfter);
+  }
+  return outcome(evidence, startedAt, failedAnchors);
 }
 
 /**
@@ -154,7 +162,10 @@ export async function collectStaticEvidence(input: ProviderInput): Promise<Provi
     providerVersion: STATIC_PROVIDER_VERSION,
     evidence: [...structure.evidence, ...references.evidence],
     completion: structure.completion === "COMPLETE" ? references.completion : structure.completion,
-    elapsedMs: structure.elapsedMs + references.elapsedMs
+    elapsedMs: structure.elapsedMs + references.elapsedMs,
+    ...(!structure.degradation && !references.degradation ? {} : {
+      degradation: [structure.degradation, references.degradation].filter(Boolean).join("; ")
+    })
   };
 }
 
@@ -162,12 +173,17 @@ async function collectPerAnchor(
   input: ProviderInput,
   candidates: Map<string, CandidateFile>,
   evidence: EvidenceSignal[],
+  failedAnchors: Set<string>,
   stage: StaticStage,
   collect: (anchor: ResolvedAnchor) => Promise<void>
 ): Promise<void> {
   for (const anchor of input.anchors) {
     const before = snapshotCandidates(candidates);
-    await collect(anchor);
+    try {
+      await collect(anchor);
+    } catch {
+      failedAnchors.add(anchor.id);
+    }
     for (const candidate of candidates.values()) {
       const prior = before.get(candidate.absolutePath);
       if (!changedSince(candidate, prior)) {
@@ -190,8 +206,9 @@ async function collectImplementationDependencies(
   candidates: Map<string, CandidateFile>,
   evidence: EvidenceSignal[],
   implementationPathsByAnchor: ReadonlyMap<string, ReadonlySet<string>>
-): Promise<void> {
+): Promise<Set<string>> {
   const dependencies: ImplementationDependency[] = [];
+  const failedAnchors = new Set<string>();
   for (const anchor of input.anchors) {
     if (!anchor.methodName || input.budget.expired()) continue;
     const implementationPaths = [...(implementationPathsByAnchor.get(anchor.id) ?? [])]
@@ -202,6 +219,7 @@ async function collectImplementationDependencies(
       try {
         implementation = await input.javaIndex.factsFor(implementationPath, input.generation);
       } catch {
+        failedAnchors.add(anchor.id);
         continue;
       }
       for (const field of implementation.fieldTypes ?? []) {
@@ -231,15 +249,21 @@ async function collectImplementationDependencies(
       }
     }
   }
-  const bounded = dedupeImplementationDependencies(dependencies).slice(0, MAX_IMPLEMENTATION_DEPENDENCY_TYPES);
-  if (bounded.length === 0) return;
+  const bounded = boundedImplementationDependencies(dependencies, input.anchors, MAX_IMPLEMENTATION_DEPENDENCY_TYPES);
+  if (bounded.length === 0) return failedAnchors;
   const dependenciesByType = new Map<string, ImplementationDependency[]>();
   for (const dependency of bounded) {
     const values = dependenciesByType.get(dependency.qualifiedTypeName) ?? [];
     values.push(dependency);
     dependenciesByType.set(dependency.qualifiedTypeName, values);
   }
-  const definitions = await input.javaIndex.findTypeDefinitions([...dependenciesByType.keys()], MAX_IMPLEMENTATION_DEPENDENCY_TYPES, false);
+  let definitions: JavaSourceFacts[];
+  try {
+    definitions = await input.javaIndex.findTypeDefinitions([...dependenciesByType.keys()], MAX_IMPLEMENTATION_DEPENDENCY_TYPES, false);
+  } catch {
+    for (const dependency of bounded) failedAnchors.add(dependency.anchorId);
+    return failedAnchors;
+  }
   for (const definition of definitions) {
     const qualifiedTypeName = definition.qualifiedName;
     if (!qualifiedTypeName) continue;
@@ -271,6 +295,7 @@ async function collectImplementationDependencies(
       });
     }
   }
+  return failedAnchors;
 }
 
 function dedupeImplementationDependencies(dependencies: readonly ImplementationDependency[]): ImplementationDependency[] {
@@ -281,23 +306,66 @@ function dedupeImplementationDependencies(dependencies: readonly ImplementationD
   return [...unique.values()];
 }
 
+function boundedImplementationDependencies(
+  dependencies: readonly ImplementationDependency[],
+  anchors: readonly ResolvedAnchor[],
+  limit: number
+): ImplementationDependency[] {
+  const byAnchor = new Map<string, ImplementationDependency[]>();
+  for (const dependency of dedupeImplementationDependencies(dependencies)) {
+    const values = byAnchor.get(dependency.anchorId) ?? [];
+    values.push(dependency);
+    byAnchor.set(dependency.anchorId, values);
+  }
+  const anchorIds = [...anchors]
+    .sort((left, right) => left.absolutePath.localeCompare(right.absolutePath)
+      || left.line - right.line
+      || left.column - right.column
+      || left.id.localeCompare(right.id))
+    .map(anchor => anchor.id);
+  const bounded: ImplementationDependency[] = [];
+  for (let index = 0; bounded.length < limit; index += 1) {
+    let added = false;
+    for (const anchorId of anchorIds) {
+      const dependency = byAnchor.get(anchorId)?.[index];
+      if (dependency) {
+        bounded.push(dependency);
+        added = true;
+        if (bounded.length === limit) break;
+      }
+    }
+    if (!added) break;
+  }
+  return bounded;
+}
+
 function simpleTypeName(value: string): string {
   const normalized = value.replace(/<.*>/, "").replace(/\[\]$/, "");
   return normalized.slice(normalized.lastIndexOf(".") + 1);
 }
 
 function outcome(
-  candidates: Map<string, CandidateFile>,
   evidence: EvidenceSignal[],
-  startedAt: number
+  startedAt: number,
+  failedAnchors: ReadonlySet<string>
 ): ProviderOutcome {
+  const failed = [...failedAnchors].sort();
   return {
     providerId: STATIC_PROVIDER_ID,
     providerVersion: STATIC_PROVIDER_VERSION,
     evidence,
-    completion: "COMPLETE",
-    elapsedMs: Date.now() - startedAt
+    completion: failed.length > 0 ? "FAILED" : "COMPLETE",
+    elapsedMs: Date.now() - startedAt,
+    ...(failed.length === 0 ? {} : { degradation: `static provider failed for anchors: ${failed.join(", ")}` })
   };
+}
+
+async function safeRouterStatus(input: ProviderInput): Promise<RouterIndexStatus | undefined> {
+  try {
+    return await input.javaIndex.routerStatus();
+  } catch {
+    return undefined;
+  }
 }
 
 function snapshotCandidates(candidates: ReadonlyMap<string, CandidateFile>): Map<string, CandidateSnapshot> {

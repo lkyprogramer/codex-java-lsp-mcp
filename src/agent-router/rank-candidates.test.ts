@@ -107,6 +107,28 @@ test("rankCandidates always returns the anchor, even with zero evidence", async 
   assert.equal(ranked[0]?.absolutePath, anchorEntry.absolutePath);
 });
 
+test("a root-module anchor retains the empty module identity for cross-module ranking", async () => {
+  const rootFile = "/repo/src/main/java/demo/RootPeer.java";
+  const moduleFile = "/repo/module-a/src/main/java/demo/ModulePeer.java";
+  const suppressed = emptySuppressed();
+  const ranked = await rankCandidatePool(new Map([
+    [rootFile, evidenceCandidate(rootFile, [signal({ candidateFile: rootFile })], { module: "", sourceSet: "main" })],
+    [moduleFile, evidenceCandidate(moduleFile, [signal({ candidateFile: moduleFile })], { module: "module-a", sourceSet: "main" })]
+  ]), {
+    anchors: [anchor({
+      absolutePath: "/repo/src/main/java/demo/Anchor.java",
+      module: ""
+    })],
+    options: options(),
+    suppressed,
+    repoRoot: "/repo"
+  });
+
+  assert.ok(ranked.find(file => file.absolutePath === rootFile)!.score
+    > ranked.find(file => file.absolutePath === moduleFile)!.score);
+  assert.equal(suppressed.crossModuleConsumers, 1);
+});
+
 test("typed evidence preserves family score, candidate order, metadata, and read-plan selection without legacy fragments", async () => {
   const anchorEntry = anchor();
   const structuralFile = "/repo/module-a/src/main/java/demo/Structural.java";
@@ -208,6 +230,65 @@ test("rankCandidates mirrors family-ranker's cross-module and deferred-test pena
 
   assert.equal(suppressed.crossModuleConsumers, 1);
   assert.equal(suppressed.deferredTests, 1);
+});
+
+test("multi-anchor suppression treats every anchor module as local and counts only outside modules", async () => {
+  const secondAnchorModuleFile = "/repo/module-b/src/main/java/demo/SecondAnchorPeer.java";
+  const outsideModuleFile = "/repo/module-c/src/main/java/demo/OutsidePeer.java";
+  const normalized = new Map<string, CandidateEvidence>([
+    [secondAnchorModuleFile, evidenceCandidate(secondAnchorModuleFile, [
+      signal({ candidateFile: secondAnchorModuleFile, anchorId: "A2", weight: 80 })
+    ], { module: "module-b", sourceSet: "main" })],
+    [outsideModuleFile, evidenceCandidate(outsideModuleFile, [
+      signal({ candidateFile: outsideModuleFile, anchorId: "A1", weight: 80 })
+    ], { module: "module-c", sourceSet: "main" })]
+  ]);
+  const suppressed = emptySuppressed();
+
+  await rankCandidates(normalized, {
+    anchors: [
+      anchor({ id: "A1", module: "module-a" }),
+      anchor({
+        id: "A2",
+        absolutePath: "/repo/module-b/src/main/java/demo/SecondAnchor.java",
+        module: "module-b",
+        symbolName: "SecondAnchor"
+      })
+    ],
+    options: options({ crossModulePolicy: "auto" }),
+    suppressed,
+    repoRoot: "/repo"
+  });
+
+  assert.equal(suppressed.crossModuleConsumers, 1);
+});
+
+test("multi-anchor balanced mode uses the largest anchor profile limit within the mode hard cap", async () => {
+  const entries: [string, CandidateEvidence][] = [];
+  for (let index = 0; index < 25; index += 1) {
+    const file = `/repo/module-a/src/main/java/demo/Candidate${index}.java`;
+    entries.push([file, evidenceCandidate(file, [
+      signal({ candidateFile: file, family: "LEXICAL", kind: "LEXICAL:java", weight: 60 - index, confidence: 0.6 })
+    ], { module: "module-a", sourceSet: "main" })]);
+  }
+  const anchors = [
+    anchor({ id: "A1", profile: "port" }),
+    anchor({
+      id: "A2",
+      profile: "dto",
+      absolutePath: "/repo/module-a/src/main/java/demo/DtoAnchor.java",
+      symbolName: "DtoAnchor"
+    })
+  ];
+
+  const ranked = await rankCandidates(new Map(entries), {
+    anchors,
+    options: options({ mode: "balanced" }),
+    suppressed: emptySuppressed(),
+    repoRoot: "/repo"
+  });
+
+  assert.equal(ranked.length, 24, "dto's limit 24 should win over port's 20 without exceeding balanced's hard cap 26");
 });
 
 test("rankCandidates truncates the candidate tail by family-ranker score while protecting structural evidence", async () => {

@@ -111,6 +111,23 @@ test("isActive is false for a fully-indexed repo with no MyBatis build marker or
   }
 });
 
+test("direct and runner MyBatis collection keep the same single-anchor contract", async () => {
+  const router = await readyRouter();
+  try {
+    const mapper = file("src/main/java/demo/OrderMapper.java");
+    const context = await frameworkContextFor(router, repoRoot, [anchor(mapper)], [mapper]);
+    const direct = await mybatisAdapter.collect(context);
+    const throughRunner = await runFrameworkAdapters([mybatisAdapter], context);
+
+    assert.deepEqual(throughRunner.outcome.evidence, direct.outcome.evidence);
+    assert.equal(throughRunner.outcome.completion, direct.outcome.completion);
+    assert.deepEqual(throughRunner.metadata[mybatisAdapter.id], direct.metadata);
+    assert.deepEqual(throughRunner.diagnostics, direct.diagnostics);
+  } finally {
+    await router.close();
+  }
+});
+
 test("collect links OrderMapper's namespace, both statements, and their resolved parameter/resultMap types", async () => {
   const router = await readyRouter();
   try {
@@ -198,6 +215,29 @@ test("collect scopes MYBATIS_STATEMENT_METHOD to the anchored method, but not ty
     // Both findById's and insert's type-kind evidence still fire regardless of the method anchor.
     assert.equal(signalsOf(result.outcome.evidence, "MYBATIS_PARAMETER_TYPE").length, 1);
     assert.equal(signalsOf(result.outcome.evidence, "MYBATIS_RESULT_MAP").length, 1);
+  } finally {
+    await router.close();
+  }
+});
+
+test("collect attributes each MyBatis statement to its originating method anchor", async () => {
+  const router = await readyRouter();
+  try {
+    const orderMapperFile = file("src/main/java/demo/OrderMapper.java");
+    const context = await frameworkContextFor(router, repoRoot, [
+      anchor(orderMapperFile, { id: "A1", kind: "method", symbolName: "findById", line: 4 }),
+      anchor(orderMapperFile, { id: "A2", kind: "method", symbolName: "insert", line: 6 })
+    ], [orderMapperFile]);
+
+    const result = await runFrameworkAdapters([mybatisAdapter], context);
+    const statementMethods = signalsOf(result.outcome.evidence, "MYBATIS_STATEMENT_METHOD");
+    assert.deepEqual(
+      statementMethods.map(signal => [signal.detail, signal.anchorId]).sort(),
+      [
+        ["OrderMapper.findById() statement", "A1"],
+        ["OrderMapper.insert() statement", "A2"]
+      ]
+    );
   } finally {
     await router.close();
   }

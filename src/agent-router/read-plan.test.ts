@@ -1207,6 +1207,83 @@ test("token-aware read plan retains every readable anchor in a multi-anchor requ
   assert.deepEqual(result.items.slice(0, 2).map(item => item.fileId), ["F1", "F2"]);
 });
 
+test("multi-anchor protected core reserves coverage for a lower-scored second-anchor candidate", async () => {
+  const first = candidate({ absolutePath: "/repo/src/main/java/demo/First.java", path: "src/main/java/demo/First.java", reasons: ["target"], categories: ["target"], score: 1_000 });
+  const second = candidate({ absolutePath: "/repo/src/main/java/demo/Second.java", path: "src/main/java/demo/Second.java", reasons: ["target"], categories: ["target"], score: 1_000 });
+  const firstHigh = candidate({ absolutePath: "/repo/src/main/java/demo/FirstHigh.java", path: "src/main/java/demo/FirstHigh.java", score: 900, plannerEvidence: [{ family: "EXACT_SEMANTIC", kind: "DEFINITION", sourceTarget: `A1:${first.absolutePath}->first-high` }] });
+  const firstOther = candidate({ absolutePath: "/repo/src/main/java/demo/FirstOther.java", path: "src/main/java/demo/FirstOther.java", score: 800, plannerEvidence: [{ family: "EXACT_SEMANTIC", kind: "DEFINITION", sourceTarget: `A1:${first.absolutePath}->first-other` }] });
+  const secondOnly = candidate({ absolutePath: "/repo/src/main/java/demo/SecondOnly.java", path: "src/main/java/demo/SecondOnly.java", score: 100, plannerEvidence: [{ family: "EXACT_SEMANTIC", kind: "DEFINITION", sourceTarget: `A2:${second.absolutePath}->second-only` }] });
+  const files = [first, second, firstHigh, firstOther, secondOnly];
+  const result = await buildReadPlan({
+    files,
+    ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
+    options: { ...optionsFor(first, { mode: "minimal", readPlanMaxItems: 4 }), anchors: [{ file: first.absolutePath, line: 1, column: 1 }, { file: second.absolutePath, line: 1, column: 1 }] },
+    javaIndex: fixedRangeIndex()
+  });
+
+  assert.ok(result.selectedPaths.includes(secondOnly.absolutePath));
+  assert.equal(result.selectedPaths.filter(path => path === firstHigh.absolutePath || path === firstOther.absolutePath).length, 1);
+});
+
+test("one shared protected candidate can cover both anchors in one core slot", async () => {
+  const first = candidate({ absolutePath: "/repo/src/main/java/demo/First.java", path: "src/main/java/demo/First.java", reasons: ["target"], categories: ["target"], score: 1_000 });
+  const second = candidate({ absolutePath: "/repo/src/main/java/demo/Second.java", path: "src/main/java/demo/Second.java", reasons: ["target"], categories: ["target"], score: 1_000 });
+  const firstOnly = candidate({ absolutePath: "/repo/src/main/java/demo/FirstOnly.java", path: "src/main/java/demo/FirstOnly.java", score: 900, plannerEvidence: [{ family: "EXACT_SEMANTIC", kind: "DEFINITION", sourceTarget: `A1:${first.absolutePath}->first-only` }] });
+  const shared = candidate({
+    absolutePath: "/repo/src/main/java/demo/Shared.java",
+    path: "src/main/java/demo/Shared.java",
+    score: 100,
+    plannerEvidence: [
+      { family: "EXACT_SEMANTIC", kind: "DEFINITION", sourceTarget: `A1:${first.absolutePath}->shared` },
+      { family: "EXACT_SEMANTIC", kind: "DEFINITION", sourceTarget: `A2:${second.absolutePath}->shared` }
+    ]
+  });
+  const files = [first, second, firstOnly, shared];
+  const result = await buildReadPlan({
+    files,
+    ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
+    options: { ...optionsFor(first, { mode: "minimal", readPlanMaxItems: 3 }), anchors: [{ file: first.absolutePath, line: 1, column: 1 }, { file: second.absolutePath, line: 1, column: 1 }] },
+    javaIndex: fixedRangeIndex()
+  });
+
+  assert.deepEqual(result.selectedPaths, [first.absolutePath, second.absolutePath, shared.absolutePath]);
+});
+
+test("swapping multi-anchor input order keeps the protected read-plan stable", async () => {
+  const first = candidate({ absolutePath: "/repo/src/main/java/demo/First.java", path: "src/main/java/demo/First.java", reasons: ["target"], categories: ["target"], score: 1_000 });
+  const second = candidate({ absolutePath: "/repo/src/main/java/demo/Second.java", path: "src/main/java/demo/Second.java", reasons: ["target"], categories: ["target"], score: 1_000 });
+  const firstCorePath = "/repo/src/main/java/demo/FirstCore.java";
+  const secondCorePath = "/repo/src/main/java/demo/SecondCore.java";
+  const run = async (anchors: readonly CandidateFile[]) => {
+    const core = anchors.map((anchorFile, index) => candidate({
+      absolutePath: anchorFile.absolutePath === first.absolutePath ? firstCorePath : secondCorePath,
+      path: anchorFile.absolutePath === first.absolutePath ? "src/main/java/demo/FirstCore.java" : "src/main/java/demo/SecondCore.java",
+      score: anchorFile.absolutePath === first.absolutePath ? 900 : 100,
+      plannerEvidence: [{
+        family: "EXACT_SEMANTIC",
+        kind: "DEFINITION",
+        sourceTarget: `A${index + 1}:${anchorFile.absolutePath}->${anchorFile.absolutePath === first.absolutePath ? firstCorePath : secondCorePath}`
+      }]
+    }));
+    const files = [first, second, ...core];
+    return buildReadPlan({
+      files,
+      ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
+      options: {
+        ...optionsFor(first, { mode: "minimal", readPlanMaxItems: 4 }),
+        anchors: anchors.map(file => ({ file: file.absolutePath, line: 1, column: 1 }))
+      },
+      javaIndex: fixedRangeIndex()
+    });
+  };
+
+  const forward = await run([first, second]);
+  const reversed = await run([second, first]);
+
+  assert.deepEqual(forward.selectedPaths, reversed.selectedPaths);
+  assert.deepEqual(forward.evidenceGaps, reversed.evidenceGaps);
+});
+
 test("anchors remain mandatory when their distinct files exceed the configured file budget", async () => {
   const anchors = Array.from({ length: 5 }, (_, index) => candidate({
     absolutePath: `/repo/src/main/java/demo/Anchor${index}.java`,

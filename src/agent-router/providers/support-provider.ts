@@ -14,13 +14,15 @@ const SUPPORT_FILE_PATTERN = /\.(xml|sql|ya?ml|properties)$/i;
 
 export async function collectSupportEvidence(input: ProviderInput): Promise<ProviderOutcome> {
   const startedAt = Date.now();
-  const anchorId = input.anchors[0]?.id ?? "A1";
+  const anchorIds = input.anchors.length > 0 ? input.anchors.map(anchor => anchor.id) : ["A1"];
   const evidence: EvidenceSignal[] = [];
   for (const absolutePath of new Set(input.existingCandidatePaths)) {
     const context = classifyPath(input.repoRoot, absolutePath);
     const relativePath = context.relativePath ?? absolutePath;
     if (context.sourceSet === "test" || SUPPORT_FILE_PATTERN.test(relativePath)) {
-      evidence.push(makeSignal(input, anchorId, absolutePath, "SUPPORT_FILE", "SUPPORT", 10));
+      for (const anchorId of anchorIds) {
+        evidence.push(makeSignal(input, anchorId, absolutePath, "SUPPORT_FILE", "SUPPORT", 10));
+      }
     }
     const focusMatch = Boolean(context.module && input.options.focusModules.includes(context.module));
     const keywordMatch = matchesAny(relativePath, input.options.taskKeywords);
@@ -28,10 +30,14 @@ export async function collectSupportEvidence(input: ProviderInput): Promise<Prov
       // A focus module is an explicit caller scope, unlike a lexical keyword.
       // Its bounded TASK_CONTEXT family contribution offsets, but never waives,
       // the family ranker's cross-module penalty for multi-module tasks.
-      evidence.push(makeSignal(input, anchorId, absolutePath, "FOCUS_MODULE", "TASK_CONTEXT", 55));
+      for (const anchorId of anchorIds) {
+        evidence.push(makeSignal(input, anchorId, absolutePath, "FOCUS_MODULE", "TASK_CONTEXT", 55));
+      }
     }
     if (keywordMatch) {
-      evidence.push(makeSignal(input, anchorId, absolutePath, "TASK_KEYWORD", "TASK_CONTEXT", 30));
+      for (const anchorId of anchorIds) {
+        evidence.push(makeSignal(input, anchorId, absolutePath, "TASK_KEYWORD", "TASK_CONTEXT", 30));
+      }
     }
   }
   return {

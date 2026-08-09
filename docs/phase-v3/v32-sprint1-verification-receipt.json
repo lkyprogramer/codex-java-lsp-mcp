@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 2,
+  "sprint": "V3.2 Sprint 1",
+  "verifiedAt": "2026-08-09T20:48:08Z",
+  "exitCode": 0,
+  "verificationKind": "ARTIFACT_MANIFEST_INTEGRITY_REPLAY",
+  "isolation": {
+    "mode": "detached-local-clone",
+    "jdtlsBin": "/usr/bin/false",
+    "activeRuntimeStateAccessed": false,
+    "wrapperExecutableTree": "487b242544039aafb014882d2beb0d147ec59550"
+  },
+  "command": [
+    "sh",
+    "scripts/run-isolated-node.sh",
+    "scripts/run-isolated-validation.mjs",
+    "--profile",
+    "targeted",
+    "--",
+    "node",
+    "scripts/run-v32-optimization-matrix.mjs",
+    "--verify",
+    "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ku4jAX/formal/optimization-manifest.json"
+  ],
+  "verifiedManifest": {
+    "path": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ku4jAX/formal/optimization-manifest.json",
+    "bytes": 108616,
+    "sha256": "653de3e6c343f1dabf45304b6b20753def929c6ffa97f8c85cd19887d6242db6",
+    "payloadSha256": "a53dfbce825a932aa2335c8fd3db05cb9a840b1a61fdfbe91117b5af3bbc766e",
+    "candidateExecutableTree": "487b242544039aafb014882d2beb0d147ec59550",
+    "candidatePatchSha256": "006a3a5a76d4d276ac295e12ef279a0dcd8aa927b3b385c3ca3a844634cc138b"
+  },
+  "boundEvidence": {
+    "taskLedgerSha256": "36535bb49288906daf06199ebfca6b66ed95b71892608eebad28d17b2a791c2f",
+    "dependencyInventorySha256": "0362908244299e2d61f87cb5d1037d9609abd11f8d0afae2cc89c3569ce13bc6",
+    "distTapSha256": "0b6be5548af89e85e2237abb0f6ed795d83fcbffae1b56ee6fe19392f9880a3e",
+    "scriptsTapSha256": "5120bcf9b65210fabee9c83df7499972e3424cd8563866ed3f88503f40288d75",
+    "coldRunManifestSha256": "550ef03aab9dc7e82ff02ddd310adc628f9e3bb7166b92315870b6833d41d98c",
+    "matrixSummarySha256": "51f3a79fb2e5dafda5d65e7fd280901d836a32947b0b6271bb6572ea9edcbbaf"
+  },
+  "result": {
+    "verificationStatus": "PASS",
+    "resultStatus": "BASELINE_RECORDED_WITH_GAPS",
+    "coldGatePassed": false
+  },
+  "scopeNote": "The replay validates source identity, manifests, the copied Sprint 1 task ledger, TAP evidence, the private dependency inventory, and hash-bound matrix artifacts. It does not rerun candidate tests or the three-repository matrix; those ran in the formal isolated execution."
+}

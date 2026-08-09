@@ -147,8 +147,27 @@ test("rankCandidates applies a same-module prior over an equally-evidenced cross
     ...candidate("Cross.java", [signal({ family: "STATIC_STRUCTURE", weight: 40, confidence: 0.9 })]),
     module: "shipping"
   };
-  const ranked = rankCandidates([crossModule, sameModule], { policy: genericFamilyRankPolicy, anchorModule: "billing" });
+  const ranked = rankCandidates([crossModule, sameModule], { policy: genericFamilyRankPolicy, anchorModules: ["billing"] });
   assert.equal(ranked[0].file, "Same.java");
+});
+
+test("rankCandidates treats a candidate as same-module when it matches any request anchor", () => {
+  const secondAnchorModule: CandidateEvidence = {
+    ...candidate("SecondAnchorModule.java", [signal({ family: "STATIC_STRUCTURE", weight: 40, confidence: 0.9 })]),
+    module: "shipping"
+  };
+  const outsideEveryAnchor: CandidateEvidence = {
+    ...candidate("Outside.java", [signal({ family: "STATIC_STRUCTURE", weight: 40, confidence: 0.9 })]),
+    module: "reporting"
+  };
+
+  const ranked = rankCandidates([outsideEveryAnchor, secondAnchorModule], {
+    policy: genericFamilyRankPolicy,
+    anchorModules: ["billing", "shipping"]
+  });
+
+  assert.equal(ranked[0].file, "SecondAnchorModule.java");
+  assert.ok(ranked[0].finalScore > ranked[1].finalScore);
 });
 
 test("rankCandidates tie-breaks on repo path when every scored term is equal", () => {
@@ -165,10 +184,10 @@ test("rankCandidates does not exempt a focus-module candidate from the cross-mod
   const withoutFocusContext = candidate("Focused.java", [
     signal({ family: "STATIC_STRUCTURE", weight: 40, confidence: 0.9 })
   ]);
-  const ranked = rankCandidates([withoutFocusContext], { policy: genericFamilyRankPolicy, anchorModule: "billing" });
+  const ranked = rankCandidates([withoutFocusContext], { policy: genericFamilyRankPolicy, anchorModules: ["billing"] });
   const penalized = rankCandidates(
     [{ ...withoutFocusContext, module: "reporting" }],
-    { policy: genericFamilyRankPolicy, anchorModule: "billing" }
+    { policy: genericFamilyRankPolicy, anchorModules: ["billing"] }
   );
   assert.ok(
     penalized[0].finalScore < ranked[0].finalScore,
@@ -204,8 +223,8 @@ test("rankCandidates does not apply the cross-module penalty when crossModulePol
     ...candidate("Cross.java", [signal({ family: "STATIC_STRUCTURE", weight: 40, confidence: 0.9 })]),
     module: "shipping"
   };
-  const penalized = rankCandidates([crossModule], { policy: genericFamilyRankPolicy, anchorModule: "billing" })[0];
-  const allowed = rankCandidates([crossModule], { policy: genericFamilyRankPolicy, anchorModule: "billing", crossModulePolicy: "all" })[0];
+  const penalized = rankCandidates([crossModule], { policy: genericFamilyRankPolicy, anchorModules: ["billing"] })[0];
+  const allowed = rankCandidates([crossModule], { policy: genericFamilyRankPolicy, anchorModules: ["billing"], crossModulePolicy: "all" })[0];
   assert.ok(allowed.finalScore > penalized.finalScore);
 });
 

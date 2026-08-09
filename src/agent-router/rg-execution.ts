@@ -4,6 +4,7 @@ import type { CandidateFile, ImpactOptions, ResolvedAnchor, RgPlanSection, RgSec
 import type { RoutingPolicy } from "../routing-policy.js";
 import type { Completion } from "../runtime/completion.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
+import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
 import { RgRunner } from "../search/rg-runner.js";
 import type { RgQuery, SearchResult } from "../search/search-types.js";
 import { mergeCandidate } from "./candidate-helpers.js";
@@ -57,11 +58,15 @@ export async function executeRgPlan(input: ExecuteRgPlanInput): Promise<RgExecut
   let totalMatches = 0;
   let commandCount = 0;
   const completions: Completion[] = [];
-  const results = await mapConcurrent(input.plan, input.concurrency, async item => ({
-    item,
-    summary: await input.loadSummary(item, input.options, input.anchors)
-  }));
-  for (const { item, summary } of results) {
+  const results = await mapConcurrent(input.plan, input.concurrency, async item => {
+    const anchorId = requireSectionAnchorId(item, input.anchors);
+    return {
+      item,
+      anchorId,
+      summary: await input.loadSummary(item, input.options, input.anchors)
+    };
+  });
+  for (const { item, anchorId, summary } of results) {
     commandCount += 1;
     rawBytes += summary.rawBytes;
     totalMatches += summary.totalMatches;
@@ -70,7 +75,7 @@ export async function executeRgPlan(input: ExecuteRgPlanInput): Promise<RgExecut
       mergeCandidate(fileMap, file);
       evidenceMatches.push({
         file,
-        anchorId: item.anchorId ?? input.anchors[0]?.id ?? "A1",
+        anchorId,
         category: item.category
       });
     }
@@ -109,6 +114,19 @@ export async function executeRgPlan(input: ExecuteRgPlanInput): Promise<RgExecut
       note: "raw rg stdout is summarized inside MCP and not returned to the agent"
     }
   };
+}
+
+function requireSectionAnchorId(
+  section: RgPlanSection,
+  anchors: readonly ResolvedAnchor[]
+): string {
+  if (section.anchorId && anchors.some(anchor => anchor.id === section.anchorId)) {
+    return section.anchorId;
+  }
+  throw new JavaIntelligenceError(
+    "INVALID_INPUT",
+    `rg plan section has unknown anchor ${String(section.anchorId)}`
+  );
 }
 
 /**

@@ -110,6 +110,23 @@ test("isActive is false for a fully-indexed repo with no MapStruct build marker 
   }
 });
 
+test("direct and runner MapStruct collection keep the same single-anchor contract", async () => {
+  const router = await readyRouter();
+  try {
+    const mapper = file("src/main/java/demo/OrderMapper.java");
+    const context = await frameworkContextFor(router, repoRoot, [anchor(mapper)], [mapper]);
+    const direct = await mapstructAdapter.collect(context);
+    const throughRunner = await runFrameworkAdapters([mapstructAdapter], context);
+
+    assert.deepEqual(throughRunner.outcome.evidence, direct.outcome.evidence);
+    assert.equal(throughRunner.outcome.completion, direct.outcome.completion);
+    assert.deepEqual(throughRunner.metadata[mapstructAdapter.id], direct.metadata);
+    assert.deepEqual(throughRunner.diagnostics, direct.diagnostics);
+  } finally {
+    await router.close();
+  }
+});
+
 test("isActive detects a MapStruct import from bounded request facts without scanning the whole index", async () => {
   let globalScanCalls = 0;
   const mapper = "/repo/src/main/java/demo/OrderMapper.java";
@@ -169,6 +186,26 @@ test("collect links OrderMapper.toResponse's parameter as SOURCE and its return 
     const candidatePaths = new Set(result.outcome.evidence.map(signal => signal.candidateFile));
     assert.ok(candidatePaths.has(orderEntityFile));
     assert.ok(candidatePaths.has(orderResponseFile));
+  } finally {
+    await router.close();
+  }
+});
+
+test("collect attributes each MapStruct mapping method to its originating anchor", async () => {
+  const router = await readyRouter();
+  try {
+    const orderMapperFile = file("src/main/java/demo/OrderMapper.java");
+    const context = await frameworkContextFor(router, repoRoot, [
+      anchor(orderMapperFile, { id: "A1", kind: "method", symbolName: "toResponse", line: 8 }),
+      anchor(orderMapperFile, { id: "A2", kind: "method", symbolName: "updateResponse", line: 10 })
+    ], [orderMapperFile]);
+
+    const result = await runFrameworkAdapters([mapstructAdapter], context);
+    const methodSignals = result.outcome.evidence.filter(signal => signal.kind === "MAPSTRUCT_SOURCE" || signal.kind === "MAPSTRUCT_TARGET");
+    assert.ok(methodSignals.some(signal => signal.detail?.includes("toResponse")));
+    assert.ok(methodSignals.some(signal => signal.detail?.includes("updateResponse")));
+    assert.ok(methodSignals.filter(signal => signal.detail?.includes("toResponse")).every(signal => signal.anchorId === "A1"));
+    assert.ok(methodSignals.filter(signal => signal.detail?.includes("updateResponse")).every(signal => signal.anchorId === "A2"));
   } finally {
     await router.close();
   }

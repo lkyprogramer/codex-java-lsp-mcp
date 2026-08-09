@@ -112,6 +112,27 @@ test("static provider keeps each implementation evidence tied to its own anchor"
   );
 });
 
+test("an A2 static lookup failure retains A1 evidence and degrades the provider outcome", async () => {
+  const first = anchor("A1", "FirstPort");
+  const second = anchor("A2", "SecondPort");
+  const firstImplementation = facts("/repo/src/main/java/demo/FirstPortImpl.java");
+  const result = await collectStaticStructureEvidence(providerInput([first, second], {
+    factsFor: async (file: string) => facts(file, { kind: "interface" }),
+    findImplementers: async (typeName: string) => {
+      if (typeName === "SecondPort") throw new Error("A2 index failure");
+      return [firstImplementation];
+    },
+    findTypeDefinitions: async () => [],
+    findImporters: async () => []
+  }));
+
+  assert.deepEqual(result.evidence.map(signal => [signal.anchorId, signal.candidateFile]), [
+    ["A1", firstImplementation.absolutePath]
+  ]);
+  assert.equal(result.completion, "FAILED");
+  assert.equal(result.degradation, "static provider failed for anchors: A2");
+});
+
 test("static provider classifies direct imported declarations as exact AST evidence", async () => {
   const request = anchor("A1", "Request", "dto");
   const directDeclaration = facts("/repo/src/main/java/demo/DirectCollaborator.java");
@@ -183,6 +204,44 @@ test("a resolved implementation exposes its exact field and anchored-method coll
 
   assert.ok(result.evidence.some(signal => signal.candidateFile === mapper.absolutePath && signal.kind === "FIELD_TYPE"));
   assert.ok(result.evidence.some(signal => signal.candidateFile === entity.absolutePath && signal.kind === "IMPLEMENTATION_METHOD_TYPE"));
+});
+
+test("implementation dependency cap gives every anchor a deterministic seat", async () => {
+  const first = { ...anchor("A1", "FirstPort", "port"), methodName: "load", symbolName: "load" };
+  const second = { ...anchor("A2", "SecondPort", "port"), methodName: "load", symbolName: "load" };
+  const firstImplementation = {
+    ...facts("/repo/src/main/java/demo/FirstPortImpl.java"),
+    fieldTypes: Array.from({ length: 24 }, (_, index) => ({
+      typeName: `FirstDependency${index}`,
+      qualifiedName: `demo.FirstDependency${index}`,
+      typeId: `type:demo.FirstDependency${index}`
+    }))
+  } as JavaSourceFacts;
+  const secondImplementation = {
+    ...facts("/repo/src/main/java/demo/SecondPortImpl.java"),
+    fieldTypes: [{ typeName: "SecondDependency", qualifiedName: "demo.SecondDependency", typeId: "type:demo.SecondDependency" }]
+  } as JavaSourceFacts;
+  const requestedDefinitionBatches: string[][] = [];
+  const result = await collectStaticStructureEvidence(providerInput([first, second], {
+    factsFor: async (file: string) => file === first.absolutePath || file === second.absolutePath
+      ? facts(file, { kind: "interface" })
+      : file === firstImplementation.absolutePath ? firstImplementation : secondImplementation,
+    findImplementers: async (typeName: string) => typeName === "FirstPort" ? [firstImplementation] : [secondImplementation],
+    findTypeDefinitions: async (names: readonly string[]) => {
+      requestedDefinitionBatches.push([...names]);
+      return names.map(name => facts(`/repo/src/main/java/demo/${name.split(".").at(-1)}.java`));
+    },
+    findImporters: async () => [],
+    findTypeReferences: async () => [],
+    methodAt: async () => undefined,
+    routerStatus: async () => emptyRouterStatus()
+  }));
+
+  const requestedDefinitions = requestedDefinitionBatches.find(names => names.length === 24) ?? [];
+  assert.equal(requestedDefinitions.length, 24);
+  assert.ok(requestedDefinitions.includes("demo.SecondDependency"));
+  assert.equal(requestedDefinitions.includes("demo.FirstDependency23"), false);
+  assert.ok(result.evidence.some(signal => signal.anchorId === "A2" && signal.kind === "FIELD_TYPE"));
 });
 
 test("deferred test implementations do not fan out their collaborators into a main-source request", async () => {

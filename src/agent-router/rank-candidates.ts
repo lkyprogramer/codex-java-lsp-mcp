@@ -44,7 +44,8 @@ export async function rankCandidatePool(
   normalized: ReadonlyMap<string, CandidateEvidence>,
   context: RankCandidatesContext
 ): Promise<CandidateFile[]> {
-  const anchor = context.anchors[0]!;
+  const anchorModules = [...new Set(context.anchors.flatMap(anchor =>
+    anchor.module === undefined ? [] : [anchor.module]))];
   const evidenceCandidates = [...normalized.values()].filter(candidate => {
     if (candidate.module && context.options.excludeModules.includes(candidate.module)) {
       context.suppressed.excludedModules += 1;
@@ -61,9 +62,9 @@ export async function rankCandidatePool(
       context.suppressed.deferredTests += 1;
     }
     if (
-      anchor.module !== undefined
+      anchorModules.length > 0
       && candidate.module !== undefined
-      && candidate.module !== anchor.module
+      && !anchorModules.includes(candidate.module)
       && context.options.crossModulePolicy !== "all"
     ) {
       context.suppressed.crossModuleConsumers += 1;
@@ -72,7 +73,7 @@ export async function rankCandidatePool(
 
   const rankContext: RankContext = {
     policy: context.familyRankPolicy ?? genericFamilyRankPolicy,
-    anchorModule: anchor.module,
+    anchorModules,
     crossModulePolicy: context.options.crossModulePolicy,
     testReadMode: context.options.testReadMode
   };
@@ -86,7 +87,6 @@ export function truncateRankedCandidatePool(
   context: RankCandidatesContext,
   requiredPaths: ReadonlySet<string> = new Set<string>()
 ): CandidateFile[] {
-  const anchor = context.anchors[0]!;
   // Preserve Task 29's public candidate-tail contract independently of the
   // V6 byte planner. The legacy file-slot selector is used only to decide
   // which CandidateFile records survive the output cap; it does not feed the
@@ -98,7 +98,11 @@ export function truncateRankedCandidatePool(
       readPlanCovered.add(file);
     }
   }
-  const limit = candidateLimit(context.options.mode, anchor.profile);
+  const hardLimit = candidateLimit(context.options.mode);
+  const anchorLimits = context.anchors.map(anchor => candidateLimit(context.options.mode, anchor.profile));
+  const limit = anchorLimits.length === 0
+    ? hardLimit
+    : Math.min(hardLimit, Math.max(...anchorLimits));
   for (const file of focusModuleRepresentatives(ranked, context.options.focusModules, limit, readPlanCovered)) {
     readPlanCovered.add(file);
   }

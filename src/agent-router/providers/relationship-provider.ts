@@ -96,10 +96,29 @@ type DirectCallCandidate = {
 
 export async function collectRelationshipEvidence(input: RelationshipProviderInput): Promise<ProviderOutcome> {
   const startedAt = Date.now();
-  const anchor = input.anchors[0];
-  if (!anchor) {
-    return emptyOutcome(startedAt);
+  const evidence: EvidenceSignal[] = [];
+  const failedAnchors: string[] = [];
+  for (const anchor of input.anchors) {
+    try {
+      evidence.push(...await collectRelationshipEvidenceForAnchor(input, anchor));
+    } catch {
+      failedAnchors.push(anchor.id);
+    }
   }
+  return {
+    providerId: RELATIONSHIP_PROVIDER_ID,
+    providerVersion: RELATIONSHIP_PROVIDER_VERSION,
+    evidence,
+    completion: failedAnchors.length > 0 ? "FAILED" : "COMPLETE",
+    elapsedMs: Date.now() - startedAt,
+    ...(failedAnchors.length === 0 ? {} : { degradation: `relationship failed for anchors: ${failedAnchors.join(", ")}` })
+  };
+}
+
+async function collectRelationshipEvidenceForAnchor(
+  input: RelationshipProviderInput,
+  anchor: ResolvedAnchor
+): Promise<EvidenceSignal[]> {
   let anchorFacts: JavaSourceFacts | undefined;
   try {
     anchorFacts = await input.javaIndex.factsFor(anchor.absolutePath, input.generation);
@@ -178,13 +197,7 @@ export async function collectRelationshipEvidence(input: RelationshipProviderInp
     pushIfPositive(evidence, input, anchor.id, candidate, "KIND_PAIRING", structural.kind);
   }
 
-  return {
-    providerId: RELATIONSHIP_PROVIDER_ID,
-    providerVersion: RELATIONSHIP_PROVIDER_VERSION,
-    evidence,
-    completion: "COMPLETE",
-    elapsedMs: Date.now() - startedAt
-  };
+  return evidence;
 }
 
 /**
@@ -435,11 +448,12 @@ async function resolvedImplementationCallCandidates(
 }
 
 function prioritizedImplementationContinuationPaths(input: RelationshipProviderInput): string[] {
+  const anchorPaths = new Set(input.anchors.map(anchor => anchor.absolutePath));
   const priority = (candidate: CandidateFile): number => candidate.reasons.includes("typeGraph:implementation-lookup")
     ? 0
     : (candidate.verifiedBy || []).includes("typeGraph") ? 1 : 2;
   const candidates = [...input.allCandidates]
-    .filter(candidate => candidate.absolutePath !== input.anchors[0]?.absolutePath && candidate.absolutePath.endsWith(".java"))
+    .filter(candidate => !anchorPaths.has(candidate.absolutePath) && candidate.absolutePath.endsWith(".java"))
     .sort((left, right) => priority(left) - priority(right)
       || right.score - left.score
       || left.absolutePath.localeCompare(right.absolutePath))
@@ -800,14 +814,4 @@ function pushIfPositive(
       matchCount: 0
     }
   });
-}
-
-function emptyOutcome(startedAt: number): ProviderOutcome {
-  return {
-    providerId: RELATIONSHIP_PROVIDER_ID,
-    providerVersion: RELATIONSHIP_PROVIDER_VERSION,
-    evidence: [],
-    completion: "COMPLETE",
-    elapsedMs: Date.now() - startedAt
-  };
 }

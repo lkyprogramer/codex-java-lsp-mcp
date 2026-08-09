@@ -158,6 +158,42 @@ test("an anchor implementing the candidate interface earns a TYPE_SYMMETRIC stru
   })();
 });
 
+test("relationship evidence retains the true origin for every request anchor", async () => {
+  const first = anchor({
+    id: "A1",
+    absolutePath: "/repo/src/main/java/demo/FirstOrderService.java",
+    path: "src/main/java/demo/FirstOrderService.java",
+    className: "FirstOrderService"
+  });
+  const second = anchor({
+    id: "A2",
+    absolutePath: "/repo/src/main/java/demo/SecondOrderService.java",
+    path: "src/main/java/demo/SecondOrderService.java",
+    className: "SecondOrderService"
+  });
+  const service = candidate("/repo/src/main/java/demo/OrderService.java");
+  const result = await collectRelationshipEvidence(providerInput(
+    [first, second],
+    [],
+    [service],
+    noopJavaIndex({
+      factsFor: async (file: string) => file === service.absolutePath
+        ? facts(file, { typeName: "OrderService", kind: "interface" })
+        : facts(file, {
+          typeName: file === first.absolutePath ? "FirstOrderService" : "SecondOrderService",
+          implementsTypes: ["demo.OrderService"]
+        })
+    })
+  ));
+
+  assert.deepEqual(
+    result.evidence
+      .filter(signal => signal.candidateFile === service.absolutePath && signal.kind === "TYPE_SYMMETRIC")
+      .map(signal => signal.anchorId),
+    ["A1", "A2"]
+  );
+});
+
 test("an unrelated candidate has no relationship evidence", async () => {
   const service = anchor();
   const unrelated = candidate("/repo/src/main/java/demo/Whatever.java", { verifiedBy: ["rg"] });

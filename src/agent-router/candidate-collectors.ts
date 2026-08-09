@@ -38,6 +38,7 @@ type CollectImportGraphInput = CollectCandidatesInput & {
 
 type CollectPersistedSemanticInput = {
   readonly candidates: Map<string, CandidateFile>;
+  readonly candidateMapForAnchor?: (anchor: ResolvedAnchor) => Map<string, CandidateFile>;
   readonly anchors: readonly ResolvedAnchor[];
   readonly options: ImpactOptions;
   readonly repoRoot: string;
@@ -149,16 +150,21 @@ export async function collectImportGraphCandidates(input: CollectImportGraphInpu
   }
 }
 
-export async function collectPersistedSemanticCandidates(input: CollectPersistedSemanticInput): Promise<void> {
+export async function collectPersistedSemanticCandidates(
+  input: CollectPersistedSemanticInput
+): Promise<{ failedAnchors: string[] }> {
   const { candidates, anchors, options, repoRoot, routingPolicy, javaIndex, edgeStoreV2, generation, metrics } = input;
   if (options.semanticPolicy === "required") {
-    return;
+    return { failedAnchors: [] };
   }
+  const failedAnchors: string[] = [];
   for (const anchor of anchors) {
+    const anchorCandidates = input.candidateMapForAnchor?.(anchor) ?? candidates;
     let anchorSymbol: { symbolId: string } | undefined;
     try {
       anchorSymbol = await javaIndex.queryAnchor(anchor.absolutePath, anchor.line, anchor.column);
     } catch {
+      failedAnchors.push(anchor.id);
       continue;
     }
     if (!anchorSymbol) {
@@ -189,7 +195,7 @@ export async function collectPersistedSemanticCandidates(input: CollectPersisted
       // 33 read-cutover) still carry an empty array; this rebuildable cache
       // just falls back to {1,1} for those until they age out or are rewritten.
       const range = edge.targetRanges[0]?.start ?? { line: 1, column: 1 };
-      mergeCandidate(candidates, {
+      mergeCandidate(anchorCandidates, {
         absolutePath: edge.targetFile,
         path: context.relativePath,
         module: context.module,
@@ -208,6 +214,7 @@ export async function collectPersistedSemanticCandidates(input: CollectPersisted
       uniqueEdges += 1;
     }
   }
+  return { failedAnchors };
 }
 
 function shouldUseTypeGraph(anchor: ResolvedAnchor): boolean {

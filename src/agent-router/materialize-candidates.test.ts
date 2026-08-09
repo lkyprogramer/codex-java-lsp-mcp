@@ -76,6 +76,29 @@ test("two anchors in the same file share one candidate and retain both positions
   ]);
 });
 
+test("anchor materialization order is stable when callers swap A1 and A2", () => {
+  const first = anchor();
+  const second: ResolvedAnchor = {
+    ...anchor(),
+    id: "A2",
+    absolutePath: path.join(repoRoot, "src/main/java/com/example/BeforeAnchor.java"),
+    path: "src/main/java/com/example/BeforeAnchor.java",
+    line: 4,
+    column: 2,
+    symbolName: "BeforeAnchor",
+    className: "BeforeAnchor"
+  };
+
+  const forward = materializeRankedCandidates([], [first, second], repoRoot);
+  const reversed = materializeRankedCandidates([], [second, first], repoRoot);
+
+  assert.deepEqual(
+    forward.map(file => [file.absolutePath, file.positions]),
+    reversed.map(file => [file.absolutePath, file.positions])
+  );
+  assert.deepEqual(forward.map(file => file.absolutePath), [first.absolutePath, second.absolutePath]);
+});
+
 test("module/layer/sourceSet thread through from the normalized evidence entry", () => {
   const other = {
     ...candidateEvidence(path.join(repoRoot, "src/test/java/com/example/OtherTest.java"), [signal({})]),

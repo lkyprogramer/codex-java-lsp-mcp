@@ -20,6 +20,15 @@ type SemanticSuppressed = {
   externalLocations: number;
 };
 
+export type SemanticStageResult = {
+  failedAnchors: readonly string[];
+  cancelledAnchors: readonly string[];
+  timeoutAnchors: readonly string[];
+  limitedAnchors: readonly string[];
+};
+
+type SemanticFailureKind = "timeout" | "cancelled" | "failed";
+
 type SemanticSeedState = {
   used: boolean;
   skipped: boolean;
@@ -44,6 +53,7 @@ type SemanticVerifyState = {
 
 type SemanticInput = {
   readonly candidates: Map<string, CandidateFile>;
+  readonly candidateMapForAnchor?: (anchor: ResolvedAnchor) => Map<string, CandidateFile>;
   readonly anchors: readonly ResolvedAnchor[];
   readonly options: ImpactOptions;
   readonly phaseMs: Record<string, number>;
@@ -85,17 +95,22 @@ type LocationCandidateInput = {
   readonly suppressed: SemanticSuppressed;
 };
 
-export async function collectSemanticSeed(input: SemanticSeedInput): Promise<void> {
+export async function collectSemanticSeed(input: SemanticSeedInput): Promise<SemanticStageResult> {
   if (!shouldUseSemantic(input.options.semanticPolicy, input.options.mode, input.anchors)) {
     input.semantic.skipped = true;
-    return;
+    return semanticStageResult();
   }
   input.semantic.used = true;
   const suppressed: SemanticSuppressed = { externalLocations: 0 };
+  const failedAnchors: string[] = [];
+  const cancelledAnchors: string[] = [];
+  const timeoutAnchors: string[] = [];
   await timed(input.phaseMs, "semantic", async () => {
-    for (const anchor of input.anchors) {
+    for (let anchorIndex = 0; anchorIndex < input.anchors.length; anchorIndex += 1) {
+      const anchor = input.anchors[anchorIndex]!;
       if (input.budget.expired()) {
         recordSemanticBudgetExpiry(input.semantic);
+        timeoutAnchors.push(...input.anchors.slice(anchorIndex).map(candidate => candidate.id));
         break;
       }
       try {
@@ -106,7 +121,10 @@ export async function collectSemanticSeed(input: SemanticSeedInput): Promise<voi
           input.budget,
           shouldIncludeImplementations(anchor)
         );
-        if (input.budget.expired()) recordSemanticBudgetExpiry(input.semantic);
+        if (input.budget.expired()) {
+          recordSemanticBudgetExpiry(input.semantic);
+          timeoutAnchors.push(anchor.id);
+        }
         for (const location of [...context.definitions, ...context.implementations]) {
           const described = locationCandidate({
             location,
@@ -118,29 +136,36 @@ export async function collectSemanticSeed(input: SemanticSeedInput): Promise<voi
             suppressed
           });
           if (described) {
-            mergeCandidate(input.candidates, described);
+            mergeCandidate(input.candidateMapForAnchor?.(anchor) ?? input.candidates, described);
           }
         }
       } catch (error) {
         // Semantic evidence is an enhancement. A backed-off, misconfigured or
         // still-starting JDT must degrade this stage, not fail the request.
-        recordSemanticFailure(input.semantic, error);
+        const failure = recordSemanticFailure(input.semantic, error);
+        if (failure === "timeout") timeoutAnchors.push(anchor.id);
+        else if (failure === "cancelled") cancelledAnchors.push(anchor.id);
+        else failedAnchors.push(anchor.id);
       }
     }
   });
   input.semantic.externalLocationsSuppressed += suppressed.externalLocations;
+  return semanticStageResult({ failedAnchors, cancelledAnchors, timeoutAnchors });
 }
 
 function recordSemanticFailure(
   state: { timeout: boolean; errorCode?: string },
   error: unknown
-): void {
+): SemanticFailureKind {
   const classified = classifySemanticError(error);
   state.errorCode = classified.code;
   state.timeout ||= classified.code === "DEADLINE_EXCEEDED";
   if (!isExpectedSemanticOutcome(classified.code)) {
     console.error(`[codex-java-lsp] semantic stage failed code=${classified.code} ${classified.message}`);
   }
+  if (classified.code === "DEADLINE_EXCEEDED") return "timeout";
+  if (classified.code === "CANCELLED") return "cancelled";
+  return "failed";
 }
 
 function recordSemanticBudgetExpiry(state: { timeout: boolean; errorCode?: string }): void {
@@ -148,18 +173,26 @@ function recordSemanticBudgetExpiry(state: { timeout: boolean; errorCode?: strin
   state.errorCode ??= "DEADLINE_EXCEEDED";
 }
 
-export async function semanticVerify(input: SemanticVerifyInput): Promise<void> {
+export async function semanticVerify(input: SemanticVerifyInput): Promise<SemanticStageResult> {
   if (!shouldUseSemanticVerify(input.options, input.semantic, input.session)) {
     input.semantic.verifySkipped = true;
-    return;
+    return semanticStageResult();
   }
   if (input.budget.expired()) {
     input.semantic.verifySkipped = true;
     recordSemanticBudgetExpiry(input.semantic);
-    return;
+    // The seed stage has already recorded the anchors whose work exhausted
+    // the shared request budget. Verification never started, so attributing
+    // this request-level timeout to every anchor would downgrade seed evidence
+    // that completed before another anchor consumed the remaining budget.
+    return semanticStageResult();
   }
   input.semantic.verifyUsed = true;
   const suppressed: SemanticSuppressed = { externalLocations: 0 };
+  const failedAnchors: string[] = [];
+  const cancelledAnchors: string[] = [];
+  const timeoutAnchors: string[] = [];
+  const limitedAnchors: string[] = [];
   // Shared across every anchor in this call: mapSemanticEdgeForPersistence
   // resolves both endpoints of every candidate edge, but every edge from one
   // anchor shares that anchor's source position - memoizing collapses what
@@ -168,9 +201,11 @@ export async function semanticVerify(input: SemanticVerifyInput): Promise<void> 
   // gateway cutover (see v3-iteration-e-status memory).
   const resolveAnchorSymbol = createMemoizedAnchorResolver(input.javaIndex);
   await timed(input.phaseMs, "semanticVerify", async () => {
-    for (const anchor of input.anchors) {
+    for (let anchorIndex = 0; anchorIndex < input.anchors.length; anchorIndex += 1) {
+      const anchor = input.anchors[anchorIndex]!;
       if (input.budget.expired()) {
         recordSemanticBudgetExpiry(input.semantic);
+        timeoutAnchors.push(...input.anchors.slice(anchorIndex).map(candidate => candidate.id));
         break;
       }
       const edgeCandidatesForPersistence: RawSemanticEdgeCandidate[] = [];
@@ -182,7 +217,10 @@ export async function semanticVerify(input: SemanticVerifyInput): Promise<void> 
           false,
           input.budget
         );
-        if (input.budget.expired()) recordSemanticBudgetExpiry(input.semantic);
+        if (input.budget.expired()) {
+          recordSemanticBudgetExpiry(input.semantic);
+          timeoutAnchors.push(anchor.id);
+        }
         const referenceRankingStarted = Date.now();
         const rawLocations: ReferenceLocation[] = [];
         const rawItems = references.items.slice(0, MAX_RAW_REFERENCE_LOCATIONS);
@@ -204,12 +242,13 @@ export async function semanticVerify(input: SemanticVerifyInput): Promise<void> 
         input.semantic.referenceCollapsedFiles += new Set(rawLocations.map(location => location.absolutePath)).size;
         input.semantic.referenceReturnedFiles += rankedFiles.length;
         input.semantic.referenceTruncatedByLimit ||= truncatedRaw;
+        if (truncatedRaw) limitedAnchors.push(anchor.id);
         input.semantic.referenceRankingMs += Date.now() - referenceRankingStarted;
         for (const file of rankedFiles) {
           const candidate = candidateFromRankedReference(file, anchor, input.options, input.repoRoot, input.routingPolicy);
           candidate.confidence = "high";
           candidate.verifiedBy = ["reference"];
-          mergeCandidate(input.candidates, candidate);
+          mergeCandidate(input.candidateMapForAnchor?.(anchor) ?? input.candidates, candidate);
           // maxRawLocations truncation means this outcome did not see every
           // reference JDT has - persisting it as a complete edge would let a
           // later request trust an incomplete reference set from cache.
@@ -245,14 +284,23 @@ export async function semanticVerify(input: SemanticVerifyInput): Promise<void> 
             40,
             input.budget
           );
-          input.semantic.timeout ||= hierarchy.completion === "PARTIAL_TIMEOUT";
+          if (hierarchy.completion === "PARTIAL_TIMEOUT") {
+            input.semantic.timeout = true;
+            timeoutAnchors.push(anchor.id);
+          } else if (hierarchy.completion === "PARTIAL_LIMIT") {
+            limitedAnchors.push(anchor.id);
+          } else if (hierarchy.completion === "CANCELLED") {
+            cancelledAnchors.push(anchor.id);
+          } else if (hierarchy.completion === "FAILED") {
+            failedAnchors.push(anchor.id);
+          }
           for (const edge of hierarchy.edges.slice(0, 40)) {
             const location = hierarchyItemLocation(edge.from);
             const candidate = location ? locationCandidate({ location, reason: "typeHierarchy", anchor, options: input.options, repoRoot: input.repoRoot, routingPolicy: input.routingPolicy, suppressed }) : undefined;
             if (candidate) {
               candidate.confidence = "high";
               candidate.verifiedBy = ["typeHierarchy"];
-              mergeCandidate(input.candidates, candidate);
+              mergeCandidate(input.candidateMapForAnchor?.(anchor) ?? input.candidates, candidate);
               if (candidate.absolutePath !== anchor.absolutePath) {
                 const line = candidate.positions[0]?.line || 1;
                 const column = candidate.positions[0]?.column || 1;
@@ -278,7 +326,10 @@ export async function semanticVerify(input: SemanticVerifyInput): Promise<void> 
           }
         }
       } catch (error) {
-        recordSemanticFailure(input.semantic, error);
+        const failure = recordSemanticFailure(input.semantic, error);
+        if (failure === "timeout") timeoutAnchors.push(anchor.id);
+        else if (failure === "cancelled") cancelledAnchors.push(anchor.id);
+        else failedAnchors.push(anchor.id);
       }
       if (edgeCandidatesForPersistence.length > 0 && !input.budget.expired()) {
         try {
@@ -297,6 +348,21 @@ export async function semanticVerify(input: SemanticVerifyInput): Promise<void> 
     }
   });
   input.semantic.externalLocationsSuppressed += suppressed.externalLocations;
+  return semanticStageResult({ failedAnchors, cancelledAnchors, timeoutAnchors, limitedAnchors });
+}
+
+function semanticStageResult(input: {
+  failedAnchors?: readonly string[];
+  cancelledAnchors?: readonly string[];
+  timeoutAnchors?: readonly string[];
+  limitedAnchors?: readonly string[];
+} = {}): SemanticStageResult {
+  return {
+    failedAnchors: [...new Set(input.failedAnchors ?? [])],
+    cancelledAnchors: [...new Set(input.cancelledAnchors ?? [])],
+    timeoutAnchors: [...new Set(input.timeoutAnchors ?? [])],
+    limitedAnchors: [...new Set(input.limitedAnchors ?? [])]
+  };
 }
 
 function shouldUseSemantic(policy: SemanticPolicy, mode: ImpactMode, anchors: readonly ResolvedAnchor[]): boolean {

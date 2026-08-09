@@ -67,7 +67,12 @@ export function materializeRankedCandidates(
   repoRoot: string
 ): CandidateFile[] {
   const anchorFilesByPath = new Map<string, CandidateFile>();
-  for (const anchor of anchors) {
+  const orderedAnchors = anchors.length <= 1 ? anchors : [...anchors].sort((left, right) =>
+    left.absolutePath.localeCompare(right.absolutePath)
+    || left.line - right.line
+    || left.column - right.column
+    || left.id.localeCompare(right.id));
+  for (const anchor of orderedAnchors) {
     const incoming = candidateFromAnchor(anchor);
     const existing = anchorFilesByPath.get(incoming.absolutePath);
     if (!existing) {

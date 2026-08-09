@@ -177,6 +177,21 @@ test("springAdapter.collect confines method-level endpoint evidence to the ancho
       path.join(root, "src/main/java/demo/FirstResponse.java")
     ]);
     assert.equal((result.metadata as { endpoints?: unknown[] }).endpoints?.length, 1);
+
+    const multiAnchor = await springAdapter.collect(await frameworkContextFor(
+      router,
+      root,
+      [
+        anchor(source, { id: "A1", line: 6, column: 26, kind: "Method", methodName: "first" }),
+        anchor(source, { id: "A2", line: 7, column: 27, kind: "Method", methodName: "second" })
+      ],
+      [source]
+    ));
+    const originByTarget = new Map(multiAnchor.outcome.evidence.map(signal => [path.basename(signal.candidateFile), signal.anchorId]));
+    assert.equal(originByTarget.get("FirstRequest.java"), "A1");
+    assert.equal(originByTarget.get("FirstResponse.java"), "A1");
+    assert.equal(originByTarget.get("SecondRequest.java"), "A2");
+    assert.equal(originByTarget.get("SecondResponse.java"), "A2");
   } finally {
     await router.close();
   }

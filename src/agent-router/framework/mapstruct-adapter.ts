@@ -1,10 +1,8 @@
 // input: FrameworkAdapterContext (bounded FrameworkIndexView + request-scoped anchors/candidates/budget).
 // output: EvidenceSignals linking a @Mapper interface's mapping methods to their
 //         source/target types, and @Mapper(uses = ...) to the mapper classes it delegates to.
-// pos: Task 29 commit 2a/2b. buildMarkerPaths/frameworkSeedFiles/resolveTargets below mirror
-//      spring-adapter.ts's own private helpers of the same name - duplicated, not imported, so
-//      each framework pack stays an independently removable unit (same choice mybatis-adapter.ts
-//      already made). MAPSTRUCT_USES is the one kind needing a technique no other pack uses:
+// pos: Task 29 commit 2a/2b. Framework discovery and bounded index queries use the
+//      request-local shared preflight. MAPSTRUCT_USES is the one kind needing a technique no other pack uses:
 //      FrameworkAnnotation.argumentsText is raw, unparsed source text (confirmed via a real-worker
 //      probe before writing the regex: `"(uses = AddressMapper.class)"` /
 //      `"(uses = {AddressMapper.class, ContactMapper.class})"`, parens included). A dotted capture
@@ -14,15 +12,19 @@
 import path from "node:path";
 import type { EvidenceCompleteness, EvidenceSignal } from "../evidence.js";
 import {
-  MAX_DECLARATION_IDS_PER_CALL,
   type FrameworkAnnotation,
-  type FrameworkDeclarations,
   type FrameworkFileFacts,
   type FrameworkImport,
-  type FrameworkIndexView,
   type FrameworkTypeRef
 } from "../../java-index/framework-index-view.js";
-import { frameworkFactsForFiles, hasStaticStructureEvidence, type FrameworkAdapter, type FrameworkAdapterContext, type FrameworkCollectResult } from "./adapter.js";
+import { frameworkEvidenceOriginIds, frameworkFactsForFiles, type FrameworkAdapter, type FrameworkAdapterContext, type FrameworkCollectResult } from "./adapter.js";
+import {
+  frameworkBuildMarkerPaths,
+  frameworkRepositoryMarkers,
+  frameworkSeedFiles,
+  frameworkStatus,
+  resolveFrameworkTargets
+} from "./shared.js";
 
 export const MAPSTRUCT_ADAPTER_ID = "mapstruct";
 export const MAPSTRUCT_ADAPTER_VERSION = "1";
@@ -47,6 +49,7 @@ type PendingEvidence = {
   targetId: string;
   weight: number;
   detail: string;
+  anchorIds: readonly string[];
 };
 
 function hasAnnotation(annotations: readonly FrameworkAnnotation[], fqn: string): boolean {
@@ -112,33 +115,9 @@ function usesClassLiterals(argumentsText: string): string[] {
   return [...argumentsText.slice(start, end).matchAll(CLASS_LITERAL_PATTERN)].map(item => item[1]!);
 }
 
-// mirrors spring-adapter.ts's frameworkSeedFiles.
-function frameworkSeedFiles(context: FrameworkAdapterContext): Set<string> {
-  const seeds = new Set(context.anchors.map(anchor => anchor.absolutePath));
-  for (const candidate of context.staticEvidence) {
-    if (hasStaticStructureEvidence(candidate)) {
-      seeds.add(candidate.file);
-    }
-  }
-  return seeds;
-}
-
-// mirrors spring-adapter.ts's buildMarkerPaths.
-function buildMarkerPaths(context: FrameworkAdapterContext): string[] {
-  const paths = new Set<string>(BUILD_MARKER_NAMES);
-  for (const source of [...context.anchors.map(anchor => anchor.absolutePath), ...context.candidateFiles]) {
-    const relative = path.relative(context.repoRoot, source).replace(/\\/g, "/");
-    const sourceRootIndex = relative.indexOf("/src/");
-    if (sourceRootIndex <= 0) continue;
-    const moduleRoot = relative.slice(0, sourceRootIndex);
-    for (const marker of BUILD_MARKER_NAMES) paths.add(`${moduleRoot}/${marker}`);
-  }
-  return [...paths];
-}
-
 async function isActive(context: FrameworkAdapterContext): Promise<boolean> {
   if (context.budget.expired()) return false;
-  const buildMarkers = await context.frameworkIndex.repositoryMarkers(buildMarkerPaths(context));
+  const buildMarkers = await frameworkRepositoryMarkers(context, frameworkBuildMarkerPaths(context, BUILD_MARKER_NAMES));
   if ([...buildMarkers.values()].some(content => MAPSTRUCT_DEPENDENCY_PATTERN.test(content))) return true;
   if (context.budget.expired()) return false;
   // Do not scan the complete index just to decide whether this pack runs.
@@ -150,7 +129,7 @@ async function isActive(context: FrameworkAdapterContext): Promise<boolean> {
   if (context.budget.expired()) return false;
   // A partial index cannot prove that MapStruct is absent. Running a bounded pack
   // is safe; treating the absence as definitive would not be.
-  const status = await context.frameworkIndex.frameworkStatus();
+  const status = await frameworkStatus(context);
   return status.coverage !== "complete";
 }
 
@@ -170,34 +149,9 @@ function mappingMethodTouchesAnchor(method: { parameters: readonly { type: Frame
     || typeTouchesAnchor(method.returnType, anchorTypeFqns);
 }
 
-// mirrors spring-adapter.ts's resolveTargets.
-async function resolveTargets(
-  frameworkIndex: FrameworkIndexView,
-  targetIds: readonly string[],
-  context: FrameworkAdapterContext
-): Promise<{ declarations: FrameworkDeclarations; timedOut: boolean }> {
-  const types: FrameworkDeclarations["types"] = [];
-  const methods: FrameworkDeclarations["methods"] = [];
-  const fields: FrameworkDeclarations["fields"] = [];
-  const missingIds: string[] = [];
-  let truncated = false;
-  for (let offset = 0; offset < targetIds.length; offset += MAX_DECLARATION_IDS_PER_CALL) {
-    if (context.budget.expired()) {
-      return { declarations: { types, methods, fields, missingIds, truncated }, timedOut: true };
-    }
-    const result = await frameworkIndex.declarationsById(targetIds.slice(offset, offset + MAX_DECLARATION_IDS_PER_CALL));
-    types.push(...result.types);
-    methods.push(...result.methods);
-    fields.push(...result.fields);
-    missingIds.push(...result.missingIds);
-    truncated = truncated || result.truncated;
-  }
-  return { declarations: { types, methods, fields, missingIds, truncated }, timedOut: false };
-}
-
 async function collect(context: FrameworkAdapterContext): Promise<FrameworkCollectResult> {
   const startedAt = Date.now();
-  const status = await context.frameworkIndex.frameworkStatus();
+  const status = await frameworkStatus(context);
   const completeness: EvidenceCompleteness = status.coverage === "complete" ? "COMPLETE" : status.coverage === "degraded" ? "UNKNOWN" : "PARTIAL";
   const diagnostics: string[] = [];
   let timedOut = context.budget.expired();
@@ -237,7 +191,8 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
             sourceFile: absolutePath,
             targetId,
             weight: MAPSTRUCT_USES_WEIGHT,
-            detail: `${type.simpleName} @Mapper(uses = ...)`
+            detail: `${type.simpleName} @Mapper(uses = ...)`,
+            anchorIds: frameworkEvidenceOriginIds(context, absolutePath)
           });
         }
         for (const method of factsForFile.methods) {
@@ -259,7 +214,8 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
               sourceFile: absolutePath,
               targetId: `type:${parameter.type.resolvedFqn}`,
               weight: kind === "MAPSTRUCT_TARGET" ? MAPSTRUCT_TARGET_WEIGHT : MAPSTRUCT_SOURCE_WEIGHT,
-              detail: `${type.simpleName}.${method.name}(${parameter.name})`
+              detail: `${type.simpleName}.${method.name}(${parameter.name})`,
+              anchorIds: frameworkEvidenceOriginIds(context, absolutePath, method.range)
             });
           }
           if (method.returnType?.resolvedFqn) {
@@ -268,7 +224,8 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
               sourceFile: absolutePath,
               targetId: `type:${method.returnType.resolvedFqn}`,
               weight: MAPSTRUCT_TARGET_WEIGHT,
-              detail: `${type.simpleName}.${method.name}() return type`
+              detail: `${type.simpleName}.${method.name}() return type`,
+              anchorIds: frameworkEvidenceOriginIds(context, absolutePath, method.range)
             });
           }
         }
@@ -279,36 +236,37 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
   const targetIds = [...new Set(pending.map(item => item.targetId))];
   const resolved = timedOut || targetIds.length === 0
     ? { declarations: { types: [], methods: [], fields: [], missingIds: [], truncated: false }, timedOut }
-    : await resolveTargets(context.frameworkIndex, targetIds, context);
+    : await resolveFrameworkTargets(context, targetIds);
   timedOut = timedOut || resolved.timedOut;
   const relativePathByTypeId = new Map(resolved.declarations.types.map(type => [type.typeId, type.relativePath]));
 
   const evidence: EvidenceSignal[] = [];
-  const anchorId = context.anchors[0]?.id ?? "A1";
   let signalSeq = 0;
   for (const item of pending) {
     const relativePath = relativePathByTypeId.get(item.targetId);
     if (!relativePath) continue;
     const targetAbsolutePath = path.resolve(context.repoRoot, relativePath);
-    signalSeq += 1;
-    evidence.push({
-      signalId: `${MAPSTRUCT_ADAPTER_ID}:${signalSeq}`,
-      candidateFile: targetAbsolutePath,
-      anchorId,
-      kind: item.kind,
-      family: "FRAMEWORK",
-      provenance: "FRAMEWORK_INFERRED",
-      confidence: CONFIDENCE,
-      completeness,
-      weight: item.weight,
-      sourceFile: item.sourceFile,
-      positions: [],
-      providerId: MAPSTRUCT_ADAPTER_ID,
-      providerVersion: MAPSTRUCT_ADAPTER_VERSION,
-      generation: context.generation,
-      detail: item.detail,
-      candidateMetadata: { categories: ["framework"], reasons: [item.kind], verifiedBy: [item.kind], matchCount: 0 }
-    });
+    for (const anchorId of item.anchorIds) {
+      signalSeq += 1;
+      evidence.push({
+        signalId: `${MAPSTRUCT_ADAPTER_ID}:${signalSeq}`,
+        candidateFile: targetAbsolutePath,
+        anchorId,
+        kind: item.kind,
+        family: "FRAMEWORK",
+        provenance: "FRAMEWORK_INFERRED",
+        confidence: CONFIDENCE,
+        completeness,
+        weight: item.weight,
+        sourceFile: item.sourceFile,
+        positions: [],
+        providerId: MAPSTRUCT_ADAPTER_ID,
+        providerVersion: MAPSTRUCT_ADAPTER_VERSION,
+        generation: context.generation,
+        detail: item.detail,
+        candidateMetadata: { categories: ["framework"], reasons: [item.kind], verifiedBy: [item.kind], matchCount: 0 }
+      });
+    }
   }
 
   if (resolved.declarations.truncated) diagnostics.push(`mapstruct adapter: declarationsById truncated while resolving ${targetIds.length} evidence targets`);

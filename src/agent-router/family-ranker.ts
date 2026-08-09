@@ -87,7 +87,7 @@ export function familyContribution(
 
 export type RankContext = {
   readonly policy: FamilyRankPolicy;
-  readonly anchorModule?: string;
+  readonly anchorModules?: readonly string[];
   readonly crossModulePolicy?: "auto" | "focused" | "all";
   readonly testReadMode?: "defer" | "include" | "priority";
 };
@@ -139,6 +139,7 @@ export function confidenceLabel(
  */
 export function rankCandidates(candidates: readonly CandidateEvidence[], context: RankContext): CandidateEvidence[] {
   const policy = context.policy;
+  const anchorModules = new Set(context.anchorModules ?? []);
   const scored = candidates.map(candidate => {
     const familyScores: Partial<Record<EvidenceFamily, number>> = {};
     for (const family of ALL_FAMILIES) {
@@ -149,14 +150,14 @@ export function rankCandidates(candidates: readonly CandidateEvidence[], context
     }
     const familySum = ALL_FAMILIES.reduce((sum, family) => sum + (familyScores[family] ?? 0), 0);
     const sourceSetDelta = policy.sourceSetDelta[candidate.sourceSet ?? "unknown"] ?? 0;
-    const sameModule = context.anchorModule !== undefined && candidate.module === context.anchorModule;
+    const sameModule = candidate.module !== undefined && anchorModules.has(candidate.module);
     // No focus-module exemption here: a focus-module candidate already earns
     // its TASK_CONTEXT family contribution above. Exempting it from this
     // penalty too would score the same signal through two channels - the
     // single-evidence-channel requirement this ranker exists to enforce.
-    const crossModulePenalty = context.anchorModule !== undefined
+    const crossModulePenalty = anchorModules.size > 0
       && candidate.module !== undefined
-      && candidate.module !== context.anchorModule
+      && !sameModule
       && context.crossModulePolicy !== "all"
       ? policy.crossModulePenalty
       : 0;

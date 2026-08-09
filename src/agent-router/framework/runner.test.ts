@@ -85,15 +85,25 @@ test("merges evidence/metadata across active adapters and skips an inactive one 
   assert.equal(result.outcome.completion, "COMPLETE");
 });
 
-test("an adapter whose isActive() throws is skipped, fail-soft, and does not stop other adapters", async () => {
-  const throwingIsActive = fakeAdapter({ id: "broken-active", isActive: async () => { throw new Error("boom"); } });
+test("an adapter whose isActive() throws runs conservatively, degrades, and does not stop later adapters", async () => {
+  let conservativeCollectCalls = 0;
+  const throwingIsActive = fakeAdapter({
+    id: "broken-active",
+    isActive: async () => { throw new Error("boom"); },
+    collect: async () => {
+      conservativeCollectCalls += 1;
+      return { ...emptyResult(), metadata: { conservative: true } };
+    }
+  });
   const ranAfter = fakeAdapter({ id: "after", collect: async () => ({ ...emptyResult(), metadata: { ran: true } }) });
 
   const result = await runFrameworkAdapters([throwingIsActive, ranAfter], context());
 
   assert.ok(result.diagnostics.some(d => d.includes("broken-active") && d.includes("isActive")));
-  assert.deepEqual(result.metadata, { after: { ran: true } });
-  assert.equal(result.outcome.completion, "COMPLETE", "a broken isActive() must not degrade completion - it never produced a result to be partial");
+  assert.ok(result.diagnostics.some(d => d.includes("broken-active") && d.includes("conservatively")));
+  assert.equal(conservativeCollectCalls, 1);
+  assert.deepEqual(result.metadata, { "broken-active": { conservative: true }, after: { ran: true } });
+  assert.equal(result.outcome.completion, "FAILED");
 });
 
 test("an adapter whose collect() throws is skipped, fail-soft, and degrades completion to FAILED", async () => {
@@ -105,6 +115,30 @@ test("an adapter whose collect() throws is skipped, fail-soft, and degrades comp
   assert.ok(result.diagnostics.some(d => d.includes("broken-collect") && d.includes("collect")));
   assert.deepEqual(result.metadata, { after: { ran: true } }, "one adapter's crash must not prevent a later adapter from running");
   assert.equal(result.outcome.completion, "FAILED");
+});
+
+test("an unavailable shared framework status runs conservatively and cannot report COMPLETE", async () => {
+  const frameworkIndex = {
+    frameworkStatus: async () => { throw new Error("worker unavailable"); }
+  } as unknown as FrameworkIndexView;
+  let collectCalls = 0;
+  const statusConsumer = fakeAdapter({
+    id: "status-consumer",
+    isActive: async ctx => {
+      assert.deepEqual(await ctx.preflight!.status(), { coverage: "degraded" });
+      return true;
+    },
+    collect: async () => {
+      collectCalls += 1;
+      return emptyResult();
+    }
+  });
+
+  const result = await runFrameworkAdapters([statusConsumer], context({ frameworkIndex }));
+
+  assert.equal(collectCalls, 1);
+  assert.equal(result.outcome.completion, "FAILED");
+  assert.ok(result.diagnostics.some(message => message.includes("status unavailable")));
 });
 
 test("a deadline that is already expired stops the loop before the first adapter and marks PARTIAL_TIMEOUT", async () => {

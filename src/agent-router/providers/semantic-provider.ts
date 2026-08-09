@@ -56,9 +56,10 @@ function liveSemanticWeightBonus(rawReason: string): number {
 
 export async function collectPersistedSemanticEvidence(input: ProviderInput): Promise<ProviderOutcome> {
   const startedAt = Date.now();
-  const candidates = new Map<string, CandidateFile>();
-  await timed(input.phaseMs, "persistedSemantic", async () => collectPersistedSemanticCandidates({
-    candidates,
+  const candidatesByAnchor = new Map(input.anchors.map(anchor => [anchor.id, new Map<string, CandidateFile>()]));
+  const persistedResult = await timed(input.phaseMs, "persistedSemantic", async () => collectPersistedSemanticCandidates({
+    candidates: new Map<string, CandidateFile>(),
+    candidateMapForAnchor: anchor => candidatesByAnchor.get(anchor.id)!,
     anchors: input.anchors,
     options: input.options,
     repoRoot: input.repoRoot,
@@ -68,43 +69,55 @@ export async function collectPersistedSemanticEvidence(input: ProviderInput): Pr
     generation: input.generation,
     metrics: input.metrics.persistedSemantic
   }));
-  const touched = [...candidates.values()].filter(isTouchedCandidate);
-  const anchorId = input.anchors[0]?.id ?? "A1";
-  const evidence: EvidenceSignal[] = touched.map(candidate => {
-    const rawKind = (candidate.verifiedBy?.[0] ?? "persisted").replace(/^persisted-/, "");
-    return {
-      signalId: nextSignalId(SEMANTIC_PROVIDER_ID),
-      candidateFile: candidate.absolutePath,
-      anchorId,
-      kind: rawKind.toUpperCase(),
-      family: "EXACT_SEMANTIC" as const,
-      provenance: "PERSISTED_JDT" as const,
-      confidence: 0.9,
-      completeness: "COMPLETE" as const,
-      weight: persistedEdgeWeightBonus(rawKind),
-      sourceFile: candidate.absolutePath,
-      positions: candidate.positions,
-      providerId: SEMANTIC_PROVIDER_ID,
-      providerVersion: SEMANTIC_PROVIDER_VERSION,
-      generation: input.generation,
-      detail: candidate.verifiedBy?.[0],
-      candidateMetadata: candidateMetadata(candidate)
-    };
-  });
+  const evidence: EvidenceSignal[] = input.anchors.flatMap(anchor =>
+    [...(candidatesByAnchor.get(anchor.id)?.values() ?? [])]
+      .filter(isTouchedCandidate)
+      .flatMap(candidate => semanticReasons(candidate, "persisted").map((detail, reasonIndex) => {
+        const rawKind = detail.replace(/^persisted-/, "");
+        return {
+          signalId: nextSignalId(SEMANTIC_PROVIDER_ID),
+          candidateFile: candidate.absolutePath,
+          anchorId: anchor.id,
+          kind: rawKind.toUpperCase(),
+          family: "EXACT_SEMANTIC" as const,
+          provenance: "PERSISTED_JDT" as const,
+          confidence: 0.9,
+          completeness: "COMPLETE" as const,
+          weight: persistedEdgeWeightBonus(rawKind),
+          sourceFile: candidate.absolutePath,
+          positions: candidate.positions,
+          providerId: SEMANTIC_PROVIDER_ID,
+          providerVersion: SEMANTIC_PROVIDER_VERSION,
+          generation: input.generation,
+          detail,
+          candidateMetadata: candidateMetadata(candidate, {
+            reasons: [detail],
+            verifiedBy: [detail],
+            matchCount: reasonIndex === 0 ? candidate.matchCount : 0
+          })
+        };
+      }))
+  );
   return {
     providerId: SEMANTIC_PROVIDER_ID,
     providerVersion: SEMANTIC_PROVIDER_VERSION,
     evidence,
-    completion: "COMPLETE",
-    elapsedMs: Date.now() - startedAt
+    completion: persistedResult.failedAnchors.length > 0 ? "FAILED" : "COMPLETE",
+    elapsedMs: Date.now() - startedAt,
+    ...(persistedResult.failedAnchors.length === 0 ? {} : {
+      degradation: `persisted semantic failed for anchors: ${persistedResult.failedAnchors.join(", ")}`
+    })
   };
 }
 
 export async function collectLiveSemanticEvidence(input: ProviderInput): Promise<ProviderOutcome> {
   const startedAt = Date.now();
-  const candidates = new Map<string, CandidateFile>();
-  await collectSemanticSeed({
-    candidates,
+  const candidatesByAnchor = new Map(input.anchors.map(anchor => [anchor.id, new Map<string, CandidateFile>()]));
+  const fallbackCandidates = new Map<string, CandidateFile>();
+  const candidateMapForAnchor = (anchor: (typeof input.anchors)[number]) => candidatesByAnchor.get(anchor.id)!;
+  const seedResult = await collectSemanticSeed({
+    candidates: fallbackCandidates,
+    candidateMapForAnchor,
     anchors: input.anchors,
     options: input.options,
     semantic: input.metrics.semantic,
@@ -114,8 +127,9 @@ export async function collectLiveSemanticEvidence(input: ProviderInput): Promise
     routingPolicy: input.routingPolicy,
     budget: input.budget
   });
-  await semanticVerify({
-    candidates,
+  const verifyResult = await semanticVerify({
+    candidates: fallbackCandidates,
+    candidateMapForAnchor,
     anchors: input.anchors,
     options: input.options,
     semantic: input.metrics.semantic,
@@ -129,41 +143,60 @@ export async function collectLiveSemanticEvidence(input: ProviderInput): Promise
     buildFingerprint: input.buildFingerprint,
     generation: input.generation
   });
-  const touched = [...candidates.values()].filter(isTouchedCandidate);
-  const anchorId = input.anchors[0]?.id ?? "A1";
-  const evidence: EvidenceSignal[] = touched.map(candidate => {
-    const rawReason = candidate.reasons[0] ?? "reference";
-    return {
-      signalId: nextSignalId(SEMANTIC_PROVIDER_ID),
-      candidateFile: candidate.absolutePath,
-      anchorId,
-      kind: rawReason.toUpperCase(),
-      family: "EXACT_SEMANTIC" as const,
-      provenance: "JDT_EXACT" as const,
-      confidence: 0.95,
-      completeness: input.metrics.semantic.timeout
-        || (rawReason === "reference" && input.metrics.semantic.referenceTruncatedByLimit)
-        ? "PARTIAL" as const
-        : "COMPLETE" as const,
-      weight: liveSemanticWeightBonus(rawReason),
-      sourceFile: candidate.absolutePath,
-      positions: candidate.positions,
-      providerId: SEMANTIC_PROVIDER_ID,
-      providerVersion: SEMANTIC_PROVIDER_VERSION,
-      generation: input.generation,
-      detail: candidate.reasons[0],
-      candidateMetadata: candidateMetadata(candidate)
-    };
-  });
+  const failedAnchors = [...new Set([...seedResult.failedAnchors, ...verifyResult.failedAnchors])];
+  const cancelledAnchors = [...new Set([...seedResult.cancelledAnchors, ...verifyResult.cancelledAnchors])];
+  const timeoutAnchors = [...new Set([...seedResult.timeoutAnchors, ...verifyResult.timeoutAnchors])];
+  const limitedAnchors = [...new Set([...seedResult.limitedAnchors, ...verifyResult.limitedAnchors])];
+  const partialAnchors = new Set([...failedAnchors, ...cancelledAnchors, ...timeoutAnchors, ...limitedAnchors]);
+  const evidence: EvidenceSignal[] = input.anchors.flatMap(anchor =>
+    [...(candidatesByAnchor.get(anchor.id)?.values() ?? [])]
+      .filter(isTouchedCandidate)
+      .flatMap(candidate => semanticReasons(candidate, "reference").map((rawReason, reasonIndex) => {
+        const verifiedBy = candidate.verifiedBy?.find(detail => detail === rawReason || detail === `semantic-${rawReason}`)
+          ?? rawReason;
+        return {
+          signalId: nextSignalId(SEMANTIC_PROVIDER_ID),
+          candidateFile: candidate.absolutePath,
+          anchorId: anchor.id,
+          kind: rawReason.toUpperCase(),
+          family: "EXACT_SEMANTIC" as const,
+          provenance: "JDT_EXACT" as const,
+          confidence: 0.95,
+          completeness: partialAnchors.has(anchor.id) ? "PARTIAL" as const : "COMPLETE" as const,
+          weight: liveSemanticWeightBonus(rawReason),
+          sourceFile: candidate.absolutePath,
+          positions: candidate.positions,
+          providerId: SEMANTIC_PROVIDER_ID,
+          providerVersion: SEMANTIC_PROVIDER_VERSION,
+          generation: input.generation,
+          detail: rawReason,
+          candidateMetadata: candidateMetadata(candidate, {
+            reasons: [rawReason],
+            verifiedBy: [verifiedBy],
+            matchCount: reasonIndex === 0 ? candidate.matchCount : 0
+          })
+        };
+      }))
+  );
   return {
     providerId: SEMANTIC_PROVIDER_ID,
     providerVersion: SEMANTIC_PROVIDER_VERSION,
     evidence,
-    completion: input.metrics.semantic.timeout
-      ? "PARTIAL_TIMEOUT"
-      : input.metrics.semantic.referenceTruncatedByLimit
-        ? "PARTIAL_LIMIT"
-        : "COMPLETE",
-    elapsedMs: Date.now() - startedAt
+    completion: failedAnchors.length > 0
+      ? "FAILED"
+      : cancelledAnchors.length > 0
+        ? "CANCELLED"
+        : timeoutAnchors.length > 0 || input.metrics.semantic.timeout
+          ? "PARTIAL_TIMEOUT"
+          : limitedAnchors.length > 0 || input.metrics.semantic.referenceTruncatedByLimit
+            ? "PARTIAL_LIMIT"
+            : "COMPLETE",
+    elapsedMs: Date.now() - startedAt,
+    ...(failedAnchors.length === 0 ? {} : { degradation: `semantic failed for anchors: ${failedAnchors.join(", ")}` })
   };
+}
+
+function semanticReasons(candidate: CandidateFile, fallback: string): string[] {
+  const reasons = [...new Set(candidate.reasons.filter(Boolean))];
+  return reasons.length > 0 ? reasons : [fallback];
 }

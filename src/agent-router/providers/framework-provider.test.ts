@@ -71,6 +71,51 @@ test("collectFrameworkEvidence with the default adapters adds no evidence for a 
   assert.equal(result.outcome.completion, "COMPLETE");
 });
 
+test("default adapters share one framework status, build-marker, and bounded facts preflight", async () => {
+  const calls = { status: 0, markers: 0, factMarkers: 0, facts: 0 };
+  const frameworkIndex: FrameworkIndexView = {
+    ...fakeFrameworkIndex(),
+    frameworkFactsForFiles: async () => {
+      calls.facts += 1;
+      return [];
+    },
+    repositoryMarkers: async () => {
+      calls.markers += 1;
+      return new Map();
+    },
+    repositoryFactMarkers: async () => {
+      calls.factMarkers += 1;
+      return { importPrefixFound: false, annotationPrefixFound: false };
+    },
+    frameworkStatus: async () => {
+      calls.status += 1;
+      return { coverage: "complete" };
+    }
+  };
+
+  const result = await collectFrameworkEvidence(input({ frameworkIndex }));
+
+  assert.deepEqual(result.outcome.evidence, []);
+  assert.deepEqual(calls, { status: 1, markers: 1, factMarkers: 2, facts: 1 });
+});
+
+test("a marker failure runs adapters conservatively and cannot report COMPLETE", async () => {
+  let markerCalls = 0;
+  const frameworkIndex: FrameworkIndexView = {
+    ...fakeFrameworkIndex(),
+    repositoryMarkers: async () => {
+      markerCalls += 1;
+      throw new Error("marker worker unavailable");
+    }
+  };
+
+  const result = await collectFrameworkEvidence(input({ frameworkIndex }));
+
+  assert.equal(result.outcome.completion, "FAILED");
+  assert.ok(markerCalls >= 3, "each adapter gets a bounded retry after the request-local failure is evicted");
+  assert.ok(result.diagnostics.some(message => message.includes("conservatively")));
+});
+
 test("collectFrameworkEvidence maps ProviderInput fields onto FrameworkAdapterContext for an injected adapter", async () => {
   let seenContext: FrameworkAdapterContext | undefined;
   const capturingAdapter: FrameworkAdapter = {

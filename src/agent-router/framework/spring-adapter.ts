@@ -1,19 +1,25 @@
 import path from "node:path";
 import type { EvidenceCompleteness, EvidenceSignal } from "../evidence.js";
 import {
-  MAX_DECLARATION_IDS_PER_CALL,
   MAX_FRAMEWORK_CALLEE_METHODS,
   type FrameworkCallees,
-  type FrameworkDeclarations,
   type FrameworkFileFacts,
-  type FrameworkIndexView,
   type FrameworkMethodDeclaration,
   type FrameworkTypeDeclaration,
   type FrameworkTypeRef
 } from "../../java-index/framework-index-view.js";
 import type { SourceRange } from "../../runtime/source-range.js";
 import type { TypeResolutionStrategy } from "../../java-index/index-types.js";
-import { frameworkFactsForFiles, hasStaticStructureEvidence, type FrameworkAdapter, type FrameworkAdapterContext, type FrameworkCollectResult } from "./adapter.js";
+import { frameworkEvidenceOriginIds, frameworkFactsForFiles, type FrameworkAdapter, type FrameworkAdapterContext, type FrameworkCollectResult } from "./adapter.js";
+import {
+  frameworkBuildMarkerPaths,
+  frameworkRepositoryFactMarkers,
+  frameworkRepositoryMarkers,
+  frameworkSeedFiles,
+  frameworkStatus,
+  rankableFrameworkMethods,
+  resolveFrameworkTargets
+} from "./shared.js";
 import {
   hasAnnotation,
   isController,
@@ -82,6 +88,7 @@ type PendingEvidence = {
   weight: number;
   confidence: number;
   detail: string;
+  sourceRange?: SourceRange;
 };
 
 type TypeContext = {
@@ -96,61 +103,24 @@ type TypeContext = {
   controller: boolean;
 };
 
-function frameworkSeedFiles(context: FrameworkAdapterContext): Set<string> {
-  const seeds = new Set(context.anchors.map(anchor => anchor.absolutePath));
-  for (const candidate of context.staticEvidence) {
-    if (hasStaticStructureEvidence(candidate)) {
-      seeds.add(candidate.file);
-    }
-  }
-  return seeds;
-}
-
-function isMethodAnchor(anchor: FrameworkAdapterContext["anchors"][number], absolutePath: string): boolean {
-  return anchor.absolutePath === absolutePath && anchor.kind.toLowerCase() === "method";
-}
-
-function rankableMethodsFor(
-  context: FrameworkAdapterContext,
-  absolutePath: string,
-  methods: readonly FrameworkMethodDeclaration[]
-): FrameworkMethodDeclaration[] {
-  const methodAnchors = context.anchors.filter(anchor => isMethodAnchor(anchor, absolutePath));
-  if (methodAnchors.length === 0) return [...methods];
-  return methods.filter(method => methodAnchors.some(anchor =>
-    method.range.start.line <= anchor.line && anchor.line <= method.range.end.line));
-}
-
 function typeRefConfidence(type: FrameworkTypeRef, resolvedBaseConfidence: number): number {
   const fallback = type.strategy ? FALLBACK_STRATEGY_CONFIDENCE[type.strategy] : undefined;
   return fallback !== undefined ? fallback * 0.95 : resolvedBaseConfidence;
 }
 
-function buildMarkerPaths(context: FrameworkAdapterContext): string[] {
-  const paths = new Set<string>(BUILD_MARKER_NAMES);
-  for (const source of [...context.anchors.map(anchor => anchor.absolutePath), ...context.candidateFiles]) {
-    const relative = path.relative(context.repoRoot, source).replace(/\\/g, "/");
-    const sourceRootIndex = relative.indexOf("/src/");
-    if (sourceRootIndex <= 0) continue;
-    const moduleRoot = relative.slice(0, sourceRootIndex);
-    for (const marker of BUILD_MARKER_NAMES) paths.add(`${moduleRoot}/${marker}`);
-  }
-  return [...paths];
-}
-
 async function isActive(context: FrameworkAdapterContext): Promise<boolean> {
   if (context.budget.expired()) return false;
-  const buildMarkers = await context.frameworkIndex.repositoryMarkers(buildMarkerPaths(context));
+  const buildMarkers = await frameworkRepositoryMarkers(context, frameworkBuildMarkerPaths(context, BUILD_MARKER_NAMES));
   if ([...buildMarkers.values()].some(content => SPRING_DEPENDENCY_PATTERN.test(content))) return true;
   if (context.budget.expired()) return false;
-  const factMarkers = await context.frameworkIndex.repositoryFactMarkers({
+  const factMarkers = await frameworkRepositoryFactMarkers(context, {
     importPrefixes: ["org.springframework."],
     annotationPrefixes: ["org.springframework."]
   });
   if (factMarkers.importPrefixFound || factMarkers.annotationPrefixFound) return true;
   // A partial index cannot prove that Spring is absent. Running a bounded pack
   // is safe; treating the absence as definitive would not be.
-  const status = await context.frameworkIndex.frameworkStatus();
+  const status = await frameworkStatus(context);
   return status.coverage !== "complete";
 }
 
@@ -204,33 +174,9 @@ function candidateType(type: FrameworkTypeRef | undefined): FrameworkTypeRef | u
   return type;
 }
 
-async function resolveTargets(
-  frameworkIndex: FrameworkIndexView,
-  targetIds: readonly string[],
-  context: FrameworkAdapterContext
-): Promise<{ declarations: FrameworkDeclarations; timedOut: boolean }> {
-  const types: FrameworkDeclarations["types"] = [];
-  const methods: FrameworkDeclarations["methods"] = [];
-  const fields: FrameworkDeclarations["fields"] = [];
-  const missingIds: string[] = [];
-  let truncated = false;
-  for (let offset = 0; offset < targetIds.length; offset += MAX_DECLARATION_IDS_PER_CALL) {
-    if (context.budget.expired()) {
-      return { declarations: { types, methods, fields, missingIds, truncated }, timedOut: true };
-    }
-    const result = await frameworkIndex.declarationsById(targetIds.slice(offset, offset + MAX_DECLARATION_IDS_PER_CALL));
-    types.push(...result.types);
-    methods.push(...result.methods);
-    fields.push(...result.fields);
-    missingIds.push(...result.missingIds);
-    truncated = truncated || result.truncated;
-  }
-  return { declarations: { types, methods, fields, missingIds, truncated }, timedOut: false };
-}
-
 async function collect(context: FrameworkAdapterContext): Promise<FrameworkCollectResult> {
   const startedAt = Date.now();
-  const status = await context.frameworkIndex.frameworkStatus();
+  const status = await frameworkStatus(context);
   const completeness: EvidenceCompleteness = status.coverage === "complete" ? "COMPLETE" : status.coverage === "degraded" ? "UNKNOWN" : "PARTIAL";
   const pending: PendingEvidence[] = [];
   const endpoints: SpringEndpointFact[] = [];
@@ -261,7 +207,7 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
           absolutePath,
           type,
           methods,
-          rankableMethods: rankableMethodsFor(context, absolutePath, methods),
+          rankableMethods: rankableFrameworkMethods(context, absolutePath, methods),
           fields: factsForFile.fields.filter(field => field.ownerTypeId === type.typeId),
           typeAnnotations,
           stereotype: isStereotype(typeAnnotations),
@@ -281,7 +227,7 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
     : await context.frameworkIndex.resolvedCalleesFor(callMethodIds.slice(0, MAX_FRAMEWORK_CALLEE_METHODS), CALLEES_LIMIT);
   if (!timedOut && context.budget.expired()) timedOut = true;
 
-  const publishedEvents = new Map<string, string>();
+  const publishedEvents = new Map<string, Array<{ sourceFile: string; sourceRange: SourceRange }>>();
   for (const typeContext of typeContexts) {
     if (timedOut || context.budget.expired()) {
       timedOut = true;
@@ -296,7 +242,7 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
       const constructor = injectingConstructorOf(methods, factsForFile);
       for (const parameter of constructor?.parameters ?? []) {
         if (!parameter.type.resolvedFqn) continue;
-        pending.push({ kind: "SPRING_INJECTION", sourceFile: absolutePath, targetId: `type:${parameter.type.resolvedFqn}`, weight: SPRING_INJECTION_WEIGHT, confidence: typeRefConfidence(parameter.type, 0.97), detail: `${type.simpleName} constructor parameter` });
+        pending.push({ kind: "SPRING_INJECTION", sourceFile: absolutePath, sourceRange: constructor!.range, targetId: `type:${parameter.type.resolvedFqn}`, weight: SPRING_INJECTION_WEIGHT, confidence: typeRefConfidence(parameter.type, 0.97), detail: `${type.simpleName} constructor parameter` });
       }
       for (const field of fields) {
         if (!hasAnnotation(annotationsOf(factsForFile, field.annotations), SPRING_AUTOWIRED_FQN) || !field.type.resolvedFqn) continue;
@@ -315,11 +261,11 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
         endpoints.push(composeEndpointFact(method.methodId, classMapping, methodMapping));
         const responseType = candidateType(method.returnType);
         if (responseType?.resolvedFqn) {
-          pending.push({ kind: "SPRING_RESPONSE_TYPE", sourceFile: absolutePath, targetId: `type:${responseType.resolvedFqn}`, weight: SPRING_RESPONSE_TYPE_WEIGHT, confidence: typeRefConfidence(responseType, RESOLVED_TYPE_BASE_CONFIDENCE), detail: `${type.simpleName}.${method.name}() response type` });
+          pending.push({ kind: "SPRING_RESPONSE_TYPE", sourceFile: absolutePath, sourceRange: method.range, targetId: `type:${responseType.resolvedFqn}`, weight: SPRING_RESPONSE_TYPE_WEIGHT, confidence: typeRefConfidence(responseType, RESOLVED_TYPE_BASE_CONFIDENCE), detail: `${type.simpleName}.${method.name}() response type` });
         }
         const requestBody = method.parameters.find(parameter => hasAnnotation(annotationsOf(factsForFile, parameter.annotations), SPRING_REQUEST_BODY_FQN));
         if (requestBody?.type.resolvedFqn) {
-          pending.push({ kind: "SPRING_REQUEST_BODY", sourceFile: absolutePath, targetId: `type:${requestBody.type.resolvedFqn}`, weight: SPRING_REQUEST_BODY_WEIGHT, confidence: typeRefConfidence(requestBody.type, RESOLVED_TYPE_BASE_CONFIDENCE), detail: `${type.simpleName}.${method.name}() @RequestBody` });
+          pending.push({ kind: "SPRING_REQUEST_BODY", sourceFile: absolutePath, sourceRange: method.range, targetId: `type:${requestBody.type.resolvedFqn}`, weight: SPRING_REQUEST_BODY_WEIGHT, confidence: typeRefConfidence(requestBody.type, RESOLVED_TYPE_BASE_CONFIDENCE), detail: `${type.simpleName}.${method.name}() @RequestBody` });
         }
       }
 
@@ -327,17 +273,17 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
       if (hasAnnotation(methodAnnotations, SPRING_BEAN_FQN)) {
         const beanType = candidateType(method.returnType);
         if (beanType?.resolvedFqn) {
-          pending.push({ kind: "SPRING_BEAN_PRODUCES", sourceFile: absolutePath, targetId: `type:${beanType.resolvedFqn}`, weight: SPRING_BEAN_PRODUCES_WEIGHT, confidence: typeRefConfidence(beanType, RESOLVED_TYPE_BASE_CONFIDENCE), detail: `@Bean ${type.simpleName}.${method.name}()` });
+          pending.push({ kind: "SPRING_BEAN_PRODUCES", sourceFile: absolutePath, sourceRange: method.range, targetId: `type:${beanType.resolvedFqn}`, weight: SPRING_BEAN_PRODUCES_WEIGHT, confidence: typeRefConfidence(beanType, RESOLVED_TYPE_BASE_CONFIDENCE), detail: `@Bean ${type.simpleName}.${method.name}()` });
         }
         for (const parameter of method.parameters) {
           if (!parameter.type.resolvedFqn) continue;
-          pending.push({ kind: "SPRING_BEAN_DEPENDS_ON", sourceFile: absolutePath, targetId: `type:${parameter.type.resolvedFqn}`, weight: SPRING_BEAN_DEPENDS_ON_WEIGHT, confidence: typeRefConfidence(parameter.type, RESOLVED_TYPE_BASE_CONFIDENCE), detail: `@Bean ${type.simpleName}.${method.name}() parameter` });
+          pending.push({ kind: "SPRING_BEAN_DEPENDS_ON", sourceFile: absolutePath, sourceRange: method.range, targetId: `type:${parameter.type.resolvedFqn}`, weight: SPRING_BEAN_DEPENDS_ON_WEIGHT, confidence: typeRefConfidence(parameter.type, RESOLVED_TYPE_BASE_CONFIDENCE), detail: `@Bean ${type.simpleName}.${method.name}() parameter` });
         }
       }
       if (hasAnnotation(methodAnnotations, SPRING_EVENT_LISTENER_FQN)) {
         const eventType = method.parameters[0]?.type;
         if (eventType?.resolvedFqn) {
-          pending.push({ kind: "SPRING_CONSUMES_EVENT", sourceFile: absolutePath, targetId: `type:${eventType.resolvedFqn}`, weight: SPRING_CONSUMES_EVENT_WEIGHT, confidence: typeRefConfidence(eventType, RESOLVED_TYPE_BASE_CONFIDENCE), detail: `${type.simpleName}.${method.name}() consumes event` });
+          pending.push({ kind: "SPRING_CONSUMES_EVENT", sourceFile: absolutePath, sourceRange: method.range, targetId: `type:${eventType.resolvedFqn}`, weight: SPRING_CONSUMES_EVENT_WEIGHT, confidence: typeRefConfidence(eventType, RESOLVED_TYPE_BASE_CONFIDENCE), detail: `${type.simpleName}.${method.name}() consumes event` });
         }
       }
 
@@ -350,13 +296,15 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
         if (!receiver?.resolvedFqn || callSite.receiverDeclaredType?.resolvedFqn !== receiver.resolvedFqn) continue;
         const matchingCalls = calleeResult.callees.filter(edge => edge.kind === "CALLS" && sameRange(edge.range, callSite.range));
         if (matchingCalls.length === 1 && !calleeResult.truncated) {
-          pending.push({ kind: "SPRING_CALL_PATH", sourceFile: absolutePath, targetId: matchingCalls[0]!.targetId, weight: SPRING_CALL_PATH_WEIGHT, confidence: matchingCalls[0]!.confidence, detail: `${type.simpleName}.${method.name}() injected call path` });
+          pending.push({ kind: "SPRING_CALL_PATH", sourceFile: absolutePath, sourceRange: method.range, targetId: matchingCalls[0]!.targetId, weight: SPRING_CALL_PATH_WEIGHT, confidence: matchingCalls[0]!.confidence, detail: `${type.simpleName}.${method.name}() injected call path` });
         }
         if (callSite.name !== "publishEvent" || callSite.arity !== 1 || receiver.resolvedFqn !== SPRING_APPLICATION_EVENT_PUBLISHER_FQN) continue;
         const eventType = callSite.argumentTypeHints[0];
         if (!eventType?.resolvedFqn) continue;
-        pending.push({ kind: "SPRING_PUBLISHES_EVENT", sourceFile: absolutePath, targetId: `type:${eventType.resolvedFqn}`, weight: SPRING_PUBLISHES_EVENT_WEIGHT, confidence: typeRefConfidence(eventType, RESOLVED_TYPE_BASE_CONFIDENCE), detail: `${type.simpleName}.${method.name}() publishes event` });
-        publishedEvents.set(eventType.resolvedFqn, absolutePath);
+        pending.push({ kind: "SPRING_PUBLISHES_EVENT", sourceFile: absolutePath, sourceRange: method.range, targetId: `type:${eventType.resolvedFqn}`, weight: SPRING_PUBLISHES_EVENT_WEIGHT, confidence: typeRefConfidence(eventType, RESOLVED_TYPE_BASE_CONFIDENCE), detail: `${type.simpleName}.${method.name}() publishes event` });
+        const publishers = publishedEvents.get(eventType.resolvedFqn) ?? [];
+        publishers.push({ sourceFile: absolutePath, sourceRange: method.range });
+        publishedEvents.set(eventType.resolvedFqn, publishers);
       }
     }
   }
@@ -385,45 +333,48 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
       const annotationFacts = hydrated ? annotationsOf(hydrated.factsForFile, hydrated.method.annotations) : listener.annotations;
       const eventType = listener.parameters[0]?.type;
       if (!eventType?.resolvedFqn || !publishedEvents.has(eventType.resolvedFqn) || !hasAnnotation(annotationFacts, SPRING_EVENT_LISTENER_FQN)) continue;
-      pending.push({ kind: "SPRING_EVENT_LISTENER", sourceFile: publishedEvents.get(eventType.resolvedFqn)!, targetId: listener.methodId, weight: SPRING_EVENT_LISTENER_WEIGHT, confidence: typeRefConfidence(eventType, RESOLVED_TYPE_BASE_CONFIDENCE), detail: `listener for ${eventType.resolvedFqn}` });
+      for (const published of publishedEvents.get(eventType.resolvedFqn) ?? []) {
+        pending.push({ kind: "SPRING_EVENT_LISTENER", sourceFile: published.sourceFile, sourceRange: published.sourceRange, targetId: listener.methodId, weight: SPRING_EVENT_LISTENER_WEIGHT, confidence: typeRefConfidence(eventType, RESOLVED_TYPE_BASE_CONFIDENCE), detail: `listener for ${eventType.resolvedFqn}` });
+      }
     }
   }
 
   const targetIds = [...new Set(pending.map(item => item.targetId))];
   const resolved = timedOut
     ? { declarations: { types: [], methods: [], fields: [], missingIds: [], truncated: false }, timedOut: true }
-    : await resolveTargets(context.frameworkIndex, targetIds, context);
+    : await resolveFrameworkTargets(context, targetIds);
   timedOut = timedOut || resolved.timedOut;
   const relativePathById = new Map<string, string>();
   for (const type of resolved.declarations.types) relativePathById.set(type.typeId, type.relativePath);
   for (const method of resolved.declarations.methods) relativePathById.set(method.methodId, method.relativePath);
 
   const evidence: EvidenceSignal[] = [];
-  const anchorId = context.anchors[0]?.id ?? "A1";
   let signalSeq = 0;
   for (const item of pending) {
     const relativePath = relativePathById.get(item.targetId);
     if (!relativePath) continue;
     const targetAbsolutePath = path.resolve(context.repoRoot, relativePath);
-    signalSeq += 1;
-    evidence.push({
-      signalId: `${SPRING_ADAPTER_ID}:${signalSeq}`,
-      candidateFile: targetAbsolutePath,
-      anchorId,
-      kind: item.kind,
-      family: "FRAMEWORK",
-      provenance: "FRAMEWORK_INFERRED",
-      confidence: item.confidence,
-      completeness,
-      weight: item.weight,
-      sourceFile: item.sourceFile,
-      positions: [],
-      providerId: SPRING_ADAPTER_ID,
-      providerVersion: SPRING_ADAPTER_VERSION,
-      generation: context.generation,
-      detail: item.detail,
-      candidateMetadata: { categories: ["framework"], reasons: [item.kind], verifiedBy: [item.kind], matchCount: 0 }
-    });
+    for (const anchorId of frameworkEvidenceOriginIds(context, item.sourceFile, item.sourceRange)) {
+      signalSeq += 1;
+      evidence.push({
+        signalId: `${SPRING_ADAPTER_ID}:${signalSeq}`,
+        candidateFile: targetAbsolutePath,
+        anchorId,
+        kind: item.kind,
+        family: "FRAMEWORK",
+        provenance: "FRAMEWORK_INFERRED",
+        confidence: item.confidence,
+        completeness,
+        weight: item.weight,
+        sourceFile: item.sourceFile,
+        positions: [],
+        providerId: SPRING_ADAPTER_ID,
+        providerVersion: SPRING_ADAPTER_VERSION,
+        generation: context.generation,
+        detail: item.detail,
+        candidateMetadata: { categories: ["framework"], reasons: [item.kind], verifiedBy: [item.kind], matchCount: 0 }
+      });
+    }
   }
 
   if (resolved.declarations.truncated) diagnostics.push(`spring adapter: declarationsById truncated while resolving ${targetIds.length} evidence targets`);

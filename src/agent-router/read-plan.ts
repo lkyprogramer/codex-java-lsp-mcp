@@ -41,6 +41,7 @@ const PROTECTED_CORE_KINDS = new Set([
   "typeGraph:implementation-lookup",
   "SPRING_INJECTION",
   "SPRING_CALL_PATH",
+  "MYBATIS_NAMESPACE",
   "MYBATIS_STATEMENT_METHOD"
 ]);
 
@@ -240,14 +241,14 @@ function shortlistCandidates(
   };
   // Anchors and protected core cannot be displaced before the byte-aware pass.
   ordered.filter(file => isAnchor(file, options)).forEach(add);
-  const protectedCandidates = ordered
+  const protectedCandidates = coverageFirst(ordered
     .filter(file => !isAnchor(file, options)
       && !isDeferredTest(file, options)
       && (isProtectedCore(file, options) || protectedPaths.has(file.absolutePath)))
     .sort((left, right) =>
       protectedCorePriority(right, options) - protectedCorePriority(left, options)
       || right.score - left.score
-      || left.absolutePath.localeCompare(right.absolutePath));
+      || left.absolutePath.localeCompare(right.absolutePath)), file => file, options);
   protectedCandidates.forEach(add);
   const omittedProtected = protectedCandidates.filter(file => !selected.has(file.absolutePath)).length;
   // Preserve early representation for each evidence bucket, but never force
@@ -366,8 +367,34 @@ function selectTokenAwarePlan(
     protectedCorePriority(right.file, options) - protectedCorePriority(left.file, options)
     || compareUtilityAndDensity(protectedUtility(left), left.bytes, protectedUtility(right), right.bytes, coreUsesByteDensity)
     || left.file.absolutePath.localeCompare(right.file.absolutePath));
+  if (options.anchors.length > 1) {
+    const uncovered = new Set(stableAnchorEntries(options).map(entry => entry.id));
+    while (uncovered.size > 0) {
+      let best: CandidateWindow | undefined;
+      let bestCoverage = 0;
+      for (const window of core) {
+        if (!canAdd(window)) continue;
+        const coverage = [...protectedAnchorIds(window.file, options)].filter(id => uncovered.has(id)).length;
+        if (coverage > bestCoverage) {
+          best = window;
+          bestCoverage = coverage;
+        }
+      }
+      if (!best) break;
+      add(best, protectedUtility(best));
+      for (const id of protectedAnchorIds(best.file, options)) uncovered.delete(id);
+    }
+  }
   for (const window of core) {
     if (canAdd(window)) add(window, protectedUtility(window));
+  }
+  if (options.anchors.length > 1) {
+    for (const anchor of stableAnchorEntries(options)) {
+      const attributed = core.filter(window => protectedAnchorIds(window.file, options).has(anchor.id));
+      if (attributed.length > 0 && !attributed.some(window => selectedPaths.has(window.file.absolutePath))) {
+        evidenceGaps.push(`Protected core coverage omitted for anchor ${anchor.file}: read-plan limits.`);
+      }
+    }
   }
   if (core.some(window => !selectedPaths.has(window.file.absolutePath))) {
     evidenceGaps.push("Protected core exceeded read-plan limits; lower-value core files were omitted.");
@@ -626,6 +653,54 @@ function isProtectedCoreEvidence(
   if (arrow <= 0) return false;
   const source = evidence.sourceTarget.slice(0, arrow);
   return options.anchors.some((anchor, index) => source === `A${index + 1}:${anchor.file}`);
+}
+
+function protectedAnchorIds(
+  file: CandidateFile,
+  options: Pick<ImpactOptions, "anchors">
+): Set<string> {
+  const valid = new Set(options.anchors.map((_, index) => `A${index + 1}`));
+  return new Set((file.plannerEvidence ?? [])
+    .filter(evidence => isProtectedCoreEvidence(evidence, options))
+    .map(evidence => /^(A[1-9]\d*)(?=:|->)/.exec(evidence.sourceTarget)?.[1])
+    .filter((id): id is string => id !== undefined && valid.has(id)));
+}
+
+function stableAnchorEntries(options: Pick<ImpactOptions, "anchors">): Array<{ id: string; file: string }> {
+  return options.anchors
+    .map((anchor, index) => ({ id: `A${index + 1}`, ...anchor }))
+    .sort((left, right) => left.file.localeCompare(right.file)
+      || left.line - right.line
+      || left.column - right.column
+      || (left.role ?? "").localeCompare(right.role ?? ""));
+}
+
+function coverageFirst<T>(
+  values: readonly T[],
+  fileOf: (value: T) => CandidateFile,
+  options: Pick<ImpactOptions, "anchors">
+): T[] {
+  if (options.anchors.length <= 1) return [...values];
+  const remainingAnchors = new Set(stableAnchorEntries(options).map(anchor => anchor.id));
+  const remainingValues = [...values];
+  const selected: T[] = [];
+  while (remainingAnchors.size > 0) {
+    let bestIndex = -1;
+    let bestCoverage = 0;
+    for (let index = 0; index < remainingValues.length; index += 1) {
+      const coverage = [...protectedAnchorIds(fileOf(remainingValues[index]!), options)]
+        .filter(id => remainingAnchors.has(id)).length;
+      if (coverage > bestCoverage) {
+        bestIndex = index;
+        bestCoverage = coverage;
+      }
+    }
+    if (bestIndex < 0) break;
+    const [next] = remainingValues.splice(bestIndex, 1);
+    selected.push(next!);
+    for (const id of protectedAnchorIds(fileOf(next!), options)) remainingAnchors.delete(id);
+  }
+  return [...selected, ...remainingValues];
 }
 
 function bucketOf(file: CandidateFile, options: ImpactOptions, protectedPaths: ReadonlySet<string>): ReadPlanBucket {
