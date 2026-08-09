@@ -167,6 +167,13 @@ export class FakeJdtlsConnection implements JdtlsConnection {
   emitNotification(method: string, params: unknown): void {
     this.notificationHandlers.get(method)?.(params);
   }
+
+  /** Drive a server-to-client request, e.g. workspace/configuration. */
+  async emitRequest(method: string, params: unknown): Promise<unknown> {
+    const handler = this.requestHandlers.get(method);
+    if (!handler) throw new Error(`No fake request handler for ${method}`);
+    return await handler(params);
+  }
 }
 
 export type FakeAttemptOptions = {

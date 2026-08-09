@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
+import { JavaIndexRpcTelemetryCollector } from "../agent-router/impact-metrics.js";
 import type { JavaIndexStatus } from "./index-types.js";
 import { JavaIndexClient, type WorkerLike } from "./java-index-client.js";
 import { RouterJavaIndex } from "./router-java-index.js";
@@ -30,7 +31,7 @@ function validStatus(generation: number): JavaIndexStatus {
 }
 
 class FakeWorker implements WorkerLike {
-  readonly posted: Array<{ id: number; type: string }> = [];
+  readonly posted: Array<{ id: number; type: string; telemetry?: true }> = [];
   terminations = 0;
   private readonly listeners: {
     message: Array<(value: unknown) => void>;
@@ -39,7 +40,7 @@ class FakeWorker implements WorkerLike {
   } = { message: [], error: [], exit: [] };
 
   postMessage(value: unknown): void {
-    this.posted.push(value as { id: number; type: string });
+    this.posted.push(value as { id: number; type: string; telemetry?: true });
   }
 
   on(event: "message" | "error" | "exit", listener: (value: never) => void): this {
@@ -136,6 +137,40 @@ test("two out-of-order responses resolve correct promises", async () => {
   const [statusResult, anchorResult] = await Promise.all([statusPromise, anchorPromise]);
   assert.equal(statusResult.state, "READY");
   assert.equal(anchorResult, undefined);
+});
+
+test("request-local telemetry records JSON bytes and worker-local queue/processing timing", async () => {
+  const { client, worker } = await openedClient();
+  const telemetry = new JavaIndexRpcTelemetryCollector();
+  const statusPromise = client.status({ telemetry });
+  await flushMicrotasks();
+  const statusMessage = worker.posted[1]!;
+  assert.equal(statusMessage.telemetry, true);
+  worker.emitMessage({
+    id: statusMessage.id,
+    ok: true,
+    value: validStatus(1),
+    timing: { queueDepthAtEnqueue: 2, queueMs: 3, processingMs: 5 }
+  });
+  await statusPromise;
+
+  const metrics = telemetry.snapshot().operations.STATUS!;
+  assert.equal(metrics.count, 1);
+  assert.ok(metrics.inputJsonBytes > 0);
+  assert.ok(metrics.outputJsonBytes > 0);
+  assert.equal(metrics.outputMeasuredCount, 1);
+  assert.equal(metrics.completed, 1);
+  assert.equal(metrics.workerQueue?.measuredCount, 1);
+  assert.equal(metrics.workerQueue?.totalMs, 3);
+  assert.equal(metrics.workerProcessing?.totalMs, 5);
+  assert.equal(metrics.maxWorkerQueueDepth, 2);
+
+  const unmeasured = client.status();
+  await flushMicrotasks();
+  const ordinaryMessage = worker.posted[2]!;
+  assert.equal(ordinaryMessage.telemetry, undefined, "ordinary requests retain the legacy lean envelope");
+  worker.emitMessage({ id: ordinaryMessage.id, ok: true, value: validStatus(1) });
+  await unmeasured;
 });
 
 test("QUERY_TYPES sends one worker command and validates ordered lookup results", async () => {
@@ -306,6 +341,52 @@ test("a cancelled query rejects deterministically and drops its late response wi
   assert.equal(client.localStatus().state, "READY", "a late response for a cancelled request must not mutate client state");
 });
 
+test("cancel telemetry records one terminal outcome and separately accounts for the late worker response", async () => {
+  const { client, worker } = await openedClient();
+  const telemetry = new JavaIndexRpcTelemetryCollector();
+  const controller = new AbortController();
+  const pending = client.queryAnchor("A.java", 1, 1, { signal: controller.signal, telemetry });
+  await flushMicrotasks();
+  const query = worker.posted[1]!;
+
+  controller.abort();
+  await assert.rejects(pending, (error: unknown) => error instanceof JavaIntelligenceError && error.code === "CANCELLED");
+  worker.emitMessage({
+    id: query.id,
+    ok: true,
+    value: undefined,
+    timing: { queueDepthAtEnqueue: 1, queueMs: 1, processingMs: 2 }
+  });
+
+  const metrics = telemetry.snapshot().operations.QUERY_ANCHOR!;
+  assert.equal(metrics.count, 1);
+  assert.equal(metrics.cancelled, 1);
+  assert.equal(metrics.completed, 0, "a late response must not double-settle the cancelled caller");
+  assert.equal(metrics.lateResponses, 1);
+  assert.equal(metrics.outputMeasuredCount, 1);
+  assert.equal(worker.terminations, 0);
+});
+
+test("deadline telemetry distinguishes the triggering RPC from other requests retired with its worker", async () => {
+  const { client, worker } = await openedClient();
+  const telemetry = new JavaIndexRpcTelemetryCollector();
+  const anchor = client.queryAnchor("A.java", 1, 1, {
+    budget: DeadlineBudget.fromTimeout(20),
+    telemetry
+  });
+  const status = client.status({ budget: DeadlineBudget.fromTimeout(200), telemetry });
+  await flushMicrotasks();
+
+  await assert.rejects(anchor, (error: unknown) => error instanceof JavaIntelligenceError && error.code === "DEADLINE_EXCEEDED");
+  await assert.rejects(status, (error: unknown) => error instanceof JavaIntelligenceError && error.code === "DEADLINE_EXCEEDED");
+  const snapshot = telemetry.snapshot().operations;
+  assert.equal(snapshot.QUERY_ANCHOR?.deadlineExceeded, 1);
+  assert.equal(snapshot.QUERY_ANCHOR?.retireReasons.DEADLINE_EXCEEDED, 1);
+  assert.equal(snapshot.STATUS?.retired, 1);
+  assert.equal(snapshot.STATUS?.retireReasons.DEADLINE_EXCEEDED, 1);
+  assert.equal(worker.terminations, 1);
+});
+
 test("after an unexpected exit, the next request restarts the worker exactly once", async () => {
   const workers: FakeWorker[] = [];
   const client = new JavaIndexClient("/repo", "/cache", () => {
@@ -348,6 +429,23 @@ test("client opens a real worker thread, reaches READY, and closes cleanly", asy
   assert.equal((await client.status()).state, "READY");
   await client.close();
   assert.equal(client.localStatus().state, "CLOSED");
+});
+
+test("a real worker returns non-negative timing only for an opted-in request", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "java-index-client-telemetry-"));
+  const cacheDir = mkdtempSync(path.join(tmpdir(), "java-index-client-telemetry-cache-"));
+  const telemetry = new JavaIndexRpcTelemetryCollector();
+  const client = new JavaIndexClient(repoRoot, cacheDir);
+  try {
+    await client.open(1, {}, { telemetry });
+    const metrics = telemetry.snapshot().operations.OPEN!;
+    assert.equal(metrics.completed, 1);
+    assert.equal(metrics.workerQueue?.measuredCount, 1);
+    assert.ok((metrics.workerQueue?.totalMs ?? -1) >= 0);
+    assert.ok((metrics.workerProcessing?.totalMs ?? -1) >= 0);
+  } finally {
+    await client.close();
+  }
 });
 
 test("REFRESH end-to-end through a real worker thread: reads, parses, extracts, and QUERY_FILES returns the facts; deletion clears them", async () => {
@@ -419,11 +517,13 @@ test("QUERY_READ_RANGES returns exact UTF-8 Java/XML/fallback windows in one wor
   ].join("\n");
   const fallbackPath = path.join(repoRoot, "notes.txt");
   const crlfFallbackPath = path.join(repoRoot, "notes-crlf.txt");
+  const emojiFallbackPath = path.join(repoRoot, "emoji.txt");
   writeFileSync(javaPath, javaSource);
   writeFileSync(xmlPath, xmlSource);
   writeFileSync(fallbackPath, "first\nsecond\nthird\n");
   const crlfFallbackSource = "first\r\nsecond\r\nthird";
   writeFileSync(crlfFallbackPath, crlfFallbackSource);
+  writeFileSync(emojiFallbackPath, "a😀b");
 
   const client = new JavaIndexClient(repoRoot, cacheDir);
   try {
@@ -434,7 +534,8 @@ test("QUERY_READ_RANGES returns exact UTF-8 Java/XML/fallback windows in one wor
       { file: javaPath, positions: [{ line: 4, column: 3 }, { line: secondMethodLine, column: 3 }] },
       { file: xmlPath, positions: [{ line: 2, column: 3 }] },
       { file: fallbackPath, positions: [{ line: 2, column: 1 }] },
-      { file: crlfFallbackPath, positions: [{ line: 2, column: 1 }] }
+      { file: crlfFallbackPath, positions: [{ line: 2, column: 1 }] },
+      { file: emojiFallbackPath, positions: [{ line: 1, column: 2 }] }
     ]);
 
     const javaRanges = results.find(result => result.file === javaPath)!.ranges;
@@ -450,10 +551,16 @@ test("QUERY_READ_RANGES returns exact UTF-8 Java/XML/fallback windows in one wor
     for (let index = 0; index < javaSource.length; index += 1) if (javaSource.charCodeAt(index) === 10) lineStarts.push(index + 1);
     const expectedBytes = Buffer.byteLength(javaSource.slice(lineStarts[javaRangeWithCjk.startLine - 1], lineStarts[javaRangeWithCjk.endLine] ?? javaSource.length), "utf8");
     assert.equal(javaRangeWithCjk.estimatedBytes, expectedBytes, "CJK source is accounted in UTF-8 bytes, not JS character count");
+    assert.deepEqual(javaRangeWithCjk.range.start, { line: javaRangeWithCjk.startLine, column: 1 });
+    assert.deepEqual(javaRangeWithCjk.range.end, { line: javaRangeWithCjk.endLine + 1, column: 1 });
 
     const xmlRange = results.find(result => result.file === xmlPath)!.ranges[0]!;
     assert.equal(xmlRange.kind, "xml-statement");
     assert.ok(xmlRange.estimatedBytes > 0);
+    assert.deepEqual(xmlRange.range, {
+      start: { line: xmlRange.startLine, column: 1 },
+      end: { line: xmlRange.endLine + 1, column: 1 }
+    });
     assert.equal(results.find(result => result.file === fallbackPath)!.ranges[0]!.kind, "fallback");
     const crlfFallbackRange = results.find(result => result.file === crlfFallbackPath)!.ranges[0]!;
     assert.equal(crlfFallbackRange.kind, "fallback");
@@ -462,6 +569,16 @@ test("QUERY_READ_RANGES returns exact UTF-8 Java/XML/fallback windows in one wor
       Buffer.byteLength(crlfFallbackSource, "utf8"),
       "CRLF source without a terminal newline is priced in its exact UTF-8 byte representation"
     );
+    assert.deepEqual(crlfFallbackRange.range, {
+      start: { line: 1, column: 1 },
+      end: { line: 3, column: 6 }
+    }, "EOF clamps to the real final UTF-16 position even when the fallback line window extends beyond EOF");
+    const emojiFallbackRange = results.find(result => result.file === emojiFallbackPath)!.ranges[0]!;
+    assert.deepEqual(emojiFallbackRange.range, {
+      start: { line: 1, column: 1 },
+      end: { line: 1, column: 5 }
+    }, "the emoji occupies two UTF-16 code units in the end-exclusive coordinate");
+    assert.equal(emojiFallbackRange.estimatedBytes, Buffer.byteLength("a😀b", "utf8"));
   } finally {
     await client.close();
   }
@@ -509,6 +626,27 @@ test("RouterJavaIndex request scope forwards its absolute deadline to a silent w
   const error = rejectedJavaIntelligenceError(outcome);
   assert.equal(error.code, "DEADLINE_EXCEEDED");
   assert.equal(worker.terminations, 1, "a deadline-wedged worker is retired so a later request can recover");
+});
+
+test("nested RouterJavaIndex request scopes override the child budget while inheriting outer telemetry", async () => {
+  const worker = new FakeWorker();
+  const client = new JavaIndexClient("/repo", "/cache", () => worker);
+  const router = new RouterJavaIndex("/repo", client);
+  const openPromise = router.open(1);
+  worker.emitMessage({ id: worker.posted[0]!.id, ok: true, value: validStatus(1) });
+  await openPromise;
+  const telemetry = new JavaIndexRpcTelemetryCollector();
+
+  const query = router.withRequestOptions({ telemetry, budget: DeadlineBudget.fromTimeout(200) }, () =>
+    router.withRequestOptions({ budget: DeadlineBudget.fromTimeout(100) }, () =>
+      router.queryAnchor("/repo/Anchor.java", 1, 1)));
+  await flushMicrotasks();
+  const message = worker.posted[1]!;
+  assert.equal(message.telemetry, true);
+  worker.emitMessage({ id: message.id, ok: true, value: undefined, timing: { queueDepthAtEnqueue: 0, queueMs: 0, processingMs: 1 } });
+  await query;
+
+  assert.equal(telemetry.snapshot().operations.QUERY_ANCHOR?.completed, 1);
 });
 
 test("RouterJavaIndex does not downgrade a request deadline from routerStatus into a local snapshot", async () => {
@@ -607,6 +745,12 @@ test("QUERY_READ_RANGES bounds an extreme Java method to first and last windows"
     assert.equal(result.extremeMethod, true);
     assert.ok(result.ranges.length >= 2, "extreme method must not become one oversized body range");
     assert.ok(result.ranges.every(range => range.endLine - range.startLine + 1 <= 41));
+    assert.ok(result.ranges.every(range => range.range.start.line === range.startLine));
+    assert.ok(result.ranges.every(range => range.range.end.line > range.range.start.line));
+    assert.deepEqual(
+      result.ranges.map(range => range.range.start.line),
+      [...result.ranges].map(range => range.range.start.line).sort((left, right) => left - right)
+    );
   } finally {
     await client.close();
   }

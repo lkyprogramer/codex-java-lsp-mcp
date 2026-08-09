@@ -1,4 +1,10 @@
 import type { ImpactOptions, ResolvedAnchor } from "../agent-types.js";
+import type {
+  JavaIndexRpcOperation,
+  JavaIndexRpcSettlement,
+  JavaIndexRpcTelemetrySink,
+  JavaIndexWorkerRetireReason
+} from "../java-index/java-index-client.js";
 import type { ImportGraphMetrics } from "./candidate-collectors.js";
 import type { TypeReferenceMetrics } from "./type-reference.js";
 
@@ -31,6 +37,141 @@ export type PersistedSemanticMetrics = {
   addedCandidates: number;
   elapsedMs: number;
 };
+
+export type JavaIndexRpcDurationAggregate = {
+  measuredCount: number;
+  totalMs: number;
+  maxMs: number;
+};
+
+export type JavaIndexRpcOperationMetrics = {
+  count: number;
+  inputJsonBytes: number;
+  outputJsonBytes: number;
+  outputMeasuredCount: number;
+  callerWait: JavaIndexRpcDurationAggregate;
+  workerQueue?: JavaIndexRpcDurationAggregate;
+  workerProcessing?: JavaIndexRpcDurationAggregate;
+  maxWorkerQueueDepth?: number;
+  lateResponseWait?: JavaIndexRpcDurationAggregate;
+  completed: number;
+  cancelled: number;
+  deadlineExceeded: number;
+  failed: number;
+  retired: number;
+  lateResponses: number;
+  retireReasons: Partial<Record<JavaIndexWorkerRetireReason, number>>;
+};
+
+export type JavaIndexRpcMetrics = {
+  enabled: true;
+  payloadBytes: "JSON_UTF8_ENVELOPE_ESTIMATE";
+  operations: Partial<Record<JavaIndexRpcOperation, JavaIndexRpcOperationMetrics>>;
+};
+
+/** Request-local diagnostic collector. Sink failures are contained by JavaIndexClient. */
+export class JavaIndexRpcTelemetryCollector implements JavaIndexRpcTelemetrySink {
+  private readonly operations = new Map<JavaIndexRpcOperation, JavaIndexRpcOperationMetrics>();
+
+  requestStarted(event: { operation: JavaIndexRpcOperation; inputJsonBytes: number }): void {
+    const metrics = this.forOperation(event.operation);
+    metrics.count += 1;
+    metrics.inputJsonBytes += nonNegative(event.inputJsonBytes);
+  }
+
+  requestSettled(event: JavaIndexRpcSettlement): void {
+    const metrics = this.forOperation(event.operation);
+    addDuration(metrics.callerWait, event.callerWaitMs);
+    if (event.outputJsonBytes !== undefined) {
+      metrics.outputJsonBytes += nonNegative(event.outputJsonBytes);
+      metrics.outputMeasuredCount += 1;
+    }
+    if (event.workerTiming) {
+      metrics.workerQueue ??= emptyDuration();
+      metrics.workerProcessing ??= emptyDuration();
+      addDuration(metrics.workerQueue, event.workerTiming.queueMs);
+      addDuration(metrics.workerProcessing, event.workerTiming.processingMs);
+      metrics.maxWorkerQueueDepth = Math.max(
+        metrics.maxWorkerQueueDepth ?? 0,
+        event.workerTiming.queueDepthAtEnqueue
+      );
+    }
+    metrics[event.outcome] += 1;
+    if (event.retireReason) {
+      metrics.retireReasons[event.retireReason] = (metrics.retireReasons[event.retireReason] ?? 0) + 1;
+    }
+  }
+
+  lateResponse(event: Omit<JavaIndexRpcSettlement, "outcome">): void {
+    const metrics = this.forOperation(event.operation);
+    metrics.lateResponses += 1;
+    metrics.lateResponseWait ??= emptyDuration();
+    addDuration(metrics.lateResponseWait, event.callerWaitMs);
+    if (event.outputJsonBytes !== undefined) {
+      metrics.outputJsonBytes += nonNegative(event.outputJsonBytes);
+      metrics.outputMeasuredCount += 1;
+    }
+    if (event.workerTiming) {
+      metrics.workerQueue ??= emptyDuration();
+      metrics.workerProcessing ??= emptyDuration();
+      addDuration(metrics.workerQueue, event.workerTiming.queueMs);
+      addDuration(metrics.workerProcessing, event.workerTiming.processingMs);
+      metrics.maxWorkerQueueDepth = Math.max(
+        metrics.maxWorkerQueueDepth ?? 0,
+        event.workerTiming.queueDepthAtEnqueue
+      );
+    }
+  }
+
+  snapshot(): JavaIndexRpcMetrics {
+    return {
+      enabled: true,
+      payloadBytes: "JSON_UTF8_ENVELOPE_ESTIMATE",
+      operations: Object.fromEntries(
+        [...this.operations.entries()]
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([operation, metrics]) => [operation, structuredClone(metrics)])
+      )
+    };
+  }
+
+  private forOperation(operation: JavaIndexRpcOperation): JavaIndexRpcOperationMetrics {
+    let metrics = this.operations.get(operation);
+    if (!metrics) {
+      metrics = {
+        count: 0,
+        inputJsonBytes: 0,
+        outputJsonBytes: 0,
+        outputMeasuredCount: 0,
+        callerWait: emptyDuration(),
+        completed: 0,
+        cancelled: 0,
+        deadlineExceeded: 0,
+        failed: 0,
+        retired: 0,
+        lateResponses: 0,
+        retireReasons: {}
+      };
+      this.operations.set(operation, metrics);
+    }
+    return metrics;
+  }
+}
+
+function emptyDuration(): JavaIndexRpcDurationAggregate {
+  return { measuredCount: 0, totalMs: 0, maxMs: 0 };
+}
+
+function addDuration(target: JavaIndexRpcDurationAggregate, value: number): void {
+  const duration = nonNegative(value);
+  target.measuredCount += 1;
+  target.totalMs += duration;
+  target.maxMs = Math.max(target.maxMs, duration);
+}
+
+function nonNegative(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, value) : 0;
+}
 
 type SessionCacheSnapshot = {
   entries: number;

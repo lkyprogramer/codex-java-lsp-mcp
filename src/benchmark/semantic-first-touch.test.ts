@@ -143,8 +143,10 @@ test("runAttempt counts only real in-repository locations as repo-contained", as
   assert.equal(attempt.repoContainedFiles, 1);
   assert.equal(attempt.outsideRepoFiles, 1);
   assert.equal(attempt.suppressedLocations, 1);
-  assert.equal(attempt.cacheHit, "unavailable");
-  assert.equal(attempt.shared, "unavailable");
+  assert.equal(attempt.cacheHit.status, "UNMEASURED");
+  assert.equal(attempt.shared.status, "UNMEASURED");
+  assert.equal(attempt.jdtTelemetry.status, "UNMEASURED");
+  assert.equal(attempt.criticalPath.gate, "PASS");
   assert.equal((attempt as unknown as { backendSettlement: string }).backendSettlement, "unavailable");
 });
 
@@ -166,6 +168,7 @@ test("runAttempt buckets cancellation settlement observed for its own operation"
   );
 
   assert.equal(attempt.backendSettlement, "within_1s");
+  assert.equal(attempt.criticalPath.gate, "PASS");
   assert.deepEqual(attempt.sessionPhaseMs, {
     ensureStart: 12,
     "textDocument/definition": 100,

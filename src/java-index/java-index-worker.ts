@@ -162,11 +162,37 @@ let ownSnapshotVerificationStale = false;
 let ownSnapshotVerificationPromise: Promise<void> = Promise.resolve();
 let queuedReconcileAfterSnapshotVerification: number | undefined;
 
-const foregroundQueue: JavaIndexRequest[] = [];
+type ForegroundQueueEntry = {
+  request: JavaIndexRequest;
+  enqueuedAtMs: number;
+  queueDepthAtEnqueue: number;
+};
+const foregroundQueue: ForegroundQueueEntry[] = [];
 let drainingForeground = false;
 let runningBackground = false;
+let activeForegroundTiming:
+  | {
+      requestId: number;
+      queueDepthAtEnqueue: number;
+      queueMs: number;
+      processingStartedAtMs: number;
+      enabled: boolean;
+    }
+  | undefined;
 
 function respond(response: JavaIndexResponse): void {
+  const timing = activeForegroundTiming;
+  if (timing?.enabled && timing.requestId === response.id) {
+    parentPort?.postMessage({
+      ...response,
+      timing: {
+        queueDepthAtEnqueue: timing.queueDepthAtEnqueue,
+        queueMs: timing.queueMs,
+        processingMs: Math.max(0, performance.now() - timing.processingStartedAtMs)
+      }
+    });
+    return;
+  }
   parentPort?.postMessage(response);
 }
 
@@ -259,6 +285,7 @@ function deriveSourceLayout(
 const EXTREME_METHOD_LINES = 300;
 const EXTREME_METHOD_WINDOW_LINES = 40;
 const READ_RANGE_MERGE_GAP_LINES = 3;
+type UnlocatedReadRange = Omit<IndexedReadRange, "range">;
 
 /**
  * One worker-side round trip computes the AST/XML windows and their exact
@@ -289,6 +316,7 @@ async function queryReadRanges(
       const starts = lineStartOffsets(content);
       const ranges = mergeWorkerReadRanges(unmerged).map(range => ({
         ...range,
+        range: sourceRangeForLines(content, starts, range.startLine, range.endLine),
         estimatedBytes: utf8BytesForLines(content, starts, range.startLine, range.endLine)
       }));
       return { file: request.file, ranges, ...(java.extremeMethod ? { extremeMethod: true } : {}) };
@@ -317,8 +345,8 @@ async function resolvedPathWithinRepo(absolutePath: string): Promise<string | un
   return resolvedFile;
 }
 
-function javaReadRanges(bundle: JavaFileBundle, positions: SourcePosition[]): { ranges: IndexedReadRange[]; extremeMethod: boolean } {
-  const ranges: IndexedReadRange[] = [];
+function javaReadRanges(bundle: JavaFileBundle, positions: SourcePosition[]): { ranges: UnlocatedReadRange[]; extremeMethod: boolean } {
+  const ranges: UnlocatedReadRange[] = [];
   const headerTypes = new Set<string>();
   let extremeMethod = false;
   for (const position of positions) {
@@ -367,8 +395,8 @@ function javaReadRanges(bundle: JavaFileBundle, positions: SourcePosition[]): { 
 function xmlReadRanges(
   resource: NonNullable<ReturnType<JavaIndexStore["myBatisResource"]>>,
   positions: SourcePosition[]
-): IndexedReadRange[] {
-  const ranges: IndexedReadRange[] = [];
+): UnlocatedReadRange[] {
+  const ranges: UnlocatedReadRange[] = [];
   for (const position of positions) {
     const statement = resource.statements.find(item => item.range && rangeContainsLine(item.range, position.line));
     if (statement?.range) {
@@ -403,7 +431,7 @@ function rangeContainsLine(range: SourceRange, line: number): boolean {
   return range.start.line <= line && line <= range.end.line;
 }
 
-function typeHeaderRange(range: SourceRange): IndexedReadRange {
+function typeHeaderRange(range: SourceRange): UnlocatedReadRange {
   return {
     startLine: range.start.line,
     endLine: Math.min(range.end.line, range.start.line + 12),
@@ -412,7 +440,7 @@ function typeHeaderRange(range: SourceRange): IndexedReadRange {
   };
 }
 
-function fallbackReadRange(position: SourcePosition): IndexedReadRange {
+function fallbackReadRange(position: SourcePosition): UnlocatedReadRange {
   return {
     startLine: Math.max(1, position.line - 10),
     endLine: Math.max(1, position.line + 22),
@@ -421,8 +449,8 @@ function fallbackReadRange(position: SourcePosition): IndexedReadRange {
   };
 }
 
-function mergeWorkerReadRanges(ranges: IndexedReadRange[]): IndexedReadRange[] {
-  const merged: IndexedReadRange[] = [];
+function mergeWorkerReadRanges(ranges: UnlocatedReadRange[]): UnlocatedReadRange[] {
+  const merged: UnlocatedReadRange[] = [];
   for (const current of [...ranges].sort((left, right) => left.startLine - right.startLine || left.endLine - right.endLine)) {
     const previous = merged.at(-1);
     if (previous && current.startLine <= previous.endLine + READ_RANGE_MERGE_GAP_LINES + 1) {
@@ -449,6 +477,32 @@ function utf8BytesForLines(content: string, starts: readonly number[], startLine
   const start = starts[Math.min(Math.max(startLine - 1, 0), starts.length - 1)]!;
   const end = endLine < starts.length ? starts[endLine]! : content.length;
   return Buffer.byteLength(content.slice(start, Math.max(start, end)), "utf8");
+}
+
+function sourceRangeForLines(
+  content: string,
+  starts: readonly number[],
+  startLine: number,
+  endLine: number
+): SourceRange {
+  const startOffset = starts[Math.min(Math.max(startLine - 1, 0), starts.length - 1)]!;
+  const endOffset = endLine < starts.length ? starts[endLine]! : content.length;
+  return {
+    start: sourcePositionAtOffset(starts, startOffset),
+    end: sourcePositionAtOffset(starts, Math.max(startOffset, endOffset))
+  };
+}
+
+/** JS string offsets are UTF-16 code units, matching the repository coordinate contract. */
+function sourcePositionAtOffset(starts: readonly number[], offset: number): SourcePosition {
+  let low = 0;
+  let high = starts.length - 1;
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    if (starts[middle]! <= offset) low = middle;
+    else high = middle - 1;
+  }
+  return { line: low + 1, column: offset - starts[low]! + 1 };
 }
 
 function summarizeFiles(): Pick<JavaIndexStatus, "files" | "types" | "methods" | "edges"> {
@@ -1603,7 +1657,21 @@ async function drainForeground(): Promise<void> {
   try {
     while (foregroundQueue.length > 0) {
       const next = foregroundQueue.shift();
-      if (next) await handle(next);
+      if (next) {
+        const processingStartedAtMs = performance.now();
+        activeForegroundTiming = {
+          requestId: next.request.id,
+          queueDepthAtEnqueue: next.queueDepthAtEnqueue,
+          queueMs: Math.max(0, processingStartedAtMs - next.enqueuedAtMs),
+          processingStartedAtMs,
+          enabled: next.request.telemetry === true
+        };
+        try {
+          await handle(next.request);
+        } finally {
+          activeForegroundTiming = undefined;
+        }
+      }
     }
   } finally {
     drainingForeground = false;
@@ -1611,6 +1679,10 @@ async function drainForeground(): Promise<void> {
 }
 
 parentPort?.on("message", (request: JavaIndexRequest) => {
-  foregroundQueue.push(request);
+  foregroundQueue.push({
+    request,
+    enqueuedAtMs: performance.now(),
+    queueDepthAtEnqueue: foregroundQueue.length + (drainingForeground ? 1 : 0)
+  });
   void drainForeground();
 });

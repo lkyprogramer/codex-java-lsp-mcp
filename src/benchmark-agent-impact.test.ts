@@ -244,7 +244,15 @@ test("impact benchmark exposes timing diagnostics", async () => {
       mustHit: ["src/main/java/demo/DemoService.java"],
       taskBlocking: [],
       shouldHit: [],
-      support: []
+      support: [],
+      mustReadRanges: {
+        "src/main/java/demo/DemoService.java": [{ startLine: 3, endLine: 3 }]
+      },
+      mustReadCoordinateRangesV2: [{
+          file: "src/main/java/demo/DemoService.java",
+          start: { line: 3, column: 1 },
+          end: { line: 4, column: 1 }
+        }]
     }
   })}\n`);
 
@@ -258,6 +266,7 @@ test("impact benchmark exposes timing diagnostics", async () => {
     "--strategy", "impact",
     "--runs", "1",
     "--verbosity", "diagnostic",
+    "--payload-projections",
     "--read-plan-max-items", "3",
     "--read-plan-max-bytes", "2048",
     "--index-cache-dir", indexCacheA
@@ -279,6 +288,7 @@ test("impact benchmark exposes timing diagnostics", async () => {
   assert.equal(payload.metadata.prepareJavaIndexStatus.pendingBackground, 0);
   assert.equal(payload.metadata.readPlanMaxItems, 3);
   assert.equal(payload.metadata.readPlanMaxBytes, 2048);
+  assert.equal(payload.metadata.payloadProjections, true);
   assert.ok(attempt.readPlanItems > 1, "the fixture must exercise a multi-file range batch");
   assert.ok(attempt.readPlanFiles > 1);
   assert.ok(attempt.readPlanRanges >= 1);
@@ -286,6 +296,9 @@ test("impact benchmark exposes timing diagnostics", async () => {
   assert.ok(attempt.budgetUtilization > 0 && attempt.budgetUtilization <= 1);
   assert.equal(typeof attempt.budgetExceededByAnchor, "boolean");
   assert.equal(typeof attempt.marginalUtilityBySelectedFile, "object");
+  assert.equal(attempt.RangeLineRecall, 1);
+  assert.equal(attempt.RangeCoordinateRecall, 1);
+  assert.equal(JSON.stringify(attempt).includes("selectedCoordinateRangesByPath"), false);
   assert.equal(attempt.roundTrips, 2, "one impact request and one batched range query replace per-read-plan-item round trips");
   assert.equal(typeof timing.phaseMs, "object");
   assert.equal(timing.semantic.policy, "fast");
@@ -300,7 +313,22 @@ test("impact benchmark exposes timing diagnostics", async () => {
   assert.equal(typeof timing.persistedSemantic, "object");
   assert.equal(typeof timing.persistedSemantic.elapsedMs, "number");
   assert.equal(typeof timing.persistedSemantic.edgesSeen, "number");
+  assert.equal(timing.javaIndex.rpc.enabled, true);
+  assert.equal(timing.javaIndex.rpc.payloadBytes, "JSON_UTF8_ENVELOPE_ESTIMATE");
+  assert.ok(Object.keys(timing.javaIndex.rpc.operations).length > 0);
   assert.equal(typeof attempt.shadowRanking, "object", "diagnostic benchmark attempts must retain opted-in shadow diagnostics");
+  assert.equal(attempt.payloadProjection.canonicalExecutions, 1);
+  assert.equal(typeof attempt.payloadProjectionElapsedMs, "number");
+  assert.ok(attempt.payloadProjectionElapsedMs >= 0);
+  assert.equal(attempt.payloadProjection.defaultToolResponse, "standard");
+  assert.equal(
+    new Set(Object.values(attempt.payloadProjection.projections).map((item: any) => item.candidateReadPlanSha256)).size,
+    1,
+    "all payload projections must come from the same candidate/read-plan result"
+  );
+  for (const projection of Object.values(attempt.payloadProjection.projections) as Array<Record<string, number>>) {
+    assert.equal(projection.serializedBytes, projection.costResultBytes);
+  }
   assert.equal(typeof attempt.shadowQuality, "object", "benchmark must score the shadow candidate and read-plan outputs against the same golden scenario");
   assert.equal(attempt.shadowQuality.rReadMust, 1);
   assert.equal(attempt.determinism.candidatePaths[0], "src/main/java/demo/DemoService.java");

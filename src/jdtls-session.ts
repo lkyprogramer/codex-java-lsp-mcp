@@ -152,6 +152,66 @@ export type JdtlsProgressStatus = {
   lastLanguageStatus?: string;
 };
 
+export type TelemetryObservation<T> =
+  | { status: "MEASURED"; value: T }
+  | { status: "UNMEASURED"; reason: string }
+  | { status: "NOT_APPLICABLE"; reason: string };
+
+export type JdtFirstTouchExecution =
+  | "new-process"
+  | "joined-existing-start"
+  | "reused-ready-session";
+
+export type JdtFirstTouchOperationTrace = {
+  id: number;
+  method: string;
+  callerMs: TelemetryObservation<number>;
+  callerSettlement: TelemetryObservation<"COMPLETE" | "FAILED" | "CANCELLED" | "DEADLINE_EXCEEDED">;
+  backendSettlement: TelemetryObservation<"fulfilled" | "rejected" | "pending">;
+  backendSettlementAfterCallerMs: TelemetryObservation<number>;
+  cancelSentMs: TelemetryObservation<number>;
+  cancelAckMs: TelemetryObservation<number>;
+};
+
+export type JdtFirstTouchSessionTrace = {
+  schemaVersion: "java-intelligence-v32-jdt-first-touch-session/v1";
+  execution: JdtFirstTouchExecution;
+  startup: {
+    filesystemSetupMs: TelemetryObservation<number>;
+    processSpawnCallMs: TelemetryObservation<number>;
+    initializeRoundTripMs: TelemetryObservation<number>;
+    configurationNotifySendMs: TelemetryObservation<number>;
+    configurationAppliedMs: TelemetryObservation<number>;
+    jdtlsPid: TelemetryObservation<number>;
+  };
+  configuration: {
+    requests: number;
+    responseBuildMs: TelemetryObservation<number>;
+  };
+  progress: {
+    events: Array<{ atMs: number; kind: string; title?: string }>;
+    projectImportMs: TelemetryObservation<number>;
+  };
+  document: {
+    sourceReadMs: TelemetryObservation<number>;
+    lruSynchronizeMs: TelemetryObservation<number>;
+    syncAction: TelemetryObservation<"didOpen" | "didChange" | "reused">;
+    serverAppliedMs: TelemetryObservation<number>;
+  };
+  gateway: {
+    cacheHit: TelemetryObservation<boolean>;
+    shared: TelemetryObservation<boolean>;
+    backendRole: TelemetryObservation<"owner" | "joiner" | "cache">;
+  };
+  operations: JdtFirstTouchOperationTrace[];
+};
+
+export interface JdtFirstTouchTraceHandle {
+  endAttempt(): void;
+  snapshot(): JdtFirstTouchSessionTrace;
+  close(): JdtFirstTouchSessionTrace;
+}
+
 type CacheEntry<T> = {
   value: T;
   expiresAt: number;
@@ -182,6 +242,223 @@ export type HierarchyResult = {
 const MAX_HIERARCHY_REQUESTS = 64;
 const HIERARCHY_PREPARE_CAP_MS = 1000;
 const HIERARCHY_STEP_CAP_MS = 1500;
+
+type FirstTouchStartupPhase =
+  | "filesystemSetupMs"
+  | "processSpawnCallMs"
+  | "initializeRoundTripMs"
+  | "configurationNotifySendMs";
+
+type MutableFirstTouchOperation = {
+  id: number;
+  method: string;
+  startedAt: number;
+  callerCompletedAt?: number;
+  callerSettlement?: "COMPLETE" | "FAILED" | "CANCELLED" | "DEADLINE_EXCEEDED";
+  backendSettledAt?: number;
+  backendSettlement?: "fulfilled" | "rejected";
+  cancelSentAt?: number;
+};
+
+class JdtFirstTouchRecorder {
+  private readonly startedAt = performance.now();
+  private readonly startupPhases = new Map<FirstTouchStartupPhase, number>();
+  private readonly progressEvents: Array<{ atMs: number; kind: string; title?: string }> = [];
+  private readonly importProgressStarts = new Map<string, number>();
+  private projectImportMs = 0;
+  private configurationRequests = 0;
+  private configurationResponseBuildMs = 0;
+  private sourceReadMs = 0;
+  private lruSynchronizeMs = 0;
+  private readonly documentNotifications: string[] = [];
+  private readonly operations = new Map<number, MutableFirstTouchOperation>();
+  private nextOperationId = 1;
+  private pid?: number;
+  private sessionStopped = false;
+
+  constructor(readonly execution: JdtFirstTouchExecution) {}
+
+  recordStartupPhase(name: FirstTouchStartupPhase, elapsedMs: number): void {
+    this.startupPhases.set(name, (this.startupPhases.get(name) ?? 0) + elapsedMs);
+  }
+
+  recordPid(pid: number | undefined): void {
+    if (pid !== undefined) this.pid = pid;
+  }
+
+  recordConfigurationRequest(elapsedMs: number): void {
+    this.configurationRequests += 1;
+    this.configurationResponseBuildMs += elapsedMs;
+  }
+
+  recordProgress(params: { token?: string | number; value?: { kind?: string; title?: string; message?: string } }): void {
+    const token = String(params.token ?? "unknown");
+    const kind = params.value?.kind ?? "report";
+    const title = [params.value?.title, params.value?.message].filter(Boolean).join(": ") || undefined;
+    const at = performance.now();
+    this.progressEvents.push({ atMs: roundedMs(at - this.startedAt), kind, title });
+    const isImportProgress = /(?:import|project|workspace|build)/i.test(title ?? "")
+      || this.importProgressStarts.has(token);
+    if (!isImportProgress) return;
+    if (kind === "begin") {
+      this.importProgressStarts.set(token, at);
+    } else if (kind === "end") {
+      const startedAt = this.importProgressStarts.get(token);
+      if (startedAt !== undefined) this.projectImportMs += Math.max(0, at - startedAt);
+      this.importProgressStarts.delete(token);
+    }
+  }
+
+  recordDocumentRead(elapsedMs: number): void {
+    this.sourceReadMs += elapsedMs;
+  }
+
+  documentNotificationCount(): number {
+    return this.documentNotifications.length;
+  }
+
+  recordDocumentNotification(method: string): void {
+    if (method === "textDocument/didOpen" || method === "textDocument/didChange") {
+      this.documentNotifications.push(method);
+    }
+  }
+
+  recordDocumentSync(elapsedMs: number): void {
+    this.lruSynchronizeMs += elapsedMs;
+  }
+
+  beginOperation(method: string): number {
+    const id = this.nextOperationId++;
+    this.operations.set(id, { id, method, startedAt: performance.now() });
+    return id;
+  }
+
+  recordCallerSettlement(
+    id: number,
+    settlement: MutableFirstTouchOperation["callerSettlement"]
+  ): void {
+    const operation = this.operations.get(id);
+    if (!operation) return;
+    operation.callerCompletedAt = performance.now();
+    operation.callerSettlement = settlement;
+  }
+
+  recordBackendSettlement(id: number, settlement: "fulfilled" | "rejected"): void {
+    const operation = this.operations.get(id);
+    if (!operation) return;
+    operation.backendSettledAt = performance.now();
+    operation.backendSettlement = settlement;
+  }
+
+  recordCancelSent(id: number): void {
+    const operation = this.operations.get(id);
+    if (!operation || operation.cancelSentAt !== undefined) return;
+    operation.cancelSentAt = performance.now();
+  }
+
+  markSessionStopped(): void {
+    this.sessionStopped = true;
+  }
+
+  snapshot(): JdtFirstTouchSessionTrace {
+    const startupObservation = (name: FirstTouchStartupPhase): TelemetryObservation<number> => {
+      const value = this.startupPhases.get(name);
+      if (value !== undefined) return measured(roundedMs(value));
+      if (this.execution === "reused-ready-session") {
+        return notApplicable("the attempt reused an already READY JDT session");
+      }
+      return unmeasured(`${name} was not observed before the trace snapshot`);
+    };
+    const actions = this.documentNotifications;
+    const syncAction: TelemetryObservation<"didOpen" | "didChange" | "reused"> = actions.includes("textDocument/didOpen")
+      ? measured("didOpen")
+      : actions.includes("textDocument/didChange")
+        ? measured("didChange")
+        : this.lruSynchronizeMs > 0
+          ? measured("reused")
+          : unmeasured("no document synchronization phase was observed");
+    return {
+      schemaVersion: "java-intelligence-v32-jdt-first-touch-session/v1",
+      execution: this.execution,
+      startup: {
+        filesystemSetupMs: startupObservation("filesystemSetupMs"),
+        processSpawnCallMs: startupObservation("processSpawnCallMs"),
+        initializeRoundTripMs: startupObservation("initializeRoundTripMs"),
+        configurationNotifySendMs: startupObservation("configurationNotifySendMs"),
+        configurationAppliedMs: unmeasured("LSP configuration notifications have no server acknowledgement"),
+        jdtlsPid: this.pid !== undefined
+          ? measured(this.pid)
+          : this.execution === "reused-ready-session"
+            ? notApplicable("the reused session pid was not sampled by this attempt")
+            : unmeasured("the JDT child pid was unavailable")
+      },
+      configuration: {
+        requests: this.configurationRequests,
+        responseBuildMs: this.configurationRequests > 0
+          ? measured(roundedMs(this.configurationResponseBuildMs))
+          : unmeasured("JDT did not issue workspace/configuration during this attempt")
+      },
+      progress: {
+        events: this.progressEvents.map(event => ({ ...event })),
+        projectImportMs: this.projectImportMs > 0
+          ? measured(roundedMs(this.projectImportMs))
+          : unmeasured("no complete project-import progress begin/end span was observed")
+      },
+      document: {
+        sourceReadMs: this.sourceReadMs > 0
+          ? measured(roundedMs(this.sourceReadMs))
+          : unmeasured("no source read was observed"),
+        lruSynchronizeMs: this.lruSynchronizeMs > 0
+          ? measured(roundedMs(this.lruSynchronizeMs))
+          : unmeasured("no document LRU synchronization was observed"),
+        syncAction,
+        serverAppliedMs: unmeasured("didOpen/didChange notifications have no server acknowledgement")
+      },
+      gateway: {
+        cacheHit: unmeasured("raw JdtlsSession first-touch operations bypass SemanticGateway"),
+        shared: unmeasured("raw JdtlsSession first-touch operations bypass SemanticGateway"),
+        backendRole: unmeasured("raw JdtlsSession first-touch operations bypass SemanticGateway")
+      },
+      operations: [...this.operations.values()].map(operation => this.operationSnapshot(operation))
+    };
+  }
+
+  private operationSnapshot(operation: MutableFirstTouchOperation): JdtFirstTouchOperationTrace {
+    const callerMs = operation.callerCompletedAt === undefined
+      ? unmeasured("caller had not settled at snapshot")
+      : measured(roundedMs(operation.callerCompletedAt - operation.startedAt));
+    const backendSettlement = operation.backendSettlement === undefined
+      ? measured<"fulfilled" | "rejected" | "pending">("pending")
+      : measured<"fulfilled" | "rejected" | "pending">(operation.backendSettlement);
+    let backendSettlementAfterCallerMs: TelemetryObservation<number>;
+    if (operation.callerCompletedAt === undefined) {
+      backendSettlementAfterCallerMs = unmeasured("caller had not settled at snapshot");
+    } else if (operation.backendSettledAt !== undefined) {
+      backendSettlementAfterCallerMs = measured(roundedMs(Math.max(0, operation.backendSettledAt - operation.callerCompletedAt)));
+    } else {
+      backendSettlementAfterCallerMs = unmeasured(this.sessionStopped
+        ? "backend did not settle before benchmark session stop"
+        : "backend was still pending at snapshot");
+    }
+    const cancelSentMs = operation.cancelSentAt === undefined
+      ? notApplicable<number>("the caller did not request cancellation")
+      : measured(roundedMs(operation.cancelSentAt - operation.startedAt));
+    return {
+      id: operation.id,
+      method: operation.method,
+      callerMs,
+      callerSettlement: operation.callerSettlement
+        ? measured(operation.callerSettlement)
+        : unmeasured("caller settlement was not observed"),
+      backendSettlement,
+      backendSettlementAfterCallerMs,
+      cancelSentMs,
+      cancelAckMs: operation.cancelSentAt === undefined
+        ? notApplicable("the caller did not request cancellation")
+        : unmeasured("LSP cancellation has no acknowledgement")
+    };
+  }
+}
 
 export class JdtlsSession {
   private connection?: JdtlsConnection;
@@ -240,6 +517,8 @@ export class JdtlsSession {
    */
   private cacheGeneration = 1;
   private readonly semanticGateway: SemanticGateway;
+  private activeFirstTouchTrace?: JdtFirstTouchRecorder;
+  private readonly firstTouchTraces = new Set<JdtFirstTouchRecorder>();
 
   constructor(
     private readonly repoRoot: string,
@@ -253,7 +532,10 @@ export class JdtlsSession {
     this.restartBackoff = new JdtRestartBackoff(now);
     this.documents = new DocumentLru({
       maxOpen: positiveInteger(process.env.JDTLS_MAX_OPEN_DOCUMENTS, 64),
-      notify: (method, params) => this.connection?.sendNotification(method, params)
+      notify: (method, params) => {
+        this.activeFirstTouchTrace?.recordDocumentNotification(method);
+        this.connection?.sendNotification(method, params);
+      }
     });
     this.semanticGateway = new SemanticGateway(createJdtlsSemanticBackend(this), {
       now,
@@ -308,6 +590,45 @@ export class JdtlsSession {
   onLifecycleChange(listener: LifecycleListener): () => void {
     this.lifecycleListeners.add(listener);
     return () => this.lifecycleListeners.delete(listener);
+  }
+
+  /**
+   * Benchmark-only, single-attempt trace. Production requests never call this,
+   * so the normal path pays only nullable branch checks at the phase boundaries.
+   * The handle remains readable after endAttempt() so a late backend settlement
+   * can be attributed to the attempt that created it until close().
+   */
+  beginFirstTouchTrace(): JdtFirstTouchTraceHandle {
+    if (this.activeFirstTouchTrace) {
+      throw new Error("a JDT first-touch trace is already active for this session");
+    }
+    const execution: JdtFirstTouchExecution = this.lifecycleState === "READY"
+      ? "reused-ready-session"
+      : this.lifecycleState === "STARTING"
+        ? "joined-existing-start"
+        : "new-process";
+    const recorder = new JdtFirstTouchRecorder(execution);
+    recorder.recordPid(this.process?.pid ?? this.startAttempt?.child.pid);
+    this.activeFirstTouchTrace = recorder;
+    this.firstTouchTraces.add(recorder);
+    let ended = false;
+    let closed = false;
+    const endAttempt = (): void => {
+      if (ended) return;
+      ended = true;
+      if (this.activeFirstTouchTrace === recorder) this.activeFirstTouchTrace = undefined;
+    };
+    return {
+      endAttempt,
+      snapshot: () => recorder.snapshot(),
+      close: () => {
+        if (closed) return recorder.snapshot();
+        endAttempt();
+        closed = true;
+        this.firstTouchTraces.delete(recorder);
+        return recorder.snapshot();
+      }
+    };
   }
 
   async ensureStarted(
@@ -536,6 +857,7 @@ export class JdtlsSession {
       return this.stopPromise;
     }
     const operation: Promise<void> = this.stopInternal().finally(() => {
+      for (const trace of this.firstTouchTraces) trace.markSessionStopped();
       if (this.stopPromise === operation) this.stopPromise = undefined;
     });
     this.stopPromise = operation;
@@ -1168,16 +1490,28 @@ export class JdtlsSession {
       );
     }
 
-    await mkdir(this.dataDir, { recursive: true });
-    await mkdir(this.logDir, { recursive: true });
+    const filesystemStartedAt = performance.now();
+    try {
+      await mkdir(this.dataDir, { recursive: true });
+      await mkdir(this.logDir, { recursive: true });
+    } finally {
+      this.activeFirstTouchTrace?.recordStartupPhase("filesystemSetupMs", performance.now() - filesystemStartedAt);
+    }
     budget.throwIfExpired("jdtls.spawn");
 
-    const attempt = this.transportFactory.spawn({
-      binary: this.jdtlsBin,
-      args: this.launchArgs(),
-      cwd: this.repoRoot,
-      env: buildJdtlsEnv(this.jdtlsRuntimeJavaHome)
-    });
+    const spawnStartedAt = performance.now();
+    let attempt: JdtlsTransportAttempt;
+    try {
+      attempt = this.transportFactory.spawn({
+        binary: this.jdtlsBin,
+        args: this.launchArgs(),
+        cwd: this.repoRoot,
+        env: buildJdtlsEnv(this.jdtlsRuntimeJavaHome)
+      });
+    } finally {
+      this.activeFirstTouchTrace?.recordStartupPhase("processSpawnCallMs", performance.now() - spawnStartedAt);
+    }
+    this.activeFirstTouchTrace?.recordPid(attempt.child.pid);
     this.startAttempt = attempt;
     this.registerClientHandlers(attempt.connection);
     attempt.connection.listen();
@@ -1193,12 +1527,18 @@ export class JdtlsSession {
           );
         }
       }
-      const initializeResult = await budget.race(
-        "jdtls.initialize",
-        attempt.connection.sendRequest("initialize", this.initializeParams()),
-        this.startHardCapMs,
-        () => { void terminateChild(attempt.child, 200); }
-      );
+      const initializeStartedAt = performance.now();
+      let initializeResult: unknown;
+      try {
+        initializeResult = await budget.race(
+          "jdtls.initialize",
+          attempt.connection.sendRequest("initialize", this.initializeParams()),
+          this.startHardCapMs,
+          () => { void terminateChild(attempt.child, 200); }
+        );
+      } finally {
+        this.activeFirstTouchTrace?.recordStartupPhase("initializeRoundTripMs", performance.now() - initializeStartedAt);
+      }
       if (!initializeResult) {
         throw new JavaIntelligenceError(
           "JDT_SERVER_ERROR",
@@ -1212,10 +1552,18 @@ export class JdtlsSession {
         );
       }
       await this.heartbeatPendingLease();
-      attempt.connection.sendNotification("initialized", {});
-      attempt.connection.sendNotification("workspace/didChangeConfiguration", {
-        settings: this.javaSettings()
-      });
+      const configurationStartedAt = performance.now();
+      try {
+        attempt.connection.sendNotification("initialized", {});
+        attempt.connection.sendNotification("workspace/didChangeConfiguration", {
+          settings: this.javaSettings()
+        });
+      } finally {
+        this.activeFirstTouchTrace?.recordStartupPhase(
+          "configurationNotifySendMs",
+          performance.now() - configurationStartedAt
+        );
+      }
 
       this.process = attempt.child;
       this.connection = attempt.connection;
@@ -1254,7 +1602,10 @@ export class JdtlsSession {
       ...jvmArgs(this.generatedCode),
       "-data",
       this.dataDir,
-      ...splitArgs(process.env.JDTLS_EXTRA_ARGS)
+      ...splitArgs(process.env.JDTLS_EXTRA_ARGS),
+      ...(process.env.JAVA_LSP_ISOLATED_VALIDATION === "1" && process.env.HOME
+        ? [`--jvm-arg=-Duser.home=${process.env.HOME}`]
+        : [])
     ];
   }
 
@@ -1323,15 +1674,20 @@ export class JdtlsSession {
   private registerClientHandlers(connection: JdtlsConnection): void {
     connection.onRequest("client/registerCapability", async () => null);
     connection.onRequest("workspace/configuration", async (params: { items?: Array<{ section?: string }> }) => {
-      return (params.items || []).map(item => {
-        if (!item.section || item.section === "java") {
-          return this.javaSettings().java;
-        }
-        if (item.section.startsWith("java.")) {
-          return pickSection(this.javaSettings().java, item.section.replace(/^java\./, ""));
-        }
-        return null;
-      });
+      const startedAt = performance.now();
+      try {
+        return (params.items || []).map(item => {
+          if (!item.section || item.section === "java") {
+            return this.javaSettings().java;
+          }
+          if (item.section.startsWith("java.")) {
+            return pickSection(this.javaSettings().java, item.section.replace(/^java\./, ""));
+          }
+          return null;
+        });
+      } finally {
+        this.activeFirstTouchTrace?.recordConfigurationRequest(performance.now() - startedAt);
+      }
     });
     connection.onRequest("workspace/applyEdit", async () => ({ applied: false }));
     connection.onRequest("window/workDoneProgress/create", async () => null);
@@ -1441,8 +1797,20 @@ export class JdtlsSession {
    * didOpen now lives there instead.
    */
   private async withDocument<T>(file: string, action: (uri: string) => Promise<T>): Promise<T> {
-    const text = await readFile(file, "utf8");
-    const lease = await this.documents.acquire(file, text);
+    const readStartedAt = performance.now();
+    let text: string;
+    try {
+      text = await readFile(file, "utf8");
+    } finally {
+      this.activeFirstTouchTrace?.recordDocumentRead(performance.now() - readStartedAt);
+    }
+    const synchronizeStartedAt = performance.now();
+    let lease: Awaited<ReturnType<DocumentLru["acquire"]>>;
+    try {
+      lease = await this.documents.acquire(file, text);
+    } finally {
+      this.activeFirstTouchTrace?.recordDocumentSync(performance.now() - synchronizeStartedAt);
+    }
     try {
       return await action(lease.uri);
     } finally {
@@ -1496,13 +1864,26 @@ export class JdtlsSession {
     throwIfAborted(signal, method);
     const cancellation = new CancellationTokenSource();
     const startedAt = Date.now();
+    const firstTouchTrace = this.activeFirstTouchTrace;
+    const firstTouchOperationId = firstTouchTrace?.beginOperation(method);
     // Hold the raw promise so backend settlement can still be measured after the
     // client gives up, and so the timeout/cancel/server-error classification
     // below is never lost behind an undefined-on-any-failure return.
     const backend = this.connection.sendRequest(method, params, cancellation.token);
     let backendSettledAt: number | undefined;
-    const markSettled = (): void => { backendSettledAt = Date.now(); };
-    backend.then(markSettled, markSettled);
+    const markFulfilled = (): void => {
+      backendSettledAt = Date.now();
+      if (firstTouchOperationId !== undefined) {
+        firstTouchTrace?.recordBackendSettlement(firstTouchOperationId, "fulfilled");
+      }
+    };
+    const markRejected = (): void => {
+      backendSettledAt = Date.now();
+      if (firstTouchOperationId !== undefined) {
+        firstTouchTrace?.recordBackendSettlement(firstTouchOperationId, "rejected");
+      }
+    };
+    backend.then(markFulfilled, markRejected);
 
     let removeAbortListener: (() => void) | undefined;
     const abortableBackend = signal
@@ -1510,6 +1891,7 @@ export class JdtlsSession {
           backend,
           new Promise<never>((_, reject) => {
             const onAbort = (): void => {
+              if (firstTouchOperationId !== undefined) firstTouchTrace?.recordCancelSent(firstTouchOperationId);
               cancellation.cancel();
               reject(new JavaIntelligenceError("CANCELLED", `Cancelled during ${method}`));
             };
@@ -1519,11 +1901,26 @@ export class JdtlsSession {
         ])
       : backend;
 
+    let callerSettlement: MutableFirstTouchOperation["callerSettlement"] = "COMPLETE";
     try {
-      return await withTimeout(abortableBackend, timeoutMs, method, () => cancellation.cancel()) as T;
+      return await withTimeout(abortableBackend, timeoutMs, method, () => {
+        if (firstTouchOperationId !== undefined) firstTouchTrace?.recordCancelSent(firstTouchOperationId);
+        cancellation.cancel();
+      }) as T;
+    } catch (error) {
+      const code = classifySemanticError(error).code;
+      callerSettlement = code === "DEADLINE_EXCEEDED"
+        ? "DEADLINE_EXCEEDED"
+        : code === "CANCELLED"
+          ? "CANCELLED"
+          : "FAILED";
+      throw error;
     } finally {
       removeAbortListener?.();
       const clientCompletedAt = Date.now();
+      if (firstTouchOperationId !== undefined) {
+        firstTouchTrace?.recordCallerSettlement(firstTouchOperationId, callerSettlement);
+      }
       this.addPhaseMetric(method, clientCompletedAt - startedAt);
       if (backendSettledAt === undefined) {
         // The user response is never blocked on this; it only records how long
@@ -1636,6 +2033,7 @@ export class JdtlsSession {
   }
 
   private recordProgress(params: { token?: string | number; value?: { kind?: string; title?: string; message?: string } }): void {
+    this.activeFirstTouchTrace?.recordProgress(params);
     const token = String(params.token ?? "unknown");
     const value = params.value || {};
     this.lastProgressAt = new Date();
@@ -1700,6 +2098,10 @@ function buildJdtlsEnv(runtimeJavaHome?: string): NodeJS.ProcessEnv {
     PATH: process.env.PATH,
     SHELL: process.env.SHELL,
     TMPDIR: process.env.TMPDIR,
+    XDG_CACHE_HOME: process.env.XDG_CACHE_HOME,
+    XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
+    XDG_DATA_HOME: process.env.XDG_DATA_HOME,
+    XDG_STATE_HOME: process.env.XDG_STATE_HOME,
     LANG: process.env.LANG,
     LC_ALL: process.env.LC_ALL,
     JAVA_HOME: runtimeJavaHome
@@ -1798,6 +2200,22 @@ function truncate<T>(items: T[], limit: number): { items: T[]; truncated: boolea
 
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function measured<T>(value: T): TelemetryObservation<T> {
+  return { status: "MEASURED", value };
+}
+
+function unmeasured<T = never>(reason: string): TelemetryObservation<T> {
+  return { status: "UNMEASURED", reason };
+}
+
+function notApplicable<T = never>(reason: string): TelemetryObservation<T> {
+  return { status: "NOT_APPLICABLE", reason };
+}
+
+function roundedMs(value: number): number {
+  return Math.round(Math.max(0, value) * 1000) / 1000;
 }
 
 /** Stable identity for a hierarchy item, so a cycle is visited exactly once. */

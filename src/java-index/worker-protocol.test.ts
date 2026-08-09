@@ -18,6 +18,7 @@ import {
   isJavaIndexResponse,
   validateAnchorFacts,
   validateFileBundleArray,
+  validateIndexedReadRangeResults,
   validateIndexedReferenceArray,
   validateJavaIndexStatus,
   validateTypeFactsArray,
@@ -302,13 +303,40 @@ test("validateIndexedReferenceArray rejects a reference missing required fields"
   assert.throws(() => validateIndexedReferenceArray([{ sourceId: "a" }]));
 });
 
+test("validateIndexedReadRangeResults requires canonical exact coordinates", () => {
+  const valid = [{
+    file: "/repo/A.java",
+    ranges: [{
+      startLine: 1,
+      endLine: 3,
+      range: { start: { line: 1, column: 1 }, end: { line: 4, column: 1 } },
+      kind: "method",
+      estimatedBytes: 64
+    }]
+  }];
+  assert.deepEqual(validateIndexedReadRangeResults(valid), valid);
+  assert.throws(() => validateIndexedReadRangeResults([{ ...valid[0], ranges: [{ ...valid[0]!.ranges[0], range: undefined }] }]));
+  assert.throws(() => validateIndexedReadRangeResults([{ ...valid[0], ranges: [{
+    ...valid[0]!.ranges[0],
+    range: { start: { line: 1, column: 2 }, end: { line: 1, column: 2 } }
+  }] }]));
+  assert.throws(() => validateIndexedReadRangeResults([{ ...valid[0], ranges: [{
+    ...valid[0]!.ranges[0],
+    range: { start: { line: 0, column: 1 }, end: { line: 1, column: 1 } }
+  }] }]));
+});
+
 test("validateFileBundleArray rejects a bundle with an incomplete file", () => {
   assert.throws(() => validateFileBundleArray([{ file: {}, types: [], fields: [], methods: [], edges: [] }]));
 });
 
 test("isJavaIndexResponse accepts well-formed envelopes and rejects malformed ones", () => {
   assert.equal(isJavaIndexResponse({ id: 1, ok: true, value: null }), true);
+  assert.equal(isJavaIndexResponse({ id: 1, ok: true, value: null, timing: { queueDepthAtEnqueue: 1, queueMs: 1.5, processingMs: 2 } }), true);
   assert.equal(isJavaIndexResponse({ id: 1, ok: false, error: { code: "X", message: "boom" } }), true);
+  assert.equal(isJavaIndexResponse({ id: 1, ok: true, value: null, timing: { queueDepthAtEnqueue: 1, queueMs: -1, processingMs: 2 } }), false);
+  assert.equal(isJavaIndexResponse({ id: 1, ok: true, value: null, timing: { queueDepthAtEnqueue: -1, queueMs: 1, processingMs: 2 } }), false);
+  assert.equal(isJavaIndexResponse({ id: 1, ok: true, value: null, timing: { queueDepthAtEnqueue: 1, queueMs: 1 } }), false);
   assert.equal(isJavaIndexResponse({ id: 1, ok: true }), false);
   assert.equal(isJavaIndexResponse({ id: 1, ok: false, error: {} }), false);
   assert.equal(isJavaIndexResponse({ ok: true, value: 1 }), false);

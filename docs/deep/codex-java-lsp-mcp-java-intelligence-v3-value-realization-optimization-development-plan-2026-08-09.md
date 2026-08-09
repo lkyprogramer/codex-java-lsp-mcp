@@ -387,7 +387,7 @@ flowchart LR
   - 新增 `scripts/run-v32-optimization-matrix.mjs`
   - 新增 `scripts/count-production-ts.mjs`
   - 新增 `docs/phase-v3/v32-optimization-baseline.md`
-- 实现：从当前 source-locked candidate 生成新的 immutable optimization baseline；绑定 executable tree、patch、16 个 runtime inputs、三仓 HEAD/tree、scenario hash、Node/JDT/Tree-sitter 版本和 stderr。计数器固定只统计 source-locked tree 的 `src/**/*.ts`，排除 `*.test.ts`、`dist/` 和生成物，并把路径列表、LOC、SHA-256 写入 manifest。
+- 实现：从当前 source-locked candidate 生成新的 immutable optimization baseline；绑定 executable tree、candidate patch、全部参与执行且未包含在 patch 中的 hash-bound runtime inputs、三仓 HEAD/tree、scenario hash、Node/JDT/Tree-sitter identity 和 stderr。计数器固定只统计 source-locked tree 的 `src/**/*.ts`，排除 `*.test.ts`、`dist/` 和生成物，并把路径列表、LOC、SHA-256 写入 manifest。
 - 依赖：无。
 - 验收：同一个 manifest 可独立复验；任意 runtime/scenario/row/hash 变化都失败；LOC 计数可由路径清单逐文件复算，telemetry 新增 LOC 必须在 task-level ledger 中记录其后续删除/合并偿还项。
 - 回滚：只删除新增 runner/report，不修改生产路径。
@@ -838,10 +838,18 @@ flowchart TD
 
 ### 9.1 每个实现提交
 
+本计划所有验证均受强制隔离合同约束：不得连接、restart、shutdown、复用或清理当前在线
+MCP/LSP/JDT/JavaIndex 的进程、lease、repo checkout、cache、workspace、log 或配置。禁止在
+在线服务所使用的 checkout 直接执行 `npm run build`、`npm run clean` 或裸
+`node dist/<benchmark-or-smoke>.js`。严格验证先由 `run-isolated-node.sh` 在 Node 启动前清除
+宿主 loader/output 变量，再由 `run-isolated-validation.mjs` 创建 detached
+code local clone 和私有 HOME/XDG/TMP/cache；真实 JDT 验证再由
+`run-isolated-jdt-benchmark.mjs` 创建目标 Java 仓库的 detached local clone 和私有 JDT data/log。
+
 ```bash
-npm run build
-npm test
-npm run smoke
+sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile compile
+sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile full
+sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted --env JAVA_LSP_SMOKE_REPO_ROOT=. -- node dist/smoke.js
 git diff --check
 ```
 

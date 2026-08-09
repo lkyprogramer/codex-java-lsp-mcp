@@ -140,7 +140,13 @@ test("token-aware read plan keeps its anchor, respects bytes, and makes one shor
       rangeQueries += 1;
       return requests.map(request => ({
         file: request.file,
-        ranges: [{ startLine: 1, endLine: 10, kind: "method", estimatedBytes: request.file.includes("OrderService") ? 1_500 : 900 }]
+        ranges: [{
+          startLine: 1,
+          endLine: 10,
+          range: { start: { line: 1, column: 1 }, end: { line: 11, column: 1 } },
+          kind: "method",
+          estimatedBytes: request.file.includes("OrderService") ? 1_500 : 900
+        }]
       }));
     }
   };
@@ -175,6 +181,9 @@ test("token-aware read plan keeps its anchor, respects bytes, and makes one shor
   assert.deepEqual(plan.items.map(item => item.fileId), ["F1"], "the anchor stays while another file would exceed the byte budget");
   assert.equal(plan.totalBytes, 1_500);
   assert.equal(rangeQueries, 1, "all shortlisted candidates use one worker range batch");
+  assert.deepEqual(result.selectedCoordinateRangesByPath.get(anchor.absolutePath), [
+    { start: { line: 1, column: 1 }, end: { line: 11, column: 1 } }
+  ]);
 });
 
 test("token-aware read plan keeps a framework collaborator ahead of duplicate lexical variants", async () => {
@@ -1015,7 +1024,13 @@ test("deferred tests stay in candidate output but never consume a V6 read-plan s
     requestedPaths.push(...requests.map(request => request.file));
     return requests.map(request => ({
       file: request.file,
-      ranges: [{ startLine: 1, endLine: 4, kind: "method" as const, estimatedBytes: 256 }]
+      ranges: [{
+        startLine: 1,
+        endLine: 4,
+        range: { start: { line: 1, column: 1 }, end: { line: 5, column: 1 } },
+        kind: "method" as const,
+        estimatedBytes: 256
+      }]
     }));
   };
 
@@ -1097,7 +1112,13 @@ test("deferred externally protected tests cannot exhaust the bounded range short
     requestedPaths.push(...requests.map(request => request.file));
     return requests.map(request => ({
       file: request.file,
-      ranges: [{ startLine: 1, endLine: 4, kind: "method" as const, estimatedBytes: 256 }]
+      ranges: [{
+        startLine: 1,
+        endLine: 4,
+        range: { start: { line: 1, column: 1 }, end: { line: 5, column: 1 } },
+        kind: "method" as const,
+        estimatedBytes: 256
+      }]
     }));
   };
 

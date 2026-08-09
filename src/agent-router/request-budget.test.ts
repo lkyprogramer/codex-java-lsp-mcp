@@ -173,7 +173,13 @@ test("live semantic timeouts share one bounded stage budget and leave time for t
       readRangeCalls += 1;
       return requests.map(request => ({
         file: request.file,
-        ranges: [{ startLine: 1, endLine: 1, kind: "fallback", estimatedBytes: 48 }]
+        ranges: [{
+          startLine: 1,
+          endLine: 1,
+          range: { start: { line: 1, column: 1 }, end: { line: 2, column: 1 } },
+          kind: "fallback",
+          estimatedBytes: 48
+        }]
       }));
     },
     async frameworkFactsFor() { return emptyFrameworkFacts; },
@@ -247,5 +253,6 @@ test("live semantic timeouts share one bounded stage budget and leave time for t
   assert.equal(readRangeCalls, 1, "the read-plan range batch must still run before the absolute deadline");
   assert.equal(result.semantic.completion, "PARTIAL_TIMEOUT");
   assert.ok(result.readPlan.length > 0, "deadline degradation must return a usable bounded read plan");
+  assert.equal(JSON.stringify(result).includes("selectedCoordinateRangesByPath"), false, "exact benchmark coordinates must not leak into ImpactResultV6");
   assert.equal(requestBudget.expired(), false, "the router must retain a bounded finalization reserve");
 });

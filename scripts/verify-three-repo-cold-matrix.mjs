@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 export const MATRIX_PROJECTS = ["lishuedu", "cipherlink", "exam-parent-v3"];
 export const MATRIX_ROUNDS = [1, 2, 3];
 export const MATRIX_VARIANTS = ["old", "new"];
-export const VERIFIER_VERSION = 4;
+export const VERIFIER_VERSION = 5;
 
 const EPSILON = 1e-12;
 const P_READ_TOLERANCE = 0.02;
@@ -45,13 +45,21 @@ export function verifyMatrix({ matrixDir, manifestFile, expectedRuns = 5, p95Lim
     const newRun = byVariant.get("new");
     const p95Ratio = newRun.p95 / oldRun.p95;
     const p95ThresholdMs = Math.max(oldRun.p95 * p95Limit, oldRun.p95 + P95_ABSOLUTE_SLACK_MS);
+    const oldHoldout = oldRun.splits.holdout;
+    const newHoldout = newRun.splits.holdout;
     const gate = {
       rReadMust: newRun.minReadMust === 1,
       rTaskBlocking: newRun.rTaskBlocking + EPSILON >= oldRun.rTaskBlocking,
       recall: newRun.recall + EPSILON >= oldRun.recall,
       pRead: newRun.pRead + P_READ_TOLERANCE + EPSILON >= oldRun.pRead,
       estimatedTokens: newRun.estimatedTokensP50 <= oldRun.estimatedTokensP50 + EPSILON,
-      p95: newRun.p95 <= p95ThresholdMs + EPSILON
+      p95: newRun.p95 <= p95ThresholdMs + EPSILON,
+      rangeLineRecall: completeRangeGate(newRun.rangeEvidence.line),
+      rangeCoordinateRecall: completeRangeGate(newRun.rangeEvidence.coordinate),
+      holdoutRReadMust: newHoldout.minReadMust === 1,
+      holdoutRTaskBlocking: newHoldout.rTaskBlocking + EPSILON >= oldHoldout.rTaskBlocking,
+      holdoutRecall: newHoldout.recall + EPSILON >= oldHoldout.recall,
+      holdoutPRead: newHoldout.pRead + P_READ_TOLERANCE + EPSILON >= oldHoldout.pRead
     };
     projectSummaries.push({
       project,
@@ -64,7 +72,13 @@ export function verifyMatrix({ matrixDir, manifestFile, expectedRuns = 5, p95Lim
         rTaskBlocking: newRun.rTaskBlocking - oldRun.rTaskBlocking,
         estimatedTokensP50: newRun.estimatedTokensP50 - oldRun.estimatedTokensP50,
         p95Ratio,
-        p95ThresholdMs
+        p95ThresholdMs,
+        holdout: {
+          recall: newHoldout.recall - oldHoldout.recall,
+          pRead: newHoldout.pRead - oldHoldout.pRead,
+          rReadMust: newHoldout.rReadMust - oldHoldout.rReadMust,
+          rTaskBlocking: newHoldout.rTaskBlocking - oldHoldout.rTaskBlocking
+        }
       },
       gate,
       passed: Object.values(gate).every(Boolean)
@@ -112,15 +126,20 @@ export function verifyMatrix({ matrixDir, manifestFile, expectedRuns = 5, p95Lim
     passed: projectSummaries.every(project => project.passed)
   };
 
-  const target = summaryFile ? path.resolve(summaryFile) : path.join(resolvedMatrixDir, "matrix-summary.json");
-  result.summaryFile = target;
-  mkdirSync(path.dirname(target), { recursive: true });
-  writeFileSync(target, `${JSON.stringify(result, null, 2)}\n`);
+  if (typeof summaryFile === "string" && summaryFile.length > 0) {
+    const target = path.resolve(summaryFile);
+    result.summaryFile = target;
+    mkdirSync(path.dirname(target), { recursive: true });
+    writeFileSync(target, `${JSON.stringify(result, null, 2)}\n`);
+  }
   return result;
 }
 
 function aggregateProject(matrixDir, project, variant, expectedRuns, cells, manifest) {
   const attempts = [];
+  const scenarioManifest = manifest.value.scenarios[project];
+  const holdoutIds = new Set(scenarioManifest.holdoutRowIds);
+  const scenarioDescriptors = manifest.scenarioDescriptors[project];
   const scenarioFiles = new Set();
   for (const round of MATRIX_ROUNDS) {
     const file = path.join(matrixDir, `${project}-r${round}-${variant}.json`);
@@ -146,8 +165,18 @@ function aggregateProject(matrixDir, project, variant, expectedRuns, cells, mani
         throw new MatrixValidationError(`${file}: ${String(row.id || "unknown scenario")} must contain exactly ${expectedRuns} attempts`);
       }
       for (const attempt of row.attempts) {
-        validateAttempt(attempt, file, row.id);
-        attempts.push({ scenario: row.id, ...attempt, rTaskBlocking: taskBlockingRecall(attempt, file, row.id) });
+        const descriptor = scenarioDescriptors.get(row.id);
+        validateAttempt(attempt, file, row.id, payload.metadata);
+        attempts.push({
+          scenario: row.id,
+          evaluationSplit: holdoutIds.has(row.id) ? "holdout" : "tuning",
+          rangeLineExpected: descriptor.hasLineRanges,
+          rangeCoordinateExpected: descriptor.hasCoordinateRanges,
+          ...attempt,
+          rangeLineRecall: normalizedRangeLineRecall(attempt),
+          rangeCoordinateRecall: attempt.RangeCoordinateRecall,
+          rTaskBlocking: taskBlockingRecall(attempt, file, row.id)
+        });
       }
     }
   }
@@ -155,24 +184,14 @@ function aggregateProject(matrixDir, project, variant, expectedRuns, cells, mani
     throw new MatrixValidationError(`${project}/${variant} did not use exactly one frozen scenario file`);
   }
   if (attempts.length === 0) throw new MatrixValidationError(`${project}/${variant} contains no attempts`);
+  const aggregate = summarizeAttemptGroup(attempts);
   return {
-    attempts: attempts.length,
+    ...aggregate,
     scenarioFile: scenarioFiles.values().next().value,
-    recall: mean(attempts, "recall"),
-    pRead: mean(attempts, "pRead"),
-    rReadMust: mean(attempts, "rReadMust"),
-    rTaskBlocking: mean(attempts, "rTaskBlocking"),
-    minReadMust: Math.min(...attempts.map(attempt => attempt.rReadMust)),
-    minTaskBlocking: Math.min(...attempts.map(attempt => attempt.rTaskBlocking)),
-    estimatedTokensP50: percentile(attempts.map(attempt => attempt.estimatedTokens), 0.5),
-    estimatedTokensP95: percentile(attempts.map(attempt => attempt.estimatedTokens), 0.95),
-    rangeEvidence: summarizeRangeEvidence(attempts),
-    p50: percentile(attempts.map(attempt => attempt.elapsedMs), 0.5),
-    p95: percentile(attempts.map(attempt => attempt.elapsedMs), 0.95),
-    max: Math.max(...attempts.map(attempt => attempt.elapsedMs)),
-    mustFailureScenarios: [...new Set(attempts
-      .filter(attempt => attempt.rReadMust !== 1)
-      .map(attempt => attempt.scenario))]
+    splits: {
+      tuning: summarizeAttemptGroup(attempts.filter(attempt => attempt.evaluationSplit === "tuning")),
+      holdout: summarizeAttemptGroup(attempts.filter(attempt => attempt.evaluationSplit === "holdout"))
+    }
   };
 }
 
@@ -184,7 +203,12 @@ function validateMetadata(payload, { file, project, variant, expectedRuns, manif
   if (metadata.projectId !== project) throw new MatrixValidationError(`${file}: projectId mismatch`);
   if (metadata.warmState !== "cold-nolsp") throw new MatrixValidationError(`${file}: warmState must be cold-nolsp`);
   if (metadata.strategy !== "impact") throw new MatrixValidationError(`${file}: strategy must be impact`);
-  if (metadata.verbosity !== "diagnostic") throw new MatrixValidationError(`${file}: verbosity must be diagnostic`);
+  if (metadata.semanticPolicy !== "fast") {
+    throw new MatrixValidationError(`${file}: cold-nolsp semanticPolicy must be fast`);
+  }
+  if (metadata.verbosity !== "standard") {
+    throw new MatrixValidationError(`${file}: formal default-Token gate verbosity must be standard`);
+  }
   if (metadata.runs !== expectedRuns) throw new MatrixValidationError(`${file}: metadata.runs must be ${expectedRuns}`);
   if (!(typeof metadata.scenarioFile === "string" && path.isAbsolute(metadata.scenarioFile))) {
     throw new MatrixValidationError(`${file}: scenarioFile must be an absolute frozen path`);
@@ -243,12 +267,26 @@ function validateRows(rows, { file, expectedRowIds }) {
   }
 }
 
-function validateAttempt(attempt, file, scenarioId) {
+function validateAttempt(attempt, file, scenarioId, metadata) {
   if (!attempt || typeof attempt !== "object" || attempt.strategy !== "impact") {
     throw new MatrixValidationError(`${file}: ${scenarioId} attempt strategy must be impact`);
   }
   const semantic = attempt.timing?.semantic;
-  if (!semantic || semantic.policy !== "fast" || semantic.used !== false || semantic.timeout !== false) {
+  const completion = attempt.determinism?.completion;
+  const diagnosticSemanticIsSafe = semantic?.policy === "fast"
+    && semantic.used === false
+    && semantic.timeout === false;
+  // Standard is the production/default Token-gate projection and deliberately
+  // removes diagnostic metrics. Cross-version baselines therefore prove the
+  // same cold contract through the determinism snapshot that is retained in
+  // every benchmark attempt: semantic was unused and completed without a
+  // timeout/partial state. Diagnostic artifacts continue to use the stricter
+  // timing.semantic tuple above.
+  const standardSemanticIsSafe = metadata?.verbosity === "standard"
+    && metadata.semanticPolicy === "fast"
+    && completion?.semanticUsed === false
+    && completion.semantic === "COMPLETE";
+  if (!diagnosticSemanticIsSafe && !standardSemanticIsSafe) {
     throw new MatrixValidationError(`${file}: ${scenarioId} violates cold-nolsp semantic completion policy`);
   }
   for (const metric of ["recall", "pRead", "rReadMust"]) {
@@ -257,12 +295,19 @@ function validateAttempt(attempt, file, scenarioId) {
   for (const metric of ["estimatedTokens", "elapsedMs"]) {
     requireMetric(attempt[metric], metric, file, scenarioId);
   }
-  if (attempt.readPlanRangeRecall !== undefined
-    && (!(typeof attempt.readPlanRangeRecall === "number" && Number.isFinite(attempt.readPlanRangeRecall))
-      || attempt.readPlanRangeRecall < 0
-      || attempt.readPlanRangeRecall > 1)) {
-    throw new MatrixValidationError(`${file}: ${scenarioId} has invalid readPlanRangeRecall`);
+  for (const metric of ["readPlanRangeRecall", "RangeLineRecall", "RangeCoordinateRecall"]) {
+    if (attempt[metric] !== undefined) requireMetric(attempt[metric], metric, file, scenarioId, { max: 1 });
   }
+  if (attempt.readPlanRangeRecall !== undefined
+    && attempt.RangeLineRecall !== undefined
+    && Math.abs(attempt.readPlanRangeRecall - attempt.RangeLineRecall) > EPSILON) {
+    throw new MatrixValidationError(`${file}: ${scenarioId} readPlanRangeRecall and RangeLineRecall disagree`);
+  }
+}
+
+function normalizedRangeLineRecall(attempt) {
+  if (attempt.RangeLineRecall !== undefined) return attempt.RangeLineRecall;
+  return attempt.readPlanRangeRecall;
 }
 
 function taskBlockingRecall(attempt, file, scenarioId) {
@@ -290,19 +335,54 @@ function requireMetric(value, metric, file, scenarioId, { max } = {}) {
   }
 }
 
-function summarizeRangeEvidence(attempts) {
-  const measured = attempts
-    .map(attempt => attempt.readPlanRangeRecall)
+function summarizeAttemptGroup(attempts) {
+  if (attempts.length === 0) throw new MatrixValidationError("matrix split contains no attempts");
+  return {
+    attempts: attempts.length,
+    recall: mean(attempts, "recall"),
+    pRead: mean(attempts, "pRead"),
+    rReadMust: mean(attempts, "rReadMust"),
+    rTaskBlocking: mean(attempts, "rTaskBlocking"),
+    minReadMust: Math.min(...attempts.map(attempt => attempt.rReadMust)),
+    minTaskBlocking: Math.min(...attempts.map(attempt => attempt.rTaskBlocking)),
+    estimatedTokensP50: percentile(attempts.map(attempt => attempt.estimatedTokens), 0.5),
+    estimatedTokensP95: percentile(attempts.map(attempt => attempt.estimatedTokens), 0.95),
+    rangeEvidence: {
+      line: summarizeRangeEvidence(attempts, "rangeLineRecall", "rangeLineExpected"),
+      coordinate: summarizeRangeEvidence(attempts, "rangeCoordinateRecall", "rangeCoordinateExpected")
+    },
+    p50: percentile(attempts.map(attempt => attempt.elapsedMs), 0.5),
+    p95: percentile(attempts.map(attempt => attempt.elapsedMs), 0.95),
+    max: Math.max(...attempts.map(attempt => attempt.elapsedMs)),
+    mustFailureScenarios: [...new Set(attempts
+      .filter(attempt => attempt.rReadMust !== 1)
+      .map(attempt => attempt.scenario))]
+  };
+}
+
+function summarizeRangeEvidence(attempts, metric, expectedFlag) {
+  const expected = attempts.filter(attempt => attempt[expectedFlag] === true);
+  const measured = expected
+    .map(attempt => attempt[metric])
     .filter(value => typeof value === "number" && Number.isFinite(value));
   const measuredAttempts = measured.length;
-  const unmeasuredAttempts = attempts.length - measuredAttempts;
+  const expectedAttempts = expected.length;
+  const unmeasuredAttempts = expectedAttempts - measuredAttempts;
   return {
-    status: measuredAttempts === 0 ? "UNMEASURED" : unmeasuredAttempts === 0 ? "MEASURED" : "PARTIAL",
+    status: expectedAttempts === 0 || measuredAttempts === 0 ? "UNMEASURED" : unmeasuredAttempts === 0 ? "MEASURED" : "PARTIAL",
+    expectedAttempts,
     measuredAttempts,
     unmeasuredAttempts,
     mean: measuredAttempts > 0 ? measured.reduce((total, value) => total + value, 0) / measuredAttempts : undefined,
     min: measuredAttempts > 0 ? Math.min(...measured) : undefined
   };
+}
+
+function completeRangeGate(evidence) {
+  return evidence.expectedAttempts > 0
+    && evidence.status === "MEASURED"
+    && evidence.measuredAttempts === evidence.expectedAttempts
+    && evidence.min === 1;
 }
 
 function scenarioFilesByProject(cells) {
@@ -364,7 +444,7 @@ function readAndValidateManifest(file, expectedRuns, p95Limit) {
   if (!policy
     || policy.baseline !== "executable-code-baseline"
     || policy.baselineRevision !== value.runtimes?.old?.commit
-    || policy.goldenSchema !== "task36-cross-version-v1"
+    || policy.goldenSchema !== "java-intelligence-v32-range-holdout-v2"
     || policy.pReadTolerance !== P_READ_TOLERANCE
     || policy.p95AbsoluteSlackMs !== P95_ABSOLUTE_SLACK_MS
     || policy.taskBlockingBaseline !== "attempt-or-derived-attribution") {
@@ -373,10 +453,18 @@ function readAndValidateManifest(file, expectedRuns, p95Limit) {
   if (!sameStringArray(value.rounds, ["old/new", "new/old", "old/new"])) {
     throw new MatrixValidationError(`${file}: manifest rounds must be AB/BA/AB`);
   }
+  for (const suite of ["dist", "scripts"]) {
+    const result = value.candidateTests?.[suite];
+    if (!result || !Number.isInteger(result.discoveredTests) || result.discoveredTests <= 0
+      || result.passedTests !== result.discoveredTests) {
+      throw new MatrixValidationError(`${file}: candidate ${suite} tests must prove a non-empty all-green suite`);
+    }
+    validateCandidateTestEvidence(result, file, suite);
+  }
+  validateDependencyInventory(value.dependencies, file);
   for (const variant of MATRIX_VARIANTS) validateRuntime(value.runtimes?.[variant], file, variant);
-  if (value.runtimes.old.commit === value.runtimes.new.commit
-    || value.runtimes.old.executableTree === value.runtimes.new.executableTree) {
-    throw new MatrixValidationError(`${file}: old and new runtime commits and trees must be different`);
+  if (value.runtimes.old.executableTree === value.runtimes.new.executableTree) {
+    throw new MatrixValidationError(`${file}: old and new runtime executable trees must be different`);
   }
   validateHashBoundFile(value.candidatePatch, file, "candidate patch");
   if (value.candidatePatch.appliedToCommit !== value.runtimes.new.commit
@@ -398,6 +486,7 @@ function readAndValidateManifest(file, expectedRuns, p95Limit) {
     untrackedPaths.add(input.path);
     validateHashBoundFile(input, file, `untracked source input ${input.path}`);
   }
+  const scenarioDescriptors = {};
   for (const project of MATRIX_PROJECTS) {
     const repo = value.repositories?.[project];
     if (!repo
@@ -419,13 +508,22 @@ function readAndValidateManifest(file, expectedRuns, p95Limit) {
     if (new Set(scenario.rowIds).size !== scenario.rowIds.length) {
       throw new MatrixValidationError(`${file}: ${project} scenario row-id manifest contains duplicates`);
     }
+    validateScenarioSplit(scenario, file, project);
     validateHashBoundFile(scenario, file, `${project} scenario`);
-    const actualScenarioIds = scenarioIdsFromJsonl(scenario.file);
+    const actualScenarioRows = scenarioRowsFromJsonl(scenario.file);
+    const actualScenarioIds = actualScenarioRows.map(row => row.id);
     if (!sameStringSet(actualScenarioIds, scenario.rowIds)) {
       throw new MatrixValidationError(`${file}: ${project} scenario row ids do not match frozen scenario contents`);
     }
+    const actualTuningIds = actualScenarioRows.filter(row => row.evaluationSplit === "tuning").map(row => row.id);
+    const actualHoldoutIds = actualScenarioRows.filter(row => row.evaluationSplit === "holdout").map(row => row.id);
+    if (!sameStringSet(actualTuningIds, scenario.tuningRowIds)
+      || !sameStringSet(actualHoldoutIds, scenario.holdoutRowIds)) {
+      throw new MatrixValidationError(`${file}: ${project} frozen scenario split does not match the manifest`);
+    }
+    scenarioDescriptors[project] = new Map(actualScenarioRows.map(row => [row.id, row]));
   }
-  return { file, value, sha256: sha256(bytes) };
+  return { file, value, sha256: sha256(bytes), scenarioDescriptors };
 }
 
 function validateRuntime(runtime, manifestFile, variant) {
@@ -465,7 +563,53 @@ function validateHashBoundFile(entry, manifestFile, label) {
   }
 }
 
-function scenarioIdsFromJsonl(file) {
+function validateCandidateTestEvidence(result, manifestFile, suite) {
+  validateHashBoundFile(result.stdout, manifestFile, `candidate ${suite} test stdout`);
+  validateHashBoundFile(result.stderr, manifestFile, `candidate ${suite} test stderr`);
+  const stdout = readFileSync(result.stdout.file, "utf8");
+  const summary = name => {
+    const match = [...stdout.matchAll(new RegExp(`^# ${name} (\\d+)$`, "gm"))].at(-1);
+    return match ? Number(match[1]) : undefined;
+  };
+  if (summary("tests") !== result.discoveredTests
+    || summary("pass") !== result.passedTests
+    || summary("fail") !== 0
+    || summary("cancelled") !== 0) {
+    throw new MatrixValidationError(`${manifestFile}: candidate ${suite} TAP summary does not match the manifest`);
+  }
+}
+
+function validateDependencyInventory(dependencies, manifestFile) {
+  const inventory = dependencies?.inventory;
+  if (dependencies?.copyMode !== "private-content-verified-copy"
+    || !inventory
+    || inventory.schemaVersion !== 1
+    || inventory.algorithm !== "sha256-path-type-size-content-v1"
+    || !Number.isInteger(inventory.fileCount) || inventory.fileCount < 0
+    || !Number.isInteger(inventory.directoryCount) || inventory.directoryCount < 0
+    || !Number.isInteger(inventory.symlinkCount) || inventory.symlinkCount < 0
+    || !Number.isInteger(inventory.totalBytes) || inventory.totalBytes < 0
+    || !sha256Value(inventory.sha256)) {
+    throw new MatrixValidationError(`${manifestFile}: invalid isolated dependency inventory`);
+  }
+}
+
+function validateScenarioSplit(scenario, manifestFile, project) {
+  const tuning = scenario.tuningRowIds;
+  const holdout = scenario.holdoutRowIds;
+  if (!Array.isArray(tuning) || tuning.length !== 8 || !Array.isArray(holdout) || holdout.length !== 2) {
+    throw new MatrixValidationError(`${manifestFile}: ${project} scenario split must contain 8 tuning and 2 holdout rows`);
+  }
+  if (tuning.some(id => typeof id !== "string" || !id) || holdout.some(id => typeof id !== "string" || !id)) {
+    throw new MatrixValidationError(`${manifestFile}: ${project} scenario split contains an invalid row id`);
+  }
+  if (new Set([...tuning, ...holdout]).size !== scenario.rowIds.length
+    || !sameStringSet([...tuning, ...holdout], scenario.rowIds)) {
+    throw new MatrixValidationError(`${manifestFile}: ${project} tuning/holdout split must partition the frozen row ids`);
+  }
+}
+
+function scenarioRowsFromJsonl(file) {
   const seen = new Set();
   return readFileSync(file, "utf8").split(/\r?\n/).map(line => line.trim()).filter(Boolean).map((line, index) => {
     let row;
@@ -478,8 +622,18 @@ function scenarioIdsFromJsonl(file) {
       throw new MatrixValidationError(`${file}:${index + 1}: scenario id is required`);
     }
     if (seen.has(row.id)) throw new MatrixValidationError(`${file}:${index + 1}: duplicate scenario id ${row.id}`);
+    if (row.evaluationSplit !== "tuning" && row.evaluationSplit !== "holdout") {
+      throw new MatrixValidationError(`${file}:${index + 1}: evaluationSplit must be tuning or holdout`);
+    }
     seen.add(row.id);
-    return row.id;
+    const lineRanges = row.golden?.mustReadRanges;
+    const coordinateRanges = row.golden?.mustReadCoordinateRangesV2;
+    return {
+      id: row.id,
+      evaluationSplit: row.evaluationSplit,
+      hasLineRanges: Boolean(lineRanges && typeof lineRanges === "object" && !Array.isArray(lineRanges) && Object.keys(lineRanges).length > 0),
+      hasCoordinateRanges: Array.isArray(coordinateRanges) && coordinateRanges.length > 0
+    };
   });
 }
 
@@ -572,7 +726,10 @@ if (isMain) {
     if (cli.help) {
       printUsage();
     } else {
-      const result = verifyMatrix(cli);
+      const result = verifyMatrix({
+        ...cli,
+        summaryFile: cli.summaryFile ?? false
+      });
       console.table(result.projects.map(project => ({
         project: project.project,
         oldRecall: project.old.recall.toFixed(4),

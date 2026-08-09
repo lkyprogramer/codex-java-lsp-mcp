@@ -1,18 +1,28 @@
 #!/usr/bin/env node
-// input: A baseline Git revision, a candidate worktree, and three local Java repositories.
+// input: A baseline Git revision, a candidate source checkout, and three local Java repositories.
 // output: An isolated AB/BA/AB cold-nolsp impact matrix plus a strict paired-gate summary.
-// pos: Reusable real-repository acceptance runner; never compiles or starts JDT in the caller's active worktree.
+// pos: Reusable real-repository acceptance runner; all code and Java inputs run from private local clones.
 import { createHash } from "node:crypto";
 import { createWriteStream, existsSync } from "node:fs";
-import { access, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { MATRIX_PROJECTS, VERIFIER_VERSION, verifyMatrix } from "./verify-three-repo-cold-matrix.mjs";
+import {
+  copyIsolatedNodeModules,
+  createDetachedLocalClone,
+  dependencyTreeInventory,
+  scrubHostNodeRuntimeState
+} from "./isolation-utils.mjs";
 
 const scriptRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const COLD_ENV = { JDTLS_BIN: "/usr/bin/false", JAVA_LSP_SHADOW_RANKING: "0" };
+const COLD_ENV = {
+  JDTLS_BIN: "/usr/bin/false",
+  JAVA_LSP_SHADOW_RANKING: "0",
+  JAVA_LSP_ISOLATED_VALIDATION: "1"
+};
 const ROUND_ORDER = [["old", "new"], ["new", "old"], ["old", "new"]];
 
 async function main() {
@@ -20,17 +30,28 @@ async function main() {
   if (cli.help) return printUsage();
 
   const sourceRoot = path.resolve(cli.candidateRoot);
-  const outputDir = path.resolve(cli.outputDir || path.join(sourceRoot, "artifacts", "model-eval", `three-repo-cold-${timestamp()}`));
+  const outputDir = path.resolve(cli.outputDir);
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "codex-java-lsp-mcp-three-repo-"));
   const baselineRoot = path.join(workspaceRoot, "baseline");
   const candidateRoot = path.join(workspaceRoot, "candidate");
   const scenarioDir = path.join(outputDir, "frozen-scenarios");
   const matrixDir = path.join(outputDir, "matrix");
   const cacheDir = path.join(workspaceRoot, "caches");
-  const isolatedEnv = { ...COLD_ENV, JAVA_LSP_CACHE_ROOT: path.join(workspaceRoot, "process-cache") };
-  let baselineCreated = false;
-  let candidateCreated = false;
-  let worktreesRemoved = true;
+  const isolatedEnv = {
+    ...COLD_ENV,
+    HOME: path.join(workspaceRoot, "home"),
+    XDG_CACHE_HOME: path.join(workspaceRoot, "xdg-cache"),
+    XDG_CONFIG_HOME: path.join(workspaceRoot, "xdg-config"),
+    XDG_DATA_HOME: path.join(workspaceRoot, "xdg-data"),
+    XDG_STATE_HOME: path.join(workspaceRoot, "xdg-state"),
+    TMPDIR: path.join(workspaceRoot, "tmp"),
+    JAVA_LSP_CACHE_ROOT: path.join(workspaceRoot, "process-cache"),
+    JDTLS_DATA_DIR: path.join(workspaceRoot, "jdt-data"),
+    JDTLS_LOG_DIR: path.join(workspaceRoot, "jdt-logs"),
+    JAVA_LSP_PROJECTS_JSON: path.join(workspaceRoot, "projects.json"),
+    GRADLE_USER_HOME: path.join(workspaceRoot, "gradle-home"),
+    MAVEN_USER_HOME: path.join(workspaceRoot, "maven-home")
+  };
 
   try {
     await preflight({ cli, sourceRoot, outputDir });
@@ -38,6 +59,9 @@ async function main() {
     await mkdir(scenarioDir, { recursive: true });
     await mkdir(matrixDir, { recursive: true });
     await mkdir(cacheDir, { recursive: true });
+    await Promise.all(["home", "xdg-cache", "xdg-config", "xdg-data", "xdg-state", "tmp", "process-cache", "jdt-data", "jdt-logs", "gradle-home", "maven-home"]
+      .map(directory => mkdir(path.join(workspaceRoot, directory), { recursive: true })));
+    await writeFile(path.join(workspaceRoot, "projects.json"), "{\"aliases\":[],\"defaults\":{}}\n");
 
     const candidateSnapshot = await captureCandidatePatch(sourceRoot);
     const candidatePatch = candidateSnapshot.patch;
@@ -50,29 +74,40 @@ async function main() {
       candidateSnapshot.untrackedInputs
     );
 
-    await run("git", ["-C", sourceRoot, "worktree", "add", "--detach", baselineRoot, cli.baseline]);
-    baselineCreated = true;
-    await run("git", ["-C", sourceRoot, "worktree", "add", "--detach", candidateRoot, "HEAD"]);
-    candidateCreated = true;
+    const baselineCommit = (await capture("git", ["-C", sourceRoot, "rev-parse", `${cli.baseline}^{commit}`])).trim();
+    const candidateCommit = (await capture("git", ["-C", sourceRoot, "rev-parse", "HEAD^{commit}"])).trim();
+    await createDetachedLocalClone(sourceRoot, baselineRoot, baselineCommit, run);
+    await createDetachedLocalClone(sourceRoot, candidateRoot, candidateCommit, run);
     if (candidatePatch.length > 0) await run("git", ["-C", candidateRoot, "apply", "--index", candidatePatchFile]);
 
-    await symlinkNodeModules(sourceRoot, baselineRoot);
-    await symlinkNodeModules(sourceRoot, candidateRoot);
+    const sourceDependencyBefore = await dependencyTreeInventory(path.join(sourceRoot, "node_modules"));
+    const isolatedNodeModules = await copyIsolatedNodeModules(sourceRoot, workspaceRoot);
+    const [sourceDependencyAfter, isolatedDependency] = await Promise.all([
+      dependencyTreeInventory(path.join(sourceRoot, "node_modules")),
+      dependencyTreeInventory(isolatedNodeModules)
+    ]);
+    if (!sameDependencyInventory(sourceDependencyBefore, sourceDependencyAfter)
+      || !sameDependencyInventory(sourceDependencyBefore, isolatedDependency)) {
+      throw new Error("node_modules changed during the isolated dependency snapshot");
+    }
+    await symlinkNodeModules(isolatedNodeModules, baselineRoot);
+    await symlinkNodeModules(isolatedNodeModules, candidateRoot);
 
-    const scenarios = await freezeScenarios(candidateRoot, scenarioDir);
+    const sourceRepositories = await repositoryIdentities(cli.repositories);
+    const repositories = await cloneRepositories(sourceRepositories, path.join(workspaceRoot, "repositories"));
+    const scenarios = await freezeScenarios(candidateRoot, scenarioDir, repositories);
     await writeFile(path.join(outputDir, "frozen-scenarios.sha256"), Object.entries(scenarios)
       .map(([project, scenario]) => `${scenario.sha256}  frozen-scenarios/${project}.scenarios.jsonl`)
       .join("\n") + "\n");
 
     await build(baselineRoot, isolatedEnv);
     await build(candidateRoot, isolatedEnv);
-    await runCandidateTests(candidateRoot, isolatedEnv);
+    const candidateTests = await runCandidateTests(candidateRoot, isolatedEnv, path.join(outputDir, "candidate-tests"));
 
     const runtimes = {
       old: await runtimeIdentity(baselineRoot),
       new: await runtimeIdentity(candidateRoot)
     };
-    const repositories = await repositoryIdentities(cli.repositories);
     const manifest = await writeManifest(outputDir, {
       sourceRoot,
       verifierVersion: VERIFIER_VERSION,
@@ -91,7 +126,7 @@ async function main() {
       comparisonPolicy: {
         baseline: "executable-code-baseline",
         baselineRevision: runtimes.old.commit,
-        goldenSchema: "task36-cross-version-v1",
+        goldenSchema: "java-intelligence-v32-range-holdout-v2",
         pReadTolerance: 0.02,
         p95AbsoluteSlackMs: 50,
         taskBlockingBaseline: "attempt-or-derived-attribution"
@@ -99,6 +134,11 @@ async function main() {
       rounds: ROUND_ORDER.map(order => order.join("/")),
       repositories,
       scenarios,
+      candidateTests,
+      dependencies: {
+        copyMode: "private-content-verified-copy",
+        inventory: isolatedDependency
+      },
       jdtlsDisabled: true,
       workspaceRoot
     });
@@ -133,6 +173,11 @@ async function main() {
       }
     }
 
+    const finalDependency = await dependencyTreeInventory(isolatedNodeModules);
+    if (!sameDependencyInventory(isolatedDependency, finalDependency)) {
+      throw new Error("isolated node_modules changed during build, tests, or matrix execution");
+    }
+
     const result = verifyMatrix({
       matrixDir,
       manifestFile: manifest.file,
@@ -144,15 +189,9 @@ async function main() {
     if (!result.passed) process.exitCode = 1;
   } finally {
     if (!cli.keepWorktrees) {
-      worktreesRemoved = await removeWorktree(sourceRoot, candidateRoot, candidateCreated) && worktreesRemoved;
-      worktreesRemoved = await removeWorktree(sourceRoot, baselineRoot, baselineCreated) && worktreesRemoved;
-      if (worktreesRemoved) {
-        await rm(workspaceRoot, { recursive: true, force: true });
-      } else {
-        console.warn(`preserved temporary workspace after worktree cleanup failure: ${workspaceRoot}`);
-      }
+      await rm(workspaceRoot, { recursive: true, force: true });
     } else {
-      console.log(`preserved isolated worktrees/cache: ${workspaceRoot}`);
+      console.log(`preserved isolated local clones/cache: ${workspaceRoot}`);
     }
   }
 }
@@ -163,9 +202,7 @@ async function preflight({ cli, sourceRoot, outputDir }) {
   await run("git", ["-C", sourceRoot, "merge-base", "--is-ancestor", cli.baseline, "HEAD"]);
   const baselineCommit = (await capture("git", ["-C", sourceRoot, "rev-parse", `${cli.baseline}^{commit}`])).trim();
   const candidateCommit = (await capture("git", ["-C", sourceRoot, "rev-parse", "HEAD^{commit}"])).trim();
-  if (baselineCommit === candidateCommit) {
-    throw new Error("baseline and candidate must resolve to different commits");
-  }
+  await assertOutputOutsideSource(sourceRoot, outputDir);
   if (existsSync(outputDir)) throw new Error(`output directory already exists: ${outputDir}`);
   for (const [project, repoRoot] of Object.entries(cli.repositories)) {
     await access(repoRoot).catch(() => {
@@ -177,7 +214,21 @@ async function preflight({ cli, sourceRoot, outputDir }) {
   }
 }
 
-async function freezeScenarios(candidateRoot, scenarioDir) {
+export async function assertOutputOutsideSource(sourceRoot, outputDir) {
+  const outputParent = path.dirname(path.resolve(outputDir));
+  const [canonicalSource, canonicalParent] = await Promise.all([
+    realpath(sourceRoot),
+    realpath(outputParent).catch(() => {
+      throw new Error("formal matrix --output-dir parent must already exist");
+    })
+  ]);
+  const canonicalOutput = path.join(canonicalParent, path.basename(path.resolve(outputDir)));
+  if (isWithin(canonicalSource, canonicalOutput)) {
+    throw new Error("formal matrix --output-dir must be outside the candidate source checkout");
+  }
+}
+
+async function freezeScenarios(candidateRoot, scenarioDir, repositories) {
   const scenarios = {};
   for (const project of MATRIX_PROJECTS) {
     const source = path.join(candidateRoot, "golden", `${project}.scenarios.jsonl`);
@@ -185,20 +236,24 @@ async function freezeScenarios(candidateRoot, scenarioDir) {
     const sourceContents = await readFile(source, "utf8");
     await writeFile(target, toCrossVersionScenarioJsonl(sourceContents, source));
     const bytes = await readFile(target);
+    const rows = scenarioRows(bytes.toString("utf8"), target);
+    await validateScenarioSet(rows, repositories[project], target);
     scenarios[project] = {
       file: target,
       sha256: sha256(bytes),
-      rowIds: scenarioIds(bytes.toString("utf8"), target)
+      rowIds: rows.map(row => row.id),
+      tuningRowIds: rows.filter(row => row.evaluationSplit === "tuning").map(row => row.id),
+      holdoutRowIds: rows.filter(row => row.evaluationSplit === "holdout").map(row => row.id)
     };
   }
   return scenarios;
 }
 
-async function symlinkNodeModules(sourceRoot, worktreeRoot) {
+async function symlinkNodeModules(isolatedNodeModules, worktreeRoot) {
   const target = path.join(worktreeRoot, "node_modules");
   if (existsSync(target)) return;
   const { symlink } = await import("node:fs/promises");
-  await symlink(path.join(sourceRoot, "node_modules"), target, "dir");
+  await symlink(isolatedNodeModules, target, "dir");
 }
 
 async function build(root, env) {
@@ -206,8 +261,77 @@ async function build(root, env) {
   await run(process.execPath, [path.join(root, "scripts", "write-build-stamp.mjs")], { cwd: root, env });
 }
 
-async function runCandidateTests(candidateRoot, env) {
-  await run(process.execPath, ["--test", "--test-concurrency=1", "dist/**/*.test.js"], { cwd: candidateRoot, env });
+async function runCandidateTests(candidateRoot, env, evidenceRoot) {
+  await mkdir(evidenceRoot, { recursive: true });
+  const scriptTests = (await readdir(path.join(candidateRoot, "scripts"), { recursive: true }))
+    .filter(file => file.endsWith(".test.mjs"))
+    .map(file => path.join("scripts", file))
+    .sort((left, right) => left.localeCompare(right));
+  if (scriptTests.length === 0) throw new Error("candidate scripts test suite discovered zero test files");
+  const dist = await runTestSuite(
+    process.execPath,
+    ["--test", "--test-concurrency=1", "dist/**/*.test.js"],
+    { cwd: candidateRoot, env, label: "dist", evidenceRoot }
+  );
+  const scripts = await runTestSuite(
+    process.execPath,
+    ["--test", "--test-concurrency=1", ...scriptTests],
+    { cwd: candidateRoot, env, label: "scripts", evidenceRoot }
+  );
+  return { dist, scripts };
+}
+
+function runTestSuite(command, args, { cwd, env, label, evidenceRoot }) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd,
+      env: isolatedChildEnvironment(env),
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    const stdout = [];
+    const stderr = [];
+    child.stdout.on("data", chunk => {
+      stdout.push(chunk);
+      process.stdout.write(chunk);
+    });
+    child.stderr.on("data", chunk => {
+      stderr.push(chunk);
+      process.stderr.write(chunk);
+    });
+    child.once("error", reject);
+    child.once("exit", async code => {
+      try {
+        const stdoutBytes = Buffer.concat(stdout);
+        const stderrBytes = Buffer.concat(stderr);
+        const stdoutFile = path.join(evidenceRoot, `${label}.tap`);
+        const stderrFile = path.join(evidenceRoot, `${label}.stderr`);
+        await Promise.all([writeFile(stdoutFile, stdoutBytes), writeFile(stderrFile, stderrBytes)]);
+        const stdoutText = stdoutBytes.toString("utf8");
+        const tests = [...stdoutText.matchAll(/^# tests (\d+)$/gm)].at(-1);
+        const passed = [...stdoutText.matchAll(/^# pass (\d+)$/gm)].at(-1);
+        const discoveredTests = tests ? Number(tests[1]) : 0;
+        const passedTests = passed ? Number(passed[1]) : 0;
+        if (code !== 0) {
+          reject(new Error(`${label} candidate tests exited with ${code}: ${stderrBytes.toString("utf8")}`));
+        } else if (discoveredTests <= 0 || passedTests !== discoveredTests) {
+          reject(new Error(`${label} candidate tests did not prove a non-empty all-green suite`));
+        } else {
+          resolve({
+            discoveredTests,
+            passedTests,
+            stdout: { file: stdoutFile, bytes: stdoutBytes.byteLength, sha256: sha256(stdoutBytes) },
+            stderr: { file: stderrFile, bytes: stderrBytes.byteLength, sha256: sha256(stderrBytes) }
+          });
+        }
+      } catch (error) {
+        reject(error);
+      }
+    });
+  });
+}
+
+function sameDependencyInventory(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 async function runCell({ runtimeRoot, variant, round, project, repoRoot, repository, scenarioFile, cacheDir, outputFile, runs, env, provenance }) {
@@ -223,7 +347,9 @@ async function runCell({ runtimeRoot, variant, round, project, repoRoot, reposit
       "--warm-state", "cold-nolsp",
       "--strategy", "impact",
       "--runs", String(runs),
-      "--verbosity", "diagnostic",
+      // The public default is standard. Diagnostic telemetry has a separate
+      // attribution suite and must never be charged to the default Token gate.
+      "--verbosity", "standard",
       "--index-cache-dir", cacheDir
     ],
     outputFile,
@@ -266,6 +392,22 @@ async function repositoryIdentities(repositories) {
   for (const project of MATRIX_PROJECTS) {
     const root = path.resolve(repositories[project]);
     result[project] = await assertCleanRepository(root, project);
+  }
+  return result;
+}
+
+async function cloneRepositories(sourceRepositories, destinationRoot) {
+  await mkdir(destinationRoot, { recursive: true });
+  const result = {};
+  for (const project of MATRIX_PROJECTS) {
+    const source = sourceRepositories[project];
+    const target = path.join(destinationRoot, project);
+    await createDetachedLocalClone(source.root, target, source.head, run);
+    const isolated = await assertCleanRepository(target, project);
+    if (isolated.head !== source.head || isolated.tree !== source.tree) {
+      throw new Error(`${project} isolated clone does not match its source identity`);
+    }
+    result[project] = { ...isolated, sourceRoot: source.root };
   }
   return result;
 }
@@ -372,7 +514,7 @@ async function stampCellProvenance(file, provenance) {
   await writeFile(file, `${JSON.stringify(payload, null, 2)}\n`);
 }
 
-function scenarioIds(contents, file) {
+function scenarioRows(contents, file) {
   const seen = new Set();
   return contents.split(/\r?\n/).map(line => line.trim()).filter(Boolean).map((line, index) => {
     let row;
@@ -386,19 +528,85 @@ function scenarioIds(contents, file) {
     }
     if (seen.has(row.id)) throw new Error(`${file}:${index + 1}: duplicate scenario id ${row.id}`);
     seen.add(row.id);
-    return row.id;
+    return row;
   });
 }
 
-async function removeWorktree(sourceRoot, worktreeRoot, created) {
-  if (!created) return true;
-  try {
-    await run("git", ["-C", sourceRoot, "worktree", "remove", "--force", worktreeRoot]);
-    return true;
-  } catch (error) {
-    console.warn(`could not remove temporary worktree ${worktreeRoot}: ${error instanceof Error ? error.message : String(error)}`);
-    return false;
+function scenarioIds(contents, file) {
+  return scenarioRows(contents, file).map(row => row.id);
+}
+
+export async function validateScenarioSet(rows, repository, file) {
+  if (rows.length !== 10) throw new Error(`${file}: formal V3.2 matrix requires exactly 10 scenarios`);
+  const tuning = rows.filter(row => row.evaluationSplit === "tuning");
+  const holdout = rows.filter(row => row.evaluationSplit === "holdout");
+  if (tuning.length !== 8 || holdout.length !== 2) {
+    throw new Error(`${file}: expected 8 tuning and 2 holdout scenarios`);
   }
+  const contentByFile = new Map();
+  const sourceLines = async relativeFile => {
+    if (!(typeof relativeFile === "string" && relativeFile.length > 0 && !path.isAbsolute(relativeFile))) {
+      throw new Error(`${file}: scenario source path must be repository-relative`);
+    }
+    const absolute = path.resolve(repository.root, relativeFile);
+    const relative = path.relative(repository.root, absolute);
+    if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+      throw new Error(`${file}: scenario source escapes the isolated repository: ${relativeFile}`);
+    }
+    if (!contentByFile.has(relativeFile)) {
+      const content = await readFile(absolute, "utf8").catch(error => {
+        throw new Error(`${file}: cannot read frozen source ${relativeFile}: ${error instanceof Error ? error.message : String(error)}`);
+      });
+      contentByFile.set(relativeFile, content.split(/\r?\n/));
+    }
+    return contentByFile.get(relativeFile);
+  };
+
+  for (const row of rows) {
+    if (row.repoCommit !== repository.head) {
+      throw new Error(`${file}: ${row.id} repoCommit must equal frozen repository HEAD ${repository.head}`);
+    }
+    const anchorLines = await sourceLines(row.anchor?.file);
+    validatePosition(row.anchor, anchorLines, `${file}: ${row.id} anchor`);
+    const lineRanges = row.golden?.mustReadRanges;
+    const coordinateRanges = row.golden?.mustReadCoordinateRangesV2;
+    if (!lineRanges || typeof lineRanges !== "object" || Array.isArray(lineRanges) || Object.keys(lineRanges).length === 0) {
+      throw new Error(`${file}: ${row.id} must carry mustReadRanges`);
+    }
+    if (!Array.isArray(coordinateRanges) || coordinateRanges.length === 0) {
+      throw new Error(`${file}: ${row.id} must carry mustReadCoordinateRangesV2`);
+    }
+    for (const [relativeFile, ranges] of Object.entries(lineRanges)) {
+      const lines = await sourceLines(relativeFile);
+      if (!Array.isArray(ranges) || ranges.length === 0) throw new Error(`${file}: ${row.id} has an empty line range set`);
+      for (const range of ranges) {
+        if (!Number.isInteger(range?.startLine) || !Number.isInteger(range?.endLine)
+          || range.startLine < 1 || range.endLine < range.startLine || range.endLine > lines.length) {
+          throw new Error(`${file}: ${row.id} has an invalid line range for ${relativeFile}`);
+        }
+      }
+    }
+    for (const range of coordinateRanges) {
+      const lines = await sourceLines(range?.file);
+      validatePosition(range?.start, lines, `${file}: ${row.id} coordinate start`);
+      validatePosition(range?.end, lines, `${file}: ${row.id} coordinate end`);
+      if (comparePosition(range.start, range.end) >= 0) {
+        throw new Error(`${file}: ${row.id} coordinate range must be end-exclusive and non-empty`);
+      }
+    }
+  }
+}
+
+function validatePosition(position, lines, context) {
+  if (!Number.isInteger(position?.line) || !Number.isInteger(position?.column)
+    || position.line < 1 || position.line > lines.length
+    || position.column < 1 || position.column > lines[position.line - 1].length + 1) {
+    throw new Error(`${context} is not a valid 1-based UTF-16 source position`);
+  }
+}
+
+function comparePosition(left, right) {
+  return left.line - right.line || left.column - right.column;
 }
 
 function sha256(value) {
@@ -409,7 +617,7 @@ function run(command, args, { cwd, env } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,
-      env: { ...process.env, ...env },
+      env: isolatedChildEnvironment(env),
       stdio: "inherit"
     });
     child.once("error", reject);
@@ -441,7 +649,7 @@ function runToFiles(command, args, stdoutFile, stderrFile, { cwd, env } = {}) {
     const stderr = createWriteStream(stderrFile);
     const stdoutFinished = streamFinished(stdout);
     const stderrFinished = streamFinished(stderr);
-    const child = spawn(command, args, { cwd, env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(command, args, { cwd, env: isolatedChildEnvironment(env), stdio: ["ignore", "pipe", "pipe"] });
     child.stdout.pipe(stdout);
     child.stderr.pipe(stderr);
     child.once("error", error => {
@@ -490,7 +698,7 @@ function parseCli(args) {
     keepWorktrees: flags.has("--keep-worktrees"),
     candidateRoot,
     baseline: required(options.get("--baseline") || process.env.THREE_REPO_BASELINE_SHA, "--baseline"),
-    outputDir: options.get("--output-dir"),
+    outputDir: required(options.get("--output-dir"), "--output-dir"),
     runs: numberOption(options.get("--runs"), 5, "--runs"),
     p95Limit: numberOption(options.get("--p95-limit"), 1.25, "--p95-limit"),
     repositories: {
@@ -513,8 +721,36 @@ function numberOption(value, fallback, flag) {
   return parsed;
 }
 
-function timestamp() {
-  return new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+export function isolatedChildEnvironment(overrides = {}) {
+  const environment = scrubHostNodeRuntimeState({ ...process.env, ...overrides });
+  for (const name of [
+    "JDTLS_EXTRA_ARGS",
+    "JAVA_LSP_RESOURCE_TELEMETRY_FILE",
+    "JAVA_LSP_RESOURCE_INTERVAL_MS",
+    "JAVA_LSP_REPO_ROOT",
+    "JAVA_LSP_BENCH_REPO_ROOT",
+    "JAVA_LSP_SMOKE_REPO_ROOT",
+    "JAVA_LSP_TEST_REPO_ROOT",
+    "JAVA_LSP_BENCH_INDEX_CACHE_DIR",
+    "JAVA_LSP_ISOLATED_REPO_ROOT",
+    "JAVA_LSP_ISOLATED_REPO_WORKTREE",
+    "JAVA_TOOL_OPTIONS",
+    "_JAVA_OPTIONS",
+    "JDK_JAVA_OPTIONS",
+    "MAVEN_OPTS",
+    "GRADLE_OPTS",
+    "LISHUEDU_ROOT",
+    "CIPHERLINK_ROOT",
+    "EXAM_PARENT_V3_ROOT"
+  ]) {
+    if (!(name in overrides)) delete environment[name];
+  }
+  return environment;
+}
+
+function isWithin(root, target) {
+  const relative = path.relative(path.resolve(root), path.resolve(target));
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
 function printResult(result) {
@@ -536,7 +772,7 @@ function printUsage() {
   console.log(`usage: node scripts/run-three-repo-cold-matrix.mjs \\
   --baseline <sha> \\
   --lishuedu <repo-root> --cipherlink <repo-root> --exam-parent-v3 <repo-root> \\
-  [--candidate-root <codex-java-lsp-mcp-root>] [--output-dir <new-dir>] \\
+  [--candidate-root <codex-java-lsp-mcp-root>] --output-dir <new-dir-outside-source-checkout> \\
   [--runs 5] [--p95-limit 1.25] [--keep-worktrees]`);
 }
 

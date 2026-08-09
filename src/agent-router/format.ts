@@ -102,6 +102,10 @@ export function applyVerbosity(payload: ImpactResult, verbosity: ImpactVerbosity
   if (verbosity === "diagnostic") {
     return;
   }
+  payload.files = payload.files.map(file => {
+    const { reasons: _reasons, verifiedBy: _verifiedBy, scoreBreakdown: _scoreBreakdown, ...publicFile } = file;
+    return publicFile;
+  });
   const preservedGaps = payload.evidenceGaps.filter(isLombokCompletenessGap);
   const ordinaryGaps = payload.evidenceGaps.filter(gap => !isLombokCompletenessGap(gap));
   payload.evidenceGaps = [...preservedGaps, ...ordinaryGaps]
@@ -112,6 +116,20 @@ export function applyVerbosity(payload: ImpactResult, verbosity: ImpactVerbosity
     elapsedMs: metrics.elapsedMs,
     ...(metrics.generatedSemantics === undefined ? {} : { generatedSemantics: metrics.generatedSemantics })
   };
+}
+
+/**
+ * Produces a wire-ready verbosity projection from one diagnostic result.
+ * The canonical object is never mutated, so payload attribution can compare
+ * compact/standard/diagnostic without a second provider/rank/read-plan run.
+ */
+export function projectImpactResultV6(
+  canonicalDiagnostic: Readonly<ImpactResult>,
+  verbosity: ImpactVerbosity
+): ImpactResult {
+  const payload = structuredClone(canonicalDiagnostic) as ImpactResult;
+  applyVerbosity(payload, verbosity);
+  return withConvergedCostV6(payload, payload.cost.readBytes, payload.cost.suppressedRawBytes);
 }
 
 function shortEvidenceGap(gap: string): string {

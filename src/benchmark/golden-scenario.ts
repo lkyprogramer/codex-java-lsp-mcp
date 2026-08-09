@@ -4,6 +4,7 @@
 //      parsing without importing that script's side-effecting top level.
 import { existsSync, readFileSync } from "node:fs";
 import type { ImpactOptions } from "../agent-types.js";
+import type { SourcePosition, SourceRange } from "../runtime/source-range.js";
 
 export type WarmState = "cold-nolsp" | "cold-lsp" | "warm-auto" | "warm-required";
 
@@ -15,6 +16,7 @@ export type Scenario = {
   projectId?: string;
   layoutProfile?: string;
   repoCommit?: string;
+  evaluationSplit?: "tuning" | "holdout";
   scenarioVersion?: number;
   warmState?: WarmState;
   skippedProfiles?: string[];
@@ -32,6 +34,7 @@ export type Scenario = {
     shouldHit?: string[];
     support?: string[];
     mustReadRanges?: Record<string, Array<{ startLine: number; endLine: number }>>;
+    mustReadCoordinateRangesV2?: Array<{ file: string } & SourceRange>;
   };
   groundTruth?: string[];
 };
@@ -46,7 +49,9 @@ export function loadScenarios(file: string): Scenario[] {
     .filter(Boolean)
     .map((line, index) => {
       try {
-        return JSON.parse(line) as Scenario;
+        const parsed: unknown = JSON.parse(line);
+        validateScenario(parsed, `${file}:${index + 1}`);
+        return parsed as Scenario;
       } catch (error) {
         throw new Error(`Invalid scenario JSON at ${file}:${index + 1}: ${error instanceof Error ? error.message : String(error)}`);
       }
@@ -158,4 +163,158 @@ export function readPlanRangeRecall(
     }
   }
   return totalRanges > 0 ? coveredRanges / totalRanges : undefined;
+}
+
+/**
+ * Fraction of required exact UTF-16 ranges covered by the union of selected
+ * worker ranges. Legacy line-only scenarios are deliberately UNMEASURED.
+ */
+export function readPlanCoordinateRecall(
+  scenario: Scenario,
+  selectedRangesByFile: ReadonlyMap<string, readonly SourceRange[]>
+): number | undefined {
+  const requiredByFile = scenario.golden?.mustReadCoordinateRangesV2;
+  if (!requiredByFile || requiredByFile.length === 0) {
+    return undefined;
+  }
+  let totalRanges = 0;
+  let coveredRanges = 0;
+  for (const required of requiredByFile) {
+    const selected = [...(selectedRangesByFile.get(required.file) ?? [])]
+      .sort((left, right) => comparePosition(left.start, right.start) || comparePosition(left.end, right.end));
+    totalRanges += 1;
+    if (rangeCoveredByUnion(required, selected)) coveredRanges += 1;
+  }
+  return totalRanges > 0 ? coveredRanges / totalRanges : undefined;
+}
+
+function rangeCoveredByUnion(required: SourceRange, selected: readonly SourceRange[]): boolean {
+  let coveredUntil: SourcePosition | undefined;
+  for (const candidate of selected) {
+    if (comparePosition(candidate.end, required.start) <= 0) continue;
+    if (comparePosition(candidate.start, required.end) >= 0) break;
+    if (!coveredUntil) {
+      if (comparePosition(candidate.start, required.start) > 0) return false;
+      coveredUntil = candidate.end;
+    } else if (comparePosition(candidate.start, coveredUntil) <= 0) {
+      if (comparePosition(candidate.end, coveredUntil) > 0) coveredUntil = candidate.end;
+    } else {
+      return false;
+    }
+    if (comparePosition(coveredUntil, required.end) >= 0) return true;
+  }
+  return false;
+}
+
+function comparePosition(left: SourcePosition, right: SourcePosition): number {
+  return left.line - right.line || left.column - right.column;
+}
+
+function validateScenario(value: unknown, context: string): void {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`Invalid scenario at ${context}: expected an object`);
+  }
+  const scenario = value as Record<string, unknown>;
+  if (typeof scenario.id !== "string" || typeof scenario.name !== "string") {
+    throw new Error(`Invalid scenario at ${context}: id and name must be strings`);
+  }
+  if (!scenario.anchor || typeof scenario.anchor !== "object" || Array.isArray(scenario.anchor)) {
+    throw new Error(`Invalid scenario at ${context}: anchor must be an object`);
+  }
+  const anchor = scenario.anchor as Record<string, unknown>;
+  if (!validRelativePath(anchor.file)
+    || !positiveInteger(anchor.line)
+    || !positiveInteger(anchor.column)) {
+    throw new Error(`Invalid scenario at ${context}: anchor must use a relative file and positive 1-based coordinates`);
+  }
+  if (scenario.evaluationSplit !== undefined) {
+    if (scenario.evaluationSplit !== "tuning" && scenario.evaluationSplit !== "holdout") {
+      throw new Error(`Invalid scenario at ${context}: evaluationSplit must be tuning or holdout`);
+    }
+    if (typeof scenario.repoCommit !== "string" || !/^[0-9a-f]{40}$/i.test(scenario.repoCommit)) {
+      throw new Error(`Invalid scenario at ${context}: split scenarios require a full 40-character repoCommit`);
+    }
+  }
+  if (scenario.golden === undefined) return;
+  if (!scenario.golden || typeof scenario.golden !== "object" || Array.isArray(scenario.golden)) {
+    throw new Error(`Invalid scenario at ${context}: golden must be an object`);
+  }
+  const golden = scenario.golden as Record<string, unknown>;
+  validateLineRanges(golden.mustReadRanges, `${context}.golden.mustReadRanges`);
+  validateCoordinateRanges(golden.mustReadCoordinateRangesV2, `${context}.golden.mustReadCoordinateRangesV2`);
+}
+
+function validateLineRanges(value: unknown, context: string): void {
+  if (value === undefined) return;
+  for (const [file, ranges] of validatedRangeRecord(value, context)) {
+    for (const [index, raw] of ranges.entries()) {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+        throw new Error(`Invalid scenario at ${context}.${file}[${index}]: expected a range object`);
+      }
+      const range = raw as Record<string, unknown>;
+      if (!positiveInteger(range.startLine) || !positiveInteger(range.endLine) || range.endLine < range.startLine) {
+        throw new Error(`Invalid scenario at ${context}.${file}[${index}]: expected an inclusive positive line range`);
+      }
+    }
+  }
+}
+
+function validateCoordinateRanges(value: unknown, context: string): void {
+  if (value === undefined) return;
+  if (!Array.isArray(value)) {
+    throw new Error(`Invalid scenario at ${context}: expected an array of file ranges`);
+  }
+  const seen = new Set<string>();
+  for (const [index, raw] of value.entries()) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      throw new Error(`Invalid scenario at ${context}[${index}]: expected a range object`);
+    }
+    const range = raw as Record<string, unknown>;
+    const start = range.start;
+    const end = range.end;
+    if (!validRelativePath(range.file)
+      || !validPosition(start)
+      || !validPosition(end)
+      || comparePosition(start, end) >= 0) {
+      throw new Error(`Invalid scenario at ${context}[${index}]: expected a relative file and positive 1-based end-exclusive UTF-16 range`);
+    }
+    const key = `${range.file}:${start.line}:${start.column}-${end.line}:${end.column}`;
+    if (seen.has(key)) {
+      throw new Error(`Invalid scenario at ${context}[${index}]: duplicate coordinate range`);
+    }
+    seen.add(key);
+  }
+}
+
+function validatedRangeRecord(value: unknown, context: string): Array<[string, unknown[]]> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`Invalid scenario at ${context}: expected a file-to-ranges object`);
+  }
+  return Object.entries(value as Record<string, unknown>).map(([file, ranges]) => {
+    if (!validRelativePath(file) || !Array.isArray(ranges)) {
+      throw new Error(`Invalid scenario at ${context}.${file}: expected a relative file and range array`);
+    }
+    return [file, ranges];
+  });
+}
+
+function validPosition(value: unknown): value is SourcePosition {
+  return value !== undefined
+    && value !== null
+    && typeof value === "object"
+    && !Array.isArray(value)
+    && positiveInteger((value as Record<string, unknown>).line)
+    && positiveInteger((value as Record<string, unknown>).column);
+}
+
+function validRelativePath(value: unknown): value is string {
+  return typeof value === "string"
+    && value.length > 0
+    && !value.startsWith("/")
+    && !/^[A-Za-z]:[\\/]/.test(value)
+    && !value.split(/[\\/]/).includes("..");
+}
+
+function positiveInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0;
 }

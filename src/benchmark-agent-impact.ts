@@ -8,17 +8,24 @@ import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import { AgentRouter } from "./agent-router/index.js";
 import type { ShadowRankingDiagnostics } from "./agent-router/shadow-ranking.js";
-import type { ImpactOptions } from "./agent-types.js";
+import type { ImpactOptions, ImpactResult } from "./agent-types.js";
+import { projectImpactResultV6 } from "./agent-router/format.js";
 import { readRuntimeBuild } from "./build-info.js";
-import { buildGoldenAttributionV3, buildGoldenCounterfactualV3 } from "./benchmark/attribution-v3.js";
+import {
+  buildGoldenAttributionV3,
+  buildGoldenCounterfactualV3,
+  buildImpactPayloadProjectionV3
+} from "./benchmark/attribution-v3.js";
 import { buildImpactDeterminismSnapshot } from "./benchmark/determinism.js";
 import { isJavaIndexQuiescent } from "./benchmark/java-index-idle.js";
+import { startBenchmarkProcessResourceObserverFromEnvironment } from "./benchmark/process-resource-observer.js";
 import {
   firstTaskBlockingRank,
   goldenEntries,
   goldenFiles,
   loadScenarios,
   ndcgReadAt6,
+  readPlanCoordinateRecall,
   readPlanRangeRecall,
   taskBlockingFiles,
   type GoldenKind,
@@ -31,6 +38,7 @@ import { RouterJavaIndex } from "./java-index/router-java-index.js";
 import { repoCacheRoot } from "./repo-layout.js";
 import { DeadlineBudget } from "./runtime/deadline-budget.js";
 import { createRequestContext, defaultDeadlineMs, MAX_REQUEST_DEADLINE_MS } from "./runtime/request-context.js";
+import type { SourceRange } from "./runtime/source-range.js";
 import { JdtlsSession } from "./jdtls-session.js";
 
 type BenchmarkStrategy = "impact" | "no-lsp";
@@ -56,6 +64,8 @@ type Cli = {
   mode: ImpactOptions["mode"];
   semanticPolicy: ImpactOptions["semanticPolicy"];
   verbosity: NonNullable<ImpactOptions["verbosity"]>;
+  /** Benchmark-only: derive all verbosity payloads from one diagnostic router execution. */
+  payloadProjections: boolean;
   runs: number;
   readPlanMaxItems?: number;
   readPlanMaxBytes?: number;
@@ -71,6 +81,14 @@ const DEFAULT_INDEX_PREPARE_TIMEOUT_MS = 600_000;
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const projectDir = path.resolve(scriptDir, "..");
 const cli = parseCli(process.argv.slice(2), projectDir);
+if (process.env.JAVA_LSP_ISOLATED_VALIDATION !== "1") {
+  throw new Error(
+    "benchmark-agent-impact requires the detached isolated validation harness; refusing to use a caller runtime cache"
+  );
+}
+if (cli.warmState !== "cold-nolsp" && process.env.JAVA_LSP_ISOLATED_REPO_WORKTREE !== "1") {
+  throw new Error("warm benchmark-agent-impact runs require a detached Java repository from run-isolated-jdt-benchmark.mjs");
+}
 const scenarios = loadScenarios(cli.scenarioFile).filter(scenario => !scenario.projectId || scenario.projectId === cli.projectId);
 const runtimeBuild = readRuntimeBuild();
 const metadata = {
@@ -84,6 +102,7 @@ const metadata = {
   mode: cli.mode,
   semanticPolicy: effectiveSemanticPolicy(cli),
   verbosity: cli.verbosity,
+  payloadProjections: cli.payloadProjections,
   strategy: cli.strategy,
   indexBackend: "v2",
   // Recorded so a run is comparable only against runs with the same budget.
@@ -121,6 +140,11 @@ if (cli.listScenarios) {
   }, null, 2));
   process.exit(0);
 }
+
+const processResources = startBenchmarkProcessResourceObserverFromEnvironment(
+  `benchmark-agent-impact:${cli.warmState}`,
+  cli.strategy === "impact" ? "PRESENT" : "NOT_PRESENT"
+);
 
 const session = cli.strategy === "impact" ? new JdtlsSession(cli.repoRoot) : undefined;
 // A benchmark has no runtime coordinator, so it must close the worker itself
@@ -173,12 +197,13 @@ if (session) {
 if (javaIndexClient) {
   await javaIndexClient.close();
 }
+await processResources?.stop();
 
 function parseCli(args: string[], root: string): Cli {
   const values = new Map<string, string | true>();
   for (let index = 0; index < args.length; index += 1) {
     const item = args[index];
-    if (item === "--list-scenarios") {
+    if (item === "--list-scenarios" || item === "--payload-projections") {
       values.set(item, true);
       continue;
     }
@@ -216,6 +241,7 @@ function parseCli(args: string[], root: string): Cli {
     mode,
     semanticPolicy,
     verbosity: stringArg(values, "--verbosity", process.env.JAVA_LSP_BENCH_VERBOSITY || "standard") as NonNullable<ImpactOptions["verbosity"]>,
+    payloadProjections: values.get("--payload-projections") === true,
     runs: Number(stringArg(values, "--runs", process.env.JAVA_LSP_BENCH_RUNS || "1")),
     readPlanMaxItems: optionalPositiveIntegerArg(values, "--read-plan-max-items", process.env.JAVA_LSP_BENCH_READ_PLAN_MAX_ITEMS),
     readPlanMaxBytes: optionalPositiveIntegerArg(values, "--read-plan-max-bytes", process.env.JAVA_LSP_BENCH_READ_PLAN_MAX_BYTES),
@@ -242,7 +268,8 @@ function parseCli(args: string[], root: string): Cli {
 
 async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cli, scenario: Scenario): Promise<Record<string, unknown>> {
   const startedAt = performance.now();
-  const result = await router.impact(
+  let coordinateRangesByAbsolutePath: ReadonlyMap<string, readonly SourceRange[]> = new Map();
+  const canonical = await router.impact(
     {
       anchors: [scenario.anchor],
       mode: cli.mode,
@@ -254,7 +281,7 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
       excludeModules: [],
       taskKeywords: scenario.anchor.taskKeywords || [],
       crossModulePolicy: "auto",
-      verbosity: cli.verbosity,
+      verbosity: cli.payloadProjections ? "diagnostic" : cli.verbosity,
       readPlanMaxItems: cli.readPlanMaxItems,
       readPlanMaxBytes: cli.readPlanMaxBytes
     },
@@ -271,9 +298,26 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
       mode: cli.mode,
       semanticPolicy: effectiveSemanticPolicy(cli),
       budget: DeadlineBudget.fromTimeout(cli.deadlineMs)
-    })
+    }),
+    {
+      readPlanCoordinates(rangesByAbsolutePath) {
+        coordinateRangesByAbsolutePath = rangesByAbsolutePath;
+      }
+    }
   );
-  const elapsedMs = performance.now() - startedAt;
+  const routerElapsedMs = performance.now() - startedAt;
+  recordJavaIndexQueueDepth(canonical);
+  const projectionStartedAt = performance.now();
+  const payloadProjection = cli.payloadProjections
+    ? buildImpactPayloadProjectionV3(canonical)
+    : undefined;
+  const result: ImpactResult = cli.payloadProjections
+    ? projectImpactResultV6(canonical, cli.verbosity)
+    : canonical;
+  const payloadProjectionElapsedMs = cli.payloadProjections
+    ? performance.now() - projectionStartedAt
+    : undefined;
+  const elapsedMs = routerElapsedMs;
   const rawSearchPayload = Buffer.byteLength(JSON.stringify(result), "utf8");
   const readingPayload = readPlanBytes(result);
   const candidatePaths = result.files.map(file => String(file.path));
@@ -281,14 +325,22 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
   const quality = evaluate(candidatePaths, readFiles, scenario);
   const kibVisible = (rawSearchPayload + readingPayload) / 1024;
   const blockingHitsInReadPlan = readFiles.filter(file => taskBlockingFiles(scenario).has(file)).length;
+  const rangeLineRecall = readPlanRangeRecall(scenario, selectedRangesByFile(result));
+  const rangeCoordinateRecall = readPlanCoordinateRecall(
+    scenario,
+    relativeCoordinateRanges(cli.repoRoot, coordinateRangesByAbsolutePath)
+  );
   const qualityV3 = {
     "NDCG_read@6": ndcgReadAt6(scenario, readFiles),
     firstTaskBlockingRank: firstTaskBlockingRank(scenario, candidatePaths),
-    readPlanRangeRecall: readPlanRangeRecall(scenario, selectedRangesByFile(result)),
+    readPlanRangeRecall: rangeLineRecall,
+    RangeLineRecall: rangeLineRecall,
+    RangeCoordinateRecall: rangeCoordinateRecall,
     evidencePerKiB: kibVisible > 0 ? quality.hitFiles / kibVisible : 0,
     taskBlockingHitsPerKiB: kibVisible > 0 ? blockingHitsInReadPlan / kibVisible : 0
   };
-  const shadowRanking = result.metrics?.shadowRanking;
+  const diagnosticResult = cli.payloadProjections ? canonical : result;
+  const shadowRanking = diagnosticResult.metrics?.shadowRanking;
   const shadowRankingTyped = asShadowRankingDiagnostics(shadowRanking);
   const shadowQuality = qualityForShadowRanking(shadowRanking, cli.repoRoot, scenario);
   const sessionPhaseMs = session.drainPhaseMetrics();
@@ -296,8 +348,8 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
     repoRoot: cli.repoRoot,
     mode: cli.mode,
     profile: scenario.anchor.profile,
-    semanticUsed: result.semantic.used,
-    semanticTimeout: result.metrics?.semantic?.timeout === true,
+    semanticUsed: diagnosticResult.semantic.used,
+    semanticTimeout: diagnosticResult.metrics?.semantic?.timeout === true,
     coverage: metadata.prepareJavaIndexStatus?.coverage ?? []
   };
   return {
@@ -307,7 +359,9 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
     ...attemptPayload("impact", quality, rawSearchPayload, readingPayload, elapsedMs, 2, result.readPlan.length, result.cost.suppressedRawBytes, 0),
     ...readPlanMetrics(result),
     ...qualityV3,
-    timing: timingPayload(result, sessionPhaseMs),
+    timing: timingPayload(diagnosticResult, sessionPhaseMs),
+    payloadProjection,
+    payloadProjectionElapsedMs,
     // V3 attribution/counterfactual (Task 32 Steps 2-3) need the same
     // shadow-ranking pass this request already computed; they have no
     // fallback when that pass is off (verbosity=standard or
@@ -319,17 +373,29 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
     counterfactual: attributionContext && shadowRankingTyped
       ? buildGoldenCounterfactualV3(scenario, shadowRankingTyped, attributionContext)
       : undefined,
-    frameworkEvidence: { mapstruct: mapstructEvidenceSummary(result, scenario) },
+    frameworkEvidence: { mapstruct: mapstructEvidenceSummary(diagnosticResult, scenario) },
     // Task 36's 20-run verifier consumes only semantic ordering/state. Keep
     // latency/cache counters in their ordinary attempt fields so benign
     // diagnostic variance cannot mask or manufacture semantic drift.
-    determinism: buildImpactDeterminismSnapshot(result, cli.repoRoot),
+    determinism: buildImpactDeterminismSnapshot(diagnosticResult, cli.repoRoot),
     // Task 25's counterfactual rank diagnostics are deliberately opt-in at
     // the router boundary. Preserve them in the benchmark attempt when that
     // boundary supplied them; standard requests still serialize no field.
     shadowRanking,
     shadowQuality
   };
+}
+
+function recordJavaIndexQueueDepth(result: ImpactResult): void {
+  const rpc = result.metrics?.javaIndex?.rpc;
+  if (!rpc || typeof rpc !== "object") return;
+  const operations = (rpc as { operations?: unknown }).operations;
+  if (!operations || typeof operations !== "object") return;
+  for (const [operation, value] of Object.entries(operations)) {
+    if (!value || typeof value !== "object") continue;
+    const depth = (value as { maxWorkerQueueDepth?: unknown }).maxWorkerQueueDepth;
+    if (typeof depth === "number") processResources?.recordQueueDepth(`java-index:${operation}`, depth);
+  }
 }
 
 /**
@@ -394,6 +460,8 @@ function noLspAttempt(repoRoot: string, scenario: Scenario): Record<string, unkn
     // no-lsp has no range-aware read plan at all - a scenario that later
     // carries mustReadRanges genuinely gets 0 coverage here, not "unmeasured".
     readPlanRangeRecall: readPlanRangeRecall(scenario, new Map()),
+    RangeLineRecall: readPlanRangeRecall(scenario, new Map()),
+    RangeCoordinateRecall: readPlanCoordinateRecall(scenario, new Map()),
     evidencePerKiB: kibVisible > 0 ? quality.hitFiles / kibVisible : 0,
     taskBlockingHitsPerKiB: kibVisible > 0 ? blockingHitsInReadPlan / kibVisible : 0,
     goldenAttribution: goldenAttributionForNoLsp(repoRoot, candidatePaths, readFiles, scenario)
@@ -551,6 +619,16 @@ function selectedRangesByFile(result: Awaited<ReturnType<AgentRouter["impact"]>>
   return byFile;
 }
 
+function relativeCoordinateRanges(
+  repoRoot: string,
+  rangesByAbsolutePath: ReadonlyMap<string, readonly SourceRange[]>
+): Map<string, readonly SourceRange[]> {
+  return new Map([...rangesByAbsolutePath].map(([absolutePath, ranges]) => [
+    path.relative(repoRoot, absolutePath).split(path.sep).join("/"),
+    ranges
+  ]));
+}
+
 function readMatchedFilesBytes(repoRoot: string, files: string[], lineByPath: Map<string, number>, scenario: Scenario): number {
   let bytes = 0;
   for (const file of files) {
@@ -578,7 +656,8 @@ function timingPayload(result: Awaited<ReturnType<AgentRouter["impact"]>>, sessi
     semantic: metrics?.semantic,
     typeReference: metrics?.typeReference,
     importGraph: metrics?.importGraph,
-    persistedSemantic: metrics?.persistedSemantic
+    persistedSemantic: metrics?.persistedSemantic,
+    javaIndex: metrics?.javaIndex
   });
 }
 

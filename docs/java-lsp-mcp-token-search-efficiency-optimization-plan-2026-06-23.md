@@ -1,5 +1,11 @@
 # Java LSP MCP 省 Token 与检索效率优化改造方案
 
+> **历史资料，禁止直接作为可执行 runbook。** 本文第 5 节保留的是 2026-06-23
+> 当时的原始命令，其中包含当前 checkout 的 `npm run build` 和裸 `node dist/...`。
+> 在线 LSP 运行期间严禁执行这些命令；所有现行验证必须使用根 `README.md` 与
+> `docs/deep/codex-java-lsp-mcp-java-intelligence-v3-value-realization-optimization-development-plan-2026-08-09.md`
+> 定义的 detached clone、私有 HOME/XDG/TMP/cache/JDT 隔离入口。
+
 生成时间：2026-06-23
 适用仓库：`/Users/luo/Documents/github/codex-java-lsp-mcp`
 

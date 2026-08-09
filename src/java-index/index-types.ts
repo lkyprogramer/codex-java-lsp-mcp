@@ -280,6 +280,8 @@ export type IndexedReference = {
 export type IndexedReadRange = {
   startLine: number;
   endLine: number;
+  /** Exact source slice read by the worker: 1-based UTF-16, end-exclusive. */
+  range: SourceRange;
   kind: "method" | "type" | "xml-statement" | "xml-resultMap" | "fallback";
   /** Every source-window kind merged into this range, retained for planner reason fidelity. */
   kinds?: Array<"method" | "type" | "xml-statement" | "xml-resultMap" | "fallback">;

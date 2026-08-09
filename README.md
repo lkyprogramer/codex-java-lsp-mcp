@@ -84,12 +84,17 @@ brew install jdtls
 ## 快速开始
 
 ```bash
+# 仅在未被在线 runtime 使用的 checkout（或独立 clone）中安装依赖
 npm ci
-npm run build
-npm test
+sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile compile
+sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile full
 ./install-runtime.sh
 ./check-codex-mcp.sh --fast
 ```
+
+上面的 `check-codex-mcp.sh` 是安装后的在线运维检查，会访问刚安装的服务。`npm ci`
+会重建当前 checkout 的 `node_modules`，只能在确认该 checkout 未被在线 runtime 使用时执行；
+后续隔离构建与测试会把依赖复制到私有临时目录，不会让验证写回源依赖树。
 
 默认 runtime 目录：
 
@@ -223,7 +228,7 @@ hook 行为：
 | `JAVA_LSP_PROJECTS_JSON` | 覆盖 `projects.json` 路径。 |
 | `JDTLS_BIN` | 指定 `jdtls` 可执行文件。 |
 | `JDTLS_JAVA_HOME` | 指定运行 JDT LS 的 Java home。 |
-| `JDTLS_EXTRA_ARGS` | 追加传给 `jdtls` launcher 的参数，例如额外 `--jvm-arg=`。 |
+| `JDTLS_EXTRA_ARGS` | 追加传给在线 `jdtls` launcher 的参数，例如额外 `--jvm-arg=`；隔离 benchmark 会丢弃调用者提供的值，禁止用第二个 `-data` 覆盖私有 workspace。 |
 | `JAVA_LSP_PROJECT_JAVA_HOME` | 指定默认项目 JDK。 |
 | `JAVA_LSP_PROJECT_JAVA_HOME_<ALIAS>` | 为某个 alias 指定项目 JDK，alias 会转成大写并把非字母数字替换成 `_`。 |
 | `JAVA_LSP_JDTLS_XMX` | 覆盖 JDT LS heap，例如 `2g`。 |
@@ -253,13 +258,25 @@ hook 行为：
 
 ## 开发与验证
 
-本地开发：
+> **隔离硬门禁**：在线 MCP/LSP 正在运行时，禁止在本 checkout 执行
+> `npm run build`、`npm run clean` 或裸 `node dist/<benchmark-or-smoke>.js`。
+> 当前 `dist/` 可能正被在线服务使用。开发验证必须通过隔离脚本，在临时 detached
+> code local clone、私有 HOME/XDG/TMP/cache/JDT workspace 中重新编译和运行；真实 JDT
+> 还必须使用目标 Java 仓库的 detached local clone。`check-codex-mcp.sh` 是在线服务运维检查，
+> 不属于隔离开发验证，执行前会接触当前服务。严格验证必须从
+> `scripts/run-isolated-node.sh` 启动；它会在 Node 解释器加载前清除宿主 loader、coverage、
+> compile-cache 和 warning-output 变量。`npm run ...` 仅是可信开发环境下的快捷入口，
+> 不能作为在线 runtime 并存时的正式证据。
+
+在线服务运行期间的本地开发验证：
 
 ```bash
-npm ci
-npm run build
-npm test
+sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile compile
+sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile full
 ```
+
+依赖缺失或需要执行 `npm ci` 时，先创建不被在线 runtime 使用的独立 clone；只有在确认
+当前 checkout 未被在线 runtime 使用时，才执行 `npm ci`、生产构建 `npm run build` 或清理命令。
 
 MCP readiness：
 
@@ -282,24 +299,36 @@ fast-path smoke：
 benchmark 入口：
 
 ```bash
-npm run benchmark:agent-impact -- --repo-root /absolute/path/to/java-repo --project-id <id> --warm-state cold-nolsp --strategy impact --runs 5 --verbosity diagnostic
-npm run benchmark:impact-attribution -- --repo-root /absolute/path/to/java-repo --project-id <id>
-npm run benchmark:three-repo-matrix -- --baseline <approved-baseline-sha> --lishuedu <repo-root> --cipherlink <repo-root> --exam-parent-v3 <repo-root>
-npm run test:three-repo-matrix
-npm run test:determinism
-npm run test:task36-mutation
-npm run test:task36-fault
-npm run test:task36-multiprocess
+sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node scripts/run-isolated-jdt-benchmark.mjs --repo-root /source/java-repo --revision <exact-sha> -- node dist/benchmark-agent-impact.js --repo-root {repo} --project-id <id> --warm-state cold-nolsp --strategy impact --runs 5 --verbosity diagnostic
+sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node scripts/run-isolated-jdt-benchmark.mjs --repo-root /source/java-repo --revision <exact-sha> -- node scripts/attribute-impact-payload.mjs --repo-root {repo} --project-id <id>
+sh scripts/run-isolated-node.sh scripts/run-three-repo-cold-matrix.mjs --baseline <approved-baseline-sha> --output-dir /tmp/java-v32-matrix-<id> --lishuedu <repo-root> --cipherlink <repo-root> --exam-parent-v3 <repo-root>
+sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node --test scripts/run-three-repo-cold-matrix.test.mjs scripts/verify-three-repo-cold-matrix.test.mjs
+```
+
+`warm-auto`、`warm-required`、semantic first-touch 等会启动真实 JDT 的基准，必须把
+目标 Java 仓库和精确 revision 交给双层隔离 harness；不得把当前在线项目目录直接作为
+JDT workspace：
+
+```bash
+sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- \
+  node scripts/run-isolated-jdt-benchmark.mjs \
+  --repo-root /path/to/source-java-repo --revision <exact-sha> -- \
+  node dist/benchmark/semantic-first-touch.js --repo-root {repo} <other-args>
 ```
 
 Task36 机器可读产物入口：
 
 ```bash
-npm run benchmark:task36-mutation -- --output artifacts/v3-final/task36-mutation.json
-node scripts/task36-fault-suite.mjs --output artifacts/v3-final/task36-fault.json
-npm run smoke:task36-multiprocess > artifacts/v3-final/task36-multiprocess.json
-npm run benchmark:verify-determinism -- --input artifacts/v3-final/<repo>-determinism-20.json --expected-runs 20
+sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --keep --profile targeted -- \
+  node dist/benchmark/task36-mutation-matrix.js --output '{state}/task36-mutation.json'
+sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node --test scripts/task36-fault-suite.test.mjs
+sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node --test scripts/task36-multiprocess-smoke.test.mjs
+sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node dist/benchmark/verify-determinism.js --input /tmp/<repo>-determinism-20.json --expected-runs 20
 ```
+
+需要保留输出的 Task36 命令必须使用 `--keep` 与 `{state}`；以 wrapper 最后打印的
+`preserved isolated validation root` 作为产物根。不要把 `--output` 指向当前 checkout、在线 cache
+或正在使用的 Java 仓库。
 
 当前 benchmark 口径：
 
@@ -320,7 +349,9 @@ npm run benchmark:verify-determinism -- --input artifacts/v3-final/<repo>-determ
 
 - `codex-java-lsp currently supports macOS only`：当前平台不是 macOS，回退到 `rg`、build、日志证据。
 - `jdtls not found`：执行 `brew install jdtls`，或设置 `JDTLS_BIN`。
-- `Missing dist/server.js`：先运行 `npm run build`，用户级 runtime 则重新执行 `./install-runtime.sh`。
+- `Missing dist/server.js`：若该 checkout 没有被在线服务使用，可运行 `npm run build`；
+  在线服务场景只运行 `npm run build:isolated` 做源码验证，用户级 runtime 通过
+  `./install-runtime.sh` 在目标 runtime 目录重新安装。
 - `Project root is not LSP-enabled`：用 `register-alias.sh --enable-lsp <id> <absolute-root>` 显式启用。
 - `Multiple enabled aliases share this Git common-dir`：为当前 worktree 单独注册绝对路径，消除 family 继承歧义。
 - `No idle Java LSP runtime available`：降低并发、关闭空闲 repo，或调整 `JAVA_LSP_MAX_ACTIVE_REPOS`。
@@ -340,8 +371,8 @@ npm run benchmark:verify-determinism -- --input artifacts/v3-final/<repo>-determ
 - 提交前至少运行：
 
 ```bash
-npm run build
-npm test
+sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile compile
+sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile full
 ```
 
 - 贡献代码默认按 Apache License 2.0 授权，除非贡献者在提交中明确说明更严格且兼容的授权边界。

@@ -29,6 +29,7 @@ import {
   validateTypeLookupArray,
   type JavaIndexCommand,
   type JavaIndexValueValidator,
+  type JavaIndexWorkerTiming,
   type JavaIndexWorktreeIdentity,
   type MyBatisResourceByNamespaceBatch
 } from "./worker-protocol.js";
@@ -45,7 +46,32 @@ export type JavaIndexOpenOptions = {
 export type JavaIndexRequestOptions = {
   budget?: DeadlineBudget;
   signal?: AbortSignal;
+  telemetry?: JavaIndexRpcTelemetrySink;
 };
+
+export type JavaIndexRpcOperation = JavaIndexCommand["type"];
+export type JavaIndexRpcOutcome = "completed" | "cancelled" | "deadlineExceeded" | "failed" | "retired";
+export type JavaIndexWorkerRetireReason =
+  | "DEADLINE_EXCEEDED"
+  | "MALFORMED_RESPONSE"
+  | "WORKER_ERROR"
+  | "WORKER_EXIT"
+  | "OPEN_FAILURE";
+
+export type JavaIndexRpcSettlement = {
+  operation: JavaIndexRpcOperation;
+  outcome: JavaIndexRpcOutcome;
+  callerWaitMs: number;
+  outputJsonBytes?: number;
+  workerTiming?: JavaIndexWorkerTiming;
+  retireReason?: JavaIndexWorkerRetireReason;
+};
+
+export interface JavaIndexRpcTelemetrySink {
+  requestStarted(event: { operation: JavaIndexRpcOperation; inputJsonBytes: number }): void;
+  requestSettled(event: JavaIndexRpcSettlement): void;
+  lateResponse(event: Omit<JavaIndexRpcSettlement, "outcome">): void;
+}
 
 export interface WorkerLike {
   postMessage(value: unknown): void;
@@ -56,10 +82,16 @@ export interface WorkerLike {
 }
 
 type PendingRequest = {
+  operation: JavaIndexRpcOperation;
+  postedAtMs: number;
+  telemetry?: JavaIndexRpcTelemetrySink;
+  validate: (value: unknown) => unknown;
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
   cleanup(): void;
 };
+
+type CancelledTombstone = Pick<PendingRequest, "operation" | "postedAtMs" | "telemetry">;
 
 function emptyStatus(): JavaIndexStatus {
   return {
@@ -82,12 +114,14 @@ function defaultWorkerFactory(): WorkerLike {
 }
 
 const CLOSE_GRACE_MS = 250;
+const MAX_CANCELLED_TOMBSTONES = 64;
 
 export class JavaIndexClient {
   private nextId = 1;
   private worker?: WorkerLike;
   private state: JavaIndexStatus["state"] = "NEW";
   private readonly pending = new Map<number, PendingRequest>();
+  private readonly cancelledTombstones = new Map<number, CancelledTombstone>();
   private readonly terminatedWorkers = new WeakSet<WorkerLike>();
   private restartCount = 0;
   private lastKnownStatus: JavaIndexStatus = emptyStatus();
@@ -355,6 +389,7 @@ export class JavaIndexClient {
     } finally {
       if (this.worker === worker) this.worker = undefined;
       this.rejectAllPending(closed);
+      this.cancelledTombstones.clear();
       await this.terminateWorker(worker);
       this.state = "CLOSED";
       this.lastKnownStatus = { ...this.lastKnownStatus, state: "CLOSED" };
@@ -396,7 +431,7 @@ export class JavaIndexClient {
       // swallow the one automatic restart and route every future request to
       // a thread that never finished opening.
       const failure = error instanceof Error ? error : new Error(String(error));
-      this.retireWorker(worker, failure);
+      this.retireWorker(worker, failure, "OPEN_FAILURE");
       throw error;
     }
   }
@@ -441,21 +476,15 @@ export class JavaIndexClient {
     const stage = `java-index.${request.type.toLowerCase()}`;
     this.throwIfCancelledOrExpired(stage, requestOptions);
     const id = this.nextId++;
+    const postedAtMs = performance.now();
     let abortListener: (() => void) | undefined;
     const operation = new Promise<T>((resolve, reject) => {
       this.pending.set(id, {
-        resolve: value => {
-          try {
-            resolve(validate(value));
-          } catch (error) {
-            this.markDegraded("Java index worker returned an invalid payload");
-            reject(new JavaIntelligenceError(
-              "INDEX_CORRUPT",
-              `Java index returned an invalid payload for ${request.type}`,
-              error
-            ));
-          }
-        },
+        operation: request.type,
+        postedAtMs,
+        telemetry: requestOptions.telemetry,
+        validate,
+        resolve: value => resolve(value as T),
         reject,
         cleanup: () => {
           if (abortListener) requestOptions.signal?.removeEventListener("abort", abortListener);
@@ -467,7 +496,7 @@ export class JavaIndexClient {
         this.rejectPending(id, new JavaIntelligenceError(
           "CANCELLED",
           `Java index request cancelled during ${stage}`
-        ));
+        ), "cancelled", undefined, true);
       };
       requestOptions.signal.addEventListener("abort", abortListener, { once: true });
       if (requestOptions.signal.aborted) {
@@ -475,14 +504,23 @@ export class JavaIndexClient {
         return operation;
       }
     }
-    worker.postMessage({ ...request, id });
+    const envelope = requestOptions.telemetry
+      ? { ...request, id, telemetry: true as const }
+      : { ...request, id };
+    this.safeTelemetry(() => requestOptions.telemetry?.requestStarted({
+      operation: request.type,
+      inputJsonBytes: jsonBytes(envelope)
+    }));
+    worker.postMessage(envelope);
     if (!requestOptions.budget) return operation;
     return requestOptions.budget.race(stage, operation, undefined, () => {
       const error = new JavaIntelligenceError(
         "DEADLINE_EXCEEDED",
         `Deadline exceeded during ${stage}`
       );
-      if (this.rejectPending(id, error)) this.retireWorker(worker, error);
+      if (this.rejectPending(id, error, "deadlineExceeded", "DEADLINE_EXCEEDED")) {
+        this.retireWorker(worker, error, "DEADLINE_EXCEEDED");
+      }
     });
   }
 
@@ -496,16 +534,47 @@ export class JavaIndexClient {
         "INDEX_CORRUPT",
         "Java index worker sent a malformed response envelope"
       );
-      this.retireWorker(worker, error);
+      this.retireWorker(worker, error, "MALFORMED_RESPONSE");
       return;
     }
     const pending = this.pending.get(value.id);
-    if (!pending) return;
+    if (!pending) {
+      const tombstone = this.cancelledTombstones.get(value.id);
+      if (tombstone) {
+        this.cancelledTombstones.delete(value.id);
+        this.safeTelemetry(() => tombstone.telemetry?.lateResponse({
+          operation: tombstone.operation,
+          callerWaitMs: Math.max(0, performance.now() - tombstone.postedAtMs),
+          outputJsonBytes: jsonBytes(value),
+          workerTiming: value.timing
+        }));
+      }
+      return;
+    }
     this.pending.delete(value.id);
     pending.cleanup();
     if (value.ok) {
-      pending.resolve(value.value);
+      try {
+        const validated = pending.validate(value.value);
+        this.recordSettlement(pending, "completed", value, value.timing);
+        pending.resolve(validated);
+      } catch (error) {
+        this.markDegraded("Java index worker returned an invalid payload");
+        this.recordSettlement(pending, "failed", value, value.timing, "MALFORMED_RESPONSE");
+        pending.reject(new JavaIntelligenceError(
+          "INDEX_CORRUPT",
+          `Java index returned an invalid payload for ${pending.operation}`,
+          error
+        ));
+      }
     } else {
+      this.recordSettlement(
+        pending,
+        "failed",
+        value,
+        value.timing,
+        pending.operation === "OPEN" ? "OPEN_FAILURE" : undefined
+      );
       pending.reject(new JavaIntelligenceError(
         "INDEX_PARTIAL",
         `java index worker reported ${value.error.code}: ${value.error.message}`
@@ -515,7 +584,7 @@ export class JavaIndexClient {
 
   private handleFatal(worker: WorkerLike, error: Error): void {
     if (this.state === "CLOSED") return;
-    this.retireWorker(worker, error);
+    this.retireWorker(worker, error, "WORKER_ERROR");
   }
 
   private handleExit(worker: WorkerLike, code: number): void {
@@ -525,7 +594,7 @@ export class JavaIndexClient {
       "INDEX_PARTIAL",
       `Java index worker exited unexpectedly with code ${code}`
     );
-    this.rejectAllPending(error);
+    this.rejectAllPending(error, "retired", "WORKER_EXIT");
     this.worker = undefined;
     this.markDegraded(error.message);
   }
@@ -537,21 +606,30 @@ export class JavaIndexClient {
     requestOptions.budget?.throwIfExpired(stage);
   }
 
-  private rejectPending(id: number, error: Error): boolean {
+  private rejectPending(
+    id: number,
+    error: Error,
+    outcome: JavaIndexRpcOutcome = "failed",
+    retireReason?: JavaIndexWorkerRetireReason,
+    retainLateResponse = false
+  ): boolean {
     const pending = this.pending.get(id);
     if (!pending) return false;
     this.pending.delete(id);
     pending.cleanup();
+    this.recordSettlement(pending, outcome, undefined, undefined, retireReason);
+    if (retainLateResponse && pending.telemetry) this.rememberCancelledTombstone(id, pending);
     pending.reject(error);
     return true;
   }
 
   /** A deadline means the single-threaded worker may be wedged behind this RPC. */
-  private retireWorker(worker: WorkerLike, error: Error): void {
+  private retireWorker(worker: WorkerLike, error: Error, reason: JavaIndexWorkerRetireReason): void {
     if (this.worker !== worker) return;
     this.worker = undefined;
     this.markDegraded(error.message);
-    this.rejectAllPending(error);
+    this.rejectAllPending(error, "retired", reason);
+    this.cancelledTombstones.clear();
     void this.terminateWorker(worker);
   }
 
@@ -566,7 +644,52 @@ export class JavaIndexClient {
     this.lastKnownStatus = { ...this.lastKnownStatus, state: "DEGRADED", lastError: reason };
   }
 
-  private rejectAllPending(error: Error): void {
-    for (const id of [...this.pending.keys()]) this.rejectPending(id, error);
+  private rejectAllPending(
+    error: Error,
+    outcome: JavaIndexRpcOutcome = "failed",
+    retireReason?: JavaIndexWorkerRetireReason
+  ): void {
+    for (const id of [...this.pending.keys()]) this.rejectPending(id, error, outcome, retireReason);
   }
+
+  private recordSettlement(
+    pending: PendingRequest,
+    outcome: JavaIndexRpcOutcome,
+    response?: unknown,
+    workerTiming?: JavaIndexWorkerTiming,
+    retireReason?: JavaIndexWorkerRetireReason
+  ): void {
+    this.safeTelemetry(() => pending.telemetry?.requestSettled({
+      operation: pending.operation,
+      outcome,
+      callerWaitMs: Math.max(0, performance.now() - pending.postedAtMs),
+      ...(response === undefined ? {} : { outputJsonBytes: jsonBytes(response) }),
+      ...(workerTiming === undefined ? {} : { workerTiming }),
+      ...(retireReason === undefined ? {} : { retireReason })
+    }));
+  }
+
+  private rememberCancelledTombstone(id: number, pending: PendingRequest): void {
+    if (this.cancelledTombstones.size >= MAX_CANCELLED_TOMBSTONES) {
+      const oldest = this.cancelledTombstones.keys().next().value;
+      if (typeof oldest === "number") this.cancelledTombstones.delete(oldest);
+    }
+    this.cancelledTombstones.set(id, {
+      operation: pending.operation,
+      postedAtMs: pending.postedAtMs,
+      telemetry: pending.telemetry
+    });
+  }
+
+  private safeTelemetry(action: () => void): void {
+    try {
+      action();
+    } catch {
+      // Diagnostic telemetry must never change request behavior.
+    }
+  }
+}
+
+function jsonBytes(value: unknown): number {
+  return Buffer.byteLength(JSON.stringify(value), "utf8");
 }

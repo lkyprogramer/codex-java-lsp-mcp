@@ -1,7 +1,7 @@
 // input: Built MCP server and an enabled Java repo.
 // output: LSP startup, impact, warm reuse, and JVM flag benchmark measurements.
 // pos: Reproducible performance harness for JDT LS tuning decisions.
-import { existsSync, rmSync, statSync } from "node:fs";
+import { existsSync, realpathSync, rmSync, statSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -9,7 +9,6 @@ import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { repoCacheRoot } from "./repo-layout.js";
 
 type JsonObject = Record<string, unknown>;
 
@@ -42,6 +41,28 @@ const anchor = {
 };
 const startupRepeats = Number(process.env.JAVA_LSP_BENCH_STARTUP_REPEATS || 3);
 const waitMs = Number(process.env.JAVA_LSP_BENCH_STATUS_WAIT_MS || 5000);
+const isolatedCacheRoot = process.env.JAVA_LSP_CACHE_ROOT;
+const isolatedDataDir = process.env.JDTLS_DATA_DIR;
+const isolatedLogDir = process.env.JDTLS_LOG_DIR;
+
+if (process.env.JAVA_LSP_ISOLATED_VALIDATION !== "1") {
+  throw new Error("benchmark-lsp-performance must run through the detached isolated validation harness");
+}
+if (process.env.JAVA_LSP_ISOLATED_REPO_WORKTREE !== "1") {
+  throw new Error("benchmark-lsp-performance requires a detached Java repository from run-isolated-jdt-benchmark.mjs");
+}
+const isolatedRepoRoot = process.env.JAVA_LSP_ISOLATED_REPO_ROOT;
+if (!isolatedRepoRoot || canonicalPath(repoRoot) !== canonicalPath(isolatedRepoRoot)) {
+  throw new Error("benchmark-lsp-performance repo root must equal the detached Java clone selected by the isolation harness");
+}
+if (!isolatedCacheRoot || !isolatedDataDir || !isolatedLogDir) {
+  throw new Error("benchmark-lsp-performance requires isolated JAVA_LSP_CACHE_ROOT, JDTLS_DATA_DIR and JDTLS_LOG_DIR");
+}
+for (const [label, target] of [["JDTLS_DATA_DIR", isolatedDataDir], ["JDTLS_LOG_DIR", isolatedLogDir]] as const) {
+  if (!isWithin(isolatedCacheRoot, target)) {
+    throw new Error(`${label} must be contained by the isolated JAVA_LSP_CACHE_ROOT`);
+  }
+}
 
 if (!existsSync(repoRoot)) {
   throw new Error(`Benchmark repo does not exist: ${repoRoot}`);
@@ -216,7 +237,20 @@ async function timed<T>(action: () => Promise<T>): Promise<{ elapsedMs: number; 
 }
 
 function clearJdtlsWorkspace(): void {
-  rmSync(path.join(repoCacheRoot(repoRoot), "workspace"), { recursive: true, force: true });
+  rmSync(isolatedDataDir!, { recursive: true, force: true });
+}
+
+function isWithin(root: string, target: string): boolean {
+  const relative = path.relative(path.resolve(root), path.resolve(target));
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+function canonicalPath(value: string): string {
+  try {
+    return realpathSync(value);
+  } catch {
+    return path.resolve(value);
+  }
 }
 
 function pickStatusMetrics(status: JsonObject): JsonObject {

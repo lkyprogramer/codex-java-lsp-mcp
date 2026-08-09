@@ -3,8 +3,9 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import type { ImpactResult } from "../agent-types.js";
 import type { ShadowRankingCandidate, ShadowRankingDiagnostics } from "../agent-router/shadow-ranking.js";
-import { type AttributionV3Context, buildGoldenAttributionV3, buildGoldenCounterfactualV3 } from "./attribution-v3.js";
+import { type AttributionV3Context, buildGoldenAttributionV3, buildGoldenCounterfactualV3, buildImpactPayloadProjectionV3 } from "./attribution-v3.js";
 import type { Scenario } from "./golden-scenario.js";
 
 function shadowCandidate(overrides: Partial<ShadowRankingCandidate>): ShadowRankingCandidate {
@@ -265,3 +266,67 @@ test("absentReason: coverage-partial when the file's source root has not finishe
   }));
   assert.equal(complete[0]!.absentReason, "no-static-edge");
 });
+
+test("payload attribution derives three byte projections from one canonical candidate/read-plan result", () => {
+  const canonical = payloadFixture();
+  const projection = buildImpactPayloadProjectionV3(canonical);
+
+  assert.equal(projection.canonicalExecutions, 1);
+  assert.equal(projection.defaultToolResponse, "standard");
+  assert.equal(projection.defaultToolSerializedBytes, projection.projections.standard.serializedBytes);
+  assert.equal(projection.defaultToolEstimatedTokens, Math.ceil(projection.defaultToolSerializedBytes / 4));
+  assert.equal(projection.diagnosticSerializedBytes, projection.projections.diagnostic.serializedBytes);
+  assert.equal(projection.diagnosticEstimatedTokens, Math.ceil(projection.diagnosticSerializedBytes / 4));
+  assert.ok(projection.standardToDiagnosticBytesRatio > 0 && projection.standardToDiagnosticBytesRatio < 1);
+  assert.equal(new Set(Object.values(projection.projections).map(item => item.candidateReadPlanSha256)).size, 1);
+  for (const item of Object.values(projection.projections)) {
+    assert.equal(item.serializedBytes, item.costResultBytes);
+  }
+  assert.equal(projection.projections.standard.fields["files.reasons"]?.occurrences, 0);
+  assert.equal(projection.projections.compact.fields["files.scoreBreakdown"]?.omitDeltaBytes, 0);
+  assert.equal(projection.projections.diagnostic.fields["files.reasons"]?.occurrences, 1);
+  assert.ok((projection.projections.diagnostic.fields["files.reasons"]?.omitDeltaBytes ?? 0) > 0);
+  assert.ok(projection.projections.standard.serializedBytes < projection.projections.diagnostic.serializedBytes);
+  assert.deepEqual(canonical.files[0]!.reasons, ["CALLS"], "measurement must not mutate the diagnostic canonical result");
+});
+
+function payloadFixture(): ImpactResult {
+  return {
+    version: 6,
+    target: {
+      file: "src/main/java/demo/Anchor.java",
+      symbol: "Anchor#run",
+      profile: "service",
+      range: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } }
+    },
+    freshness: { requestGeneration: 1, indexedGeneration: 1, coverage: "COMPLETE", changedDuringRequest: false },
+    semantic: { policy: "fast", used: false, completion: "COMPLETE" },
+    files: [{
+      id: "F1",
+      path: "src/main/java/demo/Collaborator.java",
+      role: "collaborator",
+      confidence: "high",
+      evidence: ["calls anchor"],
+      locations: [{ line: 2, column: 3 }],
+      reasons: ["CALLS"],
+      verifiedBy: ["CALLS"],
+      scoreBreakdown: [{ id: "family", source: "policy", delta: 10, reason: "test" }]
+    }],
+    readPlan: [{
+      priority: "P0",
+      fileId: "F1",
+      ranges: [{ startLine: 1, endLine: 10, reason: "method", estimatedBytes: 100 }],
+      reason: "method",
+      expectedEvidence: ["calls anchor"],
+      estimatedBytes: 100
+    }],
+    evidenceGaps: ["Run Gradle compile/test before claiming behavior."],
+    cost: { resultBytes: 0, readBytes: 100, estimatedTokens: 0, suppressedRawBytes: 1000 },
+    metrics: {
+      routingVersion: 6,
+      elapsedMs: 1,
+      semantic: { used: false },
+      cache: { hits: 1 }
+    }
+  };
+}

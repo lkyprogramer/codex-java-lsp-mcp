@@ -167,7 +167,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
   }
 
   withRequestOptions<T>(options: JavaIndexRequestOptions, action: () => Promise<T>): Promise<T> {
-    return this.requestOptionsScope.run(Object.freeze({ ...options }), action);
+    return this.requestOptionsScope.run(Object.freeze({ ...this.currentRequestOptions(), ...options }), action);
   }
 
   private currentRequestOptions(): JavaIndexRequestOptions {

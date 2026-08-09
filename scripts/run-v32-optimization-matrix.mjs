@@ -4,14 +4,18 @@
 // pos: Sprint-level V3.2 matrix entrypoint; delegates semantic gates to the V4 cold runner.
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { countProductionTs } from "./count-production-ts.mjs";
+import { createDetachedLocalClone, scrubHostNodeRuntimeState } from "./isolation-utils.mjs";
+import { assertOutputOutsideSource } from "./run-three-repo-cold-matrix.mjs";
+import { verifyMatrix } from "./verify-three-repo-cold-matrix.mjs";
 
 const scriptRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-export const V32_OPTIMIZATION_MANIFEST_VERSION = 1;
+export const V32_OPTIMIZATION_MANIFEST_VERSION = 2;
 
 export function createOptimizationManifest({
   baselineProductionTs,
@@ -20,9 +24,15 @@ export function createOptimizationManifest({
   coldSummary,
   environment,
   artifacts,
-  taskLedger = []
+  taskLedger = [],
+  taskLedgerEvidence,
+  coldEvidence,
+  allowColdGateFailure = false
 }) {
-  if (coldSummary?.passed !== true) throw new Error("cold matrix must pass before a V3.2 manifest can be published");
+  if (typeof coldSummary?.passed !== "boolean") throw new Error("cold matrix summary is missing its gate result");
+  if (!coldSummary.passed && !allowColdGateFailure) {
+    throw new Error("cold matrix must pass unless --allow-gate-failure explicitly records a Sprint baseline gap");
+  }
   const oldRuntime = coldManifest?.runtimes?.old;
   const newRuntime = coldManifest?.runtimes?.new;
   if (!oldRuntime || !newRuntime) throw new Error("cold manifest is missing old/new runtime identities");
@@ -30,12 +40,14 @@ export function createOptimizationManifest({
     || baselineProductionTs.source.commitTree !== oldRuntime.commitTree) {
     throw new Error("production TypeScript baseline does not match the cold old runtime");
   }
-  if (candidateProductionTs.source.commit !== newRuntime.commit) {
-    throw new Error("production TypeScript candidate does not match the cold candidate base commit");
+  if (candidateProductionTs.source.commit !== newRuntime.commit
+    || candidateProductionTs.source.commitTree !== newRuntime.commitTree
+    || candidateProductionTs.source.executableTree !== newRuntime.executableTree) {
+    throw new Error("production TypeScript candidate does not match the cold candidate executable tree");
   }
   const manifest = {
     schemaVersion: V32_OPTIMIZATION_MANIFEST_VERSION,
-    status: "PASS",
+    status: coldSummary.passed ? "PASS" : "BASELINE_RECORDED_WITH_GAPS",
     comparison: {
       policy: "previous-immutable-sprint-to-source-locked-candidate",
       coldManifestVersion: coldManifest.version,
@@ -44,11 +56,13 @@ export function createOptimizationManifest({
       candidateBaseCommit: newRuntime.commit,
       candidateCommitTree: newRuntime.commitTree,
       candidateExecutableTree: newRuntime.executableTree,
+      candidatePatchFile: coldManifest.candidatePatch?.file,
       candidatePatchSha256: coldManifest.candidatePatch?.sha256,
       runtimeInputs: coldManifest.candidatePatch?.untrackedInputs ?? []
     },
     repositories: coldManifest.repositories,
     scenarios: coldManifest.scenarios,
+    dependencies: coldManifest.dependencies,
     environment,
     productionTs: {
       old: baselineProductionTs,
@@ -64,8 +78,14 @@ export function createOptimizationManifest({
       }
     },
     taskLedger,
+    taskLedgerEvidence,
     coldGate: {
-      passed: true,
+      passed: coldSummary.passed,
+      allowFailure: allowColdGateFailure,
+      manifestFile: coldEvidence?.manifestFile,
+      matrixDir: coldEvidence?.matrixDir,
+      expectedRuns: coldSummary.configuration?.expectedRuns,
+      p95Limit: coldEvidence?.p95Limit,
       inputSha256: coldSummary.inputSha256,
       projects: coldSummary.projects,
       configuration: coldSummary.configuration
@@ -76,7 +96,8 @@ export function createOptimizationManifest({
 }
 
 export function validateOptimizationManifest(manifest) {
-  if (!manifest || manifest.schemaVersion !== V32_OPTIMIZATION_MANIFEST_VERSION || manifest.status !== "PASS") {
+  if (!manifest || manifest.schemaVersion !== V32_OPTIMIZATION_MANIFEST_VERSION
+    || !["PASS", "BASELINE_RECORDED_WITH_GAPS"].includes(manifest.status)) {
     throw new Error("invalid V3.2 optimization manifest header");
   }
   const { manifestPayloadSha256, ...payload } = manifest;
@@ -95,29 +116,134 @@ export function validateOptimizationManifest(manifest) {
   if (manifest.productionTs.new.totalLoc > manifest.productionTs.limits.sprintMaximumLoc) {
     throw new Error("production TypeScript LOC exceeds the V3.2 +5% sprint ceiling");
   }
-  if (!Array.isArray(manifest.taskLedger)) throw new Error("V3.2 task LOC ledger is missing");
-  for (const entry of manifest.taskLedger) {
-    if (!entry || typeof entry.task !== "string" || !Number.isFinite(entry.productionLocAdded)) {
-      throw new Error("V3.2 task LOC ledger contains an invalid entry");
-    }
-  }
+  validateTaskLedger(manifest.taskLedger, manifest.productionTs.old, manifest.productionTs.new);
+  validateTaskLedgerEvidenceDescriptor(manifest.taskLedgerEvidence);
+  validateDependencyEvidence(manifest.dependencies);
   if (!Array.isArray(manifest.artifacts) || manifest.artifacts.length === 0) {
     throw new Error("V3.2 optimization manifest has no artifact inventory");
   }
+  const statusClaimsPass = manifest.status === "PASS";
+  if (statusClaimsPass !== (manifest.coldGate?.passed === true)
+    || (manifest.status === "BASELINE_RECORDED_WITH_GAPS" && manifest.coldGate?.allowFailure !== true)
+    || typeof manifest.coldGate?.manifestFile !== "string"
+    || typeof manifest.coldGate?.matrixDir !== "string"
+    || !Number.isInteger(manifest.coldGate?.expectedRuns)
+    || !(Number.isFinite(manifest.coldGate?.p95Limit) && manifest.coldGate.p95Limit > 0)) {
+    throw new Error("V3.2 cold-gate evidence is incomplete or inconsistent");
+  }
   return true;
+}
+
+function validateTaskLedger(taskLedger, oldInventory, newInventory) {
+  if (!Array.isArray(taskLedger)) throw new Error("V3.2 task LOC ledger is missing");
+  const oldFiles = new Map(oldInventory.files.map(file => [file.path, file]));
+  const newFiles = new Map(newInventory.files.map(file => [file.path, file]));
+  const expectedPaths = new Set([...new Set([...oldFiles.keys(), ...newFiles.keys()])]
+    .filter(filePath => (oldFiles.get(filePath)?.sha256 ?? null) !== (newFiles.get(filePath)?.sha256 ?? null)));
+  const coveredPaths = new Set();
+  let ledgerAdded = 0;
+  let ledgerRemoved = 0;
+
+  for (const entry of taskLedger) {
+    if (!entry || typeof entry.task !== "string" || entry.task.length === 0
+      || !isNonNegativeInteger(entry.productionLocAdded)
+      || !isNonNegativeInteger(entry.productionLocRemoved)
+      || !Number.isInteger(entry.netProductionLoc)
+      || !Array.isArray(entry.paths)) {
+      throw new Error("V3.2 task LOC ledger contains an invalid entry");
+    }
+    if (entry.productionLocAdded > 0
+      && (!(typeof entry.repaymentTask === "string" && entry.repaymentTask.length > 0)
+        || !(typeof entry.repaymentDecision === "string" && entry.repaymentDecision.length > 0))) {
+      throw new Error(`V3.2 task LOC ledger has no repayment gate: ${entry.task}`);
+    }
+    let entryAdded = 0;
+    let entryRemoved = 0;
+    for (const pathEntry of entry.paths) {
+      if (!pathEntry || typeof pathEntry.path !== "string"
+        || !isNonNegativeInteger(pathEntry.oldLoc)
+        || !isNonNegativeInteger(pathEntry.newLoc)
+        || !isNonNegativeInteger(pathEntry.addedLoc)
+        || !isNonNegativeInteger(pathEntry.removedLoc)
+        || !Number.isInteger(pathEntry.netLoc)
+        || pathEntry.contentChanged !== true) {
+        throw new Error(`V3.2 task LOC ledger contains an invalid path entry: ${entry.task}`);
+      }
+      if (coveredPaths.has(pathEntry.path)) {
+        throw new Error(`V3.2 task LOC ledger covers a path more than once: ${pathEntry.path}`);
+      }
+      const oldLoc = oldFiles.get(pathEntry.path)?.loc ?? 0;
+      const newLoc = newFiles.get(pathEntry.path)?.loc ?? 0;
+      const addedLoc = Math.max(0, newLoc - oldLoc);
+      const removedLoc = Math.max(0, oldLoc - newLoc);
+      if (!expectedPaths.has(pathEntry.path)
+        || pathEntry.oldLoc !== oldLoc
+        || pathEntry.newLoc !== newLoc
+        || pathEntry.addedLoc !== addedLoc
+        || pathEntry.removedLoc !== removedLoc
+        || pathEntry.netLoc !== newLoc - oldLoc) {
+        throw new Error(`V3.2 task LOC ledger path does not match source inventories: ${pathEntry.path}`);
+      }
+      coveredPaths.add(pathEntry.path);
+      entryAdded += addedLoc;
+      entryRemoved += removedLoc;
+    }
+    if (entry.productionLocAdded !== entryAdded
+      || entry.productionLocRemoved !== entryRemoved
+      || entry.netProductionLoc !== entryAdded - entryRemoved) {
+      throw new Error(`V3.2 task LOC ledger totals are inconsistent: ${entry.task}`);
+    }
+    ledgerAdded += entryAdded;
+    ledgerRemoved += entryRemoved;
+  }
+
+  const uncovered = [...expectedPaths].filter(filePath => !coveredPaths.has(filePath));
+  if (uncovered.length > 0) {
+    throw new Error(`V3.2 task LOC ledger does not cover production paths: ${uncovered.join(", ")}`);
+  }
+  if (ledgerAdded - ledgerRemoved !== newInventory.totalLoc - oldInventory.totalLoc) {
+    throw new Error("V3.2 task LOC ledger does not reconcile the production LOC delta");
+  }
+}
+
+function isNonNegativeInteger(value) {
+  return Number.isInteger(value) && value >= 0;
 }
 
 export async function verifyOptimizationManifest({ manifestFile, candidateRoot = scriptRoot }) {
   const manifest = JSON.parse(await readFile(path.resolve(manifestFile), "utf8"));
   validateOptimizationManifest(manifest);
+  await verifyTaskLedgerEvidence(manifest.taskLedgerEvidence, manifest.taskLedger);
   const baseline = await countProductionTs({ root: candidateRoot, revision: manifest.comparison.baselineCommit });
   assertSameInventory(manifest.productionTs.old, baseline, "old production TypeScript");
-  const candidate = await countProductionTs({ root: candidateRoot });
-  assertSameInventory(manifest.productionTs.new, candidate, "new production TypeScript");
-  const environment = await environmentIdentity(candidateRoot);
-  if (stableJson(manifest.environment) !== stableJson(environment)) {
-    throw new Error("runtime environment drift");
-  }
+  await withReplayedCandidate(candidateRoot, manifest.comparison, async candidateRoot => {
+    const candidate = await countProductionTs({ root: candidateRoot });
+    assertSameInventory(manifest.productionTs.new, candidate, "new production TypeScript");
+    const environment = await environmentIdentity(candidateRoot);
+    if (stableJson(manifest.environment) !== stableJson(environment)) {
+      throw new Error("runtime environment drift");
+    }
+  });
+  const cold = verifyMatrix({
+    matrixDir: manifest.coldGate.matrixDir,
+    manifestFile: manifest.coldGate.manifestFile,
+    expectedRuns: manifest.coldGate.expectedRuns,
+    p95Limit: manifest.coldGate.p95Limit,
+    summaryFile: false
+  });
+  const expectedCold = {
+    passed: manifest.coldGate.passed,
+    inputSha256: manifest.coldGate.inputSha256,
+    projects: manifest.coldGate.projects,
+    configuration: manifest.coldGate.configuration
+  };
+  const actualCold = {
+    passed: cold.passed,
+    inputSha256: cold.inputSha256,
+    projects: cold.projects,
+    configuration: cold.configuration
+  };
+  if (stableJson(expectedCold) !== stableJson(actualCold)) throw new Error("cold matrix verification drift");
   for (const artifact of manifest.artifacts) {
     const bytes = await readFile(artifact.file);
     if (bytes.byteLength !== artifact.bytes || sha256(bytes) !== artifact.sha256) {
@@ -127,41 +253,80 @@ export async function verifyOptimizationManifest({ manifestFile, candidateRoot =
   return manifest;
 }
 
+export function optimizationCommandResult(manifest, extra = {}) {
+  return {
+    ...extra,
+    verificationStatus: "PASS",
+    resultStatus: manifest.status,
+    coldGatePassed: manifest.coldGate.passed,
+    manifestPayloadSha256: manifest.manifestPayloadSha256
+  };
+}
+
 async function main() {
   const cli = parseCli(process.argv.slice(2));
   if (cli.help) return printUsage();
   if (cli.verify) {
     const manifest = await verifyOptimizationManifest({ manifestFile: cli.verify, candidateRoot: cli.candidateRoot });
-    console.log(JSON.stringify({ status: "PASS", manifestPayloadSha256: manifest.manifestPayloadSha256 }));
+    console.log(JSON.stringify(optimizationCommandResult(manifest)));
     return;
   }
 
   const outputDir = path.resolve(cli.outputDir);
+  await assertOutputOutsideSource(cli.candidateRoot, outputDir);
   if (existsSync(outputDir)) throw new Error(`output directory already exists: ${outputDir}`);
   await mkdir(outputDir, { recursive: true });
+  const { taskLedger, taskLedgerEvidence } = await snapshotTaskLedger(cli.taskLedgerFile, outputDir);
   const coldDir = path.join(outputDir, "cold");
   await runColdMatrix({ ...cli, outputDir: coldDir });
   const manifest = await buildManifestFromCold({
     candidateRoot: cli.candidateRoot,
     baseline: cli.baseline,
     coldDir,
-    taskLedger: cli.taskLedgerFile ? JSON.parse(await readFile(path.resolve(cli.taskLedgerFile), "utf8")) : []
+    taskLedger,
+    taskLedgerEvidence,
+    allowColdGateFailure: cli.allowColdGateFailure,
+    p95Limit: cli.p95Limit
   });
   const manifestFile = path.join(outputDir, "optimization-manifest.json");
   await writeFile(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);
   await verifyOptimizationManifest({ manifestFile, candidateRoot: cli.candidateRoot });
-  console.log(JSON.stringify({ status: "PASS", manifestFile, manifestPayloadSha256: manifest.manifestPayloadSha256 }));
+  console.log(JSON.stringify(optimizationCommandResult(manifest, { manifestFile })));
 }
 
-export async function buildManifestFromCold({ candidateRoot, baseline, coldDir, taskLedger = [] }) {
+export async function buildManifestFromCold({
+  candidateRoot,
+  baseline,
+  coldDir,
+  taskLedger = [],
+  taskLedgerEvidence,
+  allowColdGateFailure = false,
+  p95Limit = 1.25
+}) {
   const coldManifestFile = path.resolve(coldDir, "run-manifest.json");
   const coldSummaryFile = path.resolve(coldDir, "matrix-summary.json");
   const coldManifest = JSON.parse(await readFile(coldManifestFile, "utf8"));
   const coldSummary = JSON.parse(await readFile(coldSummaryFile, "utf8"));
   const baselineProductionTs = await countProductionTs({ root: candidateRoot, revision: baseline });
-  const candidateProductionTs = await countProductionTs({ root: candidateRoot });
-  const environment = await environmentIdentity(candidateRoot);
-  const artifacts = await artifactInventory(coldManifestFile, coldSummaryFile, coldSummary);
+  let candidateProductionTs;
+  let environment;
+  await withReplayedCandidate(candidateRoot, {
+    candidateBaseCommit: coldManifest.runtimes.new.commit,
+    candidateCommitTree: coldManifest.runtimes.new.commitTree,
+    candidateExecutableTree: coldManifest.runtimes.new.executableTree,
+    candidatePatchFile: coldManifest.candidatePatch.file,
+    candidatePatchSha256: coldManifest.candidatePatch.sha256
+  }, async replayRoot => {
+    candidateProductionTs = await countProductionTs({ root: replayRoot });
+    environment = await environmentIdentity(replayRoot);
+  });
+  const artifacts = await artifactInventory(
+    coldManifestFile,
+    coldSummaryFile,
+    coldSummary,
+    coldManifest,
+    taskLedgerEvidence
+  );
   return createOptimizationManifest({
     baselineProductionTs,
     candidateProductionTs,
@@ -169,7 +334,14 @@ export async function buildManifestFromCold({ candidateRoot, baseline, coldDir, 
     coldSummary,
     environment,
     artifacts,
-    taskLedger
+    taskLedger,
+    taskLedgerEvidence,
+    allowColdGateFailure,
+    coldEvidence: {
+      manifestFile: coldManifestFile,
+      matrixDir: path.resolve(coldDir, "matrix"),
+      p95Limit
+    }
   });
 }
 
@@ -197,8 +369,48 @@ async function environmentIdentity(root) {
   };
 }
 
-async function artifactInventory(coldManifestFile, coldSummaryFile, coldSummary) {
+async function withReplayedCandidate(sourceRoot, comparison, action) {
+  const commit = comparison?.candidateBaseCommit;
+  const commitTree = comparison?.candidateCommitTree;
+  const executableTree = comparison?.candidateExecutableTree;
+  const patchFile = comparison?.candidatePatchFile;
+  const patchSha256 = comparison?.candidatePatchSha256;
+  if (!(typeof commit === "string" && typeof commitTree === "string" && typeof executableTree === "string"
+    && typeof patchFile === "string" && typeof patchSha256 === "string")) {
+    throw new Error("candidate replay identity is incomplete");
+  }
+  const patch = await readFile(path.resolve(patchFile));
+  if (sha256(patch) !== patchSha256) throw new Error("candidate replay patch hash mismatch");
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "codex-java-v32-candidate-replay-"));
+  const replayRoot = path.join(temporaryRoot, "candidate");
+  try {
+    await createDetachedLocalClone(sourceRoot, replayRoot, commit, runCommand);
+    const observedCommit = (await captureCommand("git", ["-C", replayRoot, "rev-parse", "HEAD^{commit}"])).trim();
+    const observedCommitTree = (await captureCommand("git", ["-C", replayRoot, "rev-parse", "HEAD^{tree}"])).trim();
+    if (observedCommit !== commit || observedCommitTree !== commitTree) {
+      throw new Error("candidate replay base commit/tree mismatch");
+    }
+    if (patch.byteLength > 0) await runCommand("git", ["-C", replayRoot, "apply", "--index", path.resolve(patchFile)]);
+    const observedExecutableTree = (await captureCommand("git", ["-C", replayRoot, "write-tree"])).trim();
+    if (observedExecutableTree !== executableTree) throw new Error("candidate replay executable tree mismatch");
+    return await action(replayRoot);
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
+}
+
+async function artifactInventory(coldManifestFile, coldSummaryFile, coldSummary, coldManifest, taskLedgerEvidence) {
   const files = new Set([coldManifestFile, coldSummaryFile]);
+  if (taskLedgerEvidence?.file) files.add(path.resolve(taskLedgerEvidence.file));
+  if (coldManifest?.candidatePatch?.file) files.add(path.resolve(coldManifest.candidatePatch.file));
+  for (const input of coldManifest?.candidatePatch?.untrackedInputs ?? []) {
+    if (input?.file) files.add(path.resolve(input.file));
+  }
+  for (const suite of ["dist", "scripts"]) {
+    const result = coldManifest?.candidateTests?.[suite];
+    if (result?.stdout?.file) files.add(path.resolve(result.stdout.file));
+    if (result?.stderr?.file) files.add(path.resolve(result.stderr.file));
+  }
   for (const cell of coldSummary.cells ?? []) {
     files.add(path.resolve(cell.file));
     files.add(path.resolve(`${cell.file}.stderr`));
@@ -209,6 +421,96 @@ async function artifactInventory(coldManifestFile, coldSummaryFile, coldSummary)
     result.push({ file, bytes: bytes.byteLength, sha256: sha256(bytes) });
   }
   return result;
+}
+
+async function snapshotTaskLedger(sourceFile, outputDir) {
+  const source = sourceFile ? path.resolve(sourceFile) : undefined;
+  const bytes = source ? await readFile(source) : Buffer.from("[]\n");
+  let taskLedger;
+  try {
+    taskLedger = JSON.parse(bytes.toString("utf8"));
+  } catch (error) {
+    throw new Error(`cannot parse V3.2 task LOC ledger: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  if (!Array.isArray(taskLedger)) throw new Error("V3.2 task LOC ledger must be a JSON array");
+  const file = path.join(outputDir, "task-ledger.json");
+  await writeFile(file, bytes);
+  return {
+    taskLedger,
+    taskLedgerEvidence: {
+      file,
+      sourceFile: source ?? null,
+      bytes: bytes.byteLength,
+      sha256: sha256(bytes)
+    }
+  };
+}
+
+function validateTaskLedgerEvidenceDescriptor(evidence) {
+  if (!evidence
+    || typeof evidence.file !== "string" || !path.isAbsolute(evidence.file)
+    || !(evidence.sourceFile === null || (typeof evidence.sourceFile === "string" && path.isAbsolute(evidence.sourceFile)))
+    || !isNonNegativeInteger(evidence.bytes)
+    || !sha256Value(evidence.sha256)) {
+    throw new Error("V3.2 task LOC ledger evidence is invalid");
+  }
+}
+
+async function verifyTaskLedgerEvidence(evidence, expectedLedger) {
+  const bytes = await readFile(evidence.file);
+  if (bytes.byteLength !== evidence.bytes || sha256(bytes) !== evidence.sha256) {
+    throw new Error("V3.2 task LOC ledger evidence drift");
+  }
+  let observed;
+  try {
+    observed = JSON.parse(bytes.toString("utf8"));
+  } catch (error) {
+    throw new Error(`V3.2 task LOC ledger evidence is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  if (!Array.isArray(observed) || stableJson(observed) !== stableJson(expectedLedger)) {
+    throw new Error("V3.2 task LOC ledger evidence does not match the manifest ledger");
+  }
+}
+
+function validateDependencyEvidence(dependencies) {
+  const inventory = dependencies?.inventory;
+  if (dependencies?.copyMode !== "private-content-verified-copy"
+    || !inventory
+    || inventory.schemaVersion !== 1
+    || inventory.algorithm !== "sha256-path-type-size-content-v1"
+    || !isNonNegativeInteger(inventory.fileCount)
+    || !isNonNegativeInteger(inventory.directoryCount)
+    || !isNonNegativeInteger(inventory.symlinkCount)
+    || !isNonNegativeInteger(inventory.totalBytes)
+    || !sha256Value(inventory.sha256)) {
+    throw new Error("V3.2 isolated dependency evidence is invalid");
+  }
+}
+
+function runCommand(command, args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { stdio: ["ignore", "ignore", "pipe"] });
+    const errors = [];
+    child.stderr.on("data", chunk => errors.push(chunk));
+    child.once("error", reject);
+    child.once("exit", code => code === 0
+      ? resolve()
+      : reject(new Error(`${command} exited with ${code}: ${Buffer.concat(errors).toString("utf8")}`)));
+  });
+}
+
+function captureCommand(command, args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
+    const output = [];
+    const errors = [];
+    child.stdout.on("data", chunk => output.push(chunk));
+    child.stderr.on("data", chunk => errors.push(chunk));
+    child.once("error", reject);
+    child.once("exit", code => code === 0
+      ? resolve(Buffer.concat(output).toString("utf8"))
+      : reject(new Error(`${command} exited with ${code}: ${Buffer.concat(errors).toString("utf8")}`)));
+  });
 }
 
 function validateProductionInventory(value, label) {
@@ -252,9 +554,24 @@ function runColdMatrix(cli) {
     "--output-dir", cli.outputDir
   ];
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, args, { cwd: cli.candidateRoot, stdio: "inherit" });
+    const child = spawn(process.execPath, args, {
+      cwd: cli.candidateRoot,
+      env: scrubHostNodeRuntimeState(process.env),
+      stdio: "inherit"
+    });
     child.once("error", reject);
-    child.once("exit", code => code === 0 ? resolve() : reject(new Error(`cold matrix exited with ${code}`)));
+    child.once("exit", async code => {
+      if (code === 0) return resolve();
+      if (code === 1 && cli.allowColdGateFailure) {
+        try {
+          const summary = JSON.parse(await readFile(path.join(cli.outputDir, "matrix-summary.json"), "utf8"));
+          if (summary?.passed === false) return resolve();
+        } catch {
+          // Fall through to the original process failure below.
+        }
+      }
+      reject(new Error(`cold matrix exited with ${code}`));
+    });
   });
 }
 
@@ -263,7 +580,7 @@ function parseCli(args) {
   const flags = new Set();
   for (let index = 0; index < args.length; index += 1) {
     const key = args[index];
-    if (key === "--help") {
+    if (key === "--help" || key === "--allow-gate-failure") {
       flags.add(key);
       continue;
     }
@@ -280,6 +597,7 @@ function parseCli(args) {
     baseline: required(options.get("--baseline"), "--baseline"),
     outputDir: required(options.get("--output-dir"), "--output-dir"),
     p95Limit: numeric(options.get("--p95-limit"), 1.25, "--p95-limit"),
+    allowColdGateFailure: flags.has("--allow-gate-failure"),
     taskLedgerFile: options.get("--task-ledger"),
     verify: options.get("--verify"),
     repositories: {
@@ -306,6 +624,10 @@ function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
+function sha256Value(value) {
+  return typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+}
+
 function stableJson(value) {
   return JSON.stringify(sortValue(value));
 }
@@ -317,7 +639,7 @@ function sortValue(value) {
 }
 
 function printUsage() {
-  console.log("Usage: node scripts/run-v32-optimization-matrix.mjs --baseline SHA --output-dir DIR --lishuedu DIR --cipherlink DIR --exam-parent-v3 DIR [--candidate-root DIR] [--task-ledger FILE]");
+  console.log("Usage: node scripts/run-v32-optimization-matrix.mjs --baseline SHA --output-dir DIR --lishuedu DIR --cipherlink DIR --exam-parent-v3 DIR [--candidate-root DIR] [--task-ledger FILE] [--allow-gate-failure]");
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

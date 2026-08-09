@@ -13,6 +13,7 @@ import type {
 } from "../agent-types.js";
 import type { IndexedReadRangeResult } from "../java-index/index-types.js";
 import type { RouterIndex } from "../java-index/router-java-index.js";
+import type { SourceRange } from "../runtime/source-range.js";
 import { hasProtectedStructuralSignal } from "./ranking-signals.js";
 import { selectWithEvidenceBudget } from "./read-plan-budget.js";
 
@@ -82,6 +83,7 @@ type SelectReadPlanInput = {
 type CandidateWindow = {
   readonly file: CandidateFile;
   readonly ranges: ReadRange[];
+  readonly coordinateRanges: SourceRange[];
   readonly bytes: number;
   readonly extremeMethod: boolean;
 };
@@ -95,6 +97,8 @@ export type ReadPlanBuildResult = {
   items: ReadPlanItemV6[];
   /** Internal path identity used to re-key fileIds after output-tail truncation. */
   selectedPaths: string[];
+  /** Benchmark-only exact coordinates. AgentRouter strips this before building public metrics. */
+  selectedCoordinateRangesByPath: ReadonlyMap<string, readonly SourceRange[]>;
   totalBytes: number;
   maxReadBytes: number;
   maxFiles: number;
@@ -272,6 +276,7 @@ function materializeWindows(files: readonly CandidateFile[], results: readonly I
     return {
       file,
       ranges,
+      coordinateRanges: (result?.ranges || []).map(range => range.range),
       bytes: ranges.reduce((sum, range) => sum + range.estimatedBytes, 0),
       extremeMethod: result?.extremeMethod === true
     };
@@ -407,6 +412,7 @@ function selectTokenAwarePlan(
   return {
     items: selected.map(window => toPlanItem(window, ids, options)),
     selectedPaths: selected.map(window => window.file.absolutePath),
+    selectedCoordinateRangesByPath: new Map(selected.map(window => [window.file.absolutePath, window.coordinateRanges])),
     totalBytes,
     maxReadBytes: budget.maxReadBytes,
     maxFiles: budget.maxFiles,

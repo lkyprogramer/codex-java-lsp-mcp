@@ -15,17 +15,24 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
-import { JdtlsSession, type LspLocation, type LspLocationLink } from "../jdtls-session.js";
+import {
+  JdtlsSession,
+  type JdtFirstTouchSessionTrace,
+  type JdtFirstTouchTraceHandle,
+  type LspLocation,
+  type LspLocationLink,
+  type TelemetryObservation
+} from "../jdtls-session.js";
 import { canonicalPotentialPath, isPotentiallyWithin } from "../path-utils.js";
 import { fromFileUri } from "../repo-layout.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
+import { startBenchmarkProcessResourceObserverFromEnvironment } from "./process-resource-observer.js";
 import type { Completion } from "../runtime/completion.js";
 import { classifySemanticError, type JavaIntelligenceErrorCode } from "../runtime/intelligence-error.js";
 
 export type WorkspaceState = "fresh" | "reused";
 export type PrepareMode = "none" | "progress-idle" | "document-symbol";
 export type FirstTouchOperation = "definition" | "implementation" | "references" | "type-hierarchy";
-export type ObservedBoolean = boolean | "unavailable";
 export type BackendSettlementBucket =
   | "within_250ms"
   | "within_1s"
@@ -33,6 +40,17 @@ export type BackendSettlementBucket =
   | "after_5s"
   | "never_before_session_stop"
   | "unavailable";
+
+export type FirstTouchCriticalPath = {
+  wallMs: number;
+  ensureStartedMs: number;
+  prepareMs: number;
+  operationCallerMs: number;
+  accountedMs: number;
+  residualMs: number;
+  accountingErrorRatio: number;
+  gate: "PASS" | "FAIL";
+};
 
 export type SemanticFirstTouchAttempt = {
   projectId: string;
@@ -51,16 +69,20 @@ export type SemanticFirstTouchAttempt = {
   outsideRepoFiles: number;
   suppressedLocations: number;
   /** Raw JdtlsSession calls do not expose SemanticGateway cache telemetry. */
-  cacheHit: ObservedBoolean;
+  cacheHit: TelemetryObservation<boolean>;
   /** Raw JdtlsSession calls do not expose SemanticGateway singleflight telemetry. */
-  shared: ObservedBoolean;
+  shared: TelemetryObservation<boolean>;
   /** Cancellation settlement is only available when JdtlsSession has already recorded it. */
   backendSettlement: BackendSettlementBucket;
+  criticalPath: FirstTouchCriticalPath;
+  jdtTelemetry: TelemetryObservation<JdtFirstTouchSessionTrace>;
   errorCode?: JavaIntelligenceErrorCode;
   sessionPhaseMs: Record<string, number>;
   /** Preserved JDT cache/log root for a non-complete fresh attempt. */
   retainedWorkspace?: string;
 };
+
+const attemptTraceHandles = new WeakMap<SemanticFirstTouchAttempt, JdtFirstTouchTraceHandle>();
 
 export type SemanticFirstTouchCli = {
   repoRoot: string;
@@ -141,61 +163,100 @@ export async function runAttempt(
   cli: Pick<SemanticFirstTouchCli, "repoRoot" | "operation" | "workspaceState" | "prepare" | "projectId" | "timeoutMs">,
   anchor: FirstTouchAnchor,
   repoCommit: string,
-  ensureStartedMs: number
+  ensureStartedMs: number,
+  traceContext?: { handle: JdtFirstTouchTraceHandle; attemptStartedAt: number }
 ): Promise<SemanticFirstTouchAttempt> {
-  let prepareMs = 0;
-  if (cli.prepare === "progress-idle") {
-    const prepareStartedAt = performance.now();
-    await session.waitForProgressIdle(cli.timeoutMs);
-    prepareMs = performance.now() - prepareStartedAt;
-  } else if (cli.prepare === "document-symbol") {
-    const prepareStartedAt = performance.now();
-    await session.documentSymbolsWithRetry(anchor.file, cli.timeoutMs).catch(() => undefined);
-    prepareMs = performance.now() - prepareStartedAt;
-  }
-
-  // Drain preparation and any preceding lifecycle timings before the raw
-  // operation. A delayed cancellation settlement from a prior request must
-  // never be attributed to this attempt's backend call.
-  const beforeOperationPhaseMs = session.drainPhaseMetrics();
-  const requestStartedAt = performance.now();
-  let completion: Completion = "COMPLETE";
-  let operationResult: OperationResult = { resultFiles: 0, locations: [] };
-  let errorCode: JavaIntelligenceErrorCode | undefined;
+  const runStartedAt = performance.now();
+  const ownedTrace = traceContext ?? beginTraceIfSupported(session, runStartedAt - ensureStartedMs);
+  const attemptStartedAt = ownedTrace?.attemptStartedAt ?? runStartedAt - ensureStartedMs;
   try {
-    operationResult = await runOperation(session, cli.operation, anchor, cli.timeoutMs);
-  } catch (error) {
-    const classified = classifySemanticError(error);
-    completion = completionForError(classified.code);
-    errorCode = classified.code;
-  }
-  const requestMs = performance.now() - requestStartedAt;
-  const containment = summarizeContainment(cli.repoRoot, operationResult.locations);
-  const operationPhaseMs = session.drainPhaseMetrics();
-  const sessionPhaseMs = mergePhaseMetrics(beforeOperationPhaseMs, operationPhaseMs);
+    let prepareMs = 0;
+    if (cli.prepare === "progress-idle") {
+      const prepareStartedAt = performance.now();
+      await session.waitForProgressIdle(cli.timeoutMs);
+      prepareMs = performance.now() - prepareStartedAt;
+    } else if (cli.prepare === "document-symbol") {
+      const prepareStartedAt = performance.now();
+      await session.documentSymbolsWithRetry(anchor.file, cli.timeoutMs).catch(() => undefined);
+      prepareMs = performance.now() - prepareStartedAt;
+    }
 
-  return {
-    projectId: cli.projectId,
-    repoCommit,
-    workspaceState: cli.workspaceState,
-    prepare: cli.prepare,
-    operation: cli.operation,
-    scenarioId: anchor.scenarioId,
-    ensureStartedMs,
-    prepareMs: Math.round(prepareMs),
-    requestMs: Math.round(requestMs),
-    totalMs: Math.round(ensureStartedMs + prepareMs + requestMs),
-    completion,
-    resultFiles: operationResult.resultFiles,
-    repoContainedFiles: containment.repoContainedFiles,
-    outsideRepoFiles: containment.outsideRepoFiles,
-    suppressedLocations: containment.suppressedLocations,
-    cacheHit: "unavailable",
-    shared: "unavailable",
-    backendSettlement: settlementBucket(operationPhaseMs.cancelBackendSettlementMs),
-    errorCode,
-    sessionPhaseMs
-  };
+    // Retained only for historical artifacts. The attempt-scoped trace below
+    // is the authoritative source for new phase attribution.
+    const beforeOperationPhaseMs = session.drainPhaseMetrics();
+    const requestStartedAt = performance.now();
+    let completion: Completion = "COMPLETE";
+    let operationResult: OperationResult = { resultFiles: 0, locations: [] };
+    let errorCode: JavaIntelligenceErrorCode | undefined;
+    try {
+      operationResult = await runOperation(session, cli.operation, anchor, cli.timeoutMs);
+    } catch (error) {
+      const classified = classifySemanticError(error);
+      completion = completionForError(classified.code);
+      errorCode = classified.code;
+    }
+    const callerCompletedAt = performance.now();
+    const requestMs = callerCompletedAt - requestStartedAt;
+    const containment = summarizeContainment(cli.repoRoot, operationResult.locations);
+    const operationPhaseMs = session.drainPhaseMetrics();
+    const sessionPhaseMs = mergePhaseMetrics(beforeOperationPhaseMs, operationPhaseMs);
+    const wallMs = Math.max(0, callerCompletedAt - attemptStartedAt);
+    const accountedMs = Math.max(0, ensureStartedMs) + prepareMs + requestMs;
+    const residualMs = wallMs - accountedMs;
+    const accountingErrorRatio = Math.abs(residualMs) / Math.max(wallMs, 1);
+    const telemetrySnapshot = ownedTrace?.handle.snapshot();
+    const attempt: SemanticFirstTouchAttempt = {
+      projectId: cli.projectId,
+      repoCommit,
+      workspaceState: cli.workspaceState,
+      prepare: cli.prepare,
+      operation: cli.operation,
+      scenarioId: anchor.scenarioId,
+      ensureStartedMs: roundedMs(ensureStartedMs),
+      prepareMs: roundedMs(prepareMs),
+      requestMs: roundedMs(requestMs),
+      totalMs: roundedMs(wallMs),
+      completion,
+      resultFiles: operationResult.resultFiles,
+      repoContainedFiles: containment.repoContainedFiles,
+      outsideRepoFiles: containment.outsideRepoFiles,
+      suppressedLocations: containment.suppressedLocations,
+      cacheHit: unmeasuredObservation("raw JdtlsSession first-touch operations bypass SemanticGateway"),
+      shared: unmeasuredObservation("raw JdtlsSession first-touch operations bypass SemanticGateway"),
+      backendSettlement: telemetrySnapshot
+        ? settlementBucketFromTrace(telemetrySnapshot)
+        : settlementBucket(operationPhaseMs.cancelBackendSettlementMs),
+      criticalPath: {
+        wallMs: roundedMs(wallMs),
+        ensureStartedMs: roundedMs(ensureStartedMs),
+        prepareMs: roundedMs(prepareMs),
+        operationCallerMs: roundedMs(requestMs),
+        accountedMs: roundedMs(accountedMs),
+        residualMs: roundedSignedMs(residualMs),
+        accountingErrorRatio: Math.round(accountingErrorRatio * 1_000_000) / 1_000_000,
+        gate: accountingErrorRatio <= 0.05 ? "PASS" : "FAIL"
+      },
+      jdtTelemetry: telemetrySnapshot
+        ? { status: "MEASURED", value: telemetrySnapshot }
+        : unmeasuredObservation("the supplied session does not expose beginFirstTouchTrace()"),
+      errorCode,
+      sessionPhaseMs
+    };
+    if (ownedTrace) attemptTraceHandles.set(attempt, ownedTrace.handle);
+    return attempt;
+  } finally {
+    ownedTrace?.handle.endAttempt();
+  }
+}
+
+function beginTraceIfSupported(
+  session: JdtlsSession,
+  attemptStartedAt: number
+): { handle: JdtFirstTouchTraceHandle; attemptStartedAt: number } | undefined {
+  const begin = (session as JdtlsSession & { beginFirstTouchTrace?: () => JdtFirstTouchTraceHandle }).beginFirstTouchTrace;
+  return typeof begin === "function"
+    ? { handle: begin.call(session), attemptStartedAt }
+    : undefined;
 }
 
 function settlementBucket(settlementMs: number | undefined): BackendSettlementBucket {
@@ -204,6 +265,33 @@ function settlementBucket(settlementMs: number | undefined): BackendSettlementBu
   if (settlementMs! <= 1_000) return "within_1s";
   if (settlementMs! <= 5_000) return "within_5s";
   return "after_5s";
+}
+
+function settlementBucketFromTrace(trace: JdtFirstTouchSessionTrace): BackendSettlementBucket {
+  const measuredValues = trace.operations
+    .map(operation => operation.backendSettlementAfterCallerMs)
+    .filter((value): value is { status: "MEASURED"; value: number } => value.status === "MEASURED")
+    .map(value => value.value);
+  if (measuredValues.length > 0) return settlementBucket(Math.max(...measuredValues));
+  if (trace.operations.some(operation =>
+    operation.backendSettlementAfterCallerMs.status === "UNMEASURED"
+    && /before benchmark session stop/.test(operation.backendSettlementAfterCallerMs.reason)
+  )) {
+    return "never_before_session_stop";
+  }
+  return "unavailable";
+}
+
+function unmeasuredObservation<T = never>(reason: string): TelemetryObservation<T> {
+  return { status: "UNMEASURED", reason };
+}
+
+function roundedMs(value: number): number {
+  return Math.round(Math.max(0, value) * 1000) / 1000;
+}
+
+function roundedSignedMs(value: number): number {
+  return Math.round(value * 1000) / 1000;
 }
 
 function mergePhaseMetrics(...parts: ReadonlyArray<Record<string, number>>): Record<string, number> {
@@ -319,27 +407,53 @@ export async function runStartedAttempt(
   repoCommit: string
 ): Promise<SemanticFirstTouchAttempt> {
   let attempt: SemanticFirstTouchAttempt | undefined;
+  const attemptStartedAt = performance.now();
+  const trace = beginTraceIfSupported(session, attemptStartedAt);
   try {
-    const startedAt = performance.now();
     await session.ensureStarted(DeadlineBudget.fromTimeout(180_000));
-    attempt = await runAttempt(session, cli, anchor, repoCommit, performance.now() - startedAt);
+    attempt = await runAttempt(
+      session,
+      cli,
+      anchor,
+      repoCommit,
+      performance.now() - attemptStartedAt,
+      trace
+    );
   } finally {
+    trace?.handle.endAttempt();
     await session.stop();
     if (attempt) {
       const afterStopPhaseMs = session.drainPhaseMetrics();
       attempt.sessionPhaseMs = mergePhaseMetrics(attempt.sessionPhaseMs, afterStopPhaseMs);
-      if (
-        (attempt.completion === "PARTIAL_TIMEOUT" || attempt.completion === "CANCELLED")
-        && attempt.backendSettlement === "unavailable"
-      ) {
-        const afterStopSettlement = settlementBucket(afterStopPhaseMs.cancelBackendSettlementMs);
-        attempt.backendSettlement = afterStopSettlement === "unavailable"
-          ? "never_before_session_stop"
-          : afterStopSettlement;
-      }
+      finalizeAttemptTelemetry(attempt, afterStopPhaseMs);
+    } else {
+      trace?.handle.close();
     }
   }
   return attempt!;
+}
+
+function finalizeAttemptTelemetry(
+  attempt: SemanticFirstTouchAttempt,
+  fallbackPhaseMs: Record<string, number> = {}
+): void {
+  const handle = attemptTraceHandles.get(attempt);
+  if (handle) {
+    const snapshot = handle.close();
+    attemptTraceHandles.delete(attempt);
+    attempt.jdtTelemetry = { status: "MEASURED", value: snapshot };
+    attempt.backendSettlement = settlementBucketFromTrace(snapshot);
+    return;
+  }
+  if (
+    (attempt.completion === "PARTIAL_TIMEOUT" || attempt.completion === "CANCELLED")
+    && attempt.backendSettlement === "unavailable"
+  ) {
+    const afterStopSettlement = settlementBucket(fallbackPhaseMs.cancelBackendSettlementMs);
+    attempt.backendSettlement = afterStopSettlement === "unavailable"
+      ? "never_before_session_stop"
+      : afterStopSettlement;
+  }
 }
 
 function printUsage(): void {
@@ -375,6 +489,22 @@ async function main(): Promise<void> {
     return;
   }
   const cli = parseCli(process.argv.slice(2));
+  if (process.env.JAVA_LSP_ISOLATED_VALIDATION !== "1") {
+    throw new Error(
+      "semantic-first-touch requires JAVA_LSP_ISOLATED_VALIDATION=1 from the detached validation harness; refusing to touch a caller LSP workspace"
+    );
+  }
+  if (process.env.JAVA_LSP_ISOLATED_REPO_WORKTREE !== "1") {
+    throw new Error("semantic-first-touch requires a detached Java repository from run-isolated-jdt-benchmark.mjs");
+  }
+  const isolatedRepoRoot = process.env.JAVA_LSP_ISOLATED_REPO_ROOT;
+  if (!isolatedRepoRoot || canonicalPath(cli.repoRoot) !== canonicalPath(isolatedRepoRoot)) {
+    throw new Error("semantic-first-touch repo root must equal the detached Java clone selected by the isolation harness");
+  }
+  const processResources = startBenchmarkProcessResourceObserverFromEnvironment(
+    `semantic-first-touch:${cli.workspaceState}:${cli.operation}`,
+    "NOT_PRESENT"
+  );
   const repoCommit = execFileSync("git", ["-C", cli.repoRoot, "rev-parse", "--short=12", "HEAD"], { encoding: "utf8" }).trim();
   const attempts: SemanticFirstTouchAttempt[] = [];
 
@@ -383,9 +513,10 @@ async function main(): Promise<void> {
       const previousCacheRoot = process.env.JAVA_LSP_CACHE_ROOT;
       try {
         const workspace = await withFreshWorkspace(async cacheRoot => {
-          process.env.JAVA_LSP_CACHE_ROOT = cacheRoot;
-          const session = new JdtlsSession(cli.repoRoot);
-          return runStartedAttempt(session, cli, anchorFor(cli), repoCommit);
+          return withIsolatedJdtEnvironment(cacheRoot, async () => {
+            const session = new JdtlsSession(cli.repoRoot);
+            return runStartedAttempt(session, cli, anchorFor(cli), repoCommit);
+          });
         });
         const attempt = workspace.result;
         if (workspace.failed) attempt.retainedWorkspace = workspace.cacheRoot;
@@ -396,16 +527,41 @@ async function main(): Promise<void> {
       }
     }
   } else {
-    const session = new JdtlsSession(cli.repoRoot);
+    const cacheRoot = mkdtempSync(path.join(os.tmpdir(), "semantic-first-touch-reused-"));
+    let preserveWorkspace = false;
     try {
-      const startedAt = performance.now();
-      await session.ensureStarted(DeadlineBudget.fromTimeout(180_000));
-      const ensureStartedMs = performance.now() - startedAt;
-      for (let run = 0; run < cli.runs; run += 1) {
-        attempts.push(await runAttempt(session, cli, anchorFor(cli), repoCommit, run === 0 ? ensureStartedMs : 0));
+      await withIsolatedJdtEnvironment(cacheRoot, async () => {
+        const session = new JdtlsSession(cli.repoRoot);
+        const attemptStartedAt = performance.now();
+        const startupTrace = beginTraceIfSupported(session, attemptStartedAt);
+        try {
+          await session.ensureStarted(DeadlineBudget.fromTimeout(180_000));
+          const ensureStartedMs = performance.now() - attemptStartedAt;
+          for (let run = 0; run < cli.runs; run += 1) {
+            attempts.push(await runAttempt(
+              session,
+              cli,
+              anchorFor(cli),
+              repoCommit,
+              run === 0 ? ensureStartedMs : 0,
+              run === 0 ? startupTrace : undefined
+            ));
+          }
+        } finally {
+          startupTrace?.handle.endAttempt();
+          await session.stop();
+          for (const attempt of attempts) finalizeAttemptTelemetry(attempt);
+          if (attempts.length === 0) startupTrace?.handle.close();
+        }
+      });
+      preserveWorkspace = attempts.some(attempt => attempt.completion !== "COMPLETE");
+      if (preserveWorkspace) {
+        for (const attempt of attempts) {
+          if (attempt.completion !== "COMPLETE") attempt.retainedWorkspace = cacheRoot;
+        }
       }
     } finally {
-      await session.stop();
+      if (!preserveWorkspace) rmSync(cacheRoot, { recursive: true, force: true });
     }
   }
 
@@ -413,6 +569,30 @@ async function main(): Promise<void> {
   const serialized = JSON.stringify(payload, null, 2);
   if (cli.output) await writeJsonAtomically(cli.output, serialized);
   console.log(serialized);
+  await processResources?.stop();
+}
+
+async function withIsolatedJdtEnvironment<T>(cacheRoot: string, action: () => Promise<T>): Promise<T> {
+  const previous = {
+    cacheRoot: process.env.JAVA_LSP_CACHE_ROOT,
+    dataDir: process.env.JDTLS_DATA_DIR,
+    logDir: process.env.JDTLS_LOG_DIR
+  };
+  process.env.JAVA_LSP_CACHE_ROOT = cacheRoot;
+  process.env.JDTLS_DATA_DIR = path.join(cacheRoot, "jdt-workspace");
+  process.env.JDTLS_LOG_DIR = path.join(cacheRoot, "jdt-logs");
+  try {
+    return await action();
+  } finally {
+    restoreEnvironment("JAVA_LSP_CACHE_ROOT", previous.cacheRoot);
+    restoreEnvironment("JDTLS_DATA_DIR", previous.dataDir);
+    restoreEnvironment("JDTLS_LOG_DIR", previous.logDir);
+  }
+}
+
+function restoreEnvironment(name: string, value: string | undefined): void {
+  if (value === undefined) delete process.env[name];
+  else process.env[name] = value;
 }
 
 function anchorFor(cli: SemanticFirstTouchCli): FirstTouchAnchor {
@@ -432,14 +612,15 @@ function anchorFor(cli: SemanticFirstTouchCli): FirstTouchAnchor {
 
 export function isMainModule(argvPath: string | undefined, moduleUrl: string): boolean {
   if (!argvPath) return false;
-  const canonicalPath = (value: string): string => {
-    try {
-      return realpathSync(value);
-    } catch {
-      return path.resolve(value);
-    }
-  };
   return canonicalPath(argvPath) === canonicalPath(fileURLToPath(moduleUrl));
+}
+
+function canonicalPath(value: string): string {
+  try {
+    return realpathSync(value);
+  } catch {
+    return path.resolve(value);
+  }
 }
 
 const isMain = isMainModule(process.argv[1], import.meta.url);

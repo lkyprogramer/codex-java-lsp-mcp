@@ -4,14 +4,152 @@
 // pos: Task 32 Step 2 - replaces V2's regex-based goldenAttributionRow for the "impact"
 //      strategy. Every field here traces to a concrete diagnostic (familyScores, providers,
 //      rank, coverage state, semantic completion) rather than a reread-and-guess heuristic.
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import type { ImpactMode } from "../agent-types.js";
+import type { ImpactMode, ImpactResult, ImpactVerbosity } from "../agent-types.js";
 import type { EvidenceFamily } from "../agent-router/evidence.js";
+import { projectImpactResultV6 } from "../agent-router/format.js";
 import { candidateLimit } from "../agent-router/read-plan.js";
 import { ALL_FAMILIES, type ShadowRankingDiagnostics } from "../agent-router/shadow-ranking.js";
 import type { SourceRootCoverage } from "../java-index/index-types.js";
 import { goldenEntries, type GoldenKind, type Scenario } from "./golden-scenario.js";
+
+export type ImpactPayloadFieldAttributionV3 = {
+  occurrences: number;
+  valueJsonBytes: number;
+  /** Marginal wire bytes after removing every occurrence and reconverging cost. Nested field deltas are not additive. */
+  omitDeltaBytes: number;
+};
+
+export type ImpactPayloadProjectionEntryV3 = {
+  serializedBytes: number;
+  costResultBytes: number;
+  projectionEstimatedTokens: number;
+  candidateReadPlanSha256: string;
+  fields: Record<string, ImpactPayloadFieldAttributionV3>;
+};
+
+export type ImpactPayloadProjectionV3 = {
+  schemaVersion: "impact-payload-projection-v3";
+  canonicalExecutions: 1;
+  canonicalVerbosity: "diagnostic";
+  defaultToolResponse: "standard";
+  defaultToolSerializedBytes: number;
+  defaultToolEstimatedTokens: number;
+  diagnosticSerializedBytes: number;
+  diagnosticEstimatedTokens: number;
+  standardToDiagnosticBytesRatio: number;
+  candidateReadPlanSha256: string;
+  projections: Record<ImpactVerbosity, ImpactPayloadProjectionEntryV3>;
+};
+
+const PAYLOAD_VERBOSITIES: readonly ImpactVerbosity[] = ["compact", "standard", "diagnostic"];
+const PAYLOAD_FIELDS = [
+  "files",
+  "readPlan",
+  "metrics",
+  "evidenceGaps",
+  "files.locations",
+  "files.reasons",
+  "files.scoreBreakdown",
+  "files.verifiedBy"
+] as const;
+
+export function buildImpactPayloadProjectionV3(canonicalDiagnostic: ImpactResult): ImpactPayloadProjectionV3 {
+  const projections = {} as Record<ImpactVerbosity, ImpactPayloadProjectionEntryV3>;
+  const fingerprint = candidateReadPlanFingerprint(canonicalDiagnostic);
+  for (const verbosity of PAYLOAD_VERBOSITIES) {
+    const payload = projectImpactResultV6(canonicalDiagnostic, verbosity);
+    const serializedBytes = jsonBytes(payload);
+    if (payload.cost.resultBytes !== serializedBytes) {
+      throw new Error(`${verbosity} ImpactResultV6 cost.resultBytes does not match serialized bytes`);
+    }
+    const projectionFingerprint = candidateReadPlanFingerprint(payload);
+    if (projectionFingerprint !== fingerprint) {
+      throw new Error(`${verbosity} projection changed candidate/read-plan identity`);
+    }
+    projections[verbosity] = {
+      serializedBytes,
+      costResultBytes: payload.cost.resultBytes,
+      projectionEstimatedTokens: Math.ceil(serializedBytes / 4),
+      candidateReadPlanSha256: projectionFingerprint,
+      fields: Object.fromEntries(PAYLOAD_FIELDS.map(field => [field, fieldAttribution(payload, field)]))
+    };
+  }
+  const standard = projections.standard;
+  const diagnostic = projections.diagnostic;
+  return {
+    schemaVersion: "impact-payload-projection-v3",
+    canonicalExecutions: 1,
+    canonicalVerbosity: "diagnostic",
+    defaultToolResponse: "standard",
+    defaultToolSerializedBytes: standard.serializedBytes,
+    defaultToolEstimatedTokens: standard.projectionEstimatedTokens,
+    diagnosticSerializedBytes: diagnostic.serializedBytes,
+    diagnosticEstimatedTokens: diagnostic.projectionEstimatedTokens,
+    standardToDiagnosticBytesRatio: diagnostic.serializedBytes > 0
+      ? standard.serializedBytes / diagnostic.serializedBytes
+      : 0,
+    candidateReadPlanSha256: fingerprint,
+    projections
+  };
+}
+
+function candidateReadPlanFingerprint(payload: ImpactResult): string {
+  return sha256(JSON.stringify({
+    files: payload.files.map(file => ({
+      id: file.id,
+      path: file.path,
+      role: file.role,
+      confidence: file.confidence,
+      evidence: file.evidence,
+      locations: file.locations
+    })),
+    readPlan: payload.readPlan
+  }));
+}
+
+function fieldAttribution(
+  payload: ImpactResult,
+  field: typeof PAYLOAD_FIELDS[number]
+): ImpactPayloadFieldAttributionV3 {
+  const values = fieldValues(payload, field);
+  if (values.length === 0) return { occurrences: 0, valueJsonBytes: 0, omitDeltaBytes: 0 };
+  const without = structuredClone(payload) as ImpactResult;
+  omitField(without, field);
+  const converged = projectImpactResultV6(without, "diagnostic");
+  return {
+    occurrences: values.length,
+    valueJsonBytes: values.reduce<number>((sum, value) => sum + jsonBytes(value), 0),
+    omitDeltaBytes: payload.cost.resultBytes - converged.cost.resultBytes
+  };
+}
+
+function fieldValues(payload: ImpactResult, field: typeof PAYLOAD_FIELDS[number]): unknown[] {
+  if (field.startsWith("files.")) {
+    const property = field.slice("files.".length) as "locations" | "reasons" | "scoreBreakdown" | "verifiedBy";
+    return payload.files.filter(file => Object.hasOwn(file, property)).map(file => file[property]);
+  }
+  return Object.hasOwn(payload, field) ? [(payload as unknown as Record<string, unknown>)[field]] : [];
+}
+
+function omitField(payload: ImpactResult, field: typeof PAYLOAD_FIELDS[number]): void {
+  if (field.startsWith("files.")) {
+    const property = field.slice("files.".length);
+    for (const file of payload.files) delete (file as unknown as Record<string, unknown>)[property];
+    return;
+  }
+  delete (payload as unknown as Record<string, unknown>)[field];
+}
+
+function jsonBytes(value: unknown): number {
+  return Buffer.byteLength(JSON.stringify(value), "utf8");
+}
+
+function sha256(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
 
 export type GoldenBlockedByV3 = "hit" | "readplan-budget" | "candidate-limit" | "absent";
 

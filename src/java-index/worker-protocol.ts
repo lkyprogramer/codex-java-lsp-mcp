@@ -39,7 +39,7 @@ export type JavaIndexWorktreeIdentity = {
   isLinkedWorktree: boolean;
 };
 
-export type JavaIndexRequest =
+type JavaIndexRequestOperation =
   | {
       id: number;
       type: "OPEN";
@@ -73,15 +73,27 @@ export type JavaIndexRequest =
   | { id: number; type: "FLUSH" }
   | { id: number; type: "CLOSE" };
 
-export type JavaIndexCommand = JavaIndexRequest extends infer Request
+/** Optional request-local timing flag; absent keeps the legacy worker envelope byte-for-byte lean. */
+export type JavaIndexRequest = JavaIndexRequestOperation & { telemetry?: true };
+
+export type JavaIndexCommand = JavaIndexRequestOperation extends infer Request
   ? Request extends { id: number }
     ? Omit<Request, "id">
     : never
   : never;
 
+export type JavaIndexWorkerTiming = {
+  /** Outstanding foreground commands, including an active command, observed at enqueue. */
+  queueDepthAtEnqueue: number;
+  /** Worker-local enqueue-to-dequeue duration. */
+  queueMs: number;
+  /** Worker-local dequeue-to-response duration. */
+  processingMs: number;
+};
+
 export type JavaIndexResponse =
-  | { id: number; ok: true; value: unknown }
-  | { id: number; ok: false; error: { code: string; message: string; stack?: string } };
+  | { id: number; ok: true; value: unknown; timing?: JavaIndexWorkerTiming }
+  | { id: number; ok: false; error: { code: string; message: string; stack?: string }; timing?: JavaIndexWorkerTiming };
 
 export type JavaIndexValueValidator<T> = (value: unknown) => T;
 
@@ -153,12 +165,24 @@ function withOptional<K extends string, V>(key: K, value: V | undefined): { [P i
 export function isJavaIndexResponse(value: unknown): value is JavaIndexResponse {
   if (!isRecord(value)) return false;
   if (!isNumber(value.id)) return false;
+  if (value.timing !== undefined && !isJavaIndexWorkerTiming(value.timing)) return false;
   if (value.ok === true) return "value" in value;
   if (value.ok === false) {
     const error = value.error;
     return isRecord(error) && isString(error.code) && isString(error.message);
   }
   return false;
+}
+
+function isJavaIndexWorkerTiming(value: unknown): value is JavaIndexWorkerTiming {
+  return isRecord(value)
+    && isNumber(value.queueDepthAtEnqueue)
+    && Number.isInteger(value.queueDepthAtEnqueue)
+    && value.queueDepthAtEnqueue >= 0
+    && isNumber(value.queueMs)
+    && value.queueMs >= 0
+    && isNumber(value.processingMs)
+    && value.processingMs >= 0;
 }
 
 // --- shared fact validators --------------------------------------------------
@@ -794,6 +818,10 @@ function validateIndexedReadRange(value: unknown, context: string): IndexedReadR
     invalid(context, "expected an inclusive positive line range");
   }
   if (!isOneOf(source.kind, INDEXED_READ_RANGE_KINDS)) invalid(context, "kind");
+  const range = validateSourceRange(source.range, `${context}.range`);
+  if (!validCanonicalSourceRange(range)) {
+    invalid(context, "range must use positive integer 1-based coordinates with an exclusive end");
+  }
   const kinds = optional(source.kinds, `${context}.kinds`, (item, itemContext) =>
     array(item, itemContext).map((kind, index) => {
       if (!isOneOf(kind, INDEXED_READ_RANGE_KINDS)) invalid(`${itemContext}[${index}]`, "kind");
@@ -803,10 +831,21 @@ function validateIndexedReadRange(value: unknown, context: string): IndexedReadR
   return {
     startLine: source.startLine,
     endLine: source.endLine,
+    range,
     kind: source.kind,
     ...withOptional("kinds", kinds),
     estimatedBytes: source.estimatedBytes
   };
+}
+
+function validCanonicalSourceRange(range: SourceRange): boolean {
+  const positions = [range.start, range.end];
+  if (!positions.every(position => Number.isInteger(position.line)
+    && Number.isInteger(position.column)
+    && position.line >= 1
+    && position.column >= 1)) return false;
+  return range.start.line < range.end.line
+    || (range.start.line === range.end.line && range.start.column < range.end.column);
 }
 
 export function validateIndexedReadRangeResults(value: unknown): IndexedReadRangeResult[] {

@@ -285,6 +285,147 @@ test("a successful start records the spawned jdtls pid on the lease", async () =
   assert.deepEqual(leaseStore.released.sort(), ["JDT_SLOT", "JDT_WORKTREE"], "stop() releases the lease");
 });
 
+test("isolated startup appends the private Java user.home after benchmark profile arguments", async () => {
+  const previous = {
+    marker: process.env.JAVA_LSP_ISOLATED_VALIDATION,
+    home: process.env.HOME,
+    extraArgs: process.env.JDTLS_EXTRA_ARGS
+  };
+  const factory = fakeTransportFactory({ initializeResult: { capabilities: {} } });
+  const { session } = harness(factory);
+  try {
+    process.env.JAVA_LSP_ISOLATED_VALIDATION = "1";
+    process.env.HOME = "/tmp/private-jdt-home";
+    process.env.JDTLS_EXTRA_ARGS = "--jvm-arg=-Duser.home=/active/home --jvm-arg=-Xms1g";
+    await session.ensureStarted(DeadlineBudget.fromTimeout(5000));
+    const userHomeArgs = factory.spawnInputs[0].args.filter(argument => argument.startsWith("--jvm-arg=-Duser.home="));
+    assert.deepEqual(userHomeArgs, [
+      "--jvm-arg=-Duser.home=/active/home",
+      "--jvm-arg=-Duser.home=/tmp/private-jdt-home"
+    ]);
+    assert.equal(factory.spawnInputs[0].args.at(-1), "--jvm-arg=-Duser.home=/tmp/private-jdt-home");
+  } finally {
+    await session.stop();
+    for (const [name, value] of Object.entries({
+      JAVA_LSP_ISOLATED_VALIDATION: previous.marker,
+      HOME: previous.home,
+      JDTLS_EXTRA_ARGS: previous.extraArgs
+    })) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+});
+
+test("first-touch trace separates startup, configuration, progress, document and backend phases", async () => {
+  const factory = fakeTransportFactory({
+    initializeResult: { capabilities: {} },
+    responses: { "textDocument/definition": [] }
+  });
+  const { session, repoRoot } = harness(factory);
+  const file = path.join(repoRoot, "Trace.java");
+  writeFileSync(file, "class Trace {}\n");
+  const trace = session.beginFirstTouchTrace();
+
+  await session.ensureStarted(DeadlineBudget.fromTimeout(5000));
+  await factory.connections[0].emitRequest("workspace/configuration", { items: [{ section: "java" }] });
+  factory.connections[0].emitNotification("$/progress", {
+    token: "import",
+    value: { kind: "begin", title: "Importing projects" }
+  });
+  await delay(2);
+  factory.connections[0].emitNotification("$/progress", {
+    token: "import",
+    value: { kind: "end", title: "Importing projects" }
+  });
+  await session.rawDefinition(file, 1, 1, 5000);
+  trace.endAttempt();
+  const beforeStop = trace.snapshot();
+
+  assert.equal(beforeStop.execution, "new-process");
+  assert.equal(beforeStop.startup.filesystemSetupMs.status, "MEASURED");
+  assert.equal(beforeStop.startup.processSpawnCallMs.status, "MEASURED");
+  assert.equal(beforeStop.startup.initializeRoundTripMs.status, "MEASURED");
+  assert.equal(beforeStop.startup.configurationNotifySendMs.status, "MEASURED");
+  assert.equal(beforeStop.startup.configurationAppliedMs.status, "UNMEASURED");
+  assert.equal(beforeStop.configuration.requests, 1);
+  assert.equal(beforeStop.progress.events.length, 2);
+  assert.equal(beforeStop.progress.projectImportMs.status, "MEASURED");
+  assert.equal(beforeStop.document.sourceReadMs.status, "MEASURED");
+  assert.equal(beforeStop.document.lruSynchronizeMs.status, "MEASURED");
+  assert.deepEqual(beforeStop.document.syncAction, { status: "MEASURED", value: "didOpen" });
+  assert.equal(beforeStop.operations.length, 1);
+  assert.equal(beforeStop.operations[0].method, "textDocument/definition");
+  assert.deepEqual(beforeStop.operations[0].callerSettlement, { status: "MEASURED", value: "COMPLETE" });
+  assert.equal(beforeStop.operations[0].cancelAckMs.status, "NOT_APPLICABLE");
+
+  await session.stop();
+  trace.close();
+});
+
+test("a READY first-touch trace marks startup not applicable and observes a reused open document", async () => {
+  const factory = fakeTransportFactory({
+    initializeResult: { capabilities: {} },
+    responses: { "textDocument/definition": [] }
+  });
+  const { session, repoRoot } = harness(factory);
+  const file = path.join(repoRoot, "Reuse.java");
+  writeFileSync(file, "class Reuse {}\n");
+  await session.ensureStarted(DeadlineBudget.fromTimeout(5000));
+  await session.rawDefinition(file, 1, 1, 5000);
+
+  const trace = session.beginFirstTouchTrace();
+  await session.rawDefinition(file, 1, 1, 5000);
+  trace.endAttempt();
+  const snapshot = trace.snapshot();
+  assert.equal(snapshot.execution, "reused-ready-session");
+  assert.equal(snapshot.startup.filesystemSetupMs.status, "NOT_APPLICABLE");
+  assert.equal(snapshot.startup.jdtlsPid.status, "MEASURED");
+  assert.deepEqual(snapshot.document.syncAction, { status: "MEASURED", value: "reused" });
+  assert.equal(factory.connections[0].notifications.filter(method => method === "textDocument/didOpen").length, 1);
+
+  await session.stop();
+  trace.close();
+});
+
+test("a first-touch trace retains late backend settlement after the caller is cancelled", async () => {
+  const pendingDefinition = deferred<unknown>();
+  const factory = fakeTransportFactory({
+    initializeResult: { capabilities: {} },
+    responses: { "textDocument/definition": [] }
+  });
+  const { session, repoRoot } = harness(factory);
+  const file = path.join(repoRoot, "Cancel.java");
+  writeFileSync(file, "class Cancel {}\n");
+  await session.ensureStarted(DeadlineBudget.fromTimeout(5000));
+  factory.connections[0].pending.set("textDocument/definition", pendingDefinition);
+
+  const trace = session.beginFirstTouchTrace();
+  const controller = new AbortController();
+  const request = session.rawDefinition(file, 1, 1, 5000, controller.signal);
+  for (let attempt = 0; attempt < 100 && factory.connections[0].count("textDocument/definition") === 0; attempt += 1) {
+    await delay(1);
+  }
+  controller.abort();
+  await assert.rejects(
+    request,
+    (error: unknown) => error instanceof JavaIntelligenceError && error.code === "CANCELLED"
+  );
+  trace.endAttempt();
+  assert.deepEqual(trace.snapshot().operations[0].backendSettlement, { status: "MEASURED", value: "pending" });
+
+  pendingDefinition.resolve([]);
+  await delay(1);
+  const settled = trace.snapshot().operations[0];
+  assert.deepEqual(settled.backendSettlement, { status: "MEASURED", value: "fulfilled" });
+  assert.equal(settled.backendSettlementAfterCallerMs.status, "MEASURED");
+  assert.equal(settled.cancelSentMs.status, "MEASURED");
+  assert.equal(settled.cancelAckMs.status, "UNMEASURED");
+
+  await session.stop();
+  trace.close();
+});
+
 test("the JDT lease heartbeats throughout a long STARTING wait and the READY lifetime, then stops on release", async () => {
   const initialize = deferred<unknown>();
   const leaseStore = new FakeLeaseStore();

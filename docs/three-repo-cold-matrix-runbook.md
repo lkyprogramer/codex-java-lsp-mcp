@@ -6,8 +6,8 @@
 
 - 基线必须是已批准且为候选 `HEAD` 祖先的 Git SHA；候选是 `--candidate-root` 的 `HEAD + 全部已跟踪改动（含 staged/unstaged diff）+ runner 白名单内的未跟踪运行时输入`。这些未跟踪输入会复制到 `candidate-untracked/` 并绑定 SHA-256；白名单外未跟踪文件不会进入候选，也不能作为测试结论依据。
 - 场景从候选 worktree 拷贝到产物目录的 `frozen-scenarios/`，old/new 都通过 `--scenarios <同一绝对路径>` 使用它。禁止依赖各 worktree 的默认 `golden/` 路径。
-- 运行固定为 `cold-nolsp`、`impact`、`diagnostic`、3 轮 AB/BA/AB、每 cell 5 runs。脚本拒绝非 5-run 的正式门禁。
-- 所有编译、测试和 benchmark 都在临时 candidate/baseline worktree 执行，强制 `JDTLS_BIN=/usr/bin/false`、`JAVA_LSP_SHADOW_RANKING=0`，并将 `JAVA_LSP_CACHE_ROOT` 指向临时目录；不会复用、停止或改写调用者正在运行的 LSP 或其缓存。
+- 运行固定为 `cold-nolsp`、`impact`、`standard`、3 轮 AB/BA/AB、每 cell 5 runs。脚本拒绝非 5-run 的正式门禁。
+- 所有编译、测试和 benchmark 都在临时 candidate/baseline worktree 执行，依赖先复制到私有 `node_modules` 并在运行前后核对内容摘要；强制 `JDTLS_BIN=/usr/bin/false`、`JAVA_LSP_SHADOW_RANKING=0`，并将 `JAVA_LSP_CACHE_ROOT` 指向临时目录；不会复用、停止或改写调用者正在运行的 LSP 或其缓存。
 - 原始 18 份 JSON、每 cell stderr、候选 patch、场景 SHA-256、运行台账和汇总都保存在新建 output 目录。默认清理临时 worktree/cache；`--keep-worktrees` 仅用于调试。
 
 ## 前置条件
@@ -15,9 +15,11 @@
 1. 当前候选根目录已有 `node_modules`。
 2. 三个 golden 仓库可本地读取，且其提交在一次矩阵期间保持不变。
 3. 选定的 `--baseline` 是本轮报告指定的 before，而不是随意的旧 SHA。
-4. output 目录必须不存在；脚本不会覆盖旧产物。
+4. output 目录必须不存在，其直接父目录必须已存在，并且 canonical 路径必须位于 candidate checkout 外；脚本不会覆盖旧产物，也不会把验证产物写回在线源码 checkout。
 
-不要使用 `npm run build` 或 `npm test` 作为门禁证据。环境中的 nvm shell 包装可能在调用真实工具前失败；脚本直接以当前 Node 调用 `node_modules/.bin/tsc`、`node --test` 和 benchmark 入口。
+不要使用 `npm run build`、`npm test` 或裸 `node` 作为门禁证据。正式入口先通过
+`scripts/run-isolated-node.sh` 清除宿主 Node loader/output 变量，再由 detached isolation broker
+直接调用 `node_modules/.bin/tsc`、`node --test` 和 benchmark 入口。
 
 ## 日常使用规范
 
@@ -32,24 +34,24 @@
 ```zsh
 cd /Users/luo/Documents/github/codex-java-lsp-mcp
 
-node scripts/run-three-repo-cold-matrix.mjs \
+sh scripts/run-isolated-node.sh scripts/run-three-repo-cold-matrix.mjs \
   --baseline 652e9765ff3691214116782b383ce9d3ffa7c6ef \
-  --lishuedu /Users/luo/Documents/program/lishu/lishuedu \
-  --cipherlink /Users/luo/Documents/program/cipherlink \
-  --exam-parent-v3 /Users/luo/Documents/program/exam-parent-v3 \
-  --output-dir artifacts/model-eval/task30-final-frozen-20260804
+  --lishuedu /tmp/frozen-java-repos/lishuedu \
+  --cipherlink /tmp/frozen-java-repos/cipherlink \
+  --exam-parent-v3 /tmp/frozen-java-repos/exam-parent-v3 \
+  --output-dir /tmp/codex-java-lsp-matrix-<run-id>
 ```
 
-也可用环境变量缩短仓库参数（正式证据仍直接调用 Node）：
+也可用环境变量缩短仓库参数（正式证据仍须经 shell bootstrap 启动 Node）：
 
 ```zsh
-export LISHUEDU_ROOT=/Users/luo/Documents/program/lishu/lishuedu
-export CIPHERLINK_ROOT=/Users/luo/Documents/program/cipherlink
-export EXAM_PARENT_V3_ROOT=/Users/luo/Documents/program/exam-parent-v3
+export LISHUEDU_ROOT=/tmp/frozen-java-repos/lishuedu
+export CIPHERLINK_ROOT=/tmp/frozen-java-repos/cipherlink
+export EXAM_PARENT_V3_ROOT=/tmp/frozen-java-repos/exam-parent-v3
 
-node scripts/run-three-repo-cold-matrix.mjs \
+sh scripts/run-isolated-node.sh scripts/run-three-repo-cold-matrix.mjs \
   --baseline 652e9765ff3691214116782b383ce9d3ffa7c6ef \
-  --output-dir artifacts/model-eval/task30-final-frozen-20260804
+  --output-dir /tmp/codex-java-lsp-matrix-<run-id>
 ```
 
 成功时输出目录包含：
@@ -58,6 +60,10 @@ node scripts/run-three-repo-cold-matrix.mjs \
 run-manifest.json
 candidate.patch
 candidate.patch.sha256
+candidate-tests/dist.tap
+candidate-tests/dist.stderr
+candidate-tests/scripts.tap
+candidate-tests/scripts.stderr
 frozen-scenarios/<project>.scenarios.jsonl
 frozen-scenarios.sha256
 matrix/<project>-r<1|2|3>-<old|new>.json
@@ -70,13 +76,13 @@ matrix-summary.json
 对已有矩阵只做结构和门禁复验，不重新执行仓库：
 
 ```zsh
-node scripts/verify-three-repo-cold-matrix.mjs \
-  --matrix-dir artifacts/model-eval/task30-final-frozen-20260804/matrix \
+sh scripts/run-isolated-node.sh scripts/verify-three-repo-cold-matrix.mjs \
+  --matrix-dir /tmp/codex-java-lsp-matrix-<run-id>/matrix \
   --expected-runs 5 \
   --p95-limit 1.25
 ```
 
-校验器要求完整 18 cells，并检查每个 cell 的 `projectId`、`cold-nolsp`、`impact`、`diagnostic`、5 attempts/场景，以及同项目 old/new 的 `scenarioFile` 完全一致。
+校验器要求完整 18 cells，并检查每个 cell 的 `projectId`、`cold-nolsp`、`impact`、`standard`、5 attempts/场景，以及同项目 old/new 的 `scenarioFile` 完全一致；同时校验 candidate TAP/stderr 的 bytes、SHA-256、测试/通过/失败/取消摘要，以及私有依赖树 inventory 合同。该复验验证已记录证据的完整性，不会重新执行测试或矩阵。
 
 ## 通过条件与失败处理
 

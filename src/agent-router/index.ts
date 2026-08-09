@@ -22,6 +22,7 @@ import {
 import { buildImpactResult } from "./format.js";
 import {
   createImportGraphMetrics,
+  JavaIndexRpcTelemetryCollector,
   createPersistedSemanticMetrics,
   createSemanticMetrics,
   createTypeReferenceMetrics,
@@ -35,6 +36,7 @@ import { summaryFromSearchResult, type RgCommandSummary } from "./rg-plan.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import type { RepoChangeBatch } from "../repo-generation.js";
 import type { RequestContext } from "../runtime/request-context.js";
+import type { SourceRange } from "../runtime/source-range.js";
 import { GenerationRgCache } from "../search/rg-cache.js";
 import { RgRunner } from "../search/rg-runner.js";
 import type { SearchResult } from "../search/search-types.js";
@@ -67,6 +69,11 @@ type RouterStatus = {
   misses: number;
   generation: number;
   ttlMs: number;
+};
+
+/** Request-local benchmark observer. It is intentionally absent from ImpactResultV6. */
+export type ImpactInternalObserver = {
+  readPlanCoordinates?(rangesByAbsolutePath: ReadonlyMap<string, readonly SourceRange[]>): void;
 };
 
 /**
@@ -199,19 +206,26 @@ export class AgentRouter {
 
   async impact(
     options: ImpactOptions,
-    request?: RequestContext
+    request?: RequestContext,
+    internalObserver?: ImpactInternalObserver
   ): Promise<ImpactResult> {
     const budget = request?.budget ?? DeadlineBudget.fromTimeout(DEFAULT_ROUTER_DEADLINE_MS);
-    const execute = () => this.impactWithinRequest(options, request, budget);
+    const javaIndexTelemetry = options.verbosity === "diagnostic"
+      && process.env.JAVA_LSP_JAVA_INDEX_RPC_TELEMETRY !== "0"
+      ? new JavaIndexRpcTelemetryCollector()
+      : undefined;
+    const execute = () => this.impactWithinRequest(options, request, budget, javaIndexTelemetry, internalObserver);
     return this.javaIndex.withRequestOptions
-      ? this.javaIndex.withRequestOptions({ budget }, execute)
+      ? this.javaIndex.withRequestOptions({ budget, telemetry: javaIndexTelemetry }, execute)
       : execute();
   }
 
   private async impactWithinRequest(
     options: ImpactOptions,
     request: RequestContext | undefined,
-    budget: DeadlineBudget
+    budget: DeadlineBudget,
+    javaIndexTelemetry?: JavaIndexRpcTelemetryCollector,
+    internalObserver?: ImpactInternalObserver
   ): Promise<ImpactResult> {
     // A generation of 0 with reads/writes allowed reproduces the pre-freshness
     // behavior for callers (benchmarks/tests) that do not build a RequestContext.
@@ -380,6 +394,8 @@ export class AgentRouter {
       protectedPaths: plannerProtectedPaths,
       generation
     }));
+    internalObserver?.readPlanCoordinates?.(readPlanResult.selectedCoordinateRangesByPath);
+    const { selectedCoordinateRangesByPath: _selectedCoordinateRangesByPath, ...publicReadPlanMetrics } = readPlanResult;
     const ranked = truncateRankedCandidatePool(rankedPool, rankContext, new Set(readPlanResult.selectedPaths));
     const idByPath = new Map(ranked.map((file, index) => [file.absolutePath, `F${index + 1}`]));
     const pathById = new Map([...idByPath].map(([absolutePath, id]) => [id, absolutePath]));
@@ -453,9 +469,10 @@ export class AgentRouter {
           state: sourceAfter.javaIndex.state,
           files: sourceAfter.javaIndex.files,
           coverage: sourceAfter.coverage,
-          openSource: sourceAfter.openSource
+          openSource: sourceAfter.openSource,
+          ...(javaIndexTelemetry ? { rpc: javaIndexTelemetry.snapshot() } : {})
         },
-        readPlan: readPlanResult,
+        readPlan: publicReadPlanMetrics,
         framework: {
           metadata: frameworkResult.metadata,
           diagnostics: frameworkResult.diagnostics,
