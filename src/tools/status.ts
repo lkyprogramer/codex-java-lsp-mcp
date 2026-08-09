@@ -7,11 +7,11 @@ import path from "node:path";
 import { readRuntimeBuild, type RuntimeBuildInfo } from "../build-info.js";
 import { probeLayout, type LayoutContext } from "../layout-probe.js";
 import type { JdtlsProgressStatus } from "../jdtls-session.js";
-import type { FileWatcherStatus } from "../file-watcher.js";
 import type { GeneratedCodeStatus } from "../generated-code.js";
 import type { JavaIndexStatus } from "../java-index/index-types.js";
 import { summarizeCoverage } from "../java-index/java-index-view.js";
 import type { ProjectJdkStatus } from "../project-jdk.js";
+import type { RequestContext } from "../runtime/request-context.js";
 import type { ToolContext } from "./context.js";
 import { compact, detailSchema, isDiagnosticDetail } from "./shared.js";
 
@@ -59,7 +59,11 @@ export const statusSchema = {
   detail: detailSchema
 };
 
-export async function javaStatus(context: ToolContext, _args: z.infer<z.ZodObject<typeof statusSchema>>): Promise<Record<string, unknown>> {
+export async function javaStatus(
+  context: ToolContext,
+  _args: z.infer<z.ZodObject<typeof statusSchema>>,
+  request?: Pick<RequestContext, "budget">
+): Promise<Record<string, unknown>> {
   const layout = probeLayout(context.repoRoot, context.layoutProfile);
   const runtimeBuild = readRuntimeBuild();
   const warnings = rootWarnings(context.repoRoot);
@@ -80,10 +84,10 @@ export async function javaStatus(context: ToolContext, _args: z.infer<z.ZodObjec
       };
       return isDiagnosticDetail(_args.detail) ? disabled : disabledSummary(disabled);
     }
-    await context.session.ensureStarted();
+    await context.session.ensureStarted(request?.budget);
   }
   const sessionStatus = context.session.status();
-  const javaIndex = await context.javaIndexClient?.status().catch(() => undefined);
+  const javaIndex = await context.javaIndexClient?.status({ budget: request?.budget }).catch(() => undefined);
   const full = {
     ...sessionStatus,
     repoHash: context.repoHash,
@@ -125,7 +129,6 @@ export function summarizeSessionStatus(status: SessionStatus): Record<string, un
     buildSystem: status.buildSystem,
     projectJdk: summarizeProjectJdk(status.projectJdk),
     generatedCode: summarizeGeneratedCode(status.generatedCode),
-    fileWatcher: summarizeFileWatcher(status.fileWatcher),
     progress: summarizeProgress(status.progress)
   });
 }
@@ -260,18 +263,6 @@ function summarizeGeneratedCode(generatedCode: GeneratedCodeStatus): Record<stri
     annotationProcessing: generatedCode.annotationProcessing,
     generatedCodeSemantics: generatedCode.generatedCodeSemantics
   };
-}
-
-function summarizeFileWatcher(fileWatcher: FileWatcherStatus): Record<string, unknown> {
-  return compact({
-    enabled: fileWatcher.enabled,
-    active: fileWatcher.active,
-    watchedRootCount: fileWatcher.watchedRoots.length,
-    pendingChanges: fileWatcher.pendingChanges,
-    lastFlushAt: fileWatcher.lastFlushAt,
-    lastFlushSize: fileWatcher.lastFlushSize,
-    lastError: fileWatcher.lastError
-  });
 }
 
 function summarizeProgress(progress: JdtlsProgressStatus): Record<string, unknown> {

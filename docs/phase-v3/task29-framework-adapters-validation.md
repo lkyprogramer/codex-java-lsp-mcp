@@ -2,7 +2,7 @@
 
 ## Decision
 
-MapStruct is registered after its real-repository canary passed. JPA remains implemented but unregistered because the available real repositories do not establish counterfactual value. Lombok completeness remains result-level metadata/gap logic and does not create synthetic candidate edges.
+MapStruct is registered after its real-repository canary passed. JPA was initially implemented but left unregistered because the available real repositories did not establish counterfactual value; Task 36 later removed that unmeasured dead path under the measured-or-remove rule. Lombok completeness remains result-level metadata/gap logic and does not create synthetic candidate edges.
 
 ## Correctness changes
 
@@ -10,8 +10,7 @@ MapStruct is registered after its real-repository canary passed. JPA remains imp
 - A structurally discovered non-anchor mapper exposes only mapping methods whose parameter/return types touch the task anchor.
 - MapStruct activation uses bounded request facts instead of a whole-store marker scan.
 - `MAPSTRUCT_USES` survives lexical tail trimming but cannot make the final candidate list exceed `candidateLimit`.
-- Spring, MyBatis, JPA and MapStruct recognize normalized `STATIC_STRUCTURE` signals before family scores are materialized.
-- JPA derived-query evidence requires `<prefix>By<UppercaseProperty>`; `findAll` and `getFoo` are excluded while `findByCustomerId` remains.
+- Spring, MyBatis and MapStruct recognize normalized `STATIC_STRUCTURE` signals before family scores are materialized.
 - Lombok completeness reuses the JDT session's generated-code snapshot and checks selected read-plan collaborators as well as anchors.
 - `generatedSemantics` and a task-relevant Lombok advisory remain visible in compact, standard and diagnostic output.
 - Cold partial declaration lookup foreground-refreshes only bounded, exact conventional FQN paths before retrying once.
@@ -46,6 +45,6 @@ The manually verified `SchoolTemplateImportAssembler uses={IdConverter.class, Da
 - Canary off/on worktrees shared source HEAD `71f8c5b` and differed only by the registration import/list entry, but the generated `dist/build-stamp.json` was absent and raw files record `runtimeBuild.gitSha=unknown`. The source/diff boundary is known; the artifacts alone are not a cryptographically stamped runtime build.
 - Benchmark preparation completed every source root before impact sampling. The cold-partial exact-FQN retry is validated by a direct integration regression, not by these P95 cells.
 - The partial-FQN retry performs at most 512 exact existence checks; multi-root cap/deadline stress remains a documented follow-up.
-- JPA real-repository quality/cost is unmeasured, so it is deliberately not in `FRAMEWORK_ADAPTERS`.
+- JPA real-repository quality/cost was unmeasured, so it was never added to `FRAMEWORK_ADAPTERS`; Task 36 subsequently deleted its adapter, fixture and tests instead of retaining an unreachable implementation.
 
 Raw evidence is under `artifacts/v3-phase4/task29-mapstruct-canary-20260801/`; cache snapshots are intentionally excluded from version control.

@@ -94,10 +94,19 @@ export async function collectSemanticSeed(input: SemanticSeedInput): Promise<voi
   const suppressed: SemanticSuppressed = { externalLocations: 0 };
   await timed(input.phaseMs, "semantic", async () => {
     for (const anchor of input.anchors) {
-      const before = Date.now();
+      if (input.budget.expired()) {
+        recordSemanticBudgetExpiry(input.semantic);
+        break;
+      }
       try {
-        const context = await input.session.semanticLocations(anchor.absolutePath, anchor.line, anchor.column, input.options.semanticTimeoutMs, shouldIncludeImplementations(anchor));
-        input.semantic.timeout ||= Date.now() - before >= input.options.semanticTimeoutMs;
+        const context = await input.session.semanticLocations(
+          anchor.absolutePath,
+          anchor.line,
+          anchor.column,
+          input.budget,
+          shouldIncludeImplementations(anchor)
+        );
+        if (input.budget.expired()) recordSemanticBudgetExpiry(input.semantic);
         for (const location of [...context.definitions, ...context.implementations]) {
           const described = locationCandidate({
             location,
@@ -134,9 +143,19 @@ function recordSemanticFailure(
   }
 }
 
+function recordSemanticBudgetExpiry(state: { timeout: boolean; errorCode?: string }): void {
+  state.timeout = true;
+  state.errorCode ??= "DEADLINE_EXCEEDED";
+}
+
 export async function semanticVerify(input: SemanticVerifyInput): Promise<void> {
   if (!shouldUseSemanticVerify(input.options, input.semantic, input.session)) {
     input.semantic.verifySkipped = true;
+    return;
+  }
+  if (input.budget.expired()) {
+    input.semantic.verifySkipped = true;
+    recordSemanticBudgetExpiry(input.semantic);
     return;
   }
   input.semantic.verifyUsed = true;
@@ -150,11 +169,20 @@ export async function semanticVerify(input: SemanticVerifyInput): Promise<void> 
   const resolveAnchorSymbol = createMemoizedAnchorResolver(input.javaIndex);
   await timed(input.phaseMs, "semanticVerify", async () => {
     for (const anchor of input.anchors) {
-      const before = Date.now();
+      if (input.budget.expired()) {
+        recordSemanticBudgetExpiry(input.semantic);
+        break;
+      }
       const edgeCandidatesForPersistence: RawSemanticEdgeCandidate[] = [];
       try {
-        const references = await input.session.references(anchor.absolutePath, anchor.line, anchor.column, false, input.options.semanticTimeoutMs);
-        input.semantic.timeout ||= Date.now() - before >= input.options.semanticTimeoutMs;
+        const references = await input.session.references(
+          anchor.absolutePath,
+          anchor.line,
+          anchor.column,
+          false,
+          input.budget
+        );
+        if (input.budget.expired()) recordSemanticBudgetExpiry(input.semantic);
         const referenceRankingStarted = Date.now();
         const rawLocations: ReferenceLocation[] = [];
         const rawItems = references.items.slice(0, MAX_RAW_REFERENCE_LOCATIONS);
@@ -252,7 +280,7 @@ export async function semanticVerify(input: SemanticVerifyInput): Promise<void> 
       } catch (error) {
         recordSemanticFailure(input.semantic, error);
       }
-      if (edgeCandidatesForPersistence.length > 0) {
+      if (edgeCandidatesForPersistence.length > 0 && !input.budget.expired()) {
         try {
           const bounded = edgeCandidatesForPersistence.slice(0, MAX_PERSISTED_EDGES_PER_ANCHOR);
           const mapped = await Promise.all(

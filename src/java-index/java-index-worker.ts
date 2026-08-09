@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { parentPort } from "node:worker_threads";
 import {
@@ -82,8 +82,6 @@ const CLOSE_FLUSH_BUDGET_MS = 2000;
 // provisional BUILDING state and lets the caller's ordinary reconcile() -
 // exactly today's no-snapshot path - run it as a normal leased, chunked sweep.
 const SNAPSHOT_DIFF_INLINE_LIMIT = 200;
-const LEGACY_V1_CACHE_FILE_NAMES = ["source-index.files.jsonl", "source-index.symbols.jsonl", "source-index.meta.json"];
-const LEGACY_V1_CLEANUP_MARKER_NAME = "java-index-v2.initialized";
 
 let status: JavaIndexStatus = {
   state: "NEW",
@@ -604,26 +602,6 @@ function recordFileCoverage(relativePath: string, failure?: unknown): boolean {
   }
   coverage.indexed(file.sourceRoot);
   return false;
-}
-
-// Deletes legacy V1 on-disk cache files once, the first time this repo
-// is ever opened as a V2 index - guarded by a marker file so every later OPEN
-// is a single cheap stat() instead of repeating the deletion. The current
-// Java index snapshot lives under a different file name in the same
-// directory and is never touched here.
-async function cleanupLegacyCacheOnce(cacheDir: string): Promise<void> {
-  const markerPath = path.join(cacheDir, LEGACY_V1_CLEANUP_MARKER_NAME);
-  try {
-    await stat(markerPath);
-    return;
-  } catch {
-    // Marker absent: this is the first V2 open of this cache directory.
-  }
-  for (const name of LEGACY_V1_CACHE_FILE_NAMES) {
-    await rm(path.join(cacheDir, name), { force: true }).catch(() => undefined);
-  }
-  await mkdir(cacheDir, { recursive: true }).catch(() => undefined);
-  await writeFile(markerPath, new Date().toISOString()).catch(() => undefined);
 }
 
 // Debounced (Step 5): a burst of foreground refreshes coalesces into one
@@ -1268,10 +1246,11 @@ async function processBackgroundChunk(sweep: BackgroundSweep): Promise<void> {
     cache.setMaxSourceBytes(effectiveParseTreeSourceBudget(configured, activeRuntimes));
   }
   // Peek, do not remove yet: `remaining` (and therefore `pendingBackground`)
-  // must still count this chunk's files as outstanding for as long as they
-  // are actually being parsed/resolved, or a status check racing the chunk
-  // would see pendingBackground drop to 0 before the work is done.
+  // must still count this chunk's files as outstanding through its heartbeat.
+  // The final chunk stays counted through terminal re-link, coverage, lease,
+  // and snapshot-flush work too, so STATUS cannot report false quiescence.
   const chunk = sweep.remaining.slice(0, SWEEP_CHUNK_SIZE);
+  const finalChunk = chunk.length === sweep.remaining.length;
   const touched = new Set<string>();
   for (const file of chunk) {
     try {
@@ -1290,10 +1269,9 @@ async function processBackgroundChunk(sweep: BackgroundSweep): Promise<void> {
       recordFileCoverage(relativePath, error);
     }
   }
-  sweep.remaining.splice(0, chunk.length);
   sweep.parsedFiles += chunk.length;
   await sweep.leaseHandle.heartbeat();
-  if (sweep.remaining.length === 0) {
+  if (finalChunk) {
     const relinkErrors = resolveAllAndBuildEdges(sweep.allDiscovered.map(file => file.relativePath));
     for (const [relativePath, error] of relinkErrors) {
       recordFileCoverage(relativePath, error);
@@ -1314,6 +1292,7 @@ async function processBackgroundChunk(sweep: BackgroundSweep): Promise<void> {
     snapshotDirty = true;
     await flushSnapshotNow();
   }
+  sweep.remaining.splice(0, chunk.length);
 }
 
 function yieldToMessageLoop(): Promise<void> {
@@ -1386,7 +1365,6 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         layout = probeLayout(repoRoot);
         snapshotPath = path.join(request.cacheDir, SNAPSHOT_FILE_NAME);
         snapshotDirty = false;
-        await cleanupLegacyCacheOnce(request.cacheDir);
 
         let openedGeneration = request.generation;
         let ownSnapshotIdentity: SnapshotIdentity | undefined;

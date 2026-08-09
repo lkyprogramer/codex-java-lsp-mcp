@@ -40,8 +40,7 @@ const PROTECTED_CORE_KINDS = new Set([
   "typeGraph:implementation-lookup",
   "SPRING_INJECTION",
   "SPRING_CALL_PATH",
-  "MYBATIS_STATEMENT_METHOD",
-  "JPA_REPOSITORY_ENTITY"
+  "MYBATIS_STATEMENT_METHOD"
 ]);
 
 // A concrete class that directly implements or extends the anchor's type is
@@ -627,7 +626,7 @@ function bucketOf(file: CandidateFile, options: ImpactOptions, protectedPaths: R
   if (isAnchor(file, options)) return "anchor";
   if (file.sourceSet === "test" && options.testReadMode === "defer") return "support";
   if (isProtectedCore(file, options) || protectedPaths.has(file.absolutePath)) return "core";
-  if (file.categories.includes("framework") || file.reasons.some(reason => reason.startsWith("SPRING_") || reason.startsWith("MYBATIS_") || reason.startsWith("JPA_"))) return "framework";
+  if (file.categories.includes("framework") || file.reasons.some(reason => reason.startsWith("SPRING_") || reason.startsWith("MYBATIS_") || reason.startsWith("MAPSTRUCT_"))) return "framework";
   if (file.sourceSet === "test" || file.categories.some(category => category === "config" || category === "persistence" || category === "nonJava")) return "support";
   return "lexical";
 }

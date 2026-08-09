@@ -15,7 +15,6 @@ import { evidenceGaps } from "./evidence-gaps.js";
 import {
   baselineReadPlanSafePaths,
   familyReadPlanProtectedPaths,
-  foldProviderCandidates,
   rankCandidatePool,
   truncateRankedCandidatePool,
   type RankCandidatesContext
@@ -86,10 +85,14 @@ type RouterStatus = {
 function shadowRankingEnabled(): boolean {
   return process.env.JAVA_LSP_SHADOW_RANKING === "1";
 }
-const RG_CACHE_TTL_MS = positiveInteger(process.env.AGENT_RG_CACHE_TTL_MS, 300000);
+const RG_CACHE_TTL_MS = positiveInteger(process.env.JAVA_LSP_RG_CACHE_TTL_MS, 300000);
 const RG_CONCURRENCY = positiveInteger(process.env.JAVA_LSP_RG_CONCURRENCY, Math.min(4, availableParallelism()));
 // Used only when a caller does not supply the request budget (benchmarks, tests).
 const DEFAULT_ROUTER_DEADLINE_MS = positiveInteger(process.env.JAVA_LSP_ROUTER_DEADLINE_MS, 15000);
+// Live JDT is optional enrichment. Preserve enough of the caller's absolute
+// budget for the mandatory AST range batch, final freshness sample and result
+// assembly; the child budget can expire without extending the parent request.
+const FINALIZATION_RESERVE_MS = 500;
 
 /**
  * Carries only the legacy planner's already-selected high-confidence exact
@@ -199,6 +202,17 @@ export class AgentRouter {
     request?: RequestContext
   ): Promise<ImpactResult> {
     const budget = request?.budget ?? DeadlineBudget.fromTimeout(DEFAULT_ROUTER_DEADLINE_MS);
+    const execute = () => this.impactWithinRequest(options, request, budget);
+    return this.javaIndex.withRequestOptions
+      ? this.javaIndex.withRequestOptions({ budget }, execute)
+      : execute();
+  }
+
+  private async impactWithinRequest(
+    options: ImpactOptions,
+    request: RequestContext | undefined,
+    budget: DeadlineBudget
+  ): Promise<ImpactResult> {
     // A generation of 0 with reads/writes allowed reproduces the pre-freshness
     // behavior for callers (benchmarks/tests) that do not build a RequestContext.
     const freshness = request ?? {
@@ -285,12 +299,20 @@ export class AgentRouter {
     const afterFrameworkPaths = unionPaths(afterStaticPaths, frameworkOutcome);
 
     const preRelationshipOutcomes: ProviderOutcome[] = [persistedOutcome, staticStructureOutcome, lexicalOutcome, typeReferenceOutcome, frameworkOutcome];
+    const familyRankPolicy = resolveFamilyRankPolicy(this.routingPolicy);
     // Relationship evidence depends only on the anchor and the static
     // candidate surface. Collect it before the live semantic phase so exact
     // CALLS/METHOD_RELATION facts can participate in the protected read-plan
     // set that governs that later budget. Re-running it after live semantic
     // was both redundant and too late for Task 30's protected-core contract.
-    const relationshipCandidates = [...foldProviderCandidates(anchors, preRelationshipOutcomes).values()];
+    const preRelationshipNormalized = normalizeEvidence(preRelationshipOutcomes.flatMap(outcome => outcome.evidence), this.repoRoot);
+    const relationshipCandidates = await rankCandidatePool(preRelationshipNormalized, {
+      anchors,
+      options,
+      suppressed: { deferredTests: 0, crossModuleConsumers: 0, excludedModules: 0 },
+      repoRoot: this.repoRoot,
+      familyRankPolicy
+    });
     const relationshipOutcome = await timed(phaseMs, "relationshipEvidence", async () => collectRelationshipEvidence({
       ...providerInputBase,
       existingCandidatePaths: relationshipCandidates.map(candidate => candidate.absolutePath),
@@ -299,11 +321,9 @@ export class AgentRouter {
         (candidate.verifiedBy || []).some(source => source === "typeGraph" || source === "typeReference"))
     }));
     const phaseOneOutcomes: ProviderOutcome[] = [...preRelationshipOutcomes, relationshipOutcome];
-    const familyRankPolicy = resolveFamilyRankPolicy(this.routingPolicy);
     const phaseOneNormalized = normalizeEvidence(phaseOneOutcomes.flatMap(outcome => outcome.evidence), this.repoRoot);
     const protectedReadPlanPaths = await timed(phaseMs, "nonLspReadPlan", async () => familyReadPlanProtectedPaths(
       phaseOneNormalized,
-      phaseOneOutcomes,
       {
         anchors,
         options,
@@ -315,7 +335,18 @@ export class AgentRouter {
 
     // Live JDT budget is spent only after the protected read-plan paths are
     // already pinned from cheaper evidence, matching the pre-Task-24 order.
-    const liveSemanticOutcome = await collectLiveSemanticEvidence({ ...providerInputBase, existingCandidatePaths: afterFrameworkPaths });
+    // Both seed and verification consume this one child deadline. The nested
+    // JavaIndex binding also prevents optional edge-persistence lookups from
+    // borrowing the finalization reserve through the outer request scope.
+    const liveSemanticBudget = budget.forStage(options.semanticTimeoutMs, FINALIZATION_RESERVE_MS);
+    const collectLiveSemantic = () => collectLiveSemanticEvidence({
+      ...providerInputBase,
+      budget: liveSemanticBudget,
+      existingCandidatePaths: afterFrameworkPaths
+    });
+    const liveSemanticOutcome = await (this.javaIndex.withRequestOptions
+      ? this.javaIndex.withRequestOptions({ budget: liveSemanticBudget }, collectLiveSemantic)
+      : collectLiveSemantic());
     const afterSemanticPaths = unionPaths(afterFrameworkPaths, liveSemanticOutcome);
     const supportOutcome = await collectSupportEvidence({ ...providerInputBase, existingCandidatePaths: afterSemanticPaths });
 
@@ -338,7 +369,7 @@ export class AgentRouter {
       repoRoot: this.repoRoot,
       familyRankPolicy
     };
-    const rankedPool = await timed(phaseMs, "familyRank", async () => rankCandidatePool(normalized, outcomes, rankContext));
+    const rankedPool = await timed(phaseMs, "familyRank", async () => rankCandidatePool(normalized, rankContext));
     const plannerProtectedPaths = readPlanProtectedPaths(rankedPool, protectedReadPlanPaths, rankContext);
     const poolIdByPath = new Map(rankedPool.map((file, index) => [file.absolutePath, `P${index + 1}`]));
     const readPlanResult = await timed(phaseMs, "buildReadPlan", async () => buildReadPlan({
@@ -381,11 +412,9 @@ export class AgentRouter {
         repoRoot: this.repoRoot,
         anchors,
         options,
-        javaIndex: this.javaIndex,
-        generation,
         outcomes,
         ranked,
-        protectedReadPlanPaths,
+        productionSelectedPaths: new Set(readPlanResult.selectedPaths),
         familyRankPolicy
       }))
       : undefined;
@@ -489,7 +518,7 @@ type RouterFreshness = {
 };
 
 function unionPaths(known: readonly string[], outcome: ProviderOutcome): string[] {
-  return [...new Set([...known, ...outcome.candidates.map(candidate => candidate.absolutePath)])];
+  return [...new Set([...known, ...outcome.evidence.map(signal => signal.candidateFile)])];
 }
 
 function coverageV6(coverage: "complete" | "partial" | "degraded"): "COMPLETE" | "PARTIAL" | "DEGRADED" {

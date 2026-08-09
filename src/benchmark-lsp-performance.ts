@@ -223,7 +223,7 @@ function pickStatusMetrics(status: JsonObject): JsonObject {
   return {
     started: status.started,
     pid: status.pid,
-    fileWatcher: status.fileWatcher,
+    watcher: status.watcher,
     resource: status.resource,
     progress: status.progress
   };

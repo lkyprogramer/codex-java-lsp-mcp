@@ -8,12 +8,16 @@
 //      cache. `--repo-root` must be an isolated worktree the caller created (see
 //      scripts/run-three-repo-cold-matrix.mjs's worktree pattern), not a real active checkout:
 //      this tool starts a real jdtls process against it.
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { open, rename, rm } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
-import { JdtlsSession } from "../jdtls-session.js";
+import { JdtlsSession, type LspLocation, type LspLocationLink } from "../jdtls-session.js";
+import { canonicalPotentialPath, isPotentiallyWithin } from "../path-utils.js";
+import { fromFileUri } from "../repo-layout.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import type { Completion } from "../runtime/completion.js";
 import { classifySemanticError, type JavaIntelligenceErrorCode } from "../runtime/intelligence-error.js";
@@ -21,6 +25,14 @@ import { classifySemanticError, type JavaIntelligenceErrorCode } from "../runtim
 export type WorkspaceState = "fresh" | "reused";
 export type PrepareMode = "none" | "progress-idle" | "document-symbol";
 export type FirstTouchOperation = "definition" | "implementation" | "references" | "type-hierarchy";
+export type ObservedBoolean = boolean | "unavailable";
+export type BackendSettlementBucket =
+  | "within_250ms"
+  | "within_1s"
+  | "within_5s"
+  | "after_5s"
+  | "never_before_session_stop"
+  | "unavailable";
 
 export type SemanticFirstTouchAttempt = {
   projectId: string;
@@ -36,10 +48,18 @@ export type SemanticFirstTouchAttempt = {
   completion: Completion;
   resultFiles: number;
   repoContainedFiles: number;
-  cacheHit: boolean;
-  shared: boolean;
+  outsideRepoFiles: number;
+  suppressedLocations: number;
+  /** Raw JdtlsSession calls do not expose SemanticGateway cache telemetry. */
+  cacheHit: ObservedBoolean;
+  /** Raw JdtlsSession calls do not expose SemanticGateway singleflight telemetry. */
+  shared: ObservedBoolean;
+  /** Cancellation settlement is only available when JdtlsSession has already recorded it. */
+  backendSettlement: BackendSettlementBucket;
   errorCode?: JavaIntelligenceErrorCode;
   sessionPhaseMs: Record<string, number>;
+  /** Preserved JDT cache/log root for a non-complete fresh attempt. */
+  retainedWorkspace?: string;
 };
 
 export type SemanticFirstTouchCli = {
@@ -114,11 +134,11 @@ export type FirstTouchAnchor = { file: string; line: number; column: number; sce
  * Runs one attempt against an already-started session. Uses the raw (non-gateway) session
  * primitives deliberately: a first-touch/cold-start measurement must see the real JDT round trip,
  * not the SemanticGateway's completed-at cache short-circuiting a second identical query. Raw
- * calls never touch that cache, so cacheHit/shared are always false here by construction.
+ * calls bypass that gateway, so cache/singleflight telemetry is explicitly unavailable here.
  */
 export async function runAttempt(
   session: JdtlsSession,
-  cli: Pick<SemanticFirstTouchCli, "operation" | "workspaceState" | "prepare" | "projectId" | "timeoutMs">,
+  cli: Pick<SemanticFirstTouchCli, "repoRoot" | "operation" | "workspaceState" | "prepare" | "projectId" | "timeoutMs">,
   anchor: FirstTouchAnchor,
   repoCommit: string,
   ensureStartedMs: number
@@ -134,18 +154,25 @@ export async function runAttempt(
     prepareMs = performance.now() - prepareStartedAt;
   }
 
+  // Drain preparation and any preceding lifecycle timings before the raw
+  // operation. A delayed cancellation settlement from a prior request must
+  // never be attributed to this attempt's backend call.
+  const beforeOperationPhaseMs = session.drainPhaseMetrics();
   const requestStartedAt = performance.now();
   let completion: Completion = "COMPLETE";
-  let resultFiles = 0;
+  let operationResult: OperationResult = { resultFiles: 0, locations: [] };
   let errorCode: JavaIntelligenceErrorCode | undefined;
   try {
-    resultFiles = await runOperation(session, cli.operation, anchor, cli.timeoutMs);
+    operationResult = await runOperation(session, cli.operation, anchor, cli.timeoutMs);
   } catch (error) {
     const classified = classifySemanticError(error);
     completion = completionForError(classified.code);
     errorCode = classified.code;
   }
   const requestMs = performance.now() - requestStartedAt;
+  const containment = summarizeContainment(cli.repoRoot, operationResult.locations);
+  const operationPhaseMs = session.drainPhaseMetrics();
+  const sessionPhaseMs = mergePhaseMetrics(beforeOperationPhaseMs, operationPhaseMs);
 
   return {
     projectId: cli.projectId,
@@ -159,27 +186,101 @@ export async function runAttempt(
     requestMs: Math.round(requestMs),
     totalMs: Math.round(ensureStartedMs + prepareMs + requestMs),
     completion,
-    resultFiles,
-    repoContainedFiles: resultFiles,
-    cacheHit: false,
-    shared: false,
+    resultFiles: operationResult.resultFiles,
+    repoContainedFiles: containment.repoContainedFiles,
+    outsideRepoFiles: containment.outsideRepoFiles,
+    suppressedLocations: containment.suppressedLocations,
+    cacheHit: "unavailable",
+    shared: "unavailable",
+    backendSettlement: settlementBucket(operationPhaseMs.cancelBackendSettlementMs),
     errorCode,
-    sessionPhaseMs: session.drainPhaseMetrics()
+    sessionPhaseMs
   };
 }
 
-async function runOperation(session: JdtlsSession, operation: FirstTouchOperation, anchor: FirstTouchAnchor, timeoutMs: number): Promise<number> {
+function settlementBucket(settlementMs: number | undefined): BackendSettlementBucket {
+  if (!Number.isFinite(settlementMs)) return "unavailable";
+  if (settlementMs! <= 250) return "within_250ms";
+  if (settlementMs! <= 1_000) return "within_1s";
+  if (settlementMs! <= 5_000) return "within_5s";
+  return "after_5s";
+}
+
+function mergePhaseMetrics(...parts: ReadonlyArray<Record<string, number>>): Record<string, number> {
+  const merged: Record<string, number> = {};
+  for (const part of parts) {
+    for (const [name, durationMs] of Object.entries(part)) {
+      merged[name] = (merged[name] ?? 0) + durationMs;
+    }
+  }
+  return merged;
+}
+
+type OperationResult = {
+  resultFiles: number;
+  locations: Array<LspLocation | LspLocationLink>;
+};
+
+async function runOperation(session: JdtlsSession, operation: FirstTouchOperation, anchor: FirstTouchAnchor, timeoutMs: number): Promise<OperationResult> {
   if (operation === "definition") {
-    return (await session.rawDefinition(anchor.file, anchor.line, anchor.column, timeoutMs)).length;
+    const locations = await session.rawDefinition(anchor.file, anchor.line, anchor.column, timeoutMs);
+    return { resultFiles: locations.length, locations };
   }
   if (operation === "implementation") {
-    return (await session.rawImplementation(anchor.file, anchor.line, anchor.column, timeoutMs)).length;
+    const locations = await session.rawImplementation(anchor.file, anchor.line, anchor.column, timeoutMs);
+    return { resultFiles: locations.length, locations };
   }
   if (operation === "references") {
-    return (await session.rawReferences(anchor.file, anchor.line, anchor.column, false, timeoutMs)).length;
+    const locations = await session.rawReferences(anchor.file, anchor.line, anchor.column, false, timeoutMs);
+    return { resultFiles: locations.length, locations };
   }
   const result = await session.rawTypeHierarchy(anchor.file, anchor.line, anchor.column, "subtypes", 2, 20, DeadlineBudget.fromTimeout(timeoutMs));
-  return result.edges.length;
+  return {
+    resultFiles: result.edges.length,
+    locations: result.edges.flatMap(edge => [locationFromHierarchyItem(edge.from), locationFromHierarchyItem(edge.to)].filter(isLocation))
+  };
+}
+
+function locationFromHierarchyItem(item: unknown): LspLocation | undefined {
+  if (!item || typeof item !== "object") return undefined;
+  const candidate = item as Partial<LspLocation>;
+  return typeof candidate.uri === "string" && candidate.range ? candidate as LspLocation : undefined;
+}
+
+function isLocation(value: LspLocation | undefined): value is LspLocation {
+  return value !== undefined;
+}
+
+function summarizeContainment(repoRoot: string, locations: readonly (LspLocation | LspLocationLink)[]): {
+  repoContainedFiles: number;
+  outsideRepoFiles: number;
+  suppressedLocations: number;
+} {
+  const contained = new Set<string>();
+  const outside = new Set<string>();
+  let suppressedLocations = 0;
+  for (const location of locations) {
+    const uri = "targetUri" in location ? location.targetUri : location.uri;
+    let file: string | undefined;
+    try {
+      file = fromFileUri(uri);
+    } catch {
+      suppressedLocations += 1;
+      continue;
+    }
+    if (!file) {
+      suppressedLocations += 1;
+    } else if (isPotentiallyWithin(repoRoot, file)) {
+      contained.add(canonicalPotentialPath(file));
+    } else {
+      outside.add(canonicalPotentialPath(file));
+    }
+  }
+  return {
+    repoContainedFiles: contained.size,
+    outsideRepoFiles: outside.size,
+    suppressedLocations
+  };
 }
 
 /**
@@ -187,12 +288,14 @@ async function runOperation(session: JdtlsSession, operation: FirstTouchOperatio
  * JAVA_LSP_CACHE_ROOT, removed after unless the attempt failed/timed out - never the caller's
  * live cache. Each call is one throwaway workspace; callers loop this once per fresh attempt so
  * "fresh P95" reflects N independent cold starts, not 1 cold + (N-1) warm reuses of the same JDT.
+ * A non-complete attempt retains that workspace as its JDT/log evidence.
  */
 export async function withFreshWorkspace<T>(action: (cacheRoot: string) => Promise<T>): Promise<{ result: T; failed: boolean; cacheRoot: string }> {
   const cacheRoot = mkdtempSync(path.join(os.tmpdir(), "semantic-first-touch-fresh-"));
   let failed = false;
   try {
     const result = await action(cacheRoot);
+    failed = hasNonCompleteCompletion(result);
     return { result, failed, cacheRoot };
   } catch (error) {
     failed = true;
@@ -202,6 +305,43 @@ export async function withFreshWorkspace<T>(action: (cacheRoot: string) => Promi
   }
 }
 
+function hasNonCompleteCompletion(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  const completion = (value as { completion?: unknown }).completion;
+  return typeof completion === "string" && completion !== "COMPLETE";
+}
+
+/** Ensures a throwaway session is stopped even when startup or the operation fails. */
+export async function runStartedAttempt(
+  session: JdtlsSession,
+  cli: Parameters<typeof runAttempt>[1],
+  anchor: FirstTouchAnchor,
+  repoCommit: string
+): Promise<SemanticFirstTouchAttempt> {
+  let attempt: SemanticFirstTouchAttempt | undefined;
+  try {
+    const startedAt = performance.now();
+    await session.ensureStarted(DeadlineBudget.fromTimeout(180_000));
+    attempt = await runAttempt(session, cli, anchor, repoCommit, performance.now() - startedAt);
+  } finally {
+    await session.stop();
+    if (attempt) {
+      const afterStopPhaseMs = session.drainPhaseMetrics();
+      attempt.sessionPhaseMs = mergePhaseMetrics(attempt.sessionPhaseMs, afterStopPhaseMs);
+      if (
+        (attempt.completion === "PARTIAL_TIMEOUT" || attempt.completion === "CANCELLED")
+        && attempt.backendSettlement === "unavailable"
+      ) {
+        const afterStopSettlement = settlementBucket(afterStopPhaseMs.cancelBackendSettlementMs);
+        attempt.backendSettlement = afterStopSettlement === "unavailable"
+          ? "never_before_session_stop"
+          : afterStopSettlement;
+      }
+    }
+  }
+  return attempt!;
+}
+
 function printUsage(): void {
   console.log(`Usage: semantic-first-touch.js --repo-root <path> --project-id <id> --workspace-state fresh|reused --operation definition|implementation|references|type-hierarchy [--prepare none|progress-idle|document-symbol] [--runs 10] [--timeout-ms 60000] [--output <file>]
 
@@ -209,6 +349,24 @@ Anchor position (required, no golden-scenario loader of its own):
   JAVA_LSP_BENCH_ANCHOR_FILE, JAVA_LSP_BENCH_ANCHOR_LINE, JAVA_LSP_BENCH_ANCHOR_COLUMN
 
 --repo-root must be an isolated worktree - this starts a real jdtls process against it.`);
+}
+
+/** Writes an artifact through a same-directory temporary file so readers never see partial JSON. */
+export async function writeJsonAtomically(target: string, payload: string): Promise<void> {
+  const output = path.resolve(target);
+  const temporary = path.join(path.dirname(output), `.${path.basename(output)}.${process.pid}.${randomUUID()}.tmp`);
+  try {
+    const handle = await open(temporary, "wx", 0o600);
+    try {
+      await handle.writeFile(payload, "utf8");
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await rename(temporary, output);
+  } finally {
+    await rm(temporary, { force: true }).catch(() => undefined);
+  }
 }
 
 async function main(): Promise<void> {
@@ -223,33 +381,38 @@ async function main(): Promise<void> {
   if (cli.workspaceState === "fresh") {
     for (let run = 0; run < cli.runs; run += 1) {
       const previousCacheRoot = process.env.JAVA_LSP_CACHE_ROOT;
-      const { result: attempt } = await withFreshWorkspace(async cacheRoot => {
-        process.env.JAVA_LSP_CACHE_ROOT = cacheRoot;
-        const session = new JdtlsSession(cli.repoRoot);
-        const startedAt = performance.now();
-        await session.ensureStarted(DeadlineBudget.fromTimeout(180_000));
-        const ensureStartedMs = performance.now() - startedAt;
-        const result = await runAttempt(session, cli, anchorFor(cli), repoCommit, ensureStartedMs);
-        await session.stop();
-        return result;
-      });
-      if (previousCacheRoot === undefined) delete process.env.JAVA_LSP_CACHE_ROOT;
-      else process.env.JAVA_LSP_CACHE_ROOT = previousCacheRoot;
-      attempts.push(attempt);
+      try {
+        const workspace = await withFreshWorkspace(async cacheRoot => {
+          process.env.JAVA_LSP_CACHE_ROOT = cacheRoot;
+          const session = new JdtlsSession(cli.repoRoot);
+          return runStartedAttempt(session, cli, anchorFor(cli), repoCommit);
+        });
+        const attempt = workspace.result;
+        if (workspace.failed) attempt.retainedWorkspace = workspace.cacheRoot;
+        attempts.push(attempt);
+      } finally {
+        if (previousCacheRoot === undefined) delete process.env.JAVA_LSP_CACHE_ROOT;
+        else process.env.JAVA_LSP_CACHE_ROOT = previousCacheRoot;
+      }
     }
   } else {
     const session = new JdtlsSession(cli.repoRoot);
-    const startedAt = performance.now();
-    await session.ensureStarted(DeadlineBudget.fromTimeout(180_000));
-    const ensureStartedMs = performance.now() - startedAt;
-    for (let run = 0; run < cli.runs; run += 1) {
-      attempts.push(await runAttempt(session, cli, anchorFor(cli), repoCommit, run === 0 ? ensureStartedMs : 0));
+    try {
+      const startedAt = performance.now();
+      await session.ensureStarted(DeadlineBudget.fromTimeout(180_000));
+      const ensureStartedMs = performance.now() - startedAt;
+      for (let run = 0; run < cli.runs; run += 1) {
+        attempts.push(await runAttempt(session, cli, anchorFor(cli), repoCommit, run === 0 ? ensureStartedMs : 0));
+      }
+    } finally {
+      await session.stop();
     }
-    await session.stop();
   }
 
   const payload = { metadata: { ...cli, repoCommit }, attempts };
-  console.log(JSON.stringify(payload, null, 2));
+  const serialized = JSON.stringify(payload, null, 2);
+  if (cli.output) await writeJsonAtomically(cli.output, serialized);
+  console.log(serialized);
 }
 
 function anchorFor(cli: SemanticFirstTouchCli): FirstTouchAnchor {
@@ -267,7 +430,19 @@ function anchorFor(cli: SemanticFirstTouchCli): FirstTouchAnchor {
   };
 }
 
-const isMain = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
+export function isMainModule(argvPath: string | undefined, moduleUrl: string): boolean {
+  if (!argvPath) return false;
+  const canonicalPath = (value: string): string => {
+    try {
+      return realpathSync(value);
+    } catch {
+      return path.resolve(value);
+    }
+  };
+  return canonicalPath(argvPath) === canonicalPath(fileURLToPath(moduleUrl));
+}
+
+const isMain = isMainModule(process.argv[1], import.meta.url);
 if (isMain) {
   main().catch(error => {
     console.error(error instanceof Error ? error.stack ?? error.message : error);

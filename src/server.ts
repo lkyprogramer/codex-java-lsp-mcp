@@ -1,5 +1,5 @@
 // input: Codex MCP stdio tool calls for Java analysis.
-// output: Five read-only Java navigation tools backed by source index, rg, and bounded JDT LS.
+// output: Five read-only Java navigation tools backed by JavaIndex, streaming rg, and bounded JDT LS.
 // pos: Thin MCP server registration entrypoint.
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -56,13 +56,29 @@ register("java_symbol", {
   title: "Java Symbol",
   description: "operation=query (default): search workspace symbols. operation=position (default with file/line/column): hover/definition/implementation at a position. operation=references: summary-only references.",
   inputSchema: symbolSchema
-}, args => withContext(args, context => javaSymbol(context, args), { mayStartLsp: true, requireLspEnabled: true }));
+}, args => withContext(args, (context, request) => javaSymbol(context, args, request), {
+  mayStartLsp: true,
+  requireLspEnabled: true,
+  requestOptions: {
+    mode: "balanced",
+    semanticPolicy: "required",
+    deadlineMs: args.semanticTimeoutMs
+  }
+}));
 
 register("java_diagnostics", {
   title: "Java Diagnostics",
   description: "Open Java files and return JDT LS diagnostics after a short wait.",
   inputSchema: diagnosticsSchema
-}, args => withContext(args, context => javaDiagnostics(context, args), { mayStartLsp: true, requireLspEnabled: true }));
+}, args => withContext(args, (context, request) => javaDiagnostics(context, args, request), {
+  mayStartLsp: true,
+  requireLspEnabled: true,
+  requestOptions: {
+    mode: "balanced",
+    semanticPolicy: "required",
+    deadlineMs: Math.min(15000, Math.max(10000, args.waitMs + 5000))
+  }
+}));
 
 register("java_runtime", {
   title: "Java Runtime",
@@ -126,13 +142,16 @@ async function javaStatusFor(args: z.infer<z.ZodObject<typeof statusSchema>>): P
       activeRepos: runtimes.activeRepos()
     };
   }
-  return withContext(args, async context => {
+  return withContext(args, async (context, request) => {
     const resource = runtimes.resourceStatus();
     return {
-      ...await javaStatus(context, args),
+      ...await javaStatus(context, args, request),
       resource: isDiagnosticDetail(args.detail) ? resource : summarizeResourceStatus(resource)
     };
-  }, { mayStartLsp: args.start });
+  }, {
+    mayStartLsp: args.start,
+    requestOptions: args.start ? { mode: "balanced", semanticPolicy: "required", deadlineMs: 15000 } : undefined
+  });
 }
 
 async function runtimeFor(args: z.infer<z.ZodObject<typeof runtimeSchema>>): Promise<unknown> {

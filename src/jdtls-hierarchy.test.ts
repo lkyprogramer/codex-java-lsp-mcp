@@ -52,13 +52,12 @@ async function harness(attempt: FakeAttemptOptions): Promise<Harness> {
   process.env.JDTLS_DATA_DIR = path.join(scratch, "workspace");
   process.env.JDTLS_LOG_DIR = path.join(scratch, "logs");
   process.env.JAVA_LSP_PROJECT_JAVA_HOME = javaHome;
-  process.env.JAVA_LSP_FILE_WATCH = "0";
   process.env.JDTLS_CACHE_TTL_MS = "0";
 
   const factory = fakeTransportFactory(attempt);
   const session = new JdtlsSession(repoRoot, [], factory);
 
-  for (const key of ["JDTLS_BIN", "JDTLS_DATA_DIR", "JDTLS_LOG_DIR", "JAVA_LSP_PROJECT_JAVA_HOME", "JAVA_LSP_FILE_WATCH", "JDTLS_CACHE_TTL_MS"]) {
+  for (const key of ["JDTLS_BIN", "JDTLS_DATA_DIR", "JDTLS_LOG_DIR", "JAVA_LSP_PROJECT_JAVA_HOME", "JDTLS_CACHE_TTL_MS"]) {
     if (previous[key] === undefined) delete process.env[key];
     else process.env[key] = previous[key];
   }
@@ -131,6 +130,7 @@ test("hierarchy items outside the repository never become edges", async () => {
 test("an expired hierarchy budget returns partial edges rather than throwing", async () => {
   let uriA = "";
   let uriB = "";
+  let nowMs = 0;
   const stall = deferred<unknown>();
   const context = await harness({
     handlers: {
@@ -138,7 +138,11 @@ test("an expired hierarchy budget returns partial edges rather than throwing", a
       "typeHierarchy/subtypes": (params: unknown) => {
         const item = (params as { item: { uri: string } }).item;
         // The first expansion answers; the second never settles.
-        return item.uri === uriA ? [hierarchyItem(uriB, "B")] : stall.promise;
+        if (item.uri === uriA) {
+          nowMs = 4_999;
+          return [hierarchyItem(uriB, "B")];
+        }
+        return stall.promise;
       }
     }
   });
@@ -152,7 +156,7 @@ test("an expired hierarchy budget returns partial edges rather than throwing", a
     "subtypes",
     10,
     100,
-    DeadlineBudget.fromTimeout(250)
+    DeadlineBudget.fromTimeout(5_000, () => nowMs)
   );
 
   assert.equal(result.completion, "PARTIAL_TIMEOUT");

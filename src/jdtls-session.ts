@@ -29,17 +29,11 @@ import {
   type JavaIntelligenceErrorCode
 } from "./runtime/intelligence-error.js";
 import { normalizeRepoLocation } from "./semantic-location.js";
-import {
-  isFileWatchEnabled,
-  JavaFileWatcher,
-  WatchedFileChangeType,
-  type FileWatcherStatus,
-  type WatchedFileChange
-} from "./file-watcher.js";
 import { DocumentLru } from "./document-lru.js";
 import { detectGeneratedCode, type GeneratedCodeStatus } from "./generated-code.js";
 import { detectBuildSystem, resolveProjectJdk, type BuildSystem, type ProjectJdkStatus } from "./project-jdk.js";
 import { fromFileUri, repoCacheRoot, toFileUri } from "./repo-layout.js";
+import type { RepoChange, RepoChangeBatch } from "./repo-generation.js";
 import { resourceDefaults } from "./resource-defaults.js";
 import { touchRepoCache } from "./worktree-cache-cleanup.js";
 import type { WorktreeIdentity } from "./worktree-identity.js";
@@ -127,7 +121,6 @@ type JdtlsStatus = {
   knownDiagnostics: number;
   openDocuments: number;
   startedAt?: string;
-  fileWatcher: FileWatcherStatus;
   cache: JdtlsCacheStatus;
   /** Task 33 Step 9. Aggregate counters only - no per-query file path, matching the plan's diagnostic-output constraint. */
   semanticGateway: SemanticGatewayStatus;
@@ -135,6 +128,12 @@ type JdtlsStatus = {
   projectJdk: ProjectJdkStatus;
   generatedCode: GeneratedCodeStatus;
   progress: JdtlsProgressStatus;
+  leaseHeartbeat: {
+    active: boolean;
+    intervalMs: number;
+    lastSuccessAt?: string;
+    lastError?: string;
+  };
 };
 
 export type JdtlsCacheStatus = {
@@ -213,7 +212,6 @@ export class JdtlsSession {
   private readonly projectJdk: ProjectJdkStatus;
   private readonly generatedCode: GeneratedCodeStatus;
   private readonly jdtlsRuntimeJavaHome?: string;
-  private fileWatcher?: JavaFileWatcher;
   private readonly cache = new Map<string, CacheEntry<unknown>>();
   private cacheHits = 0;
   private cacheMisses = 0;
@@ -224,15 +222,21 @@ export class JdtlsSession {
   private lastLanguageStatus?: string;
   private phaseMetrics: Record<string, number> = {};
   private pendingLease?: CompositeJdtLease;
+  private leaseHeartbeatTimer?: NodeJS.Timeout;
+  private leaseHeartbeatPromise?: Promise<void>;
+  private leaseHeartbeatError?: JavaIntelligenceError;
+  private lastLeaseHeartbeatAt?: Date;
+  private readonly leaseHeartbeatMs = positiveInteger(
+    process.env.JAVA_LSP_JDT_LEASE_HEARTBEAT_MS,
+    30_000
+  );
   private readonly worktree: WorktreeIdentity;
   /**
    * Independent staleness signal for SemanticGateway-owned operations,
    * alongside each key's own fileFingerprint. Mirrors clearCache()'s
-   * existing storm/BUILD_CHANGE/stop semantics (a full clear bumps this;
-   * a single changed file is still caught by that file's own
-   * fileFingerprint dimension, same as the old cache's per-dependency
-   * invalidation) rather than threading the external repo-generation
-   * clock through call sites that do not currently share it.
+   * existing repo-change/stop semantics. Any Java change bumps this because
+   * cross-file definitions/references cannot be invalidated safely from the
+   * queried file's fingerprint alone.
    */
   private cacheGeneration = 1;
   private readonly semanticGateway: SemanticGateway;
@@ -286,19 +290,18 @@ export class JdtlsSession {
       knownDiagnostics: [...this.diagnostics.values()].reduce((sum, value) => sum + value.length, 0),
       openDocuments: this.documents.status().open,
       startedAt: this.startedAt?.toISOString(),
-      fileWatcher: this.fileWatcher?.status() ?? {
-        enabled: isFileWatchEnabled(),
-        active: false,
-        watchedRoots: [],
-        pendingChanges: 0,
-        lastFlushSize: 0
-      },
       cache: this.cacheStatus(),
       semanticGateway: this.semanticGateway.status(),
       buildSystem: this.buildSystem,
       projectJdk: this.projectJdk,
       generatedCode: this.generatedCode,
-      progress: this.progressStatus()
+      progress: this.progressStatus(),
+      leaseHeartbeat: {
+        active: this.pendingLease !== undefined,
+        intervalMs: this.leaseHeartbeatMs,
+        lastSuccessAt: this.lastLeaseHeartbeatAt?.toISOString(),
+        lastError: this.leaseHeartbeatError?.message
+      }
     };
   }
 
@@ -316,6 +319,7 @@ export class JdtlsSession {
         await callerBudget.race("jdtls.stop.wait", this.stopPromise);
       }
       if (this.lifecycleState === "READY") {
+        await callerBudget.race("jdtls.lease.heartbeat", this.heartbeatPendingLease());
         return;
       }
       const gate = this.restartBackoff.check();
@@ -369,6 +373,7 @@ export class JdtlsSession {
       throw leaseAcquireResultToError(leaseResult);
     }
     this.pendingLease = leaseResult.lease;
+    this.startLeaseHeartbeat(leaseResult.lease);
     // The start owns its own hard cap. A caller deadline only stops that
     // caller from waiting; it must never kill work shared with another caller.
     const startBudget = DeadlineBudget.fromTimeout(this.startHardCapMs);
@@ -391,7 +396,62 @@ export class JdtlsSession {
   private async releasePendingLease(): Promise<void> {
     const lease = this.pendingLease;
     this.pendingLease = undefined;
+    this.stopLeaseHeartbeat();
+    const heartbeat = this.leaseHeartbeatPromise;
+    if (heartbeat) await heartbeat.catch(() => undefined);
+    this.leaseHeartbeatError = undefined;
     if (lease) await lease.release();
+  }
+
+  private startLeaseHeartbeat(lease: CompositeJdtLease): void {
+    this.stopLeaseHeartbeat();
+    const schedule = (): void => {
+      if (this.pendingLease !== lease) return;
+      const timer = setTimeout(() => {
+        if (this.leaseHeartbeatTimer === timer) this.leaseHeartbeatTimer = undefined;
+        void this.heartbeatPendingLease()
+          .catch(() => undefined)
+          .finally(schedule);
+      }, this.leaseHeartbeatMs);
+      timer.unref();
+      this.leaseHeartbeatTimer = timer;
+    };
+    schedule();
+  }
+
+  private stopLeaseHeartbeat(): void {
+    if (!this.leaseHeartbeatTimer) return;
+    clearTimeout(this.leaseHeartbeatTimer);
+    this.leaseHeartbeatTimer = undefined;
+  }
+
+  private heartbeatPendingLease(): Promise<void> {
+    const lease = this.pendingLease;
+    if (!lease) return Promise.resolve();
+    if (this.leaseHeartbeatPromise) return this.leaseHeartbeatPromise;
+    const operation = lease.heartbeat()
+      .then(() => {
+        if (this.pendingLease === lease) {
+          this.lastLeaseHeartbeatAt = new Date();
+          this.leaseHeartbeatError = undefined;
+        }
+      })
+      .catch((error: unknown) => {
+        const classified = error instanceof JavaIntelligenceError
+          ? error
+          : new JavaIntelligenceError(
+              "LEASE_CONFIG_ERROR",
+              error instanceof Error ? error.message : String(error),
+              error
+            );
+        if (this.pendingLease === lease) this.leaseHeartbeatError = classified;
+        throw classified;
+      })
+      .finally(() => {
+        if (this.leaseHeartbeatPromise === operation) this.leaseHeartbeatPromise = undefined;
+      });
+    this.leaseHeartbeatPromise = operation;
+    return operation;
   }
 
   /**
@@ -399,7 +459,7 @@ export class JdtlsSession {
    * Changed/deleted files evict their dependent entries; a build change clears
    * everything because classpath/import semantics may have shifted.
    */
-  invalidateForRepoChanges(batch: { changes: ReadonlyArray<{ kind: string; absolutePath: string }>; storm?: boolean }): void {
+  private invalidateForRepoChanges(batch: RepoChangeBatch): void {
     // A storm is handled the same as a build change: filtering/invalidating
     // per-path for hundreds of entries is strictly more work than one clear,
     // for no precision benefit once that many files moved at once.
@@ -410,7 +470,47 @@ export class JdtlsSession {
     const files = batch.changes
       .filter(change => change.kind.startsWith("JAVA_"))
       .map(change => change.absolutePath);
-    if (files.length > 0) this.invalidateCacheFor(files);
+    if (files.length > 0) {
+      this.invalidateCacheFor(files);
+      this.invalidateSemanticGateway();
+    }
+  }
+
+  /**
+   * Sole JDT-session consumer of RepoChangeCoordinator output. Cache
+   * invalidation always happens; LSP notifications are emitted only while a
+   * connection is live, and disk refreshes never synthesize didOpen.
+   */
+  async applyRepoChangeBatch(batch: RepoChangeBatch): Promise<void> {
+    this.invalidateForRepoChanges(batch);
+    const connection = this.connection;
+    if (!connection) return;
+    const watchedChanges = batch.changes
+      .map(change => watchedFileChange(change))
+      .filter((change): change is { uri: string; type: number } => change !== undefined);
+    if (watchedChanges.length > 0) {
+      connection.sendNotification("workspace/didChangeWatchedFiles", { changes: watchedChanges });
+    }
+    for (const change of batch.changes) {
+      if (change.kind === "JAVA_DELETE") {
+        this.documents.delete(change.absolutePath);
+        this.diagnostics.delete(toFileUri(change.absolutePath));
+        continue;
+      }
+      if (
+        (change.kind !== "JAVA_ADD" && change.kind !== "JAVA_CHANGE")
+        || !this.documents.has(change.absolutePath)
+      ) {
+        continue;
+      }
+      try {
+        const text = await readFile(change.absolutePath, "utf8");
+        await this.documents.updateIfOpen(change.absolutePath, text);
+      } catch (error) {
+        if (isMissingFileError(error)) continue;
+        throw error;
+      }
+    }
   }
 
   drainPhaseMetrics(): Record<string, number> {
@@ -446,7 +546,6 @@ export class JdtlsSession {
     // Transition first so an in-flight startTransactional sees STOPPED and
     // classifies its own failure as CANCELLED rather than a JDT fault.
     this.transition("STOPPED");
-    this.stopFileWatcher();
     this.clearCache();
     if (this.readyStableTimer) {
       clearTimeout(this.readyStableTimer);
@@ -496,10 +595,21 @@ export class JdtlsSession {
     this.diagnostics.clear();
   }
 
-  async workspaceSymbols(query: string, limit: number): Promise<{ items: LspSymbol[]; truncated: boolean }> {
+  async workspaceSymbols(
+    query: string,
+    limit: number,
+    timeoutOrBudget: number | DeadlineBudget = DEFAULT_LSP_REQUEST_TIMEOUT_MS
+  ): Promise<{ items: LspSymbol[]; truncated: boolean }> {
+    const budget = semanticBudget(timeoutOrBudget);
+    budget.throwIfExpired("workspace/symbol");
     return this.cached("workspaceSymbols", [query, limit], [], async () => {
-      await this.ensureStarted();
-      const items = await this.request<LspSymbol[]>("workspace/symbol", { query });
+      await this.ensureStarted(budget);
+      budget.throwIfExpired("workspace/symbol");
+      const items = await this.request<LspSymbol[]>(
+        "workspace/symbol",
+        { query },
+        Math.max(1, budget.remainingMs())
+      );
       return truncate(items || [], limit);
     });
   }
@@ -512,15 +622,22 @@ export class JdtlsSession {
    * requestSettled() behavior exactly) rather than failing the whole call -
    * symbolContext() itself still never throws.
    */
-  async symbolContext(file: string, line: number, column: number, timeoutMs = DEFAULT_LSP_REQUEST_TIMEOUT_MS): Promise<{
+  async symbolContext(
+    file: string,
+    line: number,
+    column: number,
+    timeoutOrBudget: number | DeadlineBudget = DEFAULT_LSP_REQUEST_TIMEOUT_MS
+  ): Promise<{
     hover: unknown;
     definitions: Array<LspLocation | LspLocationLink>;
     implementations: Array<LspLocation | LspLocationLink>;
   }> {
+    const budget = semanticBudget(timeoutOrBudget);
+    const operationCapMs = semanticOperationCap(timeoutOrBudget, budget);
     const [hover, definitions, implementations] = await Promise.all([
-      this.gatewaySemanticValue("hover", file, line, column, timeoutMs),
-      this.gatewaySemanticValue("definition", file, line, column, timeoutMs),
-      this.gatewaySemanticValue("implementation", file, line, column, timeoutMs)
+      this.gatewaySemanticValue("hover", file, line, column, budget, operationCapMs),
+      this.gatewaySemanticValue("definition", file, line, column, budget, operationCapMs),
+      this.gatewaySemanticValue("implementation", file, line, column, budget, operationCapMs)
     ]);
     return {
       hover,
@@ -530,13 +647,21 @@ export class JdtlsSession {
   }
 
   /** Same cutover as symbolContext(); see its comment. Shares the same "definition"/"implementation" gateway cache entries when called for the same position - a natural improvement over the old bundled per-method caches, which never overlapped even when asking the identical LSP question. */
-  async semanticLocations(file: string, line: number, column: number, timeoutMs = DEFAULT_LSP_REQUEST_TIMEOUT_MS, includeImplementations = false): Promise<{
+  async semanticLocations(
+    file: string,
+    line: number,
+    column: number,
+    timeoutOrBudget: number | DeadlineBudget = DEFAULT_LSP_REQUEST_TIMEOUT_MS,
+    includeImplementations = false
+  ): Promise<{
     definitions: Array<LspLocation | LspLocationLink>;
     implementations: Array<LspLocation | LspLocationLink>;
   }> {
+    const budget = semanticBudget(timeoutOrBudget);
+    const operationCapMs = semanticOperationCap(timeoutOrBudget, budget);
     const [definitions, implementations] = await Promise.all([
-      this.gatewaySemanticValue("definition", file, line, column, timeoutMs),
-      includeImplementations ? this.gatewaySemanticValue("implementation", file, line, column, timeoutMs) : Promise.resolve(undefined)
+      this.gatewaySemanticValue("definition", file, line, column, budget, operationCapMs),
+      includeImplementations ? this.gatewaySemanticValue("implementation", file, line, column, budget, operationCapMs) : Promise.resolve(undefined)
     ]);
     return {
       definitions: definitions ? [...definitions] : [],
@@ -556,7 +681,8 @@ export class JdtlsSession {
     file: string,
     line: number,
     column: number,
-    timeoutMs: number
+    budget: DeadlineBudget,
+    operationCapMs: number
   ): Promise<SemanticValueMap[Operation] | undefined> {
     const key: SemanticCacheKey<Operation> = {
       repoHash: this.worktree.repoHash,
@@ -569,11 +695,20 @@ export class JdtlsSession {
       optionsKey: ""
     };
     try {
-      const outcome = await this.semanticGateway.execute(key, DeadlineBudget.fromTimeout(timeoutMs), timeoutMs);
+      const outcome = await this.semanticGateway.execute(key, budget, operationCapMs);
       return outcome.completion === "COMPLETE" ? outcome.value : undefined;
     } catch {
       return undefined;
     }
+  }
+
+  private async ensureSemanticStarted(
+    budget: DeadlineBudget,
+    signal: AbortSignal | undefined,
+    stage: string
+  ): Promise<void> {
+    throwIfAborted(signal, stage);
+    await waitForAbortSignal(this.ensureStarted(budget), signal, stage);
   }
 
   async documentSymbols(file: string, timeoutMs = 2000): Promise<LspDocumentSymbol[]> {
@@ -581,10 +716,21 @@ export class JdtlsSession {
   }
 
   /** Uncached primitive for SemanticGateway; see rawReferences. */
-  async rawDocumentSymbols(file: string, timeoutMs = 2000): Promise<LspDocumentSymbol[]> {
-    await this.ensureStarted();
+  async rawDocumentSymbols(
+    file: string,
+    timeoutOrBudget: number | DeadlineBudget = 2000,
+    signal?: AbortSignal
+  ): Promise<LspDocumentSymbol[]> {
+    const budget = semanticBudget(timeoutOrBudget);
+    await this.ensureSemanticStarted(budget, signal, "textDocument/documentSymbol startup");
+    budget.throwIfExpired("textDocument/documentSymbol");
     const symbols = await this.withDocument(file, uri =>
-      this.request<LspDocumentSymbol[]>("textDocument/documentSymbol", { textDocument: { uri } }, timeoutMs)
+      this.request<LspDocumentSymbol[]>(
+        "textDocument/documentSymbol",
+        { textDocument: { uri } },
+        Math.max(1, budget.remainingMs()),
+        signal
+      )
     );
     return symbols || [];
   }
@@ -615,11 +761,19 @@ export class JdtlsSession {
    * behavior are preserved exactly so no caller (semantic.ts, symbol.ts)
    * needed a code change.
    */
-  async references(file: string, line: number, column: number, includeDeclaration: boolean, timeoutMs = DEFAULT_LSP_REQUEST_TIMEOUT_MS): Promise<{
+  async references(
+    file: string,
+    line: number,
+    column: number,
+    includeDeclaration: boolean,
+    timeoutOrBudget: number | DeadlineBudget = DEFAULT_LSP_REQUEST_TIMEOUT_MS
+  ): Promise<{
     items: LspLocation[];
     totalReferences: number;
     truncated: boolean;
   }> {
+    const budget = semanticBudget(timeoutOrBudget);
+    const operationCapMs = semanticOperationCap(timeoutOrBudget, budget);
     const key: SemanticCacheKey<"references"> = {
       repoHash: this.worktree.repoHash,
       generation: this.cacheGeneration,
@@ -630,7 +784,7 @@ export class JdtlsSession {
       column,
       optionsKey: `includeDeclaration=${includeDeclaration}`
     };
-    const outcome = await this.semanticGateway.execute(key, DeadlineBudget.fromTimeout(timeoutMs), timeoutMs);
+    const outcome = await this.semanticGateway.execute(key, budget, operationCapMs);
     if (outcome.completion !== "COMPLETE") {
       throw new JavaIntelligenceError(
         outcome.errorCode ?? "JDT_SERVER_ERROR",
@@ -651,47 +805,91 @@ export class JdtlsSession {
    * cache for this operation instead of going through the generic TTL cache
    * a second time.
    */
-  async rawReferences(file: string, line: number, column: number, includeDeclaration: boolean, timeoutMs = DEFAULT_LSP_REQUEST_TIMEOUT_MS): Promise<LspLocation[]> {
-    await this.ensureStarted();
+  async rawReferences(
+    file: string,
+    line: number,
+    column: number,
+    includeDeclaration: boolean,
+    timeoutOrBudget: number | DeadlineBudget = DEFAULT_LSP_REQUEST_TIMEOUT_MS,
+    signal?: AbortSignal
+  ): Promise<LspLocation[]> {
+    const budget = semanticBudget(timeoutOrBudget);
+    await this.ensureSemanticStarted(budget, signal, "textDocument/references startup");
+    budget.throwIfExpired("textDocument/references");
     const items = await this.withDocumentPosition(file, line, column, params =>
-      this.request<LspLocation[]>("textDocument/references", { ...params, context: { includeDeclaration } }, timeoutMs)
+      this.request<LspLocation[]>(
+        "textDocument/references",
+        { ...params, context: { includeDeclaration } },
+        Math.max(1, budget.remainingMs()),
+        signal
+      )
     );
     return items || [];
   }
 
   /** Uncached primitive for SemanticGateway; see rawReferences. */
-  async rawHover(file: string, line: number, column: number, timeoutMs = DEFAULT_LSP_REQUEST_TIMEOUT_MS): Promise<unknown> {
-    await this.ensureStarted();
+  async rawHover(
+    file: string,
+    line: number,
+    column: number,
+    timeoutOrBudget: number | DeadlineBudget = DEFAULT_LSP_REQUEST_TIMEOUT_MS,
+    signal?: AbortSignal
+  ): Promise<unknown> {
+    const budget = semanticBudget(timeoutOrBudget);
+    await this.ensureSemanticStarted(budget, signal, "textDocument/hover startup");
+    budget.throwIfExpired("textDocument/hover");
     return this.withDocumentPosition(file, line, column, params =>
-      this.request<unknown>("textDocument/hover", params, timeoutMs)
+      this.request<unknown>("textDocument/hover", params, Math.max(1, budget.remainingMs()), signal)
     );
   }
 
   /** Uncached primitive for SemanticGateway; see rawReferences. */
-  async rawDefinition(file: string, line: number, column: number, timeoutMs = DEFAULT_LSP_REQUEST_TIMEOUT_MS): Promise<Array<LspLocation | LspLocationLink>> {
-    await this.ensureStarted();
+  async rawDefinition(
+    file: string,
+    line: number,
+    column: number,
+    timeoutOrBudget: number | DeadlineBudget = DEFAULT_LSP_REQUEST_TIMEOUT_MS,
+    signal?: AbortSignal
+  ): Promise<Array<LspLocation | LspLocationLink>> {
+    const budget = semanticBudget(timeoutOrBudget);
+    await this.ensureSemanticStarted(budget, signal, "textDocument/definition startup");
+    budget.throwIfExpired("textDocument/definition");
     const result = await this.withDocumentPosition(file, line, column, params =>
-      this.request<unknown>("textDocument/definition", params, timeoutMs)
+      this.request<unknown>("textDocument/definition", params, Math.max(1, budget.remainingMs()), signal)
     );
     return normalizeLocations(result);
   }
 
   /** Uncached primitive for SemanticGateway; see rawReferences. */
-  async rawImplementation(file: string, line: number, column: number, timeoutMs = DEFAULT_LSP_REQUEST_TIMEOUT_MS): Promise<Array<LspLocation | LspLocationLink>> {
-    await this.ensureStarted();
+  async rawImplementation(
+    file: string,
+    line: number,
+    column: number,
+    timeoutOrBudget: number | DeadlineBudget = DEFAULT_LSP_REQUEST_TIMEOUT_MS,
+    signal?: AbortSignal
+  ): Promise<Array<LspLocation | LspLocationLink>> {
+    const budget = semanticBudget(timeoutOrBudget);
+    await this.ensureSemanticStarted(budget, signal, "textDocument/implementation startup");
+    budget.throwIfExpired("textDocument/implementation");
     const result = await this.withDocumentPosition(file, line, column, params =>
-      this.request<unknown>("textDocument/implementation", params, timeoutMs)
+      this.request<unknown>("textDocument/implementation", params, Math.max(1, budget.remainingMs()), signal)
     );
     return normalizeLocations(result);
   }
 
-  async diagnosticsFor(files: string[], waitMs: number): Promise<Record<string, LspDiagnostic[]>> {
-    await this.ensureStarted();
+  async diagnosticsFor(
+    files: string[],
+    waitMs: number,
+    timeoutOrBudget: number | DeadlineBudget = DEFAULT_LSP_REQUEST_TIMEOUT_MS
+  ): Promise<Record<string, LspDiagnostic[]>> {
+    const budget = semanticBudget(timeoutOrBudget);
+    await this.ensureStarted(budget);
     for (const file of files) {
+      budget.throwIfExpired("diagnostics.open");
       await this.withDocument(file, async () => undefined);
     }
     if (waitMs > 0) {
-      await delay(Math.min(waitMs, 10000));
+      await budget.race("diagnostics.wait", delay(Math.min(waitMs, 10000)));
     }
     const result: Record<string, LspDiagnostic[]> = {};
     for (const file of files) {
@@ -700,16 +898,7 @@ export class JdtlsSession {
     return result;
   }
 
-  /**
-   * Task 33 Step 7 cutover, hierarchy variant: routed through SemanticGateway
-   * for its completed-at TTL cache and lifecycle-gate short-circuit only -
-   * NOT its singleflight join (see NON_SHARED_OPERATIONS in
-   * semantic-gateway.ts for why walkHierarchy's "resolve with partial edges
-   * on the caller's own deadline" contract cannot share a backend call
-   * across callers with different deadlines). `operationCapMs` is the
-   * caller's own remaining budget, so the caller awaiting the gateway
-   * outcome is equivalent to the caller awaiting the raw walk directly.
-   */
+  /** Task 33 hierarchy cutover: same-key callers share backend work while each caller settles against its own absolute deadline. */
   async callHierarchy(
     file: string,
     line: number,
@@ -729,7 +918,7 @@ export class JdtlsSession {
       column,
       optionsKey: `direction=${direction}&depth=${depth}&limit=${limit}`
     };
-    const outcome = await this.semanticGateway.execute(key, budget, budget.remainingMs());
+    const outcome = await this.semanticGateway.execute(key, budget, DEFAULT_LSP_REQUEST_TIMEOUT_MS);
     return {
       roots: [...outcome.value.roots],
       edges: [...outcome.value.edges],
@@ -749,7 +938,8 @@ export class JdtlsSession {
     direction: "incoming" | "outgoing",
     depth: number,
     limit: number,
-    budget: DeadlineBudget
+    budget: DeadlineBudget,
+    signal?: AbortSignal
   ): Promise<HierarchyResult> {
     const method = direction === "incoming" ? "callHierarchy/incomingCalls" : "callHierarchy/outgoingCalls";
     return this.walkHierarchy({
@@ -761,6 +951,7 @@ export class JdtlsSession {
       depth,
       limit,
       budget,
+      signal,
       expand: (item, related) => (related as Array<{ from?: unknown; to?: unknown; fromRanges?: LspRange[] }>).map(call => {
         const next = direction === "incoming" ? call.from : call.to;
         return {
@@ -795,7 +986,7 @@ export class JdtlsSession {
       column,
       optionsKey: `direction=${direction}&depth=${depth}&limit=${limit}`
     };
-    const outcome = await this.semanticGateway.execute(key, budget, budget.remainingMs());
+    const outcome = await this.semanticGateway.execute(key, budget, DEFAULT_LSP_REQUEST_TIMEOUT_MS);
     return {
       roots: [...outcome.value.roots],
       edges: [...outcome.value.edges],
@@ -815,7 +1006,8 @@ export class JdtlsSession {
     direction: "supertypes" | "subtypes",
     depth: number,
     limit: number,
-    budget: DeadlineBudget
+    budget: DeadlineBudget,
+    signal?: AbortSignal
   ): Promise<HierarchyResult> {
     const method = direction === "supertypes" ? "typeHierarchy/supertypes" : "typeHierarchy/subtypes";
     return this.walkHierarchy({
@@ -827,6 +1019,7 @@ export class JdtlsSession {
       depth,
       limit,
       budget,
+      signal,
       expand: (item, related) => (related as unknown[]).map(next => ({
         next,
         edge: {
@@ -846,6 +1039,7 @@ export class JdtlsSession {
     depth: number;
     limit: number;
     budget: DeadlineBudget;
+    signal?: AbortSignal;
     expand: (item: unknown, related: unknown) => Array<{ next: unknown; edge: Omit<HierarchyEdge, "depth"> }>;
   }): Promise<HierarchyResult> {
     const edges: HierarchyEdge[] = [];
@@ -860,9 +1054,14 @@ export class JdtlsSession {
 
     let roots: unknown[];
     try {
-      await this.ensureStarted(input.budget);
+      await this.ensureSemanticStarted(input.budget, input.signal, `${input.prepareMethod} startup`);
       roots = await this.withDocumentPosition(input.file, input.line, input.column, params =>
-        this.request<unknown[]>(input.prepareMethod, params, input.budget.remainingMs(HIERARCHY_PREPARE_CAP_MS))
+        this.request<unknown[]>(
+          input.prepareMethod,
+          params,
+          Math.max(1, input.budget.remainingMs(HIERARCHY_PREPARE_CAP_MS)),
+          input.signal
+        )
       ) || [];
     } catch (error) {
       // A prepare that never answered means there is nothing to traverse.
@@ -892,7 +1091,8 @@ export class JdtlsSession {
         related = await this.request<unknown[]>(
           input.method,
           { item: current.item },
-          input.budget.remainingMs(HIERARCHY_STEP_CAP_MS)
+          Math.max(1, input.budget.remainingMs(HIERARCHY_STEP_CAP_MS)),
+          input.signal
         );
       } catch (error) {
         // Preserve what was already collected; classification decides whether
@@ -1011,6 +1211,7 @@ export class JdtlsSession {
           "JDT LS startup was superseded or stopped before commit"
         );
       }
+      await this.heartbeatPendingLease();
       attempt.connection.sendNotification("initialized", {});
       attempt.connection.sendNotification("workspace/didChangeConfiguration", {
         settings: this.javaSettings()
@@ -1019,7 +1220,6 @@ export class JdtlsSession {
       this.process = attempt.child;
       this.connection = attempt.connection;
       this.startedAt = new Date();
-      await this.startFileWatcher();
       this.startAttempt = undefined;
       this.restartBackoff.recordReadyStarted();
       this.transition("READY");
@@ -1033,7 +1233,6 @@ export class JdtlsSession {
         this.lifecycleState === "STOPPED"
         || (this.startAttempt !== attempt
           && (this.lifecycleState === "STARTING" || this.lifecycleState === "READY"));
-      this.stopFileWatcher();
       await this.disposeAttempt(attempt);
       if (this.startAttempt === attempt) this.startAttempt = undefined;
       if (this.process === attempt.child) this.process = undefined;
@@ -1075,7 +1274,6 @@ export class JdtlsSession {
         return;
       }
       if (ownsReadyProcess) {
-        this.stopFileWatcher();
         if (this.readyStableTimer) {
           clearTimeout(this.readyStableTimer);
           this.readyStableTimer = undefined;
@@ -1286,58 +1484,16 @@ export class JdtlsSession {
     }
   }
 
-  private async startFileWatcher(): Promise<void> {
-    this.stopFileWatcher();
-    const watcher = new JavaFileWatcher(this.repoRoot, {
-      notifyChanges: changes => this.notifyWatchedFileChanges(changes),
-      syncOpenDocument: change => this.syncOpenDocumentFromDisk(change)
-    });
-    this.fileWatcher = watcher;
-    await watcher.start();
-  }
-
-  private stopFileWatcher(): void {
-    this.fileWatcher?.close();
-    this.fileWatcher = undefined;
-  }
-
-  private notifyWatchedFileChanges(changes: WatchedFileChange[]): void {
-    if (!this.connection || changes.length === 0) {
-      return;
-    }
-    this.invalidateCacheFor(changes.map(change => change.filePath));
-    this.connection.sendNotification("workspace/didChangeWatchedFiles", {
-      changes: changes.map(change => ({
-        uri: change.uri,
-        type: change.type
-      }))
-    });
-  }
-
-  private async syncOpenDocumentFromDisk(change: WatchedFileChange): Promise<void> {
-    if (!this.documents.has(change.filePath) || !this.connection) {
-      return;
-    }
-
-    if (change.type === WatchedFileChangeType.Deleted) {
-      this.documents.delete(change.filePath);
-      this.diagnostics.delete(change.uri);
-      return;
-    }
-
-    if (!existsSync(change.filePath)) {
-      return;
-    }
-
-    // acquire()/release() folds the disk-driven resync into DocumentLru's own
-    // didOpen/didChange join and recency tracking instead of duplicating it.
-    await this.withDocument(change.filePath, async () => undefined);
-  }
-
-  private async request<T>(method: string, params?: unknown, timeoutMs = DEFAULT_LSP_REQUEST_TIMEOUT_MS): Promise<T> {
+  private async request<T>(
+    method: string,
+    params?: unknown,
+    timeoutMs = DEFAULT_LSP_REQUEST_TIMEOUT_MS,
+    signal?: AbortSignal
+  ): Promise<T> {
     if (!this.connection) {
       throw new Error("JDT LS is not started.");
     }
+    throwIfAborted(signal, method);
     const cancellation = new CancellationTokenSource();
     const startedAt = Date.now();
     // Hold the raw promise so backend settlement can still be measured after the
@@ -1348,9 +1504,25 @@ export class JdtlsSession {
     const markSettled = (): void => { backendSettledAt = Date.now(); };
     backend.then(markSettled, markSettled);
 
+    let removeAbortListener: (() => void) | undefined;
+    const abortableBackend = signal
+      ? Promise.race([
+          backend,
+          new Promise<never>((_, reject) => {
+            const onAbort = (): void => {
+              cancellation.cancel();
+              reject(new JavaIntelligenceError("CANCELLED", `Cancelled during ${method}`));
+            };
+            signal.addEventListener("abort", onAbort, { once: true });
+            removeAbortListener = () => signal.removeEventListener("abort", onAbort);
+          })
+        ])
+      : backend;
+
     try {
-      return await withTimeout(backend, timeoutMs, method, () => cancellation.cancel()) as T;
+      return await withTimeout(abortableBackend, timeoutMs, method, () => cancellation.cancel()) as T;
     } finally {
+      removeAbortListener?.();
       const clientCompletedAt = Date.now();
       this.addPhaseMetric(method, clientCompletedAt - startedAt);
       if (backendSettledAt === undefined) {
@@ -1434,11 +1606,12 @@ export class JdtlsSession {
       this.lastCacheInvalidatedAt = new Date();
     }
     this.cache.clear();
-    // Independent of the old per-method cache above: every SemanticGateway
-    // cache key is stamped with this generation, so a storm/BUILD_CHANGE/
-    // stop (every clearCache() caller) invalidates gateway-owned operations
-    // too, without a per-key scan.
+    this.invalidateSemanticGateway();
+  }
+
+  private invalidateSemanticGateway(): void {
     this.cacheGeneration += 1;
+    this.semanticGateway.clear();
   }
 
   private evictExpiredCacheEntries(): void {
@@ -1500,6 +1673,21 @@ export class JdtlsSession {
 function findExecutable(name: string): string {
   const result = spawnSync("sh", ["-lc", `command -v ${shellQuote(name)}`], { encoding: "utf8" });
   return result.status === 0 ? result.stdout.trim() : "";
+}
+
+function watchedFileChange(change: RepoChange): { uri: string; type: number } | undefined {
+  if (change.kind === "WATCHER_DEGRADED") return undefined;
+  let type: number;
+  if (change.kind === "JAVA_ADD") type = 1;
+  else if (change.kind === "JAVA_DELETE") type = 3;
+  else if (change.event === "add") type = 1;
+  else if (change.event === "delete") type = 3;
+  else type = 2;
+  return { uri: toFileUri(change.absolutePath), type };
+}
+
+function isMissingFileError(error: unknown): boolean {
+  return error instanceof Error && "code" in error && error.code === "ENOENT";
 }
 
 function shellQuote(value: string): string {
@@ -1757,32 +1945,33 @@ function requirePosition(line: number | undefined, column: number | undefined, o
  */
 export function createJdtlsSemanticBackend(session: JdtlsSession): SemanticBackend {
   return {
-    async execute(key, timeoutMs): Promise<SemanticBackendResult<SemanticBackendValue>> {
+    async execute(key, timeoutMs, signal): Promise<SemanticBackendResult<SemanticBackendValue>> {
       const options = parseOptionsKey(key.optionsKey);
+      const budget = DeadlineBudget.fromTimeout(timeoutMs);
       switch (key.operation) {
         case "hover": {
           const { line, column } = requirePosition(key.line, key.column, "hover");
-          const value = await session.rawHover(key.file, line, column, timeoutMs) as SemanticValueMap["hover"];
+          const value = await session.rawHover(key.file, line, column, budget, signal) as SemanticValueMap["hover"];
           return { completion: "COMPLETE", value };
         }
         case "definition": {
           const { line, column } = requirePosition(key.line, key.column, "definition");
-          const value = await session.rawDefinition(key.file, line, column, timeoutMs);
+          const value = await session.rawDefinition(key.file, line, column, budget, signal);
           return { completion: "COMPLETE", value };
         }
         case "implementation": {
           const { line, column } = requirePosition(key.line, key.column, "implementation");
-          const value = await session.rawImplementation(key.file, line, column, timeoutMs);
+          const value = await session.rawImplementation(key.file, line, column, budget, signal);
           return { completion: "COMPLETE", value };
         }
         case "references": {
           const { line, column } = requirePosition(key.line, key.column, "references");
           const includeDeclaration = options.get("includeDeclaration") === "true";
-          const value = await session.rawReferences(key.file, line, column, includeDeclaration, timeoutMs);
+          const value = await session.rawReferences(key.file, line, column, includeDeclaration, budget, signal);
           return { completion: "COMPLETE", value };
         }
         case "documentSymbol": {
-          const value = await session.rawDocumentSymbols(key.file, timeoutMs);
+          const value = await session.rawDocumentSymbols(key.file, budget, signal);
           return { completion: "COMPLETE", value };
         }
         case "typeHierarchy": {
@@ -1790,7 +1979,7 @@ export function createJdtlsSemanticBackend(session: JdtlsSession): SemanticBacke
           const direction = options.get("direction") === "subtypes" ? "subtypes" : "supertypes";
           const depth = Number(options.get("depth") ?? "1");
           const limit = Number(options.get("limit") ?? "50");
-          const result = await session.rawTypeHierarchy(key.file, line, column, direction, depth, limit, DeadlineBudget.fromTimeout(timeoutMs));
+          const result = await session.rawTypeHierarchy(key.file, line, column, direction, depth, limit, budget, signal);
           return {
             completion: result.completion,
             value: { roots: result.roots, edges: result.edges, truncated: result.truncated, requests: result.requests, visited: result.visited },
@@ -1802,7 +1991,7 @@ export function createJdtlsSemanticBackend(session: JdtlsSession): SemanticBacke
           const direction = options.get("direction") === "outgoing" ? "outgoing" : "incoming";
           const depth = Number(options.get("depth") ?? "1");
           const limit = Number(options.get("limit") ?? "50");
-          const result = await session.rawCallHierarchy(key.file, line, column, direction, depth, limit, DeadlineBudget.fromTimeout(timeoutMs));
+          const result = await session.rawCallHierarchy(key.file, line, column, direction, depth, limit, budget, signal);
           return {
             completion: result.completion,
             value: { roots: result.roots, edges: result.edges, truncated: result.truncated, requests: result.requests, visited: result.visited },
@@ -1812,6 +2001,46 @@ export function createJdtlsSemanticBackend(session: JdtlsSession): SemanticBacke
       }
     }
   };
+}
+
+function semanticBudget(timeoutOrBudget: number | DeadlineBudget): DeadlineBudget {
+  return timeoutOrBudget instanceof DeadlineBudget
+    ? timeoutOrBudget
+    : DeadlineBudget.fromTimeout(timeoutOrBudget);
+}
+
+function semanticOperationCap(
+  timeoutOrBudget: number | DeadlineBudget,
+  _budget: DeadlineBudget
+): number {
+  return typeof timeoutOrBudget === "number"
+    ? timeoutOrBudget
+    : DEFAULT_LSP_REQUEST_TIMEOUT_MS;
+}
+
+function throwIfAborted(signal: AbortSignal | undefined, stage: string): void {
+  if (signal?.aborted) {
+    throw new JavaIntelligenceError("CANCELLED", `Cancelled before ${stage}`);
+  }
+}
+
+async function waitForAbortSignal<T>(
+  operation: Promise<T>,
+  signal: AbortSignal | undefined,
+  stage: string
+): Promise<T> {
+  if (!signal) return operation;
+  throwIfAborted(signal, stage);
+  let onAbort: (() => void) | undefined;
+  const aborted = new Promise<never>((_, reject) => {
+    onAbort = () => reject(new JavaIntelligenceError("CANCELLED", `Cancelled during ${stage}`));
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try {
+    return await Promise.race([operation, aborted]);
+  } finally {
+    if (onAbort) signal.removeEventListener("abort", onAbort);
+  }
 }
 
 function leaseAcquireResultToError(result: Exclude<JdtLeaseAcquireResult, { kind: "ACQUIRED" }>): JavaIntelligenceError {

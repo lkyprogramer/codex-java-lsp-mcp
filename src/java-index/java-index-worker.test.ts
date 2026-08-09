@@ -3,6 +3,7 @@ import test from "node:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { Worker } from "node:worker_threads";
 import { gunzipSync, gzipSync } from "node:zlib";
 import {
   defaultLeaseClockDeps,
@@ -82,6 +83,72 @@ test("reconcile() runs a background full sweep that discovers and indexes every 
   );
 
   await client.close();
+});
+
+test("pendingBackground stays nonzero while the final sweep chunk is still finishing", async () => {
+  const repoRoot = tempRepo("java-index-worker-final-chunk-quiescence-");
+  writeJavaFile(repoRoot, "src/main/java/demo/Solo.java", "package demo;\n\nclass Solo {}\n");
+  const cacheDir = tempCacheDir();
+  const leaseRoot = tempRepo("java-index-worker-final-chunk-lease-");
+  const barrier = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT * 2));
+  const client = new JavaIndexClient(repoRoot, cacheDir, () => new Worker(`
+    const { workerData } = require("node:worker_threads");
+    (async () => {
+      const control = new Int32Array(workerData.barrier);
+      const leaseModule = await import(workerData.leaseModuleUrl);
+      const originalAcquireSweep = leaseModule.FileCrossProcessLeaseStore.prototype.acquireSweep;
+      leaseModule.FileCrossProcessLeaseStore.prototype.acquireSweep = async function (...args) {
+        const handle = await originalAcquireSweep.apply(this, args);
+        const originalHeartbeat = handle.heartbeat;
+        handle.heartbeat = async () => {
+          Atomics.store(control, 0, 1);
+          Atomics.notify(control, 0);
+          while (Atomics.load(control, 1) === 0) {
+            await Atomics.waitAsync(control, 1, 0).value;
+          }
+          await originalHeartbeat.call(handle);
+        };
+        return handle;
+      };
+      await import(workerData.workerModuleUrl);
+    })().catch(error => setImmediate(() => { throw error; }));
+  `, {
+    eval: true,
+    workerData: {
+      barrier: barrier.buffer,
+      leaseModuleUrl: new URL("../cross-process-lease.js", import.meta.url).href,
+      workerModuleUrl: new URL("./java-index-worker.js", import.meta.url).href
+    }
+  }));
+
+  try {
+    await client.open(1, { leaseRoot, worktree: identityFor(repoRoot, "final-chunk-quiescence") });
+    await client.reconcile(1);
+    while (Atomics.load(barrier, 0) === 0) {
+      const wait = (Atomics as typeof Atomics & {
+        waitAsync(array: Int32Array, index: number, value: number, timeout?: number): {
+          async: boolean;
+          value: string | Promise<string>;
+        };
+      }).waitAsync(barrier, 0, 0, 5000);
+      const result = wait.async ? await wait.value : wait.value;
+      assert.notEqual(result, "timed-out", "the controlled final-chunk heartbeat barrier must be reached");
+    }
+
+    const duringFinalHeartbeat = await client.status();
+    assert.ok(
+      duringFinalHeartbeat.pendingBackground > 0,
+      `the final chunk must remain pending through heartbeat and terminal cleanup, got ${JSON.stringify(duringFinalHeartbeat)}`
+    );
+    assert.ok(
+      duringFinalHeartbeat.coverage.every(entry => entry.state === "BUILDING"),
+      `coverage must still be BUILDING at the heartbeat barrier, got ${JSON.stringify(duringFinalHeartbeat.coverage)}`
+    );
+  } finally {
+    Atomics.store(barrier, 1, 1);
+    Atomics.notify(barrier, 1);
+    await client.close().catch(() => undefined);
+  }
 });
 
 test("a clean full sweep re-links an early source file after its later declaration is indexed", async () => {
@@ -499,32 +566,6 @@ test("FLUSH writes the current facts immediately, ahead of the debounce timer", 
   assert.ok(bytesAtFlush > 0);
 
   await client.close();
-});
-
-test("the first V2 open deletes legacy V1 cache files exactly once", async () => {
-  const repoRoot = tempRepo("java-index-worker-v1-cleanup-");
-  const cacheDir = tempCacheDir();
-  const v1Files = ["source-index.files.jsonl", "source-index.symbols.jsonl", "source-index.meta.json"];
-  for (const name of v1Files) writeFileSync(path.join(cacheDir, name), "legacy");
-
-  const client = new JavaIndexClient(repoRoot, cacheDir);
-  await client.open(1);
-  for (const name of v1Files) {
-    assert.ok(!existsSync(path.join(cacheDir, name)), `${name} must be deleted on the first V2 open`);
-  }
-  assert.ok(existsSync(path.join(cacheDir, "java-index-v2.initialized")), "a one-time marker must be left behind");
-  await client.close();
-
-  // A later open must not repeat the cleanup: a file that happens to share a
-  // legacy name after the marker exists is left alone.
-  writeFileSync(path.join(cacheDir, v1Files[0]!), "unrelated content written after the marker");
-  const second = new JavaIndexClient(repoRoot, cacheDir);
-  await second.open(1);
-  assert.ok(
-    existsSync(path.join(cacheDir, v1Files[0]!)),
-    "cleanup must not run again once the marker is present"
-  );
-  await second.close();
 });
 
 test("sibling-seeded reconcile re-parses only target-side diffs while preserving reusable facts", async () => {

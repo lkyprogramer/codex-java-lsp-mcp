@@ -1,7 +1,7 @@
 // input: Anchors, JavaIndex facts, routing policy, and the persisted SemanticEdgeStoreV2.
 // output: Candidate map mutations for type graph, import graph, and persisted semantic edges.
 // pos: Static candidate collectors for AgentRouter (Task 22: async JavaIndex V2; Task 33
-//      moved collectPersistedSemanticCandidates's read off the legacy edge-store).
+//      moved collectPersistedSemanticCandidates onto the versioned semantic edge snapshot).
 import path from "node:path";
 import { classifyPath } from "../repo-layout.js";
 import type { RoutingPolicy } from "../routing-policy.js";

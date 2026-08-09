@@ -1,4 +1,5 @@
 import { Worker } from "node:worker_threads";
+import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
 import type {
   AnchorFacts,
@@ -40,6 +41,12 @@ export type JavaIndexOpenOptions = {
   siblingCacheBase?: string;
 };
 
+/** Per-call control; omitted for non-request maintenance and legacy callers. */
+export type JavaIndexRequestOptions = {
+  budget?: DeadlineBudget;
+  signal?: AbortSignal;
+};
+
 export interface WorkerLike {
   postMessage(value: unknown): void;
   on(event: "message", listener: (value: unknown) => void): this;
@@ -47,6 +54,12 @@ export interface WorkerLike {
   on(event: "exit", listener: (code: number) => void): this;
   terminate(): Promise<number>;
 }
+
+type PendingRequest = {
+  resolve: (value: unknown) => void;
+  reject: (error: Error) => void;
+  cleanup(): void;
+};
 
 function emptyStatus(): JavaIndexStatus {
   return {
@@ -68,14 +81,14 @@ function defaultWorkerFactory(): WorkerLike {
   return new Worker(new URL("./java-index-worker.js", import.meta.url)) as unknown as WorkerLike;
 }
 
+const CLOSE_GRACE_MS = 250;
+
 export class JavaIndexClient {
   private nextId = 1;
   private worker?: WorkerLike;
   private state: JavaIndexStatus["state"] = "NEW";
-  private readonly pending = new Map<number, {
-    resolve: (value: unknown) => void;
-    reject: (error: Error) => void;
-  }>();
+  private readonly pending = new Map<number, PendingRequest>();
+  private readonly terminatedWorkers = new WeakSet<WorkerLike>();
   private restartCount = 0;
   private lastKnownStatus: JavaIndexStatus = emptyStatus();
   private openOptions: JavaIndexOpenOptions = {};
@@ -86,7 +99,11 @@ export class JavaIndexClient {
     private readonly createWorker: () => WorkerLike = defaultWorkerFactory
   ) {}
 
-  async open(generation: number, options: JavaIndexOpenOptions = {}): Promise<JavaIndexStatus> {
+  async open(
+    generation: number,
+    options: JavaIndexOpenOptions = {},
+    requestOptions: JavaIndexRequestOptions = {}
+  ): Promise<JavaIndexStatus> {
     if (this.worker || this.state !== "NEW") {
       throw new JavaIntelligenceError(
         "INDEX_PARTIAL",
@@ -94,21 +111,27 @@ export class JavaIndexClient {
       );
     }
     this.openOptions = options;
-    return this.spawnAndOpen(generation);
+    return this.spawnAndOpen(generation, requestOptions);
   }
 
-  async status(): Promise<JavaIndexStatus> {
-    await this.ensureOpen();
-    const status = await this.request({ type: "STATUS" }, validateJavaIndexStatus);
+  async status(requestOptions: JavaIndexRequestOptions = {}): Promise<JavaIndexStatus> {
+    await this.ensureOpen(requestOptions);
+    const status = await this.request({ type: "STATUS" }, validateJavaIndexStatus, requestOptions);
     this.lastKnownStatus = status;
     return status;
   }
 
-  async refresh(generation: number, changed: string[], deleted: string[]): Promise<JavaIndexStatus> {
-    await this.ensureOpen();
+  async refresh(
+    generation: number,
+    changed: string[],
+    deleted: string[],
+    requestOptions: JavaIndexRequestOptions = {}
+  ): Promise<JavaIndexStatus> {
+    await this.ensureOpen(requestOptions);
     const status = await this.request(
       { type: "REFRESH", generation, changed, deleted },
-      validateJavaIndexStatus
+      validateJavaIndexStatus,
+      requestOptions
     );
     this.lastKnownStatus = status;
     return status;
@@ -122,12 +145,17 @@ export class JavaIndexClient {
    * distinguish them at the coordinator layer); the worker resolves each via
    * a stat, idempotently.
    */
-  async refreshResources(generation: number, paths: string[]): Promise<JavaIndexStatus> {
-    if (paths.length === 0) return this.lastKnownStatus ?? await this.status();
-    await this.ensureOpen();
+  async refreshResources(
+    generation: number,
+    paths: string[],
+    requestOptions: JavaIndexRequestOptions = {}
+  ): Promise<JavaIndexStatus> {
+    if (paths.length === 0) return this.lastKnownStatus ?? await this.status(requestOptions);
+    await this.ensureOpen(requestOptions);
     const status = await this.request(
       { type: "REFRESH_RESOURCES", generation, paths },
-      validateJavaIndexStatus
+      validateJavaIndexStatus,
+      requestOptions
     );
     this.lastKnownStatus = status;
     return status;
@@ -137,112 +165,171 @@ export class JavaIndexClient {
    * Request-path foreground refresh for the given files at `generation`.
    * Empty input is a no-op so callers can always pair ensureFresh with a query.
    */
-  async ensureFresh(files: string[], generation: number): Promise<void> {
+  async ensureFresh(
+    files: string[],
+    generation: number,
+    requestOptions: JavaIndexRequestOptions = {}
+  ): Promise<void> {
     if (files.length === 0) return;
-    await this.refresh(generation, files, []);
+    await this.refresh(generation, files, [], requestOptions);
   }
 
-  async reconcile(generation: number): Promise<JavaIndexStatus> {
-    await this.ensureOpen();
-    const status = await this.request({ type: "RECONCILE", generation }, validateJavaIndexStatus);
+  async reconcile(generation: number, requestOptions: JavaIndexRequestOptions = {}): Promise<JavaIndexStatus> {
+    await this.ensureOpen(requestOptions);
+    const status = await this.request({ type: "RECONCILE", generation }, validateJavaIndexStatus, requestOptions);
     this.lastKnownStatus = status;
     return status;
   }
 
-  async flush(): Promise<JavaIndexStatus> {
-    await this.ensureOpen();
-    const status = await this.request({ type: "FLUSH" }, validateJavaIndexStatus);
+  async flush(requestOptions: JavaIndexRequestOptions = {}): Promise<JavaIndexStatus> {
+    await this.ensureOpen(requestOptions);
+    const status = await this.request({ type: "FLUSH" }, validateJavaIndexStatus, requestOptions);
     this.lastKnownStatus = status;
     return status;
   }
 
-  async queryAnchor(file: string, line: number, column: number): Promise<AnchorFacts | undefined> {
-    await this.ensureOpen();
-    return this.request({ type: "QUERY_ANCHOR", file, line, column }, validateAnchorFacts);
+  async queryAnchor(
+    file: string,
+    line: number,
+    column: number,
+    requestOptions: JavaIndexRequestOptions = {}
+  ): Promise<AnchorFacts | undefined> {
+    await this.ensureOpen(requestOptions);
+    return this.request({ type: "QUERY_ANCHOR", file, line, column }, validateAnchorFacts, requestOptions);
   }
 
-  async queryType(typeText: string, scopeFile?: string): Promise<JavaTypeLookupResult> {
-    await this.ensureOpen();
-    return this.request({ type: "QUERY_TYPE", typeText, scopeFile }, validateTypeLookup);
+  async queryType(
+    typeText: string,
+    scopeFile?: string,
+    requestOptions: JavaIndexRequestOptions = {}
+  ): Promise<JavaTypeLookupResult> {
+    await this.ensureOpen(requestOptions);
+    return this.request({ type: "QUERY_TYPE", typeText, scopeFile }, validateTypeLookup, requestOptions);
   }
 
-  async queryTypes(queries: Array<{ typeText: string; scopeFile?: string }>): Promise<JavaTypeLookupResult[]> {
-    await this.ensureOpen();
+  async queryTypes(
+    queries: Array<{ typeText: string; scopeFile?: string }>,
+    requestOptions: JavaIndexRequestOptions = {}
+  ): Promise<JavaTypeLookupResult[]> {
+    await this.ensureOpen(requestOptions);
     if (queries.length === 0) return [];
-    return this.request({ type: "QUERY_TYPES", queries }, validateTypeLookupArray);
+    return this.request({ type: "QUERY_TYPES", queries }, validateTypeLookupArray, requestOptions);
   }
 
-  async queryImplementers(typeId: string, limit: number): Promise<JavaTypeFacts[]> {
-    await this.ensureOpen();
-    return this.request({ type: "QUERY_IMPLEMENTERS", typeId, limit }, validateTypeFactsArray);
+  async queryImplementers(
+    typeId: string,
+    limit: number,
+    requestOptions: JavaIndexRequestOptions = {}
+  ): Promise<JavaTypeFacts[]> {
+    await this.ensureOpen(requestOptions);
+    return this.request({ type: "QUERY_IMPLEMENTERS", typeId, limit }, validateTypeFactsArray, requestOptions);
   }
 
   async queryTypeReferencers(
     typeId: string,
     edgeKinds: StaticEdgeKind[],
-    limit: number
+    limit: number,
+    requestOptions: JavaIndexRequestOptions = {}
   ): Promise<IndexedReference[]> {
-    await this.ensureOpen();
+    await this.ensureOpen(requestOptions);
     return this.request(
       { type: "QUERY_TYPE_REFERENCERS", typeId, edgeKinds, limit },
-      validateIndexedReferenceArray
+      validateIndexedReferenceArray,
+      requestOptions
     );
   }
 
-  async queryCallers(methodId: string, limit: number): Promise<IndexedReference[]> {
-    await this.ensureOpen();
-    return this.request({ type: "QUERY_CALLERS", methodId, limit }, validateIndexedReferenceArray);
+  async queryCallers(
+    methodId: string,
+    limit: number,
+    requestOptions: JavaIndexRequestOptions = {}
+  ): Promise<IndexedReference[]> {
+    await this.ensureOpen(requestOptions);
+    return this.request({ type: "QUERY_CALLERS", methodId, limit }, validateIndexedReferenceArray, requestOptions);
   }
 
-  async queryCallees(methodId: string, limit: number): Promise<IndexedReference[]> {
-    await this.ensureOpen();
-    return this.request({ type: "QUERY_CALLEES", methodId, limit }, validateIndexedReferenceArray);
+  async queryCallees(
+    methodId: string,
+    limit: number,
+    requestOptions: JavaIndexRequestOptions = {}
+  ): Promise<IndexedReference[]> {
+    await this.ensureOpen(requestOptions);
+    return this.request({ type: "QUERY_CALLEES", methodId, limit }, validateIndexedReferenceArray, requestOptions);
   }
 
-  async queryCalleesBatch(methodIds: string[], limit: number): Promise<Array<{ methodId: string; callees: IndexedReference[] }>> {
-    await this.ensureOpen();
+  async queryCalleesBatch(
+    methodIds: string[],
+    limit: number,
+    requestOptions: JavaIndexRequestOptions = {}
+  ): Promise<Array<{ methodId: string; callees: IndexedReference[] }>> {
+    await this.ensureOpen(requestOptions);
     if (methodIds.length === 0) return [];
-    return this.request({ type: "QUERY_CALLEES_BATCH", methodIds, limit }, validateIndexedReferenceBatch);
+    return this.request({ type: "QUERY_CALLEES_BATCH", methodIds, limit }, validateIndexedReferenceBatch, requestOptions);
   }
 
-  async queryMethodsWithParameterTypes(typeIds: string[], limit: number): Promise<string[]> {
-    await this.ensureOpen();
+  async queryMethodsWithParameterTypes(
+    typeIds: string[],
+    limit: number,
+    requestOptions: JavaIndexRequestOptions = {}
+  ): Promise<string[]> {
+    await this.ensureOpen(requestOptions);
     if (typeIds.length === 0) return [];
-    return this.request({ type: "QUERY_METHODS_WITH_PARAMETER_TYPES", typeIds, limit }, validateStringArray);
+    return this.request(
+      { type: "QUERY_METHODS_WITH_PARAMETER_TYPES", typeIds, limit },
+      validateStringArray,
+      requestOptions
+    );
   }
 
-  async queryFiles(files: string[]): Promise<JavaFileBundle[]> {
-    await this.ensureOpen();
-    return this.request({ type: "QUERY_FILES", files }, validateFileBundleArray);
+  async queryFiles(files: string[], requestOptions: JavaIndexRequestOptions = {}): Promise<JavaFileBundle[]> {
+    await this.ensureOpen(requestOptions);
+    return this.request({ type: "QUERY_FILES", files }, validateFileBundleArray, requestOptions);
   }
 
   async queryReadRanges(
-    requests: Array<{ file: string; positions: Array<{ line: number; column: number }> }>
+    requests: Array<{ file: string; positions: Array<{ line: number; column: number }> }>,
+    requestOptions: JavaIndexRequestOptions = {}
   ): Promise<IndexedReadRangeResult[]> {
-    await this.ensureOpen();
+    await this.ensureOpen(requestOptions);
     if (requests.length === 0) return [];
-    return this.request({ type: "QUERY_READ_RANGES", requests }, validateIndexedReadRangeResults);
+    return this.request({ type: "QUERY_READ_RANGES", requests }, validateIndexedReadRangeResults, requestOptions);
   }
 
-  async queryMyBatisResource(relativePath: string): Promise<MyBatisMapperResourceFacts | undefined> {
-    await this.ensureOpen();
-    return this.request({ type: "QUERY_MYBATIS_RESOURCE", relativePath }, validateMyBatisMapperResourceFacts);
+  async queryMyBatisResource(
+    relativePath: string,
+    requestOptions: JavaIndexRequestOptions = {}
+  ): Promise<MyBatisMapperResourceFacts | undefined> {
+    await this.ensureOpen(requestOptions);
+    return this.request(
+      { type: "QUERY_MYBATIS_RESOURCE", relativePath },
+      validateMyBatisMapperResourceFacts,
+      requestOptions
+    );
   }
 
-  async queryMyBatisResourcesByNamespace(namespaces: string[]): Promise<MyBatisResourceByNamespaceBatch> {
-    await this.ensureOpen();
+  async queryMyBatisResourcesByNamespace(
+    namespaces: string[],
+    requestOptions: JavaIndexRequestOptions = {}
+  ): Promise<MyBatisResourceByNamespaceBatch> {
+    await this.ensureOpen(requestOptions);
     if (namespaces.length === 0) return [];
-    return this.request({ type: "QUERY_MYBATIS_RESOURCES_BY_NAMESPACE", namespaces }, validateMyBatisResourceByNamespaceBatch);
+    return this.request(
+      { type: "QUERY_MYBATIS_RESOURCES_BY_NAMESPACE", namespaces },
+      validateMyBatisResourceByNamespaceBatch,
+      requestOptions
+    );
   }
 
   async queryRepositoryFactMarkers(
     importPrefixes: string[],
-    annotationPrefixes: string[]
+    annotationPrefixes: string[],
+    requestOptions: JavaIndexRequestOptions = {}
   ): Promise<{ importPrefixFound: boolean; annotationPrefixFound: boolean }> {
-    await this.ensureOpen();
+    await this.ensureOpen(requestOptions);
     return this.request(
       { type: "QUERY_REPOSITORY_FACT_MARKERS", importPrefixes, annotationPrefixes },
-      validateRepositoryFactMarkers
+      validateRepositoryFactMarkers,
+      requestOptions
     );
   }
 
@@ -253,16 +340,25 @@ export class JavaIndexClient {
       this.lastKnownStatus = { ...this.lastKnownStatus, state: "CLOSED" };
       return;
     }
-    try {
-      await this.request({ type: "CLOSE" }, () => undefined);
-    } catch {
-      // best-effort: the worker may already be unresponsive; terminate regardless.
-    }
+    const closed = new JavaIntelligenceError("INDEX_PARTIAL", "Java index client was closed");
     this.state = "CLOSED";
     this.lastKnownStatus = { ...this.lastKnownStatus, state: "CLOSED" };
-    this.worker = undefined;
-    this.rejectAllPending(new JavaIntelligenceError("INDEX_PARTIAL", "Java index client was closed"));
-    await worker.terminate();
+    this.rejectAllPending(closed);
+    try {
+      await this.request(
+        { type: "CLOSE" },
+        () => undefined,
+        { budget: DeadlineBudget.fromTimeout(CLOSE_GRACE_MS) }
+      );
+    } catch {
+      // CLOSE is best-effort; an unresponsive worker is force-terminated below.
+    } finally {
+      if (this.worker === worker) this.worker = undefined;
+      this.rejectAllPending(closed);
+      await this.terminateWorker(worker);
+      this.state = "CLOSED";
+      this.lastKnownStatus = { ...this.lastKnownStatus, state: "CLOSED" };
+    }
   }
 
   /** Synchronous, non-blocking snapshot of the last known status; never round-trips to the worker. */
@@ -270,7 +366,10 @@ export class JavaIndexClient {
     return { ...this.lastKnownStatus, state: this.state };
   }
 
-  private async spawnAndOpen(generation: number): Promise<JavaIndexStatus> {
+  private async spawnAndOpen(
+    generation: number,
+    requestOptions: JavaIndexRequestOptions = {}
+  ): Promise<JavaIndexStatus> {
     const worker = this.wireWorker(this.createWorker());
     this.worker = worker;
     this.state = "OPENING";
@@ -285,7 +384,8 @@ export class JavaIndexClient {
           ...(this.openOptions.worktree ? { worktree: this.openOptions.worktree } : {}),
           ...(this.openOptions.siblingCacheBase ? { siblingCacheBase: this.openOptions.siblingCacheBase } : {})
         },
-        validateJavaIndexStatus
+        validateJavaIndexStatus,
+        requestOptions
       );
       this.state = status.state;
       this.lastKnownStatus = status;
@@ -295,9 +395,8 @@ export class JavaIndexClient {
       // path only checks truthiness, so a wedged worker here would silently
       // swallow the one automatic restart and route every future request to
       // a thread that never finished opening.
-      this.worker = undefined;
-      this.markDegraded(error instanceof Error ? error.message : String(error));
-      await worker.terminate().catch(() => undefined);
+      const failure = error instanceof Error ? error : new Error(String(error));
+      this.retireWorker(worker, failure);
       throw error;
     }
   }
@@ -308,11 +407,11 @@ export class JavaIndexClient {
    * worker. The single automatic restart happens lazily here, on the next
    * request after the exit, and is spent at most once per client instance.
    */
-  private async ensureOpen(): Promise<void> {
-    if (this.worker) return;
+  private async ensureOpen(requestOptions: JavaIndexRequestOptions = {}): Promise<void> {
     if (this.state === "CLOSED") {
       throw new JavaIntelligenceError("INDEX_PARTIAL", "Java index client is closed");
     }
+    if (this.worker) return;
     if (this.restartCount >= 1) {
       throw new JavaIntelligenceError(
         "INDEX_PARTIAL",
@@ -320,26 +419,30 @@ export class JavaIndexClient {
       );
     }
     this.restartCount += 1;
-    await this.spawnAndOpen(this.lastKnownStatus.indexedGeneration);
+    await this.spawnAndOpen(this.lastKnownStatus.indexedGeneration, requestOptions);
   }
 
   private wireWorker(worker: WorkerLike): WorkerLike {
-    worker.on("message", value => this.handleMessage(value));
-    worker.on("error", error => this.handleFatal(error));
-    worker.on("exit", code => this.handleExit(code));
+    worker.on("message", value => this.handleMessage(worker, value));
+    worker.on("error", error => this.handleFatal(worker, error));
+    worker.on("exit", code => this.handleExit(worker, code));
     return worker;
   }
 
   private request<T>(
     request: JavaIndexCommand,
-    validate: JavaIndexValueValidator<T>
+    validate: JavaIndexValueValidator<T>,
+    requestOptions: JavaIndexRequestOptions = {}
   ): Promise<T> {
     const worker = this.worker;
     if (!worker) {
       throw new JavaIntelligenceError("INDEX_PARTIAL", "Java index worker is not open");
     }
+    const stage = `java-index.${request.type.toLowerCase()}`;
+    this.throwIfCancelledOrExpired(stage, requestOptions);
     const id = this.nextId++;
-    return new Promise<T>((resolve, reject) => {
+    let abortListener: (() => void) | undefined;
+    const operation = new Promise<T>((resolve, reject) => {
       this.pending.set(id, {
         resolve: value => {
           try {
@@ -353,13 +456,38 @@ export class JavaIndexClient {
             ));
           }
         },
-        reject
+        reject,
+        cleanup: () => {
+          if (abortListener) requestOptions.signal?.removeEventListener("abort", abortListener);
+        }
       });
-      worker.postMessage({ ...request, id });
+    });
+    if (requestOptions.signal) {
+      abortListener = () => {
+        this.rejectPending(id, new JavaIntelligenceError(
+          "CANCELLED",
+          `Java index request cancelled during ${stage}`
+        ));
+      };
+      requestOptions.signal.addEventListener("abort", abortListener, { once: true });
+      if (requestOptions.signal.aborted) {
+        abortListener();
+        return operation;
+      }
+    }
+    worker.postMessage({ ...request, id });
+    if (!requestOptions.budget) return operation;
+    return requestOptions.budget.race(stage, operation, undefined, () => {
+      const error = new JavaIntelligenceError(
+        "DEADLINE_EXCEEDED",
+        `Deadline exceeded during ${stage}`
+      );
+      if (this.rejectPending(id, error)) this.retireWorker(worker, error);
     });
   }
 
-  private handleMessage(value: unknown): void {
+  private handleMessage(worker: WorkerLike, value: unknown): void {
+    if (this.worker !== worker) return;
     if (!isJavaIndexResponse(value)) {
       // No id to correlate on, so every in-flight request would otherwise
       // hang forever: treat a malformed envelope as fatal to the whole batch
@@ -368,14 +496,13 @@ export class JavaIndexClient {
         "INDEX_CORRUPT",
         "Java index worker sent a malformed response envelope"
       );
-      this.markDegraded(error.message);
-      this.rejectAllPending(error);
-      this.worker = undefined;
+      this.retireWorker(worker, error);
       return;
     }
     const pending = this.pending.get(value.id);
     if (!pending) return;
     this.pending.delete(value.id);
+    pending.cleanup();
     if (value.ok) {
       pending.resolve(value.value);
     } else {
@@ -386,16 +513,14 @@ export class JavaIndexClient {
     }
   }
 
-  private handleFatal(error: Error): void {
+  private handleFatal(worker: WorkerLike, error: Error): void {
     if (this.state === "CLOSED") return;
-    this.markDegraded(`Java index worker error: ${error.message}`);
-    this.rejectAllPending(error);
-    this.worker = undefined;
+    this.retireWorker(worker, error);
   }
 
-  private handleExit(code: number): void {
+  private handleExit(worker: WorkerLike, code: number): void {
     if (this.state === "CLOSED") return;
-    if (!this.worker) return; // already handled by handleFatal for this same crash
+    if (this.worker !== worker) return;
     const error = new JavaIntelligenceError(
       "INDEX_PARTIAL",
       `Java index worker exited unexpectedly with code ${code}`
@@ -405,15 +530,43 @@ export class JavaIndexClient {
     this.markDegraded(error.message);
   }
 
+  private throwIfCancelledOrExpired(stage: string, requestOptions: JavaIndexRequestOptions): void {
+    if (requestOptions.signal?.aborted) {
+      throw new JavaIntelligenceError("CANCELLED", `Java index request cancelled before ${stage}`);
+    }
+    requestOptions.budget?.throwIfExpired(stage);
+  }
+
+  private rejectPending(id: number, error: Error): boolean {
+    const pending = this.pending.get(id);
+    if (!pending) return false;
+    this.pending.delete(id);
+    pending.cleanup();
+    pending.reject(error);
+    return true;
+  }
+
+  /** A deadline means the single-threaded worker may be wedged behind this RPC. */
+  private retireWorker(worker: WorkerLike, error: Error): void {
+    if (this.worker !== worker) return;
+    this.worker = undefined;
+    this.markDegraded(error.message);
+    this.rejectAllPending(error);
+    void this.terminateWorker(worker);
+  }
+
+  private async terminateWorker(worker: WorkerLike): Promise<void> {
+    if (this.terminatedWorkers.has(worker)) return;
+    this.terminatedWorkers.add(worker);
+    await worker.terminate().catch(() => undefined);
+  }
+
   private markDegraded(reason: string): void {
     this.state = "DEGRADED";
     this.lastKnownStatus = { ...this.lastKnownStatus, state: "DEGRADED", lastError: reason };
   }
 
   private rejectAllPending(error: Error): void {
-    for (const entry of this.pending.values()) {
-      entry.reject(error);
-    }
-    this.pending.clear();
+    for (const id of [...this.pending.keys()]) this.rejectPending(id, error);
   }
 }

@@ -145,7 +145,7 @@ test("collect links OrderMapper's namespace, both statements, and their resolved
     assert.equal(resultMap.length, 1);
     assert.equal(resultMap[0]!.candidateFile, orderEntityFile);
 
-    const candidatePaths = new Set(result.outcome.candidates.map(candidate => candidate.absolutePath));
+    const candidatePaths = new Set(result.outcome.evidence.map(signal => signal.candidateFile));
     assert.ok(candidatePaths.has(orderMapperXml));
     assert.ok(candidatePaths.has(orderEntityFile));
   } finally {
@@ -174,7 +174,7 @@ test("collect skips MYBATIS_STATEMENT_METHOD for an ambiguous overload but still
     assert.equal(resultType[0]!.candidateFile, itemEntityFile);
     assert.equal(resultType[0]!.sourceFile, itemMapperXml);
 
-    const candidatePaths = new Set(result.outcome.candidates.map(candidate => candidate.absolutePath));
+    const candidatePaths = new Set(result.outcome.evidence.map(signal => signal.candidateFile));
     assert.ok(candidatePaths.has(itemMapperXml));
   } finally {
     await router.close();
@@ -234,7 +234,6 @@ test("registering springAdapter alongside mybatisAdapter does not change MyBatis
     const combined = await runFrameworkAdapters([mybatisAdapter, springAdapter], context);
 
     assert.deepEqual(combined.outcome.evidence, mybatisOnly.outcome.evidence);
-    assert.deepEqual(combined.outcome.candidates, mybatisOnly.outcome.candidates);
     assert.equal(combined.metadata.spring, undefined, "springAdapter must not activate on the MyBatis fixture (no Spring build marker or import/annotation)");
   } finally {
     await router.close();

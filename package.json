@@ -8,9 +8,9 @@
     "codex-java-lsp-mcp": "dist/server.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/write-build-stamp.mjs",
+    "build": "npm run clean && tsc -p tsconfig.json && node scripts/write-build-stamp.mjs",
     "clean": "rm -rf dist",
-    "test": "node --test \"dist/**/*.test.js\"",
+    "test": "node --test --test-concurrency=1 \"dist/**/*.test.js\"",
     "benchmark:agent-impact": "node dist/benchmark-agent-impact.js",
     "benchmark:agent-summary": "node scripts/summarize-impact-benchmark.mjs",
     "benchmark:three-repo-matrix": "node scripts/run-three-repo-cold-matrix.mjs",
@@ -18,21 +18,27 @@
     "benchmark:impact-attribution": "node scripts/attribute-impact-payload.mjs",
     "benchmark:lsp-performance": "node dist/benchmark-lsp-performance.js",
     "benchmark:semantic-first-touch": "node dist/benchmark/semantic-first-touch.js",
+    "benchmark:verify-determinism": "node dist/benchmark/verify-determinism.js",
+    "benchmark:task36-mutation": "node dist/benchmark/task36-mutation-matrix.js",
     "benchmark:edit-to-visible": "node scripts/edit-to-visible-benchmark.mjs",
     "smoke": "node dist/smoke.js",
     "smoke:lease-subprocess": "node scripts/lease-subprocess-smoke.mjs",
+    "smoke:task36-multiprocess": "node scripts/task36-multiprocess-smoke.mjs",
     "measure:tool-schema": "node scripts/measure-tool-schema.mjs",
-    "test:three-repo-matrix": "node --test scripts/verify-three-repo-cold-matrix.test.mjs",
+    "test:three-repo-matrix": "node --test scripts/run-three-repo-cold-matrix.test.mjs scripts/verify-three-repo-cold-matrix.test.mjs",
+    "test:determinism": "node --test dist/benchmark/determinism.test.js",
+    "test:task36-mutation": "node --test dist/benchmark/task36-mutation-matrix.test.js",
+    "test:task36-fault": "node --test scripts/task36-fault-suite.test.mjs",
+    "test:task36-multiprocess": "node --test scripts/task36-multiprocess-smoke.test.mjs",
     "start": "node dist/server.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "chokidar": "5.0.0",
     "fast-xml-parser": "5.10.1",
     "tree-sitter": "0.25.0",
     "tree-sitter-java": "0.23.5",
     "vscode-jsonrpc": "^8.2.1",
-    "vscode-languageserver-protocol": "^3.17.5",
     "zod": "^4.1.13"
   },
   "overrides": {

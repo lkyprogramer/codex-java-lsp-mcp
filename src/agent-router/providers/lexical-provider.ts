@@ -5,7 +5,7 @@ import type { EvidenceSignal, ProviderInput, ProviderOutcome } from "../evidence
 import { executeRgPlan, type RgExecutionResult } from "../rg-execution.js";
 import { buildRgPlan } from "../rg-plan.js";
 import { timed } from "../runtime.js";
-import { nextSignalId } from "./shared.js";
+import { candidateMetadata, nextSignalId } from "./shared.js";
 
 export const LEXICAL_PROVIDER_ID = "lexical";
 export const LEXICAL_PROVIDER_VERSION = "1";
@@ -77,14 +77,18 @@ export async function collectLexicalEvidence(input: ProviderInput): Promise<Lexi
     providerId: LEXICAL_PROVIDER_ID,
     providerVersion: LEXICAL_PROVIDER_VERSION,
     generation: input.generation,
-    detail: candidate.reasons.join(",")
+    detail: candidate.reasons.join(","),
+    candidateMetadata: candidateMetadata(candidate, {
+      categories: [lexicalCategory(category)],
+      reasons: [`rg:${lexicalCategory(category)}`],
+      verifiedBy: ["rg"]
+    })
   }));
 
   return {
     providerId: LEXICAL_PROVIDER_ID,
     providerVersion: LEXICAL_PROVIDER_VERSION,
     evidence,
-    candidates: rgExecution.files,
     completion: rgExecution.completion,
     elapsedMs: Date.now() - startedAt,
     rgExecution

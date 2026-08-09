@@ -123,6 +123,22 @@ test("classification maps java/resource/build events and ignores the rest", asyn
   assert.deepEqual(kinds, ["BUILD_CHANGE", "JAVA_ADD", "RESOURCE_CHANGE"]);
 });
 
+test("classification preserves the exact build-file event for LSP mapping", async () => {
+  const { coordinator, root, batches } = await coordinatorFor();
+  const buildFile = path.join(root, "pom.xml");
+
+  for (const [rawEvent, expectedEvent] of [
+    ["add", "add"],
+    ["change", "change"],
+    ["unlink", "delete"]
+  ] as const) {
+    coordinator.queueFsPathForTest(buildFile, rawEvent);
+    await coordinator.flushNow();
+    assert.equal(batches.at(-1)?.changes[0]?.kind, "BUILD_CHANGE");
+    assert.equal(batches.at(-1)?.changes[0]?.event, expectedEvent);
+  }
+});
+
 test("a listener exception marks the clock dirty and still runs later listeners", async () => {
   const { coordinator, clock, root } = await coordinatorFor();
   let secondRan = false;
@@ -132,6 +148,27 @@ test("a listener exception marks the clock dirty and still runs later listeners"
   await coordinator.flushNow();
   assert.equal(secondRan, true);
   assert.equal(clock.snapshot().dirty, true);
+});
+
+test("degrade catches an async listener rejection and records the listener failure", async () => {
+  const { coordinator, clock } = await coordinatorFor();
+  const unhandled: unknown[] = [];
+  const onUnhandled = (reason: unknown) => { unhandled.push(reason); };
+  process.on("unhandledRejection", onUnhandled);
+  try {
+    coordinator.onBatch(async () => {
+      throw new Error("async listener boom");
+    });
+    (coordinator as unknown as { degrade(error: unknown): void }).degrade(new Error("watcher backend failed"));
+    await new Promise(resolve => setImmediate(resolve));
+
+    assert.equal(coordinator.status().lastError, "async listener boom");
+    assert.equal(clock.snapshot().dirty, true);
+    assert.deepEqual(unhandled, []);
+  } finally {
+    process.off("unhandledRejection", onUnhandled);
+    await coordinator.close();
+  }
 });
 
 test("a BUILD_CHANGE reconfigures the watch plan so a newly added module's source root is recognized", async () => {

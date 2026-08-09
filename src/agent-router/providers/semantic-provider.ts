@@ -15,7 +15,7 @@ import type { EvidenceSignal, ProviderInput, ProviderOutcome } from "../evidence
 import { collectPersistedSemanticCandidates } from "../candidate-collectors.js";
 import { collectSemanticSeed, semanticVerify } from "../semantic.js";
 import { timed } from "../runtime.js";
-import { isTouchedCandidate, nextSignalId } from "./shared.js";
+import { candidateMetadata, isTouchedCandidate, nextSignalId } from "./shared.js";
 
 export const SEMANTIC_PROVIDER_ID = "semantic";
 export const SEMANTIC_PROVIDER_VERSION = "1";
@@ -87,14 +87,14 @@ export async function collectPersistedSemanticEvidence(input: ProviderInput): Pr
       providerId: SEMANTIC_PROVIDER_ID,
       providerVersion: SEMANTIC_PROVIDER_VERSION,
       generation: input.generation,
-      detail: candidate.verifiedBy?.[0]
+      detail: candidate.verifiedBy?.[0],
+      candidateMetadata: candidateMetadata(candidate)
     };
   });
   return {
     providerId: SEMANTIC_PROVIDER_ID,
     providerVersion: SEMANTIC_PROVIDER_VERSION,
     evidence,
-    candidates: touched,
     completion: "COMPLETE",
     elapsedMs: Date.now() - startedAt
   };
@@ -151,14 +151,14 @@ export async function collectLiveSemanticEvidence(input: ProviderInput): Promise
       providerId: SEMANTIC_PROVIDER_ID,
       providerVersion: SEMANTIC_PROVIDER_VERSION,
       generation: input.generation,
-      detail: candidate.reasons[0]
+      detail: candidate.reasons[0],
+      candidateMetadata: candidateMetadata(candidate)
     };
   });
   return {
     providerId: SEMANTIC_PROVIDER_ID,
     providerVersion: SEMANTIC_PROVIDER_VERSION,
     evidence,
-    candidates: touched,
     completion: input.metrics.semantic.timeout
       ? "PARTIAL_TIMEOUT"
       : input.metrics.semantic.referenceTruncatedByLimit

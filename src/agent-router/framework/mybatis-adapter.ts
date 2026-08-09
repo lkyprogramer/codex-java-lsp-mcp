@@ -1,5 +1,5 @@
 // input: FrameworkAdapterContext (bounded FrameworkIndexView + request-scoped anchors/candidates/budget).
-// output: EvidenceSignal/CandidateFile pairs linking Java MyBatis mapper interfaces to their
+// output: EvidenceSignals linking Java MyBatis mapper interfaces to their
 //         mapper XML resources by namespace/statement-id/parameter-and-result-type name match.
 // pos: Task 28 Slice D. buildMarkerPaths/frameworkSeedFiles/isMethodAnchor/rankableMethodsFor/
 //      resolveTargets below mirror spring-adapter.ts's own private helpers of the same name -
@@ -12,9 +12,6 @@
 //      per-type @Mapper check would add a module with no other caller, since namespace-exact-match
 //      (an authoritative, stronger signal) already gates which interfaces earn evidence.
 import path from "node:path";
-import type { CandidateFile } from "../../agent-types.js";
-import { classifyPath } from "../../repo-layout.js";
-import { breakdown, mergeCandidate } from "../candidate-helpers.js";
 import type { EvidenceCompleteness, EvidenceSignal } from "../evidence.js";
 import {
   MAX_DECLARATION_IDS_PER_CALL,
@@ -326,7 +323,6 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
   }
 
   const evidence: EvidenceSignal[] = [];
-  const candidates = new Map<string, CandidateFile>();
   const anchorId = context.anchors[0]?.id ?? "A1";
   let signalSeq = 0;
   for (const item of resolvedEvidence) {
@@ -346,9 +342,9 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
       providerId: MYBATIS_ADAPTER_ID,
       providerVersion: MYBATIS_ADAPTER_VERSION,
       generation: context.generation,
-      detail: item.detail
+      detail: item.detail,
+      candidateMetadata: { categories: ["framework"], reasons: [item.kind], verifiedBy: [item.kind], matchCount: 0 }
     });
-    mergeCandidate(candidates, mybatisCandidate(context.repoRoot, item.targetAbsolutePath, item.weight * item.confidence, item.kind));
   }
 
   if (resolved.declarations.truncated) diagnostics.push(`mybatis adapter: declarationsById truncated while resolving ${targetIds.length} evidence targets`);
@@ -359,31 +355,11 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
       providerId: MYBATIS_ADAPTER_ID,
       providerVersion: MYBATIS_ADAPTER_VERSION,
       evidence,
-      candidates: [...candidates.values()],
       completion: timedOut ? "PARTIAL_TIMEOUT" : limited || resolved.declarations.truncated ? "PARTIAL_LIMIT" : "COMPLETE",
       elapsedMs: Date.now() - startedAt
     },
     metadata: {},
     diagnostics
-  };
-}
-
-function mybatisCandidate(repoRoot: string, absolutePath: string, score: number, kind: MyBatisEvidenceKind): CandidateFile {
-  const context = classifyPath(repoRoot, absolutePath);
-  return {
-    absolutePath,
-    path: context.relativePath,
-    module: context.module,
-    layer: context.layer,
-    sourceSet: context.sourceSet,
-    score,
-    matchCount: 0,
-    positions: [],
-    categories: ["framework"],
-    reasons: [kind],
-    confidence: "high",
-    verifiedBy: [kind],
-    scoreBreakdown: [breakdown(`evidence.${kind}`, "policy", score, `MyBatis ${kind}`)]
   };
 }
 

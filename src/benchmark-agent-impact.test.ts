@@ -248,7 +248,8 @@ test("impact benchmark exposes timing diagnostics", async () => {
     }
   })}\n`);
 
-  const result = spawnSync(process.execPath, [
+  const indexCacheA = path.join(root, "index-cache-a");
+  const benchmarkArgs = [
     "dist/benchmark-agent-impact.js",
     "--repo-root", root,
     "--scenarios", scenarioFile,
@@ -258,12 +259,15 @@ test("impact benchmark exposes timing diagnostics", async () => {
     "--runs", "1",
     "--verbosity", "diagnostic",
     "--read-plan-max-items", "3",
-    "--read-plan-max-bytes", "2048"
-  ], {
+    "--read-plan-max-bytes", "2048",
+    "--index-cache-dir", indexCacheA
+  ];
+  const spawnOptions = {
     cwd: path.resolve(import.meta.dirname, ".."),
     encoding: "utf8",
     env: { ...process.env, JAVA_LSP_SHADOW_RANKING: "1" }
-  });
+  } as const;
+  const result = spawnSync(process.execPath, benchmarkArgs, spawnOptions);
 
   assert.equal(result.status, 0, result.stderr);
   const payload = JSON.parse(result.stdout);
@@ -299,6 +303,36 @@ test("impact benchmark exposes timing diagnostics", async () => {
   assert.equal(typeof attempt.shadowRanking, "object", "diagnostic benchmark attempts must retain opted-in shadow diagnostics");
   assert.equal(typeof attempt.shadowQuality, "object", "benchmark must score the shadow candidate and read-plan outputs against the same golden scenario");
   assert.equal(attempt.shadowQuality.rReadMust, 1);
+  assert.equal(attempt.determinism.candidatePaths[0], "src/main/java/demo/DemoService.java");
+  assert.deepEqual(
+    [...attempt.determinism.candidatePaths.slice(1)].sort(),
+    ["src/main/java/demo/DemoCommand.java", "src/main/java/demo/DemoResult.java"]
+  );
+  assert.equal(Array.isArray(attempt.determinism.familyScores), true, "Task 36 determinism evidence requires opted-in family scores");
+  assert.deepEqual(
+    attempt.determinism.readPlan.map((item: Record<string, unknown>) => item.path).sort(),
+    ["src/main/java/demo/DemoCommand.java", "src/main/java/demo/DemoResult.java", "src/main/java/demo/DemoService.java"]
+  );
+  assert.deepEqual(attempt.determinism.completion, {
+    semantic: "COMPLETE",
+    semanticUsed: false,
+    readiness: "NEW",
+    coverage: "COMPLETE",
+    requestGeneration: 0,
+    indexedGeneration: 0,
+    changedDuringRequest: false
+  });
+
+  const replayArgs = [...benchmarkArgs];
+  replayArgs[replayArgs.indexOf(indexCacheA)] = path.join(root, "index-cache-b");
+  const replay = spawnSync(process.execPath, replayArgs, spawnOptions);
+  assert.equal(replay.status, 0, replay.stderr);
+  const replayAttempt = JSON.parse(replay.stdout).rows[0].attempts[0];
+  assert.deepEqual(
+    replayAttempt.determinism,
+    attempt.determinism,
+    `two isolated cold indexes of the same unchanged repo must agree\nfirst=${JSON.stringify(attempt.determinism)}\nsecond=${JSON.stringify(replayAttempt.determinism)}`
+  );
   assert.deepEqual(
     attempt.frameworkEvidence.mapstruct,
     { selected: 0, readPlan: 0, golden: 0, byKind: {} },

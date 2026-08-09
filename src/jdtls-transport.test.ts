@@ -1,12 +1,81 @@
 import assert from "node:assert/strict";
+import { PassThrough } from "node:stream";
 import test from "node:test";
+import {
+  AbstractMessageWriter,
+  createMessageConnection,
+  StreamMessageReader,
+  type Message,
+  type MessageConnection
+} from "vscode-jsonrpc/node.js";
 import {
   deferred,
   fakeTransportFactory,
   FakeJdtlsConnection,
   sequenceTransportFactory
 } from "./test-support/fake-jdtls.js";
-import type { JdtlsSpawnInput } from "./jdtls-transport.js";
+import {
+  adaptMessageConnection,
+  guardMessageWriter,
+  type JdtlsSpawnInput
+} from "./jdtls-transport.js";
+
+class RejectingMessageWriter extends AbstractMessageWriter {
+  async write(message: Message): Promise<void> {
+    const error = new Error("write EPIPE");
+    this.fireError(error, message, 1);
+    throw error;
+  }
+
+  end(): void {}
+}
+
+test("guarded writer turns a JSON-RPC write failure into a handled connection failure", async () => {
+  const unhandled: unknown[] = [];
+  const onUnhandled = (error: unknown): void => { unhandled.push(error); };
+  process.on("unhandledRejection", onUnhandled);
+  let connection: MessageConnection | undefined;
+  let failures = 0;
+  try {
+    const writer = guardMessageWriter(new RejectingMessageWriter(), () => {
+      failures += 1;
+      connection?.dispose();
+    });
+    connection = createMessageConnection(new StreamMessageReader(new PassThrough()), writer);
+    connection.listen();
+
+    await assert.rejects(
+      connection.sendRequest("will-fail"),
+      /Pending response rejected since connection got disposed/
+    );
+    await new Promise<void>(resolve => setImmediate(resolve));
+
+    assert.equal(failures, 1);
+    assert.deepEqual(unhandled, [], "the dependency's async Promise executor must not leak an orphan rejection");
+  } finally {
+    process.off("unhandledRejection", onUnhandled);
+    connection?.dispose();
+  }
+});
+
+test("real transport adapter observes rejected fire-and-forget notifications", () => {
+  let rejectionObserved = false;
+  const rawConnection = {
+    sendNotification() {
+      return {
+        catch(handler: (error: unknown) => unknown) {
+          rejectionObserved = true;
+          handler(new Error("write EPIPE"));
+          return Promise.resolve();
+        }
+      };
+    }
+  };
+
+  adaptMessageConnection(rawConnection as never).sendNotification("exit");
+
+  assert.equal(rejectionObserved, true, "a rejected JSON-RPC writer promise must not become an unhandled rejection");
+});
 
 const spawnInput: JdtlsSpawnInput = {
   binary: "/opt/homebrew/bin/jdtls",

@@ -1,15 +1,10 @@
-// input: Provider outcomes' legacy CandidateFile fragments (see evidence.ts ProviderOutcome.candidates)
-//        plus normalized CandidateEvidence (see evidence-normalizer.ts).
+// input: Normalized CandidateEvidence (see evidence-normalizer.ts).
 // output: Score-sorted candidates with protected read-plan paths, via family-ranker.ts's family-saturated score.
-// pos: Task 25's production cutover - foldProviderCandidates still supplies category/reason/verification
-//      metadata (materialize-candidates.ts's legacyCandidates param), but ranking itself comes from
-//      family-ranker.ts, not the retired additive final scorer. The same
+// pos: Task 25's production cutover. Ranking and candidate metadata both come
+//      from typed evidence; no additive CandidateFile fold remains. The same
 //      family path also derives the pre-semantic protected read-plan paths.
 import type { CandidateFile, ImpactOptions, ResolvedAnchor } from "../agent-types.js";
-import { candidateFromAnchor } from "./candidate-collectors.js";
-import { mergeCandidate } from "./candidate-helpers.js";
-import { normalizeEvidence } from "./evidence-normalizer.js";
-import type { CandidateEvidence, ProviderOutcome } from "./evidence.js";
+import type { CandidateEvidence } from "./evidence.js";
 import { genericFamilyRankPolicy, rankCandidates as rankByFamily, type FamilyRankPolicy, type RankContext } from "./family-ranker.js";
 import { materializeRankedCandidates } from "./materialize-candidates.js";
 import { candidateLimit, defaultReadPlanMax, legacyReadPlanSorted, selectReadPlanFiles } from "./read-plan.js";
@@ -32,43 +27,11 @@ export type RankCandidatesContext = {
   readonly familyRankPolicy?: FamilyRankPolicy;
 };
 
-/**
- * Replays every provider's `candidates` fragments through the same
- * `mergeCandidate` fold the legacy single-shared-map pipeline used, in
- * provider order. Each fragment is either a fresh discovery or an untouched
- * zero stub (see providers/shared.ts); either way the fold is equivalent to
- * the old sequential mutation of one map.
- */
-export function foldProviderCandidates(
-  anchors: readonly ResolvedAnchor[],
-  outcomes: readonly ProviderOutcome[],
-  normalized: ReadonlyMap<string, CandidateEvidence> = normalizeEvidence(outcomes.flatMap(outcome => outcome.evidence))
-): Map<string, CandidateFile> {
-  const candidates = new Map<string, CandidateFile>();
-  for (const anchor of anchors) {
-    mergeCandidate(candidates, candidateFromAnchor(anchor));
-  }
-  for (const outcome of outcomes) {
-    for (const candidate of outcome.candidates) {
-      const retainedSignalIds = new Set(normalized.get(candidate.absolutePath)?.signals.map(signal => signal.signalId));
-      const contributionSurvivedNormalization = outcome.evidence.some(signal =>
-        signal.candidateFile === candidate.absolutePath
-        && retainedSignalIds.has(signal.signalId));
-      if (!contributionSurvivedNormalization) {
-        continue;
-      }
-      mergeCandidate(candidates, candidate);
-    }
-  }
-  return candidates;
-}
-
 export async function rankCandidates(
   normalized: ReadonlyMap<string, CandidateEvidence>,
-  outcomes: readonly ProviderOutcome[],
   context: RankCandidatesContext
 ): Promise<CandidateFile[]> {
-  const ranked = await rankCandidatePool(normalized, outcomes, context);
+  const ranked = await rankCandidatePool(normalized, context);
   return truncateRankedCandidatePool(ranked, context);
 }
 
@@ -79,17 +42,9 @@ export async function rankCandidates(
  */
 export async function rankCandidatePool(
   normalized: ReadonlyMap<string, CandidateEvidence>,
-  outcomes: readonly ProviderOutcome[],
   context: RankCandidatesContext
 ): Promise<CandidateFile[]> {
   const anchor = context.anchors[0]!;
-  // Candidate discovery metadata (categories/reasons/verifiedBy/positions) is
-  // not yet fully reconstructable from EvidenceFamily alone (materialize-
-  // candidates.ts's FAMILY_TO_CATEGORY gap) - foldProviderCandidates still
-  // runs its pure mergeCandidate fold to supply it, but its score is never
-  // read; family-ranker.ts computes the score family-ranker.ts owns ranking.
-  const legacyCandidates = foldProviderCandidates(context.anchors, outcomes, normalized);
-
   const evidenceCandidates = [...normalized.values()].filter(candidate => {
     if (candidate.module && context.options.excludeModules.includes(candidate.module)) {
       context.suppressed.excludedModules += 1;
@@ -122,7 +77,7 @@ export async function rankCandidatePool(
     testReadMode: context.options.testReadMode
   };
   const familyRanked = rankByFamily(evidenceCandidates, rankContext);
-  return materializeRankedCandidates(familyRanked, context.anchors, context.repoRoot, legacyCandidates);
+  return materializeRankedCandidates(familyRanked, context.anchors, context.repoRoot);
 }
 
 /** Applies the output candidate cap only after Task 30 has chosen its plan. */
@@ -188,8 +143,7 @@ function isBaselineSafeCore(file: CandidateFile, options: ImpactOptions): boolea
     || reason === "implementation"
     || reason === "SPRING_INJECTION"
     || reason === "SPRING_CALL_PATH"
-    || reason === "MYBATIS_STATEMENT_METHOD"
-    || reason === "JPA_REPOSITORY_ENTITY")) return true;
+    || reason === "MYBATIS_STATEMENT_METHOD")) return true;
   return (file.scoreBreakdown || []).some(item => item.delta > 0 && (
     item.id === "finalize.type-relation"
     || item.id === "finalize.method-relation"
@@ -243,7 +197,6 @@ function focusModuleRepresentatives(
  */
 export async function familyReadPlanProtectedPaths(
   normalized: ReadonlyMap<string, CandidateEvidence>,
-  _outcomes: readonly ProviderOutcome[],
   context: RankCandidatesContext
 ): Promise<ReadonlySet<string>> {
   return new Set([...normalized.values()]

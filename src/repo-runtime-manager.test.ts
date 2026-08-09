@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { RepoRuntimeManager, type ManagedToolContext, type RuntimeCoordination } from "./repo-runtime-manager.js";
 import { GenerationClock, type RepoChangeBatch } from "./repo-generation.js";
+import type { JavaIndexStatus } from "./java-index/index-types.js";
+import { DeadlineBudget } from "./runtime/deadline-budget.js";
 import { JavaIntelligenceError } from "./runtime/intelligence-error.js";
 import { deferred, delay, type Deferred } from "./test-support/fake-jdtls.js";
 import type { JdtlsLifecycleState } from "./jdtls-session.js";
@@ -14,7 +16,8 @@ import {
   defaultLeaseClockDeps,
   FileCrossProcessLeaseStore,
   NoopCrossProcessLeaseStore,
-  type CrossProcessLeaseStore
+  type CrossProcessLeaseStore,
+  type LeaseHandle
 } from "./cross-process-lease.js";
 import type { LayoutSource } from "./layout-manager.js";
 
@@ -71,6 +74,7 @@ test("RepoRuntimeManager starts and flushes the coordinator around Java index OP
   assert.ok(coordinator.flushes >= 1, "OPEN must flush any batches buffered while a sibling seed was being validated");
   assert.ok(javaIndex.calls.includes("refresh:2:1:0"), "the flushed batch must refresh its changed Java path before the runtime is exposed");
   assert.ok(javaIndex.calls.includes("reconcile:2"), "a generation change during seed validation receives a target reconcile");
+  assert.ok(javaIndex.boundedCalls.includes("reconcile:2"), "coordinator reconcile uses the manager hard-cap budget");
 
   await manager.shutdownAll();
 });
@@ -98,6 +102,7 @@ test("RepoRuntimeManager routes a RESOURCE_CHANGE batch to refreshResources, sep
   });
 
   assert.ok(javaIndex.calls.includes("refreshResources:2:1"), "a RESOURCE_CHANGE-only batch must reach refreshResources");
+  assert.ok(javaIndex.boundedCalls.includes("refreshResources:2:1"), "coordinator RPCs must have a manager hard-cap budget");
   assert.ok(!javaIndex.calls.some(call => call.startsWith("refresh:")), "a RESOURCE_CHANGE-only batch must not also call refresh");
 
   await coordinator.emit({
@@ -113,7 +118,76 @@ test("RepoRuntimeManager routes a RESOURCE_CHANGE batch to refreshResources, sep
 
   assert.ok(javaIndex.calls.includes("refresh:3:1:0"), "a mixed batch must still refresh its Java path");
   assert.ok(javaIndex.calls.includes("refreshResources:3:1"), "a mixed batch must still refresh its resource path");
+  assert.ok(javaIndex.boundedCalls.includes("refresh:3:1:0"));
+  assert.ok(javaIndex.boundedCalls.includes("refreshResources:3:1"));
 
+  await manager.shutdownAll();
+});
+
+test("RepoRuntimeManager still applies JavaIndex work when session batch handling fails", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const coordinator = new FakeCoordinator();
+  const javaIndex = new RecordingJavaIndex(() => coordinator.starts);
+  const manager = new RepoRuntimeManager(
+    fakeResolver(),
+    { idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
+    resolved => ({ generation: new GenerationClock(), coordinator, layout: fakeLayoutSource(resolved.repoRoot) }),
+    new NoopCrossProcessLeaseStore()
+  );
+  await manager.contextFor({ repoRoot: "/repo-a" });
+  sessions.get("/repo-a")!.repoChangeError = new Error("session batch failed");
+
+  await assert.rejects(
+    () => coordinator.emit({
+      generation: 2,
+      observedAt: new Date().toISOString(),
+      changes: [{ kind: "JAVA_CHANGE", absolutePath: "/repo-a/src/main/java/demo/Changed.java" }],
+      storm: false,
+      affectedRoots: []
+    }),
+    /session batch failed/
+  );
+
+  assert.ok(javaIndex.calls.includes("refresh:2:1:0"), "a session failure must not prevent JavaIndex refresh");
+  assert.ok(javaIndex.boundedCalls.includes("refresh:2:1:0"));
+  await manager.shutdownAll();
+});
+
+test("RepoRuntimeManager replays batches buffered during OPEN with a per-batch hard-cap budget", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const coordinator = new FakeCoordinator();
+  const openGate = deferred<{
+    indexedGeneration: number;
+    coverage: Array<{ state: "COMPLETE"; generation: number; failedFiles: number; recoveredFiles: number }>;
+  }>();
+  let openStarted = false;
+  const javaIndex = new RecordingJavaIndex(() => coordinator.starts);
+  javaIndex.openGate = openGate;
+  javaIndex.onOpen = () => { openStarted = true; };
+  const manager = new RepoRuntimeManager(
+    fakeResolver(),
+    { idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
+    resolved => ({ generation: new GenerationClock(), coordinator, layout: fakeLayoutSource(resolved.repoRoot) }),
+    new NoopCrossProcessLeaseStore()
+  );
+
+  const creating = manager.contextFor({ repoRoot: "/repo-a" });
+  await waitFor(() => openStarted);
+  await coordinator.emit({
+    generation: 2,
+    observedAt: new Date().toISOString(),
+    changes: [{ kind: "RESOURCE_CHANGE", absolutePath: "/repo-a/src/main/resources/app.yml" }],
+    storm: false,
+    affectedRoots: []
+  });
+  assert.ok(!javaIndex.calls.includes("refreshResources:2:1"), "the batch stays buffered until OPEN completes");
+
+  openGate.resolve({ indexedGeneration: 1, coverage: [] });
+  await creating;
+  assert.ok(javaIndex.calls.includes("refreshResources:2:1"));
+  assert.ok(javaIndex.boundedCalls.includes("refreshResources:2:1"), "buffer replay uses the manager hard cap too");
   await manager.shutdownAll();
 });
 
@@ -138,7 +212,10 @@ test("RepoRuntimeManager fails fast when all active runtimes are in use", async 
   await assert.rejects(
     () => manager.withContext({ repoRoot: "/repo-b" }, async context => {
       await (context.session as unknown as FakeSession).ensureStarted();
-    }, { mayStartLsp: true }),
+    }, {
+      mayStartLsp: true,
+      requestOptions: { mode: "balanced", semanticPolicy: "auto", deadlineMs: 30 }
+    }),
     (error: unknown) => error instanceof JavaIntelligenceError
       && error.code === "DEADLINE_EXCEEDED"
       && /runtime\.lsp-slot/.test(error.message)
@@ -146,6 +223,121 @@ test("RepoRuntimeManager fails fast when all active runtimes are in use", async 
 
   held.resolve();
   await first;
+});
+
+test("RepoRuntimeManager uses the request deadline, not the manager timeout, while waiting for a saturated LSP slot", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const manager = new RepoRuntimeManager(fakeResolver(), {
+    maxActiveRepos: 1,
+    idleTtlMs: 100000,
+    requestTimeoutMs: 160
+  }, resolved => fakeContext(resolved, sessions),
+    fakeCoordination(), new NoopCrossProcessLeaseStore());
+  const held = deferred<void>();
+  const entered = deferred<void>();
+
+  const first = manager.withContext({ repoRoot: "/repo-a" }, async context => {
+    await (context.session as unknown as FakeSession).ensureStarted();
+    entered.resolve();
+    await held.promise;
+  }, { mayStartLsp: true });
+  await entered.promise;
+
+  const startedAt = Date.now();
+  await assert.rejects(
+    () => manager.withContext(
+      { repoRoot: "/repo-b" },
+      async () => undefined,
+      {
+        mayStartLsp: true,
+        requestOptions: { mode: "balanced", semanticPolicy: "auto", deadlineMs: 20 }
+      }
+    ),
+    (error: unknown) => error instanceof JavaIntelligenceError
+      && error.code === "DEADLINE_EXCEEDED"
+      && /runtime\.lsp-slot/.test(error.message)
+  );
+  assert.ok(Date.now() - startedAt < 100, "the slot wait must consume the request's 20ms deadline, not the 160ms manager timeout");
+
+  held.resolve();
+  await first;
+});
+
+test("RepoRuntimeManager bounds shared runtime creation separately from the caller budget", async () => {
+  const sessions = new Map<string, FakeSession>();
+  let openBudget: DeadlineBudget | undefined;
+  let handlerBudget: DeadlineBudget | undefined;
+  const javaIndex = {
+    localStatus() {
+      return { files: 0 };
+    },
+    async open(
+      generation: number,
+      _options?: unknown,
+      controls?: { budget?: DeadlineBudget }
+    ) {
+      openBudget = controls?.budget;
+      return { indexedGeneration: generation, coverage: [] };
+    }
+  };
+  const manager = new RepoRuntimeManager(
+    fakeResolver(),
+    { idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
+    fakeCoordination(),
+    new NoopCrossProcessLeaseStore()
+  );
+
+  await manager.withContext(
+    { repoRoot: "/repo-a" },
+    async (_context, request) => { handlerBudget = request.budget; },
+    { requestOptions: { mode: "balanced", semanticPolicy: "auto", deadlineMs: 500 } }
+  );
+
+  assert.ok(openBudget instanceof DeadlineBudget, "runtime creation must receive a bounded operation budget before JavaIndex OPEN");
+  assert.ok(handlerBudget instanceof DeadlineBudget, "the handler must receive its caller-specific absolute budget");
+  assert.notEqual(openBudget, handlerBudget, "shared creation must not be cancelled by the first caller's shorter budget");
+  assert.ok(openBudget!.remainingMs() > handlerBudget!.remainingMs(), "the shared operation uses the manager hard cap");
+});
+
+test("RepoRuntimeManager does not run a handler after its budget expires during the JavaIndex status probe", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const javaIndex = {
+    localStatus() {
+      return { files: 1 };
+    },
+    async open() {
+      return completeJavaIndexStatus(1);
+    },
+    async status(controls?: { budget?: DeadlineBudget }): Promise<JavaIndexStatus> {
+      return controls!.budget!.race(
+        "test.java-index-status",
+        new Promise<JavaIndexStatus>(() => undefined)
+      );
+    }
+  };
+  const manager = new RepoRuntimeManager(
+    fakeResolver(),
+    { idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    resolved => ({
+      ...fakeContext(resolved, sessions),
+      javaIndexClient: javaIndex as never,
+      javaIndex: { routerStatus: async () => ({}) } as never
+    }),
+    fakeCoordination(),
+    new NoopCrossProcessLeaseStore()
+  );
+  let handlerRan = false;
+
+  await assert.rejects(
+    () => manager.withContext(
+      { repoRoot: "/repo-a" },
+      async () => { handlerRan = true; },
+      { requestOptions: { mode: "balanced", semanticPolicy: "auto", deadlineMs: 20 } }
+    ),
+    (error: unknown) => error instanceof JavaIntelligenceError && error.code === "DEADLINE_EXCEEDED"
+  );
+  assert.equal(handlerRan, false);
 });
 
 test("STARTING sessions count against the active repo limit", async () => {
@@ -246,7 +438,10 @@ test("a waiter that misses its deadline is removed and never granted later", asy
 
   let bRan = false;
   await assert.rejects(
-    () => manager.withContext({ repoRoot: "/repo-b" }, async () => { bRan = true; }, { mayStartLsp: true }),
+    () => manager.withContext({ repoRoot: "/repo-b" }, async () => { bRan = true; }, {
+      mayStartLsp: true,
+      requestOptions: { mode: "balanced", semanticPolicy: "auto", deadlineMs: 30 }
+    }),
     (error: unknown) => error instanceof JavaIntelligenceError && error.code === "DEADLINE_EXCEEDED"
   );
   assert.equal(bRan, false);
@@ -357,6 +552,94 @@ test("two concurrent contextFor calls share one runtime and one coordinator", as
   assert.equal(contextCalls, 1, "the runtime is created once");
   assert.equal(coordinators.size, 1, "one coordinator for the shared runtime");
   assert.equal([...coordinators.values()][0].starts, 1, "the watcher is started once");
+});
+
+test("the first runtime creator honors its deadline without cancelling shared creation", async () => {
+  const leaseGate = deferred<LeaseHandle>();
+  let acquireCalls = 0;
+  class BlockingRuntimeLeaseStore extends NoopCrossProcessLeaseStore {
+    override async acquireRuntime(): Promise<LeaseHandle> {
+      acquireCalls += 1;
+      return leaseGate.promise;
+    }
+  }
+  const sessions = new Map<string, FakeSession>();
+  const manager = new RepoRuntimeManager(
+    fakeResolver(),
+    { maxActiveRepos: 2, idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    resolved => fakeContext(resolved, sessions),
+    fakeCoordination(),
+    new BlockingRuntimeLeaseStore()
+  );
+
+  const short = manager.withContext(
+    { repoRoot: "/repo-a" },
+    async () => "short",
+    { requestOptions: { mode: "balanced", semanticPolicy: "auto", deadlineMs: 20 } }
+  );
+  await delay(5);
+  const long = manager.withContext(
+    { repoRoot: "/repo-a" },
+    async () => "long",
+    { requestOptions: { mode: "balanced", semanticPolicy: "auto", deadlineMs: 500 } }
+  );
+  let leaseReleased = false;
+  const releaseTimer = setTimeout(() => {
+    leaseReleased = true;
+    leaseGate.resolve(fakeLeaseHandle());
+  }, 80);
+
+  await assert.rejects(
+    () => short,
+    (error: unknown) => error instanceof JavaIntelligenceError
+      && error.code === "DEADLINE_EXCEEDED"
+      && /runtime\.create/.test(error.message)
+      && leaseReleased === false
+  );
+  assert.equal(await long, "long", "the shared creation continues for a caller with budget remaining");
+  clearTimeout(releaseTimer);
+  assert.equal(acquireCalls, 1, "both callers share the same runtime creation");
+
+  await manager.shutdownAll();
+});
+
+test("a runtime creation hard-cap retires a stuck lease singleflight so a later request can recover", async () => {
+  let acquireCalls = 0;
+  class OneStuckRuntimeLeaseStore extends NoopCrossProcessLeaseStore {
+    override async acquireRuntime(): Promise<LeaseHandle> {
+      acquireCalls += 1;
+      if (acquireCalls === 1) return new Promise<LeaseHandle>(() => undefined);
+      return fakeLeaseHandle();
+    }
+  }
+  const sessions = new Map<string, FakeSession>();
+  const manager = new RepoRuntimeManager(
+    fakeResolver(),
+    { maxActiveRepos: 2, idleTtlMs: 100000, requestTimeoutMs: 30 },
+    resolved => fakeContext(resolved, sessions),
+    fakeCoordination(),
+    new OneStuckRuntimeLeaseStore()
+  );
+
+  await assert.rejects(
+    () => manager.withContext(
+      { repoRoot: "/repo-a" },
+      async () => undefined,
+      { requestOptions: { mode: "balanced", semanticPolicy: "auto", deadlineMs: 20 } }
+    ),
+    (error: unknown) => error instanceof JavaIntelligenceError && error.code === "DEADLINE_EXCEEDED"
+  );
+  await delay(30);
+
+  const recovered = await manager.withContext(
+    { repoRoot: "/repo-a" },
+    async () => "recovered",
+    { requestOptions: { mode: "balanced", semanticPolicy: "auto", deadlineMs: 200 } }
+  );
+  assert.equal(recovered, "recovered");
+  assert.equal(acquireCalls, 2, "the expired shared creation is removed before the retry");
+
+  await manager.shutdownAll();
 });
 
 test("initialize() singleflights lease store opening and a degraded store still leaves the fast path usable", async () => {
@@ -507,6 +790,72 @@ test("reconcileIfDirty runs once under two concurrent requests and clears dirty 
   assert.equal(clock.snapshot().dirty, false, "clearDirty succeeds since no new change arrived during reconcile");
 });
 
+test("a reconcile singleflight joiner honors its own deadline without cancelling the shared reconcile", async () => {
+  const clock = new GenerationClock();
+  clock.markDirty("test-forced-dirty");
+  const coordinator = new FakeCoordinator();
+  const layout = probeLayout("/repo-a");
+  const reconcileGate = deferred<void>();
+  let reconcileCalls = 0;
+  const javaIndexClientStub = {
+    localStatus() {
+      return { files: 0 };
+    },
+    async open(generation: number) {
+      return { indexedGeneration: generation, coverage: [{ state: "COMPLETE", generation, failedFiles: 0, recoveredFiles: 0 }] };
+    },
+    async reconcile(): Promise<void> {
+      reconcileCalls += 1;
+      await reconcileGate.promise;
+    },
+    async close() {}
+  };
+  const manager = new RepoRuntimeManager(
+    fakeResolver(),
+    { idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    resolved => ({
+      repoRoot: resolved.repoRoot,
+      rootSource: resolved.rootSource,
+      repoHash: resolved.repoHash,
+      aliases: resolved.aliases,
+      layoutProfile: resolved.layoutProfile,
+      lsp: resolved.lsp,
+      session: new FakeSession() as never,
+      javaIndexClient: javaIndexClientStub as never,
+      router: { clearRgCache() {}, onRepoChanged() {}, async flushSemanticEdgeStore() {} } as never,
+      javaIndex: { routerStatus: async () => ({}) } as never
+    }),
+    () => ({ generation: clock, coordinator, layout: { current: () => layout, refresh: () => ({ changed: false, layout }) } }),
+    new NoopCrossProcessLeaseStore()
+  );
+
+  const long = manager.withContext(
+    { repoRoot: "/repo-a" },
+    async () => "long",
+    { requestOptions: { mode: "balanced", semanticPolicy: "auto", deadlineMs: 500 } }
+  );
+  await waitFor(() => reconcileCalls === 1);
+  const short = manager.withContext(
+    { repoRoot: "/repo-a" },
+    async () => "short",
+    { requestOptions: { mode: "balanced", semanticPolicy: "auto", deadlineMs: 20 } }
+  );
+  const releaseTimer = setTimeout(() => reconcileGate.resolve(), 80);
+
+  await assert.rejects(
+    () => short,
+    (error: unknown) => error instanceof JavaIntelligenceError
+      && error.code === "DEADLINE_EXCEEDED"
+      && /runtime\.reconcile/.test(error.message)
+  );
+  assert.equal(await long, "long", "the original reconcile caller still completes");
+  clearTimeout(releaseTimer);
+  assert.equal(reconcileCalls, 1, "the deadline race does not duplicate or cancel reconciliation");
+  assert.equal(clock.snapshot().dirty, false);
+
+  await manager.shutdownAll();
+});
+
 test("reconcileIfDirty leaves dirty set when reconcile fails, without failing the request", async () => {
   const clock = new GenerationClock();
   clock.markDirty("test-forced-dirty");
@@ -555,6 +904,7 @@ test("V2 runtime reconciles only JavaIndex and records its OPEN source on the re
   const coordinator = new FakeCoordinator();
   const layout = probeLayout("/repo-a");
   let reconcileCalls = 0;
+  let routerStatusBudget: DeadlineBudget | undefined;
   const javaIndexClient = {
     localStatus() {
       return { files: 3 };
@@ -580,6 +930,10 @@ test("V2 runtime reconciles only JavaIndex and records its OPEN source on the re
       session: new FakeSession() as never,
       javaIndexClient: javaIndexClient as never,
       javaIndex: {
+        async withRequestOptions<T>(options: { budget?: DeadlineBudget }, action: () => Promise<T>): Promise<T> {
+          routerStatusBudget = options.budget;
+          return action();
+        },
         async routerStatus() {
           return { openSource: "sibling-seed" };
         }
@@ -594,13 +948,139 @@ test("V2 runtime reconciles only JavaIndex and records its OPEN source on the re
   reconcileCalls = 0;
   clock.markDirty("test-v2-dirty");
   let openSource: string | undefined;
+  let handlerBudget: DeadlineBudget | undefined;
   await manager.withContext({ repoRoot: "/repo-a" }, async (_context, request) => {
     openSource = request.indexOpenSource;
+    handlerBudget = request.budget;
   });
 
   assert.equal(context.javaIndexClient, javaIndexClient as never, "runtime must retain its JavaIndex worker client");
   assert.equal(reconcileCalls, 1, "dirty V2 request must reconcile JavaIndex exactly once");
   assert.equal(openSource, "sibling-seed");
+  assert.equal(routerStatusBudget, handlerBudget, "routerStatus must inherit the caller's immutable request budget");
+});
+
+test("a compatibility RouterIndex without withRequestOptions cannot outlive the caller deadline", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const manager = new RepoRuntimeManager(
+    fakeResolver(),
+    { idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    resolved => ({
+      ...fakeContext(resolved, sessions),
+      javaIndex: {
+        routerStatus: async () => new Promise<never>(() => undefined)
+      } as never
+    }),
+    fakeCoordination(),
+    new NoopCrossProcessLeaseStore()
+  );
+  let handlerRan = false;
+
+  await assert.rejects(
+    () => Promise.race([
+      manager.withContext(
+        { repoRoot: "/repo-a" },
+        async () => { handlerRan = true; },
+        { requestOptions: { mode: "balanced", semanticPolicy: "auto", deadlineMs: 20 } }
+      ),
+      delay(150).then(() => { throw new Error("test guard: routerStatus escaped the request deadline"); })
+    ]),
+    (error: unknown) => error instanceof JavaIntelligenceError
+      && error.code === "DEADLINE_EXCEEDED"
+      && /runtime\.router-status/.test(error.message)
+  );
+  assert.equal(handlerRan, false);
+  await manager.shutdownAll();
+});
+
+test("a bounded routerStatus failure degrades only indexOpenSource while budget remains", async () => {
+  const sessions = new Map<string, FakeSession>();
+  let receivedBudget: DeadlineBudget | undefined;
+  const manager = new RepoRuntimeManager(
+    fakeResolver(),
+    { idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    resolved => ({
+      ...fakeContext(resolved, sessions),
+      javaIndex: {
+        async withRequestOptions<T>(options: { budget?: DeadlineBudget }, action: () => Promise<T>): Promise<T> {
+          receivedBudget = options.budget;
+          return action();
+        },
+        async routerStatus() {
+          throw new JavaIntelligenceError("DEADLINE_EXCEEDED", "bounded router status timed out");
+        }
+      } as never
+    }),
+    fakeCoordination(),
+    new NoopCrossProcessLeaseStore()
+  );
+  let openSource: string | undefined = "unexpected";
+
+  await manager.withContext(
+    { repoRoot: "/repo-a" },
+    async (_context, request) => { openSource = request.indexOpenSource; },
+    { requestOptions: { mode: "balanced", semanticPolicy: "auto", deadlineMs: 500 } }
+  );
+
+  assert.ok(receivedBudget instanceof DeadlineBudget);
+  assert.equal(openSource, undefined);
+  await manager.shutdownAll();
+});
+
+test("RepoRuntimeManager permits negative lookup only for a settled, same-generation, fully complete index under a normal watcher", async () => {
+  const complete = completeJavaIndexStatus(1);
+  assert.equal(await negativeLookupAllowedFor(complete), true);
+
+  const cases: Array<{ name: string; status?: JavaIndexStatus; watcher?: Partial<Pick<FakeCoordinator, "degraded" | "pending" | "ready">> }> = [
+    {
+      name: "a watcher degradation",
+      watcher: { degraded: true }
+    },
+    {
+      name: "undrained watcher work",
+      watcher: { pending: 1 }
+    },
+    {
+      name: "a mismatched index generation",
+      status: { ...complete, indexedGeneration: 0 }
+    },
+    {
+      name: "incomplete source coverage",
+      status: { ...complete, coverage: [{ ...complete.coverage[0]!, state: "BUILDING" }] }
+    },
+    {
+      name: "a failed or recovered source file",
+      status: { ...complete, coverage: [{ ...complete.coverage[0]!, failedFiles: 1, recoveredFiles: 1 }] }
+    },
+    {
+      name: "incomplete resource coverage",
+      status: { ...complete, resourceCoverage: [{ ...complete.resourceCoverage[0]!, state: "DEGRADED" }] }
+    },
+    {
+      name: "a failed resource file",
+      status: { ...complete, resourceCoverage: [{ ...complete.resourceCoverage[0]!, failedFiles: 1 }] }
+    },
+    {
+      name: "foreground index work",
+      status: { ...complete, pendingForeground: 1 }
+    },
+    {
+      name: "background index work",
+      status: { ...complete, pendingBackground: 1 }
+    },
+    {
+      name: "snapshot verification",
+      status: { ...complete, snapshotVerificationPending: true }
+    }
+  ];
+
+  for (const scenario of cases) {
+    assert.equal(
+      await negativeLookupAllowedFor(scenario.status ?? complete, scenario.watcher),
+      false,
+      `negative lookup must remain disabled for ${scenario.name}`
+    );
+  }
 });
 
 test("own snapshot verification stays worker-owned after OPEN instead of triggering a duplicate full reconcile", async () => {
@@ -659,6 +1139,8 @@ class FakeSession {
   state: JdtlsLifecycleState = "NEW";
   stops = 0;
   startGate?: Deferred<void>;
+  repoChangeError?: Error;
+  readonly repoChangeBatches: RepoChangeBatch[] = [];
 
   private readonly listeners = new Set<(state: JdtlsLifecycleState) => void>();
 
@@ -688,7 +1170,10 @@ class FakeSession {
     this.transition("STOPPED");
   }
 
-  invalidateForRepoChanges(): void {}
+  async applyRepoChangeBatch(batch: RepoChangeBatch): Promise<void> {
+    this.repoChangeBatches.push(batch);
+    if (this.repoChangeError) throw this.repoChangeError;
+  }
 }
 
 function fakeResolver(): { resolve(selector: { repoRoot?: string }): Promise<ResolvedRepo> } {
@@ -719,6 +1204,9 @@ class FakeCoordinator {
   flushes = 0;
   flushHook?: () => void | Promise<void>;
   closes = 0;
+  ready = true;
+  degraded = false;
+  pending = 0;
   private readonly listeners = new Set<(batch: RepoChangeBatch) => void | Promise<void>>();
   onBatch(listener: (batch: RepoChangeBatch) => void | Promise<void>): () => void {
     this.listeners.add(listener);
@@ -735,13 +1223,19 @@ class FakeCoordinator {
   async awaitReadyWithin(): Promise<boolean> { return true; }
   async close(): Promise<void> { this.closes += 1; }
   status(): { ready: boolean; degraded: boolean; pending: number } {
-    return { ready: true, degraded: false, pending: 0 };
+    return { ready: this.ready, degraded: this.degraded, pending: this.pending };
   }
 }
 
 class RecordingJavaIndex {
   readonly calls: string[] = [];
+  readonly boundedCalls: string[] = [];
   coordinatorStartsAtOpen: number | undefined;
+  openGate?: Deferred<{
+    indexedGeneration: number;
+    coverage: Array<{ state: "COMPLETE"; generation: number; failedFiles: number; recoveredFiles: number }>;
+  }>;
+  onOpen?: () => void;
 
   constructor(private readonly coordinatorStarts: () => number) {}
 
@@ -751,15 +1245,25 @@ class RecordingJavaIndex {
   }> {
     this.coordinatorStartsAtOpen = this.coordinatorStarts();
     this.calls.push(`open:${generation}`);
+    this.onOpen?.();
+    if (this.openGate) return this.openGate.promise;
     return { indexedGeneration: generation, coverage: [] };
   }
 
-  async reconcile(generation: number): Promise<void> { this.calls.push(`reconcile:${generation}`); }
-  async refresh(generation: number, changed: string[], deleted: string[]): Promise<void> {
-    this.calls.push(`refresh:${generation}:${changed.length}:${deleted.length}`);
+  async reconcile(generation: number, controls?: { budget?: DeadlineBudget }): Promise<void> {
+    const call = `reconcile:${generation}`;
+    this.calls.push(call);
+    if (controls?.budget) this.boundedCalls.push(call);
   }
-  async refreshResources(generation: number, paths: string[]): Promise<void> {
-    this.calls.push(`refreshResources:${generation}:${paths.length}`);
+  async refresh(generation: number, changed: string[], deleted: string[], controls?: { budget?: DeadlineBudget }): Promise<void> {
+    const call = `refresh:${generation}:${changed.length}:${deleted.length}`;
+    this.calls.push(call);
+    if (controls?.budget) this.boundedCalls.push(call);
+  }
+  async refreshResources(generation: number, paths: string[], controls?: { budget?: DeadlineBudget }): Promise<void> {
+    const call = `refreshResources:${generation}:${paths.length}`;
+    this.calls.push(call);
+    if (controls?.budget) this.boundedCalls.push(call);
   }
   async close(): Promise<void> { this.calls.push("close"); }
 }
@@ -774,6 +1278,23 @@ function fakeCoordination(coordinators?: Map<string, FakeCoordinator>) {
     const coordinator = new FakeCoordinator();
     coordinators?.set(resolved.repoRoot, coordinator);
     return { generation: new GenerationClock(), coordinator, layout: fakeLayoutSource(resolved.repoRoot) };
+  };
+}
+
+function fakeLeaseHandle(): LeaseHandle {
+  return {
+    kind: "RUNTIME",
+    path: "/tmp/fake-runtime-lease",
+    owner: {
+      ownerToken: "test-runtime-owner",
+      pid: process.pid,
+      repoRoot: "/repo-a",
+      repoHash: "repoa",
+      acquiredAt: new Date(0).toISOString(),
+      heartbeatAt: new Date(0).toISOString()
+    },
+    async heartbeat() {},
+    async release() {}
   };
 }
 
@@ -817,4 +1338,73 @@ function fakeContext(
       routerStatus: async () => ({ entries: 0 })
     } as never
   };
+}
+
+function completeJavaIndexStatus(generation: number): JavaIndexStatus {
+  return {
+    state: "READY",
+    indexedGeneration: generation,
+    files: 1,
+    types: 1,
+    methods: 1,
+    edges: 0,
+    snapshotBytes: 0,
+    pendingForeground: 0,
+    pendingBackground: 0,
+    coverage: [{
+      root: "src/main/java",
+      generation,
+      state: "COMPLETE",
+      discoveredFiles: 1,
+      indexedFiles: 1,
+      failedFiles: 0,
+      recoveredFiles: 0,
+      extractorVersion: "test"
+    }],
+    resourceCoverage: [{
+      root: "src/main/resources",
+      generation,
+      state: "COMPLETE",
+      discoveredFiles: 1,
+      indexedFiles: 1,
+      failedFiles: 0
+    }]
+  };
+}
+
+async function negativeLookupAllowedFor(
+  status: JavaIndexStatus,
+  watcher: Partial<Pick<FakeCoordinator, "degraded" | "pending" | "ready">> = {}
+): Promise<boolean> {
+  const sessions = new Map<string, FakeSession>();
+  const coordinator = new FakeCoordinator();
+  Object.assign(coordinator, watcher);
+  const javaIndexClient = {
+    localStatus() {
+      return { files: status.files };
+    },
+    async open() {
+      return status;
+    },
+    async status() {
+      return status;
+    },
+    async close() {}
+  };
+  const manager = new RepoRuntimeManager(
+    fakeResolver(),
+    { idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    resolved => ({
+      ...fakeContext(resolved, sessions),
+      javaIndexClient: javaIndexClient as never,
+      javaIndex: { routerStatus: async () => ({}) } as never
+    }),
+    () => ({ generation: new GenerationClock(), coordinator, layout: fakeLayoutSource("/repo-a") }),
+    new NoopCrossProcessLeaseStore()
+  );
+  let allowed = false;
+  await manager.withContext({ repoRoot: "/repo-a" }, async (_context, request) => {
+    allowed = request.negativeLookupAllowed;
+  });
+  return allowed;
 }

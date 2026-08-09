@@ -37,7 +37,7 @@ export function withConvergedCostV6<T extends { cost: ImpactCostV6 }>(
   return payload;
 }
 
-const FRAMEWORK_KIND = /^(?:SPRING|MYBATIS|JPA|MAPSTRUCT)_/;
+const FRAMEWORK_KIND = /^(?:SPRING|MYBATIS|MAPSTRUCT)_/;
 
 /**
  * One precedence list over `CandidateFile.reasons`' kind-string vocabulary
@@ -130,9 +130,6 @@ const EVIDENCE_PHRASES: Readonly<Record<string, string>> = {
   MYBATIS_PARAMETER_TYPE: "MyBatis statement parameter type",
   MYBATIS_RESULT_TYPE: "MyBatis statement result type",
   MYBATIS_RESULT_MAP: "MyBatis resultMap",
-  JPA_REPOSITORY_ENTITY: "Spring Data repository entity",
-  JPA_ENTITY_RELATION: "JPA entity relationship",
-  JPA_DERIVED_QUERY: "JPA derived query method",
   MAPSTRUCT_SOURCE: "MapStruct mapping source type",
   MAPSTRUCT_TARGET: "MapStruct mapping target type",
   MAPSTRUCT_USES: "MapStruct @Mapper(uses=...) dependency",

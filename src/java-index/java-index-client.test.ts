@@ -4,6 +4,7 @@ import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
 import type { JavaIndexStatus } from "./index-types.js";
 import { JavaIndexClient, type WorkerLike } from "./java-index-client.js";
@@ -30,6 +31,7 @@ function validStatus(generation: number): JavaIndexStatus {
 
 class FakeWorker implements WorkerLike {
   readonly posted: Array<{ id: number; type: string }> = [];
+  terminations = 0;
   private readonly listeners: {
     message: Array<(value: unknown) => void>;
     error: Array<(error: Error) => void>;
@@ -46,6 +48,7 @@ class FakeWorker implements WorkerLike {
   }
 
   terminate(): Promise<number> {
+    this.terminations += 1;
     return Promise.resolve(0);
   }
 
@@ -65,6 +68,47 @@ class FakeWorker implements WorkerLike {
 // before the test inspects what the fake worker received.
 function flushMicrotasks(): Promise<void> {
   return new Promise(resolve => setImmediate(resolve));
+}
+
+type JavaIndexRequestControls = { budget?: DeadlineBudget; signal?: AbortSignal };
+
+type BudgetAwareClient = {
+  open(generation: number, options?: object, controls?: JavaIndexRequestControls): Promise<JavaIndexStatus>;
+  status(controls?: JavaIndexRequestControls): Promise<JavaIndexStatus>;
+  queryAnchor(
+    file: string,
+    line: number,
+    column: number,
+    controls?: JavaIndexRequestControls
+  ): Promise<unknown>;
+};
+
+type Settled<T> =
+  | { kind: "fulfilled"; value: T }
+  | { kind: "rejected"; error: unknown }
+  | { kind: "timed-out" };
+
+async function settleWithin<T>(promise: Promise<T>, timeoutMs: number): Promise<Settled<T>> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      promise.then(
+        value => ({ kind: "fulfilled", value }) as Settled<T>,
+        error => ({ kind: "rejected", error }) as Settled<T>
+      ),
+      new Promise<Settled<T>>(resolve => {
+        timer = setTimeout(() => resolve({ kind: "timed-out" }), timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+function rejectedJavaIntelligenceError(outcome: Settled<unknown>): JavaIntelligenceError {
+  assert.equal(outcome.kind, "rejected");
+  assert.ok(outcome.error instanceof JavaIntelligenceError);
+  return outcome.error;
 }
 
 async function openedClient(): Promise<{ client: JavaIndexClient; worker: FakeWorker }> {
@@ -146,6 +190,17 @@ test("worker exit rejects all pending requests and marks the client DEGRADED", a
   assert.equal(client.localStatus().state, "DEGRADED");
 });
 
+test("close is bounded and terminates a worker that never answers CLOSE", async () => {
+  const { client, worker } = await openedClient();
+
+  const outcome = await settleWithin(client.close(), 1000);
+
+  assert.equal(outcome.kind, "fulfilled");
+  assert.equal(worker.posted.at(-1)?.type, "CLOSE");
+  assert.equal(worker.terminations, 1);
+  assert.equal(client.localStatus().state, "CLOSED");
+});
+
 test("a failed OPEN clears the worker so the next request can still restart once", async () => {
   const workers: FakeWorker[] = [];
   const client = new JavaIndexClient("/repo", "/cache", () => {
@@ -174,6 +229,81 @@ test("a failed OPEN clears the worker so the next request can still restart once
 
   const status = await statusPromise;
   assert.equal(status.state, "READY");
+});
+
+test("a silent OPEN deadline terminates the worker and allows the next same-repo request to recover", async () => {
+  const workers: FakeWorker[] = [];
+  const client = new JavaIndexClient("/repo", "/cache", () => {
+    const worker = new FakeWorker();
+    workers.push(worker);
+    return worker;
+  });
+  const budgeted = client as unknown as BudgetAwareClient;
+
+  const outcome = await settleWithin(
+    budgeted.open(1, {}, { budget: DeadlineBudget.fromTimeout(20) }),
+    80
+  );
+  assert.equal(outcome.kind, "rejected", "a live worker that never answers OPEN must reject at the request deadline");
+  assert.equal(rejectedJavaIntelligenceError(outcome).code, "DEADLINE_EXCEEDED");
+  assert.equal(workers[0]!.terminations, 1, "the silent worker must be terminated instead of retaining the OPEN pending entry");
+  assert.equal(client.localStatus().state, "DEGRADED");
+
+  workers[0]!.emitMessage({ id: workers[0]!.posted[0]!.id, ok: true, value: validStatus(1) });
+  const statusPromise = budgeted.status({ budget: DeadlineBudget.fromTimeout(100) });
+  assert.equal(workers.length, 2, "the next request must get a replacement worker after the timed-out OPEN");
+  workers[1]!.emitMessage({ id: workers[1]!.posted[0]!.id, ok: true, value: validStatus(1) });
+  await flushMicrotasks();
+  workers[1]!.emitMessage({ id: workers[1]!.posted[1]!.id, ok: true, value: validStatus(1) });
+  assert.equal((await statusPromise).state, "READY");
+});
+
+test("a silent query deadline removes its pending request, terminates the worker, and recovers on the next request", async () => {
+  const workers: FakeWorker[] = [];
+  const client = new JavaIndexClient("/repo", "/cache", () => {
+    const worker = new FakeWorker();
+    workers.push(worker);
+    return worker;
+  });
+  const budgeted = client as unknown as BudgetAwareClient;
+  const opened = budgeted.open(1);
+  workers[0]!.emitMessage({ id: workers[0]!.posted[0]!.id, ok: true, value: validStatus(1) });
+  await opened;
+
+  const outcome = await settleWithin(
+    budgeted.queryAnchor("A.java", 1, 1, { budget: DeadlineBudget.fromTimeout(20) }),
+    80
+  );
+  assert.equal(outcome.kind, "rejected", "a live worker that never answers a query must reject at the request deadline");
+  assert.equal(rejectedJavaIntelligenceError(outcome).code, "DEADLINE_EXCEEDED");
+  assert.equal(workers[0]!.terminations, 1, "the timed-out query must not leave a live, blocked worker behind");
+  assert.equal(client.localStatus().state, "DEGRADED");
+
+  workers[0]!.emitMessage({ id: workers[0]!.posted[1]!.id, ok: true, value: undefined });
+  const statusPromise = budgeted.status({ budget: DeadlineBudget.fromTimeout(100) });
+  assert.equal(workers.length, 2);
+  workers[1]!.emitMessage({ id: workers[1]!.posted[0]!.id, ok: true, value: validStatus(1) });
+  await flushMicrotasks();
+  workers[1]!.emitMessage({ id: workers[1]!.posted[1]!.id, ok: true, value: validStatus(1) });
+  assert.equal((await statusPromise).state, "READY");
+});
+
+test("a cancelled query rejects deterministically and drops its late response without terminating a healthy worker", async () => {
+  const { client, worker } = await openedClient();
+  const budgeted = client as unknown as BudgetAwareClient;
+  const controller = new AbortController();
+  const pending = budgeted.queryAnchor("A.java", 1, 1, { signal: controller.signal });
+  await flushMicrotasks();
+  const query = worker.posted[1]!;
+
+  controller.abort();
+  const outcome = await settleWithin(pending, 80);
+  assert.equal(outcome.kind, "rejected");
+  assert.equal(rejectedJavaIntelligenceError(outcome).code, "CANCELLED");
+  assert.equal(worker.terminations, 0, "caller cancellation must not evict a worker that may still service other requests");
+
+  worker.emitMessage({ id: query.id, ok: true, value: undefined });
+  assert.equal(client.localStatus().state, "READY", "a late response for a cancelled request must not mutate client state");
 });
 
 test("after an unexpected exit, the next request restarts the worker exactly once", async () => {
@@ -357,6 +487,61 @@ test("RouterJavaIndex rejects outside-repository range requests before forwardin
     /outside|repository|repo/i
   );
   assert.equal(forwarded.length, 0);
+});
+
+test("RouterJavaIndex request scope forwards its absolute deadline to a silent worker query", async () => {
+  const worker = new FakeWorker();
+  const client = new JavaIndexClient("/repo", "/cache", () => worker);
+  const router = new RouterJavaIndex("/repo", client);
+  const openPromise = router.open(1);
+  const openMessage = worker.posted[0]!;
+  worker.emitMessage({ id: openMessage.id, ok: true, value: validStatus(1) });
+  await openPromise;
+
+  const outcome = await settleWithin(
+    router.withRequestOptions(
+      { budget: DeadlineBudget.fromTimeout(20) },
+      () => router.queryAnchor("/repo/Anchor.java", 1, 1)
+    ),
+    80
+  );
+
+  const error = rejectedJavaIntelligenceError(outcome);
+  assert.equal(error.code, "DEADLINE_EXCEEDED");
+  assert.equal(worker.terminations, 1, "a deadline-wedged worker is retired so a later request can recover");
+});
+
+test("RouterJavaIndex does not downgrade a request deadline from routerStatus into a local snapshot", async () => {
+  const worker = new FakeWorker();
+  const client = new JavaIndexClient("/repo", "/cache", () => worker);
+  const router = new RouterJavaIndex("/repo", client);
+  const openPromise = router.open(1);
+  const openMessage = worker.posted[0]!;
+  worker.emitMessage({ id: openMessage.id, ok: true, value: validStatus(1) });
+  await openPromise;
+
+  const outcome = await settleWithin(
+    router.withRequestOptions(
+      { budget: DeadlineBudget.fromTimeout(20) },
+      () => router.routerStatus()
+    ),
+    80
+  );
+  assert.equal(rejectedJavaIntelligenceError(outcome).code, "DEADLINE_EXCEEDED");
+  assert.equal(worker.terminations, 1);
+});
+
+test("RouterJavaIndex request scope guards direct repository marker reads with the same deadline", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "java-index-marker-budget-"));
+  writeFileSync(path.join(repoRoot, "pom.xml"), "<project/>\n");
+  const router = new RouterJavaIndex(repoRoot, {} as never);
+  const budget = DeadlineBudget.fromTimeout(1);
+  await new Promise(resolve => setTimeout(resolve, 5));
+
+  await assert.rejects(
+    () => router.withRequestOptions({ budget }, () => router.repositoryMarkers(["pom.xml"])),
+    (error: unknown) => error instanceof JavaIntelligenceError && error.code === "DEADLINE_EXCEEDED"
+  );
 });
 
 test("QUERY_READ_RANGES does not read an in-repository symlink whose target escapes the repository", async () => {

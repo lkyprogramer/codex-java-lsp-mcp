@@ -156,12 +156,10 @@ async function runCell(
     "--verbosity", "diagnostic",
     "--index-cache-dir", cacheDir
   ];
-  // JAVA_LSP_FILE_WATCH=0: no interactive editor session exists to benefit from
-  // file-watch invalidation during a scripted matrix run. JAVA_LSP_SHADOW_RANKING
-  // must stay "1" (never "0") - see file-level pos note.
+  // JAVA_LSP_SHADOW_RANKING must stay "1" (never "0") so the matrix retains
+  // deterministic attribution/family-score evidence.
   const env: Record<string, string | undefined> = {
-    JAVA_LSP_SHADOW_RANKING: "1",
-    JAVA_LSP_FILE_WATCH: "0"
+    JAVA_LSP_SHADOW_RANKING: "1"
   };
 
   const outcome = await options.runCommand(options.nodeBin ?? process.execPath, args, env);

@@ -21,7 +21,12 @@ function shadowCandidate(overrides: Partial<ShadowRankingCandidate>): ShadowRank
 }
 
 function diagnostics(candidates: ShadowRankingCandidate[]): ShadowRankingDiagnostics {
-  return { categoryFidelity: "preserved", productionCandidatesWithoutEvidence: [], candidates };
+  return {
+    categoryFidelity: "preserved",
+    productionCandidatesWithoutEvidence: [],
+    productionSelectedPaths: candidates.filter(candidate => candidate.selectedByReadPlan).map(candidate => candidate.path),
+    candidates
+  };
 }
 
 function baseContext(overrides: Partial<AttributionV3Context> = {}): AttributionV3Context {
@@ -117,6 +122,26 @@ test("a family with a zero score is excluded from sourceFamilies", async () => {
   ]);
   const rows = buildGoldenAttributionV3(scenarioV3, shadow, baseContext({ repoRoot: root }));
   assert.deepEqual(rows[0]!.sourceFamilies, ["LEXICAL"], "a zero-score family entry must not be reported as a real source");
+});
+
+test("inReadPlan is projected from production selectedPaths even when shadow selection disagrees", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "attribution-v3-production-plan-"));
+  await mkdir(path.join(root, "src/main/java/demo"), { recursive: true });
+  const file = "src/main/java/demo/A.java";
+  const absolutePath = path.join(root, file);
+  await writeFile(absolutePath, "package demo; class A {}\n");
+  const scenarioV3 = scenario({ mustHit: [file], taskBlocking: [], shouldHit: [], support: [] });
+  const shadow = {
+    ...diagnostics([
+      shadowCandidate({ path: absolutePath, rank: 1, selectedByReadPlan: false, familyScores: { STATIC_STRUCTURE: 5 } })
+    ]),
+    productionSelectedPaths: [absolutePath]
+  } as ShadowRankingDiagnostics;
+
+  const rows = buildGoldenAttributionV3(scenarioV3, shadow, baseContext({ repoRoot: root }));
+
+  assert.equal(rows[0]!.inReadPlan, true);
+  assert.equal(rows[0]!.blockedBy, "hit");
 });
 
 test("absentReason: support kind and missing-on-disk both take the low-value fast path", async () => {

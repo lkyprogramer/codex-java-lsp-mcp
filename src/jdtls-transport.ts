@@ -8,6 +8,7 @@ import {
   StreamMessageReader,
   StreamMessageWriter,
   type CancellationToken,
+  type MessageWriter,
   type MessageConnection
 } from "vscode-jsonrpc/node.js";
 
@@ -61,20 +62,72 @@ export const defaultJdtlsTransportFactory: JdtlsTransportFactory = {
       env: input.env,
       stdio: ["pipe", "pipe", "pipe"]
     }) as ChildProcessWithoutNullStreams;
-    const connection = createMessageConnection(
+    let connection: MessageConnection | undefined;
+    const writer = guardMessageWriter(new StreamMessageWriter(child.stdin), () => {
+      // vscode-jsonrpc 8.x/9.x uses an async Promise executor in sendRequest.
+      // If MessageWriter.write rejects, that executor both rejects the public
+      // request and throws an unreachable second rejection. Disposing here
+      // rejects every public pending request, while guardMessageWriter consumes
+      // only that duplicate writer rejection.
+      try {
+        connection?.dispose();
+      } catch {
+        // The transport is already broken; disposal is best effort.
+      }
+    });
+    connection = createMessageConnection(
       new StreamMessageReader(child.stdout),
-      new StreamMessageWriter(child.stdin)
+      writer
     ) as MessageConnection;
     return { child, connection: adaptMessageConnection(connection) };
   }
 };
 
-function adaptMessageConnection(connection: MessageConnection): JdtlsConnection {
+/**
+ * Prevents vscode-jsonrpc's async Promise executor from leaking an orphan
+ * rejection when the underlying stream write fails. The failure callback must
+ * close/dispose the owning connection so its public requests still reject.
+ */
+export function guardMessageWriter(
+  writer: MessageWriter,
+  onFailure: (error: unknown) => void
+): MessageWriter {
+  return {
+    onError: writer.onError,
+    onClose: writer.onClose,
+    async write(message) {
+      try {
+        await writer.write(message);
+      } catch (error) {
+        try {
+          onFailure(error);
+        } catch {
+          // Never replace a transport failure with cleanup failure.
+        }
+      }
+    },
+    end: () => writer.end(),
+    dispose: () => writer.dispose()
+  };
+}
+
+export function adaptMessageConnection(connection: MessageConnection): JdtlsConnection {
   return {
     sendRequest: (method, params, token) => token === undefined
       ? connection.sendRequest(method, params)
       : connection.sendRequest(method, params, token),
-    sendNotification: (method, params) => { void connection.sendNotification(method, params); },
+    sendNotification: (method, params) => {
+      // vscode-jsonrpc returns a writer promise even for notifications. The
+      // session-facing interface is intentionally fire-and-forget, so observe
+      // the rejection here; otherwise a normal JDT exit can turn queued
+      // didOpen/cancel/exit writes into process-fatal unhandled EPIPEs.
+      try {
+        void connection.sendNotification(method, params).catch(() => undefined);
+      } catch {
+        // A connection that was synchronously closed/disposed has no writer
+        // promise to observe. Notifications are intentionally best effort.
+      }
+    },
     onRequest: (method, handler) => { connection.onRequest(method, handler); },
     onNotification: (method, handler) => { connection.onNotification(method, handler); },
     onError: handler => { connection.onError(handler); },

@@ -1,7 +1,4 @@
 import path from "node:path";
-import type { CandidateFile } from "../../agent-types.js";
-import { classifyPath } from "../../repo-layout.js";
-import { breakdown, mergeCandidate } from "../candidate-helpers.js";
 import type { EvidenceCompleteness, EvidenceSignal } from "../evidence.js";
 import {
   MAX_DECLARATION_IDS_PER_CALL,
@@ -402,7 +399,6 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
   for (const method of resolved.declarations.methods) relativePathById.set(method.methodId, method.relativePath);
 
   const evidence: EvidenceSignal[] = [];
-  const candidates = new Map<string, CandidateFile>();
   const anchorId = context.anchors[0]?.id ?? "A1";
   let signalSeq = 0;
   for (const item of pending) {
@@ -410,8 +406,24 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
     if (!relativePath) continue;
     const targetAbsolutePath = path.resolve(context.repoRoot, relativePath);
     signalSeq += 1;
-    evidence.push({ signalId: `${SPRING_ADAPTER_ID}:${signalSeq}`, candidateFile: targetAbsolutePath, anchorId, kind: item.kind, family: "FRAMEWORK", provenance: "FRAMEWORK_INFERRED", confidence: item.confidence, completeness, weight: item.weight, sourceFile: item.sourceFile, positions: [], providerId: SPRING_ADAPTER_ID, providerVersion: SPRING_ADAPTER_VERSION, generation: context.generation, detail: item.detail });
-    mergeCandidate(candidates, springCandidate(context.repoRoot, targetAbsolutePath, item.weight * item.confidence, item.kind));
+    evidence.push({
+      signalId: `${SPRING_ADAPTER_ID}:${signalSeq}`,
+      candidateFile: targetAbsolutePath,
+      anchorId,
+      kind: item.kind,
+      family: "FRAMEWORK",
+      provenance: "FRAMEWORK_INFERRED",
+      confidence: item.confidence,
+      completeness,
+      weight: item.weight,
+      sourceFile: item.sourceFile,
+      positions: [],
+      providerId: SPRING_ADAPTER_ID,
+      providerVersion: SPRING_ADAPTER_VERSION,
+      generation: context.generation,
+      detail: item.detail,
+      candidateMetadata: { categories: ["framework"], reasons: [item.kind], verifiedBy: [item.kind], matchCount: 0 }
+    });
   }
 
   if (resolved.declarations.truncated) diagnostics.push(`spring adapter: declarationsById truncated while resolving ${targetIds.length} evidence targets`);
@@ -422,31 +434,11 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
       providerId: SPRING_ADAPTER_ID,
       providerVersion: SPRING_ADAPTER_VERSION,
       evidence,
-      candidates: [...candidates.values()],
       completion: timedOut ? "PARTIAL_TIMEOUT" : limited || resolved.declarations.truncated ? "PARTIAL_LIMIT" : "COMPLETE",
       elapsedMs: Date.now() - startedAt
     },
     metadata: { endpoints, transactionalMethodIds: [...new Set(transactionalMethodIds)] },
     diagnostics
-  };
-}
-
-function springCandidate(repoRoot: string, absolutePath: string, score: number, kind: SpringEvidenceKind): CandidateFile {
-  const context = classifyPath(repoRoot, absolutePath);
-  return {
-    absolutePath,
-    path: context.relativePath,
-    module: context.module,
-    layer: context.layer,
-    sourceSet: context.sourceSet,
-    score,
-    matchCount: 0,
-    positions: [],
-    categories: ["framework"],
-    reasons: [kind],
-    confidence: "high",
-    verifiedBy: [kind],
-    scoreBreakdown: [breakdown(`evidence.${kind}`, "policy", score, `Spring ${kind}`)]
   };
 }
 

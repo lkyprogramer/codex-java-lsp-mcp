@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   firstTaskBlockingRank,
+  goldenEntries,
   ndcgReadAt6,
   readPlanRangeRecall,
   taskBlockingFiles,
@@ -25,6 +26,22 @@ test("taskBlockingFiles unions mustHit and taskBlocking, excludes should/support
     support: ["D.java"]
   });
   assert.deepEqual([...taskBlockingFiles(s)].sort(), ["A.java", "B.java"]);
+});
+
+test("goldenEntries de-duplicates cross-version compatibility aliases by strongest kind", () => {
+  const s = scenario({
+    mustHit: ["A.java"],
+    taskBlocking: ["B.java"],
+    shouldHit: ["B.java", "C.java"],
+    support: ["D.java"]
+  });
+
+  assert.deepEqual(goldenEntries(s), [
+    { file: "A.java", kind: "must" },
+    { file: "B.java", kind: "taskBlocking" },
+    { file: "C.java", kind: "should" },
+    { file: "D.java", kind: "support" }
+  ]);
 });
 
 test("ndcgReadAt6 scores 1.0 when the read plan places golden files in ideal relevance order", () => {

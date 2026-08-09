@@ -39,9 +39,15 @@ try {
   const status = await client.callTool({ name: "java_status", arguments: selector }, undefined, {
     timeout: 180000
   });
+  if (status.isError) {
+    throw new Error(`java_status smoke failed: ${JSON.stringify(status.content)}`);
+  }
   const shutdown = await client.callTool({ name: "java_runtime", arguments: shutdownSelector }, undefined, {
     timeout: 180000
   });
+  if (shutdown.isError) {
+    throw new Error(`java_runtime shutdown smoke failed: ${JSON.stringify(shutdown.content)}`);
+  }
   console.log(JSON.stringify({
     tools: names,
     status: status.content,

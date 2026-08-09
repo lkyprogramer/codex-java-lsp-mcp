@@ -70,7 +70,7 @@ function fakeSession(referenceItems: LspLocation[]) {
   };
 }
 
-/** No symbol ever resolves, so mapSemanticEdgeForPersistence always returns undefined and edgeStoreV2 never gets a real edge - these tests exercise the legacy edgeStore path only, matching their pre-Task-33-Step-8 assertions. */
+/** No symbol ever resolves, so mapSemanticEdgeForPersistence always returns undefined and the persisted semantic store never gets a real edge. */
 function fakeJavaIndex(): { queryAnchor: (file: string, line: number, column: number) => Promise<undefined> } {
   return { queryAnchor: async () => undefined };
 }

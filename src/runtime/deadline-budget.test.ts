@@ -28,6 +28,24 @@ test("DeadlineBudget rejects expired stages with a classified error", () => {
   );
 });
 
+test("DeadlineBudget.forStage preserves the parent deadline and a finalization reserve", () => {
+  let now = 100;
+  const request = DeadlineBudget.fromTimeout(1_000, () => now);
+  const capped = request.forStage(400, 200);
+
+  assert.equal(capped.deadlineAtMs, 500, "the stage cap wins when it is earlier than the reserved parent deadline");
+  now = 500;
+  assert.equal(capped.expired(), true);
+  assert.equal(request.remainingMs(), 600);
+
+  now = 700;
+  const parentBound = request.forStage(1_000, 200);
+  assert.equal(parentBound.deadlineAtMs, 900, "a stage can never consume the parent's reserved tail");
+  now = 900;
+  assert.equal(parentBound.expired(), true);
+  assert.equal(request.remainingMs(), 200);
+});
+
 test("DeadlineBudget.race calls timeout cleanup", async () => {
   let cleaned = 0;
   const budget = DeadlineBudget.fromTimeout(10);

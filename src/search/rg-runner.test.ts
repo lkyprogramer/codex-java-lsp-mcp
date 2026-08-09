@@ -75,7 +75,11 @@ test("rg timeout returns partial evidence but is not complete", async () => {
     "__SLEEP_2000__"
   ]);
   const runner = fakeRunner(script);
-  const result = await runner.run(query(root), DeadlineBudget.fromTimeout(120));
+  // Leave enough process-start headroom for this to remain a timeout-semantics
+  // test under concurrent CI load. The fake rg has already emitted one match
+  // and then sleeps for two seconds, so 800 ms still deterministically exercises
+  // the timeout path without depending on a sub-100 ms Node startup.
+  const result = await runner.run(query(root), DeadlineBudget.fromTimeout(800));
 
   assert.equal(result.completion, "PARTIAL_TIMEOUT");
   assert.equal(result.errorCode, "SEARCH_TIMEOUT");
@@ -93,10 +97,11 @@ process.stdout.write(${JSON.stringify(matchLine("src/main/java/demo/A.java"))} +
 setInterval(() => {}, 1000);
 `, "utf8");
 
-  // Generous headroom: this asserts the SIGTERM->SIGKILL escalation, not tight
-  // timing, and the assertions do not depend on the exact deadline.
+  // Generous process-start headroom: this asserts SIGTERM->SIGKILL escalation,
+  // not a sub-second Node startup SLA. The child still hangs indefinitely, so
+  // the one-second deadline deterministically exercises the same timeout path.
   const runner = fakeRunner(script, { killGraceMs: 100 });
-  const result = await runner.run(query(root), DeadlineBudget.fromTimeout(400));
+  const result = await runner.run(query(root), DeadlineBudget.fromTimeout(1_000));
 
   assert.equal(result.completion, "PARTIAL_TIMEOUT");
   assert.equal(result.files.length, 1);

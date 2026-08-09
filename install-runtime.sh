@@ -85,8 +85,7 @@ for env_name in \
   JAVA_LSP_DOCUMENT_SYMBOL_PER_REPO_CONCURRENCY \
   JAVA_LSP_PROGRESS_IDLE_MS \
   JAVA_LSP_MIN_SEMANTIC_WAIT_MS \
-  JAVA_LSP_LOMBOK_JAR \
-  JDTLS_FILEWATCH
+  JAVA_LSP_LOMBOK_JAR
 do
   if [[ -n "${!env_name:-}" ]]; then
     CODEX_ARGS+=(--env "$env_name=${!env_name}")

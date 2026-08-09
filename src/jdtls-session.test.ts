@@ -21,6 +21,8 @@ import {
 } from "./test-support/fake-jdtls.js";
 import type { GeneratedCodeStatus } from "./generated-code.js";
 import type { LspDiagnostic } from "./jdtls-session.js";
+import type { RepoChange, RepoChangeBatch } from "./repo-generation.js";
+import { toFileUri } from "./repo-layout.js";
 import type {
   CompositeJdtLease,
   CrossProcessLeaseStore,
@@ -89,9 +91,24 @@ type Harness = {
   advance(ms: number): void;
 };
 
+function repoChangeBatch(changes: RepoChange[], storm = false): RepoChangeBatch {
+  return {
+    generation: 2,
+    observedAt: new Date(0).toISOString(),
+    changes,
+    storm,
+    affectedRoots: []
+  };
+}
+
 function harness(
   factory: FakeJdtlsTransportFactory,
-  options: { readyStabilityMs?: number; leaseStore?: CrossProcessLeaseStore; maxOpenDocuments?: number } = {}
+  options: {
+    readyStabilityMs?: number;
+    leaseStore?: CrossProcessLeaseStore;
+    maxOpenDocuments?: number;
+    leaseHeartbeatMs?: number;
+  } = {}
 ): Harness {
   const scratch = mkdtempSync(path.join(tmpdir(), "jdtls-session-"));
   const repoRoot = path.join(scratch, "repo");
@@ -105,19 +122,21 @@ function harness(
     logDir: process.env.JDTLS_LOG_DIR,
     javaHome: process.env.JAVA_LSP_PROJECT_JAVA_HOME,
     stability: process.env.JDTLS_READY_STABILITY_MS,
-    watch: process.env.JAVA_LSP_FILE_WATCH,
-    maxOpenDocuments: process.env.JDTLS_MAX_OPEN_DOCUMENTS
+    maxOpenDocuments: process.env.JDTLS_MAX_OPEN_DOCUMENTS,
+    leaseHeartbeat: process.env.JAVA_LSP_JDT_LEASE_HEARTBEAT_MS
   };
   process.env.JDTLS_BIN = path.join(scratch, "fake-jdtls");
   process.env.JDTLS_DATA_DIR = path.join(scratch, "workspace");
   process.env.JDTLS_LOG_DIR = path.join(scratch, "logs");
   process.env.JAVA_LSP_PROJECT_JAVA_HOME = javaHome;
-  process.env.JAVA_LSP_FILE_WATCH = "0";
   if (options.readyStabilityMs !== undefined) {
     process.env.JDTLS_READY_STABILITY_MS = String(options.readyStabilityMs);
   }
   if (options.maxOpenDocuments !== undefined) {
     process.env.JDTLS_MAX_OPEN_DOCUMENTS = String(options.maxOpenDocuments);
+  }
+  if (options.leaseHeartbeatMs !== undefined) {
+    process.env.JAVA_LSP_JDT_LEASE_HEARTBEAT_MS = String(options.leaseHeartbeatMs);
   }
 
   let now = 1_000_000;
@@ -129,8 +148,8 @@ function harness(
     JDTLS_LOG_DIR: previous.logDir,
     JAVA_LSP_PROJECT_JAVA_HOME: previous.javaHome,
     JDTLS_READY_STABILITY_MS: previous.stability,
-    JAVA_LSP_FILE_WATCH: previous.watch,
-    JDTLS_MAX_OPEN_DOCUMENTS: previous.maxOpenDocuments
+    JDTLS_MAX_OPEN_DOCUMENTS: previous.maxOpenDocuments,
+    JAVA_LSP_JDT_LEASE_HEARTBEAT_MS: previous.leaseHeartbeat
   })) {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;
@@ -150,6 +169,8 @@ async function waitForSpawn(factory: FakeJdtlsTransportFactory, count: number): 
  * (recording whatever pid is given) or always rejects with a fixed result. */
 class FakeLeaseStore implements CrossProcessLeaseStore {
   acquireCalls = 0;
+  heartbeatCalls = 0;
+  heartbeatError?: Error;
   released: string[] = [];
   recordedPids: number[] = [];
   recordSucceeds = true;
@@ -173,7 +194,10 @@ class FakeLeaseStore implements CrossProcessLeaseStore {
     const lease: CompositeJdtLease = {
       worktree,
       slot,
-      heartbeat: async () => {},
+      heartbeat: async () => {
+        this.heartbeatCalls += 1;
+        if (this.heartbeatError) throw this.heartbeatError;
+      },
       release: async () => {
         await worktree.release();
         await slot.release();
@@ -261,7 +285,106 @@ test("a successful start records the spawned jdtls pid on the lease", async () =
   assert.deepEqual(leaseStore.released.sort(), ["JDT_SLOT", "JDT_WORKTREE"], "stop() releases the lease");
 });
 
-test("invalidateForRepoChanges clears the whole cache on a storm instead of only the affected files", async () => {
+test("the JDT lease heartbeats throughout a long STARTING wait and the READY lifetime, then stops on release", async () => {
+  const initialize = deferred<unknown>();
+  const leaseStore = new FakeLeaseStore();
+  const { session, factory } = harness(fakeTransportFactory({ initialize }), {
+    leaseStore,
+    leaseHeartbeatMs: 10
+  });
+
+  const starting = session.ensureStarted(DeadlineBudget.fromTimeout(5000));
+  await waitForSpawn(factory, 1);
+  for (let attempt = 0; attempt < 100 && leaseStore.heartbeatCalls === 0; attempt += 1) {
+    await delay(5);
+  }
+  assert.equal(leaseStore.heartbeatCalls > 0, true, "STARTING must refresh both held lease handles while initialize is pending");
+
+  initialize.resolve({ capabilities: {} });
+  await starting;
+  const readyHeartbeatCount = leaseStore.heartbeatCalls;
+  for (let attempt = 0; attempt < 100 && leaseStore.heartbeatCalls === readyHeartbeatCount; attempt += 1) {
+    await delay(5);
+  }
+  assert.equal(leaseStore.heartbeatCalls > readyHeartbeatCount, true, "the same heartbeat loop continues after READY");
+
+  await session.stop();
+  const stoppedHeartbeatCount = leaseStore.heartbeatCalls;
+  await delay(40);
+  assert.equal(leaseStore.heartbeatCalls, stoppedHeartbeatCount, "releasing the lease also stops its heartbeat loop");
+});
+
+test("a semantic request heartbeats the READY session lease immediately", async () => {
+  const leaseStore = new FakeLeaseStore();
+  const factory = fakeTransportFactory({
+    initializeResult: { capabilities: {} },
+    responses: { "textDocument/documentSymbol": [] }
+  });
+  const { session, repoRoot } = harness(factory, { leaseStore, leaseHeartbeatMs: 60_000 });
+  const file = path.join(repoRoot, "A.java");
+  writeFileSync(file, "class A {}\n");
+  await session.ensureStarted(DeadlineBudget.fromTimeout(5000));
+  const readyHeartbeatCount = leaseStore.heartbeatCalls;
+  assert.equal(readyHeartbeatCount > 0, true, "READY commit itself proves the lease can still be heartbeated");
+
+  await session.rawDocumentSymbols(file, 5000);
+  assert.equal(leaseStore.heartbeatCalls, readyHeartbeatCount + 1);
+  await session.stop();
+});
+
+test("a persistent lease heartbeat failure is observable and prevents STARTING from committing READY", async () => {
+  const initialize = deferred<unknown>();
+  const leaseStore = new FakeLeaseStore();
+  leaseStore.heartbeatError = new Error("lease metadata write failed");
+  const { session, factory } = harness(fakeTransportFactory({ initialize }), {
+    leaseStore,
+    leaseHeartbeatMs: 10
+  });
+
+  const starting = session.ensureStarted(DeadlineBudget.fromTimeout(5000));
+  await waitForSpawn(factory, 1);
+  for (let attempt = 0; attempt < 100 && leaseStore.heartbeatCalls === 0; attempt += 1) {
+    await delay(5);
+  }
+  assert.match(session.status().leaseHeartbeat.lastError ?? "", /lease metadata write failed/);
+
+  initialize.resolve({ capabilities: {} });
+  await assert.rejects(
+    () => starting,
+    (error: unknown) => error instanceof JavaIntelligenceError && error.code === "LEASE_CONFIG_ERROR"
+  );
+  assert.equal(session.status().state, "BROKEN");
+  assert.equal(session.status().started, false);
+  await session.stop();
+});
+
+test("a READY session blocks semantic work while heartbeat fails and resumes after heartbeat recovers", async () => {
+  const leaseStore = new FakeLeaseStore();
+  const factory = fakeTransportFactory({
+    initializeResult: { capabilities: {} },
+    responses: { "textDocument/documentSymbol": [] }
+  });
+  const { session, repoRoot } = harness(factory, { leaseStore, leaseHeartbeatMs: 60_000 });
+  const file = path.join(repoRoot, "A.java");
+  writeFileSync(file, "class A {}\n");
+  await session.ensureStarted(DeadlineBudget.fromTimeout(5000));
+
+  leaseStore.heartbeatError = new Error("lease heartbeat unavailable");
+  await assert.rejects(
+    () => session.rawDocumentSymbols(file, 5000),
+    (error: unknown) => error instanceof JavaIntelligenceError && error.code === "LEASE_CONFIG_ERROR"
+  );
+  assert.equal(factory.connections[0].count("textDocument/documentSymbol"), 0);
+  assert.match(session.status().leaseHeartbeat.lastError ?? "", /lease heartbeat unavailable/);
+
+  leaseStore.heartbeatError = undefined;
+  await session.rawDocumentSymbols(file, 5000);
+  assert.equal(factory.connections[0].count("textDocument/documentSymbol"), 1);
+  assert.equal(session.status().leaseHeartbeat.lastError, undefined);
+  await session.stop();
+});
+
+test("applyRepoChangeBatch clears the whole cache on a storm instead of only the affected files", async () => {
   const factory = fakeTransportFactory({
     initializeResult: { capabilities: {} },
     responses: { "textDocument/documentSymbol": [] }
@@ -278,7 +401,7 @@ test("invalidateForRepoChanges clears the whole cache on a storm instead of only
   assert.equal(session.cacheStatus().entries, 2);
 
   // Non-storm: only the entry depending on the changed file is invalidated.
-  session.invalidateForRepoChanges({ changes: [{ kind: "JAVA_CHANGE", absolutePath: fileA }] });
+  await session.applyRepoChangeBatch(repoChangeBatch([{ kind: "JAVA_CHANGE", absolutePath: fileA }]));
   assert.equal(session.cacheStatus().entries, 1, "only file A's entry was invalidated");
 
   await session.documentSymbols(fileA);
@@ -286,8 +409,80 @@ test("invalidateForRepoChanges clears the whole cache on a storm instead of only
 
   // Storm: everything is cleared, since filtering per path is strictly more
   // work than one clear once this many files changed at once.
-  session.invalidateForRepoChanges({ changes: [{ kind: "JAVA_CHANGE", absolutePath: fileA }], storm: true });
+  await session.applyRepoChangeBatch(repoChangeBatch([{ kind: "JAVA_CHANGE", absolutePath: fileA }], true));
   assert.equal(session.cacheStatus().entries, 0, "a storm clears the whole cache regardless of which paths it lists");
+
+  await session.stop();
+});
+
+test("applyRepoChangeBatch is the sole watcher consumer and updates only already-open Java documents", async () => {
+  const factory = fakeTransportFactory({
+    initializeResult: { capabilities: {} },
+    responses: { "textDocument/documentSymbol": [] }
+  });
+  const { session, repoRoot } = harness(factory);
+  await session.ensureStarted(DeadlineBudget.fromTimeout(5000));
+  const connection = factory.connections[0];
+  const sent: Array<{ method: string; params?: unknown }> = [];
+  const notificationTarget = connection as unknown as {
+    sendNotification(method: string, params?: unknown): void;
+  };
+  const originalSendNotification = notificationTarget.sendNotification.bind(connection);
+  notificationTarget.sendNotification = (method, params) => {
+    sent.push({ method, params });
+    originalSendNotification(method, params);
+  };
+
+  const openFile = path.join(repoRoot, "Open.java");
+  const unopenedFile = path.join(repoRoot, "Unopened.java");
+  const buildFile = path.join(repoRoot, "pom.xml");
+  writeFileSync(openFile, "class Open {}\n");
+  writeFileSync(unopenedFile, "class Unopened {}\n");
+  writeFileSync(buildFile, "<project/>\n");
+  await session.rawDocumentSymbols(openFile, 5000);
+  connection.emitNotification("textDocument/publishDiagnostics", {
+    uri: toFileUri(openFile),
+    diagnostics: [diagnosticAt(1, 1, 5, "test diagnostic")]
+  });
+  assert.equal(session.status().knownDiagnostics, 1);
+  assert.equal(Object.hasOwn(session.status(), "fileWatcher"), false, "the retired session-owned watcher must not remain in status");
+
+  sent.length = 0;
+  writeFileSync(openFile, "class Open { int changed; }\n");
+  writeFileSync(unopenedFile, "class Unopened { int changed; }\n");
+  await session.applyRepoChangeBatch(repoChangeBatch([
+    { kind: "JAVA_CHANGE", absolutePath: openFile, event: "change" },
+    { kind: "JAVA_CHANGE", absolutePath: unopenedFile, event: "change" },
+    { kind: "BUILD_CHANGE", absolutePath: buildFile, event: "add" }
+  ]));
+
+  const workspaceChanges = sent.filter(item => item.method === "workspace/didChangeWatchedFiles");
+  assert.equal(workspaceChanges.length, 1, "one coordinator batch sends one workspace notification");
+  assert.deepEqual(workspaceChanges[0]?.params, {
+    changes: [
+      { uri: toFileUri(openFile), type: 2 },
+      { uri: toFileUri(unopenedFile), type: 2 },
+      { uri: toFileUri(buildFile), type: 1 }
+    ]
+  });
+  assert.equal(sent.filter(item => item.method === "textDocument/didOpen").length, 0);
+  assert.deepEqual(
+    sent.filter(item => item.method === "textDocument/didChange").map(item => item.params),
+    [{
+      textDocument: { uri: toFileUri(openFile), version: 2 },
+      contentChanges: [{ text: "class Open { int changed; }\n" }]
+    }]
+  );
+  assert.equal(session.status().openDocuments, 1, "the unopened CHANGE must not synthesize didOpen");
+
+  sent.length = 0;
+  await session.applyRepoChangeBatch(repoChangeBatch([
+    { kind: "JAVA_DELETE", absolutePath: openFile, event: "delete" }
+  ]));
+  assert.equal(sent.filter(item => item.method === "workspace/didChangeWatchedFiles").length, 1);
+  assert.equal(sent.filter(item => item.method === "textDocument/didClose").length, 1);
+  assert.equal(session.status().openDocuments, 0);
+  assert.equal(session.status().knownDiagnostics, 0);
 
   await session.stop();
 });
@@ -620,6 +815,92 @@ test("createJdtlsSemanticBackend routes each operation to its matching raw JDT r
   await session.stop();
 });
 
+test("raw documentSymbol/hover/definition/implementation/references startup consumes the backend deadline", async () => {
+  const initialize = deferred<unknown>();
+  const { session, repoRoot } = harness(fakeTransportFactory({ initialize }));
+  writeFileSync(path.join(repoRoot, "A.java"), "class A {}\n");
+  const backend = createJdtlsSemanticBackend(session);
+  const operations: SemanticCacheKey[] = [
+    baseKeyFor(repoRoot, { operation: "documentSymbol", line: undefined, column: undefined }),
+    baseKeyFor(repoRoot, { operation: "hover" }),
+    baseKeyFor(repoRoot, { operation: "definition" }),
+    baseKeyFor(repoRoot, { operation: "implementation" }),
+    baseKeyFor(repoRoot, { operation: "references", optionsKey: "includeDeclaration=false" })
+  ];
+
+  try {
+    const settlements = Promise.all(operations.map(key =>
+      backend.execute(key, 20, new AbortController().signal).then(
+        () => new Error("unexpected completion"),
+        error => error
+      )
+    ));
+    const errors = await Promise.race([
+      settlements,
+      delay(150).then(() => { throw new Error("raw semantic startup ignored its 20ms backend deadline"); })
+    ]);
+    assert.equal(errors.length, operations.length);
+    for (const error of errors) {
+      assert.equal(error instanceof JavaIntelligenceError && error.code === "DEADLINE_EXCEEDED", true);
+    }
+  } finally {
+    await session.stop();
+  }
+});
+
+test("createJdtlsSemanticBackend honours AbortSignal during an active LSP request", async () => {
+  const factory = fakeTransportFactory({ initializeResult: { capabilities: {} } });
+  const { session, repoRoot } = harness(factory);
+  const file = path.join(repoRoot, "A.java");
+  writeFileSync(file, "class A {}\n");
+  await session.ensureStarted(DeadlineBudget.fromTimeout(5000));
+  factory.connections[0].pending.set("textDocument/references", deferred<unknown>());
+  const backend = createJdtlsSemanticBackend(session);
+  const controller = new AbortController();
+
+  try {
+    const operation = backend.execute(baseKeyFor(repoRoot, {
+      operation: "references",
+      optionsKey: "includeDeclaration=false"
+    }), 5000, controller.signal);
+    for (let attempt = 0; attempt < 50 && factory.connections[0].count("textDocument/references") === 0; attempt += 1) {
+      await delay(2);
+    }
+    assert.equal(factory.connections[0].count("textDocument/references"), 1);
+    controller.abort();
+    await assert.rejects(
+      () => Promise.race([
+        operation,
+        delay(150).then(() => { throw new Error("semantic backend ignored AbortSignal"); })
+      ]),
+      (error: unknown) => error instanceof JavaIntelligenceError && error.code === "CANCELLED"
+    );
+  } finally {
+    await session.stop();
+  }
+});
+
+test("a pre-aborted semantic backend call never starts JDT", async () => {
+  const factory = fakeTransportFactory({ initializeResult: { capabilities: {} } });
+  const { session, repoRoot } = harness(factory);
+  const file = path.join(repoRoot, "A.java");
+  writeFileSync(file, "class A {}\n");
+  const backend = createJdtlsSemanticBackend(session);
+  const controller = new AbortController();
+  controller.abort();
+
+  try {
+    await assert.rejects(
+      () => backend.execute(baseKeyFor(repoRoot, { operation: "hover" }), 5000, controller.signal),
+      (error: unknown) => error instanceof JavaIntelligenceError && error.code === "CANCELLED"
+    );
+    await delay(20);
+    assert.equal(factory.spawnCalls, 0, "an already-cancelled backend call must not create shared startup work");
+  } finally {
+    await session.stop();
+  }
+});
+
 test("createJdtlsSemanticBackend forwards hierarchy completion and honours direction/depth/limit from optionsKey", async () => {
   const item = { name: "Base", uri: "file:///repo/Base.java", range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } } };
   const factory = fakeTransportFactory({
@@ -772,12 +1053,81 @@ test("a storm/BUILD_CHANGE invalidation forces a fresh references() request even
   await session.references(file, 3, 7, false);
   assert.equal(calls, 1, "second call is a cache hit");
 
-  session.invalidateForRepoChanges({ changes: [{ kind: "BUILD_CHANGE", absolutePath: file }] });
+  await session.applyRepoChangeBatch(repoChangeBatch([{ kind: "BUILD_CHANGE", absolutePath: file }]));
 
   await session.references(file, 3, 7, false);
   assert.equal(calls, 2, "the build-change generation bump invalidates the gateway cache even though the file itself is unchanged");
 
   await session.stop();
+});
+
+test("an ordinary Java change in B invalidates a completed semantic result queried from unchanged A", async () => {
+  let calls = 0;
+  const factory = fakeTransportFactory({
+    initializeResult: { capabilities: {} },
+    handlers: {
+      "textDocument/references": () => { calls += 1; return []; }
+    }
+  });
+  const { session, repoRoot } = harness(factory);
+  const fileA = path.join(repoRoot, "A.java");
+  const fileB = path.join(repoRoot, "B.java");
+  writeFileSync(fileA, "class A {}\n");
+  writeFileSync(fileB, "class B {}\n");
+
+  await session.references(fileA, 1, 1, false);
+  await session.references(fileA, 1, 1, false);
+  assert.equal(calls, 1, "the unchanged A query is cached before the repo change");
+
+  await session.applyRepoChangeBatch(repoChangeBatch([{ kind: "JAVA_CHANGE", absolutePath: fileB }]));
+  await session.references(fileA, 1, 1, false);
+  assert.equal(calls, 2, "cross-file semantic results are refreshed after any ordinary Java change batch");
+
+  await session.stop();
+});
+
+test("a short first semantic caller does not become the shared backend hard cap", async () => {
+  const location = {
+    uri: "file:///repo/A.java",
+    range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } }
+  };
+  const factory = fakeTransportFactory({
+    initializeResult: { capabilities: {} },
+    handlers: {
+      "textDocument/definition": async () => {
+        await delay(40);
+        return [location];
+      }
+    }
+  });
+  const { session, repoRoot } = harness(factory);
+  const file = path.join(repoRoot, "A.java");
+  writeFileSync(file, "class A {}\n");
+
+  const short = session.semanticLocations(file, 1, 1, DeadlineBudget.fromTimeout(10));
+  const long = session.semanticLocations(file, 1, 1, DeadlineBudget.fromTimeout(500));
+  const [shortResult, longResult] = await Promise.all([short, long]);
+
+  assert.deepEqual(shortResult.definitions, [], "the short caller still settles against its own budget");
+  assert.deepEqual(longResult.definitions, [location], "the long waiter receives the shared backend result after the first caller leaves");
+  assert.equal(factory.connections[0]?.count("textDocument/definition"), 1);
+
+  await session.stop();
+});
+
+test("stop explicitly clears SemanticGateway completed entries", async () => {
+  const factory = fakeTransportFactory({
+    initializeResult: { capabilities: {} },
+    responses: { "textDocument/references": [] }
+  });
+  const { session, repoRoot } = harness(factory);
+  const file = path.join(repoRoot, "A.java");
+  writeFileSync(file, "class A {}\n");
+
+  await session.references(file, 1, 1, false);
+  assert.equal(session.status().semanticGateway.completedEntries, 1);
+  await session.stop();
+  assert.equal(session.status().semanticGateway.completedEntries, 0);
 });
 
 test("references() during an active restart backoff fails fast without a backend request", async () => {

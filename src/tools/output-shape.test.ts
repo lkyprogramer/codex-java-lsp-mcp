@@ -53,7 +53,7 @@ test("action tools return summaries by default and diagnostic status on request"
 
   assert.equal(restartSummary.restarted, true);
   assert.equal(Object.hasOwn(restartSummary, "dataDir"), false);
-  assert.equal((restartSummary.fileWatcher as Record<string, unknown>).watchedRootCount, 1);
+  assert.equal(Object.hasOwn(restartSummary, "fileWatcher"), false);
   assert.equal(restartDiagnostic.dataDir, "/tmp/demo/.jdtls");
   assert.equal(shutdownSummary.stopped, true);
   assert.equal(shutdownSummary.started, false);
@@ -63,10 +63,13 @@ test("action tools return summaries by default and diagnostic status on request"
 });
 
 test("java_diagnostics summarizes repo-relative diagnostics by default", async () => {
+  const requestBudget = DeadlineBudget.fromTimeout(5000);
+  let observedBudget: DeadlineBudget | undefined;
   const context = {
     repoRoot,
     session: {
-      async diagnosticsFor(files: string[], _waitMs: number) {
+      async diagnosticsFor(files: string[], _waitMs: number, budget?: DeadlineBudget) {
+        observedBudget = budget;
         return {
           [files[0]]: [{
             range: {
@@ -83,21 +86,26 @@ test("java_diagnostics summarizes repo-relative diagnostics by default", async (
     }
   } as unknown as ToolContext;
 
-  const summary = record(await javaDiagnostics(context, { files: ["src/main/java/demo/DemoService.java"], waitMs: 0 }));
-  const diagnostic = record(await javaDiagnostics(context, { files: ["src/main/java/demo/DemoService.java"], waitMs: 0, detail: "diagnostic" }));
+  const request = { budget: requestBudget } as never;
+  const summary = record(await javaDiagnostics(context, { files: ["src/main/java/demo/DemoService.java"], waitMs: 0 }, request));
+  const diagnostic = record(await javaDiagnostics(context, { files: ["src/main/java/demo/DemoService.java"], waitMs: 0, detail: "diagnostic" }, request));
 
   assert.equal(summary.totalDiagnostics, 1);
   assert.equal((summary.files as Array<Record<string, unknown>>)[0]?.path, "src/main/java/demo/DemoService.java");
   assert.equal(Object.hasOwn(summary, "diagnostics"), false);
   assert.equal((diagnostic.files as string[])[0], sourceFile);
   assert.equal(Object.hasOwn(diagnostic, "diagnostics"), true);
+  assert.equal(observedBudget, requestBudget, "the public request budget must reach diagnostics startup/wait work");
 });
 
 test("java_symbol (query/position/references operations) omits raw uri ranges unless diagnostic is requested", async () => {
+  const requestBudget = DeadlineBudget.fromTimeout(5000);
+  const observedBudgets: DeadlineBudget[] = [];
   const context = {
     repoRoot,
     session: {
-      async workspaceSymbols(_query: string, _limit: number) {
+      async workspaceSymbols(_query: string, _limit: number, budget: DeadlineBudget) {
+        observedBudgets.push(budget);
         return {
           truncated: false,
           items: [{
@@ -107,14 +115,16 @@ test("java_symbol (query/position/references operations) omits raw uri ranges un
           }]
         };
       },
-      async symbolContext(_file: string, _line: number, _column: number, _timeoutMs: number) {
+      async symbolContext(_file: string, _line: number, _column: number, budget: DeadlineBudget) {
+        observedBudgets.push(budget);
         return {
           hover: { contents: "DemoService" },
           definitions: [locationAt(5, 9)],
           implementations: [locationAt(7, 11)]
         };
       },
-      async references(_file: string, _line: number, _column: number, _includeDeclaration: boolean) {
+      async references(_file: string, _line: number, _column: number, _includeDeclaration: boolean, budget: DeadlineBudget) {
+        observedBudgets.push(budget);
         return {
           items: [locationAt(5, 9), locationAt(7, 11)],
           totalReferences: 2,
@@ -124,11 +134,12 @@ test("java_symbol (query/position/references operations) omits raw uri ranges un
     }
   } as unknown as ToolContext;
 
-  const symbolSummary = record(await javaSymbol(context, { operation: "query", query: "DemoService", semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3 }));
-  const symbolDiagnostic = record(await javaSymbol(context, { operation: "query", query: "DemoService", semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3, detail: "diagnostic" }));
-  const positionSummary = record(await javaSymbol(context, { operation: "position", file: "src/main/java/demo/DemoService.java", line: 5, column: 9, semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3 }));
-  const referencesSummary = record(await javaSymbol(context, { operation: "references", file: "src/main/java/demo/DemoService.java", line: 5, column: 9, semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3 }));
-  const referencesDiagnostic = record(await javaSymbol(context, { operation: "references", file: "src/main/java/demo/DemoService.java", line: 5, column: 9, semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3, detail: "diagnostic" }));
+  const request = { budget: requestBudget } as never;
+  const symbolSummary = record(await javaSymbol(context, { operation: "query", query: "DemoService", semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3 }, request));
+  const symbolDiagnostic = record(await javaSymbol(context, { operation: "query", query: "DemoService", semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3, detail: "diagnostic" }, request));
+  const positionSummary = record(await javaSymbol(context, { operation: "position", file: "src/main/java/demo/DemoService.java", line: 5, column: 9, semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3 }, request));
+  const referencesSummary = record(await javaSymbol(context, { operation: "references", file: "src/main/java/demo/DemoService.java", line: 5, column: 9, semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3 }, request));
+  const referencesDiagnostic = record(await javaSymbol(context, { operation: "references", file: "src/main/java/demo/DemoService.java", line: 5, column: 9, semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3, detail: "diagnostic" }, request));
 
   const symbolLocation = ((symbolSummary.items as Array<Record<string, unknown>>)[0]?.location) as Record<string, unknown>;
   const diagnosticLocation = ((symbolDiagnostic.items as Array<Record<string, unknown>>)[0]?.location) as Record<string, unknown>;
@@ -145,6 +156,8 @@ test("java_symbol (query/position/references operations) omits raw uri ranges un
   assert.equal(referencesSummary.returnedReferences, 2);
   assert.equal(Object.hasOwn(firstPosition, "range"), false);
   assert.equal(Object.hasOwn(firstDiagnosticPosition, "range"), true);
+  assert.equal(observedBudgets.length, 5);
+  assert.equal(observedBudgets.every(budget => budget === requestBudget), true, "every java_symbol operation must consume one immutable request budget");
 });
 
 test("semantic tools never emit locations from outside the repository", async () => {
@@ -367,13 +380,6 @@ function sessionStatus(started: boolean) {
     knownDiagnostics: 0,
     openDocuments: 0,
     startedAt: started ? "2026-07-01T00:00:00.000Z" : undefined,
-    fileWatcher: {
-      enabled: true,
-      active: started,
-      watchedRoots: [path.join(repoRoot, "src", "main", "java")],
-      pendingChanges: 0,
-      lastFlushSize: 0
-    },
     cache: {
       enabled: true,
       entries: 1,

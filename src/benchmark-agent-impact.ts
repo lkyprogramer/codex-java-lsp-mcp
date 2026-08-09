@@ -11,6 +11,8 @@ import type { ShadowRankingDiagnostics } from "./agent-router/shadow-ranking.js"
 import type { ImpactOptions } from "./agent-types.js";
 import { readRuntimeBuild } from "./build-info.js";
 import { buildGoldenAttributionV3, buildGoldenCounterfactualV3 } from "./benchmark/attribution-v3.js";
+import { buildImpactDeterminismSnapshot } from "./benchmark/determinism.js";
+import { isJavaIndexQuiescent } from "./benchmark/java-index-idle.js";
 import {
   firstTaskBlockingRank,
   goldenEntries,
@@ -318,6 +320,10 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
       ? buildGoldenCounterfactualV3(scenario, shadowRankingTyped, attributionContext)
       : undefined,
     frameworkEvidence: { mapstruct: mapstructEvidenceSummary(result, scenario) },
+    // Task 36's 20-run verifier consumes only semantic ordering/state. Keep
+    // latency/cache counters in their ordinary attempt fields so benign
+    // diagnostic variance cannot mask or manufacture semantic drift.
+    determinism: buildImpactDeterminismSnapshot(result, cli.repoRoot),
     // Task 25's counterfactual rank diagnostics are deliberately opt-in at
     // the router boundary. Preserve them in the benchmark attempt when that
     // boundary supplied them; standard requests still serialize no field.
@@ -493,7 +499,7 @@ async function prepareJavaIndex(
 async function waitForJavaIndexIdle(client: JavaIndexClient, timeoutMs: number): Promise<JavaIndexStatus> {
   const deadline = Date.now() + timeoutMs;
   let status = await client.status();
-  while (status.pendingForeground > 0 || status.pendingBackground > 0) {
+  while (!isJavaIndexQuiescent(status)) {
     if (Date.now() >= deadline) {
       throw new Error(`JavaIndex did not finish startup reconciliation within ${timeoutMs}ms`);
     }
@@ -722,6 +728,9 @@ function moduleName(file: string): string | undefined {
 
 function runNoLspRg(repoRoot: string, scenario: Scenario): { stdout: string; files: string[]; lineByPath: Map<string, number> } {
   const pattern = unique(noLspTerms(repoRoot, scenario)).map(regexLiteral).join("|") || regexLiteral(path.basename(scenario.anchor.file, ".java"));
+  // Task 36 classification: KEEP_NON_REQUEST_PATH_WITH_REASON. This fallback
+  // is confined to the offline benchmark harness; MCP request paths use the
+  // bounded streaming RgRunner and never execute synchronous rg.
   const result = spawnSync("rg", ["--line-number", "--no-heading", "-g", "*.java", pattern, "."], {
     cwd: repoRoot,
     encoding: "utf8",

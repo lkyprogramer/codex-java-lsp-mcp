@@ -10,7 +10,7 @@ import type { RoutingPolicy } from "../routing-policy.js";
 import type { DeadlineBudget } from "../runtime/deadline-budget.js";
 import type { JdtlsSession } from "../jdtls-session.js";
 import type { SemanticEdgeStoreV2 } from "../semantic-edge-store.js";
-import type { CandidateFile, Confidence, ImpactOptions, ResolvedAnchor, RgPlanSection } from "../agent-types.js";
+import type { Confidence, ImpactOptions, ResolvedAnchor, RgPlanSection } from "../agent-types.js";
 import type { RgCommandSummary } from "./rg-plan.js";
 import type { TypeReferenceMetrics } from "./type-reference.js";
 import type { ImportGraphMetrics } from "./candidate-collectors.js";
@@ -34,6 +34,18 @@ export type EvidenceFamily =
 
 export type EvidenceCompleteness = "COMPLETE" | "PARTIAL" | "UNKNOWN";
 
+/**
+ * Candidate-facing attribution carried by the signal that discovered it.
+ * Ranking never reads this projection; it exists so CandidateFile/read-plan
+ * consumers do not need a second, additive CandidateFile side channel.
+ */
+export type EvidenceCandidateMetadata = {
+  categories: string[];
+  reasons: string[];
+  verifiedBy: string[];
+  matchCount: number;
+};
+
 export type EvidenceSignal = {
   signalId: string;
   candidateFile: string;
@@ -56,19 +68,13 @@ export type EvidenceSignal = {
   providerVersion: string;
   generation: number;
   detail?: string;
+  candidateMetadata?: EvidenceCandidateMetadata;
 };
 
 export type ProviderOutcome = {
   providerId: string;
   providerVersion: string;
   evidence: EvidenceSignal[];
-  /**
-   * Transitional metadata from a provider's wrapped collector, in
-   * `mergeCandidate`-foldable form. Task 25 ranks only typed `evidence`, but
-   * materialization still needs categories, reasons, positions and
-   * verification provenance that are not yet reconstructable from families.
-   */
-  candidates: CandidateFile[];
   completion: Completion;
   elapsedMs: number;
   degradation?: string;

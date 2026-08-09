@@ -28,8 +28,6 @@ const KIND_TO_LEGACY_ID: Partial<Record<string, { id: string; reason: string }>>
   TASK_KEYWORD: { id: "finalize.task-keyword", reason: "task keyword evidence" },
   DIRECT_COLLABORATOR: { id: "finalize.direct-collaborator", reason: "direct type-name collaborator" },
   METHOD_RELATION: { id: "finalize.method-relation", reason: "method relation" },
-  ANNOTATION_COLLABORATION: { id: "finalize.structural.annotation", reason: "stereotype collaboration" },
-  PACKAGE_PROXIMITY: { id: "finalize.structural.package", reason: "package proximity" },
   TYPE_SYMMETRIC: { id: "finalize.structural.type-symmetric", reason: "anchor is candidate subtype" },
   KIND_PAIRING: { id: "finalize.structural.kind", reason: "interface-impl pairing" }
 };
@@ -66,14 +64,7 @@ const MAX_POSITIONS = 8;
 export function materializeRankedCandidates(
   ranked: readonly CandidateEvidence[],
   anchors: readonly ResolvedAnchor[],
-  repoRoot: string,
-  /**
-   * Candidate discovery metadata is orthogonal to rank evidence. During the
-   * shadow transition the production fold already has the authoritative
-   * category/reason/verification union; retain it so buildReadPlan compares
-   * two rankers, rather than a ranker against a lossy adapter.
-   */
-  legacyCandidates: ReadonlyMap<string, CandidateFile> = new Map()
+  repoRoot: string
 ): CandidateFile[] {
   const anchorFilesByPath = new Map<string, CandidateFile>();
   for (const anchor of anchors) {
@@ -89,29 +80,16 @@ export function materializeRankedCandidates(
   const anchorPaths = new Set(anchorFilesByPath.keys());
   const rest = ranked
     .filter(candidate => !anchorPaths.has(candidate.file))
-    .map(candidate => materializeOne(candidate, repoRoot, legacyCandidates.get(candidate.file)));
+    .map(candidate => materializeOne(candidate, repoRoot));
   return [...anchorFiles, ...rest];
 }
 
-function materializeOne(candidate: CandidateEvidence, repoRoot: string, legacy?: CandidateFile): CandidateFile {
-  const path = legacy?.path ?? classifyPath(repoRoot, candidate.file).relativePath;
-  const evidenceReasons = candidate.signals.map(signal => lexicalCategory(signal.kind) ? `rg:${lexicalCategory(signal.kind)}` : signal.kind);
-  const reasons = unique([...(legacy?.reasons ?? []), ...evidenceReasons]);
-  // LEXICAL signal count stands in for the old rg matchCount - it is the
-  // closest existing analog, not a literal port of rg's per-line match tally.
-  const matchCount = candidate.signals.filter(signal => signal.family === "LEXICAL").length;
-  const lexicalCategories = candidate.signals
-    .map(signal => lexicalCategory(signal.kind))
-    .filter((category): category is string => Boolean(category));
-  const categories = unique([
-    ...(legacy?.categories ?? []),
-    ...lexicalCategories,
-    ...candidate.signals
-      .map(signal => signal.kind === "SUPPORT_FILE" ? "config" : FAMILY_TO_CATEGORY[signal.family])
-      .filter((category): category is string => Boolean(category)),
-    ...(candidate.signals.some(signal => signal.family === "LEXICAL") && lexicalCategories.length === 0 ? ["naming"] : [])
-  ]);
-  const positions = dedupePositions([...candidate.signals.flatMap(signal => signal.positions), ...(legacy?.positions ?? [])]);
+function materializeOne(candidate: CandidateEvidence, repoRoot: string): CandidateFile {
+  const path = classifyPath(repoRoot, candidate.file).relativePath;
+  const signalMetadata = candidate.signals.map(signal => signal.candidateMetadata ?? fallbackMetadata(signal));
+  const reasons = unique(signalMetadata.flatMap(metadata => metadata.reasons));
+  const categories = unique(signalMetadata.flatMap(metadata => metadata.categories));
+  const positions = dedupePositions(candidate.signals.flatMap(signal => signal.positions));
   const scoreBreakdown: ScoreBreakdownItem[] = [
     { id: "family-ranker.final-score", source: "policy", delta: candidate.finalScore, reason: "family-saturated score" },
     ...legacyCompatEntries(candidate)
@@ -119,16 +97,16 @@ function materializeOne(candidate: CandidateEvidence, repoRoot: string, legacy?:
   const materialized: CandidateFile = {
     absolutePath: candidate.file,
     path,
-    module: candidate.module ?? legacy?.module,
-    layer: candidate.layer ?? legacy?.layer,
-    sourceSet: candidate.sourceSet ?? legacy?.sourceSet,
+    module: candidate.module,
+    layer: candidate.layer,
+    sourceSet: candidate.sourceSet,
     score: candidate.finalScore,
-    matchCount: Math.max(matchCount, legacy?.matchCount ?? 0),
+    matchCount: signalMetadata.reduce((sum, metadata) => sum + metadata.matchCount, 0),
     positions,
     categories,
     reasons,
     confidence: candidate.confidence,
-    verifiedBy: unique([...(legacy?.verifiedBy ?? []), ...reasons]),
+    verifiedBy: unique(signalMetadata.flatMap(metadata => metadata.verifiedBy)),
     scoreBreakdown
   };
   Object.defineProperty(materialized, "plannerEvidence", {
@@ -138,6 +116,19 @@ function materializeOne(candidate: CandidateEvidence, repoRoot: string, legacy?:
     writable: false
   });
   return materialized;
+}
+
+function fallbackMetadata(signal: CandidateEvidence["signals"][number]): NonNullable<CandidateEvidence["signals"][number]["candidateMetadata"]> {
+  const lexical = lexicalCategory(signal.kind);
+  const category = signal.kind === "SUPPORT_FILE"
+    ? "config"
+    : lexical ?? FAMILY_TO_CATEGORY[signal.family] ?? (signal.family === "LEXICAL" ? "naming" : undefined);
+  return {
+    categories: category ? [category] : [],
+    reasons: [lexical ? `rg:${lexical}` : signal.kind],
+    verifiedBy: [lexical ? "rg" : signal.kind],
+    matchCount: signal.family === "LEXICAL" ? 1 : 0
+  };
 }
 
 function plannerEvidence(candidate: CandidateEvidence): CandidateEvidenceKey[] {

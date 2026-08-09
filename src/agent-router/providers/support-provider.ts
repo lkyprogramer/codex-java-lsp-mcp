@@ -3,8 +3,7 @@
 // pos: Task 24 Step 7 - a tiny context provider; focusModules/taskKeywords stop being direct
 //      direct final-score deltas; Task 25's ranker consumes these signals instead (plan line 7434).
 import { classifyPath } from "../../repo-layout.js";
-import type { CandidateFile } from "../../agent-types.js";
-import { breakdown, matchesAny, mergeCandidate } from "../candidate-helpers.js";
+import { matchesAny } from "../candidate-helpers.js";
 import type { EvidenceSignal, ProviderInput, ProviderOutcome } from "../evidence.js";
 import { nextSignalId } from "./shared.js";
 
@@ -17,7 +16,6 @@ export async function collectSupportEvidence(input: ProviderInput): Promise<Prov
   const startedAt = Date.now();
   const anchorId = input.anchors[0]?.id ?? "A1";
   const evidence: EvidenceSignal[] = [];
-  const candidates = new Map<string, CandidateFile>();
   for (const absolutePath of new Set(input.existingCandidatePaths)) {
     const context = classifyPath(input.repoRoot, absolutePath);
     const relativePath = context.relativePath ?? absolutePath;
@@ -31,46 +29,17 @@ export async function collectSupportEvidence(input: ProviderInput): Promise<Prov
       // Its bounded TASK_CONTEXT family contribution offsets, but never waives,
       // the family ranker's cross-module penalty for multi-module tasks.
       evidence.push(makeSignal(input, anchorId, absolutePath, "FOCUS_MODULE", "TASK_CONTEXT", 55));
-      mergeCandidate(candidates, contextCandidate(context, "taskContext:focusModule", 55));
     }
     if (keywordMatch) {
       evidence.push(makeSignal(input, anchorId, absolutePath, "TASK_KEYWORD", "TASK_CONTEXT", 30));
-      mergeCandidate(candidates, contextCandidate(context, "taskContext:taskKeyword", 30));
     }
   }
   return {
     providerId: SUPPORT_PROVIDER_ID,
     providerVersion: SUPPORT_PROVIDER_VERSION,
     evidence,
-    // Context only reinforces paths that an earlier provider found.  It does
-    // not create broad lexical candidates, but its contribution must flow
-    // through the same normalized evidence/ranking boundary as every other
-    // provider instead of being re-applied after ranking.
-    candidates: [...candidates.values()],
     completion: "COMPLETE",
     elapsedMs: Date.now() - startedAt
-  };
-}
-
-function contextCandidate(
-  context: ReturnType<typeof classifyPath>,
-  reason: string,
-  score: number
-): CandidateFile {
-  return {
-    absolutePath: context.absolutePath,
-    path: context.relativePath,
-    module: context.module,
-    layer: context.layer,
-    sourceSet: context.sourceSet,
-    score,
-    matchCount: 0,
-    positions: [],
-    categories: ["task-context"],
-    reasons: [reason],
-    confidence: "low",
-    verifiedBy: ["taskContext"],
-    scoreBreakdown: [breakdown(`evidence.${reason}`, "policy", score, reason)]
   };
 }
 
@@ -96,6 +65,14 @@ function makeSignal(
     positions: [],
     providerId: SUPPORT_PROVIDER_ID,
     providerVersion: SUPPORT_PROVIDER_VERSION,
-    generation: input.generation
+    generation: input.generation,
+    candidateMetadata: {
+      categories: [kind === "SUPPORT_FILE" ? "config" : "task-context"],
+      reasons: [kind === "FOCUS_MODULE"
+        ? "taskContext:focusModule"
+        : kind === "TASK_KEYWORD" ? "taskContext:taskKeyword" : kind],
+      verifiedBy: [kind === "SUPPORT_FILE" ? kind : "taskContext"],
+      matchCount: 0
+    }
   };
 }

@@ -47,14 +47,14 @@ test("cleanupStaleWorktreeCaches removes only stale inactive worktree caches by 
   }
 });
 
-test("cleanupStaleWorktreeCaches ignores legacy source-index metadata", async () => {
+test("cleanupStaleWorktreeCaches ignores unrelated metadata files", async () => {
   const { cleanupStaleWorktreeCaches } = await import("./worktree-cache-cleanup.js");
   const cacheBase = await mkdtemp(path.join(tmpdir(), "java-lsp-worktree-cache-"));
   const legacyDir = path.join(cacheBase, "legacy-index");
 
   try {
     await mkdir(legacyDir, { recursive: true });
-    await writeFile(path.join(legacyDir, "source-index.meta.json"), JSON.stringify({
+    await writeFile(path.join(legacyDir, "unrelated-index.meta.json"), JSON.stringify({
       repoRoot: "/tmp/old-worktree",
       isGitWorktree: true,
       updatedAt: "2026-06-18T00:00:00.000Z"
@@ -155,7 +155,7 @@ async function teardown(fixture: JanitorFixture): Promise<void> {
   await rm(fixture.leaseBase, { recursive: true, force: true });
 }
 
-test("janitor does not delete a stale-looking cache owned by a live fast-only runtime", async () => {
+test("janitor does not delete a stale-looking cache whose ownerToken matches a live fast-only runtime", async () => {
   const fixture = await cacheJanitorFixture(10);
   try {
     const runtimeLease = await fixture.leases.acquireRuntime(fixture.identity);
@@ -187,7 +187,23 @@ test("janitor removes a stale cache once the runtime lease is released and the r
   }
 });
 
-test("a live ownerPid fallback protects a cache even with no runtime lease on disk", async () => {
+test("a stale ownerToken does not let the same live PID protect a released runtime forever", async () => {
+  const fixture = await cacheJanitorFixture(10);
+  try {
+    const runtimeLease = await fixture.leases.acquireRuntime(fixture.identity);
+    await runtimeLease.release();
+    await fixture.writeCacheMeta({ ownerPid: process.pid, ownerToken: runtimeLease.owner.ownerToken });
+
+    const result = await cleanupFixture(fixture);
+
+    assert.equal(result.removed, 1);
+    assert.equal(existsSync(fixture.cacheRoot), false);
+  } finally {
+    await teardown(fixture);
+  }
+});
+
+test("a legacy cache with no ownerToken conservatively falls back to a live ownerPid", async () => {
   const fixture = await cacheJanitorFixture(10);
   try {
     await fixture.writeCacheMeta({ ownerPid: process.pid });

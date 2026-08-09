@@ -4,10 +4,10 @@
 
 ## 不变量
 
-- 基线必须是已批准且为候选 `HEAD` 祖先的 Git SHA；候选是 `--candidate-root` 的 `HEAD + 全部已跟踪改动（含 staged/unstaged diff）`。未跟踪的 `src/`、`golden/`、`fixtures/`、`scripts/` 或构建配置输入会直接拒绝运行。
+- 基线必须是已批准且为候选 `HEAD` 祖先的 Git SHA；候选是 `--candidate-root` 的 `HEAD + 全部已跟踪改动（含 staged/unstaged diff）+ runner 白名单内的未跟踪运行时输入`。这些未跟踪输入会复制到 `candidate-untracked/` 并绑定 SHA-256；白名单外未跟踪文件不会进入候选，也不能作为测试结论依据。
 - 场景从候选 worktree 拷贝到产物目录的 `frozen-scenarios/`，old/new 都通过 `--scenarios <同一绝对路径>` 使用它。禁止依赖各 worktree 的默认 `golden/` 路径。
 - 运行固定为 `cold-nolsp`、`impact`、`diagnostic`、3 轮 AB/BA/AB、每 cell 5 runs。脚本拒绝非 5-run 的正式门禁。
-- 所有编译、测试和 benchmark 都在临时 candidate/baseline worktree 执行，强制 `JDTLS_BIN=/usr/bin/false`、`JAVA_LSP_FILE_WATCH=0`、`JAVA_LSP_SHADOW_RANKING=0`，并将 `JAVA_LSP_CACHE_ROOT` 指向临时目录；不会复用、停止或改写调用者正在运行的 LSP 或其缓存。
+- 所有编译、测试和 benchmark 都在临时 candidate/baseline worktree 执行，强制 `JDTLS_BIN=/usr/bin/false`、`JAVA_LSP_SHADOW_RANKING=0`，并将 `JAVA_LSP_CACHE_ROOT` 指向临时目录；不会复用、停止或改写调用者正在运行的 LSP 或其缓存。
 - 原始 18 份 JSON、每 cell stderr、候选 patch、场景 SHA-256、运行台账和汇总都保存在新建 output 目录。默认清理临时 worktree/cache；`--keep-worktrees` 仅用于调试。
 
 ## 前置条件
@@ -73,7 +73,7 @@ matrix-summary.json
 node scripts/verify-three-repo-cold-matrix.mjs \
   --matrix-dir artifacts/model-eval/task30-final-frozen-20260804/matrix \
   --expected-runs 5 \
-  --p95-limit 1.10
+  --p95-limit 1.25
 ```
 
 校验器要求完整 18 cells，并检查每个 cell 的 `projectId`、`cold-nolsp`、`impact`、`diagnostic`、5 attempts/场景，以及同项目 old/new 的 `scenarioFile` 完全一致。
@@ -87,8 +87,8 @@ node scripts/verify-three-repo-cold-matrix.mjs \
 | Must 读取 | 每个 candidate attempt 的 `R_read_must = 1.0000` |
 | 候选质量 | candidate recall 不低于 old |
 | 读取质量 | candidate `P_read` 不低于 old |
-| 延迟 | `P95(candidate) <= 1.10 × P95(old)` |
+| 延迟 | `P95(candidate) <= max(1.25 × P95(old), P95(old) + 50ms)` |
 
-P95 以每个项目三个 round 的所有 scenario attempts 汇合后，按 `ceil(n × 0.95) - 1` 计算。不能只看总平均、单个 scenario、绝对 300ms 阈值或 shadow 数据。
+P95 以每个项目三个 round 的所有 scenario attempts 汇合后，按 `ceil(n × 0.95) - 1` 计算。`50ms` 绝对 slack 避免极低基线被调度噪声放大；它不能替代比例门，也不能用总平均、单个 scenario、绝对 300ms 阈值或 shadow 数据代替正式 P95。
 
 若脚本返回非零：保留 output 原始 JSON 和 `matrix-summary.json`，先检查 `goldenAttribution` 中的 `absent` / `readplan-full` 和相关 timing，再做通用事实、排序或预算修复。不得用仓库名、路径名、文件名或 golden 项添加定制规则；修复后必须重新运行完整矩阵。

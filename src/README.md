@@ -1,23 +1,29 @@
-本目录是 `codex-java-lsp` MCP 的 TypeScript 源码层。
-`server.ts` 只做 MCP 注册，`repo-resolver.ts` 负责 repo/worktree 选择，`tools/` 处理 public tools，`agent-router/` 生成 Java 影响面。
+# `src/` architecture map
+
+本目录是 `codex-java-lsp` MCP 的 TypeScript 源码层。生产链只有一套 Java V3 路径：RepoChangeCoordinator generation → Tree-sitter JavaIndex → bounded JDT/SemanticGateway → typed evidence/family ranker → token-aware `readPlan` → 5 个 MCP tools。
 
 ## 文件清单
 
-- `agent-router/` | `java_impact` 的候选生成、内部 rg、评分、readPlan 与证据缺口逻辑。
-- `agent-types.ts` | public options、内部候选、readPlan、rgSummary 与 metrics 类型。
+- `agent-router/` | `java_impact` 的 typed evidence、family ranking、framework packs、candidate materialization 与文件/范围级 `readPlan`。
+- `agent-types.ts` | public options、ImpactResultV6、候选、readPlan、freshness 与 metrics 类型。
 - `alias-registry.ts` | 读取并热更新 `projects.json` alias 与 LSP enablement 配置。
-- `benchmark-agent-impact.ts` | 固化导航场景，统计 payload、耗时、precision、recall。
-- `file-watcher.ts` | 监听 Java/Gradle/Maven 变化并通知 JDT LS，同时触发 cache invalidation。
+- `benchmark-agent-impact.ts`、`benchmark/` | frozen golden、质量/成本/确定性/mutation/first-touch 验收工具；不属于 MCP 请求路径。
+- `cross-process-lease.ts` | machine-level JDT/sweep fixed slots、same-worktree runtime ownership、heartbeat 与 owner-token release。
+- `document-lru.ts` | JDT open document 上限、pin、didChange/didClose 与 LRU 淘汰。
 - `generated-code.ts` | 检测 Lombok、MapStruct 等生成代码依赖与 Lombok javaagent。
 - `hooks/hook-gate.ts` | Codex advisory hook，复用 registry/resolver/path 判断。
-- `jdtls-session.ts` | 启动/复用 JDT LS，处理 initialize、open document、diagnostics、documentSymbol、timeout 与 cache。
-- `path-utils.ts` | canonical path、segment-safe containment、repo hash。
+- `java-index/` | Tree-sitter Java AST、FQN/import resolution、静态 edges、MyBatis resources、coverage、incremental refresh、atomic snapshot 与 worktree seed。
+- `jdtls-session.ts` | transactional JDT lifecycle、restart backoff、lease heartbeat、DocumentLru、LSP notifications 与 SemanticGateway backend。
+- `semantic-gateway.ts` | 所有 semantic operations 的 same-key singleflight、per-caller deadline、complete-only bounded cache。
+- `repo-change-coordinator.ts` | 唯一文件 watcher owner；输出 normalized batch 和单调 generation，处理 storm/degraded 状态。
+- `repo-runtime-manager.ts` | 管理每个 repo/worktree 的 coordinator、JavaIndex、JDT session、request budget 与 lifecycle。
+- `path-utils.ts` | canonical/potential path、segment-safe containment、repo hash。
 - `project-jdk.ts` | 解析项目 JDK 与 JDT LS runtime JDK 的配置关系。
 - `repo-layout.ts` | 识别 repo root、模块、layer、sourceSet 和路径规范化。
 - `repo-resolver.ts` | 将 `projectId/repoRoot/file` 解析为 canonical repoRoot、repoHash 与 LSP enablement。
-- `repo-runtime-manager.ts` | 管理每个 repo/worktree 的 session、JavaIndex 和 AgentRouter。
-- `server.ts` | 注册七个只读 public MCP tools。
-- `smoke.ts` | 启动已构建 MCP server，验证 tools/list、`java_status` 与 shutdown。
-- `java-index/` | 异步 Java AST 索引、快照恢复与 worktree seed，向 AgentRouter 提供静态事实。
-- `tools/` | 七个 public MCP tool 的 handler 与共享 context。
-- `worktree-cache-cleanup.ts` | 启动时清理超过 TTL 的非活跃 Git worktree cache，不清主 checkout。
+- `server.ts` | 注册 5 个只读 public MCP tools。
+- `smoke.ts` | 启动已构建 MCP server，验证 `tools/list`、`java_status` 与 shutdown。
+- `tools/` | 5 个 public MCP tool 的薄 handler 与共享 context。
+- `worktree-cache-cleanup.ts` | owner-token/lease-aware cache janitor；只清理已确认非活跃的 stale worktree cache。
+
+目录或生产 ownership 变化时必须同步更新本文件。

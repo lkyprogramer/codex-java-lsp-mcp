@@ -83,7 +83,6 @@ export async function runFrameworkAdapters(
       context.candidateFiles.slice(0, MAX_FRAMEWORK_TRAVERSAL_FILES).includes(candidate.file))
   };
   const evidence: ProviderOutcome["evidence"] = [];
-  const candidates: ProviderOutcome["candidates"] = [];
   const metadata: Record<string, FrameworkAdapterMetadata> = {};
   const diagnostics: string[] = [];
   let completion: Completion = "COMPLETE";
@@ -110,7 +109,6 @@ export async function runFrameworkAdapters(
     try {
       const result = await adapter.collect(boundedContext);
       evidence.push(...result.outcome.evidence);
-      candidates.push(...result.outcome.candidates);
       metadata[adapter.id] = result.metadata;
       diagnostics.push(...result.diagnostics);
       completion = worseCompletion(completion, result.outcome.completion);
@@ -125,7 +123,6 @@ export async function runFrameworkAdapters(
       providerId: FRAMEWORK_PROVIDER_ID,
       providerVersion: FRAMEWORK_PROVIDER_VERSION,
       evidence,
-      candidates,
       completion,
       elapsedMs: Date.now() - startedAt
     },

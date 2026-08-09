@@ -1,15 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import * as candidateRanking from "./rank-candidates.js";
 import {
   familyReadPlanProtectedPaths,
-  foldProviderCandidates,
   rankCandidatePool,
   rankCandidates,
   truncateRankedCandidatePool
 } from "./rank-candidates.js";
 import type { CandidateFile, ImpactOptions, ResolvedAnchor } from "../agent-types.js";
-import type { CandidateEvidence, EvidenceSignal, ProviderOutcome } from "./evidence.js";
+import type { CandidateEvidence, EvidenceSignal } from "./evidence.js";
+import { selectReadPlanFiles } from "./read-plan.js";
 
 function candidate(absolutePath: string, score: number): CandidateFile {
   return {
@@ -24,57 +23,6 @@ function candidate(absolutePath: string, score: number): CandidateFile {
     scoreBreakdown: []
   };
 }
-
-function outcome(overrides: Partial<ProviderOutcome>): ProviderOutcome {
-  return {
-    providerId: "static",
-    providerVersion: "1",
-    evidence: [],
-    candidates: [],
-    completion: "COMPLETE",
-    elapsedMs: 0,
-    ...overrides
-  };
-}
-
-test("rank fold ignores a provider fragment without retained evidence", () => {
-  const orphan = candidate("/repo/Orphan.java", 55);
-
-  const folded = foldProviderCandidates([], [outcome({ candidates: [orphan] })]);
-
-  assert.equal(
-    folded.has(orphan.absolutePath),
-    false,
-    "a provider cannot nominate a scored candidate after the evidence normalizer rejected or omitted its evidence"
-  );
-});
-
-test("rank fold applies one provider contribution when its evidence was deduplicated", () => {
-  const duplicate = candidate("/repo/Duplicate.java", 55);
-  const evidence = {
-    signalId: "first",
-    candidateFile: duplicate.absolutePath,
-    anchorId: "A1",
-    kind: "REFERENCE",
-    family: "STATIC_STRUCTURE" as const,
-    provenance: "AST_RESOLVED" as const,
-    confidence: 0.8,
-    completeness: "COMPLETE" as const,
-    weight: 55,
-    sourceFile: duplicate.absolutePath,
-    positions: [],
-    providerId: "static",
-    providerVersion: "1",
-    generation: 0
-  };
-
-  const folded = foldProviderCandidates([], [
-    outcome({ candidates: [duplicate], evidence: [evidence] }),
-    outcome({ candidates: [duplicate], evidence: [{ ...evidence, signalId: "duplicate" }] })
-  ]);
-
-  assert.equal(folded.get(duplicate.absolutePath)?.score, 55);
-});
 
 // Task 25 cutover: rankCandidates() now scores from family-ranker.ts instead
 // of finalizeRank/finalizeScore. The three-repo shadow benchmark that gated
@@ -149,7 +97,7 @@ function emptySuppressed(): Record<string, number> {
 
 test("rankCandidates always returns the anchor, even with zero evidence", async () => {
   const anchorEntry = anchor();
-  const ranked = await rankCandidates(new Map(), [], {
+  const ranked = await rankCandidates(new Map(), {
     anchors: [anchorEntry],
     options: options(),
     suppressed: emptySuppressed(),
@@ -157,6 +105,68 @@ test("rankCandidates always returns the anchor, even with zero evidence", async 
   });
   assert.equal(ranked.length, 1);
   assert.equal(ranked[0]?.absolutePath, anchorEntry.absolutePath);
+});
+
+test("typed evidence preserves family score, candidate order, metadata, and read-plan selection without legacy fragments", async () => {
+  const anchorEntry = anchor();
+  const structuralFile = "/repo/module-a/src/main/java/demo/Structural.java";
+  const lexicalFile = "/repo/module-a/src/main/java/demo/Lexical.java";
+  const structuralSignal = signal({
+    candidateFile: structuralFile,
+    kind: "IMPLEMENTS",
+    weight: 90,
+    confidence: 1,
+    positions: [{ line: 17, column: 3 }],
+    ...({
+      candidateMetadata: {
+        categories: ["semantic"],
+        reasons: ["typeGraph"],
+        verifiedBy: ["typeGraph"],
+        matchCount: 0
+      }
+    } as Record<string, unknown>)
+  });
+  const lexicalSignal = signal({
+    candidateFile: lexicalFile,
+    kind: "LEXICAL:java",
+    family: "LEXICAL",
+    provenance: "LEXICAL_RG",
+    weight: 56,
+    confidence: 0.6,
+    positions: [{ line: 9, column: 2 }],
+    ...({
+      candidateMetadata: {
+        categories: ["java"],
+        reasons: ["rg:java"],
+        verifiedBy: ["rg"],
+        matchCount: 2
+      }
+    } as Record<string, unknown>)
+  });
+  const normalized = new Map<string, CandidateEvidence>([
+    [lexicalFile, evidenceCandidate(lexicalFile, [lexicalSignal], { module: "module-a", sourceSet: "main" })],
+    [structuralFile, evidenceCandidate(structuralFile, [structuralSignal], { module: "module-a", sourceSet: "main" })]
+  ]);
+
+  const pool = await rankCandidatePool(normalized, {
+    anchors: [anchorEntry],
+    options: options({ mode: "minimal", readPlanMaxItems: 2 }),
+    suppressed: emptySuppressed(),
+    repoRoot: "/repo"
+  });
+
+  assert.deepEqual(pool.map(file => file.absolutePath), [anchorEntry.absolutePath, structuralFile, lexicalFile]);
+  assert.deepEqual(pool.map(file => file.score), [1000, 140, 77.6]);
+  const structural = pool[1]!;
+  assert.deepEqual(structural.categories, ["semantic"]);
+  assert.deepEqual(structural.reasons, ["typeGraph"]);
+  assert.deepEqual(structural.verifiedBy, ["typeGraph"]);
+  assert.deepEqual(structural.positions, [{ line: 17, column: 3 }]);
+  assert.deepEqual(
+    selectReadPlanFiles({ files: pool, options: options({ readPlanMaxItems: 2 }), maxItems: 2 })
+      .map(file => file.absolutePath),
+    [anchorEntry.absolutePath, structuralFile]
+  );
 });
 
 test("rankCandidates filters excluded modules before scoring and counts them as suppressed", async () => {
@@ -168,7 +178,7 @@ test("rankCandidates filters excluded modules before scoring and counts them as 
   ]);
   const suppressed = emptySuppressed();
 
-  const ranked = await rankCandidates(normalized, [], {
+  const ranked = await rankCandidates(normalized, {
     anchors: [anchor()],
     options: options({ excludeModules: ["module-b"] }),
     suppressed,
@@ -189,7 +199,7 @@ test("rankCandidates mirrors family-ranker's cross-module and deferred-test pena
   ]);
   const suppressed = emptySuppressed();
 
-  await rankCandidates(normalized, [], {
+  await rankCandidates(normalized, {
     anchors: [anchor({ module: "module-a" })],
     options: options({ crossModulePolicy: "auto", testReadMode: "defer" }),
     suppressed,
@@ -221,7 +231,7 @@ test("rankCandidates truncates the candidate tail by family-ranker score while p
   const normalized = new Map(entries);
   const anchorEntry = anchor();
 
-  const ranked = await rankCandidates(normalized, [], {
+  const ranked = await rankCandidates(normalized, {
     anchors: [anchorEntry],
     options: options({ mode: "minimal" }),
     suppressed: emptySuppressed(),
@@ -257,7 +267,7 @@ test("the V6 planner can select from the complete ranked pool before output-tail
     suppressed: emptySuppressed(),
     repoRoot: "/repo"
   };
-  const pool = await rankCandidatePool(new Map(entries), [], rankContext);
+  const pool = await rankCandidatePool(new Map(entries), rankContext);
   const requiredPath = "/repo/module-a/src/main/java/demo/Candidate24.java";
   const truncated = truncateRankedCandidatePool(pool, rankContext, new Set([requiredPath]));
 
@@ -310,7 +320,7 @@ test("output-tail truncation retains the seed read-plan coverage independently o
   assert.ok(truncated.some(file => file.absolutePath === legacyCovered.absolutePath), "Task 29 candidate-output coverage remains required");
 });
 
-test("output-tail compatibility retains a legacy direct collaborator without making it V6 protected core", async () => {
+test("output-tail compatibility retains a direct collaborator without making it V6 protected core", async () => {
   const entries: [string, CandidateEvidence][] = [];
   for (let index = 0; index < 25; index += 1) {
     const file = `/repo/module-a/src/main/java/demo/High${index}.java`;
@@ -328,14 +338,7 @@ test("output-tail compatibility retains a legacy direct collaborator without mak
     confidence: 0.5
   });
   entries.push([collaborator, evidenceCandidate(collaborator, [collaboratorSignal], { module: "module-a", sourceSet: "main" })]);
-  const fragment = {
-    ...candidate(collaborator, 1),
-    reasons: ["DIRECT_COLLABORATOR"],
-    verifiedBy: ["DIRECT_COLLABORATOR"],
-    scoreBreakdown: [{ id: "finalize.direct-collaborator", source: "finalize" as const, delta: 1, reason: "legacy output retention" }]
-  };
-
-  const ranked = await rankCandidates(new Map(entries), [outcome({ evidence: [collaboratorSignal], candidates: [fragment] })], {
+  const ranked = await rankCandidates(new Map(entries), {
     anchors: [anchor()],
     options: options({ mode: "minimal" }),
     suppressed: emptySuppressed(),
@@ -369,18 +372,16 @@ test("candidate tail retains an exact main-source type reference without promoti
     provenance: "AST_RESOLVED",
     confidence: 0.8,
     weight: 1,
-    sourceFile: anchorEntry.absolutePath
+    sourceFile: anchorEntry.absolutePath,
+    candidateMetadata: {
+      categories: ["semantic"],
+      reasons: ["typeReference"],
+      verifiedBy: ["typeReference"],
+      matchCount: 0
+    }
   });
   entries.push([directReference, evidenceCandidate(directReference, [referenceSignal], { module: "module-a", sourceSet: "main" })]);
-  const fragment = {
-    ...candidate(directReference, 1),
-    module: "module-a",
-    sourceSet: "main" as const,
-    reasons: ["typeReference"],
-    verifiedBy: ["typeReference"]
-  };
-
-  const ranked = await rankCandidates(new Map(entries), [outcome({ evidence: [referenceSignal], candidates: [fragment] })], {
+  const ranked = await rankCandidates(new Map(entries), {
     anchors: [anchorEntry],
     options: options({ mode: "minimal" }),
     suppressed: emptySuppressed(),
@@ -414,7 +415,7 @@ test("candidate tail retains bounded main-source representatives from every expl
     ], { module: "product", sourceSet: "main" })]);
   }
 
-  const ranked = await rankCandidates(new Map(entries), [], {
+  const ranked = await rankCandidates(new Map(entries), {
     anchors: [anchorEntry],
     options: options({ mode: "balanced", focusModules: ["benefits", "product"] }),
     suppressed: emptySuppressed(),
@@ -430,20 +431,7 @@ test("candidate tail retains bounded main-source representatives from every expl
   }
 });
 
-test("pre-semantic protection ignores a score that exists only in the retired additive policy", async () => {
-  const familyReadPlanProtectedPaths = (candidateRanking as unknown as {
-    familyReadPlanProtectedPaths?: (
-      normalized: ReadonlyMap<string, CandidateEvidence>,
-      outcomes: readonly ProviderOutcome[],
-      context: Parameters<typeof rankCandidates>[2]
-    ) => Promise<ReadonlySet<string>>;
-  }).familyReadPlanProtectedPaths;
-  assert.equal(
-    typeof familyReadPlanProtectedPaths,
-    "function",
-    "production must derive pre-semantic protection from family ranking rather than finalizeRank"
-  );
-
+test("pre-semantic protection does not reserve a slot for lexical-only evidence", async () => {
   const names = ["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "ZLegacyBoost"];
   const files = names.map(name => `/repo/module-a/src/main/java/demo/${name}.java`);
   const signals = files.map(file => signal({
@@ -458,13 +446,7 @@ test("pre-semantic protection ignores a score that exists only in the retired ad
     module: "module-a",
     sourceSet: "main"
   })]));
-  const fragments = files.map((absolutePath, index) => ({
-    ...candidate(absolutePath, index === files.length - 1 ? 10_000 : 1),
-    categories: ["java"],
-    reasons: ["rg:java"],
-    verifiedBy: ["rg"]
-  }));
-  const protectedPaths = await familyReadPlanProtectedPaths!(normalized, [outcome({ evidence: signals, candidates: fragments })], {
+  const protectedPaths = await familyReadPlanProtectedPaths(normalized, {
     anchors: [anchor()],
     options: options({ mode: "minimal", readPlanMaxItems: 4 }),
     suppressed: emptySuppressed(),
@@ -474,7 +456,7 @@ test("pre-semantic protection ignores a score that exists only in the retired ad
   assert.equal(
     protectedPaths.has(files.at(-1)!),
     false,
-    "the high legacy fragment score must not reserve a read-plan slot when its family evidence ties the other lexical candidates"
+    "lexical-only evidence must not reserve a protected read-plan slot"
   );
 });
 
@@ -501,12 +483,7 @@ test("pre-semantic protection reserves resolved Spring call paths, not injection
     [injectionFile, evidenceCandidate(injectionFile, [injectionSignal], { module: "module-a", sourceSet: "main" })],
     [responseFile, evidenceCandidate(responseFile, [responseSignal], { module: "module-a", sourceSet: "main" })]
   ]);
-  const fragments = [
-    { ...candidate(injectionFile, 1), categories: ["framework"], reasons: ["SPRING_INJECTION"], verifiedBy: ["SPRING_INJECTION"] },
-    { ...candidate(responseFile, 1), categories: ["framework"], reasons: ["SPRING_RESPONSE_TYPE"], verifiedBy: ["SPRING_RESPONSE_TYPE"] }
-  ];
-
-  const protectedPaths = await familyReadPlanProtectedPaths(normalized, [outcome({ evidence: [injectionSignal, responseSignal], candidates: fragments })], {
+  const protectedPaths = await familyReadPlanProtectedPaths(normalized, {
     anchors: [anchor()],
     options: options({ mode: "minimal", readPlanMaxItems: 3 }),
     suppressed: emptySuppressed(),
@@ -544,7 +521,7 @@ test("pre-semantic Spring call protection is limited to a call sourced by the re
     [nestedCallFile, evidenceCandidate(nestedCallFile, [nestedCall], { module: "module-a", sourceSet: "main" })]
   ]);
 
-  const protectedPaths = await familyReadPlanProtectedPaths(normalized, [], {
+  const protectedPaths = await familyReadPlanProtectedPaths(normalized, {
     anchors: [anchorEntry],
     options: options({ mode: "minimal", readPlanMaxItems: 3 }),
     suppressed: emptySuppressed(),
@@ -584,7 +561,7 @@ test("pre-semantic protection leaves deferred-test direct calls out of the range
     [deferredTestFile, evidenceCandidate(deferredTestFile, [deferredTestCall], { module: "module-a", sourceSet: "test" })]
   ]);
 
-  const protectedPaths = await familyReadPlanProtectedPaths(normalized, [], {
+  const protectedPaths = await familyReadPlanProtectedPaths(normalized, {
     anchors: [anchorEntry],
     options: options({ mode: "minimal", testReadMode: "defer" }),
     suppressed: emptySuppressed(),
@@ -622,7 +599,7 @@ test("direct imports remain candidate evidence rather than V6 protected core", a
     [nestedImportFile, evidenceCandidate(nestedImportFile, [nestedImport], { module: "module-a", sourceSet: "main" })]
   ]);
 
-  const protectedPaths = await familyReadPlanProtectedPaths(normalized, [], {
+  const protectedPaths = await familyReadPlanProtectedPaths(normalized, {
     anchors: [anchorEntry],
     options: options({ mode: "minimal", readPlanMaxItems: 3 }),
     suppressed: emptySuppressed(),
@@ -660,7 +637,7 @@ test("generic JavaIndex type references remain candidate evidence rather than V6
     [nestedReferenceFile, evidenceCandidate(nestedReferenceFile, [nestedReference], { module: "module-a", sourceSet: "main" })]
   ]);
 
-  const protectedPaths = await familyReadPlanProtectedPaths(normalized, [], {
+  const protectedPaths = await familyReadPlanProtectedPaths(normalized, {
     anchors: [anchorEntry],
     options: options({ mode: "minimal", readPlanMaxItems: 3 }),
     suppressed: emptySuppressed(),
@@ -687,7 +664,7 @@ test("contract anchors leave direct imports outside the protected execution core
     [directImportFile, evidenceCandidate(directImportFile, [directImport], { module: "module-a", sourceSet: "main" })]
   ]);
 
-  const protectedPaths = await familyReadPlanProtectedPaths(normalized, [], {
+  const protectedPaths = await familyReadPlanProtectedPaths(normalized, {
     anchors: [contractAnchor],
     options: options({ mode: "minimal", readPlanMaxItems: 3, profile: "repository" }),
     suppressed: emptySuppressed(),
@@ -723,7 +700,7 @@ test("pre-semantic protection retains only method-level second-hop implementatio
     [entityFile, evidenceCandidate(entityFile, [entity], { module: "module-a", sourceSet: "main" })]
   ]);
 
-  const protectedPaths = await familyReadPlanProtectedPaths(normalized, [], {
+  const protectedPaths = await familyReadPlanProtectedPaths(normalized, {
     anchors: [anchor()],
     options: options({ mode: "minimal", readPlanMaxItems: 3 }),
     suppressed: emptySuppressed(),
@@ -756,12 +733,7 @@ test("pre-semantic protection admits exact MyBatis namespace/statement matches b
     [namespaceFile, evidenceCandidate(namespaceFile, [namespaceSignal], { module: "module-a", sourceSet: "main" })],
     [paramTypeFile, evidenceCandidate(paramTypeFile, [paramTypeSignal], { module: "module-a", sourceSet: "main" })]
   ]);
-  const fragments = [
-    { ...candidate(namespaceFile, 1), categories: ["framework"], reasons: ["MYBATIS_NAMESPACE"], verifiedBy: ["MYBATIS_NAMESPACE"] },
-    { ...candidate(paramTypeFile, 1), categories: ["framework"], reasons: ["MYBATIS_PARAMETER_TYPE"], verifiedBy: ["MYBATIS_PARAMETER_TYPE"] }
-  ];
-
-  const protectedPaths = await familyReadPlanProtectedPaths(normalized, [outcome({ evidence: [namespaceSignal, paramTypeSignal], candidates: fragments })], {
+  const protectedPaths = await familyReadPlanProtectedPaths(normalized, {
     anchors: [anchor()],
     options: options({ mode: "minimal", readPlanMaxItems: 3 }),
     suppressed: emptySuppressed(),

@@ -60,9 +60,13 @@ export type RepoChangeKind =
   | "BUILD_CHANGE"
   | "WATCHER_DEGRADED";
 
+export type RepoChangeEvent = "add" | "change" | "delete";
+
 export type RepoChange = {
   kind: RepoChangeKind;
   absolutePath: string;
+  /** Exact filesystem event when known; BUILD_CHANGE needs it for precise LSP mapping. */
+  event?: RepoChangeEvent;
 };
 
 export type RepoChangeBatch = {

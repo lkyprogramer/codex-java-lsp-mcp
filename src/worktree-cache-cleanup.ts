@@ -4,7 +4,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { hasLiveRuntimeLease } from "./cross-process-lease.js";
+import { observeRuntimeLeaseLiveness } from "./cross-process-lease.js";
 import { repoCacheBase, repoCacheRoot } from "./repo-layout.js";
 
 const DAY_MS = 86400000;
@@ -156,10 +156,19 @@ function isWorktreeCache(meta: RepoCacheMeta): boolean {
  */
 function hasActiveOwner(cacheRoot: string, meta: RepoCacheMeta, leaseBase: string, isAlive: (pid: number) => boolean): boolean {
   const familyKey = meta.familyHash ?? meta.repoHash;
-  if (familyKey && meta.repoHash && hasLiveRuntimeLease(leaseBase, familyKey, meta.repoHash, isAlive)) {
-    return true;
+  if (familyKey && meta.repoHash) {
+    const runtime = observeRuntimeLeaseLiveness(leaseBase, familyKey, meta.repoHash, meta.ownerToken, isAlive);
+    // Any live runtime is authoritative. The token comparison additionally
+    // tells us whether this cache metadata's last-touch owner remains live;
+    // a different live runtime must still retain the shared cache.
+    if (runtime.matchingOwnerToken || runtime.anyLive) {
+      return true;
+    }
   }
-  if (meta.ownerPid && isAlive(meta.ownerPid)) {
+  // Only legacy metadata lacks an ownerToken. New metadata must be backed by
+  // a live runtime lease; otherwise a PID reused by this long-lived server
+  // could preserve a released runtime cache indefinitely.
+  if (meta.ownerToken === undefined && meta.ownerPid && isAlive(meta.ownerPid)) {
     return true;
   }
   if (meta.jdtlsPid && isAlive(meta.jdtlsPid)) {

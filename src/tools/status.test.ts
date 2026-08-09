@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import { javaStatus } from "./status.js";
 import type { ToolContext } from "./context.js";
 
@@ -60,13 +61,6 @@ test("java_status returns summary by default and keeps diagnostics explicit", as
           pid: 1234,
           knownDiagnostics: 0,
           openDocuments: 1,
-          fileWatcher: {
-            enabled: true,
-            active: true,
-            watchedRoots: ["/tmp/demo/src/main/java"],
-            pendingChanges: 0,
-            lastFlushSize: 0
-          },
           cache: {
             enabled: true,
             entries: 2,
@@ -125,12 +119,11 @@ test("java_status returns summary by default and keeps diagnostics explicit", as
   assert.equal(Object.hasOwn(summary, "dataDir"), false);
   assert.equal(Object.hasOwn(summary, "logFile"), false);
   assert.equal(Object.hasOwn(summary, "rgCache"), false);
-  assert.equal((summary.fileWatcher as Record<string, unknown>).watchedRootCount, 1);
-  assert.equal(Object.hasOwn(summary.fileWatcher as Record<string, unknown>, "watchedRoots"), false);
+  assert.equal(Object.hasOwn(summary, "fileWatcher"), false);
   assert.equal(Object.hasOwn(summary.projectJdk as Record<string, unknown>, "candidates"), false);
   assert.equal(Object.hasOwn(summary.generatedCode as Record<string, unknown>, "jar"), false);
   assert.equal(diagnostic.dataDir, "/tmp/demo/.jdtls");
-  assert.deepEqual((diagnostic.fileWatcher as Record<string, unknown>).watchedRoots, ["/tmp/demo/src/main/java"]);
+  assert.equal(Object.hasOwn(diagnostic, "fileWatcher"), false);
   assert.equal(Object.hasOwn(diagnostic, "rgCache"), true);
   // Task 35 Step 8 (Phase 5 KEEP_EXPLICIT decision): java_status must explain
   // why semanticPolicy=auto skips semantic work, not just that it did.
@@ -191,6 +184,46 @@ test("java_status exposes sibling-seed progress without requiring diagnostic det
   assert.equal(seed.deltaParsedFiles, 0);
 });
 
+test("java_status forwards the request absolute budget to JavaIndex status", async () => {
+  const budget = DeadlineBudget.fromTimeout(250);
+  let observedBudget: DeadlineBudget | undefined;
+  const context = {
+    repoRoot: "/tmp/demo",
+    session: { status: () => testSessionStatus(false) },
+    router: { rgCacheStatus: () => ({ entries: 0 }) },
+    javaIndexClient: {
+      async status(options?: { budget?: DeadlineBudget }) {
+        observedBudget = options?.budget;
+        return undefined;
+      }
+    }
+  } as unknown as ToolContext;
+
+  await javaStatus(context, { start: false }, { budget } as never);
+
+  assert.equal(observedBudget, budget);
+});
+
+test("java_status start consumes the same absolute request budget", async () => {
+  const budget = DeadlineBudget.fromTimeout(250);
+  let observedBudget: DeadlineBudget | undefined;
+  const context = {
+    repoRoot: "/tmp/demo",
+    lsp: { enabled: true },
+    session: {
+      async ensureStarted(received?: DeadlineBudget) {
+        observedBudget = received;
+      },
+      status: () => testSessionStatus(true)
+    },
+    router: { rgCacheStatus: () => ({ entries: 0 }) }
+  } as unknown as ToolContext;
+
+  await javaStatus(context, { start: true }, { budget } as never);
+
+  assert.equal(observedBudget, budget);
+});
+
 function testSessionStatus(started: boolean): Record<string, unknown> {
   return {
     repoRoot: "/tmp/demo",
@@ -202,13 +235,6 @@ function testSessionStatus(started: boolean): Record<string, unknown> {
     restartBackoff: { consecutiveFailures: 0, blockedUntilExplicitReset: false },
     knownDiagnostics: 0,
     openDocuments: 0,
-    fileWatcher: {
-      enabled: true,
-      active: started,
-      watchedRoots: [],
-      pendingChanges: 0,
-      lastFlushSize: 0
-    },
     cache: {
       enabled: true,
       entries: 0,

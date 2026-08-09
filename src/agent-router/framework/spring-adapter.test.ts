@@ -389,9 +389,13 @@ test("springAdapter.collect emits SPRING_PUBLISHES_EVENT (OrderService.create ->
     assert.equal(consumes!.candidateFile, file("src/main/java/demo/OrderCreated.java"));
     assert.equal(consumes!.weight, 85);
 
-    const merged = result.outcome.candidates.find(c => c.absolutePath === file("src/main/java/demo/OrderCreated.java"));
-    assert.ok(merged, "both edges point at the same event type, so they must merge into one candidate");
-    assert.deepEqual(merged!.reasons.sort(), ["SPRING_CONSUMES_EVENT", "SPRING_PUBLISHES_EVENT"]);
+    assert.deepEqual(
+      result.outcome.evidence
+        .filter(signal => signal.candidateFile === file("src/main/java/demo/OrderCreated.java"))
+        .flatMap(signal => signal.candidateMetadata?.reasons ?? [])
+        .sort(),
+      ["SPRING_CONSUMES_EVENT", "SPRING_PUBLISHES_EVENT"]
+    );
 
     assert.deepEqual(result.metadata, {
       endpoints: [],
@@ -809,7 +813,6 @@ test("registering mybatisAdapter alongside springAdapter does not change Spring'
     const combined = await runFrameworkAdapters([springAdapter, mybatisAdapter], context);
 
     assert.deepEqual(combined.outcome.evidence, springOnly.outcome.evidence);
-    assert.deepEqual(combined.outcome.candidates, springOnly.outcome.candidates);
     assert.equal(combined.metadata.mybatis, undefined, "mybatisAdapter must not activate on the Spring fixture (no MyBatis build marker or import/annotation)");
   } finally {
     await router.close();

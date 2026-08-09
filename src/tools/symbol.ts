@@ -6,6 +6,7 @@
 import { z } from "zod";
 import { clampLimit, normalizeRepoFile } from "../repo-layout.js";
 import type { LspLocation, LspLocationLink } from "../jdtls-session.js";
+import type { RequestContext } from "../runtime/request-context.js";
 import type { ToolContext } from "./context.js";
 import { compact, describeFile, describeLocation, detailSchema, isDiagnosticDetail, normalizeHover, symbolKindName, type ResponseDetail } from "./shared.js";
 
@@ -29,17 +30,21 @@ export const symbolSchema = {
 
 type SymbolArgs = z.infer<z.ZodObject<typeof symbolSchema>>;
 
-export async function javaSymbol(context: ToolContext, args: SymbolArgs): Promise<unknown> {
+export async function javaSymbol(
+  context: ToolContext,
+  args: SymbolArgs,
+  request?: Pick<RequestContext, "budget">
+): Promise<unknown> {
   const operation = args.operation ?? (args.query ? "query" : "position");
   if (operation === "references") {
-    return javaSymbolReferences(context, args);
+    return javaSymbolReferences(context, args, request);
   }
   if (operation === "query") {
     if (!args.query) {
       throw new Error("java_symbol operation=query requires query.");
     }
     const limit = clampLimit(args.limit);
-    const result = await context.session.workspaceSymbols(args.query, limit);
+    const result = await context.session.workspaceSymbols(args.query, limit, request?.budget ?? args.semanticTimeoutMs);
     return {
       mode: "query",
       query: args.query,
@@ -67,7 +72,7 @@ export async function javaSymbol(context: ToolContext, args: SymbolArgs): Promis
     throw new Error("java_symbol requires either query, or file/line/column, or operation=references with file/line/column.");
   }
   const file = normalizeRepoFile(context.repoRoot, args.file);
-  const result = await context.session.symbolContext(file, args.line, args.column, args.semanticTimeoutMs);
+  const result = await context.session.symbolContext(file, args.line, args.column, request?.budget ?? args.semanticTimeoutMs);
   return {
     mode: "position",
     file: isDiagnosticDetail(args.detail) ? file : describeFile(context.repoRoot, file).path,
@@ -79,13 +84,23 @@ export async function javaSymbol(context: ToolContext, args: SymbolArgs): Promis
   };
 }
 
-async function javaSymbolReferences(context: ToolContext, args: SymbolArgs): Promise<unknown> {
+async function javaSymbolReferences(
+  context: ToolContext,
+  args: SymbolArgs,
+  request?: Pick<RequestContext, "budget">
+): Promise<unknown> {
   if (!args.file || !args.line || !args.column) {
     throw new Error("java_symbol operation=references requires file/line/column.");
   }
   const file = normalizeRepoFile(context.repoRoot, args.file);
   const limit = clampLimit(args.limit);
-  const result = await context.session.references(file, args.line, args.column, args.includeDeclaration);
+  const result = await context.session.references(
+    file,
+    args.line,
+    args.column,
+    args.includeDeclaration,
+    request?.budget ?? args.semanticTimeoutMs
+  );
   const described = await Promise.all(result.items.map(location => describeLocation(context.repoRoot, location, { detail: args.detail })));
   // describeLocation returns undefined for hits outside this repo (jars, JDK
   // sources); they are counted, not rendered.

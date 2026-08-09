@@ -30,6 +30,28 @@ export class DeadlineBudget {
     return this.remainingMs() === 0;
   }
 
+  /**
+   * Derive a child budget that can use at most `capMs` while preserving a
+   * reserved tail of the parent request for mandatory finalization. The child
+   * shares the parent's monotonic clock and can never outlive its absolute
+   * deadline; unlike rebuilding from `remainingMs()`, it cannot accidentally
+   * extend the request between stages.
+   */
+  forStage(capMs: number, reserveMs = 0): DeadlineBudget {
+    if (!Number.isFinite(capMs) || capMs <= 0) {
+      throw new JavaIntelligenceError("INVALID_INPUT", "stage capMs must be positive");
+    }
+    if (!Number.isFinite(reserveMs) || reserveMs < 0) {
+      throw new JavaIntelligenceError("INVALID_INPUT", "stage reserveMs must be non-negative");
+    }
+    const nowMs = this.now();
+    const deadlineAtMs = Math.max(
+      nowMs,
+      Math.min(nowMs + capMs, this.deadlineAtMs - reserveMs)
+    );
+    return new DeadlineBudget(deadlineAtMs, this.now);
+  }
+
   throwIfExpired(stage: string): void {
     if (this.expired()) {
       throw new JavaIntelligenceError(

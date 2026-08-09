@@ -35,7 +35,7 @@ function context(overrides: Partial<FrameworkAdapterContext> = {}): FrameworkAda
 }
 
 function emptyResult(): FrameworkCollectResult {
-  return { outcome: { providerId: "x", providerVersion: "1", evidence: [], candidates: [], completion: "COMPLETE", elapsedMs: 0 }, metadata: {}, diagnostics: [] };
+  return { outcome: { providerId: "x", providerVersion: "1", evidence: [], completion: "COMPLETE", elapsedMs: 0 }, metadata: {}, diagnostics: [] };
 }
 
 function fakeAdapter(overrides: Partial<FrameworkAdapter> & { id: string }): FrameworkAdapter {
@@ -51,13 +51,13 @@ test("an empty adapter registry (the current production default) yields zero evi
   const result = await runFrameworkAdapters([], context());
 
   assert.deepEqual(result.outcome.evidence, []);
-  assert.deepEqual(result.outcome.candidates, []);
+  assert.equal(Object.hasOwn(result.outcome, "candidates"), false);
   assert.equal(result.outcome.completion, "COMPLETE");
   assert.deepEqual(result.metadata, {});
   assert.deepEqual(result.diagnostics, []);
 });
 
-test("merges evidence/candidates/metadata across active adapters and skips an inactive one entirely", async () => {
+test("merges evidence/metadata across active adapters and skips an inactive one entirely", async () => {
   const signal = {
     signalId: "s1", candidateFile: "/repo/A.java", anchorId: "A1", kind: "SPRING_INJECTION", family: "FRAMEWORK" as const,
     provenance: "FRAMEWORK_INFERRED" as const, confidence: 0.9, completeness: "COMPLETE" as const, weight: 80,
@@ -66,7 +66,7 @@ test("merges evidence/candidates/metadata across active adapters and skips an in
   const activeAdapter = fakeAdapter({
     id: "active",
     collect: async () => ({
-      outcome: { providerId: "x", providerVersion: "1", evidence: [signal], candidates: [], completion: "COMPLETE", elapsedMs: 1 },
+      outcome: { providerId: "x", providerVersion: "1", evidence: [signal], completion: "COMPLETE", elapsedMs: 1 },
       metadata: { beans: 3 },
       diagnostics: ["active adapter note"]
     })

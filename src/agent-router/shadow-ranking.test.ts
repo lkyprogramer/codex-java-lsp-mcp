@@ -35,7 +35,6 @@ function outcome(evidence: EvidenceSignal[]): ProviderOutcome {
     providerId: evidence[0]?.providerId ?? "test-provider",
     providerVersion: "1",
     evidence,
-    candidates: [],
     completion: "COMPLETE",
     elapsedMs: 0
   };
@@ -73,13 +72,6 @@ function candidate(absolutePath: string, overrides: Partial<CandidateFile> = {})
   };
 }
 
-function noopJavaIndex(): Record<string, unknown> {
-  return {
-    factsFor: async () => undefined,
-    methodAt: async () => undefined
-  };
-}
-
 function baseInput(overrides: Partial<BuildShadowRankingInput> = {}): BuildShadowRankingInput {
   const options: ImpactOptions = {
     anchors: [],
@@ -97,11 +89,9 @@ function baseInput(overrides: Partial<BuildShadowRankingInput> = {}): BuildShado
     repoRoot,
     anchors: [anchor()],
     options,
-    javaIndex: noopJavaIndex() as never,
-    generation: 1,
     outcomes: [],
     ranked: [],
-    protectedReadPlanPaths: new Set<string>(),
+    productionSelectedPaths: new Set<string>(),
     familyRankPolicy: genericFamilyRankPolicy,
     ...overrides
   };
@@ -124,6 +114,7 @@ test("a candidate whose only evidence is in one family ranks below a candidate c
   const result = await buildShadowRanking(baseInput({
     outcomes,
     ranked: [candidateA, candidateB],
+    productionSelectedPaths: new Set([candidateA.absolutePath]),
     options: { ...baseInput().options, readPlanMaxItems: 2 }
   }));
 
@@ -151,9 +142,8 @@ test("a candidate whose only evidence is in one family ranks below a candidate c
   // regardless of family score - ablation can move B to rank 1 without ever
   // giving it A's read-plan slot. The dedicated cross-family-flip test below
   // covers the case where ablation *does* change the read-plan outcome.
-  assert.equal(a.selectedByReadPlanWithoutEachFamily?.STATIC_STRUCTURE, true, "A's read-plan slot survives ablation of its own family: B is priority-tier-ineligible to take it regardless of rank");
-  assert.equal(b.selectedByReadPlanWithoutEachFamily?.STATIC_STRUCTURE, false, "B still loses despite outranking A post-ablation, because deferred tests never win a main file's slot");
-  assert.equal(a.selectedByReadPlanWithoutEachFamily?.LEXICAL, true, "ablating a family A has no evidence in must not change A's selection");
+  assert.equal(a.selectedByReadPlanWithoutEachFamily, undefined, "range-aware read-plan ablation is explicitly unmeasured");
+  assert.equal(b.selectedByReadPlanWithoutEachFamily, undefined, "range-aware read-plan ablation is explicitly unmeasured");
   assert.deepEqual(result.productionCandidatesWithoutEvidence, [], "A and B both have evidence, so nothing should be reported missing");
 });
 
@@ -168,6 +158,7 @@ test("ablating a candidate's sole family can flip which of two same-tier candida
   const result = await buildShadowRanking(baseInput({
     outcomes,
     ranked: [candidateC, candidateD],
+    productionSelectedPaths: new Set([candidateC.absolutePath]),
     options: { ...baseInput().options, readPlanMaxItems: 2 }
   }));
 
@@ -178,64 +169,78 @@ test("ablating a candidate's sole family can flip which of two same-tier candida
   assert.equal(c.selectedByReadPlan, true, "C's stronger STATIC_STRUCTURE evidence wins the one shared slot under the 2-item budget (anchor + 1)");
   assert.equal(d.selectedByReadPlan, false);
 
-  assert.equal(c.selectedByReadPlanWithoutEachFamily?.STATIC_STRUCTURE, false, "C loses the slot once its sole family is ablated");
-  assert.equal(d.selectedByReadPlanWithoutEachFamily?.STATIC_STRUCTURE, true, "D gains the slot C vacated - the real task-output-changing counterfactual gain Step 3 needs, not just a rank delta");
-  assert.equal(c.selectedByReadPlanWithoutEachFamily?.FRAMEWORK, true, "ablating D's family (which C does not carry) must not affect C's own selection");
-  assert.equal(d.selectedByReadPlanWithoutEachFamily?.FRAMEWORK, false, "D was already losing before this ablation and stays losing");
+  assert.equal(c.selectedByReadPlanWithoutEachFamily, undefined, "rank ablation remains available but range-aware read-plan ablation is unmeasured");
+  assert.equal(d.selectedByReadPlanWithoutEachFamily, undefined);
 });
 
-test("shadow selection does not query Java ranges when it only needs selected paths", async () => {
-  let factsForCalls = 0;
-  const javaIndex = {
-    factsFor: async () => {
-      factsForCalls += 1;
-      return undefined;
-    },
-    methodAt: async () => undefined
-  };
+test("base read-plan attribution follows production buildReadPlan selectedPaths instead of the shadow selector", async () => {
+  const candidateA = candidate(`${repoRoot}/src/main/java/demo/Alpha.java`);
+  const candidateB = candidate(`${repoRoot}/src/main/java/demo/Beta.java`);
+  const outcomes: ProviderOutcome[] = [
+    outcome([signal({ candidateFile: candidateA.absolutePath, family: "STATIC_STRUCTURE", weight: 100 })]),
+    outcome([signal({ candidateFile: candidateB.absolutePath, family: "LEXICAL", weight: 20 })])
+  ];
+  const input = {
+    ...baseInput({
+      outcomes,
+      ranked: [candidateA, candidateB],
+      options: { ...baseInput().options, readPlanMaxItems: 2 }
+    }),
+    // The token/range-aware production planner selected B. The old in-memory
+    // selector would choose higher-ranked A, which is exactly the attribution
+    // mismatch this regression test must catch.
+    productionSelectedPaths: new Set([anchor().absolutePath, candidateB.absolutePath])
+  } as BuildShadowRankingInput;
+
+  const result = await buildShadowRanking(input);
+  const byPath = new Map(result.candidates.map(item => [item.path, item]));
+
+  assert.equal(byPath.get(candidateA.absolutePath)?.selectedByReadPlan, false);
+  assert.equal(byPath.get(candidateB.absolutePath)?.selectedByReadPlan, true);
+  assert.equal(
+    byPath.get(candidateB.absolutePath)?.selectedByReadPlanWithoutEachFamily,
+    undefined,
+    "without a real range-aware replay, read-plan ablations must stay unmeasured"
+  );
+});
+
+test("shadow attribution accepts the production selection without a JavaIndex dependency", async () => {
   const candidateA = candidate(`${repoRoot}/src/main/java/demo/AlphaWidget.java`, { verifiedBy: ["rg"] });
   const outcomes: ProviderOutcome[] = [
     outcome([signal({ candidateFile: candidateA.absolutePath, family: "LEXICAL", kind: "NAME_MATCH", weight: 40, confidence: 0.6 })])
   ];
   const defaults = baseInput();
   const input = baseInput({
-    javaIndex: javaIndex as never,
     outcomes,
     ranked: [candidateA],
+    productionSelectedPaths: new Set([candidateA.absolutePath]),
     options: { ...defaults.options, readPlanMaxItems: 2 }
   });
 
-  await buildShadowRanking(input);
+  const result = await buildShadowRanking(input);
 
-  assert.equal(factsForCalls, 0, "counterfactual selection must reuse production evidence without reading Java facts again");
+  assert.equal(result.candidates[0]?.selectedByReadPlan, true);
 });
 
-test("required-policy requests omit selectedByReadPlanWithoutEachFamily instead of paying for six extra queryReadRanges calls", async () => {
-  let queryReadRangesCalls = 0;
-  const javaIndex = {
-    factsFor: async () => undefined,
-    methodAt: async () => undefined,
-    queryReadRanges: async (files: Array<{ file: string }>) => {
-      queryReadRangesCalls += 1;
-      return files.map(file => ({ file: file.file, ranges: [], extremeMethod: false }));
-    }
-  };
+test("required-policy requests reuse production selection and leave read-plan ablation unmeasured", async () => {
   const candidateA = candidate(`${repoRoot}/src/main/java/demo/AlphaWidget.java`, { verifiedBy: ["typeGraph"] });
   const outcomes: ProviderOutcome[] = [
     outcome([signal({ candidateFile: candidateA.absolutePath, family: "STATIC_STRUCTURE", weight: 100 })])
   ];
   const defaults = baseInput();
 
-  const result = await buildShadowRanking(baseInput({
-    javaIndex: javaIndex as never,
-    outcomes,
-    ranked: [candidateA],
-    options: { ...defaults.options, semanticPolicy: "required" }
-  }));
+  const result = await buildShadowRanking({
+    ...baseInput({
+      outcomes,
+      ranked: [candidateA],
+      options: { ...defaults.options, semanticPolicy: "required" }
+    }),
+    productionSelectedPaths: new Set([candidateA.absolutePath])
+  } as BuildShadowRankingInput);
 
   const a = result.candidates.find(item => item.path === candidateA.absolutePath)!;
+  assert.equal(a.selectedByReadPlan, true);
   assert.equal(a.selectedByReadPlanWithoutEachFamily, undefined, "required-policy ablation is skipped entirely, not computed with an empty per-family map");
-  assert.equal(queryReadRangesCalls, 1, "only the one real (non-ablated) selection may call queryReadRanges - the six ablations must not each pay for their own worker round trip");
 });
 
 test("a production candidate the shadow pass never received evidence for (e.g. the anchor itself) is reported, not silently dropped", async () => {

@@ -1,14 +1,16 @@
-一旦我所属的文件夹有所变化，请更新我。
-本目录承载 v5 public MCP tools 的薄 handler。
-每个 handler 只做入参解析、调用共享服务和响应格式化，复杂影响面逻辑放在 `agent-router/`。
+# `src/tools/`
+
+本目录承载 ImpactResultV6 public MCP tools 的薄 handler。每个 handler 只负责入参解析、request budget 传播、调用共享服务和响应格式化；JavaIndex、semantic、ranking 与 readPlan 逻辑留在各自 owner 模块。
 
 ## 文件清单
 
-- `README.md` | 目录说明 | 说明 tools 目录职责。
-- `context.ts` | 共享上下文 | 定义注入给 tool handler 的 JDT LS session、source index、agent router。
-- `diagnostics.ts` | 工具 handler | 实现 `java_diagnostics`。
-- `impact.ts` | 工具 handler | 实现推荐入口 `java_impact`。
-- `runtime.ts` | 工具 handler | 实现合并后的 `java_runtime`（action=restart\|shutdown，Task 31 Step 7 折叠了原 `restart.ts`/`shutdown.ts`）。
-- `shared.ts` | 格式化工具 | 复用 LSP location、hover、symbol kind 的 JSON-safe formatter。
-- `status.ts` | 工具 handler | 实现 `java_status`。
-- `symbol.ts` | 工具 handler | 实现合并后的 `java_symbol`（operation=query\|position\|references，Task 31 Step 7 折叠了原 `references.ts`）。
+- `README.md` | 目录职责与文件清单。
+- `context.ts` | 注入给 handler 的 JDT session、JavaIndex、AgentRouter、watcher/resource 状态。
+- `diagnostics.ts` | `java_diagnostics`。
+- `impact.ts` | 推荐入口 `java_impact`；创建唯一 absolute `DeadlineBudget` 并传入 router。
+- `runtime.ts` | `java_runtime`（action=restart\|shutdown）。
+- `shared.ts` | repo-relative、JSON-safe 的 location/hover/symbol formatter。
+- `status.ts` | `java_status`；汇总 runtime、RepoChangeCoordinator、JavaIndex coverage/generation、lease 与 cache 状态。
+- `symbol.ts` | `java_symbol`（operation=query\|position\|references）。
+
+目录内容变化时必须同步更新本文件。

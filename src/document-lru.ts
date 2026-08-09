@@ -37,20 +37,20 @@ type OpenDocumentEntry = {
 const DEFAULT_MAX_OPEN = 64;
 
 /**
- * Same-uri opens are singleflighted here (not just deduped by caller) because
+ * Same-uri opens and updates are serialized here (not just deduped by caller) because
  * Task 33's per-operation gateway split means 2-3 concurrent requests for the
  * same position each call acquire() independently; without joining, each
  * would race its own didOpen/didChange and corrupt the version JDT sees -
  * this exact race caused a measured 1.4-1.6x three-repo P95 regression
  * before it was joined at the JdtlsSession layer (see openDocument() there,
- * predating this class). Joining here keeps that guarantee while still
+ * predating this class). Serializing here keeps that guarantee while still
  * giving every caller its own independently-released pin.
  */
 export class DocumentLru {
   private readonly maxOpen: number;
   private readonly notify: (method: string, params: unknown) => void;
   private readonly entries = new Map<string, OpenDocumentEntry>();
-  private readonly inflight = new Map<string, Promise<OpenDocumentEntry>>();
+  private readonly inflight = new Map<string, Promise<void>>();
   private sequence = 0;
   private evictions = 0;
   private evictionDeferred = 0;
@@ -63,7 +63,7 @@ export class DocumentLru {
 
   async acquire(file: string, text: string): Promise<DocumentLease> {
     const uri = toFileUri(file);
-    const entry = await this.joinSync(uri, text);
+    const entry = await this.serialize(uri, () => this.sync(uri, text));
     // Pin before evicting: eviction only ever considers pins===0 entries, so
     // bumping first guarantees the entry this exact call just resolved can
     // never be the victim of its own eviction pass (only possible when every
@@ -91,6 +91,20 @@ export class DocumentLru {
   /** Cached text for a URI without acquiring a lease or bumping recency - used for read-only lookups like diagnostic filtering. */
   textForUri(uri: string): string | undefined {
     return this.entries.get(uri)?.text;
+  }
+
+  /**
+   * Refreshes text only when the document is already open. Calls for the same
+   * URI are serialized so two filesystem changes cannot reuse one inflight
+   * promise and silently drop the later text/version.
+   */
+  async updateIfOpen(file: string, text: string): Promise<boolean> {
+    const uri = toFileUri(file);
+    return this.serialize(uri, () => {
+      if (!this.entries.has(uri)) return false;
+      this.sync(uri, text);
+      return true;
+    });
   }
 
   delete(file: string): void {
@@ -129,17 +143,27 @@ export class DocumentLru {
     };
   }
 
-  private async joinSync(uri: string, text: string): Promise<OpenDocumentEntry> {
-    const inflight = this.inflight.get(uri);
-    if (inflight) return inflight;
-    const promise = this.sync(uri, text).finally(() => {
-      if (this.inflight.get(uri) === promise) this.inflight.delete(uri);
+  private serialize<T>(uri: string, action: () => T): Promise<T> {
+    const previous = this.inflight.get(uri);
+    let operation: Promise<T>;
+    if (previous) {
+      operation = previous.then(action, action);
+    } else {
+      try {
+        operation = Promise.resolve(action());
+      } catch (error) {
+        operation = Promise.reject(error);
+      }
+    }
+    const tail = operation.then(() => undefined, () => undefined);
+    this.inflight.set(uri, tail);
+    void tail.then(() => {
+      if (this.inflight.get(uri) === tail) this.inflight.delete(uri);
     });
-    this.inflight.set(uri, promise);
-    return promise;
+    return operation;
   }
 
-  private async sync(uri: string, text: string): Promise<OpenDocumentEntry> {
+  private sync(uri: string, text: string): OpenDocumentEntry {
     const existing = this.entries.get(uri);
     if (!existing) {
       const entry: OpenDocumentEntry = { uri, version: 1, text, pins: 0, lastUsedAt: this.sequence += 1 };

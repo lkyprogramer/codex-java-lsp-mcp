@@ -1,5 +1,5 @@
 // input: FrameworkAdapterContext (bounded FrameworkIndexView + request-scoped anchors/candidates/budget).
-// output: EvidenceSignal/CandidateFile pairs linking a @Mapper interface's mapping methods to their
+// output: EvidenceSignals linking a @Mapper interface's mapping methods to their
 //         source/target types, and @Mapper(uses = ...) to the mapper classes it delegates to.
 // pos: Task 29 commit 2a/2b. buildMarkerPaths/frameworkSeedFiles/resolveTargets below mirror
 //      spring-adapter.ts's own private helpers of the same name - duplicated, not imported, so
@@ -12,9 +12,6 @@
 //      a same-package guess, then verified through the same declarationsById batch as SOURCE/TARGET -
 //      an unresolved candidate produces no evidence, never a guess.
 import path from "node:path";
-import type { CandidateFile } from "../../agent-types.js";
-import { classifyPath } from "../../repo-layout.js";
-import { breakdown, mergeCandidate } from "../candidate-helpers.js";
 import type { EvidenceCompleteness, EvidenceSignal } from "../evidence.js";
 import {
   MAX_DECLARATION_IDS_PER_CALL,
@@ -287,7 +284,6 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
   const relativePathByTypeId = new Map(resolved.declarations.types.map(type => [type.typeId, type.relativePath]));
 
   const evidence: EvidenceSignal[] = [];
-  const candidates = new Map<string, CandidateFile>();
   const anchorId = context.anchors[0]?.id ?? "A1";
   let signalSeq = 0;
   for (const item of pending) {
@@ -310,9 +306,9 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
       providerId: MAPSTRUCT_ADAPTER_ID,
       providerVersion: MAPSTRUCT_ADAPTER_VERSION,
       generation: context.generation,
-      detail: item.detail
+      detail: item.detail,
+      candidateMetadata: { categories: ["framework"], reasons: [item.kind], verifiedBy: [item.kind], matchCount: 0 }
     });
-    mergeCandidate(candidates, mapstructCandidate(context.repoRoot, targetAbsolutePath, item.weight * CONFIDENCE, item.kind));
   }
 
   if (resolved.declarations.truncated) diagnostics.push(`mapstruct adapter: declarationsById truncated while resolving ${targetIds.length} evidence targets`);
@@ -323,31 +319,11 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
       providerId: MAPSTRUCT_ADAPTER_ID,
       providerVersion: MAPSTRUCT_ADAPTER_VERSION,
       evidence,
-      candidates: [...candidates.values()],
       completion: timedOut ? "PARTIAL_TIMEOUT" : resolved.declarations.truncated ? "PARTIAL_LIMIT" : "COMPLETE",
       elapsedMs: Date.now() - startedAt
     },
     metadata: {},
     diagnostics
-  };
-}
-
-function mapstructCandidate(repoRoot: string, absolutePath: string, score: number, kind: MapStructEvidenceKind): CandidateFile {
-  const context = classifyPath(repoRoot, absolutePath);
-  return {
-    absolutePath,
-    path: context.relativePath,
-    module: context.module,
-    layer: context.layer,
-    sourceSet: context.sourceSet,
-    score,
-    matchCount: 0,
-    positions: [],
-    categories: ["framework"],
-    reasons: [kind],
-    confidence: "high",
-    verifiedBy: [kind],
-    scoreBreakdown: [breakdown(`evidence.${kind}`, "policy", score, `MapStruct ${kind}`)]
   };
 }
 

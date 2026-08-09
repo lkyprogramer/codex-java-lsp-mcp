@@ -1,5 +1,5 @@
 // input: Anchors and JavaIndex structural facts (implementers, imports, type references).
-// output: ProviderOutcome carrying static-structure EvidenceSignal[] plus legacy CandidateFile fragments.
+// output: ProviderOutcome carrying static-structure EvidenceSignal[] and typed candidate metadata.
 // pos: Task 24 Step 5 - wraps candidate-collectors.ts/type-reference.ts unchanged behind the evidence contract.
 import type { CandidateFile, ResolvedAnchor } from "../../agent-types.js";
 import type { EvidenceFamily, EvidenceProvenance, EvidenceSignal, ProviderInput, ProviderOutcome } from "../evidence.js";
@@ -11,7 +11,7 @@ import { candidateFromFacts, mergeCandidate, scoreBase } from "../candidate-help
 import { collectTypeReferenceCandidates } from "../type-reference.js";
 import { timed } from "../runtime.js";
 import { updateTypeReferenceCacheMetrics } from "../impact-metrics.js";
-import { isTouchedCandidate, nextSignalId, seedZeroStubs } from "./shared.js";
+import { candidateMetadata, nextSignalId, seedZeroStubs } from "./shared.js";
 
 export const STATIC_PROVIDER_ID = "static";
 export const STATIC_PROVIDER_VERSION = "1";
@@ -146,14 +146,13 @@ export async function collectStaticEvidence(input: ProviderInput): Promise<Provi
   const structure = await collectStaticStructureEvidence(input);
   const knownPaths = [...new Set([
     ...input.existingCandidatePaths,
-    ...structure.candidates.map(candidate => candidate.absolutePath)
+    ...structure.evidence.map(signal => signal.candidateFile)
   ])];
   const references = await collectTypeReferenceEvidence({ ...input, existingCandidatePaths: knownPaths });
   return {
     providerId: STATIC_PROVIDER_ID,
     providerVersion: STATIC_PROVIDER_VERSION,
     evidence: [...structure.evidence, ...references.evidence],
-    candidates: [...structure.candidates, ...references.candidates],
     completion: structure.completion === "COMPLETE" ? references.completion : structure.completion,
     elapsedMs: structure.elapsedMs + references.elapsedMs
   };
@@ -267,7 +266,8 @@ async function collectImplementationDependencies(
         providerId: STATIC_PROVIDER_ID,
         providerVersion: STATIC_PROVIDER_VERSION,
         generation: input.generation,
-        detail: "resolved implementation dependency"
+        detail: "resolved implementation dependency",
+        candidateMetadata: candidateMetadata(candidate)
       });
     }
   }
@@ -295,7 +295,6 @@ function outcome(
     providerId: STATIC_PROVIDER_ID,
     providerVersion: STATIC_PROVIDER_VERSION,
     evidence,
-    candidates: [...candidates.values()].filter(isTouchedCandidate),
     completion: "COMPLETE",
     elapsedMs: Date.now() - startedAt
   };
@@ -365,7 +364,11 @@ function evidenceForCandidate(
       providerId: STATIC_PROVIDER_ID,
       providerVersion: STATIC_PROVIDER_VERSION,
       generation: input.generation,
-      detail: reason
+      detail: reason,
+      candidateMetadata: candidateMetadata(candidate, {
+        reasons: [reason],
+        verifiedBy: [reason.startsWith("typeGraph") ? "typeGraph" : stage]
+      })
     });
   }
   return signals;

@@ -166,7 +166,7 @@ test("collect links OrderMapper.toResponse's parameter as SOURCE and its return 
     const target = signalsOf(result.outcome.evidence, "MAPSTRUCT_TARGET");
     assert.ok(target.some(s => s.candidateFile === orderResponseFile), "toResponse's return type is a target");
 
-    const candidatePaths = new Set(result.outcome.candidates.map(candidate => candidate.absolutePath));
+    const candidatePaths = new Set(result.outcome.evidence.map(signal => signal.candidateFile));
     assert.ok(candidatePaths.has(orderEntityFile));
     assert.ok(candidatePaths.has(orderResponseFile));
   } finally {

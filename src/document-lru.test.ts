@@ -25,17 +25,22 @@ test("opening the sixty-fifth idle document closes the least recently used docum
 
 function recordingLru(maxOpen: number): {
   lru: DocumentLru;
-  notifications: Array<{ method: string; uri: string; version?: number }>;
+  notifications: Array<{ method: string; uri: string; version?: number; text?: string }>;
 } {
-  const notifications: Array<{ method: string; uri: string; version?: number }> = [];
+  const notifications: Array<{ method: string; uri: string; version?: number; text?: string }> = [];
   const lru = new DocumentLru({
     maxOpen,
     notify(method, params) {
-      const textDocument = (params as { textDocument: { uri: string; version?: number } }).textDocument;
+      const notification = params as {
+        textDocument: { uri: string; version?: number };
+        contentChanges?: Array<{ text?: string }>;
+      };
+      const textDocument = notification.textDocument;
       notifications.push({
         method,
         uri: textDocument.uri,
-        version: "version" in textDocument ? textDocument.version : undefined
+        version: "version" in textDocument ? textDocument.version : undefined,
+        text: notification.contentChanges?.[0]?.text
       });
     }
   });
@@ -83,7 +88,50 @@ test("changed text sends one monotonically versioned didChange", async () => {
 
   const changes = notifications.filter(item => item.method === "textDocument/didChange");
   assert.equal(changes.length, 1);
-  assert.equal(changes[0].version, 2);
+  assert.deepEqual(changes[0], {
+    method: "textDocument/didChange",
+    uri: "file:///repo/A.java",
+    version: 2,
+    text: "class A { int value; }"
+  });
+});
+
+test("updateIfOpen leaves an unopened document closed", async () => {
+  const { lru, notifications } = recordingLru(2);
+
+  assert.equal(await lru.updateIfOpen("/repo/A.java", "class A { int value; }"), false);
+  assert.equal(lru.has("/repo/A.java"), false);
+  assert.deepEqual(notifications, []);
+});
+
+test("concurrent updateIfOpen calls serialize distinct text with monotonic versions", async () => {
+  const { lru, notifications } = recordingLru(2);
+  const lease = await lru.acquire("/repo/A.java", "class A {}");
+  lease.release();
+
+  const updated = await Promise.all([
+    lru.updateIfOpen("/repo/A.java", "class A { int first; }"),
+    lru.updateIfOpen("/repo/A.java", "class A { int second; }")
+  ]);
+
+  assert.deepEqual(updated, [true, true]);
+  assert.deepEqual(
+    notifications.filter(item => item.method === "textDocument/didChange"),
+    [
+      {
+        method: "textDocument/didChange",
+        uri: "file:///repo/A.java",
+        version: 2,
+        text: "class A { int first; }"
+      },
+      {
+        method: "textDocument/didChange",
+        uri: "file:///repo/A.java",
+        version: 3,
+        text: "class A { int second; }"
+      }
+    ]
+  );
 });
 
 test("closeAll sends didClose for every open document and clears state", async () => {

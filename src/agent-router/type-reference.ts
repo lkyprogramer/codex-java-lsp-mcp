@@ -41,9 +41,6 @@ type CollectTypeReferenceInput = {
 
 export async function collectTypeReferenceCandidates(input: CollectTypeReferenceInput): Promise<void> {
   const { candidates, anchors, options, metrics, javaIndex, routingPolicy, generation } = input;
-  if (options.semanticPolicy === "required") {
-    return;
-  }
   for (const anchor of anchors) {
     if (!shouldUseTypeReference(anchor)) {
       continue;

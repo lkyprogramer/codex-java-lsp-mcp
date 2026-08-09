@@ -86,8 +86,8 @@ test("roleOf prefers a resolved CALLS/METHOD_RELATION edge over an overlapping l
   assert.equal(roleOf(["CALLS", "rg:java"]), "collaborator", "order-independent - CALLS wins regardless of position");
 });
 
-test("roleOf recognizes every framework family via the shared SPRING|MYBATIS|JPA|MAPSTRUCT prefix", () => {
-  for (const kind of ["SPRING_INJECTION", "MYBATIS_STATEMENT_METHOD", "JPA_REPOSITORY_ENTITY", "MAPSTRUCT_USES"]) {
+test("roleOf recognizes every registered framework family via the shared SPRING|MYBATIS|MAPSTRUCT prefix", () => {
+  for (const kind of ["SPRING_INJECTION", "MYBATIS_STATEMENT_METHOD", "MAPSTRUCT_USES"]) {
     assert.equal(roleOf([kind]), "framework", kind);
   }
 });

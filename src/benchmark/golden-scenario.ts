@@ -61,12 +61,19 @@ export function goldenFiles(scenario: Scenario, key: "mustHit" | "taskBlocking" 
 }
 
 export function goldenEntries(scenario: Scenario): Array<{ file: string; kind: GoldenKind }> {
-  return [
-    ...goldenFiles(scenario, "mustHit").map(file => ({ file, kind: "must" as const })),
-    ...goldenFiles(scenario, "taskBlocking").map(file => ({ file, kind: "taskBlocking" as const })),
-    ...goldenFiles(scenario, "shouldHit").map(file => ({ file, kind: "should" as const })),
-    ...goldenFiles(scenario, "support").map(file => ({ file, kind: "support" as const }))
-  ];
+  const entries = new Map<string, GoldenKind>();
+  const add = (files: string[], kind: GoldenKind): void => {
+    for (const file of files) {
+      if (!entries.has(file)) entries.set(file, kind);
+    }
+  };
+  // Strongest-to-weakest order also de-duplicates the Task36 cross-version
+  // aliases (taskBlocking is repeated in legacy shouldHit; support in side).
+  add(goldenFiles(scenario, "mustHit"), "must");
+  add(goldenFiles(scenario, "taskBlocking"), "taskBlocking");
+  add(goldenFiles(scenario, "shouldHit"), "should");
+  add(goldenFiles(scenario, "support"), "support");
+  return [...entries].map(([file, kind]) => ({ file, kind }));
 }
 
 /**

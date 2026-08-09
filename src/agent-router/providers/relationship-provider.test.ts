@@ -300,7 +300,7 @@ test("cold re-evaluation nominates one uniquely resolved wildcard-import receive
     })
   ));
 
-  assert.deepEqual(result.candidates.map(item => item.absolutePath), [targetPath]);
+  assert.deepEqual([...new Set(result.evidence.map(item => item.candidateFile))], [targetPath]);
   assert.ok(result.evidence.some(item => item.candidateFile === targetPath && item.kind === "CALLS"));
 });
 
@@ -487,7 +487,7 @@ test("cold re-evaluation refuses an overloaded resolved receiver target", async 
     })
   ));
 
-  assert.equal(result.candidates.length, 0);
+  assert.equal(Object.hasOwn(result, "candidates"), false);
   assert.equal(result.evidence.some(item => item.kind === "CALLS"), false);
 });
 
@@ -535,7 +535,7 @@ test("parsed method signatures nominate uniquely resolved wildcard parameters an
     })
   ));
 
-  assert.deepEqual(result.candidates.map(item => item.absolutePath).sort(), [requestPath, responsePath]);
+  assert.deepEqual([...new Set(result.evidence.map(item => item.candidateFile))].sort(), [requestPath, responsePath]);
   assert.deepEqual(
     result.evidence.filter(item => item.kind === "METHOD_RELATION").map(item => item.candidateFile).sort(),
     [requestPath, responsePath]
@@ -603,7 +603,7 @@ test("cold re-evaluation rejects a generic wrapper with an unknown argument", as
     })
   ));
 
-  assert.equal(result.candidates.length, 0);
+  assert.equal(Object.hasOwn(result, "candidates"), false);
   assert.equal(result.evidence.some(item => item.kind === "CALLS"), false);
 });
 

@@ -57,13 +57,14 @@ export function buildGoldenAttributionV3(
   context: AttributionV3Context
 ): GoldenAttributionV3[] {
   const candidateByPath = new Map(shadowRanking.candidates.map(candidate => [candidate.path, candidate]));
+  const productionSelectedPaths = new Set(shadowRanking.productionSelectedPaths);
   const limit = candidateLimit(context.mode, resolvedProfile(context.profile));
   const repoRoot = path.resolve(context.repoRoot);
   return goldenEntries(scenario).map(({ file, kind }) => {
     const absolutePath = path.join(repoRoot, file);
     const candidate = candidateByPath.get(absolutePath);
     const inCandidates = candidate !== undefined;
-    const inReadPlan = candidate?.selectedByReadPlan === true;
+    const inReadPlan = productionSelectedPaths.has(absolutePath);
     const blockedBy = resolveBlockedBy(inReadPlan, candidate?.rank, limit);
     const sourceFamilies = candidate
       ? (Object.keys(candidate.familyScores) as EvidenceFamily[]).filter(family => (candidate.familyScores[family] ?? 0) > 0)
@@ -139,7 +140,7 @@ function absentReason(
 export type CounterfactualResult = {
   candidateHitLost: string[];
   readPlanHitLost: string[];
-  /** False when this request skipped read-plan ablation (semanticPolicy=required); readPlanHitLost is then always empty and must not be read as "no gain". */
+  /** False when exact range-aware read-plan ablation was not replayed; an empty readPlanHitLost must then not be read as "no gain". */
   measured: boolean;
 };
 

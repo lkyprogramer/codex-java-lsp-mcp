@@ -58,7 +58,7 @@ test("collectFrameworkEvidence with an explicitly empty adapters list returns a 
   const result = await collectFrameworkEvidence(input({ frameworkIndex: undefined as never }), []);
 
   assert.deepEqual(result.outcome.evidence, []);
-  assert.deepEqual(result.outcome.candidates, []);
+  assert.equal(Object.hasOwn(result.outcome, "candidates"), false);
   assert.equal(result.outcome.completion, "COMPLETE");
   assert.deepEqual(result.metadata, {});
 });
@@ -67,7 +67,7 @@ test("collectFrameworkEvidence with the default adapters adds no evidence for a 
   const result = await collectFrameworkEvidence(input());
 
   assert.deepEqual(result.outcome.evidence, []);
-  assert.deepEqual(result.outcome.candidates, []);
+  assert.equal(Object.hasOwn(result.outcome, "candidates"), false);
   assert.equal(result.outcome.completion, "COMPLETE");
 });
 
@@ -78,7 +78,7 @@ test("collectFrameworkEvidence maps ProviderInput fields onto FrameworkAdapterCo
     version: "1",
     isActive: async ctx => { seenContext = ctx; return true; },
     collect: async () => ({
-      outcome: { providerId: "x", providerVersion: "1", evidence: [], candidates: [], completion: "COMPLETE", elapsedMs: 0 },
+      outcome: { providerId: "x", providerVersion: "1", evidence: [], completion: "COMPLETE", elapsedMs: 0 },
       metadata: {},
       diagnostics: []
     })

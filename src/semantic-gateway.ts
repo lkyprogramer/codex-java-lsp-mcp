@@ -98,6 +98,7 @@ export type SemanticLifecycleGate = () =>
 export type SemanticGatewayOptions = {
   ttlMs?: number;
   absoluteCapMs?: number;
+  maxCompletedEntries?: number;
   now?: () => number;
   lifecycleGate?: SemanticLifecycleGate;
 };
@@ -121,6 +122,7 @@ export interface SemanticGatewayApi {
     callerBudget: DeadlineBudget,
     operationCapMs: number
   ): Promise<SemanticOutcome<SemanticValueMap[Operation]>>;
+  clear(): void;
   status(): SemanticGatewayStatus;
 }
 
@@ -144,32 +146,15 @@ type CompletedEntry = {
 
 const DEFAULT_TTL_MS = 5 * 60_000;
 const DEFAULT_ABSOLUTE_CAP_MS = 20_000;
+const DEFAULT_MAX_COMPLETED_ENTRIES = 512;
 const ALWAYS_ALLOWED: SemanticLifecycleGate = () => ({ allowed: true });
-
-/**
- * typeHierarchy/callHierarchy walk JDT step by step and, on the caller's own
- * deadline expiring mid-walk, RESOLVE with whatever edges were already
- * collected (completion PARTIAL_TIMEOUT) - see jdtls-hierarchy.test.ts's
- * "an expired hierarchy budget returns partial edges rather than throwing".
- * Every other operation's caller REJECTs on its own deadline instead
- * (`callerBudget.race()` below), which is correct when a backend call is
- * shared: one caller giving up must not cancel work another waiter still
- * needs. Those two contracts cannot both apply to one shared backend call -
- * a caller whose deadline just fired cannot both "get back partial edges"
- * and "not affect the other waiter". So these two operations skip
- * singleflight/join entirely: each call gets its own backend operation,
- * capped by the caller's own remaining budget, and the caller simply awaits
- * it to completion instead of racing a second, independent clock against it.
- * They still read and write the completed-at TTL cache like every other
- * operation - only the in-flight join is skipped.
- */
-const NON_SHARED_OPERATIONS: ReadonlySet<SemanticOperation> = new Set(["typeHierarchy", "callHierarchy"]);
 
 export class SemanticGateway implements SemanticGatewayApi {
   private readonly inflight = new Map<string, InflightEntry>();
   private readonly completed = new Map<string, CompletedEntry>();
   private readonly ttlMs: number;
   private readonly absoluteCapMs: number;
+  private readonly maxCompletedEntries: number;
   private readonly now: () => number;
   private readonly lifecycleGate: SemanticLifecycleGate;
 
@@ -188,6 +173,7 @@ export class SemanticGateway implements SemanticGatewayApi {
   ) {
     this.ttlMs = options.ttlMs ?? DEFAULT_TTL_MS;
     this.absoluteCapMs = options.absoluteCapMs ?? DEFAULT_ABSOLUTE_CAP_MS;
+    this.maxCompletedEntries = Math.max(1, Math.floor(options.maxCompletedEntries ?? DEFAULT_MAX_COMPLETED_ENTRIES));
     this.now = options.now ?? (() => Date.now());
     this.lifecycleGate = options.lifecycleGate ?? ALWAYS_ALLOWED;
   }
@@ -197,18 +183,17 @@ export class SemanticGateway implements SemanticGatewayApi {
     callerBudget: DeadlineBudget,
     operationCapMs: number
   ): Promise<SemanticOutcome<SemanticValueMap[Operation]>> {
+    this.sweepExpiredCompletedEntries();
     const cacheKey = serializeKey(key);
     const cachedEntry = this.completed.get(cacheKey);
     if (cachedEntry && cachedEntry.expiresAtMs > this.now()) {
       this.cacheHits += 1;
+      this.completed.delete(cacheKey);
+      this.completed.set(cacheKey, cachedEntry);
       return toOutcome(cachedEntry.settled, true, false) as SemanticOutcome<SemanticValueMap[Operation]>;
     }
     if (cachedEntry) this.completed.delete(cacheKey);
     this.cacheMisses += 1;
-
-    if (NON_SHARED_OPERATIONS.has(key.operation)) {
-      return this.executeUnshared(key, cacheKey, operationCapMs) as Promise<SemanticOutcome<SemanticValueMap[Operation]>>;
-    }
 
     let entry = this.inflight.get(cacheKey);
     let shared = true;
@@ -238,48 +223,36 @@ export class SemanticGateway implements SemanticGatewayApi {
     const activeEntry = entry;
     activeEntry.waiters += 1;
     try {
-      const settled = await callerBudget.race(
-        `semantic.${key.operation}`,
-        activeEntry.promise,
-        operationCapMs
-      );
-      return toOutcome(settled, false, shared) as SemanticOutcome<SemanticValueMap[Operation]>;
+      try {
+        const settled = await callerBudget.race(
+          `semantic.${key.operation}`,
+          activeEntry.promise,
+          operationCapMs
+        );
+        return toOutcome(settled, false, shared) as SemanticOutcome<SemanticValueMap[Operation]>;
+      } catch (error) {
+        const classified = classifySemanticError(error);
+        if (isHierarchyOperation(key.operation) && classified.code === "DEADLINE_EXCEEDED") {
+          if (activeEntry.waiters === 1 && this.inflight.get(cacheKey) === activeEntry) {
+            this.abortBecauseNoWaiters(activeEntry);
+          }
+          return {
+            completion: "PARTIAL_TIMEOUT",
+            value: emptyValueFor(key.operation) as SemanticValueMap[Operation],
+            elapsedMs: 0,
+            cacheHit: false,
+            shared,
+            errorCode: classified.code
+          };
+        }
+        throw error;
+      }
     } finally {
       activeEntry.waiters -= 1;
       if (activeEntry.waiters === 0 && this.inflight.get(cacheKey) === activeEntry) {
-        this.abortedNoWaiters += 1;
-        activeEntry.controller.abort();
+        this.abortBecauseNoWaiters(activeEntry);
       }
     }
-  }
-
-  /** See NON_SHARED_OPERATIONS: no join, no race - just cache read/write around one dedicated, caller-bounded backend call. */
-  private async executeUnshared<Operation extends SemanticOperation>(
-    key: SemanticCacheKey<Operation>,
-    cacheKey: string,
-    operationCapMs: number
-  ): Promise<SemanticOutcome<SemanticValueMap[Operation]>> {
-    const gate = this.lifecycleGate();
-    if (!gate.allowed) {
-      if (gate.code === "JDT_BACKOFF" || gate.code === "JDT_CONFIG_ERROR") {
-        this.lifecycleBackoffSkips += 1;
-      } else {
-        this.busyOtherSessionSkips += 1;
-      }
-      return {
-        completion: "FAILED",
-        value: emptyValueFor(key.operation) as SemanticValueMap[Operation],
-        elapsedMs: 0,
-        cacheHit: false,
-        shared: false,
-        errorCode: gate.code
-      };
-    }
-    const backendCapMs = Math.max(1, Math.min(operationCapMs, this.absoluteCapMs));
-    const controller = new AbortController();
-    const settled = await this.runBackend(key, backendCapMs, controller.signal);
-    this.writeCache(cacheKey, settled);
-    return toOutcome(settled, false, false) as SemanticOutcome<SemanticValueMap[Operation]>;
   }
 
   private createInflightEntry(
@@ -293,10 +266,17 @@ export class SemanticGateway implements SemanticGatewayApi {
     const entry: InflightEntry = { controller, promise, waiters: 0 };
     this.inflight.set(cacheKey, entry);
     promise.then(settled => {
-      if (this.inflight.get(cacheKey) === entry) this.inflight.delete(cacheKey);
+      if (this.inflight.get(cacheKey) !== entry) return;
+      this.inflight.delete(cacheKey);
       this.writeCache(cacheKey, settled);
     });
     return entry;
+  }
+
+  private abortBecauseNoWaiters(entry: InflightEntry): void {
+    if (entry.controller.signal.aborted) return;
+    this.abortedNoWaiters += 1;
+    entry.controller.abort();
   }
 
   private runBackend(
@@ -329,10 +309,32 @@ export class SemanticGateway implements SemanticGatewayApi {
       return;
     }
     this.completeWrites += 1;
+    this.sweepExpiredCompletedEntries();
+    this.completed.delete(cacheKey);
+    while (this.completed.size >= this.maxCompletedEntries) {
+      const oldestKey = this.completed.keys().next().value as string | undefined;
+      if (oldestKey === undefined) break;
+      this.completed.delete(oldestKey);
+    }
     this.completed.set(cacheKey, { settled, expiresAtMs: this.now() + this.ttlMs });
   }
 
+  clear(): void {
+    this.completed.clear();
+    for (const entry of this.inflight.values()) entry.controller.abort();
+    this.inflight.clear();
+  }
+
+  private sweepExpiredCompletedEntries(): void {
+    if (this.completed.size === 0) return;
+    const now = this.now();
+    for (const [key, entry] of this.completed) {
+      if (entry.expiresAtMs <= now) this.completed.delete(key);
+    }
+  }
+
   status(): SemanticGatewayStatus {
+    this.sweepExpiredCompletedEntries();
     return {
       inflight: this.inflight.size,
       completedEntries: this.completed.size,
@@ -385,4 +387,8 @@ function emptyValueFor(operation: SemanticOperation): SemanticBackendValue {
     return { roots: [], edges: [], truncated: false, requests: 0, visited: 0 };
   }
   return [];
+}
+
+function isHierarchyOperation(operation: SemanticOperation): operation is "typeHierarchy" | "callHierarchy" {
+  return operation === "typeHierarchy" || operation === "callHierarchy";
 }

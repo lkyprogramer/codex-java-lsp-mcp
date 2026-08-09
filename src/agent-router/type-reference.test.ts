@@ -88,3 +88,28 @@ test("lishuedu controller retains an exact direct return-type declaration", asyn
   assert.ok(candidate, "an AST-resolved direct return type must remain a candidate under the lishuedu policy");
   assert.ok(candidate.reasons.includes("typeReference"));
 });
+
+test("required semantic policy retains deterministic type-reference evidence", async () => {
+  const response = facts("/repo/src/main/java/demo/ConfirmResponse.java");
+  const candidates = new Map<string, CandidateFile>();
+
+  await collectTypeReferenceCandidates({
+    candidates,
+    anchors: [anchor],
+    options: { ...options, semanticPolicy: "required" },
+    metrics: metrics(),
+    javaIndex: {
+      factsFor: async () => facts(anchor.absolutePath, { referencedTypes: ["demo.ConfirmResponse"] }),
+      findTypeReferences: async () => [],
+      findTypeDefinitions: async () => [response],
+      methodAt: async () => undefined,
+      findImplementers: async () => []
+    } as never,
+    routingPolicy: lishueduPolicy,
+    generation: 1
+  });
+
+  const candidate = candidates.get(response.absolutePath);
+  assert.ok(candidate, "required semantic evidence must augment, never suppress, deterministic static type references");
+  assert.ok(candidate.reasons.includes("typeReference"));
+});

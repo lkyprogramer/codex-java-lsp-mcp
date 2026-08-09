@@ -1,38 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as routingPolicies from "./routing-policy.js";
-import { genericJavaPolicy, lishueduPolicy, resolveRoutingPolicy, scoreWithPolicy } from "./routing-policy.js";
-import type { ImpactOptions, ResolvedAnchor } from "./agent-types.js";
-import type { PathContext } from "./repo-layout.js";
+import { genericJavaPolicy, lishueduPolicy, resolveRoutingPolicy } from "./routing-policy.js";
 
-test("lishuedu discovery policy preserves parser boosts and penalties", () => {
-  const anchor = {
-    path: "modules/school/src/main/java/demo/SchoolTemplateImportParser.java",
-    module: "school",
-    profile: "parser"
-  } as ResolvedAnchor;
-  const options = {
-    focusModules: ["school"],
-    taskKeywords: []
-  } as unknown as ImpactOptions;
-
-  assert.equal(scoreWithPolicy(lishueduPolicy, "java", context("modules/school/src/main/java/demo/SchoolTemplateImportDiffBuilder.java", "school", "main"), anchor, options), 154);
-  assert.equal(scoreWithPolicy(lishueduPolicy, "java", context("modules/school/src/main/java/demo/SchoolTemplateImportTaskRepository.java", "school", "main"), anchor, options), 46);
-  assert.equal(scoreWithPolicy(lishueduPolicy, "tests", context("modules/school/src/test/java/demo/SchoolTemplateImportExcelParserTest.java", "school", "test"), anchor, options), 198);
-});
-
-test("generic policy contains no lishuedu-specific tokens", () => {
-  const serialized = JSON.stringify(genericJavaPolicy.scoreRules.map(rule => String(rule.when.pathRegex)));
-  for (const token of ["ProductView", "ParentBenefit", "SignedUrl", "ParsedTemplate", "DiffBuilder", "ExcelParserTest", "BenefitEntitlementAssemblerTest"]) {
-    assert.equal(serialized.includes(token), false, `generic policy leaked ${token}`);
-  }
-});
-
-test("lishuedu discovery policy keeps its original rule ids", () => {
-  const ids = lishueduPolicy.scoreRules.map(rule => rule.id);
-  for (const id of ["profile.parser.tests", "profile.dto.tests", "profile.dto.family", "profile.port.family"]) {
-    assert.ok(ids.includes(id), `legacy policy missing ${id}`);
-  }
+test("routing policy selects a family pack without exposing additive score state", () => {
+  assert.deepEqual(Object.keys(genericJavaPolicy), ["id"]);
+  assert.deepEqual(Object.keys(lishueduPolicy), ["id"]);
+  assert.equal("scoreWithPolicy" in routingPolicies, false);
 });
 
 test("resolveRoutingPolicy picks by env override then repo basename", () => {
@@ -67,12 +41,3 @@ test("legacy lishuedu override resolves to the supported lishuedu policy id", ()
     }
   }
 });
-
-function context(relativePath: string, module: string, sourceSet: string): PathContext {
-  return {
-    absolutePath: `/repo/${relativePath}`,
-    relativePath,
-    module,
-    sourceSet
-  };
-}

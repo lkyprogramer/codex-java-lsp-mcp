@@ -12,6 +12,7 @@ import {
 } from "./cross-process-lease.js";
 import { JdtlsSession, type JdtlsLifecycleState } from "./jdtls-session.js";
 import { JavaIndexClient } from "./java-index/java-index-client.js";
+import type { JavaIndexStatus } from "./java-index/index-types.js";
 import { RouterJavaIndex } from "./java-index/router-java-index.js";
 import { LayoutManager, type LayoutSource } from "./layout-manager.js";
 import { RepoChangeCoordinator } from "./repo-change-coordinator.js";
@@ -179,8 +180,11 @@ export class RepoRuntimeManager {
     handler: (context: ManagedToolContext, request: RequestContext) => Promise<T>,
     options: { mayStartLsp?: boolean; requestOptions?: RequestOptionsInput } = {}
   ): Promise<T> {
+    const budget = this.createRequestBudget(options.requestOptions);
     const resolved = await this.resolver.resolve(selector);
-    const entry = await this.getOrCreate(resolved);
+    budget.throwIfExpired("runtime.repo-resolve");
+    const entry = await this.getOrCreate(resolved, budget);
+    budget.throwIfExpired("runtime.create");
     this.refreshResource(entry);
     entry.refCount += 1;
     if (entry.idleTimer) {
@@ -188,9 +192,9 @@ export class RepoRuntimeManager {
       entry.idleTimer = undefined;
     }
     try {
-      const request = await this.prepareRequestContext(entry, options.requestOptions);
+      const request = await this.prepareRequestContext(entry, options.requestOptions, budget);
       if (options.mayStartLsp) {
-        await this.reserveLspSlot(entry, DeadlineBudget.fromTimeout(this.options.requestTimeoutMs));
+        await this.reserveLspSlot(entry, request.budget);
       }
       return await handler(entry.context, request);
     } finally {
@@ -209,7 +213,8 @@ export class RepoRuntimeManager {
    */
   private async prepareRequestContext(
     entry: RuntimeEntry,
-    requestOptions?: RequestOptionsInput
+    requestOptions: RequestOptionsInput | undefined,
+    budget: DeadlineBudget
   ): Promise<RequestContext> {
     const mode = requestOptions?.mode ?? "balanced";
     const semanticPolicy = requestOptions?.semanticPolicy ?? "auto";
@@ -217,7 +222,7 @@ export class RepoRuntimeManager {
       MAX_REQUEST_DEADLINE_MS,
       requestOptions?.deadlineMs ?? defaultDeadlineMs(mode, semanticPolicy)
     );
-    const budget = DeadlineBudget.fromTimeout(deadlineMs);
+    budget.throwIfExpired("runtime.request-context");
 
     const ready = await entry.coordinator.awaitReadyWithin(
       Math.min(WATCHER_READY_CAP_MS, budget.remainingMs())
@@ -226,11 +231,10 @@ export class RepoRuntimeManager {
     let freshnessMode: RequestFreshnessMode;
     let cacheReadAllowed = false;
     let cacheWriteAllowed = false;
-    const negativeLookupAllowed = false; // negative-answer coverage tracking arrives in Iteration C
 
     if (ready) {
       await entry.coordinator.flushNow();      // already-delivered debounced events
-      await this.reconcileIfDirty(entry);      // no-op unless a reconcile is pending
+      await this.reconcileIfDirty(entry, budget);      // no-op unless a reconcile is pending
       await entry.coordinator.flushNow();      // events delivered during reconcile
       const clock = entry.generation.snapshot();
       freshnessMode = clock.dirty ? "WATCHER_DEGRADED" : "NORMAL";
@@ -240,21 +244,110 @@ export class RepoRuntimeManager {
       freshnessMode = entry.generation.snapshot().dirty ? "WATCHER_DEGRADED" : "WATCHER_NOT_READY";
     }
 
+    budget.throwIfExpired("runtime.request-context");
+    const generationBeforeIndexStatus = entry.generation.snapshot().value;
+    let javaIndexStatus: JavaIndexStatus | undefined;
+    try {
+      javaIndexStatus = await entry.context.javaIndexClient?.status({ budget });
+    } catch {
+      // JavaIndex is an optional accelerator; a failed status probe is
+      // degraded evidence, not a reason to fail an otherwise lexical request.
+    }
+    const finalClock = entry.generation.snapshot();
+    if (finalClock.dirty) {
+      freshnessMode = "WATCHER_DEGRADED";
+      cacheReadAllowed = false;
+      cacheWriteAllowed = false;
+    }
+    const negativeLookupAllowed = this.negativeLookupAllowed(
+      freshnessMode,
+      entry.coordinator.status(),
+      javaIndexStatus,
+      finalClock.value,
+      finalClock.value === generationBeforeIndexStatus && !finalClock.dirty
+    );
+    budget.throwIfExpired("runtime.request-context");
+
+    let indexOpenSource: RequestContext["indexOpenSource"];
+    try {
+      const routerIndex = entry.context.javaIndex;
+      const statusOperation = routerIndex.withRequestOptions
+        ? routerIndex.withRequestOptions({ budget }, () => routerIndex.routerStatus())
+        : routerIndex.routerStatus();
+      const status = await budget.race("runtime.router-status", statusOperation);
+      indexOpenSource = status.openSource;
+    } catch {
+      // Router status is diagnostic evidence. A backend failure degrades only
+      // this field; an exhausted absolute request budget is rethrown below.
+    }
+    budget.throwIfExpired("runtime.router-status");
+
     return createRequestContext({
       repoRoot: entry.context.repoRoot,
       repoHash: entry.context.repoHash,
       familyHash: entry.context.worktree?.familyHash,
-      generation: entry.generation.snapshot().value,
+      generation: finalClock.value,
       freshnessMode,
       cacheReadAllowed,
       cacheWriteAllowed,
       negativeLookupAllowed,
-      indexOpenSource: await entry.context.javaIndex.routerStatus().then(status => status.openSource).catch(() => undefined),
+      indexOpenSource,
       mode,
       semanticPolicy,
       deadlineMs,
       budget
     });
+  }
+
+  /** Negative answers are safe only when watcher and both index coverages agree on this generation. */
+  private negativeLookupAllowed(
+    freshnessMode: RequestFreshnessMode,
+    watcher: ReturnType<RuntimeCoordinator["status"]>,
+    status: JavaIndexStatus | undefined,
+    generation: number,
+    generationStableDuringStatusProbe: boolean
+  ): boolean {
+    const sourceCoverage = status?.coverage ?? [];
+    const resourceCoverage = status?.resourceCoverage ?? [];
+    if (
+      freshnessMode !== "NORMAL"
+      || !generationStableDuringStatusProbe
+      || !watcher.ready
+      || watcher.degraded
+      || watcher.pending > 0
+      || !status
+      || status.state !== "READY"
+      || status.lastError !== undefined
+      || status.indexedGeneration !== generation
+      || status.pendingForeground !== 0
+      || status.pendingBackground !== 0
+      || status.snapshotVerificationPending === true
+      || sourceCoverage.length === 0
+    ) {
+      return false;
+    }
+    const sourceComplete = sourceCoverage.every(entry =>
+      entry.generation === generation
+      && entry.state === "COMPLETE"
+      && entry.failedFiles === 0
+      && entry.recoveredFiles === 0
+    );
+    const resourcesComplete = resourceCoverage.every(entry =>
+      entry.generation === generation
+      && entry.state === "COMPLETE"
+      && entry.failedFiles === 0
+    );
+    return sourceComplete && resourcesComplete;
+  }
+
+  private createRequestBudget(requestOptions?: RequestOptionsInput): DeadlineBudget {
+    const mode = requestOptions?.mode ?? "balanced";
+    const semanticPolicy = requestOptions?.semanticPolicy ?? "auto";
+    const deadlineMs = Math.min(
+      MAX_REQUEST_DEADLINE_MS,
+      requestOptions?.deadlineMs ?? defaultDeadlineMs(mode, semanticPolicy)
+    );
+    return DeadlineBudget.fromTimeout(deadlineMs);
   }
 
   /**
@@ -263,13 +356,21 @@ export class RepoRuntimeManager {
    * the runtime stays DEGRADED and the next request tries again rather than
    * silently believing the index is clean.
    */
-  private async reconcileIfDirty(entry: RuntimeEntry): Promise<void> {
+  private async reconcileIfDirty(entry: RuntimeEntry, budget?: DeadlineBudget): Promise<void> {
     if (!entry.generation.snapshot().dirty) return;
     if (!entry.reconcilePromise) {
+      // Reconciliation belongs to the shared runtime, not to the first caller
+      // that happens to observe it dirty. Keep the shared work bounded by the
+      // manager hard cap, while every caller independently races its own
+      // absolute request budget below.
+      const operationBudget = DeadlineBudget.fromTimeout(this.options.requestTimeoutMs);
       const operation = (async () => {
         const generationAtStart = entry.generation.snapshot().value;
         try {
-          await entry.context.javaIndexClient?.reconcile(generationAtStart);
+          await entry.context.javaIndexClient?.reconcile(
+            generationAtStart,
+            { budget: operationBudget }
+          );
           entry.generation.clearDirty(generationAtStart);
         } catch {
           // Reconcile failure must not fail the request: output coverage stays
@@ -280,7 +381,9 @@ export class RepoRuntimeManager {
       });
       entry.reconcilePromise = operation;
     }
-    await entry.reconcilePromise;
+    await (budget
+      ? budget.race("runtime.reconcile", entry.reconcilePromise)
+      : entry.reconcilePromise);
   }
 
   reservedCount(): number {
@@ -399,7 +502,7 @@ export class RepoRuntimeManager {
   }
 
   /** Singleflight so two concurrent requests share one runtime/coordinator/watcher. */
-  private async getOrCreate(resolved: ResolvedRepo): Promise<RuntimeEntry> {
+  private async getOrCreate(resolved: ResolvedRepo, budget?: DeadlineBudget): Promise<RuntimeEntry> {
     const existing = this.runtimes.get(resolved.repoRoot);
     if (existing) {
       if (existing.stoppedAt === undefined) {
@@ -416,22 +519,39 @@ export class RepoRuntimeManager {
       this.runtimes.delete(resolved.repoRoot);
     }
     const pending = this.creating.get(resolved.repoRoot);
-    if (pending) return pending;
-    const operation = this.createEntry(resolved).finally(() => {
+    if (pending) return budget ? budget.race("runtime.create", pending) : pending;
+    // Runtime construction is shared by all concurrent callers. Its worker
+    // operations use the manager hard cap; each caller races the same promise
+    // with its own request deadline so a short caller neither hangs nor
+    // cancels creation needed by a longer caller.
+    const operationBudget = DeadlineBudget.fromTimeout(this.options.requestTimeoutMs);
+    const operation = this.createEntry(resolved, operationBudget).finally(() => {
       if (this.creating.get(resolved.repoRoot) === operation) {
         this.creating.delete(resolved.repoRoot);
       }
     });
     this.creating.set(resolved.repoRoot, operation);
-    return operation;
+    return budget ? budget.race("runtime.create", operation) : operation;
   }
 
-  private async createEntry(resolved: ResolvedRepo): Promise<RuntimeEntry> {
+  private async createEntry(resolved: ResolvedRepo, budget?: DeadlineBudget): Promise<RuntimeEntry> {
     const context = this.runtimeFactory(resolved, this.leases);
     const { generation, coordinator, layout } = this.coordinationFactory(
       resolved,
       () => context.javaIndexClient?.localStatus().files ?? 0
     );
+    const leaseOperation = this.leases.acquireRuntime(resolved.worktree).catch(() => undefined);
+    let leaseTimedOut = false;
+    // A caller deadline only stops that caller, but the shared creation itself
+    // also needs a hard cap so `creating` cannot retain a permanently silent
+    // lease operation. If an acquisition completes after the cap, release the
+    // now-unowned handle rather than leaking janitor protection.
+    void leaseOperation.then(handle => {
+      if (leaseTimedOut && handle) void handle.release().catch(() => undefined);
+    });
+    const runtimeLease = budget
+      ? await budget.race("runtime.lease", leaseOperation, undefined, () => { leaseTimedOut = true; })
+      : await leaseOperation;
     const entry: RuntimeEntry = {
       context,
       generation,
@@ -443,7 +563,7 @@ export class RepoRuntimeManager {
       lspReservation: "NONE",
       // Best-effort: a degraded or unopened lease store must never block a
       // runtime from being created, so acquisition failure is swallowed here.
-      runtimeLease: await this.leases.acquireRuntime(resolved.worktree).catch(() => undefined)
+      runtimeLease
     };
     entry.unsubscribeLifecycle = entry.context.session.onLifecycleChange(state => {
       if (state === "STARTING") entry.lspReservation = "STARTING";
@@ -462,12 +582,28 @@ export class RepoRuntimeManager {
     let javaIndexReady = entry.context.javaIndexClient === undefined;
     coordinator.onBatch(async batch => {
       entry.context.router.onRepoChanged(batch);
-      entry.context.session.invalidateForRepoChanges(batch);
+      let sessionFailure: unknown;
+      let sessionFailed = false;
+      try {
+        await entry.context.session.applyRepoChangeBatch(batch);
+      } catch (error) {
+        sessionFailed = true;
+        sessionFailure = error;
+      }
       if (!javaIndexReady) {
         bufferedJavaIndexBatches.push(batch);
+        if (sessionFailed) throw sessionFailure;
         return;
       }
-      await this.applyBatchToJavaIndex(entry.context.javaIndexClient, batch);
+      try {
+        await this.applyBatchToJavaIndex(entry.context.javaIndexClient, batch);
+      } catch (indexFailure) {
+        if (sessionFailed) {
+          throw new AggregateError([sessionFailure, indexFailure], "session and JavaIndex repo-change consumers failed");
+        }
+        throw indexFailure;
+      }
+      if (sessionFailed) throw sessionFailure;
     });
     // Do not await the watcher-ready scan here: requests retain their bounded
     // readiness barrier below, while OPEN already gets a live coordinator and
@@ -482,7 +618,7 @@ export class RepoRuntimeManager {
       leaseRoot: path.join(repoCacheBase(), "leases"),
       worktree: resolved.worktree,
       siblingCacheBase: repoCacheBase()
-    }).then(async openStatus => {
+    }, budget ? { budget } : undefined).then(async openStatus => {
       // A restored-and-verified snapshot (Task 21 Step 6a) reports its own
       // (possibly higher) generation; the repo's clock must never regress
       // behind facts the Java index has already verified as current.
@@ -517,7 +653,10 @@ export class RepoRuntimeManager {
       // sweep itself.  A real watcher batch still sets generationChanged and
       // takes the normal reconcile path.
       if ((!fullyRestored && !openStatus.snapshotVerificationPending) || generationChangedDuringSeed) {
-        await entry.context.javaIndexClient?.reconcile(generation.snapshot().value);
+        await entry.context.javaIndexClient?.reconcile(
+          generation.snapshot().value,
+          budget ? { budget } : undefined
+        );
       }
     }).catch(() => {
       // An OPEN failure remains non-fatal, but watchers must not retain every
@@ -542,8 +681,9 @@ export class RepoRuntimeManager {
     batch: RepoChangeBatch
   ): Promise<void> {
     if (!javaIndex) return;
+    const budget = DeadlineBudget.fromTimeout(this.options.requestTimeoutMs);
     if (batch.storm || batch.changes.some(change => change.kind === "BUILD_CHANGE")) {
-      await javaIndex.reconcile(batch.generation);
+      await javaIndex.reconcile(batch.generation, { budget });
       return;
     }
     const changed: string[] = [];
@@ -555,14 +695,13 @@ export class RepoRuntimeManager {
       else if (change.kind === "RESOURCE_CHANGE") resources.push(change.absolutePath);
     }
     if (changed.length > 0 || deleted.length > 0) {
-      await javaIndex.refresh(batch.generation, changed, deleted);
+      await javaIndex.refresh(batch.generation, changed, deleted, { budget });
     }
-    // RESOURCE_CHANGE does not distinguish add/change/delete (repo-change-
-    // coordinator.ts's classify() collapses all three into one kind); the
-    // worker resolves each path via its own stat, idempotently (Task 28
-    // Slice B).
+    // The coordinator retains the exact resource event for LSP consumers, but
+    // the worker API remains path-only and resolves each path via its own stat,
+    // idempotently (Task 28 Slice B).
     if (resources.length > 0) {
-      await javaIndex.refreshResources(batch.generation, resources);
+      await javaIndex.refreshResources(batch.generation, resources, { budget });
     }
   }
 

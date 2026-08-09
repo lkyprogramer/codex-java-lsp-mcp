@@ -182,13 +182,6 @@ export async function collectRelationshipEvidence(input: RelationshipProviderInp
     providerId: RELATIONSHIP_PROVIDER_ID,
     providerVersion: RELATIONSHIP_PROVIDER_VERSION,
     evidence,
-    // Cold index coverage may lack an already-materialized CALLS edge. The
-    // bounded exact re-evaluation above can nominate that target declaration
-    // without adding a name-search or lexical fallback.
-    candidates: [...new Map([
-      ...[...callCandidates.values()].map(directCall => [directCall.candidate.absolutePath, directCall.candidate] as const),
-      ...signatureCandidates.candidates
-    ]).values()],
     completion: "COMPLETE",
     elapsedMs: Date.now() - startedAt
   };
@@ -799,7 +792,13 @@ function pushIfPositive(
     positions: candidate.positions,
     providerId: RELATIONSHIP_PROVIDER_ID,
     providerVersion: RELATIONSHIP_PROVIDER_VERSION,
-    generation: input.generation
+    generation: input.generation,
+    candidateMetadata: {
+      categories: [policy.family === "FRAMEWORK" ? "framework" : "semantic"],
+      reasons: [kind],
+      verifiedBy: [kind],
+      matchCount: 0
+    }
   });
 }
 
@@ -808,7 +807,6 @@ function emptyOutcome(startedAt: number): ProviderOutcome {
     providerId: RELATIONSHIP_PROVIDER_ID,
     providerVersion: RELATIONSHIP_PROVIDER_VERSION,
     evidence: [],
-    candidates: [],
     completion: "COMPLETE",
     elapsedMs: Date.now() - startedAt
   };

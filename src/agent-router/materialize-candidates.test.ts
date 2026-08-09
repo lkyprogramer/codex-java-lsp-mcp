@@ -121,7 +121,7 @@ test("IMPLEMENTS and TYPE_RELATION signals for the same candidate collapse to on
   assert.equal(entries[0]!.delta, 95, "must take the max delta, matching the old Math.max() between the two old conditions");
 });
 
-test("relationship-provider kinds map to their compatible finalize.* scoreBreakdown ids", () => {
+test("materialization keeps only scoreBreakdown ids that still have a compatibility consumer", () => {
   const other = candidateEvidence(
     path.join(repoRoot, "src/main/java/com/example/Related.java"),
     [
@@ -138,8 +138,8 @@ test("relationship-provider kinds map to their compatible finalize.* scoreBreakd
   const idsById = new Map(materialized.scoreBreakdown!.map(item => [item.id, item.delta]));
   assert.equal(idsById.get("finalize.direct-collaborator"), 170);
   assert.equal(idsById.get("finalize.method-relation"), 160);
-  assert.equal(idsById.get("finalize.structural.annotation"), 50);
-  assert.equal(idsById.get("finalize.structural.package"), 30);
+  assert.equal(idsById.has("finalize.structural.annotation"), false);
+  assert.equal(idsById.has("finalize.structural.package"), false);
   assert.equal(idsById.get("finalize.structural.type-symmetric"), 95);
   assert.equal(idsById.get("finalize.structural.kind"), 20);
 });
@@ -181,35 +181,32 @@ test("lexical section categories and task-keyword utility survive materializatio
   assert.ok(materialized.scoreBreakdown!.some(item => item.id === "finalize.task-keyword" && item.delta > 0));
 });
 
-test("provider candidate metadata survives materialization while the family score remains authoritative", () => {
+test("typed signal metadata materializes without a legacy candidate fragment", () => {
   const file = path.join(repoRoot, "modules/report/src/main/java/com/example/ReportTask.java");
   const ranked = candidateEvidence(file, [signal({
     candidateFile: file,
-    kind: "LEXICAL:java",
-    family: "LEXICAL",
-    weight: 56
-  })], 77);
-  const legacy = {
-    absolutePath: file,
-    path: "modules/report/src/main/java/com/example/ReportTask.java",
-    module: "report",
-    layer: "persistence",
-    sourceSet: "main" as const,
-    score: 999,
-    matchCount: 4,
+    kind: "REFERENCE",
+    family: "STATIC_STRUCTURE",
     positions: [{ line: 41, column: 3 }],
-    categories: ["persistence"],
-    reasons: ["typeReference", "rg:persistence"],
-    verifiedBy: ["typeReference"]
-  };
+    ...({
+      candidateMetadata: {
+        categories: ["persistence"],
+        reasons: ["typeReference"],
+        verifiedBy: ["typeReference"],
+        matchCount: 4
+      }
+    } as Record<string, unknown>)
+  })], 77);
 
-  const result = materializeRankedCandidates([ranked], [anchor()], repoRoot, new Map([[file, legacy]]));
+  const result = materializeRankedCandidates([ranked], [anchor()], repoRoot);
   const materialized = result.find(item => item.absolutePath === file)!;
-  assert.equal(materialized.score, 77, "ranker score must not be replaced by legacy score");
-  assert.ok(materialized.categories.includes("persistence"));
-  assert.ok(materialized.reasons.includes("typeReference"));
-  assert.ok(materialized.verifiedBy!.includes("typeReference"));
-  assert.deepEqual(materialized.positions, [{ line: 3, column: 1 }, { line: 41, column: 3 }]);
+
+  assert.equal(materialized.score, 77);
+  assert.equal(materialized.matchCount, 4);
+  assert.deepEqual(materialized.categories, ["persistence"]);
+  assert.deepEqual(materialized.reasons, ["typeReference"]);
+  assert.deepEqual(materialized.verifiedBy, ["typeReference"]);
+  assert.deepEqual(materialized.positions, [{ line: 41, column: 3 }]);
 });
 
 test("weak name support does not misclassify a Java collaborator as config", () => {

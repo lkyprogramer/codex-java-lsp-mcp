@@ -3,10 +3,16 @@
 // pos: Task 22 cutover facade between V2 worker queries and router call sites.
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { AsyncLocalStorage } from "node:async_hooks";
 import path from "node:path";
 import { probeLayout } from "../layout-probe.js";
 import { normalizeRepoFile, repoCacheRoot } from "../repo-layout.js";
-import { JavaIndexClient, type JavaIndexOpenOptions } from "./java-index-client.js";
+import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
+import {
+  JavaIndexClient,
+  type JavaIndexOpenOptions,
+  type JavaIndexRequestOptions
+} from "./java-index-client.js";
 import type {
   AnchorFacts,
   IndexedReadRangeResult,
@@ -95,6 +101,8 @@ export type RouterIndexStatus = {
 
 /** Router-facing fact surface backed exclusively by JavaIndex V2. */
 export interface RouterIndex {
+  /** Binds immutable request controls to this async call chain without sharing mutable state across concurrent requests. */
+  withRequestOptions?<T>(options: JavaIndexRequestOptions, action: () => Promise<T>): Promise<T>;
   ensureFresh(files: string[], generation: number): Promise<void>;
   queryAnchor(file: string, line: number, column: number): Promise<AnchorFacts | undefined>;
   queryReadRanges(
@@ -121,6 +129,7 @@ export interface RouterIndex {
  * V2 queries into the fact shapes collectors already understand.
  */
 export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkIndexView {
+  private readonly requestOptionsScope = new AsyncLocalStorage<JavaIndexRequestOptions>();
   private generation = 0;
   private opened = false;
   private openSource: JavaIndexOpenSource = "cold";
@@ -157,8 +166,16 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     return this.client;
   }
 
+  withRequestOptions<T>(options: JavaIndexRequestOptions, action: () => Promise<T>): Promise<T> {
+    return this.requestOptionsScope.run(Object.freeze({ ...options }), action);
+  }
+
+  private currentRequestOptions(): JavaIndexRequestOptions {
+    return this.requestOptionsScope.getStore() ?? {};
+  }
+
   async open(generation: number, options: JavaIndexOpenOptions = {}): Promise<JavaIndexStatus> {
-    const status = await this.client.open(generation, { ...this.openOptions, ...options });
+    const status = await this.client.open(generation, { ...this.openOptions, ...options }, this.currentRequestOptions());
     this.generation = Math.max(generation, status.indexedGeneration);
     this.opened = true;
     this.openSource = openSourceFromStatus(status);
@@ -202,14 +219,14 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
       this.generation = Math.max(this.generation, generation);
       return;
     }
-    const status = await this.client.refresh(generation, staleFiles, []);
+    const status = await this.client.refresh(generation, staleFiles, [], this.currentRequestOptions());
     for (const file of staleFiles) this.freshGenerationByPath.set(file, generation);
     this.generation = Math.max(generation, status.indexedGeneration);
   }
 
   async queryAnchor(file: string, line: number, column: number) {
     await this.ensureOpened(this.generation);
-    return this.client.queryAnchor(file, line, column);
+    return this.client.queryAnchor(file, line, column, this.currentRequestOptions());
   }
 
   async queryReadRanges(
@@ -218,47 +235,50 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
   ): Promise<IndexedReadRangeResult[]> {
     const files = requests.map(request => normalizeRepoFile(this.repoRoot, request.file));
     await this.ensureOpened(generation);
-    return this.client.queryReadRanges(requests.map((request, index) => ({ ...request, file: files[index]! })));
+    return this.client.queryReadRanges(
+      requests.map((request, index) => ({ ...request, file: files[index]! })),
+      this.currentRequestOptions()
+    );
   }
 
   async queryType(typeText: string, scopeFile?: string) {
     await this.ensureOpened(this.generation);
-    return this.client.queryType(typeText, scopeFile);
+    return this.client.queryType(typeText, scopeFile, this.currentRequestOptions());
   }
 
   async queryTypes(queries: Array<{ typeText: string; scopeFile?: string }>) {
     await this.ensureOpened(this.generation);
-    return this.client.queryTypes(queries);
+    return this.client.queryTypes(queries, this.currentRequestOptions());
   }
 
   async queryImplementers(typeId: string, limit: number) {
     await this.ensureOpened(this.generation);
-    return this.client.queryImplementers(typeId, limit);
+    return this.client.queryImplementers(typeId, limit, this.currentRequestOptions());
   }
 
   async queryTypeReferencers(typeId: string, kinds: StaticEdgeKind[], limit: number) {
     await this.ensureOpened(this.generation);
-    return this.client.queryTypeReferencers(typeId, kinds, limit);
+    return this.client.queryTypeReferencers(typeId, kinds, limit, this.currentRequestOptions());
   }
 
   async queryCallers(methodId: string, limit: number) {
     await this.ensureOpened(this.generation);
-    return this.client.queryCallers(methodId, limit);
+    return this.client.queryCallers(methodId, limit, this.currentRequestOptions());
   }
 
   async queryCallees(methodId: string, limit: number) {
     await this.ensureOpened(this.generation);
-    return this.client.queryCallees(methodId, limit);
+    return this.client.queryCallees(methodId, limit, this.currentRequestOptions());
   }
 
   async queryFiles(files: string[]) {
     await this.ensureOpened(this.generation);
-    return this.client.queryFiles(files);
+    return this.client.queryFiles(files, this.currentRequestOptions());
   }
 
   async status(): Promise<JavaIndexStatus> {
     await this.ensureOpened(this.generation);
-    const status = await this.client.status();
+    const status = await this.client.status(this.currentRequestOptions());
     if (this.openSource === "cold" && status.files > 0) {
       this.openSource = openSourceFromStatus(status);
     }
@@ -266,7 +286,16 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
   }
 
   async routerStatus(): Promise<RouterIndexStatus> {
-    const javaIndex = await this.status().catch(() => this.client.localStatus());
+    let javaIndex: JavaIndexStatus;
+    try {
+      javaIndex = await this.status();
+    } catch (error) {
+      if (error instanceof JavaIntelligenceError
+        && (error.code === "DEADLINE_EXCEEDED" || error.code === "CANCELLED")) {
+        throw error;
+      }
+      javaIndex = this.client.localStatus();
+    }
     return {
       entries: javaIndex.files,
       hits: this.factsHits,
@@ -285,7 +314,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
 
   async refresh(generation: number, changed: string[], deleted: string[]): Promise<JavaIndexStatus> {
     await this.ensureOpened(generation);
-    const status = await this.client.refresh(generation, changed, deleted);
+    const status = await this.client.refresh(generation, changed, deleted, this.currentRequestOptions());
     for (const file of changed) {
       const absolute = normalizeRepoFile(this.repoRoot, file);
       this.freshGenerationByPath.set(absolute, generation);
@@ -306,7 +335,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
 
   async reconcile(generation: number): Promise<JavaIndexStatus> {
     await this.ensureOpened(generation);
-    const status = await this.client.reconcile(generation);
+    const status = await this.client.reconcile(generation, this.currentRequestOptions());
     this.freshGenerationByPath.clear();
     this.factsByPath.clear();
     this.frameworkFactsByPath.clear();
@@ -337,7 +366,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
       return cached.facts;
     }
     await this.ensureFresh([absolutePath], generation);
-    const bundles = await this.client.queryFiles([absolutePath]);
+    const bundles = await this.client.queryFiles([absolutePath], this.currentRequestOptions());
     const bundle = bundles[0];
     if (!bundle) {
       this.factsMisses += 1;
@@ -366,7 +395,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
       return [];
     }
     this.typeLookupHits += 1;
-    const implementers = await this.client.queryImplementers(typeId, limit);
+    const implementers = await this.client.queryImplementers(typeId, limit, this.currentRequestOptions());
     return this.typesToFacts(implementers);
   }
 
@@ -377,7 +406,12 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
       return [];
     }
     this.typeLookupHits += 1;
-    const refs = await this.client.queryTypeReferencers(typeId, TYPE_REFERENCE_EDGE_KINDS, limit * 4);
+    const refs = await this.client.queryTypeReferencers(
+      typeId,
+      TYPE_REFERENCE_EDGE_KINDS,
+      limit * 4,
+      this.currentRequestOptions()
+    );
     return this.referencesToFacts(refs, limit);
   }
 
@@ -390,7 +424,12 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
       return [];
     }
     this.typeLookupHits += 1;
-    const refs = await this.client.queryTypeReferencers(typeId, IMPORT_EDGE_KINDS, limit * 2);
+    const refs = await this.client.queryTypeReferencers(
+      typeId,
+      IMPORT_EDGE_KINDS,
+      limit * 2,
+      this.currentRequestOptions()
+    );
     return this.referencesToFacts(refs, limit);
   }
 
@@ -400,7 +439,10 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     // Resolve those independent lookups together and hydrate their owning
     // files once.  The former one-type-at-a-time pattern paid a worker IPC
     // round-trip for every definition and then another for every file bundle.
-    const lookupResults = await this.client.queryTypes(names.map(typeText => ({ typeText })));
+    const lookupResults = await this.client.queryTypes(
+      names.map(typeText => ({ typeText })),
+      this.currentRequestOptions()
+    );
     const found: JavaTypeFacts[] = [];
     const foundFiles = new Set<string>();
     for (const lookup of lookupResults) {
@@ -427,7 +469,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
 
   private async resolveTypeId(typeName: string, scopeFile?: string): Promise<string | undefined> {
     const simple = typeName.slice(typeName.lastIndexOf(".") + 1);
-    const lookup = await this.client.queryType(typeName, scopeFile);
+    const lookup = await this.client.queryType(typeName, scopeFile, this.currentRequestOptions());
     if (lookup.state === "RESOLVED") return lookup.type.typeId;
     if (lookup.state === "AMBIGUOUS" && lookup.candidates.length > 0) {
       // Prefer an exact simple-name match; otherwise first candidate.
@@ -435,7 +477,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
         || lookup.candidates[0]?.typeId;
     }
     if (simple !== typeName) {
-      const simpleLookup = await this.client.queryType(simple, scopeFile);
+      const simpleLookup = await this.client.queryType(simple, scopeFile, this.currentRequestOptions());
       if (simpleLookup.state === "RESOLVED") return simpleLookup.type.typeId;
       if (simpleLookup.state === "AMBIGUOUS") return simpleLookup.candidates[0]?.typeId;
     }
@@ -459,7 +501,9 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
       }));
     }
     const absolutePaths = [...byPath.keys()].map(relative => path.resolve(this.repoRoot, relative));
-    const bundles = absolutePaths.length > 0 ? await this.client.queryFiles(absolutePaths) : [];
+    const bundles = absolutePaths.length > 0
+      ? await this.client.queryFiles(absolutePaths, this.currentRequestOptions())
+      : [];
     const bundleByRelative = new Map(bundles.map(bundle => [bundle.file.relativePath, bundle]));
     const facts: JavaSourceFacts[] = [];
     for (const [relativePath, type] of byPath) {
@@ -483,7 +527,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     const relativePaths = unique(refs.map(ref => ref.sourceFile)).slice(0, limit * 2);
     if (relativePaths.length === 0) return [];
     const absolutePaths = relativePaths.map(relative => path.resolve(this.repoRoot, relative));
-    const bundles = await this.client.queryFiles(absolutePaths);
+    const bundles = await this.client.queryFiles(absolutePaths, this.currentRequestOptions());
     const facts = bundles
       .map(bundle => bundleToSourceFacts(this.repoRoot, bundle));
     for (const fact of facts) {
@@ -509,7 +553,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     }
     // Unit-test / benchmark path: open cold without sibling seed options.
     try {
-      const status = await this.client.open(generation, this.openOptions);
+      const status = await this.client.open(generation, this.openOptions, this.currentRequestOptions());
       this.opened = true;
       this.generation = Math.max(generation, status.indexedGeneration);
       this.openSource = openSourceFromStatus(status);
@@ -546,7 +590,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     const uncached = absolutePaths.filter(file => this.frameworkFactsByPath.get(file)?.generation !== generation);
     if (uncached.length > 0) {
       await this.ensureFresh(uncached, generation);
-      const bundles = await this.client.queryFiles(uncached);
+      const bundles = await this.client.queryFiles(uncached, this.currentRequestOptions());
       const bundleByPath = new Map(bundles.map(bundle => [path.resolve(this.repoRoot, bundle.file.relativePath), bundle]));
       for (const absolutePath of uncached) {
         const bundle = bundleByPath.get(absolutePath);
@@ -607,7 +651,10 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     }
     if (fqnsNeedingLookup.size > 0) {
       const fqnLookups = [...fqnsNeedingLookup];
-      const lookups = await this.client.queryTypes(fqnLookups.map(typeText => ({ typeText })));
+      const lookups = await this.client.queryTypes(
+        fqnLookups.map(typeText => ({ typeText })),
+        this.currentRequestOptions()
+      );
       for (const lookup of lookups) {
         if (lookup.state === "RESOLVED") relativePaths.add(relativePathOfFileId(lookup.type.fileId));
       }
@@ -623,7 +670,10 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
         const candidates = this.conventionalDeclarationCandidates(unresolvedFqns);
         if (candidates.length > 0) {
           await this.ensureFresh(candidates, this.generation);
-          const retries = await this.client.queryTypes(unresolvedFqns.map(typeText => ({ typeText })));
+          const retries = await this.client.queryTypes(
+            unresolvedFqns.map(typeText => ({ typeText })),
+            this.currentRequestOptions()
+          );
           for (const lookup of retries) {
             if (lookup.state === "RESOLVED") relativePaths.add(relativePathOfFileId(lookup.type.fileId));
           }
@@ -632,7 +682,9 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     }
     const boundedPaths = [...relativePaths].slice(0, MAX_DECLARATION_PATHS);
     const absolutePaths = boundedPaths.map(relative => path.resolve(this.repoRoot, relative));
-    const bundles = absolutePaths.length > 0 ? await this.client.queryFiles(absolutePaths) : [];
+    const bundles = absolutePaths.length > 0
+      ? await this.client.queryFiles(absolutePaths, this.currentRequestOptions())
+      : [];
     const result = bundlesToRequestedDeclarations(bundles, boundedIds);
     return {
       ...result,
@@ -655,7 +707,11 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     await this.ensureOpened(this.generation);
     const boundedLimit = Math.max(1, Math.min(CALLEES_LIMIT_DEFAULT, Math.floor(limit)));
     const boundedMethodIds = unique([...methodIds]).slice(0, MAX_FRAMEWORK_CALLEE_METHODS);
-    const raw = await this.client.queryCalleesBatch(boundedMethodIds, boundedLimit + 1);
+    const raw = await this.client.queryCalleesBatch(
+      boundedMethodIds,
+      boundedLimit + 1,
+      this.currentRequestOptions()
+    );
     const result = new Map<string, FrameworkCallees>();
     for (const entry of raw) {
       result.set(entry.methodId, {
@@ -673,19 +729,26 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
    * a Spring pack checking pom.xml/build.gradle for a dependency string).
    */
   async repositoryMarkers(relativePaths: readonly string[]): Promise<Map<string, string>> {
+    const requestOptions = this.currentRequestOptions();
+    requestOptions.budget?.throwIfExpired("java-index.repository-markers");
     const result = new Map<string, string>();
     for (const relativePath of relativePaths) {
+      requestOptions.budget?.throwIfExpired("java-index.repository-markers");
       const cached = this.repositoryMarkerCache.get(relativePath);
       if (cached !== undefined) {
         if (cached !== null) result.set(relativePath, cached);
         continue;
       }
       try {
-        const content = await readFile(path.resolve(this.repoRoot, relativePath), "utf8");
+        const readOperation = readFile(path.resolve(this.repoRoot, relativePath), "utf8");
+        const content = requestOptions.budget
+          ? await requestOptions.budget.race("java-index.repository-markers", readOperation)
+          : await readOperation;
         const bounded = content.length > REPOSITORY_MARKER_MAX_BYTES ? content.slice(0, REPOSITORY_MARKER_MAX_BYTES) : content;
         this.repositoryMarkerCache.set(relativePath, bounded);
         result.set(relativePath, bounded);
-      } catch {
+      } catch (error) {
+        if (error instanceof JavaIntelligenceError) throw error;
         this.repositoryMarkerCache.set(relativePath, null);
       }
     }
@@ -699,7 +762,11 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     const key = `${importPrefixes.join("\u0000")}|${annotationPrefixes.join("\u0000")}`;
     const cached = this.repositoryFactMarkerCache.get(key);
     if (cached?.generation === this.generation) return cached.markers;
-    const markers = await this.client.queryRepositoryFactMarkers(importPrefixes, annotationPrefixes);
+    const markers = await this.client.queryRepositoryFactMarkers(
+      importPrefixes,
+      annotationPrefixes,
+      this.currentRequestOptions()
+    );
     this.repositoryFactMarkerCache.set(key, { generation: this.generation, markers });
     return markers;
   }
@@ -707,17 +774,27 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
   async methodsWithParameterTypes(typeFqns: readonly string[], limit = 32): Promise<FrameworkMethodDeclaration[]> {
     await this.ensureOpened(this.generation);
     const boundedLimit = Math.max(1, Math.min(64, Math.floor(limit)));
-    const lookups = await this.client.queryTypes(unique([...typeFqns]).slice(0, boundedLimit).map(typeText => ({ typeText })));
+    const lookups = await this.client.queryTypes(
+      unique([...typeFqns]).slice(0, boundedLimit).map(typeText => ({ typeText })),
+      this.currentRequestOptions()
+    );
     const typeIds = lookups.filter((lookup): lookup is Extract<typeof lookup, { state: "RESOLVED" }> => lookup.state === "RESOLVED")
       .map(lookup => lookup.type.typeId);
-    const methodIds = await this.client.queryMethodsWithParameterTypes(typeIds, boundedLimit);
+    const methodIds = await this.client.queryMethodsWithParameterTypes(
+      typeIds,
+      boundedLimit,
+      this.currentRequestOptions()
+    );
     return (await this.declarationsById(methodIds)).methods;
   }
 
   async myBatisResourcesByNamespaces(namespaces: readonly string[]): Promise<Map<string, MyBatisMapperResourceFacts>> {
     await this.ensureOpened(this.generation);
     const boundedNamespaces = unique([...namespaces]).slice(0, MAX_FRAMEWORK_MYBATIS_NAMESPACES);
-    const raw = await this.client.queryMyBatisResourcesByNamespace(boundedNamespaces);
+    const raw = await this.client.queryMyBatisResourcesByNamespace(
+      boundedNamespaces,
+      this.currentRequestOptions()
+    );
     const result = new Map<string, MyBatisMapperResourceFacts>();
     for (const entry of raw) {
       if (entry.resource) result.set(entry.namespace, entry.resource);

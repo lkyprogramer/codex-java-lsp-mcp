@@ -8,13 +8,14 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import type { LayoutContext } from "./layout-probe.js";
 import type { LayoutSource } from "./layout-manager.js";
-import { isWithin } from "./path-utils.js";
+import { isPotentiallyWithin } from "./path-utils.js";
 import {
   GenerationClock,
   isStormBatch,
   mergeChangeKind,
   type RepoChange,
   type RepoChangeBatch,
+  type RepoChangeEvent,
   type RepoChangeKind
 } from "./repo-generation.js";
 import type { WorktreeIdentity } from "./worktree-identity.js";
@@ -125,9 +126,9 @@ export function isIgnoredRepoPath(
 ): boolean {
   const absolute = path.resolve(candidate);
   if (absolute === path.join(identity.repoRoot, ".git")) return true;
-  if (identity.gitCommonDir && isWithin(identity.gitCommonDir, absolute)) return true;
-  if (isWithin(cacheBase, absolute)) return true;
-  if (explicitGeneratedRoots.some(root => isWithin(root, absolute) || isWithin(absolute, root))) {
+  if (identity.gitCommonDir && isPotentiallyWithin(identity.gitCommonDir, absolute)) return true;
+  if (isPotentiallyWithin(cacheBase, absolute)) return true;
+  if (explicitGeneratedRoots.some(root => isPotentiallyWithin(root, absolute) || isPotentiallyWithin(absolute, root))) {
     return false;
   }
   return path.normalize(absolute).split(path.sep).some(segment => IGNORED_SEGMENTS.has(segment));
@@ -148,7 +149,7 @@ export type RepoChangeCoordinatorStatus = {
 export class RepoChangeCoordinator {
   private watcher?: FSWatcher;
   private plan?: RepoWatchPlan;
-  private readonly pending = new Map<string, RepoChangeKind>();
+  private readonly pending = new Map<string, RepoChange>();
   private readonly listeners = new Set<RepoChangeListener>();
   private flushTimer?: NodeJS.Timeout;
   private flushPromise?: Promise<void>;
@@ -187,7 +188,11 @@ export class RepoChangeCoordinator {
         ignoreInitial: true,
         persistent: true,
         followSymlinks: false,
-        atomic: true,
+        // Our own mergeRepoChange() already collapses delete+add of the same
+        // path into JAVA_CHANGE. Chokidar's atomic coalescing can suppress the
+        // unlink half of a real cross-path rename on macOS, leaving the old
+        // JavaIndex fact live, so keep the raw pair here.
+        atomic: false,
         awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 20 },
         // Reads `this.plan` dynamically (not the `plan` captured above) so a
         // build-change reconfigure keeps the generated-root allowlist current.
@@ -236,7 +241,7 @@ export class RepoChangeCoordinator {
     const roots = [...plan.sourceRoots, ...plan.resourceRoots, ...plan.generatedRoots];
     const affected = new Set<string>();
     for (const change of changes) {
-      const root = roots.find(candidate => isWithin(candidate, change.absolutePath));
+      const root = roots.find(candidate => isPotentiallyWithin(candidate, change.absolutePath));
       if (root) affected.add(path.relative(this.repoRoot, root) || ".");
       if (affected.size >= AFFECTED_ROOTS_LIMIT) break;
     }
@@ -273,27 +278,28 @@ export class RepoChangeCoordinator {
 
   private classify(file: string, event: "add" | "change" | "unlink"): RepoChange | undefined {
     const absolute = path.resolve(file);
+    const repoEvent: RepoChangeEvent = event === "unlink" ? "delete" : event;
     const plan = this.ensurePlan();
     if (isIgnoredRepoPath(absolute, this.identity, this.cacheBase, plan.generatedRoots)) {
       return undefined;
     }
     if (plan.buildFiles.includes(absolute)) {
-      return { kind: "BUILD_CHANGE", absolutePath: absolute };
+      return { kind: "BUILD_CHANGE", absolutePath: absolute, event: repoEvent };
     }
-    const underSource = [...plan.sourceRoots, ...plan.generatedRoots].some(root => isWithin(root, absolute));
+    const underSource = [...plan.sourceRoots, ...plan.generatedRoots].some(root => isPotentiallyWithin(root, absolute));
     if (absolute.endsWith(".java") && underSource) {
-      return { kind: javaKind(event), absolutePath: absolute };
+      return { kind: javaKind(event), absolutePath: absolute, event: repoEvent };
     }
-    const underResource = plan.resourceRoots.some(root => isWithin(root, absolute));
+    const underResource = plan.resourceRoots.some(root => isPotentiallyWithin(root, absolute));
     if (underResource && RESOURCE_EXTENSIONS.has(path.extname(absolute).toLowerCase())) {
-      return { kind: "RESOURCE_CHANGE", absolutePath: absolute };
+      return { kind: "RESOURCE_CHANGE", absolutePath: absolute, event: repoEvent };
     }
     return undefined;
   }
 
   private queue(change: RepoChange): void {
     const previous = this.pending.get(change.absolutePath);
-    const merged = previous ? mergeChangeKind(previous, change.kind) : change.kind;
+    const merged = previous ? mergeRepoChange(previous, change) : change;
     if (merged === undefined) {
       this.pending.delete(change.absolutePath);
     } else {
@@ -354,8 +360,7 @@ export class RepoChangeCoordinator {
     if (this.flushPromise) return this.flushPromise;
     const operation = (async () => {
       while (this.pending.size > 0) {
-        const changes = [...this.pending]
-          .map(([absolutePath, kind]) => ({ absolutePath, kind }))
+        const changes = [...this.pending.values()]
           .sort((left, right) => left.absolutePath.localeCompare(right.absolutePath));
         this.pending.clear();
         if (changes.some(change => change.kind === "BUILD_CHANGE")) {
@@ -388,8 +393,7 @@ export class RepoChangeCoordinator {
           try {
             await listener(batch);
           } catch (error) {
-            this.lastError = error instanceof Error ? error.message : String(error);
-            this.clock.markDirty(`change listener failed at generation ${generation}`);
+            this.recordListenerFailure(error, generation);
           }
         }
       }
@@ -412,14 +416,20 @@ export class RepoChangeCoordinator {
       affectedRoots: []
     };
     for (const listener of this.listeners) {
-      try {
-        void listener(batch);
-      } catch {
-        // Degrade is best-effort notification; listener errors do not re-degrade.
-      }
+      // A synchronous try/catch cannot observe a rejected listener promise.
+      // Keep the notification non-blocking, but record either failure mode so
+      // degradation never introduces an unhandled rejection of its own.
+      void Promise.resolve()
+        .then(() => listener(batch))
+        .catch(error => this.recordListenerFailure(error, generation));
     }
     void this.watcher?.close();
     this.watcher = undefined;
+  }
+
+  private recordListenerFailure(error: unknown, generation: number): void {
+    this.lastError = error instanceof Error ? error.message : String(error);
+    this.clock.markDirty(`change listener failed at generation ${generation}`);
   }
 
   status(): RepoChangeCoordinatorStatus {
@@ -451,6 +461,16 @@ function javaKind(event: "add" | "change" | "unlink"): RepoChangeKind {
   if (event === "add") return "JAVA_ADD";
   if (event === "unlink") return "JAVA_DELETE";
   return "JAVA_CHANGE";
+}
+
+function mergeRepoChange(previous: RepoChange, next: RepoChange): RepoChange | undefined {
+  const kind = mergeChangeKind(previous.kind, next.kind);
+  if (kind === undefined) return undefined;
+  if (previous.event === "add" && next.event === "delete") return undefined;
+  let event = next.event ?? previous.event;
+  if (previous.event === "add" && next.event === "change") event = "add";
+  else if (previous.event === "delete" && next.event === "add") event = "change";
+  return { kind, absolutePath: next.absolutePath, event };
 }
 
 function summarizeChanges(changes: readonly RepoChange[]): string {

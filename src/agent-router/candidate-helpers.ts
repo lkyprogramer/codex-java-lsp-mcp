@@ -1,5 +1,5 @@
 import type { PathContext } from "../repo-layout.js";
-import { scoreWithPolicy, type RoutingPolicy, type ScoreCategory } from "../routing-policy.js";
+import type { RoutingPolicy } from "../routing-policy.js";
 import type { JavaSourceFacts } from "../java-index/router-facts.js";
 import type {
   CandidateFile,
@@ -60,8 +60,27 @@ export function addScoreDelta(items: ScoreBreakdownItem[], id: string, delta: nu
 }
 
 export function scoreBase(policy: RoutingPolicy, category: string, context: PathContext, anchor: ResolvedAnchor, options: ImpactOptions): number {
-  return scoreWithPolicy(policy, category as ScoreCategory, context, anchor, options);
+  void policy;
+  void context;
+  void anchor;
+  void options;
+  return DISCOVERY_CATEGORY_BASE[category] ?? 18;
 }
+
+/**
+ * Internal CandidateFile seed values retained for legacy collectors whose
+ * touched-map/detailed rg summaries still require a positive numeric score.
+ * These values never cross the normalized-evidence family rank boundary.
+ */
+const DISCOVERY_CATEGORY_BASE: Readonly<Record<string, number>> = {
+  persistence: 70,
+  protocol: 64,
+  java: 56,
+  semantic: 80,
+  tests: 24,
+  config: 18,
+  nonJava: 18
+};
 
 export function typeReferenceOrderBonus(order: number | undefined): number {
   return order === undefined ? 0 : Math.max(0, 80 - order * 5);
