@@ -1,0 +1,160 @@
+TAP version 13
+# Subtest: cross-version scenario freeze gives Task0 and V3 the same golden set
+ok 1 - cross-version scenario freeze gives Task0 and V3 the same golden set
+  ---
+  duration_ms: 0.978416
+  type: 'test'
+  ...
+# Subtest: candidate patch includes hash-bound untracked source inputs
+ok 2 - candidate patch includes hash-bound untracked source inputs
+  ---
+  duration_ms: 147.336792
+  type: 'test'
+  ...
+# Subtest: formal repository identity rejects a dirty checkout
+ok 3 - formal repository identity rejects a dirty checkout
+  ---
+  duration_ms: 79.578125
+  type: 'test'
+  ...
+# Subtest: Task 36 fault suite records the authority manifest, per-case evidence hashes, and a passing aggregate gate
+ok 4 - Task 36 fault suite records the authority manifest, per-case evidence hashes, and a passing aggregate gate
+  ---
+  duration_ms: 9559.103917
+  type: 'test'
+  ...
+# Subtest: Task 36 fault suite bounds every child test and records a timeout as a failed case
+ok 5 - Task 36 fault suite bounds every child test and records a timeout as a failed case
+  ---
+  duration_ms: 76.725959
+  type: 'test'
+  ...
+# Subtest: Task36 Step6a smoke enforces process lease caps and executes every isolated behavior gate
+ok 6 - Task36 Step6a smoke enforces process lease caps and executes every isolated behavior gate
+  ---
+  duration_ms: 4121.066167
+  type: 'test'
+  ...
+# Subtest: a Node test-file wrapper PASS does not count as a selected behavior test
+ok 7 - a Node test-file wrapper PASS does not count as a selected behavior test
+  ---
+  duration_ms: 0.926375
+  type: 'test'
+  ...
+# Subtest: only behavior subtests matching the authority pattern are selected
+ok 8 - only behavior subtests matching the authority pattern are selected
+  ---
+  duration_ms: 0.234709
+  type: 'test'
+  ...
+# Subtest: SKIP, TODO, and failed subtests are never accepted as passing behavior evidence
+ok 9 - SKIP, TODO, and failed subtests are never accepted as passing behavior evidence
+  ---
+  duration_ms: 0.619792
+  type: 'test'
+  ...
+# Subtest: verifier accepts a complete frozen-scenario matrix that satisfies every paired gate
+ok 10 - verifier accepts a complete frozen-scenario matrix that satisfies every paired gate
+  ---
+  duration_ms: 27.221791
+  type: 'test'
+  ...
+# Subtest: verifier allows the Task36 P_read tolerance but rejects a larger regression
+ok 11 - verifier allows the Task36 P_read tolerance but rejects a larger regression
+  ---
+  duration_ms: 29.748791
+  type: 'test'
+  ...
+# Subtest: verifier gates task-blocking recall and standard estimated tokens
+ok 12 - verifier gates task-blocking recall and standard estimated tokens
+  ---
+  duration_ms: 14.759875
+  type: 'test'
+  ...
+# Subtest: verifier rejects a matrix whose old and new cells use different scenario files
+ok 13 - verifier rejects a matrix whose old and new cells use different scenario files
+  ---
+  duration_ms: 11.619042
+  type: 'test'
+  ...
+# Subtest: verifier rejects old and new cells from the same runtime commit and tree
+ok 14 - verifier rejects old and new cells from the same runtime commit and tree
+  ---
+  duration_ms: 10.810917
+  type: 'test'
+  ...
+# Subtest: verifier rejects a frozen scenario replaced at the same absolute path
+ok 15 - verifier rejects a frozen scenario replaced at the same absolute path
+  ---
+  duration_ms: 10.503334
+  type: 'test'
+  ...
+# Subtest: verifier rejects a candidate cell that omits one frozen scenario row
+ok 16 - verifier rejects a candidate cell that omits one frozen scenario row
+  ---
+  duration_ms: 11.435042
+  type: 'test'
+  ...
+# Subtest: verifier rejects a candidate patch whose bytes no longer match the manifest
+ok 17 - verifier rejects a candidate patch whose bytes no longer match the manifest
+  ---
+  duration_ms: 9.075792
+  type: 'test'
+  ...
+# Subtest: verifier rejects a candidate patch whose replay tree is not the declared executable tree
+ok 18 - verifier rejects a candidate patch whose replay tree is not the declared executable tree
+  ---
+  duration_ms: 10.953416
+  type: 'test'
+  ...
+# Subtest: verifier rejects a hash-bound untracked source input changed after the run
+ok 19 - verifier rejects a hash-bound untracked source input changed after the run
+  ---
+  duration_ms: 15.416125
+  type: 'test'
+  ...
+# Subtest: verifier rejects a repository manifest without a clean tree identity
+ok 20 - verifier rejects a repository manifest without a clean tree identity
+  ---
+  duration_ms: 10.287667
+  type: 'test'
+  ...
+# Subtest: verifier requires an explicit executable-baseline comparison policy
+ok 21 - verifier requires an explicit executable-baseline comparison policy
+  ---
+  duration_ms: 10.174083
+  type: 'test'
+  ...
+# Subtest: verifier reports missing real range evidence as UNMEASURED instead of folding it into PASS
+ok 22 - verifier reports missing real range evidence as UNMEASURED instead of folding it into PASS
+  ---
+  duration_ms: 12.410375
+  type: 'test'
+  ...
+# Subtest: verifier rejects a cell whose runtime build stamp does not match its manifest variant
+ok 23 - verifier rejects a cell whose runtime build stamp does not match its manifest variant
+  ---
+  duration_ms: 11.328375
+  type: 'test'
+  ...
+# Subtest: verifier rejects non-empty stderr and an illegal cold semantic completion
+ok 24 - verifier rejects non-empty stderr and an illegal cold semantic completion
+  ---
+  duration_ms: 44.614125
+  type: 'test'
+  ...
+# Subtest: verifier rejects out-of-domain quality, token, and latency metrics
+ok 25 - verifier rejects out-of-domain quality, token, and latency metrics
+  ---
+  duration_ms: 57.679625
+  type: 'test'
+  ...
+1..25
+# tests 25
+# suites 0
+# pass 25
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 9738.762583

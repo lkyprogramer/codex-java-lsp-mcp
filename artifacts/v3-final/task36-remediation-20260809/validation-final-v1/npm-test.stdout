@@ -1,0 +1,5040 @@
+
+> codex-java-lsp-mcp@0.1.0 test
+> node --test --test-concurrency=1 "dist/**/*.test.js"
+
+TAP version 13
+# Subtest: type graph returns the exact implementation facts it merged
+ok 1 - type graph returns the exact implementation facts it merged
+  ---
+  duration_ms: 1.122334
+  type: 'test'
+  ...
+# Subtest: omits the Lombok gap by default
+ok 2 - omits the Lombok gap by default
+  ---
+  duration_ms: 0.427875
+  type: 'test'
+  ...
+# Subtest: adds a Lombok gap only when lombokIncomplete is true
+ok 3 - adds a Lombok gap only when lombokIncomplete is true
+  ---
+  duration_ms: 0.078875
+  type: 'test'
+  ...
+# Subtest: normalizer deduplicates the same underlying evidence
+ok 4 - normalizer deduplicates the same underlying evidence
+  ---
+  duration_ms: 0.748125
+  type: 'test'
+  ...
+# Subtest: normalizer preserves independent evidence families
+ok 5 - normalizer preserves independent evidence families
+  ---
+  duration_ms: 0.614375
+  type: 'test'
+  ...
+# Subtest: normalizer preserves the same evidence for distinct anchors
+ok 6 - normalizer preserves the same evidence for distinct anchors
+  ---
+  duration_ms: 0.157125
+  type: 'test'
+  ...
+# Subtest: normalizer groups signals by candidate file
+ok 7 - normalizer groups signals by candidate file
+  ---
+  duration_ms: 0.159375
+  type: 'test'
+  ...
+# Subtest: duplicate identity keeps the signal with higher confidence
+ok 8 - duplicate identity keeps the signal with higher confidence
+  ---
+  duration_ms: 0.147292
+  type: 'test'
+  ...
+# Subtest: duplicate identity with equal confidence keeps COMPLETE over PARTIAL over UNKNOWN
+ok 9 - duplicate identity with equal confidence keeps COMPLETE over PARTIAL over UNKNOWN
+  ---
+  duration_ms: 0.078542
+  type: 'test'
+  ...
+# Subtest: duplicate identity with equal confidence and completeness keeps higher weight
+ok 10 - duplicate identity with equal confidence and completeness keeps higher weight
+  ---
+  duration_ms: 0.115875
+  type: 'test'
+  ...
+# Subtest: duplicate identity fully tied breaks deterministically on the lower signalId
+ok 11 - duplicate identity fully tied breaks deterministically on the lower signalId
+  ---
+  duration_ms: 0.054875
+  type: 'test'
+  ...
+# Subtest: a different sourceRange is a different identity even for the same kind and file
+ok 12 - a different sourceRange is a different identity even for the same kind and file
+  ---
+  duration_ms: 0.298417
+  type: 'test'
+  ...
+# Subtest: out-of-range confidence throws INVALID_INPUT instead of silently clamping
+ok 13 - out-of-range confidence throws INVALID_INPUT instead of silently clamping
+  ---
+  duration_ms: 0.562709
+  type: 'test'
+  ...
+# Subtest: NaN confidence throws INVALID_INPUT instead of silently becoming zero
+ok 14 - NaN confidence throws INVALID_INPUT instead of silently becoming zero
+  ---
+  duration_ms: 0.135458
+  type: 'test'
+  ...
+# Subtest: an unknown completeness value throws INVALID_INPUT
+ok 15 - an unknown completeness value throws INVALID_INPUT
+  ---
+  duration_ms: 0.071084
+  type: 'test'
+  ...
+# Subtest: a negative weight throws INVALID_INPUT
+ok 16 - a negative weight throws INVALID_INPUT
+  ---
+  duration_ms: 0.058791
+  type: 'test'
+  ...
+# Subtest: normalized entries start unscored, leaving ranking to a later stage
+ok 17 - normalized entries start unscored, leaving ranking to a later stage
+  ---
+  duration_ms: 0.335
+  type: 'test'
+  ...
+# Subtest: family is preserved on the kept signal for later per-family scoring
+ok 18 - family is preserved on the kept signal for later per-family scoring
+  ---
+  duration_ms: 0.041792
+  type: 'test'
+  ...
+# Subtest: three duplicate lexical providers cannot outrank one exact semantic edge
+ok 19 - three duplicate lexical providers cannot outrank one exact semantic edge
+  ---
+  duration_ms: 0.741958
+  type: 'test'
+  ...
+# Subtest: independent structure and framework evidence can combine
+ok 20 - independent structure and framework evidence can combine
+  ---
+  duration_ms: 0.244709
+  type: 'test'
+  ...
+# Subtest: familyContribution ignores families with no matching signal
+ok 21 - familyContribution ignores families with no matching signal
+  ---
+  duration_ms: 0.058625
+  type: 'test'
+  ...
+# Subtest: familyContribution caps at the family's ceiling regardless of weight
+ok 22 - familyContribution caps at the family's ceiling regardless of weight
+  ---
+  duration_ms: 0.063167
+  type: 'test'
+  ...
+# Subtest: familyContribution takes the max weighted signal, not the sum, then adds a log-scaled diversity bonus
+ok 23 - familyContribution takes the max weighted signal, not the sum, then adds a log-scaled diversity bonus
+  ---
+  duration_ms: 0.165333
+  type: 'test'
+  ...
+# Subtest: completeness discounts a signal's weighted contribution
+ok 24 - completeness discounts a signal's weighted contribution
+  ---
+  duration_ms: 0.057917
+  type: 'test'
+  ...
+# Subtest: confidenceLabel is high when exact semantic evidence clears its own threshold
+ok 25 - confidenceLabel is high when exact semantic evidence clears its own threshold
+  ---
+  duration_ms: 0.099875
+  type: 'test'
+  ...
+# Subtest: confidenceLabel is high when complete static or framework evidence clears its threshold
+ok 26 - confidenceLabel is high when complete static or framework evidence clears its threshold
+  ---
+  duration_ms: 0.054958
+  type: 'test'
+  ...
+# Subtest: confidenceLabel does not call it high when the >=100 score came only from PARTIAL/UNKNOWN evidence
+ok 27 - confidenceLabel does not call it high when the >=100 score came only from PARTIAL/UNKNOWN evidence
+  ---
+  duration_ms: 0.303166
+  type: 'test'
+  ...
+# Subtest: confidenceLabel does not let lexical evidence alone reach medium or high
+ok 28 - confidenceLabel does not let lexical evidence alone reach medium or high
+  ---
+  duration_ms: 0.347209
+  type: 'test'
+  ...
+# Subtest: confidenceLabel is medium when non-lexical evidence sums past its threshold without clearing high
+ok 29 - confidenceLabel is medium when non-lexical evidence sums past its threshold without clearing high
+  ---
+  duration_ms: 0.104584
+  type: 'test'
+  ...
+# Subtest: rankCandidates applies a same-module prior over an equally-evidenced cross-module candidate
+ok 30 - rankCandidates applies a same-module prior over an equally-evidenced cross-module candidate
+  ---
+  duration_ms: 0.073917
+  type: 'test'
+  ...
+# Subtest: rankCandidates tie-breaks on repo path when every scored term is equal
+ok 31 - rankCandidates tie-breaks on repo path when every scored term is equal
+  ---
+  duration_ms: 7.957083
+  type: 'test'
+  ...
+# Subtest: rankCandidates does not exempt a focus-module candidate from the cross-module penalty
+ok 32 - rankCandidates does not exempt a focus-module candidate from the cross-module penalty
+  ---
+  duration_ms: 0.06675
+  type: 'test'
+  ...
+# Subtest: rankCandidates applies the sourceSet delta from policy
+ok 33 - rankCandidates applies the sourceSet delta from policy
+  ---
+  duration_ms: 0.063375
+  type: 'test'
+  ...
+# Subtest: rankCandidates applies the test-defer penalty only when testReadMode is defer
+ok 34 - rankCandidates applies the test-defer penalty only when testReadMode is defer
+  ---
+  duration_ms: 0.445625
+  type: 'test'
+  ...
+# Subtest: rankCandidates does not apply the cross-module penalty when crossModulePolicy is all
+ok 35 - rankCandidates does not apply the cross-module penalty when crossModulePolicy is all
+  ---
+  duration_ms: 0.052417
+  type: 'test'
+  ...
+# Subtest: rankCandidates tie-break level 1: higher exact-semantic contribution wins at an equal final score
+ok 36 - rankCandidates tie-break level 1: higher exact-semantic contribution wins at an equal final score
+  ---
+  duration_ms: 0.052
+  type: 'test'
+  ...
+# Subtest: rankCandidates tie-break level 2: higher static+framework contribution wins when exact-semantic is equal (both zero)
+ok 37 - rankCandidates tie-break level 2: higher static+framework contribution wins when exact-semantic is equal (both zero)
+  ---
+  duration_ms: 0.0475
+  type: 'test'
+  ...
+# Subtest: standard output preserves the Lombok completeness state and advisory
+ok 38 - standard output preserves the Lombok completeness state and advisory
+  ---
+  duration_ms: 0.495292
+  type: 'test'
+  ...
+# Subtest: compact output preserves a task-relevant Lombok advisory
+ok 39 - compact output preserves a task-relevant Lombok advisory
+  ---
+  duration_ms: 0.081541
+  type: 'test'
+  ...
+# Subtest: diagnostic output exposes generated semantics at the common metrics path
+ok 40 - diagnostic output exposes generated semantics at the common metrics path
+  ---
+  duration_ms: 0.064875
+  type: 'test'
+  ...
+# Subtest: returns NOT_DETECTED and no task gap for a repo with no Lombok build marker
+ok 41 - returns NOT_DETECTED and no task gap for a repo with no Lombok build marker
+  ---
+  duration_ms: 1.189292
+  type: 'test'
+  ...
+# Subtest: treats an older lightweight session status without generatedCode as not detected
+ok 42 - treats an older lightweight session status without generatedCode as not detected
+  ---
+  duration_ms: 0.071542
+  type: 'test'
+  ...
+# Subtest: returns OK and no task gap when the Lombok agent jar is resolvable, without consulting framework facts
+ok 43 - returns OK and no task gap when the Lombok agent jar is resolvable, without consulting framework facts
+  ---
+  duration_ms: 0.657541
+  type: 'test'
+  ...
+# Subtest: returns INCOMPLETE with a task gap when the agent is missing and the anchor's own type carries @Data
+ok 44 - returns INCOMPLETE with a task gap when the agent is missing and the anchor's own type carries @Data
+  ---
+  duration_ms: 689.642875
+  type: 'test'
+  ...
+# Subtest: returns INCOMPLETE but no task gap when the agent is missing and the anchor's own type carries no Lombok annotation
+ok 45 - returns INCOMPLETE but no task gap when the agent is missing and the anchor's own type carries no Lombok annotation
+  ---
+  duration_ms: 79.899375
+  type: 'test'
+  ...
+# Subtest: returns a task gap when a selected collaborator, not the anchor, carries @Data
+ok 46 - returns a task gap when a selected collaborator, not the anchor, carries @Data
+  ---
+  duration_ms: 81.623333
+  type: 'test'
+  ...
+# Subtest: does not spend a fact lookup on an expired request budget
+ok 47 - does not spend a fact lookup on an expired request budget
+  ---
+  duration_ms: 0.224709
+  type: 'test'
+  ...
+# Subtest: isActive is true for the MapStruct fixture (pom.xml dependency marker)
+ok 48 - isActive is true for the MapStruct fixture (pom.xml dependency marker)
+  ---
+  duration_ms: 114.748959
+  type: 'test'
+  ...
+# Subtest: isActive is false for a fully-indexed repo with no MapStruct build marker or Java facts
+ok 49 - isActive is false for a fully-indexed repo with no MapStruct build marker or Java facts
+  ---
+  duration_ms: 87.152
+  type: 'test'
+  ...
+# Subtest: isActive detects a MapStruct import from bounded request facts without scanning the whole index
+ok 50 - isActive detects a MapStruct import from bounded request facts without scanning the whole index
+  ---
+  duration_ms: 0.229083
+  type: 'test'
+  ...
+# Subtest: collect links OrderMapper.toResponse's parameter as SOURCE and its return type as TARGET
+ok 51 - collect links OrderMapper.toResponse's parameter as SOURCE and its return type as TARGET
+  ---
+  duration_ms: 105.679625
+  type: 'test'
+  ...
+# Subtest: collect links @Mapper(uses = AddressMapper.class) to the used mapper via the same-package fallback (no import needed)
+ok 52 - collect links @Mapper(uses = AddressMapper.class) to the used mapper via the same-package fallback (no import needed)
+  ---
+  duration_ms: 100.880833
+  type: 'test'
+  ...
+# Subtest: collect resolves an unqualified uses= class literal via an explicit cross-package import
+ok 53 - collect resolves an unqualified uses= class literal via an explicit cross-package import
+  ---
+  duration_ms: 83.539542
+  type: 'test'
+  ...
+# Subtest: collect resolves multiple uses= class literals from a brace-list
+ok 54 - collect resolves multiple uses= class literals from a brace-list
+  ---
+  duration_ms: 87.267458
+  type: 'test'
+  ...
+# Subtest: collect expands a structurally signaled mapper before family scores are materialized
+ok 55 - collect expands a structurally signaled mapper before family scores are materialized
+  ---
+  duration_ms: 84.5405
+  type: 'test'
+  ...
+# Subtest: collect resolves a cross-module uses declaration before the background reconcile reaches its source root
+ok 56 - collect resolves a cross-module uses declaration before the background reconcile reaches its source root
+  ---
+  duration_ms: 85.469083
+  type: 'test'
+  ...
+# Subtest: collect limits a non-anchor mapper to mapping methods that touch the anchor type
+ok 57 - collect limits a non-anchor mapper to mapping methods that touch the anchor type
+  ---
+  duration_ms: 88.736
+  type: 'test'
+  ...
+# Subtest: collect ignores @Mapper config class literals that are not uses dependencies
+ok 58 - collect ignores @Mapper config class literals that are not uses dependencies
+  ---
+  duration_ms: 84.9845
+  type: 'test'
+  ...
+# Subtest: collect ignores @Mapper imports class literals that are not uses dependencies
+ok 59 - collect ignores @Mapper imports class literals that are not uses dependencies
+  ---
+  duration_ms: 81.922208
+  type: 'test'
+  ...
+# Subtest: collect treats a @MappingTarget parameter as TARGET, not SOURCE, on a void update method
+ok 60 - collect treats a @MappingTarget parameter as TARGET, not SOURCE, on a void update method
+  ---
+  duration_ms: 103.900792
+  type: 'test'
+  ...
+# Subtest: isActive is true for the MyBatis fixture (pom.xml dependency marker)
+ok 61 - isActive is true for the MyBatis fixture (pom.xml dependency marker)
+  ---
+  duration_ms: 105.723417
+  type: 'test'
+  ...
+# Subtest: isActive is false for a fully-indexed repo with no MyBatis build marker or Java facts
+ok 62 - isActive is false for a fully-indexed repo with no MyBatis build marker or Java facts
+  ---
+  duration_ms: 84.714875
+  type: 'test'
+  ...
+# Subtest: collect links OrderMapper's namespace, both statements, and their resolved parameter/resultMap types
+ok 63 - collect links OrderMapper's namespace, both statements, and their resolved parameter/resultMap types
+  ---
+  duration_ms: 97.134208
+  type: 'test'
+  ...
+# Subtest: collect skips MYBATIS_STATEMENT_METHOD for an ambiguous overload but still emits its resultType evidence
+ok 64 - collect skips MYBATIS_STATEMENT_METHOD for an ambiguous overload but still emits its resultType evidence
+  ---
+  duration_ms: 91.668375
+  type: 'test'
+  ...
+# Subtest: collect scopes MYBATIS_STATEMENT_METHOD to the anchored method, but not type-kind or namespace evidence
+ok 65 - collect scopes MYBATIS_STATEMENT_METHOD to the anchored method, but not type-kind or namespace evidence
+  ---
+  duration_ms: 92.519167
+  type: 'test'
+  ...
+# Subtest: collect resolves a resultMap type through another mapper namespace
+ok 66 - collect resolves a resultMap type through another mapper namespace
+  ---
+  duration_ms: 87.731583
+  type: 'test'
+  ...
+# Subtest: registering springAdapter alongside mybatisAdapter does not change MyBatis's evidence on a Spring-inactive fixture
+ok 67 - registering springAdapter alongside mybatisAdapter does not change MyBatis's evidence on a Spring-inactive fixture
+  ---
+  duration_ms: 95.235833
+  type: 'test'
+  ...
+# Subtest: an empty adapter registry (the current production default) yields zero evidence and a COMPLETE outcome
+ok 68 - an empty adapter registry (the current production default) yields zero evidence and a COMPLETE outcome
+  ---
+  duration_ms: 0.926709
+  type: 'test'
+  ...
+# Subtest: merges evidence/metadata across active adapters and skips an inactive one entirely
+ok 69 - merges evidence/metadata across active adapters and skips an inactive one entirely
+  ---
+  duration_ms: 0.228417
+  type: 'test'
+  ...
+# Subtest: an adapter whose isActive() throws is skipped, fail-soft, and does not stop other adapters
+ok 70 - an adapter whose isActive() throws is skipped, fail-soft, and does not stop other adapters
+  ---
+  duration_ms: 0.304834
+  type: 'test'
+  ...
+# Subtest: an adapter whose collect() throws is skipped, fail-soft, and degrades completion to FAILED
+ok 71 - an adapter whose collect() throws is skipped, fail-soft, and degrades completion to FAILED
+  ---
+  duration_ms: 0.19575
+  type: 'test'
+  ...
+# Subtest: a deadline that is already expired stops the loop before the first adapter and marks PARTIAL_TIMEOUT
+ok 72 - a deadline that is already expired stops the loop before the first adapter and marks PARTIAL_TIMEOUT
+  ---
+  duration_ms: 0.1755
+  type: 'test'
+  ...
+# Subtest: candidateFiles handed to an adapter is capped at MAX_FRAMEWORK_TRAVERSAL_FILES
+ok 73 - candidateFiles handed to an adapter is capped at MAX_FRAMEWORK_TRAVERSAL_FILES
+  ---
+  duration_ms: 0.136709
+  type: 'test'
+  ...
+# Subtest: reuses one identical framework-facts query across adapters in a request
+ok 74 - reuses one identical framework-facts query across adapters in a request
+  ---
+  duration_ms: 0.196125
+  type: 'test'
+  ...
+# Subtest: does not retain a failed framework-facts query for a later adapter
+ok 75 - does not retain a failed framework-facts query for a later adapter
+  ---
+  duration_ms: 0.127375
+  type: 'test'
+  ...
+# Subtest: fixture facts: OrderController/OrderService/OrderRepository carry resolved Spring annotation FQNs
+ok 76 - fixture facts: OrderController/OrderService/OrderRepository carry resolved Spring annotation FQNs
+  ---
+  duration_ms: 121.968917
+  type: 'test'
+  ...
+# Subtest: springAdapter.collect does not expand a lexical-only Spring candidate
+ok 77 - springAdapter.collect does not expand a lexical-only Spring candidate
+  ---
+  duration_ms: 109.998541
+  type: 'test'
+  ...
+# Subtest: springAdapter.collect confines method-level endpoint evidence to the anchored method
+ok 78 - springAdapter.collect confines method-level endpoint evidence to the anchored method
+  ---
+  duration_ms: 88.531041
+  type: 'test'
+  ...
+# Subtest: fixture facts: OrderService.create's publish call site and OrderListener.on's parameter both resolve to demo.OrderCreated
+ok 79 - fixture facts: OrderService.create's publish call site and OrderListener.on's parameter both resolve to demo.OrderCreated
+  ---
+  duration_ms: 107.149583
+  type: 'test'
+  ...
+# Subtest: fixture facts: OrderController.create resolves a unique CALLS edge to OrderService.create via resolvedCallees
+ok 80 - fixture facts: OrderController.create resolves a unique CALLS edge to OrderService.create via resolvedCallees
+  ---
+  duration_ms: 106.502083
+  type: 'test'
+  ...
+# Subtest: repositoryMarkers detects the Spring dependency declared in the fixture's pom.xml
+ok 81 - repositoryMarkers detects the Spring dependency declared in the fixture's pom.xml
+  ---
+  duration_ms: 104.052709
+  type: 'test'
+  ...
+# Subtest: springAdapter.isActive is true for the Spring fixture (pom.xml dependency) and false for a plain Java repo
+ok 82 - springAdapter.isActive is true for the Spring fixture (pom.xml dependency) and false for a plain Java repo
+  ---
+  duration_ms: 190.754542
+  type: 'test'
+  ...
+# Subtest: springAdapter.isActive probes the source module's build marker, not only the aggregator root
+ok 83 - springAdapter.isActive probes the source module's build marker, not only the aggregator root
+  ---
+  duration_ms: 86.456542
+  type: 'test'
+  ...
+# Subtest: springAdapter.collect emits SPRING_INJECTION for OrderController->OrderService and OrderService->OrderRepository, but not for the external ApplicationEventPublisher parameter
+ok 84 - springAdapter.collect emits SPRING_INJECTION for OrderController->OrderService and OrderService->OrderRepository, but not for the external ApplicationEventPublisher parameter
+  ---
+  duration_ms: 110.974916
+  type: 'test'
+  ...
+# Subtest: springAdapter.collect emits SPRING_CALL_PATH for every invocation whose receiver is a confirmed injection target
+ok 85 - springAdapter.collect emits SPRING_CALL_PATH for every invocation whose receiver is a confirmed injection target
+  ---
+  duration_ms: 108.952916
+  type: 'test'
+  ...
+# Subtest: springAdapter.collect emits SPRING_REQUEST_BODY (OrderController.create -> OrderRequest) and SPRING_RESPONSE_TYPE (OrderController.create -> OrderResponse)
+ok 86 - springAdapter.collect emits SPRING_REQUEST_BODY (OrderController.create -> OrderRequest) and SPRING_RESPONSE_TYPE (OrderController.create -> OrderResponse)
+  ---
+  duration_ms: 108.455625
+  type: 'test'
+  ...
+# Subtest: springAdapter.collect emits SPRING_PUBLISHES_EVENT (OrderService.create -> OrderCreated) and SPRING_CONSUMES_EVENT (OrderListener.on -> OrderCreated), merged onto one candidate
+ok 87 - springAdapter.collect emits SPRING_PUBLISHES_EVENT (OrderService.create -> OrderCreated) and SPRING_CONSUMES_EVENT (OrderListener.on -> OrderCreated), merged onto one candidate
+  ---
+  duration_ms: 108.366875
+  type: 'test'
+  ...
+# Subtest: springAdapter.collect emits SPRING_BEAN_PRODUCES for a @Bean method's return type
+ok 88 - springAdapter.collect emits SPRING_BEAN_PRODUCES for a @Bean method's return type
+  ---
+  duration_ms: 82.1295
+  type: 'test'
+  ...
+# Subtest: springAdapter.collect chunks declarationsById past its 64-id-per-call cap instead of silently losing evidence targets beyond it
+ok 89 - springAdapter.collect chunks declarationsById past its 64-id-per-call cap instead of silently losing evidence targets beyond it
+  ---
+  duration_ms: 217.153958
+  type: 'test'
+  ...
+# Subtest: springAdapter.collect stops at an already-exhausted deadline instead of scanning any candidate file, and reports PARTIAL_TIMEOUT
+ok 90 - springAdapter.collect stops at an already-exhausted deadline instead of scanning any candidate file, and reports PARTIAL_TIMEOUT
+  ---
+  duration_ms: 124.634709
+  type: 'test'
+  ...
+# Subtest: springAdapter.collect produces no injection signal for a stereotype class with two constructors and none @Autowired (ambiguous)
+ok 91 - springAdapter.collect produces no injection signal for a stereotype class with two constructors and none @Autowired (ambiguous)
+  ---
+  duration_ms: 84.513792
+  type: 'test'
+  ...
+# Subtest: springAdapter.collect produces no injection signal for a plain (non-stereotype) class, even with a Spring-shaped constructor
+ok 92 - springAdapter.collect produces no injection signal for a plain (non-stereotype) class, even with a Spring-shaped constructor
+  ---
+  duration_ms: 85.928666
+  type: 'test'
+  ...
+# Subtest: springAdapter.collect emits a call path for an injected receiver even when the method also calls a local helper
+ok 93 - springAdapter.collect emits a call path for an injected receiver even when the method also calls a local helper
+  ---
+  duration_ms: 82.395417
+  type: 'test'
+  ...
+# Subtest: springAdapter.collect does not label a component's non-injected helper call as a Spring call path
+ok 94 - springAdapter.collect does not label a component's non-injected helper call as a Spring call path
+  ---
+  duration_ms: 100.161792
+  type: 'test'
+  ...
+# Subtest: springAdapter.collect binds a call path only to this component's plain or this-qualified injection receiver
+ok 95 - springAdapter.collect binds a call path only to this component's plain or this-qualified injection receiver
+  ---
+  duration_ms: 85.086042
+  type: 'test'
+  ...
+# Subtest: springAdapter.collect requires an injected ApplicationEventPublisher receiver before emitting an event
+ok 96 - springAdapter.collect requires an injected ApplicationEventPublisher receiver before emitting an event
+  ---
+  duration_ms: 81.354792
+  type: 'test'
+  ...
+# Subtest: springAdapter.collect discovers an event listener outside the initial candidate set
+ok 97 - springAdapter.collect discovers an event listener outside the initial candidate set
+  ---
+  duration_ms: 104.743
+  type: 'test'
+  ...
+# Subtest: springAdapter.collect retains a wildcard-imported listener discovered outside the initial candidate set
+ok 98 - springAdapter.collect retains a wildcard-imported listener discovered outside the initial candidate set
+  ---
+  duration_ms: 82.366166
+  type: 'test'
+  ...
+# Subtest: springAdapter.collect emits request/response evidence only for mapped controller methods
+ok 99 - springAdapter.collect emits request/response evidence only for mapped controller methods
+  ---
+  duration_ms: 81.581833
+  type: 'test'
+  ...
+# Subtest: springAdapter.collect records type-level transaction methods as metadata
+ok 100 - springAdapter.collect records type-level transaction methods as metadata
+  ---
+  duration_ms: 82.111333
+  type: 'test'
+  ...
+# Subtest: running springAdapter through runFrameworkAdapters against the real fixture yields the same evidence as a direct collect() call
+ok 101 - running springAdapter through runFrameworkAdapters against the real fixture yields the same evidence as a direct collect() call
+  ---
+  duration_ms: 108.999583
+  type: 'test'
+  ...
+# Subtest: registering mybatisAdapter alongside springAdapter does not change Spring's evidence on a MyBatis-inactive fixture
+ok 102 - registering mybatisAdapter alongside springAdapter does not change Spring's evidence on a MyBatis-inactive fixture
+  ---
+  duration_ms: 109.330208
+  type: 'test'
+  ...
+# Subtest: pathsFromArgumentsText: positional string literal
+ok 103 - pathsFromArgumentsText: positional string literal
+  ---
+  duration_ms: 1.018916
+  type: 'test'
+  ...
+# Subtest: pathsFromArgumentsText: positional array literal
+ok 104 - pathsFromArgumentsText: positional array literal
+  ---
+  duration_ms: 0.174292
+  type: 'test'
+  ...
+# Subtest: pathsFromArgumentsText: named value= argument alongside an unrelated named argument
+ok 105 - pathsFromArgumentsText: named value= argument alongside an unrelated named argument
+  ---
+  duration_ms: 0.115333
+  type: 'test'
+  ...
+# Subtest: pathsFromArgumentsText: no arguments at all
+ok 106 - pathsFromArgumentsText: no arguments at all
+  ---
+  duration_ms: 0.05275
+  type: 'test'
+  ...
+# Subtest: pathsFromArgumentsText: named arguments present but none is value/path - unknown, not guessed
+ok 107 - pathsFromArgumentsText: named arguments present but none is value/path - unknown, not guessed
+  ---
+  duration_ms: 0.054834
+  type: 'test'
+  ...
+# Subtest: pathsFromArgumentsText: a constant reference is left unparsed rather than guessed
+ok 108 - pathsFromArgumentsText: a constant reference is left unparsed rather than guessed
+  ---
+  duration_ms: 0.070958
+  type: 'test'
+  ...
+# Subtest: pathsFromArgumentsText: a concatenated string is unknown rather than its literal prefix
+ok 109 - pathsFromArgumentsText: a concatenated string is unknown rather than its literal prefix
+  ---
+  duration_ms: 0.120083
+  type: 'test'
+  ...
+# Subtest: httpMethodsFromArgumentsText: extracts RequestMethod.X constants
+ok 110 - httpMethodsFromArgumentsText: extracts RequestMethod.X constants
+  ---
+  duration_ms: 0.186666
+  type: 'test'
+  ...
+# Subtest: mappingOf: a GetMapping annotation yields its fixed HTTP verb plus parsed paths
+ok 111 - mappingOf: a GetMapping annotation yields its fixed HTTP verb plus parsed paths
+  ---
+  duration_ms: 0.330375
+  type: 'test'
+  ...
+# Subtest: mappingOf: a plain RequestMapping with no arguments yields no httpMethods/paths but is still recognized
+ok 112 - mappingOf: a plain RequestMapping with no arguments yields no httpMethods/paths but is still recognized
+  ---
+  duration_ms: 0.32575
+  type: 'test'
+  ...
+# Subtest: mappingOf: no mapping annotation present at all
+ok 113 - mappingOf: no mapping annotation present at all
+  ---
+  duration_ms: 0.107792
+  type: 'test'
+  ...
+# Subtest: composeEndpointFact: joins a class-level prefix with a path-less method mapping
+ok 114 - composeEndpointFact: joins a class-level prefix with a path-less method mapping
+  ---
+  duration_ms: 0.077291
+  type: 'test'
+  ...
+# Subtest: composeEndpointFact: an unknown method path does not become a known class prefix
+ok 115 - composeEndpointFact: an unknown method path does not become a known class prefix
+  ---
+  duration_ms: 0.055
+  type: 'test'
+  ...
+# Subtest: composeEndpointFact: joins a class-level prefix with a method-level sub-path
+ok 116 - composeEndpointFact: joins a class-level prefix with a method-level sub-path
+  ---
+  duration_ms: 0.085041
+  type: 'test'
+  ...
+# Subtest: composeEndpointFact: no class-level mapping - method mapping used as-is
+ok 117 - composeEndpointFact: no class-level mapping - method mapping used as-is
+  ---
+  duration_ms: 0.406958
+  type: 'test'
+  ...
+# Subtest: generic seed references stay outside the V6 protected core
+ok 118 - generic seed references stay outside the V6 protected core
+  ---
+  duration_ms: 0.7585
+  type: 'test'
+  ...
+# Subtest: service task that reads a Lombok-generated getter keeps its selected DTO and reports the missing-agent gap
+ok 119 - service task that reads a Lombok-generated getter keeps its selected DTO and reports the missing-agent gap
+  ---
+  duration_ms: 114.679542
+  type: 'test'
+  ...
+# Subtest: the anchor is always present and first, even though it earned no evidence
+ok 120 - the anchor is always present and first, even though it earned no evidence
+  ---
+  duration_ms: 1.676541
+  type: 'test'
+  ...
+# Subtest: a candidate that is also the anchor path is not listed twice
+ok 121 - a candidate that is also the anchor path is not listed twice
+  ---
+  duration_ms: 0.190292
+  type: 'test'
+  ...
+# Subtest: two anchors in the same file share one candidate and retain both positions
+ok 122 - two anchors in the same file share one candidate and retain both positions
+  ---
+  duration_ms: 0.443166
+  type: 'test'
+  ...
+# Subtest: module/layer/sourceSet thread through from the normalized evidence entry
+ok 123 - module/layer/sourceSet thread through from the normalized evidence entry
+  ---
+  duration_ms: 0.150708
+  type: 'test'
+  ...
+# Subtest: finalScore becomes the CandidateFile score, and positions are deduplicated across signals
+ok 124 - finalScore becomes the CandidateFile score, and positions are deduplicated across signals
+  ---
+  duration_ms: 0.243209
+  type: 'test'
+  ...
+# Subtest: IMPLEMENTS and TYPE_RELATION signals for the same candidate collapse to one finalize.type-relation entry at the max weight
+ok 125 - IMPLEMENTS and TYPE_RELATION signals for the same candidate collapse to one finalize.type-relation entry at the max weight
+  ---
+  duration_ms: 0.44925
+  type: 'test'
+  ...
+# Subtest: materialization keeps only scoreBreakdown ids that still have a compatibility consumer
+ok 126 - materialization keeps only scoreBreakdown ids that still have a compatibility consumer
+  ---
+  duration_ms: 0.306417
+  type: 'test'
+  ...
+# Subtest: an IMPLEMENTS signal produces a compatible finalize.type-relation scoreBreakdown entry
+ok 127 - an IMPLEMENTS signal produces a compatible finalize.type-relation scoreBreakdown entry
+  ---
+  duration_ms: 0.192583
+  type: 'test'
+  ...
+# Subtest: a REFERENCE-only candidate does not fabricate a finalize.type-relation entry
+ok 128 - a REFERENCE-only candidate does not fabricate a finalize.type-relation entry
+  ---
+  duration_ms: 0.371875
+  type: 'test'
+  ...
+# Subtest: lexical section categories and task-keyword utility survive materialization
+ok 129 - lexical section categories and task-keyword utility survive materialization
+  ---
+  duration_ms: 0.510917
+  type: 'test'
+  ...
+# Subtest: typed signal metadata materializes without a legacy candidate fragment
+ok 130 - typed signal metadata materializes without a legacy candidate fragment
+  ---
+  duration_ms: 0.295292
+  type: 'test'
+  ...
+# Subtest: weak name support does not misclassify a Java collaborator as config
+ok 131 - weak name support does not misclassify a Java collaborator as config
+  ---
+  duration_ms: 0.090375
+  type: 'test'
+  ...
+# Subtest: a FRAMEWORK-family signal materializes into a generic 'framework' category, not a Spring-specific one
+ok 132 - a FRAMEWORK-family signal materializes into a generic 'framework' category, not a Spring-specific one
+  ---
+  duration_ms: 0.0725
+  type: 'test'
+  ...
+# Subtest: planner evidence preserves family, kind, and source-target identity
+ok 133 - planner evidence preserves family, kind, and source-target identity
+  ---
+  duration_ms: 0.12825
+  type: 'test'
+  ...
+# Subtest: withConvergedCostV6 stabilizes resultBytes/estimatedTokens within 3 attempts
+ok 134 - withConvergedCostV6 stabilizes resultBytes/estimatedTokens within 3 attempts
+  ---
+  duration_ms: 0.698333
+  type: 'test'
+  ...
+# Subtest: withConvergedCostV6 converges identically regardless of starting cost values
+ok 135 - withConvergedCostV6 converges identically regardless of starting cost values
+  ---
+  duration_ms: 0.216417
+  type: 'test'
+  ...
+# Subtest: withConvergedCostV6 handles a resultBytes digit-width crossing (e.g. 999->1000 bytes)
+ok 136 - withConvergedCostV6 handles a resultBytes digit-width crossing (e.g. 999->1000 bytes)
+  ---
+  duration_ms: 0.094042
+  type: 'test'
+  ...
+# Subtest: roleOf prefers a resolved CALLS/METHOD_RELATION edge over an overlapping lexical hit
+ok 137 - roleOf prefers a resolved CALLS/METHOD_RELATION edge over an overlapping lexical hit
+  ---
+  duration_ms: 0.186208
+  type: 'test'
+  ...
+# Subtest: roleOf recognizes every registered framework family via the shared SPRING|MYBATIS|MAPSTRUCT prefix
+ok 138 - roleOf recognizes every registered framework family via the shared SPRING|MYBATIS|MAPSTRUCT prefix
+  ---
+  duration_ms: 0.061416
+  type: 'test'
+  ...
+# Subtest: roleOf falls back to target/reference/config/related in the expected order
+ok 139 - roleOf falls back to target/reference/config/related in the expected order
+  ---
+  duration_ms: 0.1345
+  type: 'test'
+  ...
+# Subtest: evidencePhrasesFor caps at 4 phrases, dedupes, and never leaks a raw provider kind string
+ok 140 - evidencePhrasesFor caps at 4 phrases, dedupes, and never leaks a raw provider kind string
+  ---
+  duration_ms: 0.402584
+  type: 'test'
+  ...
+# Subtest: evidencePhrasesFor degrades an unknown kind to a humanized phrase instead of dropping or throwing
+ok 141 - evidencePhrasesFor degrades an unknown kind to a humanized phrase instead of dropping or throwing
+  ---
+  duration_ms: 0.062375
+  type: 'test'
+  ...
+# Subtest: buildImpactFileV6 in standard mode omits reasons/verifiedBy/scoreBreakdown and caps locations at 3
+ok 142 - buildImpactFileV6 in standard mode omits reasons/verifiedBy/scoreBreakdown and caps locations at 3
+  ---
+  duration_ms: 0.311625
+  type: 'test'
+  ...
+# Subtest: buildImpactFileV6 in diagnostic mode adds reasons/verifiedBy/scoreBreakdown on top of the standard fields
+ok 143 - buildImpactFileV6 in diagnostic mode adds reasons/verifiedBy/scoreBreakdown on top of the standard fields
+  ---
+  duration_ms: 0.364416
+  type: 'test'
+  ...
+# Subtest: buildImpactFileV6 defaults a missing confidence to medium, matching the pre-V6 formatCandidate default
+ok 144 - buildImpactFileV6 defaults a missing confidence to medium, matching the pre-V6 formatCandidate default
+  ---
+  duration_ms: 0.108792
+  type: 'test'
+  ...
+# Subtest: buildImpactTargetV6 maps the anchor point onto a zero-width range rather than inventing an end position
+ok 145 - buildImpactTargetV6 maps the anchor point onto a zero-width range rather than inventing an end position
+  ---
+  duration_ms: 0.127625
+  type: 'test'
+  ...
+# Subtest: buildImpactTargetV6 falls back to absolutePath only when the anchor has no repo-relative path
+ok 146 - buildImpactTargetV6 falls back to absolutePath only when the anchor has no repo-relative path
+  ---
+  duration_ms: 0.042125
+  type: 'test'
+  ...
+# Subtest: the production framework registry includes MapStruct after its real-repository canary gate
+ok 147 - the production framework registry includes MapStruct after its real-repository canary gate
+  ---
+  duration_ms: 0.661375
+  type: 'test'
+  ...
+# Subtest: collectFrameworkEvidence with an explicitly empty adapters list returns a zero-evidence COMPLETE outcome and never touches frameworkIndex
+ok 148 - collectFrameworkEvidence with an explicitly empty adapters list returns a zero-evidence COMPLETE outcome and never touches frameworkIndex
+  ---
+  duration_ms: 0.206625
+  type: 'test'
+  ...
+# Subtest: collectFrameworkEvidence with the default adapters adds no evidence for a non-Spring, non-MyBatis, non-MapStruct repo
+ok 149 - collectFrameworkEvidence with the default adapters adds no evidence for a non-Spring, non-MyBatis, non-MapStruct repo
+  ---
+  duration_ms: 0.556041
+  type: 'test'
+  ...
+# Subtest: collectFrameworkEvidence maps ProviderInput fields onto FrameworkAdapterContext for an injected adapter
+ok 150 - collectFrameworkEvidence maps ProviderInput fields onto FrameworkAdapterContext for an injected adapter
+  ---
+  duration_ms: 0.1305
+  type: 'test'
+  ...
+# Subtest: lexical provider emits a category evidence weight instead of the legacy policy-composed candidate score
+ok 151 - lexical provider emits a category evidence weight instead of the legacy policy-composed candidate score
+  ---
+  duration_ms: 1.5305
+  type: 'test'
+  ...
+# Subtest: lexical evidence retains the anchor that produced each matching plan section
+ok 152 - lexical evidence retains the anchor that produced each matching plan section
+  ---
+  duration_ms: 0.4745
+  type: 'test'
+  ...
+# Subtest: filename similarity alone never creates relationship evidence
+ok 153 - filename similarity alone never creates relationship evidence
+  ---
+  duration_ms: 1.463625
+  type: 'test'
+  ...
+# Subtest: an anchor implementing the candidate interface earns a TYPE_SYMMETRIC structural signal
+ok 154 - an anchor implementing the candidate interface earns a TYPE_SYMMETRIC structural signal
+  ---
+  duration_ms: 0.671667
+  type: 'test'
+  ...
+# Subtest: an unrelated candidate has no relationship evidence
+ok 155 - an unrelated candidate has no relationship evidence
+  ---
+  duration_ms: 0.231292
+  type: 'test'
+  ...
+# Subtest: an AST-resolved CALLS edge from the anchor method protects the target declaration
+ok 156 - an AST-resolved CALLS edge from the anchor method protects the target declaration
+  ---
+  duration_ms: 0.335333
+  type: 'test'
+  ...
+# Subtest: cold re-evaluation nominates one uniquely resolved wildcard-import receiver target without a pre-existing CALLS edge
+ok 157 - cold re-evaluation nominates one uniquely resolved wildcard-import receiver target without a pre-existing CALLS edge
+  ---
+  duration_ms: 0.9265
+  type: 'test'
+  ...
+# Subtest: cold direct-call cap retains an exact declared field receiver after earlier value calls
+ok 158 - cold direct-call cap retains an exact declared field receiver after earlier value calls
+  ---
+  duration_ms: 8.061291
+  type: 'test'
+  ...
+# Subtest: cold re-evaluation refuses an overloaded resolved receiver target
+ok 159 - cold re-evaluation refuses an overloaded resolved receiver target
+  ---
+  duration_ms: 0.464792
+  type: 'test'
+  ...
+# Subtest: parsed method signatures nominate uniquely resolved wildcard parameters and concrete generic return collaborators without promoting the wrapper
+ok 160 - parsed method signatures nominate uniquely resolved wildcard parameters and concrete generic return collaborators without promoting the wrapper
+  ---
+  duration_ms: 0.26125
+  type: 'test'
+  ...
+# Subtest: cold re-evaluation rejects a generic wrapper with an unknown argument
+ok 161 - cold re-evaluation rejects a generic wrapper with an unknown argument
+  ---
+  duration_ms: 0.481458
+  type: 'test'
+  ...
+# Subtest: cold re-evaluation disambiguates an overloaded outer call from one resolved nested return
+ok 162 - cold re-evaluation disambiguates an overloaded outer call from one resolved nested return
+  ---
+  duration_ms: 1.42725
+  type: 'test'
+  ...
+# Subtest: an interface anchor follows one exact implementation override to its resolved receiver call
+ok 163 - an interface anchor follows one exact implementation override to its resolved receiver call
+  ---
+  duration_ms: 0.646083
+  type: 'test'
+  ...
+# Subtest: a candidate type in the anchor's own method relations earns a METHOD_RELATION signal
+ok 164 - a candidate type in the anchor's own method relations earns a METHOD_RELATION signal
+  ---
+  duration_ms: 0.158792
+  type: 'test'
+  ...
+# Subtest: a local receiver alone is not promoted into Task 30 protected method evidence
+ok 165 - a local receiver alone is not promoted into Task 30 protected method evidence
+  ---
+  duration_ms: 0.103125
+  type: 'test'
+  ...
+# Subtest: a method relation never binds a same-simple-name candidate from another package
+ok 166 - a method relation never binds a same-simple-name candidate from another package
+  ---
+  duration_ms: 0.119667
+  type: 'test'
+  ...
+# Subtest: a candidate implementing the anchor's type earns a TYPE_RELATION signal even when it is not verifiedBy typeGraph
+ok 167 - a candidate implementing the anchor's type earns a TYPE_RELATION signal even when it is not verifiedBy typeGraph
+  ---
+  duration_ms: 0.180333
+  type: 'test'
+  ...
+# Subtest: the facts-based checks do not run for a candidate outside staticVerifiedCandidates
+ok 168 - the facts-based checks do not run for a candidate outside staticVerifiedCandidates
+  ---
+  duration_ms: 0.067
+  type: 'test'
+  ...
+# Subtest: a complete persisted reference emits high-confidence exact-semantic weight
+ok 169 - a complete persisted reference emits high-confidence exact-semantic weight
+  ---
+  duration_ms: 1.200208
+  type: 'test'
+  ...
+# Subtest: an anchor position that does not resolve to any symbol yields no persisted candidates and does not throw
+ok 170 - an anchor position that does not resolve to any symbol yields no persisted candidates and does not throw
+  ---
+  duration_ms: 0.114375
+  type: 'test'
+  ...
+# Subtest: an edge written by putComplete() is found by a later request whose anchor resolves to the same source symbol
+ok 171 - an edge written by putComplete() is found by a later request whose anchor resolves to the same source symbol
+  ---
+  duration_ms: 4.977334
+  type: 'test'
+  ...
+# Subtest: static provider keeps each implementation evidence tied to its own anchor
+ok 172 - static provider keeps each implementation evidence tied to its own anchor
+  ---
+  duration_ms: 2.050333
+  type: 'test'
+  ...
+# Subtest: static provider classifies direct imported declarations as exact AST evidence
+ok 173 - static provider classifies direct imported declarations as exact AST evidence
+  ---
+  duration_ms: 0.407041
+  type: 'test'
+  ...
+# Subtest: static provider records direct type references as anchored AST relationships
+ok 174 - static provider records direct type references as anchored AST relationships
+  ---
+  duration_ms: 0.31275
+  type: 'test'
+  ...
+# Subtest: a resolved implementation exposes its exact field and anchored-method collaborators
+ok 175 - a resolved implementation exposes its exact field and anchored-method collaborators
+  ---
+  duration_ms: 0.479541
+  type: 'test'
+  ...
+# Subtest: deferred test implementations do not fan out their collaborators into a main-source request
+ok 176 - deferred test implementations do not fan out their collaborators into a main-source request
+  ---
+  duration_ms: 0.450417
+  type: 'test'
+  ...
+# Subtest: support provider carries candidate metadata only through typed evidence
+ok 177 - support provider carries candidate metadata only through typed evidence
+  ---
+  duration_ms: 1.066625
+  type: 'test'
+  ...
+# Subtest: rankCandidates always returns the anchor, even with zero evidence
+ok 178 - rankCandidates always returns the anchor, even with zero evidence
+  ---
+  duration_ms: 1.160667
+  type: 'test'
+  ...
+# Subtest: typed evidence preserves family score, candidate order, metadata, and read-plan selection without legacy fragments
+ok 179 - typed evidence preserves family score, candidate order, metadata, and read-plan selection without legacy fragments
+  ---
+  duration_ms: 1.1135
+  type: 'test'
+  ...
+# Subtest: rankCandidates filters excluded modules before scoring and counts them as suppressed
+ok 180 - rankCandidates filters excluded modules before scoring and counts them as suppressed
+  ---
+  duration_ms: 0.320541
+  type: 'test'
+  ...
+# Subtest: rankCandidates mirrors family-ranker's cross-module and deferred-test penalties into suppressed counters
+ok 181 - rankCandidates mirrors family-ranker's cross-module and deferred-test penalties into suppressed counters
+  ---
+  duration_ms: 0.44025
+  type: 'test'
+  ...
+# Subtest: rankCandidates truncates the candidate tail by family-ranker score while protecting structural evidence
+ok 182 - rankCandidates truncates the candidate tail by family-ranker score while protecting structural evidence
+  ---
+  duration_ms: 9.238542
+  type: 'test'
+  ...
+# Subtest: the V6 planner can select from the complete ranked pool before output-tail truncation
+ok 183 - the V6 planner can select from the complete ranked pool before output-tail truncation
+  ---
+  duration_ms: 0.617167
+  type: 'test'
+  ...
+# Subtest: output-tail truncation retains the seed read-plan coverage independently of V6 selections
+ok 184 - output-tail truncation retains the seed read-plan coverage independently of V6 selections
+  ---
+  duration_ms: 0.275167
+  type: 'test'
+  ...
+# Subtest: output-tail compatibility retains a direct collaborator without making it V6 protected core
+ok 185 - output-tail compatibility retains a direct collaborator without making it V6 protected core
+  ---
+  duration_ms: 0.468166
+  type: 'test'
+  ...
+# Subtest: candidate tail retains an exact main-source type reference without promoting it into V6 core
+ok 186 - candidate tail retains an exact main-source type reference without promoting it into V6 core
+  ---
+  duration_ms: 0.873333
+  type: 'test'
+  ...
+# Subtest: candidate tail retains bounded main-source representatives from every explicit focus module
+ok 187 - candidate tail retains bounded main-source representatives from every explicit focus module
+  ---
+  duration_ms: 1.201292
+  type: 'test'
+  ...
+# Subtest: pre-semantic protection does not reserve a slot for lexical-only evidence
+ok 188 - pre-semantic protection does not reserve a slot for lexical-only evidence
+  ---
+  duration_ms: 0.233125
+  type: 'test'
+  ...
+# Subtest: pre-semantic protection reserves resolved Spring call paths, not injection metadata
+ok 189 - pre-semantic protection reserves resolved Spring call paths, not injection metadata
+  ---
+  duration_ms: 0.076709
+  type: 'test'
+  ...
+# Subtest: pre-semantic Spring call protection is limited to a call sourced by the request anchor
+ok 190 - pre-semantic Spring call protection is limited to a call sourced by the request anchor
+  ---
+  duration_ms: 0.080916
+  type: 'test'
+  ...
+# Subtest: pre-semantic protection leaves deferred-test direct calls out of the range-query core
+ok 191 - pre-semantic protection leaves deferred-test direct calls out of the range-query core
+  ---
+  duration_ms: 0.066417
+  type: 'test'
+  ...
+# Subtest: direct imports remain candidate evidence rather than V6 protected core
+ok 192 - direct imports remain candidate evidence rather than V6 protected core
+  ---
+  duration_ms: 0.057125
+  type: 'test'
+  ...
+# Subtest: generic JavaIndex type references remain candidate evidence rather than V6 protected core
+ok 193 - generic JavaIndex type references remain candidate evidence rather than V6 protected core
+  ---
+  duration_ms: 0.061875
+  type: 'test'
+  ...
+# Subtest: contract anchors leave direct imports outside the protected execution core
+ok 194 - contract anchors leave direct imports outside the protected execution core
+  ---
+  duration_ms: 0.050833
+  type: 'test'
+  ...
+# Subtest: pre-semantic protection retains only method-level second-hop implementation dependencies
+ok 195 - pre-semantic protection retains only method-level second-hop implementation dependencies
+  ---
+  duration_ms: 0.146625
+  type: 'test'
+  ...
+# Subtest: pre-semantic protection admits exact MyBatis namespace/statement matches but not parameter-type relations
+ok 196 - pre-semantic protection admits exact MyBatis namespace/statement matches but not parameter-type relations
+  ---
+  duration_ms: 0.056334
+  type: 'test'
+  ...
+# Subtest: protected read plan retains exact structural evidence without turning a generic type reference into core
+ok 197 - protected read plan retains exact structural evidence without turning a generic type reference into core
+  ---
+  duration_ms: 1.466625
+  type: 'test'
+  ...
+# Subtest: an indexed direct CALLS edge receives a core slot while an unlocated legacy CALLS edge does not
+ok 198 - an indexed direct CALLS edge receives a core slot while an unlocated legacy CALLS edge does not
+  ---
+  duration_ms: 0.929
+  type: 'test'
+  ...
+# Subtest: token-aware read plan keeps its anchor, respects bytes, and makes one shortlisted range query
+ok 199 - token-aware read plan keeps its anchor, respects bytes, and makes one shortlisted range query
+  ---
+  duration_ms: 0.284625
+  type: 'test'
+  ...
+# Subtest: token-aware read plan keeps a framework collaborator ahead of duplicate lexical variants
+ok 200 - token-aware read plan keeps a framework collaborator ahead of duplicate lexical variants
+  ---
+  duration_ms: 0.589458
+  type: 'test'
+  ...
+# Subtest: anchor range may exceed bytes but does not force an additional file
+ok 201 - anchor range may exceed bytes but does not force an additional file
+  ---
+  duration_ms: 0.166625
+  type: 'test'
+  ...
+# Subtest: token-aware read plan caps protected core at four and releases the remaining slot
+ok 202 - token-aware read plan caps protected core at four and releases the remaining slot
+  ---
+  duration_ms: 0.574208
+  type: 'test'
+  ...
+# Subtest: protected core is ordered by family utility per byte when only one of two candidates fits
+ok 203 - protected core is ordered by family utility per byte when only one of two candidates fits
+  ---
+  duration_ms: 0.181166
+  type: 'test'
+  ...
+# Subtest: protected core uses absolute utility when the file cap binds but bytes do not
+ok 204 - protected core uses absolute utility when the file cap binds but bytes do not
+  ---
+  duration_ms: 0.200917
+  type: 'test'
+  ...
+# Subtest: Spring injection remains structural and cannot displace resolved JDT core evidence
+ok 205 - Spring injection remains structural and cannot displace resolved JDT core evidence
+  ---
+  duration_ms: 0.38275
+  type: 'test'
+  ...
+# Subtest: structured JDT definition evidence is protected core without legacy reason aliases
+ok 206 - structured JDT definition evidence is protected core without legacy reason aliases
+  ---
+  duration_ms: 0.477834
+  type: 'test'
+  ...
+# Subtest: non-protected static evidence does not consume protected core quota
+ok 207 - non-protected static evidence does not consume protected core quota
+  ---
+  duration_ms: 0.849
+  type: 'test'
+  ...
+# Subtest: a Spring call path from a structural seed does not displace an anchor's direct implementation core
+ok 208 - a Spring call path from a structural seed does not displace an anchor's direct implementation core
+  ---
+  duration_ms: 0.162458
+  type: 'test'
+  ...
+# Subtest: a resolved shallow call outranks an anchor Spring call path in a constrained core
+ok 209 - a resolved shallow call outranks an anchor Spring call path in a constrained core
+  ---
+  duration_ms: 0.142542
+  type: 'test'
+  ...
+# Subtest: direct implementations take the bounded core ahead of higher-scoring second-hop method types
+ok 210 - direct implementations take the bounded core ahead of higher-scoring second-hop method types
+  ---
+  duration_ms: 7.774542
+  type: 'test'
+  ...
+# Subtest: explicit implementation method types outrank legacy compatibility paths in a constrained core
+ok 211 - explicit implementation method types outrank legacy compatibility paths in a constrained core
+  ---
+  duration_ms: 0.144375
+  type: 'test'
+  ...
+# Subtest: a generic anchor reference cannot displace a direct method relation from protected core
+ok 212 - a generic anchor reference cannot displace a direct method relation from protected core
+  ---
+  duration_ms: 0.103208
+  type: 'test'
+  ...
+# Subtest: a shallow resolved CALLS path outranks a deeper call when the protected core is constrained
+ok 213 - a shallow resolved CALLS path outranks a deeper call when the protected core is constrained
+  ---
+  duration_ms: 0.102
+  type: 'test'
+  ...
+# Subtest: a direct anchor CALLS receiver outranks an unrelated implementation expansion in a constrained core
+ok 214 - a direct anchor CALLS receiver outranks an unrelated implementation expansion in a constrained core
+  ---
+  duration_ms: 0.102708
+  type: 'test'
+  ...
+# Subtest: a concrete anchor's declared interface contract outranks downstream implementation context
+ok 215 - a concrete anchor's declared interface contract outranks downstream implementation context
+  ---
+  duration_ms: 0.092041
+  type: 'test'
+  ...
+# Subtest: an exact anchor method relation outranks a lower-value import in protected core
+ok 216 - an exact anchor method relation outranks a lower-value import in protected core
+  ---
+  duration_ms: 0.095709
+  type: 'test'
+  ...
+# Subtest: only method-level dependencies of a resolved implementation receive protected core slots
+ok 217 - only method-level dependencies of a resolved implementation receive protected core slots
+  ---
+  duration_ms: 0.113917
+  type: 'test'
+  ...
+# Subtest: framework evidence keeps its own quota when the same candidate also has static evidence
+ok 218 - framework evidence keeps its own quota when the same candidate also has static evidence
+  ---
+  duration_ms: 0.219625
+  type: 'test'
+  ...
+# Subtest: missing buckets release capacity after bounded baseline-safe core slots
+ok 219 - missing buckets release capacity after bounded baseline-safe core slots
+  ---
+  duration_ms: 0.3775
+  type: 'test'
+  ...
+# Subtest: deferred tests never consume protected core quota
+ok 220 - deferred tests never consume protected core quota
+  ---
+  duration_ms: 0.187292
+  type: 'test'
+  ...
+# Subtest: deferred tests stay in candidate output but never consume a V6 read-plan slot
+ok 221 - deferred tests stay in candidate output but never consume a V6 read-plan slot
+  ---
+  duration_ms: 0.157292
+  type: 'test'
+  ...
+# Subtest: externally protected deferred tests cannot displace an exact main-source core file
+ok 222 - externally protected deferred tests cannot displace an exact main-source core file
+  ---
+  duration_ms: 0.092292
+  type: 'test'
+  ...
+# Subtest: deferred externally protected tests cannot exhaust the bounded range shortlist
+ok 223 - deferred externally protected tests cannot exhaust the bounded range shortlist
+  ---
+  duration_ms: 0.184125
+  type: 'test'
+  ...
+# Subtest: parsed second-hop implementation evidence outranks a compatibility-only direct declaration
+ok 224 - parsed second-hop implementation evidence outranks a compatibility-only direct declaration
+  ---
+  duration_ms: 0.115334
+  type: 'test'
+  ...
+# Subtest: legacy tail protection does not promote application service suffixes without direct evidence
+ok 225 - legacy tail protection does not promote application service suffixes without direct evidence
+  ---
+  duration_ms: 0.063417
+  type: 'test'
+  ...
+# Subtest: token-aware read plan retains every readable anchor in a multi-anchor request
+ok 226 - token-aware read plan retains every readable anchor in a multi-anchor request
+  ---
+  duration_ms: 0.223708
+  type: 'test'
+  ...
+# Subtest: anchors remain mandatory when their distinct files exceed the configured file budget
+ok 227 - anchors remain mandatory when their distinct files exceed the configured file budget
+  ---
+  duration_ms: 0.133625
+  type: 'test'
+  ...
+# Subtest: two anchors remain mandatory when readPlanMaxItems is one
+ok 228 - two anchors remain mandatory when readPlanMaxItems is one
+  ---
+  duration_ms: 0.095416
+  type: 'test'
+  ...
+# Subtest: an unreadable non-anchor range cannot consume a read-plan file slot
+ok 229 - an unreadable non-anchor range cannot consume a read-plan file slot
+  ---
+  duration_ms: 0.127542
+  type: 'test'
+  ...
+# Subtest: marginal selection recomputes overlap after each selected file
+ok 230 - marginal selection recomputes overlap after each selected file
+  ---
+  duration_ms: 0.124708
+  type: 'test'
+  ...
+# Subtest: marginal selection is ordered by utility per byte when only one of two candidates fits
+ok 231 - marginal selection is ordered by utility per byte when only one of two candidates fits
+  ---
+  duration_ms: 0.129917
+  type: 'test'
+  ...
+# Subtest: marginal selection uses absolute utility when the file cap binds but bytes do not
+ok 232 - marginal selection uses absolute utility when the file cap binds but bytes do not
+  ---
+  duration_ms: 0.11325
+  type: 'test'
+  ...
+# Subtest: same evidence kind with a different source-target remains independently useful
+ok 233 - same evidence kind with a different source-target remains independently useful
+  ---
+  duration_ms: 0.112167
+  type: 'test'
+  ...
+# Subtest: a merged worker range reports every retained source-window reason
+ok 234 - a merged worker range reports every retained source-window reason
+  ---
+  duration_ms: 0.129375
+  type: 'test'
+  ...
+# Subtest: semanticPolicy required still uses one bounded V6 range batch
+ok 235 - semanticPolicy required still uses one bounded V6 range batch
+  ---
+  duration_ms: 0.558459
+  type: 'test'
+  ...
+# Subtest: protected candidates omitted by the bounded shortlist produce an evidence gap
+ok 236 - protected candidates omitted by the bounded shortlist produce an evidence gap
+  ---
+  duration_ms: 0.217375
+  type: 'test'
+  ...
+# Subtest: V6 shortlist does not promote a repository filename without protected structural evidence
+ok 237 - V6 shortlist does not promote a repository filename without protected structural evidence
+  ---
+  duration_ms: 0.187666
+  type: 'test'
+  ...
+# Subtest: reference ranking selects valuable files before truncation
+ok 238 - reference ranking selects valuable files before truncation
+  ---
+  duration_ms: 8.594416
+  type: 'test'
+  ...
+# Subtest: collapse accumulates totalReferences and every raw position per file
+ok 239 - collapse accumulates totalReferences and every raw position per file
+  ---
+  duration_ms: 0.416542
+  type: 'test'
+  ...
+# Subtest: value formula rewards main source, same module, focus module, task keyword, and framework role
+ok 240 - value formula rewards main source, same module, focus module, task keyword, and framework role
+  ---
+  duration_ms: 0.121917
+  type: 'test'
+  ...
+# Subtest: reference count is capped and cannot dominate structural value
+ok 241 - reference count is capped and cannot dominate structural value
+  ---
+  duration_ms: 0.163166
+  type: 'test'
+  ...
+# Subtest: generated code is penalized relative to an otherwise identical hand-written file
+ok 242 - generated code is penalized relative to an otherwise identical hand-written file
+  ---
+  duration_ms: 0.101875
+  type: 'test'
+  ...
+# Subtest: limitFiles truncates the ranked result to the requested budget
+ok 243 - limitFiles truncates the ranked result to the requested budget
+  ---
+  duration_ms: 0.506958
+  type: 'test'
+  ...
+# Subtest: ties break by higher reference count, then lexical path order
+ok 244 - ties break by higher reference count, then lexical path order
+  ---
+  duration_ms: 0.187333
+  type: 'test'
+  ...
+# Subtest: AgentRouter binds the request's absolute budget around the complete JavaIndex call chain
+ok 245 - AgentRouter binds the request's absolute budget around the complete JavaIndex call chain
+  ---
+  duration_ms: 1.855958
+  type: 'test'
+  ...
+# Subtest: live semantic timeouts share one bounded stage budget and leave time for the read plan
+ok 246 - live semantic timeouts share one bounded stage budget and leave time for the read plan
+  ---
+  duration_ms: 204.577
+  type: 'test'
+  ...
+# Subtest: semanticVerify ranks reference candidates by value instead of JDT server order
+ok 247 - semanticVerify ranks reference candidates by value instead of JDT server order
+  ---
+  duration_ms: 14.802292
+  type: 'test'
+  ...
+# Subtest: semanticVerify skips persisted-edge writes when raw reference locations hit the safety cap
+ok 248 - semanticVerify skips persisted-edge writes when raw reference locations hit the safety cap
+  ---
+  duration_ms: 161.628417
+  type: 'test'
+  ...
+# Subtest: semanticVerify caps returned reference files at referenceFileLimit(mode) and reports collapse metrics
+ok 249 - semanticVerify caps returned reference files at referenceFileLimit(mode) and reports collapse metrics
+  ---
+  duration_ms: 3.365875
+  type: 'test'
+  ...
+# Subtest: semanticVerify dual-writes resolvable reference edges into edgeStoreV2, resolving the shared anchor source position only once
+ok 250 - semanticVerify dual-writes resolvable reference edges into edgeStoreV2, resolving the shared anchor source position only once
+  ---
+  duration_ms: 1.3305
+  type: 'test'
+  ...
+# Subtest: a candidate whose only evidence is in one family ranks below a candidate carrying that family once it is ablated
+ok 251 - a candidate whose only evidence is in one family ranks below a candidate carrying that family once it is ablated
+  ---
+  duration_ms: 1.947375
+  type: 'test'
+  ...
+# Subtest: ablating a candidate's sole family can flip which of two same-tier candidates wins the shared read-plan slot
+ok 252 - ablating a candidate's sole family can flip which of two same-tier candidates wins the shared read-plan slot
+  ---
+  duration_ms: 0.324167
+  type: 'test'
+  ...
+# Subtest: base read-plan attribution follows production buildReadPlan selectedPaths instead of the shadow selector
+ok 253 - base read-plan attribution follows production buildReadPlan selectedPaths instead of the shadow selector
+  ---
+  duration_ms: 0.187834
+  type: 'test'
+  ...
+# Subtest: shadow attribution accepts the production selection without a JavaIndex dependency
+ok 254 - shadow attribution accepts the production selection without a JavaIndex dependency
+  ---
+  duration_ms: 0.296583
+  type: 'test'
+  ...
+# Subtest: required-policy requests reuse production selection and leave read-plan ablation unmeasured
+ok 255 - required-policy requests reuse production selection and leave read-plan ablation unmeasured
+  ---
+  duration_ms: 0.155334
+  type: 'test'
+  ...
+# Subtest: a production candidate the shadow pass never received evidence for (e.g. the anchor itself) is reported, not silently dropped
+ok 256 - a production candidate the shadow pass never received evidence for (e.g. the anchor itself) is reported, not silently dropped
+  ---
+  duration_ms: 0.235416
+  type: 'test'
+  ...
+# Subtest: production relationship evidence folds into the same shadow ranking without duplicating other providers' identities
+ok 257 - production relationship evidence folds into the same shadow ranking without duplicating other providers' identities
+  ---
+  duration_ms: 0.105958
+  type: 'test'
+  ...
+# Subtest: lishuedu controller retains an exact direct return-type declaration
+ok 258 - lishuedu controller retains an exact direct return-type declaration
+  ---
+  duration_ms: 0.879083
+  type: 'test'
+  ...
+# Subtest: required semantic policy retains deterministic type-reference evidence
+ok 259 - required semantic policy retains deterministic type-reference evidence
+  ---
+  duration_ms: 0.226833
+  type: 'test'
+  ...
+# Subtest: loads a valid config and exposes its aliases
+ok 260 - loads a valid config and exposes its aliases
+  ---
+  duration_ms: 3.916708
+  type: 'test'
+  ...
+# Subtest: a broken first load throws: there is no last-known-good to fall back to
+ok 261 - a broken first load throws: there is no last-known-good to fall back to
+  ---
+  duration_ms: 1.105792
+  type: 'test'
+  ...
+# Subtest: AliasRegistry retains last known good config when a reload is invalid JSON
+ok 262 - AliasRegistry retains last known good config when a reload is invalid JSON
+  ---
+  duration_ms: 1.829916
+  type: 'test'
+  ...
+# Subtest: AliasRegistry retains last known good config when a reload has a schema violation
+ok 263 - AliasRegistry retains last known good config when a reload has a schema violation
+  ---
+  duration_ms: 1.333833
+  type: 'test'
+  ...
+# Subtest: deleting the config file clears aliases and any prior reload error
+ok 264 - deleting the config file clears aliases and any prior reload error
+  ---
+  duration_ms: 1.657333
+  type: 'test'
+  ...
+# Subtest: benchmark loads scenarios from external jsonl and prints metadata
+ok 265 - benchmark loads scenarios from external jsonl and prints metadata
+  ---
+  duration_ms: 85.666875
+  type: 'test'
+  ...
+# Subtest: benchmark records an explicitly isolated JavaIndex cache directory
+ok 266 - benchmark records an explicitly isolated JavaIndex cache directory
+  ---
+  duration_ms: 163.655208
+  type: 'test'
+  ...
+# Subtest: benchmark can run a no-lsp token baseline
+ok 267 - benchmark can run a no-lsp token baseline
+  ---
+  duration_ms: 164.417833
+  type: 'test'
+  ...
+# Subtest: impact benchmark exposes timing diagnostics
+ok 268 - impact benchmark exposes timing diagnostics
+  ---
+  duration_ms: 4114.904584
+  type: 'test'
+  ...
+# Subtest: blockedBy distinguishes hit, readplan-budget, and candidate-limit using the real production candidateLimit boundary
+ok 269 - blockedBy distinguishes hit, readplan-budget, and candidate-limit using the real production candidateLimit boundary
+  ---
+  duration_ms: 4.700042
+  type: 'test'
+  ...
+# Subtest: a relative context.repoRoot still matches shadowRanking's absolute candidate paths instead of silently reporting every golden file absent
+ok 270 - a relative context.repoRoot still matches shadowRanking's absolute candidate paths instead of silently reporting every golden file absent
+  ---
+  duration_ms: 1.307209
+  type: 'test'
+  ...
+# Subtest: a family with a zero score is excluded from sourceFamilies
+ok 271 - a family with a zero score is excluded from sourceFamilies
+  ---
+  duration_ms: 1.1945
+  type: 'test'
+  ...
+# Subtest: inReadPlan is projected from production selectedPaths even when shadow selection disagrees
+ok 272 - inReadPlan is projected from production selectedPaths even when shadow selection disagrees
+  ---
+  duration_ms: 1.060084
+  type: 'test'
+  ...
+# Subtest: absentReason: support kind and missing-on-disk both take the low-value fast path
+ok 273 - absentReason: support kind and missing-on-disk both take the low-value fast path
+  ---
+  duration_ms: 0.62925
+  type: 'test'
+  ...
+# Subtest: absentReason: semantic-not-used and semantic-timeout come from the real request's semantic completion
+ok 274 - absentReason: semantic-not-used and semantic-timeout come from the real request's semantic completion
+  ---
+  duration_ms: 1.015666
+  type: 'test'
+  ...
+# Subtest: counterfactual readPlanHitLost only records a real selection flip, not a rank-only movement
+ok 275 - counterfactual readPlanHitLost only records a real selection flip, not a rank-only movement
+  ---
+  duration_ms: 1.39975
+  type: 'test'
+  ...
+# Subtest: counterfactual candidateHitLost fires when ablation pushes a candidate's rank past the real production candidateLimit boundary
+ok 276 - counterfactual candidateHitLost fires when ablation pushes a candidate's rank past the real production candidateLimit boundary
+  ---
+  duration_ms: 1.036417
+  type: 'test'
+  ...
+# Subtest: counterfactual reports measured=false instead of a false readPlanHitLost=[] when read-plan ablation was skipped
+ok 277 - counterfactual reports measured=false instead of a false readPlanHitLost=[] when read-plan ablation was skipped
+  ---
+  duration_ms: 1.661375
+  type: 'test'
+  ...
+# Subtest: absentReason: coverage-partial when the file's source root has not finished indexing, no-static-edge otherwise
+ok 278 - absentReason: coverage-partial when the file's source root has not finished indexing, no-static-edge otherwise
+  ---
+  duration_ms: 1.343625
+  type: 'test'
+  ...
+# Subtest: buildImpactDeterminismSnapshot records only semantic ordering and rounds scores
+ok 279 - buildImpactDeterminismSnapshot records only semantic ordering and rounds scores
+  ---
+  duration_ms: 1.098458
+  type: 'test'
+  ...
+# Subtest: verifyImpactDeterminismPayload accepts 20 identical semantic snapshots despite diagnostic drift
+ok 280 - verifyImpactDeterminismPayload accepts 20 identical semantic snapshots despite diagnostic drift
+  ---
+  duration_ms: 0.389209
+  type: 'test'
+  ...
+# Subtest: verifyImpactDeterminismPayload rejects candidate, readPlan, score or completion drift
+ok 281 - verifyImpactDeterminismPayload rejects candidate, readPlan, score or completion drift
+  ---
+  duration_ms: 0.395208
+  type: 'test'
+  ...
+# Subtest: verifyImpactDeterminismPayload rejects missing snapshots, wrong run count and non-cold input
+ok 282 - verifyImpactDeterminismPayload rejects missing snapshots, wrong run count and non-cold input
+  ---
+  duration_ms: 0.135541
+  type: 'test'
+  ...
+# Subtest: verify-determinism CLI returns a machine-readable PASS summary
+ok 283 - verify-determinism CLI returns a machine-readable PASS summary
+  ---
+  duration_ms: 39.886417
+  type: 'test'
+  ...
+# Subtest: taskBlockingFiles unions mustHit and taskBlocking, excludes should/support
+ok 284 - taskBlockingFiles unions mustHit and taskBlocking, excludes should/support
+  ---
+  duration_ms: 1.336375
+  type: 'test'
+  ...
+# Subtest: goldenEntries de-duplicates cross-version compatibility aliases by strongest kind
+ok 285 - goldenEntries de-duplicates cross-version compatibility aliases by strongest kind
+  ---
+  duration_ms: 0.228292
+  type: 'test'
+  ...
+# Subtest: ndcgReadAt6 scores 1.0 when the read plan places golden files in ideal relevance order
+ok 286 - ndcgReadAt6 scores 1.0 when the read plan places golden files in ideal relevance order
+  ---
+  duration_ms: 0.146333
+  type: 'test'
+  ...
+# Subtest: ndcgReadAt6 penalizes placing a should-hit file ahead of a must-hit file
+ok 287 - ndcgReadAt6 penalizes placing a should-hit file ahead of a must-hit file
+  ---
+  duration_ms: 0.198208
+  type: 'test'
+  ...
+# Subtest: ndcgReadAt6 is 0 when no golden file appears in the read plan's first 6 items
+ok 288 - ndcgReadAt6 is 0 when no golden file appears in the read plan's first 6 items
+  ---
+  duration_ms: 0.100583
+  type: 'test'
+  ...
+# Subtest: firstTaskBlockingRank returns the 1-indexed position, undefined when never a candidate
+ok 289 - firstTaskBlockingRank returns the 1-indexed position, undefined when never a candidate
+  ---
+  duration_ms: 0.11125
+  type: 'test'
+  ...
+# Subtest: readPlanRangeRecall is undefined (not 0) when the scenario carries no mustReadRanges
+ok 290 - readPlanRangeRecall is undefined (not 0) when the scenario carries no mustReadRanges
+  ---
+  duration_ms: 0.195
+  type: 'test'
+  ...
+# Subtest: readPlanRangeRecall measures fractional line-range coverage once mustReadRanges is populated
+ok 291 - readPlanRangeRecall measures fractional line-range coverage once mustReadRanges is populated
+  ---
+  duration_ms: 0.084208
+  type: 'test'
+  ...
+# Subtest: java index microbenchmark emits every Task 23 measurement from a real worker run
+ok 292 - java index microbenchmark emits every Task 23 measurement from a real worker run
+  ---
+  duration_ms: 5759.779791
+  type: 'test'
+  ...
+# Subtest: JavaIndex is not quiescent while any source root is still BUILDING
+ok 293 - JavaIndex is not quiescent while any source root is still BUILDING
+  ---
+  duration_ms: 0.438291
+  type: 'test'
+  ...
+# Subtest: JavaIndex may quiesce with no pending jobs once roots are no longer BUILDING
+ok 294 - JavaIndex may quiesce with no pending jobs once roots are no longer BUILDING
+  ---
+  duration_ms: 0.085042
+  type: 'test'
+  ...
+# Subtest: runMatrix runs one cell per project x warm-state, defaulting to cold-nolsp and warm-auto
+ok 295 - runMatrix runs one cell per project x warm-state, defaulting to cold-nolsp and warm-auto
+  ---
+  duration_ms: 3.503334
+  type: 'test'
+  ...
+# Subtest: runMatrix only runs warm-required when the caller explicitly requests it
+ok 296 - runMatrix only runs warm-required when the caller explicitly requests it
+  ---
+  duration_ms: 1.31925
+  type: 'test'
+  ...
+# Subtest: runMatrix throws (does not silently swallow) a nonzero cell exit code
+ok 297 - runMatrix throws (does not silently swallow) a nonzero cell exit code
+  ---
+  duration_ms: 1.233667
+  type: 'test'
+  ...
+# Subtest: runMatrix throws when a cell's totals is missing a required metric instead of defaulting to 0
+ok 298 - runMatrix throws when a cell's totals is missing a required metric instead of defaulting to 0
+  ---
+  duration_ms: 1.171708
+  type: 'test'
+  ...
+# Subtest: runMatrix collects hardGateFailures verbatim from every supplied gate check
+ok 299 - runMatrix collects hardGateFailures verbatim from every supplied gate check
+  ---
+  duration_ms: 1.916125
+  type: 'test'
+  ...
+# Subtest: readCellPayloads round-trips artifact files written by runMatrix
+ok 300 - readCellPayloads round-trips artifact files written by runMatrix
+  ---
+  duration_ms: 1.323042
+  type: 'test'
+  ...
+# Subtest: buildProviderValueRows aggregates added/selected/goldenHits and attributes counterfactual gain to a golden file's recorded providers
+ok 301 - buildProviderValueRows aggregates added/selected/goldenHits and attributes counterfactual gain to a golden file's recorded providers
+  ---
+  duration_ms: 0.365875
+  type: 'test'
+  ...
+# Subtest: buildProviderValueRows returns an empty list for cells with no goldenAttribution at all
+ok 302 - buildProviderValueRows returns an empty list for cells with no goldenAttribution at all
+  ---
+  duration_ms: 0.783833
+  type: 'test'
+  ...
+# Subtest: renderPhaseReport produces deterministic heading order
+ok 303 - renderPhaseReport produces deterministic heading order
+  ---
+  duration_ms: 0.934375
+  type: 'test'
+  ...
+# Subtest: renderPhaseReport includes every artifact path verbatim
+ok 304 - renderPhaseReport includes every artifact path verbatim
+  ---
+  duration_ms: 0.724791
+  type: 'test'
+  ...
+# Subtest: renderPhaseReport includes every hard gate failure verbatim and skips the 'None.' fallback
+ok 305 - renderPhaseReport includes every hard gate failure verbatim and skips the 'None.' fallback
+  ---
+  duration_ms: 0.095167
+  type: 'test'
+  ...
+# Subtest: renderPhaseReport prints 'None.' under Hard Gate Failures when the list is empty
+ok 306 - renderPhaseReport prints 'None.' under Hard Gate Failures when the list is empty
+  ---
+  duration_ms: 0.219458
+  type: 'test'
+  ...
+# Subtest: renderPhaseReport output is unaffected by the input objects' own JSON key order
+ok 307 - renderPhaseReport output is unaffected by the input objects' own JSON key order
+  ---
+  duration_ms: 0.177625
+  type: 'test'
+  ...
+# Subtest: renderPhaseReport known limitations render verbatim, one bullet per entry
+ok 308 - renderPhaseReport known limitations render verbatim, one bullet per entry
+  ---
+  duration_ms: 0.068125
+  type: 'test'
+  ...
+# Subtest: isMainModule recognizes an entrypoint reached through a filesystem symlink
+ok 309 - isMainModule recognizes an entrypoint reached through a filesystem symlink
+  ---
+  duration_ms: 2.898833
+  type: 'test'
+  ...
+# Subtest: parseCli accepts a full flag set and applies defaults for --prepare/--runs/--timeout-ms
+ok 310 - parseCli accepts a full flag set and applies defaults for --prepare/--runs/--timeout-ms
+  ---
+  duration_ms: 0.51075
+  type: 'test'
+  ...
+# Subtest: parseCli accepts every documented flag explicitly
+ok 311 - parseCli accepts every documented flag explicitly
+  ---
+  duration_ms: 0.083917
+  type: 'test'
+  ...
+# Subtest: parseCli rejects a missing required flag
+ok 312 - parseCli rejects a missing required flag
+  ---
+  duration_ms: 0.218833
+  type: 'test'
+  ...
+# Subtest: parseCli rejects an invalid --workspace-state
+ok 313 - parseCli rejects an invalid --workspace-state
+  ---
+  duration_ms: 0.079291
+  type: 'test'
+  ...
+# Subtest: parseCli rejects an invalid --prepare
+ok 314 - parseCli rejects an invalid --prepare
+  ---
+  duration_ms: 0.070209
+  type: 'test'
+  ...
+# Subtest: parseCli rejects an invalid --operation
+ok 315 - parseCli rejects an invalid --operation
+  ---
+  duration_ms: 0.127083
+  type: 'test'
+  ...
+# Subtest: parseCli rejects a non-positive --runs
+ok 316 - parseCli rejects a non-positive --runs
+  ---
+  duration_ms: 0.065166
+  type: 'test'
+  ...
+# Subtest: parseCli rejects a flag missing its value
+ok 317 - parseCli rejects a flag missing its value
+  ---
+  duration_ms: 0.3365
+  type: 'test'
+  ...
+# Subtest: runAttempt counts only real in-repository locations as repo-contained
+ok 318 - runAttempt counts only real in-repository locations as repo-contained
+  ---
+  duration_ms: 1.685458
+  type: 'test'
+  ...
+# Subtest: runAttempt buckets cancellation settlement observed for its own operation
+ok 319 - runAttempt buckets cancellation settlement observed for its own operation
+  ---
+  duration_ms: 0.347833
+  type: 'test'
+  ...
+# Subtest: type hierarchy edges contribute their endpoint locations to containment evidence
+ok 320 - type hierarchy edges contribute their endpoint locations to containment evidence
+  ---
+  duration_ms: 1.064292
+  type: 'test'
+  ...
+# Subtest: withFreshWorkspace retains a failed operation workspace for log evidence
+ok 321 - withFreshWorkspace retains a failed operation workspace for log evidence
+  ---
+  duration_ms: 1.0235
+  type: 'test'
+  ...
+# Subtest: a timeout normalized by runAttempt still retains fresh workspace evidence
+ok 322 - a timeout normalized by runAttempt still retains fresh workspace evidence
+  ---
+  duration_ms: 0.889666
+  type: 'test'
+  ...
+# Subtest: a failed ensureStarted still stops the fresh session before preserving its workspace
+ok 323 - a failed ensureStarted still stops the fresh session before preserving its workspace
+  ---
+  duration_ms: 0.1945
+  type: 'test'
+  ...
+# Subtest: runStartedAttempt reports a timed-out backend that never settled before session stop
+ok 324 - runStartedAttempt reports a timed-out backend that never settled before session stop
+  ---
+  duration_ms: 0.139209
+  type: 'test'
+  ...
+# Subtest: writeJsonAtomically commits a complete JSON payload at the requested output path
+ok 325 - writeJsonAtomically commits a complete JSON payload at the requested output path
+  ---
+  duration_ms: 23.902833
+  type: 'test'
+  ...
+# Subtest: Task 36 mutation gate reports nine watcher-driven mutations and a truthful overlapping AgentRouter request
+ok 326 - Task 36 mutation gate reports nine watcher-driven mutations and a truthful overlapping AgentRouter request
+  ---
+  duration_ms: 7831.658708
+  type: 'test'
+  ...
+# Subtest: two processes cannot exceed one machine JDT slot
+ok 327 - two processes cannot exceed one machine JDT slot
+  ---
+  duration_ms: 7.129167
+  type: 'test'
+  ...
+# Subtest: same worktree second process is rejected before a second JDT slot
+ok 328 - same worktree second process is rejected before a second JDT slot
+  ---
+  duration_ms: 2.78825
+  type: 'test'
+  ...
+# Subtest: a dead-PID worktree lease is reclaimed
+ok 329 - a dead-PID worktree lease is reclaimed
+  ---
+  duration_ms: 3.261125
+  type: 'test'
+  ...
+# Subtest: a dead owner with no live JDT child allows worktree and global slot reclaim
+ok 330 - a dead owner with no live JDT child allows worktree and global slot reclaim
+  ---
+  duration_ms: 3.789583
+  type: 'test'
+  ...
+# Subtest: a dead owner whose recorded jdtlsPid is still alive is ORPHAN_JDT and is not reclaimed until the child exits
+ok 331 - a dead owner whose recorded jdtlsPid is still alive is ORPHAN_JDT and is not reclaimed until the child exits
+  ---
+  duration_ms: 3.6675
+  type: 'test'
+  ...
+# Subtest: a live PID with a stale heartbeat is not stolen
+ok 332 - a live PID with a stale heartbeat is not stolen
+  ---
+  duration_ms: 2.185042
+  type: 'test'
+  ...
+# Subtest: a directory created without metadata is reclaimed only after orphanGraceMs
+ok 333 - a directory created without metadata is reclaimed only after orphanGraceMs
+  ---
+  duration_ms: 2.035334
+  type: 'test'
+  ...
+# Subtest: release with a different ownerToken cannot delete another owner's lease
+ok 334 - release with a different ownerToken cannot delete another owner's lease
+  ---
+  duration_ms: 1.550125
+  type: 'test'
+  ...
+# Subtest: timeout while waiting for a JDT slot leaves no worktree lease behind
+ok 335 - timeout while waiting for a JDT slot leaves no worktree lease behind
+  ---
+  duration_ms: 124.651125
+  type: 'test'
+  ...
+# Subtest: two stores requesting different jdtSlots while one lease is live both obey the persisted capacity
+ok 336 - two stores requesting different jdtSlots while one lease is live both obey the persisted capacity
+  ---
+  duration_ms: 4.590916
+  type: 'test'
+  ...
+# Subtest: a dead or metadata-less expired capacity.lock is reclaimed, while a live lock owner is never stolen
+ok 337 - a dead or metadata-less expired capacity.lock is reclaimed, while a live lock owner is never stolen
+  ---
+  duration_ms: 111.735791
+  type: 'test'
+  ...
+# Subtest: acquireSweep bounds to the configured sweep slots and rejects use before open()
+ok 338 - acquireSweep bounds to the configured sweep slots and rejects use before open()
+  ---
+  duration_ms: 144.848791
+  type: 'test'
+  ...
+# Subtest: opening the sixty-fifth idle document closes the least recently used document
+ok 339 - opening the sixty-fifth idle document closes the least recently used document
+  ---
+  duration_ms: 4.271833
+  type: 'test'
+  ...
+# Subtest: an in-flight pinned document is not evicted
+ok 340 - an in-flight pinned document is not evicted
+  ---
+  duration_ms: 0.285792
+  type: 'test'
+  ...
+# Subtest: delete sends didClose and removes cached text
+ok 341 - delete sends didClose and removes cached text
+  ---
+  duration_ms: 0.106625
+  type: 'test'
+  ...
+# Subtest: changed text sends one monotonically versioned didChange
+ok 342 - changed text sends one monotonically versioned didChange
+  ---
+  duration_ms: 0.112042
+  type: 'test'
+  ...
+# Subtest: updateIfOpen leaves an unopened document closed
+ok 343 - updateIfOpen leaves an unopened document closed
+  ---
+  duration_ms: 0.095375
+  type: 'test'
+  ...
+# Subtest: concurrent updateIfOpen calls serialize distinct text with monotonic versions
+ok 344 - concurrent updateIfOpen calls serialize distinct text with monotonic versions
+  ---
+  duration_ms: 0.213291
+  type: 'test'
+  ...
+# Subtest: closeAll sends didClose for every open document and clears state
+ok 345 - closeAll sends didClose for every open document and clears state
+  ---
+  duration_ms: 0.145042
+  type: 'test'
+  ...
+# Subtest: two concurrent acquires for the same uri share one didOpen and each get an independently-released pin
+ok 346 - two concurrent acquires for the same uri share one didOpen and each get an independently-released pin
+  ---
+  duration_ms: 0.099292
+  type: 'test'
+  ...
+# Subtest: a document with all pins held exceeds maxOpen and records evictionDeferred until released
+ok 347 - a document with all pins held exceeds maxOpen and records evictionDeferred until released
+  ---
+  duration_ms: 0.338958
+  type: 'test'
+  ...
+# Subtest: retained text is bounded by the most recently used documents under maxOpen
+ok 348 - retained text is bounded by the most recently used documents under maxOpen
+  ---
+  duration_ms: 2.816667
+  type: 'test'
+  ...
+# Subtest: DocumentSymbolLimiter enforces per-repo concurrency
+ok 349 - DocumentSymbolLimiter enforces per-repo concurrency
+  ---
+  duration_ms: 12.941083
+  type: 'test'
+  ...
+# Subtest: detects Lombok and annotation processors from Gradle build
+ok 350 - detects Lombok and annotation processors from Gradle build
+  ---
+  duration_ms: 7.8465
+  type: 'test'
+  ...
+# Subtest: detects Lombok from common module build files
+ok 351 - detects Lombok from common module build files
+  ---
+  duration_ms: 8.517542
+  type: 'test'
+  ...
+# Subtest: JAVA_LSP_LOMBOK_JAR enables Lombok agent
+ok 352 - JAVA_LSP_LOMBOK_JAR enables Lombok agent
+  ---
+  duration_ms: 5.000083
+  type: 'test'
+  ...
+# Subtest: semantic version sorting prefers 1.18.38 over 1.18.4
+ok 353 - semantic version sorting prefers 1.18.38 over 1.18.4
+  ---
+  duration_ms: 0.566375
+  type: 'test'
+  ...
+# Subtest: hook advice tells enabled projects to start a stopped LSP server
+ok 354 - hook advice tells enabled projects to start a stopped LSP server
+  ---
+  duration_ms: 83.391416
+  type: 'test'
+  ...
+# Subtest: extractJavaFile extracts package, imports, types, methods and call sites
+ok 355 - extractJavaFile extracts package, imports, types, methods and call sites
+  ---
+  duration_ms: 22.060833
+  type: 'test'
+  ...
+# Subtest: extractJavaFile marks RECOVERED when a top-level type survives a parse error
+ok 356 - extractJavaFile marks RECOVERED when a top-level type survives a parse error
+  ---
+  duration_ms: 0.590375
+  type: 'test'
+  ...
+# Subtest: extractJavaFile marks FAILED when no useful structural root can be obtained
+ok 357 - extractJavaFile marks FAILED when no useful structural root can be obtained
+  ---
+  duration_ms: 0.2365
+  type: 'test'
+  ...
+# Subtest: extracted ranges are exact across Chinese text and a surrogate-pair emoji preceding a token
+ok 358 - extracted ranges are exact across Chinese text and a surrogate-pair emoji preceding a token
+  ---
+  duration_ms: 0.384542
+  type: 'test'
+  ...
+# Subtest: extractJavaFile extracts parameter annotations, including on a varargs parameter
+ok 359 - extractJavaFile extracts parameter annotations, including on a varargs parameter
+  ---
+  duration_ms: 0.71825
+  type: 'test'
+  ...
+# Subtest: a leading block comment in an argument list does not shift arity or argumentTypeHints out of position
+ok 360 - a leading block comment in an argument list does not shift arity or argumentTypeHints out of position
+  ---
+  duration_ms: 0.353625
+  type: 'test'
+  ...
+# Subtest: extractJavaFile binds call-site arguments to their type where the syntax makes it unambiguous
+ok 361 - extractJavaFile binds call-site arguments to their type where the syntax makes it unambiguous
+  ---
+  duration_ms: 0.76075
+  type: 'test'
+  ...
+# Subtest: an unshadowed explicit type import is retained as the receiver of a static call
+ok 362 - an unshadowed explicit type import is retained as the receiver of a static call
+  ---
+  duration_ms: 0.322459
+  type: 'test'
+  ...
+# Subtest: a value binding shadows an explicit import when extracting a call receiver
+ok 363 - a value binding shadows an explicit import when extracting a call receiver
+  ---
+  duration_ms: 0.627208
+  type: 'test'
+  ...
+# Subtest: computeExtractorVersion follows the schema-3|facts-<n>|tree-sitter-<v>|tree-sitter-java-<v>|extractor-code-<hash> format
+ok 364 - computeExtractorVersion follows the schema-3|facts-<n>|tree-sitter-<v>|tree-sitter-java-<v>|extractor-code-<hash> format
+  ---
+  duration_ms: 1.952208
+  type: 'test'
+  ...
+# Subtest: an mtime-only change does not change the build fingerprint
+ok 365 - an mtime-only change does not change the build fingerprint
+  ---
+  duration_ms: 5.478708
+  type: 'test'
+  ...
+# Subtest: a build file content change changes the fingerprint
+ok 366 - a build file content change changes the fingerprint
+  ---
+  duration_ms: 3.12025
+  type: 'test'
+  ...
+# Subtest: a module-level build file change changes the fingerprint
+ok 367 - a module-level build file change changes the fingerprint
+  ---
+  duration_ms: 4.453791
+  type: 'test'
+  ...
+# Subtest: a source-root/layout change changes the fingerprint
+ok 368 - a source-root/layout change changes the fingerprint
+  ---
+  duration_ms: 11.6675
+  type: 'test'
+  ...
+# Subtest: the order filesystem entries are enumerated in does not affect the fingerprint
+ok 369 - the order filesystem entries are enumerated in does not affect the fingerprint
+  ---
+  duration_ms: 3.585667
+  type: 'test'
+  ...
+# Subtest: canAnswerNegative requires COMPLETE at the matching generation with zero failed/recovered files
+ok 370 - canAnswerNegative requires COMPLETE at the matching generation with zero failed/recovered files
+  ---
+  duration_ms: 1.709042
+  type: 'test'
+  ...
+# Subtest: an unknown root never answers negative
+ok 371 - an unknown root never answers negative
+  ---
+  duration_ms: 0.087583
+  type: 'test'
+  ...
+# Subtest: a failed file also blocks negative answers, independent of recovered files
+ok 372 - a failed file also blocks negative answers, independent of recovered files
+  ---
+  duration_ms: 0.087833
+  type: 'test'
+  ...
+# Subtest: a stale generation (query generation behind the root's own) never answers negative
+ok 373 - a stale generation (query generation behind the root's own) never answers negative
+  ---
+  duration_ms: 0.06325
+  type: 'test'
+  ...
+# Subtest: complete() advancing a root directly to a new generation without a preceding begin() keeps its counts
+ok 374 - complete() advancing a root directly to a new generation without a preceding begin() keeps its counts
+  ---
+  duration_ms: 0.0725
+  type: 'test'
+  ...
+# Subtest: restoreProvisional forces BUILDING but preserves failed/recovered counts verbatim
+ok 375 - restoreProvisional forces BUILDING but preserves failed/recovered counts verbatim
+  ---
+  duration_ms: 0.080583
+  type: 'test'
+  ...
+# Subtest: snapshot reflects multiple independently tracked roots
+ok 376 - snapshot reflects multiple independently tracked roots
+  ---
+  duration_ms: 0.070792
+  type: 'test'
+  ...
+# Subtest: declaration/type edges: implements, field type, return type, param type
+ok 377 - declaration/type edges: implements, field type, return type, param type
+  ---
+  duration_ms: 10.080084
+  type: 'test'
+  ...
+# Subtest: bounded call resolution: declared-receiver CALLS and constructor CONSTRUCTS
+ok 378 - bounded call resolution: declared-receiver CALLS and constructor CONSTRUCTS
+  ---
+  duration_ms: 1.82325
+  type: 'test'
+  ...
+# Subtest: an unshadowed explicit imported type receiver resolves a static CALLS edge
+ok 379 - an unshadowed explicit imported type receiver resolves a static CALLS edge
+  ---
+  duration_ms: 0.730334
+  type: 'test'
+  ...
+# Subtest: an unqualified call matching two same-arity overloads produces no CALLS edge
+ok 380 - an unqualified call matching two same-arity overloads produces no CALLS edge
+  ---
+  duration_ms: 1.239542
+  type: 'test'
+  ...
+# Subtest: an unqualified same-owner call produces SAME_OWNER_NAME_ARITY at 0.92 confidence
+ok 381 - an unqualified same-owner call produces SAME_OWNER_NAME_ARITY at 0.92 confidence
+  ---
+  duration_ms: 0.386292
+  type: 'test'
+  ...
+# Subtest: an inherited method call produces SUPER_CHAIN_NAME_ARITY at 0.85 confidence
+ok 382 - an inherited method call produces SUPER_CHAIN_NAME_ARITY at 0.85 confidence
+  ---
+  duration_ms: 1.466791
+  type: 'test'
+  ...
+# Subtest: IMPORTS and ANNOTATED_WITH edges resolve to external: nodes for names never stored as a JavaTypeRef
+ok 383 - IMPORTS and ANNOTATED_WITH edges resolve to external: nodes for names never stored as a JavaTypeRef
+  ---
+  duration_ms: 1.553208
+  type: 'test'
+  ...
+# Subtest: a constructor parameter annotation produces an ANNOTATED_WITH edge from the parameter's synthetic id
+ok 384 - a constructor parameter annotation produces an ANNOTATED_WITH edge from the parameter's synthetic id
+  ---
+  duration_ms: 0.373833
+  type: 'test'
+  ...
+# Subtest: a repo-defined parameter annotation (e.g. a custom @CurrentUser) resolves to the repo type, not an external: node
+ok 385 - a repo-defined parameter annotation (e.g. a custom @CurrentUser) resolves to the repo type, not an external: node
+  ---
+  duration_ms: 0.642625
+  type: 'test'
+  ...
+# Subtest: an ambiguous/unimported parameter annotation produces no ANNOTATED_WITH edge
+ok 386 - an ambiguous/unimported parameter annotation produces no ANNOTATED_WITH edge
+  ---
+  duration_ms: 0.562708
+  type: 'test'
+  ...
+# Subtest: a call argument's structured type hint resolves to its repo type via the same pass that resolves method parameters
+ok 387 - a call argument's structured type hint resolves to its repo type via the same pass that resolves method parameters
+  ---
+  duration_ms: 0.401375
+  type: 'test'
+  ...
+# Subtest: ownerTypeIdOf: types/type-local ids are their own owner, field/method ids are split on the first \#
+ok 388 - ownerTypeIdOf: types/type-local ids are their own owner, field/method ids are split on the first \#
+  ---
+  duration_ms: 0.476125
+  type: 'test'
+  ...
+# Subtest: relativePathOfLocalTypeId / fqnOfTypeId are exact inverses of the two type-id shapes
+ok 389 - relativePathOfLocalTypeId / fqnOfTypeId are exact inverses of the two type-id shapes
+  ---
+  duration_ms: 0.1995
+  type: 'test'
+  ...
+# Subtest: bundleToFrameworkFileFacts resolves a type annotation's edge target but leaves an unresolvable one bare
+ok 390 - bundleToFrameworkFileFacts resolves a type annotation's edge target but leaves an unresolvable one bare
+  ---
+  duration_ms: 0.331875
+  type: 'test'
+  ...
+# Subtest: bundleToFrameworkFileFacts projects extends/implements, each resolving independently of its own type arguments
+ok 391 - bundleToFrameworkFileFacts projects extends/implements, each resolving independently of its own type arguments
+  ---
+  duration_ms: 0.143208
+  type: 'test'
+  ...
+# Subtest: bundleToFrameworkFileFacts joins parameter annotations by the parameter's synthetic id, not by position among all annotations
+ok 392 - bundleToFrameworkFileFacts joins parameter annotations by the parameter's synthetic id, not by position among all annotations
+  ---
+  duration_ms: 0.425167
+  type: 'test'
+  ...
+# Subtest: bundleToFrameworkFileFacts maps parseState to coverage: COMPLETE/RECOVERED/FAILED -> COMPLETE/PARTIAL/DEGRADED
+ok 393 - bundleToFrameworkFileFacts maps parseState to coverage: COMPLETE/RECOVERED/FAILED -> COMPLETE/PARTIAL/DEGRADED
+  ---
+  duration_ms: 0.177209
+  type: 'test'
+  ...
+# Subtest: bundlesToRequestedDeclarations returns only the requested ids across multiple bundles, and reports the rest as missing
+ok 394 - bundlesToRequestedDeclarations returns only the requested ids across multiple bundles, and reports the rest as missing
+  ---
+  duration_ms: 0.417291
+  type: 'test'
+  ...
+# Subtest: replacing a file removes all old facts and reverse edges
+ok 395 - replacing a file removes all old facts and reverse edges
+  ---
+  duration_ms: 1.282666
+  type: 'test'
+  ...
+# Subtest: deleting a file removes its facts and marks dependents
+ok 396 - deleting a file removes its facts and marks dependents
+  ---
+  duration_ms: 0.217833
+  type: 'test'
+  ...
+# Subtest: store rejects absolute-path-derived IDs
+ok 397 - store rejects absolute-path-derived IDs
+  ---
+  duration_ms: 0.227292
+  type: 'test'
+  ...
+# Subtest: same relative facts from sibling worktrees have identical IDs
+ok 398 - same relative facts from sibling worktrees have identical IDs
+  ---
+  duration_ms: 0.851292
+  type: 'test'
+  ...
+# Subtest: replacing a file at the same path with the same FQN drops old members but keeps the type resolvable
+ok 399 - replacing a file at the same path with the same FQN drops old members but keeps the type resolvable
+  ---
+  duration_ms: 0.616042
+  type: 'test'
+  ...
+# Subtest: anchor prefers the most specific containing symbol: method over its owning type
+ok 400 - anchor prefers the most specific containing symbol: method over its owning type
+  ---
+  duration_ms: 0.243917
+  type: 'test'
+  ...
+# Subtest: typeByFqn, implementers, typeReferencers, callers, callees and files answer via map lookups
+ok 401 - typeByFqn, implementers, typeReferencers, callers, callees and files answer via map lookups
+  ---
+  duration_ms: 0.388084
+  type: 'test'
+  ...
+# Subtest: methodsWithParameterTypes unions bounded PARAM_TYPE reverse indexes without a per-type caller scan
+ok 402 - methodsWithParameterTypes unions bounded PARAM_TYPE reverse indexes without a per-type caller scan
+  ---
+  duration_ms: 0.262291
+  type: 'test'
+  ...
+# Subtest: typeLookup resolves explicit imports and same-package names, and reports AMBIGUOUS/UNRESOLVED honestly
+ok 403 - typeLookup resolves explicit imports and same-package names, and reports AMBIGUOUS/UNRESOLVED honestly
+  ---
+  duration_ms: 0.699958
+  type: 'test'
+  ...
+# Subtest: performance: 10,000 types and 50,000 edges, 1,000 repeated lookups stay well within budget
+ok 404 - performance: 10,000 types and 50,000 edges, 1,000 repeated lookups stay well within budget
+  ---
+  duration_ms: 239.708083
+  type: 'test'
+  ...
+# Subtest: toSnapshotData returns arrays sorted by id/path regardless of insertion order
+ok 405 - toSnapshotData returns arrays sorted by id/path regardless of insertion order
+  ---
+  duration_ms: 10.041125
+  type: 'test'
+  ...
+# Subtest: toSnapshotData sorts myBatisResources by relativePath regardless of insertion order
+ok 406 - toSnapshotData sorts myBatisResources by relativePath regardless of insertion order
+  ---
+  duration_ms: 0.284375
+  type: 'test'
+  ...
+# Subtest: loadSnapshotData rebuilds a store whose queries behave identically to the original
+ok 407 - loadSnapshotData rebuilds a store whose queries behave identically to the original
+  ---
+  duration_ms: 0.402792
+  type: 'test'
+  ...
+# Subtest: loadSnapshotData replaces whatever the store previously held
+ok 408 - loadSnapshotData replaces whatever the store previously held
+  ---
+  duration_ms: 0.076791
+  type: 'test'
+  ...
+# Subtest: loadSnapshotData rejects a snapshot with a duplicate type id
+ok 409 - loadSnapshotData rejects a snapshot with a duplicate type id
+  ---
+  duration_ms: 0.092
+  type: 'test'
+  ...
+# Subtest: loadSnapshotData round-trips MyBatis resources and clears whatever the store previously held
+ok 410 - loadSnapshotData round-trips MyBatis resources and clears whatever the store previously held
+  ---
+  duration_ms: 0.100458
+  type: 'test'
+  ...
+# Subtest: loadSnapshotData rejects a snapshot with a duplicate mybatis resource relativePath
+ok 411 - loadSnapshotData rejects a snapshot with a duplicate mybatis resource relativePath
+  ---
+  duration_ms: 0.067292
+  type: 'test'
+  ...
+# Subtest: replaceMyBatisResource indexes statements by namespace.id and the resource by namespace
+ok 412 - replaceMyBatisResource indexes statements by namespace.id and the resource by namespace
+  ---
+  duration_ms: 0.053666
+  type: 'test'
+  ...
+# Subtest: replacing a MyBatis resource evicts its previous version's statements and namespace entry, keyed by the old facts
+ok 413 - replacing a MyBatis resource evicts its previous version's statements and namespace entry, keyed by the old facts
+  ---
+  duration_ms: 0.065167
+  type: 'test'
+  ...
+# Subtest: removing a MyBatis resource does not evict a qualifiedId claimed by a different resource with the same (namespace, id)
+ok 414 - removing a MyBatis resource does not evict a qualifiedId claimed by a different resource with the same (namespace, id)
+  ---
+  duration_ms: 0.074041
+  type: 'test'
+  ...
+# Subtest: removeMyBatisResources on an unindexed path is a no-op
+ok 415 - removeMyBatisResources on an unindexed path is a no-op
+  ---
+  duration_ms: 0.125958
+  type: 'test'
+  ...
+# Subtest: myBatisResourceForNamespace returns the sole resource claiming a namespace
+ok 416 - myBatisResourceForNamespace returns the sole resource claiming a namespace
+  ---
+  duration_ms: 0.057125
+  type: 'test'
+  ...
+# Subtest: myBatisResourceForNamespace treats a namespace collision as ambiguous instead of guessing
+ok 417 - myBatisResourceForNamespace treats a namespace collision as ambiguous instead of guessing
+  ---
+  duration_ms: 0.037791
+  type: 'test'
+  ...
+# Subtest: two out-of-order responses resolve correct promises
+ok 418 - two out-of-order responses resolve correct promises
+  ---
+  duration_ms: 4.551208
+  type: 'test'
+  ...
+# Subtest: QUERY_TYPES sends one worker command and validates ordered lookup results
+ok 419 - QUERY_TYPES sends one worker command and validates ordered lookup results
+  ---
+  duration_ms: 0.910958
+  type: 'test'
+  ...
+# Subtest: an invalid command payload is rejected by the validator and moves the client to DEGRADED
+ok 420 - an invalid command payload is rejected by the validator and moves the client to DEGRADED
+  ---
+  duration_ms: 0.592916
+  type: 'test'
+  ...
+# Subtest: worker exit rejects all pending requests and marks the client DEGRADED
+ok 421 - worker exit rejects all pending requests and marks the client DEGRADED
+  ---
+  duration_ms: 0.582417
+  type: 'test'
+  ...
+# Subtest: close is bounded and terminates a worker that never answers CLOSE
+ok 422 - close is bounded and terminates a worker that never answers CLOSE
+  ---
+  duration_ms: 252.24325
+  type: 'test'
+  ...
+# Subtest: a failed OPEN clears the worker so the next request can still restart once
+ok 423 - a failed OPEN clears the worker so the next request can still restart once
+  ---
+  duration_ms: 0.816083
+  type: 'test'
+  ...
+# Subtest: a silent OPEN deadline terminates the worker and allows the next same-repo request to recover
+ok 424 - a silent OPEN deadline terminates the worker and allows the next same-repo request to recover
+  ---
+  duration_ms: 22.113166
+  type: 'test'
+  ...
+# Subtest: a silent query deadline removes its pending request, terminates the worker, and recovers on the next request
+ok 425 - a silent query deadline removes its pending request, terminates the worker, and recovers on the next request
+  ---
+  duration_ms: 21.651917
+  type: 'test'
+  ...
+# Subtest: a cancelled query rejects deterministically and drops its late response without terminating a healthy worker
+ok 426 - a cancelled query rejects deterministically and drops its late response without terminating a healthy worker
+  ---
+  duration_ms: 1.077625
+  type: 'test'
+  ...
+# Subtest: after an unexpected exit, the next request restarts the worker exactly once
+ok 427 - after an unexpected exit, the next request restarts the worker exactly once
+  ---
+  duration_ms: 0.937333
+  type: 'test'
+  ...
+# Subtest: client opens a real worker thread, reaches READY, and closes cleanly
+ok 428 - client opens a real worker thread, reaches READY, and closes cleanly
+  ---
+  duration_ms: 94.140417
+  type: 'test'
+  ...
+# Subtest: REFRESH end-to-end through a real worker thread: reads, parses, extracts, and QUERY_FILES returns the facts; deletion clears them
+ok 429 - REFRESH end-to-end through a real worker thread: reads, parses, extracts, and QUERY_FILES returns the facts; deletion clears them
+  ---
+  duration_ms: 163.768667
+  type: 'test'
+  ...
+# Subtest: QUERY_READ_RANGES returns exact UTF-8 Java/XML/fallback windows in one worker batch
+ok 430 - QUERY_READ_RANGES returns exact UTF-8 Java/XML/fallback windows in one worker batch
+  ---
+  duration_ms: 110.219208
+  type: 'test'
+  ...
+# Subtest: RouterJavaIndex rejects outside-repository range requests before forwarding to the worker
+ok 431 - RouterJavaIndex rejects outside-repository range requests before forwarding to the worker
+  ---
+  duration_ms: 1.441083
+  type: 'test'
+  ...
+# Subtest: RouterJavaIndex request scope forwards its absolute deadline to a silent worker query
+ok 432 - RouterJavaIndex request scope forwards its absolute deadline to a silent worker query
+  ---
+  duration_ms: 22.423542
+  type: 'test'
+  ...
+# Subtest: RouterJavaIndex does not downgrade a request deadline from routerStatus into a local snapshot
+ok 433 - RouterJavaIndex does not downgrade a request deadline from routerStatus into a local snapshot
+  ---
+  duration_ms: 22.407541
+  type: 'test'
+  ...
+# Subtest: RouterJavaIndex request scope guards direct repository marker reads with the same deadline
+ok 434 - RouterJavaIndex request scope guards direct repository marker reads with the same deadline
+  ---
+  duration_ms: 9.4795
+  type: 'test'
+  ...
+# Subtest: QUERY_READ_RANGES does not read an in-repository symlink whose target escapes the repository
+ok 435 - QUERY_READ_RANGES does not read an in-repository symlink whose target escapes the repository
+  ---
+  duration_ms: 86.7295
+  type: 'test'
+  ...
+# Subtest: REFRESH does not parse an in-repository symlink whose target escapes the repository
+ok 436 - REFRESH does not parse an in-repository symlink whose target escapes the repository
+  ---
+  duration_ms: 101.127875
+  type: 'test'
+  ...
+# Subtest: QUERY_READ_RANGES bounds an extreme Java method to first and last windows
+ok 437 - QUERY_READ_RANGES bounds an extreme Java method to first and last windows
+  ---
+  duration_ms: 125.902917
+  type: 'test'
+  ...
+# Subtest: deleting a type's sole source file drops the now-stale IMPLEMENTS edge from its implementer
+ok 438 - deleting a type's sole source file drops the now-stale IMPLEMENTS edge from its implementer
+  ---
+  duration_ms: 100.02
+  type: 'test'
+  ...
+# Subtest: refreshing a declaration preserves inbound implementation edges when its stable id is unchanged
+ok 439 - refreshing a declaration preserves inbound implementation edges when its stable id is unchanged
+  ---
+  duration_ms: 97.88225
+  type: 'test'
+  ...
+# Subtest: Task 19/27 query commands (anchor/type/implementers/referencers/callers/callees/batched parameter methods) answer through a real worker thread
+ok 440 - Task 19/27 query commands (anchor/type/implementers/referencers/callers/callees/batched parameter methods) answer through a real worker thread
+  ---
+  duration_ms: 98.686833
+  type: 'test'
+  ...
+# Subtest: reconcile() runs a background full sweep that discovers and indexes every file under source roots
+ok 441 - reconcile() runs a background full sweep that discovers and indexes every file under source roots
+  ---
+  duration_ms: 142.149834
+  type: 'test'
+  ...
+# Subtest: pendingBackground stays nonzero while the final sweep chunk is still finishing
+ok 442 - pendingBackground stays nonzero while the final sweep chunk is still finishing
+  ---
+  duration_ms: 103.546625
+  type: 'test'
+  ...
+# Subtest: a clean full sweep re-links an early source file after its later declaration is indexed
+ok 443 - a clean full sweep re-links an early source file after its later declaration is indexed
+  ---
+  duration_ms: 123.318375
+  type: 'test'
+  ...
+# Subtest: a clean multi-module sweep resolves an import into a source root indexed later
+ok 444 - a clean multi-module sweep resolves an import into a source root indexed later
+  ---
+  duration_ms: 199.005209
+  type: 'test'
+  ...
+# Subtest: a background sweep spanning multiple 50-file chunks resolves every file's own facts and cross-file edges
+ok 445 - a background sweep spanning multiple 50-file chunks resolves every file's own facts and cross-file edges
+  ---
+  duration_ms: 171.339333
+  type: 'test'
+  ...
+# Subtest: an untouched root stays COMPLETE at the new generation after a healthy incremental refresh elsewhere
+ok 446 - an untouched root stays COMPLETE at the new generation after a healthy incremental refresh elsewhere
+  ---
+  duration_ms: 124.976125
+  type: 'test'
+  ...
+# Subtest: a refresh landing while the initial sweep is still in flight bumps the sweep's target generation instead of leaving it stale
+ok 447 - a refresh landing while the initial sweep is still in flight bumps the sweep's target generation instead of leaving it stale
+  ---
+  duration_ms: 226.016
+  type: 'test'
+  ...
+# Subtest: CLOSE waits for an in-flight background sweep instead of racing worker.terminate() against it
+ok 448 - CLOSE waits for an in-flight background sweep instead of racing worker.terminate() against it
+  ---
+  duration_ms: 127.673
+  type: 'test'
+  ...
+# Subtest: a background sweep waits for the machine sweep lease without blocking foreground queries
+ok 449 - a background sweep waits for the machine sweep lease without blocking foreground queries
+  ---
+  duration_ms: 317.987125
+  type: 'test'
+  ...
+# Subtest: a file's own sourceRoot matches the repo-wide discovery root under a modules/X layout
+ok 450 - a file's own sourceRoot matches the repo-wide discovery root under a modules/X layout
+  ---
+  duration_ms: 126.025583
+  type: 'test'
+  ...
+# Subtest: a diff too large to apply inline is abandoned in favor of an ordinary leased, chunked reconcile
+ok 451 - a diff too large to apply inline is abandoned in favor of an ordinary leased, chunked reconcile
+  ---
+  duration_ms: 517.351625
+  type: 'test'
+  ...
+# Subtest: a full sweep's completion persists a snapshot that a fresh client restores without re-parsing
+ok 452 - a full sweep's completion persists a snapshot that a fresh client restores without re-parsing
+  ---
+  duration_ms: 227.828417
+  type: 'test'
+  ...
+# Subtest: a file edited while the index was closed is detected and only that file is re-parsed on reopen
+ok 453 - a file edited while the index was closed is detected and only that file is re-parsed on reopen
+  ---
+  duration_ms: 256.881667
+  type: 'test'
+  ...
+# Subtest: FLUSH writes the current facts immediately, ahead of the debounce timer
+ok 454 - FLUSH writes the current facts immediately, ahead of the debounce timer
+  ---
+  duration_ms: 90.873834
+  type: 'test'
+  ...
+# Subtest: sibling-seeded reconcile re-parses only target-side diffs while preserving reusable facts
+ok 455 - sibling-seeded reconcile re-parses only target-side diffs while preserving reusable facts
+  ---
+  duration_ms: 229.616958
+  type: 'test'
+  ...
+# Subtest: two target processes can seed concurrently and leave a manifest-validated target snapshot
+ok 456 - two target processes can seed concurrently and leave a manifest-validated target snapshot
+  ---
+  duration_ms: 311.742167
+  type: 'test'
+  ...
+# Subtest: a malformed sibling snapshot fails the seed attempt softly - OPEN still succeeds with an empty store
+ok 457 - a malformed sibling snapshot fails the seed attempt softly - OPEN still succeeds with an empty store
+  ---
+  duration_ms: 185.863292
+  type: 'test'
+  ...
+# Subtest: reconcile()'s full sweep discovers and indexes MyBatis mapper resources, but not a well-formed non-mapper XML resource
+ok 458 - reconcile()'s full sweep discovers and indexes MyBatis mapper resources, but not a well-formed non-mapper XML resource
+  ---
+  duration_ms: 135.945709
+  type: 'test'
+  ...
+# Subtest: reconcile() indexes a mapper even when more than 500 non-mapper XML resources sort before it
+ok 459 - reconcile() indexes a mapper even when more than 500 non-mapper XML resources sort before it
+  ---
+  duration_ms: 691.6775
+  type: 'test'
+  ...
+# Subtest: refreshResources upserts a mapper resource written after OPEN, without requiring a full reconcile
+ok 460 - refreshResources upserts a mapper resource written after OPEN, without requiring a full reconcile
+  ---
+  duration_ms: 79.550791
+  type: 'test'
+  ...
+# Subtest: refreshResources on a path that was never indexed and does not exist on disk is an idempotent no-op
+ok 461 - refreshResources on a path that was never indexed and does not exist on disk is an idempotent no-op
+  ---
+  duration_ms: 88.3935
+  type: 'test'
+  ...
+# Subtest: refreshResources re-extracts a changed mapper file and leaves an unchanged one intact
+ok 462 - refreshResources re-extracts a changed mapper file and leaves an unchanged one intact
+  ---
+  duration_ms: 96.596083
+  type: 'test'
+  ...
+# Subtest: refreshResources removes a resource once its file is deleted, idempotently across repeated events
+ok 463 - refreshResources removes a resource once its file is deleted, idempotently across repeated events
+  ---
+  duration_ms: 99.262666
+  type: 'test'
+  ...
+# Subtest: an own-snapshot restore re-derives MyBatis resources even when Java facts verify clean and queue no reconcile
+ok 464 - an own-snapshot restore re-derives MyBatis resources even when Java facts verify clean and queue no reconcile
+  ---
+  duration_ms: 214.835209
+  type: 'test'
+  ...
+# Subtest: java parser backend: full parse, incremental edit, changed ranges, delete
+ok 465 - java parser backend: full parse, incremental edit, changed ranges, delete
+  ---
+  duration_ms: 4.119167
+  type: 'test'
+  ...
+# Subtest: manifest discovers tracked and untracked Java files under source roots
+ok 466 - manifest discovers tracked and untracked Java files under source roots
+  ---
+  duration_ms: 33.130084
+  type: 'test'
+  ...
+# Subtest: a build/target directory nested inside a source root is not walked
+ok 467 - a build/target directory nested inside a source root is not walked
+  ---
+  duration_ms: 4.303042
+  type: 'test'
+  ...
+# Subtest: a source root with no test tree does not fail the walk
+ok 468 - a source root with no test tree does not fail the walk
+  ---
+  duration_ms: 2.063916
+  type: 'test'
+  ...
+# Subtest: discoverMyBatisResourceFiles finds every .xml under src/main/resources, not src/test/resources, and skips build directories
+ok 469 - discoverMyBatisResourceFiles finds every .xml under src/main/resources, not src/test/resources, and skips build directories
+  ---
+  duration_ms: 4.120083
+  type: 'test'
+  ...
+# Subtest: discoverMyBatisResourceFiles on a repo with no resources directory returns an empty list without failing
+ok 470 - discoverMyBatisResourceFiles on a repo with no resources directory returns an empty list without failing
+  ---
+  duration_ms: 1.342042
+  type: 'test'
+  ...
+# Subtest: computeManifestFingerprint is independent of entry order
+ok 471 - computeManifestFingerprint is independent of entry order
+  ---
+  duration_ms: 0.420125
+  type: 'test'
+  ...
+# Subtest: computeManifestFingerprint changes when a content hash, path, or source root changes
+ok 472 - computeManifestFingerprint changes when a content hash, path, or source root changes
+  ---
+  duration_ms: 0.2055
+  type: 'test'
+  ...
+# Subtest: computeManifestFingerprint keeps Java and mapper XML entries distinct even when their path and hash match
+ok 473 - computeManifestFingerprint keeps Java and mapper XML entries distinct even when their path and hash match
+  ---
+  duration_ms: 0.069792
+  type: 'test'
+  ...
+# Subtest: computeCurrentManifestFingerprint reflects an independent re-scan of the current files on disk
+ok 474 - computeCurrentManifestFingerprint reflects an independent re-scan of the current files on disk
+  ---
+  duration_ms: 22.981375
+  type: 'test'
+  ...
+# Subtest: computeCurrentSnapshotManifestFingerprint changes when a supported mapper XML changes
+ok 475 - computeCurrentSnapshotManifestFingerprint changes when a supported mapper XML changes
+  ---
+  duration_ms: 8.785041
+  type: 'test'
+  ...
+# Subtest: the write-side and disk-rescan manifest fingerprints agree for identical repo state
+ok 476 - the write-side and disk-rescan manifest fingerprints agree for identical repo state
+  ---
+  duration_ms: 5.21025
+  type: 'test'
+  ...
+# Subtest: snapshot manifest diff uses file metadata to isolate the paths that need content verification
+ok 477 - snapshot manifest diff uses file metadata to isolate the paths that need content verification
+  ---
+  duration_ms: 3.730917
+  type: 'test'
+  ...
+# Subtest: extractMyBatisMapperFacts reads namespace, statements, resultMaps and includes from a real mapper file
+ok 478 - extractMyBatisMapperFacts reads namespace, statements, resultMaps and includes from a real mapper file
+  ---
+  duration_ms: 5.498667
+  type: 'test'
+  ...
+# Subtest: extractMyBatisMapperFacts populates ranges located by scanning the original XML text
+ok 479 - extractMyBatisMapperFacts populates ranges located by scanning the original XML text
+  ---
+  duration_ms: 0.805167
+  type: 'test'
+  ...
+# Subtest: a non-mapper root element yields undefined - not a MyBatis resource, never a FAILED fact
+ok 480 - a non-mapper root element yields undefined - not a MyBatis resource, never a FAILED fact
+  ---
+  duration_ms: 0.064625
+  type: 'test'
+  ...
+# Subtest: malformed content under a <mapper> root returns FAILED and never throws
+ok 481 - malformed content under a <mapper> root returns FAILED and never throws
+  ---
+  duration_ms: 0.323917
+  type: 'test'
+  ...
+# Subtest: a mapper with mismatched closing tags returns FAILED instead of trusted facts
+ok 482 - a mapper with mismatched closing tags returns FAILED instead of trusted facts
+  ---
+  duration_ms: 0.112708
+  type: 'test'
+  ...
+# Subtest: extractMyBatisMapperFacts collects includes nested below dynamic statement elements
+ok 483 - extractMyBatisMapperFacts collects includes nested below dynamic statement elements
+  ---
+  duration_ms: 0.318375
+  type: 'test'
+  ...
+# Subtest: locateMapperElementRange returns undefined for a duplicate (tag, id) pair rather than guessing
+ok 484 - locateMapperElementRange returns undefined for a duplicate (tag, id) pair rather than guessing
+  ---
+  duration_ms: 0.218166
+  type: 'test'
+  ...
+# Subtest: locateMapperElementRange handles a self-closing statement element
+ok 485 - locateMapperElementRange handles a self-closing statement element
+  ---
+  duration_ms: 0.064875
+  type: 'test'
+  ...
+# Subtest: locateMapperElementRange skips past nested same-shaped elements to the correct closing tag
+ok 486 - locateMapperElementRange skips past nested same-shaped elements to the correct closing tag
+  ---
+  duration_ms: 0.309917
+  type: 'test'
+  ...
+# Subtest: locateMapperElementRange returns undefined when the element is never closed
+ok 487 - locateMapperElementRange returns undefined when the element is never closed
+  ---
+  duration_ms: 0.338333
+  type: 'test'
+  ...
+# Subtest: explicit imports beat same simple-name candidates
+ok 488 - explicit imports beat same simple-name candidates
+  ---
+  duration_ms: 9.1965
+  type: 'test'
+  ...
+# Subtest: multiple wildcard candidates remain ambiguous
+ok 489 - multiple wildcard candidates remain ambiguous
+  ---
+  duration_ms: 2.251125
+  type: 'test'
+  ...
+# Subtest: repo-unique simple name is a lower-priority fallback
+ok 490 - repo-unique simple name is a lower-priority fallback
+  ---
+  duration_ms: 3.996
+  type: 'test'
+  ...
+# Subtest: same-package type resolves without any import
+ok 491 - same-package type resolves without any import
+  ---
+  duration_ms: 2.493917
+  type: 'test'
+  ...
+# Subtest: nested type resolves through the enclosing type scope, innermost first
+ok 492 - nested type resolves through the enclosing type scope, innermost first
+  ---
+  duration_ms: 6.8555
+  type: 'test'
+  ...
+# Subtest: a dotted Outer.Inner reference without a package prefix resolves via the current package
+ok 493 - a dotted Outer.Inner reference without a package prefix resolves via the current package
+  ---
+  duration_ms: 7.038125
+  type: 'test'
+  ...
+# Subtest: java.lang.String resolves as EXTERNAL/JAVA_LANG
+ok 494 - java.lang.String resolves as EXTERNAL/JAVA_LANG
+  ---
+  duration_ms: 6.128042
+  type: 'test'
+  ...
+# Subtest: an explicit import to a type with no repo source is still EXTERNAL/EXPLICIT_IMPORT
+ok 495 - an explicit import to a type with no repo source is still EXTERNAL/EXPLICIT_IMPORT
+  ---
+  duration_ms: 2.502292
+  type: 'test'
+  ...
+# Subtest: an unresolvable bare name with no import, repo, or java.lang match is UNRESOLVED
+ok 496 - an unresolvable bare name with no import, repo, or java.lang match is UNRESOLVED
+  ---
+  duration_ms: 2.964625
+  type: 'test'
+  ...
+# Subtest: a declared type parameter resolves to TYPE_VARIABLE, but an undeclared single letter does not
+ok 497 - a declared type parameter resolves to TYPE_VARIABLE, but an undeclared single letter does not
+  ---
+  duration_ms: 2.913959
+  type: 'test'
+  ...
+# Subtest: a static import of a member does not shadow or interfere with type resolution
+ok 498 - a static import of a member does not shadow or interfere with type resolution
+  ---
+  duration_ms: 2.463708
+  type: 'test'
+  ...
+# Subtest: wildcard type arguments and array types resolve recursively through resolveTypeText
+ok 499 - wildcard type arguments and array types resolve recursively through resolveTypeText
+  ---
+  duration_ms: 3.97525
+  type: 'test'
+  ...
+# Subtest: resolveTypeRef re-resolves an already-built JavaTypeRef, including nested wildcard-bound type arguments
+ok 500 - resolveTypeRef re-resolves an already-built JavaTypeRef, including nested wildcard-bound type arguments
+  ---
+  duration_ms: 1.628708
+  type: 'test'
+  ...
+# Subtest: parseTypeText handles nested generics, arrays, wildcards and dotted names
+ok 501 - parseTypeText handles nested generics, arrays, wildcards and dotted names
+  ---
+  duration_ms: 0.114583
+  type: 'test'
+  ...
+# Subtest: exhaustive switch over all five resolution states
+ok 502 - exhaustive switch over all five resolution states
+  ---
+  duration_ms: 2.231792
+  type: 'test'
+  ...
+# Subtest: computeSingleEdit: ASCII one-token edit
+ok 503 - computeSingleEdit: ASCII one-token edit
+  ---
+  duration_ms: 0.704583
+  type: 'test'
+  ...
+# Subtest: computeSingleEdit: Chinese string before the edit point
+ok 504 - computeSingleEdit: Chinese string before the edit point
+  ---
+  duration_ms: 0.210708
+  type: 'test'
+  ...
+# Subtest: computeSingleEdit: insert/delete across a line boundary
+ok 505 - computeSingleEdit: insert/delete across a line boundary
+  ---
+  duration_ms: 0.077
+  type: 'test'
+  ...
+# Subtest: computeSingleEdit: large rewrite falls back to full parse (returns undefined)
+ok 506 - computeSingleEdit: large rewrite falls back to full parse (returns undefined)
+  ---
+  duration_ms: 0.072459
+  type: 'test'
+  ...
+# Subtest: computeSingleEdit: unchanged text and oversized files return undefined
+ok 507 - computeSingleEdit: unchanged text and oversized files return undefined
+  ---
+  duration_ms: 0.125209
+  type: 'test'
+  ...
+# Subtest: ParseTreeCache: entry-count LRU eviction
+ok 508 - ParseTreeCache: entry-count LRU eviction
+  ---
+  duration_ms: 0.173541
+  type: 'test'
+  ...
+# Subtest: ParseTreeCache: total-byte-cap eviction
+ok 509 - ParseTreeCache: total-byte-cap eviction
+  ---
+  duration_ms: 0.144792
+  type: 'test'
+  ...
+# Subtest: ParseTreeCache: eviction calls Tree.delete()
+ok 510 - ParseTreeCache: eviction calls Tree.delete()
+  ---
+  duration_ms: 0.072041
+  type: 'test'
+  ...
+# Subtest: incremental facts equal clean full-parse facts
+ok 511 - incremental facts equal clean full-parse facts
+  ---
+  duration_ms: 6.242
+  type: 'test'
+  ...
+# Subtest: effectiveParseTreeSourceBudget shrinks as active machine runtimes grow
+ok 512 - effectiveParseTreeSourceBudget shrinks as active machine runtimes grow
+  ---
+  duration_ms: 0.386875
+  type: 'test'
+  ...
+# Subtest: an explicit configured byte budget always wins over the runtime-count heuristic
+ok 513 - an explicit configured byte budget always wins over the runtime-count heuristic
+  ---
+  duration_ms: 0.120583
+  type: 'test'
+  ...
+# Subtest: ParseTreeCache.setMaxSourceBytes shrinks the budget and evicts over the new limit
+ok 514 - ParseTreeCache.setMaxSourceBytes shrinks the budget and evicts over the new limit
+  ---
+  duration_ms: 0.183125
+  type: 'test'
+  ...
+# Subtest: method facts retain a repository-resolved generic return argument as a return relation
+ok 515 - method facts retain a repository-resolved generic return argument as a return relation
+  ---
+  duration_ms: 0.938083
+  type: 'test'
+  ...
+# Subtest: lightweight type facts retain the declaration FQN
+ok 516 - lightweight type facts retain the declaration FQN
+  ---
+  duration_ms: 0.322375
+  type: 'test'
+  ...
+# Subtest: complete JavaIndex resolves implementation relations even when naming recall is empty
+ok 517 - complete JavaIndex resolves implementation relations even when naming recall is empty
+  ---
+  duration_ms: 166.882042
+  type: 'test'
+  ...
+# [codex-java-lsp] discarding Java index snapshot at /var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-index-snapshot-reconcile-race-bYi6n1/.cache/java-index-snapshot.json.gz: extractorVersion mismatch
+# Subtest: a rejected own snapshot stays pending until its replacement sweep has been installed
+ok 518 - a rejected own snapshot stays pending until its replacement sweep has been installed
+  ---
+  duration_ms: 498.073458
+  type: 'test'
+  ...
+# Subtest: shadowRanking is populated end-to-end only when JAVA_LSP_SHADOW_RANKING=1 and verbosity=diagnostic, and never leaks into standard verbosity
+ok 519 - shadowRanking is populated end-to-end only when JAVA_LSP_SHADOW_RANKING=1 and verbosity=diagnostic, and never leaks into standard verbosity
+  ---
+  duration_ms: 96.024417
+  type: 'test'
+  ...
+# Subtest: V2 type-reference evidence upgrades a candidate that naming recall found first
+ok 520 - V2 type-reference evidence upgrades a candidate that naming recall found first
+  ---
+  duration_ms: 114.956167
+  type: 'test'
+  ...
+# Subtest: RouterJavaIndex reuses facts refreshed at the current generation
+ok 521 - RouterJavaIndex reuses facts refreshed at the current generation
+  ---
+  duration_ms: 79.938125
+  type: 'test'
+  ...
+# Subtest: RouterJavaIndex reuses COMPLETE coverage without reparsing an indexed candidate
+ok 522 - RouterJavaIndex reuses COMPLETE coverage without reparsing an indexed candidate
+  ---
+  duration_ms: 92.716291
+  type: 'test'
+  ...
+# Subtest: sibling-seeded V2 router never returns a stale implementation before its foreground refresh
+ok 523 - sibling-seeded V2 router never returns a stale implementation before its foreground refresh
+  ---
+  duration_ms: 329.236541
+  type: 'test'
+  ...
+# Subtest: frameworkFactsFor resolves annotations (incl. a parameter annotation) and callSite argument hints against a real extracted+resolved bundle
+ok 524 - frameworkFactsFor resolves annotations (incl. a parameter annotation) and callSite argument hints against a real extracted+resolved bundle
+  ---
+  duration_ms: 107.730542
+  type: 'test'
+  ...
+# Subtest: frameworkFactsFor projects an extends clause's base and its type arguments as independently-resolved refs
+ok 525 - frameworkFactsFor projects an extends clause's base and its type arguments as independently-resolved refs
+  ---
+  duration_ms: 80.029083
+  type: 'test'
+  ...
+# Subtest: frameworkFactsFor caches within a generation and drops the cache entry on refresh
+ok 526 - frameworkFactsFor caches within a generation and drops the cache entry on refresh
+  ---
+  duration_ms: 94.376791
+  type: 'test'
+  ...
+# Subtest: declarationsById hydrates a method/field/type id across two files with one batched lookup, and reports an unresolvable id as missing
+ok 527 - declarationsById hydrates a method/field/type id across two files with one batched lookup, and reports an unresolvable id as missing
+  ---
+  duration_ms: 81.507875
+  type: 'test'
+  ...
+# Subtest: declarationsById foreground-refreshes a conventional cross-module type path while the initial sweep is incomplete
+ok 528 - declarationsById foreground-refreshes a conventional cross-module type path while the initial sweep is incomplete
+  ---
+  duration_ms: 75.637833
+  type: 'test'
+  ...
+# Subtest: declarationsById caps an oversized id list rather than issuing an unbounded worker query, and reports it as truncated
+ok 529 - declarationsById caps an oversized id list rather than issuing an unbounded worker query, and reports it as truncated
+  ---
+  duration_ms: 80.388
+  type: 'test'
+  ...
+# Subtest: resolvedCallees returns the real CALLS edge with truncated=false for an ordinary call count
+ok 530 - resolvedCallees returns the real CALLS edge with truncated=false for an ordinary call count
+  ---
+  duration_ms: 84.113292
+  type: 'test'
+  ...
+# Subtest: repositoryMarkers reads a small marker file's content and caches it independent of the Java generation
+ok 531 - repositoryMarkers reads a small marker file's content and caches it independent of the Java generation
+  ---
+  duration_ms: 107.481625
+  type: 'test'
+  ...
+# Subtest: framework activation marker caches are invalidated by both BUILD and JAVA refresh batches
+ok 532 - framework activation marker caches are invalidated by both BUILD and JAVA refresh batches
+  ---
+  duration_ms: 89.163208
+  type: 'test'
+  ...
+# Subtest: myBatisResourcesByNamespaces batches a namespace lookup against real background-swept mapper XML
+ok 533 - myBatisResourcesByNamespaces batches a namespace lookup against real background-swept mapper XML
+  ---
+  duration_ms: 84.886083
+  type: 'test'
+  ...
+# Subtest: myBatisResourcesByNamespaces omits a namespace collision rather than returning arbitrary XML
+ok 534 - myBatisResourcesByNamespaces omits a namespace collision rather than returning arbitrary XML
+  ---
+  duration_ms: 85.89175
+  type: 'test'
+  ...
+# Subtest: a written snapshot round-trips through loadSnapshot
+ok 535 - a written snapshot round-trips through loadSnapshot
+  ---
+  duration_ms: 16.997291
+  type: 'test'
+  ...
+# Subtest: failed snapshot write leaves the previous snapshot readable
+ok 536 - failed snapshot write leaves the previous snapshot readable
+  ---
+  duration_ms: 17.539
+  type: 'test'
+  ...
+# Subtest: a snapshot candidate is not renamed after the target manifest changes during serialization
+ok 537 - a snapshot candidate is not renamed after the target manifest changes during serialization
+  ---
+  duration_ms: 19.186583
+  type: 'test'
+  ...
+# Subtest: a write failure does not leave a stray temp file behind
+ok 538 - a write failure does not leave a stray temp file behind
+  ---
+  duration_ms: 6.606292
+  type: 'test'
+  ...
+# Subtest: a missing snapshot file is a silent miss, not an error
+ok 539 - a missing snapshot file is a silent miss, not an error
+  ---
+  duration_ms: 0.836083
+  type: 'test'
+  ...
+# [codex-java-lsp] discarding Java index snapshot at /var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-index-snapshot-sih625/nested/java-index-snapshot.json.gz: invalid gzip stream
+# Subtest: an invalid gzip stream is discarded as a miss and the file is deleted
+ok 540 - an invalid gzip stream is discarded as a miss and the file is deleted
+  ---
+  duration_ms: 1.752708
+  type: 'test'
+  ...
+# [codex-java-lsp] discarding Java index snapshot at /var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-index-snapshot-WYEL6b/nested/java-index-snapshot.json.gz: invalid JSON payload
+# Subtest: valid gzip but invalid JSON is discarded as a miss
+ok 541 - valid gzip but invalid JSON is discarded as a miss
+  ---
+  duration_ms: 11.986084
+  type: 'test'
+  ...
+# [codex-java-lsp] discarding Java index snapshot at /var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-index-snapshot-CANVnH/nested/java-index-snapshot.json.gz: unsupported schemaVersion 1
+# Subtest: schemaVersion 1 is rejected and the file is deleted
+ok 542 - schemaVersion 1 is rejected and the file is deleted
+  ---
+  duration_ms: 10.379792
+  type: 'test'
+  ...
+# [codex-java-lsp] discarding Java index snapshot at /var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-index-snapshot-bYjsab/nested/java-index-snapshot.json.gz: unsupported schemaVersion 2
+# Subtest: the pre-Task-28 schemaVersion 2 (no myBatisResources/resourceCoverage) is rejected, not migrated
+ok 543 - the pre-Task-28 schemaVersion 2 (no myBatisResources/resourceCoverage) is rejected, not migrated
+  ---
+  duration_ms: 10.58225
+  type: 'test'
+  ...
+# [codex-java-lsp] discarding Java index snapshot at /var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-index-snapshot-ai0TW0/nested/java-index-snapshot.json.gz: extractorVersion mismatch
+# Subtest: an extractorVersion mismatch is rejected
+ok 544 - an extractorVersion mismatch is rejected
+  ---
+  duration_ms: 10.4435
+  type: 'test'
+  ...
+# [codex-java-lsp] discarding Java index snapshot at /var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-index-snapshot-kZbVWM/nested/java-index-snapshot.json.gz: canonicalRepoRoot mismatch
+# Subtest: a canonicalRepoRoot mismatch in a normal own-snapshot load is rejected
+ok 545 - a canonicalRepoRoot mismatch in a normal own-snapshot load is rejected
+  ---
+  duration_ms: 9.716959
+  type: 'test'
+  ...
+# [codex-java-lsp] discarding Java index snapshot at /var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-index-snapshot-pAKawN/nested/java-index-snapshot.json.gz: buildFingerprint mismatch
+# Subtest: a buildFingerprint mismatch is rejected
+ok 546 - a buildFingerprint mismatch is rejected
+  ---
+  duration_ms: 9.997959
+  type: 'test'
+  ...
+# [codex-java-lsp] discarding Java index snapshot at /var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/java-index-snapshot-7YzXFb/nested/java-index-snapshot.json.gz: stableIdVersion mismatch
+# Subtest: a stableIdVersion mismatch is rejected
+ok 547 - a stableIdVersion mismatch is rejected
+  ---
+  duration_ms: 9.433333
+  type: 'test'
+  ...
+# Subtest: directory fsync during write tolerates EINVAL/ENOTSUP/EPERM but not other errors
+ok 548 - directory fsync during write tolerates EINVAL/ENOTSUP/EPERM but not other errors
+  ---
+  duration_ms: 9.756083
+  type: 'test'
+  ...
+# Subtest: stable IDs are independent of worktree absolute root
+ok 549 - stable IDs are independent of worktree absolute root
+  ---
+  duration_ms: 0.426375
+  type: 'test'
+  ...
+# Subtest: local type IDs include relative path and source position
+ok 550 - local type IDs include relative path and source position
+  ---
+  duration_ms: 0.07475
+  type: 'test'
+  ...
+# Subtest: method IDs use owner type and erased signature
+ok 551 - method IDs use owner type and erased signature
+  ---
+  duration_ms: 0.05675
+  type: 'test'
+  ...
+# Subtest: two call sites to the same target retain distinct root-independent edge IDs
+ok 552 - two call sites to the same target retain distinct root-independent edge IDs
+  ---
+  duration_ms: 0.150167
+  type: 'test'
+  ...
+# Subtest: tree-sitter-java parses Java inside a worker thread
+ok 553 - tree-sitter-java parses Java inside a worker thread
+  ---
+  duration_ms: 33.797708
+  type: 'test'
+  ...
+# Subtest: validateFileBundleArray round-trips a fully populated bundle
+ok 554 - validateFileBundleArray round-trips a fully populated bundle
+  ---
+  duration_ms: 1.877708
+  type: 'test'
+  ...
+# Subtest: validateJavaIndexStatus accepts a well-formed status and rejects an unknown state
+ok 555 - validateJavaIndexStatus accepts a well-formed status and rejects an unknown state
+  ---
+  duration_ms: 0.226333
+  type: 'test'
+  ...
+# Subtest: validateAnchorFacts passes through undefined and rejects a payload missing required fields
+ok 556 - validateAnchorFacts passes through undefined and rejects a payload missing required fields
+  ---
+  duration_ms: 0.14825
+  type: 'test'
+  ...
+# Subtest: validateTypeLookup accepts each state and rejects an unknown one
+ok 557 - validateTypeLookup accepts each state and rejects an unknown one
+  ---
+  duration_ms: 0.159375
+  type: 'test'
+  ...
+# Subtest: validateTypeLookupArray preserves a batched lookup response
+ok 558 - validateTypeLookupArray preserves a batched lookup response
+  ---
+  duration_ms: 0.129042
+  type: 'test'
+  ...
+# Subtest: validateTypeFactsArray rejects a type missing required fields
+ok 559 - validateTypeFactsArray rejects a type missing required fields
+  ---
+  duration_ms: 0.070292
+  type: 'test'
+  ...
+# Subtest: validateIndexedReferenceArray rejects a reference missing required fields
+ok 560 - validateIndexedReferenceArray rejects a reference missing required fields
+  ---
+  duration_ms: 0.087417
+  type: 'test'
+  ...
+# Subtest: validateFileBundleArray rejects a bundle with an incomplete file
+ok 561 - validateFileBundleArray rejects a bundle with an incomplete file
+  ---
+  duration_ms: 0.051084
+  type: 'test'
+  ...
+# Subtest: isJavaIndexResponse accepts well-formed envelopes and rejects malformed ones
+ok 562 - isJavaIndexResponse accepts well-formed envelopes and rejects malformed ones
+  ---
+  duration_ms: 0.26825
+  type: 'test'
+  ...
+# Subtest: sibling seed reuses only target-content-matching facts
+ok 563 - sibling seed reuses only target-content-matching facts
+  ---
+  duration_ms: 220.696875
+  type: 'test'
+  ...
+# Subtest: reused facts are stamped into the target's current generation, not the source's
+ok 564 - reused facts are stamped into the target's current generation, not the source's
+  ---
+  duration_ms: 189.986916
+  type: 'test'
+  ...
+# Subtest: final stable revalidation drops a reused fact changed after its initial hash and before seed publication
+ok 565 - final stable revalidation drops a reused fact changed after its initial hash and before seed publication
+  ---
+  duration_ms: 183.950667
+  type: 'test'
+  ...
+# Subtest: a corrupt newest candidate falls back to the next valid candidate
+ok 566 - a corrupt newest candidate falls back to the next valid candidate
+  ---
+  duration_ms: 195.3145
+  type: 'test'
+  ...
+# Subtest: a source snapshot that disappears before seeding leaves the target with no seed
+ok 567 - a source snapshot that disappears before seeding leaves the target with no seed
+  ---
+  duration_ms: 187.980458
+  type: 'test'
+  ...
+# Subtest: no valid sibling candidate reports no candidate, not an error
+ok 568 - no valid sibling candidate reports no candidate, not an error
+  ---
+  duration_ms: 100.320333
+  type: 'test'
+  ...
+# Subtest: an unchanged source file whose only target-visible dependency changed drops its resolved edge and enters relinkPaths
+ok 569 - an unchanged source file whose only target-visible dependency changed drops its resolved edge and enters relinkPaths
+  ---
+  duration_ms: 220.418167
+  type: 'test'
+  ...
+# Subtest: readFileStable reports a quiet file as stable
+ok 570 - readFileStable reports a quiet file as stable
+  ---
+  duration_ms: 0.781542
+  type: 'test'
+  ...
+# Subtest: a path scanCurrentManifestStable reports as unstable is excluded from entries, not silently trusted
+ok 571 - a path scanCurrentManifestStable reports as unstable is excluded from entries, not silently trusted
+  ---
+  duration_ms: 1.75025
+  type: 'test'
+  ...
+# Subtest: sibling seed reuses an unchanged MyBatis resource by content hash and counts it separately from Java files
+ok 572 - sibling seed reuses an unchanged MyBatis resource by content hash and counts it separately from Java files
+  ---
+  duration_ms: 200.948334
+  type: 'test'
+  ...
+# Subtest: sibling seed does not reuse a MyBatis resource changed on the target - the Java mapper interface is unaffected
+ok 573 - sibling seed does not reuse a MyBatis resource changed on the target - the Java mapper interface is unaffected
+  ---
+  duration_ms: 189.516
+  type: 'test'
+  ...
+# Subtest: final stable revalidation drops a reused MyBatis resource changed after its initial hash and before seed publication
+ok 574 - final stable revalidation drops a reused MyBatis resource changed after its initial hash and before seed publication
+  ---
+  duration_ms: 189.079166
+  type: 'test'
+  ...
+# Subtest: a linked worktree opened via siblingCacheBase reuses an unchanged mapper resource, then re-derives a changed one once the post-seed sweep completes
+ok 575 - a linked worktree opened via siblingCacheBase reuses an unchanged mapper resource, then re-derives a changed one once the post-seed sweep completes
+  ---
+  duration_ms: 282.493042
+  type: 'test'
+  ...
+# Subtest: retryable JDT failures back off and explicit reset clears the gate
+ok 576 - retryable JDT failures back off and explicit reset clears the gate
+  ---
+  duration_ms: 0.843583
+  type: 'test'
+  ...
+# Subtest: JDT configuration failures require explicit reset
+ok 577 - JDT configuration failures require explicit reset
+  ---
+  duration_ms: 0.075792
+  type: 'test'
+  ...
+# Subtest: caller deadlines and cancellation do not poison restart backoff
+ok 578 - caller deadlines and cancellation do not poison restart backoff
+  ---
+  duration_ms: 0.904667
+  type: 'test'
+  ...
+# Subtest: READY does not reset failures until the stability window completes
+ok 579 - READY does not reset failures until the stability window completes
+  ---
+  duration_ms: 0.102792
+  type: 'test'
+  ...
+# Subtest: backoff delay grows exponentially and is capped at 30 seconds
+ok 580 - backoff delay grows exponentially and is capped at 30 seconds
+  ---
+  duration_ms: 0.172167
+  type: 'test'
+  ...
+# Subtest: type hierarchy stops on cycles and does not request the same item twice
+ok 581 - type hierarchy stops on cycles and does not request the same item twice
+  ---
+  duration_ms: 2248.940334
+  type: 'test'
+  ...
+# Subtest: hierarchy items outside the repository never become edges
+ok 582 - hierarchy items outside the repository never become edges
+  ---
+  duration_ms: 796.333
+  type: 'test'
+  ...
+# Subtest: an expired hierarchy budget returns partial edges rather than throwing
+ok 583 - an expired hierarchy budget returns partial edges rather than throwing
+  ---
+  duration_ms: 2274.58325
+  type: 'test'
+  ...
+# Subtest: a timed-out prepare returns an empty partial result without traversing
+ok 584 - a timed-out prepare returns an empty partial result without traversing
+  ---
+  duration_ms: 913.966
+  type: 'test'
+  ...
+# Subtest: the edge limit reports PARTIAL_LIMIT rather than COMPLETE
+ok 585 - the edge limit reports PARTIAL_LIMIT rather than COMPLETE
+  ---
+  duration_ms: 709.703125
+  type: 'test'
+  ...
+# Subtest: an unexpected JDT error fails the hierarchy with a classified code
+ok 586 - an unexpected JDT error fails the hierarchy with a classified code
+  ---
+  duration_ms: 789.313
+  type: 'test'
+  ...
+# Subtest: call hierarchy applies the same visited and containment rules
+ok 587 - call hierarchy applies the same visited and containment rules
+  ---
+  duration_ms: 828.056333
+  type: 'test'
+  ...
+# Subtest: a depth limit stops expansion without failing the result
+ok 588 - a depth limit stops expansion without failing the result
+  ---
+  duration_ms: 812.18725
+  type: 'test'
+  ...
+# Subtest: filters only Lombok generated log unresolved diagnostics
+ok 589 - filters only Lombok generated log unresolved diagnostics
+  ---
+  duration_ms: 1.302708
+  type: 'test'
+  ...
+# Subtest: a lease metadata-update failure after spawn kills the child and never reaches READY
+ok 590 - a lease metadata-update failure after spawn kills the child and never reaches READY
+  ---
+  duration_ms: 995.338042
+  type: 'test'
+  ...
+# Subtest: a rejected lease acquisition fails fast without spawning and does not gate future retries
+ok 591 - a rejected lease acquisition fails fast without spawning and does not gate future retries
+  ---
+  duration_ms: 991.012542
+  type: 'test'
+  ...
+# Subtest: a successful start records the spawned jdtls pid on the lease
+ok 592 - a successful start records the spawned jdtls pid on the lease
+  ---
+  duration_ms: 1003.2085
+  type: 'test'
+  ...
+# Subtest: the JDT lease heartbeats throughout a long STARTING wait and the READY lifetime, then stops on release
+ok 593 - the JDT lease heartbeats throughout a long STARTING wait and the READY lifetime, then stops on release
+  ---
+  duration_ms: 863.531458
+  type: 'test'
+  ...
+# Subtest: a semantic request heartbeats the READY session lease immediately
+ok 594 - a semantic request heartbeats the READY session lease immediately
+  ---
+  duration_ms: 785.110292
+  type: 'test'
+  ...
+# Subtest: a persistent lease heartbeat failure is observable and prevents STARTING from committing READY
+ok 595 - a persistent lease heartbeat failure is observable and prevents STARTING from committing READY
+  ---
+  duration_ms: 815.667833
+  type: 'test'
+  ...
+# Subtest: a READY session blocks semantic work while heartbeat fails and resumes after heartbeat recovers
+ok 596 - a READY session blocks semantic work while heartbeat fails and resumes after heartbeat recovers
+  ---
+  duration_ms: 724.088333
+  type: 'test'
+  ...
+# Subtest: applyRepoChangeBatch clears the whole cache on a storm instead of only the affected files
+ok 597 - applyRepoChangeBatch clears the whole cache on a storm instead of only the affected files
+  ---
+  duration_ms: 846.831292
+  type: 'test'
+  ...
+# Subtest: applyRepoChangeBatch is the sole watcher consumer and updates only already-open Java documents
+ok 598 - applyRepoChangeBatch is the sole watcher consumer and updates only already-open Java documents
+  ---
+  duration_ms: 856.510416
+  type: 'test'
+  ...
+# Subtest: Task 34: opening a third document past a bounded max evicts the least recently used one, end to end through the real notification path
+ok 599 - Task 34: opening a third document past a bounded max evicts the least recently used one, end to end through the real notification path
+  ---
+  duration_ms: 883.435
+  type: 'test'
+  ...
+# Subtest: concurrent ensureStarted shares one transactional start
+ok 600 - concurrent ensureStarted shares one transactional start
+  ---
+  duration_ms: 852.289792
+  type: 'test'
+  ...
+# Subtest: a short caller deadline does not cancel a shared JDT startup
+ok 601 - a short caller deadline does not cancel a shared JDT startup
+  ---
+  duration_ms: 846.233625
+  type: 'test'
+  ...
+# Subtest: failed initialize disposes the attempt and permits a clean retry
+ok 602 - failed initialize disposes the attempt and permits a clean retry
+  ---
+  duration_ms: 809.327084
+  type: 'test'
+  ...
+# Subtest: a missing jdtls binary blocks restarts until an explicit reset
+ok 603 - a missing jdtls binary blocks restarts until an explicit reset
+  ---
+  duration_ms: 1633.823625
+  type: 'test'
+  ...
+# Subtest: requests inside an active retry window share exactly one delayed restart
+ok 604 - requests inside an active retry window share exactly one delayed restart
+  ---
+  duration_ms: 732.45375
+  type: 'test'
+  ...
+# Subtest: stop during STARTING cancels waiters without recording a restart failure
+ok 605 - stop during STARTING cancels waiters without recording a restart failure
+  ---
+  duration_ms: 804.123416
+  type: 'test'
+  ...
+# Subtest: a READY child that exits marks the session BROKEN and restartable
+ok 606 - a READY child that exits marks the session BROKEN and restartable
+  ---
+  duration_ms: 740.966083
+  type: 'test'
+  ...
+# Subtest: status reports STARTING pid separately and never as started
+ok 607 - status reports STARTING pid separately and never as started
+  ---
+  duration_ms: 940.45
+  type: 'test'
+  ...
+# Subtest: the ready stability window clears earlier restart failures
+ok 608 - the ready stability window clears earlier restart failures
+  ---
+  duration_ms: 850.578083
+  type: 'test'
+  ...
+# Subtest: lifecycle listeners observe every transition and can unsubscribe
+ok 609 - lifecycle listeners observe every transition and can unsubscribe
+  ---
+  duration_ms: 731.715416
+  type: 'test'
+  ...
+# Subtest: createJdtlsSemanticBackend routes each operation to its matching raw JDT request
+ok 610 - createJdtlsSemanticBackend routes each operation to its matching raw JDT request
+  ---
+  duration_ms: 776.990417
+  type: 'test'
+  ...
+# Subtest: raw documentSymbol/hover/definition/implementation/references startup consumes the backend deadline
+ok 611 - raw documentSymbol/hover/definition/implementation/references startup consumes the backend deadline
+  ---
+  duration_ms: 809.519208
+  type: 'test'
+  ...
+# Subtest: createJdtlsSemanticBackend honours AbortSignal during an active LSP request
+ok 612 - createJdtlsSemanticBackend honours AbortSignal during an active LSP request
+  ---
+  duration_ms: 727.579166
+  type: 'test'
+  ...
+# Subtest: a pre-aborted semantic backend call never starts JDT
+ok 613 - a pre-aborted semantic backend call never starts JDT
+  ---
+  duration_ms: 808.883292
+  type: 'test'
+  ...
+# Subtest: createJdtlsSemanticBackend forwards hierarchy completion and honours direction/depth/limit from optionsKey
+ok 614 - createJdtlsSemanticBackend forwards hierarchy completion and honours direction/depth/limit from optionsKey
+  ---
+  duration_ms: 776.996625
+  type: 'test'
+  ...
+# Subtest: createJdtlsSemanticBackend rejects a position-requiring operation missing line/column
+ok 615 - createJdtlsSemanticBackend rejects a position-requiring operation missing line/column
+  ---
+  duration_ms: 770.258167
+  type: 'test'
+  ...
+# Subtest: lifecycleGateFromRestartBackoffStatus maps backoff, config-block and allowed states
+ok 616 - lifecycleGateFromRestartBackoffStatus maps backoff, config-block and allowed states
+  ---
+  duration_ms: 0.121125
+  type: 'test'
+  ...
+# Subtest: references() returns the same shape as before, backed by the gateway
+ok 617 - references() returns the same shape as before, backed by the gateway
+  ---
+  duration_ms: 719.672667
+  type: 'test'
+  ...
+# Subtest: references() shares one backend request across identical concurrent calls and caches the result
+ok 618 - references() shares one backend request across identical concurrent calls and caches the result
+  ---
+  duration_ms: 791.860333
+  type: 'test'
+  ...
+# Subtest: references() with includeDeclaration true/false are independent cache entries
+ok 619 - references() with includeDeclaration true/false are independent cache entries
+  ---
+  duration_ms: 793.04025
+  type: 'test'
+  ...
+# Subtest: references() throws a classified error instead of silently returning partial data
+ok 620 - references() throws a classified error instead of silently returning partial data
+  ---
+  duration_ms: 848.558875
+  type: 'test'
+  ...
+# Subtest: a storm/BUILD_CHANGE invalidation forces a fresh references() request even for an unchanged file
+ok 621 - a storm/BUILD_CHANGE invalidation forces a fresh references() request even for an unchanged file
+  ---
+  duration_ms: 780.372625
+  type: 'test'
+  ...
+# Subtest: an ordinary Java change in B invalidates a completed semantic result queried from unchanged A
+ok 622 - an ordinary Java change in B invalidates a completed semantic result queried from unchanged A
+  ---
+  duration_ms: 800.8825
+  type: 'test'
+  ...
+# Subtest: a short first semantic caller does not become the shared backend hard cap
+ok 623 - a short first semantic caller does not become the shared backend hard cap
+  ---
+  duration_ms: 815.575958
+  type: 'test'
+  ...
+# Subtest: stop explicitly clears SemanticGateway completed entries
+ok 624 - stop explicitly clears SemanticGateway completed entries
+  ---
+  duration_ms: 748.499333
+  type: 'test'
+  ...
+# Subtest: references() during an active restart backoff fails fast without a backend request
+ok 625 - references() during an active restart backoff fails fast without a backend request
+  ---
+  duration_ms: 793.115
+  type: 'test'
+  ...
+# Subtest: symbolContext() returns hover/definitions/implementations from independently gateway-cached operations
+ok 626 - symbolContext() returns hover/definitions/implementations from independently gateway-cached operations
+  ---
+  duration_ms: 717.082042
+  type: 'test'
+  ...
+# Subtest: symbolContext() never throws: a per-field JDT failure degrades that field to absent, not a rejected call
+ok 627 - symbolContext() never throws: a per-field JDT failure degrades that field to absent, not a rejected call
+  ---
+  duration_ms: 820.809541
+  type: 'test'
+  ...
+# Subtest: semanticLocations() skips implementation entirely when includeImplementations is false, and shares the definition cache entry with symbolContext()
+ok 628 - semanticLocations() skips implementation entirely when includeImplementations is false, and shares the definition cache entry with symbolContext()
+  ---
+  duration_ms: 793.104167
+  type: 'test'
+  ...
+# Subtest: symbolContext()'s 3 concurrent raw requests for a not-yet-open file open the document exactly once
+ok 629 - symbolContext()'s 3 concurrent raw requests for a not-yet-open file open the document exactly once
+  ---
+  duration_ms: 786.605917
+  type: 'test'
+  ...
+# Subtest: status() exposes SemanticGateway's aggregate counters, with no per-query file path
+ok 630 - status() exposes SemanticGateway's aggregate counters, with no per-query file path
+  ---
+  duration_ms: 765.103958
+  type: 'test'
+  ...
+# Subtest: guarded writer turns a JSON-RPC write failure into a handled connection failure
+ok 631 - guarded writer turns a JSON-RPC write failure into a handled connection failure
+  ---
+  duration_ms: 3.915958
+  type: 'test'
+  ...
+# Subtest: real transport adapter observes rejected fire-and-forget notifications
+ok 632 - real transport adapter observes rejected fire-and-forget notifications
+  ---
+  duration_ms: 0.15325
+  type: 'test'
+  ...
+# Subtest: fake transport exposes deterministic connection state
+ok 633 - fake transport exposes deterministic connection state
+  ---
+  duration_ms: 0.138584
+  type: 'test'
+  ...
+# Subtest: fake transport records every spawn and its launch input
+ok 634 - fake transport records every spawn and its launch input
+  ---
+  duration_ms: 0.347875
+  type: 'test'
+  ...
+# Subtest: fake transport can defer initialize until the test resolves it
+ok 635 - fake transport can defer initialize until the test resolves it
+  ---
+  duration_ms: 0.133875
+  type: 'test'
+  ...
+# Subtest: fake transport can fail initialize and reports child termination
+ok 636 - fake transport can fail initialize and reports child termination
+  ---
+  duration_ms: 0.138791
+  type: 'test'
+  ...
+# Subtest: sequence transport factory returns a different attempt per spawn
+ok 637 - sequence transport factory returns a different attempt per spawn
+  ---
+  duration_ms: 0.224375
+  type: 'test'
+  ...
+# Subtest: fake child reports a hung process that ignores SIGTERM
+ok 638 - fake child reports a hung process that ignores SIGTERM
+  ---
+  duration_ms: 0.081583
+  type: 'test'
+  ...
+# Subtest: refresh() reports unchanged when no build marker moved
+ok 639 - refresh() reports unchanged when no build marker moved
+  ---
+  duration_ms: 2.21875
+  type: 'test'
+  ...
+# Subtest: refresh() detects a new module directory and its build marker
+ok 640 - refresh() detects a new module directory and its build marker
+  ---
+  duration_ms: 9.965334
+  type: 'test'
+  ...
+# Subtest: refresh() detects an edit to an existing build marker
+ok 641 - refresh() detects an edit to an existing build marker
+  ---
+  duration_ms: 1.214167
+  type: 'test'
+  ...
+# Subtest: probeLayout detects single-module Maven source roots
+ok 642 - probeLayout detects single-module Maven source roots
+  ---
+  duration_ms: 11.4895
+  type: 'test'
+  ...
+# Subtest: probeLayout detects Maven reactor modules
+ok 643 - probeLayout detects Maven reactor modules
+  ---
+  duration_ms: 3.331708
+  type: 'test'
+  ...
+# Subtest: probeLayout detects Gradle modules/apps roots
+ok 644 - probeLayout detects Gradle modules/apps roots
+  ---
+  duration_ms: 2.294042
+  type: 'test'
+  ...
+# Subtest: probeLayout never descends linked-worktree containers
+ok 645 - probeLayout never descends linked-worktree containers
+  ---
+  duration_ms: 1.981583
+  type: 'test'
+  ...
+# Subtest: a real file inside the repo is contained
+ok 646 - a real file inside the repo is contained
+  ---
+  duration_ms: 1.33625
+  type: 'test'
+  ...
+# Subtest: a real file outside the repo is not contained
+ok 647 - a real file outside the repo is not contained
+  ---
+  duration_ms: 0.636708
+  type: 'test'
+  ...
+# Subtest: a nonexistent child under a symlink that escapes the repo is not contained
+ok 648 - a nonexistent child under a symlink that escapes the repo is not contained
+  ---
+  duration_ms: 0.857292
+  type: 'test'
+  ...
+# Subtest: an existing file reached through an escaping symlink is not contained
+ok 649 - an existing file reached through an escaping symlink is not contained
+  ---
+  duration_ms: 0.654291
+  type: 'test'
+  ...
+# Subtest: a nonexistent file in a real repo directory is still contained
+ok 650 - a nonexistent file in a real repo directory is still contained
+  ---
+  duration_ms: 0.522375
+  type: 'test'
+  ...
+# Subtest: a parent-escaping relative path is not contained
+ok 651 - a parent-escaping relative path is not contained
+  ---
+  duration_ms: 0.566166
+  type: 'test'
+  ...
+# Subtest: a sibling directory sharing the repo name prefix is not contained
+ok 652 - a sibling directory sharing the repo name prefix is not contained
+  ---
+  duration_ms: 0.497708
+  type: 'test'
+  ...
+# Subtest: canonicalPotentialPath resolves the deepest existing ancestor
+ok 653 - canonicalPotentialPath resolves the deepest existing ancestor
+  ---
+  duration_ms: 0.636875
+  type: 'test'
+  ...
+# Subtest: detects Maven Java 8 requirement
+ok 654 - detects Maven Java 8 requirement
+  ---
+  duration_ms: 703.239541
+  type: 'test'
+  ...
+# Subtest: detects Gradle JavaLanguageVersion requirement
+ok 655 - detects Gradle JavaLanguageVersion requirement
+  ---
+  duration_ms: 689.103041
+  type: 'test'
+  ...
+# Subtest: alias-specific env override wins
+ok 656 - alias-specific env override wins
+  ---
+  duration_ms: 708.363875
+  type: 'test'
+  ...
+# Subtest: annotationCollaborationDelta rewards known stereotype collaboration (symmetric)
+ok 657 - annotationCollaborationDelta rewards known stereotype collaboration (symmetric)
+  ---
+  duration_ms: 0.599833
+  type: 'test'
+  ...
+# Subtest: annotationCollaborationDelta ignores non-collaborating or missing stereotypes
+ok 658 - annotationCollaborationDelta ignores non-collaborating or missing stereotypes
+  ---
+  duration_ms: 0.159958
+  type: 'test'
+  ...
+# Subtest: packageProximityDelta grades by shared package prefix depth
+ok 659 - packageProximityDelta grades by shared package prefix depth
+  ---
+  duration_ms: 0.108208
+  type: 'test'
+  ...
+# Subtest: symmetricTypeRelationDelta rewards when anchor is a subtype of the candidate
+ok 660 - symmetricTypeRelationDelta rewards when anchor is a subtype of the candidate
+  ---
+  duration_ms: 0.142583
+  type: 'test'
+  ...
+# Subtest: kindPairingDelta rewards interface x impl only under port profile
+ok 661 - kindPairingDelta rewards interface x impl only under port profile
+  ---
+  duration_ms: 0.163583
+  type: 'test'
+  ...
+# Subtest: hasProtectedStructuralSignal reads positive protected deltas from scoreBreakdown
+ok 662 - hasProtectedStructuralSignal reads positive protected deltas from scoreBreakdown
+  ---
+  duration_ms: 0.144375
+  type: 'test'
+  ...
+# Subtest: truncateCandidateTail returns input unchanged when 10 or fewer candidates
+ok 663 - truncateCandidateTail returns input unchanged when 10 or fewer candidates
+  ---
+  duration_ms: 0.253833
+  type: 'test'
+  ...
+# Subtest: truncateCandidateTail keeps protected/structural, trims pure-string tail, honors floor
+ok 664 - truncateCandidateTail keeps protected/structural, trims pure-string tail, honors floor
+  ---
+  duration_ms: 0.219709
+  type: 'test'
+  ...
+# Subtest: truncateCandidateTail retains a deferred test candidate backed by an exact JavaIndex type reference
+ok 665 - truncateCandidateTail retains a deferred test candidate backed by an exact JavaIndex type reference
+  ---
+  duration_ms: 0.373666
+  type: 'test'
+  ...
+# Subtest: truncateCandidateTail retains an exact deferred test reference when sparse evidence reaches the caller limit
+ok 666 - truncateCandidateTail retains an exact deferred test reference when sparse evidence reaches the caller limit
+  ---
+  duration_ms: 0.400459
+  type: 'test'
+  ...
+# Subtest: truncateCandidateTail cuts at a score cliff inside the discardable tail
+ok 667 - truncateCandidateTail cuts at a score cliff inside the discardable tail
+  ---
+  duration_ms: 0.149208
+  type: 'test'
+  ...
+# Subtest: truncateCandidateTail skips tail trimming when structural evidence is too thin
+ok 668 - truncateCandidateTail skips tail trimming when structural evidence is too thin
+  ---
+  duration_ms: 0.067709
+  type: 'test'
+  ...
+# Subtest: a retained MapStruct uses edge does not by itself trigger the structural-tail compression threshold
+ok 669 - a retained MapStruct uses edge does not by itself trigger the structural-tail compression threshold
+  ---
+  duration_ms: 0.089542
+  type: 'test'
+  ...
+# Subtest: truncateCandidateTail gives resolved MapStruct uses edges priority over generic structural retention
+ok 670 - truncateCandidateTail gives resolved MapStruct uses edges priority over generic structural retention
+  ---
+  duration_ms: 7.522041
+  type: 'test'
+  ...
+# Subtest: MapStruct uses protection remains deterministic without exceeding the caller candidate limit
+ok 671 - MapStruct uses protection remains deterministic without exceeding the caller candidate limit
+  ---
+  duration_ms: 0.502209
+  type: 'test'
+  ...
+# Subtest: truncateCandidateTail applies limit to focus-only candidates
+ok 672 - truncateCandidateTail applies limit to focus-only candidates
+  ---
+  duration_ms: 0.07675
+  type: 'test'
+  ...
+# Subtest: evidenceClassOf classifies anchor, verified, structural, naming, and support
+ok 673 - evidenceClassOf classifies anchor, verified, structural, naming, and support
+  ---
+  duration_ms: 1.008
+  type: 'test'
+  ...
+# Subtest: evidenceClassOf gives only a framework pack's exact structural match the verified quota
+ok 674 - evidenceClassOf gives only a framework pack's exact structural match the verified quota
+  ---
+  duration_ms: 0.17775
+  type: 'test'
+  ...
+# Subtest: classQuotas favors structural evidence for six-slot read plans
+ok 675 - classQuotas favors structural evidence for six-slot read plans
+  ---
+  duration_ms: 0.401959
+  type: 'test'
+  ...
+# Subtest: protected paths always enter the plan regardless of quota
+ok 676 - protected paths always enter the plan regardless of quota
+  ---
+  duration_ms: 0.413875
+  type: 'test'
+  ...
+# Subtest: anchor is protected even when structural protected paths fill the budget
+ok 677 - anchor is protected even when structural protected paths fill the budget
+  ---
+  duration_ms: 0.193833
+  type: 'test'
+  ...
+# Subtest: structural candidates keep quota slots under naming flood
+ok 678 - structural candidates keep quota slots under naming flood
+  ---
+  duration_ms: 0.183709
+  type: 'test'
+  ...
+# Subtest: task utility breaks structural score ties before generic wrappers
+ok 679 - task utility breaks structural score ties before generic wrappers
+  ---
+  duration_ms: 0.117458
+  type: 'test'
+  ...
+# Subtest: concrete naming family member replaces abstract base in a saturated slot
+ok 680 - concrete naming family member replaces abstract base in a saturated slot
+  ---
+  duration_ms: 0.086709
+  type: 'test'
+  ...
+# Subtest: unused quota backfills by sorted order
+ok 681 - unused quota backfills by sorted order
+  ---
+  duration_ms: 0.332125
+  type: 'test'
+  ...
+# Subtest: maxItems=1 keeps only the first sorted candidate
+ok 682 - maxItems=1 keeps only the first sorted candidate
+  ---
+  duration_ms: 0.337708
+  type: 'test'
+  ...
+# Subtest: watch plan unions source/resource/generated roots and exact build markers
+ok 683 - watch plan unions source/resource/generated roots and exact build markers
+  ---
+  duration_ms: 3.473833
+  type: 'test'
+  ...
+# Subtest: ignore contract suppresses git/cache/build-output but not an allowlisted generated root
+ok 684 - ignore contract suppresses git/cache/build-output but not an allowlisted generated root
+  ---
+  duration_ms: 3.331167
+  type: 'test'
+  ...
+# Subtest: a linked-worktree .git file and common-dir are ignored
+ok 685 - a linked-worktree .git file and common-dir are ignored
+  ---
+  duration_ms: 98.989625
+  type: 'test'
+  ...
+# Subtest: a queued event stays debounced until flushNow advances the generation once
+ok 686 - a queued event stays debounced until flushNow advances the generation once
+  ---
+  duration_ms: 3.023084
+  type: 'test'
+  ...
+# Subtest: classification maps java/resource/build events and ignores the rest
+ok 687 - classification maps java/resource/build events and ignores the rest
+  ---
+  duration_ms: 10.914625
+  type: 'test'
+  ...
+# Subtest: classification preserves the exact build-file event for LSP mapping
+ok 688 - classification preserves the exact build-file event for LSP mapping
+  ---
+  duration_ms: 2.904291
+  type: 'test'
+  ...
+# Subtest: a listener exception marks the clock dirty and still runs later listeners
+ok 689 - a listener exception marks the clock dirty and still runs later listeners
+  ---
+  duration_ms: 2.181583
+  type: 'test'
+  ...
+# Subtest: degrade catches an async listener rejection and records the listener failure
+ok 690 - degrade catches an async listener rejection and records the listener failure
+  ---
+  duration_ms: 2.6355
+  type: 'test'
+  ...
+# Subtest: a BUILD_CHANGE reconfigures the watch plan so a newly added module's source root is recognized
+ok 691 - a BUILD_CHANGE reconfigures the watch plan so a newly added module's source root is recognized
+  ---
+  duration_ms: 5.178667
+  type: 'test'
+  ...
+# Subtest: the coordinator watches real edits and advances generation without JDT
+ok 692 - the coordinator watches real edits and advances generation without JDT
+  ---
+  duration_ms: 316.275084
+  type: 'test'
+  ...
+# Subtest: generation advances monotonically and dirty clear is compare-and-set
+ok 693 - generation advances monotonically and dirty clear is compare-and-set
+  ---
+  duration_ms: 0.864
+  type: 'test'
+  ...
+# Subtest: rebaseAtLeast rejects non-positive and non-integer values
+ok 694 - rebaseAtLeast rejects non-positive and non-integer values
+  ---
+  duration_ms: 0.263542
+  type: 'test'
+  ...
+# Subtest: status reports the last reason and a timestamp
+ok 695 - status reports the last reason and a timestamp
+  ---
+  duration_ms: 1.303958
+  type: 'test'
+  ...
+# Subtest: change kinds merge within one debounce window
+ok 696 - change kinds merge within one debounce window
+  ---
+  duration_ms: 0.096875
+  type: 'test'
+  ...
+# Subtest: isStormBatch flags an absolutely large batch or one large relative to the indexed repo
+ok 697 - isStormBatch flags an absolutely large batch or one large relative to the indexed repo
+  ---
+  duration_ms: 0.07875
+  type: 'test'
+  ...
+# Subtest: repoCacheBase honors JAVA_LSP_CACHE_ROOT for an isolated process
+ok 698 - repoCacheBase honors JAVA_LSP_CACHE_ROOT for an isolated process
+  ---
+  duration_ms: 0.36775
+  type: 'test'
+  ...
+# Subtest: isWithin respects path segment boundaries
+ok 699 - isWithin respects path segment boundaries
+  ---
+  duration_ms: 2.405
+  type: 'test'
+  ...
+# Subtest: resolver uses deepest enabled absolute root
+ok 700 - resolver uses deepest enabled absolute root
+  ---
+  duration_ms: 12.486916
+  type: 'test'
+  ...
+# Subtest: resolver returns enable hint for unregistered repos
+ok 701 - resolver returns enable hint for unregistered repos
+  ---
+  duration_ms: 10.48275
+  type: 'test'
+  ...
+# Subtest: resolver reports where the repo root came from
+ok 702 - resolver reports where the repo root came from
+  ---
+  duration_ms: 10.414666
+  type: 'test'
+  ...
+# Subtest: registry rejects relative alias roots
+ok 703 - registry rejects relative alias roots
+  ---
+  duration_ms: 1.411625
+  type: 'test'
+  ...
+# Subtest: resolver lets Git worktrees inherit enablement without sharing runtime identity
+ok 704 - resolver lets Git worktrees inherit enablement without sharing runtime identity
+  ---
+  duration_ms: 85.243709
+  type: 'test'
+  ...
+# Subtest: RepoRuntimeManager evicts the oldest idle started runtime before starting another
+ok 705 - RepoRuntimeManager evicts the oldest idle started runtime before starting another
+  ---
+  duration_ms: 5.158333
+  type: 'test'
+  ...
+# Subtest: RepoRuntimeManager starts and flushes the coordinator around Java index OPEN so a seed cannot miss its watcher window
+ok 706 - RepoRuntimeManager starts and flushes the coordinator around Java index OPEN so a seed cannot miss its watcher window
+  ---
+  duration_ms: 1.289459
+  type: 'test'
+  ...
+# Subtest: RepoRuntimeManager routes a RESOURCE_CHANGE batch to refreshResources, separately from a JAVA_CHANGE batch's refresh
+ok 707 - RepoRuntimeManager routes a RESOURCE_CHANGE batch to refreshResources, separately from a JAVA_CHANGE batch's refresh
+  ---
+  duration_ms: 0.769708
+  type: 'test'
+  ...
+# Subtest: RepoRuntimeManager still applies JavaIndex work when session batch handling fails
+ok 708 - RepoRuntimeManager still applies JavaIndex work when session batch handling fails
+  ---
+  duration_ms: 0.869667
+  type: 'test'
+  ...
+# Subtest: RepoRuntimeManager replays batches buffered during OPEN with a per-batch hard-cap budget
+ok 709 - RepoRuntimeManager replays batches buffered during OPEN with a per-batch hard-cap budget
+  ---
+  duration_ms: 6.495917
+  type: 'test'
+  ...
+# Subtest: RepoRuntimeManager fails fast when all active runtimes are in use
+ok 710 - RepoRuntimeManager fails fast when all active runtimes are in use
+  ---
+  duration_ms: 33.01425
+  type: 'test'
+  ...
+# Subtest: RepoRuntimeManager uses the request deadline, not the manager timeout, while waiting for a saturated LSP slot
+ok 711 - RepoRuntimeManager uses the request deadline, not the manager timeout, while waiting for a saturated LSP slot
+  ---
+  duration_ms: 24.126834
+  type: 'test'
+  ...
+# Subtest: RepoRuntimeManager bounds shared runtime creation separately from the caller budget
+ok 712 - RepoRuntimeManager bounds shared runtime creation separately from the caller budget
+  ---
+  duration_ms: 0.995625
+  type: 'test'
+  ...
+# Subtest: RepoRuntimeManager does not run a handler after its budget expires during the JavaIndex status probe
+ok 713 - RepoRuntimeManager does not run a handler after its budget expires during the JavaIndex status probe
+  ---
+  duration_ms: 22.433167
+  type: 'test'
+  ...
+# Subtest: STARTING sessions count against the active repo limit
+ok 714 - STARTING sessions count against the active repo limit
+  ---
+  duration_ms: 26.796334
+  type: 'test'
+  ...
+# Subtest: slot waiters are granted in FIFO order
+ok 715 - slot waiters are granted in FIFO order
+  ---
+  duration_ms: 24.454875
+  type: 'test'
+  ...
+# Subtest: a waiter that misses its deadline is removed and never granted later
+ok 716 - a waiter that misses its deadline is removed and never granted later
+  ---
+  duration_ms: 62.619208
+  type: 'test'
+  ...
+# Subtest: a reservation taken but never used is released for the next caller
+ok 717 - a reservation taken but never used is released for the next caller
+  ---
+  duration_ms: 1.070375
+  type: 'test'
+  ...
+# Subtest: a session that breaks releases its slot to a queued waiter
+ok 718 - a session that breaks releases its slot to a queued waiter
+  ---
+  duration_ms: 22.978125
+  type: 'test'
+  ...
+# Subtest: activeRepos exposes lifecycle state and reservation
+ok 719 - activeRepos exposes lifecycle state and reservation
+  ---
+  duration_ms: 0.627084
+  type: 'test'
+  ...
+# Subtest: two concurrent contextFor calls share one runtime and one coordinator
+ok 720 - two concurrent contextFor calls share one runtime and one coordinator
+  ---
+  duration_ms: 0.479208
+  type: 'test'
+  ...
+# Subtest: the first runtime creator honors its deadline without cancelling shared creation
+ok 721 - the first runtime creator honors its deadline without cancelling shared creation
+  ---
+  duration_ms: 88.435792
+  type: 'test'
+  ...
+# [codex-java-lsp] cross-process JDT lease store degraded: disk full
+# Subtest: a runtime creation hard-cap retires a stuck lease singleflight so a later request can recover
+ok 722 - a runtime creation hard-cap retires a stuck lease singleflight so a later request can recover
+  ---
+  duration_ms: 56.866083
+  type: 'test'
+  ...
+# Subtest: initialize() singleflights lease store opening and a degraded store still leaves the fast path usable
+ok 723 - initialize() singleflights lease store opening and a degraded store still leaves the fast path usable
+  ---
+  duration_ms: 2.276875
+  type: 'test'
+  ...
+# Subtest: a live runtime holds a runtime lease so activeRuntimeCount reflects it, and shutdown releases it
+ok 724 - a live runtime holds a runtime lease so activeRuntimeCount reflects it, and shutdown releases it
+  ---
+  duration_ms: 3.918667
+  type: 'test'
+  ...
+# Subtest: fully stopped idle runtimes are removed from the runtime map beyond the retention bound
+ok 725 - fully stopped idle runtimes are removed from the runtime map beyond the retention bound
+  ---
+  duration_ms: 1.534375
+  type: 'test'
+  ...
+# Subtest: a runtime reused after shutdown gets a freshly started coordinator, not the closed one
+ok 726 - a runtime reused after shutdown gets a freshly started coordinator, not the closed one
+  ---
+  duration_ms: 0.891833
+  type: 'test'
+  ...
+# Subtest: reconcileIfDirty runs once under two concurrent requests and clears dirty via compare-and-set
+ok 727 - reconcileIfDirty runs once under two concurrent requests and clears dirty via compare-and-set
+  ---
+  duration_ms: 6.622125
+  type: 'test'
+  ...
+# Subtest: a reconcile singleflight joiner honors its own deadline without cancelling the shared reconcile
+ok 728 - a reconcile singleflight joiner honors its own deadline without cancelling the shared reconcile
+  ---
+  duration_ms: 90.903583
+  type: 'test'
+  ...
+# Subtest: reconcileIfDirty leaves dirty set when reconcile fails, without failing the request
+ok 729 - reconcileIfDirty leaves dirty set when reconcile fails, without failing the request
+  ---
+  duration_ms: 3.161
+  type: 'test'
+  ...
+# Subtest: V2 runtime reconciles only JavaIndex and records its OPEN source on the request
+ok 730 - V2 runtime reconciles only JavaIndex and records its OPEN source on the request
+  ---
+  duration_ms: 1.997209
+  type: 'test'
+  ...
+# Subtest: a compatibility RouterIndex without withRequestOptions cannot outlive the caller deadline
+ok 731 - a compatibility RouterIndex without withRequestOptions cannot outlive the caller deadline
+  ---
+  duration_ms: 24.483083
+  type: 'test'
+  ...
+# Subtest: a bounded routerStatus failure degrades only indexOpenSource while budget remains
+ok 732 - a bounded routerStatus failure degrades only indexOpenSource while budget remains
+  ---
+  duration_ms: 2.767459
+  type: 'test'
+  ...
+# Subtest: RepoRuntimeManager permits negative lookup only for a settled, same-generation, fully complete index under a normal watcher
+ok 733 - RepoRuntimeManager permits negative lookup only for a settled, same-generation, fully complete index under a normal watcher
+  ---
+  duration_ms: 6.85525
+  type: 'test'
+  ...
+# Subtest: own snapshot verification stays worker-owned after OPEN instead of triggering a duplicate full reconcile
+ok 734 - own snapshot verification stays worker-owned after OPEN instead of triggering a duplicate full reconcile
+  ---
+  duration_ms: 0.7785
+  type: 'test'
+  ...
+# Subtest: routing policy selects a family pack without exposing additive score state
+ok 735 - routing policy selects a family pack without exposing additive score state
+  ---
+  duration_ms: 0.689042
+  type: 'test'
+  ...
+# Subtest: resolveRoutingPolicy picks by env override then repo basename
+ok 736 - resolveRoutingPolicy picks by env override then repo basename
+  ---
+  duration_ms: 0.104125
+  type: 'test'
+  ...
+# Subtest: family ranking resolves the selected generic or lishuedu policy pack
+ok 737 - family ranking resolves the selected generic or lishuedu policy pack
+  ---
+  duration_ms: 0.068333
+  type: 'test'
+  ...
+# Subtest: legacy lishuedu override resolves to the supported lishuedu policy id
+ok 738 - legacy lishuedu override resolves to the supported lishuedu policy id
+  ---
+  duration_ms: 0.125583
+  type: 'test'
+  ...
+# Subtest: only COMPLETE results are cacheable
+ok 739 - only COMPLETE results are cacheable
+  ---
+  duration_ms: 0.406917
+  type: 'test'
+  ...
+# Subtest: DeadlineBudget clamps each stage to the absolute remaining budget
+ok 740 - DeadlineBudget clamps each stage to the absolute remaining budget
+  ---
+  duration_ms: 0.542125
+  type: 'test'
+  ...
+# Subtest: DeadlineBudget rejects expired stages with a classified error
+ok 741 - DeadlineBudget rejects expired stages with a classified error
+  ---
+  duration_ms: 0.336959
+  type: 'test'
+  ...
+# Subtest: DeadlineBudget.forStage preserves the parent deadline and a finalization reserve
+ok 742 - DeadlineBudget.forStage preserves the parent deadline and a finalization reserve
+  ---
+  duration_ms: 0.125125
+  type: 'test'
+  ...
+# Subtest: DeadlineBudget.race calls timeout cleanup
+ok 743 - DeadlineBudget.race calls timeout cleanup
+  ---
+  duration_ms: 13.251584
+  type: 'test'
+  ...
+# Subtest: DeadlineBudget.race rejects immediately once the budget is already spent
+ok 744 - DeadlineBudget.race rejects immediately once the budget is already spent
+  ---
+  duration_ms: 0.342208
+  type: 'test'
+  ...
+# Subtest: DeadlineBudget.race resolves a fast operation without invoking cleanup
+ok 745 - DeadlineBudget.race resolves a fast operation without invoking cleanup
+  ---
+  duration_ms: 0.112917
+  type: 'test'
+  ...
+# Subtest: DeadlineBudget rejects non-positive and non-finite timeouts
+ok 746 - DeadlineBudget rejects non-positive and non-finite timeouts
+  ---
+  duration_ms: 0.195375
+  type: 'test'
+  ...
+# Subtest: splits multiple lines from a single chunk
+ok 747 - splits multiple lines from a single chunk
+  ---
+  duration_ms: 0.793875
+  type: 'test'
+  ...
+# Subtest: keeps a UTF-8 character split across chunk boundaries intact
+ok 748 - keeps a UTF-8 character split across chunk boundaries intact
+  ---
+  duration_ms: 0.666084
+  type: 'test'
+  ...
+# Subtest: strips a trailing CR so CRLF output parses
+ok 749 - strips a trailing CR so CRLF output parses
+  ---
+  duration_ms: 0.169291
+  type: 'test'
+  ...
+# Subtest: returns nothing for empty input
+ok 750 - returns nothing for empty input
+  ---
+  duration_ms: 0.173417
+  type: 'test'
+  ...
+# Subtest: rejects a completed line larger than the cap
+ok 751 - rejects a completed line larger than the cap
+  ---
+  duration_ms: 0.268459
+  type: 'test'
+  ...
+# Subtest: rejects an unterminated buffer that grows past the cap
+ok 752 - rejects an unterminated buffer that grows past the cap
+  ---
+  duration_ms: 0.178
+  type: 'test'
+  ...
+# Subtest: returns a trailing unterminated record within the cap
+ok 753 - returns a trailing unterminated record within the cap
+  ---
+  duration_ms: 0.179125
+  type: 'test'
+  ...
+# Subtest: generation rg cache rejects partial results
+ok 754 - generation rg cache rejects partial results
+  ---
+  duration_ms: 0.519417
+  type: 'test'
+  ...
+# Subtest: no non-COMPLETE completion is ever cacheable
+ok 755 - no non-COMPLETE completion is ever cacheable
+  ---
+  duration_ms: 0.536875
+  type: 'test'
+  ...
+# Subtest: a stale generation entry is dropped rather than returned
+ok 756 - a stale generation entry is dropped rather than returned
+  ---
+  duration_ms: 0.065208
+  type: 'test'
+  ...
+# Subtest: invalidateBefore removes only older generations
+ok 757 - invalidateBefore removes only older generations
+  ---
+  duration_ms: 0.081625
+  type: 'test'
+  ...
+# Subtest: a disabled ttl stores nothing
+ok 758 - a disabled ttl stores nothing
+  ---
+  duration_ms: 0.119791
+  type: 'test'
+  ...
+# Subtest: rg timeout returns partial evidence but is not complete
+ok 759 - rg timeout returns partial evidence but is not complete
+  ---
+  duration_ms: 807.051791
+  type: 'test'
+  ...
+# Subtest: a hung child is escalated from SIGTERM to SIGKILL
+ok 760 - a hung child is escalated from SIGTERM to SIGKILL
+  ---
+  duration_ms: 1112.267542
+  type: 'test'
+  ...
+# Subtest: a noisy child cannot block on a full stderr pipe
+ok 761 - a noisy child cannot block on a full stderr pipe
+  ---
+  duration_ms: 50.809375
+  type: 'test'
+  ...
+# Subtest: malformed JSON fails the search instead of silently losing matches
+ok 762 - malformed JSON fails the search instead of silently losing matches
+  ---
+  duration_ms: 36.862333
+  type: 'test'
+  ...
+# Subtest: the match cap makes the result PARTIAL_LIMIT
+ok 763 - the match cap makes the result PARTIAL_LIMIT
+  ---
+  duration_ms: 35.339666
+  type: 'test'
+  ...
+# Subtest: the raw byte cap makes the result PARTIAL_LIMIT
+ok 764 - the raw byte cap makes the result PARTIAL_LIMIT
+  ---
+  duration_ms: 34.367583
+  type: 'test'
+  ...
+# Subtest: an oversized single JSON record makes the result PARTIAL_LIMIT
+ok 765 - an oversized single JSON record makes the result PARTIAL_LIMIT
+  ---
+  duration_ms: 34.036
+  type: 'test'
+  ...
+# Subtest: a pattern beginning with a dash is treated as a pattern, not a flag
+ok 766 - a pattern beginning with a dash is treated as a pattern, not a flag
+  ---
+  duration_ms: 36.404167
+  type: 'test'
+  ...
+# Subtest: matches resolving outside the repo root are suppressed
+ok 767 - matches resolving outside the repo root are suppressed
+  ---
+  duration_ms: 36.252209
+  type: 'test'
+  ...
+# Subtest: exit status 1 with no matches is a complete search
+ok 768 - exit status 1 with no matches is a complete search
+  ---
+  duration_ms: 33.099334
+  type: 'test'
+  ...
+# Subtest: a non-zero, non-one exit status is a failure
+ok 769 - a non-zero, non-one exit status is a failure
+  ---
+  duration_ms: 32.784583
+  type: 'test'
+  ...
+# Subtest: a missing binary is reported as a failed search, not a throw
+ok 770 - a missing binary is reported as a failed search, not a throw
+  ---
+  duration_ms: 1.369084
+  type: 'test'
+  ...
+# Subtest: positions per file are bounded while matchCount keeps counting
+ok 771 - positions per file are bounded while matchCount keeps counting
+  ---
+  duration_ms: 45.184167
+  type: 'test'
+  ...
+# Subtest: a COMPLETE repo-contained edge resolving on both sides persists and reloads
+ok 772 - a COMPLETE repo-contained edge resolving on both sides persists and reloads
+  ---
+  duration_ms: 12.029375
+  type: 'test'
+  ...
+# Subtest: a location that cannot map to a stable symbol ID is not persisted
+ok 773 - a location that cannot map to a stable symbol ID is not persisted
+  ---
+  duration_ms: 0.507708
+  type: 'test'
+  ...
+# Subtest: PARTIAL and FAILED outcomes cannot produce a persistable edge
+ok 774 - PARTIAL and FAILED outcomes cannot produce a persistable edge
+  ---
+  duration_ms: 0.305667
+  type: 'test'
+  ...
+# Subtest: a changed or deleted dependency removes the edge
+ok 775 - a changed or deleted dependency removes the edge
+  ---
+  duration_ms: 1.575833
+  type: 'test'
+  ...
+# Subtest: a build fingerprint change clears the store
+ok 776 - a build fingerprint change clears the store
+  ---
+  duration_ms: 0.935625
+  type: 'test'
+  ...
+# Subtest: an unaffected edge is promoted to the current generation only after dependency fingerprints are revalidated
+ok 777 - an unaffected edge is promoted to the current generation only after dependency fingerprints are revalidated
+  ---
+  duration_ms: 0.889083
+  type: 'test'
+  ...
+# Subtest: an outside-repo source or target is rejected even if handed directly to putComplete
+ok 778 - an outside-repo source or target is rejected even if handed directly to putComplete
+  ---
+  duration_ms: 0.761917
+  type: 'test'
+  ...
+# Subtest: a failed atomic write leaves the previous snapshot readable
+ok 779 - a failed atomic write leaves the previous snapshot readable
+  ---
+  duration_ms: 14.234584
+  type: 'test'
+  ...
+# Subtest: putComplete() loads the existing snapshot before its first write, even if load() was never called explicitly
+ok 780 - putComplete() loads the existing snapshot before its first write, even if load() was never called explicitly
+  ---
+  duration_ms: 12.185208
+  type: 'test'
+  ...
+# Subtest: a debounced flush fires automatically after putComplete(), without an explicit flush() call
+ok 781 - a debounced flush fires automatically after putComplete(), without an explicit flush() call
+  ---
+  duration_ms: 53.710666
+  type: 'test'
+  ...
+# Subtest: identical concurrent semantic requests share one backend call
+ok 782 - identical concurrent semantic requests share one backend call
+  ---
+  duration_ms: 1.192625
+  type: 'test'
+  ...
+# Subtest: partial and failed outcomes are never cached
+ok 783 - partial and failed outcomes are never cached
+  ---
+  duration_ms: 0.277916
+  type: 'test'
+  ...
+# Subtest: completed cache TTL starts after backend completion
+ok 784 - completed cache TTL starts after backend completion
+  ---
+  duration_ms: 0.155833
+  type: 'test'
+  ...
+# Subtest: generation and fingerprint are part of the cache key
+ok 785 - generation and fingerprint are part of the cache key
+  ---
+  duration_ms: 0.765125
+  type: 'test'
+  ...
+# Subtest: one caller deadline does not cancel another caller sharing backend work
+ok 786 - one caller deadline does not cancel another caller sharing backend work
+  ---
+  duration_ms: 12.860042
+  type: 'test'
+  ...
+# Subtest: gateway calls during an active lifecycle backoff cause zero backend calls
+ok 787 - gateway calls during an active lifecycle backoff cause zero backend calls
+  ---
+  duration_ms: 0.183292
+  type: 'test'
+  ...
+# Subtest: busy-other-session lifecycle outcome is reported distinctly from backoff
+ok 788 - busy-other-session lifecycle outcome is reported distinctly from backoff
+  ---
+  duration_ms: 0.081
+  type: 'test'
+  ...
+# Subtest: identical hierarchy calls share backend work while each caller settles against its own deadline
+ok 789 - identical hierarchy calls share backend work while each caller settles against its own deadline
+  ---
+  duration_ms: 12.312792
+  type: 'test'
+  ...
+# Subtest: identical callHierarchy calls also share one backend execution
+ok 790 - identical callHierarchy calls also share one backend execution
+  ---
+  duration_ms: 0.57125
+  type: 'test'
+  ...
+# Subtest: PARTIAL_TIMEOUT hierarchy outcomes are never cached, matching every other operation's cacheability rule
+ok 791 - PARTIAL_TIMEOUT hierarchy outcomes are never cached, matching every other operation's cacheability rule
+  ---
+  duration_ms: 0.464167
+  type: 'test'
+  ...
+# Subtest: the last hierarchy waiter returns without post-deadline settlement grace when it aborts the transport
+ok 792 - the last hierarchy waiter returns without post-deadline settlement grace when it aborts the transport
+  ---
+  duration_ms: 9.827042
+  type: 'test'
+  ...
+# Subtest: completed cache sweeps expired entries and evicts the oldest entry at its capacity
+ok 793 - completed cache sweeps expired entries and evicts the oldest entry at its capacity
+  ---
+  duration_ms: 0.241666
+  type: 'test'
+  ...
+# Subtest: clear aborts in-flight hierarchy work and prevents a late completion from repopulating the cache
+ok 794 - clear aborts in-flight hierarchy work and prevents a late completion from repopulating the cache
+  ---
+  duration_ms: 0.136458
+  type: 'test'
+  ...
+# Subtest: semantic locations outside canonical repo root are rejected
+ok 795 - semantic locations outside canonical repo root are rejected
+  ---
+  duration_ms: 1.390166
+  type: 'test'
+  ...
+# Subtest: repo locations are returned as relative 1-based ranges
+ok 796 - repo locations are returned as relative 1-based ranges
+  ---
+  duration_ms: 1.589292
+  type: 'test'
+  ...
+# Subtest: the returned absolutePath stays in the caller's repoRoot namespace
+ok 797 - the returned absolutePath stays in the caller's repoRoot namespace
+  ---
+  duration_ms: 0.97475
+  type: 'test'
+  ...
+# Subtest: a Maven repository jar source is rejected
+ok 798 - a Maven repository jar source is rejected
+  ---
+  duration_ms: 0.970834
+  type: 'test'
+  ...
+# Subtest: a JDK source location is rejected
+ok 799 - a JDK source location is rejected
+  ---
+  duration_ms: 0.657583
+  type: 'test'
+  ...
+# Subtest: a location reached through a symlink out of the repo is rejected
+ok 800 - a location reached through a symlink out of the repo is rejected
+  ---
+  duration_ms: 0.820708
+  type: 'test'
+  ...
+# Subtest: a LocationLink uses its target selection range
+ok 801 - a LocationLink uses its target selection range
+  ---
+  duration_ms: 0.632917
+  type: 'test'
+  ...
+# Subtest: a non-file uri is rejected
+ok 802 - a non-file uri is rejected
+  ---
+  duration_ms: 0.455458
+  type: 'test'
+  ...
+# Subtest: the repo root itself is not a location
+ok 803 - the repo root itself is not a location
+  ---
+  duration_ms: 0.777625
+  type: 'test'
+  ...
+# Subtest: impact accepts one absolute deadline and rejects values above 15 seconds
+ok 804 - impact accepts one absolute deadline and rejects values above 15 seconds
+  ---
+  duration_ms: 2.447041
+  type: 'test'
+  ...
+# Subtest: impact exposes exactly one timeout control
+ok 805 - impact exposes exactly one timeout control
+  ---
+  duration_ms: 0.101875
+  type: 'test'
+  ...
+# Subtest: impact projects the absolute deadline onto the internal semantic stage timeout
+ok 806 - impact projects the absolute deadline onto the internal semantic stage timeout
+  ---
+  duration_ms: 0.325541
+  type: 'test'
+  ...
+# Subtest: java_impact wrapper respects verbosity when adding phase metrics
+ok 807 - java_impact wrapper respects verbosity when adding phase metrics
+  ---
+  duration_ms: 0.2535
+  type: 'test'
+  ...
+# Subtest: action tools return summaries by default and diagnostic status on request
+ok 808 - action tools return summaries by default and diagnostic status on request
+  ---
+  duration_ms: 0.656042
+  type: 'test'
+  ...
+# Subtest: java_diagnostics summarizes repo-relative diagnostics by default
+ok 809 - java_diagnostics summarizes repo-relative diagnostics by default
+  ---
+  duration_ms: 0.323125
+  type: 'test'
+  ...
+# Subtest: java_symbol (query/position/references operations) omits raw uri ranges unless diagnostic is requested
+ok 810 - java_symbol (query/position/references operations) omits raw uri ranges unless diagnostic is requested
+  ---
+  duration_ms: 1.789459
+  type: 'test'
+  ...
+# Subtest: semantic tools never emit locations from outside the repository
+ok 811 - semantic tools never emit locations from outside the repository
+  ---
+  duration_ms: 2.484042
+  type: 'test'
+  ...
+# Subtest: java_impact standard output matches the ImpactResultV6 contract - present/absent fields per architecture V3.1 §15
+ok 812 - java_impact standard output matches the ImpactResultV6 contract - present/absent fields per architecture V3.1 §15
+  ---
+  duration_ms: 128.365042
+  type: 'test'
+  ...
+# Subtest: java_status exposes runtime build and root source metadata
+ok 813 - java_status exposes runtime build and root source metadata
+  ---
+  duration_ms: 1.287125
+  type: 'test'
+  ...
+# Subtest: java_status returns summary by default and keeps diagnostics explicit
+ok 814 - java_status returns summary by default and keeps diagnostics explicit
+  ---
+  duration_ms: 0.521
+  type: 'test'
+  ...
+# Subtest: java_status exposes sibling-seed progress without requiring diagnostic detail
+ok 815 - java_status exposes sibling-seed progress without requiring diagnostic detail
+  ---
+  duration_ms: 0.320792
+  type: 'test'
+  ...
+# Subtest: java_status forwards the request absolute budget to JavaIndex status
+ok 816 - java_status forwards the request absolute budget to JavaIndex status
+  ---
+  duration_ms: 0.265167
+  type: 'test'
+  ...
+# Subtest: java_status start consumes the same absolute request budget
+ok 817 - java_status start consumes the same absolute request budget
+  ---
+  duration_ms: 0.302084
+  type: 'test'
+  ...
+# Subtest: cleanupStaleWorktreeCaches removes only stale inactive worktree caches by default
+ok 818 - cleanupStaleWorktreeCaches removes only stale inactive worktree caches by default
+  ---
+  duration_ms: 8.620375
+  type: 'test'
+  ...
+# Subtest: cleanupStaleWorktreeCaches ignores unrelated metadata files
+ok 819 - cleanupStaleWorktreeCaches ignores unrelated metadata files
+  ---
+  duration_ms: 1.336584
+  type: 'test'
+  ...
+# Subtest: the janitor never recursively deletes the global leases/ base, even though it lives inside the same cacheBase
+ok 820 - the janitor never recursively deletes the global leases/ base, even though it lives inside the same cacheBase
+  ---
+  duration_ms: 3.685125
+  type: 'test'
+  ...
+# Subtest: janitor does not delete a stale-looking cache whose ownerToken matches a live fast-only runtime
+ok 821 - janitor does not delete a stale-looking cache whose ownerToken matches a live fast-only runtime
+  ---
+  duration_ms: 3.389416
+  type: 'test'
+  ...
+# Subtest: janitor removes a stale cache once the runtime lease is released and the recorded owner pid is dead
+ok 822 - janitor removes a stale cache once the runtime lease is released and the recorded owner pid is dead
+  ---
+  duration_ms: 2.857208
+  type: 'test'
+  ...
+# Subtest: a stale ownerToken does not let the same live PID protect a released runtime forever
+ok 823 - a stale ownerToken does not let the same live PID protect a released runtime forever
+  ---
+  duration_ms: 2.843541
+  type: 'test'
+  ...
+# Subtest: a legacy cache with no ownerToken conservatively falls back to a live ownerPid
+ok 824 - a legacy cache with no ownerToken conservatively falls back to a live ownerPid
+  ---
+  duration_ms: 1.984791
+  type: 'test'
+  ...
+# Subtest: a dead ownerPid does not protect a cache once the runtime lease is also gone
+ok 825 - a dead ownerPid does not protect a cache once the runtime lease is also gone
+  ---
+  duration_ms: 2.278584
+  type: 'test'
+  ...
+# Subtest: a JDT workspace lock file protects a cache regardless of lease/pid state
+ok 826 - a JDT workspace lock file protects a cache regardless of lease/pid state
+  ---
+  duration_ms: 2.788333
+  type: 'test'
+  ...
+# Subtest: touchRepoCache merges independent writers instead of one clobbering the other
+ok 827 - touchRepoCache merges independent writers instead of one clobbering the other
+  ---
+  duration_ms: 23.4825
+  type: 'test'
+  ...
+# Subtest: a non-Git directory yields repoRoot/repoHash only
+ok 828 - a non-Git directory yields repoRoot/repoHash only
+  ---
+  duration_ms: 11.872542
+  type: 'test'
+  ...
+# Subtest: the primary checkout has gitDir === gitCommonDir and is not linked
+ok 829 - the primary checkout has gitDir === gitCommonDir and is not linked
+  ---
+  duration_ms: 91.402125
+  type: 'test'
+  ...
+# Subtest: linked worktrees share familyHash but retain distinct repoHash
+ok 830 - linked worktrees share familyHash but retain distinct repoHash
+  ---
+  duration_ms: 97.825709
+  type: 'test'
+  ...
+# Subtest: leaseFamilyKey falls back to repoHash for a non-Git directory
+ok 831 - leaseFamilyKey falls back to repoHash for a non-Git directory
+  ---
+  duration_ms: 8.050833
+  type: 'test'
+  ...
+# Subtest: leaseFamilyKey uses the shared familyHash for linked worktrees, not their distinct repoHash
+ok 832 - leaseFamilyKey uses the shared familyHash for linked worktrees, not their distinct repoHash
+  ---
+  duration_ms: 102.388083
+  type: 'test'
+  ...
+# Subtest: the identity cache resolves a root once and can be invalidated
+ok 833 - the identity cache resolves a root once and can be invalidated
+  ---
+  duration_ms: 99.400125
+  type: 'test'
+  ...
+# Subtest: a 500-file batch is delivered as one storm with a bounded, non-empty affectedRoots list, and marks the generation dirty
+ok 834 - a 500-file batch is delivered as one storm with a bounded, non-empty affectedRoots list, and marks the generation dirty
+  ---
+  duration_ms: 37.281292
+  type: 'test'
+  ...
+# Subtest: a below-threshold batch on the same repo is not treated as a storm
+ok 835 - a below-threshold batch on the same repo is not treated as a storm
+  ---
+  duration_ms: 1.511333
+  type: 'test'
+  ...
+# Subtest: linked-worktree git metadata never advances Java generation, even under a large burst
+ok 836 - linked-worktree git metadata never advances Java generation, even under a large burst
+  ---
+  duration_ms: 105.19225
+  type: 'test'
+  ...
+1..836
+# tests 836
+# suites 0
+# pass 836
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 105034.185708

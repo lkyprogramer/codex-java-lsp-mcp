@@ -1,0 +1,419 @@
+{
+  "schemaVersion": 1,
+  "manifest": {
+    "authority": "existing-dist-tests",
+    "runner": "node --test",
+    "caseTimeoutMs": 30000,
+    "generatedAt": "2026-08-09T07:05:49.489Z"
+  },
+  "gate": {
+    "requiredCaseCount": 13,
+    "passed": true
+  },
+  "cases": [
+    {
+      "id": "concurrent-jdt-start",
+      "testFile": "dist/jdtls-session.test.js",
+      "testNamePattern": "^concurrent ensureStarted shares one transactional start$",
+      "expectedInvariant": "concurrent callers share exactly one transactional JDT start",
+      "command": "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+      "args": [
+        "--test",
+        "--test-name-pattern=^concurrent ensureStarted shares one transactional start$",
+        "dist/jdtls-session.test.js"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "testCount": 1,
+      "passedTestCount": 1,
+      "failedTestCount": 0,
+      "selectedTestCount": 1,
+      "selectedTestNames": [
+        "concurrent ensureStarted shares one transactional start"
+      ],
+      "selectedTestResults": [
+        {
+          "name": "concurrent ensureStarted shares one transactional start",
+          "status": "passed"
+        }
+      ],
+      "stdoutSha256": "46ecdbe67051bbc6fb50be1d5df71033ac2a02a6c84fc349b076a39383cac7aa",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "status": "passed"
+    },
+    {
+      "id": "initialize-timeout",
+      "testFile": "dist/jdtls-session.test.js",
+      "testNamePattern": "^a short caller deadline does not cancel a shared JDT startup$",
+      "expectedInvariant": "one initialize caller timing out does not cancel shared startup",
+      "command": "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+      "args": [
+        "--test",
+        "--test-name-pattern=^a short caller deadline does not cancel a shared JDT startup$",
+        "dist/jdtls-session.test.js"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "testCount": 1,
+      "passedTestCount": 1,
+      "failedTestCount": 0,
+      "selectedTestCount": 1,
+      "selectedTestNames": [
+        "a short caller deadline does not cancel a shared JDT startup"
+      ],
+      "selectedTestResults": [
+        {
+          "name": "a short caller deadline does not cancel a shared JDT startup",
+          "status": "passed"
+        }
+      ],
+      "stdoutSha256": "6910b4fca69f6a738cffd9f57253c10e32a289ca5caa5df6de997c3c91c8fc56",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "status": "passed"
+    },
+    {
+      "id": "child-exits-initialize",
+      "testFile": "dist/jdtls-session.test.js",
+      "testNamePattern": "^failed initialize disposes the attempt and permits a clean retry$",
+      "expectedInvariant": "an initialize failure disposes its child and permits a clean retry",
+      "command": "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+      "args": [
+        "--test",
+        "--test-name-pattern=^failed initialize disposes the attempt and permits a clean retry$",
+        "dist/jdtls-session.test.js"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "testCount": 1,
+      "passedTestCount": 1,
+      "failedTestCount": 0,
+      "selectedTestCount": 1,
+      "selectedTestNames": [
+        "failed initialize disposes the attempt and permits a clean retry"
+      ],
+      "selectedTestResults": [
+        {
+          "name": "failed initialize disposes the attempt and permits a clean retry",
+          "status": "passed"
+        }
+      ],
+      "stdoutSha256": "03ae7b423e5805c483bf2d0d14619cfd405f19e525974072b508001df1a10e7a",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "status": "passed"
+    },
+    {
+      "id": "child-exits-ready",
+      "testFile": "dist/jdtls-session.test.js",
+      "testNamePattern": "^a READY child that exits marks the session BROKEN and restartable$",
+      "expectedInvariant": "a READY child exit marks the session BROKEN and restartable",
+      "command": "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+      "args": [
+        "--test",
+        "--test-name-pattern=^a READY child that exits marks the session BROKEN and restartable$",
+        "dist/jdtls-session.test.js"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "testCount": 1,
+      "passedTestCount": 1,
+      "failedTestCount": 0,
+      "selectedTestCount": 1,
+      "selectedTestNames": [
+        "a READY child that exits marks the session BROKEN and restartable"
+      ],
+      "selectedTestResults": [
+        {
+          "name": "a READY child that exits marks the session BROKEN and restartable",
+          "status": "passed"
+        }
+      ],
+      "stdoutSha256": "a8cebd802e407be77407b61f7ae52dc9f92489d39df472ef004f532e326a88b6",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "status": "passed"
+    },
+    {
+      "id": "rg-partial-timeout",
+      "testFile": "dist/search/rg-runner.test.js",
+      "testNamePattern": "^rg timeout returns partial evidence but is not complete$",
+      "expectedInvariant": "timeout returns PARTIAL_TIMEOUT rather than COMPLETE",
+      "command": "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+      "args": [
+        "--test",
+        "--test-name-pattern=^rg timeout returns partial evidence but is not complete$",
+        "dist/search/rg-runner.test.js"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "testCount": 1,
+      "passedTestCount": 1,
+      "failedTestCount": 0,
+      "selectedTestCount": 1,
+      "selectedTestNames": [
+        "rg timeout returns partial evidence but is not complete"
+      ],
+      "selectedTestResults": [
+        {
+          "name": "rg timeout returns partial evidence but is not complete",
+          "status": "passed"
+        }
+      ],
+      "stdoutSha256": "f9faeae7a0601b48a3d0fb349bae2a4aef0134211b1498bc0b366efc8269953e",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "status": "passed"
+    },
+    {
+      "id": "rg-partial-limit",
+      "testFile": "dist/search/rg-runner.test.js",
+      "testNamePattern": "^the match cap makes the result PARTIAL_LIMIT$",
+      "expectedInvariant": "a match limit returns PARTIAL_LIMIT rather than COMPLETE",
+      "accepted_variance": "limit seam only; this does not claim a real OS ENOBUFS condition",
+      "command": "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+      "args": [
+        "--test",
+        "--test-name-pattern=^the match cap makes the result PARTIAL_LIMIT$",
+        "dist/search/rg-runner.test.js"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "testCount": 1,
+      "passedTestCount": 1,
+      "failedTestCount": 0,
+      "selectedTestCount": 1,
+      "selectedTestNames": [
+        "the match cap makes the result PARTIAL_LIMIT"
+      ],
+      "selectedTestResults": [
+        {
+          "name": "the match cap makes the result PARTIAL_LIMIT",
+          "status": "passed"
+        }
+      ],
+      "stdoutSha256": "75675d1a862b37e29a87a2c66c4899c92e08a3bba5cf448d99170ce2f1d6c6f1",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "status": "passed"
+    },
+    {
+      "id": "java-index-crash",
+      "testFile": "dist/java-index/java-index-client.test.js",
+      "testNamePattern": "^worker exit rejects all pending requests and marks the client DEGRADED$",
+      "expectedInvariant": "a worker crash rejects pending requests and degrades the client",
+      "command": "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+      "args": [
+        "--test",
+        "--test-name-pattern=^worker exit rejects all pending requests and marks the client DEGRADED$",
+        "dist/java-index/java-index-client.test.js"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "testCount": 1,
+      "passedTestCount": 1,
+      "failedTestCount": 0,
+      "selectedTestCount": 1,
+      "selectedTestNames": [
+        "worker exit rejects all pending requests and marks the client DEGRADED"
+      ],
+      "selectedTestResults": [
+        {
+          "name": "worker exit rejects all pending requests and marks the client DEGRADED",
+          "status": "passed"
+        }
+      ],
+      "stdoutSha256": "bb670757febfc64ce260bf183777dd631159bda569541102c0585018ffff30aa",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "status": "passed"
+    },
+    {
+      "id": "snapshot-corruption",
+      "testFile": "dist/java-index/java-index-worker.test.js",
+      "testNamePattern": "^a malformed sibling snapshot fails the seed attempt softly - OPEN still succeeds with an empty store$",
+      "expectedInvariant": "a corrupt sibling snapshot falls back to an empty OPEN store",
+      "command": "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+      "args": [
+        "--test",
+        "--test-name-pattern=^a malformed sibling snapshot fails the seed attempt softly - OPEN still succeeds with an empty store$",
+        "dist/java-index/java-index-worker.test.js"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "testCount": 1,
+      "passedTestCount": 1,
+      "failedTestCount": 0,
+      "selectedTestCount": 1,
+      "selectedTestNames": [
+        "a malformed sibling snapshot fails the seed attempt softly - OPEN still succeeds with an empty store"
+      ],
+      "selectedTestResults": [
+        {
+          "name": "a malformed sibling snapshot fails the seed attempt softly - OPEN still succeeds with an empty store",
+          "status": "passed"
+        }
+      ],
+      "stdoutSha256": "e1c6a111d4ba45df3595a9485906caf7a4e91c11892b7a96f53dae33dc181a5a",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "status": "passed"
+    },
+    {
+      "id": "watcher-error",
+      "testFile": "dist/repo-change-coordinator.test.js",
+      "testNamePattern": "^degrade catches an async listener rejection and records the listener failure$",
+      "expectedInvariant": "a watcher listener error is recorded without escaping the coordinator",
+      "command": "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+      "args": [
+        "--test",
+        "--test-name-pattern=^degrade catches an async listener rejection and records the listener failure$",
+        "dist/repo-change-coordinator.test.js"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "testCount": 1,
+      "passedTestCount": 1,
+      "failedTestCount": 0,
+      "selectedTestCount": 1,
+      "selectedTestNames": [
+        "degrade catches an async listener rejection and records the listener failure"
+      ],
+      "selectedTestResults": [
+        {
+          "name": "degrade catches an async listener rejection and records the listener failure",
+          "status": "passed"
+        }
+      ],
+      "stdoutSha256": "fe440efc922456532aa357055b70f3a14378f743a7cd8051dc2f72ac6e5a12ec",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "status": "passed"
+    },
+    {
+      "id": "dirty-reconcile",
+      "testFile": "dist/repo-runtime-manager.test.js",
+      "testNamePattern": "^reconcileIfDirty leaves dirty set when reconcile fails, without failing the request$",
+      "expectedInvariant": "failed dirty reconciliation remains dirty for a later retry",
+      "command": "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+      "args": [
+        "--test",
+        "--test-name-pattern=^reconcileIfDirty leaves dirty set when reconcile fails, without failing the request$",
+        "dist/repo-runtime-manager.test.js"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "testCount": 1,
+      "passedTestCount": 1,
+      "failedTestCount": 0,
+      "selectedTestCount": 1,
+      "selectedTestNames": [
+        "reconcileIfDirty leaves dirty set when reconcile fails, without failing the request"
+      ],
+      "selectedTestResults": [
+        {
+          "name": "reconcileIfDirty leaves dirty set when reconcile fails, without failing the request",
+          "status": "passed"
+        }
+      ],
+      "stdoutSha256": "c53d8070870f7af93b1338d27b8824a32f20c2d66ba49707c87e6b8899781c14",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "status": "passed"
+    },
+    {
+      "id": "outside-repo-result",
+      "testFile": "dist/semantic-location.test.js",
+      "testNamePattern": "^semantic locations outside canonical repo root are rejected$",
+      "expectedInvariant": "outside-repository semantic results are rejected",
+      "command": "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+      "args": [
+        "--test",
+        "--test-name-pattern=^semantic locations outside canonical repo root are rejected$",
+        "dist/semantic-location.test.js"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "testCount": 1,
+      "passedTestCount": 1,
+      "failedTestCount": 0,
+      "selectedTestCount": 1,
+      "selectedTestNames": [
+        "semantic locations outside canonical repo root are rejected"
+      ],
+      "selectedTestResults": [
+        {
+          "name": "semantic locations outside canonical repo root are rejected",
+          "status": "passed"
+        }
+      ],
+      "stdoutSha256": "b9249b8e0c59261e546f9682b6e94eaa9f9ed72e0bf288459aa4a01792e79556",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "status": "passed"
+    },
+    {
+      "id": "semantic-one-waiter-cancel",
+      "testFile": "dist/semantic-gateway.test.js",
+      "testNamePattern": "^one caller deadline does not cancel another caller sharing backend work$",
+      "expectedInvariant": "one cancelled semantic waiter does not cancel shared backend work",
+      "command": "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+      "args": [
+        "--test",
+        "--test-name-pattern=^one caller deadline does not cancel another caller sharing backend work$",
+        "dist/semantic-gateway.test.js"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "testCount": 1,
+      "passedTestCount": 1,
+      "failedTestCount": 0,
+      "selectedTestCount": 1,
+      "selectedTestNames": [
+        "one caller deadline does not cancel another caller sharing backend work"
+      ],
+      "selectedTestResults": [
+        {
+          "name": "one caller deadline does not cancel another caller sharing backend work",
+          "status": "passed"
+        }
+      ],
+      "stdoutSha256": "f2bc9cd3a53a04303f5aba2833f34858f2692adbfdef8d5d403b3723e5e662ba",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "status": "passed"
+    },
+    {
+      "id": "semantic-all-cancel",
+      "testFile": "dist/semantic-gateway.test.js",
+      "testNamePattern": "^the last hierarchy waiter returns without post-deadline settlement grace when it aborts the transport$",
+      "expectedInvariant": "the final cancelled waiter aborts backend transport, returns at its own deadline, and cannot populate the complete cache",
+      "command": "/Users/luo/.nvm/versions/node/v22.16.0/bin/node",
+      "args": [
+        "--test",
+        "--test-name-pattern=^the last hierarchy waiter returns without post-deadline settlement grace when it aborts the transport$",
+        "dist/semantic-gateway.test.js"
+      ],
+      "exitCode": 0,
+      "signal": null,
+      "timedOut": false,
+      "testCount": 1,
+      "passedTestCount": 1,
+      "failedTestCount": 0,
+      "selectedTestCount": 1,
+      "selectedTestNames": [
+        "the last hierarchy waiter returns without post-deadline settlement grace when it aborts the transport"
+      ],
+      "selectedTestResults": [
+        {
+          "name": "the last hierarchy waiter returns without post-deadline settlement grace when it aborts the transport",
+          "status": "passed"
+        }
+      ],
+      "stdoutSha256": "28c929cf29e46c78dbd9dbc049f67058f35a509cfdaedf48b35a0279e947d30f",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "status": "passed"
+    }
+  ]
+}

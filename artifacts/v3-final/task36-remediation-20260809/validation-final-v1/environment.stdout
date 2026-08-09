@@ -1,0 +1,14 @@
+v22.16.0
+10.9.2
+jdtls 1.56.0
+ripgrep 14.1.0
+
+features:-simd-accel,+pcre2
+simd(compile):+NEON
+simd(runtime):+NEON
+
+PCRE2 10.42 is available (JIT is available)
+ProductName:		macOS
+ProductVersion:		26.5.1
+BuildVersion:		25F80
+arm64
