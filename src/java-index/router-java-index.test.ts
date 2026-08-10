@@ -8,7 +8,12 @@ import test from "node:test";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { DeadlineBudget } from "../runtime/deadline-budget.js";
+import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
+import type { JavaFileBundle, JavaIndexStatus, JavaParseState } from "./index-types.js";
 import { JavaIndexClient } from "./java-index-client.js";
+import { MAX_FRAMEWORK_FACT_FILES } from "./framework-index-view.js";
+import { MAX_FACTS_FOR_FILES } from "./router-facts.js";
 import { RouterJavaIndex } from "./router-java-index.js";
 
 function write(root: string, relativePath: string, content: string): void {
@@ -34,6 +39,420 @@ async function readyRouter(repoRoot: string): Promise<RouterJavaIndex> {
   await waitFor(async () => (await router.status()).pendingBackground === 0, 15_000);
   return router;
 }
+
+function readyStatus(generation: number): JavaIndexStatus {
+  return {
+    state: "READY",
+    indexedGeneration: generation,
+    files: 0,
+    types: 0,
+    methods: 0,
+    edges: 0,
+    snapshotBytes: 0,
+    pendingForeground: 0,
+    pendingBackground: 0,
+    coverage: [],
+    resourceCoverage: []
+  };
+}
+
+function emptyBundle(repoRoot: string, absolutePath: string, generation: number, parseState: JavaParseState = "COMPLETE"): JavaFileBundle {
+  return {
+    file: {
+      fileId: `file:${path.relative(repoRoot, absolutePath).replace(/\\/g, "/")}`,
+      relativePath: path.relative(repoRoot, absolutePath).replace(/\\/g, "/"),
+      sourceRoot: "src/main/java",
+      module: "",
+      sourceSet: "main",
+      packageName: "demo",
+      imports: [],
+      topLevelTypeIds: [],
+      allTypeIds: [],
+      contentHash: "hash",
+      size: 1,
+      mtimeMs: 1,
+      parseState,
+      parseErrorCount: parseState === "COMPLETE" ? 0 : 1,
+      generation
+    },
+    types: [],
+    fields: [],
+    methods: [],
+    edges: []
+  };
+}
+
+class RecordingFactsClient {
+  generation = 1;
+  readonly refreshCalls: string[][] = [];
+  readonly queryFilesCalls: string[][] = [];
+  statusCalls = 0;
+  queryAnchorCalls = 0;
+  queryFilesImpl: (files: string[]) => Promise<JavaFileBundle[]>;
+
+  constructor(private readonly repoRoot: string) {
+    this.queryFilesImpl = async files => files.map(file => emptyBundle(this.repoRoot, file, this.generation));
+  }
+
+  localStatus(): JavaIndexStatus {
+    return readyStatus(this.generation);
+  }
+
+  async refresh(generation: number, changed: string[]): Promise<JavaIndexStatus> {
+    this.generation = generation;
+    this.refreshCalls.push([...changed]);
+    return readyStatus(generation);
+  }
+
+  async queryFiles(files: string[]): Promise<JavaFileBundle[]> {
+    this.queryFilesCalls.push([...files]);
+    return this.queryFilesImpl(files);
+  }
+
+  async status(): Promise<JavaIndexStatus> {
+    this.statusCalls += 1;
+    return readyStatus(this.generation);
+  }
+
+  async queryAnchor(): Promise<undefined> {
+    this.queryAnchorCalls += 1;
+    return undefined;
+  }
+}
+
+test("factsForFiles preserves input order while refreshing and hydrating each unique file once", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "router-facts-batch-order-"));
+  write(repoRoot, "src/main/java/demo/A.java", "package demo; class A {}\n");
+  write(repoRoot, "src/main/java/demo/B.java", "package demo; class B {}\n");
+  const a = path.join(repoRoot, "src/main/java/demo/A.java");
+  const b = path.join(repoRoot, "src/main/java/demo/B.java");
+  const client = new RecordingFactsClient(repoRoot);
+  client.queryFilesImpl = async files => [...files].reverse().map(file => emptyBundle(repoRoot, file, client.generation));
+  const router = new RouterJavaIndex(repoRoot, client as never);
+
+  const result = await router.factsForFiles([a, b, a], 1);
+
+  assert.equal(result.completion, "COMPLETE");
+  assert.deepEqual(result.items.map(item => item.state), ["FOUND", "FOUND", "FOUND"]);
+  assert.deepEqual(result.items.map(item => item.absolutePath), [a, b, a]);
+  assert.strictEqual(
+    result.items[0]!.state === "FOUND" ? result.items[0]!.facts : undefined,
+    result.items[2]!.state === "FOUND" ? result.items[2]!.facts : undefined,
+    "duplicate inputs must share the one authoritative projection"
+  );
+  assert.deepEqual(client.refreshCalls, [[a, b]]);
+  assert.deepEqual(client.queryFilesCalls, [[a, b]]);
+
+  await router.factsForFiles([a, b], 1);
+  assert.equal(client.refreshCalls.length, 1, "same-generation authoritative facts must be cached");
+  assert.equal(client.queryFilesCalls.length, 1);
+  await router.factsForFiles([a, b], 2);
+  assert.equal(client.refreshCalls.length, 2, "a new request generation must not reuse the old batch");
+  assert.equal(client.queryFilesCalls.length, 2);
+});
+
+test("factsForFiles caps unique work at 70 and isolates one malformed source", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "router-facts-batch-cap-"));
+  const files = Array.from({ length: MAX_FACTS_FOR_FILES + 1 }, (_, index) => {
+    const relative = `src/main/java/demo/F${index}.java`;
+    write(repoRoot, relative, `package demo; class F${index} {}\n`);
+    return path.join(repoRoot, relative);
+  });
+  const client = new RecordingFactsClient(repoRoot);
+  client.queryFilesImpl = async queried => queried.map(file => emptyBundle(
+    repoRoot,
+    file,
+    client.generation,
+    file === files[1] ? "FAILED" : "COMPLETE"
+  ));
+  const router = new RouterJavaIndex(repoRoot, client as never);
+
+  const result = await router.factsForFiles(files, 1);
+
+  assert.equal(result.completion, "PARTIAL");
+  assert.equal(result.truncated, true);
+  assert.equal(client.refreshCalls[0]!.length, MAX_FACTS_FOR_FILES);
+  assert.equal(client.queryFilesCalls[0]!.length, MAX_FACTS_FOR_FILES);
+  assert.equal(result.items[0]!.state, "FOUND", "a neighboring valid item survives one malformed source");
+  assert.deepEqual(result.items[1], {
+    inputFile: files[1],
+    absolutePath: files[1],
+    state: "DEGRADED",
+    reason: "INDEX_INCOMPLETE"
+  });
+  assert.deepEqual(result.items.at(-1), {
+    inputFile: files.at(-1),
+    absolutePath: files.at(-1),
+    state: "DEGRADED",
+    reason: "LIMIT_EXCEEDED"
+  });
+});
+
+test("request memo singleflights exact queries, evicts rejection, and partitions nested deadlines", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "router-request-memo-"));
+  const file = path.join(repoRoot, "src/main/java/demo/A.java");
+  write(repoRoot, "src/main/java/demo/A.java", "package demo; class A {}\n");
+  const client = new RecordingFactsClient(repoRoot);
+  const router = new RouterJavaIndex(repoRoot, client as never);
+
+  await router.withRequestOptions({ budget: DeadlineBudget.fromTimeout(1_000) }, async () => {
+    await Promise.all([router.queryFiles([file]), router.queryFiles([file])]);
+    assert.equal(client.queryFilesCalls.length, 1, "same request and generation share the in-flight RPC");
+
+    client.queryFilesImpl = async () => { throw new Error("transient query failure"); };
+    await assert.rejects(() => router.queryFiles([file, file]));
+    client.queryFilesImpl = async files => files.map(item => emptyBundle(repoRoot, item, client.generation));
+    await router.queryFiles([file, file]);
+    assert.equal(client.queryFilesCalls.length, 3, "a rejected memo entry must be evicted before retry");
+
+    await router.withRequestOptions({ budget: DeadlineBudget.fromTimeout(500) }, () => router.queryFiles([file]));
+    assert.equal(client.queryFilesCalls.length, 4, "a nested control boundary must not inherit the parent in-flight/result memo");
+  });
+
+  await Promise.all([
+    router.withRequestOptions({ budget: DeadlineBudget.fromTimeout(1_000) }, () => router.queryFiles([file])),
+    router.withRequestOptions({ budget: DeadlineBudget.fromTimeout(1_000) }, () => router.queryFiles([file]))
+  ]);
+  assert.equal(client.queryFilesCalls.length, 6, "independent root requests never share request-local memo state");
+});
+
+test("request memo shares anchor and status probes while the final status refresh stays authoritative", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "router-request-probes-"));
+  const file = path.join(repoRoot, "src/main/java/demo/A.java");
+  write(repoRoot, "src/main/java/demo/A.java", "package demo; class A {}\n");
+  const client = new RecordingFactsClient(repoRoot);
+  const router = new RouterJavaIndex(repoRoot, client as never);
+
+  await router.withRequestOptions({ budget: DeadlineBudget.fromTimeout(1_000) }, async () => {
+    await Promise.all([
+      router.queryAnchor(file, 1, 1),
+      router.queryAnchor("src/main/java/demo/A.java", 1, 1)
+    ]);
+    await Promise.all([router.routerStatus(), router.routerStatus(), router.frameworkStatus()]);
+    assert.equal(router.localRouterStatus().javaIndex.indexedGeneration, 1);
+    await router.routerStatus(true);
+  });
+
+  assert.equal(client.queryAnchorCalls, 1, "canonical anchor coordinates share one request-local RPC");
+  assert.equal(client.statusCalls, 2, "request-scoped readers share one STATUS and the final refresh remains distinct");
+  await router.withRequestOptions({ budget: DeadlineBudget.fromTimeout(1_000) }, () => router.queryAnchor(file, 1, 1));
+  assert.equal(client.queryAnchorCalls, 2, "independent requests do not share anchor results");
+});
+
+test("metadata-only reference and implementer discovery skips type resolution and bundle hydration", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "router-metadata-only-discovery-"));
+  const client = new RecordingFactsClient(repoRoot);
+  let typeReferencerCalls = 0;
+  let implementerCalls = 0;
+  Object.assign(client, {
+    async queryTypeReferencers() {
+      typeReferencerCalls += 1;
+      return [{
+        sourceId: "type:demo.Usage",
+        targetId: "type:demo.Anchor",
+        sourceFile: "src/main/java/demo/Usage.java",
+        sourceModule: "",
+        sourceSet: "main",
+        kind: "FIELD_TYPE",
+        confidence: 1,
+        generation: 1
+      }];
+    },
+    async queryImplementers() {
+      implementerCalls += 1;
+      return [{
+        typeId: "type:demo.AnchorImpl",
+        fqn: "demo.AnchorImpl",
+        simpleName: "AnchorImpl",
+        kind: "class",
+        fileId: "src/main/java/demo/AnchorImpl.java",
+        range: { start: { line: 1, column: 1 }, end: { line: 1, column: 17 } },
+        modifiers: [],
+        annotations: [],
+        typeParameters: [],
+        extends: [],
+        implements: [],
+        permits: [],
+        fieldIds: [],
+        methodIds: [],
+        confidence: 1
+      }];
+    },
+    async queryType() {
+      throw new Error("known type ids must skip QUERY_TYPE");
+    }
+  });
+  client.queryFilesImpl = async () => {
+    throw new Error("metadata-only discovery must skip QUERY_FILES");
+  };
+  const router = new RouterJavaIndex(repoRoot, client as never);
+
+  const references = await router.findTypeReferences("Anchor", 20, {
+    typeId: "type:demo.Anchor",
+    hydrate: false
+  });
+  const implementations = await router.findImplementers("demo.Anchor", 8, undefined, {
+    typeId: "type:demo.Anchor",
+    hydrate: false
+  });
+
+  assert.deepEqual(references.map(item => item.absolutePath), [path.join(repoRoot, "src/main/java/demo/Usage.java")]);
+  assert.deepEqual(implementations.map(item => item.absolutePath), [path.join(repoRoot, "src/main/java/demo/AnchorImpl.java")]);
+  assert.equal(typeReferencerCalls, 1);
+  assert.equal(implementerCalls, 1);
+  assert.equal(client.queryFilesCalls.length, 0);
+});
+
+test("factsForFiles classifies deadline failure and one request hydrates source/framework surfaces once", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "router-cross-surface-memo-"));
+  const file = path.join(repoRoot, "src/main/java/demo/A.java");
+  write(repoRoot, "src/main/java/demo/A.java", "package demo; class A {}\n");
+
+  const deadlineClient = new RecordingFactsClient(repoRoot);
+  deadlineClient.queryFilesImpl = async () => {
+    throw new JavaIntelligenceError("DEADLINE_EXCEEDED", "synthetic deadline");
+  };
+  const deadlineRouter = new RouterJavaIndex(repoRoot, deadlineClient as never);
+  const deadlineResult = await deadlineRouter.factsForFiles([file], 1);
+  assert.deepEqual(deadlineResult.items, [{
+    inputFile: file,
+    absolutePath: file,
+    state: "DEGRADED",
+    reason: "DEADLINE_EXCEEDED",
+    detail: "DEADLINE_EXCEEDED"
+  }]);
+  await assert.rejects(
+    () => deadlineRouter.factsFor(file, 1),
+    (error: unknown) => error instanceof JavaIntelligenceError && error.code === "DEADLINE_EXCEEDED"
+  );
+
+  const client = new RecordingFactsClient(repoRoot);
+  const router = new RouterJavaIndex(repoRoot, client as never);
+  await router.withRequestOptions({ budget: DeadlineBudget.fromTimeout(1_000) }, async () => {
+    const [source, framework, frameworkBatch] = await Promise.all([
+      router.factsFor(file, 1),
+      router.frameworkFactsFor(file, 1),
+      router.frameworkFactsForFiles([file], 1)
+    ]);
+    assert.equal(source.factSource, "javaIndex");
+    assert.equal(framework.coverage, "COMPLETE");
+    assert.strictEqual(frameworkBatch[0], framework);
+  });
+  assert.equal(client.refreshCalls.length, 1);
+  assert.equal(client.queryFilesCalls.length, 1, "source, type-reference and framework projections share one hydrate");
+});
+
+test("equivalent facts batches share one canonical refresh and hydrate within a request", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "router-canonical-facts-memo-"));
+  write(repoRoot, "src/main/java/demo/A.java", "package demo; class A {}\n");
+  write(repoRoot, "src/main/java/demo/B.java", "package demo; class B {}\n");
+  const a = path.join(repoRoot, "src/main/java/demo/A.java");
+  const b = path.join(repoRoot, "src/main/java/demo/B.java");
+  const client = new RecordingFactsClient(repoRoot);
+  const router = new RouterJavaIndex(repoRoot, client as never);
+
+  await router.withRequestOptions({ budget: DeadlineBudget.fromTimeout(1_000) }, async () => {
+    await Promise.all([
+      router.factsForFiles([a, b, a], 1),
+      router.factsForFiles([b, "src/main/java/demo/A.java"], 1),
+      router.frameworkFactsFor(a, 1)
+    ]);
+  });
+
+  assert.deepEqual(client.refreshCalls, [[a, b]]);
+  assert.deepEqual(client.queryFilesCalls, [[a, b]]);
+});
+
+test("factsForFiles rejects an older generation without regressing or refreshing the worker", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "router-facts-generation-high-water-"));
+  const file = path.join(repoRoot, "src/main/java/demo/A.java");
+  write(repoRoot, "src/main/java/demo/A.java", "package demo; class A {}\n");
+  const client = new RecordingFactsClient(repoRoot);
+  const router = new RouterJavaIndex(repoRoot, client as never);
+
+  assert.equal((await router.factsForFiles([file], 2)).completion, "COMPLETE");
+  const stale = await router.factsForFiles([file], 1);
+
+  assert.equal(client.generation, 2);
+  assert.equal(client.refreshCalls.length, 1, "the stale request must not reach REFRESH");
+  assert.deepEqual(stale.items, [{
+    inputFile: file,
+    absolutePath: file,
+    state: "DEGRADED",
+    reason: "GENERATION_MISMATCH"
+  }]);
+});
+
+test("factsForFiles never mixes cached facts with a newer generation reached during hydration", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "router-facts-generation-race-"));
+  write(repoRoot, "src/main/java/demo/A.java", "package demo; class A {}\n");
+  write(repoRoot, "src/main/java/demo/B.java", "package demo; class B {}\n");
+  const a = path.join(repoRoot, "src/main/java/demo/A.java");
+  const b = path.join(repoRoot, "src/main/java/demo/B.java");
+  const client = new RecordingFactsClient(repoRoot);
+  const router = new RouterJavaIndex(repoRoot, client as never);
+
+  assert.equal((await router.factsForFiles([a], 1)).completion, "COMPLETE");
+  let releaseHydration: (() => void) | undefined;
+  let hydrationStarted: (() => void) | undefined;
+  const started = new Promise<void>(resolve => { hydrationStarted = resolve; });
+  client.queryFilesImpl = files => new Promise(resolve => {
+    releaseHydration = () => resolve(files.map(file => emptyBundle(repoRoot, file, 1)));
+    hydrationStarted?.();
+  });
+
+  const pending = router.factsForFiles([a, b], 1);
+  await started;
+  client.generation = 2;
+  releaseHydration?.();
+  const result = await pending;
+
+  assert.equal(result.completion, "PARTIAL");
+  assert.deepEqual(result.items, [a, b].map(inputFile => ({
+    inputFile,
+    absolutePath: inputFile,
+    state: "DEGRADED",
+    reason: "GENERATION_MISMATCH"
+  })));
+});
+
+test("framework facts retain the 200-file contract instead of inheriting the relationship cap", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "router-framework-cap-"));
+  const files = Array.from({ length: MAX_FACTS_FOR_FILES + 1 }, (_, index) => {
+    const relative = `src/main/java/demo/F${index}.java`;
+    write(repoRoot, relative, `package demo; class F${index} {}\n`);
+    return path.join(repoRoot, relative);
+  });
+  assert.ok(files.length <= MAX_FRAMEWORK_FACT_FILES);
+  const client = new RecordingFactsClient(repoRoot);
+  const router = new RouterJavaIndex(repoRoot, client as never);
+
+  const result = await router.frameworkFactsForFiles(files, 1);
+
+  assert.equal(result.length, files.length);
+  assert.ok(result.every(item => item.coverage === "COMPLETE"));
+  assert.equal(client.refreshCalls[0]?.length, files.length);
+  assert.equal(client.queryFilesCalls[0]?.length, files.length);
+});
+
+test("framework facts never return a prior-generation complete projection after a failed refresh", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "router-framework-generation-"));
+  const file = path.join(repoRoot, "src/main/java/demo/A.java");
+  write(repoRoot, "src/main/java/demo/A.java", "package demo; class A {}\n");
+  const client = new RecordingFactsClient(repoRoot);
+  const router = new RouterJavaIndex(repoRoot, client as never);
+
+  assert.equal((await router.frameworkFactsFor(file, 1)).coverage, "COMPLETE");
+  client.queryFilesImpl = async () => {
+    throw new JavaIntelligenceError("DEADLINE_EXCEEDED", "synthetic generation-two deadline");
+  };
+
+  const generationTwo = await router.frameworkFactsFor(file, 2);
+
+  assert.equal(generationTwo.coverage, "DEGRADED");
+  assert.equal(client.refreshCalls.length, 2);
+  assert.equal(client.queryFilesCalls.length, 2);
+});
 
 test("frameworkFactsFor resolves annotations (incl. a parameter annotation) and callSite argument hints against a real extracted+resolved bundle", async () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), "framework-view-repo-"));

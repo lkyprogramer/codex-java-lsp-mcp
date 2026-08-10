@@ -25,6 +25,8 @@ export type RankCandidatesContext = {
   readonly suppressed: Record<string, number>;
   readonly repoRoot: string;
   readonly familyRankPolicy?: FamilyRankPolicy;
+  /** Benchmark-only observation of the exact production rank; never serialized. */
+  readonly onRankedEvidence?: (ranked: readonly CandidateEvidence[]) => void;
 };
 
 export async function rankCandidates(
@@ -78,6 +80,7 @@ export async function rankCandidatePool(
     testReadMode: context.options.testReadMode
   };
   const familyRanked = rankByFamily(evidenceCandidates, rankContext);
+  context.onRankedEvidence?.(familyRanked);
   return materializeRankedCandidates(familyRanked, context.anchors, context.repoRoot);
 }
 

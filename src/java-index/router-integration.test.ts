@@ -364,8 +364,8 @@ test("a rejected own snapshot stays pending until its replacement sweep has been
   }
 });
 
-test("shadowRanking is populated end-to-end only when JAVA_LSP_SHADOW_RANKING=1 and verbosity=diagnostic, and never leaks into standard verbosity", async () => {
-  const root = await mkdtemp(path.join(tmpdir(), "java-index-router-shadow-ranking-"));
+test("production ranking observer sees the exact in-request family rank and selected read plan", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-index-router-production-ranking-"));
   const request = await writeJava(root, "src/main/java/demo/api/OrderRequest.java", [
     "package demo.api;",
     "",
@@ -383,7 +383,6 @@ test("shadowRanking is populated end-to-end only when JAVA_LSP_SHADOW_RANKING=1 
     ""
   ].join("\n"));
   const index = new RouterJavaIndex(root, new JavaIndexClient(root, path.join(root, ".cache")));
-  const previousFlag = process.env.JAVA_LSP_SHADOW_RANKING;
   try {
     await index.open(0);
     await index.reconcile(0);
@@ -399,21 +398,35 @@ test("shadowRanking is populated end-to-end only when JAVA_LSP_SHADOW_RANKING=1 
     );
     const anchors = [{ file: request, line: 3, column: 15 }];
 
-    process.env.JAVA_LSP_SHADOW_RANKING = "1";
+    let observed: {
+      ranked: readonly import("../agent-router/evidence.js").CandidateEvidence[];
+      selectedPaths: readonly string[];
+    } | undefined;
     const diagnosticImpact = await router.impact(options({
       anchors,
       profile: "dto",
       mode: "balanced",
       readPlanMaxItems: 2,
       verbosity: "diagnostic"
-    }));
-    assert.ok(diagnosticImpact.metrics?.shadowRanking, "flag on + diagnostic verbosity must populate shadowRanking");
-    const shadow = diagnosticImpact.metrics!.shadowRanking as { categoryFidelity: string; candidates: Array<{ path: string }> };
-    assert.equal(shadow.categoryFidelity, "preserved");
+    }), undefined, {
+      productionRanking(ranked, selectedPaths) {
+        observed = { ranked, selectedPaths };
+      }
+    });
+    assert.ok(observed, "the benchmark-only observer must receive the final production rank");
     assert.ok(
-      shadow.candidates.some(item => item.path.endsWith("OrderProcessor.java")),
-      "the naming-recall candidate must appear in the shadow ranking too"
+      observed.ranked.some(item => item.file.endsWith("OrderProcessor.java")),
+      "the naming-recall candidate must appear in the production family rank"
     );
+    assert.deepEqual(
+      [...observed.selectedPaths].sort(),
+      diagnosticImpact.readPlan.map(item => diagnosticImpact.files.find(file => file.id === item.fileId)?.path)
+        .filter((item): item is string => item !== undefined)
+        .map(item => path.join(root, item))
+        .sort(),
+      "observer selected paths must be the same buildReadPlan selection exposed by the request"
+    );
+    assert.equal("shadowRanking" in (diagnosticImpact.metrics ?? {}), false);
 
     const standardImpact = await router.impact(options({
       anchors,
@@ -422,23 +435,8 @@ test("shadowRanking is populated end-to-end only when JAVA_LSP_SHADOW_RANKING=1 
       readPlanMaxItems: 2,
       verbosity: "standard"
     }));
-    assert.equal(standardImpact.metrics?.shadowRanking, undefined, "standard verbosity must never carry shadowRanking, flag or not");
-
-    delete process.env.JAVA_LSP_SHADOW_RANKING;
-    const flagOffImpact = await router.impact(options({
-      anchors,
-      profile: "dto",
-      mode: "balanced",
-      readPlanMaxItems: 2,
-      verbosity: "diagnostic"
-    }));
-    assert.equal(flagOffImpact.metrics?.shadowRanking, undefined, "diagnostic verbosity without the flag must not compute shadowRanking");
+    assert.equal("shadowRanking" in (standardImpact.metrics ?? {}), false);
   } finally {
-    if (previousFlag === undefined) {
-      delete process.env.JAVA_LSP_SHADOW_RANKING;
-    } else {
-      process.env.JAVA_LSP_SHADOW_RANKING = previousFlag;
-    }
     await index.close();
     await rm(root, { recursive: true, force: true });
   }

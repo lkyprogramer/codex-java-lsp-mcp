@@ -67,6 +67,52 @@ export type JavaSourceFacts = {
   confirmedAt?: string;
 };
 
+export const MAX_FACTS_FOR_FILES = 70;
+
+export type FactsForFileMissingReason = "FILE_NOT_FOUND";
+
+export type FactsForFileDegradedReason =
+  | "INVALID_PATH"
+  | "LIMIT_EXCEEDED"
+  | "GENERATION_MISMATCH"
+  | "INDEX_INCOMPLETE"
+  | "DEADLINE_EXCEEDED"
+  | "CANCELLED"
+  | "QUERY_FAILED";
+
+export type FactsForFileItem =
+  | {
+      inputFile: string;
+      absolutePath: string;
+      state: "FOUND";
+      facts: JavaSourceFacts;
+    }
+  | {
+      inputFile: string;
+      absolutePath?: string;
+      state: "MISSING";
+      reason: FactsForFileMissingReason;
+    }
+  | {
+      inputFile: string;
+      absolutePath?: string;
+      state: "DEGRADED";
+      reason: FactsForFileDegradedReason;
+      detail?: string;
+    };
+
+/**
+ * Order-preserving, bounded source-fact batch. COMPLETE deliberately means
+ * every requested item has an authoritative JavaIndex fact; callers never
+ * have to infer completeness from an empty bundle or a fallback projection.
+ */
+export type FactsForFilesResult = {
+  generation: number;
+  completion: "COMPLETE" | "PARTIAL";
+  truncated: boolean;
+  items: FactsForFileItem[];
+};
+
 export function bundleToSourceFacts(repoRoot: string, bundle: JavaFileBundle): JavaSourceFacts {
   const absolutePath = path.resolve(repoRoot, bundle.file.relativePath);
   const layout = classifyPath(repoRoot, absolutePath);

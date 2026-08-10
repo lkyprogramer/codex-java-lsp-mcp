@@ -62,10 +62,7 @@ export function isolatedValidationEnvironment(root, overrides = {}) {
     GRADLE_USER_HOME: path.join(root, "gradle-home"),
     MAVEN_USER_HOME: path.join(root, "maven-home"),
     JAVA_LSP_ISOLATED_VALIDATION: "1",
-    JDTLS_BIN: typeof overrides.JDTLS_BIN === "string" ? overrides.JDTLS_BIN : "/usr/bin/false",
-    JAVA_LSP_SHADOW_RANKING: typeof overrides.JAVA_LSP_SHADOW_RANKING === "string"
-      ? overrides.JAVA_LSP_SHADOW_RANKING
-      : "0"
+    JDTLS_BIN: typeof overrides.JDTLS_BIN === "string" ? overrides.JDTLS_BIN : "/usr/bin/false"
   };
   for (const inheritedSelector of [
     "JAVA_LSP_REPO_ROOT",

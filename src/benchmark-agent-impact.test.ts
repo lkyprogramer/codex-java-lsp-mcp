@@ -274,7 +274,10 @@ test("impact benchmark exposes timing diagnostics", async () => {
   const spawnOptions = {
     cwd: path.resolve(import.meta.dirname, ".."),
     encoding: "utf8",
-    env: { ...process.env, JAVA_LSP_SHADOW_RANKING: "1" }
+    env: {
+      ...process.env,
+      JAVA_LSP_JAVA_INDEX_RPC_TELEMETRY: "1"
+    }
   } as const;
   const result = spawnSync(process.execPath, benchmarkArgs, spawnOptions);
 
@@ -316,7 +319,8 @@ test("impact benchmark exposes timing diagnostics", async () => {
   assert.equal(timing.javaIndex.rpc.enabled, true);
   assert.equal(timing.javaIndex.rpc.payloadBytes, "JSON_UTF8_ENVELOPE_ESTIMATE");
   assert.ok(Object.keys(timing.javaIndex.rpc.operations).length > 0);
-  assert.equal(typeof attempt.shadowRanking, "object", "diagnostic benchmark attempts must retain opted-in shadow diagnostics");
+  assert.equal(Array.isArray(attempt.goldenAttribution), true, "diagnostic benchmark attempts must retain production rank attribution");
+  assert.equal(attempt.shadowRanking, undefined, "retired shadow reranking must not leak into benchmark output");
   assert.equal(attempt.payloadProjection.canonicalExecutions, 1);
   assert.equal(typeof attempt.payloadProjectionElapsedMs, "number");
   assert.ok(attempt.payloadProjectionElapsedMs >= 0);
@@ -329,8 +333,8 @@ test("impact benchmark exposes timing diagnostics", async () => {
   for (const projection of Object.values(attempt.payloadProjection.projections) as Array<Record<string, number>>) {
     assert.equal(projection.serializedBytes, projection.costResultBytes);
   }
-  assert.equal(typeof attempt.shadowQuality, "object", "benchmark must score the shadow candidate and read-plan outputs against the same golden scenario");
-  assert.equal(attempt.shadowQuality.rReadMust, 1);
+  assert.equal(attempt.shadowQuality, undefined, "production quality is already reported by the canonical attempt");
+  assert.equal(attempt.counterfactual.withoutStaticStructure.measured, false);
   assert.equal(attempt.determinism.candidatePaths[0], "src/main/java/demo/DemoService.java");
   assert.deepEqual(
     [...attempt.determinism.candidatePaths.slice(1)].sort(),

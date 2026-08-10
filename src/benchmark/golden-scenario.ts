@@ -86,7 +86,7 @@ export function goldenEntries(scenario: Scenario): Array<{ file: string; kind: G
  * if missed - R_task_blocking is the stricter superset of R_read_must that
  * the plan's Iteration D gate compares against Phase 3. Deliberately kept
  * in evaluate()'s standard-verbosity path (not attribution-v3.ts), because a
- * gate metric must exist without JAVA_LSP_SHADOW_RANKING=1.
+ * gate metric comes from the canonical production candidate/read-plan result.
  */
 export function taskBlockingFiles(scenario: Scenario): Set<string> {
   return new Set([...goldenFiles(scenario, "mustHit"), ...goldenFiles(scenario, "taskBlocking")]);

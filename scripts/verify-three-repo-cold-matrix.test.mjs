@@ -4,7 +4,15 @@ import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { MATRIX_PROJECTS, MATRIX_ROUNDS, MATRIX_VARIANTS, MatrixValidationError, verifyMatrix } from "./verify-three-repo-cold-matrix.mjs";
+import {
+  FORMAL_REQUEST_DEADLINE_MS,
+  MATRIX_PROJECTS,
+  MATRIX_ROUNDS,
+  MATRIX_VARIANTS,
+  MatrixValidationError,
+  VERIFIER_VERSION,
+  verifyMatrix
+} from "./verify-three-repo-cold-matrix.mjs";
 
 test("verifier accepts a complete frozen-scenario matrix that satisfies every paired gate", async t => {
   const matrixDir = await fixtureMatrix();
@@ -282,6 +290,27 @@ test("verifier rejects a cell whose runtime build stamp does not match its manif
   );
 });
 
+test("verifier binds the formal request deadline in both manifest and cells", async t => {
+  const manifestMatrix = await fixtureMatrix();
+  const cellMatrix = await fixtureMatrix();
+  t.after(() => Promise.all([
+    rm(path.dirname(manifestMatrix), { recursive: true, force: true }),
+    rm(path.dirname(cellMatrix), { recursive: true, force: true })
+  ]));
+
+  const manifestFile = path.join(path.dirname(manifestMatrix), "run-manifest.json");
+  const manifest = JSON.parse(await readFile(manifestFile, "utf8"));
+  manifest.requestDeadlineMs = 15_000;
+  await writeFile(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);
+  assert.throws(() => verifyMatrix({ matrixDir: manifestMatrix }), /requestDeadlineMs must be 2000/);
+
+  const cellFile = path.join(cellMatrix, "cipherlink-r1-new.json");
+  const cell = JSON.parse(await readFile(cellFile, "utf8"));
+  cell.metadata.deadlineMs = 15_000;
+  await writeFile(cellFile, JSON.stringify(cell));
+  assert.throws(() => verifyMatrix({ matrixDir: cellMatrix }), /metadata\.deadlineMs must be 2000/);
+});
+
 test("verifier rejects non-empty stderr and an illegal cold semantic completion", async t => {
   const stderrMatrix = await fixtureMatrix();
   const completionMatrix = await fixtureMatrix();
@@ -445,10 +474,11 @@ async function fixtureMatrix(overrides = {}, fixtureOptions = {}) {
     scenarios[project] = { file: scenarioFile, sha256: sha256(scenarioContents), rowIds, tuningRowIds, holdoutRowIds };
   }
   const manifest = {
-    version: 5,
-    verifierVersion: 5,
+    version: VERIFIER_VERSION,
+    verifierVersion: VERIFIER_VERSION,
     createdAt: "2026-08-09T00:02:00.000Z",
     runs: 5,
+    requestDeadlineMs: FORMAL_REQUEST_DEADLINE_MS,
     p95Limit: 1.25,
     comparisonPolicy: {
       baseline: "executable-code-baseline",
@@ -515,6 +545,7 @@ async function fixtureMatrix(overrides = {}, fixtureOptions = {}) {
             semanticPolicy: "fast",
             strategy: "impact",
             verbosity: "standard",
+            deadlineMs: FORMAL_REQUEST_DEADLINE_MS,
             runs: 5,
             scenarioFile: old ? scenarioFile : (projectOverride.newScenarioFile ?? scenarioFile),
             runtimeBuild: { ...runtime.buildStamp, stampPath: `/tmp/${variant}/dist/build-stamp.json` },

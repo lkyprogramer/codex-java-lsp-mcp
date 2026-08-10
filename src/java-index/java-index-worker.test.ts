@@ -85,6 +85,24 @@ test("reconcile() runs a background full sweep that discovers and indexes every 
   await client.close();
 });
 
+test("stale maintenance commands never regress the worker generation", async () => {
+  const repoRoot = tempRepo("java-index-worker-generation-high-water-");
+  const relativeFile = "src/main/java/demo/A.java";
+  const absoluteFile = path.join(repoRoot, relativeFile);
+  writeJavaFile(repoRoot, relativeFile, "package demo; class A {}\n");
+  const client = new JavaIndexClient(repoRoot, tempCacheDir());
+  await client.open(1);
+  await client.refresh(2, [absoluteFile], []);
+
+  assert.equal((await client.refresh(1, [absoluteFile], [])).indexedGeneration, 2);
+  assert.equal((await client.refreshResources(1, [path.join(repoRoot, "pom.xml")])).indexedGeneration, 2);
+  assert.equal((await client.reconcile(1)).indexedGeneration, 2);
+  assert.equal((await client.status()).indexedGeneration, 2);
+  assert.equal((await client.queryFiles([absoluteFile]))[0]?.file.generation, 2);
+
+  await client.close();
+});
+
 test("pendingBackground stays nonzero while the final sweep chunk is still finishing", async () => {
   const repoRoot = tempRepo("java-index-worker-final-chunk-quiescence-");
   writeJavaFile(repoRoot, "src/main/java/demo/Solo.java", "package demo;\n\nclass Solo {}\n");
@@ -465,8 +483,8 @@ test("a full sweep's completion persists a snapshot that a fresh client restores
   const cacheDir = tempCacheDir();
 
   const first = new JavaIndexClient(repoRoot, cacheDir);
-  await first.open(1);
-  await first.reconcile(1);
+  await first.open(7);
+  await first.reconcile(7);
   await waitFor(async () => (await first.status()).pendingBackground === 0, 5000);
   const firstStatus = await first.status();
   assert.ok(firstStatus.coverage.every(entry => entry.state === "COMPLETE"));
@@ -490,8 +508,8 @@ test("a full sweep's completion persists a snapshot that a fresh client restores
   assert.equal(restoredStatus.files, 2, "facts must be restored from the snapshot after background hydration");
   assert.equal(
     restoredStatus.indexedGeneration,
-    firstStatus.indexedGeneration,
-    "an identical manifest must not advance the generation"
+    1,
+    "a snapshot from a prior process must be adopted into the new coordinator generation"
   );
   assert.ok(
     restoredStatus.coverage.every(entry => entry.state === "COMPLETE" && entry.generation === restoredStatus.indexedGeneration),
@@ -500,11 +518,16 @@ test("a full sweep's completion persists a snapshot that a fresh client restores
 
   const gatewayBundle = (await second.queryFiles([path.join(repoRoot, "src/main/java/demo/Gateway.java")]))[0]!;
   const implBundle = (await second.queryFiles([path.join(repoRoot, "src/main/java/demo/Impl.java")]))[0]!;
+  assert.equal(gatewayBundle.file.generation, 1);
+  assert.equal(implBundle.file.generation, 1);
   const gateway = gatewayBundle.types.find(t => t.simpleName === "Gateway")!;
   assert.ok(
     implBundle.edges.some(e => e.kind === "IMPLEMENTS" && e.toId === gateway.typeId),
     "a restored snapshot's facts must include the same resolved edges the original sweep produced"
   );
+
+  await second.refresh(2, [path.join(repoRoot, "src/main/java/demo/Impl.java")], []);
+  assert.equal((await second.status()).indexedGeneration, 2, "the first watcher generation after restore must apply normally");
 
   await second.close();
 });
@@ -520,7 +543,6 @@ test("a file edited while the index was closed is detected and only that file is
   await first.open(1);
   await first.reconcile(1);
   await waitFor(async () => (await first.status()).pendingBackground === 0, 5000);
-  const firstStatus = await first.status();
   await first.close();
 
   // Simulate an edit made while no process had this repo open (e.g. a branch
@@ -534,8 +556,8 @@ test("a file edited while the index was closed is detected and only that file is
   const verifiedStatus = await second.status();
   assert.equal(
     verifiedStatus.indexedGeneration,
-    firstStatus.indexedGeneration + 1,
-    "a manifest mismatch must advance the generation exactly once"
+    1,
+    "offline snapshot repair belongs to the new coordinator's OPEN generation"
   );
   assert.ok(
     verifiedStatus.coverage.every(entry => entry.state === "COMPLETE" && entry.generation === verifiedStatus.indexedGeneration),

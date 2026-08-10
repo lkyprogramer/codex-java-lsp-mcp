@@ -6,15 +6,17 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
-import { AgentRouter } from "./agent-router/index.js";
-import type { ShadowRankingDiagnostics } from "./agent-router/shadow-ranking.js";
+import { AgentRouter, type ImpactInternalObserver } from "./agent-router/index.js";
+import type { CandidateEvidence } from "./agent-router/evidence.js";
 import type { ImpactOptions, ImpactResult } from "./agent-types.js";
 import { projectImpactResultV6 } from "./agent-router/format.js";
 import { readRuntimeBuild } from "./build-info.js";
 import {
   buildGoldenAttributionV3,
   buildGoldenCounterfactualV3,
-  buildImpactPayloadProjectionV3
+  buildImpactPayloadProjectionV3,
+  buildProductionRankingSnapshot,
+  type ProductionRankingSnapshot
 } from "./benchmark/attribution-v3.js";
 import { buildImpactDeterminismSnapshot } from "./benchmark/determinism.js";
 import { isJavaIndexQuiescent } from "./benchmark/java-index-idle.js";
@@ -269,6 +271,20 @@ function parseCli(args: string[], root: string): Cli {
 async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cli, scenario: Scenario): Promise<Record<string, unknown>> {
   const startedAt = performance.now();
   let coordinateRangesByAbsolutePath: ReadonlyMap<string, readonly SourceRange[]> = new Map();
+  let rankingSource: {
+    ranked: readonly CandidateEvidence[];
+    selectedPaths: readonly string[];
+  } | undefined;
+  const observer: ImpactInternalObserver = {
+    readPlanCoordinates(rangesByAbsolutePath) {
+      coordinateRangesByAbsolutePath = rangesByAbsolutePath;
+    }
+  };
+  if (cli.payloadProjections || cli.verbosity === "diagnostic") {
+    observer.productionRanking = (ranked, selectedPaths) => {
+      rankingSource = { ranked, selectedPaths };
+    };
+  }
   const canonical = await router.impact(
     {
       anchors: [scenario.anchor],
@@ -299,13 +315,12 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
       semanticPolicy: effectiveSemanticPolicy(cli),
       budget: DeadlineBudget.fromTimeout(cli.deadlineMs)
     }),
-    {
-      readPlanCoordinates(rangesByAbsolutePath) {
-        coordinateRangesByAbsolutePath = rangesByAbsolutePath;
-      }
-    }
+    observer
   );
   const routerElapsedMs = performance.now() - startedAt;
+  const productionRanking: ProductionRankingSnapshot | undefined = rankingSource
+    ? buildProductionRankingSnapshot(rankingSource.ranked, rankingSource.selectedPaths)
+    : undefined;
   recordJavaIndexQueueDepth(canonical);
   const projectionStartedAt = performance.now();
   const payloadProjection = cli.payloadProjections
@@ -340,11 +355,8 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
     taskBlockingHitsPerKiB: kibVisible > 0 ? blockingHitsInReadPlan / kibVisible : 0
   };
   const diagnosticResult = cli.payloadProjections ? canonical : result;
-  const shadowRanking = diagnosticResult.metrics?.shadowRanking;
-  const shadowRankingTyped = asShadowRankingDiagnostics(shadowRanking);
-  const shadowQuality = qualityForShadowRanking(shadowRanking, cli.repoRoot, scenario);
   const sessionPhaseMs = session.drainPhaseMetrics();
-  const attributionContext = shadowRankingTyped && {
+  const attributionContext = productionRanking && {
     repoRoot: cli.repoRoot,
     mode: cli.mode,
     profile: scenario.anchor.profile,
@@ -362,27 +374,19 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
     timing: timingPayload(diagnosticResult, sessionPhaseMs),
     payloadProjection,
     payloadProjectionElapsedMs,
-    // V3 attribution/counterfactual (Task 32 Steps 2-3) need the same
-    // shadow-ranking pass this request already computed; they have no
-    // fallback when that pass is off (verbosity=standard or
-    // JAVA_LSP_SHADOW_RANKING unset), matching shadowRanking/shadowQuality's
-    // own gating below.
-    goldenAttribution: attributionContext && shadowRankingTyped
-      ? buildGoldenAttributionV3(scenario, shadowRankingTyped, attributionContext)
+    // Attribution observes the exact production family rank and read-plan;
+    // no second ranker or provider pass is executed for benchmark evidence.
+    goldenAttribution: attributionContext && productionRanking
+      ? buildGoldenAttributionV3(scenario, productionRanking, attributionContext)
       : undefined,
-    counterfactual: attributionContext && shadowRankingTyped
-      ? buildGoldenCounterfactualV3(scenario, shadowRankingTyped, attributionContext)
+    counterfactual: productionRanking
+      ? buildGoldenCounterfactualV3()
       : undefined,
     frameworkEvidence: { mapstruct: mapstructEvidenceSummary(diagnosticResult, scenario) },
     // Task 36's 20-run verifier consumes only semantic ordering/state. Keep
     // latency/cache counters in their ordinary attempt fields so benign
     // diagnostic variance cannot mask or manufacture semantic drift.
-    determinism: buildImpactDeterminismSnapshot(diagnosticResult, cli.repoRoot),
-    // Task 25's counterfactual rank diagnostics are deliberately opt-in at
-    // the router boundary. Preserve them in the benchmark attempt when that
-    // boundary supplied them; standard requests still serialize no field.
-    shadowRanking,
-    shadowQuality
+    determinism: buildImpactDeterminismSnapshot(diagnosticResult, cli.repoRoot, productionRanking)
   };
 }
 
@@ -396,51 +400,6 @@ function recordJavaIndexQueueDepth(result: ImpactResult): void {
     const depth = (value as { maxWorkerQueueDepth?: unknown }).maxWorkerQueueDepth;
     if (typeof depth === "number") processResources?.recordQueueDepth(`java-index:${operation}`, depth);
   }
-}
-
-/**
- * `metrics.shadowRanking` is typed as an opaque `Record<string, unknown>` on
- * `ImpactResultV6` (a diagnostic-only field never meant to widen the public
- * result type), but the benchmark calls `router.impact()` in-process - this
- * is the exact object `buildShadowRanking()` returned, not a JSON round
- * trip. The array check below is the only real uncertainty worth guarding.
- */
-function asShadowRankingDiagnostics(value: Record<string, unknown> | undefined): ShadowRankingDiagnostics | undefined {
-  if (!value || !Array.isArray(value.candidates)) {
-    return undefined;
-  }
-  return value as unknown as ShadowRankingDiagnostics;
-}
-
-/**
- * Scores the shadow ranker's candidate and read-plan decisions against the
- * exact same golden scenario as production. The shadow payload uses absolute
- * paths while `evaluate()` deliberately consumes repo-relative golden paths.
- */
-function qualityForShadowRanking(
-  shadowRanking: Record<string, unknown> | undefined,
-  repoRoot: string,
-  scenario: Scenario
-): Record<string, number> | undefined {
-  const rawCandidates = shadowRanking?.candidates;
-  if (!Array.isArray(rawCandidates)) {
-    return undefined;
-  }
-  const candidates = rawCandidates.flatMap(item => {
-    if (!item || typeof item !== "object") {
-      return [];
-    }
-    const value = item as Record<string, unknown>;
-    if (typeof value.path !== "string") {
-      return [];
-    }
-    return [{ path: path.relative(repoRoot, value.path), selectedByReadPlan: value.selectedByReadPlan === true }];
-  });
-  return evaluate(
-    candidates.map(candidate => candidate.path),
-    candidates.filter(candidate => candidate.selectedByReadPlan).map(candidate => candidate.path),
-    scenario
-  );
 }
 
 function noLspAttempt(repoRoot: string, scenario: Scenario): Record<string, unknown> {

@@ -80,14 +80,22 @@ export async function collectTypeGraphCandidates(input: CollectCandidatesInput):
       continue;
     }
     let isInterface = anchor.profile === "port";
+    let anchorTypeId: string | undefined;
     try {
-      isInterface = (await javaIndex.factsFor(anchor.absolutePath, generation)).kind === "interface";
+      const anchorFacts = await javaIndex.factsFor(anchor.absolutePath, generation);
+      isInterface = anchorFacts.kind === "interface";
+      anchorTypeId = anchorFacts.typeId;
     } catch {
       // A failed fact read must not prevent the ordinary type lookup; it only
       // means this candidate cannot claim the stronger implementation reason.
     }
     const typeName = anchor.className || path.basename(anchor.absolutePath, ".java");
-    for (const facts of (await javaIndex.findImplementers(typeName, 20, anchor.absolutePath))) {
+    for (const facts of (await javaIndex.findImplementers(
+      typeName,
+      20,
+      anchor.absolutePath,
+      { typeId: anchorTypeId, hydrate: false }
+    ))) {
       implementations.push(facts);
       const candidate = candidateFromFacts(facts, scoreBase(routingPolicy, "semantic", facts, anchor, options) + 70, "typeGraph");
       if (isInterface) {
@@ -132,7 +140,10 @@ export async function collectImportGraphCandidates(input: CollectImportGraphInpu
     }
     const typeName = anchor.className || path.basename(anchor.absolutePath, ".java");
     const importerLookupName = anchorFacts.packageName ? `${anchorFacts.packageName}.${typeName}` : typeName;
-    for (const facts of await javaIndex.findImporters(importerLookupName, 20)) {
+    for (const facts of await javaIndex.findImporters(importerLookupName, 20, {
+      typeId: anchorFacts.typeId,
+      hydrate: false
+    })) {
       if (facts.absolutePath === anchor.absolutePath) {
         continue;
       }

@@ -880,15 +880,15 @@ async function handleRefreshResources(request: Extract<JavaIndexRequest, { type:
 /**
  * Step 6a: verifies a just-restored snapshot's facts against the repo's
  * *current* files on disk (an independent metadata re-scan, not a re-parse) and
- * returns the generation OPEN should report. Facts were already installed
+ * returns the coordinator generation OPEN should report. Facts were already installed
  * provisionally (`coverage.restoreProvisional`, forced to BUILDING) before
  * this runs, so a concurrent foreground query sees either fully-verified
  * COMPLETE coverage or honestly-provisional BUILDING coverage - never a
  * silent, unverified COMPLETE.
  *
  * - Metadata-identical manifest: every root the snapshot or the current disk
- *   scan knows about is promoted straight to COMPLETE at the snapshot's own
- *   generation, with no source-content read or AST parse at all.  New
+ *   scan knows about is promoted straight to COMPLETE at the current OPEN
+ *   generation, with no source-content read or AST parse at all. New
  *   snapshots persist size, mtime, and ctime; older snapshots have no ctime
  *   and deliberately take the conservative diff path once.
  * - Metadata-different manifest: only the added/changed metadata paths are
@@ -901,9 +901,10 @@ async function handleRefreshResources(request: Extract<JavaIndexRequest, { type:
  */
 async function verifyOwnSnapshot(
   snapshotData: JavaIndexSnapshotV3,
+  targetGeneration: number,
   canApply: () => boolean = () => true
 ): Promise<number | undefined> {
-  if (!layout || !store) return snapshotData.indexedGeneration;
+  if (!layout || !store) return targetGeneration;
   const manifestDiff = await scanSnapshotManifestDiff(repoRoot, layout, snapshotData.files);
   if (!canApply()) return undefined;
   const { discovered, changed, deletedRelativePaths, metadataMatches } = manifestDiff;
@@ -919,34 +920,33 @@ async function verifyOwnSnapshot(
   // would silently no-op for its files.
   for (const root of allRoots) {
     if (!coverage.snapshot().some(entry => entry.root === root)) {
-      coverage.begin(root, snapshotData.indexedGeneration, discoveredCountByRoot.get(root) ?? 0);
+      coverage.begin(root, targetGeneration, discoveredCountByRoot.get(root) ?? 0);
     }
   }
 
   if (metadataMatches) {
     if (!canApply()) return undefined;
-    for (const root of allRoots) coverage.complete(root, snapshotData.indexedGeneration);
-    return snapshotData.indexedGeneration;
+    for (const root of allRoots) coverage.complete(root, targetGeneration);
+    return targetGeneration;
   }
 
-  const newGeneration = snapshotData.indexedGeneration + 1;
   const changedAbsolutePaths = changed.map(file => file.absolutePath);
 
   if (changedAbsolutePaths.length + deletedRelativePaths.length >= SNAPSHOT_DIFF_INLINE_LIMIT) {
     // Too large to parse inline without the sweep lease's governance: leave
     // every root at its restored provisional BUILDING state (already set
-    // above) and report the snapshot's own generation unchanged, so the
+    // above) and retain the current OPEN generation, so the
     // caller's ordinary "not fully restored" check triggers a normal
     // reconcile() - the same leased, chunked sweep a fresh (no-snapshot)
     // open would run.
-    return snapshotData.indexedGeneration;
+    return targetGeneration;
   }
 
   if (!canApply()) return undefined;
   const rootHadIssue = await handleRefresh({
     id: -1,
     type: "REFRESH",
-    generation: newGeneration,
+    generation: targetGeneration,
     changed: changedAbsolutePaths,
     deleted: deletedRelativePaths
   });
@@ -956,10 +956,10 @@ async function verifyOwnSnapshot(
     if (rootHadIssue.has(root)) continue;
     const entry = coverage.snapshot().find(candidate => candidate.root === root);
     if (entry && entry.state !== "COMPLETE" && entry.failedFiles === 0 && entry.recoveredFiles === 0) {
-      coverage.complete(root, newGeneration);
+      coverage.complete(root, targetGeneration);
     }
   }
-  return newGeneration;
+  return targetGeneration;
 }
 
 function ownSnapshotCoverageFullyRestored(generation: number): boolean {
@@ -1016,8 +1016,15 @@ function startOwnSnapshotHydration(
       // reuse exact snapshot facts without re-parsing them, while changed XML
       // is extracted fresh and is never visible through the interim store.
       store.loadSnapshotData({ ...loaded, myBatisResources: [] });
-      for (const entry of loaded.coverage) coverage.restoreProvisional(entry);
-      const expectedGeneration = Math.max(requestedGeneration, loaded.indexedGeneration);
+      // Snapshot generations belong to the process that wrote the snapshot.
+      // A new RepoChangeCoordinator starts its own monotonic domain, so every
+      // verified fact must be adopted into the OPEN generation instead of
+      // asynchronously pulling the worker ahead of the coordinator clock.
+      store.stampGeneration(loaded.files.map(file => file.relativePath), requestedGeneration);
+      for (const entry of loaded.coverage) {
+        coverage.restoreProvisional({ ...entry, generation: requestedGeneration });
+      }
+      const expectedGeneration = requestedGeneration;
       status = { ...status, indexedGeneration: expectedGeneration };
       const canApply = (): boolean =>
         !closing
@@ -1026,7 +1033,7 @@ function startOwnSnapshotHydration(
       const resourceReindex = layout
         ? indexMyBatisResources(store, layout, expectedGeneration, new Map(loaded.myBatisResources.map(resource => [resource.relativePath, resource])))
         : Promise.resolve();
-      const verifiedGeneration = await verifyOwnSnapshot(loaded, canApply);
+      const verifiedGeneration = await verifyOwnSnapshot(loaded, expectedGeneration, canApply);
       await resourceReindex;
       if (verifiedGeneration !== undefined && canApply()) {
         status = { ...status, indexedGeneration: verifiedGeneration };
@@ -1482,9 +1489,13 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         return;
       }
       case "REFRESH": {
+        if (request.generation < status.indexedGeneration) {
+          respond({ id: request.id, ok: true, value: currentStatus() });
+          return;
+        }
         invalidateOwnSnapshotVerification(request.generation);
         await handleRefresh(request);
-        status = { ...status, indexedGeneration: request.generation };
+        status = { ...status, indexedGeneration: Math.max(status.indexedGeneration, request.generation) };
         respond({ id: request.id, ok: true, value: currentStatus() });
         return;
       }
@@ -1493,12 +1504,20 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         // persisted own-snapshot (schema 2) carries no resource facts at
         // all, so a mapper XML change cannot make its Java-facts
         // verification stale.
+        if (request.generation < status.indexedGeneration) {
+          respond({ id: request.id, ok: true, value: currentStatus() });
+          return;
+        }
         await handleRefreshResources(request);
         status = { ...status, indexedGeneration: Math.max(status.indexedGeneration, request.generation) };
         respond({ id: request.id, ok: true, value: currentStatus() });
         return;
       }
       case "RECONCILE": {
+        if (request.generation < status.indexedGeneration) {
+          respond({ id: request.id, ok: true, value: currentStatus() });
+          return;
+        }
         if (ownSnapshotVerificationPending) {
           invalidateOwnSnapshotVerification(request.generation);
           status = { ...status, indexedGeneration: Math.max(status.indexedGeneration, request.generation) };
@@ -1506,7 +1525,7 @@ async function handle(request: JavaIndexRequest): Promise<void> {
           return;
         }
         await beginBackgroundSweep(request.generation);
-        status = { ...status, indexedGeneration: request.generation };
+        status = { ...status, indexedGeneration: Math.max(status.indexedGeneration, request.generation) };
         respond({ id: request.id, ok: true, value: currentStatus() });
         return;
       }

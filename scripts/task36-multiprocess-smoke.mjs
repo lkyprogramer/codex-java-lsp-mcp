@@ -369,10 +369,14 @@ async function isolatedBehaviorCases() {
       references: ["src/java-index/java-index-worker.test.ts", "src/java-index/router-integration.test.ts"]
     }
   };
-  const entries = await Promise.all(Object.entries(definitions).map(async ([name, definition]) => [
-    name,
-    await runIsolatedBehaviorCase(definition)
-  ]));
+  const entries = [];
+  // These cases validate independent behavior contracts; the process-level
+  // concurrency/slot bounds are exercised above. Running six Node test trees
+  // at once makes their 30s safety timeout measure host contention after the
+  // full dist suite instead of the behavior under test.
+  for (const [name, definition] of Object.entries(definitions)) {
+    entries.push([name, await runIsolatedBehaviorCase(definition)]);
+  }
   return Object.fromEntries(entries);
 }
 

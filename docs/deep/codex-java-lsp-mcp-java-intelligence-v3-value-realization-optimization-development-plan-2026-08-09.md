@@ -736,6 +736,7 @@ Sprint 5 完成门：必须第一次能够回答“这套体系让 Agent 完成�
 - 文件：
   - `src/agent-router/candidate-helpers.ts`
   - `src/agent-router/candidate-collectors.ts`
+  - `src/agent-router/naming-recall.ts`
   - `src/agent-router/rg-plan.ts`
   - `src/agent-router/rg-execution.ts`
   - `src/agent-router/type-reference.ts`
@@ -762,6 +763,10 @@ Sprint 5 完成门：必须第一次能够回答“这套体系让 Agent 完成�
   - `src/agent-router/shadow-ranking.ts`
   - `src/benchmark/attribution-v3.ts`
   - `src/benchmark/matrix-runner.ts`
+  - `src/benchmark/matrix-runner-process.ts`
+  - `src/benchmark/phase-report.ts`
+  - `src/benchmark/run-matrix-report.ts`
+- 测试：删除 `shadow-ranking.test.ts`、`matrix-runner.test.ts`、`phase-report.test.ts`；真实生产排名 observer、attribution 与 determinism 测试继续保留。
 - 实现：production selected paths 继续是唯一真源；无法用已捕获 ranges 做准确 ablation 的字段写 `measured=false`，不再维护简化 selector。
 - 验收：报告不会把 unavailable 当 0 gain；正常 diagnostic request 不新增 I/O。
 
@@ -771,6 +776,7 @@ Sprint 5 完成门：必须第一次能够回答“这套体系让 Agent 完成�
 - nightly：三仓 cold/warm-auto、fault、mutation、determinism、resource smoke。
 - release：source-locked 18+ cells、first-touch、storm、multiprocess、Agent trace、manifest/receipt。
 - 所有 gate 必须输出 raw hash；失败 artifact 保留，不用 rerun 覆盖。
+- 删除未注册的 `src/benchmark/java-index-benchmark.ts` 及其专属测试；Task 23 的 snapshot/seed/query microbenchmark 只作为 Phase 3 source-locked 历史证据保留，不宣称已被 Task36 完整替代。当前 mutation 正确性由 Task36 九场景 watcher gate 负责，端到端可见性由 edit-to-visible gate 负责；未来修改 snapshot、seed 或 JavaIndex 查询实现时，应新增隔离、范围明确的专项 benchmark，而不是恢复旧综合 harness。
 
 ### V3.2-35 最终价值报告
 

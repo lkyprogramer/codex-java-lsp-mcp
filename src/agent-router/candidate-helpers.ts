@@ -82,10 +82,6 @@ const DISCOVERY_CATEGORY_BASE: Readonly<Record<string, number>> = {
   nonJava: 18
 };
 
-export function typeReferenceOrderBonus(order: number | undefined): number {
-  return order === undefined ? 0 : Math.max(0, 80 - order * 5);
-}
-
 export function simpleTypeName(value: string): string {
   const withoutGenerics = value.replace(/<.*$/, "");
   return withoutGenerics.slice(withoutGenerics.lastIndexOf(".") + 1);

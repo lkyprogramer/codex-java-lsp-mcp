@@ -4,7 +4,12 @@ import type { ImpactOptions, ResolvedAnchor } from "../../agent-types.js";
 import { resolveRoutingPolicy } from "../../routing-policy.js";
 import type { ProviderInput } from "../evidence.js";
 import type { JavaSourceFacts } from "../../java-index/router-facts.js";
-import { collectStaticEvidence, collectStaticStructureEvidence } from "./static-provider.js";
+import { JavaIntelligenceError } from "../../runtime/intelligence-error.js";
+import {
+  collectStaticEvidence,
+  collectStaticStructureEvidence,
+  collectTypeReferenceEvidence
+} from "./static-provider.js";
 
 const options: ImpactOptions = {
   anchors: [],
@@ -169,6 +174,145 @@ test("static provider records direct type references as anchored AST relationshi
   const evidence = result.evidence.find(signal => signal.candidateFile === referenced.absolutePath);
   assert.equal(evidence?.kind, "REFERENCE");
   assert.equal(evidence?.sourceFile, request.absolutePath, "the direct JavaIndex edge must retain its request-anchor source");
+});
+
+test("a failed A2 type-reference query retains A1 evidence and identifies only A2 degradation", async () => {
+  const first = anchor("A1", "FirstService", "service");
+  const second = anchor("A2", "SecondService", "service");
+  const referenced = facts("/repo/src/main/java/demo/FirstUsage.java");
+  const result = await collectStaticEvidence(providerInput([first, second], {
+    factsForFiles: async () => ({
+      generation: 0,
+      completion: "COMPLETE",
+      truncated: false,
+      items: [
+        { state: "FOUND", facts: facts(first.absolutePath) },
+        { state: "FOUND", facts: facts(second.absolutePath) }
+      ]
+    }),
+    factsFor: async (file: string) => facts(file, { kind: "interface" }),
+    findImplementers: async () => [],
+    findTypeDefinitions: async () => [],
+    findImporters: async () => [],
+    findTypeReferences: async (typeName: string) => {
+      if (typeName === "SecondService") throw new Error("A2 query failed");
+      return [referenced];
+    },
+    methodAt: async () => undefined,
+    routerStatus: async () => emptyRouterStatus()
+  }));
+
+  assert.ok(result.evidence.some(signal => signal.anchorId === "A1" && signal.candidateFile === referenced.absolutePath));
+  assert.equal(result.evidence.some(signal => signal.anchorId === "A2"), false);
+  assert.equal(result.completion, "FAILED");
+  assert.match(result.degradation ?? "", /static provider failed for anchors: A2/);
+  assert.match(result.degradation ?? "", /direct reference lookup QUERY_FAILED/);
+});
+
+test("type-reference batch retains A1 evidence and propagates typed A2 partial outcomes", async () => {
+  const first = anchor("A1", "FirstService", "service");
+  const second = anchor("A2", "SecondService", "service");
+  const referenced = facts("/repo/src/main/java/demo/FirstUsage.java");
+  for (const [reason, expectedCompletion] of [
+    ["DEADLINE_EXCEEDED", "PARTIAL_TIMEOUT"],
+    ["CANCELLED", "CANCELLED"],
+    ["INDEX_INCOMPLETE", "PARTIAL_LIMIT"]
+  ] as const) {
+    let postBatchCalls = 0;
+    let statusCalls = 0;
+    const result = await collectTypeReferenceEvidence(providerInput([first, second], {
+      factsForFiles: async () => ({
+        generation: 0,
+        completion: "PARTIAL",
+        truncated: false,
+        items: [
+          { inputFile: first.absolutePath, absolutePath: first.absolutePath, state: "FOUND", facts: facts(first.absolutePath) },
+          { inputFile: second.absolutePath, absolutePath: second.absolutePath, state: "DEGRADED", reason }
+        ]
+      }),
+      findTypeReferences: async (typeName: string) => {
+        postBatchCalls += 1;
+        return typeName === "FirstService" ? [referenced] : [];
+      },
+      findTypeDefinitions: async () => [],
+      findImplementers: async () => [],
+      routerStatus: async () => {
+        statusCalls += 1;
+        return emptyRouterStatus();
+      }
+    }));
+
+    assert.equal(result.completion, expectedCompletion, reason);
+    if (reason === "INDEX_INCOMPLETE") {
+      assert.ok(result.evidence.some(signal => signal.anchorId === "A1" && signal.candidateFile === referenced.absolutePath));
+      assert.ok(postBatchCalls > 0);
+    } else {
+      assert.equal(result.evidence.length, 0, "deadline/cancellation stops post-batch JavaIndex work");
+      assert.equal(postBatchCalls, 0);
+    }
+    assert.equal(statusCalls, reason === "INDEX_INCOMPLETE" ? 2 : 1, "terminal outcomes skip the after-status probe");
+    assert.equal(result.evidence.some(signal => signal.anchorId === "A2"), false);
+    assert.match(result.degradation ?? "", new RegExp(reason));
+  }
+});
+
+test("an already-expired type-reference phase skips status and JavaIndex work", async () => {
+  const request = anchor("A1", "ExpiredController", "controller");
+  let calls = 0;
+  const input = providerInput([request], {
+    routerStatus: async () => { calls += 1; return emptyRouterStatus(); },
+    factsForFiles: async () => { calls += 1; throw new Error("must not run"); },
+    factsFor: async () => { calls += 1; throw new Error("must not run"); },
+    findTypeReferences: async () => { calls += 1; return []; },
+    findTypeDefinitions: async () => { calls += 1; return []; },
+    findImplementers: async () => { calls += 1; return []; }
+  });
+  const result = await collectTypeReferenceEvidence({
+    ...input,
+    budget: { expired: () => true }
+  } as never);
+
+  assert.equal(calls, 0);
+  assert.equal(result.completion, "PARTIAL_TIMEOUT");
+  assert.match(result.degradation ?? "", /request budget exhausted/);
+});
+
+test("type-reference operation exceptions distinguish deadline, cancellation, and ordinary failure", async () => {
+  const first = anchor("A1", "FirstService", "service");
+  const second = anchor("A2", "SecondService", "service");
+  const referenced = facts("/repo/src/main/java/demo/FirstUsage.java");
+  for (const [error, expectedCompletion] of [
+    [new JavaIntelligenceError("DEADLINE_EXCEEDED", "synthetic deadline"), "PARTIAL_TIMEOUT"],
+    [new JavaIntelligenceError("CANCELLED", "synthetic cancellation"), "CANCELLED"],
+    [new Error("synthetic query failure"), "FAILED"]
+  ] as const) {
+    let statusCalls = 0;
+    const result = await collectTypeReferenceEvidence(providerInput([first, second], {
+      factsForFiles: async () => ({
+        generation: 0,
+        completion: "COMPLETE",
+        truncated: false,
+        items: [
+          { inputFile: first.absolutePath, absolutePath: first.absolutePath, state: "FOUND", facts: facts(first.absolutePath) },
+          { inputFile: second.absolutePath, absolutePath: second.absolutePath, state: "FOUND", facts: facts(second.absolutePath) }
+        ]
+      }),
+      findTypeReferences: async (typeName: string) => {
+        if (typeName === "SecondService") throw error;
+        return [referenced];
+      },
+      findTypeDefinitions: async () => [],
+      findImplementers: async () => [],
+      routerStatus: async () => {
+        statusCalls += 1;
+        return emptyRouterStatus();
+      }
+    }));
+
+    assert.equal(result.completion, expectedCompletion);
+    assert.ok(result.evidence.some(signal => signal.anchorId === "A1" && signal.candidateFile === referenced.absolutePath));
+    assert.equal(statusCalls, expectedCompletion === "FAILED" ? 2 : 1, "terminal outcomes cannot restart JavaIndex for metrics");
+  }
 });
 
 test("a resolved implementation exposes its exact field and anchored-method collaborators", async () => {

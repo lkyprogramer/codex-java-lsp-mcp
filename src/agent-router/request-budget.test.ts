@@ -108,6 +108,7 @@ test("live semantic timeouts share one bounded stage budget and leave time for t
   writeFileSync(file, "public class OrderService { void place() {} }\n", "utf8");
   let readRangeCalls = 0;
   let boundBudget: DeadlineBudget | undefined;
+  let readPlanFinished = false;
   const status = {
     entries: 1,
     hits: 0,
@@ -167,10 +168,11 @@ test("live semantic timeouts share one bounded stage budget and leave time for t
     async findImporters() { return []; },
     async findTypeDefinitions() { return []; },
     async resolvedCallees() { return { callees: [], truncated: false }; },
-    async routerStatus() { return status; },
+    async routerStatus() { return structuredClone(status); },
     async queryReadRanges(requests: Array<{ file: string }>) {
       boundBudget?.throwIfExpired("test.queryReadRanges");
       readRangeCalls += 1;
+      readPlanFinished = true;
       return requests.map(request => ({
         file: request.file,
         ranges: [{
@@ -183,7 +185,10 @@ test("live semantic timeouts share one bounded stage budget and leave time for t
       }));
     },
     async frameworkFactsFor() { return emptyFrameworkFacts; },
-    async frameworkFactsForFiles() { return []; },
+    async frameworkFactsForFiles() {
+      if (readPlanFinished) status.javaIndex.indexedGeneration = 2;
+      return [];
+    },
     async declarationsById() { return { types: [], methods: [], fields: [], missingIds: [], truncated: false }; },
     async resolvedCalleesFor() { return new Map(); },
     async repositoryMarkers() { return new Map<string, string>(); },
@@ -206,9 +211,9 @@ test("live semantic timeouts share one bounded stage budget and leave time for t
         started: true,
         progress: { active: 0 },
         generatedCode: {
-          lombok: { detected: false, agentEnabled: false, status: "not-detected" },
+          lombok: { detected: true, agentEnabled: false, status: "missing-agent" },
           annotationProcessing: { detectedProcessors: [], enabled: false, source: "auto" },
-          generatedCodeSemantics: "complete"
+          generatedCodeSemantics: "incomplete"
         }
       };
     },
@@ -253,6 +258,8 @@ test("live semantic timeouts share one bounded stage budget and leave time for t
   assert.equal(readRangeCalls, 1, "the read-plan range batch must still run before the absolute deadline");
   assert.equal(result.semantic.completion, "PARTIAL_TIMEOUT");
   assert.ok(result.readPlan.length > 0, "deadline degradation must return a usable bounded read plan");
+  assert.equal(result.freshness.indexedGeneration, 2, "final freshness must include JavaIndex work performed by Lombok completeness");
+  assert.equal(result.freshness.changedDuringRequest, true);
   assert.equal(JSON.stringify(result).includes("selectedCoordinateRangesByPath"), false, "exact benchmark coordinates must not leak into ImpactResultV6");
   assert.equal(requestBudget.expired(), false, "the router must retain a bounded finalization reserve");
 });

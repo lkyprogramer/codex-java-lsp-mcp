@@ -7,14 +7,23 @@ import path from "node:path";
 import { promisify } from "node:util";
 import {
   assertCleanRepository,
+  assertDisjointRuntimeState,
   assertOutputOutsideSource,
+  benchmarkCellArguments,
   captureCandidatePatch,
   isolatedChildEnvironment,
+  matrixRuntimeEnvironment,
   toCrossVersionScenarioJsonl,
   validateScenarioSet
 } from "./run-three-repo-cold-matrix.mjs";
+import { FORMAL_REQUEST_DEADLINE_MS } from "./verify-three-repo-cold-matrix.mjs";
 
 const exec = promisify(execFile);
+
+function restoreEnvironment(name, value) {
+  if (value === undefined) delete process.env[name];
+  else process.env[name] = value;
+}
 
 test("formal matrix child processes cannot inherit Node loader or host output selectors", () => {
   const environment = isolatedChildEnvironment({
@@ -31,6 +40,69 @@ test("formal matrix child processes cannot inherit Node loader or host output se
   assert.equal(environment.NODE_V8_COVERAGE, undefined);
   assert.equal(environment.NODE_COMPILE_CACHE, undefined);
   assert.equal(environment.NODE_REDIRECT_WARNINGS, undefined);
+});
+
+test("formal matrix scrubs inherited RPC telemetry and only accepts an explicit cell mode", () => {
+  const previous = process.env.JAVA_LSP_JAVA_INDEX_RPC_TELEMETRY;
+  process.env.JAVA_LSP_JAVA_INDEX_RPC_TELEMETRY = "1";
+  try {
+    assert.equal(isolatedChildEnvironment({ TASK_MARKER: "standard" }).JAVA_LSP_JAVA_INDEX_RPC_TELEMETRY, undefined);
+    assert.equal(
+      isolatedChildEnvironment({ JAVA_LSP_JAVA_INDEX_RPC_TELEMETRY: "0" }).JAVA_LSP_JAVA_INDEX_RPC_TELEMETRY,
+      "0"
+    );
+    assert.equal(
+      isolatedChildEnvironment({ JAVA_LSP_JAVA_INDEX_RPC_TELEMETRY: "1" }).JAVA_LSP_JAVA_INDEX_RPC_TELEMETRY,
+      "1"
+    );
+  } finally {
+    if (previous === undefined) delete process.env.JAVA_LSP_JAVA_INDEX_RPC_TELEMETRY;
+    else process.env.JAVA_LSP_JAVA_INDEX_RPC_TELEMETRY = previous;
+  }
+});
+
+test("formal matrix scrubs inherited benchmark selectors and fixes the request deadline", () => {
+  const previousDeadline = process.env.JAVA_LSP_BENCH_DEADLINE_MS;
+  const previousPrepare = process.env.JAVA_LSP_BENCH_INDEX_PREPARE_TIMEOUT_MS;
+  const previousMode = process.env.JAVA_LSP_BENCH_MODE;
+  process.env.JAVA_LSP_BENCH_DEADLINE_MS = "15000";
+  process.env.JAVA_LSP_BENCH_INDEX_PREPARE_TIMEOUT_MS = "999999";
+  process.env.JAVA_LSP_BENCH_MODE = "recall";
+  try {
+    const environment = isolatedChildEnvironment({ TASK_MARKER: "formal" });
+    assert.equal(environment.JAVA_LSP_BENCH_DEADLINE_MS, undefined);
+    assert.equal(environment.JAVA_LSP_BENCH_INDEX_PREPARE_TIMEOUT_MS, undefined);
+    assert.equal(environment.JAVA_LSP_BENCH_MODE, undefined);
+    assert.equal(FORMAL_REQUEST_DEADLINE_MS, 2_000);
+    const args = benchmarkCellArguments({
+      runtimeRoot: "/private/runtime",
+      repoRoot: "/private/repo",
+      project: "lishuedu",
+      scenarioFile: "/private/scenarios.jsonl",
+      cacheDir: "/private/cache",
+      runs: 5,
+      verbosity: "standard"
+    });
+    assert.equal(args[args.indexOf("--deadline-ms") + 1], "2000");
+    assert.equal(args[args.indexOf("--mode") + 1], "balanced");
+    assert.equal(args[args.indexOf("--semantic-policy") + 1], "fast");
+  } finally {
+    restoreEnvironment("JAVA_LSP_BENCH_DEADLINE_MS", previousDeadline);
+    restoreEnvironment("JAVA_LSP_BENCH_INDEX_PREPARE_TIMEOUT_MS", previousPrepare);
+    restoreEnvironment("JAVA_LSP_BENCH_MODE", previousMode);
+  }
+});
+
+test("standard and diagnostic matrices use disjoint private runtime state", () => {
+  const standard = matrixRuntimeEnvironment("/tmp/v32-standard", "0");
+  const diagnostic = matrixRuntimeEnvironment("/tmp/v32-diagnostic", "1");
+  assert.doesNotThrow(() => assertDisjointRuntimeState(standard, diagnostic));
+  assert.equal(standard.JAVA_LSP_JAVA_INDEX_RPC_TELEMETRY, "0");
+  assert.equal(diagnostic.JAVA_LSP_JAVA_INDEX_RPC_TELEMETRY, "1");
+  assert.throws(
+    () => assertDisjointRuntimeState(standard, { ...diagnostic, JAVA_LSP_CACHE_ROOT: standard.JAVA_LSP_CACHE_ROOT }),
+    /runtime state overlap/
+  );
 });
 
 test("cross-version scenario freeze gives Task0 and V3 the same golden set", () => {

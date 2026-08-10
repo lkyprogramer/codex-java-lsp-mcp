@@ -10,7 +10,10 @@ import {
   collectTypeGraphCandidates
 } from "../candidate-collectors.js";
 import { candidateFromFacts, mergeCandidate, scoreBase } from "../candidate-helpers.js";
-import { collectTypeReferenceCandidates } from "../type-reference.js";
+import {
+  collectTypeReferenceSignals,
+  type TypeReferenceSignalResult
+} from "../type-reference.js";
 import { timed } from "../runtime.js";
 import { updateTypeReferenceCacheMetrics } from "../impact-metrics.js";
 import { candidateMetadata, nextSignalId, seedZeroStubs } from "./shared.js";
@@ -18,7 +21,7 @@ import { candidateMetadata, nextSignalId, seedZeroStubs } from "./shared.js";
 export const STATIC_PROVIDER_ID = "static";
 export const STATIC_PROVIDER_VERSION = "1";
 
-type StaticStage = "typeGraph" | "importGraph" | "typeReference";
+type StaticStage = "typeGraph" | "importGraph";
 
 type ImplementationDependencyKind = "FIELD_TYPE" | "IMPLEMENTATION_METHOD_TYPE";
 
@@ -42,16 +45,12 @@ const STATIC_SIGNAL_POLICY: Record<string, { kind: string; family: EvidenceFamil
   typeGraph: { kind: "IMPLEMENTS", family: "STATIC_STRUCTURE", provenance: "AST_RESOLVED", confidence: 0.85, weight: 70 },
   "typeGraph:implementation-lookup": { kind: "IMPLEMENTS", family: "STATIC_STRUCTURE", provenance: "AST_RESOLVED", confidence: 0.9, weight: 70 },
   importGraph: { kind: "DIRECT_DECLARATION", family: "STATIC_STRUCTURE", provenance: "AST_EXACT", confidence: 0.98, weight: 65 },
-  "importGraph:reverse": { kind: "IMPORTED_BY", family: "STATIC_STRUCTURE", provenance: "AST_EXACT", confidence: 0.55, weight: 20 },
-  typeReference: { kind: "REFERENCE", family: "STATIC_STRUCTURE", provenance: "AST_RESOLVED", confidence: 0.8, weight: 55 }
+  "importGraph:reverse": { kind: "IMPORTED_BY", family: "STATIC_STRUCTURE", provenance: "AST_EXACT", confidence: 0.55, weight: 20 }
 };
 
 const STAGE_REASONS: Record<StaticStage, readonly string[]> = {
   typeGraph: ["typeGraph", "typeGraph:implementation-lookup"],
-  importGraph: ["importGraph", "importGraph:reverse"],
-  // collectTypeReferenceCandidates can resolve an interface implementation
-  // after an exact direct-reference lookup, so retain that nested signal too.
-  typeReference: ["typeReference", "typeGraph:implementation-lookup"]
+  importGraph: ["importGraph", "importGraph:reverse"]
 };
 
 type CandidateSnapshot = {
@@ -121,28 +120,32 @@ export async function collectStaticStructureEvidence(input: ProviderInput): Prom
  */
 export async function collectTypeReferenceEvidence(input: ProviderInput): Promise<ProviderOutcome> {
   const startedAt = Date.now();
-  const candidates = seedZeroStubs(input.repoRoot, input.existingCandidatePaths);
   const evidence: EvidenceSignal[] = [];
-  const failedAnchors = new Set<string>();
-  const typeReferenceBefore = await safeRouterStatus(input);
+  let result: TypeReferenceSignalResult | undefined;
+  const typeReferenceBefore = input.budget?.expired() ? undefined : await safeRouterStatus(input);
   await timed(input.phaseMs, "typeReference", async () => {
-    await collectPerAnchor(input, candidates, evidence, failedAnchors, "typeReference", async anchor => {
-      await collectTypeReferenceCandidates({
-        candidates,
-        anchors: [anchor],
-        options: input.options,
-        metrics: input.metrics.typeReference,
-        javaIndex: input.javaIndex,
-        routingPolicy: input.routingPolicy,
-        generation: input.generation
-      });
+    result = await collectTypeReferenceSignals({
+      anchors: input.anchors,
+      options: input.options,
+      metrics: input.metrics.typeReference,
+      javaIndex: input.javaIndex,
+      budget: input.budget,
+      generation: input.generation,
+      existingCandidatePaths: input.existingCandidatePaths,
+      providerId: STATIC_PROVIDER_ID,
+      providerVersion: STATIC_PROVIDER_VERSION,
+      nextSignalId: () => nextSignalId(STATIC_PROVIDER_ID)
     });
+    evidence.push(...result.evidence);
   });
-  const typeReferenceAfter = await safeRouterStatus(input);
+  const terminal = input.budget?.expired()
+    || (result?.cancelledAnchorIds.length ?? 0) > 0
+    || (result?.deadlineExceededAnchorIds.length ?? 0) > 0;
+  const typeReferenceAfter = terminal ? undefined : await safeRouterStatus(input);
   if (typeReferenceBefore && typeReferenceAfter) {
     updateTypeReferenceCacheMetrics(input.metrics.typeReference, typeReferenceBefore, typeReferenceAfter);
   }
-  return outcome(evidence, startedAt, failedAnchors);
+  return typeReferenceOutcome(evidence, startedAt, result);
 }
 
 /**
@@ -344,6 +347,10 @@ function simpleTypeName(value: string): string {
   return normalized.slice(normalized.lastIndexOf(".") + 1);
 }
 
+function uniqueStrings(values: readonly string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
+}
+
 function outcome(
   evidence: EvidenceSignal[],
   startedAt: number,
@@ -360,9 +367,41 @@ function outcome(
   };
 }
 
+function typeReferenceOutcome(
+  evidence: EvidenceSignal[],
+  startedAt: number,
+  result: TypeReferenceSignalResult | undefined
+): ProviderOutcome {
+  const failed = result?.failedAnchorIds ?? [];
+  const cancelled = result?.cancelledAnchorIds ?? [];
+  const timedOut = result?.deadlineExceededAnchorIds ?? [];
+  const partial = result?.partialAnchorIds ?? [];
+  const completion = failed.length > 0
+    ? "FAILED"
+    : cancelled.length > 0
+      ? "CANCELLED"
+      : timedOut.length > 0
+        ? "PARTIAL_TIMEOUT"
+        : partial.length > 0
+          ? "PARTIAL_LIMIT"
+          : "COMPLETE";
+  const degradation = uniqueStrings([
+    ...(failed.length === 0 ? [] : [`static provider failed for anchors: ${failed.join(", ")}`]),
+    ...(result?.degradedReasons ?? [])
+  ]).join("; ");
+  return {
+    providerId: STATIC_PROVIDER_ID,
+    providerVersion: STATIC_PROVIDER_VERSION,
+    evidence,
+    completion,
+    elapsedMs: Date.now() - startedAt,
+    ...(degradation ? { degradation } : {})
+  };
+}
+
 async function safeRouterStatus(input: ProviderInput): Promise<RouterIndexStatus | undefined> {
   try {
-    return await input.javaIndex.routerStatus();
+    return input.javaIndex.localRouterStatus?.() ?? await input.javaIndex.routerStatus();
   } catch {
     return undefined;
   }
@@ -421,11 +460,10 @@ function evidenceForCandidate(
       confidence: policy.confidence,
       completeness: "COMPLETE",
       weight: policy.weight,
-      // Import declarations and direct JavaIndex type references both start
-      // at the request anchor. Retaining that source lets the planner reserve
-      // a bounded core slot for the direct edge while keeping relationships
-      // discovered from a structural expansion as ordinary ranking evidence.
-      sourceFile: reason === "importGraph" || reason === "typeReference"
+      // Import declarations start at the request anchor. Retaining that source
+      // lets the planner reserve a bounded core slot for the direct edge while
+      // keeping structural expansions as ordinary ranking evidence.
+      sourceFile: reason === "importGraph"
         ? anchor.absolutePath
         : candidate.absolutePath,
       positions: candidate.positions,

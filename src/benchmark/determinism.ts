@@ -4,6 +4,7 @@
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import type { ImpactResult } from "../agent-types.js";
+import type { ProductionRankingSnapshot } from "./attribution-v3.js";
 
 const SCORE_PRECISION = 4;
 const DEFAULT_EXPECTED_RUNS = 20;
@@ -55,10 +56,10 @@ export type ImpactDeterminismSummary = {
  */
 export function buildImpactDeterminismSnapshot(
   result: ImpactResult,
-  repoRoot: string
+  repoRoot: string,
+  productionRanking?: ProductionRankingSnapshot
 ): ImpactDeterminismSnapshot {
   const pathById = new Map(result.files.map(file => [file.id, file.path]));
-  const shadowCandidates = shadowRankingCandidates(result.metrics?.shadowRanking);
   return {
     candidatePaths: result.files.map(file => file.path),
     readPlan: result.readPlan.map(item => ({
@@ -70,7 +71,7 @@ export function buildImpactDeterminismSnapshot(
         reason: range.reason
       }))
     })),
-    familyScores: shadowCandidates?.map(candidate => ({
+    familyScores: productionRanking?.candidates.map(candidate => ({
       path: repoRelativePath(repoRoot, candidate.path),
       finalScore: rounded(candidate.finalScore),
       families: sortedRoundedRecord(candidate.familyScores)
@@ -89,7 +90,7 @@ export function buildImpactDeterminismSnapshot(
 
 /**
  * Verifies a benchmark payload produced with `--warm-state cold-nolsp
- * --runs 20 --verbosity diagnostic` and shadow ranking enabled. Each row is
+ * --runs 20 --verbosity diagnostic` with the production-ranking observer. Each row is
  * compared to its first attempt; rows need not equal one another.
  */
 export function verifyImpactDeterminismPayload(
@@ -134,30 +135,6 @@ export function verifyImpactDeterminismPayload(
   return { rows: root.rows.length, attempts, expectedRuns, stable: true };
 }
 
-type ShadowCandidate = {
-  path: string;
-  finalScore: number;
-  familyScores: Record<string, number>;
-};
-
-function shadowRankingCandidates(value: Record<string, unknown> | undefined): ShadowCandidate[] | undefined {
-  if (!value || !Array.isArray(value.candidates)) return undefined;
-  const result: ShadowCandidate[] = [];
-  for (const raw of value.candidates) {
-    if (!raw || typeof raw !== "object") return undefined;
-    const item = raw as Record<string, unknown>;
-    if (typeof item.path !== "string" || typeof item.finalScore !== "number") return undefined;
-    if (!item.familyScores || typeof item.familyScores !== "object" || Array.isArray(item.familyScores)) return undefined;
-    const familyScores: Record<string, number> = {};
-    for (const [family, score] of Object.entries(item.familyScores as Record<string, unknown>)) {
-      if (typeof score !== "number" || !Number.isFinite(score)) return undefined;
-      familyScores[family] = score;
-    }
-    result.push({ path: item.path, finalScore: item.finalScore, familyScores });
-  }
-  return result;
-}
-
 function validatedSnapshot(value: unknown, context: string): ImpactDeterminismSnapshot {
   const snapshot = record(value, `${context} determinism snapshot`);
   if (!Array.isArray(snapshot.candidatePaths)) {
@@ -167,7 +144,7 @@ function validatedSnapshot(value: unknown, context: string): ImpactDeterminismSn
     throw new Error(`${context}: missing determinism.readPlan`);
   }
   if (!Array.isArray(snapshot.familyScores)) {
-    throw new Error(`${context}: missing determinism.familyScores; rerun with diagnostic shadow ranking enabled`);
+    throw new Error(`${context}: missing determinism.familyScores; rerun through the diagnostic production-ranking observer`);
   }
   record(snapshot.completion, `${context} determinism.completion`);
   return snapshot as ImpactDeterminismSnapshot;
@@ -189,8 +166,9 @@ function rounded(value: number): number {
   return Number(value.toFixed(SCORE_PRECISION));
 }
 
-function sortedRoundedRecord(values: Record<string, number>): Record<string, number> {
+function sortedRoundedRecord(values: Partial<Record<string, number>>): Record<string, number> {
   return Object.fromEntries(Object.entries(values)
+    .filter((entry): entry is [string, number] => typeof entry[1] === "number")
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, value]) => [key, rounded(value)]));
 }

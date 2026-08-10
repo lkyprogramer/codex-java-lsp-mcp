@@ -3,7 +3,12 @@ import test from "node:test";
 import type { CandidateFile, ImpactOptions, ResolvedAnchor } from "../../agent-types.js";
 import { resolveRoutingPolicy } from "../../routing-policy.js";
 import type { FrameworkFileFacts } from "../../java-index/framework-index-view.js";
-import type { JavaMethodFact, JavaSourceFacts } from "../../java-index/router-facts.js";
+import {
+  MAX_FACTS_FOR_FILES,
+  type JavaMethodFact,
+  type JavaSourceFacts
+} from "../../java-index/router-facts.js";
+import { JavaIntelligenceError } from "../../runtime/intelligence-error.js";
 import type { ProviderInput } from "../evidence.js";
 import { collectRelationshipEvidence, type RelationshipProviderInput } from "./relationship-provider.js";
 
@@ -908,4 +913,245 @@ test("the facts-based checks do not run for a candidate outside staticVerifiedCa
     noopJavaIndex({ methodAt: async () => method })
   ));
   assert.equal(result.evidence.some(item => item.kind === "METHOD_RELATION"), false);
+});
+
+test("relationship provider consumes one typed facts batch and never falls back to per-file hydration", async () => {
+  const implementation = anchor({
+    absolutePath: "/repo/src/main/java/demo/OrderServiceImpl.java",
+    path: "src/main/java/demo/OrderServiceImpl.java",
+    className: "OrderServiceImpl"
+  });
+  const service = candidate("/repo/src/main/java/demo/OrderService.java");
+  const byPath = new Map([
+    [implementation.absolutePath, facts(implementation.absolutePath, {
+      typeName: "OrderServiceImpl",
+      implementsTypes: ["demo.OrderService"]
+    })],
+    [service.absolutePath, facts(service.absolutePath, { typeName: "OrderService", kind: "interface" })]
+  ]);
+  const batchCalls: string[][] = [];
+  let legacyCalls = 0;
+
+  const result = await collectRelationshipEvidence(providerInput(
+    [implementation],
+    [service],
+    [service],
+    noopJavaIndex({
+      factsForFiles: async (files: readonly string[]) => {
+        batchCalls.push([...files]);
+        return {
+          generation: 0,
+          completion: "COMPLETE",
+          truncated: false,
+          items: files.map(inputFile => ({
+            inputFile,
+            absolutePath: inputFile,
+            state: "FOUND" as const,
+            facts: byPath.get(inputFile)!
+          }))
+        };
+      },
+      factsFor: async () => {
+        legacyCalls += 1;
+        throw new Error("legacy per-file hydration must not run");
+      }
+    })
+  ));
+
+  assert.deepEqual(batchCalls, [[implementation.absolutePath, service.absolutePath]]);
+  assert.equal(legacyCalls, 0);
+  assert.equal(result.completion, "COMPLETE");
+  assert.ok(result.evidence.some(item => item.kind === "TYPE_SYMMETRIC" && item.candidateFile === service.absolutePath));
+});
+
+test("relationship typed batch preserves good evidence while surfacing degraded and bounded work", async () => {
+  const requestAnchor = anchor();
+  const candidates = Array.from({ length: MAX_FACTS_FOR_FILES }, (_, index) => candidate(
+    `/repo/src/main/java/demo/Candidate${index}.java`
+  ));
+  const goodCandidate = candidates[0]!;
+  let observedBatch: readonly string[] = [];
+  let legacyCalls = 0;
+  const result = await collectRelationshipEvidence(providerInput(
+    [requestAnchor],
+    candidates,
+    candidates,
+    noopJavaIndex({
+      factsForFiles: async (files: readonly string[]) => {
+        observedBatch = files;
+        return {
+          generation: 0,
+          completion: "PARTIAL",
+          truncated: false,
+          items: files.map((inputFile, index) => index === 2
+            ? { inputFile, absolutePath: inputFile, state: "DEGRADED" as const, reason: "INDEX_INCOMPLETE" as const }
+            : {
+                inputFile,
+                absolutePath: inputFile,
+                state: "FOUND" as const,
+                facts: inputFile === requestAnchor.absolutePath
+                  ? facts(inputFile, { typeName: "OrderService", referencedTypes: ["Candidate0"] })
+                  : facts(inputFile, { typeName: inputFile.split("/").at(-1)!.replace(/\.java$/, "") })
+              })
+        };
+      },
+      factsFor: async () => {
+        legacyCalls += 1;
+        throw new Error("bounded batch must prefill overflow and degraded paths");
+      }
+    })
+  ));
+
+  assert.equal(observedBatch.length, MAX_FACTS_FOR_FILES, "anchor plus candidates is capped before the router call");
+  assert.equal(legacyCalls, 0);
+  assert.equal(result.completion, "PARTIAL_LIMIT");
+  assert.match(result.degradation ?? "", /truncated|INDEX_INCOMPLETE/);
+  assert.ok(
+    result.evidence.some(item => item.candidateFile === goodCandidate.absolutePath),
+    "healthy facts remain usable when another batch item is degraded"
+  );
+});
+
+test("relationship typed batch preserves deadline and cancellation completions", async () => {
+  for (const [code, expected] of [
+    ["DEADLINE_EXCEEDED", "PARTIAL_TIMEOUT"],
+    ["CANCELLED", "CANCELLED"]
+  ] as const) {
+    let postTerminalCalls = 0;
+    const result = await collectRelationshipEvidence(providerInput(
+      [anchor()],
+      [],
+      [],
+      noopJavaIndex({
+        factsForFiles: async () => {
+          throw new JavaIntelligenceError(code, `synthetic ${code}`);
+        },
+        factsFor: async () => {
+          postTerminalCalls += 1;
+          throw new Error("typed batch failure must not fall back to per-file hydration");
+        },
+        frameworkFactsFor: async () => {
+          postTerminalCalls += 1;
+          throw new Error("terminal batch failure must stop framework lookups");
+        },
+        resolvedCallees: async () => {
+          postTerminalCalls += 1;
+          throw new Error("terminal batch failure must stop relationship lookups");
+        }
+      })
+    ));
+
+    assert.equal(result.completion, expected);
+    assert.match(result.degradation ?? "", new RegExp(code));
+    assert.equal(postTerminalCalls, 0, "deadline/cancellation must stop all later JavaIndex work");
+  }
+});
+
+test("an already-expired relationship request performs no JavaIndex work", async () => {
+  let calls = 0;
+  const input = providerInput(
+    [anchor()],
+    [],
+    [],
+    noopJavaIndex({
+      factsForFiles: async () => { calls += 1; throw new Error("must not run"); },
+      factsFor: async () => { calls += 1; throw new Error("must not run"); },
+      methodAt: async () => { calls += 1; return undefined; },
+      frameworkFactsFor: async () => { calls += 1; return frameworkFacts(); },
+      resolvedCallees: async () => { calls += 1; return { callees: [], truncated: false }; }
+    })
+  );
+  const result = await collectRelationshipEvidence({
+    ...input,
+    budget: { expired: () => true }
+  } as never);
+
+  assert.equal(calls, 0);
+  assert.equal(result.completion, "PARTIAL_TIMEOUT");
+  assert.match(result.degradation ?? "", /DEADLINE_EXCEEDED/);
+});
+
+test("relationship facts batch rollback flag uses the legacy per-file path", async () => {
+  const previous = process.env.JAVA_LSP_RELATIONSHIP_FACTS_BATCH;
+  process.env.JAVA_LSP_RELATIONSHIP_FACTS_BATCH = "off";
+  let batchCalls = 0;
+  let legacyCalls = 0;
+  try {
+    const result = await collectRelationshipEvidence(providerInput(
+      [anchor()],
+      [],
+      [],
+      noopJavaIndex({
+        factsForFiles: async () => {
+          batchCalls += 1;
+          throw new Error("batch must stay disabled");
+        },
+        factsFor: async (file: string) => {
+          legacyCalls += 1;
+          return facts(file);
+        }
+      })
+    ));
+
+    assert.equal(batchCalls, 0);
+    assert.ok(legacyCalls > 0);
+    assert.equal(result.completion, "COMPLETE");
+  } finally {
+    if (previous === undefined) delete process.env.JAVA_LSP_RELATIONSHIP_FACTS_BATCH;
+    else process.env.JAVA_LSP_RELATIONSHIP_FACTS_BATCH = previous;
+  }
+});
+
+test("relationship rollback path preserves terminal deadline and cancellation semantics", async () => {
+  const previous = process.env.JAVA_LSP_RELATIONSHIP_FACTS_BATCH;
+  process.env.JAVA_LSP_RELATIONSHIP_FACTS_BATCH = "off";
+  try {
+    for (const [code, expected] of [
+      ["DEADLINE_EXCEEDED", "PARTIAL_TIMEOUT"],
+      ["CANCELLED", "CANCELLED"]
+    ] as const) {
+      let batchCalls = 0;
+      let legacyCalls = 0;
+      let postTerminalCalls = 0;
+      const result = await collectRelationshipEvidence(providerInput(
+        [
+          anchor(),
+          anchor({ id: "A2", absolutePath: "/repo/src/main/java/demo/OtherService.java", path: "src/main/java/demo/OtherService.java" })
+        ],
+        [],
+        [],
+        noopJavaIndex({
+          factsForFiles: async () => {
+            batchCalls += 1;
+            throw new Error("rollback path must not call the batch API");
+          },
+          factsFor: async () => {
+            legacyCalls += 1;
+            throw new JavaIntelligenceError(code, `synthetic ${code}`);
+          },
+          methodAt: async () => {
+            postTerminalCalls += 1;
+            return undefined;
+          },
+          frameworkFactsFor: async () => {
+            postTerminalCalls += 1;
+            return frameworkFacts();
+          },
+          resolvedCallees: async () => {
+            postTerminalCalls += 1;
+            return { callees: [], truncated: false };
+          }
+        })
+      ));
+
+      assert.equal(result.completion, expected);
+      assert.match(result.degradation ?? "", new RegExp(code));
+      assert.equal(batchCalls, 0);
+      assert.equal(legacyCalls, 1, "terminal failure stops before the second anchor");
+      assert.equal(postTerminalCalls, 0, "terminal failure stops all later JavaIndex work");
+    }
+  } finally {
+    if (previous === undefined) delete process.env.JAVA_LSP_RELATIONSHIP_FACTS_BATCH;
+    else process.env.JAVA_LSP_RELATIONSHIP_FACTS_BATCH = previous;
+  }
 });

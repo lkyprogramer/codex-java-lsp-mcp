@@ -25,7 +25,6 @@ type BuildImpactResultInput = {
   readonly rgExecution: RgExecutionResult;
   readonly suppressed: Record<string, number>;
   readonly evidenceGaps: string[];
-  readonly shadowRanking?: Record<string, unknown>;
   readonly freshness: ImpactFreshnessV6;
   readonly semanticCompletion: Completion;
   readonly semanticReadiness?: string;
@@ -79,8 +78,7 @@ export function buildImpactResult(input: BuildImpactResultInput): ImpactResult {
       javaIndex: input.metrics.javaIndex,
       readPlan: input.metrics.readPlan as Record<string, unknown> | undefined,
       framework: input.metrics.framework,
-      suppressed: input.suppressed,
-      shadowRanking: input.shadowRanking
+      suppressed: input.suppressed
     }
   };
   applyVerbosity(payload, verbosity);

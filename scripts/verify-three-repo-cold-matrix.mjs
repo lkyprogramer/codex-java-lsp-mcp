@@ -10,7 +10,8 @@ import { fileURLToPath } from "node:url";
 export const MATRIX_PROJECTS = ["lishuedu", "cipherlink", "exam-parent-v3"];
 export const MATRIX_ROUNDS = [1, 2, 3];
 export const MATRIX_VARIANTS = ["old", "new"];
-export const VERIFIER_VERSION = 5;
+export const VERIFIER_VERSION = 6;
+export const FORMAL_REQUEST_DEADLINE_MS = 2_000;
 
 const EPSILON = 1e-12;
 const P_READ_TOLERANCE = 0.02;
@@ -208,6 +209,9 @@ function validateMetadata(payload, { file, project, variant, expectedRuns, manif
   }
   if (metadata.verbosity !== "standard") {
     throw new MatrixValidationError(`${file}: formal default-Token gate verbosity must be standard`);
+  }
+  if (metadata.deadlineMs !== manifest.value.requestDeadlineMs) {
+    throw new MatrixValidationError(`${file}: metadata.deadlineMs must be ${manifest.value.requestDeadlineMs}`);
   }
   if (metadata.runs !== expectedRuns) throw new MatrixValidationError(`${file}: metadata.runs must be ${expectedRuns}`);
   if (!(typeof metadata.scenarioFile === "string" && path.isAbsolute(metadata.scenarioFile))) {
@@ -439,6 +443,9 @@ function readAndValidateManifest(file, expectedRuns, p95Limit) {
   }
   if (value.p95Limit !== p95Limit) {
     throw new MatrixValidationError(`${file}: manifest p95Limit must be ${p95Limit}`);
+  }
+  if (value.requestDeadlineMs !== FORMAL_REQUEST_DEADLINE_MS) {
+    throw new MatrixValidationError(`${file}: manifest requestDeadlineMs must be ${FORMAL_REQUEST_DEADLINE_MS}`);
   }
   const policy = value.comparisonPolicy;
   if (!policy

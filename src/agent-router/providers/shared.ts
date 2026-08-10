@@ -22,8 +22,8 @@ export function candidateMetadata(
  * `CandidateFile` (or merging any `CandidateFile` into this) yields that
  * other `CandidateFile` unchanged. Seeding a provider's private map with one
  * zero stub per already-known path lets that provider's unmodified legacy
- * collector (`collectImportGraphCandidates`, `collectTypeReferenceCandidates`,
- * ...) both see prior candidates for its own `.has()`/read logic AND, after
+ * collector (`collectImportGraphCandidates`, ...) both see prior candidates
+ * for its own `.has()`/read logic AND, after
  * running, report each touched entry as exactly this provider's own net
  * contribution - the stub contributes nothing to score/reasons/positions.
  */

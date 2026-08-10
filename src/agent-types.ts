@@ -219,8 +219,6 @@ export type ImpactDiagnosticMetrics = {
   rgCache?: Record<string, unknown>;
   sourceFacts?: Record<string, unknown>;
   suppressed?: Record<string, unknown>;
-  /** Task 25 item 6: present only for verbosity="diagnostic" requests opted into JAVA_LSP_SHADOW_RANKING=1 - see shadow-ranking.ts. */
-  shadowRanking?: Record<string, unknown>;
 };
 
 export type ImpactResultV6 = {

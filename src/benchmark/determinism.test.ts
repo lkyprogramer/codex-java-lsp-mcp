@@ -8,6 +8,7 @@ import {
   buildImpactDeterminismSnapshot,
   verifyImpactDeterminismPayload
 } from "./determinism.js";
+import type { ProductionRankingSnapshot } from "./attribution-v3.js";
 
 function result(overrides: Record<string, unknown> = {}) {
   return {
@@ -68,29 +69,27 @@ function result(overrides: Record<string, unknown> = {}) {
     ],
     evidenceGaps: [],
     cost: { resultBytes: 1, readBytes: 932, estimatedTokens: 1, suppressedRawBytes: 0 },
-    metrics: {
-      routingVersion: 6,
-      elapsedMs: 12,
-      shadowRanking: {
-        candidates: [
-          {
-            path: "/repo/src/main/java/demo/OrderRepository.java",
-            finalScore: 123.456789,
-            rank: 2,
-            familyScores: { STATIC_STRUCTURE: 98.7654321 },
-            rankWithoutEachFamily: {},
-            selectedByReadPlan: true,
-            providers: ["static"]
-          }
-        ]
-      }
-    },
+    metrics: { routingVersion: 6, elapsedMs: 12 },
     ...overrides
   };
 }
 
+function rankingSnapshot(): ProductionRankingSnapshot {
+  return {
+    productionSelectedPaths: ["/repo/src/main/java/demo/OrderRepository.java"],
+    candidates: [{
+      path: "/repo/src/main/java/demo/OrderRepository.java",
+      finalScore: 123.456789,
+      rank: 2,
+      familyScores: { STATIC_STRUCTURE: 98.7654321 },
+      selectedByReadPlan: true,
+      providers: ["static"]
+    }]
+  };
+}
+
 test("buildImpactDeterminismSnapshot records only semantic ordering and rounds scores", () => {
-  const snapshot = buildImpactDeterminismSnapshot(result() as never, "/repo");
+  const snapshot = buildImpactDeterminismSnapshot(result() as never, "/repo", rankingSnapshot());
 
   assert.deepEqual(snapshot.candidatePaths, [
     "src/main/java/demo/OrderService.java",
@@ -126,7 +125,7 @@ test("buildImpactDeterminismSnapshot records only semantic ordering and rounds s
 });
 
 test("verifyImpactDeterminismPayload accepts 20 identical semantic snapshots despite diagnostic drift", () => {
-  const snapshot = buildImpactDeterminismSnapshot(result() as never, "/repo");
+  const snapshot = buildImpactDeterminismSnapshot(result() as never, "/repo", rankingSnapshot());
   const attempts = Array.from({ length: 20 }, (_, index) => ({
     elapsedMs: 10 + index,
     cacheHits: index,
@@ -145,7 +144,7 @@ test("verifyImpactDeterminismPayload accepts 20 identical semantic snapshots des
 });
 
 test("verifyImpactDeterminismPayload rejects candidate, readPlan, score or completion drift", () => {
-  const snapshot = buildImpactDeterminismSnapshot(result() as never, "/repo");
+  const snapshot = buildImpactDeterminismSnapshot(result() as never, "/repo", rankingSnapshot());
   const changed = structuredClone(snapshot);
   changed.readPlan.reverse();
 
@@ -173,7 +172,7 @@ test("verifyImpactDeterminismPayload rejects missing snapshots, wrong run count 
 });
 
 test("verify-determinism CLI returns a machine-readable PASS summary", () => {
-  const snapshot = buildImpactDeterminismSnapshot(result() as never, "/repo");
+  const snapshot = buildImpactDeterminismSnapshot(result() as never, "/repo", rankingSnapshot());
   const root = mkdtempSync(path.join(tmpdir(), "impact-determinism-"));
   const input = path.join(root, "cold-20.json");
   writeFileSync(input, JSON.stringify({

@@ -9,7 +9,16 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { MATRIX_PROJECTS, VERIFIER_VERSION, verifyMatrix } from "./verify-three-repo-cold-matrix.mjs";
+import {
+  aggregateJavaIndexRpcSidecar,
+  DIAGNOSTIC_RPC_GATE_POLICY
+} from "./aggregate-java-index-rpc-sidecar.mjs";
+import {
+  FORMAL_REQUEST_DEADLINE_MS,
+  MATRIX_PROJECTS,
+  VERIFIER_VERSION,
+  verifyMatrix
+} from "./verify-three-repo-cold-matrix.mjs";
 import {
   copyIsolatedNodeModules,
   createDetachedLocalClone,
@@ -20,10 +29,76 @@ import {
 const scriptRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const COLD_ENV = {
   JDTLS_BIN: "/usr/bin/false",
-  JAVA_LSP_SHADOW_RANKING: "0",
+  JAVA_LSP_JAVA_INDEX_RPC_TELEMETRY: "0",
   JAVA_LSP_ISOLATED_VALIDATION: "1"
 };
 const ROUND_ORDER = [["old", "new"], ["new", "old"], ["old", "new"]];
+const RUNTIME_STATE_KEYS = [
+  "HOME",
+  "XDG_CACHE_HOME",
+  "XDG_CONFIG_HOME",
+  "XDG_DATA_HOME",
+  "XDG_STATE_HOME",
+  "TMPDIR",
+  "JAVA_LSP_CACHE_ROOT",
+  "JDTLS_DATA_DIR",
+  "JDTLS_LOG_DIR",
+  "JAVA_LSP_PROJECTS_JSON",
+  "GRADLE_USER_HOME",
+  "MAVEN_USER_HOME"
+];
+
+export function matrixRuntimeEnvironment(root, telemetry = "0") {
+  return {
+    ...COLD_ENV,
+    JAVA_LSP_JAVA_INDEX_RPC_TELEMETRY: telemetry,
+    HOME: path.join(root, "home"),
+    XDG_CACHE_HOME: path.join(root, "xdg-cache"),
+    XDG_CONFIG_HOME: path.join(root, "xdg-config"),
+    XDG_DATA_HOME: path.join(root, "xdg-data"),
+    XDG_STATE_HOME: path.join(root, "xdg-state"),
+    TMPDIR: path.join(root, "tmp"),
+    JAVA_LSP_CACHE_ROOT: path.join(root, "process-cache"),
+    JDTLS_DATA_DIR: path.join(root, "jdt-data"),
+    JDTLS_LOG_DIR: path.join(root, "jdt-logs"),
+    JAVA_LSP_PROJECTS_JSON: path.join(root, "projects.json"),
+    GRADLE_USER_HOME: path.join(root, "gradle-home"),
+    MAVEN_USER_HOME: path.join(root, "maven-home")
+  };
+}
+
+export function assertDisjointRuntimeState(left, right) {
+  const leftPaths = RUNTIME_STATE_KEYS.map(key => path.resolve(left[key]));
+  const rightPaths = RUNTIME_STATE_KEYS.map(key => path.resolve(right[key]));
+  for (const leftPath of leftPaths) {
+    for (const rightPath of rightPaths) {
+      if (leftPath === rightPath || isWithin(leftPath, rightPath) || isWithin(rightPath, leftPath)) {
+        throw new Error(`standard and diagnostic runtime state overlap: ${leftPath} <-> ${rightPath}`);
+      }
+    }
+  }
+}
+
+async function prepareMatrixRuntimeState(root) {
+  await Promise.all([
+    "home",
+    "xdg-cache",
+    "xdg-config",
+    "xdg-data",
+    "xdg-state",
+    "tmp",
+    "process-cache",
+    "jdt-data",
+    "jdt-logs",
+    "gradle-home",
+    "maven-home"
+  ].map(directory => mkdir(path.join(root, directory), { recursive: true })));
+  await writeFile(path.join(root, "projects.json"), "{\"aliases\":[],\"defaults\":{}}\n");
+}
+
+function runtimeStateDescriptor(environment) {
+  return Object.fromEntries(RUNTIME_STATE_KEYS.map(key => [key, path.resolve(environment[key])]));
+}
 
 async function main() {
   const cli = parseCli(process.argv.slice(2));
@@ -37,21 +112,13 @@ async function main() {
   const scenarioDir = path.join(outputDir, "frozen-scenarios");
   const matrixDir = path.join(outputDir, "matrix");
   const cacheDir = path.join(workspaceRoot, "caches");
-  const isolatedEnv = {
-    ...COLD_ENV,
-    HOME: path.join(workspaceRoot, "home"),
-    XDG_CACHE_HOME: path.join(workspaceRoot, "xdg-cache"),
-    XDG_CONFIG_HOME: path.join(workspaceRoot, "xdg-config"),
-    XDG_DATA_HOME: path.join(workspaceRoot, "xdg-data"),
-    XDG_STATE_HOME: path.join(workspaceRoot, "xdg-state"),
-    TMPDIR: path.join(workspaceRoot, "tmp"),
-    JAVA_LSP_CACHE_ROOT: path.join(workspaceRoot, "process-cache"),
-    JDTLS_DATA_DIR: path.join(workspaceRoot, "jdt-data"),
-    JDTLS_LOG_DIR: path.join(workspaceRoot, "jdt-logs"),
-    JAVA_LSP_PROJECTS_JSON: path.join(workspaceRoot, "projects.json"),
-    GRADLE_USER_HOME: path.join(workspaceRoot, "gradle-home"),
-    MAVEN_USER_HOME: path.join(workspaceRoot, "maven-home")
-  };
+  const diagnosticRpcDir = path.join(outputDir, "diagnostic-java-index-rpc");
+  const diagnosticRpcRawDir = path.join(diagnosticRpcDir, "raw");
+  const diagnosticRpcCacheDir = path.join(workspaceRoot, "diagnostic-rpc-caches");
+  const diagnosticRuntimeRoot = path.join(workspaceRoot, "diagnostic-rpc-runtime");
+  const isolatedEnv = matrixRuntimeEnvironment(workspaceRoot, "0");
+  const diagnosticEnv = matrixRuntimeEnvironment(diagnosticRuntimeRoot, "1");
+  assertDisjointRuntimeState(isolatedEnv, diagnosticEnv);
 
   try {
     await preflight({ cli, sourceRoot, outputDir });
@@ -59,9 +126,12 @@ async function main() {
     await mkdir(scenarioDir, { recursive: true });
     await mkdir(matrixDir, { recursive: true });
     await mkdir(cacheDir, { recursive: true });
-    await Promise.all(["home", "xdg-cache", "xdg-config", "xdg-data", "xdg-state", "tmp", "process-cache", "jdt-data", "jdt-logs", "gradle-home", "maven-home"]
-      .map(directory => mkdir(path.join(workspaceRoot, directory), { recursive: true })));
-    await writeFile(path.join(workspaceRoot, "projects.json"), "{\"aliases\":[],\"defaults\":{}}\n");
+    if (cli.diagnosticRpcSidecar) {
+      await mkdir(diagnosticRpcRawDir, { recursive: true });
+      await mkdir(diagnosticRpcCacheDir, { recursive: true });
+    }
+    await prepareMatrixRuntimeState(workspaceRoot);
+    if (cli.diagnosticRpcSidecar) await prepareMatrixRuntimeState(diagnosticRuntimeRoot);
 
     const candidateSnapshot = await captureCandidatePatch(sourceRoot);
     const candidatePatch = candidateSnapshot.patch;
@@ -123,6 +193,7 @@ async function main() {
       },
       runs: cli.runs,
       p95Limit: cli.p95Limit,
+      requestDeadlineMs: FORMAL_REQUEST_DEADLINE_MS,
       comparisonPolicy: {
         baseline: "executable-code-baseline",
         baselineRevision: runtimes.old.commit,
@@ -138,6 +209,22 @@ async function main() {
       dependencies: {
         copyMode: "private-content-verified-copy",
         inventory: isolatedDependency
+      },
+      diagnosticRpc: {
+        requested: cli.diagnosticRpcSidecar,
+        role: "DIAGNOSTIC_ONLY_NOT_STANDARD_TOKEN_GATE",
+        gatePolicy: cli.diagnosticRpcSidecar ? DIAGNOSTIC_RPC_GATE_POLICY : null,
+        runtimeState: cli.diagnosticRpcSidecar ? {
+          standard: runtimeStateDescriptor(isolatedEnv),
+          diagnostic: runtimeStateDescriptor(diagnosticEnv)
+        } : null,
+        telemetryMode: cli.diagnosticRpcSidecar ? {
+          standard: isolatedEnv.JAVA_LSP_JAVA_INDEX_RPC_TELEMETRY,
+          diagnostic: diagnosticEnv.JAVA_LSP_JAVA_INDEX_RPC_TELEMETRY
+        } : null,
+        outputFile: cli.diagnosticRpcSidecar
+          ? path.join(diagnosticRpcDir, "java-index-rpc-sidecar.json")
+          : null
       },
       jdtlsDisabled: true,
       workspaceRoot
@@ -159,6 +246,7 @@ async function main() {
             cacheDir: path.join(cacheDir, `${project}-r${round}-${variant}`),
             outputFile: path.join(matrixDir, `${project}-r${round}-${variant}.json`),
             runs: cli.runs,
+            verbosity: "standard",
             env: isolatedEnv,
             provenance: {
               manifestSha256: manifest.sha256,
@@ -171,6 +259,45 @@ async function main() {
           });
         }
       }
+    }
+
+    if (cli.diagnosticRpcSidecar) {
+      for (let roundIndex = 0; roundIndex < ROUND_ORDER.length; roundIndex += 1) {
+        const round = roundIndex + 1;
+        for (const variant of ROUND_ORDER[roundIndex]) {
+          const runtimeRoot = variant === "old" ? baselineRoot : candidateRoot;
+          for (const project of MATRIX_PROJECTS) {
+            await runCell({
+              runtimeRoot,
+              variant,
+              round,
+              project,
+              repoRoot: repositories[project].root,
+              repository: repositories[project],
+              scenarioFile: scenarios[project].file,
+              cacheDir: path.join(diagnosticRpcCacheDir, `${project}-r${round}-${variant}`),
+              outputFile: path.join(diagnosticRpcRawDir, `${project}-r${round}-${variant}.json`),
+              runs: cli.runs,
+              verbosity: "diagnostic",
+              env: diagnosticEnv,
+              provenance: {
+                manifestSha256: manifest.sha256,
+                variant,
+                runtimeCommit: runtimes[variant].commit,
+                runtimeCommitTree: runtimes[variant].commitTree,
+                runtimeExecutableTree: runtimes[variant].executableTree,
+                candidatePatchSha256: sha256(candidatePatch)
+              }
+            });
+          }
+        }
+      }
+      const sidecar = await aggregateJavaIndexRpcSidecar({
+        manifestFile: manifest.file,
+        diagnosticDir: diagnosticRpcDir,
+        outputFile: path.join(diagnosticRpcDir, "java-index-rpc-sidecar.json")
+      });
+      console.log(`diagnostic JavaIndex RPC sidecar: ${sidecar.payloadSha256}`);
     }
 
     const finalDependency = await dependencyTreeInventory(isolatedNodeModules);
@@ -334,24 +461,31 @@ function sameDependencyInventory(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-async function runCell({ runtimeRoot, variant, round, project, repoRoot, repository, scenarioFile, cacheDir, outputFile, runs, env, provenance }) {
+export function benchmarkCellArguments({ runtimeRoot, repoRoot, project, scenarioFile, cacheDir, runs, verbosity }) {
+  return [
+    path.join(runtimeRoot, "dist", "benchmark-agent-impact.js"),
+    "--repo-root", repoRoot,
+    "--project-id", project,
+    "--scenarios", scenarioFile,
+    "--warm-state", "cold-nolsp",
+    "--mode", "balanced",
+    "--semantic-policy", "fast",
+    "--strategy", "impact",
+    "--runs", String(runs),
+    "--deadline-ms", String(FORMAL_REQUEST_DEADLINE_MS),
+    // Diagnostic telemetry is a separate source-locked run and is never
+    // charged to the default standard Token gate.
+    "--verbosity", verbosity,
+    "--index-cache-dir", cacheDir
+  ];
+}
+
+async function runCell({ runtimeRoot, variant, round, project, repoRoot, repository, scenarioFile, cacheDir, outputFile, runs, verbosity, env, provenance }) {
   await mkdir(cacheDir, { recursive: true });
-  console.log(`matrix: r${round} ${variant} ${project}`);
+  console.log(`${verbosity === "standard" ? "matrix" : "diagnostic-rpc"}: r${round} ${variant} ${project}`);
   await runToFiles(
     process.execPath,
-    [
-      path.join(runtimeRoot, "dist", "benchmark-agent-impact.js"),
-      "--repo-root", repoRoot,
-      "--project-id", project,
-      "--scenarios", scenarioFile,
-      "--warm-state", "cold-nolsp",
-      "--strategy", "impact",
-      "--runs", String(runs),
-      // The public default is standard. Diagnostic telemetry has a separate
-      // attribution suite and must never be charged to the default Token gate.
-      "--verbosity", "standard",
-      "--index-cache-dir", cacheDir
-    ],
+    benchmarkCellArguments({ runtimeRoot, repoRoot, project, scenarioFile, cacheDir, runs, verbosity }),
     outputFile,
     `${outputFile}.stderr`,
     { cwd: runtimeRoot, env }
@@ -362,6 +496,7 @@ async function runCell({ runtimeRoot, variant, round, project, repoRoot, reposit
   }
   await stampCellProvenance(outputFile, {
     ...provenance,
+    round,
     repoHead: observedRepository.head,
     repoTree: observedRepository.tree,
     repoStatusSha256: observedRepository.statusSha256,
@@ -683,7 +818,7 @@ function parseCli(args) {
   const flags = new Set();
   for (let index = 0; index < args.length; index += 1) {
     const key = args[index];
-    if (key === "--help" || key === "--keep-worktrees") {
+    if (key === "--help" || key === "--keep-worktrees" || key === "--diagnostic-rpc-sidecar") {
       flags.add(key);
       continue;
     }
@@ -696,6 +831,7 @@ function parseCli(args) {
   return {
     help: flags.has("--help"),
     keepWorktrees: flags.has("--keep-worktrees"),
+    diagnosticRpcSidecar: flags.has("--diagnostic-rpc-sidecar"),
     candidateRoot,
     baseline: required(options.get("--baseline") || process.env.THREE_REPO_BASELINE_SHA, "--baseline"),
     outputDir: required(options.get("--output-dir"), "--output-dir"),
@@ -723,6 +859,9 @@ function numberOption(value, fallback, flag) {
 
 export function isolatedChildEnvironment(overrides = {}) {
   const environment = scrubHostNodeRuntimeState({ ...process.env, ...overrides });
+  for (const name of Object.keys(environment)) {
+    if (name.startsWith("JAVA_LSP_BENCH_") && !(name in overrides)) delete environment[name];
+  }
   for (const name of [
     "JDTLS_EXTRA_ARGS",
     "JAVA_LSP_RESOURCE_TELEMETRY_FILE",
@@ -732,6 +871,7 @@ export function isolatedChildEnvironment(overrides = {}) {
     "JAVA_LSP_SMOKE_REPO_ROOT",
     "JAVA_LSP_TEST_REPO_ROOT",
     "JAVA_LSP_BENCH_INDEX_CACHE_DIR",
+    "JAVA_LSP_JAVA_INDEX_RPC_TELEMETRY",
     "JAVA_LSP_ISOLATED_REPO_ROOT",
     "JAVA_LSP_ISOLATED_REPO_WORKTREE",
     "JAVA_TOOL_OPTIONS",
@@ -773,7 +913,7 @@ function printUsage() {
   --baseline <sha> \\
   --lishuedu <repo-root> --cipherlink <repo-root> --exam-parent-v3 <repo-root> \\
   [--candidate-root <codex-java-lsp-mcp-root>] --output-dir <new-dir-outside-source-checkout> \\
-  [--runs 5] [--p95-limit 1.25] [--keep-worktrees]`);
+  [--runs 5] [--p95-limit 1.25] [--diagnostic-rpc-sidecar] [--keep-worktrees]`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

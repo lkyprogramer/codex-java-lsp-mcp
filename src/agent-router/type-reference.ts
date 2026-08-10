@@ -1,21 +1,14 @@
-// input: Anchors, candidate map, and JavaIndex type/reference facts.
-// output: Type-reference and implementation-lookup candidates without rg scans.
-// pos: Async type-reference collector for AgentRouter (Task 22).
+// input: Anchors, existing candidate paths, and JavaIndex type/reference facts.
+// output: Evidence-native type-reference and implementation signals without additive CandidateFile scoring.
+// pos: Async type-reference collector for AgentRouter (V3.2-14).
 import path from "node:path";
-import type { RoutingPolicy } from "../routing-policy.js";
 import type { RouterIndex } from "../java-index/router-java-index.js";
-import type { JavaSourceFacts } from "../java-index/router-facts.js";
-import type { CandidateFile, ImpactOptions, ResolvedAnchor } from "../agent-types.js";
-import {
-  candidateFromFacts,
-  breakdown,
-  matchesAny,
-  mergeCandidate,
-  scoreBase,
-  simpleTypeName,
-  typeReferenceOrderBonus,
-  unique
-} from "./candidate-helpers.js";
+import type { FactsForFileItem, JavaSourceFacts } from "../java-index/router-facts.js";
+import type { ImpactOptions, ResolvedAnchor, RouterPosition } from "../agent-types.js";
+import type { EvidenceSignal } from "./evidence.js";
+import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
+import type { DeadlineBudget } from "../runtime/deadline-budget.js";
+import { matchesAny, simpleTypeName, unique } from "./candidate-helpers.js";
 
 export type TypeReferenceMetrics = {
   scannedPatterns: number;
@@ -29,177 +22,428 @@ export type TypeReferenceMetrics = {
   indexMisses: number;
 };
 
-type CollectTypeReferenceInput = {
-  candidates: Map<string, CandidateFile>;
-  anchors: ResolvedAnchor[];
-  options: ImpactOptions;
-  metrics: TypeReferenceMetrics;
-  javaIndex: RouterIndex;
-  routingPolicy: RoutingPolicy;
-  generation?: number;
+export type CollectTypeReferenceSignalsInput = {
+  readonly anchors: readonly ResolvedAnchor[];
+  readonly options: Pick<ImpactOptions, "taskKeywords">;
+  readonly metrics: TypeReferenceMetrics;
+  readonly javaIndex: RouterIndex;
+  readonly budget?: DeadlineBudget;
+  readonly generation?: number;
+  readonly existingCandidatePaths: readonly string[];
+  readonly providerId: string;
+  readonly providerVersion: string;
+  readonly nextSignalId: () => string;
 };
 
-export async function collectTypeReferenceCandidates(input: CollectTypeReferenceInput): Promise<void> {
-  const { candidates, anchors, options, metrics, javaIndex, routingPolicy, generation } = input;
-  for (const anchor of anchors) {
-    if (!shouldUseTypeReference(anchor)) {
-      continue;
+export type TypeReferenceSignalResult = {
+  readonly evidence: readonly EvidenceSignal[];
+  readonly failedAnchorIds: readonly string[];
+  readonly cancelledAnchorIds: readonly string[];
+  readonly deadlineExceededAnchorIds: readonly string[];
+  readonly partialAnchorIds: readonly string[];
+  readonly degradedReasons: readonly string[];
+};
+
+type TypeReferenceAnchorPlan = {
+  readonly anchor: ResolvedAnchor;
+  readonly referenceTypeName: string;
+};
+
+type TypeReferenceSignalDraft = Omit<EvidenceSignal, "signalId">;
+
+type TypeReferenceOutcome = {
+  readonly failedAnchorIds: Set<string>;
+  readonly cancelledAnchorIds: Set<string>;
+  readonly deadlineExceededAnchorIds: Set<string>;
+  readonly partialAnchorIds: Set<string>;
+  readonly degradedReasons: string[];
+};
+
+const REFERENCE_SPEC = {
+  kind: "REFERENCE",
+  weight: 55,
+  confidence: 0.8,
+  reason: "typeReference",
+  verifiedBy: "typeReference"
+} as const;
+
+const IMPLEMENTATION_SPEC = {
+  kind: "IMPLEMENTS",
+  weight: 70,
+  confidence: 0.9,
+  reason: "typeGraph:implementation-lookup",
+  verifiedBy: "typeGraph"
+} as const;
+
+export async function collectTypeReferenceSignals(
+  input: CollectTypeReferenceSignalsInput
+): Promise<TypeReferenceSignalResult> {
+  const plans = input.anchors
+    .filter(shouldUseTypeReference)
+    .map(anchor => ({
+      anchor,
+      referenceTypeName: anchor.className || path.basename(anchor.absolutePath, ".java")
+    } satisfies TypeReferenceAnchorPlan));
+  const outcome = newTypeReferenceOutcome();
+  if (input.budget?.expired()) {
+    for (const plan of plans) recordBudgetDeadline(outcome, plan.anchor.id);
+    return materializeResult([], outcome);
+  }
+  const anchorFacts = await loadAnchorFacts(input, plans, outcome);
+  const knownPaths = new Set(input.existingCandidatePaths);
+  const evidence: EvidenceSignal[] = [];
+
+  if (terminalOutcome(outcome)) return materializeResult(evidence, outcome);
+
+  for (const plan of plans) {
+    if (input.budget?.expired()) {
+      recordBudgetDeadline(outcome, plan.anchor.id);
+      break;
     }
-    // Direct type references are index-resolved facts.  Candidate discovery
-    // must not suppress them by repository identity: the read-plan's bounded
-    // selection decides whether a discovered file is worth reading.
-    const canUseReferenceOrderBonus = anchor.profile === "controller";
-    const typeName = anchor.className || path.basename(anchor.absolutePath, ".java");
-    const typeReferenceFacts = javaIndex.findTypeReferences(typeName, 20);
-    let anchorFacts: JavaSourceFacts;
+    const facts = anchorFacts.get(plan.anchor.id);
+    if (!facts) continue;
+    const drafts = new Map<string, TypeReferenceSignalDraft>();
+    const pathOrder = new Map<string, number>();
+    for (const candidatePath of input.existingCandidatePaths) {
+      if (!pathOrder.has(candidatePath)) pathOrder.set(candidatePath, pathOrder.size);
+    }
+
+    let directReferences: readonly JavaSourceFacts[] = [];
     try {
-      anchorFacts = await javaIndex.factsFor(anchor.absolutePath, generation);
-    } catch {
-      // Ensure an in-flight static query is observed before moving to the next
-      // anchor, so a failed fact read cannot leave a rejected promise behind.
-      await typeReferenceFacts.catch(() => undefined);
-      continue;
-    }
-    metrics.scannedPatterns += 1;
-    for (const facts of await typeReferenceFacts) {
-      const alreadyCandidate = candidates.has(facts.absolutePath);
-      if (alreadyCandidate) {
-        metrics.skippedExisting += 1;
-      }
-      const candidate = candidateFromFacts(facts, scoreBase(routingPolicy, "semantic", facts, anchor, options) + 60, "typeReference");
-      mergeCandidate(candidates, candidate);
-      if (!alreadyCandidate) {
-        metrics.addedCandidates += 1;
+      directReferences = await input.javaIndex.findTypeReferences(plan.referenceTypeName, 20, {
+        typeId: facts.typeId,
+        hydrate: false
+      });
+      input.metrics.scannedPatterns += 1;
+    } catch (error) {
+      recordOperationFailure(outcome, plan.anchor.id, "direct reference lookup", error);
+      if (terminalOutcome(outcome)) {
+        evidence.push(...materializeDrafts(input, drafts, pathOrder));
+        break;
       }
     }
-    const methodFact = await javaIndex.methodAt(anchor.absolutePath, anchor.line, generation);
+    for (const reference of directReferences) {
+      recordCandidateMetric(input.metrics, knownPaths, reference.absolutePath);
+      rememberPath(pathOrder, reference.absolutePath);
+      recordReferenceDraft(input, drafts, plan.anchor, reference.absolutePath, [{ line: 1, column: 1 }]);
+    }
+
+    const methodFact = methodAtFromFacts(facts, plan.anchor.line);
     const methodTypes = methodFact
       ? unique([...methodFact.relations.map(relation => relation.typeName), ...methodFact.referencedTypes])
       : [];
-    // A method relation is the strongest signal. Task-named imports cover
-    // static mapper calls and generic return types that tree-sitter cannot
-    // always express as a direct method type.  They are still exact imports,
-    // not a lexical repository scan.
     const referencedTypes = unique([
       ...methodTypes,
-      ...anchorFacts.referencedTypes,
-      ...anchorFacts.imports
-        .filter(imported => matchesAny(simpleTypeName(imported), options.taskKeywords))
+      ...facts.referencedTypes,
+      ...facts.imports.filter(imported => matchesAny(simpleTypeName(imported), input.options.taskKeywords))
     ]);
-    const referencedTypeOrder = new Map<string, number>();
-    referencedTypes.forEach((type, index) => {
-      const simple = simpleTypeName(type);
-      if (!referencedTypeOrder.has(simple)) {
-        referencedTypeOrder.set(simple, index);
-      }
-    });
-    reinforceImportedCandidates({
-      candidates,
-      anchor,
-      options,
-      routingPolicy,
-      importedTypes: referencedTypes,
-      referencedTypeOrder,
-      canUseReferenceOrderBonus
-    });
-    // Candidate names used to be resolved by foreground-parsing every rg
-    // result.  That makes the V2 worker parse arbitrary lexical matches just
-    // to discover whether they are a referenced type.  Querying definitions
-    // is both exact and indexed; merge the returned fact even when rg already
-    // found the same path so the evidence and implementation lookup survive.
-    if (referencedTypes.length > 0) {
-      metrics.scannedPatterns += 1;
+    reinforceImportedCandidates(input, plan.anchor, referencedTypes, pathOrder, drafts);
+    if (referencedTypes.length === 0) {
+      evidence.push(...materializeDrafts(input, drafts, pathOrder));
+      continue;
     }
-    const definitions = await javaIndex.findTypeDefinitions(referencedTypes, 20);
-    for (const facts of definitions) {
-      if (facts.absolutePath === anchor.absolutePath) {
-        continue;
+
+    input.metrics.scannedPatterns += 1;
+    if (input.budget?.expired()) {
+      recordBudgetDeadline(outcome, plan.anchor.id);
+      evidence.push(...materializeDrafts(input, drafts, pathOrder));
+      break;
+    }
+    let definitions: readonly JavaSourceFacts[] = [];
+    try {
+      definitions = await input.javaIndex.findTypeDefinitions(referencedTypes, 20, false);
+    } catch (error) {
+      recordOperationFailure(outcome, plan.anchor.id, "definition lookup", error);
+      evidence.push(...materializeDrafts(input, drafts, pathOrder));
+      if (terminalOutcome(outcome)) break;
+      continue;
+    }
+    let stopAfterPlan = false;
+    for (const definition of definitions) {
+      if (definition.absolutePath === plan.anchor.absolutePath) continue;
+      recordCandidateMetric(input.metrics, knownPaths, definition.absolutePath);
+      rememberPath(pathOrder, definition.absolutePath);
+      recordReferenceDraft(
+        input,
+        drafts,
+        plan.anchor,
+        definition.absolutePath,
+        [{ line: 1, column: 1 }]
+      );
+      if (definition.kind !== "interface" || !definition.typeName) continue;
+      const qualifiedTypeName = definition.packageName
+        ? `${definition.packageName}.${definition.typeName}`
+        : definition.typeName;
+      if (input.budget?.expired()) {
+        recordBudgetDeadline(outcome, plan.anchor.id);
+        stopAfterPlan = true;
+        break;
       }
-      const alreadyCandidate = candidates.has(facts.absolutePath);
-      if (alreadyCandidate) {
-        metrics.skippedExisting += 1;
-      }
-      const orderBonus = canUseReferenceOrderBonus ? typeReferenceOrderBonus(referencedTypeOrder.get(simpleTypeName(facts.typeName || ""))) : 0;
-      const candidate = candidateFromFacts(facts, scoreBase(routingPolicy, "semantic", facts, anchor, options) + 55 + orderBonus, "typeReference");
-      mergeCandidate(candidates, candidate);
-      if (!alreadyCandidate) {
-        metrics.addedCandidates += 1;
-      }
-      if (facts.kind === "interface" && facts.typeName) {
-        const qualifiedTypeName = facts.packageName ? `${facts.packageName}.${facts.typeName}` : facts.typeName;
-        for (const implFacts of await javaIndex.findImplementers(qualifiedTypeName, 8, anchor.absolutePath)) {
-          const implementation = candidateFromFacts(implFacts, scoreBase(routingPolicy, "semantic", implFacts, anchor, options) + 70, "typeGraph");
-          implementation.reasons = ["typeGraph:implementation-lookup"];
-          mergeCandidate(candidates, implementation);
+      try {
+        for (const implementation of await input.javaIndex.findImplementers(
+          qualifiedTypeName,
+          8,
+          plan.anchor.absolutePath,
+          { typeId: definition.typeId, hydrate: false }
+        )) {
+          rememberPath(pathOrder, implementation.absolutePath);
+          recordImplementationDraft(input, drafts, plan.anchor, implementation.absolutePath);
+          knownPaths.add(implementation.absolutePath);
+        }
+      } catch (error) {
+        recordOperationFailure(outcome, plan.anchor.id, "implementer lookup", error);
+        if (terminalOutcome(outcome)) {
+          stopAfterPlan = true;
+          break;
         }
       }
+    }
+    evidence.push(...materializeDrafts(input, drafts, pathOrder));
+    if (stopAfterPlan) break;
+  }
+
+  return materializeResult(evidence, outcome);
+}
+
+function materializeResult(
+  evidence: readonly EvidenceSignal[],
+  outcome: TypeReferenceOutcome
+): TypeReferenceSignalResult {
+  return {
+    evidence,
+    failedAnchorIds: [...outcome.failedAnchorIds],
+    cancelledAnchorIds: [...outcome.cancelledAnchorIds],
+    deadlineExceededAnchorIds: [...outcome.deadlineExceededAnchorIds],
+    partialAnchorIds: [...outcome.partialAnchorIds],
+    degradedReasons: unique(outcome.degradedReasons)
+  };
+}
+
+function terminalOutcome(outcome: TypeReferenceOutcome): boolean {
+  return outcome.cancelledAnchorIds.size > 0 || outcome.deadlineExceededAnchorIds.size > 0;
+}
+
+function recordBudgetDeadline(outcome: TypeReferenceOutcome, anchorId: string): void {
+  outcome.deadlineExceededAnchorIds.add(anchorId);
+  outcome.degradedReasons.push(`typeReference ${anchorId} request budget exhausted`);
+}
+
+async function loadAnchorFacts(
+  input: CollectTypeReferenceSignalsInput,
+  plans: readonly TypeReferenceAnchorPlan[],
+  outcome: TypeReferenceOutcome
+): Promise<Map<string, JavaSourceFacts>> {
+  const factsByAnchor = new Map<string, JavaSourceFacts>();
+  if (plans.length === 0) return factsByAnchor;
+  if (input.budget?.expired()) {
+    for (const plan of plans) recordBudgetDeadline(outcome, plan.anchor.id);
+    return factsByAnchor;
+  }
+  if (input.javaIndex.factsForFiles) {
+    try {
+      const result = await input.javaIndex.factsForFiles(plans.map(plan => plan.anchor.absolutePath), input.generation);
+      for (let index = 0; index < plans.length; index += 1) {
+        const plan = plans[index]!;
+        const item = result.items[index];
+        if (item?.state === "FOUND") {
+          factsByAnchor.set(plan.anchor.id, item.facts);
+        } else {
+          recordFactsItemOutcome(outcome, plan.anchor.id, item);
+        }
+      }
+      return factsByAnchor;
+    } catch (error) {
+      for (const plan of plans) recordOperationFailure(outcome, plan.anchor.id, "facts batch", error);
+      return factsByAnchor;
+    }
+  }
+  for (const plan of plans) {
+    if (input.budget?.expired()) {
+      recordBudgetDeadline(outcome, plan.anchor.id);
+      break;
+    }
+    try {
+      factsByAnchor.set(plan.anchor.id, await input.javaIndex.factsFor(plan.anchor.absolutePath, input.generation));
+    } catch (error) {
+      recordOperationFailure(outcome, plan.anchor.id, "anchor facts", error);
+    }
+  }
+  return factsByAnchor;
+}
+
+function newTypeReferenceOutcome(): TypeReferenceOutcome {
+  return {
+    failedAnchorIds: new Set(),
+    cancelledAnchorIds: new Set(),
+    deadlineExceededAnchorIds: new Set(),
+    partialAnchorIds: new Set(),
+    degradedReasons: []
+  };
+}
+
+function recordFactsItemOutcome(
+  outcome: TypeReferenceOutcome,
+  anchorId: string,
+  item: FactsForFileItem | undefined
+): void {
+  const reason = item?.state === "DEGRADED"
+    ? item.reason
+    : item?.state === "MISSING"
+      ? item.reason
+      : "INDEX_INCOMPLETE";
+  if (reason === "DEADLINE_EXCEEDED") outcome.deadlineExceededAnchorIds.add(anchorId);
+  else if (reason === "CANCELLED") outcome.cancelledAnchorIds.add(anchorId);
+  else if (reason === "QUERY_FAILED") outcome.failedAnchorIds.add(anchorId);
+  else outcome.partialAnchorIds.add(anchorId);
+  outcome.degradedReasons.push(`typeReference ${anchorId} ${reason}`);
+}
+
+function recordOperationFailure(
+  outcome: TypeReferenceOutcome,
+  anchorId: string,
+  operation: string,
+  error: unknown
+): void {
+  if (error instanceof JavaIntelligenceError && error.code === "DEADLINE_EXCEEDED") {
+    outcome.deadlineExceededAnchorIds.add(anchorId);
+  } else if (error instanceof JavaIntelligenceError && error.code === "CANCELLED") {
+    outcome.cancelledAnchorIds.add(anchorId);
+  } else {
+    outcome.failedAnchorIds.add(anchorId);
+  }
+  const reason = error instanceof JavaIntelligenceError ? error.code : "QUERY_FAILED";
+  outcome.degradedReasons.push(`typeReference ${anchorId} ${operation} ${reason}`);
+}
+
+function methodAtFromFacts(facts: JavaSourceFacts, line: number) {
+  return [...facts.methods]
+    .filter(method => method.line <= line && line <= method.endLine)
+    .sort((left, right) => right.line - left.line)[0]
+    ?? [...facts.methods]
+      .filter(method => method.line <= line)
+      .sort((left, right) => right.line - left.line)[0];
+}
+
+function reinforceImportedCandidates(
+  input: CollectTypeReferenceSignalsInput,
+  anchor: ResolvedAnchor,
+  referencedTypes: readonly string[],
+  pathOrder: ReadonlyMap<string, number>,
+  drafts: Map<string, TypeReferenceSignalDraft>
+): void {
+  const importedPaths = referencedTypes
+    .filter(typeName => typeName.includes("."))
+    .map(typeName => `${typeName.replace(/\./g, "/")}.java`);
+  if (importedPaths.length === 0) return;
+  for (const candidatePath of pathOrder.keys()) {
+    const normalized = candidatePath.replace(/\\/g, "/");
+    if (importedPaths.some(suffix => normalized.endsWith(suffix))) {
+      recordReferenceDraft(input, drafts, anchor, candidatePath, []);
     }
   }
 }
 
-type ReinforceImportedCandidatesInput = {
-  candidates: Map<string, CandidateFile>;
-  anchor: ResolvedAnchor;
-  options: ImpactOptions;
-  routingPolicy: RoutingPolicy;
-  importedTypes: readonly string[];
-  referencedTypeOrder: ReadonlyMap<string, number>;
-  canUseReferenceOrderBonus: boolean;
-};
-
-/**
- * A candidate can be proven as a direct type reference from the anchor's
- * explicit import and its already-known path.  This is intentionally path
- * matching rather than `factsFor(candidate)`: the latter turns every rg hit
- * into an on-demand parse before read-plan selection.
- */
-function reinforceImportedCandidates(input: ReinforceImportedCandidatesInput): void {
-  const importedPaths = new Map<string, string>();
-  for (const importedType of input.importedTypes) {
-    const simple = simpleTypeName(importedType);
-    if (importedType.includes(".")) {
-      importedPaths.set(simple, `${importedType.replace(/\./g, "/")}.java`);
+function recordReferenceDraft(
+  input: CollectTypeReferenceSignalsInput,
+  drafts: Map<string, TypeReferenceSignalDraft>,
+  anchor: ResolvedAnchor,
+  candidateFile: string,
+  positions: RouterPosition[],
+  weight: number = REFERENCE_SPEC.weight
+): void {
+  recordDraft(drafts, {
+    candidateFile,
+    anchorId: anchor.id,
+    kind: REFERENCE_SPEC.kind,
+    family: "STATIC_STRUCTURE",
+    provenance: "AST_RESOLVED",
+    confidence: REFERENCE_SPEC.confidence,
+    completeness: "COMPLETE",
+    weight,
+    sourceFile: anchor.absolutePath,
+    positions,
+    providerId: input.providerId,
+    providerVersion: input.providerVersion,
+    generation: input.generation ?? 0,
+    detail: REFERENCE_SPEC.reason,
+    candidateMetadata: {
+      categories: ["semantic"],
+      reasons: [REFERENCE_SPEC.reason],
+      verifiedBy: [REFERENCE_SPEC.verifiedBy],
+      matchCount: 0
     }
-  }
-  if (importedPaths.size === 0) {
+  });
+}
+
+function recordImplementationDraft(
+  input: CollectTypeReferenceSignalsInput,
+  drafts: Map<string, TypeReferenceSignalDraft>,
+  anchor: ResolvedAnchor,
+  candidateFile: string
+): void {
+  recordDraft(drafts, {
+    candidateFile,
+    anchorId: anchor.id,
+    kind: IMPLEMENTATION_SPEC.kind,
+    family: "STATIC_STRUCTURE",
+    provenance: "AST_RESOLVED",
+    confidence: IMPLEMENTATION_SPEC.confidence,
+    completeness: "COMPLETE",
+    weight: IMPLEMENTATION_SPEC.weight,
+    sourceFile: candidateFile,
+    positions: [{ line: 1, column: 1 }],
+    providerId: input.providerId,
+    providerVersion: input.providerVersion,
+    generation: input.generation ?? 0,
+    detail: IMPLEMENTATION_SPEC.reason,
+    candidateMetadata: {
+      categories: ["semantic"],
+      reasons: [IMPLEMENTATION_SPEC.reason],
+      verifiedBy: [IMPLEMENTATION_SPEC.verifiedBy],
+      matchCount: 0
+    }
+  });
+}
+
+function recordDraft(drafts: Map<string, TypeReferenceSignalDraft>, draft: TypeReferenceSignalDraft): void {
+  const key = `${draft.anchorId}\0${draft.candidateFile}\0${draft.kind}\0${draft.sourceFile}`;
+  const existing = drafts.get(key);
+  if (!existing) {
+    drafts.set(key, draft);
     return;
   }
-  for (const existing of [...input.candidates.values()]) {
-    const candidatePath = (existing.path || existing.absolutePath).replace(/\\/g, "/");
-    const matched = [...importedPaths.entries()].find(([, importedPath]) => candidatePath.endsWith(importedPath));
-    if (!matched) {
-      continue;
-    }
-    const [typeName] = matched;
-    const orderBonus = input.canUseReferenceOrderBonus
-      ? typeReferenceOrderBonus(input.referencedTypeOrder.get(typeName))
-      : 0;
-    const score = scoreBase(input.routingPolicy, "semantic", existing, input.anchor, input.options) + 55 + orderBonus;
-    mergeCandidate(input.candidates, {
-      ...existing,
-      score,
-      matchCount: 0,
-      positions: [],
-      categories: ["semantic"],
-      reasons: ["typeReference"],
-      confidence: "medium",
-      verifiedBy: ["typeReference"],
-      scoreBreakdown: [breakdown("semantic.typeReference", "semantic-seed", score, "anchor explicit import")]
+  if (draft.weight > existing.weight || (existing.positions.length === 0 && draft.positions.length > 0)) {
+    drafts.set(key, {
+      ...(draft.weight > existing.weight ? draft : existing),
+      positions: existing.positions.length > 0 ? existing.positions : [...draft.positions],
+      weight: Math.max(existing.weight, draft.weight)
     });
   }
+}
+
+function materializeDrafts(
+  input: CollectTypeReferenceSignalsInput,
+  drafts: ReadonlyMap<string, TypeReferenceSignalDraft>,
+  pathOrder: ReadonlyMap<string, number>
+): EvidenceSignal[] {
+  return [...drafts.values()]
+    .sort((left, right) => (pathOrder.get(left.candidateFile) ?? Number.MAX_SAFE_INTEGER)
+      - (pathOrder.get(right.candidateFile) ?? Number.MAX_SAFE_INTEGER))
+    .map(draft => ({ ...draft, signalId: input.nextSignalId() }));
+}
+
+function recordCandidateMetric(metrics: TypeReferenceMetrics, knownPaths: Set<string>, candidateFile: string): void {
+  if (knownPaths.has(candidateFile)) metrics.skippedExisting += 1;
+  else {
+    knownPaths.add(candidateFile);
+    metrics.addedCandidates += 1;
+  }
+}
+
+function rememberPath(pathOrder: Map<string, number>, candidateFile: string): void {
+  if (!pathOrder.has(candidateFile)) pathOrder.set(candidateFile, pathOrder.size);
 }
 
 function shouldUseTypeReference(anchor: ResolvedAnchor): boolean {
   return new Set(["controller", "service", "repository", "dto", "port"]).has(anchor.profile);
-}
-
-function shouldLookupReferencedImplementers(facts: JavaSourceFacts, options: ImpactOptions): facts is JavaSourceFacts & { typeName: string } {
-  return facts.kind === "interface"
-    && typeof facts.typeName === "string"
-    && /(?:Service|Gateway|Port)$/.test(facts.typeName)
-    && (options.taskKeywords.length === 0 || matchesAny(facts.typeName, options.taskKeywords));
-}
-
-function implementationLookupInScope(facts: JavaSourceFacts, anchor: ResolvedAnchor, options: ImpactOptions): boolean {
-  return !facts.module || facts.module === anchor.module || options.focusModules.includes(facts.module) || options.focusModules.includes(path.basename(facts.module));
 }

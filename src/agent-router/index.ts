@@ -41,7 +41,7 @@ import { GenerationRgCache } from "../search/rg-cache.js";
 import { RgRunner } from "../search/rg-runner.js";
 import type { SearchResult } from "../search/search-types.js";
 import { positiveInteger, timed } from "./runtime.js";
-import type { ProviderInput } from "./evidence.js";
+import type { CandidateEvidence, ProviderInput } from "./evidence.js";
 import { EvidenceLedger } from "./evidence-ledger.js";
 import {
   collectStaticStructureEvidence,
@@ -53,7 +53,6 @@ import { collectSupportEvidence } from "./providers/support-provider.js";
 import { collectRelationshipEvidence } from "./providers/relationship-provider.js";
 import { collectFrameworkEvidence, FRAMEWORK_ADAPTERS } from "./providers/framework-provider.js";
 import { lombokCompleteness } from "./framework/lombok-adapter.js";
-import { buildShadowRanking } from "./shadow-ranking.js";
 import {
   type CandidateFile,
   type ImpactOptions,
@@ -74,24 +73,11 @@ type RouterStatus = {
 /** Request-local benchmark observer. It is intentionally absent from ImpactResultV6. */
 export type ImpactInternalObserver = {
   readPlanCoordinates?(rangesByAbsolutePath: ReadonlyMap<string, readonly SourceRange[]>): void;
+  productionRanking?(
+    ranked: readonly CandidateEvidence[],
+    selectedPaths: readonly string[]
+  ): void;
 };
-
-/**
- * Task 25 item 6: an explicit opt-in, independent of `verbosity`. The family
- * diagnostics calculate counterfactual attribution from the outcomes and
- * ranked candidates already produced by this request. Keeping it opt-in
- * still avoids the payload and CPU cost of per-family ablations on ordinary
- * diagnostic requests. The P95 gate defaults to verbosity=standard
- * (src/benchmark-agent-impact.ts), so this flag remains an independent
- * safety net on top of the verbosity gate below.
- *
- * Read live per request, not cached at module load: this toggle exists to be
- * flipped on a running process for a comparison window and back off again,
- * not to be fixed for the process lifetime like RG_CACHE_TTL_MS below.
- */
-function shadowRankingEnabled(): boolean {
-  return process.env.JAVA_LSP_SHADOW_RANKING === "1";
-}
 const RG_CACHE_TTL_MS = positiveInteger(process.env.JAVA_LSP_RG_CACHE_TTL_MS, 300000);
 const RG_CONCURRENCY = positiveInteger(process.env.JAVA_LSP_RG_CONCURRENCY, Math.min(4, availableParallelism()));
 // Used only when a caller does not supply the request budget (benchmarks, tests).
@@ -372,12 +358,16 @@ export class AgentRouter {
       crossModuleConsumers: 0,
       excludedModules: 0
     };
-    const rankContext = {
+    let productionRankedEvidence: readonly CandidateEvidence[] = [];
+    const rankContext: RankCandidatesContext = {
       anchors,
       options,
       suppressed,
       repoRoot: this.repoRoot,
-      familyRankPolicy
+      familyRankPolicy,
+      onRankedEvidence(rankedEvidence) {
+        productionRankedEvidence = rankedEvidence;
+      }
     };
     const rankedPool = await timed(phaseMs, "familyRank", async () => rankCandidatePool(normalized, rankContext));
     const plannerProtectedPaths = readPlanProtectedPaths(rankedPool, protectedReadPlanPaths, rankContext);
@@ -391,6 +381,7 @@ export class AgentRouter {
       generation
     }));
     internalObserver?.readPlanCoordinates?.(readPlanResult.selectedCoordinateRangesByPath);
+    internalObserver?.productionRanking?.(productionRankedEvidence, readPlanResult.selectedPaths);
     const { selectedCoordinateRangesByPath: _selectedCoordinateRangesByPath, ...publicReadPlanMetrics } = readPlanResult;
     const ranked = truncateRankedCandidatePool(rankedPool, rankContext, new Set(readPlanResult.selectedPaths));
     const idByPath = new Map(ranked.map((file, index) => [file.absolutePath, `F${index + 1}`]));
@@ -401,7 +392,6 @@ export class AgentRouter {
     }));
     const cacheAfter = await timed(phaseMs, "sessionCacheAfter", async () => this.session.cacheStatus());
     const rgAfter = await timed(phaseMs, "rgCacheAfter", async () => this.rgCacheStatus());
-    const sourceAfter = await timed(phaseMs, "sourceStatusAfter", async () => this.javaIndex.routerStatus());
     // One status() call shared by the Lombok gap and semantic.readiness below -
     // both want the same JDT session snapshot, and status() is not free.
     const sessionStatus = this.session.status();
@@ -415,21 +405,10 @@ export class AgentRouter {
     ])];
     const lombok = await timed(phaseMs, "lombokCompleteness", async () =>
       lombokCompleteness(sessionStatus.generatedCode, lombokScopePaths, this.javaIndex, generation, budget));
-
-    // Diagnostic only: production ranking above has already used the same
-    // normalized outcomes. Shadow output adds counterfactual attribution; it
-    // must never cause a second provider/facts collection pass.
-    const shadowRanking = shadowRankingEnabled() && options.verbosity === "diagnostic"
-      ? await timed(phaseMs, "shadowRanking", async () => buildShadowRanking({
-        repoRoot: this.repoRoot,
-        anchors,
-        options,
-        outcomes: evidenceLedger.outcomes(),
-        ranked,
-        productionSelectedPaths: new Set(readPlanResult.selectedPaths),
-        familyRankPolicy
-      }))
-      : undefined;
+    // Earlier request-scoped status consumers share sourceBefore. Force the
+    // final probe after every request-time JavaIndex consumer (including
+    // Lombok completeness) so generation/coverage changes remain observable.
+    const sourceAfter = await timed(phaseMs, "sourceStatusAfter", async () => this.javaIndex.routerStatus(true));
 
     return buildImpactResult({
       startedAt,
@@ -444,7 +423,6 @@ export class AgentRouter {
         ...evidenceGaps(anchors, options, { ...semantic, lombokIncomplete: lombok.taskGapDetected }),
         ...readPlanResult.evidenceGaps
       ],
-      shadowRanking,
       freshness: {
         requestGeneration: freshness.generation,
         indexedGeneration: sourceAfter.javaIndex.indexedGeneration,

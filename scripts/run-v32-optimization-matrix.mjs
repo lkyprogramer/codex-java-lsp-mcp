@@ -10,14 +10,25 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { countProductionTs } from "./count-production-ts.mjs";
+import {
+  JAVA_INDEX_RPC_SIDECAR_ROLE,
+  validateDiagnosticRpcGate,
+  verifyJavaIndexRpcSidecar
+} from "./aggregate-java-index-rpc-sidecar.mjs";
 import { createDetachedLocalClone, scrubHostNodeRuntimeState } from "./isolation-utils.mjs";
 import { assertOutputOutsideSource } from "./run-three-repo-cold-matrix.mjs";
 import { verifyMatrix } from "./verify-three-repo-cold-matrix.mjs";
 
 const scriptRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-export const V32_OPTIMIZATION_MANIFEST_VERSION = 2;
+export const V32_OPTIMIZATION_MANIFEST_VERSION = 3;
+export const V32_OPTIMIZATION_BASELINE_COMMIT = "94c4ebfb1c174b2ac3cab615d986c3061accd2ed";
+export const V32_OPTIMIZATION_BASELINE_TREE = "60ae785e8af9ac06012452ea41c6b1fe2d3606fd";
+export const V32_OPTIMIZATION_BASELINE_INVENTORY_SHA256 = "8c3feaba965ca26a9f076608ad5c4e92dc3d074b3e657afbb32316bc17a6e9ea";
+export const V32_OPTIMIZATION_BASELINE_LOC = 31_638;
+export const V32_OPTIMIZATION_CYCLE_MAXIMUM_LOC = 33_219;
 
 export function createOptimizationManifest({
+  optimizationBaselineProductionTs,
   baselineProductionTs,
   candidateProductionTs,
   coldManifest,
@@ -26,12 +37,24 @@ export function createOptimizationManifest({
   artifacts,
   taskLedger = [],
   taskLedgerEvidence,
+  diagnosticRpcEvidence,
   coldEvidence,
   allowColdGateFailure = false
 }) {
   if (typeof coldSummary?.passed !== "boolean") throw new Error("cold matrix summary is missing its gate result");
-  if (!coldSummary.passed && !allowColdGateFailure) {
-    throw new Error("cold matrix must pass unless --allow-gate-failure explicitly records a Sprint baseline gap");
+  const diagnosticRpcGatePassed = diagnosticRpcEvidence?.gate?.passed ?? true;
+  validateProductionInventory(optimizationBaselineProductionTs, "optimization baseline");
+  validateFrozenOptimizationBaselineInventory(optimizationBaselineProductionTs);
+  const optimizationCycleMaximumLoc = Math.floor(optimizationBaselineProductionTs.totalLoc * 1.05);
+  const productionLocGatePassed = candidateProductionTs.totalLoc <= optimizationCycleMaximumLoc;
+  if (!productionLocGatePassed) {
+    throw new Error(
+      `production TypeScript LOC ${candidateProductionTs.totalLoc} exceeds the fixed V3.2 optimization-cycle ceiling ${optimizationCycleMaximumLoc}`
+    );
+  }
+  const sprintGatePassed = coldSummary.passed && diagnosticRpcGatePassed;
+  if (!sprintGatePassed && !allowColdGateFailure) {
+    throw new Error("cold and diagnostic Sprint gates must pass unless --allow-gate-failure explicitly records a gap");
   }
   const oldRuntime = coldManifest?.runtimes?.old;
   const newRuntime = coldManifest?.runtimes?.new;
@@ -47,9 +70,11 @@ export function createOptimizationManifest({
   }
   const manifest = {
     schemaVersion: V32_OPTIMIZATION_MANIFEST_VERSION,
-    status: coldSummary.passed ? "PASS" : "BASELINE_RECORDED_WITH_GAPS",
+    status: sprintGatePassed ? "PASS" : "BASELINE_RECORDED_WITH_GAPS",
     comparison: {
       policy: "previous-immutable-sprint-to-source-locked-candidate",
+      optimizationBaselineCommit: optimizationBaselineProductionTs.source.commit,
+      optimizationBaselineTree: optimizationBaselineProductionTs.source.executableTree,
       coldManifestVersion: coldManifest.version,
       baselineCommit: oldRuntime.commit,
       baselineTree: oldRuntime.executableTree,
@@ -65,20 +90,34 @@ export function createOptimizationManifest({
     dependencies: coldManifest.dependencies,
     environment,
     productionTs: {
+      optimizationBaseline: optimizationBaselineProductionTs,
       old: baselineProductionTs,
       new: candidateProductionTs,
       limits: {
-        sprintMaximumLoc: Math.floor(baselineProductionTs.totalLoc * 1.05),
-        finalTargetLoc: baselineProductionTs.totalLoc
+        optimizationCycleMaximumLoc,
+        finalTargetLoc: optimizationBaselineProductionTs.totalLoc
       },
       delta: {
         files: candidateProductionTs.fileCount - baselineProductionTs.fileCount,
         bytes: candidateProductionTs.totalBytes - baselineProductionTs.totalBytes,
         loc: candidateProductionTs.totalLoc - baselineProductionTs.totalLoc
+      },
+      cumulativeDelta: {
+        files: candidateProductionTs.fileCount - optimizationBaselineProductionTs.fileCount,
+        bytes: candidateProductionTs.totalBytes - optimizationBaselineProductionTs.totalBytes,
+        loc: candidateProductionTs.totalLoc - optimizationBaselineProductionTs.totalLoc
+      },
+      gate: {
+        passed: productionLocGatePassed,
+        actualLoc: candidateProductionTs.totalLoc,
+        maximumLoc: optimizationCycleMaximumLoc,
+        excessLoc: Math.max(0, candidateProductionTs.totalLoc - optimizationCycleMaximumLoc)
       }
     },
     taskLedger,
     taskLedgerEvidence,
+    ...(diagnosticRpcEvidence ? { diagnosticRpcEvidence } : {}),
+    ...(diagnosticRpcEvidence ? { diagnosticRpcGate: diagnosticRpcEvidence.gate } : {}),
     coldGate: {
       passed: coldSummary.passed,
       allowFailure: allowColdGateFailure,
@@ -104,7 +143,10 @@ export function validateOptimizationManifest(manifest) {
   if (manifestPayloadSha256 !== sha256(stableJson(payload))) {
     throw new Error("V3.2 optimization manifest payload hash mismatch");
   }
-  for (const side of ["old", "new"]) validateProductionInventory(manifest.productionTs?.[side], side);
+  for (const side of ["optimizationBaseline", "old", "new"]) {
+    validateProductionInventory(manifest.productionTs?.[side], side);
+  }
+  validateFrozenOptimizationBaselineInventory(manifest.productionTs.optimizationBaseline);
   const expectedDelta = {
     files: manifest.productionTs.new.fileCount - manifest.productionTs.old.fileCount,
     bytes: manifest.productionTs.new.totalBytes - manifest.productionTs.old.totalBytes,
@@ -113,17 +155,53 @@ export function validateOptimizationManifest(manifest) {
   if (stableJson(expectedDelta) !== stableJson(manifest.productionTs.delta)) {
     throw new Error("production TypeScript delta is inconsistent");
   }
-  if (manifest.productionTs.new.totalLoc > manifest.productionTs.limits.sprintMaximumLoc) {
-    throw new Error("production TypeScript LOC exceeds the V3.2 +5% sprint ceiling");
+  const expectedCumulativeDelta = {
+    files: manifest.productionTs.new.fileCount - manifest.productionTs.optimizationBaseline.fileCount,
+    bytes: manifest.productionTs.new.totalBytes - manifest.productionTs.optimizationBaseline.totalBytes,
+    loc: manifest.productionTs.new.totalLoc - manifest.productionTs.optimizationBaseline.totalLoc
+  };
+  if (stableJson(expectedCumulativeDelta) !== stableJson(manifest.productionTs.cumulativeDelta)) {
+    throw new Error("production TypeScript cumulative delta is inconsistent");
+  }
+  const expectedCycleMaximumLoc = Math.floor(manifest.productionTs.optimizationBaseline.totalLoc * 1.05);
+  const expectedLocGate = {
+    passed: manifest.productionTs.new.totalLoc <= expectedCycleMaximumLoc,
+    actualLoc: manifest.productionTs.new.totalLoc,
+    maximumLoc: expectedCycleMaximumLoc,
+    excessLoc: Math.max(0, manifest.productionTs.new.totalLoc - expectedCycleMaximumLoc)
+  };
+  if (manifest.productionTs.limits?.optimizationCycleMaximumLoc !== expectedCycleMaximumLoc
+    || manifest.productionTs.limits?.finalTargetLoc !== manifest.productionTs.optimizationBaseline.totalLoc
+    || stableJson(manifest.productionTs.gate) !== stableJson(expectedLocGate)) {
+    throw new Error("production TypeScript optimization-cycle LOC gate is inconsistent");
+  }
+  if (!expectedLocGate.passed) {
+    throw new Error(
+      `production TypeScript LOC ${expectedLocGate.actualLoc} exceeds the fixed V3.2 optimization-cycle ceiling ${expectedLocGate.maximumLoc}`
+    );
+  }
+  if (manifest.comparison?.optimizationBaselineCommit !== manifest.productionTs.optimizationBaseline.source.commit
+    || manifest.comparison?.optimizationBaselineTree !== manifest.productionTs.optimizationBaseline.source.executableTree) {
+    throw new Error("production TypeScript optimization baseline identity is inconsistent");
   }
   validateTaskLedger(manifest.taskLedger, manifest.productionTs.old, manifest.productionTs.new);
   validateTaskLedgerEvidenceDescriptor(manifest.taskLedgerEvidence);
   validateDependencyEvidence(manifest.dependencies);
+  if (manifest.diagnosticRpcEvidence !== undefined) validateDiagnosticRpcEvidence(manifest.diagnosticRpcEvidence);
+  if (manifest.diagnosticRpcEvidence === undefined && manifest.diagnosticRpcGate !== undefined) {
+    throw new Error("V3.2 diagnostic JavaIndex RPC gate has no evidence descriptor");
+  }
+  if (manifest.diagnosticRpcEvidence !== undefined
+    && stableJson(manifest.diagnosticRpcGate) !== stableJson(manifest.diagnosticRpcEvidence.gate)) {
+    throw new Error("V3.2 diagnostic JavaIndex RPC gate is inconsistent with its evidence");
+  }
   if (!Array.isArray(manifest.artifacts) || manifest.artifacts.length === 0) {
     throw new Error("V3.2 optimization manifest has no artifact inventory");
   }
   const statusClaimsPass = manifest.status === "PASS";
-  if (statusClaimsPass !== (manifest.coldGate?.passed === true)
+  const sprintGatePassed = manifest.coldGate?.passed === true
+    && (manifest.diagnosticRpcGate?.passed ?? true) === true;
+  if (statusClaimsPass !== sprintGatePassed
     || (manifest.status === "BASELINE_RECORDED_WITH_GAPS" && manifest.coldGate?.allowFailure !== true)
     || typeof manifest.coldGate?.manifestFile !== "string"
     || typeof manifest.coldGate?.matrixDir !== "string"
@@ -214,6 +292,15 @@ export async function verifyOptimizationManifest({ manifestFile, candidateRoot =
   const manifest = JSON.parse(await readFile(path.resolve(manifestFile), "utf8"));
   validateOptimizationManifest(manifest);
   await verifyTaskLedgerEvidence(manifest.taskLedgerEvidence, manifest.taskLedger);
+  const optimizationBaseline = await countProductionTs({
+    root: candidateRoot,
+    revision: V32_OPTIMIZATION_BASELINE_COMMIT
+  });
+  assertSameInventory(
+    manifest.productionTs.optimizationBaseline,
+    optimizationBaseline,
+    "optimization baseline production TypeScript"
+  );
   const baseline = await countProductionTs({ root: candidateRoot, revision: manifest.comparison.baselineCommit });
   assertSameInventory(manifest.productionTs.old, baseline, "old production TypeScript");
   await withReplayedCandidate(candidateRoot, manifest.comparison, async candidateRoot => {
@@ -244,6 +331,30 @@ export async function verifyOptimizationManifest({ manifestFile, candidateRoot =
     configuration: cold.configuration
   };
   if (stableJson(expectedCold) !== stableJson(actualCold)) throw new Error("cold matrix verification drift");
+  if (manifest.diagnosticRpcEvidence) {
+    const coldManifestFile = path.resolve(manifest.coldGate.manifestFile);
+    const coldManifestBytes = await readFile(coldManifestFile);
+    const coldManifestSha256 = sha256(coldManifestBytes);
+    if (path.resolve(manifest.diagnosticRpcEvidence.coldManifestFile) !== coldManifestFile
+      || manifest.diagnosticRpcEvidence.coldManifestSha256 !== coldManifestSha256) {
+      throw new Error("diagnostic JavaIndex RPC evidence is not bound to the verified cold manifest");
+    }
+    const sidecarBytes = await readFile(manifest.diagnosticRpcEvidence.file);
+    if (sidecarBytes.byteLength !== manifest.diagnosticRpcEvidence.bytes
+      || sha256(sidecarBytes) !== manifest.diagnosticRpcEvidence.sha256) {
+      throw new Error("diagnostic JavaIndex RPC sidecar descriptor drift");
+    }
+    const observed = await verifyJavaIndexRpcSidecar({ sidecarFile: manifest.diagnosticRpcEvidence.file });
+    if (observed.payloadSha256 !== manifest.diagnosticRpcEvidence.payloadSha256
+      || observed.role !== manifest.diagnosticRpcEvidence.role
+      || observed.scope !== manifest.diagnosticRpcEvidence.scope
+      || observed.cells.length !== manifest.diagnosticRpcEvidence.cellCount
+      || stableJson(observed.diagnosticRpcGate) !== stableJson(manifest.diagnosticRpcEvidence.gate)
+      || path.resolve(observed.sourceLock.coldManifest.file) !== coldManifestFile
+      || observed.sourceLock.coldManifest.sha256 !== coldManifestSha256) {
+      throw new Error("diagnostic JavaIndex RPC sidecar payload drift");
+    }
+  }
   for (const artifact of manifest.artifacts) {
     const bytes = await readFile(artifact.file);
     if (bytes.byteLength !== artifact.bytes || sha256(bytes) !== artifact.sha256) {
@@ -259,6 +370,8 @@ export function optimizationCommandResult(manifest, extra = {}) {
     verificationStatus: "PASS",
     resultStatus: manifest.status,
     coldGatePassed: manifest.coldGate.passed,
+    diagnosticRpcGatePassed: manifest.diagnosticRpcGate?.passed ?? null,
+    productionLocGatePassed: manifest.productionTs.gate.passed,
     manifestPayloadSha256: manifest.manifestPayloadSha256
   };
 }
@@ -281,10 +394,12 @@ async function main() {
   await runColdMatrix({ ...cli, outputDir: coldDir });
   const manifest = await buildManifestFromCold({
     candidateRoot: cli.candidateRoot,
+    optimizationBaseline: cli.optimizationBaseline,
     baseline: cli.baseline,
     coldDir,
     taskLedger,
     taskLedgerEvidence,
+    diagnosticRpcSidecar: cli.diagnosticRpcSidecar,
     allowColdGateFailure: cli.allowColdGateFailure,
     p95Limit: cli.p95Limit
   });
@@ -296,17 +411,61 @@ async function main() {
 
 export async function buildManifestFromCold({
   candidateRoot,
+  optimizationBaseline,
   baseline,
   coldDir,
   taskLedger = [],
   taskLedgerEvidence,
+  diagnosticRpcSidecar = false,
   allowColdGateFailure = false,
   p95Limit = 1.25
 }) {
   const coldManifestFile = path.resolve(coldDir, "run-manifest.json");
   const coldSummaryFile = path.resolve(coldDir, "matrix-summary.json");
-  const coldManifest = JSON.parse(await readFile(coldManifestFile, "utf8"));
+  const coldManifestBytes = await readFile(coldManifestFile);
+  const coldManifestSha256 = sha256(coldManifestBytes);
+  const coldManifest = JSON.parse(coldManifestBytes.toString("utf8"));
   const coldSummary = JSON.parse(await readFile(coldSummaryFile, "utf8"));
+  const diagnosticRpcFile = path.resolve(coldDir, "diagnostic-java-index-rpc", "java-index-rpc-sidecar.json");
+  const coldRequestedDiagnosticRpc = coldManifest?.diagnosticRpc?.requested === true;
+  if (coldRequestedDiagnosticRpc !== diagnosticRpcSidecar) {
+    throw new Error("diagnostic JavaIndex RPC request does not match the cold manifest");
+  }
+  if (diagnosticRpcSidecar && !existsSync(diagnosticRpcFile)) {
+    throw new Error("diagnostic JavaIndex RPC sidecar was requested but not produced");
+  }
+  if (!diagnosticRpcSidecar && existsSync(diagnosticRpcFile)) {
+    throw new Error("unrequested diagnostic JavaIndex RPC sidecar is present");
+  }
+  const diagnosticRpc = diagnosticRpcSidecar
+    ? await verifyJavaIndexRpcSidecar({ sidecarFile: diagnosticRpcFile })
+    : undefined;
+  if (diagnosticRpc
+    && (path.resolve(diagnosticRpc.sourceLock.coldManifest.file) !== coldManifestFile
+      || diagnosticRpc.sourceLock.coldManifest.sha256 !== coldManifestSha256)) {
+    throw new Error("diagnostic JavaIndex RPC sidecar is not bound to this cold manifest");
+  }
+  const diagnosticRpcBytes = diagnosticRpc ? await readFile(diagnosticRpcFile) : undefined;
+  const diagnosticRpcEvidence = diagnosticRpc && diagnosticRpcBytes ? {
+    file: diagnosticRpcFile,
+    bytes: diagnosticRpcBytes.byteLength,
+    sha256: sha256(diagnosticRpcBytes),
+    payloadSha256: diagnosticRpc.payloadSha256,
+    role: diagnosticRpc.role,
+    scope: diagnosticRpc.scope,
+    cellCount: diagnosticRpc.cells.length,
+    coldManifestFile,
+    coldManifestSha256,
+    gate: diagnosticRpc.diagnosticRpcGate
+  } : undefined;
+  if (optimizationBaseline !== V32_OPTIMIZATION_BASELINE_COMMIT) {
+    throw new Error(`optimization baseline must be ${V32_OPTIMIZATION_BASELINE_COMMIT}`);
+  }
+  const optimizationBaselineProductionTs = await countProductionTs({
+    root: candidateRoot,
+    revision: V32_OPTIMIZATION_BASELINE_COMMIT
+  });
+  validateFrozenOptimizationBaselineInventory(optimizationBaselineProductionTs);
   const baselineProductionTs = await countProductionTs({ root: candidateRoot, revision: baseline });
   let candidateProductionTs;
   let environment;
@@ -325,9 +484,12 @@ export async function buildManifestFromCold({
     coldSummaryFile,
     coldSummary,
     coldManifest,
-    taskLedgerEvidence
+    taskLedgerEvidence,
+    diagnosticRpcEvidence,
+    diagnosticRpc
   );
   return createOptimizationManifest({
+    optimizationBaselineProductionTs,
     baselineProductionTs,
     candidateProductionTs,
     coldManifest,
@@ -336,6 +498,7 @@ export async function buildManifestFromCold({
     artifacts,
     taskLedger,
     taskLedgerEvidence,
+    diagnosticRpcEvidence,
     allowColdGateFailure,
     coldEvidence: {
       manifestFile: coldManifestFile,
@@ -399,7 +562,15 @@ async function withReplayedCandidate(sourceRoot, comparison, action) {
   }
 }
 
-async function artifactInventory(coldManifestFile, coldSummaryFile, coldSummary, coldManifest, taskLedgerEvidence) {
+async function artifactInventory(
+  coldManifestFile,
+  coldSummaryFile,
+  coldSummary,
+  coldManifest,
+  taskLedgerEvidence,
+  diagnosticRpcEvidence,
+  diagnosticRpc
+) {
   const files = new Set([coldManifestFile, coldSummaryFile]);
   if (taskLedgerEvidence?.file) files.add(path.resolve(taskLedgerEvidence.file));
   if (coldManifest?.candidatePatch?.file) files.add(path.resolve(coldManifest.candidatePatch.file));
@@ -414,6 +585,11 @@ async function artifactInventory(coldManifestFile, coldSummaryFile, coldSummary,
   for (const cell of coldSummary.cells ?? []) {
     files.add(path.resolve(cell.file));
     files.add(path.resolve(`${cell.file}.stderr`));
+  }
+  if (diagnosticRpcEvidence?.file) files.add(path.resolve(diagnosticRpcEvidence.file));
+  for (const cell of diagnosticRpc?.cells ?? []) {
+    files.add(path.resolve(cell.file));
+    files.add(path.resolve(cell.stderrFile));
   }
   const result = [];
   for (const file of [...files].sort((left, right) => left.localeCompare(right))) {
@@ -487,6 +663,22 @@ function validateDependencyEvidence(dependencies) {
   }
 }
 
+function validateDiagnosticRpcEvidence(evidence) {
+  if (!evidence
+    || typeof evidence.file !== "string" || !path.isAbsolute(evidence.file)
+    || !isNonNegativeInteger(evidence.bytes)
+    || !sha256Value(evidence.sha256)
+    || !sha256Value(evidence.payloadSha256)
+    || evidence.role !== JAVA_INDEX_RPC_SIDECAR_ROLE
+    || evidence.scope !== "STEADY_IMPACT_REQUESTS_ONLY_EXCLUDES_INDEX_PREPARE"
+    || evidence.cellCount !== 18
+    || typeof evidence.coldManifestFile !== "string" || !path.isAbsolute(evidence.coldManifestFile)
+    || !sha256Value(evidence.coldManifestSha256)) {
+    throw new Error("V3.2 diagnostic JavaIndex RPC evidence is invalid");
+  }
+  validateDiagnosticRpcGate(evidence.gate);
+}
+
 function runCommand(command, args) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { stdio: ["ignore", "ignore", "pipe"] });
@@ -535,6 +727,21 @@ function validateProductionInventory(value, label) {
   }
 }
 
+function validateFrozenOptimizationBaselineInventory(value) {
+  if (value?.source?.kind !== "git-revision"
+    || value?.source?.revision !== V32_OPTIMIZATION_BASELINE_COMMIT
+    || value?.source?.commit !== V32_OPTIMIZATION_BASELINE_COMMIT
+    || value?.source?.commitTree !== V32_OPTIMIZATION_BASELINE_TREE
+    || value?.source?.executableTree !== V32_OPTIMIZATION_BASELINE_TREE
+    || value.fileCount !== 129
+    || value.totalBytes !== 1_273_211
+    || value.totalLoc !== V32_OPTIMIZATION_BASELINE_LOC
+    || value.inventorySha256 !== V32_OPTIMIZATION_BASELINE_INVENTORY_SHA256
+    || Math.floor(value.totalLoc * 1.05) !== V32_OPTIMIZATION_CYCLE_MAXIMUM_LOC) {
+    throw new Error("production TypeScript optimization baseline does not match the frozen V3.2 inventory");
+  }
+}
+
 function assertSameInventory(expected, actual, label) {
   validateProductionInventory(expected, label);
   validateProductionInventory(actual, label);
@@ -553,6 +760,7 @@ function runColdMatrix(cli) {
     "--p95-limit", String(cli.p95Limit),
     "--output-dir", cli.outputDir
   ];
+  if (cli.diagnosticRpcSidecar) args.push("--diagnostic-rpc-sidecar");
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, args, {
       cwd: cli.candidateRoot,
@@ -580,7 +788,7 @@ function parseCli(args) {
   const flags = new Set();
   for (let index = 0; index < args.length; index += 1) {
     const key = args[index];
-    if (key === "--help" || key === "--allow-gate-failure") {
+    if (key === "--help" || key === "--allow-gate-failure" || key === "--diagnostic-rpc-sidecar") {
       flags.add(key);
       continue;
     }
@@ -594,10 +802,12 @@ function parseCli(args) {
   }
   return {
     candidateRoot,
+    optimizationBaseline: frozenOptimizationBaseline(options.get("--optimization-baseline")),
     baseline: required(options.get("--baseline"), "--baseline"),
     outputDir: required(options.get("--output-dir"), "--output-dir"),
     p95Limit: numeric(options.get("--p95-limit"), 1.25, "--p95-limit"),
     allowColdGateFailure: flags.has("--allow-gate-failure"),
+    diagnosticRpcSidecar: flags.has("--diagnostic-rpc-sidecar"),
     taskLedgerFile: options.get("--task-ledger"),
     verify: options.get("--verify"),
     repositories: {
@@ -611,6 +821,14 @@ function parseCli(args) {
 function required(value, flag) {
   if (!value) throw new Error(`${flag} is required`);
   return value;
+}
+
+function frozenOptimizationBaseline(value) {
+  const baseline = required(value, "--optimization-baseline");
+  if (baseline !== V32_OPTIMIZATION_BASELINE_COMMIT) {
+    throw new Error(`--optimization-baseline must be the frozen V3.2 baseline ${V32_OPTIMIZATION_BASELINE_COMMIT}`);
+  }
+  return baseline;
 }
 
 function numeric(value, fallback, flag) {
@@ -639,7 +857,7 @@ function sortValue(value) {
 }
 
 function printUsage() {
-  console.log("Usage: node scripts/run-v32-optimization-matrix.mjs --baseline SHA --output-dir DIR --lishuedu DIR --cipherlink DIR --exam-parent-v3 DIR [--candidate-root DIR] [--task-ledger FILE] [--allow-gate-failure]");
+  console.log("Usage: node scripts/run-v32-optimization-matrix.mjs --optimization-baseline 94c4ebfb1c174b2ac3cab615d986c3061accd2ed --baseline SHA --output-dir DIR --lishuedu DIR --cipherlink DIR --exam-parent-v3 DIR [--candidate-root DIR] [--task-ledger FILE] [--allow-gate-failure] [--diagnostic-rpc-sidecar]");
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

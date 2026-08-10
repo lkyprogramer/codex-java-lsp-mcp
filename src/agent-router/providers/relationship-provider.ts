@@ -4,8 +4,13 @@
 //      extraction is isolated from final ranking in relationship-deltas.ts.
 import type { CandidateFile, ResolvedAnchor } from "../../agent-types.js";
 import type { FrameworkCallSite, FrameworkFileFacts, FrameworkMethodDeclaration, FrameworkTypeRef } from "../../java-index/framework-index-view.js";
-import type { JavaMethodFact, JavaSourceFacts } from "../../java-index/router-facts.js";
+import {
+  MAX_FACTS_FOR_FILES,
+  type JavaMethodFact,
+  type JavaSourceFacts
+} from "../../java-index/router-facts.js";
 import type { EvidenceFamily, EvidenceProvenance, EvidenceSignal, ProviderInput, ProviderOutcome } from "../evidence.js";
+import { JavaIntelligenceError } from "../../runtime/intelligence-error.js";
 import { candidateFromFacts } from "../candidate-helpers.js";
 import {
   methodRelationDelta,
@@ -94,50 +99,201 @@ type DirectCallCandidate = {
   readonly callOrigin: "anchor" | "implementation";
 };
 
+type RelationshipFactsBatch = {
+  readonly cache: Map<string, JavaSourceFacts | undefined>;
+  readonly degradedReasons: readonly string[];
+  readonly deadlineExceeded: boolean;
+  readonly cancelled: boolean;
+  readonly partial: boolean;
+};
+
 export async function collectRelationshipEvidence(input: RelationshipProviderInput): Promise<ProviderOutcome> {
   const startedAt = Date.now();
+  if (input.budget?.expired()) {
+    return {
+      providerId: RELATIONSHIP_PROVIDER_ID,
+      providerVersion: RELATIONSHIP_PROVIDER_VERSION,
+      evidence: [],
+      completion: "PARTIAL_TIMEOUT",
+      elapsedMs: Date.now() - startedAt,
+      degradation: "relationship DEADLINE_EXCEEDED"
+    };
+  }
   const evidence: EvidenceSignal[] = [];
   const failedAnchors: string[] = [];
-  for (const anchor of input.anchors) {
-    try {
-      evidence.push(...await collectRelationshipEvidenceForAnchor(input, anchor));
-    } catch {
-      failedAnchors.push(anchor.id);
+  let legacyTerminal: "DEADLINE_EXCEEDED" | "CANCELLED" | undefined;
+  const batch = await preloadRelationshipFacts(input);
+  // A request deadline/cancellation is terminal for foreground JavaIndex work.
+  // Keep any evidence already materialized by earlier stages, but do not issue
+  // framework/definition/facts calls after the batch reports a terminal state.
+  if (!batch?.deadlineExceeded && !batch?.cancelled) {
+    for (const anchor of input.anchors) {
+      if (input.budget?.expired()) {
+        legacyTerminal = "DEADLINE_EXCEEDED";
+        break;
+      }
+      try {
+        evidence.push(...await collectRelationshipEvidenceForAnchor(input, anchor, batch?.cache));
+        if (input.budget?.expired()) {
+          legacyTerminal = "DEADLINE_EXCEEDED";
+          break;
+        }
+      } catch (error) {
+        const terminal = relationshipTerminalCode(error);
+        if (terminal) {
+          legacyTerminal = terminal;
+          break;
+        }
+        failedAnchors.push(anchor.id);
+      }
     }
   }
+  const cancelled = batch?.cancelled || legacyTerminal === "CANCELLED";
+  const deadlineExceeded = batch?.deadlineExceeded || legacyTerminal === "DEADLINE_EXCEEDED";
+  const completion = failedAnchors.length > 0
+    ? "FAILED"
+    : cancelled
+      ? "CANCELLED"
+      : deadlineExceeded
+        ? "PARTIAL_TIMEOUT"
+        : batch?.partial
+          ? "PARTIAL_LIMIT"
+          : "COMPLETE";
+  const degradation = [
+    ...(failedAnchors.length === 0 ? [] : [`relationship failed for anchors: ${failedAnchors.join(", ")}`]),
+    ...(batch?.degradedReasons ?? []),
+    ...(legacyTerminal ? [`relationship ${legacyTerminal}`] : [])
+  ].join("; ");
   return {
     providerId: RELATIONSHIP_PROVIDER_ID,
     providerVersion: RELATIONSHIP_PROVIDER_VERSION,
     evidence,
-    completion: failedAnchors.length > 0 ? "FAILED" : "COMPLETE",
+    completion,
     elapsedMs: Date.now() - startedAt,
-    ...(failedAnchors.length === 0 ? {} : { degradation: `relationship failed for anchors: ${failedAnchors.join(", ")}` })
+    ...(degradation ? { degradation } : {})
   };
+}
+
+async function preloadRelationshipFacts(input: RelationshipProviderInput): Promise<RelationshipFactsBatch | undefined> {
+  if (input.budget?.expired()) {
+    return {
+      cache: new Map(),
+      degradedReasons: ["relationship facts DEADLINE_EXCEEDED"],
+      deadlineExceeded: true,
+      cancelled: false,
+      partial: true
+    };
+  }
+  if (process.env.JAVA_LSP_RELATIONSHIP_FACTS_BATCH === "off" || !input.javaIndex.factsForFiles) {
+    return undefined;
+  }
+  const allPaths = uniquePaths([
+    ...input.anchors.map(anchor => anchor.absolutePath),
+    ...input.staticVerifiedCandidates
+      .map(candidate => candidate.absolutePath)
+      .filter(candidatePath => candidatePath.endsWith(".java"))
+  ]);
+  const selectedPaths = allPaths.slice(0, MAX_FACTS_FOR_FILES);
+  const cache = new Map<string, JavaSourceFacts | undefined>();
+  for (const absolutePath of allPaths.slice(MAX_FACTS_FOR_FILES)) cache.set(absolutePath, undefined);
+  const degradedReasons: string[] = [];
+  if (allPaths.length > MAX_FACTS_FOR_FILES) {
+    degradedReasons.push(`relationship facts truncated at ${MAX_FACTS_FOR_FILES} files`);
+  }
+  try {
+    const result = await input.javaIndex.factsForFiles(selectedPaths, input.generation);
+    let deadlineExceeded = false;
+    let cancelled = false;
+    for (let index = 0; index < selectedPaths.length; index += 1) {
+      const absolutePath = selectedPaths[index]!;
+      const item = result.items[index];
+      if (item?.state === "FOUND") {
+        cache.set(absolutePath, item.facts);
+        continue;
+      }
+      cache.set(absolutePath, undefined);
+      const reason = item?.state === "DEGRADED" ? item.reason : (item?.state === "MISSING" ? item.reason : "INDEX_INCOMPLETE");
+      if (reason === "DEADLINE_EXCEEDED") deadlineExceeded = true;
+      else if (reason === "CANCELLED") cancelled = true;
+      degradedReasons.push(`relationship facts ${reason}`);
+    }
+    return {
+      cache,
+      degradedReasons: uniquePaths(degradedReasons),
+      deadlineExceeded,
+      cancelled,
+      partial: allPaths.length > MAX_FACTS_FOR_FILES || result.completion !== "COMPLETE" || result.truncated
+    };
+  } catch (error) {
+    for (const absolutePath of selectedPaths) cache.set(absolutePath, undefined);
+    const reason = error instanceof JavaIntelligenceError
+      && (error.code === "DEADLINE_EXCEEDED" || error.code === "CANCELLED")
+      ? error.code
+      : "QUERY_FAILED";
+    degradedReasons.push(`relationship facts ${reason}`);
+    return {
+      cache,
+      degradedReasons,
+      deadlineExceeded: reason === "DEADLINE_EXCEEDED",
+      cancelled: reason === "CANCELLED",
+      partial: true
+    };
+  }
+}
+
+function relationshipTerminalCode(error: unknown): "DEADLINE_EXCEEDED" | "CANCELLED" | undefined {
+  if (!(error instanceof JavaIntelligenceError)) return undefined;
+  return error.code === "DEADLINE_EXCEEDED" || error.code === "CANCELLED" ? error.code : undefined;
+}
+
+function rethrowRelationshipTerminal(error: unknown): void {
+  if (relationshipTerminalCode(error)) throw error;
+}
+
+function throwIfRelationshipBudgetExpired(input: RelationshipProviderInput): void {
+  if (input.budget?.expired()) {
+    throw new JavaIntelligenceError("DEADLINE_EXCEEDED", "relationship provider request budget exhausted");
+  }
 }
 
 async function collectRelationshipEvidenceForAnchor(
   input: RelationshipProviderInput,
-  anchor: ResolvedAnchor
+  anchor: ResolvedAnchor,
+  preloadedFacts?: Map<string, JavaSourceFacts | undefined>
 ): Promise<EvidenceSignal[]> {
   let anchorFacts: JavaSourceFacts | undefined;
-  try {
-    anchorFacts = await input.javaIndex.factsFor(anchor.absolutePath, input.generation);
-  } catch {
-    anchorFacts = undefined;
+  if (preloadedFacts?.has(anchor.absolutePath)) {
+    anchorFacts = preloadedFacts.get(anchor.absolutePath);
+  } else {
+    try {
+      anchorFacts = await input.javaIndex.factsFor(anchor.absolutePath, input.generation);
+    } catch (error) {
+      rethrowRelationshipTerminal(error);
+      anchorFacts = undefined;
+    }
   }
-  const factsCache = new Map<string, JavaSourceFacts | undefined>();
+  throwIfRelationshipBudgetExpired(input);
+  const factsCache = preloadedFacts ?? new Map<string, JavaSourceFacts | undefined>();
   const methodCache = new Map<string, JavaMethodFact | undefined>();
   if (anchorFacts) {
     factsCache.set(anchor.absolutePath, anchorFacts);
   }
 
   const evidence: EvidenceSignal[] = [];
-  const resolvedCallTargets = await resolvedAnchorCallTargets(input, anchor, methodCache);
+  const legacyAnchorFallbackAllowed = preloadedFacts === undefined;
+  const resolvedCallTargets = anchorFacts || legacyAnchorFallbackAllowed
+    ? await resolvedAnchorCallTargets(input, anchor, methodCache)
+    : new Set<string>();
+  throwIfRelationshipBudgetExpired(input);
   const anchoredFrameworkMethod = await loadAnchoredFrameworkMethod(input, anchor);
+  throwIfRelationshipBudgetExpired(input);
   const directCallCandidates = await resolvedDirectCallCandidates(input, anchoredFrameworkMethod);
+  throwIfRelationshipBudgetExpired(input);
   const implementationCallCandidates = await resolvedImplementationCallCandidates(input, anchoredFrameworkMethod);
+  throwIfRelationshipBudgetExpired(input);
   const callCandidates = mergeCallCandidates(directCallCandidates, implementationCallCandidates);
   const signatureCandidates = await resolvedSignatureCandidates(input, anchoredFrameworkMethod);
+  throwIfRelationshipBudgetExpired(input);
   const candidates = new Map(input.staticVerifiedCandidates.map(candidate => [candidate.absolutePath, candidate]));
   const staticVerifiedPaths = new Set(candidates.keys());
   for (const directCall of callCandidates.values()) {
@@ -148,6 +304,7 @@ async function collectRelationshipEvidenceForAnchor(
   }
 
   for (const candidate of candidates.values()) {
+    throwIfRelationshipBudgetExpired(input);
     const directCall = callCandidates.get(candidate.absolutePath);
     if (directCall) {
       pushIfPositive(evidence, input, anchor.id, candidate, "CALLS", 120, directCall.callDepth, directCall.callOrigin);
@@ -174,7 +331,9 @@ async function collectRelationshipEvidenceForAnchor(
     // generic transport wrapper. The older projection remains fail-soft when
     // framework facts are unavailable.
     if (!signatureCandidates.available) {
-      const methodDelta = await methodRelationDelta(candidate, anchor, input.javaIndex, input.generation, methodCache, factsCache);
+      const methodDelta = anchorFacts || legacyAnchorFallbackAllowed
+        ? await methodRelationDelta(candidate, anchor, input.javaIndex, input.generation, methodCache, factsCache)
+        : 0;
       pushIfPositive(evidence, input, anchor.id, candidate, "METHOD_RELATION", methodDelta);
     }
 
@@ -222,7 +381,8 @@ async function loadAnchoredFrameworkMethod(
     if (input.budget?.expired()) return undefined;
     const method = anchoredMethod(facts, anchor);
     return method ? { facts, method } : undefined;
-  } catch {
+  } catch (error) {
+    rethrowRelationshipTerminal(error);
     return undefined;
   }
 }
@@ -254,7 +414,8 @@ async function resolvedSignatureCandidates(
       ])),
       available: true
     };
-  } catch {
+  } catch (error) {
+    rethrowRelationshipTerminal(error);
     // The anchor facts remain authoritative; failure to hydrate optional
     // collaborators should not reinstate the older, wrapper-only relation.
     return { candidates: new Map(), available: true };
@@ -309,7 +470,8 @@ async function resolvedDirectCallCandidates(
       MAX_DIRECT_CALL_TARGETS,
       false
     );
-  } catch {
+  } catch (error) {
+    rethrowRelationshipTerminal(error);
     return new Map();
   }
   if (input.budget?.expired() || definitions.length === 0) return new Map();
@@ -320,7 +482,8 @@ async function resolvedDirectCallCandidates(
       definitions.map(definition => definition.absolutePath),
       input.generation
     );
-  } catch {
+  } catch (error) {
+    rethrowRelationshipTerminal(error);
     return new Map();
   }
   if (input.budget?.expired()) return new Map();
@@ -386,7 +549,8 @@ async function resolvedImplementationCallCandidates(
   let implementationFacts: FrameworkFileFacts[];
   try {
     implementationFacts = await input.frameworkIndex.frameworkFactsForFiles(sourcePaths, input.generation);
-  } catch {
+  } catch (error) {
+    rethrowRelationshipTerminal(error);
     return new Map();
   }
   if (input.budget?.expired()) return new Map();
@@ -413,7 +577,8 @@ async function resolvedImplementationCallCandidates(
       MAX_IMPLEMENTATION_CONTINUATION_CALL_TARGETS,
       false
     );
-  } catch {
+  } catch (error) {
+    rethrowRelationshipTerminal(error);
     return new Map();
   }
   if (definitions.length === 0 || input.budget?.expired()) return new Map();
@@ -424,7 +589,8 @@ async function resolvedImplementationCallCandidates(
       definitions.map(definition => definition.absolutePath),
       input.generation
     );
-  } catch {
+  } catch (error) {
+    rethrowRelationshipTerminal(error);
     return new Map();
   }
   if (input.budget?.expired()) return new Map();
@@ -736,7 +902,8 @@ async function resolvedAnchorCallTargets(
     try {
       method = await input.javaIndex.methodAt(anchor.absolutePath, anchor.line, input.generation);
       methodCache.set(key, method);
-    } catch {
+    } catch (error) {
+      rethrowRelationshipTerminal(error);
       method = undefined;
       methodCache.set(key, method);
     }
@@ -752,7 +919,8 @@ async function resolvedAnchorCallTargets(
     return new Set(result.callees
       .filter(edge => edge.kind === "CALLS")
       .map(edge => edge.targetId));
-  } catch {
+  } catch (error) {
+    rethrowRelationshipTerminal(error);
     return new Set();
   }
 }
@@ -770,7 +938,8 @@ async function cachedFacts(
     const facts = await javaIndex.factsFor(absolutePath, generation);
     cache.set(absolutePath, facts);
     return facts;
-  } catch {
+  } catch (error) {
+    rethrowRelationshipTerminal(error);
     cache.set(absolutePath, undefined);
     return undefined;
   }
@@ -814,4 +983,8 @@ function pushIfPositive(
       matchCount: 0
     }
   });
+}
+
+function uniquePaths(values: readonly string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
 }
