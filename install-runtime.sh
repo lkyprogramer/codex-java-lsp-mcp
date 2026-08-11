@@ -34,6 +34,7 @@ echo "Projects config: ${JAVA_LSP_PROJECTS_JSON:-$HOME/.config/codex-java-lsp/pr
 
 mkdir -p "$RUNTIME_DIR"
 rsync -a --delete \
+  --exclude .git \
   --exclude node_modules \
   --exclude dist \
   --exclude coverage \
@@ -76,6 +77,7 @@ for env_name in \
   JAVA_LSP_JDTLS_XMX \
   JAVA_LSP_MAX_ACTIVE_REPOS \
   JAVA_LSP_IDLE_TTL_MS \
+  JAVA_LSP_SERVER_IDLE_TTL_MS \
   JAVA_LSP_AUTOBUILD \
   JAVA_LSP_IMPORT_CONCURRENCY \
   JAVA_LSP_RG_CONCURRENCY \

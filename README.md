@@ -38,6 +38,7 @@
 
 - public MCP surface 保持 7 个工具；除非有明确需求，不扩展工具面。
 - 所有工具都不修改目标 Java repo；`java_restart` 和 `java_shutdown` 只影响本 MCP 管理的 JDT LS 进程。
+- MCP stdio 对端结束或关闭时，服务会释放全部 runtime 并退出；即使客户端未关闭管道，服务也会在无请求的 server idle TTL 后自行退出。
 - JDT LS 启动必须显式启用：`lspEnabled=true`，或命中同一 Git `common-dir` 的 worktree family 继承。
 - SourceIndex 是冷启动事实来源；JDT LS 是可选增强，不是路由正确性的唯一来源。
 - JDT LS runtime JDK 与项目 JDK 分开处理，避免把语言服务器运行环境误当成项目编译环境。
@@ -206,6 +207,7 @@ hook 行为：
 | `JAVA_LSP_JDTLS_XMX` | 覆盖 JDT LS heap，例如 `2g`。 |
 | `JAVA_LSP_MAX_ACTIVE_REPOS` | 限制同时活跃的 JDT LS repo 数。 |
 | `JAVA_LSP_IDLE_TTL_MS` | repo 空闲后自动停止 JDT LS 的时间。 |
+| `JAVA_LSP_SERVER_IDLE_TTL_MS` | 整个 MCP 服务在最后一个请求完成后的退出时间；默认 `900000`（15 分钟），设为 `0` 关闭服务级自回收。 |
 | `JAVA_LSP_WORKTREE_CACHE_TTL_DAYS` | 自动删除超过指定天数未更新的 Git worktree cache；默认 `2`，设为 `0` 关闭。 |
 | `JAVA_LSP_AUTOBUILD` | 设为 `on` 时启用 JDT LS auto build；默认关闭以降低 import 等待。 |
 | `JAVA_LSP_IMPORT_CONCURRENCY` | 透传给 JDT LS `java.maxConcurrentBuilds`。 |
@@ -221,6 +223,7 @@ hook 行为：
 - `JAVA_LSP_MAX_ACTIVE_REPOS=3`
 - `JAVA_LSP_JDTLS_XMX=2g`
 - `JAVA_LSP_IDLE_TTL_MS=2700000`
+- `JAVA_LSP_SERVER_IDLE_TTL_MS=900000`
 - `JAVA_LSP_WORKTREE_CACHE_TTL_DAYS=2`
 - `JAVA_LSP_IMPORT_CONCURRENCY=2`
 - `JAVA_LSP_RG_CONCURRENCY=4`

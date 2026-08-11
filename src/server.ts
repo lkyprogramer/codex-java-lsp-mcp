@@ -15,6 +15,7 @@ import { javaShutdown, shutdownSchema } from "./tools/shutdown.js";
 import { javaStatus, statusSchema, summarizeResourceStatus } from "./tools/status.js";
 import { isDiagnosticDetail } from "./tools/shared.js";
 import { javaSymbol, symbolSchema } from "./tools/symbol.js";
+import { McpServerLifecycle, serverIdleTtlMs, type ServerShutdownReason } from "./server-lifecycle.js";
 import { cleanupStaleWorktreeCaches } from "./worktree-cache-cleanup.js";
 
 type ToolResult = {
@@ -31,6 +32,15 @@ const server = new McpServer({
   version: "0.1.0"
 }, {
   instructions: "Use java_impact first for Java navigation. Tools are read-only and optimized for low-token impact analysis."
+});
+
+const lifecycle = new McpServerLifecycle({
+  stdin: process.stdin,
+  idleTtlMs: serverIdleTtlMs(),
+  shutdown: shutdownServer,
+  reportFailure: (reason, error) => {
+    console.error(`[codex-java-lsp] shutdown failed (${reason})`, error);
+  }
 });
 
 register("java_status", {
@@ -83,27 +93,32 @@ async function main(): Promise<void> {
   if (cleanup.removed > 0) {
     console.error(`[codex-java-lsp] cleaned ${cleanup.removed} stale worktree cache(s)`);
   }
+  lifecycle.start();
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  lifecycle.markReady();
   console.error("[codex-java-lsp] MCP server ready");
 }
 
 process.on("SIGINT", () => {
-  void shutdown();
+  void lifecycle.shutdown("sigint");
 });
 process.on("SIGTERM", () => {
-  void shutdown();
+  void lifecycle.shutdown("sigterm");
 });
 
 main().catch(error => {
   console.error("[codex-java-lsp] fatal startup error", error);
-  process.exit(1);
+  void lifecycle.shutdown("startup_failure", 1);
 });
 
-async function shutdown(): Promise<void> {
-  await runtimes.shutdownAll();
-  await server.close();
-  process.exit(0);
+async function shutdownServer(reason: ServerShutdownReason): Promise<void> {
+  console.error(`[codex-java-lsp] shutting down (${reason})`);
+  try {
+    await runtimes.shutdownAll();
+  } finally {
+    await server.close();
+  }
 }
 
 async function javaStatusFor(args: z.infer<z.ZodObject<typeof statusSchema>>): Promise<unknown> {
@@ -157,11 +172,13 @@ function register<T extends z.ZodRawShape>(
   handler: (args: z.infer<z.ZodObject<T>>) => Promise<unknown>
 ): void {
   const callback = async (args: unknown): Promise<ToolResult> => {
-    try {
-      return jsonResult(await handler(args as z.infer<z.ZodObject<T>>));
-    } catch (error) {
-      return errorResult(error);
-    }
+    return lifecycle.runRequest(async () => {
+      try {
+        return jsonResult(await handler(args as z.infer<z.ZodObject<T>>));
+      } catch (error) {
+        return errorResult(error);
+      }
+    });
   };
   server.registerTool(name, config as any, callback as any);
 }

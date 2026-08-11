@@ -121,6 +121,8 @@ type CacheEntry<T> = {
   dependencies: Set<string>;
 };
 
+export type JdtlsChild = Pick<ChildProcessWithoutNullStreams, "exitCode" | "signalCode" | "kill" | "once">;
+
 const DEFAULT_LSP_REQUEST_TIMEOUT_MS = positiveInteger(process.env.JDTLS_REQUEST_TIMEOUT_MS, 120000);
 const DEFAULT_CACHE_TTL_MS = positiveInteger(process.env.JDTLS_CACHE_TTL_MS, 300000);
 
@@ -240,8 +242,9 @@ export class JdtlsSession {
       }
       connection.dispose();
     }
-    if (this.process && !this.process.killed) {
-      this.process.kill();
+    const child = this.process;
+    if (child) {
+      await terminateJdtlsChild(child);
     }
     touchRepoCache(this.repoRoot);
     this.openDocuments.clear();
@@ -1018,6 +1021,39 @@ function truncate<T>(items: T[], limit: number): { items: T[]; truncated: boolea
 
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * `child.killed` only records that a signal was sent; it does not prove JDT LS
+ * has exited. Wait for close so the parent never exits while its JDT child is
+ * still alive, and use SIGKILL only if JDT ignores the brief graceful window.
+ */
+export async function terminateJdtlsChild(child: JdtlsChild, graceMs = 200): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return;
+  }
+  const closed = new Promise<void>(resolve => child.once("close", () => resolve()));
+  child.kill("SIGTERM");
+  if (await settlesWithin(closed, graceMs)) {
+    return;
+  }
+  if (child.exitCode === null && child.signalCode === null) {
+    child.kill("SIGKILL");
+    await settlesWithin(closed, 1000);
+  }
+}
+
+function settlesWithin(operation: Promise<void>, timeoutMs: number): Promise<boolean> {
+  return new Promise(resolve => {
+    const timer = setTimeout(() => resolve(false), timeoutMs);
+    operation.then(() => {
+      clearTimeout(timer);
+      resolve(true);
+    }, () => {
+      clearTimeout(timer);
+      resolve(true);
+    });
+  });
 }
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string, onTimeout?: () => void): Promise<T> {
