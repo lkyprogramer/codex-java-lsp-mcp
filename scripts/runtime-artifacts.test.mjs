@@ -108,6 +108,30 @@ test("stable daemon runner resolves only the current immutable release", async t
   assert.equal(await readFile(capture, "utf8"), path.join(fixture, "current", "dist", "http-server.js"));
 });
 
+test("stable hook runner resolves only the current immutable release", async t => {
+  const fixture = await mkdtemp(path.join(tmpdir(), "codex-java-lsp-hook-runner-"));
+  t.after(() => rm(fixture, { recursive: true, force: true }));
+  const release = path.join(fixture, "releases", "one");
+  await mkdir(path.join(release, "dist", "hooks"), { recursive: true });
+  await writeFile(path.join(release, "dist", "hooks", "hook-gate.js"), "// fixture\n");
+  await symlink("releases/one", path.join(fixture, "current"));
+  const capture = path.join(fixture, "node-argument.txt");
+  const fakeNode = path.join(fixture, "fake-node.sh");
+  await writeFile(fakeNode, `#!/usr/bin/env bash\nprintf '%s' "$1" > "${capture}"\n`);
+  await chmod(fakeNode, 0o755);
+  await writeFile(path.join(fixture, "run-hook-gate.sh"), await readFile(path.join(projectRoot, "run-hook-gate.sh"), "utf8"));
+  await chmod(path.join(fixture, "run-hook-gate.sh"), 0o755);
+  await run(path.join(fixture, "run-hook-gate.sh"), [], { NODE_BIN: fakeNode });
+  assert.equal(await readFile(capture, "utf8"), path.join(fixture, "current", "dist", "hooks", "hook-gate.js"));
+});
+
+test("hook installer configures the stable release-following hook runner", () => {
+  const installer = readFileSync(path.join(projectRoot, "install-hook.sh"), "utf8");
+  assert.match(installer, /hook="\$runtime_dir\/run-hook-gate\.sh"/);
+  assert.match(installer, /command="\$quoted_hook"/);
+  assert.doesNotMatch(installer, /dist\/hooks\/hook-gate\.js/);
+});
+
 test("HTTP entrypoint remains executable through the stable current symlink", async t => {
   const fixture = await mkdtemp(path.join(tmpdir(), "codex-java-lsp-http-current-"));
   t.after(() => rm(fixture, { recursive: true, force: true }));

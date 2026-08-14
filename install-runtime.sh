@@ -292,7 +292,7 @@ copy_release() {
     CODEX_JAVA_LSP_BUILD_SHA="$BUILD_SHA" "$NPM_BIN" run build
   )
   run_release_tests_in_isolated_environment
-  chmod +x "$RELEASE_DIR/run.sh" "$RELEASE_DIR/run-daemon.sh" "$RELEASE_DIR/run-stdio.sh" \
+  chmod +x "$RELEASE_DIR/run.sh" "$RELEASE_DIR/run-daemon.sh" "$RELEASE_DIR/run-stdio.sh" "$RELEASE_DIR/run-hook-gate.sh" \
     "$RELEASE_DIR/daemonctl.sh" "$RELEASE_DIR/install-hook.sh" "$RELEASE_DIR/register-alias.sh"
 }
 
@@ -485,6 +485,10 @@ backup_managed_configuration() {
     "$ROLLBACK_DIR/run.sh" \
     "$ROLLBACK_DIR/run.sh.marker"
   backup_file_for_rollback \
+    "$RUNTIME_DIR/run-hook-gate.sh" \
+    "$ROLLBACK_DIR/run-hook-gate.sh" \
+    "$ROLLBACK_DIR/run-hook-gate.sh.marker"
+  backup_file_for_rollback \
     "$RUNTIME_DIR/daemonctl.sh" \
     "$ROLLBACK_DIR/daemonctl.sh" \
     "$ROLLBACK_DIR/daemonctl.sh.marker"
@@ -568,6 +572,10 @@ restore_previous_managed_configuration() {
     "$RUNTIME_DIR/run.sh" \
     "$ROLLBACK_DIR/run.sh" \
     "$ROLLBACK_DIR/run.sh.marker" || return 1
+  restore_file_from_rollback \
+    "$RUNTIME_DIR/run-hook-gate.sh" \
+    "$ROLLBACK_DIR/run-hook-gate.sh" \
+    "$ROLLBACK_DIR/run-hook-gate.sh.marker" || return 1
   restore_file_from_rollback \
     "$RUNTIME_DIR/daemonctl.sh" \
     "$ROLLBACK_DIR/daemonctl.sh" \
@@ -670,13 +678,16 @@ write_launch_agent() {
 install_stable_entrypoints() {
   local staged_daemon="$RUNTIME_DIR/.run-daemon.next.$$"
   local staged_stdio="$RUNTIME_DIR/.run-stdio.next.$$"
+  local staged_hook="$RUNTIME_DIR/.run-hook-gate.next.$$"
   local staged_ctl="$RUNTIME_DIR/.daemonctl.next.$$"
   cp "$RELEASE_DIR/run-daemon.sh" "$staged_daemon" || return 1
   cp "$RELEASE_DIR/run-stdio.sh" "$staged_stdio" || return 1
+  cp "$RELEASE_DIR/run-hook-gate.sh" "$staged_hook" || return 1
   cp "$RELEASE_DIR/daemonctl.sh" "$staged_ctl" || return 1
-  chmod 755 "$staged_daemon" "$staged_stdio" "$staged_ctl" || return 1
+  chmod 755 "$staged_daemon" "$staged_stdio" "$staged_hook" "$staged_ctl" || return 1
   mv -f "$staged_daemon" "$RUNTIME_DIR/run-daemon.sh" || return 1
   mv -f "$staged_stdio" "$RUNTIME_DIR/run.sh" || return 1
+  mv -f "$staged_hook" "$RUNTIME_DIR/run-hook-gate.sh" || return 1
   mv -f "$staged_ctl" "$RUNTIME_DIR/daemonctl.sh" || return 1
 }
 

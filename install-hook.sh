@@ -2,9 +2,9 @@
 set -euo pipefail
 
 runtime_dir="${CODEX_JAVA_LSP_RUNTIME_DIR:-$HOME/Library/Application Support/codex-java-lsp-mcp}"
-hook="$runtime_dir/dist/hooks/hook-gate.js"
+hook="$runtime_dir/run-hook-gate.sh"
 quoted_hook="'${hook//\'/\'\\\'\'}'"
-command="node $quoted_hook"
+command="$quoted_hook"
 
 cat <<JSON
 {
