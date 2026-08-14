@@ -132,6 +132,16 @@ test("hook installer configures the stable release-following hook runner", () =>
   assert.doesNotMatch(installer, /dist\/hooks\/hook-gate\.js/);
 });
 
+test("runtime installer atomically manages both stable hook entrypoints", () => {
+  const installer = readFileSync(path.join(projectRoot, "install-runtime.sh"), "utf8");
+  for (const artifact of ["run-hook-gate.sh", "install-hook.sh"]) {
+    const escaped = artifact.replaceAll(".", "\\.");
+    assert.match(installer, new RegExp(`\\$RUNTIME_DIR/${escaped}`));
+    assert.match(installer, new RegExp(`\\$RELEASE_DIR/${escaped}`));
+    assert.match(installer, new RegExp(`\\$ROLLBACK_DIR/${escaped}\\.marker`));
+  }
+});
+
 test("HTTP entrypoint remains executable through the stable current symlink", async t => {
   const fixture = await mkdtemp(path.join(tmpdir(), "codex-java-lsp-http-current-"));
   t.after(() => rm(fixture, { recursive: true, force: true }));
