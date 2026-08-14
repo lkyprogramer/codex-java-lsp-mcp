@@ -5,7 +5,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { SourceIndex, parseJavaSource } from "./source-index.js";
 import { repoCacheRoot } from "./repo-layout.js";
 
@@ -38,6 +39,29 @@ public class SampleController implements DemoPort {
   assert.equal(facts.methods[0].line, 7);
   assert.equal(facts.methods[0].endLine, 12);
   assert.equal(facts.factSource, "regex");
+});
+
+test("SourceIndex dispose drops memory while a new instance reloads the disk snapshot", t => {
+  const fixtureRoot = mkdtempSync(path.join(tmpdir(), "source-index-dispose-"));
+  const cacheRoot = path.join(fixtureRoot, "cache");
+  const javaFile = path.join(fixtureRoot, "src/main/java/demo/Sample.java");
+  t.after(() => rmSync(fixtureRoot, { recursive: true, force: true }));
+  mkdirSync(path.dirname(javaFile), { recursive: true });
+  writeFileSync(javaFile, `package demo;
+public class Sample {
+  public void run() {}
+}
+`);
+
+  const first = new SourceIndex(fixtureRoot, cacheRoot);
+  assert.equal(first.factsFor(javaFile).typeName, "Sample");
+  assert.equal(first.status().entries, 1);
+  first.dispose();
+  assert.equal(first.status().entries, 0);
+
+  const reloaded = new SourceIndex(fixtureRoot, cacheRoot);
+  assert.equal(reloaded.status().entries, 1);
+  assert.equal(reloaded.factsFor(javaFile).typeName, "Sample");
 });
 
 test("parseJavaSource extracts signature referenced types", () => {

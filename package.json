@@ -10,21 +10,25 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/write-build-stamp.mjs",
     "clean": "rm -rf dist",
-    "test": "node --test \"dist/**/*.test.js\"",
+    "test": "node scripts/run-isolated-tests.mjs",
     "benchmark:agent-impact": "node dist/benchmark-agent-impact.js",
     "benchmark:agent-summary": "node scripts/summarize-impact-benchmark.mjs",
     "benchmark:impact-attribution": "node scripts/attribute-impact-payload.mjs",
     "benchmark:lsp-performance": "node dist/benchmark-lsp-performance.js",
     "smoke": "node dist/smoke.js",
-    "start": "node dist/server.js"
+    "smoke:http": "node dist/smoke-http.js",
+    "start": "node dist/server.js",
+    "start:http": "node dist/http-server.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "express": "^5.2.1",
     "vscode-jsonrpc": "^8.2.1",
     "vscode-languageserver-protocol": "^3.17.5",
     "zod": "^4.1.13"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^22.19.1",
     "typescript": "^5.9.3"
   },

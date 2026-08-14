@@ -30,6 +30,7 @@ export type ToolContext = {
     importConcurrency: number;
     workspaceRetainedOnShutdown: boolean;
   };
+  runBackgroundTask?: (operation: () => Promise<void>) => boolean;
   session: JdtlsSession;
   sourceIndex: SourceIndex;
   router: AgentRouter;

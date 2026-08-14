@@ -107,12 +107,27 @@ export class SourceIndex {
   private typeLookupIndexMisses = 0;
   private dirtyCountCache?: { computedAt: number; value: number };
 
-  constructor(private readonly repoRoot: string) {
-    this.snapshotDir = repoCacheRoot(repoRoot);
+  constructor(private readonly repoRoot: string, snapshotDir = repoCacheRoot(repoRoot)) {
+    this.snapshotDir = snapshotDir;
     this.filesPath = path.join(this.snapshotDir, "source-index.files.jsonl");
     this.symbolsPath = path.join(this.snapshotDir, "source-index.symbols.jsonl");
     this.metaPath = path.join(this.snapshotDir, "source-index.meta.json");
     this.loadSnapshot();
+  }
+
+  isBusy(): boolean {
+    return this.warmIndexPending > 0;
+  }
+
+  dispose(): void {
+    this.cache.clear();
+    this.rgFileCache.clear();
+    this.typeNameIndex.clear();
+    this.referencedTypeIndex.clear();
+    this.importedTypeIndex.clear();
+    this.wildcardImportIndex.clear();
+    this.dirtyCountCache = undefined;
+    this.warmIndexPending = 0;
   }
 
   status(): SourceIndexStatus {

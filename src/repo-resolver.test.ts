@@ -79,6 +79,51 @@ test("resolver reports where the repo root came from", async () => {
   assert.equal((await resolver.resolve({ file: path.join(root, "src", "main", "java", "Demo.java") }) as unknown as { rootSource?: string }).rootSource, "inferred");
 });
 
+test("daemon resolver rejects cwd and relative-file fallback", async () => {
+  const root = await javaRepo("java-lsp-strict-selector-");
+  const registry = await emptyRegistry(root);
+  const resolver = new RepoResolver(registry, { cwdFallback: "reject" });
+
+  await assert.rejects(() => resolver.resolve({}), /requires an explicit repoRoot/);
+  await assert.rejects(() => resolver.resolve({ repoRoot: "relative-repo" }), /repoRoot to be an absolute path/);
+  await assert.rejects(() => resolver.resolve({ file: "src/main/java/Demo.java" }), /when file paths are relative/);
+});
+
+test("daemon resolver accepts root-relative files but rejects root escape and mixed roots", async () => {
+  const root = await javaRepo("java-lsp-strict-root-");
+  const sibling = await javaRepo("java-lsp-strict-sibling-");
+  const registry = await emptyRegistry(root);
+  const resolver = new RepoResolver(registry, { cwdFallback: "reject" });
+
+  const resolved = await resolver.resolve({
+    repoRoot: root,
+    anchors: [{ file: "src/main/java/Demo.java" }]
+  });
+  assert.equal(resolved.repoRoot, canonicalPath(root));
+  await assert.rejects(
+    () => resolver.resolve({ repoRoot: root, file: path.join(sibling, "Outside.java") }),
+    /outside resolved repo root/
+  );
+  await assert.rejects(
+    () => resolver.resolve({ repoRoot: root, files: ["src/main/java/Demo.java", "../outside.java"] }),
+    /outside resolved repo root/
+  );
+});
+
+test("daemon resolver rejects conflicting root identities", async () => {
+  const root = await javaRepo("java-lsp-strict-conflict-");
+  const config = path.join(root, "projects.json");
+  await writeFile(config, JSON.stringify({ aliases: [{ id: "demo", root, lspEnabled: true }] }));
+  const registry = new AliasRegistry(config);
+  await registry.reloadIfChanged();
+  const resolver = new RepoResolver(registry, { cwdFallback: "reject" });
+
+  await assert.rejects(
+    () => resolver.resolve({ repoRoot: root, projectId: "demo" }),
+    /mutually exclusive/
+  );
+});
+
 test("registry rejects relative alias roots", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "java-lsp-relative-config-"));
   const config = path.join(root, "projects.json");
@@ -124,6 +169,21 @@ test("resolver lets Git worktrees inherit enablement without sharing runtime ide
 
 function hasGit(): boolean {
   return spawnSync("git", ["--version"], { encoding: "utf8" }).status === 0;
+}
+
+async function javaRepo(prefix: string): Promise<string> {
+  const root = await mkdtemp(path.join(tmpdir(), prefix));
+  await mkdir(path.join(root, "src", "main", "java"), { recursive: true });
+  await writeFile(path.join(root, "pom.xml"), "<project></project>");
+  return root;
+}
+
+async function emptyRegistry(root: string): Promise<AliasRegistry> {
+  const config = path.join(root, "projects.json");
+  await writeFile(config, JSON.stringify({ aliases: [] }));
+  const registry = new AliasRegistry(config);
+  await registry.reloadIfChanged();
+  return registry;
 }
 
 function git(cwd: string, args: string[]): void {

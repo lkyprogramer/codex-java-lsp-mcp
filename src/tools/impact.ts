@@ -44,7 +44,12 @@ export async function javaImpact(context: ToolContext, args: z.infer<z.ZodObject
   if (semanticPolicy === "required" && context.lsp?.enabled) {
     await timed(phaseMs, "warmDocumentSymbol", async () => warmDocumentSymbols(context, anchors, semanticPolicy));
   } else {
-    warmDocumentSymbols(context, anchors, semanticPolicy).catch(() => undefined);
+    const warm = () => warmDocumentSymbols(context, anchors, semanticPolicy);
+    if (context.runBackgroundTask) {
+      context.runBackgroundTask(warm);
+    } else {
+      warm().catch(() => undefined);
+    }
   }
   mergePhaseMs(phaseMs, context.session.drainPhaseMetrics());
   const options: ImpactOptions = {

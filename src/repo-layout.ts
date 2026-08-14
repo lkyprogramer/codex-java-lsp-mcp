@@ -1,13 +1,12 @@
 // input: Repository paths and LSP file locations.
 // output: Normalized repo metadata, DDD layer classification, and source previews.
 // pos: Shared path helper for the lishuedu JDT LS MCP bridge.
-import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { canonicalPath } from "./path-utils.js";
+import { canonicalPath, repoHash } from "./path-utils.js";
 
 export type PathContext = {
   absolutePath: string;
@@ -62,13 +61,29 @@ function findBuildRoot(startDir: string): string | undefined {
   }
 }
 
-export function repoCacheRoot(repoRoot: string): string {
-  const hash = createHash("sha1").update(repoRoot).digest("hex").slice(0, 12);
-  return path.join(repoCacheBase(), hash);
+export function repoCacheRoot(repoRoot: string, cacheBase = repoCacheBase()): string {
+  return path.join(cacheBase, repoHash(repoRoot));
 }
 
-export function repoCacheBase(): string {
-  return path.join(homedir(), "Library", "Caches", "codex-java-lsp");
+export function repoCacheBase(env: NodeJS.ProcessEnv = process.env): string {
+  const configured = env.JAVA_LSP_CACHE_BASE;
+  if (!configured) {
+    return path.join(env.HOME || homedir(), "Library", "Caches", "codex-java-lsp");
+  }
+  return resolveConfiguredBase(configured, "JAVA_LSP_CACHE_BASE", env);
+}
+
+export function resolveConfiguredBase(value: string, variableName: string, env: NodeJS.ProcessEnv = process.env): string {
+  if (value === "~") {
+    return env.HOME || homedir();
+  }
+  if (value.startsWith(`~${path.sep}`)) {
+    return path.join(env.HOME || homedir(), value.slice(2));
+  }
+  if (!path.isAbsolute(value)) {
+    throw new Error(`${variableName} must be an absolute path or start with ~/; relative paths would split repository identity across working directories.`);
+  }
+  return path.normalize(value);
 }
 
 export function toFileUri(filePath: string): string {

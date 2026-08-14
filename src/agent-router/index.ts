@@ -93,6 +93,10 @@ export class AgentRouter {
     this.rgCache.clear();
   }
 
+  dispose(): void {
+    this.clearRgCache();
+  }
+
   async impact(options: ImpactOptions): Promise<ImpactResult> {
     const startedAt = Date.now();
     const phaseMs: Record<string, number> = {};

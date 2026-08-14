@@ -1,7 +1,7 @@
 // input: MCP tool requests that need Java semantic information.
 // output: Managed Eclipse JDT LS requests and normalized raw LSP responses.
 // pos: Stateful LSP client and process manager for the generic Java LSP MCP bridge.
-import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawn, spawnSync, type ChildProcessWithoutNullStreams, type SpawnOptionsWithoutStdio } from "node:child_process";
 import { createWriteStream, existsSync, readFileSync, rmSync, statSync } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
@@ -21,9 +21,15 @@ import {
 } from "./file-watcher.js";
 import { detectGeneratedCode, type GeneratedCodeStatus } from "./generated-code.js";
 import { detectBuildSystem, resolveProjectJdk, type BuildSystem, type ProjectJdkStatus } from "./project-jdk.js";
-import { fromFileUri, repoCacheRoot, toFileUri } from "./repo-layout.js";
+import { fromFileUri, repoCacheBase, repoCacheRoot, resolveConfiguredBase, toFileUri } from "./repo-layout.js";
 import { resourceDefaults } from "./resource-defaults.js";
 import { touchRepoCache } from "./worktree-cache-cleanup.js";
+import {
+  processStartIdentityForPid,
+  type RepoOwnershipLease,
+  type RepoOwnerTransport
+} from "./repo-ownership-lease.js";
+import { repoHash } from "./path-utils.js";
 
 export type LspPosition = {
   line: number;
@@ -123,6 +129,20 @@ type CacheEntry<T> = {
 
 export type JdtlsChild = Pick<ChildProcessWithoutNullStreams, "exitCode" | "signalCode" | "kill" | "once">;
 
+export type JdtlsSessionOptions = {
+  transportMode?: RepoOwnerTransport;
+  env?: NodeJS.ProcessEnv;
+  ownershipLifecycle?: Pick<RepoOwnershipLease, "markJdtlsStarting" | "markJdtlsRunning" | "clearJdtlsState">;
+  initializeTimeoutMs?: number;
+  spawnJdtls?: (command: string, args: string[], options: SpawnOptionsWithoutStdio) => ChildProcessWithoutNullStreams;
+};
+
+export type JdtlsRuntimePaths = {
+  cacheRoot: string;
+  dataDir: string;
+  logDir: string;
+};
+
 const DEFAULT_LSP_REQUEST_TIMEOUT_MS = positiveInteger(process.env.JDTLS_REQUEST_TIMEOUT_MS, 120000);
 const DEFAULT_CACHE_TTL_MS = positiveInteger(process.env.JDTLS_CACHE_TTL_MS, 300000);
 
@@ -138,6 +158,8 @@ export class JdtlsSession {
   private process?: ChildProcessWithoutNullStreams;
   private starting?: Promise<void>;
   private startedAt?: Date;
+  private initialized = false;
+  private ownershipJdtlsMarked = false;
   private readonly openDocuments = new Map<string, OpenDocument>();
   private readonly diagnostics = new Map<string, LspDiagnostic[]>();
   private readonly dataDir: string;
@@ -148,6 +170,10 @@ export class JdtlsSession {
   private readonly projectJdk: ProjectJdkStatus;
   private readonly generatedCode: GeneratedCodeStatus;
   private readonly jdtlsRuntimeJavaHome?: string;
+  private readonly extraArgs: string[];
+  private readonly ownershipLifecycle?: JdtlsSessionOptions["ownershipLifecycle"];
+  private readonly initializeTimeoutMs: number;
+  private readonly spawnJdtls: NonNullable<JdtlsSessionOptions["spawnJdtls"]>;
   private fileWatcher?: JavaFileWatcher;
   private readonly cache = new Map<string, CacheEntry<unknown>>();
   private cacheHits = 0;
@@ -158,17 +184,28 @@ export class JdtlsSession {
   private lastProgressAt?: Date;
   private lastLanguageStatus?: string;
   private phaseMetrics: Record<string, number> = {};
+  private terminallyStopped = false;
+  private readonly terminalAbort = new AbortController();
 
-  constructor(private readonly repoRoot: string, aliases: string[] = []) {
-    const cacheRoot = repoCacheRoot(repoRoot);
-    this.dataDir = process.env.JDTLS_DATA_DIR || path.join(cacheRoot, "workspace");
-    this.logDir = process.env.JDTLS_LOG_DIR || path.join(cacheRoot, "logs");
+  constructor(private readonly repoRoot: string, aliases: string[] = [], options: JdtlsSessionOptions = {}) {
+    const env = options.env ?? process.env;
+    validateJdtlsTransportEnvironment(options.transportMode ?? "stdio", env);
+    const paths = resolveJdtlsRuntimePaths(repoRoot, options.transportMode ?? "stdio", env);
+    this.dataDir = paths.dataDir;
+    this.logDir = paths.logDir;
     this.logFile = path.join(this.logDir, "jdtls.log");
-    this.jdtlsBin = process.env.JDTLS_BIN || findExecutable("jdtls");
+    this.jdtlsBin = env.JDTLS_BIN || findExecutable("jdtls");
     this.buildSystem = detectBuildSystem(repoRoot);
     this.projectJdk = resolveProjectJdk(repoRoot, aliases);
     this.generatedCode = detectGeneratedCode(repoRoot);
-    this.jdtlsRuntimeJavaHome = process.env.JDTLS_JAVA_HOME || process.env.JAVA_HOME;
+    this.jdtlsRuntimeJavaHome = env.JDTLS_JAVA_HOME || env.JAVA_HOME;
+    this.extraArgs = splitArgs(env.JDTLS_EXTRA_ARGS);
+    this.ownershipLifecycle = options.ownershipLifecycle;
+    this.initializeTimeoutMs = positiveInteger(
+      options.initializeTimeoutMs === undefined ? undefined : String(options.initializeTimeoutMs),
+      120000
+    );
+    this.spawnJdtls = options.spawnJdtls ?? spawn;
   }
 
   status(): JdtlsStatus {
@@ -177,7 +214,7 @@ export class JdtlsSession {
       dataDir: this.dataDir,
       logFile: this.logFile,
       jdtlsBin: this.jdtlsBin,
-      started: Boolean(this.connection && this.process && !this.process.killed),
+      started: Boolean(this.initialized && this.connection && this.process && !this.process.killed),
       pid: this.process?.pid,
       knownDiagnostics: [...this.diagnostics.values()].reduce((sum, value) => sum + value.length, 0),
       openDocuments: this.openDocuments.size,
@@ -198,7 +235,10 @@ export class JdtlsSession {
   }
 
   async ensureStarted(): Promise<void> {
-    if (this.connection && this.process && !this.process.killed) {
+    if (this.terminallyStopped) {
+      throw new Error("JDT LS session is terminally stopped.");
+    }
+    if (this.initialized && this.connection && this.process && !this.process.killed) {
       return;
     }
     const startedAt = Date.now();
@@ -246,11 +286,34 @@ export class JdtlsSession {
     if (child) {
       await terminateJdtlsChild(child);
     }
-    touchRepoCache(this.repoRoot);
+    touchRepoCache(this.repoRoot, { jdtlsPid: null, jdtlsProcessStartIdentity: null });
+    this.clearOwnershipJdtlsState();
     this.openDocuments.clear();
     this.diagnostics.clear();
     this.process = undefined;
     this.startedAt = undefined;
+    this.initialized = false;
+  }
+
+  async forceStop(deadlineMs = 1000): Promise<void> {
+    this.terminallyStopped = true;
+    this.terminalAbort.abort();
+    this.stopFileWatcher();
+    this.clearCache();
+    const connection = this.connection;
+    this.connection = undefined;
+    connection?.dispose();
+    const child = this.process;
+    if (child) {
+      await forceTerminateJdtlsChild(child, deadlineMs);
+    }
+    touchRepoCache(this.repoRoot, { jdtlsPid: null, jdtlsProcessStartIdentity: null });
+    this.clearOwnershipJdtlsState();
+    this.openDocuments.clear();
+    this.diagnostics.clear();
+    this.process = undefined;
+    this.startedAt = undefined;
+    this.initialized = false;
   }
 
   async workspaceSymbols(query: string, limit: number): Promise<{ items: LspSymbol[]; truncated: boolean }> {
@@ -415,6 +478,9 @@ export class JdtlsSession {
   }
 
   private async start(): Promise<void> {
+    if (this.terminallyStopped) {
+      throw new Error("JDT LS session is terminally stopped.");
+    }
     if (!this.jdtlsBin) {
       throw new Error("jdtls executable was not found. Install with `brew install jdtls` or set JDTLS_BIN.");
     }
@@ -428,49 +494,126 @@ export class JdtlsSession {
       ...jvmArgs(this.generatedCode),
       "-data",
       this.dataDir,
-      ...splitArgs(process.env.JDTLS_EXTRA_ARGS)
+      ...this.extraArgs
     ];
-    const child = spawn(this.jdtlsBin, args, {
-      cwd: this.repoRoot,
-      env: buildJdtlsEnv(this.jdtlsRuntimeJavaHome),
-      stdio: ["pipe", "pipe", "pipe"]
-    });
-    const logStream = createWriteStream(this.logFile, { flags: "a" });
-    child.stderr.on("data", chunk => {
-      logStream.write(chunk);
-    });
-    child.on("exit", (code, signal) => {
-      logStream.write(`\n[jdtls exited] code=${code ?? ""} signal=${signal ?? ""}\n`);
-      logStream.end();
-      this.stopFileWatcher();
-      this.connection?.dispose();
-      this.connection = undefined;
+    if (this.terminallyStopped) {
+      throw new Error("JDT LS session is terminally stopped.");
+    }
+    if (this.ownershipLifecycle?.markJdtlsStarting) {
+      this.ownershipLifecycle.markJdtlsStarting();
+      this.ownershipJdtlsMarked = true;
+    }
+    let child: ChildProcessWithoutNullStreams | undefined;
+    let connection: MessageConnection | undefined;
+    let logStream: ReturnType<typeof createWriteStream> | undefined;
+    try {
+      child = this.spawnJdtls(this.jdtlsBin, args, {
+        cwd: this.repoRoot,
+        env: buildJdtlsEnv(this.jdtlsRuntimeJavaHome),
+        stdio: ["pipe", "pipe", "pipe"]
+      });
+      const pid = child.pid;
+      const identity = pid ? processStartIdentityForPid(pid) : undefined;
+      if (!pid || !identity) {
+        throw new Error("JDT LS child did not expose a trustworthy PID/start identity for ownership.");
+      }
+      this.ownershipLifecycle?.markJdtlsRunning?.(pid, identity);
+
+      logStream = createWriteStream(this.logFile, { flags: "a" });
+      child.stderr.on("data", chunk => {
+        logStream?.write(chunk);
+      });
+      child.on("exit", (code, signal) => {
+        logStream?.write(`\n[jdtls exited] code=${code ?? ""} signal=${signal ?? ""}\n`);
+        logStream?.end();
+        if (this.process !== child) {
+          return;
+        }
+        this.stopFileWatcher();
+        this.connection?.dispose();
+        this.connection = undefined;
+        this.process = undefined;
+        this.startedAt = undefined;
+        this.initialized = false;
+        touchRepoCache(this.repoRoot, { jdtlsPid: null, jdtlsProcessStartIdentity: null });
+        this.clearOwnershipJdtlsState();
+      });
+
+      connection = createMessageConnection(
+        new StreamMessageReader(child.stdout),
+        new StreamMessageWriter(child.stdin)
+      );
+      this.registerClientHandlers(connection);
+      connection.listen();
+
+      this.process = child;
+      this.connection = connection;
+      if (this.terminallyStopped) {
+        throw new Error("JDT LS session is terminally stopped.");
+      }
+      touchRepoCache(this.repoRoot, {
+        jdtlsPid: child.pid,
+        jdtlsProcessStartIdentity: identity
+      });
+      const initializeResult = await withTimeout(
+        connection.sendRequest("initialize", this.initializeParams()),
+        this.initializeTimeoutMs,
+        "initialize",
+        undefined,
+        this.terminalAbort.signal
+      );
+      if (!initializeResult) {
+        throw new Error("JDT LS initialization returned an empty result.");
+      }
+      connection.sendNotification("initialized", {});
+      connection.sendNotification("workspace/didChangeConfiguration", { settings: this.javaSettings() });
+      this.startedAt = new Date();
+      await this.startFileWatcher();
+      this.initialized = true;
+    } catch (error) {
+      try {
+        await this.cleanupFailedStart(child, connection, logStream);
+      } catch (cleanupError) {
+        throw new AggregateError(
+          [error, cleanupError],
+          "JDT LS startup failed and its child could not be confirmed stopped."
+        );
+      }
+      throw error;
+    }
+  }
+
+  private async cleanupFailedStart(
+    child: ChildProcessWithoutNullStreams | undefined,
+    connection: MessageConnection | undefined,
+    logStream: ReturnType<typeof createWriteStream> | undefined
+  ): Promise<void> {
+    this.stopFileWatcher();
+    connection?.dispose();
+    if (child) {
+      await forceTerminateJdtlsChild(child, 1000);
+    }
+    logStream?.end();
+    if (this.process === child) {
       this.process = undefined;
-      this.startedAt = undefined;
-    });
+      this.connection = undefined;
+    }
+    this.startedAt = undefined;
+    this.initialized = false;
+    touchRepoCache(this.repoRoot, { jdtlsPid: null, jdtlsProcessStartIdentity: null });
+    this.clearOwnershipJdtlsState();
+  }
 
-    const connection = createMessageConnection(
-      new StreamMessageReader(child.stdout),
-      new StreamMessageWriter(child.stdin)
-    );
-    this.registerClientHandlers(connection);
-    connection.listen();
-
-    this.process = child;
-    this.connection = connection;
-    touchRepoCache(this.repoRoot, { jdtlsPid: child.pid });
-    const initializeResult = await withTimeout(
-      connection.sendRequest("initialize", this.initializeParams()),
-      120000,
-      "initialize"
-    );
-    connection.sendNotification("initialized", {});
-    connection.sendNotification("workspace/didChangeConfiguration", { settings: this.javaSettings() });
-    this.startedAt = new Date();
-    await this.startFileWatcher();
-
-    if (!initializeResult) {
-      throw new Error("JDT LS initialization returned an empty result.");
+  private clearOwnershipJdtlsState(): void {
+    if (!this.ownershipJdtlsMarked) {
+      return;
+    }
+    try {
+      this.ownershipLifecycle?.clearJdtlsState?.();
+    } catch (error) {
+      console.error("[codex-java-lsp] failed to clear JDT LS ownership lifecycle state", error);
+    } finally {
+      this.ownershipJdtlsMarked = false;
     }
   }
 
@@ -699,15 +842,27 @@ export class JdtlsSession {
   }
 
   private async request<T>(method: string, params?: unknown, timeoutMs = DEFAULT_LSP_REQUEST_TIMEOUT_MS): Promise<T> {
+    if (this.terminallyStopped) {
+      throw new Error("JDT LS session is terminally stopped.");
+    }
     if (!this.connection) {
       throw new Error("JDT LS is not started.");
     }
     const cancellation = new CancellationTokenSource();
     const startedAt = Date.now();
+    const abort = () => cancellation.cancel();
+    this.terminalAbort.signal.addEventListener("abort", abort, { once: true });
     try {
-      return await withTimeout(this.connection.sendRequest(method, params, cancellation.token), timeoutMs, method, () => cancellation.cancel()) as T;
+      return await withTimeout(
+        this.connection.sendRequest(method, params, cancellation.token),
+        timeoutMs,
+        method,
+        () => cancellation.cancel(),
+        this.terminalAbort.signal
+      ) as T;
     } finally {
       this.addPhaseMetric(method, Date.now() - startedAt);
+      this.terminalAbort.signal.removeEventListener("abort", abort);
       cancellation.dispose();
     }
   }
@@ -988,6 +1143,54 @@ function splitArgs(value: string | undefined): string[] {
   return value.split(/\s+/).filter(Boolean);
 }
 
+export function validateJdtlsTransportEnvironment(
+  transportMode: RepoOwnerTransport,
+  env: NodeJS.ProcessEnv = process.env
+): void {
+  if (env.JAVA_LSP_CACHE_BASE) {
+    resolveConfiguredBase(env.JAVA_LSP_CACHE_BASE, "JAVA_LSP_CACHE_BASE", env);
+  }
+  if (env.JAVA_LSP_OWNERSHIP_BASE) {
+    resolveConfiguredBase(env.JAVA_LSP_OWNERSHIP_BASE, "JAVA_LSP_OWNERSHIP_BASE", env);
+  }
+  if (transportMode === "streamable_http" && (env.JDTLS_DATA_DIR || env.JDTLS_LOG_DIR)) {
+    throw new Error("streamable_http mode rejects JDTLS_DATA_DIR/JDTLS_LOG_DIR; use JAVA_LSP_CACHE_BASE so every canonical repo gets its own workspace and logs.");
+  }
+  if (transportMode === "stdio") {
+    if (env.JDTLS_DATA_DIR) {
+      resolveConfiguredBase(env.JDTLS_DATA_DIR, "JDTLS_DATA_DIR", env);
+    }
+    if (env.JDTLS_LOG_DIR) {
+      resolveConfiguredBase(env.JDTLS_LOG_DIR, "JDTLS_LOG_DIR", env);
+    }
+  }
+  const extraArgs = splitArgs(env.JDTLS_EXTRA_ARGS);
+  if (extraArgs.some(arg => arg === "-data" || arg.startsWith("-data=") || arg.startsWith("--jvm-arg=-data"))) {
+    throw new Error("JDTLS_EXTRA_ARGS must not override -data; repository workspaces are managed by codex-java-lsp.");
+  }
+}
+
+export function resolveJdtlsRuntimePaths(
+  repoRoot: string,
+  transportMode: RepoOwnerTransport = "stdio",
+  env: NodeJS.ProcessEnv = process.env
+): JdtlsRuntimePaths {
+  validateJdtlsTransportEnvironment(transportMode, env);
+  const cacheRoot = repoCacheRoot(repoRoot, repoCacheBase(env));
+  const hash = repoHash(repoRoot);
+  const dataDir = transportMode === "stdio" && env.JDTLS_DATA_DIR
+    ? path.join(resolveConfiguredPath(env.JDTLS_DATA_DIR, env), hash)
+    : path.join(cacheRoot, "workspace");
+  const logDir = transportMode === "stdio" && env.JDTLS_LOG_DIR
+    ? path.join(resolveConfiguredPath(env.JDTLS_LOG_DIR, env), hash)
+    : path.join(cacheRoot, "logs");
+  return { cacheRoot, dataDir, logDir };
+}
+
+function resolveConfiguredPath(value: string, env: NodeJS.ProcessEnv): string {
+  return resolveConfiguredBase(value, "JDTLS_DATA_DIR/JDTLS_LOG_DIR", env);
+}
+
 function positiveInteger(value: string | undefined, fallback: number): number {
   if (!value) {
     return fallback;
@@ -1043,6 +1246,20 @@ export async function terminateJdtlsChild(child: JdtlsChild, graceMs = 200): Pro
   }
 }
 
+export async function forceTerminateJdtlsChild(child: JdtlsChild, deadlineMs = 1000): Promise<void> {
+  if (!Number.isFinite(deadlineMs) || deadlineMs < 0) {
+    throw new Error(`Invalid JDT LS force-stop deadline: ${deadlineMs}`);
+  }
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return;
+  }
+  const closed = new Promise<void>(resolve => child.once("close", () => resolve()));
+  child.kill("SIGKILL");
+  if (!await settlesWithin(closed, Math.floor(deadlineMs))) {
+    throw new Error(`JDT LS child did not exit after SIGKILL within ${Math.floor(deadlineMs)}ms.`);
+  }
+}
+
 function settlesWithin(operation: Promise<void>, timeoutMs: number): Promise<boolean> {
   return new Promise(resolve => {
     const timer = setTimeout(() => resolve(false), timeoutMs);
@@ -1056,7 +1273,13 @@ function settlesWithin(operation: Promise<void>, timeoutMs: number): Promise<boo
   });
 }
 
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string, onTimeout?: () => void): Promise<T> {
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  label: string,
+  onTimeout?: () => void,
+  signal?: AbortSignal
+): Promise<T> {
   let timeout: NodeJS.Timeout | undefined;
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeout = setTimeout(() => {
@@ -1064,11 +1287,22 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: str
       reject(new Error(`Timed out waiting for ${label} after ${timeoutMs}ms`));
     }, timeoutMs);
   });
+  let removeAbort: (() => void) | undefined;
+  const aborted = signal ? new Promise<never>((_, reject) => {
+    const abort = () => reject(new Error(`Cancelled while waiting for ${label}.`));
+    if (signal.aborted) {
+      abort();
+      return;
+    }
+    signal.addEventListener("abort", abort, { once: true });
+    removeAbort = () => signal.removeEventListener("abort", abort);
+  }) : undefined;
   try {
-    return await Promise.race([promise, timeoutPromise]);
+    return await Promise.race([promise, timeoutPromise, ...(aborted ? [aborted] : [])]);
   } finally {
     if (timeout) {
       clearTimeout(timeout);
     }
+    removeAbort?.();
   }
 }

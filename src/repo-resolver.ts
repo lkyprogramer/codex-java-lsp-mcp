@@ -13,6 +13,11 @@ export type RepoSelector = {
   repoRoot?: string;
   file?: string;
   files?: string[];
+  anchors?: Array<{ file: string }>;
+};
+
+export type RepoResolverOptions = {
+  cwdFallback: "allow" | "reject";
 };
 
 export type RootSource = "explicit" | "projectId" | "cwd" | "inferred";
@@ -36,7 +41,18 @@ export type ResolvedRepo = {
 };
 
 export class RepoResolver {
-  constructor(private readonly registry: AliasRegistry) {}
+  private readonly options: RepoResolverOptions;
+
+  constructor(private readonly registry: AliasRegistry, options: Partial<RepoResolverOptions> = {}) {
+    this.options = {
+      cwdFallback: "allow",
+      ...options
+    };
+  }
+
+  cwdFallbackPolicy(): RepoResolverOptions["cwdFallback"] {
+    return this.options.cwdFallback;
+  }
 
   async resolve(selector: RepoSelector): Promise<ResolvedRepo> {
     await this.registry.reloadIfChanged();
@@ -102,22 +118,57 @@ export class RepoResolver {
   }
 
   private resolveRoot(selector: RepoSelector): { repoRoot: string; source: RootSource } {
-    if (selector.repoRoot) {
-      return { repoRoot: findRepoRoot(selector.repoRoot), source: "explicit" };
+    if (this.options.cwdFallback === "reject" && selector.repoRoot && selector.projectId) {
+      throw new Error("repoRoot and projectId are mutually exclusive in daemon mode.");
     }
-    if (selector.projectId) {
+    let resolved: { repoRoot: string; source: RootSource };
+    if (selector.repoRoot) {
+      if (this.options.cwdFallback === "reject" && !path.isAbsolute(selector.repoRoot)) {
+        throw new Error("Daemon mode requires repoRoot to be an absolute path.");
+      }
+      resolved = { repoRoot: findRepoRoot(selector.repoRoot), source: "explicit" };
+    } else if (selector.projectId) {
       const alias = this.registry.findById(selector.projectId);
       if (!alias) {
         throw new Error(`Unknown projectId: ${selector.projectId}`);
       }
-      return { repoRoot: findRepoRoot(alias.root), source: "projectId" };
+      resolved = { repoRoot: findRepoRoot(alias.root), source: "projectId" };
+    } else {
+      const file = selectorFiles(selector)[0];
+      if (file) {
+        if (this.options.cwdFallback === "reject" && !path.isAbsolute(file)) {
+          throw new Error("Daemon mode requires repoRoot/projectId when file paths are relative.");
+        }
+        const absoluteFile = path.isAbsolute(file) ? file : path.resolve(process.cwd(), file);
+        resolved = { repoRoot: findRepoRoot(path.dirname(absoluteFile)), source: "inferred" };
+      } else {
+        if (this.options.cwdFallback === "reject") {
+          throw new Error("Daemon mode requires an explicit repoRoot, projectId, or absolute file.");
+        }
+        resolved = { repoRoot: findRepoRoot(process.cwd()), source: "cwd" };
+      }
     }
-    const file = selector.file || selector.files?.[0];
-    if (file) {
-      const absoluteFile = path.isAbsolute(file) ? file : path.resolve(process.cwd(), file);
-      return { repoRoot: findRepoRoot(path.dirname(absoluteFile)), source: "inferred" };
+    if (this.options.cwdFallback === "reject") {
+      assertSelectorFilesWithinRoot(resolved.repoRoot, selectorFiles(selector));
     }
-    return { repoRoot: findRepoRoot(process.cwd()), source: "cwd" };
+    return resolved;
+  }
+}
+
+function selectorFiles(selector: RepoSelector): string[] {
+  return [
+    ...(selector.file ? [selector.file] : []),
+    ...(selector.files || []),
+    ...(selector.anchors || []).map(anchor => anchor.file)
+  ];
+}
+
+function assertSelectorFilesWithinRoot(repoRoot: string, files: string[]): void {
+  for (const file of files) {
+    const candidate = path.isAbsolute(file) ? file : path.resolve(repoRoot, file);
+    if (!isWithin(repoRoot, candidate)) {
+      throw new Error(`Selector file is outside resolved repo root: ${file}`);
+    }
   }
 }
 
