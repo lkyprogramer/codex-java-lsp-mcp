@@ -228,6 +228,12 @@ test("installer persists canonical ownership and migrates only supported project
   assert.match(installer, /if ! acquire_install_lock; then/);
 });
 
+test("installer handles an empty project JDK override list under nounset", () => {
+  const installer = readFileSync(path.join(projectRoot, "install-runtime.sh"), "utf8");
+  const guards = installer.match(/if \(\( \$\{#PROJECT_JDK_ENV\[@\]\} > 0 \)\); then/g) || [];
+  assert.equal(guards.length, 3, "every empty-array expansion must be guarded when install-runtime.sh uses set -u");
+});
+
 test("installer rejects dirty release provenance before assembling a new immutable release", () => {
   const installer = readFileSync(path.join(projectRoot, "install-runtime.sh"), "utf8");
   assert.match(installer, /assert_clean_release_source\(\)/);

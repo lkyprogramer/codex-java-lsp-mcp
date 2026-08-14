@@ -304,17 +304,19 @@ merge_project_jdk_env() {
     return 1
   fi
   local entry existing_key existing_value
-  for entry in "${PROJECT_JDK_ENV[@]}"; do
-    existing_key="${entry%%=*}"
-    existing_value="${entry#*=}"
-    if [[ "$existing_key" == "$key" ]]; then
-      if [[ "$existing_value" != "$value" ]]; then
-        echo "Conflicting project JDK override for $key between installer environment and existing stdio MCP registration." >&2
-        return 1
+  if (( ${#PROJECT_JDK_ENV[@]} > 0 )); then
+    for entry in "${PROJECT_JDK_ENV[@]}"; do
+      existing_key="${entry%%=*}"
+      existing_value="${entry#*=}"
+      if [[ "$existing_key" == "$key" ]]; then
+        if [[ "$existing_value" != "$value" ]]; then
+          echo "Conflicting project JDK override for $key between installer environment and existing stdio MCP registration." >&2
+          return 1
+        fi
+        return 0
       fi
-      return 0
-    fi
-  done
+    done
+  fi
   PROJECT_JDK_ENV+=("$key=$value")
 }
 
@@ -597,10 +599,12 @@ write_state() {
       printf 'JAVA_LSP_CACHE_BASE=%q\n' "$JAVA_LSP_CACHE_BASE"
       printf 'JAVA_LSP_OWNERSHIP_BASE=%q\n' "$JAVA_LSP_OWNERSHIP_BASE"
       printf 'NODE_BIN=%q\n' "$NODE_BIN"
-      local entry
-      for entry in "${PROJECT_JDK_ENV[@]}"; do
-        printf '%s=%q\n' "${entry%%=*}" "${entry#*=}"
-      done
+      if (( ${#PROJECT_JDK_ENV[@]} > 0 )); then
+        local entry
+        for entry in "${PROJECT_JDK_ENV[@]}"; do
+          printf '%s=%q\n' "${entry%%=*}" "${entry#*=}"
+        done
+      fi
     } >"$staged"
   ) || return 1
   mv -f "$staged" "$STATE_DIR/daemon.env" || return 1
@@ -648,7 +652,9 @@ write_launch_agent() {
       environment+=("$env_name=${!env_name}")
     fi
   done
-  environment+=("${PROJECT_JDK_ENV[@]}")
+  if (( ${#PROJECT_JDK_ENV[@]} > 0 )); then
+    environment+=("${PROJECT_JDK_ENV[@]}")
+  fi
   "$NODE_BIN" "$RELEASE_DIR/scripts/render-launch-agent-plist.mjs" \
     "$RELEASE_DIR/macos/com.lky.codex-java-lsp-mcp.plist.template" \
     "$staged" \
