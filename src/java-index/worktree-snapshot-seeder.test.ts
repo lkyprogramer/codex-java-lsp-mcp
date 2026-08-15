@@ -106,6 +106,8 @@ test("sibling seed reuses only target-content-matching facts", async () => {
   const seeder = new WorktreeSnapshotSeeder();
   const candidate = await seeder.findCandidate(targetIdentity, identity, cacheBase);
   assert.ok(candidate, "primary's complete snapshot must be found as a candidate");
+  assert.equal(seeder.lastScanTelemetry.cacheDirsScanned, 1, "cacheBase has exactly one sibling cache dir (primary)");
+  assert.equal(seeder.lastScanTelemetry.eligibleSnapshots, 1, "primary's snapshot passes every eligibility check");
 
   const { result, store } = await seeder.seedValidatedFacts(candidate!, identity, family.linked, layout, 2);
 
@@ -114,6 +116,9 @@ test("sibling seed reuses only target-content-matching facts", async () => {
   assert.deepEqual(result.deletedSourcePaths, [DELETED_IN_B]);
   assert.equal(result.coverage, "DEGRADED");
   assert.equal(result.negativeLookupAllowed, false);
+  assert.ok(result.candidateDecompressMs >= 0);
+  assert.ok(result.initialManifestScanMs >= 0);
+  assert.ok(result.finalManifestScanMs >= 0);
   assert.equal(store.file(SAME) !== undefined, true, "Same.java's facts must be present in the seeded store");
   assert.equal(store.file(CHANGED), undefined, "Changed.java must not be seeded from stale source facts");
   assert.equal(store.file(DELETED_IN_B), undefined, "a file deleted in the target must never be seeded");
@@ -184,6 +189,8 @@ test("a corrupt newest candidate falls back to the next valid candidate", async 
 
   assert.ok(candidate, "the corrupt sibling must be skipped, not fatal");
   assert.equal(candidate!.sourceRepoRoot, family.primary);
+  assert.equal(seeder.lastScanTelemetry.cacheDirsScanned, 2, "both the corrupt and the valid sibling dir were scanned");
+  assert.equal(seeder.lastScanTelemetry.eligibleSnapshots, 1, "only the valid sibling passed eligibility");
 });
 
 test("a source snapshot that disappears before seeding leaves the target with no seed", async () => {
@@ -210,6 +217,8 @@ test("no valid sibling candidate reports no candidate, not an error", async () =
   const seeder = new WorktreeSnapshotSeeder();
   const candidate = await seeder.findCandidate(targetIdentity, identity, cacheBase);
   assert.equal(candidate, undefined);
+  assert.equal(seeder.lastScanTelemetry.cacheDirsScanned, 0);
+  assert.equal(seeder.lastScanTelemetry.eligibleSnapshots, 0);
 });
 
 test("an unchanged source file whose only target-visible dependency changed drops its resolved edge and enters relinkPaths", async () => {

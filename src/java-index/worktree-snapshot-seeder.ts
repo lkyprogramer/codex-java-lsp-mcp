@@ -23,6 +23,12 @@ export type WorktreeSeedCandidate = {
   manifestFingerprint: string;
 };
 
+/** `findCandidate()` scan diagnostics (V3.2-19), independent of whether a candidate was picked. */
+export type WorktreeScanTelemetry = {
+  cacheDirsScanned: number;
+  eligibleSnapshots: number;
+};
+
 export type WorktreeSeedResult = {
   sourceRepoHash?: string;
   targetGeneration: number;
@@ -34,6 +40,12 @@ export type WorktreeSeedResult = {
   /** Framework relationships are derived from facts at request time, never persisted as store edges. */
   droppedFrameworkEdges: number;
   manifestValidationMs: number;
+  /** Time to load and decompress the winning candidate's snapshot file (V3.2-19). */
+  candidateDecompressMs: number;
+  /** Time for the pre-load target manifest scan that reuse eligibility is checked against (V3.2-19). */
+  initialManifestScanMs: number;
+  /** Time for the re-scan at the publication boundary that invalidates any reuse a late write raced (V3.2-19). */
+  finalManifestScanMs: number;
   reusedFiles: number;
   /**
    * MyBatis resources reused from the sibling's snapshot / re-derived fresh
@@ -63,6 +75,9 @@ function emptySeedResult(targetGeneration: number): WorktreeSeedResult {
     droppedCrossFileEdges: 0,
     droppedFrameworkEdges: 0,
     manifestValidationMs: 0,
+    candidateDecompressMs: 0,
+    initialManifestScanMs: 0,
+    finalManifestScanMs: 0,
     reusedFiles: 0,
     reusedResources: 0,
     dirtyResources: 0,
@@ -87,6 +102,13 @@ function readRepoCacheMetaFields(cacheRoot: string): RepoCacheMetaFields | undef
 
 export class WorktreeSnapshotSeeder {
   /**
+   * Diagnostics from the most recent `findCandidate()` call (V3.2-19). A
+   * fresh instance is constructed per seed attempt (`attemptSiblingSeed`),
+   * so this last-call side channel never crosses call boundaries.
+   */
+  lastScanTelemetry: WorktreeScanTelemetry = { cacheDirsScanned: 0, eligibleSnapshots: 0 };
+
+  /**
    * Scans every cache directory under `cacheBase` for a sibling worktree's
    * snapshot: same family (shared Git common-dir) as `target`, a different
    * repo, and a snapshot that is schema/extractor/stableId/buildFingerprint
@@ -104,8 +126,10 @@ export class WorktreeSnapshotSeeder {
     if (!existsSync(cacheBase)) return undefined;
     const familyKey = target.familyHash ?? target.repoHash;
     const candidates: WorktreeSeedCandidate[] = [];
+    let cacheDirsScanned = 0;
     for (const entry of readdirSync(cacheBase, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
+      cacheDirsScanned += 1;
       const cacheRoot = path.join(cacheBase, entry.name);
       const meta = readRepoCacheMetaFields(cacheRoot);
       if (!meta?.repoRoot || !meta.repoHash) continue;
@@ -129,6 +153,7 @@ export class WorktreeSnapshotSeeder {
         manifestFingerprint: snapshot.manifestFingerprint
       });
     }
+    this.lastScanTelemetry = { cacheDirsScanned, eligibleSnapshots: candidates.length };
     if (candidates.length === 0) return undefined;
     candidates.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.sourceRepoHash.localeCompare(b.sourceRepoHash));
     return candidates[0];
@@ -173,16 +198,20 @@ export class WorktreeSnapshotSeeder {
     hooks: WorktreeSeedValidationHooks = {}
   ): Promise<{ result: WorktreeSeedResult; store: JavaIndexStore }> {
     const start = Date.now();
+    const decompressStart = Date.now();
     const snapshot = await loadSiblingSnapshot(candidate.sourceSnapshotPath, identity);
+    const candidateDecompressMs = Date.now() - decompressStart;
     if (!snapshot) {
       // Disappeared, or changed shape, since findCandidate looked at it.
-      return { result: emptySeedResult(targetGeneration), store: new JavaIndexStore() };
+      return { result: { ...emptySeedResult(targetGeneration), candidateDecompressMs }, store: new JavaIndexStore() };
     }
 
+    const initialManifestScanStart = Date.now();
     const [{ entries, unstablePaths }, resourceManifest] = await Promise.all([
       scanCurrentManifestStable(targetRepoRoot, targetLayout),
       scanCurrentMyBatisManifestStable(targetRepoRoot, targetLayout)
     ]);
+    const initialManifestScanMs = Date.now() - initialManifestScanStart;
     const unstable = new Set(unstablePaths);
     const targetEntryByPath = new Map(entries.map(entry => [entry.relativePath, entry]));
     const resourceUnstable = new Set(resourceManifest.unstablePaths);
@@ -240,10 +269,12 @@ export class WorktreeSnapshotSeeder {
     // store is installed by the worker. Re-scan at that exact publication
     // boundary and evict any formerly reusable facts that no longer match.
     await hooks.beforeFinalValidation?.();
+    const finalManifestScanStart = Date.now();
     const [finalManifest, finalResourceManifest] = await Promise.all([
       scanCurrentManifestStable(targetRepoRoot, targetLayout),
       scanCurrentMyBatisManifestStable(targetRepoRoot, targetLayout)
     ]);
+    const finalManifestScanMs = Date.now() - finalManifestScanStart;
     const finalUnstable = new Set(finalManifest.unstablePaths);
     const finalEntriesByPath = new Map(finalManifest.entries.map(entry => [entry.relativePath, entry]));
     const snapshotFilesByPath = new Map(snapshot.files.map(file => [file.relativePath, file]));
@@ -315,6 +346,9 @@ export class WorktreeSnapshotSeeder {
       droppedCrossFileEdges,
       droppedFrameworkEdges: 0,
       manifestValidationMs: Date.now() - start,
+      candidateDecompressMs,
+      initialManifestScanMs,
+      finalManifestScanMs,
       reusedFiles: reusedPaths.length,
       reusedResources: reusedResourcePaths.length,
       dirtyResources,

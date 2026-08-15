@@ -217,6 +217,14 @@ export type WorktreeSeedStatus = {
   /** Task 28 Slice C: MyBatis resources reused (content-hash matched) vs. left for the normal post-seed sweep to re-derive. */
   reusedResources: number;
   dirtyResources: number;
+  /** How many sibling cache directories findCandidate() scanned, regardless of eligibility (V3.2-19). */
+  cacheDirsScanned: number;
+  /** Of those scanned, how many held a snapshot that passed every eligibility check (V3.2-19). */
+  eligibleSnapshots: number;
+  /** Decompress, pre-load scan, and publication-boundary re-scan phase timings (V3.2-19). */
+  candidateDecompressMs: number;
+  initialManifestScanMs: number;
+  finalManifestScanMs: number;
   completion: "NOT_ATTEMPTED" | "SEEDED_DEGRADED" | "RECONCILED_COMPLETE" | "NO_VALID_SOURCE" | "FAILED";
 };
 

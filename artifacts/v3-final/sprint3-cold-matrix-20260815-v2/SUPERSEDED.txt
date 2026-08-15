@@ -1,0 +1,14 @@
+Superseded by ../sprint3-cold-matrix-20260815-v3/ (2026-08-15).
+
+This v2 evidence pre-dates the java-index-worker.ts resourceCoverage/
+snapshot-durability fixes (#110): the piggyback catch-up loop keyed off
+status.indexedGeneration, and the processBackgroundChunk finalChunk
+rescan that closes the gap when a piggybacked bump lands after the
+owning beginBackgroundSweep call already returned. v3 was captured after
+those fixes, plus the storm-gate harness corrections (see
+../sprint3-storm-20260815/).
+
+v3's diagnostic-rpc numbers are identical to v2's (old.rpcCount ==
+new.rpcCount == 8088, same per-scenario breakdown), confirming the
+worker-side fixes did not touch the steady-state request-serving RPC
+path - only background-sweep/snapshot bookkeeping.

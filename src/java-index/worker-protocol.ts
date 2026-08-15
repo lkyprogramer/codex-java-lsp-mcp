@@ -661,6 +661,11 @@ function validateWorktreeSeedStatus(value: unknown, context: string): WorktreeSe
   if (!isNumber(source.deltaParsedFiles)) invalid(context, "deltaParsedFiles");
   if (!isNumber(source.reusedResources)) invalid(context, "reusedResources");
   if (!isNumber(source.dirtyResources)) invalid(context, "dirtyResources");
+  if (!isNumber(source.cacheDirsScanned)) invalid(context, "cacheDirsScanned");
+  if (!isNumber(source.eligibleSnapshots)) invalid(context, "eligibleSnapshots");
+  if (!isNumber(source.candidateDecompressMs)) invalid(context, "candidateDecompressMs");
+  if (!isNumber(source.initialManifestScanMs)) invalid(context, "initialManifestScanMs");
+  if (!isNumber(source.finalManifestScanMs)) invalid(context, "finalManifestScanMs");
   if (!isOneOf(source.completion, WORKTREE_SEED_COMPLETIONS)) invalid(context, "completion");
   return {
     attempted: source.attempted,
@@ -674,6 +679,11 @@ function validateWorktreeSeedStatus(value: unknown, context: string): WorktreeSe
     deltaParsedFiles: source.deltaParsedFiles,
     reusedResources: source.reusedResources,
     dirtyResources: source.dirtyResources,
+    cacheDirsScanned: source.cacheDirsScanned,
+    eligibleSnapshots: source.eligibleSnapshots,
+    candidateDecompressMs: source.candidateDecompressMs,
+    initialManifestScanMs: source.initialManifestScanMs,
+    finalManifestScanMs: source.finalManifestScanMs,
     completion: source.completion
   };
 }

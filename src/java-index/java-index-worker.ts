@@ -1244,8 +1244,14 @@ async function attemptSiblingSeed(
     const seedIdentity = { extractorVersion: computeExtractorVersion(), stableIdVersion: STABLE_ID_VERSION, buildFingerprint };
     const seeder = new WorktreeSnapshotSeeder();
     const candidate = await seeder.findCandidate(currentWorktreeIdentity(), seedIdentity, siblingCacheBase);
+    const scanTelemetry = seeder.lastScanTelemetry;
     if (!candidate) {
-      return { ...emptyWorktreeSeedStatus("NO_VALID_SOURCE"), attempted: true };
+      return {
+        ...emptyWorktreeSeedStatus("NO_VALID_SOURCE"),
+        attempted: true,
+        cacheDirsScanned: scanTelemetry.cacheDirsScanned,
+        eligibleSnapshots: scanTelemetry.eligibleSnapshots
+      };
     }
     const seeded = await seeder.seedValidatedFacts(candidate, seedIdentity, repoRoot, layout, generation);
     store = seeded.store;
@@ -1265,6 +1271,11 @@ async function attemptSiblingSeed(
       deltaParsedFiles: 0,
       reusedResources: seeded.result.reusedResources,
       dirtyResources: seeded.result.dirtyResources,
+      cacheDirsScanned: scanTelemetry.cacheDirsScanned,
+      eligibleSnapshots: scanTelemetry.eligibleSnapshots,
+      candidateDecompressMs: seeded.result.candidateDecompressMs,
+      initialManifestScanMs: seeded.result.initialManifestScanMs,
+      finalManifestScanMs: seeded.result.finalManifestScanMs,
       completion: "SEEDED_DEGRADED"
     };
   } catch {
@@ -1286,6 +1297,11 @@ function emptyWorktreeSeedStatus(completion: WorktreeSeedStatus["completion"]): 
     deltaParsedFiles: 0,
     reusedResources: 0,
     dirtyResources: 0,
+    cacheDirsScanned: 0,
+    eligibleSnapshots: 0,
+    candidateDecompressMs: 0,
+    initialManifestScanMs: 0,
+    finalManifestScanMs: 0,
     completion
   };
 }

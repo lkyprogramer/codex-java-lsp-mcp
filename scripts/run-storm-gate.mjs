@@ -252,16 +252,33 @@ async function pollUntilSettled(runtimes, repoRoot, isJavaIndexCompleteAt, isJav
   // why. Keep a bounded rolling window instead of the full poll history.
   const trail = [];
   while (Date.now() < deadline) {
-    const observed = await runtimes.withContext(
-      { repoRoot },
-      context => ({
-        status: context.javaIndexClient?.localStatus(),
-        watcherReady: context.watcher?.ready === true,
-        watcherPending: context.watcher?.pending ?? 0,
-        lastStorm: context.watcher?.lastStorm
-      }),
-      { mayStartLsp: false }
-    );
+    // This is a cheap local status read (no JavaIndex RPC), but it still goes
+    // through the production request budget path (createRequestBudget's
+    // "balanced"/"auto" default is 3000ms) meant for full request processing.
+    // Under real host contention (observed: a concurrent Time Machine backup
+    // driving load average >14) that budget can be missed even for a local
+    // read while the repo's own initial cold sweep is competing for the same
+    // worker thread. A transient DEADLINE_EXCEEDED here is not evidence the
+    // repo failed to settle - retry immediately, bounded by the same outer
+    // poll deadline, instead of letting one slow tick crash the whole matrix.
+    let observed;
+    for (;;) {
+      try {
+        observed = await runtimes.withContext(
+          { repoRoot },
+          context => ({
+            status: context.javaIndexClient?.localStatus(),
+            watcherReady: context.watcher?.ready === true,
+            watcherPending: context.watcher?.pending ?? 0,
+            lastStorm: context.watcher?.lastStorm
+          }),
+          { mayStartLsp: false }
+        );
+        break;
+      } catch (error) {
+        if (error?.code !== "DEADLINE_EXCEEDED" || Date.now() >= deadline) throw error;
+      }
+    }
     if (observed.lastStorm) {
       lastStorm = observed.lastStorm;
       stormBatchesByObservedAt.set(observed.lastStorm.observedAt, observed.lastStorm);
