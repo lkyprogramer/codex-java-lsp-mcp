@@ -2,109 +2,68 @@
 
 ## 当前任务
 
-继续 Java-only LSP/MCP V3.2 优化的 Sprint3：把 JavaIndex 的渐进就绪、快照持久化、后台扫描优先级和前台闭包优化收束为可复现证据。用户的硬约束是：**任何测试、构建、benchmark 或验证都必须与正在使用的 LSP 隔离**，不能接触活动 checkout、LSP、JDT、JavaIndex 缓存或 `node_modules`。
+Java-only LSP/MCP V3.2 优化的 Sprint3 已完成并已 commit/push。当前应继续 Sprint4（JDT 语义价值兑现，V3.2-21~25）。用户的硬约束不变：**任何测试、构建、benchmark 或验证都必须与正在使用的 LSP 隔离**，不能接触活动 checkout、LSP、JDT、JavaIndex 缓存或 `node_modules`。
 
-当前分支是 `codex/java-intelligence-v3`，`HEAD=d7f23d5 feat(v32): batch java index request hot paths`。Sprint2 已提交；Sprint3 仍是未提交的 dirty worktree。
+当前分支是 `codex/java-intelligence-v3`，`HEAD=0736713`（`ba6a02f` 主体实现 + `0736713` V3.2-19 telemetry/storm-ratio exit decision/V3.2-20 关闭）。**Sprint3 已 commit 且已 push，不是 dirty worktree**。
 
-## 已完成
+用户的标准授权（持续有效，无需每次重新确认）：
+- 本仓库上的 `git commit`、`git push origin codex/java-intelligence-v3` 不需要逐次请求授权。
+- 设计分叉/实现取舍不需要问用户，直接调用 advisor 并按其最终建议执行；只有 destructive/不可逆操作、PR/发布/deploy 范围、或 advisor 自己标注为"需要用户判断"的事项才升级给用户。
+- 详见 `~/.claude/projects/-Users-luo-Documents-github-codex-java-lsp-mcp/memory/autonomous-scope-authorization.md`（如果下一会话是同一账号/同一 Claude Code 环境，这份记忆应该已经自动加载）。
 
-- 已落地并接入回归测试的 Sprint3 实现：
-  - JavaIndex snapshot 状态（`EMPTY/PENDING/DURABLE/FAILED`）、单写者 tail、dirty/durable revision、防止旧 writer 覆盖新 revision、完整 Java + MyBatis manifest 校验、own-snapshot 代际重写。
-  - `close()` 两阶段语义：2.5s 仅限制调用方等待；到期只 `unref()`，不终止仍在 native parse/fsync/atomic rename 的 worker；收到安全 ACK 或确定 exit 后才终止。
-  - 仅 A1 主锚点可通过 `REFRESH.priority=ACTIVE_ANCHOR` 提升后台 sweep；watcher / A2 / 普通 refresh 不会抢占。每个 sweep 最多一个 active root、一个额外重排 epoch，且不抢占已开始的 chunk。
-  - 前台 anchor closure：有限 direct imports、一个优先 interface、冷态 exact-FQN conventional-path refresh 和有界实现类 discovery；失败只 fail-soft，不能产生权威负结论。
-  - progressive-index benchmark/runner/verifier、三仓 scenario lock 和严格 complete/durable predicate。
-  - 删除已无入口的 `src/benchmark-lsp-performance.ts`、`src/document-symbol-limiter.ts`、`src/util/jsonl.ts`；将仅测试使用的 `src/test-support/*` 改为 `*.test.ts`。这部分是 LOC 偿还，其中 test-support 是统计重分类，报告中不得包装为生产算法优化。
+**唯一仍然需要用户明确授权、不可绕过的边界**：development-plan V3.2-07b（外部 Agent eval）——任何会产生外部模型调用成本或把代码发送给外部 provider 的操作，必须由用户显式授权；未获授权时相关任务状态必须是 `BLOCKED_EXTERNAL`，不得编造/估算数字顶替。Sprint4 的 V3.2-21 若涉及"实际 Agent quality 结论"，同样受此约束。
 
-- 当前集成树已实际运行且通过的隔离验证：
+## Sprint3 最终状态（已关闭，供追溯）
 
-  ```sh
-  sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- \
-    node --test --test-concurrency=1 \
-    dist/java-index/java-index-client.test.js \
-    dist/java-index/worker-protocol.test.js \
-    dist/java-index/java-index-worker.test.js \
-    dist/java-index/manifest.test.js \
-    dist/java-index/router-java-index.test.js \
-    dist/agent-router/anchor.test.js \
-    dist/benchmark/java-index-idle.test.js \
-    dist/benchmark/progressive-index.test.js \
-    scripts/run-progressive-index.test.mjs \
-    scripts/run-progressive-index-three-repo.test.mjs \
-    scripts/verify-progressive-index.test.mjs
-  ```
+- V3.2-16（progressive-index benchmark）：完成。
+- V3.2-17（前台 anchor closure 优先级）：实现完成，且修复了一个真实的 `resourceCoverage`/snapshot-durability 竞态（`java-index-worker.ts`，三次迭代定位到正确修复：`processBackgroundChunk` 的 `finalChunk` 兜底重扫）。但其自身 `storm foreground P95/quiet ≤1.10` 验收线**未达标**（实测 7.72x-13.24x），已正式记录为 exit decision `DO_NOT_IMPLEMENT_SINGLE_WORKER_ARCHITECTURAL_CONTENTION`：拆解为一次性 ~671ms 冷启动税（次要）+ 单线程 worker 上后台 sweep 与前台请求的持续资源争用（主要、架构性，需要第二 worker 线程或 ADR 级并发模型决策才能消除，明确超出 Sprint3 范围）。**这不是待办事项，是已关闭的架构性结论**——除非有新证据或产品优先级变化，不要在 Sprint4 里顺手重新触碰 `beginBackgroundSweep`/`processBackgroundChunk` 试图修它。
+- V3.2-18（后台 root 优先级）：确认已实现且有测试（`manifest.ts` 的 `prioritizeJavaFilesForBackgroundSweep`）。
+- V3.2-19（snapshot/seed telemetry）：本轮补齐了此前缺失的无条件 telemetry 半边；门控式 metadata directory index 半边未触发入场条件，未实施（正确行为）。
+- V3.2-20（cooperative cancel 研究门）：已用现有证据关闭，入场条件不满足，不实施。
 
-  结果：detached clone、私有缓存、`JDTLS_BIN=/usr/bin/false`，`executableTree=5e6d9fc05db830b866dbb78458ae9c1d5374cbde`，122/122 PASS，0 fail，15.832s。
+详细报告：`docs/deep/codex-java-lsp-mcp-java-intelligence-v3-sprint3-storm-progressive-cold-matrix-report-2026-08-15.md`。
+记忆索引：`v32-sprint3-status.md`。
 
-- 已实际执行：`git diff --check` 通过；`node --check scripts/run-progressive-index*.mjs scripts/verify-progressive-index.mjs` 通过。
-- 已保存的 Sprint3 quiet progressive baseline（15 次）：
-  `/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-kmFwCH/sprint3-progressive-baseline/progressive-manifest.json`
-  - lishuedu P95：open 772.320ms、anchor 13009.798ms、module 41005.065ms、complete 46993.824ms、durable 62476.572ms。
-  - cipherlink：94.076ms、2023.015ms、2885.670ms、3452.069ms、4783.928ms。
-  - exam-parent-v3：111.567ms、4764.640ms、5785.149ms、6921.872ms、9944.624ms。
-  - 全部 pre-complete negative 非权威、post-complete negative 权威，semantic digest 稳定。
+## Sprint4 范围（development-plan 第 630-680 行）
 
-## 当前状态 / 卡点
+- V3.2-21：修改 `auto` semantic admission（session READY + import idle + budget 足够 + 有预期增益才进 live JDT），而不是延长 timeout。文件：`src/agent-router/semantic.ts`、`src/agent-router/providers/semantic-provider.ts`、`src/jdtls-session.ts`。依赖 V3.2-04、V3.2-07a；涉及 Agent quality 结论时依赖 V3.2-07b（**外部授权门，见上**）。
+- V3.2-22：persisted semantic operation-completeness 合同（`SemanticEdgeStoreV2`）——推荐实现或保守替代（不新增 coverage record，只提供正向候选不承诺 completeness）二选一，依据 telemetry 是否证明值得。依赖 V3.2-08、V3.2-21。
+- V3.2-23：opt-in idle JDT prewarm 实验。依赖 V3.2-04、V3.2-05。试验门：first-touch P95 至少 -30% 且 peak RSS/CPU 增幅 ≤10%，否则不进默认路径。
+- V3.2-24：JDT 单变量参数实验（import concurrency / workspace reuse / project import readiness / document prepare，一次一个变量）；workspace/dataDir reuse 有严格隔离要求（同 canonical worktree + 同版本 + 同 build fingerprint 才允许复用）。
+- V3.2-25：默认化硬门——5 项条件（P95≤800ms、0 partial/timeout、R_must=1 且 Recall/R_task 非劣、Agent task success 非劣、资源受控）全部满足前，策略维持 `KEEP_EXPLICIT`。
 
-- 工作树尚未提交，包含 36 个 tracked 文件的变更/删除和 Sprint3 新增的 progressive 脚本、测试、scenario lock、test-support 重命名文件。当前生产 LOC：33,060；V3.2 固定 cycle baseline 31,638、硬上限 33,219，因此只剩 159 LOC 余量，距最终目标仍高 1,422 LOC。下一会话不要增加生产 LOC，除非先给出等量或更多偿还。
-- 当前 `git diff --stat` 为 1,332 insertions / 851 deletions（仅 tracked 部分）。大量 `artifacts/`、`.workflow/`、`.task30-debug.mjs` 未跟踪，是既有/并行产物，不在 Sprint3 范围；不要删除、覆盖、暂存或把它们当作当前证据。
-- 尚未跑完整受影响回归、完整 isolated suite、当前候选的三仓 progressive run，也尚未跑 storm/quiet 500-file gate。故 Sprint3 不能宣称完成或性能 gate PASS。
-- `runProgressiveIndex` 的 `T_complete` 与 `T_snapshot_durable` 是外部可观察的阶段：worker 在最后 chunk 内部几乎连续 complete+flush，当前 API 不能量出其内部间隔。报告必须说明这一边界，不能声称测得 worker 内部 rename 时延。
-- 曾有一次直接 `npx tsc --noEmit` 误操作；无输出且未启动 LSP/JDT/JavaIndex，但违反隔离流程。它不计入任何验证结论，也不要重复。
-- 当前没有活跃子代理或未整合 review 结果。
+Sprint4 完成门（development-plan 原文未单列一行，但按 §5.2 全局硬门 + 上述 5 条默认化硬门执行）。
 
-## 下一步计划
+## 下一步
 
-1. 先静态复核当前 dirty diff，特别是 `java-index-client.ts`/`java-index-worker.ts` 的 delayed CLOSE、late ACK/exit、snapshot revision/hydration 和 XML resource 变更；发现问题必须先用隔离 RED 再修。
-2. 在隔离 clone 中跑扩大后的受影响回归（至少 `repo-runtime-manager`、`repo-change-coordinator`、`worktree-storm`、`worktree-identity`、`worktree-snapshot-seeder`、`router-integration`、`type-reference`、`relationship-provider`、`request-budget`、`jdtls-session`、`semantic-gateway`）。不得在活动 checkout 直接运行。
-3. 运行当前 candidate 的三仓 quiet progressive runner，并用已有 baseline 做 source-locked 对比。建议命令（未运行）：
+1. 读 development-plan 第 630-680 行确认范围未变。
+2. 参照 Sprint3 的模式：先起草/确认 Sprint0 telemetry（V3.2-04 JDT first-touch 分段 telemetry）是否已充分覆盖 V3.2-21 需要的 session READY/import idle 信号，不够则先补 telemetry 再改 admission 逻辑。
+3. 遇到设计分叉直接问 advisor，不问用户；遇到需要外部 Agent 调用/涉及外部成本的边界，停下来问用户。
+4. 完成后走 Sprint3 同样的收尾流程：隔离回归 → LOC ledger → 报告 → commit → push（均已获用户标准授权，不需要再问）。
 
-  ```sh
-  sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --keep --profile targeted -- \
-    node scripts/run-progressive-index-three-repo.mjs \
-    --candidate-root . \
-    --output-dir '{state}/sprint3-progressive-candidate' \
-    --lishuedu /tmp/codex-java-v3-golden-20260809/lishuedu \
-    --cipherlink /tmp/codex-java-v3-golden-20260809/cipherlink \
-    --exam-parent-v3 /tmp/codex-java-v3-golden-20260809/exam-parent-v3
-  ```
-
-  然后用 `scripts/verify-progressive-index.mjs` 比较 baseline/candidate。正式规则：semantic digest 精确相等；anchor P95（旧值 >2s 时）候选 <=2s，否则 <=旧值×0.8；module P95 严格改善；complete P95 <=旧值×1.10；不使用 slack。
-4. quiet candidate 证据通过后，新增并运行独立的 storm gate，而不是修改既有 quiet verifier：3 仓 × quiet/storm ×10 次、每次独立 detached clone/private cache；真实 watcher 对 500 个既存 Java 文件做 identical-byte burst rewrite；必须观察单 batch `changeCount===500` 和 generation 仅 +1。每仓硬门：`stormAnchorP95/quietAnchorP95 <= 1.10`、`staleCount=0`、完整 generation/coverage/durable/negative truth、quiet/storm digest 精确相等。当前该 gate 是 UNMEASURED。
-5. 生成 Sprint3 LOC ledger、报告和 artifact receipt；报告必须区分“已运行”“未运行”“外部可观察但不可细分”。完成完整隔离回归和三仓证据后，才向用户申请 commit 授权；不得自行 commit/push。
-
-## 绝对不要再踩的坑
+## 绝对不要再踩的坑（跨 Sprint 持续有效）
 
 - 不要在活动 checkout 直接执行 `npm run build`、`node dist/...`、`npx tsc`、任何 `node --test` 或三仓 benchmark。所有会启动 Node worker/JDT/JavaIndex 的命令必须包在 `sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs` 中，并保持 `JDTLS_BIN=/usr/bin/false`。
-- 不要运行旧的 `benchmark:lsp-performance` 入口；它已删除的实现曾使用全局 cache 并递归删除 workspace。不要从陈旧 `dist/benchmark-lsp-performance.js` 运行任何内容。
-- 不要把 close 的 grace 恢复成 deadline 触发 `terminate()`；这会在 native parser 或原子写中杀 worker。超时只可 `unref()` 并保留 late ACK/exit cleanup。
+- 不要运行旧的 `benchmark:lsp-performance` 入口；它已删除。
+- 不要把 close 的 grace 恢复成 deadline 触发 `terminate()`；这会在 native parser 或原子写中杀 worker。
 - 不要将 watcher refresh、A2 anchor 或多文件 refresh 标为 `ACTIVE_ANCHOR`。只有 `AgentRouter` 的第一个 A1 anchor 且单 changed/no deleted 能升级 root priority。
-- 不要让 foreground rg discovery 的正向候选变成 negative 结论；它只可补充候选，必须 exact typeId re-query 后使用，timeout/partial/failure 一律 fail-soft。
-- 不要把 `isJavaIndexQuiescent()` 当作 `T_complete`；它允许部分 degraded 状态。progressive complete 必须用 `isJavaIndexCompleteAt()`，durable 必须再验证实际 snapshot readback 和完整 manifest。
-- 不要改变、删除或暂存未跟踪的历史 artifacts、`.workflow/`、`.task30-debug.mjs`。它们与当前 dirty Sprint3 不是同一所有权。
-- 不要把 test-support 重命名导致的 LOC 下降写成生产代码删除；明确这是测试专用文件的统计归类。
+- 不要把 `isJavaIndexQuiescent()` 当作 `T_complete`；progressive complete 必须用 `isJavaIndexCompleteAt()`。
+- 不要改变、删除或暂存未跟踪的历史 artifacts（`artifacts/v3-phase3`、`artifacts/v3-phase4`、`artifacts/v3-phase5`、`artifacts/v3-final/task36-remediation-20260809`、`artifacts/model-eval`、`artifacts/v3-task22`）、`.workflow/`、`.task30-debug.mjs`、`docs/evals/task30-model-comparison-20260802`。它们是其他并行会话/任务的产物，与 V3.2 Sprint 系列不是同一所有权，截至 2026-08-15 仍是 untracked。
+- 不要在没有新证据或产品优先级变更的情况下重开 V3.2-17 的 storm/quiet P95 exit decision（见上）。
+- 不要在没有用户明确授权的情况下产生任何真实 Agent 模型调用成本（V3.2-07b/V3.2-21/V3.2-30 的 quality 结论）。
 
 ## 关键文件 / 命令 / 验证
 
-- Sprint3 核心：
-  - `src/java-index/java-index-client.ts`：CLOSE 的 unref/late-ACK 清理。
-  - `src/java-index/java-index-worker.ts`：snapshot revision、own hydration、XML manifest、background sweep priority。
-  - `src/java-index/index-types.ts`、`src/java-index/worker-protocol.ts`：snapshot status 与 `ACTIVE_ANCHOR` 协议。
-  - `src/java-index/router-java-index.ts`、`src/agent-router/anchor.ts`、`src/agent-router/index.ts`：A1 priority 和前台 closure。
-  - `src/benchmark/java-index-idle.ts`、`src/benchmark/progressive-index.ts`、`golden/progressive-index-v1.json`。
-  - `scripts/run-progressive-index.mjs`、`scripts/run-progressive-index-three-repo.mjs`、`scripts/verify-progressive-index.mjs`。
-- 计划真源：`docs/deep/codex-java-lsp-mcp-java-intelligence-v3-value-realization-optimization-development-plan-2026-08-09.md`（V3.2-16/17/18，约 584–608 与 850–878 行）。
-- 关键已运行验证及结果在“已完成”部分；不要把它们扩大解释为 full suite 或三仓 candidate PASS。
-- 当前静态状态：`git diff --check` PASS；生产 inventory 为 `120 files / 1,329,579 bytes / 33,060 LOC / f1e9fcc55b3660ac3e72310b72da4f50e398f457f83bf9f86cc13f8d0ca8af50`。
+- 计划真源：`docs/deep/codex-java-lsp-mcp-java-intelligence-v3-value-realization-optimization-development-plan-2026-08-09.md`。
+- Sprint3 证据：`artifacts/v3-final/sprint3-{cold-matrix-20260815-v3,progressive-20260815,storm-20260815,diagnostics-20260815,followup-20260815}/`。
+- 隔离验证入口：`sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted|compile|full [--keep] [--env NAME=VALUE] -- COMMAND`。
+- LOC ledger 生成参考：对比固定基线 `d7f23d5`（31,638 行）与当前 worktree，用 `scripts/count-production-ts.mjs` 的 `countProductionTs`；硬上限 `Math.floor(31638*1.05)=33,219`；当前候选 33,215（4 行余量，Sprint4 起步前如需新增生产代码请先规划偿还或确认余量）。
 
 ## 给下一会话的第一步
 
-先读本文件，再在当前工作树执行只读检查：
-
 ```sh
+git log --oneline -5
 git status --short
-git diff --check
-git diff -- src/java-index/java-index-client.ts src/java-index/java-index-worker.ts src/java-index/router-java-index.ts src/agent-router/anchor.ts
 ```
 
-确认没有并发写入后，先跑“已完成”中的 122-case 隔离定向套件以验证树未漂移；若通过，再按“下一步计划”第 2 步扩大回归。任何失败先保留 raw 输出、建立隔离 RED，再改代码。
+确认 HEAD 是 `0736713`（或更新）、工作树干净，再读 development-plan 第 630-680 行，开始 Sprint4 的 telemetry 覆盖度核查（第一步）。
