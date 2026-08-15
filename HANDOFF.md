@@ -26,20 +26,19 @@ Java-only LSP/MCP V3.2 优化的 Sprint3 已完成并已 commit/push。当前应
 
 ## Sprint4 范围（development-plan 第 630-680 行）
 
-- V3.2-21：修改 `auto` semantic admission（session READY + import idle + budget 足够 + 有预期增益才进 live JDT），而不是延长 timeout。文件：`src/agent-router/semantic.ts`、`src/agent-router/providers/semantic-provider.ts`、`src/jdtls-session.ts`。依赖 V3.2-04、V3.2-07a；涉及 Agent quality 结论时依赖 V3.2-07b（**外部授权门，见上**）。
-- V3.2-22：persisted semantic operation-completeness 合同（`SemanticEdgeStoreV2`）——推荐实现或保守替代（不新增 coverage record，只提供正向候选不承诺 completeness）二选一，依据 telemetry 是否证明值得。依赖 V3.2-08、V3.2-21。
+- **V3.2-21：已用 exit decision 关闭，不实施（`DO_NOT_IMPLEMENT`）。** 写过一版 admission-gate 草稿（`session.status().started && progress.active===0 && !budget.expired()`），未落地就 revert 了——`progress.active===0` 是瞬时读数，`waitForProgressIdle()`（`jdtls-session.ts:2054`）自己已经证明瞬时 idle 不可信，需要 sustained-idle wait 才可靠，而这恰是 V3.2-21 原文明确禁止的（"修改 admission，而不是延长 timeout"）。在设计更好的信号之前，先用真实 jdtls 在当前 tree（`3030975`）上重跑了 Task35 2026-08-07/08 的 `cold-nolsp` vs `warm-auto` quality 对比（3 仓 × 5 runs × 全量 golden scenarios），**结果与 Task35 原始结论完全一致**：recall/pRead/rReadMust/rTaskBlocking 三仓全部 bit-identical，P95 却暴涨 7-15.6 倍。`auto` 现有的 live JDT 调用对当前三仓 golden 集合没有任何可测量的质量收益，只有真实延迟成本——这本身就是 line 640 验收线的完整答案（quality 非劣是平凡成立的，因为两边本来就相同；要做到 P95 不再顶 cap 又不引入质量退化，唯一路径是不打这些没有收益的调用，而不是把"何时打"变聪明）。**这不是待办事项，是已关闭的结论**，除非未来某个新场景证明 live semantic 证据真的改变了某个 golden 指标，否则不要重新设计 admission gate。详见 `docs/phase-v3/phase5-semantic-first-touch-decision.md`（2026-08-15 追加小节）+ `artifacts/v3-final/sprint4-v321-admission-recheck-20260815/`。
+- V3.2-22：persisted semantic operation-completeness 合同（`SemanticEdgeStoreV2`）——推荐实现或保守替代（不新增 coverage record，只提供正向候选不承诺 completeness）二选一，依据 telemetry 是否证明值得。依赖 V3.2-08、V3.2-21（V3.2-21 已关闭，重新评估此依赖是否仍有意义再决定是否继续）。
 - V3.2-23：opt-in idle JDT prewarm 实验。依赖 V3.2-04、V3.2-05。试验门：first-touch P95 至少 -30% 且 peak RSS/CPU 增幅 ≤10%，否则不进默认路径。
 - V3.2-24：JDT 单变量参数实验（import concurrency / workspace reuse / project import readiness / document prepare，一次一个变量）；workspace/dataDir reuse 有严格隔离要求（同 canonical worktree + 同版本 + 同 build fingerprint 才允许复用）。
-- V3.2-25：默认化硬门——5 项条件（P95≤800ms、0 partial/timeout、R_must=1 且 Recall/R_task 非劣、Agent task success 非劣、资源受控）全部满足前，策略维持 `KEEP_EXPLICIT`。
+- V3.2-25：默认化硬门——5 项条件（P95≤800ms、0 partial/timeout、R_must=1 且 Recall/R_task 非劣、Agent task success 非劣、资源受控）全部满足前，策略维持 `KEEP_EXPLICIT`。V3.2-21 关闭后这条本来就更加确定不会满足（连 auto 的选择性调用都没有收益，遑论把它变成默认）。
 
 Sprint4 完成门（development-plan 原文未单列一行，但按 §5.2 全局硬门 + 上述 5 条默认化硬门执行）。
 
 ## 下一步
 
-1. 读 development-plan 第 630-680 行确认范围未变。
-2. 参照 Sprint3 的模式：先起草/确认 Sprint0 telemetry（V3.2-04 JDT first-touch 分段 telemetry）是否已充分覆盖 V3.2-21 需要的 session READY/import idle 信号，不够则先补 telemetry 再改 admission 逻辑。
-3. 遇到设计分叉直接问 advisor，不问用户；遇到需要外部 Agent 调用/涉及外部成本的边界，停下来问用户。
-4. 完成后走 Sprint3 同样的收尾流程：隔离回归 → LOC ledger → 报告 → commit → push（均已获用户标准授权，不需要再问）。
+1. V3.2-21 已关闭，下一会话应从 V3.2-22 开始：先判断"依据 telemetry 是否证明值得"这句话在 V3.2-21 关闭后是否还成立——如果 `auto` 已经不打算走 live JDT，`SemanticEdgeStoreV2` 的 operation-completeness 合同的价值主张可能也要重新审视，不要默认照抄计划文本直接实现。
+2. 遇到设计分叉直接问 advisor，不问用户；遇到需要外部 Agent 调用/涉及外部成本的边界，停下来问用户。
+3. 完成后走 Sprint3 同样的收尾流程：隔离回归 → LOC ledger → 报告 → commit → push（均已获用户标准授权，不需要再问）。
 
 ## 绝对不要再踩的坑（跨 Sprint 持续有效）
 
