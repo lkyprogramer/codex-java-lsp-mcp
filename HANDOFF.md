@@ -2,9 +2,9 @@
 
 ## 当前任务
 
-Java-only LSP/MCP V3.2 优化的 Sprint3 已完成并已 commit/push。Sprint4（JDT 语义价值兑现，V3.2-21~25）进行中：V3.2-21、V3.2-22 已关闭，下一步是 V3.2-23。用户的硬约束不变：**任何测试、构建、benchmark 或验证都必须与正在使用的 LSP 隔离**，不能接触活动 checkout、LSP、JDT、JavaIndex 缓存或 `node_modules`。
+Java-only LSP/MCP V3.2 优化的 Sprint3 已完成并已 commit/push。Sprint4（JDT 语义价值兑现，V3.2-21~25）进行中：V3.2-21、V3.2-22、V3.2-23 已关闭，下一步是 V3.2-24。用户的硬约束不变：**任何测试、构建、benchmark 或验证都必须与正在使用的 LSP 隔离**，不能接触活动 checkout、LSP、JDT、JavaIndex 缓存或 `node_modules`。
 
-当前分支是 `codex/java-intelligence-v3`（最新 commit 见 `git log --oneline -5`，V3.2-22 关闭提交紧随 `c7b984c` 之后）。**均已 commit 且已 push，不是 dirty worktree**。
+当前分支是 `codex/java-intelligence-v3`（最新 commit 见 `git log --oneline -5`）。**均已 commit 且已 push，不是 dirty worktree**（工作区可能有一个未提交、未跟踪的 `scripts/run-idle-prewarm-experiment.mjs`——这是保留的实验脚手架，不是遗漏的改动，见下方 V3.2-23 小节）。
 
 用户的标准授权（持续有效，无需每次重新确认）：
 - 本仓库上的 `git commit`、`git push origin codex/java-intelligence-v3` 不需要逐次请求授权。
@@ -28,15 +28,15 @@ Java-only LSP/MCP V3.2 优化的 Sprint3 已完成并已 commit/push。Sprint4�
 
 - **V3.2-21：已用 exit decision 关闭，不实施（`DO_NOT_IMPLEMENT`）。** 写过一版 admission-gate 草稿（`session.status().started && progress.active===0 && !budget.expired()`），未落地就 revert 了——`progress.active===0` 是瞬时读数，`waitForProgressIdle()`（`jdtls-session.ts:2054`）自己已经证明瞬时 idle 不可信，需要 sustained-idle wait 才可靠，而这恰是 V3.2-21 原文明确禁止的（"修改 admission，而不是延长 timeout"）。在设计更好的信号之前，先用真实 jdtls 在当前 tree（`3030975`）上重跑了 Task35 2026-08-07/08 的 `cold-nolsp` vs `warm-auto` quality 对比（3 仓 × 5 runs × 全量 golden scenarios），**结果与 Task35 原始结论完全一致**：recall/pRead/rReadMust/rTaskBlocking 三仓全部 bit-identical，P95 却暴涨 7-15.6 倍。`auto` 现有的 live JDT 调用对当前三仓 golden 集合没有任何可测量的质量收益，只有真实延迟成本——这本身就是 line 640 验收线的完整答案（quality 非劣是平凡成立的，因为两边本来就相同；要做到 P95 不再顶 cap 又不引入质量退化，唯一路径是不打这些没有收益的调用，而不是把"何时打"变聪明）。**这不是待办事项，是已关闭的结论**，除非未来某个新场景证明 live semantic 证据真的改变了某个 golden 指标，否则不要重新设计 admission gate。详见 `docs/phase-v3/phase5-semantic-first-touch-decision.md`（2026-08-15 追加小节）+ `artifacts/v3-final/sprint4-v321-admission-recheck-20260815/`。
 - **V3.2-22：已用 exit decision 关闭，不实施（`CONSERVATIVE_ALTERNATIVE_ALREADY_SATISFIED`）。** 逐路径核查了写入门（`semantic-edge-store.ts` 的 `completion`/`confidence` 硬编码字面量，仅供 `load()`/`putComplete()` 内部拒绝非完整写入用）、读取路径（`candidate-collectors.ts:186-209` 只读 `relation`/`targetFile`/`targetRanges`，从不读 `completion`/`confidence`）、证据层（`semantic-provider.ts:84-85` 的 `confidence: 0.9`/`completeness: "COMPLETE"` 是 provider 自己的固定字面量，与底层 edge 字段无关）、准入路径（`index.ts` 不读 `completeness`、不据此跳过或精简 live JDT，两阶段无条件顺序执行）——四处均确认：当前实现已经就是计划自己定义的"保守替代"（只提供正向候选和置信度，不承诺 operation completeness，也不据此跳过 live JDT）。"推荐实现"分支（新增 `SemanticOperationCoverageRecord`）的入场条件"telemetry 证明值得减少 live verify"不成立——`impact-metrics.ts` 只有逐请求 `verifyUsed`/`verifySkipped` 布尔量，没有支撑这个判断所需的聚合 telemetry。**这不是待办事项，是已关闭的结论**，不要新增 coverage-record 机制。详见 `docs/deep/codex-java-lsp-mcp-java-intelligence-v3-sprint4-jdt-semantic-value-report-2026-08-16.md` §3。遗留悬空依赖（不代为处理，留给下一步）：V3.2-22 原依赖行写的是"依赖 V3.2-08、V3.2-21"，V3.2-21 已关闭，这条依赖已悬空；V3.2-25 的 5 项默认化条件书写时假设 `auto` 仍会发起 live JDT 调用，这个前提在 V3.2-21 关闭后也不再成立，处理 V3.2-25 时需要先重新评估这些条件本身是否还有意义。
-- V3.2-23：opt-in idle JDT prewarm 实验。依赖 V3.2-04、V3.2-05。试验门：first-touch P95 至少 -30% 且 peak RSS/CPU 增幅 ≤10%，否则不进默认路径。**下一会话从这里开始**。
-- V3.2-24：JDT 单变量参数实验（import concurrency / workspace reuse / project import readiness / document prepare，一次一个变量）；workspace/dataDir reuse 有严格隔离要求（同 canonical worktree + 同版本 + 同 build fingerprint 才允许复用）。
+- **V3.2-23：已关闭为 `DEFERRED_PENDING_WORKLOAD_TELEMETRY`（既不是 PASS/FAIL，也不是 DO_NOT_IMPLEMENT）。** 延迟收益是真实且巨大的——直接引用 Task35 已有证据（`artifacts/v3-phase5/task35-first-touch-20260807/`）：cipherlink 上 `fresh`（全新 session）totalMs 32296-42268ms，对比"已预热完成的 session 收到第一个真实请求"的代理值（`reused` 第 2/3 次请求）177-182ms，改善 >99.5%，超过计划 30% 门槛约 300 倍，不需要新测量确认方向。受益面也不是空集：`server.ts` 的 `java_symbol`（hover/definition/implementation/references）与 `java_diagnostics` 两个工具硬编码 `semanticPolicy: "required"` + `requireLspEnabled: true`，任何 Agent 调用它们（不经过 `java_impact` 默认 `auto` 的 opt-in 参数）就无条件走 live JDT，因此 V3.2-21 关闭 `auto` 不等于 prewarm 受益面为空。**但试验门的资源安全半边（peak RSS/CPU 增幅 ≤10%，对应计划"禁止"条款——不能只把成本提前发生再包装成提速）结构性无法测量**：这条禁令保护的是"预热了但从未被查询"的浪费场景，而任何现有工具（已存在的 `scripts/sample-java-runtime-resources.mjs` V3.2-05 进程树采样器，或本轮新写但未提交的 `scripts/run-idle-prewarm-experiment.mjs`）都只能测量"确实发起了请求"路径的资源开销，回答不了"未使用的预热"这个问题——那是会话级/仓库级的预热命中率 telemetry，`impact-metrics.ts` 目前不存在这类字段，与 V3.2-22 发现的 telemetry 缺口同类。**这不是待办事项，是已关闭的结论**：在没有命中率 telemetry 之前实现并默认开启预热功能，正是计划"禁止"条款要阻止的交付方式；构建这类 telemetry 是一项独立、有实质 LOC 成本的功能决策，不应该在"只是测量"的实验步骤里顺手决定。详见 `docs/deep/codex-java-lsp-mcp-java-intelligence-v3-sprint4-jdt-semantic-value-report-2026-08-16.md` §4。`scripts/run-idle-prewarm-experiment.mjs` 保留在工作区（未提交，调试中留下 3 个与本结论无关的 harness 修复：`JDTLS_BIN` 透传缺失、嵌套 isolation broker 命令要求 `node` 起手而非 `sh`、`withFreshWorkspace` 清理阶段的 Gradle daemon 竞态），不建议继续调试或提交它——它回答的是延迟问题（已经用现有证据回答了），不是真正卡住 V3.2-23 的资源安全问题。
+- V3.2-24：JDT 单变量参数实验（import concurrency / workspace reuse / project import readiness / document prepare，一次一个变量）；workspace/dataDir reuse 有严格隔离要求（同 canonical worktree + 同版本 + 同 build fingerprint 才允许复用）。**下一会话从这里开始**，但注意 4.3 节同样的告诫可能适用：如果这个实验的验收也隐含依赖会话级/工作负载 telemetry（而不是纯逐请求的 phase timing），开始前先确认能不能被现有 V3.2-04/05 覆盖，不要重复 V3.2-23 踩过的坑。
 - V3.2-25：默认化硬门——5 项条件（P95≤800ms、0 partial/timeout、R_must=1 且 Recall/R_task 非劣、Agent task success 非劣、资源受控）全部满足前，策略维持 `KEEP_EXPLICIT`。V3.2-21 关闭后这条本来就更加确定不会满足（连 auto 的选择性调用都没有收益，遑论把它变成默认）；处理这一条前先判断 5 项条件本身是否需要因 V3.2-21 的关闭而重写。
 
 Sprint4 完成门（development-plan 原文未单列一行，但按 §5.2 全局硬门 + 上述 5 条默认化硬门执行）。
 
 ## 下一步
 
-1. V3.2-21、V3.2-22 均已关闭，下一会话应从 V3.2-23（opt-in idle JDT prewarm 实验）开始。开始前先重新读一遍 V3.2-25 的 5 项默认化条件，判断是否需要因 V3.2-21 关闭而重写（悬空依赖，见上），避免 V3.2-23/24 的实验设计朝着一个已经过时的默认化目标去优化。
+1. V3.2-21、V3.2-22、V3.2-23 均已关闭，下一会话应从 V3.2-24（JDT 单变量参数实验）开始。开始前先重新读一遍 V3.2-25 的 5 项默认化条件，判断是否需要因 V3.2-21 关闭而重写（悬空依赖，见上），避免实验设计朝着一个已经过时的默认化目标去优化；也确认 V3.2-24 的验收指标是不是纯逐请求 phase timing（V3.2-04 已覆盖），而不是像 V3.2-23 那样隐含需要会话级工作负载 telemetry。
 2. 遇到设计分叉直接问 advisor，不问用户；遇到需要外部 Agent 调用/涉及外部成本的边界，停下来问用户。
 3. 完成后走 Sprint3 同样的收尾流程：隔离回归 → LOC ledger → 报告 → commit → push（均已获用户标准授权，不需要再问）。
 
@@ -65,4 +65,4 @@ git log --oneline -5
 git status --short
 ```
 
-确认工作树干净、`git log` 最新一条是 V3.2-22 关闭提交（或更新），再从 V3.2-23（opt-in idle JDT prewarm 实验）开始——先重新读一遍 V3.2-25 的 5 项默认化条件是否需要因 V3.2-21 关闭而重写（见上方"下一步"）。
+确认 `git log` 最新一条是 V3.2-23 关闭提交（或更新）、`git status` 除了未跟踪的 `scripts/run-idle-prewarm-experiment.mjs` 之外干净，再从 V3.2-24（JDT 单变量参数实验）开始——先重新读一遍 V3.2-25 的 5 项默认化条件是否需要因 V3.2-21 关闭而重写（见上方"下一步"）。
