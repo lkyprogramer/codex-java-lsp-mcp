@@ -1,0 +1,7 @@
+{"isolation":"detached-local-clone","candidateRoot":"/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-U7OE9z/candidate","cacheRoot":"/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-U7OE9z/cache","jdtlsBin":"/usr/bin/false","executableTree":"56117f44869fdeeb7d861652d1bf5027e76e7dba"}
+storm-gate: lishuedu iter1 quiet
+storm-gate: lishuedu iter1 storm
+storm-gate: cipherlink iter1 quiet
+storm-gate: cipherlink iter1 storm
+storm-gate: exam-parent-v3 iter1 quiet
+storm-gate: exam-parent-v3 iter1 storm

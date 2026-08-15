@@ -136,7 +136,15 @@ async function main() {
     }
     const nodeModules = path.join(candidateRoot, "node_modules");
     if (!existsSync(nodeModules)) await symlink(isolatedNodeModules, nodeModules, "dir");
-    const env = isolatedValidationEnvironment(validationRoot, cli.environment);
+    // candidateRoot/node_modules is a symlink onto isolatedNodeModules, so a
+    // child command's own inventory of it is identical to this one; hand it
+    // the already-computed result to spare it a second full-tree hash walk.
+    const dependencyInventoryFile = path.join(validationRoot, "dependency-inventory.json");
+    await writeFile(dependencyInventoryFile, `${JSON.stringify(isolatedDependencyInventory)}\n`);
+    const env = {
+      ...isolatedValidationEnvironment(validationRoot, cli.environment),
+      JAVA_LSP_ISOLATED_DEPENDENCY_INVENTORY_FILE: dependencyInventoryFile
+    };
     const executableTree = (await capture("git", ["-C", candidateRoot, "write-tree"])).trim();
     console.log(JSON.stringify({
       isolation: "detached-local-clone",

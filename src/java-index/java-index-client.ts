@@ -27,7 +27,9 @@ import {
   validateTypeFactsArray,
   validateTypeLookup,
   validateTypeLookupArray,
+  JAVA_INDEX_CLOSE_GRACE_MS,
   type JavaIndexCommand,
+  type JavaIndexRefreshPriority,
   type JavaIndexValueValidator,
   type JavaIndexWorkerTiming,
   type JavaIndexWorktreeIdentity,
@@ -78,6 +80,7 @@ export interface WorkerLike {
   on(event: "message", listener: (value: unknown) => void): this;
   on(event: "error", listener: (error: Error) => void): this;
   on(event: "exit", listener: (code: number) => void): this;
+  unref?(): void;
   terminate(): Promise<number>;
 }
 
@@ -102,6 +105,7 @@ function emptyStatus(): JavaIndexStatus {
     methods: 0,
     edges: 0,
     snapshotBytes: 0,
+    snapshot: { state: "EMPTY" },
     pendingForeground: 0,
     pendingBackground: 0,
     coverage: [],
@@ -113,7 +117,6 @@ function defaultWorkerFactory(): WorkerLike {
   return new Worker(new URL("./java-index-worker.js", import.meta.url)) as unknown as WorkerLike;
 }
 
-const CLOSE_GRACE_MS = 250;
 const MAX_CANCELLED_TOMBSTONES = 64;
 
 export class JavaIndexClient {
@@ -159,11 +162,15 @@ export class JavaIndexClient {
     generation: number,
     changed: string[],
     deleted: string[],
-    requestOptions: JavaIndexRequestOptions = {}
+    requestOptions: JavaIndexRequestOptions = {},
+    priority?: JavaIndexRefreshPriority
   ): Promise<JavaIndexStatus> {
+    if (priority === "ACTIVE_ANCHOR" && (changed.length !== 1 || deleted.length !== 0)) {
+      throw new Error("ACTIVE_ANCHOR refresh requires exactly one changed file and no deletions");
+    }
     await this.ensureOpen(requestOptions);
     const status = await this.request(
-      { type: "REFRESH", generation, changed, deleted },
+      { type: "REFRESH", generation, changed, deleted, ...(priority ? { priority } : {}) },
       validateJavaIndexStatus,
       requestOptions
     );
@@ -368,6 +375,7 @@ export class JavaIndexClient {
   }
 
   async close(): Promise<void> {
+    if (this.state === "CLOSED") return;
     const worker = this.worker;
     if (!worker) {
       this.state = "CLOSED";
@@ -378,22 +386,25 @@ export class JavaIndexClient {
     this.state = "CLOSED";
     this.lastKnownStatus = { ...this.lastKnownStatus, state: "CLOSED" };
     this.rejectAllPending(closed);
-    try {
-      await this.request(
-        { type: "CLOSE" },
-        () => undefined,
-        { budget: DeadlineBudget.fromTimeout(CLOSE_GRACE_MS) }
-      );
-    } catch {
-      // CLOSE is best-effort; an unresponsive worker is force-terminated below.
-    } finally {
-      if (this.worker === worker) this.worker = undefined;
-      this.rejectAllPending(closed);
-      this.cancelledTombstones.clear();
-      await this.terminateWorker(worker);
-      this.state = "CLOSED";
-      this.lastKnownStatus = { ...this.lastKnownStatus, state: "CLOSED" };
+    const closeRequest = this.request({ type: "CLOSE" }, () => undefined);
+    const settled = closeRequest.then(() => true, () => true);
+    let graceTimer: NodeJS.Timeout | undefined;
+    const acknowledged = await Promise.race([
+      settled,
+      new Promise<false>(resolve => {
+        graceTimer = setTimeout(() => resolve(false), JAVA_INDEX_CLOSE_GRACE_MS);
+      })
+    ]);
+    if (graceTimer) clearTimeout(graceTimer);
+    if (acknowledged) {
+      await this.finishCloseWorker(worker, closed);
+      return;
     }
+    // Bound the caller-visible shutdown without killing native parse/fsync.
+    // The wired listeners and CLOSE promise stay live; a late ACK/exit runs
+    // the same idempotent terminal cleanup below.
+    worker.unref?.();
+    void settled.then(() => this.finishCloseWorker(worker, closed));
   }
 
   /** Synchronous, non-blocking snapshot of the last known status; never round-trips to the worker. */
@@ -583,17 +594,23 @@ export class JavaIndexClient {
   }
 
   private handleFatal(worker: WorkerLike, error: Error): void {
-    if (this.state === "CLOSED") return;
+    if (this.state === "CLOSED") {
+      if (this.worker === worker) this.rejectAllPending(error, "retired", "WORKER_ERROR");
+      return;
+    }
     this.retireWorker(worker, error, "WORKER_ERROR");
   }
 
   private handleExit(worker: WorkerLike, code: number): void {
-    if (this.state === "CLOSED") return;
     if (this.worker !== worker) return;
     const error = new JavaIntelligenceError(
       "INDEX_PARTIAL",
       `Java index worker exited unexpectedly with code ${code}`
     );
+    if (this.state === "CLOSED") {
+      this.rejectAllPending(error, "retired", "WORKER_EXIT");
+      return;
+    }
     this.rejectAllPending(error, "retired", "WORKER_EXIT");
     this.worker = undefined;
     this.markDegraded(error.message);
@@ -637,6 +654,15 @@ export class JavaIndexClient {
     if (this.terminatedWorkers.has(worker)) return;
     this.terminatedWorkers.add(worker);
     await worker.terminate().catch(() => undefined);
+  }
+
+  private async finishCloseWorker(worker: WorkerLike, closed: Error): Promise<void> {
+    if (this.worker === worker) this.worker = undefined;
+    this.rejectAllPending(closed);
+    this.cancelledTombstones.clear();
+    await this.terminateWorker(worker);
+    this.state = "CLOSED";
+    this.lastKnownStatus = { ...this.lastKnownStatus, state: "CLOSED" };
   }
 
   private markDegraded(reason: string): void {

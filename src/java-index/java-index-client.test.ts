@@ -10,6 +10,7 @@ import { JavaIndexRpcTelemetryCollector } from "../agent-router/impact-metrics.j
 import type { JavaIndexStatus } from "./index-types.js";
 import { JavaIndexClient, type WorkerLike } from "./java-index-client.js";
 import { RouterJavaIndex } from "./router-java-index.js";
+import { JAVA_INDEX_CLOSE_GRACE_MS } from "./worker-protocol.js";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const fixturesRepoRoot = path.resolve(dirname, "..", "..", "fixtures", "java-index-v2");
@@ -31,8 +32,14 @@ function validStatus(generation: number): JavaIndexStatus {
 }
 
 class FakeWorker implements WorkerLike {
-  readonly posted: Array<{ id: number; type: string; telemetry?: true }> = [];
+  readonly posted: Array<{
+    id: number;
+    type: string;
+    telemetry?: true;
+    priority?: "ACTIVE_ANCHOR";
+  }> = [];
   terminations = 0;
+  unrefs = 0;
   private readonly listeners: {
     message: Array<(value: unknown) => void>;
     error: Array<(error: Error) => void>;
@@ -40,7 +47,7 @@ class FakeWorker implements WorkerLike {
   } = { message: [], error: [], exit: [] };
 
   postMessage(value: unknown): void {
-    this.posted.push(value as { id: number; type: string; telemetry?: true });
+    this.posted.push(value as { id: number; type: string; telemetry?: true; priority?: "ACTIVE_ANCHOR" });
   }
 
   on(event: "message" | "error" | "exit", listener: (value: never) => void): this {
@@ -51,6 +58,10 @@ class FakeWorker implements WorkerLike {
   terminate(): Promise<number> {
     this.terminations += 1;
     return Promise.resolve(0);
+  }
+
+  unref(): void {
+    this.unrefs += 1;
   }
 
   emitMessage(value: unknown): void {
@@ -193,6 +204,29 @@ test("QUERY_TYPES sends one worker command and validates ordered lookup results"
   ]);
 });
 
+test("only an explicit active-anchor refresh carries the worker priority marker", async () => {
+  const { client, worker } = await openedClient();
+  const active = client.refresh(2, ["/repo/src/main/java/demo/Anchor.java"], [], {}, "ACTIVE_ANCHOR");
+  await flushMicrotasks();
+  const activeMessage = worker.posted[1]!;
+  assert.equal(activeMessage.type, "REFRESH");
+  assert.equal(activeMessage.priority, "ACTIVE_ANCHOR");
+  worker.emitMessage({ id: activeMessage.id, ok: true, value: validStatus(2) });
+  await active;
+
+  const ordinary = client.refresh(2, ["/repo/src/test/java/demo/Watcher.java"], []);
+  await flushMicrotasks();
+  const ordinaryMessage = worker.posted[2]!;
+  assert.equal(ordinaryMessage.priority, undefined);
+  worker.emitMessage({ id: ordinaryMessage.id, ok: true, value: validStatus(2) });
+  await ordinary;
+
+  await assert.rejects(
+    client.refresh(2, ["/repo/A.java", "/repo/B.java"], [], {}, "ACTIVE_ANCHOR"),
+    /requires exactly one changed file/
+  );
+});
+
 test("an invalid command payload is rejected by the validator and moves the client to DEGRADED", async () => {
   const { client, worker } = await openedClient();
 
@@ -225,15 +259,21 @@ test("worker exit rejects all pending requests and marks the client DEGRADED", a
   assert.equal(client.localStatus().state, "DEGRADED");
 });
 
-test("close is bounded and terminates a worker that never answers CLOSE", async () => {
+test("close returns at the shared grace without terminating a silent worker, then terminates after a late ACK", async () => {
   const { client, worker } = await openedClient();
 
-  const outcome = await settleWithin(client.close(), 1000);
+  const outcome = await settleWithin(client.close(), JAVA_INDEX_CLOSE_GRACE_MS + 1000);
 
   assert.equal(outcome.kind, "fulfilled");
-  assert.equal(worker.posted.at(-1)?.type, "CLOSE");
-  assert.equal(worker.terminations, 1);
+  const closeMessage = worker.posted.at(-1)!;
+  assert.equal(closeMessage.type, "CLOSE");
+  assert.equal(worker.unrefs, 1);
+  assert.equal(worker.terminations, 0, "the return grace must not kill a worker that may still own native/fsync work");
   assert.equal(client.localStatus().state, "CLOSED");
+
+  worker.emitMessage({ id: closeMessage.id, ok: true, value: undefined });
+  await flushMicrotasks();
+  assert.equal(worker.terminations, 1, "the late CLOSE ACK permits final worker termination");
 });
 
 test("a failed OPEN clears the worker so the next request can still restart once", async () => {

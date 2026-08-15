@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "scenarios": [
+    {
+      "projectId": "lishuedu",
+      "repoCommit": "db63b1a7e393edd90449eb013d7d1c4d65c366f2",
+      "anchorScenarioId": "storage-signed-url",
+      "anchor": {
+        "file": "modules/integration/src/main/java/com/lishu/edu/integration/domain/port/StorageGateway.java",
+        "line": 36,
+        "column": 28
+      },
+      "requiredTypeDefinitions": [
+        {
+          "typeText": "com.lishu.edu.integration.domain.contract.StorageSignedUrlCommand",
+          "expectedFile": "modules/integration/src/main/java/com/lishu/edu/integration/domain/contract/StorageSignedUrlCommand.java"
+        },
+        {
+          "typeText": "com.lishu.edu.integration.domain.contract.StorageSignedUrlResult",
+          "expectedFile": "modules/integration/src/main/java/com/lishu/edu/integration/domain/contract/StorageSignedUrlResult.java"
+        }
+      ],
+      "requiredImplementer": {
+        "typeText": "com.lishu.edu.integration.domain.port.StorageGateway",
+        "expectedFile": "modules/integration/src/main/java/com/lishu/edu/integration/infrastructure/storage/AliyunOssGateway.java",
+        "limit": 16
+      },
+      "missingTypeFqn": "v32.progressive.missing.LishueduType"
+    },
+    {
+      "projectId": "cipherlink",
+      "repoCommit": "fa433982e92e52dd610650d1e79f2d041179b1d3",
+      "anchorScenarioId": "organization-create-member-cross-module",
+      "anchor": {
+        "file": "modules/organization/src/main/java/com/hhtele/cipherlink/organization/application/DefaultOrganizationAppService.java",
+        "line": 693,
+        "column": 23
+      },
+      "requiredTypeDefinitions": [
+        {
+          "typeText": "com.hhtele.cipherlink.account.application.AccountEnsureService",
+          "expectedFile": "modules/account/src/main/java/com/hhtele/cipherlink/account/application/AccountEnsureService.java"
+        },
+        {
+          "typeText": "com.hhtele.cipherlink.rbac.application.RbacRoleDetail",
+          "expectedFile": "modules/rbac/src/main/java/com/hhtele/cipherlink/rbac/application/RbacRoleDetail.java"
+        }
+      ],
+      "requiredImplementer": {
+        "typeText": "com.hhtele.cipherlink.account.application.AccountEnsureService",
+        "expectedFile": "modules/account/src/main/java/com/hhtele/cipherlink/account/application/DefaultAccountEnsureService.java",
+        "limit": 16
+      },
+      "missingTypeFqn": "v32.progressive.missing.CipherlinkType"
+    },
+    {
+      "projectId": "exam-parent-v3",
+      "repoCommit": "f90a0b475f7be2ed003703feecec8195bc7eb976",
+      "anchorScenarioId": "current-user-service-implementer-edge",
+      "anchor": {
+        "file": "exam-management/src/main/java/com/hhtele/exam/management/controller/examination/ExaminationCheckController.java",
+        "line": 47,
+        "column": 88
+      },
+      "requiredTypeDefinitions": [
+        {
+          "typeText": "com.hhtele.exam.data.service.CurrentUserService",
+          "expectedFile": "exam-data/src/main/java/com/hhtele/exam/data/service/CurrentUserService.java"
+        }
+      ],
+      "requiredImplementer": {
+        "typeText": "com.hhtele.exam.data.service.CurrentUserService",
+        "expectedFile": "exam-service/exam-service-management/src/main/java/com/hhtele/exam/service/management/service/impl/ManageCurrentUserServiceImpl.java",
+        "limit": 16
+      },
+      "missingTypeFqn": "v32.progressive.missing.ExamParentType"
+    }
+  ]
+}

@@ -12,7 +12,7 @@ import type { ImpactOptions } from "../agent-types.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import { RgRunner } from "../search/rg-runner.js";
 import type { RgQuery, SearchResult } from "../search/search-types.js";
-import { createGitWorktreeFamily } from "../test-support/git-worktree.js";
+import { createGitWorktreeFamily } from "../test-support/git-worktree.test.js";
 import { resolveWorktreeIdentity } from "../worktree-identity.js";
 import { JavaIndexClient } from "./java-index-client.js";
 import { RouterJavaIndex } from "./router-java-index.js";
@@ -541,6 +541,13 @@ test("sibling-seeded V2 router never returns a stale implementation before its f
   const gatewayPath = "src/main/java/demo/Gateway.java";
   const commandPath = "src/main/java/demo/PaymentCommand.java";
   const implementationPath = "src/main/java/demo/GatewayImpl.java";
+  // Sits under a test source root so it is outside both the sibling-seed's
+  // exact-content reuse (excluded like GatewayImpl below) and the bounded
+  // foreground implementer scan's roots, which are main-only (router-java-index.ts's
+  // foregroundImplementationRoots filters to sourceSet === "main"). It must
+  // therefore stay unresolved - never surfaced with primary's stale content -
+  // even after the main-root implementation below self-heals.
+  const testImplementationPath = "src/test/java/demo/TestGatewayImpl.java";
   const gateway = [
     "package demo;",
     "",
@@ -565,6 +572,23 @@ test("sibling-seeded V2 router never returns a stale implementation before its f
     "}",
     ""
   ].join("\n");
+  const primaryTestImplementation = [
+    "package demo;",
+    "",
+    "final class TestGatewayImpl implements Gateway {",
+    "  public PaymentResult pay(PaymentCommand command) { return new PaymentResult(false); }",
+    "}",
+    ""
+  ].join("\n");
+  const linkedTestImplementation = [
+    "package demo;",
+    "",
+    "final class TestGatewayImpl implements Gateway {",
+    "  public PaymentResult pay(PaymentCommand command) { return new PaymentResult(true); }",
+    "  String linkedTestOnlyBehavior() { return \"linked-test\"; }",
+    "}",
+    ""
+  ].join("\n");
   const primaryCache = path.join(cacheBase, "primary");
   const linkedCache = path.join(cacheBase, "linked");
   const primaryClient = new JavaIndexClient(family.primary, primaryCache);
@@ -575,7 +599,9 @@ test("sibling-seeded V2 router never returns a stale implementation before its f
       await writeJava(root, commandPath, command);
     }
     await writeJava(family.primary, implementationPath, primaryImplementation);
+    await writeJava(family.primary, testImplementationPath, primaryTestImplementation);
     const linkedImplementationFile = await writeJava(family.linked, implementationPath, linkedImplementation);
+    await writeJava(family.linked, testImplementationPath, linkedTestImplementation);
 
     await primaryClient.open(1);
     await primaryClient.reconcile(1);
@@ -609,12 +635,29 @@ test("sibling-seeded V2 router never returns a stale implementation before its f
     );
     const beforeRefresh = await router.impact(options({
       anchors: [{ file: gatewayPath, line: 3, column: 12 }],
-      profile: "port"
+      profile: "port",
+      // "include" (not the file default "defer") so TestGatewayImpl's
+      // absence below is isolated to the foreground implementer scan's
+      // main-only roots, not conflated with generic test-file deferral.
+      testReadMode: "include"
     }));
+    const beforeMainImpl = beforeRefresh.files.find(file => String(file.path).endsWith("GatewayImpl.java") && !String(file.path).includes("Test"));
+    if (beforeMainImpl) {
+      // The router's bounded foreground closure (V3.2-17) may proactively
+      // self-heal an anchor-adjacent interface's implementer before this
+      // test's own explicit refresh below - that is expected. What must
+      // never happen is surfacing it with primary's excluded, sibling-borrowed
+      // content instead of a genuine re-parse of the linked worktree's file.
+      const beforeFacts = await linkedIndex.factsFor(linkedImplementationFile, 2);
+      assert.ok(
+        beforeFacts.methods.some(method => method.name === "linkedOnlyBehavior"),
+        "an implementation surfacing before explicit refresh must be the linked worktree's real content, never primary's stale sibling-borrowed fact"
+      );
+    }
     assert.equal(
-      beforeRefresh.files.some(file => String(file.path).endsWith("GatewayImpl.java")),
+      beforeRefresh.files.some(file => String(file.path).endsWith("TestGatewayImpl.java")),
       false,
-      "the changed implementation must not be borrowed from the sibling snapshot"
+      "an implementer outside the bounded foreground scan's main-only roots must stay unresolved, not fall back to primary's stale content"
     );
 
     await linkedIndex.ensureFresh([linkedImplementationFile], 2);
@@ -623,7 +666,7 @@ test("sibling-seeded V2 router never returns a stale implementation before its f
       profile: "port"
     }));
     assert.ok(
-      afterRefresh.files.some(file => String(file.path).endsWith("GatewayImpl.java")),
+      afterRefresh.files.some(file => String(file.path).endsWith("GatewayImpl.java") && !String(file.path).includes("Test")),
       "after target foreground refresh, the linked worktree implementation must be selected"
     );
   } finally {

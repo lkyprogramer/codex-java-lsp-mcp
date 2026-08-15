@@ -1,0 +1,162 @@
+{
+  "schemaVersion": 1,
+  "kind": "v32-progressive-index-run-plan",
+  "verifierVersion": 1,
+  "createdAt": "2026-08-15T07:41:57.224Z",
+  "runtime": {
+    "commit": "d7f23d5b9086922c8213b9f1735e45cca365b947",
+    "commitTree": "d3913c4432b10de9c112f890bddfd9f29269f76e",
+    "executableTree": "49b61b57dd2bb0f935874af9d202c7d44703132e",
+    "statusSha256": "6734b7a9b8a31aa530b8e9be179196ffc2c6c1d593b8aa2293d88ef37400debe",
+    "changedPaths": [
+      "README.md",
+      "golden/progressive-index-v1.json",
+      "install-runtime.sh",
+      "package.json",
+      "scripts/run-isolated-validation.mjs",
+      "scripts/run-progressive-index-three-repo.mjs",
+      "scripts/run-progressive-index-three-repo.test.mjs",
+      "scripts/run-progressive-index.mjs",
+      "scripts/run-progressive-index.test.mjs",
+      "scripts/run-storm-gate.mjs",
+      "scripts/verify-progressive-index.mjs",
+      "scripts/verify-progressive-index.test.mjs",
+      "src/agent-router/anchor.test.ts",
+      "src/agent-router/anchor.ts",
+      "src/agent-router/index.ts",
+      "src/benchmark-lsp-performance.ts",
+      "src/benchmark/java-index-idle.test.ts",
+      "src/benchmark/java-index-idle.ts",
+      "src/benchmark/progressive-index.test.ts",
+      "src/benchmark/progressive-index.ts",
+      "src/document-symbol-limiter.test.ts",
+      "src/document-symbol-limiter.ts",
+      "src/java-index/index-types.ts",
+      "src/java-index/java-index-client.test.ts",
+      "src/java-index/java-index-client.ts",
+      "src/java-index/java-index-worker.test.ts",
+      "src/java-index/java-index-worker.ts",
+      "src/java-index/manifest.test.ts",
+      "src/java-index/manifest.ts",
+      "src/java-index/router-facts.test.ts",
+      "src/java-index/router-facts.ts",
+      "src/java-index/router-integration.test.ts",
+      "src/java-index/router-java-index.test.ts",
+      "src/java-index/router-java-index.ts",
+      "src/java-index/worker-protocol.test.ts",
+      "src/java-index/worker-protocol.ts",
+      "src/java-index/worktree-snapshot-seeder.test.ts",
+      "src/jdtls-hierarchy.test.ts",
+      "src/jdtls-session.test.ts",
+      "src/jdtls-transport.test.ts",
+      "src/path-utils.ts",
+      "src/repo-change-coordinator.test.ts",
+      "src/repo-runtime-manager.test.ts",
+      "src/semantic-gateway.test.ts",
+      "src/test-support/deferred.test.ts",
+      "src/test-support/fake-jdtls.test.ts",
+      "src/test-support/git-worktree.test.ts",
+      "src/util/jsonl.ts",
+      "src/worktree-identity.test.ts",
+      "src/worktree-storm.test.ts"
+    ],
+    "patch": {
+      "file": "inputs/runtime.patch",
+      "bytes": 258331,
+      "sha256": "41139edb21a1052a87986777e30635ed3e7026fcf6a963b1e9042c1fc6881d6c"
+    },
+    "buildStamp": {
+      "gitSha": "d7f23d5b9086",
+      "generatedAt": "2026-08-15T07:41:54.787Z",
+      "defaults": {
+        "idleTtlMs": 2700000,
+        "importConcurrency": 2,
+        "jdtlsXmx": "2g",
+        "maxActiveRepos": 3
+      },
+      "defaultsFingerprint": "e5835394a86f"
+    },
+    "dependencies": {
+      "schemaVersion": 1,
+      "algorithm": "sha256-path-type-size-content-v1",
+      "fileCount": 4086,
+      "directoryCount": 660,
+      "symlinkCount": 7,
+      "totalBytes": 58951103,
+      "sha256": "0362908244299e2d61f87cb5d1037d9609abd11f8d0afae2cc89c3569ce13bc6"
+    }
+  },
+  "scenarioLock": {
+    "file": "inputs/progressive-index-v1.json",
+    "bytes": 3440,
+    "sha256": "ca52f31c9f68012f20354870dd3979dc667f52011100af8d82455a41cd4ebace",
+    "projectIds": [
+      "lishuedu",
+      "cipherlink",
+      "exam-parent-v3"
+    ]
+  },
+  "sourceFiles": [
+    {
+      "file": "inputs/runtime-sources/src/benchmark/progressive-index.ts",
+      "bytes": 17460,
+      "sha256": "4304afd31492dcc72fee3aff6ee27bd07129c3a7bf42f7226d43bc1faa57570e"
+    },
+    {
+      "file": "inputs/runtime-sources/src/benchmark/java-index-idle.ts",
+      "bytes": 2045,
+      "sha256": "383ec7e9533b086221931316aa428ce6c5aaac1ba47c2d12d1d9810422644338"
+    },
+    {
+      "file": "inputs/runtime-sources/scripts/run-progressive-index.mjs",
+      "bytes": 9335,
+      "sha256": "3ba6311d4c0ebd1794e6fcf3789f8728c39421631c53357549c6ffa4fb597ba1"
+    },
+    {
+      "file": "inputs/runtime-sources/scripts/run-progressive-index-three-repo.mjs",
+      "bytes": 18969,
+      "sha256": "80664ca26abe0bb5851d65634d52be6b86697e8a59b4f3cddee8c69b22f6d88b"
+    },
+    {
+      "file": "inputs/runtime-sources/scripts/verify-progressive-index.mjs",
+      "bytes": 19714,
+      "sha256": "5e79a78fe8f8d82758832bcd265f84992e28b7f4402395bc49974bd8bc0ed5dd"
+    },
+    {
+      "file": "inputs/runtime-sources/golden/progressive-index-v1.json",
+      "bytes": 3440,
+      "sha256": "ca52f31c9f68012f20354870dd3979dc667f52011100af8d82455a41cd4ebace"
+    }
+  ],
+  "repositories": {
+    "lishuedu": {
+      "sourceRoot": "/tmp/codex-java-v3-golden-20260809/lishuedu",
+      "head": "db63b1a7e393edd90449eb013d7d1c4d65c366f2",
+      "tree": "22f0ce444e4cac484de85c8a0bf02240ad70d712",
+      "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "cipherlink": {
+      "sourceRoot": "/tmp/codex-java-v3-golden-20260809/cipherlink",
+      "head": "fa433982e92e52dd610650d1e79f2d041179b1d3",
+      "tree": "21a1075c7b211932a4cdb2abf2742521b1eba31f",
+      "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "exam-parent-v3": {
+      "sourceRoot": "/tmp/codex-java-v3-golden-20260809/exam-parent-v3",
+      "head": "f90a0b475f7be2ed003703feecec8195bc7eb976",
+      "tree": "dcdb2024879686451859c64260c7e1f3a4721fa7",
+      "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "protocol": {
+    "runs": 5,
+    "generation": 1,
+    "pollMs": 50,
+    "timeoutMs": 180000,
+    "cache": "EMPTY_PRIVATE_PER_ATTEMPT",
+    "percentile": "nearest-rank-ceil",
+    "jdtlsDisabled": true,
+    "runtimeState": "PRIVATE_PER_ATTEMPT",
+    "scope": "QUIET_PROGRESSIVE_ONLY_STORM_GATE_SEPARATE"
+  }
+}

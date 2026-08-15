@@ -18,7 +18,7 @@ import {
   fakeTransportFactory,
   sequenceTransportFactory,
   type FakeJdtlsTransportFactory
-} from "./test-support/fake-jdtls.js";
+} from "./test-support/fake-jdtls.test.js";
 import type { GeneratedCodeStatus } from "./generated-code.js";
 import type { LspDiagnostic } from "./jdtls-session.js";
 import type { RepoChange, RepoChangeBatch } from "./repo-generation.js";

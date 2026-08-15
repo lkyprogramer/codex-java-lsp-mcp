@@ -23,6 +23,7 @@ import {
   computeManifestFingerprint,
   discoverJavaFiles,
   discoverMyBatisResourceFiles,
+  prioritizeJavaFilesForBackgroundSweep,
   readFileStable,
   resourceSourceRoot,
   scanSnapshotManifestDiff,
@@ -56,7 +57,11 @@ import type {
   SourceRootCoverage,
   WorktreeSeedStatus
 } from "./index-types.js";
-import type { JavaIndexRequest, JavaIndexResponse } from "./worker-protocol.js";
+import {
+  JAVA_INDEX_CLOSE_FLUSH_BUDGET_MS,
+  type JavaIndexRequest,
+  type JavaIndexResponse
+} from "./worker-protocol.js";
 
 // A full sweep processes this many files before yielding to the message loop
 // (Task 20 Step 4), so a foreground request queued mid-sweep is serviced
@@ -69,10 +74,6 @@ const SNAPSHOT_FILE_NAME = "java-index-snapshot.json.gz";
 // Debounced so a burst of foreground refreshes (a save, then a formatter
 // re-save moments later) coalesces into one write instead of one per event.
 const SNAPSHOT_FLUSH_DEBOUNCE_MS = 1000;
-// CLOSE's best-effort flush budget: a slow disk must not block CLOSE
-// indefinitely - a dirty snapshot left behind is rebuilt on the next open's
-// manifest verification anyway, just without this session's positive facts.
-const CLOSE_FLUSH_BUDGET_MS = 2000;
 // A snapshot's manifest diff this large or larger (e.g. a partial snapshot
 // from a debounced flush that landed mid-sweep before an unclean shutdown,
 // or a large branch switch) is abandoned rather than parsed inline inside
@@ -91,6 +92,7 @@ let status: JavaIndexStatus = {
   methods: 0,
   edges: 0,
   snapshotBytes: 0,
+  snapshot: { state: "EMPTY" },
   pendingForeground: 0,
   pendingBackground: 0,
   coverage: [],
@@ -125,6 +127,12 @@ let lastRefreshError: string | undefined;
 type BackgroundSweep = {
   generation: number;
   remaining: DiscoveredJavaFile[];
+  /** At most one root, set only by the primary A1 ACTIVE_ANCHOR request. */
+  activePriorityRoot?: string;
+  /** 0 is ordinary ordering; 1 is the one accepted active-anchor priority epoch. */
+  priorityEpoch: number;
+  /** The epoch already applied to `remaining`; -1 forces the initial stable order. */
+  appliedPriorityEpoch: number;
   /** Every discovered file is batch re-linked once all declarations exist. */
   allDiscovered: DiscoveredJavaFile[];
   rootsSeen: Set<string>;
@@ -134,19 +142,30 @@ type BackgroundSweep = {
 let backgroundSweep: BackgroundSweep | undefined;
 // Settles once the currently-running (or most recently run) background loop
 // (startBackgroundLoop) returns. CLOSE awaits this - never just nulling
-// backgroundSweep - so
-// worker.terminate() can never land while a native parse/edge-build is still
-// in flight underneath it (which previously crashed the whole process with
-// an uncaught Napi::Error, not merely the worker thread).
+// backgroundSweep - so the normal CLOSE ACK path joins native parse/edge-build
+// work instead of terminating beneath it (which previously crashed the whole
+// process with an uncaught Napi::Error). The client return grace only unrefs a
+// slow worker; it does not terminate this drain before the eventual ACK.
 let backgroundLoopPromise: Promise<void> = Promise.resolve();
 let closing = false;
 
 let snapshotPath: string | undefined;
-let snapshotDirty = false;
+// Monotonic in-memory publication revisions. A writer owns the revision it
+// captured, so its late success/failure cannot overwrite the observable state
+// of a newer mutation that arrived while the atomic write was in flight.
+let snapshotDirtyRevision = 0;
+let snapshotDurableRevision = 0;
+let lastDurableSnapshotIdentity:
+  | { durableGeneration: number; durableManifestFingerprint: string }
+  | undefined;
 let snapshotFlushTimer: NodeJS.Timeout | undefined;
-// CLOSE awaits this (bounded by CLOSE_FLUSH_BUDGET_MS via Promise.race) so it
-// never responds while a write is still being serialized/compressed.
+// CLOSE joins this before deciding whether the remaining soft budget permits
+// one additional dirty retry.
 let snapshotFlushPromise: Promise<void> = Promise.resolve();
+// Every writer joins this tail. Without a single flight, a slower stale
+// debounce write can rename after a newer full-sweep write and roll the
+// durable cache backwards even though both manifests still match.
+let snapshotFlushTail: Promise<void> = Promise.resolve();
 // A completed sweep is not fully quiescent until its durable snapshot is
 // published. Expose that work through pendingBackground so callers that wait
 // for a steady index never start a latency sample behind gzip/atomic rename.
@@ -660,8 +679,16 @@ function recordFileCoverage(relativePath: string, failure?: unknown): boolean {
 
 // Debounced (Step 5): a burst of foreground refreshes coalesces into one
 // write, `SNAPSHOT_FLUSH_DEBOUNCE_MS` after the last one settles.
+function markSnapshotDirty(): void {
+  snapshotDirtyRevision += 1;
+  status = {
+    ...status,
+    snapshot: { state: "PENDING", ...lastDurableSnapshotIdentity }
+  };
+}
+
 function scheduleSnapshotFlush(): void {
-  snapshotDirty = true;
+  markSnapshotDirty();
   if (!snapshotPath) return;
   if (snapshotFlushTimer) clearTimeout(snapshotFlushTimer);
   snapshotFlushTimer = setTimeout(() => {
@@ -672,23 +699,32 @@ function scheduleSnapshotFlush(): void {
 
 // Forces an immediate (non-debounced) write when dirty; a no-op otherwise,
 // since the on-disk snapshot already reflects the current facts. Tracked via
-// `snapshotFlushPromise` so CLOSE can bound how long it waits for this.
-async function flushSnapshotNow(): Promise<void> {
+// `snapshotFlushPromise` so CLOSE can join a writer that already started.
+function flushSnapshotNow(): Promise<void> {
   if (snapshotFlushTimer) {
     clearTimeout(snapshotFlushTimer);
     snapshotFlushTimer = undefined;
   }
-  if (!snapshotDirty || !snapshotPath || !store || !layout) return Promise.resolve();
-  snapshotDirty = false;
-  snapshotFlushInProgress = true;
-  const target = snapshotPath;
-  const currentLayout = layout;
-  const generationAtSerialize = status.indexedGeneration;
-  snapshotFlushPromise = (async () => {
+  const queued = snapshotFlushTail.then(async () => {
+    if (snapshotDirtyRevision <= snapshotDurableRevision || !snapshotPath || !store || !layout) return;
+    snapshotFlushInProgress = true;
+    const target = snapshotPath;
+    const currentLayout = layout;
+    const attemptRevision = snapshotDirtyRevision;
+    let revisionAtSerialize = attemptRevision;
     try {
       const buildFingerprint = await computeBuildFingerprint(repoRoot, currentLayout).catch(() => undefined);
-      if (buildFingerprint === undefined || !store) return;
+      if (buildFingerprint === undefined || !store) {
+        throw new Error("snapshot build fingerprint unavailable");
+      }
+      // No await is allowed between these captures: worker mutations also run
+      // on this event loop, so generation, facts, and coverage now describe
+      // one coherent publication revision.
+      revisionAtSerialize = snapshotDirtyRevision;
+      const generationAtSerialize = status.indexedGeneration;
       const data = store.toSnapshotData();
+      const coverageAtSerialize = coverage.snapshot();
+      const resourceCoverageAtSerialize = resourceCoverage.map(entry => ({ ...entry }));
       const resourceEntries = data.myBatisResources.map(resource => {
         const sourceRoot = resourceSourceRoot(resource.relativePath, currentLayout);
         if (!sourceRoot) {
@@ -709,25 +745,57 @@ async function flushSnapshotNow(): Promise<void> {
         manifestFingerprint,
         indexedGeneration: generationAtSerialize,
         createdAt: new Date().toISOString(),
-        coverage: coverage.snapshot(),
-        resourceCoverage,
+        coverage: coverageAtSerialize,
+        resourceCoverage: resourceCoverageAtSerialize,
         ...data
       };
-      try {
-        const bytes = await writeSnapshotIfManifestCurrent(
-          target,
-          value,
-          () => computeCurrentSnapshotManifestFingerprint(repoRoot, currentLayout)
-        );
-        status = { ...status, snapshotBytes: bytes };
-      } catch {
-        snapshotDirty = true;
-      }
+      const bytes = await writeSnapshotIfManifestCurrent(
+        target,
+        value,
+        () => computeCurrentSnapshotManifestFingerprint(repoRoot, currentLayout)
+      );
+      lastDurableSnapshotIdentity = {
+        durableGeneration: generationAtSerialize,
+        durableManifestFingerprint: manifestFingerprint
+      };
+      snapshotDurableRevision = revisionAtSerialize;
+      // A concurrently-running MyBatis resource reconcile can still be
+      // catching resourceCoverage up to this generation (the Java chunk
+      // loop's own finalChunk flush does not wait for it - see the
+      // piggyback catch-up loop in beginBackgroundSweep), so a write that
+      // races ahead of it must not claim DURABLE for a generation
+      // resourceCoverage has not reached yet, even though these bytes are
+      // already on disk.
+      const resourceCoverageCurrent = resourceCoverageAtSerialize.every(
+        entry => entry.generation === generationAtSerialize
+      );
+      status = {
+        ...status,
+        snapshotBytes: bytes,
+        snapshot: snapshotDirtyRevision > revisionAtSerialize || !resourceCoverageCurrent
+          ? { state: "PENDING", ...lastDurableSnapshotIdentity }
+          : { state: "DURABLE", ...lastDurableSnapshotIdentity }
+      };
+    } catch (error) {
+      status = {
+        ...status,
+        snapshot: snapshotDirtyRevision > revisionAtSerialize
+          ? { state: "PENDING", ...lastDurableSnapshotIdentity }
+          : {
+              state: "FAILED",
+              ...lastDurableSnapshotIdentity,
+              failure: error instanceof Error && error.message === "manifest changed before snapshot publish"
+                ? "MANIFEST_CHANGED"
+                : "WRITE_FAILED"
+            }
+      };
     } finally {
       snapshotFlushInProgress = false;
     }
-  })();
-  return snapshotFlushPromise;
+  });
+  snapshotFlushPromise = queued;
+  snapshotFlushTail = queued.catch(() => undefined);
+  return queued;
 }
 
 // Returns the set of source roots that had an issue this round (an
@@ -746,6 +814,9 @@ async function handleRefresh(request: Extract<JavaIndexRequest, { type: "REFRESH
   }
   const touched = new Set<string>();
   const rootHadIssue = new Set<string>();
+  if (request.priority === "ACTIVE_ANCHOR" && request.changed.length === 1 && request.deleted.length === 0) {
+    recordActiveAnchorSweepRoot(request.changed[0]!);
+  }
   for (const inputPath of request.changed) {
     try {
       const refreshed = await refreshFile(inputPath, request.generation);
@@ -800,6 +871,20 @@ async function handleRefresh(request: Extract<JavaIndexRequest, { type: "REFRESH
   }
   scheduleSnapshotFlush();
   return rootHadIssue;
+}
+
+function recordActiveAnchorSweepRoot(inputPath: string): void {
+  if (!backgroundSweep || backgroundSweep.activePriorityRoot) return;
+  try {
+    const root = deriveSourceLayout(inputPath).sourceRoot;
+    if (root) {
+      backgroundSweep.activePriorityRoot = root;
+      backgroundSweep.priorityEpoch = 1;
+    }
+  } catch {
+    // An outside-repo or otherwise unclassifiable anchor cannot belong to
+    // this sweep and must not create a synthetic priority band.
+  }
 }
 
 /**
@@ -1010,6 +1095,7 @@ function startOwnSnapshotHydration(
         if (!closing) queueSnapshotVerificationReconcile(status.indexedGeneration);
         return;
       }
+      const durableRevisionAtHydration = snapshotDurableRevision;
       store = new JavaIndexStore();
       // XML facts stay out of the provisional store until a stable target-side
       // read confirms their content hash. `indexMyBatisResources` can then
@@ -1036,8 +1122,51 @@ function startOwnSnapshotHydration(
       const verifiedGeneration = await verifyOwnSnapshot(loaded, expectedGeneration, canApply);
       await resourceReindex;
       if (verifiedGeneration !== undefined && canApply()) {
+        const hydratedManifestFingerprint = layout
+          ? await computeCurrentSnapshotManifestFingerprint(repoRoot, layout)
+          : loaded.manifestFingerprint;
+        const hydratedManifestChanged = hydratedManifestFingerprint !== loaded.manifestFingerprint;
+        const restoredFully = ownSnapshotCoverageFullyRestored(verifiedGeneration);
+        const restoredBytes = snapshotPath
+          ? await stat(snapshotPath).then(entry => entry.size).catch(() => undefined)
+          : undefined;
+        if (!canApply()) {
+          queueSnapshotVerificationReconcile(status.indexedGeneration);
+          return;
+        }
         status = { ...status, indexedGeneration: verifiedGeneration };
-        if (!ownSnapshotCoverageFullyRestored(verifiedGeneration)) {
+        // The physical snapshot keeps its original generation identity. If
+        // this process adopted the facts into a different coordinator clock,
+        // expose the old durable identity as PENDING and rewrite explicitly;
+        // never relabel the old bytes as if they already contained the new
+        // generation.
+        if (
+          restoredBytes !== undefined
+          && snapshotDurableRevision === durableRevisionAtHydration
+        ) {
+          lastDurableSnapshotIdentity = {
+            durableGeneration: loaded.indexedGeneration,
+            durableManifestFingerprint: loaded.manifestFingerprint
+          };
+          status = {
+            ...status,
+            snapshotBytes: restoredBytes,
+            snapshot: restoredFully
+              && snapshotDirtyRevision === snapshotDurableRevision
+              && loaded.indexedGeneration === verifiedGeneration
+              && !hydratedManifestChanged
+              ? { state: "DURABLE", ...lastDurableSnapshotIdentity }
+              : { state: "PENDING", ...lastDurableSnapshotIdentity }
+          };
+        }
+        if (
+          restoredFully
+          && (loaded.indexedGeneration !== verifiedGeneration || hydratedManifestChanged)
+          && snapshotDirtyRevision === snapshotDurableRevision
+        ) {
+          scheduleSnapshotFlush();
+        }
+        if (!restoredFully) {
           queueSnapshotVerificationReconcile(verifiedGeneration);
         }
       } else if (!closing) {
@@ -1273,6 +1402,8 @@ async function beginBackgroundSweep(generation: number): Promise<void> {
     remaining: reusedPaths
       ? discovered.filter(file => !reusedPaths.has(file.relativePath))
       : discovered.slice(),
+    priorityEpoch: 0,
+    appliedPriorityEpoch: -1,
     allDiscovered: discovered,
     rootsSeen: new Set(byRoot.keys()),
     parsedFiles: 0
@@ -1284,7 +1415,44 @@ async function beginBackgroundSweep(generation: number): Promise<void> {
   // otherwise a second RECONCILE landing mid-scan would see backgroundSweep
   // still undefined, skip the guard, and start a second concurrent resource
   // scan (and a second Java sweep) racing this one.
-  if (store) await indexMyBatisResources(store, layout, generation);
+  if (store) {
+    let resourceGeneration = generation;
+    await indexMyBatisResources(store, layout, resourceGeneration);
+    // A piggybacked reconcile (the guard above) can advance the generation
+    // this sweep will eventually stamp Java coverage at while this call was
+    // in flight, leaving resourceCoverage behind. Catch up against
+    // status.indexedGeneration, not backgroundSweep.generation: the Java
+    // chunk loop's own finalChunk completion can null out `backgroundSweep`
+    // concurrently with this await, at which point backgroundSweep.generation
+    // is no longer readable at all and a bump that landed in that window
+    // would be lost forever. status.indexedGeneration is bumped in lockstep
+    // by every RECONCILE handler right after beginBackgroundSweep resolves
+    // and is never cleared, so it stays a valid catch-up target even after
+    // backgroundSweep is gone - and it is exactly the field
+    // isJavaIndexCompleteAt compares resourceCoverage's generation against,
+    // so catching up to it (instead of to an internal sweep-object field
+    // that happens to usually correlate) closes the gap by construction.
+    // Never start a second concurrent resource scan - instead of starting a
+    // fresh one from the top, which would re-open the same race this
+    // function's own piggyback guard exists to close.
+    let caughtUp = false;
+    while (!closing && status.indexedGeneration > resourceGeneration) {
+      resourceGeneration = status.indexedGeneration;
+      await indexMyBatisResources(store, layout, resourceGeneration);
+      caughtUp = true;
+    }
+    // Only when the catch-up loop actually ran: the Java chunk loop's own
+    // finalChunk flush does not wait for this resource scan and can
+    // durable-stamp a snapshot before resourceCoverage caught up to the
+    // piggybacked generation; flushSnapshotNow's own completeness check then
+    // leaves that write PENDING forever, since nothing else re-dirties it.
+    // Debounced (scheduleSnapshotFlush), not an immediate forced write: this
+    // is the rare piggyback path, and an eager write here would add an extra,
+    // unexpected write attempt on every ordinary sweep too.
+    if (caughtUp) {
+      scheduleSnapshotFlush();
+    }
+  }
 }
 
 async function processBackgroundChunk(sweep: BackgroundSweep): Promise<void> {
@@ -1310,6 +1478,18 @@ async function processBackgroundChunk(sweep: BackgroundSweep): Promise<void> {
   // must still count this chunk's files as outstanding through its heartbeat.
   // The final chunk stays counted through terminal re-link, coverage, lease,
   // and snapshot-flush work too, so STATUS cannot report false quiescence.
+  // Reorder only after the prior chunk is entirely done, at startup or when
+  // the single primary anchor accepts its one priority epoch. The current
+  // chunk is copied below and never modified, so no foreground request can
+  // preempt an in-flight parse batch or repeatedly sort the full queue.
+  if (sweep.appliedPriorityEpoch !== sweep.priorityEpoch) {
+    sweep.remaining = prioritizeJavaFilesForBackgroundSweep(
+      sweep.remaining,
+      layout ?? { sourceRoots: [] },
+      sweep.activePriorityRoot ? [sweep.activePriorityRoot] : []
+    );
+    sweep.appliedPriorityEpoch = sweep.priorityEpoch;
+  }
   const chunk = sweep.remaining.slice(0, SWEEP_CHUNK_SIZE);
   const finalChunk = chunk.length === sweep.remaining.length;
   const touched = new Set<string>();
@@ -1347,10 +1527,27 @@ async function processBackgroundChunk(sweep: BackgroundSweep): Promise<void> {
     }
     seededReconcilePlan = undefined;
     await sweep.leaseHandle.release();
+    // resourceCoverage can lag this sweep's own settled generation no matter
+    // which of several unsynchronized paths produced it - a watcher-driven
+    // batch reconcile (repo-runtime-manager's applyBatchToJavaIndex) and a
+    // request-driven one (reconcileIfDirty, triggered independently by any
+    // foreground request against a dirty runtime) both call
+    // JavaIndexClient.reconcile() with no shared singleflight between them,
+    // and beginBackgroundSweep's own piggyback-catchup loop can only close a
+    // gap that lands while ITS OWN call is still on the stack - a bump that
+    // lands after it already returned (this sweep can run for tens of
+    // seconds in the background loop below, long after beginBackgroundSweep
+    // itself resolved) is invisible to it. This is the one place that always
+    // knows the sweep's final, authoritative settled generation - rescan
+    // here, before the flush below serializes resourceCoverage's state, so a
+    // gap from any of those paths is closed regardless of its origin.
+    if (!closing && store && layout && !resourceCoverage.every(entry => entry.generation === sweep.generation)) {
+      await indexMyBatisResources(store, layout, sweep.generation);
+    }
     // Step 5: a full sweep's completion forces an immediate (non-debounced)
     // flush, since it is exactly the moment the persisted snapshot goes from
     // stale to fully caught-up.
-    snapshotDirty = true;
+    markSnapshotDirty();
     await flushSnapshotNow();
   }
   sweep.remaining.splice(0, chunk.length);
@@ -1425,7 +1622,9 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         lastRefreshError = undefined;
         layout = probeLayout(repoRoot);
         snapshotPath = path.join(request.cacheDir, SNAPSHOT_FILE_NAME);
-        snapshotDirty = false;
+        snapshotDirtyRevision = 0;
+        snapshotDurableRevision = 0;
+        lastDurableSnapshotIdentity = undefined;
 
         let openedGeneration = request.generation;
         let ownSnapshotIdentity: SnapshotIdentity | undefined;
@@ -1444,7 +1643,13 @@ async function handle(request: JavaIndexRequest): Promise<void> {
             worktreeSeedStatus = await attemptSiblingSeed(request.siblingCacheBase, buildFingerprint, request.generation);
           }
         }
-        status = { ...status, state: "READY", indexedGeneration: openedGeneration };
+        status = {
+          ...status,
+          state: "READY",
+          indexedGeneration: openedGeneration,
+          snapshotBytes: 0,
+          snapshot: { state: "EMPTY" }
+        };
         if (ownSnapshotIdentity && buildFingerprint !== undefined) {
           startOwnSnapshotHydration(ownSnapshotIdentity, openedGeneration, buildFingerprint, request.siblingCacheBase);
         }
@@ -1472,18 +1677,22 @@ async function handle(request: JavaIndexRequest): Promise<void> {
           clearTimeout(snapshotFlushTimer);
           snapshotFlushTimer = undefined;
         }
-        // Always await snapshotFlushPromise, not just when snapshotDirty is
-        // still true: a debounce timer can have already fired moments ago,
-        // clearing snapshotDirty synchronously while the write it kicked off
-        // is still being serialized/compressed - skipping the wait on
-        // snapshotDirty alone would let worker.terminate() land mid-write.
-        await Promise.race([
-          (async () => {
-            await snapshotFlushPromise;
-            if (snapshotDirty) await flushSnapshotNow();
-          })(),
-          new Promise(resolve => setTimeout(resolve, CLOSE_FLUSH_BUDGET_MS))
-        ]).catch(() => undefined);
+        // Always await snapshotFlushPromise, not just the dirty revision: a
+        // debounce timer can have already fired moments ago and claimed that
+        // revision while the write is still being serialized/compressed.
+        const closeFlushDeadline = Date.now() + JAVA_INDEX_CLOSE_FLUSH_BUDGET_MS;
+        // The worker's 2s budget is a soft drain limit: it must not ACK merely
+        // because an already-started atomic writer crossed that boundary. It
+        // only decides whether CLOSE may start one additional dirty retry.
+        // The client's shared 2.5s grace only bounds caller-visible close by
+        // unrefing the worker; final termination still waits for this ACK.
+        await snapshotFlushPromise.catch(() => undefined);
+        if (
+          snapshotDirtyRevision > snapshotDurableRevision
+          && Date.now() < closeFlushDeadline
+        ) {
+          await flushSnapshotNow().catch(() => undefined);
+        }
         status = { ...status, state: "CLOSED" };
         respond({ id: request.id, ok: true, value: currentStatus() });
         return;
@@ -1530,7 +1739,7 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         return;
       }
       case "FLUSH": {
-        snapshotDirty = true;
+        markSnapshotDirty();
         await flushSnapshotNow();
         respond({ id: request.id, ok: true, value: currentStatus() });
         return;
@@ -1698,6 +1907,10 @@ async function drainForeground(): Promise<void> {
 }
 
 parentPort?.on("message", (request: JavaIndexRequest) => {
+  // Stop scheduling later background chunks as soon as CLOSE arrives, even
+  // if an older foreground request is still draining ahead of it. The active
+  // chunk/writer keeps its own reference and is joined at the safe boundary.
+  if (request.type === "CLOSE") closing = true;
   foregroundQueue.push({
     request,
     enqueuedAtMs: performance.now(),

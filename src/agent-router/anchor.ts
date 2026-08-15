@@ -23,6 +23,8 @@ type ResolveAnchorInput = {
   readonly input: ImpactAnchorInput;
   readonly requested: ImpactProfile;
   readonly id: string;
+  /** Only AgentRouter's first A1 anchor may reprioritize a live background sweep. */
+  readonly primary?: boolean;
   readonly generation?: number;
 };
 
@@ -33,7 +35,11 @@ export async function resolveAnchor(input: ResolveAnchorInput): Promise<Resolved
   let methodName: string | undefined;
   let kind = "Type";
   try {
-    await input.javaIndex.ensureFresh([absolutePath], generation);
+    await input.javaIndex.ensureFresh(
+      [absolutePath],
+      generation,
+      input.primary && input.id === "A1" ? { priority: "ACTIVE_ANCHOR" } : undefined
+    );
     const anchor = await input.javaIndex.queryAnchor(absolutePath, input.input.line, input.input.column);
     if (anchor) {
       facts = anchorToSourceFacts(input.repoRoot, anchor);
@@ -53,6 +59,15 @@ export async function resolveAnchor(input: ResolveAnchorInput): Promise<Resolved
     facts = fallbackSourceFacts(input.repoRoot, absolutePath, token);
     methodName = undefined;
     kind = "Type";
+  }
+
+  // A COMPLETE index has nothing left to warm: the closure's own
+  // findTypeDefinitions/findImplementers calls would just re-fetch facts a
+  // later collector already has for free, paying a pure foreground RPC cost
+  // for zero benefit. Gate on the same synchronous, no-RPC coverage snapshot
+  // retryColdImplementers/retryColdExactTypeLookups already use internally.
+  if (input.javaIndex.localRouterStatus?.().coverage !== "complete") {
+    await warmForegroundAnchorClosure(input.javaIndex, absolutePath, facts).catch(() => undefined);
   }
 
   const symbolName = tokenAtColumn(absolutePath, input.input.line, input.input.column)
@@ -77,6 +92,47 @@ export async function resolveAnchor(input: ResolveAnchorInput): Promise<Resolved
     factSource: facts.factSource,
     kind
   };
+}
+
+const MAX_FOREGROUND_ANCHOR_IMPORTS = 16;
+// Each interface closure may start one bounded rg process; keep anchor warmup
+// to a single highest-priority interface and let later collectors close their
+// own exact requested type.
+const MAX_FOREGROUND_ANCHOR_INTERFACES = 1;
+
+async function warmForegroundAnchorClosure(
+  javaIndex: RouterIndex,
+  anchorFile: string,
+  anchorFacts: JavaSourceFacts
+): Promise<void> {
+  const definitions = anchorFacts.imports.length > 0
+    ? await javaIndex.findTypeDefinitions(
+        anchorFacts.imports.slice(0, MAX_FOREGROUND_ANCHOR_IMPORTS),
+        MAX_FOREGROUND_ANCHOR_IMPORTS,
+        false
+      )
+    : [];
+  const referenced = new Set([
+    ...anchorFacts.referencedTypes,
+    ...anchorFacts.implementsTypes,
+    anchorFacts.extendsType ?? "",
+    ...(anchorFacts.fieldTypes ?? []).flatMap(item => [item.typeName, item.qualifiedName ?? ""])
+  ].flatMap(item => [item, item.slice(item.lastIndexOf(".") + 1)]).filter(Boolean));
+  const priority = (item: JavaSourceFacts) => item === anchorFacts
+    ? 2
+    : Number(referenced.has(item.qualifiedName!) || referenced.has(item.typeName ?? ""));
+  const interfaces = [...new Map([anchorFacts, ...definitions]
+    .filter(item => item.kind === "interface" && item.typeId && item.qualifiedName)
+    .map(item => [item.typeId!, item])).values()]
+    // Array#sort is stable; equal-priority definitions retain direct-import order.
+    .sort((left, right) => priority(right) - priority(left))
+    .slice(0, MAX_FOREGROUND_ANCHOR_INTERFACES);
+  for (const item of interfaces) {
+    await javaIndex.findImplementers(item.qualifiedName!, 8, anchorFile, {
+      typeId: item.typeId,
+      hydrate: false
+    }).catch(() => []);
+  }
 }
 
 function inferProfile(facts: JavaSourceFacts, role?: string): ResolvedImpactProfile {

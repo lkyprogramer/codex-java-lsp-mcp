@@ -12,7 +12,7 @@ import {
   type FakeAttemptOptions,
   type FakeJdtlsConnection,
   type FakeJdtlsTransportFactory
-} from "./test-support/fake-jdtls.js";
+} from "./test-support/fake-jdtls.test.js";
 
 type Harness = {
   session: JdtlsSession;

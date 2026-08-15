@@ -11,6 +11,7 @@ import {
   computeManifestFingerprint,
   discoverJavaFiles,
   discoverMyBatisResourceFiles,
+  prioritizeJavaFilesForBackgroundSweep,
   scanSnapshotManifestDiff
 } from "./manifest.js";
 
@@ -57,6 +58,50 @@ test("a source root with no test tree does not fail the walk", async () => {
   const files = await discoverJavaFiles(root, layout);
 
   assert.deepEqual(files.map(file => file.relativePath), ["src/main/java/demo/OnlyMain.java"]);
+});
+
+test("background sweep priority keeps first-touched roots ahead of other main and test roots", () => {
+  const files = [
+    { absolutePath: "/repo/module-a/src/main/java/demo/B.java", relativePath: "module-a/src/main/java/demo/B.java", sourceRoot: "module-a/src/main/java" },
+    { absolutePath: "/repo/module-z/src/main/java/demo/Z.java", relativePath: "module-z/src/main/java/demo/Z.java", sourceRoot: "module-z/src/main/java" },
+    { absolutePath: "/repo/module-b/src/test/java/demo/Test.java", relativePath: "module-b/src/test/java/demo/Test.java", sourceRoot: "module-b/src/test/java" },
+    { absolutePath: "/repo/module-a/src/main/java/demo/A.java", relativePath: "module-a/src/main/java/demo/A.java", sourceRoot: "module-a/src/main/java" },
+    { absolutePath: "/repo/module-y/src/test/java/demo/FocusedTest.java", relativePath: "module-y/src/test/java/demo/FocusedTest.java", sourceRoot: "module-y/src/test/java" },
+    { absolutePath: "/repo/module-z/src/main/java/demo/A.java", relativePath: "module-z/src/main/java/demo/A.java", sourceRoot: "module-z/src/main/java" }
+  ];
+
+  const prioritized = prioritizeJavaFilesForBackgroundSweep(files, {
+    sourceRoots: [
+      { relativePath: "module-a/src/main/java", module: "module-a", sourceSet: "main" },
+      { relativePath: "module-b/src/test/java", module: "module-b", sourceSet: "test" },
+      { relativePath: "module-y/src/test/java", module: "module-y", sourceSet: "test" },
+      { relativePath: "module-z/src/main/java", module: "module-z", sourceSet: "main" }
+    ]
+  }, ["module-y/src/test/java", "module-z/src/main/java"]);
+
+  assert.deepEqual(
+    prioritized.map(file => file.relativePath),
+    [
+      "module-y/src/test/java/demo/FocusedTest.java",
+      "module-z/src/main/java/demo/A.java",
+      "module-z/src/main/java/demo/Z.java",
+      "module-a/src/main/java/demo/A.java",
+      "module-a/src/main/java/demo/B.java",
+      "module-b/src/test/java/demo/Test.java"
+    ]
+  );
+  assert.deepEqual(
+    files.map(file => file.relativePath),
+    [
+      "module-a/src/main/java/demo/B.java",
+      "module-z/src/main/java/demo/Z.java",
+      "module-b/src/test/java/demo/Test.java",
+      "module-a/src/main/java/demo/A.java",
+      "module-y/src/test/java/demo/FocusedTest.java",
+      "module-z/src/main/java/demo/A.java"
+    ],
+    "the current in-flight queue view must not be mutated by a future-chunk reorder"
+  );
 });
 
 test("discoverMyBatisResourceFiles finds every .xml under src/main/resources, not src/test/resources, and skips build directories", async () => {

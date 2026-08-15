@@ -9,7 +9,7 @@ import { probeLayout, type LayoutContext } from "./layout-probe.js";
 import type { LayoutSource } from "./layout-manager.js";
 import { canonicalPath } from "./path-utils.js";
 import type { WorktreeIdentity } from "./worktree-identity.js";
-import { createGitWorktreeFamily } from "./test-support/git-worktree.js";
+import { createGitWorktreeFamily } from "./test-support/git-worktree.test.js";
 
 function repo(): { root: string; layout: LayoutContext } {
   const root = canonicalPath(mkdtempSync(path.join(tmpdir(), "storm-")));

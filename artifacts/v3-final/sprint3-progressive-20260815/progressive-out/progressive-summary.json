@@ -1,0 +1,258 @@
+{
+  "status": "BASELINE_RECORDED",
+  "schemaVersion": 1,
+  "verifierVersion": 1,
+  "verifiedAt": "2026-08-15T07:48:10.580Z",
+  "manifest": {
+    "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-w0plmb/progressive-out/progressive-manifest.json",
+    "sha256": "3c0b8ff4ce44ae511130d3bb56ac4f61ba4d61a2718d013420430d46a153a933"
+  },
+  "runtime": {
+    "commit": "d7f23d5b9086922c8213b9f1735e45cca365b947",
+    "commitTree": "d3913c4432b10de9c112f890bddfd9f29269f76e",
+    "executableTree": "49b61b57dd2bb0f935874af9d202c7d44703132e",
+    "statusSha256": "6734b7a9b8a31aa530b8e9be179196ffc2c6c1d593b8aa2293d88ef37400debe",
+    "changedPaths": [
+      "README.md",
+      "golden/progressive-index-v1.json",
+      "install-runtime.sh",
+      "package.json",
+      "scripts/run-isolated-validation.mjs",
+      "scripts/run-progressive-index-three-repo.mjs",
+      "scripts/run-progressive-index-three-repo.test.mjs",
+      "scripts/run-progressive-index.mjs",
+      "scripts/run-progressive-index.test.mjs",
+      "scripts/run-storm-gate.mjs",
+      "scripts/verify-progressive-index.mjs",
+      "scripts/verify-progressive-index.test.mjs",
+      "src/agent-router/anchor.test.ts",
+      "src/agent-router/anchor.ts",
+      "src/agent-router/index.ts",
+      "src/benchmark-lsp-performance.ts",
+      "src/benchmark/java-index-idle.test.ts",
+      "src/benchmark/java-index-idle.ts",
+      "src/benchmark/progressive-index.test.ts",
+      "src/benchmark/progressive-index.ts",
+      "src/document-symbol-limiter.test.ts",
+      "src/document-symbol-limiter.ts",
+      "src/java-index/index-types.ts",
+      "src/java-index/java-index-client.test.ts",
+      "src/java-index/java-index-client.ts",
+      "src/java-index/java-index-worker.test.ts",
+      "src/java-index/java-index-worker.ts",
+      "src/java-index/manifest.test.ts",
+      "src/java-index/manifest.ts",
+      "src/java-index/router-facts.test.ts",
+      "src/java-index/router-facts.ts",
+      "src/java-index/router-integration.test.ts",
+      "src/java-index/router-java-index.test.ts",
+      "src/java-index/router-java-index.ts",
+      "src/java-index/worker-protocol.test.ts",
+      "src/java-index/worker-protocol.ts",
+      "src/java-index/worktree-snapshot-seeder.test.ts",
+      "src/jdtls-hierarchy.test.ts",
+      "src/jdtls-session.test.ts",
+      "src/jdtls-transport.test.ts",
+      "src/path-utils.ts",
+      "src/repo-change-coordinator.test.ts",
+      "src/repo-runtime-manager.test.ts",
+      "src/semantic-gateway.test.ts",
+      "src/test-support/deferred.test.ts",
+      "src/test-support/fake-jdtls.test.ts",
+      "src/test-support/git-worktree.test.ts",
+      "src/util/jsonl.ts",
+      "src/worktree-identity.test.ts",
+      "src/worktree-storm.test.ts"
+    ],
+    "patch": {
+      "file": "inputs/runtime.patch",
+      "bytes": 258331,
+      "sha256": "41139edb21a1052a87986777e30635ed3e7026fcf6a963b1e9042c1fc6881d6c"
+    },
+    "buildStamp": {
+      "gitSha": "d7f23d5b9086",
+      "generatedAt": "2026-08-15T07:41:54.787Z",
+      "defaults": {
+        "idleTtlMs": 2700000,
+        "importConcurrency": 2,
+        "jdtlsXmx": "2g",
+        "maxActiveRepos": 3
+      },
+      "defaultsFingerprint": "e5835394a86f"
+    },
+    "dependencies": {
+      "schemaVersion": 1,
+      "algorithm": "sha256-path-type-size-content-v1",
+      "fileCount": 4086,
+      "directoryCount": 660,
+      "symlinkCount": 7,
+      "totalBytes": 58951103,
+      "sha256": "0362908244299e2d61f87cb5d1037d9609abd11f8d0afae2cc89c3569ce13bc6"
+    }
+  },
+  "scenarioLock": {
+    "file": "inputs/progressive-index-v1.json",
+    "bytes": 3440,
+    "sha256": "ca52f31c9f68012f20354870dd3979dc667f52011100af8d82455a41cd4ebace",
+    "projectIds": [
+      "lishuedu",
+      "cipherlink",
+      "exam-parent-v3"
+    ]
+  },
+  "protocol": {
+    "runs": 5,
+    "generation": 1,
+    "pollMs": 50,
+    "timeoutMs": 180000,
+    "cache": "EMPTY_PRIVATE_PER_ATTEMPT",
+    "percentile": "nearest-rank-ceil",
+    "jdtlsDisabled": true,
+    "runtimeState": "PRIVATE_PER_ATTEMPT",
+    "scope": "QUIET_PROGRESSIVE_ONLY_STORM_GATE_SEPARATE"
+  },
+  "projects": [
+    {
+      "project": "lishuedu",
+      "repository": {
+        "sourceRoot": "/tmp/codex-java-v3-golden-20260809/lishuedu",
+        "head": "db63b1a7e393edd90449eb013d7d1c4d65c366f2",
+        "tree": "22f0ce444e4cac484de85c8a0bf02240ad70d712",
+        "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "semanticDigest": "bcf75b8f17c2c3557d1a9062348f9077ab4d4c586acb7507022a8f6b4a6a4ab9",
+      "stages": {
+        "open": {
+          "samples": 5,
+          "min": 192.27275,
+          "p50": 204.216458,
+          "p95": 970.865,
+          "max": 970.865
+        },
+        "anchorReady": {
+          "samples": 5,
+          "min": 721.6737919999999,
+          "p50": 740.6965,
+          "p95": 1558.596667,
+          "max": 1558.596667
+        },
+        "moduleReady": {
+          "samples": 5,
+          "min": 36188.599666999995,
+          "p50": 39082.373791,
+          "p95": 39667.772917,
+          "max": 39667.772917
+        },
+        "complete": {
+          "samples": 5,
+          "min": 38817.832459,
+          "p50": 43370.818,
+          "p95": 45476.281292,
+          "max": 45476.281292
+        },
+        "snapshotDurable": {
+          "samples": 5,
+          "min": 55515.592958,
+          "p50": 60400.477583,
+          "p95": 62908.8535,
+          "max": 62908.8535
+        }
+      }
+    },
+    {
+      "project": "cipherlink",
+      "repository": {
+        "sourceRoot": "/tmp/codex-java-v3-golden-20260809/cipherlink",
+        "head": "fa433982e92e52dd610650d1e79f2d041179b1d3",
+        "tree": "21a1075c7b211932a4cdb2abf2742521b1eba31f",
+        "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "semanticDigest": "13a742d1260e86911050381fb8dbe9b241fbb4a67ac9ef7807a13ce937130bdb",
+      "stages": {
+        "open": {
+          "samples": 5,
+          "min": 85.679542,
+          "p50": 85.942,
+          "p95": 88.489791,
+          "max": 88.489791
+        },
+        "anchorReady": {
+          "samples": 5,
+          "min": 287.082875,
+          "p50": 297.506208,
+          "p95": 304.643333,
+          "max": 304.643333
+        },
+        "moduleReady": {
+          "samples": 5,
+          "min": 2312.30125,
+          "p50": 2328.610333,
+          "p95": 2353.620458,
+          "max": 2353.620458
+        },
+        "complete": {
+          "samples": 5,
+          "min": 2964.7492909999996,
+          "p50": 2976.86625,
+          "p95": 2998.9035,
+          "max": 2998.9035
+        },
+        "snapshotDurable": {
+          "samples": 5,
+          "min": 4423.3305,
+          "p50": 4436.939542,
+          "p95": 4474.320708,
+          "max": 4474.320708
+        }
+      }
+    },
+    {
+      "project": "exam-parent-v3",
+      "repository": {
+        "sourceRoot": "/tmp/codex-java-v3-golden-20260809/exam-parent-v3",
+        "head": "f90a0b475f7be2ed003703feecec8195bc7eb976",
+        "tree": "dcdb2024879686451859c64260c7e1f3a4721fa7",
+        "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "semanticDigest": "9259ba95b7f71a571cdb6961bc29357f2f64894c3d178bc9a860754cc2a28cab",
+      "stages": {
+        "open": {
+          "samples": 5,
+          "min": 98.61458300000001,
+          "p50": 103.40437499999999,
+          "p95": 103.79333299999999,
+          "max": 103.79333299999999
+        },
+        "anchorReady": {
+          "samples": 5,
+          "min": 361.72920899999997,
+          "p50": 385.21333300000003,
+          "p95": 391.58475,
+          "max": 391.58475
+        },
+        "moduleReady": {
+          "samples": 5,
+          "min": 5289.292333,
+          "p50": 5346.907875,
+          "p95": 5405.903292,
+          "max": 5405.903292
+        },
+        "complete": {
+          "samples": 5,
+          "min": 6448.886333,
+          "p50": 6542.665875,
+          "p95": 6583.061917,
+          "max": 6583.061917
+        },
+        "snapshotDurable": {
+          "samples": 5,
+          "min": 9712.64575,
+          "p50": 9769.09775,
+          "p95": 9834.9975,
+          "max": 9834.9975
+        }
+      }
+    }
+  ],
+  "passed": true
+}

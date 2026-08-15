@@ -239,9 +239,7 @@ hook 行为：
 | `JAVA_LSP_IMPORT_CONCURRENCY` | 透传给 JDT LS `java.maxConcurrentBuilds`。 |
 | `JAVA_LSP_RG_CONCURRENCY` | `java_impact` 内部 rg section 并行度。 |
 | `JAVA_LSP_RG_CACHE_TTL_MS` | complete-only rg cache TTL；generation 变化仍会立即失效。 |
-| `JAVA_LSP_DOCUMENT_SYMBOL_TIMEOUT_MS` | documentSymbol warm-index 等待预算。 |
-| `JAVA_LSP_DOCUMENT_SYMBOL_GLOBAL_CONCURRENCY` | documentSymbol 全局并发。 |
-| `JAVA_LSP_DOCUMENT_SYMBOL_PER_REPO_CONCURRENCY` | documentSymbol 单 repo 并发。 |
+| `JAVA_LSP_DOCUMENT_SYMBOL_ATTEMPT_TIMEOUT_MS` | 单次 documentSymbol 尝试预算；默认 `10000`。 |
 | `JAVA_LSP_LOMBOK_JAR` | 指定 Lombok javaagent。 |
 
 32GB 内存机器的默认资源策略通常是：
@@ -252,9 +250,7 @@ hook 行为：
 - `JAVA_LSP_WORKTREE_CACHE_TTL_DAYS=2`
 - `JAVA_LSP_IMPORT_CONCURRENCY=2`
 - `JAVA_LSP_RG_CONCURRENCY=4`
-- `JAVA_LSP_DOCUMENT_SYMBOL_GLOBAL_CONCURRENCY=2`
-- `JAVA_LSP_DOCUMENT_SYMBOL_PER_REPO_CONCURRENCY=1`
-- `JAVA_LSP_DOCUMENT_SYMBOL_TIMEOUT_MS=2000`
+- `JAVA_LSP_DOCUMENT_SYMBOL_ATTEMPT_TIMEOUT_MS=10000`
 
 ## 开发与验证
 

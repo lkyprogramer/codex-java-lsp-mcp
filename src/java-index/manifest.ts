@@ -78,6 +78,40 @@ export type DiscoveredJavaFile = {
   sourceRoot: string;
 };
 
+/**
+ * Reorders only the not-yet-started part of a background sweep. Foreground
+ * refreshes record source roots in first-touch order; the next chunk serves
+ * those roots first, then the remaining production roots, then test roots.
+ * Paths remain the deterministic tie-breaker within every priority band.
+ *
+ * This deliberately returns a copy. A worker must call it at a chunk boundary
+ * only, after the previous chunk has finished, so a foreground request cannot
+ * preempt files that the sweep has already claimed for parsing.
+ */
+export function prioritizeJavaFilesForBackgroundSweep(
+  files: readonly DiscoveredJavaFile[],
+  layout: Pick<LayoutContext, "sourceRoots">,
+  activeRoots: readonly string[]
+): DiscoveredJavaFile[] {
+  const activeOrder = new Map<string, number>();
+  for (const root of activeRoots) {
+    if (!activeOrder.has(root)) activeOrder.set(root, activeOrder.size);
+  }
+  const sourceSetByRoot = new Map(layout.sourceRoots.map(root => [root.relativePath, root.sourceSet]));
+  const priority = (file: DiscoveredJavaFile): [band: number, activeOrder: number] => {
+    const active = activeOrder.get(file.sourceRoot);
+    if (active !== undefined) return [0, active];
+    return [sourceSetByRoot.get(file.sourceRoot) === "main" ? 1 : 2, 0];
+  };
+  return [...files].sort((left, right) => {
+    const leftPriority = priority(left);
+    const rightPriority = priority(right);
+    return leftPriority[0] - rightPriority[0]
+      || leftPriority[1] - rightPriority[1]
+      || left.relativePath.localeCompare(right.relativePath);
+  });
+}
+
 // Recursively discovers every .java file under the repo's known source
 // roots (per layout-probe.ts's LayoutContext, reused rather than a second
 // module/source-root classifier) via async fs.promises.opendir - never a

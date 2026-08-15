@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { leaseFamilyKey, resolveWorktreeIdentity, WorktreeIdentityCache } from "./worktree-identity.js";
 import { canonicalPath } from "./path-utils.js";
-import { createGitWorktreeFamily } from "./test-support/git-worktree.js";
+import { createGitWorktreeFamily } from "./test-support/git-worktree.test.js";
 
 test("a non-Git directory yields repoRoot/repoHash only", async () => {
   const dir = canonicalPath(mkdtempSync(path.join(tmpdir(), "wt-plain-")));

@@ -14,9 +14,11 @@ import type { WorktreeIdentity } from "../worktree-identity.js";
 import { probeLayout } from "../layout-probe.js";
 import { computeBuildFingerprint, computeExtractorVersion } from "./build-fingerprint.js";
 import { JavaIndexClient } from "./java-index-client.js";
+import type { JavaIndexSnapshotStatus } from "./index-types.js";
 import { computeCurrentManifestFingerprint, computeCurrentSnapshotManifestFingerprint } from "./manifest.js";
 import { loadSnapshot } from "./snapshot.js";
 import { STABLE_ID_VERSION } from "./stable-id.js";
+import { JAVA_INDEX_CLOSE_GRACE_MS } from "./worker-protocol.js";
 
 function tempRepo(prefix: string): string {
   return mkdtempSync(path.join(tmpdir(), prefix));
@@ -36,6 +38,82 @@ function writeJavaFile(repoRoot: string, relativePath: string, content: string):
 
 function identityFor(repoRoot: string, repoHash: string): WorktreeIdentity {
   return { repoRoot, repoHash, isLinkedWorktree: false };
+}
+
+function controlledSnapshotWorker(
+  barrier: Int32Array,
+  hook: "snapshot-sync" | "build-read",
+  snapshotWriteToBlock = 1,
+  lifecycle?: { unrefs: number; terminations: number }
+): Worker {
+  const worker = new Worker(`
+    const fs = require("node:fs");
+    const { syncBuiltinESMExports } = require("node:module");
+    const { workerData } = require("node:worker_threads");
+    (async () => {
+      const control = new Int32Array(workerData.barrier);
+      if (workerData.hook === "snapshot-sync") {
+        const originalOpen = fs.promises.open;
+        let snapshotWrites = 0;
+        fs.promises.open = async function (input, ...args) {
+          const handle = await originalOpen.call(this, input, ...args);
+          if (String(input).includes("java-index-snapshot.json.gz.tmp-")) {
+            snapshotWrites += 1;
+            if (snapshotWrites === workerData.snapshotWriteToBlock) {
+              const originalSync = handle.sync.bind(handle);
+              handle.sync = async () => {
+                await originalSync();
+                Atomics.store(control, 0, 1);
+                Atomics.notify(control, 0);
+                while (Atomics.load(control, 1) === 0) {
+                  await Atomics.waitAsync(control, 1, 0).value;
+                }
+              };
+            }
+          }
+          return handle;
+        };
+      } else {
+        const originalReadFile = fs.promises.readFile;
+        fs.promises.readFile = async function (input, ...args) {
+          if (
+            String(input).endsWith("/pom.xml")
+            && Atomics.compareExchange(control, 2, 1, 2) === 1
+          ) {
+            Atomics.store(control, 0, 1);
+            Atomics.notify(control, 0);
+            while (Atomics.load(control, 1) === 0) {
+              await Atomics.waitAsync(control, 1, 0).value;
+            }
+          }
+          return originalReadFile.call(this, input, ...args);
+        };
+      }
+      syncBuiltinESMExports();
+      await import(workerData.workerModuleUrl);
+    })().catch(error => setImmediate(() => { throw error; }));
+  `, {
+    eval: true,
+    workerData: {
+      barrier: barrier.buffer,
+      hook,
+      snapshotWriteToBlock,
+      workerModuleUrl: new URL("./java-index-worker.js", import.meta.url).href
+    }
+  });
+  if (lifecycle) {
+    const terminate = worker.terminate.bind(worker);
+    worker.terminate = () => {
+      lifecycle.terminations += 1;
+      return terminate();
+    };
+    const unref = worker.unref.bind(worker);
+    worker.unref = () => {
+      lifecycle.unrefs += 1;
+      return unref();
+    };
+  }
+  return worker;
 }
 
 async function waitFor(condition: () => Promise<boolean> | boolean, timeoutMs: number): Promise<void> {
@@ -83,6 +161,26 @@ test("reconcile() runs a background full sweep that discovers and indexes every 
   );
 
   await client.close();
+});
+
+test("a failed snapshot publication is observable after coverage becomes complete", async () => {
+  const repoRoot = tempRepo("java-index-worker-snapshot-failure-");
+  writeJavaFile(repoRoot, "src/main/java/demo/Solo.java", "package demo; class Solo {}\n");
+  const cacheParent = tempRepo("java-index-worker-snapshot-failure-cache-");
+  const cacheDir = path.join(cacheParent, "not-a-directory");
+  writeFileSync(cacheDir, "blocks snapshot mkdir\n");
+  const client = new JavaIndexClient(repoRoot, cacheDir);
+  try {
+    await client.open(1);
+    await client.reconcile(1);
+    await waitFor(async () => (await client.status()).pendingBackground === 0, 5000);
+    const status = await client.status();
+    assert.ok(status.coverage.every(entry => entry.state === "COMPLETE"));
+    assert.deepEqual(status.snapshot, { state: "FAILED", failure: "WRITE_FAILED" });
+    assert.equal(status.snapshotBytes, 0);
+  } finally {
+    await client.close();
+  }
 });
 
 test("stale maintenance commands never regress the worker generation", async () => {
@@ -277,6 +375,172 @@ test("a background sweep spanning multiple 50-file chunks resolves every file's 
   await client.close();
 });
 
+test("an ordinary watcher refresh in a test root does not preempt remaining main-root sweep work", async () => {
+  const repoRoot = tempRepo("java-index-worker-watcher-root-priority-");
+  const primaryRoot = "modules/a-main/src/main/java";
+  const watcherTestRoot = "modules/z-watcher/src/test/java";
+  for (let index = 0; index < 55; index += 1) {
+    writeJavaFile(repoRoot, `${primaryRoot}/demo/Filler${String(index).padStart(2, "0")}.java`, `package demo; class Filler${index} {}\n`);
+  }
+  const anchor = `${watcherTestRoot}/demo/Anchor.java`;
+  writeJavaFile(repoRoot, anchor, "package demo; class Anchor {}\n");
+  for (let index = 1; index < 50; index += 1) {
+    writeJavaFile(repoRoot, `${watcherTestRoot}/demo/Watcher${String(index).padStart(2, "0")}.java`, `package demo; class Watcher${index} {}\n`);
+  }
+
+  const leaseRoot = tempRepo("java-index-worker-watcher-root-priority-lease-");
+  const barrier = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT * 2));
+  const client = new JavaIndexClient(repoRoot, tempCacheDir(), () => new Worker(`
+    const { workerData } = require("node:worker_threads");
+    (async () => {
+      const control = new Int32Array(workerData.barrier);
+      const leaseModule = await import(workerData.leaseModuleUrl);
+      const originalAcquireSweep = leaseModule.FileCrossProcessLeaseStore.prototype.acquireSweep;
+      leaseModule.FileCrossProcessLeaseStore.prototype.acquireSweep = async function (...args) {
+        const handle = await originalAcquireSweep.apply(this, args);
+        const originalHeartbeat = handle.heartbeat;
+        handle.heartbeat = async () => {
+          const heartbeat = Atomics.add(control, 0, 1) + 1;
+          Atomics.notify(control, 0);
+          while (Atomics.load(control, 1) < heartbeat) {
+            await Atomics.waitAsync(control, 1, Atomics.load(control, 1)).value;
+          }
+          await originalHeartbeat.call(handle);
+        };
+        return handle;
+      };
+      await import(workerData.workerModuleUrl);
+    })().catch(error => setImmediate(() => { throw error; }));
+  `, {
+    eval: true,
+    workerData: {
+      barrier: barrier.buffer,
+      leaseModuleUrl: new URL("../cross-process-lease.js", import.meta.url).href,
+      workerModuleUrl: new URL("./java-index-worker.js", import.meta.url).href
+    }
+  }));
+
+  try {
+    await client.open(1, { leaseRoot, worktree: identityFor(repoRoot, "watcher-root-priority") });
+    await client.reconcile(1);
+    await waitFor(() => Atomics.load(barrier, 0) >= 1, 5000);
+
+    await client.refresh(2, [path.join(repoRoot, anchor)], []);
+    Atomics.store(barrier, 1, 1);
+    Atomics.notify(barrier, 1);
+    await waitFor(() => Atomics.load(barrier, 0) >= 2, 5000);
+
+    const duringSecondChunk = await client.status();
+    const watcherCoverage = duringSecondChunk.coverage.find(entry => entry.root === watcherTestRoot)!;
+    const primaryCoverage = duringSecondChunk.coverage.find(entry => entry.root === primaryRoot)!;
+    assert.equal(primaryCoverage.indexedFiles, 55, "a watcher refresh must not let a test root jump the five remaining main-root files");
+    assert.equal(watcherCoverage.indexedFiles, 46, "the watcher refresh itself plus only the remaining chunk capacity may be indexed from the test root");
+
+    Atomics.store(barrier, 1, 2147483647);
+    Atomics.notify(barrier, 1);
+    await waitFor(async () => (await client.status()).pendingBackground === 0, 10000);
+    const completed = await client.status();
+    assert.ok(completed.coverage.every(entry => entry.state === "COMPLETE"));
+  } finally {
+    Atomics.store(barrier, 1, 2147483647);
+    Atomics.notify(barrier, 1);
+    await client.close().catch(() => undefined);
+  }
+});
+
+test("only the first active-anchor refresh receives the sweep priority epoch", async () => {
+  const repoRoot = tempRepo("java-index-worker-single-active-root-");
+  const primaryRoot = "modules/a-main/src/main/java";
+  const firstAnchorRoot = "modules/y-first/src/main/java";
+  const secondAnchorRoot = "modules/z-second/src/main/java";
+  for (let index = 0; index < 55; index += 1) {
+    writeJavaFile(repoRoot, `${primaryRoot}/demo/Filler${String(index).padStart(2, "0")}.java`, `package demo; class Filler${index} {}\n`);
+  }
+  const firstAnchor = `${firstAnchorRoot}/demo/FirstAnchor.java`;
+  const secondAnchor = `${secondAnchorRoot}/demo/SecondAnchor.java`;
+  writeJavaFile(repoRoot, firstAnchor, "package demo; class FirstAnchor {}\n");
+  writeJavaFile(repoRoot, secondAnchor, "package demo; class SecondAnchor {}\n");
+  for (let index = 1; index < 50; index += 1) {
+    writeJavaFile(repoRoot, `${firstAnchorRoot}/demo/First${String(index).padStart(2, "0")}.java`, `package demo; class First${index} {}\n`);
+    writeJavaFile(repoRoot, `${secondAnchorRoot}/demo/Second${String(index).padStart(2, "0")}.java`, `package demo; class Second${index} {}\n`);
+  }
+
+  const leaseRoot = tempRepo("java-index-worker-single-active-root-lease-");
+  const barrier = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT * 2));
+  const client = new JavaIndexClient(repoRoot, tempCacheDir(), () => new Worker(`
+    const { workerData } = require("node:worker_threads");
+    (async () => {
+      const control = new Int32Array(workerData.barrier);
+      const leaseModule = await import(workerData.leaseModuleUrl);
+      const originalAcquireSweep = leaseModule.FileCrossProcessLeaseStore.prototype.acquireSweep;
+      leaseModule.FileCrossProcessLeaseStore.prototype.acquireSweep = async function (...args) {
+        const handle = await originalAcquireSweep.apply(this, args);
+        const originalHeartbeat = handle.heartbeat;
+        handle.heartbeat = async () => {
+          const heartbeat = Atomics.add(control, 0, 1) + 1;
+          Atomics.notify(control, 0);
+          while (Atomics.load(control, 1) < heartbeat) {
+            await Atomics.waitAsync(control, 1, Atomics.load(control, 1)).value;
+          }
+          await originalHeartbeat.call(handle);
+        };
+        return handle;
+      };
+      await import(workerData.workerModuleUrl);
+    })().catch(error => setImmediate(() => { throw error; }));
+  `, {
+    eval: true,
+    workerData: {
+      barrier: barrier.buffer,
+      leaseModuleUrl: new URL("../cross-process-lease.js", import.meta.url).href,
+      workerModuleUrl: new URL("./java-index-worker.js", import.meta.url).href
+    }
+  }));
+
+  try {
+    await client.open(1, { leaseRoot, worktree: identityFor(repoRoot, "single-active-root") });
+    await client.reconcile(1);
+    await waitFor(() => Atomics.load(barrier, 0) >= 1, 5000);
+
+    await client.refresh(2, [path.join(repoRoot, firstAnchor)], [], {}, "ACTIVE_ANCHOR");
+    await client.refresh(2, [path.join(repoRoot, secondAnchor)], [], {}, "ACTIVE_ANCHOR");
+    Atomics.store(barrier, 1, 1);
+    Atomics.notify(barrier, 1);
+    await waitFor(() => Atomics.load(barrier, 0) >= 2, 5000);
+
+    const duringFirstPriorityChunk = await client.status();
+    const firstCoverage = duringFirstPriorityChunk.coverage.find(entry => entry.root === firstAnchorRoot)!;
+    const secondCoverage = duringFirstPriorityChunk.coverage.find(entry => entry.root === secondAnchorRoot)!;
+    const primaryCoverage = duringFirstPriorityChunk.coverage.find(entry => entry.root === primaryRoot)!;
+    assert.equal(firstCoverage.indexedFiles, 51, "the first ACTIVE_ANCHOR root owns the one priority epoch");
+    assert.equal(secondCoverage.indexedFiles, 1, "the second ACTIVE_ANCHOR refresh itself is indexed but cannot create another priority root");
+    assert.equal(primaryCoverage.indexedFiles, 50);
+
+    Atomics.store(barrier, 1, 2);
+    Atomics.notify(barrier, 1);
+    await waitFor(() => Atomics.load(barrier, 0) >= 3, 5000);
+
+    const duringFollowingChunk = await client.status();
+    assert.equal(
+      duringFollowingChunk.coverage.find(entry => entry.root === primaryRoot)!.indexedFiles,
+      55,
+      "after the single priority epoch, remaining main-root files retain their stable order ahead of the second anchor root"
+    );
+    assert.equal(
+      duringFollowingChunk.coverage.find(entry => entry.root === secondAnchorRoot)!.indexedFiles,
+      46
+    );
+
+    Atomics.store(barrier, 1, 2147483647);
+    Atomics.notify(barrier, 1);
+    await waitFor(async () => (await client.status()).pendingBackground === 0, 10000);
+  } finally {
+    Atomics.store(barrier, 1, 2147483647);
+    Atomics.notify(barrier, 1);
+    await client.close().catch(() => undefined);
+  }
+});
+
 test("an untouched root stays COMPLETE at the new generation after a healthy incremental refresh elsewhere", async () => {
   const repoRoot = tempRepo("java-index-worker-untouched-root-");
   const mainFile = "src/main/java/demo/Main.java";
@@ -357,6 +621,160 @@ test("CLOSE waits for an in-flight background sweep instead of racing worker.ter
   // the whole process with an uncaught native exception.
   await client.close();
   assert.equal(client.localStatus().state, "CLOSED");
+});
+
+test("CLOSE returns at its grace without interrupting an active atomic writer, then terminates after ACK", async () => {
+  const repoRoot = tempRepo("java-index-worker-close-snapshot-write-");
+  writeJavaFile(repoRoot, "src/main/java/demo/Solo.java", "package demo; class Solo {}\n");
+  const cacheDir = tempCacheDir();
+  const barrier = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT * 3));
+  const lifecycle = { unrefs: 0, terminations: 0 };
+  const client = new JavaIndexClient(
+    repoRoot,
+    cacheDir,
+    () => controlledSnapshotWorker(barrier, "snapshot-sync", 1, lifecycle)
+  );
+  try {
+    await client.open(1);
+    await client.refresh(1, [path.join(repoRoot, "src/main/java/demo/Solo.java")], []);
+    await waitFor(() => Atomics.load(barrier, 0) === 1, 5000);
+
+    let settled = false;
+    const closing = client.close().then(() => { settled = true; });
+    await new Promise(resolve => setTimeout(resolve, JAVA_INDEX_CLOSE_GRACE_MS + 100));
+    assert.equal(settled, true, "the caller-visible close must stay bounded even while the writer is blocked");
+    assert.equal(lifecycle.unrefs, 1);
+    assert.equal(lifecycle.terminations, 0, "the grace branch must not terminate a worker before CLOSE ACK");
+    assert.equal(existsSync(path.join(cacheDir, SNAPSHOT_FILE_NAME)), false);
+
+    Atomics.store(barrier, 1, 1);
+    Atomics.notify(barrier, 1);
+    await closing;
+    await waitFor(
+      () => lifecycle.terminations === 1 && existsSync(path.join(cacheDir, SNAPSHOT_FILE_NAME)),
+      2000
+    );
+  } finally {
+    Atomics.store(barrier, 1, 1);
+    Atomics.notify(barrier, 1);
+    await client.close().catch(() => undefined);
+  }
+});
+
+test("a stale writer failure leaves a newer dirty revision pending with the last durable identity, then retries", async () => {
+  const repoRoot = tempRepo("java-index-worker-snapshot-revision-retry-");
+  const relativeFile = "src/main/java/demo/Solo.java";
+  const absoluteFile = path.join(repoRoot, relativeFile);
+  writeJavaFile(repoRoot, relativeFile, "package demo; class Solo { int value = 1; }\n");
+  const barrier = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT * 3));
+  const client = new JavaIndexClient(
+    repoRoot,
+    tempCacheDir(),
+    () => controlledSnapshotWorker(barrier, "snapshot-sync", 2)
+  );
+  try {
+    await client.open(1);
+    await client.reconcile(1);
+    await waitFor(async () => {
+      const status = await client.status();
+      return status.pendingBackground === 0 && status.snapshot?.state === "DURABLE";
+    }, 5000);
+    const firstDurable = (await client.status()).snapshot;
+    assert.equal(firstDurable?.state, "DURABLE");
+
+    await client.reconcile(2);
+    await waitFor(() => Atomics.load(barrier, 0) === 1, 5000);
+    writeJavaFile(repoRoot, relativeFile, "package demo; class Solo { int value = 2; }\n");
+    await client.refresh(3, [absoluteFile], []);
+    Atomics.store(barrier, 1, 1);
+    Atomics.notify(barrier, 1);
+
+    await waitFor(async () => {
+      const status = await client.status();
+      const snapshot = status.snapshot;
+      return status.pendingBackground === 0
+        && snapshot?.state === "PENDING"
+        && snapshot.durableGeneration === firstDurable.durableGeneration
+        && snapshot.durableManifestFingerprint === firstDurable.durableManifestFingerprint;
+    }, 800);
+    await waitFor(async () => {
+      const snapshot = (await client.status()).snapshot;
+      return snapshot?.state === "DURABLE" && snapshot.durableGeneration === 3;
+    }, 5000);
+  } finally {
+    Atomics.store(barrier, 1, 1);
+    Atomics.notify(barrier, 1);
+    await client.close().catch(() => undefined);
+  }
+});
+
+test("snapshot generation, data, and coverage are captured from one revision", async () => {
+  const repoRoot = tempRepo("java-index-worker-snapshot-coherent-revision-");
+  const cacheDir = tempCacheDir();
+  const relativeFile = "src/main/java/demo/Solo.java";
+  const absoluteFile = path.join(repoRoot, relativeFile);
+  writeJavaFile(repoRoot, relativeFile, "package demo; class Solo { int value = 1; }\n");
+  writeFileSync(path.join(repoRoot, "pom.xml"), "<project/>\n");
+  const barrier = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT * 3));
+  const client = new JavaIndexClient(
+    repoRoot,
+    cacheDir,
+    () => controlledSnapshotWorker(barrier, "build-read")
+  );
+  try {
+    await client.open(1);
+    await client.reconcile(1);
+    await waitFor(async () => {
+      const status = await client.status();
+      return status.pendingBackground === 0 && status.snapshot?.state === "DURABLE";
+    }, 5000);
+
+    Atomics.store(barrier, 2, 1);
+    await client.reconcile(2);
+    await waitFor(() => Atomics.load(barrier, 0) === 1, 5000);
+    writeJavaFile(repoRoot, relativeFile, "package demo; class Solo { int value = 2; }\n");
+    await client.refresh(3, [absoluteFile], []);
+    Atomics.store(barrier, 1, 1);
+    Atomics.notify(barrier, 1);
+    const published = await (async () => {
+      let observed: Extract<JavaIndexSnapshotStatus, { state: "PENDING" | "DURABLE" }> | undefined;
+      await waitFor(async () => {
+        const status = await client.status();
+        if (
+          status.pendingBackground === 0
+          && (status.snapshot?.state === "PENDING" || status.snapshot?.state === "DURABLE")
+        ) {
+          observed = status.snapshot;
+        }
+        return observed !== undefined;
+      }, 800);
+      return observed!;
+    })();
+    assert.equal(published.durableGeneration, 3, "the publication identity must use the same revision as its serialized data");
+
+    const snapshot = await loadSnapshot(path.join(cacheDir, SNAPSHOT_FILE_NAME), {
+      extractorVersion: computeExtractorVersion(),
+      stableIdVersion: STABLE_ID_VERSION,
+      canonicalRepoRoot: repoRoot,
+      buildFingerprint: await computeBuildFingerprint(repoRoot, probeLayout(repoRoot))
+    });
+    assert.ok(snapshot);
+    const capturedGenerations = [
+      ...snapshot.files.map(file => file.generation),
+      ...snapshot.coverage.map(entry => entry.generation)
+    ];
+    assert.equal(snapshot.indexedGeneration, Math.max(...capturedGenerations));
+    assert.equal(snapshot.indexedGeneration, 3);
+
+    await waitFor(async () => {
+      const status = await client.status();
+      return status.snapshot?.state === "DURABLE" && status.snapshot.durableGeneration === 3;
+    }, 5000);
+  } finally {
+    Atomics.store(barrier, 1, 1);
+    Atomics.notify(barrier, 1);
+    await client.close().catch(() => undefined);
+  }
 });
 
 test("a background sweep waits for the machine sweep lease without blocking foreground queries", async () => {
@@ -488,6 +906,7 @@ test("a full sweep's completion persists a snapshot that a fresh client restores
   await waitFor(async () => (await first.status()).pendingBackground === 0, 5000);
   const firstStatus = await first.status();
   assert.ok(firstStatus.coverage.every(entry => entry.state === "COMPLETE"));
+  assert.equal(firstStatus.snapshot?.state, "DURABLE");
   await first.close();
 
   assert.ok(
@@ -515,6 +934,14 @@ test("a full sweep's completion persists a snapshot that a fresh client restores
     restoredStatus.coverage.every(entry => entry.state === "COMPLETE" && entry.generation === restoredStatus.indexedGeneration),
     `expected every root restored COMPLETE without a re-parse, got ${JSON.stringify(restoredStatus.coverage)}`
   );
+  assert.equal(restoredStatus.snapshot?.state, "PENDING");
+  assert.equal(restoredStatus.snapshot.durableGeneration, 7, "the old bytes retain their literal generation identity");
+  assert.equal(restoredStatus.snapshot.durableManifestFingerprint, firstStatus.snapshot.durableManifestFingerprint);
+  assert.equal(restoredStatus.snapshotBytes, readFileSync(path.join(cacheDir, SNAPSHOT_FILE_NAME)).length);
+
+  const rewrittenStatus = await second.flush();
+  assert.equal(rewrittenStatus.snapshot?.state, "DURABLE");
+  assert.equal(rewrittenStatus.snapshot.durableGeneration, 1, "FLUSH rewrites the adopted facts in the current generation domain");
 
   const gatewayBundle = (await second.queryFiles([path.join(repoRoot, "src/main/java/demo/Gateway.java")]))[0]!;
   const implBundle = (await second.queryFiles([path.join(repoRoot, "src/main/java/demo/Impl.java")]))[0]!;
@@ -901,6 +1328,8 @@ test("an own-snapshot restore re-derives MyBatis resources even when Java facts 
   await first.reconcile(1);
   await waitFor(async () => (await first.status()).pendingBackground === 0, 5000);
   assert.deepEqual((await first.queryMyBatisResource(relativePath))?.statements.map(s => s.id), ["findById"]);
+  const firstStatus = await first.status();
+  assert.equal(firstStatus.snapshot?.state, "DURABLE");
   await first.close();
 
   // Edited while the process was closed - Java facts are untouched, so the
@@ -918,9 +1347,26 @@ test("an own-snapshot restore re-derives MyBatis resources even when Java facts 
     restoredStatus.coverage.every(entry => entry.state === "COMPLETE"),
     `expected the unrelated Java restore to still take the clean fast path, got ${JSON.stringify(restoredStatus.coverage)}`
   );
+  assert.equal(restoredStatus.snapshot?.state, "PENDING", "changed resource facts must not leave the old manifest DURABLE");
+  assert.equal(restoredStatus.snapshot.durableManifestFingerprint, firstStatus.snapshot.durableManifestFingerprint);
 
   const facts = await second.queryMyBatisResource(relativePath);
   assert.deepEqual(facts?.statements.map(s => s.id).sort(), ["findById", "insert"], "the changed mapper must be re-derived, not served stale from the restored snapshot");
+
+  const flushed = await second.flush();
+  assert.equal(flushed.snapshot?.state, "DURABLE");
+  assert.equal(flushed.snapshot.durableGeneration, 1);
+  assert.notEqual(flushed.snapshot.durableManifestFingerprint, firstStatus.snapshot.durableManifestFingerprint);
+  const persisted = await loadSnapshot(path.join(cacheDir, SNAPSHOT_FILE_NAME), {
+    extractorVersion: computeExtractorVersion(),
+    stableIdVersion: STABLE_ID_VERSION,
+    canonicalRepoRoot: repoRoot,
+    buildFingerprint: await computeBuildFingerprint(repoRoot, probeLayout(repoRoot))
+  });
+  assert.deepEqual(
+    persisted?.myBatisResources[0]?.statements.map(statement => statement.id).sort(),
+    ["findById", "insert"]
+  );
 
   await second.close();
 });

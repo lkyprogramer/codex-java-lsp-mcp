@@ -239,6 +239,7 @@ export class AgentRouter {
       input: anchor,
       requested: options.profile,
       id: `A${index + 1}`,
+      primary: index === 0,
       generation
     }))));
 

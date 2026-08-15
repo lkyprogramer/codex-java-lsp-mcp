@@ -7,12 +7,15 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import path from "node:path";
 import { probeLayout } from "../layout-probe.js";
 import { normalizeRepoFile, repoCacheRoot } from "../repo-layout.js";
+import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
+import { RgRunner } from "../search/rg-runner.js";
 import {
   JavaIndexClient,
   type JavaIndexOpenOptions,
   type JavaIndexRequestOptions
 } from "./java-index-client.js";
+import type { JavaIndexRefreshPriority } from "./worker-protocol.js";
 import type {
   AnchorFacts,
   IndexedReadRangeResult,
@@ -20,6 +23,7 @@ import type {
   JavaFileBundle,
   JavaIndexStatus,
   JavaTypeFacts,
+  JavaTypeLookupResult,
   StaticEdgeKind
 } from "./index-types.js";
 import {
@@ -76,6 +80,12 @@ const MAX_DECLARATION_PATHS = 64;
 /** A cold partial index may have parsed an anchor before its imported module; retry only a small exact-FQN set through conventional source paths. */
 const MAX_COLD_DECLARATION_FQN_RETRIES = 16;
 const MAX_COLD_DECLARATION_PATH_CHECKS = 512;
+// RgRunner may spend up to 100 ms escalating a timed-out child; a 1 s stage
+// keeps no-budget foreground discovery within a 1.2 s wall-clock envelope.
+const FOREGROUND_IMPLEMENTATION_SCAN_MS = 1_000;
+const MAX_FOREGROUND_IMPLEMENTATION_MATCHES = 64;
+const MAX_FOREGROUND_IMPLEMENTATION_RAW_BYTES = 2 * 1024 * 1024;
+const MAX_FOREGROUND_IMPLEMENTATION_CLAUSE_BYTES = 4_096;
 
 const TYPE_REFERENCE_EDGE_KINDS: StaticEdgeKind[] = [
   "FIELD_TYPE",
@@ -110,11 +120,16 @@ export type RouterTypeLookupOptions = {
   readonly hydrate?: boolean;
 };
 
+/** Explicitly reserved for the primary impact anchor's A1 refresh. */
+export type RouterEnsureFreshOptions = {
+  readonly priority?: JavaIndexRefreshPriority;
+};
+
 /** Router-facing fact surface backed exclusively by JavaIndex V2. */
 export interface RouterIndex {
   /** Binds immutable request controls to this async call chain without sharing mutable state across concurrent requests. */
   withRequestOptions?<T>(options: JavaIndexRequestOptions, action: () => Promise<T>): Promise<T>;
-  ensureFresh(files: string[], generation: number): Promise<void>;
+  ensureFresh(files: string[], generation: number, options?: RouterEnsureFreshOptions): Promise<void>;
   queryAnchor(file: string, line: number, column: number): Promise<AnchorFacts | undefined>;
   queryReadRanges(
     requests: Array<{ file: string; positions: Array<{ line: number; column: number }> }>,
@@ -178,13 +193,21 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
   private readonly repositoryFactMarkerCache = new Map<string, { generation: number; markers: FrameworkRepositoryFactMarkers }>();
   /** Layout-probe source roots are stable through a request and let cold declaration lookup refresh only an exact conventional source path. */
   private readonly conventionalDeclarationRoots: readonly string[];
+  /** Main roots only: test implementations must not displace production closure under the foreground scan cap. */
+  private readonly foregroundImplementationRoots: readonly string[];
+  /** A complete bounded source search is deterministic for one repository generation. */
+  private readonly foregroundImplementationScans = new Set<string>();
 
   constructor(
     private readonly repoRoot: string,
     private readonly client: JavaIndexClient,
     private readonly openOptions: JavaIndexOpenOptions = {}
   ) {
-    this.conventionalDeclarationRoots = probeLayout(repoRoot).sourceRoots.map(root => root.relativePath);
+    const layout = probeLayout(repoRoot);
+    this.conventionalDeclarationRoots = layout.sourceRoots.map(root => root.relativePath);
+    this.foregroundImplementationRoots = layout.sourceRoots
+      .filter(root => root.sourceSet === "main")
+      .map(root => root.relativePath);
   }
 
   static create(repoRoot: string, cacheDir = repoCacheRoot(repoRoot), openOptions: JavaIndexOpenOptions = {}): RouterJavaIndex {
@@ -241,7 +264,11 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
    * queries see current AST facts. Opens the worker lazily for unit tests that
    * construct the router without going through RepoRuntimeManager.
    */
-  async ensureFresh(files: string[], generation: number): Promise<void> {
+  async ensureFresh(
+    files: string[],
+    generation: number,
+    options: RouterEnsureFreshOptions = {}
+  ): Promise<void> {
     await this.ensureOpened(generation);
     generation = this.effectiveGeneration(generation);
     if (this.isStaleGeneration(generation)) throw staleGenerationError(generation, this.currentGenerationHighWater());
@@ -258,12 +285,16 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
         .filter((file): file is string => file !== undefined && existsSync(file))
     ).sort((left, right) => left.localeCompare(right));
     return this.requestMemoized(
-      queryMemoKey("ENSURE_FRESH", generation, absoluteFiles),
-      () => this.ensureFreshCanonical(absoluteFiles, generation)
+      queryMemoKey("ENSURE_FRESH", generation, { files: absoluteFiles, priority: options.priority }),
+      () => this.ensureFreshCanonical(absoluteFiles, generation, options.priority)
     );
   }
 
-  private async ensureFreshCanonical(absoluteFiles: readonly string[], generation: number): Promise<void> {
+  private async ensureFreshCanonical(
+    absoluteFiles: readonly string[],
+    generation: number,
+    priority?: JavaIndexRefreshPriority
+  ): Promise<void> {
     if (absoluteFiles.length === 0) {
       this.generation = Math.max(this.generation, generation);
       return;
@@ -282,7 +313,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
       this.generation = Math.max(this.generation, generation);
       return;
     }
-    const status = await this.client.refresh(generation, staleFiles, [], this.currentRequestOptions());
+    const status = await this.client.refresh(generation, staleFiles, [], this.currentRequestOptions(), priority);
     this.generation = Math.max(this.generation, generation, status.indexedGeneration);
     if (this.isStaleGeneration(generation)) throw staleGenerationError(generation, this.currentGenerationHighWater());
     for (const file of staleFiles) this.freshGenerationByPath.set(file, generation);
@@ -444,6 +475,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     }
     this.repositoryMarkerCache.clear();
     this.repositoryFactMarkerCache.clear();
+    this.foregroundImplementationScans.clear();
     return status;
   }
 
@@ -459,6 +491,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     this.frameworkFactsByPath.clear();
     this.repositoryMarkerCache.clear();
     this.repositoryFactMarkerCache.clear();
+    this.foregroundImplementationScans.clear();
     return status;
   }
 
@@ -470,6 +503,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     this.frameworkFactsByPath.clear();
     this.repositoryMarkerCache.clear();
     this.repositoryFactMarkerCache.clear();
+    this.foregroundImplementationScans.clear();
   }
 
   async factsFor(inputFile: string, generation = this.generation): Promise<JavaSourceFacts> {
@@ -730,7 +764,13 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
       return [];
     }
     this.typeLookupHits += 1;
-    const implementers = await this.queryImplementers(typeId, limit);
+    let implementers = await this.queryImplementers(typeId, limit);
+    if (implementers.length < limit && summarizeCoverage(this.client.localStatus()) !== "complete") {
+      implementers = await this.requestMemoized(
+        queryMemoKey("FOREGROUND_IMPLEMENTERS", this.generation, [typeName, typeId, limit]),
+        () => this.retryColdImplementers(typeName, typeId, limit, implementers)
+      );
+    }
     return this.typesToFacts(implementers, false, options.hydrate ?? true);
   }
 
@@ -780,7 +820,13 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     // Resolve those independent lookups together and hydrate their owning
     // files once.  The former one-type-at-a-time pattern paid a worker IPC
     // round-trip for every definition and then another for every file bundle.
-    const lookupResults = await this.queryTypes(names.map(typeText => ({ typeText })));
+    let lookupResults = await this.queryTypes(names.map(typeText => ({ typeText })));
+    if (summarizeCoverage(this.client.localStatus()) !== "complete") {
+      lookupResults = await this.requestMemoized(
+        queryMemoKey("FOREGROUND_TYPE_DEFINITIONS", this.generation, names),
+        () => this.retryColdExactTypeLookups(names, lookupResults)
+      );
+    }
     const found: JavaTypeFacts[] = [];
     const foundFiles = new Set<string>();
     for (const lookup of lookupResults) {
@@ -803,6 +849,83 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     // discard a direct interface such as PositionService, which also meant
     // its implementation lookup never ran in a large controller import set.
     return (await this.typesToFacts(found, true, hydrate)).slice(0, limit);
+  }
+
+  private async retryColdExactTypeLookups(
+    names: readonly string[],
+    results: readonly JavaTypeLookupResult[]
+  ): Promise<JavaTypeLookupResult[]> {
+    const unresolved = names
+      .map((name, index) => ({ name, index, result: results[index] }))
+      .filter(item => item.result?.state === "UNRESOLVED" && isExactFqn(item.name))
+      .slice(0, MAX_COLD_DECLARATION_FQN_RETRIES);
+    const candidates = this.conventionalDeclarationCandidates(unresolved.map(item => item.name));
+    if (candidates.length === 0) return [...results];
+    try {
+      this.currentRequestOptions().budget?.throwIfExpired("java-index.foreground-type-definitions");
+      await this.ensureFresh(candidates, this.generation);
+      // The first unresolved QUERY_TYPES may be request-memoized. A refresh
+      // changes worker state without changing the query key, so this positive
+      // retry must intentionally bypass that pre-refresh memo entry.
+      const retried = await this.client.queryTypes(
+        unresolved.map(item => ({ typeText: item.name })),
+        this.currentRequestOptions()
+      );
+      const merged = [...results];
+      unresolved.forEach((item, index) => { merged[item.index] = retried[index] ?? item.result!; });
+      return merged;
+    } catch {
+      return [...results];
+    }
+  }
+
+  private async retryColdImplementers(
+    typeName: string,
+    typeId: string,
+    limit: number,
+    fallback: JavaTypeFacts[]
+  ): Promise<JavaTypeFacts[]> {
+    const scanKey = `${this.generation}:${typeId}`;
+    if (this.foregroundImplementationScans.has(scanKey)) return fallback;
+    try {
+      const simpleName = typeName.slice(typeName.lastIndexOf(".") + 1);
+      if (!/^[A-Za-z_$][\w$]*$/.test(simpleName)) return fallback;
+      const parentBudget = this.currentRequestOptions().budget
+        ?? DeadlineBudget.fromTimeout(FOREGROUND_IMPLEMENTATION_SCAN_MS);
+      const runner = new RgRunner({
+        prefixArgs: ["--multiline"],
+        maxPositionsPerFile: 1,
+        maxMatches: MAX_FOREGROUND_IMPLEMENTATION_MATCHES,
+        maxRawBytes: MAX_FOREGROUND_IMPLEMENTATION_RAW_BYTES
+      });
+      const escaped = escapeRegExp(simpleName);
+      const roots = this.orderedForegroundImplementationRoots(typeName);
+      if (roots.length === 0) return fallback;
+      const result = await runner.run({
+        cwd: this.repoRoot,
+        roots,
+        globs: ["*.java"],
+        pattern: `\\b(?:implements|extends)\\b[^{};]{0,${MAX_FOREGROUND_IMPLEMENTATION_CLAUSE_BYTES}}(?:^|[^A-Za-z0-9_$])${escaped}(?:$|[^A-Za-z0-9_$])`
+      }, parentBudget.forStage(FOREGROUND_IMPLEMENTATION_SCAN_MS));
+      const reusableScan = result.completion === "COMPLETE" || result.completion === "PARTIAL_LIMIT";
+      const candidates = result.files
+        .map(item => item.absolutePath)
+        .sort((left, right) => left.localeCompare(right))
+        .slice(0, MAX_FOREGROUND_IMPLEMENTATION_MATCHES);
+      if (candidates.length === 0) {
+        if (reusableScan) this.foregroundImplementationScans.add(scanKey);
+        return fallback;
+      }
+      await this.ensureFresh(candidates, this.generation);
+      // See retryColdExactTypeLookups: do not reuse the pre-refresh empty RPC.
+      const retried = await this.client.queryImplementers(typeId, limit, this.currentRequestOptions());
+      if (reusableScan) this.foregroundImplementationScans.add(scanKey);
+      return mergeTypes(fallback, retried).slice(0, limit);
+    } catch {
+      // Candidate discovery is opportunistic and cannot turn a valid partial
+      // lookup into a request failure or an authoritative negative result.
+      return fallback;
+    }
   }
 
   private async resolveTypeId(typeName: string, scopeFile?: string): Promise<string | undefined> {
@@ -1017,7 +1140,10 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
         const candidates = this.conventionalDeclarationCandidates(unresolvedFqns);
         if (candidates.length > 0) {
           await this.ensureFresh(candidates, this.generation);
-          const retries = await this.queryTypes(unresolvedFqns.map(typeText => ({ typeText })));
+          const retries = await this.client.queryTypes(
+            unresolvedFqns.map(typeText => ({ typeText })),
+            this.currentRequestOptions()
+          );
           for (const lookup of retries) {
             if (lookup.state === "RESOLVED") relativePaths.add(relativePathOfFileId(lookup.type.fileId));
           }
@@ -1185,6 +1311,16 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     return generation === 0 ? this.currentGenerationHighWater() : generation;
   }
 
+  private orderedForegroundImplementationRoots(typeName: string): string[] {
+    const exactTypePath = isExactFqn(typeName)
+      ? `${typeName.split("$")[0]!.split(".").join(path.sep)}.java`
+      : undefined;
+    const preferred = this.foregroundImplementationRoots.filter(root =>
+      exactTypePath !== undefined && existsSync(path.join(this.repoRoot, root, exactTypePath))
+    );
+    return unique([...preferred, ...this.foregroundImplementationRoots]);
+  }
+
   private conventionalDeclarationCandidates(fqns: readonly string[]): string[] {
     const candidates: string[] = [];
     let pathChecks = 0;
@@ -1271,6 +1407,19 @@ function incompleteItem(absolutePath: string): FactsForFileItem {
 
 function relativePathOfFileId(fileId: string): string {
   return fileId.startsWith("file:") ? fileId.slice("file:".length) : fileId;
+}
+
+function isExactFqn(value: string): boolean {
+  const segments = (value.split("$")[0] ?? "").split(".");
+  return segments.length > 1 && segments.every(segment => /^[A-Za-z_$][\w$]*$/.test(segment));
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function mergeTypes(left: readonly JavaTypeFacts[], right: readonly JavaTypeFacts[]): JavaTypeFacts[] {
+  return [...new Map([...left, ...right].map(item => [item.typeId, item])).values()];
 }
 
 function unique(values: string[]): string[] {

@@ -144,7 +144,7 @@ export function bundleToSourceFacts(repoRoot: string, bundle: JavaFileBundle): J
     extendsType: primary?.extends.map(typeRefName).find(Boolean),
     fieldTypes: uniqueTypeReferences(bundle.fields.flatMap(field => flattenTypeRefs(field.type))),
     referencedTypes,
-    imports: bundle.file.imports.filter(item => !item.wildcard).map(item => item.qualifiedName),
+    imports: bundle.file.imports.filter(item => !item.static && !item.wildcard).map(item => item.qualifiedName),
     wildcardImports: bundle.file.imports.filter(item => item.wildcard).map(item => item.qualifiedName.replace(/\.\*$/, "")),
     annotations: (primary?.annotations || []).map(item => item.name),
     methods,
@@ -178,7 +178,7 @@ export function anchorToSourceFacts(repoRoot: string, anchor: AnchorFacts): Java
       ...(type?.implements.map(typeRefName) || []),
       ...(anchor.method ? methodReferencedTypes(anchor.method) : [])
     ].filter(Boolean)),
-    imports: anchor.file.imports.filter(item => !item.wildcard).map(item => item.qualifiedName),
+    imports: anchor.file.imports.filter(item => !item.static && !item.wildcard).map(item => item.qualifiedName),
     wildcardImports: anchor.file.imports.filter(item => item.wildcard).map(item => item.qualifiedName.replace(/\.\*$/, "")),
     annotations: (type?.annotations || []).map(item => item.name),
     methods,

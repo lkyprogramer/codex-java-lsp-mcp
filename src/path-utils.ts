@@ -25,11 +25,18 @@ export function isWithin(root: string, candidate: string): boolean {
  * ancestor and re-appending the missing suffix. `canonicalPath` gives up on a
  * missing path, which lets `repo/link/Missing.java` look contained even when
  * `repo/link` is a symlink pointing outside the repo.
+ *
+ * A watcher can report a path that vanishes between the existence check and
+ * the realpath call below (e.g. chokidar's ignore check racing its own
+ * remove handling during the initial scan), so both realpath calls treat a
+ * mid-flight ENOENT as "does not exist" instead of letting it crash the
+ * process uncaught.
  */
 export function canonicalPotentialPath(value: string): string {
   const resolved = path.resolve(value);
   if (existsSync(resolved)) {
-    return realpathSync.native(resolved);
+    const settled = tryRealpathNative(resolved);
+    if (settled !== undefined) return settled;
   }
 
   const suffix: string[] = [];
@@ -40,8 +47,17 @@ export function canonicalPotentialPath(value: string): string {
     suffix.unshift(path.basename(cursor));
     cursor = parent;
   }
-  const canonicalAncestor = existsSync(cursor) ? realpathSync.native(cursor) : cursor;
+  const canonicalAncestor = existsSync(cursor) ? tryRealpathNative(cursor) ?? cursor : cursor;
   return path.join(canonicalAncestor, ...suffix);
+}
+
+function tryRealpathNative(resolved: string): string | undefined {
+  try {
+    return realpathSync.native(resolved);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return undefined;
+    throw error;
+  }
 }
 
 export function isPotentiallyWithin(root: string, candidate: string): boolean {

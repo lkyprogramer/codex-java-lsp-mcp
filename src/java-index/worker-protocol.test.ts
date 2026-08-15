@@ -35,6 +35,7 @@ function validStatus(): JavaIndexStatus {
     methods: 1,
     edges: 2,
     snapshotBytes: 4096,
+    snapshot: { state: "DURABLE", durableGeneration: 3, durableManifestFingerprint: "manifest" },
     pendingForeground: 0,
     pendingBackground: 0,
     coverage: [{
@@ -265,6 +266,14 @@ test("validateJavaIndexStatus accepts a well-formed status and rejects an unknow
   const status = validStatus();
   assert.deepEqual(validateJavaIndexStatus(status), status);
   assert.throws(() => validateJavaIndexStatus({ ...status, state: "BOGUS" }));
+  assert.throws(() => validateJavaIndexStatus({ ...status, snapshot: { state: "DURABLE", durableGeneration: "3" } }));
+  assert.throws(() => validateJavaIndexStatus({ ...status, snapshot: { state: "DURABLE" } }));
+  assert.throws(() => validateJavaIndexStatus({ ...status, snapshot: { state: "FAILED" } }));
+  assert.throws(() => validateJavaIndexStatus({ ...status, snapshot: { state: "EMPTY", failure: "WRITE_FAILED" } }));
+  assert.throws(() => validateJavaIndexStatus({
+    ...status,
+    snapshot: { state: "PENDING", durableGeneration: 3 }
+  }));
 });
 
 test("validateAnchorFacts passes through undefined and rejects a payload missing required fields", () => {

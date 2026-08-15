@@ -220,6 +220,26 @@ export type WorktreeSeedStatus = {
   completion: "NOT_ATTEMPTED" | "SEEDED_DEGRADED" | "RECONCILED_COMPLETE" | "NO_VALID_SOURCE" | "FAILED";
 };
 
+/** Observable publication state for the rebuildable JavaIndex snapshot. */
+export type JavaIndexSnapshotStatus =
+  | { state: "EMPTY" }
+  | {
+      state: "PENDING";
+      durableGeneration?: number;
+      durableManifestFingerprint?: string;
+    }
+  | {
+      state: "DURABLE";
+      durableGeneration: number;
+      durableManifestFingerprint: string;
+    }
+  | {
+      state: "FAILED";
+      durableGeneration?: number;
+      durableManifestFingerprint?: string;
+      failure: "MANIFEST_CHANGED" | "WRITE_FAILED";
+    };
+
 export type JavaIndexStatus = {
   state: "NEW" | "OPENING" | "READY" | "DEGRADED" | "CLOSED";
   indexedGeneration: number;
@@ -228,6 +248,8 @@ export type JavaIndexStatus = {
   methods: number;
   edges: number;
   snapshotBytes: number;
+  /** Optional for compatibility with older workers; new workers always publish it. */
+  snapshot?: JavaIndexSnapshotStatus;
   pendingForeground: number;
   pendingBackground: number;
   /** Own-snapshot manifest validation still running after OPEN returned. */

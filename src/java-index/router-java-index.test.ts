@@ -85,6 +85,7 @@ function emptyBundle(repoRoot: string, absolutePath: string, generation: number,
 class RecordingFactsClient {
   generation = 1;
   readonly refreshCalls: string[][] = [];
+  readonly refreshPriorities: Array<"ACTIVE_ANCHOR" | undefined> = [];
   readonly queryFilesCalls: string[][] = [];
   statusCalls = 0;
   queryAnchorCalls = 0;
@@ -98,9 +99,16 @@ class RecordingFactsClient {
     return readyStatus(this.generation);
   }
 
-  async refresh(generation: number, changed: string[]): Promise<JavaIndexStatus> {
+  async refresh(
+    generation: number,
+    changed: string[],
+    _deleted: string[] = [],
+    _requestOptions: unknown = {},
+    priority?: "ACTIVE_ANCHOR"
+  ): Promise<JavaIndexStatus> {
     this.generation = generation;
     this.refreshCalls.push([...changed]);
+    this.refreshPriorities.push(priority);
     return readyStatus(generation);
   }
 
@@ -149,6 +157,19 @@ test("factsForFiles preserves input order while refreshing and hydrating each un
   await router.factsForFiles([a, b], 2);
   assert.equal(client.refreshCalls.length, 2, "a new request generation must not reuse the old batch");
   assert.equal(client.queryFilesCalls.length, 2);
+});
+
+test("ensureFresh forwards ACTIVE_ANCHOR only when the caller explicitly requests it", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "router-active-anchor-priority-"));
+  const file = path.join(repoRoot, "src/main/java/demo/Anchor.java");
+  write(repoRoot, "src/main/java/demo/Anchor.java", "package demo; class Anchor {}\n");
+  const client = new RecordingFactsClient(repoRoot);
+  const router = new RouterJavaIndex(repoRoot, client as never);
+
+  await router.ensureFresh([file], 1, { priority: "ACTIVE_ANCHOR" });
+  await router.ensureFresh([file], 2);
+
+  assert.deepEqual(client.refreshPriorities, ["ACTIVE_ANCHOR", undefined]);
 });
 
 test("factsForFiles caps unique work at 70 and isolates one malformed source", async () => {
@@ -590,6 +611,48 @@ test("declarationsById foreground-refreshes a conventional cross-module type pat
     assert.deepEqual(result.missingIds, []);
     assert.deepEqual(result.types.map(type => type.fqn), ["common.IdConverter"]);
     assert.equal(result.truncated, false);
+  } finally {
+    await router.close();
+  }
+});
+
+test("cold foreground lookups close an exact imported type and a positively discovered one-hop implementation", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "router-cold-foreground-closure-"));
+  write(repoRoot, "modules/api/src/main/java/api/Anchor.java", [
+    "package api;",
+    "import contract.Port;",
+    "class Anchor { Port port; }",
+    ""
+  ].join("\n"));
+  write(repoRoot, "modules/contract/src/main/java/contract/Port.java", "package contract; public interface Port {}\n");
+  write(repoRoot, "modules/impl/src/main/java/impl/PortAdapter.java", [
+    "package impl;",
+    "import contract.Port;",
+    "public class PortAdapter implements Port {}",
+    ""
+  ].join("\n"));
+  write(repoRoot, "modules/impl/src/main/java/impl/PortPrimary.java", [
+    "package impl;",
+    "import contract.Port;",
+    "public class PortPrimary implements Port {}",
+    ""
+  ].join("\n"));
+  const router = RouterJavaIndex.create(repoRoot, mkdtempSync(path.join(tmpdir(), "router-cold-foreground-cache-")));
+  await router.open(1);
+  try {
+    const anchor = path.join(repoRoot, "modules/api/src/main/java/api/Anchor.java");
+    await router.ensureFresh([anchor], 1);
+
+    const definitions = await router.findTypeDefinitions(["contract.Port"]);
+    await router.ensureFresh([path.join(repoRoot, "modules/impl/src/main/java/impl/PortPrimary.java")], 1);
+    const implementations = await router.findImplementers("contract.Port", 8, anchor);
+
+    assert.deepEqual(definitions.map(item => item.path), ["modules/contract/src/main/java/contract/Port.java"]);
+    assert.deepEqual(implementations.map(item => item.path), [
+      "modules/impl/src/main/java/impl/PortAdapter.java",
+      "modules/impl/src/main/java/impl/PortPrimary.java"
+    ], "a known partial result below the limit still triggers bounded positive discovery");
+    assert.notEqual(router.localRouterStatus().coverage, "complete", "foreground positive closure must not promote global coverage");
   } finally {
     await router.close();
   }

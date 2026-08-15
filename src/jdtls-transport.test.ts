@@ -13,7 +13,7 @@ import {
   fakeTransportFactory,
   FakeJdtlsConnection,
   sequenceTransportFactory
-} from "./test-support/fake-jdtls.js";
+} from "./test-support/fake-jdtls.test.js";
 import {
   adaptMessageConnection,
   guardMessageWriter,

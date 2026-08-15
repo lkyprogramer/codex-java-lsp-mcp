@@ -11,6 +11,7 @@ import type {
   JavaFileFacts,
   JavaImportFact,
   JavaIndexStatus,
+  JavaIndexSnapshotStatus,
   JavaMethodFacts,
   JavaParseState,
   JavaSourceSet,
@@ -29,7 +30,17 @@ import type {
   TypeResolutionStrategy,
   WorktreeSeedStatus
 } from "./index-types.js";
+
 import type { MyBatisMapperResourceFacts, MyBatisResultMapFact, MyBatisStatementFact, MyBatisStatementKind } from "./mybatis-types.js";
+
+/**
+ * Worker CLOSE may join one already-started atomic snapshot write. Keep the
+ * client return grace above that worker soft budget. When the grace expires,
+ * close() unrefs the worker but keeps its CLOSE promise alive; only the late
+ * ACK (or a definite worker exit) permits final termination.
+ */
+export const JAVA_INDEX_CLOSE_FLUSH_BUDGET_MS = 2000;
+export const JAVA_INDEX_CLOSE_GRACE_MS = JAVA_INDEX_CLOSE_FLUSH_BUDGET_MS + 500;
 
 /** Worker-thread-safe subset of WorktreeIdentity: plain strings/booleans, never the live identity cache. */
 export type JavaIndexWorktreeIdentity = {
@@ -38,6 +49,9 @@ export type JavaIndexWorktreeIdentity = {
   familyHash?: string;
   isLinkedWorktree: boolean;
 };
+
+/** Explicit request-origin marker for the single primary impact anchor. */
+export type JavaIndexRefreshPriority = "ACTIVE_ANCHOR";
 
 type JavaIndexRequestOperation =
   | {
@@ -52,7 +66,14 @@ type JavaIndexRequestOperation =
       /** Absent => the worker never attempts a sibling-worktree snapshot seed (Task 21a), even with no own snapshot. */
       siblingCacheBase?: string;
     }
-  | { id: number; type: "REFRESH"; generation: number; changed: string[]; deleted: string[] }
+  | {
+      id: number;
+      type: "REFRESH";
+      generation: number;
+      changed: string[];
+      deleted: string[];
+      priority?: JavaIndexRefreshPriority;
+    }
   | { id: number; type: "REFRESH_RESOURCES"; generation: number; paths: string[] }
   | { id: number; type: "RECONCILE"; generation: number }
   | { id: number; type: "QUERY_ANCHOR"; file: string; line: number; column: number }
@@ -657,6 +678,56 @@ function validateWorktreeSeedStatus(value: unknown, context: string): WorktreeSe
   };
 }
 
+function validateSnapshotStatus(value: unknown, context: string): JavaIndexSnapshotStatus {
+  const source = record(value, context);
+  if (!isOneOf(source.state, ["EMPTY", "PENDING", "DURABLE", "FAILED"] as const)) invalid(context, "state");
+  const durableGeneration = optional(source.durableGeneration, `${context}.durableGeneration`, (item, itemContext) => {
+    if (!isNumber(item)) invalid(itemContext, "expected a number");
+    return item;
+  });
+  const durableManifestFingerprint = optional(
+    source.durableManifestFingerprint,
+    `${context}.durableManifestFingerprint`,
+    isAssertString
+  );
+  const failure = optional(source.failure, `${context}.failure`, (item, itemContext) => {
+    if (!isOneOf(item, ["MANIFEST_CHANGED", "WRITE_FAILED"] as const)) invalid(itemContext, "unsupported failure");
+    return item;
+  });
+  const hasDurableGeneration = durableGeneration !== undefined;
+  const hasDurableManifest = durableManifestFingerprint !== undefined;
+  if (hasDurableGeneration !== hasDurableManifest) invalid(context, "durable identity must be complete");
+  if (source.state === "EMPTY") {
+    if (hasDurableGeneration || failure !== undefined) invalid(context, "EMPTY cannot carry durable/failure state");
+    return { state: "EMPTY" };
+  }
+  if (source.state === "DURABLE") {
+    if (durableGeneration === undefined || durableManifestFingerprint === undefined || failure !== undefined) {
+      invalid(context, "DURABLE requires identity and no failure");
+    }
+    return {
+      state: "DURABLE",
+      durableGeneration,
+      durableManifestFingerprint
+    };
+  }
+  if (source.state === "FAILED") {
+    if (failure === undefined) invalid(context, "FAILED requires failure");
+    return {
+      state: "FAILED",
+      ...withOptional("durableGeneration", durableGeneration),
+      ...withOptional("durableManifestFingerprint", durableManifestFingerprint),
+      failure
+    };
+  }
+  if (failure !== undefined) invalid(context, "PENDING cannot carry failure");
+  return {
+    state: "PENDING",
+    ...withOptional("durableGeneration", durableGeneration),
+    ...withOptional("durableManifestFingerprint", durableManifestFingerprint)
+  };
+}
+
 // --- exported command-specific validators ------------------------------------
 
 export function validateJavaIndexStatus(value: unknown): JavaIndexStatus {
@@ -692,6 +763,7 @@ export function validateJavaIndexStatus(value: unknown): JavaIndexStatus {
     methods: source.methods,
     edges: source.edges,
     snapshotBytes: source.snapshotBytes,
+    ...withOptional("snapshot", optional(source.snapshot, `${context}.snapshot`, validateSnapshotStatus)),
     pendingForeground: source.pendingForeground,
     pendingBackground: source.pendingBackground,
     ...withOptional("snapshotVerificationPending", snapshotVerificationPending),

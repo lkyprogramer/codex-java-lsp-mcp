@@ -8,7 +8,7 @@ import {
   type SemanticCacheKey,
   type SemanticValueMap
 } from "./semantic-gateway.js";
-import { deferred } from "./test-support/deferred.js";
+import { deferred } from "./test-support/deferred.test.js";
 
 function reference(name: string): SemanticValueMap["references"][number] {
   return {
