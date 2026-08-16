@@ -41,10 +41,14 @@ Java-only LSP/MCP V3.2 优化的 Sprint3、Sprint4 均已完成。**Sprint5 进�
 
 ## 下一步
 
-1. Sprint5 剩余：**V3.2-28**（task-aware budget，依赖 V3.2-27 已关闭——注意 V3.2-27 没有落地代码，V3.2-28 的"按 anchor profile/taskBlocking/文件大小调整预算"需要先确认自己不依赖 V3.2-27 未实现的 range-first 改动）；**V3.2-29**（provider measured-or-remove，Spring/MyBatis/MapStruct source-locked on/off ablation——这是 Sprint5 里唯一"失败分支即删代码"的项，LOC 余量已经打满 33219/33219，优先做这项，为后续项目挪出负 LOC 空间）；**V3.2-30**（真实 Agent outcome gate，已获 V3.2-07b 授权，可以直接执行，不需要再问用户，但要按 `docs/evals/java-intelligence-v32-agent-trace-spec.md` 的 preflight 走完整流程）。
-2. 遇到设计分叉直接问 advisor，不问用户；V3.2-30/V3.2-26 的外部 Agent 调用已获授权（scope：6 任务×old/new×AB/BA），执行前不需要再问，但如果实际需要的调用量/范围明显超出这个 scope，按标准流程停下来问。
-3. Sprint5 完成后走 Sprint3/4 同样的收尾流程：隔离回归 → LOC ledger → 报告 → commit → push（均已获用户标准授权，不需要再问）。
-4. 独立于 Sprint5：如果未来有会话想验证 import concurrency 是否影响 first-touch（V3.2-24 §5.4 的开放问题）或版本/fingerprint 复用缺口（V3.2-24 §5.5(c)），先看 `uptime` 的 1 分钟 load average 是否 <= 逻辑核数 × 0.7——`scripts/run-v324-import-concurrency-experiment.mjs` 已经内置这个前置检查，会直接拒绝在嘈杂主机上启动。这两项都不是 Sprint5 的依赖，是独立的、优先级较低的收尾项。
+Sprint5 剩余三项（V3.2-28/29/30）本轮都排查过，**全部有明确、非虚构的阻塞**，不是"忘了做"，不要在没有解决对应阻塞前直接开始写代码：
+
+1. **V3.2-29（provider measured-or-remove）被 LOC ceiling 卡住，是一个真实的循环依赖**：现在恰好在硬上限 33219/33219，零余量。测量 ablation 需要的最小改动——`AgentRouter` 构造函数加一个 `frameworkAdapters` 覆盖参数（预估 +1 行，`index.ts`）+ `benchmark-agent-impact.ts` 加一个 `--exclude-framework-adapter` CLI 开关（预估 +5~8 行，已核实 `src/benchmark-agent-impact.ts`/`src/benchmark/**` **在** LOC ledger 统计范围内，不是免费的；`scripts/*.mjs` 才是免费的，编排/diff/manifest 逻辑应该写成新的 `scripts/run-v329-framework-ablation.mjs`，只有调用点那几行落在 `src/`）——而 V3.2-29 唯一能腾出行数的路径（删除无收益 adapter）必须先有 ablation 结果才能触发，测量本身却又需要先有几行代码。**不要为了凑行数去别处顺手"精简"无关代码**——那是伪造删除，CLAUDE.md 明确禁止。已核实旧数据不能顶替：`task29-mapstruct-canary-20260801` 的 `runtimeBuild.gitSha` 是字面量 `"unknown"`、`missing:true`，且直接跑在未隔离的 `/Users/luo/Documents/program/lishu/lishuedu` 活动 checkout 上，不满足 source-locked 要求；`task27-spring-matrix-final2-20260731` 有真实 gitSha（`6ef328686da9`）但日期是 2026-07-31，早于 Sprint1-4 全部改动，能否算"同源 tree"未验证，大概率也不算数。**这个循环依赖需要用户判断**：是接受几行的一次性 ceiling 超额（development-plan 风险表本身写的是"新 scheduler/cache/DSL → +5% ceiling、architecture review"，这正是那类决策）,还是等一次自然出现的合理删除机会。不要自己单方面决定突破硬上限。
+2. **V3.2-30（真实 Agent outcome gate）本身没有 LOC 问题（编排代码是 `scripts/*.mjs`，天然免于 ledger），但依赖的 V3.2-07a 还没完工**：`docs/evals/java-intelligence-v32-agent-trace-spec.md` 第 114 行原文写明"真实六任务 replay runner 尚未落地，Sprint 0 仍按 `PARTIAL` 报告"——`scripts/record-mcp-trace-matrix.mjs`（recorder）已存在，但 V3.2-07b/V3.2-30 需要的 `scripts/run-agent-trace-matrix.mjs`（真实 6 任务 replay + AB/BA 编排）完全不存在，需要先设计并实现。这不是"跑一个命令"级别的工作，是先补完 Sprint0 遗留缺口，再叠加真实外部模型调用（已获 V3.2-07b 授权，scope=6 任务×old/new×AB/BA，执行时不需要再问，但工作量本身是下一会话应该独立规划、给足预算的一个单元，不要在 session 快用完时仓促发起）。
+3. **V3.2-28（task-aware budget）依赖 V3.2-27，而 V3.2-27 是结构性拒绝、零代码落地关闭的**——V3.2-28 起步前先确认它设想的"按 anchor profile/taskBlocking/文件大小调整预算"是否隐式假设了 V3.2-27 未实现的 range-first 改动；如果假设成立，V3.2-28 同样会撞到 V3.2-29 那类"改动 read-plan.ts 需要 LOC 余量"的墙，处理方式相同：先问用户 ceiling 决策，不要自行突破。
+4. 遇到设计分叉直接问 advisor，不问用户；只有 LOC ceiling 突破、外部 Agent 调用范围明显超出已授权 scope 这类事项才升级给用户。
+5. Sprint5 完成后走 Sprint3/4 同样的收尾流程：隔离回归 → LOC ledger → 报告 → commit → push（均已获用户标准授权，不需要再问）。
+6. 独立于 Sprint5：如果未来有会话想验证 import concurrency 是否影响 first-touch（V3.2-24 §5.4 的开放问题）或版本/fingerprint 复用缺口（V3.2-24 §5.5(c)），先看 `uptime` 的 1 分钟 load average 是否 <= 逻辑核数 × 0.7——`scripts/run-v324-import-concurrency-experiment.mjs` 已经内置这个前置检查，会直接拒绝在嘈杂主机上启动。这两项都不是 Sprint5 的依赖，是独立的、优先级较低的收尾项。
 
 ## 绝对不要再踩的坑（跨 Sprint 持续有效）
 
