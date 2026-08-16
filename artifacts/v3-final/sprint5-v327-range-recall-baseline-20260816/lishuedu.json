@@ -1,0 +1,2729 @@
+{
+  "metadata": {
+    "generatedAt": "2026-08-16T02:26:59.453Z",
+    "repoRoot": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ubHTg1/tmp/codex-java-lsp-isolated-jdt-KExFGJ/repo",
+    "indexCacheDir": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ubHTg1/tmp/codex-java-lsp-isolated-jdt-KExFGJ/cache/049b5e2b7e62",
+    "repoCommit": "db63b1a7e393",
+    "projectId": "lishuedu",
+    "layoutProfile": "ddd-gradle",
+    "warmState": "cold-nolsp",
+    "mode": "balanced",
+    "semanticPolicy": "fast",
+    "verbosity": "standard",
+    "payloadProjections": false,
+    "strategy": "impact",
+    "indexBackend": "v2",
+    "deadlineMs": 2000,
+    "runs": 1,
+    "scenarioFile": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ubHTg1/candidate/golden/lishuedu.scenarios.jsonl",
+    "runtimeBuild": {
+      "gitSha": "12791f5ceb42",
+      "generatedAt": "2026-08-16T02:26:57.585Z",
+      "defaults": {
+        "idleTtlMs": 2700000,
+        "importConcurrency": 2,
+        "jdtlsXmx": "2g",
+        "maxActiveRepos": 3
+      },
+      "defaultsFingerprint": "e5835394a86f",
+      "stampPath": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ubHTg1/candidate/dist/build-stamp.json"
+    },
+    "prepareJavaIndexMs": 40918.696041999996,
+    "prepareJavaIndexReconciled": true,
+    "prepareJavaIndexStatus": {
+      "state": "READY",
+      "indexedGeneration": 0,
+      "files": 5312,
+      "types": 6365,
+      "methods": 21139,
+      "edges": 219226,
+      "snapshotBytes": 21716040,
+      "snapshot": {
+        "state": "DURABLE",
+        "durableGeneration": 0,
+        "durableManifestFingerprint": "8bab44344f0d0bba054a2b21604dd776b72999785ab420ff41991db248bee329"
+      },
+      "pendingForeground": 0,
+      "pendingBackground": 0,
+      "coverage": [
+        {
+          "root": "apps/lishu-edu-app/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 34,
+          "indexedFiles": 34,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "apps/lishu-edu-app/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 15,
+          "indexedFiles": 15,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/agency/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 160,
+          "indexedFiles": 160,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/agency/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 38,
+          "indexedFiles": 38,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/ai/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 307,
+          "indexedFiles": 307,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/ai/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 81,
+          "indexedFiles": 81,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/analysis/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 500,
+          "indexedFiles": 500,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/analysis/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 136,
+          "indexedFiles": 136,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/audit/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 62,
+          "indexedFiles": 62,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/audit/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 8,
+          "indexedFiles": 8,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/benefits/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 109,
+          "indexedFiles": 109,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/benefits/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 31,
+          "indexedFiles": 31,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/common/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 223,
+          "indexedFiles": 223,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/common/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 45,
+          "indexedFiles": 45,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/exam/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 302,
+          "indexedFiles": 302,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/exam/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 48,
+          "indexedFiles": 48,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/exercisebook/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 67,
+          "indexedFiles": 67,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/exercisebook/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 7,
+          "indexedFiles": 7,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/iam/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 235,
+          "indexedFiles": 235,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/iam/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 68,
+          "indexedFiles": 68,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/integration/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 278,
+          "indexedFiles": 278,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/integration/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 46,
+          "indexedFiles": 46,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/operationLog/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 17,
+          "indexedFiles": 17,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/operationLog/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 1,
+          "indexedFiles": 1,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/order/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 143,
+          "indexedFiles": 143,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/order/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 38,
+          "indexedFiles": 38,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/paper/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 253,
+          "indexedFiles": 253,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/paper/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 99,
+          "indexedFiles": 99,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/platform/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 191,
+          "indexedFiles": 191,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/platform/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 36,
+          "indexedFiles": 36,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/print/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 4,
+          "indexedFiles": 4,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/product/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 91,
+          "indexedFiles": 91,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/product/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 19,
+          "indexedFiles": 19,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/questionBank/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 468,
+          "indexedFiles": 468,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/questionBank/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 78,
+          "indexedFiles": 78,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/report/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 451,
+          "indexedFiles": 451,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/report/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 93,
+          "indexedFiles": 93,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/school/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 378,
+          "indexedFiles": 378,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/school/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 74,
+          "indexedFiles": 74,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/subscription/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 62,
+          "indexedFiles": 62,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        },
+        {
+          "root": "modules/subscription/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 16,
+          "indexedFiles": 16,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-12791f5ceb42",
+          "completedAt": "2026-08-16T02:27:36.101Z"
+        }
+      ],
+      "resourceCoverage": [
+        {
+          "root": "apps/lishu-edu-app/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "docs/sql",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/agency/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/ai/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/analysis/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/audit/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/benefits/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/common/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/exam/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/exercisebook/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/iam/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/integration/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/operationLog/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/order/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/paper/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/platform/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/print/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/product/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/questionBank/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/report/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/school/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/subscription/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        }
+      ]
+    },
+    "indexPrepareTimeoutMs": 600000,
+    "prepareWarmMs": 0,
+    "prepareWarmPhaseMs": {}
+  },
+  "totals": {
+    "rawSearchPayload": 9976.5,
+    "readingPayload": 7451.1,
+    "totalAgentVisiblePayload": 17427.6,
+    "estimatedTokens": 4356.9,
+    "elapsedMs": 137.33622509999842,
+    "roundTrips": 2,
+    "returnedFiles": 21.8,
+    "hitFiles": 6.9,
+    "precision": 0.31193376068376066,
+    "recall": 0.7923214285714285,
+    "pCandAt5": 0.78,
+    "pCandAt10": 0.53,
+    "rCand": 0.7923214285714285,
+    "pRead": 0.7083333333333333,
+    "rReadMust": 0.9,
+    "rTaskBlocking": 0.5721123321123321,
+    "readPlanItems": 5.8,
+    "rgRawBytesSuppressed": 407077,
+    "rgRawBytesExposed": 0,
+    "readPlanFiles": 5.8,
+    "readPlanRanges": 7.1,
+    "readPlanBytes": 7451.1,
+    "budgetUtilization": 0,
+    "NDCG_read@6": 0.7789761266343259,
+    "firstTaskBlockingRank": 1,
+    "readPlanRangeRecall": 0.6342857142857142,
+    "RangeLineRecall": 0.6342857142857142,
+    "RangeCoordinateRecall": 0.6342857142857142,
+    "evidencePerKiB": 0.4209076261994505,
+    "taskBlockingHitsPerKiB": 0.24437372734395063,
+    "elapsedMsP50": 82.5355419999978,
+    "elapsedMsP95": 284.38824999999633,
+    "rawSearchPayloadP50": 9589,
+    "rawSearchPayloadP95": 12112,
+    "readingPayloadP50": 5414,
+    "readingPayloadP95": 14283,
+    "totalAgentVisiblePayloadP50": 17526,
+    "totalAgentVisiblePayloadP95": 23253,
+    "estimatedTokensP50": 4382,
+    "estimatedTokensP95": 5813
+  },
+  "rows": [
+    {
+      "id": "storage-signed-url",
+      "name": "StorageGateway#getSignedUrl",
+      "attempts": [
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 9589,
+          "readingPayload": 4968,
+          "totalAgentVisiblePayload": 14557,
+          "estimatedTokens": 3639,
+          "elapsedMs": 233.8469169999953,
+          "roundTrips": 2,
+          "returnedFiles": 20,
+          "hitFiles": 7,
+          "precision": 0.35,
+          "recall": 0.7,
+          "pCandAt5": 0.8,
+          "pCandAt10": 0.7,
+          "rCand": 0.7,
+          "pRead": 0.8333333333333334,
+          "rReadMust": 1,
+          "rTaskBlocking": 0.5555555555555556,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 398964,
+          "rgRawBytesExposed": 0,
+          "readPlanFiles": 6,
+          "readPlanRanges": 7,
+          "readPlanBytes": 4968,
+          "budgetUtilization": 0,
+          "budgetExceededByAnchor": false,
+          "NDCG_read@6": 0.892210845475489,
+          "firstTaskBlockingRank": 1,
+          "readPlanRangeRecall": 0.5,
+          "RangeLineRecall": 0.5,
+          "RangeCoordinateRecall": 0.5,
+          "evidencePerKiB": 0.4924091502369994,
+          "taskBlockingHitsPerKiB": 0.3517208215978567,
+          "timing": {
+            "sessionPhaseMs": {}
+          },
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          },
+          "determinism": {
+            "candidatePaths": [
+              "modules/integration/src/main/java/com/lishu/edu/integration/domain/port/StorageGateway.java",
+              "modules/integration/src/main/java/com/lishu/edu/integration/infrastructure/storage/AliyunOssProperties.java",
+              "modules/integration/src/main/java/com/lishu/edu/integration/domain/contract/StorageSignedUrlCommand.java",
+              "modules/integration/src/main/java/com/lishu/edu/integration/domain/contract/StorageSignedUrlResult.java",
+              "modules/integration/src/main/java/com/lishu/edu/integration/infrastructure/storage/AliyunOssGateway.java",
+              "modules/integration/src/main/java/com/lishu/edu/integration/infrastructure/storage/StubStorageGateway.java",
+              "modules/integration/src/test/java/com/lishu/edu/integration/application/service/StorageAppServiceTest.java",
+              "modules/integration/src/main/java/com/lishu/edu/integration/application/service/StorageAppService.java",
+              "modules/integration/src/main/java/com/lishu/edu/integration/infrastructure/storage/AliyunOssConfig.java",
+              "modules/integration/src/main/java/com/lishu/edu/integration/application/dto/StorageSignedUrlCommand.java",
+              "modules/integration/src/main/java/com/lishu/edu/integration/application/dto/StorageSignedUrlResult.java",
+              "modules/integration/src/main/java/com/lishu/edu/integration/domain/contract/StorageDeleteCommand.java",
+              "modules/integration/src/main/java/com/lishu/edu/integration/domain/contract/StorageDeleteResult.java",
+              "modules/integration/src/main/java/com/lishu/edu/integration/domain/contract/StorageGetCommand.java",
+              "modules/integration/src/main/java/com/lishu/edu/integration/domain/contract/StorageGetResult.java",
+              "modules/integration/src/main/java/com/lishu/edu/integration/domain/contract/StoragePutCommand.java",
+              "modules/integration/src/main/java/com/lishu/edu/integration/domain/contract/StoragePutFileCommand.java",
+              "modules/integration/src/main/java/com/lishu/edu/integration/domain/contract/StoragePutResult.java",
+              "modules/integration/src/main/java/com/lishu/edu/integration/application/dto/StorageDeleteCommand.java",
+              "modules/integration/src/main/java/com/lishu/edu/integration/application/dto/StorageDeleteResult.java"
+            ],
+            "readPlan": [
+              {
+                "path": "modules/integration/src/main/java/com/lishu/edu/integration/domain/port/StorageGateway.java",
+                "priority": "P0",
+                "ranges": [
+                  {
+                    "startLine": 18,
+                    "endLine": 30,
+                    "reason": "AST owner type header"
+                  },
+                  {
+                    "startLine": 36,
+                    "endLine": 36,
+                    "reason": "AST method range"
+                  }
+                ]
+              },
+              {
+                "path": "modules/integration/src/main/java/com/lishu/edu/integration/domain/contract/StorageSignedUrlResult.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 23,
+                    "reason": "fixed-radius fallback; AST owner type header"
+                  }
+                ]
+              },
+              {
+                "path": "modules/integration/src/main/java/com/lishu/edu/integration/domain/contract/StorageSignedUrlCommand.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 23,
+                    "reason": "fixed-radius fallback; AST owner type header"
+                  }
+                ]
+              },
+              {
+                "path": "modules/integration/src/main/java/com/lishu/edu/integration/infrastructure/storage/StubStorageGateway.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 37,
+                    "reason": "fixed-radius fallback; AST owner type header"
+                  }
+                ]
+              },
+              {
+                "path": "modules/integration/src/main/java/com/lishu/edu/integration/infrastructure/storage/AliyunOssGateway.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 43,
+                    "reason": "fixed-radius fallback"
+                  }
+                ]
+              },
+              {
+                "path": "modules/integration/src/main/java/com/lishu/edu/integration/application/dto/StorageSignedUrlResult.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 23,
+                    "reason": "fixed-radius fallback; AST owner type header"
+                  }
+                ]
+              }
+            ],
+            "completion": {
+              "semantic": "COMPLETE",
+              "semanticUsed": false,
+              "readiness": "NEW",
+              "coverage": "COMPLETE",
+              "requestGeneration": 0,
+              "indexedGeneration": 0,
+              "changedDuringRequest": false
+            }
+          }
+        }
+      ],
+      "summary": {
+        "rawSearchPayload": 9589,
+        "readingPayload": 4968,
+        "totalAgentVisiblePayload": 14557,
+        "estimatedTokens": 3639,
+        "elapsedMs": 233.8469169999953,
+        "roundTrips": 2,
+        "returnedFiles": 20,
+        "hitFiles": 7,
+        "precision": 0.35,
+        "recall": 0.7,
+        "pCandAt5": 0.8,
+        "pCandAt10": 0.7,
+        "rCand": 0.7,
+        "pRead": 0.8333333333333334,
+        "rReadMust": 1,
+        "rTaskBlocking": 0.5555555555555556,
+        "readPlanItems": 6,
+        "rgRawBytesSuppressed": 398964,
+        "rgRawBytesExposed": 0,
+        "readPlanFiles": 6,
+        "readPlanRanges": 7,
+        "readPlanBytes": 4968,
+        "budgetUtilization": 0,
+        "NDCG_read@6": 0.892210845475489,
+        "firstTaskBlockingRank": 1,
+        "readPlanRangeRecall": 0.5,
+        "RangeLineRecall": 0.5,
+        "RangeCoordinateRecall": 0.5,
+        "evidencePerKiB": 0.4924091502369994,
+        "taskBlockingHitsPerKiB": 0.3517208215978567,
+        "elapsedMsP50": 233.8469169999953,
+        "elapsedMsP95": 233.8469169999953,
+        "rawSearchPayloadP50": 9589,
+        "rawSearchPayloadP95": 9589,
+        "readingPayloadP50": 4968,
+        "readingPayloadP95": 4968,
+        "totalAgentVisiblePayloadP50": 14557,
+        "totalAgentVisiblePayloadP95": 14557,
+        "estimatedTokensP50": 3639,
+        "estimatedTokensP95": 3639
+      }
+    },
+    {
+      "id": "school-template-parser",
+      "name": "SchoolTemplateImportParser#parse",
+      "attempts": [
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 8970,
+          "readingPayload": 14283,
+          "totalAgentVisiblePayload": 23253,
+          "estimatedTokens": 5813,
+          "elapsedMs": 173.7337090000001,
+          "roundTrips": 2,
+          "returnedFiles": 18,
+          "hitFiles": 4,
+          "precision": 0.2222222222222222,
+          "recall": 0.5714285714285714,
+          "pCandAt5": 0.8,
+          "pCandAt10": 0.4,
+          "rCand": 0.5714285714285714,
+          "pRead": 0.6666666666666666,
+          "rReadMust": 1,
+          "rTaskBlocking": 0.8,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 313928,
+          "rgRawBytesExposed": 0,
+          "readPlanFiles": 6,
+          "readPlanRanges": 7,
+          "readPlanBytes": 14283,
+          "budgetUtilization": 0,
+          "budgetExceededByAnchor": false,
+          "NDCG_read@6": 0.7982730932609229,
+          "firstTaskBlockingRank": 1,
+          "readPlanRangeRecall": 1,
+          "RangeLineRecall": 1,
+          "RangeCoordinateRecall": 1,
+          "evidencePerKiB": 0.1761493140670021,
+          "taskBlockingHitsPerKiB": 0.1761493140670021,
+          "timing": {
+            "sessionPhaseMs": {}
+          },
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          },
+          "determinism": {
+            "candidatePaths": [
+              "modules/school/src/main/java/com/lishu/edu/school/application/port/SchoolTemplateImportParser.java",
+              "modules/school/src/main/java/com/lishu/edu/school/domain/template/SchoolTemplateParsedTemplate.java",
+              "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolFlexibleImportTaskProcessingAppService.java",
+              "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolTemplateImportAppService.java",
+              "modules/school/src/main/java/com/lishu/edu/school/infrastructure/excel/SchoolTemplateImportExcelParser.java",
+              "modules/school/src/main/java/com/lishu/edu/school/application/dto/SchoolSourceSyncImportCommand.java",
+              "modules/school/src/main/java/com/lishu/edu/school/application/dto/SchoolSourceSyncImportResult.java",
+              "modules/school/src/main/java/com/lishu/edu/school/application/dto/SchoolTemplateImportTaskCreateCommand.java",
+              "modules/school/src/main/java/com/lishu/edu/school/application/dto/SchoolTemplateImportTaskCreatedResult.java",
+              "modules/school/src/main/java/com/lishu/edu/school/application/dto/SchoolTemplateImportTaskFileCommand.java",
+              "modules/school/src/main/java/com/lishu/edu/school/application/dto/StudentImportResult.java",
+              "modules/school/src/main/java/com/lishu/edu/school/application/profile/ParentIdentityProfileProvider.java",
+              "modules/school/src/main/java/com/lishu/edu/school/application/service/AdminSchoolAppService.java",
+              "modules/school/src/main/java/com/lishu/edu/school/application/service/GradeAppService.java",
+              "modules/school/src/main/java/com/lishu/edu/school/application/service/GradeBaseDataExportAppService.java",
+              "modules/school/src/main/java/com/lishu/edu/school/application/service/GradeQueryService.java",
+              "modules/school/src/main/java/com/lishu/edu/school/application/service/GrowthBookStudentProfileQueryAppService.java",
+              "modules/school/src/main/java/com/lishu/edu/school/application/service/InternalSchoolRegionQueryAppService.java"
+            ],
+            "readPlan": [
+              {
+                "path": "modules/school/src/main/java/com/lishu/edu/school/application/port/SchoolTemplateImportParser.java",
+                "priority": "P0",
+                "ranges": [
+                  {
+                    "startLine": 8,
+                    "endLine": 17,
+                    "reason": "AST owner type header; AST method range"
+                  }
+                ]
+              },
+              {
+                "path": "modules/school/src/main/java/com/lishu/edu/school/domain/template/SchoolTemplateParsedTemplate.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 23,
+                    "reason": "fixed-radius fallback; AST owner type header; AST method range"
+                  }
+                ]
+              },
+              {
+                "path": "modules/school/src/main/java/com/lishu/edu/school/application/dto/SchoolTemplateImportTaskFileCommand.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 6,
+                    "endLine": 12,
+                    "reason": "AST owner type header"
+                  }
+                ]
+              },
+              {
+                "path": "modules/school/src/main/java/com/lishu/edu/school/infrastructure/excel/SchoolTemplateImportExcelParser.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 53,
+                    "reason": "fixed-radius fallback; AST owner type header; AST method range"
+                  }
+                ]
+              },
+              {
+                "path": "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolTemplateImportAppService.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 34,
+                    "reason": "fixed-radius fallback; AST owner type header"
+                  }
+                ]
+              },
+              {
+                "path": "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolFlexibleImportTaskProcessingAppService.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 79,
+                    "reason": "fixed-radius fallback; AST owner type header"
+                  },
+                  {
+                    "startLine": 88,
+                    "endLine": 134,
+                    "reason": "AST method range"
+                  }
+                ]
+              }
+            ],
+            "completion": {
+              "semantic": "COMPLETE",
+              "semanticUsed": false,
+              "readiness": "NEW",
+              "coverage": "COMPLETE",
+              "requestGeneration": 0,
+              "indexedGeneration": 0,
+              "changedDuringRequest": false
+            }
+          }
+        }
+      ],
+      "summary": {
+        "rawSearchPayload": 8970,
+        "readingPayload": 14283,
+        "totalAgentVisiblePayload": 23253,
+        "estimatedTokens": 5813,
+        "elapsedMs": 173.7337090000001,
+        "roundTrips": 2,
+        "returnedFiles": 18,
+        "hitFiles": 4,
+        "precision": 0.2222222222222222,
+        "recall": 0.5714285714285714,
+        "pCandAt5": 0.8,
+        "pCandAt10": 0.4,
+        "rCand": 0.5714285714285714,
+        "pRead": 0.6666666666666666,
+        "rReadMust": 1,
+        "rTaskBlocking": 0.8,
+        "readPlanItems": 6,
+        "rgRawBytesSuppressed": 313928,
+        "rgRawBytesExposed": 0,
+        "readPlanFiles": 6,
+        "readPlanRanges": 7,
+        "readPlanBytes": 14283,
+        "budgetUtilization": 0,
+        "NDCG_read@6": 0.7982730932609229,
+        "firstTaskBlockingRank": 1,
+        "readPlanRangeRecall": 1,
+        "RangeLineRecall": 1,
+        "RangeCoordinateRecall": 1,
+        "evidencePerKiB": 0.1761493140670021,
+        "taskBlockingHitsPerKiB": 0.1761493140670021,
+        "elapsedMsP50": 173.7337090000001,
+        "elapsedMsP95": 173.7337090000001,
+        "rawSearchPayloadP50": 8970,
+        "rawSearchPayloadP95": 8970,
+        "readingPayloadP50": 14283,
+        "readingPayloadP95": 14283,
+        "totalAgentVisiblePayloadP50": 23253,
+        "totalAgentVisiblePayloadP95": 23253,
+        "estimatedTokensP50": 5813,
+        "estimatedTokensP95": 5813
+      }
+    },
+    {
+      "id": "report-reusable-zip",
+      "name": "ReportBatchExportTaskRepository#findReusableReadyZip",
+      "attempts": [
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 12112,
+          "readingPayload": 5414,
+          "totalAgentVisiblePayload": 17526,
+          "estimatedTokens": 4382,
+          "elapsedMs": 284.38824999999633,
+          "roundTrips": 2,
+          "returnedFiles": 26,
+          "hitFiles": 7,
+          "precision": 0.2692307692307692,
+          "recall": 0.875,
+          "pCandAt5": 0.4,
+          "pCandAt10": 0.3,
+          "rCand": 0.875,
+          "pRead": 0.6666666666666666,
+          "rReadMust": 1,
+          "rTaskBlocking": 0.6666666666666666,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 977927,
+          "rgRawBytesExposed": 0,
+          "readPlanFiles": 6,
+          "readPlanRanges": 7,
+          "readPlanBytes": 5414,
+          "budgetUtilization": 0,
+          "budgetExceededByAnchor": false,
+          "NDCG_read@6": 0.7012899792965543,
+          "firstTaskBlockingRank": 1,
+          "readPlanRangeRecall": 0.5,
+          "RangeLineRecall": 0.5,
+          "RangeCoordinateRecall": 0.5,
+          "evidencePerKiB": 0.40899235421659247,
+          "taskBlockingHitsPerKiB": 0.2337099166951957,
+          "timing": {
+            "sessionPhaseMs": {}
+          },
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          },
+          "determinism": {
+            "candidatePaths": [
+              "modules/report/src/main/java/com/lishu/edu/report/domain/port/ReportBatchExportTaskRepository.java",
+              "modules/report/src/main/java/com/lishu/edu/report/application/service/ReportBatchExportDispatchService.java",
+              "modules/report/src/main/java/com/lishu/edu/report/application/service/ReportBatchExportPrepareService.java",
+              "modules/report/src/main/java/com/lishu/edu/report/infrastructure/persistence/mapper/ReportBatchExportTaskMapper.java",
+              "modules/report/src/main/java/com/lishu/edu/report/domain/model/ReportBatchExportTask.java",
+              "modules/report/src/main/java/com/lishu/edu/report/infrastructure/persistence/repository/ReportBatchExportTaskRepositoryImpl.java",
+              "modules/report/src/main/java/com/lishu/edu/report/domain/port/ReportExportTaskRepository.java",
+              "modules/report/src/main/java/com/lishu/edu/report/infrastructure/config/ReportBatchExportProperties.java",
+              "modules/report/src/main/java/com/lishu/edu/report/domain/model/ReportBatchExportTaskStatus.java",
+              "modules/report/src/main/java/com/lishu/edu/report/infrastructure/persistence/repository/ReportBatchExportTaskConverter.java",
+              "modules/report/src/main/java/com/lishu/edu/report/infrastructure/persistence/entity/ReportBatchExportTaskDO.java",
+              "modules/report/src/main/java/com/lishu/edu/report/application/service/ReportApplicationQueryService.java",
+              "modules/report/src/main/java/com/lishu/edu/report/application/service/ReportBatchExportCommandService.java",
+              "modules/report/src/main/java/com/lishu/edu/report/application/service/ReportBatchExportQueryService.java",
+              "modules/report/src/main/java/com/lishu/edu/report/application/service/ReportBatchExportRecoveryService.java",
+              "modules/report/src/main/java/com/lishu/edu/report/application/service/ReportBatchExportZipCleanupService.java",
+              "modules/report/src/main/java/com/lishu/edu/report/application/service/ReportAccessService.java",
+              "modules/report/src/main/java/com/lishu/edu/report/domain/port/GrowthBookSnapshotRepository.java",
+              "modules/report/src/main/java/com/lishu/edu/report/domain/port/ReportApplicationItemRepository.java",
+              "modules/report/src/test/java/com/lishu/edu/report/application/service/ReportApplicationQueryServiceTest.java",
+              "modules/report/src/test/java/com/lishu/edu/report/application/service/ReportBatchExportCommandServiceTest.java",
+              "modules/report/src/test/java/com/lishu/edu/report/application/service/ReportBatchExportDispatchServiceTest.java",
+              "modules/report/src/test/java/com/lishu/edu/report/application/service/ReportBatchExportPrepareServiceTest.java",
+              "modules/report/src/test/java/com/lishu/edu/report/application/service/ReportBatchExportQueryServiceTest.java",
+              "modules/report/src/test/java/com/lishu/edu/report/application/service/ReportBatchExportRecoveryServiceTest.java",
+              "modules/report/src/test/java/com/lishu/edu/report/application/service/ReportBatchExportZipCleanupServiceTest.java"
+            ],
+            "readPlan": [
+              {
+                "path": "modules/report/src/main/java/com/lishu/edu/report/domain/port/ReportBatchExportTaskRepository.java",
+                "priority": "P0",
+                "ranges": [
+                  {
+                    "startLine": 18,
+                    "endLine": 30,
+                    "reason": "AST owner type header"
+                  },
+                  {
+                    "startLine": 36,
+                    "endLine": 40,
+                    "reason": "AST method range"
+                  }
+                ]
+              },
+              {
+                "path": "modules/report/src/main/java/com/lishu/edu/report/domain/model/ReportBatchExportTask.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 24,
+                    "reason": "fixed-radius fallback"
+                  }
+                ]
+              },
+              {
+                "path": "modules/report/src/main/java/com/lishu/edu/report/infrastructure/persistence/repository/ReportBatchExportTaskRepositoryImpl.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 39,
+                    "reason": "fixed-radius fallback; AST owner type header"
+                  }
+                ]
+              },
+              {
+                "path": "modules/report/src/main/java/com/lishu/edu/report/infrastructure/persistence/mapper/ReportBatchExportTaskMapper.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 31,
+                    "reason": "fixed-radius fallback; AST owner type header"
+                  }
+                ]
+              },
+              {
+                "path": "modules/report/src/main/java/com/lishu/edu/report/infrastructure/persistence/entity/ReportBatchExportTaskDO.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 28,
+                    "reason": "fixed-radius fallback; AST owner type header"
+                  }
+                ]
+              },
+              {
+                "path": "modules/report/src/main/java/com/lishu/edu/report/domain/model/ReportBatchExportTaskStatus.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 24,
+                    "reason": "fixed-radius fallback"
+                  }
+                ]
+              }
+            ],
+            "completion": {
+              "semantic": "COMPLETE",
+              "semanticUsed": false,
+              "readiness": "NEW",
+              "coverage": "COMPLETE",
+              "requestGeneration": 0,
+              "indexedGeneration": 0,
+              "changedDuringRequest": false
+            }
+          }
+        }
+      ],
+      "summary": {
+        "rawSearchPayload": 12112,
+        "readingPayload": 5414,
+        "totalAgentVisiblePayload": 17526,
+        "estimatedTokens": 4382,
+        "elapsedMs": 284.38824999999633,
+        "roundTrips": 2,
+        "returnedFiles": 26,
+        "hitFiles": 7,
+        "precision": 0.2692307692307692,
+        "recall": 0.875,
+        "pCandAt5": 0.4,
+        "pCandAt10": 0.3,
+        "rCand": 0.875,
+        "pRead": 0.6666666666666666,
+        "rReadMust": 1,
+        "rTaskBlocking": 0.6666666666666666,
+        "readPlanItems": 6,
+        "rgRawBytesSuppressed": 977927,
+        "rgRawBytesExposed": 0,
+        "readPlanFiles": 6,
+        "readPlanRanges": 7,
+        "readPlanBytes": 5414,
+        "budgetUtilization": 0,
+        "NDCG_read@6": 0.7012899792965543,
+        "firstTaskBlockingRank": 1,
+        "readPlanRangeRecall": 0.5,
+        "RangeLineRecall": 0.5,
+        "RangeCoordinateRecall": 0.5,
+        "evidencePerKiB": 0.40899235421659247,
+        "taskBlockingHitsPerKiB": 0.2337099166951957,
+        "elapsedMsP50": 284.38824999999633,
+        "elapsedMsP95": 284.38824999999633,
+        "rawSearchPayloadP50": 12112,
+        "rawSearchPayloadP95": 12112,
+        "readingPayloadP50": 5414,
+        "readingPayloadP95": 5414,
+        "totalAgentVisiblePayloadP50": 17526,
+        "totalAgentVisiblePayloadP95": 17526,
+        "estimatedTokensP50": 4382,
+        "estimatedTokensP95": 4382
+      }
+    },
+    {
+      "id": "school-confirm-controller",
+      "name": "SchoolTemplateImportController#confirm",
+      "attempts": [
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 8073,
+          "readingPayload": 10276,
+          "totalAgentVisiblePayload": 18349,
+          "estimatedTokens": 4587,
+          "elapsedMs": 82.5355419999978,
+          "roundTrips": 2,
+          "returnedFiles": 16,
+          "hitFiles": 5,
+          "precision": 0.3125,
+          "recall": 0.7142857142857143,
+          "pCandAt5": 1,
+          "pCandAt10": 0.5,
+          "rCand": 0.7142857142857143,
+          "pRead": 0.8333333333333334,
+          "rReadMust": 1,
+          "rTaskBlocking": 0.7142857142857143,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 266976,
+          "rgRawBytesExposed": 0,
+          "readPlanFiles": 6,
+          "readPlanRanges": 9,
+          "readPlanBytes": 10276,
+          "budgetUtilization": 0,
+          "budgetExceededByAnchor": false,
+          "NDCG_read@6": 0.848698793250593,
+          "firstTaskBlockingRank": 1,
+          "readPlanRangeRecall": 1,
+          "RangeLineRecall": 1,
+          "RangeCoordinateRecall": 1,
+          "evidencePerKiB": 0.27903427979726414,
+          "taskBlockingHitsPerKiB": 0.27903427979726414,
+          "timing": {
+            "sessionPhaseMs": {}
+          },
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          },
+          "determinism": {
+            "candidatePaths": [
+              "modules/school/src/main/java/com/lishu/edu/school/interfaces/web/SchoolTemplateImportController.java",
+              "modules/school/src/main/java/com/lishu/edu/school/interfaces/dto/SchoolTemplateImportConfirmRequest.java",
+              "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolTemplateImportAppService.java",
+              "modules/school/src/main/java/com/lishu/edu/school/interfaces/assembler/SchoolTemplateImportAssembler.java",
+              "modules/school/src/main/java/com/lishu/edu/school/interfaces/dto/SchoolTemplateImportConfirmResponse.java",
+              "modules/common/src/main/java/com/lishu/edu/common/domain/contract/ApiResponse.java",
+              "modules/school/src/main/java/com/lishu/edu/school/interfaces/dto/SchoolTemplateImportPreviewResponse.java",
+              "modules/school/src/main/java/com/lishu/edu/school/interfaces/dto/SchoolTemplateImportProgressResponse.java",
+              "modules/school/src/main/java/com/lishu/edu/school/interfaces/dto/SchoolTemplateImportTaskCreatedResponse.java",
+              "modules/common/src/main/java/com/lishu/edu/common/interfaces/assembler/IdConverter.java",
+              "modules/school/src/main/java/com/lishu/edu/school/application/dto/SchoolFlexibleImportConfirmCommand.java",
+              "modules/school/src/main/java/com/lishu/edu/school/application/dto/SchoolFlexibleImportConfirmResult.java",
+              "modules/school/src/main/java/com/lishu/edu/school/application/dto/SchoolFlexibleImportConfirmResultDetail.java",
+              "modules/school/src/main/java/com/lishu/edu/school/application/dto/SchoolFlexibleImportConfirmSummary.java",
+              "modules/school/src/main/java/com/lishu/edu/school/application/dto/SchoolSourceSyncImportCommand.java",
+              "modules/common/src/main/java/com/lishu/edu/common/interfaces/assembler/DateTimeConverter.java"
+            ],
+            "readPlan": [
+              {
+                "path": "modules/school/src/main/java/com/lishu/edu/school/interfaces/web/SchoolTemplateImportController.java",
+                "priority": "P0",
+                "ranges": [
+                  {
+                    "startLine": 34,
+                    "endLine": 46,
+                    "reason": "AST owner type header"
+                  },
+                  {
+                    "startLine": 99,
+                    "endLine": 117,
+                    "reason": "AST method range"
+                  }
+                ]
+              },
+              {
+                "path": "modules/school/src/main/java/com/lishu/edu/school/interfaces/assembler/SchoolTemplateImportAssembler.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 32,
+                    "reason": "fixed-radius fallback; AST owner type header; AST method range"
+                  },
+                  {
+                    "startLine": 140,
+                    "endLine": 144,
+                    "reason": "AST method range"
+                  }
+                ]
+              },
+              {
+                "path": "modules/common/src/main/java/com/lishu/edu/common/domain/contract/ApiResponse.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 23,
+                    "reason": "fixed-radius fallback"
+                  }
+                ]
+              },
+              {
+                "path": "modules/school/src/main/java/com/lishu/edu/school/interfaces/dto/SchoolTemplateImportConfirmRequest.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 28,
+                    "reason": "fixed-radius fallback; AST owner type header"
+                  }
+                ]
+              },
+              {
+                "path": "modules/school/src/main/java/com/lishu/edu/school/interfaces/dto/SchoolTemplateImportConfirmResponse.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 23,
+                    "reason": "fixed-radius fallback; AST owner type header"
+                  }
+                ]
+              },
+              {
+                "path": "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolTemplateImportAppService.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 34,
+                    "reason": "fixed-radius fallback; AST owner type header"
+                  },
+                  {
+                    "startLine": 147,
+                    "endLine": 170,
+                    "reason": "AST method range"
+                  }
+                ]
+              }
+            ],
+            "completion": {
+              "semantic": "COMPLETE",
+              "semanticUsed": false,
+              "readiness": "NEW",
+              "coverage": "COMPLETE",
+              "requestGeneration": 0,
+              "indexedGeneration": 0,
+              "changedDuringRequest": false
+            }
+          }
+        }
+      ],
+      "summary": {
+        "rawSearchPayload": 8073,
+        "readingPayload": 10276,
+        "totalAgentVisiblePayload": 18349,
+        "estimatedTokens": 4587,
+        "elapsedMs": 82.5355419999978,
+        "roundTrips": 2,
+        "returnedFiles": 16,
+        "hitFiles": 5,
+        "precision": 0.3125,
+        "recall": 0.7142857142857143,
+        "pCandAt5": 1,
+        "pCandAt10": 0.5,
+        "rCand": 0.7142857142857143,
+        "pRead": 0.8333333333333334,
+        "rReadMust": 1,
+        "rTaskBlocking": 0.7142857142857143,
+        "readPlanItems": 6,
+        "rgRawBytesSuppressed": 266976,
+        "rgRawBytesExposed": 0,
+        "readPlanFiles": 6,
+        "readPlanRanges": 9,
+        "readPlanBytes": 10276,
+        "budgetUtilization": 0,
+        "NDCG_read@6": 0.848698793250593,
+        "firstTaskBlockingRank": 1,
+        "readPlanRangeRecall": 1,
+        "RangeLineRecall": 1,
+        "RangeCoordinateRecall": 1,
+        "evidencePerKiB": 0.27903427979726414,
+        "taskBlockingHitsPerKiB": 0.27903427979726414,
+        "elapsedMsP50": 82.5355419999978,
+        "elapsedMsP95": 82.5355419999978,
+        "rawSearchPayloadP50": 8073,
+        "rawSearchPayloadP95": 8073,
+        "readingPayloadP50": 10276,
+        "readingPayloadP95": 10276,
+        "totalAgentVisiblePayloadP50": 18349,
+        "totalAgentVisiblePayloadP95": 18349,
+        "estimatedTokensP50": 4587,
+        "estimatedTokensP95": 4587
+      }
+    },
+    {
+      "id": "benefit-product-code-dto",
+      "name": "ParentStudentBenefitItemResponse.productCode",
+      "attempts": [
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 9858,
+          "readingPayload": 3334,
+          "totalAgentVisiblePayload": 13192,
+          "estimatedTokens": 3298,
+          "elapsedMs": 69.21637499999633,
+          "roundTrips": 2,
+          "returnedFiles": 24,
+          "hitFiles": 6,
+          "precision": 0.25,
+          "recall": 0.6666666666666666,
+          "pCandAt5": 0.6,
+          "pCandAt10": 0.4,
+          "rCand": 0.6666666666666666,
+          "pRead": 0.75,
+          "rReadMust": 1,
+          "rTaskBlocking": 0.42857142857142855,
+          "readPlanItems": 4,
+          "rgRawBytesSuppressed": 235934,
+          "rgRawBytesExposed": 0,
+          "readPlanFiles": 4,
+          "readPlanRanges": 4,
+          "readPlanBytes": 3334,
+          "budgetUtilization": 0,
+          "budgetExceededByAnchor": false,
+          "NDCG_read@6": 0.6238470455881188,
+          "firstTaskBlockingRank": 1,
+          "readPlanRangeRecall": 0.6666666666666666,
+          "RangeLineRecall": 0.6666666666666666,
+          "RangeCoordinateRecall": 0.6666666666666666,
+          "evidencePerKiB": 0.46573681018799273,
+          "taskBlockingHitsPerKiB": 0.23286840509399637,
+          "timing": {
+            "sessionPhaseMs": {}
+          },
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          },
+          "determinism": {
+            "candidatePaths": [
+              "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/dto/ParentStudentBenefitItemResponse.java",
+              "modules/benefits/src/main/java/com/lishu/edu/benefits/application/dto/ParentStudentBenefitItemView.java",
+              "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/assembler/BenefitEntitlementAssembler.java",
+              "modules/benefits/src/test/java/com/lishu/edu/benefits/interfaces/controller/ParentBenefitControllerMappingTest.java",
+              "modules/benefits/src/main/java/com/lishu/edu/benefits/application/dto/ParentPendingBenefitView.java",
+              "modules/benefits/src/main/java/com/lishu/edu/benefits/application/dto/ParentStudentBenefitView.java",
+              "modules/benefits/src/main/java/com/lishu/edu/benefits/application/service/AdminBenefitStudentQueryAppService.java",
+              "modules/benefits/src/main/java/com/lishu/edu/benefits/application/service/AdminPendingEntitlementRepairAppService.java",
+              "modules/benefits/src/main/java/com/lishu/edu/benefits/application/service/BenefitGrantAppService.java",
+              "modules/benefits/src/main/java/com/lishu/edu/benefits/application/service/ParentBenefitQueryAppService.java",
+              "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/assembler/BenefitAdminAssembler.java",
+              "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/assembler/BenefitOpenApplicationAssembler.java",
+              "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/controller/AdminBenefitEntitlementController.java",
+              "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/controller/ConsultantBenefitOpenApplicationController.java",
+              "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/controller/OperatorBenefitOpenApplicationController.java",
+              "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/controller/ParentBenefitController.java",
+              "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/dto/ParentPendingBenefitResponse.java",
+              "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/dto/ParentStudentBenefitResponse.java",
+              "modules/benefits/src/test/java/com/lishu/edu/benefits/interfaces/assembler/BenefitEntitlementAssemblerTest.java",
+              "modules/product/src/main/java/com/lishu/edu/product/application/dto/CmccProductSubjectMappingView.java",
+              "modules/product/src/main/java/com/lishu/edu/product/application/dto/PackageProductView.java",
+              "modules/product/src/main/java/com/lishu/edu/product/application/dto/PackageView.java",
+              "modules/common/src/main/java/com/lishu/edu/common/interfaces/assembler/DateTimeConverter.java",
+              "modules/common/src/main/java/com/lishu/edu/common/interfaces/assembler/IdConverter.java"
+            ],
+            "readPlan": [
+              {
+                "path": "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/dto/ParentStudentBenefitItemResponse.java",
+                "priority": "P0",
+                "ranges": [
+                  {
+                    "startLine": 10,
+                    "endLine": 22,
+                    "reason": "AST owner type header"
+                  }
+                ]
+              },
+              {
+                "path": "modules/benefits/src/main/java/com/lishu/edu/benefits/application/dto/ParentStudentBenefitItemView.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 10,
+                    "endLine": 22,
+                    "reason": "AST owner type header"
+                  }
+                ]
+              },
+              {
+                "path": "modules/benefits/src/main/java/com/lishu/edu/benefits/application/dto/ParentStudentBenefitView.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 8,
+                    "endLine": 12,
+                    "reason": "AST owner type header"
+                  }
+                ]
+              },
+              {
+                "path": "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/assembler/BenefitEntitlementAssembler.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 35,
+                    "reason": "fixed-radius fallback"
+                  }
+                ]
+              }
+            ],
+            "completion": {
+              "semantic": "COMPLETE",
+              "semanticUsed": false,
+              "readiness": "NEW",
+              "coverage": "COMPLETE",
+              "requestGeneration": 0,
+              "indexedGeneration": 0,
+              "changedDuringRequest": false
+            }
+          }
+        }
+      ],
+      "summary": {
+        "rawSearchPayload": 9858,
+        "readingPayload": 3334,
+        "totalAgentVisiblePayload": 13192,
+        "estimatedTokens": 3298,
+        "elapsedMs": 69.21637499999633,
+        "roundTrips": 2,
+        "returnedFiles": 24,
+        "hitFiles": 6,
+        "precision": 0.25,
+        "recall": 0.6666666666666666,
+        "pCandAt5": 0.6,
+        "pCandAt10": 0.4,
+        "rCand": 0.6666666666666666,
+        "pRead": 0.75,
+        "rReadMust": 1,
+        "rTaskBlocking": 0.42857142857142855,
+        "readPlanItems": 4,
+        "rgRawBytesSuppressed": 235934,
+        "rgRawBytesExposed": 0,
+        "readPlanFiles": 4,
+        "readPlanRanges": 4,
+        "readPlanBytes": 3334,
+        "budgetUtilization": 0,
+        "NDCG_read@6": 0.6238470455881188,
+        "firstTaskBlockingRank": 1,
+        "readPlanRangeRecall": 0.6666666666666666,
+        "RangeLineRecall": 0.6666666666666666,
+        "RangeCoordinateRecall": 0.6666666666666666,
+        "evidencePerKiB": 0.46573681018799273,
+        "taskBlockingHitsPerKiB": 0.23286840509399637,
+        "elapsedMsP50": 69.21637499999633,
+        "elapsedMsP95": 69.21637499999633,
+        "rawSearchPayloadP50": 9858,
+        "rawSearchPayloadP95": 9858,
+        "readingPayloadP50": 3334,
+        "readingPayloadP95": 3334,
+        "totalAgentVisiblePayloadP50": 13192,
+        "totalAgentVisiblePayloadP95": 13192,
+        "estimatedTokensP50": 3298,
+        "estimatedTokensP95": 3298
+      }
+    },
+    {
+      "id": "school-mapstruct-uses",
+      "name": "SchoolTemplateImportController#confirm MapStruct uses",
+      "attempts": [
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 8073,
+          "readingPayload": 10276,
+          "totalAgentVisiblePayload": 18349,
+          "estimatedTokens": 4587,
+          "elapsedMs": 19.24491699999635,
+          "roundTrips": 2,
+          "returnedFiles": 16,
+          "hitFiles": 4,
+          "precision": 0.25,
+          "recall": 1,
+          "pCandAt5": 0.4,
+          "pCandAt10": 0.3,
+          "rCand": 1,
+          "pRead": 0.3333333333333333,
+          "rReadMust": 1,
+          "rTaskBlocking": 0.5,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 266976,
+          "rgRawBytesExposed": 0,
+          "readPlanFiles": 6,
+          "readPlanRanges": 9,
+          "readPlanBytes": 10276,
+          "budgetUtilization": 0,
+          "budgetExceededByAnchor": false,
+          "NDCG_read@6": 0.6366824387328316,
+          "firstTaskBlockingRank": 1,
+          "readPlanRangeRecall": 1,
+          "RangeLineRecall": 1,
+          "RangeCoordinateRecall": 1,
+          "evidencePerKiB": 0.22322742383781133,
+          "taskBlockingHitsPerKiB": 0.11161371191890566,
+          "timing": {
+            "sessionPhaseMs": {}
+          },
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          },
+          "determinism": {
+            "candidatePaths": [
+              "modules/school/src/main/java/com/lishu/edu/school/interfaces/web/SchoolTemplateImportController.java",
+              "modules/school/src/main/java/com/lishu/edu/school/interfaces/dto/SchoolTemplateImportConfirmRequest.java",
+              "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolTemplateImportAppService.java",
+              "modules/school/src/main/java/com/lishu/edu/school/interfaces/assembler/SchoolTemplateImportAssembler.java",
+              "modules/school/src/main/java/com/lishu/edu/school/interfaces/dto/SchoolTemplateImportConfirmResponse.java",
+              "modules/common/src/main/java/com/lishu/edu/common/domain/contract/ApiResponse.java",
+              "modules/school/src/main/java/com/lishu/edu/school/interfaces/dto/SchoolTemplateImportPreviewResponse.java",
+              "modules/school/src/main/java/com/lishu/edu/school/interfaces/dto/SchoolTemplateImportProgressResponse.java",
+              "modules/school/src/main/java/com/lishu/edu/school/interfaces/dto/SchoolTemplateImportTaskCreatedResponse.java",
+              "modules/common/src/main/java/com/lishu/edu/common/interfaces/assembler/IdConverter.java",
+              "modules/school/src/main/java/com/lishu/edu/school/application/dto/SchoolFlexibleImportConfirmCommand.java",
+              "modules/school/src/main/java/com/lishu/edu/school/application/dto/SchoolFlexibleImportConfirmResult.java",
+              "modules/school/src/main/java/com/lishu/edu/school/application/dto/SchoolFlexibleImportConfirmResultDetail.java",
+              "modules/school/src/main/java/com/lishu/edu/school/application/dto/SchoolFlexibleImportConfirmSummary.java",
+              "modules/school/src/main/java/com/lishu/edu/school/application/dto/SchoolSourceSyncImportCommand.java",
+              "modules/common/src/main/java/com/lishu/edu/common/interfaces/assembler/DateTimeConverter.java"
+            ],
+            "readPlan": [
+              {
+                "path": "modules/school/src/main/java/com/lishu/edu/school/interfaces/web/SchoolTemplateImportController.java",
+                "priority": "P0",
+                "ranges": [
+                  {
+                    "startLine": 34,
+                    "endLine": 46,
+                    "reason": "AST owner type header"
+                  },
+                  {
+                    "startLine": 99,
+                    "endLine": 117,
+                    "reason": "AST method range"
+                  }
+                ]
+              },
+              {
+                "path": "modules/school/src/main/java/com/lishu/edu/school/interfaces/assembler/SchoolTemplateImportAssembler.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 32,
+                    "reason": "fixed-radius fallback; AST owner type header; AST method range"
+                  },
+                  {
+                    "startLine": 140,
+                    "endLine": 144,
+                    "reason": "AST method range"
+                  }
+                ]
+              },
+              {
+                "path": "modules/common/src/main/java/com/lishu/edu/common/domain/contract/ApiResponse.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 23,
+                    "reason": "fixed-radius fallback"
+                  }
+                ]
+              },
+              {
+                "path": "modules/school/src/main/java/com/lishu/edu/school/interfaces/dto/SchoolTemplateImportConfirmRequest.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 28,
+                    "reason": "fixed-radius fallback; AST owner type header"
+                  }
+                ]
+              },
+              {
+                "path": "modules/school/src/main/java/com/lishu/edu/school/interfaces/dto/SchoolTemplateImportConfirmResponse.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 23,
+                    "reason": "fixed-radius fallback; AST owner type header"
+                  }
+                ]
+              },
+              {
+                "path": "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolTemplateImportAppService.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 34,
+                    "reason": "fixed-radius fallback; AST owner type header"
+                  },
+                  {
+                    "startLine": 147,
+                    "endLine": 170,
+                    "reason": "AST method range"
+                  }
+                ]
+              }
+            ],
+            "completion": {
+              "semantic": "COMPLETE",
+              "semanticUsed": false,
+              "readiness": "NEW",
+              "coverage": "COMPLETE",
+              "requestGeneration": 0,
+              "indexedGeneration": 0,
+              "changedDuringRequest": false
+            }
+          }
+        }
+      ],
+      "summary": {
+        "rawSearchPayload": 8073,
+        "readingPayload": 10276,
+        "totalAgentVisiblePayload": 18349,
+        "estimatedTokens": 4587,
+        "elapsedMs": 19.24491699999635,
+        "roundTrips": 2,
+        "returnedFiles": 16,
+        "hitFiles": 4,
+        "precision": 0.25,
+        "recall": 1,
+        "pCandAt5": 0.4,
+        "pCandAt10": 0.3,
+        "rCand": 1,
+        "pRead": 0.3333333333333333,
+        "rReadMust": 1,
+        "rTaskBlocking": 0.5,
+        "readPlanItems": 6,
+        "rgRawBytesSuppressed": 266976,
+        "rgRawBytesExposed": 0,
+        "readPlanFiles": 6,
+        "readPlanRanges": 9,
+        "readPlanBytes": 10276,
+        "budgetUtilization": 0,
+        "NDCG_read@6": 0.6366824387328316,
+        "firstTaskBlockingRank": 1,
+        "readPlanRangeRecall": 1,
+        "RangeLineRecall": 1,
+        "RangeCoordinateRecall": 1,
+        "evidencePerKiB": 0.22322742383781133,
+        "taskBlockingHitsPerKiB": 0.11161371191890566,
+        "elapsedMsP50": 19.24491699999635,
+        "elapsedMsP95": 19.24491699999635,
+        "rawSearchPayloadP50": 8073,
+        "rawSearchPayloadP95": 8073,
+        "readingPayloadP50": 10276,
+        "readingPayloadP95": 10276,
+        "totalAgentVisiblePayloadP50": 18349,
+        "totalAgentVisiblePayloadP95": 18349,
+        "estimatedTokensP50": 4587,
+        "estimatedTokensP95": 4587
+      }
+    },
+    {
+      "id": "audit-order-repository-mapper-rule-type",
+      "name": "AuditOrderRepositoryImpl#save new assignee rule type in MyBatis mapper",
+      "attempts": [
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 10785,
+          "readingPayload": 5338,
+          "totalAgentVisiblePayload": 16123,
+          "estimatedTokens": 4031,
+          "elapsedMs": 43.574124999999185,
+          "roundTrips": 2,
+          "returnedFiles": 26,
+          "hitFiles": 6,
+          "precision": 0.23076923076923078,
+          "recall": 0.75,
+          "pCandAt5": 0.8,
+          "pCandAt10": 0.6,
+          "rCand": 0.75,
+          "pRead": 0.6666666666666666,
+          "rReadMust": 1,
+          "rTaskBlocking": 0.6,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 60661,
+          "rgRawBytesExposed": 0,
+          "readPlanFiles": 6,
+          "readPlanRanges": 7,
+          "readPlanBytes": 5338,
+          "budgetUtilization": 0,
+          "budgetExceededByAnchor": false,
+          "NDCG_read@6": 0.751723738836106,
+          "firstTaskBlockingRank": 1,
+          "readPlanRangeRecall": 0.3333333333333333,
+          "RangeLineRecall": 0.3333333333333333,
+          "RangeCoordinateRecall": 0.3333333333333333,
+          "evidencePerKiB": 0.3810705203746201,
+          "taskBlockingHitsPerKiB": 0.19053526018731004,
+          "timing": {
+            "sessionPhaseMs": {}
+          },
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          },
+          "determinism": {
+            "candidatePaths": [
+              "modules/audit/src/main/java/com/lishu/edu/audit/infrastructure/persistence/repository/AuditOrderRepositoryImpl.java",
+              "modules/audit/src/main/java/com/lishu/edu/audit/infrastructure/persistence/mapper/AuditOrderMapper.java",
+              "modules/audit/src/main/java/com/lishu/edu/audit/domain/port/AuditOrderRepository.java",
+              "modules/audit/src/main/java/com/lishu/edu/audit/infrastructure/persistence/entity/AuditOrderDO.java",
+              "modules/audit/src/main/java/com/lishu/edu/audit/domain/model/AuditOrder.java",
+              "modules/audit/src/main/java/com/lishu/edu/audit/domain/model/AssigneePolicy.java",
+              "modules/audit/src/main/java/com/lishu/edu/audit/application/dto/AssigneePolicy.java",
+              "modules/audit/src/main/java/com/lishu/edu/audit/application/assembler/AuditAssigneeMapper.java",
+              "modules/audit/src/main/java/com/lishu/edu/audit/application/service/AuditApplyAppService.java",
+              "modules/audit/src/main/java/com/lishu/edu/audit/application/service/AuditDecisionAppService.java",
+              "modules/audit/src/main/java/com/lishu/edu/audit/application/service/AuditOrderQueryAppService.java",
+              "modules/audit/src/main/java/com/lishu/edu/audit/infrastructure/config/AuditMapperConfig.java",
+              "modules/audit/src/main/java/com/lishu/edu/audit/infrastructure/persistence/repository/AuditTodoRepositoryImpl.java",
+              "modules/audit/src/main/java/com/lishu/edu/audit/interfaces/assembler/AuditAssembler.java",
+              "modules/audit/src/main/java/com/lishu/edu/audit/interfaces/web/AuditController.java",
+              "modules/audit/src/main/java/com/lishu/edu/audit/domain/port/AuditOutboxWriter.java",
+              "modules/audit/src/main/java/com/lishu/edu/audit/domain/port/AuditTaskRepository.java",
+              "modules/audit/src/main/java/com/lishu/edu/audit/infrastructure/persistence/repository/AuditOutboxRepositoryImpl.java",
+              "modules/audit/src/main/java/com/lishu/edu/audit/infrastructure/persistence/repository/AuditTaskRepositoryImpl.java",
+              "modules/common/src/main/java/com/lishu/edu/common/domain/contract/AuditBizType.java",
+              "modules/common/src/main/java/com/lishu/edu/common/domain/contract/AuditOrderStatus.java",
+              "modules/common/src/main/java/com/lishu/edu/common/domain/scope/ScopeType.java",
+              "modules/audit/src/test/java/com/lishu/edu/audit/application/assembler/AuditAssigneeMapperTest.java",
+              "modules/audit/src/test/java/com/lishu/edu/audit/application/service/AuditApplyAppServiceTest.java",
+              "modules/common/src/main/java/com/lishu/edu/common/domain/contract/PageQuery.java",
+              "modules/common/src/main/java/com/lishu/edu/common/domain/contract/PageResult.java"
+            ],
+            "readPlan": [
+              {
+                "path": "modules/audit/src/main/java/com/lishu/edu/audit/infrastructure/persistence/repository/AuditOrderRepositoryImpl.java",
+                "priority": "P0",
+                "ranges": [
+                  {
+                    "startLine": 22,
+                    "endLine": 34,
+                    "reason": "AST owner type header"
+                  },
+                  {
+                    "startLine": 39,
+                    "endLine": 60,
+                    "reason": "AST method range"
+                  }
+                ]
+              },
+              {
+                "path": "modules/audit/src/main/java/com/lishu/edu/audit/domain/port/AuditOrderRepository.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 25,
+                    "reason": "fixed-radius fallback; AST owner type header; AST method range"
+                  }
+                ]
+              },
+              {
+                "path": "modules/audit/src/main/java/com/lishu/edu/audit/domain/model/AuditOrder.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 23,
+                    "reason": "fixed-radius fallback"
+                  }
+                ]
+              },
+              {
+                "path": "modules/audit/src/main/java/com/lishu/edu/audit/infrastructure/persistence/mapper/AuditOrderMapper.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 29,
+                    "reason": "fixed-radius fallback; AST owner type header"
+                  }
+                ]
+              },
+              {
+                "path": "modules/audit/src/main/java/com/lishu/edu/audit/infrastructure/persistence/entity/AuditOrderDO.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 23,
+                    "reason": "fixed-radius fallback; AST owner type header"
+                  }
+                ]
+              },
+              {
+                "path": "modules/audit/src/main/java/com/lishu/edu/audit/domain/model/AssigneePolicy.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 23,
+                    "reason": "fixed-radius fallback"
+                  }
+                ]
+              }
+            ],
+            "completion": {
+              "semantic": "COMPLETE",
+              "semanticUsed": false,
+              "readiness": "NEW",
+              "coverage": "COMPLETE",
+              "requestGeneration": 0,
+              "indexedGeneration": 0,
+              "changedDuringRequest": false
+            }
+          }
+        }
+      ],
+      "summary": {
+        "rawSearchPayload": 10785,
+        "readingPayload": 5338,
+        "totalAgentVisiblePayload": 16123,
+        "estimatedTokens": 4031,
+        "elapsedMs": 43.574124999999185,
+        "roundTrips": 2,
+        "returnedFiles": 26,
+        "hitFiles": 6,
+        "precision": 0.23076923076923078,
+        "recall": 0.75,
+        "pCandAt5": 0.8,
+        "pCandAt10": 0.6,
+        "rCand": 0.75,
+        "pRead": 0.6666666666666666,
+        "rReadMust": 1,
+        "rTaskBlocking": 0.6,
+        "readPlanItems": 6,
+        "rgRawBytesSuppressed": 60661,
+        "rgRawBytesExposed": 0,
+        "readPlanFiles": 6,
+        "readPlanRanges": 7,
+        "readPlanBytes": 5338,
+        "budgetUtilization": 0,
+        "NDCG_read@6": 0.751723738836106,
+        "firstTaskBlockingRank": 1,
+        "readPlanRangeRecall": 0.3333333333333333,
+        "RangeLineRecall": 0.3333333333333333,
+        "RangeCoordinateRecall": 0.3333333333333333,
+        "evidencePerKiB": 0.3810705203746201,
+        "taskBlockingHitsPerKiB": 0.19053526018731004,
+        "elapsedMsP50": 43.574124999999185,
+        "elapsedMsP95": 43.574124999999185,
+        "rawSearchPayloadP50": 10785,
+        "rawSearchPayloadP95": 10785,
+        "readingPayloadP50": 5338,
+        "readingPayloadP95": 5338,
+        "totalAgentVisiblePayloadP50": 16123,
+        "totalAgentVisiblePayloadP95": 16123,
+        "estimatedTokensP50": 4031,
+        "estimatedTokensP95": 4031
+      }
+    },
+    {
+      "id": "audit-assignee-mapper-precision",
+      "name": "AuditAssigneeMapper#toDomain new overload precision",
+      "attempts": [
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 9116,
+          "readingPayload": 1584,
+          "totalAgentVisiblePayload": 10700,
+          "estimatedTokens": 2675,
+          "elapsedMs": 29.488375000000815,
+          "roundTrips": 2,
+          "returnedFiles": 20,
+          "hitFiles": 7,
+          "precision": 0.35,
+          "recall": 1,
+          "pCandAt5": 1,
+          "pCandAt10": 0.7,
+          "rCand": 1,
+          "pRead": 0.6666666666666666,
+          "rReadMust": 1,
+          "rTaskBlocking": 0.5714285714285714,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 25623,
+          "rgRawBytesExposed": 0,
+          "readPlanFiles": 6,
+          "readPlanRanges": 6,
+          "readPlanBytes": 1584,
+          "budgetUtilization": 0,
+          "budgetExceededByAnchor": false,
+          "NDCG_read@6": 0.7526136409516657,
+          "firstTaskBlockingRank": 1,
+          "readPlanRangeRecall": 1,
+          "RangeLineRecall": 1,
+          "RangeCoordinateRecall": 1,
+          "evidencePerKiB": 0.6699065420560748,
+          "taskBlockingHitsPerKiB": 0.382803738317757,
+          "timing": {
+            "sessionPhaseMs": {}
+          },
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          },
+          "determinism": {
+            "candidatePaths": [
+              "modules/audit/src/main/java/com/lishu/edu/audit/application/assembler/AuditAssigneeMapper.java",
+              "modules/audit/src/main/java/com/lishu/edu/audit/domain/model/AssigneePolicy.java",
+              "modules/audit/src/main/java/com/lishu/edu/audit/application/dto/AssigneePolicy.java",
+              "modules/audit/src/main/java/com/lishu/edu/audit/application/dto/AssigneeRuleType.java",
+              "modules/audit/src/main/java/com/lishu/edu/audit/application/dto/AuditAssigneeRule.java",
+              "modules/audit/src/main/java/com/lishu/edu/audit/domain/port/AuditOrderRepository.java",
+              "modules/audit/src/main/java/com/lishu/edu/audit/domain/model/AssigneeRuleType.java",
+              "modules/audit/src/main/java/com/lishu/edu/audit/domain/model/AuditAssigneeRule.java",
+              "modules/audit/src/main/java/com/lishu/edu/audit/application/service/AuditApplyAppService.java",
+              "modules/audit/src/main/java/com/lishu/edu/audit/infrastructure/config/AuditMapperConfig.java",
+              "modules/audit/src/main/java/com/lishu/edu/audit/interfaces/assembler/AuditAssembler.java",
+              "modules/audit/src/main/java/com/lishu/edu/audit/interfaces/web/AuditController.java",
+              "modules/audit/src/main/java/com/lishu/edu/audit/infrastructure/persistence/repository/AuditOrderRepositoryImpl.java",
+              "modules/audit/src/main/java/com/lishu/edu/audit/infrastructure/persistence/repository/AuditTaskRepositoryImpl.java",
+              "modules/audit/src/main/java/com/lishu/edu/audit/infrastructure/persistence/repository/AuditTodoRepositoryImpl.java",
+              "modules/audit/src/test/java/com/lishu/edu/audit/application/service/AuditApplyAppServiceTest.java",
+              "modules/common/src/main/java/com/lishu/edu/common/domain/id/IdGenerator.java",
+              "modules/operationLog/src/main/java/com/lishu/edu/operationlog/application/service/OperationLogAppService.java",
+              "modules/audit/src/test/java/com/lishu/edu/audit/application/assembler/AuditAssigneeMapperTest.java",
+              "modules/audit/src/test/java/com/lishu/edu/audit/infrastructure/persistence/repository/AuditTodoRepositoryImplTest.java"
+            ],
+            "readPlan": [
+              {
+                "path": "modules/audit/src/main/java/com/lishu/edu/audit/application/assembler/AuditAssigneeMapper.java",
+                "priority": "P0",
+                "ranges": [
+                  {
+                    "startLine": 8,
+                    "endLine": 15,
+                    "reason": "AST owner type header; AST method range"
+                  }
+                ]
+              },
+              {
+                "path": "modules/audit/src/main/java/com/lishu/edu/audit/domain/model/AssigneePolicy.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 23,
+                    "reason": "fixed-radius fallback"
+                  }
+                ]
+              },
+              {
+                "path": "modules/audit/src/main/java/com/lishu/edu/audit/application/dto/AssigneePolicy.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 23,
+                    "reason": "fixed-radius fallback"
+                  }
+                ]
+              },
+              {
+                "path": "modules/audit/src/main/java/com/lishu/edu/audit/domain/port/AuditOrderRepository.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 23,
+                    "reason": "fixed-radius fallback"
+                  }
+                ]
+              },
+              {
+                "path": "modules/common/src/main/java/com/lishu/edu/common/domain/id/IdGenerator.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 23,
+                    "reason": "fixed-radius fallback"
+                  }
+                ]
+              },
+              {
+                "path": "modules/audit/src/main/java/com/lishu/edu/audit/application/dto/AssigneeRuleType.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 23,
+                    "reason": "fixed-radius fallback"
+                  }
+                ]
+              }
+            ],
+            "completion": {
+              "semantic": "COMPLETE",
+              "semanticUsed": false,
+              "readiness": "NEW",
+              "coverage": "COMPLETE",
+              "requestGeneration": 0,
+              "indexedGeneration": 0,
+              "changedDuringRequest": false
+            }
+          }
+        }
+      ],
+      "summary": {
+        "rawSearchPayload": 9116,
+        "readingPayload": 1584,
+        "totalAgentVisiblePayload": 10700,
+        "estimatedTokens": 2675,
+        "elapsedMs": 29.488375000000815,
+        "roundTrips": 2,
+        "returnedFiles": 20,
+        "hitFiles": 7,
+        "precision": 0.35,
+        "recall": 1,
+        "pCandAt5": 1,
+        "pCandAt10": 0.7,
+        "rCand": 1,
+        "pRead": 0.6666666666666666,
+        "rReadMust": 1,
+        "rTaskBlocking": 0.5714285714285714,
+        "readPlanItems": 6,
+        "rgRawBytesSuppressed": 25623,
+        "rgRawBytesExposed": 0,
+        "readPlanFiles": 6,
+        "readPlanRanges": 6,
+        "readPlanBytes": 1584,
+        "budgetUtilization": 0,
+        "NDCG_read@6": 0.7526136409516657,
+        "firstTaskBlockingRank": 1,
+        "readPlanRangeRecall": 1,
+        "RangeLineRecall": 1,
+        "RangeCoordinateRecall": 1,
+        "evidencePerKiB": 0.6699065420560748,
+        "taskBlockingHitsPerKiB": 0.382803738317757,
+        "elapsedMsP50": 29.488375000000815,
+        "elapsedMsP95": 29.488375000000815,
+        "rawSearchPayloadP50": 9116,
+        "rawSearchPayloadP95": 9116,
+        "readingPayloadP50": 1584,
+        "readingPayloadP95": 1584,
+        "totalAgentVisiblePayloadP50": 10700,
+        "totalAgentVisiblePayloadP95": 10700,
+        "estimatedTokensP50": 2675,
+        "estimatedTokensP95": 2675
+      }
+    },
+    {
+      "id": "exam-score-export-cross-module-holdout",
+      "name": "ExamScoreExportAppService#export cross-module score workbook",
+      "attempts": [
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 11724,
+          "readingPayload": 9918,
+          "totalAgentVisiblePayload": 21642,
+          "estimatedTokens": 5411,
+          "elapsedMs": 210.78433299999597,
+          "roundTrips": 2,
+          "returnedFiles": 26,
+          "hitFiles": 13,
+          "precision": 0.5,
+          "recall": 0.8125,
+          "pCandAt5": 1,
+          "pCandAt10": 0.6,
+          "rCand": 0.8125,
+          "pRead": 0.8333333333333334,
+          "rReadMust": 0.5,
+          "rTaskBlocking": 0.38461538461538464,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 532465,
+          "rgRawBytesExposed": 0,
+          "readPlanFiles": 6,
+          "readPlanRanges": 7,
+          "readPlanBytes": 9918,
+          "budgetUtilization": 0,
+          "budgetExceededByAnchor": false,
+          "NDCG_read@6": 0.892210845475489,
+          "firstTaskBlockingRank": 1,
+          "readPlanRangeRecall": 0.14285714285714285,
+          "RangeLineRecall": 0.14285714285714285,
+          "RangeCoordinateRecall": 0.14285714285714285,
+          "evidencePerKiB": 0.6151002679974125,
+          "taskBlockingHitsPerKiB": 0.23657702615285095,
+          "timing": {
+            "sessionPhaseMs": {}
+          },
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          },
+          "determinism": {
+            "candidatePaths": [
+              "modules/exam/src/main/java/com/lishu/edu/exam/application/service/ExamScoreExportAppService.java",
+              "modules/exam/src/main/java/com/lishu/edu/exam/application/dto/ExamScoreExportFile.java",
+              "modules/exam/src/main/java/com/lishu/edu/exam/domain/port/ExamRepository.java",
+              "modules/exam/src/main/java/com/lishu/edu/exam/domain/port/ExamScoreExportGenerator.java",
+              "modules/exam/src/main/java/com/lishu/edu/exam/domain/port/ExamStudentSubjectScoreRepository.java",
+              "modules/exam/src/main/java/com/lishu/edu/exam/infrastructure/excel/ExamScoreExportExcelGenerator.java",
+              "modules/exam/src/main/java/com/lishu/edu/exam/infrastructure/persistence/repository/ExamRepositoryImpl.java",
+              "modules/exam/src/main/java/com/lishu/edu/exam/infrastructure/persistence/repository/ExamStudentItemScoreRepositoryImpl.java",
+              "modules/exam/src/main/java/com/lishu/edu/exam/infrastructure/persistence/repository/ExamStudentSubjectScoreRepositoryImpl.java",
+              "modules/exam/src/main/java/com/lishu/edu/exam/infrastructure/persistence/mapper/ExamStudentSubjectScoreMapper.java",
+              "modules/exam/src/main/java/com/lishu/edu/exam/interfaces/web/ExamController.java",
+              "modules/exam/src/main/java/com/lishu/edu/exam/infrastructure/persistence/mapper/ExamMapper.java",
+              "modules/exam/src/main/java/com/lishu/edu/exam/application/service/ExamScopeService.java",
+              "modules/exam/src/main/java/com/lishu/edu/exam/domain/port/ExamSubjectRepository.java",
+              "modules/exam/src/main/java/com/lishu/edu/exam/application/dto/ExamScoreExportItem.java",
+              "modules/exam/src/main/java/com/lishu/edu/exam/application/dto/ExamScoreExportRow.java",
+              "modules/exam/src/main/java/com/lishu/edu/exam/application/dto/ExamScoreExportWorkbook.java",
+              "modules/exam/src/main/java/com/lishu/edu/exam/domain/port/ExamStudentItemScoreRepository.java",
+              "modules/exam/src/main/java/com/lishu/edu/exam/infrastructure/persistence/repository/ExamItemRepositoryImpl.java",
+              "modules/exam/src/main/java/com/lishu/edu/exam/infrastructure/persistence/repository/ExamSubjectRepositoryImpl.java",
+              "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolQueryService.java",
+              "modules/exam/src/main/java/com/lishu/edu/exam/domain/error/ExamErrorCode.java",
+              "modules/exam/src/main/java/com/lishu/edu/exam/domain/exam/Exam.java",
+              "modules/exam/src/test/java/com/lishu/edu/exam/application/service/ExamAppServiceTest.java",
+              "modules/school/src/main/java/com/lishu/edu/school/application/dto/StudentBasicInfo.java",
+              "modules/school/src/main/java/com/lishu/edu/school/application/dto/SchoolSummary.java"
+            ],
+            "readPlan": [
+              {
+                "path": "modules/exam/src/main/java/com/lishu/edu/exam/application/service/ExamScoreExportAppService.java",
+                "priority": "P0",
+                "ranges": [
+                  {
+                    "startLine": 38,
+                    "endLine": 50,
+                    "reason": "AST owner type header"
+                  },
+                  {
+                    "startLine": 55,
+                    "endLine": 84,
+                    "reason": "AST method range"
+                  }
+                ]
+              },
+              {
+                "path": "modules/exam/src/main/java/com/lishu/edu/exam/domain/port/ExamScoreExportGenerator.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 25,
+                    "reason": "fixed-radius fallback"
+                  }
+                ]
+              },
+              {
+                "path": "modules/exam/src/main/java/com/lishu/edu/exam/domain/port/ExamRepository.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 29,
+                    "reason": "fixed-radius fallback; AST owner type header"
+                  }
+                ]
+              },
+              {
+                "path": "modules/exam/src/main/java/com/lishu/edu/exam/domain/port/ExamStudentSubjectScoreRepository.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 28,
+                    "reason": "fixed-radius fallback; AST owner type header"
+                  }
+                ]
+              },
+              {
+                "path": "modules/exam/src/main/java/com/lishu/edu/exam/domain/port/ExamSubjectRepository.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 23,
+                    "reason": "fixed-radius fallback"
+                  }
+                ]
+              },
+              {
+                "path": "modules/exam/src/main/java/com/lishu/edu/exam/interfaces/web/ExamController.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 63,
+                    "reason": "fixed-radius fallback"
+                  }
+                ]
+              }
+            ],
+            "completion": {
+              "semantic": "COMPLETE",
+              "semanticUsed": false,
+              "readiness": "NEW",
+              "coverage": "COMPLETE",
+              "requestGeneration": 0,
+              "indexedGeneration": 0,
+              "changedDuringRequest": false
+            }
+          }
+        }
+      ],
+      "summary": {
+        "rawSearchPayload": 11724,
+        "readingPayload": 9918,
+        "totalAgentVisiblePayload": 21642,
+        "estimatedTokens": 5411,
+        "elapsedMs": 210.78433299999597,
+        "roundTrips": 2,
+        "returnedFiles": 26,
+        "hitFiles": 13,
+        "precision": 0.5,
+        "recall": 0.8125,
+        "pCandAt5": 1,
+        "pCandAt10": 0.6,
+        "rCand": 0.8125,
+        "pRead": 0.8333333333333334,
+        "rReadMust": 0.5,
+        "rTaskBlocking": 0.38461538461538464,
+        "readPlanItems": 6,
+        "rgRawBytesSuppressed": 532465,
+        "rgRawBytesExposed": 0,
+        "readPlanFiles": 6,
+        "readPlanRanges": 7,
+        "readPlanBytes": 9918,
+        "budgetUtilization": 0,
+        "NDCG_read@6": 0.892210845475489,
+        "firstTaskBlockingRank": 1,
+        "readPlanRangeRecall": 0.14285714285714285,
+        "RangeLineRecall": 0.14285714285714285,
+        "RangeCoordinateRecall": 0.14285714285714285,
+        "evidencePerKiB": 0.6151002679974125,
+        "taskBlockingHitsPerKiB": 0.23657702615285095,
+        "elapsedMsP50": 210.78433299999597,
+        "elapsedMsP95": 210.78433299999597,
+        "rawSearchPayloadP50": 11724,
+        "rawSearchPayloadP95": 11724,
+        "readingPayloadP50": 9918,
+        "readingPayloadP95": 9918,
+        "totalAgentVisiblePayloadP50": 21642,
+        "totalAgentVisiblePayloadP95": 21642,
+        "estimatedTokensP50": 5411,
+        "estimatedTokensP95": 5411
+      }
+    },
+    {
+      "id": "paper-task-claim-iam-holdout",
+      "name": "PaperTaskCommandAppService#claimTask IAM identity and atomic claim",
+      "attempts": [
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 11465,
+          "readingPayload": 9120,
+          "totalAgentVisiblePayload": 20585,
+          "estimatedTokens": 5146,
+          "elapsedMs": 226.54970800000592,
+          "roundTrips": 2,
+          "returnedFiles": 26,
+          "hitFiles": 10,
+          "precision": 0.38461538461538464,
+          "recall": 0.8333333333333334,
+          "pCandAt5": 1,
+          "pCandAt10": 0.8,
+          "rCand": 0.8333333333333334,
+          "pRead": 0.8333333333333334,
+          "rReadMust": 0.5,
+          "rTaskBlocking": 0.5,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 991316,
+          "rgRawBytesExposed": 0,
+          "readPlanFiles": 6,
+          "readPlanRanges": 8,
+          "readPlanBytes": 9120,
+          "budgetUtilization": 0,
+          "budgetExceededByAnchor": false,
+          "NDCG_read@6": 0.892210845475489,
+          "firstTaskBlockingRank": 1,
+          "readPlanRangeRecall": 0.2,
+          "RangeLineRecall": 0.2,
+          "RangeCoordinateRecall": 0.2,
+          "evidencePerKiB": 0.497449599222735,
+          "taskBlockingHitsPerKiB": 0.2487247996113675,
+          "timing": {
+            "sessionPhaseMs": {}
+          },
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          },
+          "determinism": {
+            "candidatePaths": [
+              "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperTaskCommandAppService.java",
+              "modules/paper/src/main/java/com/lishu/edu/paper/application/dto/PaperTaskView.java",
+              "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperTaskQueryService.java",
+              "modules/paper/src/main/java/com/lishu/edu/paper/domain/port/PaperRecordTaskRepository.java",
+              "modules/paper/src/main/java/com/lishu/edu/paper/infrastructure/persistence/repository/PaperRecordTaskRepositoryImpl.java",
+              "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperTaskAppService.java",
+              "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperAccessService.java",
+              "modules/paper/src/main/java/com/lishu/edu/paper/domain/error/PaperErrorCode.java",
+              "modules/paper/src/main/java/com/lishu/edu/paper/domain/task/PaperRecordTask.java",
+              "modules/paper/src/main/java/com/lishu/edu/paper/domain/task/PaperRecordTaskStatus.java",
+              "modules/paper/src/main/java/com/lishu/edu/paper/application/dto/PaperRecordTaskStatus.java",
+              "modules/paper/src/test/java/com/lishu/edu/paper/application/service/PaperTaskCommandAppServiceTest.java",
+              "modules/paper/src/main/java/com/lishu/edu/paper/application/assembler/QuestionOperatorViewAssembler.java",
+              "modules/paper/src/main/java/com/lishu/edu/paper/application/dto/QuestionOperatorView.java",
+              "modules/paper/src/main/java/com/lishu/edu/paper/application/service/AdminQuestionOperatorAppService.java",
+              "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperAppService.java",
+              "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperAuditEventService.java",
+              "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperAutoRecordJobAppService.java",
+              "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperAutoRecordJobGuard.java",
+              "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperAutoRecordJobOrchestratorAppService.java",
+              "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperAutoRecordMainlineAppService.java",
+              "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperAutoRecordPersistAppService.java",
+              "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperAutoRecordStartupRecoveryAppService.java",
+              "modules/iam/src/main/java/com/lishu/edu/iam/application/dto/MeInfo.java",
+              "modules/iam/src/main/java/com/lishu/edu/iam/application/dto/SwitchIdentityCommand.java",
+              "modules/iam/src/main/java/com/lishu/edu/iam/application/service/AccountSessionRefreshService.java"
+            ],
+            "readPlan": [
+              {
+                "path": "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperTaskCommandAppService.java",
+                "priority": "P0",
+                "ranges": [
+                  {
+                    "startLine": 19,
+                    "endLine": 43,
+                    "reason": "AST owner type header; AST method range"
+                  }
+                ]
+              },
+              {
+                "path": "modules/paper/src/main/java/com/lishu/edu/paper/domain/port/PaperRecordTaskRepository.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 31,
+                    "reason": "fixed-radius fallback; AST owner type header"
+                  },
+                  {
+                    "startLine": 38,
+                    "endLine": 38,
+                    "reason": "AST method range"
+                  }
+                ]
+              },
+              {
+                "path": "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperTaskQueryService.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 44,
+                    "reason": "fixed-radius fallback"
+                  }
+                ]
+              },
+              {
+                "path": "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperAccessService.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 23,
+                    "reason": "fixed-radius fallback"
+                  }
+                ]
+              },
+              {
+                "path": "modules/paper/src/main/java/com/lishu/edu/paper/application/dto/PaperTaskView.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 23,
+                    "reason": "fixed-radius fallback; AST owner type header"
+                  },
+                  {
+                    "startLine": 43,
+                    "endLine": 104,
+                    "reason": "AST method range"
+                  }
+                ]
+              },
+              {
+                "path": "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperTaskAppService.java",
+                "priority": "P1",
+                "ranges": [
+                  {
+                    "startLine": 1,
+                    "endLine": 27,
+                    "reason": "fixed-radius fallback; AST owner type header; AST method range"
+                  }
+                ]
+              }
+            ],
+            "completion": {
+              "semantic": "COMPLETE",
+              "semanticUsed": false,
+              "readiness": "NEW",
+              "coverage": "COMPLETE",
+              "requestGeneration": 0,
+              "indexedGeneration": 0,
+              "changedDuringRequest": false
+            }
+          }
+        }
+      ],
+      "summary": {
+        "rawSearchPayload": 11465,
+        "readingPayload": 9120,
+        "totalAgentVisiblePayload": 20585,
+        "estimatedTokens": 5146,
+        "elapsedMs": 226.54970800000592,
+        "roundTrips": 2,
+        "returnedFiles": 26,
+        "hitFiles": 10,
+        "precision": 0.38461538461538464,
+        "recall": 0.8333333333333334,
+        "pCandAt5": 1,
+        "pCandAt10": 0.8,
+        "rCand": 0.8333333333333334,
+        "pRead": 0.8333333333333334,
+        "rReadMust": 0.5,
+        "rTaskBlocking": 0.5,
+        "readPlanItems": 6,
+        "rgRawBytesSuppressed": 991316,
+        "rgRawBytesExposed": 0,
+        "readPlanFiles": 6,
+        "readPlanRanges": 8,
+        "readPlanBytes": 9120,
+        "budgetUtilization": 0,
+        "NDCG_read@6": 0.892210845475489,
+        "firstTaskBlockingRank": 1,
+        "readPlanRangeRecall": 0.2,
+        "RangeLineRecall": 0.2,
+        "RangeCoordinateRecall": 0.2,
+        "evidencePerKiB": 0.497449599222735,
+        "taskBlockingHitsPerKiB": 0.2487247996113675,
+        "elapsedMsP50": 226.54970800000592,
+        "elapsedMsP95": 226.54970800000592,
+        "rawSearchPayloadP50": 11465,
+        "rawSearchPayloadP95": 11465,
+        "readingPayloadP50": 9120,
+        "readingPayloadP95": 9120,
+        "totalAgentVisiblePayloadP50": 20585,
+        "totalAgentVisiblePayloadP95": 20585,
+        "estimatedTokensP50": 5146,
+        "estimatedTokensP95": 5146
+      }
+    }
+  ]
+}

@@ -104,6 +104,10 @@ export function applyVerbosity(payload: ImpactResult, verbosity: ImpactVerbosity
     const { reasons: _reasons, verifiedBy: _verifiedBy, scoreBreakdown: _scoreBreakdown, ...publicFile } = file;
     return publicFile;
   });
+  payload.readPlan = payload.readPlan.map(item => ({
+    ...item,
+    ranges: item.ranges.map(({ reason: _reason, ...publicRange }) => publicRange)
+  }));
   const preservedGaps = payload.evidenceGaps.filter(isLombokCompletenessGap);
   const ordinaryGaps = payload.evidenceGaps.filter(gap => !isLombokCompletenessGap(gap));
   payload.evidenceGaps = [...preservedGaps, ...ordinaryGaps]

@@ -2,7 +2,7 @@
 
 ## 当前任务
 
-Java-only LSP/MCP V3.2 优化的 Sprint3、**Sprint4（JDT 语义价值兑现，V3.2-21~25）均已完成**。Sprint4 五项全部关闭，最终策略维持 `semantic` = `KEEP_EXPLICIT`，未新增任何自动触发 live JDT 的默认路径。下一个未开始的单元是 Sprint5（development-plan 第 682 行起，V3.2-26~，真实 Token/范围质量/任务结果）。用户的硬约束不变：**任何测试、构建、benchmark 或验证都必须与正在使用的 LSP 隔离**，不能接触活动 checkout、LSP、JDT、JavaIndex 缓存或 `node_modules`。
+Java-only LSP/MCP V3.2 优化的 Sprint3、Sprint4 均已完成。**Sprint5 进行中：V3.2-26、V3.2-27 已关闭；V3.2-28/29/30 未开始**（development-plan 第 682 行起）。V3.2-30（真实 Agent outcome gate，6 任务×old/new×AB/BA）与 V3.2-26 的 Agent 使用质量半场已获得 2026-08-16 的 V3.2-07b 显式授权（[[v32-07b-authorization]]，scope 限定，不是永久豁免）。用户的硬约束不变：**任何测试、构建、benchmark 或验证都必须与正在使用的 LSP 隔离**，不能接触活动 checkout、LSP、JDT、JavaIndex 缓存或 `node_modules`。
 
 当前分支是 `codex/java-intelligence-v3`（最新 commit 见 `git log --oneline -5`）。**均已 commit 且已 push，不是 dirty worktree**（工作区可能有两个未提交、未跟踪的实验脚手架：`scripts/run-idle-prewarm-experiment.mjs`（V3.2-23）与 `scripts/run-v324-import-concurrency-experiment.mjs`（V3.2-24）——都是保留的、接线已验证有效的脚手架，不是遗漏的改动，见下方对应小节）。
 
@@ -34,10 +34,15 @@ Java-only LSP/MCP V3.2 优化的 Sprint3、**Sprint4（JDT 语义价值兑现，
 
 **Sprint4 完成门**（development-plan 原文未单列一行，按 §5.2 全局硬门 + 上述 5 条默认化硬门执行）：五项全部关闭，最终策略维持 `KEEP_EXPLICIT`，`semantic` 未进入默认路径，未新增任何自动触发 live JDT 的代码。
 
+## Sprint5 进展（development-plan 第 685-725 行）
+
+- **V3.2-26：字节半场已关闭为 `CLOSED_VIA_V3.2-02_EXIT_CONDITION`（不是"达到 15% 目标"）。** `artifacts/v3-baseline/` 下的 Sprint0 baseline 全是 0 字节文件（`ls -la` 核实），"相对 Sprint0 baseline 降 15%" 这个数值门本身不可测。但依赖项 V3.2-02 自己的退出条件（`standardToDiagnosticBytesRatio<0.5` → 转向真实 Agent trace）早已成立：cipherlink 10 场景 P50 ratio 是 0.338（本轮改动前）/0.329（改动后），远低于 0.5。本轮顺手修了一个真实的一致性 bug——`applyVerbosity()`（`format.ts`）给 `files[]` 剥离了 `reasons`/`verifiedBy`/`scoreBreakdown` 三个诊断专用字段，却漏了 `readPlan[].ranges[].reason` 同类字段，导致它在 standard/compact 也原样出现；改成剥离后 standard bytes P50 从 11432 降到 11124（**-2.69%**，cipherlink 独测，机制仓库无关但未在另外两仓复测）。**连带修复**了 `attribution-v3.ts` 的 `candidateReadPlanFingerprint()`——它把 `payload.readPlan` 整体纳入身份哈希，剥离 `ranges[].reason` 后触发了它自己的"projection changed candidate/read-plan identity"断言（这个断言设计意图是只保护身份不保护辅助字段，`files` 侧早就手动排除了对应字段，`readPlan` 侧漏做了同样的事）——这不是我引入的新 bug，是既有断言正确抓住了一个此前从未被裁剪过的字段路径。**输出契约变化**：`readPlan[].ranges[].reason` 不再出现在默认 `standard` 响应里；已检索确认没有任何现存文档/schema/agent prompt 把这个字段列为承诺契约，不需要改文档。Agent 使用质量半场移交 V3.2-30。详见 `docs/deep/codex-java-lsp-mcp-java-intelligence-v3-sprint5-token-value-realization-progress-2026-08-16.md` §2。
+- **V3.2-27：已关闭为 `MODIFY_REJECTED_STRUCTURAL`，本轮不实现代码。** 首次测得 baseline：三仓 RangeLineRecall 0.5525-0.85（目标 1.0），真实未关闭的实现缺口。15 个 miss 场景归纳出 5 类根因（top-of-file-fallback / near-miss-boundary / budget-truncation / second-position-not-queried / out-of-scope），本轮只深入分析了最大类 top-of-file-fallback（8 例，根因是 `candidateFromFacts()` 硬编码 `positions:[{line:1,column:1}]`，命中 `fallbackReadRange()` 得到 lines 1-23）。**一个"用 type 声明行代替 (1,1)"的低成本候选修法被结构性证伪**：任何因这个 bug miss 的场景，golden 起点按定义必然 >~23 行（否则早已是命中）；`typeHeaderRange()` 的落点仍在 1-40 行区间，和实际 miss 起点（50/77/102/136/162/238/961）完全不重叠——本轮从 golden 数据逐一核实：真正落在 [1,23] 内的几个 range 全部已经是命中，不在 miss 列表里，证明这条修法帮不到任何一个真实 miss。真正需要的修法是给候选线程具体方法级位置（不是类型声明行），这需要在 `collectTypeGraphCandidates`/`collectImportGraphCandidates` 两个 `hydrate:false` 调用点强制 `hydrate:true`，成本未量化，留作后续独立评估项。**不要试图用 type-header 变体去凑合**——已证明结构性帮不上忙，不是"收益不够大"。详见同上报告 §3。
+
 ## 下一步
 
-1. Sprint4（V3.2-21~25）全部关闭，下一个未开始的单元是 **Sprint5**（development-plan 第 682 行起：V3.2-26 优化默认 `standard` 输出、V3.2-27 range-first source planning，……真实 Token/范围质量/任务结果）。开始前先通读 Sprint5 全文，同 Sprint4 起步时一样确认每项的验收指标性质、依赖是否因 Sprint4 的关闭结论（尤其 V3.2-21 `DO_NOT_IMPLEMENT`）而变化。development-plan 备注 V3.2-26 的部分验收依赖 V3.2-07b（外部 Agent 调用），遇到时按标准流程处理为 `BLOCKED_EXTERNAL`，不要绕过授权边界。
-2. 遇到设计分叉直接问 advisor，不问用户；遇到需要外部 Agent 调用/涉及外部成本的边界，停下来问用户。
+1. Sprint5 剩余：**V3.2-28**（task-aware budget，依赖 V3.2-27 已关闭——注意 V3.2-27 没有落地代码，V3.2-28 的"按 anchor profile/taskBlocking/文件大小调整预算"需要先确认自己不依赖 V3.2-27 未实现的 range-first 改动）；**V3.2-29**（provider measured-or-remove，Spring/MyBatis/MapStruct source-locked on/off ablation——这是 Sprint5 里唯一"失败分支即删代码"的项，LOC 余量已经打满 33219/33219，优先做这项，为后续项目挪出负 LOC 空间）；**V3.2-30**（真实 Agent outcome gate，已获 V3.2-07b 授权，可以直接执行，不需要再问用户，但要按 `docs/evals/java-intelligence-v32-agent-trace-spec.md` 的 preflight 走完整流程）。
+2. 遇到设计分叉直接问 advisor，不问用户；V3.2-30/V3.2-26 的外部 Agent 调用已获授权（scope：6 任务×old/new×AB/BA），执行前不需要再问，但如果实际需要的调用量/范围明显超出这个 scope，按标准流程停下来问。
 3. Sprint5 完成后走 Sprint3/4 同样的收尾流程：隔离回归 → LOC ledger → 报告 → commit → push（均已获用户标准授权，不需要再问）。
 4. 独立于 Sprint5：如果未来有会话想验证 import concurrency 是否影响 first-touch（V3.2-24 §5.4 的开放问题）或版本/fingerprint 复用缺口（V3.2-24 §5.5(c)），先看 `uptime` 的 1 分钟 load average 是否 <= 逻辑核数 × 0.7——`scripts/run-v324-import-concurrency-experiment.mjs` 已经内置这个前置检查，会直接拒绝在嘈杂主机上启动。这两项都不是 Sprint5 的依赖，是独立的、优先级较低的收尾项。
 
@@ -54,13 +59,15 @@ Java-only LSP/MCP V3.2 优化的 Sprint3、**Sprint4（JDT 语义价值兑现，
 - 不要在没有新证据的情况下重开 V3.2-24 的 `KEEP_EXPLICIT`——退出条件已经在现有 concurrency=2 数据上独立成立，不依赖 import concurrency 那一维度的答案。
 - 不要在没有先验证"JDT 自身 M2E/Buildship 是否已经覆盖"之前，直接给 `dataDir` 加版本/fingerprint 失效逻辑（V3.2-24 §5.5(c) 的开放问题）——可能是重复造轮子。
 - 不要在 1 分钟 load average 明显高于逻辑核数（本机 10 核，经验阈值 0.7x）时运行 fresh-workspace JDT first-touch 类 benchmark 并把结果当结论——2026-08-16 的一次尝试在 load≈30 时两臂都 60s 超时零结果，已确认这类噪声会让结果不可信。
+- 不要在裸 `bash -lc '...'` 里跑 `run-isolated-validation.mjs`/`run-isolated-jdt-benchmark.mjs` 而不先 `export PATH="/opt/homebrew/bin:$PATH"`——本机 `/usr/local/bin/git` 是 2015 年遗留的 git 2.3.1 符号链接，排在真正的 `/opt/homebrew/bin/git`（2.52.0）前面，会导致 worktree 相关测试假性失败、或对三仓 golden repo（本身是 git worktree）的 `--repo-root` 调用假性报 "Not a git repository"。见 [[node-and-benchmark-env-constraints]] 第 3 条。
+- 不要把 V3.2-27 的 top-of-file-fallback miss 类用"type 声明行代替 (1,1)"这种低成本修法去凑合——已用 golden 数据结构性证伪（见 Sprint5 §3），会浪费 LOC 余量且拿不到任何真实收益。
 
 ## 关键文件 / 命令 / 验证
 
 - 计划真源：`docs/deep/codex-java-lsp-mcp-java-intelligence-v3-value-realization-optimization-development-plan-2026-08-09.md`。
 - Sprint3 证据：`artifacts/v3-final/sprint3-{cold-matrix-20260815-v3,progressive-20260815,storm-20260815,diagnostics-20260815,followup-20260815}/`。
 - 隔离验证入口：`sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted|compile|full [--keep] [--env NAME=VALUE] -- COMMAND`。
-- LOC ledger 生成参考：对比固定基线 `d7f23d5`（31,638 行）与当前 worktree，用 `scripts/count-production-ts.mjs` 的 `countProductionTs`；硬上限 `Math.floor(31638*1.05)=33,219`；当前候选 33,215（4 行余量，Sprint4 起步前如需新增生产代码请先规划偿还或确认余量）。
+- LOC ledger 生成参考：对比固定基线 `d7f23d5`（31,638 行）与当前 worktree，用 `scripts/count-production-ts.mjs` 的 `countProductionTs`；硬上限 `Math.floor(31638*1.05)=33,219`（`scripts/run-v32-optimization-matrix.mjs:49` 用 `<=` 判定，打满不算超）；**当前候选 33,219，零余量**（Sprint5 的 V3.2-26 修复占用了全部 4 行；下一次新增生产代码前必须先在别处腾出行数，V3.2-29 是 Sprint5 里唯一天然会删代码的项，优先做）。
 
 ## 给下一会话的第一步
 
@@ -69,4 +76,4 @@ git log --oneline -5
 git status --short
 ```
 
-确认 `git log` 最新一条是 Sprint4 收尾提交（或更新）、`git status` 除了未跟踪的 `scripts/run-idle-prewarm-experiment.mjs` 与 `scripts/run-v324-import-concurrency-experiment.mjs` 之外干净，再从 Sprint5 开始（见上方"下一步"）。
+确认 `git log` 最新一条是 Sprint5（V3.2-26/27）收尾提交（或更新）、`git status` 除了未跟踪的 `scripts/run-idle-prewarm-experiment.mjs` 与 `scripts/run-v324-import-concurrency-experiment.mjs` 之外干净，再从 V3.2-28/29/30 开始（见上方"下一步"）。

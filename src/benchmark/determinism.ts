@@ -68,7 +68,7 @@ export function buildImpactDeterminismSnapshot(
       ranges: item.ranges.map(range => ({
         startLine: range.startLine,
         endLine: range.endLine,
-        reason: range.reason
+        reason: range.reason ?? ""
       }))
     })),
     familyScores: productionRanking?.candidates.map(candidate => ({

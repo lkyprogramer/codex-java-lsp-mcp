@@ -106,7 +106,7 @@ export type CandidateEvidenceKey = {
 export type ReadRange = {
   startLine: number;
   endLine: number;
-  reason: string;
+  reason?: string; // diagnostic-only; stripped at standard/compact like files[].scoreBreakdown
   estimatedBytes: number;
 };
 

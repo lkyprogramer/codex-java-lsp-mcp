@@ -104,7 +104,7 @@ function candidateReadPlanFingerprint(payload: ImpactResult): string {
       evidence: file.evidence,
       locations: file.locations
     })),
-    readPlan: payload.readPlan
+    readPlan: payload.readPlan.map(item => ({ ...item, ranges: item.ranges.map(({ reason: _reason, ...range }) => range) }))
   }));
 }
 

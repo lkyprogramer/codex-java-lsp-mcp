@@ -88,6 +88,14 @@ test("one diagnostic canonical result projects to standard/compact without diagn
     cache: { hits: 1 },
     javaIndex: { rpc: { enabled: true, operations: { STATUS: { count: 1 } } } }
   };
+  canonical.readPlan = [{
+    priority: "P1",
+    fileId: "F1",
+    ranges: [{ startLine: 2, endLine: 4, reason: "AST method range", estimatedBytes: 100 }],
+    reason: "main implementation candidate",
+    expectedEvidence: ["CALLS"],
+    estimatedBytes: 100
+  }];
 
   const standard = projectImpactResultV6(canonical, "standard");
   const compact = projectImpactResultV6(canonical, "compact");
@@ -97,6 +105,10 @@ test("one diagnostic canonical result projects to standard/compact without diagn
   assert.equal(Object.hasOwn(compact.files[0]!, "scoreBreakdown"), false);
   assert.deepEqual(diagnostic.files[0]!.reasons, ["CALLS"]);
   assert.deepEqual(canonical.files[0]!.reasons, ["CALLS"], "projection must not mutate the canonical result");
+  assert.equal(Object.hasOwn(standard.readPlan[0]!.ranges[0]!, "reason"), false);
+  assert.equal(Object.hasOwn(compact.readPlan[0]!.ranges[0]!, "reason"), false);
+  assert.equal(diagnostic.readPlan[0]!.ranges[0]!.reason, "AST method range");
+  assert.equal(canonical.readPlan[0]!.ranges[0]!.reason, "AST method range", "projection must not mutate the canonical result");
   assert.equal(Object.hasOwn(standard.metrics!, "cache"), false);
   assert.equal(Object.hasOwn(standard.metrics!, "javaIndex"), false);
   assert.equal(Object.hasOwn(compact.metrics!, "javaIndex"), false);

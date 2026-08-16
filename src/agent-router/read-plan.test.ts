@@ -1526,8 +1526,8 @@ test("a merged worker range reports every retained source-window reason", async 
     } as never
   });
 
-  assert.match(result.items[0]!.ranges[0]!.reason, /AST method range/);
-  assert.match(result.items[0]!.ranges[0]!.reason, /AST owner type header/);
+  assert.match(result.items[0]!.ranges[0]!.reason!, /AST method range/);
+  assert.match(result.items[0]!.ranges[0]!.reason!, /AST owner type header/);
 });
 
 test("semanticPolicy required still uses one bounded V6 range batch", async () => {
