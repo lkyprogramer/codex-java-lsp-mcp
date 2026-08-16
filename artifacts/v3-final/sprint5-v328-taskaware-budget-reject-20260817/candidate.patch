@@ -1,0 +1,634 @@
+diff --git a/src/agent-router/read-plan.test.ts b/src/agent-router/read-plan.test.ts
+index 6aefc22..6f7d66b 100644
+--- a/src/agent-router/read-plan.test.ts
++++ b/src/agent-router/read-plan.test.ts
+@@ -1307,6 +1307,53 @@ test("anchors remain mandatory when their distinct files exceed the configured f
+   assert.ok(result.evidenceGaps.some(gap => gap.includes("Anchor files exceeded")));
+ });
+ 
++test("protected structural evidence widens the mode-default file cap the same way anchor overflow does", async () => {
++  const anchor = candidate({ absolutePath: "/repo/src/main/java/demo/Anchor.java", path: "src/main/java/demo/Anchor.java", reasons: ["target"], categories: ["target"], score: 1_000 });
++  // Exactly BUCKET_RULES.core.max (4) protected candidates: anchor(1) + core(4) = 5 stays within
++  // the "core" bucket's own ceiling, isolating the file-count-cap effect this rule targets from
++  // that separate, unrelated per-bucket ceiling.
++  const protectedCore = Array.from({ length: 4 }, (_, index) => candidate({
++    absolutePath: `/repo/src/main/java/demo/Core${index}.java`,
++    path: `src/main/java/demo/Core${index}.java`,
++    reasons: ["persisted-implementation"],
++    verifiedBy: ["persisted-implementation"],
++    categories: ["semantic"],
++    score: 900 - index
++  }));
++  const files = [anchor, ...protectedCore];
++  const result = await buildReadPlan({
++    files,
++    ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
++    options: { ...optionsFor(anchor, { mode: "minimal" }) },
++    javaIndex: fixedRangeIndex(),
++    protectedPaths: protectedReadPlanPaths(files)
++  });
++
++  assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F2", "F3", "F4", "F5"]);
++});
++
++test("an explicit readPlanMaxItems stays binding even when protected evidence would otherwise widen it", async () => {
++  const anchor = candidate({ absolutePath: "/repo/src/main/java/demo/Anchor.java", path: "src/main/java/demo/Anchor.java", reasons: ["target"], categories: ["target"], score: 1_000 });
++  const protectedCore = Array.from({ length: 4 }, (_, index) => candidate({
++    absolutePath: `/repo/src/main/java/demo/Core${index}.java`,
++    path: `src/main/java/demo/Core${index}.java`,
++    reasons: ["persisted-implementation"],
++    verifiedBy: ["persisted-implementation"],
++    categories: ["semantic"],
++    score: 900 - index
++  }));
++  const files = [anchor, ...protectedCore];
++  const result = await buildReadPlan({
++    files,
++    ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
++    options: { ...optionsFor(anchor, { mode: "minimal", readPlanMaxItems: 3 }) },
++    javaIndex: fixedRangeIndex(),
++    protectedPaths: protectedReadPlanPaths(files)
++  });
++
++  assert.equal(result.items.length, 3);
++});
++
+ test("two anchors remain mandatory when readPlanMaxItems is one", async () => {
+   const anchors = [0, 1].map(index => candidate({
+     absolutePath: `/repo/src/main/java/demo/Anchor${index}.java`,
+diff --git a/src/agent-router/read-plan.ts b/src/agent-router/read-plan.ts
+index f5d7a69..f224a2d 100644
+--- a/src/agent-router/read-plan.ts
++++ b/src/agent-router/read-plan.ts
+@@ -117,12 +117,22 @@ export type ReadPlanBuildResult = {
+ export async function buildReadPlan(input: BuildReadPlanInput): Promise<ReadPlanBuildResult> {
+   const configuredBudget = readPlanBudget(input.options);
+   const protectedPaths = input.protectedPaths || new Set<string>();
+-  const anchorFileCount = new Set(input.files
++  const anchorPaths = new Set(input.files
+     .filter(file => isAnchor(file, input.options))
+-    .map(file => file.absolutePath)).size;
++    .map(file => file.absolutePath));
++  const anchorFileCount = anchorPaths.size;
++  // V3.2-28 task-aware budget: protectedPaths already marks JDT-verified structural evidence
++  // (persisted-implementation/typeHierarchy, hasProtectedStructuralSignal - see
++  // protectedReadPlanPaths()) that selectTokenAwarePlan's "core" bucket guarantees a slot for
++  // regardless of quota; widen the mode-default file cap so that guarantee isn't starved before
++  // the byte budget (the actual token limit) is reached. An explicit caller-supplied
++  // readPlanMaxItems is a hard contract, not a default, and must stay binding.
++  const protectedFileCount = new Set([...anchorPaths, ...protectedPaths]).size;
+   const selectionBudget = {
+     ...configuredBudget,
+-    maxFiles: Math.max(configuredBudget.maxFiles, anchorFileCount)
++    maxFiles: input.options.readPlanMaxItems === undefined
++      ? Math.max(configuredBudget.maxFiles, protectedFileCount)
++      : configuredBudget.maxFiles
+   };
+   const shortlist = shortlistCandidates(input.files, input.options, selectionBudget.maxFiles, protectedPaths);
+   const rangeResults = shortlist.files.length === 0
+diff --git a/scripts/run-idle-prewarm-experiment.mjs b/scripts/run-idle-prewarm-experiment.mjs
+new file mode 100755
+index 0000000..2a5f4a9
+--- /dev/null
++++ b/scripts/run-idle-prewarm-experiment.mjs
+@@ -0,0 +1,278 @@
++#!/usr/bin/env node
++// input: three real Java repositories (already-cloned worktrees the caller owns) and one
++//   real-symbol anchor per repo (file/line/column of an identifier with real references).
++// output: cold ("fresh", no prewarm) vs prewarm-proxy ("reused", session already READY)
++//   first-touch P95 delta and peak JDT java-process RSS/%CPU delta, per repo.
++// pos: V3.2-23 trial-gate measurement (development-plan Sprint4). Deliberately reuses the
++//   existing src/benchmark/semantic-first-touch.ts CLI (Task 35) unmodified through the
++//   standard two-layer isolation chain - no production src/ changes, so this script does not
++//   touch the LOC ledger. If the gate below passes, a follow-up task designs the actual opt-in
++//   production trigger (repo-runtime-manager.ts idle timer + cross-process-lease.ts machine
++//   lease); this script only answers whether that investment is worth making.
++import { spawn, execFile } from "node:child_process";
++import { mkdir, writeFile, appendFile } from "node:fs/promises";
++import path from "node:path";
++import { fileURLToPath } from "node:url";
++import { promisify } from "node:util";
++
++const execFileAsync = promisify(execFile);
++const scriptRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
++const JDT_MATCH = "org.eclipse.jdt.ls.core.id1";
++const SAMPLE_INTERVAL_MS = 300;
++const P95_IMPROVEMENT_GATE = 0.30;
++const RESOURCE_INCREASE_GATE = 0.10;
++
++// One real, referenced identifier per golden repo. cipherlink's anchor is the exact one
++// already documented in docs/phase-v3/phase5-semantic-first-touch-decision.md (Task 35);
++// lishuedu/exam-parent-v3 anchors are freshly picked (a ServiceImpl class name with >=1
++// real usage beyond its own declaration, verified with a plain grep before use).
++const ANCHORS = {
++  cipherlink: {
++    file: "modules/organization/src/main/java/com/hhtele/cipherlink/organization/application/DefaultOrganizationAppService.java",
++    line: 693,
++    column: 23
++  },
++  lishuedu: {
++    file: "modules/iam/src/main/java/com/lishu/edu/iam/application/service/InternalUserAppServiceImpl.java",
++    line: 37,
++    column: 14
++  },
++  "exam-parent-v3": {
++    file: "exam-service/exam-service-candidate/src/main/java/com/hhtele/exam/service/candidate/impl/OrgServiceImpl.java",
++    line: 26,
++    column: 14
++  }
++};
++
++async function main() {
++  const cli = parseCli(process.argv.slice(2));
++  if (cli.help) return printUsage();
++  await mkdir(cli.outputDir, { recursive: true });
++  const results = {};
++  for (const project of Object.keys(ANCHORS)) {
++    const repoRoot = cli.repositories[project];
++    if (!repoRoot) throw new Error(`missing --${project} <repo root>`);
++    await assertNoStrayJdt();
++    console.log(`idle-prewarm-experiment: ${project} fresh (baseline, no prewarm)`);
++    const fresh = await runCondition({
++      project, repoRoot, workspaceState: "fresh", runs: cli.runs, anchor: ANCHORS[project], outputDir: cli.outputDir
++    });
++    await assertNoStrayJdt();
++    console.log(`idle-prewarm-experiment: ${project} reused (prewarm proxy: session already READY)`);
++    const reused = await runCondition({
++      project, repoRoot, workspaceState: "reused", runs: cli.runs, anchor: ANCHORS[project], outputDir: cli.outputDir
++    });
++    results[project] = evaluate(fresh, reused);
++    console.log(`idle-prewarm-experiment: ${project} -> ${JSON.stringify(results[project])}`);
++  }
++  const overall = Object.values(results).every(cell => cell.pass);
++  const summary = {
++    schemaVersion: "v32-idle-prewarm-experiment/v1",
++    purpose: "V3.2-23 trial gate: does a JDT session that already finished importing before the "
++      + "request arrives (prewarm proxy) beat a from-scratch cold start (baseline) by >=30% P95 "
++      + "totalMs, without >10% more peak RSS/%CPU on the JDT java process. Measurement-only - no "
++      + "production code changed by this script.",
++    gate: { p95ImprovementMin: P95_IMPROVEMENT_GATE, resourceIncreaseMax: RESOURCE_INCREASE_GATE },
++    method: "baseline = P95(totalMs) across `--workspace-state fresh` attempts (each a brand-new "
++      + "JdtlsSession + fresh project import). warmProxy = P95(totalMs) across `--workspace-state "
++      + "reused` attempts 2..N within one CLI invocation (attempt 1 still pays a cold "
++      + "session+import cost and is excluded from the warm sample; attempts 2..N run against the "
++      + "same already-imported, already-READY session, standing in for 'prewarm already finished "
++      + "before the request arrived'). Peak RSS/%CPU sampled externally via `ps` against the JDT "
++      + "java process (matched on the equinox application id, which keeps the launcher's pid "
++      + "stable since jdtls execvp()s into java) every 300ms for each condition's full wall-clock "
++      + "lifetime.",
++    results,
++    overall: overall ? "PASS" : "FAIL"
++  };
++  await writeFile(path.join(cli.outputDir, "summary.json"), `${JSON.stringify(summary, null, 2)}\n`);
++  console.log(JSON.stringify(summary, null, 2));
++  if (!overall) process.exitCode = 1;
++}
++
++async function runCondition({ project, repoRoot, workspaceState, runs, anchor, outputDir }) {
++  const label = `${project}-${workspaceState}`;
++  const stdoutFile = path.join(outputDir, `${label}.stdout.log`);
++  const stderrFile = path.join(outputDir, `${label}.stderr.log`);
++  await writeFile(stdoutFile, "");
++  await writeFile(stderrFile, "");
++  const jdtlsBin = process.env.JDTLS_BIN ?? "/opt/homebrew/bin/jdtls";
++  const args = [
++    path.join(scriptRoot, "scripts", "run-isolated-validation.mjs"),
++    "--profile", "compile",
++    "--env", `JDTLS_BIN=${jdtlsBin}`,
++    "--env", `JAVA_LSP_BENCH_ANCHOR_FILE=${anchor.file}`,
++    "--env", `JAVA_LSP_BENCH_ANCHOR_LINE=${String(anchor.line)}`,
++    "--env", `JAVA_LSP_BENCH_ANCHOR_COLUMN=${String(anchor.column)}`,
++    "--",
++    "node", "scripts/run-isolated-jdt-benchmark.mjs",
++    "--repo-root", repoRoot,
++    "--",
++    "node", "dist/benchmark/semantic-first-touch.js",
++    "--repo-root", "{repo}",
++    "--project-id", project,
++    "--workspace-state", workspaceState,
++    "--operation", "references",
++    "--runs", String(runs),
++    "--timeout-ms", "180000"
++  ];
++  const sampler = startResourceSampler();
++  let stdoutBuffer = "";
++  const exitCode = await new Promise((resolve, reject) => {
++    const child = spawn("sh", [path.join(scriptRoot, "scripts", "run-isolated-node.sh"), ...args], {
++      cwd: scriptRoot,
++      env: process.env
++    });
++    child.stdout.on("data", chunk => {
++      stdoutBuffer += chunk.toString("utf8");
++      void appendFile(stdoutFile, chunk);
++    });
++    child.stderr.on("data", chunk => {
++      void appendFile(stderrFile, chunk);
++    });
++    child.once("error", reject);
++    child.once("exit", code => resolve(code));
++  });
++  sampler.stop();
++  if (exitCode !== 0) {
++    throw new Error(`${label} exited with code ${exitCode}; see ${stderrFile}`);
++  }
++  const payload = parsePayloadAfterStatusLines(stdoutBuffer, stdoutFile);
++  const resource = sampler.result();
++  return { attempts: payload.attempts, ...resource };
++}
++
++// run-isolated-validation.mjs and run-isolated-jdt-benchmark.mjs each print one single-line
++// status JSON object before handing off; semantic-first-touch.js's own pretty-printed
++// { metadata, attempts } payload is everything after those two lines (matches the
++// `tail -n +3` convention already used for prior real-JDT isolated benchmark runs this sprint).
++function parsePayloadAfterStatusLines(buffer, stdoutFile) {
++  const lines = buffer.split("\n");
++  const rest = lines.slice(2).join("\n");
++  try {
++    const parsed = JSON.parse(rest);
++    if (!Array.isArray(parsed?.attempts)) throw new Error("no attempts array");
++    return parsed;
++  } catch (error) {
++    throw new Error(`could not parse semantic-first-touch payload from stdout (see ${stdoutFile}): ${error.message}`);
++  }
++}
++
++function evaluate(fresh, reused) {
++  const baselineTotals = fresh.attempts.map(attempt => attempt.totalMs).sort((left, right) => left - right);
++  const warmTotals = reused.attempts.slice(1).map(attempt => attempt.totalMs).sort((left, right) => left - right);
++  const baselineP95 = percentile(baselineTotals, 95);
++  const warmP95 = percentile(warmTotals, 95);
++  const p95ImprovementRatio = (baselineP95 - warmP95) / baselineP95;
++  const rssIncreaseRatio = fresh.peakRssKb > 0 ? (reused.peakRssKb - fresh.peakRssKb) / fresh.peakRssKb : undefined;
++  const cpuIncreaseRatio = fresh.peakCpuPercent > 0 ? (reused.peakCpuPercent - fresh.peakCpuPercent) / fresh.peakCpuPercent : undefined;
++  const pass = Number.isFinite(p95ImprovementRatio) && p95ImprovementRatio >= P95_IMPROVEMENT_GATE
++    && rssIncreaseRatio !== undefined && rssIncreaseRatio <= RESOURCE_INCREASE_GATE
++    && cpuIncreaseRatio !== undefined && cpuIncreaseRatio <= RESOURCE_INCREASE_GATE;
++  return {
++    baselineP95TotalMs: round(baselineP95),
++    warmP95TotalMs: round(warmP95),
++    p95ImprovementRatio: round(p95ImprovementRatio),
++    freshPeakRssKb: fresh.peakRssKb,
++    reusedPeakRssKb: reused.peakRssKb,
++    rssIncreaseRatio: rssIncreaseRatio !== undefined ? round(rssIncreaseRatio) : null,
++    freshPeakCpuPercent: fresh.peakCpuPercent,
++    reusedPeakCpuPercent: reused.peakCpuPercent,
++    cpuIncreaseRatio: cpuIncreaseRatio !== undefined ? round(cpuIncreaseRatio) : null,
++    freshSampleCount: fresh.sampleCount,
++    reusedSampleCount: reused.sampleCount,
++    pass
++  };
++}
++
++function percentile(sortedValues, p) {
++  if (sortedValues.length === 0) return NaN;
++  const index = Math.min(sortedValues.length - 1, Math.ceil((p / 100) * sortedValues.length) - 1);
++  return sortedValues[Math.max(0, index)];
++}
++
++function startResourceSampler() {
++  let peakRssKb = 0;
++  let peakCpuPercent = 0;
++  let sampleCount = 0;
++  let stopped = false;
++  let pending = false;
++  const timer = setInterval(() => {
++    if (stopped || pending) return;
++    pending = true;
++    void sampleOnce().finally(() => { pending = false; });
++  }, SAMPLE_INTERVAL_MS);
++  timer.unref();
++  async function sampleOnce() {
++    const pids = await findJdtPids();
++    for (const pid of pids) {
++      try {
++        const { stdout } = await execFileAsync("ps", ["-o", "rss=,%cpu=", "-p", pid]);
++        const [rssKb, cpuPercent] = stdout.trim().split(/\s+/).map(Number);
++        if (Number.isFinite(rssKb)) peakRssKb = Math.max(peakRssKb, rssKb);
++        if (Number.isFinite(cpuPercent)) peakCpuPercent = Math.max(peakCpuPercent, cpuPercent);
++      } catch {
++        // the process may have exited between pgrep and ps; skip this sample.
++      }
++    }
++    sampleCount += 1;
++  }
++  return {
++    stop() { stopped = true; clearInterval(timer); },
++    result() { return { peakRssKb, peakCpuPercent, sampleCount }; }
++  };
++}
++
++async function assertNoStrayJdt() {
++  const pids = await findJdtPids();
++  if (pids.length > 0) {
++    throw new Error(
++      `refusing to start: found pre-existing JDT process(es) matching "${JDT_MATCH}" (pid(s) ${pids.join(",")}). `
++      + "This experiment requires no other JDT session running on the machine."
++    );
++  }
++}
++
++async function findJdtPids() {
++  try {
++    const { stdout } = await execFileAsync("pgrep", ["-f", JDT_MATCH]);
++    return stdout.split("\n").map(line => line.trim()).filter(Boolean);
++  } catch (error) {
++    if (error.code === 1) return [];
++    throw error;
++  }
++}
++
++function round(value) {
++  return Math.round(value * 10000) / 10000;
++}
++
++function parseCli(args) {
++  const repositories = {};
++  let outputDir;
++  let runs = 3;
++  for (let index = 0; index < args.length; index += 1) {
++    const arg = args[index];
++    if (arg === "--help" || arg === "-h") return { help: true };
++    if (arg === "--output-dir") { outputDir = args[++index]; continue; }
++    if (arg === "--runs") { runs = Number.parseInt(args[++index], 10); continue; }
++    if (arg === "--lishuedu") { repositories.lishuedu = args[++index]; continue; }
++    if (arg === "--cipherlink") { repositories.cipherlink = args[++index]; continue; }
++    if (arg === "--exam-parent-v3") { repositories["exam-parent-v3"] = args[++index]; continue; }
++    throw new Error(`unknown argument: ${arg}`);
++  }
++  if (!outputDir) throw new Error("--output-dir is required");
++  if (!Number.isInteger(runs) || runs < 2) throw new Error("--runs must be an integer >= 2 (attempt 1 is excluded from the warm sample)");
++  return { outputDir: path.resolve(outputDir), runs, repositories };
++}
++
++function printUsage() {
++  console.log("Usage: node scripts/run-idle-prewarm-experiment.mjs --output-dir DIR --lishuedu DIR --cipherlink DIR --exam-parent-v3 DIR [--runs 3]");
++}
++
++if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
++  main().catch(error => {
++    console.error(error instanceof Error ? error.message : String(error));
++    process.exitCode = 1;
++  });
++}
+diff --git a/scripts/run-v324-import-concurrency-experiment.mjs b/scripts/run-v324-import-concurrency-experiment.mjs
+new file mode 100644
+index 0000000..27981a4
+--- /dev/null
++++ b/scripts/run-v324-import-concurrency-experiment.mjs
+@@ -0,0 +1,256 @@
++#!/usr/bin/env node
++// input: three real Java repositories (already-cloned worktrees the caller owns) and one
++//   real-symbol anchor per repo (file/line/column of an identifier with real references).
++// output: fresh-workspace, prepare=none, references first-touch phase timings and peak JDT
++//   java-process RSS/%CPU for JAVA_LSP_IMPORT_CONCURRENCY=2 (current machine default) vs 8,
++//   per repo, run interleaved per repo (2-batch then 8-batch, not batched across all repos).
++// pos: V3.2-24 pass 1 (import concurrency single-variable sweep, development-plan Sprint4).
++//   Deliberately reuses src/benchmark/semantic-first-touch.ts (Task 35) unmodified through the
++//   standard two-layer isolation chain, following the exact proven invocation this Sprint used
++//   for run-idle-prewarm-experiment.mjs (V3.2-23) - no production src/ changes, so this script
++//   does not touch the LOC ledger.
++import { spawn, execFile } from "node:child_process";
++import { mkdir, writeFile, appendFile } from "node:fs/promises";
++import os from "node:os";
++import path from "node:path";
++import { fileURLToPath } from "node:url";
++import { promisify } from "node:util";
++
++const execFileAsync = promisify(execFile);
++const scriptRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
++const JDT_MATCH = "org.eclipse.jdt.ls.core.id1";
++const SAMPLE_INTERVAL_MS = 300;
++// 2026-08-16 pass 1 hit host load average ~30 on this 10-core machine (Time Machine backup +
++// heavy desktop multitasking) and got two 60s DEADLINE_EXCEEDED attempts with zero results,
++// versus Task36's clean ~22-26s baseline for the same repo/anchor/timeout - a load this high
++// invalidates any comparison. Refuse to start rather than produce noise that looks like data.
++const MAX_LOADAVG_PER_CPU = 0.7;
++
++const ANCHORS = {
++  cipherlink: {
++    file: "modules/organization/src/main/java/com/hhtele/cipherlink/organization/application/DefaultOrganizationAppService.java",
++    line: 693,
++    column: 23
++  },
++  lishuedu: {
++    file: "modules/iam/src/main/java/com/lishu/edu/iam/application/service/InternalUserAppServiceImpl.java",
++    line: 37,
++    column: 14
++  },
++  "exam-parent-v3": {
++    file: "exam-service/exam-service-candidate/src/main/java/com/hhtele/exam/service/candidate/impl/OrgServiceImpl.java",
++    line: 26,
++    column: 14
++  }
++};
++
++const CONCURRENCY_ARMS = [2, 8];
++
++async function main() {
++  const cli = parseCli(process.argv.slice(2));
++  if (cli.help) return printUsage();
++  await mkdir(cli.outputDir, { recursive: true });
++  const results = {};
++  for (const project of Object.keys(ANCHORS)) {
++    const repoRoot = cli.repositories[project];
++    if (!repoRoot) throw new Error(`missing --${project} <repo root>`);
++    results[project] = {};
++    for (const concurrency of CONCURRENCY_ARMS) {
++      await assertNoStrayJdt();
++      await assertHostQuiet();
++      console.log(`v324-import-concurrency: ${project} concurrency=${concurrency} (runs=${cli.runs})`);
++      const cell = await runCondition({
++        project, repoRoot, concurrency, runs: cli.runs, anchor: ANCHORS[project], outputDir: cli.outputDir
++      });
++      results[project][String(concurrency)] = cell;
++      console.log(`v324-import-concurrency: ${project} concurrency=${concurrency} -> ${JSON.stringify(summarizeCell(cell))}`);
++    }
++  }
++  const summary = {
++    schemaVersion: "v32-import-concurrency-experiment/v1",
++    purpose: "V3.2-24 pass 1: does raising JAVA_LSP_IMPORT_CONCURRENCY from the current machine "
++      + "default (2, per resource-defaults.ts on this 32GB/10-core host) to 8 move fresh-workspace "
++      + "references first-touch phaseMs/totalMs or completion rate. Measurement-only.",
++    method: "workspaceState=fresh, prepare=none, operation=references, timeoutMs=60000 fixed "
++      + "throughout (matches the existing 2026-08-09 Task36 baseline at concurrency=2 for the same "
++      + "repos/anchors/timeout, so that data is reused as-is rather than re-run). Per repo, the "
++      + "concurrency=2 batch and concurrency=8 batch are run back-to-back (interleaved at the "
++      + "repo x arm grain, not batched across all 3 repos) to bound host-drift exposure to one "
++      + "repo's pair rather than the whole run, per advisor guidance during design.",
++    concurrencyArms: CONCURRENCY_ARMS,
++    runsPerCell: cli.runs,
++    results
++  };
++  await writeFile(path.join(cli.outputDir, "summary.json"), `${JSON.stringify(summary, null, 2)}\n`);
++  console.log(JSON.stringify(summary, null, 2));
++}
++
++function summarizeCell(cell) {
++  const totals = cell.attempts.filter(a => a.completion === "COMPLETE").map(a => a.totalMs).sort((a, b) => a - b);
++  return {
++    completions: `${totals.length}/${cell.attempts.length}`,
++    medianTotalMs: totals.length > 0 ? totals[Math.floor((totals.length - 1) / 2)] : null,
++    peakRssKb: cell.peakRssKb,
++    peakCpuPercent: cell.peakCpuPercent
++  };
++}
++
++async function runCondition({ project, repoRoot, concurrency, runs, anchor, outputDir }) {
++  const label = `${project}-c${concurrency}`;
++  const stdoutFile = path.join(outputDir, `${label}.stdout.log`);
++  const stderrFile = path.join(outputDir, `${label}.stderr.log`);
++  await writeFile(stdoutFile, "");
++  await writeFile(stderrFile, "");
++  const jdtlsBin = process.env.JDTLS_BIN ?? "/opt/homebrew/bin/jdtls";
++  const args = [
++    path.join(scriptRoot, "scripts", "run-isolated-validation.mjs"),
++    "--profile", "compile",
++    "--env", `JDTLS_BIN=${jdtlsBin}`,
++    "--env", `JAVA_LSP_IMPORT_CONCURRENCY=${String(concurrency)}`,
++    "--env", `JAVA_LSP_BENCH_ANCHOR_FILE=${anchor.file}`,
++    "--env", `JAVA_LSP_BENCH_ANCHOR_LINE=${String(anchor.line)}`,
++    "--env", `JAVA_LSP_BENCH_ANCHOR_COLUMN=${String(anchor.column)}`,
++    "--",
++    "node", "scripts/run-isolated-jdt-benchmark.mjs",
++    "--repo-root", repoRoot,
++    "--",
++    "node", "dist/benchmark/semantic-first-touch.js",
++    "--repo-root", "{repo}",
++    "--project-id", project,
++    "--workspace-state", "fresh",
++    "--operation", "references",
++    "--prepare", "none",
++    "--runs", String(runs),
++    "--timeout-ms", "60000"
++  ];
++  const sampler = startResourceSampler();
++  let stdoutBuffer = "";
++  const exitCode = await new Promise((resolve, reject) => {
++    const child = spawn("sh", [path.join(scriptRoot, "scripts", "run-isolated-node.sh"), ...args], {
++      cwd: scriptRoot,
++      env: process.env
++    });
++    child.stdout.on("data", chunk => {
++      stdoutBuffer += chunk.toString("utf8");
++      void appendFile(stdoutFile, chunk);
++    });
++    child.stderr.on("data", chunk => {
++      void appendFile(stderrFile, chunk);
++    });
++    child.once("error", reject);
++    child.once("exit", code => resolve(code));
++  });
++  sampler.stop();
++  if (exitCode !== 0) {
++    throw new Error(`${label} exited with code ${exitCode}; see ${stderrFile}`);
++  }
++  const payload = parsePayloadAfterStatusLines(stdoutBuffer, stdoutFile);
++  const resource = sampler.result();
++  return { attempts: payload.attempts, ...resource };
++}
++
++function parsePayloadAfterStatusLines(buffer, stdoutFile) {
++  const lines = buffer.split("\n");
++  const rest = lines.slice(2).join("\n");
++  try {
++    const parsed = JSON.parse(rest);
++    if (!Array.isArray(parsed?.attempts)) throw new Error("no attempts array");
++    return parsed;
++  } catch (error) {
++    throw new Error(`could not parse semantic-first-touch payload from stdout (see ${stdoutFile}): ${error.message}`);
++  }
++}
++
++function startResourceSampler() {
++  let peakRssKb = 0;
++  let peakCpuPercent = 0;
++  let sampleCount = 0;
++  let stopped = false;
++  let pending = false;
++  const timer = setInterval(() => {
++    if (stopped || pending) return;
++    pending = true;
++    void sampleOnce().finally(() => { pending = false; });
++  }, SAMPLE_INTERVAL_MS);
++  timer.unref();
++  async function sampleOnce() {
++    const pids = await findJdtPids();
++    for (const pid of pids) {
++      try {
++        const { stdout } = await execFileAsync("ps", ["-o", "rss=,%cpu=", "-p", pid]);
++        const [rssKb, cpuPercent] = stdout.trim().split(/\s+/).map(Number);
++        if (Number.isFinite(rssKb)) peakRssKb = Math.max(peakRssKb, rssKb);
++        if (Number.isFinite(cpuPercent)) peakCpuPercent = Math.max(peakCpuPercent, cpuPercent);
++      } catch {
++        // the process may have exited between pgrep and ps; skip this sample.
++      }
++    }
++    sampleCount += 1;
++  }
++  return {
++    stop() { stopped = true; clearInterval(timer); },
++    result() { return { peakRssKb, peakCpuPercent, sampleCount }; }
++  };
++}
++
++async function assertHostQuiet() {
++  const [loadavg1] = os.loadavg();
++  const perCpu = loadavg1 / os.cpus().length;
++  if (perCpu > MAX_LOADAVG_PER_CPU) {
++    throw new Error(
++      `refusing to start: 1-minute load average ${loadavg1.toFixed(2)} is ${perCpu.toFixed(2)}x logical `
++      + `CPU count (${os.cpus().length}); this benchmark requires a quiet host (<=${MAX_LOADAVG_PER_CPU}x) `
++      + "to produce a comparison worth trusting. Close background work (Time Machine, browsers, etc.) and retry."
++    );
++  }
++}
++
++async function assertNoStrayJdt() {
++  const pids = await findJdtPids();
++  if (pids.length > 0) {
++    throw new Error(
++      `refusing to start: found pre-existing JDT process(es) matching "${JDT_MATCH}" (pid(s) ${pids.join(",")}). `
++      + "This experiment requires no other JDT session running on the machine."
++    );
++  }
++}
++
++async function findJdtPids() {
++  try {
++    const { stdout } = await execFileAsync("pgrep", ["-f", JDT_MATCH]);
++    return stdout.split("\n").map(line => line.trim()).filter(Boolean);
++  } catch (error) {
++    if (error.code === 1) return [];
++    throw error;
++  }
++}
++
++function parseCli(args) {
++  const repositories = {};
++  let outputDir;
++  let runs = 5;
++  for (let index = 0; index < args.length; index += 1) {
++    const arg = args[index];
++    if (arg === "--help" || arg === "-h") return { help: true };
++    if (arg === "--output-dir") { outputDir = args[++index]; continue; }
++    if (arg === "--runs") { runs = Number.parseInt(args[++index], 10); continue; }
++    if (arg === "--lishuedu") { repositories.lishuedu = args[++index]; continue; }
++    if (arg === "--cipherlink") { repositories.cipherlink = args[++index]; continue; }
++    if (arg === "--exam-parent-v3") { repositories["exam-parent-v3"] = args[++index]; continue; }
++    throw new Error(`unknown argument: ${arg}`);
++  }
++  if (!outputDir) throw new Error("--output-dir is required");
++  if (!Number.isInteger(runs) || runs < 1) throw new Error("--runs must be a positive integer");
++  return { outputDir: path.resolve(outputDir), runs, repositories };
++}
++
++function printUsage() {
++  console.log("Usage: node scripts/run-v324-import-concurrency-experiment.mjs --output-dir DIR --lishuedu DIR --cipherlink DIR --exam-parent-v3 DIR [--runs 5]");
++}
++
++if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
++  main().catch(error => {
++    console.error(error instanceof Error ? error.message : String(error));
++    process.exitCode = 1;
++  });
++}

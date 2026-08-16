@@ -10,7 +10,7 @@
 | --- | --- |
 | V3.2-26 | 字节半场 `CLOSED_VIA_V3.2-02_EXIT_CONDITION`（15% vs Sprint0 baseline 的原定数值门不可测；`standardToDiagnosticBytesRatio` 已 ≪0.5，按 V3.2-02 自身退出条件转向真实 Agent trace）；Agent 使用质量半场移交 V3.2-30（已获 V3.2-07b 授权） |
 | V3.2-27 | `MODIFY_REJECTED_STRUCTURAL`（本次分析的低成本修法——用 type header 位置替换 `(1,1)` fallback——被证明结构性地帮不到实际 miss 集合；真正的修法需要 `hydrate:true` 获取具体方法级位置，成本未量化，留作未来工作，本轮不实现） |
-| V3.2-28 | `NO_VIABLE_ZERO_COST_RULE_FOUND`（唯一测过的零 LOC 候选规则——把 `SPRING_CALL_PATH` 移出 `read-plan-budget.ts` 的 "verified" 配额——正式三仓 AB/BA/AB 矩阵测出净负收益，已回滚，未落地任何代码）；更大范围的 "anchor profile/taskBlocking/sourceSet/文件大小" budget 调整需要真正新增生产代码，在当前 LOC 已超编（33,230/33,219）状态下需要用户先行授权，本轮未做 |
+| V3.2-28 | `REJECTED`（两轮候选规则均被正式三仓 AB/BA/AB 矩阵证伪并回滚：第 1 轮零 LOC 的 Spring "verified" 配额调整净负收益；第 2 轮用户授权 LOC 突破后测的文件数上限放宽——三仓 token 成本上升、`pRead` 广泛下降，仅一仓一项指标 `rTaskBlocking` 有真实收益，净不划算）；未落地任何生产代码，LOC 回到 33,230 |
 | V3.2-29 | 第 1 轮 source-locked on/off ablation 已测完，**三个 adapter 都不满足删除条件**：MapStruct `KEEP_CONFIRMED_GAIN`（lishuedu 真实正收益）；Spring `KEEP_MODIFY_SIGNAL`（收益方向不一致，但 NDCG 三仓一致变差，指向 read-plan 预算配额而非删 adapter）；MyBatis `KEEP_UNDERPOWERED`（三仓均无 XML mapper，adapter "激活但空跑"，golden 集合本身测不出它，不算无收益轮次）。LOC 硬上限一次性突破至 33230/33219（+11 行，已获用户授权），本轮未偿还，需要未来出现真实无收益轮次或合理删除机会才能偿还 |
 
 ## 2. V3.2-26：优化默认 `standard` 输出
@@ -121,9 +121,34 @@ lishuedu 和 exam-parent-v3 在 tuning、holdout 两个切分上全部四项指�
 
 **顺带发现、超出本轮范围的观察**：`gate.holdoutRReadMust` 三仓全部 `FALSE`（holdout rReadMust 分别是 0.5/0.55/0.4，远低于验收要求的绝对值 1.0），且 old/new 完全一致——说明这不是本轮改动造成的，是当前代码树（`869b353`）在这套正式验收口径下本来就没有通过 holdout 的 must-read 绝对门槛，和 §3 已经记录的 V3.2-27 RangeLineRecall 缺口（0.55-0.85 vs 目标 1.0）是同一类"结构性未闭合"证据的另一个角度。这不是本轮要修的问题，只是本轮测量顺带得到的、值得记录的既有事实。
 
-### 4.5 disposition
+### 4.5 第 1 轮 disposition
 
-`NO_VIABLE_ZERO_COST_RULE_FOUND`：本轮唯一测过的零 LOC 候选规则被正式数据证伪并回滚。V3.2-28 计划原文的完整范围（anchor profile、taskBlocking evidence、sourceSet、文件大小四个维度）远大于这一次探测，但继续探索意味着要往 `read-plan.ts`/`read-plan-budget.ts` 写真正的新逻辑——这在当前 LOC 已超编（33,230/33,219，V3.2-29 的一次性突破尚未偿还）的状态下，不能像 V3.2-29 那样默认继续往上加，需要用户先明确是否愿意再授权一次 LOC 突破，本轮不擅自决定。
+`NO_VIABLE_ZERO_COST_RULE_FOUND`（第 1 轮，零 LOC 规则）：唯一测过的零 LOC 候选规则被正式数据证伪并回滚。V3.2-28 计划原文的完整范围（anchor profile、taskBlocking evidence、sourceSet、文件大小四个维度）远大于这一次探测，继续探索意味着要往 `read-plan.ts`/`read-plan-budget.ts` 写真正的新逻辑——这在当时 LOC 已超编（33,230/33,219，V3.2-29 的一次性突破尚未偿还）的状态下，不能默认继续往上加，需要用户先明确是否愿意再授权一次 LOC 突破。
+
+### 4.6 第 2 轮：用户授权 LOC 突破后，测了一条真正新增代码的规则
+
+用户明确说"授权一次突破"。设计前先用第 1 轮已有的正式矩阵原始数据（`v328-spring-quota-matrix-20260816-run2/matrix/*.json`）核对了 6 个 holdout 场景（三仓各 2 个）old 臂的 `readPlanFiles`/`readPlanBytes`：**全部 6 个 holdout 场景都在 balanced 模式的文件数上限（6）打满，字节预算只用了 30%-69%**——文件数是真正 binding 的约束，不是字节数，这条候选规则（扩大文件数上限）选对了杠杆。
+
+改动：`buildReadPlan()`（`read-plan.ts`）里已有的"anchor 数量超过预算时临时放宽 `selectionBudget.maxFiles`"机制（这是既有代码，不是本轮引入），本轮把触发条件从"只数 anchor"扩大为"数 anchor ∪ `protectedPaths`"（`protectedPaths` 是已经在流转的 JDT 精确结构证据集合，`protectedReadPlanPaths()` 产出，`selectTokenAwarePlan` 的 "core" bucket 本就无条件保留这个集合，只是保留时可能撞上外层 `maxFiles` 先天不够大），并且只在调用方没有显式传 `readPlanMaxItems`（即走 mode 默认值）时才放宽——显式预算是硬约束，不能被这条规则悄悄突破。净改动 `read-plan.ts` +13/-3（净 +10 行）。
+
+**一次中间发现**：第一版实现（放宽不分是否显式传参）让 3 个既有测试（"...in a constrained core" 系列，命名就在说明它们故意设小预算验证约束生效）多选出一个文件——不是这些测试过期，是我的改动确实覆盖了调用方显式传入的 `readPlanMaxItems`，一个真实的合约违反；加上"仅在默认分支生效"的判断后这三个测试原样通过，不需要放松任何断言。同时把自己新增的单测从"5 个全部同属 core bucket"的构造改成"anchor(1)+core(4)=5 恰好卡在 `BUCKET_RULES.core.max`（既有常量，本轮未改）之内"，避免撞上另一个无关的既有硬上限。
+
+**正式三仓矩阵结果**（baseline=`4eedc6b`，candidate=改动后 worktree，`--runs 5`）：不是"全零"，是三仓五项指标里**四项在两仓上出现真实、方向不一致的效果**：
+
+| repo | split | recall Δ | pRead Δ | rTaskBlocking Δ | tokens P50 Δ |
+| --- | --- | --- | --- | --- | --- |
+| lishuedu | tuning | 0 | -0.031 | +0.031 | +181 |
+| lishuedu | holdout | 0 | **-0.071** | **+0.154** | — |
+| cipherlink | tuning | **-0.047** | **-0.133** | 0 | +251 |
+| cipherlink | holdout | 0 | 0 | 0 | — |
+| exam-parent-v3 | tuning | 0 | -0.065 | 0 | +486 |
+| exam-parent-v3 | holdout | 0 | **-0.183** | 0 | — |
+
+三仓 token 成本全部上升（+181~+486 P50），`pRead`（读取精度）在三仓 tuning 侧全部下降、两仓 holdout 侧也下降——机制上完全符合预期：文件数上限一放宽，更多文件被读入，其中不全是有用的，精度天然被稀释。唯一真实的正向信号是 lishuedu holdout 的 `rTaskBlocking` +0.154（0.442→0.596），但同一个仓库同一个切分的 `pRead` 同时 -0.071，且 cipherlink tuning recall/pRead 双双真实回归、exam-parent-v3 holdout pRead 回归 -0.183——净效果是花更多 token 换到广泛的精度下降，只在一仓一项指标上换到一次收益，不是"holdout 有收益"的干净结果，是"多花预算、精度普遍变差、局部换到一点召回"的不划算交易。判定 REJECT，已 `git checkout --` 还原 `read-plan.ts`/`read-plan.test.ts`，LOC 回到 33,230（V3.2-29 的授权状态，V3.2-28 两轮均未额外占用）。
+
+### 4.7 最终 disposition
+
+两轮候选规则（零 LOC 的 Spring 配额调整、+10 LOC 的文件数上限放宽）均被正式三仓矩阵证伪并回滚，V3.2-28 未落地任何生产代码改动。计划原文更大的范围仍然未被排除——只是这两条具体规则不成立，不代表"anchor profile/taskBlocking/sourceSet/文件大小"这个方向整体不可行——但连续两轮真实投入（含一次用户授权的 LOC 突破）都拿到净负/无收益结果，本轮到此为止，不再尝试第三条规则；如果未来要继续，需要新的、结构不同的假设，而不是这两条已经被否定的规则的变体。
 
 ## 5. V3.2-30：`BLOCKED_EXTERNAL`（缺失外部凭据，非授权范围问题）
 
@@ -185,3 +210,4 @@ V3.2-07b 已就 "6 任务 × old/new × AB/BA" 的调用范围获得用户授权
 - `src/agent-router/format.test.ts`、`src/benchmark/determinism.test.ts`、`src/agent-router/read-plan.test.ts`、`src/benchmark/attribution-v3.test.ts`、`src/benchmark-agent-impact.test.ts`：已在隔离环境（`run-isolated-validation.mjs --profile targeted`）跑过，66/66 通过。
 - 全量隔离回归（`--profile full`，V3.2-26/27/29 全部改动落地之后，含 `index.ts`/`benchmark-agent-impact.ts` 的 V3.2-29 wiring）：921/921 单测 + 100/100 `scripts/*.test.mjs` + smoke 全绿，exit 0（`bash -lc` 需显式 `export PATH="/opt/homebrew/bin:$PATH"`，否则本机 PATH 顺序会把 `/usr/local/bin/git`——一个 2015 年的 git 2.3.1 残留符号链接——排在 `/opt/homebrew/bin/git` 2.52.0 前面，导致 worktree/sibling-seed 相关 19 个测试因为老版本 git 不支持 `-b`/`worktree` 而失败，与本轮源码改动无关；详见 `[[node-and-benchmark-env-constraints]]`）。
 - LOC ledger：Sprint4 收尾时 `33,219 / 33,219`（硬上限），V3.2-26 修复不变；V3.2-29 之后变为 `33,230 / 33,219`，**用户已明确授权的一次性小幅突破**（见 §4.2），`scripts/run-v32-optimization-matrix.mjs:49` 的 `<=` 判定此后为 `false`，是预期结果，不是需要修复的回归。
+- V3.2-28 第 2 轮（`read-plan.ts` +10 净行）落地期间：隔离 targeted（79/79，含新增的 2 个用例）与全量隔离回归（923/923 + 100/100 + smoke 全绿）均在正式矩阵测量前跑过；矩阵证伪后 `git checkout --` 还原，`count-production-ts.mjs` 复核 LOC 精确回到 `33,230`，未额外占用。
