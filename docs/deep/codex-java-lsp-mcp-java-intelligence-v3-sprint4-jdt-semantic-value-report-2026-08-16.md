@@ -12,7 +12,7 @@ Sprint4 五项（V3.2-21~25）本次全部关闭。最终策略：**`semantic` �
 | V3.2-22 | `CONSERVATIVE_ALTERNATIVE_ALREADY_SATISFIED`（本轮关闭，无需代码改动） |
 | V3.2-23 | `DEFERRED_PENDING_WORKLOAD_TELEMETRY`（本轮关闭为"实验前置条件缺失"，不是 PASS/FAIL，也不是 DO_NOT_IMPLEMENT） |
 | V3.2-24 | `KEEP_EXPLICIT`（退出条件已在现有 concurrency=2 数据上成立；import concurrency 维度因主机噪声未能复测，记为待复测的开放问题，不影响本次关闭） |
-| V3.2-25 | `KEEP_EXPLICIT`（默认化硬门 5 项条件中至少 3 项已用 Sprint4 已有证据决定性证伪，是前四项工作的直接推论） |
+| V3.2-25 | `KEEP_EXPLICIT`（默认化硬门 5 项条件中 2 项已用 Sprint4 已有证据决定性证伪，第 3 项证据不可比已撤回，是前四项工作的直接推论） |
 
 ## 2. V3.2-21 回顾（不重复展开，仅索引）
 
@@ -156,18 +156,19 @@ HANDOFF.md 记录 V3.2-23 依赖 V3.2-04（JDT first-touch 分段 telemetry）�
 
 本轮未改动任何 `src/` 生产文件（只新增了两个未提交的 `scripts/*.mjs` 脚本与本文档），现场重跑 `scripts/count-production-ts.mjs` 确认 production TS LOC 仍是 33,215，与硬上限 33,219 的差距仍是 4 行，跟 §3 提到的余量一致，未发生变化。
 
-## 6. V3.2-25：默认化硬门——5 项条件中 3 项已用现有证据决定性不成立
+## 6. V3.2-25：默认化硬门——2 项条件已用现有证据决定性不成立，第 3 项证据不可比、已撤回
 
 计划原文（development-plan 663-668 行）："只有同时满足以下条件，才重新讨论把 semantic 设为默认"：(1) 三仓 fresh 代表 operation P95 ≤800ms；(2) 0 partial/timeout；(3) R_must=1、Recall/R_task 非劣；(4) actual Agent task success 非劣；(5) peak RSS 和机器级 JDT 数量仍受控。五项是合取（同时满足），任何一项决定性不成立就足以关闭整个硬门，不需要逐项都跑到底。
 
-不需要新实验：Sprint4 本轮（V3.2-21 recheck + V3.2-24 复核）已经产生的证据里，3 项已经决定性不成立：
+不需要新实验：Sprint4 本轮（V3.2-21 recheck + V3.2-24 复核）已经产生的证据里，2 项已经决定性不成立：
 
-- **条件 1（P95≤800ms）不成立**：`artifacts/v3-final/sprint4-v321-admission-recheck-20260815/summary.json`——即使是最有利的场景（`warm-auto`，session 已经预热完成，不含 fresh 冷启动成本），三仓 `elapsedMsP95` 是 1571.0/1611.3/1571.7ms，仍是 800ms 门槛的约 2 倍；`fresh` 冷启动场景（V3.2-24 §5.2）P95 是 25431-53549ms，是门槛的 32-67 倍。
+- **条件 1（P95≤800ms）不成立**：`artifacts/v3-final/sprint4-v321-admission-recheck-20260815/summary.json`——三仓 `warm-auto` 场景 `elapsedMsP95` 是 1571.0/1611.3/1571.7ms。这三个数字彼此相差不到 40ms 且都落在 1500ms 附近不是巧合：`src/benchmark-agent-impact.ts:487-489` 的 `effectiveSemanticTimeoutMs()` 给 `warm-auto`（非 `warm-required`）配置的 `semanticTimeoutMs` 硬编码就是 `1500`（development-plan 362 行的表述也印证这点——"受影响 warm-auto P95 显著低于当前 1.5s cap"）。也就是说这不是三次巧合相近的真实测量值，而是**被这个 1.5s 内部截止时间强制截断的结果**——真实的、不被截断的 live JDT 语义调用延迟未知，只知道下界已经在 1500ms 附近（截断本身就发生在门槛的将近 2 倍处），完整值大概率更高。这让条件 1 的不成立结论比"测到 1571ms"更强，不是更弱：即使把 `auto` 自己的截止时间设得比现在更宽松，也不会让它落到 800ms 以内——现有内部超时配置本身已经是 800ms 的近 2 倍。`fresh` 冷启动场景（V3.2-24 §5.2）P95 是 25431-53549ms，是门槛的 32-67 倍，不涉及这个截断问题，独立成立。
 - **条件 2（0 partial/timeout）不成立**：对 Task36 `first-touch-final` 全量 242 次 attempts 现场重新统计，2 次是 `PARTIAL_TIMEOUT`（均在 `lishuedu-fresh-none-references.stdout.json`）——真实存在的、已观测到的超时，不是理论风险。
-- **条件 3（R_must=1）不成立**：同一份 `sprint4-v321-admission-recheck-20260815` 数据里，`rReadMust` 三仓分别是 0.9100/0.8800/0.9000（`cold-nolsp`与`warm-auto`两个 policy 下 bit-identical，说明这不是一个 live JDT 调用能修复的问题，是当前 read-plan/golden scenario 集合本身的天花板）——条件要求的是恰好 1.0，不是"非劣"，0.88-0.91 距离 1.0 有明确、非噪声级别的差距。
 
-条件 4（actual Agent task success 非劣）依计划依赖 V3.2-07b（外部 Agent 模型调用），是 HANDOFF.md 记录的唯一不可绕过的用户授权边界——本轮未获得该授权，状态是 `BLOCKED_EXTERNAL`，不编造或估算数字顶替，也不需要评估：条件 1-3 已经让合取整体不成立，条件 4/5 的结果不会改变最终结论，不必为了走完形式而去申请外部调用授权。条件 5（peak RSS/机器级 JDT 数量受控）同理不再单独核查。
+**条件 3（R_must=1）：最初判定为不成立，复核后撤回，改记为"证据不可比、未独立核实"**——不是决定性证伪。同一份 `sprint4-v321-admission-recheck-20260815` 数据里，`rReadMust` 三仓分别是 0.9100/0.8800/0.9000，`cold-nolsp` 与 `warm-auto` 两个 policy 下 bit-identical。但复核发现这个数字来自 `benchmark-agent-impact.ts` 的当前 golden-scenario 集合（Task32 之后、16→24 个场景），而 `docs/phase-v3/phase5-semantic-first-touch-decision.md` 的历史 caveat #6 明确写过：Iteration A 记录的 `R_read_must=1.0000`（旧的 16 场景集合、旧 ranking pipeline）与当前场景集合下的数字"不可比"（not comparable）——用当前 0.88-0.91 直接判定"条件 3 不成立"，犯的正是本节条件 1 曾经差点犯、后来撤回的同一类错误（拿错误的指标/口径下结论）。目前不清楚 V3.2-25 原文的"R_must=1"具体指哪一套场景集合下的哪个数字，所以这一条**不作为决定性证据使用**。同时纠正一处过度表述：0.88-0.91 在两个 policy 下 bit-identical，只能证明"live JDT 调用不改变这个值"，不能证明"这是当前 read-plan/scenario 集合本身的天花板"——`required` policy 下的类似回归已经有明确根因（`type-reference.ts:44-46`），`auto` policy 下这个数字的根因未经排查，不应类比声称"已是天花板"。
+
+条件 4（actual Agent task success 非劣）依计划依赖 V3.2-07b（外部 Agent 模型调用），是 HANDOFF.md 记录的唯一不可绕过的用户授权边界——本轮未获得该授权，状态是 `BLOCKED_EXTERNAL`，不编造或估算数字顶替，也不需要评估：条件 1-2 已经让合取整体不成立，条件 4/5 的结果不会改变最终结论，不必为了走完形式而去申请外部调用授权。条件 5（peak RSS/机器级 JDT 数量受控）同理不再单独核查。
 
 ### 决定
 
-**`KEEP_EXPLICIT`**（Sprint4 最终策略维持不变）——5 项条件中至少 3 项（P95、0 partial/timeout、R_must=1）已经用本 Sprint 已经产生、无需新实验的证据决定性证伪，合取不可能成立。这不是本轮的新发现，而是 V3.2-21（零质量收益 + P95 暴涨）与 V3.2-24（fresh P95 远超 20s 门槛）两项已关闭结论的直接推论——**这一条基本上是 Sprint4 前四项工作的必然结果，不是一个需要独立调查的新问题**。
+**`KEEP_EXPLICIT`**（Sprint4 最终策略维持不变）——5 项条件中至少 2 项（P95、0 partial/timeout）已经用本 Sprint 已经产生、无需新实验、且经过复核站得住的证据决定性证伪，合取不可能成立，不依赖存疑的条件 3。这不是本轮的新发现，而是 V3.2-21（零质量收益 + `auto` 自身 1.5s 内部超时已经近 2 倍于 800ms 门槛）与 V3.2-24（fresh P95 远超 20s 门槛）两项已关闭结论的直接推论——**这一条基本上是 Sprint4 前四项工作的必然结果，不是一个需要独立调查的新问题**。
