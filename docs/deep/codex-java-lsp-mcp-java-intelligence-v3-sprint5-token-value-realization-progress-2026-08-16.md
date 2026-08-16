@@ -1,8 +1,8 @@
-# Java Intelligence V3 Sprint 5 进展报告（V3.2-26 / V3.2-27）
+# Java Intelligence V3 Sprint 5 进展报告（V3.2-26 / V3.2-27 / V3.2-29）
 
 来源计划：`docs/deep/codex-java-lsp-mcp-java-intelligence-v3-value-realization-optimization-development-plan-2026-08-09.md` 第 685-725 行（Sprint5，V3.2-26~30）。
 
-本报告只覆盖本轮已关闭的两项：V3.2-26（优化默认 `standard` 输出）、V3.2-27（range-first source planning）。V3.2-28/29/30 未开始。
+本报告覆盖 V3.2-26（优化默认 `standard` 输出）、V3.2-27（range-first source planning）、V3.2-29（provider measured-or-remove）。V3.2-28/30 未开始。
 
 ## 1. 直接结论
 
@@ -10,6 +10,7 @@
 | --- | --- |
 | V3.2-26 | 字节半场 `CLOSED_VIA_V3.2-02_EXIT_CONDITION`（15% vs Sprint0 baseline 的原定数值门不可测；`standardToDiagnosticBytesRatio` 已 ≪0.5，按 V3.2-02 自身退出条件转向真实 Agent trace）；Agent 使用质量半场移交 V3.2-30（已获 V3.2-07b 授权） |
 | V3.2-27 | `MODIFY_REJECTED_STRUCTURAL`（本次分析的低成本修法——用 type header 位置替换 `(1,1)` fallback——被证明结构性地帮不到实际 miss 集合；真正的修法需要 `hydrate:true` 获取具体方法级位置，成本未量化，留作未来工作，本轮不实现） |
+| V3.2-29 | 第 1 轮 source-locked on/off ablation 已测完，**三个 adapter 都不满足删除条件**：MapStruct `KEEP_CONFIRMED_GAIN`（lishuedu 真实正收益）；Spring `KEEP_MODIFY_SIGNAL`（收益方向不一致，但 NDCG 三仓一致变差，指向 read-plan 预算配额而非删 adapter）；MyBatis `KEEP_UNDERPOWERED`（三仓均无 XML mapper，adapter "激活但空跑"，golden 集合本身测不出它，不算无收益轮次）。LOC 硬上限一次性突破至 33230/33219（+11 行，已获用户授权），本轮未偿还，需要未来出现真实无收益轮次或合理删除机会才能偿还 |
 
 ## 2. V3.2-26：优化默认 `standard` 输出
 
@@ -82,8 +83,59 @@
 
 `MODIFY_REJECTED_STRUCTURAL`：不做 type-header 替代修法（结构性证伪，不是"收益不够"）；真正的修法（线程具体方法位置 + `hydrate:true`）成本未量化，留作后续 sprint 的独立评估项，本轮不实现、不占用 LOC 余量。near-miss-boundary/budget-truncation/second-position/out-of-scope 四类同样留待后续，其中 near-miss-boundary 已确认不是单纯的"总是少读尾部"模式（`paper-task-claim-iam-holdout`：golden 28–44 vs 实选 19–43，起点更早、仍然 miss），根因未定。
 
-## 4. 验证
+## 4. V3.2-29：provider measured-or-remove
+
+### 4.1 计划原文与本轮范围
+
+"新增 benchmark-only adapter allowlist（生产默认 registry 不读取该开关）……对 Spring/MyBatis/MapStruct 做 source-locked on/off；ON/OFF 各自使用独立 process/cache、同 source tree、同 deadline，OFF 必须是不加载/不运行该 adapter，不能复用 ON 的暖态；记录 selected、readPlan、golden/task-blocking gain、独立 cost；连续两轮无真实增益的 adapter 进入删除候选。" 附带规则："MyBatis parser/resource index 与 MyBatis ranking adapter 分开决策；不得因为 adapter 无收益删除底层 XML 正确性能力。"
+
+本轮完成的是**第 1 轮**测量，不是最终删除判定——"连续两轮无真实增益"要求至少两轮，本轮无论结果如何都不能单轮触发删除。
+
+### 4.2 LOC ceiling：一次性小幅突破，用户已授权
+
+测量本身需要的最小生产代码改动：`AgentRouter` 构造函数新增一个 `frameworkAdapters` 覆盖参数（`src/agent-router/index.ts`，默认值仍是完整的 `FRAMEWORK_ADAPTERS`，生产调用方从不传这个参数，行为不变）；`benchmark-agent-impact.ts` 新增 `--exclude-framework-adapter <id>` CLI 开关，过滤后传给 `AgentRouter`。这两处都在 `count-production-ts.mjs` 的统计范围内（已用其 `scope` 字段核实：`src/benchmark-agent-impact.ts`、`src/benchmark/**`——测试文件除外——都计入 ledger，只有 `scripts/*.mjs` 免于计入）。而能腾出行数的分支（删除无收益 adapter）必须先有本轮测量结果才能触发，形成真实的循环依赖，无法用"先删后测"绕开，也不应该为了凑行数去别处做无关"精简"。
+
+用户明确授权"接受一次性小幅突破硬上限，但是还是要做好测试和验证对比"。**实际改动 +11 行**：`totalLoc` 从 Sprint4 收尾时的 33,219（硬上限本身）变为 **33,230**，超出硬上限 11 行（约 0.033%）。`scripts/run-v32-optimization-matrix.mjs:49` 的 `productionLocGatePassed` 判定（`<=` 比较）此后会返回 `false`，这是预期结果，不是需要排查的回归——下一次运行该 matrix 脚本的会话应该识别这一点，不要"修复"它。**本轮的测量结果没有让任何 adapter 达到删除标准（见 4.4），所以这 11 行目前没有被偿还**，仍然是欠账状态，需要未来一轮真实的"连续两轮无真实增益"结果，或者一次合理的独立删除机会，才能还清。
+
+### 4.3 "不加载/不运行"的读法，改动前先写明
+
+`AgentRouter` 的 `frameworkAdapters` 参数是一个运行时过滤后的数组；`spring-adapter.ts`/`mybatis-adapter.ts`/`mapstruct-adapter.ts` 三个模块仍然被 `framework-provider.ts` 静态 `import`（JS 模块加载层面无法避免，除非改成动态 `import()`，那是明显更重的改动，且这三个 adapter 对象本身是无状态的、`import` 不产生任何副作用或成本）。本轮采用的读法是：**"不加载/不运行"约束的是运行时行为——排除的 adapter 的 `isActive()`/`collect()` 必须一次都不被调用、不产生任何证据或副作用、不接触 `frameworkIndex`——而不是字面意义上的"JS 模块不能被 import"**。`runFrameworkAdapters(adapters, ...)`（`framework-provider.ts:47`）只会遍历传入的 `adapters` 数组，被过滤掉的 adapter 对象在整个请求生命周期内不会被引用或调用，满足这个读法。
+
+### 4.4 ablation 结果（第 1 轮，真实数据）
+
+**方法**：`scripts/run-v329-framework-ablation.mjs`（新增，LOC-free）对每个 adapter × 每个仓库分别发起两次完全独立的顶层两层 isolation-chain 调用（各自独立的 detached clone、独立 JavaIndex cache、独立进程）——ON 用完整 registry，OFF 用 `--exclude-framework-adapter <id>`；`warmState=cold-nolsp`（不 spawn 真实 jdtls，framework adapter 靠 JavaIndex/rg 证据工作，不依赖 live LSP）；每仓每条件 `runs=1`。全部 10 golden 场景一次跑完，取 `totals`（P50 口径的聚合字段）。
+
+**单次运行为什么对 gain 指标够用、对 elapsedMs 不够用**：Task36 determinism gate（`determinism.ts:53-55` 自己的注释）只证明冷启动路径的**语义快照**（`candidatePaths`/`readPlan`/`familyScores`/`completion`）逐字节确定——明确排除延迟、字节计数、cache 命中和 phase timing。recall/pRead/rTaskBlocking/rReadMust/NDCG 五项 gain 指标都是候选/read-plan 选择的派生量，落在这个快照覆盖范围内，单轮可信；`readPlanBytes`/`totalAgentVisiblePayload` 是同一个确定性选择序列化后的字节数，同样可信。但 `elapsedMs`（wall-clock）明确不在快照保证范围内，本轮各 cell 的 elapsedMs 正负号不一致（例如 MyBatis 在 lishuedu 是 -6.9ms、cipherlink 是 +15.8ms，同一个"零产出"的 adapter），**这就是单轮 wall-clock 噪声的直接证据，elapsedMs 的符号不作为结论依据，只有量级（个位数到十几毫秒）用于说明 cost 处在噪声量级、不是数量级差异**。
+
+**正对照（验证 filter 真的生效，不是没起作用）**：cipherlink 排除 Spring 后，recall/pRead/rTaskBlocking/rReadMust/NDCG_read@6 全部出现非零变化（`{"recall":0.0062,"pRead":0.0017,"rTaskBlocking":-0.0268,"rReadMust":-0.02,"NDCG_read@6":-0.0164}`）——证明 `--exclude-framework-adapter` 确实改变了 `collectFrameworkEvidence` 的行为，不是死开关。
+
+**溯源**：18 次运行（3 adapter × 3 repo × on/off）的 `executableTree`（isolation chain 状态行里的真实 candidate 树哈希，不是 `runtimeBuild.gitSha`——后者只反映已提交的 HEAD `ec78258`，而本轮改动此时还没提交，`git apply` 补丁应用后的真实执行树是另一个哈希）**全部一致，都是 `eaaf5d39b74647e62964406800333bc21099b1b2`**，证明整轮 campaign 期间代码树没有漂移；这个值也和改动前的冒烟测试（`executableTree` 前缀 `1533d5343e7a…`）不同，说明确实是带着本轮 wiring 跑的。这个校验只证明"没漂移"，不单独构成 source-locked 证明——真正的功能证明是上一段的正对照。
+
+**哪些 cell 有效（9 个 cell 里只有 4 个是有效测量，其余 5 个是仓库本身不用这个框架，天然零信号，不是测量失败）**：三仓源码逐一 grep 核实：Spring 三仓都在用（159/1488/445 处 `org.springframework` import），MapStruct 只有 lishuedu 用（81 处 `org.mapstruct.Mapper`，cipherlink/exam-parent-v3 均为 0），MyBatis 三仓都有 `org.apache.ibatis`/`org.mybatis` import（24/311/0 处）但**三仓全部零个 MyBatis XML mapper 文件**（多种 grep 模式核实：路径含 mapper 的 xml、含 `<mapper ` 标签的 xml，均为 0）。`mybatisAdapter.isActive()`（`mybatis-adapter.ts:82-96`）按 import/annotation 前缀判定，cipherlink/lishuedu 会被判定为激活（`collect()` 确实执行），但当前 `mybatisAdapter` 的证据产出是 XML statement/resultMap 形状的，没有 XML 文件可扫，所以"激活但空跑"——不是"未激活"，是激活了但注定拿不到证据，这是三仓 golden 集合本身的覆盖缺口，不是 adapter 没价值的证据（呼应计划自己的 MyBatis 规则）。
+
+有效 gain 数据（gainDelta = ON − OFF，即启用该 adapter 相对禁用的差值）：
+
+| adapter | repo | recall | pRead | rTaskBlocking | rReadMust | NDCG_read@6 |
+| --- | --- | --- | --- | --- | --- | --- |
+| Spring | cipherlink | +0.0062 | +0.0017 | -0.0268 | -0.02 | -0.0164 |
+| Spring | lishuedu | -0.0125 | -0.0167 | -0.0143 | 0 | -0.014 |
+| Spring | exam-parent-v3 | 0 | +0.0167 | +0.0083 | 0 | -0.0024 |
+| MapStruct | lishuedu | +0.0536 | +0.025 | +0.0286 | +0.0333 | +0.0278 |
+
+（`rReadMust` 这里是同一套当前 24 场景 golden 集合内部 ON vs OFF 的比较，不是像 Sprint4 V3.2-25 那样跨新旧 golden 集合口径比较，可比性成立，不受那次撤回影响的约束。）
+
+**MapStruct（lishuedu）**：五项 gain 指标**全部正向**，且量级不小（recall+5.36%、rReadMust+3.33%）。更值得精确说明的是成本方向：`totalAgentVisiblePayload` -212.6 字节、`readPlanBytes` -375.9 字节**同时**下降——不是"多花字节换召回"，是 MapStruct 证据帮助 read-plan 选出更精准的候选集合，使得同一次读取**用更少字节拿到更高召回**（更贴合任务的候选挤掉了本来会占预算的次优候选）。这是本轮 ablation 里最干净的正结果，`KEEP_CONFIRMED_GAIN`。
+
+**Spring（三仓）**：方向不一致，不能用一句话总结。cipherlink 是 recall/pRead 小幅提升但 rTaskBlocking/rReadMust/NDCG 明显下降；lishuedu 是五项**全部**下降（含 recall 本身）；exam-parent-v3 是 pRead/rTaskBlocking 提升、NDCG 微降。**唯一三仓一致的信号是 NDCG_read@6 全部为负**——加入 Spring 证据会持续拉低 read-plan 排序质量，即使对原始 recall 的影响方向不定、量级也小。结合 `read-plan-budget.ts` 把 `SPRING_CALL_PATH` 证据归入"verified"配额（与 JDT-exact/semantic-definition 同一优先级）这一既有设计，这更像是**预算配额层面的 MODIFY 信号**（Spring 证据在配额里可能不该和精确证据同等优先），不是删除 adapter 的信号——net 收益接近中性、且三仓都在用，不满足任何删除标准。`KEEP_MODIFY_SIGNAL`，配额调整留作独立后续项，本轮不动 `read-plan-budget.ts`。
+
+**MyBatis（三仓）**：gain 五项在三仓全部精确为 0——但这是"golden 集合测不出"，不是"测过了、真的没用"。付出的成本是真实的（cipherlink +15.8ms/+542 字节，lishuedu -6.9ms/+554 字节，exam-parent-v3 +6.5ms/+56 字节——延迟量级在噪声附近，payload 字节的正向增量更稳定，说明 adapter 确实执行了、只是没产出可用证据）。`KEEP_UNDERPOWERED`：按计划的 MyBatis 专属规则，不能仅因为这一轮无收益就进入删除候选；真正测出结论需要一个含 MyBatis XML mapper 的 golden 仓库，当前 3 仓都不满足，这是本轮暴露的 golden 集合覆盖缺口，不是 adapter 本身的负面证据。
+
+### 4.5 disposition
+
+三个 adapter 本轮全部 `KEEP`，理由各不相同（MapStruct 有真实正收益；Spring 是中性/待配额调整；MyBatis 是无法用当前 golden 集合公平测量）——**没有一个进入删除候选**，"连续两轮无真实增益"的门槛本轮也无法触发（只有一轮）。11 行 LOC 欠账保留，未偿还。
+
+## 5. 验证
 
 - `src/agent-router/format.test.ts`、`src/benchmark/determinism.test.ts`、`src/agent-router/read-plan.test.ts`、`src/benchmark/attribution-v3.test.ts`、`src/benchmark-agent-impact.test.ts`：已在隔离环境（`run-isolated-validation.mjs --profile targeted`）跑过，66/66 通过。
-- 全量隔离回归（`--profile full`）：921/921 单测 + 100/100 `scripts/*.test.mjs` + smoke 全绿，exit 0（`bash -lc` 需显式 `export PATH="/opt/homebrew/bin:$PATH"`，否则本机 PATH 顺序会把 `/usr/local/bin/git`——一个 2015 年的 git 2.3.1 残留符号链接——排在 `/opt/homebrew/bin/git` 2.52.0 前面，导致 worktree/sibling-seed 相关 19 个测试因为老版本 git 不支持 `-b`/`worktree` 而失败，与本轮源码改动无关；详见 `[[node-and-benchmark-env-constraints]]`）。
-- LOC ledger：`33,219 / 33,219`（硬上限，`Math.floor(31638*1.05)`），恰好打满，零余量。`scripts/count-production-ts.test.mjs` 本身不断言具体上限；真正的门在 `scripts/run-v32-optimization-matrix.mjs:49`，是 `<=` 比较，33219<=33219 通过。
+- 全量隔离回归（`--profile full`，V3.2-26/27/29 全部改动落地之后，含 `index.ts`/`benchmark-agent-impact.ts` 的 V3.2-29 wiring）：921/921 单测 + 100/100 `scripts/*.test.mjs` + smoke 全绿，exit 0（`bash -lc` 需显式 `export PATH="/opt/homebrew/bin:$PATH"`，否则本机 PATH 顺序会把 `/usr/local/bin/git`——一个 2015 年的 git 2.3.1 残留符号链接——排在 `/opt/homebrew/bin/git` 2.52.0 前面，导致 worktree/sibling-seed 相关 19 个测试因为老版本 git 不支持 `-b`/`worktree` 而失败，与本轮源码改动无关；详见 `[[node-and-benchmark-env-constraints]]`）。
+- LOC ledger：Sprint4 收尾时 `33,219 / 33,219`（硬上限），V3.2-26 修复不变；V3.2-29 之后变为 `33,230 / 33,219`，**用户已明确授权的一次性小幅突破**（见 §4.2），`scripts/run-v32-optimization-matrix.mjs:49` 的 `<=` 判定此后为 `false`，是预期结果，不是需要修复的回归。

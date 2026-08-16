@@ -120,7 +120,9 @@ export class AgentRouter {
     // Appended last (not inserted among the params above) so every existing
     // positional call site - several tests pass rgRunner positionally with
     // `undefined` placeholders before it - keeps working unchanged.
-    private readonly edgeStoreV2: SemanticEdgeStoreV2 = new FileSemanticEdgeStoreV2(repoRoot)
+    private readonly edgeStoreV2: SemanticEdgeStoreV2 = new FileSemanticEdgeStoreV2(repoRoot),
+    // V3.2-29 benchmark-only ablation override; production callers never pass this.
+    private readonly frameworkAdapters: typeof FRAMEWORK_ADAPTERS = FRAMEWORK_ADAPTERS
   ) {}
 
   /**
@@ -294,7 +296,7 @@ export class AgentRouter {
     const frameworkResult = await timed(phaseMs, "frameworkEvidence", async () => collectFrameworkEvidence({
       ...providerInputBase,
       existingCandidatePaths: evidenceLedger.paths()
-    }, FRAMEWORK_ADAPTERS, [...normalizedStaticEvidence.values()]));
+    }, this.frameworkAdapters, [...normalizedStaticEvidence.values()]));
     const frameworkOutcome = frameworkResult.outcome;
     evidenceLedger.append(frameworkOutcome);
 

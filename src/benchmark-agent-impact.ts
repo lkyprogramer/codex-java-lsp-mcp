@@ -8,6 +8,7 @@ import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import { AgentRouter, type ImpactInternalObserver } from "./agent-router/index.js";
 import type { CandidateEvidence } from "./agent-router/evidence.js";
+import { FRAMEWORK_ADAPTERS } from "./agent-router/providers/framework-provider.js";
 import type { ImpactOptions, ImpactResult } from "./agent-types.js";
 import { projectImpactResultV6 } from "./agent-router/format.js";
 import { readRuntimeBuild } from "./build-info.js";
@@ -73,6 +74,8 @@ type Cli = {
   readPlanMaxBytes?: number;
   listScenarios: boolean;
   strategy: BenchmarkStrategy;
+  /** V3.2-29 benchmark-only ablation: FrameworkAdapter.id to exclude, e.g. "spring". Empty = full registry. */
+  excludeFrameworkAdapter: string;
   deadlineMs: number;
   /** Startup reconciliation is excluded from request P95 but must finish before the steady-state sample. */
   indexPrepareTimeoutMs: number;
@@ -158,7 +161,12 @@ const routerJavaIndex = session && javaIndexClient
   ? new RouterJavaIndex(cli.repoRoot, javaIndexClient)
   : undefined;
 const javaIndex = routerJavaIndex;
-const router = session && javaIndex ? new AgentRouter(cli.repoRoot, session, javaIndex) : undefined;
+const frameworkAdapters = cli.excludeFrameworkAdapter
+  ? FRAMEWORK_ADAPTERS.filter(adapter => adapter.id !== cli.excludeFrameworkAdapter)
+  : FRAMEWORK_ADAPTERS;
+const router = session && javaIndex
+  ? new AgentRouter(cli.repoRoot, session, javaIndex, undefined, undefined, undefined, undefined, frameworkAdapters)
+  : undefined;
 if (routerJavaIndex && javaIndexClient) {
   const startedAt = performance.now();
   const preparation = await prepareJavaIndex(cli, routerJavaIndex, javaIndexClient);
@@ -249,6 +257,7 @@ function parseCli(args: string[], root: string): Cli {
     readPlanMaxBytes: optionalPositiveIntegerArg(values, "--read-plan-max-bytes", process.env.JAVA_LSP_BENCH_READ_PLAN_MAX_BYTES),
     listScenarios: values.get("--list-scenarios") === true,
     strategy: stringArg(values, "--strategy", process.env.JAVA_LSP_BENCH_STRATEGY || "impact") as BenchmarkStrategy,
+    excludeFrameworkAdapter: stringArg(values, "--exclude-framework-adapter", process.env.JAVA_LSP_BENCH_EXCLUDE_FRAMEWORK_ADAPTER || ""),
     // The same absolute deadline java_impact gives a real caller in this warm
     // state, so the benchmark measures what users actually get.
     deadlineMs: Math.min(
