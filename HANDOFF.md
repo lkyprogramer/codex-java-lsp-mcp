@@ -47,7 +47,7 @@
 
 ## 下一步
 
-**执行 V4 计划（真源见上）。** 当前进行到：Phase0.2（V4-02 LOC 重定基线 → V4-03 Sprint0' 非 0 字节测量 → V4-04 artifacts 治理）。V4-01 daemon 合流已完成。V3.2-30 的 API key 阻塞已由用户确认解除（V4-10 将使用用户提供的凭据），不再是 `BLOCKED_EXTERNAL`。
+**执行 V4 计划（真源见上）。** 当前进行到：V4-03 Sprint0' 非 0 字节测量。V4-01 daemon 合流已完成（`4323b3c`）。V4-02 LOC 基线已冻结为 35,472（上限 37,245，清单 `docs/phase-v4/v4-production-ts-baseline.json`）；V3.2 的 33,219/33,230 与 +11 旧债已归档清零。V4-04 已把 `artifacts/v4-*/` 写入 `.gitignore`，历史 artifacts 未动。V3.2-30 的 API key 阻塞已由用户确认解除（V4-10 将使用用户提供的凭据），不再是 `BLOCKED_EXTERNAL`。
 
 以下为 V3.2 收尾时的历史记录（保留供追溯）：
 
@@ -74,7 +74,8 @@
 - 不要在 1 分钟 load average 明显高于逻辑核数（本机 10 核，经验阈值 0.7x）时运行 fresh-workspace JDT first-touch 类 benchmark 并把结果当结论——2026-08-16 的一次尝试在 load≈30 时两臂都 60s 超时零结果，已确认这类噪声会让结果不可信。
 - 不要在裸 `bash -lc '...'` 里跑 `run-isolated-validation.mjs`/`run-isolated-jdt-benchmark.mjs` 而不先 `export PATH="/opt/homebrew/bin:$PATH"`——本机 `/usr/local/bin/git` 是 2015 年遗留的 git 2.3.1 符号链接，排在真正的 `/opt/homebrew/bin/git`（2.52.0）前面，会导致 worktree 相关测试假性失败、或对三仓 golden repo（本身是 git worktree）的 `--repo-root` 调用假性报 "Not a git repository"。见 [[node-and-benchmark-env-constraints]] 第 3 条。
 - 不要把 V3.2-27 的 top-of-file-fallback miss 类用"type 声明行代替 (1,1)"这种低成本修法去凑合——已用 golden 数据结构性证伪（见 Sprint5 §3），会浪费 LOC 余量且拿不到任何真实收益。
-- 不要"修复" `scripts/run-v32-optimization-matrix.mjs` 报出的 `productionLocGatePassed: false`——V3.2-29 之后 LOC 是 `33,230/33,219`，超编 11 行是用户已明确授权的一次性突破（见 Sprint5 §4.2），这是预期状态，不是需要还原的回归；唯一合法的偿还路径是未来某个 adapter 真的测出"连续两轮无真实增益"进而被删除，不是去别处找无关代码"精简"凑数，也不是把这次改动 revert 掉。
+- V4 起不要再用 V3.2 的 `33,230/33,219` 当 LOC 门禁。现行真源是合流提交 `4323b3c`：35,472 LOC，周期上限 37,245。V3.2-29 的 +11 行旧债已并入该基线清零。
+- 不要"修复"历史 V3.2 报告里的 `productionLocGatePassed: false`——那是当时 `33,230/33,219` 的已授权突破记录，不是现在的回归。
 - `scripts/run-three-repo-cold-matrix.mjs` 的候选测试套件阶段包含真实子进程多进程锁 lease 测试（`task36-multiprocess-smoke.test.mjs`），在 1 分钟 load average 明显偏高（本机 10 核，经验阈值 0.7x；2026-08-16 遇到过 37.82）时可能因真实硬性超时假性失败——判定是否是主机噪声的方法是在隔离环境单独重跑那一个测试文件，不要凭一次失败就断定改动有问题，也不要凭一次通过就断定改动没问题；两次都要看，方向一致才能下结论。
 - 不要重复尝试"把 `SPRING_CALL_PATH` 从 `read-plan-budget.ts` 的 `FRAMEWORK_VERIFIED_REASONS` 整体移出"这条规则——V3.2-28 第 1 轮已经用正式三仓 AB/BA/AB 矩阵测过（`--baseline 869b353`），cipherlink tuning recall 净负、其余两仓四项指标全零，已回滚（见 Sprint5 §4.1-4.5）。Spring 配额问题本身可能仍然存在（V3.2-29 的 `NDCG_read@6` 三仓一致为负这个信号没有被推翻，只是这一种修法不对），但下次要换更细粒度的假设，不是重跑同一条规则。
 - 不要重复尝试"把 `buildReadPlan()` 里 anchor 数量超预算才放宽 `maxFiles` 的机制，扩大到 anchor∪protectedPaths"这条规则——V3.2-28 第 2 轮用正式三仓矩阵测过（`--baseline 4eedc6b`），三仓 token 成本全部上升、`pRead` 广泛下降，只在一仓一项指标上有收益，净不划算，已回滚（见 Sprint5 §4.6-4.7）。如果未来想继续挖"task-aware budget"这个方向，先重复这条规则本身发现的方法论（见下一条），不要直接重跑同一条被否定的规则。

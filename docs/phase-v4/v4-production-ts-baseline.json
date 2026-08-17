@@ -1,0 +1,792 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "kind": "git-revision",
+    "revision": "4323b3cfead3a368b5a81c880176841d162ceced",
+    "commit": "4323b3cfead3a368b5a81c880176841d162ceced",
+    "commitTree": "1be810da3cc7a2895e143be204542174367e0b30",
+    "executableTree": "1be810da3cc7a2895e143be204542174367e0b30"
+  },
+  "scope": {
+    "include": "src/**/*.ts",
+    "exclude": [
+      "src/**/*.test.ts",
+      "dist/**",
+      "generated output"
+    ]
+  },
+  "fileCount": 128,
+  "totalBytes": 1418751,
+  "totalLoc": 35472,
+  "files": [
+    {
+      "path": "src/agent-router/anchor.ts",
+      "bytes": 9509,
+      "loc": 224,
+      "sha256": "6ab58df1ecbf750b89d35599e68232d76174db4a1c56c4af6b20741197f37459"
+    },
+    {
+      "path": "src/agent-router/candidate-collectors.ts",
+      "bytes": 10111,
+      "loc": 268,
+      "sha256": "85f3d46bf7a9510cb4612d12c8c4141920f88d398f30a4e2ebea7d09e0394c81"
+    },
+    {
+      "path": "src/agent-router/candidate-helpers.ts",
+      "bytes": 3887,
+      "loc": 107,
+      "sha256": "d7eb8551fb3e7be2d67be291d6fa7deae9d203020dcc348f50ef8605202ca2ac"
+    },
+    {
+      "path": "src/agent-router/evidence-gaps.ts",
+      "bytes": 1753,
+      "loc": 33,
+      "sha256": "bd3d67297e6c6e93ccec1ff072de7e409a7219f8f26ed1a370eee10e15624fe7"
+    },
+    {
+      "path": "src/agent-router/evidence-ledger.ts",
+      "bytes": 1387,
+      "loc": 42,
+      "sha256": "ce67ca4c23a4b75fd4d107fcfbfdf2235764c9c57ddf82500995ee19e24d356e"
+    },
+    {
+      "path": "src/agent-router/evidence-normalizer.ts",
+      "bytes": 4119,
+      "loc": 111,
+      "sha256": "35389f585ca8a4d8d94f86229e10622607f9f5b57b74d8a65b725743e45b1368"
+    },
+    {
+      "path": "src/agent-router/evidence.ts",
+      "bytes": 5830,
+      "loc": 152,
+      "sha256": "7babcb31428b333168cb24b3e2f80d9157c6c6f9ba3f099eff47d5f80379e9a8"
+    },
+    {
+      "path": "src/agent-router/family-ranker.ts",
+      "bytes": 8183,
+      "loc": 211,
+      "sha256": "a619a45f5538ecd7312383c51dd0c4644208acd11b756ca4347ad0f8fcb98fc8"
+    },
+    {
+      "path": "src/agent-router/format.ts",
+      "bytes": 7287,
+      "loc": 167,
+      "sha256": "ee73a95e5047774019496e5c36f1e3cdffcc90a0598e77fd6035c555c3c03a67"
+    },
+    {
+      "path": "src/agent-router/framework/adapter.ts",
+      "bytes": 6630,
+      "loc": 138,
+      "sha256": "23890fca243c5302cfa401e196ea810b9c4d389c0e4e2435c24fa4f28e4ec1d1"
+    },
+    {
+      "path": "src/agent-router/framework/lombok-adapter.ts",
+      "bytes": 3901,
+      "loc": 84,
+      "sha256": "811a364087814f68d729a2f19a734dc0b007015868a9be194a6108404e6440a7"
+    },
+    {
+      "path": "src/agent-router/framework/mapstruct-adapter.ts",
+      "bytes": 13719,
+      "loc": 288,
+      "sha256": "67f8d0f5dbef798822dff192c8efdd4f8314b86c66be7c25a4e9f321cabbe4c1"
+    },
+    {
+      "path": "src/agent-router/framework/mybatis-adapter.ts",
+      "bytes": 15024,
+      "loc": 312,
+      "sha256": "5b772f4b8e33b4cf0c7a2326fd5a0db3308d5d9fe6296ff6e0002aed5f06626a"
+    },
+    {
+      "path": "src/agent-router/framework/runner.ts",
+      "bytes": 6645,
+      "loc": 159,
+      "sha256": "378c0acb5f0e83d8299116d2dec9373633c872bfa1674fbf01fcf7e3da79dfed"
+    },
+    {
+      "path": "src/agent-router/framework/shared.ts",
+      "bytes": 5879,
+      "loc": 158,
+      "sha256": "1029c7db69451c781dad4f2de25b0ca6c9a0ca4a5b8c3942b652e7a99f480770"
+    },
+    {
+      "path": "src/agent-router/framework/spring-adapter.ts",
+      "bytes": 20148,
+      "loc": 396,
+      "sha256": "ce978067a0b596797171eadf78e795196e4c17e14200c44411c479029d5ef0a6"
+    },
+    {
+      "path": "src/agent-router/framework/spring-annotations.ts",
+      "bytes": 5022,
+      "loc": 99,
+      "sha256": "22ca8a1e100c50c2480d6c0e0cf1c0ef21eb178af7a121f666136b38f90f06f5"
+    },
+    {
+      "path": "src/agent-router/framework/spring-endpoint.ts",
+      "bytes": 5172,
+      "loc": 97,
+      "sha256": "7cb70b578ddffad0995d77d3cef2bec11be86996636146e6298765fffba88229"
+    },
+    {
+      "path": "src/agent-router/impact-metrics.ts",
+      "bytes": 9630,
+      "loc": 305,
+      "sha256": "1fac2aa329680cc369f30884b600f431d7d22f54cdb4aa63d8cab312453500fa"
+    },
+    {
+      "path": "src/agent-router/index.ts",
+      "bytes": 24020,
+      "loc": 520,
+      "sha256": "3c395104a10d012b5ce340614a90dd75eae6e15548b58ab1ce5a1c64797eff7f"
+    },
+    {
+      "path": "src/agent-router/materialize-candidates.ts",
+      "bytes": 9217,
+      "loc": 198,
+      "sha256": "d68a198240adb97796236bc8511220ebef3b1b05ca2e307eac9a5af2784ec508"
+    },
+    {
+      "path": "src/agent-router/name-helpers.ts",
+      "bytes": 1416,
+      "loc": 35,
+      "sha256": "1e553b82062208dd6539cb8bae564fc5b4ad4095e7c2d34265f5001e119cbf17"
+    },
+    {
+      "path": "src/agent-router/output-v6.ts",
+      "bytes": 8546,
+      "loc": 204,
+      "sha256": "e8f0e2b0f11b2039f7777c4cc4b4bca6c1ffcef5dd91ff1bf2528ffcd605b891"
+    },
+    {
+      "path": "src/agent-router/providers/framework-provider.ts",
+      "bytes": 3142,
+      "loc": 56,
+      "sha256": "ebb6e21e8d2495a3950f807d1d9462bdffb2e6c271c25d4b9bedd8ab9b6655f3"
+    },
+    {
+      "path": "src/agent-router/providers/lexical-provider.ts",
+      "bytes": 4047,
+      "loc": 105,
+      "sha256": "1e2119599fd23de53dba65ebfcc1f25d68d0b6de4fe5c3a6f9ba5ada2b1845c6"
+    },
+    {
+      "path": "src/agent-router/providers/relationship-provider.ts",
+      "bytes": 42434,
+      "loc": 990,
+      "sha256": "4eef2f1d9c4cbe769f10d0b1608b78602d92f0b1f9c4e1644ff59b7ff395fe15"
+    },
+    {
+      "path": "src/agent-router/providers/semantic-provider.ts",
+      "bytes": 8987,
+      "loc": 202,
+      "sha256": "75be5554fdbb484497d268f35435928bf835e46440de1c5d80fad5967e7e5c26"
+    },
+    {
+      "path": "src/agent-router/providers/shared.ts",
+      "bytes": 2795,
+      "loc": 72,
+      "sha256": "7bd4d1e3150c0e437b38af6ed2bac6ce2d421f489e0daf2731b8945a2281466f"
+    },
+    {
+      "path": "src/agent-router/providers/static-provider.ts",
+      "bytes": 19420,
+      "loc": 481,
+      "sha256": "f33be1af2131fe97cfb66f45d70c4485e4154b3b40086452b86104485035c977"
+    },
+    {
+      "path": "src/agent-router/providers/support-provider.ts",
+      "bytes": 3379,
+      "loc": 84,
+      "sha256": "e7e20896e16a2d83eeaffd0e82b3e1643494bd08008c08b6382118e0da039f60"
+    },
+    {
+      "path": "src/agent-router/rank-candidates.ts",
+      "bytes": 10801,
+      "loc": 248,
+      "sha256": "edb4a0b53ca92f8b6f128bfaf57560ff53739760957c5e2ef8c75864143d8d87"
+    },
+    {
+      "path": "src/agent-router/ranking-signals.ts",
+      "bytes": 9941,
+      "loc": 248,
+      "sha256": "797744782418f7c597781ddd092f28f444476c1d1b43b27158c92ee07ae65ad4"
+    },
+    {
+      "path": "src/agent-router/read-plan-budget.ts",
+      "bytes": 6108,
+      "loc": 180,
+      "sha256": "b7e546bf3dad681cfa07a5c9fb004859fd921448de144ac307219cf8bcaec427"
+    },
+    {
+      "path": "src/agent-router/read-plan.ts",
+      "bytes": 32770,
+      "loc": 761,
+      "sha256": "37cebaf02e8e5ff7c9436edb19a90c9ed9ea27d3d68c599123725ec2fa69639c"
+    },
+    {
+      "path": "src/agent-router/reference-ranking.ts",
+      "bytes": 5653,
+      "loc": 142,
+      "sha256": "148ee194b624ae4dd8d7b53bb1837ff8c68d4279ad299301359aba88a7c2aeab"
+    },
+    {
+      "path": "src/agent-router/relationship-deltas.ts",
+      "bytes": 4453,
+      "loc": 111,
+      "sha256": "4351f01a5220de2ce329cd8a3d0f86abd2315c354e9f244e8014083f1883d27d"
+    },
+    {
+      "path": "src/agent-router/rg-execution.ts",
+      "bytes": 6305,
+      "loc": 189,
+      "sha256": "373d4b007e42eb856f3bc491228c678c8ec0c5e886f3cb13fde880cd48d414a6"
+    },
+    {
+      "path": "src/agent-router/rg-plan.ts",
+      "bytes": 7957,
+      "loc": 152,
+      "sha256": "de41a007449f4a9eb6096f9650579033c14aec7a19ec5f8584199b675cc22300"
+    },
+    {
+      "path": "src/agent-router/rg-roots.ts",
+      "bytes": 2643,
+      "loc": 58,
+      "sha256": "5b8a2a5bbf5c6f715bb4c58c941a2b4121a857867e64c09ba2bd1df6234d1d79"
+    },
+    {
+      "path": "src/agent-router/rg-terms.ts",
+      "bytes": 7368,
+      "loc": 157,
+      "sha256": "dd9863cff99ad64901f74e2a678c092a979b9d8d3feacc10a2897af0878d0d2b"
+    },
+    {
+      "path": "src/agent-router/runtime.ts",
+      "bytes": 513,
+      "loc": 16,
+      "sha256": "433bf5e0af929ba3ede8cc356d79c8a2a65df3c71ef16a105ea2de6ae149b488"
+    },
+    {
+      "path": "src/agent-router/semantic.ts",
+      "bytes": 24405,
+      "loc": 560,
+      "sha256": "17fc7c1b7a8564016c9b6bf7ee6b7e2b7bd9a887badcfb123ce999a8a24336d0"
+    },
+    {
+      "path": "src/agent-router/type-reference.ts",
+      "bytes": 16072,
+      "loc": 449,
+      "sha256": "7f3e1f8791d466c41a963e8243b623f901fe38d1e6658d92043f2c27744852ef"
+    },
+    {
+      "path": "src/agent-types.ts",
+      "bytes": 7030,
+      "loc": 236,
+      "sha256": "56fcea63575b1a386ea592d3be69c980b73f1a575ea602f13962223792042a73"
+    },
+    {
+      "path": "src/alias-registry.ts",
+      "bytes": 3401,
+      "loc": 107,
+      "sha256": "a4a8bef9b2e1e945fbaf84b7cdaaaa947d1263d5262ae9a8828906602db9a5cb"
+    },
+    {
+      "path": "src/application.ts",
+      "bytes": 9623,
+      "loc": 271,
+      "sha256": "95d2504b4e627e4c19101e830f48b7f1d5b486cc9832d475d754213272818e98"
+    },
+    {
+      "path": "src/benchmark-agent-impact.ts",
+      "bytes": 37919,
+      "loc": 898,
+      "sha256": "ab9cde3e544f341aff4bd28d6dfee885fd9c6790dfd1a1183412dbe40e27932e"
+    },
+    {
+      "path": "src/benchmark/attribution-v3.ts",
+      "bytes": 12132,
+      "loc": 322,
+      "sha256": "e64fb5e2d1ab4718a897666814d8e79a787bc25191507c7bfde2101e0c04f370"
+    },
+    {
+      "path": "src/benchmark/determinism.ts",
+      "bytes": 6579,
+      "loc": 174,
+      "sha256": "2014c6795cdf11e97921d8755ce9e125a0dd6ce9b151b136b0d782e7bf5c01cb"
+    },
+    {
+      "path": "src/benchmark/golden-scenario.ts",
+      "bytes": 13370,
+      "loc": 320,
+      "sha256": "69de2af7454b4fdc11ce1fe5ecf97c22e088d84ead0d06f2c2ed95ba676ba73f"
+    },
+    {
+      "path": "src/benchmark/java-index-idle.ts",
+      "bytes": 2045,
+      "loc": 50,
+      "sha256": "383ec7e9533b086221931316aa428ce6c5aaac1ba47c2d12d1d9810422644338"
+    },
+    {
+      "path": "src/benchmark/process-resource-observer.ts",
+      "bytes": 7954,
+      "loc": 136,
+      "sha256": "da0ac3351fbe31ff5b495b47daa4cf30942f33eacb6707800ef16f708adcd50d"
+    },
+    {
+      "path": "src/benchmark/progressive-index.ts",
+      "bytes": 17460,
+      "loc": 374,
+      "sha256": "4304afd31492dcc72fee3aff6ee27bd07129c3a7bf42f7226d43bc1faa57570e"
+    },
+    {
+      "path": "src/benchmark/semantic-first-touch.ts",
+      "bytes": 25939,
+      "loc": 632,
+      "sha256": "4a1a4c998eddc0729636a1894515a0d3a98e437ec32c6a5b4e1b51a8f2eda759"
+    },
+    {
+      "path": "src/benchmark/task36-mutation-matrix.ts",
+      "bytes": 24543,
+      "loc": 620,
+      "sha256": "7956c75de01494c235303add1318b31c1501d5fc8a2082b7594719347437d278"
+    },
+    {
+      "path": "src/benchmark/verify-determinism.ts",
+      "bytes": 1856,
+      "loc": 44,
+      "sha256": "ac59ec695856ab321e9df00151846d011ff6da822a48f820445a10d850099056"
+    },
+    {
+      "path": "src/build-info.ts",
+      "bytes": 1597,
+      "loc": 47,
+      "sha256": "131ef82d695a734c6149a4c473f1b493b12ecd8d1f83b8f7ffcf3872809db1e0"
+    },
+    {
+      "path": "src/cross-process-lease.ts",
+      "bytes": 26091,
+      "loc": 710,
+      "sha256": "3038d045bac623053f6031538cab6f03593cb2f90a4cc8a4f6492211582581b4"
+    },
+    {
+      "path": "src/document-lru.ts",
+      "bytes": 6752,
+      "loc": 211,
+      "sha256": "ebfd497516f49ab525d5ea302492c570cb03460f0ab7860253b9d373e3423c40"
+    },
+    {
+      "path": "src/generated-code.ts",
+      "bytes": 5571,
+      "loc": 146,
+      "sha256": "c701eb2eb713bd4db17b18fa7ebd3d7c371ff5cd44db9d0f9a9d3257d3c7f545"
+    },
+    {
+      "path": "src/hooks/hook-gate.ts",
+      "bytes": 2220,
+      "loc": 63,
+      "sha256": "3427a76dab35cf55acf9b1f4a0660033aca0b7329049f195d52bc59b95cd7e4e"
+    },
+    {
+      "path": "src/http-server-lifecycle.ts",
+      "bytes": 2830,
+      "loc": 91,
+      "sha256": "ec909f69c396ccdb9af006e711076f26a2ea827dd7edfafd35e9d5de7b50ce4c"
+    },
+    {
+      "path": "src/http-server.ts",
+      "bytes": 16753,
+      "loc": 438,
+      "sha256": "e1dfc55ca5f0c066214ecd61fb29b1c3a5296ffe59a0ee26df8fb779e48b6d67"
+    },
+    {
+      "path": "src/java-index/ast-extractor.ts",
+      "bytes": 26885,
+      "loc": 702,
+      "sha256": "39463af1ffc9a579f7c26f3cec47b0bf36ca227c5a15941abfbe97747cf7f067"
+    },
+    {
+      "path": "src/java-index/build-fingerprint.ts",
+      "bytes": 3722,
+      "loc": 82,
+      "sha256": "2008e0bcb7b28651fcc8b6dc11d38adcb93c36ccfd4a45a89e0fe1c347ee1932"
+    },
+    {
+      "path": "src/java-index/coverage.ts",
+      "bytes": 3987,
+      "loc": 106,
+      "sha256": "c35a0eb323bd624a4fec715801a951d5db084810498ef48d9fb7ed78fd98db3d"
+    },
+    {
+      "path": "src/java-index/edge-builder.ts",
+      "bytes": 17243,
+      "loc": 380,
+      "sha256": "51b47ad89a5486e6d3161223c41d4091dd17b96f70ca8019066df8cc7eb0fe1b"
+    },
+    {
+      "path": "src/java-index/framework-index-view.ts",
+      "bytes": 17939,
+      "loc": 407,
+      "sha256": "51006b007876735a49e8593f458056accbb3271a445c4d1291e7c093fe33ceba"
+    },
+    {
+      "path": "src/java-index/index-store.ts",
+      "bytes": 33811,
+      "loc": 756,
+      "sha256": "ea0f8f25d7792636e7b7a5f718ecf67d890cd855789c572b44a7622110596ba9"
+    },
+    {
+      "path": "src/java-index/index-types.ts",
+      "bytes": 9384,
+      "loc": 326,
+      "sha256": "80fd7420944383ad94cee97d6396fc3c28b6f6086283afc16ea16211192e6e08"
+    },
+    {
+      "path": "src/java-index/java-index-client.ts",
+      "bytes": 25402,
+      "loc": 721,
+      "sha256": "5961d5ba8371ecaba2be25a383432305b2c3b8664e8d80ea199b3dae4cbeb782"
+    },
+    {
+      "path": "src/java-index/java-index-view.ts",
+      "bytes": 3247,
+      "loc": 82,
+      "sha256": "0d2f5b189495ec55fe10d929bf8ef0984fa5f0662cb319ab8ad9ad1c96dd8558"
+    },
+    {
+      "path": "src/java-index/java-index-worker.ts",
+      "bytes": 85585,
+      "loc": 1936,
+      "sha256": "b4eb9527147f5d5c0bd31d4a4acb8bbf649a53beced50edcf6e45e50084c1b9b"
+    },
+    {
+      "path": "src/java-index/java-parser-backend.ts",
+      "bytes": 4360,
+      "loc": 108,
+      "sha256": "5e443e32606a6dedbaec02ee66884d49eafa21325597a230f77b7aa2b3b75d2a"
+    },
+    {
+      "path": "src/java-index/manifest.ts",
+      "bytes": 17584,
+      "loc": 412,
+      "sha256": "e66408155c648020b42f7c12895a0bed85a3b7193fac197d248e67abf616adcf"
+    },
+    {
+      "path": "src/java-index/mybatis-types.ts",
+      "bytes": 1406,
+      "loc": 51,
+      "sha256": "21862f208a8ed40bb252508211066955eb8ce108b6455fe63b72dbca8eaa4dbb"
+    },
+    {
+      "path": "src/java-index/mybatis-xml-extractor.ts",
+      "bytes": 10626,
+      "loc": 298,
+      "sha256": "10ef3357230ee5a6d4d0d7a1fd78061cb89c65a343158cf092d352992bef07c5"
+    },
+    {
+      "path": "src/java-index/name-resolver.ts",
+      "bytes": 13194,
+      "loc": 313,
+      "sha256": "1eecefff62178248acdb3331876fbe93f348e396d9c7283b15b431e038b6735e"
+    },
+    {
+      "path": "src/java-index/parse-tree-cache.ts",
+      "bytes": 7078,
+      "loc": 210,
+      "sha256": "f2993c785e4b7084fa85c3f0116b8b8da382af3cf0e7599f7f51c91b8007fbce"
+    },
+    {
+      "path": "src/java-index/router-facts.ts",
+      "bytes": 13900,
+      "loc": 405,
+      "sha256": "c0dab14db73505dec09c0c18f2e7e4dd582c175c77977718a53d87aa9ae4b2a6"
+    },
+    {
+      "path": "src/java-index/router-java-index.ts",
+      "bytes": 59991,
+      "loc": 1436,
+      "sha256": "090fba33acd678b33efee60b0fd17a81ac13580053adab6531adfe34c9de4fb0"
+    },
+    {
+      "path": "src/java-index/snapshot.ts",
+      "bytes": 9214,
+      "loc": 240,
+      "sha256": "bd5669cdc2882b12617aa0637ccde9d15b1816cdaab51afe4de49ad1dd174239"
+    },
+    {
+      "path": "src/java-index/stable-id.ts",
+      "bytes": 2136,
+      "loc": 57,
+      "sha256": "6cf502d3af7dcef6256cc8bdd7f2b87330f37e02291002425be841933e5ee192"
+    },
+    {
+      "path": "src/java-index/tree-sitter-smoke-worker.ts",
+      "bytes": 3436,
+      "loc": 86,
+      "sha256": "94ee922e8814189212bdbc56f21ae90e9ad70d87fdf2aa0677e19962b1235558"
+    },
+    {
+      "path": "src/java-index/worker-protocol.ts",
+      "bytes": 46222,
+      "loc": 1028,
+      "sha256": "2aeec0afcb9db13ac5e433c24179894b8b4e52561f7acc8057a8940763c4eaf0"
+    },
+    {
+      "path": "src/java-index/worktree-snapshot-seeder.ts",
+      "bytes": 17102,
+      "loc": 360,
+      "sha256": "22a508cc239c8ef2495b134b330f97ca6d82199c3dc635ca4c6acd5c5d099801"
+    },
+    {
+      "path": "src/jdt-restart-backoff.ts",
+      "bytes": 3099,
+      "loc": 92,
+      "sha256": "c138172e0b6410d01b53ec05d50565f681da213bdab50c0972abee8286e5a4b2"
+    },
+    {
+      "path": "src/jdtls-session.ts",
+      "bytes": 98025,
+      "loc": 2631,
+      "sha256": "1859ebca08becab1f259ecc0ae05095ce5dc7fd354b2948d315afd02561f140d"
+    },
+    {
+      "path": "src/jdtls-transport.ts",
+      "bytes": 5049,
+      "loc": 137,
+      "sha256": "b923bc950be786406ff8cc215b1a01ff00537ae9a1fab4b43b2970f740b68399"
+    },
+    {
+      "path": "src/layout-manager.ts",
+      "bytes": 1236,
+      "loc": 34,
+      "sha256": "485d7f411b806de2f3e896a05af2de3b19e28b61ec3e3b2ccf4c63f6ab0a4af3"
+    },
+    {
+      "path": "src/layout-probe.ts",
+      "bytes": 7291,
+      "loc": 212,
+      "sha256": "d4f2c1c09eba58cd5b74d7be540b6acaf47c914815dfb5ae94f7d80df75f6a8e"
+    },
+    {
+      "path": "src/mcp-server-factory.ts",
+      "bytes": 9097,
+      "loc": 232,
+      "sha256": "77cac550044e26eae850ce9e0d991bca46a16d846fa600eb4e6753c88a599eb3"
+    },
+    {
+      "path": "src/path-utils.ts",
+      "bytes": 2861,
+      "loc": 75,
+      "sha256": "1d4f428a6c46b57768f1699693fc88a6738357aaa22f4338ab501adab357a4a6"
+    },
+    {
+      "path": "src/project-jdk.ts",
+      "bytes": 9870,
+      "loc": 244,
+      "sha256": "cea6ffc3d24225f119b2dc81fea2a7fd8ec7d003996ef96b0f4f68588f8eddf6"
+    },
+    {
+      "path": "src/repo-change-coordinator.ts",
+      "bytes": 18342,
+      "loc": 486,
+      "sha256": "08e3199dd96436e99e62680faa07fc42a2b23f1b532213bd9b0883e2e8c10577"
+    },
+    {
+      "path": "src/repo-generation.ts",
+      "bytes": 3508,
+      "loc": 106,
+      "sha256": "5544bcbe601bef2043ca81d2cd69b17e81ed929fb195e78eee41afe9e7ae4f6f"
+    },
+    {
+      "path": "src/repo-layout.ts",
+      "bytes": 6223,
+      "loc": 185,
+      "sha256": "74f12f557f286382f119878cf3bde4bd57e12ac8ecdcb8b371db415fdefb2b78"
+    },
+    {
+      "path": "src/repo-ownership-lease.ts",
+      "bytes": 18005,
+      "loc": 531,
+      "sha256": "0a9281210dae165d85771bef6c930a9140a419100e0292bb8450648bb76ad9f3"
+    },
+    {
+      "path": "src/repo-resolver.ts",
+      "bytes": 7806,
+      "loc": 206,
+      "sha256": "5692d2e9d9984d1f9e7907934177651199abc79d8c6e5b93720c38fc3e4cfe9c"
+    },
+    {
+      "path": "src/repo-runtime-manager.ts",
+      "bytes": 40222,
+      "loc": 1001,
+      "sha256": "d20d567ffcb02c5725745065ca9e575bc3f3360c860d9d4d45eec5f3f0fad123"
+    },
+    {
+      "path": "src/resource-defaults.ts",
+      "bytes": 1056,
+      "loc": 37,
+      "sha256": "22576fd7fa5eedaaa4ae5dd86dcc40390f73e3cd972ce462b10c46f7a4b4d676"
+    },
+    {
+      "path": "src/routing-policy.ts",
+      "bytes": 1300,
+      "loc": 30,
+      "sha256": "5bbef7be1dbaba5427d6e0171e8fc762e848ddb5a0d933de2828b5887988de56"
+    },
+    {
+      "path": "src/runtime-lifecycle-gate.ts",
+      "bytes": 4099,
+      "loc": 141,
+      "sha256": "cff34d0c2afa81bfdb4a182bc318cb677b53dc557b2983975292a696f4782a5d"
+    },
+    {
+      "path": "src/runtime/completion.ts",
+      "bytes": 421,
+      "loc": 13,
+      "sha256": "063038e7c02d413dabaf588f883bf3a36b56bf10ae3246839f75d76778d23265"
+    },
+    {
+      "path": "src/runtime/deadline-budget.ts",
+      "bytes": 3277,
+      "loc": 98,
+      "sha256": "b8e314c808b50b5d909da6bc57a50f90438dc55282af298b16c6612877d94d6e"
+    },
+    {
+      "path": "src/runtime/intelligence-error.ts",
+      "bytes": 2538,
+      "loc": 72,
+      "sha256": "c5c5ac28332f67fe63191b44fb4c5d14e592b90e7fdf9eed9c69253ce8a46841"
+    },
+    {
+      "path": "src/runtime/request-context.ts",
+      "bytes": 2676,
+      "loc": 81,
+      "sha256": "45a51ad127bb23df16ab6da62ecfb24bf8cf46ec7cfefb33309c52941390cf54"
+    },
+    {
+      "path": "src/runtime/source-range.ts",
+      "bytes": 343,
+      "loc": 5,
+      "sha256": "a2e60490e6137d7467c6501786f1047d6edfb443f5820c90b20f0e876032010e"
+    },
+    {
+      "path": "src/search/bounded-line-decoder.ts",
+      "bytes": 1467,
+      "loc": 43,
+      "sha256": "6b144a6aa864823ec2120616ebf643f6ccbc717f5b795c6f1c84d423a9c33e1c"
+    },
+    {
+      "path": "src/search/rg-cache.ts",
+      "bytes": 1726,
+      "loc": 58,
+      "sha256": "f447d6e971ddac4f8acdd6fc5395ce1ddded8ae91303bc29b78478bc4749e0ae"
+    },
+    {
+      "path": "src/search/rg-runner.ts",
+      "bytes": 7246,
+      "loc": 218,
+      "sha256": "ba5bc58f907dba9ff4ee18af202c1c9b75368907bf9f0b2bb30084561dab1bcc"
+    },
+    {
+      "path": "src/search/search-types.ts",
+      "bytes": 847,
+      "loc": 30,
+      "sha256": "db9f01deef3acddb1e9c9e2c2d322e4e6355ce78124854303c8e44f951c938ca"
+    },
+    {
+      "path": "src/semantic-edge-store.ts",
+      "bytes": 15112,
+      "loc": 401,
+      "sha256": "8afb0b949477d1aa286cccfa8d029918a09f152b4bc90fc5b878e1ca550d8f3e"
+    },
+    {
+      "path": "src/semantic-gateway.ts",
+      "bytes": 12681,
+      "loc": 394,
+      "sha256": "d51bdea9fbc5d19b81f2191de2c519bc569fb24e795e0134b7b5f8e2bf41c3d2"
+    },
+    {
+      "path": "src/semantic-location.ts",
+      "bytes": 2095,
+      "loc": 61,
+      "sha256": "920fe4657b6d4f0f7001997138b41707eda41f691c16a8155b78a3579bed39ed"
+    },
+    {
+      "path": "src/server-lifecycle.ts",
+      "bytes": 2243,
+      "loc": 65,
+      "sha256": "5d62b90dda43b9ca75a599fca2ce3c7abb8d2220d239654fb3d7b4fb1aadcde1"
+    },
+    {
+      "path": "src/server.ts",
+      "bytes": 1857,
+      "loc": 52,
+      "sha256": "7e7d497a8951bd8271b2bbb186d21212ca1f2618dd80621082ae87db775b54a7"
+    },
+    {
+      "path": "src/smoke-http.ts",
+      "bytes": 5700,
+      "loc": 143,
+      "sha256": "c278c537fa39953b689082031d8c20b3e325ade4deb679f1a18c777976faa29c"
+    },
+    {
+      "path": "src/smoke.ts",
+      "bytes": 2380,
+      "loc": 58,
+      "sha256": "0da7cead2c0553c019a1f52bcf3c5276a6c39148d61ae9fe7135f0e3bae0e31f"
+    },
+    {
+      "path": "src/tools/context.ts",
+      "bytes": 1685,
+      "loc": 51,
+      "sha256": "06c0a54505d08681d582a8e6527c2c7cbe67996ddfbd70ca7663001d765d8b70"
+    },
+    {
+      "path": "src/tools/diagnostics.ts",
+      "bytes": 1975,
+      "loc": 56,
+      "sha256": "cb7c732ab884c33f71711e76c82a7fd2fa80169d277571da1b46992840ff85ba"
+    },
+    {
+      "path": "src/tools/impact.ts",
+      "bytes": 5372,
+      "loc": 117,
+      "sha256": "b2e88ca8d91aea1ffb10ca0186bd3c0e679dc2972843c5974448f04140728a2c"
+    },
+    {
+      "path": "src/tools/runtime.ts",
+      "bytes": 1850,
+      "loc": 50,
+      "sha256": "5df481d9ab50757c3d64f13a1b87834f3789a61d77789a15928d5fb6bb47aedf"
+    },
+    {
+      "path": "src/tools/shared.ts",
+      "bytes": 4419,
+      "loc": 150,
+      "sha256": "2d7ffdc07406ae7da666730e168d4c90f8c53dc22937ade0e67416bd8d81e040"
+    },
+    {
+      "path": "src/tools/status.ts",
+      "bytes": 10273,
+      "loc": 275,
+      "sha256": "4185f34fbdaa73952f0c02d1246144643de9d9cd3729eaf67d3e00c5d5823cff"
+    },
+    {
+      "path": "src/tools/symbol.ts",
+      "bytes": 7255,
+      "loc": 171,
+      "sha256": "3b601ae0560fa5320ca7e9c44f39b15559b53776ae636d98cccb689535c2eb79"
+    },
+    {
+      "path": "src/worktree-cache-cleanup.ts",
+      "bytes": 11945,
+      "loc": 385,
+      "sha256": "68b0a9e5d9e4f58362df7bd368f27909ef2e36f34b20bcba4d4713d5d6539499"
+    },
+    {
+      "path": "src/worktree-identity.ts",
+      "bytes": 2932,
+      "loc": 84,
+      "sha256": "2d607bbb17c0cc0d8ef707b97d602cfb8ae59ffdefeb79d4d018c6fee96c728b"
+    }
+  ],
+  "inventorySha256": "357952d57b439326da0b0c4dc7bf079f9970cb0f9bec69cb0e4c547c6ffa79a4"
+}

@@ -13,8 +13,9 @@ import {
   buildManifestFromCold,
   createOptimizationManifest as createRawOptimizationManifest,
   optimizationCommandResult,
-  V32_OPTIMIZATION_BASELINE_COMMIT,
-  V32_OPTIMIZATION_CYCLE_MAXIMUM_LOC,
+  V4_OPTIMIZATION_BASELINE_COMMIT,
+  V4_OPTIMIZATION_BASELINE_LOC,
+  V4_OPTIMIZATION_CYCLE_MAXIMUM_LOC,
   validateOptimizationManifest,
   verifyOptimizationManifest
 } from "./run-v32-optimization-matrix.mjs";
@@ -23,7 +24,7 @@ const exec = promisify(execFile);
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frozenOptimizationBaseline = await countProductionTs({
   root: repositoryRoot,
-  revision: V32_OPTIMIZATION_BASELINE_COMMIT
+  revision: V4_OPTIMIZATION_BASELINE_COMMIT
 });
 
 function createOptimizationManifest(input) {
@@ -69,7 +70,7 @@ test("optimization manifest binds source inventories, runtime inputs, environmen
     bytes: newInventory.totalBytes - frozenOptimizationBaseline.totalBytes,
     loc: newInventory.totalLoc - frozenOptimizationBaseline.totalLoc
   });
-  assert.equal(manifest.productionTs.limits.optimizationCycleMaximumLoc, V32_OPTIMIZATION_CYCLE_MAXIMUM_LOC);
+  assert.equal(manifest.productionTs.limits.optimizationCycleMaximumLoc, V4_OPTIMIZATION_CYCLE_MAXIMUM_LOC);
   assert.equal(manifest.productionTs.gate.passed, true);
   assert.equal(manifest.comparison.candidateExecutableTree, "candidate-tree");
   assert.equal(manifest.comparison.runtimeInputs.length, 1);
@@ -132,7 +133,7 @@ test("optimization manifest rejects drift in its payload or LOC totals", () => {
   const frozenIdentityDrift = structuredClone(manifest);
   frozenIdentityDrift.productionTs.optimizationBaseline.source.commit = "forged";
   resign(frozenIdentityDrift);
-  assert.throws(() => validateOptimizationManifest(frozenIdentityDrift), /frozen V3\.2 inventory/);
+  assert.throws(() => validateOptimizationManifest(frozenIdentityDrift), /frozen V4 inventory/);
 
   const dependencyDrift = structuredClone(manifest);
   dependencyDrift.dependencies.inventory.algorithm = "unbound";
@@ -146,11 +147,13 @@ test("optimization manifest rejects drift in its payload or LOC totals", () => {
 });
 
 test("optimization LOC gate stays anchored to the immutable cycle baseline instead of compounding per sprint", () => {
+  const atCeiling = V4_OPTIMIZATION_CYCLE_MAXIMUM_LOC;
+  const oldLoc = atCeiling - 1;
   const oldInventory = productionInventory("old", [
-    { path: "src/a.ts", bytes: 33_218, loc: 33_218, sha256: hash("old") }
+    { path: "src/a.ts", bytes: oldLoc, loc: oldLoc, sha256: hash("old") }
   ]);
   const newInventory = productionInventory("new", [
-    { path: "src/a.ts", bytes: 33_219, loc: 33_219, sha256: hash("new") }
+    { path: "src/a.ts", bytes: atCeiling, loc: atCeiling, sha256: hash("new") }
   ], { commitTree: "new-tree", executableTree: "candidate-tree" });
   const input = {
     baselineProductionTs: oldInventory,
@@ -170,28 +173,28 @@ test("optimization LOC gate stays anchored to the immutable cycle baseline inste
     coldEvidence: { manifestFile: "/tmp/run-manifest.json", matrixDir: "/tmp/matrix", p95Limit: 1.25 },
     environment: {},
     artifacts: [{ file: "/tmp/cold.json", bytes: 2, sha256: hash("{}") }],
-    taskLedger: [ledgerEntry("V3.2-cycle-cap", [locPath("src/a.ts", 33_218, 33_219)])],
+    taskLedger: [ledgerEntry("V4-cycle-cap", [locPath("src/a.ts", oldLoc, atCeiling)])],
     taskLedgerEvidence: ledgerEvidence()
   };
 
   const manifest = createOptimizationManifest(input);
-  assert.equal(manifest.productionTs.limits.optimizationCycleMaximumLoc, 33_219);
-  assert.equal(manifest.productionTs.limits.finalTargetLoc, 31_638);
+  assert.equal(manifest.productionTs.limits.optimizationCycleMaximumLoc, V4_OPTIMIZATION_CYCLE_MAXIMUM_LOC);
+  assert.equal(manifest.productionTs.limits.finalTargetLoc, V4_OPTIMIZATION_BASELINE_LOC);
   assert.equal(manifest.productionTs.gate.passed, true);
-  assert.equal(manifest.productionTs.cumulativeDelta.loc, 1_581);
+  assert.equal(manifest.productionTs.cumulativeDelta.loc, atCeiling - V4_OPTIMIZATION_BASELINE_LOC);
 
   const overLimitInventory = productionInventory("new", [
-    { path: "src/a.ts", bytes: 33_220, loc: 33_220, sha256: hash("new-over-limit") }
+    { path: "src/a.ts", bytes: atCeiling + 1, loc: atCeiling + 1, sha256: hash("new-over-limit") }
   ], { commitTree: "new-tree", executableTree: "candidate-tree" });
   const overLimit = {
     ...input,
     candidateProductionTs: overLimitInventory,
-    taskLedger: [ledgerEntry("V3.2-cycle-cap", [locPath("src/a.ts", 33_218, 33_220)])]
+    taskLedger: [ledgerEntry("V4-cycle-cap", [locPath("src/a.ts", oldLoc, atCeiling + 1)])]
   };
-  assert.throws(() => createOptimizationManifest(overLimit), /exceeds the fixed V3\.2 optimization-cycle ceiling/);
+  assert.throws(() => createOptimizationManifest(overLimit), /exceeds the fixed V4 optimization-cycle ceiling/);
   assert.throws(
     () => createOptimizationManifest({ ...overLimit, allowColdGateFailure: true }),
-    /exceeds the fixed V3\.2 optimization-cycle ceiling/
+    /exceeds the fixed V4 optimization-cycle ceiling/
   );
 });
 
@@ -358,7 +361,7 @@ test("optimization inventory replays the tested patch instead of reading later c
   try {
     await mkdir(coldDir, { recursive: true });
     await exec("git", ["clone", "-q", "--no-hardlinks", repositoryRoot, repo]);
-    await git(repo, ["checkout", "-q", V32_OPTIMIZATION_BASELINE_COMMIT]);
+    await git(repo, ["checkout", "-q", V4_OPTIMIZATION_BASELINE_COMMIT]);
     const commit = (await git(repo, ["rev-parse", "HEAD^{commit}"])).trim();
     const commitTree = (await git(repo, ["rev-parse", "HEAD^{tree}"])).trim();
     const addedPath = "src/v32-manifest-replay-fixture.ts";
@@ -404,7 +407,7 @@ test("optimization inventory replays the tested patch instead of reading later c
     };
     const manifest = await buildManifestFromCold({
       candidateRoot: repo,
-      optimizationBaseline: V32_OPTIMIZATION_BASELINE_COMMIT,
+      optimizationBaseline: V4_OPTIMIZATION_BASELINE_COMMIT,
       baseline: commit,
       coldDir,
       taskLedger,

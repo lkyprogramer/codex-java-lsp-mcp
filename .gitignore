@@ -9,3 +9,7 @@ coverage/
 .env
 .env.*
 !.env.example
+
+# V4+ benchmark dumps stay out of git. Track only manifests under docs/phase-v4/.
+# Historical artifacts/v3-* trees are owned by other sessions and must not be touched.
+artifacts/v4-*/

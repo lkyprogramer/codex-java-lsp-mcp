@@ -21,11 +21,20 @@ import { verifyMatrix } from "./verify-three-repo-cold-matrix.mjs";
 
 const scriptRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const V32_OPTIMIZATION_MANIFEST_VERSION = 3;
+/** Archived V3.2 optimization-cycle identity. No longer the active LOC gate. */
 export const V32_OPTIMIZATION_BASELINE_COMMIT = "94c4ebfb1c174b2ac3cab615d986c3061accd2ed";
 export const V32_OPTIMIZATION_BASELINE_TREE = "60ae785e8af9ac06012452ea41c6b1fe2d3606fd";
 export const V32_OPTIMIZATION_BASELINE_INVENTORY_SHA256 = "8c3feaba965ca26a9f076608ad5c4e92dc3d074b3e657afbb32316bc17a6e9ea";
 export const V32_OPTIMIZATION_BASELINE_LOC = 31_638;
 export const V32_OPTIMIZATION_CYCLE_MAXIMUM_LOC = 33_219;
+/** V4 post-merge production TypeScript identity. Active LOC gate from V4-02. */
+export const V4_OPTIMIZATION_BASELINE_COMMIT = "4323b3cfead3a368b5a81c880176841d162ceced";
+export const V4_OPTIMIZATION_BASELINE_TREE = "1be810da3cc7a2895e143be204542174367e0b30";
+export const V4_OPTIMIZATION_BASELINE_INVENTORY_SHA256 = "357952d57b439326da0b0c4dc7bf079f9970cb0f9bec69cb0e4c547c6ffa79a4";
+export const V4_OPTIMIZATION_BASELINE_FILE_COUNT = 128;
+export const V4_OPTIMIZATION_BASELINE_BYTES = 1_418_751;
+export const V4_OPTIMIZATION_BASELINE_LOC = 35_472;
+export const V4_OPTIMIZATION_CYCLE_MAXIMUM_LOC = 37_245;
 
 export function createOptimizationManifest({
   optimizationBaselineProductionTs,
@@ -49,7 +58,7 @@ export function createOptimizationManifest({
   const productionLocGatePassed = candidateProductionTs.totalLoc <= optimizationCycleMaximumLoc;
   if (!productionLocGatePassed) {
     throw new Error(
-      `production TypeScript LOC ${candidateProductionTs.totalLoc} exceeds the fixed V3.2 optimization-cycle ceiling ${optimizationCycleMaximumLoc}`
+      `production TypeScript LOC ${candidateProductionTs.totalLoc} exceeds the fixed V4 optimization-cycle ceiling ${optimizationCycleMaximumLoc}`
     );
   }
   const sprintGatePassed = coldSummary.passed && diagnosticRpcGatePassed;
@@ -294,7 +303,7 @@ export async function verifyOptimizationManifest({ manifestFile, candidateRoot =
   await verifyTaskLedgerEvidence(manifest.taskLedgerEvidence, manifest.taskLedger);
   const optimizationBaseline = await countProductionTs({
     root: candidateRoot,
-    revision: V32_OPTIMIZATION_BASELINE_COMMIT
+    revision: V4_OPTIMIZATION_BASELINE_COMMIT
   });
   assertSameInventory(
     manifest.productionTs.optimizationBaseline,
@@ -458,12 +467,12 @@ export async function buildManifestFromCold({
     coldManifestSha256,
     gate: diagnosticRpc.diagnosticRpcGate
   } : undefined;
-  if (optimizationBaseline !== V32_OPTIMIZATION_BASELINE_COMMIT) {
-    throw new Error(`optimization baseline must be ${V32_OPTIMIZATION_BASELINE_COMMIT}`);
+  if (optimizationBaseline !== V4_OPTIMIZATION_BASELINE_COMMIT) {
+    throw new Error(`optimization baseline must be ${V4_OPTIMIZATION_BASELINE_COMMIT}`);
   }
   const optimizationBaselineProductionTs = await countProductionTs({
     root: candidateRoot,
-    revision: V32_OPTIMIZATION_BASELINE_COMMIT
+    revision: V4_OPTIMIZATION_BASELINE_COMMIT
   });
   validateFrozenOptimizationBaselineInventory(optimizationBaselineProductionTs);
   const baselineProductionTs = await countProductionTs({ root: candidateRoot, revision: baseline });
@@ -729,16 +738,16 @@ function validateProductionInventory(value, label) {
 
 function validateFrozenOptimizationBaselineInventory(value) {
   if (value?.source?.kind !== "git-revision"
-    || value?.source?.revision !== V32_OPTIMIZATION_BASELINE_COMMIT
-    || value?.source?.commit !== V32_OPTIMIZATION_BASELINE_COMMIT
-    || value?.source?.commitTree !== V32_OPTIMIZATION_BASELINE_TREE
-    || value?.source?.executableTree !== V32_OPTIMIZATION_BASELINE_TREE
-    || value.fileCount !== 129
-    || value.totalBytes !== 1_273_211
-    || value.totalLoc !== V32_OPTIMIZATION_BASELINE_LOC
-    || value.inventorySha256 !== V32_OPTIMIZATION_BASELINE_INVENTORY_SHA256
-    || Math.floor(value.totalLoc * 1.05) !== V32_OPTIMIZATION_CYCLE_MAXIMUM_LOC) {
-    throw new Error("production TypeScript optimization baseline does not match the frozen V3.2 inventory");
+    || value?.source?.revision !== V4_OPTIMIZATION_BASELINE_COMMIT
+    || value?.source?.commit !== V4_OPTIMIZATION_BASELINE_COMMIT
+    || value?.source?.commitTree !== V4_OPTIMIZATION_BASELINE_TREE
+    || value?.source?.executableTree !== V4_OPTIMIZATION_BASELINE_TREE
+    || value.fileCount !== V4_OPTIMIZATION_BASELINE_FILE_COUNT
+    || value.totalBytes !== V4_OPTIMIZATION_BASELINE_BYTES
+    || value.totalLoc !== V4_OPTIMIZATION_BASELINE_LOC
+    || value.inventorySha256 !== V4_OPTIMIZATION_BASELINE_INVENTORY_SHA256
+    || Math.floor(value.totalLoc * 1.05) !== V4_OPTIMIZATION_CYCLE_MAXIMUM_LOC) {
+    throw new Error("production TypeScript optimization baseline does not match the frozen V4 inventory");
   }
 }
 
@@ -825,8 +834,8 @@ function required(value, flag) {
 
 function frozenOptimizationBaseline(value) {
   const baseline = required(value, "--optimization-baseline");
-  if (baseline !== V32_OPTIMIZATION_BASELINE_COMMIT) {
-    throw new Error(`--optimization-baseline must be the frozen V3.2 baseline ${V32_OPTIMIZATION_BASELINE_COMMIT}`);
+  if (baseline !== V4_OPTIMIZATION_BASELINE_COMMIT) {
+    throw new Error(`--optimization-baseline must be the frozen V4 baseline ${V4_OPTIMIZATION_BASELINE_COMMIT}`);
   }
   return baseline;
 }
@@ -857,7 +866,7 @@ function sortValue(value) {
 }
 
 function printUsage() {
-  console.log("Usage: node scripts/run-v32-optimization-matrix.mjs --optimization-baseline 94c4ebfb1c174b2ac3cab615d986c3061accd2ed --baseline SHA --output-dir DIR --lishuedu DIR --cipherlink DIR --exam-parent-v3 DIR [--candidate-root DIR] [--task-ledger FILE] [--allow-gate-failure] [--diagnostic-rpc-sidecar]");
+  console.log("Usage: node scripts/run-v32-optimization-matrix.mjs --optimization-baseline 4323b3cfead3a368b5a81c880176841d162ceced --baseline SHA --output-dir DIR --lishuedu DIR --cipherlink DIR --exam-parent-v3 DIR [--candidate-root DIR] [--task-ledger FILE] [--allow-gate-failure] [--diagnostic-rpc-sidecar]");
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
