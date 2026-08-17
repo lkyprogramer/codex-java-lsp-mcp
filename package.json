@@ -28,6 +28,7 @@
     "benchmark:progressive-index-three-repo": "sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node scripts/run-progressive-index-three-repo.mjs",
     "benchmark:progressive-index-verify": "sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node scripts/verify-progressive-index.mjs",
     "smoke": "sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted --env JAVA_LSP_SMOKE_REPO_ROOT=. -- node dist/smoke.js",
+    "smoke:http": "node dist/smoke-http.js",
     "smoke:lease-subprocess": "sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node scripts/lease-subprocess-smoke.mjs",
     "smoke:task36-multiprocess": "sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node scripts/task36-multiprocess-smoke.mjs",
     "measure:tool-schema": "sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node scripts/measure-tool-schema.mjs",
@@ -42,11 +43,13 @@
     "test:task36-mutation": "sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node --test dist/benchmark/task36-mutation-matrix.test.js",
     "test:task36-fault": "sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node --test scripts/task36-fault-suite.test.mjs",
     "test:task36-multiprocess": "sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node --test scripts/task36-multiprocess-smoke.test.mjs",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "start:http": "node dist/http-server.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
     "chokidar": "5.0.0",
+    "express": "^5.2.1",
     "fast-xml-parser": "5.10.1",
     "tree-sitter": "0.25.0",
     "tree-sitter-java": "0.23.5",
@@ -59,6 +62,7 @@
     }
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^22.19.1",
     "typescript": "^5.9.3"
   },

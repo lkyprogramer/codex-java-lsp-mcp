@@ -2,7 +2,7 @@
 
 ## 当前任务
 
-**V3.2 Sprint0–5 已全部收尾，2026-08-17 起进入 V4 阶段**：真源是 `docs/deep/codex-java-lsp-mcp-java-intelligence-v4-consolidation-plan-2026-08-17.md`（用户已批准）。V4 的三项用户已确认决策：(1) 以 `codex/java-intelligence-v3` 为底座，把 `main` 最近 5 个提交（`9691293` 共享 HTTP daemon 隔离等）移植合流，完成后合回 main；(2) 合流后重新冻结 LOC 基线（V3.2 的 33,219/33,230 记录归档，11 行旧债并入新基线清零）；(3) 用户提供外部模型 API key，真实 Agent outcome gate（原 V3.2-30）解除 `BLOCKED_EXTERNAL`，纳入核心验收主线。V4 阶段顺序：Phase0 合流+基线重置（V4-01~04）→ Phase1 底层架构修复（V4-05 双 worker ADR、V4-06 range/holdout 闭合、V4-07 缓存单真源、V4-08 god file 拆解、V4-09 JDT fingerprint）→ Phase2 价值兑现（V4-10 Agent trace、V4-11 prewarm、V4-12 golden 补齐）→ Phase3 收敛发布（V4-13~15）。用户的硬约束不变：**任何测试、构建、benchmark 或验证都必须与正在使用的 LSP 隔离**，不能接触活动 checkout、LSP、JDT、JavaIndex 缓存或 `node_modules`。
+**V4-01 已完成（2026-08-17）**：`origin/main` 的 HTTP daemon / ownership / janitor 已移植到 v3 五工具面。冲突原则是 v3 底座 + daemon API，不恢复 `source-index` 或旧 7 工具面。隔离全量回归绿：`dist` 976 + `scripts` 136 + stdio smoke（工具面仍是 `java_status` / `java_impact` / `java_symbol` / `java_diagnostics` / `java_runtime`）。下一步是 Phase0.2：V4-02 冻结合流后 LOC 基线、V4-03 重跑非 0 字节 Sprint0'、V4-04 artifacts 不入库。真源仍是 `docs/deep/codex-java-lsp-mcp-java-intelligence-v4-consolidation-plan-2026-08-17.md`。V4 三项用户决策不变：(1) 以 v3 为底座合流 daemon，完成后合回 main；(2) 合流后重定 LOC 基线，V3.2 的 33,219/33,230 与 11 行旧债清零；(3) 真实 Agent outcome gate 纳入核心验收。后续顺序：Phase1 底层架构修复（V4-05~09）→ Phase2 价值兑现（V4-10~12）→ Phase3 收敛发布（V4-13~15）。用户的硬约束不变：**任何测试、构建、benchmark 或验证都必须与正在使用的 LSP 隔离**，不能接触活动 checkout、LSP、JDT、JavaIndex 缓存或 `node_modules`。
 
 （以下 V3.2 各 Sprint 记录保留供追溯，其结论与"不要再踩的坑"在 V4 阶段继续有效，除非 V4 计划文档显式解除——目前唯一显式解除的是"不新增第二 scheduler"边界：V4-05 以 ADR 形式引入第二 worker **线程**，sweep 调度语义不变。）
 
@@ -47,7 +47,7 @@
 
 ## 下一步
 
-**执行 V4 计划（真源见上）。** 当前进行到：Phase0 V4-01 daemon 合流。V3.2-30 的 API key 阻塞已由用户确认解除（V4-10 将使用用户提供的凭据），不再是 `BLOCKED_EXTERNAL`。
+**执行 V4 计划（真源见上）。** 当前进行到：Phase0.2（V4-02 LOC 重定基线 → V4-03 Sprint0' 非 0 字节测量 → V4-04 artifacts 治理）。V4-01 daemon 合流已完成。V3.2-30 的 API key 阻塞已由用户确认解除（V4-10 将使用用户提供的凭据），不再是 `BLOCKED_EXTERNAL`。
 
 以下为 V3.2 收尾时的历史记录（保留供追溯）：
 

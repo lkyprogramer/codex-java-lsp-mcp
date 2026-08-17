@@ -1,0 +1,232 @@
+// input: One shared JavaLspApplication and transport policy.
+// output: A fresh MCP protocol server exposing the five read-only Java tools.
+// pos: Protocol-instance factory; never owns or closes the shared application lifecycle.
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
+import type { JavaLspApplication } from "./application.js";
+import { readRuntimeBuild } from "./build-info.js";
+import type { ManagedToolContext, RequestOptionsInput } from "./repo-runtime-manager.js";
+import type { RepoSelector } from "./repo-resolver.js";
+import type { RequestContext } from "./runtime/request-context.js";
+import { diagnosticsSchema, javaDiagnostics } from "./tools/diagnostics.js";
+import { impactSchema, javaImpact } from "./tools/impact.js";
+import { javaRuntime, runtimeSchema } from "./tools/runtime.js";
+import { isDiagnosticDetail } from "./tools/shared.js";
+import { javaStatus, statusSchema, summarizeResourceStatus } from "./tools/status.js";
+import { javaSymbol, symbolSchema } from "./tools/symbol.js";
+
+export type McpTransportMode = "stdio" | "streamable_http";
+
+export type McpServerFactoryOptions = {
+  transportMode: McpTransportMode;
+};
+
+type ToolResult = {
+  content: Array<{ type: "text"; text: string }>;
+  isError?: boolean;
+};
+
+export function createMcpServer(
+  application: JavaLspApplication,
+  options: Partial<McpServerFactoryOptions> = {}
+): McpServer {
+  const transportMode = options.transportMode ?? application.transportMode;
+  if (transportMode !== application.transportMode) {
+    throw new Error(`MCP transport (${transportMode}) does not match application ownership mode (${application.transportMode}).`);
+  }
+  if (transportMode === "streamable_http" && application.resolver.cwdFallbackPolicy() !== "reject") {
+    throw new Error("Streamable HTTP requires a RepoResolver with cwdFallback=reject.");
+  }
+  const server = new McpServer({
+    name: "codex-java-lsp",
+    version: "0.1.0"
+  }, {
+    instructions: "Use java_impact first for Java navigation. Tools are read-only and optimized for low-token impact analysis."
+  });
+
+  register("java_status", {
+    title: "Java Status",
+    description: "Return repo, JDT LS, watcher, JavaIndex, and router cache status; pass start=true to start JDT LS.",
+    inputSchema: statusSchema
+  }, args => javaStatusFor(args));
+
+  register("java_impact", {
+    title: "Java Impact",
+    description: "Build a compact Java impact plan with JavaIndex routing, internal rg summary, optional bounded LSP enrichment, and read plan.",
+    inputSchema: impactSchema
+  }, args => withContext(args, (context, request) => javaImpact(context, args, request), {
+    mayStartLsp: args.semanticPolicy !== "fast",
+    requireLspEnabled: args.semanticPolicy === "required",
+    requestOptions: {
+      mode: args.mode,
+      semanticPolicy: args.semanticPolicy,
+      deadlineMs: args.deadlineMs
+    }
+  }));
+
+  register("java_symbol", {
+    title: "Java Symbol",
+    description: "operation=query (default): search workspace symbols. operation=position (default with file/line/column): hover/definition/implementation at a position. operation=references: summary-only references.",
+    inputSchema: symbolSchema
+  }, args => withContext(args, (context, request) => javaSymbol(context, args, request), {
+    mayStartLsp: true,
+    requireLspEnabled: true,
+    requestOptions: {
+      mode: "balanced",
+      semanticPolicy: "required",
+      deadlineMs: args.semanticTimeoutMs
+    }
+  }));
+
+  register("java_diagnostics", {
+    title: "Java Diagnostics",
+    description: "Open Java files and return JDT LS diagnostics after a short wait.",
+    inputSchema: diagnosticsSchema
+  }, args => withContext(args, (context, request) => javaDiagnostics(context, args, request), {
+    mayStartLsp: true,
+    requireLspEnabled: true,
+    requestOptions: {
+      mode: "balanced",
+      semanticPolicy: "required",
+      deadlineMs: Math.min(15000, Math.max(10000, args.waitMs + 5000))
+    }
+  }));
+
+  register("java_runtime", {
+    title: "Java Runtime",
+    description: "action=restart: restart JDT LS (clearCache=true also clears cache). action=shutdown: stop JDT LS (all=true stops every active repo).",
+    inputSchema: runtimeSchema
+  }, args => runtimeFor(args));
+
+  return server;
+
+  async function javaStatusFor(args: z.infer<z.ZodObject<typeof statusSchema>>): Promise<unknown> {
+    const hasSelector = Boolean(args.projectId || args.repoRoot || args.file);
+    if (!hasSelector && !args.start) {
+      if (transportMode === "streamable_http") {
+        return daemonStatus(application);
+      }
+      await application.registry.reloadIfChanged();
+      return {
+        server: {
+          name: "codex-java-lsp",
+          transport: transportMode,
+          activeRepos: application.runtimes.activeRepos().length
+        },
+        resource: application.runtimes.resourceStatus(),
+        aliases: application.registry.aliases(),
+        activeRepos: application.runtimes.activeRepos()
+      };
+    }
+    return withContext(args, async (context, request) => {
+      const resource = application.runtimes.resourceStatus();
+      return {
+        ...await javaStatus(context, args, request),
+        resource: isDiagnosticDetail(args.detail) ? resource : summarizeResourceStatus(resource)
+      };
+    }, {
+      mayStartLsp: args.start,
+      requestOptions: args.start ? { mode: "balanced", semanticPolicy: "required", deadlineMs: 15000 } : undefined
+    });
+  }
+
+  async function runtimeFor(args: z.infer<z.ZodObject<typeof runtimeSchema>>): Promise<unknown> {
+    if (args.action === "shutdown" && args.all) {
+      if (transportMode === "streamable_http") {
+        throw new Error("java_runtime(all=true) is not available on the shared daemon; select one worktree.");
+      }
+      const activeRepos = application.runtimes.activeRepos();
+      await application.runtimes.shutdownAll();
+      return { stoppedRepos: activeRepos };
+    }
+    return withContext(args, context => javaRuntime(context, args), {
+      mayStartLsp: args.action === "restart",
+      requireLspEnabled: args.action === "restart"
+    });
+  }
+
+  async function withContext<T>(
+    args: RepoSelector,
+    handler: (context: ManagedToolContext, request: RequestContext) => Promise<T>,
+    contextOptions: {
+      mayStartLsp?: boolean;
+      requireLspEnabled?: boolean;
+      requestOptions?: RequestOptionsInput;
+    } = {}
+  ): Promise<T> {
+    return application.runtimes.withContext(args, async (context, request) => {
+      if (contextOptions.requireLspEnabled && !context.lsp.enabled) {
+        throw new Error(context.lsp.enableHint || "This repo is not LSP-enabled.");
+      }
+      return handler(context, request);
+    }, { mayStartLsp: contextOptions.mayStartLsp, requestOptions: contextOptions.requestOptions });
+  }
+
+  function register<T extends z.ZodRawShape>(
+    name: string,
+    config: { title: string; description: string; inputSchema: T },
+    handler: (args: z.infer<z.ZodObject<T>>) => Promise<unknown>
+  ): void {
+    const callback = async (args: unknown, extra: { signal?: AbortSignal }): Promise<ToolResult> => {
+      const operation = application.runRequest(async () => jsonResult(await handler(args as z.infer<z.ZodObject<T>>)));
+      void operation.catch(() => undefined);
+      try {
+        return await raceRequestAbort(operation, extra.signal);
+      } catch (error) {
+        return errorResult(error);
+      }
+    };
+    server.registerTool(name, config as any, callback as any);
+  }
+}
+
+function raceRequestAbort<T>(operation: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return operation;
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => reject(new Error("MCP request was cancelled."));
+    if (signal.aborted) {
+      abort();
+      return;
+    }
+    signal.addEventListener("abort", abort, { once: true });
+    operation.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
+  });
+}
+
+function daemonStatus(application: JavaLspApplication): Record<string, unknown> {
+  const state = application.state();
+  const resource = application.runtimes.resourceStatus();
+  const build = readRuntimeBuild();
+  return {
+    server: {
+      name: "codex-java-lsp",
+      transport: "streamable_http",
+      state: state.state,
+      uptimeMs: state.uptimeMs,
+      activeRequests: state.activeRequests,
+      runtimeCount: resource.activeRepos,
+      activeJdtlsCount: resource.activeJdtlsPids.length,
+      buildSha: build.gitSha
+    },
+    resource: {
+      maxActiveRepos: resource.maxActiveRepos,
+      idleTtlMs: resource.idleTtlMs,
+      importConcurrency: resource.importConcurrency,
+      workspaceRetainedOnShutdown: resource.workspaceRetainedOnShutdown
+    }
+  };
+}
+
+function jsonResult(value: unknown): ToolResult {
+  return {
+    content: [{ type: "text", text: JSON.stringify(value) }]
+  };
+}
+
+function errorResult(error: unknown): ToolResult {
+  const message = error instanceof Error ? error.message : String(error);
+  return {
+    isError: true,
+    content: [{ type: "text", text: message }]
+  };
+}

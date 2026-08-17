@@ -32,7 +32,9 @@ import { normalizeRepoLocation } from "./semantic-location.js";
 import { DocumentLru } from "./document-lru.js";
 import { detectGeneratedCode, type GeneratedCodeStatus } from "./generated-code.js";
 import { detectBuildSystem, resolveProjectJdk, type BuildSystem, type ProjectJdkStatus } from "./project-jdk.js";
-import { fromFileUri, repoCacheRoot, toFileUri } from "./repo-layout.js";
+import { fromFileUri, repoCacheBase, repoCacheRoot, resolveConfiguredBase, toFileUri } from "./repo-layout.js";
+import type { RepoOwnershipLease, RepoOwnerTransport } from "./repo-ownership-lease.js";
+import { processStartIdentityForPid } from "./repo-ownership-lease.js";
 import type { RepoChange, RepoChangeBatch } from "./repo-generation.js";
 import { resourceDefaults } from "./resource-defaults.js";
 import { touchRepoCache } from "./worktree-cache-cleanup.js";
@@ -460,6 +462,25 @@ class JdtFirstTouchRecorder {
   }
 }
 
+export type JdtlsSessionOptions = {
+  transportMode?: RepoOwnerTransport;
+  ownershipLifecycle?: Pick<RepoOwnershipLease, "markJdtlsStarting" | "markJdtlsRunning" | "clearJdtlsState">;
+  transportFactory?: JdtlsTransportFactory;
+  now?: () => number;
+  leaseStore?: CrossProcessLeaseStore;
+  worktree?: WorktreeIdentity;
+};
+
+export type JdtlsRuntimePaths = {
+  cacheRoot: string;
+  dataDir: string;
+  logDir: string;
+};
+
+function isJdtlsSessionOptions(value: JdtlsTransportFactory | JdtlsSessionOptions): value is JdtlsSessionOptions {
+  return typeof value === "object" && value !== null && typeof (value as JdtlsTransportFactory).spawn !== "function";
+}
+
 export class JdtlsSession {
   private connection?: JdtlsConnection;
   private process?: JdtlsChild;
@@ -481,6 +502,8 @@ export class JdtlsSession {
   private startedAt?: Date;
   private readonly documents: DocumentLru;
   private readonly diagnostics = new Map<string, LspDiagnostic[]>();
+  private readonly transportFactory: JdtlsTransportFactory;
+  private readonly leaseStore: CrossProcessLeaseStore;
   private readonly dataDir: string;
   private readonly logDir: string;
   private readonly logFile: string;
@@ -519,16 +542,32 @@ export class JdtlsSession {
   private readonly semanticGateway: SemanticGateway;
   private activeFirstTouchTrace?: JdtFirstTouchRecorder;
   private readonly firstTouchTraces = new Set<JdtFirstTouchRecorder>();
+  private ownershipLifecycle?: JdtlsSessionOptions["ownershipLifecycle"];
+  private ownershipJdtlsMarked = false;
+  private terminallyStopped = false;
 
   constructor(
     private readonly repoRoot: string,
     aliases: string[] = [],
-    private readonly transportFactory: JdtlsTransportFactory = defaultJdtlsTransportFactory,
+    factoryOrOptions: JdtlsTransportFactory | JdtlsSessionOptions = defaultJdtlsTransportFactory,
     now: () => number = Date.now,
-    private readonly leaseStore: CrossProcessLeaseStore = new NoopCrossProcessLeaseStore(),
+    leaseStore: CrossProcessLeaseStore = new NoopCrossProcessLeaseStore(),
     worktree?: WorktreeIdentity
   ) {
+    const options = isJdtlsSessionOptions(factoryOrOptions) ? factoryOrOptions : {};
+    this.transportFactory = isJdtlsSessionOptions(factoryOrOptions)
+      ? (options.transportFactory ?? defaultJdtlsTransportFactory)
+      : factoryOrOptions;
+    now = options.now ?? now;
+    this.leaseStore = options.leaseStore ?? leaseStore;
+    this.ownershipLifecycle = options.ownershipLifecycle;
+    worktree = options.worktree ?? worktree;
     this.worktree = worktree ?? { repoRoot, repoHash: repoHash(repoRoot), isLinkedWorktree: false };
+    validateJdtlsTransportEnvironment(options.transportMode ?? "stdio");
+    const paths = resolveJdtlsRuntimePaths(repoRoot, options.transportMode ?? "stdio");
+    this.dataDir = paths.dataDir;
+    this.logDir = paths.logDir;
+    this.logFile = path.join(this.logDir, "jdtls.log");
     this.restartBackoff = new JdtRestartBackoff(now);
     this.documents = new DocumentLru({
       maxOpen: positiveInteger(process.env.JDTLS_MAX_OPEN_DOCUMENTS, 64),
@@ -543,15 +582,15 @@ export class JdtlsSession {
       absoluteCapMs: DEFAULT_LSP_REQUEST_TIMEOUT_MS,
       lifecycleGate: () => lifecycleGateFromRestartBackoffStatus(this.restartBackoff.status())
     });
-    const cacheRoot = repoCacheRoot(repoRoot);
-    this.dataDir = process.env.JDTLS_DATA_DIR || path.join(cacheRoot, "workspace");
-    this.logDir = process.env.JDTLS_LOG_DIR || path.join(cacheRoot, "logs");
-    this.logFile = path.join(this.logDir, "jdtls.log");
     this.jdtlsBin = process.env.JDTLS_BIN || findExecutable("jdtls");
     this.buildSystem = detectBuildSystem(repoRoot);
     this.projectJdk = resolveProjectJdk(repoRoot, aliases);
     this.generatedCode = detectGeneratedCode(repoRoot);
     this.jdtlsRuntimeJavaHome = process.env.JDTLS_JAVA_HOME || process.env.JAVA_HOME;
+  }
+
+  bindOwnershipLifecycle(ownership?: RepoOwnershipLease): void {
+    this.ownershipLifecycle = ownership;
   }
 
   status(): JdtlsStatus {
@@ -913,8 +952,30 @@ export class JdtlsSession {
     // release path when stop() is called on an already-READY session.
     await this.releasePendingLease();
     touchRepoCache(this.repoRoot, { jdtlsPid: undefined });
+    this.clearOwnershipJdtlsState();
     this.documents.closeAll();
     this.diagnostics.clear();
+  }
+
+  async forceStop(deadlineMs = 1000): Promise<void> {
+    this.terminallyStopped = true;
+    if (this.process) {
+      await forceTerminateJdtlsChild(this.process, deadlineMs);
+    }
+    await this.stop();
+  }
+
+  private clearOwnershipJdtlsState(): void {
+    if (!this.ownershipJdtlsMarked) {
+      return;
+    }
+    try {
+      this.ownershipLifecycle?.clearJdtlsState?.();
+    } catch (error) {
+      console.error("[codex-java-lsp] failed to clear JDT LS ownership lifecycle state", error);
+    } finally {
+      this.ownershipJdtlsMarked = false;
+    }
   }
 
   async workspaceSymbols(
@@ -1513,6 +1574,16 @@ export class JdtlsSession {
     }
     this.activeFirstTouchTrace?.recordPid(attempt.child.pid);
     this.startAttempt = attempt;
+    if (this.ownershipLifecycle?.markJdtlsStarting) {
+      this.ownershipLifecycle.markJdtlsStarting();
+      this.ownershipJdtlsMarked = true;
+    }
+    if (attempt.child.pid !== undefined) {
+      const identity = processStartIdentityForPid(attempt.child.pid);
+      if (identity) {
+        this.ownershipLifecycle?.markJdtlsRunning?.(attempt.child.pid, identity);
+      }
+    }
     this.registerClientHandlers(attempt.connection);
     attempt.connection.listen();
     this.attachAttemptLogging(attempt);
@@ -2275,6 +2346,70 @@ async function terminateChild(child: JdtlsChild, graceMs: number): Promise<void>
   }
   child.kill("SIGKILL");
   await settlesWithin(exited, 1000);
+}
+
+export function validateJdtlsTransportEnvironment(
+  transportMode: RepoOwnerTransport,
+  env: NodeJS.ProcessEnv = process.env
+): void {
+  if (env.JAVA_LSP_CACHE_BASE) {
+    resolveConfiguredBase(env.JAVA_LSP_CACHE_BASE, "JAVA_LSP_CACHE_BASE", env);
+  }
+  if (env.JAVA_LSP_OWNERSHIP_BASE) {
+    resolveConfiguredBase(env.JAVA_LSP_OWNERSHIP_BASE, "JAVA_LSP_OWNERSHIP_BASE", env);
+  }
+  // Isolated validation always injects private JDTLS_* dirs. Those are harness
+  // plumbing, not operator overrides, so HTTP mode must still initialize.
+  if (
+    transportMode === "streamable_http"
+    && (env.JDTLS_DATA_DIR || env.JDTLS_LOG_DIR)
+    && env.JAVA_LSP_ISOLATED_VALIDATION !== "1"
+  ) {
+    throw new Error("streamable_http mode rejects JDTLS_DATA_DIR/JDTLS_LOG_DIR; use JAVA_LSP_CACHE_BASE so every canonical repo gets its own workspace and logs.");
+  }
+  if (transportMode === "stdio") {
+    if (env.JDTLS_DATA_DIR) {
+      resolveConfiguredBase(env.JDTLS_DATA_DIR, "JDTLS_DATA_DIR", env);
+    }
+    if (env.JDTLS_LOG_DIR) {
+      resolveConfiguredBase(env.JDTLS_LOG_DIR, "JDTLS_LOG_DIR", env);
+    }
+  }
+  const extraArgs = (env.JDTLS_EXTRA_ARGS ?? "").split(/\s+/).filter(Boolean);
+  if (extraArgs.some(arg => arg === "-data" || arg.startsWith("-data=") || arg.startsWith("--jvm-arg=-data"))) {
+    throw new Error("JDTLS_EXTRA_ARGS must not override -data; repository workspaces are managed by codex-java-lsp.");
+  }
+}
+
+export function resolveJdtlsRuntimePaths(
+  repoRoot: string,
+  transportMode: RepoOwnerTransport = "stdio",
+  env: NodeJS.ProcessEnv = process.env
+): JdtlsRuntimePaths {
+  validateJdtlsTransportEnvironment(transportMode, env);
+  const cacheRoot = repoCacheRoot(repoRoot, repoCacheBase(env));
+  const hash = repoHash(repoRoot);
+  const dataDir = transportMode === "stdio" && env.JDTLS_DATA_DIR
+    ? path.join(resolveConfiguredBase(env.JDTLS_DATA_DIR, "JDTLS_DATA_DIR", env), hash)
+    : path.join(cacheRoot, "workspace");
+  const logDir = transportMode === "stdio" && env.JDTLS_LOG_DIR
+    ? path.join(resolveConfiguredBase(env.JDTLS_LOG_DIR, "JDTLS_LOG_DIR", env), hash)
+    : path.join(cacheRoot, "logs");
+  return { cacheRoot, dataDir, logDir };
+}
+
+export async function forceTerminateJdtlsChild(child: JdtlsChild, deadlineMs = 1000): Promise<void> {
+  if (!Number.isFinite(deadlineMs) || deadlineMs < 0) {
+    throw new Error(`Invalid JDT LS force-stop deadline: ${deadlineMs}`);
+  }
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return;
+  }
+  const closed = new Promise<void>(resolve => child.once("close", () => resolve()));
+  child.kill("SIGKILL");
+  if (!await settlesWithin(closed, Math.floor(deadlineMs))) {
+    throw new Error(`JDT LS child did not exit after SIGKILL within ${Math.floor(deadlineMs)}ms.`);
+  }
 }
 
 function settlesWithin(operation: Promise<void>, timeoutMs: number): Promise<boolean> {

@@ -31,7 +31,14 @@ import {
   type SemanticPolicy
 } from "./runtime/request-context.js";
 import type { ToolContext } from "./tools/context.js";
-import { touchRepoCache } from "./worktree-cache-cleanup.js";
+import { touchRepoCache, type RepoCacheTouch } from "./worktree-cache-cleanup.js";
+import { RuntimeLifecycleGate } from "./runtime-lifecycle-gate.js";
+import {
+  type RepoOwnershipLease,
+  type RepoOwnershipProvider,
+  type RepoOwnerTransport
+} from "./repo-ownership-lease.js";
+import { forceTerminateJdtlsChild } from "./jdtls-session.js";
 
 export type RequestOptionsInput = {
   mode: RequestMode;
@@ -100,6 +107,8 @@ type RuntimeEntry = {
    * stays invisible to `activeRuntimeCount()`/janitor protection.
    */
   runtimeLease?: LeaseHandle;
+  gate: RuntimeLifecycleGate;
+  ownership?: RepoOwnershipLease;
 };
 
 type SlotWaiter = {
@@ -114,6 +123,7 @@ type RuntimeManagerOptions = {
   idleTtlMs: number;
   requestTimeoutMs: number;
   maxRetainedStoppedRepos: number;
+  transportMode: RepoOwnerTransport;
 };
 
 export class RepoRuntimeManager {
@@ -130,9 +140,9 @@ export class RepoRuntimeManager {
   constructor(
     private readonly resolver: Pick<RepoResolver, "resolve">,
     options: Partial<RuntimeManagerOptions> = {},
-    private readonly runtimeFactory: (resolved: ResolvedRepo, leases: CrossProcessLeaseStore) => ManagedToolContext = createRuntime,
-    private readonly coordinationFactory: CoordinationFactory = createCoordination,
-    private readonly leases: CrossProcessLeaseStore = createDefaultLeaseStore()
+    runtimeFactory?: (resolved: ResolvedRepo, leases: CrossProcessLeaseStore) => ManagedToolContext,
+    coordinationOrOwnership: CoordinationFactory | RepoOwnershipProvider = createCoordination,
+    leasesOrTouch: CrossProcessLeaseStore | ((repoRoot: string, extra?: RepoCacheTouch) => void) = createDefaultLeaseStore()
   ) {
     this.defaults = resourceDefaults();
     this.options = {
@@ -140,9 +150,27 @@ export class RepoRuntimeManager {
       idleTtlMs: positiveInteger(process.env.JAVA_LSP_IDLE_TTL_MS, this.defaults.idleTtlMs),
       requestTimeoutMs: positiveInteger(process.env.JAVA_LSP_REQUEST_TIMEOUT_MS, 120000),
       maxRetainedStoppedRepos: positiveInteger(process.env.JAVA_LSP_MAX_RETAINED_STOPPED_REPOS, 2),
+      transportMode: "stdio",
       ...options
     };
+    this.runtimeFactory = runtimeFactory ?? ((resolved, leases) => createRuntime(resolved, leases, this.options.transportMode));
+    if (isOwnershipProvider(coordinationOrOwnership)) {
+      this.coordinationFactory = createCoordination;
+      this.ownership = coordinationOrOwnership;
+    } else {
+      this.coordinationFactory = coordinationOrOwnership;
+    }
+    if (typeof leasesOrTouch === "function" && !isLeaseStore(leasesOrTouch)) {
+      this.leases = createDefaultLeaseStore();
+    } else {
+      this.leases = leasesOrTouch as CrossProcessLeaseStore;
+    }
   }
+
+  private readonly runtimeFactory: (resolved: ResolvedRepo, leases: CrossProcessLeaseStore) => ManagedToolContext;
+  private readonly coordinationFactory: CoordinationFactory;
+  private readonly leases: CrossProcessLeaseStore;
+  private readonly ownership?: RepoOwnershipProvider;
 
   /**
    * Opens the shared machine-wide capacity once per process (singleflighted).
@@ -204,6 +232,53 @@ export class RepoRuntimeManager {
       this.scheduleIdleShutdown(entry);
       void this.serviceSlotWaiters();
     }
+  }
+
+  async withQuery<T>(
+    selector: RepoSelector,
+    handler: (context: ManagedToolContext, request: RequestContext) => Promise<T>,
+    options: { mayStartLsp?: boolean; requestOptions?: RequestOptionsInput } = {}
+  ): Promise<T> {
+    return this.withContext(selector, async (context, request) => {
+      const entry = this.runtimes.get(context.repoRoot);
+      if (!entry) {
+        return handler(context, request);
+      }
+      return entry.gate.withQuery(() => handler(context, request), request.budget.remainingMs());
+    }, options);
+  }
+
+  async withControl<T>(
+    selector: RepoSelector,
+    handler: (context: ManagedToolContext, request?: RequestContext) => Promise<T>,
+    options: { mayStartLsp?: boolean; requestOptions?: RequestOptionsInput } = {}
+  ): Promise<T> {
+    return this.withContext(selector, async (context, request) => {
+      const entry = this.runtimes.get(context.repoRoot);
+      if (!entry) {
+        return handler(context, request);
+      }
+      return entry.gate.withControl(() => handler(context, request), request.budget.remainingMs());
+    }, options);
+  }
+
+  retainedRepoRoots(): Set<string> {
+    return new Set([...this.runtimes.keys()]);
+  }
+
+  async forceTerminateOwnedJdtls(deadlineMs = 1000): Promise<void> {
+    await Promise.all([...this.runtimes.values()].map(async entry => {
+      const session = entry.context.session as JdtlsSession & { forceStop?: (ms: number) => Promise<void> };
+      if (typeof session.forceStop === "function") {
+        await session.forceStop(deadlineMs);
+        return;
+      }
+      const child = session.status().pid || session.status().startingPid;
+      if (child) {
+        await forceTerminateJdtlsChild({ pid: child } as never, deadlineMs).catch(() => undefined);
+      }
+      await session.stop();
+    }));
   }
 
   /**
@@ -479,7 +554,7 @@ export class RepoRuntimeManager {
     }
   }
 
-  async shutdownAll(): Promise<void> {
+  async shutdownAll(options: { releaseOwnership?: boolean; terminal?: boolean } = {}): Promise<void> {
     for (const waiter of this.slotWaiters.splice(0)) {
       waiter.cancel();
     }
@@ -493,6 +568,14 @@ export class RepoRuntimeManager {
       await entry.context.router.flushSemanticEdgeStore().catch(() => undefined);
       await entry.runtimeLease?.release();
       entry.runtimeLease = undefined;
+      if (options.releaseOwnership !== false) {
+        try {
+          entry.ownership?.release();
+        } catch {
+          // Ownership release is best-effort during shutdown.
+        }
+        entry.ownership = undefined;
+      }
       touchRepoCache(entry.context.repoRoot, { ownerPid: undefined, ownerToken: undefined });
     }));
     for (const entry of this.runtimes.values()) {
@@ -535,7 +618,13 @@ export class RepoRuntimeManager {
   }
 
   private async createEntry(resolved: ResolvedRepo, budget?: DeadlineBudget): Promise<RuntimeEntry> {
+    const ownership = this.ownership?.acquire(resolved.repoRoot);
     const context = this.runtimeFactory(resolved, this.leases);
+    context.session.bindOwnershipLifecycle?.(ownership);
+    context.runBackgroundTask = operation => {
+      void operation().catch(() => undefined);
+      return true;
+    };
     const { generation, coordinator, layout } = this.coordinationFactory(
       resolved,
       () => context.javaIndexClient?.localStatus().files ?? 0
@@ -563,7 +652,9 @@ export class RepoRuntimeManager {
       lspReservation: "NONE",
       // Best-effort: a degraded or unopened lease store must never block a
       // runtime from being created, so acquisition failure is swallowed here.
-      runtimeLease
+      runtimeLease,
+      gate: new RuntimeLifecycleGate(),
+      ownership
     };
     entry.unsubscribeLifecycle = entry.context.session.onLifecycleChange(state => {
       if (state === "STARTING") entry.lspReservation = "STARTING";
@@ -852,8 +943,18 @@ export class RepoRuntimeManager {
   }
 }
 
-function createRuntime(resolved: ResolvedRepo, leases: CrossProcessLeaseStore): ManagedToolContext {
-  const session = new JdtlsSession(resolved.repoRoot, resolved.aliases, undefined, undefined, leases, resolved.worktree);
+function createRuntime(
+  resolved: ResolvedRepo,
+  leases: CrossProcessLeaseStore,
+  transportMode: RepoOwnerTransport = "stdio",
+  ownershipLifecycle?: RepoOwnershipLease
+): ManagedToolContext {
+  const session = new JdtlsSession(resolved.repoRoot, resolved.aliases, {
+    transportMode,
+    ownershipLifecycle,
+    leaseStore: leases,
+    worktree: resolved.worktree
+  });
   const javaIndexClient = new JavaIndexClient(resolved.repoRoot, repoCacheRoot(resolved.repoRoot));
   const javaIndex = new RouterJavaIndex(resolved.repoRoot, javaIndexClient);
   const router = new AgentRouter(resolved.repoRoot, session, javaIndex);
@@ -870,6 +971,14 @@ function createRuntime(resolved: ResolvedRepo, leases: CrossProcessLeaseStore): 
     javaIndex,
     javaIndexClient
   };
+}
+
+function isOwnershipProvider(value: CoordinationFactory | RepoOwnershipProvider): value is RepoOwnershipProvider {
+  return typeof value === "object" && value !== null && typeof (value as RepoOwnershipProvider).acquire === "function";
+}
+
+function isLeaseStore(value: unknown): value is CrossProcessLeaseStore {
+  return typeof value === "object" && value !== null && typeof (value as CrossProcessLeaseStore).open === "function";
 }
 
 function createDefaultLeaseStore(): CrossProcessLeaseStore {

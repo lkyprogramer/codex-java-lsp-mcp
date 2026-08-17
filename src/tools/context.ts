@@ -41,6 +41,7 @@ export type ToolContext = {
     pending: number;
     lastStorm?: { observedAt: string; changeCount: number; affectedRoots: string[] };
   };
+  runBackgroundTask?: (operation: () => Promise<void>) => boolean;
   session: JdtlsSession;
   /** Router-facing JavaIndex V2 facts used by AgentRouter. */
   javaIndex: RouterIndex;

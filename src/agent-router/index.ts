@@ -156,6 +156,10 @@ export class AgentRouter {
     this.rgCache.clear();
   }
 
+  dispose(): void {
+    this.clearRgCache();
+  }
+
   /**
    * SemanticEdgeStoreV2's writes are debounced in-memory (see
    * semantic-edge-store.ts's scheduleFlush) - this forces the pending gzip
