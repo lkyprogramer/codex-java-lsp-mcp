@@ -1,0 +1,43 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import {
+  blockedExternalResult,
+  hasExternalAgentCredentials,
+  parseAgentTraceCli,
+  planAgentTraceMatrix,
+  runAgentTraceMatrix
+} from "./run-agent-trace-matrix.mjs";
+
+test("blocked external result never substitutes 0 for usage or TaskSuccess", () => {
+  const blocked = blockedExternalResult();
+  assert.equal(blocked.status, "BLOCKED_EXTERNAL");
+  assert.equal(blocked.modelUsage.status, "UNMEASURED");
+  assert.equal(blocked.taskSuccess.status, "UNMEASURED");
+  assert.equal(blocked.modelUsage.input, undefined);
+  assert.notEqual(blocked.modelUsage.status, 0);
+});
+
+test("credentials helper is false without a provider key", () => {
+  assert.equal(hasExternalAgentCredentials({}), false);
+  assert.equal(hasExternalAgentCredentials({ ANTHROPIC_API_KEY: "sk-test" }), true);
+});
+
+test("matrix plan freezes six holdout tasks and 24 AB/BA cells", async () => {
+  const plan = await planAgentTraceMatrix(parseAgentTraceCli(["--dry-run"]));
+  assert.equal(plan.tasks.length, 6);
+  assert.equal(plan.cells.length, 24);
+  assert.ok(plan.tasks.every(task => task.taskId.includes(":") && /^[a-f0-9]{40}$/.test(task.repoCommit)));
+});
+
+test("runner stays BLOCKED_EXTERNAL without explicit authorization even if a key is present", async () => {
+  const result = await runAgentTraceMatrix(parseAgentTraceCli([], { ANTHROPIC_API_KEY: "sk-test" }));
+  assert.equal(result.status, "BLOCKED_EXTERNAL");
+  assert.equal(result.modelUsage.status, "UNMEASURED");
+  assert.equal(result.plan.tasks.length, 6);
+});
+
+test("authorization without a key still cannot invent measured usage", async () => {
+  const result = await runAgentTraceMatrix(parseAgentTraceCli(["--authorize-external"], {}));
+  assert.equal(result.status, "BLOCKED_EXTERNAL");
+  assert.equal(result.taskSuccess.status, "UNMEASURED");
+});

@@ -2,7 +2,7 @@
 
 ## 当前任务
 
-**V4-01 已完成（2026-08-17）**：`origin/main` 的 HTTP daemon / ownership / janitor 已移植到 v3 五工具面。冲突原则是 v3 底座 + daemon API，不恢复 `source-index` 或旧 7 工具面。隔离全量回归绿：`dist` 976 + `scripts` 136 + stdio smoke（工具面仍是 `java_status` / `java_impact` / `java_symbol` / `java_diagnostics` / `java_runtime`）。下一步是 Phase0.2：V4-02 冻结合流后 LOC 基线、V4-03 重跑非 0 字节 Sprint0'、V4-04 artifacts 不入库。真源仍是 `docs/deep/codex-java-lsp-mcp-java-intelligence-v4-consolidation-plan-2026-08-17.md`。V4 三项用户决策不变：(1) 以 v3 为底座合流 daemon，完成后合回 main；(2) 合流后重定 LOC 基线，V3.2 的 33,219/33,230 与 11 行旧债清零；(3) 真实 Agent outcome gate 纳入核心验收。后续顺序：Phase1 底层架构修复（V4-05~09）→ Phase2 价值兑现（V4-10~12）→ Phase3 收敛发布（V4-13~15）。用户的硬约束不变：**任何测试、构建、benchmark 或验证都必须与正在使用的 LSP 隔离**，不能接触活动 checkout、LSP、JDT、JavaIndex 缓存或 `node_modules`。
+**V4-01/02/04 已完成；V4-03 测量仍受主机静默门挡住（2026-08-17）**：daemon 合流、LOC 基线（35,472 / 上限 37,245）与 `artifacts/v4-*/` gitignore 都已入库。本轮补齐了 Sprint0' 的非 0 字节校验器、静默门、编排器，以及 ADR-01 / Agent-trace harness。**还没有跑三仓 `--runs 5` 或 fresh JDT first-touch**——1 分钟 load 仍高于 0.7× 核数。真源仍是 `docs/deep/codex-java-lsp-mcp-java-intelligence-v4-consolidation-plan-2026-08-17.md`。V4 三项用户决策不变：(1) 以 v3 为底座合流 daemon，完成后合回 main；(2) 合流后重定 LOC 基线，V3.2 的 33,219/33,230 与 11 行旧债清零；(3) 真实 Agent outcome gate 纳入核心验收。后续顺序：先在安静主机上跑完 V4-03，再进入 Phase1（V4-05 已有 ADR，实现仍等 Sprint0' 分母）。用户的硬约束不变：**任何测试、构建、benchmark 或验证都必须与正在使用的 LSP 隔离**，不能接触活动 checkout、LSP、JDT、JavaIndex 缓存或 `node_modules`。
 
 （以下 V3.2 各 Sprint 记录保留供追溯，其结论与"不要再踩的坑"在 V4 阶段继续有效，除非 V4 计划文档显式解除——目前唯一显式解除的是"不新增第二 scheduler"边界：V4-05 以 ADR 形式引入第二 worker **线程**，sweep 调度语义不变。）
 
@@ -47,7 +47,13 @@
 
 ## 下一步
 
-**执行 V4 计划（真源见上）。** 当前进行到：V4-03 Sprint0' 非 0 字节测量。V4-01 daemon 合流已完成（`4323b3c`）。V4-02 LOC 基线已冻结为 35,472（上限 37,245，清单 `docs/phase-v4/v4-production-ts-baseline.json`）；V3.2 的 33,219/33,230 与 +11 旧债已归档清零。V4-04 已把 `artifacts/v4-*/` 写入 `.gitignore`，历史 artifacts 未动。**V4-03 尚未开跑**：2026-08-17 本机 1 分钟 load 曾到 300+（10 核，远超 0.7x 静默门槛），且 `LISHUEDU_ROOT` / `CIPHERLINK_ROOT` / `EXAM_PARENT_V3_ROOT` 未设置。主机安静后用隔离合同跑三仓 `--runs 5` 矩阵，产物写 `artifacts/v4-sprint0/`（已被 gitignore），只把 manifest + SHA256 收入 `docs/phase-v4/`。V3.2-30 的 API key 阻塞已由用户确认解除（V4-10 将使用用户提供的凭据），不再是 `BLOCKED_EXTERNAL`。
+**执行 V4 计划（真源见上）。** 当前进行到：V4-03 Sprint0' 非 0 字节测量。V4-01 daemon 合流已完成（`4323b3c`）。V4-02 LOC 基线已冻结为 35,472（上限 37,245，清单 `docs/phase-v4/v4-production-ts-baseline.json`）；V3.2 的 33,219/33,230 与 +11 旧债已归档清零。V4-04 已把 `artifacts/v4-*/` 写入 `.gitignore`，历史 artifacts 未动。
+
+V4-03 **编排与校验已就绪，测量未开跑**：`scripts/run-v4-sprint0-baseline.mjs` + `scripts/verify-v4-sprint0-baseline.mjs` 会拒绝 0 字节和 SHA 漂移，并要求三仓 HEAD 等于 `golden/progressive-index-v1.json`。正式仓路径已找到：`/tmp/codex-java-v3-golden-20260809/{lishuedu,cipherlink,exam-parent-v3}`（三仓干净且 commit 对齐）。开发工作副本 `Documents/program/...` 只有 cipherlink 对齐，lishuedu/exam-parent-v3 已前移，不要用。手册：`docs/phase-v4/v4-sprint0-runbook.md`。主机 1 分钟 load / 核数 ≤0.7 之前不要开 `--runs 5` 或 fresh JDT first-touch。
+
+V4-05 ADR-01 已写入 `docs/phase-v4/adr-01-java-index-dual-worker.md`（消息移交 + 查询线程单写者）。**不要在 Sprint0' 分母入库前改 `src/java-index/`**，否则基线身份会漂离 `4323b3c`。
+
+V4-10 harness 已存在：`scripts/run-agent-trace-matrix.mjs`。无 `--authorize-external` 或 API key 时必须报 `BLOCKED_EXTERNAL` 且 usage/TaskSuccess 为 `UNMEASURED`，不得写成 `0`。真正外发调用仍等用户提供 key 且 Sprint0' 已入库后再开。
 
 以下为 V3.2 收尾时的历史记录（保留供追溯）：
 
@@ -95,4 +101,4 @@ git log --oneline -5
 git status --short
 ```
 
-确认 `git log` 最新一条是 Sprint5 收尾提交（V3.2-26~30 全部有 disposition，或更新）、`git status` 除了未跟踪的 `scripts/run-idle-prewarm-experiment.mjs` 与 `scripts/run-v324-import-concurrency-experiment.mjs` 之外干净。Sprint5 本身已经收尾；下一步是否开始 Sprint6（development-plan 第 732 行起）先跟用户确认，不要自动往下扩展范围（见上方"下一步"）。
+确认 `git log` 最新几条是 V4 合流/基线/本轮 Sprint0' harness，`git status` 除了未跟踪的 `scripts/run-idle-prewarm-experiment.mjs` 与 `scripts/run-v324-import-concurrency-experiment.mjs` 之外干净。下一步：看 `uptime`，1 分钟 load / 逻辑核数 ≤0.7 后按 `docs/phase-v4/v4-sprint0-runbook.md` 跑 V4-03；未跑完 Sprint0' 前不要改生产 `src/`。
