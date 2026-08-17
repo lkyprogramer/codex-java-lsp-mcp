@@ -47,7 +47,7 @@
 
 ## 下一步
 
-**执行 V4 计划（真源见上）。** 当前进行到：V4-03 Sprint0' 非 0 字节测量。V4-01 daemon 合流已完成（`4323b3c`）。V4-02 LOC 基线已冻结为 35,472（上限 37,245，清单 `docs/phase-v4/v4-production-ts-baseline.json`）；V3.2 的 33,219/33,230 与 +11 旧债已归档清零。V4-04 已把 `artifacts/v4-*/` 写入 `.gitignore`，历史 artifacts 未动。V3.2-30 的 API key 阻塞已由用户确认解除（V4-10 将使用用户提供的凭据），不再是 `BLOCKED_EXTERNAL`。
+**执行 V4 计划（真源见上）。** 当前进行到：V4-03 Sprint0' 非 0 字节测量。V4-01 daemon 合流已完成（`4323b3c`）。V4-02 LOC 基线已冻结为 35,472（上限 37,245，清单 `docs/phase-v4/v4-production-ts-baseline.json`）；V3.2 的 33,219/33,230 与 +11 旧债已归档清零。V4-04 已把 `artifacts/v4-*/` 写入 `.gitignore`，历史 artifacts 未动。**V4-03 尚未开跑**：2026-08-17 本机 1 分钟 load 曾到 300+（10 核，远超 0.7x 静默门槛），且 `LISHUEDU_ROOT` / `CIPHERLINK_ROOT` / `EXAM_PARENT_V3_ROOT` 未设置。主机安静后用隔离合同跑三仓 `--runs 5` 矩阵，产物写 `artifacts/v4-sprint0/`（已被 gitignore），只把 manifest + SHA256 收入 `docs/phase-v4/`。V3.2-30 的 API key 阻塞已由用户确认解除（V4-10 将使用用户提供的凭据），不再是 `BLOCKED_EXTERNAL`。
 
 以下为 V3.2 收尾时的历史记录（保留供追溯）：
 
