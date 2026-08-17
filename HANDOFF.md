@@ -2,7 +2,9 @@
 
 ## 当前任务
 
-Java-only LSP/MCP V3.2 优化的 Sprint3、Sprint4 均已完成。**Sprint5 基本收尾：V3.2-26/27/28/29 已关闭，V3.2-30 `BLOCKED_EXTERNAL`（用户已确认暂时跳过）**（development-plan 第 682 行起）。V3.2-30（真实 Agent outcome gate，6 任务×old/new×AB/BA）的调用范围已获得 2026-08-16 的 V3.2-07b 显式授权（[[v32-07b-authorization]]，scope 限定，不是永久豁免），但真正的阻塞是**本环境没有任何外部模型 provider 的 API key**（只有指向本 CLI 自身的 `CLAUDE_CODE_EXECPATH`）——这是缺失入参，不是授权范围问题，驱动 `claude` CLI 代替也达不到 spec 要求的 wire-level 事件哈希/精确 usage/锁定 model 版本，不是可行的变通方案。用户的硬约束不变：**任何测试、构建、benchmark 或验证都必须与正在使用的 LSP 隔离**，不能接触活动 checkout、LSP、JDT、JavaIndex 缓存或 `node_modules`。
+**V3.2 Sprint0–5 已全部收尾，2026-08-17 起进入 V4 阶段**：真源是 `docs/deep/codex-java-lsp-mcp-java-intelligence-v4-consolidation-plan-2026-08-17.md`（用户已批准）。V4 的三项用户已确认决策：(1) 以 `codex/java-intelligence-v3` 为底座，把 `main` 最近 5 个提交（`9691293` 共享 HTTP daemon 隔离等）移植合流，完成后合回 main；(2) 合流后重新冻结 LOC 基线（V3.2 的 33,219/33,230 记录归档，11 行旧债并入新基线清零）；(3) 用户提供外部模型 API key，真实 Agent outcome gate（原 V3.2-30）解除 `BLOCKED_EXTERNAL`，纳入核心验收主线。V4 阶段顺序：Phase0 合流+基线重置（V4-01~04）→ Phase1 底层架构修复（V4-05 双 worker ADR、V4-06 range/holdout 闭合、V4-07 缓存单真源、V4-08 god file 拆解、V4-09 JDT fingerprint）→ Phase2 价值兑现（V4-10 Agent trace、V4-11 prewarm、V4-12 golden 补齐）→ Phase3 收敛发布（V4-13~15）。用户的硬约束不变：**任何测试、构建、benchmark 或验证都必须与正在使用的 LSP 隔离**，不能接触活动 checkout、LSP、JDT、JavaIndex 缓存或 `node_modules`。
+
+（以下 V3.2 各 Sprint 记录保留供追溯，其结论与"不要再踩的坑"在 V4 阶段继续有效，除非 V4 计划文档显式解除——目前唯一显式解除的是"不新增第二 scheduler"边界：V4-05 以 ADR 形式引入第二 worker **线程**，sweep 调度语义不变。）
 
 当前分支是 `codex/java-intelligence-v3`（最新 commit 见 `git log --oneline -5`）。**均已 commit 且已 push，不是 dirty worktree**（工作区可能有两个未提交、未跟踪的实验脚手架：`scripts/run-idle-prewarm-experiment.mjs`（V3.2-23）与 `scripts/run-v324-import-concurrency-experiment.mjs`（V3.2-24）——都是保留的、接线已验证有效的脚手架，不是遗漏的改动，见下方对应小节）。
 
@@ -45,7 +47,9 @@ Java-only LSP/MCP V3.2 优化的 Sprint3、Sprint4 均已完成。**Sprint5 基�
 
 ## 下一步
 
-**Sprint5 五项（V3.2-26~30）全部有了明确 disposition，收尾工作只剩隔离回归 → commit → push。** V3.2-30 是 `BLOCKED_EXTERNAL`（缺外部 provider API key，用户已确认暂时跳过），不是"未开始"，除非用户主动提供凭据，否则不要再花时间在它上面。
+**执行 V4 计划（真源见上）。** 当前进行到：Phase0 V4-01 daemon 合流。V3.2-30 的 API key 阻塞已由用户确认解除（V4-10 将使用用户提供的凭据），不再是 `BLOCKED_EXTERNAL`。
+
+以下为 V3.2 收尾时的历史记录（保留供追溯）：
 
 1. **V3.2-28 已两轮都测完、都 REJECT，未落地任何代码，不是待办事项**：第 1 轮零 LOC 的 Spring 配额调整、第 2 轮用户授权 LOC 突破后的文件数上限放宽，均被正式三仓矩阵证伪并回滚（见报告 §4.1-4.7）。计划原文更大的范围（anchor profile/taskBlocking evidence/sourceSet/文件大小四维度）没有被排除，只是这两条具体规则不成立——如果未来想继续挖，需要一个结构不同的新假设，不是这两条的变体，也不要不问用户就再花一次已经授权过的 LOC 突破额度（"再授权一次"不等于"永久授权"，每次新的 LOC 突破仍需单独问）。
 2. **V3.2-29 尚未偿还的 11 行债务**：如果未来某个 round 2 真的对某个 adapter 测出"连续两轮无真实增益"（MyBatis 需要先找一个有真实 XML mapper 的 golden 仓库才能算公平的一轮，不能拿同样 3 个仓库再跑一次充数），对应的删除会把 LOC 拉回到硬上限以下——这是唯一的偿还路径，不要在其他无关地方找"精简"凑数。
