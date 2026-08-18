@@ -77,3 +77,64 @@ test("type graph returns the exact implementation facts it merged", async () => 
   assert.ok(candidates.has(implementation.absolutePath));
   assert.deepEqual(candidates.get(implementation.absolutePath)?.positions, [{ line: 77, column: 1 }]);
 });
+
+test("type graph uses the unique caller-site callee when the implementer has no methodName", async () => {
+  const candidates = new Map<string, CandidateFile>();
+  const deleteAnchor: ResolvedAnchor = {
+    ...anchor,
+    absolutePath: "/repo/src/main/java/demo/CheckController.java",
+    path: "src/main/java/demo/CheckController.java",
+    line: 62,
+    symbolName: "delete",
+    methodName: "delete",
+    className: "PositionCheckPeopleService",
+    profile: "service"
+  };
+  const deleteImpl: JavaSourceFacts = {
+    ...implementation,
+    methods: [
+      { name: "page", line: 69, endLine: 80, referencedTypes: [], relations: [] },
+      { name: "deleteCheckPeople", line: 172, endLine: 189, referencedTypes: [], relations: [] }
+    ]
+  };
+  await collectTypeGraphCandidates({
+    candidates,
+    anchors: [deleteAnchor],
+    options,
+    javaIndex: {
+      factsFor: async () => ({
+        ...implementation,
+        absolutePath: deleteAnchor.absolutePath,
+        kind: "interface",
+        methods: [{
+          name: "delete",
+          line: 62,
+          endLine: 66,
+          referencedTypes: [],
+          relations: [
+            {
+              kind: "local-receiver",
+              typeName: "PositionCheckPeopleService",
+              name: "deleteCheckPeople",
+              line: 64,
+              confidence: "medium",
+              source: "ast"
+            },
+            {
+              kind: "local-receiver",
+              typeName: "CommonResult",
+              name: "success",
+              line: 65,
+              confidence: "medium",
+              source: "ast"
+            }
+          ]
+        }]
+      }),
+      findImplementers: async () => [deleteImpl]
+    } as never,
+    routingPolicy: resolveRoutingPolicy("/repo")
+  });
+
+  assert.deepEqual(candidates.get(deleteImpl.absolutePath)?.positions, [{ line: 172, column: 1 }]);
+});

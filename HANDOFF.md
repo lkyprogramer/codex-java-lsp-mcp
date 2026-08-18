@@ -2,7 +2,7 @@
 
 ## 当前任务
 
-**V4-01/02/03/04 已完成；V4-05 默认关已落地；V4-06 进行中（2026-08-19）**：range 矩阵 `2fb2148` 闭合 assembler/DTO。sibling callee 矩阵 `/tmp/codex-java-lsp-v4-06-sibling-20260819-005042/`（`d00a3bd` vs `2fb2148`）闭合 `rule-engine-execute` / `apply-info-save`，但 `school-template-parser` 因 parse 扇出胀爆被挤出（lishuedu range 0.768→0.746）。正在把 `SIBLING_CALLEE_MAX` 收到 2 后复测。holdout rReadMust 仍 0.5/0.55/0.4。真源 `docs/deep/codex-java-lsp-mcp-java-intelligence-v4-consolidation-plan-2026-08-17.md`。**三仓 load 政策**：1 分钟 load < 20 必须执行。V4-05 storm 未测。隔离约束不变。
+**V4-01/02/03/04 已完成；V4-05 默认关已落地；V4-06 进行中（2026-08-19）**：sibling cap 矩阵 `/tmp/codex-java-lsp-v4-06-sibling-cap-20260819-010421/`（`ba5838f` vs `2fb2148`）恢复 `school-template-parser`，三仓 RangeLineRecall 0.782/0.875/0.753。下一刀：type-graph `calleeNames` 修 `check-people-delete-site-guard`（Impl 已在 plan，错落到类头）。隔离 10/10 已绿，正式矩阵 `--baseline ba5838f`。holdout rReadMust 仍 0.5/0.55/0.4。真源 `docs/deep/codex-java-lsp-mcp-java-intelligence-v4-consolidation-plan-2026-08-17.md`。**三仓 load 政策**：1 分钟 load < 20 必须执行。V4-05 storm 未测。隔离约束不变。
 
 （以下 V3.2 各 Sprint 记录保留供追溯，其结论与"不要再踩的坑"在 V4 阶段继续有效，除非 V4 计划文档显式解除——目前唯一显式解除的是"不新增第二 scheduler"边界：V4-05 以 ADR 形式引入第二 worker **线程**，sweep 调度语义不变。）
 
@@ -47,7 +47,7 @@
 
 ## 下一步
 
-**执行 V4 计划（真源见上）。** V4-06：sibling callee 已证实能闭合 exam tuning 两场景，但 MAX=6 扇出回归了 lishuedu `school-template-parser`。下一测量 `--baseline 2fb2148` 或 `d00a3bd` 验证 MAX=2。三仓 load < 20 必须继续跑。V4-05 storm 未测。V4-01 daemon 合流已完成（`4323b3c`）。V4-02 LOC 基线 35,472（上限 37,245）。生产 LOC 约 35,820。
+**执行 V4 计划（真源见上）。** V4-06：MAX=2 sibling cap 已过（`ba5838f`）。下一测量 `--baseline ba5838f` 验证 type-graph `calleeNames`（目标 `check-people-delete-site-guard` 0.5→1.0，且不回归 `school-template-parser`）。三仓 load < 20 必须继续跑。V4-05 storm 未测。V4-01 daemon 合流已完成（`4323b3c`）。V4-02 LOC 基线 35,472（上限 37,245）。生产 LOC 约 35,820。
 
 V4-03 **分母已入库**：`docs/phase-v4/v4-sprint0-manifest.json` + `docs/phase-v4/v4-sprint0-summaries/`。raw 在 `/tmp/codex-java-lsp-v4-sprint0-20260818/`。主机门改为可用内存 ≥4 GiB，load 只记录。cold-matrix 质量门 FAIL 是分母（三仓 rReadMust 0.90/0.91/0.88）。first-touch：lishuedu 3/5 COMPLETE，cipherlink 与 exam-parent-v3 5/5 PARTIAL_TIMEOUT（`--prepare none` + 60s）。正式仓仍是 `/tmp/codex-java-v3-golden-20260809/{lishuedu,cipherlink,exam-parent-v3}`。
 

@@ -60,6 +60,26 @@ test("positionFromFacts uses the unique method that names the collaborator type"
   );
 });
 
+test("positionFromFacts uses the unique caller-site callee when methodName misses", () => {
+  assert.deepEqual(
+    positionFromFacts(facts([
+      { name: "page", line: 69, endLine: 80, referencedTypes: [], relations: [] },
+      { name: "deleteCheckPeople", line: 172, endLine: 189, referencedTypes: [], relations: [] }
+    ]), { methodName: "delete", calleeNames: ["deleteCheckPeople", "success"] }),
+    { line: 172, column: 1 }
+  );
+});
+
+test("positionFromFacts keeps (1,1) when several caller-site callees exist on the implementer", () => {
+  assert.deepEqual(
+    positionFromFacts(facts([
+      { name: "page", line: 69, endLine: 80, referencedTypes: [], relations: [] },
+      { name: "deleteCheckPeople", line: 172, endLine: 189, referencedTypes: [], relations: [] }
+    ]), { methodName: "delete", calleeNames: ["page", "deleteCheckPeople"] }),
+    { line: 1, column: 1 }
+  );
+});
+
 test("positionFromFacts keeps (1,1) when several methods name the same type", () => {
   assert.deepEqual(
     positionFromFacts(facts([

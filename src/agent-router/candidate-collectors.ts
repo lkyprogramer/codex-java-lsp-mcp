@@ -81,10 +81,17 @@ export async function collectTypeGraphCandidates(input: CollectCandidatesInput):
     }
     let isInterface = anchor.profile === "port";
     let anchorTypeId: string | undefined;
+    let calleeNames: string[] = [];
     try {
       const anchorFacts = await javaIndex.factsFor(anchor.absolutePath, generation);
       isInterface = anchorFacts.kind === "interface";
       anchorTypeId = anchorFacts.typeId;
+      const caller = anchorFacts.methods.find(method => method.name === anchor.methodName);
+      calleeNames = [...new Set(
+        (caller?.relations ?? [])
+          .filter(relation => relation.kind === "local-receiver" && relation.name)
+          .map(relation => relation.name!)
+      )];
     } catch {
       // A failed fact read must not prevent the ordinary type lookup; it only
       // means this candidate cannot claim the stronger implementation reason.
@@ -101,7 +108,7 @@ export async function collectTypeGraphCandidates(input: CollectCandidatesInput):
         facts,
         scoreBase(routingPolicy, "semantic", facts, anchor, options) + 70,
         "typeGraph",
-        { methodName: anchor.methodName, typeName: anchor.className }
+        { methodName: anchor.methodName, typeName: anchor.className, calleeNames }
       );
       if (isInterface) {
         candidate.reasons = ["typeGraph:implementation-lookup"];

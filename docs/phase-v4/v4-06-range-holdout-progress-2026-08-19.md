@@ -70,3 +70,37 @@ baseline `f0e2ef1`，candidate `2fb2148`，`--runs 5`（3 rounds × 5 attempts�
 闭合：`rule-engine-execute` 0.5→1.0，`apply-info-save-basic-service` 0→1.0。holdout 抬升：exam-score 0.143→0.429，backend-operation-log 0→0.250。
 
 **回归**：`school-template-parser` 1.0→0.5 / rReadMust 1→0.75。`ExcelParser.parse()` 扇出 6 个相邻 helper，merge 成整文件后超 14KiB 预算被挤出。修复：`SIBLING_CALLEE_MAX` 6→2。
+
+## sibling cap 矩阵（`ba5838f` vs `2fb2148`，已完成）
+
+产物：`/tmp/codex-java-lsp-v4-06-sibling-cap-20260819-010421/`。候选 159/159。exit 1 = 质量门槛 FAIL（分母）。
+
+| 仓 | RangeLineRecall old→new | holdout rReadMust | tokens P50 | p95Ratio |
+|---|---|---|---|---|
+| lishuedu | 0.768 → **0.782** | 0.90 | +286 | 0.996 |
+| cipherlink | 0.85 → **0.875** | 0.91 | +294 | 1.005 |
+| exam-parent-v3 | 0.603 → **0.753** | 0.88 | +149 | 1.009 |
+
+`school-template-parser` 恢复 1.0 / rReadMust 1。`rule-engine-execute` / `apply-info-save-basic-service` 仍为 1.0。exam-score holdout 0.143→0.286；backend-operation-log 0→0.250。
+
+## calleeNames 切片（相对 `ba5838f`，待矩阵）
+
+`check-people-delete-site-guard` 仍 0.500：Impl 已在 candidates 与 readPlan，但 `collectTypeGraphCandidates` 把 `methodName: delete` 传给没有 `delete` 的 Impl，退回 `(1,1)` → 类头 1–43 / 52–64，盖不住 golden `171–189`。
+
+修法：`FactPositionHint.calleeNames`。从 anchor 方法的 `local-receiver` relation 收集调用名；`methodName` 不命中且 Impl 上恰好有**唯一**同名方法时用它。多命中保持 `(1,1)`，不用 type-header，不放宽 maxFiles。
+
+隔离 targeted：`candidate-helpers` + `candidate-collectors` 10/10。正式矩阵 `--baseline ba5838f`，新目录，同一 output-dir 只开一场。
+
+## 仍 miss（相对 `ba5838f` / cap 矩阵 r1-new）
+
+**Tuning**
+
+- `check-people-delete-site-guard`（exam，0.500）：本刀目标。
+- `current-user-service-implementer-edge`（exam，0.500）：Controller 45–52 与 `CurrentUserService` 1–23 已覆盖；`ManageCurrentUserServiceImpl` 在 candidates 但不在 6 文件 readPlan（缺 42–50）；`ExamManagementApplication` 不在 candidates（缺 21–29）。属预算/选文件，不放宽 maxFiles。
+- `audit-order-repository-mapper-rule-type`（lishuedu，0.333）：Impl 39–60 已命中；Mapper 1–29 vs golden 47–155 / 157–254。Anchor 是 `save()`。禁止用 save 去猜 listTodo。
+
+**Holdout**
+
+- lishuedu `exam-score` 0.286；`paper-task` 0.200
+- cipherlink `client-release-storage-presign` 0.500；`backend-operation-log` 0.250（77–93 vs 77–94 不要用 +1 type-header；缺 DefaultOperationLogAppService）
+- exam `exam-room-print` 0.400；`candidate-pay-order` 0.125

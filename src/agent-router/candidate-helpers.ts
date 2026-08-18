@@ -13,6 +13,8 @@ export type FactPositionHint = {
   methodName?: string;
   /** Prefer the unique hydrated method that names this collaborator type. */
   typeName?: string;
+  /** Unique callee name from the caller's local-receiver relations, used when methodName is absent on the implementer. */
+  calleeNames?: readonly string[];
 };
 
 export function candidateFromFacts(
@@ -44,10 +46,14 @@ export function positionFromFacts(facts: JavaSourceFacts, hint?: FactPositionHin
   const preferred = hint?.methodName
     ? methods.find(method => method.name === hint.methodName)
     : undefined;
-  const typeMatches = !preferred && hint?.typeName
+  const calleeMatches = !preferred && hint?.calleeNames?.length
+    ? methods.filter(method => hint.calleeNames!.includes(method.name))
+    : [];
+  const typeMatches = !preferred && calleeMatches.length !== 1 && hint?.typeName
     ? methodsReferencingType(methods, hint.typeName)
     : [];
   const method = preferred
+    ?? (calleeMatches.length === 1 ? calleeMatches[0] : undefined)
     ?? (typeMatches.length === 1 ? typeMatches[0] : undefined)
     ?? (methods.length === 1 ? methods[0] : undefined);
   if (method && method.line >= 1) return { line: method.line, column: 1 };
