@@ -9,7 +9,16 @@ import type {
   ScoreBreakdownItem
 } from "../agent-types.js";
 
-export function candidateFromFacts(facts: JavaSourceFacts, score: number, verifiedBy: string): CandidateFile {
+export type FactPositionHint = {
+  methodName?: string;
+};
+
+export function candidateFromFacts(
+  facts: JavaSourceFacts,
+  score: number,
+  verifiedBy: string,
+  hint?: FactPositionHint
+): CandidateFile {
   return {
     absolutePath: facts.absolutePath,
     path: facts.path,
@@ -18,13 +27,24 @@ export function candidateFromFacts(facts: JavaSourceFacts, score: number, verifi
     sourceSet: facts.sourceSet,
     score,
     matchCount: 0,
-    positions: [{ line: 1, column: 1 }],
+    positions: [positionFromFacts(facts, hint)],
     categories: ["semantic"],
     reasons: [verifiedBy],
     confidence: "medium",
     verifiedBy: [verifiedBy],
     scoreBreakdown: [breakdown(`semantic.${verifiedBy}`, "semantic-seed", score, verifiedBy)]
   };
+}
+
+/** Prefer the hit-reason method. Never invent a type-header stand-in for (1,1). */
+export function positionFromFacts(facts: JavaSourceFacts, hint?: FactPositionHint): { line: number; column: number } {
+  const methods = facts.methods ?? [];
+  const preferred = hint?.methodName
+    ? methods.find(method => method.name === hint.methodName)
+    : undefined;
+  const method = preferred ?? (methods.length === 1 ? methods[0] : undefined);
+  if (method && method.line >= 1) return { line: method.line, column: 1 };
+  return { line: 1, column: 1 };
 }
 
 export function mergeCandidate(target: Map<string, CandidateFile>, incoming: CandidateFile): void {

@@ -47,7 +47,7 @@
 
 ## 下一步
 
-**执行 V4 计划（真源见上）。** 当前进行到：V4-06 range/holdout，同时可测 V4-05 门禁。V4-01 daemon 合流已完成（`4323b3c`）。V4-02 LOC 基线已冻结为 35,472（上限 37,245，清单 `docs/phase-v4/v4-production-ts-baseline.json`）。V4-04 已把 `artifacts/v4-*/` 写入 `.gitignore`。生产 LOC 在双 worker 落地后约为 35,820（仍低于 37,245）。
+**执行 V4 计划（真源见上）。** 当前进行到：V4-06 已打开 type/import graph 的 `hydrate:true`，`candidateFromFacts` 用命中方法行替代 `(1,1)`（不用 type-header）。三仓 RangeLineRecall / holdout rReadMust 矩阵尚未复测。同时可测 V4-05 storm 门禁。V4-01 daemon 合流已完成（`4323b3c`）。V4-02 LOC 基线已冻结为 35,472（上限 37,245，清单 `docs/phase-v4/v4-production-ts-baseline.json`）。V4-04 已把 `artifacts/v4-*/` 写入 `.gitignore`。生产 LOC 在双 worker 落地后约为 35,820（仍低于 37,245）。
 
 V4-03 **分母已入库**：`docs/phase-v4/v4-sprint0-manifest.json` + `docs/phase-v4/v4-sprint0-summaries/`。raw 在 `/tmp/codex-java-lsp-v4-sprint0-20260818/`。主机门改为可用内存 ≥4 GiB，load 只记录。cold-matrix 质量门 FAIL 是分母（三仓 rReadMust 0.90/0.91/0.88）。first-touch：lishuedu 3/5 COMPLETE，cipherlink 与 exam-parent-v3 5/5 PARTIAL_TIMEOUT（`--prepare none` + 60s）。正式仓仍是 `/tmp/codex-java-v3-golden-20260809/{lishuedu,cipherlink,exam-parent-v3}`。
 
@@ -101,4 +101,4 @@ git log --oneline -5
 git status --short
 ```
 
-确认 `git log` 最新几条含 Sprint0' 分母与 V4-05 dual-worker，`git status` 除了未跟踪的 `scripts/run-idle-prewarm-experiment.mjs` 与 `scripts/run-v324-import-concurrency-experiment.mjs` 之外干净。下一步：V4-06（`hydrate:true`，不要 type-header）；安静主机上可另跑 `scripts/run-storm-gate.mjs` 作为 V4-05 门禁，未过两轮不要把 dual worker 设为默认。
+确认 `git log` 最新几条含 Sprint0' 分母、V4-05 dual-worker 与 V4-06 hydrate 位置。下一步：隔离三仓 cold-matrix 看 RangeLineRecall / holdout rReadMust；未到 1.0 再按 miss 类继续，不要用 type-header。安静主机上可另跑 `scripts/run-storm-gate.mjs`，未过两轮不要把 dual worker 设为默认。

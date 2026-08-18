@@ -94,10 +94,15 @@ export async function collectTypeGraphCandidates(input: CollectCandidatesInput):
       typeName,
       20,
       anchor.absolutePath,
-      { typeId: anchorTypeId, hydrate: false }
+      { typeId: anchorTypeId, hydrate: true }
     ))) {
       implementations.push(facts);
-      const candidate = candidateFromFacts(facts, scoreBase(routingPolicy, "semantic", facts, anchor, options) + 70, "typeGraph");
+      const candidate = candidateFromFacts(
+        facts,
+        scoreBase(routingPolicy, "semantic", facts, anchor, options) + 70,
+        "typeGraph",
+        { methodName: anchor.methodName }
+      );
       if (isInterface) {
         candidate.reasons = ["typeGraph:implementation-lookup"];
       }
@@ -121,11 +126,8 @@ export async function collectImportGraphCandidates(input: CollectImportGraphInpu
     }
     metrics.scannedAnchors += 1;
     const localImports = projectLocalImports(anchorFacts.imports, anchorFacts.packageName);
-    // Import graph only needs the declaration identity/path to nominate a
-    // candidate.  Hydrating every imported file's full AST bundle creates a
-    // large worker payload on wide application services without adding any
-    // structural signal to this collector.
-    for (const facts of await javaIndex.findTypeDefinitions(localImports, 40, false)) {
+    const positionHint = { methodName: anchor.methodName };
+    for (const facts of await javaIndex.findTypeDefinitions(localImports, 40, true)) {
       if (facts.absolutePath === anchor.absolutePath) {
         continue;
       }
@@ -133,7 +135,10 @@ export async function collectImportGraphCandidates(input: CollectImportGraphInpu
       if (alreadyCandidate) {
         metrics.skippedExisting += 1;
       }
-      mergeCandidate(candidates, candidateFromFacts(facts, scoreBase(routingPolicy, "semantic", facts, anchor, options) + 65, "importGraph"));
+      mergeCandidate(
+        candidates,
+        candidateFromFacts(facts, scoreBase(routingPolicy, "semantic", facts, anchor, options) + 65, "importGraph", positionHint)
+      );
       if (!alreadyCandidate) {
         metrics.addedCandidates += 1;
       }
@@ -142,7 +147,7 @@ export async function collectImportGraphCandidates(input: CollectImportGraphInpu
     const importerLookupName = anchorFacts.packageName ? `${anchorFacts.packageName}.${typeName}` : typeName;
     for (const facts of await javaIndex.findImporters(importerLookupName, 20, {
       typeId: anchorFacts.typeId,
-      hydrate: false
+      hydrate: true
     })) {
       if (facts.absolutePath === anchor.absolutePath) {
         continue;
@@ -151,7 +156,12 @@ export async function collectImportGraphCandidates(input: CollectImportGraphInpu
       if (alreadyCandidate) {
         metrics.skippedExisting += 1;
       }
-      const candidate = candidateFromFacts(facts, scoreBase(routingPolicy, "semantic", facts, anchor, options) + 20, "importGraph");
+      const candidate = candidateFromFacts(
+        facts,
+        scoreBase(routingPolicy, "semantic", facts, anchor, options) + 20,
+        "importGraph",
+        positionHint
+      );
       candidate.reasons = ["importGraph:reverse"];
       mergeCandidate(candidates, candidate);
       if (!alreadyCandidate) {

@@ -44,23 +44,31 @@ const implementation: JavaSourceFacts = {
   imports: [],
   wildcardImports: [],
   annotations: [],
-  methods: [],
+  methods: [
+    { name: "findById", line: 77, endLine: 90, referencedTypes: [], relations: [] }
+  ],
   factSource: "javaIndex"
 };
 
 test("type graph returns the exact implementation facts it merged", async () => {
   const candidates = new Map<string, CandidateFile>();
+  let hydrate: boolean | undefined;
   const implementations = await collectTypeGraphCandidates({
     candidates,
     anchors: [anchor],
     options,
     javaIndex: {
       factsFor: async () => ({ ...implementation, absolutePath: anchor.absolutePath, kind: "interface" }),
-      findImplementers: async () => [implementation]
+      findImplementers: async (_typeName, _limit, _scope, lookupOptions) => {
+        hydrate = lookupOptions.hydrate;
+        return [implementation];
+      }
     } as never,
     routingPolicy: resolveRoutingPolicy("/repo")
   });
 
+  assert.equal(hydrate, true);
   assert.deepEqual(implementations, [implementation]);
   assert.ok(candidates.has(implementation.absolutePath));
+  assert.deepEqual(candidates.get(implementation.absolutePath)?.positions, [{ line: 77, column: 1 }]);
 });
