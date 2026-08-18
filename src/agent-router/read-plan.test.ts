@@ -759,6 +759,53 @@ test("a direct anchor CALLS receiver outranks an unrelated implementation expans
   );
 });
 
+test("a response-wrapper CALLS envelope does not evict a first-hop implementer from a constrained core", async () => {
+  const anchor = candidate({
+    absolutePath: "/repo/src/main/java/demo/CheckController.java",
+    path: "src/main/java/demo/CheckController.java",
+    reasons: ["target"],
+    categories: ["target"],
+    score: 1_000
+  });
+  const wrapper = candidate({
+    absolutePath: "/repo/src/main/java/demo/CommonResult.java",
+    path: "src/main/java/demo/CommonResult.java",
+    reasons: ["CALLS"],
+    score: 400,
+    plannerEvidence: [{
+      family: "STATIC_STRUCTURE",
+      kind: "CALLS",
+      sourceTarget: `A1:${anchor.absolutePath}->/repo/src/main/java/demo/CommonResult.java`,
+      callDepth: 0,
+      callOrigin: "anchor"
+    }]
+  });
+  const implementer = candidate({
+    absolutePath: "/repo/src/main/java/demo/ManageCurrentUserServiceImpl.java",
+    path: "src/main/java/demo/ManageCurrentUserServiceImpl.java",
+    reasons: ["typeGraph:implementation-lookup"],
+    score: 120,
+    plannerEvidence: [{
+      family: "STATIC_STRUCTURE",
+      kind: "IMPLEMENTS",
+      sourceTarget: `A1:${anchor.absolutePath}->/repo/src/main/java/demo/ManageCurrentUserServiceImpl.java`
+    }]
+  });
+  const files = [anchor, wrapper, implementer];
+  const plan = await buildReadPlan({
+    files,
+    ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
+    options: optionsFor(anchor, { mode: "minimal", readPlanMaxItems: 2, readPlanMaxBytes: 10_000 }),
+    javaIndex: fixedRangeIndex()
+  });
+
+  assert.deepEqual(
+    plan.items.map(item => item.fileId),
+    ["F1", "F3"],
+    "CommonResult.success must not consume the last core slot ahead of the implementer"
+  );
+});
+
 test("a concrete anchor's declared interface contract outranks downstream implementation context", async () => {
   const anchor = candidate({
     absolutePath: "/repo/src/main/java/demo/CloudSmsGateway.java",

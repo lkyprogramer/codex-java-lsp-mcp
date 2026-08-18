@@ -89,11 +89,26 @@ baseline `f0e2ef1`，candidate `2fb2148`，`--runs 5`（3 rounds × 5 attempts�
 
 根因修正：controller 锚点不走 `collectTypeGraphCandidates`（`shouldUseTypeGraph` 只要 port/repository/service/interface）。Impl 来自 `type-reference.ts` 的 interface→implementer 查找，且 **硬编码** `positions: [{line:1,column:1}]` + `hydrate: false`。
 
-## type-reference implementer 切片（相对 `599a4d1`，待矩阵）
+## type-reference implementer 切片（`4d10d86` vs `599a4d1`，已完成）
 
-`findImplementers(..., { hydrate: true })`，用 caller 方法的 `local-receiver` calleeNames 走既有 `positionFromFacts`。定义/引用查找仍不 hydrate。多命中保持 `(1,1)`，不用 type-header，不放宽 maxFiles。
+产物：`/tmp/codex-java-lsp-v4-06-type-ref-20260819-013500/`。候选 159/159。exit 1 = 质量门槛 FAIL（分母）。
 
-隔离 targeted：helpers + collectors + type-reference 21/21。正式矩阵 `--baseline 599a4d1`，新目录，同一 output-dir 只开一场。
+`check-people-delete-site-guard` **0.500→1.000**（Impl 现含 `171–189`）。`school-template-parser` 仍为 1.0。三仓 file recall / pRead 不变。cipherlink p95Ratio 1.936 是主机噪声（质量格子未动），不是回归。
+
+副作用：`candidate-pay-order` tokens 3663→3199，range 仍 0.125——hydrate 后 WechatApplyServiceImpl 变“诚实体积”，被更小的 OrderVO 挤出，指标未变差。
+
+## 仍 miss（相对 `4d10d86` / type-ref 矩阵 r1-new）
+
+**Tuning**
+
+- `current-user-service-implementer-edge`（exam，0.500）：Controller / `CurrentUserService` 已覆盖；`ManageCurrentUserServiceImpl` 在 candidates（现应能定位 `currentUser` 42–50）但不在 6 文件 plan；`ExamManagementApplication` 不在 candidates（缺 21–29，`@ComponentScan` exclude）。本刀：response wrapper CALLS（`CommonResult`/`CommonsResult`/`ResponseEntity`/`ApiResponse`）优先级 2.5→1.25，不得压过 first-hop IMPLEMENTS。真实 receiver CALLS 仍是 2.5。不放宽 maxFiles。`ExamManagementApplication` 仍需后续发现。
+- `audit-order-repository-mapper-rule-type`（lishuedu，0.333）：Mapper 1–29 vs 47–155 / 157–254。Anchor 是 `save()`。禁止用 save 去猜 listTodo。
+
+**Holdout**
+
+- lishuedu `exam-score` 0.286；`paper-task` 0.200
+- cipherlink `client-release-storage-presign` 0.500；`backend-operation-log` 0.250
+- exam `exam-room-print` 0.400；`candidate-pay-order` 0.125
 
 ## 仍 miss（相对 `ba5838f` / cap 矩阵 r1-new）
 

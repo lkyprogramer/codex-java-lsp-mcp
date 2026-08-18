@@ -55,6 +55,12 @@ const FIRST_HOP_IMPLEMENTATION_KINDS = new Set([
   "TYPE_RELATION"
 ]);
 const SECOND_HOP_IMPLEMENTATION_KINDS = new Set(["IMPLEMENTATION_METHOD_TYPE"]);
+const RESPONSE_WRAPPER_TYPE_NAMES = new Set([
+  "CommonResult",
+  "CommonsResult",
+  "ResponseEntity",
+  "ApiResponse"
+]);
 const BUCKET_RULES = {
   anchor: { min: 1, max: 1 },
   core: { min: 2, max: 4 },
@@ -540,10 +546,13 @@ function protectedCorePriority(file: CandidateFile, options: Pick<ImpactOptions,
   // wrappers commonly contain the real receiver call). One-hop continuation
   // calls intentionally remain below the first implementation alternatives,
   // because they are downstream context.
+  // Transport envelopes (CommonResult.success, ResponseEntity.ok) are still
+  // CALLS, but they are not the task receiver and must not evict a first-hop
+  // implementer from the bounded core.
   if (file.plannerEvidence?.some(evidence => evidence.kind === "CALLS"
     && (evidence.callOrigin === "anchor" || (evidence.callOrigin === undefined && evidence.callDepth === 0))
     && (evidence.callDepth ?? Infinity) <= 1)) {
-    return 2.5;
+    return isResponseWrapperFile(file) ? 1.25 : 2.5;
   }
   if (file.plannerEvidence?.some(evidence => evidence.kind === "CALLS" && evidence.callDepth === 1)) {
     return 1.75;
@@ -600,6 +609,11 @@ function familyKeys(file: CandidateFile): Set<string> {
   }
   const keys = evidenceKeys(file).map(key => key.split(":", 1)[0]!);
   return new Set(keys.length > 0 ? keys : file.categories);
+}
+
+function isResponseWrapperFile(file: CandidateFile): boolean {
+  const base = (file.path || file.absolutePath).replace(/\\/g, "/").split("/").pop()?.replace(/\.java$/i, "");
+  return Boolean(base && RESPONSE_WRAPPER_TYPE_NAMES.has(base));
 }
 
 function isAnchor(
