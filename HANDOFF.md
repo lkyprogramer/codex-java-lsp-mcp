@@ -2,7 +2,7 @@
 
 ## 当前任务
 
-**V4-01/02/03/04 已完成（2026-08-18）**：daemon 合流、LOC 基线（35,472 / 上限 37,245）、`artifacts/v4-*/` gitignore，以及 Sprint0' 非 0 字节分母都已入库。真源仍是 `docs/deep/codex-java-lsp-mcp-java-intelligence-v4-consolidation-plan-2026-08-17.md`。V4 三项用户决策不变：(1) 以 v3 为底座合流 daemon，完成后合回 main；(2) 合流后重定 LOC 基线，V3.2 的 33,219/33,230 与 11 行旧债清零；(3) 真实 Agent outcome gate 纳入核心验收。后续顺序：Phase1 从 V4-05 双 worker 开始。用户的硬约束不变：**任何测试、构建、benchmark 或验证都必须与正在使用的 LSP 隔离**，不能接触活动 checkout、LSP、JDT、JavaIndex 缓存或 `node_modules`。
+**V4-01/02/03/04 已完成；V4-05 实现已落地、默认关（2026-08-18）**：daemon 合流、LOC 基线（35,472 / 上限 37,245）、`artifacts/v4-*/` gitignore、Sprint0' 非 0 字节分母，以及 ADR-01 双 worker（`JAVA_LSP_JAVA_INDEX_DUAL_WORKER=1` 才开 sweep 线程）都已入库。真源仍是 `docs/deep/codex-java-lsp-mcp-java-intelligence-v4-consolidation-plan-2026-08-17.md`。V4 三项用户决策不变：(1) 以 v3 为底座合流 daemon，完成后合回 main；(2) 合流后重定 LOC 基线，V3.2 的 33,219/33,230 与 11 行旧债清零；(3) 真实 Agent outcome gate 纳入核心验收。后续顺序：V4-05 的 storm/T_complete/RSS 门禁测量（未过两轮前禁止默认开启）可与 V4-06 range/holdout 并行。用户的硬约束不变：**任何测试、构建、benchmark 或验证都必须与正在使用的 LSP 隔离**，不能接触活动 checkout、LSP、JDT、JavaIndex 缓存或 `node_modules`。
 
 （以下 V3.2 各 Sprint 记录保留供追溯，其结论与"不要再踩的坑"在 V4 阶段继续有效，除非 V4 计划文档显式解除——目前唯一显式解除的是"不新增第二 scheduler"边界：V4-05 以 ADR 形式引入第二 worker **线程**，sweep 调度语义不变。）
 
@@ -47,11 +47,11 @@
 
 ## 下一步
 
-**执行 V4 计划（真源见上）。** 当前进行到：V4-05 双 worker。V4-01 daemon 合流已完成（`4323b3c`）。V4-02 LOC 基线已冻结为 35,472（上限 37,245，清单 `docs/phase-v4/v4-production-ts-baseline.json`）。V4-04 已把 `artifacts/v4-*/` 写入 `.gitignore`。
+**执行 V4 计划（真源见上）。** 当前进行到：V4-06 range/holdout，同时可测 V4-05 门禁。V4-01 daemon 合流已完成（`4323b3c`）。V4-02 LOC 基线已冻结为 35,472（上限 37,245，清单 `docs/phase-v4/v4-production-ts-baseline.json`）。V4-04 已把 `artifacts/v4-*/` 写入 `.gitignore`。生产 LOC 在双 worker 落地后约为 35,820（仍低于 37,245）。
 
 V4-03 **分母已入库**：`docs/phase-v4/v4-sprint0-manifest.json` + `docs/phase-v4/v4-sprint0-summaries/`。raw 在 `/tmp/codex-java-lsp-v4-sprint0-20260818/`。主机门改为可用内存 ≥4 GiB，load 只记录。cold-matrix 质量门 FAIL 是分母（三仓 rReadMust 0.90/0.91/0.88）。first-touch：lishuedu 3/5 COMPLETE，cipherlink 与 exam-parent-v3 5/5 PARTIAL_TIMEOUT（`--prepare none` + 60s）。正式仓仍是 `/tmp/codex-java-v3-golden-20260809/{lishuedu,cipherlink,exam-parent-v3}`。
 
-V4-05 ADR-01 已写入 `docs/phase-v4/adr-01-java-index-dual-worker.md`（消息移交 + 查询线程单写者）。Sprint0' 分母已齐，可以改 `src/java-index/`。flag `JAVA_LSP_JAVA_INDEX_DUAL_WORKER` 默认关。
+V4-05 ADR-01 已实施：query worker 仍是 live store 唯一写者；sweep 线程只解析并把 facts 交回。flag `JAVA_LSP_JAVA_INDEX_DUAL_WORKER` **默认关**。隔离测试已覆盖 flag、digest 逐位等价、跨 chunk IMPLEMENTS。**未过** `scripts/run-storm-gate.mjs` 两轮（P95/quiet ≤1.10 且 staleCount=0）以及 T_complete/RSS ≤+10% 之前，禁止默认开启，也禁止在 V4-08 拆 god file 时改调度语义。
 
 V4-10 harness 已存在：`scripts/run-agent-trace-matrix.mjs`。无 `--authorize-external` 或 API key 时必须报 `BLOCKED_EXTERNAL` 且 usage/TaskSuccess 为 `UNMEASURED`，不得写成 `0`。真正外发调用仍等用户提供 key 且 Sprint0' 已入库后再开。
 
@@ -101,4 +101,4 @@ git log --oneline -5
 git status --short
 ```
 
-确认 `git log` 最新几条是 V4 合流/基线/本轮 Sprint0' harness，`git status` 除了未跟踪的 `scripts/run-idle-prewarm-experiment.mjs` 与 `scripts/run-v324-import-concurrency-experiment.mjs` 之外干净。下一步：看 `uptime`，1 分钟 load / 逻辑核数 ≤0.7 后按 `docs/phase-v4/v4-sprint0-runbook.md` 跑 V4-03；未跑完 Sprint0' 前不要改生产 `src/`。
+确认 `git log` 最新几条含 Sprint0' 分母与 V4-05 dual-worker，`git status` 除了未跟踪的 `scripts/run-idle-prewarm-experiment.mjs` 与 `scripts/run-v324-import-concurrency-experiment.mjs` 之外干净。下一步：V4-06（`hydrate:true`，不要 type-header）；安静主机上可另跑 `scripts/run-storm-gate.mjs` 作为 V4-05 门禁，未过两轮不要把 dual worker 设为默认。

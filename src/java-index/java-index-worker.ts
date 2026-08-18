@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, realpath, stat } from "node:fs/promises";
+import { readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { parentPort } from "node:worker_threads";
 import {
@@ -10,12 +10,13 @@ import {
   type LeaseHandle
 } from "../cross-process-lease.js";
 import { probeLayout, type LayoutContext } from "../layout-probe.js";
-import { classifyPath, normalizeRepoFile } from "../repo-layout.js";
 import { positiveInteger, resourceDefaults } from "../resource-defaults.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import type { WorktreeIdentity } from "../worktree-identity.js";
 import { createJavaParserBackend, type JavaParserBackend } from "./java-parser-backend.js";
-import { extractFromParsedTree, type ExtractJavaInput } from "./ast-extractor.js";
+import { isJavaIndexDualWorkerEnabled } from "./java-index-dual-worker.js";
+import { deriveJavaSourceLayout, parseJavaSourceFile, resolvedPathWithinRepo as resolveReadableRepoPath } from "./java-index-file-parse.js";
+import { JavaIndexSweepHost } from "./java-index-sweep-host.js";
 import { computeBuildFingerprint, computeExtractorVersion } from "./build-fingerprint.js";
 import { CoverageTracker } from "./coverage.js";
 import {
@@ -32,7 +33,7 @@ import {
 } from "./manifest.js";
 import { extractMyBatisMapperFacts } from "./mybatis-xml-extractor.js";
 import type { MyBatisMapperResourceFacts } from "./mybatis-types.js";
-import { effectiveParseTreeSourceBudget, ParseTreeCache, refreshParseTree } from "./parse-tree-cache.js";
+import { effectiveParseTreeSourceBudget, ParseTreeCache } from "./parse-tree-cache.js";
 import { buildStaticEdges, resolveFileRefs } from "./edge-builder.js";
 import { JavaIndexStore } from "./index-store.js";
 import { JavaNameResolver, buildTypeRegistryView, type TypeRegistryView } from "./name-resolver.js";
@@ -49,7 +50,6 @@ import type {
   IndexedReadRangeResult,
   JavaFileBundle,
   JavaIndexStatus,
-  JavaSourceSet,
   JavaTypeLookupResult,
   MyBatisResourceCoverage,
   SourcePosition,
@@ -140,6 +140,7 @@ type BackgroundSweep = {
   leaseHandle?: LeaseHandle;
 };
 let backgroundSweep: BackgroundSweep | undefined;
+let sweepHost: JavaIndexSweepHost | undefined;
 // Settles once the currently-running (or most recently run) background loop
 // (startBackgroundLoop) returns. CLOSE awaits this - never just nulling
 // backgroundSweep - so the normal CLOSE ACK path joins native parse/edge-build
@@ -254,51 +255,8 @@ function worstTypeLookupCoverage(generation: number): "COMPLETE" | "PARTIAL" | "
   return worst;
 }
 
-// Prefers the source root layout-probe.ts already discovered (the same list
-// discoverJavaFiles/coverage tracking key off of) over re-synthesizing one
-// from classifyPath's module+sourceSet alone. The two disagree for a
-// "modules/X" or "apps/X" layout: layout-probe's relativePath includes that
-// top-level prefix (e.g. "modules/foo/src/main/java"), while classifyPath's
-// module does not (giving "foo/src/main/java" if synthesized directly). A
-// single file's source root must always resolve to the exact same string a
-// repo-wide discovery scan already assigned it, or coverage tracking and
-// manifest verification would silently key off two different roots for the
-// same physical directory. Falls back to the synthesized form only if no
-// known source root matches (layout not yet probed, or a brand-new module
-// not yet picked up by a reconcile()).
-function resolveSourceRoot(relativePath: string, module: string, rawSourceSet: string | undefined): string {
-  if (layout) {
-    const match = layout.sourceRoots.find(root =>
-      relativePath === root.relativePath || relativePath.startsWith(`${root.relativePath}/`)
-    );
-    if (match) return match.relativePath;
-  }
-  return rawSourceSet ? [module, "src", rawSourceSet, "java"].filter(Boolean).join("/") : "";
-}
-
-// Provisional: reuses the repo's existing Maven/Gradle module + sourceSet
-// classifier (src/repo-layout.ts) rather than inventing a parallel one. A
-// real source-set/module classifier tied to build-file parsing is a later
-// task's concern; this is enough to populate JavaFileFacts today.
-function deriveSourceLayout(
-  inputPath: string
-): { absolutePath: string; relativePath: string; sourceRoot: string; module: string; sourceSet: JavaSourceSet } {
-  // normalizeRepoFile resolves a relative-or-absolute path against repoRoot
-  // and throws if it escapes the repo; classifyPath's own path.relative
-  // silently resolves a relative input against process.cwd() instead, which
-  // would return an empty context.relativePath for any caller that passes a
-  // repo-relative path (as opposed to absolute).
-  const absolutePath = normalizeRepoFile(repoRoot, inputPath);
-  const context = classifyPath(repoRoot, absolutePath);
-  const relativePath = (context.relativePath ?? path.relative(repoRoot, absolutePath))
-    .split(path.sep)
-    .join("/");
-  const module = context.module && context.module !== "." ? context.module : "";
-  const sourceSet: JavaSourceSet = context.sourceSet === "main" || context.sourceSet === "test"
-    ? context.sourceSet
-    : "unknown";
-  const sourceRoot = resolveSourceRoot(relativePath, module, context.sourceSet);
-  return { absolutePath, relativePath, sourceRoot, module, sourceSet };
+function deriveSourceLayout(inputPath: string) {
+  return deriveJavaSourceLayout(repoRoot, inputPath, layout);
 }
 
 const EXTREME_METHOD_LINES = 300;
@@ -355,13 +313,8 @@ async function queryReadRanges(
  * in the worker that performs the read.  Reading the resolved path also closes
  * the check-then-use window for a symlink retargeted after this validation.
  */
-async function resolvedPathWithinRepo(absolutePath: string): Promise<string | undefined> {
-  const resolvedFile = await realpath(absolutePath);
-  const relative = path.relative(resolvedRepoRoot, resolvedFile);
-  if (relative === "" || relative.startsWith(`..${path.sep}`) || relative === ".." || path.isAbsolute(relative)) {
-    return undefined;
-  }
-  return resolvedFile;
+function resolvedPathWithinRepo(absolutePath: string): Promise<string | undefined> {
+  return resolveReadableRepoPath(absolutePath, resolvedRepoRoot);
 }
 
 function javaReadRanges(bundle: JavaFileBundle, positions: SourcePosition[]): { ranges: UnlocatedReadRange[]; extremeMethod: boolean } {
@@ -559,31 +512,64 @@ type RefreshedFile = {
 
 async function refreshFile(inputPath: string, generation: number): Promise<RefreshedFile> {
   if (!backend || !cache || !store) throw new Error("refreshFile called before OPEN");
-  const { absolutePath, relativePath, sourceRoot, module, sourceSet } = deriveSourceLayout(inputPath);
-  const readablePath = await resolvedPathWithinRepo(absolutePath);
-  if (!readablePath) throw new Error(`Java source resolves outside repo root: ${inputPath}`);
-  const [content, stats] = await Promise.all([
-    readFile(readablePath, "utf8"),
-    stat(readablePath)
-  ]);
-  const contentHash = createHash("sha256").update(content, "utf8").digest("hex");
-  const { tree } = refreshParseTree(cache, backend, relativePath, content);
-  const input: ExtractJavaInput = {
+  const bundle = await parseJavaSourceFile({
     repoRoot,
-    absolutePath,
-    relativePath,
-    sourceRoot,
-    module,
-    sourceSet,
-    content,
-    size: stats.size,
-    mtimeMs: stats.mtimeMs,
-    ctimeMs: stats.ctimeMs,
-    contentHash,
-    generation
-  };
-  const dependents = store.replaceFile({ ...extractFromParsedTree(input, tree), edges: [] });
-  return { relativePath, dependents };
+    resolvedRepoRoot,
+    inputPath,
+    generation,
+    backend,
+    cache,
+    layout
+  });
+  const dependents = store.replaceFile(bundle);
+  return { relativePath: bundle.file.relativePath, dependents };
+}
+
+async function ensureSweepHost(): Promise<JavaIndexSweepHost> {
+  if (!sweepHost) {
+    sweepHost = new JavaIndexSweepHost();
+    await sweepHost.ensureOpen(repoRoot);
+  }
+  return sweepHost;
+}
+
+async function applyBackgroundChunkParses(
+  chunk: DiscoveredJavaFile[],
+  generation: number
+): Promise<{ touched: Set<string> }> {
+  const touched = new Set<string>();
+  if (chunk.length === 0) return { touched };
+  if (isJavaIndexDualWorkerEnabled()) {
+    try {
+      const parsed = await (await ensureSweepHost()).parseChunk(chunk, generation);
+      for (const [index, file] of chunk.entries()) {
+        const result = parsed[index];
+        if (!result || !result.ok) {
+          coverage.failed(file.sourceRoot, file.relativePath, result?.ok === false ? result.error : "sweep worker omitted file");
+          continue;
+        }
+        if (!store) continue;
+        const dependents = store.replaceFile(result.bundle);
+        touched.add(result.relativePath);
+        for (const dependent of dependents) touched.add(dependent);
+      }
+      return { touched };
+    } catch (error) {
+      lastRefreshError = `sweep worker parse failed, falling back to query thread: ${
+        error instanceof Error ? error.message : String(error)
+      }`;
+    }
+  }
+  for (const file of chunk) {
+    try {
+      const refreshed = await refreshFile(file.absolutePath, generation);
+      touched.add(refreshed.relativePath);
+      for (const dependent of refreshed.dependents) touched.add(dependent);
+    } catch (error) {
+      coverage.failed(file.sourceRoot, file.relativePath, error);
+    }
+  }
+  return { touched };
 }
 
 // Repo-wide registry rebuilt from whatever has been indexed so far. O(repo
@@ -1508,16 +1494,7 @@ async function processBackgroundChunk(sweep: BackgroundSweep): Promise<void> {
   }
   const chunk = sweep.remaining.slice(0, SWEEP_CHUNK_SIZE);
   const finalChunk = chunk.length === sweep.remaining.length;
-  const touched = new Set<string>();
-  for (const file of chunk) {
-    try {
-      const refreshed = await refreshFile(file.absolutePath, sweep.generation);
-      touched.add(refreshed.relativePath);
-      for (const dependent of refreshed.dependents) touched.add(dependent);
-    } catch (error) {
-      coverage.failed(file.sourceRoot, file.relativePath, error);
-    }
-  }
+  const { touched } = await applyBackgroundChunkParses(chunk, sweep.generation);
   for (const relativePath of touched) {
     try {
       resolveAndBuildEdges(relativePath);
@@ -1685,6 +1662,10 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         closing = true;
         await ownSnapshotVerificationPromise;
         await backgroundLoopPromise;
+        if (sweepHost) {
+          await sweepHost.close().catch(() => undefined);
+          sweepHost = undefined;
+        }
         if (backgroundSweep?.leaseHandle) {
           await backgroundSweep.leaseHandle.release().catch(() => undefined);
         }
