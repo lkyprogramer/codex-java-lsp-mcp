@@ -708,6 +708,40 @@ test("QUERY_READ_RANGES includes a nearby same-owner callee and leaves an uncall
   }
 });
 
+test("QUERY_READ_RANGES caps same-owner callee fan-out so a parse method does not swallow the file", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "java-index-sibling-fanout-"));
+  const cacheDir = mkdtempSync(path.join(tmpdir(), "java-index-sibling-fanout-cache-"));
+  const javaDir = path.join(repoRoot, "src/main/java/demo");
+  mkdirSync(javaDir, { recursive: true });
+  const javaPath = path.join(javaDir, "FanOutParser.java");
+  writeFileSync(javaPath, [
+    "package demo;",
+    "public class FanOutParser {",
+    "  public void parse() { a(); b(); c(); d(); e(); f(); }",
+    "  public void a() {}",
+    "  public void b() {}",
+    "  public void c() {}",
+    "  public void d() {}",
+    "  public void e() {}",
+    ...Array.from({ length: 16 }, () => ""),
+    "  public void f() {}",
+    "}",
+    ""
+  ].join("\n"));
+
+  const client = new JavaIndexClient(repoRoot, cacheDir);
+  try {
+    await client.open(1);
+    await client.refresh(2, [javaPath], []);
+    const result = (await client.queryReadRanges([{ file: javaPath, positions: [{ line: 3, column: 3 }] }]))[0]!;
+    const methodRanges = result.ranges.filter(range => range.kind === "method" || range.kinds?.includes("method"));
+    assert.ok(methodRanges.some(range => range.startLine <= 3 && range.endLine >= 5), "parse plus the first two callees stay readable");
+    assert.ok(methodRanges.every(range => range.endLine < 20), "later fan-out helpers must not be pulled into the window");
+  } finally {
+    await client.close();
+  }
+});
+
 test("RouterJavaIndex rejects outside-repository range requests before forwarding to the worker", async () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), "java-index-read-ranges-boundary-"));
   const forwarded: unknown[] = [];

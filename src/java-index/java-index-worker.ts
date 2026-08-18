@@ -265,7 +265,9 @@ const EXTREME_METHOD_LINES = 300;
 const EXTREME_METHOD_WINDOW_LINES = 40;
 const READ_RANGE_MERGE_GAP_LINES = 3;
 const METHODLESS_TYPE_MAX_LINES = 80;
-const SIBLING_CALLEE_MAX = 6;
+// Cap is 2: a parse-style fan-out of adjacent helpers otherwise merges into
+// one file-sized window and the planner drops the file under the byte cap.
+const SIBLING_CALLEE_MAX = 2;
 const SIBLING_CALLEE_NEAR_LINES = 80;
 type UnlocatedReadRange = Omit<IndexedReadRange, "range">;
 

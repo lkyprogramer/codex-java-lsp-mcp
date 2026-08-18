@@ -57,6 +57,16 @@ baseline `f0e2ef1`，candidate `2fb2148`，`--runs 5`（3 rounds × 5 attempts�
 **错方法**：`check-people-delete-site-guard` 选中 52–64 vs 171–189。
 **holdout 预算/召回**：exam-score 0.143、paper-task 0.200、cipherlink 两 holdout、exam 两 holdout。`backend-operation-log` 77–93 vs 77–94 且缺 102–146 与 DefaultOperationLogAppService。
 
-## 下一刀（代码已落地，待矩阵）
+## sibling callee 矩阵（`d00a3bd` vs `2fb2148`）
 
-`QUERY_READ_RANGES`：已选方法的 1-hop 同类型 unqualified/`this` 被调方法一并读出（近 80 行、最多 6 个）。相邻窗口走现有 merge gap=3，可把 apply-info 合成 136–226。不放宽 maxFiles，不用 type-header。
+产物：`/tmp/codex-java-lsp-v4-06-sibling-20260819-005042/`。候选 159/159。exit 1 = 质量门槛 FAIL。
+
+| 仓 | RangeLineRecall | holdout rReadMust | tokens P50 |
+|---|---|---|---|
+| lishuedu | 0.768 → **0.746 回归** | 0.5 | 4501 → 4216（-285） |
+| cipherlink | 0.85 → **0.875** | 0.55 | +294 |
+| exam-parent-v3 | 0.603 → **0.753** | 0.40 | +149 |
+
+闭合：`rule-engine-execute` 0.5→1.0，`apply-info-save-basic-service` 0→1.0。holdout 抬升：exam-score 0.143→0.429，backend-operation-log 0→0.250。
+
+**回归**：`school-template-parser` 1.0→0.5 / rReadMust 1→0.75。`ExcelParser.parse()` 扇出 6 个相邻 helper，merge 成整文件后超 14KiB 预算被挤出。修复：`SIBLING_CALLEE_MAX` 6→2。
