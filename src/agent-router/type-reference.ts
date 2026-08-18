@@ -8,7 +8,7 @@ import type { ImpactOptions, ResolvedAnchor, RouterPosition } from "../agent-typ
 import type { EvidenceSignal } from "./evidence.js";
 import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
 import type { DeadlineBudget } from "../runtime/deadline-budget.js";
-import { matchesAny, simpleTypeName, unique } from "./candidate-helpers.js";
+import { calleeNamesFromRelations, matchesAny, positionFromFacts, simpleTypeName, unique } from "./candidate-helpers.js";
 
 export type TypeReferenceMetrics = {
   scannedPatterns: number;
@@ -184,10 +184,20 @@ export async function collectTypeReferenceSignals(
           qualifiedTypeName,
           8,
           plan.anchor.absolutePath,
-          { typeId: definition.typeId, hydrate: false }
+          { typeId: definition.typeId, hydrate: true }
         )) {
           rememberPath(pathOrder, implementation.absolutePath);
-          recordImplementationDraft(input, drafts, plan.anchor, implementation.absolutePath);
+          recordImplementationDraft(
+            input,
+            drafts,
+            plan.anchor,
+            implementation.absolutePath,
+            [positionFromFacts(implementation, {
+              methodName: methodFact?.name ?? plan.anchor.methodName,
+              typeName: definition.typeName,
+              calleeNames: calleeNamesFromRelations(methodFact?.relations)
+            })]
+          );
           knownPaths.add(implementation.absolutePath);
         }
       } catch (error) {
@@ -379,7 +389,8 @@ function recordImplementationDraft(
   input: CollectTypeReferenceSignalsInput,
   drafts: Map<string, TypeReferenceSignalDraft>,
   anchor: ResolvedAnchor,
-  candidateFile: string
+  candidateFile: string,
+  positions: RouterPosition[]
 ): void {
   recordDraft(drafts, {
     candidateFile,
@@ -391,7 +402,7 @@ function recordImplementationDraft(
     completeness: "COMPLETE",
     weight: IMPLEMENTATION_SPEC.weight,
     sourceFile: candidateFile,
-    positions: [{ line: 1, column: 1 }],
+    positions,
     providerId: input.providerId,
     providerVersion: input.providerVersion,
     generation: input.generation ?? 0,

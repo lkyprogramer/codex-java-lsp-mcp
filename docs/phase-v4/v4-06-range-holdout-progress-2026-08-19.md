@@ -83,13 +83,17 @@ baseline `f0e2ef1`，candidate `2fb2148`，`--runs 5`（3 rounds × 5 attempts�
 
 `school-template-parser` 恢复 1.0 / rReadMust 1。`rule-engine-execute` / `apply-info-save-basic-service` 仍为 1.0。exam-score holdout 0.143→0.286；backend-operation-log 0→0.250。
 
-## calleeNames 切片（相对 `ba5838f`，待矩阵）
+## calleeNames 切片（`599a4d1` vs `ba5838f`，已测，零效果）
 
-`check-people-delete-site-guard` 仍 0.500：Impl 已在 candidates 与 readPlan，但 `collectTypeGraphCandidates` 把 `methodName: delete` 传给没有 `delete` 的 Impl，退回 `(1,1)` → 类头 1–43 / 52–64，盖不住 golden `171–189`。
+产物：`/tmp/codex-java-lsp-v4-06-impl-hint-20260819-012330/`。候选 159/159。三仓 file recall / pRead / 全部场景 RangeLineRecall **逐位相等**。`check-people-delete-site-guard` 仍 0.500，readPlan 仍是 Impl 1–43 / 52–64。无回归。
 
-修法：`FactPositionHint.calleeNames`。从 anchor 方法的 `local-receiver` relation 收集调用名；`methodName` 不命中且 Impl 上恰好有**唯一**同名方法时用它。多命中保持 `(1,1)`，不用 type-header，不放宽 maxFiles。
+根因修正：controller 锚点不走 `collectTypeGraphCandidates`（`shouldUseTypeGraph` 只要 port/repository/service/interface）。Impl 来自 `type-reference.ts` 的 interface→implementer 查找，且 **硬编码** `positions: [{line:1,column:1}]` + `hydrate: false`。
 
-隔离 targeted：`candidate-helpers` + `candidate-collectors` 10/10。正式矩阵 `--baseline ba5838f`，新目录，同一 output-dir 只开一场。
+## type-reference implementer 切片（相对 `599a4d1`，待矩阵）
+
+`findImplementers(..., { hydrate: true })`，用 caller 方法的 `local-receiver` calleeNames 走既有 `positionFromFacts`。定义/引用查找仍不 hydrate。多命中保持 `(1,1)`，不用 type-header，不放宽 maxFiles。
+
+隔离 targeted：helpers + collectors + type-reference 21/21。正式矩阵 `--baseline 599a4d1`，新目录，同一 output-dir 只开一场。
 
 ## 仍 miss（相对 `ba5838f` / cap 矩阵 r1-new）
 

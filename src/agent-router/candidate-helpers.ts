@@ -17,6 +17,16 @@ export type FactPositionHint = {
   calleeNames?: readonly string[];
 };
 
+export function calleeNamesFromRelations(
+  relations: readonly { kind: string; name?: string }[] | undefined
+): string[] {
+  return [...new Set(
+    (relations ?? [])
+      .filter(relation => relation.kind === "local-receiver" && relation.name)
+      .map(relation => relation.name!)
+  )];
+}
+
 export function candidateFromFacts(
   facts: JavaSourceFacts,
   score: number,

@@ -11,6 +11,7 @@ import type { PersistedSemanticEdgeRelation, SemanticEdgeStoreV2 } from "../sema
 import type { CandidateFile, ImpactOptions, ResolvedAnchor } from "../agent-types.js";
 import {
   breakdown,
+  calleeNamesFromRelations,
   candidateFromFacts,
   mergeCandidate,
   scoreBase
@@ -87,11 +88,7 @@ export async function collectTypeGraphCandidates(input: CollectCandidatesInput):
       isInterface = anchorFacts.kind === "interface";
       anchorTypeId = anchorFacts.typeId;
       const caller = anchorFacts.methods.find(method => method.name === anchor.methodName);
-      calleeNames = [...new Set(
-        (caller?.relations ?? [])
-          .filter(relation => relation.kind === "local-receiver" && relation.name)
-          .map(relation => relation.name!)
-      )];
+      calleeNames = calleeNamesFromRelations(caller?.relations);
     } catch {
       // A failed fact read must not prevent the ordinary type lookup; it only
       // means this candidate cannot claim the stronger implementation reason.

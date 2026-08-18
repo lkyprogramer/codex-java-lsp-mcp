@@ -193,7 +193,7 @@ test("retired controller order bonuses do not leak into evidence family ranking"
   assert.deepEqual(ranked.map(candidate => candidate.file), [aService.absolutePath, zService.absolutePath]);
 });
 
-test("type-reference discovery reuses known type ids and never hydrates candidate bundles", async () => {
+test("type-reference discovery reuses known type ids and hydrates only implementer bundles", async () => {
   const port = facts("/repo/src/main/java/demo/ConfirmGateway.java", {
     kind: "interface",
     typeName: "ConfirmGateway",
@@ -221,7 +221,7 @@ test("type-reference discovery reuses known type ids and never hydrates candidat
   });
 
   assert.deepEqual(referenceOptions, [{ typeId: "type:demo.ConfirmController", hydrate: false }]);
-  assert.deepEqual(implementerOptions, [{ typeId: "type:demo.ConfirmGateway", hydrate: false }]);
+  assert.deepEqual(implementerOptions, [{ typeId: "type:demo.ConfirmGateway", hydrate: true }]);
   assert.deepEqual(result.evidence.map(signal => signal.candidateFile), [port.absolutePath, implementation.absolutePath]);
 });
 
@@ -283,6 +283,61 @@ test("an existing imported path emits exact metadata without parsing that candid
   assert.equal(result.evidence[0]?.candidateFile, existing);
   assert.deepEqual(result.evidence[0]?.positions, []);
   assert.deepEqual(result.evidence[0]?.candidateMetadata?.verifiedBy, ["typeReference"]);
+});
+
+test("interface implementer uses the unique caller-site callee instead of (1,1)", async () => {
+  const deleteAnchor: ResolvedAnchor = {
+    ...anchor,
+    line: 62,
+    methodName: "delete",
+    symbolName: "delete",
+    kind: "Method"
+  };
+  const port = facts("/repo/src/main/java/demo/PositionCheckPeopleService.java", {
+    kind: "interface",
+    typeName: "PositionCheckPeopleService"
+  });
+  const implementation = facts("/repo/src/main/java/demo/PositionCheckPeopleServiceImpl.java", {
+    methods: [
+      { name: "page", line: 69, endLine: 80, referencedTypes: [], relations: [] },
+      { name: "deleteCheckPeople", line: 172, endLine: 189, referencedTypes: [], relations: [] }
+    ]
+  });
+  const result = await collect({
+    factsFor: async () => facts(deleteAnchor.absolutePath, {
+      referencedTypes: ["demo.PositionCheckPeopleService"],
+      methods: [{
+        name: "delete",
+        line: 60,
+        endLine: 66,
+        referencedTypes: [],
+        relations: [
+          {
+            kind: "local-receiver",
+            typeName: "PositionCheckPeopleService",
+            name: "deleteCheckPeople",
+            line: 64,
+            confidence: "medium",
+            source: "ast"
+          },
+          {
+            kind: "local-receiver",
+            typeName: "CommonResult",
+            name: "success",
+            line: 65,
+            confidence: "medium",
+            source: "ast"
+          }
+        ]
+      }]
+    }),
+    findTypeReferences: async () => [],
+    findTypeDefinitions: async () => [port],
+    findImplementers: async () => [implementation]
+  }, { anchors: [deleteAnchor] });
+
+  const implementer = result.evidence.find(signal => signal.kind === "IMPLEMENTS");
+  assert.deepEqual(implementer?.positions, [{ line: 172, column: 1 }]);
 });
 
 test("interface implementation evidence retains its own source and typeGraph attribution", async () => {
