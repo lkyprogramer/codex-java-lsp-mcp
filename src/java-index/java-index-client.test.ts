@@ -647,6 +647,67 @@ test("QUERY_READ_RANGES reads a methodless DTO through the type body, not a 13-l
   }
 });
 
+test("QUERY_READ_RANGES includes a nearby same-owner callee and leaves an uncalled sibling unread", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "java-index-sibling-callee-"));
+  const cacheDir = mkdtempSync(path.join(tmpdir(), "java-index-sibling-callee-cache-"));
+  const javaDir = path.join(repoRoot, "src/main/java/demo");
+  mkdirSync(javaDir, { recursive: true });
+  const adjacentPath = path.join(javaDir, "SaveService.java");
+  writeFileSync(adjacentPath, [
+    "package demo;",
+    "public class SaveService {",
+    "  public String save() { return persist(); }",
+    "  public String persist() { return unused(); }",
+    ...Array.from({ length: 16 }, () => ""),
+    "  public String unused() { return \"no\"; }",
+    "}",
+    ""
+  ].join("\n"));
+  const documentedPath = path.join(javaDir, "RuleEngine.java");
+  writeFileSync(documentedPath, [
+    "package demo;",
+    "public class RuleEngine {",
+    "  public void execute() { child(); }",
+    "",
+    "  /**",
+    "   * parent nodes pick one child branch.",
+    "   * the gap must stay larger than the worker merge window.",
+    "   * extra lines keep execute and child as separate ranges.",
+    "   */",
+    "  public void child() { leftover(); }",
+    ...Array.from({ length: 16 }, () => ""),
+    "  public void leftover() {}",
+    "}",
+    ""
+  ].join("\n"));
+
+  const client = new JavaIndexClient(repoRoot, cacheDir);
+  try {
+    await client.open(1);
+    await client.refresh(2, [adjacentPath, documentedPath], []);
+    const adjacent = (await client.queryReadRanges([{ file: adjacentPath, positions: [{ line: 3, column: 3 }] }]))[0]!;
+    const methodRanges = (result: typeof adjacent) => result.ranges.filter(range => range.kind === "method" || range.kinds?.includes("method"));
+    assert.ok(
+      methodRanges(adjacent).some(range => range.startLine <= 3 && range.endLine >= 4),
+      "adjacent same-owner callee must join the selected method window"
+    );
+    assert.ok(
+      methodRanges(adjacent).every(range => range.endLine < 20),
+      "a callee's own callee (unused) is a second hop and must stay unread"
+    );
+
+    const documented = (await client.queryReadRanges([{ file: documentedPath, positions: [{ line: 3, column: 3 }] }]))[0]!;
+    assert.ok(methodRanges(documented).some(range => range.startLine <= 3 && range.endLine >= 3));
+    assert.ok(methodRanges(documented).some(range => range.startLine <= 10 && range.endLine >= 10));
+    assert.ok(
+      methodRanges(documented).every(range => range.endLine < 26),
+      "leftover() is not a 1-hop callee of execute() and must stay unread"
+    );
+  } finally {
+    await client.close();
+  }
+});
+
 test("RouterJavaIndex rejects outside-repository range requests before forwarding to the worker", async () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), "java-index-read-ranges-boundary-"));
   const forwarded: unknown[] = [];

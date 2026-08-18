@@ -24,12 +24,9 @@ baseline `df2ca1f`，candidate `f0e2ef1`，`--runs 5`。候选测试 158/158。e
 
 lishuedu 闭合：`storage-signed-url` 0.5→1、`report-reusable-zip` 0.5→1。
 
-## 剩余 miss 分类（r1-new vs frozen golden）
+## hydrate 后的 miss 分类（已被 range 矩阵部分闭合）
 
-**NEAR-MISS-HEADER / (1,1)**：Assembler 1–35、AuditOrderMapper 1–29、PaperAccessService 1–23。  
-**NEAR-MISS-WRONG-RANGE**：同文件第二方法或方法截断（exam-score 后续方法、apply-info 136–202 vs 136–226、rule-engine 103–130）。  
-**DTO type-header**：CebOrderRequest 10–22 vs 10–61。  
-**ABSENT-FROM-READPLAN / CANDIDATES**：多数 holdout，属预算/召回，不是本刀 hydrate。
+Assembler `(1,1)` 与 CebOrderRequest type-header 已在 `2fb2148` 闭合。仍开放的见下方「仍 miss」。
 
 ## 本轮代码（相对 `f0e2ef1`）
 
@@ -40,7 +37,26 @@ lishuedu 闭合：`storage-signed-url` 0.5→1、`report-reusable-zip` 0.5→1�
 
 隔离 targeted：67/67 绿（host-quiet、candidate-helpers、collectors、relationship-provider、java-index-client）。
 
-## 下一测量
+## 本轮正式矩阵（已完成）
 
-正式三仓矩阵 `--baseline f0e2ef1`，`--runs 5`，冻结仓 `/tmp/codex-java-v3-golden-20260809/{lishuedu,cipherlink,exam-parent-v3}`。  
-验收仍是三仓 RangeLineRecall=1.0 与 holdout rReadMust=1.0；本轮预期先抬 lishuedu assembler 与 exam DTO，不承诺一次过门。
+产物：`/tmp/codex-java-lsp-v4-06-range-20260819-002900/`
+baseline `f0e2ef1`，candidate `2fb2148`，`--runs 5`（3 rounds × 5 attempts）。候选测试 159/159。exit 1 = 质量绝对门槛 FAIL（分母），不是本轮回归。
+
+| 仓 | RangeLineRecall old→new | holdout rReadMust | tokens P50 | p95Ratio |
+|---|---|---|---|---|
+| lishuedu | 0.734 → **0.768** | 0.5 | 4496 → 4501（+5） | 0.995 |
+| cipherlink | 0.85 → 0.85 | 0.55 | 3606 → 3617（+11） | 0.865 |
+| exam-parent-v3 | 0.5525 → **0.6025** | 0.40 | 3395 → 3514（+119） | 1.109 |
+
+闭合（r1）：`benefit-product-code-dto` 0.667→1.0（Assembler 49–54 + methodless DTO 整型）；`ceb-order-create-dto` 0.500→1.0（CebOrderRequest 10–61）。
+
+## 仍 miss（r1-new）
+
+**NEAR-MISS-WRONG-RANGE / 同文件第二方法**（本刀已改代码，待矩阵）：`rule-engine-execute` 缺 103–130；`apply-info-save-basic-service` 136–202 盖不住 136–226（RangeLineRecall 要求单段完整覆盖）。
+**NEAR-MISS-HEADER**：`audit-order-repository-mapper-rule-type` Mapper 1–29 vs 47–155/157–254（禁止用 save 去猜 listTodo）。
+**错方法**：`check-people-delete-site-guard` 选中 52–64 vs 171–189。
+**holdout 预算/召回**：exam-score 0.143、paper-task 0.200、cipherlink 两 holdout、exam 两 holdout。`backend-operation-log` 77–93 vs 77–94 且缺 102–146 与 DefaultOperationLogAppService。
+
+## 下一刀（代码已落地，待矩阵）
+
+`QUERY_READ_RANGES`：已选方法的 1-hop 同类型 unqualified/`this` 被调方法一并读出（近 80 行、最多 6 个）。相邻窗口走现有 merge gap=3，可把 apply-info 合成 136–226。不放宽 maxFiles，不用 type-header。

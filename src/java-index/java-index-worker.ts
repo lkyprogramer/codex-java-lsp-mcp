@@ -48,8 +48,10 @@ import { WorktreeSnapshotSeeder } from "./worktree-snapshot-seeder.js";
 import type {
   IndexedReadRange,
   IndexedReadRangeResult,
+  JavaCallSiteFact,
   JavaFileBundle,
   JavaIndexStatus,
+  JavaMethodFacts,
   JavaTypeLookupResult,
   MyBatisResourceCoverage,
   SourcePosition,
@@ -263,6 +265,8 @@ const EXTREME_METHOD_LINES = 300;
 const EXTREME_METHOD_WINDOW_LINES = 40;
 const READ_RANGE_MERGE_GAP_LINES = 3;
 const METHODLESS_TYPE_MAX_LINES = 80;
+const SIBLING_CALLEE_MAX = 6;
+const SIBLING_CALLEE_NEAR_LINES = 80;
 type UnlocatedReadRange = Omit<IndexedReadRange, "range">;
 
 /**
@@ -321,35 +325,44 @@ function resolvedPathWithinRepo(absolutePath: string): Promise<string | undefine
 function javaReadRanges(bundle: JavaFileBundle, positions: SourcePosition[]): { ranges: UnlocatedReadRange[]; extremeMethod: boolean } {
   const ranges: UnlocatedReadRange[] = [];
   const headerTypes = new Set<string>();
+  const emittedMethods = new Set<string>();
   let extremeMethod = false;
+
+  const emitMethod = (method: JavaMethodFacts): void => {
+    if (emittedMethods.has(method.methodId)) return;
+    emittedMethods.add(method.methodId);
+    const endLine = methodRangeEnd(method.range, method.bodyRange);
+    if (endLine - method.range.start.line + 1 > EXTREME_METHOD_LINES) {
+      extremeMethod = true;
+      ranges.push({
+        startLine: method.range.start.line,
+        endLine: Math.min(endLine, method.range.start.line + EXTREME_METHOD_WINDOW_LINES - 1),
+        kind: "method",
+        estimatedBytes: 0
+      });
+      ranges.push({
+        startLine: Math.max(method.range.start.line + EXTREME_METHOD_WINDOW_LINES, endLine - EXTREME_METHOD_WINDOW_LINES + 1),
+        endLine,
+        kind: "method",
+        estimatedBytes: 0
+      });
+    } else {
+      ranges.push({ startLine: method.range.start.line, endLine, kind: "method", estimatedBytes: 0 });
+    }
+    const owner = bundle.types.find(type => type.typeId === method.ownerTypeId);
+    if (owner && !headerTypes.has(owner.typeId)) {
+      ranges.push(typeHeaderRange(owner.range));
+      headerTypes.add(owner.typeId);
+    }
+  };
+
   for (const position of positions) {
     const method = bundle.methods
       .filter(item => rangeContainsLine(item.range, position.line))
       .sort((left, right) => right.range.start.line - left.range.start.line)[0];
     if (method) {
-      const endLine = methodRangeEnd(method.range, method.bodyRange);
-      if (endLine - method.range.start.line + 1 > EXTREME_METHOD_LINES) {
-        extremeMethod = true;
-        ranges.push({
-          startLine: method.range.start.line,
-          endLine: Math.min(endLine, method.range.start.line + EXTREME_METHOD_WINDOW_LINES - 1),
-          kind: "method",
-          estimatedBytes: 0
-        });
-        ranges.push({
-          startLine: Math.max(method.range.start.line + EXTREME_METHOD_WINDOW_LINES, endLine - EXTREME_METHOD_WINDOW_LINES + 1),
-          endLine,
-          kind: "method",
-          estimatedBytes: 0
-        });
-      } else {
-        ranges.push({ startLine: method.range.start.line, endLine, kind: "method", estimatedBytes: 0 });
-      }
-      const owner = bundle.types.find(type => type.typeId === method.ownerTypeId);
-      if (owner && !headerTypes.has(owner.typeId)) {
-        ranges.push(typeHeaderRange(owner.range));
-        headerTypes.add(owner.typeId);
-      }
+      emitMethod(method);
+      for (const sibling of sameOwnerCallees(bundle, method)) emitMethod(sibling);
       continue;
     }
     const owner = bundle.types
@@ -363,6 +376,33 @@ function javaReadRanges(bundle: JavaFileBundle, positions: SourcePosition[]): { 
     }
   }
   return { ranges, extremeMethod };
+}
+
+function sameOwnerCallees(bundle: JavaFileBundle, method: JavaMethodFacts): JavaMethodFacts[] {
+  const selectedEnd = methodRangeEnd(method.range, method.bodyRange);
+  const siblings = bundle.methods.filter(item =>
+    item.methodId !== method.methodId
+    && item.ownerTypeId === method.ownerTypeId
+    && !item.constructor
+    && item.range.start.line > method.range.start.line
+    && item.range.start.line - selectedEnd <= SIBLING_CALLEE_NEAR_LINES
+  );
+  const callees: JavaMethodFacts[] = [];
+  for (const site of method.callSites) {
+    if (!isUnqualifiedOrThisCall(site)) continue;
+    const matches = siblings.filter(item => item.name === site.name && item.parameters.length === site.arity);
+    if (matches.length !== 1) continue;
+    const callee = matches[0]!;
+    if (!callees.some(item => item.methodId === callee.methodId)) callees.push(callee);
+    if (callees.length >= SIBLING_CALLEE_MAX) break;
+  }
+  return callees;
+}
+
+function isUnqualifiedOrThisCall(site: JavaCallSiteFact): boolean {
+  if (site.kind !== "METHOD_INVOCATION") return false;
+  const receiver = site.receiverText?.trim();
+  return !receiver || receiver === "this";
 }
 
 function xmlReadRanges(
