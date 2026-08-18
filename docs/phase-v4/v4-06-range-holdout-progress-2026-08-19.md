@@ -101,7 +101,7 @@ baseline `f0e2ef1`，candidate `2fb2148`，`--runs 5`（3 rounds × 5 attempts�
 
 **Tuning**
 
-- `current-user-service-implementer-edge`（exam，0.500）：wrapper 矩阵 `/tmp/codex-java-lsp-v4-06-wrapper-20260819-014800/` 已把 `CommonResult` 挤出 plan，空位给了 DTO，Impl 仍未进。check-people / school-template-parser 仍 1.0；cipherlink/exam pRead 微升。本刀：first-hop IMPLEMENTS 2→2.4，高于 METHOD_RELATION DTO，仍低于真实 CALLS 2.5。不放宽 maxFiles。`ExamManagementApplication` 仍需后续发现。
+- `current-user-service-implementer-edge`（exam，**0.500→0.750**）：impl-rank 矩阵 `/tmp/codex-java-lsp-v4-06-impl-rank-20260819-020000/`（`f6367f2` vs `6533ebd`）把 `ManageCurrentUserServiceImpl` 1–50 选进 plan，盖住 42–50。仍缺 `ExamManagementApplication` 21–29（`@SpringBootApplication` + `@ComponentScan` exclude，candidates 里没有）。check-people / school-template-parser 仍 1.0。paper-task holdout **0.200→0.400** / rReadMust 0.5→0.75（`PaperRecordTaskRepositoryImpl` 替换 DTO）。代价：exam 已闭合 tuning 的 pRead 下降（多选了非 Primary implementer）。不放宽 maxFiles。下一刀应是同模块 Boot Application 发现，或只提升 `@Primary` implementer，而不是再抬全量 IMPLEMENTS。
 - `audit-order-repository-mapper-rule-type`（lishuedu，0.333）：Mapper 1–29 vs 47–155 / 157–254。Anchor 是 `save()`。禁止用 save 去猜 listTodo。
 
 **Holdout**

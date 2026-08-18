@@ -2,7 +2,7 @@
 
 ## 当前任务
 
-**V4-01/02/03/04 已完成；V4-05 默认关已落地；V4-06 进行中（2026-08-19）**：type-reference implementer 矩阵 `/tmp/codex-java-lsp-v4-06-type-ref-20260819-013500/`（`4d10d86` vs `599a4d1`）闭合 `check-people-delete-site-guard` 0.5→1.0，无 range 回归。下一刀：`current-user` 的 Impl 已在 candidates 但被 wrapper CALLS / 同层 controller 挤出 6 文件 plan；`ExamManagementApplication` 尚未发现。holdout rReadMust 仍 0.5/0.55/0.4。真源 `docs/deep/codex-java-lsp-mcp-java-intelligence-v4-consolidation-plan-2026-08-17.md`。**三仓 load 政策**：1 分钟 load < 20 必须执行。V4-05 storm 未测。隔离约束不变。
+**V4-01/02/03/04 已完成；V4-05 默认关已落地；V4-06 进行中（2026-08-19）**：HEAD `f6367f2`。`check-people` 已 1.0；`current-user` 0.5→0.75（Impl 已进 plan，仍缺 `ExamManagementApplication`）；paper-task holdout 0.2→0.4。下一刀：同模块 `@SpringBootApplication` 发现，或只抬 `@Primary` implementer（全量 IMPLEMENTS 2.4 已让 exam 已闭合场景 pRead 下降）。holdout rReadMust 仍未到 1.0。真源 `docs/deep/codex-java-lsp-mcp-java-intelligence-v4-consolidation-plan-2026-08-17.md`。**三仓 load 政策**：1 分钟 load < 20 必须执行。V4-05 storm 未测。隔离约束不变。
 
 （以下 V3.2 各 Sprint 记录保留供追溯，其结论与"不要再踩的坑"在 V4 阶段继续有效，除非 V4 计划文档显式解除——目前唯一显式解除的是"不新增第二 scheduler"边界：V4-05 以 ADR 形式引入第二 worker **线程**，sweep 调度语义不变。）
 
