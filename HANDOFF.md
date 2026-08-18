@@ -2,7 +2,7 @@
 
 ## 当前任务
 
-**V4-01/02/03/04 已完成；V4-05 实现已落地、默认关（2026-08-18）**：daemon 合流、LOC 基线（35,472 / 上限 37,245）、`artifacts/v4-*/` gitignore、Sprint0' 非 0 字节分母，以及 ADR-01 双 worker（`JAVA_LSP_JAVA_INDEX_DUAL_WORKER=1` 才开 sweep 线程）都已入库。真源仍是 `docs/deep/codex-java-lsp-mcp-java-intelligence-v4-consolidation-plan-2026-08-17.md`。V4 三项用户决策不变：(1) 以 v3 为底座合流 daemon，完成后合回 main；(2) 合流后重定 LOC 基线，V3.2 的 33,219/33,230 与 11 行旧债清零；(3) 真实 Agent outcome gate 纳入核心验收。后续顺序：V4-05 的 storm/T_complete/RSS 门禁测量（未过两轮前禁止默认开启）可与 V4-06 range/holdout 并行。用户的硬约束不变：**任何测试、构建、benchmark 或验证都必须与正在使用的 LSP 隔离**，不能接触活动 checkout、LSP、JDT、JavaIndex 缓存或 `node_modules`。
+**V4-01/02/03/04 已完成；V4-05 默认关已落地；V4-06 hydrate 位置已落地（2026-08-18）**：daemon 合流、LOC 基线（35,472 / 上限 37,245）、`artifacts/v4-*/` gitignore、Sprint0' 非 0 字节分母、ADR-01 双 worker（`JAVA_LSP_JAVA_INDEX_DUAL_WORKER=1` 才开），以及 type/import graph 的方法级候选位置都已入库。真源仍是 `docs/deep/codex-java-lsp-mcp-java-intelligence-v4-consolidation-plan-2026-08-17.md`。V4 三项用户决策不变：(1) 以 v3 为底座合流 daemon，完成后合回 main；(2) 合流后重定 LOC 基线，V3.2 的 33,219/33,230 与 11 行旧债清零；(3) 真实 Agent outcome gate 纳入核心验收。后续顺序：隔离三仓矩阵验收 RangeLineRecall / holdout rReadMust；V4-05 storm 门禁仍未测。用户的硬约束不变：**任何测试、构建、benchmark 或验证都必须与正在使用的 LSP 隔离**，不能接触活动 checkout、LSP、JDT、JavaIndex 缓存或 `node_modules`。
 
 （以下 V3.2 各 Sprint 记录保留供追溯，其结论与"不要再踩的坑"在 V4 阶段继续有效，除非 V4 计划文档显式解除——目前唯一显式解除的是"不新增第二 scheduler"边界：V4-05 以 ADR 形式引入第二 worker **线程**，sweep 调度语义不变。）
 
