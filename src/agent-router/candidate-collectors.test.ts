@@ -59,7 +59,12 @@ test("type graph returns the exact implementation facts it merged", async () => 
     options,
     javaIndex: {
       factsFor: async () => ({ ...implementation, absolutePath: anchor.absolutePath, kind: "interface" }),
-      findImplementers: async (_typeName, _limit, _scope, lookupOptions) => {
+      findImplementers: async (
+        _typeName: string,
+        _limit: number,
+        _scope: string | undefined,
+        lookupOptions: { hydrate?: boolean }
+      ) => {
         hydrate = lookupOptions.hydrate;
         return [implementation];
       }
