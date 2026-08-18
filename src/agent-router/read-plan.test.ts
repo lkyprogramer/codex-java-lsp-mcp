@@ -759,6 +759,51 @@ test("a direct anchor CALLS receiver outranks an unrelated implementation expans
   );
 });
 
+test("a first-hop implementer outranks a same-priority method-parameter DTO in a constrained core", async () => {
+  const anchor = candidate({
+    absolutePath: "/repo/src/main/java/demo/CheckController.java",
+    path: "src/main/java/demo/CheckController.java",
+    reasons: ["target"],
+    categories: ["target"],
+    score: 1_000
+  });
+  const dto = candidate({
+    absolutePath: "/repo/src/main/java/demo/ExaminationCheckPeopleDTO.java",
+    path: "src/main/java/demo/ExaminationCheckPeopleDTO.java",
+    reasons: ["METHOD_RELATION"],
+    score: 400,
+    plannerEvidence: [{
+      family: "STATIC_STRUCTURE",
+      kind: "METHOD_RELATION",
+      sourceTarget: `A1:${anchor.absolutePath}->/repo/src/main/java/demo/ExaminationCheckPeopleDTO.java`
+    }]
+  });
+  const implementer = candidate({
+    absolutePath: "/repo/src/main/java/demo/ManageCurrentUserServiceImpl.java",
+    path: "src/main/java/demo/ManageCurrentUserServiceImpl.java",
+    reasons: ["typeGraph:implementation-lookup"],
+    score: 120,
+    plannerEvidence: [{
+      family: "STATIC_STRUCTURE",
+      kind: "IMPLEMENTS",
+      sourceTarget: `A1:${anchor.absolutePath}->/repo/src/main/java/demo/ManageCurrentUserServiceImpl.java`
+    }]
+  });
+  const files = [anchor, dto, implementer];
+  const plan = await buildReadPlan({
+    files,
+    ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
+    options: optionsFor(anchor, { mode: "minimal", readPlanMaxItems: 2, readPlanMaxBytes: 10_000 }),
+    javaIndex: fixedRangeIndex()
+  });
+
+  assert.deepEqual(
+    plan.items.map(item => item.fileId),
+    ["F1", "F3"],
+    "the called service implementer must survive before a request DTO"
+  );
+});
+
 test("a response-wrapper CALLS envelope does not evict a first-hop implementer from a constrained core", async () => {
   const anchor = candidate({
     absolutePath: "/repo/src/main/java/demo/CheckController.java",

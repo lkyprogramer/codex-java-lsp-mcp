@@ -535,7 +535,7 @@ function protectedCorePriority(file: CandidateFile, options: Pick<ImpactOptions,
     || kind === "typeGraph:implementation-lookup"
     || kind === "implementation"
     || kind === "persisted-implementation")) {
-    return 2;
+    return 2.4;
   }
   if (kinds.has("METHOD_RELATION")) {
     return 2;

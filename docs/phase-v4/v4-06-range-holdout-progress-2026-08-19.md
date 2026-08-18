@@ -101,7 +101,7 @@ baseline `f0e2ef1`，candidate `2fb2148`，`--runs 5`（3 rounds × 5 attempts�
 
 **Tuning**
 
-- `current-user-service-implementer-edge`（exam，0.500）：Controller / `CurrentUserService` 已覆盖；`ManageCurrentUserServiceImpl` 在 candidates（现应能定位 `currentUser` 42–50）但不在 6 文件 plan；`ExamManagementApplication` 不在 candidates（缺 21–29，`@ComponentScan` exclude）。本刀：response wrapper CALLS（`CommonResult`/`CommonsResult`/`ResponseEntity`/`ApiResponse`）优先级 2.5→1.25，不得压过 first-hop IMPLEMENTS。真实 receiver CALLS 仍是 2.5。不放宽 maxFiles。`ExamManagementApplication` 仍需后续发现。
+- `current-user-service-implementer-edge`（exam，0.500）：wrapper 矩阵 `/tmp/codex-java-lsp-v4-06-wrapper-20260819-014800/` 已把 `CommonResult` 挤出 plan，空位给了 DTO，Impl 仍未进。check-people / school-template-parser 仍 1.0；cipherlink/exam pRead 微升。本刀：first-hop IMPLEMENTS 2→2.4，高于 METHOD_RELATION DTO，仍低于真实 CALLS 2.5。不放宽 maxFiles。`ExamManagementApplication` 仍需后续发现。
 - `audit-order-repository-mapper-rule-type`（lishuedu，0.333）：Mapper 1–29 vs 47–155 / 157–254。Anchor 是 `save()`。禁止用 save 去猜 listTodo。
 
 **Holdout**
