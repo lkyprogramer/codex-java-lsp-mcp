@@ -33,9 +33,10 @@ git -C /Users/luo/Documents/program/exam-parent-v3 worktree add /tmp/frozen-java
 
 ## 前置
 
-1. 可用内存 ≥ 4 GiB（`vm_stat` 的 free+inactive+purgeable；可用 `JAVA_LSP_MIN_AVAILABLE_BYTES` 覆盖）。load 只记录，不再作为硬门槛。
-2. first-touch 还要求机器上没有其它 `org.eclipse.jdt.ls.core.id1`。
-3. 不要在活动 checkout 跑 `npm test` / `tsc` / 裸 `node`。
+1. 可用内存 ≥ 4 GiB（`vm_stat` 的 free+inactive+purgeable；可用 `JAVA_LSP_MIN_AVAILABLE_BYTES` 覆盖）。
+2. **三仓测试：1 分钟 load < 20 必须执行，不得因 load 阻断。** `load >= 20` 只记录。真源见 `docs/phase-v4/three-repo-host-load-policy.md`。禁止再用 load/核数 ≤0.7 拒绝三仓。
+3. first-touch 还要求机器上没有其它 `org.eclipse.jdt.ls.core.id1`。
+4. 不要在活动 checkout 跑 `npm test` / `tsc` / 裸 `node`。
 
 ## 命令
 

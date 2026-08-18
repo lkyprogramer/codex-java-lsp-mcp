@@ -95,7 +95,7 @@
   - 三仓 cold matrix（`run-three-repo-cold-matrix.mjs --runs 5`，AB/BA/AB）；
   - standard/compact/diagnostic 三口径 bytes（V3.2-02 工具复用）；
   - progressive readiness（`T_open`/`T_anchor_ready`/`T_module_ready`/`T_complete`/`T_snapshot_durable`）；
-  - JDT first-touch 分段（安静主机，load/核数 ≤0.7 前置检查）。
+  - JDT first-touch 分段（记录主机 load；三仓质量矩阵按 `docs/phase-v4/three-repo-host-load-policy.md`，load < 20 必须执行、不得因 load 拒绝）。
 - **验收**：每个基线文件非空、有 SHA256、有 run manifest；后续所有"相对基线 ±X%"门禁一律指向 Sprint0'。
 
 ### V4-04 artifacts 治理
@@ -199,7 +199,7 @@
 2. 不重开已关闭 exit decision：V3.2-21/22/24/25、"SPRING_CALL_PATH 整体移出 verified 配额"、"anchor∪protectedPaths 放宽 maxFiles"两条已证伪规则。
 3. 所有验证走隔离合同：`sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs`，`JDTLS_BIN=/usr/bin/false`；真实 JDT 走 `run-isolated-jdt-benchmark.mjs`；不得接触在线 checkout/LSP/JDT/JavaIndex 缓存。
 4. 三仓配对矩阵（AB/BA/AB × 5 runs）仍是唯一性能真源；tuning/holdout 纪律不变。
-5. first-touch/storm 类 benchmark 前置主机静默度检查（1 分钟 load / 逻辑核数 ≤0.7）。
+5. 三仓 cold matrix：1 分钟 load < 20 必须执行，load 不是拒绝门（`docs/phase-v4/three-repo-host-load-policy.md`）。first-touch/storm 记录 load，不得用 per-CPU 0.7 阻断三仓质量门。
 6. 本机 PATH 陷阱：先 `export PATH="/opt/homebrew/bin:$PATH"` 再跑任何 worktree/git 相关验证（`/usr/local/bin/git` 是 2.3.1 残留）。
 
 ---

@@ -262,6 +262,7 @@ function deriveSourceLayout(inputPath: string) {
 const EXTREME_METHOD_LINES = 300;
 const EXTREME_METHOD_WINDOW_LINES = 40;
 const READ_RANGE_MERGE_GAP_LINES = 3;
+const METHODLESS_TYPE_MAX_LINES = 80;
 type UnlocatedReadRange = Omit<IndexedReadRange, "range">;
 
 /**
@@ -355,7 +356,7 @@ function javaReadRanges(bundle: JavaFileBundle, positions: SourcePosition[]): { 
       .filter(type => rangeContainsLine(type.range, position.line))
       .sort((left, right) => right.range.start.line - left.range.start.line)[0];
     if (owner) {
-      ranges.push(typeHeaderRange(owner.range));
+      ranges.push(typeReadRange(bundle, owner));
       headerTypes.add(owner.typeId);
     } else {
       ranges.push(fallbackReadRange(position));
@@ -396,7 +397,20 @@ function xmlReadRanges(
 }
 
 function methodRangeEnd(range: SourceRange, bodyRange: SourceRange | undefined): number {
-  return bodyRange?.end.line ?? range.end.line;
+  return Math.max(range.end.line, bodyRange?.end.line ?? 0);
+}
+
+function typeReadRange(bundle: JavaFileBundle, owner: JavaFileBundle["types"][number]): UnlocatedReadRange {
+  const instanceMethods = bundle.methods.filter(method => method.ownerTypeId === owner.typeId && !method.constructor);
+  if (instanceMethods.length === 0) {
+    return {
+      startLine: owner.range.start.line,
+      endLine: Math.min(Math.max(owner.range.end.line, owner.range.start.line), owner.range.start.line + METHODLESS_TYPE_MAX_LINES - 1),
+      kind: "type",
+      estimatedBytes: 0
+    };
+  }
+  return typeHeaderRange(owner.range);
 }
 
 function rangeContainsLine(range: SourceRange, line: number): boolean {

@@ -624,6 +624,29 @@ test("QUERY_READ_RANGES returns exact UTF-8 Java/XML/fallback windows in one wor
   }
 });
 
+test("QUERY_READ_RANGES reads a methodless DTO through the type body, not a 13-line header", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "java-index-dto-range-"));
+  const cacheDir = mkdtempSync(path.join(tmpdir(), "java-index-dto-range-cache-"));
+  const javaDir = path.join(repoRoot, "src/main/java/demo");
+  mkdirSync(javaDir, { recursive: true });
+  const javaPath = path.join(javaDir, "OrderRequest.java");
+  const fields = Array.from({ length: 12 }, (_, index) => `  private String field${index};`);
+  writeFileSync(javaPath, ["package demo;", "public class OrderRequest {", ...fields, "}", ""].join("\n"));
+
+  const client = new JavaIndexClient(repoRoot, cacheDir);
+  try {
+    await client.open(1);
+    await client.refresh(2, [javaPath], []);
+    const result = (await client.queryReadRanges([{ file: javaPath, positions: [{ line: 4, column: 3 }] }]))[0]!;
+    const typeRange = result.ranges.find(range => range.kind === "type");
+    assert.ok(typeRange);
+    assert.equal(typeRange!.startLine, 2);
+    assert.ok(typeRange!.endLine >= 14, `methodless DTO must cover the last field, got endLine=${typeRange!.endLine}`);
+  } finally {
+    await client.close();
+  }
+});
+
 test("RouterJavaIndex rejects outside-repository range requests before forwarding to the worker", async () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), "java-index-read-ranges-boundary-"));
   const forwarded: unknown[] = [];

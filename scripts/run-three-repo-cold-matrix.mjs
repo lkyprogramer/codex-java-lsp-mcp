@@ -25,6 +25,7 @@ import {
   dependencyTreeInventory,
   scrubHostNodeRuntimeState
 } from "./isolation-utils.mjs";
+import { inspectHostQuiet, THREE_REPO_LOADAVG_PROCEED_BELOW } from "./host-quiet.mjs";
 
 const scriptRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const COLD_ENV = {
@@ -121,6 +122,12 @@ async function main() {
   assertDisjointRuntimeState(isolatedEnv, diagnosticEnv);
 
   try {
+    const host = inspectHostQuiet();
+    console.log(
+      `three-repo host: load ${host.loadavg1.toFixed(2)} `
+      + `(proceed window < ${THREE_REPO_LOADAVG_PROCEED_BELOW}: ${host.loadPolicy.belowThreshold ? "yes" : "above-window, still running"}; `
+      + `refuse=${host.loadPolicy.refuse})`
+    );
     await preflight({ cli, sourceRoot, outputDir });
     await mkdir(outputDir, { recursive: false });
     await mkdir(scenarioDir, { recursive: true });
@@ -181,6 +188,7 @@ async function main() {
     const manifest = await writeManifest(outputDir, {
       sourceRoot,
       verifierVersion: VERIFIER_VERSION,
+      hostLoad: host,
       runtimes,
       candidatePatch: {
         file: candidatePatchFile,

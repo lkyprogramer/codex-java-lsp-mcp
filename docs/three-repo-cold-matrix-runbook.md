@@ -16,6 +16,7 @@
 2. 三个 golden 仓库可本地读取，且其提交在一次矩阵期间保持不变。
 3. 选定的 `--baseline` 是本轮报告指定的 before，而不是随意的旧 SHA。
 4. output 目录必须不存在，其直接父目录必须已存在，并且 canonical 路径必须位于 candidate checkout 外；脚本不会覆盖旧产物，也不会把验证产物写回在线源码 checkout。
+5. **主机 load：1 分钟 load average < 20 必须开跑，不得因 load 拒绝。** 详见 `docs/phase-v4/three-repo-host-load-policy.md`。不要用 per-CPU 0.7 或“等主机安静”阻断本矩阵。`load >= 20` 只写入 `run-manifest.json` 的 `hostLoad`，脚本继续执行。
 
 不要使用 `npm run build`、`npm test` 或裸 `node` 作为门禁证据。正式入口先通过
 `scripts/run-isolated-node.sh` 清除宿主 Node loader/output 变量，再由 detached isolation broker

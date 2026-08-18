@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   DEFAULT_MIN_AVAILABLE_BYTES,
+  THREE_REPO_LOADAVG_PROCEED_BELOW,
   assertHostQuiet,
   evaluateHostQuiet,
-  inspectHostQuiet
+  inspectHostQuiet,
+  threeRepoLoadDecision
 } from "./host-quiet.mjs";
 
 const fourGiB = 4 * 1024 * 1024 * 1024;
@@ -20,7 +22,19 @@ test("host gate ignores load and passes when available memory meets the floor", 
   });
   assert.equal(noisy.perCpu, 3.6);
   assert.equal(noisy.passed, true);
+  assert.equal(noisy.loadPolicy.refuse, false);
+  assert.equal(noisy.loadPolicy.belowThreshold, false);
   assert.equal(noisy.memory.availableBytes, fourGiB);
+});
+
+test("three-repo load policy proceeds below 20 and never refuses", () => {
+  assert.equal(THREE_REPO_LOADAVG_PROCEED_BELOW, 20);
+  const ready = threeRepoLoadDecision(19.99);
+  assert.equal(ready.belowThreshold, true);
+  assert.equal(ready.refuse, false);
+  const busy = threeRepoLoadDecision(20);
+  assert.equal(busy.belowThreshold, false);
+  assert.equal(busy.refuse, false);
 });
 
 test("host gate fails only when available memory is below the floor", () => {

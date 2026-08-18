@@ -1,13 +1,16 @@
 #!/usr/bin/env node
 // input: Optional load sample plus available-memory floor.
-// output: A host-readiness verdict. Load is recorded only; memory is the hard gate.
-// pos: Shared start gate for V4 measurements. High load no longer refuses a run.
+// output: A host-readiness verdict. Three-repo tests proceed when 1-minute
+// load is below 20; load is never a refuse gate. Memory remains the hard gate.
+// pos: Shared start gate for V4 measurements. Do not revive per-CPU 0.7 refusals.
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import os from "node:os";
 
 export const DEFAULT_MAX_LOADAVG_PER_CPU = 1.2;
 export const DEFAULT_MIN_AVAILABLE_BYTES = 4 * 1024 * 1024 * 1024;
+/** 1-minute loadavg below this is the expected three-repo operating window. Never refuse a run for load. */
+export const THREE_REPO_LOADAVG_PROCEED_BELOW = 20;
 
 export function evaluateHostQuiet({
   loadavg1,
@@ -35,17 +38,38 @@ export function evaluateHostQuiet({
   if (!(Number.isFinite(minAvailableBytes) && minAvailableBytes > 0)) {
     throw new Error("minAvailableBytes must be a positive finite number");
   }
+  const load = threeRepoLoadDecision(loadavg1);
   return {
     loadavg1,
     logicalCpus,
     perCpu: loadavg1 / logicalCpus,
     maxLoadavgPerCpu,
+    loadPolicy: load,
     memory: {
       totalBytes,
       availableBytes,
       minAvailableBytes
     },
     passed: availableBytes >= minAvailableBytes
+  };
+}
+
+/**
+ * Three-repo cold matrix policy: load < 20 means the run must start.
+ * load >= 20 is recorded as above-window, but still must not refuse.
+ */
+export function threeRepoLoadDecision(loadavg1, proceedBelow = THREE_REPO_LOADAVG_PROCEED_BELOW) {
+  if (!(Number.isFinite(loadavg1) && loadavg1 >= 0)) {
+    throw new Error("loadavg1 must be a non-negative finite number");
+  }
+  if (!(Number.isFinite(proceedBelow) && proceedBelow > 0)) {
+    throw new Error("proceedBelow must be a positive finite number");
+  }
+  return {
+    loadavg1,
+    proceedBelow,
+    belowThreshold: loadavg1 < proceedBelow,
+    refuse: false
   };
 }
 
@@ -82,7 +106,8 @@ export function assertHostQuiet(options = {}) {
     throw new Error(
       `refusing to start: available memory ${formatGiB(verdict.memory.availableBytes)} is below the `
       + `${formatGiB(verdict.memory.minAvailableBytes)} floor needed for isolated JDT + Gradle `
-      + `(load ${verdict.loadavg1.toFixed(2)} / ${verdict.logicalCpus} CPUs is recorded, not a hard gate).`
+      + `(three-repo load policy: proceed when load < ${THREE_REPO_LOADAVG_PROCEED_BELOW}; `
+      + `observed ${verdict.loadavg1.toFixed(2)} is recorded, never a refuse gate).`
     );
   }
   return verdict;

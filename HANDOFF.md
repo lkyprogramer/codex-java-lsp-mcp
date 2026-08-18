@@ -2,7 +2,7 @@
 
 ## 当前任务
 
-**V4-01/02/03/04 已完成；V4-05 默认关已落地；V4-06 hydrate 位置已落地（2026-08-18）**：daemon 合流、LOC 基线（35,472 / 上限 37,245）、`artifacts/v4-*/` gitignore、Sprint0' 非 0 字节分母、ADR-01 双 worker（`JAVA_LSP_JAVA_INDEX_DUAL_WORKER=1` 才开），以及 type/import graph 的方法级候选位置都已入库。真源仍是 `docs/deep/codex-java-lsp-mcp-java-intelligence-v4-consolidation-plan-2026-08-17.md`。V4 三项用户决策不变：(1) 以 v3 为底座合流 daemon，完成后合回 main；(2) 合流后重定 LOC 基线，V3.2 的 33,219/33,230 与 11 行旧债清零；(3) 真实 Agent outcome gate 纳入核心验收。后续顺序：隔离三仓矩阵验收 RangeLineRecall / holdout rReadMust；V4-05 storm 门禁仍未测。用户的硬约束不变：**任何测试、构建、benchmark 或验证都必须与正在使用的 LSP 隔离**，不能接触活动 checkout、LSP、JDT、JavaIndex 缓存或 `node_modules`。
+**V4-01/02/03/04 已完成；V4-05 默认关已落地；V4-06 进行中（2026-08-19）**：daemon 合流、LOC 基线（35,472 / 上限 37,245）、`artifacts/v4-*/` gitignore、Sprint0' 非 0 字节分母、ADR-01 双 worker（`JAVA_LSP_JAVA_INDEX_DUAL_WORKER=1` 才开），type/import graph 的方法级候选位置已入库。正式三仓矩阵（产物 `/tmp/codex-java-lsp-v4-06-hydrate-20260818-233402/`，baseline `df2ca1f`，candidate `f0e2ef1`）显示：lishuedu RangeLineRecall **0.634→0.734**（`storage-signed-url` / `report-reusable-zip` 闭合），cipherlink/exam-parent-v3 range 未动；holdout rReadMust 仍 0.5/0.55/0.4；lishuedu tokens P50 +188。后续 miss 按类修：type 协作方法位置、无方法 DTO 读整型、CALLS 用已有 framework 方法行。真源仍是 `docs/deep/codex-java-lsp-mcp-java-intelligence-v4-consolidation-plan-2026-08-17.md`。V4 三项用户决策不变：(1) 以 v3 为底座合流 daemon，完成后合回 main；(2) 合流后重定 LOC 基线，V3.2 的 33,219/33,230 与 11 行旧债清零；(3) 真实 Agent outcome gate 纳入核心验收。**三仓 load 政策（2026-08-19 固化）**：1 分钟 load < 20 必须执行三仓，不得因 load 阻断；真源 `docs/phase-v4/three-repo-host-load-policy.md`。V4-05 storm 门禁仍未测。用户的硬约束不变：**任何测试、构建、benchmark 或验证都必须与正在使用的 LSP 隔离**，不能接触活动 checkout、LSP、JDT、JavaIndex 缓存或 `node_modules`。
 
 （以下 V3.2 各 Sprint 记录保留供追溯，其结论与"不要再踩的坑"在 V4 阶段继续有效，除非 V4 计划文档显式解除——目前唯一显式解除的是"不新增第二 scheduler"边界：V4-05 以 ADR 形式引入第二 worker **线程**，sweep 调度语义不变。）
 
@@ -47,7 +47,7 @@
 
 ## 下一步
 
-**执行 V4 计划（真源见上）。** 当前进行到：V4-06 已打开 type/import graph 的 `hydrate:true`，`candidateFromFacts` 用命中方法行替代 `(1,1)`（不用 type-header）。三仓 RangeLineRecall / holdout rReadMust 矩阵尚未复测。同时可测 V4-05 storm 门禁。V4-01 daemon 合流已完成（`4323b3c`）。V4-02 LOC 基线已冻结为 35,472（上限 37,245，清单 `docs/phase-v4/v4-production-ts-baseline.json`）。V4-04 已把 `artifacts/v4-*/` 写入 `.gitignore`。生产 LOC 在双 worker 落地后约为 35,820（仍低于 37,245）。
+**执行 V4 计划（真源见上）。** 当前进行到 V4-06：hydrate 第一刀已测（lishuedu RangeLineRecall +0.10，另两仓未动，holdout 未动）。正在修剩余 miss（type 协作方法、methodless DTO、CALLS 真实方法行）。三仓 load < 20 必须继续跑正式矩阵，不要等“安静主机”。V4-05 storm 门禁仍未测。V4-01 daemon 合流已完成（`4323b3c`）。V4-02 LOC 基线 35,472（上限 37,245）。生产 LOC 在双 worker 后约 35,820。
 
 V4-03 **分母已入库**：`docs/phase-v4/v4-sprint0-manifest.json` + `docs/phase-v4/v4-sprint0-summaries/`。raw 在 `/tmp/codex-java-lsp-v4-sprint0-20260818/`。主机门改为可用内存 ≥4 GiB，load 只记录。cold-matrix 质量门 FAIL 是分母（三仓 rReadMust 0.90/0.91/0.88）。first-touch：lishuedu 3/5 COMPLETE，cipherlink 与 exam-parent-v3 5/5 PARTIAL_TIMEOUT（`--prepare none` + 60s）。正式仓仍是 `/tmp/codex-java-v3-golden-20260809/{lishuedu,cipherlink,exam-parent-v3}`。
 
@@ -62,7 +62,7 @@ V4-10 harness 已存在：`scripts/run-agent-trace-matrix.mjs`。无 `--authoriz
 3. 遇到设计分叉直接问 advisor，不问用户；只有 LOC ceiling 突破、外部 Agent 调用范围明显超出已授权 scope 这类事项才升级给用户。
 4. Sprint5 完成后走 Sprint3/4 同样的收尾流程：隔离回归 → LOC ledger → 报告 → commit → push（均已获用户标准授权，不需要再问）。
 5. **Sprint6（development-plan 第 732 行起，V3.2-31~35：删除 evidence transitional score 路径、收敛 framework shared helper、删除未测量的 shadow planner 决策路径、CI 分层门禁、最终价值报告）尚未开始、未做任何调研**——是 Sprint5 之后的自然下一个单元，但要不要现在开始应该先跟用户确认，不要在完成 Sprint5 收尾后自动往下扩展范围。
-6. 独立于 Sprint5：如果未来有会话想验证 import concurrency 是否影响 first-touch（V3.2-24 §5.4 的开放问题）或版本/fingerprint 复用缺口（V3.2-24 §5.5(c)），先看 `uptime` 的 1 分钟 load average 是否 <= 逻辑核数 × 0.7——`scripts/run-v324-import-concurrency-experiment.mjs` 已经内置这个前置检查，会直接拒绝在嘈杂主机上启动。这两项都不是 Sprint5 的依赖，是独立的、优先级较低的收尾项。
+6. 独立于 Sprint5：import concurrency / JDT fingerprint 仍是低优先级开放项。**三仓质量矩阵不要用 0.7/核 去挡**：1 分钟 load < 20 必须跑，见 `docs/phase-v4/three-repo-host-load-policy.md`。
 7. **Spring 的 `read-plan-budget.ts` 配额调整仍是独立的未来项**：V3.2-29 发现 Spring `NDCG_read@6` 三仓一致为负，但 V3.2-28 测过的"整体移出 verified 配额"这一种修法已被证伪（cipherlink tuning recall 净负、其余零效果）——这不代表 Spring 配额问题不存在，只说明"整体降级"这个具体修法不对；如果未来想继续挖这个方向，需要换一个更细粒度的假设（比如只在特定证据组合下降级，而不是全局移出 Set），不要重复跑同一个已经被否定的规则。
 
 ## 绝对不要再踩的坑（跨 Sprint 持续有效）
@@ -77,12 +77,12 @@ V4-10 harness 已存在：`scripts/run-agent-trace-matrix.mjs`。无 `--authoriz
 - 不要在没有用户明确授权的情况下产生任何真实 Agent 模型调用成本（V3.2-07b/V3.2-21/V3.2-30 的 quality 结论）。
 - 不要在没有新证据的情况下重开 V3.2-24 的 `KEEP_EXPLICIT`——退出条件已经在现有 concurrency=2 数据上独立成立，不依赖 import concurrency 那一维度的答案。
 - 不要在没有先验证"JDT 自身 M2E/Buildship 是否已经覆盖"之前，直接给 `dataDir` 加版本/fingerprint 失效逻辑（V3.2-24 §5.5(c) 的开放问题）——可能是重复造轮子。
-- 不要在 1 分钟 load average 明显高于逻辑核数（本机 10 核，经验阈值 0.7x）时运行 fresh-workspace JDT first-touch 类 benchmark 并把结果当结论——2026-08-16 的一次尝试在 load≈30 时两臂都 60s 超时零结果，已确认这类噪声会让结果不可信。
+- 三仓 cold-nolsp 矩阵：1 分钟 load < 20 **必须执行**，禁止用 per-CPU 0.7 或“等主机安静”阻断。load 只记录，不是拒绝门。真源 `docs/phase-v4/three-repo-host-load-policy.md`。fresh-workspace **真实 JDT** first-touch 在 load≈30 时曾两臂 60s 超时——那是 JDT 噪声解释，不能外推成“三仓也不许跑”。
 - 不要在裸 `bash -lc '...'` 里跑 `run-isolated-validation.mjs`/`run-isolated-jdt-benchmark.mjs` 而不先 `export PATH="/opt/homebrew/bin:$PATH"`——本机 `/usr/local/bin/git` 是 2015 年遗留的 git 2.3.1 符号链接，排在真正的 `/opt/homebrew/bin/git`（2.52.0）前面，会导致 worktree 相关测试假性失败、或对三仓 golden repo（本身是 git worktree）的 `--repo-root` 调用假性报 "Not a git repository"。见 [[node-and-benchmark-env-constraints]] 第 3 条。
 - 不要把 V3.2-27 的 top-of-file-fallback miss 类用"type 声明行代替 (1,1)"这种低成本修法去凑合——已用 golden 数据结构性证伪（见 Sprint5 §3），会浪费 LOC 余量且拿不到任何真实收益。
 - V4 起不要再用 V3.2 的 `33,230/33,219` 当 LOC 门禁。现行真源是合流提交 `4323b3c`：35,472 LOC，周期上限 37,245。V3.2-29 的 +11 行旧债已并入该基线清零。
 - 不要"修复"历史 V3.2 报告里的 `productionLocGatePassed: false`——那是当时 `33,230/33,219` 的已授权突破记录，不是现在的回归。
-- `scripts/run-three-repo-cold-matrix.mjs` 的候选测试套件阶段包含真实子进程多进程锁 lease 测试（`task36-multiprocess-smoke.test.mjs`），在 1 分钟 load average 明显偏高（本机 10 核，经验阈值 0.7x；2026-08-16 遇到过 37.82）时可能因真实硬性超时假性失败——判定是否是主机噪声的方法是在隔离环境单独重跑那一个测试文件，不要凭一次失败就断定改动有问题，也不要凭一次通过就断定改动没问题；两次都要看，方向一致才能下结论。
+- `scripts/run-three-repo-cold-matrix.mjs` 的候选测试套件阶段包含真实子进程多进程锁 lease 测试（`task36-multiprocess-smoke.test.mjs`），高 load 时可能假失败。这**不是**停跑三仓的理由：load < 20 必须开跑；若该单测失败，隔离环境单独重跑那一个文件，两次方向一致才能下结论。
 - 不要重复尝试"把 `SPRING_CALL_PATH` 从 `read-plan-budget.ts` 的 `FRAMEWORK_VERIFIED_REASONS` 整体移出"这条规则——V3.2-28 第 1 轮已经用正式三仓 AB/BA/AB 矩阵测过（`--baseline 869b353`），cipherlink tuning recall 净负、其余两仓四项指标全零，已回滚（见 Sprint5 §4.1-4.5）。Spring 配额问题本身可能仍然存在（V3.2-29 的 `NDCG_read@6` 三仓一致为负这个信号没有被推翻，只是这一种修法不对），但下次要换更细粒度的假设，不是重跑同一条规则。
 - 不要重复尝试"把 `buildReadPlan()` 里 anchor 数量超预算才放宽 `maxFiles` 的机制，扩大到 anchor∪protectedPaths"这条规则——V3.2-28 第 2 轮用正式三仓矩阵测过（`--baseline 4eedc6b`），三仓 token 成本全部上升、`pRead` 广泛下降，只在一仓一项指标上有收益，净不划算，已回滚（见 Sprint5 §4.6-4.7）。如果未来想继续挖"task-aware budget"这个方向，先重复这条规则本身发现的方法论（见下一条），不要直接重跑同一条被否定的规则。
 - 涉及 `read-plan.ts`/`read-plan-budget.ts` 的任何预算类改动，落地前先核实**文件数上限（`maxFiles`）还是字节上限（`maxReadBytes`）才是真正 binding 的约束**——V3.2-28 两轮都先用已有正式矩阵原始数据核对过这一点（holdout 场景文件数打满、字节只用 30%-69%），这不是可以跳过的步骤，选错杠杆等于白跑一次正式矩阵。同时要注意 `selectTokenAwarePlan` 的 `BUCKET_RULES`（`anchor:1, core:4, framework:2, support:1, lexical:1`）是另一层独立的、按证据类别分桶的硬上限，和 `configuredBudget.maxFiles` 是两套不同机制——只调其中一个可能对另一个完全无效（本轮第 2 轮第一次单测编写时就撞上了这个坑）。任何"默认预算内自动放宽"的机制都必须显式判断调用方是否传了 `readPlanMaxItems`/`readPlanMaxBytes`——显式预算是硬约束，不能被默认值放宽逻辑覆盖（第 2 轮第一版实现漏了这条，导致 3 个既有的"constrained core"测试真实回归，不是测试断言过期）。
@@ -101,4 +101,4 @@ git log --oneline -5
 git status --short
 ```
 
-确认 `git log` 最新几条含 Sprint0' 分母、V4-05 dual-worker 与 V4-06 hydrate 位置。下一步：隔离三仓 cold-matrix 看 RangeLineRecall / holdout rReadMust；未到 1.0 再按 miss 类继续，不要用 type-header。安静主机上可另跑 `scripts/run-storm-gate.mjs`，未过两轮不要把 dual worker 设为默认。
+确认 `git log` 最新几条含 Sprint0' 分母、V4-05 dual-worker 与 V4-06。下一步：只要 1 分钟 load < 20 就跑隔离三仓 cold-matrix（不要因 load 停）；未到 RangeLineRecall/rReadMust=1.0 再按 miss 类继续，不要用 type-header。V4-05 storm 另测，未过两轮不要默认开 dual worker。

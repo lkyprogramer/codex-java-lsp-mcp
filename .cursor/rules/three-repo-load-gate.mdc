@@ -1,0 +1,13 @@
+---
+description: 三仓测试在 1 分钟 load < 20 时必须执行，不得因 load 阻断
+alwaysApply: true
+---
+
+# 三仓 load 政策
+
+1 分钟 load average **小于 20** 时，必须执行正式三仓 cold-nolsp 矩阵与隔离质量复测。不要因为主机“不够安静”、per-CPU 0.7、或历史 HANDOFF 里的 0.7x 经验阈值而跳过、推迟或改成小样本。
+
+- 真源：`docs/phase-v4/three-repo-host-load-policy.md`
+- 常量：`scripts/host-quiet.mjs` 的 `THREE_REPO_LOADAVG_PROCEED_BELOW = 20`
+- load **永远不是**三仓矩阵的拒绝门；`load >= 20` 只记录，不 `throw`
+- 唯一主机硬门：可用内存 ≥ 4 GiB

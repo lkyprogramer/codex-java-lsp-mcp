@@ -101,7 +101,7 @@ export async function collectTypeGraphCandidates(input: CollectCandidatesInput):
         facts,
         scoreBase(routingPolicy, "semantic", facts, anchor, options) + 70,
         "typeGraph",
-        { methodName: anchor.methodName }
+        { methodName: anchor.methodName, typeName: anchor.className }
       );
       if (isInterface) {
         candidate.reasons = ["typeGraph:implementation-lookup"];
@@ -126,7 +126,7 @@ export async function collectImportGraphCandidates(input: CollectImportGraphInpu
     }
     metrics.scannedAnchors += 1;
     const localImports = projectLocalImports(anchorFacts.imports, anchorFacts.packageName);
-    const positionHint = { methodName: anchor.methodName };
+    const positionHint = { methodName: anchor.methodName, typeName: anchor.className };
     for (const facts of await javaIndex.findTypeDefinitions(localImports, 40, true)) {
       if (facts.absolutePath === anchor.absolutePath) {
         continue;

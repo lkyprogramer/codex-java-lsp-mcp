@@ -315,6 +315,7 @@ async function collectRelationshipEvidenceForAnchor(
         // It lacks expression nesting, but it is not an unknown/deep call:
         // represent it as the direct anchor hop so it retains the same
         // protected-core eligibility as the AST re-evaluation path.
+        preferResolvedCallPositions(candidate, candidateFacts, resolvedCallTargets);
         pushIfPositive(evidence, input, anchor.id, candidate, "CALLS", 120, 0, "anchor");
       }
     }
@@ -512,7 +513,7 @@ async function resolvedDirectCallCandidates(
     const existing = candidates.get(definition.absolutePath);
     if (!existing || callDepth < existing.callDepth) {
       candidates.set(definition.absolutePath, {
-        candidate: candidateFromFacts(definition, 120, "CALLS"),
+        candidate: callsCandidateFromFacts(definition, matchingSpecs, targetFacts),
         callDepth,
         callOrigin: "anchor"
       });
@@ -605,7 +606,7 @@ async function resolvedImplementationCallCandidates(
     const facts = targetFactsByPath.get(relativePath);
     if (!facts || !matchesImplementationContinuationTarget(facts, targetFqn, matchingSpecs)) continue;
     candidates.set(definition.absolutePath, {
-      candidate: candidateFromFacts(definition, 120, "CALLS"),
+      candidate: callsCandidateFromFacts(definition, matchingSpecs, facts),
       callDepth: 1,
       callOrigin: "implementation"
     });
@@ -814,6 +815,58 @@ function rangeSpan(range: FrameworkCallSite["range"]): number {
 
 function rangeKey(range: FrameworkCallSite["range"]): string {
   return `${range.start.line}:${range.start.column}-${range.end.line}:${range.end.column}`;
+}
+
+function callsCandidateFromFacts(
+  definition: JavaSourceFacts,
+  specs: readonly DirectCallSpec[],
+  targetFacts?: FrameworkFileFacts
+): CandidateFile {
+  const names = [...new Set(specs.map(spec => spec.methodName).filter(Boolean))];
+  const candidate = candidateFromFacts(
+    definition,
+    120,
+    "CALLS",
+    names.length === 1 ? { methodName: names[0] } : undefined
+  );
+  const positioned = uniqueCallPosition(targetFacts, definition.qualifiedName, specs);
+  if (positioned) candidate.positions = [positioned];
+  return candidate;
+}
+
+function uniqueCallPosition(
+  facts: FrameworkFileFacts | undefined,
+  targetFqn: string | undefined,
+  specs: readonly DirectCallSpec[]
+): { line: number; column: number } | undefined {
+  if (!facts || !targetFqn) return undefined;
+  const targetTypeIds = new Set(facts.types.filter(type => type.fqn === targetFqn).map(type => type.typeId));
+  if (targetTypeIds.size !== 1) return undefined;
+  const targetTypeId = [...targetTypeIds][0]!;
+  const methods = specs
+    .map(spec => uniqueDeclaredMethod(facts, targetTypeId, spec))
+    .filter((method): method is NonNullable<typeof method> => method !== undefined);
+  const lines = [...new Set(methods.map(method => method.range.start.line))];
+  if (lines.length !== 1) return undefined;
+  const method = methods[0]!;
+  return { line: method.range.start.line, column: method.range.start.column };
+}
+
+function preferResolvedCallPositions(
+  candidate: CandidateFile,
+  facts: JavaSourceFacts,
+  resolvedCallTargets: ReadonlySet<string>
+): void {
+  const hits = facts.methods.filter(method => method.methodId && resolvedCallTargets.has(method.methodId) && method.line >= 1);
+  if (hits.length === 0) return;
+  const next = hits.slice(0, 8).map(method => ({ line: method.line, column: 1 }));
+  const placeholderOnly = candidate.positions.length === 0
+    || candidate.positions.every(position => position.line === 1 && position.column === 1);
+  candidate.positions = placeholderOnly
+    ? next
+    : [...candidate.positions, ...next.filter(position =>
+      !candidate.positions.some(existing => existing.line === position.line && existing.column === position.column)
+    )].slice(0, 8);
 }
 
 function matchesUniqueDeclaredCall(

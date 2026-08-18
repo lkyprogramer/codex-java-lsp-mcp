@@ -11,6 +11,8 @@ import type {
 
 export type FactPositionHint = {
   methodName?: string;
+  /** Prefer the unique hydrated method that names this collaborator type. */
+  typeName?: string;
 };
 
 export function candidateFromFacts(
@@ -42,9 +44,23 @@ export function positionFromFacts(facts: JavaSourceFacts, hint?: FactPositionHin
   const preferred = hint?.methodName
     ? methods.find(method => method.name === hint.methodName)
     : undefined;
-  const method = preferred ?? (methods.length === 1 ? methods[0] : undefined);
+  const typeMatches = !preferred && hint?.typeName
+    ? methodsReferencingType(methods, hint.typeName)
+    : [];
+  const method = preferred
+    ?? (typeMatches.length === 1 ? typeMatches[0] : undefined)
+    ?? (methods.length === 1 ? methods[0] : undefined);
   if (method && method.line >= 1) return { line: method.line, column: 1 };
   return { line: 1, column: 1 };
+}
+
+function methodsReferencingType(methods: JavaSourceFacts["methods"], typeName: string): JavaSourceFacts["methods"] {
+  const needle = simpleTypeName(typeName);
+  if (!needle) return [];
+  return methods.filter(method =>
+    method.referencedTypes.some(type => simpleTypeName(type) === needle)
+    || (method.relations ?? []).some(relation => simpleTypeName(relation.typeName) === needle)
+  );
 }
 
 export function mergeCandidate(target: Map<string, CandidateFile>, incoming: CandidateFile): void {

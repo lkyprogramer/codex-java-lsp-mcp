@@ -342,7 +342,9 @@ test("cold re-evaluation nominates one uniquely resolved wildcard-import receive
   ));
 
   assert.deepEqual([...new Set(result.evidence.map(item => item.candidateFile))], [targetPath]);
-  assert.ok(result.evidence.some(item => item.candidateFile === targetPath && item.kind === "CALLS"));
+  const call = result.evidence.find(item => item.candidateFile === targetPath && item.kind === "CALLS");
+  assert.ok(call);
+  assert.deepEqual(call!.positions, [{ line: 3, column: 3 }]);
 });
 
 test("cold direct-call cap retains an exact declared field receiver after earlier value calls", async () => {
