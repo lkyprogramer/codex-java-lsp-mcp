@@ -1,0 +1,107 @@
+{
+  "schemaVersion": "v4-sprint0-baseline/v1",
+  "verifierVersion": 1,
+  "identity": {
+    "commit": "4323b3cfead3a368b5a81c880176841d162ceced",
+    "productionTree": "1be810da3cc7a2895e143be204542174367e0b30",
+    "measuredCommit": "63a80a2a0b4e9947bbf94a454ae1d14ece64dca9"
+  },
+  "campaigns": {
+    "cold-matrix": {
+      "summaries": [
+        {
+          "file": "v4-sprint0-summaries/cold-matrix.json",
+          "bytes": 42479,
+          "sha256": "8d928a0e760bed9ab29f9184ae442dfd1be2ad42979dd992e551c9445e634c34"
+        }
+      ],
+      "rawArtifacts": [
+        {
+          "file": "/tmp/codex-java-lsp-v4-sprint0-20260818/cold-matrix/run-manifest.json",
+          "bytes": 9432,
+          "sha256": "d59c89817cf669cc7d7b51edd65a7a36db5f32f0d0697e873283f37d4d1876c4"
+        }
+      ]
+    },
+    "bytes": {
+      "summaries": [
+        {
+          "file": "v4-sprint0-summaries/bytes.json",
+          "bytes": 185460,
+          "sha256": "7a227a62ae23230bfcd01c94d9fc34b83b29cc3a76ccf8776f68aec5f1740e39"
+        }
+      ],
+      "rawArtifacts": [
+        {
+          "file": "/tmp/codex-java-lsp-v4-sprint0-20260818/bytes-lishuedu.stdout.log",
+          "bytes": 56023,
+          "sha256": "3de79d0e569e256d6269aa959c6df3da4bfcf37cbb4eabce100f2250794d642f"
+        },
+        {
+          "file": "/tmp/codex-java-lsp-v4-sprint0-20260818/bytes-cipherlink.stdout.log",
+          "bytes": 55979,
+          "sha256": "5f8d993dc6bb4b55139165f3cd2a7098338b94411e0513529be146271649cd84"
+        },
+        {
+          "file": "/tmp/codex-java-lsp-v4-sprint0-20260818/bytes-exam-parent-v3.stdout.log",
+          "bytes": 56014,
+          "sha256": "b74cd3f8332f9783afde9f74dbe9f9a5ce8cff7f0b59eb42e901039b15e5bb2c"
+        }
+      ]
+    },
+    "progressive": {
+      "summaries": [
+        {
+          "file": "v4-sprint0-summaries/progressive.json",
+          "bytes": 6685,
+          "sha256": "e49f17964d97e5a98da48b4349ec059b36c9434dbb810e22485f3b1f769d726e"
+        }
+      ],
+      "rawArtifacts": [
+        {
+          "file": "/tmp/codex-java-lsp-v4-sprint0-20260818/progressive/progressive-manifest.json",
+          "bytes": 16691,
+          "sha256": "0d99216fd1fd8be3498ecd9183967e3651bfe3c8ae75db5757db023d44a720c6"
+        }
+      ]
+    },
+    "first-touch": {
+      "summaries": [
+        {
+          "file": "v4-sprint0-summaries/first-touch.json",
+          "bytes": 84951,
+          "sha256": "0015427aba38598187b94781d027e843341046d087dbad5726baa1309532cd0b"
+        }
+      ],
+      "rawArtifacts": [
+        {
+          "file": "/tmp/codex-java-lsp-v4-sprint0-20260818/first-touch-lishuedu.stdout.log",
+          "bytes": 26057,
+          "sha256": "d37e8dfc63c17618391ae21206c756273d7090792bc47072ec3141e35df7c027"
+        },
+        {
+          "file": "/tmp/codex-java-lsp-v4-sprint0-20260818/first-touch-cipherlink.stdout.log",
+          "bytes": 26836,
+          "sha256": "1d0ada0fda0915e58a26dc2cfe37b43c61dafd058763b4922dca3f900b426b4a"
+        },
+        {
+          "file": "/tmp/codex-java-lsp-v4-sprint0-20260818/first-touch-exam-parent-v3.stdout.log",
+          "bytes": 26898,
+          "sha256": "10ceefb7f9fbb175dbbecb5ce7ba31391bd5890949acedf649db5c157096b160"
+        }
+      ],
+      "hostQuiet": {
+        "loadavg1": 13.46044921875,
+        "logicalCpus": 10,
+        "perCpu": 1.346044921875,
+        "maxLoadavgPerCpu": 1.2,
+        "memory": {
+          "totalBytes": 34359738368,
+          "availableBytes": 15544451072,
+          "minAvailableBytes": 4294967296
+        },
+        "passed": true
+      }
+    }
+  }
+}

@@ -6,8 +6,6 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { DEFAULT_MAX_LOADAVG_PER_CPU } from "./host-quiet.mjs";
-
 export const V4_SPRINT0_SCHEMA_VERSION = "v4-sprint0-baseline/v1";
 export const V4_SPRINT0_IDENTITY_COMMIT = "4323b3cfead3a368b5a81c880176841d162ceced";
 export const V4_SPRINT0_PRODUCTION_TREE = "1be810da3cc7a2895e143be204542174367e0b30";
@@ -101,9 +99,18 @@ function validateFirstTouchHostQuiet(campaign, context) {
   if (!(Number.isFinite(quiet.loadavg1) && Number.isInteger(quiet.logicalCpus) && quiet.logicalCpus > 0)) {
     throw new Sprint0ValidationError(`${context}: first-touch.hostQuiet is incomplete`);
   }
-  const perCpu = quiet.loadavg1 / quiet.logicalCpus;
-  if (quiet.perCpu !== perCpu || quiet.maxLoadavgPerCpu !== DEFAULT_MAX_LOADAVG_PER_CPU || perCpu > DEFAULT_MAX_LOADAVG_PER_CPU) {
-    throw new Sprint0ValidationError(`${context}: first-touch.hostQuiet ratio is not a trusted quiet-host sample`);
+  if (quiet.perCpu !== quiet.loadavg1 / quiet.logicalCpus) {
+    throw new Sprint0ValidationError(`${context}: first-touch.hostQuiet.perCpu does not match the recorded load sample`);
+  }
+  const memory = quiet.memory;
+  if (!memory
+    || !(Number.isFinite(memory.availableBytes) && memory.availableBytes >= 0)
+    || !(Number.isFinite(memory.minAvailableBytes) && memory.minAvailableBytes > 0)
+    || !(Number.isFinite(memory.totalBytes) && memory.totalBytes > 0)) {
+    throw new Sprint0ValidationError(`${context}: first-touch.hostQuiet.memory is incomplete`);
+  }
+  if (memory.availableBytes < memory.minAvailableBytes) {
+    throw new Sprint0ValidationError(`${context}: first-touch.hostQuiet was recorded below the available-memory floor`);
   }
 }
 

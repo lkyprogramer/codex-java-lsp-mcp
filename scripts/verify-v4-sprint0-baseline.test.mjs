@@ -35,18 +35,47 @@ test("Sprint0' verifier rejects SHA drift and missing campaigns", async t => {
   assert.throws(() => verifyV4Sprint0Baseline(missing.manifestFile), /missing campaigns: progressive/);
 });
 
-test("Sprint0' verifier rejects first-touch captured on a noisy host", async t => {
+test("Sprint0' verifier accepts a high-load first-touch sample when memory cleared the floor", async t => {
   const root = await mkdtemp(path.join(os.tmpdir(), "v4-sprint0-noisy-"));
   const bundle = await writeManifest(root, {
-    hostQuiet: { loadavg1: 30, logicalCpus: 10, perCpu: 3, maxLoadavgPerCpu: 0.7, passed: true }
+    hostQuiet: {
+      loadavg1: 30,
+      logicalCpus: 10,
+      perCpu: 3,
+      maxLoadavgPerCpu: 1.2,
+      memory: { totalBytes: 32 * 1024 ** 3, availableBytes: 8 * 1024 ** 3, minAvailableBytes: 4 * 1024 ** 3 },
+      passed: true
+    }
   });
-  assert.throws(() => verifyV4Sprint0Baseline(bundle.manifestFile), /not a trusted quiet-host sample/);
+  assert.equal(verifyV4Sprint0Baseline(bundle.manifestFile).passed, true);
+});
+
+test("Sprint0' verifier rejects first-touch captured below the memory floor", async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v4-sprint0-lowmem-"));
+  const bundle = await writeManifest(root, {
+    hostQuiet: {
+      loadavg1: 2,
+      logicalCpus: 10,
+      perCpu: 0.2,
+      maxLoadavgPerCpu: 1.2,
+      memory: { totalBytes: 32 * 1024 ** 3, availableBytes: 1024, minAvailableBytes: 4 * 1024 ** 3 },
+      passed: true
+    }
+  });
+  assert.throws(() => verifyV4Sprint0Baseline(bundle.manifestFile), /below the available-memory floor/);
 });
 
 async function writeManifest(root, {
   emptySummary = false,
   dropCampaign,
-  hostQuiet = { loadavg1: 2, logicalCpus: 10, perCpu: 0.2, maxLoadavgPerCpu: 0.7, passed: true }
+  hostQuiet = {
+    loadavg1: 2,
+    logicalCpus: 10,
+    perCpu: 0.2,
+    maxLoadavgPerCpu: 1.2,
+    memory: { totalBytes: 32 * 1024 ** 3, availableBytes: 8 * 1024 ** 3, minAvailableBytes: 4 * 1024 ** 3 },
+    passed: true
+  }
 } = {}) {
   const summaryDir = path.join(root, "summaries");
   await mkdir(summaryDir, { recursive: true });

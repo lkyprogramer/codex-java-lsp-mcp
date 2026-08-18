@@ -4,7 +4,7 @@
 // pos: V4-03 orchestrator. It never writes into the active LSP checkout caches.
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -36,6 +36,25 @@ export const FIRST_TOUCH_ANCHORS = {
     column: 14
   }
 };
+
+export function defaultJdtJavaHome(home = os.homedir()) {
+  const candidates = [
+    process.env.JDTLS_JAVA_HOME,
+    path.join(home, ".sdkman/candidates/java/21.0.10-tem"),
+    path.join(home, ".sdkman/candidates/java/21.0.10-amzn"),
+    "/opt/homebrew/opt/openjdk@21"
+  ];
+  return candidates.find(value => value && existsSync(value)) ?? "";
+}
+
+export function defaultProjectJavaHome(home = os.homedir()) {
+  const candidates = [
+    process.env.JAVA_LSP_PROJECT_JAVA_HOME,
+    path.join(home, ".sdkman/candidates/java/25.0.1-open"),
+    path.join(home, ".sdkman/candidates/java/current")
+  ];
+  return candidates.find(value => value && existsSync(value)) ?? "";
+}
 
 export function defaultRepoCandidates(home = os.homedir()) {
   return {
@@ -142,6 +161,8 @@ export function buildSprint0CommandPlan({
   baseline = V4_SPRINT0_IDENTITY_COMMIT,
   candidateRoot = scriptRoot,
   jdtlsBin = process.env.JDTLS_BIN ?? "/opt/homebrew/bin/jdtls",
+  jdtJavaHome = process.env.JDTLS_JAVA_HOME ?? defaultJdtJavaHome(),
+  projectJavaHome = process.env.JAVA_LSP_PROJECT_JAVA_HOME ?? defaultProjectJavaHome(),
   runs = 5
 }) {
   const isolatedNode = ["sh", path.join(candidateRoot, "scripts", "run-isolated-node.sh")];
@@ -167,18 +188,27 @@ export function buildSprint0CommandPlan({
         path.join(candidateRoot, "scripts", "run-isolated-validation.mjs"),
         "--profile", "targeted",
         "--",
-        "node", "scripts/attribute-impact-payload.mjs",
-        "--project-id", project,
+        "node", "scripts/run-isolated-jdt-benchmark.mjs",
         "--repo-root", repositories[project].repoRoot,
-        "--mode", "balanced"
+        "--revision", repositories[project].head,
+        "--",
+        "node", "scripts/attribute-impact-payload.mjs",
+        "--repo-root", "{repo}",
+        "--project-id", project,
+        "--mode", "balanced",
+        "--index-cache-dir", "{state}/index"
       ]]))
     },
     progressive: {
       argv: [
         ...isolatedNode,
-        path.join(candidateRoot, "scripts", "run-progressive-index-three-repo.mjs"),
+        path.join(candidateRoot, "scripts", "run-isolated-validation.mjs"),
+        "--profile", "compile",
+        "--keep",
+        "--",
+        "node", "scripts/run-progressive-index-three-repo.mjs",
         ...repoFlags,
-        "--output-dir", path.join(outputDir, "progressive"),
+        "--output-dir", "{state}/progressive",
         "--runs", String(runs)
       ]
     },
@@ -189,12 +219,16 @@ export function buildSprint0CommandPlan({
           ...isolatedNode,
           path.join(candidateRoot, "scripts", "run-isolated-validation.mjs"),
           "--profile", "compile",
+          "--keep",
           "--env", `JDTLS_BIN=${jdtlsBin}`,
+          ...(jdtJavaHome ? ["--env", `JDTLS_JAVA_HOME=${jdtJavaHome}`] : []),
+          ...(projectJavaHome ? ["--env", `JAVA_HOME=${projectJavaHome}`, "--env", `JAVA_LSP_PROJECT_JAVA_HOME=${projectJavaHome}`] : []),
           "--env", `JAVA_LSP_BENCH_ANCHOR_FILE=${anchor.file}`,
           "--env", `JAVA_LSP_BENCH_ANCHOR_LINE=${String(anchor.line)}`,
           "--env", `JAVA_LSP_BENCH_ANCHOR_COLUMN=${String(anchor.column)}`,
           "--",
           "node", "scripts/run-isolated-jdt-benchmark.mjs",
+          "--keep",
           "--repo-root", repositories[project].repoRoot,
           "--revision", repositories[project].head,
           "--",
@@ -220,6 +254,103 @@ export function descriptorForBytes(file, bytes) {
     bytes: bytes.length,
     sha256: createHash("sha256").update(bytes).digest("hex")
   };
+}
+
+export function extractTrailingJson(text) {
+  let last;
+  for (let index = 0; index < text.length; ) {
+    const start = text.indexOf("{", index);
+    if (start < 0) break;
+    const sliced = sliceBalancedJsonObject(text, start);
+    if (!sliced) {
+      index = start + 1;
+      continue;
+    }
+    last = JSON.parse(sliced.value);
+    index = sliced.end;
+  }
+  if (last === undefined) throw new Error("artifact does not contain a trailing JSON object");
+  return last;
+}
+
+function sliceBalancedJsonObject(text, start) {
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let index = start; index < text.length; index += 1) {
+    const character = text[index];
+    if (inString) {
+      if (escape) escape = false;
+      else if (character === "\\") escape = true;
+      else if (character === "\"") inString = false;
+      continue;
+    }
+    if (character === "\"") inString = true;
+    else if (character === "{") depth += 1;
+    else if (character === "}") {
+      depth -= 1;
+      if (depth === 0) return { value: text.slice(start, index + 1), end: index + 1 };
+    }
+  }
+  return undefined;
+}
+
+export async function writeSprint0DocsManifest(plan) {
+  const docsDir = plan.docsDir;
+  const summaryDir = path.join(docsDir, "v4-sprint0-summaries");
+  await mkdir(summaryDir, { recursive: true });
+  const campaigns = {
+    "cold-matrix": await writeCampaignSummary(summaryDir, "cold-matrix.json", await readRequiredJson(
+      path.join(plan.outputDir, "cold-matrix", "matrix-summary.json")
+    ), [path.join(plan.outputDir, "cold-matrix", "run-manifest.json")]),
+    bytes: await writeCampaignSummary(summaryDir, "bytes.json", {
+      projects: Object.fromEntries(await Promise.all(V4_SPRINT0_PROJECTS.map(async project => [
+        project,
+        extractTrailingJson(await readFile(path.join(plan.outputDir, `bytes-${project}.stdout.log`), "utf8"))
+      ])))
+    }, V4_SPRINT0_PROJECTS.map(project => path.join(plan.outputDir, `bytes-${project}.stdout.log`))),
+    progressive: await writeCampaignSummary(summaryDir, "progressive.json", await readRequiredJson(
+      path.join(plan.outputDir, "progressive", "progressive-summary.json")
+    ), [path.join(plan.outputDir, "progressive", "progressive-manifest.json")]),
+    "first-touch": {
+      ...await writeCampaignSummary(summaryDir, "first-touch.json", {
+        hostQuiet: plan.hostQuiet,
+        projects: Object.fromEntries(await Promise.all(V4_SPRINT0_PROJECTS.map(async project => [
+          project,
+          extractTrailingJson(await readFile(path.join(plan.outputDir, `first-touch-${project}.stdout.log`), "utf8"))
+        ])))
+      }, V4_SPRINT0_PROJECTS.map(project => path.join(plan.outputDir, `first-touch-${project}.stdout.log`))),
+      hostQuiet: plan.hostQuiet
+    }
+  };
+  const manifest = {
+    schemaVersion: V4_SPRINT0_SCHEMA_VERSION,
+    verifierVersion: V4_SPRINT0_VERIFIER_VERSION,
+    identity: plan.identity,
+    campaigns
+  };
+  const manifestFile = path.join(docsDir, "v4-sprint0-manifest.json");
+  await writeFile(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);
+  return manifestFile;
+}
+
+async function writeCampaignSummary(summaryDir, name, payload, rawFiles) {
+  const relative = path.join("v4-sprint0-summaries", name);
+  const contents = `${JSON.stringify(payload, null, 2)}\n`;
+  await writeFile(path.join(summaryDir, name), contents);
+  return {
+    summaries: [descriptorForBytes(relative, contents)],
+    rawArtifacts: rawFiles
+      .filter(file => existsSync(file))
+      .map(file => descriptorForBytes(file, readFileSync(file)))
+  };
+}
+
+async function readRequiredJson(file) {
+  if (!existsSync(file)) throw new Error(`missing Sprint0' summary: ${file}`);
+  const bytes = readFileSync(file);
+  if (bytes.length <= 0) throw new Error(`${file}: refusing to record a zero-byte Sprint0' artifact`);
+  return JSON.parse(bytes.toString("utf8"));
 }
 
 export async function planV4Sprint0Baseline(cli, helpers = {}) {
@@ -277,12 +408,43 @@ async function main(args = process.argv.slice(2)) {
     }
     await executeStage(stage, plan);
   }
+  if (sprint0ArtifactsReady(plan.outputDir)) await writeSprint0DocsManifest(plan);
   return plan;
+}
+
+export function sprint0ArtifactsReady(outputDir) {
+  return [
+    path.join(outputDir, "cold-matrix", "matrix-summary.json"),
+    path.join(outputDir, "progressive", "progressive-summary.json"),
+    ...V4_SPRINT0_PROJECTS.flatMap(project => [
+      path.join(outputDir, `bytes-${project}.stdout.log`),
+      path.join(outputDir, `first-touch-${project}.stdout.log`)
+    ])
+  ].every(file => existsSync(file) && readFileSync(file).length > 0);
+}
+
+export function assertRealJdtlsBin(jdtlsBin = process.env.JDTLS_BIN ?? "/opt/homebrew/bin/jdtls") {
+  if (!jdtlsBin || path.basename(jdtlsBin) === "false") {
+    throw new Error("first-touch requires a real JDTLS_BIN; /usr/bin/false is only for compile-only isolation");
+  }
+  return jdtlsBin;
 }
 
 async function executeStage(stage, plan) {
   const command = plan.commands[stage];
+  if (stage === "first-touch") assertRealJdtlsBin();
   if (command.argv) {
+    if (stage === "cold-matrix") {
+      // Quality-gate FAIL is the Sprint0' denominator, not a crash.
+      await runInherited(command.argv, plan.candidateRoot ?? scriptRoot, { allowedExitCodes: [0, 1] });
+      return;
+    }
+    if (stage === "progressive") {
+      const stdoutFile = path.join(plan.outputDir, "progressive.stdout.log");
+      await runCaptured(command.argv, plan.candidateRoot ?? scriptRoot, stdoutFile);
+      await collectKeptProgressiveOutput(stdoutFile, path.join(plan.outputDir, "progressive"));
+      return;
+    }
     await runInherited(command.argv, plan.candidateRoot ?? scriptRoot);
     return;
   }
@@ -293,11 +455,23 @@ async function executeStage(stage, plan) {
   }
 }
 
-function runInherited(argv, cwd) {
+async function collectKeptProgressiveOutput(stdoutFile, dest) {
+  const text = await readFile(stdoutFile, "utf8");
+  const match = text.match(/preserved isolated validation root: (.+)/);
+  if (!match) throw new Error("progressive isolation root was not preserved");
+  const source = path.join(match[1].trim(), "progressive");
+  if (!existsSync(source)) throw new Error(`missing progressive output: ${source}`);
+  await mkdir(path.dirname(dest), { recursive: true });
+  await cp(source, dest, { recursive: true, errorOnExist: true });
+}
+
+function runInherited(argv, cwd, { allowedExitCodes = [0] } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(argv[0], argv.slice(1), { cwd, env: process.env, stdio: "inherit" });
     child.once("error", reject);
-    child.once("exit", code => code === 0 ? resolve() : reject(new Error(`${argv.join(" ")} exited ${code}`)));
+    child.once("exit", code => allowedExitCodes.includes(code)
+      ? resolve()
+      : reject(new Error(`${argv.join(" ")} exited ${code}`)));
   });
 }
 

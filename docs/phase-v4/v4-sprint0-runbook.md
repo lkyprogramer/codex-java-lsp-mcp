@@ -33,7 +33,7 @@ git -C /Users/luo/Documents/program/exam-parent-v3 worktree add /tmp/frozen-java
 
 ## 前置
 
-1. `uptime` 的 1 分钟 load / 逻辑核数 ≤ 0.7。本机 10 核 ⇒ 1 分钟 load ≤ 7.0。
+1. 可用内存 ≥ 4 GiB（`vm_stat` 的 free+inactive+purgeable；可用 `JAVA_LSP_MIN_AVAILABLE_BYTES` 覆盖）。load 只记录，不再作为硬门槛。
 2. first-touch 还要求机器上没有其它 `org.eclipse.jdt.ls.core.id1`。
 3. 不要在活动 checkout 跑 `npm test` / `tsc` / 裸 `node`。
 

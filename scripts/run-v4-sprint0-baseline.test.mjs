@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -9,12 +9,15 @@ import {
   V4_SPRINT0_PRODUCTION_TREE
 } from "./verify-v4-sprint0-baseline.mjs";
 import {
+  assertRealJdtlsBin,
   buildSprint0CommandPlan,
   defaultRepoCandidates,
   descriptorForBytes,
+  extractTrailingJson,
   parseSprint0Cli,
   planV4Sprint0Baseline,
-  resolveSprint0Repositories
+  resolveSprint0Repositories,
+  writeSprint0DocsManifest
 } from "./run-v4-sprint0-baseline.mjs";
 
 const FROZEN = {
@@ -79,13 +82,25 @@ test("command plan keeps all four Sprint0' campaigns on the isolation contract",
   const plan = buildSprint0CommandPlan({
     repositories,
     outputDir: "/tmp/v4-sprint0",
-    candidateRoot: "/repo"
+    candidateRoot: "/repo",
+    jdtlsBin: "/opt/homebrew/bin/jdtls",
+    jdtJavaHome: "/opt/jdk-21",
+    projectJavaHome: "/opt/jdk-25"
   });
   assert.match(plan["cold-matrix"].argv.join(" "), /run-isolated-node\.sh.*run-three-repo-cold-matrix\.mjs.*--runs 5/);
-  assert.match(plan.bytes.argvByProject.lishuedu.join(" "), /attribute-impact-payload\.mjs/);
-  assert.match(plan.progressive.argv.join(" "), /run-progressive-index-three-repo\.mjs/);
-  assert.match(plan["first-touch"].argvByProject.cipherlink.join(" "), /run-isolated-jdt-benchmark\.mjs.*--repo-root \{repo\}/);
+  assert.match(plan.bytes.argvByProject.lishuedu.join(" "), /run-isolated-jdt-benchmark\.mjs.*attribute-impact-payload\.mjs.*--repo-root \{repo\}/);
+  assert.match(plan.progressive.argv.join(" "), /run-isolated-validation\.mjs.*run-progressive-index-three-repo\.mjs.*--output-dir \{state\}\/progressive/);
+  assert.match(plan["first-touch"].argvByProject.cipherlink.join(" "), /run-isolated-validation\.mjs.*--keep/);
+  assert.match(plan["first-touch"].argvByProject.cipherlink.join(" "), /run-isolated-jdt-benchmark\.mjs.*--keep.*--repo-root \{repo\}/);
   assert.match(plan["first-touch"].argvByProject.cipherlink.join(" "), /--workspace-state fresh/);
+  const firstTouch = plan["first-touch"].argvByProject.cipherlink.join(" ");
+  assert.match(firstTouch, /JDTLS_JAVA_HOME=\/opt\/jdk-21/);
+  assert.match(firstTouch, /JAVA_HOME=\/opt\/jdk-25/);
+  assert.match(firstTouch, /JAVA_LSP_PROJECT_JAVA_HOME=\/opt\/jdk-25/);
+  assert.throws(
+    () => assertRealJdtlsBin("/usr/bin/false"),
+    /first-touch requires a real JDTLS_BIN/
+  );
 });
 
 test("dry-run planning refuses an in-checkout output dir and records the quiet-host sample", async () => {
@@ -131,6 +146,49 @@ test("descriptor helper refuses the 0-byte Sprint0 failure mode", () => {
   const descriptor = descriptorForBytes("ok.json", "{\"ok\":true}\n");
   assert.ok(descriptor.bytes > 0);
   assert.match(descriptor.sha256, /^[a-f0-9]{64}$/);
+});
+
+test("extractTrailingJson keeps the last object after isolation banners", () => {
+  const payload = extractTrailingJson(
+    '{"isolation":true}\n{\n  "nested": {\n    "ok": false\n  },\n  "ok": true\n}\npreserved isolated validation root: /tmp/x\n'
+  );
+  assert.equal(payload.ok, true);
+});
+
+test("writeSprint0DocsManifest records hashed summaries and keeps raw files outside git", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v4-sprint0-docs-"));
+  const outputDir = path.join(root, "out");
+  const docsDir = path.join(root, "docs");
+  await mkdir(path.join(outputDir, "cold-matrix"), { recursive: true });
+  await mkdir(path.join(outputDir, "progressive"), { recursive: true });
+  await writeFile(path.join(outputDir, "cold-matrix", "matrix-summary.json"), `${JSON.stringify({ campaign: "cold-matrix" }, null, 2)}\n`);
+  await writeFile(path.join(outputDir, "cold-matrix", "run-manifest.json"), `${JSON.stringify({ campaign: "manifest" }, null, 2)}\n`);
+  for (const project of ["lishuedu", "cipherlink", "exam-parent-v3"]) {
+    await writeFile(path.join(outputDir, `bytes-${project}.stdout.log`), `{"isolation":true}\n${JSON.stringify({ project, mode: "bytes" }, null, 2)}\n`);
+    await writeFile(path.join(outputDir, `first-touch-${project}.stdout.log`), `{"isolation":true}\n${JSON.stringify({ project, mode: "first-touch" }, null, 2)}\n`);
+  }
+  await writeFile(path.join(outputDir, "progressive", "progressive-summary.json"), `${JSON.stringify({ campaign: "progressive" }, null, 2)}\n`);
+  await writeFile(path.join(outputDir, "progressive", "progressive-manifest.json"), `${JSON.stringify({ campaign: "progressive-manifest" }, null, 2)}\n`);
+  const hostQuiet = {
+    loadavg1: 20,
+    logicalCpus: 10,
+    perCpu: 2,
+    maxLoadavgPerCpu: 1.2,
+    memory: { totalBytes: 32 * 1024 ** 3, availableBytes: 8 * 1024 ** 3, minAvailableBytes: 4 * 1024 ** 3 },
+    passed: true
+  };
+  const manifestFile = await writeSprint0DocsManifest({
+    docsDir,
+    outputDir,
+    hostQuiet,
+    identity: {
+      commit: V4_SPRINT0_IDENTITY_COMMIT,
+      productionTree: V4_SPRINT0_PRODUCTION_TREE,
+      measuredCommit: "eeb6331aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  });
+  const { verifyV4Sprint0Baseline } = await import("./verify-v4-sprint0-baseline.mjs");
+  assert.equal(verifyV4Sprint0Baseline(manifestFile).passed, true);
 });
 
 test("default repo candidates prefer the frozen /tmp copies", () => {

@@ -1,0 +1,5224 @@
+{
+  "projects": {
+    "lishuedu": {
+      "metadata": {
+        "generatedAt": "2026-08-18T12:10:20.317Z",
+        "repoRoot": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ZzSRYQ/tmp/codex-java-lsp-isolated-jdt-JidP7G/repo",
+        "projectId": "lishuedu",
+        "scenarios": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ZzSRYQ/candidate/golden/lishuedu.scenarios.jsonl",
+        "indexBackend": "v2",
+        "mode": "balanced",
+        "measurement": "single-diagnostic-canonical-with-pure-verbosity-projections",
+        "canonicalExecutionsPerScenario": 1,
+        "defaultToolResponse": "standard",
+        "indexCacheDir": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ZzSRYQ/tmp/codex-java-lsp-isolated-jdt-JidP7G/index",
+        "indexCacheIsolation": "caller-supplied"
+      },
+      "totals": {
+        "standard": {
+          "serializedBytes": 9318.6,
+          "costResultBytes": 9318.6,
+          "projectionEstimatedTokens": 2329.9,
+          "fields": {
+            "files": {
+              "occurrences": 1,
+              "valueJsonBytes": 6885.2,
+              "omitDeltaBytes": 6894.8
+            },
+            "readPlan": {
+              "occurrences": 1,
+              "valueJsonBytes": 1459.2,
+              "omitDeltaBytes": 1471.6
+            },
+            "metrics": {
+              "occurrences": 1,
+              "valueJsonBytes": 70,
+              "omitDeltaBytes": 81
+            },
+            "evidenceGaps": {
+              "occurrences": 1,
+              "valueJsonBytes": 265.3,
+              "omitDeltaBytes": 281.3
+            },
+            "files.locations": {
+              "occurrences": 21.5,
+              "valueJsonBytes": 942.5,
+              "omitDeltaBytes": 1222.4
+            },
+            "files.reasons": {
+              "occurrences": 0,
+              "valueJsonBytes": 0,
+              "omitDeltaBytes": 0
+            },
+            "files.scoreBreakdown": {
+              "occurrences": 0,
+              "valueJsonBytes": 0,
+              "omitDeltaBytes": 0
+            },
+            "files.verifiedBy": {
+              "occurrences": 0,
+              "valueJsonBytes": 0,
+              "omitDeltaBytes": 0
+            }
+          }
+        },
+        "diagnostic": {
+          "serializedBytes": 28423.8,
+          "costResultBytes": 28423.8,
+          "projectionEstimatedTokens": 7106.4,
+          "fields": {
+            "files": {
+              "occurrences": 1,
+              "valueJsonBytes": 14617.3,
+              "omitDeltaBytes": 14626.5
+            },
+            "readPlan": {
+              "occurrences": 1,
+              "valueJsonBytes": 1740.6,
+              "omitDeltaBytes": 1752.6
+            },
+            "metrics": {
+              "occurrences": 1,
+              "valueJsonBytes": 10778,
+              "omitDeltaBytes": 10789.1
+            },
+            "evidenceGaps": {
+              "occurrences": 1,
+              "valueJsonBytes": 648.3,
+              "omitDeltaBytes": 664.3
+            },
+            "files.locations": {
+              "occurrences": 21.5,
+              "valueJsonBytes": 942.5,
+              "omitDeltaBytes": 1222
+            },
+            "files.reasons": {
+              "occurrences": 21.5,
+              "valueJsonBytes": 1664.3,
+              "omitDeltaBytes": 1900.9
+            },
+            "files.scoreBreakdown": {
+              "occurrences": 21.5,
+              "valueJsonBytes": 4334.4,
+              "omitDeltaBytes": 4721.5
+            },
+            "files.verifiedBy": {
+              "occurrences": 21.5,
+              "valueJsonBytes": 808.9,
+              "omitDeltaBytes": 1110
+            }
+          }
+        },
+        "compact": {
+          "serializedBytes": 9180.9,
+          "costResultBytes": 9180.9,
+          "projectionEstimatedTokens": 2295.6,
+          "fields": {
+            "files": {
+              "occurrences": 1,
+              "valueJsonBytes": 6885.2,
+              "omitDeltaBytes": 6894.8
+            },
+            "readPlan": {
+              "occurrences": 1,
+              "valueJsonBytes": 1459.2,
+              "omitDeltaBytes": 1471.6
+            },
+            "metrics": {
+              "occurrences": 1,
+              "valueJsonBytes": 70,
+              "omitDeltaBytes": 81
+            },
+            "evidenceGaps": {
+              "occurrences": 1,
+              "valueJsonBytes": 127.6,
+              "omitDeltaBytes": 143.6
+            },
+            "files.locations": {
+              "occurrences": 21.5,
+              "valueJsonBytes": 942.5,
+              "omitDeltaBytes": 1222.4
+            },
+            "files.reasons": {
+              "occurrences": 0,
+              "valueJsonBytes": 0,
+              "omitDeltaBytes": 0
+            },
+            "files.scoreBreakdown": {
+              "occurrences": 0,
+              "valueJsonBytes": 0,
+              "omitDeltaBytes": 0
+            },
+            "files.verifiedBy": {
+              "occurrences": 0,
+              "valueJsonBytes": 0,
+              "omitDeltaBytes": 0
+            }
+          }
+        }
+      },
+      "rows": [
+        {
+          "id": "storage-signed-url",
+          "name": "StorageGateway#getSignedUrl",
+          "schemaVersion": "impact-payload-projection-v3",
+          "canonicalExecutions": 1,
+          "candidateReadPlanSha256": "e7c6ce64ab0f04fb781277a8fb97d0fd260936f47449f6dba39ed4dcd373bfc1",
+          "defaultToolSerializedBytes": 8788,
+          "defaultToolEstimatedTokens": 2197,
+          "diagnosticSerializedBytes": 28797,
+          "diagnosticEstimatedTokens": 7200,
+          "standardToDiagnosticBytesRatio": 0.3051706775011286,
+          "verbosity": {
+            "compact": {
+              "serializedBytes": 8728,
+              "costResultBytes": 8728,
+              "projectionEstimatedTokens": 2182,
+              "candidateReadPlanSha256": "e7c6ce64ab0f04fb781277a8fb97d0fd260936f47449f6dba39ed4dcd373bfc1",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 6149,
+                  "omitDeltaBytes": 6158
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1680,
+                  "omitDeltaBytes": 1692
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 71,
+                  "omitDeltaBytes": 82
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 206,
+                  "omitDeltaBytes": 222
+                },
+                "files.locations": {
+                  "occurrences": 20,
+                  "valueJsonBytes": 758,
+                  "omitDeltaBytes": 1018
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "standard": {
+              "serializedBytes": 8788,
+              "costResultBytes": 8788,
+              "projectionEstimatedTokens": 2197,
+              "candidateReadPlanSha256": "e7c6ce64ab0f04fb781277a8fb97d0fd260936f47449f6dba39ed4dcd373bfc1",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 6149,
+                  "omitDeltaBytes": 6158
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1680,
+                  "omitDeltaBytes": 1692
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 71,
+                  "omitDeltaBytes": 82
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 266,
+                  "omitDeltaBytes": 282
+                },
+                "files.locations": {
+                  "occurrences": 20,
+                  "valueJsonBytes": 758,
+                  "omitDeltaBytes": 1018
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "diagnostic": {
+              "serializedBytes": 28797,
+              "costResultBytes": 28797,
+              "projectionEstimatedTokens": 7200,
+              "candidateReadPlanSha256": "e7c6ce64ab0f04fb781277a8fb97d0fd260936f47449f6dba39ed4dcd373bfc1",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 13835,
+                  "omitDeltaBytes": 13844
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1975,
+                  "omitDeltaBytes": 1987
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 11791,
+                  "omitDeltaBytes": 11802
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 573,
+                  "omitDeltaBytes": 589
+                },
+                "files.locations": {
+                  "occurrences": 20,
+                  "valueJsonBytes": 758,
+                  "omitDeltaBytes": 1018
+                },
+                "files.reasons": {
+                  "occurrences": 20,
+                  "valueJsonBytes": 1357,
+                  "omitDeltaBytes": 1577
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 20,
+                  "valueJsonBytes": 4460,
+                  "omitDeltaBytes": 4820
+                },
+                "files.verifiedBy": {
+                  "occurrences": 20,
+                  "valueJsonBytes": 1009,
+                  "omitDeltaBytes": 1289
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "school-template-parser",
+          "name": "SchoolTemplateImportParser#parse",
+          "schemaVersion": "impact-payload-projection-v3",
+          "canonicalExecutions": 1,
+          "candidateReadPlanSha256": "54e7085de6d39c78101ab654af86ea3b4e586d97a6e1ce1a0732dca357b29098",
+          "defaultToolSerializedBytes": 7891,
+          "defaultToolEstimatedTokens": 1973,
+          "diagnosticSerializedBytes": 24254,
+          "diagnosticEstimatedTokens": 6064,
+          "standardToDiagnosticBytesRatio": 0.32534839614084277,
+          "verbosity": {
+            "compact": {
+              "serializedBytes": 7720,
+              "costResultBytes": 7720,
+              "projectionEstimatedTokens": 1930,
+              "candidateReadPlanSha256": "54e7085de6d39c78101ab654af86ea3b4e586d97a6e1ce1a0732dca357b29098",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 5879,
+                  "omitDeltaBytes": 5888
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1048,
+                  "omitDeltaBytes": 1060
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 94,
+                  "omitDeltaBytes": 110
+                },
+                "files.locations": {
+                  "occurrences": 18,
+                  "valueJsonBytes": 890,
+                  "omitDeltaBytes": 1124
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "standard": {
+              "serializedBytes": 7891,
+              "costResultBytes": 7891,
+              "projectionEstimatedTokens": 1973,
+              "candidateReadPlanSha256": "54e7085de6d39c78101ab654af86ea3b4e586d97a6e1ce1a0732dca357b29098",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 5879,
+                  "omitDeltaBytes": 5888
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1048,
+                  "omitDeltaBytes": 1060
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 265,
+                  "omitDeltaBytes": 281
+                },
+                "files.locations": {
+                  "occurrences": 18,
+                  "valueJsonBytes": 890,
+                  "omitDeltaBytes": 1124
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "diagnostic": {
+              "serializedBytes": 24254,
+              "costResultBytes": 24254,
+              "projectionEstimatedTokens": 6064,
+              "candidateReadPlanSha256": "54e7085de6d39c78101ab654af86ea3b4e586d97a6e1ce1a0732dca357b29098",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 11755,
+                  "omitDeltaBytes": 11764
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1280,
+                  "omitDeltaBytes": 1292
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 9920,
+                  "omitDeltaBytes": 9931
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 669,
+                  "omitDeltaBytes": 685
+                },
+                "files.locations": {
+                  "occurrences": 18,
+                  "valueJsonBytes": 890,
+                  "omitDeltaBytes": 1124
+                },
+                "files.reasons": {
+                  "occurrences": 18,
+                  "valueJsonBytes": 1151,
+                  "omitDeltaBytes": 1349
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 18,
+                  "valueJsonBytes": 3540,
+                  "omitDeltaBytes": 3864
+                },
+                "files.verifiedBy": {
+                  "occurrences": 18,
+                  "valueJsonBytes": 411,
+                  "omitDeltaBytes": 663
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "report-reusable-zip",
+          "name": "ReportBatchExportTaskRepository#findReusableReadyZip",
+          "schemaVersion": "impact-payload-projection-v3",
+          "canonicalExecutions": 1,
+          "candidateReadPlanSha256": "af8ea7bf2c118704cfb65f9193d65382308aec4a03bd55c2590f081a012d56bd",
+          "defaultToolSerializedBytes": 11068,
+          "defaultToolEstimatedTokens": 2767,
+          "diagnosticSerializedBytes": 32734,
+          "diagnosticEstimatedTokens": 8184,
+          "standardToDiagnosticBytesRatio": 0.3381193865705383,
+          "verbosity": {
+            "compact": {
+              "serializedBytes": 10897,
+              "costResultBytes": 10897,
+              "projectionEstimatedTokens": 2725,
+              "candidateReadPlanSha256": "af8ea7bf2c118704cfb65f9193d65382308aec4a03bd55c2590f081a012d56bd",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 8545,
+                  "omitDeltaBytes": 8555
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1518,
+                  "omitDeltaBytes": 1531
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 94,
+                  "omitDeltaBytes": 110
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1275,
+                  "omitDeltaBytes": 1614
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "standard": {
+              "serializedBytes": 11068,
+              "costResultBytes": 11068,
+              "projectionEstimatedTokens": 2767,
+              "candidateReadPlanSha256": "af8ea7bf2c118704cfb65f9193d65382308aec4a03bd55c2590f081a012d56bd",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 8545,
+                  "omitDeltaBytes": 8555
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1518,
+                  "omitDeltaBytes": 1531
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 265,
+                  "omitDeltaBytes": 281
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1275,
+                  "omitDeltaBytes": 1614
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "diagnostic": {
+              "serializedBytes": 32734,
+              "costResultBytes": 32734,
+              "projectionEstimatedTokens": 8184,
+              "candidateReadPlanSha256": "af8ea7bf2c118704cfb65f9193d65382308aec4a03bd55c2590f081a012d56bd",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 18223,
+                  "omitDeltaBytes": 18232
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1813,
+                  "omitDeltaBytes": 1825
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 11247,
+                  "omitDeltaBytes": 11258
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 781,
+                  "omitDeltaBytes": 797
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1275,
+                  "omitDeltaBytes": 1613
+                },
+                "files.reasons": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 2279,
+                  "omitDeltaBytes": 2565
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 5492,
+                  "omitDeltaBytes": 5960
+                },
+                "files.verifiedBy": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 789,
+                  "omitDeltaBytes": 1153
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "school-confirm-controller",
+          "name": "SchoolTemplateImportController#confirm",
+          "schemaVersion": "impact-payload-projection-v3",
+          "canonicalExecutions": 1,
+          "candidateReadPlanSha256": "8cc18b40b10ff5edfb5af5d65b5a968a544d1d0fcc9b417618ea53d38b044ba4",
+          "defaultToolSerializedBytes": 7704,
+          "defaultToolEstimatedTokens": 1926,
+          "diagnosticSerializedBytes": 26051,
+          "diagnosticEstimatedTokens": 6513,
+          "standardToDiagnosticBytesRatio": 0.29572761122413727,
+          "verbosity": {
+            "compact": {
+              "serializedBytes": 7533,
+              "costResultBytes": 7533,
+              "projectionEstimatedTokens": 1884,
+              "candidateReadPlanSha256": "8cc18b40b10ff5edfb5af5d65b5a968a544d1d0fcc9b417618ea53d38b044ba4",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 4996,
+                  "omitDeltaBytes": 5005
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1723,
+                  "omitDeltaBytes": 1735
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 94,
+                  "omitDeltaBytes": 110
+                },
+                "files.locations": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 569,
+                  "omitDeltaBytes": 777
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "standard": {
+              "serializedBytes": 7704,
+              "costResultBytes": 7704,
+              "projectionEstimatedTokens": 1926,
+              "candidateReadPlanSha256": "8cc18b40b10ff5edfb5af5d65b5a968a544d1d0fcc9b417618ea53d38b044ba4",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 4996,
+                  "omitDeltaBytes": 5005
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1723,
+                  "omitDeltaBytes": 1735
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 265,
+                  "omitDeltaBytes": 281
+                },
+                "files.locations": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 569,
+                  "omitDeltaBytes": 777
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "diagnostic": {
+              "serializedBytes": 26051,
+              "costResultBytes": 26051,
+              "projectionEstimatedTokens": 6513,
+              "candidateReadPlanSha256": "8cc18b40b10ff5edfb5af5d65b5a968a544d1d0fcc9b417618ea53d38b044ba4",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 10686,
+                  "omitDeltaBytes": 10695
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 2115,
+                  "omitDeltaBytes": 2127
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 11930,
+                  "omitDeltaBytes": 11941
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 669,
+                  "omitDeltaBytes": 685
+                },
+                "files.locations": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 569,
+                  "omitDeltaBytes": 777
+                },
+                "files.reasons": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 1283,
+                  "omitDeltaBytes": 1459
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 2973,
+                  "omitDeltaBytes": 3261
+                },
+                "files.verifiedBy": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 746,
+                  "omitDeltaBytes": 970
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "benefit-product-code-dto",
+          "name": "ParentStudentBenefitItemResponse.productCode",
+          "schemaVersion": "impact-payload-projection-v3",
+          "canonicalExecutions": 1,
+          "candidateReadPlanSha256": "3bd63f73f8bc9c5846ff6f94b63ae8fa8ef8367e3804de2fc77d2a828b94f049",
+          "defaultToolSerializedBytes": 9426,
+          "defaultToolEstimatedTokens": 2357,
+          "diagnosticSerializedBytes": 24226,
+          "diagnosticEstimatedTokens": 6057,
+          "standardToDiagnosticBytesRatio": 0.3890861058367044,
+          "verbosity": {
+            "compact": {
+              "serializedBytes": 9366,
+              "costResultBytes": 9366,
+              "projectionEstimatedTokens": 2342,
+              "candidateReadPlanSha256": "3bd63f73f8bc9c5846ff6f94b63ae8fa8ef8367e3804de2fc77d2a828b94f049",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 7985,
+                  "omitDeltaBytes": 7995
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 477,
+                  "omitDeltaBytes": 489
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 69,
+                  "omitDeltaBytes": 80
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 206,
+                  "omitDeltaBytes": 222
+                },
+                "files.locations": {
+                  "occurrences": 24,
+                  "valueJsonBytes": 1212,
+                  "omitDeltaBytes": 1524
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "standard": {
+              "serializedBytes": 9426,
+              "costResultBytes": 9426,
+              "projectionEstimatedTokens": 2357,
+              "candidateReadPlanSha256": "3bd63f73f8bc9c5846ff6f94b63ae8fa8ef8367e3804de2fc77d2a828b94f049",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 7985,
+                  "omitDeltaBytes": 7995
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 477,
+                  "omitDeltaBytes": 489
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 69,
+                  "omitDeltaBytes": 80
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 266,
+                  "omitDeltaBytes": 282
+                },
+                "files.locations": {
+                  "occurrences": 24,
+                  "valueJsonBytes": 1212,
+                  "omitDeltaBytes": 1524
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "diagnostic": {
+              "serializedBytes": 24226,
+              "costResultBytes": 24226,
+              "projectionEstimatedTokens": 6057,
+              "candidateReadPlanSha256": "3bd63f73f8bc9c5846ff6f94b63ae8fa8ef8367e3804de2fc77d2a828b94f049",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 15693,
+                  "omitDeltaBytes": 15703
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 543,
+                  "omitDeltaBytes": 555
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 6899,
+                  "omitDeltaBytes": 6910
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 461,
+                  "omitDeltaBytes": 477
+                },
+                "files.locations": {
+                  "occurrences": 24,
+                  "valueJsonBytes": 1212,
+                  "omitDeltaBytes": 1524
+                },
+                "files.reasons": {
+                  "occurrences": 24,
+                  "valueJsonBytes": 1523,
+                  "omitDeltaBytes": 1787
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 24,
+                  "valueJsonBytes": 4623,
+                  "omitDeltaBytes": 5055
+                },
+                "files.verifiedBy": {
+                  "occurrences": 24,
+                  "valueJsonBytes": 530,
+                  "omitDeltaBytes": 866
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "school-mapstruct-uses",
+          "name": "SchoolTemplateImportController#confirm MapStruct uses",
+          "schemaVersion": "impact-payload-projection-v3",
+          "canonicalExecutions": 1,
+          "candidateReadPlanSha256": "8cc18b40b10ff5edfb5af5d65b5a968a544d1d0fcc9b417618ea53d38b044ba4",
+          "defaultToolSerializedBytes": 7703,
+          "defaultToolEstimatedTokens": 1926,
+          "diagnosticSerializedBytes": 25555,
+          "diagnosticEstimatedTokens": 6389,
+          "standardToDiagnosticBytesRatio": 0.3014282919193896,
+          "verbosity": {
+            "compact": {
+              "serializedBytes": 7532,
+              "costResultBytes": 7532,
+              "projectionEstimatedTokens": 1883,
+              "candidateReadPlanSha256": "8cc18b40b10ff5edfb5af5d65b5a968a544d1d0fcc9b417618ea53d38b044ba4",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 4996,
+                  "omitDeltaBytes": 5005
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1723,
+                  "omitDeltaBytes": 1735
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 69,
+                  "omitDeltaBytes": 80
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 94,
+                  "omitDeltaBytes": 110
+                },
+                "files.locations": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 569,
+                  "omitDeltaBytes": 777
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "standard": {
+              "serializedBytes": 7703,
+              "costResultBytes": 7703,
+              "projectionEstimatedTokens": 1926,
+              "candidateReadPlanSha256": "8cc18b40b10ff5edfb5af5d65b5a968a544d1d0fcc9b417618ea53d38b044ba4",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 4996,
+                  "omitDeltaBytes": 5005
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1723,
+                  "omitDeltaBytes": 1735
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 69,
+                  "omitDeltaBytes": 80
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 265,
+                  "omitDeltaBytes": 281
+                },
+                "files.locations": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 569,
+                  "omitDeltaBytes": 777
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "diagnostic": {
+              "serializedBytes": 25555,
+              "costResultBytes": 25555,
+              "projectionEstimatedTokens": 6389,
+              "candidateReadPlanSha256": "8cc18b40b10ff5edfb5af5d65b5a968a544d1d0fcc9b417618ea53d38b044ba4",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 10686,
+                  "omitDeltaBytes": 10695
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 2115,
+                  "omitDeltaBytes": 2127
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 11434,
+                  "omitDeltaBytes": 11445
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 669,
+                  "omitDeltaBytes": 685
+                },
+                "files.locations": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 569,
+                  "omitDeltaBytes": 777
+                },
+                "files.reasons": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 1283,
+                  "omitDeltaBytes": 1459
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 2973,
+                  "omitDeltaBytes": 3261
+                },
+                "files.verifiedBy": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 746,
+                  "omitDeltaBytes": 970
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "audit-order-repository-mapper-rule-type",
+          "name": "AuditOrderRepositoryImpl#save new assignee rule type in MyBatis mapper",
+          "schemaVersion": "impact-payload-projection-v3",
+          "canonicalExecutions": 1,
+          "candidateReadPlanSha256": "0e8aa37d42c48ee73712fec431484268dc00c23971e86050fb29c7e5e95f4ad3",
+          "defaultToolSerializedBytes": 10531,
+          "defaultToolEstimatedTokens": 2633,
+          "diagnosticSerializedBytes": 31766,
+          "diagnosticEstimatedTokens": 7942,
+          "standardToDiagnosticBytesRatio": 0.3315179751936032,
+          "verbosity": {
+            "compact": {
+              "serializedBytes": 10360,
+              "costResultBytes": 10360,
+              "projectionEstimatedTokens": 2590,
+              "candidateReadPlanSha256": "0e8aa37d42c48ee73712fec431484268dc00c23971e86050fb29c7e5e95f4ad3",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 8019,
+                  "omitDeltaBytes": 8029
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1531,
+                  "omitDeltaBytes": 1544
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 94,
+                  "omitDeltaBytes": 110
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1077,
+                  "omitDeltaBytes": 1416
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "standard": {
+              "serializedBytes": 10531,
+              "costResultBytes": 10531,
+              "projectionEstimatedTokens": 2633,
+              "candidateReadPlanSha256": "0e8aa37d42c48ee73712fec431484268dc00c23971e86050fb29c7e5e95f4ad3",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 8019,
+                  "omitDeltaBytes": 8029
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1531,
+                  "omitDeltaBytes": 1544
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 265,
+                  "omitDeltaBytes": 281
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1077,
+                  "omitDeltaBytes": 1416
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "diagnostic": {
+              "serializedBytes": 31766,
+              "costResultBytes": 31766,
+              "projectionEstimatedTokens": 7942,
+              "candidateReadPlanSha256": "0e8aa37d42c48ee73712fec431484268dc00c23971e86050fb29c7e5e95f4ad3",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 17377,
+                  "omitDeltaBytes": 17386
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1844,
+                  "omitDeltaBytes": 1856
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 11118,
+                  "omitDeltaBytes": 11129
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 781,
+                  "omitDeltaBytes": 797
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1077,
+                  "omitDeltaBytes": 1415
+                },
+                "files.reasons": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 2057,
+                  "omitDeltaBytes": 2343
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 5230,
+                  "omitDeltaBytes": 5698
+                },
+                "files.verifiedBy": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 953,
+                  "omitDeltaBytes": 1317
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "audit-assignee-mapper-precision",
+          "name": "AuditAssigneeMapper#toDomain new overload precision",
+          "schemaVersion": "impact-payload-projection-v3",
+          "canonicalExecutions": 1,
+          "candidateReadPlanSha256": "6152a541ee7fa8a9a7f8c2506502c920af177a90fcbd37b605c16daddb8863f3",
+          "defaultToolSerializedBytes": 8074,
+          "defaultToolEstimatedTokens": 2019,
+          "diagnosticSerializedBytes": 25468,
+          "diagnosticEstimatedTokens": 6367,
+          "standardToDiagnosticBytesRatio": 0.31702528663420765,
+          "verbosity": {
+            "compact": {
+              "serializedBytes": 8014,
+              "costResultBytes": 8014,
+              "projectionEstimatedTokens": 2004,
+              "candidateReadPlanSha256": "6152a541ee7fa8a9a7f8c2506502c920af177a90fcbd37b605c16daddb8863f3",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 5490,
+                  "omitDeltaBytes": 5500
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1625,
+                  "omitDeltaBytes": 1637
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 206,
+                  "omitDeltaBytes": 222
+                },
+                "files.locations": {
+                  "occurrences": 17,
+                  "valueJsonBytes": 682,
+                  "omitDeltaBytes": 903
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "standard": {
+              "serializedBytes": 8074,
+              "costResultBytes": 8074,
+              "projectionEstimatedTokens": 2019,
+              "candidateReadPlanSha256": "6152a541ee7fa8a9a7f8c2506502c920af177a90fcbd37b605c16daddb8863f3",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 5490,
+                  "omitDeltaBytes": 5500
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1625,
+                  "omitDeltaBytes": 1637
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 266,
+                  "omitDeltaBytes": 282
+                },
+                "files.locations": {
+                  "occurrences": 17,
+                  "valueJsonBytes": 682,
+                  "omitDeltaBytes": 903
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "diagnostic": {
+              "serializedBytes": 25468,
+              "costResultBytes": 25468,
+              "projectionEstimatedTokens": 6367,
+              "candidateReadPlanSha256": "6152a541ee7fa8a9a7f8c2506502c920af177a90fcbd37b605c16daddb8863f3",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 11519,
+                  "omitDeltaBytes": 11528
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1841,
+                  "omitDeltaBytes": 1853
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 11023,
+                  "omitDeltaBytes": 11034
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 461,
+                  "omitDeltaBytes": 477
+                },
+                "files.locations": {
+                  "occurrences": 17,
+                  "valueJsonBytes": 682,
+                  "omitDeltaBytes": 903
+                },
+                "files.reasons": {
+                  "occurrences": 17,
+                  "valueJsonBytes": 1266,
+                  "omitDeltaBytes": 1453
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 17,
+                  "valueJsonBytes": 3495,
+                  "omitDeltaBytes": 3801
+                },
+                "files.verifiedBy": {
+                  "occurrences": 17,
+                  "valueJsonBytes": 537,
+                  "omitDeltaBytes": 775
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "exam-score-export-cross-module-holdout",
+          "name": "ExamScoreExportAppService#export cross-module score workbook",
+          "schemaVersion": "impact-payload-projection-v3",
+          "canonicalExecutions": 1,
+          "candidateReadPlanSha256": "6f99b18918803b7a3a0670c182256b49e3a88a4c58304f2214260ca448b3da18",
+          "defaultToolSerializedBytes": 11068,
+          "defaultToolEstimatedTokens": 2767,
+          "diagnosticSerializedBytes": 33953,
+          "diagnosticEstimatedTokens": 8489,
+          "standardToDiagnosticBytesRatio": 0.32598003121962715,
+          "verbosity": {
+            "compact": {
+              "serializedBytes": 10897,
+              "costResultBytes": 10897,
+              "projectionEstimatedTokens": 2725,
+              "candidateReadPlanSha256": "6f99b18918803b7a3a0670c182256b49e3a88a4c58304f2214260ca448b3da18",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 8523,
+                  "omitDeltaBytes": 8533
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1579,
+                  "omitDeltaBytes": 1592
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 71,
+                  "omitDeltaBytes": 82
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 94,
+                  "omitDeltaBytes": 110
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1116,
+                  "omitDeltaBytes": 1455
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "standard": {
+              "serializedBytes": 11068,
+              "costResultBytes": 11068,
+              "projectionEstimatedTokens": 2767,
+              "candidateReadPlanSha256": "6f99b18918803b7a3a0670c182256b49e3a88a4c58304f2214260ca448b3da18",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 8523,
+                  "omitDeltaBytes": 8533
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1579,
+                  "omitDeltaBytes": 1592
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 71,
+                  "omitDeltaBytes": 82
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 265,
+                  "omitDeltaBytes": 281
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1116,
+                  "omitDeltaBytes": 1455
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "diagnostic": {
+              "serializedBytes": 33953,
+              "costResultBytes": 33953,
+              "projectionEstimatedTokens": 8489,
+              "candidateReadPlanSha256": "6f99b18918803b7a3a0670c182256b49e3a88a4c58304f2214260ca448b3da18",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 19558,
+                  "omitDeltaBytes": 19568
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1874,
+                  "omitDeltaBytes": 1886
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 11140,
+                  "omitDeltaBytes": 11152
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 750,
+                  "omitDeltaBytes": 766
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1116,
+                  "omitDeltaBytes": 1454
+                },
+                "files.reasons": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 2685,
+                  "omitDeltaBytes": 2972
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 5620,
+                  "omitDeltaBytes": 6089
+                },
+                "files.verifiedBy": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1612,
+                  "omitDeltaBytes": 1977
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "paper-task-claim-iam-holdout",
+          "name": "PaperTaskCommandAppService#claimTask IAM identity and atomic claim",
+          "schemaVersion": "impact-payload-projection-v3",
+          "canonicalExecutions": 1,
+          "candidateReadPlanSha256": "2e79527d23e0cd3f29643968e69c2b70df22a36a02e8fb681baff80a5729e1d7",
+          "defaultToolSerializedBytes": 10933,
+          "defaultToolEstimatedTokens": 2734,
+          "diagnosticSerializedBytes": 31434,
+          "diagnosticEstimatedTokens": 7859,
+          "standardToDiagnosticBytesRatio": 0.347808105872622,
+          "verbosity": {
+            "compact": {
+              "serializedBytes": 10762,
+              "costResultBytes": 10762,
+              "projectionEstimatedTokens": 2691,
+              "candidateReadPlanSha256": "2e79527d23e0cd3f29643968e69c2b70df22a36a02e8fb681baff80a5729e1d7",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 8270,
+                  "omitDeltaBytes": 8280
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1688,
+                  "omitDeltaBytes": 1701
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 94,
+                  "omitDeltaBytes": 110
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1277,
+                  "omitDeltaBytes": 1616
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "standard": {
+              "serializedBytes": 10933,
+              "costResultBytes": 10933,
+              "projectionEstimatedTokens": 2734,
+              "candidateReadPlanSha256": "2e79527d23e0cd3f29643968e69c2b70df22a36a02e8fb681baff80a5729e1d7",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 8270,
+                  "omitDeltaBytes": 8280
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1688,
+                  "omitDeltaBytes": 1701
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 265,
+                  "omitDeltaBytes": 281
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1277,
+                  "omitDeltaBytes": 1616
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "diagnostic": {
+              "serializedBytes": 31434,
+              "costResultBytes": 31434,
+              "projectionEstimatedTokens": 7859,
+              "candidateReadPlanSha256": "2e79527d23e0cd3f29643968e69c2b70df22a36a02e8fb681baff80a5729e1d7",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 16841,
+                  "omitDeltaBytes": 16850
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 2006,
+                  "omitDeltaBytes": 2018
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 11278,
+                  "omitDeltaBytes": 11289
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 669,
+                  "omitDeltaBytes": 685
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1277,
+                  "omitDeltaBytes": 1615
+                },
+                "files.reasons": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1759,
+                  "omitDeltaBytes": 2045
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 4938,
+                  "omitDeltaBytes": 5406
+                },
+                "files.verifiedBy": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 756,
+                  "omitDeltaBytes": 1120
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "cipherlink": {
+      "metadata": {
+        "generatedAt": "2026-08-18T12:10:33.159Z",
+        "repoRoot": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-gsQ8se/tmp/codex-java-lsp-isolated-jdt-ugp0E0/repo",
+        "projectId": "cipherlink",
+        "scenarios": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-gsQ8se/candidate/golden/cipherlink.scenarios.jsonl",
+        "indexBackend": "v2",
+        "mode": "balanced",
+        "measurement": "single-diagnostic-canonical-with-pure-verbosity-projections",
+        "canonicalExecutionsPerScenario": 1,
+        "defaultToolResponse": "standard",
+        "indexCacheDir": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-gsQ8se/tmp/codex-java-lsp-isolated-jdt-ugp0E0/index",
+        "indexCacheIsolation": "caller-supplied"
+      },
+      "totals": {
+        "standard": {
+          "serializedBytes": 9896.3,
+          "costResultBytes": 9896.3,
+          "projectionEstimatedTokens": 2474.5,
+          "fields": {
+            "files": {
+              "occurrences": 1,
+              "valueJsonBytes": 7450.2,
+              "omitDeltaBytes": 7459.9
+            },
+            "readPlan": {
+              "occurrences": 1,
+              "valueJsonBytes": 1459.8,
+              "omitDeltaBytes": 1472.3
+            },
+            "metrics": {
+              "occurrences": 1,
+              "valueJsonBytes": 69.9,
+              "omitDeltaBytes": 80.9
+            },
+            "evidenceGaps": {
+              "occurrences": 1,
+              "valueJsonBytes": 265.6,
+              "omitDeltaBytes": 281.6
+            },
+            "files.locations": {
+              "occurrences": 22.6,
+              "valueJsonBytes": 1041,
+              "omitDeltaBytes": 1335.3
+            },
+            "files.reasons": {
+              "occurrences": 0,
+              "valueJsonBytes": 0,
+              "omitDeltaBytes": 0
+            },
+            "files.scoreBreakdown": {
+              "occurrences": 0,
+              "valueJsonBytes": 0,
+              "omitDeltaBytes": 0
+            },
+            "files.verifiedBy": {
+              "occurrences": 0,
+              "valueJsonBytes": 0,
+              "omitDeltaBytes": 0
+            }
+          }
+        },
+        "diagnostic": {
+          "serializedBytes": 29658.7,
+          "costResultBytes": 29658.7,
+          "projectionEstimatedTokens": 7415.1,
+          "fields": {
+            "files": {
+              "occurrences": 1,
+              "valueJsonBytes": 15459.7,
+              "omitDeltaBytes": 15468.8
+            },
+            "readPlan": {
+              "occurrences": 1,
+              "valueJsonBytes": 1749.5,
+              "omitDeltaBytes": 1761.5
+            },
+            "metrics": {
+              "occurrences": 1,
+              "valueJsonBytes": 11198.2,
+              "omitDeltaBytes": 11209.3
+            },
+            "evidenceGaps": {
+              "occurrences": 1,
+              "valueJsonBytes": 600,
+              "omitDeltaBytes": 616
+            },
+            "files.locations": {
+              "occurrences": 22.6,
+              "valueJsonBytes": 1041,
+              "omitDeltaBytes": 1334.8
+            },
+            "files.reasons": {
+              "occurrences": 22.6,
+              "valueJsonBytes": 1724.8,
+              "omitDeltaBytes": 1973.5
+            },
+            "files.scoreBreakdown": {
+              "occurrences": 22.6,
+              "valueJsonBytes": 4452.4,
+              "omitDeltaBytes": 4859.3
+            },
+            "files.verifiedBy": {
+              "occurrences": 22.6,
+              "valueJsonBytes": 860.5,
+              "omitDeltaBytes": 1176.9
+            }
+          }
+        },
+        "compact": {
+          "serializedBytes": 9791.9,
+          "costResultBytes": 9791.9,
+          "projectionEstimatedTokens": 2448.4,
+          "fields": {
+            "files": {
+              "occurrences": 1,
+              "valueJsonBytes": 7450.2,
+              "omitDeltaBytes": 7459.9
+            },
+            "readPlan": {
+              "occurrences": 1,
+              "valueJsonBytes": 1459.8,
+              "omitDeltaBytes": 1472.4
+            },
+            "metrics": {
+              "occurrences": 1,
+              "valueJsonBytes": 69.9,
+              "omitDeltaBytes": 80.9
+            },
+            "evidenceGaps": {
+              "occurrences": 1,
+              "valueJsonBytes": 161.2,
+              "omitDeltaBytes": 177.2
+            },
+            "files.locations": {
+              "occurrences": 22.6,
+              "valueJsonBytes": 1041,
+              "omitDeltaBytes": 1335.4
+            },
+            "files.reasons": {
+              "occurrences": 0,
+              "valueJsonBytes": 0,
+              "omitDeltaBytes": 0
+            },
+            "files.scoreBreakdown": {
+              "occurrences": 0,
+              "valueJsonBytes": 0,
+              "omitDeltaBytes": 0
+            },
+            "files.verifiedBy": {
+              "occurrences": 0,
+              "valueJsonBytes": 0,
+              "omitDeltaBytes": 0
+            }
+          }
+        }
+      },
+      "rows": [
+        {
+          "id": "client-update-check",
+          "name": "ClientUpdateController#check",
+          "schemaVersion": "impact-payload-projection-v3",
+          "canonicalExecutions": 1,
+          "candidateReadPlanSha256": "e01cbbebcf9afe592939ccdb14be8f6e93e098c289a9f993f214ca767a604992",
+          "defaultToolSerializedBytes": 7898,
+          "defaultToolEstimatedTokens": 1975,
+          "diagnosticSerializedBytes": 26750,
+          "diagnosticEstimatedTokens": 6688,
+          "standardToDiagnosticBytesRatio": 0.2952523364485981,
+          "verbosity": {
+            "compact": {
+              "serializedBytes": 7727,
+              "costResultBytes": 7727,
+              "projectionEstimatedTokens": 1932,
+              "candidateReadPlanSha256": "e01cbbebcf9afe592939ccdb14be8f6e93e098c289a9f993f214ca767a604992",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 5391,
+                  "omitDeltaBytes": 5400
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1542,
+                  "omitDeltaBytes": 1554
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 94,
+                  "omitDeltaBytes": 110
+                },
+                "files.locations": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 904,
+                  "omitDeltaBytes": 1112
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "standard": {
+              "serializedBytes": 7898,
+              "costResultBytes": 7898,
+              "projectionEstimatedTokens": 1975,
+              "candidateReadPlanSha256": "e01cbbebcf9afe592939ccdb14be8f6e93e098c289a9f993f214ca767a604992",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 5391,
+                  "omitDeltaBytes": 5400
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1542,
+                  "omitDeltaBytes": 1554
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 265,
+                  "omitDeltaBytes": 281
+                },
+                "files.locations": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 904,
+                  "omitDeltaBytes": 1112
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "diagnostic": {
+              "serializedBytes": 26750,
+              "costResultBytes": 26750,
+              "projectionEstimatedTokens": 6688,
+              "candidateReadPlanSha256": "e01cbbebcf9afe592939ccdb14be8f6e93e098c289a9f993f214ca767a604992",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 11217,
+                  "omitDeltaBytes": 11226
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1868,
+                  "omitDeltaBytes": 1880
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 12365,
+                  "omitDeltaBytes": 12376
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 669,
+                  "omitDeltaBytes": 685
+                },
+                "files.locations": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 904,
+                  "omitDeltaBytes": 1112
+                },
+                "files.reasons": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 1314,
+                  "omitDeltaBytes": 1490
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 3156,
+                  "omitDeltaBytes": 3444
+                },
+                "files.verifiedBy": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 668,
+                  "omitDeltaBytes": 892
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "transfer-upload-init",
+          "name": "TransferUploadController#init",
+          "schemaVersion": "impact-payload-projection-v3",
+          "canonicalExecutions": 1,
+          "candidateReadPlanSha256": "e8100a3b2dc4f3f5bc452ab36f32b9ea228d7e8bcdf554b81ab49daca6ed44c0",
+          "defaultToolSerializedBytes": 7553,
+          "defaultToolEstimatedTokens": 1889,
+          "diagnosticSerializedBytes": 25449,
+          "diagnosticEstimatedTokens": 6363,
+          "standardToDiagnosticBytesRatio": 0.2967896577468663,
+          "verbosity": {
+            "compact": {
+              "serializedBytes": 7382,
+              "costResultBytes": 7382,
+              "projectionEstimatedTokens": 1846,
+              "candidateReadPlanSha256": "e8100a3b2dc4f3f5bc452ab36f32b9ea228d7e8bcdf554b81ab49daca6ed44c0",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 4975,
+                  "omitDeltaBytes": 4984
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1606,
+                  "omitDeltaBytes": 1618
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 94,
+                  "omitDeltaBytes": 110
+                },
+                "files.locations": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 633,
+                  "omitDeltaBytes": 841
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "standard": {
+              "serializedBytes": 7553,
+              "costResultBytes": 7553,
+              "projectionEstimatedTokens": 1889,
+              "candidateReadPlanSha256": "e8100a3b2dc4f3f5bc452ab36f32b9ea228d7e8bcdf554b81ab49daca6ed44c0",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 4975,
+                  "omitDeltaBytes": 4984
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1606,
+                  "omitDeltaBytes": 1618
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 265,
+                  "omitDeltaBytes": 281
+                },
+                "files.locations": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 633,
+                  "omitDeltaBytes": 841
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "diagnostic": {
+              "serializedBytes": 25449,
+              "costResultBytes": 25449,
+              "projectionEstimatedTokens": 6363,
+              "candidateReadPlanSha256": "e8100a3b2dc4f3f5bc452ab36f32b9ea228d7e8bcdf554b81ab49daca6ed44c0",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 10722,
+                  "omitDeltaBytes": 10731
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1983,
+                  "omitDeltaBytes": 1995
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 11437,
+                  "omitDeltaBytes": 11448
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 669,
+                  "omitDeltaBytes": 685
+                },
+                "files.locations": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 633,
+                  "omitDeltaBytes": 841
+                },
+                "files.reasons": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 1302,
+                  "omitDeltaBytes": 1478
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 2983,
+                  "omitDeltaBytes": 3271
+                },
+                "files.verifiedBy": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 774,
+                  "omitDeltaBytes": 998
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "transfer-upload-session-repository",
+          "name": "TransferRepository#findUploadInitByOwnerAndIdempotencyKey",
+          "schemaVersion": "impact-payload-projection-v3",
+          "canonicalExecutions": 1,
+          "candidateReadPlanSha256": "deec4df503526828439ffc89f8b11c84b0eb034a72b1207ddb5be12425348115",
+          "defaultToolSerializedBytes": 10996,
+          "defaultToolEstimatedTokens": 2749,
+          "diagnosticSerializedBytes": 30846,
+          "diagnosticEstimatedTokens": 7712,
+          "standardToDiagnosticBytesRatio": 0.3564805809505284,
+          "verbosity": {
+            "compact": {
+              "serializedBytes": 10825,
+              "costResultBytes": 10825,
+              "projectionEstimatedTokens": 2707,
+              "candidateReadPlanSha256": "deec4df503526828439ffc89f8b11c84b0eb034a72b1207ddb5be12425348115",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 9003,
+                  "omitDeltaBytes": 9013
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 967,
+                  "omitDeltaBytes": 980
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 94,
+                  "omitDeltaBytes": 110
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1734,
+                  "omitDeltaBytes": 2073
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "standard": {
+              "serializedBytes": 10996,
+              "costResultBytes": 10996,
+              "projectionEstimatedTokens": 2749,
+              "candidateReadPlanSha256": "deec4df503526828439ffc89f8b11c84b0eb034a72b1207ddb5be12425348115",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 9003,
+                  "omitDeltaBytes": 9013
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 967,
+                  "omitDeltaBytes": 979
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 265,
+                  "omitDeltaBytes": 281
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1734,
+                  "omitDeltaBytes": 2073
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "diagnostic": {
+              "serializedBytes": 30846,
+              "costResultBytes": 30846,
+              "projectionEstimatedTokens": 7712,
+              "candidateReadPlanSha256": "deec4df503526828439ffc89f8b11c84b0eb034a72b1207ddb5be12425348115",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 18297,
+                  "omitDeltaBytes": 18306
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1181,
+                  "omitDeltaBytes": 1193
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 9896,
+                  "omitDeltaBytes": 9907
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 781,
+                  "omitDeltaBytes": 797
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1734,
+                  "omitDeltaBytes": 2072
+                },
+                "files.reasons": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 2127,
+                  "omitDeltaBytes": 2413
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 5442,
+                  "omitDeltaBytes": 5910
+                },
+                "files.verifiedBy": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 607,
+                  "omitDeltaBytes": 971
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "aliyun-sms-gateway-send",
+          "name": "AliyunSmsGateway#send",
+          "schemaVersion": "impact-payload-projection-v3",
+          "canonicalExecutions": 1,
+          "candidateReadPlanSha256": "8a1d88098381c1abdf8935967295483e1b2fa163c597e2b15991690b5fdc4b1e",
+          "defaultToolSerializedBytes": 9317,
+          "defaultToolEstimatedTokens": 2330,
+          "diagnosticSerializedBytes": 27833,
+          "diagnosticEstimatedTokens": 6959,
+          "standardToDiagnosticBytesRatio": 0.334746523910466,
+          "verbosity": {
+            "compact": {
+              "serializedBytes": 9257,
+              "costResultBytes": 9257,
+              "projectionEstimatedTokens": 2315,
+              "candidateReadPlanSha256": "8a1d88098381c1abdf8935967295483e1b2fa163c597e2b15991690b5fdc4b1e",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 6967,
+                  "omitDeltaBytes": 6976
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1382,
+                  "omitDeltaBytes": 1394
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 206,
+                  "omitDeltaBytes": 222
+                },
+                "files.locations": {
+                  "occurrences": 20,
+                  "valueJsonBytes": 1138,
+                  "omitDeltaBytes": 1398
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "standard": {
+              "serializedBytes": 9317,
+              "costResultBytes": 9317,
+              "projectionEstimatedTokens": 2330,
+              "candidateReadPlanSha256": "8a1d88098381c1abdf8935967295483e1b2fa163c597e2b15991690b5fdc4b1e",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 6967,
+                  "omitDeltaBytes": 6976
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1382,
+                  "omitDeltaBytes": 1394
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 266,
+                  "omitDeltaBytes": 282
+                },
+                "files.locations": {
+                  "occurrences": 20,
+                  "valueJsonBytes": 1138,
+                  "omitDeltaBytes": 1398
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "diagnostic": {
+              "serializedBytes": 27833,
+              "costResultBytes": 27833,
+              "projectionEstimatedTokens": 6959,
+              "candidateReadPlanSha256": "8a1d88098381c1abdf8935967295483e1b2fa163c597e2b15991690b5fdc4b1e",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 14168,
+                  "omitDeltaBytes": 14177
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1708,
+                  "omitDeltaBytes": 1720
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 10751,
+                  "omitDeltaBytes": 10762
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 573,
+                  "omitDeltaBytes": 589
+                },
+                "files.locations": {
+                  "occurrences": 20,
+                  "valueJsonBytes": 1138,
+                  "omitDeltaBytes": 1398
+                },
+                "files.reasons": {
+                  "occurrences": 20,
+                  "valueJsonBytes": 1496,
+                  "omitDeltaBytes": 1716
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 20,
+                  "valueJsonBytes": 4194,
+                  "omitDeltaBytes": 4554
+                },
+                "files.verifiedBy": {
+                  "occurrences": 20,
+                  "valueJsonBytes": 651,
+                  "omitDeltaBytes": 931
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "operation-log-response-dto",
+          "name": "OperationLogResponse#from",
+          "schemaVersion": "impact-payload-projection-v3",
+          "canonicalExecutions": 1,
+          "candidateReadPlanSha256": "dc581fb16d7d6071b6d6ce80a179d2d23b83a2a6bb6022ee881096719a80b548",
+          "defaultToolSerializedBytes": 7925,
+          "defaultToolEstimatedTokens": 1982,
+          "diagnosticSerializedBytes": 22758,
+          "diagnosticEstimatedTokens": 5690,
+          "standardToDiagnosticBytesRatio": 0.34822919412953685,
+          "verbosity": {
+            "compact": {
+              "serializedBytes": 7865,
+              "costResultBytes": 7865,
+              "projectionEstimatedTokens": 1967,
+              "candidateReadPlanSha256": "dc581fb16d7d6071b6d6ce80a179d2d23b83a2a6bb6022ee881096719a80b548",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 5970,
+                  "omitDeltaBytes": 5980
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1005,
+                  "omitDeltaBytes": 1017
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 69,
+                  "omitDeltaBytes": 80
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 206,
+                  "omitDeltaBytes": 222
+                },
+                "files.locations": {
+                  "occurrences": 18,
+                  "valueJsonBytes": 935,
+                  "omitDeltaBytes": 1169
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "standard": {
+              "serializedBytes": 7925,
+              "costResultBytes": 7925,
+              "projectionEstimatedTokens": 1982,
+              "candidateReadPlanSha256": "dc581fb16d7d6071b6d6ce80a179d2d23b83a2a6bb6022ee881096719a80b548",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 5970,
+                  "omitDeltaBytes": 5980
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1005,
+                  "omitDeltaBytes": 1017
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 69,
+                  "omitDeltaBytes": 80
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 266,
+                  "omitDeltaBytes": 282
+                },
+                "files.locations": {
+                  "occurrences": 18,
+                  "valueJsonBytes": 935,
+                  "omitDeltaBytes": 1169
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "diagnostic": {
+              "serializedBytes": 22758,
+              "costResultBytes": 22758,
+              "projectionEstimatedTokens": 5690,
+              "candidateReadPlanSha256": "dc581fb16d7d6071b6d6ce80a179d2d23b83a2a6bb6022ee881096719a80b548",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 11843,
+                  "omitDeltaBytes": 11852
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1155,
+                  "omitDeltaBytes": 1167
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 8683,
+                  "omitDeltaBytes": 8694
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 461,
+                  "omitDeltaBytes": 477
+                },
+                "files.locations": {
+                  "occurrences": 18,
+                  "valueJsonBytes": 935,
+                  "omitDeltaBytes": 1169
+                },
+                "files.reasons": {
+                  "occurrences": 18,
+                  "valueJsonBytes": 1175,
+                  "omitDeltaBytes": 1373
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 18,
+                  "valueJsonBytes": 3437,
+                  "omitDeltaBytes": 3761
+                },
+                "files.verifiedBy": {
+                  "occurrences": 18,
+                  "valueJsonBytes": 487,
+                  "omitDeltaBytes": 739
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "organization-create-member-cross-module",
+          "name": "DefaultOrganizationAppService#createMember",
+          "schemaVersion": "impact-payload-projection-v3",
+          "canonicalExecutions": 1,
+          "candidateReadPlanSha256": "2fdd6007cbdfff587abb087a622d78c2699e798d3eec2ebff2df1f90ceb666f0",
+          "defaultToolSerializedBytes": 10964,
+          "defaultToolEstimatedTokens": 2741,
+          "diagnosticSerializedBytes": 34080,
+          "diagnosticEstimatedTokens": 8520,
+          "standardToDiagnosticBytesRatio": 0.3217136150234742,
+          "verbosity": {
+            "compact": {
+              "serializedBytes": 10904,
+              "costResultBytes": 10904,
+              "projectionEstimatedTokens": 2726,
+              "candidateReadPlanSha256": "2fdd6007cbdfff587abb087a622d78c2699e798d3eec2ebff2df1f90ceb666f0",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 8629,
+                  "omitDeltaBytes": 8639
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1331,
+                  "omitDeltaBytes": 1344
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 206,
+                  "omitDeltaBytes": 222
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1005,
+                  "omitDeltaBytes": 1344
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "standard": {
+              "serializedBytes": 10964,
+              "costResultBytes": 10964,
+              "projectionEstimatedTokens": 2741,
+              "candidateReadPlanSha256": "2fdd6007cbdfff587abb087a622d78c2699e798d3eec2ebff2df1f90ceb666f0",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 8629,
+                  "omitDeltaBytes": 8639
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1331,
+                  "omitDeltaBytes": 1344
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 266,
+                  "omitDeltaBytes": 282
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1005,
+                  "omitDeltaBytes": 1344
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "diagnostic": {
+              "serializedBytes": 34080,
+              "costResultBytes": 34080,
+              "projectionEstimatedTokens": 8520,
+              "candidateReadPlanSha256": "2fdd6007cbdfff587abb087a622d78c2699e798d3eec2ebff2df1f90ceb666f0",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 18926,
+                  "omitDeltaBytes": 18935
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1565,
+                  "omitDeltaBytes": 1577
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 12288,
+                  "omitDeltaBytes": 12299
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 633,
+                  "omitDeltaBytes": 649
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1005,
+                  "omitDeltaBytes": 1343
+                },
+                "files.reasons": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 2259,
+                  "omitDeltaBytes": 2545
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 5637,
+                  "omitDeltaBytes": 6105
+                },
+                "files.verifiedBy": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1283,
+                  "omitDeltaBytes": 1647
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "auth-sms-login-lockout",
+          "name": "DefaultAuthAppService#smsLogin",
+          "schemaVersion": "impact-payload-projection-v3",
+          "canonicalExecutions": 1,
+          "candidateReadPlanSha256": "3874a29d4ddf0486074b8498856db53ae1f8061e5bf2a3690bc202da0d819b5a",
+          "defaultToolSerializedBytes": 10584,
+          "defaultToolEstimatedTokens": 2646,
+          "diagnosticSerializedBytes": 30860,
+          "diagnosticEstimatedTokens": 7715,
+          "standardToDiagnosticBytesRatio": 0.34296824368114065,
+          "verbosity": {
+            "compact": {
+              "serializedBytes": 10524,
+              "costResultBytes": 10524,
+              "projectionEstimatedTokens": 2631,
+              "candidateReadPlanSha256": "3874a29d4ddf0486074b8498856db53ae1f8061e5bf2a3690bc202da0d819b5a",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 7929,
+                  "omitDeltaBytes": 7939
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1692,
+                  "omitDeltaBytes": 1705
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 206,
+                  "omitDeltaBytes": 222
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 718,
+                  "omitDeltaBytes": 1057
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "standard": {
+              "serializedBytes": 10584,
+              "costResultBytes": 10584,
+              "projectionEstimatedTokens": 2646,
+              "candidateReadPlanSha256": "3874a29d4ddf0486074b8498856db53ae1f8061e5bf2a3690bc202da0d819b5a",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 7929,
+                  "omitDeltaBytes": 7939
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1692,
+                  "omitDeltaBytes": 1705
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 266,
+                  "omitDeltaBytes": 282
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 718,
+                  "omitDeltaBytes": 1057
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "diagnostic": {
+              "serializedBytes": 30860,
+              "costResultBytes": 30860,
+              "projectionEstimatedTokens": 7715,
+              "candidateReadPlanSha256": "3874a29d4ddf0486074b8498856db53ae1f8061e5bf2a3690bc202da0d819b5a",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 16433,
+                  "omitDeltaBytes": 16442
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1959,
+                  "omitDeltaBytes": 1971
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 11299,
+                  "omitDeltaBytes": 11310
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 542,
+                  "omitDeltaBytes": 558
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 718,
+                  "omitDeltaBytes": 1056
+                },
+                "files.reasons": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1730,
+                  "omitDeltaBytes": 2016
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 4428,
+                  "omitDeltaBytes": 4896
+                },
+                "files.verifiedBy": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1228,
+                  "omitDeltaBytes": 1592
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "account-admin-create-account-guard",
+          "name": "DefaultAccountAdminAppService#createAccount",
+          "schemaVersion": "impact-payload-projection-v3",
+          "canonicalExecutions": 1,
+          "candidateReadPlanSha256": "9e373ce6a86cb55bd4c273263f7992fe291504bc2f74e20518fd969da33a124f",
+          "defaultToolSerializedBytes": 11393,
+          "defaultToolEstimatedTokens": 2849,
+          "diagnosticSerializedBytes": 35454,
+          "diagnosticEstimatedTokens": 8864,
+          "standardToDiagnosticBytesRatio": 0.32134596942517063,
+          "verbosity": {
+            "compact": {
+              "serializedBytes": 11222,
+              "costResultBytes": 11222,
+              "projectionEstimatedTokens": 2806,
+              "candidateReadPlanSha256": "9e373ce6a86cb55bd4c273263f7992fe291504bc2f74e20518fd969da33a124f",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 8740,
+                  "omitDeltaBytes": 8750
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1660,
+                  "omitDeltaBytes": 1673
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 94,
+                  "omitDeltaBytes": 110
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 988,
+                  "omitDeltaBytes": 1327
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "standard": {
+              "serializedBytes": 11393,
+              "costResultBytes": 11393,
+              "projectionEstimatedTokens": 2849,
+              "candidateReadPlanSha256": "9e373ce6a86cb55bd4c273263f7992fe291504bc2f74e20518fd969da33a124f",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 8740,
+                  "omitDeltaBytes": 8750
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1660,
+                  "omitDeltaBytes": 1673
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 265,
+                  "omitDeltaBytes": 281
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 988,
+                  "omitDeltaBytes": 1326
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "diagnostic": {
+              "serializedBytes": 35454,
+              "costResultBytes": 35454,
+              "projectionEstimatedTokens": 8864,
+              "candidateReadPlanSha256": "9e373ce6a86cb55bd4c273263f7992fe291504bc2f74e20518fd969da33a124f",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 19473,
+                  "omitDeltaBytes": 19483
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 2032,
+                  "omitDeltaBytes": 2044
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 12540,
+                  "omitDeltaBytes": 12552
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 750,
+                  "omitDeltaBytes": 766
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 988,
+                  "omitDeltaBytes": 1326
+                },
+                "files.reasons": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 2505,
+                  "omitDeltaBytes": 2792
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 5641,
+                  "omitDeltaBytes": 6110
+                },
+                "files.verifiedBy": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1469,
+                  "omitDeltaBytes": 1833
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "client-release-storage-presign-holdout",
+          "name": "DefaultClientReleasePackageStorageGateway#storeAndPresign",
+          "schemaVersion": "impact-payload-projection-v3",
+          "canonicalExecutions": 1,
+          "candidateReadPlanSha256": "64f4f96c590cd0253ac6e164bca22fdd1cdcdb47470e6e60de36e161bac92de2",
+          "defaultToolSerializedBytes": 11237,
+          "defaultToolEstimatedTokens": 2810,
+          "diagnosticSerializedBytes": 31459,
+          "diagnosticEstimatedTokens": 7865,
+          "standardToDiagnosticBytesRatio": 0.35719507930957756,
+          "verbosity": {
+            "compact": {
+              "serializedBytes": 11177,
+              "costResultBytes": 11177,
+              "projectionEstimatedTokens": 2795,
+              "candidateReadPlanSha256": "64f4f96c590cd0253ac6e164bca22fdd1cdcdb47470e6e60de36e161bac92de2",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 8524,
+                  "omitDeltaBytes": 8534
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1688,
+                  "omitDeltaBytes": 1701
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 206,
+                  "omitDeltaBytes": 222
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1122,
+                  "omitDeltaBytes": 1461
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "standard": {
+              "serializedBytes": 11237,
+              "costResultBytes": 11237,
+              "projectionEstimatedTokens": 2810,
+              "candidateReadPlanSha256": "64f4f96c590cd0253ac6e164bca22fdd1cdcdb47470e6e60de36e161bac92de2",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 8524,
+                  "omitDeltaBytes": 8534
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1688,
+                  "omitDeltaBytes": 1701
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 266,
+                  "omitDeltaBytes": 282
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1122,
+                  "omitDeltaBytes": 1461
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "diagnostic": {
+              "serializedBytes": 31459,
+              "costResultBytes": 31459,
+              "projectionEstimatedTokens": 7865,
+              "candidateReadPlanSha256": "64f4f96c590cd0253ac6e164bca22fdd1cdcdb47470e6e60de36e161bac92de2",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 17033,
+                  "omitDeltaBytes": 17042
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1955,
+                  "omitDeltaBytes": 1967
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 11321,
+                  "omitDeltaBytes": 11332
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 461,
+                  "omitDeltaBytes": 477
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1122,
+                  "omitDeltaBytes": 1460
+                },
+                "files.reasons": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1703,
+                  "omitDeltaBytes": 1989
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 5024,
+                  "omitDeltaBytes": 5492
+                },
+                "files.verifiedBy": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 664,
+                  "omitDeltaBytes": 1028
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "backend-operation-log-aspect-async-audit-holdout",
+          "name": "BackendOperationLogAspect#recordOperationLog",
+          "schemaVersion": "impact-payload-projection-v3",
+          "canonicalExecutions": 1,
+          "candidateReadPlanSha256": "8690f42c4e60d76e1a082de7b287df3c467687ea601b506b7caf28f6cba1e12e",
+          "defaultToolSerializedBytes": 11096,
+          "defaultToolEstimatedTokens": 2774,
+          "diagnosticSerializedBytes": 31098,
+          "diagnosticEstimatedTokens": 7775,
+          "standardToDiagnosticBytesRatio": 0.3568075117370892,
+          "verbosity": {
+            "compact": {
+              "serializedBytes": 11036,
+              "costResultBytes": 11036,
+              "projectionEstimatedTokens": 2759,
+              "candidateReadPlanSha256": "8690f42c4e60d76e1a082de7b287df3c467687ea601b506b7caf28f6cba1e12e",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 8374,
+                  "omitDeltaBytes": 8384
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1725,
+                  "omitDeltaBytes": 1738
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 206,
+                  "omitDeltaBytes": 222
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1233,
+                  "omitDeltaBytes": 1572
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "standard": {
+              "serializedBytes": 11096,
+              "costResultBytes": 11096,
+              "projectionEstimatedTokens": 2774,
+              "candidateReadPlanSha256": "8690f42c4e60d76e1a082de7b287df3c467687ea601b506b7caf28f6cba1e12e",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 8374,
+                  "omitDeltaBytes": 8384
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1725,
+                  "omitDeltaBytes": 1738
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 266,
+                  "omitDeltaBytes": 282
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1233,
+                  "omitDeltaBytes": 1572
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "diagnostic": {
+              "serializedBytes": 31098,
+              "costResultBytes": 31098,
+              "projectionEstimatedTokens": 7775,
+              "candidateReadPlanSha256": "8690f42c4e60d76e1a082de7b287df3c467687ea601b506b7caf28f6cba1e12e",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 16485,
+                  "omitDeltaBytes": 16494
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 2089,
+                  "omitDeltaBytes": 2101
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 11402,
+                  "omitDeltaBytes": 11413
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 461,
+                  "omitDeltaBytes": 477
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1233,
+                  "omitDeltaBytes": 1571
+                },
+                "files.reasons": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1637,
+                  "omitDeltaBytes": 1923
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 4582,
+                  "omitDeltaBytes": 5050
+                },
+                "files.verifiedBy": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 774,
+                  "omitDeltaBytes": 1138
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "exam-parent-v3": {
+      "metadata": {
+        "generatedAt": "2026-08-18T12:10:46.361Z",
+        "repoRoot": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-SjMqRV/tmp/codex-java-lsp-isolated-jdt-H2KWE0/repo",
+        "projectId": "exam-parent-v3",
+        "scenarios": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-SjMqRV/candidate/golden/exam-parent-v3.scenarios.jsonl",
+        "indexBackend": "v2",
+        "mode": "balanced",
+        "measurement": "single-diagnostic-canonical-with-pure-verbosity-projections",
+        "canonicalExecutionsPerScenario": 1,
+        "defaultToolResponse": "standard",
+        "indexCacheDir": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-SjMqRV/tmp/codex-java-lsp-isolated-jdt-H2KWE0/index",
+        "indexCacheIsolation": "caller-supplied"
+      },
+      "totals": {
+        "standard": {
+          "serializedBytes": 8484.8,
+          "costResultBytes": 8484.8,
+          "projectionEstimatedTokens": 2121.5,
+          "fields": {
+            "files": {
+              "occurrences": 1,
+              "valueJsonBytes": 6018.5,
+              "omitDeltaBytes": 6027.9
+            },
+            "readPlan": {
+              "occurrences": 1,
+              "valueJsonBytes": 1490.4,
+              "omitDeltaBytes": 1502.6
+            },
+            "metrics": {
+              "occurrences": 1,
+              "valueJsonBytes": 69.8,
+              "omitDeltaBytes": 80.9
+            },
+            "evidenceGaps": {
+              "occurrences": 1,
+              "valueJsonBytes": 265,
+              "omitDeltaBytes": 281.1
+            },
+            "files.locations": {
+              "occurrences": 19.8,
+              "valueJsonBytes": 764.1,
+              "omitDeltaBytes": 1021.6
+            },
+            "files.reasons": {
+              "occurrences": 0,
+              "valueJsonBytes": 0,
+              "omitDeltaBytes": 0
+            },
+            "files.scoreBreakdown": {
+              "occurrences": 0,
+              "valueJsonBytes": 0,
+              "omitDeltaBytes": 0
+            },
+            "files.verifiedBy": {
+              "occurrences": 0,
+              "valueJsonBytes": 0,
+              "omitDeltaBytes": 0
+            }
+          }
+        },
+        "diagnostic": {
+          "serializedBytes": 26701,
+          "costResultBytes": 26701,
+          "projectionEstimatedTokens": 6675.7,
+          "fields": {
+            "files": {
+              "occurrences": 1,
+              "valueJsonBytes": 12631.3,
+              "omitDeltaBytes": 12640.6
+            },
+            "readPlan": {
+              "occurrences": 1,
+              "valueJsonBytes": 1740.3,
+              "omitDeltaBytes": 1752.4
+            },
+            "metrics": {
+              "occurrences": 1,
+              "valueJsonBytes": 10950.4,
+              "omitDeltaBytes": 10961.6
+            },
+            "evidenceGaps": {
+              "occurrences": 1,
+              "valueJsonBytes": 736.9,
+              "omitDeltaBytes": 753
+            },
+            "files.locations": {
+              "occurrences": 19.8,
+              "valueJsonBytes": 764.1,
+              "omitDeltaBytes": 1021.6
+            },
+            "files.reasons": {
+              "occurrences": 19.8,
+              "valueJsonBytes": 1224.8,
+              "omitDeltaBytes": 1442.7
+            },
+            "files.scoreBreakdown": {
+              "occurrences": 19.8,
+              "valueJsonBytes": 3812,
+              "omitDeltaBytes": 4168.5
+            },
+            "files.verifiedBy": {
+              "occurrences": 19.8,
+              "valueJsonBytes": 724.6,
+              "omitDeltaBytes": 1001.9
+            }
+          }
+        },
+        "compact": {
+          "serializedBytes": 8313.7,
+          "costResultBytes": 8313.7,
+          "projectionEstimatedTokens": 2078.8,
+          "fields": {
+            "files": {
+              "occurrences": 1,
+              "valueJsonBytes": 6018.5,
+              "omitDeltaBytes": 6027.8
+            },
+            "readPlan": {
+              "occurrences": 1,
+              "valueJsonBytes": 1490.4,
+              "omitDeltaBytes": 1502.5
+            },
+            "metrics": {
+              "occurrences": 1,
+              "valueJsonBytes": 69.8,
+              "omitDeltaBytes": 80.8
+            },
+            "evidenceGaps": {
+              "occurrences": 1,
+              "valueJsonBytes": 94,
+              "omitDeltaBytes": 110
+            },
+            "files.locations": {
+              "occurrences": 19.8,
+              "valueJsonBytes": 764.1,
+              "omitDeltaBytes": 1021.6
+            },
+            "files.reasons": {
+              "occurrences": 0,
+              "valueJsonBytes": 0,
+              "omitDeltaBytes": 0
+            },
+            "files.scoreBreakdown": {
+              "occurrences": 0,
+              "valueJsonBytes": 0,
+              "omitDeltaBytes": 0
+            },
+            "files.verifiedBy": {
+              "occurrences": 0,
+              "valueJsonBytes": 0,
+              "omitDeltaBytes": 0
+            }
+          }
+        }
+      },
+      "rows": [
+        {
+          "id": "rule-engine-execute",
+          "name": "RuleEngine#execute",
+          "schemaVersion": "impact-payload-projection-v3",
+          "canonicalExecutions": 1,
+          "candidateReadPlanSha256": "a2374bfe1b0963372796357735b615cdf72f159e85b8ceb95c995d46c6eab864",
+          "defaultToolSerializedBytes": 7410,
+          "defaultToolEstimatedTokens": 1853,
+          "diagnosticSerializedBytes": 24741,
+          "diagnosticEstimatedTokens": 6186,
+          "standardToDiagnosticBytesRatio": 0.29950284952103795,
+          "verbosity": {
+            "compact": {
+              "serializedBytes": 7239,
+              "costResultBytes": 7239,
+              "projectionEstimatedTokens": 1810,
+              "candidateReadPlanSha256": "a2374bfe1b0963372796357735b615cdf72f159e85b8ceb95c995d46c6eab864",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 4886,
+                  "omitDeltaBytes": 4895
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1591,
+                  "omitDeltaBytes": 1603
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 94,
+                  "omitDeltaBytes": 110
+                },
+                "files.locations": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 830,
+                  "omitDeltaBytes": 1038
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "standard": {
+              "serializedBytes": 7410,
+              "costResultBytes": 7410,
+              "projectionEstimatedTokens": 1853,
+              "candidateReadPlanSha256": "a2374bfe1b0963372796357735b615cdf72f159e85b8ceb95c995d46c6eab864",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 4886,
+                  "omitDeltaBytes": 4895
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1591,
+                  "omitDeltaBytes": 1603
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 265,
+                  "omitDeltaBytes": 281
+                },
+                "files.locations": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 830,
+                  "omitDeltaBytes": 1038
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "diagnostic": {
+              "serializedBytes": 24741,
+              "costResultBytes": 24741,
+              "projectionEstimatedTokens": 6186,
+              "candidateReadPlanSha256": "a2374bfe1b0963372796357735b615cdf72f159e85b8ceb95c995d46c6eab864",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 10162,
+                  "omitDeltaBytes": 10171
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1863,
+                  "omitDeltaBytes": 1875
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 11448,
+                  "omitDeltaBytes": 11459
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 669,
+                  "omitDeltaBytes": 685
+                },
+                "files.locations": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 830,
+                  "omitDeltaBytes": 1038
+                },
+                "files.reasons": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 995,
+                  "omitDeltaBytes": 1171
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 3096,
+                  "omitDeltaBytes": 3384
+                },
+                "files.verifiedBy": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 497,
+                  "omitDeltaBytes": 721
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "candidate-position-select",
+          "name": "ExaminationController#selectApplySite",
+          "schemaVersion": "impact-payload-projection-v3",
+          "canonicalExecutions": 1,
+          "candidateReadPlanSha256": "f3899cf5cb00d847667bc62a0b8585acc2e93c91f802ea52e889431e923bf6fe",
+          "defaultToolSerializedBytes": 7915,
+          "defaultToolEstimatedTokens": 1979,
+          "diagnosticSerializedBytes": 26614,
+          "diagnosticEstimatedTokens": 6654,
+          "standardToDiagnosticBytesRatio": 0.29739986473284735,
+          "verbosity": {
+            "compact": {
+              "serializedBytes": 7744,
+              "costResultBytes": 7744,
+              "projectionEstimatedTokens": 1936,
+              "candidateReadPlanSha256": "f3899cf5cb00d847667bc62a0b8585acc2e93c91f802ea52e889431e923bf6fe",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 5207,
+                  "omitDeltaBytes": 5216
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1718,
+                  "omitDeltaBytes": 1730
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 94,
+                  "omitDeltaBytes": 110
+                },
+                "files.locations": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 525,
+                  "omitDeltaBytes": 733
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "standard": {
+              "serializedBytes": 7915,
+              "costResultBytes": 7915,
+              "projectionEstimatedTokens": 1979,
+              "candidateReadPlanSha256": "f3899cf5cb00d847667bc62a0b8585acc2e93c91f802ea52e889431e923bf6fe",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 5207,
+                  "omitDeltaBytes": 5216
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1718,
+                  "omitDeltaBytes": 1730
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 265,
+                  "omitDeltaBytes": 281
+                },
+                "files.locations": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 525,
+                  "omitDeltaBytes": 733
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "diagnostic": {
+              "serializedBytes": 26614,
+              "costResultBytes": 26614,
+              "projectionEstimatedTokens": 6654,
+              "candidateReadPlanSha256": "f3899cf5cb00d847667bc62a0b8585acc2e93c91f802ea52e889431e923bf6fe",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 11389,
+                  "omitDeltaBytes": 11398
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 2000,
+                  "omitDeltaBytes": 2012
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 11819,
+                  "omitDeltaBytes": 11830
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 750,
+                  "omitDeltaBytes": 766
+                },
+                "files.locations": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 525,
+                  "omitDeltaBytes": 733
+                },
+                "files.reasons": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 1141,
+                  "omitDeltaBytes": 1317
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 3633,
+                  "omitDeltaBytes": 3921
+                },
+                "files.verifiedBy": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 720,
+                  "omitDeltaBytes": 944
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "apply-info-save-basic-service",
+          "name": "ApplyInfoServiceImpl#saveApplyBasicInfo",
+          "schemaVersion": "impact-payload-projection-v3",
+          "canonicalExecutions": 1,
+          "candidateReadPlanSha256": "3e0b5e5dcba51def700659a5ebe4ab5c6e0ea20471abc3676ed02920265f948d",
+          "defaultToolSerializedBytes": 9976,
+          "defaultToolEstimatedTokens": 2494,
+          "diagnosticSerializedBytes": 31066,
+          "diagnosticEstimatedTokens": 7767,
+          "standardToDiagnosticBytesRatio": 0.3211227708749115,
+          "verbosity": {
+            "compact": {
+              "serializedBytes": 9805,
+              "costResultBytes": 9805,
+              "projectionEstimatedTokens": 2452,
+              "candidateReadPlanSha256": "3e0b5e5dcba51def700659a5ebe4ab5c6e0ea20471abc3676ed02920265f948d",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 7291,
+                  "omitDeltaBytes": 7300
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1683,
+                  "omitDeltaBytes": 1695
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 94,
+                  "omitDeltaBytes": 110
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 675,
+                  "omitDeltaBytes": 1013
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "standard": {
+              "serializedBytes": 9976,
+              "costResultBytes": 9976,
+              "projectionEstimatedTokens": 2494,
+              "candidateReadPlanSha256": "3e0b5e5dcba51def700659a5ebe4ab5c6e0ea20471abc3676ed02920265f948d",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 7291,
+                  "omitDeltaBytes": 7300
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1683,
+                  "omitDeltaBytes": 1695
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 265,
+                  "omitDeltaBytes": 281
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 675,
+                  "omitDeltaBytes": 1013
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "diagnostic": {
+              "serializedBytes": 31066,
+              "costResultBytes": 31066,
+              "projectionEstimatedTokens": 7767,
+              "candidateReadPlanSha256": "3e0b5e5dcba51def700659a5ebe4ab5c6e0ea20471abc3676ed02920265f948d",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 15968,
+                  "omitDeltaBytes": 15978
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1950,
+                  "omitDeltaBytes": 1963
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 11729,
+                  "omitDeltaBytes": 11741
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 750,
+                  "omitDeltaBytes": 767
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 675,
+                  "omitDeltaBytes": 1014
+                },
+                "files.reasons": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1424,
+                  "omitDeltaBytes": 1711
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 4959,
+                  "omitDeltaBytes": 5428
+                },
+                "files.verifiedBy": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1176,
+                  "omitDeltaBytes": 1541
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "position-repository-exists",
+          "name": "PositionRepository#existsByExamId",
+          "schemaVersion": "impact-payload-projection-v3",
+          "canonicalExecutions": 1,
+          "candidateReadPlanSha256": "bf59278a15fca0bdebb21fe8b44079068fffc05c95b2126e0d986833e8c4b902",
+          "defaultToolSerializedBytes": 10032,
+          "defaultToolEstimatedTokens": 2508,
+          "diagnosticSerializedBytes": 28777,
+          "diagnosticEstimatedTokens": 7195,
+          "standardToDiagnosticBytesRatio": 0.3486117385411961,
+          "verbosity": {
+            "compact": {
+              "serializedBytes": 9860,
+              "costResultBytes": 9860,
+              "projectionEstimatedTokens": 2465,
+              "candidateReadPlanSha256": "bf59278a15fca0bdebb21fe8b44079068fffc05c95b2126e0d986833e8c4b902",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 8081,
+                  "omitDeltaBytes": 8091
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 979,
+                  "omitDeltaBytes": 991
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 94,
+                  "omitDeltaBytes": 110
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1458,
+                  "omitDeltaBytes": 1796
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "standard": {
+              "serializedBytes": 10032,
+              "costResultBytes": 10032,
+              "projectionEstimatedTokens": 2508,
+              "candidateReadPlanSha256": "bf59278a15fca0bdebb21fe8b44079068fffc05c95b2126e0d986833e8c4b902",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 8081,
+                  "omitDeltaBytes": 8092
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 979,
+                  "omitDeltaBytes": 992
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 82
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 265,
+                  "omitDeltaBytes": 282
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1458,
+                  "omitDeltaBytes": 1797
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "diagnostic": {
+              "serializedBytes": 28777,
+              "costResultBytes": 28777,
+              "projectionEstimatedTokens": 7195,
+              "candidateReadPlanSha256": "bf59278a15fca0bdebb21fe8b44079068fffc05c95b2126e0d986833e8c4b902",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 16524,
+                  "omitDeltaBytes": 16533
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1152,
+                  "omitDeltaBytes": 1164
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 9683,
+                  "omitDeltaBytes": 9694
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 781,
+                  "omitDeltaBytes": 797
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1458,
+                  "omitDeltaBytes": 1796
+                },
+                "files.reasons": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1740,
+                  "omitDeltaBytes": 2026
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 5025,
+                  "omitDeltaBytes": 5493
+                },
+                "files.verifiedBy": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 560,
+                  "omitDeltaBytes": 924
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "ceb-order-create-dto",
+          "name": "CebOrderRequest/CebOrderCreateResponse",
+          "schemaVersion": "impact-payload-projection-v3",
+          "canonicalExecutions": 1,
+          "candidateReadPlanSha256": "dd5dcbfe30959ff87f295bc571203a7a497cc300de8fcdb2b5733661d9b5ced1",
+          "defaultToolSerializedBytes": 8609,
+          "defaultToolEstimatedTokens": 2153,
+          "diagnosticSerializedBytes": 23255,
+          "diagnosticEstimatedTokens": 5814,
+          "standardToDiagnosticBytesRatio": 0.37019995699849495,
+          "verbosity": {
+            "compact": {
+              "serializedBytes": 8438,
+              "costResultBytes": 8438,
+              "projectionEstimatedTokens": 2110,
+              "candidateReadPlanSha256": "dd5dcbfe30959ff87f295bc571203a7a497cc300de8fcdb2b5733661d9b5ced1",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 7216,
+                  "omitDeltaBytes": 7226
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 475,
+                  "omitDeltaBytes": 487
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 69,
+                  "omitDeltaBytes": 80
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 94,
+                  "omitDeltaBytes": 110
+                },
+                "files.locations": {
+                  "occurrences": 24,
+                  "valueJsonBytes": 1202,
+                  "omitDeltaBytes": 1514
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "standard": {
+              "serializedBytes": 8609,
+              "costResultBytes": 8609,
+              "projectionEstimatedTokens": 2153,
+              "candidateReadPlanSha256": "dd5dcbfe30959ff87f295bc571203a7a497cc300de8fcdb2b5733661d9b5ced1",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 7216,
+                  "omitDeltaBytes": 7226
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 475,
+                  "omitDeltaBytes": 487
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 69,
+                  "omitDeltaBytes": 80
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 265,
+                  "omitDeltaBytes": 281
+                },
+                "files.locations": {
+                  "occurrences": 24,
+                  "valueJsonBytes": 1202,
+                  "omitDeltaBytes": 1514
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "diagnostic": {
+              "serializedBytes": 23255,
+              "costResultBytes": 23255,
+              "projectionEstimatedTokens": 5814,
+              "candidateReadPlanSha256": "dd5dcbfe30959ff87f295bc571203a7a497cc300de8fcdb2b5733661d9b5ced1",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 14643,
+                  "omitDeltaBytes": 14653
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 541,
+                  "omitDeltaBytes": 553
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 6817,
+                  "omitDeltaBytes": 6828
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 669,
+                  "omitDeltaBytes": 685
+                },
+                "files.locations": {
+                  "occurrences": 24,
+                  "valueJsonBytes": 1202,
+                  "omitDeltaBytes": 1514
+                },
+                "files.reasons": {
+                  "occurrences": 24,
+                  "valueJsonBytes": 1085,
+                  "omitDeltaBytes": 1349
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 24,
+                  "valueJsonBytes": 4825,
+                  "omitDeltaBytes": 5257
+                },
+                "files.verifiedBy": {
+                  "occurrences": 24,
+                  "valueJsonBytes": 485,
+                  "omitDeltaBytes": 821
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "apply-info-update-cross-exam-guard",
+          "name": "ExamApplyServiceImpl#updateApplyInfo cross-exam guard",
+          "schemaVersion": "impact-payload-projection-v3",
+          "canonicalExecutions": 1,
+          "candidateReadPlanSha256": "bc7a7a692ccae99ad098d8d80e55d39216fcb9e9736fd1d5e348be33d67dc4b8",
+          "defaultToolSerializedBytes": 11094,
+          "defaultToolEstimatedTokens": 2774,
+          "diagnosticSerializedBytes": 34171,
+          "diagnosticEstimatedTokens": 8543,
+          "standardToDiagnosticBytesRatio": 0.3246612624740277,
+          "verbosity": {
+            "compact": {
+              "serializedBytes": 10923,
+              "costResultBytes": 10923,
+              "projectionEstimatedTokens": 2731,
+              "candidateReadPlanSha256": "bc7a7a692ccae99ad098d8d80e55d39216fcb9e9736fd1d5e348be33d67dc4b8",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 8166,
+                  "omitDeltaBytes": 8176
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1917,
+                  "omitDeltaBytes": 1930
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 94,
+                  "omitDeltaBytes": 110
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 746,
+                  "omitDeltaBytes": 1085
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "standard": {
+              "serializedBytes": 11094,
+              "costResultBytes": 11094,
+              "projectionEstimatedTokens": 2774,
+              "candidateReadPlanSha256": "bc7a7a692ccae99ad098d8d80e55d39216fcb9e9736fd1d5e348be33d67dc4b8",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 8166,
+                  "omitDeltaBytes": 8176
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1917,
+                  "omitDeltaBytes": 1930
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 265,
+                  "omitDeltaBytes": 281
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 746,
+                  "omitDeltaBytes": 1084
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "diagnostic": {
+              "serializedBytes": 34171,
+              "costResultBytes": 34171,
+              "projectionEstimatedTokens": 8543,
+              "candidateReadPlanSha256": "bc7a7a692ccae99ad098d8d80e55d39216fcb9e9736fd1d5e348be33d67dc4b8",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 18379,
+                  "omitDeltaBytes": 18389
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 2334,
+                  "omitDeltaBytes": 2346
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 12031,
+                  "omitDeltaBytes": 12043
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 750,
+                  "omitDeltaBytes": 766
+                },
+                "files.locations": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 746,
+                  "omitDeltaBytes": 1084
+                },
+                "files.reasons": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 2092,
+                  "omitDeltaBytes": 2378
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 5608,
+                  "omitDeltaBytes": 6076
+                },
+                "files.verifiedBy": {
+                  "occurrences": 26,
+                  "valueJsonBytes": 1395,
+                  "omitDeltaBytes": 1759
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "check-people-delete-site-guard",
+          "name": "ExaminationCheckController#delete site guard",
+          "schemaVersion": "impact-payload-projection-v3",
+          "canonicalExecutions": 1,
+          "candidateReadPlanSha256": "c1eab3e560b68c1e9db6873f7d8e937dbe0b0087c3707c0cf231a6519fe00306",
+          "defaultToolSerializedBytes": 7224,
+          "defaultToolEstimatedTokens": 1806,
+          "diagnosticSerializedBytes": 24075,
+          "diagnosticEstimatedTokens": 6019,
+          "standardToDiagnosticBytesRatio": 0.3000623052959502,
+          "verbosity": {
+            "compact": {
+              "serializedBytes": 7053,
+              "costResultBytes": 7053,
+              "projectionEstimatedTokens": 1764,
+              "candidateReadPlanSha256": "c1eab3e560b68c1e9db6873f7d8e937dbe0b0087c3707c0cf231a6519fe00306",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 4561,
+                  "omitDeltaBytes": 4570
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1680,
+                  "omitDeltaBytes": 1692
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 94,
+                  "omitDeltaBytes": 110
+                },
+                "files.locations": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 549,
+                  "omitDeltaBytes": 757
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "standard": {
+              "serializedBytes": 7224,
+              "costResultBytes": 7224,
+              "projectionEstimatedTokens": 1806,
+              "candidateReadPlanSha256": "c1eab3e560b68c1e9db6873f7d8e937dbe0b0087c3707c0cf231a6519fe00306",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 4561,
+                  "omitDeltaBytes": 4570
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1680,
+                  "omitDeltaBytes": 1692
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 265,
+                  "omitDeltaBytes": 281
+                },
+                "files.locations": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 549,
+                  "omitDeltaBytes": 757
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "diagnostic": {
+              "serializedBytes": 24075,
+              "costResultBytes": 24075,
+              "projectionEstimatedTokens": 6019,
+              "candidateReadPlanSha256": "c1eab3e560b68c1e9db6873f7d8e937dbe0b0087c3707c0cf231a6519fe00306",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 9032,
+                  "omitDeltaBytes": 9041
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1947,
+                  "omitDeltaBytes": 1959
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 11697,
+                  "omitDeltaBytes": 11708
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 750,
+                  "omitDeltaBytes": 766
+                },
+                "files.locations": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 549,
+                  "omitDeltaBytes": 757
+                },
+                "files.reasons": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 805,
+                  "omitDeltaBytes": 981
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 2471,
+                  "omitDeltaBytes": 2759
+                },
+                "files.verifiedBy": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 507,
+                  "omitDeltaBytes": 731
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "current-user-service-implementer-edge",
+          "name": "ExaminationCheckController currentUserService.currentUser() implementer edge",
+          "schemaVersion": "impact-payload-projection-v3",
+          "canonicalExecutions": 1,
+          "candidateReadPlanSha256": "5eb67bc71dd750a1c10b46f4a5611ea13774601ebe94aedef13b647de5304a1c",
+          "defaultToolSerializedBytes": 7332,
+          "defaultToolEstimatedTokens": 1833,
+          "diagnosticSerializedBytes": 23665,
+          "diagnosticEstimatedTokens": 5917,
+          "standardToDiagnosticBytesRatio": 0.30982463553771394,
+          "verbosity": {
+            "compact": {
+              "serializedBytes": 7161,
+              "costResultBytes": 7161,
+              "projectionEstimatedTokens": 1791,
+              "candidateReadPlanSha256": "5eb67bc71dd750a1c10b46f4a5611ea13774601ebe94aedef13b647de5304a1c",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 4776,
+                  "omitDeltaBytes": 4785
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1572,
+                  "omitDeltaBytes": 1584
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 69,
+                  "omitDeltaBytes": 80
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 94,
+                  "omitDeltaBytes": 110
+                },
+                "files.locations": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 641,
+                  "omitDeltaBytes": 849
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "standard": {
+              "serializedBytes": 7332,
+              "costResultBytes": 7332,
+              "projectionEstimatedTokens": 1833,
+              "candidateReadPlanSha256": "5eb67bc71dd750a1c10b46f4a5611ea13774601ebe94aedef13b647de5304a1c",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 4776,
+                  "omitDeltaBytes": 4785
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1572,
+                  "omitDeltaBytes": 1584
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 69,
+                  "omitDeltaBytes": 80
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 265,
+                  "omitDeltaBytes": 281
+                },
+                "files.locations": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 641,
+                  "omitDeltaBytes": 849
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "diagnostic": {
+              "serializedBytes": 23665,
+              "costResultBytes": 23665,
+              "projectionEstimatedTokens": 5917,
+              "candidateReadPlanSha256": "5eb67bc71dd750a1c10b46f4a5611ea13774601ebe94aedef13b647de5304a1c",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 9028,
+                  "omitDeltaBytes": 9037
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1811,
+                  "omitDeltaBytes": 1823
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 11425,
+                  "omitDeltaBytes": 11436
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 750,
+                  "omitDeltaBytes": 766
+                },
+                "files.locations": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 641,
+                  "omitDeltaBytes": 849
+                },
+                "files.reasons": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 772,
+                  "omitDeltaBytes": 948
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 2267,
+                  "omitDeltaBytes": 2555
+                },
+                "files.verifiedBy": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 525,
+                  "omitDeltaBytes": 749
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "exam-room-print-download-types-persistent-bundle",
+          "name": "ExamRoomPrintController#downloadByTypes persistent bundle admission",
+          "schemaVersion": "impact-payload-projection-v3",
+          "canonicalExecutions": 1,
+          "candidateReadPlanSha256": "e96a5f7f2ebf9cc4ab6e64878ea75881e917299627a75f9ec9dc044a1a22f049",
+          "defaultToolSerializedBytes": 7795,
+          "defaultToolEstimatedTokens": 1949,
+          "diagnosticSerializedBytes": 25770,
+          "diagnosticEstimatedTokens": 6443,
+          "standardToDiagnosticBytesRatio": 0.3024835079549864,
+          "verbosity": {
+            "compact": {
+              "serializedBytes": 7624,
+              "costResultBytes": 7624,
+              "projectionEstimatedTokens": 1906,
+              "candidateReadPlanSha256": "e96a5f7f2ebf9cc4ab6e64878ea75881e917299627a75f9ec9dc044a1a22f049",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 5164,
+                  "omitDeltaBytes": 5173
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1635,
+                  "omitDeltaBytes": 1647
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 94,
+                  "omitDeltaBytes": 110
+                },
+                "files.locations": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 469,
+                  "omitDeltaBytes": 677
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "standard": {
+              "serializedBytes": 7795,
+              "costResultBytes": 7795,
+              "projectionEstimatedTokens": 1949,
+              "candidateReadPlanSha256": "e96a5f7f2ebf9cc4ab6e64878ea75881e917299627a75f9ec9dc044a1a22f049",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 5164,
+                  "omitDeltaBytes": 5173
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1635,
+                  "omitDeltaBytes": 1647
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 265,
+                  "omitDeltaBytes": 281
+                },
+                "files.locations": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 469,
+                  "omitDeltaBytes": 677
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "diagnostic": {
+              "serializedBytes": 25770,
+              "costResultBytes": 25770,
+              "projectionEstimatedTokens": 6443,
+              "candidateReadPlanSha256": "e96a5f7f2ebf9cc4ab6e64878ea75881e917299627a75f9ec9dc044a1a22f049",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 11048,
+                  "omitDeltaBytes": 11057
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1902,
+                  "omitDeltaBytes": 1914
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 11408,
+                  "omitDeltaBytes": 11419
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 750,
+                  "omitDeltaBytes": 766
+                },
+                "files.locations": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 469,
+                  "omitDeltaBytes": 677
+                },
+                "files.reasons": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 1112,
+                  "omitDeltaBytes": 1288
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 3347,
+                  "omitDeltaBytes": 3635
+                },
+                "files.verifiedBy": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 737,
+                  "omitDeltaBytes": 961
+                }
+              }
+            }
+          }
+        },
+        {
+          "id": "candidate-pay-order-cross-module-admission",
+          "name": "OrderController#createPayOrder cross-module payment admission",
+          "schemaVersion": "impact-payload-projection-v3",
+          "canonicalExecutions": 1,
+          "candidateReadPlanSha256": "2d24d61a8f2b743a9710292b22b63757bf3c6da0892eb57355ecfd67607d6728",
+          "defaultToolSerializedBytes": 7461,
+          "defaultToolEstimatedTokens": 1866,
+          "diagnosticSerializedBytes": 24876,
+          "diagnosticEstimatedTokens": 6219,
+          "standardToDiagnosticBytesRatio": 0.29992764109985526,
+          "verbosity": {
+            "compact": {
+              "serializedBytes": 7290,
+              "costResultBytes": 7290,
+              "projectionEstimatedTokens": 1823,
+              "candidateReadPlanSha256": "2d24d61a8f2b743a9710292b22b63757bf3c6da0892eb57355ecfd67607d6728",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 4837,
+                  "omitDeltaBytes": 4846
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1654,
+                  "omitDeltaBytes": 1666
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 94,
+                  "omitDeltaBytes": 110
+                },
+                "files.locations": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 546,
+                  "omitDeltaBytes": 754
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "standard": {
+              "serializedBytes": 7461,
+              "costResultBytes": 7461,
+              "projectionEstimatedTokens": 1866,
+              "candidateReadPlanSha256": "2d24d61a8f2b743a9710292b22b63757bf3c6da0892eb57355ecfd67607d6728",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 4837,
+                  "omitDeltaBytes": 4846
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1654,
+                  "omitDeltaBytes": 1666
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 70,
+                  "omitDeltaBytes": 81
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 265,
+                  "omitDeltaBytes": 281
+                },
+                "files.locations": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 546,
+                  "omitDeltaBytes": 754
+                },
+                "files.reasons": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                },
+                "files.verifiedBy": {
+                  "occurrences": 0,
+                  "valueJsonBytes": 0,
+                  "omitDeltaBytes": 0
+                }
+              }
+            },
+            "diagnostic": {
+              "serializedBytes": 24876,
+              "costResultBytes": 24876,
+              "projectionEstimatedTokens": 6219,
+              "candidateReadPlanSha256": "2d24d61a8f2b743a9710292b22b63757bf3c6da0892eb57355ecfd67607d6728",
+              "fields": {
+                "files": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 10140,
+                  "omitDeltaBytes": 10149
+                },
+                "readPlan": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 1903,
+                  "omitDeltaBytes": 1915
+                },
+                "metrics": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 11447,
+                  "omitDeltaBytes": 11458
+                },
+                "evidenceGaps": {
+                  "occurrences": 1,
+                  "valueJsonBytes": 750,
+                  "omitDeltaBytes": 766
+                },
+                "files.locations": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 546,
+                  "omitDeltaBytes": 754
+                },
+                "files.reasons": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 1082,
+                  "omitDeltaBytes": 1258
+                },
+                "files.scoreBreakdown": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 2889,
+                  "omitDeltaBytes": 3177
+                },
+                "files.verifiedBy": {
+                  "occurrences": 16,
+                  "valueJsonBytes": 644,
+                  "omitDeltaBytes": 868
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
