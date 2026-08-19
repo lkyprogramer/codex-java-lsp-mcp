@@ -14,7 +14,8 @@ import {
   calleeNamesFromRelations,
   candidateFromFacts,
   mergeCandidate,
-  scoreBase
+  scoreBase,
+  selectPreferredImplementers
 } from "./candidate-helpers.js";
 
 export type ImportGraphMetrics = {
@@ -94,7 +95,7 @@ export async function collectTypeGraphCandidates(input: CollectCandidatesInput):
       // means this candidate cannot claim the stronger implementation reason.
     }
     const typeName = anchor.className || path.basename(anchor.absolutePath, ".java");
-    for (const facts of (await javaIndex.findImplementers(
+    for (const facts of selectPreferredImplementers(await javaIndex.findImplementers(
       typeName,
       20,
       anchor.absolutePath,

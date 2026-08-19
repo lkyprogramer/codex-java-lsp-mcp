@@ -851,6 +851,58 @@ test("a response-wrapper CALLS envelope does not evict a first-hop implementer f
   );
 });
 
+test("a Boot application takes the leftover framework slot instead of a lexical sibling", async () => {
+  const anchor = candidate({
+    absolutePath: "/repo/exam-management/src/main/java/demo/CheckController.java",
+    path: "exam-management/src/main/java/demo/CheckController.java",
+    reasons: ["target"],
+    categories: ["target"],
+    score: 1_000
+  });
+  const implementer = candidate({
+    absolutePath: "/repo/exam-service/src/main/java/demo/ManageCurrentUserServiceImpl.java",
+    path: "exam-service/src/main/java/demo/ManageCurrentUserServiceImpl.java",
+    reasons: ["typeGraph:implementation-lookup"],
+    score: 120,
+    plannerEvidence: [{
+      family: "STATIC_STRUCTURE",
+      kind: "IMPLEMENTS",
+      sourceTarget: `A1:${anchor.absolutePath}->/repo/exam-service/src/main/java/demo/ManageCurrentUserServiceImpl.java`
+    }]
+  });
+  const application = candidate({
+    absolutePath: "/repo/exam-management/src/main/java/demo/ExamManagementApplication.java",
+    path: "exam-management/src/main/java/demo/ExamManagementApplication.java",
+    categories: ["framework"],
+    reasons: ["SPRING_BOOT_APPLICATION"],
+    score: 90,
+    plannerEvidence: [{
+      family: "FRAMEWORK",
+      kind: "SPRING_BOOT_APPLICATION",
+      sourceTarget: `A1:${anchor.absolutePath}->/repo/exam-management/src/main/java/demo/ExamManagementApplication.java`
+    }]
+  });
+  const lexical = candidate({
+    absolutePath: "/repo/exam-management/src/main/java/demo/DictionaryTreeController.java",
+    path: "exam-management/src/main/java/demo/DictionaryTreeController.java",
+    reasons: ["REFERENCE"],
+    score: 55
+  });
+  const files = [anchor, implementer, application, lexical];
+  const plan = await buildReadPlan({
+    files,
+    ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
+    options: optionsFor(anchor, { mode: "minimal", readPlanMaxItems: 3, readPlanMaxBytes: 10_000 }),
+    javaIndex: fixedRangeIndex()
+  });
+
+  assert.deepEqual(
+    plan.items.map(item => item.fileId),
+    ["F1", "F2", "F3"],
+    "the Boot application must occupy the leftover slot ahead of a same-module lexical controller"
+  );
+});
+
 test("a concrete anchor's declared interface contract outranks downstream implementation context", async () => {
   const anchor = candidate({
     absolutePath: "/repo/src/main/java/demo/CloudSmsGateway.java",

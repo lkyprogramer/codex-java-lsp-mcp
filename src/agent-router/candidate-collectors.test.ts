@@ -138,3 +138,31 @@ test("type graph uses the unique caller-site callee when the implementer has no 
 
   assert.deepEqual(candidates.get(deleteImpl.absolutePath)?.positions, [{ line: 172, column: 1 }]);
 });
+
+test("type graph keeps only the @Primary implementer when several alternatives exist", async () => {
+  const candidates = new Map<string, CandidateFile>();
+  const primary = {
+    ...implementation,
+    annotations: ["Service", "Primary"]
+  };
+  const other = {
+    ...implementation,
+    absolutePath: "/repo/src/main/java/demo/OtherPortImpl.java",
+    path: "src/main/java/demo/OtherPortImpl.java",
+    annotations: ["Service"]
+  };
+  const implementations = await collectTypeGraphCandidates({
+    candidates,
+    anchors: [anchor],
+    options,
+    javaIndex: {
+      factsFor: async () => ({ ...implementation, absolutePath: anchor.absolutePath, kind: "interface" }),
+      findImplementers: async () => [other, primary]
+    } as never,
+    routingPolicy: resolveRoutingPolicy("/repo")
+  });
+
+  assert.deepEqual(implementations.map(item => item.absolutePath), [primary.absolutePath]);
+  assert.equal(candidates.has(primary.absolutePath), true);
+  assert.equal(candidates.has(other.absolutePath), false);
+});

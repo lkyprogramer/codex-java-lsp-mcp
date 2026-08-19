@@ -62,6 +62,8 @@ export type JavaSourceFacts = {
   wildcardImports: string[];
   annotations: string[];
   methods: JavaMethodFact[];
+  /** Inclusive start line of the primary type, including leading annotations. */
+  typeStartLine?: number;
   factSource: "javaIndex" | "fallback";
   parseState?: "COMPLETE" | "RECOVERED" | "FAILED";
   confirmedAt?: string;
@@ -148,6 +150,7 @@ export function bundleToSourceFacts(repoRoot: string, bundle: JavaFileBundle): J
     wildcardImports: bundle.file.imports.filter(item => item.wildcard).map(item => item.qualifiedName.replace(/\.\*$/, "")),
     annotations: (primary?.annotations || []).map(item => item.name),
     methods,
+    ...(primary?.range.start.line ? { typeStartLine: primary.range.start.line } : {}),
     factSource: "javaIndex",
     parseState: bundle.file.parseState
   };
@@ -182,6 +185,9 @@ export function anchorToSourceFacts(repoRoot: string, anchor: AnchorFacts): Java
     wildcardImports: anchor.file.imports.filter(item => item.wildcard).map(item => item.qualifiedName.replace(/\.\*$/, "")),
     annotations: (type?.annotations || []).map(item => item.name),
     methods,
+    ...((type?.range.start.line ?? anchor.range.start.line)
+      ? { typeStartLine: type?.range.start.line ?? anchor.range.start.line }
+      : {}),
     factSource: "javaIndex",
     parseState: anchor.file.parseState
   };
@@ -205,7 +211,8 @@ export function typeFactsToSourceFacts(
       annotations: type.annotations.map(item => item.name),
       methods: bundle.methods
         .filter(method => method.ownerTypeId === type.typeId)
-        .map(methodToFact)
+        .map(methodToFact),
+      ...(type.range.start.line ? { typeStartLine: type.range.start.line } : {})
     };
   }
   const absolutePath = path.resolve(repoRoot, type.fileId.includes("/") ? type.fileId : guessPathFromType(type));
@@ -230,6 +237,7 @@ export function typeFactsToSourceFacts(
     wildcardImports: [],
     annotations: type.annotations.map(item => item.name),
     methods: [],
+    ...(type.range.start.line ? { typeStartLine: type.range.start.line } : {}),
     factSource: "javaIndex"
   };
 }

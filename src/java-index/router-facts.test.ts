@@ -82,6 +82,7 @@ test("lightweight type facts retain the declaration FQN", () => {
 
   const fact = typeFactsToSourceFacts("/repo", type);
   assert.equal(fact.qualifiedName, "demo.OrderMapper");
+  assert.equal(fact.typeStartLine, 10);
 });
 
 test("anchor source facts drop static imports from imports, since a static import's qualifiedName carries a member segment and is never a valid type FQN", () => {

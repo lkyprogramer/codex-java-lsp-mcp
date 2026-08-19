@@ -412,3 +412,100 @@ test("deadline and cancellation stop definition, implementer, and later-anchor w
     assert.deepEqual(result.cancelledAnchorIds, code === "CANCELLED" ? ["A1"] : []);
   }
 });
+
+test("multiple implementers keep only the @Primary bean", async () => {
+  const port = facts("/repo/src/main/java/demo/CurrentUserService.java", {
+    kind: "interface",
+    typeName: "CurrentUserService"
+  });
+  const primary = facts("/repo/src/main/java/demo/ManageCurrentUserServiceImpl.java", {
+    annotations: ["Service", "Primary"]
+  });
+  const other = facts("/repo/src/main/java/demo/CheckCurrentServiceImpl.java", {
+    annotations: ["Service"]
+  });
+  const result = await collect({
+    factsFor: async () => facts(anchor.absolutePath, { referencedTypes: ["demo.CurrentUserService"] }),
+    findTypeReferences: async () => [],
+    findTypeDefinitions: async () => [port],
+    findImplementers: async () => [primary, other]
+  });
+
+  assert.deepEqual(result.evidence.filter(signal => signal.kind === "IMPLEMENTS").map(signal => signal.candidateFile), [
+    primary.absolutePath
+  ]);
+});
+
+test("a cross-module preferred implementer adds the anchor-module Boot application at its type start", async () => {
+  const checkAnchor: ResolvedAnchor = {
+    ...anchor,
+    absolutePath: "/repo/exam-management/src/main/java/demo/CheckController.java",
+    path: "exam-management/src/main/java/demo/CheckController.java",
+    module: "exam-management"
+  };
+  const port = facts("/repo/exam-data/src/main/java/demo/CurrentUserService.java", {
+    kind: "interface",
+    typeName: "CurrentUserService",
+    module: "exam-data"
+  });
+  const primary = facts("/repo/exam-service/exam-service-management/src/main/java/demo/ManageCurrentUserServiceImpl.java", {
+    annotations: ["Service", "Primary"],
+    module: "exam-service/exam-service-management",
+    methods: [{ name: "currentUser", line: 42, endLine: 50, referencedTypes: [], relations: [] }]
+  });
+  const other = facts("/repo/exam-service/exam-service-check/src/main/java/demo/CheckCurrentServiceImpl.java", {
+    annotations: ["Service"],
+    module: "exam-service/exam-service-check"
+  });
+  const application = facts("/repo/exam-management/src/main/java/demo/ExamManagementApplication.java", {
+    annotations: ["SpringBootApplication"],
+    module: "exam-management",
+    typeStartLine: 21,
+    methods: [{ name: "main", line: 31, endLine: 33, referencedTypes: [], relations: [] }]
+  });
+  const referenceNames: string[] = [];
+  const result = await collect({
+    factsFor: async () => facts(checkAnchor.absolutePath, {
+      module: "exam-management",
+      referencedTypes: ["demo.CurrentUserService"]
+    }),
+    findTypeReferences: async (typeName: string) => {
+      referenceNames.push(typeName);
+      return typeName === "SpringBootApplication" ? [application] : [];
+    },
+    findImporters: async () => [],
+    findTypeDefinitions: async () => [port],
+    findImplementers: async () => [primary, other]
+  }, { anchors: [checkAnchor] });
+
+  assert.ok(referenceNames.includes("SpringBootApplication"));
+  assert.deepEqual(result.evidence.filter(signal => signal.kind === "IMPLEMENTS").map(signal => signal.candidateFile), [
+    primary.absolutePath
+  ]);
+  const boot = result.evidence.find(signal => signal.kind === "SPRING_BOOT_APPLICATION");
+  assert.equal(boot?.candidateFile, application.absolutePath);
+  assert.deepEqual(boot?.positions, [{ line: 21, column: 1 }]);
+  assert.deepEqual(boot?.candidateMetadata?.reasons, ["SPRING_BOOT_APPLICATION"]);
+});
+
+test("a same-module implementer does not look up a Boot application", async () => {
+  const port = facts("/repo/src/main/java/demo/ConfirmGateway.java", {
+    kind: "interface",
+    typeName: "ConfirmGateway"
+  });
+  const implementation = facts("/repo/src/main/java/demo/DefaultConfirmGateway.java");
+  const referenceNames: string[] = [];
+  await collect({
+    factsFor: async () => facts(anchor.absolutePath, { referencedTypes: ["demo.ConfirmGateway"] }),
+    findTypeReferences: async (typeName: string) => {
+      referenceNames.push(typeName);
+      return [];
+    },
+    findImporters: async () => {
+      throw new Error("must not look up Boot application for a same-module implementer");
+    },
+    findTypeDefinitions: async () => [port],
+    findImplementers: async () => [implementation]
+  });
+  assert.deepEqual(referenceNames, ["ConfirmController"]);
+});

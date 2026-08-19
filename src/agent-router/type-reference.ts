@@ -8,7 +8,16 @@ import type { ImpactOptions, ResolvedAnchor, RouterPosition } from "../agent-typ
 import type { EvidenceSignal } from "./evidence.js";
 import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
 import type { DeadlineBudget } from "../runtime/deadline-budget.js";
-import { calleeNamesFromRelations, matchesAny, positionFromFacts, simpleTypeName, unique } from "./candidate-helpers.js";
+import {
+  calleeNamesFromRelations,
+  isSpringBootApplicationType,
+  matchesAny,
+  positionFromFacts,
+  sameSourceModule,
+  selectPreferredImplementers,
+  simpleTypeName,
+  unique
+} from "./candidate-helpers.js";
 
 export type TypeReferenceMetrics = {
   scannedPatterns: number;
@@ -74,6 +83,16 @@ const IMPLEMENTATION_SPEC = {
   reason: "typeGraph:implementation-lookup",
   verifiedBy: "typeGraph"
 } as const;
+
+const BOOT_APPLICATION_SPEC = {
+  kind: "SPRING_BOOT_APPLICATION",
+  weight: 90,
+  confidence: 0.85,
+  reason: "SPRING_BOOT_APPLICATION",
+  verifiedBy: "typeGraph"
+} as const;
+
+const SPRING_BOOT_APPLICATION_TYPE_ID = "external:org.springframework.boot.autoconfigure.SpringBootApplication";
 
 export async function collectTypeReferenceSignals(
   input: CollectTypeReferenceSignalsInput
@@ -159,6 +178,7 @@ export async function collectTypeReferenceSignals(
       continue;
     }
     let stopAfterPlan = false;
+    const preferredImplementers: JavaSourceFacts[] = [];
     for (const definition of definitions) {
       if (definition.absolutePath === plan.anchor.absolutePath) continue;
       recordCandidateMetric(input.metrics, knownPaths, definition.absolutePath);
@@ -180,12 +200,14 @@ export async function collectTypeReferenceSignals(
         break;
       }
       try {
-        for (const implementation of await input.javaIndex.findImplementers(
+        const preferred = selectPreferredImplementers(await input.javaIndex.findImplementers(
           qualifiedTypeName,
           8,
           plan.anchor.absolutePath,
           { typeId: definition.typeId, hydrate: true }
-        )) {
+        ));
+        preferredImplementers.push(...preferred);
+        for (const implementation of preferred) {
           rememberPath(pathOrder, implementation.absolutePath);
           recordImplementationDraft(
             input,
@@ -206,6 +228,20 @@ export async function collectTypeReferenceSignals(
           stopAfterPlan = true;
           break;
         }
+      }
+    }
+    if (!stopAfterPlan && !input.budget?.expired() && needsAnchorBootApplication(facts, preferredImplementers)) {
+      try {
+        const application = await discoverAnchorBootApplication(input, facts);
+        if (application) {
+          recordCandidateMetric(input.metrics, knownPaths, application.absolutePath);
+          rememberPath(pathOrder, application.absolutePath);
+          recordBootApplicationDraft(input, drafts, plan.anchor, application);
+          knownPaths.add(application.absolutePath);
+        }
+      } catch (error) {
+        recordOperationFailure(outcome, plan.anchor.id, "boot application lookup", error);
+        if (terminalOutcome(outcome)) stopAfterPlan = true;
       }
     }
     evidence.push(...materializeDrafts(input, drafts, pathOrder));
@@ -380,6 +416,69 @@ function recordReferenceDraft(
       categories: ["semantic"],
       reasons: [REFERENCE_SPEC.reason],
       verifiedBy: [REFERENCE_SPEC.verifiedBy],
+      matchCount: 0
+    }
+  });
+}
+
+function needsAnchorBootApplication(
+  anchorFacts: JavaSourceFacts,
+  implementers: readonly JavaSourceFacts[]
+): boolean {
+  return implementers.some(implementation => !sameSourceModule(anchorFacts, implementation));
+}
+
+function pickAnchorBootApplication(
+  candidates: readonly JavaSourceFacts[],
+  anchorFacts: JavaSourceFacts
+): JavaSourceFacts | undefined {
+  const matches = candidates.filter(candidate =>
+    isSpringBootApplicationType(candidate) && sameSourceModule(anchorFacts, candidate));
+  if (matches.length === 0) return undefined;
+  return matches.find(candidate => (candidate.typeName ?? "").endsWith("Application")) ?? matches[0];
+}
+
+async function discoverAnchorBootApplication(
+  input: CollectTypeReferenceSignalsInput,
+  anchorFacts: JavaSourceFacts
+): Promise<JavaSourceFacts | undefined> {
+  const options = { typeId: SPRING_BOOT_APPLICATION_TYPE_ID, hydrate: true } as const;
+  const annotated = pickAnchorBootApplication(
+    await input.javaIndex.findTypeReferences("SpringBootApplication", 8, options),
+    anchorFacts
+  );
+  if (annotated) return annotated;
+  return pickAnchorBootApplication(
+    await input.javaIndex.findImporters("SpringBootApplication", 8, options),
+    anchorFacts
+  );
+}
+
+function recordBootApplicationDraft(
+  input: CollectTypeReferenceSignalsInput,
+  drafts: Map<string, TypeReferenceSignalDraft>,
+  anchor: ResolvedAnchor,
+  application: JavaSourceFacts
+): void {
+  recordDraft(drafts, {
+    candidateFile: application.absolutePath,
+    anchorId: anchor.id,
+    kind: BOOT_APPLICATION_SPEC.kind,
+    family: "FRAMEWORK",
+    provenance: "AST_RESOLVED",
+    confidence: BOOT_APPLICATION_SPEC.confidence,
+    completeness: "COMPLETE",
+    weight: BOOT_APPLICATION_SPEC.weight,
+    sourceFile: application.absolutePath,
+    positions: [positionFromFacts(application)],
+    providerId: input.providerId,
+    providerVersion: input.providerVersion,
+    generation: input.generation ?? 0,
+    detail: BOOT_APPLICATION_SPEC.reason,
+    candidateMetadata: {
+      categories: ["framework"],
+      reasons: [BOOT_APPLICATION_SPEC.reason],
+      verifiedBy: [BOOT_APPLICATION_SPEC.verifiedBy],
       matchCount: 0
     }
   });

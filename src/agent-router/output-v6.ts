@@ -125,6 +125,7 @@ const EVIDENCE_PHRASES: Readonly<Record<string, string>> = {
   SPRING_EVENT_LISTENER: "Spring event listener",
   SPRING_BEAN_PRODUCES: "produces a Spring bean",
   SPRING_BEAN_DEPENDS_ON: "Spring bean dependency",
+  SPRING_BOOT_APPLICATION: "Spring Boot application wiring",
   MYBATIS_NAMESPACE: "MyBatis mapper namespace",
   MYBATIS_STATEMENT_METHOD: "MyBatis statement binding",
   MYBATIS_PARAMETER_TYPE: "MyBatis statement parameter type",

@@ -50,8 +50,15 @@ export function candidateFromFacts(
   };
 }
 
+const BOOT_APPLICATION_ANNOTATIONS = new Set(["SpringBootApplication", "SpringBootConfiguration"]);
+
 /** Prefer the hit-reason method. Never invent a type-header stand-in for (1,1). */
 export function positionFromFacts(facts: JavaSourceFacts, hint?: FactPositionHint): { line: number; column: number } {
+  // Boot application value is the annotation header (ComponentScan / exclude
+  // filters), not the unique `main` method that hydrate otherwise selects.
+  if (isSpringBootApplicationType(facts) && (facts.typeStartLine ?? 0) >= 1) {
+    return { line: facts.typeStartLine!, column: 1 };
+  }
   const methods = facts.methods ?? [];
   const preferred = hint?.methodName
     ? methods.find(method => method.name === hint.methodName)
@@ -68,6 +75,42 @@ export function positionFromFacts(facts: JavaSourceFacts, hint?: FactPositionHin
     ?? (methods.length === 1 ? methods[0] : undefined);
   if (method && method.line >= 1) return { line: method.line, column: 1 };
   return { line: 1, column: 1 };
+}
+
+export function isPrimaryImplementer(facts: JavaSourceFacts): boolean {
+  return (facts.annotations ?? []).some(name => simpleTypeName(name) === "Primary");
+}
+
+/**
+ * One implementer stays as-is (paper-task). Several alternatives keep only
+ * `@Primary`. Test fixtures are ignored when a main-source implementer exists.
+ */
+export function selectPreferredImplementers(implementers: readonly JavaSourceFacts[]): JavaSourceFacts[] {
+  const main = implementers.filter(item => item.sourceSet !== "test");
+  const pool = main.length > 0 ? main : [...implementers];
+  if (pool.length <= 1) return pool;
+  return pool.filter(isPrimaryImplementer);
+}
+
+export function isSpringBootApplicationType(facts: JavaSourceFacts): boolean {
+  return (facts.annotations ?? []).some(name => BOOT_APPLICATION_ANNOTATIONS.has(simpleTypeName(name)));
+}
+
+export function sourceModuleKey(file: { module?: string; absolutePath?: string; path?: string }): string {
+  if (file.module) return file.module;
+  const candidate = file.absolutePath || file.path || "";
+  const parts = candidate.replace(/\\/g, "/").split("/");
+  const src = parts.lastIndexOf("src");
+  return src > 0 ? parts.slice(0, src).join("/") : "";
+}
+
+export function sameSourceModule(
+  left: { module?: string; absolutePath?: string; path?: string },
+  right: { module?: string; absolutePath?: string; path?: string }
+): boolean {
+  const leftKey = sourceModuleKey(left);
+  const rightKey = sourceModuleKey(right);
+  return leftKey.length > 0 && leftKey === rightKey;
 }
 
 function methodsReferencingType(methods: JavaSourceFacts["methods"], typeName: string): JavaSourceFacts["methods"] {

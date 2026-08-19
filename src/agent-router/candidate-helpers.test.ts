@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { JavaSourceFacts } from "../java-index/router-facts.js";
-import { candidateFromFacts, positionFromFacts } from "./candidate-helpers.js";
+import { candidateFromFacts, positionFromFacts, selectPreferredImplementers } from "./candidate-helpers.js";
 
 function facts(methods: JavaSourceFacts["methods"]): JavaSourceFacts {
   return {
@@ -88,4 +88,37 @@ test("positionFromFacts keeps (1,1) when several methods name the same type", ()
     ]), { typeName: "Order" }),
     { line: 1, column: 1 }
   );
+});
+
+test("positionFromFacts uses the Boot application type start instead of unique main", () => {
+  assert.deepEqual(
+    positionFromFacts({
+      ...facts([{ name: "main", line: 31, endLine: 33, referencedTypes: [], relations: [] }]),
+      annotations: ["SpringBootApplication"],
+      typeStartLine: 21
+    }),
+    { line: 21, column: 1 }
+  );
+});
+
+test("selectPreferredImplementers keeps a unique implementer and only @Primary when several exist", () => {
+  const only = facts([{ name: "claim", line: 40, endLine: 50, referencedTypes: [], relations: [] }]);
+  const primary = {
+    ...facts([{ name: "currentUser", line: 42, endLine: 50, referencedTypes: [], relations: [] }]),
+    annotations: ["Service", "Primary"]
+  };
+  const other = {
+    ...facts([{ name: "currentUser", line: 20, endLine: 28, referencedTypes: [], relations: [] }]),
+    absolutePath: "/repo/src/main/java/demo/OtherImpl.java",
+    annotations: ["Service"]
+  };
+  const testImpl = {
+    ...other,
+    absolutePath: "/repo/src/test/java/demo/FakeImpl.java",
+    sourceSet: "test" as const
+  };
+  assert.deepEqual(selectPreferredImplementers([only]), [only]);
+  assert.deepEqual(selectPreferredImplementers([primary, other]), [primary]);
+  assert.deepEqual(selectPreferredImplementers([other, { ...other, absolutePath: "/repo/src/main/java/demo/Third.java" }]), []);
+  assert.deepEqual(selectPreferredImplementers([only, testImpl]), [only]);
 });
