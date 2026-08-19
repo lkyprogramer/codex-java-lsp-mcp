@@ -2,6 +2,7 @@
 // output: Shared tool context for the five-tool MCP handlers.
 // pos: Dependency bundle passed from server.ts into individual tools.
 import { AgentRouter } from "../agent-router/index.js";
+import type { RetrievalSessionStore } from "../agent-router/retrieval/retrieval-session-store.js";
 import type { JavaIndexClient } from "../java-index/java-index-client.js";
 import type { RouterIndex } from "../java-index/router-java-index.js";
 import { JdtlsSession } from "../jdtls-session.js";
@@ -48,4 +49,5 @@ export type ToolContext = {
   /** Raw V2 worker client; optional only to keep isolated handler tests lightweight. */
   javaIndexClient?: JavaIndexClient;
   router: AgentRouter;
+  retrievalSessions?: RetrievalSessionStore;
 };

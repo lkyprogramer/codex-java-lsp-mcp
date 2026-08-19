@@ -259,4 +259,34 @@ export type ImpactResultV6 = {
   metrics?: ImpactDiagnosticMetrics;
 };
 
-export type ImpactResult = ImpactResultV6;
+/** Public continuation unit. Paths are repo-relative. No planner scores. */
+export type RetrievalFrontierItemV1 = {
+  id: string;
+  fileId: string;
+  path: string;
+  ranges: Array<{ startLine: number; endLine: number; estimatedBytes: number }>;
+  relation: string;
+  expectedEvidence: string[];
+  confidence: Confidence;
+  estimatedReadBytes: number;
+  hop: 0 | 1 | 2 | "reverse" | "unknown";
+};
+
+export type RetrievalSectionV1 = {
+  sessionId: string;
+  generation: number;
+  step: number;
+  maxSteps: number;
+  expiresAt: string;
+  frontier: RetrievalFrontierItemV1[];
+  consumed?: string[];
+  stopReason: string;
+};
+
+export type ImpactResultV7 = Omit<ImpactResultV6, "version"> & {
+  version: 7;
+  kind: "analysis" | "continuation";
+  retrieval: RetrievalSectionV1;
+};
+
+export type ImpactResult = ImpactResultV6 | ImpactResultV7;

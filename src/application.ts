@@ -11,6 +11,7 @@ import {
   type WorktreeCacheCleanupResult
 } from "./worktree-cache-cleanup.js";
 import { validateJdtlsTransportEnvironment } from "./jdtls-session.js";
+import { RetrievalSessionStore } from "./agent-router/retrieval/retrieval-session-store.js";
 
 export type JavaLspApplicationState = "created" | "ready" | "draining" | "closed";
 
@@ -35,6 +36,7 @@ export class JavaLspApplication {
   readonly registry: AliasRegistry;
   readonly resolver: RepoResolver;
   readonly runtimes: RepoRuntimeManager;
+  readonly retrievalSessions: RetrievalSessionStore;
 
   private readonly cleanup: (options: WorktreeCacheCleanupOptions) => WorktreeCacheCleanupResult;
   private readonly cacheJanitorIntervalMs: number;
@@ -53,9 +55,10 @@ export class JavaLspApplication {
     this.resolver = options.resolver ?? new RepoResolver(this.registry, options.resolverOptions ?? {
       cwdFallback: this.transportMode === "streamable_http" ? "reject" : "allow"
     });
+    this.retrievalSessions = new RetrievalSessionStore();
     this.runtimes = options.runtimes ?? new RepoRuntimeManager(
       this.resolver,
-      { transportMode: this.transportMode },
+      { transportMode: this.transportMode, retrievalSessions: this.retrievalSessions },
       undefined,
       options.ownership ?? new RepoOwnershipManager({ transport: this.transportMode })
     );
@@ -180,6 +183,7 @@ export class JavaLspApplication {
             throw new Error(`Refusing to release repository ownership while ${activeAtClose} MCP request(s) are active.`);
           }
         } finally {
+          this.retrievalSessions.clear();
           this.currentState = "closed";
           for (const resolve of this.idleWaiters) {
             resolve();
@@ -204,6 +208,7 @@ export class JavaLspApplication {
           // Keep ownership leases until process exit, but prove our JDT children are gone.
           await this.runtimes.forceTerminateOwnedJdtls(Math.floor(deadlineMs));
         } finally {
+          this.retrievalSessions.clear();
           this.currentState = "closed";
           for (const resolve of this.idleWaiters) {
             resolve();

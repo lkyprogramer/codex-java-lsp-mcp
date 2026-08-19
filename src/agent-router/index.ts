@@ -11,6 +11,7 @@ import { probeLayout, type LayoutContext } from "../layout-probe.js";
 import { resolveFamilyRankPolicy, resolveRoutingPolicy, type RoutingPolicy } from "../routing-policy.js";
 import { resolveAnchor } from "./anchor.js";
 import { buildReadPlan } from "./read-plan.js";
+import type { FrontierShadowReport } from "./retrieval/retrieval-types.js";
 import { evidenceGaps } from "./evidence-gaps.js";
 import {
   baselineReadPlanSafePaths,
@@ -78,6 +79,7 @@ export type ImpactInternalObserver = {
     ranked: readonly CandidateEvidence[],
     selectedPaths: readonly string[]
   ): void;
+  frontierShadow?(report: FrontierShadowReport | undefined): void;
 };
 const RG_CACHE_TTL_MS = positiveInteger(process.env.JAVA_LSP_RG_CACHE_TTL_MS, 300000);
 const RG_CONCURRENCY = positiveInteger(process.env.JAVA_LSP_RG_CONCURRENCY, Math.min(4, availableParallelism()));
@@ -390,6 +392,7 @@ export class AgentRouter {
     }));
     internalObserver?.readPlanCoordinates?.(readPlanResult.selectedCoordinateRangesByPath);
     internalObserver?.productionRanking?.(productionRankedEvidence, readPlanResult.selectedPaths);
+    internalObserver?.frontierShadow?.(readPlanResult.frontierShadow);
     const { selectedCoordinateRangesByPath: _selectedCoordinateRangesByPath, ...publicReadPlanMetrics } = readPlanResult;
     const ranked = truncateRankedCandidatePool(rankedPool, rankContext, new Set(readPlanResult.selectedPaths));
     const idByPath = new Map(ranked.map((file, index) => [file.absolutePath, `F${index + 1}`]));

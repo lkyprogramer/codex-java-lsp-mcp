@@ -3,6 +3,7 @@
 // pos: Lazy runtime manager; one context per canonical repoRoot with small LRU/idle control.
 import path from "node:path";
 import { AgentRouter } from "./agent-router/index.js";
+import type { RetrievalSessionStore } from "./agent-router/retrieval/retrieval-session-store.js";
 import {
   defaultLeaseClockDeps,
   FileCrossProcessLeaseStore,
@@ -125,6 +126,7 @@ type RuntimeManagerOptions = {
   requestTimeoutMs: number;
   maxRetainedStoppedRepos: number;
   transportMode: RepoOwnerTransport;
+  retrievalSessions?: RetrievalSessionStore;
 };
 
 export class RepoRuntimeManager {
@@ -622,6 +624,9 @@ export class RepoRuntimeManager {
   private async createEntry(resolved: ResolvedRepo, budget?: DeadlineBudget): Promise<RuntimeEntry> {
     const ownership = this.ownership?.acquire(resolved.repoRoot);
     const context = this.runtimeFactory(resolved, this.leases);
+    if (this.options.retrievalSessions) {
+      context.retrievalSessions = this.options.retrievalSessions;
+    }
     context.session.bindOwnershipLifecycle?.(ownership);
     context.runBackgroundTask = operation => {
       void operation().catch(() => undefined);
@@ -942,6 +947,7 @@ export class RepoRuntimeManager {
     }
     await entry.context.session.stop();
     entry.context.router.clearRgCache();
+    entry.context.retrievalSessions?.invalidateRepo(entry.context.repoHash);
     // The lifecycle listener normally clears this on STOPPED; assign it here too
     // so eviction is authoritative even for a session that never transitioned.
     entry.lspReservation = "NONE";

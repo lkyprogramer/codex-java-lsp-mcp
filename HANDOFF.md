@@ -1,5 +1,17 @@
 # HANDOFF
 
+## V5R Phase 5（COMPLETE，2026-08-19）
+
+真源：`docs/deep/codex-java-lsp-mcp-java-intelligence-v5r-comprehensive-assessment-refactoring-plan-2026-08-19.md` §15 Phase 5 / §8。  
+收口：`docs/phase-v5r/v5r-phase5-closeout.json`。隔离全量 1061+164 fail 0；executableTree `7340a718`。
+
+- **默认 `action=analyze` 仍是 V6**，first-plan identity 不变。`retrieval.enabled=true` 才建 session 并返回 **V7**（`kind` + `retrieval`）。
+- **`action=continue`**：只消费 session 里已物化的 in-pool 单元（BUDGET_EVICTED / implementer / second-hop / collaborator / in-pool cross-module）。不发明 discovery-gap 文件，不开放 `QUERY_CALLERS`。
+- **session**：application 持有、内存 LRU+TTL（128 / 180s）、opaque 128-bit id、complete-only 写入、generation/build stale fail-closed、同 id 幂等、并发串行。stdio 随进程灭；HTTP 随 daemon 灭。
+- **rReadMust@2calls**：池内 holdout 可抬升；`MeQueryService` 仍 uncovered。λ 仍 `CALIBRATED_OFFLINE`。未烧三仓。
+
+下一 Phase：**Phase 6 span packing**。不得合 main。
+
 ## V5R Phase 4（COMPLETE，2026-08-19）
 
 真源：`docs/deep/codex-java-lsp-mcp-java-intelligence-v5r-comprehensive-assessment-refactoring-plan-2026-08-19.md` §15 Phase 4 / §9.5。  
@@ -164,4 +176,4 @@ git log --oneline -5
 git status --short
 ```
 
-确认 `git log` 最新几条含 V5R Phase 4 收口。不要复活 dual-worker sweep 线程。下一独立项是 V5R Phase 5（continuation session），因 Phase 4 oracle 为 GO。λ 仍是 `CALIBRATED_OFFLINE`：禁止合成 `J(π)`。Discovery-gap（MeQueryService / exam-data templates）不是 continuation 能修的。三仓 load < 20 仍必须跑。
+确认 `git log` 最新几条含 V5R Phase 5 收口。不要复活 dual-worker sweep 线程。下一独立项是 V5R Phase 6（span packing）。λ 仍是 `CALIBRATED_OFFLINE`：禁止合成 `J(π)`。Discovery-gap 仍不是 continuation 能修的。三仓 load < 20 仍必须跑。

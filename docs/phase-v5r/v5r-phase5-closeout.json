@@ -1,0 +1,77 @@
+{
+  "schemaVersion": "v5r-phase5-closeout/v1",
+  "phase": 5,
+  "deadline": "2026-09-02",
+  "decision": "COMPLETE",
+  "parentPhase4": "docs/phase-v5r/v5r-phase4-closeout.json",
+  "phase5WriteTree": "7340a718c9accf6b50e6025d013c42a7252dbcb3",
+  "productionLoc": 39029,
+  "v4LocBaseline": 35472,
+  "v4LocCap": 37245,
+  "locNote": "V5R does not treat 37245 as a hard merge gate. Phase 5 mapped +592 LOC versus Phase 4 to the session store/service, V7 wrapper, and java_impact action=continue.",
+  "continuation": {
+    "action": "java_impact action=analyze|continue",
+    "defaultAnalyzeVersion": 6,
+    "optInVersion": 7,
+    "consumableRelations": [
+      "BUDGET_EVICTED",
+      "CLOSED_PORT_IMPLEMENTATION",
+      "SECOND_HOP_EXACT",
+      "SIGNATURE_COLLABORATOR",
+      "CROSS_MODULE_ALTERNATIVE"
+    ],
+    "notOpened": ["REVERSE_CALLER_QUERY", "QUERY_CALLERS"],
+    "noDiscoveryGapHits": true,
+    "noJavaContext": true,
+    "inlineSource": false
+  },
+  "session": {
+    "owner": "JavaLspApplication",
+    "memory": "in-memory LRU+TTL",
+    "maxSessions": 128,
+    "maxPerRepo": 32,
+    "ttlMs": 180000,
+    "opaqueIdBits": 128,
+    "completeOnlyWrites": true,
+    "staleFailClosed": true,
+    "idempotentSameIds": true
+  },
+  "rReadMustAt2Calls": {
+    "target": "in-pool lift; not 1.0",
+    "shippedTest": "rReadMust@2calls lifts in-pool holdout files and leaves discovery-gap uncovered",
+    "discoveryGapRemains": ["MeQueryService"]
+  },
+  "defaultPolicyCost": {
+    "estimator": "BYTE_DIV_4",
+    "lambda": "CALIBRATED_OFFLINE",
+    "note": "Continuation adds planned source bytes for consumed in-pool ranges only. Per-field compare; no J(π). Cheaper than whole-file repair for the same files."
+  },
+  "schemaIncrement": {
+    "addedKeys": ["action", "retrieval", "continuation"],
+    "publicTools": 5,
+    "acceptable": true
+  },
+  "threeRepoMatrix": "not required: default analyze first-plan identity preserved. Continuation is opt-in retrieval.enabled / action=continue.",
+  "isolationFull": {
+    "tests": 1061,
+    "scripts": 164,
+    "fail": 0,
+    "targeted": { "tests": 30, "pass": 30, "fail": 0 }
+  },
+  "exitChecklist": {
+    "sessionStoreService": true,
+    "actionContinue": true,
+    "staleTtlLruIdempotent": true,
+    "analyzeContinueIntegration": true,
+    "mutationConcurrencyTests": true,
+    "v7Additive": true,
+    "rReadMustAt2CallsInPoolLift": true,
+    "noDiscoveryGapHits": true,
+    "noStaleServe": true,
+    "noPartialSessionWrite": true,
+    "schemaIncrementAcceptable": true,
+    "sessionMemoryBounded": true,
+    "firstPlanIdentity": true,
+    "noReverseQuery": true
+  }
+}
