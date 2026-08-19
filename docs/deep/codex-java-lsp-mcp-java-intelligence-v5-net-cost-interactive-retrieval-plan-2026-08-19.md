@@ -1,7 +1,12 @@
 # Java Intelligence V5：净成本目标函数与交互式检索重构方案
 
-> 文档状态：`DRAFT`（待用户批准）
+> 文档状态：`SUPERSEDED_BY_V5R`——诊断部分（§1–§3）仍是有效真源；实施设计（§4–§6）由 `docs/deep/codex-java-lsp-mcp-java-intelligence-v5r-comprehensive-assessment-refactoring-plan-2026-08-19.md` 取代（含下方勘误）。
 > 日期：2026-08-19
+>
+> **勘误（2026-08-19，经源码复核确认）**：
+> 1. §4.1 的成本公式描述错误：当前生产实现是 `estimatedTokens = ceil((resultBytes + readBytes)/4)`（`output-v6.ts:31`），`readBytes`（readPlan 选中范围的估算字节）**已计入**；测试中的 400 是 fixture 的 readBytes 参数，不是固定调用信封。原 NetCost 公式若直接叠加 planned read 成本会重复计费，需按 V5R §6 的分解成本向量重设计。
+> 2. §4.2 引用的 `java_context` 工具不存在：公开工具面是 `java_status/java_impact/java_symbol/java_diagnostics/java_runtime` 五个（`mcp-server-factory.ts`）。continuation 应按 V5R §8 扩展 `java_impact` 的 `action=analyze|continue`。
+> 3. 附录中"`63a80a2..73d1161` 共 19 提交"范围标错：19 是 `63a80a2..4130e3a`；到 `73d1161` 的完整 DAG 计数是 27。
 > 前置真源：`docs/deep/codex-java-lsp-mcp-java-intelligence-v4-consolidation-plan-2026-08-17.md`（V4 计划）、`docs/phase-v4/v4-final-three-repo-cold-20260819.md`（最终矩阵）、`docs/phase-v4/v4-06-range-holdout-progress-2026-08-19.md`（残差分类）、`docs/phase-v3/v4-value-realization-final-report.md`（价值报告）、`HANDOFF.md`
 > 身份：Sprint0' 分母 = `63a80a2`（`docs/phase-v4/v4-sprint0-manifest.json`）；被评估树 = `4130e3a` + patch（executableTree `a56af2f9`）；最终树 = `73d1161`
 > 调查方法：git 历史（`63a80a2..73d1161` 共 19 提交）+ 最终矩阵摘要 JSON 逐 split 拆解 + 门禁脚本实现核对 + V4 计划逐条执行偏差审计
