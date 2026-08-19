@@ -16,6 +16,12 @@ import type { RouterIndex } from "../java-index/router-java-index.js";
 import type { SourceRange } from "../runtime/source-range.js";
 import { hasProtectedStructuralSignal } from "./ranking-signals.js";
 import { selectWithEvidenceBudget } from "./read-plan-budget.js";
+import { evidenceKeys, hasNovelEvidence as fileHasNovelEvidence } from "./retrieval/evidence-features.js";
+import { observeRetrievalParity, selectedReadUnits } from "./retrieval/plan-selector.js";
+import { buildReadUnits, windowsFromReadUnits } from "./retrieval/read-unit-builder.js";
+import { retrievalBudgetFor, readUnitPlannerMode, type MaterializedReadWindow } from "./retrieval/retrieval-types.js";
+import { retrievalBudgetOverflowGaps } from "./retrieval/selection-policy.js";
+import { protectedSelectionUtility, selectionUtility, compareSelectionUtility } from "./retrieval/selection-utility.js";
 
 export const READ_PLAN_BUDGETS = {
   minimal: { maxFiles: 4, maxReadBytes: 6 * 1024 },
@@ -87,13 +93,7 @@ type SelectReadPlanInput = {
   readonly protectedPaths?: ReadonlySet<string>;
 };
 
-type CandidateWindow = {
-  readonly file: CandidateFile;
-  readonly ranges: ReadRange[];
-  readonly coordinateRanges: SourceRange[];
-  readonly bytes: number;
-  readonly extremeMethod: boolean;
-};
+type CandidateWindow = MaterializedReadWindow;
 
 type ShortlistResult = {
   readonly files: CandidateFile[];
@@ -138,7 +138,23 @@ export async function buildReadPlan(input: BuildReadPlanInput): Promise<ReadPlan
       input.generation
     );
   const windows = materializeWindows(shortlist.files, rangeResults);
-  const result = selectTokenAwarePlan(windows, input.ids, input.options, selectionBudget, protectedPaths);
+  const units = buildReadUnits({
+    windows,
+    ids: input.ids,
+    options: input.options,
+    priorityOf: v6ReadPriority
+  });
+  const plannerWindows = windowsFromReadUnits(units);
+  const result = selectTokenAwarePlan(plannerWindows, input.ids, input.options, selectionBudget, protectedPaths);
+  const selectedUnits = selectedReadUnits(units, result.selectedPaths);
+  if (readUnitPlannerMode() === "shadow") {
+    const legacy = selectTokenAwarePlan(windows, input.ids, input.options, selectionBudget, protectedPaths);
+    observeRetrievalParity(selectedUnits, selectedReadUnits(units, legacy.selectedPaths));
+  }
+  const capGaps = retrievalBudgetOverflowGaps(selectedUnits, retrievalBudgetFor(input.options.mode, selectionBudget));
+  if (capGaps.length > 0) {
+    result.evidenceGaps = [...new Set([...result.evidenceGaps, ...capGaps])];
+  }
   if (shortlist.omittedProtected > 0) {
     result.evidenceGaps = [...new Set([
       `Protected candidates exceeded shortlist capacity; ${shortlist.omittedProtected} candidate(s) were not range-planned.`,
@@ -286,7 +302,8 @@ function materializeWindows(files: readonly CandidateFile[], results: readonly I
       ranges,
       coordinateRanges: (result?.ranges || []).map(range => range.range),
       bytes: ranges.reduce((sum, range) => sum + range.estimatedBytes, 0),
-      extremeMethod: result?.extremeMethod === true
+      extremeMethod: result?.extremeMethod === true,
+      rangeKinds: (result?.ranges || []).map(range => range.kind)
     };
   });
 }
@@ -373,7 +390,7 @@ function selectTokenAwarePlan(
   const calledPorts = calledPortPaths(windows.map(window => window.file));
   core.sort((left, right) =>
     protectedCorePriority(right.file, options, calledPorts) - protectedCorePriority(left.file, options, calledPorts)
-    || compareUtilityAndDensity(protectedUtility(left), left.bytes, protectedUtility(right), right.bytes, coreUsesByteDensity)
+    || compareSelectionUtility(protectedUtility(left), left.bytes, protectedUtility(right), right.bytes, coreUsesByteDensity)
     || left.file.absolutePath.localeCompare(right.file.absolutePath));
   if (options.anchors.length > 1) {
     const uncovered = new Set(stableAnchorEntries(options).map(entry => entry.id));
@@ -424,7 +441,7 @@ function selectTokenAwarePlan(
         budget.maxFiles - selected.length
       );
       return eligible.sort((left, right) =>
-        compareUtilityAndDensity(left.utility, left.window.bytes, right.utility, right.window.bytes, preferDensity)
+        compareSelectionUtility(left.utility, left.window.bytes, right.utility, right.window.bytes, preferDensity)
         || right.window.file.score - left.window.file.score
         || left.window.file.absolutePath.localeCompare(right.window.file.absolutePath))[0];
     };
@@ -470,11 +487,7 @@ function toPlanItem(window: CandidateWindow, ids: ReadonlyMap<string, string>, o
 }
 
 function protectedUtility(window: CandidateWindow): number {
-  return window.file.score + familyKeys(window.file).size * 10;
-}
-
-function utilityPerByte(utility: number, bytes: number): number {
-  return utility / Math.max(256, bytes);
+  return protectedSelectionUtility({ file: window.file, estimatedBytes: window.bytes });
 }
 
 /**
@@ -497,20 +510,6 @@ function byteBudgetCanConstrainSelection(
     .slice(0, remainingSlots)
     .reduce((sum, bytes) => sum + bytes, 0);
   return selectedBytes + maximumPotentialBytes > budget.maxReadBytes;
-}
-
-function compareUtilityAndDensity(
-  leftUtility: number,
-  leftBytes: number,
-  rightUtility: number,
-  rightBytes: number,
-  preferDensity: boolean
-): number {
-  const densityDelta = utilityPerByte(rightUtility, rightBytes) - utilityPerByte(leftUtility, leftBytes);
-  const utilityDelta = rightUtility - leftUtility;
-  return preferDensity
-    ? densityDelta || utilityDelta || leftBytes - rightBytes
-    : utilityDelta || densityDelta || leftBytes - rightBytes;
 }
 
 function protectedCorePriority(
@@ -578,46 +577,14 @@ function protectedCorePriority(
 }
 
 function marginalUtility(candidate: CandidateWindow, selected: readonly CandidateWindow[]): number {
-  const candidateFamilies = familyKeys(candidate.file);
-  const selectedFamilies = new Set(selected.flatMap(window => [...familyKeys(window.file)]));
-  const uncoveredFamilies = [...candidateFamilies].filter(family => !selectedFamilies.has(family)).length * 12;
-  const moduleDiversity = selected.some(window => window.file.module === candidate.file.module) ? 0 : 8;
-  const layerDiversity = selected.some(window => window.file.layer === candidate.file.layer) ? 0 : 6;
-  const overlap = selected.reduce((maximum, window) => Math.max(maximum, evidenceOverlap(candidate.file, window.file)), 0) * 35;
-  const supportValue = candidate.file.sourceSet === "test" ? 2 : candidate.file.categories.some(category => category === "config" || category === "persistence") ? 4 : 0;
-  const bytePenalty = Math.log2(1 + Math.max(1, candidate.bytes)) * 3;
-  return candidate.file.score + uncoveredFamilies + moduleDiversity + layerDiversity + supportValue - overlap - bytePenalty;
-}
-
-function evidenceOverlap(left: CandidateFile, right: CandidateFile): number {
-  const leftKeys = plannerEvidenceKeys(left);
-  const rightKeys = new Set(plannerEvidenceKeys(right));
-  if (leftKeys.length === 0) return 0;
-  return leftKeys.filter(key => rightKeys.has(key)).length / leftKeys.length;
+  return selectionUtility(
+    { file: candidate.file, estimatedBytes: candidate.bytes },
+    selected.map(window => ({ file: window.file, estimatedBytes: window.bytes }))
+  );
 }
 
 function hasNovelEvidence(candidate: CandidateFile, selected: readonly CandidateWindow[]): boolean {
-  const selectedKeys = new Set(selected.flatMap(window => plannerEvidenceKeys(window.file)));
-  return plannerEvidenceKeys(candidate).some(key => !selectedKeys.has(key));
-}
-
-function plannerEvidenceKeys(file: CandidateFile): string[] {
-  if ((file.plannerEvidence?.length ?? 0) > 0) {
-    return file.plannerEvidence!.map(item => `${item.family}\0${item.kind}\0${item.sourceTarget}\0${item.callOrigin ?? ""}`);
-  }
-  return evidenceKeys(file);
-}
-
-function evidenceKeys(file: CandidateFile): string[] {
-  return [...new Set([...file.reasons, ...(file.verifiedBy || [])])];
-}
-
-function familyKeys(file: CandidateFile): Set<string> {
-  if ((file.plannerEvidence?.length ?? 0) > 0) {
-    return new Set(file.plannerEvidence!.map(item => item.family));
-  }
-  const keys = evidenceKeys(file).map(key => key.split(":", 1)[0]!);
-  return new Set(keys.length > 0 ? keys : file.categories);
+  return fileHasNovelEvidence(candidate, selected.map(window => window.file));
 }
 
 function calledPortPaths(files: readonly CandidateFile[]): Set<string> {

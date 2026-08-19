@@ -1,3 +1,7 @@
+// Remaining production caller: selectReadPlanFiles() in read-plan.ts, used by
+// rank-candidates.ts baselineReadPlanCoverage() to seed candidate-tail coverage.
+// That is not the V6 byte-aware first-call selector. Do not delete this module
+// until a Phase 2+ parity run proves the tail coverage is unused.
 import type { CandidateFile } from "../agent-types.js";
 
 export type EvidenceClass = "anchor" | "verified" | "structural" | "naming" | "support";

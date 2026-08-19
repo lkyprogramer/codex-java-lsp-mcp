@@ -1,5 +1,19 @@
 # HANDOFF
 
+## V5R Phase 2（COMPLETE，2026-08-19）
+
+真源：`docs/deep/codex-java-lsp-mcp-java-intelligence-v5r-comprehensive-assessment-refactoring-plan-2026-08-19.md` §15 Phase 2。  
+收口：`docs/phase-v5r/v5r-phase2-closeout.json`。隔离全量 1038+164 fail 0；executableTree `3110213e`。
+
+- **ReadUnit**：`src/agent-router/retrieval/`。CandidateWindow 经 `buildReadUnits` 再 round-trip 回 V6 selector，首呼选择 identity 保持。
+- **context closure**：对已有 indexed ranges 分类（method/xml-statement = primary，type/resultMap = context），不新增 golden 特判 span。
+- **统一 utility**：`selectionUtility` 同时服务 first-call 与后续 frontier；不暴露到公开 MCP。
+- **hard caps**：files/bytes/spans/spansPerFile；溢出只记 gap，不另起选择刀。
+- **`read-plan-budget.ts`**：仍只服务 `rank-candidates` 的 candidate-tail coverage，不是 V6 byte-aware first-call selector。
+- **shadow**：`JAVA_LSP_READUNIT_PLANNER=shadow`。未做 continuation / session / V7。未烧三仓（选择 identity 未变）。
+
+下一 Phase：**Phase 3 成本向量与离线策略模拟**。禁止跳到 continuation / 合 main。
+
 ## V5R Phase 1（COMPLETE，2026-08-19）
 
 真源：`docs/deep/codex-java-lsp-mcp-java-intelligence-v5r-comprehensive-assessment-refactoring-plan-2026-08-19.md` §15 Phase 1。  
@@ -125,4 +139,4 @@ git log --oneline -5
 git status --short
 ```
 
-确认 `git log` 最新几条含 V5R Phase 1 收口。不要复活 dual-worker sweep 线程。下一独立项是 V5R Phase 2（ReadUnit），未过 Phase 4 oracle 不得做 continuation。三仓 load < 20 仍必须跑。
+确认 `git log` 最新几条含 V5R Phase 2 收口。不要复活 dual-worker sweep 线程。下一独立项是 V5R Phase 3（成本向量）。未过 Phase 4 oracle 不得做 continuation。三仓 load < 20 仍必须跑。
