@@ -43,6 +43,9 @@
     "test:task36-mutation": "sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node --test dist/benchmark/task36-mutation-matrix.test.js",
     "test:task36-fault": "sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node --test scripts/task36-fault-suite.test.mjs",
     "test:task36-multiprocess": "sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile targeted -- node --test scripts/task36-multiprocess-smoke.test.mjs",
+    "gate:pr": "sh scripts/run-isolated-node.sh scripts/run-v4-gates.mjs --profile pr",
+    "gate:nightly": "sh scripts/run-isolated-node.sh scripts/run-v4-gates.mjs --profile nightly",
+    "gate:release": "sh scripts/run-isolated-node.sh scripts/run-v4-gates.mjs --profile release",
     "start": "node dist/server.js",
     "start:http": "node dist/http-server.js"
   },
