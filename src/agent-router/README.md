@@ -1,6 +1,7 @@
 一旦我所属的文件夹有所变化，请更新我。
 本目录承载 `java_impact` 的 agent 级 Java 语义路由器。
 它先用源码索引和内部 rg 收敛影响面，再按策略进行有界 JDT LS 增强。
+公共 MCP 工具面是 ImpactResult V6，不是历史 v5 handler 面。
 
 ## 文件清单
 

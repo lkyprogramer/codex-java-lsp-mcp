@@ -1,6 +1,6 @@
 // input: java_status MCP request and optional start flag.
 // output: Current JDT LS, watcher, JavaIndex, and router cache status.
-// pos: v5 status tool handler.
+// pos: V6 status tool handler.
 import { z } from "zod";
 import { existsSync } from "node:fs";
 import path from "node:path";

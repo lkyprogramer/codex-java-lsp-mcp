@@ -1,5 +1,5 @@
 // input: java_impact tool arguments, JavaIndex facts, optional JDT LS context, and rg output.
-// output: Compact v5 impact map, read plan, and evidence gaps.
+// output: Compact V6 impact map, read plan, and evidence gaps.
 // pos: Single agent-grade semantic router for Java navigation (Task 22: JavaIndex V2).
 import { availableParallelism } from "node:os";
 import { JdtlsSession } from "../jdtls-session.js";

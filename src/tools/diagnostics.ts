@@ -1,6 +1,6 @@
 // input: java_diagnostics files and wait budget.
 // output: JDT LS diagnostics for opened files.
-// pos: Public v5 diagnostics tool handler.
+// pos: Public V6 diagnostics tool handler.
 import { z } from "zod";
 import { normalizeRepoFile } from "../repo-layout.js";
 import type { LspDiagnostic } from "../jdtls-session.js";

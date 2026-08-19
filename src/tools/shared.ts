@@ -1,6 +1,6 @@
 // input: Raw LSP locations, hovers, ranges, and symbols.
 // output: Compact JSON-safe descriptions for MCP tools.
-// pos: Shared response formatting helpers for v5 tools.
+// pos: Shared response formatting helpers for V6 tools.
 import { z } from "zod";
 import { classifyPath, sourcePreview } from "../repo-layout.js";
 import { normalizeRepoLocation } from "../semantic-location.js";

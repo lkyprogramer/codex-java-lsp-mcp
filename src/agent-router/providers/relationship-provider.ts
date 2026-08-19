@@ -186,7 +186,7 @@ async function preloadRelationshipFacts(input: RelationshipProviderInput): Promi
       partial: true
     };
   }
-  if (process.env.JAVA_LSP_RELATIONSHIP_FACTS_BATCH === "off" || !input.javaIndex.factsForFiles) {
+  if (!input.javaIndex.factsForFiles) {
     return undefined;
   }
   const allPaths = uniquePaths([

@@ -1,5 +1,5 @@
 // input: java_impact MCP request.
-// output: v5 JavaIndex plus rg plus optional LSP impact result.
+// output: V6 JavaIndex plus rg plus optional LSP impact result.
 // pos: Public recommended impact tool handler.
 import { z } from "zod";
 import { withConvergedCostV6 } from "../agent-router/output-v6.js";
