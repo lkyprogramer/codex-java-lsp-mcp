@@ -11,6 +11,25 @@ export const DEFAULT_MAX_LOADAVG_PER_CPU = 1.2;
 export const DEFAULT_MIN_AVAILABLE_BYTES = 4 * 1024 * 1024 * 1024;
 /** 1-minute loadavg below this is the expected three-repo operating window. Never refuse a run for load. */
 export const THREE_REPO_LOADAVG_PROCEED_BELOW = 20;
+/** Real JDT first-touch / prewarm suggested window: load < logicalCpus * this factor. Not a three-repo refuse gate. */
+export const JDT_EXPERIMENT_LOAD_PER_CPU = 1.5;
+
+export function jdtExperimentLoadDecision(loadavg1, logicalCpus, perCpu = JDT_EXPERIMENT_LOAD_PER_CPU) {
+  if (!(Number.isFinite(loadavg1) && loadavg1 >= 0)) {
+    throw new Error("loadavg1 must be a non-negative finite number");
+  }
+  if (!(Number.isInteger(logicalCpus) && logicalCpus > 0)) {
+    throw new Error("logicalCpus must be a positive integer");
+  }
+  const proceedBelow = logicalCpus * perCpu;
+  return {
+    loadavg1,
+    logicalCpus,
+    proceedBelow,
+    belowThreshold: loadavg1 < proceedBelow,
+    refuse: false
+  };
+}
 
 export function evaluateHostQuiet({
   loadavg1,

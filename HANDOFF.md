@@ -1,5 +1,16 @@
 # HANDOFF
 
+## V5R Phase 0（COMPLETE，2026-08-19）
+
+真源：`docs/deep/codex-java-lsp-mcp-java-intelligence-v5r-comprehensive-assessment-refactoring-plan-2026-08-19.md` §15。  
+收口：`docs/phase-v5r/v5r-phase0-closeout.json`。V4 最终矩阵 executableTree `a56af2f9`；Phase 0 工作树在 close-out 里。PR/nightly/release argv 已分层。`PUBLIC_JAVA_TOOLS` 为五工具真源。`estimatedTokens` 仍是 `ceil((resultBytes+readBytes)/4)`，另报 `wireTokensProxy` / `plannedSourceTokensProxy`。
+
+### 遗留欠账二值决定（2026-08-19）
+
+- **V4-09 JDT dataDir fingerprint**：`CLOSED`。实验已完成、未加失效层（`docs/phase-v4/v4-09-jdt-workspace-fingerprint.md`）。除非出现 stale-workspace 实证，不再加 fingerprint 层。
+- **V4-11 idle prewarm**：`DEFERRED`。telemetry 已落地（`IdlePrewarmTracker`，`JAVA_LSP_IDLE_PREWARM` 默认关）。正式 first-touch P95/RSS 试验 `UNMEASURED`。真实 JDT 实验主机门见 `docs/phase-v4/three-repo-host-load-policy.md`「真实 JDT 实验」：可用内存 ≥ 4 GiB **且** 1 分钟 load < 逻辑核数×1.5。窗口出现时由后续会话补跑；本计划 Phase 0 不阻塞。不得默认开启。
+- **V4-05 dual worker**：Phase 0 只登记期限。**Phase 1 期限 2026-09-02**：两轮 `run-storm-gate.mjs`（flag=1）或当日 `FAIL`/`UNAVAILABLE` 书面决定。未过两轮不得 default-on，不得删单 worker 路径。
+
 ## 当前任务
 
 **V4-01/02/03/04 已完成；V4-05 默认关已落地；V4-06 已诚实收口（2026-08-19）**：`CLOSED_WITH_RESIDUAL_STRUCTURAL_MISSES`，不是 RangeLineRecall/rReadMust=1.0。KEEP：Primary-keep、`positionsFromFacts`（paper-task 0.4→0.8）、helper continuation + called-port IMPLEMENTS 2.45（lishuedu/cipherlink file recall 升，rReadMust 未回归）。REJECT：IMPLEMENTS 2.65。禁止为三仓凑 1.0。残差见 `docs/phase-v4/v4-06-range-holdout-progress-2026-08-19.md`。真源 `docs/deep/codex-java-lsp-mcp-java-intelligence-v4-consolidation-plan-2026-08-17.md`。**三仓 load 政策**：1 分钟 load < 20 必须执行。V4-05 storm 未测。隔离约束不变。
@@ -11,7 +22,7 @@
 用户的标准授权（持续有效，无需每次重新确认）：
 - 本仓库上的 `git commit`、`git push origin codex/java-intelligence-v3` 不需要逐次请求授权。
 - 设计分叉/实现取舍不需要问用户，直接调用 advisor 并按其最终建议执行；只有 destructive/不可逆操作、PR/发布/deploy 范围、或 advisor 自己标注为"需要用户判断"的事项才升级给用户。
-- 详见 `~/.claude/projects/-Users-luo-Documents-github-codex-java-lsp-mcp/memory/autonomous-scope-authorization.md`（如果下一会话是同一账号/同一 Claude Code 环境，这份记忆应该已经自动加载）。
+- 外部 Agent eval 与 destructive 操作的边界写在本文件；不引用个人本机 memory 路径。
 
 **唯一仍然需要用户明确授权、不可绕过的边界**：development-plan V3.2-07b（外部 Agent eval）——任何会产生外部模型调用成本或把代码发送给外部 provider 的操作，必须由用户显式授权；未获授权时相关任务状态必须是 `BLOCKED_EXTERNAL`，不得编造/估算数字顶替。Sprint4 的 V3.2-21 若涉及"实际 Agent quality 结论"，同样受此约束。
 

@@ -6,17 +6,17 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { JavaLspApplication } from "./application.js";
-import { createMcpServer } from "./mcp-server-factory.js";
+import { createMcpServer, PUBLIC_JAVA_TOOLS } from "./mcp-server-factory.js";
 import { AliasRegistry } from "./alias-registry.js";
 import { RepoResolver } from "./repo-resolver.js";
 
-const expectedTools = [
-  "java_diagnostics",
-  "java_impact",
-  "java_runtime",
-  "java_status",
-  "java_symbol"
-];
+const expectedTools = [...PUBLIC_JAVA_TOOLS].sort();
+
+test("PUBLIC_JAVA_TOOLS is exactly the five public tools and excludes java_context", () => {
+  assert.deepEqual([...PUBLIC_JAVA_TOOLS].sort(), expectedTools);
+  assert.equal(PUBLIC_JAVA_TOOLS.includes("java_context" as never), false);
+  assert.equal(PUBLIC_JAVA_TOOLS.length, 5);
+});
 
 test("HTTP protocol factory refuses an application with cwd fallback", () => {
   const registry = new AliasRegistry("/path/that/does/not/exist");

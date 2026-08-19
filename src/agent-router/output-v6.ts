@@ -29,10 +29,25 @@ export function withConvergedCostV6<T extends { cost: ImpactCostV6 }>(
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const resultBytes = Buffer.byteLength(JSON.stringify(payload), "utf8");
     const estimatedTokens = Math.ceil((resultBytes + readBytes) / BYTES_PER_TOKEN);
-    if (payload.cost.resultBytes === resultBytes && payload.cost.estimatedTokens === estimatedTokens) {
+    const wireTokensProxy = Math.ceil(resultBytes / BYTES_PER_TOKEN);
+    const plannedSourceTokensProxy = Math.ceil(readBytes / BYTES_PER_TOKEN);
+    if (
+      payload.cost.resultBytes === resultBytes
+      && payload.cost.estimatedTokens === estimatedTokens
+      && payload.cost.wireTokensProxy === wireTokensProxy
+      && payload.cost.plannedSourceTokensProxy === plannedSourceTokensProxy
+    ) {
       return payload;
     }
-    payload.cost = { resultBytes, readBytes, estimatedTokens, suppressedRawBytes };
+    payload.cost = {
+      resultBytes,
+      readBytes,
+      estimatedTokens,
+      suppressedRawBytes,
+      wireTokensProxy,
+      plannedSourceTokensProxy,
+      tokenEstimator: "BYTE_DIV_4"
+    };
   }
   return payload;
 }

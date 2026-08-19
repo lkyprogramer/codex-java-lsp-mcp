@@ -17,6 +17,17 @@ import { javaSymbol, symbolSchema } from "./tools/symbol.js";
 
 export type McpTransportMode = "stdio" | "streamable_http";
 
+/** Single source of truth for the public MCP tool surface. There is no java_context. */
+export const PUBLIC_JAVA_TOOLS = [
+  "java_status",
+  "java_impact",
+  "java_symbol",
+  "java_diagnostics",
+  "java_runtime"
+] as const;
+
+export type PublicJavaTool = (typeof PUBLIC_JAVA_TOOLS)[number];
+
 export type McpServerFactoryOptions = {
   transportMode: McpTransportMode;
 };
@@ -44,13 +55,19 @@ export function createMcpServer(
     instructions: "Use java_impact first for Java navigation. Tools are read-only and optimized for low-token impact analysis."
   });
 
-  register("java_status", {
+  const registered: string[] = [];
+  const track = (name: string): string => {
+    registered.push(name);
+    return name;
+  };
+
+  register(track("java_status"), {
     title: "Java Status",
     description: "Return repo, JDT LS, watcher, JavaIndex, and router cache status; pass start=true to start JDT LS.",
     inputSchema: statusSchema
   }, args => javaStatusFor(args));
 
-  register("java_impact", {
+  register(track("java_impact"), {
     title: "Java Impact",
     description: "Build a compact Java impact plan with JavaIndex routing, internal rg summary, optional bounded LSP enrichment, and read plan.",
     inputSchema: impactSchema
@@ -64,7 +81,7 @@ export function createMcpServer(
     }
   }));
 
-  register("java_symbol", {
+  register(track("java_symbol"), {
     title: "Java Symbol",
     description: "operation=query (default): search workspace symbols. operation=position (default with file/line/column): hover/definition/implementation at a position. operation=references: summary-only references.",
     inputSchema: symbolSchema
@@ -78,7 +95,7 @@ export function createMcpServer(
     }
   }));
 
-  register("java_diagnostics", {
+  register(track("java_diagnostics"), {
     title: "Java Diagnostics",
     description: "Open Java files and return JDT LS diagnostics after a short wait.",
     inputSchema: diagnosticsSchema
@@ -92,12 +109,15 @@ export function createMcpServer(
     }
   }));
 
-  register("java_runtime", {
+  register(track("java_runtime"), {
     title: "Java Runtime",
     description: "action=restart: restart JDT LS (clearCache=true also clears cache). action=shutdown: stop JDT LS (all=true stops every active repo).",
     inputSchema: runtimeSchema
   }, args => runtimeFor(args));
 
+  if (registered.join("\0") !== PUBLIC_JAVA_TOOLS.join("\0")) {
+    throw new Error(`MCP registration drifted from PUBLIC_JAVA_TOOLS: ${registered.join(",")}`);
+  }
   return server;
 
   async function javaStatusFor(args: z.infer<z.ZodObject<typeof statusSchema>>): Promise<unknown> {

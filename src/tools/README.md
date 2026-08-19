@@ -1,6 +1,6 @@
 # `src/tools/`
 
-本目录承载 ImpactResult V6 public MCP tools 的薄 handler。每个 handler 只负责入参解析、request budget 传播、调用共享服务和响应格式化；JavaIndex、semantic、ranking 与 readPlan 逻辑留在各自 owner 模块。历史 v5 tools 面已删除。
+本目录承载 ImpactResult V6 public MCP tools 的薄 handler。公开工具面真源是 `src/mcp-server-factory.ts` 的 `PUBLIC_JAVA_TOOLS`（恰好五个：`java_status`、`java_impact`、`java_symbol`、`java_diagnostics`、`java_runtime`）。没有 `java_context`。每个 handler 只负责入参解析、request budget 传播、调用共享服务和响应格式化；JavaIndex、semantic、ranking 与 readPlan 逻辑留在各自 owner 模块。历史 v5 tools 面已删除。
 
 ## 文件清单
 

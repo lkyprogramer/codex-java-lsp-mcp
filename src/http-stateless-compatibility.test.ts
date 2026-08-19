@@ -10,15 +10,9 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { JavaLspApplication } from "./application.js";
-import { createMcpServer } from "./mcp-server-factory.js";
+import { createMcpServer, PUBLIC_JAVA_TOOLS } from "./mcp-server-factory.js";
 
-const EXPECTED_TOOLS = [
-  "java_diagnostics",
-  "java_impact",
-  "java_runtime",
-  "java_status",
-  "java_symbol"
-];
+const EXPECTED_TOOLS = [...PUBLIC_JAVA_TOOLS].sort();
 
 test("SDK client remains compatible with stateless HTTP across daemon restart", async t => {
   const root = await mkdtemp(path.join(tmpdir(), "java-lsp-http-stateless-"));

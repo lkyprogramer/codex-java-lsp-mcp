@@ -3,9 +3,11 @@ import test from "node:test";
 import {
   DEFAULT_MIN_AVAILABLE_BYTES,
   THREE_REPO_LOADAVG_PROCEED_BELOW,
+  JDT_EXPERIMENT_LOAD_PER_CPU,
   assertHostQuiet,
   evaluateHostQuiet,
   inspectHostQuiet,
+  jdtExperimentLoadDecision,
   threeRepoLoadDecision
 } from "./host-quiet.mjs";
 
@@ -33,6 +35,17 @@ test("three-repo load policy proceeds below 20 and never refuses", () => {
   assert.equal(ready.belowThreshold, true);
   assert.equal(ready.refuse, false);
   const busy = threeRepoLoadDecision(20);
+  assert.equal(busy.belowThreshold, false);
+  assert.equal(busy.refuse, false);
+});
+
+test("real JDT experiment window is load < cores*1.5 and never refuses", () => {
+  assert.equal(JDT_EXPERIMENT_LOAD_PER_CPU, 1.5);
+  const ready = jdtExperimentLoadDecision(14, 10);
+  assert.equal(ready.proceedBelow, 15);
+  assert.equal(ready.belowThreshold, true);
+  assert.equal(ready.refuse, false);
+  const busy = jdtExperimentLoadDecision(16, 10);
   assert.equal(busy.belowThreshold, false);
   assert.equal(busy.refuse, false);
 });

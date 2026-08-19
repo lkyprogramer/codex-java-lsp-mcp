@@ -1,0 +1,9 @@
+{
+  "schemaVersion": "v5r-commit-count/v1",
+  "countingMode": "git-log-oneline from Sprint0' measuredCommit exclusive to HEAD inclusive",
+  "fromExclusive": "63a80a2a0b4e9947bbf94a454ae1d14ece64dca9",
+  "toInclusive": "a917d9ced265a3122e9724299c7a0b54e51f36de",
+  "countOneline": 28,
+  "countNoMerges": 28,
+  "note": "Do not mix with a 19 vs 27 count taken on a different endpoint or merge filter."
+}

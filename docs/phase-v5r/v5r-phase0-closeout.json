@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "v5r-phase0-closeout/v1",
+  "phase": 0,
+  "deadline": "2026-09-02",
+  "decision": "COMPLETE",
+  "sprint0MeasuredCommit": "63a80a2a0b4e9947bbf94a454ae1d14ece64dca9",
+  "v4FinalMatrixExecutableTree": "a56af2f9d469f8f0e7b47dd7bbc54d3f98778159",
+  "phase0HeadBeforeCommit": "a917d9ced265a3122e9724299c7a0b54e51f36de",
+  "phase0WriteTree": "a3cddfd897a6e139197c1826dba36acd5e7c8109",
+  "productionLoc": 36810,
+  "v4LocBaseline": 35472,
+  "commitCount": {
+    "schemaVersion": "v5r-commit-count/v1",
+    "countingMode": "git-log-oneline from Sprint0' measuredCommit exclusive to HEAD inclusive",
+    "fromExclusive": "63a80a2a0b4e9947bbf94a454ae1d14ece64dca9",
+    "toInclusive": "a917d9ced265a3122e9724299c7a0b54e51f36de",
+    "countOneline": 28,
+    "countNoMerges": 28,
+    "note": "Do not mix with a 19 vs 27 count taken on a different endpoint or merge filter."
+  },
+  "leftovers": {
+    "V4-09": "CLOSED",
+    "V4-11": "DEFERRED",
+    "V4-05": "Phase-1-dated-2026-09-02"
+  },
+  "isolationFull": {
+    "tests": 1027,
+    "scripts": 164,
+    "fail": 0
+  },
+  "exitChecklist": {
+    "correctedBaselineRecomputable": true,
+    "noDoubleCountingEstimatedTokens": true,
+    "gateProfilesDiffer": true,
+    "publicToolsExactlyFive": true,
+    "rcProvenanceRecorded": true,
+    "leftoverDecisionsInHandoff": true
+  }
+}

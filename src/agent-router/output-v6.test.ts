@@ -55,6 +55,20 @@ test("withConvergedCostV6 stabilizes resultBytes/estimatedTokens within 3 attemp
   assert.equal(result.cost.readBytes, 400);
   assert.equal(result.cost.suppressedRawBytes, 12000);
   assert.equal(result.cost.estimatedTokens, Math.ceil((result.cost.resultBytes + 400) / 4));
+  assert.equal(result.cost.wireTokensProxy, Math.ceil(result.cost.resultBytes / 4));
+  assert.equal(result.cost.plannedSourceTokensProxy, Math.ceil(400 / 4));
+  assert.equal(result.cost.tokenEstimator, "BYTE_DIV_4");
+});
+
+test("wire and planned-source proxies report parts without changing estimatedTokens", () => {
+  const result = withConvergedCostV6(samplePayload(2), 800, 0);
+  assert.equal(result.cost.estimatedTokens, Math.ceil((result.cost.resultBytes + result.cost.readBytes) / 4));
+  assert.equal(result.cost.wireTokensProxy, Math.ceil(result.cost.resultBytes / 4));
+  assert.equal(result.cost.plannedSourceTokensProxy, Math.ceil(result.cost.readBytes / 4));
+  const doubled = Math.ceil((result.cost.resultBytes + result.cost.readBytes) / 4)
+    + Math.ceil(result.cost.resultBytes / 4)
+    + Math.ceil(result.cost.readBytes / 4);
+  assert.notEqual(result.cost.estimatedTokens, doubled);
 });
 
 test("withConvergedCostV6 converges identically regardless of starting cost values", () => {

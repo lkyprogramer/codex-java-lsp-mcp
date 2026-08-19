@@ -193,6 +193,11 @@ export type ImpactCostV6 = {
   readBytes: number;
   estimatedTokens: number;
   suppressedRawBytes: number;
+  /** ceil(resultBytes / 4). Report-only; not added into estimatedTokens. */
+  wireTokensProxy?: number;
+  /** ceil(readBytes / 4). Report-only; not added into estimatedTokens. */
+  plannedSourceTokensProxy?: number;
+  tokenEstimator?: "BYTE_DIV_4" | "MODEL_TOKENIZER";
 };
 
 /**

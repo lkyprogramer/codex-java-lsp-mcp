@@ -17,6 +17,14 @@
 
 first-touch / storm 若使用真实 JDT，仍应在报告里记录 load；但不得用 load 阻断三仓质量门。
 
+## 真实 JDT 实验（first-touch / idle-prewarm）
+
+与三仓 cold-nolsp **分开**的主机门（V5R Phase 0，不得互相挪用）：
+
+1. 可用内存 ≥ 4 GiB（与三仓相同硬门）。
+2. **建议窗口**：1 分钟 load < 逻辑核数 × 1.5。未进入窗口时记录 `UNMEASURED` / `DEFERRED`，不要把超时当 P95 数字。
+3. 不得用这条 load 门拒绝三仓矩阵；也不得用三仓「load < 20 必须跑」强迫启动真实 JDT 试验。
+
 ## 代理人检查清单
 
 启动三仓前只做：
