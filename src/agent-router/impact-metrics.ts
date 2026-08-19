@@ -1,4 +1,5 @@
 import type { ImpactOptions, ResolvedAnchor } from "../agent-types.js";
+export { idlePrewarmTracker, IdlePrewarmTracker, type IdlePrewarmSnapshot } from "./prewarm-metrics.js";
 import type {
   JavaIndexRpcOperation,
   JavaIndexRpcSettlement,

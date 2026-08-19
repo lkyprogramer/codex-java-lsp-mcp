@@ -39,6 +39,7 @@ import {
   type RepoOwnerTransport
 } from "./repo-ownership-lease.js";
 import { forceTerminateJdtlsChild } from "./jdtls-session.js";
+import { idlePrewarmTracker } from "./agent-router/prewarm-metrics.js";
 
 export type RequestOptionsInput = {
   mode: RequestMode;
@@ -222,6 +223,7 @@ export class RepoRuntimeManager {
     try {
       const request = await this.prepareRequestContext(entry, options.requestOptions, budget);
       if (options.mayStartLsp) {
+        idlePrewarmTracker.recordFirstSemanticRequest(resolved.repoRoot);
         await this.reserveLspSlot(entry, request.budget);
       }
       return await handler(entry.context, request);
@@ -630,6 +632,9 @@ export class RepoRuntimeManager {
       () => context.javaIndexClient?.localStatus().files ?? 0
     );
     context.session.bindGenerationClock?.(generation);
+    if (process.env.JAVA_LSP_IDLE_PREWARM === "1") {
+      idlePrewarmTracker.recordPrewarm(resolved.repoRoot);
+    }
     const leaseOperation = this.leases.acquireRuntime(resolved.worktree).catch(() => undefined);
     let leaseTimedOut = false;
     // A caller deadline only stops that caller, but the shared creation itself
