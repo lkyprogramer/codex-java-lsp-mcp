@@ -1244,6 +1244,175 @@ test("relationship typed batch preserves deadline and cancellation completions",
   }
 });
 
+function withRelationshipBundleMode<T>(mode: string | undefined, action: () => T): T {
+  const previous = process.env.JAVA_LSP_RELATIONSHIP_BUNDLE;
+  if (mode === undefined) delete process.env.JAVA_LSP_RELATIONSHIP_BUNDLE;
+  else process.env.JAVA_LSP_RELATIONSHIP_BUNDLE = mode;
+  try {
+    return action();
+  } finally {
+    if (previous === undefined) delete process.env.JAVA_LSP_RELATIONSHIP_BUNDLE;
+    else process.env.JAVA_LSP_RELATIONSHIP_BUNDLE = previous;
+  }
+}
+
+function evidenceIdentity(result: { evidence: Array<{ kind: string; candidateFile: string; anchorId: string; weight: number }> }): string {
+  return result.evidence
+    .map(item => `${item.kind}:${item.candidateFile}:${item.anchorId}:${item.weight}`)
+    .join("|");
+}
+
+test("bundle-on consumes QUERY_RELATIONSHIP_BUNDLE and keeps evidence identity with the facts batch", async () => {
+  const implementation = anchor({
+    absolutePath: "/repo/src/main/java/demo/OrderServiceImpl.java",
+    path: "src/main/java/demo/OrderServiceImpl.java",
+    className: "OrderServiceImpl"
+  });
+  const service = candidate("/repo/src/main/java/demo/OrderService.java");
+  const byPath = new Map([
+    [implementation.absolutePath, facts(implementation.absolutePath, {
+      typeName: "OrderServiceImpl",
+      implementsTypes: ["demo.OrderService"]
+    })],
+    [service.absolutePath, facts(service.absolutePath, { typeName: "OrderService", kind: "interface" })]
+  ]);
+  const items = [...byPath.entries()].map(([absolutePath, sourceFacts]) => ({
+    inputFile: absolutePath,
+    absolutePath,
+    state: "FOUND" as const,
+    facts: sourceFacts
+  }));
+  let bundleCalls = 0;
+  let batchCalls = 0;
+  let calleeCalls = 0;
+  const method: JavaMethodFact = {
+    name: "place",
+    line: 1,
+    endLine: 5,
+    referencedTypes: [],
+    relations: [],
+    methodId: "method:demo.OrderServiceImpl#place"
+  };
+
+  const legacy = await collectRelationshipEvidence(providerInput(
+    [implementation],
+    [service],
+    [service],
+    noopJavaIndex({
+      factsForFiles: async () => {
+        batchCalls += 1;
+        return { generation: 0, completion: "COMPLETE", truncated: false, items };
+      },
+      methodAt: async () => method,
+      resolvedCallees: async () => {
+        calleeCalls += 1;
+        return { callees: [], truncated: false };
+      }
+    })
+  ));
+
+  const bundled = await withRelationshipBundleMode("on", () => collectRelationshipEvidence(providerInput(
+    [implementation],
+    [service],
+    [service],
+    noopJavaIndex({
+      factsForFiles: async () => {
+        batchCalls += 1;
+        throw new Error("bundle-on must not fall back to factsForFiles");
+      },
+      methodAt: async () => method,
+      queryRelationshipBundle: async () => {
+        bundleCalls += 1;
+        return {
+          generation: 0,
+          completion: "COMPLETE",
+          stale: false,
+          truncated: false,
+          items,
+          anchors: [{
+            anchorId: implementation.id,
+            calleeTargetIds: [],
+            calleeTruncated: false,
+            implementationTypeIds: [],
+            signatureTypeIds: []
+          }],
+          metrics: { parsedFiles: 2, hydratedFiles: 2, cacheHits: 0, queryCount: 1 }
+        };
+      },
+      resolvedCallees: async () => {
+        calleeCalls += 1;
+        throw new Error("bundle-on must not issue resolvedCallees");
+      }
+    })
+  )));
+
+  assert.equal(bundleCalls, 1);
+  assert.equal(batchCalls, 1, "only the legacy off-path should batch factsForFiles");
+  assert.equal(calleeCalls, 1, "only the legacy off-path should query resolvedCallees");
+  assert.equal(evidenceIdentity(bundled), evidenceIdentity(legacy));
+  assert.equal(bundled.completion, "COMPLETE");
+});
+
+test("bundle-shadow keeps the old path for evidence and still fetches the bundle", async () => {
+  const requestAnchor = anchor();
+  const service = candidate("/repo/src/main/java/demo/OrderService.java");
+  const sourceFacts = facts(requestAnchor.absolutePath);
+  let bundleCalls = 0;
+  let batchCalls = 0;
+  const result = await withRelationshipBundleMode("shadow", () => collectRelationshipEvidence(providerInput(
+    [requestAnchor],
+    [service],
+    [service],
+    noopJavaIndex({
+      factsForFiles: async () => {
+        batchCalls += 1;
+        return {
+          generation: 0,
+          completion: "COMPLETE",
+          truncated: false,
+          items: [{
+            inputFile: requestAnchor.absolutePath,
+            absolutePath: requestAnchor.absolutePath,
+            state: "FOUND",
+            facts: sourceFacts
+          }, {
+            inputFile: service.absolutePath,
+            absolutePath: service.absolutePath,
+            state: "FOUND",
+            facts: facts(service.absolutePath, { typeName: "OrderService", kind: "interface" })
+          }]
+        };
+      },
+      queryRelationshipBundle: async () => {
+        bundleCalls += 1;
+        return {
+          generation: 0,
+          completion: "COMPLETE",
+          stale: false,
+          truncated: false,
+          items: [{
+            inputFile: requestAnchor.absolutePath,
+            absolutePath: requestAnchor.absolutePath,
+            state: "FOUND",
+            facts: sourceFacts
+          }],
+          anchors: [{
+            anchorId: requestAnchor.id,
+            calleeTargetIds: [],
+            calleeTruncated: false,
+            implementationTypeIds: [],
+            signatureTypeIds: []
+          }],
+          metrics: { parsedFiles: 1, hydratedFiles: 1, cacheHits: 0, queryCount: 1 }
+        };
+      }
+    })
+  )));
+  assert.equal(bundleCalls, 1);
+  assert.equal(batchCalls, 1);
+  assert.equal(result.completion, "COMPLETE");
+});
+
 test("an already-expired relationship request performs no JavaIndex work", async () => {
   let calls = 0;
   const input = providerInput(

@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "v5r-phase1-closeout/v1",
+  "phase": 1,
+  "deadline": "2026-09-02",
+  "decision": "COMPLETE",
+  "parentPhase0": "docs/phase-v5r/v5r-phase0-closeout.json",
+  "phase1WriteTree": "6035eda7131206a051d8815d68deb870e60b515f",
+  "productionLoc": 37360,
+  "v4LocBaseline": 35472,
+  "v4LocCap": 37245,
+  "locNote": "V5R does not treat 37245 as a hard merge gate. Phase 1 mapped the net +550 LOC versus Phase 0 to QUERY_RELATIONSHIP_BUNDLE plus provider split, after FAIL-repaying the dual-worker sweep thread.",
+  "relationshipBundle": {
+    "command": "QUERY_RELATIONSHIP_BUNDLE",
+    "flag": "JAVA_LSP_RELATIONSHIP_BUNDLE",
+    "defaultMode": "off",
+    "modes": ["off", "shadow", "on"],
+    "oldPathRetained": true,
+    "rpcTelemetry": "JavaIndexRpcTelemetryCollector.relationshipSummary plus diagnostic javaIndex.relationshipRpc"
+  },
+  "dualWorker": {
+    "decision": "FAIL",
+    "evidence": "docs/phase-v5r/v5r-dual-worker-decision.json"
+  },
+  "isolationFull": {
+    "tests": 1032,
+    "scripts": 164,
+    "fail": 0
+  },
+  "exitChecklist": {
+    "bundleCommandExists": true,
+    "oldNewParityObserver": true,
+    "rpcTelemetry": true,
+    "providerFirstSplit": true,
+    "identityParityTests": true,
+    "partialDeadlineCancelPreserved": true,
+    "dualWorkerTwoRoundDecision": true,
+    "sweepThreadDeletedOnFail": true
+  }
+}

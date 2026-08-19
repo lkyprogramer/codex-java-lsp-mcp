@@ -1,5 +1,17 @@
 # HANDOFF
 
+## V5R Phase 1（COMPLETE，2026-08-19）
+
+真源：`docs/deep/codex-java-lsp-mcp-java-intelligence-v5r-comprehensive-assessment-refactoring-plan-2026-08-19.md` §15 Phase 1。  
+收口：`docs/phase-v5r/v5r-phase1-closeout.json`。隔离全量 1032+164 fail 0；executableTree `6035eda7`。
+
+- **QUERY_RELATIONSHIP_BUNDLE**：worker command + router facade + request memo + generation stale → `DEGRADED`。默认 `JAVA_LSP_RELATIONSHIP_BUNDLE=off` 走旧 `factsForFiles` 路径；`shadow` 旁路观察文件身份；`on` 用 bundle 填充 facts 并跳过已打包的 `resolvedCallees`。旧路径保留至 release soak。
+- **RPC telemetry**：`JavaIndexRpcTelemetryCollector.relationshipSummary()`；diagnostic `javaIndex.relationshipRpc`。
+- **provider 拆分第一步**：`relationship-query-plan.ts` / `relationship-bundle-client.ts` / `relationship-parity.ts`。projector/closure 仍在 `relationship-provider.ts`。
+- **V4-05 dual worker**：两轮 `run-storm-gate.mjs`（flag=1，`--iterations 1`）均 `FAIL`。staleCount=0，但 P95/quiet 为 29.0/5.28/7.92 与 37.5/5.92/3.94（门槛 1.10）。sweep 线程已删除。单 query worker 仍是 store 唯一写者。证据 `docs/phase-v5r/v5r-dual-worker-decision.json`。ADR-01 标 `FAILED`。
+
+下一 Phase：**Phase 2 ReadUnit 与统一 planner**。禁止跳到 continuation / 合 main。
+
 ## V5R Phase 0（COMPLETE，2026-08-19）
 
 真源：`docs/deep/codex-java-lsp-mcp-java-intelligence-v5r-comprehensive-assessment-refactoring-plan-2026-08-19.md` §15。  
@@ -9,13 +21,13 @@
 
 - **V4-09 JDT dataDir fingerprint**：`CLOSED`。实验已完成、未加失效层（`docs/phase-v4/v4-09-jdt-workspace-fingerprint.md`）。除非出现 stale-workspace 实证，不再加 fingerprint 层。
 - **V4-11 idle prewarm**：`DEFERRED`。telemetry 已落地（`IdlePrewarmTracker`，`JAVA_LSP_IDLE_PREWARM` 默认关）。正式 first-touch P95/RSS 试验 `UNMEASURED`。真实 JDT 实验主机门见 `docs/phase-v4/three-repo-host-load-policy.md`「真实 JDT 实验」：可用内存 ≥ 4 GiB **且** 1 分钟 load < 逻辑核数×1.5。窗口出现时由后续会话补跑；本计划 Phase 0 不阻塞。不得默认开启。
-- **V4-05 dual worker**：Phase 0 只登记期限。**Phase 1 期限 2026-09-02**：两轮 `run-storm-gate.mjs`（flag=1）或当日 `FAIL`/`UNAVAILABLE` 书面决定。未过两轮不得 default-on，不得删单 worker 路径。
+- **V4-05 dual worker**：Phase 1 已 `FAIL`（2026-08-19）。两轮 storm flag=1 未过 P95/quiet ≤1.10；sweep 线程已删除。见 `docs/phase-v5r/v5r-dual-worker-decision.json`。
 
 ## 当前任务
 
-**V4-01/02/03/04 已完成；V4-05 默认关已落地；V4-06 已诚实收口（2026-08-19）**：`CLOSED_WITH_RESIDUAL_STRUCTURAL_MISSES`，不是 RangeLineRecall/rReadMust=1.0。KEEP：Primary-keep、`positionsFromFacts`（paper-task 0.4→0.8）、helper continuation + called-port IMPLEMENTS 2.45（lishuedu/cipherlink file recall 升，rReadMust 未回归）。REJECT：IMPLEMENTS 2.65。禁止为三仓凑 1.0。残差见 `docs/phase-v4/v4-06-range-holdout-progress-2026-08-19.md`。真源 `docs/deep/codex-java-lsp-mcp-java-intelligence-v4-consolidation-plan-2026-08-17.md`。**三仓 load 政策**：1 分钟 load < 20 必须执行。V4-05 storm 未测。隔离约束不变。
+**V4-01/02/03/04 已完成；V4-05 默认关已落地；V4-06 已诚实收口（2026-08-19）**：`CLOSED_WITH_RESIDUAL_STRUCTURAL_MISSES`，不是 RangeLineRecall/rReadMust=1.0。KEEP：Primary-keep、`positionsFromFacts`（paper-task 0.4→0.8）、helper continuation + called-port IMPLEMENTS 2.45（lishuedu/cipherlink file recall 升，rReadMust 未回归）。REJECT：IMPLEMENTS 2.65。禁止为三仓凑 1.0。残差见 `docs/phase-v4/v4-06-range-holdout-progress-2026-08-19.md`。真源 `docs/deep/codex-java-lsp-mcp-java-intelligence-v4-consolidation-plan-2026-08-17.md`。**三仓 load 政策**：1 分钟 load < 20 必须执行。V4-05 storm 已两轮 FAIL，sweep 线程已删。隔离约束不变。
 
-（以下 V3.2 各 Sprint 记录保留供追溯，其结论与"不要再踩的坑"在 V4 阶段继续有效，除非 V4 计划文档显式解除——目前唯一显式解除的是"不新增第二 scheduler"边界：V4-05 以 ADR 形式引入第二 worker **线程**，sweep 调度语义不变。）
+（以下 V3.2 各 Sprint 记录保留供追溯，其结论与"不要再踩的坑"在 V4 阶段继续有效，除非 V4 计划文档显式解除——V4-05 曾以 ADR 引入第二 worker **线程**；V5R Phase 1 两轮 storm FAIL 后该线程已删除，query worker 再次独自承担后台 chunk。）
 
 当前分支是 `codex/java-intelligence-v3`（最新 commit 见 `git log --oneline -5`）。**均已 commit 且已 push，不是 dirty worktree**（工作区可能有两个未提交、未跟踪的实验脚手架：`scripts/run-idle-prewarm-experiment.mjs`（V3.2-23）与 `scripts/run-v324-import-concurrency-experiment.mjs`（V3.2-24）——都是保留的、接线已验证有效的脚手架，不是遗漏的改动，见下方对应小节）。
 
@@ -62,7 +74,7 @@
 
 V4-03 **分母已入库**：`docs/phase-v4/v4-sprint0-manifest.json` + `docs/phase-v4/v4-sprint0-summaries/`。raw 在 `/tmp/codex-java-lsp-v4-sprint0-20260818/`。主机门改为可用内存 ≥4 GiB，load 只记录。cold-matrix 质量门 FAIL 是分母（三仓 rReadMust 0.90/0.91/0.88）。first-touch：lishuedu 3/5 COMPLETE，cipherlink 与 exam-parent-v3 5/5 PARTIAL_TIMEOUT（`--prepare none` + 60s）。正式仓仍是 `/tmp/codex-java-v3-golden-20260809/{lishuedu,cipherlink,exam-parent-v3}`。
 
-V4-05 ADR-01 已实施：query worker 仍是 live store 唯一写者；sweep 线程只解析并把 facts 交回。flag `JAVA_LSP_JAVA_INDEX_DUAL_WORKER` **默认关**。隔离测试已覆盖 flag、digest 逐位等价、跨 chunk IMPLEMENTS。**未过** `scripts/run-storm-gate.mjs` 两轮（P95/quiet ≤1.10 且 staleCount=0）以及 T_complete/RSS ≤+10% 之前，禁止默认开启，也禁止在 V4-08 拆 god file 时改调度语义。
+V4-05 ADR-01 **FAILED**（V5R Phase 1）：两轮 `run-storm-gate.mjs` flag=1 未过 P95/quiet ≤1.10。sweep 线程已删除；query worker 仍是 live store 唯一写者，并继续在本线程跑后台 chunk。不要复活 `JAVA_LSP_JAVA_INDEX_DUAL_WORKER`。
 
 V4-10 harness 已存在：`scripts/run-agent-trace-matrix.mjs`。无 `--authorize-external` 或 API key 时必须报 `BLOCKED_EXTERNAL` 且 usage/TaskSuccess 为 `UNMEASURED`，不得写成 `0`。真正外发调用仍等用户提供 key 且 Sprint0' 已入库后再开。
 
@@ -113,4 +125,4 @@ git log --oneline -5
 git status --short
 ```
 
-确认 `git log` 最新几条含 V4-06 收口（`1242b05` helper-hop KEEP）。不要再为三仓 holdout 1.0 开新特判。下一步独立项：V4-05 `scripts/run-storm-gate.mjs` 两轮，或 V4-07 缓存真源。三仓 load < 20 仍必须跑。
+确认 `git log` 最新几条含 V5R Phase 1 收口。不要复活 dual-worker sweep 线程。下一独立项是 V5R Phase 2（ReadUnit），未过 Phase 4 oracle 不得做 continuation。三仓 load < 20 仍必须跑。

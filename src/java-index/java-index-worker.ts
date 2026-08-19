@@ -14,9 +14,7 @@ import { positiveInteger, resourceDefaults } from "../resource-defaults.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import type { WorktreeIdentity } from "../worktree-identity.js";
 import { createJavaParserBackend, type JavaParserBackend } from "./java-parser-backend.js";
-import { isJavaIndexDualWorkerEnabled } from "./java-index-dual-worker.js";
 import { deriveJavaSourceLayout, parseJavaSourceFile, resolvedPathWithinRepo as resolveReadableRepoPath } from "./java-index-file-parse.js";
-import { JavaIndexSweepHost } from "./java-index-sweep-host.js";
 import { computeBuildFingerprint, computeExtractorVersion } from "./build-fingerprint.js";
 import { CoverageTracker } from "./coverage.js";
 import {
@@ -144,7 +142,6 @@ type BackgroundSweep = {
   leaseHandle?: LeaseHandle;
 };
 let backgroundSweep: BackgroundSweep | undefined;
-let sweepHost: JavaIndexSweepHost | undefined;
 // Settles once the currently-running (or most recently run) background loop
 // (startBackgroundLoop) returns. CLOSE awaits this - never just nulling
 // backgroundSweep - so the normal CLOSE ACK path joins native parse/edge-build
@@ -583,41 +580,12 @@ async function refreshFile(inputPath: string, generation: number): Promise<Refre
   return { relativePath: bundle.file.relativePath, dependents };
 }
 
-async function ensureSweepHost(): Promise<JavaIndexSweepHost> {
-  if (!sweepHost) {
-    sweepHost = new JavaIndexSweepHost();
-    await sweepHost.ensureOpen(repoRoot);
-  }
-  return sweepHost;
-}
-
 async function applyBackgroundChunkParses(
   chunk: DiscoveredJavaFile[],
   generation: number
 ): Promise<{ touched: Set<string> }> {
   const touched = new Set<string>();
   if (chunk.length === 0) return { touched };
-  if (isJavaIndexDualWorkerEnabled()) {
-    try {
-      const parsed = await (await ensureSweepHost()).parseChunk(chunk, generation);
-      for (const [index, file] of chunk.entries()) {
-        const result = parsed[index];
-        if (!result || !result.ok) {
-          coverage.failed(file.sourceRoot, file.relativePath, result?.ok === false ? result.error : "sweep worker omitted file");
-          continue;
-        }
-        if (!store) continue;
-        const dependents = store.replaceFile(result.bundle);
-        touched.add(result.relativePath);
-        for (const dependent of dependents) touched.add(dependent);
-      }
-      return { touched };
-    } catch (error) {
-      lastRefreshError = `sweep worker parse failed, falling back to query thread: ${
-        error instanceof Error ? error.message : String(error)
-      }`;
-    }
-  }
   for (const file of chunk) {
     try {
       const refreshed = await refreshFile(file.absolutePath, generation);
@@ -1735,10 +1703,6 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         closing = true;
         await ownSnapshotVerificationPromise;
         await backgroundLoopPromise;
-        if (sweepHost) {
-          await sweepHost.close().catch(() => undefined);
-          sweepHost = undefined;
-        }
         if (backgroundSweep?.leaseHandle) {
           await backgroundSweep.leaseHandle.release().catch(() => undefined);
         }

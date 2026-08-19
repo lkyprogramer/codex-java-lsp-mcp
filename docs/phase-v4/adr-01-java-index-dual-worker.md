@@ -1,6 +1,6 @@
 # ADR-01：JavaIndex 双 worker 并发模型
 
-- 状态：`ACCEPTED`
+- 状态：`FAILED`（V5R Phase 1，2026-08-19：两轮 `run-storm-gate.mjs` flag=1 均未过 P95/quiet ≤ 1.10；sweep 线程已删除。证据 `docs/phase-v5r/storm-gate-20260819/`）
 - 日期：2026-08-17
 - 任务：V4-05
 - 解除边界：V3.2 硬门第 8 条「不新增第二 scheduler」。本 ADR 新增的是第二 worker **线程**，不是第二套 sweep 调度语义。

@@ -23,6 +23,7 @@ import { buildImpactResult } from "./format.js";
 import {
   createImportGraphMetrics,
   JavaIndexRpcTelemetryCollector,
+  relationshipRpcSummary,
   createPersistedSemanticMetrics,
   createSemanticMetrics,
   createTypeReferenceMetrics,
@@ -451,7 +452,10 @@ export class AgentRouter {
           files: sourceAfter.javaIndex.files,
           coverage: sourceAfter.coverage,
           openSource: sourceAfter.openSource,
-          ...(javaIndexTelemetry ? { rpc: javaIndexTelemetry.snapshot() } : {})
+          ...(javaIndexTelemetry ? {
+            rpc: javaIndexTelemetry.snapshot(),
+            relationshipRpc: relationshipRpcSummary(javaIndexTelemetry.snapshot(), anchors.length)
+          } : {})
         },
         readPlan: publicReadPlanMetrics,
         framework: {

@@ -30,3 +30,17 @@ test("JavaIndex RPC telemetry aggregates terminal counts without exposing raw er
   assert.deepEqual(metrics.retireReasons, { WORKER_EXIT: 1 });
   assert.equal(JSON.stringify(metrics).includes("message"), false);
 });
+
+test("relationship RPC summary counts bundle operations per anchor without double-counting", () => {
+  const collector = new JavaIndexRpcTelemetryCollector();
+  collector.requestStarted({ operation: "QUERY_RELATIONSHIP_BUNDLE", inputJsonBytes: 20 });
+  collector.requestSettled({ operation: "QUERY_RELATIONSHIP_BUNDLE", outcome: "completed", callerWaitMs: 3 });
+  collector.requestStarted({ operation: "STATUS", inputJsonBytes: 4 });
+  collector.requestSettled({ operation: "STATUS", outcome: "completed", callerWaitMs: 1 });
+
+  const summary = collector.relationshipSummary(2);
+  assert.equal(summary.bundleCount, 1);
+  assert.equal(summary.relationshipOperations, 1);
+  assert.equal(summary.relationshipRpcPerAnchor, 0.5);
+  assert.equal(summary.anchorCount, 2);
+});

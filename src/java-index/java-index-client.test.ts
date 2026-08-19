@@ -184,6 +184,51 @@ test("request-local telemetry records JSON bytes and worker-local queue/processi
   await unmeasured;
 });
 
+test("QUERY_RELATIONSHIP_BUNDLE sends one worker command and validates a compact payload", async () => {
+  const { client, worker } = await openedClient();
+  const pending = client.queryRelationshipBundle({
+    generation: 1,
+    anchors: [{ anchorId: "A1", file: "/repo/src/main/java/demo/Gateway.java", line: 3, column: 11 }],
+    candidateFiles: ["/repo/src/main/java/demo/Impl.java"],
+    needs: {
+      anchorFacts: true,
+      candidateFacts: true,
+      directCallees: true,
+      implementationOverrides: true,
+      signatureDefinitions: true,
+      frameworkFacts: true,
+      readRanges: false
+    },
+    limits: { maxCandidateFiles: 70, maxDefinitions: 12, maxCallees: 16, maxImplementations: 32 }
+  });
+  await flushMicrotasks();
+  const message = worker.posted[1];
+  assert.equal(message.type, "QUERY_RELATIONSHIP_BUNDLE");
+  worker.emitMessage({
+    id: message.id,
+    ok: true,
+    value: {
+      generation: 1,
+      indexedGeneration: 1,
+      stale: false,
+      completion: "COMPLETE",
+      truncated: false,
+      anchors: [{
+        anchorId: "A1",
+        calleeTruncated: false,
+        directCalls: [],
+        implementations: [],
+        signatureLookups: []
+      }],
+      files: [],
+      metrics: { parsedFiles: 0, hydratedFiles: 0, cacheHits: 0, queryCount: 1 }
+    }
+  });
+  const result = await pending;
+  assert.equal(result.stale, false);
+  assert.deepEqual(result.anchors.map(anchor => anchor.anchorId), ["A1"]);
+});
+
 test("QUERY_TYPES sends one worker command and validates ordered lookup results", async () => {
   const { client, worker } = await openedClient();
   const pending = client.queryTypes([{ typeText: "Gateway" }, { typeText: "Missing" }]);

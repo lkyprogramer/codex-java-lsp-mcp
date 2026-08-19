@@ -68,6 +68,11 @@ import {
   isExactFqn,
   MAX_COLD_DECLARATION_FQN_RETRIES
 } from "./router-java-index-cold.js";
+import type {
+  RelationshipBundleRequest,
+  RelationshipBundleView,
+  RelationshipBundleWorkerValue
+} from "./relationship-bundle.js";
 
 /** Bounds a single marker file read (e.g. pom.xml) - repositoryMarkers is meant for small dependency-declaration files, not arbitrary large sources. */
 const REPOSITORY_MARKER_MAX_BYTES = 65_536;
@@ -140,6 +145,10 @@ export interface RouterIndex {
   factsFor(inputFile: string, generation?: number): Promise<JavaSourceFacts>;
   /** Optional for one rollout so the relationship provider can feature-flag the legacy per-file fallback. */
   factsForFiles?(inputFiles: readonly string[], generation?: number): Promise<FactsForFilesResult>;
+  queryRelationshipBundle?(
+    request: RelationshipBundleRequest,
+    generation?: number
+  ): Promise<RelationshipBundleView>;
   methodAt(inputFile: string, line: number, generation?: number): Promise<JavaMethodFact | undefined>;
   findImplementers(
     typeName: string,
@@ -535,6 +544,24 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     );
   }
 
+  async queryRelationshipBundle(
+    request: RelationshipBundleRequest,
+    generation = this.generation
+  ): Promise<RelationshipBundleView> {
+    await this.ensureOpened(generation);
+    generation = this.effectiveGeneration(generation);
+    const bounded: RelationshipBundleRequest = {
+      ...request,
+      generation,
+      anchors: request.anchors.slice(0, MAX_FACTS_FOR_FILES),
+      candidateFiles: request.candidateFiles.slice(0, MAX_FACTS_FOR_FILES)
+    };
+    return this.requestMemoized(
+      queryMemoKey("QUERY_RELATIONSHIP_BUNDLE", generation, bounded),
+      () => this.loadRelationshipBundle(bounded, generation)
+    );
+  }
+
   private async loadFactsForFiles(
     inputFiles: readonly string[],
     generation: number,
@@ -636,6 +663,89 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
       truncated,
       items
     };
+  }
+
+  private async loadRelationshipBundle(
+    request: RelationshipBundleRequest,
+    generation: number
+  ): Promise<RelationshipBundleView> {
+    const requestedPaths = unique([
+      ...request.anchors.map(anchor => {
+        try {
+          return normalizeRepoFile(this.repoRoot, anchor.file);
+        } catch {
+          return undefined;
+        }
+      }).filter((file): file is string => file !== undefined),
+      ...request.candidateFiles.map(file => {
+        try {
+          return normalizeRepoFile(this.repoRoot, file);
+        } catch {
+          return undefined;
+        }
+      }).filter((file): file is string => file !== undefined)
+    ]);
+    if (this.isStaleGeneration(generation)) {
+      return staleRelationshipBundleView(request, generation, requestedPaths);
+    }
+    if (requestedPaths.length > 0) {
+      await this.ensureFresh(requestedPaths, generation);
+    }
+    if (this.isStaleGeneration(generation)) {
+      return staleRelationshipBundleView(request, generation, requestedPaths);
+    }
+    const raw = await this.client.queryRelationshipBundle(request, this.currentRequestOptions());
+    if (this.isStaleGeneration(generation) || raw.stale) {
+      return staleRelationshipBundleView(request, generation, requestedPaths, raw);
+    }
+    const requested = new Set(requestedPaths);
+    const itemsByPath = new Map<string, FactsForFileItem>();
+    for (const bundle of raw.files) {
+      try {
+        const absolutePath = normalizeRepoFile(this.repoRoot, bundle.file.relativePath);
+        if (bundle.file.generation === generation) this.cacheBundle(bundle, generation);
+        itemsByPath.set(absolutePath, this.itemFromCachedBundle(absolutePath, generation, bundle.file.parseState));
+        requested.add(absolutePath);
+      } catch {
+        // A malformed bundle path cannot poison otherwise valid items.
+      }
+    }
+    const items: FactsForFileItem[] = [...requested].map(absolutePath =>
+      itemsByPath.get(absolutePath) ?? incompleteItem(absolutePath)
+    );
+    return {
+      generation,
+      completion: raw.completion,
+      stale: false,
+      truncated: raw.truncated,
+      items,
+      anchors: raw.anchors.map(anchor => ({
+        anchorId: anchor.anchorId,
+        ...(anchor.methodId ? { methodId: anchor.methodId } : {}),
+        ...(anchor.ownerTypeId ? { ownerTypeId: anchor.ownerTypeId } : {}),
+        calleeTargetIds: anchor.directCalls
+          .filter(edge => edge.kind === "CALLS")
+          .map(edge => edge.targetId),
+        calleeTruncated: anchor.calleeTruncated,
+        implementationTypeIds: anchor.implementations.map(type => type.typeId),
+        signatureTypeIds: anchor.signatureLookups
+          .filter((lookup): lookup is Extract<typeof lookup, { state: "RESOLVED" }> => lookup.state === "RESOLVED")
+          .map(lookup => lookup.type.typeId)
+      })),
+      metrics: raw.metrics
+    };
+  }
+
+  private itemFromCachedBundle(
+    absolutePath: string,
+    generation: number,
+    parseState: JavaFileBundle["file"]["parseState"]
+  ): FactsForFileItem {
+    const cached = this.factsByPath.get(absolutePath);
+    if (cached?.generation === generation && parseState === "COMPLETE") {
+      return { inputFile: absolutePath, absolutePath, state: "FOUND", facts: cached.facts };
+    }
+    return incompleteItem(absolutePath);
   }
 
   private async hydrateFactsForPaths(
@@ -1374,6 +1484,29 @@ function generationMismatchItem(absolutePath: string): FactsForFileItem {
     absolutePath,
     state: "DEGRADED",
     reason: "GENERATION_MISMATCH"
+  };
+}
+
+function staleRelationshipBundleView(
+  request: RelationshipBundleRequest,
+  generation: number,
+  requestedPaths: readonly string[],
+  raw?: RelationshipBundleWorkerValue
+): RelationshipBundleView {
+  return {
+    generation,
+    completion: "DEGRADED",
+    stale: true,
+    truncated: raw?.truncated ?? false,
+    items: requestedPaths.map(generationMismatchItem),
+    anchors: request.anchors.map(anchor => ({
+      anchorId: anchor.anchorId,
+      calleeTargetIds: [],
+      calleeTruncated: false,
+      implementationTypeIds: [],
+      signatureTypeIds: []
+    })),
+    metrics: raw?.metrics ?? { parsedFiles: 0, hydratedFiles: 0, cacheHits: 0, queryCount: 1 }
   };
 }
 

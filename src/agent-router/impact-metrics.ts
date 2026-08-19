@@ -70,6 +70,45 @@ export type JavaIndexRpcMetrics = {
   operations: Partial<Record<JavaIndexRpcOperation, JavaIndexRpcOperationMetrics>>;
 };
 
+const RELATIONSHIP_RPC_OPERATIONS = new Set<JavaIndexRpcOperation>([
+  "QUERY_ANCHOR",
+  "QUERY_TYPE",
+  "QUERY_TYPES",
+  "QUERY_IMPLEMENTERS",
+  "QUERY_CALLERS",
+  "QUERY_CALLEES",
+  "QUERY_CALLEES_BATCH",
+  "QUERY_FILES",
+  "QUERY_READ_RANGES",
+  "QUERY_RELATIONSHIP_BUNDLE"
+]);
+
+export type RelationshipRpcSummary = {
+  enabled: true;
+  anchorCount: number;
+  relationshipOperations: number;
+  relationshipRpcPerAnchor: number;
+  bundleCount: number;
+};
+
+export function relationshipRpcSummary(metrics: JavaIndexRpcMetrics, anchorCount: number): RelationshipRpcSummary {
+  let relationshipOperations = 0;
+  let bundleCount = 0;
+  for (const [operation, value] of Object.entries(metrics.operations) as Array<[JavaIndexRpcOperation, JavaIndexRpcOperationMetrics | undefined]>) {
+    if (!value || !RELATIONSHIP_RPC_OPERATIONS.has(operation)) continue;
+    relationshipOperations += value.count;
+    if (operation === "QUERY_RELATIONSHIP_BUNDLE") bundleCount += value.count;
+  }
+  const boundedAnchors = Number.isFinite(anchorCount) ? Math.max(0, anchorCount) : 0;
+  return {
+    enabled: true,
+    anchorCount: boundedAnchors,
+    relationshipOperations,
+    relationshipRpcPerAnchor: boundedAnchors > 0 ? relationshipOperations / boundedAnchors : relationshipOperations,
+    bundleCount
+  };
+}
+
 /** Request-local diagnostic collector. Sink failures are contained by JavaIndexClient. */
 export class JavaIndexRpcTelemetryCollector implements JavaIndexRpcTelemetrySink {
   private readonly operations = new Map<JavaIndexRpcOperation, JavaIndexRpcOperationMetrics>();
@@ -134,6 +173,10 @@ export class JavaIndexRpcTelemetryCollector implements JavaIndexRpcTelemetrySink
           .map(([operation, metrics]) => [operation, structuredClone(metrics)])
       )
     };
+  }
+
+  relationshipSummary(anchorCount: number): RelationshipRpcSummary {
+    return relationshipRpcSummary(this.snapshot(), anchorCount);
   }
 
   private forOperation(operation: JavaIndexRpcOperation): JavaIndexRpcOperationMetrics {

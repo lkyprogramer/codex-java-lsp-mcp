@@ -6,9 +6,14 @@ import type { CandidateFile, ResolvedAnchor } from "../../agent-types.js";
 import type { FrameworkCallSite, FrameworkFileFacts, FrameworkMethodDeclaration, FrameworkTypeRef } from "../../java-index/framework-index-view.js";
 import {
   MAX_FACTS_FOR_FILES,
+  type FactsForFileItem,
   type JavaMethodFact,
   type JavaSourceFacts
 } from "../../java-index/router-facts.js";
+import {
+  relationshipBundleMode,
+  type RelationshipBundleView
+} from "../../java-index/relationship-bundle.js";
 import type { EvidenceFamily, EvidenceProvenance, EvidenceSignal, ProviderInput, ProviderOutcome } from "../evidence.js";
 import { JavaIntelligenceError } from "../../runtime/intelligence-error.js";
 import { candidateFromFacts } from "../candidate-helpers.js";
@@ -17,6 +22,9 @@ import {
   structuralDeltas
 } from "../relationship-deltas.js";
 import { nextSignalId } from "./shared.js";
+import { fetchRelationshipBundle } from "./relationship/relationship-bundle-client.js";
+import { observeRelationshipParity } from "./relationship/relationship-parity.js";
+import { buildRelationshipQueryPlan } from "./relationship/relationship-query-plan.js";
 
 export const RELATIONSHIP_PROVIDER_ID = "relationship";
 export const RELATIONSHIP_PROVIDER_VERSION = "1";
@@ -101,12 +109,18 @@ type DirectCallCandidate = {
   readonly callOrigin: "anchor" | "implementation" | "helper";
 };
 
+type RelationshipBundleCallees = ReadonlyMap<string, {
+  readonly targets: ReadonlySet<string>;
+  readonly truncated: boolean;
+}>;
+
 type RelationshipFactsBatch = {
   readonly cache: Map<string, JavaSourceFacts | undefined>;
   readonly degradedReasons: readonly string[];
   readonly deadlineExceeded: boolean;
   readonly cancelled: boolean;
   readonly partial: boolean;
+  readonly bundleCallees?: RelationshipBundleCallees;
 };
 
 export async function collectRelationshipEvidence(input: RelationshipProviderInput): Promise<ProviderOutcome> {
@@ -135,7 +149,12 @@ export async function collectRelationshipEvidence(input: RelationshipProviderInp
         break;
       }
       try {
-        evidence.push(...await collectRelationshipEvidenceForAnchor(input, anchor, batch?.cache));
+        evidence.push(...await collectRelationshipEvidenceForAnchor(
+          input,
+          anchor,
+          batch?.cache,
+          batch?.bundleCallees
+        ));
         if (input.budget?.expired()) {
           legacyTerminal = "DEADLINE_EXCEEDED";
           break;
@@ -186,6 +205,36 @@ async function preloadRelationshipFacts(input: RelationshipProviderInput): Promi
       partial: true
     };
   }
+  const mode = relationshipBundleMode();
+  const plan = mode === "off" ? undefined : buildRelationshipQueryPlan({
+    generation: input.generation,
+    anchors: input.anchors,
+    staticVerifiedCandidates: input.staticVerifiedCandidates
+  });
+  let bundle: RelationshipBundleView | undefined;
+  if (plan) {
+    try {
+      bundle = await fetchRelationshipBundle(input.javaIndex, plan);
+    } catch (error) {
+      if (mode === "on") return factsBatchFromQueryFailure(plan.candidateFiles, error);
+      rethrowRelationshipTerminal(error);
+    }
+  }
+  if (mode === "on" && bundle && !bundle.stale) {
+    return factsBatchFromBundle(bundle);
+  }
+  const legacy = await preloadRelationshipFactsLegacy(input);
+  if (mode === "shadow" && bundle && legacy) {
+    observeRelationshipParity(
+      [...legacy.cache.entries()].filter(([, facts]) => facts !== undefined).map(([path]) => path),
+      [],
+      bundle
+    );
+  }
+  return legacy;
+}
+
+async function preloadRelationshipFactsLegacy(input: RelationshipProviderInput): Promise<RelationshipFactsBatch | undefined> {
   if (!input.javaIndex.factsForFiles) {
     return undefined;
   }
@@ -227,20 +276,67 @@ async function preloadRelationshipFacts(input: RelationshipProviderInput): Promi
       partial: allPaths.length > MAX_FACTS_FOR_FILES || result.completion !== "COMPLETE" || result.truncated
     };
   } catch (error) {
-    for (const absolutePath of selectedPaths) cache.set(absolutePath, undefined);
-    const reason = error instanceof JavaIntelligenceError
-      && (error.code === "DEADLINE_EXCEEDED" || error.code === "CANCELLED")
-      ? error.code
-      : "QUERY_FAILED";
-    degradedReasons.push(`relationship facts ${reason}`);
-    return {
-      cache,
-      degradedReasons,
-      deadlineExceeded: reason === "DEADLINE_EXCEEDED",
-      cancelled: reason === "CANCELLED",
-      partial: true
-    };
+    return factsBatchFromQueryFailure(selectedPaths, error, degradedReasons);
   }
+}
+
+function factsBatchFromBundle(bundle: RelationshipBundleView): RelationshipFactsBatch {
+  const cache = new Map<string, JavaSourceFacts | undefined>();
+  const degradedReasons: string[] = [];
+  let deadlineExceeded = false;
+  let cancelled = false;
+  for (const item of bundle.items) {
+    if (item.state === "FOUND") {
+      cache.set(item.absolutePath, item.facts);
+      continue;
+    }
+    cache.set(item.absolutePath ?? item.inputFile, undefined);
+    const reason = bundleItemReason(item);
+    if (reason === "DEADLINE_EXCEEDED") deadlineExceeded = true;
+    else if (reason === "CANCELLED") cancelled = true;
+    degradedReasons.push(`relationship facts ${reason}`);
+  }
+  const bundleCallees: RelationshipBundleCallees = new Map(bundle.anchors.map(anchor => [
+    anchor.anchorId,
+    {
+      targets: new Set(anchor.calleeTruncated ? [] : anchor.calleeTargetIds),
+      truncated: anchor.calleeTruncated
+    }
+  ]));
+  return {
+    cache,
+    degradedReasons: uniquePaths(degradedReasons),
+    deadlineExceeded,
+    cancelled,
+    partial: bundle.truncated || bundle.completion !== "COMPLETE" || deadlineExceeded || cancelled,
+    bundleCallees
+  };
+}
+
+function bundleItemReason(item: FactsForFileItem): string {
+  if (item.state === "DEGRADED") return item.reason;
+  if (item.state === "MISSING") return item.reason;
+  return "INDEX_INCOMPLETE";
+}
+
+function factsBatchFromQueryFailure(
+  selectedPaths: readonly string[],
+  error: unknown,
+  extraReasons: readonly string[] = []
+): RelationshipFactsBatch {
+  const cache = new Map<string, JavaSourceFacts | undefined>();
+  for (const absolutePath of selectedPaths) cache.set(absolutePath, undefined);
+  const reason = error instanceof JavaIntelligenceError
+    && (error.code === "DEADLINE_EXCEEDED" || error.code === "CANCELLED")
+    ? error.code
+    : "QUERY_FAILED";
+  return {
+    cache,
+    degradedReasons: [...extraReasons, `relationship facts ${reason}`],
+    deadlineExceeded: reason === "DEADLINE_EXCEEDED",
+    cancelled: reason === "CANCELLED",
+    partial: true
+  };
 }
 
 function relationshipTerminalCode(error: unknown): "DEADLINE_EXCEEDED" | "CANCELLED" | undefined {
@@ -261,7 +357,8 @@ function throwIfRelationshipBudgetExpired(input: RelationshipProviderInput): voi
 async function collectRelationshipEvidenceForAnchor(
   input: RelationshipProviderInput,
   anchor: ResolvedAnchor,
-  preloadedFacts?: Map<string, JavaSourceFacts | undefined>
+  preloadedFacts?: Map<string, JavaSourceFacts | undefined>,
+  bundleCallees?: RelationshipBundleCallees
 ): Promise<EvidenceSignal[]> {
   let anchorFacts: JavaSourceFacts | undefined;
   if (preloadedFacts?.has(anchor.absolutePath)) {
@@ -284,7 +381,7 @@ async function collectRelationshipEvidenceForAnchor(
   const evidence: EvidenceSignal[] = [];
   const legacyAnchorFallbackAllowed = preloadedFacts === undefined;
   const resolvedCallTargets = anchorFacts || legacyAnchorFallbackAllowed
-    ? await resolvedAnchorCallTargets(input, anchor, methodCache)
+    ? await resolvedAnchorCallTargets(input, anchor, methodCache, bundleCallees)
     : new Set<string>();
   throwIfRelationshipBudgetExpired(input);
   const anchoredFrameworkMethod = await loadAnchoredFrameworkMethod(input, anchor);
@@ -1018,8 +1115,13 @@ function uniqueDeclaredMethod(
 async function resolvedAnchorCallTargets(
   input: RelationshipProviderInput,
   anchor: ResolvedAnchor,
-  methodCache: Map<string, JavaMethodFact | undefined>
+  methodCache: Map<string, JavaMethodFact | undefined>,
+  bundleCallees?: RelationshipBundleCallees
 ): Promise<ReadonlySet<string>> {
+  const bundled = bundleCallees?.get(anchor.id);
+  if (bundled) {
+    return bundled.truncated ? new Set() : bundled.targets;
+  }
   if (!input.javaIndex.resolvedCallees || input.budget?.expired()) {
     return new Set();
   }
