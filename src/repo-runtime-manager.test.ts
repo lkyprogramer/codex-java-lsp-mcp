@@ -42,6 +42,13 @@ test("RepoRuntimeManager evicts the oldest idle started runtime before starting 
   assert.equal(sessions.get("/repo-b")?.stops, 0);
 });
 
+test("RepoRuntimeManager binds the coordinator GenerationClock onto the session", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const manager = managerWith({}, sessions);
+  await manager.withContext({ repoRoot: "/repo-a" }, async () => {});
+  assert.equal(sessions.get("/repo-a")?.boundClock instanceof GenerationClock, true);
+});
+
 test("RepoRuntimeManager starts and flushes the coordinator around Java index OPEN so a seed cannot miss its watcher window", async () => {
   const sessions = new Map<string, FakeSession>();
   const coordinator = new FakeCoordinator();
@@ -1140,6 +1147,7 @@ class FakeSession {
   stops = 0;
   startGate?: Deferred<void>;
   repoChangeError?: Error;
+  boundClock?: GenerationClock;
   readonly repoChangeBatches: RepoChangeBatch[] = [];
 
   private readonly listeners = new Set<(state: JdtlsLifecycleState) => void>();
@@ -1168,6 +1176,10 @@ class FakeSession {
   async stop(): Promise<void> {
     this.stops += 1;
     this.transition("STOPPED");
+  }
+
+  bindGenerationClock(clock?: GenerationClock): void {
+    this.boundClock = clock;
   }
 
   async applyRepoChangeBatch(batch: RepoChangeBatch): Promise<void> {

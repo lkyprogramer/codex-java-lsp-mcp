@@ -21,7 +21,7 @@ import {
 } from "./test-support/fake-jdtls.test.js";
 import type { GeneratedCodeStatus } from "./generated-code.js";
 import type { LspDiagnostic } from "./jdtls-session.js";
-import type { RepoChange, RepoChangeBatch } from "./repo-generation.js";
+import { GenerationClock, type RepoChange, type RepoChangeBatch } from "./repo-generation.js";
 import { toFileUri } from "./repo-layout.js";
 import type {
   CompositeJdtLease,
@@ -525,7 +525,7 @@ test("a READY session blocks semantic work while heartbeat fails and resumes aft
   await session.stop();
 });
 
-test("applyRepoChangeBatch clears the whole cache on a storm instead of only the affected files", async () => {
+test("applyRepoChangeBatch bumps semantic generation and drops complete-only documentSymbol entries", async () => {
   const factory = fakeTransportFactory({
     initializeResult: { capabilities: {} },
     responses: { "textDocument/documentSymbol": [] }
@@ -537,21 +537,21 @@ test("applyRepoChangeBatch clears the whole cache on a storm instead of only the
   const fileB = path.join(repoRoot, "B.java");
   writeFileSync(fileA, "class A {}\n");
   writeFileSync(fileB, "class B {}\n");
+  assert.equal(session.semanticGeneration(), 1);
   await session.documentSymbols(fileA);
   await session.documentSymbols(fileB);
-  assert.equal(session.cacheStatus().entries, 2);
+  assert.equal(session.status().semanticGateway.completedEntries, 2);
+  assert.equal(session.cacheStatus().entries, 0, "documentSymbols no longer uses the session TTL cache");
 
-  // Non-storm: only the entry depending on the changed file is invalidated.
   await session.applyRepoChangeBatch(repoChangeBatch([{ kind: "JAVA_CHANGE", absolutePath: fileA }]));
-  assert.equal(session.cacheStatus().entries, 1, "only file A's entry was invalidated");
+  assert.equal(session.semanticGeneration(), 2, "JAVA_* batches bump the gateway generation");
+  assert.equal(session.status().semanticGateway.completedEntries, 0, "generation bump drops complete-only entries for every file");
 
   await session.documentSymbols(fileA);
-  assert.equal(session.cacheStatus().entries, 2);
+  assert.equal(session.status().semanticGateway.completedEntries, 1);
 
-  // Storm: everything is cleared, since filtering per path is strictly more
-  // work than one clear once this many files changed at once.
   await session.applyRepoChangeBatch(repoChangeBatch([{ kind: "JAVA_CHANGE", absolutePath: fileA }], true));
-  assert.equal(session.cacheStatus().entries, 0, "a storm clears the whole cache regardless of which paths it lists");
+  assert.equal(session.status().semanticGateway.completedEntries, 0, "a storm clears the gateway regardless of which paths it lists");
 
   await session.stop();
 });
@@ -918,7 +918,8 @@ test("createJdtlsSemanticBackend routes each operation to its matching raw JDT r
       "textDocument/hover": { contents: "docs" },
       "textDocument/definition": [location],
       "textDocument/implementation": [location],
-      "textDocument/documentSymbol": [{ name: "A", kind: 5, range: location.range }]
+      "textDocument/documentSymbol": [{ name: "A", kind: 5, range: location.range }],
+      "workspace/symbol": [{ name: "A", kind: 5, location }]
     },
     handlers: {
       "textDocument/references": (params: unknown) => {
@@ -947,6 +948,17 @@ test("createJdtlsSemanticBackend routes each operation to its matching raw JDT r
   assert.equal(documentSymbol.completion, "COMPLETE");
   assert.equal((documentSymbol.value as ReadonlyArray<{ name: string }>)[0]?.name, "A");
 
+  const workspaceSymbol = await backend.execute(baseKeyFor(repoRoot, {
+    operation: "workspaceSymbol",
+    file: "",
+    fileFingerprint: "",
+    line: undefined,
+    column: undefined,
+    optionsKey: "query=A&limit=10"
+  }), 5000, new AbortController().signal);
+  assert.equal(workspaceSymbol.completion, "COMPLETE");
+  assert.equal((workspaceSymbol.value as { items: ReadonlyArray<{ name: string }> }).items[0]?.name, "A");
+
   const referencesWithoutDeclaration = await backend.execute(baseKeyFor(repoRoot, { optionsKey: "includeDeclaration=false" }), 5000, new AbortController().signal);
   assert.equal((referencesWithoutDeclaration.value as unknown[]).length, 1);
 
@@ -963,6 +975,7 @@ test("raw documentSymbol/hover/definition/implementation/references startup cons
   const backend = createJdtlsSemanticBackend(session);
   const operations: SemanticCacheKey[] = [
     baseKeyFor(repoRoot, { operation: "documentSymbol", line: undefined, column: undefined }),
+    baseKeyFor(repoRoot, { operation: "workspaceSymbol", file: "", fileFingerprint: "", line: undefined, column: undefined, optionsKey: "query=A&limit=10" }),
     baseKeyFor(repoRoot, { operation: "hover" }),
     baseKeyFor(repoRoot, { operation: "definition" }),
     baseKeyFor(repoRoot, { operation: "implementation" }),
@@ -1416,6 +1429,127 @@ test("status() exposes SemanticGateway's aggregate counters, with no per-query f
   assert.equal(gatewayStatus.cacheMisses, 1);
   assert.equal(gatewayStatus.cacheHits, 1);
   assert.equal(JSON.stringify(gatewayStatus).includes(file), false, "no per-query file path leaks into the aggregate status");
+
+  await session.stop();
+});
+
+test("workspaceSymbols and documentSymbols share the complete-only gateway and skip the session TTL cache", async () => {
+  let documentCalls = 0;
+  let workspaceCalls = 0;
+  const factory = fakeTransportFactory({
+    initializeResult: { capabilities: {} },
+    handlers: {
+      "textDocument/documentSymbol": () => {
+        documentCalls += 1;
+        return [{ name: "A", kind: 5, range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } } }];
+      },
+      "workspace/symbol": () => {
+        workspaceCalls += 1;
+        return [{ name: "A", kind: 5, location: { uri: "file:///repo/A.java", range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } } } }];
+      }
+    }
+  });
+  const { session, repoRoot } = harness(factory);
+  const file = path.join(repoRoot, "A.java");
+  writeFileSync(file, "class A {}\n");
+
+  const firstDocument = await session.documentSymbols(file);
+  const secondDocument = await session.documentSymbols(file);
+  const firstWorkspace = await session.workspaceSymbols("A", 10);
+  const secondWorkspace = await session.workspaceSymbols("A", 10);
+
+  assert.equal(firstDocument[0]?.name, "A");
+  assert.deepEqual(secondDocument, firstDocument);
+  assert.equal(firstWorkspace.items[0]?.name, "A");
+  assert.deepEqual(secondWorkspace, firstWorkspace);
+  assert.equal(documentCalls, 1, "the second documentSymbols call is a complete-only cache hit");
+  assert.equal(workspaceCalls, 1, "the second workspaceSymbols call is a complete-only cache hit");
+  assert.equal(session.cacheStatus().entries, 0);
+  assert.equal(session.status().semanticGateway.completeWrites, 2);
+  assert.equal(session.status().semanticGateway.cacheHits, 2);
+
+  await session.stop();
+});
+
+test("editing file B then querying documentSymbols or workspaceSymbols for A does not serve an old COMPLETE", async () => {
+  let documentCalls = 0;
+  let workspaceCalls = 0;
+  const factory = fakeTransportFactory({
+    initializeResult: { capabilities: {} },
+    handlers: {
+      "textDocument/documentSymbol": () => {
+        documentCalls += 1;
+        return [{ name: `A-${documentCalls}`, kind: 5, range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } } }];
+      },
+      "workspace/symbol": () => {
+        workspaceCalls += 1;
+        return [{ name: `W-${workspaceCalls}`, kind: 5, location: { uri: "file:///repo/A.java", range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } } } }];
+      }
+    }
+  });
+  const { session, repoRoot } = harness(factory);
+  const fileA = path.join(repoRoot, "A.java");
+  const fileB = path.join(repoRoot, "B.java");
+  writeFileSync(fileA, "class A {}\n");
+  writeFileSync(fileB, "class B {}\n");
+
+  const cachedDocument = await session.documentSymbols(fileA);
+  const cachedWorkspace = await session.workspaceSymbols("A", 10);
+  assert.equal(cachedDocument[0]?.name, "A-1");
+  assert.equal(cachedWorkspace.items[0]?.name, "W-1");
+  await session.documentSymbols(fileA);
+  await session.workspaceSymbols("A", 10);
+  assert.equal(documentCalls, 1);
+  assert.equal(workspaceCalls, 1);
+
+  const generationBefore = session.semanticGeneration();
+  await session.applyRepoChangeBatch(repoChangeBatch([{ kind: "JAVA_CHANGE", absolutePath: fileB }]));
+  assert.ok(session.semanticGeneration() > generationBefore, "a JAVA_* batch must bump gateway generation");
+
+  const freshDocument = await session.documentSymbols(fileA);
+  const freshWorkspace = await session.workspaceSymbols("A", 10);
+  assert.equal(freshDocument[0]?.name, "A-2");
+  assert.equal(freshWorkspace.items[0]?.name, "W-2");
+  assert.equal(documentCalls, 2, "documentSymbols for A must not reuse the COMPLETE written before B changed");
+  assert.equal(workspaceCalls, 2, "workspaceSymbols must not reuse the COMPLETE written before B changed");
+
+  await session.stop();
+});
+
+test("a bound GenerationClock is the only generation used for gateway keys", async () => {
+  let documentCalls = 0;
+  const factory = fakeTransportFactory({
+    initializeResult: { capabilities: {} },
+    handlers: {
+      "textDocument/documentSymbol": () => {
+        documentCalls += 1;
+        return [];
+      }
+    }
+  });
+  const { session, repoRoot } = harness(factory);
+  const clock = new GenerationClock();
+  session.bindGenerationClock(clock);
+  const file = path.join(repoRoot, "A.java");
+  writeFileSync(file, "class A {}\n");
+
+  assert.equal(session.semanticGeneration(), 1);
+  await session.documentSymbols(file);
+  assert.equal(documentCalls, 1);
+
+  clock.markDirty("java change");
+  assert.equal(session.semanticGeneration(), 2);
+  await session.applyRepoChangeBatch({
+    generation: clock.snapshot().value,
+    observedAt: new Date(0).toISOString(),
+    changes: [{ kind: "JAVA_CHANGE", absolutePath: file }],
+    storm: false,
+    affectedRoots: []
+  });
+  assert.equal(session.semanticGeneration(), clock.snapshot().value);
+
+  await session.documentSymbols(file);
+  assert.equal(documentCalls, 2, "the coordinator clock value is part of the gateway key");
 
   await session.stop();
 });

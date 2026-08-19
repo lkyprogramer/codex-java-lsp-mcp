@@ -5,7 +5,7 @@
 import path from "node:path";
 import { canonicalPotentialPath, isPotentiallyWithin } from "./path-utils.js";
 import { fromFileUri } from "./repo-layout.js";
-import type { LspLocation, LspLocationLink } from "./jdtls-session.js";
+import type { LspLocation, LspLocationLink } from "./jdtls-lsp-types.js";
 import type { SourceRange } from "./runtime/source-range.js";
 
 export type RepoLocation = {

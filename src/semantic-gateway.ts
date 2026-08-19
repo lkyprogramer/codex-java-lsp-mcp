@@ -6,12 +6,13 @@
 import { isCacheableCompletion, type Completion } from "./runtime/completion.js";
 import type { DeadlineBudget } from "./runtime/deadline-budget.js";
 import { classifySemanticError, type JavaIntelligenceErrorCode } from "./runtime/intelligence-error.js";
+import type { HierarchyEdge } from "./jdtls-hierarchy-walk.js";
 import type {
-  HierarchyEdge,
   LspDocumentSymbol,
   LspLocation,
-  LspLocationLink
-} from "./jdtls-session.js";
+  LspLocationLink,
+  LspSymbol
+} from "./jdtls-lsp-types.js";
 
 export type SemanticOperation =
   | "hover"
@@ -19,6 +20,7 @@ export type SemanticOperation =
   | "implementation"
   | "references"
   | "documentSymbol"
+  | "workspaceSymbol"
   | "typeHierarchy"
   | "callHierarchy";
 
@@ -64,6 +66,7 @@ export type SemanticValueMap = {
   implementation: readonly SemanticLocation[];
   references: readonly LspLocation[];
   documentSymbol: readonly LspDocumentSymbol[];
+  workspaceSymbol: { items: readonly LspSymbol[]; truncated: boolean };
   typeHierarchy: SemanticHierarchy;
   callHierarchy: SemanticHierarchy;
 };
@@ -383,6 +386,7 @@ function completionForCode(code: JavaIntelligenceErrorCode): Completion {
 
 function emptyValueFor(operation: SemanticOperation): SemanticBackendValue {
   if (operation === "hover") return null;
+  if (operation === "workspaceSymbol") return { items: [], truncated: false };
   if (operation === "typeHierarchy" || operation === "callHierarchy") {
     return { roots: [], edges: [], truncated: false, requests: 0, visited: 0 };
   }

@@ -629,6 +629,7 @@ export class RepoRuntimeManager {
       resolved,
       () => context.javaIndexClient?.localStatus().files ?? 0
     );
+    context.session.bindGenerationClock?.(generation);
     const leaseOperation = this.leases.acquireRuntime(resolved.worktree).catch(() => undefined);
     let leaseTimedOut = false;
     // A caller deadline only stops that caller, but the shared creation itself

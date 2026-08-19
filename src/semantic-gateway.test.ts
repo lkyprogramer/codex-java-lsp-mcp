@@ -155,6 +155,40 @@ test("generation and fingerprint are part of the cache key", async () => {
   assert.equal(calls, 3);
 });
 
+test("workspaceSymbol complete results are cached and generation changes miss", async () => {
+  let calls = 0;
+  const workspaceKey: SemanticCacheKey<"workspaceSymbol"> = {
+    repoHash: "repo",
+    generation: 1,
+    operation: "workspaceSymbol",
+    file: "",
+    fileFingerprint: "",
+    optionsKey: "query=A&limit=10"
+  };
+  const gateway = new SemanticGateway({
+    async execute() {
+      calls += 1;
+      return {
+        completion: "COMPLETE",
+        value: {
+          items: [{ name: `hit-${calls}`, kind: 5 }],
+          truncated: false
+        }
+      };
+    }
+  }, { ttlMs: 1000, absoluteCapMs: 1000 });
+
+  const first = await gateway.execute(workspaceKey, DeadlineBudget.fromTimeout(1000), 1000);
+  const cached = await gateway.execute(workspaceKey, DeadlineBudget.fromTimeout(1000), 1000);
+  const bumped = await gateway.execute({ ...workspaceKey, generation: 2 }, DeadlineBudget.fromTimeout(1000), 1000);
+  assert.equal(first.value.items[0]?.name, "hit-1");
+  assert.equal(cached.cacheHit, true);
+  assert.equal(cached.value.items[0]?.name, "hit-1");
+  assert.equal(bumped.cacheHit, false);
+  assert.equal(bumped.value.items[0]?.name, "hit-2");
+  assert.equal(calls, 2);
+});
+
 test("one caller deadline does not cancel another caller sharing backend work", async () => {
   const pending = deferred<SemanticBackendResult<SemanticValueMap["references"]>>();
   let backendSignal: AbortSignal | undefined;
