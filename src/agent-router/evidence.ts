@@ -61,8 +61,8 @@ export type EvidenceSignal = {
   sourceRange?: SourceRange;
   /** Present only for AST-resolved CALLS signals; lower means closer to the anchor expression root. */
   callDepth?: number;
-  /** Distinguishes an anchor-body receiver call from a validated implementation continuation. */
-  callOrigin?: "anchor" | "implementation";
+  /** Distinguishes an anchor-body receiver call from a same-owner helper or a validated implementation continuation. */
+  callOrigin?: "anchor" | "implementation" | "helper";
   positions: Array<{ line: number; column: number }>;
   providerId: string;
   providerVersion: string;

@@ -131,16 +131,37 @@ exam file recall 略降是预期：无 `@Primary` 的 CurrentUser 实现不再�
 
 **REJECT**：把已选端口的 IMPLEMENTS 提到 2.65。`exam-score` 0.286→0.571、`candidate-pay` 0.125→0.25，但 cipherlink `rReadMust` 0.91→0.81——`organization-create-member` 与 `auth-sms-login` 的跨模块第一跳被实现类挤出。任意 Spring 仓都会遇到同一模式，不能为抬 range 牺牲其它第一跳。排名已撤回，只留方法定位与 `candidateNodeId` 元数据。
 
-## 仍 miss（相对 `ba5838f` / cap 矩阵 r1-new）
+## positions 正式矩阵（`98a0183` vs `e9fe968`，已完成）
+
+产物：`/tmp/codex-java-lsp-v4-06-positions-20260819-105100/`。候选 159/159。exit 1 = 质量绝对门槛 FAIL（分母），不是本刀回归。
+
+| 仓 | RangeLineRecall old→new | holdout range | holdout rReadMust | tokens P50 | p95Ratio |
+|---|---|---|---|---|---|
+| lishuedu | 0.8019 → **0.8419** | 0.343 → **0.543** | 0.625 | 4787 → 4662 | 0.987 |
+| cipherlink | 0.875 不变 | 0.375 | 0.550 | 4390 → 4370 | 1.041 |
+| exam-parent-v3 | 0.8525 不变 | 0.263 | 0.400 | 3869 不变 | 1.520（主机噪声；file recall 未动） |
+
+**KEEP**：`paper-task` 三轮 0.4→**0.8**（AccessService `1–38/64–68` 盖住 32–38 与 64–68）。storage / current-user / check-people / school-template 仍 1.0。cipherlink `rReadMust` 0.91 未回归。file recall 三仓逐位相等。
+
+exam `pRead` 0.6067→0.6000：更紧的 range 省出字节后多进了一个非 golden 文件。相对 pRead 门仍过，不因此撤回方法定位。
+
+## 下一刀（相对 `98a0183`，隔离已绿，待正式矩阵）
+
+两条对任意 Java 仓都成立的规则，**不**把 IMPLEMENTS 抬到 sibling CALLS 之上：
+
+1. **extract-method 延续**：锚点方法的同类型 unqualified/`this` helper，其外部字段接收者记为 `CALLS` depth-1 / `callOrigin=helper`（优先级 1.75）。不递归，重载同名同 arity 跳过。
+2. **闭合已 CALLS 的端口**：该端口的 IMPLEMENTS 为 2.45，其它 IMPLEMENTS 仍 2.4。低于 sibling CALLS 2.5。
+
+禁止项不变：save 猜 Mapper、type-header +1、caller-scan、放宽 maxFiles、全量 IMPLEMENTS 2.65。
+
+## 仍 miss（相对 positions 矩阵 r1-new）
 
 **Tuning**
 
-- `check-people-delete-site-guard`（exam，0.500）：本刀目标。
-- `current-user-service-implementer-edge`（exam，0.500）：Controller 45–52 与 `CurrentUserService` 1–23 已覆盖；`ManageCurrentUserServiceImpl` 在 candidates 但不在 6 文件 readPlan（缺 42–50）；`ExamManagementApplication` 不在 candidates（缺 21–29）。属预算/选文件，不放宽 maxFiles。
-- `audit-order-repository-mapper-rule-type`（lishuedu，0.333）：Impl 39–60 已命中；Mapper 1–29 vs golden 47–155 / 157–254。Anchor 是 `save()`。禁止用 save 去猜 listTodo。
+- `audit-order-repository-mapper-rule-type`（lishuedu，0.333）：Mapper 1–29 vs golden 47–155 / 157–254。Anchor 是 `save()`。**DO_NOT_SPECIALIZE**。
 
 **Holdout**
 
-- lishuedu `exam-score` 0.286；`paper-task` 0.200
-- cipherlink `client-release-storage-presign` 0.500；`backend-operation-log` 0.250（77–93 vs 77–94 不要用 +1 type-header；缺 DefaultOperationLogAppService）
-- exam `exam-room-print` 0.400；`candidate-pay-order` 0.125
+- lishuedu `exam-score` 0.286（helper 外部接收者 + generator 实现）；`paper-task` 0.800（只剩第二跳 `MeQueryService`）
+- cipherlink `client-release-storage-presign` 0.500（反向调用方，不发明 caller-scan）；`backend-operation-log` 0.250（77–93 vs 77–94 **DO_NOT** +1；缺已选端口的实现）
+- exam `exam-room-print` 0.400（实现被同级 CALLS 挤出；不能再抬全量 IMPLEMENTS）；`candidate-pay-order` 0.125（同带 IMPLEMENTS 里应优先闭合已 CALLS 的端口）

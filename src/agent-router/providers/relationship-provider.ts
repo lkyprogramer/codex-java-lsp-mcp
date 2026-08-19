@@ -47,6 +47,8 @@ const SIGNAL_POLICY: Record<string, { family: EvidenceFamily; provenance: Eviden
 
 const MAX_DIRECT_CALL_TARGETS = 12;
 const MAX_IMPLEMENTATION_CONTINUATION_CALL_TARGETS = 32;
+const MAX_SAME_OWNER_HELPERS = 4;
+const MAX_HELPER_CONTINUATION_CALL_TARGETS = 12;
 // The static type graph already nominates exact implementations. Prefer that
 // evidence and keep the import/reference fallback tiny: parsing a wide
 // lexical candidate pool just to prove one dynamic-dispatch hop turns a cold
@@ -96,7 +98,7 @@ type DirectCallSpec = {
 type DirectCallCandidate = {
   readonly candidate: CandidateFile;
   readonly callDepth: number;
-  readonly callOrigin: "anchor" | "implementation";
+  readonly callOrigin: "anchor" | "implementation" | "helper";
 };
 
 type RelationshipFactsBatch = {
@@ -291,7 +293,13 @@ async function collectRelationshipEvidenceForAnchor(
   throwIfRelationshipBudgetExpired(input);
   const implementationCallCandidates = await resolvedImplementationCallCandidates(input, anchoredFrameworkMethod);
   throwIfRelationshipBudgetExpired(input);
-  const callCandidates = mergeCallCandidates(directCallCandidates, implementationCallCandidates);
+  const helperCallCandidates = await resolvedSameOwnerHelperCallCandidates(input, anchoredFrameworkMethod);
+  throwIfRelationshipBudgetExpired(input);
+  const callCandidates = mergeCallCandidates(
+    directCallCandidates,
+    implementationCallCandidates,
+    helperCallCandidates
+  );
   const signatureCandidates = await resolvedSignatureCandidates(input, anchoredFrameworkMethod);
   throwIfRelationshipBudgetExpired(input);
   const candidates = new Map(input.staticVerifiedCandidates.map(candidate => [candidate.absolutePath, candidate]));
@@ -568,14 +576,53 @@ async function resolvedImplementationCallCandidates(
     continuationSpecs.push(...directCallSpecs(implementationMethod, MAX_IMPLEMENTATION_CONTINUATION_CALL_TARGETS)
       .map(spec => ({ ...spec, callDepth: 1 })));
   }
-  const boundedSpecs = dedupeCallSpecs(continuationSpecs).slice(0, MAX_IMPLEMENTATION_CONTINUATION_CALL_TARGETS);
+  return resolveContinuationCallCandidates(
+    input,
+    continuationSpecs,
+    "implementation",
+    MAX_IMPLEMENTATION_CONTINUATION_CALL_TARGETS
+  );
+}
+
+/**
+ * A same-owner unqualified/`this` helper is still the anchored method after
+ * extract-method. Follow one such hop and keep only its external receivers
+ * as depth-1 CALLS so they can fill leftover core slots without outranking
+ * the anchor's own first-hop collaborators.
+ */
+async function resolvedSameOwnerHelperCallCandidates(
+  input: RelationshipProviderInput,
+  anchored: AnchoredFrameworkMethod | undefined
+): Promise<Map<string, DirectCallCandidate>> {
+  if (!anchored || input.budget?.expired()) return new Map();
+  const fieldNames = declaredFieldReceiverNames(anchored);
+  const continuationSpecs: DirectCallSpec[] = [];
+  for (const helper of sameOwnerHelperMethods(anchored)) {
+    continuationSpecs.push(...directCallSpecs(helper, MAX_HELPER_CONTINUATION_CALL_TARGETS, fieldNames)
+      .map(spec => ({ ...spec, callDepth: 1 })));
+  }
+  return resolveContinuationCallCandidates(
+    input,
+    continuationSpecs,
+    "helper",
+    MAX_HELPER_CONTINUATION_CALL_TARGETS
+  );
+}
+
+async function resolveContinuationCallCandidates(
+  input: RelationshipProviderInput,
+  continuationSpecs: readonly DirectCallSpec[],
+  callOrigin: "implementation" | "helper",
+  limit: number
+): Promise<Map<string, DirectCallCandidate>> {
+  const boundedSpecs = dedupeCallSpecs(continuationSpecs).slice(0, limit);
   if (boundedSpecs.length === 0 || input.budget?.expired()) return new Map();
 
   let definitions: JavaSourceFacts[];
   try {
     definitions = await input.javaIndex.findTypeDefinitions(
       [...new Set(boundedSpecs.map(spec => spec.targetFqn))],
-      MAX_IMPLEMENTATION_CONTINUATION_CALL_TARGETS,
+      limit,
       false
     );
   } catch (error) {
@@ -608,10 +655,37 @@ async function resolvedImplementationCallCandidates(
     candidates.set(definition.absolutePath, {
       candidate: callsCandidateFromFacts(definition, matchingSpecs, facts),
       callDepth: 1,
-      callOrigin: "implementation"
+      callOrigin
     });
   }
   return candidates;
+}
+
+function sameOwnerHelperMethods(anchored: AnchoredFrameworkMethod): FrameworkMethodDeclaration[] {
+  const helpers: FrameworkMethodDeclaration[] = [];
+  const seen = new Set<string>();
+  for (const call of anchored.method.callSites) {
+    if (!isUnqualifiedOrThisReceiver(call.receiverText)) continue;
+    const matches = anchored.facts.methods.filter(method =>
+      method.methodId !== anchored.method.methodId
+      && method.ownerTypeId === anchored.method.ownerTypeId
+      && !method.constructor
+      && method.name === call.name
+      && method.parameters.length === call.arity
+    );
+    if (matches.length !== 1) continue;
+    const helper = matches[0]!;
+    if (seen.has(helper.methodId)) continue;
+    seen.add(helper.methodId);
+    helpers.push(helper);
+    if (helpers.length >= MAX_SAME_OWNER_HELPERS) break;
+  }
+  return helpers;
+}
+
+function isUnqualifiedOrThisReceiver(receiverText: string | undefined): boolean {
+  const receiver = receiverText?.trim();
+  return !receiver || receiver === "this";
 }
 
 function prioritizedImplementationContinuationPaths(input: RelationshipProviderInput): string[] {
@@ -1006,7 +1080,7 @@ function pushIfPositive(
   kind: string,
   weight: number,
   callDepth?: number,
-  callOrigin?: "anchor" | "implementation"
+  callOrigin?: "anchor" | "implementation" | "helper"
 ): void {
   if (weight <= 0) {
     return;

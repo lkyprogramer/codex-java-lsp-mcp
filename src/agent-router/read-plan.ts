@@ -237,6 +237,7 @@ function shortlistCandidates(
 ): ShortlistResult {
   const limit = Math.max(1, maxFiles * SHORTLIST_MULTIPLIER);
   const ordered = sortedForV6Shortlist(files, options);
+  const calledPorts = calledPortPaths(ordered);
   const shortlisted: CandidateFile[] = [];
   const selected = new Set<string>();
   const add = (file: CandidateFile): void => {
@@ -252,7 +253,7 @@ function shortlistCandidates(
       && !isDeferredTest(file, options)
       && (isProtectedCore(file, options) || protectedPaths.has(file.absolutePath)))
     .sort((left, right) =>
-      protectedCorePriority(right, options) - protectedCorePriority(left, options)
+      protectedCorePriority(right, options, calledPorts) - protectedCorePriority(left, options, calledPorts)
       || right.score - left.score
       || left.absolutePath.localeCompare(right.absolutePath)), file => file, options);
   protectedCandidates.forEach(add);
@@ -369,8 +370,9 @@ function selectTokenAwarePlan(
     budget,
     Math.min(budget.maxFiles - selected.length, BUCKET_RULES.core.max - bucketCounts.core)
   );
+  const calledPorts = calledPortPaths(windows.map(window => window.file));
   core.sort((left, right) =>
-    protectedCorePriority(right.file, options) - protectedCorePriority(left.file, options)
+    protectedCorePriority(right.file, options, calledPorts) - protectedCorePriority(left.file, options, calledPorts)
     || compareUtilityAndDensity(protectedUtility(left), left.bytes, protectedUtility(right), right.bytes, coreUsesByteDensity)
     || left.file.absolutePath.localeCompare(right.file.absolutePath));
   if (options.anchors.length > 1) {
@@ -511,7 +513,11 @@ function compareUtilityAndDensity(
     : utilityDelta || densityDelta || leftBytes - rightBytes;
 }
 
-function protectedCorePriority(file: CandidateFile, options: Pick<ImpactOptions, "anchors">): number {
+function protectedCorePriority(
+  file: CandidateFile,
+  options: Pick<ImpactOptions, "anchors">,
+  calledPorts: ReadonlySet<string> = new Set()
+): number {
   const kinds = new Set(file.plannerEvidence?.map(evidence => evidence.kind) || [
     ...file.reasons,
     ...(file.verifiedBy || [])
@@ -531,11 +537,14 @@ function protectedCorePriority(file: CandidateFile, options: Pick<ImpactOptions,
   if (kinds.has("TYPE_SYMMETRIC")) {
     return 2.75;
   }
+  // Close a hop the anchor already opened: the implementer of a called port
+  // outranks other implementers. It must stay below sibling CALLS (2.5);
+  // raising all IMPLEMENTS to 2.65 evicted first-hop collaborators.
   if ([...kinds].some(kind => FIRST_HOP_IMPLEMENTATION_KINDS.has(kind)
     || kind === "typeGraph:implementation-lookup"
     || kind === "implementation"
     || kind === "persisted-implementation")) {
-    return 2.4;
+    return closesCalledPort(file, calledPorts) ? 2.45 : 2.4;
   }
   if (kinds.has("METHOD_RELATION")) {
     return 2;
@@ -609,6 +618,34 @@ function familyKeys(file: CandidateFile): Set<string> {
   }
   const keys = evidenceKeys(file).map(key => key.split(":", 1)[0]!);
   return new Set(keys.length > 0 ? keys : file.categories);
+}
+
+function calledPortPaths(files: readonly CandidateFile[]): Set<string> {
+  const paths = new Set<string>();
+  for (const file of files) {
+    if (file.plannerEvidence?.some(evidence => evidence.kind === "CALLS"
+      && (evidence.callOrigin === "anchor" || (evidence.callOrigin === undefined && (evidence.callDepth ?? 0) === 0)))) {
+      paths.add(file.absolutePath);
+    }
+  }
+  return paths;
+}
+
+function implementedTypePath(file: CandidateFile): string | undefined {
+  const evidence = file.plannerEvidence?.find(item => item.kind === "IMPLEMENTS"
+    || item.kind === "IMPLEMENTATION"
+    || item.kind === "TYPE_RELATION"
+    || item.kind === "typeGraph:implementation-lookup");
+  if (!evidence) return undefined;
+  const arrow = evidence.sourceTarget.lastIndexOf("->");
+  if (arrow < 0) return undefined;
+  const target = evidence.sourceTarget.slice(arrow + 2);
+  return target.includes("/") ? target : undefined;
+}
+
+function closesCalledPort(file: CandidateFile, calledPorts: ReadonlySet<string>): boolean {
+  const implemented = implementedTypePath(file);
+  return Boolean(implemented && calledPorts.has(implemented));
 }
 
 function isResponseWrapperFile(file: CandidateFile): boolean {

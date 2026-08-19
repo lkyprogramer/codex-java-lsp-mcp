@@ -99,8 +99,8 @@ export type CandidateEvidenceKey = {
   sourceTarget: string;
   /** AST nesting depth for a resolved CALLS signal; internal read-plan tie-break metadata. */
   callDepth?: number;
-  /** Whether CALLS originates in the anchor body or after one validated implementation dispatch. */
-  callOrigin?: "anchor" | "implementation";
+  /** Whether CALLS originates in the anchor body, a same-owner helper, or one validated implementation dispatch. */
+  callOrigin?: "anchor" | "implementation" | "helper";
 };
 
 export type ReadRange = {

@@ -759,6 +759,75 @@ test("a direct anchor CALLS receiver outranks an unrelated implementation expans
   );
 });
 
+test("an implementer of a called port outranks an unrelated implementer without beating sibling CALLS", async () => {
+  const anchor = candidate({
+    absolutePath: "/repo/src/main/java/demo/OrderController.java",
+    path: "src/main/java/demo/OrderController.java",
+    reasons: ["target"],
+    categories: ["target"],
+    score: 1_000
+  });
+  const calledPort = candidate({
+    absolutePath: "/repo/src/main/java/demo/OrderPort.java",
+    path: "src/main/java/demo/OrderPort.java",
+    reasons: ["CALLS"],
+    score: 120,
+    plannerEvidence: [{
+      family: "STATIC_STRUCTURE",
+      kind: "CALLS",
+      sourceTarget: `A1:${anchor.absolutePath}->/repo/src/main/java/demo/OrderPort.java`,
+      callDepth: 0,
+      callOrigin: "anchor"
+    }]
+  });
+  const calledImplementer = candidate({
+    absolutePath: "/repo/src/main/java/demo/OrderPortAdapter.java",
+    path: "src/main/java/demo/OrderPortAdapter.java",
+    reasons: ["IMPLEMENTS"],
+    score: 80,
+    plannerEvidence: [{
+      family: "STATIC_STRUCTURE",
+      kind: "IMPLEMENTS",
+      sourceTarget: `A1:${anchor.absolutePath}->/repo/src/main/java/demo/OrderPort.java`
+    }]
+  });
+  const unrelatedImplementer = candidate({
+    absolutePath: "/repo/src/main/java/demo/BillingPortAdapter.java",
+    path: "src/main/java/demo/BillingPortAdapter.java",
+    reasons: ["IMPLEMENTS"],
+    score: 900,
+    plannerEvidence: [{
+      family: "STATIC_STRUCTURE",
+      kind: "IMPLEMENTS",
+      sourceTarget: `A1:${anchor.absolutePath}->/repo/src/main/java/demo/BillingPort.java`
+    }]
+  });
+  const files = [anchor, calledPort, calledImplementer, unrelatedImplementer];
+  const threeSlot = await buildReadPlan({
+    files,
+    ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
+    options: optionsFor(anchor, { mode: "minimal", readPlanMaxItems: 3, readPlanMaxBytes: 10_000 }),
+    javaIndex: fixedRangeIndex()
+  });
+  assert.deepEqual(
+    threeSlot.items.map(item => item.fileId),
+    ["F1", "F2", "F3"],
+    "the implementer of the called port must win the last slot over an unrelated implementer"
+  );
+
+  const twoSlot = await buildReadPlan({
+    files,
+    ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
+    options: optionsFor(anchor, { mode: "minimal", readPlanMaxItems: 2, readPlanMaxBytes: 10_000 }),
+    javaIndex: fixedRangeIndex()
+  });
+  assert.deepEqual(
+    twoSlot.items.map(item => item.fileId),
+    ["F1", "F2"],
+    "closing a called port must not evict the port CALLS itself"
+  );
+});
+
 test("a first-hop implementer outranks a same-priority method-parameter DTO in a constrained core", async () => {
   const anchor = candidate({
     absolutePath: "/repo/src/main/java/demo/CheckController.java",

@@ -802,6 +802,201 @@ test("an interface anchor follows one exact implementation override to its resol
   assert.ok(result.evidence.some(item => item.candidateFile === mapperPath && item.kind === "CALLS" && item.callDepth === 1 && item.callOrigin === "implementation"));
 });
 
+test("a same-owner helper's external field receiver is a depth-1 CALLS continuation", async () => {
+  const service = anchor({ kind: "method", methodName: "place", line: 10 });
+  const catalogPath = "/repo/src/main/java/demo/CatalogQueryService.java";
+  const catalogRelativePath = "src/main/java/demo/CatalogQueryService.java";
+  const catalog = facts(catalogPath, {
+    typeName: "CatalogQueryService",
+    qualifiedName: "demo.CatalogQueryService",
+    typeId: "type:demo.CatalogQueryService"
+  });
+  const anchorFrameworkFacts = frameworkFacts({
+    types: [{
+      typeId: "type:demo.OrderService",
+      fqn: "demo.OrderService",
+      relativePath: "src/main/java/demo/OrderService.java",
+      simpleName: "OrderService",
+      kind: "class",
+      annotations: [],
+      methodIds: ["placeMethod", "loadItemsMethod"],
+      fieldIds: ["catalogField"],
+      extends: [],
+      implements: []
+    }],
+    fields: [{
+      fieldId: "catalogField",
+      ownerTypeId: "type:demo.OrderService",
+      relativePath: "src/main/java/demo/OrderService.java",
+      name: "catalog",
+      type: { text: "CatalogQueryService", resolvedFqn: "demo.CatalogQueryService", strategy: "EXPLICIT_IMPORT", typeArguments: [], arrayDepth: 0 },
+      annotations: []
+    }],
+    methods: [{
+      methodId: "placeMethod",
+      ownerTypeId: "type:demo.OrderService",
+      relativePath: "src/main/java/demo/OrderService.java",
+      name: "place",
+      constructor: false,
+      range: { start: { line: 9, column: 3 }, end: { line: 14, column: 3 } },
+      annotations: [],
+      parameters: [],
+      callSites: [{
+        kind: "METHOD_INVOCATION",
+        name: "loadItems",
+        arity: 1,
+        argumentTypeHints: [],
+        range: { start: { line: 11, column: 5 }, end: { line: 11, column: 24 } }
+      }]
+    }, {
+      methodId: "loadItemsMethod",
+      ownerTypeId: "type:demo.OrderService",
+      relativePath: "src/main/java/demo/OrderService.java",
+      name: "loadItems",
+      constructor: false,
+      range: { start: { line: 16, column: 3 }, end: { line: 22, column: 3 } },
+      annotations: [],
+      parameters: [
+        { name: "ids", type: { text: "List", resolvedFqn: "java.util.List", strategy: "JAVA_LANG", typeArguments: [], arrayDepth: 0 }, varargs: false, annotations: [] }
+      ],
+      callSites: [{
+        kind: "METHOD_INVOCATION",
+        name: "listByIds",
+        arity: 1,
+        receiverText: "catalog",
+        receiverDeclaredType: {
+          text: "CatalogQueryService",
+          resolvedFqn: "demo.CatalogQueryService",
+          strategy: "EXPLICIT_IMPORT",
+          typeArguments: [],
+          arrayDepth: 0
+        },
+        argumentTypeHints: [
+          { text: "List", resolvedFqn: "java.util.List", strategy: "JAVA_LANG", typeArguments: [], arrayDepth: 0 }
+        ],
+        range: { start: { line: 18, column: 5 }, end: { line: 18, column: 36 } }
+      }]
+    }]
+  });
+  const catalogFrameworkFacts = frameworkFacts({
+    relativePath: catalogRelativePath,
+    types: [{
+      typeId: "type:demo.CatalogQueryService",
+      fqn: "demo.CatalogQueryService",
+      relativePath: catalogRelativePath,
+      simpleName: "CatalogQueryService",
+      kind: "interface",
+      annotations: [],
+      methodIds: ["listByIdsMethod"],
+      fieldIds: [],
+      extends: [],
+      implements: []
+    }],
+    methods: [{
+      methodId: "listByIdsMethod",
+      ownerTypeId: "type:demo.CatalogQueryService",
+      relativePath: catalogRelativePath,
+      name: "listByIds",
+      constructor: false,
+      range: { start: { line: 4, column: 3 }, end: { line: 4, column: 40 } },
+      annotations: [],
+      parameters: [
+        { name: "ids", type: { text: "List", resolvedFqn: "java.util.List", strategy: "JAVA_LANG", typeArguments: [], arrayDepth: 0 }, varargs: false, annotations: [] }
+      ],
+      callSites: []
+    }]
+  });
+  const result = await collectRelationshipEvidence(providerInput(
+    [service],
+    [],
+    [],
+    noopJavaIndex({
+      findTypeDefinitions: async (typeFqns: readonly string[]) => typeFqns.includes("demo.CatalogQueryService") ? [catalog] : [],
+      frameworkFactsFor: async () => anchorFrameworkFacts,
+      frameworkFactsForFiles: async (paths: readonly string[]) => paths.includes(catalogPath)
+        ? [catalogFrameworkFacts]
+        : []
+    })
+  ));
+
+  const call = result.evidence.find(item => item.candidateFile === catalogPath && item.kind === "CALLS");
+  assert.ok(call, "expected a CALLS signal for the helper's external field receiver");
+  assert.equal(call!.callDepth, 1);
+  assert.equal(call!.callOrigin, "helper");
+});
+
+test("an overloaded same-owner helper is not treated as an extract-method continuation", async () => {
+  const service = anchor({ kind: "method", methodName: "place", line: 10 });
+  const catalogPath = "/repo/src/main/java/demo/CatalogQueryService.java";
+  const catalog = facts(catalogPath, {
+    typeName: "CatalogQueryService",
+    qualifiedName: "demo.CatalogQueryService",
+    typeId: "type:demo.CatalogQueryService"
+  });
+  const helper = (methodId: string, column: number) => ({
+    methodId,
+    ownerTypeId: "type:demo.OrderService",
+    relativePath: "src/main/java/demo/OrderService.java",
+    name: "loadItems",
+    constructor: false,
+    range: { start: { line: 16, column: column }, end: { line: 22, column: 3 } },
+    annotations: [],
+    parameters: [
+      { name: "ids", type: { text: "List", resolvedFqn: "java.util.List", strategy: "JAVA_LANG" as const, typeArguments: [], arrayDepth: 0 }, varargs: false, annotations: [] }
+    ],
+    callSites: [{
+      kind: "METHOD_INVOCATION" as const,
+      name: "listByIds",
+      arity: 1,
+      receiverText: "catalog",
+      receiverDeclaredType: {
+        text: "CatalogQueryService",
+        resolvedFqn: "demo.CatalogQueryService",
+        strategy: "EXPLICIT_IMPORT" as const,
+        typeArguments: [],
+        arrayDepth: 0
+      },
+      argumentTypeHints: [
+        { text: "List", resolvedFqn: "java.util.List", strategy: "JAVA_LANG" as const, typeArguments: [], arrayDepth: 0 }
+      ],
+      range: { start: { line: 18, column: 5 }, end: { line: 18, column: 36 } }
+    }]
+  });
+  const result = await collectRelationshipEvidence(providerInput(
+    [service],
+    [],
+    [],
+    noopJavaIndex({
+      findTypeDefinitions: async () => [catalog],
+      frameworkFactsFor: async () => frameworkFacts({
+        methods: [{
+          methodId: "placeMethod",
+          ownerTypeId: "type:demo.OrderService",
+          relativePath: "src/main/java/demo/OrderService.java",
+          name: "place",
+          constructor: false,
+          range: { start: { line: 9, column: 3 }, end: { line: 14, column: 3 } },
+          annotations: [],
+          parameters: [],
+          callSites: [{
+            kind: "METHOD_INVOCATION",
+            name: "loadItems",
+            arity: 1,
+            argumentTypeHints: [],
+            range: { start: { line: 11, column: 5 }, end: { line: 11, column: 24 } }
+          }]
+        }, helper("loadItemsA", 3), helper("loadItemsB", 4)]
+      })
+    })
+  ));
+
+  assert.equal(
+    result.evidence.some(item => item.candidateFile === catalogPath && item.kind === "CALLS"),
+    false,
+    "an overloaded helper must not invent a collaborator hop"
+  );
+});
+
 test("a candidate type in the anchor's own method relations earns a METHOD_RELATION signal", async () => {
   const service = anchor();
   const paramType = candidate("/repo/src/main/java/demo/OrderRequest.java");
