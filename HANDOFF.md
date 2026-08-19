@@ -1,5 +1,18 @@
 # HANDOFF
 
+## V5R Phase 4（COMPLETE，2026-08-19）
+
+真源：`docs/deep/codex-java-lsp-mcp-java-intelligence-v5r-comprehensive-assessment-refactoring-plan-2026-08-19.md` §15 Phase 4 / §9.5。  
+收口：`docs/phase-v5r/v5r-phase4-closeout.json`。隔离全量 1052+164 fail 0；executableTree `2c35ab1c`。holdout oracle：`docs/phase-v5r/v5r-phase4-holdout-oracle.json`。
+
+- **frontier shadow**：`buildFrontier` 在 first plan 之后从已物化、未入选的 ReadUnit 生成。默认 `JAVA_LSP_FRONTIER_SHADOW=shadow`，只挂 `metrics.readPlan.frontierShadow`（diagnostic）。不改 `version:6`，不暴露 `expectedGain` / 公开 `retrieval`。
+- **多样性**：relation/file/family cap（2/1/2）+ items/bytes 双上限（8 / 8KiB）。不是 dropped top-K 复制。
+- **oracle**：六条 holdout 的 first-plan mustHit 均值 **0.525 → 池内 oracle 0.825**。5/6 至少有一个已在首轮候选池、被预算挤出的 golden。`paper-task` 的 `MeQueryService` 以及 exam-data 持久化类型仍是 discovery gap。
+- **continuation 决策：GO**（仅针对池内 BUDGET_EVICTED / implementer）。**本 Phase 未实施** `action=continue` / session。反向 caller 只写了设计：`docs/phase-v5r/v5r-reverse-query-design.md`，未开放 `QUERY_CALLERS`。
+- λ 仍 `CALIBRATED_OFFLINE`。未烧三仓（first plan identity 未变）。
+
+下一 Phase：**Phase 5 Continuation session**（仅因本 Phase GO）。不得把 discovery-gap 文件算成 frontier 命中。未过 Phase 5 退出条件不得合 main。
+
 ## V5R Phase 3（COMPLETE，2026-08-19）
 
 真源：`docs/deep/codex-java-lsp-mcp-java-intelligence-v5r-comprehensive-assessment-refactoring-plan-2026-08-19.md` §15 Phase 3 / §6.2。  
@@ -151,4 +164,4 @@ git log --oneline -5
 git status --short
 ```
 
-确认 `git log` 最新几条含 V5R Phase 3 收口。不要复活 dual-worker sweep 线程。下一独立项是 V5R Phase 4（frontier shadow）。λ 仍是 `CALIBRATED_OFFLINE`：禁止合成 `J(π)`。未过 Phase 4 oracle 不得做 continuation。三仓 load < 20 仍必须跑。
+确认 `git log` 最新几条含 V5R Phase 4 收口。不要复活 dual-worker sweep 线程。下一独立项是 V5R Phase 5（continuation session），因 Phase 4 oracle 为 GO。λ 仍是 `CALIBRATED_OFFLINE`：禁止合成 `J(π)`。Discovery-gap（MeQueryService / exam-data templates）不是 continuation 能修的。三仓 load < 20 仍必须跑。

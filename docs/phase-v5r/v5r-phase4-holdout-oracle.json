@@ -1,0 +1,86 @@
+{
+  "schemaVersion": "v5r-phase4-holdout-oracle/v1",
+  "source": {
+    "matrix": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/matrix/*-r1-new.json",
+    "note": "V5R Phases 0-3 preserved first-call ranking/readPlan identity, so this V4-final first plan is the Phase 4 denominator. Numbers below are attempt[0] of r1-new."
+  },
+  "mustHitFileCoverage": {
+    "firstMean": 0.525,
+    "poolOracleMean": 0.825,
+    "lift": 0.3,
+    "scenarios": 6
+  },
+  "rows": [
+    {
+      "id": "exam-score-export-cross-module-holdout",
+      "firstCoverage": 0.5,
+      "poolOracleCoverage": 1.0,
+      "inPoolNotPlan": [
+        "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolQueryService.java",
+        "modules/exam/src/main/java/com/lishu/edu/exam/infrastructure/excel/ExamScoreExportExcelGenerator.java"
+      ],
+      "notInPool": [],
+      "class": "BUDGET_EVICTED / CLOSED_PORT_IMPLEMENTATION"
+    },
+    {
+      "id": "paper-task-claim-iam-holdout",
+      "firstCoverage": 0.75,
+      "poolOracleCoverage": 0.75,
+      "inPoolNotPlan": [],
+      "notInPool": [
+        "modules/iam/src/main/java/com/lishu/edu/iam/application/service/MeQueryService.java"
+      ],
+      "class": "REVERSE_CALLER_UNDISCOVERED / candidate-discovery"
+    },
+    {
+      "id": "client-release-storage-presign-holdout",
+      "firstCoverage": 0.5,
+      "poolOracleCoverage": 1.0,
+      "inPoolNotPlan": [
+        "modules/storage/src/main/java/com/hhtele/cipherlink/storage/application/ObjectStorageProvider.java",
+        "modules/client/src/main/java/com/hhtele/cipherlink/client/application/DefaultClientReleasePublishAppService.java"
+      ],
+      "notInPool": [],
+      "class": "BUDGET_EVICTED. PublishAppService is in the first-call pool; not a missing caller-scan."
+    },
+    {
+      "id": "backend-operation-log-aspect-async-audit-holdout",
+      "firstCoverage": 0.6,
+      "poolOracleCoverage": 1.0,
+      "inPoolNotPlan": [
+        "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/OperationLogCommand.java",
+        "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/DefaultOperationLogAppService.java"
+      ],
+      "notInPool": [],
+      "class": "BUDGET_EVICTED. Near-miss +1 range on the already-selected aspect is a span-packing issue, not frontier."
+    },
+    {
+      "id": "exam-room-print-download-types-persistent-bundle",
+      "firstCoverage": 0.4,
+      "poolOracleCoverage": 0.6,
+      "inPoolNotPlan": [
+        "exam-service/exam-service-exam-site/src/main/java/com/hhtele/exam/service/exam/site/impl/ExamRoomPrintBundleServiceImpl.java"
+      ],
+      "notInPool": [
+        "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/ExamRoomPrintBundleJob.java",
+        "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/ExamRoomPrintBundleJobTemplate.java"
+      ],
+      "class": "mixed: CLOSED_PORT_IMPLEMENTATION in pool; persistence types are discovery"
+    },
+    {
+      "id": "candidate-pay-order-cross-module-admission",
+      "firstCoverage": 0.4,
+      "poolOracleCoverage": 0.6,
+      "inPoolNotPlan": [
+        "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/impl/ApplyPayServiceImpl.java"
+      ],
+      "notInPool": [
+        "exam-data/src/main/java/com/hhtele/exam/data/repository/order/ApplyPayTemplate.java",
+        "exam-data/src/main/java/com/hhtele/exam/data/repository/order/OrderRepository.java"
+      ],
+      "class": "mixed: CLOSED_PORT_IMPLEMENTATION in pool; persistence types are discovery"
+    }
+  ],
+  "decision": "GO",
+  "decisionNote": "Frontier oracle coverage is materially above first plan (0.525 → 0.825 mustHit files if the builder keeps pool-evicted goldens). 5/6 holdouts have at least one budget-evicted golden already in the first-call pool. Continuation is justified for those. 3/6 still have discovery-gap files (MeQueryService, exam-data templates) that reverse-query/candidate discovery must own; Phase 4 does not open reverse queries and Phase 5 must not claim those files as frontier hits."
+}

@@ -1,12 +1,61 @@
 // input: Candidate files, indexed ranges, and the current impact mode.
-// output: Internal ReadUnit and retrieval budget types. Not a public MCP payload.
-// pos: V5R Phase 2. Frontier/session types stay out until Phase 4/5.
+// output: Internal ReadUnit, retrieval budget, and diagnostic frontier types. Not a public MCP payload.
+// pos: V5R Phase 2/4. Session store stays out until Phase 5.
 import type { CandidateEvidenceKey, CandidateFile, ImpactMode, ReadPriority, ReadRange } from "../../agent-types.js";
 import type { SourceRange } from "../../runtime/source-range.js";
 
 export const JAVA_LSP_READUNIT_PLANNER = "JAVA_LSP_READUNIT_PLANNER";
+export const JAVA_LSP_FRONTIER_SHADOW = "JAVA_LSP_FRONTIER_SHADOW";
 
 export type ReadUnitPlannerMode = "off" | "shadow" | "on";
+export type FrontierShadowMode = "off" | "shadow";
+
+export type RetrievalStopReason =
+  | "NO_FRONTIER"
+  | "NO_HIGH_VALUE_FRONTIER"
+  | "FRONTIER_AVAILABLE"
+  | "FRONTIER_BYTE_CAP"
+  | "READ_BUDGET_EXHAUSTED";
+
+export type FrontierItemV1 = {
+  readonly id: string;
+  readonly fileId: string;
+  readonly path: string;
+  readonly ranges: Array<{ startLine: number; endLine: number; estimatedBytes: number }>;
+  readonly relation: ContinuationRelation;
+  readonly expectedEvidence: string[];
+  readonly confidence: "high" | "medium" | "low";
+  readonly estimatedReadBytes: number;
+  readonly hop: 0 | 1 | 2 | "reverse" | "unknown";
+};
+
+export type DeferredQueryDesign = {
+  readonly relation: "REVERSE_CALLER_QUERY";
+  readonly reason: string;
+  readonly notOpened: true;
+};
+
+export type FrontierShadowReport = {
+  readonly items: FrontierItemV1[];
+  readonly deferredQueries: DeferredQueryDesign[];
+  readonly stopReason: RetrievalStopReason;
+  readonly coverage: {
+    readonly itemCount: number;
+    readonly relationCounts: Record<string, number>;
+    readonly familyCounts: Record<string, number>;
+    readonly estimatedReadBytes: number;
+    readonly responseBytes: number;
+    readonly distinctRelations: number;
+    readonly distinctFamilies: number;
+  };
+  readonly caps: {
+    readonly maxItems: number;
+    readonly maxBytes: number;
+    readonly maxPerRelation: number;
+    readonly maxPerFile: number;
+    readonly maxPerFamily: number;
+  };
+};
 
 export type ContinuationRelation =
   | "BUDGET_EVICTED"
@@ -91,6 +140,12 @@ export function readUnitPlannerMode(env: NodeJS.ProcessEnv = process.env): ReadU
   return "off";
 }
 
+export function frontierShadowMode(env: NodeJS.ProcessEnv = process.env): FrontierShadowMode {
+  const raw = env[JAVA_LSP_FRONTIER_SHADOW];
+  if (raw === "off" || raw === "0") return "off";
+  return "shadow";
+}
+
 export function retrievalBudgetFor(
   mode: ImpactMode,
   limits: { maxFiles: number; maxReadBytes: number }
@@ -103,9 +158,9 @@ export function retrievalBudgetFor(
     maxSpansPerFile,
     maxCrossModuleUnits: limits.maxFiles,
     maxTestUnits: Math.max(1, Math.floor(limits.maxFiles / 6)),
-    frontierMaxItems: 0,
-    frontierMaxBytes: 0,
-    additionalReadBytes: 0,
-    maxSteps: 1
+    frontierMaxItems: 8,
+    frontierMaxBytes: 8 * 1024,
+    additionalReadBytes: 16 * 1024,
+    maxSteps: 2
   };
 }

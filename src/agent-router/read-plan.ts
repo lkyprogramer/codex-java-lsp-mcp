@@ -19,7 +19,14 @@ import { selectWithEvidenceBudget } from "./read-plan-budget.js";
 import { evidenceKeys, hasNovelEvidence as fileHasNovelEvidence } from "./retrieval/evidence-features.js";
 import { observeRetrievalParity, selectedReadUnits } from "./retrieval/plan-selector.js";
 import { buildReadUnits, windowsFromReadUnits } from "./retrieval/read-unit-builder.js";
-import { retrievalBudgetFor, readUnitPlannerMode, type MaterializedReadWindow } from "./retrieval/retrieval-types.js";
+import { buildFrontier } from "./retrieval/frontier-builder.js";
+import {
+  frontierShadowMode,
+  readUnitPlannerMode,
+  retrievalBudgetFor,
+  type FrontierShadowReport,
+  type MaterializedReadWindow
+} from "./retrieval/retrieval-types.js";
 import { retrievalBudgetOverflowGaps } from "./retrieval/selection-policy.js";
 import { protectedSelectionUtility, selectionUtility, compareSelectionUtility } from "./retrieval/selection-utility.js";
 
@@ -113,6 +120,8 @@ export type ReadPlanBuildResult = {
   evidenceGaps: string[];
   /** Diagnostic-only selection trace; regular output consumers do not expose it. */
   marginalUtilityBySelectedFile: Record<string, number>;
+  /** Diagnostic-only frontier shadow. Absent when JAVA_LSP_FRONTIER_SHADOW=off. */
+  frontierShadow?: FrontierShadowReport;
 };
 
 /**
@@ -151,7 +160,11 @@ export async function buildReadPlan(input: BuildReadPlanInput): Promise<ReadPlan
     const legacy = selectTokenAwarePlan(windows, input.ids, input.options, selectionBudget, protectedPaths);
     observeRetrievalParity(selectedUnits, selectedReadUnits(units, legacy.selectedPaths));
   }
-  const capGaps = retrievalBudgetOverflowGaps(selectedUnits, retrievalBudgetFor(input.options.mode, selectionBudget));
+  const retrievalBudget = retrievalBudgetFor(input.options.mode, selectionBudget);
+  if (frontierShadowMode() !== "off") {
+    result.frontierShadow = buildFrontier(units, result.selectedPaths, retrievalBudget);
+  }
+  const capGaps = retrievalBudgetOverflowGaps(selectedUnits, retrievalBudget);
   if (capGaps.length > 0) {
     result.evidenceGaps = [...new Set([...result.evidenceGaps, ...capGaps])];
   }
