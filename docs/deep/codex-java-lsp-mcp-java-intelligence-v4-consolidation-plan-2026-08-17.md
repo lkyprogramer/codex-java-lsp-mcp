@@ -120,6 +120,7 @@
 
 ### V4-06 range 精度与 holdout 必读闭合
 
+- **状态（2026-08-19）**：`CLOSED_WITH_RESIDUAL_STRUCTURAL_MISSES`。通用刀已落地并经正式三仓矩阵确认；RangeLineRecall=1.0 / holdout rReadMust=1.0 未达到。继续凑 1.0 只能走已否决路径（全量 IMPLEMENTS 2.65、放宽 maxFiles、save 猜 Mapper、type-header +1、caller-scan）。过程与残差分类：`docs/phase-v4/v4-06-range-holdout-progress-2026-08-19.md`。
 - **实施**：
   1. `collectTypeGraphCandidates`/`collectImportGraphCandidates`（`candidate-collectors.ts`）强制 `hydrate:true`，`candidateFromFacts()` 用命中原因所在方法/字段的真实位置替换 `(1,1)`；
   2. 先用 V3.2-03 telemetry 量化 hydrate 的 RPC/延迟成本；若 cold P95 超门禁，把 hydration 合并进 `QUERY_READ_RANGES`/`factsForFiles` 批量路径；

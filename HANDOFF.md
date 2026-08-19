@@ -2,7 +2,7 @@
 
 ## 当前任务
 
-**V4-01/02/03/04 已完成；V4-05 默认关已落地；V4-06 进行中（2026-08-19）**：Primary-keep 已确认 storage/current-user 1.0。`positionsFromFacts` 正式矩阵 KEEP（`98a0183` vs `e9fe968`）：paper-task 0.4→0.8，lishuedu holdout range 0.343→0.543，cipherlink rReadMust 0.91 未回归。IMPLEMENTS 2.65 排名仍 REJECT。下一刀是可泛化的「闭合已打开的 hop」：同类型 extract-method helper 的外部接收者作 depth-1 CALLS；IMPLEMENTS 只在已 CALLS 的端口之间互比（2.45），不压过 sibling CALLS。禁止为三仓分数过拟合。holdout rReadMust 仍未到 1.0。真源 `docs/deep/codex-java-lsp-mcp-java-intelligence-v4-consolidation-plan-2026-08-17.md`。**三仓 load 政策**：1 分钟 load < 20 必须执行。V4-05 storm 未测。隔离约束不变。
+**V4-01/02/03/04 已完成；V4-05 默认关已落地；V4-06 已诚实收口（2026-08-19）**：`CLOSED_WITH_RESIDUAL_STRUCTURAL_MISSES`，不是 RangeLineRecall/rReadMust=1.0。KEEP：Primary-keep、`positionsFromFacts`（paper-task 0.4→0.8）、helper continuation + called-port IMPLEMENTS 2.45（lishuedu/cipherlink file recall 升，rReadMust 未回归）。REJECT：IMPLEMENTS 2.65。禁止为三仓凑 1.0。残差见 `docs/phase-v4/v4-06-range-holdout-progress-2026-08-19.md`。真源 `docs/deep/codex-java-lsp-mcp-java-intelligence-v4-consolidation-plan-2026-08-17.md`。**三仓 load 政策**：1 分钟 load < 20 必须执行。V4-05 storm 未测。隔离约束不变。
 
 （以下 V3.2 各 Sprint 记录保留供追溯，其结论与"不要再踩的坑"在 V4 阶段继续有效，除非 V4 计划文档显式解除——目前唯一显式解除的是"不新增第二 scheduler"边界：V4-05 以 ADR 形式引入第二 worker **线程**，sweep 调度语义不变。）
 
@@ -47,7 +47,7 @@
 
 ## 下一步
 
-**执行 V4 计划（真源见上）。** V4-06：Primary-keep 已闭合 storage/current-user。`positionsFromFacts` 正式 KEEP。不要再抬全量 IMPLEMENTS，不要放宽 maxFiles，不要用 save 猜 Mapper，不要为某一个 golden 写场景特判，不要 type-header +1，不要发明 caller-scan。下一刀（helper continuation + called-port implementer 2.45）测完再决定 KEEP/REJECT。三仓 load < 20 必须继续跑。V4-05 storm 未测。V4-01 daemon 合流已完成（`4323b3c`）。V4-02 LOC 基线 35,472（上限 37,245）。
+**执行 V4 计划（真源见上）。** V4-06 已收口，不要再为 holdout 1.0 发明特判。不要再抬全量 IMPLEMENTS，不要放宽 maxFiles，不要用 save 猜 Mapper，不要 type-header +1，不要发明 caller-scan。下一件独立项是 V4-05 storm（未测，未过两轮不得默认开 dual worker）或 V4-07 缓存真源；不要自动扩到 Sprint6。三仓 load < 20 必须继续跑。V4-01 daemon 合流已完成（`4323b3c`）。V4-02 LOC 基线 35,472（上限 37,245）。
 
 V4-03 **分母已入库**：`docs/phase-v4/v4-sprint0-manifest.json` + `docs/phase-v4/v4-sprint0-summaries/`。raw 在 `/tmp/codex-java-lsp-v4-sprint0-20260818/`。主机门改为可用内存 ≥4 GiB，load 只记录。cold-matrix 质量门 FAIL 是分母（三仓 rReadMust 0.90/0.91/0.88）。first-touch：lishuedu 3/5 COMPLETE，cipherlink 与 exam-parent-v3 5/5 PARTIAL_TIMEOUT（`--prepare none` + 60s）。正式仓仍是 `/tmp/codex-java-v3-golden-20260809/{lishuedu,cipherlink,exam-parent-v3}`。
 
@@ -102,4 +102,4 @@ git log --oneline -5
 git status --short
 ```
 
-确认 `git log` 最新几条含 Sprint0' 分母、V4-05 dual-worker 与 V4-06。下一步：只要 1 分钟 load < 20 就跑隔离三仓 cold-matrix（不要因 load 停）；未到 RangeLineRecall/rReadMust=1.0 再按 miss 类继续，不要用 type-header。V4-05 storm 另测，未过两轮不要默认开 dual worker。
+确认 `git log` 最新几条含 V4-06 收口（`1242b05` helper-hop KEEP）。不要再为三仓 holdout 1.0 开新特判。下一步独立项：V4-05 `scripts/run-storm-gate.mjs` 两轮，或 V4-07 缓存真源。三仓 load < 20 仍必须跑。

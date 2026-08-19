@@ -145,23 +145,29 @@ exam file recall 略降是预期：无 `@Primary` 的 CurrentUser 实现不再�
 
 exam `pRead` 0.6067→0.6000：更紧的 range 省出字节后多进了一个非 golden 文件。相对 pRead 门仍过，不因此撤回方法定位。
 
-## 下一刀（相对 `98a0183`，隔离已绿，待正式矩阵）
+## helper-hop 正式矩阵（`1242b05` vs `98a0183`，已完成）
 
-两条对任意 Java 仓都成立的规则，**不**把 IMPLEMENTS 抬到 sibling CALLS 之上：
+产物：`/tmp/codex-java-lsp-v4-06-helper-hop-20260819-111800/`。候选 159/159。exit 1 = 质量绝对门槛 FAIL（分母）。
 
-1. **extract-method 延续**：锚点方法的同类型 unqualified/`this` helper，其外部字段接收者记为 `CALLS` depth-1 / `callOrigin=helper`（优先级 1.75）。不递归，重载同名同 arity 跳过。
-2. **闭合已 CALLS 的端口**：该端口的 IMPLEMENTS 为 2.45，其它 IMPLEMENTS 仍 2.4。低于 sibling CALLS 2.5。
+| 仓 | RangeLineRecall | file recall | pRead | rReadMust | tokens P50 | p95Ratio |
+|---|---|---|---|---|---|---|
+| lishuedu | 0.8419 不变 | 0.7923 → **0.7986** | 0.7217 不变 | 0.925 | 4662 不变 | 1.189 |
+| cipherlink | 0.875 不变 | 0.8265 → **0.8390** | 0.6433 → **0.6633** | 0.910 | 4370 → 4422 | 1.242 |
+| exam-parent-v3 | 0.8525 不变 | 0.6970 不变 | 0.6000 不变 | 0.880 | 3869 不变 | 0.965 |
 
-禁止项不变：save 猜 Mapper、type-header +1、caller-scan、放宽 maxFiles、全量 IMPLEMENTS 2.65。
+**KEEP**。cipherlink `organization-create-member` / `auth-sms-login` 未再被挤出。`exam-score` 文件召回 0.813→0.875（helper 发现了 SchoolQueryService，但 1.75 进不了已满的 2.5 CALLS 核心）。`account-admin` 用 AuthAccountAdminBridge 换掉 Bcrypt，recall 0.875→1.0。range 格子未动。
 
-## 仍 miss（相对 positions 矩阵 r1-new）
+## V4-06 收口（`CLOSED_WITH_RESIDUAL_STRUCTURAL_MISSES`）
 
-**Tuning**
+计划门禁 RangeLineRecall=1.0 / holdout rReadMust=1.0 **未达到**。继续为这三个 golden 凑 1.0 只能走已否决路径。残差按类冻结：
 
-- `audit-order-repository-mapper-rule-type`（lishuedu，0.333）：Mapper 1–29 vs golden 47–155 / 157–254。Anchor 是 `save()`。**DO_NOT_SPECIALIZE**。
+| 类 | 样本 | 决定 |
+|---|---|---|
+| 错方法 / 猜 sibling | `audit-order` save vs Mapper listTodo | **DO_NOT_SPECIALIZE** |
+| near-miss +1 | `backend-operation-log` 77–93 vs 77–94 | **DO_NOT** type-header +1 |
+| 反向调用方 | `presign` PublishAppService | 不发明 caller-scan |
+| 第二跳 | `paper-task` MeQueryService | 无免费通用刀 |
+| 实现被同级 CALLS 挤出 | `exam-room-print` / `exam-score` ExcelGenerator / `candidate-pay` Impl | IMPLEMENTS 2.65 已 REJECT；2.45 不压过 CALLS |
+| 文件数上限 | 6 files binding | 不放宽 maxFiles（V3.2-28 已证伪） |
 
-**Holdout**
-
-- lishuedu `exam-score` 0.286（helper 外部接收者 + generator 实现）；`paper-task` 0.800（只剩第二跳 `MeQueryService`）
-- cipherlink `client-release-storage-presign` 0.500（反向调用方，不发明 caller-scan）；`backend-operation-log` 0.250（77–93 vs 77–94 **DO_NOT** +1；缺已选端口的实现）
-- exam `exam-room-print` 0.400（实现被同级 CALLS 挤出；不能再抬全量 IMPLEMENTS）；`candidate-pay-order` 0.125（同带 IMPLEMENTS 里应优先闭合已 CALLS 的端口）
+已落地且正式矩阵确认的通用刀：hydrate 方法位、sibling callee cap=2、type-ref implementer 定位、Primary-keep、`positionsFromFacts`、helper continuation、called-port IMPLEMENTS 2.45。
