@@ -436,6 +436,26 @@ test("multiple implementers keep only the @Primary bean", async () => {
   ]);
 });
 
+test("multiple implementers without @Primary all remain first-hop evidence", async () => {
+  const port = facts("/repo/src/main/java/demo/StorageGateway.java", {
+    kind: "interface",
+    typeName: "StorageGateway"
+  });
+  const aliyun = facts("/repo/src/main/java/demo/AliyunOssGateway.java");
+  const stub = facts("/repo/src/main/java/demo/StubStorageGateway.java");
+  const result = await collect({
+    factsFor: async () => facts(anchor.absolutePath, { referencedTypes: ["demo.StorageGateway"] }),
+    findTypeReferences: async () => [],
+    findTypeDefinitions: async () => [port],
+    findImplementers: async () => [aliyun, stub]
+  });
+
+  assert.deepEqual(result.evidence.filter(signal => signal.kind === "IMPLEMENTS").map(signal => signal.candidateFile), [
+    aliyun.absolutePath,
+    stub.absolutePath
+  ]);
+});
+
 test("a cross-module preferred implementer adds the anchor-module Boot application at its type start", async () => {
   const checkAnchor: ResolvedAnchor = {
     ...anchor,

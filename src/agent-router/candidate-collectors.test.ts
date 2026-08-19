@@ -166,3 +166,25 @@ test("type graph keeps only the @Primary implementer when several alternatives e
   assert.equal(candidates.has(primary.absolutePath), true);
   assert.equal(candidates.has(other.absolutePath), false);
 });
+
+test("type graph keeps every implementer when none is @Primary", async () => {
+  const candidates = new Map<string, CandidateFile>();
+  const first = implementation;
+  const second = {
+    ...implementation,
+    absolutePath: "/repo/src/main/java/demo/StubPortImpl.java",
+    path: "src/main/java/demo/StubPortImpl.java"
+  };
+  const implementations = await collectTypeGraphCandidates({
+    candidates,
+    anchors: [anchor],
+    options,
+    javaIndex: {
+      factsFor: async () => ({ ...implementation, absolutePath: anchor.absolutePath, kind: "interface" }),
+      findImplementers: async () => [first, second]
+    } as never,
+    routingPolicy: resolveRoutingPolicy("/repo")
+  });
+
+  assert.deepEqual(implementations.map(item => item.absolutePath), [first.absolutePath, second.absolutePath]);
+});

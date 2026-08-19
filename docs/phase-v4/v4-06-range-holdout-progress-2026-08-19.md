@@ -101,7 +101,7 @@ baseline `f0e2ef1`，candidate `2fb2148`，`--runs 5`（3 rounds × 5 attempts�
 
 **Tuning**
 
-- `current-user-service-implementer-edge`（exam，**0.500→0.750**）：impl-rank 矩阵 `/tmp/codex-java-lsp-v4-06-impl-rank-20260819-020000/`（`f6367f2` vs `6533ebd`）把 `ManageCurrentUserServiceImpl` 1–50 选进 plan，盖住 42–50。仍缺 `ExamManagementApplication` 21–29（`@SpringBootApplication` + `@ComponentScan` exclude，candidates 里没有）。check-people / school-template-parser 仍 1.0。paper-task holdout **0.200→0.400** / rReadMust 0.5→0.75（`PaperRecordTaskRepositoryImpl` 替换 DTO）。代价：exam 已闭合 tuning 的 pRead 下降（多选了非 Primary implementer）。不放宽 maxFiles。下一刀应是同模块 Boot Application 发现，或只提升 `@Primary` implementer，而不是再抬全量 IMPLEMENTS。
+- `current-user-service-implementer-edge`（exam，**0.750→1.000**）：primary-app 矩阵 `/tmp/codex-java-lsp-v4-06-primary-app-20260819-091800/`（`74750ef` vs `84a3b69`）把 `ExamManagementApplication` 21–33 选进 leftover framework 槽，盖住 21–29。Impl 仍在 plan。check-people 仍 1.0 且 pRead 0.500→0.667（非 Primary CurrentUser Impl 不再挤核心）。paper-task / school-template-parser 不变。第一版“无 Primary 则全丢”会把 `storage-signed-url` 的 Aliyun+Stub Gateway 打成 1.0→0.5，已收成“有 Primary 才限流，否则全留”。不放宽 maxFiles。
 - `audit-order-repository-mapper-rule-type`（lishuedu，0.333）：Mapper 1–29 vs 47–155 / 157–254。Anchor 是 `save()`。禁止用 save 去猜 listTodo。
 
 **Holdout**

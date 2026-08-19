@@ -117,8 +117,9 @@ test("selectPreferredImplementers keeps a unique implementer and only @Primary w
     absolutePath: "/repo/src/test/java/demo/FakeImpl.java",
     sourceSet: "test" as const
   };
+  const third = { ...other, absolutePath: "/repo/src/main/java/demo/Third.java" };
   assert.deepEqual(selectPreferredImplementers([only]), [only]);
   assert.deepEqual(selectPreferredImplementers([primary, other]), [primary]);
-  assert.deepEqual(selectPreferredImplementers([other, { ...other, absolutePath: "/repo/src/main/java/demo/Third.java" }]), []);
+  assert.deepEqual(selectPreferredImplementers([other, third]), [other, third]);
   assert.deepEqual(selectPreferredImplementers([only, testImpl]), [only]);
 });

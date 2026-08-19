@@ -83,13 +83,16 @@ export function isPrimaryImplementer(facts: JavaSourceFacts): boolean {
 
 /**
  * One implementer stays as-is (paper-task). Several alternatives keep only
- * `@Primary`. Test fixtures are ignored when a main-source implementer exists.
+ * `@Primary` when that annotation exists; otherwise every main-source
+ * alternative is retained (storage gateways have no Primary). Test fixtures
+ * are ignored when a main-source implementer exists.
  */
 export function selectPreferredImplementers(implementers: readonly JavaSourceFacts[]): JavaSourceFacts[] {
   const main = implementers.filter(item => item.sourceSet !== "test");
   const pool = main.length > 0 ? main : [...implementers];
   if (pool.length <= 1) return pool;
-  return pool.filter(isPrimaryImplementer);
+  const primary = pool.filter(isPrimaryImplementer);
+  return primary.length > 0 ? primary : pool;
 }
 
 export function isSpringBootApplicationType(facts: JavaSourceFacts): boolean {

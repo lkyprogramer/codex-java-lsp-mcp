@@ -2,7 +2,7 @@
 
 ## 当前任务
 
-**V4-01/02/03/04 已完成；V4-05 默认关已落地；V4-06 进行中（2026-08-19）**：HEAD 见 `git log -1`。`check-people` 已 1.0；`current-user` 0.75（Impl 已进 plan）。已落地：多实现只保留 `@Primary`，跨模块 implementer 补锚点模块 `@SpringBootApplication`（framework 槽，不进 protected core）。待正式三仓矩阵验收 Application 是否进 plan / exam pRead 是否收回。holdout rReadMust 仍未到 1.0。真源 `docs/deep/codex-java-lsp-mcp-java-intelligence-v4-consolidation-plan-2026-08-17.md`。**三仓 load 政策**：1 分钟 load < 20 必须执行。V4-05 storm 未测。隔离约束不变。
+**V4-01/02/03/04 已完成；V4-05 默认关已落地；V4-06 进行中（2026-08-19）**：`current-user` 0.75→1.0（Application 21–33 进 plan）；`check-people` 仍 1.0。Primary 限流已收成“有 `@Primary` 才筛，否则全留”，避免 `storage-signed-url` 丢 Aliyun/Stub Gateway。待复测矩阵确认 storage 恢复且 current-user 仍 1.0。holdout rReadMust 仍未到 1.0。真源 `docs/deep/codex-java-lsp-mcp-java-intelligence-v4-consolidation-plan-2026-08-17.md`。**三仓 load 政策**：1 分钟 load < 20 必须执行。V4-05 storm 未测。隔离约束不变。
 
 （以下 V3.2 各 Sprint 记录保留供追溯，其结论与"不要再踩的坑"在 V4 阶段继续有效，除非 V4 计划文档显式解除——目前唯一显式解除的是"不新增第二 scheduler"边界：V4-05 以 ADR 形式引入第二 worker **线程**，sweep 调度语义不变。）
 
@@ -47,7 +47,7 @@
 
 ## 下一步
 
-**执行 V4 计划（真源见上）。** V4-06：Primary 限流 + 跨模块 Boot Application 已落地，下一场正式三仓以 `84a3b69`/`f6367f2` 为 baseline。不要再抬全量 IMPLEMENTS，不要放宽 maxFiles。三仓 load < 20 必须继续跑。V4-05 storm 未测。V4-01 daemon 合流已完成（`4323b3c`）。V4-02 LOC 基线 35,472（上限 37,245）。
+**执行 V4 计划（真源见上）。** V4-06：`current-user` 已闭合。下一场正式三仓复测 Primary fallback（无 Primary 全留）。不要再抬全量 IMPLEMENTS，不要放宽 maxFiles，不要用 save 猜 Mapper。三仓 load < 20 必须继续跑。V4-05 storm 未测。V4-01 daemon 合流已完成（`4323b3c`）。V4-02 LOC 基线 35,472（上限 37,245）。
 
 V4-03 **分母已入库**：`docs/phase-v4/v4-sprint0-manifest.json` + `docs/phase-v4/v4-sprint0-summaries/`。raw 在 `/tmp/codex-java-lsp-v4-sprint0-20260818/`。主机门改为可用内存 ≥4 GiB，load 只记录。cold-matrix 质量门 FAIL 是分母（三仓 rReadMust 0.90/0.91/0.88）。first-touch：lishuedu 3/5 COMPLETE，cipherlink 与 exam-parent-v3 5/5 PARTIAL_TIMEOUT（`--prepare none` + 60s）。正式仓仍是 `/tmp/codex-java-v3-golden-20260809/{lishuedu,cipherlink,exam-parent-v3}`。
 
