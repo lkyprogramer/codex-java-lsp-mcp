@@ -1,5 +1,12 @@
 # HANDOFF
 
+## V5R §15 验证面板（2026-08-19）
+
+真源：`docs/deep/codex-java-lsp-mcp-java-intelligence-v5r-comprehensive-assessment-refactoring-plan-2026-08-19.md` §15。  
+面板：`docs/phase-v5r/v5r-section15-verification-panel.json`。HEAD `09ed01b`。隔离定向 **53/53 fail 0**。
+
+**结论：Phase 0–6 COMPLETE；Phase 7 `BLOCKED_EXTERNAL`。未合 `main`。不得声称 TaskSuccess。** live-trace 未授权；第四评价仓未冻结。
+
 ## V5R Phase 7（BLOCKED_EXTERNAL，2026-08-19）
 
 真源：`docs/deep/codex-java-lsp-mcp-java-intelligence-v5r-comprehensive-assessment-refactoring-plan-2026-08-19.md` §15 Phase 7。  

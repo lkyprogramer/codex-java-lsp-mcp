@@ -1,0 +1,164 @@
+{
+  "schemaVersion": "v5r-section15-verification-panel/v1",
+  "dated": "2026-08-19",
+  "branch": "codex/java-intelligence-v3",
+  "head": "09ed01bbd981fcb6ac89fc0f57a27eb2480b66c6",
+  "originMain": "48e665ba73dc332dccd4b34e71adc1c048170cf6",
+  "commitsAheadOfMain": 188,
+  "mergedToMain": false,
+  "liveTraceAuthorized": false,
+  "panelTargetedTests": { "tests": 53, "pass": 53, "fail": 0 },
+  "verdict": "PHASES_0_6_COMPLETE_PHASE_7_BLOCKED_EXTERNAL",
+  "doNotMergeMain": true,
+  "doNotClaimTaskSuccess": true,
+  "phases": [
+    {
+      "phase": 0,
+      "decision": "COMPLETE",
+      "commit": "781f86d",
+      "closeout": "docs/phase-v5r/v5r-phase0-closeout.json",
+      "sha256": "453f88ca69262b9974ae26d178cf04230b17ef9a0fe8c53d4e6d0a40b1f3f2d2",
+      "exit": {
+        "correctedBaselineRecomputable": "PASS",
+        "noDoubleCountingEstimatedTokens": "PASS",
+        "gateProfilesDiffer": "PASS",
+        "publicToolsExactlyFive": "PASS",
+        "rcProvenanceRecorded": "PASS",
+        "leftoversInHandoff": "PASS"
+      }
+    },
+    {
+      "phase": 1,
+      "decision": "COMPLETE",
+      "commit": "e862593",
+      "closeout": "docs/phase-v5r/v5r-phase1-closeout.json",
+      "sha256": "af3495c8b585202c285de38dd73a28567c6073606253745dcfe5da86489fee51",
+      "dualWorker": "FAIL",
+      "sweepThread": "deleted",
+      "exit": {
+        "bundleCommandExists": "PASS",
+        "oldPathRetainedDefaultOff": "PASS",
+        "rpcTelemetry": "PASS",
+        "providerFirstSplit": "PASS",
+        "identityParityTests": "PASS",
+        "dualWorkerTwoRoundDecision": "PASS",
+        "perAnchorRpcDropOnDefaultPath": "NOT_MEASURED_DEFAULT_OFF"
+      }
+    },
+    {
+      "phase": 2,
+      "decision": "COMPLETE",
+      "commit": "732f437",
+      "closeout": "docs/phase-v5r/v5r-phase2-closeout.json",
+      "sha256": "3d64ef53dcef70bbafcccb65f653de3739c3025002ab536f6a967c677947c509",
+      "threeRepo": "not required: first-call identity preserved",
+      "exit": {
+        "readUnitRoundTrip": "PASS",
+        "contextClosureRuleDriven": "PASS",
+        "legacySelectorShadowParity": "PASS",
+        "hardCaps": "PASS",
+        "noPublicAbsolutePath": "PASS",
+        "readPlanBudgetCallersExplained": "PASS"
+      }
+    },
+    {
+      "phase": 3,
+      "decision": "COMPLETE",
+      "commit": "c085646",
+      "closeout": "docs/phase-v5r/v5r-phase3-closeout.json",
+      "sha256": "8f17e33b1d2b6da523eaa71d3a5c30c4e1f7379437d172f2b859a0c67643ad77",
+      "lambda": "CALIBRATED_OFFLINE",
+      "exit": {
+        "estimatedTokensRebuilt": "PASS",
+        "noDoubleCountingProxies": "PASS",
+        "tuningHoldoutSplit": "PASS",
+        "noSyntheticJ": "PASS",
+        "correctedThreeRepoBaselineMatrix": "SKIPPED_IDENTITY_PRESERVED"
+      }
+    },
+    {
+      "phase": 4,
+      "decision": "COMPLETE",
+      "continuationDecision": "GO",
+      "commit": "4bacd78",
+      "closeout": "docs/phase-v5r/v5r-phase4-closeout.json",
+      "sha256": "f2bc2a2f8f146bc980694827cf0d891a660fcce25d9c37dcbe980e3252f0f503",
+      "holdoutOracle": { "firstMustHitMean": 0.525, "poolOracleMustHitMean": 0.825 },
+      "exit": {
+        "oracleCoverageAboveFirstPlan": "PASS_ON_V4_FINAL_PLUS_SHIPPED_BUILDER",
+        "notDroppedTopK": "PASS",
+        "responseByteCap": "PASS",
+        "firstPlanUnchanged": "PASS",
+        "reverseQueryDesignOnly": "PASS"
+      }
+    },
+    {
+      "phase": 5,
+      "decision": "COMPLETE",
+      "commit": "65d07ee",
+      "closeout": "docs/phase-v5r/v5r-phase5-closeout.json",
+      "sha256": "168d918b2c528524a69030c9a58fc4dc430aabbb942f684e9b0c5981c26ba17a",
+      "exit": {
+        "sessionStore": "PASS",
+        "actionContinue": "PASS",
+        "staleTtlLruIdempotent": "PASS",
+        "v7OptIn": "PASS",
+        "rReadMustAt2Calls": "PASS_IN_POOL_FIXTURE_NOT_THREE_REPO",
+        "noDiscoveryGapHits": "PASS",
+        "noJavaContext": "PASS"
+      }
+    },
+    {
+      "phase": 6,
+      "decision": "COMPLETE",
+      "commit": "3f10c7e",
+      "closeout": "docs/phase-v5r/v5r-phase6-closeout.json",
+      "sha256": "75192775abeb69f6f42d4bb59f49db17e7e3dd82dcb158f30a52de10ababf370",
+      "exit": {
+        "defaultPackingOffIdentity": "PASS",
+        "overlapMerge": "PASS",
+        "noExtremeMethodRunaway": "PASS",
+        "noContextStarvedMethod": "PASS",
+        "packedCheaperThanWholeFile": "PASS_UNIT",
+        "tailNonWorse": "PASS_UNIT"
+      }
+    },
+    {
+      "phase": 7,
+      "decision": "BLOCKED_EXTERNAL",
+      "commit": "09ed01b",
+      "closeout": "docs/phase-v5r/v5r-phase7-closeout.json",
+      "sha256": "07f53b0c9015fdab9dfcd6a0625a1a6d4dc9750bee942e9c84f20602d7133f4b",
+      "exit": {
+        "liveTrace": "BLOCKED_EXTERNAL",
+        "taskSuccess": "UNMEASURED",
+        "fourthRepo": "UNMEASURED",
+        "leaveOneRepoOutProtocol": "PASS",
+        "leaveOneRepoOutMatrix": "UNMEASURED",
+        "mergeToMain": "FALSE",
+        "tokenLatencyWeightsCalibratedLive": "NOT_MET_CALIBRATED_OFFLINE"
+      }
+    }
+  ],
+  "findings": [
+    {
+      "severity": "blocker-for-release-not-for-branch",
+      "id": "P7-live-trace",
+      "detail": "§15 Phase 7 TaskSuccess/live trace remain BLOCKED_EXTERNAL. Correct per spec without --authorize-external. Do not merge main."
+    },
+    {
+      "severity": "measurement-caveat",
+      "id": "P1-rpc-drop",
+      "detail": "Bundle default is off. Per-anchor RPC drop was not measured on a 3-repo default-on matrix. Identity-preserving classification applies."
+    },
+    {
+      "severity": "measurement-caveat",
+      "id": "P3-P5-no-fresh-three-repo",
+      "detail": "Phases 2–6 skipped fresh 3-repo cold because first-plan ranking/readPlan identity was preserved on the default path. Phase 4/5 coverage lift uses V4-final first plans plus shipped builder/fixtures, not a new AB/BA/AB @2calls matrix."
+    }
+  ],
+  "unblockReleaseRequires": [
+    "user key plus --authorize-external",
+    "frozen fourth evaluation golden before new ranking knives"
+  ]
+}
