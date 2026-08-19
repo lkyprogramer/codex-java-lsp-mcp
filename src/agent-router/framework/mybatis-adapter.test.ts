@@ -88,6 +88,28 @@ function signalsOf(evidence: readonly EvidenceSignal[], kind: string): EvidenceS
   return evidence.filter(signal => signal.kind === kind);
 }
 
+test("the framework-mybatis golden scenario is scored from real XML mapper evidence", async () => {
+  const { loadScenarios, taskBlockingFiles } = await import("../../benchmark/golden-scenario.js");
+  const scenarios = loadScenarios(path.resolve(dirname, "..", "..", "..", "golden", "framework-mybatis.scenarios.jsonl"));
+  const scenario = scenarios[0]!;
+  assert.ok(taskBlockingFiles(scenario).has("src/main/resources/mapper/OrderMapper.xml"));
+
+  const router = await readyRouter();
+  try {
+    const mapper = file(scenario.anchor.file);
+    const context = await frameworkContextFor(router, repoRoot, [anchor(mapper)], [mapper]);
+    const result = await runFrameworkAdapters([mybatisAdapter], context);
+    const xmlHits = result.outcome.evidence.filter(signal =>
+      signal.candidateFile?.endsWith("src/main/resources/mapper/OrderMapper.xml")
+      || signal.sourceFile?.endsWith("src/main/resources/mapper/OrderMapper.xml")
+    );
+    assert.ok(xmlHits.length > 0, "adapter must emit evidence against the real OrderMapper.xml");
+    assert.equal(result.outcome.completion, "COMPLETE");
+  } finally {
+    await router.close();
+  }
+});
+
 test("isActive is true for the MyBatis fixture (pom.xml dependency marker)", async () => {
   const router = await readyRouter();
   try {

@@ -74,6 +74,20 @@ test("firstTaskBlockingRank returns the 1-indexed position, undefined when never
   assert.equal(firstTaskBlockingRank(s, ["Z.java", "Y.java"]), undefined);
 });
 
+test("framework-mybatis golden loads real XML mapper paths and scores a mapper-backed read plan", () => {
+  const scenarios = loadScenarios(path.resolve("golden/framework-mybatis.scenarios.jsonl"));
+  assert.equal(scenarios.length >= 1, true);
+  const scenario = scenarios[0]!;
+  assert.equal(scenario.projectId, "framework-mybatis");
+  assert.ok(taskBlockingFiles(scenario).has("src/main/resources/mapper/OrderMapper.xml"));
+  const score = ndcgReadAt6(scenario, [
+    "src/main/java/demo/OrderMapper.java",
+    "src/main/resources/mapper/OrderMapper.xml",
+    "src/main/java/demo/OrderEntity.java"
+  ]);
+  assert.ok(score !== undefined && score > 0, "a mapper-backed plan that hits must/taskBlocking files must score above 0");
+});
+
 test("readPlanRangeRecall is undefined (not 0) when the scenario carries no mustReadRanges", () => {
   const s = scenario({ mustHit: ["A.java"], taskBlocking: [], shouldHit: [], support: [] });
   assert.equal(readPlanRangeRecall(s, new Map()), undefined);
