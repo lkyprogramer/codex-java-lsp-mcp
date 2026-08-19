@@ -64,6 +64,8 @@ import {
   type JavaIndexRequest,
   type JavaIndexResponse
 } from "./worker-protocol.js";
+import { handleQueryCommand } from "./java-index-worker-query.js";
+import { handleMybatisCommand } from "./java-index-worker-mybatis.js";
 
 // A full sweep processes this many files before yielding to the message loop
 // (Task 20 Step 4), so a foreground request queued mid-sweep is serviced
@@ -1642,8 +1644,23 @@ function startBackgroundLoop(): void {
   })();
 }
 
+function queryHandlerDeps() {
+  return {
+    store,
+    status,
+    deriveSourceLayout,
+    queryReadRanges,
+    coverageStateFor,
+    worstTypeLookupCoverage,
+    unresolvedTypeLookup,
+    respond
+  };
+}
+
 async function handle(request: JavaIndexRequest): Promise<void> {
   try {
+    if (await handleQueryCommand(request, queryHandlerDeps())) return;
+    if (await handleMybatisCommand(request, { store, respond })) return;
     switch (request.type) {
       case "OPEN": {
         repoRoot = request.repoRoot;
@@ -1797,126 +1814,8 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         respond({ id: request.id, ok: true, value: currentStatus() });
         return;
       }
-      case "QUERY_ANCHOR": {
-        // A single bad path must not fail (and DEGRADE) the whole client -
-        // same reasoning as QUERY_FILES' per-path try/catch, just for one
-        // path instead of a list: an anchor for a file outside the repo or
-        // otherwise unresolvable simply has no anchor, not a fatal error.
-        let relativePath: string | undefined;
-        try {
-          relativePath = deriveSourceLayout(request.file).relativePath;
-        } catch {
-          relativePath = undefined;
-        }
-        const anchor = relativePath ? store?.anchor(relativePath, request.line, request.column) : undefined;
-        const value = anchor
-          ? { ...anchor, coverage: coverageStateFor(anchor.file.sourceRoot, status.indexedGeneration) }
-          : undefined;
-        respond({ id: request.id, ok: true, value });
-        return;
-      }
-      case "QUERY_TYPE": {
-        const scopeFile = request.scopeFile ? deriveSourceLayout(request.scopeFile).relativePath : undefined;
-        const result = store ? store.typeLookup(request.typeText, scopeFile) : unresolvedTypeLookup();
-        const value = result.state === "UNRESOLVED"
-          ? { ...result, coverage: worstTypeLookupCoverage(status.indexedGeneration) }
-          : result;
-        respond({ id: request.id, ok: true, value });
-        return;
-      }
-      case "QUERY_TYPES": {
-        const value = request.queries.map(query => {
-          const scopeFile = query.scopeFile ? deriveSourceLayout(query.scopeFile).relativePath : undefined;
-          const result = store ? store.typeLookup(query.typeText, scopeFile) : unresolvedTypeLookup();
-          return result.state === "UNRESOLVED"
-            ? { ...result, coverage: worstTypeLookupCoverage(status.indexedGeneration) }
-            : result;
-        });
-        respond({ id: request.id, ok: true, value });
-        return;
-      }
-      case "QUERY_IMPLEMENTERS": {
-        respond({ id: request.id, ok: true, value: store?.implementers(request.typeId, request.limit) ?? [] });
-        return;
-      }
-      case "QUERY_TYPE_REFERENCERS": {
-        respond({
-          id: request.id,
-          ok: true,
-          value: store?.typeReferencers(request.typeId, new Set(request.edgeKinds), request.limit) ?? []
-        });
-        return;
-      }
-      case "QUERY_CALLERS": {
-        respond({ id: request.id, ok: true, value: store?.callers(request.methodId, request.limit) ?? [] });
-        return;
-      }
-      case "QUERY_CALLEES": {
-        respond({ id: request.id, ok: true, value: store?.callees(request.methodId, request.limit) ?? [] });
-        return;
-      }
-      case "QUERY_CALLEES_BATCH": {
-        respond({
-          id: request.id,
-          ok: true,
-          value: request.methodIds.map(methodId => ({ methodId, callees: store?.callees(methodId, request.limit) ?? [] }))
-        });
-        return;
-      }
-      case "QUERY_METHODS_WITH_PARAMETER_TYPES": {
-        respond({
-          id: request.id,
-          ok: true,
-          value: store?.methodsWithParameterTypes(request.typeIds, request.limit) ?? []
-        });
-        return;
-      }
-      case "QUERY_FILES": {
-        const relativePaths = request.files
-          .map(inputPath => {
-            try {
-              return deriveSourceLayout(inputPath).relativePath;
-            } catch {
-              // Outside repoRoot or otherwise unresolvable: no facts for it,
-              // same as a path that was never refreshed.
-              return undefined;
-            }
-          })
-          .filter((relativePath): relativePath is string => relativePath !== undefined);
-        respond({ id: request.id, ok: true, value: store?.files(relativePaths) ?? [] });
-        return;
-      }
-      case "QUERY_READ_RANGES": {
-        respond({ id: request.id, ok: true, value: await queryReadRanges(request.requests) });
-        return;
-      }
-      case "QUERY_MYBATIS_RESOURCE": {
-        respond({ id: request.id, ok: true, value: store?.myBatisResource(request.relativePath) });
-        return;
-      }
-      case "QUERY_MYBATIS_RESOURCES_BY_NAMESPACE": {
-        respond({
-          id: request.id,
-          ok: true,
-          value: request.namespaces.map(namespace => {
-            const resource = store?.myBatisResourceForNamespace(namespace);
-            return resource ? { namespace, resource } : { namespace };
-          })
-        });
-        return;
-      }
-      case "QUERY_REPOSITORY_FACT_MARKERS": {
-        respond({
-          id: request.id,
-          ok: true,
-          value: store?.repositoryFactMarkers(request.importPrefixes, request.annotationPrefixes)
-            ?? { importPrefixFound: false, annotationPrefixFound: false }
-        });
-        return;
-      }
       default: {
-        const exhaustive: never = request;
-        throw new Error(`unhandled command: ${JSON.stringify(exhaustive)}`);
+        throw new Error(`unhandled command: ${JSON.stringify(request)}`);
       }
     }
   } catch (error) {

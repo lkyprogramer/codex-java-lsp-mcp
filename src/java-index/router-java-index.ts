@@ -63,6 +63,11 @@ import {
   type JavaMethodFact,
   type JavaSourceFacts
 } from "./router-facts.js";
+import {
+  conventionalDeclarationCandidates,
+  isExactFqn,
+  MAX_COLD_DECLARATION_FQN_RETRIES
+} from "./router-java-index-cold.js";
 
 /** Bounds a single marker file read (e.g. pom.xml) - repositoryMarkers is meant for small dependency-declaration files, not arbitrary large sources. */
 const REPOSITORY_MARKER_MAX_BYTES = 65_536;
@@ -77,9 +82,6 @@ const REPOSITORY_MARKER_MAX_BYTES = 65_536;
 // to this method (how many distinct files the bounded ids may still resolve
 // into), so it stays local.
 const MAX_DECLARATION_PATHS = 64;
-/** A cold partial index may have parsed an anchor before its imported module; retry only a small exact-FQN set through conventional source paths. */
-const MAX_COLD_DECLARATION_FQN_RETRIES = 16;
-const MAX_COLD_DECLARATION_PATH_CHECKS = 512;
 // RgRunner may spend up to 100 ms escalating a timed-out child; a 1 s stage
 // keeps no-budget foreground discovery within a 1.2 s wall-clock envelope.
 const FOREGROUND_IMPLEMENTATION_SCAN_MS = 1_000;
@@ -859,7 +861,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
       .map((name, index) => ({ name, index, result: results[index] }))
       .filter(item => item.result?.state === "UNRESOLVED" && isExactFqn(item.name))
       .slice(0, MAX_COLD_DECLARATION_FQN_RETRIES);
-    const candidates = this.conventionalDeclarationCandidates(unresolved.map(item => item.name));
+    const candidates = conventionalDeclarationCandidates(this.repoRoot, this.conventionalDeclarationRoots, unresolved.map(item => item.name));
     if (candidates.length === 0) return [...results];
     try {
       this.currentRequestOptions().budget?.throwIfExpired("java-index.foreground-type-definitions");
@@ -1137,7 +1139,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
       // and never guesses an arbitrary binding.
       const unresolvedFqns = fqnLookups.filter((_, index) => lookups[index]?.state !== "RESOLVED");
       if (unresolvedFqns.length > 0 && summarizeCoverage(this.client.localStatus()) !== "complete") {
-        const candidates = this.conventionalDeclarationCandidates(unresolvedFqns);
+        const candidates = conventionalDeclarationCandidates(this.repoRoot, this.conventionalDeclarationRoots, unresolvedFqns);
         if (candidates.length > 0) {
           await this.ensureFresh(candidates, this.generation);
           const retries = await this.client.queryTypes(
@@ -1321,27 +1323,6 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     return unique([...preferred, ...this.foregroundImplementationRoots]);
   }
 
-  private conventionalDeclarationCandidates(fqns: readonly string[]): string[] {
-    const candidates: string[] = [];
-    let pathChecks = 0;
-    for (const fqn of fqns.slice(0, MAX_COLD_DECLARATION_FQN_RETRIES)) {
-      const topLevelFqn = fqn.split("$")[0] ?? "";
-      const segments = topLevelFqn.split(".");
-      if (segments.length === 0 || segments.some(segment => !/^[A-Za-z_$][\w$]*$/.test(segment))) {
-        continue;
-      }
-      const suffix = `${segments.join(path.sep)}.java`;
-      for (const sourceRoot of this.conventionalDeclarationRoots) {
-        if (pathChecks >= MAX_COLD_DECLARATION_PATH_CHECKS) {
-          return candidates;
-        }
-        pathChecks += 1;
-        const absolutePath = path.join(this.repoRoot, sourceRoot, suffix);
-        if (existsSync(absolutePath)) candidates.push(absolutePath);
-      }
-    }
-    return unique(candidates);
-  }
 }
 
 function degradedFrameworkFacts(repoRoot: string, absolutePath: string): FrameworkFileFacts {
@@ -1407,11 +1388,6 @@ function incompleteItem(absolutePath: string): FactsForFileItem {
 
 function relativePathOfFileId(fileId: string): string {
   return fileId.startsWith("file:") ? fileId.slice("file:".length) : fileId;
-}
-
-function isExactFqn(value: string): boolean {
-  const segments = (value.split("$")[0] ?? "").split(".");
-  return segments.length > 1 && segments.every(segment => /^[A-Za-z_$][\w$]*$/.test(segment));
 }
 
 function escapeRegExp(value: string): string {
