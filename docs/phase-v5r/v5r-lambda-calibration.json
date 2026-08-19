@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "v5r-lambda-calibration/v1",
+  "status": "CALIBRATED_OFFLINE",
+  "scalarAllowed": false,
+  "taskSuccess": "UNMEASURED",
+  "dated": "2026-08-19",
+  "liveTrace": {
+    "authorized": false,
+    "JAVA_LSP_AUTHORIZE_EXTERNAL": null,
+    "providerKeyPresent": false,
+    "harness": "scripts/run-agent-trace-matrix.mjs",
+    "note": "No --authorize-external and no live provider key in this session. Live λ_call/λ_ms magnitude was not measured."
+  },
+  "offlineFit": {
+    "recordedAgentSessions": 0,
+    "lambdaCall": null,
+    "lambdaMs": null,
+    "lambdaFail": null,
+    "note": "Degraded path under V5R §6.2 option 2: label CALIBRATED_OFFLINE without inventing λ from BYTE_DIV_4 proxies or TaskSuccess=0."
+  },
+  "gateRule": "Phase 4-6 KEEP/REJECT uses per-field cost-vector comparison only (token, calls, latency). refuseSyntheticScalar() throws. Restriction lifts only after CALIBRATED_LIVE with measured λ.",
+  "publicMcp": {
+    "expectedGain": false,
+    "plannerScore": false,
+    "retrievalCostOnStandardPayload": false
+  }
+}

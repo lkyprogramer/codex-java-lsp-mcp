@@ -35,6 +35,11 @@ export type Scenario = {
     support?: string[];
     mustReadRanges?: Record<string, Array<{ startLine: number; endLine: number }>>;
     mustReadCoordinateRangesV2?: Array<{ file: string } & SourceRange>;
+    requiredGroups?: Array<{
+      id: string;
+      weight?: number;
+      anyOf: Array<{ file: string; ranges?: Array<{ startLine: number; endLine: number }> }>;
+    }>;
   };
   groundTruth?: string[];
 };
@@ -242,6 +247,28 @@ function validateScenario(value: unknown, context: string): void {
   const golden = scenario.golden as Record<string, unknown>;
   validateLineRanges(golden.mustReadRanges, `${context}.golden.mustReadRanges`);
   validateCoordinateRanges(golden.mustReadCoordinateRangesV2, `${context}.golden.mustReadCoordinateRangesV2`);
+  if (golden.requiredGroups !== undefined) {
+    validateRequiredGroupsInline(golden.requiredGroups, `${context}.golden.requiredGroups`);
+  }
+}
+
+function validateRequiredGroupsInline(value: unknown, context: string): void {
+  if (!Array.isArray(value)) throw new Error(`Invalid scenario at ${context}: requiredGroups must be an array`);
+  for (const [index, raw] of value.entries()) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      throw new Error(`Invalid scenario at ${context}[${index}]: expected a group object`);
+    }
+    const group = raw as Record<string, unknown>;
+    if (typeof group.id !== "string" || group.id.length === 0) {
+      throw new Error(`Invalid scenario at ${context}[${index}]: id must be a non-empty string`);
+    }
+    if (group.weight !== undefined && !(typeof group.weight === "number" && Number.isFinite(group.weight) && group.weight > 0)) {
+      throw new Error(`Invalid scenario at ${context}[${index}]: weight must be a positive number`);
+    }
+    if (!Array.isArray(group.anyOf) || group.anyOf.length === 0) {
+      throw new Error(`Invalid scenario at ${context}[${index}]: anyOf must be a non-empty array`);
+    }
+  }
 }
 
 function validateLineRanges(value: unknown, context: string): void {

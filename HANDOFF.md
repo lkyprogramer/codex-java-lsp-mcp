@@ -1,5 +1,17 @@
 # HANDOFF
 
+## V5R Phase 3（COMPLETE，2026-08-19）
+
+真源：`docs/deep/codex-java-lsp-mcp-java-intelligence-v5r-comprehensive-assessment-refactoring-plan-2026-08-19.md` §15 Phase 3 / §6.2。  
+收口：`docs/phase-v5r/v5r-phase3-closeout.json`。隔离全量 1047+164 fail 0；executableTree `ef2273d5`。λ：`docs/phase-v5r/v5r-lambda-calibration.json` = `CALIBRATED_OFFLINE`。
+
+- **RetrievalCostVectorV1**：由已收敛的 `ImpactCostV6` 推导。`estimatedTokens = ceil((wireBytes + plannedSourceBytes) / 4)`，与 V6 公式同一实现（`reconstructEstimatedTokens`）。proxy 只报告、不累加进 `estimatedTokens`。向量不写入 MCP `cost` 对象（避免 JSON 自引用打乱 `resultBytes`）。
+- **λ**：本会话无外部授权/key，未跑 live trace，也没有带 TaskSuccess 的录制会话。`scalarAllowed: false`，`taskSuccess: UNMEASURED`。Phase 4–6 只能逐字段比较，禁止合成 `J(π)`。
+- **repair / DEFAULT vs ORACLE / scorecard**：离线字节策略与 required-groups 覆盖；tuning/holdout 分列；无公开 planner 分。
+- **Golden V2**：`requiredGroups` 可选；旧 `mustHit` 仍有效。未改 jsonl，未烧三仓（排名/readPlan 未变）。未做 continuation。
+
+下一 Phase：**Phase 4 Retrieval frontier shadow**。未过 Phase 4 oracle coverage 不得做 continuation / 合 main。
+
 ## V5R Phase 2（COMPLETE，2026-08-19）
 
 真源：`docs/deep/codex-java-lsp-mcp-java-intelligence-v5r-comprehensive-assessment-refactoring-plan-2026-08-19.md` §15 Phase 2。  
@@ -139,4 +151,4 @@ git log --oneline -5
 git status --short
 ```
 
-确认 `git log` 最新几条含 V5R Phase 2 收口。不要复活 dual-worker sweep 线程。下一独立项是 V5R Phase 3（成本向量）。未过 Phase 4 oracle 不得做 continuation。三仓 load < 20 仍必须跑。
+确认 `git log` 最新几条含 V5R Phase 3 收口。不要复活 dual-worker sweep 线程。下一独立项是 V5R Phase 4（frontier shadow）。λ 仍是 `CALIBRATED_OFFLINE`：禁止合成 `J(π)`。未过 Phase 4 oracle 不得做 continuation。三仓 load < 20 仍必须跑。

@@ -10,8 +10,7 @@ import type {
   ImpactVerbosity,
   ResolvedAnchor
 } from "../agent-types.js";
-
-const BYTES_PER_TOKEN = 4;
+import { reconstructEstimatedTokens, tokensProxyFromBytes } from "./retrieval/cost-model.js";
 
 /**
  * cost.resultBytes includes the cost object itself, so recompute until the
@@ -28,9 +27,9 @@ export function withConvergedCostV6<T extends { cost: ImpactCostV6 }>(
 ): T {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const resultBytes = Buffer.byteLength(JSON.stringify(payload), "utf8");
-    const estimatedTokens = Math.ceil((resultBytes + readBytes) / BYTES_PER_TOKEN);
-    const wireTokensProxy = Math.ceil(resultBytes / BYTES_PER_TOKEN);
-    const plannedSourceTokensProxy = Math.ceil(readBytes / BYTES_PER_TOKEN);
+    const estimatedTokens = reconstructEstimatedTokens(resultBytes, readBytes);
+    const wireTokensProxy = tokensProxyFromBytes(resultBytes);
+    const plannedSourceTokensProxy = tokensProxyFromBytes(readBytes);
     if (
       payload.cost.resultBytes === resultBytes
       && payload.cost.estimatedTokens === estimatedTokens

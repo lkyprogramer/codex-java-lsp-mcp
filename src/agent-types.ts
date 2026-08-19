@@ -200,6 +200,26 @@ export type ImpactCostV6 = {
   tokenEstimator?: "BYTE_DIV_4" | "MODEL_TOKENIZER";
 };
 
+/** Diagnostic-only decomposed cost. estimatedTokens stays ceil((wireBytes+plannedSourceBytes)/4). */
+export type RetrievalCostVectorV1 = {
+  wireBytes: number;
+  wireTokensProxy: number;
+  plannedSourceBytes: number;
+  plannedSourceTokensProxy: number;
+  additionalWireBytes: number;
+  additionalWireTokensProxy: number;
+  additionalSourceBytes: number;
+  additionalSourceTokensProxy: number;
+  toolCalls: number;
+  sourceReadCalls: number;
+  serviceMs: number;
+  cumulativeServiceMs: number;
+  tokenEstimator: "BYTE_DIV_4" | "MODEL_TOKENIZER";
+  modelId?: string;
+  taskSuccess?: boolean;
+  blockingMisses?: number;
+};
+
 /**
  * `metrics` stays populated at every verbosity (routingVersion/elapsedMs/
  * generatedSemantics are load-bearing outside diagnostic mode - the Lombok
@@ -224,6 +244,7 @@ export type ImpactDiagnosticMetrics = {
   rgCache?: Record<string, unknown>;
   sourceFacts?: Record<string, unknown>;
   suppressed?: Record<string, unknown>;
+  retrievalCost?: RetrievalCostVectorV1;
 };
 
 export type ImpactResultV6 = {
