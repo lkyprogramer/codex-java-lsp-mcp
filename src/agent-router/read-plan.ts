@@ -21,6 +21,12 @@ import { observeRetrievalParity, selectedReadUnits } from "./retrieval/plan-sele
 import { buildReadUnits, windowsFromReadUnits } from "./retrieval/read-unit-builder.js";
 import { buildFrontier } from "./retrieval/frontier-builder.js";
 import {
+  packSelectedUnits,
+  spanPackingMode,
+  spanPackingProfile,
+  type SpanPackingReport
+} from "./retrieval/span-packer.js";
+import {
   frontierShadowMode,
   readUnitPlannerMode,
   retrievalBudgetFor,
@@ -122,6 +128,8 @@ export type ReadPlanBuildResult = {
   marginalUtilityBySelectedFile: Record<string, number>;
   /** Diagnostic-only frontier shadow. Absent when JAVA_LSP_FRONTIER_SHADOW=off. */
   frontierShadow?: FrontierShadowReport;
+  /** Diagnostic-only span packing. Absent when JAVA_LSP_SPAN_PACKING=off. */
+  spanPacking?: SpanPackingReport;
 };
 
 /**
@@ -164,7 +172,23 @@ export async function buildReadPlan(input: BuildReadPlanInput): Promise<ReadPlan
   if (frontierShadowMode() !== "off") {
     result.frontierShadow = buildFrontier(units, result.selectedPaths, retrievalBudget);
   }
-  const capGaps = retrievalBudgetOverflowGaps(selectedUnits, retrievalBudget);
+  const packingMode = spanPackingMode();
+  let packedUnits = selectedUnits;
+  if (packingMode !== "off") {
+    const packed = packSelectedUnits(selectedUnits, spanPackingProfile(input.options.mode), retrievalBudget);
+    result.spanPacking = { ...packed.report, mode: packingMode };
+    if (packingMode === "on") {
+      packedUnits = packed.units;
+      const packedByPath = new Map(packed.units.map(unit => [unit.absolutePath, unit]));
+      result.items = result.items.map((item, index) => {
+        const unit = packedByPath.get(result.selectedPaths[index]!) ?? packed.units[index];
+        if (!unit) return item;
+        return { ...item, ranges: unit.mergedRanges, estimatedBytes: unit.estimatedBytes };
+      });
+      result.totalBytes = packed.units.reduce((sum, unit) => sum + unit.estimatedBytes, 0);
+    }
+  }
+  const capGaps = retrievalBudgetOverflowGaps(packedUnits, retrievalBudget);
   if (capGaps.length > 0) {
     result.evidenceGaps = [...new Set([...result.evidenceGaps, ...capGaps])];
   }

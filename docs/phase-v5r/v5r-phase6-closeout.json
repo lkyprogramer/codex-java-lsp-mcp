@@ -1,0 +1,56 @@
+{
+  "schemaVersion": "v5r-phase6-closeout/v1",
+  "phase": 6,
+  "deadline": "2026-09-02",
+  "decision": "COMPLETE",
+  "parentPhase5": "docs/phase-v5r/v5r-phase5-closeout.json",
+  "phase6WriteTree": "3cf2f8828aaabeac1fdf990e41ae92163ca2500b",
+  "productionLoc": 39280,
+  "v4LocBaseline": 35472,
+  "v4LocCap": 37245,
+  "locNote": "V5R does not treat 37245 as a hard merge gate. Phase 6 mapped +251 LOC versus Phase 5 to the span packer, mode profiles, and overlap-merge cost path.",
+  "spanPacking": {
+    "flag": "JAVA_LSP_SPAN_PACKING=off|shadow|on",
+    "defaultMode": "off",
+    "applyPath": "after first-plan selection; selected files/paths unchanged",
+    "overlapMerge": true,
+    "neverMergeDistantPrimaries": true,
+    "noPlusOneExpansion": true,
+    "contextDroppedBeforePrimary": true,
+    "extremeMethodBounded": true,
+    "modeProfiles": {
+      "minimal": { "maxSpansPerFile": 4, "extremeMethodMaxBytes": 4096 },
+      "balanced": { "maxSpansPerFile": 8, "extremeMethodMaxBytes": 8192 },
+      "precision": { "maxSpansPerFile": 8, "extremeMethodMaxBytes": 8192 },
+      "recall": { "maxSpansPerFile": 8, "extremeMethodMaxBytes": 16384 }
+    }
+  },
+  "cost": {
+    "packedPlannedSourceNonWorseThanUnpackedOverlap": true,
+    "packedCheaperThanWholeFile": true,
+    "tailCvarNonWorse": true,
+    "lambda": "CALIBRATED_OFFLINE",
+    "noSyntheticJ": true
+  },
+  "threeRepoMatrix": "not required: default packing off preserves first-plan range identity. Packing on is opt-in and does not change selected files.",
+  "isolationFull": {
+    "tests": 1068,
+    "scripts": 164,
+    "fail": 0,
+    "targeted": { "tests": 61, "pass": 61, "fail": 0 }
+  },
+  "exitChecklist": {
+    "multiSpanPerFile": true,
+    "perFileContextClosure": true,
+    "overlapMerge": true,
+    "sourceWireJointCaps": true,
+    "modeProfiles": true,
+    "stoppingPolicy": true,
+    "correctedCostBeatsWholeFile": true,
+    "tailNonWorse": true,
+    "noExtremeMethodRunaway": true,
+    "noContextStarvedMethod": true,
+    "firstPlanIdentityDefaultOff": true,
+    "noPhase7": true
+  }
+}

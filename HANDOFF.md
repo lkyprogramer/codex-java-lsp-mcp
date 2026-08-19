@@ -1,5 +1,17 @@
 # HANDOFF
 
+## V5R Phase 6（COMPLETE，2026-08-19）
+
+真源：`docs/deep/codex-java-lsp-mcp-java-intelligence-v5r-comprehensive-assessment-refactoring-plan-2026-08-19.md` §15 Phase 6 / §9.2–9.3。  
+收口：`docs/phase-v5r/v5r-phase6-closeout.json`。隔离全量 1068+164 fail 0；executableTree `3cf2f882`。
+
+- **默认 `JAVA_LSP_SPAN_PACKING=off`**：first-plan 文件与 range identity 不变。
+- **`on`/`shadow`**：选择完成后再 pack。重叠/相邻的 context 并进 primary；**不相邻的两个方法保持多 span**，不合成整文件。预算先丢 context、不饿死最后一段 method。extreme method 按 mode 字节帽裁切。
+- **mode profiles**：minimal 4 span / 4KiB；balanced·precision 8 / 8KiB；recall 8 / 16KiB。
+- packed planned-source ≤ overlap 未合并；< whole-file；tail CVaR 不恶化。λ 仍 `CALIBRATED_OFFLINE`。未烧三仓。没有 type-header +1。
+
+下一 Phase：**Phase 7 真实 Agent 校准 / 第四仓 / release**。未获外部授权不得声称 TaskSuccess。不得合 main。
+
 ## V5R Phase 5（COMPLETE，2026-08-19）
 
 真源：`docs/deep/codex-java-lsp-mcp-java-intelligence-v5r-comprehensive-assessment-refactoring-plan-2026-08-19.md` §15 Phase 5 / §8。  
@@ -176,4 +188,4 @@ git log --oneline -5
 git status --short
 ```
 
-确认 `git log` 最新几条含 V5R Phase 5 收口。不要复活 dual-worker sweep 线程。下一独立项是 V5R Phase 6（span packing）。λ 仍是 `CALIBRATED_OFFLINE`：禁止合成 `J(π)`。Discovery-gap 仍不是 continuation 能修的。三仓 load < 20 仍必须跑。
+确认 `git log` 最新几条含 V5R Phase 6 收口。不要复活 dual-worker sweep 线程。下一独立项是 V5R Phase 7（live trace / 第四仓 / release）。λ 仍是 `CALIBRATED_OFFLINE`：禁止合成 `J(π)`。未获 `--authorize-external` 不得编 TaskSuccess。不得合 main。三仓 load < 20 仍必须跑。
