@@ -69,6 +69,23 @@ test("two processes cannot exceed one machine JDT slot", async () => {
   await b2.lease.release();
 });
 
+test("sibling worktrees acquire independent JDT worktree leases when slots allow", async () => {
+  const shared = tempLeaseRoot();
+  const first = await leaseStore(shared, { pid: 101, alive: new Set([101, 202]), jdtSlots: 2 });
+  const second = await leaseStore(shared, { pid: 202, alive: new Set([101, 202]), jdtSlots: 2 });
+  const primary = identity("/repo/primary", "primary-hash", "family");
+  const linked = identity("/repo/linked", "linked-hash", "family");
+
+  const a = await first.tryAcquireJdt(primary);
+  const b = await second.tryAcquireJdt(linked);
+  assert.equal(a.kind, "ACQUIRED");
+  assert.equal(b.kind, "ACQUIRED", "a sibling worktree must not share the other worktree's JDT lease");
+  if (a.kind !== "ACQUIRED" || b.kind !== "ACQUIRED") throw new Error("unreachable");
+  assert.notEqual(a.lease.worktree.path, b.lease.worktree.path);
+  await a.lease.release();
+  await b.lease.release();
+});
+
 test("same worktree second process is rejected before a second JDT slot", async () => {
   const shared = tempLeaseRoot();
   const first = await leaseStore(shared, { pid: 101, alive: new Set([101, 202]), jdtSlots: 2 });
