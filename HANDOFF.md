@@ -1,5 +1,18 @@
 # HANDOFF
 
+## V5R Phase 7（BLOCKED_EXTERNAL，2026-08-19）
+
+真源：`docs/deep/codex-java-lsp-mcp-java-intelligence-v5r-comprehensive-assessment-refactoring-plan-2026-08-19.md` §15 Phase 7。  
+收口：`docs/phase-v5r/v5r-phase7-closeout.json`。合 main 计划：`docs/phase-v5r/v5r-main-merge-plan.json`。隔离全量 1068+170 fail 0；executableTree `6427540e`。
+
+- **live trace**：`scripts/run-agent-trace-matrix.mjs` 无 `--authorize-external`/key → **`BLOCKED_EXTERNAL`**，`taskSuccess`/`modelUsage` = **`UNMEASURED`**（不是 0）。exit 3。
+- **第四仓**：未声明评价用第四 golden。`golden/` 里的 fixture jsonl 不算第四仓。
+- **leave-one-repo-out**：三折协议已落地（`scripts/leave-one-repo-out.mjs`），**不调参**；矩阵本身 `UNMEASURED`。
+- **release attestation**：`mergeToMain: false`。`GATE_PROFILES` pr/nightly/release 仍不同。stdio/HTTP smoke 已有；Codex CLI/Desktop live **UNMEASURED**。
+- **未合 main**。λ 仍 `CALIBRATED_OFFLINE`。
+
+解阻：用户 key + `--authorize-external`；冻结真正的第四评价仓后再开新 ranking 刀。
+
 ## V5R Phase 6（COMPLETE，2026-08-19）
 
 真源：`docs/deep/codex-java-lsp-mcp-java-intelligence-v5r-comprehensive-assessment-refactoring-plan-2026-08-19.md` §15 Phase 6 / §9.2–9.3。  
@@ -188,4 +201,4 @@ git log --oneline -5
 git status --short
 ```
 
-确认 `git log` 最新几条含 V5R Phase 6 收口。不要复活 dual-worker sweep 线程。下一独立项是 V5R Phase 7（live trace / 第四仓 / release）。λ 仍是 `CALIBRATED_OFFLINE`：禁止合成 `J(π)`。未获 `--authorize-external` 不得编 TaskSuccess。不得合 main。三仓 load < 20 仍必须跑。
+确认 `git log` 最新几条含 V5R Phase 7 `BLOCKED_EXTERNAL` 收口。不要合 `main`。不要把 TaskSuccess 写成 0。解阻需要用户 key + `--authorize-external`，以及声明并冻结第四评价仓。λ 仍是 `CALIBRATED_OFFLINE`。三仓 load < 20 仍必须跑。

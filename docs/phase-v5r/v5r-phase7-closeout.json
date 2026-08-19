@@ -1,0 +1,77 @@
+{
+  "schemaVersion": "v5r-phase7-closeout/v1",
+  "phase": 7,
+  "deadline": "2026-09-02",
+  "decision": "BLOCKED_EXTERNAL",
+  "dated": "2026-08-19",
+  "parentPhase6": "docs/phase-v5r/v5r-phase6-closeout.json",
+  "phase7WriteTree": "6427540e291279b5a6a1eb2581a35f105a1056bd",
+  "headAtMeasurement": "3f10c7e877f65a5cbd4f2fb605b96ca2ec9417cd",
+  "productionLoc": 39280,
+  "commitCountOnelineFromSprint0Exclusive": 36,
+  "offlineProtocol": "COMPLETE",
+  "mergeToMain": false,
+  "cells": {
+    "liveTrace": {
+      "status": "BLOCKED_EXTERNAL",
+      "harness": "scripts/run-agent-trace-matrix.mjs",
+      "taskSuccess": "UNMEASURED",
+      "modelUsage": "UNMEASURED",
+      "exitCodeWithoutAuthorize": 3,
+      "note": "No --authorize-external and no provider key. Not written as 0."
+    },
+    "fourthRepo": {
+      "status": "UNMEASURED",
+      "frozen": false,
+      "note": "No declared fourth evaluation golden. Fixture jsonl under golden/ is not a fourth repo."
+    },
+    "leaveOneRepoOut": {
+      "protocol": "scripts/leave-one-repo-out.mjs",
+      "folds": 3,
+      "matrix": "UNMEASURED",
+      "retune": false,
+      "taskSuccess": "UNMEASURED"
+    },
+    "installHttpStdioCanary": {
+      "stdioSmoke": "covered by isolated-full smoke.js",
+      "httpSmoke": "scripts/run-v4-http-smoke.mjs on GATE_PROFILES.release",
+      "codexCliDesktop": "UNMEASURED"
+    },
+    "crashWorktreeRollback": {
+      "task36FaultSuite": "existing isolated tests",
+      "dualWorkerSweep": "deleted-on-FAIL",
+      "continuationLive": "UNMEASURED"
+    },
+    "releaseAttestation": {
+      "script": "scripts/v5r-release-attestation.mjs",
+      "mergeToMainAllowed": false
+    },
+    "lambda": {
+      "status": "CALIBRATED_OFFLINE",
+      "scalarAllowed": false
+    }
+  },
+  "isolationFull": {
+    "tests": 1068,
+    "scripts": 170,
+    "fail": 0,
+    "targeted": { "tests": 18, "pass": 18, "fail": 0 }
+  },
+  "exitChecklist": {
+    "liveTraceBlockedExternal": true,
+    "taskSuccessUnmeasuredNotZero": true,
+    "noInventedTaskSuccess": true,
+    "fourthRepoUnmeasured": true,
+    "leaveOneRepoOutProtocolShipped": true,
+    "leaveOneRepoOutMatrixUnmeasured": true,
+    "gateProfilesDiffer": true,
+    "publicToolsExactlyFive": true,
+    "mergeToMainFalse": true,
+    "mainMergePlanWritten": true,
+    "noMainMerge": true
+  },
+  "unblockRequires": [
+    "user key plus --authorize-external for live trace",
+    "declared frozen fourth evaluation golden before new ranking knives"
+  ]
+}
