@@ -97,18 +97,40 @@ baseline `f0e2ef1`，candidate `2fb2148`，`--runs 5`（3 rounds × 5 attempts�
 
 副作用：`candidate-pay-order` tokens 3663→3199，range 仍 0.125——hydrate 后 WechatApplyServiceImpl 变“诚实体积”，被更小的 OrderVO 挤出，指标未变差。
 
-## 仍 miss（相对 `4d10d86` / type-ref 矩阵 r1-new）
+## Primary-keep 复测（`e9fe968` vs `84a3b69`，已完成）
 
-**Tuning**
+产物：`/tmp/codex-java-lsp-v4-06-primary-keep-20260819-094200/`。候选 1005+159 全绿。exit 1 = 质量门槛 FAIL（分母）。
 
-- `current-user-service-implementer-edge`（exam，**0.750→1.000**）：primary-app 矩阵 `/tmp/codex-java-lsp-v4-06-primary-app-20260819-091800/`（`74750ef` vs `84a3b69`）把 `ExamManagementApplication` 21–33 选进 leftover framework 槽，盖住 21–29。Impl 仍在 plan。check-people 仍 1.0 且 pRead 0.500→0.667（非 Primary CurrentUser Impl 不再挤核心）。paper-task / school-template-parser 不变。第一版“无 Primary 则全丢”会把 `storage-signed-url` 的 Aliyun+Stub Gateway 打成 1.0→0.5，已收成“有 Primary 才限流，否则全留”。不放宽 maxFiles。
-- `audit-order-repository-mapper-rule-type`（lishuedu，0.333）：Mapper 1–29 vs 47–155 / 157–254。Anchor 是 `save()`。禁止用 save 去猜 listTodo。
+| 仓 | RangeLineRecall old→new | holdout rReadMust | 关键场景 |
+|---|---|---|---|
+| lishuedu | 0.7923 不变 | 0.925 | `storage-signed-url` 三轮 **1.0**（Aliyun+Stub 全留） |
+| cipherlink | 0.8158→0.8265 | 0.910 | range 无回归；file recall 有互抵波动 |
+| exam-parent-v3 | 0.7095→0.6970 | 0.880 | `current-user` 三轮 **0.75→1.0**；`check-people` 仍 1.0，pRead 0.5→0.667 |
 
-**Holdout**
+exam file recall 略降是预期：无 `@Primary` 的 CurrentUser 实现不再挤核心，shouldHit 额外 Impl 离开 plan。这是反过拟合，不是回归。
 
-- lishuedu `exam-score` 0.286；`paper-task` 0.200
-- cipherlink `client-release-storage-presign` 0.500；`backend-operation-log` 0.250
-- exam `exam-room-print` 0.400；`candidate-pay-order` 0.125
+## 反过拟合：剩余 miss 分类（三仓是样本，不是目标函数）
+
+只保留对任意 Spring/DDD/多模块 Java 仓都成立的规则。禁止场景 id / 文件名 / taskKeywords 特判。
+
+| 场景 | 分类 | 决定 |
+|---|---|---|
+| `audit-order` 0.333 | 错方法：anchor 是 `save()`，golden 要 Mapper `listTodo` | **DO_NOT_SPECIALIZE**。禁止用 save 猜 listTodo |
+| `backend-operation-log` 77–93 vs 77–94 | near-miss-boundary | **DO_NOT** type-header +1 |
+| `paper-task` AccessService 1–23 vs 32–38/64–68 | 第一跳协作类型用了 (1,1) | 通用：按 caller-site 方法定位 |
+| `exam-score` / `exam-room-print` / `candidate-pay-order` / `backend-operation-log` Impl | 已选端口的实现被同级 CALLS 挤出 6 文件 | 通用：先闭合已打开的 hop |
+| `paper-task` `MeQueryService` | 第二跳（AccessService.requireMe） | 无免费通用刀时记 second-hop |
+| `presign` PublishAppService | 反向调用方，不是被调端口 | 不发明 caller-scan |
+| `candidate-pay-order` Template/Repository | 预算 + 第二跳 | 不放宽 maxFiles |
+
+## 本刀（相对 `e9fe968`，待矩阵）
+
+两条全局规则，不是三仓特判：
+
+1. `positionsFromFacts`：锚点在一个协作类型上调用了多个方法，就保留这些方法的全部位置；`findTypeDefinitions` 改为 `hydrate:true`。
+2. `IMPLEMENTS` 带上被实现类型路径（`candidateNodeId`）。若该类型已是第一跳协作（CALLS/REFERENCE/SPRING_INJECTION/METHOD_RELATION），core 优先级 2.65，高于同级 CALLS 2.5。无关 type-graph 扩展仍是 2.4。
+
+隔离 targeted：79/79 绿。不放宽 maxFiles，不抬全量 IMPLEMENTS。
 
 ## 仍 miss（相对 `ba5838f` / cap 矩阵 r1-new）
 

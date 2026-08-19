@@ -759,6 +759,66 @@ test("a direct anchor CALLS receiver outranks an unrelated implementation expans
   );
 });
 
+test("an implementer of a called port outranks a sibling CALLS receiver in a constrained core", async () => {
+  const anchor = candidate({
+    absolutePath: "/repo/src/main/java/demo/ExportController.java",
+    path: "src/main/java/demo/ExportController.java",
+    reasons: ["target"],
+    categories: ["target"],
+    score: 1_000
+  });
+  const calledPort = candidate({
+    absolutePath: "/repo/src/main/java/demo/ExportGenerator.java",
+    path: "src/main/java/demo/ExportGenerator.java",
+    reasons: ["CALLS"],
+    score: 400,
+    plannerEvidence: [{
+      family: "STATIC_STRUCTURE",
+      kind: "CALLS",
+      sourceTarget: `A1:${anchor.absolutePath}->/repo/src/main/java/demo/ExportGenerator.java`,
+      callDepth: 0,
+      callOrigin: "anchor"
+    }]
+  });
+  const implementer = candidate({
+    absolutePath: "/repo/src/main/java/demo/ExcelExportGenerator.java",
+    path: "src/main/java/demo/ExcelExportGenerator.java",
+    reasons: ["typeGraph:implementation-lookup"],
+    score: 120,
+    plannerEvidence: [{
+      family: "STATIC_STRUCTURE",
+      kind: "IMPLEMENTS",
+      sourceTarget: "A1:/repo/src/main/java/demo/ExcelExportGenerator.java->/repo/src/main/java/demo/ExportGenerator.java"
+    }]
+  });
+  const siblingPort = candidate({
+    absolutePath: "/repo/src/main/java/demo/SubjectRepository.java",
+    path: "src/main/java/demo/SubjectRepository.java",
+    reasons: ["CALLS"],
+    score: 380,
+    plannerEvidence: [{
+      family: "STATIC_STRUCTURE",
+      kind: "CALLS",
+      sourceTarget: `A1:${anchor.absolutePath}->/repo/src/main/java/demo/SubjectRepository.java`,
+      callDepth: 0,
+      callOrigin: "anchor"
+    }]
+  });
+  const files = [anchor, calledPort, implementer, siblingPort];
+  const plan = await buildReadPlan({
+    files,
+    ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
+    options: optionsFor(anchor, { mode: "minimal", readPlanMaxItems: 3, readPlanMaxBytes: 10_000 }),
+    javaIndex: fixedRangeIndex()
+  });
+
+  assert.deepEqual(
+    plan.items.map(item => item.fileId),
+    ["F1", "F3", "F2"],
+    "the implementer of a port the anchor already called must close that hop before another port"
+  );
+});
+
 test("a first-hop implementer outranks a same-priority method-parameter DTO in a constrained core", async () => {
   const anchor = candidate({
     absolutePath: "/repo/src/main/java/demo/CheckController.java",

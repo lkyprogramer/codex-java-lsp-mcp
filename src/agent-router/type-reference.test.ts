@@ -181,7 +181,7 @@ test("retired controller order bonuses do not leak into evidence family ranking"
 
   assert.deepEqual(definitionCalls, [{
     names: ["demo.ZService", "demo.AService"],
-    hydrate: false
+    hydrate: true
   }]);
   assert.deepEqual(
     result.evidence.map(signal => [signal.candidateFile, signal.weight]),
@@ -193,7 +193,7 @@ test("retired controller order bonuses do not leak into evidence family ranking"
   assert.deepEqual(ranked.map(candidate => candidate.file), [aService.absolutePath, zService.absolutePath]);
 });
 
-test("type-reference discovery reuses known type ids and hydrates only implementer bundles", async () => {
+test("type-reference discovery reuses known type ids and hydrates definition and implementer bundles", async () => {
   const port = facts("/repo/src/main/java/demo/ConfirmGateway.java", {
     kind: "interface",
     typeName: "ConfirmGateway",
@@ -340,6 +340,52 @@ test("interface implementer uses the unique caller-site callee instead of (1,1)"
   assert.deepEqual(implementer?.positions, [{ line: 172, column: 1 }]);
 });
 
+test("a first-hop collaborator keeps every caller-site method instead of (1,1)", async () => {
+  const access = facts("/repo/src/main/java/demo/AccessService.java", {
+    typeName: "AccessService",
+    methods: [
+      { name: "requireMe", line: 32, endLine: 38, referencedTypes: [], relations: [] },
+      { name: "ensureOperator", line: 64, endLine: 68, referencedTypes: [], relations: [] },
+      { name: "other", line: 80, endLine: 90, referencedTypes: [], relations: [] }
+    ]
+  });
+  const result = await collect({
+    factsFor: async () => facts(anchor.absolutePath, {
+      referencedTypes: ["demo.AccessService"],
+      methods: [{
+        name: "confirm",
+        line: 10,
+        endLine: 20,
+        referencedTypes: ["AccessService"],
+        relations: [
+          {
+            kind: "local-receiver",
+            typeName: "AccessService",
+            name: "requireMe",
+            line: 14,
+            confidence: "medium",
+            source: "ast"
+          },
+          {
+            kind: "local-receiver",
+            typeName: "AccessService",
+            name: "ensureOperator",
+            line: 15,
+            confidence: "medium",
+            source: "ast"
+          }
+        ]
+      }]
+    }),
+    findTypeReferences: async () => [],
+    findTypeDefinitions: async () => [access],
+    findImplementers: async () => []
+  });
+
+  const collaborator = result.evidence.find(signal => signal.candidateFile === access.absolutePath);
+  assert.deepEqual(collaborator?.positions, [{ line: 32, column: 1 }, { line: 64, column: 1 }]);
+});
+
 test("interface implementation evidence retains its own source and typeGraph attribution", async () => {
   const port = facts("/repo/src/main/java/demo/ConfirmGateway.java", {
     kind: "interface",
@@ -360,6 +406,7 @@ test("interface implementation evidence retains its own source and typeGraph att
   ]);
   const implementer = result.evidence[1]!;
   assert.equal(implementer.sourceFile, implementation.absolutePath);
+  assert.equal(implementer.candidateNodeId, port.absolutePath);
   assert.equal(implementer.weight, 70);
   assert.deepEqual(implementer.candidateMetadata?.reasons, ["typeGraph:implementation-lookup"]);
   assert.deepEqual(implementer.candidateMetadata?.verifiedBy, ["typeGraph"]);

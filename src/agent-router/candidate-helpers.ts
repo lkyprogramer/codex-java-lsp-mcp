@@ -77,15 +77,46 @@ export function positionFromFacts(facts: JavaSourceFacts, hint?: FactPositionHin
   return { line: 1, column: 1 };
 }
 
+/**
+ * When the caller invoked several methods on this type, keep every matching
+ * method. Choosing one of them (or falling back to (1,1)) would hide the
+ * others from QUERY_READ_RANGES. A unique preferred method still wins.
+ */
+export function positionsFromFacts(
+  facts: JavaSourceFacts,
+  hint?: FactPositionHint
+): Array<{ line: number; column: number }> {
+  if (isSpringBootApplicationType(facts) && (facts.typeStartLine ?? 0) >= 1) {
+    return [{ line: facts.typeStartLine!, column: 1 }];
+  }
+  const methods = facts.methods ?? [];
+  const preferred = hint?.methodName
+    ? methods.find(method => method.name === hint.methodName && method.line >= 1)
+    : undefined;
+  if (preferred) return [{ line: preferred.line, column: 1 }];
+  if (hint?.calleeNames?.length) {
+    const seen = new Set<number>();
+    const calleeMatches: Array<{ line: number; column: number }> = [];
+    for (const method of methods) {
+      if (!hint.calleeNames.includes(method.name) || method.line < 1 || seen.has(method.line)) continue;
+      seen.add(method.line);
+      calleeMatches.push({ line: method.line, column: 1 });
+    }
+    calleeMatches.sort((left, right) => left.line - right.line);
+    if (calleeMatches.length > 0) return calleeMatches;
+  }
+  return [positionFromFacts(facts, hint)];
+}
+
 export function isPrimaryImplementer(facts: JavaSourceFacts): boolean {
   return (facts.annotations ?? []).some(name => simpleTypeName(name) === "Primary");
 }
 
 /**
- * One implementer stays as-is (paper-task). Several alternatives keep only
+ * A single implementer stays as-is. Several alternatives keep only
  * `@Primary` when that annotation exists; otherwise every main-source
- * alternative is retained (storage gateways have no Primary). Test fixtures
- * are ignored when a main-source implementer exists.
+ * alternative is retained (multi-adapter ports often have no Primary).
+ * Test fixtures are ignored when a main-source implementer exists.
  */
 export function selectPreferredImplementers(implementers: readonly JavaSourceFacts[]): JavaSourceFacts[] {
   const main = implementers.filter(item => item.sourceSet !== "test");

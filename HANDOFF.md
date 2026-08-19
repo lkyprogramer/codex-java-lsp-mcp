@@ -2,7 +2,7 @@
 
 ## 当前任务
 
-**V4-01/02/03/04 已完成；V4-05 默认关已落地；V4-06 进行中（2026-08-19）**：`current-user` 0.75→1.0（Application 21–33 进 plan）；`check-people` 仍 1.0。Primary 限流已收成“有 `@Primary` 才筛，否则全留”，避免 `storage-signed-url` 丢 Aliyun/Stub Gateway。待复测矩阵确认 storage 恢复且 current-user 仍 1.0。holdout rReadMust 仍未到 1.0。真源 `docs/deep/codex-java-lsp-mcp-java-intelligence-v4-consolidation-plan-2026-08-17.md`。**三仓 load 政策**：1 分钟 load < 20 必须执行。V4-05 storm 未测。隔离约束不变。
+**V4-01/02/03/04 已完成；V4-05 默认关已落地；V4-06 进行中（2026-08-19）**：Primary-keep 复测 `/tmp/codex-java-lsp-v4-06-primary-keep-20260819-094200/` 确认 `storage-signed-url` 三轮 1.0、`current-user` 三轮 1.0。禁止为三仓分数过拟合——剩余 miss 已按全局规则分类，见 `docs/phase-v4/v4-06-range-holdout-progress-2026-08-19.md`。下一刀是「先闭合已打开的 hop」：协作类型按 caller-site 方法定位 + 已选端口的 IMPLEMENTS 高于同级 CALLS。holdout rReadMust 仍未到 1.0。真源 `docs/deep/codex-java-lsp-mcp-java-intelligence-v4-consolidation-plan-2026-08-17.md`。**三仓 load 政策**：1 分钟 load < 20 必须执行。V4-05 storm 未测。隔离约束不变。
 
 （以下 V3.2 各 Sprint 记录保留供追溯，其结论与"不要再踩的坑"在 V4 阶段继续有效，除非 V4 计划文档显式解除——目前唯一显式解除的是"不新增第二 scheduler"边界：V4-05 以 ADR 形式引入第二 worker **线程**，sweep 调度语义不变。）
 
@@ -47,7 +47,7 @@
 
 ## 下一步
 
-**执行 V4 计划（真源见上）。** V4-06：`current-user` 已闭合。下一场正式三仓复测 Primary fallback（无 Primary 全留）。不要再抬全量 IMPLEMENTS，不要放宽 maxFiles，不要用 save 猜 Mapper。三仓 load < 20 必须继续跑。V4-05 storm 未测。V4-01 daemon 合流已完成（`4323b3c`）。V4-02 LOC 基线 35,472（上限 37,245）。
+**执行 V4 计划（真源见上）。** V4-06：Primary-keep 已闭合 storage/current-user。下一场正式三仓测「协作方法定位 + 已选端口 IMPLEMENTS 优先」（baseline `e9fe968`）。不要再抬全量 IMPLEMENTS，不要放宽 maxFiles，不要用 save 猜 Mapper，不要为某一个 golden 写场景特判。三仓 load < 20 必须继续跑。V4-05 storm 未测。V4-01 daemon 合流已完成（`4323b3c`）。V4-02 LOC 基线 35,472（上限 37,245）。
 
 V4-03 **分母已入库**：`docs/phase-v4/v4-sprint0-manifest.json` + `docs/phase-v4/v4-sprint0-summaries/`。raw 在 `/tmp/codex-java-lsp-v4-sprint0-20260818/`。主机门改为可用内存 ≥4 GiB，load 只记录。cold-matrix 质量门 FAIL 是分母（三仓 rReadMust 0.90/0.91/0.88）。first-touch：lishuedu 3/5 COMPLETE，cipherlink 与 exam-parent-v3 5/5 PARTIAL_TIMEOUT（`--prepare none` + 60s）。正式仓仍是 `/tmp/codex-java-v3-golden-20260809/{lishuedu,cipherlink,exam-parent-v3}`。
 
@@ -84,6 +84,7 @@ V4-10 harness 已存在：`scripts/run-agent-trace-matrix.mjs`。无 `--authoriz
 - 不要"修复"历史 V3.2 报告里的 `productionLocGatePassed: false`——那是当时 `33,230/33,219` 的已授权突破记录，不是现在的回归。
 - `scripts/run-three-repo-cold-matrix.mjs` 的候选测试套件阶段包含真实子进程多进程锁 lease 测试（`task36-multiprocess-smoke.test.mjs`），高 load 时可能假失败。这**不是**停跑三仓的理由：load < 20 必须开跑；若该单测失败，隔离环境单独重跑那一个文件，两次方向一致才能下结论。
 - 不要重复尝试"把 `SPRING_CALL_PATH` 从 `read-plan-budget.ts` 的 `FRAMEWORK_VERIFIED_REASONS` 整体移出"这条规则——V3.2-28 第 1 轮已经用正式三仓 AB/BA/AB 矩阵测过（`--baseline 869b353`），cipherlink tuning recall 净负、其余两仓四项指标全零，已回滚（见 Sprint5 §4.1-4.5）。Spring 配额问题本身可能仍然存在（V3.2-29 的 `NDCG_read@6` 三仓一致为负这个信号没有被推翻，只是这一种修法不对），但下次要换更细粒度的假设，不是重跑同一条规则。
+- 不要为三仓 golden 分数过拟合。用户还有很多仓库。禁止场景 id / 文件名 / taskKeywords 特判；禁止用 `save` 猜 Mapper `listTodo`；禁止 type-header +1 修 77–93 vs 77–94。三仓是验收样本，不是目标函数。
 - 不要重复尝试"把 `buildReadPlan()` 里 anchor 数量超预算才放宽 `maxFiles` 的机制，扩大到 anchor∪protectedPaths"这条规则——V3.2-28 第 2 轮用正式三仓矩阵测过（`--baseline 4eedc6b`），三仓 token 成本全部上升、`pRead` 广泛下降，只在一仓一项指标上有收益，净不划算，已回滚（见 Sprint5 §4.6-4.7）。如果未来想继续挖"task-aware budget"这个方向，先重复这条规则本身发现的方法论（见下一条），不要直接重跑同一条被否定的规则。
 - 涉及 `read-plan.ts`/`read-plan-budget.ts` 的任何预算类改动，落地前先核实**文件数上限（`maxFiles`）还是字节上限（`maxReadBytes`）才是真正 binding 的约束**——V3.2-28 两轮都先用已有正式矩阵原始数据核对过这一点（holdout 场景文件数打满、字节只用 30%-69%），这不是可以跳过的步骤，选错杠杆等于白跑一次正式矩阵。同时要注意 `selectTokenAwarePlan` 的 `BUCKET_RULES`（`anchor:1, core:4, framework:2, support:1, lexical:1`）是另一层独立的、按证据类别分桶的硬上限，和 `configuredBudget.maxFiles` 是两套不同机制——只调其中一个可能对另一个完全无效（本轮第 2 轮第一次单测编写时就撞上了这个坑）。任何"默认预算内自动放宽"的机制都必须显式判断调用方是否传了 `readPlanMaxItems`/`readPlanMaxBytes`——显式预算是硬约束，不能被默认值放宽逻辑覆盖（第 2 轮第一版实现漏了这条，导致 3 个既有的"constrained core"测试真实回归，不是测试断言过期）。
 

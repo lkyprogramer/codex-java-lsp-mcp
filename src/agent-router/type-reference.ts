@@ -13,6 +13,7 @@ import {
   isSpringBootApplicationType,
   matchesAny,
   positionFromFacts,
+  positionsFromFacts,
   sameSourceModule,
   selectPreferredImplementers,
   simpleTypeName,
@@ -170,7 +171,7 @@ export async function collectTypeReferenceSignals(
     }
     let definitions: readonly JavaSourceFacts[] = [];
     try {
-      definitions = await input.javaIndex.findTypeDefinitions(referencedTypes, 20, false);
+      definitions = await input.javaIndex.findTypeDefinitions(referencedTypes, 20, true);
     } catch (error) {
       recordOperationFailure(outcome, plan.anchor.id, "definition lookup", error);
       evidence.push(...materializeDrafts(input, drafts, pathOrder));
@@ -179,6 +180,7 @@ export async function collectTypeReferenceSignals(
     }
     let stopAfterPlan = false;
     const preferredImplementers: JavaSourceFacts[] = [];
+    const calleeNames = calleeNamesFromRelations(methodFact?.relations);
     for (const definition of definitions) {
       if (definition.absolutePath === plan.anchor.absolutePath) continue;
       recordCandidateMetric(input.metrics, knownPaths, definition.absolutePath);
@@ -188,7 +190,10 @@ export async function collectTypeReferenceSignals(
         drafts,
         plan.anchor,
         definition.absolutePath,
-        [{ line: 1, column: 1 }]
+        positionsFromFacts(definition, {
+          typeName: definition.typeName,
+          calleeNames
+        })
       );
       if (definition.kind !== "interface" || !definition.typeName) continue;
       const qualifiedTypeName = definition.packageName
@@ -218,7 +223,8 @@ export async function collectTypeReferenceSignals(
               methodName: methodFact?.name ?? plan.anchor.methodName,
               typeName: definition.typeName,
               calleeNames: calleeNamesFromRelations(methodFact?.relations)
-            })]
+            })],
+            definition.absolutePath
           );
           knownPaths.add(implementation.absolutePath);
         }
@@ -489,10 +495,12 @@ function recordImplementationDraft(
   drafts: Map<string, TypeReferenceSignalDraft>,
   anchor: ResolvedAnchor,
   candidateFile: string,
-  positions: RouterPosition[]
+  positions: RouterPosition[],
+  implementedTypeFile: string
 ): void {
   recordDraft(drafts, {
     candidateFile,
+    candidateNodeId: implementedTypeFile,
     anchorId: anchor.id,
     kind: IMPLEMENTATION_SPEC.kind,
     family: "STATIC_STRUCTURE",
@@ -522,13 +530,30 @@ function recordDraft(drafts: Map<string, TypeReferenceSignalDraft>, draft: TypeR
     drafts.set(key, draft);
     return;
   }
-  if (draft.weight > existing.weight || (existing.positions.length === 0 && draft.positions.length > 0)) {
-    drafts.set(key, {
-      ...(draft.weight > existing.weight ? draft : existing),
-      positions: existing.positions.length > 0 ? existing.positions : [...draft.positions],
-      weight: Math.max(existing.weight, draft.weight)
-    });
-  }
+  const positions = mergeDraftPositions(existing.positions, draft.positions);
+  drafts.set(key, {
+    ...(draft.weight > existing.weight ? draft : existing),
+    positions,
+    weight: Math.max(existing.weight, draft.weight)
+  });
+}
+
+function isFallbackPositions(positions: readonly RouterPosition[]): boolean {
+  return positions.length === 0 || positions.every(position => position.line === 1 && position.column === 1);
+}
+
+function mergeDraftPositions(
+  existing: readonly RouterPosition[],
+  incoming: readonly RouterPosition[]
+): RouterPosition[] {
+  const existingFallback = isFallbackPositions(existing);
+  const incomingFallback = isFallbackPositions(incoming);
+  if (existingFallback && !incomingFallback) return [...incoming];
+  if (!existingFallback && incomingFallback) return [...existing];
+  if (existingFallback && incomingFallback) return existing.length > 0 ? [...existing] : [...incoming];
+  const byLine = new Map<number, RouterPosition>();
+  for (const position of [...existing, ...incoming]) byLine.set(position.line, position);
+  return [...byLine.values()].sort((left, right) => left.line - right.line);
 }
 
 function materializeDrafts(

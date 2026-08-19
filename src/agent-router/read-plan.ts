@@ -247,12 +247,13 @@ function shortlistCandidates(
   };
   // Anchors and protected core cannot be displaced before the byte-aware pass.
   ordered.filter(file => isAnchor(file, options)).forEach(add);
+  const firstHopPaths = firstHopCollaboratorPaths(ordered, options);
   const protectedCandidates = coverageFirst(ordered
     .filter(file => !isAnchor(file, options)
       && !isDeferredTest(file, options)
       && (isProtectedCore(file, options) || protectedPaths.has(file.absolutePath)))
     .sort((left, right) =>
-      protectedCorePriority(right, options) - protectedCorePriority(left, options)
+      protectedCorePriority(right, options, firstHopPaths) - protectedCorePriority(left, options, firstHopPaths)
       || right.score - left.score
       || left.absolutePath.localeCompare(right.absolutePath)), file => file, options);
   protectedCandidates.forEach(add);
@@ -363,6 +364,7 @@ function selectTokenAwarePlan(
     .filter(window => (isProtectedCore(window.file, options) || protectedPaths.has(window.file.absolutePath))
       && !isAnchor(window.file, options)
       && !isDeferredTest(window.file, options));
+  const firstHopPaths = firstHopCollaboratorPaths(windows.map(window => window.file), options);
   const coreUsesByteDensity = byteBudgetCanConstrainSelection(
     core,
     totalBytes,
@@ -370,7 +372,7 @@ function selectTokenAwarePlan(
     Math.min(budget.maxFiles - selected.length, BUCKET_RULES.core.max - bucketCounts.core)
   );
   core.sort((left, right) =>
-    protectedCorePriority(right.file, options) - protectedCorePriority(left.file, options)
+    protectedCorePriority(right.file, options, firstHopPaths) - protectedCorePriority(left.file, options, firstHopPaths)
     || compareUtilityAndDensity(protectedUtility(left), left.bytes, protectedUtility(right), right.bytes, coreUsesByteDensity)
     || left.file.absolutePath.localeCompare(right.file.absolutePath));
   if (options.anchors.length > 1) {
@@ -511,7 +513,53 @@ function compareUtilityAndDensity(
     : utilityDelta || densityDelta || leftBytes - rightBytes;
 }
 
-function protectedCorePriority(file: CandidateFile, options: Pick<ImpactOptions, "anchors">): number {
+function firstHopCollaboratorPaths(
+  files: readonly CandidateFile[],
+  options: Pick<ImpactOptions, "anchors">
+): Set<string> {
+  const paths = new Set<string>();
+  for (const file of files) {
+    if (isAnchor(file, options) || isFirstHopCollaborator(file)) {
+      paths.add(file.absolutePath);
+    }
+  }
+  return paths;
+}
+
+function isFirstHopCollaborator(file: CandidateFile): boolean {
+  if ((file.plannerEvidence?.length ?? 0) > 0) {
+    return file.plannerEvidence!.some(evidence =>
+      evidence.kind === "REFERENCE"
+      || evidence.kind === "SPRING_INJECTION"
+      || evidence.kind === "METHOD_RELATION"
+      || (evidence.kind === "CALLS"
+        && (evidence.callOrigin === "anchor" || (evidence.callDepth ?? Infinity) <= 1)));
+  }
+  return file.reasons.some(reason =>
+    reason === "typeReference"
+    || reason === "REFERENCE"
+    || reason === "SPRING_INJECTION"
+    || reason === "METHOD_RELATION"
+    || reason === "CALLS");
+}
+
+function implementedCollaboratorPath(file: CandidateFile): string | undefined {
+  for (const evidence of file.plannerEvidence ?? []) {
+    if (evidence.kind !== "IMPLEMENTS") continue;
+    const arrow = evidence.sourceTarget.indexOf("->");
+    if (arrow <= 0) continue;
+    const target = evidence.sourceTarget.slice(arrow + 2);
+    if (!target || target === file.absolutePath || target === file.path) continue;
+    return target;
+  }
+  return undefined;
+}
+
+function protectedCorePriority(
+  file: CandidateFile,
+  options: Pick<ImpactOptions, "anchors">,
+  firstHopPaths: ReadonlySet<string>
+): number {
   const kinds = new Set(file.plannerEvidence?.map(evidence => evidence.kind) || [
     ...file.reasons,
     ...(file.verifiedBy || [])
@@ -530,6 +578,12 @@ function protectedCorePriority(file: CandidateFile, options: Pick<ImpactOptions,
   // must choose.
   if (kinds.has("TYPE_SYMMETRIC")) {
     return 2.75;
+  }
+  // Close the hop already opened by the anchor before opening another
+  // sibling CALLS/port. Unrelated type-graph IMPLEMENTS stay at 2.4.
+  const implemented = implementedCollaboratorPath(file);
+  if (implemented && firstHopPaths.has(implemented)) {
+    return 2.65;
   }
   if ([...kinds].some(kind => FIRST_HOP_IMPLEMENTATION_KINDS.has(kind)
     || kind === "typeGraph:implementation-lookup"

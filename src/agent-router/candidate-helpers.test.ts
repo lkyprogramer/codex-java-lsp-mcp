@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { JavaSourceFacts } from "../java-index/router-facts.js";
-import { candidateFromFacts, positionFromFacts, selectPreferredImplementers } from "./candidate-helpers.js";
+import { candidateFromFacts, positionFromFacts, positionsFromFacts, selectPreferredImplementers } from "./candidate-helpers.js";
 
 function facts(methods: JavaSourceFacts["methods"]): JavaSourceFacts {
   return {
@@ -77,6 +77,17 @@ test("positionFromFacts keeps (1,1) when several caller-site callees exist on th
       { name: "deleteCheckPeople", line: 172, endLine: 189, referencedTypes: [], relations: [] }
     ]), { methodName: "delete", calleeNames: ["page", "deleteCheckPeople"] }),
     { line: 1, column: 1 }
+  );
+});
+
+test("positionsFromFacts keeps every caller-site callee on a first-hop collaborator", () => {
+  assert.deepEqual(
+    positionsFromFacts(facts([
+      { name: "requireMe", line: 32, endLine: 38, referencedTypes: [], relations: [] },
+      { name: "ensureQuestionOperator", line: 64, endLine: 68, referencedTypes: [], relations: [] },
+      { name: "other", line: 80, endLine: 90, referencedTypes: [], relations: [] }
+    ]), { calleeNames: ["requireMe", "ensureQuestionOperator"] }),
+    [{ line: 32, column: 1 }, { line: 64, column: 1 }]
   );
 });
 
