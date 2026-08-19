@@ -123,14 +123,13 @@ exam file recall 略降是预期：无 `@Primary` 的 CurrentUser 实现不再�
 | `presign` PublishAppService | 反向调用方，不是被调端口 | 不发明 caller-scan |
 | `candidate-pay-order` Template/Repository | 预算 + 第二跳 | 不放宽 maxFiles |
 
-## 本刀（相对 `e9fe968`，待矩阵）
+## 本刀（相对 `e9fe968`）
 
-两条全局规则，不是三仓特判：
+产物：`/tmp/codex-java-lsp-v4-06-first-hop-20260819-101900/`（`bc5ec9f` vs `e9fe968`）。候选 159/159。
 
-1. `positionsFromFacts`：锚点在一个协作类型上调用了多个方法，就保留这些方法的全部位置；`findTypeDefinitions` 改为 `hydrate:true`。
-2. `IMPLEMENTS` 带上被实现类型路径（`candidateNodeId`）。若该类型已是第一跳协作（CALLS/REFERENCE/SPRING_INJECTION/METHOD_RELATION），core 优先级 2.65，高于同级 CALLS 2.5。无关 type-graph 扩展仍是 2.4。
+**KEEP**：`positionsFromFacts` + `findTypeDefinitions(hydrate:true)`。`paper-task` 三轮 0.4→**0.8**（AccessService 32–38 / 64–68），storage / current-user / check-people / school-template 仍 1.0。
 
-隔离 targeted：79/79 绿。不放宽 maxFiles，不抬全量 IMPLEMENTS。
+**REJECT**：把已选端口的 IMPLEMENTS 提到 2.65。`exam-score` 0.286→0.571、`candidate-pay` 0.125→0.25，但 cipherlink `rReadMust` 0.91→0.81——`organization-create-member` 与 `auth-sms-login` 的跨模块第一跳被实现类挤出。任意 Spring 仓都会遇到同一模式，不能为抬 range 牺牲其它第一跳。排名已撤回，只留方法定位与 `candidateNodeId` 元数据。
 
 ## 仍 miss（相对 `ba5838f` / cap 矩阵 r1-new）
 
