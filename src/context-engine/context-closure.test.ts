@@ -64,6 +64,32 @@ test("closure keeps the named implementer method whole and drops hop>0 files wit
   assert.equal(port.spans[0]?.end, 4);
 });
 
+test("hop 0 keeps sibling methods supplied by facts, not only the line-containing method", () => {
+  const bundles = closeSearchResult({
+    search: {
+      resolvedIntent: "IMPLEMENTATION_CHANGE",
+      coverage: "PARTIAL",
+      bundles: [
+        { path: "src/Svc.java", hops: 0, estimatedTokens: 40, provingPath: [], closedObligations: ["O1"] }
+      ],
+      unresolved: [],
+      metrics: { expansions: 0, hops: 0, estimatedTokens: 40 }
+    },
+    anchorLine: 55,
+    factsForPath: () => ({
+      methods: [
+        { name: "export", startLine: 55, endLine: 84 },
+        { name: "loadStudentMap", startLine: 95, endLine: 107 },
+        { name: "resolveSchoolName", startLine: 145, endLine: 154 }
+      ]
+    })
+  });
+  const spans = bundles.find(item => item.path === "src/Svc.java")?.spans ?? [];
+  assert.ok(spans.some(span => span.start <= 55 && span.end >= 84));
+  assert.ok(spans.some(span => span.start <= 95 && span.end >= 107));
+  assert.ok(spans.some(span => span.start <= 145 && span.end >= 154));
+});
+
 test("hop>0 files with no named method still keep a type span", () => {
   const bundles = closeSearchResult({
     search: {

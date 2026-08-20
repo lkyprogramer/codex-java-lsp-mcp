@@ -85,6 +85,9 @@ const MID_PROOF = /EXTENDS|PERMITS|IMPORTS|DECLARES/;
 
 function proofRank(bundle: EvidenceBundle): number {
   if (bundle.proof.some(kind => HIGH_PROOF.test(kind))) return 0;
+  if (bundle.proof.includes("IMPORTS") && bundle.provingPath.some(step => step.kind === "IMPORTS" && !step.fromId.includes("#"))) {
+    return 0;
+  }
   if (bundle.proof.some(kind => MID_PROOF.test(kind))) return 1;
   return 2;
 }

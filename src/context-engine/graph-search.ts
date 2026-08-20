@@ -58,19 +58,22 @@ export function searchContextGraph(
   startRelativePath: string,
   compiled: CompiledIntent,
   budgets: Partial<GraphSearchBudgets> = {},
-  restrictToObligationKinds = false
+  restrictToObligationKinds = false,
+  startNodeIds?: readonly string[]
 ): GraphSearchResult {
   const maxHops = Math.min(8, Math.max(0, budgets.maxHops ?? DEFAULT_BUDGETS.maxHops));
   const maxExpansions = Math.min(2048, Math.max(1, budgets.maxExpansions ?? DEFAULT_BUDGETS.maxExpansions));
   const tokenBudget = Math.max(256, budgets.tokenBudget ?? DEFAULT_BUDGETS.tokenBudget);
-  const startNodes = [...graph.nodesById.entries()]
+  const pathNodes = [...graph.nodesById.entries()]
     .filter(([id, node]) => node.relativePath === startRelativePath || id === startRelativePath)
     .map(([id]) => id);
+  const scoped = (startNodeIds ?? []).filter(id => graph.nodesById.has(id));
+  const startNodes = scoped.length > 0 ? scoped : pathNodes;
   const bundles = new Map<string, EvidenceBundleCandidate>();
   const closed = new Set<string>();
   let expansions = 0;
   let deepest = 0;
-  if (startNodes.length > 0) {
+  if (pathNodes.length > 0) {
     bundles.set(startRelativePath, {
       path: startRelativePath,
       hops: 0,
@@ -94,6 +97,11 @@ export function searchContextGraph(
       if (expansions >= maxExpansions) break;
       const nextId = edge.fromId === current.id ? edge.toId : edge.fromId;
       if (seen.has(nextId)) continue;
+      const nextNode = graph.nodesById.get(nextId);
+      if (nextNode && NON_BUNDLE_PATH_KINDS.has(nextNode.kind)) {
+        seen.add(nextId);
+        continue;
+      }
       seen.add(nextId);
       expansions += 1;
       const hop = current.hop + 1;

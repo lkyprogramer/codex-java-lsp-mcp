@@ -11,7 +11,7 @@ import { compileIntent } from "../context-engine/intent-compiler.js";
 import { navigateGraph, searchContextGraph } from "../context-engine/graph-search.js";
 import { lexicalFallbackHits, shouldLexicalFallback } from "../context-engine/lexical-fallback.js";
 import { shouldEscalateToJdt } from "../context-engine/semantic-escalation.js";
-import { planContextQuery } from "../context-engine/plan-query.js";
+import { anchorMethodStartIds, attachAnchorSignatureBundles, planContextQuery } from "../context-engine/plan-query.js";
 import { PLANNER_VERSION } from "../context-engine/context-contract.js";
 
 export type QueryHandlerDeps = {
@@ -154,25 +154,28 @@ export async function handleQueryCommand(request: JavaIndexRequest, deps: QueryH
         relativePath = request.fromRelativePath.replaceAll("\\", "/");
       }
       const compiled = compileIntent(request.intent, { taskText: request.taskText, profile: request.profile, relativePath });
-      const result = request.mode === "navigate"
+      let result = request.mode === "navigate"
         ? navigateGraph(graph, relativePath, { direction: request.direction, closure: request.closure, maxHops: request.maxHops })
         : searchContextGraph(graph, relativePath, compiled, {
           maxHops: request.maxHops,
           maxExpansions: request.maxExpansions,
           tokenBudget: request.tokenBudget
-        });
+        }, false, anchorMethodStartIds(graph, deps.store, relativePath, request.anchorLine));
       if (request.mode !== "navigate" && shouldLexicalFallback(result, request.taskText ?? "")) {
         const hits = lexicalFallbackHits(deps.readyEntitySearch(), request.taskText ?? "", 5);
         for (const hit of hits) {
           if (result.bundles.some(bundle => bundle.path === hit.relativePath)) continue;
           result.bundles.push({
             path: hit.relativePath,
-            hops: result.metrics.hops + 1,
+            hops: 1,
             estimatedTokens: 48,
             provingPath: [],
             closedObligations: []
           });
         }
+      }
+      if (request.mode !== "navigate") {
+        result = attachAnchorSignatureBundles(result, graph, deps.store, relativePath, request.anchorLine);
       }
       shouldEscalateToJdt({ unresolvedRoles: result.unresolved.map(item => item.role), jdtlsBin: process.env.JDTLS_BIN });
       if (request.plan && request.mode !== "navigate") {

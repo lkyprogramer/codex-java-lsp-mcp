@@ -89,12 +89,9 @@ export function closeSearchResult(input: ClosureInput): EvidenceBundle[] {
     const role = roleOf(candidate.provingPath, candidate.hops);
     const names = relatedNames(candidate.provingPath, [...(facts.simpleNames ?? []), ...anchorNames]);
     const methods = facts.methods;
-    const focused = input.anchorLine && candidate.hops === 0
-      ? methods.filter(method => method.startLine <= input.anchorLine! && method.endLine >= input.anchorLine!)
-      : methods.filter(method => names.some(name => name === method.name));
     const chosen = candidate.hops === 0
-      ? (focused.length > 0 ? focused : methods)
-      : focused;
+      ? methods
+      : methods.filter(method => names.some(name => name === method.name));
     const methodSlices: CodeSpan[] = [];
     for (const method of chosen) {
       methodSlices.push(...sliceMethod({

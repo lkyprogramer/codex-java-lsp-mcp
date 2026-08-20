@@ -110,6 +110,37 @@ test("near hop-1 that fits is packed before a cheaper hop-3 file", () => {
   assert.ok(planned.tokenCost <= 55);
 });
 
+test("signature IMPORTS attached from a file path pack before ordinary hop-1 IMPORTS", () => {
+  const planned = planEvidenceBundles({
+    bundles: [
+      bundle({ id: "a", path: "src/A.java", role: "ANCHOR", closes: ["O1"], tokenCost: 10, hops: 0 }),
+      bundle({
+        id: "delete",
+        path: "src/DeleteCommand.java",
+        role: "CONTRACT",
+        closes: ["O5"],
+        tokenCost: 40,
+        hops: 1,
+        proof: ["IMPORTS"],
+        provingPath: [{ kind: "IMPORTS", fromId: "src/A.java#A", toId: "src/DeleteCommand.java#DeleteCommand" }]
+      }),
+      bundle({
+        id: "signed",
+        path: "src/SignedUrlCommand.java",
+        role: "CONTRACT",
+        closes: ["O5"],
+        tokenCost: 40,
+        hops: 1,
+        proof: ["IMPORTS"],
+        provingPath: [{ kind: "IMPORTS", fromId: "src/A.java", toId: "src/SignedUrlCommand.java#SignedUrlCommand" }]
+      })
+    ],
+    tokenBudget: 55
+  });
+  assert.ok(planned.selected.some(item => item.id === "signed"));
+  assert.equal(planned.selected.some(item => item.id === "delete"), false);
+});
+
 test("hop-1 IMPLEMENTS that fits is packed before a cheaper CONTAINS sibling", () => {
   const planned = planEvidenceBundles({
     bundles: [

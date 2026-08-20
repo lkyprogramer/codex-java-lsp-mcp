@@ -5,7 +5,6 @@ import type { EntityHit, EntitySearchIndex } from "../java-index/entity-search.j
 import type { GraphSearchResult } from "./graph-search.js";
 
 export function shouldLexicalFallback(result: GraphSearchResult, taskText: string): boolean {
-  if (result.unresolved.length === 0) return false;
   const tokens = taskText.trim();
   if (!tokens) return false;
   const covered = new Set(result.bundles.map(bundle => bundle.path.split("/").pop()?.replace(/\.java$/i, "").toLowerCase()));
