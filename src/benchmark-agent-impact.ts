@@ -9,15 +9,7 @@ import { fileURLToPath } from "node:url";
 import { AgentRouter, type ImpactInternalObserver } from "./agent-router/index.js";
 import type { CandidateEvidence } from "./agent-router/evidence.js";
 import { FRAMEWORK_ADAPTERS } from "./agent-router/providers/framework-provider.js";
-import {
-  DEFAULT_CONTINUE_MAX_ADDITIONAL_READ_BYTES,
-  continueSession,
-  createAnalysisSession,
-  inPoolFifoContinuationIds
-} from "./agent-router/retrieval/retrieval-session-service.js";
-import { RetrievalSessionStore } from "./agent-router/retrieval/retrieval-session-store.js";
-import type { FrontierShadowReport } from "./agent-router/retrieval/retrieval-types.js";
-import type { ImpactFileV6, ImpactOptions, ImpactResult, ReadPlanItemV6 } from "./agent-types.js";
+import type { ImpactOptions, ImpactResult } from "./agent-types.js";
 import { projectImpactResultV6 } from "./agent-router/format.js";
 import { readRuntimeBuild } from "./build-info.js";
 import {
@@ -81,8 +73,6 @@ type Cli = {
   readPlanMaxItems?: number;
   readPlanMaxBytes?: number;
   listScenarios: boolean;
-  retrievalEnabled: boolean;
-  continuePolicy: "in-pool-fifo" | undefined;
   strategy: BenchmarkStrategy;
   /** V3.2-29 benchmark-only ablation: FrameworkAdapter.id to exclude, e.g. "spring". Empty = full registry. */
   excludeFrameworkAdapter: string;
@@ -125,8 +115,6 @@ const metadata = {
   runs: cli.runs,
   readPlanMaxItems: cli.readPlanMaxItems,
   readPlanMaxBytes: cli.readPlanMaxBytes,
-  retrievalEnabled: cli.retrievalEnabled,
-  continuePolicy: cli.continuePolicy,
   scenarioFile: cli.scenarioFile,
   runtimeBuild,
   // The V2 runtime reconciles its static index before serving requests.  This
@@ -222,10 +210,13 @@ if (javaIndexClient) {
 await processResources?.stop();
 
 function parseCli(args: string[], root: string): Cli {
+  if (args.includes("--retrieval-enabled") || args.includes("--continue-policy")) {
+    throw new Error("retrieval continuation was removed in JIN N0");
+  }
   const values = new Map<string, string | true>();
   for (let index = 0; index < args.length; index += 1) {
     const item = args[index];
-    if (item === "--list-scenarios" || item === "--payload-projections" || item === "--retrieval-enabled") {
+    if (item === "--list-scenarios" || item === "--payload-projections") {
       values.set(item, true);
       continue;
     }
@@ -268,8 +259,6 @@ function parseCli(args: string[], root: string): Cli {
     readPlanMaxItems: optionalPositiveIntegerArg(values, "--read-plan-max-items", process.env.JAVA_LSP_BENCH_READ_PLAN_MAX_ITEMS),
     readPlanMaxBytes: optionalPositiveIntegerArg(values, "--read-plan-max-bytes", process.env.JAVA_LSP_BENCH_READ_PLAN_MAX_BYTES),
     listScenarios: values.get("--list-scenarios") === true,
-    retrievalEnabled: values.get("--retrieval-enabled") === true,
-    continuePolicy: continuePolicyArg(values),
     strategy: stringArg(values, "--strategy", process.env.JAVA_LSP_BENCH_STRATEGY || "impact") as BenchmarkStrategy,
     excludeFrameworkAdapter: stringArg(values, "--exclude-framework-adapter", process.env.JAVA_LSP_BENCH_EXCLUDE_FRAMEWORK_ADAPTER || ""),
     // The same absolute deadline java_impact gives a real caller in this warm
@@ -298,13 +287,9 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
     ranked: readonly CandidateEvidence[];
     selectedPaths: readonly string[];
   } | undefined;
-  let frontierShadow: FrontierShadowReport | undefined;
   const observer: ImpactInternalObserver = {
     readPlanCoordinates(rangesByAbsolutePath) {
       coordinateRangesByAbsolutePath = rangesByAbsolutePath;
-    },
-    frontierShadow(report) {
-      frontierShadow = report;
     }
   };
   if (cli.payloadProjections || cli.verbosity === "diagnostic") {
@@ -416,147 +401,7 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
     // diagnostic variance cannot mask or manufacture semantic drift.
     determinism: buildImpactDeterminismSnapshot(diagnosticResult, cli.repoRoot, productionRanking)
   };
-  if (cli.continuePolicy !== "in-pool-fifo") return firstAttempt;
-  const continuation = await continueInPoolFifo({
-    frontierShadow,
-    result,
-    request
-  });
-  if (!continuation.snapshot) {
-    return { ...firstAttempt, continue: continuation.meta };
-  }
-  const unioned = unionImpactViews(result, continuation.snapshot);
-  const continuePayload = Buffer.byteLength(JSON.stringify(continuation.snapshot), "utf8");
-  const unionRaw = rawSearchPayload + continuePayload;
-  const unionReading = readPlanBytes(unioned);
-  const unionCandidates = unique([...candidatePaths, ...unioned.files.map(file => String(file.path))]);
-  const unionReadFiles = distinctReadFiles(unioned);
-  const unionQuality = evaluate(unionCandidates, unionReadFiles, scenario);
-  const unionElapsed = elapsedMs + continuation.elapsedMs;
-  const unionKib = (unionRaw + unionReading) / 1024;
-  const unionBlockingHits = unionReadFiles.filter(file => taskBlockingFiles(scenario).has(file)).length;
-  const unionRangeLine = readPlanRangeRecall(scenario, selectedRangesByFile(unioned));
-  return {
-    ...attemptPayload(
-      "impact",
-      unionQuality,
-      unionRaw,
-      unionReading,
-      unionElapsed,
-      3,
-      unioned.readPlan.length,
-      result.cost.suppressedRawBytes,
-      0
-    ),
-    ...readPlanMetrics(unioned),
-    "NDCG_read@6": ndcgReadAt6(scenario, unionReadFiles),
-    firstTaskBlockingRank: firstTaskBlockingRank(scenario, unionCandidates),
-    readPlanRangeRecall: unionRangeLine,
-    RangeLineRecall: unionRangeLine,
-    RangeCoordinateRecall: rangeCoordinateRecall,
-    evidencePerKiB: unionKib > 0 ? unionQuality.hitFiles / unionKib : 0,
-    taskBlockingHitsPerKiB: unionKib > 0 ? unionBlockingHits / unionKib : 0,
-    timing: firstAttempt.timing,
-    payloadProjection,
-    payloadProjectionElapsedMs,
-    goldenAttribution: firstAttempt.goldenAttribution,
-    counterfactual: firstAttempt.counterfactual,
-    frameworkEvidence: firstAttempt.frameworkEvidence,
-    determinism: firstAttempt.determinism,
-    call1: {
-      recall: quality.recall,
-      pRead: quality.pRead,
-      rReadMust: quality.rReadMust,
-      rTaskBlocking: quality.rTaskBlocking,
-      estimatedTokens: Math.round((rawSearchPayload + readingPayload) / 4),
-      readPlanBytes: readingPayload,
-      RangeLineRecall: rangeLineRecall
-    },
-    continue: continuation.meta
-  };
-}
-
-async function continueInPoolFifo(input: {
-  frontierShadow: FrontierShadowReport | undefined;
-  result: ImpactResult;
-  request: ReturnType<typeof createRequestContext>;
-}): Promise<{
-  snapshot?: { files: ImpactFileV6[]; readPlan: ReadPlanItemV6[]; ids: string[]; stopReason: string };
-  elapsedMs: number;
-  meta: Record<string, unknown>;
-}> {
-  if (!input.frontierShadow) {
-    return { elapsedMs: 0, meta: { skipped: "NO_FRONTIER_SHADOW" } };
-  }
-  const store = new RetrievalSessionStore();
-  const selectedPaths = input.result.readPlan.map(item => (
-    input.result.files.find(file => file.id === item.fileId)?.path ?? item.fileId
-  ));
-  const session = createAnalysisSession({
-    store,
-    frontier: input.frontierShadow,
-    selectedPaths,
-    target: input.result.target,
-    request: input.request,
-    runtimeBuildSha: readRuntimeBuild().gitSha,
-    maxSteps: 2,
-    firstCost: input.result.cost
-  });
-  if (!session) {
-    return { elapsedMs: 0, meta: { skipped: "NO_CONSUMABLE_FRONTIER" } };
-  }
-  const ids = inPoolFifoContinuationIds(session.frontier, DEFAULT_CONTINUE_MAX_ADDITIONAL_READ_BYTES);
-  if (ids.length === 0) {
-    return { elapsedMs: 0, meta: { skipped: "FRONTIER_BYTE_CAP", sessionId: session.sessionId } };
-  }
-  const startedAt = performance.now();
-  try {
-    const continued = await continueSession({
-      store,
-      sessionId: session.sessionId,
-      ids,
-      maxAdditionalReadBytes: DEFAULT_CONTINUE_MAX_ADDITIONAL_READ_BYTES,
-      request: input.request,
-      runtimeBuildSha: readRuntimeBuild().gitSha
-    });
-    return {
-      snapshot: continued.snapshot,
-      elapsedMs: performance.now() - startedAt,
-      meta: {
-        sessionId: continued.session.sessionId,
-        consumed: continued.snapshot.ids,
-        stopReason: continued.snapshot.stopReason,
-        readBytes: continued.snapshot.cost.readBytes
-      }
-    };
-  } catch (error) {
-    return {
-      elapsedMs: performance.now() - startedAt,
-      meta: {
-        error: error instanceof Error ? error.message : String(error),
-        requestedIds: ids
-      }
-    };
-  }
-}
-
-function unionImpactViews(
-  first: ImpactResult,
-  snapshot: { files: ImpactFileV6[]; readPlan: ReadPlanItemV6[] }
-): ImpactResult {
-  const files = [...first.files];
-  const seen = new Set(files.map(file => file.id));
-  for (const file of snapshot.files) {
-    if (!seen.has(file.id)) {
-      files.push(file);
-      seen.add(file.id);
-    }
-  }
-  return {
-    ...first,
-    files,
-    readPlan: [...first.readPlan, ...snapshot.readPlan]
-  };
+  return firstAttempt;
 }
 
 function recordJavaIndexQueueDepth(result: ImpactResult): void {
@@ -629,16 +474,6 @@ function attemptPayload(
     rgRawBytesSuppressed,
     rgRawBytesExposed
   };
-}
-
-function continuePolicyArg(values: Map<string, string | true>): "in-pool-fifo" | undefined {
-  const raw = values.get("--continue-policy");
-  if (raw === undefined) return undefined;
-  if (raw !== "in-pool-fifo") throw new Error("--continue-policy must be in-pool-fifo");
-  if (values.get("--retrieval-enabled") !== true) {
-    throw new Error("--continue-policy requires --retrieval-enabled");
-  }
-  return "in-pool-fifo";
 }
 
 function stringArg(values: Map<string, string | true>, name: string, fallback: string): string {

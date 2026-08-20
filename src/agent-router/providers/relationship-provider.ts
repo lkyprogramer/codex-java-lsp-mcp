@@ -10,10 +10,6 @@ import {
   type JavaMethodFact,
   type JavaSourceFacts
 } from "../../java-index/router-facts.js";
-import {
-  relationshipBundleMode,
-  type RelationshipBundleView
-} from "../../java-index/relationship-bundle.js";
 import type { EvidenceFamily, EvidenceProvenance, EvidenceSignal, ProviderInput, ProviderOutcome } from "../evidence.js";
 import { JavaIntelligenceError } from "../../runtime/intelligence-error.js";
 import { candidateFromFacts } from "../candidate-helpers.js";
@@ -22,9 +18,6 @@ import {
   structuralDeltas
 } from "../relationship-deltas.js";
 import { nextSignalId } from "./shared.js";
-import { fetchRelationshipBundle } from "./relationship/relationship-bundle-client.js";
-import { observeRelationshipParity } from "./relationship/relationship-parity.js";
-import { buildRelationshipQueryPlan } from "./relationship/relationship-query-plan.js";
 
 export const RELATIONSHIP_PROVIDER_ID = "relationship";
 export const RELATIONSHIP_PROVIDER_VERSION = "1";
@@ -205,33 +198,7 @@ async function preloadRelationshipFacts(input: RelationshipProviderInput): Promi
       partial: true
     };
   }
-  const mode = relationshipBundleMode();
-  const plan = mode === "off" ? undefined : buildRelationshipQueryPlan({
-    generation: input.generation,
-    anchors: input.anchors,
-    staticVerifiedCandidates: input.staticVerifiedCandidates
-  });
-  let bundle: RelationshipBundleView | undefined;
-  if (plan) {
-    try {
-      bundle = await fetchRelationshipBundle(input.javaIndex, plan);
-    } catch (error) {
-      if (mode === "on") return factsBatchFromQueryFailure(plan.candidateFiles, error);
-      rethrowRelationshipTerminal(error);
-    }
-  }
-  if (mode === "on" && bundle && !bundle.stale) {
-    return factsBatchFromBundle(bundle);
-  }
-  const legacy = await preloadRelationshipFactsLegacy(input);
-  if (mode === "shadow" && bundle && legacy) {
-    observeRelationshipParity(
-      [...legacy.cache.entries()].filter(([, facts]) => facts !== undefined).map(([path]) => path),
-      [],
-      bundle
-    );
-  }
-  return legacy;
+  return preloadRelationshipFactsLegacy(input);
 }
 
 async function preloadRelationshipFactsLegacy(input: RelationshipProviderInput): Promise<RelationshipFactsBatch | undefined> {
@@ -278,45 +245,6 @@ async function preloadRelationshipFactsLegacy(input: RelationshipProviderInput):
   } catch (error) {
     return factsBatchFromQueryFailure(selectedPaths, error, degradedReasons);
   }
-}
-
-function factsBatchFromBundle(bundle: RelationshipBundleView): RelationshipFactsBatch {
-  const cache = new Map<string, JavaSourceFacts | undefined>();
-  const degradedReasons: string[] = [];
-  let deadlineExceeded = false;
-  let cancelled = false;
-  for (const item of bundle.items) {
-    if (item.state === "FOUND") {
-      cache.set(item.absolutePath, item.facts);
-      continue;
-    }
-    cache.set(item.absolutePath ?? item.inputFile, undefined);
-    const reason = bundleItemReason(item);
-    if (reason === "DEADLINE_EXCEEDED") deadlineExceeded = true;
-    else if (reason === "CANCELLED") cancelled = true;
-    degradedReasons.push(`relationship facts ${reason}`);
-  }
-  const bundleCallees: RelationshipBundleCallees = new Map(bundle.anchors.map(anchor => [
-    anchor.anchorId,
-    {
-      targets: new Set(anchor.calleeTruncated ? [] : anchor.calleeTargetIds),
-      truncated: anchor.calleeTruncated
-    }
-  ]));
-  return {
-    cache,
-    degradedReasons: uniquePaths(degradedReasons),
-    deadlineExceeded,
-    cancelled,
-    partial: bundle.truncated || bundle.completion !== "COMPLETE" || deadlineExceeded || cancelled,
-    bundleCallees
-  };
-}
-
-function bundleItemReason(item: FactsForFileItem): string {
-  if (item.state === "DEGRADED") return item.reason;
-  if (item.state === "MISSING") return item.reason;
-  return "INDEX_INCOMPLETE";
 }
 
 function factsBatchFromQueryFailure(

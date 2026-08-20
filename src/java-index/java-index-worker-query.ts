@@ -4,7 +4,6 @@
 import type { JavaIndexRequest, JavaIndexResponse } from "./worker-protocol.js";
 import type { JavaIndexStatus, JavaTypeLookupResult, SourceRootCoverage } from "./index-types.js";
 import type { JavaIndexStore } from "./index-store.js";
-import { queryRelationshipBundle } from "./relationship-bundle-query.js";
 
 export type QueryHandlerDeps = {
   store?: JavaIndexStore;
@@ -104,20 +103,6 @@ export async function handleQueryCommand(request: JavaIndexRequest, deps: QueryH
     }
     case "QUERY_READ_RANGES": {
       deps.respond({ id: request.id, ok: true, value: await deps.queryReadRanges(request.requests) });
-      return true;
-    }
-    case "QUERY_RELATIONSHIP_BUNDLE": {
-      deps.respond({
-        id: request.id,
-        ok: true,
-        value: await queryRelationshipBundle({
-          generation: request.generation,
-          anchors: request.anchors,
-          candidateFiles: request.candidateFiles,
-          needs: request.needs,
-          limits: request.limits
-        }, deps)
-      });
       return true;
     }
     default:

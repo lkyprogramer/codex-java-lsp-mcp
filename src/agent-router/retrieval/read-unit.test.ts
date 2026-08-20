@@ -3,7 +3,6 @@ import test from "node:test";
 import type { CandidateFile, ImpactOptions } from "../../agent-types.js";
 import { buildReadPlan } from "../read-plan.js";
 import { closeContextRanges, buildReadUnits, windowsFromReadUnits } from "./read-unit-builder.js";
-import { observeRetrievalParity, resetRetrievalParityTracker, retrievalParityTracker } from "./plan-selector.js";
 import { planWithinRetrievalBudget, retrievalBudgetOverflowGaps } from "./selection-policy.js";
 import { retrievalBudgetFor, type MaterializedReadWindow } from "./retrieval-types.js";
 import { protectedSelectionUtility, selectionUtility } from "./selection-utility.js";
@@ -134,10 +133,7 @@ test("hard files/spans/bytes caps report overflow without inventing a new select
   assert.equal(planWithinRetrievalBudget([unit], retrievalBudgetFor("balanced", { maxFiles: 6, maxReadBytes: 14 * 1024 })), true);
 });
 
-test("buildReadPlan ReadUnit path keeps first-call identity with the legacy selector", async () => {
-  resetRetrievalParityTracker();
-  const previous = process.env.JAVA_LSP_READUNIT_PLANNER;
-  process.env.JAVA_LSP_READUNIT_PLANNER = "shadow";
+test("buildReadPlan ReadUnit path keeps first-call file identity", async () => {
   const anchor = candidate({ reasons: ["target"], categories: ["target"], score: 1000 });
   const impl = candidate({
     absolutePath: "/repo/src/main/java/demo/OrderServiceImpl.java",
@@ -152,49 +148,27 @@ test("buildReadPlan ReadUnit path keeps first-call identity with the legacy sele
     }]
   });
   const files = [anchor, impl];
-  try {
-    const result = await buildReadPlan({
-      files,
-      ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
-      options: { ...options, mode: "minimal", readPlanMaxItems: 2 },
-      javaIndex: {
-        async queryReadRanges(requests: Array<{ file: string }>) {
-          return requests.map(request => ({
-            file: request.file,
-            ranges: [{
-              startLine: 1,
-              endLine: 10,
-              range: { start: { line: 1, column: 1 }, end: { line: 11, column: 1 } },
-              kind: "method" as const,
-              estimatedBytes: 400
-            }]
-          }));
-        }
-      } as never
-    });
-    assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F2"]);
-    assert.equal(result.items.some(item => JSON.stringify(item).includes("/repo/")), false);
-    assert.equal(retrievalParityTracker.matches, 1);
-    assert.equal(retrievalParityTracker.mismatches, 0);
-    const report = observeRetrievalParity(
-      buildReadUnits({
-        windows: files.map(file => windowFor(file, ["method"])),
-        ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
-        options,
-        priorityOf: () => "P1"
-      }),
-      buildReadUnits({
-        windows: files.map(file => windowFor(file, ["method"])),
-        ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
-        options,
-        priorityOf: () => "P1"
-      })
-    );
-    assert.equal(report.match, true);
-  } finally {
-    if (previous === undefined) delete process.env.JAVA_LSP_READUNIT_PLANNER;
-    else process.env.JAVA_LSP_READUNIT_PLANNER = previous;
-  }
+  const result = await buildReadPlan({
+    files,
+    ids: new Map(files.map((file, index) => [file.absolutePath, `F${index + 1}`])),
+    options: { ...options, mode: "minimal", readPlanMaxItems: 2 },
+    javaIndex: {
+      async queryReadRanges(requests: Array<{ file: string }>) {
+        return requests.map(request => ({
+          file: request.file,
+          ranges: [{
+            startLine: 1,
+            endLine: 10,
+            range: { start: { line: 1, column: 1 }, end: { line: 11, column: 1 } },
+            kind: "method" as const,
+            estimatedBytes: 400
+          }]
+        }));
+      }
+    } as never
+  });
+  assert.deepEqual(result.items.map(item => item.fileId), ["F1", "F2"]);
+  assert.equal(result.items.some(item => JSON.stringify(item).includes("/repo/")), false);
 });
 
 test("read-plan-budget remains the candidate-tail coverage helper, not the V6 byte-aware selector", async () => {

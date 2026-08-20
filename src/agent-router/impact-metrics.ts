@@ -79,8 +79,7 @@ const RELATIONSHIP_RPC_OPERATIONS = new Set<JavaIndexRpcOperation>([
   "QUERY_CALLEES",
   "QUERY_CALLEES_BATCH",
   "QUERY_FILES",
-  "QUERY_READ_RANGES",
-  "QUERY_RELATIONSHIP_BUNDLE"
+  "QUERY_READ_RANGES"
 ]);
 
 export type RelationshipRpcSummary = {
@@ -97,7 +96,6 @@ export function relationshipRpcSummary(metrics: JavaIndexRpcMetrics, anchorCount
   for (const [operation, value] of Object.entries(metrics.operations) as Array<[JavaIndexRpcOperation, JavaIndexRpcOperationMetrics | undefined]>) {
     if (!value || !RELATIONSHIP_RPC_OPERATIONS.has(operation)) continue;
     relationshipOperations += value.count;
-    if (operation === "QUERY_RELATIONSHIP_BUNDLE") bundleCount += value.count;
   }
   const boundedAnchors = Number.isFinite(anchorCount) ? Math.max(0, anchorCount) : 0;
   return {

@@ -22,7 +22,6 @@ import {
   validateJavaIndexStatus,
   validateMyBatisMapperResourceFacts,
   validateMyBatisResourceByNamespaceBatch,
-  validateRelationshipBundleWorkerValue,
   validateRepositoryFactMarkers,
   validateStringArray,
   validateTypeFactsArray,
@@ -36,7 +35,6 @@ import {
   type JavaIndexWorktreeIdentity,
   type MyBatisResourceByNamespaceBatch
 } from "./worker-protocol.js";
-import type { RelationshipBundleRequest, RelationshipBundleWorkerValue } from "./relationship-bundle.js";
 
 export type JavaIndexOpenOptions = {
   /** Absent => the worker never acquires a machine-level sweep lease. */
@@ -336,25 +334,6 @@ export class JavaIndexClient {
     await this.ensureOpen(requestOptions);
     if (requests.length === 0) return [];
     return this.request({ type: "QUERY_READ_RANGES", requests }, validateIndexedReadRangeResults, requestOptions);
-  }
-
-  async queryRelationshipBundle(
-    request: RelationshipBundleRequest,
-    requestOptions: JavaIndexRequestOptions = {}
-  ): Promise<RelationshipBundleWorkerValue> {
-    await this.ensureOpen(requestOptions);
-    return this.request(
-      {
-        type: "QUERY_RELATIONSHIP_BUNDLE",
-        generation: request.generation,
-        anchors: request.anchors,
-        candidateFiles: request.candidateFiles,
-        needs: request.needs,
-        limits: request.limits
-      },
-      validateRelationshipBundleWorkerValue,
-      requestOptions
-    );
   }
 
   async queryMyBatisResource(

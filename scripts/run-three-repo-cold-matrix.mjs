@@ -18,8 +18,6 @@ import {
   buildEnvLock,
   COMPARISON_POLICY_ENV_LOCKED,
   COMPARISON_POLICY_EXECUTABLE,
-  continueBenchArgs,
-  CONTINUE_POLICY_IN_POOL_FIFO,
   ENV_AB_ALLOWLIST,
   fingerprintTreatment,
   FORMAL_REQUEST_DEADLINE_MS,
@@ -883,9 +881,8 @@ export function parseCli(args) {
   if (comparisonPolicy !== COMPARISON_POLICY_EXECUTABLE && comparisonPolicy !== COMPARISON_POLICY_ENV_LOCKED) {
     throw new Error("--comparison-policy must be executable-code-baseline or env-locked-same-tree");
   }
-  const candidateContinue = options.get("--candidate-continue") || null;
-  if (candidateContinue && candidateContinue !== CONTINUE_POLICY_IN_POOL_FIFO) {
-    throw new Error("--candidate-continue must be in-pool-fifo");
+  if (options.get("--candidate-continue")) {
+    throw new Error("retrieval continuation was removed in JIN N0");
   }
   const oldTreatment = {
     env: assignmentsFromPairs(baselineEnvPairs, "--baseline-env"),
@@ -893,13 +890,13 @@ export function parseCli(args) {
   };
   const newTreatment = {
     env: assignmentsFromPairs(candidateEnvPairs, "--candidate-env"),
-    benchArgs: continueBenchArgs(candidateContinue)
+    benchArgs: []
   };
   const emptyFingerprint = fingerprintTreatment({ env: {}, benchArgs: [] });
   const hasTreatment = fingerprintTreatment(oldTreatment) !== emptyFingerprint
     || fingerprintTreatment(newTreatment) !== emptyFingerprint;
   if (hasTreatment && comparisonPolicy !== COMPARISON_POLICY_ENV_LOCKED) {
-    throw new Error("--candidate-env/--baseline-env/--candidate-continue require --comparison-policy env-locked-same-tree");
+    throw new Error("--candidate-env/--baseline-env require --comparison-policy env-locked-same-tree");
   }
   if (comparisonPolicy === COMPARISON_POLICY_ENV_LOCKED
     && fingerprintTreatment(oldTreatment) === fingerprintTreatment(newTreatment)) {
@@ -997,8 +994,7 @@ function printUsage() {
   --lishuedu <repo-root> --cipherlink <repo-root> --exam-parent-v3 <repo-root> \\
   [--candidate-root <codex-java-lsp-mcp-root>] --output-dir <new-dir-outside-source-checkout> \\
   [--runs 5] [--p95-limit 1.25] [--diagnostic-rpc-sidecar] [--keep-worktrees] \\
-  [--comparison-policy executable-code-baseline|env-locked-same-tree] \\
-  [--baseline-env KEY=VAL] [--candidate-env KEY=VAL] [--candidate-continue in-pool-fifo]`);
+  [--comparison-policy executable-code-baseline|env-locked-same-tree]`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

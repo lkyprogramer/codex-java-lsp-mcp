@@ -4,8 +4,7 @@
 import type { CandidateEvidenceKey, CandidateFile, ImpactMode, ReadPriority, ReadRange } from "../../agent-types.js";
 import type { SourceRange } from "../../runtime/source-range.js";
 
-export const JAVA_LSP_READUNIT_PLANNER = "JAVA_LSP_READUNIT_PLANNER";
-export const JAVA_LSP_FRONTIER_SHADOW = "JAVA_LSP_FRONTIER_SHADOW";
+
 
 export type ReadUnitPlannerMode = "off" | "shadow" | "on";
 export type FrontierShadowMode = "off" | "shadow";
@@ -132,19 +131,6 @@ export type RetrievalParityReport = {
   selected: ReadUnitIdentity[];
   legacy: ReadUnitIdentity[];
 };
-
-export function readUnitPlannerMode(env: NodeJS.ProcessEnv = process.env): ReadUnitPlannerMode {
-  const raw = env[JAVA_LSP_READUNIT_PLANNER];
-  if (raw === "1" || raw === "on") return "on";
-  if (raw === "shadow") return "shadow";
-  return "off";
-}
-
-export function frontierShadowMode(env: NodeJS.ProcessEnv = process.env): FrontierShadowMode {
-  const raw = env[JAVA_LSP_FRONTIER_SHADOW];
-  if (raw === "off" || raw === "0") return "off";
-  return "shadow";
-}
 
 export function retrievalBudgetFor(
   mode: ImpactMode,

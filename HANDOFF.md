@@ -1,5 +1,11 @@
 # HANDOFF
 
+## JIN N0 COMPLETE（2026-08-20）
+
+分支 `codex/jin-main`。tag `v5r-evidence-baseline` = `aa4098f`。  
+N0 T3 vs tag：**质量+token identity**。生产 LOC 39466→37410。未合 `main`。  
+报告：`docs/phase-jin/jin-phase-n0-20260820.md`。下一阶段 **N0.5** 紧凑合同。
+
 ## V5R live agent-trace（MEASURED，2026-08-20）
 
 对外 OpenAI-compatible host `192.168.10.29:28343`，模型 `openclaw/Qwen3.8-27B-WORK`，窗口 112Ki（114688）。密钥不入库。

@@ -14,12 +14,7 @@ export const VERIFIER_VERSION = 6;
 export const FORMAL_REQUEST_DEADLINE_MS = 2_000;
 export const COMPARISON_POLICY_EXECUTABLE = "executable-code-baseline";
 export const COMPARISON_POLICY_ENV_LOCKED = "env-locked-same-tree";
-export const ENV_AB_ALLOWLIST = Object.freeze([
-  "JAVA_LSP_FRONTIER_SHADOW",
-  "JAVA_LSP_RELATIONSHIP_BUNDLE",
-  "JAVA_LSP_SPAN_PACKING",
-  "JAVA_LSP_READUNIT_PLANNER"
-]);
+export const ENV_AB_ALLOWLIST = Object.freeze([]);
 export const CONTINUE_POLICY_IN_POOL_FIFO = "in-pool-fifo";
 
 const EPSILON = 1e-12;
@@ -776,10 +771,7 @@ export function fingerprintTreatment(treatment) {
 
 export function continueBenchArgs(policy) {
   if (!policy) return [];
-  if (policy === CONTINUE_POLICY_IN_POOL_FIFO) {
-    return ["--retrieval-enabled", "--continue-policy", CONTINUE_POLICY_IN_POOL_FIFO];
-  }
-  throw new Error(`unsupported --candidate-continue: ${policy}`);
+  throw new Error("retrieval continuation was removed in JIN N0");
 }
 
 export function buildEnvLock(oldTreatment, newTreatment) {

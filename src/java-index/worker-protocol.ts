@@ -32,7 +32,6 @@ import type {
 } from "./index-types.js";
 
 import type { MyBatisMapperResourceFacts, MyBatisResultMapFact, MyBatisStatementFact, MyBatisStatementKind } from "./mybatis-types.js";
-import type { RelationshipBundleWorkerValue } from "./relationship-bundle.js";
 
 /**
  * Worker CLOSE may join one already-started atomic snapshot write. Keep the
@@ -88,28 +87,6 @@ type JavaIndexRequestOperation =
   | { id: number; type: "QUERY_METHODS_WITH_PARAMETER_TYPES"; typeIds: string[]; limit: number }
   | { id: number; type: "QUERY_FILES"; files: string[] }
   | { id: number; type: "QUERY_READ_RANGES"; requests: Array<{ file: string; positions: SourcePosition[] }> }
-  | {
-      id: number;
-      type: "QUERY_RELATIONSHIP_BUNDLE";
-      generation: number;
-      anchors: Array<{ anchorId: string; file: string; line: number; column: number; methodId?: string }>;
-      candidateFiles: string[];
-      needs: {
-        anchorFacts: boolean;
-        candidateFacts: boolean;
-        directCallees: boolean;
-        implementationOverrides: boolean;
-        signatureDefinitions: boolean;
-        frameworkFacts: boolean;
-        readRanges: boolean;
-      };
-      limits: {
-        maxCandidateFiles: number;
-        maxDefinitions: number;
-        maxCallees: number;
-        maxImplementations: number;
-      };
-    }
   | { id: number; type: "QUERY_MYBATIS_RESOURCE"; relativePath: string }
   | { id: number; type: "QUERY_MYBATIS_RESOURCES_BY_NAMESPACE"; namespaces: string[] }
   | { id: number; type: "QUERY_REPOSITORY_FACT_MARKERS"; importPrefixes: string[]; annotationPrefixes: string[] }
@@ -969,61 +946,6 @@ export function validateIndexedReadRangeResults(value: unknown): IndexedReadRang
       ...withOptional("extremeMethod", extremeMethod)
     };
   });
-}
-
-export function validateRelationshipBundleWorkerValue(value: unknown): RelationshipBundleWorkerValue {
-  const context = "RelationshipBundleWorkerValue";
-  const source = record(value, context);
-  if (!isNumber(source.generation)) invalid(context, "generation");
-  if (!isNumber(source.indexedGeneration)) invalid(context, "indexedGeneration");
-  if (!isBoolean(source.stale)) invalid(context, "stale");
-  if (!isOneOf(source.completion, ["COMPLETE", "PARTIAL", "DEGRADED"] as const)) invalid(context, "completion");
-  if (!isBoolean(source.truncated)) invalid(context, "truncated");
-  const anchors = array(source.anchors, `${context}.anchors`).map((entry, index) =>
-    validateRelationshipBundleAnchorResult(entry, `${context}.anchors[${index}]`));
-  const files = validateFileBundleArray(source.files);
-  const readRanges = optional(source.readRanges, `${context}.readRanges`, validateIndexedReadRangeResults);
-  const metricsSource = record(source.metrics, `${context}.metrics`);
-  if (!isNumber(metricsSource.parsedFiles)) invalid(`${context}.metrics`, "parsedFiles");
-  if (!isNumber(metricsSource.hydratedFiles)) invalid(`${context}.metrics`, "hydratedFiles");
-  if (!isNumber(metricsSource.cacheHits)) invalid(`${context}.metrics`, "cacheHits");
-  if (!isNumber(metricsSource.queryCount)) invalid(`${context}.metrics`, "queryCount");
-  return {
-    generation: source.generation,
-    indexedGeneration: source.indexedGeneration,
-    stale: source.stale,
-    completion: source.completion,
-    truncated: source.truncated,
-    anchors,
-    files,
-    ...withOptional("readRanges", readRanges),
-    metrics: {
-      parsedFiles: metricsSource.parsedFiles,
-      hydratedFiles: metricsSource.hydratedFiles,
-      cacheHits: metricsSource.cacheHits,
-      queryCount: metricsSource.queryCount
-    }
-  };
-}
-
-function validateRelationshipBundleAnchorResult(
-  value: unknown,
-  context: string
-): RelationshipBundleWorkerValue["anchors"][number] {
-  const source = record(value, context);
-  if (!isString(source.anchorId)) invalid(context, "anchorId");
-  if (!isBoolean(source.calleeTruncated)) invalid(context, "calleeTruncated");
-  const methodId = optional(source.methodId, `${context}.methodId`, isAssertString);
-  const ownerTypeId = optional(source.ownerTypeId, `${context}.ownerTypeId`, isAssertString);
-  return {
-    anchorId: source.anchorId,
-    ...withOptional("methodId", methodId),
-    ...withOptional("ownerTypeId", ownerTypeId),
-    directCalls: validateIndexedReferenceArray(source.directCalls),
-    implementations: validateTypeFactsArray(source.implementations),
-    signatureLookups: validateTypeLookupArray(source.signatureLookups),
-    calleeTruncated: source.calleeTruncated
-  };
 }
 
 const MYBATIS_STATEMENT_KINDS = ["select", "insert", "update", "delete"] as const satisfies readonly MyBatisStatementKind[];

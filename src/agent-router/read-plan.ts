@@ -17,20 +17,9 @@ import type { SourceRange } from "../runtime/source-range.js";
 import { hasProtectedStructuralSignal } from "./ranking-signals.js";
 import { selectWithEvidenceBudget } from "./read-plan-budget.js";
 import { evidenceKeys, hasNovelEvidence as fileHasNovelEvidence } from "./retrieval/evidence-features.js";
-import { observeRetrievalParity, selectedReadUnits } from "./retrieval/plan-selector.js";
-import { buildReadUnits, windowsFromReadUnits } from "./retrieval/read-unit-builder.js";
-import { buildFrontier } from "./retrieval/frontier-builder.js";
+import { buildReadUnits, selectedReadUnits, windowsFromReadUnits } from "./retrieval/read-unit-builder.js";
 import {
-  packSelectedUnits,
-  spanPackingMode,
-  spanPackingProfile,
-  type SpanPackingReport
-} from "./retrieval/span-packer.js";
-import {
-  frontierShadowMode,
-  readUnitPlannerMode,
   retrievalBudgetFor,
-  type FrontierShadowReport,
   type MaterializedReadWindow
 } from "./retrieval/retrieval-types.js";
 import { retrievalBudgetOverflowGaps } from "./retrieval/selection-policy.js";
@@ -126,10 +115,6 @@ export type ReadPlanBuildResult = {
   evidenceGaps: string[];
   /** Diagnostic-only selection trace; regular output consumers do not expose it. */
   marginalUtilityBySelectedFile: Record<string, number>;
-  /** Diagnostic-only frontier shadow. Absent when JAVA_LSP_FRONTIER_SHADOW=off. */
-  frontierShadow?: FrontierShadowReport;
-  /** Diagnostic-only span packing. Absent when JAVA_LSP_SPAN_PACKING=off. */
-  spanPacking?: SpanPackingReport;
 };
 
 /**
@@ -164,31 +149,8 @@ export async function buildReadPlan(input: BuildReadPlanInput): Promise<ReadPlan
   const plannerWindows = windowsFromReadUnits(units);
   const result = selectTokenAwarePlan(plannerWindows, input.ids, input.options, selectionBudget, protectedPaths);
   const selectedUnits = selectedReadUnits(units, result.selectedPaths);
-  if (readUnitPlannerMode() === "shadow") {
-    const legacy = selectTokenAwarePlan(windows, input.ids, input.options, selectionBudget, protectedPaths);
-    observeRetrievalParity(selectedUnits, selectedReadUnits(units, legacy.selectedPaths));
-  }
   const retrievalBudget = retrievalBudgetFor(input.options.mode, selectionBudget);
-  if (frontierShadowMode() !== "off") {
-    result.frontierShadow = buildFrontier(units, result.selectedPaths, retrievalBudget);
-  }
-  const packingMode = spanPackingMode();
-  let packedUnits = selectedUnits;
-  if (packingMode !== "off") {
-    const packed = packSelectedUnits(selectedUnits, spanPackingProfile(input.options.mode), retrievalBudget);
-    result.spanPacking = { ...packed.report, mode: packingMode };
-    if (packingMode === "on") {
-      packedUnits = packed.units;
-      const packedByPath = new Map(packed.units.map(unit => [unit.absolutePath, unit]));
-      result.items = result.items.map((item, index) => {
-        const unit = packedByPath.get(result.selectedPaths[index]!) ?? packed.units[index];
-        if (!unit) return item;
-        return { ...item, ranges: unit.mergedRanges, estimatedBytes: unit.estimatedBytes };
-      });
-      result.totalBytes = packed.units.reduce((sum, unit) => sum + unit.estimatedBytes, 0);
-    }
-  }
-  const capGaps = retrievalBudgetOverflowGaps(packedUnits, retrievalBudget);
+  const capGaps = retrievalBudgetOverflowGaps(selectedUnits, retrievalBudget);
   if (capGaps.length > 0) {
     result.evidenceGaps = [...new Set([...result.evidenceGaps, ...capGaps])];
   }

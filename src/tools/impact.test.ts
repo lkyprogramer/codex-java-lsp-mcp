@@ -28,20 +28,14 @@ test("impact exposes exactly one timeout control", () => {
   assert.equal(Object.hasOwn(impactSchema, "semanticTimeoutMs"), false);
 });
 
-test("impact action=continue rejects anchors and requires continuation", async () => {
-  const context = capturingContext([]);
-  await assert.rejects(
-    () => javaImpact(context, { ...args("standard"), action: "continue", anchors: undefined, continuation: undefined }),
-    /requires continuation/
-  );
-  await assert.rejects(
-    () => javaImpact(context, {
-      ...args("standard"),
-      action: "continue",
-      continuation: { sessionId: "a".repeat(32), ids: ["C1"] }
-    }),
-    /forbids anchors/
-  );
+test("impact schema no longer exposes continue", () => {
+  const parsed = z.object(impactSchema).safeParse({
+    file: "src/main/java/demo/Demo.java",
+    line: 1,
+    column: 1,
+    action: "continue"
+  });
+  assert.equal(parsed.success, false);
 });
 
 test("impact projects the absolute deadline onto the internal semantic stage timeout", async () => {

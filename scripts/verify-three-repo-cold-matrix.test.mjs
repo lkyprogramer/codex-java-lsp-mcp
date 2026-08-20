@@ -123,12 +123,9 @@ test("verifier rejects env-locked-same-tree when executable trees differ", async
 });
 
 test("parseEnvAssignment rejects unknown keys and empty values", () => {
-  assert.deepEqual(
-    parseEnvAssignment("JAVA_LSP_FRONTIER_SHADOW=off", "--candidate-env"),
-    { key: "JAVA_LSP_FRONTIER_SHADOW", value: "off" }
-  );
+  assert.throws(() => parseEnvAssignment("JAVA_LSP_EXAMPLE_FLAG=off", "--candidate-env"), /allowlisted/);
   assert.throws(() => parseEnvAssignment("JAVA_LSP_JAVA_INDEX_DUAL_WORKER=1", "--candidate-env"), /allowlisted/);
-  assert.throws(() => parseEnvAssignment("JAVA_LSP_SPAN_PACKING=", "--candidate-env"), /KEY=VAL/);
+  assert.throws(() => parseEnvAssignment("JAVA_LSP_EXAMPLE_FLAG=", "--candidate-env"), /KEY=VAL/);
 });
 
 test("verifier accepts a source-locked candidate patch on the same base commit", async t => {
@@ -476,7 +473,7 @@ async function fixtureMatrix(overrides = {}, fixtureOptions = {}) {
         buildStamp: { gitSha: "222222222222", generatedAt: "2026-08-09T00:01:00.000Z", defaultsFingerprint: "new-defaults" }
       };
   const oldTreatment = fixtureOptions.oldTreatment || { env: {}, benchArgs: [] };
-  const newTreatment = fixtureOptions.newTreatment || { env: { JAVA_LSP_FRONTIER_SHADOW: "off" }, benchArgs: [] };
+  const newTreatment = fixtureOptions.newTreatment || { env: {}, benchArgs: ["--placeholder"] };
   const envLock = envLocked ? buildEnvLock(oldTreatment, newTreatment) : undefined;
   const candidatePatch = "candidate patch fixture\n";
   const candidatePatchFile = path.join(root, "candidate.patch");

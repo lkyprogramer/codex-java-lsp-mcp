@@ -52,12 +52,10 @@ test("benchmark loads scenarios from external jsonl and prints metadata", async 
   assert.equal(payload.metadata.indexBackend, "v2");
   assert.equal(payload.metadata.indexPrepareTimeoutMs, 600000);
   assert.equal(payload.metadata.readPlanMaxBytes, 2048);
-  assert.equal(payload.metadata.retrievalEnabled, false);
-  assert.equal(payload.metadata.continuePolicy, undefined);
   assert.equal(payload.scenarios[0].id, "demo");
 });
 
-test("continue-policy requires retrieval-enabled", () => {
+test("retrieval continuation flags are rejected", () => {
   const result = spawnSync(process.execPath, [
     "dist/benchmark-agent-impact.js",
     "--continue-policy", "in-pool-fifo",
@@ -68,39 +66,7 @@ test("continue-policy requires retrieval-enabled", () => {
     env: { ...process.env, JAVA_LSP_ISOLATED_VALIDATION: "1" }
   });
   assert.notEqual(result.status, 0);
-  assert.match(`${result.stderr}${result.stdout}`, /--continue-policy requires --retrieval-enabled/);
-});
-
-test("list-scenarios records in-pool-fifo continue treatment", async () => {
-  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-benchmark-continue-"));
-  const goldenDir = path.join(root, "golden");
-  await mkdir(goldenDir, { recursive: true });
-  const scenarioFile = path.join(goldenDir, "generic-java.scenarios.jsonl");
-  await writeFile(scenarioFile, `${JSON.stringify({
-    id: "demo",
-    name: "Demo",
-    projectId: "generic-java",
-    anchor: { file: "src/main/java/demo/Demo.java", line: 1, column: 1, profile: "service" },
-    golden: { mustHit: ["src/main/java/demo/Demo.java"], taskBlocking: [], shouldHit: [], support: [] }
-  })}\n`);
-  const result = spawnSync(process.execPath, [
-    "dist/benchmark-agent-impact.js",
-    "--repo-root", root,
-    "--scenarios", scenarioFile,
-    "--project-id", "generic-java",
-    "--warm-state", "cold-nolsp",
-    "--retrieval-enabled",
-    "--continue-policy", "in-pool-fifo",
-    "--list-scenarios"
-  ], {
-    cwd: path.resolve(import.meta.dirname, ".."),
-    encoding: "utf8",
-    env: { ...process.env, JAVA_LSP_ISOLATED_VALIDATION: "1" }
-  });
-  assert.equal(result.status, 0, result.stderr);
-  const payload = JSON.parse(result.stdout);
-  assert.equal(payload.metadata.retrievalEnabled, true);
-  assert.equal(payload.metadata.continuePolicy, "in-pool-fifo");
+  assert.match(`${result.stderr}${result.stdout}`, /retrieval continuation was removed/);
 });
 
 test("benchmark records an explicitly isolated JavaIndex cache directory", async () => {

@@ -19,6 +19,13 @@ export function buildReadUnits(input: {
   return input.windows.map(window => readUnitFromWindow(window, input.ids, input.options, input.priorityOf));
 }
 
+export function selectedReadUnits(units: readonly ReadUnit[], selectedPaths: readonly string[]): ReadUnit[] {
+  const order = new Map(selectedPaths.map((path, index) => [path, index]));
+  return units
+    .filter(unit => order.has(unit.absolutePath))
+    .sort((left, right) => (order.get(left.absolutePath) ?? 0) - (order.get(right.absolutePath) ?? 0));
+}
+
 export function windowsFromReadUnits(units: readonly ReadUnit[]): MaterializedReadWindow[] {
   return units.map(unit => ({
     file: unit.file,

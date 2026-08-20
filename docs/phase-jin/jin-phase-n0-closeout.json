@@ -1,0 +1,71 @@
+{
+  "schemaVersion": "jin-phase-n0-closeout/v1",
+  "phase": "N0",
+  "dated": "2026-08-20",
+  "decision": "COMPLETE",
+  "mergeToMain": false,
+  "tag": "v5r-evidence-baseline",
+  "tagCommit": "aa4098fbb5da69eb0d7ae55231e4119fb5129cac",
+  "t3": {
+    "old": { "commit": "aa4098fbb5da69eb0d7ae55231e4119fb5129cac", "executableTree": "a045b6dcc80127db1a40e58b8ad5630df9430764" },
+    "new": { "commit": "a9a935c2ddcca96e8ea313fad000e6cf893e8e82", "executableTree": "67184b53bcb94fd4fc4eb0ce91b4629a633c7e85" },
+    "identity": true,
+    "absoluteOneResidual": true,
+    "verifierExit": 1,
+    "summarySha256": "c5f207178392b2c88e41cc25e005219b32d018766a45eec4a7055831f7490c3c",
+    "manifestSha256": "b34e95516a1a1be264695932e3888284edca0f8ad22efd13cf847e1dc0e3c06a",
+    "load": 19.55,
+    "note": "recall/pRead/rReadMust/RangeLineRecall/holdout/tokens bit-identical. estimatedTokens P50 delta 0. Gate FAIL is residual 1.0 only."
+  },
+  "productionLoc": {
+    "before": 39466,
+    "after": 37410,
+    "delta": -2056,
+    "fileCountBefore": 160,
+    "fileCountAfter": 148,
+    "inventorySha256After": "bcea57e618cfc148a617356bc315c56bbd29722710affb6824d83611b68fb56b"
+  },
+  "deleted": [
+    "src/agent-router/retrieval/frontier-builder.ts",
+    "src/agent-router/retrieval/span-packer.ts",
+    "src/agent-router/retrieval/plan-selector.ts",
+    "src/agent-router/retrieval/retrieval-session-service.ts",
+    "src/agent-router/retrieval/retrieval-session-store.ts",
+    "src/agent-router/output-v7.ts",
+    "src/java-index/relationship-bundle.ts",
+    "src/java-index/relationship-bundle-query.ts",
+    "QUERY_RELATIONSHIP_BUNDLE",
+    "java_impact action=continue / retrieval.enabled",
+    "--candidate-continue / --retrieval-enabled / --continue-policy"
+  ],
+  "deferredToN6": [
+    {
+      "path": "src/agent-router/retrieval/read-unit-builder.ts",
+      "reason": "default path always builds ReadUnits before selectTokenAwarePlan"
+    },
+    {
+      "path": "src/agent-router/retrieval/evidence-features.ts",
+      "reason": "default shortlist/selection utility"
+    },
+    {
+      "path": "src/agent-router/retrieval/selection-utility.ts",
+      "reason": "default planner scoring"
+    },
+    {
+      "path": "src/agent-router/retrieval/selection-policy.ts",
+      "reason": "default overflow evidenceGaps"
+    },
+    {
+      "path": "src/agent-router/retrieval/retrieval-types.ts",
+      "reason": "ReadUnit/window types used by default builder"
+    },
+    {
+      "path": "src/agent-router/retrieval/cost-model.ts",
+      "reason": "output-v6 estimatedTokens reconstruction"
+    }
+  ],
+  "isolation": {
+    "t1": { "dist": 1040, "scripts": 185, "fail": 0, "jdtlsBin": "/usr/bin/false" },
+    "t3": { "isolation": "detached-local-clone", "jdtlsBin": "/usr/bin/false" }
+  }
+}
