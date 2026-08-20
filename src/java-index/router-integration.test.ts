@@ -8,6 +8,7 @@ import path from "node:path";
 import test from "node:test";
 import { gunzipSync, gzipSync } from "node:zlib";
 import { AgentRouter } from "../agent-router/index.js";
+import { asImpactResult, viewImpactFiles } from "../agent-router/output-compact.js";
 import type { ImpactOptions } from "../agent-types.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import { RgRunner } from "../search/rg-runner.js";
@@ -17,7 +18,7 @@ import { resolveWorktreeIdentity } from "../worktree-identity.js";
 import { JavaIndexClient } from "./java-index-client.js";
 import { RouterJavaIndex } from "./router-java-index.js";
 
-function options(overrides: Partial<ImpactOptions>): ImpactOptions {
+function options<const T extends Partial<ImpactOptions>>(overrides: T): ImpactOptions & T {
   return {
     anchors: [],
     mode: "balanced",
@@ -30,7 +31,7 @@ function options(overrides: Partial<ImpactOptions>): ImpactOptions {
     taskKeywords: [],
     crossModulePolicy: "auto",
     ...overrides
-  };
+  } as ImpactOptions & T;
 }
 
 class EmptyRgRunner extends RgRunner {
@@ -262,12 +263,12 @@ test("complete JavaIndex resolves implementation relations even when naming reca
 
     const rg = new EmptyRgRunner();
     const router = new AgentRouter(root, new NoLspSession() as never, index, undefined, undefined, rg);
-    const impact = await router.impact(options({
+    const impact = asImpactResult(await router.impact(options({
       anchors: [{ file: gateway, line: 4, column: 18 }],
       profile: "port",
       taskKeywords: ["payment"],
       verbosity: "diagnostic"
-    }));
+    })));
 
     assert.ok(rg.calls > 0, "normal naming recall remains a separate asynchronous collector");
     const implementationCandidate = impact.files.find(file => String(file.path).endsWith("GatewayImpl.java"));
@@ -293,11 +294,11 @@ test("complete JavaIndex resolves implementation relations even when naming reca
       taskKeywords: ["payment"],
       verbosity: "diagnostic"
     });
-    const forward = await router.impact(multiAnchorOptions);
-    const reversed = await router.impact({
+    const forward = asImpactResult(await router.impact(multiAnchorOptions));
+    const reversed = asImpactResult(await router.impact({
       ...multiAnchorOptions,
       anchors: [...multiAnchorOptions.anchors].reverse()
-    });
+    }));
     assert.deepEqual(
       forward.files.map(file => file.path),
       reversed.files.map(file => file.path),
@@ -402,7 +403,7 @@ test("production ranking observer sees the exact in-request family rank and sele
       ranked: readonly import("../agent-router/evidence.js").CandidateEvidence[];
       selectedPaths: readonly string[];
     } | undefined;
-    const diagnosticImpact = await router.impact(options({
+    const diagnosticImpact = asImpactResult(await router.impact(options({
       anchors,
       profile: "dto",
       mode: "balanced",
@@ -412,7 +413,7 @@ test("production ranking observer sees the exact in-request family rank and sele
       productionRanking(ranked, selectedPaths) {
         observed = { ranked, selectedPaths };
       }
-    });
+    }));
     assert.ok(observed, "the benchmark-only observer must receive the final production rank");
     assert.ok(
       observed.ranked.some(item => item.file.endsWith("OrderProcessor.java")),
@@ -474,13 +475,13 @@ test("V2 type-reference evidence upgrades a candidate that naming recall found f
       undefined,
       new FixedFileRgRunner(processor)
     );
-    const impact = await router.impact(options({
+    const impact = asImpactResult(await router.impact(options({
       anchors: [{ file: request, line: 3, column: 15 }],
       profile: "dto",
       mode: "balanced",
       readPlanMaxItems: 2,
       verbosity: "diagnostic"
-    }));
+    })));
     const processorCandidate = impact.files.find(file => String(file.path).endsWith("OrderProcessor.java"));
 
     assert.ok(processorCandidate, "ordinary naming recall should return the processor first");
@@ -641,7 +642,8 @@ test("sibling-seeded V2 router never returns a stale implementation before its f
       // main-only roots, not conflated with generic test-file deferral.
       testReadMode: "include"
     }));
-    const beforeMainImpl = beforeRefresh.files.find(file => String(file.path).endsWith("GatewayImpl.java") && !String(file.path).includes("Test"));
+    const beforePaths = viewImpactFiles(beforeRefresh);
+    const beforeMainImpl = beforePaths.find(file => file.endsWith("GatewayImpl.java") && !file.includes("Test"));
     if (beforeMainImpl) {
       // The router's bounded foreground closure (V3.2-17) may proactively
       // self-heal an anchor-adjacent interface's implementer before this
@@ -655,7 +657,7 @@ test("sibling-seeded V2 router never returns a stale implementation before its f
       );
     }
     assert.equal(
-      beforeRefresh.files.some(file => String(file.path).endsWith("TestGatewayImpl.java")),
+      beforePaths.some(file => file.endsWith("TestGatewayImpl.java")),
       false,
       "an implementer outside the bounded foreground scan's main-only roots must stay unresolved, not fall back to primary's stale content"
     );
@@ -666,7 +668,7 @@ test("sibling-seeded V2 router never returns a stale implementation before its f
       profile: "port"
     }));
     assert.ok(
-      afterRefresh.files.some(file => String(file.path).endsWith("GatewayImpl.java") && !String(file.path).includes("Test")),
+      viewImpactFiles(afterRefresh).some(file => file.endsWith("GatewayImpl.java") && !file.includes("Test")),
       "after target foreground refresh, the linked worktree implementation must be selected"
     );
   } finally {

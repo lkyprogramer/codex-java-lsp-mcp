@@ -20,6 +20,7 @@ import {
   type RankCandidatesContext
 } from "./rank-candidates.js";
 import { buildImpactResult } from "./format.js";
+import type { CompactImpact } from "./output-compact.js";
 import {
   createImportGraphMetrics,
   JavaIndexRpcTelemetryCollector,
@@ -198,10 +199,25 @@ export class AgentRouter {
   }
 
   async impact(
+    options: ImpactOptions & { verbosity: "diagnostic" },
+    request?: RequestContext,
+    internalObserver?: ImpactInternalObserver
+  ): Promise<ImpactResult>;
+  async impact(
     options: ImpactOptions,
     request?: RequestContext,
     internalObserver?: ImpactInternalObserver
-  ): Promise<ImpactResult> {
+  ): Promise<CompactImpact>;
+  async impact(
+    options: ImpactOptions,
+    request?: RequestContext,
+    internalObserver?: ImpactInternalObserver
+  ): Promise<ImpactResult | CompactImpact>;
+  async impact(
+    options: ImpactOptions,
+    request?: RequestContext,
+    internalObserver?: ImpactInternalObserver
+  ): Promise<ImpactResult | CompactImpact> {
     const budget = request?.budget ?? DeadlineBudget.fromTimeout(DEFAULT_ROUTER_DEADLINE_MS);
     const javaIndexTelemetry = options.verbosity === "diagnostic"
       && process.env.JAVA_LSP_JAVA_INDEX_RPC_TELEMETRY !== "0"
@@ -219,7 +235,7 @@ export class AgentRouter {
     budget: DeadlineBudget,
     javaIndexTelemetry?: JavaIndexRpcTelemetryCollector,
     internalObserver?: ImpactInternalObserver
-  ): Promise<ImpactResult> {
+  ): Promise<ImpactResult | CompactImpact> {
     // A generation of 0 with reads/writes allowed reproduces the pre-freshness
     // behavior for callers (benchmarks/tests) that do not build a RequestContext.
     const freshness = request ?? {

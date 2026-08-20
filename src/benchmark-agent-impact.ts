@@ -7,6 +7,16 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import { AgentRouter, type ImpactInternalObserver } from "./agent-router/index.js";
+import {
+  asImpactResult,
+  isCompactImpact,
+  viewDistinctReadFiles,
+  viewImpactFiles,
+  viewReadPlanBytes,
+  viewReadPlanRangeCount,
+  viewSelectedRangesByFile,
+  type CompactImpact
+} from "./agent-router/output-compact.js";
 import type { CandidateEvidence } from "./agent-router/evidence.js";
 import { FRAMEWORK_ADAPTERS } from "./agent-router/providers/framework-provider.js";
 import type { ImpactOptions, ImpactResult } from "./agent-types.js";
@@ -336,11 +346,14 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
     : undefined;
   recordJavaIndexQueueDepth(canonical);
   const projectionStartedAt = performance.now();
-  const payloadProjection = cli.payloadProjections
-    ? buildImpactPayloadProjectionV3(canonical)
+  const diagnosticCanonical = cli.payloadProjections || cli.verbosity === "diagnostic"
+    ? asImpactResult(canonical)
     : undefined;
-  const result: ImpactResult = cli.payloadProjections
-    ? projectImpactResultV6(canonical, cli.verbosity)
+  const payloadProjection = diagnosticCanonical && cli.payloadProjections
+    ? buildImpactPayloadProjectionV3(diagnosticCanonical)
+    : undefined;
+  const result = diagnosticCanonical && cli.payloadProjections
+    ? projectImpactResultV6(diagnosticCanonical, cli.verbosity)
     : canonical;
   const payloadProjectionElapsedMs = cli.payloadProjections
     ? performance.now() - projectionStartedAt
@@ -348,7 +361,7 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
   const elapsedMs = routerElapsedMs;
   const rawSearchPayload = Buffer.byteLength(JSON.stringify(result), "utf8");
   const readingPayload = readPlanBytes(result);
-  const candidatePaths = result.files.map(file => String(file.path));
+  const candidatePaths = viewImpactFiles(result);
   const readFiles = distinctReadFiles(result);
   const quality = evaluate(candidatePaths, readFiles, scenario);
   const kibVisible = (rawSearchPayload + readingPayload) / 1024;
@@ -367,21 +380,21 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
     evidencePerKiB: kibVisible > 0 ? quality.hitFiles / kibVisible : 0,
     taskBlockingHitsPerKiB: kibVisible > 0 ? blockingHitsInReadPlan / kibVisible : 0
   };
-  const diagnosticResult = cli.payloadProjections ? canonical : result;
+  const diagnosticResult = diagnosticCanonical ?? result;
   const sessionPhaseMs = session.drainPhaseMetrics();
-  const attributionContext = productionRanking && {
+  const attributionContext = productionRanking && diagnosticCanonical && {
     repoRoot: cli.repoRoot,
     mode: cli.mode,
     profile: scenario.anchor.profile,
-    semanticUsed: diagnosticResult.semantic.used,
-    semanticTimeout: diagnosticResult.metrics?.semantic?.timeout === true,
+    semanticUsed: diagnosticCanonical.semantic.used,
+    semanticTimeout: diagnosticCanonical.metrics?.semantic?.timeout === true,
     coverage: metadata.prepareJavaIndexStatus?.coverage ?? []
   };
   const firstAttempt = {
     // Task 30 makes the whole read-plan range lookup one batched worker
     // request. `roundTrips` measures the agent-visible impact exchange plus
     // that range batch; it must not grow with selected read-plan files.
-    ...attemptPayload("impact", quality, rawSearchPayload, readingPayload, elapsedMs, 2, result.readPlan.length, result.cost.suppressedRawBytes, 0),
+    ...attemptPayload("impact", quality, rawSearchPayload, readingPayload, elapsedMs, 2, viewReadPlanRangeCount(result) || viewDistinctReadFiles(result).length, result.cost.suppressedRawBytes, 0),
     ...readPlanMetrics(result),
     ...qualityV3,
     timing: timingPayload(diagnosticResult, sessionPhaseMs),
@@ -399,12 +412,15 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
     // Task 36's 20-run verifier consumes only semantic ordering/state. Keep
     // latency/cache counters in their ordinary attempt fields so benign
     // diagnostic variance cannot mask or manufacture semantic drift.
-    determinism: buildImpactDeterminismSnapshot(diagnosticResult, cli.repoRoot, productionRanking)
+    determinism: diagnosticCanonical
+      ? buildImpactDeterminismSnapshot(diagnosticCanonical, cli.repoRoot, productionRanking)
+      : undefined
   };
   return firstAttempt;
 }
 
-function recordJavaIndexQueueDepth(result: ImpactResult): void {
+function recordJavaIndexQueueDepth(result: ImpactResult | CompactImpact): void {
+  if (isCompactImpact(result)) return;
   const rpc = result.metrics?.javaIndex?.rpc;
   if (!rpc || typeof rpc !== "object") return;
   const operations = (rpc as { operations?: unknown }).operations;
@@ -561,17 +577,17 @@ async function waitForProgressIdle(session: JdtlsSession, timeoutMs: number): Pr
   }
 }
 
-function readPlanBytes(result: Awaited<ReturnType<AgentRouter["impact"]>>): number {
-  return result.readPlan.reduce((sum, item) => sum + item.estimatedBytes, 0);
+function readPlanBytes(result: ImpactResult | CompactImpact): number {
+  return viewReadPlanBytes(result);
 }
 
-function readPlanMetrics(result: Awaited<ReturnType<AgentRouter["impact"]>>): Record<string, unknown> {
-  const readPlan = result.metrics?.readPlan;
+function readPlanMetrics(result: ImpactResult | CompactImpact): Record<string, unknown> {
+  const readPlan = !isCompactImpact(result) ? result.metrics?.readPlan : undefined;
   const bytes = readPlanBytes(result);
   const maxReadBytes = Number(readPlan?.maxReadBytes || 0);
   return {
-    readPlanFiles: new Set(result.readPlan.map(item => item.fileId)).size,
-    readPlanRanges: result.readPlan.reduce((sum, item) => sum + item.ranges.length, 0),
+    readPlanFiles: viewDistinctReadFiles(result).length,
+    readPlanRanges: viewReadPlanRangeCount(result),
     readPlanBytes: bytes,
     budgetUtilization: maxReadBytes > 0 ? bytes / maxReadBytes : 0,
     budgetExceededByAnchor: readPlan?.budgetExceededByAnchor === true,
@@ -579,17 +595,8 @@ function readPlanMetrics(result: Awaited<ReturnType<AgentRouter["impact"]>>): Re
   };
 }
 
-function selectedRangesByFile(result: Awaited<ReturnType<AgentRouter["impact"]>>): Map<string, Array<{ startLine: number; endLine: number }>> {
-  const pathById = new Map(result.files.map(file => [String(file.id), String(file.path)]));
-  const byFile = new Map<string, Array<{ startLine: number; endLine: number }>>();
-  for (const item of result.readPlan) {
-    const file = pathById.get(item.fileId);
-    if (!file) continue;
-    const ranges = byFile.get(file) ?? [];
-    ranges.push(...item.ranges.map(range => ({ startLine: range.startLine, endLine: range.endLine })));
-    byFile.set(file, ranges);
-  }
-  return byFile;
+function selectedRangesByFile(result: ImpactResult | CompactImpact): Map<string, Array<{ startLine: number; endLine: number }>> {
+  return viewSelectedRangesByFile(result);
 }
 
 function relativeCoordinateRanges(
@@ -616,12 +623,17 @@ function readMatchedFilesBytes(repoRoot: string, files: string[], lineByPath: Ma
   return bytes;
 }
 
-function distinctReadFiles(result: Awaited<ReturnType<AgentRouter["impact"]>>): string[] {
-  const files = new Map(result.files.map(file => [String(file.id), String(file.path)]));
-  return [...new Set(result.readPlan.map(item => files.get(item.fileId)).filter((file): file is string => Boolean(file)))];
+function distinctReadFiles(result: ImpactResult | CompactImpact): string[] {
+  return viewDistinctReadFiles(result);
 }
 
-function timingPayload(result: Awaited<ReturnType<AgentRouter["impact"]>>, sessionPhaseMs: Record<string, number>): Record<string, unknown> {
+function timingPayload(result: ImpactResult | CompactImpact, sessionPhaseMs: Record<string, number>): Record<string, unknown> {
+  if (isCompactImpact(result)) {
+    return compactRecord({
+      sessionPhaseMs,
+      elapsedMs: result.metrics?.elapsedMs
+    });
+  }
   const metrics = result.metrics;
   return compactRecord({
     phaseMs: metrics?.phaseMs,
@@ -648,31 +660,38 @@ type MapstructEvidenceCounts = {
  * distinction explicit for canary comparisons without changing router output.
  */
 function mapstructEvidenceSummary(
-  result: Awaited<ReturnType<AgentRouter["impact"]>>,
+  result: ImpactResult | CompactImpact,
   scenario: Scenario
 ): MapstructEvidenceCounts {
-  const readFileIds = new Set(result.readPlan.map(item => item.fileId));
   const goldenPaths = new Set(goldenEntries(scenario).map(entry => entry.file));
   const selectedPaths = new Set<string>();
   const readPaths = new Set<string>();
   const goldenSelectedPaths = new Set<string>();
   const byKind: MapstructEvidenceCounts["byKind"] = {};
+  const files = isCompactImpact(result)
+    ? result.contexts.map(context => ({
+      path: context.path,
+      reasons: context.proof,
+      inReadPlan: context.spans.length > 0
+    }))
+    : result.files.map(file => ({
+      path: String(file.path),
+      reasons: Array.isArray(file.reasons) ? file.reasons : [],
+      inReadPlan: result.readPlan.some(item => item.fileId === file.id)
+    }));
 
-  for (const file of result.files) {
-    const filePath = typeof file.path === "string" ? file.path : "";
-    const reasons = Array.isArray(file.reasons)
-      ? file.reasons.filter((reason): reason is string => typeof reason === "string" && reason.startsWith("MAPSTRUCT_"))
-      : [];
+  for (const file of files) {
+    const filePath = file.path;
+    const reasons = file.reasons.filter(reason => reason.startsWith("MAPSTRUCT_"));
     if (!filePath || reasons.length === 0) continue;
-    const inReadPlan = readFileIds.has(String(file.id));
     const inGolden = goldenPaths.has(filePath);
     selectedPaths.add(filePath);
-    if (inReadPlan) readPaths.add(filePath);
+    if (file.inReadPlan) readPaths.add(filePath);
     if (inGolden) goldenSelectedPaths.add(filePath);
     for (const kind of new Set(reasons)) {
       const counts = byKind[kind] ??= { selected: 0, readPlan: 0, golden: 0 };
       counts.selected += 1;
-      if (inReadPlan) counts.readPlan += 1;
+      if (file.inReadPlan) counts.readPlan += 1;
       if (inGolden) counts.golden += 1;
     }
   }

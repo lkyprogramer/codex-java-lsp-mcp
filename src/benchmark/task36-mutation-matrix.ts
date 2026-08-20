@@ -398,7 +398,7 @@ async function verifyChangedDuringRequest(input: {
     edgeStore as never
   );
   const requestGeneration = input.clock.snapshot().value;
-  const options: ImpactOptions = {
+  const options: ImpactOptions & { verbosity: "diagnostic" } = {
     anchors: [{ file: input.target, line: 3, column: 24 }],
     mode: "balanced",
     profile: "service",
@@ -409,7 +409,7 @@ async function verifyChangedDuringRequest(input: {
     excludeModules: [],
     taskKeywords: ["bodyMutation"],
     crossModulePolicy: "auto",
-    verbosity: "standard"
+    verbosity: "diagnostic"
   };
   const request = createRequestContext({
     repoRoot: input.repoRoot,

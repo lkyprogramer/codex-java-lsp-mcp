@@ -11,6 +11,7 @@ import type { Completion } from "../runtime/completion.js";
 import { unique } from "./candidate-helpers.js";
 import type { ImportGraphMetrics } from "./candidate-collectors.js";
 import type { SemanticMetrics } from "./impact-metrics.js";
+import { toCompactImpact, type CompactImpact } from "./output-compact.js";
 import { buildImpactFileV6, buildImpactTargetV6, withConvergedCostV6 } from "./output-v6.js";
 import type { RgExecutionResult } from "./rg-execution.js";
 import type { TypeReferenceMetrics } from "./type-reference.js";
@@ -42,7 +43,7 @@ type BuildImpactResultInput = {
   };
 };
 
-export function buildImpactResult(input: BuildImpactResultInput): ImpactResult {
+export function buildImpactResult(input: BuildImpactResultInput): ImpactResult | CompactImpact {
   const verbosity = input.options.verbosity || "standard";
   const formattedFiles = input.ranked.map((file, index) => buildImpactFileV6(file, `F${index + 1}`, verbosity));
   const framework = input.metrics.framework;
@@ -81,8 +82,13 @@ export function buildImpactResult(input: BuildImpactResultInput): ImpactResult {
       suppressed: input.suppressed
     }
   };
+  const sourceFiles = payload.files;
   applyVerbosity(payload, verbosity);
-  return withConvergedCostV6(payload, readPlanBytes(input.readPlan), input.rgExecution.rawBytes);
+  const v6 = withConvergedCostV6(payload, readPlanBytes(input.readPlan), input.rgExecution.rawBytes);
+  if (verbosity === "diagnostic") return v6;
+  // Compact proof needs provider kinds; applyVerbosity already stripped them
+  // from the V6 wire clone. Reattach the pre-strip files only for serialization.
+  return toCompactImpact({ ...v6, files: sourceFiles });
 }
 
 function readPlanBytes(readPlan: ReadPlanItem[]): number {

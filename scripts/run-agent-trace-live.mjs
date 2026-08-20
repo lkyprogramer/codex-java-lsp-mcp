@@ -69,6 +69,9 @@ export function collectImpactPaths(result) {
     const mapped = byId.get(item.fileId);
     if (typeof mapped === "string" && mapped) paths.add(normalizeRel(mapped));
   }
+  for (const context of result?.contexts ?? []) {
+    if (typeof context?.path === "string" && context.path) paths.add(normalizeRel(context.path));
+  }
   return [...paths];
 }
 

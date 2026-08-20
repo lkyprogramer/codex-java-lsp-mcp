@@ -6,7 +6,7 @@ import { withConvergedCostV6 } from "../agent-router/output-v6.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import { defaultDeadlineMs, MAX_REQUEST_DEADLINE_MS, type RequestContext } from "../runtime/request-context.js";
 import type { ToolContext } from "./context.js";
-import type { ImpactAnchorInput, ImpactOptions, ImpactResult, ImpactResultV6, ImpactVerbosity } from "../agent-types.js";
+import type { ImpactAnchorInput, ImpactOptions, ImpactResult, ImpactVerbosity } from "../agent-types.js";
 
 // Iteration A adapter: JDT calls still take a plain timeout, so the request-level
 // absolute deadline is projected onto the single legacy stage timeout. Task 7
@@ -80,9 +80,9 @@ export async function javaImpact(
     crossModulePolicy: parsed.crossModulePolicy,
     verbosity: parsed.verbosity
   };
-  const result = await context.router.impact(options, request) as ImpactResultV6;
+  const result = await context.router.impact(options, request);
   mergePhaseMs(phaseMs, context.session.drainPhaseMetrics());
-  return withPhaseMs(result, phaseMs, parsed.verbosity) as ImpactResultV6;
+  return withPhaseMs(result, phaseMs, parsed.verbosity);
 }
 
 function normalizeAnchors(args: Pick<ImpactArgs, "anchors" | "file" | "line" | "column" | "anchorRole">): ImpactAnchorInput[] {
@@ -113,7 +113,7 @@ function withPhaseMs(result: unknown, phases: Record<string, number>, verbosity:
   if (!result || typeof result !== "object") {
     return result;
   }
-  const payload = result as ImpactResult;
+  const payload = result as ImpactResult & { metrics?: { phaseMs?: Record<string, number> } };
   if (verbosity === "diagnostic" && payload.metrics && Object.keys(phases).length > 0) {
     const existingPhaseMs = payload.metrics.phaseMs ?? {};
     payload.metrics = {

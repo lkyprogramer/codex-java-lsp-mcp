@@ -313,15 +313,18 @@ test("java_impact standard output matches the ImpactResultV6 contract - present/
     const standard = record(await javaImpact(context, { ...impactArgs, verbosity: "standard" }));
     const diagnostic = record(await javaImpact(context, { ...impactArgs, verbosity: "diagnostic" }));
 
-    for (const key of ["version", "target", "freshness", "semantic", "files", "readPlan", "evidenceGaps", "cost"]) {
+    for (const key of ["version", "target", "contexts", "unresolved", "cost"]) {
       assert.equal(Object.hasOwn(standard, key), true, `standard output must carry top-level "${key}"`);
     }
+    assert.equal(standard.version, 1);
+    assert.equal(Object.hasOwn(standard, "files"), false, "compact wire drops files[]");
+    assert.equal(Object.hasOwn(standard, "readPlan"), false, "compact wire drops readPlan[]");
     assert.equal(Object.hasOwn(standard, "options"), false, "v5's top-level options is retired in V6");
     assert.equal(Object.hasOwn(standard, "counts"), false, "v5's top-level counts is retired in V6");
     assert.equal(Object.hasOwn(standard, "rgSummary"), false, "v5's top-level rgSummary is retired in V6");
     assert.equal(Object.hasOwn(standard, "suppressed"), false, "v5's top-level suppressed is retired in V6");
 
-    const files = standard.files as Array<Record<string, unknown>>;
+    const files = standard.contexts as Array<Record<string, unknown>>;
     assert.ok(files.length > 0, "the fixture's direct field-receiver call must produce at least one candidate, or the absence assertions below are untested");
     for (const file of files) {
       assert.equal(Object.hasOwn(file, "score"), false);
@@ -329,6 +332,7 @@ test("java_impact standard output matches the ImpactResultV6 contract - present/
       assert.equal(Object.hasOwn(file, "reasons"), false);
       assert.equal(Object.hasOwn(file, "verifiedBy"), false);
       assert.equal(Object.hasOwn(file, "absolutePath"), false);
+      assert.equal(Object.hasOwn(file, "id"), false);
     }
     const standardMetrics = (standard.metrics ?? {}) as Record<string, unknown>;
     assert.equal(Object.hasOwn(standardMetrics, "phaseMs"), false);

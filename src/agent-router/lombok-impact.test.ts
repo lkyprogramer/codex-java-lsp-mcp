@@ -15,7 +15,7 @@ import { RgRunner } from "../search/rg-runner.js";
 import type { RgQuery, SearchResult } from "../search/search-types.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
 
-function options(overrides: Partial<ImpactOptions>): ImpactOptions {
+function options<const T extends Partial<ImpactOptions>>(overrides: T): ImpactOptions & T {
   return {
     anchors: [],
     mode: "balanced",
@@ -28,7 +28,7 @@ function options(overrides: Partial<ImpactOptions>): ImpactOptions {
     taskKeywords: [],
     crossModulePolicy: "auto",
     ...overrides
-  };
+  } as ImpactOptions & T;
 }
 
 class EmptyRgRunner extends RgRunner {
@@ -117,14 +117,14 @@ test("service task that reads a Lombok-generated getter keeps its selected DTO a
       freshnessMode: "NORMAL"
     } as never);
 
-    const selectedDto = result.files.find(file => String(file.path).endsWith("LombokOrder.java"));
+    const selectedDto = result.contexts.find(file => String(file.path).endsWith("LombokOrder.java"));
     assert.ok(selectedDto, "the DTO used by the service method must remain a routed candidate");
     assert.ok(
-      result.readPlan.some(item => item.fileId === selectedDto.id),
+      (selectedDto.spans?.length ?? 0) > 0,
       "the routed Lombok DTO must enter the read plan before it can trigger a task-level completeness gap"
     );
     assert.ok(
-      result.evidenceGaps.some(gap => gap.includes("Lombok")),
+      result.unresolved.some(gap => gap.includes("Lombok")),
       "the selected Lombok DTO makes the task dependent on generated-member binding"
     );
     assert.equal(result.metrics?.generatedSemantics, "INCOMPLETE");
