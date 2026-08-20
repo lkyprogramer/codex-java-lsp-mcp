@@ -96,6 +96,19 @@ type Cli = {
 
 const DEFAULT_INDEX_PREPARE_TIMEOUT_MS = 600_000;
 
+const JIN_COMPACT_ROLE: Record<string, string> = {
+  ANCHOR: "TGT",
+  CHANGE_SITE: "TGT",
+  CALLEE: "COL",
+  CALLER: "COL",
+  DATAFLOW: "COL",
+  IMPLEMENTATION: "IMP",
+  CONTRACT: "REF",
+  PERSISTENCE: "CFG",
+  FRAMEWORK: "FW",
+  TEST: "REL"
+};
+
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const projectDir = path.resolve(scriptDir, "..");
 const cli = parseCli(process.argv.slice(2), projectDir);
@@ -300,19 +313,6 @@ function parseCli(args: string[], root: string): Cli {
     ) ?? DEFAULT_INDEX_PREPARE_TIMEOUT_MS
   };
 }
-
-const JIN_COMPACT_ROLE: Record<string, string> = {
-  ANCHOR: "TGT",
-  CHANGE_SITE: "TGT",
-  CALLEE: "COL",
-  CALLER: "COL",
-  DATAFLOW: "COL",
-  IMPLEMENTATION: "IMP",
-  CONTRACT: "REF",
-  PERSISTENCE: "CFG",
-  FRAMEWORK: "FW",
-  TEST: "REL"
-};
 
 function compactFromContract(contract: ContextContract, elapsedMs: number, discoveredPaths: string[] = []): CompactImpact {
   const contexts = contract.contexts.map(item => ({
