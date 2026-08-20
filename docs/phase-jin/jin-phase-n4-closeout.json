@@ -4,54 +4,52 @@
   "dated": "2026-08-21",
   "decision": "FAIL",
   "mergeToMain": false,
-  "retry": "hop-ordered in-budget fill + selected-only wire; no hop<=2 all-admit",
+  "retry": "proving-path whole methods; drop SOURCE_ROOT files; obligation-ranked hop-order; DEFAULT_TOKEN_BUDGET=2000; selected-only wire",
   "axes": {
     "tokenP50Drop25AndLeSprint0": {
-      "result": "FAIL",
+      "result": "GO",
       "oldP50": { "lishuedu": 3393, "cipherlink": 3186, "exam-parent-v3": 2830 },
-      "newP50": { "lishuedu": 2641, "cipherlink": 2562, "exam-parent-v3": 2192 },
-      "drop": { "lishuedu": 0.222, "cipherlink": 0.196, "exam-parent-v3": 0.225 },
-      "sprint0P50": { "lishuedu": 4308, "cipherlink": 3606, "exam-parent-v3": 3395 },
-      "note": "All three still <= Sprint0'. None reach the >=25% drop vs current compact. Filling every in-budget hop-ordered file raised tokens vs the pack retry (1401/1583/1519)."
+      "newP50": { "lishuedu": 1609, "cipherlink": 1784, "exam-parent-v3": 1598 },
+      "drop": { "lishuedu": 0.526, "cipherlink": 0.44, "exam-parent-v3": 0.435 },
+      "sprint0P50": { "lishuedu": 4308, "cipherlink": 3606, "exam-parent-v3": 3395 }
     },
     "rangeLineRecallNoRegress": {
       "result": "FAIL",
       "old": { "lishuedu": 0.8419, "cipherlink": 0.875, "exam-parent-v3": 0.8525 },
-      "new": { "lishuedu": 0.3843, "cipherlink": 0.85, "exam-parent-v3": 0.4825 }
+      "new": { "lishuedu": 0.5343, "cipherlink": 0.85, "exam-parent-v3": 0.5325 }
     },
     "holdoutRReadMustMean075": {
       "result": "FAIL",
-      "new": { "lishuedu": 0.375, "cipherlink": 0.325, "exam-parent-v3": 0.2 },
-      "mean": 0.3,
-      "fullRReadMust": { "lishuedu": 0.5817, "cipherlink": 0.6483, "exam-parent-v3": 0.7067 },
-      "note": "Gate is holdout split mean, not full rReadMust. Full rReadMust rose vs pack; holdout mean fell 0.358 → 0.300."
+      "new": { "lishuedu": 0.375, "cipherlink": 0.325, "exam-parent-v3": 0.3 },
+      "mean": 0.3333,
+      "fullRReadMust": { "lishuedu": 0.6183, "cipherlink": 0.6567, "exam-parent-v3": 0.7267 }
     },
     "p95Section163": {
       "result": "GO",
-      "p95Ratio": { "lishuedu": 0.434, "cipherlink": 0.142, "exam-parent-v3": 0.141 },
-      "newP95Ms": { "lishuedu": 99.3, "cipherlink": 27.9, "exam-parent-v3": 32.2 },
-      "note": "Pairing p95Ratio vs current compact, same rubric as prior N4 T3 closeouts: all-repo -35% (ratio <= 0.65). warm p95 <=50ms still misses on lishuedu (99ms). p95Ratio vs Sprint0' UNMEASURED in this matrix."
+      "p95Ratio": { "lishuedu": 0.276, "cipherlink": 0.124, "exam-parent-v3": 0.133 },
+      "newP95Ms": { "lishuedu": 63.8, "cipherlink": 24.1, "exam-parent-v3": 30.1 },
+      "note": "Pairing p95Ratio vs current compact: all-repo -35%. warm p95 <=50ms still misses on lishuedu (64ms)."
     },
-    "passedCount": "1/4"
+    "passedCount": "2/4"
   },
   "t3": {
     "comparisonPolicy": "env-locked-same-tree",
     "newTreatment": { "JAVA_LSP_ENGINE": "jin" },
     "verifierPassed": false,
-    "summarySha256": "c8db2d8cd5b7879a2ce4f25819f4c36fd39f6a4857791290c17fc6643354ec99",
-    "head": "32a84918186a5baea6f08afe7b8f20a2d110ffcd",
-    "executableTree": "e08ab58e10a1bad7bad2ae68fc8ce584dc8a809c",
-    "loadavg1": 10.44,
+    "summarySha256": "ec9df52c298c002c21097abc0716880d4a17cda624f92a8a646295b250166dcd",
+    "head": "84dd03dab69deeaa4619ab5eba7df308f443f319",
+    "executableTree": "c1523a57ec89d1edeaa588183984d015e07a20b0",
+    "loadavg1": 8.65,
     "cells": 18
   },
   "isolation": {
     "t0": { "plannerProperties": "pass", "jdtlsBin": "/usr/bin/false" },
-    "t1": { "dist": 1111, "scripts": 190, "fail": 0, "jdtlsBin": "/usr/bin/false", "executableTree": "e08ab58e10a1bad7bad2ae68fc8ce584dc8a809c" }
+    "t1": { "dist": 1115, "scripts": 190, "fail": 0, "jdtlsBin": "/usr/bin/false", "executableTree": "c1523a57ec89d1edeaa588183984d015e07a20b0" }
   },
   "failureDisposition": {
-    "clock": "fourth T3, 2-week N4 window not expired",
-    "axesPassed": 1,
+    "clock": "fifth T3, 2-week N4 window not expired",
+    "axesPassed": 2,
     "action": "stay on N4; do not enter N5",
-    "next": "keep selected-only wire; do not add more files. Token/quality tension is now explicit: hop-order fill lost the 25% token gate and still missed RangeLineRecall (span-complete coverage) and holdout rReadMust."
+    "next": "keep selected-only wire. Token/p95 GO after dropping SOURCE_ROOT junk and packing proving-path methods under 2000. RangeLineRecall and holdout still miss because discovery still omits some mustHit files (e.g. SignedUrl DTOs) even when implementer methods cover golden ranges."
   }
 }
