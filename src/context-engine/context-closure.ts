@@ -1,7 +1,7 @@
 // input: Graph-search file candidates plus per-path method/XML facts.
 // output: EvidenceBundle list with statement slices and proving kinds.
 // pos: JIN N4-02. Closure is span-level; file merge happens at transport.
-import { sliceMethod, type SliceMethod } from "./statement-slicer.js";
+import { LARGE_METHOD_LINES, sliceMethod, type SliceMethod } from "./statement-slicer.js";
 import { BYTES_DIV_4, estimateTokens, type Tokenizer } from "./token-estimator.js";
 import {
   bundleTokenCost,
@@ -89,10 +89,11 @@ export function closeSearchResult(input: ClosureInput): EvidenceBundle[] {
       : methods;
     const chosen = focused.length > 0 ? focused : methods;
     for (const method of chosen) {
+      const methodLines = Math.max(1, method.endLine - method.startLine + 1);
       methodSlices.push(...sliceMethod({
         method,
         source: facts.source,
-        relatedNames: names,
+        relatedNames: methodLines > LARGE_METHOD_LINES ? names : [],
         includeText: includeSource
       }));
     }

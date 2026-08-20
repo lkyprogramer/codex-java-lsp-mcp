@@ -96,6 +96,20 @@ test("hop<=2 files are not force-filled; budget greedy can skip a large near fil
   assert.ok(planned.tokenCost <= 80);
 });
 
+test("near hop-1 that fits is packed before a cheaper hop-3 file", () => {
+  const planned = planEvidenceBundles({
+    bundles: [
+      bundle({ id: "a", path: "src/A.java", role: "ANCHOR", closes: ["O1"], tokenCost: 10, hops: 0 }),
+      bundle({ id: "near", path: "src/Near.java", role: "CALLEE", closes: ["O2"], tokenCost: 40, hops: 1 }),
+      bundle({ id: "far", path: "src/Far.java", role: "PERSISTENCE", closes: ["O3"], tokenCost: 20, hops: 3 })
+    ],
+    tokenBudget: 55
+  });
+  assert.ok(planned.selected.some(item => item.id === "near"));
+  assert.equal(planned.selected.some(item => item.id === "far"), false);
+  assert.ok(planned.tokenCost <= 55);
+});
+
 test("duplicate path saturates instead of paying twice for the same closes", () => {
   const planned = planEvidenceBundles({
     bundles: [

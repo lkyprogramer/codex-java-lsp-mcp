@@ -75,7 +75,7 @@ async function queryPlan(index, fromRelativePath, taskText, profile, anchorLine)
     profile,
     maxHops: 4,
     maxExpansions: 4096,
-    tokenBudget: 2500,
+    tokenBudget: 3200,
     plan: true,
     includeSource: false,
     anchorLine

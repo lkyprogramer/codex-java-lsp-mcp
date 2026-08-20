@@ -25,8 +25,8 @@ export type SliceRequest = {
 };
 
 const CONTEXT_PAD = 2;
-const LARGE_METHOD_LINES = 120;
-const LARGE_METHOD_WINDOW = 80;
+export const LARGE_METHOD_LINES = 300;
+const LARGE_METHOD_WINDOW = 40;
 
 function clamp(line: number, start: number, end: number): number {
   return Math.min(end, Math.max(start, line));
@@ -83,9 +83,11 @@ export function sliceMethod(request: SliceRequest): CodeSpan[] {
     if (bodyLines + 1 <= LARGE_METHOD_LINES) {
       return [spanFor(start, end, bounded, request.source, request.includeText === true)];
     }
-    const windowEnd = clamp(start + LARGE_METHOD_WINDOW - 1, start, end);
+    const headEnd = clamp(start + LARGE_METHOD_WINDOW - 1, start, end);
+    const tailStart = clamp(end - LARGE_METHOD_WINDOW + 1, start, end);
     return mergeSpans([
-      spanFor(start, windowEnd, bounded, request.source, request.includeText === true)
+      spanFor(start, headEnd, bounded, request.source, request.includeText === true),
+      spanFor(tailStart, end, bounded, request.source, request.includeText === true)
     ]);
   }
   const windows = uniqueHits.map(line => spanFor(line - CONTEXT_PAD, line + CONTEXT_PAD, bounded, request.source, request.includeText === true));
