@@ -1,9 +1,9 @@
 // input: EvidenceBundle candidates plus an exact token budget.
-// output: Selected bundles. Hop-ordered fill so in-budget near files are kept; file count is not a binding cap.
-// pos: JIN N4-02. P0 forced; ambiguity ≤2; skip over-budget items; no hop≤2 all-admit.
+// output: Selected bundles. P0 then hop-order among items that fit; file count is not a binding cap.
+// pos: JIN N4-02. P0 forced; ambiguity ≤2; skip over-budget; no hop≤2 all-admit.
 import { isP0Bundle, mergeSpans, type EvidenceBundle } from "./evidence-bundle.js";
 
-export const DEFAULT_TOKEN_BUDGET = 3200;
+export const DEFAULT_TOKEN_BUDGET = 2000;
 export const MAX_DISTINCT_FILES_GUARD = 20;
 export const MAX_AMBIGUITY_PER_OBLIGATION = 2;
 export const MAX_BUNDLES_GUARD = 64;
@@ -80,17 +80,28 @@ function tokenCostOf(selected: EvidenceBundle[]): number {
   return selected.reduce((sum, bundle) => sum + bundle.tokenCost, 0);
 }
 
+const HIGH_PROOF = /CALLS_|CALLED_BY|DISPATCHES_TO|IMPLEMENTS|CONSTRUCTS|METHOD_REFERENCE|MYBATIS|JPA_|REPOSITORY_|SPRING_|PUBLISHES_EVENT|CONSUMES_EVENT/;
+const MID_PROOF = /EXTENDS|PERMITS|IMPORTS|DECLARES/;
+
+function proofRank(bundle: EvidenceBundle): number {
+  if (bundle.proof.some(kind => HIGH_PROOF.test(kind))) return 0;
+  if (bundle.proof.some(kind => MID_PROOF.test(kind))) return 1;
+  return 2;
+}
+
 export function planEvidenceBundles(input: PlanInput): PlanResult {
   const budget = Math.max(1, input.tokenBudget);
   const fileGuard = input.maxDistinctFiles ?? MAX_DISTINCT_FILES_GUARD;
   const bundleGuard = input.maxBundles ?? MAX_BUNDLES_GUARD;
   const candidates = limitAmbiguity(input.bundles)
     .slice()
-    .sort((left, right) => left.hops - right.hops || left.path.localeCompare(right.path) || left.id.localeCompare(right.id));
+    .sort((left, right) => left.hops - right.hops
+      || proofRank(left) - proofRank(right)
+      || left.path.localeCompare(right.path)
+      || left.id.localeCompare(right.id));
   const selected: EvidenceBundle[] = [];
   const rejectedOverBudget: EvidenceBundle[] = [];
-  const p0 = candidates.filter(isP0Bundle);
-  for (const bundle of p0) {
+  for (const bundle of candidates.filter(isP0Bundle)) {
     selected.push(bundle);
   }
   for (const bundle of candidates.filter(item => !isP0Bundle(item))) {

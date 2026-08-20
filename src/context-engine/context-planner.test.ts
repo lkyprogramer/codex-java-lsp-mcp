@@ -110,7 +110,21 @@ test("near hop-1 that fits is packed before a cheaper hop-3 file", () => {
   assert.ok(planned.tokenCost <= 55);
 });
 
-test("every in-budget hop-1 file is selected rather than skipped by ratio", () => {
+test("hop-1 IMPLEMENTS that fits is packed before a cheaper CONTAINS sibling", () => {
+  const planned = planEvidenceBundles({
+    bundles: [
+      bundle({ id: "a", path: "src/A.java", role: "ANCHOR", closes: ["O1"], tokenCost: 10, hops: 0 }),
+      bundle({ id: "sib", path: "src/AaaSibling.java", role: "CONTRACT", closes: ["O5"], tokenCost: 20, hops: 1, proof: ["CONTAINS"] }),
+      bundle({ id: "impl", path: "src/Zimpl.java", role: "IMPLEMENTATION", closes: ["O3"], tokenCost: 40, hops: 1, proof: ["IMPLEMENTS"] })
+    ],
+    tokenBudget: 55
+  });
+  assert.ok(planned.selected.some(item => item.id === "impl"));
+  assert.equal(planned.selected.some(item => item.id === "sib"), false);
+  assert.ok(planned.tokenCost <= 55);
+});
+
+test("in-budget hop-1 files are kept; hop-order does not skip them for a later cheaper file", () => {
   const planned = planEvidenceBundles({
     bundles: [
       bundle({ id: "a", path: "src/A.java", role: "ANCHOR", closes: ["O1"], tokenCost: 10, hops: 0 }),

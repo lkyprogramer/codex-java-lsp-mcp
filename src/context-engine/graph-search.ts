@@ -30,10 +30,13 @@ export type GraphSearchResult = {
   metrics: { expansions: number; hops: number; estimatedTokens: number };
 };
 
+const NON_BUNDLE_PATH_KINDS = new Set(["REPOSITORY", "MODULE", "SOURCE_ROOT", "PARAMETER", "LOCAL", "STATEMENT", "CONFIG_KEY"]);
+
 function fileOf(graph: KnowledgeGraphStore, nodeId: string): string | undefined {
   const node = graph.nodesById.get(nodeId);
-  if (node?.relativePath) return node.relativePath;
-  if (node?.kind === "FILE") return node.id;
+  if (!node || NON_BUNDLE_PATH_KINDS.has(node.kind)) return undefined;
+  if (node.relativePath) return node.relativePath;
+  if (node.kind === "FILE") return node.id;
   return undefined;
 }
 

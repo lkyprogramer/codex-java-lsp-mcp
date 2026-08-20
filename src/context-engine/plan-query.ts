@@ -25,16 +25,19 @@ export type PlanQueryInput = {
 function methodsFromStore(store: JavaIndexStore, path: string, graph: KnowledgeGraphStore, provingIds: Set<string>, anchorLine?: number): SliceMethod[] {
   const bundle = store.files([path])[0];
   if (!bundle) return [];
-  const wanted = new Set<string>();
+  const wantedMethods = new Set<string>();
+  const wantedTypes = new Set<string>();
   for (const id of provingIds) {
     const node = graph.nodesById.get(id);
-    if (node?.javaIndexId && node.relativePath === path) wanted.add(node.javaIndexId);
+    if (!node?.javaIndexId || node.relativePath !== path) continue;
+    if (node.kind === "METHOD" || node.kind === "CONSTRUCTOR") wantedMethods.add(node.javaIndexId);
+    if (node.kind === "TYPE" || node.kind === "JPA_ENTITY") wantedTypes.add(node.javaIndexId);
   }
-  const matched = bundle.methods.filter(method => wanted.has(method.methodId));
+  const matched = bundle.methods.filter(method => wantedMethods.has(method.methodId) || wantedTypes.has(method.ownerTypeId));
   const anchored = anchorLine
     ? bundle.methods.filter(method => method.range.start.line <= anchorLine && (method.bodyRange?.end.line ?? method.range.end.line) >= anchorLine)
     : [];
-  const chosen = matched.length > 0 ? matched : anchored.length > 0 ? anchored : bundle.methods;
+  const chosen = matched.length > 0 ? matched : anchored;
   return chosen.map(method => ({
     name: method.name,
     startLine: method.range.start.line,
@@ -42,6 +45,22 @@ function methodsFromStore(store: JavaIndexStore, path: string, graph: KnowledgeG
     bodyStartLine: method.bodyRange?.start.line,
     callSites: method.callSites.map(site => ({ line: site.range.start.line, name: site.name }))
   }));
+}
+
+function typeRangesFromStore(store: JavaIndexStore, path: string, graph: KnowledgeGraphStore, provingIds: Set<string>): { start: number; end: number }[] {
+  const bundle = store.files([path])[0];
+  if (!bundle) return [];
+  const wantedTypes = new Set<string>();
+  for (const id of provingIds) {
+    const node = graph.nodesById.get(id);
+    if (!node?.javaIndexId || node.relativePath !== path) continue;
+    if (node.kind === "TYPE" || node.kind === "JPA_ENTITY") wantedTypes.add(node.javaIndexId);
+  }
+  let types = bundle.types.filter(type => wantedTypes.has(type.typeId));
+  if (types.length === 0 && provingIds.size === 0) {
+    types = [...bundle.types].sort((left, right) => left.range.start.line - right.range.start.line).slice(0, 1);
+  }
+  return types.map(type => ({ start: type.range.start.line, end: Math.max(type.range.start.line, type.range.end.line) }));
 }
 
 export function factsForStore(graph: KnowledgeGraphStore, store: JavaIndexStore | undefined, path: string, provingIds: Set<string>, anchorLine?: number): ClosureFacts {
@@ -52,11 +71,13 @@ export function factsForStore(graph: KnowledgeGraphStore, store: JavaIndexStore 
     const node = graph.nodesById.get(id);
     if (node?.simpleName) names.push(node.simpleName);
   }
+  const methods = methodsFromStore(store, path, graph, provingIds, anchorLine);
   return {
-    methods: methodsFromStore(store, path, graph, provingIds, anchorLine),
+    methods,
     xml: resource?.statements
       .filter(statement => statement.range)
       .map(statement => ({ start: statement.range!.start.line, end: statement.range!.end.line })),
+    types: typeRangesFromStore(store, path, graph, provingIds),
     simpleNames: names
   };
 }

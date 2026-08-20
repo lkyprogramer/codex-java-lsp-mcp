@@ -33,6 +33,29 @@ test("search honors maxHops and maxExpansions budgets", () => {
   assert.ok(expansions.metrics.expansions <= 1);
 });
 
+test("source-root relativePath is not emitted as a file bundle; sibling files still are", () => {
+  const graph = seed();
+  graph.upsertNode({ id: "root:src", kind: "SOURCE_ROOT", generation: 1, relativePath: "src" });
+  graph.upsertNode({ id: "src/C.java", kind: "FILE", generation: 1, relativePath: "src/C.java" }, "src/C.java");
+  graph.addEdge({
+    edgeId: knowledgeEdgeId({ kind: "CONTAINS", fromId: "root:src", toId: "src/A.java" }),
+    kind: "CONTAINS",
+    fromId: "root:src",
+    toId: "src/A.java",
+    generation: 1
+  }, "src/A.java");
+  graph.addEdge({
+    edgeId: knowledgeEdgeId({ kind: "CONTAINS", fromId: "root:src", toId: "src/C.java" }),
+    kind: "CONTAINS",
+    fromId: "root:src",
+    toId: "src/C.java",
+    generation: 1
+  }, "src/C.java");
+  const result = searchContextGraph(graph, "src/A.java", compileIntent("IMPLEMENTATION_CHANGE"), { maxHops: 2, maxExpansions: 32 });
+  assert.equal(result.bundles.some(bundle => bundle.path === "src"), false);
+  assert.ok(result.bundles.some(bundle => bundle.path === "src/C.java"));
+});
+
 test("same input yields the same bundle paths", () => {
   const graph = seed();
   const compiled = compileIntent("IMPLEMENTATION_CHANGE");

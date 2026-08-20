@@ -1,7 +1,7 @@
 // input: Graph-search file candidates plus per-path method/XML facts.
 // output: EvidenceBundle list with statement slices and proving kinds.
 // pos: JIN N4-02. Closure is span-level; file merge happens at transport.
-import { LARGE_METHOD_LINES, sliceMethod, type SliceMethod } from "./statement-slicer.js";
+import { sliceMethod, type SliceMethod } from "./statement-slicer.js";
 import { BYTES_DIV_4, estimateTokens, type Tokenizer } from "./token-estimator.js";
 import {
   bundleTokenCost,
@@ -21,6 +21,7 @@ export type XmlSlice = {
 export type ClosureFacts = {
   methods: SliceMethod[];
   xml?: XmlSlice[];
+  types?: XmlSlice[];
   source?: string;
   simpleNames?: string[];
 };
@@ -76,31 +77,42 @@ function xmlSpans(xml: XmlSlice[], source: string | undefined, includeSource: bo
 export function closeSearchResult(input: ClosureInput): EvidenceBundle[] {
   const tokenizer = input.tokenizer ?? BYTES_DIV_4;
   const includeSource = input.includeSource === true;
+  const anchorCandidate = input.search.bundles.find(item => item.hops === 0);
+  const anchorFacts = anchorCandidate ? input.factsForPath(anchorCandidate.path) : { methods: [] as SliceMethod[] };
+  const anchorNames = (input.anchorLine
+    ? anchorFacts.methods.filter(method => method.startLine <= input.anchorLine! && method.endLine >= input.anchorLine!)
+    : anchorFacts.methods).map(method => method.name);
   const bundles: EvidenceBundle[] = [];
   for (const candidate of input.search.bundles) {
     const facts = input.factsForPath(candidate.path);
     const proof = [...new Set(candidate.provingPath.map(step => step.kind))];
     const role = roleOf(candidate.provingPath, candidate.hops);
-    const names = relatedNames(candidate.provingPath, facts.simpleNames ?? []);
-    const methodSlices: CodeSpan[] = [];
+    const names = relatedNames(candidate.provingPath, [...(facts.simpleNames ?? []), ...anchorNames]);
     const methods = facts.methods;
     const focused = input.anchorLine && candidate.hops === 0
       ? methods.filter(method => method.startLine <= input.anchorLine! && method.endLine >= input.anchorLine!)
-      : methods;
-    const chosen = focused.length > 0 ? focused : methods;
+      : methods.filter(method => names.some(name => name === method.name));
+    const chosen = candidate.hops === 0
+      ? (focused.length > 0 ? focused : methods)
+      : focused;
+    const methodSlices: CodeSpan[] = [];
     for (const method of chosen) {
-      const methodLines = Math.max(1, method.endLine - method.startLine + 1);
       methodSlices.push(...sliceMethod({
         method,
         source: facts.source,
-        relatedNames: methodLines > LARGE_METHOD_LINES ? names : [],
+        relatedNames: [],
         includeText: includeSource
       }));
     }
+    const typeFallback = chosen.length === 0 ? (facts.types ?? []) : [];
     const spans = mergeSpans([
       ...methodSlices,
-      ...xmlSpans(facts.xml ?? [], facts.source, includeSource)
+      ...xmlSpans(facts.xml ?? [], facts.source, includeSource),
+      ...xmlSpans(typeFallback, facts.source, includeSource)
     ]);
+    if (spans.length === 0) {
+      if (candidate.hops !== 0) continue;
+    }
     const fallback: CodeSpan[] = spans.length > 0
       ? spans
       : [{ start: 1, end: 1, bytes: 48 }];
