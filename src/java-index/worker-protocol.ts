@@ -93,6 +93,7 @@ type JavaIndexRequestOperation =
   | { id: number; type: "QUERY_REPOSITORY_FACT_MARKERS"; importPrefixes: string[]; annotationPrefixes: string[] }
   | { id: number; type: "QUERY_ENTITY_SEARCH"; task: string; limit?: number }
   | { id: number; type: "QUERY_GRAPH_DIGEST" }
+  | { id: number; type: "QUERY_GRAPH_REACHABLE"; fromRelativePath: string; maxHops: number }
   | { id: number; type: "STATUS" }
   | { id: number; type: "FLUSH" }
   | { id: number; type: "CLOSE" };
@@ -910,6 +911,27 @@ export function validateGraphDigest(value: unknown): GraphDigest {
     ...(isNumber(source.heapUsedBytes) ? { heapUsedBytes: source.heapUsedBytes } : {}),
     ...(isNumber(source.rssBytes) ? { rssBytes: source.rssBytes } : {})
   };
+}
+
+export type GraphReachable = {
+  files: string[];
+  hops: Record<string, number>;
+};
+
+export function validateGraphReachable(value: unknown): GraphReachable {
+  const context = "GraphReachable";
+  const source = record(value, context);
+  const files = array(source.files, `${context}.files`).map((entry, index) => {
+    if (!isString(entry)) invalid(`${context}.files`, String(index));
+    return entry;
+  });
+  const hopsSource = record(source.hops, `${context}.hops`);
+  const hops: Record<string, number> = {};
+  for (const [path, hop] of Object.entries(hopsSource)) {
+    if (!isNumber(hop)) invalid(`${context}.hops`, path);
+    hops[path] = hop;
+  }
+  return { files, hops };
 }
 
 export function validateEntitySearchHits(value: unknown): EntityHit[] {

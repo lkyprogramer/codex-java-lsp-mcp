@@ -985,10 +985,12 @@ async function handleRefreshResources(request: Extract<JavaIndexRequest, { type:
       if (facts) store.replaceMyBatisResource(facts);
       else store.removeMyBatisResources([relativePath]);
       updateResourceCoverageAfterRefresh(relativePath, before, facts, request.generation, false);
+      resyncKnowledgeGraphForMyBatisNamespace(facts?.namespace ?? before?.namespace);
     } catch (error) {
       if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
         store.removeMyBatisResources([relativePath]);
         updateResourceCoverageAfterRefresh(relativePath, before, undefined, request.generation, false);
+        resyncKnowledgeGraphForMyBatisNamespace(before?.namespace);
         continue;
       }
       store.removeMyBatisResources([relativePath]);
@@ -1446,6 +1448,9 @@ async function indexMyBatisResources(
     ...entry,
     state: entry.failedFiles > 0 ? "DEGRADED" : "COMPLETE"
   }));
+  for (const namespace of target.myBatisResourcesByNamespace.keys()) {
+    resyncKnowledgeGraphForMyBatisNamespace(namespace);
+  }
 }
 
 async function beginBackgroundSweep(generation: number): Promise<void> {
@@ -1679,6 +1684,17 @@ function markIndexFactsChanged(): void {
 function markGraphAndSearchSynced(): void {
   graphSyncedRevision = indexFactsRevision;
   entitySearchSyncedRevision = indexFactsRevision;
+}
+
+function resyncKnowledgeGraphForMyBatisNamespace(namespace: string | undefined): void {
+  if (!store || !namespace) return;
+  const type = store.typeByFqn(namespace);
+  if (!type) return;
+  const relativePath = type.fileId.startsWith("file:") ? type.fileId.slice("file:".length) : type.fileId;
+  const bundle = store.files([relativePath])[0];
+  if (!bundle) return;
+  markIndexFactsChanged();
+  syncKnowledgeGraphBundle(bundle);
 }
 
 function syncKnowledgeGraphFromStore(): void {

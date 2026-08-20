@@ -6,6 +6,7 @@ import type { JavaIndexStatus, JavaTypeLookupResult, SourceRootCoverage } from "
 import type { JavaIndexStore } from "./index-store.js";
 import { ENTITY_SEARCH_DEFAULT_LIMIT, ENTITY_SEARCH_MAX_LIMIT, type EntitySearchIndex } from "./entity-search.js";
 import type { KnowledgeGraphStore } from "../java-knowledge/graph-store.js";
+import { reachableFiles } from "../java-knowledge/graph-walk.js";
 
 export type QueryHandlerDeps = {
   store?: JavaIndexStore;
@@ -124,6 +125,18 @@ export async function handleQueryCommand(request: JavaIndexRequest, deps: QueryH
           rssBytes: memory.rss
         }
       });
+      return true;
+    }
+    case "QUERY_GRAPH_REACHABLE": {
+      const graph = deps.readyKnowledgeGraph();
+      let relativePath = request.fromRelativePath;
+      try {
+        relativePath = deps.deriveSourceLayout(request.fromRelativePath).relativePath;
+      } catch {
+        relativePath = request.fromRelativePath.replaceAll("\\", "/");
+      }
+      const maxHops = Math.min(8, Math.max(0, Math.floor(request.maxHops)));
+      deps.respond({ id: request.id, ok: true, value: reachableFiles(graph, relativePath, maxHops) });
       return true;
     }
     case "QUERY_ENTITY_SEARCH": {

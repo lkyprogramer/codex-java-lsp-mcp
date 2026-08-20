@@ -25,7 +25,8 @@ import {
   validateTypeLookup,
   validateTypeLookupArray,
   validateEntitySearchHits,
-  validateGraphDigest
+  validateGraphDigest,
+  validateGraphReachable
 } from "./worker-protocol.js";
 
 function validStatus(): JavaIndexStatus {
@@ -268,6 +269,12 @@ test("validateGraphDigest requires digest and counts", () => {
   const digest = { digest: "abc", generation: 1, nodes: 2, edges: 3 };
   assert.deepEqual(validateGraphDigest(digest), digest);
   assert.throws(() => validateGraphDigest({ ...digest, digest: 1 }));
+});
+
+test("validateGraphReachable requires files and hops", () => {
+  const reachable = { files: ["src/A.java"], hops: { "src/A.java": 0 } };
+  assert.deepEqual(validateGraphReachable(reachable), reachable);
+  assert.throws(() => validateGraphReachable({ files: ["src/A.java"], hops: { "src/A.java": "0" } }));
 });
 
 test("validateEntitySearchHits accepts a LocAgent hit and rejects an unknown layer", () => {

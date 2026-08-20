@@ -527,6 +527,37 @@ test("REFRESH end-to-end through a real worker thread: reads, parses, extracts, 
   await client.close();
 });
 
+test("QUERY_GRAPH_REACHABLE walks CALLS_EXACT to a callee file", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "java-index-graph-reach-"));
+  const cacheDir = mkdtempSync(path.join(tmpdir(), "java-index-graph-reach-cache-"));
+  const javaDir = path.join(repoRoot, "src/main/java/demo");
+  mkdirSync(javaDir, { recursive: true });
+  writeFileSync(path.join(javaDir, "Service.java"), [
+    "package demo;",
+    "public class Service {",
+    "  public void save() {}",
+    "}",
+    ""
+  ].join("\n"));
+  writeFileSync(path.join(javaDir, "Caller.java"), [
+    "package demo;",
+    "public class Caller {",
+    "  private final Service service = new Service();",
+    "  public void run() { service.save(); }",
+    "}",
+    ""
+  ].join("\n"));
+  const client = new JavaIndexClient(repoRoot, cacheDir);
+  try {
+    await client.open(1);
+    await client.refresh(1, [path.join(javaDir, "Service.java"), path.join(javaDir, "Caller.java")], []);
+    const reached = await client.queryGraphReachable("src/main/java/demo/Caller.java", 3);
+    assert.ok(reached.files.some(file => file.endsWith("Service.java")));
+  } finally {
+    await client.close();
+  }
+});
+
 test("QUERY_GRAPH_DIGEST is deterministic for identical facts", async () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), "java-index-graph-digest-"));
   const cacheDir = mkdtempSync(path.join(tmpdir(), "java-index-graph-digest-cache-"));
