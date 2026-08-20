@@ -1,0 +1,78 @@
+{
+  "schemaVersion": "jin-baseline-manifest/v1",
+  "dated": "2026-08-20",
+  "tag": "v5r-evidence-baseline",
+  "headSha": "aa4098fbb5da69eb0d7ae55231e4119fb5129cac",
+  "executableTree": "a045b6dcc80127db1a40e58b8ad5630df9430764",
+  "branchAtTag": "codex/java-intelligence-v3",
+  "jinBranch": "codex/jin-main",
+  "ssot": "docs/deep/codex-java-lsp-mcp-v5r-postmortem-and-java-intelligence-next-clean-slate-plan-2026-08-20.md",
+  "productionTs": {
+    "fileCount": 160,
+    "totalLoc": 39466,
+    "totalBytes": 1568018,
+    "inventorySha256": "8d094747c271b3b7dc8ec0090ebc51c1f770b98e54326d3f474a74701fe419b3",
+    "note": "scripts/count-production-ts.mjs at the tagged HEAD working tree"
+  },
+  "goldens": {
+    "repoJsonl": {
+      "lishuedu": "93a00d2e3589ff1dabd8e94431e3defa98eec4bc1d2e77273f29f7f841a918b7",
+      "cipherlink": "82bffc7e64087b59d18d4be56a80a60ebc8966b77529271f152a824a0bbaafb0",
+      "exam-parent-v3": "78f7932ee67adb8eab867fd5d05c47c360edcaafbeb9ad6e67dd87cf49a68ccc"
+    },
+    "v5rFrozenScenarios": {
+      "source": "docs/phase-v5r/v5r-three-repo-cold-20260820-summary.json",
+      "lishuedu": "fba58bb3e3e77dfb37f7ded03fb2a9ff02612658b08ca48b15927d102c434c65",
+      "cipherlink": "e60dfebcc6cd764e6488c647793db72e098b7cf66385f8012e023fedcaf535d5",
+      "exam-parent-v3": "da84c560c46c7c90d6dbabea38b43b5695a7a23dcd2f608e8c6dcd63cae4f69e"
+    },
+    "repoCommits": {
+      "lishuedu": "db63b1a7e393edd90449eb013d7d1c4d65c366f2",
+      "cipherlink": "fa433982e92e52dd610650d1e79f2d041179b1d3",
+      "exam-parent-v3": "f90a0b475f7be2ed003703feecec8195bc7eb976"
+    }
+  },
+  "snapshots": {
+    "sprint0": {
+      "commit": "63a80a2a0b4e9947bbf94a454ae1d14ece64dca9",
+      "report": "docs/phase-v4/v4-sprint0-manifest.json",
+      "estimatedTokensP50": { "lishuedu": 4308, "cipherlink": 3606, "exam-parent-v3": 3395 }
+    },
+    "v4Final": {
+      "commit": "4130e3a",
+      "report": "docs/phase-v4/v4-final-three-repo-cold-20260819.md",
+      "summary": "docs/phase-v4/v4-final-three-repo-cold-20260819-summary.json",
+      "summarySha256": "95aa6e0f04febeee68407f5e2954020ed5c901c2316facb24472e684367d82a2",
+      "new": {
+        "lishuedu": { "recall": 0.7986, "pRead": 0.7217, "rReadMust": 0.925, "rangeLineRecall": 0.842, "holdoutRReadMust": 0.625, "estimatedTokensP50": 4662, "p95Ratio": 1.053 },
+        "cipherlink": { "recall": 0.8390, "pRead": 0.6633, "rReadMust": 0.910, "rangeLineRecall": 0.875, "holdoutRReadMust": 0.550, "estimatedTokensP50": 4422, "p95Ratio": 2.035 },
+        "exam-parent-v3": { "recall": 0.6970, "pRead": 0.6000, "rReadMust": 0.880, "rangeLineRecall": 0.853, "holdoutRReadMust": 0.400, "estimatedTokensP50": 3869, "p95Ratio": 1.777 }
+      }
+    },
+    "v5rDefault": {
+      "commit": "bcf547c41ef5d007b2a557d0d32c160fc0eda96a",
+      "report": "docs/phase-v5r/v5r-three-repo-cold-20260820.md",
+      "summary": "docs/phase-v5r/v5r-three-repo-cold-20260820-summary.json",
+      "summarySha256": "db0306870e8165357923763534a43897b461146afc5211c68598e1b218b5d31d",
+      "new": {
+        "lishuedu": { "recall": 0.7985714285714284, "pRead": 0.7216666666666659, "rReadMust": 0.925, "rangeLineRecall": 0.8419047619047617, "holdoutRReadMust": 0.625, "estimatedTokensP50": 4683, "p95Ratio": 1.095 },
+        "cipherlink": { "recall": 0.8389926739926743, "pRead": 0.6633333333333328, "rReadMust": 0.9099999999999996, "rangeLineRecall": 0.875, "holdoutRReadMust": 0.55, "estimatedTokensP50": 4443, "p95Ratio": 2.115 },
+        "exam-parent-v3": { "recall": 0.6970066045066045, "pRead": 0.6, "rReadMust": 0.8800000000000008, "rangeLineRecall": 0.8525000000000004, "holdoutRReadMust": 0.4, "estimatedTokensP50": 3890, "p95Ratio": 1.828 }
+      },
+      "qualityVsV4Final": "bit-identical first-plan quality; estimatedTokens P50 +21"
+    }
+  },
+  "liveTrace": {
+    "report": "docs/phase-v5r/v5r-live-trace-20260820.md",
+    "summary": "docs/phase-v5r/v5r-live-trace-20260820-summary.json",
+    "lambda": "LIVE_TRACE_MEASURED",
+    "scalarAllowed": false,
+    "taskSuccess": { "scored": 6, "successes": 4, "mean": 0.6666666666666666 },
+    "tokensPerToolRound": 4612.025
+  },
+  "notes": [
+    "Tag points at the V5R production HEAD before any JIN docs or deletions.",
+    "N0 T3 old side must bind this tag SHA, not Sprint0'.",
+    "Do not merge main until N6 hard gates."
+  ]
+}
