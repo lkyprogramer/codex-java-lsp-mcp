@@ -144,7 +144,7 @@
 
 （以下 V3.2 各 Sprint 记录保留供追溯，其结论与"不要再踩的坑"在 V4 阶段继续有效，除非 V4 计划文档显式解除——V4-05 曾以 ADR 引入第二 worker **线程**；V5R Phase 1 两轮 storm FAIL 后该线程已删除，query worker 再次独自承担后台 chunk。）
 
-当前分支是 `codex/java-intelligence-v3`（最新 commit 见 `git log --oneline -5`）。**均已 commit 且已 push，不是 dirty worktree**（工作区可能有两个未提交、未跟踪的实验脚手架：`scripts/run-idle-prewarm-experiment.mjs`（V3.2-23）与 `scripts/run-v324-import-concurrency-experiment.mjs`（V3.2-24）——都是保留的、接线已验证有效的脚手架，不是遗漏的改动，见下方对应小节）。
+当前分支是 `codex/java-intelligence-v3`（最新 commit 见 `git log --oneline -5`）。生产 `src/`、三仓/战役/live-trace 报告均已入库。`artifacts/v3-*`、`artifacts/model-eval/`、`graphify-out/`、`.workflow/`、`.task30-debug.mjs` 是本地 dumps，已 gitignore，不入库。
 
 用户的标准授权（持续有效，无需每次重新确认）：
 - 本仓库上的 `git commit`、`git push origin codex/java-intelligence-v3` 不需要逐次请求授权。

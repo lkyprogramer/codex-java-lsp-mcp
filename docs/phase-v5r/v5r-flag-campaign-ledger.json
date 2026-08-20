@@ -72,5 +72,5 @@
   ],
   "doNotMergeMain": true,
   "doNotClaimTaskSuccess": true,
-  "lambda": "CALIBRATED_OFFLINE"
+  "lambda": "LIVE_TRACE_MEASURED"
 }
