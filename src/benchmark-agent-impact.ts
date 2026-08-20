@@ -414,9 +414,55 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
     // diagnostic variance cannot mask or manufacture semantic drift.
     determinism: diagnosticCanonical
       ? buildImpactDeterminismSnapshot(diagnosticCanonical, cli.repoRoot, productionRanking)
-      : undefined
+      : compactDeterminismSnapshot(result)
   };
   return firstAttempt;
+}
+
+function compactDeterminismSnapshot(result: ImpactResult | CompactImpact): {
+  candidatePaths: string[];
+  readPlan: Array<{ path: string; priority: string; ranges: Array<{ startLine: number; endLine: number; reason: string }> }>;
+  completion: {
+    semantic: string;
+    semanticUsed: boolean;
+    coverage: string;
+    requestGeneration: number;
+    indexedGeneration: number;
+    changedDuringRequest: boolean;
+  };
+} {
+  const ranges = viewSelectedRangesByFile(result);
+  const readPlan = [...ranges.entries()].map(([file, spans]) => ({
+    path: file,
+    priority: "",
+    ranges: spans.map(span => ({ startLine: span.startLine, endLine: span.endLine, reason: "" }))
+  }));
+  if (isCompactImpact(result)) {
+    return {
+      candidatePaths: viewImpactFiles(result),
+      readPlan,
+      completion: {
+        semantic: result.semantic.completion,
+        semanticUsed: result.semantic.used,
+        coverage: result.freshness.coverage,
+        requestGeneration: result.freshness.requestGeneration,
+        indexedGeneration: result.freshness.indexedGeneration,
+        changedDuringRequest: result.freshness.changedDuringRequest
+      }
+    };
+  }
+  return {
+    candidatePaths: viewImpactFiles(result),
+    readPlan,
+    completion: {
+      semantic: result.semantic.completion,
+      semanticUsed: result.semantic.used,
+      coverage: result.freshness.coverage,
+      requestGeneration: result.freshness.requestGeneration,
+      indexedGeneration: result.freshness.indexedGeneration,
+      changedDuringRequest: result.freshness.changedDuringRequest
+    }
+  };
 }
 
 function recordJavaIndexQueueDepth(result: ImpactResult | CompactImpact): void {

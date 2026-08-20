@@ -1,7 +1,8 @@
 // input: Internal V6 impact payload after ranking/read-plan (selection unchanged).
 // output: Compact wire contract: one contexts[] list, no files[]+readPlan[] dual expression.
 // pos: JIN N0.5 serializer. Ranking/selection stay in format.ts / read-plan.ts.
-import type { ImpactCostV6, ImpactFileV6, ImpactResult, ImpactResultV6, ReadPlanItemV6 } from "../agent-types.js";
+import type { Completion } from "../runtime/completion.js";
+import type { ImpactCostV6, ImpactFileV6, ImpactFreshnessV6, ImpactResult, ImpactResultV6, ReadPlanItemV6 } from "../agent-types.js";
 import { roleOf } from "./output-v6.js";
 import { withConvergedCostV6 } from "./output-v6.js";
 
@@ -36,6 +37,9 @@ export type CompactImpact = {
   contexts: CompactContext[];
   unresolved: string[];
   cost: ImpactCostV6;
+  /** Slim cold-nolsp proof; not files[]/readPlan[] dual expression. */
+  freshness: Pick<ImpactFreshnessV6, "coverage" | "requestGeneration" | "indexedGeneration" | "changedDuringRequest">;
+  semantic: { used: boolean; completion: Completion };
   metrics?: {
     routingVersion: number;
     elapsedMs: number;
@@ -79,7 +83,17 @@ export function toCompactImpact(payload: ImpactResultV6): CompactImpact {
     target: { file: payload.target.file, symbol: payload.target.symbol },
     contexts,
     unresolved: compactUnresolved(payload.evidenceGaps),
-    cost: payload.cost
+    cost: payload.cost,
+    freshness: {
+      coverage: payload.freshness.coverage,
+      requestGeneration: payload.freshness.requestGeneration,
+      indexedGeneration: payload.freshness.indexedGeneration,
+      changedDuringRequest: payload.freshness.changedDuringRequest
+    },
+    semantic: {
+      used: payload.semantic.used,
+      completion: payload.semantic.completion
+    }
   };
   if (payload.metrics) {
     compact.metrics = {

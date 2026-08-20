@@ -82,6 +82,9 @@ test("compact serializer keeps file set and ranges and shrinks the wire", () => 
   assert.deepEqual(viewSelectedRangesByFile(compact).get("src/B.java"), [{ startLine: 10, endLine: 12 }]);
   const newBytes = Buffer.byteLength(JSON.stringify(compact), "utf8");
   assert.ok(newBytes < oldBytes * 0.6, `new ${newBytes} should be < 60% of old ${oldBytes}`);
+  assert.equal(compact.semantic.completion, "COMPLETE");
+  assert.equal(compact.semantic.used, false);
+  assert.equal(compact.freshness.coverage, "COMPLETE");
   assert.equal(compact.contexts[0]?.role, "TGT");
   assert.deepEqual(compact.contexts[0]?.proof, ["CALLS"]);
   assert.ok(compact.unresolved.some(gap => gap.includes("Lombok")));
