@@ -1,11 +1,11 @@
 # HANDOFF
 
-## JIN N4 FAIL span（2026-08-21）
+## JIN N4 FAIL discovery（2026-08-21）
 
-分支 `codex/jin-main`。证明路径整 method，丢掉 SOURCE_ROOT 假文件，义务优先 hop-order，预算 2000，wire selected-only。  
-T3 四轴 **2/4**：token **GO**（−52.6/−44.0/−43.5%）；p95 配对 **GO**（0.276/0.124/0.133）；RangeLineRecall / holdout rReadMust 均值 0.333 **FAIL**。T1 1115+190 fail 0。未合 `main`。  
-`AliyunOssGateway` 162–181 已覆盖；SignedUrl DTO 仍不在池里。下一刀补 discovery，不要再多选文件。  
-报告：`docs/phase-jin/jin-phase-n4-20260820.md`。摘要 `jin-n4-t3-span-summary.json`。
+分支 `codex/jin-main`。锚点 TYPE+METHOD 起步，SOURCE_ROOT 不扩展，签名类型/实现者 hop-1 attach，hop-0 同类型 sibling method，lexical hop-1 不再等 unresolved。预算 2000，selected-only。  
+T3 四轴 **2/4**：token **GO**（−47.7/−47.6/−34.5%）；p95 **GO**（0.324/0.132/0.156）；RangeLineRecall 0.582/0.850/0.558 **FAIL**；holdout rReadMust 均值 0.300 **FAIL**。T1 1118+190 fail 0。未合 `main`。  
+`storage-signed-url` 上 AliyunOssGateway 仍覆盖；SignedUrl DTO / MeQueryService / SchoolQueryService 仍缺。不进 N5。  
+报告：`docs/phase-jin/jin-phase-n4-20260820.md`。摘要 `jin-n4-t3-disc-summary.json`。
 
 ## JIN N3 COMPLETE（2026-08-20）
 

@@ -4,31 +4,29 @@
   "dated": "2026-08-21",
   "decision": "FAIL",
   "mergeToMain": false,
-  "retry": "proving-path whole methods; drop SOURCE_ROOT files; obligation-ranked hop-order; DEFAULT_TOKEN_BUDGET=2000; selected-only wire",
+  "retry": "anchor TYPE+METHOD start; skip SOURCE_ROOT expansion; signature/implementer hop-1 attach; hop-0 sibling methods; lexical hop-1 without unresolved gate; budget 2000; selected-only",
   "axes": {
     "tokenP50Drop25AndLeSprint0": {
       "result": "GO",
       "oldP50": { "lishuedu": 3393, "cipherlink": 3186, "exam-parent-v3": 2830 },
-      "newP50": { "lishuedu": 1609, "cipherlink": 1784, "exam-parent-v3": 1598 },
-      "drop": { "lishuedu": 0.526, "cipherlink": 0.44, "exam-parent-v3": 0.435 },
+      "newP50": { "lishuedu": 1775, "cipherlink": 1671, "exam-parent-v3": 1855 },
+      "drop": { "lishuedu": 0.477, "cipherlink": 0.476, "exam-parent-v3": 0.345 },
       "sprint0P50": { "lishuedu": 4308, "cipherlink": 3606, "exam-parent-v3": 3395 }
     },
     "rangeLineRecallNoRegress": {
       "result": "FAIL",
       "old": { "lishuedu": 0.8419, "cipherlink": 0.875, "exam-parent-v3": 0.8525 },
-      "new": { "lishuedu": 0.5343, "cipherlink": 0.85, "exam-parent-v3": 0.5325 }
+      "new": { "lishuedu": 0.5819, "cipherlink": 0.85, "exam-parent-v3": 0.5575 }
     },
     "holdoutRReadMustMean075": {
       "result": "FAIL",
-      "new": { "lishuedu": 0.375, "cipherlink": 0.325, "exam-parent-v3": 0.3 },
-      "mean": 0.3333,
-      "fullRReadMust": { "lishuedu": 0.6183, "cipherlink": 0.6567, "exam-parent-v3": 0.7267 }
+      "new": { "lishuedu": 0.375, "cipherlink": 0.225, "exam-parent-v3": 0.3 },
+      "mean": 0.3
     },
     "p95Section163": {
       "result": "GO",
-      "p95Ratio": { "lishuedu": 0.276, "cipherlink": 0.124, "exam-parent-v3": 0.133 },
-      "newP95Ms": { "lishuedu": 63.8, "cipherlink": 24.1, "exam-parent-v3": 30.1 },
-      "note": "Pairing p95Ratio vs current compact: all-repo -35%. warm p95 <=50ms still misses on lishuedu (64ms)."
+      "p95Ratio": { "lishuedu": 0.324, "cipherlink": 0.132, "exam-parent-v3": 0.156 },
+      "note": "Pairing p95Ratio vs current compact: all-repo -35%."
     },
     "passedCount": "2/4"
   },
@@ -36,20 +34,20 @@
     "comparisonPolicy": "env-locked-same-tree",
     "newTreatment": { "JAVA_LSP_ENGINE": "jin" },
     "verifierPassed": false,
-    "summarySha256": "ec9df52c298c002c21097abc0716880d4a17cda624f92a8a646295b250166dcd",
-    "head": "84dd03dab69deeaa4619ab5eba7df308f443f319",
-    "executableTree": "c1523a57ec89d1edeaa588183984d015e07a20b0",
-    "loadavg1": 8.65,
+    "summarySha256": "481c4ea9c200f87552a50c288a405d93d10fe1b44af86f39cf1df1a9ca4773c3",
+    "head": "75d10ed",
+    "executableTree": "cf28a005b62ba34704729a9f7c2a836a20d3fad7",
+    "loadavg1": 4.26,
     "cells": 18
   },
   "isolation": {
     "t0": { "plannerProperties": "pass", "jdtlsBin": "/usr/bin/false" },
-    "t1": { "dist": 1115, "scripts": 190, "fail": 0, "jdtlsBin": "/usr/bin/false", "executableTree": "c1523a57ec89d1edeaa588183984d015e07a20b0" }
+    "t1": { "dist": 1118, "scripts": 190, "fail": 0, "jdtlsBin": "/usr/bin/false", "executableTree": "cf28a005b62ba34704729a9f7c2a836a20d3fad7" }
   },
   "failureDisposition": {
-    "clock": "fifth T3, 2-week N4 window not expired",
+    "clock": "sixth T3, 2-week N4 window not expired",
     "axesPassed": 2,
     "action": "stay on N4; do not enter N5",
-    "next": "keep selected-only wire. Token/p95 GO after dropping SOURCE_ROOT junk and packing proving-path methods under 2000. RangeLineRecall and holdout still miss because discovery still omits some mustHit files (e.g. SignedUrl DTOs) even when implementer methods cover golden ranges."
+    "next": "Range/holdout still miss mustHit files that are not signature types or direct implementers of the anchor (MeQueryService, SchoolQueryService, ExamScoreExportExcelGenerator, SignedUrl DTOs). Do not admit extra files. N3 candidate-replay after SOURCE_ROOT skip is UNMEASURED."
   }
 }
