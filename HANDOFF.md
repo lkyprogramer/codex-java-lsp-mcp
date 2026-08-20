@@ -1,10 +1,11 @@
 # HANDOFF
 
-## JIN N4 FAIL pack（2026-08-20）
+## JIN N4 FAIL mustHit（2026-08-21）
 
-分支 `codex/jin-main`。hop≤2 先 greedy（非整批全收），普通方法整段 span，wire 仍 selected-only。  
-T3 四轴 **1/4**：token **GO**（−58.7/−50.3/−46.3%）；RangeLineRecall / holdout rReadMust 均值 0.358 / lishuedu p95 3.38× **FAIL**。T1 1110+190 fail 0。未合 `main`。  
-报告：`docs/phase-jin/jin-phase-n4-20260820.md`。摘要 `jin-n4-t3-pack-summary.json`。
+分支 `codex/jin-main`。hop-ordered 预算内填满（不全收 hop≤2），wire 仍 selected-only。HEAD `32a8491`。  
+T3 四轴 **1/4**：p95 配对 **GO**（0.434/0.142/0.141）；token **FAIL**（−22.2/−19.6/−22.5%，不到 25%）；RangeLineRecall / holdout rReadMust 均值 0.300 **FAIL**。T1 1111+190 fail 0。未合 `main`。  
+相对 pack：多选近文件抬 token、丢掉 25% 门，holdout 0.358→0.300，Range 几乎不动。下一刀不要再靠多选文件。  
+报告：`docs/phase-jin/jin-phase-n4-20260820.md`。摘要 `jin-n4-t3-musthit-summary.json`。
 
 ## JIN N3 COMPLETE（2026-08-20）
 
