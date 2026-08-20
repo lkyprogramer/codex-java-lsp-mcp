@@ -1,5 +1,12 @@
 # HANDOFF
 
+## JIN N4 FAIL（2026-08-20）
+
+分支 `codex/jin-main`。EvidenceBundle planner 已落地；`JAVA_LSP_ENGINE=jin` 仅矩阵/benchmark 读取。  
+T3 四轴 **0/4 FAIL**：token 2–3 万（应 ↓25%）；RangeLineRecall 回退；holdout rReadMust 均值 0.367（门 0.75）；lishuedu p95 3.28×。recall 上升。未合 `main`。  
+首次 T3，2 周窗未到期，**停在 N4** 不进 N5。下一刀：compact 只输出 selected spans，停止 hop≤2 全收。  
+报告：`docs/phase-jin/jin-phase-n4-20260820.md`。
+
 ## JIN N3 COMPLETE（2026-08-20）
 
 分支 `codex/jin-main`。commit-tasks 已冻：lishuedu 753 / cipherlink 20 / exam 45。  
