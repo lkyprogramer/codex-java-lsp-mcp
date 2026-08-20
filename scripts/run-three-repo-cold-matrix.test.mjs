@@ -64,10 +64,18 @@ test("parseCli rejects removed flag campaigns and continuation", () => {
     ]),
     /removed in JIN N0/
   );
+  const jin = parseCli([
+    ...required,
+    "--comparison-policy", "env-locked-same-tree",
+    "--candidate-env", "JAVA_LSP_ENGINE=jin"
+  ]);
+  assert.equal(jin.newTreatment.env.JAVA_LSP_ENGINE, "jin");
+  assert.equal(jin.oldTreatment.env.JAVA_LSP_ENGINE, undefined);
 });
 
 test("formal matrix scrubs inherited RPC telemetry and only accepts an explicit cell mode", () => {
   const previous = process.env.JAVA_LSP_JAVA_INDEX_RPC_TELEMETRY;
+  const previousEngine = process.env.JAVA_LSP_ENGINE;
   process.env.JAVA_LSP_JAVA_INDEX_RPC_TELEMETRY = "1";
   try {
     assert.equal(isolatedChildEnvironment({ TASK_MARKER: "standard" }).JAVA_LSP_JAVA_INDEX_RPC_TELEMETRY, undefined);
@@ -79,9 +87,14 @@ test("formal matrix scrubs inherited RPC telemetry and only accepts an explicit 
       isolatedChildEnvironment({ JAVA_LSP_JAVA_INDEX_RPC_TELEMETRY: "1" }).JAVA_LSP_JAVA_INDEX_RPC_TELEMETRY,
       "1"
     );
+    process.env.JAVA_LSP_ENGINE = "jin";
+    assert.equal(isolatedChildEnvironment({ TASK_MARKER: "standard" }).JAVA_LSP_ENGINE, undefined);
+    assert.equal(isolatedChildEnvironment({ JAVA_LSP_ENGINE: "jin" }).JAVA_LSP_ENGINE, "jin");
   } finally {
     if (previous === undefined) delete process.env.JAVA_LSP_JAVA_INDEX_RPC_TELEMETRY;
     else process.env.JAVA_LSP_JAVA_INDEX_RPC_TELEMETRY = previous;
+    if (previousEngine === undefined) delete process.env.JAVA_LSP_ENGINE;
+    else process.env.JAVA_LSP_ENGINE = previousEngine;
   }
 });
 

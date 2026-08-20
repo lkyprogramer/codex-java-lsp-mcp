@@ -401,6 +401,13 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     tokenBudget?: number;
     taskText?: string;
     profile?: string;
+    plan?: boolean;
+    includeSource?: boolean;
+    anchorLine?: number;
+    anchorColumn?: number;
+    sessionId?: string;
+    generation?: number;
+    repoHash?: string;
   }): Promise<ContextGraphResult> {
     await this.ensureOpened(this.generation);
     return this.client.queryContextGraph(input, this.currentRequestOptions());

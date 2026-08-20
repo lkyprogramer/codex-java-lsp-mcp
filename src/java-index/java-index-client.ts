@@ -399,6 +399,13 @@ export class JavaIndexClient {
       tokenBudget?: number;
       taskText?: string;
       profile?: string;
+      plan?: boolean;
+      includeSource?: boolean;
+      anchorLine?: number;
+      anchorColumn?: number;
+      sessionId?: string;
+      generation?: number;
+      repoHash?: string;
     },
     requestOptions: JavaIndexRequestOptions = {}
   ): Promise<ContextGraphResult> {

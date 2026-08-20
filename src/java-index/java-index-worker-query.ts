@@ -11,6 +11,8 @@ import { compileIntent } from "../context-engine/intent-compiler.js";
 import { navigateGraph, searchContextGraph } from "../context-engine/graph-search.js";
 import { lexicalFallbackHits, shouldLexicalFallback } from "../context-engine/lexical-fallback.js";
 import { shouldEscalateToJdt } from "../context-engine/semantic-escalation.js";
+import { planContextQuery } from "../context-engine/plan-query.js";
+import { PLANNER_VERSION } from "../context-engine/context-contract.js";
 
 export type QueryHandlerDeps = {
   store?: JavaIndexStore;
@@ -173,6 +175,27 @@ export async function handleQueryCommand(request: JavaIndexRequest, deps: QueryH
         }
       }
       shouldEscalateToJdt({ unresolvedRoles: result.unresolved.map(item => item.role), jdtlsBin: process.env.JDTLS_BIN });
+      if (request.plan && request.mode !== "navigate") {
+        const contract = planContextQuery({
+          graph,
+          store: deps.store,
+          search: result,
+          tokenBudget: request.tokenBudget,
+          includeSource: request.includeSource === true,
+          generation: deps.status.indexedGeneration,
+          anchorLine: request.anchorLine,
+          session: request.sessionId
+            ? {
+              sessionId: request.sessionId,
+              generation: request.generation ?? deps.status.indexedGeneration,
+              repoHash: request.repoHash ?? "",
+              plannerVersion: PLANNER_VERSION
+            }
+            : undefined
+        });
+        deps.respond({ id: request.id, ok: true, value: { ...result, contract } });
+        return true;
+      }
       deps.respond({ id: request.id, ok: true, value: result });
       return true;
     }

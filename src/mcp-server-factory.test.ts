@@ -6,6 +6,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { JavaLspApplication } from "./application.js";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { createMcpServer, PUBLIC_JAVA_TOOLS } from "./mcp-server-factory.js";
 import { AliasRegistry } from "./alias-registry.js";
 import { RepoResolver } from "./repo-resolver.js";
@@ -16,6 +18,14 @@ test("PUBLIC_JAVA_TOOLS is exactly the five public tools and excludes java_conte
   assert.deepEqual([...PUBLIC_JAVA_TOOLS].sort(), expectedTools);
   assert.equal(PUBLIC_JAVA_TOOLS.includes("java_context" as never), false);
   assert.equal(PUBLIC_JAVA_TOOLS.length, 5);
+});
+
+test("production MCP factory and java_impact do not read JAVA_LSP_ENGINE", () => {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "src");
+  for (const relative of ["mcp-server-factory.ts", "tools/impact.ts", "application.ts"]) {
+    const source = readFileSync(path.join(root, relative), "utf8");
+    assert.equal(source.includes("JAVA_LSP_ENGINE"), false, relative);
+  }
 });
 
 test("HTTP protocol factory refuses an application with cwd fallback", () => {

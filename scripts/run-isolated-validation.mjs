@@ -81,6 +81,7 @@ export function isolatedValidationEnvironment(root, overrides = {}) {
     "JDTLS_EXTRA_ARGS",
     "JAVA_LSP_RESOURCE_TELEMETRY_FILE",
     "JAVA_LSP_RESOURCE_INTERVAL_MS",
+    "JAVA_LSP_ENGINE",
     "JAVA_TOOL_OPTIONS",
     "_JAVA_OPTIONS",
     "JDK_JAVA_OPTIONS",

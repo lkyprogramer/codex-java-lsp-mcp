@@ -14,7 +14,7 @@ export const VERIFIER_VERSION = 6;
 export const FORMAL_REQUEST_DEADLINE_MS = 2_000;
 export const COMPARISON_POLICY_EXECUTABLE = "executable-code-baseline";
 export const COMPARISON_POLICY_ENV_LOCKED = "env-locked-same-tree";
-export const ENV_AB_ALLOWLIST = Object.freeze([]);
+export const ENV_AB_ALLOWLIST = Object.freeze(["JAVA_LSP_ENGINE"]);
 export const CONTINUE_POLICY_IN_POOL_FIFO = "in-pool-fifo";
 
 const EPSILON = 1e-12;

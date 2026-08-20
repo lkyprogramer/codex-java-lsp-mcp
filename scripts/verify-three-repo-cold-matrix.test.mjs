@@ -126,6 +126,7 @@ test("parseEnvAssignment rejects unknown keys and empty values", () => {
   assert.throws(() => parseEnvAssignment("JAVA_LSP_EXAMPLE_FLAG=off", "--candidate-env"), /allowlisted/);
   assert.throws(() => parseEnvAssignment("JAVA_LSP_JAVA_INDEX_DUAL_WORKER=1", "--candidate-env"), /allowlisted/);
   assert.throws(() => parseEnvAssignment("JAVA_LSP_EXAMPLE_FLAG=", "--candidate-env"), /KEY=VAL/);
+  assert.deepEqual(parseEnvAssignment("JAVA_LSP_ENGINE=jin", "--candidate-env"), { key: "JAVA_LSP_ENGINE", value: "jin" });
 });
 
 test("verifier accepts a source-locked candidate patch on the same base commit", async t => {

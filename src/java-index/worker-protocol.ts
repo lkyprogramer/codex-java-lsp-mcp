@@ -1,3 +1,4 @@
+import type { ContextContract } from "../context-engine/context-contract.js";
 import type {
   AnchorFacts,
   IndexedReadRange,
@@ -107,6 +108,13 @@ type JavaIndexRequestOperation =
       tokenBudget?: number;
       taskText?: string;
       profile?: string;
+      plan?: boolean;
+      includeSource?: boolean;
+      anchorLine?: number;
+      anchorColumn?: number;
+      sessionId?: string;
+      generation?: number;
+      repoHash?: string;
     }
   | { id: number; type: "STATUS" }
   | { id: number; type: "FLUSH" }
@@ -960,6 +968,7 @@ export type ContextGraphResult = {
   }>;
   unresolved: Array<{ id: string; role: string }>;
   metrics: { expansions: number; hops: number; estimatedTokens: number };
+  contract?: ContextContract;
 };
 
 export function validateContextGraphResult(value: unknown): ContextGraphResult {
@@ -999,7 +1008,8 @@ export function validateContextGraphResult(value: unknown): ContextGraphResult {
     coverage: source.coverage,
     bundles,
     unresolved,
-    metrics: { expansions: metrics.expansions, hops: metrics.hops, estimatedTokens: metrics.estimatedTokens }
+    metrics: { expansions: metrics.expansions, hops: metrics.hops, estimatedTokens: metrics.estimatedTokens },
+    ...(source.contract ? { contract: source.contract as ContextContract } : {})
   };
 }
 
