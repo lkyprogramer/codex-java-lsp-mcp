@@ -8,7 +8,13 @@ import type { ImpactOptions, ImpactResultV6, ImpactResultV7 } from "../../agent-
 import { frontierOracleCoverage } from "./frontier-oracle.js";
 import { requiredGroupsFromScenario } from "../../benchmark/golden-required-groups.js";
 import type { Scenario } from "../../benchmark/golden-scenario.js";
-import { CONSUMABLE_FRONTIER_RELATIONS, continueSession, createAnalysisSession } from "./retrieval-session-service.js";
+import {
+  CONSUMABLE_FRONTIER_RELATIONS,
+  continueSession,
+  createAnalysisSession,
+  DEFAULT_CONTINUE_MAX_ADDITIONAL_READ_BYTES,
+  inPoolFifoContinuationIds
+} from "./retrieval-session-service.js";
 import { RetrievalSessionStore } from "./retrieval-session-store.js";
 import type { FrontierItemV1, FrontierShadowReport } from "./retrieval-types.js";
 import { retrievalCostFromV6 } from "./cost-model.js";
@@ -238,6 +244,20 @@ test("rReadMust@2calls lifts in-pool holdout files and leaves discovery-gap unco
   assert.ok(twoCall.oracleCoverage > first.firstCoverage);
   assert.ok(twoCall.uncoveredGroupIds.some(id => id.includes("MeQueryService")));
   assert.equal(continued.snapshot.files.some(file => file.path.includes("MeQueryService")), false);
+});
+
+test("in-pool fifo continuation ids skip non-consumable relations and honor the byte cap", () => {
+  const ids = inPoolFifoContinuationIds([
+    item("skip", "src/MeQueryService.java", "REVERSE_CALLER_QUERY", 40),
+    item("a", "src/A.java", "BUDGET_EVICTED", 100),
+    item("b", "src/B.java", "CLOSED_PORT_IMPLEMENTATION", 8000),
+    item("c", "src/C.java", "SECOND_HOP_EXACT", 200)
+  ], 8192);
+  assert.deepEqual(ids, ["a", "b"]);
+  assert.equal(DEFAULT_CONTINUE_MAX_ADDITIONAL_READ_BYTES, 8192);
+  assert.deepEqual(inPoolFifoContinuationIds([
+    item("big", "src/Big.java", "BUDGET_EVICTED", 9000)
+  ]), []);
 });
 
 test("java_impact default analyze stays V6; retrieval.enabled analyze then continue is V7", async () => {

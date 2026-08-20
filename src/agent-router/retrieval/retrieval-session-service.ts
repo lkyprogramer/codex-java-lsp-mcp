@@ -34,6 +34,22 @@ export function consumableFrontierItems(items: readonly FrontierItemV1[]): Front
   return items.filter(item => CONSUMABLE_FRONTIER_RELATIONS.has(item.relation));
 }
 
+export const DEFAULT_CONTINUE_MAX_ADDITIONAL_READ_BYTES = 8192;
+
+export function inPoolFifoContinuationIds(
+  frontier: readonly FrontierItemV1[],
+  maxAdditionalReadBytes = DEFAULT_CONTINUE_MAX_ADDITIONAL_READ_BYTES
+): string[] {
+  const ids: string[] = [];
+  let used = 0;
+  for (const item of consumableFrontierItems(frontier)) {
+    if (used + item.estimatedReadBytes > maxAdditionalReadBytes) break;
+    ids.push(item.id);
+    used += item.estimatedReadBytes;
+  }
+  return ids;
+}
+
 export function createAnalysisSession(input: {
   store: RetrievalSessionStore;
   frontier: FrontierShadowReport;

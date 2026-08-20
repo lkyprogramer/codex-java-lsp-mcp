@@ -12,6 +12,15 @@ export const MATRIX_ROUNDS = [1, 2, 3];
 export const MATRIX_VARIANTS = ["old", "new"];
 export const VERIFIER_VERSION = 6;
 export const FORMAL_REQUEST_DEADLINE_MS = 2_000;
+export const COMPARISON_POLICY_EXECUTABLE = "executable-code-baseline";
+export const COMPARISON_POLICY_ENV_LOCKED = "env-locked-same-tree";
+export const ENV_AB_ALLOWLIST = Object.freeze([
+  "JAVA_LSP_FRONTIER_SHADOW",
+  "JAVA_LSP_RELATIONSHIP_BUNDLE",
+  "JAVA_LSP_SPAN_PACKING",
+  "JAVA_LSP_READUNIT_PLANNER"
+]);
+export const CONTINUE_POLICY_IN_POOL_FIFO = "in-pool-fifo";
 
 const EPSILON = 1e-12;
 const P_READ_TOLERANCE = 0.02;
@@ -109,7 +118,8 @@ export function verifyMatrix({ matrixDir, manifestFile, expectedRuns = 5, p95Lim
       runtimes: manifest.value.runtimes,
       repositories: manifest.value.repositories,
       scenarios: manifest.value.scenarios,
-      candidatePatch: manifest.value.candidatePatch
+      candidatePatch: manifest.value.candidatePatch,
+      comparisonPolicy: manifest.value.comparisonPolicy
     },
     inputSha256,
     configuration: {
@@ -248,6 +258,9 @@ function validateMetadata(payload, { file, project, variant, expectedRuns, manif
     repoStatusSha256: expectedRepo.statusSha256,
     scenarioSha256: expectedScenario.sha256
   };
+  if (manifest.value.comparisonPolicy?.baseline === COMPARISON_POLICY_ENV_LOCKED) {
+    exactFields.treatmentFingerprint = manifest.value.comparisonPolicy.envLock[variant].fingerprint;
+  }
   for (const [key, expected] of Object.entries(exactFields)) {
     if (provenance[key] !== expected) {
       throw new MatrixValidationError(`${file}: matrixProvenance.${key} does not match manifest`);
@@ -447,16 +460,7 @@ function readAndValidateManifest(file, expectedRuns, p95Limit) {
   if (value.requestDeadlineMs !== FORMAL_REQUEST_DEADLINE_MS) {
     throw new MatrixValidationError(`${file}: manifest requestDeadlineMs must be ${FORMAL_REQUEST_DEADLINE_MS}`);
   }
-  const policy = value.comparisonPolicy;
-  if (!policy
-    || policy.baseline !== "executable-code-baseline"
-    || policy.baselineRevision !== value.runtimes?.old?.commit
-    || policy.goldenSchema !== "java-intelligence-v32-range-holdout-v2"
-    || policy.pReadTolerance !== P_READ_TOLERANCE
-    || policy.p95AbsoluteSlackMs !== P95_ABSOLUTE_SLACK_MS
-    || policy.taskBlockingBaseline !== "attempt-or-derived-attribution") {
-    throw new MatrixValidationError(`${file}: invalid executable-baseline comparison policy`);
-  }
+  validateComparisonPolicy(value.comparisonPolicy, value, file);
   if (!sameStringArray(value.rounds, ["old/new", "new/old", "old/new"])) {
     throw new MatrixValidationError(`${file}: manifest rounds must be AB/BA/AB`);
   }
@@ -469,8 +473,11 @@ function readAndValidateManifest(file, expectedRuns, p95Limit) {
     validateCandidateTestEvidence(result, file, suite);
   }
   validateDependencyInventory(value.dependencies, file);
-  for (const variant of MATRIX_VARIANTS) validateRuntime(value.runtimes?.[variant], file, variant);
-  if (value.runtimes.old.executableTree === value.runtimes.new.executableTree) {
+  for (const variant of MATRIX_VARIANTS) {
+    validateRuntime(value.runtimes?.[variant], file, variant, value.comparisonPolicy);
+  }
+  if (value.comparisonPolicy.baseline === COMPARISON_POLICY_EXECUTABLE
+    && value.runtimes.old.executableTree === value.runtimes.new.executableTree) {
     throw new MatrixValidationError(`${file}: old and new runtime executable trees must be different`);
   }
   validateHashBoundFile(value.candidatePatch, file, "candidate patch");
@@ -533,14 +540,76 @@ function readAndValidateManifest(file, expectedRuns, p95Limit) {
   return { file, value, sha256: sha256(bytes), scenarioDescriptors };
 }
 
-function validateRuntime(runtime, manifestFile, variant) {
+function validateComparisonPolicy(policy, value, file) {
+  if (!policy
+    || policy.baselineRevision !== value.runtimes?.old?.commit
+    || policy.goldenSchema !== "java-intelligence-v32-range-holdout-v2"
+    || policy.pReadTolerance !== P_READ_TOLERANCE
+    || policy.p95AbsoluteSlackMs !== P95_ABSOLUTE_SLACK_MS
+    || policy.taskBlockingBaseline !== "attempt-or-derived-attribution") {
+    throw new MatrixValidationError(`${file}: invalid executable-baseline comparison policy`);
+  }
+  if (policy.baseline === COMPARISON_POLICY_EXECUTABLE) {
+    if (policy.envLock != null) {
+      throw new MatrixValidationError(`${file}: executable-code-baseline forbids envLock`);
+    }
+    return;
+  }
+  if (policy.baseline !== COMPARISON_POLICY_ENV_LOCKED) {
+    throw new MatrixValidationError(`${file}: invalid comparison policy baseline`);
+  }
+  const oldRuntime = value.runtimes.old;
+  const newRuntime = value.runtimes.new;
+  if (oldRuntime.commit !== newRuntime.commit
+    || oldRuntime.commitTree !== newRuntime.commitTree
+    || oldRuntime.executableTree !== newRuntime.executableTree) {
+    throw new MatrixValidationError(`${file}: env-locked-same-tree requires identical old/new commit and executable trees`);
+  }
+  validateEnvLock(policy.envLock, file);
+}
+
+function validateEnvLock(envLock, file) {
+  if (!envLock || typeof envLock !== "object") {
+    throw new MatrixValidationError(`${file}: env-locked-same-tree requires envLock`);
+  }
+  if (!sameStringArray(envLock.allowlist, [...ENV_AB_ALLOWLIST])) {
+    throw new MatrixValidationError(`${file}: envLock allowlist does not match ENV_AB_ALLOWLIST`);
+  }
+  for (const variant of MATRIX_VARIANTS) {
+    const side = envLock[variant];
+    if (!side || typeof side !== "object") {
+      throw new MatrixValidationError(`${file}: envLock.${variant} is missing`);
+    }
+    const env = side.env && typeof side.env === "object" && !Array.isArray(side.env) ? side.env : null;
+    const benchArgs = Array.isArray(side.benchArgs) ? side.benchArgs : null;
+    if (!env || !benchArgs || benchArgs.some(arg => typeof arg !== "string")) {
+      throw new MatrixValidationError(`${file}: envLock.${variant} must bind env object and benchArgs array`);
+    }
+    for (const key of Object.keys(env)) {
+      if (!ENV_AB_ALLOWLIST.includes(key) || typeof env[key] !== "string" || env[key].length === 0) {
+        throw new MatrixValidationError(`${file}: envLock.${variant}.env contains an illegal key or value`);
+      }
+    }
+    const expected = fingerprintTreatment({ env, benchArgs });
+    if (side.fingerprint !== expected) {
+      throw new MatrixValidationError(`${file}: envLock.${variant}.fingerprint does not match env/benchArgs`);
+    }
+  }
+  if (envLock.old.fingerprint === envLock.new.fingerprint) {
+    throw new MatrixValidationError(`${file}: env-locked-same-tree old/new treatments must differ`);
+  }
+}
+
+function validateRuntime(runtime, manifestFile, variant, policy) {
   if (!runtime
     || !gitObjectId(runtime.commit)
     || !gitObjectId(runtime.commitTree)
     || !gitObjectId(runtime.executableTree)) {
     throw new MatrixValidationError(`${manifestFile}: invalid ${variant} runtime commit/tree`);
   }
-  if (variant === "old" && runtime.commitTree !== runtime.executableTree) {
+  if (policy?.baseline === COMPARISON_POLICY_EXECUTABLE
+    && variant === "old"
+    && runtime.commitTree !== runtime.executableTree) {
     throw new MatrixValidationError(`${manifestFile}: baseline executable tree must equal its commit tree`);
   }
   if (!runtime.buildStamp || typeof runtime.buildStamp !== "object") {
@@ -676,6 +745,49 @@ function sha256Value(value) {
 
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+export function parseEnvAssignment(raw, flag) {
+  if (typeof raw !== "string") throw new Error(`${flag} must be KEY=VAL`);
+  const eq = raw.indexOf("=");
+  if (eq <= 0 || eq === raw.length - 1) throw new Error(`${flag} must be KEY=VAL`);
+  const key = raw.slice(0, eq);
+  const value = raw.slice(eq + 1);
+  if (!ENV_AB_ALLOWLIST.includes(key)) throw new Error(`${flag} key is not allowlisted: ${key}`);
+  if (/[\r\n]/.test(value)) throw new Error(`${flag} value contains newlines`);
+  return { key, value };
+}
+
+export function assignmentsFromPairs(pairs, flag) {
+  const assignments = {};
+  for (const pair of pairs) {
+    if (Object.hasOwn(assignments, pair.key)) throw new Error(`${flag} duplicate key ${pair.key}`);
+    assignments[pair.key] = pair.value;
+  }
+  return assignments;
+}
+
+export function fingerprintTreatment(treatment) {
+  const env = {};
+  for (const key of Object.keys(treatment.env || {}).sort()) env[key] = treatment.env[key];
+  const benchArgs = Array.isArray(treatment.benchArgs) ? [...treatment.benchArgs] : [];
+  return sha256(JSON.stringify({ env, benchArgs }));
+}
+
+export function continueBenchArgs(policy) {
+  if (!policy) return [];
+  if (policy === CONTINUE_POLICY_IN_POOL_FIFO) {
+    return ["--retrieval-enabled", "--continue-policy", CONTINUE_POLICY_IN_POOL_FIFO];
+  }
+  throw new Error(`unsupported --candidate-continue: ${policy}`);
+}
+
+export function buildEnvLock(oldTreatment, newTreatment) {
+  return {
+    allowlist: [...ENV_AB_ALLOWLIST],
+    old: { env: oldTreatment.env, benchArgs: oldTreatment.benchArgs, fingerprint: fingerprintTreatment(oldTreatment) },
+    new: { env: newTreatment.env, benchArgs: newTreatment.benchArgs, fingerprint: fingerprintTreatment(newTreatment) }
+  };
 }
 
 function mean(items, key) {

@@ -5,11 +5,14 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
+  buildEnvLock,
+  COMPARISON_POLICY_ENV_LOCKED,
   FORMAL_REQUEST_DEADLINE_MS,
   MATRIX_PROJECTS,
   MATRIX_ROUNDS,
   MATRIX_VARIANTS,
   MatrixValidationError,
+  parseEnvAssignment,
   VERIFIER_VERSION,
   verifyMatrix
 } from "./verify-three-repo-cold-matrix.mjs";
@@ -80,6 +83,52 @@ test("verifier rejects old and new cells from the same runtime commit and tree",
     () => verifyMatrix({ matrixDir }),
     error => error instanceof MatrixValidationError && /runtime.*different|same runtime/i.test(error.message)
   );
+});
+
+test("verifier accepts env-locked-same-tree when treatments differ", async t => {
+  const matrixDir = await fixtureMatrix({}, { envLocked: true });
+  t.after(() => rm(path.dirname(matrixDir), { recursive: true, force: true }));
+
+  const result = verifyMatrix({ matrixDir });
+  assert.equal(result.passed, true);
+  assert.equal(result.manifest.comparisonPolicy.baseline, COMPARISON_POLICY_ENV_LOCKED);
+  assert.equal(result.manifest.runtimes.old.executableTree, result.manifest.runtimes.new.executableTree);
+  assert.notEqual(
+    result.manifest.comparisonPolicy.envLock.old.fingerprint,
+    result.manifest.comparisonPolicy.envLock.new.fingerprint
+  );
+});
+
+test("verifier rejects env-locked-same-tree when treatments are identical", async t => {
+  const matrixDir = await fixtureMatrix({}, {
+    envLocked: true,
+    newTreatment: { env: {}, benchArgs: [] }
+  });
+  t.after(() => rm(path.dirname(matrixDir), { recursive: true, force: true }));
+
+  assert.throws(
+    () => verifyMatrix({ matrixDir }),
+    error => error instanceof MatrixValidationError && /treatments must differ/i.test(error.message)
+  );
+});
+
+test("verifier rejects env-locked-same-tree when executable trees differ", async t => {
+  const matrixDir = await fixtureMatrix({}, { envLocked: true, envLockedDifferentTrees: true });
+  t.after(() => rm(path.dirname(matrixDir), { recursive: true, force: true }));
+
+  assert.throws(
+    () => verifyMatrix({ matrixDir }),
+    error => error instanceof MatrixValidationError && /identical old\/new commit and executable trees/i.test(error.message)
+  );
+});
+
+test("parseEnvAssignment rejects unknown keys and empty values", () => {
+  assert.deepEqual(
+    parseEnvAssignment("JAVA_LSP_FRONTIER_SHADOW=off", "--candidate-env"),
+    { key: "JAVA_LSP_FRONTIER_SHADOW", value: "off" }
+  );
+  assert.throws(() => parseEnvAssignment("JAVA_LSP_JAVA_INDEX_DUAL_WORKER=1", "--candidate-env"), /allowlisted/);
+  assert.throws(() => parseEnvAssignment("JAVA_LSP_SPAN_PACKING=", "--candidate-env"), /KEY=VAL/);
 });
 
 test("verifier accepts a source-locked candidate patch on the same base commit", async t => {
@@ -408,7 +457,10 @@ async function fixtureMatrix(overrides = {}, fixtureOptions = {}) {
     executableTree: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     buildStamp: { gitSha: "111111111111", generatedAt: "2026-08-09T00:00:00.000Z", defaultsFingerprint: "old-defaults" }
   };
-  const newRuntime = fixtureOptions.sameRuntime
+  const envLocked = fixtureOptions.envLocked === true;
+  const newRuntime = envLocked && !fixtureOptions.envLockedDifferentTrees
+    ? oldRuntime
+    : fixtureOptions.sameRuntime
     ? oldRuntime
     : fixtureOptions.sameBaseCommit
       ? {
@@ -423,6 +475,9 @@ async function fixtureMatrix(overrides = {}, fixtureOptions = {}) {
         executableTree: "cccccccccccccccccccccccccccccccccccccccc",
         buildStamp: { gitSha: "222222222222", generatedAt: "2026-08-09T00:01:00.000Z", defaultsFingerprint: "new-defaults" }
       };
+  const oldTreatment = fixtureOptions.oldTreatment || { env: {}, benchArgs: [] };
+  const newTreatment = fixtureOptions.newTreatment || { env: { JAVA_LSP_FRONTIER_SHADOW: "off" }, benchArgs: [] };
+  const envLock = envLocked ? buildEnvLock(oldTreatment, newTreatment) : undefined;
   const candidatePatch = "candidate patch fixture\n";
   const candidatePatchFile = path.join(root, "candidate.patch");
   await writeFile(candidatePatchFile, candidatePatch);
@@ -480,14 +535,24 @@ async function fixtureMatrix(overrides = {}, fixtureOptions = {}) {
     runs: 5,
     requestDeadlineMs: FORMAL_REQUEST_DEADLINE_MS,
     p95Limit: 1.25,
-    comparisonPolicy: {
-      baseline: "executable-code-baseline",
-      baselineRevision: oldRuntime.commit,
-      goldenSchema: "java-intelligence-v32-range-holdout-v2",
-      pReadTolerance: 0.02,
-      p95AbsoluteSlackMs: 50,
-      taskBlockingBaseline: "attempt-or-derived-attribution"
-    },
+    comparisonPolicy: envLocked
+      ? {
+          baseline: COMPARISON_POLICY_ENV_LOCKED,
+          baselineRevision: oldRuntime.commit,
+          goldenSchema: "java-intelligence-v32-range-holdout-v2",
+          pReadTolerance: 0.02,
+          p95AbsoluteSlackMs: 50,
+          taskBlockingBaseline: "attempt-or-derived-attribution",
+          envLock
+        }
+      : {
+          baseline: "executable-code-baseline",
+          baselineRevision: oldRuntime.commit,
+          goldenSchema: "java-intelligence-v32-range-holdout-v2",
+          pReadTolerance: 0.02,
+          p95AbsoluteSlackMs: 50,
+          taskBlockingBaseline: "attempt-or-derived-attribution"
+        },
     rounds: ["old/new", "new/old", "old/new"],
     runtimes: { old: oldRuntime, new: newRuntime },
     candidateTests,
@@ -556,6 +621,7 @@ async function fixtureMatrix(overrides = {}, fixtureOptions = {}) {
               runtimeCommitTree: runtime.commitTree,
               runtimeExecutableTree: runtime.executableTree,
               candidatePatchSha256: manifest.candidatePatch.sha256,
+              ...(envLock ? { treatmentFingerprint: envLock[variant].fingerprint } : {}),
               repoHead: repositories[project].head,
               repoTree: repositories[project].tree,
               repoStatusSha256: repositories[project].statusSha256,

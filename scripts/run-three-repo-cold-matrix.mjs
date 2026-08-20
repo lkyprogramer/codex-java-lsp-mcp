@@ -14,8 +14,17 @@ import {
   DIAGNOSTIC_RPC_GATE_POLICY
 } from "./aggregate-java-index-rpc-sidecar.mjs";
 import {
+  assignmentsFromPairs,
+  buildEnvLock,
+  COMPARISON_POLICY_ENV_LOCKED,
+  COMPARISON_POLICY_EXECUTABLE,
+  continueBenchArgs,
+  CONTINUE_POLICY_IN_POOL_FIFO,
+  ENV_AB_ALLOWLIST,
+  fingerprintTreatment,
   FORMAL_REQUEST_DEADLINE_MS,
   MATRIX_PROJECTS,
+  parseEnvAssignment,
   VERIFIER_VERSION,
   verifyMatrix
 } from "./verify-three-repo-cold-matrix.mjs";
@@ -153,9 +162,17 @@ async function main() {
 
     const baselineCommit = (await capture("git", ["-C", sourceRoot, "rev-parse", `${cli.baseline}^{commit}`])).trim();
     const candidateCommit = (await capture("git", ["-C", sourceRoot, "rev-parse", "HEAD^{commit}"])).trim();
+    if (cli.comparisonPolicy === COMPARISON_POLICY_ENV_LOCKED && baselineCommit !== candidateCommit) {
+      throw new Error("env-locked-same-tree requires --baseline to equal HEAD");
+    }
     await createDetachedLocalClone(sourceRoot, baselineRoot, baselineCommit, run);
     await createDetachedLocalClone(sourceRoot, candidateRoot, candidateCommit, run);
-    if (candidatePatch.length > 0) await run("git", ["-C", candidateRoot, "apply", "--index", candidatePatchFile]);
+    if (candidatePatch.length > 0) {
+      await run("git", ["-C", candidateRoot, "apply", "--index", candidatePatchFile]);
+      if (cli.comparisonPolicy === COMPARISON_POLICY_ENV_LOCKED) {
+        await run("git", ["-C", baselineRoot, "apply", "--index", candidatePatchFile]);
+      }
+    }
 
     const sourceDependencyBefore = await dependencyTreeInventory(path.join(sourceRoot, "node_modules"));
     const isolatedNodeModules = await copyIsolatedNodeModules(sourceRoot, workspaceRoot);
@@ -185,6 +202,15 @@ async function main() {
       old: await runtimeIdentity(baselineRoot),
       new: await runtimeIdentity(candidateRoot)
     };
+    if (cli.comparisonPolicy === COMPARISON_POLICY_ENV_LOCKED
+      && (runtimes.old.commit !== runtimes.new.commit
+        || runtimes.old.commitTree !== runtimes.new.commitTree
+        || runtimes.old.executableTree !== runtimes.new.executableTree)) {
+      throw new Error("env-locked-same-tree old/new executable trees diverged after clone/patch");
+    }
+    const envLock = cli.comparisonPolicy === COMPARISON_POLICY_ENV_LOCKED
+      ? buildEnvLock(cli.oldTreatment, cli.newTreatment)
+      : undefined;
     const manifest = await writeManifest(outputDir, {
       sourceRoot,
       verifierVersion: VERIFIER_VERSION,
@@ -203,12 +229,13 @@ async function main() {
       p95Limit: cli.p95Limit,
       requestDeadlineMs: FORMAL_REQUEST_DEADLINE_MS,
       comparisonPolicy: {
-        baseline: "executable-code-baseline",
+        baseline: cli.comparisonPolicy,
         baselineRevision: runtimes.old.commit,
         goldenSchema: "java-intelligence-v32-range-holdout-v2",
         pReadTolerance: 0.02,
         p95AbsoluteSlackMs: 50,
-        taskBlockingBaseline: "attempt-or-derived-attribution"
+        taskBlockingBaseline: "attempt-or-derived-attribution",
+        ...(envLock ? { envLock } : {})
       },
       rounds: ROUND_ORDER.map(order => order.join("/")),
       repositories,
@@ -255,14 +282,16 @@ async function main() {
             outputFile: path.join(matrixDir, `${project}-r${round}-${variant}.json`),
             runs: cli.runs,
             verbosity: "standard",
-            env: isolatedEnv,
+            extraArgs: variant === "new" ? cli.newTreatment.benchArgs : cli.oldTreatment.benchArgs,
+            env: { ...isolatedEnv, ...(variant === "new" ? cli.newTreatment.env : cli.oldTreatment.env) },
             provenance: {
               manifestSha256: manifest.sha256,
               variant,
               runtimeCommit: runtimes[variant].commit,
               runtimeCommitTree: runtimes[variant].commitTree,
               runtimeExecutableTree: runtimes[variant].executableTree,
-              candidatePatchSha256: sha256(candidatePatch)
+              candidatePatchSha256: sha256(candidatePatch),
+              ...(envLock ? { treatmentFingerprint: envLock[variant].fingerprint } : {})
             }
           });
         }
@@ -287,14 +316,16 @@ async function main() {
               outputFile: path.join(diagnosticRpcRawDir, `${project}-r${round}-${variant}.json`),
               runs: cli.runs,
               verbosity: "diagnostic",
-              env: diagnosticEnv,
+              extraArgs: variant === "new" ? cli.newTreatment.benchArgs : cli.oldTreatment.benchArgs,
+              env: { ...diagnosticEnv, ...(variant === "new" ? cli.newTreatment.env : cli.oldTreatment.env) },
               provenance: {
                 manifestSha256: manifest.sha256,
                 variant,
                 runtimeCommit: runtimes[variant].commit,
                 runtimeCommitTree: runtimes[variant].commitTree,
                 runtimeExecutableTree: runtimes[variant].executableTree,
-                candidatePatchSha256: sha256(candidatePatch)
+                candidatePatchSha256: sha256(candidatePatch),
+                ...(envLock ? { treatmentFingerprint: envLock[variant].fingerprint } : {})
               }
             });
           }
@@ -469,7 +500,7 @@ function sameDependencyInventory(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-export function benchmarkCellArguments({ runtimeRoot, repoRoot, project, scenarioFile, cacheDir, runs, verbosity }) {
+export function benchmarkCellArguments({ runtimeRoot, repoRoot, project, scenarioFile, cacheDir, runs, verbosity, extraArgs = [] }) {
   return [
     path.join(runtimeRoot, "dist", "benchmark-agent-impact.js"),
     "--repo-root", repoRoot,
@@ -484,16 +515,17 @@ export function benchmarkCellArguments({ runtimeRoot, repoRoot, project, scenari
     // Diagnostic telemetry is a separate source-locked run and is never
     // charged to the default standard Token gate.
     "--verbosity", verbosity,
-    "--index-cache-dir", cacheDir
+    "--index-cache-dir", cacheDir,
+    ...extraArgs
   ];
 }
 
-async function runCell({ runtimeRoot, variant, round, project, repoRoot, repository, scenarioFile, cacheDir, outputFile, runs, verbosity, env, provenance }) {
+async function runCell({ runtimeRoot, variant, round, project, repoRoot, repository, scenarioFile, cacheDir, outputFile, runs, verbosity, env, extraArgs = [], provenance }) {
   await mkdir(cacheDir, { recursive: true });
   console.log(`${verbosity === "standard" ? "matrix" : "diagnostic-rpc"}: r${round} ${variant} ${project}`);
   await runToFiles(
     process.execPath,
-    benchmarkCellArguments({ runtimeRoot, repoRoot, project, scenarioFile, cacheDir, runs, verbosity }),
+    benchmarkCellArguments({ runtimeRoot, repoRoot, project, scenarioFile, cacheDir, runs, verbosity, extraArgs }),
     outputFile,
     `${outputFile}.stderr`,
     { cwd: runtimeRoot, env }
@@ -821,9 +853,11 @@ function streamFinished(stream) {
   });
 }
 
-function parseCli(args) {
+export function parseCli(args) {
   const options = new Map();
   const flags = new Set();
+  const candidateEnvPairs = [];
+  const baselineEnvPairs = [];
   for (let index = 0; index < args.length; index += 1) {
     const key = args[index];
     if (key === "--help" || key === "--keep-worktrees" || key === "--diagnostic-rpc-sidecar") {
@@ -831,11 +865,46 @@ function parseCli(args) {
       continue;
     }
     if (!key.startsWith("--") || index + 1 >= args.length) throw new Error(`invalid argument: ${key}`);
-    options.set(key, args[index + 1]);
+    const value = args[index + 1];
     index += 1;
+    if (key === "--candidate-env") {
+      candidateEnvPairs.push(parseEnvAssignment(value, key));
+      continue;
+    }
+    if (key === "--baseline-env") {
+      baselineEnvPairs.push(parseEnvAssignment(value, key));
+      continue;
+    }
+    options.set(key, value);
   }
   if (flags.has("--help")) return { help: true };
   const candidateRoot = options.get("--candidate-root") || scriptRoot;
+  const comparisonPolicy = options.get("--comparison-policy") || COMPARISON_POLICY_EXECUTABLE;
+  if (comparisonPolicy !== COMPARISON_POLICY_EXECUTABLE && comparisonPolicy !== COMPARISON_POLICY_ENV_LOCKED) {
+    throw new Error("--comparison-policy must be executable-code-baseline or env-locked-same-tree");
+  }
+  const candidateContinue = options.get("--candidate-continue") || null;
+  if (candidateContinue && candidateContinue !== CONTINUE_POLICY_IN_POOL_FIFO) {
+    throw new Error("--candidate-continue must be in-pool-fifo");
+  }
+  const oldTreatment = {
+    env: assignmentsFromPairs(baselineEnvPairs, "--baseline-env"),
+    benchArgs: []
+  };
+  const newTreatment = {
+    env: assignmentsFromPairs(candidateEnvPairs, "--candidate-env"),
+    benchArgs: continueBenchArgs(candidateContinue)
+  };
+  const emptyFingerprint = fingerprintTreatment({ env: {}, benchArgs: [] });
+  const hasTreatment = fingerprintTreatment(oldTreatment) !== emptyFingerprint
+    || fingerprintTreatment(newTreatment) !== emptyFingerprint;
+  if (hasTreatment && comparisonPolicy !== COMPARISON_POLICY_ENV_LOCKED) {
+    throw new Error("--candidate-env/--baseline-env/--candidate-continue require --comparison-policy env-locked-same-tree");
+  }
+  if (comparisonPolicy === COMPARISON_POLICY_ENV_LOCKED
+    && fingerprintTreatment(oldTreatment) === fingerprintTreatment(newTreatment)) {
+    throw new Error("env-locked-same-tree requires different old/new treatments");
+  }
   return {
     help: flags.has("--help"),
     keepWorktrees: flags.has("--keep-worktrees"),
@@ -845,6 +914,9 @@ function parseCli(args) {
     outputDir: required(options.get("--output-dir"), "--output-dir"),
     runs: numberOption(options.get("--runs"), 5, "--runs"),
     p95Limit: numberOption(options.get("--p95-limit"), 1.25, "--p95-limit"),
+    comparisonPolicy,
+    oldTreatment,
+    newTreatment,
     repositories: {
       lishuedu: required(options.get("--lishuedu") || process.env.LISHUEDU_ROOT, "--lishuedu or LISHUEDU_ROOT"),
       cipherlink: required(options.get("--cipherlink") || process.env.CIPHERLINK_ROOT, "--cipherlink or CIPHERLINK_ROOT"),
@@ -869,6 +941,9 @@ export function isolatedChildEnvironment(overrides = {}) {
   const environment = scrubHostNodeRuntimeState({ ...process.env, ...overrides });
   for (const name of Object.keys(environment)) {
     if (name.startsWith("JAVA_LSP_BENCH_") && !(name in overrides)) delete environment[name];
+  }
+  for (const name of ENV_AB_ALLOWLIST) {
+    if (!(name in overrides)) delete environment[name];
   }
   for (const name of [
     "JDTLS_EXTRA_ARGS",
@@ -921,7 +996,9 @@ function printUsage() {
   --baseline <sha> \\
   --lishuedu <repo-root> --cipherlink <repo-root> --exam-parent-v3 <repo-root> \\
   [--candidate-root <codex-java-lsp-mcp-root>] --output-dir <new-dir-outside-source-checkout> \\
-  [--runs 5] [--p95-limit 1.25] [--diagnostic-rpc-sidecar] [--keep-worktrees]`);
+  [--runs 5] [--p95-limit 1.25] [--diagnostic-rpc-sidecar] [--keep-worktrees] \\
+  [--comparison-policy executable-code-baseline|env-locked-same-tree] \\
+  [--baseline-env KEY=VAL] [--candidate-env KEY=VAL] [--candidate-continue in-pool-fifo]`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

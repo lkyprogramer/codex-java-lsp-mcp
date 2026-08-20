@@ -13,9 +13,11 @@ import {
   captureCandidatePatch,
   isolatedChildEnvironment,
   matrixRuntimeEnvironment,
+  parseCli,
   toCrossVersionScenarioJsonl,
   validateScenarioSet
 } from "./run-three-repo-cold-matrix.mjs";
+import { COMPARISON_POLICY_ENV_LOCKED } from "./verify-three-repo-cold-matrix.mjs";
 import { FORMAL_REQUEST_DEADLINE_MS } from "./verify-three-repo-cold-matrix.mjs";
 
 const exec = promisify(execFile);
@@ -40,6 +42,60 @@ test("formal matrix child processes cannot inherit Node loader or host output se
   assert.equal(environment.NODE_V8_COVERAGE, undefined);
   assert.equal(environment.NODE_COMPILE_CACHE, undefined);
   assert.equal(environment.NODE_REDIRECT_WARNINGS, undefined);
+});
+
+test("formal matrix scrubs host feature flags unless the cell treatment overrides them", () => {
+  const previous = process.env.JAVA_LSP_SPAN_PACKING;
+  process.env.JAVA_LSP_SPAN_PACKING = "on";
+  try {
+    assert.equal(isolatedChildEnvironment({ TASK_MARKER: "standard" }).JAVA_LSP_SPAN_PACKING, undefined);
+    assert.equal(
+      isolatedChildEnvironment({ JAVA_LSP_SPAN_PACKING: "on" }).JAVA_LSP_SPAN_PACKING,
+      "on"
+    );
+  } finally {
+    restoreEnvironment("JAVA_LSP_SPAN_PACKING", previous);
+  }
+});
+
+test("parseCli requires env-locked-same-tree for candidate-env and binds treatments", () => {
+  const required = [
+    "--baseline", "abc",
+    "--output-dir", "/tmp/out",
+    "--lishuedu", "/tmp/l",
+    "--cipherlink", "/tmp/c",
+    "--exam-parent-v3", "/tmp/e"
+  ];
+  assert.throws(
+    () => parseCli([...required, "--candidate-env", "JAVA_LSP_FRONTIER_SHADOW=off"]),
+    /env-locked-same-tree/
+  );
+  const cli = parseCli([
+    ...required,
+    "--comparison-policy", "env-locked-same-tree",
+    "--candidate-env", "JAVA_LSP_FRONTIER_SHADOW=off"
+  ]);
+  assert.equal(cli.comparisonPolicy, COMPARISON_POLICY_ENV_LOCKED);
+  assert.deepEqual(cli.oldTreatment.env, {});
+  assert.equal(cli.newTreatment.env.JAVA_LSP_FRONTIER_SHADOW, "off");
+  assert.deepEqual(cli.newTreatment.benchArgs, []);
+  const continued = parseCli([
+    ...required,
+    "--comparison-policy", "env-locked-same-tree",
+    "--candidate-continue", "in-pool-fifo"
+  ]);
+  assert.deepEqual(continued.newTreatment.benchArgs, [
+    "--retrieval-enabled",
+    "--continue-policy",
+    "in-pool-fifo"
+  ]);
+  assert.throws(
+    () => parseCli([
+      ...required,
+      "--comparison-policy", "env-locked-same-tree"
+    ]),
+    /different old\/new treatments/
+  );
 });
 
 test("formal matrix scrubs inherited RPC telemetry and only accepts an explicit cell mode", () => {

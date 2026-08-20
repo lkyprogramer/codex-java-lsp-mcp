@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "v5r-flag-campaign-ledger/v1",
+  "dated": "2026-08-20",
+  "denominator": "same-tree V5R default (not Sprint0')",
+  "wave0": {
+    "decision": "COMPLETE",
+    "isolationTargeted": { "tests": 56, "pass": 56, "fail": 0 },
+    "harness": [
+      "env-locked-same-tree comparison policy",
+      "--candidate-env / --baseline-env allowlist",
+      "--candidate-continue in-pool-fifo",
+      "benchmark --retrieval-enabled --continue-policy in-pool-fifo"
+    ]
+  },
+  "campaigns": [
+    {
+      "id": "T",
+      "flag": "JAVA_LSP_FRONTIER_SHADOW=off",
+      "decision": "GO_IDENTITY_HOLD_TOKEN_ATTRIBUTION",
+      "report": "docs/phase-v5r/v5r-flag-campaign-t-20260820.md",
+      "summarySha256": "3e5dae599f8a4d91b55c2efe71ad788ad40fd96a95d1a3bbaa31ca086428912c",
+      "verifyExit": 1,
+      "pairedQualityIdentity": true,
+      "tokenP50Delta": [0, 0, 0],
+      "absoluteOneStillFail": true,
+      "next": "B"
+    },
+    { "id": "B", "flag": "JAVA_LSP_RELATIONSHIP_BUNDLE=on", "decision": "PENDING" },
+    { "id": "P", "flag": "JAVA_LSP_SPAN_PACKING=on", "decision": "PENDING" },
+    { "id": "C", "flag": "retrieval.enabled + continue in-pool-fifo", "decision": "PENDING" },
+    { "id": "S", "flag": "stack B+P+C", "decision": "BLOCKED_UNTIL_SINGLES_GO" }
+  ],
+  "skipped": [
+    { "id": "R", "flag": "JAVA_LSP_READUNIT_PLANNER=on", "reason": "production path already buildReadUnits; on is a no-op" },
+    { "id": "X", "flag": "dual-worker", "reason": "storm FAIL; sweep deleted" }
+  ],
+  "doNotMergeMain": true,
+  "doNotClaimTaskSuccess": true,
+  "lambda": "CALIBRATED_OFFLINE"
+}
