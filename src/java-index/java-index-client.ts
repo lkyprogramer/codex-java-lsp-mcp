@@ -27,6 +27,7 @@ import {
   validateTypeFactsArray,
   validateTypeLookup,
   validateTypeLookupArray,
+  validateEntitySearchHits,
   JAVA_INDEX_CLOSE_GRACE_MS,
   type JavaIndexCommand,
   type JavaIndexRefreshPriority,
@@ -35,6 +36,7 @@ import {
   type JavaIndexWorktreeIdentity,
   type MyBatisResourceByNamespaceBatch
 } from "./worker-protocol.js";
+import { ENTITY_SEARCH_DEFAULT_LIMIT, type EntityHit } from "./entity-search.js";
 
 export type JavaIndexOpenOptions = {
   /** Absent => the worker never acquires a machine-level sweep lease. */
@@ -357,6 +359,19 @@ export class JavaIndexClient {
     return this.request(
       { type: "QUERY_MYBATIS_RESOURCES_BY_NAMESPACE", namespaces },
       validateMyBatisResourceByNamespaceBatch,
+      requestOptions
+    );
+  }
+
+  async queryEntitySearch(
+    task: string,
+    limit = ENTITY_SEARCH_DEFAULT_LIMIT,
+    requestOptions: JavaIndexRequestOptions = {}
+  ): Promise<EntityHit[]> {
+    await this.ensureOpen(requestOptions);
+    return this.request(
+      { type: "QUERY_ENTITY_SEARCH", task, limit },
+      validateEntitySearchHits,
       requestOptions
     );
   }

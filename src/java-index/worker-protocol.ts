@@ -32,6 +32,7 @@ import type {
 } from "./index-types.js";
 
 import type { MyBatisMapperResourceFacts, MyBatisResultMapFact, MyBatisStatementFact, MyBatisStatementKind } from "./mybatis-types.js";
+import type { EntityHit, EntityKind, EntityLayer } from "./entity-search.js";
 
 /**
  * Worker CLOSE may join one already-started atomic snapshot write. Keep the
@@ -90,6 +91,7 @@ type JavaIndexRequestOperation =
   | { id: number; type: "QUERY_MYBATIS_RESOURCE"; relativePath: string }
   | { id: number; type: "QUERY_MYBATIS_RESOURCES_BY_NAMESPACE"; namespaces: string[] }
   | { id: number; type: "QUERY_REPOSITORY_FACT_MARKERS"; importPrefixes: string[]; annotationPrefixes: string[] }
+  | { id: number; type: "QUERY_ENTITY_SEARCH"; task: string; limit?: number }
   | { id: number; type: "STATUS" }
   | { id: number; type: "FLUSH" }
   | { id: number; type: "CLOSE" };
@@ -876,6 +878,33 @@ export function validateIndexedReferenceBatch(value: unknown): IndexedReferenceB
     return {
       methodId: source.methodId,
       callees: validateIndexedReferenceArray(source.callees)
+    };
+  });
+}
+
+const ENTITY_KINDS = ["type", "method"] as const;
+const ENTITY_LAYERS = ["FQN", "SIMPLE_NAME", "BM25_IDENTIFIER", "CHUNK"] as const;
+
+export function validateEntitySearchHits(value: unknown): EntityHit[] {
+  const context = "EntityHit[]";
+  return array(value, context).map((entry, index) => {
+    const entryContext = `${context}[${index}]`;
+    const source = record(entry, entryContext);
+    if (!isString(source.entityId)) invalid(entryContext, "entityId");
+    if (!isOneOf(source.kind, ENTITY_KINDS)) invalid(entryContext, "kind");
+    if (!isString(source.fqn)) invalid(entryContext, "fqn");
+    if (!isString(source.simpleName)) invalid(entryContext, "simpleName");
+    if (!isString(source.relativePath)) invalid(entryContext, "relativePath");
+    if (!isOneOf(source.layer, ENTITY_LAYERS)) invalid(entryContext, "layer");
+    if (!isNumber(source.score)) invalid(entryContext, "score");
+    return {
+      entityId: source.entityId,
+      kind: source.kind as EntityKind,
+      fqn: source.fqn,
+      simpleName: source.simpleName,
+      relativePath: source.relativePath,
+      layer: source.layer as EntityLayer,
+      score: source.score
     };
   });
 }

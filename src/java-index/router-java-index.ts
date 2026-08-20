@@ -16,6 +16,7 @@ import {
   type JavaIndexRequestOptions
 } from "./java-index-client.js";
 import type { JavaIndexRefreshPriority } from "./worker-protocol.js";
+import { ENTITY_SEARCH_DEFAULT_LIMIT, type EntityHit } from "./entity-search.js";
 import type {
   AnchorFacts,
   IndexedReadRangeResult,
@@ -377,6 +378,11 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
       queryMemoKey("QUERY_TYPE_REFERENCERS", generation, [typeId, kinds, limit]),
       () => this.client.queryTypeReferencers(typeId, kinds, limit, this.currentRequestOptions())
     );
+  }
+
+  async queryEntitySearch(task: string, limit = ENTITY_SEARCH_DEFAULT_LIMIT): Promise<EntityHit[]> {
+    await this.ensureOpened(this.generation);
+    return this.client.queryEntitySearch(task, limit, this.currentRequestOptions());
   }
 
   async queryCallers(methodId: string, limit: number) {

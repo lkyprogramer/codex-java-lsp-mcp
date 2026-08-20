@@ -527,6 +527,31 @@ test("REFRESH end-to-end through a real worker thread: reads, parses, extracts, 
   await client.close();
 });
 
+test("QUERY_ENTITY_SEARCH returns identifier-layer hits from indexed facts", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "java-index-entity-search-"));
+  const cacheDir = mkdtempSync(path.join(tmpdir(), "java-index-entity-search-cache-"));
+  const javaDir = path.join(repoRoot, "src/main/java/demo");
+  mkdirSync(javaDir, { recursive: true });
+  writeFileSync(path.join(javaDir, "StorageGateway.java"), [
+    "package demo;",
+    "public interface StorageGateway {",
+    "  String getSignedUrl(String objectKey);",
+    "}",
+    ""
+  ].join("\n"));
+  const client = new JavaIndexClient(repoRoot, cacheDir);
+  try {
+    await client.open(1);
+    await client.refresh(1, [path.join(javaDir, "StorageGateway.java")], []);
+    const hits = await client.queryEntitySearch("storage signed url", 3);
+    assert.ok(hits.length > 0, "indexed StorageGateway must be searchable from task tokens");
+    assert.ok(hits.some(hit => hit.relativePath.endsWith("StorageGateway.java")));
+    assert.equal(hits[0]?.layer === "FQN" || hits[0]?.layer === "SIMPLE_NAME" || hits[0]?.layer === "BM25_IDENTIFIER", true);
+  } finally {
+    await client.close();
+  }
+});
+
 test("QUERY_READ_RANGES returns exact UTF-8 Java/XML/fallback windows in one worker batch", async () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), "java-index-read-ranges-"));
   const cacheDir = mkdtempSync(path.join(tmpdir(), "java-index-read-ranges-cache-"));

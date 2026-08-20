@@ -23,7 +23,8 @@ import {
   validateJavaIndexStatus,
   validateTypeFactsArray,
   validateTypeLookup,
-  validateTypeLookupArray
+  validateTypeLookupArray,
+  validateEntitySearchHits
 } from "./worker-protocol.js";
 
 function validStatus(): JavaIndexStatus {
@@ -260,6 +261,20 @@ test("validateFileBundleArray round-trips a fully populated bundle", () => {
   const bundle = fullBundle();
   const result = validateFileBundleArray([bundle]);
   assert.deepEqual(result, [bundle]);
+});
+
+test("validateEntitySearchHits accepts a LocAgent hit and rejects an unknown layer", () => {
+  const hit = {
+    entityId: "type:demo.StorageGateway",
+    kind: "type",
+    fqn: "demo.StorageGateway",
+    simpleName: "StorageGateway",
+    relativePath: "src/main/java/demo/StorageGateway.java",
+    layer: "BM25_IDENTIFIER",
+    score: 1.2
+  };
+  assert.deepEqual(validateEntitySearchHits([hit]), [hit]);
+  assert.throws(() => validateEntitySearchHits([{ ...hit, layer: "MAGIC" }]));
 });
 
 test("validateJavaIndexStatus accepts a well-formed status and rejects an unknown state", () => {

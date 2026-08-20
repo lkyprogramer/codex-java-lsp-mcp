@@ -42,6 +42,7 @@ import {
   type SnapshotIdentity
 } from "./snapshot.js";
 import { STABLE_ID_VERSION } from "./stable-id.js";
+import { EntitySearchIndex } from "./entity-search.js";
 import { WorktreeSnapshotSeeder } from "./worktree-snapshot-seeder.js";
 import type {
   IndexedReadRange,
@@ -109,6 +110,8 @@ let resolvedRepoRoot = "";
 let backend: JavaParserBackend | undefined;
 let cache: ParseTreeCache | undefined;
 let store: JavaIndexStore | undefined;
+let entitySearch = new EntitySearchIndex();
+let entitySearchRevision = -1;
 let layout: LayoutContext | undefined;
 let leaseStore: CrossProcessLeaseStore = new NoopCrossProcessLeaseStore();
 let worktreeIdentity: WorktreeIdentity | undefined;
@@ -759,7 +762,8 @@ function flushSnapshotNow(): Promise<void> {
         createdAt: new Date().toISOString(),
         coverage: coverageAtSerialize,
         resourceCoverage: resourceCoverageAtSerialize,
-        ...data
+        ...data,
+        entitySearch: readyEntitySearch().toSnapshot()
       };
       const bytes = await writeSnapshotIfManifestCurrent(
         target,
@@ -1109,11 +1113,19 @@ function startOwnSnapshotHydration(
       }
       const durableRevisionAtHydration = snapshotDurableRevision;
       store = new JavaIndexStore();
+      entitySearch = new EntitySearchIndex();
+      entitySearchRevision = -1;
       // XML facts stay out of the provisional store until a stable target-side
       // read confirms their content hash. `indexMyBatisResources` can then
       // reuse exact snapshot facts without re-parsing them, while changed XML
       // is extracted fresh and is never visible through the interim store.
       store.loadSnapshotData({ ...loaded, myBatisResources: [] });
+      if (loaded.entitySearch?.version === 1) {
+        entitySearch.loadSnapshot(loaded.entitySearch);
+        entitySearchRevision = snapshotDirtyRevision;
+      } else {
+        entitySearchRevision = -1;
+      }
       // Snapshot generations belong to the process that wrote the snapshot.
       // A new RepoChangeCoordinator starts its own monotonic domain, so every
       // verified fact must be adopted into the OPEN generation instead of
@@ -1621,8 +1633,17 @@ function queryHandlerDeps() {
     coverageStateFor,
     worstTypeLookupCoverage,
     unresolvedTypeLookup,
+    readyEntitySearch,
     respond
   };
+}
+
+function readyEntitySearch(): EntitySearchIndex {
+  if (store && entitySearchRevision !== snapshotDirtyRevision) {
+    entitySearch.rebuildFromStore(store);
+    entitySearchRevision = snapshotDirtyRevision;
+  }
+  return entitySearch;
 }
 
 async function handle(request: JavaIndexRequest): Promise<void> {
@@ -1636,6 +1657,8 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         backend = await createJavaParserBackend();
         cache = new ParseTreeCache();
         store = new JavaIndexStore();
+        entitySearch = new EntitySearchIndex();
+        entitySearchRevision = -1;
         worktreeIdentity = request.worktree;
         if (request.leaseRoot) {
           const store_ = new FileCrossProcessLeaseStore(request.leaseRoot, defaultLeaseClockDeps());

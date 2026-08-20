@@ -4,6 +4,7 @@
 import type { JavaIndexRequest, JavaIndexResponse } from "./worker-protocol.js";
 import type { JavaIndexStatus, JavaTypeLookupResult, SourceRootCoverage } from "./index-types.js";
 import type { JavaIndexStore } from "./index-store.js";
+import { ENTITY_SEARCH_DEFAULT_LIMIT, ENTITY_SEARCH_MAX_LIMIT, type EntitySearchIndex } from "./entity-search.js";
 
 export type QueryHandlerDeps = {
   store?: JavaIndexStore;
@@ -13,6 +14,7 @@ export type QueryHandlerDeps = {
   coverageStateFor(root: string, generation: number): SourceRootCoverage["state"];
   worstTypeLookupCoverage(generation: number): "COMPLETE" | "PARTIAL" | "DEGRADED";
   unresolvedTypeLookup(): JavaTypeLookupResult;
+  readyEntitySearch(): EntitySearchIndex;
   respond(response: JavaIndexResponse): void;
 };
 
@@ -103,6 +105,14 @@ export async function handleQueryCommand(request: JavaIndexRequest, deps: QueryH
     }
     case "QUERY_READ_RANGES": {
       deps.respond({ id: request.id, ok: true, value: await deps.queryReadRanges(request.requests) });
+      return true;
+    }
+    case "QUERY_ENTITY_SEARCH": {
+      const limit = Math.min(
+        ENTITY_SEARCH_MAX_LIMIT,
+        Math.max(1, Number.isFinite(request.limit) ? Number(request.limit) : ENTITY_SEARCH_DEFAULT_LIMIT)
+      );
+      deps.respond({ id: request.id, ok: true, value: deps.readyEntitySearch().search(request.task, limit) });
       return true;
     }
     default:

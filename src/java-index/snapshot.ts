@@ -12,6 +12,7 @@ import type {
   StaticEdge
 } from "./index-types.js";
 import type { MyBatisMapperResourceFacts } from "./mybatis-types.js";
+import type { EntitySearchSnapshot } from "./entity-search.js";
 
 const gzipAsync = promisify(gzip);
 const gunzipAsync = promisify(gunzip);
@@ -38,6 +39,8 @@ export type JavaIndexSnapshotV3 = {
   edges: StaticEdge[];
   myBatisResources: MyBatisMapperResourceFacts[];
   resourceCoverage: MyBatisResourceCoverage[];
+  /** Derived LocAgent entry index. Optional so schema-3 snapshots without it rebuild from facts. */
+  entitySearch?: EntitySearchSnapshot;
 };
 
 /**
