@@ -1,11 +1,11 @@
 # HANDOFF
 
-## JIN N4 FAIL（2026-08-20）
+## JIN N4 FAIL retry（2026-08-20）
 
-分支 `codex/jin-main`。EvidenceBundle planner 已落地；`JAVA_LSP_ENGINE=jin` 仅矩阵/benchmark 读取。  
-T3 四轴 **0/4 FAIL**：token 2–3 万（应 ↓25%）；RangeLineRecall 回退；holdout rReadMust 均值 0.367（门 0.75）；lishuedu p95 3.28×。recall 上升。未合 `main`。  
-首次 T3，2 周窗未到期，**停在 N4** 不进 N5。下一刀：compact 只输出 selected spans，停止 hop≤2 全收。  
-报告：`docs/phase-jin/jin-phase-n4-20260820.md`。
+分支 `codex/jin-main`。compact `contexts[]` 只含 selected spans；planner 恢复预算 greedy。  
+T3 四轴 **1/4**：token **GO**（−61.5/−50.9/−54.8% 且低于 Sprint0'）；RangeLineRecall / holdout rReadMust 均值 0.358 / lishuedu p95 3.60× **FAIL**。未合 `main`。  
+2 周窗未到期，**停在 N4** 不进 N5。  
+报告：`docs/phase-jin/jin-phase-n4-20260820.md`。 retry 摘要 `jin-n4-t3-retry-summary.json`。
 
 ## JIN N3 COMPLETE（2026-08-20）
 
