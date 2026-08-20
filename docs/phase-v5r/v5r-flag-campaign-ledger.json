@@ -51,8 +51,20 @@
       "keepDefault": "off",
       "next": "C"
     },
-    { "id": "C", "flag": "retrieval.enabled + continue in-pool-fifo", "decision": "PENDING" },
-    { "id": "S", "flag": "stack B+P+C", "decision": "BLOCKED_UNTIL_SINGLES_GO" }
+    {
+      "id": "C",
+      "flag": "retrieval.enabled + continue in-pool-fifo",
+      "decision": "FAIL",
+      "report": "docs/phase-v5r/v5r-flag-campaign-c-20260820.md",
+      "summarySha256": "f3e000b65d9145b9324c3f6389159030035ef06ed3499ed4de4e1d031c60ebfb",
+      "verifyExit": 1,
+      "continueConsumed": { "lishuedu": "120/150", "cipherlink": "150/150", "exam-parent-v3": "150/150" },
+      "holdoutRReadMustLift": false,
+      "pReadRegression": true,
+      "keepDefault": "analyze V6, retrieval.enabled off",
+      "next": "STOP_NO_STACK"
+    },
+    { "id": "S", "flag": "stack B+P+C", "decision": "SKIPPED_SINGLES_NOT_ALL_GO" }
   ],
   "skipped": [
     { "id": "R", "flag": "JAVA_LSP_READUNIT_PLANNER=on", "reason": "production path already buildReadUnits; on is a no-op" },
