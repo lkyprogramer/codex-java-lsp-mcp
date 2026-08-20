@@ -1,6 +1,16 @@
 # HANDOFF
 
-## V5R 开关战役（Wave 0 + T + B，2026-08-20）
+## V5R live agent-trace（MEASURED，2026-08-20）
+
+对外 OpenAI-compatible host `192.168.10.29:28343`，模型 `openclaw/Qwen3.8-27B-WORK`，窗口 112Ki（114688）。密钥不入库。
+
+报告：`docs/phase-v5r/v5r-live-trace-20260820.md`。摘要：`docs/phase-v5r/v5r-live-trace-20260820-summary.json`。λ：`docs/phase-v5r/v5r-lambda-calibration.json` 现为 **LIVE_TRACE_MEASURED**，`scalarAllowed=false`。
+
+- 六条冻结 holdout 全 `MEASURED`。TaskSuccess **4/6**（路径覆盖，不是模型自述）。无 `FAILED_CONTEXT_CAP`。最大 prompt 52449。
+- 合计 184481 tokens / 40 次 `java_impact`，λ_call **4612.025**。n=6 仍禁止 J(π) KEEP/REJECT。
+- 24-cell AB/BA 未跑。未合 `main`。第四评价仓仍 UNMEASURED。
+
+## V5R 开关战役（Wave 0 + T + B + P + C，2026-08-20）
 
 测量链：同树 `env-locked-same-tree` + `@2calls` benchmark。台账：`docs/phase-v5r/v5r-flag-campaign-ledger.json`。未合 `main`。
 
@@ -20,27 +30,27 @@
 - 分母 Sprint0' `63a80a2`；候选 `bcf547c`（patch 只有白名单实验脚本，无 `src/`）。load 9.35 < 20，必须跑；18 cells 齐。
 - 相对 Sprint0'：三仓 gate 全 FAIL。绝对 1.0（rReadMust / holdout rReadMust / RangeLineRecall）仍不是 1.0，与 V4-final residual 相同。
 - 相对 V4-final：recall / pRead / rReadMust / range / holdout / gate **逐位相同**（first-plan identity 成立）。new token P50 三仓都 **+21**（search payload +85B，readPlanBytes 不变）。
-- 18 个 raw cell 不入库。λ 仍 `CALIBRATED_OFFLINE`。live-trace 仍 `BLOCKED_EXTERNAL`。
+- 18 个 raw cell 不入库。λ 现为 `LIVE_TRACE_MEASURED`（2026-08-20 live-trace），`scalarAllowed` 仍 false。
 
 ## V5R §15 验证面板（2026-08-19）
 
 真源：`docs/deep/codex-java-lsp-mcp-java-intelligence-v5r-comprehensive-assessment-refactoring-plan-2026-08-19.md` §15。  
 面板：`docs/phase-v5r/v5r-section15-verification-panel.json`。HEAD `09ed01b`。隔离定向 **53/53 fail 0**。
 
-**结论：Phase 0–6 COMPLETE；Phase 7 `BLOCKED_EXTERNAL`。未合 `main`。不得声称 TaskSuccess。** live-trace 未授权；第四评价仓未冻结。
+**结论：Phase 0–6 COMPLETE；Phase 7 live-trace 已于 2026-08-20 `MEASURED`，其余格子仍阻塞。未合 `main`。** 第四评价仓未冻结。
 
-## V5R Phase 7（BLOCKED_EXTERNAL，2026-08-19）
+## V5R Phase 7（BLOCKED，live-trace 已于 2026-08-20 MEASURED）
 
 真源：`docs/deep/codex-java-lsp-mcp-java-intelligence-v5r-comprehensive-assessment-refactoring-plan-2026-08-19.md` §15 Phase 7。  
 收口：`docs/phase-v5r/v5r-phase7-closeout.json`。合 main 计划：`docs/phase-v5r/v5r-main-merge-plan.json`。隔离全量 1068+170 fail 0；executableTree `6427540e`。
 
-- **live trace**：`scripts/run-agent-trace-matrix.mjs` 无 `--authorize-external`/key → **`BLOCKED_EXTERNAL`**，`taskSuccess`/`modelUsage` = **`UNMEASURED`**（不是 0）。exit 3。
+- **live trace**：2026-08-20 已 `--authorize-external --execute-live`。六条 holdout **`MEASURED`**，TaskSuccess 4/6。无 key 时仍 exit 3 / `UNMEASURED`。
 - **第四仓**：未声明评价用第四 golden。`golden/` 里的 fixture jsonl 不算第四仓。
 - **leave-one-repo-out**：三折协议已落地（`scripts/leave-one-repo-out.mjs`），**不调参**；矩阵本身 `UNMEASURED`。
 - **release attestation**：`mergeToMain: false`。`GATE_PROFILES` pr/nightly/release 仍不同。stdio/HTTP smoke 已有；Codex CLI/Desktop live **UNMEASURED**。
-- **未合 main**。λ 仍 `CALIBRATED_OFFLINE`。
+- **未合 main**。λ 为 `LIVE_TRACE_MEASURED`，`scalarAllowed=false`。
 
-解阻：用户 key + `--authorize-external`；冻结真正的第四评价仓后再开新 ranking 刀。
+解阻合 main：冻结真正的第四评价仓；leave-one-repo-out 矩阵；标量 λ 另行裁决。
 
 ## V5R Phase 6（COMPLETE，2026-08-19）
 

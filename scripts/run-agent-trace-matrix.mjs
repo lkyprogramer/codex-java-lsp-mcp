@@ -35,7 +35,7 @@ export function parseAgentTraceCli(args, env = process.env) {
   const flags = new Set();
   for (let index = 0; index < args.length; index += 1) {
     const key = args[index];
-    if (key === "--help" || key === "--authorize-external" || key === "--dry-run") {
+    if (key === "--help" || key === "--authorize-external" || key === "--dry-run" || key === "--execute-live") {
       flags.add(key);
       continue;
     }
@@ -46,10 +46,18 @@ export function parseAgentTraceCli(args, env = process.env) {
     help: flags.has("--help"),
     dryRun: flags.has("--dry-run"),
     authorizeExternal: flags.has("--authorize-external"),
+    executeLive: flags.has("--execute-live"),
     sprint0Manifest: options.get("--sprint0-manifest"),
     outputDir: options.get("--output-dir"),
     oldSide: options.get("--old-side") ?? V4_SPRINT0_IDENTITY_COMMIT,
     newSide: options.get("--new-side"),
+    maxTasks: options.get("--max-tasks") ? Number(options.get("--max-tasks")) : 3,
+    liveOffset: options.get("--live-offset") ? Number(options.get("--live-offset")) : 0,
+    repositories: {
+      lishuedu: options.get("--lishuedu") || env.LISHUEDU_ROOT,
+      cipherlink: options.get("--cipherlink") || env.CIPHERLINK_ROOT,
+      "exam-parent-v3": options.get("--exam-parent-v3") || env.EXAM_PARENT_V3_ROOT
+    },
     env
   };
 }
@@ -85,8 +93,10 @@ export async function planAgentTraceMatrix(cli, { loadTasks = loadTraceTasks } =
     tasks: tasks.map(task => ({
       taskId: task.taskId,
       projectId: task.projectId,
+      scenarioId: task.scenarioId,
       repoCommit: task.repoCommit,
-      requiredContextFiles: task.requiredContextFiles
+      requiredContextFiles: task.requiredContextFiles,
+      anchor: task.anchor
     })),
     protocol: {
       rounds: AGENT_TRACE_ROUNDS,
@@ -115,19 +125,54 @@ export async function runAgentTraceMatrix(cli) {
       plan
     };
   }
+  if (!cli.executeLive) {
+    return {
+      schemaVersion: AGENT_TRACE_SCHEMA_VERSION,
+      status: "READY_BUT_NOT_EXECUTED",
+      reason: "external execution remains a separate, user-triggered step; pass --execute-live to send traffic",
+      modelUsage: { status: "UNMEASURED" },
+      taskSuccess: { status: "UNMEASURED" },
+      blindReview: { status: "UNMEASURED" },
+      plan
+    };
+  }
+  if (cli.dryRun) {
+    throw new Error("--execute-live cannot be combined with --dry-run");
+  }
+  if (!cli.outputDir) throw new Error("--execute-live requires --output-dir outside the source checkout");
+  const { executeLiveTrace, selectLiveTasks } = await import("./run-agent-trace-live.mjs");
+  const { mkdir, writeFile } = await import("node:fs/promises");
+  await mkdir(cli.outputDir, { recursive: true });
+  const selected = selectLiveTasks(plan.tasks, {
+    maxTasks: cli.maxTasks,
+    onePerProject: true,
+    offset: cli.liveOffset
+  });
+  const live = await executeLiveTrace({
+    tasks: selected,
+    repositories: cli.repositories,
+    outputDir: cli.outputDir,
+    env: cli.env
+  });
+  const file = path.join(cli.outputDir, "live-trace.json");
+  const planWithLive = { ...plan, liveTasks: selected.map(task => task.taskId) };
+  await writeFile(file, `${JSON.stringify({ plan: planWithLive, live }, null, 2)}\n`);
   return {
     schemaVersion: AGENT_TRACE_SCHEMA_VERSION,
-    status: "READY_BUT_NOT_EXECUTED",
-    reason: "external execution remains a separate, user-triggered step; this process will not send code or spend tokens by default",
-    modelUsage: { status: "UNMEASURED" },
-    taskSuccess: { status: "UNMEASURED" },
-    blindReview: { status: "UNMEASURED" },
-    plan
+    status: live.status,
+    modelUsage: live.modelUsage,
+    taskSuccess: live.taskSuccess,
+    blindReview: live.blindReview,
+    lambdaMagnitude: live.lambdaMagnitude,
+    outputFile: file,
+    plan: planWithLive,
+    live
   };
 }
 
 function printUsage() {
-  console.log(`usage: node scripts/run-agent-trace-matrix.mjs [--dry-run] [--authorize-external] \\
+  console.log(`usage: node scripts/run-agent-trace-matrix.mjs [--dry-run] [--authorize-external] [--execute-live] \\
+  [--max-tasks 3] [--live-offset 0] [--output-dir <dir>] [--lishuedu <root>] [--cipherlink <root>] [--exam-parent-v3 <root>] \\
   [--sprint0-manifest docs/phase-v4/v4-sprint0-manifest.json] [--old-side <sha>] [--new-side <sha>]`);
 }
 

@@ -1,24 +1,37 @@
 {
   "schemaVersion": "v5r-lambda-calibration/v1",
-  "status": "CALIBRATED_OFFLINE",
+  "status": "LIVE_TRACE_MEASURED",
   "scalarAllowed": false,
-  "taskSuccess": "UNMEASURED",
-  "dated": "2026-08-19",
+  "taskSuccess": {
+    "status": "MEASURED",
+    "tasks": 6,
+    "scored": 6,
+    "successes": 4,
+    "mean": 0.6666666666666666,
+    "note": "Path coverage of java_impact files/readPlan vs mustHit∪taskBlocking. Model self-report ignored. No old-side agent baseline, so non-inferior is not claimed."
+  },
+  "dated": "2026-08-20",
   "liveTrace": {
-    "authorized": false,
-    "JAVA_LSP_AUTHORIZE_EXTERNAL": null,
-    "providerKeyPresent": false,
-    "harness": "scripts/run-agent-trace-matrix.mjs",
-    "note": "No --authorize-external and no live provider key in this session. Live λ_call/λ_ms magnitude was not measured."
+    "authorized": true,
+    "harness": "scripts/run-agent-trace-matrix.mjs --authorize-external --execute-live",
+    "model": "openclaw/Qwen3.8-27B-WORK",
+    "baseUrlHost": "192.168.10.29:28343",
+    "contextWindowTokens": 114688,
+    "promptCapTokens": 100000,
+    "report": "docs/phase-v5r/v5r-live-trace-20260820.md",
+    "summary": "docs/phase-v5r/v5r-live-trace-20260820-summary.json",
+    "note": "Provider key was present in the process environment only. It is not recorded here."
   },
   "offlineFit": {
-    "recordedAgentSessions": 0,
-    "lambdaCall": null,
+    "recordedAgentSessions": 6,
+    "lambdaCall": 4612.025,
     "lambdaMs": null,
     "lambdaFail": null,
-    "note": "Degraded path under V5R §6.2 option 2: label CALIBRATED_OFFLINE without inventing λ from BYTE_DIV_4 proxies or TaskSuccess=0."
+    "totalTokens": 184481,
+    "toolRounds": 40,
+    "note": "Magnitude from six frozen holdouts. n is too small for KEEP/REJECT via J(π). refuseSyntheticScalar() stays in force."
   },
-  "gateRule": "Phase 4-6 KEEP/REJECT uses per-field cost-vector comparison only (token, calls, latency). refuseSyntheticScalar() throws. Restriction lifts only after CALIBRATED_LIVE with measured λ.",
+  "gateRule": "Phase 4-6 KEEP/REJECT uses per-field cost-vector comparison only (token, calls, latency). refuseSyntheticScalar() throws. Restriction lifts only after CALIBRATED_LIVE with measured λ and an explicit scalar-allowed decision. LIVE_TRACE_MEASURED is not that lift.",
   "publicMcp": {
     "expectedGain": false,
     "plannerScore": false,
