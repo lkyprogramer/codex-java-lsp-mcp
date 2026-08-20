@@ -1,5 +1,17 @@
 # HANDOFF
 
+## V5R 三仓 cold 矩阵（2026-08-20）
+
+正式入口：`scripts/run-three-repo-cold-matrix.mjs --runs 5`，AB/BA/AB，cold-nolsp。  
+报告：`docs/phase-v5r/v5r-three-repo-cold-20260820.md`。收口：`docs/phase-v5r/v5r-three-repo-closeout.json`。摘要副本：`docs/phase-v5r/v5r-three-repo-cold-20260820-summary.json`（SHA-256 `db030687…`）。
+
+**结论：矩阵已跑完。质量门 FAIL（`passed=false`，独立 verifier exit 1）。未合 `main`。不得声称 TaskSuccess。**
+
+- 分母 Sprint0' `63a80a2`；候选 `bcf547c`（patch 只有白名单实验脚本，无 `src/`）。load 9.35 < 20，必须跑；18 cells 齐。
+- 相对 Sprint0'：三仓 gate 全 FAIL。绝对 1.0（rReadMust / holdout rReadMust / RangeLineRecall）仍不是 1.0，与 V4-final residual 相同。
+- 相对 V4-final：recall / pRead / rReadMust / range / holdout / gate **逐位相同**（first-plan identity 成立）。new token P50 三仓都 **+21**（search payload +85B，readPlanBytes 不变）。
+- 18 个 raw cell 不入库。λ 仍 `CALIBRATED_OFFLINE`。live-trace 仍 `BLOCKED_EXTERNAL`。
+
 ## V5R §15 验证面板（2026-08-19）
 
 真源：`docs/deep/codex-java-lsp-mcp-java-intelligence-v5r-comprehensive-assessment-refactoring-plan-2026-08-19.md` §15。  
