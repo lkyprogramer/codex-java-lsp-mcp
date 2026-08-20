@@ -79,21 +79,28 @@ export function closeSearchResult(input: ClosureInput): EvidenceBundle[] {
   const includeSource = input.includeSource === true;
   const anchorCandidate = input.search.bundles.find(item => item.hops === 0);
   const anchorFacts = anchorCandidate ? input.factsForPath(anchorCandidate.path) : { methods: [] as SliceMethod[] };
-  const anchorNames = (input.anchorLine
+  const extraNames = (input.anchorLine
     ? anchorFacts.methods.filter(method => method.startLine <= input.anchorLine! && method.endLine >= input.anchorLine!)
     : anchorFacts.methods).map(method => method.name);
+  for (const method of anchorFacts.methods) {
+    extraNames.push(method.name);
+    for (const site of method.callSites ?? []) extraNames.push(site.name);
+  }
   const bundles: EvidenceBundle[] = [];
-  for (const candidate of input.search.bundles) {
+  const ordered = [...input.search.bundles].sort((left, right) => left.hops - right.hops || left.path.localeCompare(right.path));
+  for (const candidate of ordered) {
     const facts = input.factsForPath(candidate.path);
     const proof = [...new Set(candidate.provingPath.map(step => step.kind))];
     const role = roleOf(candidate.provingPath, candidate.hops);
-    const names = relatedNames(candidate.provingPath, [...(facts.simpleNames ?? []), ...anchorNames]);
+    const names = relatedNames(candidate.provingPath, [...(facts.simpleNames ?? []), ...extraNames]);
     const methods = facts.methods;
     const chosen = candidate.hops === 0
       ? methods
       : methods.filter(method => names.some(name => name === method.name));
     const methodSlices: CodeSpan[] = [];
     for (const method of chosen) {
+      extraNames.push(method.name);
+      for (const site of method.callSites ?? []) extraNames.push(site.name);
       methodSlices.push(...sliceMethod({
         method,
         source: facts.source,
