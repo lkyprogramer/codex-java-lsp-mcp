@@ -79,7 +79,7 @@ export function closeSearchResult(input: ClosureInput): EvidenceBundle[] {
   const includeSource = input.includeSource === true;
   const anchorCandidate = input.search.bundles.find(item => item.hops === 0);
   const anchorFacts = anchorCandidate ? input.factsForPath(anchorCandidate.path) : { methods: [] as SliceMethod[] };
-  const anchorNames = (input.anchorLine
+  const extraNames = (input.anchorLine
     ? anchorFacts.methods.filter(method => method.startLine <= input.anchorLine! && method.endLine >= input.anchorLine!)
     : anchorFacts.methods).map(method => method.name);
   const bundles: EvidenceBundle[] = [];
@@ -87,7 +87,7 @@ export function closeSearchResult(input: ClosureInput): EvidenceBundle[] {
     const facts = input.factsForPath(candidate.path);
     const proof = [...new Set(candidate.provingPath.map(step => step.kind))];
     const role = roleOf(candidate.provingPath, candidate.hops);
-    const names = relatedNames(candidate.provingPath, [...(facts.simpleNames ?? []), ...anchorNames]);
+    const names = relatedNames(candidate.provingPath, [...(facts.simpleNames ?? []), ...extraNames]);
     const methods = facts.methods;
     const chosen = candidate.hops === 0
       ? methods

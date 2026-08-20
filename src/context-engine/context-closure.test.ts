@@ -90,6 +90,60 @@ test("hop 0 keeps sibling methods supplied by facts, not only the line-containin
   assert.ok(spans.some(span => span.start <= 145 && span.end >= 154));
 });
 
+test("proving-path member names keep the called method not the whole type", () => {
+  const bundles = closeSearchResult({
+    search: {
+      resolvedIntent: "IMPLEMENTATION_CHANGE",
+      coverage: "PARTIAL",
+      bundles: [
+        {
+          path: "src/Svc.java",
+          hops: 0,
+          estimatedTokens: 40,
+          provingPath: [],
+          closedObligations: ["O1"]
+        },
+        {
+          path: "src/Access.java",
+          hops: 1,
+          estimatedTokens: 40,
+          provingPath: [{ kind: "CALLS_EXACT", fromId: "src/Svc.java", toId: "src/Access.java#Access#requireMe#n" }],
+          closedObligations: []
+        },
+        {
+          path: "src/Me.java",
+          hops: 2,
+          estimatedTokens: 40,
+          provingPath: [{ kind: "CALLS_VIRTUAL", fromId: "src/Svc.java", toId: "src/Me.java#Me#getMe#n" }],
+          closedObligations: []
+        }
+      ],
+      unresolved: [],
+      metrics: { expansions: 2, hops: 2, estimatedTokens: 120 }
+    },
+    anchorLine: 10,
+    factsForPath: path => {
+      if (path === "src/Svc.java") {
+        return { methods: [{ name: "claim", startLine: 8, endLine: 16, callSites: [{ line: 12, name: "requireMe" }] }] };
+      }
+      if (path === "src/Access.java") {
+        return { methods: [{ name: "requireMe", startLine: 32, endLine: 38, callSites: [{ line: 34, name: "getMe" }] }] };
+      }
+      return {
+        methods: [
+          { name: "getMe", startLine: 84, endLine: 93 },
+          { name: "other", startLine: 1, endLine: 300 }
+        ]
+      };
+    }
+  });
+  const me = bundles.find(item => item.path === "src/Me.java");
+  assert.ok(me);
+  assert.equal(me?.spans.length, 1);
+  assert.equal(me?.spans[0]?.start, 84);
+  assert.equal(me?.spans[0]?.end, 93);
+});
+
 test("hop>0 files with no named method still keep a type span", () => {
   const bundles = closeSearchResult({
     search: {

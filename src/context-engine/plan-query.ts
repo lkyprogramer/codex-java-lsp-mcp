@@ -26,6 +26,20 @@ export type PlanQueryInput = {
 
 const HOP0_METHOD_CAP = 8;
 
+const NOISE_CALL_NAMES = new Set([
+  "stream", "map", "filter", "collect", "toList", "toArray", "of", "get", "isEmpty",
+  "equals", "hashCode", "toString", "orElse", "orElseGet", "orElseThrow", "findFirst",
+  "findAny", "forEach", "iterator", "count", "min", "max", "distinct", "sorted", "limit",
+  "skip", "anyMatch", "allMatch", "noneMatch", "reduce", "flatMap", "peek", "add", "put",
+  "contains", "size", "length", "getClass"
+]);
+
+function neighborhoodCallName(name: string, receiverText?: string): boolean {
+  if (name.length < 3 || NOISE_CALL_NAMES.has(name)) return false;
+  if (receiverText && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(receiverText)) return false;
+  return true;
+}
+
 function relativePathOfFileId(fileId: string): string {
   return fileId.startsWith("file:") ? fileId.slice("file:".length) : fileId;
 }
@@ -56,20 +70,7 @@ function resolvedRepoTypeIds(ref: JavaTypeRef | undefined): string[] {
   return ids;
 }
 
-function methodsFromStore(store: JavaIndexStore, path: string, graph: KnowledgeGraphStore, provingIds: Set<string>, anchorLine?: number): SliceMethod[] {
-  const bundle = store.files([path])[0];
-  if (!bundle) return [];
-  const wantedMethods = new Set<string>();
-  const wantedTypes = new Set<string>();
-  for (const id of provingIds) {
-    const node = graph.nodesById.get(id);
-    if (!node?.javaIndexId || node.relativePath !== path) continue;
-    if (node.kind === "METHOD" || node.kind === "CONSTRUCTOR") wantedMethods.add(node.javaIndexId);
-    if (node.kind === "TYPE" || node.kind === "JPA_ENTITY") wantedTypes.add(node.javaIndexId);
-  }
-  const matched = bundle.methods.filter(method => wantedMethods.has(method.methodId) || wantedTypes.has(method.ownerTypeId));
-  if (matched.length > 0) return matched.map(toSlice);
-  if (!anchorLine) return [];
+function hop0Methods(bundle: JavaFileBundle, anchorLine: number): JavaMethodFacts[] {
   const containing = bundle.methods.filter(method => methodContainsLine(method, anchorLine));
   if (containing.length === 0) return [];
   const owners = new Set(containing.map(method => method.ownerTypeId));
@@ -83,7 +84,60 @@ function methodsFromStore(store: JavaIndexStore, path: string, graph: KnowledgeG
     if (keep.size >= HOP0_METHOD_CAP) break;
     keep.set(method.methodId, method);
   }
-  return [...keep.values()].map(toSlice);
+  return [...keep.values()];
+}
+
+function intraFileCallClosure(bundle: JavaFileBundle, start: JavaMethodFacts[]): JavaMethodFacts[] {
+  const keep = new Map<string, JavaMethodFacts>();
+  for (const method of start) keep.set(method.methodId, method);
+  const owners = new Set(start.map(method => method.ownerTypeId));
+  for (let step = 0; step < 8 && keep.size < HOP0_METHOD_CAP; step += 1) {
+    const names = new Set(
+      [...keep.values()].flatMap(method => method.callSites.filter(site => neighborhoodCallName(site.name, site.receiverText)).map(site => site.name))
+    );
+    let added = 0;
+    for (const method of bundle.methods) {
+      if (keep.size >= HOP0_METHOD_CAP) break;
+      if (!owners.has(method.ownerTypeId) || keep.has(method.methodId) || !names.has(method.name)) continue;
+      keep.set(method.methodId, method);
+      added += 1;
+    }
+    if (added === 0) break;
+  }
+  return [...keep.values()];
+}
+
+function methodsFromStore(store: JavaIndexStore, path: string, graph: KnowledgeGraphStore, provingIds: Set<string>, anchorLine?: number): SliceMethod[] {
+  const bundle = store.files([path])[0];
+  if (!bundle) return [];
+  const wantedMethods = new Set<string>();
+  const wantedTypes = new Set<string>();
+  const named = new Set<string>();
+  for (const id of provingIds) {
+    const node = graph.nodesById.get(id);
+    if (node?.javaIndexId && node.relativePath === path) {
+      if (node.kind === "METHOD" || node.kind === "CONSTRUCTOR") wantedMethods.add(node.javaIndexId);
+      if (node.kind === "TYPE" || node.kind === "JPA_ENTITY") wantedTypes.add(node.javaIndexId);
+    }
+    const indexed = store.typesById.get(id);
+    if (indexed && relativePathOfFileId(indexed.fileId) === path) wantedTypes.add(indexed.typeId);
+    const parts = id.split("#");
+    if (parts[2] && parts.length >= 3) named.add(parts[2]);
+  }
+  if (wantedMethods.size > 0) {
+    const byId = bundle.methods.filter(method => wantedMethods.has(method.methodId));
+    if (byId.length > 0) return byId.map(toSlice);
+  }
+  if (named.size > 0) {
+    const byName = bundle.methods.filter(method => named.has(method.name));
+    if (byName.length > 0) return byName.map(toSlice);
+  }
+  if (anchorLine) return hop0Methods(bundle, anchorLine).map(toSlice);
+  if (wantedTypes.size > 0) {
+    const ofType = bundle.methods.filter(method => wantedTypes.has(method.ownerTypeId));
+    if (ofType.length > 0) return ofType.map(toSlice);
+  }
+  return [];
 }
 
 export function anchorMethodStartIds(
@@ -114,20 +168,13 @@ function simpleNamesOfRef(ref: JavaTypeRef | undefined): string[] {
 }
 
 function typeIdByFqn(store: JavaIndexStore, fqn: string): string | undefined {
-  for (const type of store.typesById.values()) {
-    if (type.fqn === fqn) return type.typeId;
-  }
-  return undefined;
+  return store.typeIdByFqn.get(fqn);
 }
 
 function uniqueTypeIdBySimpleName(store: JavaIndexStore, simpleName: string): string | undefined {
-  let found: string | undefined;
-  for (const type of store.typesById.values()) {
-    if (type.simpleName !== simpleName) continue;
-    if (found && found !== type.typeId) return undefined;
-    found = type.typeId;
-  }
-  return found;
+  const ids = store.typeIdsBySimpleName.get(simpleName);
+  if (!ids || ids.size !== 1) return undefined;
+  return [...ids][0];
 }
 
 function refTargetsType(ref: JavaTypeRef, target: JavaTypeFacts, store: JavaIndexStore, implementerFile?: string): boolean {
@@ -153,40 +200,100 @@ function implementerTypeIds(store: JavaIndexStore, targetIds: Iterable<string>):
   return hits;
 }
 
-function collectAnchorTypeIds(store: JavaIndexStore, bundle: JavaFileBundle, anchorLine: number): Set<string> {
+type DiscoveryKind = "IMPORTS" | "IMPLEMENTS" | "EXTENDS" | "CALLS_EXACT" | "CALLS_VIRTUAL";
+type DiscoverySeed = { hops: 1 | 2; kind: DiscoveryKind; names: string[] };
+
+function kindRank(kind: DiscoveryKind): number {
+  if (kind === "CALLS_EXACT") return 0;
+  if (kind === "CALLS_VIRTUAL") return 1;
+  if (kind === "IMPLEMENTS") return 2;
+  if (kind === "EXTENDS") return 3;
+  return 4;
+}
+
+function seedType(seeds: Map<string, DiscoverySeed>, typeId: string, hops: 1 | 2, kind: DiscoveryKind, name?: string): void {
+  const previous = seeds.get(typeId);
+  if (!previous || hops < previous.hops) {
+    seeds.set(typeId, { hops, kind, names: name ? [name] : [] });
+    return;
+  }
+  if (hops > previous.hops) return;
+  if (kindRank(kind) < kindRank(previous.kind)) previous.kind = kind;
+  if (name && !previous.names.includes(name)) previous.names.push(name);
+}
+
+function mentionRef(
+  store: JavaIndexStore,
+  importBySimple: Map<string, string>,
+  seeds: Map<string, DiscoverySeed>,
+  ref: JavaTypeRef | undefined,
+  hops: 1 | 2,
+  kind: DiscoveryKind,
+  name?: string,
+  looseSimple = kind === "IMPORTS"
+): void {
+  for (const id of resolvedRepoTypeIds(ref)) seedType(seeds, id, hops, kind, name);
+  for (const simple of simpleNamesOfRef(ref)) {
+    const imported = importBySimple.get(simple);
+    const id = (imported ? typeIdByFqn(store, imported) : undefined)
+      ?? (looseSimple ? uniqueTypeIdBySimpleName(store, simple) : undefined);
+    if (id) seedType(seeds, id, hops, kind, name);
+  }
+}
+
+function collectAnchorSeeds(store: JavaIndexStore, bundle: JavaFileBundle, anchorLine: number): Map<string, DiscoverySeed> {
   const containing = bundle.methods.filter(method => methodContainsLine(method, anchorLine));
+  const hop0 = intraFileCallClosure(bundle, containing);
   const owners = new Set(containing.map(method => method.ownerTypeId));
-  const typeIds = new Set<string>(owners);
+  const seeds = new Map<string, DiscoverySeed>();
+  for (const owner of owners) seedType(seeds, owner, 1, "IMPORTS");
+  for (const method of containing) seedType(seeds, method.ownerTypeId, 1, "IMPORTS", method.name);
   const importBySimple = new Map<string, string>();
   for (const item of bundle.file.imports) {
     if (item.wildcard) continue;
     const simple = item.qualifiedName.split(".").pop();
     if (simple) importBySimple.set(simple, item.qualifiedName);
   }
-  const mention = (ref: JavaTypeRef | undefined) => {
-    for (const id of resolvedRepoTypeIds(ref)) typeIds.add(id);
-    for (const simple of simpleNamesOfRef(ref)) {
-      const imported = importBySimple.get(simple);
-      const id = (imported ? typeIdByFqn(store, imported) : undefined) ?? uniqueTypeIdBySimpleName(store, simple);
-      if (id) typeIds.add(id);
-    }
+  const mention = (ref: JavaTypeRef | undefined, hops: 1 | 2, kind: DiscoveryKind, name?: string) => {
+    mentionRef(store, importBySimple, seeds, ref, hops, kind, name);
   };
   const methodTokens = new Set(containing.flatMap(method => splitIdentifier(method.name)).filter(token => token.length > 2));
   for (const [simple, fqn] of importBySimple) {
     if (!splitIdentifier(simple).some(token => methodTokens.has(token))) continue;
     const id = typeIdByFqn(store, fqn) ?? uniqueTypeIdBySimpleName(store, simple);
-    if (id) typeIds.add(id);
+    if (id) seedType(seeds, id, 1, "IMPORTS");
   }
   for (const method of containing) {
-    mention(method.returnType);
-    for (const parameter of method.parameters) mention(parameter.type);
+    mention(method.returnType, 1, "IMPORTS");
+    for (const parameter of method.parameters) mention(parameter.type, 1, "IMPORTS");
   }
   for (const field of bundle.fields) {
     if (!owners.has(field.ownerTypeId)) continue;
-    mention(field.type);
+    mention(field.type, 1, "IMPORTS");
   }
-  for (const id of implementerTypeIds(store, typeIds)) typeIds.add(id);
-  return typeIds;
+  for (const method of hop0) {
+    for (const site of method.callSites) {
+      if (!neighborhoodCallName(site.name, site.receiverText) || !site.receiverText) continue;
+      const field = bundle.fields.find(item => item.name === site.receiverText && owners.has(item.ownerTypeId));
+      if (field) mentionRef(store, importBySimple, seeds, field.type, 1, "CALLS_EXACT", site.name, false);
+    }
+  }
+  const callNamed = [...seeds.entries()].filter(([, seed]) => seed.kind === "CALLS_EXACT" || seed.kind === "CALLS_VIRTUAL");
+  for (const implId of implementerTypeIds(store, seeds.keys())) {
+    seedType(seeds, implId, 1, "IMPLEMENTS");
+    if (callNamed.length === 0) continue;
+    const impl = store.typesById.get(implId);
+    if (!impl) continue;
+    const implFile = relativePathOfFileId(impl.fileId);
+    const refs = [...impl.implements, ...impl.extends];
+    for (const [targetId, seed] of callNamed) {
+      const target = store.typesById.get(targetId);
+      if (target && refs.some(ref => refTargetsType(ref, target, store, implFile))) {
+        for (const name of seed.names) seedType(seeds, implId, 1, "IMPLEMENTS", name);
+      }
+    }
+  }
+  return seeds;
 }
 
 function addDiscoveryBundle(
@@ -194,15 +301,27 @@ function addDiscoveryBundle(
   known: Set<string>,
   startPath: string,
   relativePath: string,
-  kind: "IMPORTS" | "IMPLEMENTS" | "EXTENDS",
+  hops: 1 | 2,
+  kind: DiscoveryKind,
   toId: string
 ): void {
-  if (!relativePath || relativePath === startPath || known.has(relativePath)) return;
+  if (!relativePath || relativePath === startPath) return;
+  const step = { kind, fromId: startPath, toId };
+  const existing = extra.find(item => item.path === relativePath);
+  if (existing) {
+    existing.hops = Math.min(existing.hops, hops);
+    const named = toId.split("#")[2];
+    if (named && !existing.provingPath.some(item => item.toId.split("#")[2] === named && item.kind === kind)) {
+      existing.provingPath = [step, ...existing.provingPath];
+    }
+    known.add(relativePath);
+    return;
+  }
   extra.push({
     path: relativePath,
-    hops: 1,
+    hops,
     estimatedTokens: 48,
-    provingPath: [{ kind, fromId: startPath, toId }],
+    provingPath: [step],
     closedObligations: []
   });
   known.add(relativePath);
@@ -218,25 +337,29 @@ export function attachAnchorSignatureBundles(
   if (!store || !anchorLine) return search;
   const bundle = store.files([path])[0];
   if (!bundle) return search;
-  const typeIds = collectAnchorTypeIds(store, bundle, anchorLine);
+  const seeds = collectAnchorSeeds(store, bundle, anchorLine);
   const known = new Set(search.bundles.map(item => item.path));
   const extra = [...search.bundles];
   const nodeIdByJavaId = new Map<string, string>();
   for (const [id, node] of graph.nodesById) {
     if (node.javaIndexId) nodeIdByJavaId.set(node.javaIndexId, id);
   }
-  for (const typeId of typeIds) {
+  for (const [typeId, seed] of seeds) {
     const type = store.typesById.get(typeId);
     if (!type) continue;
     const typeNodeId = nodeIdByJavaId.get(typeId);
-    addDiscoveryBundle(extra, known, path, relativePathOfFileId(type.fileId), "IMPORTS", typeNodeId ?? typeId);
+    const relative = relativePathOfFileId(type.fileId);
+    const toId = seed.names[0]
+      ? `${relative}#${type.simpleName}#${seed.names[0]}#n`
+      : (typeNodeId ?? typeId);
+    addDiscoveryBundle(extra, known, path, relative, seed.hops, seed.kind, toId);
     if (!typeNodeId) continue;
     for (const edge of [...graph.successors(typeNodeId), ...graph.predecessors(typeNodeId)]) {
       if (edge.kind !== "IMPLEMENTS" && edge.kind !== "EXTENDS") continue;
       const otherId = edge.fromId === typeNodeId ? edge.toId : edge.fromId;
       const other = graph.nodesById.get(otherId);
       if (!other?.relativePath) continue;
-      addDiscoveryBundle(extra, known, path, other.relativePath, edge.kind === "EXTENDS" ? "EXTENDS" : "IMPLEMENTS", otherId);
+      addDiscoveryBundle(extra, known, path, other.relativePath, seed.hops, edge.kind === "EXTENDS" ? "EXTENDS" : "IMPLEMENTS", otherId);
     }
   }
   return extra.length === search.bundles.length ? search : { ...search, bundles: extra };
@@ -246,12 +369,18 @@ function typeRangesFromStore(store: JavaIndexStore, path: string, graph: Knowled
   const bundle = store.files([path])[0];
   if (!bundle) return [];
   const wantedTypes = new Set<string>();
+  const wantedSimple = new Set<string>();
   for (const id of provingIds) {
     const node = graph.nodesById.get(id);
-    if (!node?.javaIndexId || node.relativePath !== path) continue;
-    if (node.kind === "TYPE" || node.kind === "JPA_ENTITY") wantedTypes.add(node.javaIndexId);
+    if (node?.javaIndexId && node.relativePath === path && (node.kind === "TYPE" || node.kind === "JPA_ENTITY")) {
+      wantedTypes.add(node.javaIndexId);
+    }
+    const indexed = store.typesById.get(id);
+    if (indexed && relativePathOfFileId(indexed.fileId) === path) wantedTypes.add(indexed.typeId);
+    const parts = id.split("#");
+    if (parts[0] === path && parts[1] && !parts[2]) wantedSimple.add(parts[1]);
   }
-  let types = bundle.types.filter(type => wantedTypes.has(type.typeId));
+  let types = bundle.types.filter(type => wantedTypes.has(type.typeId) || wantedSimple.has(type.simpleName));
   if (types.length === 0 && provingIds.size === 0) {
     types = [...bundle.types].sort((left, right) => left.range.start.line - right.range.start.line).slice(0, 1);
   }
