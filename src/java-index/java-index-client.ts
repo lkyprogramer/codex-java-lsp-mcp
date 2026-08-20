@@ -28,12 +28,14 @@ import {
   validateTypeLookup,
   validateTypeLookupArray,
   validateEntitySearchHits,
+  validateGraphDigest,
   JAVA_INDEX_CLOSE_GRACE_MS,
   type JavaIndexCommand,
   type JavaIndexRefreshPriority,
   type JavaIndexValueValidator,
   type JavaIndexWorkerTiming,
   type JavaIndexWorktreeIdentity,
+  type GraphDigest,
   type MyBatisResourceByNamespaceBatch
 } from "./worker-protocol.js";
 import { ENTITY_SEARCH_DEFAULT_LIMIT, type EntityHit } from "./entity-search.js";
@@ -361,6 +363,11 @@ export class JavaIndexClient {
       validateMyBatisResourceByNamespaceBatch,
       requestOptions
     );
+  }
+
+  async queryGraphDigest(requestOptions: JavaIndexRequestOptions = {}): Promise<GraphDigest> {
+    await this.ensureOpen(requestOptions);
+    return this.request({ type: "QUERY_GRAPH_DIGEST" }, validateGraphDigest, requestOptions);
   }
 
   async queryEntitySearch(

@@ -43,6 +43,9 @@ import {
 } from "./snapshot.js";
 import { STABLE_ID_VERSION } from "./stable-id.js";
 import { EntitySearchIndex } from "./entity-search.js";
+import { KnowledgeGraphStore } from "../java-knowledge/graph-store.js";
+import { KnowledgeGraphBuilder } from "../java-knowledge/graph-builder.js";
+import { loadGraphSnapshot, packGraphSnapshot, unpackGraphSnapshot, writeGraphSnapshotAtomic } from "../java-knowledge/graph-snapshot.js";
 import { WorktreeSnapshotSeeder } from "./worktree-snapshot-seeder.js";
 import type {
   IndexedReadRange,
@@ -74,6 +77,7 @@ const SWEEP_CHUNK_SIZE = 50;
 // giving up on this sweep for now; a later reconcile() call starts a fresh one.
 const SWEEP_LEASE_WAIT_MS = 10000;
 const SNAPSHOT_FILE_NAME = "java-index-snapshot.json.gz";
+const GRAPH_SNAPSHOT_FILE_NAME = "java-knowledge-graph.json.gz";
 // Debounced so a burst of foreground refreshes (a save, then a formatter
 // re-save moments later) coalesces into one write instead of one per event.
 const SNAPSHOT_FLUSH_DEBOUNCE_MS = 1000;
@@ -111,7 +115,11 @@ let backend: JavaParserBackend | undefined;
 let cache: ParseTreeCache | undefined;
 let store: JavaIndexStore | undefined;
 let entitySearch = new EntitySearchIndex();
-let entitySearchRevision = -1;
+let entitySearchSyncedRevision = -1;
+let knowledgeGraph = new KnowledgeGraphStore();
+let knowledgeBuilder = new KnowledgeGraphBuilder(knowledgeGraph);
+let graphSyncedRevision = -1;
+let indexFactsRevision = 0;
 let layout: LayoutContext | undefined;
 let leaseStore: CrossProcessLeaseStore = new NoopCrossProcessLeaseStore();
 let worktreeIdentity: WorktreeIdentity | undefined;
@@ -580,6 +588,7 @@ async function refreshFile(inputPath: string, generation: number): Promise<Refre
     layout
   });
   const dependents = store.replaceFile(bundle);
+  markIndexFactsChanged();
   return { relativePath: bundle.file.relativePath, dependents };
 }
 
@@ -631,7 +640,9 @@ function resolveAndBuildEdges(relativePath: string): void {
   // with edges, or not yet touched at all - never resolved-but-edge-less.
   store.replaceFile({ ...resolved, edges: [] });
   const edges = buildStaticEdges(resolved, rebuildRegistry(), resolver);
-  store.replaceFile({ ...resolved, edges });
+  const withEdges = { ...resolved, edges };
+  store.replaceFile(withEdges);
+  syncKnowledgeGraphBundle(withEdges);
 }
 
 /**
@@ -664,7 +675,9 @@ function resolveAllAndBuildEdges(relativePaths: readonly string[]): Map<string, 
   for (const [relativePath, resolved] of resolvedByPath) {
     try {
       const edges = buildStaticEdges(resolved, finalRegistry, finalResolver);
-      store.replaceFile({ ...resolved, edges });
+      const withEdges = { ...resolved, edges };
+      store.replaceFile(withEdges);
+      syncKnowledgeGraphBundle(withEdges);
     } catch (error) {
       errors.set(relativePath, error);
     }
@@ -770,6 +783,10 @@ function flushSnapshotNow(): Promise<void> {
         value,
         () => computeCurrentSnapshotManifestFingerprint(repoRoot, currentLayout)
       );
+      if (snapshotPath) {
+        const graphPath = path.join(path.dirname(snapshotPath), GRAPH_SNAPSHOT_FILE_NAME);
+        await writeGraphSnapshotAtomic(graphPath, packGraphSnapshot(readyKnowledgeGraph()));
+      }
       lastDurableSnapshotIdentity = {
         durableGeneration: generationAtSerialize,
         durableManifestFingerprint: manifestFingerprint
@@ -863,6 +880,10 @@ async function handleRefresh(request: Extract<JavaIndexRequest, { type: "REFRESH
     // a dangling-edge scan, not an approximation, since every edge target (a
     // type: or method: id) is owned by exactly one file.
     for (const dependent of store.removeFiles(deletedPaths)) touched.add(dependent);
+    knowledgeBuilder.removeFiles(deletedPaths);
+    entitySearch.removeFiles(deletedPaths);
+    markIndexFactsChanged();
+    markGraphAndSearchSynced();
   }
   for (const relativePath of touched) {
     let hadIssue: boolean;
@@ -1114,17 +1135,29 @@ function startOwnSnapshotHydration(
       const durableRevisionAtHydration = snapshotDurableRevision;
       store = new JavaIndexStore();
       entitySearch = new EntitySearchIndex();
-      entitySearchRevision = -1;
+      knowledgeGraph = new KnowledgeGraphStore();
+      knowledgeBuilder = new KnowledgeGraphBuilder(knowledgeGraph);
+      indexFactsRevision = 0;
+      graphSyncedRevision = -1;
+      entitySearchSyncedRevision = -1;
       // XML facts stay out of the provisional store until a stable target-side
       // read confirms their content hash. `indexMyBatisResources` can then
       // reuse exact snapshot facts without re-parsing them, while changed XML
       // is extracted fresh and is never visible through the interim store.
       store.loadSnapshotData({ ...loaded, myBatisResources: [] });
+      const graphPath = snapshotPath ? path.join(path.dirname(snapshotPath), GRAPH_SNAPSHOT_FILE_NAME) : undefined;
+      const packedGraph = graphPath ? await loadGraphSnapshot(graphPath) : undefined;
+      if (packedGraph) {
+        unpackGraphSnapshot(packedGraph, knowledgeGraph);
+        graphSyncedRevision = indexFactsRevision;
+      } else {
+        graphSyncedRevision = -1;
+      }
       if (loaded.entitySearch?.version === 1) {
         entitySearch.loadSnapshot(loaded.entitySearch);
-        entitySearchRevision = snapshotDirtyRevision;
+        entitySearchSyncedRevision = indexFactsRevision;
       } else {
-        entitySearchRevision = -1;
+        entitySearchSyncedRevision = -1;
       }
       // Snapshot generations belong to the process that wrote the snapshot.
       // A new RepoChangeCoordinator starts its own monotonic domain, so every
@@ -1634,14 +1667,43 @@ function queryHandlerDeps() {
     worstTypeLookupCoverage,
     unresolvedTypeLookup,
     readyEntitySearch,
+    readyKnowledgeGraph,
     respond
   };
 }
 
+function markIndexFactsChanged(): void {
+  indexFactsRevision += 1;
+}
+
+function markGraphAndSearchSynced(): void {
+  graphSyncedRevision = indexFactsRevision;
+  entitySearchSyncedRevision = indexFactsRevision;
+}
+
+function syncKnowledgeGraphFromStore(): void {
+  if (!store) return;
+  knowledgeBuilder.rebuildFromStore(store, status.indexedGeneration);
+  entitySearch.rebuildFromStore(store);
+  markGraphAndSearchSynced();
+}
+
+function syncKnowledgeGraphBundle(bundle: JavaFileBundle): void {
+  if (!store) return;
+  knowledgeBuilder.replaceFile(bundle, store, status.indexedGeneration);
+  entitySearch.replaceFile(bundle);
+  markGraphAndSearchSynced();
+}
+
+function readyKnowledgeGraph(): KnowledgeGraphStore {
+  if (store && graphSyncedRevision !== indexFactsRevision) syncKnowledgeGraphFromStore();
+  return knowledgeGraph;
+}
+
 function readyEntitySearch(): EntitySearchIndex {
-  if (store && entitySearchRevision !== snapshotDirtyRevision) {
+  if (store && entitySearchSyncedRevision !== indexFactsRevision) {
     entitySearch.rebuildFromStore(store);
-    entitySearchRevision = snapshotDirtyRevision;
+    entitySearchSyncedRevision = indexFactsRevision;
   }
   return entitySearch;
 }
@@ -1658,7 +1720,11 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         cache = new ParseTreeCache();
         store = new JavaIndexStore();
         entitySearch = new EntitySearchIndex();
-        entitySearchRevision = -1;
+        knowledgeGraph = new KnowledgeGraphStore();
+        knowledgeBuilder = new KnowledgeGraphBuilder(knowledgeGraph);
+        indexFactsRevision = 0;
+        graphSyncedRevision = -1;
+        entitySearchSyncedRevision = -1;
         worktreeIdentity = request.worktree;
         if (request.leaseRoot) {
           const store_ = new FileCrossProcessLeaseStore(request.leaseRoot, defaultLeaseClockDeps());

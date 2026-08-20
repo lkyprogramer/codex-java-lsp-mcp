@@ -24,7 +24,8 @@ import {
   validateTypeFactsArray,
   validateTypeLookup,
   validateTypeLookupArray,
-  validateEntitySearchHits
+  validateEntitySearchHits,
+  validateGraphDigest
 } from "./worker-protocol.js";
 
 function validStatus(): JavaIndexStatus {
@@ -261,6 +262,12 @@ test("validateFileBundleArray round-trips a fully populated bundle", () => {
   const bundle = fullBundle();
   const result = validateFileBundleArray([bundle]);
   assert.deepEqual(result, [bundle]);
+});
+
+test("validateGraphDigest requires digest and counts", () => {
+  const digest = { digest: "abc", generation: 1, nodes: 2, edges: 3 };
+  assert.deepEqual(validateGraphDigest(digest), digest);
+  assert.throws(() => validateGraphDigest({ ...digest, digest: 1 }));
 });
 
 test("validateEntitySearchHits accepts a LocAgent hit and rejects an unknown layer", () => {

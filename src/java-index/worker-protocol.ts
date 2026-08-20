@@ -92,6 +92,7 @@ type JavaIndexRequestOperation =
   | { id: number; type: "QUERY_MYBATIS_RESOURCES_BY_NAMESPACE"; namespaces: string[] }
   | { id: number; type: "QUERY_REPOSITORY_FACT_MARKERS"; importPrefixes: string[]; annotationPrefixes: string[] }
   | { id: number; type: "QUERY_ENTITY_SEARCH"; task: string; limit?: number }
+  | { id: number; type: "QUERY_GRAPH_DIGEST" }
   | { id: number; type: "STATUS" }
   | { id: number; type: "FLUSH" }
   | { id: number; type: "CLOSE" };
@@ -884,6 +885,32 @@ export function validateIndexedReferenceBatch(value: unknown): IndexedReferenceB
 
 const ENTITY_KINDS = ["type", "method"] as const;
 const ENTITY_LAYERS = ["FQN", "SIMPLE_NAME", "BM25_IDENTIFIER", "CHUNK"] as const;
+
+export type GraphDigest = {
+  digest: string;
+  generation: number;
+  nodes: number;
+  edges: number;
+  heapUsedBytes?: number;
+  rssBytes?: number;
+};
+
+export function validateGraphDigest(value: unknown): GraphDigest {
+  const context = "GraphDigest";
+  const source = record(value, context);
+  if (!isString(source.digest)) invalid(context, "digest");
+  if (!isNumber(source.generation)) invalid(context, "generation");
+  if (!isNumber(source.nodes)) invalid(context, "nodes");
+  if (!isNumber(source.edges)) invalid(context, "edges");
+  return {
+    digest: source.digest,
+    generation: source.generation,
+    nodes: source.nodes,
+    edges: source.edges,
+    ...(isNumber(source.heapUsedBytes) ? { heapUsedBytes: source.heapUsedBytes } : {}),
+    ...(isNumber(source.rssBytes) ? { rssBytes: source.rssBytes } : {})
+  };
+}
 
 export function validateEntitySearchHits(value: unknown): EntityHit[] {
   const context = "EntityHit[]";

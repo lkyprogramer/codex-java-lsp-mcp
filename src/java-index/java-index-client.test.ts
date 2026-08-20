@@ -527,6 +527,32 @@ test("REFRESH end-to-end through a real worker thread: reads, parses, extracts, 
   await client.close();
 });
 
+test("QUERY_GRAPH_DIGEST is deterministic for identical facts", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "java-index-graph-digest-"));
+  const cacheDir = mkdtempSync(path.join(tmpdir(), "java-index-graph-digest-cache-"));
+  const javaDir = path.join(repoRoot, "src/main/java/demo");
+  mkdirSync(javaDir, { recursive: true });
+  writeFileSync(path.join(javaDir, "Widget.java"), [
+    "package demo;",
+    "public class Widget {",
+    "  public void save() {}",
+    "}",
+    ""
+  ].join("\n"));
+  const client = new JavaIndexClient(repoRoot, cacheDir);
+  try {
+    await client.open(1);
+    await client.refresh(1, [path.join(javaDir, "Widget.java")], []);
+    const first = await client.queryGraphDigest();
+    const second = await client.queryGraphDigest();
+    assert.equal(first.digest, second.digest);
+    assert.ok(first.nodes >= 2);
+    assert.ok(first.edges >= 1);
+  } finally {
+    await client.close();
+  }
+});
+
 test("QUERY_ENTITY_SEARCH returns identifier-layer hits from indexed facts", async () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), "java-index-entity-search-"));
   const cacheDir = mkdtempSync(path.join(tmpdir(), "java-index-entity-search-cache-"));

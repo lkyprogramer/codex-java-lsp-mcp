@@ -5,6 +5,7 @@ import type { JavaIndexRequest, JavaIndexResponse } from "./worker-protocol.js";
 import type { JavaIndexStatus, JavaTypeLookupResult, SourceRootCoverage } from "./index-types.js";
 import type { JavaIndexStore } from "./index-store.js";
 import { ENTITY_SEARCH_DEFAULT_LIMIT, ENTITY_SEARCH_MAX_LIMIT, type EntitySearchIndex } from "./entity-search.js";
+import type { KnowledgeGraphStore } from "../java-knowledge/graph-store.js";
 
 export type QueryHandlerDeps = {
   store?: JavaIndexStore;
@@ -15,6 +16,7 @@ export type QueryHandlerDeps = {
   worstTypeLookupCoverage(generation: number): "COMPLETE" | "PARTIAL" | "DEGRADED";
   unresolvedTypeLookup(): JavaTypeLookupResult;
   readyEntitySearch(): EntitySearchIndex;
+  readyKnowledgeGraph(): KnowledgeGraphStore;
   respond(response: JavaIndexResponse): void;
 };
 
@@ -105,6 +107,23 @@ export async function handleQueryCommand(request: JavaIndexRequest, deps: QueryH
     }
     case "QUERY_READ_RANGES": {
       deps.respond({ id: request.id, ok: true, value: await deps.queryReadRanges(request.requests) });
+      return true;
+    }
+    case "QUERY_GRAPH_DIGEST": {
+      const graph = deps.readyKnowledgeGraph();
+      const memory = process.memoryUsage();
+      deps.respond({
+        id: request.id,
+        ok: true,
+        value: {
+          digest: graph.digest(),
+          generation: graph.generation,
+          nodes: graph.nodesById.size,
+          edges: graph.edgesById.size,
+          heapUsedBytes: memory.heapUsed,
+          rssBytes: memory.rss
+        }
+      });
       return true;
     }
     case "QUERY_ENTITY_SEARCH": {
