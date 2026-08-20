@@ -1,0 +1,56 @@
+{
+  "schemaVersion": "jin-phase-n2a-closeout/v1",
+  "phase": "N2a",
+  "dated": "2026-08-20",
+  "decision": "COMPLETE",
+  "mergeToMain": false,
+  "n1RssDisposition": {
+    "userChoice": "declined",
+    "selfDecision": "0A.4(a) keep 512 MiB process RSS unrelaxed; carry N1 FAIL into N2a; do not treat RSS as N2a blocker if it does not regress",
+    "clause": "0A.4(4b) remains open for a later spec revision"
+  },
+  "discovery": {
+    "passed": true,
+    "hits": 8,
+    "total": 8,
+    "sha256": "60ef4d68453a8d9293df7d139a1fe3c3116af3a467f0445d1dbbdf0bad3bae04",
+    "hops": {
+      "MeQueryService": 2,
+      "DefaultOperationLogAppService": 2,
+      "ClientReleaseMapper": 2,
+      "ExamRoomPrintBundleJob": 2,
+      "ExamRoomPrintBundleJobTemplate": 2,
+      "ApplyPayTemplate": 2,
+      "OrderRepository": 3,
+      "PayAccount": 1
+    },
+    "note": "Undirected walk over structural+call+framework+persistence edges. PayAccount used the one-time hop=4 allowance; measured hop=1."
+  },
+  "indexBenchmark": {
+    "sha256": "0b1dc5b0b5772edd026ab72537e37f9b13b5789af4ede3eb7bc7f07f7f1f2d27",
+    "vsN1": {
+      "lishueduColdMs": { "n1": 46450, "n2a": 51980 },
+      "lishueduIncrementalMs": { "n1": 43, "n2a": 14 },
+      "lishueduRssMiB": { "n1": 2344, "n2a": 2319 },
+      "lishueduHeapMiB": { "n1": 838, "n2a": 921 },
+      "lishueduEdges": { "n1": 117630, "n2a": 230357 }
+    },
+    "coldIncrementalDigest": true,
+    "rssRegressed": false,
+    "rssGate": "FAIL carried from N1; 512 MiB unrelaxed"
+  },
+  "n2b": "skipped-no-admission",
+  "productionLoc": {
+    "beforeN1": 39105,
+    "after": 39642,
+    "deltaFromN1": 537,
+    "fileCountAfter": 161,
+    "inventorySha256After": "a502baebdcf69240dde92007e4712d1c2e21dd55e152f8a764475af5f9d266a9"
+  },
+  "isolation": {
+    "t0": { "tests": 75, "fail": 0, "jdtlsBin": "/usr/bin/false", "executableTree": "4619caffc46baf7f98131c26cd4ccab5f856bcab" },
+    "t1": { "dist": 1085, "scripts": 185, "fail": 0, "jdtlsBin": "/usr/bin/false", "executableTree": "4619caffc46baf7f98131c26cd4ccab5f856bcab" },
+    "t2": { "isolation": "detached-local-clone", "jdtlsBin": "/usr/bin/false", "executableTree": "4619caffc46baf7f98131c26cd4ccab5f856bcab" }
+  },
+  "deferred": ["SQL_TOUCHES_TABLE (MyBatis facts have no SQL body)", "MAPSTRUCT_* (not required by N2a oracle files)"]
+}

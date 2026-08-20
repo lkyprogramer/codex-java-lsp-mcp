@@ -1,5 +1,12 @@
 # HANDOFF
 
+## JIN N2a COMPLETE（2026-08-20）
+
+分支 `codex/jin-main`。调用/Spring/持久化边已进 JavaIndex worker 图。  
+T2 discovery **8/8** 图可达（MeQueryService hop 2，PayAccount hop 1，ClientReleaseMapper hop 2）。  
+索引期 cold/增量/digest 相对 N1 未回退。RSS **FAIL 继承 N1**（lishuedu 2319 MiB，门未放宽）。N2b 跳过。未合 `main`。  
+报告：`docs/phase-jin/jin-phase-n2a-20260820.md`。下一阶段 **N3-00**。
+
 ## JIN N1 FAIL / escalate 0A.4(4b)（2026-08-20）
 
 分支 `codex/jin-main`。知识图 schema/store/snapshot/增量 **已落地**。  
