@@ -1,5 +1,12 @@
 # HANDOFF
 
+## JIN N3 COMPLETE（2026-08-20）
+
+分支 `codex/jin-main`。commit-tasks 已冻：lishuedu 753 / cipherlink 20 / exam 45。  
+第四仓 **`YunaiV/ruoyi-vue-pro`** pin `2bbe79b3`（mall 仅 8 条已换）。holdout 未看。  
+`QUERY_CONTEXT_GRAPH` mustHit **1.00 / 1.00 / 0.96**。查询 p95 20–37ms；相对默认链 −35% **UNMEASURED**。未合 `main`。  
+报告：`docs/phase-jin/jin-phase-n3-20260820.md`。下一阶段 **N4**。
+
 ## JIN N2a COMPLETE（2026-08-20）
 
 分支 `codex/jin-main`。调用/Spring/持久化边已进 JavaIndex worker 图。  

@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "jin-candidate-replay/v1",
+  "dated": "2026-08-20",
+  "passed": true,
+  "projects": [
+    {
+      "project": "lishuedu",
+      "scenarios": 10,
+      "mustHit": 32,
+      "hits": 32,
+      "rate": 1,
+      "p50Ms": 19.47137500000099,
+      "p95Ms": 37.12333299999591,
+      "fallbackRate": 0.1
+    },
+    {
+      "project": "cipherlink",
+      "scenarios": 10,
+      "mustHit": 29,
+      "hits": 29,
+      "rate": 1,
+      "p50Ms": 11.567291999999725,
+      "p95Ms": 19.98674999999639,
+      "fallbackRate": 0
+    },
+    {
+      "project": "exam-parent-v3",
+      "scenarios": 10,
+      "mustHit": 26,
+      "hits": 25,
+      "rate": 0.9615384615384616,
+      "p50Ms": 9.660832999994454,
+      "p95Ms": 20.494417000001704,
+      "fallbackRate": 0
+    }
+  ]
+}
