@@ -314,7 +314,7 @@ const JIN_COMPACT_ROLE: Record<string, string> = {
   TEST: "REL"
 };
 
-function compactFromContract(contract: ContextContract, elapsedMs: number): CompactImpact {
+function compactFromContract(contract: ContextContract, elapsedMs: number, discoveredPaths: string[] = []): CompactImpact {
   const contexts = contract.contexts.map(item => ({
     path: item.path,
     role: JIN_COMPACT_ROLE[item.role] ?? "REL",
@@ -325,6 +325,12 @@ function compactFromContract(contract: ContextContract, elapsedMs: number): Comp
       b: span.text ? Buffer.byteLength(span.text, "utf8") : Math.max(1, (span.end - span.start + 1) * 48)
     }))
   }));
+  const selected = new Set(contexts.map(item => item.path));
+  for (const path of discoveredPaths) {
+    if (selected.has(path)) continue;
+    contexts.push({ path, role: "REL", proof: [], spans: [] });
+    selected.add(path);
+  }
   const payload: CompactImpact = {
     version: 1,
     target: { file: contract.anchor.path, symbol: contract.anchor.symbol },
@@ -363,7 +369,7 @@ async function jinAttempt(javaIndex: RouterJavaIndex, cli: Cli, scenario: Scenar
   if (!graph.contract) {
     throw new Error("JAVA_LSP_ENGINE=jin expected QUERY_CONTEXT_GRAPH contract");
   }
-  const result = compactFromContract(graph.contract, elapsedMs);
+  const result = compactFromContract(graph.contract, elapsedMs, graph.bundles.map(item => item.path));
   const rawSearchPayload = Buffer.byteLength(JSON.stringify(result), "utf8");
   const readingPayload = readPlanBytes(result);
   const candidatePaths = viewImpactFiles(result);

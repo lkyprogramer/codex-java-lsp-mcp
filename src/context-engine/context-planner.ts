@@ -1,9 +1,9 @@
 // input: EvidenceBundle candidates plus an exact token budget.
 // output: Selected bundles. Greedy submodular knapsack; file count is not a binding cap.
 // pos: JIN N4-02. P0 forced; ambiguity ≤2; stop when best marginal ≤0 or next item over budget.
-import { isP0Bundle, type EvidenceBundle } from "./evidence-bundle.js";
+import { isP0Bundle, mergeSpans, type EvidenceBundle } from "./evidence-bundle.js";
 
-export const DEFAULT_TOKEN_BUDGET = 2500;
+export const DEFAULT_TOKEN_BUDGET = 6000;
 export const MAX_DISTINCT_FILES_GUARD = 20;
 export const MAX_AMBIGUITY_PER_OBLIGATION = 2;
 export const MAX_BUNDLES_GUARD = 64;
@@ -24,7 +24,13 @@ export type PlanInput = {
 };
 
 function primaryObligation(bundle: EvidenceBundle): string {
-  return bundle.closes[0] ?? bundle.id;
+  return bundle.closes[bundle.closes.length - 1] ?? bundle.id;
+}
+
+function ambiguityKey(bundle: EvidenceBundle): string {
+  const obligation = primaryObligation(bundle);
+  const step = bundle.provingPath[bundle.provingPath.length - 1];
+  return `${obligation}::${step?.fromId ?? bundle.path}`;
 }
 
 function limitAmbiguity(bundles: EvidenceBundle[]): EvidenceBundle[] {
@@ -33,7 +39,7 @@ function limitAmbiguity(bundles: EvidenceBundle[]): EvidenceBundle[] {
   const kept: EvidenceBundle[] = [];
   const counts = new Map<string, number>();
   for (const bundle of rest.sort((left, right) => left.hops - right.hops || right.confidence - left.confidence || left.id.localeCompare(right.id))) {
-    const key = primaryObligation(bundle);
+    const key = ambiguityKey(bundle);
     const used = counts.get(key) ?? 0;
     if (used >= MAX_AMBIGUITY_PER_OBLIGATION) continue;
     counts.set(key, used + 1);
@@ -59,12 +65,15 @@ function filesOf(selected: EvidenceBundle[]): Set<string> {
 function marginalGain(bundle: EvidenceBundle, selected: EvidenceBundle[]): number {
   const closed = coveredBy(selected);
   const fresh = bundle.closes.filter(id => !closed.has(id)).length;
+  const samePath = selected.some(item => item.path === bundle.path);
   const redundancy = selected.some(item => item.path === bundle.path && bundle.closes.every(id => item.closes.includes(id)))
-    ? 1
+    ? 8
     : 0;
   const diversity = rolesOf(selected).has(bundle.role) ? 0 : 0.15;
-  const saturation = selected.some(item => item.path === bundle.path) ? 0.25 : 0;
-  return fresh + diversity + bundle.confidence * 0.05 - redundancy - saturation;
+  const saturation = samePath ? 0.35 : 0;
+  const nearHop = samePath ? 0 : bundle.hops <= 0 ? 4 : bundle.hops === 1 ? 1.8 : bundle.hops === 2 ? 1.6 : bundle.hops === 3 ? 1.1 : 0.3;
+  const newPath = samePath ? 0 : 0.55;
+  return fresh + diversity + nearHop + newPath + bundle.confidence * 0.05 - redundancy - saturation;
 }
 
 function tokenCostOf(selected: EvidenceBundle[]): number {
@@ -85,6 +94,18 @@ export function planEvidenceBundles(input: PlanInput): PlanResult {
     selected.push(bundle);
   }
   let remaining = candidates.filter(bundle => !isP0Bundle(bundle));
+  const nearby = remaining
+    .filter(bundle => bundle.hops <= 2)
+    .sort((left, right) => left.hops - right.hops || left.path.localeCompare(right.path) || left.id.localeCompare(right.id));
+  for (const bundle of nearby) {
+    if (selected.length >= bundleGuard) break;
+    const used = tokenCostOf(selected);
+    if (used + bundle.tokenCost > budget) continue;
+    const files = filesOf(selected);
+    if (!files.has(bundle.path) && files.size >= fileGuard) continue;
+    selected.push(bundle);
+    remaining = remaining.filter(item => item.id !== bundle.id);
+  }
   while (remaining.length > 0 && selected.length < bundleGuard) {
     let best: EvidenceBundle | undefined;
     let bestRatio = -Infinity;
@@ -101,7 +122,8 @@ export function planEvidenceBundles(input: PlanInput): PlanResult {
     const used = tokenCostOf(selected);
     if (used + best.tokenCost > budget) {
       rejectedOverBudget.push(best);
-      break;
+      remaining = remaining.filter(item => item.id !== best.id);
+      continue;
     }
     const files = filesOf(selected);
     if (!files.has(best.path) && files.size >= fileGuard) {
@@ -111,12 +133,30 @@ export function planEvidenceBundles(input: PlanInput): PlanResult {
     selected.push(best);
     remaining = remaining.filter(item => item.id !== best.id);
   }
-  selected.sort((left, right) => left.hops - right.hops || left.path.localeCompare(right.path) || left.id.localeCompare(right.id));
+  const merged = mergeSelectedByPath(selected);
+  merged.sort((left, right) => left.hops - right.hops || left.path.localeCompare(right.path) || left.id.localeCompare(right.id));
   return {
-    selected,
+    selected: merged,
     rejectedOverBudget,
-    covered: [...coveredBy(selected)].sort(),
-    tokenCost: tokenCostOf(selected),
-    distinctFiles: filesOf(selected).size
+    covered: [...coveredBy(merged)].sort(),
+    tokenCost: tokenCostOf(merged),
+    distinctFiles: filesOf(merged).size
   };
+}
+
+function mergeSelectedByPath(selected: EvidenceBundle[]): EvidenceBundle[] {
+  const byPath = new Map<string, EvidenceBundle>();
+  for (const bundle of selected) {
+    const hit = byPath.get(bundle.path);
+    if (!hit) {
+      byPath.set(bundle.path, { ...bundle, spans: bundle.spans.map(span => ({ ...span })), closes: [...bundle.closes], proof: [...bundle.proof] });
+      continue;
+    }
+    hit.spans = mergeSpans([...hit.spans, ...bundle.spans]);
+    hit.closes = [...new Set([...hit.closes, ...bundle.closes])];
+    hit.proof = [...new Set([...hit.proof, ...bundle.proof])];
+    hit.tokenCost += bundle.tokenCost;
+    hit.hops = Math.min(hit.hops, bundle.hops);
+  }
+  return [...byPath.values()];
 }

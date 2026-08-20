@@ -37,6 +37,7 @@ test("larger token budget does not drop obligation coverage", () => {
   const bundles = fixtures();
   const small = planEvidenceBundles({ bundles, tokenBudget: 120 });
   const large = planEvidenceBundles({ bundles, tokenBudget: 400 });
+  assert.ok(large.covered.length >= small.covered.length);
   for (const id of small.covered) assert.ok(large.covered.includes(id), id);
   assert.ok(large.selected.length >= small.selected.length);
 });

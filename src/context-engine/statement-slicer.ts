@@ -25,8 +25,8 @@ export type SliceRequest = {
 };
 
 const CONTEXT_PAD = 2;
-const LARGE_METHOD_LINES = 80;
-const LARGE_METHOD_WINDOW = 40;
+const LARGE_METHOD_LINES = 120;
+const LARGE_METHOD_WINDOW = 80;
 
 function clamp(line: number, start: number, end: number): number {
   return Math.min(end, Math.max(start, line));

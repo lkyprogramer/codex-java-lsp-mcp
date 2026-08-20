@@ -114,7 +114,7 @@ export function searchContextGraph(
           hops: hop,
           estimatedTokens,
           provingPath: nextPath.map(item => ({ kind: item.kind, fromId: item.fromId, toId: item.toId })),
-          closedObligations: nextClosed
+          closedObligations: newlyClosed.length > 0 ? [...new Set(newlyClosed)] : nextClosed
         });
       }
       queue.push({ id: nextId, hop, cost, path: nextPath, closed: nextClosed });
