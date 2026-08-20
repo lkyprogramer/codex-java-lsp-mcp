@@ -4,20 +4,20 @@
   "dated": "2026-08-21",
   "decision": "FAIL",
   "mergeToMain": false,
-  "retry": "restore discovery planner after neighborhood p95 regress; budget 2000; selected-only",
+  "retry": "name hop-1 field callees on existing discovery types; extraNames stays containing-only; budget 2000; selected-only",
   "bestSoFar": {
     "axesPassed": "2/4",
-    "iteration": "restore=discovery",
-    "head": "61762fb",
-    "summary": "jin-n4-t3-restore-summary.json",
-    "note": "token+p95 GO; RangeLineRecall and holdout rReadMust FAIL. Matches discovery 08965e8 / 90245a6."
+    "iteration": "holdout-field-callees",
+    "head": "3fb6180",
+    "summary": "jin-n4-t3-holdout-summary.json",
+    "note": "token+p95 GO (p95 0.335/0.143/0.161). RangeLineRecall and holdout rReadMust FAIL. AliyunOssGateway and PaperAccessService selected; MeQueryService/SchoolQueryService/ExcelGenerator/SignedUrl DTO still missing."
   },
   "axes": {
     "tokenP50Drop25AndLeSprint0": {
       "result": "GO",
       "oldP50": { "lishuedu": 3393, "cipherlink": 3186, "exam-parent-v3": 2830 },
-      "newP50": { "lishuedu": 1775, "cipherlink": 1671, "exam-parent-v3": 1855 },
-      "drop": { "lishuedu": 0.477, "cipherlink": 0.476, "exam-parent-v3": 0.345 },
+      "newP50": { "lishuedu": 1822, "cipherlink": 1671, "exam-parent-v3": 1853 },
+      "drop": { "lishuedu": 0.463, "cipherlink": 0.476, "exam-parent-v3": 0.345 },
       "sprint0P50": { "lishuedu": 4308, "cipherlink": 3606, "exam-parent-v3": 3395 }
     },
     "rangeLineRecallNoRegress": {
@@ -27,44 +27,42 @@
     },
     "holdoutRReadMustMean075": {
       "result": "FAIL",
-      "new": { "lishuedu": 0.375, "cipherlink": 0.225, "exam-parent-v3": 0.3 },
-      "mean": 0.3
+      "new": { "lishuedu": 0.375, "cipherlink": 0.225, "exam-parent-v3": 0.2 },
+      "mean": 0.267
     },
     "p95Section163": {
       "result": "GO",
-      "p95Ratio": { "lishuedu": 0.327, "cipherlink": 0.135, "exam-parent-v3": 0.157 },
-      "note": "Pairing p95Ratio vs current compact: all-repo -35%. Restored after neighborhood 1.617."
+      "p95Ratio": { "lishuedu": 0.335, "cipherlink": 0.143, "exam-parent-v3": 0.161 },
+      "note": "Pairing p95Ratio vs current compact: all-repo -35%. Global extraNames call-name dump regresses lishuedu to 1.2-1.7 and is rejected."
     },
     "passedCount": "2/4"
-  },
-  "failedIteration": {
-    "name": "neighborhood",
-    "head": "4bff986",
-    "summary": "jin-n4-t3-nb-summary.json",
-    "passedCount": "1/4",
-    "p95Ratio": { "lishuedu": 1.617, "cipherlink": 0.308, "exam-parent-v3": 0.474 }
   },
   "t3": {
     "comparisonPolicy": "env-locked-same-tree",
     "newTreatment": { "JAVA_LSP_ENGINE": "jin" },
     "verifierPassed": false,
-    "summarySha256": "2dd888edd856c58a1f3c9e7619bb7b9d9d75972b84259263e3ac83470fe48f5f",
-    "head": "61762fb",
-    "executableTree": "fe0a1755597c4f02f0a2286ebb01946121c4cf86",
-    "scratch": "jin-n4-t3-disc-restore",
-    "loadavg1": 4.52,
+    "summarySha256": "2f1b4d6638f30e6a1461d63d1dafce2ff93b7b9de548739f3f10b9c10a105be8",
+    "head": "3fb6180",
+    "executableTree": "147bd5c0a738528151e0740f2b7d49f2ecd06568",
+    "scratch": "jin-n4-t3-holdout3",
+    "loadavg1": 5.44,
     "cells": 18
   },
   "isolation": {
     "t0": { "plannerProperties": "pass", "jdtlsBin": "/usr/bin/false" },
-    "t1": { "dist": 1118, "scripts": 190, "fail": 0, "jdtlsBin": "/usr/bin/false", "executableTree": "fe0a1755597c4f02f0a2286ebb01946121c4cf86" }
+    "t1": { "dist": 1122, "scripts": 190, "fail": 0, "jdtlsBin": "/usr/bin/false", "executableTree": "147bd5c0a738528151e0740f2b7d49f2ecd06568" }
+  },
+  "keyScenarios": {
+    "storage-signed-url": { "files": 8, "selected": ["AliyunOssGateway", "StubStorageGateway"], "missing": ["StorageSignedUrlCommand", "StorageSignedUrlResult"], "rangeLineRecall": 1.0 },
+    "exam-score-export-cross-module-holdout": { "files": 1, "selected": ["ExamScoreExportAppService"], "missing": ["SchoolQueryService", "ExamScoreExportExcelGenerator"] },
+    "paper-task-claim-iam-holdout": { "files": 3, "selected": ["PaperTaskCommandAppService", "PaperAccessService", "PaperTaskAppService"], "missing": ["MeQueryService"] }
   },
   "failureDisposition": {
-    "clock": "restore T3 after neighborhood p95 regress; 2-week window started 2026-08-20, not expired; stay on N4",
+    "clock": "holdout field-callee T3; 2-week window started 2026-08-20, not expired; stay on N4",
     "axesPassed": 2,
     "bestAxesPassed": 2,
-    "clause": "15A.6 JIN-N4-04: 2 周内未全达 → 二元裁决：达标 ≥ 3/4 轴则记 PARTIAL 并进 N5（live 数据可能改判），< 3/4 轴 → 停止 JIN 主链开发，写 postmortem，escalate（属方案核心假设失败）。",
-    "action": "stay on N4; do not enter N5; do not merge main; next: holdout files + RangeLineRecall without breaking token or p95",
+    "clause": "15A.6 JIN-N4-04: 2 周内未全达 → 二元裁决：达标 ≥ 3/4 轴则记 PARTIAL 并进 N5，< 3/4 轴 → 停止 JIN 主链开发。",
+    "action": "stay on N4; do not enter N5; do not merge main; next: hop-2 MeQueryService / intra-file SchoolQueryService without global extraNames or p95 regress",
     "escalate": "deferred until window expires; RSS 512 MiB remains open 0A.4(4b) and is not relaxed"
   }
 }

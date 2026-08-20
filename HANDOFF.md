@@ -1,11 +1,17 @@
 # HANDOFF
 
-## JIN 停在 N4（restore 2/4；时钟未到期，2026-08-21）
+## JIN 停在 N4（holdout 字段调用名 2/4；时钟未到期，2026-08-21）
 
-15A.6 JIN-N4-04：**2 周窗口到期**才做二元裁决（≥ 3/4 PARTIAL→N5；< 3/4 停主链）。窗口从 2026-08-20 起算，尚未到期。  
-neighborhood（`4bff986`）lishuedu p95Ratio 1.617 把 2/4 打成 1/4。`61762fb` 收回 discovery planner。restore T3 **2/4**：token **GO**（1775/1671/1855）；p95 **GO**（0.327/0.135/0.157）；RangeLineRecall **FAIL**；holdout rReadMust 均值 0.300 **FAIL**。  
-**不进 N5、不合 `main`。** 下一步：在不破 token/p95 的前提下补 holdout 文件与 Range。生产 MCP 不读 `JAVA_LSP_ENGINE`。不得发明 TaskSuccess。  
-报告：`docs/phase-jin/jin-phase-n4-20260820.md`。摘要 `jin-n4-t3-restore-summary.json`。code `61762fb`。
+15A.6 JIN-N4-04：**2 周窗口到期**才做二元裁决。窗口从 2026-08-20 起算，尚未到期。  
+本轮 T3 **2/4**：token **GO**（1822/1671/1853）；p95 **GO**（0.335/0.143/0.161）；RangeLineRecall **FAIL**；holdout rReadMust 均值 0.267 **FAIL**。全局 extraNames 灌 call 名会把 lishuedu p95 打到 1.2–1.7，已拒绝。  
+`storage-signed-url` 选中 AliyunOssGateway（RangeLine=1.0），仍缺 SignedUrl DTO。`paper-task` 选中 PaperAccessService，仍缺 MeQueryService。`exam-score-export` 仍 1 文件。  
+**不进 N5、不合 `main`。** 生产 MCP 不读 `JAVA_LSP_ENGINE`。不得发明 TaskSuccess。  
+报告：`docs/phase-jin/jin-phase-n4-20260820.md`。摘要 `jin-n4-t3-holdout-summary.json`。code `3fb6180`。
+
+## JIN N4 holdout 字段调用名 2/4（2026-08-21）
+
+分支 `codex/jin-main`。在 discovery 类型集合上给 hop-0 字段调用挂 member 名，extraNames 仍只含 containing 方法。T3 **2/4**。T1 1122+190 fail 0。  
+报告：`docs/phase-jin/jin-phase-n4-20260820.md`。摘要 `jin-n4-t3-holdout-summary.json`。
 
 ## JIN N4 restore 2/4（2026-08-21）
 
