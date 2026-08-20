@@ -4,19 +4,19 @@
   "dated": "2026-08-20",
   "decision": "FAIL",
   "mergeToMain": false,
-  "retry": "selected-spans-only + budget-greedy",
+  "retry": "near-greedy-then-far + whole-method spans + selected-only wire",
   "axes": {
     "tokenP50Drop25AndLeSprint0": {
       "result": "GO",
       "oldP50": { "lishuedu": 3393, "cipherlink": 3186, "exam-parent-v3": 2830 },
-      "newP50": { "lishuedu": 1305, "cipherlink": 1563, "exam-parent-v3": 1279 },
-      "drop": { "lishuedu": 0.615, "cipherlink": 0.509, "exam-parent-v3": 0.548 },
+      "newP50": { "lishuedu": 1401, "cipherlink": 1583, "exam-parent-v3": 1519 },
+      "drop": { "lishuedu": 0.587, "cipherlink": 0.503, "exam-parent-v3": 0.463 },
       "sprint0P50": { "lishuedu": 4308, "cipherlink": 3606, "exam-parent-v3": 3395 }
     },
     "rangeLineRecallNoRegress": {
       "result": "FAIL",
       "old": { "lishuedu": 0.8419, "cipherlink": 0.875, "exam-parent-v3": 0.8525 },
-      "new": { "lishuedu": 0.351, "cipherlink": 0.85, "exam-parent-v3": 0.4575 }
+      "new": { "lishuedu": 0.351, "cipherlink": 0.85, "exam-parent-v3": 0.4825 }
     },
     "holdoutRReadMustMean075": {
       "result": "FAIL",
@@ -25,36 +25,28 @@
     },
     "p95Section163": {
       "result": "FAIL",
-      "p95Ratio": { "lishuedu": 3.6, "cipherlink": 0.36, "exam-parent-v3": 0.515 },
-      "note": "cipherlink/exam faster; lishuedu 3.60x slower. Not all-repo -35%."
+      "p95Ratio": { "lishuedu": 3.383, "cipherlink": 0.244, "exam-parent-v3": 0.273 },
+      "note": "cipherlink/exam faster than -35%; lishuedu 3.38x slower."
     },
     "passedCount": "1/4"
   },
-  "firstT3": {
-    "passedCount": "0/4",
-    "newP50": { "lishuedu": 35441, "cipherlink": 20718, "exam-parent-v3": 21888 },
-    "summarySha256": "9376aa952b1bc4734e390e3f6aae662e55d658323fbcb1e8ddd007dc1f925344",
-    "head": "854cc5ea71ad2ae50a0b71df04a73d6acaea9fb9"
-  },
   "t3": {
-    "outputDir": "scratch jin-n4-t3-retry (isolated matrix workspace)",
     "comparisonPolicy": "env-locked-same-tree",
-    "oldTreatment": {},
     "newTreatment": { "JAVA_LSP_ENGINE": "jin" },
     "verifierPassed": false,
-    "summarySha256": "78cab579e43b5679918f85a591b97cdf3d60e9ca69c9e4e148b2e72856a4d0a3",
-    "head": "88533d5818996529b794c64b84672091be492620",
-    "executableTree": "4f7c3b0ea6fe3a6b89cca310468edbd163c1ce30",
-    "loadavg1": 13.53
+    "summarySha256": "c46d811772533e34b022a06828687fe3d1a9b5b3b96dd87819faef6b3904c3ce",
+    "head": "b6f0cbbbe8a458f34974701d33c2c9bf33d9bc1f",
+    "executableTree": "889dc2895f8007c0e7f9cf2c792f11e32a7b0476",
+    "loadavg1": 13.76
   },
   "isolation": {
-    "t0": { "plannerProperties": "pass", "jdtlsBin": "/usr/bin/false", "targeted": "15 pass 0 fail" },
-    "t1": { "matrixEmbeddedScripts": 190, "fail": 0, "jdtlsBin": "/usr/bin/false" }
+    "t0": { "plannerProperties": "pass", "jdtlsBin": "/usr/bin/false" },
+    "t1": { "dist": 1110, "scripts": 190, "fail": 0, "jdtlsBin": "/usr/bin/false", "executableTree": "889dc2895f8007c0e7f9cf2c792f11e32a7b0476" }
   },
   "failureDisposition": {
-    "clock": "second T3, 2-week N4 iteration window not expired",
+    "clock": "third T3, 2-week N4 window not expired",
     "axesPassed": 1,
-    "action": "stay on N4; do not enter N5; do not stop the JIN branch yet",
-    "next": "keep selected-only wire; raise mustHit packing quality without hop<=2 full fill or empty discovery extras"
+    "action": "stay on N4; do not enter N5",
+    "next": "keep selected-only wire; select more mustHit files under budget without hop<=2 all-admit"
   }
 }
