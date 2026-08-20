@@ -110,6 +110,20 @@ test("near hop-1 that fits is packed before a cheaper hop-3 file", () => {
   assert.ok(planned.tokenCost <= 55);
 });
 
+test("every in-budget hop-1 file is selected rather than skipped by ratio", () => {
+  const planned = planEvidenceBundles({
+    bundles: [
+      bundle({ id: "a", path: "src/A.java", role: "ANCHOR", closes: ["O1"], tokenCost: 10, hops: 0 }),
+      bundle({ id: "n1", path: "src/N1.java", role: "CALLEE", closes: ["O2"], tokenCost: 20, hops: 1 }),
+      bundle({ id: "n2", path: "src/N2.java", role: "CALLER", closes: ["O3"], tokenCost: 20, hops: 1 }),
+      bundle({ id: "n3", path: "src/N3.java", role: "IMPLEMENTATION", closes: ["O4"], tokenCost: 20, hops: 1 })
+    ],
+    tokenBudget: 80
+  });
+  assert.deepEqual(planned.selected.map(item => item.id).sort(), ["a", "n1", "n2", "n3"]);
+  assert.ok(planned.tokenCost <= 80);
+});
+
 test("duplicate path saturates instead of paying twice for the same closes", () => {
   const planned = planEvidenceBundles({
     bundles: [

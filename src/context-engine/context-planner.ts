@@ -1,6 +1,6 @@
 // input: EvidenceBundle candidates plus an exact token budget.
-// output: Selected bundles. Greedy submodular knapsack; file count is not a binding cap.
-// pos: JIN N4-02. P0 forced; ambiguity ≤2; stop when best marginal ≤0 or next item over budget.
+// output: Selected bundles. Hop-ordered fill so in-budget near files are kept; file count is not a binding cap.
+// pos: JIN N4-02. P0 forced; ambiguity ≤2; skip over-budget items; no hop≤2 all-admit.
 import { isP0Bundle, mergeSpans, type EvidenceBundle } from "./evidence-bundle.js";
 
 export const DEFAULT_TOKEN_BUDGET = 3200;
@@ -80,67 +80,31 @@ function tokenCostOf(selected: EvidenceBundle[]): number {
   return selected.reduce((sum, bundle) => sum + bundle.tokenCost, 0);
 }
 
-function packingCost(tokenCost: number): number {
-  return Math.max(1, Math.min(tokenCost, 96) + tokenCost * 0.08);
-}
-
-function pickGreedy(
-  remaining: EvidenceBundle[],
-  selected: EvidenceBundle[],
-  rejectedOverBudget: EvidenceBundle[],
-  budget: number,
-  fileGuard: number,
-  bundleGuard: number
-): EvidenceBundle[] {
-  let pool = remaining;
-  while (pool.length > 0 && selected.length < bundleGuard) {
-    let best: EvidenceBundle | undefined;
-    let bestRatio = -Infinity;
-    for (const bundle of pool) {
-      const gain = marginalGain(bundle, selected);
-      const ratio = gain / packingCost(bundle.tokenCost);
-      if (gain <= 0) continue;
-      if (ratio > bestRatio || (ratio === bestRatio && best && bundle.id.localeCompare(best.id) < 0)) {
-        best = bundle;
-        bestRatio = ratio;
-      }
-    }
-    if (!best || bestRatio <= 0) break;
-    const used = tokenCostOf(selected);
-    if (used + best.tokenCost > budget) {
-      rejectedOverBudget.push(best);
-      pool = pool.filter(item => item.id !== best.id);
-      continue;
-    }
-    const files = filesOf(selected);
-    if (!files.has(best.path) && files.size >= fileGuard) {
-      pool = pool.filter(item => item.id !== best.id);
-      continue;
-    }
-    selected.push(best);
-    pool = pool.filter(item => item.id !== best.id);
-  }
-  return pool;
-}
-
 export function planEvidenceBundles(input: PlanInput): PlanResult {
   const budget = Math.max(1, input.tokenBudget);
   const fileGuard = input.maxDistinctFiles ?? MAX_DISTINCT_FILES_GUARD;
   const bundleGuard = input.maxBundles ?? MAX_BUNDLES_GUARD;
   const candidates = limitAmbiguity(input.bundles)
     .slice()
-    .sort((left, right) => left.id.localeCompare(right.id));
+    .sort((left, right) => left.hops - right.hops || left.path.localeCompare(right.path) || left.id.localeCompare(right.id));
   const selected: EvidenceBundle[] = [];
   const rejectedOverBudget: EvidenceBundle[] = [];
-  const p0 = candidates.filter(isP0Bundle).sort((left, right) => left.path.localeCompare(right.path) || left.id.localeCompare(right.id));
+  const p0 = candidates.filter(isP0Bundle);
   for (const bundle of p0) {
     selected.push(bundle);
   }
-  let remaining = candidates.filter(bundle => !isP0Bundle(bundle));
-  const near = remaining.filter(bundle => bundle.hops <= 2);
-  const far = remaining.filter(bundle => bundle.hops > 2);
-  remaining = pickGreedy(near, selected, rejectedOverBudget, budget, fileGuard, bundleGuard);
-  remaining = pickGreedy([...remaining, ...far], selected, rejectedOverBudget, budget, fileGuard, bundleGuard);
+  for (const bundle of candidates.filter(item => !isP0Bundle(item))) {
+    if (selected.length >= bundleGuard) break;
+    if (marginalGain(bundle, selected) <= 0) continue;
+    const used = tokenCostOf(selected);
+    if (used + bundle.tokenCost > budget) {
+      rejectedOverBudget.push(bundle);
+      continue;
+    }
+    const files = filesOf(selected);
+    if (!files.has(bundle.path) && files.size >= fileGuard) continue;
+    selected.push(bundle);
+  }
   const merged = mergeSelectedByPath(selected);
   merged.sort((left, right) => left.hops - right.hops || left.path.localeCompare(right.path) || left.id.localeCompare(right.id));
   return {
