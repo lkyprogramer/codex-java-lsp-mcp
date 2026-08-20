@@ -94,6 +94,20 @@ type JavaIndexRequestOperation =
   | { id: number; type: "QUERY_ENTITY_SEARCH"; task: string; limit?: number }
   | { id: number; type: "QUERY_GRAPH_DIGEST" }
   | { id: number; type: "QUERY_GRAPH_REACHABLE"; fromRelativePath: string; maxHops: number }
+  | {
+      id: number;
+      type: "QUERY_CONTEXT_GRAPH";
+      fromRelativePath: string;
+      intent: string;
+      mode?: "search" | "navigate";
+      direction?: "callers" | "callees";
+      closure?: "persistence" | "framework";
+      maxHops?: number;
+      maxExpansions?: number;
+      tokenBudget?: number;
+      taskText?: string;
+      profile?: string;
+    }
   | { id: number; type: "STATUS" }
   | { id: number; type: "FLUSH" }
   | { id: number; type: "CLOSE" };
@@ -932,6 +946,61 @@ export function validateGraphReachable(value: unknown): GraphReachable {
     hops[path] = hop;
   }
   return { files, hops };
+}
+
+export type ContextGraphResult = {
+  resolvedIntent: string;
+  coverage: "COMPLETE" | "PARTIAL";
+  bundles: Array<{
+    path: string;
+    hops: number;
+    estimatedTokens: number;
+    provingPath: Array<{ kind: string; fromId: string; toId: string }>;
+    closedObligations: string[];
+  }>;
+  unresolved: Array<{ id: string; role: string }>;
+  metrics: { expansions: number; hops: number; estimatedTokens: number };
+};
+
+export function validateContextGraphResult(value: unknown): ContextGraphResult {
+  const context = "ContextGraphResult";
+  const source = record(value, context);
+  if (!isString(source.resolvedIntent)) invalid(context, "resolvedIntent");
+  if (source.coverage !== "COMPLETE" && source.coverage !== "PARTIAL") invalid(context, "coverage");
+  const bundles = array(source.bundles, `${context}.bundles`).map((entry, index) => {
+    const item = record(entry, `${context}.bundles[${index}]`);
+    if (!isString(item.path) || !isNumber(item.hops) || !isNumber(item.estimatedTokens)) invalid(`${context}.bundles`, String(index));
+    const provingPath = array(item.provingPath, `${context}.bundles[${index}].provingPath`).map((step, stepIndex) => {
+      const edge = record(step, `${context}.bundles[${index}].provingPath[${stepIndex}]`);
+      if (!isString(edge.kind) || !isString(edge.fromId) || !isString(edge.toId)) invalid(`${context}.bundles[${index}].provingPath`, String(stepIndex));
+      return { kind: edge.kind, fromId: edge.fromId, toId: edge.toId };
+    });
+    const closedObligations = array(item.closedObligations, `${context}.bundles[${index}].closedObligations`).map(value => {
+      if (!isString(value)) invalid(`${context}.bundles[${index}].closedObligations`, "entry");
+      return value;
+    });
+    return {
+      path: item.path,
+      hops: item.hops,
+      estimatedTokens: item.estimatedTokens,
+      provingPath,
+      closedObligations
+    };
+  });
+  const unresolved = array(source.unresolved, `${context}.unresolved`).map((entry, index) => {
+    const item = record(entry, `${context}.unresolved[${index}]`);
+    if (!isString(item.id) || !isString(item.role)) invalid(`${context}.unresolved`, String(index));
+    return { id: item.id, role: item.role };
+  });
+  const metrics = record(source.metrics, `${context}.metrics`);
+  if (!isNumber(metrics.expansions) || !isNumber(metrics.hops) || !isNumber(metrics.estimatedTokens)) invalid(context, "metrics");
+  return {
+    resolvedIntent: source.resolvedIntent,
+    coverage: source.coverage,
+    bundles,
+    unresolved,
+    metrics: { expansions: metrics.expansions, hops: metrics.hops, estimatedTokens: metrics.estimatedTokens }
+  };
 }
 
 export function validateEntitySearchHits(value: unknown): EntityHit[] {

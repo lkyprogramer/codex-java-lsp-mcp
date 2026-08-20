@@ -30,6 +30,7 @@ import {
   validateEntitySearchHits,
   validateGraphDigest,
   validateGraphReachable,
+  validateContextGraphResult,
   JAVA_INDEX_CLOSE_GRACE_MS,
   type JavaIndexCommand,
   type JavaIndexRefreshPriority,
@@ -38,6 +39,7 @@ import {
   type JavaIndexWorktreeIdentity,
   type GraphDigest,
   type GraphReachable,
+  type ContextGraphResult,
   type MyBatisResourceByNamespaceBatch
 } from "./worker-protocol.js";
 import { ENTITY_SEARCH_DEFAULT_LIMIT, type EntityHit } from "./entity-search.js";
@@ -383,6 +385,25 @@ export class JavaIndexClient {
       validateGraphReachable,
       requestOptions
     );
+  }
+
+  async queryContextGraph(
+    input: {
+      fromRelativePath: string;
+      intent: string;
+      mode?: "search" | "navigate";
+      direction?: "callers" | "callees";
+      closure?: "persistence" | "framework";
+      maxHops?: number;
+      maxExpansions?: number;
+      tokenBudget?: number;
+      taskText?: string;
+      profile?: string;
+    },
+    requestOptions: JavaIndexRequestOptions = {}
+  ): Promise<ContextGraphResult> {
+    await this.ensureOpen(requestOptions);
+    return this.request({ type: "QUERY_CONTEXT_GRAPH", ...input }, validateContextGraphResult, requestOptions);
   }
 
   async queryEntitySearch(

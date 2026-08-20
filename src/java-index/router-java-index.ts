@@ -15,7 +15,7 @@ import {
   type JavaIndexOpenOptions,
   type JavaIndexRequestOptions
 } from "./java-index-client.js";
-import type { GraphDigest, GraphReachable, JavaIndexRefreshPriority } from "./worker-protocol.js";
+import type { ContextGraphResult, GraphDigest, GraphReachable, JavaIndexRefreshPriority } from "./worker-protocol.js";
 import { ENTITY_SEARCH_DEFAULT_LIMIT, type EntityHit } from "./entity-search.js";
 import type {
   AnchorFacts,
@@ -388,6 +388,22 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
   async queryGraphReachable(fromRelativePath: string, maxHops: number): Promise<GraphReachable> {
     await this.ensureOpened(this.generation);
     return this.client.queryGraphReachable(fromRelativePath, maxHops, this.currentRequestOptions());
+  }
+
+  async queryContextGraph(input: {
+    fromRelativePath: string;
+    intent: string;
+    mode?: "search" | "navigate";
+    direction?: "callers" | "callees";
+    closure?: "persistence" | "framework";
+    maxHops?: number;
+    maxExpansions?: number;
+    tokenBudget?: number;
+    taskText?: string;
+    profile?: string;
+  }): Promise<ContextGraphResult> {
+    await this.ensureOpened(this.generation);
+    return this.client.queryContextGraph(input, this.currentRequestOptions());
   }
 
   async queryEntitySearch(task: string, limit = ENTITY_SEARCH_DEFAULT_LIMIT): Promise<EntityHit[]> {

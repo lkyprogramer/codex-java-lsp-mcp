@@ -7,6 +7,10 @@ import type { JavaIndexStore } from "./index-store.js";
 import { ENTITY_SEARCH_DEFAULT_LIMIT, ENTITY_SEARCH_MAX_LIMIT, type EntitySearchIndex } from "./entity-search.js";
 import type { KnowledgeGraphStore } from "../java-knowledge/graph-store.js";
 import { reachableFiles } from "../java-knowledge/graph-walk.js";
+import { compileIntent } from "../context-engine/intent-compiler.js";
+import { navigateGraph, searchContextGraph } from "../context-engine/graph-search.js";
+import { lexicalFallbackHits, shouldLexicalFallback } from "../context-engine/lexical-fallback.js";
+import { shouldEscalateToJdt } from "../context-engine/semantic-escalation.js";
 
 export type QueryHandlerDeps = {
   store?: JavaIndexStore;
@@ -137,6 +141,39 @@ export async function handleQueryCommand(request: JavaIndexRequest, deps: QueryH
       }
       const maxHops = Math.min(8, Math.max(0, Math.floor(request.maxHops)));
       deps.respond({ id: request.id, ok: true, value: reachableFiles(graph, relativePath, maxHops) });
+      return true;
+    }
+    case "QUERY_CONTEXT_GRAPH": {
+      const graph = deps.readyKnowledgeGraph();
+      let relativePath = request.fromRelativePath;
+      try {
+        relativePath = deps.deriveSourceLayout(request.fromRelativePath).relativePath;
+      } catch {
+        relativePath = request.fromRelativePath.replaceAll("\\", "/");
+      }
+      const compiled = compileIntent(request.intent, { taskText: request.taskText, profile: request.profile, relativePath });
+      const result = request.mode === "navigate"
+        ? navigateGraph(graph, relativePath, { direction: request.direction, closure: request.closure, maxHops: request.maxHops })
+        : searchContextGraph(graph, relativePath, compiled, {
+          maxHops: request.maxHops,
+          maxExpansions: request.maxExpansions,
+          tokenBudget: request.tokenBudget
+        });
+      if (request.mode !== "navigate" && shouldLexicalFallback(result, request.taskText ?? "")) {
+        const hits = lexicalFallbackHits(deps.readyEntitySearch(), request.taskText ?? "", 5);
+        for (const hit of hits) {
+          if (result.bundles.some(bundle => bundle.path === hit.relativePath)) continue;
+          result.bundles.push({
+            path: hit.relativePath,
+            hops: result.metrics.hops + 1,
+            estimatedTokens: 48,
+            provingPath: [],
+            closedObligations: []
+          });
+        }
+      }
+      shouldEscalateToJdt({ unresolvedRoles: result.unresolved.map(item => item.role), jdtlsBin: process.env.JDTLS_BIN });
+      deps.respond({ id: request.id, ok: true, value: result });
       return true;
     }
     case "QUERY_ENTITY_SEARCH": {
