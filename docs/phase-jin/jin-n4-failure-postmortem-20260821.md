@@ -1,6 +1,6 @@
 # JIN N4 失败 postmortem（2026-08-21）
 
-**状态（2026-08-21）**：本文是过早套用 JIN-N4-04 二元裁决的记录（`5b6f2aa`）。2 周窗口从 2026-08-20 起算，尚未到期。neighborhood T3 为 **1/4**（token GO；p95/Range/holdout FAIL），N4 最好仍是 discovery **2/4**。主链停在 N4，不进 N5，不合 `main`。到期后再做 ≥3/4 PARTIAL / <3/4 停链的二元裁决。
+**状态（2026-08-21）**：本文是过早套用 JIN-N4-04 二元裁决的记录（`5b6f2aa`）。2 周窗口从 2026-08-20 起算，尚未到期。neighborhood T3 为 **1/4**（lishuedu p95Ratio 1.617），已用 `61762fb` 收回 discovery planner。restore T3 为 **2/4**（token+p95 GO）。主链停在 N4，不进 N5，不合 `main`。到期后再做 ≥3/4 PARTIAL / <3/4 停链的二元裁决。
 
 ## 条款（窗口到期才停主链；当前禁止 N5）
 
@@ -36,4 +36,4 @@ N4 最好 T3 四轴 **2/4**（discovery：token GO、p95 GO、RangeLineRecall FA
 - **N5 未开工**：`java_context` 与三臂 live A/B 不开工。N5 准入是 N4 ≥3/4 PARTIAL，或 2 周窗口到期后的二元裁决。`5b6f2aa` 的 SKIP_FAIL 过早。
 - **N6 未开工**：不删旧链、不合 `main`。N6 硬门含 §16.3 全过 + 第四仓 + leave-one-repo-out。
 
-回滚点：分支 `codex/jin-main`。N4 最好证据仍是 discovery closeout `90245a6` / code `08965e8`。neighborhood code `4bff986`。不回滚已入库的 N0–N3 证据。
+回滚点：分支 `codex/jin-main`。N4 最好证据是 restore `61762fb` / discovery `08965e8`。neighborhood `4bff986` 已回退。不回滚已入库的 N0–N3 证据。

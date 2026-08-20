@@ -4,27 +4,26 @@
   "dated": "2026-08-21",
   "decision": "FAIL",
   "mergeToMain": false,
-  "retry": "method-body callees + hop-2 field types; proving-path member names in toId; hop-ordered extraNames; budget 2000; selected-only",
+  "retry": "restore discovery planner after neighborhood p95 regress; budget 2000; selected-only",
   "bestSoFar": {
     "axesPassed": "2/4",
-    "iteration": "discovery",
-    "head": "08965e8",
-    "closeout": "90245a6",
-    "summary": "jin-n4-t3-disc-summary.json",
-    "note": "token+p95 GO; RangeLineRecall and holdout rReadMust FAIL"
+    "iteration": "restore=discovery",
+    "head": "61762fb",
+    "summary": "jin-n4-t3-restore-summary.json",
+    "note": "token+p95 GO; RangeLineRecall and holdout rReadMust FAIL. Matches discovery 08965e8 / 90245a6."
   },
   "axes": {
     "tokenP50Drop25AndLeSprint0": {
       "result": "GO",
       "oldP50": { "lishuedu": 3393, "cipherlink": 3186, "exam-parent-v3": 2830 },
-      "newP50": { "lishuedu": 1844, "cipherlink": 1671, "exam-parent-v3": 2013 },
-      "drop": { "lishuedu": 0.457, "cipherlink": 0.476, "exam-parent-v3": 0.289 },
+      "newP50": { "lishuedu": 1775, "cipherlink": 1671, "exam-parent-v3": 1855 },
+      "drop": { "lishuedu": 0.477, "cipherlink": 0.476, "exam-parent-v3": 0.345 },
       "sprint0P50": { "lishuedu": 4308, "cipherlink": 3606, "exam-parent-v3": 3395 }
     },
     "rangeLineRecallNoRegress": {
       "result": "FAIL",
       "old": { "lishuedu": 0.8419, "cipherlink": 0.875, "exam-parent-v3": 0.8525 },
-      "new": { "lishuedu": 0.4819, "cipherlink": 0.85, "exam-parent-v3": 0.5575 }
+      "new": { "lishuedu": 0.5819, "cipherlink": 0.85, "exam-parent-v3": 0.5575 }
     },
     "holdoutRReadMustMean075": {
       "result": "FAIL",
@@ -32,38 +31,40 @@
       "mean": 0.3
     },
     "p95Section163": {
-      "result": "FAIL",
-      "p95Ratio": { "lishuedu": 1.617, "cipherlink": 0.308, "exam-parent-v3": 0.474 },
-      "note": "Pairing p95Ratio vs current compact; all-repo -35% required. lishuedu 1.617 fails the axis."
+      "result": "GO",
+      "p95Ratio": { "lishuedu": 0.327, "cipherlink": 0.135, "exam-parent-v3": 0.157 },
+      "note": "Pairing p95Ratio vs current compact: all-repo -35%. Restored after neighborhood 1.617."
     },
-    "passedCount": "1/4"
+    "passedCount": "2/4"
+  },
+  "failedIteration": {
+    "name": "neighborhood",
+    "head": "4bff986",
+    "summary": "jin-n4-t3-nb-summary.json",
+    "passedCount": "1/4",
+    "p95Ratio": { "lishuedu": 1.617, "cipherlink": 0.308, "exam-parent-v3": 0.474 }
   },
   "t3": {
     "comparisonPolicy": "env-locked-same-tree",
     "newTreatment": { "JAVA_LSP_ENGINE": "jin" },
     "verifierPassed": false,
-    "summarySha256": "25b06b77f0c787994ae9310c29a2a4d78143fc14d567193c8f89f83f6a1e931c",
-    "head": "4bff986",
-    "executableTree": "56594876c63822077f28492683909baaa4c0cba1",
-    "scratch": "jin-n4-t3-nb5b",
-    "loadavg1": 5.81,
+    "summarySha256": "2dd888edd856c58a1f3c9e7619bb7b9d9d75972b84259263e3ac83470fe48f5f",
+    "head": "61762fb",
+    "executableTree": "fe0a1755597c4f02f0a2286ebb01946121c4cf86",
+    "scratch": "jin-n4-t3-disc-restore",
+    "loadavg1": 4.52,
     "cells": 18
   },
   "isolation": {
     "t0": { "plannerProperties": "pass", "jdtlsBin": "/usr/bin/false" },
-    "t1": { "dist": 1120, "scripts": 190, "fail": 0, "jdtlsBin": "/usr/bin/false", "executableTree": "56594876c63822077f28492683909baaa4c0cba1" }
-  },
-  "keyScenarios": {
-    "storage-signed-url": { "files": 8, "missing": ["AliyunOssGateway", "StorageSignedUrlCommand", "StorageSignedUrlResult"] },
-    "exam-score-export-cross-module-holdout": { "files": 1, "selected": ["ExamScoreExportAppService"], "missing": ["ExamScoreExportExcelGenerator", "SchoolQueryService"] },
-    "paper-task-claim-iam-holdout": { "files": 3, "selected": ["PaperTaskCommandAppService", "PaperAccessService", "PaperTaskAppService"], "missing": ["MeQueryService"] }
+    "t1": { "dist": 1118, "scripts": 190, "fail": 0, "jdtlsBin": "/usr/bin/false", "executableTree": "fe0a1755597c4f02f0a2286ebb01946121c4cf86" }
   },
   "failureDisposition": {
-    "clock": "seventh T3 (neighborhood); 2-week window started 2026-08-20, not expired; stay on N4",
-    "axesPassed": 1,
+    "clock": "restore T3 after neighborhood p95 regress; 2-week window started 2026-08-20, not expired; stay on N4",
+    "axesPassed": 2,
     "bestAxesPassed": 2,
     "clause": "15A.6 JIN-N4-04: 2 周内未全达 → 二元裁决：达标 ≥ 3/4 轴则记 PARTIAL 并进 N5（live 数据可能改判），< 3/4 轴 → 停止 JIN 主链开发，写 postmortem，escalate（属方案核心假设失败）。",
-    "action": "stay on N4; do not enter N5; do not merge main; premature 5b6f2aa N5/N6 SKIP_FAIL superseded until the 2-week binary",
+    "action": "stay on N4; do not enter N5; do not merge main; next: holdout files + RangeLineRecall without breaking token or p95",
     "escalate": "deferred until window expires; RSS 512 MiB remains open 0A.4(4b) and is not relaxed"
   }
 }
