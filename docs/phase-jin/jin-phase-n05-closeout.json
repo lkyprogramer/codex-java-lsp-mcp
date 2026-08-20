@@ -1,0 +1,55 @@
+{
+  "schemaVersion": "jin-phase-n05-closeout/v1",
+  "phase": "N0.5",
+  "dated": "2026-08-20",
+  "decision": "COMPLETE",
+  "mergeToMain": false,
+  "old": {
+    "label": "N0 export",
+    "commit": "09772b29b3caea6bc9fd96685230746a8e8b601a",
+    "executableTree": "fc39b9cde6b58f6f9fe67c9abc3ab0fbd14b619a"
+  },
+  "new": {
+    "commitAtMatrix": "63859d815832f66350e03a020a567ef8f1aed523",
+    "executableTree": "3a1b37169bb18c1f09bfc3b3243c89d321cd3923",
+    "note": "uncommitted N0.5 patch applied onto 63859d8 compact serializer HEAD"
+  },
+  "t3": {
+    "identity": true,
+    "tokenP50Drop": {
+      "lishuedu": { "old": 4683, "new": 3393, "drop": 0.2755 },
+      "cipherlink": { "old": 4443, "new": 3186, "drop": 0.2829 },
+      "exam-parent-v3": { "old": 3890, "new": 2830, "drop": 0.2725 }
+    },
+    "p95Ratio": { "lishuedu": 0.882, "cipherlink": 1.000, "exam-parent-v3": 1.032 },
+    "p95Limit": 1.10,
+    "absoluteOneResidual": true,
+    "verifierExit": 1,
+    "summarySha256": "2add6aecc20093f0a44cb2ae3626a65e3d09c99957946a4fd8ea569e3120172f",
+    "manifestSha256": "76d1756900a84e22ad2f46ac000ec158bf34d034e058204b04e9c9bf859d7d1c",
+    "load": 37.66,
+    "loadWindow": "above 20; runner still executed (refuse=false). p95 still ≤ 1.10.",
+    "note": "recall/pRead/rReadMust/RangeLineRecall/holdout bit-identical vs N0. estimatedTokens P50 drop ≥ 27% all three repos. Gate FAIL is residual 1.0 only."
+  },
+  "entityEntry": {
+    "scenarios": 30,
+    "hits": 30,
+    "hitRate": 1.0,
+    "gate": 0.8,
+    "passed": true,
+    "replaySha256": "45372ecec0b2c26b1153ef7afbc55591f45d24a9e94908e76e9cd7db41ff0a27",
+    "note": "Spec cited 159 frozen scenes; checked-in golden jsonl is 10 per repo (30). Query = scenario.name + taskKeywords. SIMPLE_NAME is type-only exact lexeme."
+  },
+  "productionLoc": {
+    "beforeN0": 37410,
+    "after": 38181,
+    "deltaFromN0": 771,
+    "fileCountAfter": 150,
+    "inventorySha256After": "92d5f90dd740913b8b1e655707346a80c9550998a94c18e09c6cc220411a6445"
+  },
+  "isolation": {
+    "t1": { "dist": 1054, "scripts": 185, "fail": 0, "jdtlsBin": "/usr/bin/false", "executableTree": "3a1b37169bb18c1f09bfc3b3243c89d321cd3923" },
+    "t2": { "isolation": "detached-local-clone", "jdtlsBin": "/usr/bin/false" },
+    "t3": { "isolation": "detached-local-clone", "jdtlsBin": "/usr/bin/false" }
+  }
+}

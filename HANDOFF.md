@@ -1,5 +1,12 @@
 # HANDOFF
 
+## JIN N0.5 COMPLETE（2026-08-20）
+
+分支 `codex/jin-main`。old = N0 `09772b2`。  
+T3：**质量 identity**；`estimatedTokens` P50 三仓 −27.6/−28.3/−27.3%（≥20% GO）；p95Ratio ≤ 1.10。  
+实体入口 T2：**30/30** top-3 命中 anchor 文件。未合 `main`。  
+报告：`docs/phase-jin/jin-phase-n05-20260820.md`。下一阶段 **N1** knowledge graph。
+
 ## JIN N0 COMPLETE（2026-08-20）
 
 分支 `codex/jin-main`。tag `v5r-evidence-baseline` = `aa4098f`。  
