@@ -86,3 +86,11 @@ export function isEdgeKind(value: string): value is EdgeKind {
 export function isStructuralEdgeKind(value: string): value is StructuralEdgeKind {
   return (STRUCTURAL_EDGE_KINDS as readonly string[]).includes(value);
 }
+
+export function isCallEdgeKind(value: string): value is CallEdgeKind {
+  return (CALL_EDGE_KINDS as readonly string[]).includes(value);
+}
+
+export function isFrameworkEdgeKind(value: string): value is FrameworkEdgeKind {
+  return (FRAMEWORK_EDGE_KINDS as readonly string[]).includes(value);
+}

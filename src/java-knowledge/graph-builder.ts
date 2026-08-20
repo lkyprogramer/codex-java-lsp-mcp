@@ -1,9 +1,13 @@
 // input: JavaIndex store facts after AST extract/resolve.
-// output: Structural knowledge-graph nodes/edges (N1). Call/framework/dataflow edges stay empty until N2.
-// pos: N1 builder. Reuses ast-extractor facts; does not re-parse.
+// output: Structural + N2a call/framework/persistence knowledge-graph edges.
+// pos: N1/N2a builder. Reuses ast-extractor facts; does not re-parse.
 import type { JavaFieldFacts, JavaFileBundle, JavaFileFacts, JavaMethodFacts, JavaTypeFacts } from "../java-index/index-types.js";
 import type { JavaIndexStore } from "../java-index/index-store.js";
+import { addCallEdges } from "./call-resolver.js";
 import { isStructuralEdgeKind } from "./edge-kinds.js";
+import { addFrameworkEdges } from "./framework-edge-builder.js";
+import { addPersistenceEdges } from "./persistence-edge-builder.js";
+import { emptyMethodSummary } from "./method-summary.js";
 import {
   KNOWLEDGE_REPOSITORY_ID,
   knowledgeEdgeId,
@@ -210,6 +214,32 @@ export class KnowledgeGraphBuilder {
           );
         }
       }
+    }
+
+    const resolve = (javaIndexId: string) => this.resolveEndpoint(javaIndexId, knowledgeByJavaId, store);
+    addCallEdges(this.graph, bundle, store, generation, resolve);
+    addFrameworkEdges(this.graph, bundle, store, generation, resolve);
+    addPersistenceEdges(this.graph, bundle, store, generation, resolve);
+    this.fillMethodSummaries(bundle, knowledgeByJavaId);
+  }
+
+  private fillMethodSummaries(bundle: JavaFileBundle, knowledgeByJavaId: Map<string, string>): void {
+    for (const method of bundle.methods) {
+      const methodId = knowledgeByJavaId.get(method.methodId);
+      if (!methodId) continue;
+      const summary = emptyMethodSummary(methodId);
+      for (const item of this.graph.successors(methodId)) {
+        if (item.kind === "CALLS_EXACT" || item.kind === "CONSTRUCTS" || item.kind === "METHOD_REFERENCE") {
+          summary.directCalls.push({ toId: item.toId, kind: item.kind });
+        } else if (item.kind === "CALLS_VIRTUAL" || item.kind === "DISPATCHES_TO") {
+          summary.virtualCalls.push({ toId: item.toId, kind: item.kind });
+        } else if (item.kind === "MYBATIS_METHOD_BINDS_STATEMENT" || item.kind === "REPOSITORY_MANAGES_ENTITY") {
+          summary.persistenceTouches.push(item.toId);
+        } else if (item.kind === "SPRING_INJECTS" || item.kind === "PUBLISHES_EVENT" || item.kind === "CONSUMES_EVENT" || item.kind === "SPRING_BEAN_BINDS_TO") {
+          summary.frameworkTouches.push(item.toId);
+        }
+      }
+      this.graph.summariesByMethodId.set(methodId, summary);
     }
   }
 

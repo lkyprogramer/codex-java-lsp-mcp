@@ -6,6 +6,7 @@
 import { createHash } from "node:crypto";
 import { REVERSE_EDGE_KIND, type EdgeKind } from "./edge-kinds.js";
 import { knowledgeEdgeId } from "./entity-id.js";
+import type { MethodSummary } from "./method-summary.js";
 import type { GraphEdge, GraphNode } from "./schema.js";
 
 function addToSetMap(map: Map<string, Set<string>>, key: string, value: string): void {
@@ -38,6 +39,7 @@ export class KnowledgeGraphStore {
   readonly inEdgeIdsByNode = new Map<string, Set<string>>();
   readonly nodeIdsByFile = new Map<string, Set<string>>();
   readonly edgeIdsByFile = new Map<string, Set<string>>();
+  readonly summariesByMethodId = new Map<string, MethodSummary>();
   generation = 0;
 
   private readonly ownersByNodeId = new Map<string, Set<string>>();
@@ -53,6 +55,7 @@ export class KnowledgeGraphStore {
     this.inEdgeIdsByNode.clear();
     this.nodeIdsByFile.clear();
     this.edgeIdsByFile.clear();
+    this.summariesByMethodId.clear();
     this.ownersByNodeId.clear();
     this.ownersByEdgeId.clear();
     this.nodeXor.fill(0);
@@ -136,6 +139,7 @@ export class KnowledgeGraphStore {
         const owners = this.ownersByNodeId.get(nodeId);
         owners?.delete(relativePath);
         if (!owners || owners.size === 0) {
+          this.summariesByMethodId.delete(nodeId);
           this.removeNode(nodeId);
           this.ownersByNodeId.delete(nodeId);
         }
