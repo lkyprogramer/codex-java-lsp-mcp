@@ -1,10 +1,17 @@
 # HANDOFF
 
-## JIN 主链 STOP（N4 2/4 → N5/N6 SKIP_FAIL，2026-08-21）
+## JIN 停在 N4（neighborhood 1/4，最好仍 2/4；时钟未到期，2026-08-21）
 
-15A.6 JIN-N4-04：**≥ 3/4 轴才 PARTIAL 进 N5；< 3/4 轴停止 JIN 主链**。实测 **2/4**（token/p95 GO；RangeLineRecall 与 holdout rReadMust FAIL）。  
-**N5 未开工**（无 `java_context`、无 live A/B）。**N6 未开工**（不删旧链、不合 `main`）。escalate 0A.4(4b)。  
-Postmortem：`docs/phase-jin/jin-n4-failure-postmortem-20260821.md`。N4 报告：`docs/phase-jin/jin-phase-n4-20260820.md`。
+15A.6 JIN-N4-04：**2 周窗口到期**才做二元裁决（≥ 3/4 PARTIAL→N5；< 3/4 停主链）。窗口从 2026-08-20 起算，尚未到期。`5b6f2aa` 的 N5/N6 SKIP_FAIL 过早，已取代。  
+本轮 neighborhood T3 **1/4**：token **GO**（1844/1671/2013，−45.7/−47.6/−28.9%）；p95 **FAIL**（lishuedu 1.617）；RangeLineRecall **FAIL**；holdout rReadMust 均值 0.300 **FAIL**。N4 最好仍是 discovery **2/4**。  
+**不进 N5、不合 `main`。** 生产 MCP 不读 `JAVA_LSP_ENGINE`。不得发明 TaskSuccess。  
+报告：`docs/phase-jin/jin-phase-n4-20260820.md`。摘要 `jin-n4-t3-nb-summary.json`。code `4bff986`。
+
+## JIN N4 FAIL neighborhood（2026-08-21）
+
+分支 `codex/jin-main`。method-body callees + hop-2 field types，proving-path member 名写入 toId，hop-ordered extraNames。预算 2000，selected-only。  
+T3 四轴 **1/4**。T1 1120+190 fail 0。`storage-signed-url` 无 AliyunOssGateway / SignedUrl DTO；`exam-score-export` 仍 1 文件；`paper-task` 无 MeQueryService。  
+报告：`docs/phase-jin/jin-phase-n4-20260820.md`。摘要 `jin-n4-t3-nb-summary.json`。
 
 ## JIN N4 FAIL discovery（2026-08-21）
 
