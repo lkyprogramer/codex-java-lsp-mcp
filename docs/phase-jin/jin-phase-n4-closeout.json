@@ -45,9 +45,11 @@
     "t1": { "dist": 1118, "scripts": 190, "fail": 0, "jdtlsBin": "/usr/bin/false", "executableTree": "cf28a005b62ba34704729a9f7c2a836a20d3fad7" }
   },
   "failureDisposition": {
-    "clock": "sixth T3, 2-week N4 window not expired",
+    "clock": "sixth T3; JIN-N4-04 binary applied",
     "axesPassed": 2,
-    "action": "stay on N4; do not enter N5",
-    "next": "Range/holdout still miss mustHit files that are not signature types or direct implementers of the anchor (MeQueryService, SchoolQueryService, ExamScoreExportExcelGenerator, SignedUrl DTOs). Do not admit extra files. N3 candidate-replay after SOURCE_ROOT skip is UNMEASURED."
+    "clause": "15A.6 JIN-N4-04: 2 周内未全达 → 二元裁决：达标 ≥ 3/4 轴则记 PARTIAL 并进 N5（live 数据可能改判），< 3/4 轴 → 停止 JIN 主链开发，写 postmortem，escalate（属方案核心假设失败）。",
+    "action": "stop JIN main chain; N5/N6 SKIP_FAIL; do not enter N5; do not merge main",
+    "escalate": "0A.4(4b) scheme-level fact: graph planner cannot jointly keep ≥25% token drop and RangeLineRecall/holdout rReadMust vs current compact",
+    "postmortem": "docs/phase-jin/jin-n4-failure-postmortem-20260821.md"
   }
 }

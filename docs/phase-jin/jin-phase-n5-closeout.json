@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "jin-phase-n5-closeout/v1",
+  "phase": "N5",
+  "dated": "2026-08-21",
+  "decision": "SKIP_FAIL",
+  "mergeToMain": false,
+  "javaContextRegistered": false,
+  "threeArmLiveAB": "NOT_STARTED",
+  "authorizeExternal": false,
+  "reason": "JIN-N4-04: < 3/4 axes stops the JIN main chain. N4 passedCount is 2/4 (token GO, p95 GO, RangeLineRecall FAIL, holdout rReadMust FAIL). PARTIAL→N5 requires ≥ 3/4.",
+  "clause": "15A.6 JIN-N4-04 失败处置：达标 ≥ 3/4 轴则记 PARTIAL 并进 N5（live 数据可能改判），< 3/4 轴 → 停止 JIN 主链开发，写 postmortem，escalate（属方案核心假设失败）。",
+  "n4AxesPassed": 2,
+  "postmortem": "docs/phase-jin/jin-n4-failure-postmortem-20260821.md"
+}
