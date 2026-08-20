@@ -1,15 +1,12 @@
 # HANDOFF
 
-## V5R 开关战役（Wave 0 + T，2026-08-20）
+## V5R 开关战役（Wave 0 + T + B，2026-08-20）
 
-测量链：同树 `env-locked-same-tree` + `@2calls` benchmark 已落地。定向隔离 **56/56 fail 0**。战役矩阵内候选测试 **1071+176 fail 0**。
+测量链：同树 `env-locked-same-tree` + `@2calls` benchmark。台账：`docs/phase-v5r/v5r-flag-campaign-ledger.json`。未合 `main`。
 
-**战役 T（`JAVA_LSP_FRONTIER_SHADOW=off`）：质量 identity GO；+21 token 归因 HOLD（证伪）。**  
-报告：`docs/phase-v5r/v5r-flag-campaign-t-20260820.md`。台账：`docs/phase-v5r/v5r-flag-campaign-ledger.json`。
-
-- 三仓 recall/pRead/rReadMust/range/holdout/tokens old=new 逐位相同。shadow 不改 first-plan。
-- `estimatedTokens` P50 不变（4683/4443/3890）。standard 载荷不含 `frontierShadow`，V4-final 的 +85B **不是** 这个开关。
-- 绝对 1.0 residual 仍 FAIL。未合 `main`。下一场战役 B：`JAVA_LSP_RELATIONSHIP_BUNDLE=on` + RPC sidecar。
+- **T** `FRONTIER_SHADOW=off`：质量 identity **GO**；+21 token 归因 **HOLD（证伪）**。报告 `docs/phase-v5r/v5r-flag-campaign-t-20260820.md`。
+- **B** `RELATIONSHIP_BUNDLE=on`：**FAIL**。质量 identity 成立，但 exam p95Ratio **1.349** 超 1.25；RPC sidecar **REJECT**（10632→10662，降幅 −0.28%；P95 还变差）。保持 off。报告 `docs/phase-v5r/v5r-flag-campaign-b-20260820.md`。
+- 下一场：**P** `JAVA_LSP_SPAN_PACKING=on`（对默认路径，不叠 bundle）。
 
 ## V5R 三仓 cold 矩阵（2026-08-20）
 

@@ -25,7 +25,20 @@
       "absoluteOneStillFail": true,
       "next": "B"
     },
-    { "id": "B", "flag": "JAVA_LSP_RELATIONSHIP_BUNDLE=on", "decision": "PENDING" },
+    {
+      "id": "B",
+      "flag": "JAVA_LSP_RELATIONSHIP_BUNDLE=on",
+      "decision": "FAIL",
+      "report": "docs/phase-v5r/v5r-flag-campaign-b-20260820.md",
+      "summarySha256": "38e94ecc5b7517cb4b3af1d473f24d1dd457c62154b9d759a43cf2581fd3d589",
+      "verifyExit": 1,
+      "pairedQualityIdentity": true,
+      "examP95Ratio": 1.349,
+      "rpcCountReduction": -0.0028216704288939053,
+      "sidecarDecision": "REJECT_RPC_COUNT_AND_P95",
+      "keepDefault": "off",
+      "next": "P"
+    },
     { "id": "P", "flag": "JAVA_LSP_SPAN_PACKING=on", "decision": "PENDING" },
     { "id": "C", "flag": "retrieval.enabled + continue in-pool-fifo", "decision": "PENDING" },
     { "id": "S", "flag": "stack B+P+C", "decision": "BLOCKED_UNTIL_SINGLES_GO" }
