@@ -55,6 +55,8 @@ test("serializer emits one schema, omits scores, and keeps includeSource parity"
   assert.ok(Array.isArray(withSource.next));
   assert.equal(JSON.stringify(withSource).includes("confidence"), false);
   assert.equal(JSON.stringify(withSource).includes("score"), false);
+  assert.equal(withSource.contexts.every(item => item.spans.length > 0), true);
+  assert.equal(without.contexts.every(item => item.spans.length > 0), true);
   assert.equal(sourceParity(withSource, without), true);
   assert.equal(without.contexts.some(item => item.spans.some(span => span.text !== undefined)), false);
 });

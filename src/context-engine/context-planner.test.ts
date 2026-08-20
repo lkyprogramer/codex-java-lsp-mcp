@@ -82,6 +82,20 @@ test("same input is deterministic and file count is not a binding cap", () => {
   assert.ok(first.distinctFiles > 6, `expected more than the old maxFiles=6 binding, got ${first.distinctFiles}`);
 });
 
+test("hop<=2 files are not force-filled; budget greedy can skip a large near file", () => {
+  const planned = planEvidenceBundles({
+    bundles: [
+      bundle({ id: "a", path: "src/A.java", role: "ANCHOR", closes: ["O1"], tokenCost: 10, hops: 0 }),
+      bundle({ id: "near-huge", path: "src/Huge.java", role: "CALLEE", closes: ["O2"], tokenCost: 400, hops: 1 }),
+      bundle({ id: "far-cheap", path: "src/Far.java", role: "PERSISTENCE", closes: ["O3"], tokenCost: 20, hops: 3 })
+    ],
+    tokenBudget: 80
+  });
+  assert.equal(planned.selected.some(item => item.id === "near-huge"), false);
+  assert.ok(planned.selected.some(item => item.id === "far-cheap"));
+  assert.ok(planned.tokenCost <= 80);
+});
+
 test("duplicate path saturates instead of paying twice for the same closes", () => {
   const planned = planEvidenceBundles({
     bundles: [

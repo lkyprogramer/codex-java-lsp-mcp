@@ -55,7 +55,7 @@ function leakKeys(value: unknown, found: string[] = []): string[] {
 
 export function serializeContext(input: SerializeInput): ContextContract {
   const tokenizer = input.tokenizer ?? BYTES_DIV_4;
-  const selected = input.plan.selected;
+  const selected = input.plan.selected.filter(bundle => bundle.spans.length > 0);
   const anchorBundle = selected.find(bundle => bundle.hops === 0) ?? selected[0];
   const known = new Map<string, string>();
   for (const item of input.search.unresolved) known.set(item.id, item.role);

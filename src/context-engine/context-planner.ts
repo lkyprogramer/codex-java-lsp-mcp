@@ -3,7 +3,7 @@
 // pos: JIN N4-02. P0 forced; ambiguity ≤2; stop when best marginal ≤0 or next item over budget.
 import { isP0Bundle, mergeSpans, type EvidenceBundle } from "./evidence-bundle.js";
 
-export const DEFAULT_TOKEN_BUDGET = 6000;
+export const DEFAULT_TOKEN_BUDGET = 2500;
 export const MAX_DISTINCT_FILES_GUARD = 20;
 export const MAX_AMBIGUITY_PER_OBLIGATION = 2;
 export const MAX_BUNDLES_GUARD = 64;
@@ -94,18 +94,6 @@ export function planEvidenceBundles(input: PlanInput): PlanResult {
     selected.push(bundle);
   }
   let remaining = candidates.filter(bundle => !isP0Bundle(bundle));
-  const nearby = remaining
-    .filter(bundle => bundle.hops <= 2)
-    .sort((left, right) => left.hops - right.hops || left.path.localeCompare(right.path) || left.id.localeCompare(right.id));
-  for (const bundle of nearby) {
-    if (selected.length >= bundleGuard) break;
-    const used = tokenCostOf(selected);
-    if (used + bundle.tokenCost > budget) continue;
-    const files = filesOf(selected);
-    if (!files.has(bundle.path) && files.size >= fileGuard) continue;
-    selected.push(bundle);
-    remaining = remaining.filter(item => item.id !== bundle.id);
-  }
   while (remaining.length > 0 && selected.length < bundleGuard) {
     let best: EvidenceBundle | undefined;
     let bestRatio = -Infinity;

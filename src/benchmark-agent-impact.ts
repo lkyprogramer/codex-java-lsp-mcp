@@ -54,8 +54,7 @@ import { createRequestContext, defaultDeadlineMs, MAX_REQUEST_DEADLINE_MS } from
 import type { SourceRange } from "./runtime/source-range.js";
 import { JdtlsSession } from "./jdtls-session.js";
 import { DEFAULT_TOKEN_BUDGET } from "./context-engine/context-planner.js";
-import { withConvergedCostV6 } from "./agent-router/output-v6.js";
-import type { ContextContract } from "./context-engine/context-contract.js";
+import { toCompactFromContract } from "./context-engine/compact-bridge.js";
 
 type BenchmarkStrategy = "impact" | "no-lsp";
 
@@ -95,19 +94,6 @@ type Cli = {
 };
 
 const DEFAULT_INDEX_PREPARE_TIMEOUT_MS = 600_000;
-
-const JIN_COMPACT_ROLE: Record<string, string> = {
-  ANCHOR: "TGT",
-  CHANGE_SITE: "TGT",
-  CALLEE: "COL",
-  CALLER: "COL",
-  DATAFLOW: "COL",
-  IMPLEMENTATION: "IMP",
-  CONTRACT: "REF",
-  PERSISTENCE: "CFG",
-  FRAMEWORK: "FW",
-  TEST: "REL"
-};
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const projectDir = path.resolve(scriptDir, "..");
@@ -314,42 +300,6 @@ function parseCli(args: string[], root: string): Cli {
   };
 }
 
-function compactFromContract(contract: ContextContract, elapsedMs: number, discoveredPaths: string[] = []): CompactImpact {
-  const contexts = contract.contexts.map(item => ({
-    path: item.path,
-    role: JIN_COMPACT_ROLE[item.role] ?? "REL",
-    proof: item.proof.slice(0, 3),
-    spans: item.spans.map(span => ({
-      s: span.start,
-      e: span.end,
-      b: span.text ? Buffer.byteLength(span.text, "utf8") : Math.max(1, (span.end - span.start + 1) * 48)
-    }))
-  }));
-  const selected = new Set(contexts.map(item => item.path));
-  for (const path of discoveredPaths) {
-    if (selected.has(path)) continue;
-    contexts.push({ path, role: "REL", proof: [], spans: [] });
-    selected.add(path);
-  }
-  const payload: CompactImpact = {
-    version: 1,
-    target: { file: contract.anchor.path, symbol: contract.anchor.symbol },
-    contexts,
-    unresolved: contract.unresolved.map(item => item.role).slice(0, 3),
-    cost: { resultBytes: 0, readBytes: 0, estimatedTokens: 0, suppressedRawBytes: 0 },
-    freshness: {
-      coverage: contract.coverage === "COMPLETE" ? "COMPLETE" : "PARTIAL",
-      requestGeneration: contract.generation,
-      indexedGeneration: contract.generation,
-      changedDuringRequest: false
-    },
-    semantic: { used: false, completion: "COMPLETE" },
-    metrics: { routingVersion: 1, elapsedMs }
-  };
-  const readBytes = contexts.reduce((sum, item) => sum + item.spans.reduce((inner, span) => inner + span.b, 0), 0);
-  return withConvergedCostV6(payload, readBytes, 0);
-}
-
 async function jinAttempt(javaIndex: RouterJavaIndex, cli: Cli, scenario: Scenario): Promise<Record<string, unknown>> {
   const startedAt = performance.now();
   const graph = await javaIndex.queryContextGraph({
@@ -369,7 +319,7 @@ async function jinAttempt(javaIndex: RouterJavaIndex, cli: Cli, scenario: Scenar
   if (!graph.contract) {
     throw new Error("JAVA_LSP_ENGINE=jin expected QUERY_CONTEXT_GRAPH contract");
   }
-  const result = compactFromContract(graph.contract, elapsedMs, graph.bundles.map(item => item.path));
+  const result = toCompactFromContract(graph.contract, elapsedMs);
   const rawSearchPayload = Buffer.byteLength(JSON.stringify(result), "utf8");
   const readingPayload = readPlanBytes(result);
   const candidatePaths = viewImpactFiles(result);
