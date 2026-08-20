@@ -39,7 +39,18 @@
       "keepDefault": "off",
       "next": "P"
     },
-    { "id": "P", "flag": "JAVA_LSP_SPAN_PACKING=on", "decision": "PENDING" },
+    {
+      "id": "P",
+      "flag": "JAVA_LSP_SPAN_PACKING=on",
+      "decision": "GO_IDENTITY_HOLD_COST",
+      "report": "docs/phase-v5r/v5r-flag-campaign-p-20260820.md",
+      "summarySha256": "5c436bb2a1e9a23bff53f37d43c569b80222e34b7c231221321ed13280bd0afd",
+      "verifyExit": 1,
+      "pairedQualityIdentity": true,
+      "readPlanBytesDelta": [0, 0, 0],
+      "keepDefault": "off",
+      "next": "C"
+    },
     { "id": "C", "flag": "retrieval.enabled + continue in-pool-fifo", "decision": "PENDING" },
     { "id": "S", "flag": "stack B+P+C", "decision": "BLOCKED_UNTIL_SINGLES_GO" }
   ],

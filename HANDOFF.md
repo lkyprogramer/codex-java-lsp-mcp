@@ -6,7 +6,8 @@
 
 - **T** `FRONTIER_SHADOW=off`：质量 identity **GO**；+21 token 归因 **HOLD（证伪）**。报告 `docs/phase-v5r/v5r-flag-campaign-t-20260820.md`。
 - **B** `RELATIONSHIP_BUNDLE=on`：**FAIL**。质量 identity 成立，但 exam p95Ratio **1.349** 超 1.25；RPC sidecar **REJECT**（10632→10662，降幅 −0.28%；P95 还变差）。保持 off。报告 `docs/phase-v5r/v5r-flag-campaign-b-20260820.md`。
-- 下一场：**P** `JAVA_LSP_SPAN_PACKING=on`（对默认路径，不叠 bundle）。
+- **P** `SPAN_PACKING=on`：identity **GO**，压字节 **HOLD**（readPlanBytes/ranges 不变）。保持 off。报告 `docs/phase-v5r/v5r-flag-campaign-p-20260820.md`。
+- 下一场：**C** `@2calls` continuation。
 
 ## V5R 三仓 cold 矩阵（2026-08-20）
 
