@@ -1,5 +1,13 @@
 # HANDOFF
 
+## JIN N1 FAIL / escalate 0A.4(4b)（2026-08-20）
+
+分支 `codex/jin-main`。知识图 schema/store/snapshot/增量 **已落地**。  
+Cold/增量/digest/T1 **GO**；**RSS ≤ 512 MiB FAIL**（lishuedu 进程 RSS 2344 MiB，worker heap 838 MiB）。图本身 6.0 万节点 / gzip 1.7M，不是 RSS 主体。  
+失败处置（裁 statement/parameter、增量 digest、解耦 snapshot dirty）已做，不放宽门。  
+报告：`docs/phase-jin/jin-phase-n1-20260820.md`。未合 `main`。  
+**停在 N1 出口等文档修订授权**（512 MiB 假设错误）。N2a 在同口径 RSS 门下也会 FAIL。
+
 ## JIN N0.5 COMPLETE（2026-08-20）
 
 分支 `codex/jin-main`。old = N0 `09772b2`。  
