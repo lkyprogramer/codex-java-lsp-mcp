@@ -57,7 +57,7 @@ function repoRef(simpleName: string, typeId: string): JavaTypeRef {
 }
 
 function fileBundle(simpleName: string, options: {
-  methods?: Array<{ name: string; start: number; end: number; calls?: Array<{ name: string; receiver: string; typeId?: string }> }>;
+  methods?: Array<{ name: string; start: number; end: number; calls?: Array<{ name: string; receiver?: string; typeId?: string }> }>;
   fields?: Array<{ name: string; typeId: string; simpleName: string }>;
 }): JavaFileBundle {
   const relativePath = `src/${simpleName}.java`;
@@ -129,8 +129,8 @@ function fileBundle(simpleName: string, options: {
       callSites: (method.calls ?? []).map(call => ({
         kind: "METHOD_INVOCATION" as const,
         name: call.name,
-        receiverText: call.receiver,
-        receiverDeclaredType: call.typeId ? repoRef(call.receiver, call.typeId) : undefined,
+        ...(call.receiver ? { receiverText: call.receiver } : {}),
+        receiverDeclaredType: call.typeId ? repoRef(call.receiver ?? call.name, call.typeId) : undefined,
         arity: 0,
         argumentTypeHints: [],
         range: { start: { line: method.start + 1, column: 1 }, end: { line: method.start + 1, column: 8 } }
@@ -194,11 +194,15 @@ test("attachAnchorSignatureBundles names field callees and does not walk unused 
   const paths = attached.bundles.map(item => item.path).sort();
   assert.ok(paths.includes("src/Generator.java"), `missing callee, got ${paths.join(",")}`);
   assert.ok(paths.includes("src/Collab.java"), `missing hop-1 callee, got ${paths.join(",")}`);
+  assert.ok(paths.includes("src/Helper.java"), `missing hop-2 callee field, got ${paths.join(",")}`);
   assert.equal(paths.includes("src/Other.java"), false, `unused hop-1 field leaked: ${paths.join(",")}`);
   const generatorBundle = attached.bundles.find(item => item.path === "src/Generator.java");
   assert.ok(generatorBundle?.provingPath.some(step => step.toId.includes("#generate#")), JSON.stringify(generatorBundle?.provingPath));
   const collabBundle = attached.bundles.find(item => item.path === "src/Collab.java");
   assert.ok(collabBundle?.provingPath.some(step => step.toId.includes("#requireMe#")), JSON.stringify(collabBundle?.provingPath));
+  const helperBundle = attached.bundles.find(item => item.path === "src/Helper.java");
+  assert.ok(helperBundle?.provingPath.some(step => step.toId.includes("#getMe#")), JSON.stringify(helperBundle?.provingPath));
+  assert.equal(helperBundle?.hops, 2);
 });
 
 test("attachAnchorSignatureBundles follows same-file private callees onto hop-1 receivers", () => {
@@ -223,6 +227,52 @@ test("attachAnchorSignatureBundles follows same-file private callees onto hop-1 
   const attached = attachAnchorSignatureBundles(emptySearch(), graph, store, "src/Service.java", 12);
   const schoolBundle = attached.bundles.find(item => item.path === "src/School.java");
   assert.ok(schoolBundle, `missing hop-1 receiver, got ${attached.bundles.map(item => item.path).join(",")}`);
+  assert.ok(schoolBundle?.provingPath.some(step => step.toId.includes("#listStudents#")), JSON.stringify(schoolBundle?.provingPath));
+});
+
+test("attachAnchorSignatureBundles records every hop-0 call name on a field type", () => {
+  const school = fileBundle("School", {
+    methods: [
+      { name: "listStudents", start: 4, end: 8 },
+      { name: "listSummaries", start: 10, end: 16 }
+    ]
+  });
+  const service = fileBundle("Service", {
+    methods: [
+      { name: "export", start: 10, end: 16, calls: [{ name: "loadMap", receiver: "this" }, { name: "resolve", receiver: "this" }] },
+      { name: "loadMap", start: 20, end: 24, calls: [{ name: "listStudents", receiver: "school", typeId: school.types[0]!.typeId }] },
+      { name: "resolve", start: 26, end: 30, calls: [{ name: "listSummaries", receiver: "school", typeId: school.types[0]!.typeId }] }
+    ],
+    fields: [{ name: "school", typeId: school.types[0]!.typeId, simpleName: "School" }]
+  });
+  const store = new JavaIndexStore();
+  store.replaceFile(service);
+  store.replaceFile(school);
+  const graph = new KnowledgeGraphStore();
+  graph.upsertNode({ id: "src/Service.java", kind: "FILE", generation: 1, relativePath: "src/Service.java" }, "src/Service.java");
+  const attached = attachAnchorSignatureBundles(emptySearch(), graph, store, "src/Service.java", 12);
+  const schoolBundle = attached.bundles.find(item => item.path === "src/School.java");
+  const ids = schoolBundle?.provingPath.map(step => step.toId).join(",") ?? "";
+  assert.ok(ids.includes("#listStudents#"), ids);
+  assert.ok(ids.includes("#listSummaries#"), ids);
+});
+
+test("attachAnchorSignatureBundles matches field-type methods without a receiverText", () => {
+  const school = fileBundle("School", { methods: [{ name: "listStudents", start: 4, end: 8 }] });
+  const service = fileBundle("Service", {
+    methods: [
+      { name: "export", start: 10, end: 16, calls: [{ name: "loadMap", receiver: "this" }] },
+      { name: "loadMap", start: 20, end: 24, calls: [{ name: "listStudents" }] }
+    ],
+    fields: [{ name: "school", typeId: school.types[0]!.typeId, simpleName: "School" }]
+  });
+  const store = new JavaIndexStore();
+  store.replaceFile(service);
+  store.replaceFile(school);
+  const graph = new KnowledgeGraphStore();
+  graph.upsertNode({ id: "src/Service.java", kind: "FILE", generation: 1, relativePath: "src/Service.java" }, "src/Service.java");
+  const attached = attachAnchorSignatureBundles(emptySearch(), graph, store, "src/Service.java", 12);
+  const schoolBundle = attached.bundles.find(item => item.path === "src/School.java");
   assert.ok(schoolBundle?.provingPath.some(step => step.toId.includes("#listStudents#")), JSON.stringify(schoolBundle?.provingPath));
 });
 

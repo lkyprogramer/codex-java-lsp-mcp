@@ -25,6 +25,7 @@ export type PlanQueryInput = {
 };
 
 const HOP0_METHOD_CAP = 8;
+const HOP2_TYPE_CAP = 8;
 
 const NOISE_CALL_NAMES = new Set([
   "stream", "map", "filter", "collect", "toList", "toArray", "of", "get", "isEmpty",
@@ -73,18 +74,7 @@ function resolvedRepoTypeIds(ref: JavaTypeRef | undefined): string[] {
 function hop0Methods(bundle: JavaFileBundle, anchorLine: number): JavaMethodFacts[] {
   const containing = bundle.methods.filter(method => methodContainsLine(method, anchorLine));
   if (containing.length === 0) return [];
-  const owners = new Set(containing.map(method => method.ownerTypeId));
-  const nearest = bundle.methods
-    .filter(method => owners.has(method.ownerTypeId))
-    .sort((left, right) => Math.abs(left.range.start.line - anchorLine) - Math.abs(right.range.start.line - anchorLine)
-      || left.range.start.line - right.range.start.line);
-  const keep = new Map<string, JavaMethodFacts>();
-  for (const method of containing) keep.set(method.methodId, method);
-  for (const method of nearest) {
-    if (keep.size >= HOP0_METHOD_CAP) break;
-    keep.set(method.methodId, method);
-  }
-  return [...keep.values()];
+  return intraFileCallClosure(bundle, containing);
 }
 
 function intraFileCallClosure(bundle: JavaFileBundle, start: JavaMethodFacts[]): JavaMethodFacts[] {
@@ -271,11 +261,32 @@ function collectAnchorSeeds(store: JavaIndexStore, bundle: JavaFileBundle, ancho
     if (!owners.has(field.ownerTypeId)) continue;
     mention(field.type, 1, "IMPORTS");
   }
+  const hop0CallNames = new Set(
+    hop0.flatMap(method => method.callSites.filter(site => neighborhoodCallName(site.name, site.receiverText)).map(site => site.name))
+  );
   for (const method of hop0) {
     for (const site of method.callSites) {
       if (!neighborhoodCallName(site.name, site.receiverText) || !site.receiverText) continue;
       const field = bundle.fields.find(item => item.name === site.receiverText && owners.has(item.ownerTypeId));
       if (field) mentionRef(store, importBySimple, seeds, field.type, 1, "CALLS_EXACT", site.name, false);
+    }
+  }
+  for (const field of bundle.fields) {
+    if (!owners.has(field.ownerTypeId)) continue;
+    const typeIds = [
+      ...resolvedRepoTypeIds(field.type),
+      ...simpleNamesOfRef(field.type).flatMap(simple => {
+        const imported = importBySimple.get(simple);
+        const id = imported ? typeIdByFqn(store, imported) : undefined;
+        return id ? [id] : [];
+      })
+    ];
+    for (const typeId of typeIds) {
+      for (const name of hop0CallNames) {
+        if (store.methodIdsByOwnerAndName.get(`${typeId}#${name}`)?.size) {
+          seedType(seeds, typeId, 1, "CALLS_EXACT", name);
+        }
+      }
     }
   }
   const callNamed = [...seeds.entries()].filter(([, seed]) => seed.kind === "CALLS_EXACT" || seed.kind === "CALLS_VIRTUAL");
@@ -290,6 +301,29 @@ function collectAnchorSeeds(store: JavaIndexStore, bundle: JavaFileBundle, ancho
       const target = store.typesById.get(targetId);
       if (target && refs.some(ref => refTargetsType(ref, target, store, implFile))) {
         for (const name of seed.names) seedType(seeds, implId, 1, "IMPLEMENTS", name);
+      }
+    }
+  }
+  const callTypeIds = callNamed.map(([typeId]) => typeId).slice(0, HOP2_TYPE_CAP);
+  for (const typeId of callTypeIds) {
+    const type = store.typesById.get(typeId);
+    if (!type) continue;
+    const hop1File = store.filesByPath.get(relativePathOfFileId(type.fileId));
+    const hop1Imports = new Map<string, string>();
+    for (const item of hop1File?.imports ?? []) {
+      if (item.wildcard) continue;
+      const simple = item.qualifiedName.split(".").pop();
+      if (simple) hop1Imports.set(simple, item.qualifiedName);
+    }
+    for (const methodId of type.methodIds) {
+      const method = store.methodsById.get(methodId);
+      if (!method || !hop0CallNames.has(method.name)) continue;
+      for (const site of method.callSites) {
+        if (!neighborhoodCallName(site.name, site.receiverText) || !site.receiverText) continue;
+        const field = type.fieldIds
+          .map(id => store.fieldsById.get(id))
+          .find(item => item !== undefined && item.name === site.receiverText && item.ownerTypeId === typeId);
+        if (field) mentionRef(store, hop1Imports, seeds, field.type, 2, "CALLS_VIRTUAL", site.name, false);
       }
     }
   }
@@ -349,10 +383,13 @@ export function attachAnchorSignatureBundles(
     if (!type) continue;
     const typeNodeId = nodeIdByJavaId.get(typeId);
     const relative = relativePathOfFileId(type.fileId);
-    const toId = seed.names[0]
-      ? `${relative}#${type.simpleName}#${seed.names[0]}#n`
-      : (typeNodeId ?? typeId);
-    addDiscoveryBundle(extra, known, path, relative, seed.hops, seed.kind, toId);
+    const names = seed.names.length > 0 ? seed.names : [undefined];
+    for (const name of names) {
+      const toId = name
+        ? `${relative}#${type.simpleName}#${name}#n`
+        : (typeNodeId ?? typeId);
+      addDiscoveryBundle(extra, known, path, relative, seed.hops, seed.kind, toId);
+    }
     if (!typeNodeId) continue;
     for (const edge of [...graph.successors(typeNodeId), ...graph.predecessors(typeNodeId)]) {
       if (edge.kind !== "IMPLEMENTS" && edge.kind !== "EXTENDS") continue;
