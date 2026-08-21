@@ -1,5 +1,14 @@
 # HANDOFF
 
+## JIN 停在 N4（holdout 装箱 2/4；时钟未到期，2026-08-21）
+
+15A.6 JIN-N4-04：**2 周窗口到期**才做二元裁决。窗口从 2026-08-20 起算，尚未到期。  
+本轮 T3 **2/4**：token **FAIL**（2673/2730/2725，−21/−14/−4%，未满 25%）；p95 **GO**（0.281/0.083/0.115）；RangeLineRecall **FAIL** vs compact 0.718/0.925/0.653；holdout rReadMust 均值 **0.633**（0.75/0.65/0.50）**FAIL**。  
+storage-signed-url **5/5**（SignedUrl DTO 在）。exam-score **3/4** 缺 SchoolQueryService。paper-task **3/4** 缺 MeQueryService。ExcelGenerator 在。  
+不要再用「跨模块优先」装箱：pack6 把 Agency 等无关跨模块文件挤进 paper/exam，holdout 掉到 0.517。  
+**不进 N5、不合 `main`。** 生产 MCP 不读 `JAVA_LSP_ENGINE`。不得发明 TaskSuccess。  
+报告：`docs/phase-jin/jin-phase-n4-20260820.md`。摘要 `jin-n4-t3-pack-holdout-summary.json`。scratch `jin-n4-t3-pack4`。
+
 ## JIN 停在 N4（hop0 cap 2/4；时钟未到期，2026-08-21）
 
 15A.6 JIN-N4-04：**2 周窗口到期**才做二元裁决。窗口从 2026-08-20 起算，尚未到期。  

@@ -4,35 +4,35 @@
   "dated": "2026-08-21",
   "decision": "FAIL",
   "mergeToMain": false,
-  "retry": "hop0 containing + up to 4 field-calling same-file callees; hop-2 CALLS names without receiverText; DTO type spans; extraNames containing-only",
+  "retry": "whole-method slices; mergeSpans union bytes; hop0 containing+2 cross-module field callees; named method union + IMPLEMENTS same-file callee; CALLS after IMPLEMENTS; IMPORTS not ambiguity-capped; extraNames containing-only",
   "bestSoFar": {
     "axesPassed": "2/4",
-    "iteration": "musthit-hop0-cap",
-    "head": "c7b2482",
-    "summary": "jin-n4-t3-musthit-summary.json",
-    "note": "token+p95 GO. RangeLineRecall and holdout rReadMust FAIL. exam-score hop0 1117 leftover ~883 but SchoolQueryService still not selected. SignedUrl DTO and MeQueryService still missing."
+    "iteration": "pack-holdout",
+    "head": "482c199",
+    "summary": "jin-n4-t3-pack-holdout-summary.json",
+    "note": "p95 GO. token drop short of 25%. Range improved vs prior jin but still below compact. holdout rReadMust 0.633 (was 0.300): storage 5/5 SignedUrl DTOs; exam-score 3/4 missing SchoolQueryService; paper-task 3/4 missing MeQueryService. Cross-module-first packKey rejected (pack6 holdout 0.517)."
   },
   "axes": {
     "tokenP50Drop25AndLeSprint0": {
-      "result": "GO",
+      "result": "FAIL",
       "oldP50": { "lishuedu": 3393, "cipherlink": 3186, "exam-parent-v3": 2830 },
-      "newP50": { "lishuedu": 1730, "cipherlink": 1406, "exam-parent-v3": 1782 },
-      "drop": { "lishuedu": 0.49, "cipherlink": 0.559, "exam-parent-v3": 0.37 },
+      "newP50": { "lishuedu": 2673, "cipherlink": 2730, "exam-parent-v3": 2725 },
+      "drop": { "lishuedu": 0.212, "cipherlink": 0.143, "exam-parent-v3": 0.037 },
       "sprint0P50": { "lishuedu": 4308, "cipherlink": 3606, "exam-parent-v3": 3395 }
     },
     "rangeLineRecallNoRegress": {
       "result": "FAIL",
       "old": { "lishuedu": 0.8419, "cipherlink": 0.875, "exam-parent-v3": 0.8525 },
-      "new": { "lishuedu": 0.5819, "cipherlink": 0.85, "exam-parent-v3": 0.5575 }
+      "new": { "lishuedu": 0.7181, "cipherlink": 0.925, "exam-parent-v3": 0.6525 }
     },
     "holdoutRReadMustMean075": {
       "result": "FAIL",
-      "new": { "lishuedu": 0.375, "cipherlink": 0.225, "exam-parent-v3": 0.3 },
-      "mean": 0.3
+      "new": { "lishuedu": 0.75, "cipherlink": 0.65, "exam-parent-v3": 0.5 },
+      "mean": 0.633
     },
     "p95Section163": {
       "result": "GO",
-      "p95Ratio": { "lishuedu": 0.333, "cipherlink": 0.139, "exam-parent-v3": 0.16 }
+      "p95Ratio": { "lishuedu": 0.281, "cipherlink": 0.083, "exam-parent-v3": 0.115 }
     },
     "passedCount": "2/4"
   },
@@ -40,21 +40,21 @@
     "comparisonPolicy": "env-locked-same-tree",
     "newTreatment": { "JAVA_LSP_ENGINE": "jin" },
     "verifierPassed": false,
-    "summarySha256": "34cdbf99d06646ca10a05bb131e628fe5cef4917a45e0ce6a66146cc5b4218f0",
-    "head": "c7b2482",
-    "executableTree": "bce81f365cf0d3446c9a4db4c56d15cf7bb13d92",
-    "scratch": "jin-n4-t3-musthit3",
-    "loadavg1": 4.13,
+    "summarySha256": "c2c09fc673569e94cb194516f34915b79617e3cabb82785ea14004fc4f6ea1d5",
+    "head": "482c199",
+    "executableTree": "15b5d33594a3f7e53474aefce52a81b9c4088b81",
+    "scratch": "jin-n4-t3-pack4",
+    "loadavg1": 9.45,
     "cells": 18
   },
   "isolation": {
     "t0": { "plannerProperties": "pass", "jdtlsBin": "/usr/bin/false" },
-    "t1": { "dist": 1127, "scripts": 190, "fail": 0, "jdtlsBin": "/usr/bin/false", "executableTree": "bce81f365cf0d3446c9a4db4c56d15cf7bb13d92" }
+    "t1": { "dist": 1136, "scripts": 190, "fail": 0, "jdtlsBin": "/usr/bin/false", "executableTree": "15b5d33594a3f7e53474aefce52a81b9c4088b81" }
   },
   "keyScenarios": {
-    "storage-signed-url": { "files": 9, "selected": ["AliyunOssGateway", "StubStorageGateway"], "missing": ["StorageSignedUrlCommand", "StorageSignedUrlResult"], "rangeLineRecall": 1.0 },
-    "exam-score-export-cross-module-holdout": { "files": 1, "tokens": 1117, "selected": ["ExamScoreExportAppService"], "missing": ["SchoolQueryService", "ExamScoreExportExcelGenerator"] },
-    "paper-task-claim-iam-holdout": { "files": 7, "selected": ["PaperAccessService", "PaperRecordTaskRepository"], "missing": ["MeQueryService", "PaperRecordTaskRepositoryImpl"] }
+    "storage-signed-url": { "files": 14, "selected": ["StorageGateway", "StorageSignedUrlCommand", "StorageSignedUrlResult", "AliyunOssGateway", "StubStorageGateway"], "missing": [], "rangeLineRecall": 1.0, "rReadMust": 1.0 },
+    "exam-score-export-cross-module-holdout": { "files": 11, "tokens": 2709, "selected": ["ExamScoreExportAppService", "ExamScoreExportGenerator", "ExamScoreExportExcelGenerator"], "missing": ["SchoolQueryService"], "rangeLineRecall": 0.714, "rReadMust": 0.75 },
+    "paper-task-claim-iam-holdout": { "files": 9, "selected": ["PaperTaskCommandAppService", "PaperAccessService", "PaperRecordTaskRepositoryImpl"], "missing": ["MeQueryService"], "rangeLineRecall": 0.8, "rReadMust": 0.75 }
   },
   "failureDisposition": {
     "clock": "2-week window started 2026-08-20, not expired; stay on N4",
