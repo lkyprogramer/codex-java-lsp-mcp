@@ -12,6 +12,26 @@ import {
 import { mergeUsage, openaiCompatibleChat, usageFromCompletion } from "./openai-compatible-chat.mjs";
 import { parseAgentTraceCli, runAgentTraceMatrix } from "./run-agent-trace-matrix.mjs";
 
+test("selectLiveTasks with maxTasks 6 and onePerProject false returns all six holdouts", () => {
+  const tasks = [
+    { taskId: "lishuedu:a", projectId: "lishuedu" },
+    { taskId: "lishuedu:b", projectId: "lishuedu" },
+    { taskId: "cipherlink:a", projectId: "cipherlink" },
+    { taskId: "cipherlink:b", projectId: "cipherlink" },
+    { taskId: "exam-parent-v3:a", projectId: "exam-parent-v3" },
+    { taskId: "exam-parent-v3:b", projectId: "exam-parent-v3" }
+  ];
+  const selected = selectLiveTasks(tasks, { maxTasks: 6, onePerProject: false });
+  assert.deepEqual(selected.map(task => task.taskId), [
+    "lishuedu:a",
+    "lishuedu:b",
+    "cipherlink:a",
+    "cipherlink:b",
+    "exam-parent-v3:a",
+    "exam-parent-v3:b"
+  ]);
+});
+
 test("selectLiveTasks picks the first holdout of each project", () => {
   const selected = selectLiveTasks([
     { taskId: "lishuedu:a", projectId: "lishuedu" },

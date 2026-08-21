@@ -151,7 +151,7 @@ export async function runAgentTraceMatrix(cli) {
   await mkdir(cli.outputDir, { recursive: true });
   const selected = selectLiveTasks(plan.tasks, {
     maxTasks: cli.maxTasks,
-    onePerProject: true,
+    onePerProject: cli.maxTasks < 6,
     offset: cli.liveOffset
   });
   const live = await executeLiveTrace({
