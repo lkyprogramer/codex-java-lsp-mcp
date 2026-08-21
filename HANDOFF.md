@@ -2,25 +2,31 @@
 
 ## 当前任务
 
-JIN N5 live 仍 **FAIL**。第 0/1 步已落地：离线 `java_context` T2 三次目标文件均在选中集；live harness 改为一次 search、session、瘦 payload、不用 scene id 当 task。不进 N6，不合 `main`。未重跑 live。
+**M 轨道 M0–M5 已出口（PARTIAL）。** JIN N1 `0A.4(4b)` RSS 升级项 **RESOLVED**（分解门见 `docs/deep/codex-java-lsp-mcp-memory-footprint-optimization-plan-2026-08-21.md` §3）。N5 live 仍 FAIL，不进 N6，不合 `main`。不要重跑 N5 live，除非用户明确要求。
+
+## M 轨道出口（2026-08-21）
+
+判定 **PARTIAL**。T3 identity GO（三仓 recall/pRead/rReadMust/RangeLineRecall/holdout/tokens 逐位相同；p95 0.976/0.971/1.005 ≤ 1.10）。G1/G2/G4/G5 未达书面目标，按各卡失败处置记账，**门未放宽**。S1 733 / S2 1291 / S3=1 / S4 9 MiB·108ms GO。LOC +2118 ≤ 2500。HEAD 生产树 `70f0939`，old=`1f9eed4`。
+
+收口：`docs/phase-m/m-track-closeout.json`、`docs/phase-m/m-track-20260821.md`。raw T3 cell 不入库。
 
 ## 已完成
 
-N0 COMPLETE → N0.5 COMPLETE → N1 FAIL（RSS）→ N2a COMPLETE → N3 COMPLETE → N4 PARTIAL 3/4（`8cc1762`）→ N5-01 GO → N5-02 live MEASURED FAIL。HEAD `8ae1c1d` 隔离 T0 29/29 fail 0；T1 dist 1146 + scripts 194 fail 0，smoke 含 `java_context`。
+N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a COMPLETE → N3 COMPLETE → N4 PARTIAL 3/4（`8cc1762`）→ N5-01 GO → N5-02 live MEASURED FAIL → **M0–M5 PARTIAL**。生产树 `70f0939`。隔离 T1 dist 1173 + scripts 213 fail 0。
 
 ## 当前状态 / 卡点
 
 - N5 退出卡：质量并列 0.2；轮次/token FAIL（66 vs 26，197618 vs 25845）；presign/pay-order 未闭合；502/503 runtime 丢弃。
 - Range 残差：lishuedu / exam 仍低于 compact；cipherlink 0.925 不回退。
-- RSS 512 MiB FAIL 继承 N1（lishuedu ~2344 MiB），门不放宽，0A.4(4b) 仍开。
+- N1 RSS `0A.4(4b)` **RESOLVED** by M-track §3（G1/G2 书面目标仍 MISS，门未放宽）。
 - N3 p95 −35% vs 默认 impact **UNMEASURED**。
 - 第四仓 `YunaiV/ruoyi-vue-pro` pin `2bbe79b3` holdout 未看；leave-one-repo-out 未跑。
 - 生产 MCP / `java_impact` 不读 `JAVA_LSP_ENGINE`。
 
 ## 下一步计划
 
-1. **下一步是稳定 host 后重跑 N5 live**（第 2/3 步），不要进 N6。
-2. T2 摘要 `docs/phase-jin/jin-n5-context-replay.json` SHA `995713eb…`。第四仓 + leave-one-repo-out 仍是合 `main` 硬门。
+1. M 轨道已收口。JIN 侧仍停在 N5 live FAIL；**不要进 N6**，除非用户明确要求，不要重跑 live。
+2. 第四仓 + leave-one-repo-out 仍是合 `main` 硬门。
 
 ## 绝对不要再踩的坑
 
@@ -42,7 +48,7 @@ N0 COMPLETE → N0.5 COMPLETE → N1 FAIL（RSS）→ N2a COMPLETE → N3 COMPLE
 
 ## 给下一会话的第一步
 
-读 `docs/phase-jin/jin-section15a-verification-panel.md`。不要进 N6，不要合 `main`，不要发明 TaskSuccess。
+读 `docs/phase-m/m-track-20260821.md`。M 轨道已出口。不要进 N6，不要合 `main`，不要发明 TaskSuccess，不要重跑 N5 live。
 
 ## JIN 15A 面板（N5 FAIL / 不进 N6 / 不合 main，2026-08-21）
 

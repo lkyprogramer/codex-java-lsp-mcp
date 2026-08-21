@@ -1,0 +1,146 @@
+{
+  "schemaVersion": "m-track-closeout/v1",
+  "phase": "M5",
+  "dated": "2026-08-21",
+  "decision": "PARTIAL",
+  "mergeToMain": false,
+  "head": "70f0939",
+  "oldTree": "1f9eed4",
+  "plan": "docs/deep/codex-java-lsp-mcp-memory-footprint-optimization-plan-2026-08-21.md",
+  "n1Escalate": {
+    "clause": "0A.4(4b)",
+    "status": "RESOLVED",
+    "by": "docs/deep/codex-java-lsp-mcp-memory-footprint-optimization-plan-2026-08-21.md §3 G/S gates replace the single RSS ≤ 512 MiB/repo door. Identity is unchanged."
+  },
+  "identity": {
+    "factsDigestEqualToM0": true,
+    "factsDigest": {
+      "lishuedu": "1fe63bcaa6fb3319b6670a837ebca3055befe32422bf194668113c5e4837aaf3",
+      "cipherlink": "eec7eef8e0f197a5abcf190328d5b471013c1317718ae9bb8f7fdea5bfd21a08",
+      "exam-parent-v3": "fb7fe71d0b7192fd0591dfc70ccf366d82e4367855cc671402f1cdd16c992177"
+    },
+    "t3": {
+      "old": "1f9eed44997ef6412c2ce3aeb718e1b23e5ba126",
+      "new": "70f0939be86743b1c89f747a38f5fd7cf2c140c6",
+      "runs": 5,
+      "p95Limit": 1.1,
+      "loadavg1AtStart": 25.89,
+      "loadPolicy": "above-window, still running; refuse=false",
+      "availableBytes": 8441724928,
+      "verifierAbsoluteRangeMin1": false,
+      "bitIdentical": {
+        "recall": true,
+        "pRead": true,
+        "rReadMust": true,
+        "RangeLineRecall": true,
+        "holdoutRecall": true,
+        "holdoutPRead": true,
+        "holdoutRReadMust": true,
+        "estimatedTokensP50": true
+      },
+      "p95Ratio": {
+        "lishuedu": 0.976,
+        "cipherlink": 0.971,
+        "exam-parent-v3": 1.005
+      },
+      "passed": true,
+      "summarySha256": "d878395bf00a5357d79b50403502bd892615a04768e76a848fd126c089e61840",
+      "manifestSha256": "ed68f414e6713120c2636339d833a5eeffa1ceea78e747496941c4beffec6280",
+      "note": "Independent verifier exit 1 is the historical absolute RangeLineRecall min===1 residual (same as JIN N0/N0.5). M-track identity is old-vs-new bit equality, which holds."
+    }
+  },
+  "gates": {
+    "G1": {
+      "targetLishueduMiB": 200,
+      "targetSmallMiB": 64,
+      "lishueduHeapMiB": 273,
+      "cipherlinkHeapMiB": 45,
+      "examParentV3HeapMiB": 78,
+      "passed": false,
+      "disposition": "M2 recorded floor ~873 after columnar methods; M3 v4 files-only OPEN cut lishuedu heap to ~274. Residual is files objects + graph snapshot + v4 buffers. Identity holds. Gate not widened."
+    },
+    "G2": {
+      "targetLishueduMiB": 400,
+      "lishueduHeapAfterSnapshotLoadMiB": 273,
+      "lishueduRssSteadySameProcessMiB": 2045,
+      "lishueduS1RuntimeRssMiB": 477,
+      "passed": false,
+      "disposition": "M3 fresh-process RSS 477 after files-only load. Same-process RSS keeps allocator watermark. S1 per-runtime RSS is the serviceable G2 analogue. Gate not widened."
+    },
+    "G3": {
+      "childPeakTargetMiB": 1536,
+      "parentIncrementTargetMiB": 100,
+      "lishueduChildPeakMiB": 110,
+      "lishueduParentIncrementMiB": 0,
+      "passed": true
+    },
+    "G4": {
+      "targetMs": 2000,
+      "lishueduSnapshotLoadMs": 2114,
+      "cipherlinkSnapshotLoadMs": 480,
+      "examParentV3SnapshotLoadMs": 740,
+      "passed": false,
+      "disposition": "lishuedu 2114ms includes graph-snapshot unpack on the wait-complete path. Files-only header+files are the v4 serviceable path; S4 reheat files-only is 108ms."
+    },
+    "G5": {
+      "targetRatio": 1.1,
+      "m0WarmP95Ms": { "lishuedu": 77.2, "cipherlink": 40.9, "exam-parent-v3": 38.5 },
+      "remeasureWarmP95Ms": { "lishuedu": 7704, "cipherlink": 536, "exam-parent-v3": 1329 },
+      "passed": false,
+      "disposition": "p95 of the 10-scenario set is the first fact query, which hydrates remaining v4 segments (~7–8s on lishuedu). Subsequent scenarios in the same process are 38–76ms, in line with M0. Do not treat first-hydrate as a query regression; identity holds."
+    },
+    "S1": { "targetMiB": 1024, "rssDeltaMiB": 733, "heapUsedSumMiB": 399, "passed": true },
+    "S2": { "targetMiB": 1433.6, "rssDeltaMiB": 1291, "passed": true, "segmentShare": "DROPPED" },
+    "S3": { "simultaneousColdBuild": 1, "passed": true },
+    "S4": {
+      "hibernateHeapTargetMiB": 32,
+      "reheatTargetMs": 2000,
+      "lishueduHibernateHeapMiB": 9,
+      "lishueduReheatMs": 108,
+      "passed": true
+    }
+  },
+  "productionLoc": {
+    "old": { "commit": "1f9eed44997ef6412c2ce3aeb718e1b23e5ba126", "fileCount": 178, "totalLoc": 41971 },
+    "new": { "commit": "70f0939be86743b1c89f747a38f5fd7cf2c140c6", "fileCount": 186, "totalLoc": 44089 },
+    "delta": 2118,
+    "gate": 2500,
+    "passed": true
+  },
+  "commits": [
+    "229dff7 chore(m): add M0 memory baseline and facts-digest identity",
+    "de804b2 feat(m): intern strings and store edges in columnar form",
+    "0b993fa feat(m): store methods, call sites, and type refs in columns",
+    "92b0593 feat(m): add v4 snapshot segments and child-process cold build",
+    "70f0939 feat(m): add build semaphore, hibernate TTL, and freemem pressure"
+  ],
+  "isolation": {
+    "t1": {
+      "dist": 1173,
+      "scripts": 213,
+      "fail": 0,
+      "smoke": true,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "a2acd89e8077aa308ca85b1d6c5d9b51e0f28937",
+      "logSha256": "614c4b2c93fde2cf3e6c72ea301a7cd2a388974b9588a91f8f1699bef349075c"
+    },
+    "t3": {
+      "isolation": "detached-local-clone",
+      "jdtlsBin": "/usr/bin/false",
+      "outputDir": "scratch m5-t3 (raw cells off-git)",
+      "logSha256": "5082384ba58eb95d120c46ace403f36c16807ef70f5665027600773c5a6c12ae"
+    },
+    "gsRemeasure": {
+      "path": "docs/phase-m/m5-memory.json",
+      "sha256": "a6db1695e6eb526a3d5049d465a5a838dd751a557971527e73f2c38cbe0103e6"
+    }
+  },
+  "residuals": [
+    "G1 lishuedu heap 273 > 200; exam 78 > 64. Cipherlink 45 ≤ 64.",
+    "G2 lishuedu RSS not ≤ 400 on same-process watermark; S1 runtime ~477 MiB.",
+    "G4 lishuedu snapshotLoadMs 2114 > 2000 (graph unpack on wait-complete).",
+    "G5 first-query v4 rest hydrate dominates warm p95; later queries match M0.",
+    "Worktree v4 segment-share dropped at M4.",
+    "edit-to-visible formal matrix UNMEASURED (M3)."
+  ]
+}
