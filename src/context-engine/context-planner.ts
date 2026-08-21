@@ -92,8 +92,23 @@ function tokenCostOf(selected: EvidenceBundle[]): number {
 }
 
 const IMPL_PROOF = /IMPLEMENTS|DISPATCHES_TO|MYBATIS|JPA_|REPOSITORY_|SPRING_|PUBLISHES_EVENT|CONSUMES_EVENT/;
-const CALL_PROOF = /CALLS_|CALLED_BY|CONSTRUCTS|METHOD_REFERENCE/;
-const MID_PROOF = /EXTENDS|PERMITS|IMPORTS|DECLARES/;
+const CALL_PROOF = /CALLS_|CALLED_BY|METHOD_REFERENCE/;
+const MID_PROOF = /EXTENDS|PERMITS|IMPORTS|DECLARES|CONSTRUCTS/;
+const GENERIC_PERSISTENCE = /^(findById|save|insert|update|delete|count|exists)$|^(findBy|listBy|countBy|existsBy|deleteBy)[A-Z]/;
+const MAX_LOW_PROOF_TOKENS = 150;
+
+function provingMember(bundle: EvidenceBundle): string | undefined {
+  for (const step of bundle.provingPath) {
+    const parts = step.toId.split("#");
+    if (parts.length >= 3 && parts[2]) return parts[2];
+  }
+  return undefined;
+}
+
+function genericPersistenceCall(bundle: EvidenceBundle): boolean {
+  const name = provingMember(bundle);
+  return Boolean(name && GENERIC_PERSISTENCE.test(name));
+}
 
 function proofRank(bundle: EvidenceBundle): number {
   if (bundle.proof.some(kind => IMPL_PROOF.test(kind))) return 0;
@@ -112,26 +127,50 @@ function layoutPrefix(path: string): string {
   return path.split("/").slice(0, 2).join("/");
 }
 
+function isTestPath(path: string): boolean {
+  return path.includes("/src/test/") || path.includes("/test/java/");
+}
+
+function isSignatureImports(bundle: EvidenceBundle): boolean {
+  return bundle.proof.includes("IMPORTS") && bundle.provingPath.some(step => step.kind === "IMPORTS" && !step.fromId.includes("#"));
+}
+
+function hop2KindRank(bundle: EvidenceBundle): number {
+  if (bundle.proof.includes("CALLS_VIRTUAL")) return 0;
+  if (bundle.proof.some(kind => kind.startsWith("CALLS_"))) return 1;
+  if (bundle.proof.includes("IMPLEMENTS") || bundle.proof.includes("DISPATCHES_TO")) return 2;
+  return 3;
+}
+
 export function planEvidenceBundles(input: PlanInput): PlanResult {
   const budget = Math.max(1, input.tokenBudget);
   const fileGuard = input.maxDistinctFiles ?? MAX_DISTINCT_FILES_GUARD;
   const bundleGuard = input.maxBundles ?? MAX_BUNDLES_GUARD;
   const anchorPrefix = layoutPrefix(input.bundles.find(bundle => bundle.hops === 0)?.path ?? "");
+  const highProof = (bundle: EvidenceBundle) => (proofRank(bundle) <= 1 || (isSignatureImports(bundle) && bundle.tokenCost <= MAX_LOW_PROOF_TOKENS)) ? 0 : 1;
   const candidates = limitAmbiguity(input.bundles)
     .slice()
-    .sort((left, right) => left.hops - right.hops
+    .sort((left, right) => highProof(left) - highProof(right)
+      || left.hops - right.hops
       || proofRank(left) - proofRank(right)
       || Number(layoutPrefix(left.path) === anchorPrefix) - Number(layoutPrefix(right.path) === anchorPrefix)
+      || (left.hops >= 2 ? hop2KindRank(left) - hop2KindRank(right) : 0)
+      || (left.hops >= 2 ? left.tokenCost - right.tokenCost : 0)
       || left.path.localeCompare(right.path)
       || left.id.localeCompare(right.id));
   const selected: EvidenceBundle[] = [];
   const rejectedOverBudget: EvidenceBundle[] = [];
+  let hop2Packed = 0;
   for (const bundle of candidates.filter(isP0Bundle)) {
     selected.push(bundle);
   }
   for (const bundle of candidates.filter(item => !isP0Bundle(item))) {
     if (selected.length >= bundleGuard) break;
-    if (bundle.hops > 2 && proofRank(bundle) >= 4 && bundle.proof.some(kind => kind === "ANNOTATED_WITH" || kind === "CONTAINS")) continue;
+    if (bundle.hops > 2) continue;
+    if (isTestPath(bundle.path) || bundle.role === "TEST") continue;
+    if (genericPersistenceCall(bundle)) continue;
+    if (proofRank(bundle) >= 2 && bundle.tokenCost > MAX_LOW_PROOF_TOKENS) continue;
+    if (bundle.hops === 2 && hop2Packed >= 3) continue;
     if (marginalGain(bundle, selected) <= 0) continue;
     const used = tokenCostOf(selected);
     if (used + bundle.tokenCost > budget) {
@@ -141,6 +180,7 @@ export function planEvidenceBundles(input: PlanInput): PlanResult {
     const files = filesOf(selected);
     if (!files.has(bundle.path) && files.size >= fileGuard) continue;
     selected.push(bundle);
+    if (bundle.hops === 2) hop2Packed += 1;
   }
   const merged = mergeSelectedByPath(selected);
   merged.sort((left, right) => left.hops - right.hops || left.path.localeCompare(right.path) || left.id.localeCompare(right.id));

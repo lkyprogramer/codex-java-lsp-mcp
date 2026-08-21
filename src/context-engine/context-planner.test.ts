@@ -92,7 +92,7 @@ test("hop<=2 files are not force-filled; budget greedy can skip a large near fil
     tokenBudget: 80
   });
   assert.equal(planned.selected.some(item => item.id === "near-huge"), false);
-  assert.ok(planned.selected.some(item => item.id === "far-cheap"));
+  assert.equal(planned.selected.some(item => item.id === "far-cheap"), false);
   assert.ok(planned.tokenCost <= 80);
 });
 
@@ -172,7 +172,7 @@ test("cross-layout hop-1 CALLS pack before same-layout hop-1 CALLS", () => {
   assert.equal(planned.selected.some(item => item.id === "near"), false);
 });
 
-test("hop>2 ANNOTATED_WITH noise is skipped even when it fits", () => {
+test("hop>2 files are not packed even when they fit", () => {
   const planned = planEvidenceBundles({
     bundles: [
       bundle({ id: "a", path: "src/A.java", role: "ANCHOR", closes: ["O1"], tokenCost: 10, hops: 0 }),
@@ -190,6 +190,120 @@ test("hop>2 ANNOTATED_WITH noise is skipped even when it fits", () => {
     tokenBudget: 80
   });
   assert.equal(planned.selected.some(item => item.id === "noise"), false);
+});
+
+test("hop-2 named CALLS pack before a large hop-1 IMPORTS file", () => {
+  const planned = planEvidenceBundles({
+    bundles: [
+      bundle({ id: "a", path: "src/A.java", role: "ANCHOR", closes: ["O1"], tokenCost: 10, hops: 0 }),
+      bundle({
+        id: "view",
+        path: "src/View.java",
+        role: "CONTRACT",
+        closes: ["O5"],
+        tokenCost: 400,
+        hops: 1,
+        proof: ["IMPORTS"],
+        provingPath: [{ kind: "IMPORTS", fromId: "src/A.java", toId: "src/View.java#View" }]
+      }),
+      bundle({
+        id: "me",
+        path: "src/Me.java",
+        role: "CALLEE",
+        closes: ["O2"],
+        tokenCost: 40,
+        hops: 2,
+        proof: ["CALLS_VIRTUAL"],
+        provingPath: [{ kind: "CALLS_VIRTUAL", fromId: "src/A.java", toId: "src/Me.java#Me#getMe#n" }]
+      })
+    ],
+    tokenBudget: 55
+  });
+  assert.ok(planned.selected.some(item => item.id === "me"));
+  assert.equal(planned.selected.some(item => item.id === "view"), false);
+});
+
+test("hop-2 CALLS_VIRTUAL packs before cheaper hop-2 noise", () => {
+  const planned = planEvidenceBundles({
+    bundles: [
+      bundle({ id: "a", path: "src/A.java", role: "ANCHOR", closes: ["O1"], tokenCost: 10, hops: 0 }),
+      bundle({
+        id: "noise",
+        path: "src/Noise.java",
+        role: "DATAFLOW",
+        closes: ["O1"],
+        tokenCost: 20,
+        hops: 2,
+        proof: ["DECLARES"],
+        provingPath: [{ kind: "DECLARES", fromId: "src/A.java", toId: "src/Noise.java#N" }]
+      }),
+      bundle({
+        id: "me",
+        path: "src/Me.java",
+        role: "CALLEE",
+        closes: ["O2"],
+        tokenCost: 40,
+        hops: 2,
+        proof: ["CALLS_VIRTUAL"],
+        provingPath: [{ kind: "CALLS_VIRTUAL", fromId: "src/A.java", toId: "src/Me.java#Me#getMe#n" }]
+      })
+    ],
+    tokenBudget: 55
+  });
+  assert.ok(planned.selected.some(item => item.id === "me"));
+  assert.equal(planned.selected.some(item => item.id === "noise"), false);
+});
+
+test("generic persistence CALLS do not crowd out a named implementer", () => {
+  const planned = planEvidenceBundles({
+    bundles: [
+      bundle({ id: "a", path: "src/A.java", role: "ANCHOR", closes: ["O1"], tokenCost: 10, hops: 0 }),
+      bundle({
+        id: "repo",
+        path: "src/RepoImpl.java",
+        role: "IMPLEMENTATION",
+        closes: ["O3"],
+        tokenCost: 40,
+        hops: 1,
+        proof: ["IMPLEMENTS"],
+        provingPath: [{ kind: "IMPLEMENTS", fromId: "src/A.java", toId: "src/RepoImpl.java#Repo#findById#n" }]
+      }),
+      bundle({
+        id: "school",
+        path: "src/School.java",
+        role: "CALLEE",
+        closes: ["O2"],
+        tokenCost: 40,
+        hops: 1,
+        proof: ["CALLS_EXACT"],
+        provingPath: [{ kind: "CALLS_EXACT", fromId: "src/A.java", toId: "src/School.java#School#listStudentsByIds#n" }]
+      })
+    ],
+    tokenBudget: 55
+  });
+  assert.ok(planned.selected.some(item => item.id === "school"));
+  assert.equal(planned.selected.some(item => item.id === "repo"), false);
+});
+
+test("TEST role files are not packed", () => {
+  const planned = planEvidenceBundles({
+    bundles: [
+      bundle({ id: "a", path: "src/A.java", role: "ANCHOR", closes: ["O1"], tokenCost: 10, hops: 0 }),
+      bundle({ id: "test", path: "src/ATest.java", role: "TEST", closes: ["O7"], tokenCost: 20, hops: 1, proof: ["TESTS_TYPE"] }),
+      bundle({
+        id: "src-test",
+        path: "modules/demo/src/test/java/ATest.java",
+        role: "CALLEE",
+        closes: ["O2"],
+        tokenCost: 20,
+        hops: 1,
+        proof: ["CALLS_EXACT"],
+        provingPath: [{ kind: "CALLS_EXACT", fromId: "src/A.java", toId: "modules/demo/src/test/java/ATest.java#A#run#n" }]
+      })
+    ],
+    tokenBudget: 80
+  });
+  assert.equal(planned.selected.some(item => item.id === "test" || item.id === "src-test"), false);
 });
 
 test("named CALLS pack before signature IMPORTS when leftover fits only one", () => {

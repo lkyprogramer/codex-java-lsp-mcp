@@ -37,6 +37,7 @@ const NOISE_CALL_NAMES = new Set([
 
 function neighborhoodCallName(name: string, receiverText?: string): boolean {
   if (name.length < 3 || NOISE_CALL_NAMES.has(name)) return false;
+  if (/^(findById|save|insert|update|delete|count|exists)$|^(findBy|listBy|countBy|existsBy|deleteBy)[A-Z]/.test(name)) return false;
   if (receiverText && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(receiverText)) return false;
   return true;
 }
@@ -290,10 +291,6 @@ function collectAnchorSeeds(store: JavaIndexStore, bundle: JavaFileBundle, ancho
   for (const method of containing) {
     mention(method.returnType, 1, "IMPORTS");
     for (const parameter of method.parameters) mention(parameter.type, 1, "IMPORTS");
-  }
-  for (const field of bundle.fields) {
-    if (!owners.has(field.ownerTypeId)) continue;
-    mention(field.type, 1, "IMPORTS");
   }
   const hop0CallNames = new Set(
     hop0.flatMap(method => method.callSites.filter(site => neighborhoodCallName(site.name, site.receiverText)).map(site => site.name))
