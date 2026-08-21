@@ -2,23 +2,24 @@
 
 ## 当前任务
 
-JIN N5 **FAIL**（live 已 MEASURED）。不进 N6，不合 `main`。Serena C 臂仍 UNAVAILABLE。
+JIN N5 **FAIL** 已送 15A 验证面板。不进 N6，不合 `main`。Serena C 臂仍 UNAVAILABLE。
 
 ## 已完成
 
-N0 → N0.5 → N1 → N2a → N3-00 → N3 → N4 PARTIAL（`8cc1762`）。T3 named3：token **GO** 1715/2164/1842；p95 **GO** 0.369/0.147/0.167；holdout rReadMust 均值 **0.758** **GO**；RangeLineRecall **FAIL** 0.733/0.925/0.653 vs compact 0.842/0.875/0.853。T1 dist 1140 + scripts 190 fail 0。
+N0 COMPLETE → N0.5 COMPLETE → N1 FAIL（RSS）→ N2a COMPLETE → N3 COMPLETE → N4 PARTIAL 3/4（`8cc1762`）→ N5-01 GO → N5-02 live MEASURED FAIL。HEAD `8ae1c1d` 隔离 T0 29/29 fail 0；T1 dist 1146 + scripts 194 fail 0，smoke 含 `java_context`。
 
 ## 当前状态 / 卡点
 
+- N5 退出卡：质量并列 0.2；轮次/token FAIL（66 vs 26，197618 vs 25845）；presign/pay-order 未闭合；502/503 runtime 丢弃。
 - Range 残差：lishuedu / exam 仍低于 compact；cipherlink 0.925 不回退。
 - RSS 512 MiB FAIL 继承 N1（lishuedu ~2344 MiB），门不放宽，0A.4(4b) 仍开。
 - N3 p95 −35% vs 默认 impact **UNMEASURED**。
-- 第四仓 `YunaiV/ruoyi-vue-pro` pin `2bbe79b3`，holdout 逐场景 N5 终验前不看。
+- 第四仓 `YunaiV/ruoyi-vue-pro` pin `2bbe79b3` holdout 未看；leave-one-repo-out 未跑。
 - 生产 MCP / `java_impact` 不读 `JAVA_LSP_ENGINE`。
 
 ## 下一步计划
 
-1. **不进 N6**：N5 退出条件未过（token/轮次上升、live false 未闭合、有 502/503 runtime 丢弃）。
+1. **不进 N6**：N5 退出条件未过。
 2. 第四仓 + leave-one-repo-out 仍是合 `main` 硬门。patch/compile-test 层仍 UNMEASURED。
 
 ## 绝对不要再踩的坑
@@ -30,16 +31,23 @@ N0 → N0.5 → N1 → N2a → N3-00 → N3 → N4 PARTIAL（`8cc1762`）。T3 n
 - 不要发明 TaskSuccess。不要提交 `docs/evals/task30-model-comparison-20260802/`。密钥不入库。
 - T3 输出目录必须不存在（已存在 exit 2）。隔离测试 `PATH=/opt/homebrew/bin` 在前，`JDTLS_BIN=/usr/bin/false`。
 - 本地 `node --test *.ts` 会因 unknown extension 失败；以 isolated compile+dist 为准。
+- 不要把 N6 closeout 的过时「N4 2/4 / N5 NOT_STARTED」文案当现状；现状是 N4 3/4、N5 FAIL。
 
 ## 关键文件 / 命令 / 验证
 
-- 代码 `8cc1762`。报告 `docs/phase-jin/jin-phase-n4-20260820.md`。收口 `jin-phase-n4-closeout.json`。摘要 `jin-n4-t3-named-callee-summary.json` SHA `3ec497cf…`。T3 executableTree `9d9c87c1…`。scratch `…/implementer/jin-n4-t3-named3`。
+- 15A 面板 `docs/phase-jin/jin-section15a-verification-panel.json`。N5 收口 `jin-phase-n5-closeout.json` SHA `509999fb…`。live 摘要 SHA `fec4f4a0…`。raw trace SHA `9a398537…`（scratch）。
+- T0 log SHA `ee93dd54…`；T1 log SHA `fc5286cc…`；executableTree `4b212d28…`；`JDTLS_BIN=/usr/bin/false`。
 - goldens `/tmp/codex-java-v3-golden-20260809/{lishuedu,cipherlink,exam-parent-v3}`。
-- 计划真源 `docs/deep/codex-java-lsp-mcp-v5r-postmortem-and-java-intelligence-next-clean-slate-plan-2026-08-20.md` 15A.7。
+- 计划真源 `docs/deep/codex-java-lsp-mcp-v5r-postmortem-and-java-intelligence-next-clean-slate-plan-2026-08-20.md` 15A.7–15A.8。
 
 ## 给下一会话的第一步
 
-读 `docs/phase-jin/jin-phase-n5-20260821.md`。不要合 `main`，不要发明 TaskSuccess。N5 live 已 MEASURED，决策 FAIL。
+读 `docs/phase-jin/jin-section15a-verification-panel.md`。不要进 N6，不要合 `main`，不要发明 TaskSuccess。
+
+## JIN 15A 面板（N5 FAIL / 不进 N6 / 不合 main，2026-08-21）
+
+N0 COMPLETE、N0.5 COMPLETE、N1 FAIL RSS、N2a COMPLETE、N3 COMPLETE、N4 PARTIAL 3/4、N5 FAIL、N6 NOT_STARTED。
+HEAD `8ae1c1d` 隔离 T1 dist 1146 + scripts 194 fail 0。live SHA `9a398537…`。
 
 ## JIN N5 FAIL（live 三臂 MEASURED，2026-08-21）
 
