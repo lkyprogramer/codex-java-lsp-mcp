@@ -1,12 +1,17 @@
 # HANDOFF
 
-## JIN 停在 N4（hop-2 CALLS 2/4；时钟未到期，2026-08-21）
+## JIN 停在 N4（hop0 cap 2/4；时钟未到期，2026-08-21）
 
 15A.6 JIN-N4-04：**2 周窗口到期**才做二元裁决。窗口从 2026-08-20 起算，尚未到期。  
-本轮 T3 **2/4**：token **GO**（1730/1539/1872）；p95 **GO**（0.316/0.141/0.159）；RangeLineRecall **FAIL** 0.582/0.850/0.558；holdout rReadMust 均值 0.300 **FAIL**。  
-AliyunOssGateway + PaperAccessService + PaperRecordTaskRepository port 在选中集。仍缺 MeQueryService、SchoolQueryService、ExcelGenerator、SignedUrl DTO。exam-score hop0 ≈1509 把剩余预算吃光。按方法拆包会打 Range，已撤回。  
+本轮 T3 **2/4**：token **GO**（1730/1406/1782）；p95 **GO**（0.333/0.139/0.160）；RangeLineRecall **FAIL** 0.582/0.850/0.558；holdout rReadMust 均值 0.300 **FAIL**。  
+exam-score hop0 1117（剩余 ~883）仍 1 文件。SignedUrl DTO / MeQueryService / SchoolQueryService / ExcelGenerator 仍缺。AliyunOssGateway + PaperAccessService 在。  
 **不进 N5、不合 `main`。** 生产 MCP 不读 `JAVA_LSP_ENGINE`。不得发明 TaskSuccess。  
-报告：`docs/phase-jin/jin-phase-n4-20260820.md`。摘要 `jin-n4-t3-holdout-hop2-summary.json`。code `301bf49`。
+报告：`docs/phase-jin/jin-phase-n4-20260820.md`。摘要 `jin-n4-t3-musthit-summary.json`。code `c7b2482`。
+
+## JIN N4 hop0 field-callee cap 2/4（2026-08-21）
+
+分支 `codex/jin-main`。hop0 = containing + 最多 4 个带字段调用的同文件 callee。T3 **2/4**。T1 1127+190 fail 0。  
+报告：`docs/phase-jin/jin-phase-n4-20260820.md`。摘要 `jin-n4-t3-musthit-summary.json`。
 
 ## JIN N4 hop-2 CALLS 2/4（2026-08-21）
 

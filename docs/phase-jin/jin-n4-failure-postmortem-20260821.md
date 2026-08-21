@@ -23,6 +23,7 @@ N4 最好 T3 四轴 **2/4**（discovery：token GO、p95 GO、RangeLineRecall FA
 | restore discovery | GO 1775/1671/1855 | 0.582 / 0.850 / 0.558 | 均值 **0.300**；p95 0.327/0.135/0.157 |
 | hop-1 field callee names, extraNames containing-only | GO 1822/1671/1853 | 0.582 / 0.850 / 0.558 | 均值 **0.267**；p95 0.335/0.143/0.161 |
 | all field-callee names + hop-2 CALLS only | GO 1730/1539/1872 | 0.582 / 0.850 / 0.558 | 均值 **0.300**；p95 0.316/0.141/0.159 |
+| hop0 field-calling callee cap + DTO type span | GO 1730/1406/1782 | 0.582 / 0.850 / 0.558 | 均值 **0.300**；p95 0.333/0.139/0.160；exam-score hop0 1117 仍 1 文件 |
 
 多选文件丢掉 25% token 门，还不抬 Range（要 span 完整覆盖 golden 行）。少选文件保住 token/p95，holdout 文件（MeQueryService、SchoolQueryService、ExcelGenerator、SignedUrl DTO）仍不在选中集。这是候选闭包与预算的结构冲突，不是再跑一轮 T3 能抹平的残差。
 
@@ -39,4 +40,4 @@ N4 最好 T3 四轴 **2/4**（discovery：token GO、p95 GO、RangeLineRecall FA
 - **N5 未开工**：`java_context` 与三臂 live A/B 不开工。N5 准入是 N4 ≥3/4 PARTIAL，或 2 周窗口到期后的二元裁决。`5b6f2aa` 的 SKIP_FAIL 过早。
 - **N6 未开工**：不删旧链、不合 `main`。N6 硬门含 §16.3 全过 + 第四仓 + leave-one-repo-out。
 
-回滚点：分支 `codex/jin-main`。N4 最好证据是 `301bf49`（token+p95 2/4）。neighborhood `4bff986` 已回退。不回滚已入库的 N0–N3 证据。
+回滚点：分支 `codex/jin-main`。N4 最好证据是 `c7b2482`（token+p95 2/4）。neighborhood `4bff986` 已回退。不回滚已入库的 N0–N3 证据。
