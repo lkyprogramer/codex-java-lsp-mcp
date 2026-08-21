@@ -2,65 +2,65 @@
   "schemaVersion": "jin-phase-n4-closeout/v1",
   "phase": "N4",
   "dated": "2026-08-21",
-  "decision": "FAIL",
+  "decision": "PARTIAL",
   "mergeToMain": false,
-  "retry": "whole-method slices; mergeSpans union bytes; hop0 containing+2 cross-module field callees; named method union + IMPLEMENTS same-file callee; CALLS after IMPLEMENTS; IMPORTS not ambiguity-capped; extraNames containing-only",
+  "retry": "prefer hop-2 CALLS_VIRTUAL over cheaper hop-2 noise; skip generic persistence proving members, TEST files, and hops>2; cap hop-2 at 3; keep signature IMPORTS in the high-proof group; extraNames containing-only",
   "bestSoFar": {
-    "axesPassed": "2/4",
-    "iteration": "pack-holdout",
-    "head": "482c199",
-    "summary": "jin-n4-t3-pack-holdout-summary.json",
-    "note": "p95 GO. token drop short of 25%. Range improved vs prior jin but still below compact. holdout rReadMust 0.633 (was 0.300): storage 5/5 SignedUrl DTOs; exam-score 3/4 missing SchoolQueryService; paper-task 3/4 missing MeQueryService. Cross-module-first packKey rejected (pack6 holdout 0.517)."
+    "axesPassed": "3/4",
+    "iteration": "named-callee",
+    "head": "8cc1762",
+    "summary": "jin-n4-t3-named-callee-summary.json",
+    "note": "token+p95+holdout GO. Range still below compact on lishuedu/exam (cipherlink 0.925 does not regress). storage 5/5 SignedUrl DTOs; exam-score 4/4 SchoolQueryService; paper-task 4/4 MeQueryService. No extraNames dump, no method-split hop>0, no cross-module-first packKey."
   },
   "axes": {
     "tokenP50Drop25AndLeSprint0": {
-      "result": "FAIL",
+      "result": "GO",
       "oldP50": { "lishuedu": 3393, "cipherlink": 3186, "exam-parent-v3": 2830 },
-      "newP50": { "lishuedu": 2673, "cipherlink": 2730, "exam-parent-v3": 2725 },
-      "drop": { "lishuedu": 0.212, "cipherlink": 0.143, "exam-parent-v3": 0.037 },
+      "newP50": { "lishuedu": 1715, "cipherlink": 2164, "exam-parent-v3": 1842 },
+      "drop": { "lishuedu": 0.495, "cipherlink": 0.321, "exam-parent-v3": 0.349 },
       "sprint0P50": { "lishuedu": 4308, "cipherlink": 3606, "exam-parent-v3": 3395 }
     },
     "rangeLineRecallNoRegress": {
       "result": "FAIL",
       "old": { "lishuedu": 0.8419, "cipherlink": 0.875, "exam-parent-v3": 0.8525 },
-      "new": { "lishuedu": 0.7181, "cipherlink": 0.925, "exam-parent-v3": 0.6525 }
+      "new": { "lishuedu": 0.7333, "cipherlink": 0.925, "exam-parent-v3": 0.6525 }
     },
     "holdoutRReadMustMean075": {
-      "result": "FAIL",
-      "new": { "lishuedu": 0.75, "cipherlink": 0.65, "exam-parent-v3": 0.5 },
-      "mean": 0.633
+      "result": "GO",
+      "new": { "lishuedu": 1.0, "cipherlink": 0.775, "exam-parent-v3": 0.5 },
+      "mean": 0.758
     },
     "p95Section163": {
       "result": "GO",
-      "p95Ratio": { "lishuedu": 0.281, "cipherlink": 0.083, "exam-parent-v3": 0.115 }
+      "p95Ratio": { "lishuedu": 0.369, "cipherlink": 0.147, "exam-parent-v3": 0.167 }
     },
-    "passedCount": "2/4"
+    "passedCount": "3/4"
   },
   "t3": {
     "comparisonPolicy": "env-locked-same-tree",
     "newTreatment": { "JAVA_LSP_ENGINE": "jin" },
     "verifierPassed": false,
-    "summarySha256": "c2c09fc673569e94cb194516f34915b79617e3cabb82785ea14004fc4f6ea1d5",
-    "head": "482c199",
-    "executableTree": "15b5d33594a3f7e53474aefce52a81b9c4088b81",
-    "scratch": "jin-n4-t3-pack4",
-    "loadavg1": 9.45,
+    "summarySha256": "3ec497cfd3035f17c1e79de6abeec360bf7dab9aee9b3e81b708abab10f6969d",
+    "head": "8cc1762",
+    "executableTree": "9d9c87c1b730cb40327dbda81df33973f00c8752",
+    "scratch": "jin-n4-t3-named3",
+    "loadavg1": 19.36,
     "cells": 18
   },
   "isolation": {
     "t0": { "plannerProperties": "pass", "jdtlsBin": "/usr/bin/false" },
-    "t1": { "dist": 1136, "scripts": 190, "fail": 0, "jdtlsBin": "/usr/bin/false", "executableTree": "15b5d33594a3f7e53474aefce52a81b9c4088b81" }
+    "t1": { "dist": 1140, "scripts": 190, "fail": 0, "jdtlsBin": "/usr/bin/false", "executableTree": "9d9c87c1b730cb40327dbda81df33973f00c8752" }
   },
   "keyScenarios": {
-    "storage-signed-url": { "files": 14, "selected": ["StorageGateway", "StorageSignedUrlCommand", "StorageSignedUrlResult", "AliyunOssGateway", "StubStorageGateway"], "missing": [], "rangeLineRecall": 1.0, "rReadMust": 1.0 },
-    "exam-score-export-cross-module-holdout": { "files": 11, "tokens": 2709, "selected": ["ExamScoreExportAppService", "ExamScoreExportGenerator", "ExamScoreExportExcelGenerator"], "missing": ["SchoolQueryService"], "rangeLineRecall": 0.714, "rReadMust": 0.75 },
-    "paper-task-claim-iam-holdout": { "files": 9, "selected": ["PaperTaskCommandAppService", "PaperAccessService", "PaperRecordTaskRepositoryImpl"], "missing": ["MeQueryService"], "rangeLineRecall": 0.8, "rReadMust": 0.75 }
+    "storage-signed-url": { "files": 8, "tokens": 1715, "selected": ["StorageGateway", "StorageSignedUrlCommand", "StorageSignedUrlResult", "AliyunOssGateway", "StubStorageGateway"], "missing": [], "rangeLineRecall": 1.0, "rReadMust": 1.0 },
+    "exam-score-export-cross-module-holdout": { "files": 4, "tokens": 2370, "selected": ["ExamScoreExportAppService", "ExamScoreExportGenerator", "ExamScoreExportExcelGenerator", "SchoolQueryService"], "missing": [], "rangeLineRecall": 1.0, "rReadMust": 1.0 },
+    "paper-task-claim-iam-holdout": { "files": 10, "tokens": 2003, "selected": ["PaperTaskCommandAppService", "PaperAccessService", "PaperRecordTaskRepositoryImpl", "MeQueryService"], "alsoSelected": ["ExamPaperQueryService"], "missing": [], "rangeLineRecall": 1.0, "rReadMust": 1.0 }
   },
   "failureDisposition": {
-    "clock": "2-week window started 2026-08-20, not expired; stay on N4",
-    "axesPassed": 2,
-    "bestAxesPassed": 2,
-    "action": "stay on N4; do not enter N5; do not merge main",
-    "escalate": "deferred until window expires; RSS 512 MiB remains open 0A.4(4b) and is not relaxed"
+    "clock": "2-week window started 2026-08-20, not expired; 3/4 axes reached before expiry",
+    "axesPassed": 3,
+    "bestAxesPassed": 3,
+    "action": "N4 PARTIAL; enter N5; do not merge main",
+    "escalate": "not triggered; Range residual carried into N5 live A/B; RSS 512 MiB remains open 0A.4(4b) and is not relaxed"
   }
 }

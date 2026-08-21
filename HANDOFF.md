@@ -1,5 +1,55 @@
 # HANDOFF
 
+## 当前任务
+
+JIN N4 **PARTIAL 3/4**，下一阶段 **N5**：`java_context` 工具面 + 三臂 live A/B。不合 `main`。
+
+## 已完成
+
+N0 → N0.5 → N1 → N2a → N3-00 → N3 → N4 PARTIAL（`8cc1762`）。T3 named3：token **GO** 1715/2164/1842；p95 **GO** 0.369/0.147/0.167；holdout rReadMust 均值 **0.758** **GO**；RangeLineRecall **FAIL** 0.733/0.925/0.653 vs compact 0.842/0.875/0.853。T1 dist 1140 + scripts 190 fail 0。
+
+## 当前状态 / 卡点
+
+- Range 残差：lishuedu / exam 仍低于 compact；cipherlink 0.925 不回退。
+- RSS 512 MiB FAIL 继承 N1（lishuedu ~2344 MiB），门不放宽，0A.4(4b) 仍开。
+- N3 p95 −35% vs 默认 impact **UNMEASURED**。
+- 第四仓 `YunaiV/ruoyi-vue-pro` pin `2bbe79b3`，holdout 逐场景 N5 终验前不看。
+- 生产 MCP / `java_impact` 不读 `JAVA_LSP_ENGINE`。
+
+## 下一步计划
+
+1. JIN-N5-01：`src/tools/context.ts` 注册 `java_context`；intent enum、无锚点、navigate；`measure:tool-schema` ≤ 600 token；T0/T1 + `npm run smoke`。
+2. JIN-N5-02：old `java_impact` / JIN `java_context` / Serena 三臂 live A/B。`--authorize-external` 才可声称 TaskSuccess。
+3. N6 删除旧链并合 `main` 仅在硬门全过后。
+
+## 绝对不要再踩的坑
+
+- 不要再用「跨模块优先」装箱：pack6 把 Agency 等无关跨模块文件挤进 paper/exam，holdout 掉到 0.517。
+- 不要按方法拆 hop>0：Range 会从 0.582 掉到 0.499。
+- 不要把 extraNames 灌成全局 call 名：lishuedu p95Ratio 会到 1.2–1.7。
+- 不要给 hop0 挂全部 owner 字段 IMPORTS：会把每个 repo 的 `findById` IMPLEMENTS 抬到 rank 0，挤掉 School CALLS。
+- 不要发明 TaskSuccess。不要提交 `docs/evals/task30-model-comparison-20260802/`。密钥不入库。
+- T3 输出目录必须不存在（已存在 exit 2）。隔离测试 `PATH=/opt/homebrew/bin` 在前，`JDTLS_BIN=/usr/bin/false`。
+- 本地 `node --test *.ts` 会因 unknown extension 失败；以 isolated compile+dist 为准。
+
+## 关键文件 / 命令 / 验证
+
+- 代码 `8cc1762`。报告 `docs/phase-jin/jin-phase-n4-20260820.md`。收口 `jin-phase-n4-closeout.json`。摘要 `jin-n4-t3-named-callee-summary.json` SHA `3ec497cf…`。T3 executableTree `9d9c87c1…`。scratch `…/implementer/jin-n4-t3-named3`。
+- goldens `/tmp/codex-java-v3-golden-20260809/{lishuedu,cipherlink,exam-parent-v3}`。
+- 计划真源 `docs/deep/codex-java-lsp-mcp-v5r-postmortem-and-java-intelligence-next-clean-slate-plan-2026-08-20.md` 15A.7。
+
+## 给下一会话的第一步
+
+读 `src/tools/impact.ts` 与 `src/mcp-server-factory.ts`，按 JIN-N5-01 加 `java_context`，确认生产路径仍不读 `JAVA_LSP_ENGINE`。
+
+## JIN N4 PARTIAL 3/4（named hop-2 CALLS_VIRTUAL，2026-08-21）
+
+15A.6 JIN-N4-04：≥ 3/4 记 PARTIAL 并进 N5。窗口从 2026-08-20 起算，未到期。  
+T3 **3/4**：token **GO**（1715/2164/1842，−49.5/−32.1/−34.9%）；p95 **GO**（0.369/0.147/0.167）；holdout rReadMust 均值 **0.758**（1.00/0.775/0.50）**GO**；RangeLineRecall **FAIL** 0.733/0.925/0.653 vs compact 0.842/0.875/0.853。  
+storage-signed-url **5/5**。exam-score **4/4** SchoolQueryService。paper-task **4/4** MeQueryService。  
+**进 N5、不合 `main`。** 生产 MCP 不读 `JAVA_LSP_ENGINE`。不得发明 TaskSuccess。  
+报告：`docs/phase-jin/jin-phase-n4-20260820.md`。摘要 `jin-n4-t3-named-callee-summary.json`。code `8cc1762`。scratch `jin-n4-t3-named3`。
+
 ## JIN 停在 N4（holdout 装箱 2/4；时钟未到期，2026-08-21）
 
 15A.6 JIN-N4-04：**2 周窗口到期**才做二元裁决。窗口从 2026-08-20 起算，尚未到期。  

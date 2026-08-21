@@ -1,0 +1,1189 @@
+{
+  "version": 6,
+  "verifiedAt": "2026-08-21T03:00:40.054Z",
+  "matrixDir": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/matrix",
+  "manifest": {
+    "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/run-manifest.json",
+    "sha256": "8c6e2b441b7ff110db0d7ad2bbf4f39d9260bdd62726b85bd086fb0a4449586d",
+    "verifierVersion": 6,
+    "runtimes": {
+      "old": {
+        "commit": "bdb180984ebc62b4f44633e85c95241645511dd1",
+        "commitTree": "a98931bac357fc23e095e7dc3ddf77acb8500182",
+        "executableTree": "9d9c87c1b730cb40327dbda81df33973f00c8752",
+        "buildStamp": {
+          "gitSha": "bdb180984ebc",
+          "generatedAt": "2026-08-21T02:48:43.877Z",
+          "defaults": {
+            "idleTtlMs": 2700000,
+            "importConcurrency": 2,
+            "jdtlsXmx": "2g",
+            "maxActiveRepos": 3
+          },
+          "defaultsFingerprint": "e5835394a86f"
+        }
+      },
+      "new": {
+        "commit": "bdb180984ebc62b4f44633e85c95241645511dd1",
+        "commitTree": "a98931bac357fc23e095e7dc3ddf77acb8500182",
+        "executableTree": "9d9c87c1b730cb40327dbda81df33973f00c8752",
+        "buildStamp": {
+          "gitSha": "bdb180984ebc",
+          "generatedAt": "2026-08-21T02:48:48.389Z",
+          "defaults": {
+            "idleTtlMs": 2700000,
+            "importConcurrency": 2,
+            "jdtlsXmx": "2g",
+            "maxActiveRepos": 3
+          },
+          "defaultsFingerprint": "e5835394a86f"
+        }
+      }
+    },
+    "repositories": {
+      "lishuedu": {
+        "root": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-mcp-three-repo-fWpp0v/repositories/lishuedu",
+        "head": "db63b1a7e393edd90449eb013d7d1c4d65c366f2",
+        "tree": "22f0ce444e4cac484de85c8a0bf02240ad70d712",
+        "clean": true,
+        "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "sourceRoot": "/tmp/codex-java-v3-golden-20260809/lishuedu"
+      },
+      "cipherlink": {
+        "root": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-mcp-three-repo-fWpp0v/repositories/cipherlink",
+        "head": "fa433982e92e52dd610650d1e79f2d041179b1d3",
+        "tree": "21a1075c7b211932a4cdb2abf2742521b1eba31f",
+        "clean": true,
+        "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "sourceRoot": "/tmp/codex-java-v3-golden-20260809/cipherlink"
+      },
+      "exam-parent-v3": {
+        "root": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-mcp-three-repo-fWpp0v/repositories/exam-parent-v3",
+        "head": "f90a0b475f7be2ed003703feecec8195bc7eb976",
+        "tree": "dcdb2024879686451859c64260c7e1f3a4721fa7",
+        "clean": true,
+        "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "sourceRoot": "/tmp/codex-java-v3-golden-20260809/exam-parent-v3"
+      }
+    },
+    "scenarios": {
+      "lishuedu": {
+        "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/frozen-scenarios/lishuedu.scenarios.jsonl",
+        "sha256": "fba58bb3e3e77dfb37f7ded03fb2a9ff02612658b08ca48b15927d102c434c65",
+        "rowIds": [
+          "storage-signed-url",
+          "school-template-parser",
+          "report-reusable-zip",
+          "school-confirm-controller",
+          "benefit-product-code-dto",
+          "school-mapstruct-uses",
+          "audit-order-repository-mapper-rule-type",
+          "audit-assignee-mapper-precision",
+          "exam-score-export-cross-module-holdout",
+          "paper-task-claim-iam-holdout"
+        ],
+        "tuningRowIds": [
+          "storage-signed-url",
+          "school-template-parser",
+          "report-reusable-zip",
+          "school-confirm-controller",
+          "benefit-product-code-dto",
+          "school-mapstruct-uses",
+          "audit-order-repository-mapper-rule-type",
+          "audit-assignee-mapper-precision"
+        ],
+        "holdoutRowIds": [
+          "exam-score-export-cross-module-holdout",
+          "paper-task-claim-iam-holdout"
+        ]
+      },
+      "cipherlink": {
+        "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/frozen-scenarios/cipherlink.scenarios.jsonl",
+        "sha256": "e60dfebcc6cd764e6488c647793db72e098b7cf66385f8012e023fedcaf535d5",
+        "rowIds": [
+          "client-update-check",
+          "transfer-upload-init",
+          "transfer-upload-session-repository",
+          "aliyun-sms-gateway-send",
+          "operation-log-response-dto",
+          "organization-create-member-cross-module",
+          "auth-sms-login-lockout",
+          "account-admin-create-account-guard",
+          "client-release-storage-presign-holdout",
+          "backend-operation-log-aspect-async-audit-holdout"
+        ],
+        "tuningRowIds": [
+          "client-update-check",
+          "transfer-upload-init",
+          "transfer-upload-session-repository",
+          "aliyun-sms-gateway-send",
+          "operation-log-response-dto",
+          "organization-create-member-cross-module",
+          "auth-sms-login-lockout",
+          "account-admin-create-account-guard"
+        ],
+        "holdoutRowIds": [
+          "client-release-storage-presign-holdout",
+          "backend-operation-log-aspect-async-audit-holdout"
+        ]
+      },
+      "exam-parent-v3": {
+        "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+        "sha256": "da84c560c46c7c90d6dbabea38b43b5695a7a23dcd2f608e8c6dcd63cae4f69e",
+        "rowIds": [
+          "rule-engine-execute",
+          "candidate-position-select",
+          "apply-info-save-basic-service",
+          "position-repository-exists",
+          "ceb-order-create-dto",
+          "apply-info-update-cross-exam-guard",
+          "check-people-delete-site-guard",
+          "current-user-service-implementer-edge",
+          "exam-room-print-download-types-persistent-bundle",
+          "candidate-pay-order-cross-module-admission"
+        ],
+        "tuningRowIds": [
+          "rule-engine-execute",
+          "candidate-position-select",
+          "apply-info-save-basic-service",
+          "position-repository-exists",
+          "ceb-order-create-dto",
+          "apply-info-update-cross-exam-guard",
+          "check-people-delete-site-guard",
+          "current-user-service-implementer-edge"
+        ],
+        "holdoutRowIds": [
+          "exam-room-print-download-types-persistent-bundle",
+          "candidate-pay-order-cross-module-admission"
+        ]
+      }
+    },
+    "candidatePatch": {
+      "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/candidate.patch",
+      "sha256": "4726a8efe6de6c95df11c78d2037cdae04c8609f6e78732327d2af0e0a2972e6",
+      "bytes": 11152,
+      "appliedToCommit": "bdb180984ebc62b4f44633e85c95241645511dd1",
+      "appliedToCommitTree": "a98931bac357fc23e095e7dc3ddf77acb8500182",
+      "resultingExecutableTree": "9d9c87c1b730cb40327dbda81df33973f00c8752",
+      "untrackedInputs": []
+    },
+    "comparisonPolicy": {
+      "baseline": "env-locked-same-tree",
+      "baselineRevision": "bdb180984ebc62b4f44633e85c95241645511dd1",
+      "goldenSchema": "java-intelligence-v32-range-holdout-v2",
+      "pReadTolerance": 0.02,
+      "p95AbsoluteSlackMs": 50,
+      "taskBlockingBaseline": "attempt-or-derived-attribution",
+      "envLock": {
+        "allowlist": [
+          "JAVA_LSP_ENGINE"
+        ],
+        "old": {
+          "env": {},
+          "benchArgs": [],
+          "fingerprint": "e824adc3e677298b64352097d487e408386a47d764488f15a1ed3d24dc9a85dc"
+        },
+        "new": {
+          "env": {
+            "JAVA_LSP_ENGINE": "jin"
+          },
+          "benchArgs": [],
+          "fingerprint": "9b14eec103b9ba72b009f8f88773bb5ac28efb2372c8cab10ff323aa2329373e"
+        }
+      }
+    }
+  },
+  "inputSha256": "a6c979e111d56bb0a25c6b097ef89f7e3441c2f5ad4d8aa619cfd851cabf9ee8",
+  "configuration": {
+    "projects": [
+      "lishuedu",
+      "cipherlink",
+      "exam-parent-v3"
+    ],
+    "rounds": [
+      1,
+      2,
+      3
+    ],
+    "variants": [
+      "old",
+      "new"
+    ],
+    "expectedCells": 18,
+    "expectedRuns": 5,
+    "p95Limit": 1.25
+  },
+  "scenarioFiles": {
+    "lishuedu": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/frozen-scenarios/lishuedu.scenarios.jsonl",
+    "cipherlink": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/frozen-scenarios/cipherlink.scenarios.jsonl",
+    "exam-parent-v3": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/frozen-scenarios/exam-parent-v3.scenarios.jsonl"
+  },
+  "cells": [
+    {
+      "project": "lishuedu",
+      "round": 1,
+      "variant": "old",
+      "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/matrix/lishuedu-r1-old.json",
+      "sha256": "742baacaa93020effcbc873d953072afb50ae82c71e0059dc04558a8a22cc0ac",
+      "scenarioFile": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "lishuedu",
+      "round": 2,
+      "variant": "old",
+      "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/matrix/lishuedu-r2-old.json",
+      "sha256": "190c611fedde9ee38cb1aa1160367cd4245c98c58512d9d4c3354a5bebb16ada",
+      "scenarioFile": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "lishuedu",
+      "round": 3,
+      "variant": "old",
+      "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/matrix/lishuedu-r3-old.json",
+      "sha256": "69409135a42065e3be40d3f5d023cbd7f1b6d83fbb1b6afa7f19c4e6125cbadd",
+      "scenarioFile": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "lishuedu",
+      "round": 1,
+      "variant": "new",
+      "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/matrix/lishuedu-r1-new.json",
+      "sha256": "e6ef7bd51dffc4e28601de949a989466e49d091943397c8c502deaa6a4c1f4c9",
+      "scenarioFile": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "lishuedu",
+      "round": 2,
+      "variant": "new",
+      "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/matrix/lishuedu-r2-new.json",
+      "sha256": "b83d2932dde9ac2549c4678bee0600767ed8140175da3cfc12b0218f88efd5ab",
+      "scenarioFile": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "lishuedu",
+      "round": 3,
+      "variant": "new",
+      "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/matrix/lishuedu-r3-new.json",
+      "sha256": "39d3b372991df9b1be0d37efaa0993d16e95162714df8bfa7f3c2dc9faaa8b5d",
+      "scenarioFile": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "cipherlink",
+      "round": 1,
+      "variant": "old",
+      "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/matrix/cipherlink-r1-old.json",
+      "sha256": "e71d09f482314a76693bd8dd79bf23fa4df61569a73f8198f418b4f29f046f7f",
+      "scenarioFile": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "cipherlink",
+      "round": 2,
+      "variant": "old",
+      "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/matrix/cipherlink-r2-old.json",
+      "sha256": "0e77926486ec2296e4270ed935a7721f5ef1aaa47f6019d056c103c0ad5ba2da",
+      "scenarioFile": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "cipherlink",
+      "round": 3,
+      "variant": "old",
+      "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/matrix/cipherlink-r3-old.json",
+      "sha256": "f23cb6d45f6a6e59fb7b5067b1bafbbd0d3a84d7bc5dffd507c971cfd54cf18e",
+      "scenarioFile": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "cipherlink",
+      "round": 1,
+      "variant": "new",
+      "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/matrix/cipherlink-r1-new.json",
+      "sha256": "079b0c272f50e138aa42b082a87b45a00743cc07459caa023504f29bc153729c",
+      "scenarioFile": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "cipherlink",
+      "round": 2,
+      "variant": "new",
+      "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/matrix/cipherlink-r2-new.json",
+      "sha256": "a30a79e40632d13a0951249e2b5e2e10d09c1d9b7cf08a4d8c2b05df90660065",
+      "scenarioFile": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "cipherlink",
+      "round": 3,
+      "variant": "new",
+      "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/matrix/cipherlink-r3-new.json",
+      "sha256": "bc3f6c6837e29fea882cde9c7e7a56b2d701ad8aa55441b65ceebe8ffd0e0d3f",
+      "scenarioFile": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 1,
+      "variant": "old",
+      "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/matrix/exam-parent-v3-r1-old.json",
+      "sha256": "2eebca1cbfd5aa8c3c6b714280dddf00bc262b1dbadea2857526ca56223c7ef6",
+      "scenarioFile": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 2,
+      "variant": "old",
+      "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/matrix/exam-parent-v3-r2-old.json",
+      "sha256": "9e2d7f23f15440bd134cd498de0a672b638026cc4224c9c425c6aa5df442ee2b",
+      "scenarioFile": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 3,
+      "variant": "old",
+      "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/matrix/exam-parent-v3-r3-old.json",
+      "sha256": "1e078143b23547fe0c88960cfc5ec173f79fb4836a99ffa1642919ade2f3cf90",
+      "scenarioFile": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 1,
+      "variant": "new",
+      "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/matrix/exam-parent-v3-r1-new.json",
+      "sha256": "1e5a439480aad3f7fb9bd1d8c23a173b86c089b6481f02e664ce2106587131a7",
+      "scenarioFile": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 2,
+      "variant": "new",
+      "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/matrix/exam-parent-v3-r2-new.json",
+      "sha256": "215b69ecb8561400714af492e2c40ad4adaa8177511f9c14565c74cfc7ba9337",
+      "scenarioFile": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 3,
+      "variant": "new",
+      "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/matrix/exam-parent-v3-r3-new.json",
+      "sha256": "7c16243b4048f726e6fd257283f963f1eaca32af7eb10a1db9f071d40fa870ae",
+      "scenarioFile": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    }
+  ],
+  "projects": [
+    {
+      "project": "lishuedu",
+      "old": {
+        "attempts": 150,
+        "recall": 0.7985714285714284,
+        "pRead": 0.7216666666666659,
+        "rReadMust": 0.925,
+        "rTaskBlocking": 0.5721123321123319,
+        "minReadMust": 0.5,
+        "minTaskBlocking": 0.38461538461538464,
+        "estimatedTokensP50": 3393,
+        "estimatedTokensP95": 4747,
+        "rangeEvidence": {
+          "line": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.8419047619047617,
+            "min": 0.2857142857142857
+          },
+          "coordinate": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.8419047619047617,
+            "min": 0.2857142857142857
+          }
+        },
+        "p50": 46.99670799999876,
+        "p95": 257.81037500000093,
+        "max": 325.84408399999666,
+        "mustFailureScenarios": [
+          "exam-score-export-cross-module-holdout",
+          "paper-task-claim-iam-holdout"
+        ],
+        "scenarioFile": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/frozen-scenarios/lishuedu.scenarios.jsonl",
+        "splits": {
+          "tuning": {
+            "attempts": 120,
+            "recall": 0.784672619047619,
+            "pRead": 0.6937499999999999,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.604563492063492,
+            "minReadMust": 1,
+            "minTaskBlocking": 0.42857142857142855,
+            "estimatedTokensP50": 2982,
+            "estimatedTokensP95": 4011,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 0.9166666666666662,
+                "min": 0.3333333333333333
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 0.9166666666666662,
+                "min": 0.3333333333333333
+              }
+            },
+            "p50": 46.13362500000221,
+            "p95": 188.89895799999795,
+            "max": 325.84408399999666,
+            "mustFailureScenarios": []
+          },
+          "holdout": {
+            "attempts": 30,
+            "recall": 0.8541666666666664,
+            "pRead": 0.8333333333333331,
+            "rReadMust": 0.625,
+            "rTaskBlocking": 0.44230769230769246,
+            "minReadMust": 0.5,
+            "minTaskBlocking": 0.38461538461538464,
+            "estimatedTokensP50": 4543,
+            "estimatedTokensP95": 4747,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.542857142857143,
+                "min": 0.2857142857142857
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.542857142857143,
+                "min": 0.2857142857142857
+              }
+            },
+            "p50": 125.88579200000095,
+            "p95": 257.81037500000093,
+            "max": 259.005084000004,
+            "mustFailureScenarios": [
+              "exam-score-export-cross-module-holdout",
+              "paper-task-claim-iam-holdout"
+            ]
+          }
+        }
+      },
+      "new": {
+        "attempts": 150,
+        "recall": 0.38908730158730204,
+        "pRead": 0.5002777777777779,
+        "rReadMust": 0.8583333333333333,
+        "rTaskBlocking": 0.44822954822954897,
+        "minReadMust": 0.3333333333333333,
+        "minTaskBlocking": 0.14285714285714285,
+        "estimatedTokensP50": 1715,
+        "estimatedTokensP95": 2383,
+        "rangeEvidence": {
+          "line": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.7333333333333333,
+            "min": 0
+          },
+          "coordinate": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0,
+            "min": 0
+          }
+        },
+        "p50": 73.55499999999302,
+        "p95": 95.24433300000237,
+        "max": 122.08087499999965,
+        "mustFailureScenarios": [
+          "school-template-parser",
+          "report-reusable-zip",
+          "benefit-product-code-dto"
+        ],
+        "scenarioFile": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/frozen-scenarios/lishuedu.scenarios.jsonl",
+        "splits": {
+          "tuning": {
+            "attempts": 120,
+            "recall": 0.3821924603174605,
+            "pRead": 0.41284722222222214,
+            "rReadMust": 0.8229166666666665,
+            "rTaskBlocking": 0.43432539682539756,
+            "minReadMust": 0.3333333333333333,
+            "minTaskBlocking": 0.14285714285714285,
+            "estimatedTokensP50": 1349,
+            "estimatedTokensP95": 2383,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 0.6666666666666665,
+                "min": 0
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 0,
+                "min": 0
+              }
+            },
+            "p50": 72.35816700000578,
+            "p95": 95.24433300000237,
+            "max": 122.08087499999965,
+            "mustFailureScenarios": [
+              "school-template-parser",
+              "report-reusable-zip",
+              "benefit-product-code-dto"
+            ]
+          },
+          "holdout": {
+            "attempts": 30,
+            "recall": 0.41666666666666674,
+            "pRead": 0.8499999999999998,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.5038461538461537,
+            "minReadMust": 1,
+            "minTaskBlocking": 0.3076923076923077,
+            "estimatedTokensP50": 2003,
+            "estimatedTokensP95": 2370,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 1,
+                "min": 1
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0,
+                "min": 0
+              }
+            },
+            "p50": 76.89854199999536,
+            "p95": 91.08166700000584,
+            "max": 97.77779200000805,
+            "mustFailureScenarios": []
+          }
+        }
+      },
+      "delta": {
+        "recall": -0.40948412698412634,
+        "pRead": -0.22138888888888797,
+        "rReadMust": -0.06666666666666676,
+        "rTaskBlocking": -0.12388278388278295,
+        "estimatedTokensP50": -1678,
+        "p95Ratio": 0.3694356094086672,
+        "p95ThresholdMs": 322.26296875000116,
+        "holdout": {
+          "recall": -0.43749999999999967,
+          "pRead": 0.016666666666666607,
+          "rReadMust": 0.375,
+          "rTaskBlocking": 0.061538461538461264
+        }
+      },
+      "gate": {
+        "rReadMust": false,
+        "rTaskBlocking": false,
+        "recall": false,
+        "pRead": false,
+        "estimatedTokens": true,
+        "p95": true,
+        "rangeLineRecall": false,
+        "rangeCoordinateRecall": false,
+        "holdoutRReadMust": true,
+        "holdoutRTaskBlocking": true,
+        "holdoutRecall": false,
+        "holdoutPRead": true
+      },
+      "passed": false
+    },
+    {
+      "project": "cipherlink",
+      "old": {
+        "attempts": 150,
+        "recall": 0.8389926739926743,
+        "pRead": 0.6633333333333328,
+        "rReadMust": 0.9099999999999996,
+        "rTaskBlocking": 0.45195526695526667,
+        "minReadMust": 0.5,
+        "minTaskBlocking": 0.25,
+        "estimatedTokensP50": 3186,
+        "estimatedTokensP95": 4093,
+        "rangeEvidence": {
+          "line": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.875,
+            "min": 0.25
+          },
+          "coordinate": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.875,
+            "min": 0.25
+          }
+        },
+        "p50": 45.54399999999987,
+        "p95": 214.91741700000057,
+        "max": 284.0122500000007,
+        "mustFailureScenarios": [
+          "client-release-storage-presign-holdout",
+          "backend-operation-log-aspect-async-audit-holdout"
+        ],
+        "scenarioFile": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/frozen-scenarios/cipherlink.scenarios.jsonl",
+        "splits": {
+          "tuning": {
+            "attempts": 120,
+            "recall": 0.8612408424908428,
+            "pRead": 0.6624999999999995,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.4891865079365078,
+            "minReadMust": 1,
+            "minTaskBlocking": 0.25,
+            "estimatedTokensP50": 3037,
+            "estimatedTokensP95": 4093,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 1,
+                "min": 1
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 1,
+                "min": 1
+              }
+            },
+            "p50": 63.28095800000028,
+            "p95": 217.4630419999994,
+            "max": 284.0122500000007,
+            "mustFailureScenarios": []
+          },
+          "holdout": {
+            "attempts": 30,
+            "recall": 0.75,
+            "pRead": 0.6666666666666665,
+            "rReadMust": 0.5499999999999999,
+            "rTaskBlocking": 0.303030303030303,
+            "minReadMust": 0.5,
+            "minTaskBlocking": 0.2727272727272727,
+            "estimatedTokensP50": 3436,
+            "estimatedTokensP95": 3954,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.375,
+                "min": 0.25
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.375,
+                "min": 0.25
+              }
+            },
+            "p50": 28.275666999999885,
+            "p95": 58.539166999999,
+            "max": 59.76591700000063,
+            "mustFailureScenarios": [
+              "client-release-storage-presign-holdout",
+              "backend-operation-log-aspect-async-audit-holdout"
+            ]
+          }
+        }
+      },
+      "new": {
+        "attempts": 150,
+        "recall": 0.48136599511599554,
+        "pRead": 0.5406102231102231,
+        "rReadMust": 0.8216666666666664,
+        "rTaskBlocking": 0.5569155844155843,
+        "minReadMust": 0.5,
+        "minTaskBlocking": 0.2727272727272727,
+        "estimatedTokensP50": 2164,
+        "estimatedTokensP95": 2922,
+        "rangeEvidence": {
+          "line": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.925,
+            "min": 0.5
+          },
+          "coordinate": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0,
+            "min": 0
+          }
+        },
+        "p50": 20.58954199999971,
+        "p95": 31.50866700000006,
+        "max": 53.15112500000032,
+        "mustFailureScenarios": [
+          "client-update-check",
+          "transfer-upload-session-repository",
+          "operation-log-response-dto",
+          "organization-create-member-cross-module",
+          "client-release-storage-presign-holdout",
+          "backend-operation-log-aspect-async-audit-holdout"
+        ],
+        "scenarioFile": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/frozen-scenarios/cipherlink.scenarios.jsonl",
+        "splits": {
+          "tuning": {
+            "attempts": 120,
+            "recall": 0.5313949938949943,
+            "pRead": 0.5061199217449219,
+            "rReadMust": 0.8333333333333335,
+            "rTaskBlocking": 0.6099702380952381,
+            "minReadMust": 0.5,
+            "minTaskBlocking": 0.5,
+            "estimatedTokensP50": 1796,
+            "estimatedTokensP95": 2922,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 1,
+                "min": 1
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 0,
+                "min": 0
+              }
+            },
+            "p50": 22.963832999999795,
+            "p95": 32.144542,
+            "max": 53.15112500000032,
+            "mustFailureScenarios": [
+              "client-update-check",
+              "transfer-upload-session-repository",
+              "operation-log-response-dto",
+              "organization-create-member-cross-module"
+            ]
+          },
+          "holdout": {
+            "attempts": 30,
+            "recall": 0.28125,
+            "pRead": 0.6785714285714287,
+            "rReadMust": 0.7750000000000002,
+            "rTaskBlocking": 0.34469696969696956,
+            "minReadMust": 0.75,
+            "minTaskBlocking": 0.2727272727272727,
+            "estimatedTokensP50": 2164,
+            "estimatedTokensP95": 2498,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.625,
+                "min": 0.5
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0,
+                "min": 0
+              }
+            },
+            "p50": 18.404708000000028,
+            "p95": 20.86291699999947,
+            "max": 21.97504200000003,
+            "mustFailureScenarios": [
+              "client-release-storage-presign-holdout",
+              "backend-operation-log-aspect-async-audit-holdout"
+            ]
+          }
+        }
+      },
+      "delta": {
+        "recall": -0.35762667887667876,
+        "pRead": -0.12272311022310967,
+        "rReadMust": -0.08833333333333315,
+        "rTaskBlocking": 0.10496031746031764,
+        "estimatedTokensP50": -1022,
+        "p95Ratio": 0.14660825278762762,
+        "p95ThresholdMs": 268.6467712500007,
+        "holdout": {
+          "recall": -0.46875,
+          "pRead": 0.011904761904762196,
+          "rReadMust": 0.2250000000000003,
+          "rTaskBlocking": 0.041666666666666574
+        }
+      },
+      "gate": {
+        "rReadMust": false,
+        "rTaskBlocking": true,
+        "recall": false,
+        "pRead": false,
+        "estimatedTokens": true,
+        "p95": true,
+        "rangeLineRecall": false,
+        "rangeCoordinateRecall": false,
+        "holdoutRReadMust": false,
+        "holdoutRTaskBlocking": true,
+        "holdoutRecall": false,
+        "holdoutPRead": true
+      },
+      "passed": false
+    },
+    {
+      "project": "exam-parent-v3",
+      "old": {
+        "attempts": 150,
+        "recall": 0.6970066045066045,
+        "pRead": 0.6,
+        "rReadMust": 0.8800000000000008,
+        "rTaskBlocking": 0.48190476190476167,
+        "minReadMust": 0.4,
+        "minTaskBlocking": 0.16666666666666666,
+        "estimatedTokensP50": 2830,
+        "estimatedTokensP95": 4965,
+        "rangeEvidence": {
+          "line": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.8525000000000004,
+            "min": 0.125
+          },
+          "coordinate": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.8525000000000004,
+            "min": 0.125
+          }
+        },
+        "p50": 97.54070800000045,
+        "p95": 256.6059580000001,
+        "max": 376.2616249999992,
+        "mustFailureScenarios": [
+          "exam-room-print-download-types-persistent-bundle",
+          "candidate-pay-order-cross-module-admission"
+        ],
+        "scenarioFile": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+        "splits": {
+          "tuning": {
+            "attempts": 120,
+            "recall": 0.7633522727272726,
+            "pRead": 0.6458333333333331,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.5502976190476188,
+            "minReadMust": 1,
+            "minTaskBlocking": 0.2857142857142857,
+            "estimatedTokensP50": 2830,
+            "estimatedTokensP95": 4965,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 1,
+                "min": 1
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 1,
+                "min": 1
+              }
+            },
+            "p50": 44.382834,
+            "p95": 181.3602919999994,
+            "max": 228.31112500000017,
+            "mustFailureScenarios": []
+          },
+          "holdout": {
+            "attempts": 30,
+            "recall": 0.4316239316239317,
+            "pRead": 0.41666666666666674,
+            "rReadMust": 0.4000000000000002,
+            "rTaskBlocking": 0.20833333333333337,
+            "minReadMust": 0.4,
+            "minTaskBlocking": 0.16666666666666666,
+            "estimatedTokensP50": 2783,
+            "estimatedTokensP95": 3054,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.26250000000000007,
+                "min": 0.125
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.26250000000000007,
+                "min": 0.125
+              }
+            },
+            "p50": 232.79341699999895,
+            "p95": 332.1224999999995,
+            "max": 376.2616249999992,
+            "mustFailureScenarios": [
+              "exam-room-print-download-types-persistent-bundle",
+              "candidate-pay-order-cross-module-admission"
+            ]
+          }
+        }
+      },
+      "new": {
+        "attempts": 150,
+        "recall": 0.37708014208014196,
+        "pRead": 0.3537662337662343,
+        "rReadMust": 0.825,
+        "rTaskBlocking": 0.42261904761904745,
+        "minReadMust": 0.4,
+        "minTaskBlocking": 0.14285714285714285,
+        "estimatedTokensP50": 1842,
+        "estimatedTokensP95": 2743,
+        "rangeEvidence": {
+          "line": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.6525000000000002,
+            "min": 0
+          },
+          "coordinate": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0,
+            "min": 0
+          }
+        },
+        "p50": 27.871000000001004,
+        "p95": 42.95575000000099,
+        "max": 60.642541999999594,
+        "mustFailureScenarios": [
+          "rule-engine-execute",
+          "ceb-order-create-dto",
+          "exam-room-print-download-types-persistent-bundle",
+          "candidate-pay-order-cross-module-admission"
+        ],
+        "scenarioFile": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+        "splits": {
+          "tuning": {
+            "attempts": 120,
+            "recall": 0.3965638528138529,
+            "pRead": 0.3717532467532468,
+            "rReadMust": 0.90625,
+            "rTaskBlocking": 0.4449404761904761,
+            "minReadMust": 0.5,
+            "minTaskBlocking": 0.14285714285714285,
+            "estimatedTokensP50": 1842,
+            "estimatedTokensP95": 2664,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 0.75,
+                "min": 0
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 0,
+                "min": 0
+              }
+            },
+            "p50": 27.73466600000029,
+            "p95": 45.38470899999993,
+            "max": 60.642541999999594,
+            "mustFailureScenarios": [
+              "rule-engine-execute",
+              "ceb-order-create-dto"
+            ]
+          },
+          "holdout": {
+            "attempts": 30,
+            "recall": 0.29914529914529914,
+            "pRead": 0.2818181818181818,
+            "rReadMust": 0.5,
+            "rTaskBlocking": 0.33333333333333326,
+            "minReadMust": 0.4,
+            "minTaskBlocking": 0.16666666666666666,
+            "estimatedTokensP50": 1540,
+            "estimatedTokensP95": 2743,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.26250000000000007,
+                "min": 0.125
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0,
+                "min": 0
+              }
+            },
+            "p50": 28.185583000000406,
+            "p95": 34.535665999999765,
+            "max": 37.14470799999981,
+            "mustFailureScenarios": [
+              "exam-room-print-download-types-persistent-bundle",
+              "candidate-pay-order-cross-module-admission"
+            ]
+          }
+        }
+      },
+      "delta": {
+        "recall": -0.3199264624264625,
+        "pRead": -0.2462337662337657,
+        "rReadMust": -0.055000000000000826,
+        "rTaskBlocking": -0.05928571428571422,
+        "estimatedTokensP50": -988,
+        "p95Ratio": 0.16739965951999047,
+        "p95ThresholdMs": 320.7574475000001,
+        "holdout": {
+          "recall": -0.13247863247863256,
+          "pRead": -0.13484848484848494,
+          "rReadMust": 0.09999999999999981,
+          "rTaskBlocking": 0.12499999999999989
+        }
+      },
+      "gate": {
+        "rReadMust": false,
+        "rTaskBlocking": false,
+        "recall": false,
+        "pRead": false,
+        "estimatedTokens": true,
+        "p95": true,
+        "rangeLineRecall": false,
+        "rangeCoordinateRecall": false,
+        "holdoutRReadMust": false,
+        "holdoutRTaskBlocking": true,
+        "holdoutRecall": false,
+        "holdoutPRead": false
+      },
+      "passed": false
+    }
+  ],
+  "warnings": [],
+  "passed": false,
+  "summaryFile": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-bdeb0500fa38/implementer/jin-n4-t3-named3/matrix-summary.json"
+}
