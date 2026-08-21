@@ -2,7 +2,7 @@
 
 ## 当前任务
 
-JIN N5-01 **COMPLETE**。下一张卡 **JIN-N5-02**：old `java_impact` / JIN `java_context` / Serena 三臂 live A/B。必须 `--authorize-external`。不合 `main`。
+JIN N5 **PARTIAL**。N5-02 live 三臂 A/B **BLOCKED_EXTERNAL**（0A.4(a)）。不进 N6，不合 `main`。解阻需要进程环境 API key（同一 host `192.168.10.29:28343`）以及可选 Serena MCP。
 
 ## 已完成
 
@@ -18,8 +18,8 @@ N0 → N0.5 → N1 → N2a → N3-00 → N3 → N4 PARTIAL（`8cc1762`）。T3 n
 
 ## 下一步计划
 
-1. JIN-N5-02：扩展 `run-agent-trace-matrix.mjs` 三臂 live A/B。`--authorize-external` 才可声称 TaskSuccess。
-2. N6 删除旧链并合 `main` 仅在硬门全过后。
+1. 用户提供 live key（及可选 `SERENA_MCP_COMMAND`）后，隔离跑 `scripts/run-agent-trace-matrix.mjs --authorize-external --execute-live --max-tasks 6`。
+2. live 过门前 **不进 N6**。N6 还要第四仓 + leave-one-repo-out + §16.3 硬门。
 
 ## 绝对不要再踩的坑
 
@@ -39,7 +39,14 @@ N0 → N0.5 → N1 → N2a → N3-00 → N3 → N4 PARTIAL（`8cc1762`）。T3 n
 
 ## 给下一会话的第一步
 
-读 `scripts/run-agent-trace-matrix.mjs` 与 JIN-N5-02。没有 `--authorize-external` 不得声称 TaskSuccess，不得发明成功数字。
+确认进程环境有 `OPENAI_API_KEY` 或 `JAVA_LSP_AGENT_API_KEY`、`OPENAI_BASE_URL=http://192.168.10.29:28343/v1`、`OPENAI_MODEL=openclaw/Qwen3.8-27B-WORK`。没有 key 不得发明 TaskSuccess，不得进 N6。
+
+## JIN N5 PARTIAL（三臂 harness GO，live BLOCKED_EXTERNAL，2026-08-21）
+
+N5-02 harness：36 cells（old=`java_impact` / jin=`java_context` / serena 公开 MCP）。  
+`--authorize-external --execute-live` exit 3。host `192.168.10.29:28343` 无 key → HTTP 401。TaskSuccess/usage **UNMEASURED**。Serena **UNAVAILABLE**。  
+0A.4(a) escalate。不进 N6。不合 `main`。T1 dist 1146 + scripts 193 fail 0。  
+报告：`docs/phase-jin/jin-phase-n5-20260821.md`。摘要 `jin-n5-02-blocked-external.json`。code `78e01a3`。
 
 ## JIN N5-01 COMPLETE（java_context，2026-08-21）
 

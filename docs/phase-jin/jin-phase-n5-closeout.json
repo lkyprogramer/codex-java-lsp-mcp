@@ -2,34 +2,44 @@
   "schemaVersion": "jin-phase-n5-closeout/v1",
   "phase": "N5",
   "dated": "2026-08-21",
-  "decision": "N5-01_COMPLETE",
+  "decision": "PARTIAL",
   "mergeToMain": false,
+  "enterN6": false,
   "n501": {
     "result": "GO",
     "handler": "src/tools/java-context.ts",
-    "note": "tools/context.ts already owns ToolContext; handler file is java-context.ts",
-    "publicTools": [
-      "java_status",
-      "java_impact",
-      "java_context",
-      "java_symbol",
-      "java_diagnostics",
-      "java_runtime"
-    ],
     "measureToolSchema": {
-      "tools": 6,
-      "jsonBytes": 7486,
-      "estimatedTokens": 1872,
-      "javaContext": { "jsonBytes": 2255, "estimatedTokens": 564, "budget": 600, "result": "GO" }
+      "javaContextEstimatedTokens": 564,
+      "budget": 600,
+      "result": "GO"
     },
-    "t1": { "dist": 1146, "scripts": 190, "fail": 0, "jdtlsBin": "/usr/bin/false" },
-    "smoke": { "result": "GO", "toolsIncludeJavaContext": true },
-    "javaLspEngineUnread": ["mcp-server-factory.ts", "tools/impact.ts", "tools/java-context.ts", "application.ts"]
+    "head": "b0c08dd"
   },
   "n502": {
-    "result": "NOT_STARTED",
-    "blocker": "requires --authorize-external for live three-arm A/B; do not invent TaskSuccess"
+    "result": "BLOCKED_EXTERNAL",
+    "harness": "GO",
+    "live": "BLOCKED_EXTERNAL",
+    "taskSuccess": { "status": "UNMEASURED" },
+    "modelUsage": { "status": "UNMEASURED" },
+    "escalate": "0A.4(a)",
+    "endpoint": {
+      "host": "192.168.10.29:28343",
+      "httpStatusWithoutKey": 401
+    },
+    "serena": "UNAVAILABLE",
+    "head": "78e01a3",
+    "protocolCells": 36,
+    "summary": "jin-n5-02-blocked-external.json",
+    "t1": { "dist": 1146, "scripts": 193, "fail": 0 },
+    "executableTree": "81242b54e9789ca28df05287016815868b226c6f"
   },
-  "head": "b0c08dd",
-  "executableTree": "d99a7ee8226b3514e77ab743bc3a9ea78bceee85"
+  "gates": {
+    "agentQualityNonInferior": "UNMEASURED",
+    "toolRoundsAndTokenDrop": "UNMEASURED",
+    "liveFalseClosed": "UNMEASURED",
+    "noContextCapOrRuntimeDrop": "UNMEASURED"
+  },
+  "failureDisposition": {
+    "action": "escalate 0A.4(a) for live credentials and Serena MCP; do not enter N6; do not merge main; do not invent TaskSuccess"
+  }
 }
