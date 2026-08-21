@@ -140,22 +140,31 @@ test("valid gzip but invalid JSON is discarded as a miss", async () => {
   assert.equal(existsSync(target), false, "a corrupt snapshot must be deleted, not retained");
 });
 
-test("schemaVersion 1 is rejected and the file is deleted", async () => {
+test("schemaVersion 1 gzip JSON is rejected and the file is deleted", async () => {
   const target = tempFile();
-  const legacy = { ...snapshot(), schemaVersion: 1 } as unknown as JavaIndexSnapshotV3;
-  await writeSnapshotAtomic(target, legacy);
+  mkdirSync(path.dirname(target), { recursive: true });
+  writeFileSync(target, gzipSync(Buffer.from(JSON.stringify({ ...snapshot(), schemaVersion: 1 }))));
   const loaded = await loadSnapshot(target, identityFor(snapshot()));
   assert.equal(loaded, undefined);
   assert.equal(existsSync(target), false);
 });
 
-test("the pre-Task-28 schemaVersion 2 (no myBatisResources/resourceCoverage) is rejected, not migrated", async () => {
+test("the pre-Task-28 schemaVersion 2 gzip JSON is rejected, not migrated", async () => {
   const target = tempFile();
-  const legacyV2 = { ...snapshot(), schemaVersion: 2 } as unknown as JavaIndexSnapshotV3;
-  await writeSnapshotAtomic(target, legacyV2);
+  mkdirSync(path.dirname(target), { recursive: true });
+  writeFileSync(target, gzipSync(Buffer.from(JSON.stringify({ ...snapshot(), schemaVersion: 2 }))));
   const loaded = await loadSnapshot(target, identityFor(snapshot()));
   assert.equal(loaded, undefined);
   assert.equal(existsSync(target), false, "a schema-2 snapshot must be deleted, never migrated in place");
+});
+
+test("a leftover v3 gzip schema-3 snapshot is discarded, not migrated", async () => {
+  const target = tempFile();
+  mkdirSync(path.dirname(target), { recursive: true });
+  writeFileSync(target, gzipSync(Buffer.from(JSON.stringify(snapshot()))));
+  const loaded = await loadSnapshot(target, identityFor(snapshot()));
+  assert.equal(loaded, undefined);
+  assert.equal(existsSync(target), false);
 });
 
 test("an extractorVersion mismatch is rejected", async () => {

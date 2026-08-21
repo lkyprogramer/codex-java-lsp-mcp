@@ -916,6 +916,8 @@ export type GraphDigest = {
   edges: number;
   heapUsedBytes?: number;
   rssBytes?: number;
+  childColdPeakRssBytes?: number;
+  parentColdIncrementBytes?: number;
 };
 
 export function validateGraphDigest(value: unknown): GraphDigest {
@@ -931,7 +933,9 @@ export function validateGraphDigest(value: unknown): GraphDigest {
     nodes: source.nodes,
     edges: source.edges,
     ...(isNumber(source.heapUsedBytes) ? { heapUsedBytes: source.heapUsedBytes } : {}),
-    ...(isNumber(source.rssBytes) ? { rssBytes: source.rssBytes } : {})
+    ...(isNumber(source.rssBytes) ? { rssBytes: source.rssBytes } : {}),
+    ...(isNumber(source.childColdPeakRssBytes) ? { childColdPeakRssBytes: source.childColdPeakRssBytes } : {}),
+    ...(isNumber(source.parentColdIncrementBytes) ? { parentColdIncrementBytes: source.parentColdIncrementBytes } : {})
   };
 }
 

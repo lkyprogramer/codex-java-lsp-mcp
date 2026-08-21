@@ -343,6 +343,8 @@ export async function benchProject(project, repoRoot, timeoutMs, cacheRoot) {
         numberOfNativeContexts: hotHeap.heapStatistics.number_of_native_contexts
       },
       snapshotGzBytes: await snapshotBytes(cacheDir),
+      childColdPeakRssBytes: coldDigest.childColdPeakRssBytes,
+      parentColdIncrementBytes: coldDigest.parentColdIncrementBytes,
       nodes: coldDigest.nodes,
       edges: coldDigest.edges,
       files: loaded.status.javaIndex?.files ?? cold.status.javaIndex?.files,
@@ -590,6 +592,8 @@ async function main() {
       project: item.project,
       heapUsedMiB: bytesToMiB(item.heapUsedBytes),
       coldHeapUsedMiB: bytesToMiB(item.coldHeapUsedBytes),
+      childColdPeakMiB: item.childColdPeakRssBytes != null ? bytesToMiB(item.childColdPeakRssBytes) : undefined,
+      parentColdIncrementMiB: item.parentColdIncrementBytes != null ? bytesToMiB(item.parentColdIncrementBytes) : undefined,
       rssPeakMiB: bytesToMiB(item.rssPeakBytes),
       rssSteadySameProcessMiB: bytesToMiB(item.rssSteadySameProcessBytes),
       snapshotLoadMs: Math.round(item.snapshotLoadMs),

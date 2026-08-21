@@ -1,6 +1,8 @@
+import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { parentPort } from "node:worker_threads";
 import {
   defaultLeaseClockDeps,
@@ -36,11 +38,13 @@ import { buildStaticEdges, resolveFileRefs } from "./edge-builder.js";
 import { JavaIndexStore } from "./index-store.js";
 import { JavaNameResolver, buildTypeRegistryView, type TypeRegistryView } from "./name-resolver.js";
 import {
-  loadSnapshot,
+  loadSnapshotView,
   writeSnapshotIfManifestCurrent,
   type JavaIndexSnapshotV3,
   type SnapshotIdentity
 } from "./snapshot.js";
+import type { SnapshotV4View } from "./snapshot-v4.js";
+import type { ColdBuildResult } from "./cold-build.js";
 import { STABLE_ID_VERSION } from "./stable-id.js";
 import { EntitySearchIndex } from "./entity-search.js";
 import { KnowledgeGraphStore } from "../java-knowledge/graph-store.js";
@@ -78,6 +82,7 @@ const SWEEP_CHUNK_SIZE = 50;
 const SWEEP_LEASE_WAIT_MS = 10000;
 const SNAPSHOT_FILE_NAME = "java-index-snapshot.json.gz";
 const GRAPH_SNAPSHOT_FILE_NAME = "java-knowledge-graph.json.gz";
+const COLD_BUILD_CHILD = fileURLToPath(new URL("./cold-build-child.js", import.meta.url));
 // Debounced so a burst of foreground refreshes (a save, then a formatter
 // re-save moments later) coalesces into one write instead of one per event.
 const SNAPSHOT_FLUSH_DEBOUNCE_MS = 1000;
@@ -163,6 +168,10 @@ let backgroundLoopPromise: Promise<void> = Promise.resolve();
 let closing = false;
 
 let snapshotPath: string | undefined;
+let pendingSnapshotView: SnapshotV4View | undefined;
+let snapshotFactsHydrated = true;
+let lastColdBuildMetrics: { rssPeakBytes: number; parentIncrementBytes: number } | undefined;
+let coldBuildAttempted = false;
 // Monotonic in-memory publication revisions. A writer owns the revision it
 // captured, so its late success/failure cannot overwrite the observable state
 // of a newer mutation that arrived while the atomic write was in flight.
@@ -736,6 +745,7 @@ function flushSnapshotNow(): Promise<void> {
   }
   const queued = snapshotFlushTail.then(async () => {
     if (snapshotDirtyRevision <= snapshotDurableRevision || !snapshotPath || !store || !layout) return;
+    await ensureFactsHydrated();
     snapshotFlushInProgress = true;
     const target = snapshotPath;
     const currentLayout = layout;
@@ -1110,6 +1120,87 @@ function invalidateOwnSnapshotVerification(generation: number): void {
   queueSnapshotVerificationReconcile(generation);
 }
 
+function metaSnapshot(view: SnapshotV4View): JavaIndexSnapshotV3 {
+  return {
+    schemaVersion: 3,
+    extractorVersion: view.header.extractorVersion,
+    stableIdVersion: view.header.stableIdVersion,
+    canonicalRepoRoot: view.header.canonicalRepoRoot,
+    buildFingerprint: view.header.buildFingerprint,
+    manifestFingerprint: view.header.manifestFingerprint,
+    indexedGeneration: view.header.indexedGeneration,
+    createdAt: view.header.createdAt,
+    coverage: view.header.coverage,
+    resourceCoverage: view.header.resourceCoverage,
+    files: view.files,
+    types: [],
+    fields: [],
+    methods: [],
+    edges: [],
+    myBatisResources: []
+  };
+}
+
+async function ensureFactsHydrated(): Promise<void> {
+  if (snapshotFactsHydrated || !store || !pendingSnapshotView) {
+    snapshotFactsHydrated = true;
+    return;
+  }
+  const rest = pendingSnapshotView.readRest();
+  store.ingestSnapshotFacts({
+    types: rest.types,
+    fields: rest.fields,
+    methods: rest.methods,
+    edges: rest.edges,
+    myBatisResources: rest.myBatisResources
+  });
+  if (rest.entitySearch?.version === 1) {
+    entitySearch.loadSnapshot(rest.entitySearch);
+    entitySearchSyncedRevision = indexFactsRevision;
+  }
+  pendingSnapshotView = undefined;
+  snapshotFactsHydrated = true;
+}
+
+function spawnColdBuildChild(cacheDir: string, generation: number): Promise<ColdBuildResult | undefined> {
+  return new Promise(resolve => {
+    const child = spawn(process.execPath, [
+      COLD_BUILD_CHILD,
+      "--repo-root",
+      repoRoot,
+      "--cache-dir",
+      cacheDir,
+      "--generation",
+      String(generation)
+    ], { stdio: ["ignore", "pipe", "inherit"] });
+    let stdout = "";
+    child.stdout?.setEncoding("utf8");
+    child.stdout?.on("data", chunk => {
+      stdout += chunk;
+    });
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      resolve(undefined);
+    }, 180_000);
+    child.on("error", () => {
+      clearTimeout(timer);
+      resolve(undefined);
+    });
+    child.on("close", code => {
+      clearTimeout(timer);
+      if (code !== 0) {
+        resolve(undefined);
+        return;
+      }
+      try {
+        resolve(JSON.parse(stdout.trim().split("\n").filter(Boolean).at(-1) ?? ""));
+      } catch {
+        resolve(undefined);
+      }
+    });
+  });
+}
+
 function startOwnSnapshotHydration(
   identity: SnapshotIdentity,
   requestedGeneration: number,
@@ -1120,8 +1211,9 @@ function startOwnSnapshotHydration(
   ownSnapshotVerificationStale = false;
   ownSnapshotVerificationPromise = (async () => {
     try {
-      const loaded = snapshotPath ? await loadSnapshot(snapshotPath, identity) : undefined;
-      if (!loaded) {
+      const loadedView = snapshotPath ? await loadSnapshotView(snapshotPath, identity) : undefined;
+      const loaded = loadedView ? metaSnapshot(loadedView) : undefined;
+      if (!loadedView || !loaded) {
         // Preserve Task 21a's immediate sibling-seed path when no own cache
         // exists. A corrupt own snapshot is simply a cache miss here; its
         // sibling attempt remains fail-soft, exactly as before.
@@ -1147,7 +1239,16 @@ function startOwnSnapshotHydration(
       // read confirms their content hash. `indexMyBatisResources` can then
       // reuse exact snapshot facts without re-parsing them, while changed XML
       // is extracted fresh and is never visible through the interim store.
-      store.loadSnapshotData({ ...loaded, myBatisResources: [] });
+      store.loadSnapshotData({
+        files: loadedView.files,
+        types: [],
+        fields: [],
+        methods: [],
+        edges: [],
+        myBatisResources: []
+      });
+      pendingSnapshotView = loadedView;
+      snapshotFactsHydrated = false;
       const graphPath = snapshotPath ? path.join(path.dirname(snapshotPath), GRAPH_SNAPSHOT_FILE_NAME) : undefined;
       const packedGraph = graphPath ? await loadGraphSnapshot(graphPath) : undefined;
       if (packedGraph) {
@@ -1156,12 +1257,7 @@ function startOwnSnapshotHydration(
       } else {
         graphSyncedRevision = -1;
       }
-      if (loaded.entitySearch?.version === 1) {
-        entitySearch.loadSnapshot(loaded.entitySearch);
-        entitySearchSyncedRevision = indexFactsRevision;
-      } else {
-        entitySearchSyncedRevision = -1;
-      }
+      entitySearchSyncedRevision = -1;
       // Snapshot generations belong to the process that wrote the snapshot.
       // A new RepoChangeCoordinator starts its own monotonic domain, so every
       // verified fact must be adopted into the OPEN generation instead of
@@ -1177,7 +1273,7 @@ function startOwnSnapshotHydration(
         && !ownSnapshotVerificationStale
         && status.indexedGeneration === expectedGeneration;
       const resourceReindex = layout
-        ? indexMyBatisResources(store, layout, expectedGeneration, new Map(loaded.myBatisResources.map(resource => [resource.relativePath, resource])))
+        ? indexMyBatisResources(store, layout, expectedGeneration)
         : Promise.resolve();
       const verifiedGeneration = await verifyOwnSnapshot(loaded, expectedGeneration, canApply);
       await resourceReindex;
@@ -1455,6 +1551,49 @@ async function indexMyBatisResources(
 }
 
 async function beginBackgroundSweep(generation: number): Promise<void> {
+  const coverageEntries = coverage.snapshot();
+  if (
+    store
+    && store.filesByPath.size > 0
+    && coverageEntries.length > 0
+    && coverageEntries.every(entry => entry.state === "COMPLETE" && entry.generation === generation)
+  ) {
+    return;
+  }
+  if (
+    store
+    && store.filesByPath.size === 0
+    && snapshotPath
+    && !closing
+    && !coldBuildAttempted
+    && (
+      process.env.JAVA_LSP_ISOLATED_VALIDATION === "1"
+        ? process.env.JAVA_LSP_COLD_BUILD_CHILD === "1"
+        : process.env.JAVA_LSP_COLD_BUILD_CHILD !== "0"
+    )
+  ) {
+    coldBuildAttempted = true;
+    const parentBefore = process.memoryUsage().rss;
+    const childResult = await spawnColdBuildChild(path.dirname(snapshotPath), generation);
+    lastColdBuildMetrics = childResult
+      ? { rssPeakBytes: childResult.rssPeakBytes, parentIncrementBytes: Math.max(0, process.memoryUsage().rss - parentBefore) }
+      : undefined;
+    if (childResult?.ok) {
+      layout = layout ?? probeLayout(repoRoot);
+      const buildFingerprint = await computeBuildFingerprint(repoRoot, layout).catch(() => undefined);
+      if (buildFingerprint) {
+        const identity: SnapshotIdentity = {
+          extractorVersion: computeExtractorVersion(),
+          stableIdVersion: STABLE_ID_VERSION,
+          canonicalRepoRoot: repoRoot,
+          buildFingerprint
+        };
+        startOwnSnapshotHydration(identity, generation, buildFingerprint, undefined);
+        await ownSnapshotVerificationPromise;
+        return;
+      }
+    }
+  }
   if (backgroundSweep) {
     // A sweep is already in flight: piggyback on it rather than starting a
     // second discovery, which would orphan (leak) the first sweep's lease
@@ -1674,6 +1813,9 @@ function queryHandlerDeps() {
     unresolvedTypeLookup,
     readyEntitySearch,
     readyKnowledgeGraph,
+    ensureFactsHydrated,
+    childColdPeakRssBytes: lastColdBuildMetrics?.rssPeakBytes,
+    parentColdIncrementBytes: lastColdBuildMetrics?.parentIncrementBytes,
     respond
   };
 }
@@ -1728,6 +1870,7 @@ function readyEntitySearch(): EntitySearchIndex {
 async function handle(request: JavaIndexRequest): Promise<void> {
   try {
     if (await handleQueryCommand(request, queryHandlerDeps())) return;
+    if (request.type === "QUERY_REPOSITORY_FACT_MARKERS") await ensureFactsHydrated();
     if (await handleMybatisCommand(request, { store, respond })) return;
     switch (request.type) {
       case "OPEN": {
@@ -1765,6 +1908,10 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         snapshotDirtyRevision = 0;
         snapshotDurableRevision = 0;
         lastDurableSnapshotIdentity = undefined;
+        pendingSnapshotView = undefined;
+        snapshotFactsHydrated = true;
+        lastColdBuildMetrics = undefined;
+        coldBuildAttempted = false;
 
         let openedGeneration = request.generation;
         let ownSnapshotIdentity: SnapshotIdentity | undefined;
@@ -1842,6 +1989,7 @@ async function handle(request: JavaIndexRequest): Promise<void> {
           respond({ id: request.id, ok: true, value: currentStatus() });
           return;
         }
+        await ensureFactsHydrated();
         invalidateOwnSnapshotVerification(request.generation);
         await handleRefresh(request);
         status = { ...status, indexedGeneration: Math.max(status.indexedGeneration, request.generation) };
@@ -1879,6 +2027,7 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         return;
       }
       case "FLUSH": {
+        await ensureFactsHydrated();
         markSnapshotDirty();
         await flushSnapshotNow();
         respond({ id: request.id, ok: true, value: currentStatus() });

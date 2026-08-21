@@ -1,7 +1,5 @@
 import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import path from "node:path";
-import { promisify } from "node:util";
-import { gunzip, gzip } from "node:zlib";
 import type {
   JavaFieldFacts,
   JavaFileFacts,
@@ -13,9 +11,13 @@ import type {
 } from "./index-types.js";
 import type { MyBatisMapperResourceFacts } from "./mybatis-types.js";
 import type { EntitySearchSnapshot } from "./entity-search.js";
-
-const gzipAsync = promisify(gzip);
-const gunzipAsync = promisify(gunzip);
+import {
+  decodeSnapshotV4View,
+  encodeSnapshotV4,
+  isSnapshotV4,
+  type SnapshotV4Facts,
+  type SnapshotV4View
+} from "./snapshot-v4.js";
 
 /**
  * schemaVersion 3 (Task 28 Slice C) added myBatisResources/resourceCoverage;
@@ -70,10 +72,9 @@ export type SnapshotWriteHooks = {
 };
 
 /**
- * Writes `value` as gzipped JSON via write-temp + fsync + rename + best-effort
- * directory fsync, so a crash or failure at any point before the rename
- * leaves the previous `target` (if any) untouched and fully readable. Returns
- * the compressed byte size actually written.
+ * Writes `value` as a v4 segmented snapshot via write-temp + fsync + rename +
+ * best-effort directory fsync. A crash before rename leaves the previous
+ * `target` untouched. Returns the byte size actually written.
  */
 export async function writeSnapshotAtomic(
   target: string,
@@ -82,13 +83,12 @@ export async function writeSnapshotAtomic(
 ): Promise<number> {
   const directory = path.dirname(target);
   const tmp = `${target}.tmp-${process.pid}-${Date.now()}`;
-  const json = Buffer.from(JSON.stringify(value));
-  const compressed = await gzipAsync(json, { level: 6 });
+  const encoded = encodeSnapshotV4(toV4Facts(value));
   await mkdir(directory, { recursive: true });
   try {
     const handle = await open(tmp, "w", 0o600);
     try {
-      await handle.writeFile(compressed);
+      await handle.writeFile(encoded);
       await handle.sync();
     } finally {
       await handle.close();
@@ -96,7 +96,7 @@ export async function writeSnapshotAtomic(
     await hooks.beforeRename?.();
     await rename(tmp, target);
     await fsyncDirectoryBestEffort(directory);
-    return compressed.length;
+    return encoded.length;
   } finally {
     await rm(tmp, { force: true }).catch(() => undefined);
   }
@@ -142,39 +142,73 @@ async function discard(target: string, reason: string): Promise<undefined> {
   return undefined;
 }
 
-type ParsedSnapshot = { snapshot: Partial<JavaIndexSnapshotV3> } | { error: string };
+type ParsedSnapshot = { view: SnapshotV4View } | { error: string };
 
-// Shared by both loaders: reads, gunzips, JSON-parses, and checks
-// schemaVersion. Never throws - a missing file is `undefined` (a miss, not
-// an error); anything else unreadable is `{ error }`, leaving what happens
-// next (delete it vs. leave someone else's cache alone) to the caller.
 async function parseSnapshotFile(target: string): Promise<ParsedSnapshot | undefined> {
-  let compressed: Buffer;
+  let bytes: Buffer;
   try {
-    compressed = await readFile(target);
+    bytes = await readFile(target);
   } catch {
     return undefined;
   }
-  let json: Buffer;
-  try {
-    json = await gunzipAsync(compressed);
-  } catch {
-    return { error: "invalid gzip stream" };
+  if (!isSnapshotV4(bytes)) {
+    return { error: "unsupported on-disk snapshot (v3 gzip JSON is discarded, not migrated)" };
   }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(json.toString("utf8"));
-  } catch {
-    return { error: "invalid JSON payload" };
-  }
-  if (typeof parsed !== "object" || parsed === null) {
-    return { error: "payload is not an object" };
-  }
-  const snapshot = parsed as Partial<JavaIndexSnapshotV3>;
-  if (snapshot.schemaVersion !== 3) {
-    return { error: `unsupported schemaVersion ${String(snapshot.schemaVersion)}` };
-  }
-  return { snapshot };
+  const view = decodeSnapshotV4View(bytes);
+  if ("error" in view) return view;
+  return { view };
+}
+
+function headerIdentity(view: SnapshotV4View) {
+  return {
+    extractorVersion: view.header.extractorVersion,
+    stableIdVersion: view.header.stableIdVersion,
+    canonicalRepoRoot: view.header.canonicalRepoRoot,
+    buildFingerprint: view.header.buildFingerprint
+  };
+}
+
+function toV4Facts(value: JavaIndexSnapshotV3): SnapshotV4Facts {
+  return {
+    extractorVersion: value.extractorVersion,
+    stableIdVersion: value.stableIdVersion,
+    canonicalRepoRoot: value.canonicalRepoRoot,
+    buildFingerprint: value.buildFingerprint,
+    manifestFingerprint: value.manifestFingerprint,
+    indexedGeneration: value.indexedGeneration,
+    createdAt: value.createdAt,
+    coverage: value.coverage,
+    resourceCoverage: value.resourceCoverage,
+    files: value.files,
+    types: value.types,
+    fields: value.fields,
+    methods: value.methods,
+    edges: value.edges,
+    myBatisResources: value.myBatisResources,
+    entitySearch: value.entitySearch
+  };
+}
+
+function factsToV3(value: SnapshotV4Facts): JavaIndexSnapshotV3 {
+  return {
+    schemaVersion: 3,
+    extractorVersion: value.extractorVersion,
+    stableIdVersion: value.stableIdVersion,
+    canonicalRepoRoot: value.canonicalRepoRoot,
+    buildFingerprint: value.buildFingerprint,
+    manifestFingerprint: value.manifestFingerprint,
+    indexedGeneration: value.indexedGeneration,
+    createdAt: value.createdAt,
+    coverage: value.coverage,
+    resourceCoverage: value.resourceCoverage,
+    files: value.files,
+    types: value.types,
+    fields: value.fields,
+    methods: value.methods,
+    edges: value.edges,
+    myBatisResources: value.myBatisResources,
+    ...(value.entitySearch ? { entitySearch: value.entitySearch } : {})
+  };
 }
 
 /**
@@ -202,20 +236,40 @@ export async function loadSnapshot(
   const parsed = await parseSnapshotFile(target);
   if (!parsed) return undefined;
   if ("error" in parsed) return discard(target, parsed.error);
-  const snapshot = parsed.snapshot;
-  if (snapshot.extractorVersion !== expected.extractorVersion) {
-    return discard(target, "extractorVersion mismatch");
+  if (!identityMatches(headerIdentity(parsed.view), expected, true)) {
+    return discard(target, "snapshot identity mismatch");
   }
-  if (snapshot.stableIdVersion !== expected.stableIdVersion) {
-    return discard(target, "stableIdVersion mismatch");
+  try {
+    return factsToV3(parsed.view.toFacts());
+  } catch (error) {
+    return discard(target, error instanceof Error ? error.message : String(error));
   }
-  if (snapshot.canonicalRepoRoot !== expected.canonicalRepoRoot) {
-    return discard(target, "canonicalRepoRoot mismatch");
+}
+
+/** Files + coverage only. Remaining segments stay gzipped until `view.readRest()`. */
+export async function loadSnapshotView(
+  target: string,
+  expected: SnapshotIdentity
+): Promise<SnapshotV4View | undefined> {
+  const parsed = await parseSnapshotFile(target);
+  if (!parsed) return undefined;
+  if ("error" in parsed) return discard(target, parsed.error);
+  if (!identityMatches(headerIdentity(parsed.view), expected, true)) {
+    return discard(target, "snapshot identity mismatch");
   }
-  if (snapshot.buildFingerprint !== expected.buildFingerprint) {
-    return discard(target, "buildFingerprint mismatch");
-  }
-  return snapshot as JavaIndexSnapshotV3;
+  return parsed.view;
+}
+
+function identityMatches(
+  snapshot: Pick<JavaIndexSnapshotV3, "extractorVersion" | "stableIdVersion" | "canonicalRepoRoot" | "buildFingerprint">,
+  expected: SnapshotIdentity,
+  checkRepoRoot: boolean
+): boolean {
+  if (snapshot.extractorVersion !== expected.extractorVersion) return false;
+  if (snapshot.stableIdVersion !== expected.stableIdVersion) return false;
+  if (snapshot.buildFingerprint !== expected.buildFingerprint) return false;
+  if (checkRepoRoot && snapshot.canonicalRepoRoot !== expected.canonicalRepoRoot) return false;
+  return true;
 }
 
 /** The identity a sibling worktree's snapshot must match to be seed-eligible; `canonicalRepoRoot` is deliberately excluded - a sibling legitimately has a different one. */
@@ -235,9 +289,12 @@ export async function loadSiblingSnapshot(
 ): Promise<JavaIndexSnapshotV3 | undefined> {
   const parsed = await parseSnapshotFile(target);
   if (!parsed || "error" in parsed) return undefined;
-  const snapshot = parsed.snapshot;
-  if (snapshot.extractorVersion !== expected.extractorVersion) return undefined;
-  if (snapshot.stableIdVersion !== expected.stableIdVersion) return undefined;
-  if (snapshot.buildFingerprint !== expected.buildFingerprint) return undefined;
-  return snapshot as JavaIndexSnapshotV3;
+  if (!identityMatches(headerIdentity(parsed.view), { ...expected, canonicalRepoRoot: parsed.view.header.canonicalRepoRoot }, false)) {
+    return undefined;
+  }
+  try {
+    return factsToV3(parsed.view.toFacts());
+  } catch {
+    return undefined;
+  }
 }

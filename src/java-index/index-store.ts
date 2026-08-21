@@ -648,8 +648,25 @@ export class JavaIndexStore {
       internFile(this.edgeColumns.strings, this.edgeColumns.ranges, file);
       this.filesByPath.set(file.relativePath, file);
     }
-    for (const resource of data.myBatisResources) {
+    this.ingestSnapshotFacts(data);
+  }
+
+  /**
+   * Installs types/fields/methods/edges/myBatis on top of files already loaded
+   * (M3 lazy v4: files metadata first, remaining segments on first query).
+   */
+  ingestSnapshotFacts(data: {
+    types: readonly JavaTypeFacts[];
+    fields: readonly JavaFieldFacts[];
+    methods: readonly JavaMethodFacts[];
+    edges: readonly StaticEdge[];
+    myBatisResources?: readonly MyBatisMapperResourceFacts[];
+  }): void {
+    if (this.typesById.size > 0 || this.methodColumns.size > 0 || this.edgeColumns.size > 0) return;
+    const skipExistingResources = this.myBatisResourcesByPath.size > 0;
+    for (const resource of data.myBatisResources ?? []) {
       if (this.myBatisResourcesByPath.has(resource.relativePath)) {
+        if (skipExistingResources) continue;
         throw new Error(`duplicate mybatis resource in snapshot: ${resource.relativePath}`);
       }
       this.myBatisResourcesByPath.set(resource.relativePath, resource);

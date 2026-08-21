@@ -1,0 +1,107 @@
+{
+  "schemaVersion": "m3-baseline/v1",
+  "phase": "M3",
+  "dated": "2026-08-21",
+  "decision": "PARTIAL",
+  "mergeToMain": false,
+  "headBefore": "0b993fa",
+  "scope": [
+    "snapshot v4 segmented gzip+crc32 (v3 gzip discarded, not migrated)",
+    "lazy files-metadata OPEN; remaining segments on first fact query",
+    "child-process cold build (JAVA_LSP_COLD_BUILD_CHILD=1 under isolated validation; default on in production)"
+  ],
+  "identity": {
+    "factsDigestEqualToM0": true,
+    "projects": {
+      "lishuedu": "1fe63bcaa6fb3319b6670a837ebca3055befe32422bf194668113c5e4837aaf3",
+      "cipherlink": "eec7eef8e0f197a5abcf190328d5b471013c1317718ae9bb8f7fdea5bfd21a08",
+      "exam-parent-v3": "fb7fe71d0b7192fd0591dfc70ccf366d82e4367855cc671402f1cdd16c992177"
+    }
+  },
+  "gates": {
+    "G2": {
+      "targetMiB": 400,
+      "lishueduAfterSnapshotLoadHeapMiB": 274,
+      "lishueduFreshProcessRssMiB": 477,
+      "passed": false,
+      "disposition": "Fresh-process RSS 477 MiB after files-only v4 load (heap 268–274). Not widened. Residual is graph snapshot + files objects + v4 Buffer."
+    },
+    "G3": {
+      "childPeakTargetMiB": 1536,
+      "parentIncrementTargetMiB": 100,
+      "lishueduChildPeakMiB": 108,
+      "lishueduParentIncrementMiB": 0,
+      "passed": true,
+      "note": "Child RSS sampled on 100ms interval during async parse; parent blocked in spawn. Parent increment 0."
+    },
+    "G4": {
+      "targetMs": 2000,
+      "lishueduSnapshotLoadMs": 2673,
+      "cipherlinkSnapshotLoadMs": 497,
+      "examParentV3SnapshotLoadMs": 822,
+      "passed": false,
+      "disposition": "lishuedu 2673ms includes graph-snapshot unpack. Files+header are the v4 serviceable path; delay graph/entitySearch if G4 must hit 2s."
+    },
+    "editToVisible": { "status": "UNMEASURED", "note": "Worker test covers closed-index edit reparse; formal edit-to-visible matrix not re-run this card." }
+  },
+  "projects": {
+    "lishuedu": {
+      "coldMs": 156637,
+      "snapshotLoadMs": 2673,
+      "heapAfterSnapshotLoadMiB": 274,
+      "heapColdMiB": 964,
+      "childColdPeakMiB": 108,
+      "parentColdIncrementMiB": 0,
+      "rssPeakMiB": 3298,
+      "warmP95Ms": 9707.4
+    },
+    "cipherlink": {
+      "coldMs": 15178,
+      "snapshotLoadMs": 497,
+      "heapAfterSnapshotLoadMiB": 42,
+      "childColdPeakMiB": 79,
+      "parentColdIncrementMiB": 0,
+      "warmP95Ms": 646
+    },
+    "exam-parent-v3": {
+      "coldMs": 27840,
+      "snapshotLoadMs": 822,
+      "heapAfterSnapshotLoadMiB": 82,
+      "childColdPeakMiB": 83,
+      "parentColdIncrementMiB": 0,
+      "warmP95Ms": 1540.5
+    }
+  },
+  "scenarios": {
+    "S1": { "rssDeltaMiB": 724, "heapUsedSumMiB": 397 },
+    "S2": { "rssDeltaMiB": 1292 }
+  },
+  "artifacts": {
+    "memoryBenchmark": {
+      "path": "docs/phase-m/m3-memory.json",
+      "sha256": "934cbc120b115232ab6baad0b3920e5189214e7b46710c27d53dc48459a6645d"
+    }
+  },
+  "isolation": {
+    "t0": {
+      "tests": 85,
+      "fail": 0,
+      "jdtlsBin": "/usr/bin/false",
+      "logSha256": "d30dbedea35ddb60d1d27da330222489a06bb6821668e81f024602778c1ba246"
+    },
+    "t1": {
+      "dist": 1166,
+      "scripts": 213,
+      "fail": 0,
+      "smoke": true,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "22209b47587ec7b75be1cf485e6a83a64b6d1d21",
+      "logSha256": "4338af96ac17d656011c9c5c1513be42d277b900af1f5393d719808ed32823ae"
+    },
+    "t2": {
+      "isolation": "detached-local-clone",
+      "jdtlsBin": "/usr/bin/false",
+      "digestLogSha256": "dccad29cbd5d8fa3d1b509ad3a2f073c86b4ea3cec7b977e7e936eaa9634272b"
+    }
+  }
+}

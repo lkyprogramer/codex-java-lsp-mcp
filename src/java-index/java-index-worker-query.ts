@@ -24,10 +24,32 @@ export type QueryHandlerDeps = {
   unresolvedTypeLookup(): JavaTypeLookupResult;
   readyEntitySearch(): EntitySearchIndex;
   readyKnowledgeGraph(): KnowledgeGraphStore;
+  ensureFactsHydrated(): Promise<void>;
+  childColdPeakRssBytes?: number;
+  parentColdIncrementBytes?: number;
   respond(response: JavaIndexResponse): void;
 };
 
+const FACT_QUERY_TYPES = new Set([
+  "QUERY_ANCHOR",
+  "QUERY_TYPE",
+  "QUERY_TYPES",
+  "QUERY_FILES",
+  "QUERY_READ_RANGES",
+  "QUERY_IMPLEMENTERS",
+  "QUERY_TYPE_REFERENCERS",
+  "QUERY_CALLERS",
+  "QUERY_CALLEES",
+  "QUERY_CALLEES_BATCH",
+  "QUERY_METHODS_WITH_PARAMETER_TYPES",
+  "QUERY_CONTEXT_GRAPH",
+  "QUERY_ENTITY_SEARCH",
+  "QUERY_GRAPH_REACHABLE",
+  "QUERY_REPOSITORY_FACT_MARKERS"
+]);
+
 export async function handleQueryCommand(request: JavaIndexRequest, deps: QueryHandlerDeps): Promise<boolean> {
+  if (FACT_QUERY_TYPES.has(request.type)) await deps.ensureFactsHydrated();
   switch (request.type) {
     case "QUERY_ANCHOR": {
       let relativePath: string | undefined;
@@ -128,7 +150,9 @@ export async function handleQueryCommand(request: JavaIndexRequest, deps: QueryH
           nodes: graph.nodesById.size,
           edges: graph.edgesById.size,
           heapUsedBytes: memory.heapUsed,
-          rssBytes: memory.rss
+          rssBytes: memory.rss,
+          ...(deps.childColdPeakRssBytes !== undefined ? { childColdPeakRssBytes: deps.childColdPeakRssBytes } : {}),
+          ...(deps.parentColdIncrementBytes !== undefined ? { parentColdIncrementBytes: deps.parentColdIncrementBytes } : {})
         }
       });
       return true;

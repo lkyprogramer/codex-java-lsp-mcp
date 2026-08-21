@@ -16,7 +16,7 @@ import { computeBuildFingerprint, computeExtractorVersion } from "./build-finger
 import { JavaIndexClient } from "./java-index-client.js";
 import type { JavaIndexSnapshotStatus } from "./index-types.js";
 import { computeCurrentManifestFingerprint, computeCurrentSnapshotManifestFingerprint } from "./manifest.js";
-import { loadSnapshot } from "./snapshot.js";
+import { loadSnapshot, writeSnapshotAtomic } from "./snapshot.js";
 import { STABLE_ID_VERSION } from "./stable-id.js";
 import { JAVA_INDEX_CLOSE_GRACE_MS } from "./worker-protocol.js";
 
@@ -1142,9 +1142,15 @@ test("a malformed sibling snapshot fails the seed attempt softly - OPEN still su
   // Corrupt the otherwise-identity-matching snapshot: duplicate a file entry,
   // which JavaIndexStore.loadSnapshotData() rejects by throwing.
   const snapshotPath = path.join(siblingCacheDir, "java-index-snapshot.json.gz");
-  const raw = JSON.parse(gunzipSync(readFileSync(snapshotPath)).toString("utf8")) as { files: unknown[] };
-  raw.files.push({ ...(raw.files[0] as Record<string, unknown>) });
-  writeFileSync(snapshotPath, gzipSync(Buffer.from(JSON.stringify(raw))));
+  const raw = await loadSnapshot(snapshotPath, {
+    extractorVersion: computeExtractorVersion(),
+    stableIdVersion: STABLE_ID_VERSION,
+    canonicalRepoRoot: siblingRepo,
+    buildFingerprint: (await computeBuildFingerprint(siblingRepo, probeLayout(siblingRepo)))!
+  });
+  assert.ok(raw);
+  raw.files.push({ ...raw.files[0]! });
+  await writeSnapshotAtomic(snapshotPath, raw);
   writeFileSync(
     path.join(siblingCacheDir, "repo-meta.json"),
     JSON.stringify({ repoRoot: siblingRepo, repoHash: "sibling-repo-hash", familyHash: "shared-family" })

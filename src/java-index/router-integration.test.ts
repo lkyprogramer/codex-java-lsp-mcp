@@ -6,7 +6,6 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { gunzipSync, gzipSync } from "node:zlib";
 import { AgentRouter } from "../agent-router/index.js";
 import { asImpactResult, viewImpactFiles } from "../agent-router/output-compact.js";
 import type { ImpactOptions } from "../agent-types.js";
@@ -15,8 +14,12 @@ import { RgRunner } from "../search/rg-runner.js";
 import type { RgQuery, SearchResult } from "../search/search-types.js";
 import { createGitWorktreeFamily } from "../test-support/git-worktree.test.js";
 import { resolveWorktreeIdentity } from "../worktree-identity.js";
+import { probeLayout } from "../layout-probe.js";
+import { computeBuildFingerprint, computeExtractorVersion } from "./build-fingerprint.js";
 import { JavaIndexClient } from "./java-index-client.js";
 import { RouterJavaIndex } from "./router-java-index.js";
+import { loadSnapshot, writeSnapshotAtomic } from "./snapshot.js";
+import { STABLE_ID_VERSION } from "./stable-id.js";
 
 function options<const T extends Partial<ImpactOptions>>(overrides: T): ImpactOptions & T {
   return {
@@ -334,9 +337,15 @@ test("a rejected own snapshot stays pending until its replacement sweep has been
     await buildCompleteSnapshot(root, cacheDir);
 
     const snapshotPath = path.join(cacheDir, "java-index-snapshot.json.gz");
-    const snapshot = JSON.parse(gunzipSync(await readFile(snapshotPath)).toString("utf8")) as Record<string, unknown>;
+    const snapshot = await loadSnapshot(snapshotPath, {
+      extractorVersion: computeExtractorVersion(),
+      stableIdVersion: STABLE_ID_VERSION,
+      canonicalRepoRoot: root,
+      buildFingerprint: (await computeBuildFingerprint(root, probeLayout(root)))!
+    });
+    assert.ok(snapshot);
     snapshot.extractorVersion = "intentionally-stale";
-    await writeFile(snapshotPath, gzipSync(JSON.stringify(snapshot)));
+    await writeSnapshotAtomic(snapshotPath, snapshot);
 
     replacementClient = new JavaIndexClient(root, cacheDir);
     const replacementIndex = new RouterJavaIndex(root, replacementClient);
