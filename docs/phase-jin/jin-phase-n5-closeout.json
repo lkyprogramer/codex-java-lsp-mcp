@@ -2,7 +2,7 @@
   "schemaVersion": "jin-phase-n5-closeout/v1",
   "phase": "N5",
   "dated": "2026-08-21",
-  "decision": "PARTIAL",
+  "decision": "FAIL",
   "mergeToMain": false,
   "enterN6": false,
   "n501": {
@@ -16,30 +16,37 @@
     "head": "b0c08dd"
   },
   "n502": {
-    "result": "BLOCKED_EXTERNAL",
+    "result": "MEASURED_FAIL",
     "harness": "GO",
-    "live": "BLOCKED_EXTERNAL",
-    "taskSuccess": { "status": "UNMEASURED" },
-    "modelUsage": { "status": "UNMEASURED" },
-    "escalate": "0A.4(a)",
-    "endpoint": {
-      "host": "192.168.10.29:28343",
-      "httpStatusWithoutKey": 401
+    "live": "MEASURED",
+    "summary": "jin-n5-02-live-summary.json",
+    "liveTraceSha256": "9a398537da83054fe6beab8d6270f9389854254a72de734dbba9c2c5426d503b",
+    "model": "openclaw/Qwen3.8-27B-WORK",
+    "baseUrlHost": "192.168.10.29:28343",
+    "executableTree": "20a99abc660c39f7f2c231fbfc25df29d7499ac7",
+    "jdtlsBin": "/usr/bin/false",
+    "isolation": "detached-local-clone",
+    "taskSuccess": {
+      "old": { "scored": 5, "successes": 1, "mean": 0.2 },
+      "jin": { "scored": 5, "successes": 1, "mean": 0.2 },
+      "serena": { "status": "UNAVAILABLE" }
     },
-    "serena": "UNAVAILABLE",
-    "head": "78e01a3",
-    "protocolCells": 36,
-    "summary": "jin-n5-02-blocked-external.json",
-    "t1": { "dist": 1146, "scripts": 193, "fail": 0 },
-    "executableTree": "81242b54e9789ca28df05287016815868b226c6f"
+    "toolCallCount": { "old": 26, "jin": 66 },
+    "totalTokensMeasured": { "old": 25845, "jin": 197618 }
   },
   "gates": {
-    "agentQualityNonInferior": "UNMEASURED",
-    "toolRoundsAndTokenDrop": "UNMEASURED",
-    "liveFalseClosed": "UNMEASURED",
-    "noContextCapOrRuntimeDrop": "UNMEASURED"
+    "agentQualityNonInferior": "GO",
+    "toolRoundsAndTokenDrop": "FAIL",
+    "liveFalseClosed": "FAIL",
+    "noContextCapOrRuntimeDrop": "FAIL"
+  },
+  "killSignal": "UNMEASURED",
+  "successLayers": {
+    "localization": "MEASURED",
+    "patchGeneration": "UNMEASURED",
+    "compileTest": "UNMEASURED"
   },
   "failureDisposition": {
-    "action": "escalate 0A.4(a) for live credentials and Serena MCP; do not enter N6; do not merge main; do not invent TaskSuccess"
+    "action": "do not enter N6; do not merge main; do not invent TaskSuccess; Serena C arm remains UNAVAILABLE"
   }
 }

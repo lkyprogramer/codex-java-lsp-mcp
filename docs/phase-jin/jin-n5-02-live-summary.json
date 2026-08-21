@@ -1,0 +1,68 @@
+{
+  "schemaVersion": "java-intelligence-jin-n5-three-arm-trace/v1",
+  "dated": "2026-08-21",
+  "status": "MEASURED",
+  "model": "openclaw/Qwen3.8-27B-WORK",
+  "baseUrlHost": "192.168.10.29:28343",
+  "contextWindowTokens": 114688,
+  "isolation": {
+    "isolation": "detached-local-clone",
+    "jdtlsBin": "/usr/bin/false",
+    "executableTree": "20a99abc660c39f7f2c231fbfc25df29d7499ac7"
+  },
+  "liveTraceSha256": "9a398537da83054fe6beab8d6270f9389854254a72de734dbba9c2c5426d503b",
+  "taskSuccess": {
+    "status": "MEASURED",
+    "tasks": 18,
+    "scored": 10,
+    "successes": 2,
+    "mean": 0.2,
+    "note": "Path coverage of tool results vs mustHit∪taskBlocking. Model self-report ignored. FAILED_RUNTIME and SERENA_UNAVAILABLE excluded from mean."
+  },
+  "successLayers": {
+    "localization": { "status": "MEASURED", "scored": 10, "successes": 2, "mean": 0.2 },
+    "patchGeneration": { "status": "UNMEASURED" },
+    "compileTest": { "status": "UNMEASURED" }
+  },
+  "arms": {
+    "old": {
+      "tool": "java_impact",
+      "tasks": 6,
+      "scored": 5,
+      "successes": 1,
+      "mean": 0.2,
+      "toolCallCount": 26,
+      "totalTokensMeasured": 25845,
+      "failedRuntime": 1,
+      "contextCapped": 0
+    },
+    "jin": {
+      "tool": "java_context",
+      "tasks": 6,
+      "scored": 5,
+      "successes": 1,
+      "mean": 0.2,
+      "toolCallCount": 66,
+      "totalTokensMeasured": 197618,
+      "failedRuntime": 1,
+      "contextCapped": 0
+    },
+    "serena": {
+      "tool": "serena-public-mcp",
+      "status": "UNAVAILABLE",
+      "tasks": 6,
+      "scored": 0,
+      "reason": "SERENA_MCP_COMMAND is not set"
+    }
+  },
+  "gates": {
+    "taskSuccessNonInferior": "GO",
+    "toolRoundsAndTokenDrop": "FAIL",
+    "liveFalseClosed": "FAIL",
+    "noContextCapOrRuntimeDrop": "FAIL"
+  },
+  "killSignal": "UNMEASURED",
+  "mergeToMain": false,
+  "enterN6": false,
+  "note": "jin localization mean ties old at 0.2 among scored cells. jin used more tool rounds (66 vs 26) and more measured tokens (197618 vs 25845). V5R live falses (cipherlink presign, exam pay-order) stayed false. Two FAILED_RUNTIME cells were host 502/503, excluded from TaskSuccess mean. Serena C arm unavailable; no planner kill-signal comparison. Raw live-trace stays off-git."
+}

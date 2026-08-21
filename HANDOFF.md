@@ -2,7 +2,7 @@
 
 ## 当前任务
 
-JIN N5 **PARTIAL**。N5-02 live 三臂 A/B **BLOCKED_EXTERNAL**（0A.4(a)）。不进 N6，不合 `main`。解阻需要进程环境 API key（同一 host `192.168.10.29:28343`）以及可选 Serena MCP。
+JIN N5 **FAIL**（live 已 MEASURED）。不进 N6，不合 `main`。Serena C 臂仍 UNAVAILABLE。
 
 ## 已完成
 
@@ -18,8 +18,8 @@ N0 → N0.5 → N1 → N2a → N3-00 → N3 → N4 PARTIAL（`8cc1762`）。T3 n
 
 ## 下一步计划
 
-1. 用户提供 live key（及可选 `SERENA_MCP_COMMAND`）后，隔离跑 `scripts/run-agent-trace-matrix.mjs --authorize-external --execute-live --max-tasks 6`。
-2. live 过门前 **不进 N6**。N6 还要第四仓 + leave-one-repo-out + §16.3 硬门。
+1. **不进 N6**：N5 退出条件未过（token/轮次上升、live false 未闭合、有 502/503 runtime 丢弃）。
+2. 第四仓 + leave-one-repo-out 仍是合 `main` 硬门。patch/compile-test 层仍 UNMEASURED。
 
 ## 绝对不要再踩的坑
 
@@ -39,7 +39,12 @@ N0 → N0.5 → N1 → N2a → N3-00 → N3 → N4 PARTIAL（`8cc1762`）。T3 n
 
 ## 给下一会话的第一步
 
-确认进程环境有 `OPENAI_API_KEY` 或 `JAVA_LSP_AGENT_API_KEY`、`OPENAI_BASE_URL=http://192.168.10.29:28343/v1`、`OPENAI_MODEL=openclaw/Qwen3.8-27B-WORK`。没有 key 不得发明 TaskSuccess，不得进 N6。
+读 `docs/phase-jin/jin-phase-n5-20260821.md`。不要合 `main`，不要发明 TaskSuccess。N5 live 已 MEASURED，决策 FAIL。
+
+## JIN N5 FAIL（live 三臂 MEASURED，2026-08-21）
+
+6 holdout × old/jin/serena。localization old 1/5 与 jin 1/5 并列。jin 轮次 66 vs 26、token 197618 vs 25845 FAIL。presign/pay-order 未闭合。paper-task jin 502、presign old 503。Serena UNAVAILABLE。不合 main。
+摘要 `jin-n5-02-live-summary.json`。raw SHA `9a398537…`。
 
 ## JIN N5 PARTIAL（三臂 harness GO，live BLOCKED_EXTERNAL，2026-08-21）
 
