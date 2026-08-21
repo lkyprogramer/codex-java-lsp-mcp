@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // input: Three frozen golden Java repos plus golden/*.scenarios.jsonl.
-// output: Hot heapUsed, RSS peak/steady, snapshot load, warm query p50/p95, S1/S2, fact-graph attribution.
+// output: Hot heapUsed, RSS peak/steady, snapshot load, warm query p50/p95, S1/S2/S4, fact-graph attribution.
 // pos: M0 measurement. Isolated. Does not change production query/selection.
 import { cp, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
@@ -307,6 +307,7 @@ export async function benchProject(project, repoRoot, timeoutMs, cacheRoot) {
     let warm;
     let hotDigest;
     let hotHeap;
+    let hibernate = { heapUsedBytes: null, reheatMs: null, hibernated: false };
     try {
       const loadStarted = performance.now();
       await reloadIndex.open(1);
@@ -316,6 +317,14 @@ export async function benchProject(project, repoRoot, timeoutMs, cacheRoot) {
       warm = await warmQueries(reloadIndex, project);
       hotDigest = await reloadIndex.queryGraphDigest();
       hotHeap = collectHeap();
+      const hibernatedStatus = await reloadClient.hibernate();
+      const reheatStarted = performance.now();
+      await reloadClient.status();
+      hibernate = {
+        heapUsedBytes: hibernatedStatus.heapUsedBytes ?? null,
+        reheatMs: performance.now() - reheatStarted,
+        hibernated: hibernatedStatus.hibernated === true
+      };
     } finally {
       await reloadIndex.close().catch(() => undefined);
     }
@@ -351,7 +360,8 @@ export async function benchProject(project, repoRoot, timeoutMs, cacheRoot) {
       types: loaded.status.javaIndex?.types ?? cold.status.javaIndex?.types,
       methods: loaded.status.javaIndex?.methods ?? cold.status.javaIndex?.methods,
       warm,
-      attribution
+      attribution,
+      hibernate
     };
   } finally {
     await index.close().catch(() => undefined);
@@ -567,7 +577,15 @@ async function main() {
       "--cache-root", cacheRoot
     ]));
   }
-  let scenarios = { S1: unmeasuredScenario("S1", "skipped"), S2: unmeasuredScenario("S2", "skipped") };
+  let scenarios = {
+    S1: unmeasuredScenario("S1", "skipped"),
+    S2: unmeasuredScenario("S2", "skipped"),
+    S4: {
+      id: "S4",
+      status: "MEASURED",
+      projects: []
+    }
+  };
   if (!cli.skipConcurrent) {
     const plan = concurrentRuntimePlan();
     console.error("memory-benchmark: S1");
@@ -577,6 +595,11 @@ async function main() {
     console.error("memory-benchmark: S2");
     scenarios.S2 = await measureConcurrent("S2", plan.S2, repositories, cli.timeoutMs, cacheRoot, cli.holdMs);
   }
+  scenarios.S4 = {
+    id: "S4",
+    status: "MEASURED",
+    projects: projects.map(item => item.hibernate)
+  };
   const payload = {
     schemaVersion: "m0-memory-benchmark/v1",
     dated: new Date().toISOString().slice(0, 10),
@@ -601,7 +624,12 @@ async function main() {
       stringShare: item.attribution?.shares?.strings
     })),
     S1: scenarios.S1.status === "MEASURED" ? bytesToMiB(scenarios.S1.rssDeltaBytes) : scenarios.S1,
-    S2: scenarios.S2.status === "MEASURED" ? bytesToMiB(scenarios.S2.rssDeltaBytes) : scenarios.S2
+    S2: scenarios.S2.status === "MEASURED" ? bytesToMiB(scenarios.S2.rssDeltaBytes) : scenarios.S2,
+    S4: projects.map(item => ({
+      project: item.project,
+      hibernateHeapMiB: item.hibernate?.heapUsedBytes != null ? bytesToMiB(item.hibernate.heapUsedBytes) : null,
+      reheatMs: item.hibernate?.reheatMs != null ? Math.round(item.hibernate.reheatMs) : null
+    }))
   }));
 }
 

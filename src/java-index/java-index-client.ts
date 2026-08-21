@@ -237,6 +237,14 @@ export class JavaIndexClient {
     return status;
   }
 
+  /** Unload facts/parse trees to the v4 files-only shape (M4 S4). Reheat is the next query. */
+  async hibernate(requestOptions: JavaIndexRequestOptions = {}): Promise<JavaIndexStatus> {
+    await this.ensureOpen(requestOptions);
+    const status = await this.request({ type: "HIBERNATE" }, validateJavaIndexStatus, requestOptions);
+    this.lastKnownStatus = status;
+    return status;
+  }
+
   async queryAnchor(
     file: string,
     line: number,

@@ -46,9 +46,14 @@ async function leaseStore(root: string, options: StoreOptions): Promise<FileCros
   return store;
 }
 
-async function countClaimedSlots(store: CrossProcessLeaseStore, kind: "jdt-slots" | "sweep-slots"): Promise<number> {
+async function countClaimedSlots(
+  store: CrossProcessLeaseStore,
+  kind: "jdt-slots" | "sweep-slots" | "build-slots"
+): Promise<number> {
   const status = await store.status();
-  return kind === "jdt-slots" ? status.claimedJdtSlots : status.claimedSweepSlots;
+  if (kind === "jdt-slots") return status.claimedJdtSlots;
+  if (kind === "sweep-slots") return status.claimedSweepSlots;
+  return status.claimedBuildSlots;
 }
 
 test("two processes cannot exceed one machine JDT slot", async () => {
@@ -318,4 +323,37 @@ test("acquireSweep bounds to the configured sweep slots and rejects use before o
   const third = await store.acquireSweep(identity("/repo-b", "b"), budget());
   assert.equal(third.kind, "SWEEP_SLOT");
   await third.release();
+});
+
+test("acquireBuild is a single machine-wide slot independent of sweep capacity", async () => {
+  const shared = tempLeaseRoot();
+  const unopened = new FileCrossProcessLeaseStore(shared, {
+    pid: 101,
+    isAlive: pid => pid === 101,
+    now: () => Date.now(),
+    orphanGraceMs: 30,
+    capacityLockTimeoutMs: 200
+  });
+  await assert.rejects(
+    () => unopened.acquireBuild(identity("/repo-a", "a"), budget()),
+    (error: unknown) => error instanceof LeaseConfigError
+  );
+
+  const firstStore = await leaseStore(shared, { pid: 202, alive: new Set([202, 303]), sweepSlots: 4 });
+  const secondStore = await leaseStore(shared, { pid: 303, alive: new Set([202, 303]), sweepSlots: 4 });
+  const first = await firstStore.acquireBuild(identity("/repo-a", "a"), budget());
+  assert.equal(first.kind, "BUILD_SLOT");
+  assert.equal(await countClaimedSlots(firstStore, "build-slots"), 1);
+
+  const blocked = secondStore.acquireBuild(identity("/repo-b", "b"), budget(120));
+  await assert.rejects(
+    () => blocked,
+    (error: unknown) => error instanceof Error && /Deadline exceeded/i.test(error.message)
+  );
+
+  await first.release();
+  const second = await secondStore.acquireBuild(identity("/repo-b", "b"), budget());
+  assert.equal(second.kind, "BUILD_SLOT");
+  assert.equal(await countClaimedSlots(secondStore, "build-slots"), 1);
+  await second.release();
 });

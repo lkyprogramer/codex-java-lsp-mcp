@@ -125,6 +125,29 @@ test("ParseTreeCache: entry-count LRU eviction", () => {
   assert.equal(cache.metrics.evictions, 1);
 });
 
+test("ParseTreeCache.clear drops every tree without counting LRU evictions", () => {
+  const cache = new ParseTreeCache({
+    maxEntries: 8,
+    maxSourceBytes: 1024 * 1024,
+    maxSingleFileBytes: 1024 * 1024,
+    maxIncrementalChangeRatio: 1
+  });
+  let deletes = 0;
+  const fakeTree = (): JavaSyntaxTree => ({
+    rootNode: {} as JavaSyntaxTree["rootNode"],
+    edit: () => {},
+    getChangedRanges: () => [],
+    delete: () => { deletes += 1; }
+  });
+  cache.replace("A.java", "a", fakeTree());
+  cache.replace("B.java", "b", fakeTree());
+  cache.clear();
+  assert.equal(cache.size(), 0);
+  assert.equal(deletes, 2);
+  assert.equal(cache.metrics.evictions, 0);
+  assert.equal(cache.get("A.java"), undefined);
+});
+
 test("ParseTreeCache: total-byte-cap eviction", () => {
   const options: ParseTreeCacheOptions = {
     maxEntries: 100,

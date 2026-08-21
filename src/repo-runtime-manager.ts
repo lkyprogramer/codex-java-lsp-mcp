@@ -1,6 +1,7 @@
 // input: Resolved repo roots.
 // output: Per-repo runtime contexts.
 // pos: Lazy runtime manager; one context per canonical repoRoot with small LRU/idle control.
+import os from "node:os";
 import path from "node:path";
 import { AgentRouter } from "./agent-router/index.js";
 import {
@@ -19,7 +20,12 @@ import { RepoChangeCoordinator } from "./repo-change-coordinator.js";
 import { GenerationClock, type RepoChangeBatch } from "./repo-generation.js";
 import { repoCacheBase, repoCacheRoot } from "./repo-layout.js";
 import { RepoResolver, type RepoSelector, type ResolvedRepo } from "./repo-resolver.js";
-import { positiveInteger, resourceDefaults, type ResourceDefaults } from "./resource-defaults.js";
+import {
+  DEFAULT_FREEMEM_PRESSURE_BYTES,
+  positiveInteger,
+  resourceDefaults,
+  type ResourceDefaults
+} from "./resource-defaults.js";
 import { DeadlineBudget } from "./runtime/deadline-budget.js";
 import {
   createRequestContext,
@@ -97,6 +103,8 @@ type RuntimeEntry = {
   refCount: number;
   lastUsedAt: number;
   idleTimer?: NodeJS.Timeout;
+  hibernateTimer?: NodeJS.Timeout;
+  hibernated: boolean;
   lspReservation: LspReservation;
   unsubscribeLifecycle?: () => void;
   reconcilePromise?: Promise<void>;
@@ -122,6 +130,10 @@ type SlotWaiter = {
 type RuntimeManagerOptions = {
   maxActiveRepos: number;
   idleTtlMs: number;
+  hibernateTtlMs: number;
+  freememPressureBytes: number;
+  pressureIntervalMs: number;
+  freemem?: () => number;
   requestTimeoutMs: number;
   maxRetainedStoppedRepos: number;
   transportMode: RepoOwnerTransport;
@@ -137,6 +149,8 @@ export class RepoRuntimeManager {
 
   private leaseReady?: Promise<void>;
   private leaseInitError?: string;
+  private pressureTimer?: NodeJS.Timeout;
+  private relievingPressure = false;
 
   constructor(
     private readonly resolver: Pick<RepoResolver, "resolve">,
@@ -149,11 +163,21 @@ export class RepoRuntimeManager {
     this.options = {
       maxActiveRepos: positiveInteger(process.env.JAVA_LSP_MAX_ACTIVE_REPOS, this.defaults.maxActiveRepos),
       idleTtlMs: positiveInteger(process.env.JAVA_LSP_IDLE_TTL_MS, this.defaults.idleTtlMs),
+      hibernateTtlMs: positiveInteger(process.env.JAVA_LSP_HIBERNATE_TTL_MS, this.defaults.hibernateTtlMs),
+      freememPressureBytes: positiveInteger(
+        process.env.JAVA_LSP_FREEMEM_PRESSURE_BYTES,
+        DEFAULT_FREEMEM_PRESSURE_BYTES
+      ),
+      pressureIntervalMs: positiveInteger(
+        process.env.JAVA_LSP_FREEMEM_PRESSURE_INTERVAL_MS,
+        process.env.JAVA_LSP_ISOLATED_VALIDATION === "1" ? 0 : 5000
+      ),
       requestTimeoutMs: positiveInteger(process.env.JAVA_LSP_REQUEST_TIMEOUT_MS, 120000),
       maxRetainedStoppedRepos: positiveInteger(process.env.JAVA_LSP_MAX_RETAINED_STOPPED_REPOS, 2),
       transportMode: "stdio",
       ...options
     };
+    this.startPressureWatch();
     this.runtimeFactory = runtimeFactory ?? ((resolved, leases) => createRuntime(resolved, leases, this.options.transportMode));
     if (isOwnershipProvider(coordinationOrOwnership)) {
       this.coordinationFactory = createCoordination;
@@ -216,10 +240,8 @@ export class RepoRuntimeManager {
     budget.throwIfExpired("runtime.create");
     this.refreshResource(entry);
     entry.refCount += 1;
-    if (entry.idleTimer) {
-      clearTimeout(entry.idleTimer);
-      entry.idleTimer = undefined;
-    }
+    entry.hibernated = false;
+    this.clearIdleTimers(entry);
     try {
       const request = await this.prepareRequestContext(entry, options.requestOptions, budget);
       if (options.mayStartLsp) {
@@ -511,6 +533,7 @@ export class RepoRuntimeManager {
       logicalCpu: this.defaults.logicalCpu,
       maxActiveRepos: this.options.maxActiveRepos,
       idleTtlMs: this.options.idleTtlMs,
+      hibernateTtlMs: this.options.hibernateTtlMs,
       jdtlsXmx: process.env.JAVA_LSP_JDTLS_XMX || this.defaults.jdtlsXmx,
       activeRepos: this.runtimes.size,
       activeJdtlsPids: started,
@@ -557,6 +580,7 @@ export class RepoRuntimeManager {
   }
 
   async shutdownAll(options: { releaseOwnership?: boolean; terminal?: boolean } = {}): Promise<void> {
+    this.stopPressureWatch();
     for (const waiter of this.slotWaiters.splice(0)) {
       waiter.cancel();
     }
@@ -655,6 +679,7 @@ export class RepoRuntimeManager {
       ready: Promise.resolve(),
       refCount: 0,
       lastUsedAt: Date.now(),
+      hibernated: false,
       lspReservation: "NONE",
       // Best-effort: a degraded or unopened lease store must never block a
       // runtime from being created, so acquisition failure is swallowed here.
@@ -923,23 +948,86 @@ export class RepoRuntimeManager {
       .sort((left, right) => left.lastUsedAt - right.lastUsedAt)[0];
   }
 
-  private scheduleIdleShutdown(entry: RuntimeEntry): void {
-    if (this.options.idleTtlMs <= 0) {
-      return;
-    }
-    entry.idleTimer = setTimeout(() => {
-      if (entry.refCount === 0 && entry.lspReservation !== "NONE") {
-        void this.stopEntry(entry);
-      }
-    }, this.options.idleTtlMs);
-    entry.idleTimer.unref?.();
+  private oldestIdleEntry(exempt?: RuntimeEntry): RuntimeEntry | undefined {
+    return [...this.runtimes.values()]
+      .filter(entry => entry !== exempt && entry.refCount === 0 && entry.stoppedAt === undefined)
+      .sort((left, right) => left.lastUsedAt - right.lastUsedAt)[0];
   }
 
-  private async stopEntry(entry: RuntimeEntry): Promise<void> {
+  private clearIdleTimers(entry: RuntimeEntry): void {
     if (entry.idleTimer) {
       clearTimeout(entry.idleTimer);
       entry.idleTimer = undefined;
     }
+    if (entry.hibernateTimer) {
+      clearTimeout(entry.hibernateTimer);
+      entry.hibernateTimer = undefined;
+    }
+  }
+
+  private scheduleIdleShutdown(entry: RuntimeEntry): void {
+    this.clearIdleTimers(entry);
+    if (entry.refCount !== 0 || entry.stoppedAt !== undefined) return;
+    if (this.options.hibernateTtlMs > 0) {
+      entry.hibernateTimer = setTimeout(() => {
+        if (entry.refCount === 0 && entry.stoppedAt === undefined) {
+          void this.hibernateEntry(entry);
+        }
+      }, this.options.hibernateTtlMs);
+      entry.hibernateTimer.unref?.();
+    }
+    if (this.options.idleTtlMs > 0) {
+      entry.idleTimer = setTimeout(() => {
+        if (entry.refCount === 0 && entry.lspReservation !== "NONE") {
+          void this.stopEntry(entry);
+        }
+      }, this.options.idleTtlMs);
+      entry.idleTimer.unref?.();
+    }
+  }
+
+  private startPressureWatch(): void {
+    if (this.pressureTimer || this.options.pressureIntervalMs <= 0) return;
+    this.pressureTimer = setInterval(() => {
+      void this.maybeRelieveMemoryPressure();
+    }, this.options.pressureIntervalMs);
+    this.pressureTimer.unref?.();
+  }
+
+  private stopPressureWatch(): void {
+    if (!this.pressureTimer) return;
+    clearInterval(this.pressureTimer);
+    this.pressureTimer = undefined;
+  }
+
+  private async maybeRelieveMemoryPressure(): Promise<void> {
+    if (this.relievingPressure) return;
+    const freemem = this.options.freemem ?? os.freemem;
+    if (freemem() >= this.options.freememPressureBytes) return;
+    const victim = this.oldestIdleEntry();
+    if (!victim) return;
+    this.relievingPressure = true;
+    try {
+      if (!victim.hibernated) {
+        await this.hibernateEntry(victim);
+        return;
+      }
+      if (victim.lspReservation !== "NONE") {
+        await this.stopEntry(victim);
+      }
+    } finally {
+      this.relievingPressure = false;
+    }
+  }
+
+  private async hibernateEntry(entry: RuntimeEntry): Promise<void> {
+    if (entry.hibernated || entry.stoppedAt !== undefined || entry.refCount !== 0) return;
+    entry.hibernated = true;
+    await entry.context.javaIndexClient?.hibernate().catch(() => undefined);
+  }
+
+  private async stopEntry(entry: RuntimeEntry): Promise<void> {
+    this.clearIdleTimers(entry);
     await entry.context.session.stop();
     entry.context.router.clearRgCache();
     // The lifecycle listener normally clears this on STOPPED; assign it here too

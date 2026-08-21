@@ -80,6 +80,7 @@ const SWEEP_CHUNK_SIZE = 50;
 // How long a background chunk waits for the machine-wide sweep slot before
 // giving up on this sweep for now; a later reconcile() call starts a fresh one.
 const SWEEP_LEASE_WAIT_MS = 10000;
+const BUILD_LEASE_WAIT_MS = 180_000;
 const SNAPSHOT_FILE_NAME = "java-index-snapshot.json.gz";
 const GRAPH_SNAPSHOT_FILE_NAME = "java-knowledge-graph.json.gz";
 const COLD_BUILD_CHILD = fileURLToPath(new URL("./cold-build-child.js", import.meta.url));
@@ -170,6 +171,9 @@ let closing = false;
 let snapshotPath: string | undefined;
 let pendingSnapshotView: SnapshotV4View | undefined;
 let snapshotFactsHydrated = true;
+let hibernated = false;
+let hibernateIdentity: SnapshotIdentity | undefined;
+let hibernatedStatusCounts: { files: number; types: number; methods: number; edges: number } | undefined;
 let lastColdBuildMetrics: { rssPeakBytes: number; parentIncrementBytes: number } | undefined;
 let coldBuildAttempted = false;
 // Monotonic in-memory publication revisions. A writer owns the revision it
@@ -553,6 +557,7 @@ function sourcePositionAtOffset(starts: readonly number[], offset: number): Sour
 }
 
 function summarizeFiles(): Pick<JavaIndexStatus, "files" | "types" | "methods" | "edges"> {
+  if (hibernated && hibernatedStatusCounts) return hibernatedStatusCounts;
   if (!store) return { files: 0, types: 0, methods: 0, edges: 0 };
   return {
     files: store.filesByPath.size,
@@ -576,6 +581,7 @@ function currentStatus(overrides: Partial<JavaIndexStatus> = {}): JavaIndexStatu
     ...(ownSnapshotVerificationPending ? { snapshotVerificationPending: true } : {}),
     ...(lastRefreshError ? { lastError: lastRefreshError } : {}),
     ...(worktreeSeedStatus ? { worktreeSeed: worktreeSeedStatus } : {}),
+    ...(hibernated ? { hibernated: true } : {}),
     ...overrides
   };
 }
@@ -801,6 +807,12 @@ function flushSnapshotNow(): Promise<void> {
       lastDurableSnapshotIdentity = {
         durableGeneration: generationAtSerialize,
         durableManifestFingerprint: manifestFingerprint
+      };
+      hibernateIdentity = {
+        extractorVersion: computeExtractorVersion(),
+        stableIdVersion: STABLE_ID_VERSION,
+        canonicalRepoRoot: repoRoot,
+        buildFingerprint
       };
       snapshotDurableRevision = revisionAtSerialize;
       // A concurrently-running MyBatis resource reconcile can still be
@@ -1141,7 +1153,29 @@ function metaSnapshot(view: SnapshotV4View): JavaIndexSnapshotV3 {
   };
 }
 
+async function ensureAwake(): Promise<void> {
+  if (!hibernated) return;
+  if (snapshotPath && hibernateIdentity && store) {
+    const loadedView = await loadSnapshotView(snapshotPath, hibernateIdentity);
+    if (loadedView) {
+      store.loadSnapshotData({
+        files: loadedView.files,
+        types: [],
+        fields: [],
+        methods: [],
+        edges: [],
+        myBatisResources: []
+      });
+      pendingSnapshotView = loadedView;
+      snapshotFactsHydrated = false;
+    }
+  }
+  hibernated = false;
+  hibernatedStatusCounts = undefined;
+}
+
 async function ensureFactsHydrated(): Promise<void> {
+  await ensureAwake();
   if (snapshotFactsHydrated || !store || !pendingSnapshotView) {
     snapshotFactsHydrated = true;
     return;
@@ -1162,7 +1196,76 @@ async function ensureFactsHydrated(): Promise<void> {
   snapshotFactsHydrated = true;
 }
 
-function spawnColdBuildChild(cacheDir: string, generation: number): Promise<ColdBuildResult | undefined> {
+async function ensureGraphReady(): Promise<void> {
+  await ensureAwake();
+  if (graphSyncedRevision === indexFactsRevision) return;
+  if (snapshotPath) {
+    const packedGraph = await loadGraphSnapshot(path.join(path.dirname(snapshotPath), GRAPH_SNAPSHOT_FILE_NAME));
+    if (packedGraph) {
+      unpackGraphSnapshot(packedGraph, knowledgeGraph);
+      graphSyncedRevision = indexFactsRevision;
+      return;
+    }
+  }
+  if (store) syncKnowledgeGraphFromStore();
+}
+
+async function hibernateIndex(): Promise<void> {
+  if (hibernated || closing) return;
+  if (snapshotDirtyRevision > snapshotDurableRevision) {
+    await ensureFactsHydrated();
+    await flushSnapshotNow();
+  }
+  cache?.clear();
+  if (!snapshotPath || (snapshotDurableRevision === 0 && !lastDurableSnapshotIdentity)) {
+    const gcOnly = (globalThis as typeof globalThis & { gc?: () => void }).gc;
+    if (typeof gcOnly === "function") gcOnly();
+    return;
+  }
+  if (!hibernateIdentity && layout) {
+    const buildFingerprint = await computeBuildFingerprint(repoRoot, layout).catch(() => undefined);
+    if (buildFingerprint) {
+      hibernateIdentity = {
+        extractorVersion: computeExtractorVersion(),
+        stableIdVersion: STABLE_ID_VERSION,
+        canonicalRepoRoot: repoRoot,
+        buildFingerprint
+      };
+    }
+  }
+  hibernatedStatusCounts = summarizeFiles();
+  store = new JavaIndexStore();
+  entitySearch = new EntitySearchIndex();
+  knowledgeGraph = new KnowledgeGraphStore();
+  knowledgeBuilder = new KnowledgeGraphBuilder(knowledgeGraph);
+  pendingSnapshotView = undefined;
+  snapshotFactsHydrated = false;
+  graphSyncedRevision = -1;
+  entitySearchSyncedRevision = -1;
+  indexFactsRevision = 0;
+  hibernated = true;
+  const gcFn = (globalThis as typeof globalThis & { gc?: () => void }).gc;
+  if (typeof gcFn === "function") gcFn();
+}
+
+async function spawnColdBuildChild(cacheDir: string, generation: number): Promise<ColdBuildResult | undefined> {
+  let buildLease: LeaseHandle | undefined;
+  try {
+    buildLease = await leaseStore.acquireBuild(
+      currentWorktreeIdentity(),
+      DeadlineBudget.fromTimeout(BUILD_LEASE_WAIT_MS)
+    );
+  } catch {
+    return undefined;
+  }
+  try {
+    return await spawnColdBuildChildProcess(cacheDir, generation);
+  } finally {
+    await buildLease.release().catch(() => undefined);
+  }
+}
+
+function spawnColdBuildChildProcess(cacheDir: string, generation: number): Promise<ColdBuildResult | undefined> {
   return new Promise(resolve => {
     const child = spawn(process.execPath, [
       COLD_BUILD_CHILD,
@@ -1207,6 +1310,7 @@ function startOwnSnapshotHydration(
   buildFingerprint: string,
   siblingCacheBase: string | undefined
 ): void {
+  hibernateIdentity = identity;
   ownSnapshotVerificationPending = true;
   ownSnapshotVerificationStale = false;
   ownSnapshotVerificationPromise = (async () => {
@@ -1814,6 +1918,7 @@ function queryHandlerDeps() {
     readyEntitySearch,
     readyKnowledgeGraph,
     ensureFactsHydrated,
+    ensureGraphReady,
     childColdPeakRssBytes: lastColdBuildMetrics?.rssPeakBytes,
     parentColdIncrementBytes: lastColdBuildMetrics?.parentIncrementBytes,
     respond
@@ -1869,6 +1974,14 @@ function readyEntitySearch(): EntitySearchIndex {
 
 async function handle(request: JavaIndexRequest): Promise<void> {
   try {
+    if (
+      request.type !== "HIBERNATE"
+      && request.type !== "CLOSE"
+      && request.type !== "OPEN"
+      && request.type !== "FLUSH"
+    ) {
+      await ensureAwake();
+    }
     if (await handleQueryCommand(request, queryHandlerDeps())) return;
     if (request.type === "QUERY_REPOSITORY_FACT_MARKERS") await ensureFactsHydrated();
     if (await handleMybatisCommand(request, { store, respond })) return;
@@ -1910,6 +2023,9 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         lastDurableSnapshotIdentity = undefined;
         pendingSnapshotView = undefined;
         snapshotFactsHydrated = true;
+        hibernated = false;
+        hibernateIdentity = undefined;
+        hibernatedStatusCounts = undefined;
         lastColdBuildMetrics = undefined;
         coldBuildAttempted = false;
 
@@ -2027,10 +2143,23 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         return;
       }
       case "FLUSH": {
+        if (hibernated && snapshotDirtyRevision <= snapshotDurableRevision) {
+          respond({ id: request.id, ok: true, value: currentStatus() });
+          return;
+        }
         await ensureFactsHydrated();
         markSnapshotDirty();
         await flushSnapshotNow();
         respond({ id: request.id, ok: true, value: currentStatus() });
+        return;
+      }
+      case "HIBERNATE": {
+        await hibernateIndex();
+        respond({
+          id: request.id,
+          ok: true,
+          value: currentStatus({ heapUsedBytes: process.memoryUsage().heapUsed })
+        });
         return;
       }
       default: {

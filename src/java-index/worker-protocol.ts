@@ -118,6 +118,7 @@ type JavaIndexRequestOperation =
     }
   | { id: number; type: "STATUS" }
   | { id: number; type: "FLUSH" }
+  | { id: number; type: "HIBERNATE" }
   | { id: number; type: "CLOSE" };
 
 /** Optional request-local timing flag; absent keeps the legacy worker envelope byte-for-byte lean. */
@@ -806,7 +807,15 @@ export function validateJavaIndexStatus(value: unknown): JavaIndexStatus {
     coverage,
     resourceCoverage,
     ...withOptional("lastError", optional(source.lastError, `${context}.lastError`, isAssertString)),
-    ...withOptional("worktreeSeed", optional(source.worktreeSeed, `${context}.worktreeSeed`, validateWorktreeSeedStatus))
+    ...withOptional("worktreeSeed", optional(source.worktreeSeed, `${context}.worktreeSeed`, validateWorktreeSeedStatus)),
+    ...withOptional("hibernated", optional(source.hibernated, `${context}.hibernated`, (value, valueContext) => {
+      if (!isBoolean(value)) invalid(valueContext, "expected a boolean");
+      return value;
+    })),
+    ...withOptional("heapUsedBytes", optional(source.heapUsedBytes, `${context}.heapUsedBytes`, (value, valueContext) => {
+      if (!isNumber(value)) invalid(valueContext, "expected a number");
+      return value;
+    }))
   };
 }
 

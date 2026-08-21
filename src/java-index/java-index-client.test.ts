@@ -276,6 +276,22 @@ test("close returns at the shared grace without terminating a silent worker, the
   assert.equal(worker.terminations, 1, "the late CLOSE ACK permits final worker termination");
 });
 
+test("hibernate posts HIBERNATE and records hibernated status", async () => {
+  const { client, worker } = await openedClient();
+  const hibernatePromise = client.hibernate();
+  await flushMicrotasks();
+  const posted = worker.posted.at(-1)!;
+  assert.equal(posted.type, "HIBERNATE");
+  worker.emitMessage({
+    id: posted.id,
+    ok: true,
+    value: { ...validStatus(1), hibernated: true, heapUsedBytes: 12 }
+  });
+  const status = await hibernatePromise;
+  assert.equal(status.hibernated, true);
+  assert.equal(status.heapUsedBytes, 12);
+});
+
 test("a failed OPEN clears the worker so the next request can still restart once", async () => {
   const workers: FakeWorker[] = [];
   const client = new JavaIndexClient("/repo", "/cache", () => {

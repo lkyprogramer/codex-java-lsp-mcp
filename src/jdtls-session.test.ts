@@ -214,6 +214,10 @@ class FakeLeaseStore implements CrossProcessLeaseStore {
     throw new Error("not used by these tests");
   }
 
+  async acquireBuild(): Promise<LeaseHandle> {
+    throw new Error("not used by these tests");
+  }
+
   async activeRuntimeCount(): Promise<number> {
     return 0;
   }

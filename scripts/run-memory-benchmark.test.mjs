@@ -8,6 +8,7 @@ import {
   bytesToMiB,
   classifyFactValue,
   concurrentRuntimePlan,
+  M0_GATES,
   parseMemoryBenchmarkCli,
   percentile,
   sampleEven,
@@ -124,6 +125,7 @@ test("concurrentRuntimePlan is 3 then 5 runtimes; UNMEASURED keeps a reason", ()
   const plan = concurrentRuntimePlan();
   assert.equal(plan.S1.length, 3);
   assert.equal(plan.S2.length, 5);
+  assert.equal(M0_GATES.S4_HIBERNATE_HEAP_MIB, 32);
   assert.equal(plan.S2.filter(item => item.worktree).length, 2);
   const missing = unmeasuredScenario("S1", "OOM");
   assert.equal(missing.status, "UNMEASURED");

@@ -25,6 +25,7 @@ export type QueryHandlerDeps = {
   readyEntitySearch(): EntitySearchIndex;
   readyKnowledgeGraph(): KnowledgeGraphStore;
   ensureFactsHydrated(): Promise<void>;
+  ensureGraphReady(): Promise<void>;
   childColdPeakRssBytes?: number;
   parentColdIncrementBytes?: number;
   respond(response: JavaIndexResponse): void;
@@ -139,6 +140,7 @@ export async function handleQueryCommand(request: JavaIndexRequest, deps: QueryH
       return true;
     }
     case "QUERY_GRAPH_DIGEST": {
+      await deps.ensureGraphReady();
       const graph = deps.readyKnowledgeGraph();
       const memory = process.memoryUsage();
       deps.respond({

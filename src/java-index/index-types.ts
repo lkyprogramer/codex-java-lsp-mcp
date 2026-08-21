@@ -266,6 +266,10 @@ export type JavaIndexStatus = {
   resourceCoverage: MyBatisResourceCoverage[];
   lastError?: string;
   worktreeSeed?: WorktreeSeedStatus;
+  /** Worker has unloaded facts/parse trees; next fact query reheats from v4. */
+  hibernated?: boolean;
+  /** Worker-local heapUsed, published on HIBERNATE (S4). */
+  heapUsedBytes?: number;
 };
 
 export type JavaTypeLookupResult =

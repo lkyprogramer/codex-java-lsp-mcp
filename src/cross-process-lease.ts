@@ -23,7 +23,7 @@ export type LeaseOwner = {
 };
 
 export interface LeaseHandle {
-  readonly kind: "RUNTIME" | "JDT_WORKTREE" | "JDT_SLOT" | "SWEEP_SLOT";
+  readonly kind: "RUNTIME" | "JDT_WORKTREE" | "JDT_SLOT" | "SWEEP_SLOT" | "BUILD_SLOT";
   readonly path: string;
   readonly owner: LeaseOwner;
   heartbeat(): Promise<void>;
@@ -63,6 +63,7 @@ export type CrossProcessLeaseStatus = {
   jdtWorktreeLeases: number;
   claimedJdtSlots: number;
   claimedSweepSlots: number;
+  claimedBuildSlots: number;
   staleLeaseReclaims: number;
   lastError?: string;
 };
@@ -73,6 +74,7 @@ export interface CrossProcessLeaseStore {
   tryAcquireJdt(identity: WorktreeIdentity): Promise<JdtLeaseAcquireResult>;
   acquireJdt(identity: WorktreeIdentity, budget: DeadlineBudget): Promise<JdtLeaseAcquireResult>;
   acquireSweep(identity: WorktreeIdentity, budget: DeadlineBudget): Promise<LeaseHandle>;
+  acquireBuild(identity: WorktreeIdentity, budget: DeadlineBudget): Promise<LeaseHandle>;
   activeRuntimeCount(familyHash?: string): Promise<number>;
   status(): Promise<CrossProcessLeaseStatus>;
 }
@@ -110,6 +112,10 @@ export class NoopCrossProcessLeaseStore implements CrossProcessLeaseStore {
     return this.inertHandle("SWEEP_SLOT");
   }
 
+  async acquireBuild(): Promise<LeaseHandle> {
+    return this.inertHandle("BUILD_SLOT");
+  }
+
   async activeRuntimeCount(): Promise<number> {
     return 0;
   }
@@ -126,6 +132,7 @@ export class NoopCrossProcessLeaseStore implements CrossProcessLeaseStore {
       jdtWorktreeLeases: 0,
       claimedJdtSlots: 0,
       claimedSweepSlots: 0,
+      claimedBuildSlots: 0,
       staleLeaseReclaims: 0
     };
   }
@@ -373,6 +380,20 @@ export class FileCrossProcessLeaseStore implements CrossProcessLeaseStore {
     }
   }
 
+  /**
+   * Machine-wide cold-build semaphore (M4 S3): exactly one BUILD_SLOT, independent
+   * of capacity.json so a live JDT/sweep config cannot oversubscribe child builds.
+   */
+  async acquireBuild(identity: WorktreeIdentity, budget: DeadlineBudget): Promise<LeaseHandle> {
+    this.assertOpen();
+    for (;;) {
+      const handle = this.claimFixedSlot("build-slots", 1, "BUILD_SLOT", identity);
+      if (handle) return handle;
+      budget.throwIfExpired("cross-process-lease.acquireBuild");
+      await delay(Math.min(50, budget.remainingMs(50)));
+    }
+  }
+
   async activeRuntimeCount(familyHash?: string): Promise<number> {
     const runtimeRoot = path.join(this.root, "runtime");
     if (!existsSync(runtimeRoot)) return 0;
@@ -402,6 +423,7 @@ export class FileCrossProcessLeaseStore implements CrossProcessLeaseStore {
       jdtWorktreeLeases: this.countLiveIn(path.join(this.root, "jdt-worktree")),
       claimedJdtSlots: this.countLiveIn(path.join(this.root, "jdt-slots")),
       claimedSweepSlots: this.countLiveIn(path.join(this.root, "sweep-slots")),
+      claimedBuildSlots: this.countLiveIn(path.join(this.root, "build-slots")),
       staleLeaseReclaims: this.staleLeaseReclaims,
       lastError: this.lastError
     };
@@ -447,9 +469,9 @@ export class FileCrossProcessLeaseStore implements CrossProcessLeaseStore {
   }
 
   private claimFixedSlot(
-    prefix: "jdt-slots" | "sweep-slots",
+    prefix: "jdt-slots" | "sweep-slots" | "build-slots",
     count: number,
-    kind: "JDT_SLOT" | "SWEEP_SLOT",
+    kind: "JDT_SLOT" | "SWEEP_SLOT" | "BUILD_SLOT",
     identity: WorktreeIdentity
   ): LeaseHandle | undefined {
     for (let index = 0; index < count; index += 1) {
@@ -650,6 +672,7 @@ export class FileCrossProcessLeaseStore implements CrossProcessLeaseStore {
     if (this.scanFlatRootForLive(path.join(this.root, "jdt-worktree"), true)) return true;
     if (this.scanFlatRootForLive(path.join(this.root, "jdt-slots"), false)) return true;
     if (this.scanFlatRootForLive(path.join(this.root, "sweep-slots"), false)) return true;
+    if (this.scanFlatRootForLive(path.join(this.root, "build-slots"), false)) return true;
     return this.hasAnyRuntimeLease();
   }
 

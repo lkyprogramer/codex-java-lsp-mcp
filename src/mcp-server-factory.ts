@@ -245,6 +245,7 @@ function daemonStatus(application: JavaLspApplication): Record<string, unknown> 
     resource: {
       maxActiveRepos: resource.maxActiveRepos,
       idleTtlMs: resource.idleTtlMs,
+      hibernateTtlMs: resource.hibernateTtlMs,
       importConcurrency: resource.importConcurrency,
       workspaceRetainedOnShutdown: resource.workspaceRetainedOnShutdown
     }

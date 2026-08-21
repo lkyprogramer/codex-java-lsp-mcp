@@ -12,6 +12,7 @@ const generatedAt = new Date().toISOString();
 const defaultsFingerprint = createHash("sha1")
   .update(JSON.stringify({
     idleTtlMs: defaults.idleTtlMs,
+    hibernateTtlMs: defaults.hibernateTtlMs,
     importConcurrency: defaults.importConcurrency,
     jdtlsXmx: defaults.jdtlsXmx,
     maxActiveRepos: defaults.maxActiveRepos
@@ -25,6 +26,7 @@ writeFileSync(path.join(root, "dist", "build-stamp.json"), `${JSON.stringify({
   generatedAt,
   defaults: {
     idleTtlMs: defaults.idleTtlMs,
+    hibernateTtlMs: defaults.hibernateTtlMs,
     importConcurrency: defaults.importConcurrency,
     jdtlsXmx: defaults.jdtlsXmx,
     maxActiveRepos: defaults.maxActiveRepos

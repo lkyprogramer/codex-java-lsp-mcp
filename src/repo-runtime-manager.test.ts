@@ -25,7 +25,7 @@ test("RepoRuntimeManager evicts the oldest idle started runtime before starting 
   const sessions = new Map<string, FakeSession>();
   const manager = new RepoRuntimeManager(fakeResolver(), {
     maxActiveRepos: 1,
-    idleTtlMs: 100000,
+    idleTtlMs: 100000, pressureIntervalMs: 0,
     requestTimeoutMs: 100
   }, resolved => fakeContext(resolved, sessions),
     fakeCoordination(), new NoopCrossProcessLeaseStore());
@@ -69,7 +69,7 @@ test("RepoRuntimeManager starts and flushes the coordinator around Java index OP
   };
   const manager = new RepoRuntimeManager(
     fakeResolver(),
-    { idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
     resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
     resolved => ({ generation: clock, coordinator, layout: fakeLayoutSource(resolved.repoRoot) }),
     new NoopCrossProcessLeaseStore()
@@ -92,7 +92,7 @@ test("RepoRuntimeManager routes a RESOURCE_CHANGE batch to refreshResources, sep
   const javaIndex = new RecordingJavaIndex(() => coordinator.starts);
   const manager = new RepoRuntimeManager(
     fakeResolver(),
-    { idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
     resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
     resolved => ({ generation: new GenerationClock(), coordinator, layout: fakeLayoutSource(resolved.repoRoot) }),
     new NoopCrossProcessLeaseStore()
@@ -137,7 +137,7 @@ test("RepoRuntimeManager still applies JavaIndex work when session batch handlin
   const javaIndex = new RecordingJavaIndex(() => coordinator.starts);
   const manager = new RepoRuntimeManager(
     fakeResolver(),
-    { idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
     resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
     resolved => ({ generation: new GenerationClock(), coordinator, layout: fakeLayoutSource(resolved.repoRoot) }),
     new NoopCrossProcessLeaseStore()
@@ -174,7 +174,7 @@ test("RepoRuntimeManager replays batches buffered during OPEN with a per-batch h
   javaIndex.onOpen = () => { openStarted = true; };
   const manager = new RepoRuntimeManager(
     fakeResolver(),
-    { idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
     resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
     resolved => ({ generation: new GenerationClock(), coordinator, layout: fakeLayoutSource(resolved.repoRoot) }),
     new NoopCrossProcessLeaseStore()
@@ -202,7 +202,7 @@ test("RepoRuntimeManager fails fast when all active runtimes are in use", async 
   const sessions = new Map<string, FakeSession>();
   const manager = new RepoRuntimeManager(fakeResolver(), {
     maxActiveRepos: 1,
-    idleTtlMs: 100000,
+    idleTtlMs: 100000, pressureIntervalMs: 0,
     requestTimeoutMs: 30
   }, resolved => fakeContext(resolved, sessions),
     fakeCoordination(), new NoopCrossProcessLeaseStore());
@@ -236,7 +236,7 @@ test("RepoRuntimeManager uses the request deadline, not the manager timeout, whi
   const sessions = new Map<string, FakeSession>();
   const manager = new RepoRuntimeManager(fakeResolver(), {
     maxActiveRepos: 1,
-    idleTtlMs: 100000,
+    idleTtlMs: 100000, pressureIntervalMs: 0,
     requestTimeoutMs: 160
   }, resolved => fakeContext(resolved, sessions),
     fakeCoordination(), new NoopCrossProcessLeaseStore());
@@ -289,7 +289,7 @@ test("RepoRuntimeManager bounds shared runtime creation separately from the call
   };
   const manager = new RepoRuntimeManager(
     fakeResolver(),
-    { idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
     resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
     fakeCoordination(),
     new NoopCrossProcessLeaseStore()
@@ -325,7 +325,7 @@ test("RepoRuntimeManager does not run a handler after its budget expires during 
   };
   const manager = new RepoRuntimeManager(
     fakeResolver(),
-    { idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
     resolved => ({
       ...fakeContext(resolved, sessions),
       javaIndexClient: javaIndex as never,
@@ -353,7 +353,7 @@ test("STARTING sessions count against the active repo limit", async () => {
   const enteredB = deferred<void>();
   const manager = new RepoRuntimeManager(fakeResolver(), {
     maxActiveRepos: 1,
-    idleTtlMs: 100000,
+    idleTtlMs: 100000, pressureIntervalMs: 0,
     requestTimeoutMs: 5000
   }, resolved => fakeContext(resolved, sessions, { "/repo-a": gateA }),
     fakeCoordination(), new NoopCrossProcessLeaseStore());
@@ -391,7 +391,7 @@ test("slot waiters are granted in FIFO order", async () => {
   const order: string[] = [];
   const manager = new RepoRuntimeManager(fakeResolver(), {
     maxActiveRepos: 1,
-    idleTtlMs: 100000,
+    idleTtlMs: 100000, pressureIntervalMs: 0,
     requestTimeoutMs: 5000
   }, resolved => fakeContext(resolved, sessions),
     fakeCoordination(), new NoopCrossProcessLeaseStore());
@@ -430,7 +430,7 @@ test("a waiter that misses its deadline is removed and never granted later", asy
   const held = deferred<void>();
   const manager = new RepoRuntimeManager(fakeResolver(), {
     maxActiveRepos: 1,
-    idleTtlMs: 100000,
+    idleTtlMs: 100000, pressureIntervalMs: 0,
     requestTimeoutMs: 40
   }, resolved => fakeContext(resolved, sessions),
     fakeCoordination(), new NoopCrossProcessLeaseStore());
@@ -466,7 +466,7 @@ test("a reservation taken but never used is released for the next caller", async
   const sessions = new Map<string, FakeSession>();
   const manager = new RepoRuntimeManager(fakeResolver(), {
     maxActiveRepos: 1,
-    idleTtlMs: 100000,
+    idleTtlMs: 100000, pressureIntervalMs: 0,
     requestTimeoutMs: 5000
   }, resolved => fakeContext(resolved, sessions),
     fakeCoordination(), new NoopCrossProcessLeaseStore());
@@ -488,7 +488,7 @@ test("a session that breaks releases its slot to a queued waiter", async () => {
   const held = deferred<void>();
   const manager = new RepoRuntimeManager(fakeResolver(), {
     maxActiveRepos: 1,
-    idleTtlMs: 100000,
+    idleTtlMs: 100000, pressureIntervalMs: 0,
     requestTimeoutMs: 5000
   }, resolved => fakeContext(resolved, sessions),
     fakeCoordination(), new NoopCrossProcessLeaseStore());
@@ -522,7 +522,7 @@ test("activeRepos exposes lifecycle state and reservation", async () => {
   const sessions = new Map<string, FakeSession>();
   const manager = new RepoRuntimeManager(fakeResolver(), {
     maxActiveRepos: 2,
-    idleTtlMs: 100000,
+    idleTtlMs: 100000, pressureIntervalMs: 0,
     requestTimeoutMs: 5000
   }, resolved => fakeContext(resolved, sessions),
     fakeCoordination(), new NoopCrossProcessLeaseStore());
@@ -544,7 +544,7 @@ test("two concurrent contextFor calls share one runtime and one coordinator", as
   let contextCalls = 0;
   const manager = new RepoRuntimeManager(
     fakeResolver(),
-    { maxActiveRepos: 2, idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    { maxActiveRepos: 2, idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
     resolved => { contextCalls += 1; return fakeContext(resolved, sessions); },
     fakeCoordination(coordinators),
     new NoopCrossProcessLeaseStore()
@@ -573,7 +573,7 @@ test("the first runtime creator honors its deadline without cancelling shared cr
   const sessions = new Map<string, FakeSession>();
   const manager = new RepoRuntimeManager(
     fakeResolver(),
-    { maxActiveRepos: 2, idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    { maxActiveRepos: 2, idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
     resolved => fakeContext(resolved, sessions),
     fakeCoordination(),
     new BlockingRuntimeLeaseStore()
@@ -622,7 +622,7 @@ test("a runtime creation hard-cap retires a stuck lease singleflight so a later 
   const sessions = new Map<string, FakeSession>();
   const manager = new RepoRuntimeManager(
     fakeResolver(),
-    { maxActiveRepos: 2, idleTtlMs: 100000, requestTimeoutMs: 30 },
+    { maxActiveRepos: 2, idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 30 },
     resolved => fakeContext(resolved, sessions),
     fakeCoordination(),
     new OneStuckRuntimeLeaseStore()
@@ -660,12 +660,14 @@ test("initialize() singleflights lease store opening and a degraded store still 
     async tryAcquireJdt() { throw new Error("not used by this test"); },
     async acquireJdt() { throw new Error("not used by this test"); },
     async acquireSweep() { throw new Error("not used by this test"); },
+    async acquireBuild() { throw new Error("not used by this test"); },
     async activeRuntimeCount() { return 0; },
     async status() {
       return {
         opened: false, configuredJdtSlots: 0, configuredSweepSlots: 0,
         requestedJdtSlots: 0, requestedSweepSlots: 0, capacityConflict: false,
         runtimeLeases: 0, jdtWorktreeLeases: 0, claimedJdtSlots: 0, claimedSweepSlots: 0,
+        claimedBuildSlots: 0,
         staleLeaseReclaims: 0
       };
     }
@@ -673,7 +675,7 @@ test("initialize() singleflights lease store opening and a degraded store still 
   const sessions = new Map<string, FakeSession>();
   const manager = new RepoRuntimeManager(
     fakeResolver(),
-    { idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
     resolved => fakeContext(resolved, sessions),
     fakeCoordination(),
     degradedLeaseStore
@@ -697,7 +699,7 @@ test("a live runtime holds a runtime lease so activeRuntimeCount reflects it, an
   const sessions = new Map<string, FakeSession>();
   const manager = new RepoRuntimeManager(
     fakeResolver(),
-    { idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
     resolved => fakeContext(resolved, sessions),
     fakeCoordination(),
     leaseStore
@@ -769,7 +771,7 @@ test("reconcileIfDirty runs once under two concurrent requests and clears dirty 
 
   const manager = new RepoRuntimeManager(
     fakeResolver(),
-    { idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
     resolved => ({
       repoRoot: resolved.repoRoot,
       rootSource: resolved.rootSource,
@@ -819,7 +821,7 @@ test("a reconcile singleflight joiner honors its own deadline without cancelling
   };
   const manager = new RepoRuntimeManager(
     fakeResolver(),
-    { idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
     resolved => ({
       repoRoot: resolved.repoRoot,
       rootSource: resolved.rootSource,
@@ -882,7 +884,7 @@ test("reconcileIfDirty leaves dirty set when reconcile fails, without failing th
 
   const manager = new RepoRuntimeManager(
     fakeResolver(),
-    { idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
     resolved => ({
       repoRoot: resolved.repoRoot,
       rootSource: resolved.rootSource,
@@ -926,7 +928,7 @@ test("V2 runtime reconciles only JavaIndex and records its OPEN source on the re
   };
   const manager = new RepoRuntimeManager(
     fakeResolver(),
-    { idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
     resolved => ({
       repoRoot: resolved.repoRoot,
       rootSource: resolved.rootSource,
@@ -971,7 +973,7 @@ test("a compatibility RouterIndex without withRequestOptions cannot outlive the 
   const sessions = new Map<string, FakeSession>();
   const manager = new RepoRuntimeManager(
     fakeResolver(),
-    { idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
     resolved => ({
       ...fakeContext(resolved, sessions),
       javaIndex: {
@@ -1005,7 +1007,7 @@ test("a bounded routerStatus failure degrades only indexOpenSource while budget 
   let receivedBudget: DeadlineBudget | undefined;
   const manager = new RepoRuntimeManager(
     fakeResolver(),
-    { idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
     resolved => ({
       ...fakeContext(resolved, sessions),
       javaIndex: {
@@ -1113,7 +1115,7 @@ test("own snapshot verification stays worker-owned after OPEN instead of trigger
   };
   const manager = new RepoRuntimeManager(
     fakeResolver(),
-    { idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
     resolved => ({
       repoRoot: resolved.repoRoot,
       rootSource: resolved.rootSource,
@@ -1133,6 +1135,48 @@ test("own snapshot verification stays worker-owned after OPEN instead of trigger
   await manager.contextFor({ repoRoot: "/repo-a" });
 
   assert.equal(reconcileCalls, 0, "the worker verifies/queues the snapshot itself; manager must not race it with a full sweep");
+});
+
+test("hibernate TTL unloads the index without tearing down JDT", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const javaIndex = new RecordingJavaIndex(() => 0);
+  const manager = new RepoRuntimeManager(
+    fakeResolver(),
+    { idleTtlMs: 100000, hibernateTtlMs: 25, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
+    resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
+    fakeCoordination(),
+    new NoopCrossProcessLeaseStore()
+  );
+  await manager.withContext({ repoRoot: "/repo-a" }, async context => {
+    await (context.session as unknown as FakeSession).ensureStarted();
+  }, { mayStartLsp: true });
+  await delay(80);
+  assert.ok(javaIndex.calls.includes("hibernate"));
+  assert.equal(sessions.get("/repo-a")?.stops, 0, "T_hibernate must not call session.stop");
+  await manager.shutdownAll();
+});
+
+test("freemem pressure hibernates the LRU idle runtime", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const javaIndex = new RecordingJavaIndex(() => 0);
+  const manager = new RepoRuntimeManager(
+    fakeResolver(),
+    {
+      idleTtlMs: 100000,
+      hibernateTtlMs: 100000,
+      pressureIntervalMs: 15,
+      freememPressureBytes: 1,
+      freemem: () => 0,
+      requestTimeoutMs: 5000
+    },
+    resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
+    fakeCoordination(),
+    new NoopCrossProcessLeaseStore()
+  );
+  await manager.withContext({ repoRoot: "/repo-a" }, async () => "ok");
+  await delay(80);
+  assert.ok(javaIndex.calls.includes("hibernate"), "os.freemem below threshold must hibernate LRU idle");
+  await manager.shutdownAll();
 });
 
 async function waitFor(condition: () => boolean): Promise<void> {
@@ -1278,6 +1322,7 @@ class RecordingJavaIndex {
     if (controls?.budget) this.boundedCalls.push(call);
   }
   async close(): Promise<void> { this.calls.push("close"); }
+  async hibernate(): Promise<void> { this.calls.push("hibernate"); }
 }
 
 function fakeLayoutSource(repoRoot: string): LayoutSource {
@@ -1311,14 +1356,23 @@ function fakeLeaseHandle(): LeaseHandle {
 }
 
 function managerWith(
-  options: Partial<{ maxActiveRepos: number; idleTtlMs: number; requestTimeoutMs: number; maxRetainedStoppedRepos: number }>,
+  options: Partial<{
+    maxActiveRepos: number;
+    idleTtlMs: number;
+    hibernateTtlMs: number;
+    requestTimeoutMs: number;
+    maxRetainedStoppedRepos: number;
+    pressureIntervalMs: number;
+    freememPressureBytes: number;
+    freemem: () => number;
+  }>,
   sessions: Map<string, FakeSession>,
   gates: Record<string, Deferred<void>> = {},
   coordinators?: Map<string, FakeCoordinator>
 ): RepoRuntimeManager {
   return new RepoRuntimeManager(
     fakeResolver(),
-    { idleTtlMs: 100000, requestTimeoutMs: 5000, ...options },
+    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000, ...options },
     resolved => fakeContext(resolved, sessions, gates),
     fakeCoordination(coordinators),
     new NoopCrossProcessLeaseStore()
@@ -1405,7 +1459,7 @@ async function negativeLookupAllowedFor(
   };
   const manager = new RepoRuntimeManager(
     fakeResolver(),
-    { idleTtlMs: 100000, requestTimeoutMs: 5000 },
+    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
     resolved => ({
       ...fakeContext(resolved, sessions),
       javaIndexClient: javaIndexClient as never,

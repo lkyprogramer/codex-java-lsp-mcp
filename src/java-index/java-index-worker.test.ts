@@ -1017,6 +1017,33 @@ test("FLUSH writes the current facts immediately, ahead of the debounce timer", 
   await client.close();
 });
 
+test("HIBERNATE unloads facts then a query reheats from the v4 snapshot", async () => {
+  const repoRoot = tempRepo("java-index-worker-hibernate-");
+  const file = "src/main/java/demo/Solo.java";
+  writeJavaFile(repoRoot, file, "package demo;\n\nclass Solo {}\n");
+  const cacheDir = tempCacheDir();
+  const client = new JavaIndexClient(repoRoot, cacheDir);
+  await client.open(1);
+  await client.refresh(1, [path.join(repoRoot, file)], []);
+  await client.flush();
+  const before = (await client.queryFiles([path.join(repoRoot, file)]))[0];
+  assert.ok(before);
+  assert.equal(before.types.some(type => type.simpleName === "Solo"), true);
+
+  const hibernated = await client.hibernate();
+  assert.equal(hibernated.hibernated, true);
+  assert.equal(typeof hibernated.heapUsedBytes, "number");
+
+  const after = (await client.queryFiles([path.join(repoRoot, file)]))[0];
+  assert.ok(after);
+  assert.equal(after.types.some(type => type.simpleName === "Solo"), true);
+  assert.equal(after.file.contentHash, before.file.contentHash);
+  const woke = await client.status();
+  assert.equal(woke.hibernated, undefined);
+
+  await client.close();
+});
+
 test("sibling-seeded reconcile re-parses only target-side diffs while preserving reusable facts", async () => {
   const siblingRepo = tempRepo("java-index-worker-sibling-source-");
   writeJavaFile(siblingRepo, "src/main/java/demo/Same.java", "package demo;\n\nclass Same {}\n");

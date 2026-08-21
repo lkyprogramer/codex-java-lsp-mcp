@@ -163,6 +163,13 @@ export class ParseTreeCache {
     return this.entries.size;
   }
 
+  /** Drops every cached tree. Hibernate / CLOSE; not an LRU eviction. */
+  clear(): void {
+    for (const entry of this.entries.values()) entry.tree.delete();
+    this.entries.clear();
+    this.totalSourceBytes = 0;
+  }
+
   private evictIfNeeded(): void {
     while (this.entries.size > this.options.maxEntries || this.totalSourceBytes > this.options.maxSourceBytes) {
       const oldestKey = this.entries.keys().next().value;
