@@ -38,12 +38,15 @@ export async function loadTraceTasks(goldenDir = path.join(scriptRoot, "golden")
       if (!fullGitObjectId(row.repoCommit) || requiredContextFiles.length === 0) {
         throw new TraceValidationError(`${file}: ${row.id} must bind a full repo commit and required context`);
       }
+      const keywords = Array.isArray(row.anchor?.taskKeywords) ? row.anchor.taskKeywords : [];
+      const taskText = [row.name, ...keywords].filter(item => typeof item === "string" && item.trim()).join(" ").slice(0, 500);
       tasks.push({
         taskId: `${projectId}:${row.id}`,
         projectId,
         scenarioId: row.id,
         repoCommit: row.repoCommit,
         anchor: row.anchor,
+        taskText,
         requiredContextFiles
       });
     }

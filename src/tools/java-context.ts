@@ -23,7 +23,7 @@ export const JAVA_CONTEXT_INTENTS = [
 ] as const;
 
 export const JAVA_CONTEXT_DESCRIPTION = [
-  "Plan Java context as selected spans, unresolved gaps, and next steps. Anchors optional: omit them and pass task to resolve up to 3 entry entities. mode=navigate follows callers, callees, or a persistence/framework closure.",
+  "Plan Java context as selected spans, unresolved gaps, and next steps. Prefer one search from the given file/line/column. Anchors optional: omit them and pass task to resolve up to 3 entry entities. mode=navigate only when you need callers, callees, or a persistence/framework closure.",
   "IMPLEMENTATION_CHANGE: edit a method; pack callees, implementations, and contracts.",
   "DOWNSTREAM_BEHAVIOR: follow callees and dispatch.",
   "UPSTREAM_IMPACT: find callers and reachable controllers.",

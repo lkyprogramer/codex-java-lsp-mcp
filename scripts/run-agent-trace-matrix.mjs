@@ -101,7 +101,8 @@ export async function planAgentTraceMatrix(cli, { loadTasks = loadTraceTasks } =
       scenarioId: task.scenarioId,
       repoCommit: task.repoCommit,
       requiredContextFiles: task.requiredContextFiles,
-      anchor: task.anchor
+      anchor: task.anchor,
+      taskText: task.taskText
     })),
     protocol: {
       rounds: AGENT_TRACE_ROUNDS,

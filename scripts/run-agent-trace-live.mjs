@@ -48,7 +48,7 @@ export const JAVA_CONTEXT_TOOL = {
   type: "function",
   function: {
     name: "java_context",
-    description: "Plan Java context as selected spans. Pass intent. Anchors optional when task is present. mode=navigate follows callers, callees, or a persistence/framework closure.",
+    description: "Plan Java context as selected spans. Pass intent. Prefer one search from the given file/line/column. Stop when you can describe the impact. mode=navigate only for callers, callees, or a persistence/framework closure.",
     parameters: {
       type: "object",
       additionalProperties: false,
@@ -83,7 +83,7 @@ export const JAVA_CONTEXT_TOOL = {
 
 export const ARM_SYSTEM_PROMPTS = {
   old: "You navigate Java code with the java_impact tool only. Call it with file/line/column. You may call it again on related files. Stop when you can describe the impact. Never ask for whole files. Never invent file paths.",
-  jin: "You navigate Java code with the java_context tool only. Pass intent. You may omit anchors and pass task. mode=navigate uses callers/callees or persistence/framework closure. Never ask for whole files. Never invent file paths.",
+  jin: "You navigate Java code with the java_context tool only. Pass intent. Prefer one search from the given file/line/column. Do not use mode=navigate unless you need callers, callees, or a persistence/framework closure. Stop when you can describe the impact. Never ask for whole files. Never invent file paths.",
   serena: "You navigate Java code with the Serena MCP tools as published. Do not invent tools. Stop when you can describe the impact. Never invent file paths."
 };
 
@@ -123,15 +123,13 @@ export function compactContextForModel(result, maxChars = MAX_TOOL_RESULT_CHARS)
     coverage: result?.coverage,
     resolvedIntent: result?.resolvedIntent,
     anchor: result?.anchor,
-    resolvedAnchors: result?.resolvedAnchors ?? [],
     contexts: (result?.contexts ?? []).map(item => ({
       path: item.path,
       role: item.role,
-      proof: item.proof,
-      spans: item.spans
+      spans: (item.spans ?? []).map(span => ({ start: span.start, end: span.end }))
     })),
-    unresolved: result?.unresolved ?? [],
-    next: result?.next ?? []
+    unresolved: (result?.unresolved ?? []).slice(0, 8).map(item => ({ id: item.id, role: item.role })),
+    next: (result?.next ?? []).slice(0, 4).map(item => ({ action: item.action, reason: item.reason }))
   };
   let text = JSON.stringify(payload);
   if (text.length > maxChars) text = `${text.slice(0, maxChars)}…[truncated]`;
@@ -150,6 +148,26 @@ export function serenaUnavailableResult(task, reason = "SERENA_MCP_COMMAND is no
     taskSuccess: null,
     contextCapped: false,
     error: reason.slice(0, 500)
+  };
+}
+
+export function liveJavaContextArgs(args, task, session) {
+  const rawTask = typeof args?.task === "string" ? args.task.trim() : "";
+  const scenarioId = typeof task?.scenarioId === "string" ? task.scenarioId : "";
+  const fallback = typeof task?.taskText === "string" ? task.taskText.trim() : "";
+  const taskText = rawTask && rawTask !== scenarioId ? rawTask : fallback;
+  return {
+    intent: args?.intent || "auto",
+    file: args?.file || task.anchor.file,
+    line: args?.line || task.anchor.line,
+    column: args?.column || task.anchor.column,
+    ...(taskText ? { task: taskText } : {}),
+    mode: args?.mode || "search",
+    ...(args?.direction ? { direction: args.direction } : {}),
+    ...(args?.closure ? { closure: args.closure } : {}),
+    ...(session?.sessionId
+      ? { sessionId: session.sessionId, generation: session.generation ?? 0 }
+      : {})
   };
 }
 
@@ -217,7 +235,7 @@ export async function runLiveAgentTask({
     {
       role: "user",
       content: [
-        `Task: ${task.name ?? task.scenarioId}`,
+        `Task: ${task.taskText || task.name || "Java impact"}`,
         `Repository: ${task.projectId}`,
         `Anchor file: ${task.anchor.file}`,
         `Anchor line: ${task.anchor.line}`,
@@ -352,7 +370,10 @@ export async function executeLiveTrace({
             tools,
             maxTokens
           }),
-          invoke: (name, args) => dispatchArmTool(session, arm, name, args, task),
+          invoke: (name, args) => dispatchArmTool(session, arm, name, args, task, {
+            sessionId: `live:${task.taskId}:${arm}`,
+            generation: 0
+          }),
           promptCap: DEFAULT_PROMPT_CAP_TOKENS,
           maxRounds: MAX_LIVE_ROUNDS,
           maxCompletionTokens: DEFAULT_MAX_COMPLETION_TOKENS
@@ -449,19 +470,10 @@ function summarizeArms(results) {
   }));
 }
 
-async function dispatchArmTool(session, arm, name, args, task) {
+async function dispatchArmTool(session, arm, name, args, task, liveSession) {
   if (arm === "jin") {
     if (name !== "java_context") return { error: `unknown tool ${name}` };
-    return session.context({
-      intent: args.intent || "auto",
-      file: args.file || task.anchor.file,
-      line: args.line || task.anchor.line,
-      column: args.column || task.anchor.column,
-      task: args.task || task.scenarioId,
-      mode: args.mode,
-      direction: args.direction,
-      closure: args.closure
-    });
+    return session.context(liveJavaContextArgs(args, task, liveSession));
   }
   if (name !== "java_impact") return { error: `unknown tool ${name}` };
   return session.impact({
@@ -557,10 +569,11 @@ async function openImpactSession({ repoRoot, serverJs, cacheRoot, env }) {
         file: args.file,
         line: args.line,
         column: args.column,
-        task: args.task,
-        mode: args.mode,
-        direction: args.direction,
-        closure: args.closure
+        ...(args.task ? { task: args.task } : {}),
+        mode: args.mode || "search",
+        ...(args.direction ? { direction: args.direction } : {}),
+        ...(args.closure ? { closure: args.closure } : {}),
+        ...(args.sessionId ? { sessionId: args.sessionId, generation: args.generation ?? 0 } : {})
       });
     },
     async close() {

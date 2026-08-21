@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  ARM_SYSTEM_PROMPTS,
   compactContextForModel,
   compactImpactForModel,
+  liveJavaContextArgs,
   selectLiveTasks,
   serenaUnavailableResult,
   summarizeLiveTasks,
@@ -76,7 +78,7 @@ test("compact context uses selected spans and never includes scores or mustHit",
     resolvedIntent: "IMPLEMENTATION_CHANGE",
     anchor: { path: "src/A.java", symbol: "run" },
     resolvedAnchors: [{ path: "src/A.java", symbol: "run", layer: "graph" }],
-    contexts: [{ path: "src/A.java", role: "ANCHOR", proof: ["DECLARES"], spans: [{ start: 1, end: 4 }] }],
+    contexts: [{ path: "src/A.java", role: "ANCHOR", proof: ["DECLARES"], spans: [{ start: 1, end: 4, text: "class A {}" }] }],
     unresolved: [],
     next: [],
     score: 0.9
@@ -84,6 +86,37 @@ test("compact context uses selected spans and never includes scores or mustHit",
   assert.equal(compact.paths.includes("src/A.java"), true);
   assert.equal(compact.text.includes("mustHit"), false);
   assert.equal(compact.text.includes("score"), false);
+  assert.equal(compact.text.includes("DECLARES"), false);
+  assert.equal(compact.text.includes("class A {}"), false);
+  assert.equal(compact.text.includes("\"start\":1"), true);
+});
+
+test("live java_context args default to search and never send scenarioId as task", () => {
+  const args = liveJavaContextArgs(
+    { intent: "auto" },
+    {
+      scenarioId: "paper-task-claim-iam-holdout",
+      taskText: "PaperTaskCommandAppService claim operator identity",
+      anchor: { file: "src/A.java", line: 12, column: 4 }
+    },
+    { sessionId: "live:demo:jin", generation: 0 }
+  );
+  assert.equal(args.mode, "search");
+  assert.equal(args.file, "src/A.java");
+  assert.equal(args.task, "PaperTaskCommandAppService claim operator identity");
+  assert.equal(args.sessionId, "live:demo:jin");
+  assert.equal(JSON.stringify(args).includes("paper-task-claim-iam-holdout"), false);
+  const ignored = liveJavaContextArgs(
+    { intent: "auto", task: "paper-task-claim-iam-holdout" },
+    {
+      scenarioId: "paper-task-claim-iam-holdout",
+      taskText: "claim paper task identity",
+      anchor: { file: "src/A.java", line: 1, column: 1 }
+    }
+  );
+  assert.equal(ignored.task, "claim paper task identity");
+  assert.match(ARM_SYSTEM_PROMPTS.jin, /Stop when you can describe the impact/);
+  assert.match(ARM_SYSTEM_PROMPTS.jin, /Prefer one search/);
 });
 
 test("serena unavailable is unscored UNMEASURED, never TaskSuccess 0", () => {
