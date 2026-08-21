@@ -66,20 +66,7 @@ export function sliceMethod(request: SliceRequest): CodeSpan[] {
   const signature = spanFor(start, signatureEnd, bounded, request.source, request.includeText === true);
   const bodyLines = end - Math.max(start, signatureEnd);
   const hits: number[] = [];
-  for (const site of method.callSites ?? []) {
-    if (names.length === 0 || names.some(name => name === site.name || wholeLexeme(site.name, name))) {
-      if (site.line >= start && site.line <= end) hits.push(site.line);
-    }
-  }
-  if (request.source && names.length > 0) {
-    const lines = request.source.split(/\r?\n/);
-    for (let line = Math.max(start, signatureEnd); line <= end; line += 1) {
-      const text = lines[line - 1] ?? "";
-      if (names.some(name => wholeLexeme(text, name))) hits.push(line);
-    }
-  }
-  const uniqueHits = [...new Set(hits)].sort((left, right) => left - right);
-  if (uniqueHits.length === 0) {
+  if (names.length === 0) {
     if (bodyLines + 1 <= LARGE_METHOD_LINES) {
       return [spanFor(start, end, bounded, request.source, request.includeText === true)];
     }
@@ -89,6 +76,22 @@ export function sliceMethod(request: SliceRequest): CodeSpan[] {
       spanFor(start, headEnd, bounded, request.source, request.includeText === true),
       spanFor(tailStart, end, bounded, request.source, request.includeText === true)
     ]);
+  }
+  for (const site of method.callSites ?? []) {
+    if (names.some(name => name === site.name || wholeLexeme(site.name, name))) {
+      if (site.line >= start && site.line <= end) hits.push(site.line);
+    }
+  }
+  if (request.source) {
+    const lines = request.source.split(/\r?\n/);
+    for (let line = Math.max(start, signatureEnd); line <= end; line += 1) {
+      const text = lines[line - 1] ?? "";
+      if (names.some(name => wholeLexeme(text, name))) hits.push(line);
+    }
+  }
+  const uniqueHits = [...new Set(hits)].sort((left, right) => left - right);
+  if (uniqueHits.length === 0) {
+    return [spanFor(start, end, bounded, request.source, request.includeText === true)];
   }
   const windows = uniqueHits.map(line => spanFor(line - CONTEXT_PAD, line + CONTEXT_PAD, bounded, request.source, request.includeText === true));
   return mergeSpans([signature, ...windows]);

@@ -47,6 +47,11 @@ export function isP0Bundle(bundle: Pick<EvidenceBundle, "role" | "hops">): boole
   return bundle.hops === 0 || bundle.role === "ANCHOR" || bundle.role === "CHANGE_SITE";
 }
 
+function spanBytes(span: Pick<CodeSpan, "start" | "end" | "text">): number {
+  if (span.text !== undefined) return Math.max(1, Buffer.byteLength(span.text, "utf8"));
+  return Math.max(1, (span.end - span.start + 1) * 48);
+}
+
 export function mergeSpans(spans: CodeSpan[]): CodeSpan[] {
   if (spans.length === 0) return [];
   const ordered = [...spans].sort((left, right) => left.start - right.start || left.end - right.end);
@@ -55,10 +60,10 @@ export function mergeSpans(spans: CodeSpan[]): CodeSpan[] {
     const last = merged[merged.length - 1]!;
     if (span.start <= last.end + 1) {
       last.end = Math.max(last.end, span.end);
-      last.bytes += span.bytes;
       if (last.text !== undefined || span.text !== undefined) {
         last.text = `${last.text ?? ""}\n${span.text ?? ""}`.trim();
       }
+      last.bytes = spanBytes(last);
     } else {
       merged.push({ ...span });
     }

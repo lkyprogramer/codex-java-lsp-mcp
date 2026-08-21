@@ -71,7 +71,33 @@ function resolvedRepoTypeIds(ref: JavaTypeRef | undefined): string[] {
   return ids;
 }
 
-function hop0Methods(bundle: JavaFileBundle, anchorLine: number): JavaMethodFacts[] {
+function importBySimpleName(bundle: JavaFileBundle): Map<string, string> {
+  const imports = new Map<string, string>();
+  for (const item of bundle.file.imports) {
+    if (item.wildcard) continue;
+    const simple = item.qualifiedName.split(".").pop();
+    if (simple) imports.set(simple, item.qualifiedName);
+  }
+  return imports;
+}
+
+function typeModule(store: JavaIndexStore | undefined, bundle: JavaFileBundle, ref: JavaTypeRef | undefined): string | undefined {
+  if (!store || !ref) return undefined;
+  const ids = [...resolvedRepoTypeIds(ref)];
+  if (ids.length === 0) {
+    const imported = importBySimpleName(bundle).get(ref.simpleName);
+    const id = imported ? typeIdByFqn(store, imported) : undefined;
+    if (id) ids.push(id);
+  }
+  for (const id of ids) {
+    const type = store.typesById.get(id);
+    if (!type) continue;
+    return store.filesByPath.get(relativePathOfFileId(type.fileId))?.module;
+  }
+  return undefined;
+}
+
+function hop0Methods(bundle: JavaFileBundle, anchorLine: number, store?: JavaIndexStore): JavaMethodFacts[] {
   const containing = bundle.methods.filter(method => methodContainsLine(method, anchorLine));
   if (containing.length === 0) return [];
   const owners = new Set(containing.map(method => method.ownerTypeId));
@@ -81,17 +107,44 @@ function hop0Methods(bundle: JavaFileBundle, anchorLine: number): JavaMethodFact
     containing.flatMap(method => method.callSites.filter(site => neighborhoodCallName(site.name, site.receiverText)).map(site => site.name))
   );
   const extras = bundle.methods.filter(method => owners.has(method.ownerTypeId) && !keep.has(method.methodId) && oneLevelNames.has(method.name));
+  const fieldOf = (method: JavaMethodFacts, site: JavaMethodFacts["callSites"][number]) =>
+    bundle.fields.find(field => field.name === site.receiverText && owners.has(field.ownerTypeId));
   const hasFieldCall = (method: JavaMethodFacts) => method.callSites.some(site =>
     neighborhoodCallName(site.name, site.receiverText)
     && Boolean(site.receiverText)
-    && bundle.fields.some(field => field.name === site.receiverText && owners.has(field.ownerTypeId))
+    && Boolean(fieldOf(method, site))
   );
-  extras.sort((left, right) => Number(hasFieldCall(right)) - Number(hasFieldCall(left))
+  const hasCrossModuleFieldCall = (method: JavaMethodFacts) => method.callSites.some(site => {
+    if (!neighborhoodCallName(site.name, site.receiverText) || !site.receiverText) return false;
+    const field = fieldOf(method, site);
+    if (!field) return false;
+    const module = typeModule(store, bundle, field.type);
+    return Boolean(module && bundle.file.module && module !== bundle.file.module);
+  });
+  extras.sort((left, right) => Number(hasCrossModuleFieldCall(right)) - Number(hasCrossModuleFieldCall(left))
+    || Number(hasFieldCall(right)) - Number(hasFieldCall(left))
     || Math.abs(left.range.start.line - anchorLine) - Math.abs(right.range.start.line - anchorLine)
     || left.range.start.line - right.range.start.line);
-  const extraCap = Math.min(HOP0_METHOD_CAP, containing.length + 4);
+  const extraCap = Math.min(HOP0_METHOD_CAP, containing.length + 2);
   for (const method of extras) {
     if (keep.size >= extraCap) break;
+    keep.set(method.methodId, method);
+  }
+  return [...keep.values()];
+}
+
+function sameFileCallees(bundle: JavaFileBundle, selected: JavaMethodFacts[]): JavaMethodFacts[] {
+  if (selected.length === 0) return [];
+  const keep = new Map(selected.map(method => [method.methodId, method]));
+  const owners = new Set(selected.map(method => method.ownerTypeId));
+  const names = new Set(
+    selected.flatMap(method => method.callSites.filter(site => neighborhoodCallName(site.name, site.receiverText)).map(site => site.name))
+  );
+  const extras = bundle.methods.filter(method => owners.has(method.ownerTypeId) && !keep.has(method.methodId) && names.has(method.name));
+  extras.sort((left, right) => (right.range.end.line - right.range.start.line) - (left.range.end.line - left.range.start.line)
+    || left.range.start.line - right.range.start.line);
+  for (const method of extras) {
+    if (keep.size >= selected.length + 1) break;
     keep.set(method.methodId, method);
   }
   return [...keep.values()];
@@ -101,32 +154,18 @@ function methodsFromStore(store: JavaIndexStore, path: string, graph: KnowledgeG
   const bundle = store.files([path])[0];
   if (!bundle) return [];
   const wantedMethods = new Set<string>();
-  const wantedTypes = new Set<string>();
   const named = new Set<string>();
   for (const id of provingIds) {
     const node = graph.nodesById.get(id);
     if (node?.javaIndexId && node.relativePath === path) {
       if (node.kind === "METHOD" || node.kind === "CONSTRUCTOR") wantedMethods.add(node.javaIndexId);
-      if (node.kind === "TYPE" || node.kind === "JPA_ENTITY") wantedTypes.add(node.javaIndexId);
     }
-    const indexed = store.typesById.get(id);
-    if (indexed && relativePathOfFileId(indexed.fileId) === path) wantedTypes.add(indexed.typeId);
     const parts = id.split("#");
     if (parts[2] && parts.length >= 3) named.add(parts[2]);
   }
-  if (wantedMethods.size > 0) {
-    const byId = bundle.methods.filter(method => wantedMethods.has(method.methodId));
-    if (byId.length > 0) return byId.map(toSlice);
-  }
-  if (named.size > 0) {
-    const byName = bundle.methods.filter(method => named.has(method.name));
-    if (byName.length > 0) return byName.map(toSlice);
-  }
-  if (anchorLine) return hop0Methods(bundle, anchorLine).map(toSlice);
-  if (wantedTypes.size > 0) {
-    const ofType = bundle.methods.filter(method => wantedTypes.has(method.ownerTypeId));
-    if (ofType.length > 0) return ofType.map(toSlice);
-  }
+  const selected = bundle.methods.filter(method => wantedMethods.has(method.methodId) || named.has(method.name));
+  if (selected.length > 0) return sameFileCallees(bundle, selected).map(toSlice);
+  if (anchorLine) return hop0Methods(bundle, anchorLine, store).map(toSlice);
   return [];
 }
 
@@ -233,21 +272,16 @@ function mentionRef(
 
 function collectAnchorSeeds(store: JavaIndexStore, bundle: JavaFileBundle, anchorLine: number): Map<string, DiscoverySeed> {
   const containing = bundle.methods.filter(method => methodContainsLine(method, anchorLine));
-  const hop0 = hop0Methods(bundle, anchorLine);
+  const hop0 = hop0Methods(bundle, anchorLine, store);
   const owners = new Set(containing.map(method => method.ownerTypeId));
   const seeds = new Map<string, DiscoverySeed>();
   for (const owner of owners) seedType(seeds, owner, 1, "IMPORTS");
   for (const method of containing) seedType(seeds, method.ownerTypeId, 1, "IMPORTS", method.name);
-  const importBySimple = new Map<string, string>();
-  for (const item of bundle.file.imports) {
-    if (item.wildcard) continue;
-    const simple = item.qualifiedName.split(".").pop();
-    if (simple) importBySimple.set(simple, item.qualifiedName);
-  }
+  const importBySimple = importBySimpleName(bundle);
   const mention = (ref: JavaTypeRef | undefined, hops: 1 | 2, kind: DiscoveryKind, name?: string) => {
     mentionRef(store, importBySimple, seeds, ref, hops, kind, name);
   };
-  const methodTokens = new Set(containing.flatMap(method => splitIdentifier(method.name)).filter(token => token.length > 2));
+  const methodTokens = new Set(containing.flatMap(method => splitIdentifier(method.name)).filter(token => token.length > 3));
   for (const [simple, fqn] of importBySimple) {
     if (!splitIdentifier(simple).some(token => methodTokens.has(token))) continue;
     const id = typeIdByFqn(store, fqn) ?? uniqueTypeIdBySimpleName(store, simple);

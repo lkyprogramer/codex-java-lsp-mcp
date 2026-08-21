@@ -89,9 +89,14 @@ export function closeSearchResult(input: ClosureInput): EvidenceBundle[] {
     const role = roleOf(candidate.provingPath, candidate.hops);
     const names = relatedNames(candidate.provingPath, [...(facts.simpleNames ?? []), ...extraNames]);
     const methods = facts.methods;
+    const named = new Set(methods.filter(method => names.some(name => name === method.name)).map(method => method.name));
+    const expandCallees = candidate.provingPath.some(step => step.kind === "IMPLEMENTS" || step.kind === "DISPATCHES_TO");
+    const calleeNames = expandCallees
+      ? new Set(methods.filter(method => named.has(method.name)).flatMap(method => (method.callSites ?? []).map(site => site.name)))
+      : new Set<string>();
     const chosen = candidate.hops === 0
       ? methods
-      : methods.filter(method => names.some(name => name === method.name));
+      : methods.filter(method => named.has(method.name) || calleeNames.has(method.name));
     const methodSlices: CodeSpan[] = [];
     for (const method of chosen) {
       methodSlices.push(...sliceMethod({

@@ -1,7 +1,8 @@
 // input: EvidenceBundle candidates plus an exact token budget.
 // output: Selected bundles. P0 then hop-order among items that fit; file count is not a binding cap.
 // pos: JIN N4-02. P0 forced; ambiguity ≤2; skip over-budget; no hop≤2 all-admit.
-import { isP0Bundle, mergeSpans, type EvidenceBundle } from "./evidence-bundle.js";
+import { bundleTokenCost, isP0Bundle, mergeSpans, type EvidenceBundle } from "./evidence-bundle.js";
+import { BYTES_DIV_4, estimateTokens } from "./token-estimator.js";
 
 export const DEFAULT_TOKEN_BUDGET = 2000;
 export const MAX_DISTINCT_FILES_GUARD = 20;
@@ -33,12 +34,22 @@ function ambiguityKey(bundle: EvidenceBundle): string {
   return `${obligation}::${step?.fromId ?? bundle.path}`;
 }
 
+const AMBIGUOUS_PROOF = /IMPLEMENTS|DISPATCHES_TO|PERMITS|CALLED_BY/;
+
+function isAmbiguousProof(bundle: EvidenceBundle): boolean {
+  return bundle.proof.some(kind => AMBIGUOUS_PROOF.test(kind));
+}
+
 function limitAmbiguity(bundles: EvidenceBundle[]): EvidenceBundle[] {
   const p0 = bundles.filter(isP0Bundle);
   const rest = bundles.filter(bundle => !isP0Bundle(bundle));
   const kept: EvidenceBundle[] = [];
   const counts = new Map<string, number>();
   for (const bundle of rest.sort((left, right) => left.hops - right.hops || right.confidence - left.confidence || left.id.localeCompare(right.id))) {
+    if (!isAmbiguousProof(bundle)) {
+      kept.push(bundle);
+      continue;
+    }
     const key = ambiguityKey(bundle);
     const used = counts.get(key) ?? 0;
     if (used >= MAX_AMBIGUITY_PER_OBLIGATION) continue;
@@ -80,26 +91,37 @@ function tokenCostOf(selected: EvidenceBundle[]): number {
   return selected.reduce((sum, bundle) => sum + bundle.tokenCost, 0);
 }
 
-const HIGH_PROOF = /CALLS_|CALLED_BY|DISPATCHES_TO|IMPLEMENTS|CONSTRUCTS|METHOD_REFERENCE|MYBATIS|JPA_|REPOSITORY_|SPRING_|PUBLISHES_EVENT|CONSUMES_EVENT/;
+const IMPL_PROOF = /IMPLEMENTS|DISPATCHES_TO|MYBATIS|JPA_|REPOSITORY_|SPRING_|PUBLISHES_EVENT|CONSUMES_EVENT/;
+const CALL_PROOF = /CALLS_|CALLED_BY|CONSTRUCTS|METHOD_REFERENCE/;
 const MID_PROOF = /EXTENDS|PERMITS|IMPORTS|DECLARES/;
 
 function proofRank(bundle: EvidenceBundle): number {
-  if (bundle.proof.some(kind => HIGH_PROOF.test(kind))) return 0;
+  if (bundle.proof.some(kind => IMPL_PROOF.test(kind))) return 0;
+  if (bundle.proof.some(kind => CALL_PROOF.test(kind))) return 1;
   if (bundle.proof.includes("IMPORTS") && bundle.provingPath.some(step => step.kind === "IMPORTS" && !step.fromId.includes("#"))) {
-    return 0;
+    return 2;
   }
-  if (bundle.proof.some(kind => MID_PROOF.test(kind))) return 1;
-  return 2;
+  if (bundle.proof.some(kind => MID_PROOF.test(kind))) return 3;
+  return 4;
+}
+
+function layoutPrefix(path: string): string {
+  const src = path.indexOf("/src/");
+  if (src >= 0) return path.slice(0, src);
+  if (path === "src" || path.startsWith("src/")) return "src";
+  return path.split("/").slice(0, 2).join("/");
 }
 
 export function planEvidenceBundles(input: PlanInput): PlanResult {
   const budget = Math.max(1, input.tokenBudget);
   const fileGuard = input.maxDistinctFiles ?? MAX_DISTINCT_FILES_GUARD;
   const bundleGuard = input.maxBundles ?? MAX_BUNDLES_GUARD;
+  const anchorPrefix = layoutPrefix(input.bundles.find(bundle => bundle.hops === 0)?.path ?? "");
   const candidates = limitAmbiguity(input.bundles)
     .slice()
     .sort((left, right) => left.hops - right.hops
       || proofRank(left) - proofRank(right)
+      || Number(layoutPrefix(left.path) === anchorPrefix) - Number(layoutPrefix(right.path) === anchorPrefix)
       || left.path.localeCompare(right.path)
       || left.id.localeCompare(right.id));
   const selected: EvidenceBundle[] = [];
@@ -109,6 +131,7 @@ export function planEvidenceBundles(input: PlanInput): PlanResult {
   }
   for (const bundle of candidates.filter(item => !isP0Bundle(item))) {
     if (selected.length >= bundleGuard) break;
+    if (bundle.hops > 2 && proofRank(bundle) >= 4 && bundle.proof.some(kind => kind === "ANNOTATED_WITH" || kind === "CONTAINS")) continue;
     if (marginalGain(bundle, selected) <= 0) continue;
     const used = tokenCostOf(selected);
     if (used + bundle.tokenCost > budget) {
@@ -141,7 +164,7 @@ function mergeSelectedByPath(selected: EvidenceBundle[]): EvidenceBundle[] {
     hit.spans = mergeSpans([...hit.spans, ...bundle.spans]);
     hit.closes = [...new Set([...hit.closes, ...bundle.closes])];
     hit.proof = [...new Set([...hit.proof, ...bundle.proof])];
-    hit.tokenCost += bundle.tokenCost;
+    hit.tokenCost = Math.max(1, bundleTokenCost(hit.spans, text => estimateTokens(text, BYTES_DIV_4)));
     hit.hops = Math.min(hit.hops, bundle.hops);
   }
   return [...byPath.values()];

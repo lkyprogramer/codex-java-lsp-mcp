@@ -110,6 +110,159 @@ test("near hop-1 that fits is packed before a cheaper hop-3 file", () => {
   assert.ok(planned.tokenCost <= 55);
 });
 
+test("hop-1 IMPLEMENTS pack before hop-1 CALLS when leftover fits only one", () => {
+  const planned = planEvidenceBundles({
+    bundles: [
+      bundle({ id: "a", path: "src/A.java", role: "ANCHOR", closes: ["O1"], tokenCost: 10, hops: 0 }),
+      bundle({
+        id: "callee",
+        path: "src/AaaCallee.java",
+        role: "CALLEE",
+        closes: ["O2"],
+        tokenCost: 40,
+        hops: 1,
+        proof: ["CALLS_EXACT"],
+        provingPath: [{ kind: "CALLS_EXACT", fromId: "src/A.java", toId: "src/AaaCallee.java#C#run#n" }]
+      }),
+      bundle({
+        id: "impl",
+        path: "src/Zimpl.java",
+        role: "IMPLEMENTATION",
+        closes: ["O3"],
+        tokenCost: 40,
+        hops: 1,
+        proof: ["IMPLEMENTS"],
+        provingPath: [{ kind: "IMPLEMENTS", fromId: "src/A.java", toId: "src/Zimpl.java#Z#run#n" }]
+      })
+    ],
+    tokenBudget: 55
+  });
+  assert.ok(planned.selected.some(item => item.id === "impl"));
+  assert.equal(planned.selected.some(item => item.id === "callee"), false);
+});
+
+test("cross-layout hop-1 CALLS pack before same-layout hop-1 CALLS", () => {
+  const planned = planEvidenceBundles({
+    bundles: [
+      bundle({ id: "a", path: "modules/exam/src/A.java", role: "ANCHOR", closes: ["O1"], tokenCost: 10, hops: 0 }),
+      bundle({
+        id: "near",
+        path: "modules/exam/src/Near.java",
+        role: "CALLEE",
+        closes: ["O2"],
+        tokenCost: 40,
+        hops: 1,
+        proof: ["CALLS_EXACT"],
+        provingPath: [{ kind: "CALLS_EXACT", fromId: "modules/exam/src/A.java", toId: "modules/exam/src/Near.java#N#run#n" }]
+      }),
+      bundle({
+        id: "far",
+        path: "modules/school/src/Far.java",
+        role: "CALLEE",
+        closes: ["O2"],
+        tokenCost: 40,
+        hops: 1,
+        proof: ["CALLS_EXACT"],
+        provingPath: [{ kind: "CALLS_EXACT", fromId: "modules/exam/src/A.java", toId: "modules/school/src/Far.java#F#run#n" }]
+      })
+    ],
+    tokenBudget: 55
+  });
+  assert.ok(planned.selected.some(item => item.id === "far"));
+  assert.equal(planned.selected.some(item => item.id === "near"), false);
+});
+
+test("hop>2 ANNOTATED_WITH noise is skipped even when it fits", () => {
+  const planned = planEvidenceBundles({
+    bundles: [
+      bundle({ id: "a", path: "src/A.java", role: "ANCHOR", closes: ["O1"], tokenCost: 10, hops: 0 }),
+      bundle({
+        id: "noise",
+        path: "src/Noise.java",
+        role: "DATAFLOW",
+        closes: ["O1"],
+        tokenCost: 20,
+        hops: 3,
+        proof: ["ANNOTATED_WITH"],
+        provingPath: [{ kind: "ANNOTATED_WITH", fromId: "src/A.java", toId: "src/Noise.java" }]
+      })
+    ],
+    tokenBudget: 80
+  });
+  assert.equal(planned.selected.some(item => item.id === "noise"), false);
+});
+
+test("named CALLS pack before signature IMPORTS when leftover fits only one", () => {
+  const planned = planEvidenceBundles({
+    bundles: [
+      bundle({ id: "a", path: "src/A.java", role: "ANCHOR", closes: ["O1"], tokenCost: 10, hops: 0 }),
+      bundle({
+        id: "dto",
+        path: "src/Dto.java",
+        role: "CONTRACT",
+        closes: ["O5"],
+        tokenCost: 40,
+        hops: 1,
+        proof: ["IMPORTS"],
+        provingPath: [{ kind: "IMPORTS", fromId: "src/A.java", toId: "src/Dto.java#Dto" }]
+      }),
+      bundle({
+        id: "callee",
+        path: "src/ZCallee.java",
+        role: "CALLEE",
+        closes: ["O2"],
+        tokenCost: 40,
+        hops: 1,
+        proof: ["CALLS_EXACT"],
+        provingPath: [{ kind: "CALLS_EXACT", fromId: "src/A.java", toId: "src/ZCallee.java#Z#run#n" }]
+      })
+    ],
+    tokenBudget: 55
+  });
+  assert.ok(planned.selected.some(item => item.id === "callee"));
+  assert.equal(planned.selected.some(item => item.id === "dto"), false);
+});
+
+test("distinct IMPORTS from the same fromId are not capped at two", () => {
+  const planned = planEvidenceBundles({
+    bundles: [
+      bundle({ id: "a", path: "src/A.java", role: "ANCHOR", closes: ["O1"], tokenCost: 10, hops: 0 }),
+      bundle({
+        id: "one",
+        path: "src/One.java",
+        role: "CONTRACT",
+        closes: ["O5"],
+        tokenCost: 20,
+        hops: 1,
+        proof: ["IMPORTS"],
+        provingPath: [{ kind: "IMPORTS", fromId: "src/A.java#A", toId: "src/One.java#One" }]
+      }),
+      bundle({
+        id: "two",
+        path: "src/Two.java",
+        role: "CONTRACT",
+        closes: ["O5"],
+        tokenCost: 20,
+        hops: 1,
+        proof: ["IMPORTS"],
+        provingPath: [{ kind: "IMPORTS", fromId: "src/A.java#A", toId: "src/Two.java#Two" }]
+      }),
+      bundle({
+        id: "three",
+        path: "src/Three.java",
+        role: "CONTRACT",
+        closes: ["O5"],
+        tokenCost: 20,
+        hops: 1,
+        proof: ["IMPORTS"],
+        provingPath: [{ kind: "IMPORTS", fromId: "src/A.java#A", toId: "src/Three.java#Three" }]
+      })
+    ],
+    tokenBudget: 80
+  });
+  assert.deepEqual(planned.selected.map(item => item.id).sort(), ["a", "one", "three", "two"]);
+});
+
 test("signature IMPORTS attached from a file path pack before ordinary hop-1 IMPORTS", () => {
   const planned = planEvidenceBundles({
     bundles: [

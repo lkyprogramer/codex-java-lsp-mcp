@@ -144,6 +144,41 @@ test("proving-path member names keep the called method not the whole type", () =
   assert.equal(me?.spans[0]?.end, 93);
 });
 
+test("hop>0 keeps a same-file callee of the named method", () => {
+  const bundles = closeSearchResult({
+    search: {
+      resolvedIntent: "IMPLEMENTATION_CHANGE",
+      coverage: "PARTIAL",
+      bundles: [
+        { path: "src/Svc.java", hops: 0, estimatedTokens: 40, provingPath: [], closedObligations: ["O1"] },
+        {
+          path: "src/Excel.java",
+          hops: 1,
+          estimatedTokens: 40,
+          provingPath: [{ kind: "IMPLEMENTS", fromId: "src/Svc.java", toId: "src/Excel.java#Excel#generate#n" }],
+          closedObligations: ["O3"]
+        }
+      ],
+      unresolved: [],
+      metrics: { expansions: 1, hops: 1, estimatedTokens: 80 }
+    },
+    anchorLine: 10,
+    factsForPath: path => path === "src/Svc.java"
+      ? { methods: [{ name: "export", startLine: 10, endLine: 16, callSites: [{ line: 12, name: "generate" }] }] }
+      : {
+        methods: [
+          { name: "generate", startLine: 41, endLine: 56, callSites: [{ line: 50, name: "fillWorkbook" }] },
+          { name: "fillWorkbook", startLine: 62, endLine: 96 },
+          { name: "unused", startLine: 100, endLine: 140 }
+        ]
+      }
+  });
+  const excel = bundles.find(item => item.path === "src/Excel.java");
+  assert.ok(excel?.spans.some(span => span.start <= 41 && span.end >= 56));
+  assert.ok(excel?.spans.some(span => span.start <= 62 && span.end >= 96));
+  assert.equal(excel?.spans.some(span => span.start <= 100 && span.end >= 140), false);
+});
+
 test("hop>0 files with no named method still keep a type span", () => {
   const bundles = closeSearchResult({
     search: {

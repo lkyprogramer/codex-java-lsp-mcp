@@ -57,6 +57,7 @@ function repoRef(simpleName: string, typeId: string): JavaTypeRef {
 }
 
 function fileBundle(simpleName: string, options: {
+  module?: string;
   methods?: Array<{ name: string; start: number; end: number; calls?: Array<{ name: string; receiver?: string; typeId?: string }> }>;
   fields?: Array<{ name: string; typeId: string; simpleName: string }>;
 }): JavaFileBundle {
@@ -65,7 +66,7 @@ function fileBundle(simpleName: string, options: {
     fileId: javaFileId(relativePath),
     relativePath,
     sourceRoot: "src",
-    module: "demo",
+    module: options.module ?? "demo",
     sourceSet: "main",
     packageName: "demo",
     imports: [],
@@ -356,6 +357,75 @@ test("hop0 keeps field-calling callees and not unrelated same-file helpers", () 
   assert.ok(names.has("export"), [...names].join(","));
   assert.ok(names.has("loadMap"), [...names].join(","));
   assert.equal(names.has("safeSegment"), false, [...names].join(","));
+});
+
+test("hop0 prefers two cross-module field callees over nearer same-module helpers", () => {
+  const school = fileBundle("School", {
+    module: "school",
+    methods: [
+      { name: "listStudents", start: 4, end: 8 },
+      { name: "listSummaries", start: 10, end: 16 }
+    ]
+  });
+  const items = fileBundle("Items", {
+    module: "exam",
+    methods: [{ name: "listBySubjectId", start: 4, end: 8 }]
+  });
+  const service = fileBundle("Service", {
+    module: "exam",
+    methods: [
+      {
+        name: "export",
+        start: 55,
+        end: 84,
+        calls: [
+          { name: "loadItems", receiver: "this" },
+          { name: "loadMap", receiver: "this" },
+          { name: "resolve", receiver: "this" }
+        ]
+      },
+      { name: "loadItems", start: 86, end: 93, calls: [{ name: "listBySubjectId", receiver: "items", typeId: items.types[0]!.typeId }] },
+      { name: "loadMap", start: 95, end: 107, calls: [{ name: "listStudents", receiver: "school", typeId: school.types[0]!.typeId }] },
+      { name: "resolve", start: 145, end: 154, calls: [{ name: "listSummaries", receiver: "school", typeId: school.types[0]!.typeId }] }
+    ],
+    fields: [
+      { name: "items", typeId: items.types[0]!.typeId, simpleName: "Items" },
+      { name: "school", typeId: school.types[0]!.typeId, simpleName: "School" }
+    ]
+  });
+  const store = new JavaIndexStore();
+  store.replaceFile(service);
+  store.replaceFile(school);
+  store.replaceFile(items);
+  const graph = new KnowledgeGraphStore();
+  const facts = factsForStore(graph, store, "src/Service.java", new Set(), 60);
+  const names = new Set(facts.methods.map(method => method.name));
+  assert.ok(names.has("export"), [...names].join(","));
+  assert.ok(names.has("loadMap"), [...names].join(","));
+  assert.ok(names.has("resolve"), [...names].join(","));
+  assert.equal(names.has("loadItems"), false, [...names].join(","));
+});
+
+test("factsForStore unions proving method names and keeps a same-file callee", () => {
+  const excel = fileBundle("Excel", {
+    methods: [
+      { name: "generate", start: 41, end: 56, calls: [{ name: "fillWorkbook", receiver: "this" }] },
+      { name: "fillWorkbook", start: 62, end: 96 },
+      { name: "unused", start: 100, end: 140 }
+    ]
+  });
+  const store = new JavaIndexStore();
+  store.replaceFile(excel);
+  const graph = new KnowledgeGraphStore();
+  const proving = new Set([
+    "src/Excel.java#Excel#generate#n",
+    "src/School.java#School#listSummaries#n"
+  ]);
+  const facts = factsForStore(graph, store, "src/Excel.java", proving);
+  const names = new Set(facts.methods.map(method => method.name));
+  assert.ok(names.has("generate"), [...names].join(","));
+  assert.ok(names.has("fillWorkbook"), [...names].join(","));
+  assert.equal(names.has("unused"), false, [...names].join(","));
 });
 
 test("factsForStore keeps a type span for a hop-1 DTO with no matching method name", () => {

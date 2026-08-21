@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { mergeSpans } from "./evidence-bundle.js";
 import { sliceMethod, spansStayInsideMethod, type SliceMethod } from "./statement-slicer.js";
 
 const SOURCE = [
@@ -27,6 +28,17 @@ const METHOD: SliceMethod = {
     { line: 7, name: "notify" }
   ]
 };
+
+test("mergeSpans charges the union of overlapping windows once", () => {
+  const merged = mergeSpans([
+    { start: 55, end: 60, bytes: 288 },
+    { start: 58, end: 84, bytes: 1296 }
+  ]);
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0]?.start, 55);
+  assert.equal(merged[0]?.end, 84);
+  assert.equal(merged[0]?.bytes, 30 * 48);
+});
 
 test("uncertain slice keeps the whole method and never leaves its range", () => {
   const spans = sliceMethod({ method: METHOD, source: SOURCE });
