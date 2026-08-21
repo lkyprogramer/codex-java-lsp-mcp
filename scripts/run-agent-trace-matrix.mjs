@@ -11,9 +11,14 @@ import {
   V4_SPRINT0_PRODUCTION_TREE
 } from "./verify-v4-sprint0-baseline.mjs";
 
-export const AGENT_TRACE_SCHEMA_VERSION = "java-intelligence-v4-agent-trace-matrix/v1";
-export const AGENT_TRACE_ROUNDS = ["AB", "BA"];
-export const AGENT_TRACE_VARIANTS = ["old", "new"];
+export const AGENT_TRACE_SCHEMA_VERSION = "java-intelligence-jin-n5-three-arm-trace/v1";
+export const AGENT_TRACE_ROUNDS = ["ABC", "CBA"];
+export const AGENT_TRACE_VARIANTS = ["old", "jin", "serena"];
+export const AGENT_TRACE_ARM_TOOLS = {
+  old: "java_impact",
+  jin: "java_context",
+  serena: "serena-public-mcp"
+};
 
 export function blockedExternalResult(reason = "missing API key or --authorize-external") {
   return {
@@ -101,8 +106,9 @@ export async function planAgentTraceMatrix(cli, { loadTasks = loadTraceTasks } =
     protocol: {
       rounds: AGENT_TRACE_ROUNDS,
       variants: AGENT_TRACE_VARIANTS,
+      arms: AGENT_TRACE_ARM_TOOLS,
       cells: cells.length,
-      locked: ["provider", "model", "version", "temperature", "seed"]
+      locked: ["provider", "model", "version", "temperature", "seed", "maxRounds", "contextWindow"]
     },
     cells
   };
@@ -174,6 +180,7 @@ function printUsage() {
   console.log(`usage: node scripts/run-agent-trace-matrix.mjs [--dry-run] [--authorize-external] [--execute-live] \\
   [--max-tasks 3] [--live-offset 0] [--output-dir <dir>] [--lishuedu <root>] [--cipherlink <root>] [--exam-parent-v3 <root>] \\
   [--sprint0-manifest docs/phase-v4/v4-sprint0-manifest.json] [--old-side <sha>] [--new-side <sha>]`);
+  console.log("three arms: old=java_impact, jin=java_context, serena=public Serena MCP (UNAVAILABLE unless SERENA_MCP_COMMAND is set).");
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

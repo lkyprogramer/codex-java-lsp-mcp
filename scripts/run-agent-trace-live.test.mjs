@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  compactContextForModel,
   compactImpactForModel,
   selectLiveTasks,
+  serenaUnavailableResult,
   summarizeLiveTasks,
   taskSuccessFromCoverage,
   runLiveAgentTask
@@ -46,6 +48,84 @@ test("coverage success requires every required path and does not use model text"
   const miss = taskSuccessFromCoverage(["src/A.java", "src/MeQueryService.java"], ["src/A.java"]);
   assert.equal(miss.success, false);
   assert.deepEqual(miss.missing, ["src/MeQueryService.java"]);
+});
+
+test("compact context uses selected spans and never includes scores or mustHit", () => {
+  const compact = compactContextForModel({
+    coverage: "PARTIAL",
+    resolvedIntent: "IMPLEMENTATION_CHANGE",
+    anchor: { path: "src/A.java", symbol: "run" },
+    resolvedAnchors: [{ path: "src/A.java", symbol: "run", layer: "graph" }],
+    contexts: [{ path: "src/A.java", role: "ANCHOR", proof: ["DECLARES"], spans: [{ start: 1, end: 4 }] }],
+    unresolved: [],
+    next: [],
+    score: 0.9
+  });
+  assert.equal(compact.paths.includes("src/A.java"), true);
+  assert.equal(compact.text.includes("mustHit"), false);
+  assert.equal(compact.text.includes("score"), false);
+});
+
+test("serena unavailable is unscored UNMEASURED, never TaskSuccess 0", () => {
+  const result = serenaUnavailableResult({
+    taskId: "demo:t",
+    requiredContextFiles: ["src/A.java"]
+  });
+  assert.equal(result.stopReason, "SERENA_UNAVAILABLE");
+  assert.equal(result.taskSuccess, null);
+  assert.equal(result.usage.status, "UNMEASURED");
+  const summary = summarizeLiveTasks([result], { model: "demo", baseUrlHost: "example.test" });
+  assert.equal(summary.taskSuccess.status, "UNMEASURED");
+  assert.equal(summary.taskSuccess.mean, null);
+  assert.equal(summary.successLayers.patchGeneration.status, "UNMEASURED");
+  assert.equal(summary.arms[0].status, "UNAVAILABLE");
+});
+
+test("jin arm records coverage from java_context spans", async () => {
+  let called = false;
+  const result = await runLiveAgentTask({
+    task: {
+      taskId: "demo:t",
+      projectId: "demo",
+      scenarioId: "t",
+      requiredContextFiles: ["src/A.java"],
+      anchor: { file: "src/A.java", line: 1, column: 1 }
+    },
+    arm: "jin",
+    tools: [{ type: "function", function: { name: "java_context" } }],
+    chat: async ({ tools }) => {
+      assert.equal(tools[0].function.name, "java_context");
+      if (called) {
+        return {
+          choices: [{ finish_reason: "stop", message: { content: "done" } }],
+          usage: { prompt_tokens: 3, completion_tokens: 1, total_tokens: 4 }
+        };
+      }
+      return {
+        choices: [{
+          finish_reason: "tool_calls",
+          message: {
+            tool_calls: [{
+              id: "c1",
+              function: { name: "java_context", arguments: JSON.stringify({ intent: "auto", file: "src/A.java", line: 1, column: 1 }) }
+            }]
+          }
+        }],
+        usage: { prompt_tokens: 5, completion_tokens: 2, total_tokens: 7 }
+      };
+    },
+    invoke: async (name) => {
+      assert.equal(name, "java_context");
+      called = true;
+      return {
+        coverage: "PARTIAL",
+        contexts: [{ path: "src/A.java", role: "ANCHOR", proof: ["DECLARES"], spans: [{ start: 1, end: 2 }] }]
+      };
+    }
+  });
+  assert.equal(result.arm, "jin");
+  assert.equal(result.taskSuccess, true);
+  assert.equal(result.toolCallCount, 1);
 });
 
 test("compact impact never includes golden names and truncates large payloads", () => {

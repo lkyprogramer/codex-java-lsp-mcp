@@ -44,6 +44,49 @@ export const JAVA_IMPACT_TOOL = {
   }
 };
 
+export const JAVA_CONTEXT_TOOL = {
+  type: "function",
+  function: {
+    name: "java_context",
+    description: "Plan Java context as selected spans. Pass intent. Anchors optional when task is present. mode=navigate follows callers, callees, or a persistence/framework closure.",
+    parameters: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        intent: {
+          type: "string",
+          enum: [
+            "IMPLEMENTATION_CHANGE",
+            "DOWNSTREAM_BEHAVIOR",
+            "UPSTREAM_IMPACT",
+            "CONTRACT_CHANGE",
+            "PERSISTENCE_FLOW",
+            "DATAFLOW_TRACE",
+            "FRAMEWORK_WIRING",
+            "TEST_PLANNING",
+            "DIAGNOSTIC_ONLY",
+            "auto"
+          ]
+        },
+        file: { type: "string" },
+        line: { type: "integer", minimum: 1 },
+        column: { type: "integer", minimum: 1 },
+        task: { type: "string" },
+        mode: { type: "string", enum: ["search", "navigate"] },
+        direction: { type: "string", enum: ["auto", "callers", "callees"] },
+        closure: { type: "string", enum: ["persistence", "framework"] }
+      },
+      required: ["intent"]
+    }
+  }
+};
+
+export const ARM_SYSTEM_PROMPTS = {
+  old: "You navigate Java code with the java_impact tool only. Call it with file/line/column. You may call it again on related files. Stop when you can describe the impact. Never ask for whole files. Never invent file paths.",
+  jin: "You navigate Java code with the java_context tool only. Pass intent. You may omit anchors and pass task. mode=navigate uses callers/callees or persistence/framework closure. Never ask for whole files. Never invent file paths.",
+  serena: "You navigate Java code with the Serena MCP tools as published. Do not invent tools. Stop when you can describe the impact. Never invent file paths."
+};
+
 export function selectLiveTasks(tasks, { maxTasks = 3, onePerProject = true, offset = 0 } = {}) {
   const start = Number.isFinite(offset) ? Math.max(0, Math.trunc(offset)) : 0;
   if (!onePerProject) return tasks.slice(start, start + maxTasks);
@@ -73,6 +116,41 @@ export function collectImpactPaths(result) {
     if (typeof context?.path === "string" && context.path) paths.add(normalizeRel(context.path));
   }
   return [...paths];
+}
+
+export function compactContextForModel(result, maxChars = MAX_TOOL_RESULT_CHARS) {
+  const payload = {
+    coverage: result?.coverage,
+    resolvedIntent: result?.resolvedIntent,
+    anchor: result?.anchor,
+    resolvedAnchors: result?.resolvedAnchors ?? [],
+    contexts: (result?.contexts ?? []).map(item => ({
+      path: item.path,
+      role: item.role,
+      proof: item.proof,
+      spans: item.spans
+    })),
+    unresolved: result?.unresolved ?? [],
+    next: result?.next ?? []
+  };
+  let text = JSON.stringify(payload);
+  if (text.length > maxChars) text = `${text.slice(0, maxChars)}…[truncated]`;
+  return { text, paths: collectImpactPaths(result) };
+}
+
+export function serenaUnavailableResult(task, reason = "SERENA_MCP_COMMAND is not set") {
+  return {
+    taskId: task.taskId,
+    arm: "serena",
+    stopReason: "SERENA_UNAVAILABLE",
+    wallMs: 0,
+    toolCallCount: 0,
+    usage: { status: "UNMEASURED" },
+    coverage: taskSuccessFromCoverage(task.requiredContextFiles, []),
+    taskSuccess: null,
+    contextCapped: false,
+    error: reason.slice(0, 500)
+  };
 }
 
 export function compactImpactForModel(result, maxChars = MAX_TOOL_RESULT_CHARS) {
@@ -114,6 +192,10 @@ export async function runLiveAgentTask({
   task,
   chat,
   impact,
+  invoke,
+  tools,
+  systemPrompt,
+  arm = "old",
   promptCap = DEFAULT_PROMPT_CAP_TOKENS,
   maxRounds = MAX_LIVE_ROUNDS,
   maxCompletionTokens = DEFAULT_MAX_COMPLETION_TOKENS
@@ -122,10 +204,15 @@ export async function runLiveAgentTask({
   const observedPaths = new Set();
   const toolCalls = [];
   let usage = { status: "UNMEASURED" };
+  const exposedTools = tools ?? [JAVA_IMPACT_TOOL];
+  const callTool = invoke ?? (async (name, args) => {
+    if (name !== "java_impact") return { error: `unknown tool ${name}` };
+    return impact(args);
+  });
   const messages = [
     {
       role: "system",
-      content: "You navigate Java code with the java_impact tool only. Call it with file/line/column. You may call it again on related files. Stop when you can describe the impact. Never ask for whole files. Never invent file paths."
+      content: systemPrompt ?? ARM_SYSTEM_PROMPTS[arm] ?? ARM_SYSTEM_PROMPTS.old
     },
     {
       role: "user",
@@ -143,14 +230,14 @@ export async function runLiveAgentTask({
   let runtimeError;
   try {
     for (let round = 0; round < maxRounds; round += 1) {
-      const estimated = estimatePromptTokens(messages, [JAVA_IMPACT_TOOL]);
+      const estimated = estimatePromptTokens(messages, exposedTools);
       if (estimated >= promptCap) {
         stopReason = "FAILED_CONTEXT_CAP";
         break;
       }
       const completion = await chat({
         messages,
-        tools: [JAVA_IMPACT_TOOL],
+        tools: exposedTools,
         maxTokens: maxCompletionTokens
       });
       usage = mergeUsage(usage, usageFromCompletion(completion));
@@ -169,10 +256,6 @@ export async function runLiveAgentTask({
       for (const call of calls) {
         const name = call?.function?.name;
         const id = call?.id ?? `call-${toolCalls.length}`;
-        if (name !== "java_impact") {
-          messages.push({ role: "tool", tool_call_id: id, content: JSON.stringify({ error: `unknown tool ${name}` }) });
-          continue;
-        }
         let args = {};
         try {
           args = JSON.parse(call.function.arguments || "{}");
@@ -180,12 +263,7 @@ export async function runLiveAgentTask({
           messages.push({ role: "tool", tool_call_id: id, content: JSON.stringify({ error: "invalid tool arguments" }) });
           continue;
         }
-        const raw = await impact({
-          file: args.file,
-          line: args.line,
-          column: args.column,
-          mode: args.mode || "balanced"
-        });
+        const raw = await callTool(name, args);
         if (raw && typeof raw === "object" && "error" in raw && raw.error) {
           toolCalls.push({ name, args, pathCount: 0, error: true });
           messages.push({
@@ -195,7 +273,7 @@ export async function runLiveAgentTask({
           });
           continue;
         }
-        const compact = compactImpactForModel(raw);
+        const compact = name === "java_context" ? compactContextForModel(raw) : compactImpactForModel(raw);
         for (const filePath of compact.paths) observedPaths.add(filePath);
         toolCalls.push({ name, args, pathCount: compact.paths.length });
         messages.push({ role: "tool", tool_call_id: id, content: compact.text });
@@ -207,9 +285,12 @@ export async function runLiveAgentTask({
     runtimeError = error instanceof Error ? error.message : String(error);
   }
   const coverage = taskSuccessFromCoverage(task.requiredContextFiles, [...observedPaths]);
-  const unscored = stopReason === "FAILED_CONTEXT_CAP" || stopReason === "FAILED_RUNTIME";
+  const unscored = stopReason === "FAILED_CONTEXT_CAP"
+    || stopReason === "FAILED_RUNTIME"
+    || stopReason === "SERENA_UNAVAILABLE";
   return {
     taskId: task.taskId,
+    arm,
     stopReason,
     wallMs: Date.now() - started,
     toolCallCount: toolCalls.length,
@@ -226,6 +307,7 @@ export async function executeLiveTrace({
   repositories,
   outputDir,
   env = process.env,
+  arms = ["old", "jin", "serena"],
   serverJs = path.join(scriptRoot, "dist", "server.js")
 }) {
   const config = openaiCompatibleConfig(env);
@@ -234,48 +316,60 @@ export async function executeLiveTrace({
   }
   await mkdir(outputDir, { recursive: true });
   const results = [];
+  const serenaCommand = String(env.SERENA_MCP_COMMAND || "").trim();
   for (const task of tasks) {
     const repoRoot = repositories[task.projectId];
     if (!repoRoot) throw new Error(`missing repository root for ${task.projectId}`);
-    process.stderr.write(`[live-trace] start ${task.taskId}\n`);
-    let session;
-    try {
-      session = await openImpactSession({
-        repoRoot,
-        serverJs,
-        cacheRoot: path.join(outputDir, "mcp-cache", task.projectId),
-        env
-      });
-      await warmupImpact(session, task);
-      const measured = await runLiveAgentTask({
-        task: {
-          ...task,
-          name: task.scenarioId,
-          anchor: task.anchor
-        },
-        chat: ({ messages, tools, maxTokens }) => openaiCompatibleChat({
-          ...config,
-          messages,
-          tools,
-          maxTokens
-        }),
-        impact: args => session.impact(args),
-        promptCap: DEFAULT_PROMPT_CAP_TOKENS,
-        maxRounds: MAX_LIVE_ROUNDS,
-        maxCompletionTokens: DEFAULT_MAX_COMPLETION_TOKENS
-      });
-      results.push(measured);
-      process.stderr.write(`[live-trace] done ${task.taskId} stop=${measured.stopReason} success=${measured.taskSuccess} tools=${measured.toolCallCount}\n`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      process.stderr.write(`[live-trace] fail ${task.taskId}: ${message.slice(0, 300)}\n`);
-      results.push(runtimeFailure(task, message));
-    } finally {
-      if (session) {
-        try {
-          await session.close();
-        } catch {
-          // shutdown is best-effort
+    for (const arm of arms) {
+      process.stderr.write(`[live-trace] start ${task.taskId} arm=${arm}\n`);
+      if (arm === "serena" && !serenaCommand) {
+        const unavailable = serenaUnavailableResult(task);
+        results.push(unavailable);
+        process.stderr.write(`[live-trace] skip ${task.taskId} arm=serena SERENA_UNAVAILABLE\n`);
+        continue;
+      }
+      let session;
+      try {
+        session = await openImpactSession({
+          repoRoot,
+          serverJs,
+          cacheRoot: path.join(outputDir, "mcp-cache", task.projectId, arm),
+          env
+        });
+        if (arm !== "serena") await warmupImpact(session, task);
+        const measured = await runLiveAgentTask({
+          task: {
+            ...task,
+            name: task.scenarioId,
+            anchor: task.anchor
+          },
+          arm,
+          tools: arm === "jin" ? [JAVA_CONTEXT_TOOL] : [JAVA_IMPACT_TOOL],
+          systemPrompt: ARM_SYSTEM_PROMPTS[arm],
+          chat: ({ messages, tools, maxTokens }) => openaiCompatibleChat({
+            ...config,
+            messages,
+            tools,
+            maxTokens
+          }),
+          invoke: (name, args) => dispatchArmTool(session, arm, name, args, task),
+          promptCap: DEFAULT_PROMPT_CAP_TOKENS,
+          maxRounds: MAX_LIVE_ROUNDS,
+          maxCompletionTokens: DEFAULT_MAX_COMPLETION_TOKENS
+        });
+        results.push(measured);
+        process.stderr.write(`[live-trace] done ${task.taskId} arm=${arm} stop=${measured.stopReason} success=${measured.taskSuccess} tools=${measured.toolCallCount}\n`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        process.stderr.write(`[live-trace] fail ${task.taskId} arm=${arm}: ${message.slice(0, 300)}\n`);
+        results.push({ ...runtimeFailure(task, message), arm });
+      } finally {
+        if (session) {
+          try {
+            await session.close();
+          } catch {
+            // shutdown is best-effort
+          }
         }
       }
     }
@@ -313,6 +407,17 @@ export function summarizeLiveTasks(results, {
       successes,
       mean: scored.length ? successes / scored.length : null
     },
+    successLayers: {
+      localization: {
+        status: scored.length ? "MEASURED" : "UNMEASURED",
+        scored: scored.length,
+        successes,
+        mean: scored.length ? successes / scored.length : null
+      },
+      patchGeneration: { status: "UNMEASURED" },
+      compileTest: { status: "UNMEASURED" }
+    },
+    arms: summarizeArms(results),
     lambdaMagnitude: {
       n: results.length,
       tokensPerToolRound: lambdaCall,
@@ -322,6 +427,49 @@ export function summarizeLiveTasks(results, {
     blindReview: { status: "UNMEASURED" },
     tasks: results
   };
+}
+
+function summarizeArms(results) {
+  const byArm = new Map();
+  for (const result of results) {
+    const arm = result.arm || "old";
+    const bucket = byArm.get(arm) ?? { arm, tasks: 0, scored: 0, successes: 0, unavailable: 0 };
+    bucket.tasks += 1;
+    if (result.stopReason === "SERENA_UNAVAILABLE") bucket.unavailable += 1;
+    if (result.taskSuccess !== null) {
+      bucket.scored += 1;
+      if (result.taskSuccess === true) bucket.successes += 1;
+    }
+    byArm.set(arm, bucket);
+  }
+  return [...byArm.values()].map(bucket => ({
+    ...bucket,
+    mean: bucket.scored ? bucket.successes / bucket.scored : null,
+    status: bucket.unavailable === bucket.tasks ? "UNAVAILABLE" : bucket.scored ? "MEASURED" : "UNMEASURED"
+  }));
+}
+
+async function dispatchArmTool(session, arm, name, args, task) {
+  if (arm === "jin") {
+    if (name !== "java_context") return { error: `unknown tool ${name}` };
+    return session.context({
+      intent: args.intent || "auto",
+      file: args.file || task.anchor.file,
+      line: args.line || task.anchor.line,
+      column: args.column || task.anchor.column,
+      task: args.task || task.scenarioId,
+      mode: args.mode,
+      direction: args.direction,
+      closure: args.closure
+    });
+  }
+  if (name !== "java_impact") return { error: `unknown tool ${name}` };
+  return session.impact({
+    file: args.file,
+    line: args.line,
+    column: args.column,
+    mode: args.mode || "balanced"
+  });
 }
 
 async function warmupImpact(session, task, attempts = 2) {
@@ -380,25 +528,40 @@ async function openImpactSession({ repoRoot, serverJs, cacheRoot, env }) {
   });
   const client = new Client({ name: "v5r-live-agent-trace", version: "0.1.0" });
   await client.connect(transport);
+  async function callNamed(name, args) {
+    const result = await client.callTool({
+      name,
+      arguments: args
+    }, undefined, { timeout: IMPACT_TIMEOUT_MS });
+    const text = result.content?.map(part => part.text).join("\n") ?? "{}";
+    if (result.isError) return { error: text };
+    return JSON.parse(text);
+  }
   return {
     async impact(args) {
-      const result = await client.callTool({
-        name: "java_impact",
-        arguments: {
-          repoRoot,
-          file: args.file,
-          line: args.line,
-          column: args.column,
-          mode: args.mode || "balanced",
-          semanticPolicy: "fast",
-          verbosity: "compact",
-          // Cold runtime.create on the golden repos exceeds the 2s fast default.
-          deadlineMs: 15_000
-        }
-      }, undefined, { timeout: IMPACT_TIMEOUT_MS });
-      const text = result.content?.map(part => part.text).join("\n") ?? "{}";
-      if (result.isError) return { error: text };
-      return JSON.parse(text);
+      return callNamed("java_impact", {
+        repoRoot,
+        file: args.file,
+        line: args.line,
+        column: args.column,
+        mode: args.mode || "balanced",
+        semanticPolicy: "fast",
+        verbosity: "compact",
+        deadlineMs: 15_000
+      });
+    },
+    async context(args) {
+      return callNamed("java_context", {
+        repoRoot,
+        intent: args.intent || "auto",
+        file: args.file,
+        line: args.line,
+        column: args.column,
+        task: args.task,
+        mode: args.mode,
+        direction: args.direction,
+        closure: args.closure
+      });
     },
     async close() {
       try {

@@ -22,10 +22,14 @@ test("credentials helper is false without a provider key", () => {
   assert.equal(hasExternalAgentCredentials({ ANTHROPIC_API_KEY: "sk-test" }), true);
 });
 
-test("matrix plan freezes six holdout tasks and 24 AB/BA cells", async () => {
+test("matrix plan freezes six holdout tasks and 36 three-arm ABC/CBA cells", async () => {
   const plan = await planAgentTraceMatrix(parseAgentTraceCli(["--dry-run"]));
   assert.equal(plan.tasks.length, 6);
-  assert.equal(plan.cells.length, 24);
+  assert.equal(plan.cells.length, 36);
+  assert.deepEqual(plan.protocol.variants, ["old", "jin", "serena"]);
+  assert.deepEqual(plan.protocol.rounds, ["ABC", "CBA"]);
+  assert.equal(plan.protocol.arms.old, "java_impact");
+  assert.equal(plan.protocol.arms.jin, "java_context");
   assert.ok(plan.tasks.every(task => task.taskId.includes(":") && /^[a-f0-9]{40}$/.test(task.repoCommit)));
 });
 
