@@ -7,12 +7,13 @@ export type TypeRegistryView = {
   nestedByOwnerAndSimpleName: ReadonlyMap<string, string>;
   // Populated for Task 18's bounded call resolution (same-owner/receiver/
   // super-chain method lookup by owner type); Task 17 itself never reads it.
-  methodsByOwnerTypeId: ReadonlyMap<string, readonly JavaMethodFacts[]>;
+  methodsByOwnerTypeId: { get(ownerTypeId: string): readonly JavaMethodFacts[] | undefined };
 };
 
 export function buildTypeRegistryView(
   types: readonly JavaTypeFacts[],
-  methods: readonly JavaMethodFacts[] = []
+  methods: readonly JavaMethodFacts[] = [],
+  methodsOfOwner?: (ownerTypeId: string) => readonly JavaMethodFacts[]
 ): TypeRegistryView {
   const byId = new Map<string, JavaTypeFacts>();
   const byFqn = new Map<string, string>();
@@ -33,13 +34,23 @@ export function buildTypeRegistryView(
   }
 
   const methodsByOwnerTypeId = new Map<string, JavaMethodFacts[]>();
-  for (const method of methods) {
-    const bucket = methodsByOwnerTypeId.get(method.ownerTypeId);
-    if (bucket) bucket.push(method);
-    else methodsByOwnerTypeId.set(method.ownerTypeId, [method]);
+  if (!methodsOfOwner) {
+    for (const method of methods) {
+      const bucket = methodsByOwnerTypeId.get(method.ownerTypeId);
+      if (bucket) bucket.push(method);
+      else methodsByOwnerTypeId.set(method.ownerTypeId, [method]);
+    }
   }
 
-  return { byId, byFqn, bySimpleName, nestedByOwnerAndSimpleName, methodsByOwnerTypeId };
+  return {
+    byId,
+    byFqn,
+    bySimpleName,
+    nestedByOwnerAndSimpleName,
+    methodsByOwnerTypeId: methodsOfOwner
+      ? { get(ownerTypeId: string) { const found = methodsOfOwner(ownerTypeId); return found.length === 0 ? undefined : found; } }
+      : methodsByOwnerTypeId
+  };
 }
 
 export type JavaResolutionContext = {

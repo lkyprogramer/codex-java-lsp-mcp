@@ -5,8 +5,8 @@
 const EMPTY = 0;
 const EMPTY_SLOT = 0xffffffff;
 
-type U8 = Uint8Array<ArrayBufferLike>;
-type U32 = Uint32Array<ArrayBufferLike>;
+export type U8 = Uint8Array<ArrayBufferLike>;
+export type U32 = Uint32Array<ArrayBufferLike>;
 
 export class StringTable {
   private bytes = Buffer.allocUnsafe(1 << 16);

@@ -615,7 +615,8 @@ async function applyBackgroundChunkParses(
 // chunk pays this cost once per touched file, same as REFRESH always has.
 function rebuildRegistry(): TypeRegistryView {
   if (!store) return buildTypeRegistryView([], []);
-  return buildTypeRegistryView([...store.typesById.values()], [...store.methodsById.values()]);
+  const index = store;
+  return buildTypeRegistryView([...index.typesById.values()], [], ownerTypeId => index.methodsOfOwner(ownerTypeId));
 }
 
 // Resolves one file's refs against the registry as it stands (including any

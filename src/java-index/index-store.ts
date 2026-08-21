@@ -2,6 +2,7 @@ import { javaEdgeId, javaFieldId, javaFileId, javaMethodId, javaTypeId } from ".
 import { JavaNameResolver, type JavaResolutionContext, type TypeRegistryView } from "./name-resolver.js";
 import { myBatisQualifiedId, type MyBatisMapperResourceFacts } from "./mybatis-types.js";
 import { EdgeColumns } from "./columnar/edge-columns.js";
+import { MethodColumns } from "./columnar/method-columns.js";
 import { internField, internFile, internFileBundle, internMethod, internType } from "./columnar/facts-view.js";
 import type {
   AnchorFacts,
@@ -119,9 +120,10 @@ export class JavaIndexStore {
   readonly typeIdByFqn = new Map<string, string>();
   readonly typeIdsBySimpleName = new Map<string, Set<string>>();
   readonly fieldsById = new Map<string, JavaFieldFacts>();
-  readonly methodsById = new Map<string, JavaMethodFacts>();
-  readonly methodIdsByOwnerAndName = new Map<string, Set<string>>();
   private readonly edgeColumns = new EdgeColumns();
+  private readonly methodColumns = new MethodColumns(this.edgeColumns.strings, this.edgeColumns.ranges);
+  readonly methodsById = new MethodIdMap(this.methodColumns);
+  readonly methodIdsByOwnerAndName = new Map<string, Set<string>>();
   readonly edgesById = new EdgeIdMap(this.edgeColumns);
   readonly outEdgeIdsByNode = new Map<string, Set<string>>();
   readonly inEdgeIdsByNode = new Map<string, Set<string>>();
@@ -230,7 +232,7 @@ export class JavaIndexStore {
       ownedNodeIds.add(field.fieldId);
     }
     for (const method of bundle.methods) {
-      this.methodsById.set(method.methodId, method);
+      this.methodColumns.add(method);
       addToSetMap(this.methodIdsByOwnerAndName, `${method.ownerTypeId}#${method.name}`, method.methodId);
       ownedNodeIds.add(method.methodId);
     }
@@ -490,6 +492,17 @@ export class JavaIndexStore {
    * not become N separate worker requests. The returned method ids are sorted
    * by source location before the shared limit is applied.
    */
+  methodsOfOwner(ownerTypeId: string): JavaMethodFacts[] {
+    const type = this.typesById.get(ownerTypeId);
+    if (!type) return [];
+    const methods: JavaMethodFacts[] = [];
+    for (const methodId of type.methodIds) {
+      const method = this.methodsById.get(methodId);
+      if (method) methods.push(method);
+    }
+    return methods;
+  }
+
   methodsWithParameterTypes(typeIds: readonly string[], limit = 64): string[] {
     const methodIds = new Set<string>();
     for (const typeId of typeIds) {
@@ -587,7 +600,7 @@ export class JavaIndexStore {
       files: [...this.filesByPath.values()].sort((a, b) => a.relativePath.localeCompare(b.relativePath)),
       types: [...this.typesById.values()].sort((a, b) => a.typeId.localeCompare(b.typeId)),
       fields: [...this.fieldsById.values()].sort((a, b) => a.fieldId.localeCompare(b.fieldId)),
-      methods: [...this.methodsById.values()].sort((a, b) => a.methodId.localeCompare(b.methodId)),
+      methods: [...this.methodColumns.values()].sort((a, b) => a.methodId.localeCompare(b.methodId)),
       edges: [...this.edgeColumns.values()].sort((a, b) => a.edgeId.localeCompare(b.edgeId)),
       myBatisResources: [...this.myBatisResourcesByPath.values()].sort((a, b) => a.relativePath.localeCompare(b.relativePath))
     };
@@ -615,8 +628,8 @@ export class JavaIndexStore {
     this.typeIdByFqn.clear();
     this.typeIdsBySimpleName.clear();
     this.fieldsById.clear();
-    this.methodsById.clear();
     this.methodIdsByOwnerAndName.clear();
+    this.methodColumns.clear();
     this.edgeColumns.clear();
     this.edgeColumns.strings.clear();
     this.edgeColumns.ranges.clear();
@@ -665,9 +678,9 @@ export class JavaIndexStore {
       addToSetMap(this.fileOwnedNodeIds, relativePathOfFileId(ownerType.fileId), field.fieldId);
     }
     for (const method of data.methods) {
-      if (this.methodsById.has(method.methodId)) throw new Error(`duplicate method id in snapshot: ${method.methodId}`);
       internMethod(this.edgeColumns.strings, this.edgeColumns.ranges, method);
-      this.methodsById.set(method.methodId, method);
+      if (this.methodColumns.has(method.methodId)) throw new Error(`duplicate method id in snapshot: ${method.methodId}`);
+      this.methodColumns.add(method);
       addToSetMap(this.methodIdsByOwnerAndName, `${method.ownerTypeId}#${method.name}`, method.methodId);
       const ownerType = this.typesById.get(method.ownerTypeId);
       if (!ownerType) throw new Error(`method ${method.methodId} references unknown owner type ${method.ownerTypeId}`);
@@ -731,9 +744,8 @@ export class JavaIndexStore {
         this.fieldsById.delete(nodeId);
         continue;
       }
-      const method = this.methodsById.get(nodeId);
+      const method = this.methodColumns.remove(nodeId);
       if (method) {
-        this.methodsById.delete(nodeId);
         removeFromSetMap(this.methodIdsByOwnerAndName, `${method.ownerTypeId}#${method.name}`, nodeId);
         this.inEdgeIdsByNode.delete(nodeId);
       }
@@ -784,6 +796,27 @@ class EdgeIdMap {
 
   *[Symbol.iterator](): IterableIterator<[string, StaticEdge]> {
     for (const edge of this.columns.values()) yield [edge.edgeId, edge];
+  }
+}
+
+class MethodIdMap {
+  constructor(private readonly columns: MethodColumns) {}
+
+  get size(): number {
+    return this.columns.size;
+  }
+
+  get(id: string): JavaMethodFacts | undefined {
+    const row = this.columns.rowOf(id);
+    return row === undefined ? undefined : this.columns.materialize(row);
+  }
+
+  has(id: string): boolean {
+    return this.columns.has(id);
+  }
+
+  values(): IterableIterator<JavaMethodFacts> {
+    return this.columns.values() as IterableIterator<JavaMethodFacts>;
   }
 }
 
