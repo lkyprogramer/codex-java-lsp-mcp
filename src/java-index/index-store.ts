@@ -1,6 +1,8 @@
 import { javaEdgeId, javaFieldId, javaFileId, javaMethodId, javaTypeId } from "./stable-id.js";
 import { JavaNameResolver, type JavaResolutionContext, type TypeRegistryView } from "./name-resolver.js";
 import { myBatisQualifiedId, type MyBatisMapperResourceFacts } from "./mybatis-types.js";
+import { EdgeColumns } from "./columnar/edge-columns.js";
+import { internField, internFile, internFileBundle, internMethod, internType } from "./columnar/facts-view.js";
 import type {
   AnchorFacts,
   IndexedReference,
@@ -119,7 +121,8 @@ export class JavaIndexStore {
   readonly fieldsById = new Map<string, JavaFieldFacts>();
   readonly methodsById = new Map<string, JavaMethodFacts>();
   readonly methodIdsByOwnerAndName = new Map<string, Set<string>>();
-  readonly edgesById = new Map<string, StaticEdge>();
+  private readonly edgeColumns = new EdgeColumns();
+  readonly edgesById = new EdgeIdMap(this.edgeColumns);
   readonly outEdgeIdsByNode = new Map<string, Set<string>>();
   readonly inEdgeIdsByNode = new Map<string, Set<string>>();
   readonly fileOwnedNodeIds = new Map<string, Set<string>>();
@@ -202,6 +205,7 @@ export class JavaIndexStore {
    */
   replaceFile(bundle: JavaFileBundle): string[] {
     validateBundleIds(bundle);
+    internFileBundle(this.edgeColumns.strings, this.edgeColumns.ranges, bundle);
     const relativePath = bundle.file.relativePath;
     const nextNodeIds = bundleNodeIds(bundle);
     const retainedIncoming = new Map<string, Set<string>>();
@@ -236,11 +240,13 @@ export class JavaIndexStore {
     }
 
     const ownedEdgeIds = new Set<string>();
+    const strings = this.edgeColumns.strings;
     for (const edge of bundle.edges) {
-      this.edgesById.set(edge.edgeId, edge);
-      addToSetMap(this.outEdgeIdsByNode, edge.fromId, edge.edgeId);
-      addToSetMap(this.inEdgeIdsByNode, edge.toId, edge.edgeId);
-      ownedEdgeIds.add(edge.edgeId);
+      const edgeId = strings.interned(edge.edgeId);
+      this.edgeColumns.add(edge);
+      addToSetMap(this.outEdgeIdsByNode, strings.interned(edge.fromId), edgeId);
+      addToSetMap(this.inEdgeIdsByNode, strings.interned(edge.toId), edgeId);
+      ownedEdgeIds.add(edgeId);
     }
     this.fileOwnedEdgeIds.set(relativePath, ownedEdgeIds);
     return dependents;
@@ -274,9 +280,8 @@ export class JavaIndexStore {
     for (const relativePath of relativePaths) {
       if (!this.filesByPath.has(relativePath)) continue; // never resurrect bookkeeping for a file this store doesn't have
       for (const edgeId of this.fileOwnedEdgeIds.get(relativePath) ?? []) {
-        const edge = this.edgesById.get(edgeId);
+        const edge = this.edgeColumns.remove(edgeId);
         if (!edge) continue;
-        this.edgesById.delete(edgeId);
         removeFromSetMap(this.outEdgeIdsByNode, edge.fromId, edgeId);
         removeFromSetMap(this.inEdgeIdsByNode, edge.toId, edgeId);
         dropped += 1;
@@ -299,8 +304,11 @@ export class JavaIndexStore {
       const file = this.filesByPath.get(relativePath);
       if (file) this.filesByPath.set(relativePath, { ...file, generation });
     }
-    for (const [edgeId, edge] of this.edgesById) {
-      if (paths.has(edge.sourceFile)) this.edgesById.set(edgeId, { ...edge, generation });
+    for (const relativePath of paths) {
+      for (const edgeId of this.fileOwnedEdgeIds.get(relativePath) ?? []) {
+        const row = this.edgeColumns.rowOf(edgeId);
+        if (row !== undefined) this.edgeColumns.stampGeneration(row, generation);
+      }
     }
   }
 
@@ -533,7 +541,7 @@ export class JavaIndexStore {
       // is intentionally not rewritten. Consult that resolved edge as well,
       // otherwise `import org.springframework...; @Service` is invisible to
       // repository activation despite being exact JavaIndex evidence.
-      || [...this.edgesById.values()].some(edge =>
+      || [...this.edgeColumns.values()].some(edge =>
         edge.kind === "ANNOTATED_WITH"
         && hasPrefix(edge.toId.startsWith("external:") ? edge.toId.slice("external:".length) : undefined, annotationPrefixes)
       );
@@ -558,8 +566,8 @@ export class JavaIndexStore {
       }
       const edges: StaticEdge[] = [];
       for (const edgeId of this.fileOwnedEdgeIds.get(relativePath) ?? []) {
-        const edge = this.edgesById.get(edgeId);
-        if (edge) edges.push(edge);
+        const row = this.edgeColumns.rowOf(edgeId);
+        if (row !== undefined) edges.push(this.edgeColumns.materialize(row));
       }
       results.push({ file, types, fields, methods, edges });
     }
@@ -580,7 +588,7 @@ export class JavaIndexStore {
       types: [...this.typesById.values()].sort((a, b) => a.typeId.localeCompare(b.typeId)),
       fields: [...this.fieldsById.values()].sort((a, b) => a.fieldId.localeCompare(b.fieldId)),
       methods: [...this.methodsById.values()].sort((a, b) => a.methodId.localeCompare(b.methodId)),
-      edges: [...this.edgesById.values()].sort((a, b) => a.edgeId.localeCompare(b.edgeId)),
+      edges: [...this.edgeColumns.values()].sort((a, b) => a.edgeId.localeCompare(b.edgeId)),
       myBatisResources: [...this.myBatisResourcesByPath.values()].sort((a, b) => a.relativePath.localeCompare(b.relativePath))
     };
   }
@@ -609,7 +617,9 @@ export class JavaIndexStore {
     this.fieldsById.clear();
     this.methodsById.clear();
     this.methodIdsByOwnerAndName.clear();
-    this.edgesById.clear();
+    this.edgeColumns.clear();
+    this.edgeColumns.strings.clear();
+    this.edgeColumns.ranges.clear();
     this.outEdgeIdsByNode.clear();
     this.inEdgeIdsByNode.clear();
     this.fileOwnedNodeIds.clear();
@@ -622,6 +632,7 @@ export class JavaIndexStore {
       if (this.filesByPath.has(file.relativePath)) {
         throw new Error(`duplicate file in snapshot: ${file.relativePath}`);
       }
+      internFile(this.edgeColumns.strings, this.edgeColumns.ranges, file);
       this.filesByPath.set(file.relativePath, file);
     }
     for (const resource of data.myBatisResources) {
@@ -639,6 +650,7 @@ export class JavaIndexStore {
     }
     for (const type of data.types) {
       if (this.typesById.has(type.typeId)) throw new Error(`duplicate type id in snapshot: ${type.typeId}`);
+      internType(this.edgeColumns.strings, this.edgeColumns.ranges, type);
       this.typesById.set(type.typeId, type);
       if (type.fqn) this.typeIdByFqn.set(type.fqn, type.typeId);
       addToSetMap(this.typeIdsBySimpleName, type.simpleName, type.typeId);
@@ -646,6 +658,7 @@ export class JavaIndexStore {
     }
     for (const field of data.fields) {
       if (this.fieldsById.has(field.fieldId)) throw new Error(`duplicate field id in snapshot: ${field.fieldId}`);
+      internField(this.edgeColumns.strings, this.edgeColumns.ranges, field);
       this.fieldsById.set(field.fieldId, field);
       const ownerType = this.typesById.get(field.ownerTypeId);
       if (!ownerType) throw new Error(`field ${field.fieldId} references unknown owner type ${field.ownerTypeId}`);
@@ -653,18 +666,21 @@ export class JavaIndexStore {
     }
     for (const method of data.methods) {
       if (this.methodsById.has(method.methodId)) throw new Error(`duplicate method id in snapshot: ${method.methodId}`);
+      internMethod(this.edgeColumns.strings, this.edgeColumns.ranges, method);
       this.methodsById.set(method.methodId, method);
       addToSetMap(this.methodIdsByOwnerAndName, `${method.ownerTypeId}#${method.name}`, method.methodId);
       const ownerType = this.typesById.get(method.ownerTypeId);
       if (!ownerType) throw new Error(`method ${method.methodId} references unknown owner type ${method.ownerTypeId}`);
       addToSetMap(this.fileOwnedNodeIds, relativePathOfFileId(ownerType.fileId), method.methodId);
     }
+    const strings = this.edgeColumns.strings;
     for (const edge of data.edges) {
-      if (this.edgesById.has(edge.edgeId)) throw new Error(`duplicate edge id in snapshot: ${edge.edgeId}`);
-      this.edgesById.set(edge.edgeId, edge);
-      addToSetMap(this.outEdgeIdsByNode, edge.fromId, edge.edgeId);
-      addToSetMap(this.inEdgeIdsByNode, edge.toId, edge.edgeId);
-      addToSetMap(this.fileOwnedEdgeIds, edge.sourceFile, edge.edgeId);
+      if (this.edgeColumns.has(edge.edgeId)) throw new Error(`duplicate edge id in snapshot: ${edge.edgeId}`);
+      this.edgeColumns.add(edge);
+      const edgeId = strings.interned(edge.edgeId);
+      addToSetMap(this.outEdgeIdsByNode, strings.interned(edge.fromId), edgeId);
+      addToSetMap(this.inEdgeIdsByNode, strings.interned(edge.toId), edgeId);
+      addToSetMap(this.fileOwnedEdgeIds, strings.interned(edge.sourceFile), edgeId);
     }
   }
 
@@ -725,9 +741,8 @@ export class JavaIndexStore {
     this.fileOwnedNodeIds.delete(relativePath);
 
     for (const edgeId of this.fileOwnedEdgeIds.get(relativePath) ?? []) {
-      const edge = this.edgesById.get(edgeId);
+      const edge = this.edgeColumns.remove(edgeId);
       if (!edge) continue;
-      this.edgesById.delete(edgeId);
       removeFromSetMap(this.outEdgeIdsByNode, edge.fromId, edgeId);
       removeFromSetMap(this.inEdgeIdsByNode, edge.toId, edgeId);
     }
@@ -744,6 +759,31 @@ export class JavaIndexStore {
       }
     }
     return [...dependents];
+  }
+}
+
+class EdgeIdMap {
+  constructor(private readonly columns: EdgeColumns) {}
+
+  get size(): number {
+    return this.columns.size;
+  }
+
+  get(id: string): StaticEdge | undefined {
+    const row = this.columns.rowOf(id);
+    return row === undefined ? undefined : this.columns.materialize(row);
+  }
+
+  has(id: string): boolean {
+    return this.columns.has(id);
+  }
+
+  values(): IterableIterator<StaticEdge> {
+    return this.columns.values() as IterableIterator<StaticEdge>;
+  }
+
+  *[Symbol.iterator](): IterableIterator<[string, StaticEdge]> {
+    for (const edge of this.columns.values()) yield [edge.edgeId, edge];
   }
 }
 

@@ -1,0 +1,108 @@
+{
+  "schemaVersion": "m1-baseline/v1",
+  "phase": "M1",
+  "dated": "2026-08-21",
+  "decision": "PARTIAL",
+  "mergeToMain": false,
+  "headBefore": "229dff7",
+  "scope": [
+    "src/java-index/columnar/string-table.ts",
+    "src/java-index/columnar/range-pool.ts",
+    "src/java-index/columnar/edge-columns.ts",
+    "src/java-index/columnar/facts-view.ts",
+    "src/java-index/index-store.ts intern + columnar edges"
+  ],
+  "identity": {
+    "factsDigestEqualToM0": true,
+    "projects": {
+      "lishuedu": "1fe63bcaa6fb3319b6670a837ebca3055befe32422bf194668113c5e4837aaf3",
+      "cipherlink": "eec7eef8e0f197a5abcf190328d5b471013c1317718ae9bb8f7fdea5bfd21a08",
+      "exam-parent-v3": "fb7fe71d0b7192fd0591dfc70ccf366d82e4367855cc671402f1cdd16c992177"
+    }
+  },
+  "gates": {
+    "G1_staging": {
+      "targetMiB": 500,
+      "lishueduAfterSnapshotLoadMiB": 869,
+      "lishueduColdMiB": 847,
+      "m0AfterSnapshotLoadMiB": 1897,
+      "deltaMiB": -1028,
+      "passed": false,
+      "disposition": "Drop 1028 MiB (>= 150). Residual is methods/callSites/typeRefs (M2). Do not widen the 500 MiB staging number."
+    },
+    "G5": {
+      "targetRatio": 1.1,
+      "warmP95Ms": { "lishuedu": 85.8, "cipherlink": 43.2, "exam-parent-v3": 40.9 },
+      "m0WarmP95Ms": { "lishuedu": 77.2, "cipherlink": 40.9, "exam-parent-v3": 38.5 },
+      "ratio": { "lishuedu": 1.111, "cipherlink": 1.056, "exam-parent-v3": 1.062 },
+      "passed": false,
+      "note": "lishuedu p95 of 10 scenarios is the 2nd-highest sample (85.8). Cipherlink/exam stay inside +10%."
+    }
+  },
+  "projects": {
+    "lishuedu": {
+      "coldMs": 72742,
+      "snapshotLoadMs": 8851,
+      "rssPeakMiB": 3383,
+      "rssSteadySameProcessMiB": 2377,
+      "heapColdMiB": 847,
+      "heapAfterSnapshotLoadMiB": 869,
+      "heapAfterWarmMiB": 900,
+      "warm": { "p50Ms": 59.2, "p95Ms": 85.8 }
+    },
+    "cipherlink": {
+      "coldMs": 5752,
+      "snapshotLoadMs": 1278,
+      "rssPeakMiB": 567,
+      "rssSteadySameProcessMiB": 545,
+      "heapColdMiB": 113,
+      "heapAfterSnapshotLoadMiB": 133,
+      "heapAfterWarmMiB": 127,
+      "warm": { "p50Ms": 23.7, "p95Ms": 43.2 }
+    },
+    "exam-parent-v3": {
+      "coldMs": 12575,
+      "snapshotLoadMs": 2104,
+      "rssPeakMiB": 1022,
+      "rssSteadySameProcessMiB": 979,
+      "heapColdMiB": 206,
+      "heapAfterSnapshotLoadMiB": 429,
+      "heapAfterWarmMiB": 435,
+      "warm": { "p50Ms": 21.7, "p95Ms": 40.9 }
+    }
+  },
+  "scenarios": {
+    "S1": { "rssDeltaMiB": 2400, "heapUsedSumMiB": 1431 },
+    "S2": { "rssDeltaMiB": 3460, "heapUsedSumMiB": 2438 }
+  },
+  "artifacts": {
+    "memoryBenchmark": {
+      "path": "docs/phase-m/m1-memory.json",
+      "sha256": "f9b6e84be6f4dcb2930403508e9202b8aa45022f5bb8ff3c8c56ce9340f5ec99"
+    }
+  },
+  "isolation": {
+    "t0": {
+      "tests": 55,
+      "fail": 0,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "dfac671616d1c31c7afd1f2af64f27d557f76d76",
+      "logSha256": "28ea33068cd902580fd14fef11944abbb7de2642821914a644fff11f4ab52b01"
+    },
+    "t1": {
+      "dist": 1160,
+      "scripts": 213,
+      "fail": 0,
+      "smoke": true,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "dfac671616d1c31c7afd1f2af64f27d557f76d76",
+      "logSha256": "4d093e74f1f2467d57900bf44a83f5715738fd14676063fae2917106de8babad"
+    },
+    "t2": {
+      "isolation": "detached-local-clone",
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "dfac671616d1c31c7afd1f2af64f27d557f76d76",
+      "digestLogSha256": "f2690f5e1f554f98bab247ac8afd9fce6c388af3dc1312fb61328851ddb9f38a"
+    }
+  }
+}
