@@ -1,6 +1,6 @@
 // input: Graph search result, JavaIndex-like path facts, token budget.
 // output: Planned ContextContract. One worker-side planning step after QUERY_CONTEXT_GRAPH search.
-// pos: JIN N4-02/03. Benchmark-only until N5 registers java_context.
+// pos: JIN N4-02/03 planner. N5 java_context calls QUERY_CONTEXT_GRAPH plan=true.
 import type { KnowledgeGraphStore } from "../java-knowledge/graph-store.js";
 import type { JavaIndexStore } from "../java-index/index-store.js";
 import { closeSearchResult, type ClosureFacts } from "./context-closure.js";

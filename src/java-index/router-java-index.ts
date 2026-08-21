@@ -161,6 +161,26 @@ export interface RouterIndex {
   routerStatus(refresh?: boolean): Promise<RouterIndexStatus>;
   /** Request-local counters plus the last worker status, without issuing a STATUS RPC. */
   localRouterStatus?(): RouterIndexStatus;
+  queryContextGraph?(input: {
+    fromRelativePath: string;
+    intent: string;
+    mode?: "search" | "navigate";
+    direction?: "callers" | "callees";
+    closure?: "persistence" | "framework";
+    maxHops?: number;
+    maxExpansions?: number;
+    tokenBudget?: number;
+    taskText?: string;
+    profile?: string;
+    plan?: boolean;
+    includeSource?: boolean;
+    anchorLine?: number;
+    anchorColumn?: number;
+    sessionId?: string;
+    generation?: number;
+    repoHash?: string;
+  }): Promise<ContextGraphResult>;
+  queryEntitySearch?(task: string, limit?: number): Promise<EntityHit[]>;
 }
 
 type RequestQueryMemo = {

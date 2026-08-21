@@ -13,6 +13,7 @@ type SmokeArguments = {
 };
 
 const expectedTools = [
+  "java_context",
   "java_diagnostics",
   "java_impact",
   "java_runtime",

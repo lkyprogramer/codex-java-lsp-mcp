@@ -1,5 +1,5 @@
 // input: One shared JavaLspApplication and transport policy.
-// output: A fresh MCP protocol server exposing the five read-only Java tools.
+// output: A fresh MCP protocol server exposing the public read-only Java tools.
 // pos: Protocol-instance factory; never owns or closes the shared application lifecycle.
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -9,6 +9,7 @@ import type { ManagedToolContext, RequestOptionsInput } from "./repo-runtime-man
 import type { RepoSelector } from "./repo-resolver.js";
 import type { RequestContext } from "./runtime/request-context.js";
 import { diagnosticsSchema, javaDiagnostics } from "./tools/diagnostics.js";
+import { JAVA_CONTEXT_DESCRIPTION, javaContext, javaContextSchema } from "./tools/java-context.js";
 import { impactSchema, javaImpact } from "./tools/impact.js";
 import { javaRuntime, runtimeSchema } from "./tools/runtime.js";
 import { isDiagnosticDetail } from "./tools/shared.js";
@@ -17,10 +18,11 @@ import { javaSymbol, symbolSchema } from "./tools/symbol.js";
 
 export type McpTransportMode = "stdio" | "streamable_http";
 
-/** Single source of truth for the public MCP tool surface. There is no java_context. */
+/** Single source of truth for the public MCP tool surface. java_impact stays for the current chain; java_context is the JIN planner. */
 export const PUBLIC_JAVA_TOOLS = [
   "java_status",
   "java_impact",
+  "java_context",
   "java_symbol",
   "java_diagnostics",
   "java_runtime"
@@ -52,7 +54,7 @@ export function createMcpServer(
     name: "codex-java-lsp",
     version: "0.1.0"
   }, {
-    instructions: "Use java_impact first for Java navigation. Tools are read-only and optimized for low-token impact analysis."
+    instructions: "Use java_context for planned Java context. java_impact remains the current compact impact plan. Tools are read-only."
   });
 
   const registered: string[] = [];
@@ -69,7 +71,7 @@ export function createMcpServer(
 
   register(track("java_impact"), {
     title: "Java Impact",
-    description: "Build a compact Java impact plan with JavaIndex routing, internal rg summary, optional bounded LSP enrichment, and read plan. There is no java_context.",
+    description: "Build a compact Java impact plan with JavaIndex routing, internal rg summary, optional bounded LSP enrichment, and read plan.",
     inputSchema: impactSchema
   }, args => withContext(args, (context, request) => javaImpact(context, args, request), {
     mayStartLsp: args.semanticPolicy !== "fast",
@@ -78,6 +80,18 @@ export function createMcpServer(
       mode: args.mode,
       semanticPolicy: args.semanticPolicy,
       deadlineMs: args.deadlineMs
+    }
+  }));
+
+  register(track("java_context"), {
+    title: "Java Context",
+    description: JAVA_CONTEXT_DESCRIPTION,
+    inputSchema: javaContextSchema
+  }, args => withContext(args, (context, request) => javaContext(context, args, request), {
+    mayStartLsp: false,
+    requestOptions: {
+      mode: "balanced",
+      semanticPolicy: "fast"
     }
   }));
 

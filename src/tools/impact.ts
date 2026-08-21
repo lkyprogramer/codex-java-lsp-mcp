@@ -1,6 +1,6 @@
 // input: java_impact MCP request.
 // output: V6 analysis. Continuation is not on the production path.
-// pos: Public recommended impact tool handler. No java_context.
+// pos: Public current-chain impact tool handler. Coexists with java_context during N5.
 import { z } from "zod";
 import { withConvergedCostV6 } from "../agent-router/output-v6.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";

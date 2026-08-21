@@ -1,6 +1,6 @@
 // input: Indexed Java type/method facts plus a task string.
 // output: Ranked entity hits for the LocAgent-style four-layer entry index.
-// pos: JIN N0.5 benchmark-only QUERY_ENTITY_SEARCH. No public MCP schema change.
+// pos: JIN N0.5 entity entry index. java_context no-anchor mode calls QUERY_ENTITY_SEARCH.
 import type {
   JavaFieldFacts,
   JavaFileBundle,

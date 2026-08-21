@@ -14,15 +14,16 @@ import { RepoResolver } from "./repo-resolver.js";
 
 const expectedTools = [...PUBLIC_JAVA_TOOLS].sort();
 
-test("PUBLIC_JAVA_TOOLS is exactly the five public tools and excludes java_context", () => {
+test("PUBLIC_JAVA_TOOLS includes java_context and keeps java_impact", () => {
   assert.deepEqual([...PUBLIC_JAVA_TOOLS].sort(), expectedTools);
-  assert.equal(PUBLIC_JAVA_TOOLS.includes("java_context" as never), false);
-  assert.equal(PUBLIC_JAVA_TOOLS.length, 5);
+  assert.equal(PUBLIC_JAVA_TOOLS.includes("java_context"), true);
+  assert.equal(PUBLIC_JAVA_TOOLS.includes("java_impact"), true);
+  assert.equal(PUBLIC_JAVA_TOOLS.length, 6);
 });
 
-test("production MCP factory and java_impact do not read JAVA_LSP_ENGINE", () => {
+test("production MCP factory, java_impact, and java_context do not read JAVA_LSP_ENGINE", () => {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "src");
-  for (const relative of ["mcp-server-factory.ts", "tools/impact.ts", "application.ts"]) {
+  for (const relative of ["mcp-server-factory.ts", "tools/impact.ts", "tools/java-context.ts", "application.ts"]) {
     const source = readFileSync(path.join(root, relative), "utf8");
     assert.equal(source.includes("JAVA_LSP_ENGINE"), false, relative);
   }

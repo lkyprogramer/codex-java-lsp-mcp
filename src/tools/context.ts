@@ -1,5 +1,5 @@
 // input: MCP server process singletons.
-// output: Shared tool context for the five-tool MCP handlers.
+// output: Shared tool context for the public MCP handlers.
 // pos: Dependency bundle passed from server.ts into individual tools.
 import { AgentRouter } from "../agent-router/index.js";
 import type { JavaIndexClient } from "../java-index/java-index-client.js";

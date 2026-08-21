@@ -178,7 +178,7 @@ export async function handleQueryCommand(request: JavaIndexRequest, deps: QueryH
         result = attachAnchorSignatureBundles(result, graph, deps.store, relativePath, request.anchorLine);
       }
       shouldEscalateToJdt({ unresolvedRoles: result.unresolved.map(item => item.role), jdtlsBin: process.env.JDTLS_BIN });
-      if (request.plan && request.mode !== "navigate") {
+      if (request.plan) {
         const contract = planContextQuery({
           graph,
           store: deps.store,
