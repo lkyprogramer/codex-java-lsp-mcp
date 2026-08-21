@@ -31,6 +31,46 @@ export type GraphSearchResult = {
 };
 
 const NON_BUNDLE_PATH_KINDS = new Set(["REPOSITORY", "MODULE", "SOURCE_ROOT", "PARAMETER", "LOCAL", "STATEMENT", "CONFIG_KEY"]);
+const PERSISTENCE_EDGE = /MYBATIS_|JPA_|REPOSITORY_MANAGES_ENTITY|SQL_TOUCHES_TABLE/;
+
+function isPersistenceKind(kind: EdgeKind): boolean {
+  return PERSISTENCE_EDGE.test(kind);
+}
+
+function annotatePersistenceProof(graph: KnowledgeGraphStore, bundles: Map<string, EvidenceBundleCandidate>): void {
+  const nodesByPath = new Map<string, string[]>();
+  for (const [id, node] of graph.nodesById) {
+    if (!node.relativePath) continue;
+    const list = nodesByPath.get(node.relativePath);
+    if (list) list.push(id);
+    else nodesByPath.set(node.relativePath, [id]);
+  }
+  for (const bundle of bundles.values()) {
+    if (bundle.provingPath.some(step => isPersistenceKind(step.kind))) continue;
+    for (const id of nodesByPath.get(bundle.path) ?? []) {
+      const hit = [...graph.successors(id), ...graph.predecessors(id)].find(edge => isPersistenceKind(edge.kind));
+      if (!hit) continue;
+      bundle.provingPath = [{ kind: hit.kind, fromId: hit.fromId, toId: hit.toId }, ...bundle.provingPath];
+      break;
+    }
+  }
+}
+
+function upgradeBundle(
+  existing: EvidenceBundleCandidate,
+  hop: number,
+  path: GraphEdge[],
+  newlyClosed: string[],
+  nextClosed: string[]
+): void {
+  existing.hops = Math.min(existing.hops, hop);
+  const persist = path.some(item => isPersistenceKind(item.kind));
+  const already = existing.provingPath.some(item => isPersistenceKind(item.kind));
+  if (persist && !already) {
+    existing.provingPath = path.map(item => ({ kind: item.kind, fromId: item.fromId, toId: item.toId }));
+    existing.closedObligations = newlyClosed.length > 0 ? [...new Set(newlyClosed)] : nextClosed;
+  }
+}
 
 function fileOf(graph: KnowledgeGraphStore, nodeId: string): string | undefined {
   const node = graph.nodesById.get(nodeId);
@@ -96,7 +136,17 @@ export function searchContextGraph(
     for (const edge of edges) {
       if (expansions >= maxExpansions) break;
       const nextId = edge.fromId === current.id ? edge.toId : edge.fromId;
-      if (seen.has(nextId)) continue;
+      const currentFile = fileOf(graph, current.id);
+      const nextFile = fileOf(graph, nextId);
+      const hop = currentFile && nextFile && currentFile === nextFile ? current.hop : current.hop + 1;
+      const newlyClosed = compiled.obligations.filter(item => closes(item, edge.kind)).map(item => item.id);
+      const nextClosed = [...new Set([...current.closed, ...newlyClosed])];
+      const nextPath = [...current.path, edge];
+      const file = fileOf(graph, nextId);
+      if (seen.has(nextId)) {
+        if (file && bundles.has(file)) upgradeBundle(bundles.get(file)!, hop, nextPath, newlyClosed, nextClosed);
+        continue;
+      }
       const nextNode = graph.nodesById.get(nextId);
       if (nextNode && NON_BUNDLE_PATH_KINDS.has(nextNode.kind)) {
         seen.add(nextId);
@@ -104,11 +154,8 @@ export function searchContextGraph(
       }
       seen.add(nextId);
       expansions += 1;
-      const hop = current.hop + 1;
       deepest = Math.max(deepest, hop);
-      const newlyClosed = compiled.obligations.filter(item => closes(item, edge.kind)).map(item => item.id);
       for (const id of newlyClosed) closed.add(id);
-      const nextClosed = [...new Set([...current.closed, ...newlyClosed])];
       const cost = current.cost + pathCost({
         kind: edge.kind,
         hop,
@@ -116,9 +163,9 @@ export function searchContextGraph(
         closesObligation: newlyClosed.length > 0,
         lexicalMatch: false
       });
-      const nextPath = [...current.path, edge];
-      const file = fileOf(graph, nextId);
-      if (file && !bundles.has(file)) {
+      if (file && bundles.has(file)) {
+        upgradeBundle(bundles.get(file)!, hop, nextPath, newlyClosed, nextClosed);
+      } else if (file) {
         const estimatedTokens = Math.min(400, 48 + nextPath.length * 24);
         bundles.set(file, {
           path: file,
@@ -131,6 +178,7 @@ export function searchContextGraph(
       queue.push({ id: nextId, hop, cost, path: nextPath, closed: nextClosed });
     }
   }
+  annotatePersistenceProof(graph, bundles);
   const ordered = [...bundles.values()].sort((left, right) => left.hops - right.hops || left.path.localeCompare(right.path));
   const tokens = ordered.reduce((sum, bundle) => sum + bundle.estimatedTokens, 0);
   const capped = ordered;

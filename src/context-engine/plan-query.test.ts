@@ -438,3 +438,109 @@ test("factsForStore keeps a type span for a hop-1 DTO with no matching method na
   assert.equal(facts.methods.length, 0);
   assert.ok((facts.types ?? []).some(span => span.start === 1));
 });
+
+test("factsForStore keeps a type span when the proving id is a graph TYPE node on that path", () => {
+  const entity = fileBundle("PayAccount", { methods: [{ name: "getId", start: 4, end: 8 }] });
+  const store = new JavaIndexStore();
+  store.replaceFile(entity);
+  const graph = new KnowledgeGraphStore();
+  graph.upsertNode({
+    id: "entity:PayAccount",
+    kind: "JPA_ENTITY",
+    generation: 1,
+    relativePath: "src/PayAccount.java",
+    simpleName: "PayAccount"
+  }, "src/PayAccount.java");
+  const facts = factsForStore(graph, store, "src/PayAccount.java", new Set(["entity:PayAccount"]));
+  assert.ok((facts.types ?? []).some(span => span.start === 1), JSON.stringify(facts.types));
+});
+
+test("planContextQuery selects a hop-1 persistence entity from type spans", () => {
+  const order = fileBundle("Order", { methods: [{ name: "create", start: 10, end: 20 }] });
+  const account = fileBundle("PayAccount", { methods: [{ name: "getId", start: 4, end: 8 }] });
+  const store = new JavaIndexStore();
+  store.replaceFile(order);
+  store.replaceFile(account);
+  const graph = new KnowledgeGraphStore();
+  graph.upsertNode({ id: "src/Order.java", kind: "FILE", generation: 1, relativePath: "src/Order.java" }, "src/Order.java");
+  graph.upsertNode({
+    id: "entity:PayAccount",
+    kind: "JPA_ENTITY",
+    generation: 1,
+    relativePath: "src/PayAccount.java",
+    simpleName: "PayAccount"
+  }, "src/PayAccount.java");
+  const search: GraphSearchResult = {
+    resolvedIntent: "IMPLEMENTATION_CHANGE",
+    coverage: "PARTIAL",
+    bundles: [
+      { path: "src/Order.java", hops: 0, estimatedTokens: 40, provingPath: [], closedObligations: ["O1"] },
+      {
+        path: "src/PayAccount.java",
+        hops: 1,
+        estimatedTokens: 80,
+        provingPath: [{
+          kind: "REPOSITORY_MANAGES_ENTITY",
+          fromId: "src/Order.java",
+          toId: "entity:PayAccount"
+        }],
+        closedObligations: ["O4"]
+      }
+    ],
+    unresolved: [],
+    metrics: { expansions: 2, hops: 1, estimatedTokens: 120 }
+  };
+  const contract = planContextQuery({ graph, store, search, tokenBudget: 400, generation: 1, anchorLine: 12 });
+  assert.ok(contract.contexts.some(item => item.path === "src/PayAccount.java"), contract.contexts.map(item => item.path).join(","));
+});
+
+test("attachAnchorSignatureBundles follows persistence edges from a hop-1 field type", () => {
+  const mapper = fileBundle("ReleaseMapper", { methods: [{ name: "storeRelease", start: 4, end: 8 }] });
+  const entity = fileBundle("PayAccount", { methods: [{ name: "getId", start: 4, end: 8 }] });
+  const gateway = fileBundle("Gateway", {
+    methods: [{
+      name: "store",
+      start: 10,
+      end: 20,
+      calls: [{ name: "storeRelease", receiver: "mapper", typeId: mapper.types[0]!.typeId }]
+    }],
+    fields: [{ name: "mapper", typeId: mapper.types[0]!.typeId, simpleName: "ReleaseMapper" }]
+  });
+  const store = new JavaIndexStore();
+  store.replaceFile(gateway);
+  store.replaceFile(mapper);
+  store.replaceFile(entity);
+  const graph = new KnowledgeGraphStore();
+  graph.upsertNode({ id: "src/Gateway.java", kind: "FILE", generation: 1, relativePath: "src/Gateway.java" }, "src/Gateway.java");
+  graph.upsertNode({
+    id: "src/ReleaseMapper.java#ReleaseMapper",
+    kind: "TYPE",
+    generation: 1,
+    relativePath: "src/ReleaseMapper.java",
+    simpleName: "ReleaseMapper",
+    javaIndexId: mapper.types[0]!.typeId
+  }, "src/ReleaseMapper.java");
+  graph.upsertNode({
+    id: "src/PayAccount.java#PayAccount",
+    kind: "JPA_ENTITY",
+    generation: 1,
+    relativePath: "src/PayAccount.java",
+    simpleName: "PayAccount"
+  }, "src/PayAccount.java");
+  graph.addEdge({
+    edgeId: knowledgeEdgeId({
+      kind: "REPOSITORY_MANAGES_ENTITY",
+      fromId: "src/ReleaseMapper.java#ReleaseMapper",
+      toId: "src/PayAccount.java#PayAccount"
+    }),
+    kind: "REPOSITORY_MANAGES_ENTITY",
+    fromId: "src/ReleaseMapper.java#ReleaseMapper",
+    toId: "src/PayAccount.java#PayAccount",
+    generation: 1,
+    sourceFile: "src/ReleaseMapper.java"
+  }, "src/ReleaseMapper.java");
+  const attached = attachAnchorSignatureBundles(emptySearch("src/Gateway.java"), graph, store, "src/Gateway.java", 12);
+  const paths = attached.bundles.map(item => item.path).sort();
+  assert.ok(paths.includes("src/ReleaseMapper.java"), `missing mapper, got ${paths.join(",")}`);
+  assert.ok(paths.includes("src/PayAccount.java"), `missing persistence entity, got ${paths.join(",")}`);
+});

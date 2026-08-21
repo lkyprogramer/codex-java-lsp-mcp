@@ -64,6 +64,35 @@ test("closure keeps the named implementer method whole and drops hop>0 files wit
   assert.equal(port.spans[0]?.end, 4);
 });
 
+test("hop>0 persistence files keep a type span when no method name matches", () => {
+  const bundles = closeSearchResult({
+    search: {
+      resolvedIntent: "PERSISTENCE_FLOW",
+      coverage: "PARTIAL",
+      bundles: [
+        { path: "src/Order.java", hops: 0, estimatedTokens: 40, provingPath: [], closedObligations: ["O1"] },
+        {
+          path: "src/PayAccount.java",
+          hops: 1,
+          estimatedTokens: 80,
+          provingPath: [{ kind: "REPOSITORY_MANAGES_ENTITY", fromId: "src/Order.java#Order", toId: "src/PayAccount.java#PayAccount" }],
+          closedObligations: ["O3"]
+        }
+      ],
+      unresolved: [],
+      metrics: { expansions: 2, hops: 1, estimatedTokens: 120 }
+    },
+    factsForPath: path => {
+      if (path === "src/Order.java") return { methods: [{ name: "create", startLine: 10, endLine: 20 }] };
+      return { methods: [{ name: "getId", startLine: 4, endLine: 8 }], types: [{ start: 3, end: 40 }] };
+    }
+  });
+  const entity = bundles.find(item => item.path === "src/PayAccount.java");
+  assert.ok(entity, "persistence entity must stay in the closure");
+  assert.equal(entity?.role, "PERSISTENCE");
+  assert.ok((entity?.spans.length ?? 0) > 0);
+});
+
 test("hop 0 keeps sibling methods supplied by facts, not only the line-containing method", () => {
   const bundles = closeSearchResult({
     search: {

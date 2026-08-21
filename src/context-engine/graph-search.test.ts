@@ -56,6 +56,32 @@ test("source-root nodes are not emitted and are not expanded into sibling files"
   assert.equal(result.bundles.some(bundle => bundle.path === "src/C.java"), false);
 });
 
+test("search annotates a file reached via IMPORTS with a persistence edge on that file", () => {
+  const graph = seed();
+  graph.upsertNode({ id: "src/B.java#B", kind: "TYPE", generation: 1, relativePath: "src/B.java", simpleName: "B" }, "src/B.java");
+  graph.upsertNode({ id: "src/E.java#E", kind: "JPA_ENTITY", generation: 1, relativePath: "src/E.java", simpleName: "E" }, "src/E.java");
+  graph.addEdge({
+    edgeId: knowledgeEdgeId({ kind: "IMPORTS", fromId: "src/A.java", toId: "src/B.java#B" }),
+    kind: "IMPORTS",
+    fromId: "src/A.java",
+    toId: "src/B.java#B",
+    generation: 1,
+    sourceFile: "src/A.java"
+  }, "src/A.java");
+  graph.addEdge({
+    edgeId: knowledgeEdgeId({ kind: "REPOSITORY_MANAGES_ENTITY", fromId: "src/B.java#B", toId: "src/E.java#E" }),
+    kind: "REPOSITORY_MANAGES_ENTITY",
+    fromId: "src/B.java#B",
+    toId: "src/E.java#E",
+    generation: 1,
+    sourceFile: "src/B.java"
+  }, "src/B.java");
+  const result = searchContextGraph(graph, "src/A.java", compileIntent("IMPLEMENTATION_CHANGE"), { maxHops: 2, maxExpansions: 32 });
+  const mapper = result.bundles.find(bundle => bundle.path === "src/B.java");
+  assert.ok(mapper, "B should be discovered");
+  assert.ok(mapper?.provingPath.some(step => step.kind === "REPOSITORY_MANAGES_ENTITY"), JSON.stringify(mapper?.provingPath));
+});
+
 test("same input yields the same bundle paths", () => {
   const graph = seed();
   const compiled = compileIntent("IMPLEMENTATION_CHANGE");

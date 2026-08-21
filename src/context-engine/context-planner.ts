@@ -73,6 +73,24 @@ function filesOf(selected: EvidenceBundle[]): Set<string> {
   return new Set(selected.map(bundle => bundle.path));
 }
 
+function pathNameTokens(path: string): Set<string> {
+  const base = path.split("/").pop()?.replace(/\.java$/i, "") ?? "";
+  const parts = base.split(/(?=[A-Z0-9])/).map(part => part.toLowerCase()).filter(part => part.length > 3);
+  return new Set(parts);
+}
+
+function nameOverlap(bundle: EvidenceBundle, selected: EvidenceBundle[]): number {
+  const tokens = pathNameTokens(bundle.path);
+  if (tokens.size === 0) return 0;
+  for (const item of selected) {
+    if (item.path === bundle.path) continue;
+    for (const token of pathNameTokens(item.path)) {
+      if (tokens.has(token)) return 2.2;
+    }
+  }
+  return 0;
+}
+
 function marginalGain(bundle: EvidenceBundle, selected: EvidenceBundle[]): number {
   const closed = coveredBy(selected);
   const fresh = bundle.closes.filter(id => !closed.has(id)).length;
@@ -84,7 +102,7 @@ function marginalGain(bundle: EvidenceBundle, selected: EvidenceBundle[]): numbe
   const saturation = samePath ? 0.35 : 0;
   const nearHop = samePath ? 0 : bundle.hops <= 0 ? 4 : bundle.hops === 1 ? 1.8 : bundle.hops === 2 ? 1.6 : bundle.hops === 3 ? 1.1 : 0.3;
   const newPath = samePath ? 0 : 0.55;
-  return fresh + diversity + nearHop + newPath + bundle.confidence * 0.05 - redundancy - saturation;
+  return fresh + diversity + nearHop + newPath + nameOverlap(bundle, selected) + bundle.confidence * 0.05 - redundancy - saturation;
 }
 
 function tokenCostOf(selected: EvidenceBundle[]): number {
@@ -94,8 +112,11 @@ function tokenCostOf(selected: EvidenceBundle[]): number {
 const IMPL_PROOF = /IMPLEMENTS|DISPATCHES_TO|MYBATIS|JPA_|REPOSITORY_|SPRING_|PUBLISHES_EVENT|CONSUMES_EVENT/;
 const CALL_PROOF = /CALLS_|CALLED_BY|METHOD_REFERENCE/;
 const MID_PROOF = /EXTENDS|PERMITS|IMPORTS|DECLARES|CONSTRUCTS/;
+const PERSISTENCE_PROOF = /MYBATIS_|JPA_|REPOSITORY_MANAGES_ENTITY|SQL_TOUCHES_TABLE/;
 const GENERIC_PERSISTENCE = /^(findById|save|insert|update|delete|count|exists)$|^(findBy|listBy|countBy|existsBy|deleteBy)[A-Z]/;
 const MAX_LOW_PROOF_TOKENS = 150;
+const MAX_HOP2_CALLS = 3;
+const MAX_HOP2_PERSISTENCE = 3;
 
 function provingMember(bundle: EvidenceBundle): string | undefined {
   for (const step of bundle.provingPath) {
@@ -105,7 +126,12 @@ function provingMember(bundle: EvidenceBundle): string | undefined {
   return undefined;
 }
 
+function isPersistenceProof(bundle: EvidenceBundle): boolean {
+  return bundle.role === "PERSISTENCE" || bundle.proof.some(kind => PERSISTENCE_PROOF.test(kind));
+}
+
 function genericPersistenceCall(bundle: EvidenceBundle): boolean {
+  if (isPersistenceProof(bundle)) return false;
   const name = provingMember(bundle);
   return Boolean(name && GENERIC_PERSISTENCE.test(name));
 }
@@ -118,6 +144,10 @@ function proofRank(bundle: EvidenceBundle): number {
   }
   if (bundle.proof.some(kind => MID_PROOF.test(kind))) return 3;
   return 4;
+}
+
+function persistenceLayout(path: string): number {
+  return path.includes("/persistence/") || path.includes("/mapper/") || path.includes("/entity/") || path.includes("/repository/") ? 1 : 0;
 }
 
 function layoutPrefix(path: string): string {
@@ -136,7 +166,7 @@ function isSignatureImports(bundle: EvidenceBundle): boolean {
 }
 
 function hop2KindRank(bundle: EvidenceBundle): number {
-  if (bundle.proof.includes("CALLS_VIRTUAL")) return 0;
+  if (bundle.proof.includes("CALLS_VIRTUAL") || isPersistenceProof(bundle)) return 0;
   if (bundle.proof.some(kind => kind.startsWith("CALLS_"))) return 1;
   if (bundle.proof.includes("IMPLEMENTS") || bundle.proof.includes("DISPATCHES_TO")) return 2;
   return 3;
@@ -148,11 +178,14 @@ export function planEvidenceBundles(input: PlanInput): PlanResult {
   const bundleGuard = input.maxBundles ?? MAX_BUNDLES_GUARD;
   const anchorPrefix = layoutPrefix(input.bundles.find(bundle => bundle.hops === 0)?.path ?? "");
   const highProof = (bundle: EvidenceBundle) => (proofRank(bundle) <= 1 || (isSignatureImports(bundle) && bundle.tokenCost <= MAX_LOW_PROOF_TOKENS)) ? 0 : 1;
+  const anchors = input.bundles.filter(isP0Bundle);
   const candidates = limitAmbiguity(input.bundles)
     .slice()
     .sort((left, right) => highProof(left) - highProof(right)
       || left.hops - right.hops
       || proofRank(left) - proofRank(right)
+      || nameOverlap(right, anchors) - nameOverlap(left, anchors)
+      || persistenceLayout(right.path) - persistenceLayout(left.path)
       || Number(layoutPrefix(left.path) === anchorPrefix) - Number(layoutPrefix(right.path) === anchorPrefix)
       || (left.hops >= 2 ? hop2KindRank(left) - hop2KindRank(right) : 0)
       || (left.hops >= 2 ? left.tokenCost - right.tokenCost : 0)
@@ -160,17 +193,25 @@ export function planEvidenceBundles(input: PlanInput): PlanResult {
       || left.id.localeCompare(right.id));
   const selected: EvidenceBundle[] = [];
   const rejectedOverBudget: EvidenceBundle[] = [];
-  let hop2Packed = 0;
+  let hop2CallPacked = 0;
+  let hop2PersistPacked = 0;
   for (const bundle of candidates.filter(isP0Bundle)) {
     selected.push(bundle);
   }
   for (const bundle of candidates.filter(item => !isP0Bundle(item))) {
     if (selected.length >= bundleGuard) break;
-    if (bundle.hops > 2) continue;
+    if (bundle.hops > 3) continue;
+    if (bundle.hops > 2 && !isPersistenceProof(bundle)) continue;
     if (isTestPath(bundle.path) || bundle.role === "TEST") continue;
     if (genericPersistenceCall(bundle)) continue;
-    if (proofRank(bundle) >= 2 && bundle.tokenCost > MAX_LOW_PROOF_TOKENS) continue;
-    if (bundle.hops === 2 && hop2Packed >= 3) continue;
+    if (proofRank(bundle) >= 2 && bundle.tokenCost > MAX_LOW_PROOF_TOKENS && !isPersistenceProof(bundle)) continue;
+    if (bundle.hops >= 2) {
+      if (isPersistenceProof(bundle)) {
+        if (hop2PersistPacked >= MAX_HOP2_PERSISTENCE) continue;
+      } else if (bundle.proof.some(kind => kind.startsWith("CALLS_") || kind === "CALLED_BY")) {
+        if (hop2CallPacked >= MAX_HOP2_CALLS) continue;
+      }
+    }
     if (marginalGain(bundle, selected) <= 0) continue;
     const used = tokenCostOf(selected);
     if (used + bundle.tokenCost > budget) {
@@ -180,7 +221,10 @@ export function planEvidenceBundles(input: PlanInput): PlanResult {
     const files = filesOf(selected);
     if (!files.has(bundle.path) && files.size >= fileGuard) continue;
     selected.push(bundle);
-    if (bundle.hops === 2) hop2Packed += 1;
+    if (bundle.hops >= 2) {
+      if (isPersistenceProof(bundle)) hop2PersistPacked += 1;
+      else hop2CallPacked += 1;
+    }
   }
   const merged = mergeSelectedByPath(selected);
   merged.sort((left, right) => left.hops - right.hops || left.path.localeCompare(right.path) || left.id.localeCompare(right.id));

@@ -87,7 +87,7 @@ test("hop<=2 files are not force-filled; budget greedy can skip a large near fil
     bundles: [
       bundle({ id: "a", path: "src/A.java", role: "ANCHOR", closes: ["O1"], tokenCost: 10, hops: 0 }),
       bundle({ id: "near-huge", path: "src/Huge.java", role: "CALLEE", closes: ["O2"], tokenCost: 400, hops: 1 }),
-      bundle({ id: "far-cheap", path: "src/Far.java", role: "PERSISTENCE", closes: ["O3"], tokenCost: 20, hops: 3 })
+      bundle({ id: "far-cheap", path: "src/Far.java", role: "DATAFLOW", closes: ["O3"], tokenCost: 20, hops: 3 })
     ],
     tokenBudget: 80
   });
@@ -252,6 +252,154 @@ test("hop-2 CALLS_VIRTUAL packs before cheaper hop-2 noise", () => {
   });
   assert.ok(planned.selected.some(item => item.id === "me"));
   assert.equal(planned.selected.some(item => item.id === "noise"), false);
+});
+
+test("overlapping hop-2 mapper under persistence/mapper packs before an application repository", () => {
+  const planned = planEvidenceBundles({
+    bundles: [
+      bundle({
+        id: "a",
+        path: "modules/storage/src/main/java/DefaultClientReleasePackageStorageGateway.java",
+        role: "ANCHOR",
+        closes: ["O1"],
+        tokenCost: 10,
+        hops: 0
+      }),
+      bundle({
+        id: "repo",
+        path: "modules/client/src/main/java/application/ClientReleaseRepository.java",
+        role: "IMPLEMENTATION",
+        closes: ["O3"],
+        tokenCost: 40,
+        hops: 2,
+        proof: ["IMPLEMENTS"],
+        provingPath: [{ kind: "IMPLEMENTS", fromId: "src/A.java", toId: "src/Repo.java#Repo" }]
+      }),
+      bundle({
+        id: "mapper",
+        path: "modules/client/src/main/java/infrastructure/persistence/mapper/ClientReleaseMapper.java",
+        role: "FRAMEWORK",
+        closes: ["O6"],
+        tokenCost: 40,
+        hops: 2,
+        proof: ["SPRING_INJECTS"],
+        provingPath: [{ kind: "SPRING_INJECTS", fromId: "src/A.java", toId: "src/Mapper.java#Mapper" }]
+      })
+    ],
+    tokenBudget: 55
+  });
+  assert.ok(planned.selected.some(item => item.id === "mapper"));
+  assert.equal(planned.selected.some(item => item.id === "repo"), false);
+});
+
+test("hop-2 mapper sharing ClientRelease with the anchor packs before unrelated hop-2 framework files", () => {
+  const planned = planEvidenceBundles({
+    bundles: [
+      bundle({
+        id: "a",
+        path: "modules/storage/src/main/java/DefaultClientReleasePackageStorageGateway.java",
+        role: "ANCHOR",
+        closes: ["O1"],
+        tokenCost: 10,
+        hops: 0
+      }),
+      bundle({
+        id: "auth",
+        path: "modules/auth/src/main/java/AuthPermissionQueryService.java",
+        role: "FRAMEWORK",
+        closes: ["O6"],
+        tokenCost: 40,
+        hops: 2,
+        proof: ["SPRING_INJECTS"],
+        provingPath: [{ kind: "SPRING_INJECTS", fromId: "src/A.java", toId: "src/Auth.java#Auth" }]
+      }),
+      bundle({
+        id: "mapper",
+        path: "modules/client/src/main/java/ClientReleaseMapper.java",
+        role: "FRAMEWORK",
+        closes: ["O6"],
+        tokenCost: 40,
+        hops: 2,
+        proof: ["SPRING_INJECTS"],
+        provingPath: [{ kind: "SPRING_INJECTS", fromId: "src/A.java", toId: "src/Mapper.java#Mapper" }]
+      })
+    ],
+    tokenBudget: 55
+  });
+  assert.ok(planned.selected.some(item => item.id === "mapper"));
+  assert.equal(planned.selected.some(item => item.id === "auth"), false);
+});
+
+test("hop-3 persistence proving files pack while hop-3 CALLS still skip", () => {
+  const planned = planEvidenceBundles({
+    bundles: [
+      bundle({ id: "a", path: "src/A.java", role: "ANCHOR", closes: ["O1"], tokenCost: 10, hops: 0 }),
+      bundle({
+        id: "call",
+        path: "src/FarCall.java",
+        role: "CALLEE",
+        closes: ["O2"],
+        tokenCost: 40,
+        hops: 3,
+        proof: ["CALLS_VIRTUAL"],
+        provingPath: [{ kind: "CALLS_VIRTUAL", fromId: "src/A.java", toId: "src/FarCall.java#F#run#n" }]
+      }),
+      bundle({
+        id: "entity",
+        path: "src/PayAccount.java",
+        role: "PERSISTENCE",
+        closes: ["O4"],
+        tokenCost: 40,
+        hops: 3,
+        proof: ["REPOSITORY_MANAGES_ENTITY"],
+        provingPath: [{ kind: "REPOSITORY_MANAGES_ENTITY", fromId: "src/A.java", toId: "src/PayAccount.java#PayAccount" }]
+      })
+    ],
+    tokenBudget: 120
+  });
+  assert.ok(planned.selected.some(item => item.id === "entity"));
+  assert.equal(planned.selected.some(item => item.id === "call"), false);
+});
+
+test("hop-2 persistence proving files pack even after three CALLS_VIRTUAL files", () => {
+  const planned = planEvidenceBundles({
+    bundles: [
+      bundle({ id: "a", path: "src/A.java", role: "ANCHOR", closes: ["O1"], tokenCost: 10, hops: 0 }),
+      ...["One", "Two", "Three"].map((name, index) => bundle({
+        id: `call${index}`,
+        path: `src/${name}.java`,
+        role: "CALLEE",
+        closes: ["O2"],
+        tokenCost: 40,
+        hops: 2,
+        proof: ["CALLS_VIRTUAL"],
+        provingPath: [{ kind: "CALLS_VIRTUAL", fromId: "src/A.java", toId: `src/${name}.java#${name}#run#n` }]
+      })),
+      bundle({
+        id: "mapper",
+        path: "src/ReleaseMapper.java",
+        role: "PERSISTENCE",
+        closes: ["O4"],
+        tokenCost: 40,
+        hops: 2,
+        proof: ["MYBATIS_METHOD_BINDS_STATEMENT"],
+        provingPath: [{ kind: "MYBATIS_METHOD_BINDS_STATEMENT", fromId: "src/A.java", toId: "src/ReleaseMapper.java#ReleaseMapper" }]
+      }),
+      bundle({
+        id: "entity",
+        path: "src/PayAccount.java",
+        role: "PERSISTENCE",
+        closes: ["O4"],
+        tokenCost: 40,
+        hops: 1,
+        proof: ["REPOSITORY_MANAGES_ENTITY"],
+        provingPath: [{ kind: "REPOSITORY_MANAGES_ENTITY", fromId: "src/A.java", toId: "src/PayAccount.java#PayAccount" }]
+      })
+    ],
+    tokenBudget: 250
+  });
+  assert.ok(planned.selected.some(item => item.id === "mapper"), "hop-2 mapper should not lose to the CALLS hop-2 cap");
+  assert.ok(planned.selected.some(item => item.id === "entity"), "hop-1 entity should pack");
 });
 
 test("generic persistence CALLS do not crowd out a named implementer", () => {

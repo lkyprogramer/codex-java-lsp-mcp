@@ -51,6 +51,12 @@ function roleOf(steps: ProvingStep[], hops: number): EvidenceRole {
   return "DATAFLOW";
 }
 
+const PERSISTENCE_KIND = /MYBATIS_|JPA_|REPOSITORY_MANAGES_ENTITY|SQL_TOUCHES_TABLE/;
+
+function isPersistencePath(steps: ProvingStep[]): boolean {
+  return steps.some(step => PERSISTENCE_KIND.test(step.kind));
+}
+
 function relatedNames(steps: ProvingStep[], extra: string[]): string[] {
   const names = [...extra];
   for (const step of steps) {
@@ -106,18 +112,25 @@ export function closeSearchResult(input: ClosureInput): EvidenceBundle[] {
         includeText: includeSource
       }));
     }
-    const typeFallback = chosen.length === 0 ? (facts.types ?? []) : [];
+    const persistence = isPersistencePath(candidate.provingPath);
+    const keepTypeFile = persistence || candidate.provingPath.some(step =>
+      step.kind.startsWith("SPRING") || step.kind === "IMPORTS" || step.kind === "DECLARES"
+    );
+    const typeFallback = (chosen.length === 0 || keepTypeFile ? (facts.types ?? []) : []).map(item => ({
+      start: item.start,
+      end: Math.min(item.end, item.start + 24)
+    }));
     const spans = mergeSpans([
       ...methodSlices,
       ...xmlSpans(facts.xml ?? [], facts.source, includeSource),
       ...xmlSpans(typeFallback, facts.source, includeSource)
     ]);
     if (spans.length === 0) {
-      if (candidate.hops !== 0) continue;
+      if (candidate.hops !== 0 && !keepTypeFile) continue;
     }
     const fallback: CodeSpan[] = spans.length > 0
       ? spans
-      : [{ start: 1, end: 1, bytes: 48 }];
+      : [{ start: 1, end: keepTypeFile ? 24 : 1, bytes: (keepTypeFile ? 24 : 1) * 48 }];
     const tokenCost = bundleTokenCost(fallback, text => estimateTokens(text, tokenizer));
     bundles.push({
       id: `${candidate.path}#${role}#${candidate.hops}#${fallback.map(span => `${span.start}-${span.end}`).join(",")}`,

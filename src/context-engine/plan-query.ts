@@ -1,6 +1,7 @@
 // input: Graph search result, JavaIndex-like path facts, token budget.
 // output: Planned ContextContract. One worker-side planning step after QUERY_CONTEXT_GRAPH search.
 // pos: JIN N4-02/03 planner. N5 java_context calls QUERY_CONTEXT_GRAPH plan=true.
+import type { EdgeKind } from "../java-knowledge/edge-kinds.js";
 import type { KnowledgeGraphStore } from "../java-knowledge/graph-store.js";
 import type { JavaIndexStore } from "../java-index/index-store.js";
 import { closeSearchResult, type ClosureFacts } from "./context-closure.js";
@@ -231,6 +232,14 @@ function implementerTypeIds(store: JavaIndexStore, targetIds: Iterable<string>):
 }
 
 type DiscoveryKind = "IMPORTS" | "IMPLEMENTS" | "EXTENDS" | "CALLS_EXACT" | "CALLS_VIRTUAL";
+const DISCOVERY_NEIGHBOR_KINDS = new Set([
+  "IMPLEMENTS",
+  "EXTENDS",
+  "MYBATIS_METHOD_BINDS_STATEMENT",
+  "MYBATIS_STATEMENT_USES_ENTITY",
+  "REPOSITORY_MANAGES_ENTITY",
+  "JPA_RELATION"
+]);
 type DiscoverySeed = { hops: 1 | 2; kind: DiscoveryKind; names: string[] };
 
 function kindRank(kind: DiscoveryKind): number {
@@ -389,7 +398,7 @@ function addDiscoveryBundle(
   startPath: string,
   relativePath: string,
   hops: 1 | 2,
-  kind: DiscoveryKind,
+  kind: EdgeKind,
   toId: string
 ): void {
   if (!relativePath || relativePath === startPath) return;
@@ -445,12 +454,14 @@ export function attachAnchorSignatureBundles(
     }
     if (!typeNodeId) continue;
     for (const edge of [...graph.successors(typeNodeId), ...graph.predecessors(typeNodeId)]) {
-      if (edge.kind !== "IMPLEMENTS" && edge.kind !== "EXTENDS") continue;
+      if (!DISCOVERY_NEIGHBOR_KINDS.has(edge.kind)) continue;
       const otherId = edge.fromId === typeNodeId ? edge.toId : edge.fromId;
       const other = graph.nodesById.get(otherId);
       if (!other?.relativePath) continue;
-      const edgeKind = edge.kind === "EXTENDS" ? "EXTENDS" : "IMPLEMENTS";
-      const neighborNames = seed.names.length > 0 ? seed.names : [undefined];
+      const edgeKind = edge.kind;
+      const neighborNames = seed.names.length > 0 && (edgeKind === "IMPLEMENTS" || edgeKind === "EXTENDS")
+        ? seed.names
+        : [undefined];
       for (const name of neighborNames) {
         const neighborToId = name && other.simpleName
           ? `${other.relativePath}#${other.simpleName}#${name}#n`
@@ -478,8 +489,21 @@ function typeRangesFromStore(store: JavaIndexStore, path: string, graph: Knowled
     if (parts[0] === path && parts[1]) wantedSimple.add(parts[1]);
   }
   let types = bundle.types.filter(type => wantedTypes.has(type.typeId) || wantedSimple.has(type.simpleName));
-  if (types.length === 0 && provingIds.size === 0) {
-    types = [...bundle.types].sort((left, right) => left.range.start.line - right.range.start.line).slice(0, 1);
+  if (types.length === 0) {
+    for (const id of provingIds) {
+      const node = graph.nodesById.get(id);
+      if (node?.relativePath === path && node.simpleName) wantedSimple.add(node.simpleName);
+    }
+    types = bundle.types.filter(type => wantedTypes.has(type.typeId) || wantedSimple.has(type.simpleName));
+  }
+  if (types.length === 0) {
+    const pathLocal = provingIds.size === 0 || [...provingIds].some(id => {
+      const node = graph.nodesById.get(id);
+      return node?.relativePath === path;
+    });
+    if (pathLocal) {
+      types = [...bundle.types].sort((left, right) => left.range.start.line - right.range.start.line).slice(0, 1);
+    }
   }
   return types.map(type => ({ start: type.range.start.line, end: Math.max(type.range.start.line, type.range.end.line) }));
 }
