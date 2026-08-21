@@ -2,7 +2,7 @@
 
 ## 当前任务
 
-JIN N5 **FAIL** 已送 15A 验证面板。不进 N6，不合 `main`。Serena C 臂仍 UNAVAILABLE。
+JIN N5 live 仍 **FAIL**。第 0/1 步已落地：离线 `java_context` T2 三次目标文件均在选中集；live harness 改为一次 search、session、瘦 payload、不用 scene id 当 task。不进 N6，不合 `main`。未重跑 live。
 
 ## 已完成
 
@@ -19,8 +19,8 @@ N0 COMPLETE → N0.5 COMPLETE → N1 FAIL（RSS）→ N2a COMPLETE → N3 COMPLE
 
 ## 下一步计划
 
-1. **不进 N6**：N5 退出条件未过。
-2. 第四仓 + leave-one-repo-out 仍是合 `main` 硬门。patch/compile-test 层仍 UNMEASURED。
+1. **下一步是稳定 host 后重跑 N5 live**（第 2/3 步），不要进 N6。
+2. T2 摘要 `docs/phase-jin/jin-n5-context-replay.json` SHA `995713eb…`。第四仓 + leave-one-repo-out 仍是合 `main` 硬门。
 
 ## 绝对不要再踩的坑
 

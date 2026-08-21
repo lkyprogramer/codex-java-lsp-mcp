@@ -49,6 +49,17 @@
     "liveFalseClosed": "FAIL",
     "noContextCapOrRuntimeDrop": "FAIL"
   },
+  "t2ContextReplay": {
+    "result": "GO",
+    "summary": "jin-n5-context-replay.json",
+    "sha256": "995713ebe88a8a52e783ffb2bdaeaf3035825a98f35601b350870b47d4119b5a",
+    "gates": {
+      "paperTaskMeQueryService": "GO",
+      "presignClientReleaseMapper": "GO",
+      "payOrderPayAccount": "GO"
+    },
+    "note": "Offline java_context search, no model. Live N5-02 remains MEASURED_FAIL. Do not enter N6."
+  },
   "killSignal": "UNMEASURED",
   "successLayers": {
     "localization": "MEASURED",
