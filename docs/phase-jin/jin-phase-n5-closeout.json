@@ -2,14 +2,34 @@
   "schemaVersion": "jin-phase-n5-closeout/v1",
   "phase": "N5",
   "dated": "2026-08-21",
-  "decision": "NOT_STARTED",
+  "decision": "N5-01_COMPLETE",
   "mergeToMain": false,
-  "javaContextRegistered": false,
-  "threeArmLiveAB": "NOT_STARTED",
-  "authorizeExternal": false,
-  "reason": "N4 2-week window started 2026-08-20 is not expired. Best N4 is discovery 2/4; neighborhood T3 is 1/4. PARTIAL→N5 requires ≥ 3/4. Premature SKIP_FAIL at 5b6f2aa is superseded.",
-  "clause": "15A.6 JIN-N4-04 失败处置：达标 ≥ 3/4 轴则记 PARTIAL 并进 N5（live 数据可能改判），< 3/4 轴 → 停止 JIN 主链开发，写 postmortem，escalate（属方案核心假设失败）。窗口未到期。",
-  "n4AxesPassedLatest": 1,
-  "n4AxesPassedBest": 2,
-  "postmortem": "docs/phase-jin/jin-n4-failure-postmortem-20260821.md"
+  "n501": {
+    "result": "GO",
+    "handler": "src/tools/java-context.ts",
+    "note": "tools/context.ts already owns ToolContext; handler file is java-context.ts",
+    "publicTools": [
+      "java_status",
+      "java_impact",
+      "java_context",
+      "java_symbol",
+      "java_diagnostics",
+      "java_runtime"
+    ],
+    "measureToolSchema": {
+      "tools": 6,
+      "jsonBytes": 7486,
+      "estimatedTokens": 1872,
+      "javaContext": { "jsonBytes": 2255, "estimatedTokens": 564, "budget": 600, "result": "GO" }
+    },
+    "t1": { "dist": 1146, "scripts": 190, "fail": 0, "jdtlsBin": "/usr/bin/false" },
+    "smoke": { "result": "GO", "toolsIncludeJavaContext": true },
+    "javaLspEngineUnread": ["mcp-server-factory.ts", "tools/impact.ts", "tools/java-context.ts", "application.ts"]
+  },
+  "n502": {
+    "result": "NOT_STARTED",
+    "blocker": "requires --authorize-external for live three-arm A/B; do not invent TaskSuccess"
+  },
+  "head": "b0c08dd",
+  "executableTree": "d99a7ee8226b3514e77ab743bc3a9ea78bceee85"
 }

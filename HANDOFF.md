@@ -2,7 +2,7 @@
 
 ## 当前任务
 
-JIN N4 **PARTIAL 3/4**，下一阶段 **N5**：`java_context` 工具面 + 三臂 live A/B。不合 `main`。
+JIN N5-01 **COMPLETE**。下一张卡 **JIN-N5-02**：old `java_impact` / JIN `java_context` / Serena 三臂 live A/B。必须 `--authorize-external`。不合 `main`。
 
 ## 已完成
 
@@ -18,9 +18,8 @@ N0 → N0.5 → N1 → N2a → N3-00 → N3 → N4 PARTIAL（`8cc1762`）。T3 n
 
 ## 下一步计划
 
-1. JIN-N5-01：`src/tools/context.ts` 注册 `java_context`；intent enum、无锚点、navigate；`measure:tool-schema` ≤ 600 token；T0/T1 + `npm run smoke`。
-2. JIN-N5-02：old `java_impact` / JIN `java_context` / Serena 三臂 live A/B。`--authorize-external` 才可声称 TaskSuccess。
-3. N6 删除旧链并合 `main` 仅在硬门全过后。
+1. JIN-N5-02：扩展 `run-agent-trace-matrix.mjs` 三臂 live A/B。`--authorize-external` 才可声称 TaskSuccess。
+2. N6 删除旧链并合 `main` 仅在硬门全过后。
 
 ## 绝对不要再踩的坑
 
@@ -40,7 +39,14 @@ N0 → N0.5 → N1 → N2a → N3-00 → N3 → N4 PARTIAL（`8cc1762`）。T3 n
 
 ## 给下一会话的第一步
 
-读 `src/tools/impact.ts` 与 `src/mcp-server-factory.ts`，按 JIN-N5-01 加 `java_context`，确认生产路径仍不读 `JAVA_LSP_ENGINE`。
+读 `scripts/run-agent-trace-matrix.mjs` 与 JIN-N5-02。没有 `--authorize-external` 不得声称 TaskSuccess，不得发明成功数字。
+
+## JIN N5-01 COMPLETE（java_context，2026-08-21）
+
+`PUBLIC_JAVA_TOOLS` 现为 6 工具。handler `src/tools/java-context.ts`（`tools/context.ts` 是 ToolContext，未覆盖）。intent 必填、无锚点走实体入口、mode=navigate。  
+`measure:tool-schema` java_context **564** token（≤600）。T1 dist 1146 + scripts 190 fail 0。smoke GO。  
+N5-02 未跑。不合 `main`。生产路径不读 `JAVA_LSP_ENGINE`。  
+报告：`docs/phase-jin/jin-phase-n5-20260821.md`。收口 `jin-phase-n5-closeout.json`。code `b0c08dd`。
 
 ## JIN N4 PARTIAL 3/4（named hop-2 CALLS_VIRTUAL，2026-08-21）
 
