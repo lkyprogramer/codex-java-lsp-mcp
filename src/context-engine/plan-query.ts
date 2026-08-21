@@ -74,25 +74,25 @@ function resolvedRepoTypeIds(ref: JavaTypeRef | undefined): string[] {
 function hop0Methods(bundle: JavaFileBundle, anchorLine: number): JavaMethodFacts[] {
   const containing = bundle.methods.filter(method => methodContainsLine(method, anchorLine));
   if (containing.length === 0) return [];
-  return intraFileCallClosure(bundle, containing);
-}
-
-function intraFileCallClosure(bundle: JavaFileBundle, start: JavaMethodFacts[]): JavaMethodFacts[] {
+  const owners = new Set(containing.map(method => method.ownerTypeId));
   const keep = new Map<string, JavaMethodFacts>();
-  for (const method of start) keep.set(method.methodId, method);
-  const owners = new Set(start.map(method => method.ownerTypeId));
-  for (let step = 0; step < 8 && keep.size < HOP0_METHOD_CAP; step += 1) {
-    const names = new Set(
-      [...keep.values()].flatMap(method => method.callSites.filter(site => neighborhoodCallName(site.name, site.receiverText)).map(site => site.name))
-    );
-    let added = 0;
-    for (const method of bundle.methods) {
-      if (keep.size >= HOP0_METHOD_CAP) break;
-      if (!owners.has(method.ownerTypeId) || keep.has(method.methodId) || !names.has(method.name)) continue;
-      keep.set(method.methodId, method);
-      added += 1;
-    }
-    if (added === 0) break;
+  for (const method of containing) keep.set(method.methodId, method);
+  const oneLevelNames = new Set(
+    containing.flatMap(method => method.callSites.filter(site => neighborhoodCallName(site.name, site.receiverText)).map(site => site.name))
+  );
+  const extras = bundle.methods.filter(method => owners.has(method.ownerTypeId) && !keep.has(method.methodId) && oneLevelNames.has(method.name));
+  const hasFieldCall = (method: JavaMethodFacts) => method.callSites.some(site =>
+    neighborhoodCallName(site.name, site.receiverText)
+    && Boolean(site.receiverText)
+    && bundle.fields.some(field => field.name === site.receiverText && owners.has(field.ownerTypeId))
+  );
+  extras.sort((left, right) => Number(hasFieldCall(right)) - Number(hasFieldCall(left))
+    || Math.abs(left.range.start.line - anchorLine) - Math.abs(right.range.start.line - anchorLine)
+    || left.range.start.line - right.range.start.line);
+  const extraCap = Math.min(HOP0_METHOD_CAP, containing.length + 4);
+  for (const method of extras) {
+    if (keep.size >= extraCap) break;
+    keep.set(method.methodId, method);
   }
   return [...keep.values()];
 }
@@ -233,7 +233,7 @@ function mentionRef(
 
 function collectAnchorSeeds(store: JavaIndexStore, bundle: JavaFileBundle, anchorLine: number): Map<string, DiscoverySeed> {
   const containing = bundle.methods.filter(method => methodContainsLine(method, anchorLine));
-  const hop0 = intraFileCallClosure(bundle, containing);
+  const hop0 = hop0Methods(bundle, anchorLine);
   const owners = new Set(containing.map(method => method.ownerTypeId));
   const seeds = new Map<string, DiscoverySeed>();
   for (const owner of owners) seedType(seeds, owner, 1, "IMPORTS");
@@ -315,15 +315,37 @@ function collectAnchorSeeds(store: JavaIndexStore, bundle: JavaFileBundle, ancho
       const simple = item.qualifiedName.split(".").pop();
       if (simple) hop1Imports.set(simple, item.qualifiedName);
     }
+    const hop1CallNames = new Set<string>();
     for (const methodId of type.methodIds) {
       const method = store.methodsById.get(methodId);
       if (!method || !hop0CallNames.has(method.name)) continue;
       for (const site of method.callSites) {
-        if (!neighborhoodCallName(site.name, site.receiverText) || !site.receiverText) continue;
+        if (!neighborhoodCallName(site.name, site.receiverText)) continue;
+        hop1CallNames.add(site.name);
+        if (!site.receiverText) continue;
         const field = type.fieldIds
           .map(id => store.fieldsById.get(id))
           .find(item => item !== undefined && item.name === site.receiverText && item.ownerTypeId === typeId);
         if (field) mentionRef(store, hop1Imports, seeds, field.type, 2, "CALLS_VIRTUAL", site.name, false);
+      }
+    }
+    for (const fieldId of type.fieldIds) {
+      const field = store.fieldsById.get(fieldId);
+      if (!field || field.ownerTypeId !== typeId) continue;
+      const typeIds = [
+        ...resolvedRepoTypeIds(field.type),
+        ...simpleNamesOfRef(field.type).flatMap(simple => {
+          const imported = hop1Imports.get(simple);
+          const id = imported ? typeIdByFqn(store, imported) : undefined;
+          return id ? [id] : [];
+        })
+      ];
+      for (const id of typeIds) {
+        for (const name of hop1CallNames) {
+          if (store.methodIdsByOwnerAndName.get(`${id}#${name}`)?.size) {
+            seedType(seeds, id, 2, "CALLS_VIRTUAL", name);
+          }
+        }
       }
     }
   }
@@ -396,7 +418,14 @@ export function attachAnchorSignatureBundles(
       const otherId = edge.fromId === typeNodeId ? edge.toId : edge.fromId;
       const other = graph.nodesById.get(otherId);
       if (!other?.relativePath) continue;
-      addDiscoveryBundle(extra, known, path, other.relativePath, seed.hops, edge.kind === "EXTENDS" ? "EXTENDS" : "IMPLEMENTS", otherId);
+      const edgeKind = edge.kind === "EXTENDS" ? "EXTENDS" : "IMPLEMENTS";
+      const neighborNames = seed.names.length > 0 ? seed.names : [undefined];
+      for (const name of neighborNames) {
+        const neighborToId = name && other.simpleName
+          ? `${other.relativePath}#${other.simpleName}#${name}#n`
+          : otherId;
+        addDiscoveryBundle(extra, known, path, other.relativePath, seed.hops, edgeKind, neighborToId);
+      }
     }
   }
   return extra.length === search.bundles.length ? search : { ...search, bundles: extra };
@@ -415,7 +444,7 @@ function typeRangesFromStore(store: JavaIndexStore, path: string, graph: Knowled
     const indexed = store.typesById.get(id);
     if (indexed && relativePathOfFileId(indexed.fileId) === path) wantedTypes.add(indexed.typeId);
     const parts = id.split("#");
-    if (parts[0] === path && parts[1] && !parts[2]) wantedSimple.add(parts[1]);
+    if (parts[0] === path && parts[1]) wantedSimple.add(parts[1]);
   }
   let types = bundle.types.filter(type => wantedTypes.has(type.typeId) || wantedSimple.has(type.simpleName));
   if (types.length === 0 && provingIds.size === 0) {

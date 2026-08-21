@@ -4,7 +4,7 @@ import { KnowledgeGraphStore } from "../java-knowledge/graph-store.js";
 import { knowledgeEdgeId } from "../java-knowledge/entity-id.js";
 import { compileIntent } from "./intent-compiler.js";
 import { searchContextGraph, type GraphSearchResult } from "./graph-search.js";
-import { attachAnchorSignatureBundles, planContextQuery } from "./plan-query.js";
+import { attachAnchorSignatureBundles, factsForStore, planContextQuery } from "./plan-query.js";
 import { JavaIndexStore } from "../java-index/index-store.js";
 import type { JavaFileBundle, JavaFileFacts, JavaFieldFacts, JavaMethodFacts, JavaTypeFacts, JavaTypeRef, SourceRange } from "../java-index/index-types.js";
 import { javaFieldId, javaFileId, javaMethodId, javaTypeId } from "../java-index/stable-id.js";
@@ -307,4 +307,64 @@ test("attachAnchorSignatureBundles copies callee names onto implementers and exi
   const excel = attached.bundles.filter(item => item.path === "src/Excel.java");
   assert.equal(excel.length, 1);
   assert.ok(excel[0]?.provingPath.some(step => step.toId.includes("#generate#")), JSON.stringify(excel[0]?.provingPath));
+});
+
+test("attachAnchorSignatureBundles hop-2 matches callee field methods without receiverText", () => {
+  const helper = fileBundle("Helper", { methods: [{ name: "getMe", start: 84, end: 93 }] });
+  const collab = fileBundle("Collab", {
+    methods: [{ name: "requireMe", start: 4, end: 8, calls: [{ name: "getMe" }] }],
+    fields: [{ name: "helper", typeId: helper.types[0]!.typeId, simpleName: "Helper" }]
+  });
+  const service = fileBundle("Service", {
+    methods: [{
+      name: "claim",
+      start: 28,
+      end: 43,
+      calls: [{ name: "requireMe", receiver: "collab", typeId: collab.types[0]!.typeId }]
+    }],
+    fields: [{ name: "collab", typeId: collab.types[0]!.typeId, simpleName: "Collab" }]
+  });
+  const store = new JavaIndexStore();
+  store.replaceFile(service);
+  store.replaceFile(collab);
+  store.replaceFile(helper);
+  const graph = new KnowledgeGraphStore();
+  graph.upsertNode({ id: "src/Service.java", kind: "FILE", generation: 1, relativePath: "src/Service.java" }, "src/Service.java");
+  const attached = attachAnchorSignatureBundles(emptySearch(), graph, store, "src/Service.java", 30);
+  const helperBundle = attached.bundles.find(item => item.path === "src/Helper.java");
+  assert.ok(helperBundle, `missing hop-2, got ${attached.bundles.map(item => item.path).join(",")}`);
+  assert.ok(helperBundle?.provingPath.some(step => step.toId.includes("#getMe#")), JSON.stringify(helperBundle?.provingPath));
+  assert.equal(helperBundle?.hops, 2);
+});
+
+test("hop0 keeps field-calling callees and not unrelated same-file helpers", () => {
+  const school = fileBundle("School", { methods: [{ name: "listStudents", start: 4, end: 8 }] });
+  const service = fileBundle("Service", {
+    methods: [
+      { name: "export", start: 55, end: 84, calls: [{ name: "loadMap", receiver: "this" }, { name: "buildName", receiver: "this" }] },
+      { name: "loadMap", start: 95, end: 107, calls: [{ name: "listStudents", receiver: "school", typeId: school.types[0]!.typeId }] },
+      { name: "buildName", start: 156, end: 160, calls: [{ name: "safeSegment", receiver: "this" }] },
+      { name: "safeSegment", start: 162, end: 168 }
+    ],
+    fields: [{ name: "school", typeId: school.types[0]!.typeId, simpleName: "School" }]
+  });
+  const store = new JavaIndexStore();
+  store.replaceFile(service);
+  const graph = new KnowledgeGraphStore();
+  const facts = factsForStore(graph, store, "src/Service.java", new Set(), 60);
+  const names = new Set(facts.methods.map(method => method.name));
+  assert.ok(names.has("export"), [...names].join(","));
+  assert.ok(names.has("loadMap"), [...names].join(","));
+  assert.equal(names.has("safeSegment"), false, [...names].join(","));
+});
+
+test("factsForStore keeps a type span for a hop-1 DTO with no matching method name", () => {
+  const dto = fileBundle("SignedUrl", { methods: [] });
+  const store = new JavaIndexStore();
+  store.replaceFile(dto);
+  const graph = new KnowledgeGraphStore();
+  const proving = new Set([`src/SignedUrl.java#SignedUrl#n`]);
+  const facts = factsForStore(graph, store, "src/SignedUrl.java", proving);
+  assert.equal(facts.methods.length, 0);
+  assert.ok((facts.types ?? []).some(span => span.start === 1));
 });
