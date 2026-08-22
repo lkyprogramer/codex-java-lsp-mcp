@@ -1,25 +1,35 @@
 // input: Graph nodes/edges plus owning source file.
-// output: In-memory graph with reverse adjacency and an incremental digest.
-// pos: N1 store. Incremental replaceFile drops that file's contribution before rebuild.
-// Shared hierarchy nodes/edges are refcounted so one file's removal cannot
+// output: Columnar in-memory graph with reverse adjacency and an incremental digest.
+// pos: N1 store, M6-2 columns. Incremental replaceFile drops that file's contribution
+// before rebuild. Shared hierarchy rows are refcounted so one file's removal cannot
 // drop MODULE/SOURCE_ROOT rows still required by a sibling file.
 import { createHash } from "node:crypto";
+import { StringTable } from "../java-index/columnar/string-table.js";
 import { REVERSE_EDGE_KIND, type EdgeKind } from "./edge-kinds.js";
 import { knowledgeEdgeId } from "./entity-id.js";
+import { GraphEdgeColumns, GraphNodeColumns, GraphRecordMap } from "./graph-columns.js";
 import type { MethodSummary } from "./method-summary.js";
 import type { GraphEdge, GraphNode } from "./schema.js";
 
-function addToSetMap(map: Map<string, Set<string>>, key: string, value: string): void {
+function addToSetMap(map: Map<string, Set<number>>, key: string, value: number): void {
   const bucket = map.get(key);
   if (bucket) bucket.add(value);
   else map.set(key, new Set([value]));
 }
 
-function removeFromSetMap(map: Map<string, Set<string>>, key: string, value: string): void {
+function pushAdj(map: Map<string, number[]>, nodeId: string, edgeRow: number): void {
+  const bucket = map.get(nodeId);
+  if (bucket) bucket.push(edgeRow);
+  else map.set(nodeId, [edgeRow]);
+}
+
+function removeFromNumList(map: Map<string, number[]>, key: string, value: number): void {
   const bucket = map.get(key);
   if (!bucket) return;
-  bucket.delete(value);
-  if (bucket.size === 0) map.delete(key);
+  const index = bucket.indexOf(value);
+  if (index < 0) return;
+  bucket.splice(index, 1);
+  if (bucket.length === 0) map.delete(key);
 }
 
 function itemHash(value: string): Buffer {
@@ -33,31 +43,49 @@ function xorBuffers(target: Buffer, item: Buffer): void {
 }
 
 export class KnowledgeGraphStore {
-  readonly nodesById = new Map<string, GraphNode>();
-  readonly edgesById = new Map<string, GraphEdge>();
-  readonly outEdgeIdsByNode = new Map<string, Set<string>>();
-  readonly inEdgeIdsByNode = new Map<string, Set<string>>();
-  readonly nodeIdsByFile = new Map<string, Set<string>>();
-  readonly edgeIdsByFile = new Map<string, Set<string>>();
+  readonly strings = new StringTable();
+  private readonly nodes = new GraphNodeColumns(this.strings);
+  private readonly edges = new GraphEdgeColumns(this.strings);
+  readonly nodesById = new GraphRecordMap<GraphNode>({
+    size: () => this.nodes.size,
+    get: id => {
+      const row = this.nodes.rowOf(id);
+      return row === undefined ? undefined : this.nodes.materialize(row);
+    },
+    has: id => this.nodes.has(id),
+    ids: () => this.nodes.ids(),
+    entries: () => this.nodes.entries()
+  });
+  readonly edgesById = new GraphRecordMap<GraphEdge>({
+    size: () => this.edges.size,
+    get: id => {
+      const row = this.edges.rowOf(id);
+      return row === undefined ? undefined : this.edges.materialize(row);
+    },
+    has: id => this.edges.has(id),
+    ids: () => this.edges.ids(),
+    entries: () => this.edges.entries()
+  });
   readonly summariesByMethodId = new Map<string, MethodSummary>();
   generation = 0;
 
-  private readonly ownersByNodeId = new Map<string, Set<string>>();
-  private readonly ownersByEdgeId = new Map<string, Set<string>>();
+  private readonly outEdgeRowsByNode = new Map<string, number[]>();
+  private readonly inEdgeRowsByNode = new Map<string, number[]>();
+  private readonly nodeRowsByFile = new Map<string, Set<number>>();
+  private readonly edgeRowsByFile = new Map<string, Set<number>>();
   private readonly nodeXor = Buffer.alloc(32);
   private readonly edgeXor = Buffer.alloc(32);
   private digestCache: string | undefined;
 
   clear(): void {
-    this.nodesById.clear();
-    this.edgesById.clear();
-    this.outEdgeIdsByNode.clear();
-    this.inEdgeIdsByNode.clear();
-    this.nodeIdsByFile.clear();
-    this.edgeIdsByFile.clear();
+    this.nodes.clear();
+    this.edges.clear();
+    this.strings.clear();
+    this.outEdgeRowsByNode.clear();
+    this.inEdgeRowsByNode.clear();
+    this.nodeRowsByFile.clear();
+    this.edgeRowsByFile.clear();
     this.summariesByMethodId.clear();
-    this.ownersByNodeId.clear();
-    this.ownersByEdgeId.clear();
     this.nodeXor.fill(0);
     this.edgeXor.fill(0);
     this.digestCache = undefined;
@@ -67,120 +95,117 @@ export class KnowledgeGraphStore {
     if (this.digestCache) return this.digestCache;
     this.digestCache = createHash("sha256")
       .update(this.nodeXor)
-      .update(`:${this.nodesById.size}:`)
+      .update(`:${this.nodes.size}:`)
       .update(this.edgeXor)
-      .update(`:${this.edgesById.size}`)
+      .update(`:${this.edges.size}`)
       .digest("hex");
     return this.digestCache;
   }
 
   upsertNode(node: GraphNode, ownerFile?: string): void {
-    const existing = this.nodesById.get(node.id);
-    if (!existing) {
+    const existingRow = this.nodes.rowOf(node.id);
+    if (existingRow === undefined) {
       xorBuffers(this.nodeXor, itemHash(`n:${node.id}:${node.kind}`));
       this.digestCache = undefined;
-    } else if (existing.kind !== node.kind) {
-      xorBuffers(this.nodeXor, itemHash(`n:${existing.id}:${existing.kind}`));
-      xorBuffers(this.nodeXor, itemHash(`n:${node.id}:${node.kind}`));
-      this.digestCache = undefined;
+    } else {
+      const existingKind = this.nodes.kindAt(existingRow);
+      if (existingKind !== node.kind) {
+        xorBuffers(this.nodeXor, itemHash(`n:${node.id}:${existingKind}`));
+        xorBuffers(this.nodeXor, itemHash(`n:${node.id}:${node.kind}`));
+        this.digestCache = undefined;
+      }
     }
-    this.nodesById.set(node.id, node);
+    const row = this.nodes.upsert(node);
     if (ownerFile) {
-      addToSetMap(this.nodeIdsByFile, ownerFile, node.id);
-      addToSetMap(this.ownersByNodeId, node.id, ownerFile);
+      this.nodes.addOwner(row, ownerFile);
+      addToSetMap(this.nodeRowsByFile, ownerFile, row);
     }
   }
 
   addEdge(edge: GraphEdge, ownerFile?: string): GraphEdge {
-    const existing = this.edgesById.get(edge.edgeId);
-    if (existing) {
+    const added = this.edges.add(edge);
+    if (!added.created) {
       if (ownerFile) {
-        addToSetMap(this.edgeIdsByFile, ownerFile, existing.edgeId);
-        addToSetMap(this.ownersByEdgeId, existing.edgeId, ownerFile);
+        this.edges.addOwner(added.row, ownerFile);
+        addToSetMap(this.edgeRowsByFile, ownerFile, added.row);
       }
-      return existing;
+      return this.edges.materialize(added.row);
     }
-    this.edgesById.set(edge.edgeId, edge);
-    addToSetMap(this.outEdgeIdsByNode, edge.fromId, edge.edgeId);
-    addToSetMap(this.inEdgeIdsByNode, edge.toId, edge.edgeId);
+    pushAdj(this.outEdgeRowsByNode, this.strings.interned(edge.fromId), added.row);
+    pushAdj(this.inEdgeRowsByNode, this.strings.interned(edge.toId), added.row);
     xorBuffers(this.edgeXor, itemHash(`e:${edge.edgeId}`));
     this.digestCache = undefined;
     if (ownerFile) {
-      addToSetMap(this.edgeIdsByFile, ownerFile, edge.edgeId);
-      addToSetMap(this.ownersByEdgeId, edge.edgeId, ownerFile);
+      this.edges.addOwner(added.row, ownerFile);
+      addToSetMap(this.edgeRowsByFile, ownerFile, added.row);
     }
     const reverseKind = REVERSE_EDGE_KIND[edge.kind];
     if (reverseKind) {
-      const reverse: GraphEdge = {
+      this.addEdge({
         edgeId: knowledgeEdgeId({ kind: reverseKind, fromId: edge.toId, toId: edge.fromId, ordinal: 0 }),
         kind: reverseKind,
         fromId: edge.toId,
         toId: edge.fromId,
         sourceFile: edge.sourceFile,
         generation: edge.generation
-      };
-      this.addEdge(reverse, ownerFile);
+      }, ownerFile);
     }
-    return edge;
+    return this.edges.materialize(added.row);
   }
 
   removeFiles(relativePaths: readonly string[]): void {
     for (const relativePath of relativePaths) {
-      for (const edgeId of [...(this.edgeIdsByFile.get(relativePath) ?? [])]) {
-        const owners = this.ownersByEdgeId.get(edgeId);
-        owners?.delete(relativePath);
-        if (!owners || owners.size === 0) {
-          this.removeEdge(edgeId);
-          this.ownersByEdgeId.delete(edgeId);
+      for (const edgeRow of [...(this.edgeRowsByFile.get(relativePath) ?? [])]) {
+        if (!this.edges.removeOwner(edgeRow, relativePath)) {
+          this.removeEdgeRow(edgeRow);
         }
       }
-      this.edgeIdsByFile.delete(relativePath);
-      for (const nodeId of [...(this.nodeIdsByFile.get(relativePath) ?? [])]) {
-        const owners = this.ownersByNodeId.get(nodeId);
-        owners?.delete(relativePath);
-        if (!owners || owners.size === 0) {
-          this.summariesByMethodId.delete(nodeId);
-          this.removeNode(nodeId);
-          this.ownersByNodeId.delete(nodeId);
+      this.edgeRowsByFile.delete(relativePath);
+      for (const nodeRow of [...(this.nodeRowsByFile.get(relativePath) ?? [])]) {
+        if (!this.nodes.removeOwner(nodeRow, relativePath)) {
+          this.summariesByMethodId.delete(this.nodes.idAt(nodeRow));
+          this.removeNodeRow(nodeRow);
         }
       }
-      this.nodeIdsByFile.delete(relativePath);
+      this.nodeRowsByFile.delete(relativePath);
     }
-  }
-
-  private removeNode(nodeId: string): void {
-    const node = this.nodesById.get(nodeId);
-    if (!node) return;
-    xorBuffers(this.nodeXor, itemHash(`n:${node.id}:${node.kind}`));
-    this.digestCache = undefined;
-    this.nodesById.delete(nodeId);
-  }
-
-  private removeEdge(edgeId: string): void {
-    const edge = this.edgesById.get(edgeId);
-    if (!edge) return;
-    xorBuffers(this.edgeXor, itemHash(`e:${edge.edgeId}`));
-    this.digestCache = undefined;
-    this.edgesById.delete(edgeId);
-    removeFromSetMap(this.outEdgeIdsByNode, edge.fromId, edgeId);
-    removeFromSetMap(this.inEdgeIdsByNode, edge.toId, edgeId);
   }
 
   successors(nodeId: string, kind?: EdgeKind): GraphEdge[] {
     const edges: GraphEdge[] = [];
-    for (const id of this.outEdgeIdsByNode.get(nodeId) ?? []) {
-      const item = this.edgesById.get(id);
-      if (item && (kind === undefined || item.kind === kind)) edges.push(item);
+    for (const edgeRow of this.outEdgeRowsByNode.get(nodeId) ?? []) {
+      if (kind !== undefined && this.edges.kindAt(edgeRow) !== kind) continue;
+      edges.push(this.edges.materialize(edgeRow));
     }
     return edges;
   }
 
   predecessors(nodeId: string, kind?: EdgeKind): GraphEdge[] {
     const edges: GraphEdge[] = [];
-    for (const id of this.inEdgeIdsByNode.get(nodeId) ?? []) {
-      const item = this.edgesById.get(id);
-      if (item && (kind === undefined || item.kind === kind)) edges.push(item);
+    for (const edgeRow of this.inEdgeRowsByNode.get(nodeId) ?? []) {
+      if (kind !== undefined && this.edges.kindAt(edgeRow) !== kind) continue;
+      edges.push(this.edges.materialize(edgeRow));
     }
     return edges;
+  }
+
+  private removeNodeRow(row: number): void {
+    const node = this.nodes.remove(this.nodes.idAt(row));
+    if (!node) return;
+    xorBuffers(this.nodeXor, itemHash(`n:${node.id}:${node.kind}`));
+    this.digestCache = undefined;
+    this.outEdgeRowsByNode.delete(node.id);
+    this.inEdgeRowsByNode.delete(node.id);
+  }
+
+  private removeEdgeRow(row: number): void {
+    const fromId = this.edges.fromIdAt(row);
+    const toId = this.edges.toIdAt(row);
+    const edge = this.edges.remove(this.edges.idAt(row));
+    if (!edge) return;
+    xorBuffers(this.edgeXor, itemHash(`e:${edge.edgeId}`));
+    this.digestCache = undefined;
+    removeFromNumList(this.outEdgeRowsByNode, fromId, row);
+    removeFromNumList(this.inEdgeRowsByNode, toId, row);
   }
 }

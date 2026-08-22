@@ -2,7 +2,13 @@
 
 ## 当前任务
 
-**M6-1 已出口（PARTIAL）。** 下一刀 **M6-2 知识图列式化**（60k 节点 / 230k 边）。JIN N5 live 仍 FAIL，不进 N6，不合 `main`。不要重跑 N5 live，除非用户明确要求。
+**M6-2 已出口（PARTIAL）。** 下一刀 **M6-3 files/imports/ranges 列式化**。G1 lishuedu 208>200，中小仓已 ≤64。JIN N5 live 仍 FAIL，不进 N6，不合 `main`。
+
+## M6-2（2026-08-22）
+
+判定 **PARTIAL**。知识图改列式（StringTable + node/edge 列 + 惰性物化）。G1 257→208（−49 MiB）；cipherlink 45 / exam 62 ≤64 **GO**；lishuedu 208>200 **MISS** 8 MiB（门未放宽，残差 files）。G4 1549ms **GO**。G5 稳态 0.929/0.618/0.881 **GO**；首 hydrate 仍 ~7.9s。S1 960 **GO**；S2 RSS 1592>1433 **MISS**（heapUsedSum 546 低于 M6-1）。T1 dist 1177 + scripts 215 fail 0。
+
+收口：`docs/phase-m/m6-2-baseline.json`、`docs/phase-m/m6-2-memory.json`。
 
 ## M6-1（2026-08-22）
 
@@ -18,7 +24,7 @@
 
 ## 已完成
 
-N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a COMPLETE → N3 COMPLETE → N4 PARTIAL 3/4（`8cc1762`）→ N5-01 GO → N5-02 live MEASURED FAIL → **M0–M5 PARTIAL** → **M6-1 PARTIAL**。隔离 T1 dist 1174 + scripts 215 fail 0。
+N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a COMPLETE → N3 COMPLETE → N4 PARTIAL 3/4（`8cc1762`）→ N5-01 GO → N5-02 live MEASURED FAIL → **M0–M5 PARTIAL** → **M6-1 PARTIAL** → **M6-2 PARTIAL**。隔离 T1 dist 1177 + scripts 215 fail 0。
 
 ## 当前状态 / 卡点
 
@@ -31,8 +37,8 @@ N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a 
 
 ## 下一步计划
 
-1. **M6-2**：知识图列式化（字符串表 + TypedArray 列 + 惰性物化）。目标 lishuedu heap 257 → ~180，G1 接近 200。
-2. 随后 M6-3 files 列式化、M6-4 冷建 134s vs N1 46s 归因。
+1. **M6-3**：files/imports/ranges 列式化。目标再省 30–50 MiB，lishuedu G1 ≤200，中小仓保持 ≤64。
+2. 随后 M6-4 冷建 134s vs N1 46s 归因。
 3. JIN 侧仍停在 N5 live FAIL；**不要进 N6**，除非用户明确要求，不要重跑 live。
 4. 第四仓 + leave-one-repo-out 仍是合 `main` 硬门。
 
@@ -57,7 +63,7 @@ N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a 
 
 ## 给下一会话的第一步
 
-读 `docs/phase-m/m6-1-baseline.json`。下一刀 M6-2 知识图列式化。不要进 N6，不要合 `main`，不要发明 TaskSuccess，不要重跑 N5 live。
+读 `docs/phase-m/m6-2-baseline.json`。下一刀 M6-3 files 列式化。不要进 N6，不要合 `main`，不要发明 TaskSuccess，不要重跑 N5 live。
 
 ## JIN 15A 面板（N5 FAIL / 不进 N6 / 不合 main，2026-08-21）
 

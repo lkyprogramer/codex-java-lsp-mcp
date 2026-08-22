@@ -1,0 +1,106 @@
+{
+  "schemaVersion": "m6-2-baseline/v1",
+  "phase": "M6-2",
+  "dated": "2026-08-22",
+  "decision": "PARTIAL",
+  "mergeToMain": false,
+  "headBefore": "43caa4a",
+  "scope": [
+    "src/java-knowledge/graph-columns.ts StringTable + node/edge columns + lazy GraphRecordMap",
+    "KnowledgeGraphStore stores columns; digest/size do not materialize GraphNode/GraphEdge",
+    "materialize memo after first read so warm graph walks stay inside G5"
+  ],
+  "identity": {
+    "note": "Facts digest is JavaIndexStore, unchanged. Graph digest xor of n:id:kind / e:edgeId is preserved (T0 snapshot round-trip)."
+  },
+  "gates": {
+    "G1": {
+      "targetLishueduMiB": 200,
+      "targetSmallMiB": 64,
+      "m6_1LishueduMiB": 257,
+      "lishueduHeapMiB": 208,
+      "cipherlinkHeapMiB": 45,
+      "examParentV3HeapMiB": 62,
+      "passed": false,
+      "disposition": "lishuedu 257→208 (−49). Cipherlink 45 and exam 62 ≤ 64. lishuedu 208>200 by 8 MiB; residual is files/imports/ranges (M6-3). Gate not widened."
+    },
+    "G4": {
+      "targetMs": 2000,
+      "lishueduSnapshotLoadMs": 1549,
+      "cipherlinkSnapshotLoadMs": 329,
+      "examParentV3SnapshotLoadMs": 503,
+      "passed": true
+    },
+    "G5": {
+      "steadyRatioTarget": 1.1,
+      "m0WarmP95Ms": { "lishuedu": 77.2, "cipherlink": 40.9, "exam-parent-v3": 38.5 },
+      "firstHydrateMs": { "lishuedu": 7939, "cipherlink": 579, "exam-parent-v3": 1380 },
+      "steadyWarmP95Ms": { "lishuedu": 71.7, "cipherlink": 25.3, "exam-parent-v3": 33.9 },
+      "steadyRatio": { "lishuedu": 0.929, "cipherlink": 0.618, "exam-parent-v3": 0.881 },
+      "steadyPassed": true,
+      "firstHydratePassed": false,
+      "note": "Quiet single-process run. A same-tree run with S1/S2 holders on the host saw lishuedu steady p95 127 (ratio 1.65); G5 SSOT is the per-project warmQueries in m6-2-memory.json."
+    },
+    "S1": {
+      "targetMiB": 1024,
+      "rssDeltaMiB": 960,
+      "heapUsedSumMiB": 314,
+      "passed": true,
+      "source": "concurrent remeasure log sha256 336c67fff93f5e9b284f17e5367209153dab4bd8720e2320b3d73eb244c010bb"
+    },
+    "S2": {
+      "targetMiB": 1433.6,
+      "rssDeltaMiB": 1592,
+      "heapUsedSumMiB": 546,
+      "passed": false,
+      "disposition": "RSS 1592>1433 under 5 holders. heapUsedSum 546 is below M6-1 681. Allocator watermark, not object-model growth. Gate not widened."
+    },
+    "S4": {
+      "lishueduHibernateHeapMiB": 9,
+      "lishueduReheatMs": 113,
+      "passed": true
+    }
+  },
+  "projects": {
+    "lishuedu": {
+      "coldMs": 157696,
+      "snapshotLoadMs": 1549,
+      "heapAfterSnapshotLoadMiB": 208,
+      "heapAfterWarmMiB": 786,
+      "firstHydrateMs": 7939,
+      "steadyWarmP95Ms": 71.7
+    },
+    "cipherlink": {
+      "snapshotLoadMs": 329,
+      "heapAfterSnapshotLoadMiB": 45,
+      "firstHydrateMs": 579,
+      "steadyWarmP95Ms": 25.3
+    },
+    "exam-parent-v3": {
+      "snapshotLoadMs": 503,
+      "heapAfterSnapshotLoadMiB": 62,
+      "firstHydrateMs": 1380,
+      "steadyWarmP95Ms": 33.9
+    }
+  },
+  "artifacts": {
+    "memoryBenchmark": {
+      "path": "docs/phase-m/m6-2-memory.json",
+      "sha256": "acf8df9712de7c2da2e77c8a2c670d374416818751ef5c4eb57650f402141efa",
+      "note": "skip-concurrent; G1/G4/G5/S4"
+    },
+    "concurrentLogSha256": "336c67fff93f5e9b284f17e5367209153dab4bd8720e2320b3d73eb244c010bb"
+  },
+  "isolation": {
+    "t0Graph": { "tests": 14, "fail": 0, "jdtlsBin": "/usr/bin/false" },
+    "t1": {
+      "dist": 1177,
+      "scripts": 215,
+      "fail": 0,
+      "smoke": true,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "b5388dfd4c60fc72c2fdec86e2a8aa936e55cef6",
+      "logSha256": "6aad96205008c3cbe298941ac710aa4914a59f11507edff75498c6f27b8b5b93"
+    }
+  }
+}
