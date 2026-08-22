@@ -142,6 +142,8 @@ export async function handleQueryCommand(request: JavaIndexRequest, deps: QueryH
     case "QUERY_GRAPH_DIGEST": {
       await deps.ensureGraphReady();
       const graph = deps.readyKnowledgeGraph();
+      const gcFn = (globalThis as typeof globalThis & { gc?: () => void }).gc;
+      if (typeof gcFn === "function") gcFn();
       const memory = process.memoryUsage();
       deps.respond({
         id: request.id,

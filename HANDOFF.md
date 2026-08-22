@@ -2,7 +2,13 @@
 
 ## 当前任务
 
-**M6-1～M6-4 已出口。** G1 lishuedu 207>200 差 7 MiB。冷建 child 在 Darwin `/tmp` 必须 `realpath`，否则 5312 个文件全部 “outside repo root”，G3 108 MiB 是空 child。JIN N5 live 仍 FAIL，不进 N6，不合 `main`。
+**M6-5 G1 全达标。** lishuedu 173 / cipherlink 29 / exam 46。极致收口线已到。不要为再抠几十 MiB 做段共享或 mmap。JIN N5 live 仍 FAIL，不进 N6，不合 `main`。
+
+## M6-5（2026-08-22）
+
+判定 **PASS（G1）**。v4 rest 按段从磁盘再读，OPEN 不再捏着整份快照 Buffer。digest 在可选 `gc()` 后取样（unpack JSON 垃圾不算 G1）。G1 **173 / 29 / 46** 全达标。G4 1534ms GO。G5 稳态 lishuedu 1.12 略超 1.10。真实 child RSS 2311 仍超 G3。T1 dist 1181 + scripts 215 fail 0。
+
+收口：`docs/phase-m/m6-5-baseline.json`、`docs/phase-m/m6-5-memory.json`。
 
 ## M6-4（2026-08-22）
 
@@ -36,7 +42,7 @@
 
 ## 已完成
 
-N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a COMPLETE → N3 COMPLETE → N4 PARTIAL 3/4（`8cc1762`）→ N5-01 GO → N5-02 live MEASURED FAIL → **M0–M5 PARTIAL** → **M6-1～M6-4**。G1 lishuedu 207>200。真实冷建 child RSS 2174 MiB。
+N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a COMPLETE → N3 COMPLETE → N4 PARTIAL 3/4（`8cc1762`）→ N5-01 GO → N5-02 live MEASURED FAIL → **M0–M5 PARTIAL** → **M6-1～M6-5（G1 GO）**。
 
 ## 当前状态 / 卡点
 
@@ -49,8 +55,8 @@ N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a 
 
 ## 下一步计划
 
-1. G1 再往下需要段级按需 hydrate（丢掉 pending v4 rest Buffer），不是继续 pack files。
-2. 冷建：realpath 已修；G3 需按真实 child 2174 MiB 记账。resolveAll 46s 才是时长主因，不是 v4 gzip。
+1. G1 已全达标。再往下（worktree 段共享、mmap）复杂度陡增，场景已无痛点。
+2. 冷建 child RSS 2311>1536 与 resolveAll 46s 是剩下的非 G1 残差，不作为极致收口阻塞。
 3. JIN 侧仍停在 N5 live FAIL；**不要进 N6**，除非用户明确要求，不要重跑 live。
 4. 第四仓 + leave-one-repo-out 仍是合 `main` 硬门。
 
@@ -76,7 +82,7 @@ N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a 
 
 ## 给下一会话的第一步
 
-读 `docs/phase-m/m6-4-baseline.json`。M6 收口线：G1 未全达标（207>200）。不要进 N6，不要合 `main`，不要发明 TaskSuccess，不要重跑 N5 live。
+读 `docs/phase-m/m6-5-baseline.json`。G1 全达标。不要进 N6，不要合 `main`，不要发明 TaskSuccess，不要重跑 N5 live。
 
 ## JIN 15A 面板（N5 FAIL / 不进 N6 / 不合 main，2026-08-21）
 

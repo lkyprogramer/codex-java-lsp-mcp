@@ -154,7 +154,7 @@ async function parseSnapshotFile(target: string): Promise<ParsedSnapshot | undef
   if (!isSnapshotV4(bytes)) {
     return { error: "unsupported on-disk snapshot (v3 gzip JSON is discarded, not migrated)" };
   }
-  const view = decodeSnapshotV4View(bytes);
+  const view = decodeSnapshotV4View(bytes, target);
   if ("error" in view) return view;
   return { view };
 }
@@ -246,7 +246,7 @@ export async function loadSnapshot(
   }
 }
 
-/** Files + coverage only. Remaining segments stay gzipped until `view.readRest()`. */
+/** Files + coverage only. Rest segments reread from disk; the snapshot Buffer is not retained. */
 export async function loadSnapshotView(
   target: string,
   expected: SnapshotIdentity

@@ -1,6 +1,7 @@
 // input: In-memory JavaIndex snapshot DTO (schema 3 facts).
-// output: Segmented v4 bytes with per-segment gzip + crc32; lazy files-only decode.
-// pos: M3 P2 disk format. v3 gzip JSON is discarded by the loader, never migrated.
+// output: Segmented v4 bytes with per-segment gzip + crc32; files-only decode; rest reread from disk.
+// pos: M3 P2 disk format. OPEN does not retain the snapshot Buffer (G1).
+import { closeSync, openSync, readSync } from "node:fs";
 import { crc32, gunzipSync, gzipSync } from "node:zlib";
 import type { EntitySearchSnapshot } from "./entity-search.js";
 import type {
@@ -69,13 +70,24 @@ type V4Header = {
   segments: SegmentDirectoryEntry[];
 };
 
+export type SnapshotV4Rest = Pick<
+  SnapshotV4Facts,
+  "types" | "fields" | "methods" | "edges" | "myBatisResources" | "entitySearch"
+>;
+
 export type SnapshotV4View = {
   header: V4Header;
   files: JavaFileFacts[];
-  payload: Buffer;
-  readRest(): Pick<SnapshotV4Facts, "types" | "fields" | "methods" | "edges" | "myBatisResources" | "entitySearch">;
+  /** True when rest segments are reread from disk and the original snapshot bytes were dropped. */
+  restOnDisk: boolean;
+  readRest(): SnapshotV4Rest;
+  readSegment(kind: Exclude<SnapshotV4SegmentKind, "files">): unknown;
   toFacts(): SnapshotV4Facts;
 };
+
+type RestSource =
+  | { kind: "buffer"; payload: Buffer }
+  | { kind: "file"; path: string; payloadStart: number };
 
 export function isSnapshotV4(bytes: Buffer): boolean {
   return bytes.length >= 4 && bytes.subarray(0, 4).equals(SNAPSHOT_V4_MAGIC);
@@ -121,7 +133,7 @@ export function encodeSnapshotV4(value: SnapshotV4Facts): Buffer {
   return Buffer.concat([prefix, headerBytes, ...compressed]);
 }
 
-export function decodeSnapshotV4View(bytes: Buffer): SnapshotV4View | { error: string } {
+export function decodeSnapshotV4View(bytes: Buffer, sourcePath?: string): SnapshotV4View | { error: string } {
   if (!isSnapshotV4(bytes)) return { error: "not a v4 snapshot" };
   if (bytes.length < 12) return { error: "truncated v4 header" };
   const version = bytes.readUInt32LE(4);
@@ -140,25 +152,31 @@ export function decodeSnapshotV4View(bytes: Buffer): SnapshotV4View | { error: s
     return { error: "invalid v4 header" };
   }
   const payload = bytes.subarray(headerEnd);
+  const restSource: RestSource = sourcePath
+    ? { kind: "file", path: sourcePath, payloadStart: headerEnd }
+    : { kind: "buffer", payload: Buffer.from(payload) };
   let files: JavaFileFacts[];
   try {
-    files = readSegment(payload, header.segments, "files") as JavaFileFacts[];
+    files = decodeSegment(readSegmentBytes({ kind: "buffer", payload }, header.segments, "files")) as JavaFileFacts[];
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) };
   }
-  const readRest = () => ({
-    types: readSegment(payload, header.segments, "types") as JavaTypeFacts[],
-    fields: readSegment(payload, header.segments, "fields") as JavaFieldFacts[],
-    methods: readSegment(payload, header.segments, "methods") as JavaMethodFacts[],
-    edges: readSegment(payload, header.segments, "edges") as StaticEdge[],
-    myBatisResources: readSegment(payload, header.segments, "mybatis") as MyBatisMapperResourceFacts[],
-    entitySearch: decodeEntitySearch(readSegment(payload, header.segments, "entitySearch"))
+  const readSegment = (kind: Exclude<SnapshotV4SegmentKind, "files">): unknown =>
+    decodeSegment(readSegmentBytes(restSource, header.segments, kind));
+  const readRest = (): SnapshotV4Rest => ({
+    types: readSegment("types") as JavaTypeFacts[],
+    fields: readSegment("fields") as JavaFieldFacts[],
+    methods: readSegment("methods") as JavaMethodFacts[],
+    edges: readSegment("edges") as StaticEdge[],
+    myBatisResources: readSegment("mybatis") as MyBatisMapperResourceFacts[],
+    entitySearch: decodeEntitySearch(readSegment("entitySearch"))
   });
   return {
     header,
     files,
-    payload,
+    restOnDisk: restSource.kind === "file",
     readRest,
+    readSegment,
     toFacts() {
       const rest = readRest();
       return {
@@ -178,13 +196,31 @@ export function decodeSnapshotV4View(bytes: Buffer): SnapshotV4View | { error: s
   };
 }
 
-function readSegment(payload: Buffer, directory: SegmentDirectoryEntry[], kind: SnapshotV4SegmentKind): unknown {
+function readSegmentBytes(source: RestSource, directory: SegmentDirectoryEntry[], kind: SnapshotV4SegmentKind): Buffer {
   const entry = directory.find(item => item.kind === kind);
   if (!entry) throw new Error(`missing v4 segment ${kind}`);
-  const slice = payload.subarray(entry.offset, entry.offset + entry.length);
+  const slice = source.kind === "buffer"
+    ? source.payload.subarray(entry.offset, entry.offset + entry.length)
+    : readFileRange(source.path, source.payloadStart + entry.offset, entry.length);
   if (slice.byteLength !== entry.length) throw new Error(`truncated v4 segment ${kind}`);
   if (crc32(slice) !== entry.crc32) throw new Error(`crc32 mismatch in v4 segment ${kind}`);
+  return slice;
+}
+
+function decodeSegment(slice: Buffer): unknown {
   return JSON.parse(gunzipSync(slice).toString("utf8"));
+}
+
+function readFileRange(target: string, offset: number, length: number): Buffer {
+  const fd = openSync(target, "r");
+  try {
+    const slice = Buffer.allocUnsafe(length);
+    const bytesRead = readSync(fd, slice, 0, length, offset);
+    if (bytesRead !== length) throw new Error(`truncated v4 file read at ${offset}`);
+    return slice;
+  } finally {
+    closeSync(fd);
+  }
 }
 
 function decodeEntitySearch(value: unknown): EntitySearchSnapshot | undefined {

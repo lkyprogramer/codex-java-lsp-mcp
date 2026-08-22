@@ -87,6 +87,8 @@ test("v4 files-only view does not decode edges until readRest", async () => {
   const view = await loadSnapshotView(target, identityFor(value));
   assert.ok(view);
   assert.equal(view.files[0]?.relativePath, "src/A.java");
+  assert.equal(view.restOnDisk, true);
+  assert.equal("payload" in view, false);
   const rest = view.readRest();
   assert.equal(rest.edges[0]?.edgeId, "e1");
 });
