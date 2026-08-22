@@ -2,7 +2,11 @@
 
 ## 当前任务
 
-**M6-5 G1 全达标。** lishuedu 173 / cipherlink 29 / exam 46。极致收口线已到。不要为再抠几十 MiB 做段共享或 mmap。JIN N5 live 仍 FAIL，不进 N6，不合 `main`。
+**N5 live 已复测（OpenRouter `stealth/ox-alpha`）：MEASURED FAIL，不进 N6。** M6-5 G1 全达标仍有效。不合 `main`。
+
+## N5 live 复测（2026-08-22）
+
+判定 **FAIL**。6 holdout 全跑完，无 502/503。old 1/6（exam-score-export），jin 0/6。jin 轮次 22 vs 29，token 43543 vs 25402。presign / pay-order 仍 false。Serena UNAVAILABLE。raw SHA `51e978f5…`（scratch，不入库）。摘要 `docs/phase-jin/jin-n5-02-live-summary.json` SHA `bd5a2025…`。
 
 ## M6-5（2026-08-22）
 
@@ -46,7 +50,7 @@ N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a 
 
 ## 当前状态 / 卡点
 
-- N5 退出卡：质量并列 0.2；轮次/token FAIL（66 vs 26，197618 vs 25845）；presign/pay-order 未闭合；502/503 runtime 丢弃。
+- N5 退出卡（2026-08-22 OpenRouter）：jin 0/6 vs old 1/6；token 43543 vs 25402；presign/pay-order 未闭合。无 502/503。Serena UNAVAILABLE。
 - Range 残差：lishuedu / exam 仍低于 compact；cipherlink 0.925 不回退。
 - N1 RSS `0A.4(4b)` **RESOLVED** by M-track §3（G1/G2 书面目标仍 MISS，门未放宽）。
 - N3 p95 −35% vs 默认 impact **UNMEASURED**。
@@ -57,7 +61,7 @@ N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a 
 
 1. G1 已全达标。再往下（worktree 段共享、mmap）复杂度陡增，场景已无痛点。
 2. 冷建 child RSS 2311>1536 与 resolveAll 46s 是剩下的非 G1 残差，不作为极致收口阻塞。
-3. JIN 侧仍停在 N5 live FAIL；**不要进 N6**，除非用户明确要求，不要重跑 live。
+3. JIN N5 live 已用 OpenRouter `stealth/ox-alpha` 复测仍 FAIL；**不要进 N6**，不合 `main`。
 4. 第四仓 + leave-one-repo-out 仍是合 `main` 硬门。
 
 ## 绝对不要再踩的坑
@@ -82,7 +86,7 @@ N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a 
 
 ## 给下一会话的第一步
 
-读 `docs/phase-m/m6-5-baseline.json`。G1 全达标。不要进 N6，不要合 `main`，不要发明 TaskSuccess，不要重跑 N5 live。
+读 `docs/phase-jin/jin-n5-02-live-summary.json`。N5 live FAIL，不要进 N6，不要合 `main`，不要发明 TaskSuccess。
 
 ## JIN 15A 面板（N5 FAIL / 不进 N6 / 不合 main，2026-08-21）
 

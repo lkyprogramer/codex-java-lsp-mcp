@@ -146,21 +146,21 @@
       "phase": "N5",
       "card": "15A.7 / §15 Phase N5",
       "decision": "FAIL",
-      "evidenceHead": "8ae1c1d",
+      "evidenceHead": "0996e5f",
       "closeout": "docs/phase-jin/jin-phase-n5-closeout.json",
-      "sha256": "509999fb2e9070e7bfe07e16b88b6dd7d93cd0de3ea462fc181cbb12bf7450a8",
+      "sha256": "7b586fb2f314fff5d634f1c856b6b028fca03ead52886f11c975c99816252b4d",
       "liveSummary": "docs/phase-jin/jin-n5-02-live-summary.json",
-      "liveSummarySha256": "fec4f4a0652b9decaf76fe296823247aed187f3f54d2febadf4e836c0afd7619",
-      "liveTraceSha256": "9a398537da83054fe6beab8d6270f9389854254a72de734dbba9c2c5426d503b",
+      "liveSummarySha256": "bd5a20255efda362d75b625c268013ca437da11f6069f7086be3abff23748ad4",
+      "liveTraceSha256": "51e978f5b328f1719ef2a3016144262c85626038d3befb10858acfbb9bc67624",
       "mergeToMain": false,
       "enterN6": false,
       "exit": {
         "javaContextRegistered": "PASS",
         "toolSchemaLe600": "PASS",
-        "agentQualityNonInferior": "PASS",
+        "agentQualityNonInferior": "FAIL",
         "toolRoundsAndTokenDrop": "FAIL",
         "liveFalseClosed": "FAIL",
-        "noContextCapOrRuntimeDrop": "FAIL",
+        "noContextCapOrRuntimeDrop": "PASS",
         "serenaKillSignal": "UNMEASURED",
         "patchGeneration": "UNMEASURED",
         "compileTest": "UNMEASURED",
@@ -188,7 +188,7 @@
     {
       "severity": "blocker-for-n6-and-main",
       "id": "N5-exit-cards",
-      "detail": "N5 live MEASURED FAIL: tool rounds 66 vs 26 and tokens 197618 vs 25845; V5R live falses (presign / pay-order) stayed false; host 502/503 runtime drops. Do not enter N6. Do not merge main."
+      "detail": "N5 live MEASURED FAIL on OpenRouter stealth/ox-alpha: jin localization 0/6 vs old 1/6; tokens 43543 vs 25402; V5R live falses (presign / pay-order) stayed false. No 502/503 this run. Do not enter N6. Do not merge main."
     },
     {
       "severity": "blocker-for-release-not-for-branch",

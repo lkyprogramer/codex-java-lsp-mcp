@@ -1,11 +1,11 @@
 {
   "schemaVersion": "jin-phase-n5-closeout/v1",
   "phase": "N5",
-  "dated": "2026-08-21",
+  "dated": "2026-08-22",
   "decision": "FAIL",
   "mergeToMain": false,
   "enterN6": false,
-  "head": "8ae1c1de291dcc502bda9454972f4553cc226a91",
+  "head": "0996e5f",
   "n501": {
     "result": "GO",
     "handler": "src/tools/java-context.ts",
@@ -28,26 +28,26 @@
     "harness": "GO",
     "live": "MEASURED",
     "summary": "jin-n5-02-live-summary.json",
-    "liveTraceSha256": "9a398537da83054fe6beab8d6270f9389854254a72de734dbba9c2c5426d503b",
-    "liveSummarySha256": "fec4f4a0652b9decaf76fe296823247aed187f3f54d2febadf4e836c0afd7619",
-    "model": "openclaw/Qwen3.8-27B-WORK",
-    "baseUrlHost": "192.168.10.29:28343",
-    "executableTree": "20a99abc660c39f7f2c231fbfc25df29d7499ac7",
+    "liveTraceSha256": "51e978f5b328f1719ef2a3016144262c85626038d3befb10858acfbb9bc67624",
+    "liveSummarySha256": "bd5a20255efda362d75b625c268013ca437da11f6069f7086be3abff23748ad4",
+    "model": "stealth/ox-alpha",
+    "baseUrlHost": "openrouter.ai",
+    "executableTree": "967065d44ebd699248d62d476b465fa56260f51a",
     "jdtlsBin": "/usr/bin/false",
     "isolation": "detached-local-clone",
     "taskSuccess": {
-      "old": { "scored": 5, "successes": 1, "mean": 0.2 },
-      "jin": { "scored": 5, "successes": 1, "mean": 0.2 },
+      "old": { "scored": 6, "successes": 1, "mean": 0.1667 },
+      "jin": { "scored": 6, "successes": 0, "mean": 0 },
       "serena": { "status": "UNAVAILABLE" }
     },
-    "toolCallCount": { "old": 26, "jin": 66 },
-    "totalTokensMeasured": { "old": 25845, "jin": 197618 }
+    "toolCallCount": { "old": 29, "jin": 22 },
+    "totalTokensMeasured": { "old": 25402, "jin": 43543 }
   },
   "gates": {
-    "agentQualityNonInferior": "GO",
+    "agentQualityNonInferior": "FAIL",
     "toolRoundsAndTokenDrop": "FAIL",
     "liveFalseClosed": "FAIL",
-    "noContextCapOrRuntimeDrop": "FAIL"
+    "noContextCapOrRuntimeDrop": "GO"
   },
   "t2ContextReplay": {
     "result": "GO",
