@@ -2,7 +2,13 @@
 
 ## 当前任务
 
-**M6-3 已出口（PARTIAL）。** 下一刀 **M6-4 冷建时长归因**（lishuedu 161s vs N1 46s）。G1 lishuedu 207>200。JIN N5 live 仍 FAIL，不进 N6，不合 `main`。
+**M6-1～M6-4 已出口。** G1 lishuedu 207>200 差 7 MiB。冷建 child 在 Darwin `/tmp` 必须 `realpath`，否则 5312 个文件全部 “outside repo root”，G3 108 MiB 是空 child。JIN N5 live 仍 FAIL，不进 N6，不合 `main`。
+
+## M6-4（2026-08-22）
+
+判定 **MEASURED**。lishuedu 真实 child：discover 0.2s / parse 19.4s / resolve 46.1s / snapshotPrepare 3.4s / v4 encode 7.6s / graph encode 0.7s / **合计 77.6s**。N1 46s ≈ 今天的 resolveAll。v4 gzip 不是 3 倍主因。先前 161s 冷建是 child 因 `/tmp`→`/private/tmp` 写了空快照后父进程自己扫。真实 child RSS **2174 MiB > G3 1536**（门未放宽）。
+
+收口：`docs/phase-m/m6-4-baseline.json`、`docs/phase-m/m6-4-cold.json`。
 
 ## M6-3（2026-08-22）
 
@@ -30,7 +36,7 @@
 
 ## 已完成
 
-N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a COMPLETE → N3 COMPLETE → N4 PARTIAL 3/4（`8cc1762`）→ N5-01 GO → N5-02 live MEASURED FAIL → **M0–M5 PARTIAL** → **M6-1 PARTIAL** → **M6-2 PARTIAL** → **M6-3 PARTIAL**。隔离 T1 dist 1180 + scripts 215 fail 0。
+N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a COMPLETE → N3 COMPLETE → N4 PARTIAL 3/4（`8cc1762`）→ N5-01 GO → N5-02 live MEASURED FAIL → **M0–M5 PARTIAL** → **M6-1～M6-4**。G1 lishuedu 207>200。真实冷建 child RSS 2174 MiB。
 
 ## 当前状态 / 卡点
 
@@ -43,8 +49,8 @@ N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a 
 
 ## 下一步计划
 
-1. **M6-4**：拆 lishuedu 冷建 161s vs N1 46s 到解析 / v4 gzip 编码 / 子进程。
-2. G1 再往下需要段级按需 hydrate（丢掉 pending v4 rest Buffer），不是继续 pack files。
+1. G1 再往下需要段级按需 hydrate（丢掉 pending v4 rest Buffer），不是继续 pack files。
+2. 冷建：realpath 已修；G3 需按真实 child 2174 MiB 记账。resolveAll 46s 才是时长主因，不是 v4 gzip。
 3. JIN 侧仍停在 N5 live FAIL；**不要进 N6**，除非用户明确要求，不要重跑 live。
 4. 第四仓 + leave-one-repo-out 仍是合 `main` 硬门。
 
@@ -59,6 +65,7 @@ N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a 
 - 本地 `node --test *.ts` 会因 unknown extension 失败；以 isolated compile+dist 为准。
 - 不要把 N6 closeout 的过时「N4 2/4 / N5 NOT_STARTED」文案当现状；现状是 N4 3/4、N5 FAIL。
 - 不要在 OPEN 验证 finally 里 kick 同线程 v4 rest hydrate：STATUS 被 gzip+JSON+ingest 堵住，G4 从 1131ms 变成 9243ms，S1/S2 跟着灌满。
+- Darwin 上 cold-build child 必须 `realpath(repoRoot)`。`path.resolve('/tmp/...')` 对不上 `realpath(file)` 的 `/private/tmp/...`，5312 个文件全部 outside-repo，G3 会假绿成 108 MiB。
 
 ## 关键文件 / 命令 / 验证
 
@@ -69,7 +76,7 @@ N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a 
 
 ## 给下一会话的第一步
 
-读 `docs/phase-m/m6-3-baseline.json`。下一刀 M6-4 冷建归因。不要进 N6，不要合 `main`，不要发明 TaskSuccess，不要重跑 N5 live。
+读 `docs/phase-m/m6-4-baseline.json`。M6 收口线：G1 未全达标（207>200）。不要进 N6，不要合 `main`，不要发明 TaskSuccess，不要重跑 N5 live。
 
 ## JIN 15A 面板（N5 FAIL / 不进 N6 / 不合 main，2026-08-21）
 

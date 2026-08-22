@@ -1,7 +1,7 @@
 // input: A repo root with no usable v4 snapshot.
 // output: Writes java-index v4 + knowledge-graph snapshots, then exits.
 // pos: M3 P3 cold-build child. Parent never holds native parse-tree watermark.
-import { writeFile } from "node:fs/promises";
+import { realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { probeLayout } from "../layout-probe.js";
 import { KnowledgeGraphBuilder } from "../java-knowledge/graph-builder.js";
@@ -26,12 +26,26 @@ import { STABLE_ID_VERSION } from "./stable-id.js";
 export const SNAPSHOT_FILE_NAME = "java-index-snapshot.json.gz";
 export const GRAPH_SNAPSHOT_FILE_NAME = "java-knowledge-graph.json.gz";
 
+export type ColdBuildPhasesMs = {
+  discover: number;
+  parse: number;
+  resolve: number;
+  snapshotPrepare: number;
+  snapshotEncode: number;
+  graphEncode: number;
+  total: number;
+};
+
 export type ColdBuildResult = {
   ok: true;
   files: number;
+  discovered: number;
+  parseFailed: number;
+  lastParseError?: string;
   snapshotBytes: number;
   rssPeakBytes: number;
   heapUsedBytes: number;
+  phasesMs: ColdBuildPhasesMs;
 };
 
 export async function runColdIndexBuild(repoRoot: string, cacheDir: string, generation: number): Promise<ColdBuildResult> {
@@ -40,8 +54,11 @@ export async function runColdIndexBuild(repoRoot: string, cacheDir: string, gene
     rssPeak = Math.max(rssPeak, process.memoryUsage().rss);
   }, 100);
   sample.unref?.();
+  const started = performance.now();
+  const mark = (from: number) => performance.now() - from;
   try {
-    const layout = probeLayout(repoRoot);
+    const resolvedRepoRoot = await realpath(repoRoot).catch(() => path.resolve(repoRoot));
+    const layout = probeLayout(resolvedRepoRoot);
     const backend = await createJavaParserBackend();
     const cache = new ParseTreeCache({
       ...DEFAULT_PARSE_TREE_CACHE_OPTIONS,
@@ -52,16 +69,21 @@ export async function runColdIndexBuild(repoRoot: string, cacheDir: string, gene
     const coverage = new CoverageTracker();
     const graph = new KnowledgeGraphStore();
     const graphBuilder = new KnowledgeGraphBuilder(graph);
-    const discovered = await discoverJavaFiles(repoRoot, layout);
+    let phase = performance.now();
+    const discovered = await discoverJavaFiles(resolvedRepoRoot, layout);
+    const discoverMs = mark(phase);
     const byRoot = new Map<string, number>();
     for (const file of discovered) byRoot.set(file.sourceRoot, (byRoot.get(file.sourceRoot) ?? 0) + 1);
     for (const [root, count] of byRoot) coverage.begin(root, generation, count);
     const relativePaths: string[] = [];
+    let parseFailed = 0;
+    let lastParseError: string | undefined;
+    phase = performance.now();
     for (const file of discovered) {
       try {
         const bundle = await parseJavaSourceFile({
-          repoRoot,
-          resolvedRepoRoot: path.resolve(repoRoot),
+          repoRoot: resolvedRepoRoot,
+          resolvedRepoRoot,
           inputPath: file.absolutePath,
           generation,
           backend,
@@ -72,12 +94,18 @@ export async function runColdIndexBuild(repoRoot: string, cacheDir: string, gene
         relativePaths.push(bundle.file.relativePath);
         coverage.indexed(file.sourceRoot);
       } catch (error) {
+        parseFailed += 1;
+        if (!lastParseError) lastParseError = error instanceof Error ? error.stack ?? error.message : String(error);
         coverage.failed(file.sourceRoot, file.relativePath, error);
       }
     }
+    const parseMs = mark(phase);
+    phase = performance.now();
     resolveAll(store, relativePaths, graphBuilder, generation);
+    const resolveMs = mark(phase);
     for (const root of byRoot.keys()) coverage.complete(root, generation);
-    const buildFingerprint = await computeBuildFingerprint(repoRoot, layout);
+    phase = performance.now();
+    const buildFingerprint = await computeBuildFingerprint(resolvedRepoRoot, layout);
     if (!buildFingerprint) throw new Error("snapshot build fingerprint unavailable");
     const data = store.toSnapshotData();
     const entitySearch = new EntitySearchIndex();
@@ -88,7 +116,7 @@ export async function runColdIndexBuild(repoRoot: string, cacheDir: string, gene
       stableIdVersion: STABLE_ID_VERSION,
       canonicalRepoRoot: repoRoot,
       buildFingerprint,
-      manifestFingerprint: await computeCurrentSnapshotManifestFingerprint(repoRoot, layout),
+      manifestFingerprint: await computeCurrentSnapshotManifestFingerprint(resolvedRepoRoot, layout),
       indexedGeneration: generation,
       createdAt: new Date().toISOString(),
       coverage: coverage.snapshot(),
@@ -96,24 +124,43 @@ export async function runColdIndexBuild(repoRoot: string, cacheDir: string, gene
       ...data,
       entitySearch: entitySearch.toSnapshot()
     };
+    const snapshotPrepareMs = mark(phase);
     const snapshotPath = path.join(cacheDir, SNAPSHOT_FILE_NAME);
+    phase = performance.now();
     const snapshotBytes = await writeSnapshotIfManifestCurrent(
       snapshotPath,
       value,
-      () => computeCurrentSnapshotManifestFingerprint(repoRoot, layout)
+      () => computeCurrentSnapshotManifestFingerprint(resolvedRepoRoot, layout)
     );
+    const snapshotEncodeMs = mark(phase);
+    phase = performance.now();
     await writeGraphSnapshotAtomic(path.join(cacheDir, GRAPH_SNAPSHOT_FILE_NAME), packGraphSnapshot(graph));
+    const graphEncodeMs = mark(phase);
+    const phasesMs = {
+      discover: discoverMs,
+      parse: parseMs,
+      resolve: resolveMs,
+      snapshotPrepare: snapshotPrepareMs,
+      snapshotEncode: snapshotEncodeMs,
+      graphEncode: graphEncodeMs,
+      total: mark(started)
+    };
     await writeFile(path.join(cacheDir, "cold-build-metrics.json"), `${JSON.stringify({
       rssPeakBytes: rssPeak,
       heapUsedBytes: process.memoryUsage().heapUsed,
-      files: data.files.length
+      files: data.files.length,
+      phasesMs
     })}\n`);
     return {
       ok: true,
       files: data.files.length,
+      discovered: discovered.length,
+      parseFailed,
+      ...(lastParseError ? { lastParseError } : {}),
       snapshotBytes,
       rssPeakBytes: rssPeak,
-      heapUsedBytes: process.memoryUsage().heapUsed
+      heapUsedBytes: process.memoryUsage().heapUsed,
+      phasesMs
     };
   } finally {
     clearInterval(sample);

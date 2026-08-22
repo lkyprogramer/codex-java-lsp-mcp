@@ -1,0 +1,56 @@
+{
+  "schemaVersion": "m6-4-baseline/v1",
+  "phase": "M6-4",
+  "dated": "2026-08-22",
+  "decision": "MEASURED",
+  "mergeToMain": false,
+  "headBefore": "220825e",
+  "scope": [
+    "cold-build child realpath(repoRoot) so /tmp → /private/tmp files parse",
+    "phase timings: discover/parse/resolve/snapshotPrepare/snapshotEncode/graphEncode"
+  ],
+  "question": "lishuedu coldMs 134–161s vs N1 46s",
+  "child": {
+    "files": 5312,
+    "parseFailed": 0,
+    "snapshotMiB": 22.8,
+    "rssPeakMiB": 2174,
+    "heapMiB": 808,
+    "phasesSec": {
+      "discover": 0.17,
+      "parse": 19.44,
+      "resolve": 46.11,
+      "snapshotPrepare": 3.43,
+      "snapshotEncode": 7.64,
+      "graphEncode": 0.69,
+      "total": 77.56
+    }
+  },
+  "findings": [
+    "N1 46s is approximately today's resolveAll (46.1s): type resolution + two replaceFile passes + knowledge-graph rebuild. N2a reverse/persistent edges doubled that graph.",
+    "Parse is 19.4s for 5312 files. v4 gzip encode is 7.6s, not the 3x gap. Graph snapshot encode is 0.7s. snapshotPrepare (toSnapshotData + entitySearch) is 3.4s.",
+    "Child wall 77.6s. Memory-benchmark coldMs ~161s was mostly parent in-process rebuild after the child wrote an empty snapshot.",
+    "Root cause of the empty child: path.resolve('/tmp/...') vs realpath(file) under Darwin /tmp → /private/tmp. All 5312 parses threw 'Java source resolves outside repo root' in ~0.4s. Child returned ok:true files:0. G3 child peak 108 MiB was that empty child, not a successful 5312-file build.",
+    "A real child peaks at 2174 MiB RSS / 808 MiB heap, above G3 1536. Previous G3 PASS is invalid. Gate not widened.",
+    "Parallelizing v4 gzip would save ~8s. The remaining 46s is resolveAll; source-root parallel parse would cut the 19s parse, not the resolve pass unless resolve is sharded too."
+  ],
+  "gates": {
+    "G3": {
+      "childPeakTargetMiB": 1536,
+      "measuredChildPeakMiB": 2174,
+      "previousReportedMiB": 108,
+      "passed": false,
+      "disposition": "108 MiB was the empty-child path. Real parse+resolve child is 2174 MiB. Gate not widened."
+    }
+  },
+  "artifacts": {
+    "coldChild": {
+      "path": "docs/phase-m/m6-4-cold.json",
+      "sha256": "13eb5af3d08d889bcdd438c49ff61b2430af46c638d19a0a58e4eeb0ad1c50ce"
+    }
+  },
+  "isolation": {
+    "t0": { "coldBuildTest": true, "fail": 0, "jdtlsBin": "/usr/bin/false" },
+    "attributionLogSha256": "5d0c277c5640f2d0c1eccd204dd5be23836b6f43171d1633a8148680ef9d0f5b"
+  }
+}
