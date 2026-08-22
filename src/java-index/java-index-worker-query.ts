@@ -160,6 +160,7 @@ export async function handleQueryCommand(request: JavaIndexRequest, deps: QueryH
       return true;
     }
     case "QUERY_GRAPH_REACHABLE": {
+      await deps.ensureGraphReady();
       const graph = deps.readyKnowledgeGraph();
       let relativePath = request.fromRelativePath;
       try {
@@ -172,6 +173,7 @@ export async function handleQueryCommand(request: JavaIndexRequest, deps: QueryH
       return true;
     }
     case "QUERY_CONTEXT_GRAPH": {
+      await deps.ensureGraphReady();
       const graph = deps.readyKnowledgeGraph();
       let relativePath = request.fromRelativePath;
       try {

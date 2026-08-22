@@ -1044,6 +1044,27 @@ test("HIBERNATE unloads facts then a query reheats from the v4 snapshot", async 
   await client.close();
 });
 
+test("OPEN leaves the knowledge graph unloaded until a graph query", async () => {
+  const repoRoot = tempRepo("java-index-worker-lazy-graph-");
+  writeJavaFile(repoRoot, "src/main/java/demo/Solo.java", "package demo;\n\nclass Solo { void run() { Solo.x(); } }\n");
+  const cacheDir = tempCacheDir();
+  const writer = new JavaIndexClient(repoRoot, cacheDir);
+  await writer.open(1);
+  await writer.reconcile(1);
+  await waitFor(async () => (await writer.status()).pendingBackground === 0, 8000);
+  await writer.flush();
+  await writer.close();
+
+  const reader = new JavaIndexClient(repoRoot, cacheDir);
+  await reader.open(1);
+  await waitFor(async () => (await reader.status()).pendingBackground === 0, 8000);
+  const digest = await reader.queryGraphDigest();
+  assert.ok(digest.nodes > 0, "QUERY_GRAPH_DIGEST must unpack the on-disk graph after OPEN");
+  const files = await reader.queryFiles([path.join(repoRoot, "src/main/java/demo/Solo.java")]);
+  assert.equal(files[0]?.types.some(type => type.simpleName === "Solo"), true);
+  await reader.close();
+});
+
 test("sibling-seeded reconcile re-parses only target-side diffs while preserving reusable facts", async () => {
   const siblingRepo = tempRepo("java-index-worker-sibling-source-");
   writeJavaFile(siblingRepo, "src/main/java/demo/Same.java", "package demo;\n\nclass Same {}\n");

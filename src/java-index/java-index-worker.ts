@@ -171,6 +171,8 @@ let closing = false;
 let snapshotPath: string | undefined;
 let pendingSnapshotView: SnapshotV4View | undefined;
 let snapshotFactsHydrated = true;
+/** Joins in-flight v4 rest decode. Not counted in pendingBackground (G4 serviceable). */
+let factsHydrateInFlight: Promise<void> | undefined;
 let hibernated = false;
 let hibernateIdentity: SnapshotIdentity | undefined;
 let hibernatedStatusCounts: { files: number; types: number; methods: number; edges: number } | undefined;
@@ -1180,6 +1182,23 @@ async function ensureFactsHydrated(): Promise<void> {
     snapshotFactsHydrated = true;
     return;
   }
+  if (!factsHydrateInFlight) {
+    factsHydrateInFlight = hydratePendingFacts().finally(() => {
+      factsHydrateInFlight = undefined;
+    });
+  }
+  await factsHydrateInFlight;
+}
+
+function kickBackgroundFactsHydrate(): void {
+  void ensureFactsHydrated().catch(() => undefined);
+}
+
+async function hydratePendingFacts(): Promise<void> {
+  if (snapshotFactsHydrated || !store || !pendingSnapshotView) {
+    snapshotFactsHydrated = true;
+    return;
+  }
   const rest = pendingSnapshotView.readRest();
   store.ingestSnapshotFacts({
     types: rest.types,
@@ -1212,6 +1231,7 @@ async function ensureGraphReady(): Promise<void> {
 
 async function hibernateIndex(): Promise<void> {
   if (hibernated || closing) return;
+  await factsHydrateInFlight?.catch(() => undefined);
   if (snapshotDirtyRevision > snapshotDurableRevision) {
     await ensureFactsHydrated();
     await flushSnapshotNow();
@@ -1353,14 +1373,7 @@ function startOwnSnapshotHydration(
       });
       pendingSnapshotView = loadedView;
       snapshotFactsHydrated = false;
-      const graphPath = snapshotPath ? path.join(path.dirname(snapshotPath), GRAPH_SNAPSHOT_FILE_NAME) : undefined;
-      const packedGraph = graphPath ? await loadGraphSnapshot(graphPath) : undefined;
-      if (packedGraph) {
-        unpackGraphSnapshot(packedGraph, knowledgeGraph);
-        graphSyncedRevision = indexFactsRevision;
-      } else {
-        graphSyncedRevision = -1;
-      }
+      graphSyncedRevision = -1;
       entitySearchSyncedRevision = -1;
       // Snapshot generations belong to the process that wrote the snapshot.
       // A new RepoChangeCoordinator starts its own monotonic domain, so every
@@ -1455,6 +1468,8 @@ function startOwnSnapshotHydration(
       } finally {
         ownSnapshotVerificationPending = false;
         ownSnapshotVerificationStale = false;
+        // G4 is files+coverage serviceable. Rest decode fills in behind STATUS.
+        kickBackgroundFactsHydrate();
       }
     }
   })();
@@ -2023,6 +2038,7 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         lastDurableSnapshotIdentity = undefined;
         pendingSnapshotView = undefined;
         snapshotFactsHydrated = true;
+        factsHydrateInFlight = undefined;
         hibernated = false;
         hibernateIdentity = undefined;
         hibernatedStatusCounts = undefined;
@@ -2071,6 +2087,7 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         // previously aborted the whole process, not just this worker thread.
         closing = true;
         await ownSnapshotVerificationPromise;
+        await factsHydrateInFlight?.catch(() => undefined);
         await backgroundLoopPromise;
         if (backgroundSweep?.leaseHandle) {
           await backgroundSweep.leaseHandle.release().catch(() => undefined);
