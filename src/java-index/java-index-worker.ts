@@ -1190,10 +1190,6 @@ async function ensureFactsHydrated(): Promise<void> {
   await factsHydrateInFlight;
 }
 
-function kickBackgroundFactsHydrate(): void {
-  void ensureFactsHydrated().catch(() => undefined);
-}
-
 async function hydratePendingFacts(): Promise<void> {
   if (snapshotFactsHydrated || !store || !pendingSnapshotView) {
     snapshotFactsHydrated = true;
@@ -1468,8 +1464,9 @@ function startOwnSnapshotHydration(
       } finally {
         ownSnapshotVerificationPending = false;
         ownSnapshotVerificationStale = false;
-        // G4 is files+coverage serviceable. Rest decode fills in behind STATUS.
-        kickBackgroundFactsHydrate();
+        // Rest decode stays on the first fact query. Kicking it here runs
+        // gzip+JSON+ingest on this thread and blocks STATUS, so G4 absorbs
+        // the hydrate instead of returning files-only coverage.
       }
     }
   })();

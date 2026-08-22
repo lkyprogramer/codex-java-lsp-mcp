@@ -2,7 +2,13 @@
 
 ## 当前任务
 
-**M 轨道 M0–M5 已出口（PARTIAL）。** JIN N1 `0A.4(4b)` RSS 升级项 **RESOLVED**（分解门见 `docs/deep/codex-java-lsp-mcp-memory-footprint-optimization-plan-2026-08-21.md` §3）。N5 live 仍 FAIL，不进 N6，不合 `main`。不要重跑 N5 live，除非用户明确要求。
+**M6-1 已出口（PARTIAL）。** 下一刀 **M6-2 知识图列式化**（60k 节点 / 230k 边）。JIN N5 live 仍 FAIL，不进 N6，不合 `main`。不要重跑 N5 live，除非用户明确要求。
+
+## M6-1（2026-08-22）
+
+判定 **PARTIAL**。G4 lishuedu 1131ms ≤ 2000 **GO**（M5 2114 含 graph unpack；`0f414ed` 原提交同线程 rest hydrate 把 G4 推到 9243，已从 OPEN 验证路径拿掉）。G5 拆门：稳态 warm p95 69/28/34 vs M0 77.2/40.9/38.5，比值 0.898/0.679/0.895 **GO**；lishuedu 首 hydrate 7377ms **MISS**（门未放宽）。edit-to-visible P95 188ms ≤ 500 **GO**。S1 686 / S2 1207 / S4 9 MiB·107ms GO。G1 257/46/77 仍 MISS。
+
+收口：`docs/phase-m/m6-1-baseline.json`、`docs/phase-m/m6-1-memory.json`。T1 dist 1174 + scripts 215 fail 0。
 
 ## M 轨道出口（2026-08-21）
 
@@ -12,7 +18,7 @@
 
 ## 已完成
 
-N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a COMPLETE → N3 COMPLETE → N4 PARTIAL 3/4（`8cc1762`）→ N5-01 GO → N5-02 live MEASURED FAIL → **M0–M5 PARTIAL**。生产树 `70f0939`。隔离 T1 dist 1173 + scripts 213 fail 0。
+N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a COMPLETE → N3 COMPLETE → N4 PARTIAL 3/4（`8cc1762`）→ N5-01 GO → N5-02 live MEASURED FAIL → **M0–M5 PARTIAL** → **M6-1 PARTIAL**。隔离 T1 dist 1174 + scripts 215 fail 0。
 
 ## 当前状态 / 卡点
 
@@ -25,8 +31,10 @@ N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a 
 
 ## 下一步计划
 
-1. M 轨道已收口。JIN 侧仍停在 N5 live FAIL；**不要进 N6**，除非用户明确要求，不要重跑 live。
-2. 第四仓 + leave-one-repo-out 仍是合 `main` 硬门。
+1. **M6-2**：知识图列式化（字符串表 + TypedArray 列 + 惰性物化）。目标 lishuedu heap 257 → ~180，G1 接近 200。
+2. 随后 M6-3 files 列式化、M6-4 冷建 134s vs N1 46s 归因。
+3. JIN 侧仍停在 N5 live FAIL；**不要进 N6**，除非用户明确要求，不要重跑 live。
+4. 第四仓 + leave-one-repo-out 仍是合 `main` 硬门。
 
 ## 绝对不要再踩的坑
 
@@ -38,6 +46,7 @@ N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a 
 - T3 输出目录必须不存在（已存在 exit 2）。隔离测试 `PATH=/opt/homebrew/bin` 在前，`JDTLS_BIN=/usr/bin/false`。
 - 本地 `node --test *.ts` 会因 unknown extension 失败；以 isolated compile+dist 为准。
 - 不要把 N6 closeout 的过时「N4 2/4 / N5 NOT_STARTED」文案当现状；现状是 N4 3/4、N5 FAIL。
+- 不要在 OPEN 验证 finally 里 kick 同线程 v4 rest hydrate：STATUS 被 gzip+JSON+ingest 堵住，G4 从 1131ms 变成 9243ms，S1/S2 跟着灌满。
 
 ## 关键文件 / 命令 / 验证
 
@@ -48,7 +57,7 @@ N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a 
 
 ## 给下一会话的第一步
 
-读 `docs/phase-m/m-track-20260821.md`。M 轨道已出口。不要进 N6，不要合 `main`，不要发明 TaskSuccess，不要重跑 N5 live。
+读 `docs/phase-m/m6-1-baseline.json`。下一刀 M6-2 知识图列式化。不要进 N6，不要合 `main`，不要发明 TaskSuccess，不要重跑 N5 live。
 
 ## JIN 15A 面板（N5 FAIL / 不进 N6 / 不合 main，2026-08-21）
 

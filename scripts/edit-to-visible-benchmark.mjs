@@ -16,6 +16,7 @@ import { RepoRuntimeManager } from "../dist/repo-runtime-manager.js";
 import { RepoResolver } from "../dist/repo-resolver.js";
 import { AliasRegistry } from "../dist/alias-registry.js";
 import { javaImpact, impactSchema } from "../dist/tools/impact.js";
+import { MAX_REQUEST_DEADLINE_MS } from "../dist/runtime/request-context.js";
 
 const CYCLES = 30;
 const POLL_INTERVAL_MS = 25;
@@ -64,7 +65,16 @@ async function runCycle(runtimes, repoRoot, javaDir, index) {
     const result = await runtimes.withContext(
       { repoRoot },
       (context, request) => javaImpact(context, args, request),
-      { mayStartLsp: false, requestOptions: { mode: "recall", semanticPolicy: "fast" } }
+      {
+        mayStartLsp: false,
+        requestOptions: {
+          mode: "recall",
+          semanticPolicy: "fast",
+          // recall+fast defaults to 2000ms, which is the hot-path budget.
+          // Cycle 0 pays runtime.create (worker spawn + files-only OPEN).
+          deadlineMs: MAX_REQUEST_DEADLINE_MS
+        }
+      }
     );
     const visible = JSON.stringify(result).includes(`${collaboratorName}.java`);
     if (visible) {

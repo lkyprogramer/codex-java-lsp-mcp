@@ -1058,8 +1058,13 @@ test("OPEN leaves the knowledge graph unloaded until a graph query", async () =>
   const reader = new JavaIndexClient(repoRoot, cacheDir);
   await reader.open(1);
   await waitFor(async () => (await reader.status()).pendingBackground === 0, 8000);
+  const filesOnly = await reader.status();
+  assert.equal(filesOnly.types, 0, "OPEN+STATUS must stay files-only; rest hydrate is a fact-query cost");
+  assert.equal(filesOnly.methods, 0);
   const digest = await reader.queryGraphDigest();
   assert.ok(digest.nodes > 0, "QUERY_GRAPH_DIGEST must unpack the on-disk graph after OPEN");
+  const afterDigest = await reader.status();
+  assert.equal(afterDigest.types, 0, "graph digest must not hydrate v4 rest segments");
   const files = await reader.queryFiles([path.join(repoRoot, "src/main/java/demo/Solo.java")]);
   assert.equal(files[0]?.types.some(type => type.simpleName === "Solo"), true);
   await reader.close();

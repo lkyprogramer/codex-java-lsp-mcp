@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // input: Three frozen golden Java repos plus golden/*.scenarios.jsonl.
-// output: Hot heapUsed, RSS peak/steady, snapshot load, warm query p50/p95, S1/S2/S4, fact-graph attribution.
+// output: Hot heapUsed, RSS peak/steady, snapshot load, first-hydrate vs steady warm p95, S1/S2/S4, fact-graph attribution.
 // pos: M0 measurement. Isolated. Does not change production query/selection.
 import { cp, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
@@ -35,9 +35,17 @@ export const M0_GATES = {
   G3_PARENT_COLD_INCREMENT_MIB: 100,
   G4_SNAPSHOT_LOAD_MS: 2000,
   G5_P95_RATIO: 1.1,
+  G5_FIRST_HYDRATE_MS: 2000,
   S1_RSS_MIB: 1024,
   S2_RSS_MIB: 1433.6,
   S4_HIBERNATE_HEAP_MIB: 32
+};
+
+/** M0 all-scenario warm p95. G5 steady compares against this, not the first hydrate sample. */
+export const M0_WARM_P95_MS = {
+  lishuedu: 77.2,
+  cipherlink: 40.9,
+  "exam-parent-v3": 38.5
 };
 
 export function parseMemoryBenchmarkCli(args) {
@@ -77,6 +85,28 @@ export function percentile(values, p) {
   const sorted = [...values].sort((left, right) => left - right);
   const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1));
   return sorted[index];
+}
+
+export function splitWarmLatencies(latencies) {
+  const samples = Array.isArray(latencies) ? latencies.map(Number) : [];
+  const firstHydrateMs = samples[0] ?? 0;
+  const steady = samples.slice(1);
+  return {
+    scenarios: samples.length,
+    firstHydrateMs,
+    steadyScenarios: steady.length,
+    steadyWarmP50Ms: percentile(steady, 50),
+    steadyWarmP95Ms: percentile(steady, 95),
+    p50Ms: percentile(samples, 50),
+    p95Ms: percentile(samples, 95),
+    latenciesMs: samples
+  };
+}
+
+export function g5SteadyRatio(project, steadyWarmP95Ms) {
+  const baseline = M0_WARM_P95_MS[project];
+  if (!baseline) return null;
+  return Number((steadyWarmP95Ms / baseline).toFixed(3));
 }
 
 export function bytesToMiB(bytes) {
@@ -274,12 +304,7 @@ async function warmQueries(index, project) {
     });
     latencies.push(performance.now() - started);
   }
-  return {
-    scenarios: latencies.length,
-    p50Ms: percentile(latencies, 50),
-    p95Ms: percentile(latencies, 95),
-    latenciesMs: latencies
-  };
+  return splitWarmLatencies(latencies);
 }
 
 export async function benchProject(project, repoRoot, timeoutMs, cacheRoot) {
@@ -601,9 +626,10 @@ async function main() {
     projects: projects.map(item => item.hibernate)
   };
   const payload = {
-    schemaVersion: "m0-memory-benchmark/v1",
+    schemaVersion: "m0-memory-benchmark/v2",
     dated: new Date().toISOString().slice(0, 10),
     gates: M0_GATES,
+    m0WarmP95Ms: M0_WARM_P95_MS,
     projects,
     scenarios
   };
@@ -620,7 +646,16 @@ async function main() {
       rssPeakMiB: bytesToMiB(item.rssPeakBytes),
       rssSteadySameProcessMiB: bytesToMiB(item.rssSteadySameProcessBytes),
       snapshotLoadMs: Math.round(item.snapshotLoadMs),
+      firstHydrateMs: Math.round(item.warm?.firstHydrateMs ?? 0),
+      steadyWarmP95Ms: Math.round(item.warm?.steadyWarmP95Ms ?? 0),
       warmP95Ms: Math.round(item.warm?.p95Ms ?? 0),
+      g5SteadyRatio: g5SteadyRatio(item.project, item.warm?.steadyWarmP95Ms ?? 0),
+      g4Pass: item.snapshotLoadMs <= M0_GATES.G4_SNAPSHOT_LOAD_MS,
+      g5FirstHydratePass: (item.warm?.firstHydrateMs ?? 0) <= M0_GATES.G5_FIRST_HYDRATE_MS,
+      g5SteadyPass: (() => {
+        const ratio = g5SteadyRatio(item.project, item.warm?.steadyWarmP95Ms ?? 0);
+        return ratio != null && ratio <= M0_GATES.G5_P95_RATIO;
+      })(),
       stringShare: item.attribution?.shares?.strings
     })),
     S1: scenarios.S1.status === "MEASURED" ? bytesToMiB(scenarios.S1.rssDeltaBytes) : scenarios.S1,

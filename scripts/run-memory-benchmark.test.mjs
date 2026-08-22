@@ -8,10 +8,13 @@ import {
   bytesToMiB,
   classifyFactValue,
   concurrentRuntimePlan,
+  g5SteadyRatio,
   M0_GATES,
+  M0_WARM_P95_MS,
   parseMemoryBenchmarkCli,
   percentile,
   sampleEven,
+  splitWarmLatencies,
   unmeasuredScenario
 } from "./run-memory-benchmark.mjs";
 
@@ -126,10 +129,33 @@ test("concurrentRuntimePlan is 3 then 5 runtimes; UNMEASURED keeps a reason", ()
   assert.equal(plan.S1.length, 3);
   assert.equal(plan.S2.length, 5);
   assert.equal(M0_GATES.S4_HIBERNATE_HEAP_MIB, 32);
+  assert.equal(M0_GATES.G5_FIRST_HYDRATE_MS, 2000);
   assert.equal(plan.S2.filter(item => item.worktree).length, 2);
   const missing = unmeasuredScenario("S1", "OOM");
   assert.equal(missing.status, "UNMEASURED");
   assert.equal(missing.rssDeltaBytes, null);
+});
+
+test("splitWarmLatencies isolates first hydrate from steady warm p95", () => {
+  const split = splitWarmLatencies([7704.37, 59.56, 69.88, 43.84, 42.89, 46.09, 34.48, 36.75, 50.19, 44.69]);
+  assert.equal(split.scenarios, 10);
+  assert.equal(split.steadyScenarios, 9);
+  assert.equal(split.firstHydrateMs, 7704.37);
+  assert.equal(split.p95Ms, 7704.37);
+  assert.equal(split.steadyWarmP95Ms, 69.88);
+  assert.ok(split.steadyWarmP95Ms < 80);
+  const empty = splitWarmLatencies([]);
+  assert.equal(empty.firstHydrateMs, 0);
+  assert.equal(empty.steadyWarmP95Ms, 0);
+});
+
+test("G5 steady ratio uses M0 p95, not the first hydrate sample", () => {
+  assert.equal(M0_WARM_P95_MS.lishuedu, 77.2);
+  const contaminated = g5SteadyRatio("lishuedu", 7704.37);
+  const steady = g5SteadyRatio("lishuedu", 69.88);
+  assert.ok(contaminated > M0_GATES.G5_P95_RATIO);
+  assert.ok(steady <= M0_GATES.G5_P95_RATIO);
+  assert.equal(g5SteadyRatio("unknown-repo", 10), null);
 });
 
 test("run-memory-benchmark refuses to run outside isolated validation", async () => {
