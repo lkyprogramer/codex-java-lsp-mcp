@@ -1,0 +1,66 @@
+{
+  "schemaVersion": "m6-3-baseline/v1",
+  "phase": "M6-3",
+  "dated": "2026-08-22",
+  "decision": "PARTIAL",
+  "mergeToMain": false,
+  "headBefore": "29bbc49",
+  "scope": [
+    "src/java-index/columnar/file-columns.ts JavaFileFacts + imports + type-id lists",
+    "JavaIndexStore.filesByPath is FileIdMap over columns",
+    "drop decoded v4 files array after columnar ingest so OPEN does not keep both representations"
+  ],
+  "gates": {
+    "G1": {
+      "targetLishueduMiB": 200,
+      "targetSmallMiB": 64,
+      "m6_2LishueduMiB": 208,
+      "lishueduHeapMiB": 207,
+      "cipherlinkHeapMiB": 37,
+      "examParentV3HeapMiB": 62,
+      "passed": false,
+      "disposition": "lishuedu 208→207 (noise). Cipherlink 37 and exam 62 ≤ 64. File objects were already interned (M1); JSON files array + FileFacts were ~10 MiB, not the 30–50 MiB estimate. Residual is graph intern tables + pending v4 rest payload Buffer (~20 MiB gzip). Gate not widened. Per-segment hydrate is the next heap knife, not more file object packing."
+    },
+    "G4": {
+      "targetMs": 2000,
+      "lishueduSnapshotLoadMs": 1348,
+      "passed": true
+    },
+    "G5": {
+      "steadyRatio": { "lishuedu": 0.914, "cipherlink": 0.596, "exam-parent-v3": 1.01 },
+      "steadyWarmP95Ms": { "lishuedu": 70.6, "cipherlink": 24.4, "exam-parent-v3": 38.9 },
+      "firstHydrateMs": { "lishuedu": 7582, "cipherlink": 594, "exam-parent-v3": 1325 },
+      "steadyPassed": true,
+      "firstHydratePassed": false
+    }
+  },
+  "projects": {
+    "lishuedu": {
+      "coldMs": 161191,
+      "snapshotLoadMs": 1348,
+      "heapAfterSnapshotLoadMiB": 207,
+      "firstHydrateMs": 7582,
+      "steadyWarmP95Ms": 70.6
+    },
+    "cipherlink": { "heapAfterSnapshotLoadMiB": 37, "snapshotLoadMs": 287, "steadyWarmP95Ms": 24.4 },
+    "exam-parent-v3": { "heapAfterSnapshotLoadMiB": 62, "snapshotLoadMs": 494, "steadyWarmP95Ms": 38.9 }
+  },
+  "artifacts": {
+    "memoryBenchmark": {
+      "path": "docs/phase-m/m6-3-memory.json",
+      "sha256": "4333cd7e10e46598d1ff0f7a96f6642f75cc052674f7e1b89e3b13ec9db3fd3b"
+    }
+  },
+  "isolation": {
+    "t0": { "fileColumnsAndStore": "77 tests pass including worker OPEN/HIBERNATE", "jdtlsBin": "/usr/bin/false" },
+    "t1": {
+      "dist": 1180,
+      "scripts": 215,
+      "fail": 0,
+      "smoke": true,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "d8a4db90f0e0a8c0fe9defb9f1d748295eeb9c5e",
+      "logSha256": "a1944fc41a34462d3b192fb62fab5b10f42532300d42094a7c9e12f409ffeac4"
+    }
+  }
+}

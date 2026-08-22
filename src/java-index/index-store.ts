@@ -2,6 +2,7 @@ import { javaEdgeId, javaFieldId, javaFileId, javaMethodId, javaTypeId } from ".
 import { JavaNameResolver, type JavaResolutionContext, type TypeRegistryView } from "./name-resolver.js";
 import { myBatisQualifiedId, type MyBatisMapperResourceFacts } from "./mybatis-types.js";
 import { EdgeColumns } from "./columnar/edge-columns.js";
+import { FileColumns, FileIdMap } from "./columnar/file-columns.js";
 import { MethodColumns } from "./columnar/method-columns.js";
 import { internField, internFile, internFileBundle, internMethod, internType } from "./columnar/facts-view.js";
 import type {
@@ -115,12 +116,13 @@ function validateBundleIds(bundle: JavaFileBundle): void {
 // method/edge id, plus reverse indexes so every Step 4 query is a map
 // lookup (bounded by result size), never a scan over every file or edge.
 export class JavaIndexStore {
-  readonly filesByPath = new Map<string, JavaFileFacts>();
+  private readonly edgeColumns = new EdgeColumns();
+  private readonly fileColumns = new FileColumns(this.edgeColumns.strings, this.edgeColumns.ranges);
+  readonly filesByPath = new FileIdMap(this.fileColumns);
   readonly typesById = new Map<string, JavaTypeFacts>();
   readonly typeIdByFqn = new Map<string, string>();
   readonly typeIdsBySimpleName = new Map<string, Set<string>>();
   readonly fieldsById = new Map<string, JavaFieldFacts>();
-  private readonly edgeColumns = new EdgeColumns();
   private readonly methodColumns = new MethodColumns(this.edgeColumns.strings, this.edgeColumns.ranges);
   readonly methodsById = new MethodIdMap(this.methodColumns);
   readonly methodIdsByOwnerAndName = new Map<string, Set<string>>();
@@ -218,7 +220,7 @@ export class JavaIndexStore {
     const dependents = this.dependentFilesForOwnedNodes(relativePath, nextNodeIds);
     this.removeFileInternal(relativePath);
 
-    this.filesByPath.set(relativePath, bundle.file);
+    this.fileColumns.add(bundle.file);
 
     const ownedNodeIds = new Set<string>();
     for (const type of bundle.types) {
@@ -303,8 +305,7 @@ export class JavaIndexStore {
   stampGeneration(relativePaths: readonly string[], generation: number): void {
     const paths = new Set(relativePaths);
     for (const relativePath of paths) {
-      const file = this.filesByPath.get(relativePath);
-      if (file) this.filesByPath.set(relativePath, { ...file, generation });
+      this.fileColumns.stampGeneration(relativePath, generation);
     }
     for (const relativePath of paths) {
       for (const edgeId of this.fileOwnedEdgeIds.get(relativePath) ?? []) {
@@ -623,7 +624,7 @@ export class JavaIndexStore {
     edges: readonly StaticEdge[];
     myBatisResources: readonly MyBatisMapperResourceFacts[];
   }): void {
-    this.filesByPath.clear();
+    this.fileColumns.clear();
     this.typesById.clear();
     this.typeIdByFqn.clear();
     this.typeIdsBySimpleName.clear();
@@ -646,7 +647,7 @@ export class JavaIndexStore {
         throw new Error(`duplicate file in snapshot: ${file.relativePath}`);
       }
       internFile(this.edgeColumns.strings, this.edgeColumns.ranges, file);
-      this.filesByPath.set(file.relativePath, file);
+      this.fileColumns.add(file);
     }
     this.ingestSnapshotFacts(data);
   }
@@ -745,7 +746,7 @@ export class JavaIndexStore {
   }
 
   private removeFileInternal(relativePath: string): void {
-    this.filesByPath.delete(relativePath);
+    this.fileColumns.remove(relativePath);
 
     for (const nodeId of this.fileOwnedNodeIds.get(relativePath) ?? []) {
       const type = this.typesById.get(nodeId);

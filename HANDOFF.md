@@ -2,7 +2,13 @@
 
 ## 当前任务
 
-**M6-2 已出口（PARTIAL）。** 下一刀 **M6-3 files/imports/ranges 列式化**。G1 lishuedu 208>200，中小仓已 ≤64。JIN N5 live 仍 FAIL，不进 N6，不合 `main`。
+**M6-3 已出口（PARTIAL）。** 下一刀 **M6-4 冷建时长归因**（lishuedu 161s vs N1 46s）。G1 lishuedu 207>200。JIN N5 live 仍 FAIL，不进 N6，不合 `main`。
+
+## M6-3（2026-08-22）
+
+判定 **PARTIAL**。JavaFileFacts + imports 落列；OPEN 解完 files 段后丢掉 JSON 数组。G1 208→207（文件对象在 M1 intern 后只剩 ~10 MiB，不是预估的 30–50）。中小仓 37/62 ≤64 **GO**。G4 1348ms **GO**。G5 稳态 0.914/0.596/1.01 **GO**。残差是 graph intern 表 + pending v4 rest gzip Buffer。T1 dist 1180 + scripts 215 fail 0。
+
+收口：`docs/phase-m/m6-3-baseline.json`、`docs/phase-m/m6-3-memory.json`。
 
 ## M6-2（2026-08-22）
 
@@ -24,7 +30,7 @@
 
 ## 已完成
 
-N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a COMPLETE → N3 COMPLETE → N4 PARTIAL 3/4（`8cc1762`）→ N5-01 GO → N5-02 live MEASURED FAIL → **M0–M5 PARTIAL** → **M6-1 PARTIAL** → **M6-2 PARTIAL**。隔离 T1 dist 1177 + scripts 215 fail 0。
+N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a COMPLETE → N3 COMPLETE → N4 PARTIAL 3/4（`8cc1762`）→ N5-01 GO → N5-02 live MEASURED FAIL → **M0–M5 PARTIAL** → **M6-1 PARTIAL** → **M6-2 PARTIAL** → **M6-3 PARTIAL**。隔离 T1 dist 1180 + scripts 215 fail 0。
 
 ## 当前状态 / 卡点
 
@@ -37,8 +43,8 @@ N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a 
 
 ## 下一步计划
 
-1. **M6-3**：files/imports/ranges 列式化。目标再省 30–50 MiB，lishuedu G1 ≤200，中小仓保持 ≤64。
-2. 随后 M6-4 冷建 134s vs N1 46s 归因。
+1. **M6-4**：拆 lishuedu 冷建 161s vs N1 46s 到解析 / v4 gzip 编码 / 子进程。
+2. G1 再往下需要段级按需 hydrate（丢掉 pending v4 rest Buffer），不是继续 pack files。
 3. JIN 侧仍停在 N5 live FAIL；**不要进 N6**，除非用户明确要求，不要重跑 live。
 4. 第四仓 + leave-one-repo-out 仍是合 `main` 硬门。
 
@@ -63,7 +69,7 @@ N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a 
 
 ## 给下一会话的第一步
 
-读 `docs/phase-m/m6-2-baseline.json`。下一刀 M6-3 files 列式化。不要进 N6，不要合 `main`，不要发明 TaskSuccess，不要重跑 N5 live。
+读 `docs/phase-m/m6-3-baseline.json`。下一刀 M6-4 冷建归因。不要进 N6，不要合 `main`，不要发明 TaskSuccess，不要重跑 N5 live。
 
 ## JIN 15A 面板（N5 FAIL / 不进 N6 / 不合 main，2026-08-21）
 

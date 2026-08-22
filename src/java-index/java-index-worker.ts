@@ -1168,6 +1168,7 @@ async function ensureAwake(): Promise<void> {
         edges: [],
         myBatisResources: []
       });
+      loadedView.files = [];
       pendingSnapshotView = loadedView;
       snapshotFactsHydrated = false;
     }
@@ -1367,6 +1368,8 @@ function startOwnSnapshotHydration(
         edges: [],
         myBatisResources: []
       });
+      store.stampGeneration(loaded.files.map(file => file.relativePath), requestedGeneration);
+      loadedView.files = [];
       pendingSnapshotView = loadedView;
       snapshotFactsHydrated = false;
       graphSyncedRevision = -1;
@@ -1375,7 +1378,6 @@ function startOwnSnapshotHydration(
       // A new RepoChangeCoordinator starts its own monotonic domain, so every
       // verified fact must be adopted into the OPEN generation instead of
       // asynchronously pulling the worker ahead of the coordinator clock.
-      store.stampGeneration(loaded.files.map(file => file.relativePath), requestedGeneration);
       for (const entry of loaded.coverage) {
         coverage.restoreProvisional({ ...entry, generation: requestedGeneration });
       }
