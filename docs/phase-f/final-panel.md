@@ -14,7 +14,7 @@ Live 29-model profile (`local-qwen`): host `47.106.205.246:1082`, model `opencla
 | E4 Serena + dual profile | COMPLETE | `docs/phase-e/e4-closeout.json` | SERENA_ABANDONED; --model-profile local-qwen/openrouter |
 | C1 candidates/evidence/next | COMPLETE | `docs/phase-c/c1-closeout.json` | T2 mean 0.59 DISCOVERY_GAP floor; N=24 |
 | C2 byte slim | COMPLETE | `docs/phase-c/c2-closeout.json` | T2 first-call P50 0.951≤1.2 |
-| C3 evidence budget | COMPLETE | `docs/phase-c/c3-closeout.json` | cap 3; not reverted; T2 floor recorded |
+| C3 evidence budget | COMPLETE | `docs/phase-c/c3-closeout.json` | cap 3; 30% token drop; T2 union 0.59 DISCOVERY_GAP floor; C2 P50 0.952; schema 578 |
 | G1 ruoyi-vue-pro golden | COMPLETE | `docs/phase-g/g1-closeout.json` | 40 scenes / 12 holdout; pin 2bbe79b3; holdout frozen |
 | G2 leave-one-repo-out | G2_OVERFIT_FAIL | `docs/phase-g/g2-closeout.json` | run 2 still >15% on ruoyi; N4 same-module pack landed; escalate; blocks F not L1 |
 | O1 child RSS ≤ 1536 | G3_MISS | `docs/phase-o/o1-closeout.json` | three knives landed; lishuedu 1851 MiB floor; gate kept; residual to F1 |

@@ -7,38 +7,71 @@
   "mergeToMain": false,
   "srcTouched": true,
   "defaultChainIdentity": "UNCHANGED",
-  "note": "Constants only. Evidence cap 4→3, pack budget 2000→1400, file guard 20→14. Selection algorithm unchanged. Candidates wire N=24 after T2 (C2 P50 0.951≤1.2).",
+  "note": "Constants only. Evidence cap 4→3, pack budget 2000→1400, file guard 20→14. Selection algorithm unchanged. Planner T0 proves ≥30% token drop vs C2 2000 budget. Candidates wire N=24. Coverage did not drop vs C1; remaining misses are DISCOVERY_GAP (not in the graph frontier), so evidence was not reverted to 4.",
   "evidenceFileCap": 3,
   "defaultTokenBudget": 1400,
   "maxDistinctFilesGuard": 14,
   "reverted": false,
+  "schema": {
+    "javaContextEstimatedTokens": 578,
+    "budget": 700,
+    "result": "GO"
+  },
   "coverage": {
-    "offlineCandidatesUnionEvidence": "GO",
+    "offlineCandidatesUnionEvidence": "T2_MEASURED_FLOOR",
     "holdoutT2": "T2_MEASURED_FLOOR",
     "mean": 0.5904623154623154,
+    "n": 6,
     "gate": 0.9,
-    "reverted": false
+    "passed": false,
+    "reverted": false,
+    "disposition": "DISCOVERY_GAP_FLOOR",
+    "file": "docs/phase-c/c3-t2.json",
+    "sha256": "2cc8c88c0b78494bf8b0bd50b6163264292dc051f512e7348db94f1a5d110691",
+    "missingByHoldout": {
+      "exam-score-export-cross-module-holdout": ["SchoolQueryService.java"],
+      "paper-task-claim-iam-holdout": ["MeQueryService.java"],
+      "client-release-storage-presign-holdout": ["DefaultClientReleasePublishAppService.java", "ClientReleaseRepository.java", "MybatisClientReleaseRepository.java", "ClientReleaseMapper.java"],
+      "backend-operation-log-aspect-async-audit-holdout": ["OperationLogRepository.java", "OperationLogEntry.java", "MybatisOperationLogRepository.java", "OperationLogMapper.java"],
+      "exam-room-print-download-types-persistent-bundle": ["ExamRoomPrintBundleService.java", "ExamRoomPrintBundleServiceImpl.java", "ExamRoomPrintBundleJob.java", "ExamRoomPrintBundleJobTemplate.java", "DownloadCenterService.java", "ExamRoomPrintRendererRoute.java"],
+      "candidate-pay-order-cross-module-admission": ["ApplyPayService.java", "ApplyPayServiceImpl.java", "ApplyPayTemplate.java", "OrderRepository.java", "ApplyInfo.java", "Examination.java", "PayAccount.java", "WechatApplyService.java", "AlipayPayService.java", "CebPayService.java"]
+    }
   },
   "bytes": {
     "c2P50StillHolds": true,
-    "p50": 0.951421188630491,
-    "gate": 1.2
+    "p50": 0.9515934539190353,
+    "n": 6,
+    "gate": 1.2,
+    "passed": true
+  },
+  "tokenDrop": {
+    "vsC2Budget2000": "GO",
+    "test": "C3 shipped budget packs at least 30% fewer tokens than the C2 2000 budget"
   },
   "isolation": {
     "t0": {
-      "tests": 75,
+      "tests": 51,
       "fail": 0,
       "jdtlsBin": "/usr/bin/false",
-      "executableTree": "3e1e8f2202cd2726aeb2c058150264355b078aeb",
-      "logSha256": "f6e0d716466ab0b9584f4a34900eccac2ceeda59eb79b4717c30813403be938c"
+      "executableTree": "34caad1f7fcfd7aba725e64b73dfcbe4d9f14fed",
+      "note": "planner, candidates, serializer, java-context, plan-query"
     },
     "t1": {
-      "dist": 1186,
-      "scripts": 232,
+      "tests": 6,
       "fail": 0,
       "jdtlsBin": "/usr/bin/false",
-      "executableTree": "3e1e8f2202cd2726aeb2c058150264355b078aeb",
-      "logSha256": "e40f3aa369dfbf184e6b59b5da36d2dfaaae275843cbffe87da362215687d462"
+      "executableTree": "34caad1f7fcfd7aba725e64b73dfcbe4d9f14fed",
+      "note": "scripts/run-jin-n5-context-replay.test.mjs"
+    },
+    "t2": {
+      "coldBuildChildEnv": true,
+      "goldensJavaFiles": { "lishuedu": 5312, "cipherlink": 629, "exam-parent-v3": 1369 },
+      "logSha256": "2ce2052d86f9fa33b18c30229c72311497b3498b857278cedf8c37128c147596",
+      "executableTree": "34caad1f7fcfd7aba725e64b73dfcbe4d9f14fed"
+    },
+    "schema": {
+      "javaContextEstimatedTokens": 578,
+      "executableTree": "34caad1f7fcfd7aba725e64b73dfcbe4d9f14fed"
     }
   }
 }
