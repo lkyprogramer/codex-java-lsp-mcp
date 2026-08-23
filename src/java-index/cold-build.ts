@@ -27,6 +27,7 @@ import {
   type JavaIndexSnapshotV3
 } from "./snapshot.js";
 import { STABLE_ID_VERSION } from "./stable-id.js";
+import type { JavaTypeFacts } from "./index-types.js";
 
 export const SNAPSHOT_FILE_NAME = "java-index-snapshot.json.gz";
 export const GRAPH_SNAPSHOT_FILE_NAME = "java-knowledge-graph.json.gz";
@@ -307,22 +308,22 @@ function resolveAll(
 ): void {
   const registry = buildTypeRegistryView([...store.typesById.values()], [], owner => store.methodsOfOwner(owner));
   const resolver = new JavaNameResolver(registry);
+  const byId = registry.byId as Map<string, JavaTypeFacts>;
   for (const paths of pathsByRoot.values()) {
     for (const relativePath of paths) {
       const raw = store.files([relativePath])[0];
       if (!raw) continue;
       const resolved = resolveFileRefs(raw, resolver, registry);
       store.replaceFile({ ...resolved, edges: [] });
+      for (const type of resolved.types) byId.set(type.typeId, type);
     }
     maybeGc();
   }
-  const finalRegistry = buildTypeRegistryView([...store.typesById.values()], [], owner => store.methodsOfOwner(owner));
-  const finalResolver = new JavaNameResolver(finalRegistry);
   for (const paths of pathsByRoot.values()) {
     for (const relativePath of paths) {
       const resolved = store.files([relativePath])[0];
       if (!resolved) continue;
-      const edges = buildStaticEdges(resolved, finalRegistry, finalResolver);
+      const edges = buildStaticEdges(resolved, registry, resolver);
       const withEdges = { ...resolved, edges };
       store.replaceFile(withEdges);
       graphBuilder.replaceFile(withEdges, store, generation);

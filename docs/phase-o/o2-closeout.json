@@ -5,34 +5,45 @@
   "dated": "2026-08-23",
   "decision": "O2_MISS",
   "mergeToMain": false,
-  "srcTouched": false,
+  "srcTouched": true,
   "defaultChainIdentity": "UNCHANGED",
   "gateMs": 60000,
+  "knivesLanded": [
+    "incremental type-registry reuse: pass 1 writes resolved types into the same byId map; pass 2 does not rebuild the registry"
+  ],
   "knivesNotLanded": [
-    "resolveAll worker-pool shards (digest and RSS risk at 2.6 GiB)",
-    "incremental source-root registry reuse"
+    "resolveAll worker-pool shards (RSS 1851-2250 MiB already over G3; cloning the registry into workers is rejected)"
   ],
   "measured": {
-    "lishueduMs": 66785.650084,
-    "cipherlinkMs": 7282.158917000008,
-    "examParentV3Ms": 12200.663375000004,
+    "lishueduMs": 83488.9,
+    "cipherlinkMs": 8050.5,
+    "examParentV3Ms": 15168.2,
+    "lishueduParentColdMs": 105322.500292,
     "lishueduPass": false,
     "file": "docs/phase-o/o2-cold.json",
-    "sha256": "3c73a625ad6bdfa044592b76d1d8b9a71086149a4b26b9eccebf48a9bfcc5a1a"
+    "sha256": "2684419c0af60c20173bbbdae9abc32ee52534d4a91d5ed18cdddd796cd08d35",
+    "memoryFile": "docs/phase-o/o2-memory.json",
+    "memorySha256": "6386e1e3f5b5fefe033eb63624203646409e382d9bc580a37d548522b8e7ddac"
   },
-  "note": "lishuedu cold 66.8s > 60s. resolve remains 40.1s of that. Parallel shards were not landed: cloning the type registry into worker threads would raise the O1 RSS miss further, and harvest forbids digest drift. Gate kept. Snapshot fallback remains. T3 identity skipped because the default chain was not modified.",
+  "digest": {
+    "vsHeadB8d75ca": "BIT_IDENTICAL",
+    "lishuedu": "965a653e22e742508ecd47f11fc86e84c97e6744bcb90ae8f7c03a81999a2d14",
+    "cipherlink": "bc7f3be6cd13162c6a9ba16635f5f1f18954571930fe8ddb342213c5a2b6dcfc",
+    "examParentV3": "0a69feab2582dd1f855fcafdfda4ffe7d8e7b12888d3a94ddcfec2c112d0ceb0"
+  },
+  "note": "Tried source-root registry reuse. lishuedu child combined 83.5s > 60s (resolve 48.8s). Parallel shards not landed: O1 child RSS is already over 1536. Digest matches HEAD b8d75ca. Gate kept. Snapshot fallback remains.",
   "isolation": {
     "t0": {
-      "tests": 10,
+      "tests": 4,
       "fail": 0,
-      "note": "memory-benchmark warmup tests (O3) plus attribution CLI; no src resolve change",
       "jdtlsBin": "/usr/bin/false",
-      "executableTree": "58d3fc065f02c8ee7e00cf66dee8c782440c2a2a",
-      "logSha256": "33962165ee3adf7dd2ca0790f66037d9acb4a8ed73136b6552e0d95ee9a472c5"
+      "executableTree": "c74732013631bb3032a90c7625c36c5daa482226",
+      "note": "dist/java-index/cold-build.test.js"
     },
     "cold": {
-      "logSha256": "78e68634838cb1a2688a82aab3549c0fcb089796ab806686ad77d7ae33b26f03",
-      "executableTree": "58d3fc065f02c8ee7e00cf66dee8c782440c2a2a",
+      "logSha256": "122d311047133da25cb7ad1eba39602383f29222bf3ca863562f7db7c9b49c81",
+      "executableTree": "c74732013631bb3032a90c7625c36c5daa482226",
+      "coldBuildChildEnv": true,
       "inProcessAttribution": true
     }
   }

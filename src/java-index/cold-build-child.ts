@@ -3,6 +3,7 @@
 // output: v4 snapshot files plus one JSON line {ok, files, rssPeakBytes, heapUsedBytes}.
 // pos: M3 P3. Spawned by the JavaIndex worker; must not open a worker of its own.
 import { spawn } from "node:child_process";
+import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runColdIndexBuild, type ColdBuildPhase, type ColdBuildResult } from "./cold-build.js";
@@ -105,7 +106,14 @@ async function main(): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  process.stdout.write(`${JSON.stringify(combinePhaseResults(parseResult, resolveResult))}\n`);
+  const combined = combinePhaseResults(parseResult, resolveResult);
+  await writeFile(path.join(cli.cacheDir, "cold-build-metrics.json"), `${JSON.stringify({
+    rssPeakBytes: combined.rssPeakBytes,
+    heapUsedBytes: combined.heapUsedBytes,
+    files: combined.files,
+    phasesMs: combined.phasesMs
+  })}\n`);
+  process.stdout.write(`${JSON.stringify(combined)}\n`);
 }
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
