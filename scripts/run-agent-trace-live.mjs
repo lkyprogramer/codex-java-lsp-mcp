@@ -141,10 +141,19 @@ export function collectImpactPaths(result) {
     const mapped = byId.get(item.fileId);
     if (typeof mapped === "string" && mapped) paths.add(normalizeRel(mapped));
   }
-  for (const context of result?.contexts ?? []) {
+  for (const context of [...(result?.contexts ?? []), ...(result?.evidence ?? [])]) {
     if (typeof context?.path === "string" && context.path) paths.add(normalizeRel(context.path));
   }
+  for (const filePath of collectCandidatePaths(result)) paths.add(filePath);
+  for (const item of result?.unresolved ?? []) {
+    const value = typeof item === "string" ? item : (item?.path || (looksLikeRelPath(item?.id) ? item.id : ""));
+    if (typeof value === "string" && value) paths.add(normalizeRel(value));
+  }
   return [...paths];
+}
+
+function looksLikeRelPath(value) {
+  return typeof value === "string" && (value.includes("/") || value.endsWith(".java"));
 }
 
 export function collectCandidatePaths(result) {
@@ -157,17 +166,35 @@ export function collectCandidatePaths(result) {
 }
 
 export function compactContextForModel(result, maxChars = MAX_TOOL_RESULT_CHARS) {
+  const packed = result?.evidence ?? result?.contexts ?? [];
   const payload = {
     coverage: result?.coverage,
     resolvedIntent: result?.resolvedIntent,
     anchor: result?.anchor,
-    contexts: (result?.contexts ?? []).map(item => ({
+    candidates: (result?.candidates ?? []).slice(0, 24).map(item => (
+      typeof item === "string"
+        ? { path: item }
+        : { path: item.path, role: item.role, hop: item.hop, reason: item.reason }
+    )),
+    evidence: packed.map(item => ({
       path: item.path,
       role: item.role,
       spans: (item.spans ?? []).map(span => ({ start: span.start, end: span.end }))
     })),
-    unresolved: (result?.unresolved ?? []).slice(0, 8).map(item => ({ id: item.id, role: item.role })),
-    next: (result?.next ?? []).slice(0, 4).map(item => ({ action: item.action, reason: item.reason }))
+    contexts: packed.map(item => ({
+      path: item.path,
+      role: item.role,
+      spans: (item.spans ?? []).map(span => ({ start: span.start, end: span.end }))
+    })),
+    unresolved: (result?.unresolved ?? []).slice(0, 8).map(item => ({ id: item.id, role: item.role, path: item.path })),
+    next: (result?.next ?? []).slice(0, 4).map(item => ({
+      action: item.action,
+      file: item.file,
+      line: item.line,
+      direction: item.direction,
+      closure: item.closure,
+      reason: item.reason
+    }))
   };
   let text = JSON.stringify(payload);
   if (text.length > maxChars) text = `${text.slice(0, maxChars)}…[truncated]`;

@@ -219,7 +219,7 @@ test("jin arm records coverage from java_context spans", async () => {
   assert.equal(result.toolCallCount, 1);
 });
 
-test("jin candidatePaths do not count as coverage hits", async () => {
+test("jin candidatePaths count as coverage hits after E3", async () => {
   const result = await runLiveAgentTask({
     task: {
       taskId: "demo:t",
@@ -244,12 +244,13 @@ test("jin candidatePaths do not count as coverage hits", async () => {
     }),
     invoke: async () => ({
       contexts: [{ path: "src/A.java", role: "ANCHOR", spans: [{ start: 1, end: 2 }] }],
-      candidates: [{ path: "src/Hidden.java", role: "CALLS" }]
+      evidence: [{ path: "src/A.java", role: "ANCHOR", spans: [{ start: 1, end: 2 }] }],
+      candidates: [{ path: "src/Hidden.java", role: "CALLEE", hop: 1, reason: "CALLS_EXACT←A.run" }]
     }),
     maxRounds: 1
   });
-  assert.equal(result.taskSuccess, false);
-  assert.deepEqual(result.coverage.missing, ["src/Hidden.java"]);
+  assert.equal(result.taskSuccess, true);
+  assert.deepEqual(result.coverage.missing, []);
   assert.deepEqual(result.candidatePaths, ["src/Hidden.java"]);
 });
 
@@ -309,13 +310,15 @@ test("matrix and live report schemas are v2", () => {
   assert.equal(LIVE_TRACE_SCHEMA_VERSION, "java-intelligence-v5r-live-agent-trace/v2");
 });
 
-test("candidates are not observed paths until E3", () => {
+test("candidates and path-like unresolved enter observed paths", () => {
   const result = {
-    candidates: [{ path: "src/Hidden.java", role: "CALLS" }],
+    candidates: [{ path: "src/Hidden.java", role: "CALLEE", hop: 1, reason: "CALLS_EXACT←A.run" }],
+    evidence: [{ path: "src/A.java", role: "ANCHOR" }],
     contexts: [{ path: "src/A.java", role: "ANCHOR" }],
-    files: [{ id: "1", path: "src/B.java" }]
+    files: [{ id: "1", path: "src/B.java" }],
+    unresolved: [{ id: "src/Gap.java", role: "entity" }, { id: "O3", role: "entity" }]
   };
-  assert.deepEqual(collectImpactPaths(result).sort(), ["src/A.java", "src/B.java"]);
+  assert.deepEqual(collectImpactPaths(result).sort(), ["src/A.java", "src/B.java", "src/Gap.java", "src/Hidden.java"]);
   assert.deepEqual(collectCandidatePaths(result), ["src/Hidden.java"]);
 });
 

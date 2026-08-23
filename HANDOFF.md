@@ -2,7 +2,7 @@
 
 ## 当前任务
 
-Harvest E/C/G/O → L1 → F。**不合 `main`。** F0/E1/E2/E4/C1 COMPLETE。下一步 E3（candidates 计入观测）然后 C2。L1 才是下一次外呼。Serena `SERENA_ABANDONED`。v3 golden 已空，C1 T2 记 `T2_BLOCKED_GOLDEN_EMPTY`。
+Harvest E/C/G/O → L1 → F。**不合 `main`。** F0/E1–E4/C1 COMPLETE。下一步 C2 瘦身。L1 才是下一次外呼。Serena `SERENA_ABANDONED`。v3 golden 已空，C1 T2 记 `T2_BLOCKED_GOLDEN_EMPTY`。
 
 ## E1（2026-08-23）
 
@@ -19,6 +19,10 @@ Harvest E/C/G/O → L1 → F。**不合 `main`。** F0/E1/E2/E4/C1 COMPLETE。�
 ## C1（2026-08-23）
 
 判定 **COMPLETE**。`java_context` 合同 v2：`candidates[]` frontier N=24，`evidence[]` 装箱 spans，`next[]` 带 file/line。`contexts` 暂作 alias。schema 578 ≤ 700。T0 30/30；T1 dist 1184 + scripts 231 fail 0。T2 钉仓 `/tmp/codex-java-v3-golden-20260809` 已无源码（lishuedu 0 .java）→ `T2_BLOCKED_GOLDEN_EMPTY`。收口 `docs/phase-c/c1-closeout.json`。
+
+## E3（2026-08-23）
+
+判定 **COMPLETE**。`collectImpactPaths` 计入 `candidates[]`、`evidence[]`、带路径的 `unresolved`。compact 载荷把 frontier 交给模型。隔离 T0 22/22 fail 0。收口 `docs/phase-e/e3-closeout.json`。
 
 ## N5 live 复测（2026-08-22）
 
@@ -75,7 +79,7 @@ N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a 
 
 ## 下一步计划
 
-1. Harvest 下一张卡：E3 `collectImpactPaths` 计入 candidates；然后 C2 瘦身。G/O 可并行。T2 需要可用的三仓 golden。
+1. Harvest 下一张卡：C2 输出瘦身（P50 ≤ impact compact × 1.2）。G/O 可并行。T2 需要可用的三仓 golden。
 2. L1 一次性双模型 live（local-qwen `47.106.205.246:1082` + OpenRouter `stealth/ox-alpha`）。FAIL 则撤 `java_context` 公开工具面，没有第四次 live。
 3. 不合 `main`。F2/F3 等用户。
 4. 冷建 child RSS 2311>1536 与 resolveAll 46s 走 O1/O2，不重开 M 轨架构。
