@@ -5,19 +5,25 @@ import type { ContextContract } from "./context-contract.js";
 
 function contract(): ContextContract {
   return {
-    version: 1,
+    version: 2,
     generation: 3,
     coverage: "PARTIAL",
     resolvedIntent: "IMPLEMENTATION_CHANGE",
     resolvedAnchors: [{ path: "src/A.java", symbol: "run", layer: "graph" }],
     anchor: { path: "src/A.java", symbol: "run" },
+    evidence: [
+      { role: "ANCHOR", path: "src/A.java", proof: ["DECLARES"], spans: [{ start: 4, end: 20 }] },
+      { role: "CALLEE", path: "src/B.java", proof: ["CALLS_EXACT"], spans: [{ start: 10, end: 16 }] },
+      { role: "DATAFLOW", path: "src/ghost.java", proof: [], spans: [] }
+    ],
+    candidates: [{ path: "src/A.java", role: "ANCHOR", hop: 0, reason: "ANCHOR" }],
     contexts: [
       { role: "ANCHOR", path: "src/A.java", proof: ["DECLARES"], spans: [{ start: 4, end: 20 }] },
       { role: "CALLEE", path: "src/B.java", proof: ["CALLS_EXACT"], spans: [{ start: 10, end: 16 }] },
       { role: "DATAFLOW", path: "src/ghost.java", proof: [], spans: [] }
     ],
     unresolved: [{ id: "O3", role: "entity" }],
-    next: [],
+    next: [{ action: "expand", file: "src/A.java", line: 1, reason: "entity" }],
     cost: { modelTokens: 80, serviceMs: 12 }
   };
 }

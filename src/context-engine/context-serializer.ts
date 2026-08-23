@@ -5,6 +5,7 @@ import type { GraphSearchResult } from "./graph-search.js";
 import type { EvidenceBundle } from "./evidence-bundle.js";
 import type { PlanResult } from "./context-planner.js";
 import { BYTES_DIV_4, estimateTokens, type Tokenizer } from "./token-estimator.js";
+import { frontierCandidates, nextSteps } from "./context-candidates.js";
 import {
   CONTEXT_CONTRACT_VERSION,
   PLANNER_VERSION,
@@ -69,6 +70,8 @@ export function serializeContext(input: SerializeInput): ContextContract {
     .map(([id, role]) => ({ id, role }))
     .sort((left, right) => left.id.localeCompare(right.id));
   const honestCoverage: "COMPLETE" | "PARTIAL" = unresolved.length === 0 && selected.length > 0 ? "COMPLETE" : "PARTIAL";
+  const evidence = selected.map(bundle => contextItem(bundle, input.includeSource));
+  const candidates = frontierCandidates(input.search.bundles);
   const contract: ContextContract = {
     version: CONTEXT_CONTRACT_VERSION,
     generation: input.generation,
@@ -81,12 +84,20 @@ export function serializeContext(input: SerializeInput): ContextContract {
       path: anchorBundle?.path ?? "",
       symbol: symbolOf(anchorBundle)
     },
-    contexts: selected.map(bundle => contextItem(bundle, input.includeSource)),
+    evidence,
+    candidates,
+    contexts: evidence,
     unresolved,
-    next: unresolved.map(item => ({ action: "expand", reason: item.role })),
+    next: nextSteps({
+      unresolved,
+      candidates,
+      evidence,
+      anchorPath: anchorBundle?.path ?? ""
+    }),
     cost: {
       modelTokens: estimateTokens(JSON.stringify({
-        contexts: selected.map(bundle => contextItem(bundle, input.includeSource)),
+        evidence,
+        candidates,
         unresolved
       }), tokenizer) + selected.reduce((sum, bundle) => sum + bundle.tokenCost, 0),
       serviceMs: Math.max(0, Math.round(input.serviceMs))
@@ -103,10 +114,12 @@ export function serializeContext(input: SerializeInput): ContextContract {
 }
 
 export function sourceParity(withSource: ContextContract, withoutSource: ContextContract): boolean {
-  if (withSource.contexts.length !== withoutSource.contexts.length) return false;
-  for (let index = 0; index < withSource.contexts.length; index += 1) {
-    const left = withSource.contexts[index]!;
-    const right = withoutSource.contexts[index]!;
+  const leftItems = withSource.evidence ?? withSource.contexts;
+  const rightItems = withoutSource.evidence ?? withoutSource.contexts;
+  if (leftItems.length !== rightItems.length) return false;
+  for (let index = 0; index < leftItems.length; index += 1) {
+    const left = leftItems[index]!;
+    const right = rightItems[index]!;
     if (left.path !== right.path || left.role !== right.role) return false;
     if (JSON.stringify(left.proof) !== JSON.stringify(right.proof)) return false;
     if (left.spans.length !== right.spans.length) return false;

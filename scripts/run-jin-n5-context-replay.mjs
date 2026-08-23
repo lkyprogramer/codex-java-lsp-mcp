@@ -2,6 +2,7 @@
 // input: Three frozen golden Java repos plus golden holdout scenes.
 // output: java_context selected-path replay JSON. Scene ids are not sent as task text.
 // pos: JIN N5 T2. Isolated. Does not call a model or invent TaskSuccess.
+import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -45,6 +46,45 @@ export function evaluateN5ContextGates(results) {
   });
 }
 
+export function requiredFilesFromHoldout(row) {
+  return [...new Set([...(row?.golden?.mustHit ?? []), ...(row?.golden?.taskBlocking ?? [])])].filter(Boolean);
+}
+
+export function coverageUnion(result) {
+  return [...new Set([
+    ...(result?.evidence ?? result?.selected ?? []),
+    ...(result?.candidates ?? [])
+  ])];
+}
+
+export function evaluateC1HoldoutCoverage(results, { minMean = 0.9 } = {}) {
+  const autos = (results ?? []).filter(item => item.intent === "auto");
+  const rows = autos.map(item => {
+    const required = item.requiredFiles ?? [];
+    const union = new Set(coverageUnion(item));
+    const hit = required.filter(file => union.has(file));
+    const missing = required.filter(file => !union.has(file));
+    return {
+      project: item.project,
+      scenarioId: item.scenarioId,
+      required: required.length,
+      hit: hit.length,
+      rate: required.length ? hit.length / required.length : null,
+      missing
+    };
+  });
+  const rates = rows.map(row => row.rate).filter(rate => typeof rate === "number");
+  const mean = rates.length ? rates.reduce((sum, rate) => sum + rate, 0) / rates.length : null;
+  return {
+    schemaVersion: "c1-holdout-coverage/v1",
+    n: rows.length,
+    mean,
+    minMean,
+    passed: mean != null && mean >= minMean && rows.length === 6,
+    rows
+  };
+}
+
 function parseCli(args) {
   const options = new Map();
   for (let index = 0; index < args.length; index += 1) {
@@ -78,13 +118,19 @@ async function loadHoldouts(project) {
 
 async function waitForComplete(index, timeoutMs) {
   const started = Date.now();
+  let last = "";
   while (Date.now() - started < timeoutMs) {
     const status = await index.routerStatus(true);
     const pending = (status.javaIndex?.pendingBackground ?? 0) + (status.javaIndex?.pendingForeground ?? 0);
+    const line = `${status.coverage} files=${status.javaIndex?.files ?? 0} pending=${pending} state=${status.javaIndex?.state ?? "?"}`;
+    if (line !== last) {
+      process.stderr.write(`[replay] wait ${line}\n`);
+      last = line;
+    }
     if (status.coverage === "complete" && pending === 0) return status;
     await new Promise(resolve => setTimeout(resolve, 200));
   }
-  throw new Error("JavaIndex did not reach complete coverage before timeout");
+  throw new Error(`JavaIndex did not reach complete coverage before timeout (${last || "no-status"})`);
 }
 
 async function querySelected(index, row, intent) {
@@ -104,7 +150,9 @@ async function querySelected(index, row, intent) {
     anchorColumn: row.anchor.column
   });
   const discovered = (result.bundles ?? []).map(item => item.path);
-  const selected = (result.contract?.contexts ?? []).map(item => item.path);
+  const evidence = (result.contract?.evidence ?? result.contract?.contexts ?? []).map(item => item.path);
+  const candidates = (result.contract?.candidates ?? []).map(item => item.path);
+  const selected = evidence;
   return {
     project: row.projectId,
     scenarioId: row.id,
@@ -112,8 +160,11 @@ async function querySelected(index, row, intent) {
     resolvedIntent: result.contract?.resolvedIntent ?? result.resolvedIntent,
     taskText,
     anchor: row.anchor.file,
+    requiredFiles: requiredFilesFromHoldout(row),
     discovered,
     selected,
+    evidence,
+    candidates,
     tokenCost: result.contract?.cost?.modelTokens ?? null
   };
 }
@@ -132,9 +183,9 @@ async function main() {
   const results = [];
   for (const project of ["lishuedu", "cipherlink", "exam-parent-v3"]) {
     const repoRoot = path.resolve(cli.repositories[project]);
+    console.error(`jin-n5-context-replay: ${project} root=${repoRoot} exists=${existsSync(repoRoot)}`);
     const client = new JavaIndexClient(repoRoot, path.join(cacheRoot, project));
     const index = new RouterJavaIndex(repoRoot, client);
-    console.error(`jin-n5-context-replay: ${project}`);
     await index.open(1);
     await index.reconcile(1);
     await waitForComplete(index, cli.timeoutMs);
@@ -148,12 +199,14 @@ async function main() {
     await index.close();
   }
   const gates = evaluateN5ContextGates(results);
-  const passed = gates.every(item => item.hit);
+  const c1 = evaluateC1HoldoutCoverage(results);
+  const passed = gates.every(item => item.hit) && c1.passed;
   const payload = {
-    schemaVersion: "jin-n5-context-replay/v1",
+    schemaVersion: "jin-n5-context-replay/v2",
     dated: new Date().toISOString().slice(0, 10),
     passed,
     gates,
+    c1Coverage: c1,
     results
   };
   await mkdir(path.dirname(path.resolve(cli.output)), { recursive: true });
@@ -161,6 +214,7 @@ async function main() {
   console.log(JSON.stringify({
     output: path.resolve(cli.output),
     passed,
+    c1Mean: c1.mean,
     gates: gates.map(item => ({ scenarioId: item.scenarioId, target: item.target.split("/").pop(), hit: item.hit }))
   }));
   if (!passed) process.exitCode = 1;

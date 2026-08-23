@@ -19,7 +19,8 @@ const JIN_COMPACT_ROLE: Record<string, string> = {
 };
 
 export function toCompactFromContract(contract: ContextContract, elapsedMs: number): CompactImpact {
-  const contexts = contract.contexts
+  const packed = contract.evidence ?? contract.contexts ?? [];
+  const contexts = packed
     .filter(item => item.spans.length > 0)
     .map(item => ({
       path: item.path,

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  evaluateC1HoldoutCoverage,
   evaluateN5ContextGates,
   holdoutTaskText,
   N5_CONTEXT_GATES
@@ -80,4 +81,22 @@ test("N5 context gates fail when the persistence proving file is only discovered
     }
   ]);
   assert.equal(gates.find(item => item.scenarioId.includes("presign"))?.hit, false);
+});
+
+test("C1 coverage counts required files in candidates union evidence", () => {
+  const rows = [
+    { project: "lishuedu", scenarioId: "a", intent: "auto", requiredFiles: ["src/A.java", "src/B.java"], evidence: ["src/A.java"], candidates: ["src/B.java"] },
+    { project: "lishuedu", scenarioId: "b", intent: "auto", requiredFiles: ["src/A.java"], evidence: ["src/A.java"], candidates: [] },
+    { project: "cipherlink", scenarioId: "c", intent: "auto", requiredFiles: ["src/A.java", "src/C.java", "src/D.java", "src/E.java"], evidence: ["src/A.java"], candidates: ["src/A.java"] },
+    { project: "cipherlink", scenarioId: "d", intent: "auto", requiredFiles: ["src/A.java"], evidence: ["src/A.java"], candidates: [] },
+    { project: "exam-parent-v3", scenarioId: "e", intent: "auto", requiredFiles: ["src/A.java"], evidence: ["src/A.java"], candidates: [] },
+    { project: "exam-parent-v3", scenarioId: "f", intent: "auto", requiredFiles: ["src/A.java"], evidence: ["src/A.java"], candidates: [] }
+  ];
+  const coverage = evaluateC1HoldoutCoverage(rows);
+  assert.equal(coverage.n, 6);
+  assert.equal(coverage.rows[0].rate, 1);
+  assert.equal(coverage.rows[2].rate, 0.25);
+  assert.equal(coverage.passed, false);
+  rows[2].candidates = ["src/C.java", "src/D.java", "src/E.java"];
+  assert.equal(evaluateC1HoldoutCoverage(rows).passed, true);
 });

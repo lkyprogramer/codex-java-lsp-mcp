@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "c-c1-closeout/v1",
+  "track": "c",
+  "card": "C1",
+  "dated": "2026-08-23",
+  "decision": "COMPLETE",
+  "mergeToMain": false,
+  "srcTouched": true,
+  "defaultChainIdentity": "UNCHANGED",
+  "note": "Output layer only. Graph search, ranking, and packing are unchanged. java_impact path unchanged. contexts[] kept as evidence alias so the live harness still sees packed spans until C2/E3.",
+  "contractVersion": 2,
+  "candidateFrontierN": 24,
+  "schema": {
+    "javaContextEstimatedTokens": 578,
+    "budget": 700,
+    "result": "GO"
+  },
+  "t2": {
+    "status": "T2_BLOCKED_GOLDEN_EMPTY",
+    "replay": "docs/phase-c/c1-replay.json",
+    "goldensJavaFiles": {
+      "lishuedu": 0,
+      "cipherlink": 124,
+      "exam-parent-v3": 7
+    }
+  },
+  "isolation": {
+    "t0": {
+      "tests": 30,
+      "fail": 0,
+      "jdtlsBin": "/usr/bin/false",
+      "logSha256": "3f3fbf0e223185b8bd85b824c3e9ecf9ae45f699deb0a0ed902bc8398aca8c72"
+    },
+    "t1": {
+      "dist": 1184,
+      "scripts": 231,
+      "fail": 0,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "ffe6201e0f54e9329343621720ea4a51eb59a35f",
+      "logSha256": "b4aac64b35e499673f047b8e227cad7d257bce6b4514364cfecc13d01826046f"
+    }
+  }
+}

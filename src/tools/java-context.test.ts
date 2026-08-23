@@ -14,10 +14,11 @@ import {
 
 const schema = z.object(javaContextSchema);
 
-test("java_context description stays within the 600-token schema budget", () => {
+test("java_context description stays within the 700-token schema budget", () => {
   assert.equal(JAVA_CONTEXT_DESCRIPTION.includes("IMPLEMENTATION_CHANGE:"), true);
   assert.equal(JAVA_CONTEXT_DESCRIPTION.includes("auto:"), true);
-  assert.ok(Math.ceil(Buffer.byteLength(JAVA_CONTEXT_DESCRIPTION, "utf8") / 4) <= 600);
+  assert.equal(JAVA_CONTEXT_DESCRIPTION.includes("Prefer one search"), false);
+  assert.ok(Math.ceil(Buffer.byteLength(JAVA_CONTEXT_DESCRIPTION, "utf8") / 4) <= 700);
 });
 
 test("java_context schema requires intent and allows no-anchor task plus navigate", () => {
@@ -119,14 +120,17 @@ function entity(simpleName: string, relativePath: string, layer: EntityHit["laye
 }
 
 function sampleContract(): ContextContract {
+  const evidence = [{ role: "ANCHOR", path: "src/A.java", proof: ["DECLARES"], spans: [{ start: 1, end: 4 }] }];
   return {
-    version: 1,
+    version: 2,
     generation: 3,
     coverage: "PARTIAL",
     resolvedIntent: "IMPLEMENTATION_CHANGE",
     resolvedAnchors: [{ path: "src/A.java", symbol: "run", layer: "graph" }],
     anchor: { path: "src/A.java", symbol: "run" },
-    contexts: [{ role: "ANCHOR", path: "src/A.java", proof: ["DECLARES"], spans: [{ start: 1, end: 4 }] }],
+    evidence,
+    candidates: [{ path: "src/A.java", role: "ANCHOR", hop: 0, reason: "ANCHOR" }],
+    contexts: evidence,
     unresolved: [],
     next: [],
     cost: { modelTokens: 12, serviceMs: 4 }
