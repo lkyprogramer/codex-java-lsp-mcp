@@ -111,6 +111,10 @@ F 轨：合并包组装 → 对比矩阵 → 一次性合 main 替换 + attestat
 
 5. **止损线**：L1 若 jin 配对 hit-rate 仍不优于 old → `java_context` 从公开工具面撤下（代码留分支），EvidenceBundle planner 封存，F 轨照常推进（不含 java_context）。没有第四次 live。
 
+### 3.5 修订记录（E4，2026-08-23）
+
+Serena 两路安装均失败（`uvx --from git+https://github.com/oraios/serena serena-mcp-server` 构建未完成；pip 包 `serena` / `serena-mcp-server` 不存在）。第三臂正式 `SERENA_ABANDONED`。L1 kill 判据改为 old/jin 配对 hit-rate（§4 L1 配对门），不再等待 C 臂。local-qwen 主机以 F0 为准：`47.106.205.246:1082`，不是本文 E4 草稿里的 `192.168.10.29:28343`。
+
 ---
 
 ## 4. 数字门汇总

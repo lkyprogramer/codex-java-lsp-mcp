@@ -11,7 +11,7 @@ Live 29-model profile (`local-qwen`): host `47.106.205.246:1082`, model `opencla
 | E1 paired hit-rate | COMPLETE | `docs/phase-e/e1-closeout.json` | v2 pairedHitRate; v1 fields bit-identical on N5-02 replay |
 | E2 prompt symmetry | COMPLETE | `docs/phase-e/e2-closeout.json` | dropped jin navigate suppression; SHA in v2 report |
 | E3 collectImpactPaths candidates | PENDING | | depends C1 |
-| E4 Serena + dual profile | PENDING | | |
+| E4 Serena + dual profile | COMPLETE | `docs/phase-e/e4-closeout.json` | SERENA_ABANDONED; --model-profile local-qwen/openrouter |
 | C1 candidates/evidence/next | PENDING | | |
 | C2 byte slim | PENDING | | depends C1 |
 | C3 evidence budget | PENDING | | depends C1/C2 |

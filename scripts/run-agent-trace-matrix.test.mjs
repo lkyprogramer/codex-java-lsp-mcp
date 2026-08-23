@@ -48,3 +48,19 @@ test("authorization without a key still cannot invent measured usage", async () 
   assert.equal(result.status, "BLOCKED_EXTERNAL");
   assert.equal(result.taskSuccess.status, "UNMEASURED");
 });
+
+test("model-profile openrouter and local-qwen bind host/model without sending", async () => {
+  const openrouter = parseAgentTraceCli(["--model-profile", "openrouter"], {});
+  assert.equal(openrouter.modelProfile.id, "openrouter");
+  assert.equal(openrouter.modelProfile.host, "openrouter.ai");
+  assert.equal(openrouter.modelProfile.model, "stealth/ox-alpha");
+  assert.equal(openrouter.env.OPENAI_MODEL, "stealth/ox-alpha");
+  assert.equal(openrouter.modelProfile.apiKey, undefined);
+  const local = parseAgentTraceCli(["--model-profile", "local-qwen"], {});
+  assert.equal(local.modelProfile.host, "47.106.205.246:1082");
+  assert.equal(local.modelProfile.model, "openclaw/Qwen3.8-27B-WORK");
+  assert.equal(local.modelProfile.host.includes("192.168.10.29"), false);
+  const plan = await planAgentTraceMatrix(local);
+  assert.equal(plan.modelProfile.host, "47.106.205.246:1082");
+  assert.throws(() => parseAgentTraceCli(["--model-profile", "not-a-profile"], {}), /unknown model profile/);
+});

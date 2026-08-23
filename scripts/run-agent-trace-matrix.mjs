@@ -6,6 +6,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadTraceTasks } from "./record-mcp-trace-matrix.mjs";
+import { applyLiveModelProfile, resolveLiveModelProfile } from "./live-model-profiles.mjs";
 import {
   V4_SPRINT0_IDENTITY_COMMIT,
   V4_SPRINT0_PRODUCTION_TREE
@@ -47,7 +48,7 @@ export function parseAgentTraceCli(args, env = process.env) {
     if (!key.startsWith("--") || index + 1 >= args.length) throw new Error(`invalid argument: ${key}`);
     options.set(key, args[++index]);
   }
-  return {
+  const parsed = {
     help: flags.has("--help"),
     dryRun: flags.has("--dry-run"),
     authorizeExternal: flags.has("--authorize-external"),
@@ -58,6 +59,7 @@ export function parseAgentTraceCli(args, env = process.env) {
     newSide: options.get("--new-side"),
     maxTasks: options.get("--max-tasks") ? Number(options.get("--max-tasks")) : 3,
     liveOffset: options.get("--live-offset") ? Number(options.get("--live-offset")) : 0,
+    modelProfileName: options.get("--model-profile") || env.JAVA_LSP_MODEL_PROFILE || "local-qwen",
     repositories: {
       lishuedu: options.get("--lishuedu") || env.LISHUEDU_ROOT,
       cipherlink: options.get("--cipherlink") || env.CIPHERLINK_ROOT,
@@ -65,6 +67,15 @@ export function parseAgentTraceCli(args, env = process.env) {
     },
     env
   };
+  const modelProfile = resolveLiveModelProfile(parsed.modelProfileName, parsed.env);
+  parsed.modelProfile = {
+    id: modelProfile.id,
+    host: modelProfile.host,
+    model: modelProfile.model,
+    baseUrl: modelProfile.baseUrl
+  };
+  parsed.env = applyLiveModelProfile(parsed.env, parsed.modelProfileName);
+  return parsed;
 }
 
 export async function planAgentTraceMatrix(cli, { loadTasks = loadTraceTasks } = {}) {
@@ -111,6 +122,7 @@ export async function planAgentTraceMatrix(cli, { loadTasks = loadTraceTasks } =
       cells: cells.length,
       locked: ["provider", "model", "version", "temperature", "seed", "maxRounds", "contextWindow"]
     },
+    modelProfile: cli.modelProfile ?? null,
     cells
   };
 }
@@ -174,15 +186,18 @@ export async function runAgentTraceMatrix(cli) {
     outputFile: file,
     plan: planWithLive,
     live,
-    pairedHitRate: live.pairedHitRate
+    pairedHitRate: live.pairedHitRate,
+    modelProfile: cli.modelProfile
   };
 }
 
 function printUsage() {
   console.log(`usage: node scripts/run-agent-trace-matrix.mjs [--dry-run] [--authorize-external] [--execute-live] \\
-  [--max-tasks 3] [--live-offset 0] [--output-dir <dir>] [--lishuedu <root>] [--cipherlink <root>] [--exam-parent-v3 <root>] \\
+  [--model-profile local-qwen|openrouter] [--max-tasks 3] [--live-offset 0] [--output-dir <dir>] \\
+  [--lishuedu <root>] [--cipherlink <root>] [--exam-parent-v3 <root>] \\
   [--sprint0-manifest docs/phase-v4/v4-sprint0-manifest.json] [--old-side <sha>] [--new-side <sha>]`);
   console.log("three arms: old=java_impact, jin=java_context, serena=public Serena MCP (UNAVAILABLE unless SERENA_MCP_COMMAND is set).");
+  console.log("model profiles: local-qwen=openclaw/Qwen3.8-27B-WORK at 47.106.205.246:1082; openrouter=stealth/ox-alpha.");
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
