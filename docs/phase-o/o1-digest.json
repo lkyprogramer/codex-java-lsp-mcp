@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "m0-facts-digest/v1",
+  "dated": "2026-08-23",
+  "baseline": "HEAD b8d75ca (pre-knife working tree)",
+  "m0": {
+    "lishuedu": "1fe63bcaa6fb3319b6670a837ebca3055befe32422bf194668113c5e4837aaf3",
+    "cipherlink": "eec7eef8e0f197a5abcf190328d5b471013c1317718ae9bb8f7fdea5bfd21a08",
+    "exam-parent-v3": "fb7fe71d0b7192fd0591dfc70ccf366d82e4367855cc671402f1cdd16c992177"
+  },
+  "projects": [
+    {
+      "project": "lishuedu",
+      "fileCount": 5312,
+      "sha256": "965a653e22e742508ecd47f11fc86e84c97e6744bcb90ae8f7c03a81999a2d14",
+      "matchesHead": true,
+      "matchesM0": false
+    },
+    {
+      "project": "cipherlink",
+      "fileCount": 629,
+      "sha256": "bc7f3be6cd13162c6a9ba16635f5f1f18954571930fe8ddb342213c5a2b6dcfc",
+      "matchesHead": true,
+      "matchesM0": false
+    },
+    {
+      "project": "exam-parent-v3",
+      "fileCount": 1369,
+      "sha256": "0a69feab2582dd1f855fcafdfda4ffe7d8e7b12888d3a94ddcfec2c112d0ceb0",
+      "matchesHead": true,
+      "matchesM0": false
+    }
+  ],
+  "note": "HEAD b8d75ca already digests to these SHAs; O1 knives did not change facts. m0 2026-08-21 SHAs already drifted on this branch before O1."
+}

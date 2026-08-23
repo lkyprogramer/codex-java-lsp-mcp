@@ -54,11 +54,12 @@ function identityFor(value: JavaIndexSnapshotV3): SnapshotIdentity {
 test("a written snapshot round-trips through loadSnapshot", async () => {
   const target = tempFile();
   const value = snapshot({ indexedGeneration: 7 });
+  const expected = structuredClone(value);
   const bytesWritten = await writeSnapshotAtomic(target, value);
   assert.ok(bytesWritten > 0);
 
-  const loaded = await loadSnapshot(target, identityFor(value));
-  assert.deepEqual(loaded, value);
+  const loaded = await loadSnapshot(target, identityFor(expected));
+  assert.deepEqual(loaded, expected);
 });
 
 test("failed snapshot write leaves the previous snapshot readable", async () => {

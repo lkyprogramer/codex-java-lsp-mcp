@@ -93,6 +93,33 @@ export function isSnapshotV4(bytes: Buffer): boolean {
   return bytes.length >= 4 && bytes.subarray(0, 4).equals(SNAPSHOT_V4_MAGIC);
 }
 
+function releaseEncodedSegment(value: SnapshotV4Facts, kind: SnapshotV4SegmentKind): void {
+  switch (kind) {
+    case "files":
+      value.files.length = 0;
+      return;
+    case "types":
+      value.types.length = 0;
+      return;
+    case "fields":
+      value.fields.length = 0;
+      return;
+    case "methods":
+      value.methods.length = 0;
+      return;
+    case "edges":
+      value.edges.length = 0;
+      return;
+    case "mybatis":
+      value.myBatisResources.length = 0;
+      return;
+    case "entitySearch":
+      if (value.entitySearch) value.entitySearch.entities.length = 0;
+      value.entitySearch = undefined;
+      return;
+  }
+}
+
 export function encodeSnapshotV4(value: SnapshotV4Facts): Buffer {
   const bodies: Record<SnapshotV4SegmentKind, unknown> = {
     files: value.files,
@@ -107,7 +134,10 @@ export function encodeSnapshotV4(value: SnapshotV4Facts): Buffer {
   const segments: SegmentDirectoryEntry[] = [];
   let offset = 0;
   for (const kind of SNAPSHOT_V4_SEGMENT_KINDS) {
-    const packed = gzipSync(Buffer.from(JSON.stringify(bodies[kind])), { level: 6 });
+    const json = JSON.stringify(bodies[kind]);
+    bodies[kind] = null;
+    releaseEncodedSegment(value, kind);
+    const packed = gzipSync(Buffer.from(json), { level: 6 });
     segments.push({ kind, crc32: crc32(packed), offset, length: packed.byteLength });
     compressed.push(packed);
     offset += packed.byteLength;

@@ -93,6 +93,30 @@ test("v4 files-only view does not decode edges until readRest", async () => {
   assert.equal(rest.edges[0]?.edgeId, "e1");
 });
 
+test("encodeSnapshotV4 releases each segment body after gzip", async () => {
+  const value = snapshot();
+  const encoded = encodeSnapshotV4({
+    extractorVersion: value.extractorVersion,
+    stableIdVersion: value.stableIdVersion,
+    canonicalRepoRoot: value.canonicalRepoRoot,
+    buildFingerprint: value.buildFingerprint,
+    manifestFingerprint: value.manifestFingerprint,
+    indexedGeneration: value.indexedGeneration,
+    createdAt: value.createdAt,
+    coverage: value.coverage,
+    resourceCoverage: value.resourceCoverage,
+    files: value.files,
+    types: value.types,
+    fields: value.fields,
+    methods: value.methods,
+    edges: value.edges,
+    myBatisResources: value.myBatisResources
+  });
+  assert.equal(isSnapshotV4(encoded), true);
+  assert.equal(value.files.length, 0);
+  assert.equal(value.edges.length, 0);
+});
+
 test("a crc32 mismatch on a v4 segment is discarded and the file is deleted", async () => {
   const target = tempFile();
   const value = snapshot();

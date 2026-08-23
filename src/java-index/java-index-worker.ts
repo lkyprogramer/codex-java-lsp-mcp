@@ -1285,6 +1285,8 @@ async function spawnColdBuildChild(cacheDir: string, generation: number): Promis
 function spawnColdBuildChildProcess(cacheDir: string, generation: number): Promise<ColdBuildResult | undefined> {
   return new Promise(resolve => {
     const child = spawn(process.execPath, [
+      "--max-old-space-size=1536",
+      "--expose-gc",
       COLD_BUILD_CHILD,
       "--repo-root",
       repoRoot,
