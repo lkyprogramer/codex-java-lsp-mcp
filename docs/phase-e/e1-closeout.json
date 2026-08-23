@@ -1,0 +1,62 @@
+{
+  "schemaVersion": "e-e1-closeout/v1",
+  "track": "e",
+  "card": "E1",
+  "dated": "2026-08-23",
+  "decision": "COMPLETE",
+  "mergeToMain": false,
+  "scope": [
+    "scripts/run-agent-trace-live.mjs pairedHitRate + miss labels",
+    "scripts/run-agent-trace-matrix.mjs schema java-intelligence-jin-n5-three-arm-trace/v2",
+    "docs/phase-e/e1-n5-02-v1-anchor.json coverage/usage subset of 2026-08-22 raw"
+  ],
+  "srcTouched": false,
+  "defaultChainIdentity": "UNCHANGED",
+  "schema": {
+    "matrix": "java-intelligence-jin-n5-three-arm-trace/v2",
+    "live": "java-intelligence-v5r-live-agent-trace/v2",
+    "v1FieldsRetained": [
+      "status",
+      "contextWindowTokens",
+      "model",
+      "baseUrlHost",
+      "modelUsage",
+      "taskSuccess",
+      "successLayers",
+      "arms",
+      "lambdaMagnitude",
+      "blindReview",
+      "tasks"
+    ]
+  },
+  "replay": {
+    "status": "REPLAY_RAW_SUBSET",
+    "rawLiveTraceSha256": "51e978f5b328f1719ef2a3016144262c85626038d3befb10858acfbb9bc67624",
+    "summary": "docs/phase-jin/jin-n5-02-live-summary.json",
+    "summarySha256": "bd5a20255efda362d75b625c268013ca437da11f6069f7086be3abff23748ad4",
+    "anchor": "docs/phase-e/e1-n5-02-v1-anchor.json",
+    "note": "Raw 8/22 live-trace was still on disk. In-repo fixture is the coverage/usage subset; full raw stays off-git. v1 taskSuccess/arms/modelUsage/lambdaMagnitude bit-identical on recompute. Cell hit fractions match jin-n5-02-live-summary.json. Not REPLAY_DEGRADED."
+  },
+  "pairedHitRateN5": {
+    "mean": {
+      "old": 0.7642676767676767,
+      "jin": 0.40520590520590516,
+      "delta": -0.35906177156177155
+    },
+    "direction": {
+      "jinBetter": 0,
+      "jinWorse": 6,
+      "tie": 0,
+      "n": 6
+    }
+  },
+  "isolation": {
+    "t0": {
+      "tests": 26,
+      "fail": 0,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "146dae93b9de765b3596e3dc8f536236037731a3",
+      "logSha256": "5d2f50630348f03d4d4cfa1a424a4645a46bef4ac6207278551921ad42fc5ad3"
+    }
+  }
+}

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  AGENT_TRACE_SCHEMA_VERSION,
   blockedExternalResult,
   hasExternalAgentCredentials,
   parseAgentTraceCli,
@@ -24,6 +25,8 @@ test("credentials helper is false without a provider key", () => {
 
 test("matrix plan freezes six holdout tasks and 36 three-arm ABC/CBA cells", async () => {
   const plan = await planAgentTraceMatrix(parseAgentTraceCli(["--dry-run"]));
+  assert.equal(plan.schemaVersion, "java-intelligence-jin-n5-three-arm-trace/v2");
+  assert.equal(AGENT_TRACE_SCHEMA_VERSION, plan.schemaVersion);
   assert.equal(plan.tasks.length, 6);
   assert.equal(plan.cells.length, 36);
   assert.deepEqual(plan.protocol.variants, ["old", "jin", "serena"]);

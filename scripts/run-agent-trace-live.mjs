@@ -19,7 +19,24 @@ import {
 } from "./openai-compatible-chat.mjs";
 
 const scriptRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-export const LIVE_TRACE_SCHEMA_VERSION = "java-intelligence-v5r-live-agent-trace/v1";
+export const LIVE_TRACE_SCHEMA_VERSION = "java-intelligence-v5r-live-agent-trace/v2";
+export const LIVE_TRACE_V1_FIELD_NAMES = Object.freeze([
+  "status",
+  "contextWindowTokens",
+  "model",
+  "baseUrlHost",
+  "modelUsage",
+  "taskSuccess",
+  "successLayers",
+  "arms",
+  "lambdaMagnitude",
+  "blindReview",
+  "tasks"
+]);
+export const PAIRED_HIT_RATE_SCHEMA = "paired-hit-rate/v1";
+export const MISS_IN_POOL_NOT_PACKED = "IN_POOL_NOT_PACKED";
+export const MISS_DISCOVERY_GAP = "DISCOVERY_GAP";
+export const MISS_SINGLE_ARM_MISS = "SINGLE_ARM_MISS";
 export const MAX_LIVE_ROUNDS = 8;
 export const MAX_TOOL_RESULT_CHARS = 16_000;
 export const IMPACT_TIMEOUT_MS = 180_000;
@@ -118,6 +135,15 @@ export function collectImpactPaths(result) {
   return [...paths];
 }
 
+export function collectCandidatePaths(result) {
+  const paths = new Set();
+  for (const item of result?.candidates ?? []) {
+    const value = typeof item === "string" ? item : item?.path;
+    if (typeof value === "string" && value) paths.add(normalizeRel(value));
+  }
+  return [...paths];
+}
+
 export function compactContextForModel(result, maxChars = MAX_TOOL_RESULT_CHARS) {
   const payload = {
     coverage: result?.coverage,
@@ -206,6 +232,153 @@ export function taskSuccessFromCoverage(requiredFiles, observedPaths) {
   };
 }
 
+export function parseHitFraction(text) {
+  const match = String(text ?? "").trim().match(/^(\d+)\s*\/\s*(\d+)$/);
+  if (!match) throw new Error(`invalid hit fraction: ${text}`);
+  const hit = Number(match[1]);
+  const required = Number(match[2]);
+  if (!Number.isInteger(hit) || !Number.isInteger(required) || hit < 0 || required < 0 || hit > required) {
+    throw new Error(`invalid hit fraction: ${text}`);
+  }
+  return { hit, required, rate: required === 0 ? null : hit / required };
+}
+
+export function coverageHitRate(coverage) {
+  const required = coverage?.required ?? 0;
+  if (required <= 0) return null;
+  return (coverage.hit ?? 0) / required;
+}
+
+export function classifyRequiredFile(file, { oldHit, jinHit, inPool }) {
+  if (oldHit && jinHit) return null;
+  if (!oldHit && !jinHit && !inPool) return MISS_DISCOVERY_GAP;
+  if (!jinHit && inPool) return MISS_IN_POOL_NOT_PACKED;
+  if (oldHit !== jinHit) return MISS_SINGLE_ARM_MISS;
+  return MISS_IN_POOL_NOT_PACKED;
+}
+
+export function liveV1Fields(summary) {
+  const fields = {};
+  for (const key of LIVE_TRACE_V1_FIELD_NAMES) fields[key] = summary?.[key];
+  return fields;
+}
+
+export function pairedHitRateFromN5Cells(cells) {
+  const tasks = (cells ?? []).map(cell => {
+    const old = parseHitFraction(cell.old.hit);
+    const jin = parseHitFraction(cell.jin.hit);
+    return {
+      task: cell.task,
+      old: old.rate,
+      jin: jin.rate,
+      delta: jin.rate - old.rate,
+      oldHit: cell.old.hit,
+      jinHit: cell.jin.hit
+    };
+  });
+  return {
+    schemaVersion: PAIRED_HIT_RATE_SCHEMA,
+    replay: "cells",
+    tasks,
+    mean: meanRates(tasks),
+    direction: directionCounts(tasks.map(task => task.delta))
+  };
+}
+
+export function buildPairedHitRate(results, { candidatePoolByTask = {} } = {}) {
+  const byTask = new Map();
+  for (const result of results ?? []) {
+    const taskId = result?.taskId;
+    const arm = result?.arm;
+    if (!taskId || !arm) continue;
+    const bucket = byTask.get(taskId) ?? {};
+    bucket[arm] = result;
+    byTask.set(taskId, bucket);
+  }
+  const tasks = [];
+  const misses = [];
+  const unreachableRequired = [];
+  for (const [task, arms] of byTask) {
+    const old = arms.old;
+    const jin = arms.jin;
+    if (!old || !jin) continue;
+    if (old.taskSuccess === null || jin.taskSuccess === null) continue;
+    const oldRate = coverageHitRate(old.coverage);
+    const jinRate = coverageHitRate(jin.coverage);
+    if (oldRate == null || jinRate == null) continue;
+    const pool = new Set([
+      ...(candidatePoolByTask[task] ?? []).map(normalizeRel),
+      ...(jin.candidatePaths ?? []).map(normalizeRel)
+    ]);
+    const oldMissing = new Set((old.coverage?.missing ?? []).map(normalizeRel));
+    const jinMissing = new Set((jin.coverage?.missing ?? []).map(normalizeRel));
+    let unreachableCount = 0;
+    for (const file of new Set([...oldMissing, ...jinMissing])) {
+      const oldHit = !oldMissing.has(file);
+      const jinHit = !jinMissing.has(file);
+      const label = classifyRequiredFile(file, { oldHit, jinHit, inPool: pool.has(file) });
+      if (!label) continue;
+      misses.push({ task, file, label, oldHit, jinHit });
+      if (label === MISS_DISCOVERY_GAP) {
+        unreachableRequired.push({ task, file });
+        unreachableCount += 1;
+      }
+    }
+    const oldRequired = old.coverage.required;
+    const jinRequired = jin.coverage.required;
+    const oldReqEx = oldRequired - unreachableCount;
+    const jinReqEx = jinRequired - unreachableCount;
+    const excluding = {
+      old: oldReqEx > 0 ? old.coverage.hit / oldReqEx : null,
+      jin: jinReqEx > 0 ? jin.coverage.hit / jinReqEx : null
+    };
+    excluding.delta = excluding.old == null || excluding.jin == null ? null : excluding.jin - excluding.old;
+    tasks.push({
+      task,
+      old: oldRate,
+      jin: jinRate,
+      delta: jinRate - oldRate,
+      oldHit: `${old.coverage.hit}/${oldRequired}`,
+      jinHit: `${jin.coverage.hit}/${jinRequired}`,
+      excludingUnreachable: excluding
+    });
+  }
+  const excludingRows = tasks
+    .map(task => task.excludingUnreachable)
+    .filter(row => row.old != null && row.jin != null);
+  return {
+    schemaVersion: PAIRED_HIT_RATE_SCHEMA,
+    tasks,
+    mean: meanRates(tasks),
+    direction: directionCounts(tasks.map(task => task.delta)),
+    excludingUnreachable: {
+      mean: meanRates(excludingRows),
+      direction: directionCounts(excludingRows.map(row => row.delta))
+    },
+    unreachableRequired,
+    misses
+  };
+}
+
+function meanRates(rows) {
+  if (!rows.length) return { old: null, jin: null, delta: null };
+  const old = rows.reduce((sum, row) => sum + row.old, 0) / rows.length;
+  const jin = rows.reduce((sum, row) => sum + row.jin, 0) / rows.length;
+  return { old, jin, delta: jin - old };
+}
+
+function directionCounts(deltas) {
+  let jinBetter = 0;
+  let jinWorse = 0;
+  let tie = 0;
+  for (const delta of deltas) {
+    if (delta > 0) jinBetter += 1;
+    else if (delta < 0) jinWorse += 1;
+    else tie += 1;
+  }
+  return { jinBetter, jinWorse, tie, n: deltas.length };
+}
+
 export async function runLiveAgentTask({
   task,
   chat,
@@ -220,6 +393,7 @@ export async function runLiveAgentTask({
 }) {
   const started = Date.now();
   const observedPaths = new Set();
+  const candidatePaths = new Set();
   const toolCalls = [];
   let usage = { status: "UNMEASURED" };
   const exposedTools = tools ?? [JAVA_IMPACT_TOOL];
@@ -293,6 +467,7 @@ export async function runLiveAgentTask({
         }
         const compact = name === "java_context" ? compactContextForModel(raw) : compactImpactForModel(raw);
         for (const filePath of compact.paths) observedPaths.add(filePath);
+        for (const filePath of collectCandidatePaths(raw)) candidatePaths.add(filePath);
         toolCalls.push({ name, args, pathCount: compact.paths.length });
         messages.push({ role: "tool", tool_call_id: id, content: compact.text });
       }
@@ -314,6 +489,7 @@ export async function runLiveAgentTask({
     toolCallCount: toolCalls.length,
     usage,
     coverage,
+    candidatePaths: [...candidatePaths],
     taskSuccess: unscored ? null : coverage.success,
     contextCapped: stopReason === "FAILED_CONTEXT_CAP",
     ...(runtimeError ? { error: runtimeError.slice(0, 500) } : {})
@@ -405,7 +581,8 @@ export async function executeLiveTrace({
 export function summarizeLiveTasks(results, {
   model,
   baseUrlHost,
-  contextWindowTokens = DEFAULT_CONTEXT_WINDOW_TOKENS
+  contextWindowTokens = DEFAULT_CONTEXT_WINDOW_TOKENS,
+  candidatePoolByTask = {}
 } = {}) {
   const scored = results.filter(result => result.taskSuccess !== null);
   const successes = scored.filter(result => result.taskSuccess === true).length;
@@ -446,6 +623,7 @@ export function summarizeLiveTasks(results, {
       note: "n is too small for KEEP/REJECT via J(π); magnitude only"
     },
     blindReview: { status: "UNMEASURED" },
+    pairedHitRate: buildPairedHitRate(results, { candidatePoolByTask }),
     tasks: results
   };
 }

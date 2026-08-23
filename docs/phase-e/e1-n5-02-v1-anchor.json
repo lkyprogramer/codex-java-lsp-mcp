@@ -1,0 +1,561 @@
+{
+  "schemaVersion": "e-e1-n5-02-v1-anchor/v1",
+  "source": {
+    "liveTraceSha256": "51e978f5b328f1719ef2a3016144262c85626038d3befb10858acfbb9bc67624",
+    "summary": "docs/phase-jin/jin-n5-02-live-summary.json",
+    "summarySha256": "bd5a20255efda362d75b625c268013ca437da11f6069f7086be3abff23748ad4",
+    "note": "Coverage/usage subset extracted from the 2026-08-22 OpenRouter raw live-trace. Raw stays off-git."
+  },
+  "liveV1": {
+    "status": "MEASURED",
+    "contextWindowTokens": 114688,
+    "model": "stealth/ox-alpha",
+    "baseUrlHost": "openrouter.ai",
+    "modelUsage": {
+      "status": "PARTIAL",
+      "promptTokens": 8148,
+      "completionTokens": 2744,
+      "totalTokens": 10892
+    },
+    "taskSuccess": {
+      "status": "MEASURED",
+      "tasks": 18,
+      "scored": 12,
+      "successes": 1,
+      "mean": 0.08333333333333333
+    },
+    "successLayers": {
+      "localization": {
+        "status": "MEASURED",
+        "scored": 12,
+        "successes": 1,
+        "mean": 0.08333333333333333
+      },
+      "patchGeneration": {
+        "status": "UNMEASURED"
+      },
+      "compileTest": {
+        "status": "UNMEASURED"
+      }
+    },
+    "arms": [
+      {
+        "arm": "old",
+        "tasks": 6,
+        "scored": 6,
+        "successes": 1,
+        "unavailable": 0,
+        "mean": 0.16666666666666666,
+        "status": "MEASURED"
+      },
+      {
+        "arm": "jin",
+        "tasks": 6,
+        "scored": 6,
+        "successes": 0,
+        "unavailable": 0,
+        "mean": 0,
+        "status": "MEASURED"
+      },
+      {
+        "arm": "serena",
+        "tasks": 6,
+        "scored": 0,
+        "successes": 0,
+        "unavailable": 6,
+        "mean": null,
+        "status": "UNAVAILABLE"
+      }
+    ],
+    "lambdaMagnitude": {
+      "n": 18,
+      "tokensPerToolRound": null,
+      "scalarAllowed": false,
+      "note": "n is too small for KEEP/REJECT via J(π); magnitude only"
+    },
+    "blindReview": {
+      "status": "UNMEASURED"
+    }
+  },
+  "tasks": [
+    {
+      "taskId": "lishuedu:exam-score-export-cross-module-holdout",
+      "arm": "old",
+      "stopReason": "MODEL_STOP",
+      "toolCallCount": 4,
+      "usage": {
+        "status": "MEASURED",
+        "promptTokens": 2885,
+        "completionTokens": 1067,
+        "totalTokens": 3952
+      },
+      "coverage": {
+        "required": 13,
+        "hit": 13,
+        "success": true,
+        "missing": []
+      },
+      "taskSuccess": true,
+      "contextCapped": false
+    },
+    {
+      "taskId": "lishuedu:exam-score-export-cross-module-holdout",
+      "arm": "jin",
+      "stopReason": "MODEL_STOP",
+      "toolCallCount": 7,
+      "usage": {
+        "status": "MEASURED",
+        "promptTokens": 12186,
+        "completionTokens": 1979,
+        "totalTokens": 14165
+      },
+      "coverage": {
+        "required": 13,
+        "hit": 6,
+        "success": false,
+        "missing": [
+          "modules/exam/src/main/java/com/lishu/edu/exam/application/dto/ExamScoreExportItem.java",
+          "modules/exam/src/main/java/com/lishu/edu/exam/application/dto/ExamScoreExportRow.java",
+          "modules/exam/src/main/java/com/lishu/edu/exam/application/dto/ExamScoreExportWorkbook.java",
+          "modules/exam/src/main/java/com/lishu/edu/exam/domain/port/ExamRepository.java",
+          "modules/exam/src/main/java/com/lishu/edu/exam/domain/port/ExamStudentSubjectScoreRepository.java",
+          "modules/exam/src/main/java/com/lishu/edu/exam/domain/port/ExamSubjectRepository.java",
+          "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolQueryService.java"
+        ]
+      },
+      "taskSuccess": false,
+      "contextCapped": false
+    },
+    {
+      "taskId": "lishuedu:exam-score-export-cross-module-holdout",
+      "arm": "serena",
+      "stopReason": "SERENA_UNAVAILABLE",
+      "toolCallCount": 0,
+      "usage": {
+        "status": "UNMEASURED"
+      },
+      "coverage": {
+        "required": 13,
+        "hit": 0,
+        "success": false,
+        "missing": [
+          "modules/exam/src/main/java/com/lishu/edu/exam/application/dto/ExamScoreExportItem.java",
+          "modules/exam/src/main/java/com/lishu/edu/exam/application/dto/ExamScoreExportRow.java",
+          "modules/exam/src/main/java/com/lishu/edu/exam/application/dto/ExamScoreExportWorkbook.java",
+          "modules/exam/src/main/java/com/lishu/edu/exam/application/service/ExamScopeService.java",
+          "modules/exam/src/main/java/com/lishu/edu/exam/application/service/ExamScoreExportAppService.java",
+          "modules/exam/src/main/java/com/lishu/edu/exam/domain/port/ExamItemRepository.java",
+          "modules/exam/src/main/java/com/lishu/edu/exam/domain/port/ExamRepository.java",
+          "modules/exam/src/main/java/com/lishu/edu/exam/domain/port/ExamScoreExportGenerator.java",
+          "modules/exam/src/main/java/com/lishu/edu/exam/domain/port/ExamStudentItemScoreRepository.java",
+          "modules/exam/src/main/java/com/lishu/edu/exam/domain/port/ExamStudentSubjectScoreRepository.java",
+          "modules/exam/src/main/java/com/lishu/edu/exam/domain/port/ExamSubjectRepository.java",
+          "modules/exam/src/main/java/com/lishu/edu/exam/infrastructure/excel/ExamScoreExportExcelGenerator.java",
+          "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolQueryService.java"
+        ]
+      },
+      "taskSuccess": null,
+      "contextCapped": false
+    },
+    {
+      "taskId": "lishuedu:paper-task-claim-iam-holdout",
+      "arm": "old",
+      "stopReason": "MODEL_STOP",
+      "toolCallCount": 6,
+      "usage": {
+        "status": "MEASURED",
+        "promptTokens": 4142,
+        "completionTokens": 1659,
+        "totalTokens": 5801
+      },
+      "coverage": {
+        "required": 10,
+        "hit": 9,
+        "success": false,
+        "missing": [
+          "modules/iam/src/main/java/com/lishu/edu/iam/application/service/MeQueryService.java"
+        ]
+      },
+      "taskSuccess": false,
+      "contextCapped": false
+    },
+    {
+      "taskId": "lishuedu:paper-task-claim-iam-holdout",
+      "arm": "jin",
+      "stopReason": "MODEL_STOP",
+      "toolCallCount": 3,
+      "usage": {
+        "status": "MEASURED",
+        "promptTokens": 5683,
+        "completionTokens": 2049,
+        "totalTokens": 7732
+      },
+      "coverage": {
+        "required": 10,
+        "hit": 5,
+        "success": false,
+        "missing": [
+          "modules/iam/src/main/java/com/lishu/edu/iam/application/dto/MeInfo.java",
+          "modules/iam/src/main/java/com/lishu/edu/iam/application/service/MeQueryService.java",
+          "modules/paper/src/main/java/com/lishu/edu/paper/application/dto/PaperTaskView.java",
+          "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperTaskQueryService.java",
+          "modules/paper/src/main/java/com/lishu/edu/paper/domain/task/PaperRecordTask.java"
+        ]
+      },
+      "taskSuccess": false,
+      "contextCapped": false
+    },
+    {
+      "taskId": "lishuedu:paper-task-claim-iam-holdout",
+      "arm": "serena",
+      "stopReason": "SERENA_UNAVAILABLE",
+      "toolCallCount": 0,
+      "usage": {
+        "status": "UNMEASURED"
+      },
+      "coverage": {
+        "required": 10,
+        "hit": 0,
+        "success": false,
+        "missing": [
+          "modules/iam/src/main/java/com/lishu/edu/iam/application/dto/MeInfo.java",
+          "modules/iam/src/main/java/com/lishu/edu/iam/application/service/MeQueryService.java",
+          "modules/paper/src/main/java/com/lishu/edu/paper/application/dto/PaperTaskView.java",
+          "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperAccessService.java",
+          "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperTaskCommandAppService.java",
+          "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperTaskQueryService.java",
+          "modules/paper/src/main/java/com/lishu/edu/paper/domain/port/PaperRecordTaskRepository.java",
+          "modules/paper/src/main/java/com/lishu/edu/paper/domain/task/PaperRecordTask.java",
+          "modules/paper/src/main/java/com/lishu/edu/paper/domain/task/PaperRecordTaskStatus.java",
+          "modules/paper/src/main/java/com/lishu/edu/paper/infrastructure/persistence/repository/PaperRecordTaskRepositoryImpl.java"
+        ]
+      },
+      "taskSuccess": null,
+      "contextCapped": false
+    },
+    {
+      "taskId": "cipherlink:client-release-storage-presign-holdout",
+      "arm": "old",
+      "stopReason": "MODEL_STOP",
+      "toolCallCount": 4,
+      "usage": {
+        "status": "MEASURED",
+        "promptTokens": 2383,
+        "completionTokens": 1295,
+        "totalTokens": 3678
+      },
+      "coverage": {
+        "required": 11,
+        "hit": 8,
+        "success": false,
+        "missing": [
+          "modules/client/src/main/java/com/hhtele/cipherlink/client/application/ClientReleaseRepository.java",
+          "modules/client/src/main/java/com/hhtele/cipherlink/client/infrastructure/persistence/MybatisClientReleaseRepository.java",
+          "modules/client/src/main/java/com/hhtele/cipherlink/client/infrastructure/persistence/mapper/ClientReleaseMapper.java"
+        ]
+      },
+      "taskSuccess": false,
+      "contextCapped": false
+    },
+    {
+      "taskId": "cipherlink:client-release-storage-presign-holdout",
+      "arm": "jin",
+      "stopReason": "MODEL_STOP",
+      "toolCallCount": 3,
+      "usage": {
+        "status": "MEASURED",
+        "promptTokens": 3833,
+        "completionTokens": 1621,
+        "totalTokens": 5454
+      },
+      "coverage": {
+        "required": 11,
+        "hit": 7,
+        "success": false,
+        "missing": [
+          "modules/client/src/main/java/com/hhtele/cipherlink/client/application/ClientReleaseRepository.java",
+          "modules/client/src/main/java/com/hhtele/cipherlink/client/application/DefaultClientReleasePublishAppService.java",
+          "modules/storage/src/main/java/com/hhtele/cipherlink/storage/application/ObjectStorageProvider.java",
+          "modules/storage/src/main/java/com/hhtele/cipherlink/storage/application/PresignedChunkUrl.java"
+        ]
+      },
+      "taskSuccess": false,
+      "contextCapped": false
+    },
+    {
+      "taskId": "cipherlink:client-release-storage-presign-holdout",
+      "arm": "serena",
+      "stopReason": "SERENA_UNAVAILABLE",
+      "toolCallCount": 0,
+      "usage": {
+        "status": "UNMEASURED"
+      },
+      "coverage": {
+        "required": 11,
+        "hit": 0,
+        "success": false,
+        "missing": [
+          "modules/client/src/main/java/com/hhtele/cipherlink/client/application/ClientReleaseRepository.java",
+          "modules/client/src/main/java/com/hhtele/cipherlink/client/application/DefaultClientReleasePublishAppService.java",
+          "modules/client/src/main/java/com/hhtele/cipherlink/client/infrastructure/persistence/MybatisClientReleaseRepository.java",
+          "modules/client/src/main/java/com/hhtele/cipherlink/client/infrastructure/persistence/mapper/ClientReleaseMapper.java",
+          "modules/storage/src/main/java/com/hhtele/cipherlink/storage/application/ClientReleasePackageStorageGateway.java",
+          "modules/storage/src/main/java/com/hhtele/cipherlink/storage/application/ObjectStorageProvider.java",
+          "modules/storage/src/main/java/com/hhtele/cipherlink/storage/application/PresignedChunkUrl.java",
+          "modules/storage/src/main/java/com/hhtele/cipherlink/storage/application/ProviderPutObjectCommand.java",
+          "modules/storage/src/main/java/com/hhtele/cipherlink/storage/application/StorageObjectRef.java",
+          "modules/storage/src/main/java/com/hhtele/cipherlink/storage/application/StoredObjectMetadata.java",
+          "modules/storage/src/main/java/com/hhtele/cipherlink/storage/infrastructure/DefaultClientReleasePackageStorageGateway.java"
+        ]
+      },
+      "taskSuccess": null,
+      "contextCapped": false
+    },
+    {
+      "taskId": "cipherlink:backend-operation-log-aspect-async-audit-holdout",
+      "arm": "old",
+      "stopReason": "MODEL_STOP",
+      "toolCallCount": 4,
+      "usage": {
+        "status": "MEASURED",
+        "promptTokens": 2865,
+        "completionTokens": 1076,
+        "totalTokens": 3941
+      },
+      "coverage": {
+        "required": 12,
+        "hit": 9,
+        "success": false,
+        "missing": [
+          "modules/audit/src/main/java/com/hhtele/cipherlink/audit/domain/OperationLogEntry.java",
+          "modules/audit/src/main/java/com/hhtele/cipherlink/audit/infrastructure/persistence/MybatisOperationLogRepository.java",
+          "modules/audit/src/main/java/com/hhtele/cipherlink/audit/infrastructure/persistence/mapper/OperationLogMapper.java"
+        ]
+      },
+      "taskSuccess": false,
+      "contextCapped": false
+    },
+    {
+      "taskId": "cipherlink:backend-operation-log-aspect-async-audit-holdout",
+      "arm": "jin",
+      "stopReason": "MODEL_STOP",
+      "toolCallCount": 3,
+      "usage": {
+        "status": "MEASURED",
+        "promptTokens": 3149,
+        "completionTokens": 1631,
+        "totalTokens": 4780
+      },
+      "coverage": {
+        "required": 12,
+        "hit": 5,
+        "success": false,
+        "missing": [
+          "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/OperationLogCommand.java",
+          "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/OperationLogRepository.java",
+          "modules/audit/src/main/java/com/hhtele/cipherlink/audit/domain/OperationLogEntry.java",
+          "modules/audit/src/main/java/com/hhtele/cipherlink/audit/infrastructure/persistence/MybatisOperationLogRepository.java",
+          "modules/audit/src/main/java/com/hhtele/cipherlink/audit/infrastructure/persistence/mapper/OperationLogMapper.java",
+          "modules/auth/src/main/java/com/hhtele/cipherlink/auth/application/CurrentAuthContext.java",
+          "modules/common/src/main/java/com/hhtele/cipherlink/common/context/RequestContextHolder.java"
+        ]
+      },
+      "taskSuccess": false,
+      "contextCapped": false
+    },
+    {
+      "taskId": "cipherlink:backend-operation-log-aspect-async-audit-holdout",
+      "arm": "serena",
+      "stopReason": "SERENA_UNAVAILABLE",
+      "toolCallCount": 0,
+      "usage": {
+        "status": "UNMEASURED"
+      },
+      "coverage": {
+        "required": 12,
+        "hit": 0,
+        "success": false,
+        "missing": [
+          "apps/cipherlink-backend/src/main/java/com/hhtele/cipherlink/backend/config/BackendOperationLogAspect.java",
+          "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/DefaultOperationLogAppService.java",
+          "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/OperationLogAppService.java",
+          "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/OperationLogCommand.java",
+          "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/OperationLogRepository.java",
+          "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/OperationLogRequestSanitizer.java",
+          "modules/audit/src/main/java/com/hhtele/cipherlink/audit/domain/OperationLogEntry.java",
+          "modules/audit/src/main/java/com/hhtele/cipherlink/audit/infrastructure/persistence/MybatisOperationLogRepository.java",
+          "modules/audit/src/main/java/com/hhtele/cipherlink/audit/infrastructure/persistence/mapper/OperationLogMapper.java",
+          "modules/auth/src/main/java/com/hhtele/cipherlink/auth/application/CurrentAuthContext.java",
+          "modules/common/src/main/java/com/hhtele/cipherlink/common/context/RequestContextHolder.java",
+          "modules/common/src/main/java/com/hhtele/cipherlink/common/operationlog/OperationLog.java"
+        ]
+      },
+      "taskSuccess": null,
+      "contextCapped": false
+    },
+    {
+      "taskId": "exam-parent-v3:exam-room-print-download-types-persistent-bundle",
+      "arm": "old",
+      "stopReason": "MODEL_STOP",
+      "toolCallCount": 5,
+      "usage": {
+        "status": "MEASURED",
+        "promptTokens": 2366,
+        "completionTokens": 1001,
+        "totalTokens": 3367
+      },
+      "coverage": {
+        "required": 8,
+        "hit": 5,
+        "success": false,
+        "missing": [
+          "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/ExamRoomPrintBundleJob.java",
+          "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/ExamRoomPrintBundleJobTemplate.java",
+          "exam-service/exam-service-exam-site/src/main/java/com/hhtele/exam/service/exam/site/ExamRoomPrintRendererRoute.java"
+        ]
+      },
+      "taskSuccess": false,
+      "contextCapped": false
+    },
+    {
+      "taskId": "exam-parent-v3:exam-room-print-download-types-persistent-bundle",
+      "arm": "jin",
+      "stopReason": "MODEL_STOP",
+      "toolCallCount": 2,
+      "usage": {
+        "status": "MEASURED",
+        "promptTokens": 3785,
+        "completionTokens": 1398,
+        "totalTokens": 5183
+      },
+      "coverage": {
+        "required": 8,
+        "hit": 2,
+        "success": false,
+        "missing": [
+          "exam-common/src/main/java/com/hhtele/exam/dto/examination/ExaminationRoomDownloadDTO.java",
+          "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/ExamRoomPrintBundleJob.java",
+          "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/ExamRoomPrintBundleJobTemplate.java",
+          "exam-service/exam-service-basic/src/main/java/com/hhtele/exam/service/basic/service/DownloadCenterService.java",
+          "exam-service/exam-service-exam-site/src/main/java/com/hhtele/exam/service/exam/site/ExamRoomPrintRendererRoute.java",
+          "exam-service/exam-service-exam-site/src/main/java/com/hhtele/exam/service/exam/site/impl/ExamRoomPrintBundleServiceImpl.java"
+        ]
+      },
+      "taskSuccess": false,
+      "contextCapped": false
+    },
+    {
+      "taskId": "exam-parent-v3:exam-room-print-download-types-persistent-bundle",
+      "arm": "serena",
+      "stopReason": "SERENA_UNAVAILABLE",
+      "toolCallCount": 0,
+      "usage": {
+        "status": "UNMEASURED"
+      },
+      "coverage": {
+        "required": 8,
+        "hit": 0,
+        "success": false,
+        "missing": [
+          "exam-common/src/main/java/com/hhtele/exam/dto/examination/ExaminationRoomDownloadDTO.java",
+          "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/ExamRoomPrintBundleJob.java",
+          "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/ExamRoomPrintBundleJobTemplate.java",
+          "exam-management/src/main/java/com/hhtele/exam/management/controller/examination/ExamRoomPrintController.java",
+          "exam-service/exam-service-basic/src/main/java/com/hhtele/exam/service/basic/service/DownloadCenterService.java",
+          "exam-service/exam-service-exam-site/src/main/java/com/hhtele/exam/service/exam/site/ExamRoomPrintBundleService.java",
+          "exam-service/exam-service-exam-site/src/main/java/com/hhtele/exam/service/exam/site/ExamRoomPrintRendererRoute.java",
+          "exam-service/exam-service-exam-site/src/main/java/com/hhtele/exam/service/exam/site/impl/ExamRoomPrintBundleServiceImpl.java"
+        ]
+      },
+      "taskSuccess": null,
+      "contextCapped": false
+    },
+    {
+      "taskId": "exam-parent-v3:candidate-pay-order-cross-module-admission",
+      "arm": "old",
+      "stopReason": "MODEL_STOP",
+      "toolCallCount": 6,
+      "usage": {
+        "status": "MEASURED",
+        "promptTokens": 3746,
+        "completionTokens": 917,
+        "totalTokens": 4663
+      },
+      "coverage": {
+        "required": 12,
+        "hit": 7,
+        "success": false,
+        "missing": [
+          "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/ApplyInfo.java",
+          "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/Examination.java",
+          "exam-data/src/main/java/com/hhtele/exam/data/entity/manage/PayAccount.java",
+          "exam-data/src/main/java/com/hhtele/exam/data/repository/order/ApplyPayTemplate.java",
+          "exam-data/src/main/java/com/hhtele/exam/data/repository/order/OrderRepository.java"
+        ]
+      },
+      "taskSuccess": false,
+      "contextCapped": false
+    },
+    {
+      "taskId": "exam-parent-v3:candidate-pay-order-cross-module-admission",
+      "arm": "jin",
+      "stopReason": "MODEL_STOP",
+      "toolCallCount": 4,
+      "usage": {
+        "status": "MEASURED",
+        "promptTokens": 4402,
+        "completionTokens": 1827,
+        "totalTokens": 6229
+      },
+      "coverage": {
+        "required": 12,
+        "hit": 2,
+        "success": false,
+        "missing": [
+          "exam-common/src/main/java/com/hhtele/exam/dto/order/OrderInsertDTO.java",
+          "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/ApplyInfo.java",
+          "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/Examination.java",
+          "exam-data/src/main/java/com/hhtele/exam/data/entity/manage/PayAccount.java",
+          "exam-data/src/main/java/com/hhtele/exam/data/repository/order/ApplyPayTemplate.java",
+          "exam-data/src/main/java/com/hhtele/exam/data/repository/order/OrderRepository.java",
+          "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/AlipayPayService.java",
+          "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/CebPayService.java",
+          "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/WechatApplyService.java",
+          "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/impl/ApplyPayServiceImpl.java"
+        ]
+      },
+      "taskSuccess": false,
+      "contextCapped": false
+    },
+    {
+      "taskId": "exam-parent-v3:candidate-pay-order-cross-module-admission",
+      "arm": "serena",
+      "stopReason": "SERENA_UNAVAILABLE",
+      "toolCallCount": 0,
+      "usage": {
+        "status": "UNMEASURED"
+      },
+      "coverage": {
+        "required": 12,
+        "hit": 0,
+        "success": false,
+        "missing": [
+          "exam-candidate/src/main/java/com/hhtele/exam/candidate/controller/order/OrderController.java",
+          "exam-common/src/main/java/com/hhtele/exam/dto/order/OrderInsertDTO.java",
+          "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/ApplyInfo.java",
+          "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/Examination.java",
+          "exam-data/src/main/java/com/hhtele/exam/data/entity/manage/PayAccount.java",
+          "exam-data/src/main/java/com/hhtele/exam/data/repository/order/ApplyPayTemplate.java",
+          "exam-data/src/main/java/com/hhtele/exam/data/repository/order/OrderRepository.java",
+          "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/AlipayPayService.java",
+          "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/ApplyPayService.java",
+          "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/CebPayService.java",
+          "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/WechatApplyService.java",
+          "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/impl/ApplyPayServiceImpl.java"
+        ]
+      },
+      "taskSuccess": null,
+      "contextCapped": false
+    }
+  ]
+}

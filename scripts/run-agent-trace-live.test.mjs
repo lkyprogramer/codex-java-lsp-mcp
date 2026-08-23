@@ -1,10 +1,27 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  AGENT_TRACE_SCHEMA_VERSION
+} from "./run-agent-trace-matrix.mjs";
 import {
   ARM_SYSTEM_PROMPTS,
+  LIVE_TRACE_SCHEMA_VERSION,
+  MISS_DISCOVERY_GAP,
+  MISS_IN_POOL_NOT_PACKED,
+  MISS_SINGLE_ARM_MISS,
+  buildPairedHitRate,
+  classifyRequiredFile,
+  collectCandidatePaths,
+  collectImpactPaths,
   compactContextForModel,
   compactImpactForModel,
   liveJavaContextArgs,
+  liveV1Fields,
+  pairedHitRateFromN5Cells,
+  parseHitFraction,
   selectLiveTasks,
   serenaUnavailableResult,
   summarizeLiveTasks,
@@ -181,6 +198,40 @@ test("jin arm records coverage from java_context spans", async () => {
   assert.equal(result.toolCallCount, 1);
 });
 
+test("jin candidatePaths do not count as coverage hits", async () => {
+  const result = await runLiveAgentTask({
+    task: {
+      taskId: "demo:t",
+      projectId: "demo",
+      scenarioId: "t",
+      requiredContextFiles: ["src/A.java", "src/Hidden.java"],
+      anchor: { file: "src/A.java", line: 1, column: 1 }
+    },
+    arm: "jin",
+    tools: [{ type: "function", function: { name: "java_context" } }],
+    chat: async () => ({
+      choices: [{
+        finish_reason: "tool_calls",
+        message: {
+          tool_calls: [{
+            id: "c1",
+            function: { name: "java_context", arguments: JSON.stringify({ intent: "auto" }) }
+          }]
+        }
+      }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 }
+    }),
+    invoke: async () => ({
+      contexts: [{ path: "src/A.java", role: "ANCHOR", spans: [{ start: 1, end: 2 }] }],
+      candidates: [{ path: "src/Hidden.java", role: "CALLS" }]
+    }),
+    maxRounds: 1
+  });
+  assert.equal(result.taskSuccess, false);
+  assert.deepEqual(result.coverage.missing, ["src/Hidden.java"]);
+  assert.deepEqual(result.candidatePaths, ["src/Hidden.java"]);
+});
+
 test("compact impact never includes golden names and truncates large payloads", () => {
   const compact = compactImpactForModel({
     files: [{ id: "1", path: "src/A.java", role: "anchor", confidence: "high" }],
@@ -231,6 +282,140 @@ test("FAILED_RUNTIME and FAILED_CONTEXT_CAP are excluded from TaskSuccess mean",
   assert.equal(summary.taskSuccess.mean, 1);
   assert.equal(summary.lambdaMagnitude.scalarAllowed, false);
 });
+
+test("matrix and live report schemas are v2", () => {
+  assert.equal(AGENT_TRACE_SCHEMA_VERSION, "java-intelligence-jin-n5-three-arm-trace/v2");
+  assert.equal(LIVE_TRACE_SCHEMA_VERSION, "java-intelligence-v5r-live-agent-trace/v2");
+});
+
+test("candidates are not observed paths until E3", () => {
+  const result = {
+    candidates: [{ path: "src/Hidden.java", role: "CALLS" }],
+    contexts: [{ path: "src/A.java", role: "ANCHOR" }],
+    files: [{ id: "1", path: "src/B.java" }]
+  };
+  assert.deepEqual(collectImpactPaths(result).sort(), ["src/A.java", "src/B.java"]);
+  assert.deepEqual(collectCandidatePaths(result), ["src/Hidden.java"]);
+});
+
+test("miss labels follow pool then single-arm then discovery-gap", () => {
+  assert.equal(classifyRequiredFile("a", { oldHit: true, jinHit: true, inPool: true }), null);
+  assert.equal(classifyRequiredFile("b", { oldHit: false, jinHit: false, inPool: false }), MISS_DISCOVERY_GAP);
+  assert.equal(classifyRequiredFile("c", { oldHit: true, jinHit: false, inPool: true }), MISS_IN_POOL_NOT_PACKED);
+  assert.equal(classifyRequiredFile("d", { oldHit: false, jinHit: false, inPool: true }), MISS_IN_POOL_NOT_PACKED);
+  assert.equal(classifyRequiredFile("e", { oldHit: true, jinHit: false, inPool: false }), MISS_SINGLE_ARM_MISS);
+});
+
+test("paired hit-rate is per-task and reports unreachable-excluding mean", () => {
+  const paired = buildPairedHitRate([
+    {
+      taskId: "demo:t1",
+      arm: "old",
+      taskSuccess: false,
+      coverage: { required: 2, hit: 1, success: false, missing: ["src/Gap.java"] }
+    },
+    {
+      taskId: "demo:t1",
+      arm: "jin",
+      taskSuccess: false,
+      coverage: { required: 2, hit: 1, success: false, missing: ["src/Gap.java"] },
+      candidatePaths: ["src/Packed.java"]
+    },
+    {
+      taskId: "demo:t2",
+      arm: "old",
+      taskSuccess: true,
+      coverage: { required: 2, hit: 2, success: true, missing: [] }
+    },
+    {
+      taskId: "demo:t2",
+      arm: "jin",
+      taskSuccess: false,
+      coverage: { required: 2, hit: 1, success: false, missing: ["src/Packed.java"] },
+      candidatePaths: ["src/Packed.java"]
+    }
+  ]);
+  assert.equal(paired.tasks.length, 2);
+  assert.equal(paired.tasks[0].old, 0.5);
+  assert.equal(paired.tasks[0].jin, 0.5);
+  assert.equal(paired.tasks[0].delta, 0);
+  assert.equal(paired.tasks[1].delta, -0.5);
+  assert.equal(paired.direction.jinWorse, 1);
+  assert.equal(paired.direction.tie, 1);
+  assert.equal(paired.unreachableRequired.length, 1);
+  assert.equal(paired.unreachableRequired[0].file, "src/Gap.java");
+  assert.equal(paired.tasks[0].excludingUnreachable.old, 1);
+  assert.equal(paired.misses.some(row => row.file === "src/Packed.java" && row.label === MISS_IN_POOL_NOT_PACKED), true);
+});
+
+test("T2 N5-02 replay keeps v1 fields and adds paired hit-rate", () => {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const anchor = JSON.parse(readFileSync(path.join(root, "docs/phase-e/e1-n5-02-v1-anchor.json"), "utf8"));
+  const summary = JSON.parse(readFileSync(path.join(root, "docs/phase-jin/jin-n5-02-live-summary.json"), "utf8"));
+  const recomputed = summarizeLiveTasks(anchor.tasks, {
+    model: anchor.liveV1.model,
+    baseUrlHost: anchor.liveV1.baseUrlHost,
+    contextWindowTokens: anchor.liveV1.contextWindowTokens
+  });
+  const v1 = liveV1Fields(recomputed);
+  assert.deepEqual(v1.taskSuccess, anchor.liveV1.taskSuccess);
+  assert.deepEqual(v1.successLayers, anchor.liveV1.successLayers);
+  assert.deepEqual(v1.arms, anchor.liveV1.arms);
+  assert.deepEqual(v1.modelUsage, anchor.liveV1.modelUsage);
+  assert.deepEqual(v1.lambdaMagnitude, anchor.liveV1.lambdaMagnitude);
+  assert.deepEqual(v1.blindReview, anchor.liveV1.blindReview);
+  assert.equal(v1.taskSuccess.successes, 1);
+  assert.equal(v1.arms.find(arm => arm.arm === "old").successes, 1);
+  assert.equal(v1.arms.find(arm => arm.arm === "jin").successes, 0);
+  assert.equal(recomputed.pairedHitRate.direction.n, 6);
+  assert.equal(recomputed.pairedHitRate.direction.jinWorse, 6);
+  assert.equal(recomputed.pairedHitRate.direction.jinBetter, 0);
+  assert.ok(recomputed.pairedHitRate.mean.delta < 0);
+  const cellsReplay = pairedHitRateFromN5Cells(summary.cells);
+  assert.deepEqual(summary.cells, JSON.parse(readFileSync(path.join(root, "docs/phase-jin/jin-n5-02-live-summary.json"), "utf8")).cells);
+  assert.equal(cellsReplay.direction.jinWorse, 6);
+  assert.equal(cellsReplay.tasks.length, 6);
+  for (const cell of summary.cells) {
+    const parsed = parseHitFraction(cell.old.hit);
+    const row = recomputed.pairedHitRate.tasks.find(task => task.oldHit === cell.old.hit && task.jinHit === cell.jin.hit);
+    assert.ok(row, cell.task);
+    assert.equal(row.oldHit, cell.old.hit);
+    assert.equal(row.jinHit, cell.jin.hit);
+    assert.equal(row.old, parsed.rate);
+  }
+  assert.equal(summary.schemaVersion, "java-intelligence-jin-n5-three-arm-trace/v1");
+  assert.equal(summary.taskSuccess.successes, 1);
+  const contextReplay = JSON.parse(readFileSync(path.join(root, "docs/phase-jin/jin-n5-context-replay.json"), "utf8"));
+  const candidatePoolByTask = {};
+  for (const result of anchor.tasks) {
+    if (result.arm !== "old") continue;
+    const scenarioId = result.taskId.split(":").slice(1).join(":");
+    candidatePoolByTask[result.taskId] = contextReplayPool(contextReplay, scenarioId);
+  }
+  const withPool = summarizeLiveTasks(anchor.tasks, {
+    model: anchor.liveV1.model,
+    baseUrlHost: anchor.liveV1.baseUrlHost,
+    contextWindowTokens: anchor.liveV1.contextWindowTokens,
+    candidatePoolByTask
+  });
+  assert.deepEqual(liveV1Fields(withPool).taskSuccess, anchor.liveV1.taskSuccess);
+  const meQuery = withPool.pairedHitRate.misses.find(row => row.file.endsWith("MeQueryService.java"));
+  assert.equal(meQuery.label, MISS_IN_POOL_NOT_PACKED);
+  const payAccount = withPool.pairedHitRate.misses.find(row => row.file.endsWith("PayAccount.java"));
+  assert.equal(payAccount.label, MISS_IN_POOL_NOT_PACKED);
+  const printJob = withPool.pairedHitRate.misses.find(row => row.file.endsWith("ExamRoomPrintBundleJob.java"));
+  assert.equal(printJob.label, MISS_DISCOVERY_GAP);
+});
+
+function contextReplayPool(replay, scenarioId) {
+  const paths = new Set();
+  for (const row of replay.results ?? []) {
+    if (row.scenarioId !== scenarioId) continue;
+    for (const file of row.selected ?? []) paths.add(file);
+    for (const file of row.gateTargetsDiscovered ?? []) paths.add(file);
+  }
+  return [...paths];
+}
 
 test("execute-live is required after authorization; key alone still does not send", async () => {
   const result = await runAgentTraceMatrix(parseAgentTraceCli(

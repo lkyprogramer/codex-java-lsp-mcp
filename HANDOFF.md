@@ -2,7 +2,11 @@
 
 ## 当前任务
 
-**N5 live 已复测（OpenRouter `stealth/ox-alpha`）：MEASURED FAIL，不进 N6。** M6-5 G1 全达标仍有效。不合 `main`。
+Harvest E/C/G/O → L1 → F。**不合 `main`。** F0 COMPLETE。E1 COMPLETE（v2 配对 hit-rate + miss 归类；N5-02 v1 字段重放逐位一致）。下一步 E2 提示词对称。L1 才是下一次外呼；不得再跑第三次 N5 live。
+
+## E1（2026-08-23）
+
+判定 **COMPLETE**。报表 schema `java-intelligence-jin-n5-three-arm-trace/v2`。`pairedHitRate` 与 miss 标签 `IN_POOL_NOT_PACKED` / `DISCOVERY_GAP` / `SINGLE_ARM_MISS` 并报；v1 `taskSuccess`/`arms`/`modelUsage` 保留。N5-02 重放：jin 6/6 更差，mean delta ≈ −0.359。candidates 仍不计入 observed（E3）。隔离 T0 26/26 fail 0。收口 `docs/phase-e/e1-closeout.json`。
 
 ## N5 live 复测（2026-08-22）
 
@@ -59,10 +63,10 @@ N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a 
 
 ## 下一步计划
 
-1. G1 已全达标。再往下（worktree 段共享、mmap）复杂度陡增，场景已无痛点。
-2. 冷建 child RSS 2311>1536 与 resolveAll 46s 是剩下的非 G1 残差，不作为极致收口阻塞。
-3. JIN N5 live 已用 OpenRouter `stealth/ox-alpha` 复测仍 FAIL；**不要进 N6**，不合 `main`。
-4. 第四仓 + leave-one-repo-out 仍是合 `main` 硬门。
+1. Harvest 下一张卡：E2 提示词对称，然后 E4 双模型接线；C 轨与 G/O 可并行。E3 等 C1。
+2. L1 一次性双模型 live（local-qwen `47.106.205.246:1082` + OpenRouter `stealth/ox-alpha`）。FAIL 则撤 `java_context` 公开工具面，没有第四次 live。
+3. 不合 `main`。F2/F3 等用户。
+4. 冷建 child RSS 2311>1536 与 resolveAll 46s 走 O1/O2，不重开 M 轨架构。
 
 ## 绝对不要再踩的坑
 

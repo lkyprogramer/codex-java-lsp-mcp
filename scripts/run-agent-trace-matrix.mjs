@@ -11,7 +11,7 @@ import {
   V4_SPRINT0_PRODUCTION_TREE
 } from "./verify-v4-sprint0-baseline.mjs";
 
-export const AGENT_TRACE_SCHEMA_VERSION = "java-intelligence-jin-n5-three-arm-trace/v1";
+export const AGENT_TRACE_SCHEMA_VERSION = "java-intelligence-jin-n5-three-arm-trace/v2";
 export const AGENT_TRACE_ROUNDS = ["ABC", "CBA"];
 export const AGENT_TRACE_VARIANTS = ["old", "jin", "serena"];
 export const AGENT_TRACE_ARM_TOOLS = {
@@ -173,7 +173,8 @@ export async function runAgentTraceMatrix(cli) {
     lambdaMagnitude: live.lambdaMagnitude,
     outputFile: file,
     plan: planWithLive,
-    live
+    live,
+    pairedHitRate: live.pairedHitRate
   };
 }
 
