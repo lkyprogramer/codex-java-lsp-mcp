@@ -3,12 +3,12 @@
   "track": "c",
   "card": "C1",
   "dated": "2026-08-23",
-  "decision": "COMPLETE",
+  "decision": "IN_POOL_NOT_PACKED",
   "mergeToMain": false,
   "srcTouched": true,
   "defaultChainIdentity": "UNCHANGED",
-  "note": "Output layer only. Graph search, ranking, and packing are unchanged. java_impact path unchanged. contexts[] kept as evidence alias so the live harness still sees packed spans until C2/E3.",
-  "contractVersion": 2,
+  "note": "Layered candidates/evidence/next shipped. T2 mean 0.590 < 0.9. 21 of 26 missing required files are in search.bundles but outside wire N=24 (ranks 25-281). Harvest floor is only valid when every miss is absent from the graph. N=32 raised mean to 0.631 and broke C2 P50 1.237; N=40 would still leave 15 in-pool ranks >40. Wire N stays 24. Schema 578≤700.",
+  "contractVersion": 3,
   "candidateFrontierN": 24,
   "candidateWireN": 24,
   "schema": {
@@ -19,32 +19,33 @@
   "t2": {
     "status": "T2_MEASURED",
     "replay": "docs/phase-c/c1-replay.json",
-    "replaySha256": "54ac0e12ca514925c88b7ff62074f678e8d37a9a525c0a6e29fbef2975e7caf2",
+    "replaySha256": "a0e43ea2785dfd513b734e10ae7f936783b2a7fdcdcfc895519800ed815362fe",
     "goldensJavaFiles": {
       "lishuedu": 5312,
-      "cipherlink": 633,
-      "exam-parent-v3": 1370
+      "cipherlink": 629,
+      "exam-parent-v3": 1369
     },
     "c1CoverageMean": 0.5904623154623154,
     "minMean": 0.9,
     "passed": false,
-    "disposition": "DISCOVERY_GAP_FLOOR",
-    "note": "N=32 only reached 0.63 and broke C2 P50 1.237. Wire N stays 24. Remaining misses include N4 holdout files not in the graph frontier."
+    "inPoolNotPacked": 21,
+    "discoveryGap": 5,
+    "floorEligible": false,
+    "disposition": "IN_POOL_NOT_PACKED",
+    "n32Attempt": { "c1Mean": 0.631060606060606, "c2P50": 1.237397211297819 }
   },
   "isolation": {
     "t0": {
-      "tests": 30,
+      "tests": 9,
       "fail": 0,
       "jdtlsBin": "/usr/bin/false",
-      "logSha256": "3f3fbf0e223185b8bd85b824c3e9ecf9ae45f699deb0a0ed902bc8398aca8c72"
+      "executableTree": "ead080e4af66b44e7603c427745f9eba8ba789c5",
+      "note": "scripts/run-jin-n5-context-replay.test.mjs including miss-label tests"
     },
-    "t1": {
-      "dist": 1184,
-      "scripts": 231,
-      "fail": 0,
-      "jdtlsBin": "/usr/bin/false",
-      "executableTree": "ffe6201e0f54e9329343621720ea4a51eb59a35f",
-      "logSha256": "b4aac64b35e499673f047b8e227cad7d257bce6b4514364cfecc13d01826046f"
+    "t2": {
+      "coldBuildChildEnv": true,
+      "logSha256": "3113e321496e885fc005cdba61cb0c87d7a67adf742c21fbf81af6c1e1f550e4",
+      "executableTree": "ead080e4af66b44e7603c427745f9eba8ba789c5"
     }
   }
 }

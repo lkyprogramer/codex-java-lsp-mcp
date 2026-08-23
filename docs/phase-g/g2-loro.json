@@ -51,7 +51,7 @@
   ],
   "fourthRepo": "ruoyi-vue-pro",
   "gate": 0.15,
-  "runs": 1,
+  "runs": 2,
   "repos": {
     "cipherlink": {
       "root": "/tmp/codex-java-v3-golden-20260809/cipherlink",
@@ -59,7 +59,7 @@
       "pRead": 0.6433333333333333,
       "rReadMust": 0.885,
       "scenarios": 10,
-      "prepareJavaIndexMs": 9568.495333
+      "prepareJavaIndexMs": 9743.271292
     },
     "exam-parent-v3": {
       "root": "/tmp/codex-java-v3-golden-20260809/exam-parent-v3",
@@ -67,7 +67,7 @@
       "pRead": 0.6,
       "rReadMust": 0.8800000000000001,
       "scenarios": 10,
-      "prepareJavaIndexMs": 15893.327374999999
+      "prepareJavaIndexMs": 16194.257749999999
     },
     "lishuedu": {
       "root": "/tmp/codex-java-v3-golden-20260809/lishuedu",
@@ -75,7 +75,7 @@
       "pRead": 0.7216666666666667,
       "rReadMust": 0.925,
       "scenarios": 10,
-      "prepareJavaIndexMs": 89293.20833299999
+      "prepareJavaIndexMs": 89173.695459
     },
     "ruoyi-vue-pro": {
       "root": "/tmp/codex-java-v4-golden-20260823/ruoyi-vue-pro",
@@ -83,7 +83,7 @@
       "pRead": 0.3170833333333333,
       "rReadMust": 0.46859307359307356,
       "scenarios": 40,
-      "prepareJavaIndexMs": 79668.711167
+      "prepareJavaIndexMs": 71120.470208
     }
   },
   "scores": {
@@ -240,5 +240,6 @@
     ]
   },
   "decision": "G2_OVERFIT_FAIL",
-  "mergeToMain": false
+  "mergeToMain": false,
+  "postPackingCommit": "71f3b8d"
 }

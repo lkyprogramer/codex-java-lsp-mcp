@@ -15,7 +15,7 @@
   "taskSuccess": "UNMEASURED",
   "knife": "N4 planner packed cross-module hop-1 CALLS before same-module hop-1 CALLS (kill-list). Comparator now prefers same-module. Did not inspect ruoyi holdout gold. Did not retune impact ranking or balanced maxFiles.",
   "loro": "docs/phase-g/g2-loro.json",
-  "loroSha256": "49b8e0a44096f908ee55264ca9ebd93f12f71cfc0c3a3c8d23c357c44120c25e",
+  "loroSha256": "46acd5ce7c3a00af0bda55597afcb32500c1cc6e35019ed9798b82ff689ef688",
   "gate": 0.15,
   "runs": 2,
   "deadlineMs": 30000,
@@ -33,7 +33,7 @@
     "rReadMustDrop": 0.4774
   },
   "otherFolds": "GO",
-  "note": "LORO uses --strategy impact --mode balanced, so the java_context planner knife did not move impact scores (bit-identical to run 1). Second fail escalates. F stays blocked. L1 is not blocked. Do not merge main.",
+  "note": "Run 2 isolation HEAD 98d8bb9 includes feat(g2) 71f3b8d same-module pack. LORO still uses --strategy impact --mode balanced, so scores match run 1. Second fail escalates. F stays blocked. L1 is not blocked. Do not merge main.",
   "isolation": {
     "t0": {
       "tests": 25,
@@ -48,8 +48,10 @@
       "exitCode": 2,
       "jdtlsBin": "/usr/bin/false",
       "coldBuildChild": true,
-      "executableTree": "0a03aa302ae53667b1c0cd41ec21ca7cdb2cb711",
-      "logSha256": "e46a60a7d141e8c3d1cc23da7641d20d7d964fd3143ce1ed3300e9f0d05dc5f9"
+      "executableTree": "5260249c1b12988d755a1635de3b273ba8214d42",
+      "isolationHead": "98d8bb9",
+      "postPackingCommit": "71f3b8d",
+      "logSha256": "8bc8a3dab751538fe1a767c8b463da55173151ca5f3b83091a0f2d887eb1dfe2"
     }
   }
 }

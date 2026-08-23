@@ -1,12 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  classifyMissingPath,
   evaluateC1HoldoutCoverage,
   evaluateC2FirstCallBytes,
   evaluateN5ContextGates,
   holdoutTaskText,
   impactProfileOf,
-  N5_CONTEXT_GATES
+  MISS_DISCOVERY_GAP,
+  MISS_IN_POOL_NOT_PACKED,
+  N5_CONTEXT_GATES,
+  searchPoolPaths
 } from "./run-jin-n5-context-replay.mjs";
 
 test("impactProfileOf falls back to auto for unknown golden profiles", () => {
@@ -107,6 +111,98 @@ test("C1 coverage counts required files in candidates union evidence", () => {
   assert.equal(coverage.passed, false);
   rows[2].candidates = ["src/C.java", "src/D.java", "src/E.java"];
   assert.equal(evaluateC1HoldoutCoverage(rows).passed, true);
+});
+
+test("searchPoolPaths ranks unique paths by hop then path", () => {
+  const pool = searchPoolPaths([
+    { path: "src/B.java", hops: 1 },
+    { path: "src/A.java", hops: 2 },
+    { path: "src/B.java", hops: 0 },
+    { path: "src/C.java", hops: 1 }
+  ]);
+  assert.deepEqual(pool, ["src/B.java", "src/C.java", "src/A.java"]);
+});
+
+test("classifyMissingPath labels in-pool misses separately from discovery gaps", () => {
+  const pool = ["src/A.java", "src/B.java", "src/C.java"];
+  const inPool = classifyMissingPath("src/C.java", {
+    poolPaths: pool,
+    wireCandidates: ["src/A.java", "src/B.java"],
+    evidence: ["src/A.java"]
+  });
+  assert.equal(inPool.label, MISS_IN_POOL_NOT_PACKED);
+  assert.equal(inPool.poolRank, 3);
+  const gap = classifyMissingPath("src/Z.java", {
+    poolPaths: pool,
+    wireCandidates: pool,
+    evidence: []
+  });
+  assert.equal(gap.label, MISS_DISCOVERY_GAP);
+  assert.equal(gap.poolRank, null);
+});
+
+test("C1 coverage is not floor-eligible while an in-pool miss remains", () => {
+  const rows = [
+    {
+      project: "lishuedu",
+      scenarioId: "a",
+      intent: "auto",
+      requiredFiles: ["src/A.java", "src/InPool.java", "src/Gap.java"],
+      evidence: ["src/A.java"],
+      candidates: ["src/A.java"],
+      poolPaths: ["src/A.java", "src/InPool.java"]
+    },
+    {
+      project: "lishuedu",
+      scenarioId: "b",
+      intent: "auto",
+      requiredFiles: ["src/A.java"],
+      evidence: ["src/A.java"],
+      candidates: [],
+      poolPaths: ["src/A.java"]
+    },
+    {
+      project: "cipherlink",
+      scenarioId: "c",
+      intent: "auto",
+      requiredFiles: ["src/A.java"],
+      evidence: ["src/A.java"],
+      candidates: [],
+      poolPaths: ["src/A.java"]
+    },
+    {
+      project: "cipherlink",
+      scenarioId: "d",
+      intent: "auto",
+      requiredFiles: ["src/A.java"],
+      evidence: ["src/A.java"],
+      candidates: [],
+      poolPaths: ["src/A.java"]
+    },
+    {
+      project: "exam-parent-v3",
+      scenarioId: "e",
+      intent: "auto",
+      requiredFiles: ["src/A.java"],
+      evidence: ["src/A.java"],
+      candidates: [],
+      poolPaths: ["src/A.java"]
+    },
+    {
+      project: "exam-parent-v3",
+      scenarioId: "f",
+      intent: "auto",
+      requiredFiles: ["src/A.java"],
+      evidence: ["src/A.java"],
+      candidates: [],
+      poolPaths: ["src/A.java"]
+    }
+  ];
+  const coverage = evaluateC1HoldoutCoverage(rows);
+  assert.equal(coverage.passed, false);
+  assert.equal(coverage.inPoolNotPacked, 1);
+  assert.equal(coverage.floorEligible, false);
+  assert.equal(coverage.rows[0].missLabels[0].label, MISS_IN_POOL_NOT_PACKED);
 });
 
 test("C2 first-call byte P50 uses six auto holdouts and the 1.2 gate", () => {

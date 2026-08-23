@@ -1,22 +1,29 @@
 {
-  "schemaVersion": "c1-replay/v2",
+  "schemaVersion": "c1-replay/v3",
   "dated": "2026-08-23",
   "status": "T2_MEASURED",
   "passed": false,
+  "floorEligible": false,
+  "inPoolNotPacked": 21,
+  "discoveryGap": 5,
+  "candidateWireN": 24,
   "goldens": {
     "root": "/tmp/codex-java-v3-golden-20260809",
     "javaFiles": {
       "lishuedu": 5312,
-      "cipherlink": 633,
-      "exam-parent-v3": 1370
+      "cipherlink": 629,
+      "exam-parent-v3": 1369
     }
   },
   "c1Coverage": {
-    "schemaVersion": "c1-holdout-coverage/v1",
+    "schemaVersion": "c1-holdout-coverage/v2",
     "n": 6,
     "mean": 0.5904623154623154,
     "minMean": 0.9,
     "passed": false,
+    "inPoolNotPacked": 21,
+    "discoveryGap": 5,
+    "floorEligible": false,
     "rows": [
       {
         "project": "lishuedu",
@@ -24,8 +31,19 @@
         "required": 13,
         "hit": 12,
         "rate": 0.9230769230769231,
+        "poolSize": 606,
         "missing": [
           "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolQueryService.java"
+        ],
+        "missLabels": [
+          {
+            "path": "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolQueryService.java",
+            "label": "IN_POOL_NOT_PACKED",
+            "poolRank": 27,
+            "poolSize": 606,
+            "onWire": false,
+            "onEvidence": false
+          }
         ]
       },
       {
@@ -34,8 +52,19 @@
         "required": 10,
         "hit": 9,
         "rate": 0.9,
+        "poolSize": 594,
         "missing": [
           "modules/iam/src/main/java/com/lishu/edu/iam/application/service/MeQueryService.java"
+        ],
+        "missLabels": [
+          {
+            "path": "modules/iam/src/main/java/com/lishu/edu/iam/application/service/MeQueryService.java",
+            "label": "IN_POOL_NOT_PACKED",
+            "poolRank": 233,
+            "poolSize": 594,
+            "onWire": false,
+            "onEvidence": false
+          }
         ]
       },
       {
@@ -44,11 +73,46 @@
         "required": 11,
         "hit": 7,
         "rate": 0.6363636363636364,
+        "poolSize": 394,
         "missing": [
           "modules/client/src/main/java/com/hhtele/cipherlink/client/application/DefaultClientReleasePublishAppService.java",
           "modules/client/src/main/java/com/hhtele/cipherlink/client/application/ClientReleaseRepository.java",
           "modules/client/src/main/java/com/hhtele/cipherlink/client/infrastructure/persistence/MybatisClientReleaseRepository.java",
           "modules/client/src/main/java/com/hhtele/cipherlink/client/infrastructure/persistence/mapper/ClientReleaseMapper.java"
+        ],
+        "missLabels": [
+          {
+            "path": "modules/client/src/main/java/com/hhtele/cipherlink/client/application/DefaultClientReleasePublishAppService.java",
+            "label": "IN_POOL_NOT_PACKED",
+            "poolRank": 150,
+            "poolSize": 394,
+            "onWire": false,
+            "onEvidence": false
+          },
+          {
+            "path": "modules/client/src/main/java/com/hhtele/cipherlink/client/application/ClientReleaseRepository.java",
+            "label": "IN_POOL_NOT_PACKED",
+            "poolRank": 147,
+            "poolSize": 394,
+            "onWire": false,
+            "onEvidence": false
+          },
+          {
+            "path": "modules/client/src/main/java/com/hhtele/cipherlink/client/infrastructure/persistence/MybatisClientReleaseRepository.java",
+            "label": "IN_POOL_NOT_PACKED",
+            "poolRank": 158,
+            "poolSize": 394,
+            "onWire": false,
+            "onEvidence": false
+          },
+          {
+            "path": "modules/client/src/main/java/com/hhtele/cipherlink/client/infrastructure/persistence/mapper/ClientReleaseMapper.java",
+            "label": "IN_POOL_NOT_PACKED",
+            "poolRank": 157,
+            "poolSize": 394,
+            "onWire": false,
+            "onEvidence": false
+          }
         ]
       },
       {
@@ -57,11 +121,46 @@
         "required": 12,
         "hit": 8,
         "rate": 0.6666666666666666,
+        "poolSize": 405,
         "missing": [
           "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/OperationLogRepository.java",
           "modules/audit/src/main/java/com/hhtele/cipherlink/audit/domain/OperationLogEntry.java",
           "modules/audit/src/main/java/com/hhtele/cipherlink/audit/infrastructure/persistence/MybatisOperationLogRepository.java",
           "modules/audit/src/main/java/com/hhtele/cipherlink/audit/infrastructure/persistence/mapper/OperationLogMapper.java"
+        ],
+        "missLabels": [
+          {
+            "path": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/OperationLogRepository.java",
+            "label": "DISCOVERY_GAP",
+            "poolRank": null,
+            "poolSize": 405,
+            "onWire": false,
+            "onEvidence": false
+          },
+          {
+            "path": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/domain/OperationLogEntry.java",
+            "label": "IN_POOL_NOT_PACKED",
+            "poolRank": 78,
+            "poolSize": 405,
+            "onWire": false,
+            "onEvidence": false
+          },
+          {
+            "path": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/infrastructure/persistence/MybatisOperationLogRepository.java",
+            "label": "DISCOVERY_GAP",
+            "poolRank": null,
+            "poolSize": 405,
+            "onWire": false,
+            "onEvidence": false
+          },
+          {
+            "path": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/infrastructure/persistence/mapper/OperationLogMapper.java",
+            "label": "DISCOVERY_GAP",
+            "poolRank": null,
+            "poolSize": 405,
+            "onWire": false,
+            "onEvidence": false
+          }
         ]
       },
       {
@@ -70,6 +169,7 @@
         "required": 8,
         "hit": 2,
         "rate": 0.25,
+        "poolSize": 363,
         "missing": [
           "exam-service/exam-service-exam-site/src/main/java/com/hhtele/exam/service/exam/site/ExamRoomPrintBundleService.java",
           "exam-service/exam-service-exam-site/src/main/java/com/hhtele/exam/service/exam/site/impl/ExamRoomPrintBundleServiceImpl.java",
@@ -77,6 +177,56 @@
           "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/ExamRoomPrintBundleJobTemplate.java",
           "exam-service/exam-service-basic/src/main/java/com/hhtele/exam/service/basic/service/DownloadCenterService.java",
           "exam-service/exam-service-exam-site/src/main/java/com/hhtele/exam/service/exam/site/ExamRoomPrintRendererRoute.java"
+        ],
+        "missLabels": [
+          {
+            "path": "exam-service/exam-service-exam-site/src/main/java/com/hhtele/exam/service/exam/site/ExamRoomPrintBundleService.java",
+            "label": "IN_POOL_NOT_PACKED",
+            "poolRank": 56,
+            "poolSize": 363,
+            "onWire": false,
+            "onEvidence": false
+          },
+          {
+            "path": "exam-service/exam-service-exam-site/src/main/java/com/hhtele/exam/service/exam/site/impl/ExamRoomPrintBundleServiceImpl.java",
+            "label": "IN_POOL_NOT_PACKED",
+            "poolRank": 57,
+            "poolSize": 363,
+            "onWire": false,
+            "onEvidence": false
+          },
+          {
+            "path": "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/ExamRoomPrintBundleJob.java",
+            "label": "IN_POOL_NOT_PACKED",
+            "poolRank": 136,
+            "poolSize": 363,
+            "onWire": false,
+            "onEvidence": false
+          },
+          {
+            "path": "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/ExamRoomPrintBundleJobTemplate.java",
+            "label": "IN_POOL_NOT_PACKED",
+            "poolRank": 154,
+            "poolSize": 363,
+            "onWire": false,
+            "onEvidence": false
+          },
+          {
+            "path": "exam-service/exam-service-basic/src/main/java/com/hhtele/exam/service/basic/service/DownloadCenterService.java",
+            "label": "IN_POOL_NOT_PACKED",
+            "poolRank": 47,
+            "poolSize": 363,
+            "onWire": false,
+            "onEvidence": false
+          },
+          {
+            "path": "exam-service/exam-service-exam-site/src/main/java/com/hhtele/exam/service/exam/site/ExamRoomPrintRendererRoute.java",
+            "label": "IN_POOL_NOT_PACKED",
+            "poolRank": 281,
+            "poolSize": 363,
+            "onWire": false,
+            "onEvidence": false
+          }
         ]
       },
       {
@@ -85,6 +235,7 @@
         "required": 12,
         "hit": 2,
         "rate": 0.16666666666666666,
+        "poolSize": 368,
         "missing": [
           "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/ApplyPayService.java",
           "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/impl/ApplyPayServiceImpl.java",
@@ -96,6 +247,88 @@
           "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/WechatApplyService.java",
           "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/AlipayPayService.java",
           "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/CebPayService.java"
+        ],
+        "missLabels": [
+          {
+            "path": "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/ApplyPayService.java",
+            "label": "IN_POOL_NOT_PACKED",
+            "poolRank": 33,
+            "poolSize": 368,
+            "onWire": false,
+            "onEvidence": false
+          },
+          {
+            "path": "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/impl/ApplyPayServiceImpl.java",
+            "label": "IN_POOL_NOT_PACKED",
+            "poolRank": 37,
+            "poolSize": 368,
+            "onWire": false,
+            "onEvidence": false
+          },
+          {
+            "path": "exam-data/src/main/java/com/hhtele/exam/data/repository/order/ApplyPayTemplate.java",
+            "label": "IN_POOL_NOT_PACKED",
+            "poolRank": 149,
+            "poolSize": 368,
+            "onWire": false,
+            "onEvidence": false
+          },
+          {
+            "path": "exam-data/src/main/java/com/hhtele/exam/data/repository/order/OrderRepository.java",
+            "label": "DISCOVERY_GAP",
+            "poolRank": null,
+            "poolSize": 368,
+            "onWire": false,
+            "onEvidence": false
+          },
+          {
+            "path": "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/ApplyInfo.java",
+            "label": "IN_POOL_NOT_PACKED",
+            "poolRank": 113,
+            "poolSize": 368,
+            "onWire": false,
+            "onEvidence": false
+          },
+          {
+            "path": "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/Examination.java",
+            "label": "DISCOVERY_GAP",
+            "poolRank": null,
+            "poolSize": 368,
+            "onWire": false,
+            "onEvidence": false
+          },
+          {
+            "path": "exam-data/src/main/java/com/hhtele/exam/data/entity/manage/PayAccount.java",
+            "label": "IN_POOL_NOT_PACKED",
+            "poolRank": 25,
+            "poolSize": 368,
+            "onWire": false,
+            "onEvidence": false
+          },
+          {
+            "path": "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/WechatApplyService.java",
+            "label": "IN_POOL_NOT_PACKED",
+            "poolRank": 42,
+            "poolSize": 368,
+            "onWire": false,
+            "onEvidence": false
+          },
+          {
+            "path": "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/AlipayPayService.java",
+            "label": "IN_POOL_NOT_PACKED",
+            "poolRank": 32,
+            "poolSize": 368,
+            "onWire": false,
+            "onEvidence": false
+          },
+          {
+            "path": "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/CebPayService.java",
+            "label": "IN_POOL_NOT_PACKED",
+            "poolRank": 35,
+            "poolSize": 368,
+            "onWire": false,
+            "onEvidence": false
+          }
         ]
       }
     ]
@@ -103,7 +336,7 @@
   "c2Bytes": {
     "schemaVersion": "c2-bytes/v2",
     "n": 6,
-    "p50": 0.951421188630491,
+    "p50": 0.9515934539190353,
     "gate": 1.2,
     "passed": true,
     "rows": [
@@ -117,16 +350,16 @@
       {
         "project": "lishuedu",
         "scenarioId": "paper-task-claim-iam-holdout",
-        "contextBytes": 5523,
+        "contextBytes": 5524,
         "impactBytes": 5805,
-        "ratio": 0.951421188630491
+        "ratio": 0.9515934539190353
       },
       {
         "project": "cipherlink",
         "scenarioId": "client-release-storage-presign-holdout",
-        "contextBytes": 5986,
+        "contextBytes": 5983,
         "impactBytes": 4798,
-        "ratio": 1.247603167986661
+        "ratio": 1.2469779074614422
       },
       {
         "project": "cipherlink",
@@ -138,9 +371,9 @@
       {
         "project": "exam-parent-v3",
         "scenarioId": "exam-room-print-download-types-persistent-bundle",
-        "contextBytes": 4486,
+        "contextBytes": 4617,
         "impactBytes": 4107,
-        "ratio": 1.092281470659849
+        "ratio": 1.1241782322863403
       },
       {
         "project": "exam-parent-v3",
@@ -151,8 +384,9 @@
       }
     ]
   },
-  "candidateWireN": 24,
-  "evidenceFileCap": 3,
-  "discoveryGap": true,
-  "note": "Raising wire N 24\u219232 lifted mean 0.59\u21920.63 but C2 P50 became 1.237>1.2. N stays 24. Remaining misses include N4 holdout files (MeQueryService/PayAccount/SchoolQueryService) not in the graph frontier \u2014 DISCOVERY_GAP, not output-layer. C2 first-call uses MCP compact payloads, not handmade 1526-byte shapes."
+  "n32Attempt": {
+    "c1Mean": 0.631060606060606,
+    "c2P50": 1.237397211297819,
+    "note": "c-t2-replay-5.log at N=32; C2 P50 1.237>1.2 so wire N stays 24"
+  }
 }

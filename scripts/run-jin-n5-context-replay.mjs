@@ -59,11 +59,61 @@ export function requiredFilesFromHoldout(row) {
   return [...new Set([...(row?.golden?.mustHit ?? []), ...(row?.golden?.taskBlocking ?? [])])].filter(Boolean);
 }
 
+export const MISS_DISCOVERY_GAP = "DISCOVERY_GAP";
+export const MISS_IN_POOL_NOT_PACKED = "IN_POOL_NOT_PACKED";
+
 export function coverageUnion(result) {
   return [...new Set([
     ...(result?.evidence ?? result?.selected ?? []),
     ...(result?.candidates ?? [])
   ])];
+}
+
+export function searchPoolPaths(bundles) {
+  const byPath = new Map();
+  for (const bundle of bundles ?? []) {
+    if (typeof bundle?.path !== "string" || !bundle.path) continue;
+    const existing = byPath.get(bundle.path);
+    if (!existing || (bundle.hops ?? 99) < (existing.hops ?? 99)) byPath.set(bundle.path, bundle);
+  }
+  return [...byPath.values()]
+    .sort((left, right) => (left.hops ?? 99) - (right.hops ?? 99) || left.path.localeCompare(right.path))
+    .map(bundle => bundle.path);
+}
+
+export function classifyMissingPath(path, { poolPaths, wireCandidates, evidence } = {}) {
+  const pool = poolPaths ?? [];
+  const poolRank = pool.indexOf(path);
+  const onWire = (wireCandidates ?? []).includes(path);
+  const onEvidence = (evidence ?? []).includes(path);
+  if (onEvidence || onWire) {
+    return {
+      path,
+      label: "HIT",
+      poolRank: poolRank >= 0 ? poolRank + 1 : null,
+      poolSize: pool.length,
+      onWire,
+      onEvidence
+    };
+  }
+  if (poolRank >= 0) {
+    return {
+      path,
+      label: MISS_IN_POOL_NOT_PACKED,
+      poolRank: poolRank + 1,
+      poolSize: pool.length,
+      onWire: false,
+      onEvidence: false
+    };
+  }
+  return {
+    path,
+    label: MISS_DISCOVERY_GAP,
+    poolRank: null,
+    poolSize: pool.length,
+    onWire: false,
+    onEvidence: false
+  };
 }
 
 export function percentile(values, p) {
@@ -103,23 +153,38 @@ export function evaluateC1HoldoutCoverage(results, { minMean = 0.9 } = {}) {
     const union = new Set(coverageUnion(item));
     const hit = required.filter(file => union.has(file));
     const missing = required.filter(file => !union.has(file));
+    const poolPaths = item.poolPaths ?? searchPoolPaths(item.searchBundles);
+    const missLabels = missing.map(path => classifyMissingPath(path, {
+      poolPaths,
+      wireCandidates: item.candidates ?? [],
+      evidence: item.evidence ?? item.selected ?? []
+    }));
     return {
       project: item.project,
       scenarioId: item.scenarioId,
       required: required.length,
       hit: hit.length,
       rate: required.length ? hit.length / required.length : null,
-      missing
+      missing,
+      missLabels,
+      poolSize: poolPaths.length
     };
   });
   const rates = rows.map(row => row.rate).filter(rate => typeof rate === "number");
   const mean = rates.length ? rates.reduce((sum, rate) => sum + rate, 0) / rates.length : null;
+  const missLabels = rows.flatMap(row => row.missLabels ?? []);
+  const inPoolNotPacked = missLabels.filter(item => item.label === MISS_IN_POOL_NOT_PACKED);
+  const discoveryGap = missLabels.filter(item => item.label === MISS_DISCOVERY_GAP);
+  const passed = mean != null && mean >= minMean && rows.length === 6;
   return {
-    schemaVersion: "c1-holdout-coverage/v1",
+    schemaVersion: "c1-holdout-coverage/v2",
     n: rows.length,
     mean,
     minMean,
-    passed: mean != null && mean >= minMean && rows.length === 6,
+    passed,
+    inPoolNotPacked: inPoolNotPacked.length,
+    discoveryGap: discoveryGap.length,
+    floorEligible: !passed && missLabels.length > 0 && inPoolNotPacked.length === 0,
     rows
   };
 }
@@ -198,6 +263,24 @@ async function querySelected(toolContext, handlers, row, intent) {
   const contextCompact = handlers.compactContextForModel(contract);
   const evidence = (contract?.evidence ?? contract?.contexts ?? []).map(item => item.path);
   const candidates = (contract?.candidates ?? []).map(item => item.path);
+  const graphResult = await toolContext.javaIndex.queryContextGraph({
+    fromRelativePath: row.anchor.file,
+    intent,
+    mode: "search",
+    maxHops: 4,
+    maxExpansions: 4096,
+    tokenBudget: 1400,
+    taskText,
+    plan: true,
+    includeSource: false,
+    anchorLine: row.anchor.line,
+    anchorColumn: row.anchor.column
+  });
+  const searchBundles = (graphResult?.bundles ?? []).map(bundle => ({
+    path: bundle.path,
+    hops: bundle.hops
+  }));
+  const poolPaths = searchPoolPaths(searchBundles);
   return {
     project: row.projectId,
     scenarioId: row.id,
@@ -209,6 +292,8 @@ async function querySelected(toolContext, handlers, row, intent) {
     selected: evidence,
     evidence,
     candidates,
+    searchBundles,
+    poolPaths,
     contextBytes: Buffer.byteLength(contextCompact.text),
     impactBytes: Buffer.byteLength(JSON.stringify(impact)),
     tokenCost: contract?.cost?.modelTokens ?? null
@@ -284,6 +369,9 @@ async function main() {
     output: path.resolve(cli.output),
     passed,
     c1Mean: c1.mean,
+    c1FloorEligible: c1.floorEligible,
+    inPoolNotPacked: c1.inPoolNotPacked,
+    discoveryGap: c1.discoveryGap,
     c2P50: c2.p50,
     gates: gates.map(item => ({ scenarioId: item.scenarioId, target: item.target.split("/").pop(), hit: item.hit }))
   }));
