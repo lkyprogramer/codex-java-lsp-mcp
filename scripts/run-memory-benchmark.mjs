@@ -87,13 +87,20 @@ export function percentile(values, p) {
   return sorted[index];
 }
 
+/** Harvest O3: drop first-hydrate plus this many extra rounds before the G5 steady window. */
+export const G5_STEADY_WARMUP_ROUNDS = 2;
+
 export function splitWarmLatencies(latencies) {
   const samples = Array.isArray(latencies) ? latencies.map(Number) : [];
   const firstHydrateMs = samples[0] ?? 0;
-  const steady = samples.slice(1);
+  const afterHydrate = samples.slice(1);
+  const warmupMs = afterHydrate.slice(0, G5_STEADY_WARMUP_ROUNDS);
+  const steady = afterHydrate.slice(G5_STEADY_WARMUP_ROUNDS);
   return {
     scenarios: samples.length,
     firstHydrateMs,
+    warmupRounds: G5_STEADY_WARMUP_ROUNDS,
+    warmupMs,
     steadyScenarios: steady.length,
     steadyWarmP50Ms: percentile(steady, 50),
     steadyWarmP95Ms: percentile(steady, 95),

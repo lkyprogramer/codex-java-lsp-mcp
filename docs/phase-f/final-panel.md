@@ -19,7 +19,7 @@ Live 29-model profile (`local-qwen`): host `47.106.205.246:1082`, model `opencla
 | G2 leave-one-repo-out | G2_OVERFIT_FAIL | `docs/phase-g/g2-closeout.json` | ruoyi held-out drop >15%; blocks F not L1; no retune |
 | O1 child RSS ≤ 1536 | G3_MISS | `docs/phase-o/o1-closeout.json` | 2790 MiB; gate kept; residual to F1 |
 | O2 cold ≤ 60s | O2_MISS | `docs/phase-o/o2-closeout.json` | lishuedu 66.8s > 60s; gate kept |
-| O3 G5 steady ≤ 1.10 | PENDING | | |
+| O3 G5 steady ≤ 1.10 | COMPLETE | `docs/phase-o/o3-closeout.json` | warmup 2; 0.835/0.547/0.886; G1 173/29/46 |
 | L1 dual-model live | BLOCKED_EXTERNAL | `docs/phase-l/l1-closeout.json` | OpenRouter 429 + local-qwen 404; TaskSuccess UNMEASURED; no kill |
 | F1 compare vs main | BLOCKED | | blocked by G2_OVERFIT_FAIL; no merge |
 | F2 merge + attestation | BLOCKED | | user-only merge |

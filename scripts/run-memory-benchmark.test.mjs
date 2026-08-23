@@ -139,14 +139,24 @@ test("concurrentRuntimePlan is 3 then 5 runtimes; UNMEASURED keeps a reason", ()
 test("splitWarmLatencies isolates first hydrate from steady warm p95", () => {
   const split = splitWarmLatencies([7704.37, 59.56, 69.88, 43.84, 42.89, 46.09, 34.48, 36.75, 50.19, 44.69]);
   assert.equal(split.scenarios, 10);
-  assert.equal(split.steadyScenarios, 9);
   assert.equal(split.firstHydrateMs, 7704.37);
+  assert.equal(split.warmupRounds, 2);
+  assert.equal(split.warmupMs.length, 2);
+  assert.equal(split.steadyScenarios, 7);
   assert.equal(split.p95Ms, 7704.37);
-  assert.equal(split.steadyWarmP95Ms, 69.88);
+  assert.equal(split.steadyWarmP95Ms, 50.19);
   assert.ok(split.steadyWarmP95Ms < 80);
   const empty = splitWarmLatencies([]);
   assert.equal(empty.firstHydrateMs, 0);
   assert.equal(empty.steadyWarmP95Ms, 0);
+});
+
+test("O3 warmup of two rounds does not hide the M6-5 lishuedu 86.5ms steady sample", () => {
+  const split = splitWarmLatencies([8984, 62, 80, 61, 64, 66, 58, 63, 86.5, 72]);
+  assert.equal(split.firstHydrateMs, 8984);
+  assert.equal(split.steadyScenarios, 7);
+  assert.equal(split.steadyWarmP95Ms, 86.5);
+  assert.ok(g5SteadyRatio("lishuedu", split.steadyWarmP95Ms) > M0_GATES.G5_P95_RATIO);
 });
 
 test("G5 steady ratio uses M0 p95, not the first hydrate sample", () => {
