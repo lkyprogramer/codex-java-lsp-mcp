@@ -16,7 +16,7 @@ Live 29-model profile (`local-qwen`): host `47.106.205.246:1082`, model `opencla
 | C2 byte slim | COMPLETE | `docs/phase-c/c2-closeout.json` | T2 first-call P50 0.951≤1.2 |
 | C3 evidence budget | COMPLETE | `docs/phase-c/c3-closeout.json` | cap 3; not reverted; T2 floor recorded |
 | G1 ruoyi-vue-pro golden | COMPLETE | `docs/phase-g/g1-closeout.json` | 40 scenes / 12 holdout; pin 2bbe79b3; holdout frozen |
-| G2 leave-one-repo-out | G2_OVERFIT_FAIL | `docs/phase-g/g2-closeout.json` | ruoyi held-out drop >15%; blocks F not L1; no retune |
+| G2 leave-one-repo-out | G2_OVERFIT_FAIL | `docs/phase-g/g2-closeout.json` | run 2 still >15% on ruoyi; N4 same-module pack landed; escalate; blocks F not L1 |
 | O1 child RSS ≤ 1536 | G3_MISS | `docs/phase-o/o1-closeout.json` | three knives landed; lishuedu 1851 MiB floor; gate kept; residual to F1 |
 | O2 cold ≤ 60s | O2_MISS | `docs/phase-o/o2-closeout.json` | registry reuse landed; lishuedu 83.5s > 60s; shards not landed; gate kept |
 | O3 G5 steady ≤ 1.10 | COMPLETE | `docs/phase-o/o3-closeout.json` | warmup 2; 0.835/0.547/0.886; G1 173/29/46 |

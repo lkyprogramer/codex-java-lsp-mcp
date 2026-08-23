@@ -4,25 +4,22 @@
   "card": "G2",
   "dated": "2026-08-23",
   "decision": "G2_OVERFIT_FAIL",
+  "escalate": true,
+  "escalateReason": "Second LORO run still exceeds the 15% drop gate on ruoyi-vue-pro. Harvest 0.2(c): the packing chain may not transfer to other repositories.",
   "mergeToMain": false,
   "blocksF": true,
   "blocksL1": false,
-  "srcTouched": false,
+  "srcTouched": true,
   "defaultChainIdentity": "UNCHANGED",
   "retune": false,
   "taskSuccess": "UNMEASURED",
+  "knife": "N4 planner packed cross-module hop-1 CALLS before same-module hop-1 CALLS (kill-list). Comparator now prefers same-module. Did not inspect ruoyi holdout gold. Did not retune impact ranking or balanced maxFiles.",
   "loro": "docs/phase-g/g2-loro.json",
-  "loroSha256": "d585cd0354b54970ddddb0f7ba6e58f82cb1e565bb9551b7d03ef9219270b780",
+  "loroSha256": "49b8e0a44096f908ee55264ca9ebd93f12f71cfc0c3a3c8d23c357c44120c25e",
   "gate": 0.15,
-  "runs": 1,
+  "runs": 2,
   "deadlineMs": 30000,
-  "deadlineNote": "M6-5 lishuedu first hydrate ~9s retires the worker under the formal T3 2000ms deadline. G2 used 30000ms to obtain MEASURED cells.",
   "fourthRepo": "ruoyi-vue-pro",
-  "restoredGoldens": {
-    "lishuedu": { "head": "db63b1a7e393edd90449eb013d7d1c4d65c366f2", "javaFiles": 5312 },
-    "cipherlink": { "head": "fa433982e92e52dd610650d1e79f2d041179b1d3", "javaFiles": 633 },
-    "exam-parent-v3": { "head": "f90a0b475f7be2ed003703feecec8195bc7eb976", "javaFiles": 1370 }
-  },
   "repos": {
     "cipherlink": { "recall": 0.839, "pRead": 0.643, "rReadMust": 0.885 },
     "exam-parent-v3": { "recall": 0.697, "pRead": 0.6, "rReadMust": 0.88 },
@@ -36,22 +33,23 @@
     "rReadMustDrop": 0.4774
   },
   "otherFolds": "GO",
-  "note": "Did not retune ranking. G1 froze commit-diff mustHit on ruoyi; the three original goldens are curated 8+2 scenes. Inspecting ruoyi holdout gold to change ranking is forbidden. F is blocked; L1 is not.",
+  "note": "LORO uses --strategy impact --mode balanced, so the java_context planner knife did not move impact scores (bit-identical to run 1). Second fail escalates. F stays blocked. L1 is not blocked. Do not merge main.",
   "isolation": {
     "t0": {
-      "tests": 8,
+      "tests": 25,
       "fail": 0,
       "jdtlsBin": "/usr/bin/false",
-      "executableTree": "4cdf2bf55e20d9174e6b464397f75c52eae05fe0",
-      "logSha256": "16979e3f73aaddb8a71cd48e714ca013df0d2421b46d5f931fdd5c54abdc84c7"
+      "executableTree": "0a03aa302ae53667b1c0cd41ec21ca7cdb2cb711",
+      "note": "dist/context-engine/context-planner.test.js"
     },
     "t3Scale": {
       "fail": 0,
       "decision": "G2_OVERFIT_FAIL",
+      "exitCode": 2,
       "jdtlsBin": "/usr/bin/false",
       "coldBuildChild": true,
-      "executableTree": "f81284258f2ee100462009b8bf156b941442b6b9",
-      "logSha256": "9482f8a002af19ce4dd294f69bb004728901e25a2e980db263daf033192c7f37"
+      "executableTree": "0a03aa302ae53667b1c0cd41ec21ca7cdb2cb711",
+      "logSha256": "e46a60a7d141e8c3d1cc23da7641d20d7d964fd3143ce1ed3300e9f0d05dc5f9"
     }
   }
 }

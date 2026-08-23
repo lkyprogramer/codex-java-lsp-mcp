@@ -141,7 +141,7 @@ test("hop-1 IMPLEMENTS pack before hop-1 CALLS when leftover fits only one", () 
   assert.equal(planned.selected.some(item => item.id === "callee"), false);
 });
 
-test("cross-layout hop-1 CALLS pack before same-layout hop-1 CALLS", () => {
+test("same-layout hop-1 CALLS pack before cross-layout hop-1 CALLS", () => {
   const planned = planEvidenceBundles({
     bundles: [
       bundle({ id: "a", path: "modules/exam/src/A.java", role: "ANCHOR", closes: ["O1"], tokenCost: 10, hops: 0 }),
@@ -168,8 +168,8 @@ test("cross-layout hop-1 CALLS pack before same-layout hop-1 CALLS", () => {
     ],
     tokenBudget: 55
   });
-  assert.ok(planned.selected.some(item => item.id === "far"));
-  assert.equal(planned.selected.some(item => item.id === "near"), false);
+  assert.ok(planned.selected.some(item => item.id === "near"));
+  assert.equal(planned.selected.some(item => item.id === "far"), false);
 });
 
 test("hop>2 files are not packed even when they fit", () => {

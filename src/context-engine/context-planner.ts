@@ -186,7 +186,9 @@ export function planEvidenceBundles(input: PlanInput): PlanResult {
       || proofRank(left) - proofRank(right)
       || nameOverlap(right, anchors) - nameOverlap(left, anchors)
       || persistenceLayout(right.path) - persistenceLayout(left.path)
-      || Number(layoutPrefix(left.path) === anchorPrefix) - Number(layoutPrefix(right.path) === anchorPrefix)
+      // Same-module before cross-module. Cross-module-first packing crowded
+      // paper/exam holdouts with unrelated Agency files (N4 kill-list).
+      || Number(layoutPrefix(right.path) === anchorPrefix) - Number(layoutPrefix(left.path) === anchorPrefix)
       || (left.hops >= 2 ? hop2KindRank(left) - hop2KindRank(right) : 0)
       || (left.hops >= 2 ? left.tokenCost - right.tokenCost : 0)
       || left.path.localeCompare(right.path)
