@@ -20,7 +20,7 @@ Live 29-model profile (`local-qwen`): host `47.106.205.246:1082`, model `opencla
 | O1 child RSS ≤ 1536 | G3_MISS | `docs/phase-o/o1-closeout.json` | 2790 MiB; gate kept; residual to F1 |
 | O2 cold ≤ 60s | PENDING | | depends O1 |
 | O3 G5 steady ≤ 1.10 | PENDING | | |
-| L1 dual-model live | PENDING | | one shot; FAIL kills java_context |
-| F1 compare vs main | PENDING | | no merge |
+| L1 dual-model live | BLOCKED_EXTERNAL | `docs/phase-l/l1-closeout.json` | OpenRouter 429 + local-qwen 404; TaskSuccess UNMEASURED; no kill |
+| F1 compare vs main | BLOCKED | | blocked by G2_OVERFIT_FAIL; no merge |
 | F2 merge + attestation | BLOCKED | | user-only merge |
 | F3 soak | BLOCKED | | after user merge |

@@ -20,6 +20,7 @@ import {
   compactContextForModel,
   compactImpactForModel,
   liveJavaContextArgs,
+  liveProjectCacheRoot,
   liveV1Fields,
   pairedHitRateFromN5Cells,
   parseHitFraction,
@@ -31,6 +32,13 @@ import {
 } from "./run-agent-trace-live.mjs";
 import { mergeUsage, openaiCompatibleChat, usageFromCompletion } from "./openai-compatible-chat.mjs";
 import { parseAgentTraceCli, runAgentTraceMatrix } from "./run-agent-trace-matrix.mjs";
+
+test("live project cache is shared across arms so create can load a prewarmed snapshot", () => {
+  const root = liveProjectCacheRoot("/tmp/l1", "lishuedu");
+  assert.equal(root.endsWith(`${path.sep}mcp-cache${path.sep}lishuedu`) || root.endsWith("/mcp-cache/lishuedu"), true);
+  assert.equal(root.includes(`${path.sep}old`), false);
+  assert.equal(root.includes(`${path.sep}jin`), false);
+});
 
 test("selectLiveTasks with maxTasks 6 and onePerProject false returns all six holdouts", () => {
   const tasks = [

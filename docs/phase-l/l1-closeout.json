@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "l-l1-closeout/v1",
+  "track": "l",
+  "card": "L1",
+  "dated": "2026-08-23",
+  "decision": "BLOCKED_EXTERNAL",
+  "mergeToMain": false,
+  "srcTouched": false,
+  "defaultChainIdentity": "UNCHANGED",
+  "killJavaContext": false,
+  "fourthLive": false,
+  "taskSuccess": "UNMEASURED",
+  "modelUsage": "UNMEASURED",
+  "summary": "docs/phase-l/l1-live-summary.json",
+  "summarySha256": "e8f89cd39d32be98efd93b9fd77fc173790de03a030b5f230e55d05dc6b4054c",
+  "profiles": {
+    "openrouter": {
+      "model": "stealth/ox-alpha",
+      "result": "HTTP 429 upstream rate-limit",
+      "scored": 0
+    },
+    "local-qwen": {
+      "host": "47.106.205.246:1082",
+      "model": "openclaw/Qwen3.8-27B-WORK",
+      "result": "HTTP 404",
+      "scored": 0
+    }
+  },
+  "harness": {
+    "prewarmSharedProjectCache": true,
+    "realpathRepoRoots": true,
+    "note": "Darwin /tmp vs /private/tmp snapshot identity; 15s runtime.create cannot cold-build lishuedu."
+  },
+  "note": "Provider errors are not a java_context quality FAIL. Do not invent TaskSuccess 0. Do not drop java_context. F remains blocked by G2_OVERFIT_FAIL."
+}

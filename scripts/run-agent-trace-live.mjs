@@ -5,7 +5,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { createHash } from "node:crypto";
-import { mkdir } from "node:fs/promises";
+import { mkdir, realpath } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -556,6 +556,37 @@ export async function runLiveAgentTask({
   };
 }
 
+export function liveProjectCacheRoot(outputDir, projectId) {
+  return path.join(outputDir, "mcp-cache", projectId);
+}
+
+export async function resolveLiveRepositories(repositories) {
+  const resolved = {};
+  for (const [projectId, repoRoot] of Object.entries(repositories ?? {})) {
+    if (!repoRoot) continue;
+    resolved[projectId] = await realpath(repoRoot).catch(() => path.resolve(repoRoot));
+  }
+  return resolved;
+}
+
+export async function prewarmLiveProjectCaches(tasks, repositories, outputDir) {
+  const { runColdIndexBuild } = await import("../dist/java-index/cold-build.js");
+  const { repoCacheRoot } = await import("../dist/repo-layout.js");
+  const seen = new Set();
+  for (const task of tasks) {
+    if (seen.has(task.projectId)) continue;
+    seen.add(task.projectId);
+    const repoRoot = repositories[task.projectId];
+    if (!repoRoot) throw new Error(`missing repository root for ${task.projectId}`);
+    const cacheBase = liveProjectCacheRoot(outputDir, task.projectId);
+    const cacheDir = repoCacheRoot(repoRoot, cacheBase);
+    process.stderr.write(`[live-trace] prewarm ${task.projectId}\n`);
+    await mkdir(cacheDir, { recursive: true });
+    const result = await runColdIndexBuild(repoRoot, cacheDir, 1);
+    if (!result?.ok) throw new Error(`prewarm ${task.projectId} failed`);
+  }
+}
+
 export async function executeLiveTrace({
   tasks,
   repositories,
@@ -569,6 +600,8 @@ export async function executeLiveTrace({
     throw new Error("OPENAI_BASE_URL, OPENAI_API_KEY, and OPENAI_MODEL are required for --execute-live");
   }
   await mkdir(outputDir, { recursive: true });
+  repositories = await resolveLiveRepositories(repositories);
+  await prewarmLiveProjectCaches(tasks, repositories, outputDir);
   const results = [];
   const serenaCommand = String(env.SERENA_MCP_COMMAND || "").trim();
   for (const task of tasks) {
@@ -587,7 +620,7 @@ export async function executeLiveTrace({
         session = await openImpactSession({
           repoRoot,
           serverJs,
-          cacheRoot: path.join(outputDir, "mcp-cache", task.projectId, arm),
+          cacheRoot: liveProjectCacheRoot(outputDir, task.projectId),
           env
         });
         if (arm !== "serena") await warmupImpact(session, task);
