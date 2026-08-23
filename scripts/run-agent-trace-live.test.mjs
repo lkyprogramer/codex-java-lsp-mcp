@@ -9,6 +9,7 @@ import {
 import {
   ARM_SYSTEM_PROMPTS,
   LIVE_TRACE_SCHEMA_VERSION,
+  armPromptFingerprint,
   MISS_DISCOVERY_GAP,
   MISS_IN_POOL_NOT_PACKED,
   MISS_SINGLE_ARM_MISS,
@@ -132,8 +133,28 @@ test("live java_context args default to search and never send scenarioId as task
     }
   );
   assert.equal(ignored.task, "claim paper task identity");
-  assert.match(ARM_SYSTEM_PROMPTS.jin, /Stop when you can describe the impact/);
-  assert.match(ARM_SYSTEM_PROMPTS.jin, /Prefer one search/);
+});
+
+test("E2 arm prompts are symmetric and drop navigate suppression", () => {
+  assert.equal(ARM_SYSTEM_PROMPTS.jin.includes("Prefer one search"), false);
+  assert.equal(ARM_SYSTEM_PROMPTS.jin.includes("Do not use mode=navigate"), false);
+  assert.equal(ARM_SYSTEM_PROMPTS.old.includes("Prefer one search"), false);
+  assert.match(ARM_SYSTEM_PROMPTS.old, /java_impact tool only/);
+  assert.match(ARM_SYSTEM_PROMPTS.jin, /java_context tool only/);
+  assert.match(ARM_SYSTEM_PROMPTS.jin, /Intent is required/);
+  assert.match(ARM_SYSTEM_PROMPTS.old, /unresolved \/ next \/ evidenceGaps/);
+  assert.match(ARM_SYSTEM_PROMPTS.jin, /unresolved \/ next \/ evidenceGaps/);
+  assert.match(ARM_SYSTEM_PROMPTS.old, /8-round limit/);
+  assert.match(ARM_SYSTEM_PROMPTS.jin, /8-round limit/);
+  const oldFp = armPromptFingerprint("old");
+  const jinFp = armPromptFingerprint("jin");
+  assert.equal(oldFp.text, ARM_SYSTEM_PROMPTS.old);
+  assert.equal(jinFp.text, ARM_SYSTEM_PROMPTS.jin);
+  assert.equal(oldFp.sha256.length, 64);
+  assert.notEqual(oldFp.sha256, jinFp.sha256);
+  const summary = summarizeLiveTasks([], { model: "demo", baseUrlHost: "example.test" });
+  assert.equal(summary.promptFingerprints.old.sha256, oldFp.sha256);
+  assert.equal(summary.promptFingerprints.jin.sha256, jinFp.sha256);
 });
 
 test("serena unavailable is unscored UNMEASURED, never TaskSuccess 0", () => {

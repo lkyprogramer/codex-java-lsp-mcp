@@ -4,6 +4,7 @@
 // pos: V5R live agent-trace execute path. 112K context cap. Golden mustHit is never sent to the model.
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { createHash } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -98,11 +99,22 @@ export const JAVA_CONTEXT_TOOL = {
   }
 };
 
+const ARM_PROMPT_SHARED = "If the result points to uncovered directions (unresolved / next / evidenceGaps), call again until you can fully describe the impact surface, or until the 8-round limit. Never ask for whole files. Never invent file paths.";
+
 export const ARM_SYSTEM_PROMPTS = {
-  old: "You navigate Java code with the java_impact tool only. Call it with file/line/column. You may call it again on related files. Stop when you can describe the impact. Never ask for whole files. Never invent file paths.",
-  jin: "You navigate Java code with the java_context tool only. Pass intent. Prefer one search from the given file/line/column. Do not use mode=navigate unless you need callers, callees, or a persistence/framework closure. Stop when you can describe the impact. Never ask for whole files. Never invent file paths.",
+  old: `Explore this task's impact surface with the java_impact tool only. ${ARM_PROMPT_SHARED}`,
+  jin: `Explore this task's impact surface with the java_context tool only. Intent is required. ${ARM_PROMPT_SHARED}`,
   serena: "You navigate Java code with the Serena MCP tools as published. Do not invent tools. Stop when you can describe the impact. Never invent file paths."
 };
+
+export function armPromptFingerprint(arm) {
+  const text = ARM_SYSTEM_PROMPTS[arm];
+  if (typeof text !== "string") throw new Error(`unknown live arm prompt: ${arm}`);
+  return {
+    text,
+    sha256: createHash("sha256").update(text).digest("hex")
+  };
+}
 
 export function selectLiveTasks(tasks, { maxTasks = 3, onePerProject = true, offset = 0 } = {}) {
   const start = Number.isFinite(offset) ? Math.max(0, Math.trunc(offset)) : 0;
@@ -624,6 +636,11 @@ export function summarizeLiveTasks(results, {
     },
     blindReview: { status: "UNMEASURED" },
     pairedHitRate: buildPairedHitRate(results, { candidatePoolByTask }),
+    promptFingerprints: {
+      old: armPromptFingerprint("old"),
+      jin: armPromptFingerprint("jin"),
+      serena: armPromptFingerprint("serena")
+    },
     tasks: results
   };
 }

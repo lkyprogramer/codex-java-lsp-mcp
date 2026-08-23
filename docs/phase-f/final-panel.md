@@ -9,7 +9,7 @@ Live 29-model profile (`local-qwen`): host `47.106.205.246:1082`, model `opencla
 |---|---|---|---|
 | F0 panel + model bind | COMPLETE | `docs/phase-f/f0-closeout.json` | local-qwen host bound |
 | E1 paired hit-rate | COMPLETE | `docs/phase-e/e1-closeout.json` | v2 pairedHitRate; v1 fields bit-identical on N5-02 replay |
-| E2 prompt symmetry | PENDING | | |
+| E2 prompt symmetry | COMPLETE | `docs/phase-e/e2-closeout.json` | dropped jin navigate suppression; SHA in v2 report |
 | E3 collectImpactPaths candidates | PENDING | | depends C1 |
 | E4 Serena + dual profile | PENDING | | |
 | C1 candidates/evidence/next | PENDING | | |
