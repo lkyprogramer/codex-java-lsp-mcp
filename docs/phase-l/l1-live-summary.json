@@ -6,23 +6,26 @@
   "modelUsage": "UNMEASURED",
   "killJavaContext": false,
   "mergeToMain": false,
-  "note": "OpenRouter stealth/ox-alpha returned HTTP 429 upstream rate-limit on all old/jin cells. local-qwen at 47.106.205.246:1082 returned HTTP 404. Serena SERENA_UNAVAILABLE. Do not invent TaskSuccess 0. Do not kill java_context on provider errors.",
+  "fourthLive": false,
+  "note": "local-qwen shipped baseUrl http://47.106.205.246:1082/chat/completions returned HTTP 404 not_found on all 12 old/jin cells. OpenRouter process env has no OPENAI_API_KEY/JAVA_LSP_AGENT_API_KEY; harness returned BLOCKED_EXTERNAL missing API key before HTTP. Serena SERENA_UNAVAILABLE. Do not invent TaskSuccess 0. Do not kill java_context on provider errors.",
   "profiles": {
-    "openrouter": {
-      "host": "openrouter.ai",
-      "model": "stealth/ox-alpha",
-      "http": 429,
-      "scored": 0,
-      "failedRuntime": 12,
-      "serenaUnavailable": 6
-    },
     "local-qwen": {
       "host": "47.106.205.246:1082",
       "model": "openclaw/Qwen3.8-27B-WORK",
+      "baseUrl": "http://47.106.205.246:1082",
       "http": 404,
+      "error": "not_found",
       "scored": 0,
       "failedRuntime": 12,
-      "serenaUnavailable": 6
+      "serenaUnavailable": 6,
+      "liveTraceSha256": "1530e3db3abb2e360fdd0a77658f75be29c961cb455db286e1b7125cc15beee6"
+    },
+    "openrouter": {
+      "host": "openrouter.ai",
+      "model": "stealth/ox-alpha",
+      "http": null,
+      "result": "missing API key or --authorize-external",
+      "scored": 0
     }
   },
   "gates": {

@@ -12,24 +12,39 @@
   "taskSuccess": "UNMEASURED",
   "modelUsage": "UNMEASURED",
   "summary": "docs/phase-l/l1-live-summary.json",
-  "summarySha256": "e8f89cd39d32be98efd93b9fd77fc173790de03a030b5f230e55d05dc6b4054c",
+  "summarySha256": "414b62a39aae8c892b280f2cb1670b727dc108218a62ef877441c1d103fb863d",
   "profiles": {
-    "openrouter": {
-      "model": "stealth/ox-alpha",
-      "result": "HTTP 429 upstream rate-limit",
-      "scored": 0
-    },
     "local-qwen": {
       "host": "47.106.205.246:1082",
       "model": "openclaw/Qwen3.8-27B-WORK",
-      "result": "HTTP 404",
+      "result": "HTTP 404 not_found on POST /chat/completions",
+      "scored": 0,
+      "failedRuntime": 12
+    },
+    "openrouter": {
+      "model": "stealth/ox-alpha",
+      "result": "missing API key or --authorize-external",
       "scored": 0
     }
   },
   "harness": {
     "prewarmSharedProjectCache": true,
-    "realpathRepoRoots": true,
-    "note": "Darwin /tmp vs /private/tmp snapshot identity; 15s runtime.create cannot cold-build lishuedu."
+    "authorizeExternal": true,
+    "executeLive": true,
+    "maxTasks": 6,
+    "note": "Process env had no OPENAI_API_KEY. local-qwen ran with a non-secret probe credential so the shipped client actually POSTed. OpenRouter stopped at the missing-key gate."
   },
-  "note": "Provider errors are not a java_context quality FAIL. Do not invent TaskSuccess 0. Do not drop java_context. F remains blocked by G2_OVERFIT_FAIL."
+  "isolation": {
+    "localQwen": {
+      "executableTree": "b054396a73a4575a68735157b1b89c340da97e1b",
+      "logSha256": "012b1b078eea55c40c0678fadc591483c9119e14c9fdb6786f191f960b69302c",
+      "liveTraceSha256": "1530e3db3abb2e360fdd0a77658f75be29c961cb455db286e1b7125cc15beee6"
+    },
+    "openrouter": {
+      "executableTree": "b054396a73a4575a68735157b1b89c340da97e1b",
+      "logSha256": "4643142fafa4a7c7391c4fa20bdc12c9b5af45e003230bf2b093b1291eba11bb",
+      "exitCode": 3
+    }
+  },
+  "note": "Provider errors are not a java_context quality FAIL. Do not invent TaskSuccess 0. Do not drop java_context. F remains blocked by G2_OVERFIT_FAIL. Do not merge main."
 }
