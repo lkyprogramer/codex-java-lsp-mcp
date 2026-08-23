@@ -1,0 +1,61 @@
+{
+  "schemaVersion": "o2-cold/v1",
+  "dated": "2026-08-23",
+  "gateMs": 60000,
+  "projects": {
+    "lishuedu": {
+      "ok": true,
+      "files": 5312,
+      "discovered": 5312,
+      "parseFailed": 0,
+      "snapshotBytes": 23905466,
+      "rssPeakBytes": 2793947136,
+      "heapUsedBytes": 847274304,
+      "phasesMs": {
+        "discover": 138.75208299999986,
+        "parse": 17376.288708,
+        "resolve": 40149.139500000005,
+        "snapshotPrepare": 3798.436458999997,
+        "snapshotEncode": 4826.428332999996,
+        "graphEncode": 430.4262919999892,
+        "total": 66785.650084
+      }
+    },
+    "cipherlink": {
+      "ok": true,
+      "files": 629,
+      "discovered": 629,
+      "parseFailed": 0,
+      "snapshotBytes": 2482196,
+      "rssPeakBytes": 2640347136,
+      "heapUsedBytes": 99000336,
+      "phasesMs": {
+        "discover": 29.67158299998846,
+        "parse": 1651.1654169999965,
+        "resolve": 4822.604917000004,
+        "snapshotPrepare": 292.2624169999908,
+        "snapshotEncode": 436.76554199999373,
+        "graphEncode": 46.56587500000023,
+        "total": 7282.158917000008
+      }
+    },
+    "exam-parent-v3": {
+      "ok": true,
+      "files": 1369,
+      "discovered": 1369,
+      "parseFailed": 0,
+      "snapshotBytes": 5335429,
+      "rssPeakBytes": 2730688512,
+      "heapUsedBytes": 229727608,
+      "phasesMs": {
+        "discover": 35.01075000000128,
+        "parse": 3857.492708000005,
+        "resolve": 6643.560666999998,
+        "snapshotPrepare": 664.1385830000072,
+        "snapshotEncode": 902.0602090000029,
+        "graphEncode": 91.81124999999884,
+        "total": 12200.663375000004
+      }
+    }
+  }
+}

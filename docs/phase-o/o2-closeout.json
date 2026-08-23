@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "o-o2-closeout/v1",
+  "track": "o",
+  "card": "O2",
+  "dated": "2026-08-23",
+  "decision": "O2_MISS",
+  "mergeToMain": false,
+  "srcTouched": false,
+  "defaultChainIdentity": "UNCHANGED",
+  "gateMs": 60000,
+  "knivesNotLanded": [
+    "resolveAll worker-pool shards (digest and RSS risk at 2.6 GiB)",
+    "incremental source-root registry reuse"
+  ],
+  "measured": {
+    "lishueduMs": 66785.650084,
+    "cipherlinkMs": 7282.158917000008,
+    "examParentV3Ms": 12200.663375000004,
+    "lishueduPass": false,
+    "file": "docs/phase-o/o2-cold.json",
+    "sha256": "3c73a625ad6bdfa044592b76d1d8b9a71086149a4b26b9eccebf48a9bfcc5a1a"
+  },
+  "note": "lishuedu cold 66.8s > 60s. resolve remains 40.1s of that. Parallel shards were not landed: cloning the type registry into worker threads would raise the O1 RSS miss further, and harvest forbids digest drift. Gate kept. Snapshot fallback remains. T3 identity skipped because the default chain was not modified.",
+  "isolation": {
+    "t0": {
+      "tests": 10,
+      "fail": 0,
+      "note": "memory-benchmark warmup tests (O3) plus attribution CLI; no src resolve change",
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "58d3fc065f02c8ee7e00cf66dee8c782440c2a2a",
+      "logSha256": "33962165ee3adf7dd2ca0790f66037d9acb4a8ed73136b6552e0d95ee9a472c5"
+    },
+    "cold": {
+      "logSha256": "78e68634838cb1a2688a82aab3549c0fcb089796ab806686ad77d7ae33b26f03",
+      "executableTree": "58d3fc065f02c8ee7e00cf66dee8c782440c2a2a",
+      "inProcessAttribution": true
+    }
+  }
+}
