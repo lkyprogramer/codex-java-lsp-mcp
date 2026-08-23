@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "g-g1-golden-manifest/v1",
+  "dated": "2026-08-23",
+  "project": "ruoyi-vue-pro",
+  "pin": "2bbe79b34ab8c9c7b0148300599dc8d4881c8db1",
+  "checkout": "/tmp/codex-java-v4-golden-20260823/ruoyi-vue-pro",
+  "commitTasks": "docs/phase-jin/jin-commit-tasks-ruoyi-vue-pro.json",
+  "jsonl": "golden/ruoyi-vue-pro.scenarios.jsonl",
+  "jsonlSha256": "7e9eb15f41654f27b4bee743fa73965a514335df83c9964ccce726b217297982",
+  "generator": {
+    "source": "scripts/generate-commit-tasks.mjs",
+    "holdoutRatio": 0.3,
+    "maxScenarios": 40,
+    "minScenarios": 20,
+    "minHoldout": 6,
+    "split": "time-ordered-splitTrainHoldout",
+    "layoutProfile": "maven-reactor",
+    "handPicked": false
+  },
+  "counts": {
+    "eligible": 382,
+    "selected": 40,
+    "scenarios": 40,
+    "tuning": 28,
+    "holdout": 12,
+    "droppedMissingAtPin": 41,
+    "droppedThin": 4,
+    "droppedNoise": 0
+  },
+  "quality": {
+    "thinMustHit": 0,
+    "generatedNoise": 0,
+    "thinOrNoiseRate": 0,
+    "gate": 0.3,
+    "decision": "GO"
+  },
+  "smoke": {
+    "loaded": 40,
+    "missingFiles": 0,
+    "passed": true
+  },
+  "note": "Holdout gold is frozen. Do not inspect holdout mustHit or retune from it."
+}

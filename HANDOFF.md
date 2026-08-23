@@ -2,7 +2,7 @@
 
 ## 当前任务
 
-Harvest E/C/G/O → L1 → F。**不合 `main`。** F0/E1–E4/C1–C3 COMPLETE。下一步 G1 第四仓 golden。L1 才是下一次外呼。Serena `SERENA_ABANDONED`。v3 golden 已空。
+Harvest E/C/G/O → L1 → F。**不合 `main`。** F0/E1–E4/C1–C3/G1 COMPLETE。下一步 G2 leave-one-repo-out。L1 才是下一次外呼。Serena `SERENA_ABANDONED`。v3 golden 已空。
 
 ## E1（2026-08-23）
 
@@ -31,6 +31,10 @@ Harvest E/C/G/O → L1 → F。**不合 `main`。** F0/E1–E4/C1–C3 COMPLETE�
 ## C3（2026-08-23）
 
 判定 **COMPLETE**。只改常量：evidence 帽 **3**，`DEFAULT_TOKEN_BUDGET` **1400**（相对 C2 的 2000 −30%），文件护栏 **14**。选择算法未动。T0 75/75；T1 dist 1186 + scripts 232 fail 0。C2 字节 P50 门仍过。三仓 T2 仍空仓。收口 `docs/phase-c/c3-closeout.json`。
+
+## G1（2026-08-23）
+
+判定 **COMPLETE**。`YunaiV/ruoyi-vue-pro` pin `2bbe79b3` 冻结 40 场景 / 12 holdout。mustHit 来自 commit-tasks 同链路，未手挑。检出 `/tmp/codex-java-v4-golden-20260823/ruoyi-vue-pro`。质量 thin/noise 0。T0 17/17 fail 0。**冻结后不看 holdout gold、不调参。** 收口 `docs/phase-g/g1-closeout.json`。
 
 ## N5 live 复测（2026-08-22）
 
@@ -87,7 +91,7 @@ N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a 
 
 ## 下一步计划
 
-1. Harvest 下一张卡：G1 冻结 ruoyi-vue-pro golden（pin `2bbe79b3`）。O 轨可并行。L1 要环境 key。
+1. Harvest 下一张卡：G2 leave-one-repo-out（四仓四折，回撤 ≤15%；FAIL 阻塞 F 不阻塞 L1）。O 轨可并行。L1 要环境 key。
 2. L1 一次性双模型 live（local-qwen `47.106.205.246:1082` + OpenRouter `stealth/ox-alpha`）。FAIL 则撤 `java_context` 公开工具面，没有第四次 live。
 3. 不合 `main`。F2/F3 等用户。
 4. 冷建 child RSS 2311>1536 与 resolveAll 46s 走 O1/O2，不重开 M 轨架构。
