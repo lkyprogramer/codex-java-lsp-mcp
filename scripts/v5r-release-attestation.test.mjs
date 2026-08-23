@@ -17,7 +17,7 @@ test("release attestation keeps TaskSuccess UNMEASURED and mergeToMain false", a
   assert.equal(attestation.taskSuccess.status === 0, false);
   assert.equal(attestation.mergeToMain, false);
   assert.equal(mergeToMainAllowed(attestation), false);
-  assert.equal(attestation.fourthRepo.frozen, false);
+  assert.equal(attestation.fourthRepo.frozen, true);
   assert.equal(attestation.leaveOneRepoOut.matrix, "UNMEASURED");
   assert.equal(attestation.gateProfiles.profilesDiffer, true);
   assert.equal(ATTESTED_PUBLIC_TOOLS.includes("java_context"), false);

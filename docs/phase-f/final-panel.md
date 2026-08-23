@@ -16,7 +16,7 @@ Live 29-model profile (`local-qwen`): host `47.106.205.246:1082`, model `opencla
 | C2 byte slim | COMPLETE | `docs/phase-c/c2-closeout.json` | P50 1.009≤1.2; wire N=12; T2 goldens empty |
 | C3 evidence budget | COMPLETE | `docs/phase-c/c3-closeout.json` | cap 3; budget 1400; T2 goldens empty |
 | G1 ruoyi-vue-pro golden | COMPLETE | `docs/phase-g/g1-closeout.json` | 40 scenes / 12 holdout; pin 2bbe79b3; holdout frozen |
-| G2 leave-one-repo-out | PENDING | | depends G1; FAIL blocks F |
+| G2 leave-one-repo-out | G2_OVERFIT_FAIL | `docs/phase-g/g2-closeout.json` | ruoyi held-out drop >15%; blocks F not L1; no retune |
 | O1 child RSS ≤ 1536 | PENDING | | |
 | O2 cold ≤ 60s | PENDING | | depends O1 |
 | O3 G5 steady ≤ 1.10 | PENDING | | |

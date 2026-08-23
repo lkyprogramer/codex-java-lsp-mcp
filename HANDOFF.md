@@ -2,7 +2,7 @@
 
 ## 当前任务
 
-Harvest E/C/G/O → L1 → F。**不合 `main`。** F0/E1–E4/C1–C3/G1 COMPLETE。下一步 G2 leave-one-repo-out。L1 才是下一次外呼。Serena `SERENA_ABANDONED`。v3 golden 已空。
+Harvest E/C/G/O → L1 → F。**不合 `main`。** F0/E1–E4/C1–C3/G1 COMPLETE。G2 `G2_OVERFIT_FAIL`（阻塞 F，不阻塞 L1）。下一步 O 轨残差 + L1。Serena `SERENA_ABANDONED`。v3 golden 已从 pin 仓恢复。
 
 ## E1（2026-08-23）
 
@@ -35,6 +35,10 @@ Harvest E/C/G/O → L1 → F。**不合 `main`。** F0/E1–E4/C1–C3/G1 COMPLE
 ## G1（2026-08-23）
 
 判定 **COMPLETE**。`YunaiV/ruoyi-vue-pro` pin `2bbe79b3` 冻结 40 场景 / 12 holdout。mustHit 来自 commit-tasks 同链路，未手挑。检出 `/tmp/codex-java-v4-golden-20260823/ruoyi-vue-pro`。质量 thin/noise 0。T0 17/17 fail 0。**冻结后不看 holdout gold、不调参。** 收口 `docs/phase-g/g1-closeout.json`。
+
+## G2（2026-08-23）
+
+判定 **G2_OVERFIT_FAIL**。四仓一折冷测。ruoyi 留出 recall/pRead/rReadMust 回撤 0.179/0.516/0.477 > 0.15。另外三折 GO。未调参（冻结 holdout 禁止拿来改排序）。**阻塞 F，不阻塞 L1**。收口 `docs/phase-g/g2-closeout.json`。
 
 ## N5 live 复测（2026-08-22）
 
@@ -86,12 +90,12 @@ N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a 
 - Range 残差：lishuedu / exam 仍低于 compact；cipherlink 0.925 不回退。
 - N1 RSS `0A.4(4b)` **RESOLVED** by M-track §3（G1/G2 书面目标仍 MISS，门未放宽）。
 - N3 p95 −35% vs 默认 impact **UNMEASURED**。
-- 第四仓 `YunaiV/ruoyi-vue-pro` pin `2bbe79b3` holdout 未看；leave-one-repo-out 未跑。
+- 第四仓 `YunaiV/ruoyi-vue-pro` pin `2bbe79b3` 已冻结；G2 leave-one-repo-out **G2_OVERFIT_FAIL**（阻塞 F）。
 - 生产 MCP / `java_impact` 不读 `JAVA_LSP_ENGINE`。
 
 ## 下一步计划
 
-1. Harvest 下一张卡：G2 leave-one-repo-out（四仓四折，回撤 ≤15%；FAIL 阻塞 F 不阻塞 L1）。O 轨可并行。L1 要环境 key。
+1. Harvest 下一张卡：O1–O3 残差（child RSS / 冷建 / G5）。G2 已 FAIL，F 阻塞。L1 可跑。
 2. L1 一次性双模型 live（local-qwen `47.106.205.246:1082` + OpenRouter `stealth/ox-alpha`）。FAIL 则撤 `java_context` 公开工具面，没有第四次 live。
 3. 不合 `main`。F2/F3 等用户。
 4. 冷建 child RSS 2311>1536 与 resolveAll 46s 走 O1/O2，不重开 M 轨架构。
