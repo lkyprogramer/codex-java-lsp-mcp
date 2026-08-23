@@ -194,7 +194,7 @@ export function compactContextForModel(result, maxChars = MAX_TOOL_RESULT_CHARS)
       role: item.role,
       ranges: typeof item.ranges === "string" && item.ranges ? item.ranges : formatSpanRanges(item.spans)
     });
-    if (evidence.length >= 4) break;
+    if (evidence.length >= 3) break;
   }
   const payload = {
     coverage: result?.coverage,

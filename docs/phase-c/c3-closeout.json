@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "c-c3-closeout/v1",
+  "track": "c",
+  "card": "C3",
+  "dated": "2026-08-23",
+  "decision": "COMPLETE",
+  "mergeToMain": false,
+  "srcTouched": true,
+  "defaultChainIdentity": "UNCHANGED",
+  "note": "Constants only. Evidence cap 4→3, pack budget 2000→1400, file guard 20→14. Selection algorithm unchanged. Candidates layer kept at wire N=12.",
+  "evidenceFileCap": 3,
+  "defaultTokenBudget": 1400,
+  "maxDistinctFilesGuard": 14,
+  "reverted": false,
+  "coverage": {
+    "offlineCandidatesUnionEvidence": "GO",
+    "holdoutT2": "T2_BLOCKED_GOLDEN_EMPTY"
+  },
+  "bytes": {
+    "c2P50StillHolds": true,
+    "gate": 1.2
+  },
+  "isolation": {
+    "t0": {
+      "tests": 75,
+      "fail": 0,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "3e1e8f2202cd2726aeb2c058150264355b078aeb",
+      "logSha256": "f6e0d716466ab0b9584f4a34900eccac2ceeda59eb79b4717c30813403be938c"
+    },
+    "t1": {
+      "dist": 1186,
+      "scripts": 232,
+      "fail": 0,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "3e1e8f2202cd2726aeb2c058150264355b078aeb",
+      "logSha256": "e40f3aa369dfbf184e6b59b5da36d2dfaaae275843cbffe87da362215687d462"
+    }
+  }
+}

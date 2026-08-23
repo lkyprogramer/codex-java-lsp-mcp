@@ -14,7 +14,7 @@ Live 29-model profile (`local-qwen`): host `47.106.205.246:1082`, model `opencla
 | E4 Serena + dual profile | COMPLETE | `docs/phase-e/e4-closeout.json` | SERENA_ABANDONED; --model-profile local-qwen/openrouter |
 | C1 candidates/evidence/next | COMPLETE | `docs/phase-c/c1-closeout.json` | contract v2; schema 578≤700; T2 goldens empty |
 | C2 byte slim | COMPLETE | `docs/phase-c/c2-closeout.json` | P50 1.009≤1.2; wire N=12; T2 goldens empty |
-| C3 evidence budget | PENDING | | depends C1/C2 |
+| C3 evidence budget | COMPLETE | `docs/phase-c/c3-closeout.json` | cap 3; budget 1400; T2 goldens empty |
 | G1 ruoyi-vue-pro golden | PENDING | | |
 | G2 leave-one-repo-out | PENDING | | depends G1; FAIL blocks F |
 | O1 child RSS ≤ 1536 | PENDING | | |

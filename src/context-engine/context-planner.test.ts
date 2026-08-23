@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { planEvidenceBundles } from "./context-planner.js";
+import { DEFAULT_TOKEN_BUDGET, planEvidenceBundles } from "./context-planner.js";
 import type { EvidenceBundle, EvidenceRole } from "./evidence-bundle.js";
 
 function bundle(partial: Partial<EvidenceBundle> & Pick<EvidenceBundle, "id" | "path" | "role" | "closes" | "tokenCost">): EvidenceBundle {
@@ -595,4 +595,27 @@ test("duplicate path saturates instead of paying twice for the same closes", () 
   });
   const pathB = planned.selected.filter(item => item.path === "src/B.java");
   assert.ok(pathB.length <= 1);
+});
+
+test("C3 shipped budget packs at least 30% fewer tokens than the C2 2000 budget", () => {
+  const bundles = [
+    bundle({ id: "a", path: "src/A.java", role: "ANCHOR", closes: ["O1"], tokenCost: 80, hops: 0 })
+  ];
+  for (let index = 0; index < 40; index += 1) {
+    bundles.push(bundle({
+      id: `f${index}`,
+      path: `src/F${index}.java`,
+      role: "CALLEE",
+      closes: [`O${index + 2}`],
+      tokenCost: 80,
+      hops: 1
+    }));
+  }
+  const c2 = planEvidenceBundles({ bundles, tokenBudget: 2000, maxDistinctFiles: 20 });
+  const shipped = planEvidenceBundles({ bundles, tokenBudget: DEFAULT_TOKEN_BUDGET });
+  assert.ok(c2.tokenCost >= 1500, `c2 baseline not packed: ${c2.tokenCost}`);
+  assert.ok(
+    shipped.tokenCost <= c2.tokenCost * 0.7,
+    `token drop ${shipped.tokenCost}/${c2.tokenCost} using shipped budget ${DEFAULT_TOKEN_BUDGET}`
+  );
 });

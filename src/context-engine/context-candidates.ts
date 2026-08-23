@@ -7,7 +7,7 @@ import type { ContextCandidate, ContextNext } from "./context-contract.js";
 export const CANDIDATE_FRONTIER_N = 24;
 export const CANDIDATE_WIRE_N = 12;
 export const CANDIDATE_FRONTIER_N_MAX = 40;
-export const EVIDENCE_FILE_CAP = 4;
+export const EVIDENCE_FILE_CAP = 3;
 
 export function formatSpanRanges(spans: Array<{ start: number; end: number }> | undefined): string {
   const merged: Array<{ start: number; end: number }> = [];

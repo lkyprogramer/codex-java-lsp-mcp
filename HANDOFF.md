@@ -2,7 +2,7 @@
 
 ## 当前任务
 
-Harvest E/C/G/O → L1 → F。**不合 `main`。** F0/E1–E4/C1/C2 COMPLETE。下一步 C3。L1 才是下一次外呼。Serena `SERENA_ABANDONED`。v3 golden 已空。
+Harvest E/C/G/O → L1 → F。**不合 `main`。** F0/E1–E4/C1–C3 COMPLETE。下一步 G1 第四仓 golden。L1 才是下一次外呼。Serena `SERENA_ABANDONED`。v3 golden 已空。
 
 ## E1（2026-08-23）
 
@@ -27,6 +27,10 @@ Harvest E/C/G/O → L1 → F。**不合 `main`。** F0/E1–E4/C1/C2 COMPLETE。
 ## C2（2026-08-23）
 
 判定 **COMPLETE**。spans 收成 `12-48,60-75`；去掉 resolvedIntent/anchor/contexts 回显；unresolved 只留 `{path,role}`；evidence 最多 4 文件。N=24 时 P50 1.71，按失败处置降 wire candidates **12**（层保留）。六组首呼 compact P50 **1.009 ≤ 1.2**。T0 50/50；T1 dist 1185 + scripts 232 fail 0。三仓 T2 仍 `T2_BLOCKED_GOLDEN_EMPTY`。收口 `docs/phase-c/c2-closeout.json`。
+
+## C3（2026-08-23）
+
+判定 **COMPLETE**。只改常量：evidence 帽 **3**，`DEFAULT_TOKEN_BUDGET` **1400**（相对 C2 的 2000 −30%），文件护栏 **14**。选择算法未动。T0 75/75；T1 dist 1186 + scripts 232 fail 0。C2 字节 P50 门仍过。三仓 T2 仍空仓。收口 `docs/phase-c/c3-closeout.json`。
 
 ## N5 live 复测（2026-08-22）
 
@@ -83,7 +87,7 @@ N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a 
 
 ## 下一步计划
 
-1. Harvest 下一张卡：C3 evidence 1–3 文件、token 再降 ≥ 30%。G/O 可并行。T2 需要可用的三仓 golden。
+1. Harvest 下一张卡：G1 冻结 ruoyi-vue-pro golden（pin `2bbe79b3`）。O 轨可并行。L1 要环境 key。
 2. L1 一次性双模型 live（local-qwen `47.106.205.246:1082` + OpenRouter `stealth/ox-alpha`）。FAIL 则撤 `java_context` 公开工具面，没有第四次 live。
 3. 不合 `main`。F2/F3 等用户。
 4. 冷建 child RSS 2311>1536 与 resolveAll 46s 走 O1/O2，不重开 M 轨架构。

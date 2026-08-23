@@ -4,8 +4,8 @@
 import { bundleTokenCost, isP0Bundle, mergeSpans, type EvidenceBundle } from "./evidence-bundle.js";
 import { BYTES_DIV_4, estimateTokens } from "./token-estimator.js";
 
-export const DEFAULT_TOKEN_BUDGET = 2000;
-export const MAX_DISTINCT_FILES_GUARD = 20;
+export const DEFAULT_TOKEN_BUDGET = 1400;
+export const MAX_DISTINCT_FILES_GUARD = 14;
 export const MAX_AMBIGUITY_PER_OBLIGATION = 2;
 export const MAX_BUNDLES_GUARD = 64;
 

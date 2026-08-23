@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   CANDIDATE_FRONTIER_N,
   CANDIDATE_WIRE_N,
+  EVIDENCE_FILE_CAP,
   capEvidenceByFile,
   candidateReason,
   candidateRole,
@@ -16,6 +17,7 @@ test("formatSpanRanges merges adjacent intervals", () => {
   assert.equal(formatSpanRanges([{ start: 12, end: 48 }, { start: 60, end: 75 }]), "12-48,60-75");
   assert.equal(formatSpanRanges([{ start: 1, end: 4 }, { start: 5, end: 8 }]), "1-8");
   assert.equal(parseSpanRanges("12-48,60-75").length, 2);
+  assert.ok(EVIDENCE_FILE_CAP >= 1 && EVIDENCE_FILE_CAP <= 3);
   assert.deepEqual(capEvidenceByFile([
     { path: "src/A.java" },
     { path: "src/B.java" },
@@ -23,7 +25,7 @@ test("formatSpanRanges merges adjacent intervals", () => {
     { path: "src/C.java" },
     { path: "src/D.java" },
     { path: "src/E.java" }
-  ]).map(item => item.path), ["src/A.java", "src/B.java", "src/C.java", "src/D.java"]);
+  ]).map(item => item.path), ["src/A.java", "src/B.java", "src/C.java"]);
 });
 
 test("frontierCandidates is path-level, hop-ordered, and capped at N", () => {

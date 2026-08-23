@@ -59,7 +59,7 @@ test("serializer emits one schema, omits scores, and keeps includeSource parity"
   assert.equal(withSource.candidates.some(item => item.path === "src/B.java"), true);
   assert.equal(withSource.candidates.find(item => item.path === "src/B.java")?.reason.includes("CALLS_EXACT"), true);
   assert.equal(withSource.evidence.every(item => typeof item.ranges === "string" && item.ranges.length > 0), true);
-  assert.equal(withSource.evidence.length <= 4, true);
+  assert.ok(withSource.evidence.length <= 3);
   assert.equal(JSON.stringify(withSource).includes("confidence"), false);
   assert.equal(JSON.stringify(withSource).includes("score"), false);
   assert.equal(sourceParity(withSource, without), true);
