@@ -11,7 +11,8 @@ import {
   formatSpanRanges,
   frontierCandidates,
   nextSteps,
-  parseSpanRanges
+  parseSpanRanges,
+  wireRank
 } from "./context-candidates.js";
 
 test("formatSpanRanges merges adjacent intervals", () => {
@@ -51,6 +52,43 @@ test("frontierCandidates is path-level, hop-ordered, and capped at N", () => {
   assert.equal(rows[1]!.role, "CALLEE");
   assert.equal(rows[1]!.hop, 1);
   assert.equal(rows[1]!.reason, "CALLS_EXACT←PayService.create");
+});
+
+test("frontierCandidates keeps hop-1 CALLS before hop-1 IMPORTS when the cap is tight", () => {
+  const rows = frontierCandidates([
+    { path: "src/A.java", hops: 0, estimatedTokens: 10, provingPath: [], closedObligations: ["O0"] },
+    {
+      path: "src/AaaConstant.java",
+      hops: 1,
+      estimatedTokens: 10,
+      provingPath: [{ kind: "IMPORTS", fromId: "src/A.java", toId: "src/AaaConstant.java#C" }],
+      closedObligations: []
+    },
+    {
+      path: "src/Ledger.java",
+      hops: 1,
+      estimatedTokens: 10,
+      provingPath: [{ kind: "CALLS_EXACT", fromId: "src/A.java#A#pay#1", toId: "src/Ledger.java#Ledger" }],
+      closedObligations: ["O1"]
+    },
+    {
+      path: "src/ATest.java",
+      hops: 1,
+      estimatedTokens: 10,
+      provingPath: [{ kind: "CALLS_EXACT", fromId: "src/ATest.java#T#run#1", toId: "src/A.java#A" }],
+      closedObligations: []
+    }
+  ], 3);
+  assert.deepEqual(rows.map(item => item.path), ["src/A.java", "src/Ledger.java", "src/AaaConstant.java"]);
+  assert.ok(wireRank({
+    path: "src/Ledger.java",
+    hops: 1,
+    provingPath: [{ kind: "CALLS_EXACT", fromId: "a", toId: "b" }]
+  }) < wireRank({
+    path: "src/AaaConstant.java",
+    hops: 1,
+    provingPath: [{ kind: "IMPORTS", fromId: "a", toId: "b" }]
+  }));
 });
 
 test("candidateRole follows graph edge kinds without scores", () => {

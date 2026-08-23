@@ -7,7 +7,7 @@
   "mergeToMain": false,
   "srcTouched": true,
   "defaultChainIdentity": "UNCHANGED",
-  "note": "Layered candidates/evidence/next shipped. T2 mean 0.590 < 0.9. 21 of 26 missing required files are in search.bundles but outside wire N=24 (ranks 25-281). Harvest floor is only valid when every miss is absent from the graph. N=32 raised mean to 0.631 and broke C2 P50 1.237; N=40 would still leave 15 in-pool ranks >40. Wire N stays 24. Schema 578≤700.",
+  "note": "Wire ranking is hop, then proof role (PERSISTENCE/CALLS before CONTRACT/TEST), then path. N stays 24. T2 mean 0.590→0.707. All previous hop-path ranks 25–40 (PayAccount, SchoolQueryService, Alipay/Apply/Ceb pay services) are now on the wire. 13 in-pool misses remain at ranks 47–281. 5 true DISCOVERY_GAP. Floor still not eligible. C2 P50 0.965≤1.2.",
   "contractVersion": 3,
   "candidateFrontierN": 24,
   "candidateWireN": 24,
@@ -19,33 +19,33 @@
   "t2": {
     "status": "T2_MEASURED",
     "replay": "docs/phase-c/c1-replay.json",
-    "replaySha256": "a0e43ea2785dfd513b734e10ae7f936783b2a7fdcdcfc895519800ed815362fe",
+    "replaySha256": "5df89433c302e5c6d9f6e22059e888a60099d77aba57f22c7dcdea8fc18ea08b",
     "goldensJavaFiles": {
       "lishuedu": 5312,
       "cipherlink": 629,
       "exam-parent-v3": 1369
     },
-    "c1CoverageMean": 0.5904623154623154,
+    "c1CoverageMean": 0.7074494949494948,
     "minMean": 0.9,
     "passed": false,
-    "inPoolNotPacked": 21,
+    "inPoolNotPacked": 13,
     "discoveryGap": 5,
     "floorEligible": false,
     "disposition": "IN_POOL_NOT_PACKED",
-    "n32Attempt": { "c1Mean": 0.631060606060606, "c2P50": 1.237397211297819 }
+    "ranks25to40OnWire": true
   },
   "isolation": {
     "t0": {
-      "tests": 9,
+      "tests": 22,
       "fail": 0,
       "jdtlsBin": "/usr/bin/false",
-      "executableTree": "ead080e4af66b44e7603c427745f9eba8ba789c5",
-      "note": "scripts/run-jin-n5-context-replay.test.mjs including miss-label tests"
+      "executableTree": "df76e8079481bb4d0605a28fd5aafb6d30570322",
+      "note": "context-candidates including CALLS-before-IMPORTS wire test; serializer; java-context; replay miss labels"
     },
     "t2": {
       "coldBuildChildEnv": true,
-      "logSha256": "3113e321496e885fc005cdba61cb0c87d7a67adf742c21fbf81af6c1e1f550e4",
-      "executableTree": "ead080e4af66b44e7603c427745f9eba8ba789c5"
+      "logSha256": "8cf4b7cfbd43cb4b877730e694b1c0079b36c79c0eb28214e5f863e6ff6a4d32",
+      "executableTree": "df76e8079481bb4d0605a28fd5aafb6d30570322"
     }
   }
 }

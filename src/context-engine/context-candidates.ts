@@ -81,6 +81,25 @@ export function candidateReason(bundle: EvidenceBundleCandidate): string {
   return `${step.kind}←${symbolFromNodeId(step.fromId)}`;
 }
 
+function isTestWirePath(path: string): boolean {
+  return path.includes("/src/test/") || path.includes("/test/java/") || /Test\.java$/i.test(path);
+}
+
+/** Lower is kept first on the N=24 wire. Hop still leads; proof role beats path order. */
+export function wireRank(bundle: Pick<EvidenceBundleCandidate, "hops" | "provingPath" | "path">): number {
+  if (bundle.hops === 0) return 0;
+  if (isTestWirePath(bundle.path ?? "") || candidateRole(bundle) === "TEST") return 90;
+  switch (candidateRole(bundle)) {
+    case "PERSISTENCE": return 10;
+    case "IMPLEMENTATION": return 12;
+    case "CALLEE":
+    case "CALLER": return 14;
+    case "FRAMEWORK": return 16;
+    case "CONTRACT": return 30;
+    default: return 40;
+  }
+}
+
 export function frontierCandidates(
   bundles: EvidenceBundleCandidate[],
   limit = CANDIDATE_FRONTIER_N
@@ -93,7 +112,10 @@ export function frontierCandidates(
   }
   const cap = Math.min(CANDIDATE_FRONTIER_N_MAX, Math.max(0, limit));
   return [...byPath.values()]
-    .sort((left, right) => left.hops - right.hops || left.path.localeCompare(right.path))
+    .sort((left, right) =>
+      left.hops - right.hops
+      || wireRank(left) - wireRank(right)
+      || left.path.localeCompare(right.path))
     .slice(0, cap)
     .map(bundle => ({
       path: bundle.path,

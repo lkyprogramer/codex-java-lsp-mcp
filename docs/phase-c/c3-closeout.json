@@ -7,7 +7,7 @@
   "mergeToMain": false,
   "srcTouched": true,
   "defaultChainIdentity": "UNCHANGED",
-  "note": "Constants only. Evidence cap 4→3, pack budget 2000→1400, file guard 20→14. Token drop ≥30% vs C2 2000 budget GO. C2 P50 0.952≤1.2. Schema 578≤700. Coverage mean 0.590 is not a C1 floor: 21 misses are IN_POOL_NOT_PACKED. C3 does not revert to 4 because shrinking evidence did not create those misses. Card is blocked by C1, not COMPLETE.",
+  "note": "Constants only. Evidence cap 4→3. Token drop ≥30% vs C2 2000 GO. C2 P50 0.965≤1.2. Schema 578≤700. After C1 wireRank, T2 mean 0.707 with 13 in-pool misses remaining. C3 does not revert to 4. Card stays BLOCKED_BY_C1.",
   "evidenceFileCap": 3,
   "defaultTokenBudget": 1400,
   "maxDistinctFilesGuard": 14,
@@ -20,12 +20,12 @@
   "coverage": {
     "offlineCandidatesUnionEvidence": "T2_MEASURED",
     "holdoutT2": "T2_MEASURED",
-    "mean": 0.5904623154623154,
+    "mean": 0.7074494949494948,
     "n": 6,
     "gate": 0.9,
     "passed": false,
     "reverted": false,
-    "inPoolNotPacked": 21,
+    "inPoolNotPacked": 13,
     "discoveryGap": 5,
     "floorEligible": false,
     "disposition": "IN_POOL_NOT_PACKED",
@@ -42,7 +42,7 @@
   },
   "bytes": {
     "c2P50StillHolds": true,
-    "p50": 0.9515934539190353,
+    "p50": 0.9653199856989632,
     "n": 6,
     "gate": 1.2,
     "passed": true

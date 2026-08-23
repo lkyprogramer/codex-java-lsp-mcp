@@ -12,7 +12,7 @@
   "candidateWireN": 24,
   "evidenceFileCap": 4,
   "bytes": {
-    "p50": 0.951421188630491,
+    "p50": 0.9653199856989632,
     "gate": 1.2,
     "result": "GO",
     "file": "docs/phase-c/c2-bytes.json",

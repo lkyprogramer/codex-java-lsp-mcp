@@ -4,9 +4,10 @@
   "status": "T2_MEASURED",
   "passed": false,
   "floorEligible": false,
-  "inPoolNotPacked": 21,
+  "inPoolNotPacked": 13,
   "discoveryGap": 5,
   "candidateWireN": 24,
+  "wireRank": "hop then proof-role (PERSISTENCE/CALLS before CONTRACT) then path",
   "goldens": {
     "root": "/tmp/codex-java-v3-golden-20260809",
     "javaFiles": {
@@ -18,10 +19,10 @@
   "c1Coverage": {
     "schemaVersion": "c1-holdout-coverage/v2",
     "n": 6,
-    "mean": 0.5904623154623154,
+    "mean": 0.7074494949494948,
     "minMean": 0.9,
     "passed": false,
-    "inPoolNotPacked": 21,
+    "inPoolNotPacked": 13,
     "discoveryGap": 5,
     "floorEligible": false,
     "rows": [
@@ -29,22 +30,11 @@
         "project": "lishuedu",
         "scenarioId": "exam-score-export-cross-module-holdout",
         "required": 13,
-        "hit": 12,
-        "rate": 0.9230769230769231,
+        "hit": 13,
+        "rate": 1,
         "poolSize": 606,
-        "missing": [
-          "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolQueryService.java"
-        ],
-        "missLabels": [
-          {
-            "path": "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolQueryService.java",
-            "label": "IN_POOL_NOT_PACKED",
-            "poolRank": 27,
-            "poolSize": 606,
-            "onWire": false,
-            "onEvidence": false
-          }
-        ]
+        "missing": [],
+        "missLabels": []
       },
       {
         "project": "lishuedu",
@@ -167,34 +157,17 @@
         "project": "exam-parent-v3",
         "scenarioId": "exam-room-print-download-types-persistent-bundle",
         "required": 8,
-        "hit": 2,
-        "rate": 0.25,
+        "hit": 3,
+        "rate": 0.375,
         "poolSize": 363,
         "missing": [
-          "exam-service/exam-service-exam-site/src/main/java/com/hhtele/exam/service/exam/site/ExamRoomPrintBundleService.java",
-          "exam-service/exam-service-exam-site/src/main/java/com/hhtele/exam/service/exam/site/impl/ExamRoomPrintBundleServiceImpl.java",
           "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/ExamRoomPrintBundleJob.java",
           "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/ExamRoomPrintBundleJobTemplate.java",
+          "exam-common/src/main/java/com/hhtele/exam/dto/examination/ExaminationRoomDownloadDTO.java",
           "exam-service/exam-service-basic/src/main/java/com/hhtele/exam/service/basic/service/DownloadCenterService.java",
           "exam-service/exam-service-exam-site/src/main/java/com/hhtele/exam/service/exam/site/ExamRoomPrintRendererRoute.java"
         ],
         "missLabels": [
-          {
-            "path": "exam-service/exam-service-exam-site/src/main/java/com/hhtele/exam/service/exam/site/ExamRoomPrintBundleService.java",
-            "label": "IN_POOL_NOT_PACKED",
-            "poolRank": 56,
-            "poolSize": 363,
-            "onWire": false,
-            "onEvidence": false
-          },
-          {
-            "path": "exam-service/exam-service-exam-site/src/main/java/com/hhtele/exam/service/exam/site/impl/ExamRoomPrintBundleServiceImpl.java",
-            "label": "IN_POOL_NOT_PACKED",
-            "poolRank": 57,
-            "poolSize": 363,
-            "onWire": false,
-            "onEvidence": false
-          },
           {
             "path": "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/ExamRoomPrintBundleJob.java",
             "label": "IN_POOL_NOT_PACKED",
@@ -207,6 +180,14 @@
             "path": "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/ExamRoomPrintBundleJobTemplate.java",
             "label": "IN_POOL_NOT_PACKED",
             "poolRank": 154,
+            "poolSize": 363,
+            "onWire": false,
+            "onEvidence": false
+          },
+          {
+            "path": "exam-common/src/main/java/com/hhtele/exam/dto/examination/ExaminationRoomDownloadDTO.java",
+            "label": "IN_POOL_NOT_PACKED",
+            "poolRank": 10,
             "poolSize": 363,
             "onWire": false,
             "onEvidence": false
@@ -233,38 +214,16 @@
         "project": "exam-parent-v3",
         "scenarioId": "candidate-pay-order-cross-module-admission",
         "required": 12,
-        "hit": 2,
-        "rate": 0.16666666666666666,
+        "hit": 8,
+        "rate": 0.6666666666666666,
         "poolSize": 368,
         "missing": [
-          "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/ApplyPayService.java",
-          "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/impl/ApplyPayServiceImpl.java",
           "exam-data/src/main/java/com/hhtele/exam/data/repository/order/ApplyPayTemplate.java",
           "exam-data/src/main/java/com/hhtele/exam/data/repository/order/OrderRepository.java",
           "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/ApplyInfo.java",
-          "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/Examination.java",
-          "exam-data/src/main/java/com/hhtele/exam/data/entity/manage/PayAccount.java",
-          "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/WechatApplyService.java",
-          "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/AlipayPayService.java",
-          "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/CebPayService.java"
+          "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/Examination.java"
         ],
         "missLabels": [
-          {
-            "path": "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/ApplyPayService.java",
-            "label": "IN_POOL_NOT_PACKED",
-            "poolRank": 33,
-            "poolSize": 368,
-            "onWire": false,
-            "onEvidence": false
-          },
-          {
-            "path": "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/impl/ApplyPayServiceImpl.java",
-            "label": "IN_POOL_NOT_PACKED",
-            "poolRank": 37,
-            "poolSize": 368,
-            "onWire": false,
-            "onEvidence": false
-          },
           {
             "path": "exam-data/src/main/java/com/hhtele/exam/data/repository/order/ApplyPayTemplate.java",
             "label": "IN_POOL_NOT_PACKED",
@@ -296,38 +255,6 @@
             "poolSize": 368,
             "onWire": false,
             "onEvidence": false
-          },
-          {
-            "path": "exam-data/src/main/java/com/hhtele/exam/data/entity/manage/PayAccount.java",
-            "label": "IN_POOL_NOT_PACKED",
-            "poolRank": 25,
-            "poolSize": 368,
-            "onWire": false,
-            "onEvidence": false
-          },
-          {
-            "path": "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/WechatApplyService.java",
-            "label": "IN_POOL_NOT_PACKED",
-            "poolRank": 42,
-            "poolSize": 368,
-            "onWire": false,
-            "onEvidence": false
-          },
-          {
-            "path": "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/AlipayPayService.java",
-            "label": "IN_POOL_NOT_PACKED",
-            "poolRank": 32,
-            "poolSize": 368,
-            "onWire": false,
-            "onEvidence": false
-          },
-          {
-            "path": "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/CebPayService.java",
-            "label": "IN_POOL_NOT_PACKED",
-            "poolRank": 35,
-            "poolSize": 368,
-            "onWire": false,
-            "onEvidence": false
           }
         ]
       }
@@ -336,57 +263,62 @@
   "c2Bytes": {
     "schemaVersion": "c2-bytes/v2",
     "n": 6,
-    "p50": 0.9515934539190353,
+    "p50": 0.9653199856989632,
     "gate": 1.2,
     "passed": true,
     "rows": [
       {
         "project": "lishuedu",
         "scenarioId": "exam-score-export-cross-module-holdout",
-        "contextBytes": 5088,
+        "contextBytes": 5110,
         "impactBytes": 5446,
-        "ratio": 0.9342636797649652
+        "ratio": 0.9383033419023136
       },
       {
         "project": "lishuedu",
         "scenarioId": "paper-task-claim-iam-holdout",
-        "contextBytes": 5524,
+        "contextBytes": 5603,
         "impactBytes": 5805,
-        "ratio": 0.9515934539190353
+        "ratio": 0.9652024117140396
       },
       {
         "project": "cipherlink",
         "scenarioId": "client-release-storage-presign-holdout",
-        "contextBytes": 5983,
+        "contextBytes": 6115,
         "impactBytes": 4798,
-        "ratio": 1.2469779074614422
+        "ratio": 1.2744893705710714
       },
       {
         "project": "cipherlink",
         "scenarioId": "backend-operation-log-aspect-async-audit-holdout",
-        "contextBytes": 5241,
+        "contextBytes": 5400,
         "impactBytes": 5594,
-        "ratio": 0.9368966750089381
+        "ratio": 0.9653199856989632
       },
       {
         "project": "exam-parent-v3",
         "scenarioId": "exam-room-print-download-types-persistent-bundle",
-        "contextBytes": 4617,
+        "contextBytes": 5496,
         "impactBytes": 4107,
-        "ratio": 1.1241782322863403
+        "ratio": 1.3382030679327976
       },
       {
         "project": "exam-parent-v3",
         "scenarioId": "candidate-pay-order-cross-module-admission",
-        "contextBytes": 4191,
+        "contextBytes": 5191,
         "impactBytes": 3997,
-        "ratio": 1.0485364023017263
+        "ratio": 1.2987240430322742
       }
     ]
   },
-  "n32Attempt": {
-    "c1Mean": 0.631060606060606,
-    "c2P50": 1.237397211297819,
-    "note": "c-t2-replay-5.log at N=32; C2 P50 1.237>1.2 so wire N stays 24"
+  "ranks25to40": {
+    "nowOnWire": [
+      "PayAccount.java",
+      "SchoolQueryService.java",
+      "AlipayPayService.java",
+      "ApplyPayService.java",
+      "CebPayService.java",
+      "ApplyPayServiceImpl.java"
+    ]
   }
 }
