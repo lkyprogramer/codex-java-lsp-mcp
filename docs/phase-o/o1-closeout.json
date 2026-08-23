@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "o-o1-closeout/v1",
+  "track": "o",
+  "card": "O1",
+  "dated": "2026-08-23",
+  "decision": "G3_MISS",
+  "mergeToMain": false,
+  "srcTouched": true,
+  "defaultChainIdentity": "UNCHANGED",
+  "knife": "resolveAll no longer keeps a second resolvedByPath map; pass 2 rereads store.files()",
+  "knivesNotLanded": [
+    "per-source-root resolve then drop after v4 segment write",
+    "max-old-space-size plus explicit gc",
+    "serial parse/resolve child processes"
+  ],
+  "gateMiB": 1536,
+  "measured": {
+    "repo": "lishuedu",
+    "files": 5312,
+    "rssPeakBytes": 2925854720,
+    "rssPeakMiB": 2790.3,
+    "heapUsedBytes": 847386152,
+    "totalMs": 67508.77925,
+    "file": "docs/phase-o/o1-cold.json",
+    "sha256": "0b2ae5727839b3642dda2bc683768c5e90c99e7d5a1eb26728db6124621aa766"
+  },
+  "note": "Child/in-process resolve still holds the full facts store. Duplicate-map removal did not reach 1536. Gate kept as MISS. Allowed into F1 risk bar; child is an isolated process. Did not change snapshot v4 layout.",
+  "isolation": {
+    "t0": {
+      "tests": 2,
+      "fail": 0,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "5267696d9592f96e8edcbe6a68056a179b4506d8",
+      "logSha256": "17fdf1474fec66966de6219a55a6b88e2e5b0665220685dfdbe0c551dc4d27cd"
+    },
+    "t1": {
+      "scope": "dist/java-index/*.test.js",
+      "tests": 277,
+      "fail": 0,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "d468caa58ff0ceed8d9e18b17994933be648e884",
+      "logSha256": "ba770e1069ea74af091f31bc81ec1fb2090f7731519cb497fe97c3aadfdb0360",
+      "note": "Not the full dist+scripts T1; java-index suite only."
+    },
+    "cold": {
+      "logSha256": "08c9b167e6b18ba07132424a24ac3b91e741b6014e35e3af2982330148875281",
+      "executableTree": "5267696d9592f96e8edcbe6a68056a179b4506d8",
+      "coldBuildChildEnv": true,
+      "inProcessAttribution": true
+    }
+  }
+}

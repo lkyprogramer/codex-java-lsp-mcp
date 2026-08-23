@@ -5,6 +5,19 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { runColdIndexBuild } from "./cold-build.js";
 
+test("resolveAll pass 2 rereads the store instead of keeping a second resolved map", async () => {
+  const repoRoot = await mkdtemp(path.join(tmpdir(), "cold-build-resolve-"));
+  const cacheDir = await mkdtemp(path.join(tmpdir(), "cold-build-resolve-cache-"));
+  const javaDir = path.join(repoRoot, "src", "main", "java", "demo");
+  await mkdir(javaDir, { recursive: true });
+  await writeFile(path.join(repoRoot, "pom.xml"), "<project><modelVersion>4.0.0</modelVersion></project>\n");
+  await writeFile(path.join(javaDir, "Alpha.java"), "package demo;\n\nclass Alpha { Beta other; }\n");
+  await writeFile(path.join(javaDir, "Beta.java"), "package demo;\n\nclass Beta { Alpha other; }\n");
+  const result = await runColdIndexBuild(repoRoot, cacheDir, 1);
+  assert.equal(result.ok, true);
+  assert.equal(result.files, 2);
+});
+
 test("cold build reports phase timings that cover the wall clock", async () => {
   const repoRoot = await mkdtemp(path.join(tmpdir(), "cold-build-phases-"));
   const cacheDir = await mkdtemp(path.join(tmpdir(), "cold-build-cache-"));

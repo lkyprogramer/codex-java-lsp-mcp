@@ -2,7 +2,7 @@
 
 ## 当前任务
 
-Harvest E/C/G/O → L1 → F。**不合 `main`。** F0/E1–E4/C1–C3/G1 COMPLETE。G2 `G2_OVERFIT_FAIL`（阻塞 F，不阻塞 L1）。下一步 O 轨残差 + L1。Serena `SERENA_ABANDONED`。v3 golden 已从 pin 仓恢复。
+Harvest E/C/G/O → L1 → F。**不合 `main`。** F0/E1–E4/C1–C3/G1 COMPLETE。G2 `G2_OVERFIT_FAIL`（阻塞 F）。O1 `G3_MISS` 2790 MiB。下一步 O2/O3 或 L1。Serena `SERENA_ABANDONED`。v3 golden 已从 pin 仓恢复。
 
 ## E1（2026-08-23）
 
@@ -39,6 +39,10 @@ Harvest E/C/G/O → L1 → F。**不合 `main`。** F0/E1–E4/C1–C3/G1 COMPLE
 ## G2（2026-08-23）
 
 判定 **G2_OVERFIT_FAIL**。四仓一折冷测。ruoyi 留出 recall/pRead/rReadMust 回撤 0.179/0.516/0.477 > 0.15。另外三折 GO。未调参（冻结 holdout 禁止拿来改排序）。**阻塞 F，不阻塞 L1**。收口 `docs/phase-g/g2-closeout.json`。
+
+## O1（2026-08-23）
+
+判定 **G3_MISS**。`resolveAll` 不再保留第二份 `resolvedByPath`。lishuedu 5312 文件 RSS **2790 MiB > 1536**。门未放宽。收口 `docs/phase-o/o1-closeout.json`。
 
 ## N5 live 复测（2026-08-22）
 
@@ -95,7 +99,7 @@ N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a 
 
 ## 下一步计划
 
-1. Harvest 下一张卡：O1–O3 残差（child RSS / 冷建 / G5）。G2 已 FAIL，F 阻塞。L1 可跑。
+1. Harvest 下一张卡：O2 冷建 ≤60s（现 67.5s）与 O3 G5。G2 FAIL 阻塞 F。L1 可跑。
 2. L1 一次性双模型 live（local-qwen `47.106.205.246:1082` + OpenRouter `stealth/ox-alpha`）。FAIL 则撤 `java_context` 公开工具面，没有第四次 live。
 3. 不合 `main`。F2/F3 等用户。
 4. 冷建 child RSS 2311>1536 与 resolveAll 46s 走 O1/O2，不重开 M 轨架构。

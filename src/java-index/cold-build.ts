@@ -175,17 +175,17 @@ function resolveAll(
 ): void {
   const registry = buildTypeRegistryView([...store.typesById.values()], [], owner => store.methodsOfOwner(owner));
   const resolver = new JavaNameResolver(registry);
-  const resolvedByPath = new Map<string, ReturnType<typeof resolveFileRefs>>();
   for (const relativePath of relativePaths) {
     const raw = store.files([relativePath])[0];
     if (!raw) continue;
     const resolved = resolveFileRefs(raw, resolver, registry);
-    resolvedByPath.set(relativePath, resolved);
     store.replaceFile({ ...resolved, edges: [] });
   }
   const finalRegistry = buildTypeRegistryView([...store.typesById.values()], [], owner => store.methodsOfOwner(owner));
   const finalResolver = new JavaNameResolver(finalRegistry);
-  for (const [relativePath, resolved] of resolvedByPath) {
+  for (const relativePath of relativePaths) {
+    const resolved = store.files([relativePath])[0];
+    if (!resolved) continue;
     const edges = buildStaticEdges(resolved, finalRegistry, finalResolver);
     const withEdges = { ...resolved, edges };
     store.replaceFile(withEdges);

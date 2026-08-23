@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "files": 5312,
+  "discovered": 5312,
+  "parseFailed": 0,
+  "snapshotBytes": 23905458,
+  "rssPeakBytes": 2925854720,
+  "heapUsedBytes": 847386152,
+  "phasesMs": {
+    "discover": 168.7244579999999,
+    "parse": 17664.379791,
+    "resolve": 41068.779625,
+    "snapshotPrepare": 3303.272374999993,
+    "snapshotEncode": 4790.069666999996,
+    "graphEncode": 430.9622079999972,
+    "total": 67508.77925
+  }
+}
