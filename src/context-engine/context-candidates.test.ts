@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   CANDIDATE_FRONTIER_N,
+  CANDIDATE_FRONTIER_N_MAX,
   CANDIDATE_WIRE_N,
   EVIDENCE_FILE_CAP,
   capEvidenceByFile,
@@ -42,7 +43,8 @@ test("frontierCandidates is path-level, hop-ordered, and capped at N", () => {
     { path: "src/Pay.java", hops: 2, estimatedTokens: 10, provingPath: [], closedObligations: [] }
   ], 2);
   assert.equal(CANDIDATE_FRONTIER_N, 24);
-  assert.equal(CANDIDATE_WIRE_N, 12);
+  assert.equal(CANDIDATE_WIRE_N, 24);
+  assert.ok(CANDIDATE_WIRE_N <= CANDIDATE_FRONTIER_N_MAX);
   assert.deepEqual(rows.map(item => item.path), ["src/A.java", "src/Pay.java"]);
   assert.equal(rows[0]!.role, "ANCHOR");
   assert.equal(rows[0]!.hop, 0);

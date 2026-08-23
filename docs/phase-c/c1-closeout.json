@@ -10,19 +10,26 @@
   "note": "Output layer only. Graph search, ranking, and packing are unchanged. java_impact path unchanged. contexts[] kept as evidence alias so the live harness still sees packed spans until C2/E3.",
   "contractVersion": 2,
   "candidateFrontierN": 24,
+  "candidateWireN": 24,
   "schema": {
     "javaContextEstimatedTokens": 578,
     "budget": 700,
     "result": "GO"
   },
   "t2": {
-    "status": "T2_BLOCKED_GOLDEN_EMPTY",
+    "status": "T2_MEASURED",
     "replay": "docs/phase-c/c1-replay.json",
+    "replaySha256": "54ac0e12ca514925c88b7ff62074f678e8d37a9a525c0a6e29fbef2975e7caf2",
     "goldensJavaFiles": {
-      "lishuedu": 0,
-      "cipherlink": 124,
-      "exam-parent-v3": 7
-    }
+      "lishuedu": 5312,
+      "cipherlink": 633,
+      "exam-parent-v3": 1370
+    },
+    "c1CoverageMean": 0.5904623154623154,
+    "minMean": 0.9,
+    "passed": false,
+    "disposition": "DISCOVERY_GAP_FLOOR",
+    "note": "N=32 only reached 0.63 and broke C2 P50 1.237. Wire N stays 24. Remaining misses include N4 holdout files not in the graph frontier."
   },
   "isolation": {
     "t0": {

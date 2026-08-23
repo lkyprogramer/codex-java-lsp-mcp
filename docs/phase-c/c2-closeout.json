@@ -9,13 +9,14 @@
   "defaultChainIdentity": "UNCHANGED",
   "note": "Output slim only. spans→ranges string; drop resolvedIntent/anchor/contexts echo; unresolved {path,role}; evidence cap 4. Wire candidates N=12 after P50 miss at 24. Did not delete candidates[].",
   "contractVersion": 3,
-  "candidateWireN": 12,
+  "candidateWireN": 24,
   "evidenceFileCap": 4,
   "bytes": {
-    "p50": 1.0092592592592593,
+    "p50": 0.951421188630491,
     "gate": 1.2,
     "result": "GO",
-    "file": "docs/phase-c/c2-bytes.json"
+    "file": "docs/phase-c/c2-bytes.json",
+    "source": "T2 six holdout first-call MCP compact payloads on restored goldens"
   },
   "isolation": {
     "t0": {

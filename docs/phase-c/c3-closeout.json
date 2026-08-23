@@ -7,17 +7,21 @@
   "mergeToMain": false,
   "srcTouched": true,
   "defaultChainIdentity": "UNCHANGED",
-  "note": "Constants only. Evidence cap 4→3, pack budget 2000→1400, file guard 20→14. Selection algorithm unchanged. Candidates layer kept at wire N=12.",
+  "note": "Constants only. Evidence cap 4→3, pack budget 2000→1400, file guard 20→14. Selection algorithm unchanged. Candidates wire N=24 after T2 (C2 P50 0.951≤1.2).",
   "evidenceFileCap": 3,
   "defaultTokenBudget": 1400,
   "maxDistinctFilesGuard": 14,
   "reverted": false,
   "coverage": {
     "offlineCandidatesUnionEvidence": "GO",
-    "holdoutT2": "T2_BLOCKED_GOLDEN_EMPTY"
+    "holdoutT2": "T2_MEASURED_FLOOR",
+    "mean": 0.5904623154623154,
+    "gate": 0.9,
+    "reverted": false
   },
   "bytes": {
     "c2P50StillHolds": true,
+    "p50": 0.951421188630491,
     "gate": 1.2
   },
   "isolation": {

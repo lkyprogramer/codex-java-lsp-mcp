@@ -1,23 +1,58 @@
 {
-  "schemaVersion": "c2-bytes/v1",
+  "schemaVersion": "c2-bytes/v2",
   "dated": "2026-08-23",
   "gate": 1.2,
-  "p50": 1.0092592592592593,
+  "p50": 0.951421188630491,
   "passed": true,
-  "candidateWireN": 12,
-  "evidenceFileCap": 4,
-  "stepdown": "24→12 after T0 P50 1.71 at N=24; candidates layer kept",
-  "source": "scripts/run-agent-trace-live.test.mjs compactContextForModel vs compactImpactForModel on six first-call shapes",
+  "candidateWireN": 24,
+  "evidenceFileCap": 3,
+  "source": "scripts/run-jin-n5-context-replay.mjs auto holdout first-call MCP compact payloads",
   "rows": [
-    { "impactFiles": 13, "contextBytes": 1526, "impactBytes": 1580, "ratio": 0.9658227848101266 },
-    { "impactFiles": 10, "contextBytes": 1526, "impactBytes": 1376, "ratio": 1.1090116279069768 },
-    { "impactFiles": 11, "contextBytes": 1526, "impactBytes": 1444, "ratio": 1.056786703601108 },
-    { "impactFiles": 12, "contextBytes": 1526, "impactBytes": 1512, "ratio": 1.0092592592592593 },
-    { "impactFiles": 8, "contextBytes": 1526, "impactBytes": 1242, "ratio": 1.2286634460547503 },
-    { "impactFiles": 12, "contextBytes": 1526, "impactBytes": 1512, "ratio": 1.0092592592592593 }
+    {
+      "project": "lishuedu",
+      "scenarioId": "exam-score-export-cross-module-holdout",
+      "contextBytes": 5088,
+      "impactBytes": 5446,
+      "ratio": 0.9342636797649652
+    },
+    {
+      "project": "lishuedu",
+      "scenarioId": "paper-task-claim-iam-holdout",
+      "contextBytes": 5523,
+      "impactBytes": 5805,
+      "ratio": 0.951421188630491
+    },
+    {
+      "project": "cipherlink",
+      "scenarioId": "client-release-storage-presign-holdout",
+      "contextBytes": 5986,
+      "impactBytes": 4798,
+      "ratio": 1.247603167986661
+    },
+    {
+      "project": "cipherlink",
+      "scenarioId": "backend-operation-log-aspect-async-audit-holdout",
+      "contextBytes": 5241,
+      "impactBytes": 5594,
+      "ratio": 0.9368966750089381
+    },
+    {
+      "project": "exam-parent-v3",
+      "scenarioId": "exam-room-print-download-types-persistent-bundle",
+      "contextBytes": 4486,
+      "impactBytes": 4107,
+      "ratio": 1.092281470659849
+    },
+    {
+      "project": "exam-parent-v3",
+      "scenarioId": "candidate-pay-order-cross-module-admission",
+      "contextBytes": 4191,
+      "impactBytes": 3997,
+      "ratio": 1.0485364023017263
+    }
   ],
   "holdoutT2": {
-    "status": "T2_BLOCKED_GOLDEN_EMPTY",
-    "note": "Pinned /tmp/codex-java-v3-golden-20260809 has 0/124/7 java files. Byte gate is the shipped compact P50 above, not a three-repo first-call."
+    "status": "T2_MEASURED",
+    "n": 6
   }
 }

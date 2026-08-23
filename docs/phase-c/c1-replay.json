@@ -1,28 +1,158 @@
 {
-  "schemaVersion": "c1-replay/v1",
+  "schemaVersion": "c1-replay/v2",
   "dated": "2026-08-23",
+  "status": "T2_MEASURED",
   "passed": false,
-  "status": "T2_BLOCKED_GOLDEN_EMPTY",
   "goldens": {
     "root": "/tmp/codex-java-v3-golden-20260809",
-    "realpath": "/private/tmp/codex-java-v3-golden-20260809",
     "javaFiles": {
-      "lishuedu": 0,
-      "cipherlink": 124,
-      "exam-parent-v3": 7
-    },
-    "note": "Pinned v3 goldens no longer contain holdout sources (lishuedu 0 .java). Isolated replay reached READY with files=0 / coverage=degraded. Not an output-layer miss; cannot compute candidates∪evidence ≥ 0.9 on an empty graph."
+      "lishuedu": 5312,
+      "cipherlink": 633,
+      "exam-parent-v3": 1370
+    }
   },
   "c1Coverage": {
     "schemaVersion": "c1-holdout-coverage/v1",
-    "n": 0,
-    "mean": null,
+    "n": 6,
+    "mean": 0.5904623154623154,
     "minMean": 0.9,
     "passed": false,
-    "rows": []
+    "rows": [
+      {
+        "project": "lishuedu",
+        "scenarioId": "exam-score-export-cross-module-holdout",
+        "required": 13,
+        "hit": 12,
+        "rate": 0.9230769230769231,
+        "missing": [
+          "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolQueryService.java"
+        ]
+      },
+      {
+        "project": "lishuedu",
+        "scenarioId": "paper-task-claim-iam-holdout",
+        "required": 10,
+        "hit": 9,
+        "rate": 0.9,
+        "missing": [
+          "modules/iam/src/main/java/com/lishu/edu/iam/application/service/MeQueryService.java"
+        ]
+      },
+      {
+        "project": "cipherlink",
+        "scenarioId": "client-release-storage-presign-holdout",
+        "required": 11,
+        "hit": 7,
+        "rate": 0.6363636363636364,
+        "missing": [
+          "modules/client/src/main/java/com/hhtele/cipherlink/client/application/DefaultClientReleasePublishAppService.java",
+          "modules/client/src/main/java/com/hhtele/cipherlink/client/application/ClientReleaseRepository.java",
+          "modules/client/src/main/java/com/hhtele/cipherlink/client/infrastructure/persistence/MybatisClientReleaseRepository.java",
+          "modules/client/src/main/java/com/hhtele/cipherlink/client/infrastructure/persistence/mapper/ClientReleaseMapper.java"
+        ]
+      },
+      {
+        "project": "cipherlink",
+        "scenarioId": "backend-operation-log-aspect-async-audit-holdout",
+        "required": 12,
+        "hit": 8,
+        "rate": 0.6666666666666666,
+        "missing": [
+          "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/OperationLogRepository.java",
+          "modules/audit/src/main/java/com/hhtele/cipherlink/audit/domain/OperationLogEntry.java",
+          "modules/audit/src/main/java/com/hhtele/cipherlink/audit/infrastructure/persistence/MybatisOperationLogRepository.java",
+          "modules/audit/src/main/java/com/hhtele/cipherlink/audit/infrastructure/persistence/mapper/OperationLogMapper.java"
+        ]
+      },
+      {
+        "project": "exam-parent-v3",
+        "scenarioId": "exam-room-print-download-types-persistent-bundle",
+        "required": 8,
+        "hit": 2,
+        "rate": 0.25,
+        "missing": [
+          "exam-service/exam-service-exam-site/src/main/java/com/hhtele/exam/service/exam/site/ExamRoomPrintBundleService.java",
+          "exam-service/exam-service-exam-site/src/main/java/com/hhtele/exam/service/exam/site/impl/ExamRoomPrintBundleServiceImpl.java",
+          "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/ExamRoomPrintBundleJob.java",
+          "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/ExamRoomPrintBundleJobTemplate.java",
+          "exam-service/exam-service-basic/src/main/java/com/hhtele/exam/service/basic/service/DownloadCenterService.java",
+          "exam-service/exam-service-exam-site/src/main/java/com/hhtele/exam/service/exam/site/ExamRoomPrintRendererRoute.java"
+        ]
+      },
+      {
+        "project": "exam-parent-v3",
+        "scenarioId": "candidate-pay-order-cross-module-admission",
+        "required": 12,
+        "hit": 2,
+        "rate": 0.16666666666666666,
+        "missing": [
+          "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/ApplyPayService.java",
+          "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/impl/ApplyPayServiceImpl.java",
+          "exam-data/src/main/java/com/hhtele/exam/data/repository/order/ApplyPayTemplate.java",
+          "exam-data/src/main/java/com/hhtele/exam/data/repository/order/OrderRepository.java",
+          "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/ApplyInfo.java",
+          "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/Examination.java",
+          "exam-data/src/main/java/com/hhtele/exam/data/entity/manage/PayAccount.java",
+          "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/WechatApplyService.java",
+          "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/AlipayPayService.java",
+          "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/CebPayService.java"
+        ]
+      }
+    ]
   },
-  "offlineGate": {
-    "evaluateC1HoldoutCoverage": "scripts/run-jin-n5-context-replay.test.mjs",
-    "result": "GO"
-  }
+  "c2Bytes": {
+    "schemaVersion": "c2-bytes/v2",
+    "n": 6,
+    "p50": 0.951421188630491,
+    "gate": 1.2,
+    "passed": true,
+    "rows": [
+      {
+        "project": "lishuedu",
+        "scenarioId": "exam-score-export-cross-module-holdout",
+        "contextBytes": 5088,
+        "impactBytes": 5446,
+        "ratio": 0.9342636797649652
+      },
+      {
+        "project": "lishuedu",
+        "scenarioId": "paper-task-claim-iam-holdout",
+        "contextBytes": 5523,
+        "impactBytes": 5805,
+        "ratio": 0.951421188630491
+      },
+      {
+        "project": "cipherlink",
+        "scenarioId": "client-release-storage-presign-holdout",
+        "contextBytes": 5986,
+        "impactBytes": 4798,
+        "ratio": 1.247603167986661
+      },
+      {
+        "project": "cipherlink",
+        "scenarioId": "backend-operation-log-aspect-async-audit-holdout",
+        "contextBytes": 5241,
+        "impactBytes": 5594,
+        "ratio": 0.9368966750089381
+      },
+      {
+        "project": "exam-parent-v3",
+        "scenarioId": "exam-room-print-download-types-persistent-bundle",
+        "contextBytes": 4486,
+        "impactBytes": 4107,
+        "ratio": 1.092281470659849
+      },
+      {
+        "project": "exam-parent-v3",
+        "scenarioId": "candidate-pay-order-cross-module-admission",
+        "contextBytes": 4191,
+        "impactBytes": 3997,
+        "ratio": 1.0485364023017263
+      }
+    ]
+  },
+  "candidateWireN": 24,
+  "evidenceFileCap": 3,
+  "discoveryGap": true,
+  "note": "Raising wire N 24\u219232 lifted mean 0.59\u21920.63 but C2 P50 became 1.237>1.2. N stays 24. Remaining misses include N4 holdout files (MeQueryService/PayAccount/SchoolQueryService) not in the graph frontier \u2014 DISCOVERY_GAP, not output-layer. C2 first-call uses MCP compact payloads, not handmade 1526-byte shapes."
 }

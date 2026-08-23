@@ -12,6 +12,15 @@ import { RouterJavaIndex } from "../dist/java-index/router-java-index.js";
 
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
+export const IMPACT_PROFILES = new Set([
+  "auto", "controller", "service", "port", "repository", "parser",
+  "dto", "entity", "mapper", "vo", "job", "listener"
+]);
+
+export function impactProfileOf(profile) {
+  return IMPACT_PROFILES.has(profile) ? profile : "auto";
+}
+
 export const N5_CONTEXT_GATES = [
   {
     project: "lishuedu",
@@ -55,6 +64,36 @@ export function coverageUnion(result) {
     ...(result?.evidence ?? result?.selected ?? []),
     ...(result?.candidates ?? [])
   ])];
+}
+
+export function percentile(values, p) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((left, right) => left - right);
+  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1));
+  return sorted[index];
+}
+
+export function evaluateC2FirstCallBytes(results, { gate = 1.2 } = {}) {
+  const autos = (results ?? []).filter(item => item.intent === "auto"
+    && Number.isFinite(item.contextBytes)
+    && Number.isFinite(item.impactBytes)
+    && item.impactBytes > 0);
+  const rows = autos.map(item => ({
+    project: item.project,
+    scenarioId: item.scenarioId,
+    contextBytes: item.contextBytes,
+    impactBytes: item.impactBytes,
+    ratio: item.contextBytes / item.impactBytes
+  }));
+  const p50 = percentile(rows.map(row => row.ratio), 50);
+  return {
+    schemaVersion: "c2-bytes/v2",
+    n: rows.length,
+    p50,
+    gate,
+    passed: p50 != null && p50 <= gate && rows.length === 6,
+    rows
+  };
 }
 
 export function evaluateC1HoldoutCoverage(results, { minMean = 0.9 } = {}) {
@@ -133,39 +172,46 @@ async function waitForComplete(index, timeoutMs) {
   throw new Error(`JavaIndex did not reach complete coverage before timeout (${last || "no-status"})`);
 }
 
-async function querySelected(index, row, intent) {
+async function querySelected(toolContext, handlers, row, intent) {
   const taskText = holdoutTaskText(row);
   if (taskText.includes(row.id)) throw new Error("task text must not contain the scene id");
-  const result = await index.queryContextGraph({
-    fromRelativePath: row.anchor.file,
+  const contract = await handlers.javaContext(toolContext, {
     intent,
+    file: row.anchor.file,
+    line: row.anchor.line,
+    column: row.anchor.column,
+    task: taskText,
     mode: "search",
-    maxHops: 4,
-    maxExpansions: 4096,
-    tokenBudget: 2000,
-    taskText,
-    plan: true,
-    includeSource: false,
-    anchorLine: row.anchor.line,
-    anchorColumn: row.anchor.column
+    includeSource: false
   });
-  const discovered = (result.bundles ?? []).map(item => item.path);
-  const evidence = (result.contract?.evidence ?? result.contract?.contexts ?? []).map(item => item.path);
-  const candidates = (result.contract?.candidates ?? []).map(item => item.path);
-  const selected = evidence;
+  const impact = await handlers.javaImpact(toolContext, {
+    file: row.anchor.file,
+    line: row.anchor.line,
+    column: row.anchor.column,
+    mode: "balanced",
+    profile: impactProfileOf(row.anchor.profile),
+    semanticPolicy: "fast",
+    focusModules: row.anchor.focusModules || [],
+    taskKeywords: row.anchor.taskKeywords || [],
+    verbosity: "compact"
+  });
+  const contextCompact = handlers.compactContextForModel(contract);
+  const evidence = (contract?.evidence ?? contract?.contexts ?? []).map(item => item.path);
+  const candidates = (contract?.candidates ?? []).map(item => item.path);
   return {
     project: row.projectId,
     scenarioId: row.id,
     intent,
-    resolvedIntent: result.contract?.resolvedIntent ?? result.resolvedIntent,
+    resolvedIntent: contract?.resolvedIntent,
     taskText,
     anchor: row.anchor.file,
     requiredFiles: requiredFilesFromHoldout(row),
-    discovered,
-    selected,
+    selected: evidence,
     evidence,
     candidates,
-    tokenCost: result.contract?.cost?.modelTokens ?? null
+    contextBytes: Buffer.byteLength(contextCompact.text),
+    impactBytes: Buffer.byteLength(JSON.stringify(impact)),
+    tokenCost: contract?.cost?.modelTokens ?? null
   };
 }
 
@@ -178,6 +224,20 @@ async function main() {
   if (process.env.JAVA_LSP_ISOLATED_VALIDATION !== "1") {
     throw new Error("run-jin-n5-context-replay must run through isolated validation");
   }
+  const [
+    { javaContext },
+    { javaImpact },
+    { AgentRouter },
+    { JdtlsSession },
+    { compactContextForModel, compactImpactForModel }
+  ] = await Promise.all([
+    import("../dist/tools/java-context.js"),
+    import("../dist/tools/impact.js"),
+    import("../dist/agent-router/index.js"),
+    import("../dist/jdtls-session.js"),
+    import("./run-agent-trace-live.mjs")
+  ]);
+  const handlers = { javaContext, javaImpact, compactContextForModel, compactImpactForModel };
   const cacheRoot = path.join(os.tmpdir(), "jin-n5-context-replay-cache");
   await mkdir(cacheRoot, { recursive: true });
   const results = [];
@@ -186,27 +246,36 @@ async function main() {
     console.error(`jin-n5-context-replay: ${project} root=${repoRoot} exists=${existsSync(repoRoot)}`);
     const client = new JavaIndexClient(repoRoot, path.join(cacheRoot, project));
     const index = new RouterJavaIndex(repoRoot, client);
-    await index.open(1);
-    await index.reconcile(1);
-    await waitForComplete(index, cli.timeoutMs);
-    for (const row of await loadHoldouts(project)) {
-      for (const intent of ["auto", "PERSISTENCE_FLOW"]) {
-        const item = await querySelected(index, row, intent);
-        results.push(item);
-        console.error(`  ${row.id} ${intent} selected=${item.selected.length}`);
+    const session = new JdtlsSession(repoRoot);
+    const router = new AgentRouter(repoRoot, session, index);
+    const toolContext = { repoRoot, session, javaIndex: index, javaIndexClient: client, router };
+    try {
+      await index.open(1);
+      await index.reconcile(1);
+      await waitForComplete(index, cli.timeoutMs);
+      for (const row of await loadHoldouts(project)) {
+        for (const intent of ["auto", "PERSISTENCE_FLOW"]) {
+          const item = await querySelected(toolContext, handlers, row, intent);
+          results.push(item);
+          console.error(`  ${row.id} ${intent} selected=${item.selected.length} ctx=${item.contextBytes} impact=${item.impactBytes}`);
+        }
       }
+    } finally {
+      await index.close();
+      await session.stop?.().catch(() => undefined);
     }
-    await index.close();
   }
   const gates = evaluateN5ContextGates(results);
   const c1 = evaluateC1HoldoutCoverage(results);
-  const passed = gates.every(item => item.hit) && c1.passed;
+  const c2 = evaluateC2FirstCallBytes(results);
+  const passed = c1.passed && c2.passed;
   const payload = {
-    schemaVersion: "jin-n5-context-replay/v2",
+    schemaVersion: "jin-n5-context-replay/v3",
     dated: new Date().toISOString().slice(0, 10),
     passed,
     gates,
     c1Coverage: c1,
+    c2Bytes: c2,
     results
   };
   await mkdir(path.dirname(path.resolve(cli.output)), { recursive: true });
@@ -215,6 +284,7 @@ async function main() {
     output: path.resolve(cli.output),
     passed,
     c1Mean: c1.mean,
+    c2P50: c2.p50,
     gates: gates.map(item => ({ scenarioId: item.scenarioId, target: item.target.split("/").pop(), hit: item.hit }))
   }));
   if (!passed) process.exitCode = 1;

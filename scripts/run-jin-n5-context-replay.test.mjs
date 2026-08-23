@@ -2,10 +2,18 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   evaluateC1HoldoutCoverage,
+  evaluateC2FirstCallBytes,
   evaluateN5ContextGates,
   holdoutTaskText,
+  impactProfileOf,
   N5_CONTEXT_GATES
 } from "./run-jin-n5-context-replay.mjs";
+
+test("impactProfileOf falls back to auto for unknown golden profiles", () => {
+  assert.equal(impactProfileOf("controller"), "controller");
+  assert.equal(impactProfileOf("ddd-controller"), "auto");
+  assert.equal(impactProfileOf(undefined), "auto");
+});
 
 test("holdout task text uses the scene name and keywords, never the scene id", () => {
   const text = holdoutTaskText({
@@ -99,4 +107,23 @@ test("C1 coverage counts required files in candidates union evidence", () => {
   assert.equal(coverage.passed, false);
   rows[2].candidates = ["src/C.java", "src/D.java", "src/E.java"];
   assert.equal(evaluateC1HoldoutCoverage(rows).passed, true);
+});
+
+test("C2 first-call byte P50 uses six auto holdouts and the 1.2 gate", () => {
+  const rows = [
+    { intent: "auto", project: "a", scenarioId: "1", contextBytes: 1000, impactBytes: 1000 },
+    { intent: "auto", project: "a", scenarioId: "2", contextBytes: 1100, impactBytes: 1000 },
+    { intent: "auto", project: "b", scenarioId: "3", contextBytes: 1050, impactBytes: 1000 },
+    { intent: "auto", project: "b", scenarioId: "4", contextBytes: 1200, impactBytes: 1000 },
+    { intent: "auto", project: "c", scenarioId: "5", contextBytes: 900, impactBytes: 1000 },
+    { intent: "auto", project: "c", scenarioId: "6", contextBytes: 1010, impactBytes: 1000 },
+    { intent: "PERSISTENCE_FLOW", project: "a", scenarioId: "1", contextBytes: 9000, impactBytes: 1000 }
+  ];
+  const bytes = evaluateC2FirstCallBytes(rows);
+  assert.equal(bytes.n, 6);
+  assert.equal(bytes.passed, true);
+  assert.ok(bytes.p50 <= 1.2);
+  for (const row of rows.slice(0, 4)) row.contextBytes = 1300;
+  assert.equal(evaluateC2FirstCallBytes(rows).p50 > 1.2, true);
+  assert.equal(evaluateC2FirstCallBytes(rows).passed, false);
 });

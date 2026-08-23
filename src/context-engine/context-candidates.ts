@@ -5,7 +5,7 @@ import type { EvidenceBundleCandidate } from "./graph-search.js";
 import type { ContextCandidate, ContextNext } from "./context-contract.js";
 
 export const CANDIDATE_FRONTIER_N = 24;
-export const CANDIDATE_WIRE_N = 12;
+export const CANDIDATE_WIRE_N = 24;
 export const CANDIDATE_FRONTIER_N_MAX = 40;
 export const EVIDENCE_FILE_CAP = 3;
 
