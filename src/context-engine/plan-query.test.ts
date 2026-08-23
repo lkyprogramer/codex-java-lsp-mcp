@@ -31,11 +31,10 @@ test("planContextQuery returns a contract without scores and fail-closes a stale
   const graph = seed();
   const search = searchContextGraph(graph, "src/A.java", compileIntent("IMPLEMENTATION_CHANGE"), { maxHops: 2, maxExpansions: 16 });
   const contract = planContextQuery({ graph, search, tokenBudget: 400, generation: 4, serviceMs: 9 });
-  assert.equal(contract.version, 2);
-  assert.equal(contract.resolvedIntent, "IMPLEMENTATION_CHANGE");
-  assert.ok(contract.contexts.length >= 1);
+  assert.equal(contract.version, 3);
   assert.ok(contract.evidence.length >= 1);
   assert.ok(contract.candidates.length >= 1);
+  assert.equal(typeof contract.evidence[0]!.ranges, "string");
   assert.equal(JSON.stringify(contract).includes("confidence"), false);
   const session = { sessionId: "s-plan", generation: 4, repoHash: "r", plannerVersion: PLANNER_VERSION };
   const first = planContextQuery({ graph, search, tokenBudget: 400, generation: 4, session });
@@ -493,7 +492,7 @@ test("planContextQuery selects a hop-1 persistence entity from type spans", () =
     metrics: { expansions: 2, hops: 1, estimatedTokens: 120 }
   };
   const contract = planContextQuery({ graph, store, search, tokenBudget: 400, generation: 1, anchorLine: 12 });
-  assert.ok(contract.contexts.some(item => item.path === "src/PayAccount.java"), contract.contexts.map(item => item.path).join(","));
+  assert.ok(contract.evidence.some(item => item.path === "src/PayAccount.java"), contract.evidence.map(item => item.path).join(","));
 });
 
 test("attachAnchorSignatureBundles follows persistence edges from a hop-1 field type", () => {

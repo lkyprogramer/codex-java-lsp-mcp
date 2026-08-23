@@ -48,23 +48,21 @@ test("serializer emits one schema, omits scores, and keeps includeSource parity"
     generation: 3,
     serviceMs: 12
   });
-  assert.equal(withSource.version, 2);
-  assert.equal(withSource.resolvedIntent, "IMPLEMENTATION_CHANGE");
-  assert.ok(Array.isArray(withSource.resolvedAnchors));
+  assert.equal(withSource.version, 3);
+  assert.equal(JSON.stringify(withSource).includes("resolvedIntent"), false);
+  assert.equal(JSON.stringify(withSource).includes("\"anchor\""), false);
+  assert.equal(JSON.stringify(withSource).includes("\"contexts\""), false);
   assert.ok(Array.isArray(withSource.unresolved));
   assert.ok(Array.isArray(withSource.next));
   assert.ok(Array.isArray(withSource.evidence));
   assert.ok(Array.isArray(withSource.candidates));
   assert.equal(withSource.candidates.some(item => item.path === "src/B.java"), true);
   assert.equal(withSource.candidates.find(item => item.path === "src/B.java")?.reason.includes("CALLS_EXACT"), true);
-  assert.equal(withSource.evidence.every(item => item.spans.length > 0), true);
-  assert.deepEqual(withSource.contexts, withSource.evidence);
+  assert.equal(withSource.evidence.every(item => typeof item.ranges === "string" && item.ranges.length > 0), true);
+  assert.equal(withSource.evidence.length <= 4, true);
   assert.equal(JSON.stringify(withSource).includes("confidence"), false);
   assert.equal(JSON.stringify(withSource).includes("score"), false);
-  assert.equal(withSource.contexts.every(item => item.spans.length > 0), true);
-  assert.equal(without.contexts.every(item => item.spans.length > 0), true);
   assert.equal(sourceParity(withSource, without), true);
-  assert.equal(without.contexts.some(item => item.spans.some(span => span.text !== undefined)), false);
   assert.equal(withSource.next.every(item => typeof item.file === "string" && typeof item.line === "number"), true);
 });
 

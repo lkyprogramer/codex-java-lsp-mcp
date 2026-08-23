@@ -5,7 +5,48 @@ import type { EvidenceBundleCandidate } from "./graph-search.js";
 import type { ContextCandidate, ContextNext } from "./context-contract.js";
 
 export const CANDIDATE_FRONTIER_N = 24;
+export const CANDIDATE_WIRE_N = 12;
 export const CANDIDATE_FRONTIER_N_MAX = 40;
+export const EVIDENCE_FILE_CAP = 4;
+
+export function formatSpanRanges(spans: Array<{ start: number; end: number }> | undefined): string {
+  const merged: Array<{ start: number; end: number }> = [];
+  const ordered = [...(spans ?? [])]
+    .filter(span => Number.isFinite(span.start) && Number.isFinite(span.end))
+    .map(span => ({
+      start: Math.min(span.start, span.end),
+      end: Math.max(span.start, span.end)
+    }))
+    .sort((left, right) => left.start - right.start || left.end - right.end);
+  for (const span of ordered) {
+    const last = merged[merged.length - 1];
+    if (last && span.start <= last.end + 1) last.end = Math.max(last.end, span.end);
+    else merged.push({ ...span });
+  }
+  return merged.map(span => `${span.start}-${span.end}`).join(",");
+}
+
+export function parseSpanRanges(ranges: string | undefined): Array<{ start: number; end: number }> {
+  if (!ranges) return [];
+  return ranges.split(",").map(part => {
+    const [startText, endText] = part.split("-");
+    const start = Number(startText);
+    const end = Number(endText);
+    return { start, end: Number.isFinite(end) ? end : start };
+  }).filter(span => Number.isFinite(span.start));
+}
+
+export function capEvidenceByFile<T extends { path: string }>(items: T[], cap = EVIDENCE_FILE_CAP): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const item of items ?? []) {
+    if (!item?.path || seen.has(item.path)) continue;
+    seen.add(item.path);
+    out.push(item);
+    if (out.length >= cap) break;
+  }
+  return out;
+}
 
 export function symbolFromNodeId(id: string): string {
   const parts = String(id).split("#");
@@ -62,8 +103,18 @@ export function frontierCandidates(
     }));
 }
 
-function looksLikePath(value: string): boolean {
+export function looksLikePath(value: string): boolean {
   return value.includes("/") || value.endsWith(".java");
+}
+
+export function unresolvedWire(items: Array<{ id?: string; path?: string; role: string }>): Array<{ path: string; role: string }> {
+  const out: Array<{ path: string; role: string }> = [];
+  for (const item of items ?? []) {
+    const path = item.path || (item.id && looksLikePath(item.id) ? item.id : "");
+    if (!path) continue;
+    out.push({ path, role: item.role });
+  }
+  return out.slice(0, 8);
 }
 
 export function nextSteps(input: {

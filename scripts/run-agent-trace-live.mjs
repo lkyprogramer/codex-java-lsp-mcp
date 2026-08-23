@@ -165,34 +165,55 @@ export function collectCandidatePaths(result) {
   return [...paths];
 }
 
+export function formatSpanRanges(spans) {
+  const merged = [];
+  const ordered = [...(spans ?? [])]
+    .filter(span => Number.isFinite(span.start) && Number.isFinite(span.end))
+    .map(span => ({
+      start: Math.min(span.start, span.end),
+      end: Math.max(span.start, span.end)
+    }))
+    .sort((left, right) => left.start - right.start || left.end - right.end);
+  for (const span of ordered) {
+    const last = merged[merged.length - 1];
+    if (last && span.start <= last.end + 1) last.end = Math.max(last.end, span.end);
+    else merged.push({ ...span });
+  }
+  return merged.map(span => `${span.start}-${span.end}`).join(",");
+}
+
 export function compactContextForModel(result, maxChars = MAX_TOOL_RESULT_CHARS) {
   const packed = result?.evidence ?? result?.contexts ?? [];
+  const seen = new Set();
+  const evidence = [];
+  for (const item of packed) {
+    if (!item?.path || seen.has(item.path)) continue;
+    seen.add(item.path);
+    evidence.push({
+      path: item.path,
+      role: item.role,
+      ranges: typeof item.ranges === "string" && item.ranges ? item.ranges : formatSpanRanges(item.spans)
+    });
+    if (evidence.length >= 4) break;
+  }
   const payload = {
     coverage: result?.coverage,
-    resolvedIntent: result?.resolvedIntent,
-    anchor: result?.anchor,
-    candidates: (result?.candidates ?? []).slice(0, 24).map(item => (
+    candidates: (result?.candidates ?? []).slice(0, 12).map(item => (
       typeof item === "string"
         ? { path: item }
         : { path: item.path, role: item.role, hop: item.hop, reason: item.reason }
     )),
-    evidence: packed.map(item => ({
-      path: item.path,
-      role: item.role,
-      spans: (item.spans ?? []).map(span => ({ start: span.start, end: span.end }))
-    })),
-    contexts: packed.map(item => ({
-      path: item.path,
-      role: item.role,
-      spans: (item.spans ?? []).map(span => ({ start: span.start, end: span.end }))
-    })),
-    unresolved: (result?.unresolved ?? []).slice(0, 8).map(item => ({ id: item.id, role: item.role, path: item.path })),
+    evidence,
+    unresolved: (result?.unresolved ?? []).slice(0, 8).flatMap(item => {
+      const path = item?.path || (looksLikeRelPath(item?.id) ? item.id : "");
+      return path ? [{ path, role: item.role }] : [];
+    }),
     next: (result?.next ?? []).slice(0, 4).map(item => ({
       action: item.action,
       file: item.file,
       line: item.line,
-      direction: item.direction,
-      closure: item.closure,
+      ...(item.direction ? { direction: item.direction } : {}),
+      ...(item.closure ? { closure: item.closure } : {}),
       reason: item.reason
     }))
   };

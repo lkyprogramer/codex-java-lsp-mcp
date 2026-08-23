@@ -2,11 +2,29 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   CANDIDATE_FRONTIER_N,
+  CANDIDATE_WIRE_N,
+  capEvidenceByFile,
   candidateReason,
   candidateRole,
+  formatSpanRanges,
   frontierCandidates,
-  nextSteps
+  nextSteps,
+  parseSpanRanges
 } from "./context-candidates.js";
+
+test("formatSpanRanges merges adjacent intervals", () => {
+  assert.equal(formatSpanRanges([{ start: 12, end: 48 }, { start: 60, end: 75 }]), "12-48,60-75");
+  assert.equal(formatSpanRanges([{ start: 1, end: 4 }, { start: 5, end: 8 }]), "1-8");
+  assert.equal(parseSpanRanges("12-48,60-75").length, 2);
+  assert.deepEqual(capEvidenceByFile([
+    { path: "src/A.java" },
+    { path: "src/B.java" },
+    { path: "src/A.java" },
+    { path: "src/C.java" },
+    { path: "src/D.java" },
+    { path: "src/E.java" }
+  ]).map(item => item.path), ["src/A.java", "src/B.java", "src/C.java", "src/D.java"]);
+});
 
 test("frontierCandidates is path-level, hop-ordered, and capped at N", () => {
   const rows = frontierCandidates([
@@ -22,6 +40,7 @@ test("frontierCandidates is path-level, hop-ordered, and capped at N", () => {
     { path: "src/Pay.java", hops: 2, estimatedTokens: 10, provingPath: [], closedObligations: [] }
   ], 2);
   assert.equal(CANDIDATE_FRONTIER_N, 24);
+  assert.equal(CANDIDATE_WIRE_N, 12);
   assert.deepEqual(rows.map(item => item.path), ["src/A.java", "src/Pay.java"]);
   assert.equal(rows[0]!.role, "ANCHOR");
   assert.equal(rows[0]!.hop, 0);

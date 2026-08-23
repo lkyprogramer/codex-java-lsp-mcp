@@ -2,7 +2,7 @@
 // output: §11.3 context contract types and fail-closed session store.
 // pos: JIN N4-03. Inherits V5R sessionId+generation+repoHash+plannerVersion. No score on the wire.
 export const PLANNER_VERSION = "jin-n4-1";
-export const CONTEXT_CONTRACT_VERSION = 2 as const;
+export const CONTEXT_CONTRACT_VERSION = 3 as const;
 export const SESSION_TTL_MS = 180_000;
 export const SESSION_LRU = 128;
 
@@ -15,8 +15,9 @@ export type ContextSpan = {
 export type ContextItem = {
   role: string;
   path: string;
-  proof: string[];
-  spans: ContextSpan[];
+  proof?: string[];
+  ranges: string;
+  spans?: ContextSpan[];
 };
 
 export type ContextCandidate = {
@@ -45,13 +46,13 @@ export type ContextContract = {
   version: typeof CONTEXT_CONTRACT_VERSION;
   generation: number;
   coverage: "COMPLETE" | "PARTIAL";
-  resolvedIntent: string;
-  resolvedAnchors: ResolvedAnchor[];
-  anchor: { path: string; symbol: string };
+  resolvedIntent?: string;
+  resolvedAnchors?: ResolvedAnchor[];
+  anchor?: { path: string; symbol: string };
   evidence: ContextItem[];
   candidates: ContextCandidate[];
-  contexts: ContextItem[];
-  unresolved: Array<{ id: string; role: string }>;
+  contexts?: ContextItem[];
+  unresolved: Array<{ path?: string; id?: string; role: string }>;
   next: ContextNext[];
   cost: { modelTokens: number; serviceMs: number };
   session?: { sessionId: string; generation: number; repoHash: string; plannerVersion: string };

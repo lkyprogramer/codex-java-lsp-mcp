@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "c2-bytes/v1",
+  "dated": "2026-08-23",
+  "gate": 1.2,
+  "p50": 1.0092592592592593,
+  "passed": true,
+  "candidateWireN": 12,
+  "evidenceFileCap": 4,
+  "stepdown": "24→12 after T0 P50 1.71 at N=24; candidates layer kept",
+  "source": "scripts/run-agent-trace-live.test.mjs compactContextForModel vs compactImpactForModel on six first-call shapes",
+  "rows": [
+    { "impactFiles": 13, "contextBytes": 1526, "impactBytes": 1580, "ratio": 0.9658227848101266 },
+    { "impactFiles": 10, "contextBytes": 1526, "impactBytes": 1376, "ratio": 1.1090116279069768 },
+    { "impactFiles": 11, "contextBytes": 1526, "impactBytes": 1444, "ratio": 1.056786703601108 },
+    { "impactFiles": 12, "contextBytes": 1526, "impactBytes": 1512, "ratio": 1.0092592592592593 },
+    { "impactFiles": 8, "contextBytes": 1526, "impactBytes": 1242, "ratio": 1.2286634460547503 },
+    { "impactFiles": 12, "contextBytes": 1526, "impactBytes": 1512, "ratio": 1.0092592592592593 }
+  ],
+  "holdoutT2": {
+    "status": "T2_BLOCKED_GOLDEN_EMPTY",
+    "note": "Pinned /tmp/codex-java-v3-golden-20260809 has 0/124/7 java files. Byte gate is the shipped compact P50 above, not a three-repo first-call."
+  }
+}

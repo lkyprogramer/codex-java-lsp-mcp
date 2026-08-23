@@ -106,8 +106,65 @@ test("compact context uses selected spans and never includes scores or mustHit",
   assert.equal(compact.text.includes("score"), false);
   assert.equal(compact.text.includes("DECLARES"), false);
   assert.equal(compact.text.includes("class A {}"), false);
-  assert.equal(compact.text.includes("\"start\":1"), true);
+  assert.equal(compact.text.includes("resolvedIntent"), false);
+  assert.equal(compact.text.includes("\"anchor\""), false);
+  assert.equal(compact.text.includes("\"ranges\":\"1-4\""), true);
 });
+
+test("C2 slim context P50 is at most 1.2 of impact compact on six first-call shapes", () => {
+  const pairs = [
+    firstCallPair(13, 24, 4),
+    firstCallPair(10, 24, 4),
+    firstCallPair(11, 24, 4),
+    firstCallPair(12, 24, 4),
+    firstCallPair(8, 24, 4),
+    firstCallPair(12, 24, 4)
+  ];
+  const ratios = pairs.map(([context, impact]) => {
+    const contextBytes = Buffer.byteLength(compactContextForModel(context).text, "utf8");
+    const impactBytes = Buffer.byteLength(compactImpactForModel(impact).text, "utf8");
+    return contextBytes / impactBytes;
+  });
+  const ordered = [...ratios].sort((left, right) => left - right);
+  const p50 = ordered[Math.floor((ordered.length - 1) / 2)];
+  assert.ok(p50 <= 1.2, `p50=${p50} ratios=${ratios.map(value => value.toFixed(3)).join(",")}`);
+});
+
+function firstCallPair(impactFiles, candidateCount, evidenceCount) {
+  const files = Array.from({ length: impactFiles }, (_, index) => ({
+    id: String(index + 1),
+    path: `src/mod/File${index}.java`,
+    role: index === 0 ? "anchor" : "related",
+    confidence: "high"
+  }));
+  const impact = {
+    files,
+    readPlan: files.slice(0, Math.min(6, files.length)).map(file => ({
+      fileId: file.id,
+      ranges: [{ startLine: 1, endLine: 40 }],
+      estimatedBytes: 1200,
+      reason: "impact"
+    })),
+    evidenceGaps: ["gap"]
+  };
+  const context = {
+    coverage: "PARTIAL",
+    candidates: Array.from({ length: candidateCount }, (_, index) => ({
+      path: `src/mod/File${index}.java`,
+      role: index === 0 ? "ANCHOR" : "CALLEE",
+      hop: index === 0 ? 0 : 1,
+      reason: index === 0 ? "ANCHOR" : "CALLS_EXACT←Svc.run"
+    })),
+    evidence: Array.from({ length: evidenceCount }, (_, index) => ({
+      path: `src/mod/File${index}.java`,
+      role: index === 0 ? "ANCHOR" : "CALLEE",
+      ranges: "12-48,60-75"
+    })),
+    unresolved: [{ path: "src/mod/File8.java", role: "entity" }],
+    next: [{ action: "navigate", file: "src/mod/File8.java", line: 1, direction: "callees", reason: "entity" }]
+  };
+  return [context, impact];
+}
 
 test("live java_context args default to search and never send scenarioId as task", () => {
   const args = liveJavaContextArgs(

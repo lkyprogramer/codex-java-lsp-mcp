@@ -2,7 +2,6 @@
 // output: §11.3 ContextContract. Graph query only; no benchmark engine switch.
 // pos: JIN N5-01 public tool. Handler lives here because tools/context.ts is ToolContext.
 import { z } from "zod";
-import { compileIntent } from "../context-engine/intent-compiler.js";
 import { DEFAULT_TOKEN_BUDGET } from "../context-engine/context-planner.js";
 import { CONTEXT_CONTRACT_VERSION, type ContextContract } from "../context-engine/context-contract.js";
 import type { EntityHit } from "../java-index/entity-search.js";
@@ -110,15 +109,7 @@ export async function javaContext(
   if (!result.contract) {
     throw new Error("java_context expected a planned context contract");
   }
-  if (resolvedHits.length === 0) return result.contract;
-  return {
-    ...result.contract,
-    resolvedAnchors: resolvedHits.map(hit => ({
-      path: hit.relativePath,
-      symbol: hit.simpleName,
-      layer: hit.layer
-    }))
-  };
+  return result.contract;
 }
 
 function normalizeAnchors(args: Pick<JavaContextArgs, "anchors" | "file" | "line" | "column">): Anchor[] {
@@ -131,19 +122,14 @@ function normalizeAnchors(args: Pick<JavaContextArgs, "anchors" | "file" | "line
   return [];
 }
 
-function emptyContract(requested: string, task?: string): ContextContract {
-  const compiled = compileIntent(requested, { taskText: task });
+function emptyContract(_requested: string, _task?: string): ContextContract {
   return {
     version: CONTEXT_CONTRACT_VERSION,
     generation: 0,
     coverage: "PARTIAL",
-    resolvedIntent: compiled.resolvedIntent,
-    resolvedAnchors: [],
-    anchor: { path: "", symbol: "unknown" },
     evidence: [],
     candidates: [],
-    contexts: [],
-    unresolved: [{ id: "entry", role: "unresolved-entry" }],
+    unresolved: [],
     next: [{ action: "expand", file: "", line: 1, reason: "unresolved-entry" }],
     cost: { modelTokens: 0, serviceMs: 0 }
   };

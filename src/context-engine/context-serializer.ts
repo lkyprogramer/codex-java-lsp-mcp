@@ -5,7 +5,14 @@ import type { GraphSearchResult } from "./graph-search.js";
 import type { EvidenceBundle } from "./evidence-bundle.js";
 import type { PlanResult } from "./context-planner.js";
 import { BYTES_DIV_4, estimateTokens, type Tokenizer } from "./token-estimator.js";
-import { frontierCandidates, nextSteps } from "./context-candidates.js";
+import {
+  CANDIDATE_WIRE_N,
+  capEvidenceByFile,
+  formatSpanRanges,
+  frontierCandidates,
+  nextSteps,
+  unresolvedWire
+} from "./context-candidates.js";
 import {
   CONTEXT_CONTRACT_VERSION,
   PLANNER_VERSION,
@@ -32,16 +39,12 @@ function symbolOf(bundle: EvidenceBundle | undefined): string {
   return parts[2] || parts[1] || (bundle?.path.split("/").pop() ?? "unknown");
 }
 
-function contextItem(bundle: EvidenceBundle, includeSource: boolean): ContextItem {
+function evidenceItem(path: string, bundles: EvidenceBundle[]): ContextItem {
+  const primary = bundles[0]!;
   return {
-    role: bundle.role,
-    path: bundle.path,
-    proof: bundle.proof.slice(0, 6),
-    spans: bundle.spans.map(span => ({
-      start: span.start,
-      end: span.end,
-      ...(includeSource && span.text !== undefined ? { text: span.text } : {})
-    }))
+    role: primary.role,
+    path,
+    ranges: formatSpanRanges(bundles.flatMap(bundle => bundle.spans))
   };
 }
 
@@ -70,24 +73,26 @@ export function serializeContext(input: SerializeInput): ContextContract {
     .map(([id, role]) => ({ id, role }))
     .sort((left, right) => left.id.localeCompare(right.id));
   const honestCoverage: "COMPLETE" | "PARTIAL" = unresolved.length === 0 && selected.length > 0 ? "COMPLETE" : "PARTIAL";
-  const evidence = selected.map(bundle => contextItem(bundle, input.includeSource));
-  const candidates = frontierCandidates(input.search.bundles);
+  const byPath = new Map<string, EvidenceBundle[]>();
+  const orderedPaths: string[] = [];
+  for (const bundle of selected) {
+    const existing = byPath.get(bundle.path);
+    if (existing) existing.push(bundle);
+    else {
+      byPath.set(bundle.path, [bundle]);
+      orderedPaths.push(bundle.path);
+    }
+  }
+  const evidence = capEvidenceByFile(orderedPaths.map(path => evidenceItem(path, byPath.get(path)!)));
+  const candidates = frontierCandidates(input.search.bundles, CANDIDATE_WIRE_N);
+  const wireUnresolved = unresolvedWire(unresolved);
   const contract: ContextContract = {
     version: CONTEXT_CONTRACT_VERSION,
     generation: input.generation,
     coverage: honestCoverage,
-    resolvedIntent: input.search.resolvedIntent,
-    resolvedAnchors: input.resolvedAnchors ?? (anchorBundle
-      ? [{ path: anchorBundle.path, symbol: symbolOf(anchorBundle), layer: "graph" }]
-      : []),
-    anchor: {
-      path: anchorBundle?.path ?? "",
-      symbol: symbolOf(anchorBundle)
-    },
     evidence,
     candidates,
-    contexts: evidence,
-    unresolved,
+    unresolved: wireUnresolved,
     next: nextSteps({
       unresolved,
       candidates,
@@ -98,7 +103,7 @@ export function serializeContext(input: SerializeInput): ContextContract {
       modelTokens: estimateTokens(JSON.stringify({
         evidence,
         candidates,
-        unresolved
+        unresolved: wireUnresolved
       }), tokenizer) + selected.reduce((sum, bundle) => sum + bundle.tokenCost, 0),
       serviceMs: Math.max(0, Math.round(input.serviceMs))
     },
@@ -114,20 +119,15 @@ export function serializeContext(input: SerializeInput): ContextContract {
 }
 
 export function sourceParity(withSource: ContextContract, withoutSource: ContextContract): boolean {
-  const leftItems = withSource.evidence ?? withSource.contexts;
-  const rightItems = withoutSource.evidence ?? withoutSource.contexts;
+  const leftItems = withSource.evidence ?? withSource.contexts ?? [];
+  const rightItems = withoutSource.evidence ?? withoutSource.contexts ?? [];
   if (leftItems.length !== rightItems.length) return false;
   for (let index = 0; index < leftItems.length; index += 1) {
     const left = leftItems[index]!;
     const right = rightItems[index]!;
     if (left.path !== right.path || left.role !== right.role) return false;
-    if (JSON.stringify(left.proof) !== JSON.stringify(right.proof)) return false;
-    if (left.spans.length !== right.spans.length) return false;
-    for (let span = 0; span < left.spans.length; span += 1) {
-      if (left.spans[span]!.start !== right.spans[span]!.start) return false;
-      if (left.spans[span]!.end !== right.spans[span]!.end) return false;
-      if (right.spans[span]!.text !== undefined) return false;
-    }
+    if ((left.ranges ?? "") !== (right.ranges ?? "")) return false;
+    if (right.spans?.some(span => span.text !== undefined)) return false;
   }
   return true;
 }

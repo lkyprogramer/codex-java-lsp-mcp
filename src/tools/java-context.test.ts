@@ -63,8 +63,9 @@ test("java_context with no hits returns an entry-location contract without score
     task: "unknown thing"
   });
   assert.equal(contract.coverage, "PARTIAL");
-  assert.equal(contract.resolvedIntent, "IMPLEMENTATION_CHANGE");
-  assert.deepEqual(contract.resolvedAnchors, []);
+  assert.equal(contract.evidence.length, 0);
+  assert.equal(contract.candidates.length, 0);
+  assert.equal(JSON.stringify(contract).includes("resolvedIntent"), false);
   assert.equal(JSON.stringify(contract).includes("score"), false);
 });
 
@@ -83,10 +84,7 @@ test("java_context no-anchor search uses entity hits and one-hop planning", asyn
   assert.equal(seen[0]?.maxHops, 1);
   assert.equal(seen[0]?.plan, true);
   assert.equal(seen[0]?.mode, "search");
-  assert.deepEqual(contract.resolvedAnchors, [
-    { path: "modules/iam/src/MeQueryService.java", symbol: "MeQueryService", layer: "SIMPLE_NAME" },
-    { path: "modules/iam/src/MeController.java", symbol: "MeController", layer: "BM25_IDENTIFIER" }
-  ]);
+  assert.equal(JSON.stringify(contract).includes("resolvedAnchors"), false);
   assert.equal(JSON.stringify(contract).includes("score"), false);
 });
 
@@ -104,7 +102,7 @@ test("java_context navigate packs a planned contract from callers", async () => 
   assert.equal(seen[0]?.direction, "callers");
   assert.equal(seen[0]?.plan, true);
   assert.equal(seen[0]?.fromRelativePath, "src/A.java");
-  assert.equal(contract.anchor.path, "src/A.java");
+  assert.equal(contract.evidence[0]?.path, "src/A.java");
 });
 
 function entity(simpleName: string, relativePath: string, layer: EntityHit["layer"]): EntityHit {
@@ -120,17 +118,12 @@ function entity(simpleName: string, relativePath: string, layer: EntityHit["laye
 }
 
 function sampleContract(): ContextContract {
-  const evidence = [{ role: "ANCHOR", path: "src/A.java", proof: ["DECLARES"], spans: [{ start: 1, end: 4 }] }];
   return {
-    version: 2,
+    version: 3,
     generation: 3,
     coverage: "PARTIAL",
-    resolvedIntent: "IMPLEMENTATION_CHANGE",
-    resolvedAnchors: [{ path: "src/A.java", symbol: "run", layer: "graph" }],
-    anchor: { path: "src/A.java", symbol: "run" },
-    evidence,
+    evidence: [{ role: "ANCHOR", path: "src/A.java", ranges: "1-4" }],
     candidates: [{ path: "src/A.java", role: "ANCHOR", hop: 0, reason: "ANCHOR" }],
-    contexts: evidence,
     unresolved: [],
     next: [],
     cost: { modelTokens: 12, serviceMs: 4 }
