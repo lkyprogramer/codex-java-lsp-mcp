@@ -1062,11 +1062,15 @@ test("OPEN leaves the knowledge graph unloaded until a graph query", async () =>
   assert.equal(filesOnly.types, 0, "OPEN+STATUS must stay files-only; rest hydrate is a fact-query cost");
   assert.equal(filesOnly.methods, 0);
   const digest = await reader.queryGraphDigest();
-  assert.ok(digest.nodes > 0, "QUERY_GRAPH_DIGEST must unpack the on-disk graph after OPEN");
+  assert.ok(digest.nodes > 0, "QUERY_GRAPH_DIGEST reports on-disk graph counts without forcing a live unpack");
   const afterDigest = await reader.status();
   assert.equal(afterDigest.types, 0, "graph digest must not hydrate v4 rest segments");
   const files = await reader.queryFiles([path.join(repoRoot, "src/main/java/demo/Solo.java")]);
   assert.equal(files[0]?.types.some(type => type.simpleName === "Solo"), true);
+  writeJavaFile(repoRoot, "src/main/java/demo/Solo.java", "package demo;\n\nclass Solo { int x; void run() { Solo.x(); } }\n");
+  await reader.refresh(2, [path.join(repoRoot, "src/main/java/demo/Solo.java")], []);
+  const afterRefresh = await reader.queryFiles([path.join(repoRoot, "src/main/java/demo/Solo.java")]);
+  assert.equal(afterRefresh[0]?.fields.some(field => field.name === "x"), true, "first parse after snapshot OPEN must still load the parser");
   await reader.close();
 });
 

@@ -28,6 +28,6 @@ Live 29-model profile (`local-qwen`): host `47.106.205.246:1082`, model `opencla
 | B1/B2 chain knives | SKIPPED | | not entered; discovery-layer miss |
 | B3 escalation | RESOLVED_OPTION_C | `docs/phase-b/b3-closeout.json` | user chose C (2026-08-24 11:53); ruling recorded in b3-escalation.md; option B filed as future project with entry condition (real-usage NOT_IN_POOL gap on non-golden repos) |
 | F1 compare vs github main | FAIL_WRONG_TREE | `docs/phase-f/f1-closeout.json` | github main is pre-V4 (54 files). cipherlink numbers match V4-final new; holdout 0.55 is a V4 residual. See cipherlink-holdout-project.md |
-| F1 compare vs N0 | COMPARE_GO_S2_MISS | `docs/phase-f/f1-n0-closeout.json` | quality identity vs N0; token −27.6/−28.3/−27.3%; ruoyi identity+token GO; G1 173/29/46; S1 931; S2 1566>1433.6; no merge |
-| F2 merge + attestation | BLOCKED | | F1 memory S2 miss; quality/token GO vs N0 |
-| F3 soak | BLOCKED | | F1 not full GO |
+| F1 compare vs N0 | GO | `docs/phase-f/f1-n0-closeout.json` | quality identity vs N0; token −27%; ruoyi GO; G1 57/14/21; S1 415; S2 725≤1433.6 after digest-without-unpack |
+| F2 merge + attestation | PENDING | | F1-N0 GO; non-squash pre-authorized; not started in the S2 turn |
+| F3 soak | PENDING | | after F2 |

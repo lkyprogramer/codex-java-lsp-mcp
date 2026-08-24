@@ -15,7 +15,7 @@ import { probeLayout, type LayoutContext } from "../layout-probe.js";
 import { positiveInteger, resourceDefaults } from "../resource-defaults.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import type { WorktreeIdentity } from "../worktree-identity.js";
-import { createJavaParserBackend, type JavaParserBackend } from "./java-parser-backend.js";
+import type { JavaParserBackend } from "./java-parser-backend.js";
 import { deriveJavaSourceLayout, parseJavaSourceFile, resolvedPathWithinRepo as resolveReadableRepoPath } from "./java-index-file-parse.js";
 import { computeBuildFingerprint, computeExtractorVersion } from "./build-fingerprint.js";
 import { CoverageTracker } from "./coverage.js";
@@ -593,14 +593,23 @@ type RefreshedFile = {
   dependents: string[];
 };
 
+async function ensureParserBackend(): Promise<JavaParserBackend> {
+  if (!backend) {
+    const { createJavaParserBackend } = await import("./java-parser-backend.js");
+    backend = await createJavaParserBackend();
+  }
+  return backend;
+}
+
 async function refreshFile(inputPath: string, generation: number): Promise<RefreshedFile> {
-  if (!backend || !cache || !store) throw new Error("refreshFile called before OPEN");
+  if (!cache || !store) throw new Error("refreshFile called before OPEN");
+  const parser = await ensureParserBackend();
   const bundle = await parseJavaSourceFile({
     repoRoot,
     resolvedRepoRoot,
     inputPath,
     generation,
-    backend,
+    backend: parser,
     cache,
     layout
   });
@@ -1219,6 +1228,9 @@ async function ensureGraphReady(): Promise<void> {
     const packedGraph = await loadGraphSnapshot(path.join(path.dirname(snapshotPath), GRAPH_SNAPSHOT_FILE_NAME));
     if (packedGraph) {
       unpackGraphSnapshot(packedGraph, knowledgeGraph);
+      packedGraph.strings.length = 0;
+      packedGraph.nodes.length = 0;
+      packedGraph.edges.length = 0;
       graphSyncedRevision = indexFactsRevision;
       return;
     }
@@ -1933,6 +1945,8 @@ function queryHandlerDeps() {
     unresolvedTypeLookup,
     readyEntitySearch,
     readyKnowledgeGraph,
+    graphIsReady,
+    peekGraphSnapshot,
     ensureFactsHydrated,
     ensureGraphReady,
     childColdPeakRssBytes: lastColdBuildMetrics?.rssPeakBytes,
@@ -1975,6 +1989,15 @@ function syncKnowledgeGraphBundle(bundle: JavaFileBundle): void {
   markGraphAndSearchSynced();
 }
 
+function graphIsReady(): boolean {
+  return graphSyncedRevision >= 0 && graphSyncedRevision === indexFactsRevision;
+}
+
+async function peekGraphSnapshot(): Promise<Awaited<ReturnType<typeof loadGraphSnapshot>>> {
+  if (!snapshotPath) return undefined;
+  return loadGraphSnapshot(path.join(path.dirname(snapshotPath), GRAPH_SNAPSHOT_FILE_NAME));
+}
+
 function readyKnowledgeGraph(): KnowledgeGraphStore {
   if (store && graphSyncedRevision !== indexFactsRevision) syncKnowledgeGraphFromStore();
   return knowledgeGraph;
@@ -2005,7 +2028,7 @@ async function handle(request: JavaIndexRequest): Promise<void> {
       case "OPEN": {
         repoRoot = request.repoRoot;
         resolvedRepoRoot = await realpath(repoRoot).catch(() => path.resolve(repoRoot));
-        backend = await createJavaParserBackend();
+        backend = undefined;
         cache = new ParseTreeCache();
         store = new JavaIndexStore();
         entitySearch = new EntitySearchIndex();

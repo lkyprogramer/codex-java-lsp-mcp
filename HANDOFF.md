@@ -2,7 +2,7 @@
 
 ## 当前任务
 
-G2 收口计划：F1 已改基线 N0 `09772b2`。三仓质量 identity、token −27%、ruoyi vs N0 identity+token GO。S2 并发 RSS 1566>1433.6，F1 内存门未过，不合 `main`。cipherlink holdout 0.55 已立项（V4-final 残差，holdout 不入目）。无 live。`java_context` 仍不公开。
+G2 收口计划：F1-N0 **GO**（质量 identity、token −27%、S2 725≤1433.6）。S2 刀：`QUERY_GRAPH_DIGEST` 不再 unpack 整图；parser 延到第一次 refresh。`java_impact` 首次查询仍 unpack。F2 未在本轮启动。`main` 未动。cipherlink holdout 已立项。无 live。`java_context` 仍不公开。
 
 ## E1（2026-08-23）
 
@@ -54,7 +54,7 @@ G2 收口计划：F1 已改基线 N0 `09772b2`。三仓质量 identity、token �
 
 ## F1-N0（2026-08-24）
 
-判定 **COMPARE_GO_S2_MISS**。`docs/phase-f/f1-n0-closeout.json`。old=N0 `09772b2`。三仓质量/holdout/RangeLineRecall 与 N0 逐位相同；token P50 −27.6/−28.3/−27.3%。ruoyi 哨兵 GO（identity + token −28.9%）。G1 173/29/46；S1 931；**S2 1566>1433.6**。工具 5 个。不合 main。
+判定 **GO**。`docs/phase-f/f1-n0-closeout.json`。old=N0 `09772b2`。三仓质量 identity；token −27%。ruoyi GO。G1 57/14/21；S1 415；**S2 725≤1433.6**（digest 不再 unpack 整图）。F2 未启动。不合 main。
 
 ## F1 vs github main（2026-08-24）
 

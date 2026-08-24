@@ -24,6 +24,8 @@ export type QueryHandlerDeps = {
   unresolvedTypeLookup(): JavaTypeLookupResult;
   readyEntitySearch(): EntitySearchIndex;
   readyKnowledgeGraph(): KnowledgeGraphStore;
+  graphIsReady(): boolean;
+  peekGraphSnapshot(): Promise<{ digest: string; generation: number; nodes: unknown[]; edges: unknown[] } | undefined>;
   ensureFactsHydrated(): Promise<void>;
   ensureGraphReady(): Promise<void>;
   childColdPeakRssBytes?: number;
@@ -140,8 +142,25 @@ export async function handleQueryCommand(request: JavaIndexRequest, deps: QueryH
       return true;
     }
     case "QUERY_GRAPH_DIGEST": {
-      await deps.ensureGraphReady();
-      const graph = deps.readyKnowledgeGraph();
+      let digest = "";
+      let generation = 0;
+      let nodes = 0;
+      let edges = 0;
+      if (deps.graphIsReady()) {
+        const graph = deps.readyKnowledgeGraph();
+        digest = graph.digest();
+        generation = graph.generation;
+        nodes = graph.nodesById.size;
+        edges = graph.edgesById.size;
+      } else {
+        const packed = await deps.peekGraphSnapshot();
+        if (packed) {
+          digest = packed.digest;
+          generation = packed.generation;
+          nodes = packed.nodes.length;
+          edges = packed.edges.length;
+        }
+      }
       const gcFn = (globalThis as typeof globalThis & { gc?: () => void }).gc;
       if (typeof gcFn === "function") gcFn();
       const memory = process.memoryUsage();
@@ -149,10 +168,10 @@ export async function handleQueryCommand(request: JavaIndexRequest, deps: QueryH
         id: request.id,
         ok: true,
         value: {
-          digest: graph.digest(),
-          generation: graph.generation,
-          nodes: graph.nodesById.size,
-          edges: graph.edgesById.size,
+          digest,
+          generation,
+          nodes,
+          edges,
           heapUsedBytes: memory.heapUsed,
           rssBytes: memory.rss,
           ...(deps.childColdPeakRssBytes !== undefined ? { childColdPeakRssBytes: deps.childColdPeakRssBytes } : {}),
