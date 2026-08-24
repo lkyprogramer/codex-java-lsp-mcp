@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { z } from "zod";
-import { impactSchema, javaImpact } from "./impact.js";
+import {
+  IMPACT_DEADLINE_MS_ERROR,
+  IMPACT_READ_PLAN_MAX_ITEMS_ERROR,
+  impactSchema,
+  javaImpact
+} from "./impact.js";
 import type { ToolContext } from "./context.js";
 import type { ImpactOptions, ImpactResult } from "../agent-types.js";
 
@@ -20,7 +25,25 @@ test("impact accepts one absolute deadline and rejects values above 15 seconds",
     column: 1,
     deadlineMs: 15001
   });
-  assert.equal(bad.success, false);
+  if (bad.success) {
+    assert.fail("deadlineMs 15001 must be rejected");
+  } else {
+    assert.equal(bad.error.issues[0]?.message, IMPACT_DEADLINE_MS_ERROR);
+  }
+});
+
+test("impact rejects oversized readPlanMaxItems with an explicit omit-or-cap hint", () => {
+  const bad = z.object(impactSchema).safeParse({
+    file: "src/main/java/demo/Demo.java",
+    line: 1,
+    column: 1,
+    readPlanMaxItems: 80
+  });
+  if (bad.success) {
+    assert.fail("readPlanMaxItems 80 must be rejected");
+  } else {
+    assert.equal(bad.error.issues[0]?.message, IMPACT_READ_PLAN_MAX_ITEMS_ERROR);
+  }
 });
 
 test("impact exposes exactly one timeout control", () => {

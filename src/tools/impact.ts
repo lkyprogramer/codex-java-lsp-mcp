@@ -13,6 +13,13 @@ import type { ImpactAnchorInput, ImpactOptions, ImpactResult, ImpactVerbosity } 
 // replaces this by passing the budget itself down to every JDT call.
 const SEMANTIC_STAGE_CAP_MS = 1500;
 
+export const IMPACT_DEADLINE_MS_MAX = 15000;
+export const IMPACT_READ_PLAN_MAX_ITEMS = 30;
+export const IMPACT_DEADLINE_MS_ERROR =
+  "java_impact deadlineMs maximum is 15000ms. Omit deadlineMs (default is 2–5s by mode/semanticPolicy) or pass an integer 1–15000. Do not pass 60000/120000 from older memory.";
+export const IMPACT_READ_PLAN_MAX_ITEMS_ERROR =
+  "java_impact readPlanMaxItems maximum is 30. Omit readPlanMaxItems (default depends on mode, typically 6) or pass an integer 1–30. Do not pass 40/50/80 from older memory.";
+
 export const impactSchema = {
   projectId: z.string().min(1).optional(),
   repoRoot: z.string().min(1).optional(),
@@ -31,8 +38,10 @@ export const impactSchema = {
   profile: z.enum(["auto", "controller", "service", "port", "repository", "parser", "dto", "entity", "mapper", "vo", "job", "listener"]).default("auto"),
   anchorRole: z.enum(["auto", "controller", "service", "port", "repository", "parser", "dto", "entity", "mapper", "vo", "job", "listener"]).optional(),
   semanticPolicy: z.enum(["auto", "fast", "required"]).default("auto"),
-  deadlineMs: z.number().int().positive().max(15000).optional(),
-  readPlanMaxItems: z.number().int().positive().max(30).optional(),
+  deadlineMs: z.number().int().positive().max(IMPACT_DEADLINE_MS_MAX, IMPACT_DEADLINE_MS_ERROR).optional()
+    .describe("Optional request deadline in ms, maximum 15000. Omit this field; do not pass 60000 or 120000."),
+  readPlanMaxItems: z.number().int().positive().max(IMPACT_READ_PLAN_MAX_ITEMS, IMPACT_READ_PLAN_MAX_ITEMS_ERROR).optional()
+    .describe("Optional read-plan file cap, maximum 30. Omit this field to use the mode default (typically 6); do not pass 40, 50, or 80."),
   testReadMode: z.enum(["defer", "include", "priority"]).default("defer"),
   focusModules: z.array(z.string().min(1)).max(10).default([]),
   excludeModules: z.array(z.string().min(1)).max(20).default([]),

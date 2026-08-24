@@ -126,6 +126,8 @@ function defaultWorkerFactory(): WorkerLike {
 }
 
 const MAX_CANCELLED_TOMBSTONES = 64;
+/** Restart OPEN is shared and must outlive a short caller deadline (java_status ~2–3s). */
+const JAVA_INDEX_RESTART_OPEN_MS = 120_000;
 
 export class JavaIndexClient {
   private nextId = 1;
@@ -135,6 +137,7 @@ export class JavaIndexClient {
   private readonly cancelledTombstones = new Map<number, CancelledTombstone>();
   private readonly terminatedWorkers = new WeakSet<WorkerLike>();
   private restartCount = 0;
+  private restarting?: Promise<JavaIndexStatus>;
   private lastKnownStatus: JavaIndexStatus = emptyStatus();
   private openOptions: JavaIndexOpenOptions = {};
 
@@ -531,14 +534,41 @@ export class JavaIndexClient {
       throw new JavaIntelligenceError("INDEX_PARTIAL", "Java index client is closed");
     }
     if (this.worker) return;
-    if (this.restartCount >= 1) {
+    if (this.state === "NEW") {
+      await this.spawnAndOpen(this.lastKnownStatus.indexedGeneration, requestOptions);
+      return;
+    }
+    if (this.restartCount >= 1 && !this.restarting) {
       throw new JavaIntelligenceError(
         "INDEX_PARTIAL",
         "Java index worker is unavailable after one restart attempt"
       );
     }
-    this.restartCount += 1;
-    await this.spawnAndOpen(this.lastKnownStatus.indexedGeneration, requestOptions);
+    this.restarting ??= this.spawnAndOpen(
+      this.lastKnownStatus.indexedGeneration,
+      { budget: DeadlineBudget.fromTimeout(JAVA_INDEX_RESTART_OPEN_MS) }
+    ).then(status => {
+      this.restartCount += 1;
+      return status;
+    }).finally(() => {
+      this.restarting = undefined;
+    });
+    if (requestOptions.budget) {
+      try {
+        await requestOptions.budget.race("java-index.open", this.restarting);
+      } catch (error) {
+        if (error instanceof JavaIntelligenceError && error.code === "DEADLINE_EXCEEDED") {
+          throw new JavaIntelligenceError(
+            "DEADLINE_EXCEEDED",
+            "Deadline exceeded before/during java-index.open. This request's deadline was too short (java_status default is ~2–3s; java_impact deadlineMs max is 15000). Index OPEN continues in the background — retry the same tool without deadlineMs. Do not pass readPlanMaxItems>30 or deadlineMs>15000.",
+            error
+          );
+        }
+        throw error;
+      }
+      return;
+    }
+    await this.restarting;
   }
 
   private wireWorker(worker: WorkerLike): WorkerLike {

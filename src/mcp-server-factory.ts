@@ -69,7 +69,7 @@ export function createMcpServer(
 
   register(track("java_impact"), {
     title: "Java Impact",
-    description: "Build a compact Java impact plan with JavaIndex routing, internal rg summary, optional bounded LSP enrichment, and read plan.",
+    description: "Build a compact Java impact plan with JavaIndex routing, internal rg summary, optional bounded LSP enrichment, and read plan. Omit readPlanMaxItems (max 30) and deadlineMs (max 15000); do not reuse older values such as 80 or 120000.",
     inputSchema: impactSchema
   }, args => withContext(args, (context, request) => javaImpact(context, args, request), {
     mayStartLsp: args.semanticPolicy !== "fast",

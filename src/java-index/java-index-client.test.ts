@@ -477,6 +477,40 @@ test("after an unexpected exit, the next request restarts the worker exactly onc
   assert.equal(workers.length, 2, "a second exit must not spend a second restart");
 });
 
+test("a caller deadline during restart OPEN does not spend the one restart", async () => {
+  const workers: FakeWorker[] = [];
+  const client = new JavaIndexClient("/repo", "/cache", () => {
+    const worker = new FakeWorker();
+    workers.push(worker);
+    return worker;
+  });
+  const budgeted = client as unknown as BudgetAwareClient;
+
+  const opened = budgeted.open(1);
+  workers[0]!.emitMessage({ id: workers[0]!.posted[0]!.id, ok: true, value: validStatus(1) });
+  await opened;
+  workers[0]!.emitExit(1);
+
+  const timedOut = await settleWithin(
+    budgeted.status({ budget: DeadlineBudget.fromTimeout(20) }),
+    80
+  );
+  assert.equal(timedOut.kind, "rejected");
+  const timedOutError = rejectedJavaIntelligenceError(timedOut);
+  assert.equal(timedOutError.code, "DEADLINE_EXCEEDED");
+  assert.match(timedOutError.message, /retry the same tool without deadlineMs/);
+  assert.equal(workers.length, 2, "restart OPEN must start even when the caller deadline is short");
+
+  workers[1]!.emitMessage({ id: workers[1]!.posted[0]!.id, ok: true, value: validStatus(1) });
+  await flushMicrotasks();
+  const statusPromise = budgeted.status({ budget: DeadlineBudget.fromTimeout(100) });
+  await flushMicrotasks();
+  const statusRpc = workers[1]!.posted.find(posted => posted.type === "STATUS");
+  assert.ok(statusRpc, "the follow-up STATUS must reuse the restarted worker");
+  workers[1]!.emitMessage({ id: statusRpc.id, ok: true, value: validStatus(1) });
+  assert.equal((await statusPromise).state, "READY");
+});
+
 test("client opens a real worker thread, reaches READY, and closes cleanly", async () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), "java-index-client-smoke-"));
   const cacheDir = mkdtempSync(path.join(tmpdir(), "java-index-client-smoke-cache-"));
