@@ -5,6 +5,7 @@
   "dated": "2026-08-25",
   "decision": "GO",
   "mergeToMain": false,
+  "verifiedOnCommit": "e807ed0e4229b856d8c5ad20b49ba0a21e5994ca",
   "entryCondition": {
     "required": "none",
     "actual": "R1 has no entry gate",
@@ -32,18 +33,19 @@
       "tests": 1505,
       "fail": 0,
       "jdtlsBin": "/usr/bin/false",
-      "executableTree": "6d8dcdaf12b494f9dc49ae1a8d3efa3578b82e23",
-      "logSha256": "f8d1d5fe0a1c7f70d3d45ddf16937f25c63ffd6b47a3e95bba7e964aab42b34e"
+      "executableTree": "00348bee9d277ba9f9dc30a4ed46bf577139d01b",
+      "logSha256": "1e7176ad04e2eadf3bdace73caeef6bbd8ed284b908d93e5b839f2a4dad72b8d"
     },
     "t1": {
       "tests": 1227,
       "fail": 0,
-      "logSha256": "2a1f980acd9bd240af7769f7b870739080e3e81751a7ecadc529d53e0e1a6841"
+      "executableTree": "00348bee9d277ba9f9dc30a4ed46bf577139d01b",
+      "logSha256": "8ed84bc9b2ae00722090a3e9fc8bd2c112210120fd42ec6752d0de58b46cc9bd"
     },
     "unit": {
       "tests": 21,
       "fail": 0,
-      "logSha256": "277863b28e3b02f92f9087fc9aace81a46ae5dda3652004ac3f0e97e95a58cd1"
+      "logSha256": "2b07a7304bf374defe440deddd55f65e9288ccc1a3c02cb6aa44b20add98fe09"
     }
   }
 }
