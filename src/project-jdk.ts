@@ -193,7 +193,19 @@ function fromHome(home: string, source: ProjectJdkStatus["primarySource"], insta
   };
 }
 
+let installedJdksCache: { key: string; value: InstalledJdk[] } | undefined;
+
 function listInstalledJdks(): InstalledJdk[] {
+  const key = process.env.JAVA_HOME ?? "";
+  if (installedJdksCache?.key === key) {
+    return installedJdksCache.value;
+  }
+  const value = discoverInstalledJdks();
+  installedJdksCache = { key, value };
+  return value;
+}
+
+function discoverInstalledJdks(): InstalledJdk[] {
   const homes = new Set<string>();
   for (const dir of [path.join(homedir(), ".sdkman", "candidates", "java"), "/Library/Java/JavaVirtualMachines"]) {
     if (!existsSync(dir)) continue;
@@ -204,7 +216,7 @@ function listInstalledJdks(): InstalledJdk[] {
       }
     }
   }
-  const javaHomeOutput = spawnSync("/usr/libexec/java_home", ["-V"], { encoding: "utf8" });
+  const javaHomeOutput = spawnSync("/usr/libexec/java_home", ["-V"], { encoding: "utf8", timeout: 2000 });
   for (const match of `${javaHomeOutput.stdout}\n${javaHomeOutput.stderr}`.matchAll(/(\/[^\n]+\/Contents\/Home)/g)) {
     homes.add(match[1]!);
   }
@@ -222,7 +234,7 @@ function homeMajor(home: string): InstalledJdk | undefined {
   const label = path.basename(home);
   const javaBin = path.join(home, "bin", "java");
   const spawned = existsSync(javaBin)
-    ? spawnSync(javaBin, ["-version"], { encoding: "utf8" })
+    ? spawnSync(javaBin, ["-version"], { encoding: "utf8", timeout: 2000, killSignal: "SIGKILL" })
     : undefined;
   const major = parseMajor(label) || parseMajor(spawned?.stderr) || parseMajor(spawned?.stdout);
   return major ? { major, home, label: `${major}:${home}` } : undefined;

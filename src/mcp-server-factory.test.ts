@@ -30,6 +30,13 @@ test("production MCP factory, java_impact, and java_context do not read JAVA_LSP
   }
 });
 
+test("repo-scoped java_status uses the 15s budget even when start is false", () => {
+  const source = readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "src", "mcp-server-factory.ts"), "utf8");
+  assert.match(source, /mayStartLsp: args\.start/);
+  assert.match(source, /deadlineMs: 15000/);
+  assert.equal(source.includes("requestOptions: args.start ?"), false);
+});
+
 test("HTTP protocol factory refuses an application with cwd fallback", () => {
   const registry = new AliasRegistry("/path/that/does/not/exist");
   const application = new JavaLspApplication({

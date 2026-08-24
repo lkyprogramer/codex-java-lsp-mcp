@@ -146,7 +146,14 @@ export function createMcpServer(
       };
     }, {
       mayStartLsp: args.start,
-      requestOptions: args.start ? { mode: "balanced", semanticPolicy: "required", deadlineMs: 15000 } : undefined
+      // start:false still has to create the per-repo runtime (JDK probe, session,
+      // JavaIndex OPEN). The query default of ~2–3s expires before that finishes
+      // after a daemon restart, which is exactly "Deadline exceeded before runtime.create".
+      requestOptions: {
+        mode: "balanced",
+        semanticPolicy: args.start ? "required" : "auto",
+        deadlineMs: 15000
+      }
     });
   }
 
