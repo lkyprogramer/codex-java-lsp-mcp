@@ -1,7 +1,7 @@
 # Harvest final panel (F0)
 
-SSOT: `docs/deep/codex-java-lsp-mcp-jin-n5-live-postmortem-and-value-harvest-plan-2026-08-23.md`.
-Branch: `codex/jin-main`. **Do not merge `main` until the user decides.**
+SSOT: `docs/deep/codex-java-lsp-mcp-g2-resolution-and-main-cutover-plan-2026-08-24.md` (harvest E/C/G/O/L1 closed).
+Branch: `codex/jin-main`. F2 merge is authorized after F1 GO; B3 is the only stop.
 
 Live 29-model profile (`local-qwen`): host `47.106.205.246:1082`, model `openclaw/Qwen3.8-27B-WORK`. OpenRouter profile: `stealth/ox-alpha`.
 
@@ -21,6 +21,10 @@ Live 29-model profile (`local-qwen`): host `47.106.205.246:1082`, model `opencla
 | O2 cold ≤ 60s | O2_MISS | `docs/phase-o/o2-closeout.json` | registry reuse landed; lishuedu 83.5s > 60s; shards not landed; gate kept |
 | O3 G5 steady ≤ 1.10 | COMPLETE | `docs/phase-o/o3-closeout.json` | warmup 2; post-O1/O2 remeasure 0.802/0.614/0.890; G1 173/29/46 |
 | L1 dual-model live | FAIL_RECORDED | `docs/phase-l/l1-closeout.json` | both models MEASURED FAIL; jin 0/6 vs old 1/6; paired delta −0.476; kill java_context from PUBLIC_JAVA_TOOLS; no fourth live |
-| F1 compare vs main | BLOCKED | | blocked by G2_OVERFIT_FAIL; L1 kill already dropped java_context; no merge |
-| F2 merge + attestation | BLOCKED | | user-only merge |
-| F3 soak | BLOCKED | | after user merge |
+| A1 ruoyi golden audit | GOLDEN_NOISY | `docs/phase-a/a1-closeout.json` | tuning 13/28 noisy (0.464); control 0; holdout unread; next A2a |
+| A2a re-derive + LORO | PENDING | | |
+| A2b observation downgrade | PENDING | | only if filtered scenes < 20 |
+| B0 miss-layer diagnosis | PENDING | | only if A2a still fails LORO |
+| F1 compare vs main | BLOCKED | | blocked until G2 resolved or A2b |
+| F2 merge + attestation | BLOCKED | | after F1 GO; non-squash |
+| F3 soak | BLOCKED | | after F2; F3_SOAK_STARTED until evidence |

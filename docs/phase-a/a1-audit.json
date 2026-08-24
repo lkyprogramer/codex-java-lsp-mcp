@@ -1,0 +1,620 @@
+{
+  "schemaVersion": "a-a1-audit/v1",
+  "dated": "2026-08-24",
+  "status": "GOLDEN_NOISY",
+  "decision": "GOLDEN_NOISY",
+  "ruleTooStrict": false,
+  "threshold": 0.3,
+  "gate": 0.3,
+  "rules": [
+    "mustHitGt8",
+    "testInMustHit",
+    "codegenShareGe50",
+    "modulesGe4",
+    "anchorOutsideDepNeighborhood",
+    "mergeOrDiffGt30"
+  ],
+  "ruoyi": {
+    "projectId": "ruoyi-vue-pro",
+    "holdoutSkipped": 12,
+    "tuning": 28,
+    "audited": 28,
+    "noisyRate": 0.4642857142857143,
+    "degradedCommits": 0,
+    "scenes": [
+      {
+        "scenarioId": "ruoyi-vue-pro-98a977dd1a09f031",
+        "noisy": false,
+        "reasons": [],
+        "mustHitCount": 7,
+        "moduleCount": 1,
+        "codegenShare": 0,
+        "sourceCommit": "98a977dd1a09f03110015e496184fb2e374b59ac",
+        "commitMetaDegraded": false
+      },
+      {
+        "scenarioId": "ruoyi-vue-pro-4b27620e86d38822",
+        "noisy": true,
+        "reasons": [
+          "mustHitGt8",
+          "testInMustHit"
+        ],
+        "mustHitCount": 10,
+        "moduleCount": 1,
+        "codegenShare": 0,
+        "sourceCommit": "4b27620e86d388228d9f8cd54843a165f6efec9d",
+        "commitMetaDegraded": false
+      },
+      {
+        "scenarioId": "ruoyi-vue-pro-acda3c95de8dcddb",
+        "noisy": true,
+        "reasons": [
+          "testInMustHit"
+        ],
+        "mustHitCount": 2,
+        "moduleCount": 1,
+        "codegenShare": 0,
+        "sourceCommit": "acda3c95de8dcddb447759e99edd670b9bda543f",
+        "commitMetaDegraded": false
+      },
+      {
+        "scenarioId": "ruoyi-vue-pro-bca66fee74f1999e",
+        "noisy": true,
+        "reasons": [
+          "testInMustHit"
+        ],
+        "mustHitCount": 2,
+        "moduleCount": 1,
+        "codegenShare": 0,
+        "sourceCommit": "bca66fee74f1999e482ac6f86b8d5833aaaba511",
+        "commitMetaDegraded": false
+      },
+      {
+        "scenarioId": "ruoyi-vue-pro-863a420287d4459b",
+        "noisy": true,
+        "reasons": [
+          "testInMustHit"
+        ],
+        "mustHitCount": 4,
+        "moduleCount": 1,
+        "codegenShare": 0,
+        "sourceCommit": "863a420287d4459b74226a927cd77cdd20db7e81",
+        "commitMetaDegraded": false
+      },
+      {
+        "scenarioId": "ruoyi-vue-pro-a0be8e2907f99949",
+        "noisy": true,
+        "reasons": [
+          "testInMustHit"
+        ],
+        "mustHitCount": 2,
+        "moduleCount": 1,
+        "codegenShare": 0,
+        "sourceCommit": "a0be8e2907f9994966af24308f7c9cdaefa6dd40",
+        "commitMetaDegraded": false
+      },
+      {
+        "scenarioId": "ruoyi-vue-pro-773d0941441fcdcb",
+        "noisy": false,
+        "reasons": [],
+        "mustHitCount": 2,
+        "moduleCount": 1,
+        "codegenShare": 0,
+        "sourceCommit": "773d0941441fcdcb93aaeb97097f152515649c7e",
+        "commitMetaDegraded": false
+      },
+      {
+        "scenarioId": "ruoyi-vue-pro-79de92333fc20383",
+        "noisy": false,
+        "reasons": [],
+        "mustHitCount": 3,
+        "moduleCount": 1,
+        "codegenShare": 0,
+        "sourceCommit": "79de92333fc2038363e82f2f784294cc5c0778d0",
+        "commitMetaDegraded": false
+      },
+      {
+        "scenarioId": "ruoyi-vue-pro-9ed7c050b03c696b",
+        "noisy": true,
+        "reasons": [
+          "testInMustHit"
+        ],
+        "mustHitCount": 4,
+        "moduleCount": 1,
+        "codegenShare": 0,
+        "sourceCommit": "9ed7c050b03c696bf92cba5e2a5332ff29b82411",
+        "commitMetaDegraded": false
+      },
+      {
+        "scenarioId": "ruoyi-vue-pro-d9b320f29fd8b797",
+        "noisy": false,
+        "reasons": [],
+        "mustHitCount": 4,
+        "moduleCount": 1,
+        "codegenShare": 0,
+        "sourceCommit": "d9b320f29fd8b7978b338c86594405c9a472a8d5",
+        "commitMetaDegraded": false
+      },
+      {
+        "scenarioId": "ruoyi-vue-pro-ca367c376fc74f80",
+        "noisy": false,
+        "reasons": [],
+        "mustHitCount": 7,
+        "moduleCount": 1,
+        "codegenShare": 0,
+        "sourceCommit": "ca367c376fc74f80bb1060cc1383327d1943ae76",
+        "commitMetaDegraded": false
+      },
+      {
+        "scenarioId": "ruoyi-vue-pro-93eabb4efd61c740",
+        "noisy": false,
+        "reasons": [],
+        "mustHitCount": 3,
+        "moduleCount": 1,
+        "codegenShare": 0,
+        "sourceCommit": "93eabb4efd61c74065bdec3223211dac2943a980",
+        "commitMetaDegraded": false
+      },
+      {
+        "scenarioId": "ruoyi-vue-pro-f587d4f756cbd7af",
+        "noisy": false,
+        "reasons": [],
+        "mustHitCount": 4,
+        "moduleCount": 2,
+        "codegenShare": 0,
+        "sourceCommit": "f587d4f756cbd7afa5f0e7efde8dc84539aa48ef",
+        "commitMetaDegraded": false
+      },
+      {
+        "scenarioId": "ruoyi-vue-pro-adbec22e95e5d872",
+        "noisy": false,
+        "reasons": [],
+        "mustHitCount": 3,
+        "moduleCount": 1,
+        "codegenShare": 0,
+        "sourceCommit": "adbec22e95e5d8727aa71654443fa4885548f054",
+        "commitMetaDegraded": false
+      },
+      {
+        "scenarioId": "ruoyi-vue-pro-2f54aca928738c76",
+        "noisy": true,
+        "reasons": [
+          "testInMustHit"
+        ],
+        "mustHitCount": 2,
+        "moduleCount": 1,
+        "codegenShare": 0,
+        "sourceCommit": "2f54aca928738c76c05f5442fdb795d77b265e66",
+        "commitMetaDegraded": false
+      },
+      {
+        "scenarioId": "ruoyi-vue-pro-cb015642df0c0b9f",
+        "noisy": false,
+        "reasons": [],
+        "mustHitCount": 4,
+        "moduleCount": 1,
+        "codegenShare": 0,
+        "sourceCommit": "cb015642df0c0b9f0e128e9439370661bf5eba45",
+        "commitMetaDegraded": false
+      },
+      {
+        "scenarioId": "ruoyi-vue-pro-f473e3c514ebdf62",
+        "noisy": true,
+        "reasons": [
+          "mustHitGt8",
+          "testInMustHit"
+        ],
+        "mustHitCount": 15,
+        "moduleCount": 1,
+        "codegenShare": 0,
+        "sourceCommit": "f473e3c514ebdf623b140532fbd8568a4c74236a",
+        "commitMetaDegraded": false
+      },
+      {
+        "scenarioId": "ruoyi-vue-pro-6ff317427050b8f6",
+        "noisy": false,
+        "reasons": [],
+        "mustHitCount": 3,
+        "moduleCount": 3,
+        "codegenShare": 0,
+        "sourceCommit": "6ff317427050b8f6c90b4bffb1673a546ccdb61e",
+        "commitMetaDegraded": false
+      },
+      {
+        "scenarioId": "ruoyi-vue-pro-ea4fa68579a915fd",
+        "noisy": false,
+        "reasons": [],
+        "mustHitCount": 5,
+        "moduleCount": 1,
+        "codegenShare": 0,
+        "sourceCommit": "ea4fa68579a915fda88bfeb78ec3a07ddd452fb5",
+        "commitMetaDegraded": false
+      },
+      {
+        "scenarioId": "ruoyi-vue-pro-bd2dc903bc0cbda8",
+        "noisy": true,
+        "reasons": [
+          "testInMustHit"
+        ],
+        "mustHitCount": 3,
+        "moduleCount": 2,
+        "codegenShare": 0,
+        "sourceCommit": "bd2dc903bc0cbda8a2c13da9db7eade3669d7c43",
+        "commitMetaDegraded": false
+      },
+      {
+        "scenarioId": "ruoyi-vue-pro-86eae989f90c240f",
+        "noisy": true,
+        "reasons": [
+          "testInMustHit"
+        ],
+        "mustHitCount": 3,
+        "moduleCount": 2,
+        "codegenShare": 0,
+        "sourceCommit": "86eae989f90c240fdf2adbab05a93cec79167f6a",
+        "commitMetaDegraded": false
+      },
+      {
+        "scenarioId": "ruoyi-vue-pro-7e35f1dab9c7bb49",
+        "noisy": true,
+        "reasons": [
+          "testInMustHit"
+        ],
+        "mustHitCount": 3,
+        "moduleCount": 1,
+        "codegenShare": 0,
+        "sourceCommit": "7e35f1dab9c7bb49d6637cb929c85a42acd26c30",
+        "commitMetaDegraded": false
+      },
+      {
+        "scenarioId": "ruoyi-vue-pro-ca36970ef430704f",
+        "noisy": false,
+        "reasons": [],
+        "mustHitCount": 4,
+        "moduleCount": 2,
+        "codegenShare": 0,
+        "sourceCommit": "ca36970ef430704ffbcfbbb9fcc2c0dee34ace86",
+        "commitMetaDegraded": false
+      },
+      {
+        "scenarioId": "ruoyi-vue-pro-de08e8144fd3f922",
+        "noisy": false,
+        "reasons": [],
+        "mustHitCount": 4,
+        "moduleCount": 2,
+        "codegenShare": 0,
+        "sourceCommit": "de08e8144fd3f92228e686ca5ec9c39ac246a0de",
+        "commitMetaDegraded": false
+      },
+      {
+        "scenarioId": "ruoyi-vue-pro-0896593146e88963",
+        "noisy": false,
+        "reasons": [],
+        "mustHitCount": 4,
+        "moduleCount": 1,
+        "codegenShare": 0,
+        "sourceCommit": "0896593146e8896359081f749484bf86901ac260",
+        "commitMetaDegraded": false
+      },
+      {
+        "scenarioId": "ruoyi-vue-pro-e001bbbdbbd05659",
+        "noisy": true,
+        "reasons": [
+          "testInMustHit"
+        ],
+        "mustHitCount": 2,
+        "moduleCount": 1,
+        "codegenShare": 0,
+        "sourceCommit": "e001bbbdbbd05659eb0df41f59e2231aeb9875bd",
+        "commitMetaDegraded": false
+      },
+      {
+        "scenarioId": "ruoyi-vue-pro-e4e460d563a3b6f0",
+        "noisy": true,
+        "reasons": [
+          "mustHitGt8",
+          "testInMustHit"
+        ],
+        "mustHitCount": 14,
+        "moduleCount": 2,
+        "codegenShare": 0,
+        "sourceCommit": "e4e460d563a3b6f0b5255f9b061b258128ffd822",
+        "commitMetaDegraded": false
+      },
+      {
+        "scenarioId": "ruoyi-vue-pro-3783a26f1a961d14",
+        "noisy": false,
+        "reasons": [],
+        "mustHitCount": 6,
+        "moduleCount": 1,
+        "codegenShare": 0,
+        "sourceCommit": "3783a26f1a961d1460e1d2685bcafba8e1b85305",
+        "commitMetaDegraded": false
+      }
+    ]
+  },
+  "control": [
+    {
+      "projectId": "lishuedu",
+      "holdoutSkipped": 2,
+      "tuning": 8,
+      "audited": 8,
+      "noisyRate": 0,
+      "degradedCommits": 8,
+      "scenes": [
+        {
+          "scenarioId": "audit-assignee-mapper-precision",
+          "noisy": false,
+          "reasons": [],
+          "mustHitCount": 1,
+          "moduleCount": 1,
+          "codegenShare": 0,
+          "sourceCommit": "audit-assignee-mapper-precision",
+          "commitMetaDegraded": true
+        },
+        {
+          "scenarioId": "audit-order-repository-mapper-rule-type",
+          "noisy": false,
+          "reasons": [],
+          "mustHitCount": 1,
+          "moduleCount": 1,
+          "codegenShare": 0,
+          "sourceCommit": "audit-order-repository-mapper-rule-type",
+          "commitMetaDegraded": true
+        },
+        {
+          "scenarioId": "benefit-product-code-dto",
+          "noisy": false,
+          "reasons": [],
+          "mustHitCount": 3,
+          "moduleCount": 1,
+          "codegenShare": 0,
+          "sourceCommit": "benefit-product-code-dto",
+          "commitMetaDegraded": true
+        },
+        {
+          "scenarioId": "report-reusable-zip",
+          "noisy": false,
+          "reasons": [],
+          "mustHitCount": 4,
+          "moduleCount": 1,
+          "codegenShare": 0,
+          "sourceCommit": "report-reusable-zip",
+          "commitMetaDegraded": true
+        },
+        {
+          "scenarioId": "school-confirm-controller",
+          "noisy": false,
+          "reasons": [],
+          "mustHitCount": 4,
+          "moduleCount": 1,
+          "codegenShare": 0,
+          "sourceCommit": "school-confirm-controller",
+          "commitMetaDegraded": true
+        },
+        {
+          "scenarioId": "school-mapstruct-uses",
+          "noisy": false,
+          "reasons": [],
+          "mustHitCount": 2,
+          "moduleCount": 1,
+          "codegenShare": 0,
+          "sourceCommit": "school-mapstruct-uses",
+          "commitMetaDegraded": true
+        },
+        {
+          "scenarioId": "school-template-parser",
+          "noisy": false,
+          "reasons": [],
+          "mustHitCount": 4,
+          "moduleCount": 1,
+          "codegenShare": 0,
+          "sourceCommit": "school-template-parser",
+          "commitMetaDegraded": true
+        },
+        {
+          "scenarioId": "storage-signed-url",
+          "noisy": false,
+          "reasons": [],
+          "mustHitCount": 5,
+          "moduleCount": 1,
+          "codegenShare": 0,
+          "sourceCommit": "storage-signed-url",
+          "commitMetaDegraded": true
+        }
+      ]
+    },
+    {
+      "projectId": "cipherlink",
+      "holdoutSkipped": 2,
+      "tuning": 8,
+      "audited": 8,
+      "noisyRate": 0,
+      "degradedCommits": 8,
+      "scenes": [
+        {
+          "scenarioId": "account-admin-create-account-guard",
+          "noisy": false,
+          "reasons": [],
+          "mustHitCount": 1,
+          "moduleCount": 1,
+          "codegenShare": 0,
+          "sourceCommit": "account-admin-create-account-guard",
+          "commitMetaDegraded": true
+        },
+        {
+          "scenarioId": "aliyun-sms-gateway-send",
+          "noisy": false,
+          "reasons": [],
+          "mustHitCount": 2,
+          "moduleCount": 1,
+          "codegenShare": 0,
+          "sourceCommit": "aliyun-sms-gateway-send",
+          "commitMetaDegraded": true
+        },
+        {
+          "scenarioId": "auth-sms-login-lockout",
+          "noisy": false,
+          "reasons": [],
+          "mustHitCount": 2,
+          "moduleCount": 1,
+          "codegenShare": 0,
+          "sourceCommit": "auth-sms-login-lockout",
+          "commitMetaDegraded": true
+        },
+        {
+          "scenarioId": "client-update-check",
+          "noisy": false,
+          "reasons": [],
+          "mustHitCount": 4,
+          "moduleCount": 1,
+          "codegenShare": 0,
+          "sourceCommit": "client-update-check",
+          "commitMetaDegraded": true
+        },
+        {
+          "scenarioId": "operation-log-response-dto",
+          "noisy": false,
+          "reasons": [],
+          "mustHitCount": 2,
+          "moduleCount": 1,
+          "codegenShare": 0,
+          "sourceCommit": "operation-log-response-dto",
+          "commitMetaDegraded": true
+        },
+        {
+          "scenarioId": "organization-create-member-cross-module",
+          "noisy": false,
+          "reasons": [],
+          "mustHitCount": 4,
+          "moduleCount": 2,
+          "codegenShare": 0,
+          "sourceCommit": "organization-create-member-cross-module",
+          "commitMetaDegraded": true
+        },
+        {
+          "scenarioId": "transfer-upload-init",
+          "noisy": false,
+          "reasons": [],
+          "mustHitCount": 2,
+          "moduleCount": 1,
+          "codegenShare": 0,
+          "sourceCommit": "transfer-upload-init",
+          "commitMetaDegraded": true
+        },
+        {
+          "scenarioId": "transfer-upload-session-repository",
+          "noisy": false,
+          "reasons": [],
+          "mustHitCount": 3,
+          "moduleCount": 1,
+          "codegenShare": 0,
+          "sourceCommit": "transfer-upload-session-repository",
+          "commitMetaDegraded": true
+        }
+      ]
+    },
+    {
+      "projectId": "exam-parent-v3",
+      "holdoutSkipped": 2,
+      "tuning": 8,
+      "audited": 8,
+      "noisyRate": 0,
+      "degradedCommits": 8,
+      "scenes": [
+        {
+          "scenarioId": "apply-info-save-basic-service",
+          "noisy": false,
+          "reasons": [],
+          "mustHitCount": 2,
+          "moduleCount": 1,
+          "codegenShare": 0,
+          "sourceCommit": "apply-info-save-basic-service",
+          "commitMetaDegraded": true
+        },
+        {
+          "scenarioId": "apply-info-update-cross-exam-guard",
+          "noisy": false,
+          "reasons": [],
+          "mustHitCount": 1,
+          "moduleCount": 1,
+          "codegenShare": 0,
+          "sourceCommit": "apply-info-update-cross-exam-guard",
+          "commitMetaDegraded": true
+        },
+        {
+          "scenarioId": "candidate-position-select",
+          "noisy": false,
+          "reasons": [],
+          "mustHitCount": 1,
+          "moduleCount": 1,
+          "codegenShare": 0,
+          "sourceCommit": "candidate-position-select",
+          "commitMetaDegraded": true
+        },
+        {
+          "scenarioId": "ceb-order-create-dto",
+          "noisy": false,
+          "reasons": [],
+          "mustHitCount": 2,
+          "moduleCount": 1,
+          "codegenShare": 0,
+          "sourceCommit": "ceb-order-create-dto",
+          "commitMetaDegraded": true
+        },
+        {
+          "scenarioId": "check-people-delete-site-guard",
+          "noisy": false,
+          "reasons": [],
+          "mustHitCount": 3,
+          "moduleCount": 2,
+          "codegenShare": 0,
+          "sourceCommit": "check-people-delete-site-guard",
+          "commitMetaDegraded": true
+        },
+        {
+          "scenarioId": "current-user-service-implementer-edge",
+          "noisy": false,
+          "reasons": [],
+          "mustHitCount": 2,
+          "moduleCount": 2,
+          "codegenShare": 0,
+          "sourceCommit": "current-user-service-implementer-edge",
+          "commitMetaDegraded": true
+        },
+        {
+          "scenarioId": "position-repository-exists",
+          "noisy": false,
+          "reasons": [],
+          "mustHitCount": 1,
+          "moduleCount": 1,
+          "codegenShare": 0,
+          "sourceCommit": "position-repository-exists",
+          "commitMetaDegraded": true
+        },
+        {
+          "scenarioId": "rule-engine-execute",
+          "noisy": false,
+          "reasons": [],
+          "mustHitCount": 4,
+          "moduleCount": 1,
+          "codegenShare": 0,
+          "sourceCommit": "rule-engine-execute",
+          "commitMetaDegraded": true
+        }
+      ]
+    }
+  ],
+  "verdict": {
+    "decision": "GOLDEN_NOISY",
+    "ruleTooStrict": false,
+    "threshold": 0.3,
+    "controlMean": 0,
+    "ruoyiNoisyRate": 0.4642857142857143
+  },
+  "pin": {
+    "root": "/tmp/codex-java-v4-golden-20260823/ruoyi-vue-pro",
+    "present": true
+  },
+  "note": "Holdout scenes skipped. Six NOISY rules are pre-registered. Do not retune from holdout."
+}
