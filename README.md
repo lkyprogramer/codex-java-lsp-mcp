@@ -8,6 +8,8 @@
 
 它不是完整 IDE，也不是通用语言平台。项目边界以 canonical `repoRoot` 和 `repoHash` 为准，`projectId` 只作为 alias/display name；所有请求都受绝对 deadline、仓库边界和完整性状态约束。
 
+当前生产形态（2026-08-24 cutover 之后）：本机 Codex 走共享 HTTP daemon `http://127.0.0.1:38456/mcp`。公开工具是 `java_status`、`java_impact`、`java_symbol`、`java_diagnostics`、`java_runtime`（没有 `java_context` / `java_references` / `java_restart` / `java_shutdown`）。索引真源是 JavaIndex v4 快照，不是 SourceIndex。替换正在使用的 daemon 用 `./install-runtime.sh`（不要加 `--activate-http`）；操作真源是 [生产切流手册](docs/phase-f/production-cutover-runbook.md)。下一周期计划见 [token accuracy 计划](docs/deep/codex-java-lsp-mcp-next-frontier-token-accuracy-plan-2026-08-24.md)。
+
 ## 目录
 
 - [核心能力](#核心能力)
@@ -110,7 +112,7 @@ sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile fu
 ~/.config/codex-java-lsp/projects.json
 ```
 
-`install-runtime.sh` 会构建新的 immutable release、在固定 loopback 端口启动 LaunchAgent 管理的 HTTP daemon，并保留至少一个前序 release。**默认不改**当前 Codex MCP 注册，因此已启用的 stdio MCP 和已有 task 不会被安装步骤切换。
+`install-runtime.sh` 会构建新的 immutable release、在固定 loopback 端口启动 LaunchAgent 管理的 HTTP daemon，并保留至少一个前序 release。**默认不改** Codex MCP URL。本机生产已经是 HTTP `http://127.0.0.1:38456/mcp`，安装器替换的是 `current` 指向的 daemon 进程，不是重新注册 stdio。安装完成后必须 Restart Codex 并开**新** task；已出现 `Transport closed` 的旧 session 不能原地复活。禁止往 LaunchAgent 加 `JAVA_LSP_ENGINE`。
 
 `npm test` 同样会自动创建并清理独立的 cache、ownership、projects、XDG 配置、`CODEX_HOME` 和 `HOME`；即使从携带运行态环境变量的 shell 调用，也不会读写当前 MCP/daemon 的运行目录或 Codex 配置。
 
@@ -125,19 +127,11 @@ sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile fu
 "$HOME/Library/Application Support/codex-java-lsp-mcp/daemonctl.sh" smoke
 ```
 
-只有完成隔离 canary、真实 Codex CLI/Desktop task、crash recovery 和 worktree 并发验证后，才显式切换同名 MCP 到 HTTP URL。生产切换会校验一个不超过七天、且绑定本次 build SHA 与 daemon instance ID 的 release-gate 凭据：
+本机已经在 HTTP 上。替换正在使用的 LSP 按 [生产切流手册](docs/phase-f/production-cutover-runbook.md) 执行：`./install-runtime.sh`（**不要** `--activate-http`）。`--activate-http` 是历史上 stdio→HTTP 的首次激活门，凭据仍写着旧的七工具面，**这次生产树不要走那条门**。旧 canary runbook（`docs/shared-http-daemon-canary-runbook.md`）同样过期，不要照它做 HTTP 激活。
 
-```bash
-./install-runtime.sh --activate-http /absolute/path/to/http-activation-attestation.json
-```
+切换或热补 daemon 后仍必须 Restart Codex/Desktop 并开新 task。回滚用 `daemonctl.sh rollback-release`（回到 `previous-current`），不要手改 plist 或 MCP URL。
 
-凭据必须记录真实 CLI 和 Desktop 的 taskId、七个工具可用、正常 restart 与 `kill -9` recovery 后仍可调用、Desktop 跨过 idle 窗口后仍可调用、旧 stdio owner 已清退、以及 linked-worktree 隔离已确认；任何一项缺失，installer 保留已有 MCP registration。通过门禁后命令会先保存旧 stdio registration 的精确 rollback command；daemon health、build SHA、HTTP smoke 任一失败时不切换或恢复旧 registration。切换完成仍必须 Restart Codex/Desktop 后创建新 task，不能把已出现 `Transport closed` 的旧 task 当作已原地修复。
-
-完整的隔离 CLI/Desktop canary、crash recovery、worktree 与回滚证据要求见 [shared HTTP daemon canary runbook](docs/shared-http-daemon-canary-runbook.md)。
-CLI canary 的 MCP URL 应通过 `codex exec --ignore-user-config -c 'mcp_servers...={url="..."}'`
-作单次进程覆盖；临时 `CODEX_HOME` 可验证注册形状，但不应复制真实认证或用户配置来运行任务。
-
-可单独开发/隔离验证 HTTP host；务必使用临时 cache、ownership 和未占用端口，不能指向当前被 stdio 使用的真实 worktree：
+可单独开发/隔离验证 HTTP host；务必使用临时 cache、ownership 和未占用端口，不能指向当前被生产 daemon 使用的真实 worktree。隔离 canary 的 MCP URL 用 `codex exec --ignore-user-config -c 'mcp_servers...={url="..."}'` 作单次进程覆盖；临时 `CODEX_HOME` 可验证注册形状，但不要复制真实认证或用户配置来跑任务：
 
 ```bash
 JAVA_LSP_HTTP_PORT=38457 \
@@ -148,7 +142,7 @@ npm run start:http
 npm run smoke:http -- --url http://127.0.0.1:38457/mcp
 ```
 
-HTTP 模式固定绑定 `127.0.0.1`，只提供严格的 `/mcp`、`/healthz`、`/readyz`（拒绝大小写、尾斜杠和 query 变体）。MCP transport 是 stateless：每个 POST 使用独立 protocol/transport，但所有请求共享一个 application/runtime manager。请求或 client 关闭不会关闭其他 worktree runtime；daemon SIGINT/SIGTERM 进入 drain，超时则终止已拥有的 JDT、保留 canonical-root lease，避免 stdio/HTTP 交接时并发写 workspace 或 SourceIndex。
+HTTP 模式固定绑定 `127.0.0.1`，只提供严格的 `/mcp`、`/healthz`、`/readyz`（拒绝大小写、尾斜杠和 query 变体）。MCP transport 是 stateless：每个 POST 使用独立 protocol/transport，但所有请求共享一个 application/runtime manager。请求或 client 关闭不会关闭其他 worktree runtime；daemon SIGINT/SIGTERM 进入 drain，超时则终止已拥有的 JDT、保留 canonical-root lease，避免 stdio/HTTP 交接时并发写 workspace 或 JavaIndex。
 
 浏览器请求如果携带 `Origin`，默认全部拒绝；确需允许时通过 `JAVA_LSP_HTTP_ALLOWED_ORIGINS` 配置精确的 loopback origin。不要把 bearer token、源码或完整 tool payload写入配置和日志。
 
@@ -227,13 +221,14 @@ hook 行为：
 - 未启用、冲突、非 Java 语义提示时静默放行。
 - 只追加短提示，不直接启动 JDT LS，不阻断 shell/`rg`。
 - 提示 agent 先用 `java_status(start=false)` 校验 `repoRoot`；已配置项目不能只报告 LSP server 未启动，若返回 `started=false`，必须用 `java_status(start=true)` 主动启动。
+- 只有 cwd 已启用 **且** prompt 命中 Java 语义词（如 `java` / `Service` / `修复` / `影响面` / `排查`）才注入 `JAVA_LSP_ADVISOR`。纯「接口 / 接手计划」类 prompt 会静默放行，模型仍应自己调用工具。
 
 ## Public MCP Tools
 
 | Tool | 用途 | 是否要求 LSP |
 | --- | --- | --- |
-| `java_status` | 查看 server、repo、JDT LS、RepoChangeCoordinator、JavaIndex coverage/generation、lease 和 resource 摘要；`start=true` 时尝试启动 JDT LS；`detail=diagnostic` 返回完整排障字段。 | 否；启动时需要启用 |
-| `java_impact` | 推荐入口。生成 Java 影响面、候选文件、内部 `rg` 摘要、可读计划、证据缺口和指标。 | `semanticPolicy=fast` 不要求；`required` 要求 |
+| `java_status` | 查看 server、repo、JDT LS、RepoChangeCoordinator、JavaIndex coverage/generation、lease 和 resource 摘要。`start=false` 仍会为该仓 create runtime（不拉 JDT）；repo 级请求预算 15s。`start=true` 才启动 JDT LS。`detail=diagnostic` 返回完整排障字段。 | 否；启动时需要启用 |
+| `java_impact` | 推荐入口。生成 Java 影响面、候选文件、内部 `rg` 摘要、可读计划、证据缺口和指标。必须给 `anchors[]` 或 `file`/`line`/`column`。**省略** `readPlanMaxItems`（最大 30）和 `deadlineMs`（最大 15000）；不要用旧记忆里的 80 / 120000。 | `semanticPolicy=fast` 不要求；`required` 要求 |
 | `java_symbol` | `operation=query`（默认，给了 query）按 query 搜索 workspace symbols；`operation=position`（默认，给了 file/line/column）查 hover、definition、implementation；`operation=references` 对精确符号位置返回 summary-only references。默认返回 repo-relative 位置、隐藏 raw URI/range。 | 是 |
 | `java_diagnostics` | 打开 Java 文件并等待短时间返回 JDT LS diagnostics；默认按 repo-relative 文件聚合。 | 是 |
 | `java_runtime` | `action=restart` 重启当前 repo 的 JDT LS session（默认返回动作摘要，只有显式参数才清 cache）；`action=shutdown` 停止当前或全部（`all=true`）JDT LS 子进程，MCP server 保持存活。HTTP daemon 固定拒绝 `all=true`。 | restart 是；shutdown 否 |
@@ -241,9 +236,11 @@ hook 行为：
 推荐默认调用顺序：
 
 ```json
-{"tool":"java_status","arguments":{"repoRoot":"/absolute/repo","start":true}}
+{"tool":"java_status","arguments":{"repoRoot":"/absolute/repo","start":false}}
 {"tool":"java_impact","arguments":{"repoRoot":"/absolute/repo","anchors":[{"file":"src/main/java/demo/OrderService.java","line":42,"column":18}],"semanticPolicy":"auto"}}
 ```
+
+只要 JDT 时再 `java_status({start:true})`。daemon 刚重启后的第一次 `java_status` 会冷建 JavaIndex（大仓可能数秒到十几秒）；磁盘 CJV4 快照在，后续是 hydrate 不是从零扫树。`projects.json` 里 `lspEnabled` 的 pin 仓不会因为 2 天不用被 janitor 删掉。
 
 排查 runtime、watcher roots、JDK candidates、raw LSP URI/range 或完整 diagnostics 时显式打开诊断字段：
 
@@ -423,13 +420,13 @@ sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile ta
 - `timing.phaseMs/sessionPhaseMs` 用于 warm 延迟归因；`warm-required` 的首触成本仍不足以支持默认化，因此保持 `KEEP_EXPLICIT`。
 - 三仓 paired gate 使用 [`docs/three-repo-cold-matrix-runbook.md`](docs/three-repo-cold-matrix-runbook.md)：old/new 必须共享冻结的 `--scenarios` 文件，固定 AB/BA/AB、3 轮 × 每格 5 runs，且由脚本逐仓判定 quality/P95 硬门。
 
-最新验证报告：
+当前运维与下一周期：
 
-- `docs/java-lsp-mcp-benchmark-guide-2026-06-23.md`
-- `docs/java-lsp-mcp-readplan-semantic-gap-report-2026-06-26.md`
-- `docs/java-lsp-mcp-warm-latency-report-2026-06-27.md`
-- `docs/java-lsp-mcp-warm-instrumentation-report-2026-06-29.md`
-- `docs/java-lsp-mcp-warm-optimization-test-report-2026-06-29.md`
+- [生产切流手册](docs/phase-f/production-cutover-runbook.md)
+- [下一周期 token accuracy 计划](docs/deep/codex-java-lsp-mcp-next-frontier-token-accuracy-plan-2026-08-24.md)
+- 三仓 paired gate：[three-repo-cold-matrix-runbook](docs/three-repo-cold-matrix-runbook.md)
+
+历史 warm/readPlan 报告仍在 `docs/java-lsp-mcp-*-2026-06-*.md`。
 
 ## 故障排查
 
@@ -444,6 +441,10 @@ sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile ta
 - `Project root is not LSP-enabled`：用 `register-alias.sh --enable-lsp <id> <absolute-root>` 显式启用。
 - `Multiple enabled aliases share this Git common-dir`：为当前 worktree 单独注册绝对路径，消除 family 继承歧义。
 - `No idle Java LSP runtime available`：降低并发、关闭空闲 repo，或调整 `JAVA_LSP_MAX_ACTIVE_REPOS`。
+- `Deadline exceeded before runtime.create`：repo 级 `java_status` 现在是 15s 预算。若仍超时，等几秒再调一次（create 在后台继续）；不要为了「不超时」乱传 `deadlineMs=120000`。
+- `Too big … readPlanMaxItems` / `deadlineMs`：省略这两个字段，或分别 ≤30 / ≤15000。不要用旧记忆里的 80 / 120000。
+- `Java index worker is unavailable after one restart attempt`：短 deadline 打死过 worker。再调一次不带 `deadlineMs` 的 `java_status`/`java_impact`；仍失败则 `daemonctl.sh restart` 后开新 task。
+- hook 没有 `JAVA_LSP_ADVISOR`：cwd 未启用，或 prompt 没命中 `Service`/`修复`/`影响面` 等词。工具仍可用，模型应直接调 `java_status` / `java_impact`。
 
 ## 安全说明
 
