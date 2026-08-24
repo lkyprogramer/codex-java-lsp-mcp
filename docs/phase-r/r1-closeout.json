@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "r-r1-closeout/v1",
+  "track": "r",
+  "card": "R1",
+  "dated": "2026-08-24",
+  "decision": "GO",
+  "mergeToMain": false,
+  "entryCondition": {
+    "required": "none",
+    "actual": "R1 has no entry gate",
+    "met": true
+  },
+  "scope": [
+    "src/telemetry/impact-telemetry.ts",
+    "src/telemetry/impact-telemetry.test.ts",
+    "src/mcp-server-factory.ts",
+    "src/mcp-server-factory.test.ts"
+  ],
+  "gates": {
+    "t0IsolatedFull": "pass 1223 + pass 278, fail 0 (JDTLS_BIN=/usr/bin/false)",
+    "t1GatePr": "pass 1223, fail 0, exitCode 0",
+    "identity": "handler JSON unchanged; full benchmark:agent-impact skipped (evidence-only)",
+    "recordPath": "<1ms per record over 1000 iterations",
+    "liveDaemon": "healthz buildSha still 25b1774a2a9d; no install-runtime or daemonctl"
+  },
+  "isolation": {
+    "t0": {
+      "tests": 1501,
+      "fail": 0,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "45f00967fe8a4100d402cf8e3725855ffc18f596",
+      "logSha256": "6e180e3c074ebd755fb562328f3a352d112d4898c4e4f054437567279f09fe74"
+    },
+    "t1": {
+      "tests": 1223,
+      "fail": 0,
+      "logSha256": "8dcecc09eda4313bda00d0ef98898159d025c55c8c0b258fb23d658f71458d59"
+    },
+    "unit": {
+      "tests": 17,
+      "fail": 0,
+      "logSha256": "3207fb50d50fe33b4cd5fcd9b0a6a5c33bbc2664f2d307b60cd2c62ce0fcc1e2"
+    }
+  }
+}

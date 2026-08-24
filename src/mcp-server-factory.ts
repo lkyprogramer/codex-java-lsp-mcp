@@ -14,6 +14,7 @@ import { javaRuntime, runtimeSchema } from "./tools/runtime.js";
 import { isDiagnosticDetail } from "./tools/shared.js";
 import { javaStatus, statusSchema, summarizeResourceStatus } from "./tools/status.js";
 import { javaSymbol, symbolSchema } from "./tools/symbol.js";
+import { recordToolInvocation } from "./telemetry/impact-telemetry.js";
 
 export type McpTransportMode = "stdio" | "streamable_http";
 
@@ -195,7 +196,29 @@ export function createMcpServer(
     handler: (args: z.infer<z.ZodObject<T>>) => Promise<unknown>
   ): void {
     const callback = async (args: unknown, extra: { signal?: AbortSignal }): Promise<ToolResult> => {
-      const operation = application.runRequest(async () => jsonResult(await handler(args as z.infer<z.ZodObject<T>>)));
+      const operation = application.runRequest(async () => {
+        const started = performance.now();
+        try {
+          const value = await handler(args as z.infer<z.ZodObject<T>>);
+          recordToolInvocation({
+            tool: name,
+            args,
+            value,
+            elapsedMs: performance.now() - started,
+            error: false
+          });
+          return jsonResult(value);
+        } catch (error) {
+          recordToolInvocation({
+            tool: name,
+            args,
+            value: undefined,
+            elapsedMs: performance.now() - started,
+            error: true
+          });
+          throw error;
+        }
+      });
       void operation.catch(() => undefined);
       try {
         return await raceRequestAbort(operation, extra.signal);

@@ -31,3 +31,4 @@ Live 29-model profile (`local-qwen`): host `47.106.205.246:1082`, model `opencla
 | F1 compare vs N0 | GO | `docs/phase-f/f1-n0-closeout.json` | quality identity vs N0; token −27%; ruoyi GO; G1 57/14/21; S1 415; S2 725≤1433.6 after digest-without-unpack |
 | F2 merge + attestation | COMPLETE | `docs/phase-f/f2-attestation.json` | merge `e48a253` non-squash; gate pr/nightly/release GO; 5 tools; not pushed |
 | F3 soak | F3_SOAK_STARTED | `docs/phase-f/f3-soak.md` | 24–48h not elapsed; rollback = revert -m 1 e48a253 |
+| R1 call telemetry | GO (branch, not installed) | `docs/phase-r/r1-closeout.json` | silent JSONL under cache/telemetry; live daemon untouched |

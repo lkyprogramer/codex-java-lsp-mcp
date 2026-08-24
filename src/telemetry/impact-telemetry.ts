@@ -1,0 +1,150 @@
+// input: Public MCP tool name, args, handler result, and elapsed time.
+// output: Local JSONL usage metadata under cache-base/telemetry (or an override dir).
+// pos: Fail-open recorder; never throws into the tool path and never writes source text.
+import { appendFileSync, mkdirSync, readdirSync, unlinkSync } from "node:fs";
+import path from "node:path";
+import { repoCacheBase } from "../repo-layout.js";
+import { repoHash } from "../path-utils.js";
+
+const DAY_MS = 86400000;
+const COLD_MS = 2000;
+
+export type ToolCounterRecord = { ts: string; tool: string; elapsedMs: number; ok: boolean };
+export type ImpactDetailRecord = {
+  ts: string; tool: string; repoHash: string; mode?: string; verbosity?: string;
+  anchorsCount: number; readPlanItems: number; plannedSourceBytes: number; estimatedTokens: number;
+  elapsedMs: number; coldPath: boolean; coldPathHeuristic?: boolean; error: boolean;
+};
+export type TelemetrySink = { record(row: Record<string, unknown>): void; flush(): void };
+export type ImpactTelemetryOptions = {
+  dir?: string; now?: () => Date; appendFile?: (file: string, data: string) => void;
+  enabled?: boolean; maxBuffer?: number; flushEveryMs?: number; env?: NodeJS.ProcessEnv;
+};
+
+export function telemetryEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.JAVA_LSP_TELEMETRY !== "0";
+}
+
+export function telemetryDir(env: NodeJS.ProcessEnv = process.env): string {
+  const override = env.JAVA_LSP_TELEMETRY_DIR?.trim();
+  return override ? path.resolve(override) : path.join(repoCacheBase(env), "telemetry");
+}
+
+export function buildToolCounter(input: { tool: string; elapsedMs: number; ok: boolean; now?: Date }): ToolCounterRecord {
+  return { ts: (input.now ?? new Date()).toISOString(), tool: input.tool, elapsedMs: ms(input.elapsedMs), ok: input.ok };
+}
+
+export function buildImpactDetail(input: {
+  args: unknown; value: unknown; elapsedMs: number; error: boolean; now?: Date;
+}): ImpactDetailRecord {
+  const args = obj(input.args);
+  const value = obj(input.value);
+  const cost = obj(value.cost);
+  const phaseMs = obj(obj(value.metrics).phaseMs);
+  const elapsedMs = ms(input.elapsedMs);
+  const phaseCold = Object.keys(phaseMs).some(key => /hydrate|coldbuild|cold-build|cold_build/i.test(key));
+  const coldPathHeuristic = !phaseCold && elapsedMs > COLD_MS;
+  const repoRoot = typeof args.repoRoot === "string" ? args.repoRoot : "";
+  const hashed = typeof value.repoHash === "string" && value.repoHash ? value.repoHash : repoRoot ? repoHash(repoRoot) : "";
+  return {
+    ts: (input.now ?? new Date()).toISOString(),
+    tool: "java_impact",
+    repoHash: hashed,
+    mode: str(args.mode),
+    verbosity: str(args.verbosity),
+    anchorsCount: Array.isArray(args.anchors) ? args.anchors.length : typeof args.file === "string" && args.line != null ? 1 : 0,
+    readPlanItems: Array.isArray(value.readPlan) ? value.readPlan.length : 0,
+    plannedSourceBytes: num(cost.readBytes ?? cost.plannedSourceBytes),
+    estimatedTokens: num(cost.estimatedTokens),
+    elapsedMs,
+    coldPath: phaseCold || coldPathHeuristic,
+    ...(coldPathHeuristic ? { coldPathHeuristic: true } : {}),
+    error: input.error
+  };
+}
+
+export function createImpactTelemetry(options: ImpactTelemetryOptions = {}): TelemetrySink {
+  const env = options.env ?? process.env;
+  const enabled = options.enabled ?? telemetryEnabled(env);
+  const dir = options.dir ?? telemetryDir(env);
+  const now = options.now ?? (() => new Date());
+  const append = options.appendFile ?? ((file, data) => {
+    mkdirSync(path.dirname(file), { recursive: true });
+    appendFileSync(file, data);
+  });
+  const maxBuffer = options.maxBuffer ?? 50;
+  const buffer: string[] = [];
+  if (enabled) gcOldFiles(dir, now());
+  const flush = (): void => {
+    if (!enabled || buffer.length === 0) return;
+    const stamp = now();
+    const file = path.join(dir, `impact-${stamp.getUTCFullYear()}${pad(stamp.getUTCMonth() + 1)}${pad(stamp.getUTCDate())}.jsonl`);
+    try { append(file, `${buffer.splice(0).join("\n")}\n`); } catch { /* drop */ }
+  };
+  const flushMs = options.flushEveryMs ?? 5000;
+  if (enabled && flushMs > 0) setInterval(flush, flushMs).unref();
+  return {
+    record(row: Record<string, unknown>): void {
+      if (!enabled) return;
+      try {
+        buffer.push(JSON.stringify(row));
+        if (buffer.length >= maxBuffer) flush();
+      } catch { /* drop */ }
+    },
+    flush
+  };
+}
+
+let defaultSink: TelemetrySink | undefined;
+let beforeExitBound = false;
+
+export function resetImpactTelemetryForTests(): void {
+  defaultSink?.flush();
+  defaultSink = undefined;
+}
+
+export function recordToolInvocation(input: {
+  tool: string; args: unknown; value: unknown; elapsedMs: number; error: boolean;
+  sink?: TelemetrySink; env?: NodeJS.ProcessEnv; now?: Date;
+}): void {
+  try {
+    const env = input.env ?? process.env;
+    if (!telemetryEnabled(env)) return;
+    const sink = input.sink ?? defaultSinkFor(env);
+    sink.record(input.tool === "java_impact"
+      ? buildImpactDetail(input)
+      : buildToolCounter({ tool: input.tool, elapsedMs: input.elapsedMs, ok: !input.error, now: input.now }));
+  } catch { /* drop */ }
+}
+
+function defaultSinkFor(env: NodeJS.ProcessEnv): TelemetrySink {
+  if (!defaultSink) {
+    defaultSink = createImpactTelemetry({ env });
+    if (!beforeExitBound) {
+      beforeExitBound = true;
+      process.once("beforeExit", () => defaultSink?.flush());
+    }
+  }
+  return defaultSink;
+}
+
+function gcOldFiles(dir: string, now: Date): void {
+  try {
+    const cutoff = now.getTime() - 30 * DAY_MS;
+    for (const name of readdirSync(dir)) {
+      const match = name.match(/^impact-(\d{8})\.jsonl$/);
+      if (!match) continue;
+      const stamp = match[1]!;
+      const fileTime = Date.UTC(Number(stamp.slice(0, 4)), Number(stamp.slice(4, 6)) - 1, Number(stamp.slice(6, 8)));
+      if (fileTime < cutoff) unlinkSync(path.join(dir, name));
+    }
+  } catch { /* drop */ }
+}
+
+function pad(value: number): string { return String(value).padStart(2, "0"); }
+function ms(value: number): number { return Math.max(0, Math.round(value)); }
+function obj(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+function str(value: unknown): string | undefined { return typeof value === "string" && value ? value : undefined; }
+function num(value: unknown): number { return typeof value === "number" && Number.isFinite(value) ? value : 0; }

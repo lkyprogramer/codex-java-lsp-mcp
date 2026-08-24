@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { createMcpServer, PUBLIC_JAVA_TOOLS } from "./mcp-server-factory.js";
 import { AliasRegistry } from "./alias-registry.js";
 import { RepoResolver } from "./repo-resolver.js";
+import { resetImpactTelemetryForTests } from "./telemetry/impact-telemetry.js";
 
 const expectedTools = [...PUBLIC_JAVA_TOOLS].sort();
 
@@ -96,6 +97,53 @@ test("protocol factory creates independent servers over one shared application",
   }
 });
 
+test("register wrapper records a counter line without changing java_status bytes", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-factory-tel-"));
+  await mkdir(path.join(root, "src", "main", "java"), { recursive: true });
+  await writeFile(path.join(root, "pom.xml"), "<project></project>");
+  const configPath = path.join(root, "projects.json");
+  await writeFile(configPath, JSON.stringify({ aliases: [] }));
+  const telemetryDir = path.join(root, "telemetry");
+  const previousDir = process.env.JAVA_LSP_TELEMETRY_DIR;
+  const previousFlag = process.env.JAVA_LSP_TELEMETRY;
+  process.env.JAVA_LSP_TELEMETRY_DIR = telemetryDir;
+  delete process.env.JAVA_LSP_TELEMETRY;
+  resetImpactTelemetryForTests();
+  const application = new JavaLspApplication({
+    transportMode: "streamable_http",
+    projectsConfigPath: configPath,
+    resolverOptions: { cwdFallback: "reject" },
+    cleanup: () => ({ scanned: 0, removed: 0, skipped: 0, failures: 0, removedDirs: [] })
+  });
+  await application.initialize();
+  const session = await connect(application, "telemetry");
+  try {
+    const on = await session.client.callTool({ name: "java_status", arguments: {} });
+    const onText = toolText(on);
+    resetImpactTelemetryForTests();
+    const files = await readdir(telemetryDir);
+    assert.equal(files.length, 1);
+    const line = JSON.parse((await readFile(path.join(telemetryDir, files[0]!), "utf8")).trim());
+    assert.equal(line.tool, "java_status");
+    assert.equal(typeof line.elapsedMs, "number");
+    assert.equal(line.ok, true);
+    assert.deepEqual(Object.keys(line).sort(), ["elapsedMs", "ok", "tool", "ts"]);
+
+    process.env.JAVA_LSP_TELEMETRY = "0";
+    resetImpactTelemetryForTests();
+    const off = await session.client.callTool({ name: "java_status", arguments: {} });
+    assert.deepEqual(stableStatus(onText), stableStatus(toolText(off)));
+  } finally {
+    await session.client.close();
+    await application.close();
+    resetImpactTelemetryForTests();
+    if (previousDir === undefined) delete process.env.JAVA_LSP_TELEMETRY_DIR;
+    else process.env.JAVA_LSP_TELEMETRY_DIR = previousDir;
+    if (previousFlag === undefined) delete process.env.JAVA_LSP_TELEMETRY;
+    else process.env.JAVA_LSP_TELEMETRY = previousFlag;
+  }
+});
+
 async function connect(application: JavaLspApplication, name: string): Promise<{ client: Client }> {
   const server = createMcpServer(application, { transportMode: "streamable_http" });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -124,4 +172,13 @@ function toolJson(result: unknown): {
   [key: string]: unknown;
 } {
   return JSON.parse(toolText(result)) as { server: Record<string, unknown>; [key: string]: unknown };
+}
+
+function stableStatus(text: string): unknown {
+  const payload = JSON.parse(text) as { server?: Record<string, unknown> };
+  if (payload.server) {
+    delete payload.server.uptimeMs;
+    delete payload.server.activeRequests;
+  }
+  return payload;
 }
