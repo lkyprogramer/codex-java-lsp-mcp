@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "b-b0-closeout/v1",
+  "track": "b",
+  "card": "B0",
+  "dated": "2026-08-24",
+  "decision": "NOT_IN_POOL_STRUCTURAL",
+  "next": "B3",
+  "mergeToMain": false,
+  "srcTouched": false,
+  "defaultChainIdentity": "UNCHANGED",
+  "holdoutInspected": false,
+  "taskSuccess": "UNMEASURED",
+  "diagnosis": "docs/phase-b/b0-diagnosis.json",
+  "diagnosisSha256": "1d97bdd6cdf568ffa3f1e256652ed9d22bc081f65f0a6c88600d6868af070d89",
+  "tuning": 28,
+  "holdoutSkipped": 12,
+  "missFiles": 76,
+  "shares": {
+    "NOT_IN_POOL": 0.5,
+    "IN_POOL_EVICTED": 0.3026315789473684,
+    "RANGE_MISS": 0.19736842105263158,
+    "selectionLayer": 0.5
+  },
+  "gate": {
+    "notInPoolB3": 0.4,
+    "selectionB1": 0.6
+  },
+  "isolation": {
+    "t0": {
+      "tests": 3,
+      "fail": 0,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "edc6a8e74d22ff0f738b2f02c6bd9f49a90334b2",
+      "logSha256": "f39324c636bc69507cd68f7b06446287f8659518e29aee7ac09dc3ad2eb20671",
+      "root": "codex-java-lsp-isolated-validation-rm6s2L"
+    },
+    "t2": {
+      "exit": 0,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "edc6a8e74d22ff0f738b2f02c6bd9f49a90334b2",
+      "logSha256": "55452de8414e8deed626278a787f1bd7b5eb40b99730fa30bee787cefcded8a6",
+      "root": "codex-java-lsp-isolated-validation-xVlPZ1"
+    }
+  },
+  "note": "NOT_IN_POOL 50% > 40% so the miss is candidate/graph/index discovery, not read-plan budget. Selection-layer share 50% < 60%, so B1/B2 knives are not entered. Next B3. Holdout unread. Do not merge main. No live."
+}
