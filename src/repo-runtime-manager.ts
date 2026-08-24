@@ -831,14 +831,15 @@ export class RepoRuntimeManager {
     entry.context.resource = this.resourceStatus();
     entry.context.watcher = entry.coordinator.status();
     // The multi-process janitor's authoritative signal (Task 12c) is the
-    // runtime lease itself; this touch just refreshes the diagnostic
-    // fallback fields and lastRequestAt/updatedAt so a fast-only (never
-    // started JDT) repo still looks recently used.
+    // runtime lease itself. lastRequestAt is stamped only on MCP use, never
+    // on JDT pid changes — otherwise log writes and lifecycle touches keep
+    // abandoned worktrees immortal.
     touchRepoCache(entry.context.repoRoot, {
       repoHash: entry.context.repoHash,
       familyHash: entry.context.worktree?.familyHash,
       ownerPid: process.pid,
-      ownerToken: entry.runtimeLease?.owner.ownerToken
+      ownerToken: entry.runtimeLease?.owner.ownerToken,
+      touchLastRequest: true
     });
   }
 

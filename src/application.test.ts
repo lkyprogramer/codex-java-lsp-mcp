@@ -206,7 +206,7 @@ test("JavaLspApplication degrades cache janitor failures without failing startup
       cleanup: () => { throw new Error("janitor failure"); }
     });
     const result = await application.initialize();
-    assert.deepEqual(result, { scanned: 0, removed: 0, skipped: 0, failures: 1, removedDirs: [] });
+    assert.deepEqual(result, { scanned: 0, removed: 0, skipped: 0, failures: 1, removedDirs: [], reclaimedFiles: 0 });
     assert.equal(application.state().state, "ready");
     assert.equal(errors.length, 1);
     await application.close();

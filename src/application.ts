@@ -5,6 +5,7 @@ import { AliasRegistry } from "./alias-registry.js";
 import { RepoResolver, type RepoResolverOptions } from "./repo-resolver.js";
 import { RepoRuntimeManager } from "./repo-runtime-manager.js";
 import { RepoOwnershipManager, type RepoOwnershipProvider, type RepoOwnerTransport } from "./repo-ownership-lease.js";
+import { canonicalPath, repoHash } from "./path-utils.js";
 import {
   cleanupStaleWorktreeCaches,
   type WorktreeCacheCleanupOptions,
@@ -81,6 +82,7 @@ export class JavaLspApplication {
       this.initializePromise = Promise.resolve().then(async () => {
         validateJdtlsTransportEnvironment(this.transportMode);
         await this.runtimes.initialize?.();
+        await this.registry.reloadIfChanged();
         const result = this.runCacheJanitor();
         this.currentState = "ready";
         this.startCacheJanitor();
@@ -217,13 +219,15 @@ export class JavaLspApplication {
 
   private runCacheJanitor(): WorktreeCacheCleanupResult {
     try {
+      const retained = this.retainedRepoRoots();
       return this.cleanup({
-        protectedRepoRoots: this.retainedRepoRoots(),
+        protectedRepoRoots: this.pinRepoRoots(retained),
+        protectedCacheDirNames: this.activeCacheDirNames(retained),
         transport: this.transportMode
       });
     } catch (error) {
       console.error("[codex-java-lsp] cache janitor failed", error);
-      return { scanned: 0, removed: 0, skipped: 0, failures: 1, removedDirs: [] };
+      return { scanned: 0, removed: 0, skipped: 0, failures: 1, removedDirs: [], reclaimedFiles: 0 };
     }
   }
 
@@ -232,13 +236,31 @@ export class JavaLspApplication {
     return typeof runtimes.retainedRepoRoots === "function" ? runtimes.retainedRepoRoots() : new Set();
   }
 
+  private pinRepoRoots(retained: ReadonlySet<string>): Set<string> {
+    const pins = new Set<string>([...retained].map(root => canonicalPath(root)));
+    for (const alias of this.registry.aliases()) {
+      if (alias.lspEnabled) {
+        pins.add(canonicalPath(alias.root));
+      }
+    }
+    return pins;
+  }
+
+  private activeCacheDirNames(retained: ReadonlySet<string>): Set<string> {
+    return new Set([...retained].map(root => repoHash(root)));
+  }
+
   private startCacheJanitor(): void {
     if (this.cacheJanitorIntervalMs <= 0 || this.cacheJanitorTimer) {
       return;
     }
     this.cacheJanitorTimer = setInterval(() => {
       if (this.currentState === "ready") {
-        this.runCacheJanitor();
+        void this.registry.reloadIfChanged().then(() => {
+          if (this.currentState === "ready") {
+            this.runCacheJanitor();
+          }
+        }).catch(() => undefined);
       }
     }, this.cacheJanitorIntervalMs);
     this.cacheJanitorTimer.unref?.();
