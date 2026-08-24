@@ -1,7 +1,7 @@
 # B3 升级报告：G2 不可解（图/索引层缺口）
 
 日期：2026-08-24  
-状态：**STOP**。这是 2026-08-24 收口计划的唯一停点。`main` 未动。没有第四次 live。`java_context` 仍不在公开工具面。
+状态：**RESOLVED_OPTION_C**。B3 停点已于 2026-08-24 11:53 由用户裁决解除。`main` 在 F2 之前不动。没有第四次 live。`java_context` 仍不在公开工具面。
 
 ## 证据链
 
@@ -27,9 +27,19 @@
 
 推荐不在本报告里替用户选。停在这里。
 
+## 用户裁决（2026-08-24 11:53）
+
+**选 C（ruoyi 降观察仓）。** 裁决依据（记录在案）：
+
+1. 分支默认 `java_impact` 链质量与 `main` 是 identity 传承（N0/N0.5/M 全程质量逐位相同；B1/B2 未开刀；71f3b8d 不在默认链上，`defaultChainIdentity: UNCHANGED`）。ruoyi rReadMust 0.469 是 `main` 今天同样会跑出的数字——G2 揭示的是产品既有缺陷，不是分支引入的回归，合并不会让 ruoyi 类仓库变差。
+2. 处置：G2 记 `OBSERVATION`（非过拟合 FAIL），LORO 门改为「三仓折 GO + ruoyi 仅记账」。F1 解锁，并新增一条 ruoyi old-vs-new 对照观察行（预期质量逐位相同 + token 下降），把上述 identity 论证钉死成数据。
+3. 选项 B 登记为未来项目，**入场条件**：合并后真实使用中，在非三仓项目出现可归因到 `NOT_IN_POOL` 的检索缺口（`docs/phase-b/b0-diagnosis.json` 的 topPatterns——enum/config/properties、MyBatis-Plus Mapper 接口、DI 接线类——是现成立项种子）。没有真实疼痛不开工。
+
+**本停点解除。后续按 2026-08-24 计划 F1 → F2 → F3 自主执行。**
+
 ## 硬禁令仍有效
 
-- 不合并 `main`（本轮）
+- F2 之前不合并 `main`；F1 全 GO 后 F2 non-squash 已预授权
 - 不第四次 live
 - 不把 `java_context` 加回 `PUBLIC_JAVA_TOOLS`
 - 不读 holdout 调参

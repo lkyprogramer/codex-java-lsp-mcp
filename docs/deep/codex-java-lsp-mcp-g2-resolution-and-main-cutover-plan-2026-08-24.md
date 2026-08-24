@@ -2,6 +2,7 @@
 
 - 日期：2026-08-24
 - 状态：**ADOPTED**。本文档是收尾阶段唯一行动真源，接替 `docs/deep/codex-java-lsp-mcp-jin-n5-live-postmortem-and-value-harvest-plan-2026-08-23.md`（该文 E/C/G/O/L1 各卡已收口，其 F 轨由本文档细化后继续）。
+- **裁决记录（2026-08-24 11:53）**：A1→A2a→B0 已走完并到达 B3 停点（NOT_IN_POOL 40.8% 结构性）。用户裁决**选 C：ruoyi 降观察仓**（完整依据见 `docs/phase-b/b3-escalation.md` 用户裁决节）。G2 记 `OBSERVATION`，LORO 门改为「三仓折 GO + ruoyi 仅记账」，F1 解锁并新增 ruoyi old-vs-new 对照观察行；选项 B（图层改造）登记为未来项目，入场条件 = 真实使用中出现可归因 `NOT_IN_POOL` 缺口。**B3 停点已解除，执行 AI 从 F1 直接开跑，一路到 F3 无需再请示。**
 - 交付目标：解除 G2 过拟合阻塞 → 通过 F1 对比矩阵 → **一次性合并 `codex/jin-main` 到 `main` 替换现有 LSP 链路** → soak 收尾。用户已于 2026-08-23 授权全程自主执行（含最终合并）；本文档把唯一例外（G2 不可解）定义为硬升级点。
 - 执行 AI 首读顺序：本文档 §0–§2 → `docs/phase-f/final-panel.md` → `docs/phase-g/g2-closeout.json` → `HANDOFF.md` 前 60 行。
 
@@ -72,7 +73,7 @@ F1 对比矩阵（vs main HEAD）→ F2 合并 + attestation → F3 soak → 计
 |---|---|---|
 | golden 噪声率裁决线 | 抽样 tuning 场景 NOISY 占比 ≥ 30% → 走 A2a | A1 |
 | 重推导后规模下限 | 可用场景 ≥ 20（含 ≥6 holdout）否则 A2b 降级 | A2 |
-| LORO 过拟合门 | 每个留出折 recall/pRead/rReadMust 相对其余仓均值回撤 ≤ 15% | A2a/B2 后重跑 |
+| LORO 过拟合门 | ~~每个留出折回撤 ≤ 15%~~ **选 C 后修订：三仓折 ≤ 15% GO；ruoyi 折仅记账观察，不设门** | A2a 已跑（三折 GO）；F1 补 ruoyi 观察行 |
 | B 轨三仓非劣门 | 每把刀：三仓 tuning recall/pRead/rReadMust/RangeLineRecall 每项 ≥ 基线 − 0.005，token P50 涨幅 ≤ +3%，p95Ratio ≤ 1.10 | B1/B2 |
 | B 轨刀数上限 | 2 | B2 |
 | F1 质量门 | vs main：recall/pRead/rReadMust/RangeLineRecall/holdout 每项 ≥ main − 0.005 | F1 |
@@ -163,7 +164,7 @@ F1 对比矩阵（vs main HEAD）→ F2 合并 + attestation → F3 soak → 计
 - **附加验证**：
   1. `sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile full`（T1 全量）；
   2. `run-memory-benchmark.mjs` 在候选树复测 G1/S1/S2；
-  3. 四仓在位则 LORO 复跑一次收尾留档；
+  3. **ruoyi old-vs-new 对照观察行（选 C 裁决新增，必做）**：在 ruoyi golden（A2a 重推导版，只用 tuning + 汇总指标，holdout 仍不入目）上跑 old = `main` HEAD、new = 合并候选树的对照。预期：质量指标逐位相同（identity 论证的实证）+ estimatedTokens P50 下降 ≥ 20%。质量若非逐位相同 → 说明分支在某处动了默认链，立即停下二分定位（这是 F1 质量门的前置哨兵，不是观察完就算）；token 未降 → 按 F1 token 门失败处置。结果入 `docs/phase-f/f1-ruoyi-observation.json`；
   4. `npm run measure:production-ts` LOC 台账；
   5. `npm run measure:tool-schema`：5 工具，总 token ≤ main 现状。
 - **产出**：`docs/phase-f/f1-closeout.json`（全部门 + SHA + executableTree）。

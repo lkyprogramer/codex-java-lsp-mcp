@@ -2,7 +2,7 @@
 
 ## 当前任务
 
-G2 收口计划停在 **B3**。A1 GOLDEN_NOISY → A2a 过滤后 LORO 仍 FAIL → B0 `NOT_IN_POOL` 50% > 40%，不进 B1/B2。`main` 未动。等用户在接受风险合并 / 图层立项 / ruoyi 降观察仓中选择。无 live。`java_context` 仍不公开。
+G2 收口计划：选 C 已落档，B3 解除后 **F1 FAIL**。三仓质量门 cipherlink pRead/holdout 未过；token 两仓约 −14.7% 不到 −20%；p95 GO。ruoyi identity 哨兵 FAIL，且 ruoyi 比 `main` 更差。N0.5 探针与 HEAD 同质量，摘 M/N0.5/图/O/B 无法过 F1。`main` 未动。无 live。`java_context` 仍不公开。不进 F2。
 
 ## E1（2026-08-23）
 
@@ -52,9 +52,13 @@ G2 收口计划停在 **B3**。A1 GOLDEN_NOISY → A2a 过滤后 LORO 仍 FAIL �
 
 判定 **COMPLETE**。G5 稳态预热 2 轮。三仓比值 **0.835 / 0.547 / 0.886 ≤ 1.10**。G1 **173 / 29 / 46** 未回退。未上 LRU。收口 `docs/phase-o/o3-closeout.json`。
 
+## F1（2026-08-24）
+
+判定 **FAIL**。`docs/phase-f/f1-closeout.json`。old=`main` `48e665b`，new executableTree `b48b0b39`。T1 dist 1200 + scripts 277 fail 0。verifier 因 main 无 `deadlineMs` 拒收；门从 raw cell 计。cipherlink pRead 0.683→0.663、holdout rReadMust 0.675→0.55。token 14.7/14.7/21.4%。ruoyi 哨兵 `QUALITY_IDENTITY_FAIL`（rReadMust 0.614→0.538）。N0.5 `63859d8` 探针与 HEAD 同数字。不合 main。
+
 ## B3（2026-08-24）
 
-**STOP。** `docs/phase-b/b3-escalation.md`。G2 不可解：缺口主体是候选池缺失，不是选择层。三选一等用户。不合 main。
+**RESOLVED_OPTION_C。** `docs/phase-b/b3-escalation.md`。用户选 C：ruoyi 降观察仓。G2 是产品既有缺陷（默认链 vs `main` identity），不是合并回归。选项 B 入场条件 = 真实使用中出现可归因 `NOT_IN_POOL` 缺口。F1 已解锁。
 
 ## B0（2026-08-24）
 

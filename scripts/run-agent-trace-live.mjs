@@ -198,7 +198,7 @@ export function compactContextForModel(result, maxChars = MAX_TOOL_RESULT_CHARS)
   }
   const payload = {
     coverage: result?.coverage,
-    candidates: (result?.candidates ?? []).slice(0, 24).map(item => (
+    candidates: (result?.candidates ?? []).slice(0, 12).map(item => (
       typeof item === "string"
         ? { path: item }
         : { path: item.path, role: item.role, hop: item.hop, reason: item.reason }

@@ -1,0 +1,153 @@
+{
+  "schemaVersion": "f-f1-closeout/v1",
+  "track": "f",
+  "card": "F1",
+  "dated": "2026-08-24",
+  "decision": "FAIL",
+  "next": "BISECT_DEFAULT_CHAIN",
+  "mergeToMain": false,
+  "srcTouched": true,
+  "srcTouchNote": "Restored live compactContextForModel candidate slice 12 to recover the C2 T1 byte lock after b8d75ca raised it to 24. No default-chain knife.",
+  "defaultChainIdentity": "CHANGED",
+  "holdoutInspected": false,
+  "taskSuccess": "UNMEASURED",
+  "fourthLive": false,
+  "publicTools": ["java_status", "java_impact", "java_symbol", "java_diagnostics", "java_runtime"],
+  "baseline": {
+    "label": "main",
+    "commit": "48e665ba73dc332dccd4b34e71adc1c048170cf6",
+    "executableTree": "538661f26ae49c490227b760daa075dd8b6e64fe"
+  },
+  "candidate": {
+    "commit": "9aab7726edd853da22141ae822fc6ccc5dea6274",
+    "commitTree": "932c4149ca610d894944f617ffca8b48e5ed6d3d",
+    "executableTree": "b48b0b391601f7f7878b0ab9392ce99287f541cb"
+  },
+  "host": {
+    "loadavg1AtStart": 47.73,
+    "loadWindow": "above 20; runner still executed (refuse=false)",
+    "availableMemoryGiBApprox": 6.8,
+    "memoryFloorGiB": 4
+  },
+  "t1": {
+    "dist": 1200,
+    "scripts": 277,
+    "fail": 0,
+    "jdtlsBin": "/usr/bin/false",
+    "executableTree": "b48b0b391601f7f7878b0ab9392ce99287f541cb",
+    "logSha256": "e255d8b3c8245f65116ac5e5a0612bedfb93e97e31979f993e2b5cc790483325",
+    "root": "codex-java-lsp-isolated-validation-6KMz7B",
+    "note": "First full T1 failed 1 script test (C2 P50 1.662>1.2). Restored live compact slice 12; T1 rerun GO."
+  },
+  "matrix": {
+    "command": "npm run benchmark:three-repo-matrix -- --baseline main --runs 5 --p95-limit 1.10 --keep-worktrees",
+    "outputDir": "scratch f1-matrix (raw cells not committed)",
+    "logSha256": "9b10f6fe6ebe0e7e4f03a01dbf7d83301a9ca80af8d49c3a7386092565543671",
+    "verifier": {
+      "exitCode": 2,
+      "error": "lishuedu-r1-old.json: metadata.deadlineMs must be 2000",
+      "note": "main binary ignores --deadline-ms and does not emit metadata.deadlineMs. F1 doors scored from raw cells with the verifier percentile, not from verifier passed."
+    },
+    "worktrees": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-mcp-three-repo-nFHPQm"
+  },
+  "doors": {
+    "quality": {
+      "gate": "recall/pRead/rReadMust/holdout >= main - 0.005; RangeLineRecall UNMEASURED on main",
+      "result": "FAIL",
+      "projects": {
+        "lishuedu": {
+          "old": { "recall": 0.6924, "pRead": 0.7, "rReadMust": 0.875 },
+          "new": { "recall": 0.7986, "pRead": 0.7217, "rReadMust": 0.925 },
+          "holdoutOld": { "recall": 0.5, "pRead": 0.6667, "rReadMust": 0.375 },
+          "holdoutNew": { "recall": 0.8542, "pRead": 0.8333, "rReadMust": 0.625 },
+          "pass": true
+        },
+        "cipherlink": {
+          "old": { "recall": 0.6853, "pRead": 0.6833, "rReadMust": 0.86 },
+          "new": { "recall": 0.839, "pRead": 0.6633, "rReadMust": 0.91 },
+          "holdoutOld": { "recall": 0.4688, "pRead": 0.75, "rReadMust": 0.675 },
+          "holdoutNew": { "recall": 0.75, "pRead": 0.6667, "rReadMust": 0.55 },
+          "pass": false,
+          "failing": ["pRead -0.020", "holdout pRead -0.083", "holdout rReadMust -0.125"]
+        },
+        "exam-parent-v3": {
+          "old": { "recall": 0.5861, "pRead": 0.5511, "rReadMust": 0.8267 },
+          "new": { "recall": 0.697, "pRead": 0.6, "rReadMust": 0.88 },
+          "holdoutOld": { "recall": 0.3376, "pRead": 0.3333, "rReadMust": 0.3 },
+          "holdoutNew": { "recall": 0.4316, "pRead": 0.4167, "rReadMust": 0.4 },
+          "pass": true
+        }
+      }
+    },
+    "token": {
+      "gate": "estimatedTokens P50 drop >= 20% on three goldens",
+      "result": "FAIL",
+      "projects": {
+        "lishuedu": { "oldP50": 3979, "newP50": 3393, "drop": 0.1473, "pass": false },
+        "cipherlink": { "oldP50": 3734, "newP50": 3186, "drop": 0.1468, "pass": false },
+        "exam-parent-v3": { "oldP50": 3599, "newP50": 2830, "drop": 0.2137, "pass": true }
+      },
+      "waiver": "token gate slack <2 percentage points does not apply (lishuedu/cipherlink ~5.3 points short)"
+    },
+    "p95": {
+      "gate": "p95Ratio <= 1.10",
+      "result": "GO",
+      "projects": {
+        "lishuedu": 0.528,
+        "cipherlink": 0.745,
+        "exam-parent-v3": 0.719
+      }
+    },
+    "memory": {
+      "result": "UNMEASURED",
+      "note": "Quality identity sentinel fired; F1 stop-and-bisect takes priority over G1/S1/S2 remeasure."
+    },
+    "tools": {
+      "result": "GO_FROM_SOURCE",
+      "publicTools": 5,
+      "java_contextRegistered": false,
+      "schemaTokensVsMain": "UNMEASURED",
+      "note": "PUBLIC_JAVA_TOOLS is five names without java_context. measure:tool-schema not run after sentinel stop."
+    }
+  },
+  "ruoyiObservation": {
+    "file": "docs/phase-f/f1-ruoyi-observation.json",
+    "sha256": "58f377546da456747e888f12ea8c8600c2c8919ab67a12de60e6c0ed356984f1",
+    "decision": "QUALITY_IDENTITY_FAIL",
+    "holdoutSkipped": 12,
+    "tuningCount": 28,
+    "old": { "recall": 0.7649, "pRead": 0.3452, "rReadMust": 0.6136, "estimatedTokensP50": 3891 },
+    "new": { "recall": 0.7482, "pRead": 0.2976, "rReadMust": 0.5384, "estimatedTokensP50": 2562 },
+    "tokenDrop": 0.3416,
+    "note": "Option C sentinel: ruoyi quality is not bit-identical vs main and is worse on recall/pRead/rReadMust. Default chain moved. Merging would make ruoyi-class repos worse, contrary to the identity premise of option C."
+  },
+  "productionTs": {
+    "mainLoc": 9461,
+    "candidateLoc": 45578,
+    "mainFiles": 54,
+    "candidateFiles": 189,
+    "note": "github main is the pre-V4 five-tool tree. jin-main carries V3.2/V4/V5R/JIN/M/O."
+  },
+  "residuals": {
+    "O1": "lishuedu child RSS 1851 MiB > 1536 (not a blocker)",
+    "O2": "lishuedu cold 83.5s > 60s (not a blocker)"
+  },
+  "bisect": {
+    "status": "NO_HARVEST_BLOCK",
+    "planBlocks": ["N0.5 compact", "N2a/N3 graph", "N4 default pack", "M memory", "O memory/cold"],
+    "metric": "cipherlink pRead / holdout rReadMust vs main 0.6833 / 0.675",
+    "probeN05": {
+      "commit": "63859d815832f66350e03a020a567ef8f1aed523",
+      "runs": 1,
+      "recall": 0.839,
+      "pRead": 0.6633,
+      "rReadMust": 0.91,
+      "holdoutPRead": 0.6667,
+      "holdoutRReadMust": 0.55,
+      "estimatedTokensP50": 3145,
+      "note": "Bit-identical to HEAD on cipherlink quality. Harvest blocks after N0.5 are not the F1 quality regression."
+    },
+    "conclusion": "cipherlink pRead/holdout miss vs github main already exists at N0.5. Extracting M / N0.5 / graph / O / B cannot restore F1 quality without discarding the V4/JIN ranking stack that is the merge candidate. Token drop vs main is ~15% (N0.5 claimed 27% vs N0, not vs this main tree)."
+  },
+  "note": "F1 not GO. Quality door has no waiver. Do not merge main. No live. java_context stays off PUBLIC_JAVA_TOOLS. Holdout unread for retune."
+}
