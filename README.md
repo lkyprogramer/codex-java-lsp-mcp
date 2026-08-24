@@ -295,8 +295,10 @@ hook 行为：
 | `JAVA_LSP_RUNTIME_ENTRY_TTL_MS` | JDT 已停止后，空闲 runtime context 在内存中的保留时间；默认 `3600000`。 |
 | `JAVA_LSP_MAX_RUNTIME_ENTRIES` | Node 进程最多保留的 repo runtime context 数；默认 `16`，超限时按 LRU 驱逐不活跃 entry。 |
 | `JAVA_LSP_OWNERSHIP_BASE` | 覆盖 canonical-root 跨进程 ownership 目录；主要用于隔离 canary/测试，生产默认位于用户 cache。 |
-| `JAVA_LSP_CACHE_JANITOR_INTERVAL_MS` | worktree cache janitor 周期；默认 `21600000`（6 小时），设为 `0` 关闭周期执行。 |
-| `JAVA_LSP_WORKTREE_CACHE_TTL_DAYS` | 自动删除超过指定天数未更新的 Git worktree cache；默认 `2`，设为 `0` 关闭。 |
+| `JAVA_LSP_CACHE_JANITOR_INTERVAL_MS` | cache janitor 周期；默认 `21600000`（6 小时），设为 `0` 关闭周期执行。L0 格式回收在 TTL=0 时仍会跑。 |
+| `JAVA_LSP_WORKTREE_CACHE_TTL_DAYS` | 非 pin 目录按 `lastRequestAt` 过期删除的天数；默认 `2`。`0` 关闭 TTL 删除，仍做死路径 / L0 / L2。`projects.json` 里 `lspEnabled` 的 root 永不因 TTL 删除。 |
+| `JAVA_LSP_CACHE_UNPINNED_MAX_DIRS` | 非 pin hash 目录数硬顶，默认 `48`；`0` 关闭。超出按 `lastRequestAt` LRU 驱逐。 |
+| `JAVA_LSP_CACHE_UNPINNED_MAX_BYTES` | 非 pin 目录合计体积硬顶，默认 `6 GiB`；`0` 关闭。 |
 | `JAVA_LSP_HTTP_PORT` | HTTP daemon 固定 loopback 监听端口；HTTP entrypoint 必填。 |
 | `JAVA_LSP_HTTP_INSTANCE_ID` | installer 为每个 managed release 自动生成的 health identity；不要手工复用或配置，doctor/start/smoke 会用它拒绝端口遗留进程。 |
 | `JAVA_LSP_HTTP_CANARY_PORT` | installer candidate 的独立 loopback 端口；必须不同于固定端口，默认 `38457`。 |
@@ -313,6 +315,13 @@ hook 行为：
 
 `streamable_http` 模式拒绝 `JDTLS_DATA_DIR` / `JDTLS_LOG_DIR` 单例目录覆盖；stdio 兼容模式仅把它们视为 base，并强制追加 canonical repoHash。
 
+生产 cache 不要 `rm -rf ~/Library/Caches/codex-java-lsp`。一次性收割（默认 dry-run）：
+
+```bash
+npm run cache:harvest
+npm run cache:harvest -- --apply
+```
+
 32GB 内存机器的默认资源策略通常是：
 
 - `JAVA_LSP_MAX_ACTIVE_REPOS=3`
@@ -321,6 +330,8 @@ hook 行为：
 - `JAVA_LSP_RUNTIME_ENTRY_TTL_MS=3600000`
 - `JAVA_LSP_MAX_RUNTIME_ENTRIES=16`
 - `JAVA_LSP_WORKTREE_CACHE_TTL_DAYS=2`
+- `JAVA_LSP_CACHE_UNPINNED_MAX_DIRS=48`
+- `JAVA_LSP_CACHE_UNPINNED_MAX_BYTES=6442450944`
 - `JAVA_LSP_IMPORT_CONCURRENCY=2`
 - `JAVA_LSP_RG_CONCURRENCY=4`
 - `JAVA_LSP_DOCUMENT_SYMBOL_ATTEMPT_TIMEOUT_MS=10000`
