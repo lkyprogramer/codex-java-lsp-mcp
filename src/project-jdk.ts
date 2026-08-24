@@ -220,11 +220,16 @@ function listInstalledJdks(): InstalledJdk[] {
 function homeMajor(home: string): InstalledJdk | undefined {
   if (!home || !existsSync(home)) return undefined;
   const label = path.basename(home);
-  const major = parseMajor(label) || parseMajor(spawnSync(path.join(home, "bin", "java"), ["-version"], { encoding: "utf8" }).stderr);
+  const javaBin = path.join(home, "bin", "java");
+  const spawned = existsSync(javaBin)
+    ? spawnSync(javaBin, ["-version"], { encoding: "utf8" })
+    : undefined;
+  const major = parseMajor(label) || parseMajor(spawned?.stderr) || parseMajor(spawned?.stdout);
   return major ? { major, home, label: `${major}:${home}` } : undefined;
 }
 
-function parseMajor(value: string): number | undefined {
+function parseMajor(value: string | null | undefined): number | undefined {
+  if (typeof value !== "string" || value.length === 0) return undefined;
   const version = value.match(/(\d+)(?:\.(\d+))?/)?.[0];
   if (!version) return undefined;
   const [first, second] = version.split(".").map(Number);

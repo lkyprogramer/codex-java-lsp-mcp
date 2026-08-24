@@ -46,3 +46,27 @@ test("alias-specific env override wins", async () => {
     delete process.env.JAVA_LSP_PROJECT_JAVA_HOME_DEMO_APP;
   }
 });
+
+test("listInstalledJdks survives a JAVA_HOME whose java -version has no stderr", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-silent-jdk-"));
+  await writeFile(path.join(root, "pom.xml"), `
+<project>
+  <properties>
+    <maven.compiler.source>17</maven.compiler.source>
+  </properties>
+</project>`);
+  const fakeHome = path.join(root, "Contents", "Home");
+  await mkdir(path.join(fakeHome, "bin"), { recursive: true });
+  // Present but not executable: spawnSync yields null stderr, which used to throw in parseMajor.
+  await writeFile(path.join(fakeHome, "bin", "java"), "");
+  const previousHome = process.env.JAVA_HOME;
+  process.env.JAVA_HOME = fakeHome;
+  try {
+    const status = resolveProjectJdk(root);
+    assert.equal(status.requiredMajor, 17);
+    assert.equal(status.primarySource, "maven");
+  } finally {
+    if (previousHome === undefined) delete process.env.JAVA_HOME;
+    else process.env.JAVA_HOME = previousHome;
+  }
+});
