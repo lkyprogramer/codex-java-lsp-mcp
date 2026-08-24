@@ -8,25 +8,25 @@
   "taskSuccess": "UNMEASURED",
   "missFiles": 76,
   "counts": {
-    "NOT_IN_POOL": 38,
-    "IN_POOL_EVICTED": 23,
+    "NOT_IN_POOL": 31,
+    "IN_POOL_EVICTED": 30,
     "RANGE_MISS": 15
   },
   "shares": {
-    "NOT_IN_POOL": 0.5,
-    "IN_POOL_EVICTED": 0.3026315789473684,
+    "NOT_IN_POOL": 0.40789473684210525,
+    "IN_POOL_EVICTED": 0.39473684210526316,
     "RANGE_MISS": 0.19736842105263158,
-    "selectionLayer": 0.5
+    "selectionLayer": 0.5921052631578947
   },
   "next": "B3",
   "topPatterns": [
     {
       "key": "NOT_IN_POOL:*.java",
-      "n": 25
+      "n": 23
     },
     {
       "key": "IN_POOL_EVICTED:*.java",
-      "n": 16
+      "n": 18
     },
     {
       "key": "RANGE_MISS:*.java",
@@ -34,22 +34,22 @@
     },
     {
       "key": "IN_POOL_EVICTED:*ServiceImpl.java",
-      "n": 6
-    },
-    {
-      "key": "NOT_IN_POOL:*ServiceImpl.java",
-      "n": 6
+      "n": 9
     },
     {
       "key": "NOT_IN_POOL:*Mapper.java",
-      "n": 5
+      "n": 4
     },
     {
       "key": "RANGE_MISS:*ServiceImpl.java",
       "n": 3
     },
     {
-      "key": "RANGE_MISS:*Controller.java",
+      "key": "NOT_IN_POOL:*ServiceImpl.java",
+      "n": 3
+    },
+    {
+      "key": "IN_POOL_EVICTED:*DO.java",
       "n": 2
     }
   ],
@@ -67,15 +67,18 @@
       "misses": [
         {
           "file": "yudao-module-wms/src/main/java/cn/iocoder/yudao/module/wms/controller/admin/md/item/vo/sku/WmsItemSkuPageReqVO.java",
-          "label": "IN_POOL_EVICTED"
+          "label": "IN_POOL_EVICTED",
+          "blockedBy": "readplan-budget"
         },
         {
           "file": "yudao-module-wms/src/main/java/cn/iocoder/yudao/module/wms/dal/mysql/md/item/WmsItemSkuMapper.java",
-          "label": "NOT_IN_POOL"
+          "label": "NOT_IN_POOL",
+          "blockedBy": "absent"
         },
         {
           "file": "yudao-module-wms/src/main/java/cn/iocoder/yudao/module/wms/service/inventory/dto/WmsInventoryCheckReqDTO.java",
-          "label": "NOT_IN_POOL"
+          "label": "NOT_IN_POOL",
+          "blockedBy": "absent"
         }
       ]
     },
@@ -86,23 +89,28 @@
       "misses": [
         {
           "file": "yudao-module-im/src/main/java/cn/iocoder/yudao/module/im/enums/rtc/ImRtcCallEndReasonEnum.java",
-          "label": "NOT_IN_POOL"
+          "label": "NOT_IN_POOL",
+          "blockedBy": "absent"
         },
         {
           "file": "yudao-module-im/src/main/java/cn/iocoder/yudao/module/im/framework/config/ImProperties.java",
-          "label": "NOT_IN_POOL"
+          "label": "NOT_IN_POOL",
+          "blockedBy": "absent"
         },
         {
           "file": "yudao-module-im/src/main/java/cn/iocoder/yudao/module/im/job/rtc/ImRtcParticipantTimeoutJob.java",
-          "label": "NOT_IN_POOL"
+          "label": "NOT_IN_POOL",
+          "blockedBy": "absent"
         },
         {
           "file": "yudao-module-im/src/main/java/cn/iocoder/yudao/module/im/service/rtc/ImRtcCallService.java",
-          "label": "IN_POOL_EVICTED"
+          "label": "IN_POOL_EVICTED",
+          "blockedBy": "readplan-budget"
         },
         {
           "file": "yudao-module-im/src/main/java/cn/iocoder/yudao/module/im/service/rtc/ImRtcCallServiceImpl.java",
-          "label": "RANGE_MISS"
+          "label": "RANGE_MISS",
+          "blockedBy": "hit"
         }
       ]
     },
@@ -113,15 +121,18 @@
       "misses": [
         {
           "file": "yudao-module-im/src/main/java/cn/iocoder/yudao/module/im/service/channel/ImChannelServiceImpl.java",
-          "label": "IN_POOL_EVICTED"
+          "label": "IN_POOL_EVICTED",
+          "blockedBy": "readplan-budget"
         },
         {
           "file": "yudao-module-im/src/main/java/cn/iocoder/yudao/module/im/service/websocket/ImWebSocketService.java",
-          "label": "NOT_IN_POOL"
+          "label": "NOT_IN_POOL",
+          "blockedBy": "absent"
         },
         {
           "file": "yudao-module-im/src/main/java/cn/iocoder/yudao/module/im/service/websocket/ImWebSocketServiceImpl.java",
-          "label": "NOT_IN_POOL"
+          "label": "NOT_IN_POOL",
+          "blockedBy": "absent"
         }
       ]
     },
@@ -132,7 +143,8 @@
       "misses": [
         {
           "file": "yudao-module-im/src/main/java/cn/iocoder/yudao/module/im/dal/mysql/channel/ImChannelMaterialMapper.java",
-          "label": "NOT_IN_POOL"
+          "label": "NOT_IN_POOL",
+          "blockedBy": "absent"
         }
       ]
     },
@@ -143,7 +155,8 @@
       "misses": [
         {
           "file": "yudao-module-im/src/main/java/cn/iocoder/yudao/module/im/dal/dataobject/message/ImChannelMessageDO.java",
-          "label": "IN_POOL_EVICTED"
+          "label": "IN_POOL_EVICTED",
+          "blockedBy": "readplan-budget"
         }
       ]
     },
@@ -160,7 +173,8 @@
       "misses": [
         {
           "file": "yudao-framework/yudao-spring-boot-starter-web/src/main/java/cn/iocoder/yudao/framework/apilog/core/interceptor/ApiAccessLogInterceptor.java",
-          "label": "IN_POOL_EVICTED"
+          "label": "IN_POOL_EVICTED",
+          "blockedBy": "readplan-budget"
         }
       ]
     },
@@ -171,19 +185,23 @@
       "misses": [
         {
           "file": "yudao-framework/yudao-spring-boot-starter-mybatis/src/main/java/cn/iocoder/yudao/framework/mybatis/core/query/MPJLambdaWrapperX.java",
-          "label": "NOT_IN_POOL"
+          "label": "NOT_IN_POOL",
+          "blockedBy": "absent"
         },
         {
           "file": "yudao-framework/yudao-spring-boot-starter-mybatis/src/main/java/cn/iocoder/yudao/framework/mybatis/core/query/QueryWrapperX.java",
-          "label": "NOT_IN_POOL"
+          "label": "NOT_IN_POOL",
+          "blockedBy": "absent"
         },
         {
           "file": "yudao-module-infra/src/main/java/cn/iocoder/yudao/module/infra/enums/codegen/CodegenFrontTypeEnum.java",
-          "label": "NOT_IN_POOL"
+          "label": "NOT_IN_POOL",
+          "blockedBy": "absent"
         },
         {
           "file": "yudao-module-infra/src/main/java/cn/iocoder/yudao/module/infra/service/codegen/inner/CodegenEngine.java",
-          "label": "NOT_IN_POOL"
+          "label": "NOT_IN_POOL",
+          "blockedBy": "absent"
         }
       ]
     },
@@ -194,27 +212,33 @@
       "misses": [
         {
           "file": "yudao-module-im/src/main/java/cn/iocoder/yudao/module/im/controller/admin/group/vo/ImGroupMuteMemberReqVO.java",
-          "label": "NOT_IN_POOL"
+          "label": "IN_POOL_EVICTED",
+          "blockedBy": "candidate-limit"
         },
         {
           "file": "yudao-module-im/src/main/java/cn/iocoder/yudao/module/im/controller/admin/manager/message/vo/group/ImGroupMessageManagerPageReqVO.java",
-          "label": "IN_POOL_EVICTED"
+          "label": "IN_POOL_EVICTED",
+          "blockedBy": "readplan-budget"
         },
         {
           "file": "yudao-module-im/src/main/java/cn/iocoder/yudao/module/im/controller/admin/manager/message/vo/privates/ImPrivateMessageManagerPageReqVO.java",
-          "label": "NOT_IN_POOL"
+          "label": "IN_POOL_EVICTED",
+          "blockedBy": "candidate-limit"
         },
         {
           "file": "yudao-module-im/src/main/java/cn/iocoder/yudao/module/im/dal/dataobject/group/ImGroupMemberDO.java",
-          "label": "NOT_IN_POOL"
+          "label": "IN_POOL_EVICTED",
+          "blockedBy": "candidate-limit"
         },
         {
           "file": "yudao-module-im/src/main/java/cn/iocoder/yudao/module/im/dal/mysql/message/ImPrivateMessageMapper.java",
-          "label": "NOT_IN_POOL"
+          "label": "IN_POOL_EVICTED",
+          "blockedBy": "candidate-limit"
         },
         {
           "file": "yudao-module-im/src/main/java/cn/iocoder/yudao/module/im/service/group/ImGroupServiceImpl.java",
-          "label": "NOT_IN_POOL"
+          "label": "IN_POOL_EVICTED",
+          "blockedBy": "candidate-limit"
         }
       ]
     },
@@ -225,19 +249,23 @@
       "misses": [
         {
           "file": "yudao-module-mes/src/main/java/cn/iocoder/yudao/module/mes/controller/admin/pro/andon/vo/config/MesProAndonConfigRespVO.java",
-          "label": "IN_POOL_EVICTED"
+          "label": "IN_POOL_EVICTED",
+          "blockedBy": "readplan-budget"
         },
         {
           "file": "yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/api/permission/RoleApi.java",
-          "label": "RANGE_MISS"
+          "label": "RANGE_MISS",
+          "blockedBy": "hit"
         },
         {
           "file": "yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/api/permission/RoleApiImpl.java",
-          "label": "RANGE_MISS"
+          "label": "RANGE_MISS",
+          "blockedBy": "hit"
         },
         {
           "file": "yudao-module-system/src/main/java/cn/iocoder/yudao/module/system/api/permission/dto/RoleRespDTO.java",
-          "label": "IN_POOL_EVICTED"
+          "label": "IN_POOL_EVICTED",
+          "blockedBy": "readplan-budget"
         }
       ]
     },
@@ -248,35 +276,43 @@
       "misses": [
         {
           "file": "yudao-module-iot/yudao-module-iot-biz/src/main/java/cn/iocoder/yudao/module/iot/service/rule/scene/matcher/IotSceneRuleMatcherHelper.java",
-          "label": "RANGE_MISS"
+          "label": "RANGE_MISS",
+          "blockedBy": "hit"
         },
         {
           "file": "yudao-module-iot/yudao-module-iot-biz/src/main/java/cn/iocoder/yudao/module/iot/service/rule/scene/matcher/condition/IotCurrentTimeConditionMatcher.java",
-          "label": "IN_POOL_EVICTED"
+          "label": "IN_POOL_EVICTED",
+          "blockedBy": "readplan-budget"
         },
         {
           "file": "yudao-module-iot/yudao-module-iot-biz/src/main/java/cn/iocoder/yudao/module/iot/service/rule/scene/matcher/condition/IotDevicePropertyConditionMatcher.java",
-          "label": "IN_POOL_EVICTED"
+          "label": "IN_POOL_EVICTED",
+          "blockedBy": "readplan-budget"
         },
         {
           "file": "yudao-module-iot/yudao-module-iot-biz/src/main/java/cn/iocoder/yudao/module/iot/service/rule/scene/matcher/condition/IotDeviceStateConditionMatcher.java",
-          "label": "IN_POOL_EVICTED"
+          "label": "IN_POOL_EVICTED",
+          "blockedBy": "readplan-budget"
         },
         {
           "file": "yudao-module-iot/yudao-module-iot-biz/src/main/java/cn/iocoder/yudao/module/iot/service/rule/scene/matcher/trigger/IotDeviceEventPostTriggerMatcher.java",
-          "label": "IN_POOL_EVICTED"
+          "label": "IN_POOL_EVICTED",
+          "blockedBy": "readplan-budget"
         },
         {
           "file": "yudao-module-iot/yudao-module-iot-biz/src/main/java/cn/iocoder/yudao/module/iot/service/rule/scene/matcher/trigger/IotDevicePropertyPostTriggerMatcher.java",
-          "label": "IN_POOL_EVICTED"
+          "label": "IN_POOL_EVICTED",
+          "blockedBy": "readplan-budget"
         },
         {
           "file": "yudao-module-iot/yudao-module-iot-biz/src/main/java/cn/iocoder/yudao/module/iot/service/rule/scene/matcher/trigger/IotDeviceServiceInvokeTriggerMatcher.java",
-          "label": "IN_POOL_EVICTED"
+          "label": "IN_POOL_EVICTED",
+          "blockedBy": "readplan-budget"
         },
         {
           "file": "yudao-module-iot/yudao-module-iot-biz/src/main/java/cn/iocoder/yudao/module/iot/service/rule/scene/matcher/trigger/IotDeviceStateUpdateTriggerMatcher.java",
-          "label": "IN_POOL_EVICTED"
+          "label": "IN_POOL_EVICTED",
+          "blockedBy": "readplan-budget"
         }
       ]
     },
@@ -287,15 +323,18 @@
       "misses": [
         {
           "file": "yudao-module-mes/src/main/java/cn/iocoder/yudao/module/mes/controller/admin/qc/defectrecord/MesQcDefectRecordController.java",
-          "label": "RANGE_MISS"
+          "label": "RANGE_MISS",
+          "blockedBy": "hit"
         },
         {
           "file": "yudao-module-mes/src/main/java/cn/iocoder/yudao/module/mes/service/qc/defectrecord/MesQcDefectRecordService.java",
-          "label": "RANGE_MISS"
+          "label": "RANGE_MISS",
+          "blockedBy": "hit"
         },
         {
           "file": "yudao-module-mes/src/main/java/cn/iocoder/yudao/module/mes/service/qc/defectrecord/MesQcDefectRecordServiceImpl.java",
-          "label": "RANGE_MISS"
+          "label": "RANGE_MISS",
+          "blockedBy": "hit"
         }
       ]
     },
@@ -306,7 +345,8 @@
       "misses": [
         {
           "file": "yudao-module-iot/yudao-module-iot-biz/src/main/java/cn/iocoder/yudao/module/iot/service/rule/scene/matcher/condition/IotDevicePropertyConditionMatcher.java",
-          "label": "IN_POOL_EVICTED"
+          "label": "IN_POOL_EVICTED",
+          "blockedBy": "readplan-budget"
         }
       ]
     },
@@ -317,7 +357,8 @@
       "misses": [
         {
           "file": "yudao-module-iot/yudao-module-iot-core/src/main/java/cn/iocoder/yudao/module/iot/core/messagebus/core/rabbitmq/IotRabbitMQMessageBus.java",
-          "label": "RANGE_MISS"
+          "label": "RANGE_MISS",
+          "blockedBy": "hit"
         }
       ]
     },
@@ -328,15 +369,18 @@
       "misses": [
         {
           "file": "yudao-module-iot/yudao-module-iot-gateway/src/main/java/cn/iocoder/yudao/module/iot/gateway/protocol/modbus/tcpserver/IotModbusTcpServerProtocol.java",
-          "label": "NOT_IN_POOL"
+          "label": "NOT_IN_POOL",
+          "blockedBy": "absent"
         },
         {
           "file": "yudao-module-iot/yudao-module-iot-gateway/src/main/java/cn/iocoder/yudao/module/iot/gateway/protocol/modbus/tcpserver/manager/IotModbusTcpServerConfigCacheService.java",
-          "label": "NOT_IN_POOL"
+          "label": "NOT_IN_POOL",
+          "blockedBy": "absent"
         },
         {
           "file": "yudao-module-iot/yudao-module-iot-gateway/src/main/java/cn/iocoder/yudao/module/iot/gateway/protocol/modbus/tcpserver/manager/IotModbusTcpServerConnectionManager.java",
-          "label": "NOT_IN_POOL"
+          "label": "NOT_IN_POOL",
+          "blockedBy": "absent"
         }
       ]
     },
@@ -347,19 +391,23 @@
       "misses": [
         {
           "file": "yudao-framework/yudao-spring-boot-starter-mq/src/main/java/cn/iocoder/yudao/framework/mq/redis/config/YudaoRedisMQConsumerAutoConfiguration.java",
-          "label": "RANGE_MISS"
+          "label": "RANGE_MISS",
+          "blockedBy": "hit"
         },
         {
           "file": "yudao-framework/yudao-spring-boot-starter-mq/src/main/java/cn/iocoder/yudao/framework/mq/redis/core/job/RedisPendingMessageResendJob.java",
-          "label": "RANGE_MISS"
+          "label": "RANGE_MISS",
+          "blockedBy": "hit"
         },
         {
           "file": "yudao-framework/yudao-spring-boot-starter-mq/src/main/java/cn/iocoder/yudao/framework/mq/redis/core/job/RedisStreamMessageCleanupJob.java",
-          "label": "RANGE_MISS"
+          "label": "RANGE_MISS",
+          "blockedBy": "hit"
         },
         {
           "file": "yudao-module-iot/yudao-module-iot-core/src/main/java/cn/iocoder/yudao/module/iot/core/messagebus/config/IotMessageBusAutoConfiguration.java",
-          "label": "NOT_IN_POOL"
+          "label": "NOT_IN_POOL",
+          "blockedBy": "absent"
         }
       ]
     },
@@ -370,7 +418,8 @@
       "misses": [
         {
           "file": "yudao-module-bpm/src/main/java/cn/iocoder/yudao/module/bpm/service/task/BpmTaskServiceImpl.java",
-          "label": "IN_POOL_EVICTED"
+          "label": "IN_POOL_EVICTED",
+          "blockedBy": "readplan-budget"
         }
       ]
     },
@@ -381,7 +430,8 @@
       "misses": [
         {
           "file": "yudao-module-bpm/src/main/java/cn/iocoder/yudao/module/bpm/service/task/BpmTaskServiceImpl.java",
-          "label": "IN_POOL_EVICTED"
+          "label": "IN_POOL_EVICTED",
+          "blockedBy": "readplan-budget"
         }
       ]
     },
@@ -392,7 +442,8 @@
       "misses": [
         {
           "file": "yudao-module-iot/yudao-module-iot-core/src/main/java/cn/iocoder/yudao/module/iot/core/messagebus/config/IotMessageBusProperties.java",
-          "label": "NOT_IN_POOL"
+          "label": "NOT_IN_POOL",
+          "blockedBy": "absent"
         }
       ]
     },
@@ -403,11 +454,13 @@
       "misses": [
         {
           "file": "yudao-module-bpm/src/main/java/cn/iocoder/yudao/module/bpm/framework/flowable/core/util/BpmnModelUtils.java",
-          "label": "RANGE_MISS"
+          "label": "RANGE_MISS",
+          "blockedBy": "hit"
         },
         {
           "file": "yudao-module-bpm/src/main/java/cn/iocoder/yudao/module/bpm/service/task/BpmTaskServiceImpl.java",
-          "label": "IN_POOL_EVICTED"
+          "label": "IN_POOL_EVICTED",
+          "blockedBy": "readplan-budget"
         }
       ]
     },
@@ -418,31 +471,38 @@
       "misses": [
         {
           "file": "yudao-module-bpm/src/main/java/cn/iocoder/yudao/module/bpm/controller/admin/task/vo/instance/BpmApprovalDetailRespVO.java",
-          "label": "IN_POOL_EVICTED"
+          "label": "IN_POOL_EVICTED",
+          "blockedBy": "readplan-budget"
         },
         {
           "file": "yudao-module-bpm/src/main/java/cn/iocoder/yudao/module/bpm/controller/admin/task/vo/task/BpmTaskApproveReqVO.java",
-          "label": "NOT_IN_POOL"
+          "label": "NOT_IN_POOL",
+          "blockedBy": "absent"
         },
         {
           "file": "yudao-module-bpm/src/main/java/cn/iocoder/yudao/module/bpm/controller/admin/task/vo/task/BpmTaskRejectReqVO.java",
-          "label": "NOT_IN_POOL"
+          "label": "NOT_IN_POOL",
+          "blockedBy": "absent"
         },
         {
           "file": "yudao-module-bpm/src/main/java/cn/iocoder/yudao/module/bpm/enums/task/BpmAttachmentTypeEnum.java",
-          "label": "NOT_IN_POOL"
+          "label": "NOT_IN_POOL",
+          "blockedBy": "absent"
         },
         {
           "file": "yudao-module-bpm/src/main/java/cn/iocoder/yudao/module/bpm/service/task/BpmProcessInstanceServiceImpl.java",
-          "label": "NOT_IN_POOL"
+          "label": "IN_POOL_EVICTED",
+          "blockedBy": "readplan-budget"
         },
         {
           "file": "yudao-module-bpm/src/main/java/cn/iocoder/yudao/module/bpm/service/task/BpmTaskService.java",
-          "label": "NOT_IN_POOL"
+          "label": "NOT_IN_POOL",
+          "blockedBy": "absent"
         },
         {
           "file": "yudao-module-bpm/src/main/java/cn/iocoder/yudao/module/bpm/service/task/BpmTaskServiceImpl.java",
-          "label": "NOT_IN_POOL"
+          "label": "NOT_IN_POOL",
+          "blockedBy": "absent"
         }
       ]
     },
@@ -453,31 +513,38 @@
       "misses": [
         {
           "file": "yudao-module-mes/src/main/java/cn/iocoder/yudao/module/mes/controller/admin/wm/sn/MesWmSnController.java",
-          "label": "RANGE_MISS"
+          "label": "RANGE_MISS",
+          "blockedBy": "hit"
         },
         {
           "file": "yudao-module-mes/src/main/java/cn/iocoder/yudao/module/mes/dal/mysql/wm/barcode/MesWmBarcodeMapper.java",
-          "label": "NOT_IN_POOL"
+          "label": "NOT_IN_POOL",
+          "blockedBy": "absent"
         },
         {
           "file": "yudao-module-mes/src/main/java/cn/iocoder/yudao/module/mes/enums/MesBizTypeConstants.java",
-          "label": "NOT_IN_POOL"
+          "label": "NOT_IN_POOL",
+          "blockedBy": "absent"
         },
         {
           "file": "yudao-module-mes/src/main/java/cn/iocoder/yudao/module/mes/enums/wm/BarcodeBizTypeEnum.java",
-          "label": "NOT_IN_POOL"
+          "label": "NOT_IN_POOL",
+          "blockedBy": "absent"
         },
         {
           "file": "yudao-module-mes/src/main/java/cn/iocoder/yudao/module/mes/service/wm/barcode/MesWmBarcodeService.java",
-          "label": "NOT_IN_POOL"
+          "label": "NOT_IN_POOL",
+          "blockedBy": "absent"
         },
         {
           "file": "yudao-module-mes/src/main/java/cn/iocoder/yudao/module/mes/service/wm/barcode/MesWmBarcodeServiceImpl.java",
-          "label": "NOT_IN_POOL"
+          "label": "NOT_IN_POOL",
+          "blockedBy": "absent"
         },
         {
           "file": "yudao-module-mes/src/main/java/cn/iocoder/yudao/module/mes/service/wm/sn/MesWmSnServiceImpl.java",
-          "label": "RANGE_MISS"
+          "label": "RANGE_MISS",
+          "blockedBy": "hit"
         }
       ]
     },
@@ -488,7 +555,8 @@
       "misses": [
         {
           "file": "yudao-module-im/src/main/java/cn/iocoder/yudao/module/im/controller/admin/group/vo/ImGroupRespVO.java",
-          "label": "IN_POOL_EVICTED"
+          "label": "IN_POOL_EVICTED",
+          "blockedBy": "readplan-budget"
         }
       ]
     },
@@ -505,19 +573,23 @@
       "misses": [
         {
           "file": "yudao-module-bpm/src/main/java/cn/iocoder/yudao/module/bpm/framework/flowable/core/enums/BpmTaskCandidateStrategyEnum.java",
-          "label": "NOT_IN_POOL"
+          "label": "NOT_IN_POOL",
+          "blockedBy": "absent"
         },
         {
           "file": "yudao-module-bpm/src/main/java/cn/iocoder/yudao/module/bpm/framework/flowable/core/util/BpmnModelUtils.java",
-          "label": "RANGE_MISS"
+          "label": "RANGE_MISS",
+          "blockedBy": "hit"
         },
         {
           "file": "yudao-module-bpm/src/main/java/cn/iocoder/yudao/module/bpm/service/task/BpmProcessInstanceServiceImpl.java",
-          "label": "IN_POOL_EVICTED"
+          "label": "IN_POOL_EVICTED",
+          "blockedBy": "readplan-budget"
         },
         {
           "file": "yudao-module-bpm/src/main/java/cn/iocoder/yudao/module/bpm/service/task/BpmTaskServiceImpl.java",
-          "label": "IN_POOL_EVICTED"
+          "label": "IN_POOL_EVICTED",
+          "blockedBy": "readplan-budget"
         }
       ]
     },
@@ -528,19 +600,23 @@
       "misses": [
         {
           "file": "yudao-module-crm/src/main/java/cn/iocoder/yudao/module/crm/controller/admin/contact/CrmContactController.java",
-          "label": "NOT_IN_POOL"
+          "label": "NOT_IN_POOL",
+          "blockedBy": "absent"
         },
         {
           "file": "yudao-module-crm/src/main/java/cn/iocoder/yudao/module/crm/dal/mysql/business/CrmBusinessMapper.java",
-          "label": "NOT_IN_POOL"
+          "label": "NOT_IN_POOL",
+          "blockedBy": "absent"
         },
         {
           "file": "yudao-module-crm/src/main/java/cn/iocoder/yudao/module/crm/service/contact/CrmContactService.java",
-          "label": "NOT_IN_POOL"
+          "label": "NOT_IN_POOL",
+          "blockedBy": "absent"
         },
         {
           "file": "yudao-module-crm/src/main/java/cn/iocoder/yudao/module/crm/service/contact/CrmContactServiceImpl.java",
-          "label": "NOT_IN_POOL"
+          "label": "IN_POOL_EVICTED",
+          "blockedBy": "readplan-budget"
         }
       ]
     },

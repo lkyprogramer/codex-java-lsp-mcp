@@ -13,7 +13,7 @@
   "holdoutInspected": false,
   "taskSuccess": "UNMEASURED",
   "escalation": "docs/phase-b/b3-escalation.md",
-  "reason": "B0 NOT_IN_POOL 0.50 > 0.40. Selection-layer share 0.50 < 0.60 so B1/B2 are not entered. G2 remains unresolved.",
+  "reason": "Corrected B0 pool is productionRanking. NOT_IN_POOL 0.408 > 0.40. Selection-layer 0.592 < 0.60. B1/B2 not entered. G2 remains unresolved.",
   "options": ["accept-risk-merge", "graph-index-project", "ruoyi-observation"],
   "f1Started": false,
   "f2Started": false,

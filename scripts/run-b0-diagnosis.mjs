@@ -50,6 +50,7 @@ function runBenchmark(repoRoot, scenarioFile, deadlineMs) {
     "--mode", "balanced",
     "--semantic-policy", "fast",
     "--strategy", "impact",
+    "--verbosity", "diagnostic",
     "--deadline-ms", String(deadlineMs),
     "--runs", "1"
   ];

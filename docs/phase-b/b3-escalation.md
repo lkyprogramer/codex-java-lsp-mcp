@@ -8,14 +8,14 @@
 1. **G2（旧 golden）**：ruoyi 留出折 recall/pRead/rReadMust 回撤 0.179/0.516/0.477 > 0.15。第一次刀打在 N4 planner，LORO 测的是 impact 默认链。
 2. **A1**：六条预注册规则，holdout 未读。ruoyi tuning noisyRate **0.464** ≥ 0.30；三仓对照 0。裁决 `GOLDEN_NOISY`。
 3. **A2a**：规则取反过滤 eligible 382→238，整文件替换 40 场景。tuning 再审计 noisyRate 0。LORO 三折 GO；ruoyi **recall 回撤 0.121 过门**，**pRead 0.536 / rReadMust 0.416 仍超 0.15**。裁决 `GOLDEN_FIXED_CHAIN_STILL_FAILS`。
-4. **B0**：仅 tuning 28 条。76 个 mustHit 缺失文件：
-   - `NOT_IN_POOL` **50%**（> 40% → 结构性）
-   - `IN_POOL_EVICTED` 30.3%
-   - `RANGE_MISS` 19.7%
-   - 选择层合计 50% < 60%，**不进 B1/B2**。
-   模式：未入池的普通 `*.java` / `*ServiceImpl` / `*Mapper` 多于预算驱逐。
+4. **B0**（diagnostic `productionRanking` / GoldenAttributionV3，不是 compact `files[]`）：tuning 28，holdout 12 未读。76 个 mustHit 缺失：
+   - `NOT_IN_POOL` / `blockedBy=absent` **31 (40.8%)** > 40% → 仍结构性
+   - `IN_POOL_EVICTED` 30（`readplan-budget` 25 + `candidate-limit` 5）
+   - `RANGE_MISS` 15（attribution `hit` 但 range 未覆盖）
+   - 选择层合计 59.2% < 60%，**不进 B1/B2**。
+   compact 截断池曾把 wire cap 误标成 absent（50%）；校正后仍过 40% 门。
 
-结论：H-golden 只解释了一部分；扣掉噪声后，ruoyi 留出失败的主体是 **候选池没找到文件**（图/索引/candidate 生成），不是 `read-plan-budget` 两把条件刀能修的选择层问题。按计划不得开第三把刀、不得重写图架构。
+结论：H-golden 只解释了一部分；扣掉噪声并用完整 ranked pool 校正后，ruoyi 留出失败的主体仍是 **图/索引没把文件送进候选池**，不是两把选择层刀能修的。按计划不得开第三把刀、不得重写图架构。
 
 ## 三个方向（等用户）
 

@@ -21,22 +21,42 @@ export function rangesCover(needed, got) {
   );
 }
 
-export function classifyMustHitFile(file, { pool, selected, selectedRanges, mustReadRanges } = {}) {
+export function labelFromBlockedBy(blockedBy, rangeMiss = false) {
+  if (blockedBy === "absent") return MISS_NOT_IN_POOL;
+  if (blockedBy === "readplan-budget" || blockedBy === "candidate-limit") return MISS_IN_POOL_EVICTED;
+  if (blockedBy === "hit") return rangeMiss ? MISS_RANGE_MISS : null;
+  return undefined;
+}
+
+export function classifyMustHitFile(file, {
+  pool,
+  selected,
+  selectedRanges,
+  mustReadRanges,
+  attribution,
+  compactFiles
+} = {}) {
   const rel = posixPath(file);
+  const needed = mustReadRanges?.[rel] ?? mustReadRanges?.[file];
+  const got = selectedRanges instanceof Map
+    ? (selectedRanges.get(rel) ?? selectedRanges.get(file) ?? [])
+    : (selectedRanges?.[rel] ?? []);
+  const rangeMiss = Boolean(needed?.length) && !rangesCover(needed, got);
+  const attr = attribution instanceof Map ? attribution.get(rel) : attribution?.[rel];
+  const fromAttr = labelFromBlockedBy(attr?.blockedBy, rangeMiss);
+  if (fromAttr !== undefined) return fromAttr;
+
   const inPool = pool instanceof Set ? pool.has(rel) : (pool ?? []).map(posixPath).includes(rel);
   const inSelected = selected instanceof Set ? selected.has(rel) : (selected ?? []).map(posixPath).includes(rel);
-  if (!inSelected && !inPool) return MISS_NOT_IN_POOL;
+  const onCompact = compactFiles == null
+    ? true
+    : (compactFiles instanceof Set ? compactFiles.has(rel) : compactFiles.map(posixPath).includes(rel));
+  // Ranked familyScores / productionRanking is the pool. Compact files[] is
+  // truncated at candidateLimit (~26); missing there is eviction, not absence.
   if (!inSelected && inPool) return MISS_IN_POOL_EVICTED;
-  const needed = mustReadRanges?.[rel] ?? mustReadRanges?.[file];
-  if (needed?.length) {
-    const got = selectedRanges instanceof Map
-      ? (selectedRanges.get(rel) ?? selectedRanges.get(file) ?? [])
-      : (selectedRanges?.[rel] ?? []);
-    const hits = needed.every(want =>
-      got.some(span => Number(span.endLine) >= Number(want.startLine) && Number(span.startLine) <= Number(want.endLine))
-    );
-    if (!hits) return MISS_RANGE_MISS;
-  }
+  if (!inSelected && !inPool && !onCompact) return MISS_NOT_IN_POOL;
+  if (!inSelected && !inPool) return MISS_NOT_IN_POOL;
+  if (rangeMiss) return MISS_RANGE_MISS;
   return null;
 }
 
@@ -44,6 +64,10 @@ export function diagnoseScene(scene, impact) {
   const mustHit = [...new Set((scene?.golden?.mustHit ?? []).map(posixPath))];
   const pool = new Set((impact?.pool ?? []).map(posixPath));
   const selected = new Set((impact?.selected ?? []).map(posixPath));
+  const compactFiles = impact?.compactFiles == null ? null : new Set((impact.compactFiles ?? []).map(posixPath));
+  const attribution = impact?.attribution instanceof Map
+    ? impact.attribution
+    : new Map(Object.entries(impact?.attribution ?? {}).map(([file, row]) => [posixPath(file), row]));
   const selectedRanges = new Map();
   for (const [file, spans] of Object.entries(impact?.rangesByFile ?? {})) {
     selectedRanges.set(posixPath(file), spans);
@@ -54,9 +78,11 @@ export function diagnoseScene(scene, impact) {
       pool,
       selected,
       selectedRanges,
-      mustReadRanges: scene?.golden?.mustReadRanges
+      mustReadRanges: scene?.golden?.mustReadRanges,
+      attribution,
+      compactFiles
     });
-    if (label) misses.push({ file, label });
+    if (label) misses.push({ file, label, blockedBy: attribution.get(file)?.blockedBy ?? null });
   }
   return {
     scenarioId: scene?.id,
@@ -86,10 +112,9 @@ export function summarizeDiagnosis(sceneRows) {
   const share = label => (missFiles > 0 ? counts[label] / missFiles : 0);
   const notInPool = share(MISS_NOT_IN_POOL);
   const selection = share(MISS_IN_POOL_EVICTED) + share(MISS_RANGE_MISS);
-  let next = "B3";
-  if (notInPool > 0.4) next = "B3";
-  else if (selection >= 0.6) next = "B1";
-  else next = "B3";
+  // Pool is productionRanking, not compact files[]. B3 only if discovery
+  // still dominates after that correction; otherwise B1.
+  const next = notInPool > 0.4 ? "B3" : "B1";
   return {
     missFiles,
     counts,
@@ -116,17 +141,51 @@ function suffixPattern(base) {
 
 export function impactFromBenchmarkAttempt(attempt) {
   const det = attempt?.determinism ?? {};
-  const pool = det.candidatePaths ?? [];
+  const compactFiles = (det.candidatePaths ?? []).map(posixPath);
+  const familyPool = (det.familyScores ?? [])
+    .map(row => posixPath(row?.path))
+    .filter(Boolean);
+  const attribution = new Map();
+  for (const row of attempt?.goldenAttribution ?? []) {
+    if (!row?.file) continue;
+    attribution.set(posixPath(row.file), row);
+  }
+  const attrPool = [...attribution.values()]
+    .filter(row => row.inCandidates === true || row.blockedBy === "readplan-budget" || row.blockedBy === "candidate-limit")
+    .map(row => posixPath(row.file));
+  const rankingPool = (attempt?.productionRanking?.candidates ?? [])
+    .map(row => posixPath(row.path))
+    .filter(Boolean);
+  const pool = familyPool.length
+    ? familyPool
+    : rankingPool.length
+      ? rankingPool
+      : attrPool.length
+        ? attrPool
+        : compactFiles;
   const readPlan = det.readPlan ?? [];
-  const selected = readPlan.map(item => item.path);
+  const selected = readPlan.map(item => posixPath(item.path));
   const rangesByFile = {};
   for (const item of readPlan) {
-    rangesByFile[item.path] = (item.ranges ?? []).map(range => ({
+    rangesByFile[posixPath(item.path)] = (item.ranges ?? []).map(range => ({
       startLine: range.startLine,
       endLine: range.endLine
     }));
   }
-  return { pool, selected, rangesByFile };
+  return {
+    pool,
+    selected,
+    rangesByFile,
+    compactFiles,
+    attribution,
+    poolSource: familyPool.length
+      ? "familyScores"
+      : rankingPool.length
+        ? "productionRanking"
+        : attrPool.length
+          ? "goldenAttribution"
+          : "compactCandidatePaths"
+  };
 }
 
 export function diagnoseBenchmarkPayload(payload, scenes) {

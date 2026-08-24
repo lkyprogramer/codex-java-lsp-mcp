@@ -58,7 +58,7 @@ G2 收口计划停在 **B3**。A1 GOLDEN_NOISY → A2a 过滤后 LORO 仍 FAIL �
 
 ## B0（2026-08-24）
 
-判定 **NOT_IN_POOL_STRUCTURAL**。tuning 28，holdout 12 未读。76 个缺失：NOT_IN_POOL 50%，IN_POOL_EVICTED 30%，RANGE_MISS 20%。选择层 50% < 60%，**不开 B1/B2**。隔离 T0 3/3；T2 诊断 GO。收口 `docs/phase-b/b0-closeout.json`。
+判定 **NOT_IN_POOL_STRUCTURAL**。池是 diagnostic `productionRanking`（不是 compact `files[]`）。tuning 28，holdout 12 未读。76 缺失：absent 31 (40.8%)，readplan-budget 25，candidate-limit 5，range-miss 15。选择层 59.2%。**不开 B1/B2**。隔离 T0 6/6；T2 diagnostic GO。收口 `docs/phase-b/b0-closeout.json`。
 
 ## A2a（2026-08-24）
 
