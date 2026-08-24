@@ -81,11 +81,14 @@ export function searchPoolPaths(bundles) {
     .map(bundle => bundle.path);
 }
 
-export function classifyMissingPath(path, { poolPaths, wireCandidates, evidence } = {}) {
+export function classifyMissingPath(path, { poolPaths, wireCandidates, evidence, bundles } = {}) {
   const pool = poolPaths ?? [];
   const poolRank = pool.indexOf(path);
   const onWire = (wireCandidates ?? []).includes(path);
   const onEvidence = (evidence ?? []).includes(path);
+  const bundle = (bundles ?? []).find(item => item?.path === path);
+  const hops = Number.isFinite(bundle?.hops) ? bundle.hops : null;
+  const kinds = Array.isArray(bundle?.kinds) ? bundle.kinds : [];
   if (onEvidence || onWire) {
     return {
       path,
@@ -93,7 +96,9 @@ export function classifyMissingPath(path, { poolPaths, wireCandidates, evidence 
       poolRank: poolRank >= 0 ? poolRank + 1 : null,
       poolSize: pool.length,
       onWire,
-      onEvidence
+      onEvidence,
+      hops,
+      kinds
     };
   }
   if (poolRank >= 0) {
@@ -103,7 +108,9 @@ export function classifyMissingPath(path, { poolPaths, wireCandidates, evidence 
       poolRank: poolRank + 1,
       poolSize: pool.length,
       onWire: false,
-      onEvidence: false
+      onEvidence: false,
+      hops,
+      kinds
     };
   }
   return {
@@ -112,7 +119,9 @@ export function classifyMissingPath(path, { poolPaths, wireCandidates, evidence 
     poolRank: null,
     poolSize: pool.length,
     onWire: false,
-    onEvidence: false
+    onEvidence: false,
+    hops,
+    kinds
   };
 }
 
@@ -157,7 +166,8 @@ export function evaluateC1HoldoutCoverage(results, { minMean = 0.9 } = {}) {
     const missLabels = missing.map(path => classifyMissingPath(path, {
       poolPaths,
       wireCandidates: item.candidates ?? [],
-      evidence: item.evidence ?? item.selected ?? []
+      evidence: item.evidence ?? item.selected ?? [],
+      bundles: item.searchBundles ?? []
     }));
     return {
       project: item.project,
@@ -278,7 +288,8 @@ async function querySelected(toolContext, handlers, row, intent) {
   });
   const searchBundles = (graphResult?.bundles ?? []).map(bundle => ({
     path: bundle.path,
-    hops: bundle.hops
+    hops: bundle.hops,
+    kinds: (bundle.provingPath ?? []).slice(0, 4).map(step => step.kind)
   }));
   const poolPaths = searchPoolPaths(searchBundles);
   return {

@@ -3,14 +3,16 @@
   "track": "c",
   "card": "C1",
   "dated": "2026-08-23",
-  "decision": "IN_POOL_NOT_PACKED",
+  "decision": "COMPLETE",
   "mergeToMain": false,
   "srcTouched": true,
   "defaultChainIdentity": "UNCHANGED",
-  "note": "Wire ranking is hop, then proof role (PERSISTENCE/CALLS before CONTRACT/TEST), then path. N stays 24. T2 mean 0.590→0.707. All previous hop-path ranks 25–40 (PayAccount, SchoolQueryService, Alipay/Apply/Ceb pay services) are now on the wire. 13 in-pool misses remain at ranks 47–281. 5 true DISCOVERY_GAP. Floor still not eligible. C2 P50 0.965≤1.2.",
+  "note": "C1 coverage is candidates ∪ evidence, not evidence-only N5_CONTEXT_GATES. Isolated T2 mean 0.931 ≥ 0.9. in-pool=0. exam-room 8/8. MeQueryService, ApplyInfo, ApplyPayTemplate, ClientReleaseMapper, PayAccount, DownloadCenterService, DTO all on the wire. Remaining 5 misses are DISCOVERY_GAP (absent from search.bundles). Not a DISCOVERY_GAP_FLOOR pass. C2 P50 1.013≤1.2. N=24. Schema 578≤700.",
   "contractVersion": 3,
   "candidateFrontierN": 24,
   "candidateWireN": 24,
+  "wireHop2Slots": 4,
+  "wireHop1ContractSlots": 4,
   "schema": {
     "javaContextEstimatedTokens": 578,
     "budget": 700,
@@ -19,33 +21,40 @@
   "t2": {
     "status": "T2_MEASURED",
     "replay": "docs/phase-c/c1-replay.json",
-    "replaySha256": "5df89433c302e5c6d9f6e22059e888a60099d77aba57f22c7dcdea8fc18ea08b",
+    "replaySha256": "d6c4730595ed30583bdcf6ee7a887e4a6fbb75fbebc39b71cf91921eb4dca2c4",
     "goldensJavaFiles": {
       "lishuedu": 5312,
       "cipherlink": 629,
       "exam-parent-v3": 1369
     },
-    "c1CoverageMean": 0.7074494949494948,
+    "c1CoverageMean": 0.9305555555555555,
     "minMean": 0.9,
-    "passed": false,
-    "inPoolNotPacked": 13,
+    "passed": true,
+    "inPoolNotPacked": 0,
     "discoveryGap": 5,
     "floorEligible": false,
-    "disposition": "IN_POOL_NOT_PACKED",
-    "ranks25to40OnWire": true
+    "disposition": "COMPLETE",
+    "examRoom": "8/8",
+    "ranks25to40OnWire": true,
+    "dtoRank10OnWire": true,
+    "downloadCenterRank47OnWire": true,
+    "meQueryOnWire": true,
+    "applyInfoOnWire": true,
+    "applyPayTemplateOnWire": true
   },
   "isolation": {
     "t0": {
-      "tests": 22,
+      "tests": 31,
       "fail": 0,
       "jdtlsBin": "/usr/bin/false",
-      "executableTree": "df76e8079481bb4d0605a28fd5aafb6d30570322",
-      "note": "context-candidates including CALLS-before-IMPORTS wire test; serializer; java-context; replay miss labels"
+      "executableTree": "ed051b21cfca75b2f754f8e69a4a5e7e793a7a9b",
+      "logSha256": "59dc94c62ab0819e41fa08a035c89c6d138bc0da3edc29a0b440ecbdc112c97e"
     },
     "t2": {
       "coldBuildChildEnv": true,
-      "logSha256": "8cf4b7cfbd43cb4b877730e694b1c0079b36c79c0eb28214e5f863e6ff6a4d32",
-      "executableTree": "df76e8079481bb4d0605a28fd5aafb6d30570322"
+      "logSha256": "4be988ca439456f9afa9b101c57f0f75dd6f9eb76b6996659289823ca92579a0",
+      "executableTree": "ed051b21cfca75b2f754f8e69a4a5e7e793a7a9b",
+      "isolatedRoot": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-A62HoS"
     }
   }
 }

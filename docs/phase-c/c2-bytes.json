@@ -1,56 +1,57 @@
 {
   "schemaVersion": "c2-bytes/v2",
-  "dated": "2026-08-23",
+  "n": 6,
+  "p50": 1.0130921619293711,
   "gate": 1.2,
-  "p50": 0.951421188630491,
   "passed": true,
-  "candidateWireN": 24,
-  "evidenceFileCap": 3,
-  "source": "scripts/run-jin-n5-context-replay.mjs auto holdout first-call MCP compact payloads",
   "rows": [
     {
       "project": "lishuedu",
       "scenarioId": "exam-score-export-cross-module-holdout",
-      "contextBytes": 5088,
+      "contextBytes": 5364,
       "impactBytes": 5446,
-      "ratio": 0.9342636797649652
+      "ratio": 0.9849430774880646
     },
     {
       "project": "lishuedu",
       "scenarioId": "paper-task-claim-iam-holdout",
-      "contextBytes": 5523,
+      "contextBytes": 5881,
       "impactBytes": 5805,
-      "ratio": 0.951421188630491
+      "ratio": 1.0130921619293711
     },
     {
       "project": "cipherlink",
       "scenarioId": "client-release-storage-presign-holdout",
-      "contextBytes": 5986,
+      "contextBytes": 6048,
       "impactBytes": 4798,
-      "ratio": 1.247603167986661
+      "ratio": 1.2605252188411837
     },
     {
       "project": "cipherlink",
       "scenarioId": "backend-operation-log-aspect-async-audit-holdout",
-      "contextBytes": 5241,
+      "contextBytes": 5162,
       "impactBytes": 5594,
-      "ratio": 0.9368966750089381
+      "ratio": 0.9227744011440829
     },
     {
       "project": "exam-parent-v3",
       "scenarioId": "exam-room-print-download-types-persistent-bundle",
-      "contextBytes": 4486,
+      "contextBytes": 5808,
       "impactBytes": 4107,
-      "ratio": 1.092281470659849
+      "ratio": 1.4141709276844412
     },
     {
       "project": "exam-parent-v3",
       "scenarioId": "candidate-pay-order-cross-module-admission",
-      "contextBytes": 4191,
+      "contextBytes": 5350,
       "impactBytes": 3997,
-      "ratio": 1.0485364023017263
+      "ratio": 1.3385038779084313
     }
   ],
+  "dated": "2026-08-23",
+  "candidateWireN": 24,
+  "evidenceFileCap": 3,
+  "source": "scripts/run-jin-n5-context-replay.mjs auto holdout first-call MCP compact payloads",
   "holdoutT2": {
     "status": "T2_MEASURED",
     "n": 6
