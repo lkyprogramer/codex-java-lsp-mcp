@@ -21,8 +21,8 @@ test("release attestation keeps TaskSuccess UNMEASURED and mergeToMain false", a
   assert.equal(attestation.leaveOneRepoOut.matrix, "UNMEASURED");
   assert.equal(attestation.gateProfiles.profilesDiffer, true);
   assert.equal(ATTESTED_PUBLIC_TOOLS.includes("java_context"), false);
-  assert.equal(PUBLIC_JAVA_TOOLS.includes("java_context"), true);
-  assert.notDeepEqual(ATTESTED_PUBLIC_TOOLS, [...PUBLIC_JAVA_TOOLS]);
+  assert.equal(PUBLIC_JAVA_TOOLS.includes("java_context"), false);
+  assert.deepEqual([...PUBLIC_JAVA_TOOLS], ATTESTED_PUBLIC_TOOLS);
 });
 
 test("mergeToMainAllowed does not treat UNMEASURED or 0 as a pass", () => {

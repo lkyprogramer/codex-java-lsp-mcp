@@ -1,37 +1,106 @@
 {
   "schemaVersion": "l-l1-live-summary/v1",
   "dated": "2026-08-23",
-  "status": "BLOCKED_EXTERNAL",
-  "taskSuccess": "UNMEASURED",
-  "modelUsage": "UNMEASURED",
-  "killJavaContext": false,
+  "status": "MEASURED",
+  "decision": "FAIL",
+  "jinPlan": "KILLED_AFTER_THREE_LIVES",
+  "taskSuccess": {
+    "status": "MEASURED",
+    "localQwen": { "tasks": 18, "scored": 12, "successes": 1, "mean": 0.08333333333333333 },
+    "openrouter": { "tasks": 18, "scored": 12, "successes": 1, "mean": 0.08333333333333333 }
+  },
+  "modelUsage": {
+    "status": "MEASURED",
+    "note": "Harness mergeUsage is PARTIAL because SERENA_UNAVAILABLE cells fold UNMEASURED. Arm sums are SSOT."
+  },
+  "killJavaContext": true,
   "mergeToMain": false,
   "fourthLive": false,
-  "note": "local-qwen shipped baseUrl http://47.106.205.246:1082/chat/completions returned HTTP 404 not_found on all 12 old/jin cells. OpenRouter process env has no OPENAI_API_KEY/JAVA_LSP_AGENT_API_KEY; harness returned BLOCKED_EXTERNAL missing API key before HTTP. Serena SERENA_UNAVAILABLE. Do not invent TaskSuccess 0. Do not kill java_context on provider errors.",
+  "modelSensitive": false,
+  "executableTree": "3715e8c1213b5d0835a638bc7b0c66d1586361d2",
+  "note": "Dual-model L1 MEASURED FAIL. local-qwen host 47.106.205.246:1082 model openclaw/Qwen3.8-27B-WORK; OpenRouter stealth/ox-alpha. Both models: jin 0/6 vs old 1/6 (exam-score only). Combined paired mean delta -0.476; not-worse 1/12 (paper-task OpenRouter tie). Token jin/old 1.735 and 2.694 both >1.1. V5R leftover falses presign and pay-order stayed false on every arm. No FAILED_CONTEXT_CAP or FAILED_RUNTIME. Serena SERENA_UNAVAILABLE 6/6 both profiles. Live tree 3715e8c1 includes uncommitted C1 wire mix plus /v1 profile bind, not HEAD c6716ae hops-only. Drop java_context from PUBLIC_JAVA_TOOLS. Handler stays on the branch. No fourth live. F remains blocked by G2_OVERFIT_FAIL. Do not merge main. Raw traces stay off-git. Keys never recorded.",
   "profiles": {
     "local-qwen": {
       "host": "47.106.205.246:1082",
       "model": "openclaw/Qwen3.8-27B-WORK",
-      "baseUrl": "http://47.106.205.246:1082",
-      "http": 404,
-      "error": "not_found",
-      "scored": 0,
-      "failedRuntime": 12,
+      "baseUrl": "http://47.106.205.246:1082/v1",
+      "status": "MEASURED",
+      "isolationRoot": "codex-java-lsp-isolated-validation-uUW6VA",
+      "liveTraceSha256": "89844bfe42023965dca9794728e814cc5fe09968c00800da71e21d036d5b4887",
       "serenaUnavailable": 6,
-      "liveTraceSha256": "1530e3db3abb2e360fdd0a77658f75be29c961cb455db286e1b7125cc15beee6"
+      "failedRuntime": 0,
+      "contextCapped": 0,
+      "taskSuccess": { "status": "MEASURED", "tasks": 18, "scored": 12, "successes": 1, "mean": 0.08333333333333333 },
+      "arms": {
+        "old": { "tool": "java_impact", "tasks": 6, "scored": 6, "successes": 1, "mean": 0.16666666666666666, "toolCallCount": 55, "promptTokens": 40951, "completionTokens": 7357, "totalTokensMeasured": 48308, "stops": { "MODEL_STOP": 4, "MAX_ROUNDS": 2 } },
+        "jin": { "tool": "java_context", "tasks": 6, "scored": 6, "successes": 0, "mean": 0, "toolCallCount": 50, "promptTokens": 75946, "completionTokens": 7889, "totalTokensMeasured": 83835, "stops": { "MODEL_STOP": 3, "MAX_ROUNDS": 3 } },
+        "serena": { "status": "UNAVAILABLE", "tasks": 6, "scored": 0, "reason": "SERENA_UNAVAILABLE" }
+      },
+      "pairedHitRate": {
+        "mean": { "old": 0.7642676767676767, "jin": 0.13491647241647242, "delta": -0.6293512043512043 },
+        "direction": { "jinBetter": 0, "jinWorse": 6, "tie": 0, "n": 6 },
+        "excludingUnreachable": { "mean": { "old": 1, "jin": 0.19926231176231177, "delta": -0.8007376882376882 } }
+      },
+      "tokenRatioJinOverOld": 1.7354268444150038,
+      "cells": [
+        { "task": "exam-score-export", "old": { "success": true, "hit": "13/13", "tools": 9, "stop": "MODEL_STOP" }, "jin": { "success": false, "hit": "1/13", "tools": 8, "stop": "MAX_ROUNDS" } },
+        { "task": "paper-task-claim", "old": { "success": false, "hit": "9/10", "tools": 8, "stop": "MAX_ROUNDS" }, "jin": { "success": false, "hit": "1/10", "tools": 6, "stop": "MODEL_STOP" } },
+        { "task": "client-release-presign", "old": { "success": false, "hit": "8/11", "tools": 11, "stop": "MODEL_STOP" }, "jin": { "success": false, "hit": "1/11", "tools": 8, "stop": "MAX_ROUNDS" } },
+        { "task": "backend-operation-log", "old": { "success": false, "hit": "9/12", "tools": 9, "stop": "MODEL_STOP" }, "jin": { "success": false, "hit": "1/12", "tools": 6, "stop": "MODEL_STOP" } },
+        { "task": "exam-room-print", "old": { "success": false, "hit": "5/8", "tools": 10, "stop": "MODEL_STOP" }, "jin": { "success": false, "hit": "1/8", "tools": 7, "stop": "MODEL_STOP" } },
+        { "task": "candidate-pay-order", "old": { "success": false, "hit": "7/12", "tools": 8, "stop": "MAX_ROUNDS" }, "jin": { "success": false, "hit": "4/12", "tools": 15, "stop": "MAX_ROUNDS" } }
+      ]
     },
     "openrouter": {
       "host": "openrouter.ai",
       "model": "stealth/ox-alpha",
-      "http": null,
-      "result": "missing API key or --authorize-external",
-      "scored": 0
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "status": "MEASURED",
+      "isolationRoot": "codex-java-lsp-isolated-validation-7IGboI",
+      "liveTraceSha256": "92807b268a94faf15c3942e75afabc4ab3a4e309648b4d5df539b9c2a46233ac",
+      "runLogSha256": "f7f50f91533338cccfcf00e458405859e8762e760a9b6f1c9a1db929ce0fd5e6",
+      "serenaUnavailable": 6,
+      "failedRuntime": 0,
+      "contextCapped": 0,
+      "taskSuccess": { "status": "MEASURED", "tasks": 18, "scored": 12, "successes": 1, "mean": 0.08333333333333333 },
+      "arms": {
+        "old": { "tool": "java_impact", "tasks": 6, "scored": 6, "successes": 1, "mean": 0.16666666666666666, "toolCallCount": 43, "promptTokens": 25190, "completionTokens": 10417, "totalTokensMeasured": 35607, "stops": { "MODEL_STOP": 5, "MAX_ROUNDS": 1 } },
+        "jin": { "tool": "java_context", "tasks": 6, "scored": 6, "successes": 0, "mean": 0, "toolCallCount": 60, "promptTokens": 84024, "completionTokens": 11917, "totalTokensMeasured": 95941, "stops": { "MODEL_STOP": 3, "MAX_ROUNDS": 3 } },
+        "serena": { "status": "UNAVAILABLE", "tasks": 6, "scored": 0, "reason": "SERENA_UNAVAILABLE" }
+      },
+      "pairedHitRate": {
+        "mean": { "old": 0.7642676767676767, "jin": 0.4425893550893551, "delta": -0.3216783216783216 },
+        "direction": { "jinBetter": 0, "jinWorse": 5, "tie": 1, "n": 6 },
+        "excludingUnreachable": { "mean": { "old": 0.9833333333333334, "jin": 0.5339133089133089, "delta": -0.4494200244200245 } }
+      },
+      "tokenRatioJinOverOld": 2.6944421040806583,
+      "cells": [
+        { "task": "exam-score-export", "old": { "success": true, "hit": "13/13", "tools": 5, "stop": "MODEL_STOP" }, "jin": { "success": false, "hit": "8/13", "tools": 8, "stop": "MAX_ROUNDS" } },
+        { "task": "paper-task-claim", "old": { "success": false, "hit": "9/10", "tools": 10, "stop": "MAX_ROUNDS" }, "jin": { "success": false, "hit": "9/10", "tools": 15, "stop": "MAX_ROUNDS" } },
+        { "task": "client-release-presign", "old": { "success": false, "hit": "8/11", "tools": 4, "stop": "MODEL_STOP" }, "jin": { "success": false, "hit": "2/11", "tools": 8, "stop": "MODEL_STOP" } },
+        { "task": "backend-operation-log", "old": { "success": false, "hit": "9/12", "tools": 5, "stop": "MODEL_STOP" }, "jin": { "success": false, "hit": "6/12", "tools": 10, "stop": "MODEL_STOP" } },
+        { "task": "exam-room-print", "old": { "success": false, "hit": "5/8", "tools": 8, "stop": "MODEL_STOP" }, "jin": { "success": false, "hit": "1/8", "tools": 5, "stop": "MODEL_STOP" } },
+        { "task": "candidate-pay-order", "old": { "success": false, "hit": "7/12", "tools": 11, "stop": "MODEL_STOP" }, "jin": { "success": false, "hit": "4/12", "tools": 14, "stop": "MAX_ROUNDS" } }
+      ]
+    }
+  },
+  "combined": {
+    "pairedHitRate": {
+      "mean": { "old": 0.7642676767676767, "jin": 0.28875291375291376, "delta": -0.47551476301476294 },
+      "direction": { "jinBetter": 0, "jinWorse": 11, "tie": 1, "n": 12 },
+      "notWorsePerModel": { "local-qwen": "0/6", "openrouter": "1/6" }
+    },
+    "token": { "localQwenJinOverOld": 1.7354268444150038, "openrouterJinOverOld": 2.6944421040806583 },
+    "leftoverFalse": {
+      "presignClosed": false,
+      "payOrderClosed": false,
+      "closedOnAnyArm": false
     }
   },
   "gates": {
-    "pairedHitRate": "UNMEASURED",
-    "token": "UNMEASURED",
-    "leftoverFalse": "UNMEASURED",
-    "noCapOrRuntimeDrop": "PROVIDER_RUNTIME_DROP"
+    "pairedHitRate": "FAIL",
+    "token": "FAIL",
+    "leftoverFalse": "FAIL",
+    "noCapOrRuntimeDrop": "GO"
   }
 }

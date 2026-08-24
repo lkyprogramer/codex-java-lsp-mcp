@@ -14,11 +14,12 @@ import { RepoResolver } from "./repo-resolver.js";
 
 const expectedTools = [...PUBLIC_JAVA_TOOLS].sort();
 
-test("PUBLIC_JAVA_TOOLS includes java_context and keeps java_impact", () => {
+test("PUBLIC_JAVA_TOOLS drops java_context after L1 kill and keeps java_impact", () => {
+  const names: string[] = [...PUBLIC_JAVA_TOOLS];
   assert.deepEqual([...PUBLIC_JAVA_TOOLS].sort(), expectedTools);
-  assert.equal(PUBLIC_JAVA_TOOLS.includes("java_context"), true);
+  assert.equal(names.includes("java_context"), false);
   assert.equal(PUBLIC_JAVA_TOOLS.includes("java_impact"), true);
-  assert.equal(PUBLIC_JAVA_TOOLS.length, 6);
+  assert.equal(PUBLIC_JAVA_TOOLS.length, 5);
 });
 
 test("production MCP factory, java_impact, and java_context do not read JAVA_LSP_ENGINE", () => {

@@ -337,12 +337,14 @@ test("missing usage stays UNMEASURED instead of 0", () => {
 
 test("openai client disables Qwen thinking via chat_template_kwargs", async () => {
   let body;
+  let url;
   await openaiCompatibleChat({
-    baseUrl: "http://example.test/v1",
+    baseUrl: "http://47.106.205.246:1082/v1",
     apiKey: "sk-test",
     model: "demo",
     messages: [{ role: "user", content: "hi" }],
-    fetchImpl: async (_url, init) => {
+    fetchImpl: async (posted, init) => {
+      url = posted;
       body = JSON.parse(init.body);
       return {
         ok: true,
@@ -355,6 +357,7 @@ test("openai client disables Qwen thinking via chat_template_kwargs", async () =
     }
   });
   assert.equal(body.chat_template_kwargs.enable_thinking, false);
+  assert.equal(url, "http://47.106.205.246:1082/v1/chat/completions");
 });
 
 test("FAILED_RUNTIME and FAILED_CONTEXT_CAP are excluded from TaskSuccess mean", () => {

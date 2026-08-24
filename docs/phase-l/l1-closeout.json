@@ -3,48 +3,106 @@
   "track": "l",
   "card": "L1",
   "dated": "2026-08-23",
-  "decision": "BLOCKED_EXTERNAL",
+  "decision": "FAIL",
+  "jinPlan": "KILLED_AFTER_THREE_LIVES",
   "mergeToMain": false,
-  "srcTouched": false,
+  "srcTouched": true,
   "defaultChainIdentity": "UNCHANGED",
-  "killJavaContext": false,
+  "killJavaContext": true,
   "fourthLive": false,
-  "taskSuccess": "UNMEASURED",
-  "modelUsage": "UNMEASURED",
+  "modelSensitive": false,
+  "taskSuccess": "MEASURED",
+  "modelUsage": "MEASURED",
   "summary": "docs/phase-l/l1-live-summary.json",
-  "summarySha256": "414b62a39aae8c892b280f2cb1670b727dc108218a62ef877441c1d103fb863d",
+  "summarySha256": "cb15827888074fcd5850ba98c460d4d66dae1a851bfaf676e7123beb6e5ce574",
+  "publicTools": [
+    "java_status",
+    "java_impact",
+    "java_symbol",
+    "java_diagnostics",
+    "java_runtime"
+  ],
   "profiles": {
     "local-qwen": {
       "host": "47.106.205.246:1082",
       "model": "openclaw/Qwen3.8-27B-WORK",
-      "result": "HTTP 404 not_found on POST /chat/completions",
-      "scored": 0,
-      "failedRuntime": 12
+      "status": "MEASURED",
+      "scored": 12,
+      "successes": 1,
+      "mean": 0.08333333333333333,
+      "jinSuccesses": 0,
+      "oldSuccesses": 1,
+      "pairedDelta": -0.6293512043512043,
+      "notWorse": "0/6",
+      "tokenRatioJinOverOld": 1.7354268444150038
     },
     "openrouter": {
       "model": "stealth/ox-alpha",
-      "result": "missing API key or --authorize-external",
-      "scored": 0
+      "status": "MEASURED",
+      "scored": 12,
+      "successes": 1,
+      "mean": 0.08333333333333333,
+      "jinSuccesses": 0,
+      "oldSuccesses": 1,
+      "pairedDelta": -0.3216783216783216,
+      "notWorse": "1/6",
+      "tokenRatioJinOverOld": 2.6944421040806583
     }
+  },
+  "combined": {
+    "pairedDelta": -0.47551476301476294,
+    "direction": { "jinBetter": 0, "jinWorse": 11, "tie": 1, "n": 12 }
+  },
+  "gates": {
+    "pairedHitRate": "FAIL",
+    "token": "FAIL",
+    "leftoverFalse": "FAIL",
+    "noCapOrRuntimeDrop": "GO"
+  },
+  "leftoverFalse": {
+    "presignClosed": false,
+    "payOrderClosed": false
   },
   "harness": {
     "prewarmSharedProjectCache": true,
     "authorizeExternal": true,
     "executeLive": true,
     "maxTasks": 6,
-    "note": "Process env had no OPENAI_API_KEY. local-qwen ran with a non-secret probe credential so the shipped client actually POSTed. OpenRouter stopped at the missing-key gate."
+    "serena": "SERENA_UNAVAILABLE"
   },
   "isolation": {
+    "liveExecutableTree": "3715e8c1213b5d0835a638bc7b0c66d1586361d2",
+    "killExecutableTree": "a93251db1fb575bd3bd1f8ca19b3d68628295257",
     "localQwen": {
-      "executableTree": "b054396a73a4575a68735157b1b89c340da97e1b",
-      "logSha256": "012b1b078eea55c40c0678fadc591483c9119e14c9fdb6786f191f960b69302c",
-      "liveTraceSha256": "1530e3db3abb2e360fdd0a77658f75be29c961cb455db286e1b7125cc15beee6"
+      "root": "codex-java-lsp-isolated-validation-uUW6VA",
+      "liveTraceSha256": "89844bfe42023965dca9794728e814cc5fe09968c00800da71e21d036d5b4887"
     },
     "openrouter": {
-      "executableTree": "b054396a73a4575a68735157b1b89c340da97e1b",
-      "logSha256": "4643142fafa4a7c7391c4fa20bdc12c9b5af45e003230bf2b093b1291eba11bb",
-      "exitCode": 3
+      "root": "codex-java-lsp-isolated-validation-7IGboI",
+      "liveTraceSha256": "92807b268a94faf15c3942e75afabc4ab3a4e309648b4d5df539b9c2a46233ac",
+      "logSha256": "f7f50f91533338cccfcf00e458405859e8762e760a9b6f1c9a1db929ce0fd5e6"
+    },
+    "t0": {
+      "tests": 23,
+      "fail": 0,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "a93251db1fb575bd3bd1f8ca19b3d68628295257",
+      "logSha256": "153a23298cea81a9b45a19765c0081858e8974813ebba4aa0402d5c782940445",
+      "root": "codex-java-lsp-isolated-validation-zhVhSn"
+    },
+    "smoke": {
+      "exit": 0,
+      "tools": [
+        "java_diagnostics",
+        "java_impact",
+        "java_runtime",
+        "java_status",
+        "java_symbol"
+      ],
+      "executableTree": "a93251db1fb575bd3bd1f8ca19b3d68628295257",
+      "logSha256": "85fd99e4b2e5163f6622c94692121fcf1387594414e73fa0965b4338ab70169a",
+      "root": "codex-java-lsp-isolated-validation-UbtxgE"
     }
   },
-  "note": "Provider errors are not a java_context quality FAIL. Do not invent TaskSuccess 0. Do not drop java_context. F remains blocked by G2_OVERFIT_FAIL. Do not merge main."
+  "note": "Both models MEASURED FAIL in the same direction, so not MODEL_SENSITIVE. Combined paired mean delta -0.476; ≥4/6 not-worse missed on both profiles. Token jin > old×1.1 on both. presign and pay-order stayed false on every arm. No cap/runtime drop. java_context unregistered from PUBLIC_JAVA_TOOLS; handler and EvidenceBundle planner stay on the branch. Live ran C1 packing tree 3715e8c1. Kill T0/smoke tree a93251db. F still blocked by G2_OVERFIT_FAIL. Do not merge main. No fourth live."
 }

@@ -18,7 +18,6 @@ import {
 } from "./http-server.js";
 
 const EXPECTED_TOOLS = [
-  "java_context",
   "java_diagnostics",
   "java_impact",
   "java_runtime",

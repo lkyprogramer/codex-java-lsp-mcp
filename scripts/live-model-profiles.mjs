@@ -9,7 +9,7 @@ export const LIVE_MODEL_PROFILES = Object.freeze({
   "local-qwen": Object.freeze({
     id: "local-qwen",
     model: "openclaw/Qwen3.8-27B-WORK",
-    baseUrl: "http://47.106.205.246:1082",
+    baseUrl: "http://47.106.205.246:1082/v1",
     host: "47.106.205.246:1082"
   }),
   openrouter: Object.freeze({

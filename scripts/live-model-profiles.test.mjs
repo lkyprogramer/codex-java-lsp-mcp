@@ -12,9 +12,11 @@ test("local-qwen profile is the 29-model at 47.106.205.246:1082", () => {
   const profile = LIVE_MODEL_PROFILES["local-qwen"];
   assert.equal(profile.model, "openclaw/Qwen3.8-27B-WORK");
   assert.equal(profile.host, "47.106.205.246:1082");
-  assert.equal(profile.baseUrl, "http://47.106.205.246:1082");
+  assert.equal(profile.baseUrl, "http://47.106.205.246:1082/v1");
   assert.equal(resolveLiveModelProfile("local-qwen").host, "47.106.205.246:1082");
   assert.equal(resolveLiveModelProfile("local-qwen").model, "openclaw/Qwen3.8-27B-WORK");
+  assert.equal(`${profile.baseUrl}/chat/completions`, "http://47.106.205.246:1082/v1/chat/completions");
+  assert.equal(profile.baseUrl.endsWith("/chat/completions"), false);
 });
 
 test("local-qwen does not resolve to the retired 192.168.10.29:28343 host", () => {

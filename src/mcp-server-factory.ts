@@ -9,7 +9,6 @@ import type { ManagedToolContext, RequestOptionsInput } from "./repo-runtime-man
 import type { RepoSelector } from "./repo-resolver.js";
 import type { RequestContext } from "./runtime/request-context.js";
 import { diagnosticsSchema, javaDiagnostics } from "./tools/diagnostics.js";
-import { JAVA_CONTEXT_DESCRIPTION, javaContext, javaContextSchema } from "./tools/java-context.js";
 import { impactSchema, javaImpact } from "./tools/impact.js";
 import { javaRuntime, runtimeSchema } from "./tools/runtime.js";
 import { isDiagnosticDetail } from "./tools/shared.js";
@@ -18,11 +17,10 @@ import { javaSymbol, symbolSchema } from "./tools/symbol.js";
 
 export type McpTransportMode = "stdio" | "streamable_http";
 
-/** Single source of truth for the public MCP tool surface. java_impact stays for the current chain; java_context is the JIN planner. */
+/** Public MCP tool surface. java_impact is the current compact chain. java_context stays on the branch but is not registered after L1 FAIL. */
 export const PUBLIC_JAVA_TOOLS = [
   "java_status",
   "java_impact",
-  "java_context",
   "java_symbol",
   "java_diagnostics",
   "java_runtime"
@@ -54,7 +52,7 @@ export function createMcpServer(
     name: "codex-java-lsp",
     version: "0.1.0"
   }, {
-    instructions: "Use java_context for planned Java context. java_impact remains the current compact impact plan. Tools are read-only."
+    instructions: "java_impact is the compact Java impact plan. Tools are read-only."
   });
 
   const registered: string[] = [];
@@ -80,18 +78,6 @@ export function createMcpServer(
       mode: args.mode,
       semanticPolicy: args.semanticPolicy,
       deadlineMs: args.deadlineMs
-    }
-  }));
-
-  register(track("java_context"), {
-    title: "Java Context",
-    description: JAVA_CONTEXT_DESCRIPTION,
-    inputSchema: javaContextSchema
-  }, args => withContext(args, (context, request) => javaContext(context, args, request), {
-    mayStartLsp: false,
-    requestOptions: {
-      mode: "balanced",
-      semanticPolicy: "fast"
     }
   }));
 

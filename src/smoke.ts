@@ -11,7 +11,7 @@ const projectDir = path.resolve(scriptDir, "..");
 const repoRoot = process.env.JAVA_LSP_SMOKE_REPO_ROOT || process.env.JAVA_LSP_TEST_REPO_ROOT || process.env.LISHUEDU_ROOT || process.cwd();
 const projectId = process.env.JAVA_LSP_SMOKE_PROJECT_ID;
 const start = process.env.JAVA_LSP_SMOKE_START === "true";
-const expectedTools = ["java_status", "java_impact", "java_context", "java_symbol", "java_diagnostics", "java_runtime"];
+const expectedTools = ["java_status", "java_impact", "java_symbol", "java_diagnostics", "java_runtime"];
 
 const transport = new StdioClientTransport({
   command: process.execPath,
