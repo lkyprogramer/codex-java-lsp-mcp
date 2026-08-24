@@ -10,9 +10,11 @@ import {
   buildImpactDetail,
   buildToolCounter,
   createImpactTelemetry,
+  noteTelemetryRepoHash,
   recordToolInvocation,
   resetImpactTelemetryForTests,
-  telemetryEnabled
+  telemetryEnabled,
+  withTelemetryRequestScope
 } from "./impact-telemetry.js";
 
 test("telemetryEnabled is off only when JAVA_LSP_TELEMETRY=0", () => {
@@ -73,6 +75,76 @@ test("impact hashes repoRoot when result has no repoHash", () => {
   assert.equal(row.anchorsCount, 1);
   assert.equal(row.coldPath, false);
   assert.equal(row.coldPathHeuristic, undefined);
+});
+
+test("impact counts compact contexts that have spans as readPlanItems", () => {
+  const row = buildImpactDetail({
+    args: {
+      projectId: "exam-parent",
+      mode: "balanced",
+      verbosity: "standard",
+      anchors: [{ file: "PayService.java", line: 10, column: 1 }]
+    },
+    value: {
+      version: 1,
+      target: { file: "PayService.java", symbol: "pay" },
+      contexts: [
+        { path: "PayService.java", role: "TGT", proof: ["def"], spans: [{ s: 8, e: 20, b: 624 }] },
+        { path: "OrderMapper.java", role: "COL", proof: ["call"], spans: [{ s: 1, e: 4, b: 192 }, { s: 40, e: 48, b: 432 }] },
+        { path: "Unselected.java", role: "REL", proof: [], spans: [] }
+      ],
+      cost: { readBytes: 1248, estimatedTokens: 40, resultBytes: 200, suppressedRawBytes: 0 }
+    },
+    elapsedMs: 18,
+    error: false
+  });
+  const encoded = JSON.stringify(row);
+  assert.equal(row.readPlanItems, 2);
+  assert.equal(row.plannedSourceBytes, 1248);
+  assert.equal(row.estimatedTokens, 40);
+  assert.equal(row.anchorsCount, 1);
+  assert.equal(row.repoHash, "");
+  assert.equal(encoded.includes("PayService.java"), false);
+  assert.equal(encoded.includes("OrderMapper"), false);
+  assert.equal(encoded.includes("exam-parent"), false);
+});
+
+test("impact records context.repoHash for projectId-only calls", () => {
+  const row = withTelemetryRequestScope(() => {
+    noteTelemetryRepoHash("aabbccddeeff");
+    return buildImpactDetail({
+      args: {
+        projectId: "exam-parent",
+        mode: "balanced",
+        anchors: [{ file: "A.java", line: 1, column: 1 }]
+      },
+      value: {
+        version: 1,
+        contexts: [{ path: "A.java", role: "TGT", proof: [], spans: [{ s: 1, e: 2, b: 96 }] }],
+        cost: { readBytes: 96, estimatedTokens: 2 }
+      },
+      elapsedMs: 9,
+      error: false
+    });
+  });
+  assert.equal(row.repoHash, "aabbccddeeff");
+  assert.equal(row.readPlanItems, 1);
+  assert.equal(JSON.stringify(row).includes("exam-parent"), false);
+  assert.equal(JSON.stringify(row).includes("A.java"), false);
+});
+
+test("context.repoHash survives await inside the telemetry request scope", async () => {
+  const row = await withTelemetryRequestScope(async () => {
+    noteTelemetryRepoHash("deadbeef1234");
+    await Promise.resolve();
+    return buildImpactDetail({
+      args: { projectId: "exam-parent" },
+      value: { version: 1, contexts: [] },
+      elapsedMs: 1,
+      error: true
+    });
+  });
+  assert.equal(row.repoHash, "deadbeef1234");
 });
 
 test("elapsedMs over 2000 without hydrate phases is a heuristic cold path", () => {
@@ -177,8 +249,10 @@ test("initialization deletes telemetry files older than 30 days", async () => {
 
 test("recordToolInvocation does not mutate the handler value", () => {
   const value = {
-    cost: { estimatedTokens: 9, readBytes: 40, resultBytes: 10, suppressedRawBytes: 0 },
-    readPlan: []
+    version: 1,
+    target: { file: "PayService.java", symbol: "pay" },
+    contexts: [{ path: "PayService.java", role: "TGT", proof: ["def"], spans: [{ s: 1, e: 8, b: 384 }] }],
+    cost: { estimatedTokens: 9, readBytes: 40, resultBytes: 10, suppressedRawBytes: 0 }
   };
   const before = JSON.stringify(value);
   recordToolInvocation({

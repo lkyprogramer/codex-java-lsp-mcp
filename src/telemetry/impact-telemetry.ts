@@ -1,10 +1,23 @@
 // input: Public MCP tool name, args, handler result, and elapsed time.
 // output: Local JSONL usage metadata under cache-base/telemetry (or an override dir).
 // pos: Fail-open recorder; never throws into the tool path and never writes source text.
+import { AsyncLocalStorage } from "node:async_hooks";
 import { appendFileSync, mkdirSync, readdirSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import { repoCacheBase } from "../repo-layout.js";
 import { repoHash } from "../path-utils.js";
+
+type TelemetryRequestScope = { repoHash?: string };
+const requestScope = new AsyncLocalStorage<TelemetryRequestScope>();
+
+export function withTelemetryRequestScope<T>(fn: () => T): T {
+  return requestScope.run({}, fn);
+}
+
+export function noteTelemetryRepoHash(repoHashValue: string): void {
+  const store = requestScope.getStore();
+  if (store && repoHashValue) store.repoHash = repoHashValue;
+}
 
 const DAY_MS = 86400000;
 const COLD_MS = 2000;
@@ -44,16 +57,14 @@ export function buildImpactDetail(input: {
   const elapsedMs = ms(input.elapsedMs);
   const phaseCold = Object.keys(phaseMs).some(key => /hydrate|coldbuild|cold-build|cold_build/i.test(key));
   const coldPathHeuristic = !phaseCold && elapsedMs > COLD_MS;
-  const repoRoot = typeof args.repoRoot === "string" ? args.repoRoot : "";
-  const hashed = typeof value.repoHash === "string" && value.repoHash ? value.repoHash : repoRoot ? repoHash(repoRoot) : "";
   return {
     ts: (input.now ?? new Date()).toISOString(),
     tool: "java_impact",
-    repoHash: hashed,
+    repoHash: resolveRepoHash(args, value),
     mode: str(args.mode),
     verbosity: str(args.verbosity),
     anchorsCount: Array.isArray(args.anchors) ? args.anchors.length : typeof args.file === "string" && args.line != null ? 1 : 0,
-    readPlanItems: Array.isArray(value.readPlan) ? value.readPlan.length : 0,
+    readPlanItems: readPlanItemCount(value),
     plannedSourceBytes: num(cost.readBytes ?? cost.plannedSourceBytes),
     estimatedTokens: num(cost.estimatedTokens),
     elapsedMs,
@@ -139,6 +150,26 @@ function gcOldFiles(dir: string, now: Date): void {
       if (fileTime < cutoff) unlinkSync(path.join(dir, name));
     }
   } catch { /* drop */ }
+}
+
+function resolveRepoHash(args: Record<string, unknown>, value: Record<string, unknown>): string {
+  if (typeof value.repoHash === "string" && value.repoHash) return value.repoHash;
+  const repoRoot = typeof args.repoRoot === "string" ? args.repoRoot : "";
+  if (repoRoot) return repoHash(repoRoot);
+  return requestScope.getStore()?.repoHash ?? "";
+}
+
+function readPlanItemCount(value: Record<string, unknown>): number {
+  if (Array.isArray(value.readPlan)) return value.readPlan.length;
+  const contexts = value.contexts;
+  if (!Array.isArray(contexts)) return 0;
+  let count = 0;
+  for (const item of contexts) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const spans = (item as { spans?: unknown }).spans;
+    if (Array.isArray(spans) && spans.length > 0) count += 1;
+  }
+  return count;
 }
 
 function pad(value: number): string { return String(value).padStart(2, "0"); }

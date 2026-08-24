@@ -2,7 +2,7 @@
   "schemaVersion": "r-r1-closeout/v1",
   "track": "r",
   "card": "R1",
-  "dated": "2026-08-24",
+  "dated": "2026-08-25",
   "decision": "GO",
   "mergeToMain": false,
   "entryCondition": {
@@ -16,30 +16,34 @@
     "src/mcp-server-factory.ts",
     "src/mcp-server-factory.test.ts"
   ],
+  "productionPathFixes": [
+    "readPlanItems counts CompactImpact contexts that have spans (default java_impact has no readPlan)",
+    "repoHash comes from withContext via request-scoped ALS when args have projectId only"
+  ],
   "gates": {
-    "t0IsolatedFull": "pass 1223 + pass 278, fail 0 (JDTLS_BIN=/usr/bin/false)",
-    "t1GatePr": "pass 1223, fail 0, exitCode 0",
+    "t0IsolatedFull": "pass 1227 + pass 278, fail 0 (JDTLS_BIN=/usr/bin/false)",
+    "t1GatePr": "pass 1227, fail 0, exitCode 0",
     "identity": "handler JSON unchanged; full benchmark:agent-impact skipped (evidence-only)",
     "recordPath": "<1ms per record over 1000 iterations",
     "liveDaemon": "healthz buildSha still 25b1774a2a9d; no install-runtime or daemonctl"
   },
   "isolation": {
     "t0": {
-      "tests": 1501,
+      "tests": 1505,
       "fail": 0,
       "jdtlsBin": "/usr/bin/false",
-      "executableTree": "45f00967fe8a4100d402cf8e3725855ffc18f596",
-      "logSha256": "6e180e3c074ebd755fb562328f3a352d112d4898c4e4f054437567279f09fe74"
+      "executableTree": "6d8dcdaf12b494f9dc49ae1a8d3efa3578b82e23",
+      "logSha256": "f8d1d5fe0a1c7f70d3d45ddf16937f25c63ffd6b47a3e95bba7e964aab42b34e"
     },
     "t1": {
-      "tests": 1223,
+      "tests": 1227,
       "fail": 0,
-      "logSha256": "8dcecc09eda4313bda00d0ef98898159d025c55c8c0b258fb23d658f71458d59"
+      "logSha256": "2a1f980acd9bd240af7769f7b870739080e3e81751a7ecadc529d53e0e1a6841"
     },
     "unit": {
-      "tests": 17,
+      "tests": 21,
       "fail": 0,
-      "logSha256": "3207fb50d50fe33b4cd5fcd9b0a6a5c33bbc2664f2d307b60cd2c62ce0fcc1e2"
+      "logSha256": "277863b28e3b02f92f9087fc9aace81a46ae5dda3652004ac3f0e97e95a58cd1"
     }
   }
 }

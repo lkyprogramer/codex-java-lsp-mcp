@@ -31,6 +31,12 @@ test("production MCP factory, java_impact, and java_context do not read JAVA_LSP
   }
 });
 
+test("withContext notes repoHash for telemetry without putting it on the wire", () => {
+  const source = readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "src", "mcp-server-factory.ts"), "utf8");
+  assert.match(source, /withTelemetryRequestScope/);
+  assert.match(source, /noteTelemetryRepoHash\(context\.repoHash\)/);
+});
+
 test("repo-scoped java_status uses the 15s budget even when start is false", () => {
   const source = readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "src", "mcp-server-factory.ts"), "utf8");
   assert.match(source, /mayStartLsp: args\.start/);

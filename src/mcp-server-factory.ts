@@ -14,7 +14,7 @@ import { javaRuntime, runtimeSchema } from "./tools/runtime.js";
 import { isDiagnosticDetail } from "./tools/shared.js";
 import { javaStatus, statusSchema, summarizeResourceStatus } from "./tools/status.js";
 import { javaSymbol, symbolSchema } from "./tools/symbol.js";
-import { recordToolInvocation } from "./telemetry/impact-telemetry.js";
+import { noteTelemetryRepoHash, recordToolInvocation, withTelemetryRequestScope } from "./telemetry/impact-telemetry.js";
 
 export type McpTransportMode = "stdio" | "streamable_http";
 
@@ -183,6 +183,7 @@ export function createMcpServer(
     } = {}
   ): Promise<T> {
     return application.runtimes.withContext(args, async (context, request) => {
+      noteTelemetryRepoHash(context.repoHash);
       if (contextOptions.requireLspEnabled && !context.lsp.enabled) {
         throw new Error(context.lsp.enableHint || "This repo is not LSP-enabled.");
       }
@@ -196,7 +197,7 @@ export function createMcpServer(
     handler: (args: z.infer<z.ZodObject<T>>) => Promise<unknown>
   ): void {
     const callback = async (args: unknown, extra: { signal?: AbortSignal }): Promise<ToolResult> => {
-      const operation = application.runRequest(async () => {
+      const operation = application.runRequest(() => withTelemetryRequestScope(async () => {
         const started = performance.now();
         try {
           const value = await handler(args as z.infer<z.ZodObject<T>>);
@@ -218,7 +219,7 @@ export function createMcpServer(
           });
           throw error;
         }
-      });
+      }));
       void operation.catch(() => undefined);
       try {
         return await raceRequestAbort(operation, extra.signal);
