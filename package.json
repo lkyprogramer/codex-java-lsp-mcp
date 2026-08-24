@@ -46,6 +46,7 @@
     "gate:pr": "sh scripts/run-isolated-node.sh scripts/run-v4-gates.mjs --profile pr",
     "gate:nightly": "sh scripts/run-isolated-node.sh scripts/run-v4-gates.mjs --profile nightly",
     "gate:release": "sh scripts/run-isolated-node.sh scripts/run-v4-gates.mjs --profile release",
+    "cache:harvest": "node scripts/harvest-java-lsp-cache.mjs",
     "start": "node dist/server.js",
     "start:http": "node dist/http-server.js"
   },
