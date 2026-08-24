@@ -2,7 +2,7 @@
 
 ## 当前任务
 
-G2 收口计划：选 C 已落档，B3 解除后 **F1 FAIL**。三仓质量门 cipherlink pRead/holdout 未过；token 两仓约 −14.7% 不到 −20%；p95 GO。ruoyi identity 哨兵 FAIL，且 ruoyi 比 `main` 更差。N0.5 探针与 HEAD 同质量，摘 M/N0.5/图/O/B 无法过 F1。`main` 未动。无 live。`java_context` 仍不公开。不进 F2。
+G2 收口计划：F1 已改基线 N0 `09772b2`。三仓质量 identity、token −27%、ruoyi vs N0 identity+token GO。S2 并发 RSS 1566>1433.6，F1 内存门未过，不合 `main`。cipherlink holdout 0.55 已立项（V4-final 残差，holdout 不入目）。无 live。`java_context` 仍不公开。
 
 ## E1（2026-08-23）
 
@@ -52,9 +52,13 @@ G2 收口计划：选 C 已落档，B3 解除后 **F1 FAIL**。三仓质量门 c
 
 判定 **COMPLETE**。G5 稳态预热 2 轮。三仓比值 **0.835 / 0.547 / 0.886 ≤ 1.10**。G1 **173 / 29 / 46** 未回退。未上 LRU。收口 `docs/phase-o/o3-closeout.json`。
 
-## F1（2026-08-24）
+## F1-N0（2026-08-24）
 
-判定 **FAIL**。`docs/phase-f/f1-closeout.json`。old=`main` `48e665b`，new executableTree `b48b0b39`。T1 dist 1200 + scripts 277 fail 0。verifier 因 main 无 `deadlineMs` 拒收；门从 raw cell 计。cipherlink pRead 0.683→0.663、holdout rReadMust 0.675→0.55。token 14.7/14.7/21.4%。ruoyi 哨兵 `QUALITY_IDENTITY_FAIL`（rReadMust 0.614→0.538）。N0.5 `63859d8` 探针与 HEAD 同数字。不合 main。
+判定 **COMPARE_GO_S2_MISS**。`docs/phase-f/f1-n0-closeout.json`。old=N0 `09772b2`。三仓质量/holdout/RangeLineRecall 与 N0 逐位相同；token P50 −27.6/−28.3/−27.3%。ruoyi 哨兵 GO（identity + token −28.9%）。G1 173/29/46；S1 931；**S2 1566>1433.6**。工具 5 个。不合 main。
+
+## F1 vs github main（2026-08-24）
+
+判定 **FAIL_WRONG_TREE**。`docs/phase-f/f1-closeout.json`。github `main` 是前 V4 树。cipherlink 与 V4-final new 相同；holdout 0.55 立项。
 
 ## B3（2026-08-24）
 

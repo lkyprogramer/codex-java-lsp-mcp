@@ -3,6 +3,7 @@
 - 日期：2026-08-24
 - 状态：**ADOPTED**。本文档是收尾阶段唯一行动真源，接替 `docs/deep/codex-java-lsp-mcp-jin-n5-live-postmortem-and-value-harvest-plan-2026-08-23.md`（该文 E/C/G/O/L1 各卡已收口，其 F 轨由本文档细化后继续）。
 - **裁决记录（2026-08-24 11:53）**：A1→A2a→B0 已走完并到达 B3 停点（NOT_IN_POOL 40.8% 结构性）。用户裁决**选 C：ruoyi 降观察仓**（完整依据见 `docs/phase-b/b3-escalation.md` 用户裁决节）。G2 记 `OBSERVATION`，LORO 门改为「三仓折 GO + ruoyi 仅记账」，F1 解锁并新增 ruoyi old-vs-new 对照观察行；选项 B（图层改造）登记为未来项目，入场条件 = 真实使用中出现可归因 `NOT_IN_POOL` 缺口。**B3 停点已解除，执行 AI 从 F1 直接开跑，一路到 F3 无需再请示。**
+- **基线修订（2026-08-24，用户：对比基线 / 立项修 cipherlink holdout）**：第一次 F1 用 github `main` `48e665b` 当 old，判定 FAIL。该 `main` 是 54 文件 / 9461 LOC 的前 V4 树，不是计划所述「V4-final 旧链路」。HEAD 三仓质量与 V4-final new（cipherlink recall/pRead/rReadMust 0.839/0.663/0.91，holdout rReadMust 0.55）逐位相同。F1 重跑 **old = N0 `09772b2`**（紧凑输出前的质量 identity 点；N0.5 已对它测过 token −27%）。cipherlink holdout 残差单独立项 `docs/phase-f/cipherlink-holdout-project.md`，不阻塞本次合并，holdout 仍不入目。
 - 交付目标：解除 G2 过拟合阻塞 → 通过 F1 对比矩阵 → **一次性合并 `codex/jin-main` 到 `main` 替换现有 LSP 链路** → soak 收尾。用户已于 2026-08-23 授权全程自主执行（含最终合并）；本文档把唯一例外（G2 不可解）定义为硬升级点。
 - 执行 AI 首读顺序：本文档 §0–§2 → `docs/phase-f/final-panel.md` → `docs/phase-g/g2-closeout.json` → `HANDOFF.md` 前 60 行。
 
@@ -31,7 +32,7 @@
 
 ### 0.3 背景地图（30 秒版）
 
-- 本仓是 Java 智能检索 MCP 服务器（tree-sitter 索引 + 图 + `java_impact` 读取计划）。工作分支 `codex/jin-main`，`main` 还是 V4-final 旧链路。
+- 本仓是 Java 智能检索 MCP 服务器（tree-sitter 索引 + 图 + `java_impact` 读取计划）。工作分支 `codex/jin-main`。github `main` 是前 V4 五工具树；本分支上 V4 线的 F1 分母是 N0 `09772b2`，不是 `main` HEAD。
 - 分支上已完成且有硬证据的收益：N0.5 紧凑输出（token −27%，质量 identity）、M/M6 内存栈（单仓热堆 838→173 MiB，G1 全绿）、N2a/N3 图内核（内部能力，不改工具面）、O3（G5 稳态达标）。
 - 已处决：`java_context` 工具（三次 live 全败，公开工具面回到 5 个：`java_status/java_impact/java_symbol/java_diagnostics/java_runtime`）。
 - 已记账的残差（允许带入合并，F1 风险栏复述）：O1 child 冷建 RSS 1851 > 1536；O2 lishuedu 冷建 83.5s > 60s（有快照兜底，正确性无关）。
@@ -160,11 +161,11 @@ F1 对比矩阵（vs main HEAD）→ F2 合并 + attestation → F3 soak → 计
 ### F1 合并包组装 + 对比矩阵（预估 1 天，LOC 0 新增；前置：G2 已解除或 A2b 降级）
 
 - **包内容**：`codex/jin-main` 全量现状（含 A/B 轨落地的刀；`java_context` 已 kill、planner flag-off 留分支）。
-- **对比矩阵**：`npm run benchmark:three-repo-matrix -- --runs 5`，old = `main` HEAD，new = 合并候选树，AB/BA/AB 串行 cold-nolsp。**预期非 identity**，按 §2 F1 四门裁决（质量非劣 −0.005 容差 / token −20% / p95 1.10 / 内存不回退）。
+- **对比矩阵**：`npm run benchmark:three-repo-matrix -- --runs 5`，old = N0 `09772b2`，new = 合并候选树，AB/BA/AB 串行 cold-nolsp。**预期非 identity（token）**，质量预期与 N0.5 相同（identity vs N0）。按 §2 F1 四门裁决（质量非劣 −0.005 容差 / token −20% / p95 1.10 / 内存不回退）。github `main` 那次矩阵留在 `docs/phase-f/f1-closeout.json`，当作错树对照，不重开为门。
 - **附加验证**：
   1. `sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile full`（T1 全量）；
   2. `run-memory-benchmark.mjs` 在候选树复测 G1/S1/S2；
-  3. **ruoyi old-vs-new 对照观察行（选 C 裁决新增，必做）**：在 ruoyi golden（A2a 重推导版，只用 tuning + 汇总指标，holdout 仍不入目）上跑 old = `main` HEAD、new = 合并候选树的对照。预期：质量指标逐位相同（identity 论证的实证）+ estimatedTokens P50 下降 ≥ 20%。质量若非逐位相同 → 说明分支在某处动了默认链，立即停下二分定位（这是 F1 质量门的前置哨兵，不是观察完就算）；token 未降 → 按 F1 token 门失败处置。结果入 `docs/phase-f/f1-ruoyi-observation.json`；
+  3. **ruoyi old-vs-new 对照观察行（选 C 裁决新增，必做）**：在 ruoyi golden（A2a 重推导版，只用 tuning + 汇总指标，holdout 仍不入目）上跑 old = N0 `09772b2`、new = 合并候选树的对照。预期：质量指标逐位相同（identity 论证相对 **N0/V4 线**，不是 github `main`）+ estimatedTokens P50 下降 ≥ 20%。质量若非逐位相同 → 说明 N0 之后默认链被移动，立即停下二分定位；token 未降 → 按 F1 token 门失败处置。对 github `main` 的那次观察留在 `f1-ruoyi-observation.json`；N0 对照写入 `docs/phase-f/f1-ruoyi-observation-n0.json`；
   4. `npm run measure:production-ts` LOC 台账；
   5. `npm run measure:tool-schema`：5 工具，总 token ≤ main 现状。
 - **产出**：`docs/phase-f/f1-closeout.json`（全部门 + SHA + executableTree）。

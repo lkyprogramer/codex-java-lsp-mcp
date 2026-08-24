@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "f-f1-ruoyi-observation/v1",
+  "dated": "2026-08-24",
+  "card": "F1",
+  "repo": "ruoyi-vue-pro",
+  "evaluationSplit": "tuning",
+  "holdoutInspected": false,
+  "holdoutSkipped": 12,
+  "tuningCount": 28,
+  "runs": 5,
+  "layoutProfile": "maven-reactor",
+  "deadlineMs": 30000,
+  "old": {
+    "recall": 0.7482142857142859,
+    "pRead": 0.2976190476190475,
+    "rReadMust": 0.5383503401360543,
+    "RangeLineRecall": 0.35258194186765596,
+    "estimatedTokensP50": 3601,
+    "scenarios": 28
+  },
+  "new": {
+    "recall": 0.7482142857142859,
+    "pRead": 0.2976190476190475,
+    "rReadMust": 0.5383503401360543,
+    "RangeLineRecall": 0.35258194186765596,
+    "estimatedTokensP50": 2562,
+    "scenarios": 28
+  },
+  "identity": {
+    "identical": true,
+    "diffs": [],
+    "unmeasured": []
+  },
+  "token": {
+    "drop": 0.28853096362121633,
+    "pass": true,
+    "gate": 0.2
+  },
+  "decision": "GO",
+  "taskSuccess": "UNMEASURED",
+  "mergeToMain": false,
+  "note": "Quality identity vs main; token P50 drop meets the F1 door."
+}
