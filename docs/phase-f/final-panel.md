@@ -22,7 +22,7 @@ Live 29-model profile (`local-qwen`): host `47.106.205.246:1082`, model `opencla
 | O3 G5 steady ≤ 1.10 | COMPLETE | `docs/phase-o/o3-closeout.json` | warmup 2; post-O1/O2 remeasure 0.802/0.614/0.890; G1 173/29/46 |
 | L1 dual-model live | FAIL_RECORDED | `docs/phase-l/l1-closeout.json` | both models MEASURED FAIL; jin 0/6 vs old 1/6; paired delta −0.476; kill java_context from PUBLIC_JAVA_TOOLS; no fourth live |
 | A1 ruoyi golden audit | GOLDEN_NOISY | `docs/phase-a/a1-closeout.json` | tuning 13/28 noisy (0.464); control 0; holdout unread; next A2a |
-| A2a re-derive + LORO | PENDING | | |
+| A2a re-derive + LORO | GOLDEN_FIXED_CHAIN_STILL_FAILS | `docs/phase-a/a2a-closeout.json` | 238/382 pass filter; LORO ruoyi pRead/rReadMust still >15%; recall now passes; next B0 |
 | A2b observation downgrade | PENDING | | only if filtered scenes < 20 |
 | B0 miss-layer diagnosis | PENDING | | only if A2a still fails LORO |
 | F1 compare vs main | BLOCKED | | blocked until G2 resolved or A2b |

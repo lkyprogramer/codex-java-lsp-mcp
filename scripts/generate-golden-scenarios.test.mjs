@@ -126,6 +126,31 @@ test("missing pin files and generated noise are dropped, not hand-filled", async
   assert.deepEqual(result.scenarios.map(row => row.golden.mustHit[0]).sort(), ["src/A.java", "src/C.java"]);
 });
 
+test("a1 neutral filter drops test-file mustHit and keeps clean pairs", async () => {
+  const root = await pinRepo([
+    "mod/src/A.java",
+    "mod/src/B.java",
+    "mod/src/test/FooTest.java",
+    "mod/src/C.java"
+  ]);
+  const payload = {
+    project: "fixture",
+    head: "e".repeat(40),
+    train: [
+      task(1, [{ path: "mod/src/A.java" }, { path: "mod/src/B.java" }]),
+      task(2, [{ path: "mod/src/A.java" }, { path: "mod/src/test/FooTest.java" }])
+    ],
+    holdout: []
+  };
+  const filtered = generateGoldenScenarios(payload, root, { a1NeutralFilter: true, holdoutRatio: 0 });
+  assert.equal(filtered.dropped.a1Noisy, 1);
+  assert.equal(filtered.filterPassed, 1);
+  assert.equal(filtered.scenarios.length, 1);
+  assert.deepEqual(filtered.scenarios[0].golden.mustHit, ["mod/src/A.java", "mod/src/B.java"]);
+  const unfiltered = generateGoldenScenarios(payload, root, { holdoutRatio: 0 });
+  assert.equal(unfiltered.scenarios.length, 2);
+});
+
 test("quality fail when fewer than 20 surviving scenes", async () => {
   const root = await pinRepo(["src/A.java", "src/B.java"]);
   const payload = {

@@ -1,0 +1,244 @@
+{
+  "schemaVersion": "g-g2-loro/v1",
+  "dated": "2026-08-24",
+  "retune": false,
+  "taskSuccess": "UNMEASURED",
+  "protocolFolds": [
+    {
+      "heldOut": "cipherlink",
+      "train": [
+        "exam-parent-v3",
+        "lishuedu",
+        "ruoyi-vue-pro"
+      ],
+      "matrix": "UNMEASURED",
+      "taskSuccess": "UNMEASURED",
+      "retune": false
+    },
+    {
+      "heldOut": "exam-parent-v3",
+      "train": [
+        "cipherlink",
+        "lishuedu",
+        "ruoyi-vue-pro"
+      ],
+      "matrix": "UNMEASURED",
+      "taskSuccess": "UNMEASURED",
+      "retune": false
+    },
+    {
+      "heldOut": "lishuedu",
+      "train": [
+        "cipherlink",
+        "exam-parent-v3",
+        "ruoyi-vue-pro"
+      ],
+      "matrix": "UNMEASURED",
+      "taskSuccess": "UNMEASURED",
+      "retune": false
+    },
+    {
+      "heldOut": "ruoyi-vue-pro",
+      "train": [
+        "cipherlink",
+        "exam-parent-v3",
+        "lishuedu"
+      ],
+      "matrix": "UNMEASURED",
+      "taskSuccess": "UNMEASURED",
+      "retune": false
+    }
+  ],
+  "fourthRepo": "ruoyi-vue-pro",
+  "gate": 0.15,
+  "runs": 1,
+  "repos": {
+    "cipherlink": {
+      "root": "/tmp/codex-java-v3-golden-20260809/cipherlink",
+      "recall": 0.838992673992674,
+      "pRead": 0.6433333333333333,
+      "rReadMust": 0.885,
+      "scenarios": 10,
+      "prepareJavaIndexMs": 10054.340542000002
+    },
+    "exam-parent-v3": {
+      "root": "/tmp/codex-java-v3-golden-20260809/exam-parent-v3",
+      "recall": 0.6970066045066046,
+      "pRead": 0.6,
+      "rReadMust": 0.8800000000000001,
+      "scenarios": 10,
+      "prepareJavaIndexMs": 17071.675791
+    },
+    "lishuedu": {
+      "root": "/tmp/codex-java-v3-golden-20260809/lishuedu",
+      "recall": 0.7985714285714285,
+      "pRead": 0.7216666666666667,
+      "rReadMust": 0.925,
+      "scenarios": 10,
+      "prepareJavaIndexMs": 94236.822375
+    },
+    "ruoyi-vue-pro": {
+      "root": "/tmp/codex-java-v4-golden-20260823/ruoyi-vue-pro",
+      "recall": 0.6841666666666667,
+      "pRead": 0.3041666666666666,
+      "rReadMust": 0.5239285714285715,
+      "scenarios": 40,
+      "prepareJavaIndexMs": 77813.668583
+    }
+  },
+  "scores": {
+    "schemaVersion": "g2-loro-scores/v1",
+    "gate": 0.15,
+    "measuredMetricCells": 12,
+    "failed": true,
+    "decision": "G2_OVERFIT_FAIL",
+    "folds": [
+      {
+        "heldOut": "cipherlink",
+        "train": [
+          "exam-parent-v3",
+          "lishuedu",
+          "ruoyi-vue-pro"
+        ],
+        "retune": false,
+        "taskSuccess": "UNMEASURED",
+        "metrics": {
+          "recall": {
+            "status": "MEASURED",
+            "held": 0.838992673992674,
+            "restMean": 0.7265815665815666,
+            "drop": -0.15471230290080312,
+            "gate": 0.15,
+            "pass": true
+          },
+          "pRead": {
+            "status": "MEASURED",
+            "held": 0.6433333333333333,
+            "restMean": 0.5419444444444445,
+            "drop": -0.1870835468990261,
+            "gate": 0.15,
+            "pass": true
+          },
+          "rReadMust": {
+            "status": "MEASURED",
+            "held": 0.885,
+            "restMean": 0.7763095238095238,
+            "drop": -0.1400092010427849,
+            "gate": 0.15,
+            "pass": true
+          }
+        }
+      },
+      {
+        "heldOut": "exam-parent-v3",
+        "train": [
+          "cipherlink",
+          "lishuedu",
+          "ruoyi-vue-pro"
+        ],
+        "retune": false,
+        "taskSuccess": "UNMEASURED",
+        "metrics": {
+          "recall": {
+            "status": "MEASURED",
+            "held": 0.6970066045066046,
+            "restMean": 0.7739102564102563,
+            "drop": 0.09937024515008432,
+            "gate": 0.15,
+            "pass": true
+          },
+          "pRead": {
+            "status": "MEASURED",
+            "held": 0.6,
+            "restMean": 0.5563888888888888,
+            "drop": -0.0783824263604594,
+            "gate": 0.15,
+            "pass": true
+          },
+          "rReadMust": {
+            "status": "MEASURED",
+            "held": 0.8800000000000001,
+            "restMean": 0.7779761904761905,
+            "drop": -0.13114001530221894,
+            "gate": 0.15,
+            "pass": true
+          }
+        }
+      },
+      {
+        "heldOut": "lishuedu",
+        "train": [
+          "cipherlink",
+          "exam-parent-v3",
+          "ruoyi-vue-pro"
+        ],
+        "retune": false,
+        "taskSuccess": "UNMEASURED",
+        "metrics": {
+          "recall": {
+            "status": "MEASURED",
+            "held": 0.7985714285714285,
+            "restMean": 0.7400553150553151,
+            "drop": -0.07906991859350358,
+            "gate": 0.15,
+            "pass": true
+          },
+          "pRead": {
+            "status": "MEASURED",
+            "held": 0.7216666666666667,
+            "restMean": 0.5158333333333333,
+            "drop": -0.3990306946688209,
+            "gate": 0.15,
+            "pass": true
+          },
+          "rReadMust": {
+            "status": "MEASURED",
+            "held": 0.925,
+            "restMean": 0.7629761904761905,
+            "drop": -0.21235762209393047,
+            "gate": 0.15,
+            "pass": true
+          }
+        }
+      },
+      {
+        "heldOut": "ruoyi-vue-pro",
+        "train": [
+          "cipherlink",
+          "exam-parent-v3",
+          "lishuedu"
+        ],
+        "retune": false,
+        "taskSuccess": "UNMEASURED",
+        "metrics": {
+          "recall": {
+            "status": "MEASURED",
+            "held": 0.6841666666666667,
+            "restMean": 0.7781902356902357,
+            "drop": 0.12082337288667264,
+            "gate": 0.15,
+            "pass": true
+          },
+          "pRead": {
+            "status": "MEASURED",
+            "held": 0.3041666666666666,
+            "restMean": 0.6549999999999999,
+            "drop": 0.5356234096692113,
+            "gate": 0.15,
+            "pass": false
+          },
+          "rReadMust": {
+            "status": "MEASURED",
+            "held": 0.5239285714285715,
+            "restMean": 0.8966666666666668,
+            "drop": 0.4156930430164631,
+            "gate": 0.15,
+            "pass": false
+          }
+        }
+      }
+    ]
+  },
+  "decision": "G2_OVERFIT_FAIL",
+  "mergeToMain": false
+}

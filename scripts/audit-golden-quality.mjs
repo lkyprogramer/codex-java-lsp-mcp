@@ -270,8 +270,42 @@ export function loadModuleDepGraph(repoRoot, moduleRoots) {
   return deps;
 }
 
-function gitRunner(repoRoot) {
+export function gitRunner(repoRoot) {
   return (args) => execFileSync("git", ["-C", repoRoot, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+}
+
+export function buildA1RepoContext(repoRoot) {
+  const moduleRoots = listMavenModuleRoots(repoRoot);
+  const moduleDeps = loadModuleDepGraph(repoRoot, moduleRoots);
+  const git = repoRoot && existsSync(path.join(repoRoot, ".git")) ? gitRunner(repoRoot) : null;
+  return {
+    moduleRoots,
+    moduleDeps,
+    contextForTask(task) {
+      const commitFiles = (task?.files ?? []).map(file => file.path);
+      let meta = {
+        isMerge: false,
+        changedFileCount: commitFiles.length || null,
+        degraded: !git
+      };
+      if (git && task?.commit) {
+        meta = inspectCommitMeta(task.commit, { git });
+        if (meta.degraded && commitFiles.length) meta = { ...meta, changedFileCount: commitFiles.length };
+      }
+      const generatedHeaders = new Set();
+      for (const file of commitFiles) {
+        if (headerLooksGenerated(readHeader(repoRoot, file))) generatedHeaders.add(posixPath(file));
+      }
+      return {
+        moduleRoots,
+        moduleDeps,
+        batchPaths: batchTemplatePaths(commitFiles),
+        generatedHeaders,
+        isMerge: meta.isMerge,
+        changedFileCount: meta.changedFileCount
+      };
+    }
+  };
 }
 
 function readHeader(repoRoot, relative) {

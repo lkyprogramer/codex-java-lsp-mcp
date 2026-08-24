@@ -6,6 +6,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { MIN_JAVA_FILES, sha256, splitTrainHoldout } from "./generate-commit-tasks.mjs";
+import { auditMustHit, buildA1RepoContext } from "./audit-golden-quality.mjs";
 
 export const G1_SCHEMA = "g1-golden-scenarios/v1";
 export const G1_MAX_SCENARIOS = 40;
@@ -209,7 +210,26 @@ export function generateGoldenScenarios(payload, repoRoot, options = {}) {
   const repoCommit = options.repoCommit ?? payload.head;
   const layoutProfile = options.layoutProfile ?? inferLayoutProfile(project);
   const derived = deriveEligibleTasks(payload, repoRoot);
-  const selected = truncateEligible(derived.eligible, options.maxScenarios ?? G1_MAX_SCENARIOS);
+  let pool = derived.eligible;
+  let droppedA1Noisy = 0;
+  if (options.a1NeutralFilter) {
+    const repoContext = options.a1FilterContext ?? buildA1RepoContext(repoRoot);
+    const passing = [];
+    for (const item of pool) {
+      const scenario = scenarioFromTask(item.task, item.java, repoCommit, project, layoutProfile);
+      const labeled = auditMustHit(item.java.map(file => file.path), {
+        ...repoContext.contextForTask(item.task),
+        anchorFile: scenario.anchor.file
+      });
+      if (labeled.noisy) {
+        droppedA1Noisy += 1;
+        continue;
+      }
+      passing.push(item);
+    }
+    pool = passing;
+  }
+  const selected = truncateEligible(pool, options.maxScenarios ?? G1_MAX_SCENARIOS);
   const split = splitTrainHoldout(selected.map(item => item.task), options.holdoutRatio ?? G1_HOLDOUT_RATIO);
   const holdoutCommits = new Set(split.holdout.map(task => task.commit));
   const scenarios = selected.map(({ task, java }) => {
@@ -230,13 +250,17 @@ export function generateGoldenScenarios(payload, repoRoot, options = {}) {
     dropped: {
       missingAtPin: derived.droppedMissing,
       thin: derived.droppedThin,
-      generatedNoise: derived.droppedNoise
+      generatedNoise: derived.droppedNoise,
+      a1Noisy: droppedA1Noisy
     },
     eligible: derived.eligible.length,
+    filterPassed: pool.length,
     selected: selected.length,
     scenarios,
     quality,
-    decision: quality.failed ? "G1_QUALITY_FAIL" : "GO"
+    decision: options.a1NeutralFilter && pool.length < G1_MIN_SCENARIOS
+      ? "A2b"
+      : quality.failed ? "G1_QUALITY_FAIL" : "GO"
   };
 }
 
@@ -255,9 +279,10 @@ export function scenariosToJsonl(scenarios) {
   })).join("\n")}\n`;
 }
 
-export function smokeGoldenScenarios(scenarios, repoRoot) {
+export function smokeGoldenScenarios(scenarios, repoRoot, { skipHoldout = false } = {}) {
   const missing = [];
   for (const row of scenarios) {
+    if (skipHoldout && row.evaluationSplit === "holdout") continue;
     if (!fileExistsAtPin(repoRoot, row.anchor?.file)) missing.push("anchor");
     for (const file of row.golden?.mustHit ?? []) {
       if (!fileExistsAtPin(repoRoot, file)) missing.push("mustHit");
@@ -272,9 +297,14 @@ export function smokeGoldenScenarios(scenarios, repoRoot) {
 
 function parseCli(args) {
   const options = new Map();
+  const flags = new Set();
   for (let index = 0; index < args.length; index += 1) {
     const key = args[index];
     if (key === "--help" || key === "-h") return { help: true };
+    if (key === "--a1-neutral-filter") {
+      flags.add(key);
+      continue;
+    }
     if (!key.startsWith("--") || index + 1 >= args.length) throw new Error(`invalid argument: ${key}`);
     options.set(key, args[++index]);
   }
@@ -284,7 +314,8 @@ function parseCli(args) {
     repo: options.get("--repo"),
     output: options.get("--output"),
     manifest: options.get("--manifest"),
-    layoutProfile: options.get("--layout-profile")
+    layoutProfile: options.get("--layout-profile"),
+    a1NeutralFilter: flags.has("--a1-neutral-filter")
   };
 }
 
@@ -306,17 +337,21 @@ export function g1Manifest(result, extra = {}) {
       minHoldout: G1_MIN_HOLDOUT,
       split: "time-ordered-splitTrainHoldout",
       layoutProfile: result.layoutProfile,
-      handPicked: false
+      handPicked: false,
+      a1NeutralFilter: extra.a1NeutralFilter === true,
+      a1RuleVersion: extra.a1NeutralFilter ? "a1-noisy-rules/v1" : null
     },
     counts: {
       eligible: result.eligible,
+      filterPassed: result.filterPassed ?? result.selected,
       selected: result.selected,
       scenarios: result.scenarios.length,
       tuning: result.quality.tuning,
       holdout: result.quality.holdout,
       droppedMissingAtPin: result.dropped.missingAtPin,
       droppedThin: result.dropped.thin,
-      droppedNoise: result.dropped.generatedNoise
+      droppedNoise: result.dropped.generatedNoise,
+      droppedA1Noisy: result.dropped.a1Noisy ?? 0
     },
     quality: {
       thinMustHit: result.quality.thinMustHit,
@@ -339,18 +374,22 @@ async function main() {
   if (!cli.tasks || !cli.repo || !cli.output) throw new Error("--tasks, --repo, and --output are required");
   const payload = JSON.parse(await readFile(path.resolve(cli.tasks), "utf8"));
   const result = generateGoldenScenarios(payload, path.resolve(cli.repo), {
-    layoutProfile: cli.layoutProfile
+    layoutProfile: cli.layoutProfile,
+    a1NeutralFilter: cli.a1NeutralFilter
   });
   const text = scenariosToJsonl(result.scenarios);
   await mkdir(path.dirname(path.resolve(cli.output)), { recursive: true });
   await writeFile(cli.output, text);
-  const smoke = smokeGoldenScenarios(result.scenarios, path.resolve(cli.repo));
+  const smoke = smokeGoldenScenarios(result.scenarios, path.resolve(cli.repo), {
+    skipHoldout: cli.a1NeutralFilter
+  });
   const manifest = g1Manifest(result, {
     checkout: path.resolve(cli.repo),
     commitTasks: path.resolve(cli.tasks),
     jsonl: path.resolve(cli.output),
     jsonlSha256: sha256(text),
-    smoke
+    smoke,
+    a1NeutralFilter: cli.a1NeutralFilter
   });
   if (cli.manifest) {
     await mkdir(path.dirname(path.resolve(cli.manifest)), { recursive: true });

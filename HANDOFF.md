@@ -2,7 +2,7 @@
 
 ## 当前任务
 
-G2 收口计划（2026-08-24）为行动真源。A1 **GOLDEN_NOISY**（ruoyi tuning 13/28 = 0.464，三仓对照 0）。下一步 A2a。L1 已 kill `java_context`。G2 仍阻塞 F。无 live。
+G2 收口计划（2026-08-24）为行动真源。A1 GOLDEN_NOISY。A2a **GOLDEN_FIXED_CHAIN_STILL_FAILS**（过滤后 LORO ruoyi pRead/rReadMust 仍超门）。下一步 B0。L1 已 kill `java_context`。无 live。
 
 ## E1（2026-08-23）
 
@@ -51,6 +51,10 @@ G2 收口计划（2026-08-24）为行动真源。A1 **GOLDEN_NOISY**（ruoyi tun
 ## O3（2026-08-23）
 
 判定 **COMPLETE**。G5 稳态预热 2 轮。三仓比值 **0.835 / 0.547 / 0.886 ≤ 1.10**。G1 **173 / 29 / 46** 未回退。未上 LRU。收口 `docs/phase-o/o3-closeout.json`。
+
+## A2a（2026-08-24）
+
+判定 **GOLDEN_FIXED_CHAIN_STILL_FAILS**。A1 规则取反过滤 eligible 382→238，写入 40 场景（28 tuning / 12 holdout）。tuning 再审计 noisyRate 0。LORO 三折 GO；ruoyi recall 回撤 0.121 过门，pRead 0.536 / rReadMust 0.416 仍 >0.15。holdout 未读。下一步 **B0**。收口 `docs/phase-a/a2a-closeout.json`。
 
 ## A1（2026-08-24）
 
@@ -115,7 +119,7 @@ N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a 
 
 ## 下一步计划
 
-1. A1 GOLDEN_NOISY → A2a 重推导 ruoyi golden，重跑 LORO。holdout 不入目。
+1. A2a 后链路仍过拟合 → B0 对 ruoyi tuning 做缺口分层。holdout 不入目。
 2. 没有第四次 live。不要把 `java_context` 加回公开工具面。
 3. F2 在 F1 GO 后按 2026-08-24 计划非 squash 合并；B3 才是停点。
 4. 冷建 RSS / 时长残差走已记账的 O1/O2，不重开 M 轨架构。
