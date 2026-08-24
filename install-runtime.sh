@@ -354,7 +354,10 @@ run_release_tests_in_isolated_environment() {
     return 1
   }
   if ! (
-    cd "$RELEASE_DIR"
+    # Isolated npm test git-clones cwd. The immutable release copy has no .git
+    # (rsync excludes it), so tests must run from the source checkout. The
+    # release is a clean snapshot of that tree.
+    cd "$SCRIPT_DIR"
     exec env \
       "JAVA_LSP_CACHE_BASE=$test_cache" \
       "JAVA_LSP_OWNERSHIP_BASE=$test_ownership" \

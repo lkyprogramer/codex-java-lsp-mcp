@@ -231,6 +231,7 @@ test("installer release tests isolate cache, ownership, projects, and XDG state 
   assert.match(installer, /"XDG_CONFIG_HOME=\$INSTALL_TEST_ROOT\/config"/);
   assert.match(installer, /"CODEX_HOME=\$INSTALL_TEST_ROOT\/codex-home"/);
   assert.match(installer, /"HOME=\$INSTALL_TEST_ROOT\/home"/);
+  assert.match(installer, /cd "\$SCRIPT_DIR"\n    exec env \\/);
   assert.match(installer, /cleanup_install_test_environment\n\s*release_install_lock/);
 });
 
