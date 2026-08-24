@@ -24,7 +24,9 @@ Live 29-model profile (`local-qwen`): host `47.106.205.246:1082`, model `opencla
 | A1 ruoyi golden audit | GOLDEN_NOISY | `docs/phase-a/a1-closeout.json` | tuning 13/28 noisy (0.464); control 0; holdout unread; next A2a |
 | A2a re-derive + LORO | GOLDEN_FIXED_CHAIN_STILL_FAILS | `docs/phase-a/a2a-closeout.json` | 238/382 pass filter; LORO ruoyi pRead/rReadMust still >15%; recall now passes; next B0 |
 | A2b observation downgrade | PENDING | | only if filtered scenes < 20 |
-| B0 miss-layer diagnosis | PENDING | | only if A2a still fails LORO |
-| F1 compare vs main | BLOCKED | | blocked until G2 resolved or A2b |
+| B0 miss-layer diagnosis | NOT_IN_POOL_STRUCTURAL | `docs/phase-b/b0-closeout.json` | 76 misses; NOT_IN_POOL 50% > 40%; selection 50% < 60%; no B knives |
+| B1/B2 chain knives | SKIPPED | | not entered; discovery-layer miss |
+| B3 escalation | ESCALATE_STOP | `docs/phase-b/b3-closeout.json` | unique stop; main untouched; three options in b3-escalation.md |
+| F1 compare vs main | BLOCKED | | blocked by B3; G2 unresolved |
 | F2 merge + attestation | BLOCKED | | after F1 GO; non-squash |
 | F3 soak | BLOCKED | | after F2; F3_SOAK_STARTED until evidence |

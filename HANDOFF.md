@@ -2,7 +2,7 @@
 
 ## 当前任务
 
-G2 收口计划（2026-08-24）为行动真源。A1 GOLDEN_NOISY。A2a **GOLDEN_FIXED_CHAIN_STILL_FAILS**（过滤后 LORO ruoyi pRead/rReadMust 仍超门）。下一步 B0。L1 已 kill `java_context`。无 live。
+G2 收口计划停在 **B3**。A1 GOLDEN_NOISY → A2a 过滤后 LORO 仍 FAIL → B0 `NOT_IN_POOL` 50% > 40%，不进 B1/B2。`main` 未动。等用户在接受风险合并 / 图层立项 / ruoyi 降观察仓中选择。无 live。`java_context` 仍不公开。
 
 ## E1（2026-08-23）
 
@@ -51,6 +51,14 @@ G2 收口计划（2026-08-24）为行动真源。A1 GOLDEN_NOISY。A2a **GOLDEN_
 ## O3（2026-08-23）
 
 判定 **COMPLETE**。G5 稳态预热 2 轮。三仓比值 **0.835 / 0.547 / 0.886 ≤ 1.10**。G1 **173 / 29 / 46** 未回退。未上 LRU。收口 `docs/phase-o/o3-closeout.json`。
+
+## B3（2026-08-24）
+
+**STOP。** `docs/phase-b/b3-escalation.md`。G2 不可解：缺口主体是候选池缺失，不是选择层。三选一等用户。不合 main。
+
+## B0（2026-08-24）
+
+判定 **NOT_IN_POOL_STRUCTURAL**。tuning 28，holdout 12 未读。76 个缺失：NOT_IN_POOL 50%，IN_POOL_EVICTED 30%，RANGE_MISS 20%。选择层 50% < 60%，**不开 B1/B2**。隔离 T0 3/3；T2 诊断 GO。收口 `docs/phase-b/b0-closeout.json`。
 
 ## A2a（2026-08-24）
 
@@ -119,9 +127,9 @@ N0 COMPLETE → N0.5 COMPLETE → N1 FAIL RSS（M 轨道 **RESOLVED**）→ N2a 
 
 ## 下一步计划
 
-1. A2a 后链路仍过拟合 → B0 对 ruoyi tuning 做缺口分层。holdout 不入目。
+1. B3 停点：用户在接受风险合并 / 图层立项 / ruoyi 降观察仓中选。
 2. 没有第四次 live。不要把 `java_context` 加回公开工具面。
-3. F2 在 F1 GO 后按 2026-08-24 计划非 squash 合并；B3 才是停点。
+3. 在用户选择之前不合 `main`。
 4. 冷建 RSS / 时长残差走已记账的 O1/O2，不重开 M 轨架构。
 
 ## 绝对不要再踩的坑

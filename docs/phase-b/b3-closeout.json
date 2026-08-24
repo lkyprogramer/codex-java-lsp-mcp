@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "b-b3-closeout/v1",
+  "track": "b",
+  "card": "B3",
+  "dated": "2026-08-24",
+  "decision": "ESCALATE_STOP",
+  "mergeToMain": false,
+  "srcTouched": false,
+  "defaultChainIdentity": "UNCHANGED",
+  "fourthLive": false,
+  "killJavaContext": false,
+  "publicToolsStillExcludeJavaContext": true,
+  "holdoutInspected": false,
+  "taskSuccess": "UNMEASURED",
+  "escalation": "docs/phase-b/b3-escalation.md",
+  "reason": "B0 NOT_IN_POOL 0.50 > 0.40. Selection-layer share 0.50 < 0.60 so B1/B2 are not entered. G2 remains unresolved.",
+  "options": ["accept-risk-merge", "graph-index-project", "ruoyi-observation"],
+  "f1Started": false,
+  "f2Started": false,
+  "note": "Unique stop in the 2026-08-24 plan. main untouched. Wait for the user."
+}
