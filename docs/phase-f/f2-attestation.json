@@ -1,0 +1,70 @@
+{
+  "schemaVersion": "f-f2-attestation/v1",
+  "track": "f",
+  "card": "F2",
+  "dated": "2026-08-24",
+  "decision": "GO",
+  "mergeToMain": true,
+  "holdoutInspected": false,
+  "taskSuccess": "UNMEASURED",
+  "fourthLive": false,
+  "merge": {
+    "commit": "e48a2534388ab116eb2760a5f3c5e91f1aaa447c",
+    "parents": [
+      "48e665ba73dc332dccd4b34e71adc1c048170cf6",
+      "db61edc0ba033e05d9cf3eb3c0396e651347190e"
+    ],
+    "strategy": "ort",
+    "squash": false,
+    "plan": "docs/deep/codex-java-lsp-mcp-g2-resolution-and-main-cutover-plan-2026-08-24.md",
+    "f1Closeout": "docs/phase-f/f1-n0-closeout.json",
+    "f1CloseoutSha256": "908f8e35a130ea0acfc401272c568ddc4b14cb035470707027da496048173ce9"
+  },
+  "gates": {
+    "pr": {
+      "exitCode": 0,
+      "rawSha256": "ecc586e795b2a05875e1435529ec1377a8970175bec3a88c2211ddd8284355c6",
+      "bytes": 273124
+    },
+    "nightly": {
+      "exitCode": 0,
+      "rawSha256": "c6971bb9a31c494f39c377412d3c5ce54bf74d6bbd4733eb743ffd685b2b7305",
+      "bytes": 334265,
+      "stdioSmoke": true
+    },
+    "release": {
+      "exitCode": 0,
+      "rawSha256": "3ad8ed32c264a114c03cc30f7eca8605b47a689a9348db08ba46a1fef62549e7",
+      "bytes": 335367,
+      "httpSmoke": {
+        "url": "http://127.0.0.1:38491/mcp",
+        "tools": ["java_diagnostics", "java_impact", "java_runtime", "java_status", "java_symbol"],
+        "buildSha": "e48a2534388a",
+        "java_context": false
+      }
+    }
+  },
+  "productionDefaults": {
+    "publicTools": ["java_status", "java_impact", "java_symbol", "java_diagnostics", "java_runtime"],
+    "publicToolCount": 5,
+    "java_contextRegistered": false,
+    "productionReadsJavaLspEngine": false,
+    "engineCheckFiles": [
+      "src/mcp-server-factory.ts",
+      "src/tools/impact.ts",
+      "src/tools/java-context.ts",
+      "src/application.ts"
+    ],
+    "coldBuildChild": {
+      "isolated": "JAVA_LSP_COLD_BUILD_CHILD === \"1\"",
+      "production": "JAVA_LSP_COLD_BUILD_CHILD !== \"0\"",
+      "defaultOn": true
+    },
+    "hibernateTtlMs": 300000,
+    "idleTtlMs": "resourceDefaults(): 900000 if machineMemoryGb<=24 else 2700000",
+    "buildSlot": 1,
+    "m4": "docs/phase-m/m4-baseline.json"
+  },
+  "pushed": false,
+  "note": "Local main cut over. origin/main not pushed. F3 soak not elapsed."
+}

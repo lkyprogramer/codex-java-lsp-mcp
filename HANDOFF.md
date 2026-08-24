@@ -2,7 +2,7 @@
 
 ## 当前任务
 
-G2 收口计划：F1-N0 **GO**（质量 identity、token −27%、S2 725≤1433.6）。S2 刀：`QUERY_GRAPH_DIGEST` 不再 unpack 整图；parser 延到第一次 refresh。`java_impact` 首次查询仍 unpack。F2 未在本轮启动。`main` 未动。cipherlink holdout 已立项。无 live。`java_context` 仍不公开。
+**main 已切换。** merge `e48a253`（`48e665b` + `db61edc`，non-squash）。F2 attestation pr/nightly/release GO。未 push。F3 soak 已开始，24–48h 未过，计划未 COMPLETE。回滚：`git revert -m 1 e48a253`。cipherlink holdout 已立项。无 live。`java_context` 不公开。
 
 ## E1（2026-08-23）
 
@@ -51,6 +51,10 @@ G2 收口计划：F1-N0 **GO**（质量 identity、token −27%、S2 725≤1433.
 ## O3（2026-08-23）
 
 判定 **COMPLETE**。G5 稳态预热 2 轮。三仓比值 **0.835 / 0.547 / 0.886 ≤ 1.10**。G1 **173 / 29 / 46** 未回退。未上 LRU。收口 `docs/phase-o/o3-closeout.json`。
+
+## F2（2026-08-24）
+
+判定 **COMPLETE**。`docs/phase-f/f2-attestation.json`。`main` merge `e48a253` non-squash。gate:pr / nightly / release 全 0。HTTP smoke 5 工具无 `java_context`。未 push。F3 `F3_SOAK_STARTED`。
 
 ## F1-N0（2026-08-24）
 

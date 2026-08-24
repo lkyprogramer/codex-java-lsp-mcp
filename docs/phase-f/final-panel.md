@@ -29,5 +29,5 @@ Live 29-model profile (`local-qwen`): host `47.106.205.246:1082`, model `opencla
 | B3 escalation | RESOLVED_OPTION_C | `docs/phase-b/b3-closeout.json` | user chose C (2026-08-24 11:53); ruling recorded in b3-escalation.md; option B filed as future project with entry condition (real-usage NOT_IN_POOL gap on non-golden repos) |
 | F1 compare vs github main | FAIL_WRONG_TREE | `docs/phase-f/f1-closeout.json` | github main is pre-V4 (54 files). cipherlink numbers match V4-final new; holdout 0.55 is a V4 residual. See cipherlink-holdout-project.md |
 | F1 compare vs N0 | GO | `docs/phase-f/f1-n0-closeout.json` | quality identity vs N0; token −27%; ruoyi GO; G1 57/14/21; S1 415; S2 725≤1433.6 after digest-without-unpack |
-| F2 merge + attestation | PENDING | | F1-N0 GO; non-squash pre-authorized; not started in the S2 turn |
-| F3 soak | PENDING | | after F2 |
+| F2 merge + attestation | COMPLETE | `docs/phase-f/f2-attestation.json` | merge `e48a253` non-squash; gate pr/nightly/release GO; 5 tools; not pushed |
+| F3 soak | F3_SOAK_STARTED | `docs/phase-f/f3-soak.md` | 24–48h not elapsed; rollback = revert -m 1 e48a253 |
