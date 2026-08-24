@@ -1,0 +1,230 @@
+{
+  "version": 4,
+  "createdAt": "2026-08-09T07:10:14.984Z",
+  "sourceRoot": "/Users/luo/Documents/github/codex-java-lsp-mcp",
+  "verifierVersion": 4,
+  "runtimes": {
+    "old": {
+      "commit": "7df1a0eef98d709ef4307c2f66184746c0d95720",
+      "commitTree": "b096e87a952aa01c1d0a8b15092ac21e7e6b1929",
+      "executableTree": "b096e87a952aa01c1d0a8b15092ac21e7e6b1929",
+      "buildStamp": {
+        "gitSha": "7df1a0eef98d",
+        "generatedAt": "2026-08-09T07:08:38.260Z",
+        "defaults": {
+          "idleTtlMs": 2700000,
+          "importConcurrency": 2,
+          "jdtlsXmx": "2g",
+          "maxActiveRepos": 3
+        },
+        "defaultsFingerprint": "e5835394a86f"
+      }
+    },
+    "new": {
+      "commit": "4e147560c38b76f942a15a92b34cbea69d734ef5",
+      "commitTree": "53f77574738178a8c4a126fabea8a69fe1996495",
+      "executableTree": "60ae785e8af9ac06012452ea41c6b1fe2d3606fd",
+      "buildStamp": {
+        "gitSha": "4e147560c38b",
+        "generatedAt": "2026-08-09T07:08:41.161Z",
+        "defaults": {
+          "idleTtlMs": 2700000,
+          "importConcurrency": 2,
+          "jdtlsXmx": "2g",
+          "maxActiveRepos": 3
+        },
+        "defaultsFingerprint": "e5835394a86f"
+      }
+    }
+  },
+  "candidatePatch": {
+    "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate.patch",
+    "sha256": "dee1f4464adb670772c67f7e9eee3d644dc1b508ff3988bde7f2a04a00cb5638",
+    "bytes": 704902,
+    "appliedToCommit": "4e147560c38b76f942a15a92b34cbea69d734ef5",
+    "appliedToCommitTree": "53f77574738178a8c4a126fabea8a69fe1996495",
+    "resultingExecutableTree": "60ae785e8af9ac06012452ea41c6b1fe2d3606fd",
+    "untrackedInputs": [
+      {
+        "path": "scripts/run-three-repo-cold-matrix.test.mjs",
+        "sha256": "bd56643ab165efe77eb37e711cc841d9266915da298a181ebba6dff815af58ef",
+        "bytes": 4215,
+        "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/run-three-repo-cold-matrix.test.mjs"
+      },
+      {
+        "path": "scripts/task36-fault-suite.mjs",
+        "sha256": "3719dc06e8d1acb21137575d33821ffb9945a28db3317ed0e6bc209c662d9e61",
+        "bytes": 9529,
+        "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-fault-suite.mjs"
+      },
+      {
+        "path": "scripts/task36-fault-suite.test.mjs",
+        "sha256": "43c088eb94fa31abd314f830cfb4ac71035ca2a4a471024068258044fc645928",
+        "bytes": 6521,
+        "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-fault-suite.test.mjs"
+      },
+      {
+        "path": "scripts/task36-multiprocess-smoke.mjs",
+        "sha256": "8b92fee60f151b48ecf81b73fef076c14e5ac49fc8f6034a2d201d7a76f4d161",
+        "bytes": 20100,
+        "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-multiprocess-smoke.mjs"
+      },
+      {
+        "path": "scripts/task36-multiprocess-smoke.test.mjs",
+        "sha256": "635cff9c6f0f43c851f85fb559dc56b6377ca9bce129c342d7368c0d3ee9b2de",
+        "bytes": 4725,
+        "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-multiprocess-smoke.test.mjs"
+      },
+      {
+        "path": "scripts/task36-multiprocess-worker.mjs",
+        "sha256": "590d8fcd7888f47be9f245bb9a63ba28baf97523deb85b8f30209f30a647a354",
+        "bytes": 4250,
+        "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-multiprocess-worker.mjs"
+      },
+      {
+        "path": "scripts/task36-tap-evidence.mjs",
+        "sha256": "e296c7958ce3852d302845bf22e5d4f8a3f72c72bf7cbcd6d952cba44b1f4c42",
+        "bytes": 1285,
+        "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-tap-evidence.mjs"
+      },
+      {
+        "path": "scripts/task36-tap-evidence.test.mjs",
+        "sha256": "59cf268d652e447890548ed13464826c91353466a6f2a540ec8c8e63c2e9175b",
+        "bytes": 2075,
+        "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-tap-evidence.test.mjs"
+      },
+      {
+        "path": "src/agent-router/request-budget.test.ts",
+        "sha256": "806acfca3333d3d38f1db24b210042af3ba4f1acb02b79e6eb29b77ececd56d7",
+        "bytes": 9215,
+        "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/agent-router/request-budget.test.ts"
+      },
+      {
+        "path": "src/benchmark/determinism.test.ts",
+        "sha256": "dab7fbbb4b12fef1955fdfd5178f17bf5de9a6b566f57e885bbd183d1b0b75cf",
+        "bytes": 6256,
+        "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/determinism.test.ts"
+      },
+      {
+        "path": "src/benchmark/determinism.ts",
+        "sha256": "ea96003c3307c30e396b0670794ec172a47ed19977f368402ffb8c33265dc3dd",
+        "bytes": 7486,
+        "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/determinism.ts"
+      },
+      {
+        "path": "src/benchmark/java-index-idle.test.ts",
+        "sha256": "d0f331b6cac581af986976c6817b2d91a6075946960356745a20e353bac9f77c",
+        "bytes": 1520,
+        "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/java-index-idle.test.ts"
+      },
+      {
+        "path": "src/benchmark/java-index-idle.ts",
+        "sha256": "5cef22f6bd2eb4e6084ba99078b27a456be0ff8af2805f72cd9e09820fefc8bb",
+        "bytes": 581,
+        "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/java-index-idle.ts"
+      },
+      {
+        "path": "src/benchmark/task36-mutation-matrix.test.ts",
+        "sha256": "d3b05870ff5e62b7252bfcbfb7e6019c6ea7a38f50f06099e24d82b8e9db8900",
+        "bytes": 2543,
+        "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/task36-mutation-matrix.test.ts"
+      },
+      {
+        "path": "src/benchmark/task36-mutation-matrix.ts",
+        "sha256": "7956c75de01494c235303add1318b31c1501d5fc8a2082b7594719347437d278",
+        "bytes": 24543,
+        "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/task36-mutation-matrix.ts"
+      },
+      {
+        "path": "src/benchmark/verify-determinism.ts",
+        "sha256": "ac59ec695856ab321e9df00151846d011ff6da822a48f820445a10d850099056",
+        "bytes": 1856,
+        "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/verify-determinism.ts"
+      }
+    ]
+  },
+  "runs": 5,
+  "p95Limit": 1.25,
+  "comparisonPolicy": {
+    "baseline": "executable-code-baseline",
+    "baselineRevision": "7df1a0eef98d709ef4307c2f66184746c0d95720",
+    "goldenSchema": "task36-cross-version-v1",
+    "pReadTolerance": 0.02,
+    "p95AbsoluteSlackMs": 50,
+    "taskBlockingBaseline": "attempt-or-derived-attribution"
+  },
+  "rounds": [
+    "old/new",
+    "new/old",
+    "old/new"
+  ],
+  "repositories": {
+    "lishuedu": {
+      "root": "/tmp/codex-java-v3-golden-20260809/lishuedu",
+      "head": "db63b1a7e393edd90449eb013d7d1c4d65c366f2",
+      "tree": "22f0ce444e4cac484de85c8a0bf02240ad70d712",
+      "clean": true,
+      "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "cipherlink": {
+      "root": "/tmp/codex-java-v3-golden-20260809/cipherlink",
+      "head": "fa433982e92e52dd610650d1e79f2d041179b1d3",
+      "tree": "21a1075c7b211932a4cdb2abf2742521b1eba31f",
+      "clean": true,
+      "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "exam-parent-v3": {
+      "root": "/tmp/codex-java-v3-golden-20260809/exam-parent-v3",
+      "head": "f90a0b475f7be2ed003703feecec8195bc7eb976",
+      "tree": "dcdb2024879686451859c64260c7e1f3a4721fa7",
+      "clean": true,
+      "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "scenarios": {
+    "lishuedu": {
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "sha256": "579178746bb123822a2908025fc60aa26a8c79958079dc3043dfa936fd4ba916",
+      "rowIds": [
+        "storage-signed-url",
+        "school-template-parser",
+        "report-reusable-zip",
+        "school-confirm-controller",
+        "benefit-product-code-dto",
+        "school-mapstruct-uses",
+        "audit-order-repository-mapper-rule-type",
+        "audit-assignee-mapper-precision"
+      ]
+    },
+    "cipherlink": {
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "sha256": "47850fd6ac88804ecec0d1d0abb42ff1369a6fc1e42ad447abc334417ab084ca",
+      "rowIds": [
+        "client-update-check",
+        "transfer-upload-init",
+        "transfer-upload-session-repository",
+        "aliyun-sms-gateway-send",
+        "operation-log-response-dto",
+        "organization-create-member-cross-module",
+        "auth-sms-login-lockout",
+        "account-admin-create-account-guard"
+      ]
+    },
+    "exam-parent-v3": {
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "sha256": "83cfde7858cb3d24906c69808f321f525451afbd2b90b3f3805b2d65c62d0769",
+      "rowIds": [
+        "rule-engine-execute",
+        "candidate-position-select",
+        "apply-info-save-basic-service",
+        "position-repository-exists",
+        "ceb-order-create-dto",
+        "apply-info-update-cross-exam-guard",
+        "check-people-delete-site-guard",
+        "current-user-service-implementer-edge"
+      ]
+    }
+  },
+  "jdtlsDisabled": true,
+  "workspaceRoot": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-mcp-three-repo-TiB1vr"
+}

@@ -6,46 +6,59 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
-import { AgentRouter } from "./agent-router/index.js";
-import type { ImpactOptions } from "./agent-types.js";
+import { AgentRouter, type ImpactInternalObserver } from "./agent-router/index.js";
+import {
+  asImpactResult,
+  isCompactImpact,
+  viewDistinctReadFiles,
+  viewImpactFiles,
+  viewReadPlanBytes,
+  viewReadPlanRangeCount,
+  viewSelectedRangesByFile,
+  type CompactImpact
+} from "./agent-router/output-compact.js";
+import type { CandidateEvidence } from "./agent-router/evidence.js";
+import { FRAMEWORK_ADAPTERS } from "./agent-router/providers/framework-provider.js";
+import type { ImpactOptions, ImpactResult } from "./agent-types.js";
+import { projectImpactResultV6 } from "./agent-router/format.js";
 import { readRuntimeBuild } from "./build-info.js";
+import {
+  buildGoldenAttributionV3,
+  buildGoldenCounterfactualV3,
+  buildImpactPayloadProjectionV3,
+  buildProductionRankingSnapshot,
+  type ProductionRankingSnapshot
+} from "./benchmark/attribution-v3.js";
+import { buildImpactDeterminismSnapshot } from "./benchmark/determinism.js";
+import { isJavaIndexQuiescent } from "./benchmark/java-index-idle.js";
+import { startBenchmarkProcessResourceObserverFromEnvironment } from "./benchmark/process-resource-observer.js";
+import {
+  firstTaskBlockingRank,
+  goldenEntries,
+  goldenFiles,
+  loadScenarios,
+  ndcgReadAt6,
+  readPlanCoordinateRecall,
+  readPlanRangeRecall,
+  taskBlockingFiles,
+  type GoldenKind,
+  type Scenario,
+  type WarmState
+} from "./benchmark/golden-scenario.js";
+import { JavaIndexClient } from "./java-index/java-index-client.js";
+import type { JavaIndexStatus } from "./java-index/index-types.js";
+import { RouterJavaIndex } from "./java-index/router-java-index.js";
+import { repoCacheRoot } from "./repo-layout.js";
+import { DeadlineBudget } from "./runtime/deadline-budget.js";
+import { createRequestContext, defaultDeadlineMs, MAX_REQUEST_DEADLINE_MS } from "./runtime/request-context.js";
+import type { SourceRange } from "./runtime/source-range.js";
 import { JdtlsSession } from "./jdtls-session.js";
-import { SourceIndex } from "./source-index.js";
+import { DEFAULT_TOKEN_BUDGET } from "./context-engine/context-planner.js";
+import { toCompactFromContract } from "./context-engine/compact-bridge.js";
 
-type WarmState = "cold-nolsp" | "cold-lsp" | "warm-auto" | "warm-required";
 type BenchmarkStrategy = "impact" | "no-lsp";
 
-type Scenario = {
-  id: string;
-  name: string;
-  projectId?: string;
-  layoutProfile?: string;
-  repoCommit?: string;
-  scenarioVersion?: number;
-  warmState?: WarmState;
-  skippedProfiles?: string[];
-  anchor: {
-    file: string;
-    line: number;
-    column: number;
-    profile: ImpactOptions["profile"];
-    focusModules?: string[];
-    taskKeywords?: string[];
-  };
-  golden?: {
-    mustHit?: string[];
-    shouldHit?: string[];
-    side?: string[];
-  };
-  goldenMeta?: Record<string, {
-    shouldBlocksTask?: boolean;
-    note?: string;
-  }>;
-  groundTruth?: string[];
-};
-
-type GoldenKind = "must" | "should" | "side";
-type GoldenSource = "rg" | "typeGraph" | "importGraph" | "seed" | "reference" | "typeHierarchy" | "typeReference" | "no-lsp" | "absent" | "unknown";
+type GoldenSource = "calls" | "methodRelation" | "framework" | "rg" | "typeGraph" | "importGraph" | "seed" | "reference" | "typeHierarchy" | "typeReference" | "no-lsp" | "absent" | "unknown";
 type GoldenBlockedBy = "hit" | "readplan-full" | "absent";
 type GoldenAbsentReason = "not-recalled-implementer" | "no-type-edge" | "cross-module-cold" | "profile-gate" | "golden-stale-or-low-value";
 
@@ -57,6 +70,8 @@ type GoldenAttributionContext = {
 
 type Cli = {
   repoRoot: string;
+  /** Optional benchmark-only cache root so fresh/snapshot runs never touch the normal runtime cache. */
+  indexCacheDir: string;
   scenarioFile: string;
   projectId: string;
   layoutProfile: string;
@@ -64,20 +79,40 @@ type Cli = {
   mode: ImpactOptions["mode"];
   semanticPolicy: ImpactOptions["semanticPolicy"];
   verbosity: NonNullable<ImpactOptions["verbosity"]>;
+  /** Benchmark-only: derive all verbosity payloads from one diagnostic router execution. */
+  payloadProjections: boolean;
   runs: number;
   readPlanMaxItems?: number;
+  readPlanMaxBytes?: number;
   listScenarios: boolean;
   strategy: BenchmarkStrategy;
+  /** V3.2-29 benchmark-only ablation: FrameworkAdapter.id to exclude, e.g. "spring". Empty = full registry. */
+  excludeFrameworkAdapter: string;
+  deadlineMs: number;
+  /** Startup reconciliation is excluded from request P95 but must finish before the steady-state sample. */
+  indexPrepareTimeoutMs: number;
 };
+
+const DEFAULT_INDEX_PREPARE_TIMEOUT_MS = 600_000;
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const projectDir = path.resolve(scriptDir, "..");
 const cli = parseCli(process.argv.slice(2), projectDir);
+const jinEngine = process.env.JAVA_LSP_ENGINE === "jin";
+if (process.env.JAVA_LSP_ISOLATED_VALIDATION !== "1") {
+  throw new Error(
+    "benchmark-agent-impact requires the detached isolated validation harness; refusing to use a caller runtime cache"
+  );
+}
+if (cli.warmState !== "cold-nolsp" && process.env.JAVA_LSP_ISOLATED_REPO_WORKTREE !== "1") {
+  throw new Error("warm benchmark-agent-impact runs require a detached Java repository from run-isolated-jdt-benchmark.mjs");
+}
 const scenarios = loadScenarios(cli.scenarioFile).filter(scenario => !scenario.projectId || scenario.projectId === cli.projectId);
 const runtimeBuild = readRuntimeBuild();
 const metadata = {
   generatedAt: new Date().toISOString(),
   repoRoot: cli.repoRoot,
+  indexCacheDir: cli.indexCacheDir,
   repoCommit: git(cli.repoRoot, ["rev-parse", "--short=12", "HEAD"]) || "unknown",
   projectId: cli.projectId,
   layoutProfile: cli.layoutProfile,
@@ -85,11 +120,24 @@ const metadata = {
   mode: cli.mode,
   semanticPolicy: effectiveSemanticPolicy(cli),
   verbosity: cli.verbosity,
+  payloadProjections: cli.payloadProjections,
   strategy: cli.strategy,
+  engine: jinEngine ? "jin" : "default",
+  indexBackend: "v2",
+  // Recorded so a run is comparable only against runs with the same budget.
+  deadlineMs: cli.deadlineMs,
   runs: cli.runs,
   readPlanMaxItems: cli.readPlanMaxItems,
+  readPlanMaxBytes: cli.readPlanMaxBytes,
   scenarioFile: cli.scenarioFile,
   runtimeBuild,
+  // The V2 runtime reconciles its static index before serving requests.  This
+  // records that one-time setup separately from request P50/P95 (Task 22
+  // explicitly forbids folding the initial sweep into steady impact latency).
+  prepareJavaIndexMs: 0,
+  prepareJavaIndexReconciled: false,
+  prepareJavaIndexStatus: undefined as JavaIndexStatus | undefined,
+  indexPrepareTimeoutMs: cli.indexPrepareTimeoutMs,
   prepareWarmMs: 0,
   prepareWarmPhaseMs: {} as Record<string, number>
 };
@@ -104,15 +152,42 @@ if (cli.listScenarios) {
       layoutProfile: scenario.layoutProfile,
       warmState: scenario.warmState,
       mustHit: goldenFiles(scenario, "mustHit").length,
+      taskBlocking: goldenFiles(scenario, "taskBlocking").length,
       shouldHit: goldenFiles(scenario, "shouldHit").length,
-      side: goldenFiles(scenario, "side").length
+      support: goldenFiles(scenario, "support").length
     }))
   }, null, 2));
   process.exit(0);
 }
 
-const session = cli.strategy === "impact" ? new JdtlsSession(cli.repoRoot) : undefined;
-const router = session ? new AgentRouter(cli.repoRoot, session, new SourceIndex(cli.repoRoot)) : undefined;
+const processResources = startBenchmarkProcessResourceObserverFromEnvironment(
+  `benchmark-agent-impact:${cli.warmState}`,
+  cli.strategy === "impact" ? "PRESENT" : "NOT_PRESENT"
+);
+
+const session = cli.strategy === "impact" && !jinEngine ? new JdtlsSession(cli.repoRoot) : undefined;
+// A benchmark has no runtime coordinator, so it must close the worker itself
+// after printing its results.
+const javaIndexClient = cli.strategy === "impact"
+  ? new JavaIndexClient(cli.repoRoot, cli.indexCacheDir)
+  : undefined;
+const routerJavaIndex = javaIndexClient
+  ? new RouterJavaIndex(cli.repoRoot, javaIndexClient)
+  : undefined;
+const javaIndex = routerJavaIndex;
+const frameworkAdapters = cli.excludeFrameworkAdapter
+  ? FRAMEWORK_ADAPTERS.filter(adapter => adapter.id !== cli.excludeFrameworkAdapter)
+  : FRAMEWORK_ADAPTERS;
+const router = session && javaIndex
+  ? new AgentRouter(cli.repoRoot, session, javaIndex, undefined, undefined, undefined, undefined, frameworkAdapters)
+  : undefined;
+if (routerJavaIndex && javaIndexClient) {
+  const startedAt = performance.now();
+  const preparation = await prepareJavaIndex(cli, routerJavaIndex, javaIndexClient);
+  metadata.prepareJavaIndexMs = performance.now() - startedAt;
+  metadata.prepareJavaIndexReconciled = preparation.reconciled;
+  metadata.prepareJavaIndexStatus = preparation.status;
+}
 if (session && cli.warmState !== "cold-nolsp") {
   const startedAt = performance.now();
   await prepareWarmState(cli, session, scenarios);
@@ -124,7 +199,13 @@ const rows = [];
 for (const scenario of scenarios) {
   const attempts = [];
   for (let run = 0; run < cli.runs; run += 1) {
-    attempts.push(cli.strategy === "no-lsp" ? noLspAttempt(cli.repoRoot, scenario) : await impactAttempt(router as AgentRouter, session as JdtlsSession, cli, scenario));
+    attempts.push(
+      cli.strategy === "no-lsp"
+        ? noLspAttempt(cli.repoRoot, scenario)
+        : jinEngine
+          ? await jinAttempt(routerJavaIndex as RouterJavaIndex, cli, scenario)
+          : await impactAttempt(router as AgentRouter, session as JdtlsSession, cli, scenario)
+    );
   }
   rows.push({
     id: scenario.id,
@@ -143,12 +224,19 @@ console.log(JSON.stringify({
 if (session) {
   await session.stop();
 }
+if (javaIndexClient) {
+  await javaIndexClient.close();
+}
+await processResources?.stop();
 
 function parseCli(args: string[], root: string): Cli {
+  if (args.includes("--retrieval-enabled") || args.includes("--continue-policy")) {
+    throw new Error("retrieval continuation was removed in JIN N0");
+  }
   const values = new Map<string, string | true>();
   for (let index = 0; index < args.length; index += 1) {
     const item = args[index];
-    if (item === "--list-scenarios") {
+    if (item === "--list-scenarios" || item === "--payload-projections") {
       values.set(item, true);
       continue;
     }
@@ -158,50 +246,298 @@ function parseCli(args: string[], root: string): Cli {
     }
   }
   const projectId = stringArg(values, "--project-id", process.env.JAVA_LSP_BENCH_PROJECT_ID || "lishuedu");
+  const warmState = stringArg(values, "--warm-state", process.env.JAVA_LSP_BENCH_WARM_STATE || "cold-nolsp") as WarmState;
+  const mode = stringArg(values, "--mode", process.env.JAVA_LSP_BENCH_MODE || "balanced") as ImpactOptions["mode"];
+  const semanticPolicy = stringArg(values, "--semantic-policy", process.env.JAVA_LSP_BENCH_SEMANTIC_POLICY || "auto") as ImpactOptions["semanticPolicy"];
+  // Match the policy java_impact will actually run under for this warm state,
+  // so the derived deadline equals what a real caller gets. Using the raw
+  // --semantic-policy default (auto) would budget 3000ms while a cold-nolsp
+  // request is forced to fast and budgets 2000ms.
+  const effectivePolicy: "fast" | "auto" | "required" =
+    warmState === "cold-nolsp" ? "fast" : warmState === "warm-required" ? "required" : semanticPolicy;
+  const repoRoot = stringArg(
+    values,
+    "--repo-root",
+    process.env.JAVA_LSP_BENCH_REPO_ROOT || process.env.LISHUEDU_ROOT || path.resolve(root, "..", "..")
+  );
   return {
-    repoRoot: stringArg(values, "--repo-root", process.env.JAVA_LSP_BENCH_REPO_ROOT || process.env.LISHUEDU_ROOT || path.resolve(root, "..", "..")),
+    repoRoot,
+    indexCacheDir: path.resolve(stringArg(
+      values,
+      "--index-cache-dir",
+      process.env.JAVA_LSP_BENCH_INDEX_CACHE_DIR || repoCacheRoot(repoRoot)
+    )),
     scenarioFile: stringArg(values, "--scenarios", process.env.JAVA_LSP_BENCH_SCENARIOS || path.join(root, "golden", `${projectId}.scenarios.jsonl`)),
     projectId,
-    layoutProfile: stringArg(values, "--layout-profile", process.env.JAVA_LSP_BENCH_LAYOUT_PROFILE || (projectId === "exam-parent-v3" ? "maven-reactor" : projectId === "generic-java" ? "generic-java" : "ddd-gradle")),
-    warmState: stringArg(values, "--warm-state", process.env.JAVA_LSP_BENCH_WARM_STATE || "cold-nolsp") as WarmState,
-    mode: stringArg(values, "--mode", process.env.JAVA_LSP_BENCH_MODE || "balanced") as ImpactOptions["mode"],
-    semanticPolicy: stringArg(values, "--semantic-policy", process.env.JAVA_LSP_BENCH_SEMANTIC_POLICY || "auto") as ImpactOptions["semanticPolicy"],
+    layoutProfile: stringArg(values, "--layout-profile", process.env.JAVA_LSP_BENCH_LAYOUT_PROFILE || (projectId === "exam-parent-v3" ? "maven-reactor" : projectId === "generic-java" || projectId === "java-index-v2" ? "generic-java" : "ddd-gradle")),
+    warmState,
+    mode,
+    semanticPolicy,
     verbosity: stringArg(values, "--verbosity", process.env.JAVA_LSP_BENCH_VERBOSITY || "standard") as NonNullable<ImpactOptions["verbosity"]>,
+    payloadProjections: values.get("--payload-projections") === true,
     runs: Number(stringArg(values, "--runs", process.env.JAVA_LSP_BENCH_RUNS || "1")),
     readPlanMaxItems: optionalPositiveIntegerArg(values, "--read-plan-max-items", process.env.JAVA_LSP_BENCH_READ_PLAN_MAX_ITEMS),
+    readPlanMaxBytes: optionalPositiveIntegerArg(values, "--read-plan-max-bytes", process.env.JAVA_LSP_BENCH_READ_PLAN_MAX_BYTES),
     listScenarios: values.get("--list-scenarios") === true,
-    strategy: stringArg(values, "--strategy", process.env.JAVA_LSP_BENCH_STRATEGY || "impact") as BenchmarkStrategy
+    strategy: stringArg(values, "--strategy", process.env.JAVA_LSP_BENCH_STRATEGY || "impact") as BenchmarkStrategy,
+    excludeFrameworkAdapter: stringArg(values, "--exclude-framework-adapter", process.env.JAVA_LSP_BENCH_EXCLUDE_FRAMEWORK_ADAPTER || ""),
+    // The same absolute deadline java_impact gives a real caller in this warm
+    // state, so the benchmark measures what users actually get.
+    deadlineMs: Math.min(
+      MAX_REQUEST_DEADLINE_MS,
+      optionalPositiveIntegerArg(values, "--deadline-ms", process.env.JAVA_LSP_BENCH_DEADLINE_MS)
+        ?? defaultDeadlineMs(mode, effectivePolicy)
+    ),
+    // This is startup-only work and is deliberately excluded from steady P95.
+    // Large real repositories can legitimately need longer than the old 120s
+    // hard stop for their first snapshot; callers can lower it for a bounded
+    // diagnostic run without changing the benchmark's request budget.
+    indexPrepareTimeoutMs: optionalPositiveIntegerArg(
+      values,
+      "--index-prepare-timeout-ms",
+      process.env.JAVA_LSP_BENCH_INDEX_PREPARE_TIMEOUT_MS
+    ) ?? DEFAULT_INDEX_PREPARE_TIMEOUT_MS
+  };
+}
+
+async function jinAttempt(javaIndex: RouterJavaIndex, cli: Cli, scenario: Scenario): Promise<Record<string, unknown>> {
+  const startedAt = performance.now();
+  const graph = await javaIndex.queryContextGraph({
+    fromRelativePath: scenario.anchor.file,
+    intent: "auto",
+    taskText: `${scenario.name ?? ""} ${(scenario.anchor.taskKeywords ?? []).join(" ")}`,
+    profile: scenario.anchor.profile,
+    maxHops: 4,
+    maxExpansions: 4096,
+    tokenBudget: DEFAULT_TOKEN_BUDGET,
+    plan: true,
+    includeSource: false,
+    anchorLine: scenario.anchor.line,
+    anchorColumn: scenario.anchor.column
+  });
+  const elapsedMs = performance.now() - startedAt;
+  if (!graph.contract) {
+    throw new Error("JAVA_LSP_ENGINE=jin expected QUERY_CONTEXT_GRAPH contract");
+  }
+  const result = toCompactFromContract(graph.contract, elapsedMs);
+  const rawSearchPayload = Buffer.byteLength(JSON.stringify(result), "utf8");
+  const readingPayload = readPlanBytes(result);
+  const candidatePaths = viewImpactFiles(result);
+  const readFiles = distinctReadFiles(result);
+  const quality = evaluate(candidatePaths, readFiles, scenario);
+  const kibVisible = (rawSearchPayload + readingPayload) / 1024;
+  const blockingHitsInReadPlan = readFiles.filter(file => taskBlockingFiles(scenario).has(file)).length;
+  const rangeLineRecall = readPlanRangeRecall(scenario, selectedRangesByFile(result));
+  const rangeCoordinateRecall = readPlanCoordinateRecall(scenario, new Map());
+  const qualityV3 = {
+    "NDCG_read@6": ndcgReadAt6(scenario, readFiles),
+    firstTaskBlockingRank: firstTaskBlockingRank(scenario, candidatePaths),
+    readPlanRangeRecall: rangeLineRecall,
+    RangeLineRecall: rangeLineRecall,
+    RangeCoordinateRecall: rangeCoordinateRecall,
+    evidencePerKiB: kibVisible > 0 ? quality.hitFiles / kibVisible : 0,
+    taskBlockingHitsPerKiB: kibVisible > 0 ? blockingHitsInReadPlan / kibVisible : 0
+  };
+  return {
+    ...attemptPayload("impact", quality, rawSearchPayload, readingPayload, elapsedMs, 1, viewReadPlanRangeCount(result) || viewDistinctReadFiles(result).length, result.cost.suppressedRawBytes, 0),
+    ...readPlanMetrics(result),
+    ...qualityV3,
+    timing: timingPayload(result, {}),
+    payloadProjection: undefined,
+    payloadProjectionElapsedMs: undefined,
+    goldenAttribution: undefined,
+    counterfactual: undefined,
+    frameworkEvidence: { mapstruct: { selected: 0, readPlan: 0, golden: 0, byKind: {} } },
+    determinism: compactDeterminismSnapshot(result)
   };
 }
 
 async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cli, scenario: Scenario): Promise<Record<string, unknown>> {
   const startedAt = performance.now();
-  const result = await router.impact({
-    anchors: [scenario.anchor],
+  let coordinateRangesByAbsolutePath: ReadonlyMap<string, readonly SourceRange[]> = new Map();
+  let rankingSource: {
+    ranked: readonly CandidateEvidence[];
+    selectedPaths: readonly string[];
+  } | undefined;
+  const observer: ImpactInternalObserver = {
+    readPlanCoordinates(rangesByAbsolutePath) {
+      coordinateRangesByAbsolutePath = rangesByAbsolutePath;
+    }
+  };
+  if (cli.payloadProjections || cli.verbosity === "diagnostic") {
+    observer.productionRanking = (ranked, selectedPaths) => {
+      rankingSource = { ranked, selectedPaths };
+    };
+  }
+  const request = createRequestContext({
+    repoRoot: cli.repoRoot,
+    repoHash: "benchmark",
+    generation: 0,
+    freshnessMode: "NORMAL",
+    cacheReadAllowed: true,
+    cacheWriteAllowed: true,
+    negativeLookupAllowed: false,
     mode: cli.mode,
-    profile: scenario.anchor.profile,
     semanticPolicy: effectiveSemanticPolicy(cli),
-    semanticTimeoutMs: effectiveSemanticTimeoutMs(cli),
-    testReadMode: "defer",
-    focusModules: scenario.anchor.focusModules || [],
-    excludeModules: [],
-    taskKeywords: scenario.anchor.taskKeywords || [],
-    crossModulePolicy: "auto",
-    verbosity: cli.verbosity,
-    readPlanMaxItems: cli.readPlanMaxItems
+    budget: DeadlineBudget.fromTimeout(cli.deadlineMs)
   });
-  const elapsedMs = performance.now() - startedAt;
+  const canonical = await router.impact(
+    {
+      anchors: [scenario.anchor],
+      mode: cli.mode,
+      profile: scenario.anchor.profile,
+      semanticPolicy: effectiveSemanticPolicy(cli),
+      semanticTimeoutMs: effectiveSemanticTimeoutMs(cli),
+      testReadMode: "defer",
+      focusModules: scenario.anchor.focusModules || [],
+      excludeModules: [],
+      taskKeywords: scenario.anchor.taskKeywords || [],
+      crossModulePolicy: "auto",
+      verbosity: cli.payloadProjections ? "diagnostic" : cli.verbosity,
+      readPlanMaxItems: cli.readPlanMaxItems,
+      readPlanMaxBytes: cli.readPlanMaxBytes
+    },
+    // The benchmark has no live watcher, so it uses generation 0 with caches
+    // enabled — the pre-freshness behavior — under the same production budget.
+    request,
+    observer
+  );
+  const routerElapsedMs = performance.now() - startedAt;
+  const productionRanking: ProductionRankingSnapshot | undefined = rankingSource
+    ? buildProductionRankingSnapshot(rankingSource.ranked, rankingSource.selectedPaths)
+    : undefined;
+  recordJavaIndexQueueDepth(canonical);
+  const projectionStartedAt = performance.now();
+  const diagnosticCanonical = cli.payloadProjections || cli.verbosity === "diagnostic"
+    ? asImpactResult(canonical)
+    : undefined;
+  const payloadProjection = diagnosticCanonical && cli.payloadProjections
+    ? buildImpactPayloadProjectionV3(diagnosticCanonical)
+    : undefined;
+  const result = diagnosticCanonical && cli.payloadProjections
+    ? projectImpactResultV6(diagnosticCanonical, cli.verbosity)
+    : canonical;
+  const payloadProjectionElapsedMs = cli.payloadProjections
+    ? performance.now() - projectionStartedAt
+    : undefined;
+  const elapsedMs = routerElapsedMs;
   const rawSearchPayload = Buffer.byteLength(JSON.stringify(result), "utf8");
-  const readingPayload = readPlanBytes(cli.repoRoot, result);
-  const candidatePaths = result.files.map(file => String(file.path));
+  const readingPayload = readPlanBytes(result);
+  const candidatePaths = viewImpactFiles(result);
   const readFiles = distinctReadFiles(result);
   const quality = evaluate(candidatePaths, readFiles, scenario);
-  const sessionPhaseMs = session.drainPhaseMetrics();
-  return {
-    ...attemptPayload("impact", quality, rawSearchPayload, readingPayload, elapsedMs, 1 + result.readPlan.length, result.readPlan.length, Number(result.counts.totalRgRawBytes || 0), 0),
-    timing: timingPayload(result, sessionPhaseMs),
-    goldenAttribution: goldenAttributionForImpact(cli.repoRoot, result, scenario)
+  const kibVisible = (rawSearchPayload + readingPayload) / 1024;
+  const blockingHitsInReadPlan = readFiles.filter(file => taskBlockingFiles(scenario).has(file)).length;
+  const rangeLineRecall = readPlanRangeRecall(scenario, selectedRangesByFile(result));
+  const rangeCoordinateRecall = readPlanCoordinateRecall(
+    scenario,
+    relativeCoordinateRanges(cli.repoRoot, coordinateRangesByAbsolutePath)
+  );
+  const qualityV3 = {
+    "NDCG_read@6": ndcgReadAt6(scenario, readFiles),
+    firstTaskBlockingRank: firstTaskBlockingRank(scenario, candidatePaths),
+    readPlanRangeRecall: rangeLineRecall,
+    RangeLineRecall: rangeLineRecall,
+    RangeCoordinateRecall: rangeCoordinateRecall,
+    evidencePerKiB: kibVisible > 0 ? quality.hitFiles / kibVisible : 0,
+    taskBlockingHitsPerKiB: kibVisible > 0 ? blockingHitsInReadPlan / kibVisible : 0
   };
+  const diagnosticResult = diagnosticCanonical ?? result;
+  const sessionPhaseMs = session.drainPhaseMetrics();
+  const attributionContext = productionRanking && diagnosticCanonical && {
+    repoRoot: cli.repoRoot,
+    mode: cli.mode,
+    profile: scenario.anchor.profile,
+    semanticUsed: diagnosticCanonical.semantic.used,
+    semanticTimeout: diagnosticCanonical.metrics?.semantic?.timeout === true,
+    coverage: metadata.prepareJavaIndexStatus?.coverage ?? []
+  };
+  const firstAttempt = {
+    // Task 30 makes the whole read-plan range lookup one batched worker
+    // request. `roundTrips` measures the agent-visible impact exchange plus
+    // that range batch; it must not grow with selected read-plan files.
+    ...attemptPayload("impact", quality, rawSearchPayload, readingPayload, elapsedMs, 2, viewReadPlanRangeCount(result) || viewDistinctReadFiles(result).length, result.cost.suppressedRawBytes, 0),
+    ...readPlanMetrics(result),
+    ...qualityV3,
+    timing: timingPayload(diagnosticResult, sessionPhaseMs),
+    payloadProjection,
+    payloadProjectionElapsedMs,
+    // Attribution observes the exact production family rank and read-plan;
+    // no second ranker or provider pass is executed for benchmark evidence.
+    goldenAttribution: attributionContext && productionRanking
+      ? buildGoldenAttributionV3(scenario, productionRanking, attributionContext)
+      : undefined,
+    counterfactual: productionRanking
+      ? buildGoldenCounterfactualV3()
+      : undefined,
+    frameworkEvidence: { mapstruct: mapstructEvidenceSummary(diagnosticResult, scenario) },
+    // Task 36's 20-run verifier consumes only semantic ordering/state. Keep
+    // latency/cache counters in their ordinary attempt fields so benign
+    // diagnostic variance cannot mask or manufacture semantic drift.
+    determinism: diagnosticCanonical
+      ? buildImpactDeterminismSnapshot(diagnosticCanonical, cli.repoRoot, productionRanking)
+      : compactDeterminismSnapshot(result)
+  };
+  return firstAttempt;
+}
+
+function compactDeterminismSnapshot(result: ImpactResult | CompactImpact): {
+  candidatePaths: string[];
+  readPlan: Array<{ path: string; priority: string; ranges: Array<{ startLine: number; endLine: number; reason: string }> }>;
+  completion: {
+    semantic: string;
+    semanticUsed: boolean;
+    coverage: string;
+    requestGeneration: number;
+    indexedGeneration: number;
+    changedDuringRequest: boolean;
+  };
+} {
+  const ranges = viewSelectedRangesByFile(result);
+  const readPlan = [...ranges.entries()].map(([file, spans]) => ({
+    path: file,
+    priority: "",
+    ranges: spans.map(span => ({ startLine: span.startLine, endLine: span.endLine, reason: "" }))
+  }));
+  if (isCompactImpact(result)) {
+    return {
+      candidatePaths: viewImpactFiles(result),
+      readPlan,
+      completion: {
+        semantic: result.semantic.completion,
+        semanticUsed: result.semantic.used,
+        coverage: result.freshness.coverage,
+        requestGeneration: result.freshness.requestGeneration,
+        indexedGeneration: result.freshness.indexedGeneration,
+        changedDuringRequest: result.freshness.changedDuringRequest
+      }
+    };
+  }
+  return {
+    candidatePaths: viewImpactFiles(result),
+    readPlan,
+    completion: {
+      semantic: result.semantic.completion,
+      semanticUsed: result.semantic.used,
+      coverage: result.freshness.coverage,
+      requestGeneration: result.freshness.requestGeneration,
+      indexedGeneration: result.freshness.indexedGeneration,
+      changedDuringRequest: result.freshness.changedDuringRequest
+    }
+  };
+}
+
+function recordJavaIndexQueueDepth(result: ImpactResult | CompactImpact): void {
+  if (isCompactImpact(result)) return;
+  const rpc = result.metrics?.javaIndex?.rpc;
+  if (!rpc || typeof rpc !== "object") return;
+  const operations = (rpc as { operations?: unknown }).operations;
+  if (!operations || typeof operations !== "object") return;
+  for (const [operation, value] of Object.entries(operations)) {
+    if (!value || typeof value !== "object") continue;
+    const depth = (value as { maxWorkerQueueDepth?: unknown }).maxWorkerQueueDepth;
+    if (typeof depth === "number") processResources?.recordQueueDepth(`java-index:${operation}`, depth);
+  }
 }
 
 function noLspAttempt(repoRoot: string, scenario: Scenario): Record<string, unknown> {
@@ -212,8 +548,19 @@ function noLspAttempt(repoRoot: string, scenario: Scenario): Record<string, unkn
   const readingPayload = readMatchedFilesBytes(repoRoot, readFiles, rg.lineByPath, scenario);
   const rawSearchPayload = Buffer.byteLength(rg.stdout, "utf8");
   const quality = evaluate(candidatePaths, readFiles, scenario);
+  const kibVisible = (rawSearchPayload + readingPayload) / 1024;
+  const blockingHitsInReadPlan = readFiles.filter(file => taskBlockingFiles(scenario).has(file)).length;
   return {
     ...attemptPayload("no-lsp", quality, rawSearchPayload, readingPayload, performance.now() - startedAt, 1 + readFiles.length, readFiles.length, 0, rawSearchPayload),
+    "NDCG_read@6": ndcgReadAt6(scenario, readFiles),
+    firstTaskBlockingRank: firstTaskBlockingRank(scenario, candidatePaths),
+    // no-lsp has no range-aware read plan at all - a scenario that later
+    // carries mustReadRanges genuinely gets 0 coverage here, not "unmeasured".
+    readPlanRangeRecall: readPlanRangeRecall(scenario, new Map()),
+    RangeLineRecall: readPlanRangeRecall(scenario, new Map()),
+    RangeCoordinateRecall: readPlanCoordinateRecall(scenario, new Map()),
+    evidencePerKiB: kibVisible > 0 ? quality.hitFiles / kibVisible : 0,
+    taskBlockingHitsPerKiB: kibVisible > 0 ? blockingHitsInReadPlan / kibVisible : 0,
     goldenAttribution: goldenAttributionForNoLsp(repoRoot, candidatePaths, readFiles, scenario)
   };
 }
@@ -246,6 +593,7 @@ function attemptPayload(
     rCand: quality.recall,
     pRead: quality.pRead,
     rReadMust: quality.rReadMust,
+    rTaskBlocking: quality.rTaskBlocking,
     readPlanItems,
     rgRawBytesSuppressed,
     rgRawBytesExposed
@@ -268,23 +616,6 @@ function optionalPositiveIntegerArg(values: Map<string, string | true>, name: st
     throw new Error(`${name} must be a positive integer`);
   }
   return parsed;
-}
-
-function loadScenarios(file: string): Scenario[] {
-  if (!existsSync(file)) {
-    throw new Error(`Scenario file does not exist: ${file}`);
-  }
-  return readFileSync(file, "utf8")
-    .split(/\r?\n/)
-    .map(line => line.trim())
-    .filter(Boolean)
-    .map((line, index) => {
-      try {
-        return JSON.parse(line) as Scenario;
-      } catch (error) {
-        throw new Error(`Invalid scenario JSON at ${file}:${index + 1}: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    });
 }
 
 function effectiveSemanticPolicy(cli: Cli): ImpactOptions["semanticPolicy"] {
@@ -310,6 +641,39 @@ async function prepareWarmState(cli: Cli, session: JdtlsSession, items: Scenario
   }
 }
 
+/**
+ * Mirrors RepoRuntimeManager's V2 OPEN/reconcile lifecycle without starting
+ * JDTLS.  The static sweep is startup work, not an impact request, so the
+ * benchmark reports it in metadata and only times the steady router calls.
+ */
+async function prepareJavaIndex(
+  cli: Cli,
+  index: RouterJavaIndex,
+  client: JavaIndexClient
+): Promise<{ reconciled: boolean; status: JavaIndexStatus }> {
+  await index.open(0);
+  let reconciled = false;
+  const opened = await index.routerStatus();
+  if (opened.coverage !== "complete" && !opened.javaIndex.snapshotVerificationPending) {
+    await index.reconcile(0);
+    reconciled = true;
+  }
+  return { reconciled, status: await waitForJavaIndexIdle(client, cli.indexPrepareTimeoutMs) };
+}
+
+async function waitForJavaIndexIdle(client: JavaIndexClient, timeoutMs: number): Promise<JavaIndexStatus> {
+  const deadline = Date.now() + timeoutMs;
+  let status = await client.status();
+  while (!isJavaIndexQuiescent(status)) {
+    if (Date.now() >= deadline) {
+      throw new Error(`JavaIndex did not finish startup reconciliation within ${timeoutMs}ms`);
+    }
+    await new Promise(resolve => setTimeout(resolve, 100));
+    status = await client.status();
+  }
+  return status;
+}
+
 async function waitForProgressIdle(session: JdtlsSession, timeoutMs: number): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -321,22 +685,36 @@ async function waitForProgressIdle(session: JdtlsSession, timeoutMs: number): Pr
   }
 }
 
-function readPlanBytes(repoRoot: string, result: Awaited<ReturnType<AgentRouter["impact"]>>): number {
-  const files = new Map(result.files.map(file => [String(file.id), String(file.path)]));
-  let bytes = 0;
-  for (const item of result.readPlan) {
-    const file = files.get(item.fileId);
-    if (!file) {
-      continue;
-    }
-    const absolutePath = path.join(repoRoot, file);
-    if (!existsSync(absolutePath)) {
-      continue;
-    }
-    const lines = readFileSync(absolutePath, "utf8").split(/\r?\n/);
-    bytes += Buffer.byteLength(lines.slice(item.startLine - 1, item.endLine).join("\n"), "utf8");
-  }
-  return bytes;
+function readPlanBytes(result: ImpactResult | CompactImpact): number {
+  return viewReadPlanBytes(result);
+}
+
+function readPlanMetrics(result: ImpactResult | CompactImpact): Record<string, unknown> {
+  const readPlan = !isCompactImpact(result) ? result.metrics?.readPlan : undefined;
+  const bytes = readPlanBytes(result);
+  const maxReadBytes = Number(readPlan?.maxReadBytes || 0);
+  return {
+    readPlanFiles: viewDistinctReadFiles(result).length,
+    readPlanRanges: viewReadPlanRangeCount(result),
+    readPlanBytes: bytes,
+    budgetUtilization: maxReadBytes > 0 ? bytes / maxReadBytes : 0,
+    budgetExceededByAnchor: readPlan?.budgetExceededByAnchor === true,
+    marginalUtilityBySelectedFile: readPlan?.marginalUtilityBySelectedFile
+  };
+}
+
+function selectedRangesByFile(result: ImpactResult | CompactImpact): Map<string, Array<{ startLine: number; endLine: number }>> {
+  return viewSelectedRangesByFile(result);
+}
+
+function relativeCoordinateRanges(
+  repoRoot: string,
+  rangesByAbsolutePath: ReadonlyMap<string, readonly SourceRange[]>
+): Map<string, readonly SourceRange[]> {
+  return new Map([...rangesByAbsolutePath].map(([absolutePath, ranges]) => [
+    path.relative(repoRoot, absolutePath).split(path.sep).join("/"),
+    ranges
+  ]));
 }
 
 function readMatchedFilesBytes(repoRoot: string, files: string[], lineByPath: Map<string, number>, scenario: Scenario): number {
@@ -353,34 +731,85 @@ function readMatchedFilesBytes(repoRoot: string, files: string[], lineByPath: Ma
   return bytes;
 }
 
-function distinctReadFiles(result: Awaited<ReturnType<AgentRouter["impact"]>>): string[] {
-  const files = new Map(result.files.map(file => [String(file.id), String(file.path)]));
-  return [...new Set(result.readPlan.map(item => files.get(item.fileId)).filter((file): file is string => Boolean(file)))];
+function distinctReadFiles(result: ImpactResult | CompactImpact): string[] {
+  return viewDistinctReadFiles(result);
 }
 
-function timingPayload(result: Awaited<ReturnType<AgentRouter["impact"]>>, sessionPhaseMs: Record<string, number>): Record<string, unknown> {
-  const metrics = result.metrics || {};
+function timingPayload(result: ImpactResult | CompactImpact, sessionPhaseMs: Record<string, number>): Record<string, unknown> {
+  if (isCompactImpact(result)) {
+    return compactRecord({
+      sessionPhaseMs,
+      elapsedMs: result.metrics?.elapsedMs
+    });
+  }
+  const metrics = result.metrics;
   return compactRecord({
-    phaseMs: metrics.phaseMs,
+    phaseMs: metrics?.phaseMs,
     sessionPhaseMs,
-    semantic: metrics.semantic,
-    typeReference: metrics.typeReference,
-    importGraph: metrics.importGraph,
-    persistedSemantic: metrics.persistedSemantic
+    semantic: metrics?.semantic,
+    typeReference: metrics?.typeReference,
+    importGraph: metrics?.importGraph,
+    persistedSemantic: metrics?.persistedSemantic,
+    javaIndex: metrics?.javaIndex
   });
 }
 
-function goldenAttributionForImpact(repoRoot: string, result: Awaited<ReturnType<AgentRouter["impact"]>>, scenario: Scenario): Array<Record<string, unknown>> {
-  const fileByPath = new Map(result.files.map(file => [String(file.path), file]));
-  const pathById = new Map(result.files.map(file => [String(file.id), String(file.path)]));
-  const readSet = new Set(result.readPlan.map(item => pathById.get(item.fileId)).filter(Boolean));
-  const semanticUsed = semanticWasUsed(result.metrics);
-  const context = { repoRoot, semanticPolicy: semanticPolicyOf(result.options), semanticUsed };
-  return goldenEntries(scenario).map(({ file, kind }) => {
-    const candidate = fileByPath.get(file);
-    const inReadPlan = readSet.has(file);
-    return goldenAttributionRow(scenario, file, kind, Boolean(candidate), inReadPlan, candidate ? goldenSource(candidate) : "absent", context);
-  });
+type MapstructEvidenceCounts = {
+  selected: number;
+  readPlan: number;
+  golden: number;
+  byKind: Record<string, { selected: number; readPlan: number; golden: number }>;
+};
+
+/**
+ * Preserves framework evidence outcomes separately from generic recall. A
+ * golden file may already be recalled through imports/rg, while a MapStruct
+ * signal still changes its rank; selected/readPlan/golden counts make that
+ * distinction explicit for canary comparisons without changing router output.
+ */
+function mapstructEvidenceSummary(
+  result: ImpactResult | CompactImpact,
+  scenario: Scenario
+): MapstructEvidenceCounts {
+  const goldenPaths = new Set(goldenEntries(scenario).map(entry => entry.file));
+  const selectedPaths = new Set<string>();
+  const readPaths = new Set<string>();
+  const goldenSelectedPaths = new Set<string>();
+  const byKind: MapstructEvidenceCounts["byKind"] = {};
+  const files = isCompactImpact(result)
+    ? result.contexts.map(context => ({
+      path: context.path,
+      reasons: context.proof,
+      inReadPlan: context.spans.length > 0
+    }))
+    : result.files.map(file => ({
+      path: String(file.path),
+      reasons: Array.isArray(file.reasons) ? file.reasons : [],
+      inReadPlan: result.readPlan.some(item => item.fileId === file.id)
+    }));
+
+  for (const file of files) {
+    const filePath = file.path;
+    const reasons = file.reasons.filter(reason => reason.startsWith("MAPSTRUCT_"));
+    if (!filePath || reasons.length === 0) continue;
+    const inGolden = goldenPaths.has(filePath);
+    selectedPaths.add(filePath);
+    if (file.inReadPlan) readPaths.add(filePath);
+    if (inGolden) goldenSelectedPaths.add(filePath);
+    for (const kind of new Set(reasons)) {
+      const counts = byKind[kind] ??= { selected: 0, readPlan: 0, golden: 0 };
+      counts.selected += 1;
+      if (file.inReadPlan) counts.readPlan += 1;
+      if (inGolden) counts.golden += 1;
+    }
+  }
+
+  return {
+    selected: selectedPaths.size,
+    readPlan: readPaths.size,
+    golden: goldenSelectedPaths.size,
+    byKind
+  };
 }
 
 function goldenAttributionForNoLsp(repoRoot: string, candidatePaths: string[], readFiles: string[], scenario: Scenario): Array<Record<string, unknown>> {
@@ -403,7 +832,6 @@ function goldenAttributionRow(
   source: GoldenSource,
   context: GoldenAttributionContext
 ): Record<string, unknown> {
-  const shouldBlocksTask = kind === "should" ? scenario.goldenMeta?.[file]?.shouldBlocksTask : undefined;
   const blocked = blockedBy(inFiles, inReadPlan);
   return compactRecord({
     scenario: scenario.name,
@@ -415,17 +843,8 @@ function goldenAttributionRow(
     blockedBy: blocked,
     absentReason: blocked === "absent" ? goldenAbsentReason(context, scenario, file, kind) : undefined,
     profile: scenario.anchor.profile,
-    semanticUsed: context.semanticUsed,
-    shouldBlocksTask
+    semanticUsed: context.semanticUsed
   });
-}
-
-function goldenEntries(scenario: Scenario): Array<{ file: string; kind: GoldenKind }> {
-  return [
-    ...goldenFiles(scenario, "mustHit").map(file => ({ file, kind: "must" as const })),
-    ...goldenFiles(scenario, "shouldHit").map(file => ({ file, kind: "should" as const })),
-    ...goldenFiles(scenario, "side").map(file => ({ file, kind: "side" as const }))
-  ];
 }
 
 function blockedBy(inFiles: boolean, inReadPlan: boolean): GoldenBlockedBy {
@@ -433,9 +852,8 @@ function blockedBy(inFiles: boolean, inReadPlan: boolean): GoldenBlockedBy {
 }
 
 function goldenAbsentReason(context: GoldenAttributionContext, scenario: Scenario, file: string, kind: GoldenKind): GoldenAbsentReason {
-  const shouldBlocksTask = kind === "should" ? scenario.goldenMeta?.[file]?.shouldBlocksTask : undefined;
   const absolutePath = path.join(context.repoRoot, file);
-  if (!existsSync(absolutePath) || kind === "side" || shouldBlocksTask === false) {
+  if (!existsSync(absolutePath) || kind === "support") {
     return "golden-stale-or-low-value";
   }
 
@@ -487,49 +905,11 @@ function moduleName(file: string): string | undefined {
   return srcIndex > 0 ? segments.slice(0, srcIndex).join("/") : undefined;
 }
 
-function goldenSource(candidate: Record<string, unknown>): GoldenSource {
-  const verifiedBy = Array.isArray(candidate.verifiedBy) ? candidate.verifiedBy.map(String) : [];
-  const sources = Array.isArray(candidate.scoreBreakdown)
-    ? candidate.scoreBreakdown
-      .map(item => item && typeof item === "object" ? (item as Record<string, unknown>).source : undefined)
-      .map(String)
-    : [];
-  if (verifiedBy.includes("reference")) {
-    return "reference";
-  }
-  if (verifiedBy.includes("typeHierarchy")) {
-    return "typeHierarchy";
-  }
-  if (verifiedBy.includes("typeReference")) {
-    return "typeReference";
-  }
-  if (verifiedBy.includes("importGraph")) {
-    return "importGraph";
-  }
-  if (verifiedBy.includes("semantic-definition") || verifiedBy.includes("semantic-implementation") || sources.includes("semantic-seed")) {
-    return "seed";
-  }
-  if (verifiedBy.includes("typeGraph")) {
-    return "typeGraph";
-  }
-  if (sources.includes("rg")) {
-    return "rg";
-  }
-  return "unknown";
-}
-
-function semanticWasUsed(metrics: Record<string, unknown>): boolean {
-  const semantic = metrics.semantic;
-  return Boolean(semantic && typeof semantic === "object" && (semantic as Record<string, unknown>).used);
-}
-
-function semanticPolicyOf(options: Record<string, unknown>): string | undefined {
-  const value = options.semanticPolicy;
-  return typeof value === "string" ? value : undefined;
-}
-
 function runNoLspRg(repoRoot: string, scenario: Scenario): { stdout: string; files: string[]; lineByPath: Map<string, number> } {
   const pattern = unique(noLspTerms(repoRoot, scenario)).map(regexLiteral).join("|") || regexLiteral(path.basename(scenario.anchor.file, ".java"));
+  // Task 36 classification: KEEP_NON_REQUEST_PATH_WITH_REASON. This fallback
+  // is confined to the offline benchmark harness; MCP request paths use the
+  // bounded streaming RgRunner and never execute synchronous rg.
   const result = spawnSync("rg", ["--line-number", "--no-heading", "-g", "*.java", pattern, "."], {
     cwd: repoRoot,
     encoding: "utf8",
@@ -571,8 +951,14 @@ function normalizeRelative(file: string): string {
 
 function evaluate(candidateFiles: string[], readFiles: string[], scenario: Scenario): Record<string, number> {
   const candidates = new Set(candidateFiles);
-  const goldenAll = new Set([...goldenFiles(scenario, "mustHit"), ...goldenFiles(scenario, "shouldHit"), ...goldenFiles(scenario, "side")]);
+  const goldenAll = new Set([
+    ...goldenFiles(scenario, "mustHit"),
+    ...goldenFiles(scenario, "taskBlocking"),
+    ...goldenFiles(scenario, "shouldHit"),
+    ...goldenFiles(scenario, "support")
+  ]);
   const mustHit = new Set(goldenFiles(scenario, "mustHit"));
+  const blocking = taskBlockingFiles(scenario);
   const hitFiles = [...candidates].filter(file => goldenAll.has(file)).length;
   return {
     returnedFiles: candidates.size,
@@ -582,15 +968,12 @@ function evaluate(candidateFiles: string[], readFiles: string[], scenario: Scena
     pCandAt5: precisionAt(candidateFiles, goldenAll, 5),
     pCandAt10: precisionAt(candidateFiles, goldenAll, 10),
     pRead: readFiles.length ? readFiles.filter(file => goldenAll.has(file)).length / readFiles.length : 1,
-    rReadMust: mustHit.size ? readFiles.filter(file => mustHit.has(file)).length / mustHit.size : 1
+    rReadMust: mustHit.size ? readFiles.filter(file => mustHit.has(file)).length / mustHit.size : 1,
+    // Task 32 Step 7: the stricter superset gate metric - mustHit alone can
+    // read 1.0 while a real shouldBlocksTask file the task also needs is
+    // silently missed.
+    rTaskBlocking: blocking.size ? readFiles.filter(file => blocking.has(file)).length / blocking.size : 1
   };
-}
-
-function goldenFiles(scenario: Scenario, key: "mustHit" | "shouldHit" | "side"): string[] {
-  if (scenario.golden) {
-    return scenario.golden[key] || [];
-  }
-  return key === "mustHit" ? scenario.groundTruth || [] : [];
 }
 
 function precisionAt(files: string[], expected: Set<string>, limit: number): number {

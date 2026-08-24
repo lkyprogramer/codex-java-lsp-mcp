@@ -1,0 +1,85 @@
+[
+  {
+    "task": "V3.2-01",
+    "scope": "isolated real-JDT benchmark guard",
+    "productionLocAdded": 34,
+    "productionLocRemoved": 0,
+    "netProductionLoc": 34,
+    "paths": [
+      { "path": "src/benchmark-lsp-performance.ts", "oldLoc": 278, "newLoc": 312, "addedLoc": 34, "removedLoc": 0, "netLoc": 34, "contentChanged": true }
+    ],
+    "repaymentTask": "V3.2-35",
+    "repaymentDecision": "Retain only the in-process repository binding that remains necessary after the isolated wrapper and release gates are proven; otherwise merge or delete it."
+  },
+  {
+    "task": "V3.2-02",
+    "scope": "single-execution payload attribution and projection",
+    "productionLocAdded": 235,
+    "productionLocRemoved": 0,
+    "netProductionLoc": 235,
+    "paths": [
+      { "path": "src/agent-router/format.ts", "oldLoc": 147, "newLoc": 165, "addedLoc": 18, "removedLoc": 0, "netLoc": 18, "contentChanged": true },
+      { "path": "src/benchmark-agent-impact.ts", "oldLoc": 851, "newLoc": 930, "addedLoc": 79, "removedLoc": 0, "netLoc": 79, "contentChanged": true },
+      { "path": "src/benchmark/attribution-v3.ts", "oldLoc": 198, "newLoc": 336, "addedLoc": 138, "removedLoc": 0, "netLoc": 138, "contentChanged": true }
+    ],
+    "repaymentTask": "V3.2-33",
+    "repaymentDecision": "Keep canonical-result projection; delete attribution branches that remain UNMEASURED or duplicate production selection after the final value gate."
+  },
+  {
+    "task": "V3.2-03",
+    "scope": "request-scoped JavaIndex RPC telemetry",
+    "productionLocAdded": 394,
+    "productionLocRemoved": 0,
+    "netProductionLoc": 394,
+    "paths": [
+      { "path": "src/agent-router/impact-metrics.ts", "oldLoc": 164, "newLoc": 305, "addedLoc": 141, "removedLoc": 0, "netLoc": 141, "contentChanged": true },
+      { "path": "src/agent-router/index.ts", "oldLoc": 526, "newLoc": 543, "addedLoc": 17, "removedLoc": 0, "netLoc": 17, "contentChanged": true },
+      { "path": "src/java-index/index-types.ts", "oldLoc": 294, "newLoc": 296, "addedLoc": 2, "removedLoc": 0, "netLoc": 2, "contentChanged": true },
+      { "path": "src/java-index/java-index-client.ts", "oldLoc": 572, "newLoc": 695, "addedLoc": 123, "removedLoc": 0, "netLoc": 123, "contentChanged": true },
+      { "path": "src/java-index/java-index-worker.ts", "oldLoc": 1616, "newLoc": 1688, "addedLoc": 72, "removedLoc": 0, "netLoc": 72, "contentChanged": true },
+      { "path": "src/java-index/router-java-index.ts", "oldLoc": 868, "newLoc": 868, "addedLoc": 0, "removedLoc": 0, "netLoc": 0, "contentChanged": true },
+      { "path": "src/java-index/worker-protocol.ts", "oldLoc": 907, "newLoc": 946, "addedLoc": 39, "removedLoc": 0, "netLoc": 39, "contentChanged": true }
+    ],
+    "repaymentTask": "V3.2-35",
+    "repaymentDecision": "Retain only counters that identify an accepted batching or queue optimization and are required by long-term gates; merge or delete the rest."
+  },
+  {
+    "task": "V3.2-04",
+    "scope": "JDT first-touch phase and settlement telemetry",
+    "productionLocAdded": 606,
+    "productionLocRemoved": 0,
+    "netProductionLoc": 606,
+    "paths": [
+      { "path": "src/benchmark/semantic-first-touch.ts", "oldLoc": 451, "newLoc": 632, "addedLoc": 181, "removedLoc": 0, "netLoc": 181, "contentChanged": true },
+      { "path": "src/jdtls-session.ts", "oldLoc": 2078, "newLoc": 2496, "addedLoc": 418, "removedLoc": 0, "netLoc": 418, "contentChanged": true },
+      { "path": "src/test-support/fake-jdtls.ts", "oldLoc": 235, "newLoc": 242, "addedLoc": 7, "removedLoc": 0, "netLoc": 7, "contentChanged": true }
+    ],
+    "repaymentTask": "V3.2-35",
+    "repaymentDecision": "Keep measured phase boundaries needed to protect startup/deadline semantics; delete unused probes and collapse duplicate timers before final release."
+  },
+  {
+    "task": "V3.2-05",
+    "scope": "process-tree resource observer",
+    "productionLocAdded": 136,
+    "productionLocRemoved": 0,
+    "netProductionLoc": 136,
+    "paths": [
+      { "path": "src/benchmark/process-resource-observer.ts", "oldLoc": 0, "newLoc": 136, "addedLoc": 136, "removedLoc": 0, "netLoc": 136, "contentChanged": true }
+    ],
+    "repaymentTask": "V3.2-35",
+    "repaymentDecision": "Keep as benchmark-only support only if a hash-bound resource gate consumes it; otherwise move it out of production TypeScript or delete it."
+  },
+  {
+    "task": "V3.2-06",
+    "scope": "source-locked range-coordinate evidence",
+    "productionLocAdded": 165,
+    "productionLocRemoved": 0,
+    "netProductionLoc": 165,
+    "paths": [
+      { "path": "src/agent-router/read-plan.ts", "oldLoc": 680, "newLoc": 686, "addedLoc": 6, "removedLoc": 0, "netLoc": 6, "contentChanged": true },
+      { "path": "src/benchmark/golden-scenario.ts", "oldLoc": 161, "newLoc": 320, "addedLoc": 159, "removedLoc": 0, "netLoc": 159, "contentChanged": true }
+    ],
+    "repaymentTask": "V3.2-35",
+    "repaymentDecision": "Retain canonical coordinate validation; merge benchmark-only compatibility fields after legacy line-only artifacts are retired."
+  }
+]

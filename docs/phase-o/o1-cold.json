@@ -1,0 +1,19 @@
+{
+  "ok": true,
+  "files": 5312,
+  "discovered": 5312,
+  "parseFailed": 0,
+  "rssPeakBytes": 1941110784,
+  "heapUsedBytes": 576594576,
+  "phasesMs": {
+    "discover": 0,
+    "parse": 0,
+    "resolve": 53083.082542,
+    "snapshotPrepare": 3371.7631670000046,
+    "snapshotEncode": 4530.435749999997,
+    "graphEncode": 393.71104200000264,
+    "total": 65046.371125
+  },
+  "coldMs": 111521.029,
+  "note": "rssPeakBytes is max(parse-child, resolve-child) from the memory-benchmark child. phasesMs is the resolve grandchild; the parse grandchild overwrites this metrics file."
+}

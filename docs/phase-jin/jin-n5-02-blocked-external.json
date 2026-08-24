@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "java-intelligence-jin-n5-three-arm-trace/v1",
+  "dated": "2026-08-21",
+  "status": "BLOCKED_EXTERNAL",
+  "reason": "missing API key or --authorize-external",
+  "modelUsage": { "status": "UNMEASURED" },
+  "taskSuccess": { "status": "UNMEASURED" },
+  "blindReview": { "status": "UNMEASURED" },
+  "escalate": "0A.4(a)",
+  "endpointProbe": {
+    "host": "192.168.10.29:28343",
+    "modelsPath": "/v1/models",
+    "httpStatusWithoutKey": 401,
+    "sha256": "9c25e4ab8d8b3fe0eb5668e57ecf61337bce1aec8a4151b32bc12bcd00ee5bf2"
+  },
+  "credentialsPresent": {
+    "OPENAI_API_KEY": false,
+    "JAVA_LSP_AGENT_API_KEY": false,
+    "ANTHROPIC_API_KEY": false,
+    "OPENAI_BASE_URL": false,
+    "OPENAI_MODEL": false,
+    "SERENA_MCP_COMMAND": false
+  },
+  "protocol": {
+    "rounds": ["ABC", "CBA"],
+    "variants": ["old", "jin", "serena"],
+    "arms": {
+      "old": "java_impact",
+      "jin": "java_context",
+      "serena": "serena-public-mcp"
+    },
+    "cells": 36,
+    "maxRounds": 8,
+    "contextWindowTokens": 114688
+  },
+  "harness": "scripts/run-agent-trace-matrix.mjs --authorize-external --execute-live",
+  "exitCode": 3,
+  "blockedExternalSha256": "ec211744425fc716aa9a793df580b2a033c24fe4fdcef01a637ee15825438d9f",
+  "note": "Host answered 401 without a bearer. Process env has no provider key. Serena MCP command is unset; C arm would record SERENA_UNAVAILABLE, not TaskSuccess=0. No live traffic was sent."
+}

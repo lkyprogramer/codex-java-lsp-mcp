@@ -1,0 +1,2329 @@
+{
+  "hostQuiet": {
+    "loadavg1": 13.46044921875,
+    "logicalCpus": 10,
+    "perCpu": 1.346044921875,
+    "maxLoadavgPerCpu": 1.2,
+    "memory": {
+      "totalBytes": 34359738368,
+      "availableBytes": 15544451072,
+      "minAvailableBytes": 4294967296
+    },
+    "passed": true
+  },
+  "projects": {
+    "lishuedu": {
+      "metadata": {
+        "repoRoot": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-lNGeh4/tmp/codex-java-lsp-isolated-jdt-bNz3Yq/repo",
+        "projectId": "lishuedu",
+        "workspaceState": "fresh",
+        "prepare": "none",
+        "operation": "references",
+        "runs": 5,
+        "timeoutMs": 60000,
+        "repoCommit": "db63b1a7e393"
+      },
+      "attempts": [
+        {
+          "projectId": "lishuedu",
+          "repoCommit": "db63b1a7e393",
+          "workspaceState": "fresh",
+          "prepare": "none",
+          "operation": "references",
+          "scenarioId": "lishuedu-references",
+          "ensureStartedMs": 4815.479,
+          "prepareMs": 0,
+          "requestMs": 60003.616,
+          "totalMs": 64819.212,
+          "completion": "PARTIAL_TIMEOUT",
+          "resultFiles": 0,
+          "repoContainedFiles": 0,
+          "outsideRepoFiles": 0,
+          "suppressedLocations": 0,
+          "cacheHit": {
+            "status": "UNMEASURED",
+            "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+          },
+          "shared": {
+            "status": "UNMEASURED",
+            "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+          },
+          "backendSettlement": "within_5s",
+          "criticalPath": {
+            "wallMs": 64819.212,
+            "ensureStartedMs": 4815.479,
+            "prepareMs": 0,
+            "operationCallerMs": 60003.616,
+            "accountedMs": 64819.095,
+            "residualMs": 0.118,
+            "accountingErrorRatio": 0.000002,
+            "gate": "PASS"
+          },
+          "jdtTelemetry": {
+            "status": "MEASURED",
+            "value": {
+              "schemaVersion": "java-intelligence-v32-jdt-first-touch-session/v1",
+              "execution": "new-process",
+              "startup": {
+                "filesystemSetupMs": {
+                  "status": "MEASURED",
+                  "value": 0.572
+                },
+                "processSpawnCallMs": {
+                  "status": "MEASURED",
+                  "value": 1.709
+                },
+                "initializeRoundTripMs": {
+                  "status": "MEASURED",
+                  "value": 4787.042
+                },
+                "configurationNotifySendMs": {
+                  "status": "MEASURED",
+                  "value": 0.165
+                },
+                "configurationAppliedMs": {
+                  "status": "UNMEASURED",
+                  "reason": "LSP configuration notifications have no server acknowledgement"
+                },
+                "jdtlsPid": {
+                  "status": "MEASURED",
+                  "value": 35679
+                }
+              },
+              "configuration": {
+                "requests": 0,
+                "responseBuildMs": {
+                  "status": "UNMEASURED",
+                  "reason": "JDT did not issue workspace/configuration during this attempt"
+                }
+              },
+              "progress": {
+                "events": [],
+                "projectImportMs": {
+                  "status": "UNMEASURED",
+                  "reason": "no complete project-import progress begin/end span was observed"
+                }
+              },
+              "document": {
+                "sourceReadMs": {
+                  "status": "MEASURED",
+                  "value": 0.715
+                },
+                "lruSynchronizeMs": {
+                  "status": "MEASURED",
+                  "value": 0.224
+                },
+                "syncAction": {
+                  "status": "MEASURED",
+                  "value": "didOpen"
+                },
+                "serverAppliedMs": {
+                  "status": "UNMEASURED",
+                  "reason": "didOpen/didChange notifications have no server acknowledgement"
+                }
+              },
+              "gateway": {
+                "cacheHit": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                },
+                "shared": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                },
+                "backendRole": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                }
+              },
+              "operations": [
+                {
+                  "id": 1,
+                  "method": "textDocument/references",
+                  "callerMs": {
+                    "status": "MEASURED",
+                    "value": 60002.223
+                  },
+                  "callerSettlement": {
+                    "status": "MEASURED",
+                    "value": "DEADLINE_EXCEEDED"
+                  },
+                  "backendSettlement": {
+                    "status": "MEASURED",
+                    "value": "rejected"
+                  },
+                  "backendSettlementAfterCallerMs": {
+                    "status": "MEASURED",
+                    "value": 3003.471
+                  },
+                  "cancelSentMs": {
+                    "status": "MEASURED",
+                    "value": 60001.676
+                  },
+                  "cancelAckMs": {
+                    "status": "UNMEASURED",
+                    "reason": "LSP cancellation has no acknowledgement"
+                  }
+                }
+              ]
+            }
+          },
+          "errorCode": "DEADLINE_EXCEEDED",
+          "sessionPhaseMs": {
+            "ensureStart": 4815,
+            "textDocument/references": 60002,
+            "cancelBackendSettlementMs": 3003
+          },
+          "retainedWorkspace": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-lNGeh4/tmp/codex-java-lsp-isolated-jdt-bNz3Yq/tmp/semantic-first-touch-fresh-TbDEsO"
+        },
+        {
+          "projectId": "lishuedu",
+          "repoCommit": "db63b1a7e393",
+          "workspaceState": "fresh",
+          "prepare": "none",
+          "operation": "references",
+          "scenarioId": "lishuedu-references",
+          "ensureStartedMs": 4999.825,
+          "prepareMs": 0,
+          "requestMs": 60003.213,
+          "totalMs": 65003.039,
+          "completion": "PARTIAL_TIMEOUT",
+          "resultFiles": 0,
+          "repoContainedFiles": 0,
+          "outsideRepoFiles": 0,
+          "suppressedLocations": 0,
+          "cacheHit": {
+            "status": "UNMEASURED",
+            "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+          },
+          "shared": {
+            "status": "UNMEASURED",
+            "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+          },
+          "backendSettlement": "within_250ms",
+          "criticalPath": {
+            "wallMs": 65003.039,
+            "ensureStartedMs": 4999.825,
+            "prepareMs": 0,
+            "operationCallerMs": 60003.213,
+            "accountedMs": 65003.037,
+            "residualMs": 0.002,
+            "accountingErrorRatio": 0,
+            "gate": "PASS"
+          },
+          "jdtTelemetry": {
+            "status": "MEASURED",
+            "value": {
+              "schemaVersion": "java-intelligence-v32-jdt-first-touch-session/v1",
+              "execution": "new-process",
+              "startup": {
+                "filesystemSetupMs": {
+                  "status": "MEASURED",
+                  "value": 0.543
+                },
+                "processSpawnCallMs": {
+                  "status": "MEASURED",
+                  "value": 0.833
+                },
+                "initializeRoundTripMs": {
+                  "status": "MEASURED",
+                  "value": 4969.838
+                },
+                "configurationNotifySendMs": {
+                  "status": "MEASURED",
+                  "value": 0.281
+                },
+                "configurationAppliedMs": {
+                  "status": "UNMEASURED",
+                  "reason": "LSP configuration notifications have no server acknowledgement"
+                },
+                "jdtlsPid": {
+                  "status": "MEASURED",
+                  "value": 35811
+                }
+              },
+              "configuration": {
+                "requests": 0,
+                "responseBuildMs": {
+                  "status": "UNMEASURED",
+                  "reason": "JDT did not issue workspace/configuration during this attempt"
+                }
+              },
+              "progress": {
+                "events": [],
+                "projectImportMs": {
+                  "status": "UNMEASURED",
+                  "reason": "no complete project-import progress begin/end span was observed"
+                }
+              },
+              "document": {
+                "sourceReadMs": {
+                  "status": "MEASURED",
+                  "value": 0.858
+                },
+                "lruSynchronizeMs": {
+                  "status": "MEASURED",
+                  "value": 0.059
+                },
+                "syncAction": {
+                  "status": "MEASURED",
+                  "value": "didOpen"
+                },
+                "serverAppliedMs": {
+                  "status": "UNMEASURED",
+                  "reason": "didOpen/didChange notifications have no server acknowledgement"
+                }
+              },
+              "gateway": {
+                "cacheHit": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                },
+                "shared": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                },
+                "backendRole": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                }
+              },
+              "operations": [
+                {
+                  "id": 1,
+                  "method": "textDocument/references",
+                  "callerMs": {
+                    "status": "MEASURED",
+                    "value": 60002.228
+                  },
+                  "callerSettlement": {
+                    "status": "MEASURED",
+                    "value": "DEADLINE_EXCEEDED"
+                  },
+                  "backendSettlement": {
+                    "status": "MEASURED",
+                    "value": "rejected"
+                  },
+                  "backendSettlementAfterCallerMs": {
+                    "status": "MEASURED",
+                    "value": 2.008
+                  },
+                  "cancelSentMs": {
+                    "status": "MEASURED",
+                    "value": 60002.102
+                  },
+                  "cancelAckMs": {
+                    "status": "UNMEASURED",
+                    "reason": "LSP cancellation has no acknowledgement"
+                  }
+                }
+              ]
+            }
+          },
+          "errorCode": "DEADLINE_EXCEEDED",
+          "sessionPhaseMs": {
+            "ensureStart": 5000,
+            "textDocument/references": 60001,
+            "cancelBackendSettlementMs": 2
+          },
+          "retainedWorkspace": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-lNGeh4/tmp/codex-java-lsp-isolated-jdt-bNz3Yq/tmp/semantic-first-touch-fresh-2EIcYQ"
+        },
+        {
+          "projectId": "lishuedu",
+          "repoCommit": "db63b1a7e393",
+          "workspaceState": "fresh",
+          "prepare": "none",
+          "operation": "references",
+          "scenarioId": "lishuedu-references",
+          "ensureStartedMs": 4856.352,
+          "prepareMs": 0,
+          "requestMs": 51270.599,
+          "totalMs": 56126.953,
+          "completion": "COMPLETE",
+          "resultFiles": 2,
+          "repoContainedFiles": 1,
+          "outsideRepoFiles": 0,
+          "suppressedLocations": 0,
+          "cacheHit": {
+            "status": "UNMEASURED",
+            "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+          },
+          "shared": {
+            "status": "UNMEASURED",
+            "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+          },
+          "backendSettlement": "within_250ms",
+          "criticalPath": {
+            "wallMs": 56126.953,
+            "ensureStartedMs": 4856.352,
+            "prepareMs": 0,
+            "operationCallerMs": 51270.599,
+            "accountedMs": 56126.951,
+            "residualMs": 0.002,
+            "accountingErrorRatio": 0,
+            "gate": "PASS"
+          },
+          "jdtTelemetry": {
+            "status": "MEASURED",
+            "value": {
+              "schemaVersion": "java-intelligence-v32-jdt-first-touch-session/v1",
+              "execution": "new-process",
+              "startup": {
+                "filesystemSetupMs": {
+                  "status": "MEASURED",
+                  "value": 0.848
+                },
+                "processSpawnCallMs": {
+                  "status": "MEASURED",
+                  "value": 1.576
+                },
+                "initializeRoundTripMs": {
+                  "status": "MEASURED",
+                  "value": 4823.557
+                },
+                "configurationNotifySendMs": {
+                  "status": "MEASURED",
+                  "value": 0.204
+                },
+                "configurationAppliedMs": {
+                  "status": "UNMEASURED",
+                  "reason": "LSP configuration notifications have no server acknowledgement"
+                },
+                "jdtlsPid": {
+                  "status": "MEASURED",
+                  "value": 35929
+                }
+              },
+              "configuration": {
+                "requests": 0,
+                "responseBuildMs": {
+                  "status": "UNMEASURED",
+                  "reason": "JDT did not issue workspace/configuration during this attempt"
+                }
+              },
+              "progress": {
+                "events": [],
+                "projectImportMs": {
+                  "status": "UNMEASURED",
+                  "reason": "no complete project-import progress begin/end span was observed"
+                }
+              },
+              "document": {
+                "sourceReadMs": {
+                  "status": "MEASURED",
+                  "value": 0.326
+                },
+                "lruSynchronizeMs": {
+                  "status": "MEASURED",
+                  "value": 0.064
+                },
+                "syncAction": {
+                  "status": "MEASURED",
+                  "value": "didOpen"
+                },
+                "serverAppliedMs": {
+                  "status": "UNMEASURED",
+                  "reason": "didOpen/didChange notifications have no server acknowledgement"
+                }
+              },
+              "gateway": {
+                "cacheHit": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                },
+                "shared": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                },
+                "backendRole": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                }
+              },
+              "operations": [
+                {
+                  "id": 1,
+                  "method": "textDocument/references",
+                  "callerMs": {
+                    "status": "MEASURED",
+                    "value": 51269.994
+                  },
+                  "callerSettlement": {
+                    "status": "MEASURED",
+                    "value": "COMPLETE"
+                  },
+                  "backendSettlement": {
+                    "status": "MEASURED",
+                    "value": "fulfilled"
+                  },
+                  "backendSettlementAfterCallerMs": {
+                    "status": "MEASURED",
+                    "value": 0
+                  },
+                  "cancelSentMs": {
+                    "status": "NOT_APPLICABLE",
+                    "reason": "the caller did not request cancellation"
+                  },
+                  "cancelAckMs": {
+                    "status": "NOT_APPLICABLE",
+                    "reason": "the caller did not request cancellation"
+                  }
+                }
+              ]
+            }
+          },
+          "sessionPhaseMs": {
+            "ensureStart": 4856,
+            "textDocument/references": 51269
+          }
+        },
+        {
+          "projectId": "lishuedu",
+          "repoCommit": "db63b1a7e393",
+          "workspaceState": "fresh",
+          "prepare": "none",
+          "operation": "references",
+          "scenarioId": "lishuedu-references",
+          "ensureStartedMs": 4782.292,
+          "prepareMs": 0,
+          "requestMs": 50343.574,
+          "totalMs": 55125.875,
+          "completion": "COMPLETE",
+          "resultFiles": 2,
+          "repoContainedFiles": 1,
+          "outsideRepoFiles": 0,
+          "suppressedLocations": 0,
+          "cacheHit": {
+            "status": "UNMEASURED",
+            "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+          },
+          "shared": {
+            "status": "UNMEASURED",
+            "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+          },
+          "backendSettlement": "within_250ms",
+          "criticalPath": {
+            "wallMs": 55125.875,
+            "ensureStartedMs": 4782.292,
+            "prepareMs": 0,
+            "operationCallerMs": 50343.574,
+            "accountedMs": 55125.866,
+            "residualMs": 0.009,
+            "accountingErrorRatio": 0,
+            "gate": "PASS"
+          },
+          "jdtTelemetry": {
+            "status": "MEASURED",
+            "value": {
+              "schemaVersion": "java-intelligence-v32-jdt-first-touch-session/v1",
+              "execution": "new-process",
+              "startup": {
+                "filesystemSetupMs": {
+                  "status": "MEASURED",
+                  "value": 0.803
+                },
+                "processSpawnCallMs": {
+                  "status": "MEASURED",
+                  "value": 0.827
+                },
+                "initializeRoundTripMs": {
+                  "status": "MEASURED",
+                  "value": 4755.221
+                },
+                "configurationNotifySendMs": {
+                  "status": "MEASURED",
+                  "value": 0.098
+                },
+                "configurationAppliedMs": {
+                  "status": "UNMEASURED",
+                  "reason": "LSP configuration notifications have no server acknowledgement"
+                },
+                "jdtlsPid": {
+                  "status": "MEASURED",
+                  "value": 36758
+                }
+              },
+              "configuration": {
+                "requests": 0,
+                "responseBuildMs": {
+                  "status": "UNMEASURED",
+                  "reason": "JDT did not issue workspace/configuration during this attempt"
+                }
+              },
+              "progress": {
+                "events": [],
+                "projectImportMs": {
+                  "status": "UNMEASURED",
+                  "reason": "no complete project-import progress begin/end span was observed"
+                }
+              },
+              "document": {
+                "sourceReadMs": {
+                  "status": "MEASURED",
+                  "value": 0.453
+                },
+                "lruSynchronizeMs": {
+                  "status": "MEASURED",
+                  "value": 0.054
+                },
+                "syncAction": {
+                  "status": "MEASURED",
+                  "value": "didOpen"
+                },
+                "serverAppliedMs": {
+                  "status": "UNMEASURED",
+                  "reason": "didOpen/didChange notifications have no server acknowledgement"
+                }
+              },
+              "gateway": {
+                "cacheHit": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                },
+                "shared": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                },
+                "backendRole": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                }
+              },
+              "operations": [
+                {
+                  "id": 1,
+                  "method": "textDocument/references",
+                  "callerMs": {
+                    "status": "MEASURED",
+                    "value": 50342.993
+                  },
+                  "callerSettlement": {
+                    "status": "MEASURED",
+                    "value": "COMPLETE"
+                  },
+                  "backendSettlement": {
+                    "status": "MEASURED",
+                    "value": "fulfilled"
+                  },
+                  "backendSettlementAfterCallerMs": {
+                    "status": "MEASURED",
+                    "value": 0
+                  },
+                  "cancelSentMs": {
+                    "status": "NOT_APPLICABLE",
+                    "reason": "the caller did not request cancellation"
+                  },
+                  "cancelAckMs": {
+                    "status": "NOT_APPLICABLE",
+                    "reason": "the caller did not request cancellation"
+                  }
+                }
+              ]
+            }
+          },
+          "sessionPhaseMs": {
+            "ensureStart": 4782,
+            "textDocument/references": 50342
+          }
+        },
+        {
+          "projectId": "lishuedu",
+          "repoCommit": "db63b1a7e393",
+          "workspaceState": "fresh",
+          "prepare": "none",
+          "operation": "references",
+          "scenarioId": "lishuedu-references",
+          "ensureStartedMs": 4807.326,
+          "prepareMs": 0,
+          "requestMs": 50023.906,
+          "totalMs": 54831.235,
+          "completion": "COMPLETE",
+          "resultFiles": 2,
+          "repoContainedFiles": 1,
+          "outsideRepoFiles": 0,
+          "suppressedLocations": 0,
+          "cacheHit": {
+            "status": "UNMEASURED",
+            "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+          },
+          "shared": {
+            "status": "UNMEASURED",
+            "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+          },
+          "backendSettlement": "within_250ms",
+          "criticalPath": {
+            "wallMs": 54831.235,
+            "ensureStartedMs": 4807.326,
+            "prepareMs": 0,
+            "operationCallerMs": 50023.906,
+            "accountedMs": 54831.232,
+            "residualMs": 0.002,
+            "accountingErrorRatio": 0,
+            "gate": "PASS"
+          },
+          "jdtTelemetry": {
+            "status": "MEASURED",
+            "value": {
+              "schemaVersion": "java-intelligence-v32-jdt-first-touch-session/v1",
+              "execution": "new-process",
+              "startup": {
+                "filesystemSetupMs": {
+                  "status": "MEASURED",
+                  "value": 0.534
+                },
+                "processSpawnCallMs": {
+                  "status": "MEASURED",
+                  "value": 0.771
+                },
+                "initializeRoundTripMs": {
+                  "status": "MEASURED",
+                  "value": 4781.716
+                },
+                "configurationNotifySendMs": {
+                  "status": "MEASURED",
+                  "value": 0.097
+                },
+                "configurationAppliedMs": {
+                  "status": "UNMEASURED",
+                  "reason": "LSP configuration notifications have no server acknowledgement"
+                },
+                "jdtlsPid": {
+                  "status": "MEASURED",
+                  "value": 36894
+                }
+              },
+              "configuration": {
+                "requests": 0,
+                "responseBuildMs": {
+                  "status": "UNMEASURED",
+                  "reason": "JDT did not issue workspace/configuration during this attempt"
+                }
+              },
+              "progress": {
+                "events": [],
+                "projectImportMs": {
+                  "status": "UNMEASURED",
+                  "reason": "no complete project-import progress begin/end span was observed"
+                }
+              },
+              "document": {
+                "sourceReadMs": {
+                  "status": "MEASURED",
+                  "value": 0.321
+                },
+                "lruSynchronizeMs": {
+                  "status": "MEASURED",
+                  "value": 0.071
+                },
+                "syncAction": {
+                  "status": "MEASURED",
+                  "value": "didOpen"
+                },
+                "serverAppliedMs": {
+                  "status": "UNMEASURED",
+                  "reason": "didOpen/didChange notifications have no server acknowledgement"
+                }
+              },
+              "gateway": {
+                "cacheHit": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                },
+                "shared": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                },
+                "backendRole": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                }
+              },
+              "operations": [
+                {
+                  "id": 1,
+                  "method": "textDocument/references",
+                  "callerMs": {
+                    "status": "MEASURED",
+                    "value": 50023.399
+                  },
+                  "callerSettlement": {
+                    "status": "MEASURED",
+                    "value": "COMPLETE"
+                  },
+                  "backendSettlement": {
+                    "status": "MEASURED",
+                    "value": "fulfilled"
+                  },
+                  "backendSettlementAfterCallerMs": {
+                    "status": "MEASURED",
+                    "value": 0
+                  },
+                  "cancelSentMs": {
+                    "status": "NOT_APPLICABLE",
+                    "reason": "the caller did not request cancellation"
+                  },
+                  "cancelAckMs": {
+                    "status": "NOT_APPLICABLE",
+                    "reason": "the caller did not request cancellation"
+                  }
+                }
+              ]
+            }
+          },
+          "sessionPhaseMs": {
+            "ensureStart": 4807,
+            "textDocument/references": 50051
+          }
+        }
+      ]
+    },
+    "cipherlink": {
+      "metadata": {
+        "repoRoot": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-r7UKRJ/tmp/codex-java-lsp-isolated-jdt-BYwybY/repo",
+        "projectId": "cipherlink",
+        "workspaceState": "fresh",
+        "prepare": "none",
+        "operation": "references",
+        "runs": 5,
+        "timeoutMs": 60000,
+        "repoCommit": "fa433982e92e"
+      },
+      "attempts": [
+        {
+          "projectId": "cipherlink",
+          "repoCommit": "fa433982e92e",
+          "workspaceState": "fresh",
+          "prepare": "none",
+          "operation": "references",
+          "scenarioId": "cipherlink-references",
+          "ensureStartedMs": 4461.692,
+          "prepareMs": 0,
+          "requestMs": 60002.22,
+          "totalMs": 64464.023,
+          "completion": "PARTIAL_TIMEOUT",
+          "resultFiles": 0,
+          "repoContainedFiles": 0,
+          "outsideRepoFiles": 0,
+          "suppressedLocations": 0,
+          "cacheHit": {
+            "status": "UNMEASURED",
+            "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+          },
+          "shared": {
+            "status": "UNMEASURED",
+            "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+          },
+          "backendSettlement": "within_5s",
+          "criticalPath": {
+            "wallMs": 64464.023,
+            "ensureStartedMs": 4461.692,
+            "prepareMs": 0,
+            "operationCallerMs": 60002.22,
+            "accountedMs": 64463.912,
+            "residualMs": 0.111,
+            "accountingErrorRatio": 0.000002,
+            "gate": "PASS"
+          },
+          "jdtTelemetry": {
+            "status": "MEASURED",
+            "value": {
+              "schemaVersion": "java-intelligence-v32-jdt-first-touch-session/v1",
+              "execution": "new-process",
+              "startup": {
+                "filesystemSetupMs": {
+                  "status": "MEASURED",
+                  "value": 0.392
+                },
+                "processSpawnCallMs": {
+                  "status": "MEASURED",
+                  "value": 2.088
+                },
+                "initializeRoundTripMs": {
+                  "status": "MEASURED",
+                  "value": 4433.323
+                },
+                "configurationNotifySendMs": {
+                  "status": "MEASURED",
+                  "value": 0.178
+                },
+                "configurationAppliedMs": {
+                  "status": "UNMEASURED",
+                  "reason": "LSP configuration notifications have no server acknowledgement"
+                },
+                "jdtlsPid": {
+                  "status": "MEASURED",
+                  "value": 37111
+                }
+              },
+              "configuration": {
+                "requests": 0,
+                "responseBuildMs": {
+                  "status": "UNMEASURED",
+                  "reason": "JDT did not issue workspace/configuration during this attempt"
+                }
+              },
+              "progress": {
+                "events": [],
+                "projectImportMs": {
+                  "status": "UNMEASURED",
+                  "reason": "no complete project-import progress begin/end span was observed"
+                }
+              },
+              "document": {
+                "sourceReadMs": {
+                  "status": "MEASURED",
+                  "value": 0.713
+                },
+                "lruSynchronizeMs": {
+                  "status": "MEASURED",
+                  "value": 0.192
+                },
+                "syncAction": {
+                  "status": "MEASURED",
+                  "value": "didOpen"
+                },
+                "serverAppliedMs": {
+                  "status": "UNMEASURED",
+                  "reason": "didOpen/didChange notifications have no server acknowledgement"
+                }
+              },
+              "gateway": {
+                "cacheHit": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                },
+                "shared": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                },
+                "backendRole": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                }
+              },
+              "operations": [
+                {
+                  "id": 1,
+                  "method": "textDocument/references",
+                  "callerMs": {
+                    "status": "MEASURED",
+                    "value": 60000.909
+                  },
+                  "callerSettlement": {
+                    "status": "MEASURED",
+                    "value": "DEADLINE_EXCEEDED"
+                  },
+                  "backendSettlement": {
+                    "status": "MEASURED",
+                    "value": "rejected"
+                  },
+                  "backendSettlementAfterCallerMs": {
+                    "status": "MEASURED",
+                    "value": 3004.026
+                  },
+                  "cancelSentMs": {
+                    "status": "MEASURED",
+                    "value": 60000.552
+                  },
+                  "cancelAckMs": {
+                    "status": "UNMEASURED",
+                    "reason": "LSP cancellation has no acknowledgement"
+                  }
+                }
+              ]
+            }
+          },
+          "errorCode": "DEADLINE_EXCEEDED",
+          "sessionPhaseMs": {
+            "ensureStart": 4462,
+            "textDocument/references": 60004,
+            "cancelBackendSettlementMs": 3004
+          },
+          "retainedWorkspace": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-r7UKRJ/tmp/codex-java-lsp-isolated-jdt-BYwybY/tmp/semantic-first-touch-fresh-rLqY6K"
+        },
+        {
+          "projectId": "cipherlink",
+          "repoCommit": "fa433982e92e",
+          "workspaceState": "fresh",
+          "prepare": "none",
+          "operation": "references",
+          "scenarioId": "cipherlink-references",
+          "ensureStartedMs": 4697.638,
+          "prepareMs": 0,
+          "requestMs": 60002.742,
+          "totalMs": 64700.382,
+          "completion": "PARTIAL_TIMEOUT",
+          "resultFiles": 0,
+          "repoContainedFiles": 0,
+          "outsideRepoFiles": 0,
+          "suppressedLocations": 0,
+          "cacheHit": {
+            "status": "UNMEASURED",
+            "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+          },
+          "shared": {
+            "status": "UNMEASURED",
+            "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+          },
+          "backendSettlement": "within_5s",
+          "criticalPath": {
+            "wallMs": 64700.382,
+            "ensureStartedMs": 4697.638,
+            "prepareMs": 0,
+            "operationCallerMs": 60002.742,
+            "accountedMs": 64700.38,
+            "residualMs": 0.002,
+            "accountingErrorRatio": 0,
+            "gate": "PASS"
+          },
+          "jdtTelemetry": {
+            "status": "MEASURED",
+            "value": {
+              "schemaVersion": "java-intelligence-v32-jdt-first-touch-session/v1",
+              "execution": "new-process",
+              "startup": {
+                "filesystemSetupMs": {
+                  "status": "MEASURED",
+                  "value": 0.707
+                },
+                "processSpawnCallMs": {
+                  "status": "MEASURED",
+                  "value": 0.855
+                },
+                "initializeRoundTripMs": {
+                  "status": "MEASURED",
+                  "value": 4670.812
+                },
+                "configurationNotifySendMs": {
+                  "status": "MEASURED",
+                  "value": 0.108
+                },
+                "configurationAppliedMs": {
+                  "status": "UNMEASURED",
+                  "reason": "LSP configuration notifications have no server acknowledgement"
+                },
+                "jdtlsPid": {
+                  "status": "MEASURED",
+                  "value": 37355
+                }
+              },
+              "configuration": {
+                "requests": 0,
+                "responseBuildMs": {
+                  "status": "UNMEASURED",
+                  "reason": "JDT did not issue workspace/configuration during this attempt"
+                }
+              },
+              "progress": {
+                "events": [],
+                "projectImportMs": {
+                  "status": "UNMEASURED",
+                  "reason": "no complete project-import progress begin/end span was observed"
+                }
+              },
+              "document": {
+                "sourceReadMs": {
+                  "status": "MEASURED",
+                  "value": 0.441
+                },
+                "lruSynchronizeMs": {
+                  "status": "MEASURED",
+                  "value": 0.06
+                },
+                "syncAction": {
+                  "status": "MEASURED",
+                  "value": "didOpen"
+                },
+                "serverAppliedMs": {
+                  "status": "UNMEASURED",
+                  "reason": "didOpen/didChange notifications have no server acknowledgement"
+                }
+              },
+              "gateway": {
+                "cacheHit": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                },
+                "shared": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                },
+                "backendRole": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                }
+              },
+              "operations": [
+                {
+                  "id": 1,
+                  "method": "textDocument/references",
+                  "callerMs": {
+                    "status": "MEASURED",
+                    "value": 60002.078
+                  },
+                  "callerSettlement": {
+                    "status": "MEASURED",
+                    "value": "DEADLINE_EXCEEDED"
+                  },
+                  "backendSettlement": {
+                    "status": "MEASURED",
+                    "value": "rejected"
+                  },
+                  "backendSettlementAfterCallerMs": {
+                    "status": "MEASURED",
+                    "value": 3001.977
+                  },
+                  "cancelSentMs": {
+                    "status": "MEASURED",
+                    "value": 60001.906
+                  },
+                  "cancelAckMs": {
+                    "status": "UNMEASURED",
+                    "reason": "LSP cancellation has no acknowledgement"
+                  }
+                }
+              ]
+            }
+          },
+          "errorCode": "DEADLINE_EXCEEDED",
+          "sessionPhaseMs": {
+            "ensureStart": 4698,
+            "textDocument/references": 60002,
+            "cancelBackendSettlementMs": 3002
+          },
+          "retainedWorkspace": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-r7UKRJ/tmp/codex-java-lsp-isolated-jdt-BYwybY/tmp/semantic-first-touch-fresh-3DnqH4"
+        },
+        {
+          "projectId": "cipherlink",
+          "repoCommit": "fa433982e92e",
+          "workspaceState": "fresh",
+          "prepare": "none",
+          "operation": "references",
+          "scenarioId": "cipherlink-references",
+          "ensureStartedMs": 4530.478,
+          "prepareMs": 0,
+          "requestMs": 60002.09,
+          "totalMs": 64532.57,
+          "completion": "PARTIAL_TIMEOUT",
+          "resultFiles": 0,
+          "repoContainedFiles": 0,
+          "outsideRepoFiles": 0,
+          "suppressedLocations": 0,
+          "cacheHit": {
+            "status": "UNMEASURED",
+            "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+          },
+          "shared": {
+            "status": "UNMEASURED",
+            "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+          },
+          "backendSettlement": "within_5s",
+          "criticalPath": {
+            "wallMs": 64532.57,
+            "ensureStartedMs": 4530.478,
+            "prepareMs": 0,
+            "operationCallerMs": 60002.09,
+            "accountedMs": 64532.568,
+            "residualMs": 0.003,
+            "accountingErrorRatio": 0,
+            "gate": "PASS"
+          },
+          "jdtTelemetry": {
+            "status": "MEASURED",
+            "value": {
+              "schemaVersion": "java-intelligence-v32-jdt-first-touch-session/v1",
+              "execution": "new-process",
+              "startup": {
+                "filesystemSetupMs": {
+                  "status": "MEASURED",
+                  "value": 0.541
+                },
+                "processSpawnCallMs": {
+                  "status": "MEASURED",
+                  "value": 0.967
+                },
+                "initializeRoundTripMs": {
+                  "status": "MEASURED",
+                  "value": 4505.154
+                },
+                "configurationNotifySendMs": {
+                  "status": "MEASURED",
+                  "value": 0.186
+                },
+                "configurationAppliedMs": {
+                  "status": "UNMEASURED",
+                  "reason": "LSP configuration notifications have no server acknowledgement"
+                },
+                "jdtlsPid": {
+                  "status": "MEASURED",
+                  "value": 38451
+                }
+              },
+              "configuration": {
+                "requests": 0,
+                "responseBuildMs": {
+                  "status": "UNMEASURED",
+                  "reason": "JDT did not issue workspace/configuration during this attempt"
+                }
+              },
+              "progress": {
+                "events": [],
+                "projectImportMs": {
+                  "status": "UNMEASURED",
+                  "reason": "no complete project-import progress begin/end span was observed"
+                }
+              },
+              "document": {
+                "sourceReadMs": {
+                  "status": "MEASURED",
+                  "value": 0.303
+                },
+                "lruSynchronizeMs": {
+                  "status": "MEASURED",
+                  "value": 0.111
+                },
+                "syncAction": {
+                  "status": "MEASURED",
+                  "value": "didOpen"
+                },
+                "serverAppliedMs": {
+                  "status": "UNMEASURED",
+                  "reason": "didOpen/didChange notifications have no server acknowledgement"
+                }
+              },
+              "gateway": {
+                "cacheHit": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                },
+                "shared": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                },
+                "backendRole": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                }
+              },
+              "operations": [
+                {
+                  "id": 1,
+                  "method": "textDocument/references",
+                  "callerMs": {
+                    "status": "MEASURED",
+                    "value": 60001.505
+                  },
+                  "callerSettlement": {
+                    "status": "MEASURED",
+                    "value": "DEADLINE_EXCEEDED"
+                  },
+                  "backendSettlement": {
+                    "status": "MEASURED",
+                    "value": "rejected"
+                  },
+                  "backendSettlementAfterCallerMs": {
+                    "status": "MEASURED",
+                    "value": 3002.219
+                  },
+                  "cancelSentMs": {
+                    "status": "MEASURED",
+                    "value": 60001.372
+                  },
+                  "cancelAckMs": {
+                    "status": "UNMEASURED",
+                    "reason": "LSP cancellation has no acknowledgement"
+                  }
+                }
+              ]
+            }
+          },
+          "errorCode": "DEADLINE_EXCEEDED",
+          "sessionPhaseMs": {
+            "ensureStart": 4530,
+            "textDocument/references": 60001,
+            "cancelBackendSettlementMs": 3002
+          },
+          "retainedWorkspace": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-r7UKRJ/tmp/codex-java-lsp-isolated-jdt-BYwybY/tmp/semantic-first-touch-fresh-rTQ4Yu"
+        },
+        {
+          "projectId": "cipherlink",
+          "repoCommit": "fa433982e92e",
+          "workspaceState": "fresh",
+          "prepare": "none",
+          "operation": "references",
+          "scenarioId": "cipherlink-references",
+          "ensureStartedMs": 4702.634,
+          "prepareMs": 0,
+          "requestMs": 60003,
+          "totalMs": 64705.642,
+          "completion": "PARTIAL_TIMEOUT",
+          "resultFiles": 0,
+          "repoContainedFiles": 0,
+          "outsideRepoFiles": 0,
+          "suppressedLocations": 0,
+          "cacheHit": {
+            "status": "UNMEASURED",
+            "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+          },
+          "shared": {
+            "status": "UNMEASURED",
+            "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+          },
+          "backendSettlement": "within_5s",
+          "criticalPath": {
+            "wallMs": 64705.642,
+            "ensureStartedMs": 4702.634,
+            "prepareMs": 0,
+            "operationCallerMs": 60003,
+            "accountedMs": 64705.634,
+            "residualMs": 0.007,
+            "accountingErrorRatio": 0,
+            "gate": "PASS"
+          },
+          "jdtTelemetry": {
+            "status": "MEASURED",
+            "value": {
+              "schemaVersion": "java-intelligence-v32-jdt-first-touch-session/v1",
+              "execution": "new-process",
+              "startup": {
+                "filesystemSetupMs": {
+                  "status": "MEASURED",
+                  "value": 0.604
+                },
+                "processSpawnCallMs": {
+                  "status": "MEASURED",
+                  "value": 0.521
+                },
+                "initializeRoundTripMs": {
+                  "status": "MEASURED",
+                  "value": 4677.376
+                },
+                "configurationNotifySendMs": {
+                  "status": "MEASURED",
+                  "value": 0.092
+                },
+                "configurationAppliedMs": {
+                  "status": "UNMEASURED",
+                  "reason": "LSP configuration notifications have no server acknowledgement"
+                },
+                "jdtlsPid": {
+                  "status": "MEASURED",
+                  "value": 38863
+                }
+              },
+              "configuration": {
+                "requests": 0,
+                "responseBuildMs": {
+                  "status": "UNMEASURED",
+                  "reason": "JDT did not issue workspace/configuration during this attempt"
+                }
+              },
+              "progress": {
+                "events": [],
+                "projectImportMs": {
+                  "status": "UNMEASURED",
+                  "reason": "no complete project-import progress begin/end span was observed"
+                }
+              },
+              "document": {
+                "sourceReadMs": {
+                  "status": "MEASURED",
+                  "value": 0.31
+                },
+                "lruSynchronizeMs": {
+                  "status": "MEASURED",
+                  "value": 0.061
+                },
+                "syncAction": {
+                  "status": "MEASURED",
+                  "value": "didOpen"
+                },
+                "serverAppliedMs": {
+                  "status": "UNMEASURED",
+                  "reason": "didOpen/didChange notifications have no server acknowledgement"
+                }
+              },
+              "gateway": {
+                "cacheHit": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                },
+                "shared": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                },
+                "backendRole": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                }
+              },
+              "operations": [
+                {
+                  "id": 1,
+                  "method": "textDocument/references",
+                  "callerMs": {
+                    "status": "MEASURED",
+                    "value": 60002.553
+                  },
+                  "callerSettlement": {
+                    "status": "MEASURED",
+                    "value": "DEADLINE_EXCEEDED"
+                  },
+                  "backendSettlement": {
+                    "status": "MEASURED",
+                    "value": "rejected"
+                  },
+                  "backendSettlementAfterCallerMs": {
+                    "status": "MEASURED",
+                    "value": 3002.163
+                  },
+                  "cancelSentMs": {
+                    "status": "MEASURED",
+                    "value": 60002.353
+                  },
+                  "cancelAckMs": {
+                    "status": "UNMEASURED",
+                    "reason": "LSP cancellation has no acknowledgement"
+                  }
+                }
+              ]
+            }
+          },
+          "errorCode": "DEADLINE_EXCEEDED",
+          "sessionPhaseMs": {
+            "ensureStart": 4703,
+            "textDocument/references": 60003,
+            "cancelBackendSettlementMs": 3002
+          },
+          "retainedWorkspace": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-r7UKRJ/tmp/codex-java-lsp-isolated-jdt-BYwybY/tmp/semantic-first-touch-fresh-r0FnMr"
+        },
+        {
+          "projectId": "cipherlink",
+          "repoCommit": "fa433982e92e",
+          "workspaceState": "fresh",
+          "prepare": "none",
+          "operation": "references",
+          "scenarioId": "cipherlink-references",
+          "ensureStartedMs": 4970.959,
+          "prepareMs": 0,
+          "requestMs": 60003.381,
+          "totalMs": 64974.342,
+          "completion": "PARTIAL_TIMEOUT",
+          "resultFiles": 0,
+          "repoContainedFiles": 0,
+          "outsideRepoFiles": 0,
+          "suppressedLocations": 0,
+          "cacheHit": {
+            "status": "UNMEASURED",
+            "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+          },
+          "shared": {
+            "status": "UNMEASURED",
+            "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+          },
+          "backendSettlement": "within_5s",
+          "criticalPath": {
+            "wallMs": 64974.342,
+            "ensureStartedMs": 4970.959,
+            "prepareMs": 0,
+            "operationCallerMs": 60003.381,
+            "accountedMs": 64974.34,
+            "residualMs": 0.003,
+            "accountingErrorRatio": 0,
+            "gate": "PASS"
+          },
+          "jdtTelemetry": {
+            "status": "MEASURED",
+            "value": {
+              "schemaVersion": "java-intelligence-v32-jdt-first-touch-session/v1",
+              "execution": "new-process",
+              "startup": {
+                "filesystemSetupMs": {
+                  "status": "MEASURED",
+                  "value": 0.597
+                },
+                "processSpawnCallMs": {
+                  "status": "MEASURED",
+                  "value": 1.144
+                },
+                "initializeRoundTripMs": {
+                  "status": "MEASURED",
+                  "value": 4945.17
+                },
+                "configurationNotifySendMs": {
+                  "status": "MEASURED",
+                  "value": 0.117
+                },
+                "configurationAppliedMs": {
+                  "status": "UNMEASURED",
+                  "reason": "LSP configuration notifications have no server acknowledgement"
+                },
+                "jdtlsPid": {
+                  "status": "MEASURED",
+                  "value": 39187
+                }
+              },
+              "configuration": {
+                "requests": 0,
+                "responseBuildMs": {
+                  "status": "UNMEASURED",
+                  "reason": "JDT did not issue workspace/configuration during this attempt"
+                }
+              },
+              "progress": {
+                "events": [],
+                "projectImportMs": {
+                  "status": "UNMEASURED",
+                  "reason": "no complete project-import progress begin/end span was observed"
+                }
+              },
+              "document": {
+                "sourceReadMs": {
+                  "status": "MEASURED",
+                  "value": 0.483
+                },
+                "lruSynchronizeMs": {
+                  "status": "MEASURED",
+                  "value": 0.081
+                },
+                "syncAction": {
+                  "status": "MEASURED",
+                  "value": "didOpen"
+                },
+                "serverAppliedMs": {
+                  "status": "UNMEASURED",
+                  "reason": "didOpen/didChange notifications have no server acknowledgement"
+                }
+              },
+              "gateway": {
+                "cacheHit": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                },
+                "shared": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                },
+                "backendRole": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                }
+              },
+              "operations": [
+                {
+                  "id": 1,
+                  "method": "textDocument/references",
+                  "callerMs": {
+                    "status": "MEASURED",
+                    "value": 60002.694
+                  },
+                  "callerSettlement": {
+                    "status": "MEASURED",
+                    "value": "DEADLINE_EXCEEDED"
+                  },
+                  "backendSettlement": {
+                    "status": "MEASURED",
+                    "value": "rejected"
+                  },
+                  "backendSettlementAfterCallerMs": {
+                    "status": "MEASURED",
+                    "value": 3002.444
+                  },
+                  "cancelSentMs": {
+                    "status": "MEASURED",
+                    "value": 60002.454
+                  },
+                  "cancelAckMs": {
+                    "status": "UNMEASURED",
+                    "reason": "LSP cancellation has no acknowledgement"
+                  }
+                }
+              ]
+            }
+          },
+          "errorCode": "DEADLINE_EXCEEDED",
+          "sessionPhaseMs": {
+            "ensureStart": 4971,
+            "textDocument/references": 60002,
+            "cancelBackendSettlementMs": 3002
+          },
+          "retainedWorkspace": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-r7UKRJ/tmp/codex-java-lsp-isolated-jdt-BYwybY/tmp/semantic-first-touch-fresh-leVGLx"
+        }
+      ]
+    },
+    "exam-parent-v3": {
+      "metadata": {
+        "repoRoot": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-g0ZpV0/tmp/codex-java-lsp-isolated-jdt-0GJGhk/repo",
+        "projectId": "exam-parent-v3",
+        "workspaceState": "fresh",
+        "prepare": "none",
+        "operation": "references",
+        "runs": 5,
+        "timeoutMs": 60000,
+        "repoCommit": "f90a0b475f7b"
+      },
+      "attempts": [
+        {
+          "projectId": "exam-parent-v3",
+          "repoCommit": "f90a0b475f7b",
+          "workspaceState": "fresh",
+          "prepare": "none",
+          "operation": "references",
+          "scenarioId": "exam-parent-v3-references",
+          "ensureStartedMs": 4582.726,
+          "prepareMs": 0,
+          "requestMs": 60004.936,
+          "totalMs": 64587.774,
+          "completion": "PARTIAL_TIMEOUT",
+          "resultFiles": 0,
+          "repoContainedFiles": 0,
+          "outsideRepoFiles": 0,
+          "suppressedLocations": 0,
+          "cacheHit": {
+            "status": "UNMEASURED",
+            "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+          },
+          "shared": {
+            "status": "UNMEASURED",
+            "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+          },
+          "backendSettlement": "within_5s",
+          "criticalPath": {
+            "wallMs": 64587.774,
+            "ensureStartedMs": 4582.726,
+            "prepareMs": 0,
+            "operationCallerMs": 60004.936,
+            "accountedMs": 64587.662,
+            "residualMs": 0.112,
+            "accountingErrorRatio": 0.000002,
+            "gate": "PASS"
+          },
+          "jdtTelemetry": {
+            "status": "MEASURED",
+            "value": {
+              "schemaVersion": "java-intelligence-v32-jdt-first-touch-session/v1",
+              "execution": "new-process",
+              "startup": {
+                "filesystemSetupMs": {
+                  "status": "MEASURED",
+                  "value": 0.776
+                },
+                "processSpawnCallMs": {
+                  "status": "MEASURED",
+                  "value": 2.241
+                },
+                "initializeRoundTripMs": {
+                  "status": "MEASURED",
+                  "value": 4551.182
+                },
+                "configurationNotifySendMs": {
+                  "status": "MEASURED",
+                  "value": 0.174
+                },
+                "configurationAppliedMs": {
+                  "status": "UNMEASURED",
+                  "reason": "LSP configuration notifications have no server acknowledgement"
+                },
+                "jdtlsPid": {
+                  "status": "MEASURED",
+                  "value": 39594
+                }
+              },
+              "configuration": {
+                "requests": 0,
+                "responseBuildMs": {
+                  "status": "UNMEASURED",
+                  "reason": "JDT did not issue workspace/configuration during this attempt"
+                }
+              },
+              "progress": {
+                "events": [],
+                "projectImportMs": {
+                  "status": "UNMEASURED",
+                  "reason": "no complete project-import progress begin/end span was observed"
+                }
+              },
+              "document": {
+                "sourceReadMs": {
+                  "status": "MEASURED",
+                  "value": 0.538
+                },
+                "lruSynchronizeMs": {
+                  "status": "MEASURED",
+                  "value": 0.225
+                },
+                "syncAction": {
+                  "status": "MEASURED",
+                  "value": "didOpen"
+                },
+                "serverAppliedMs": {
+                  "status": "UNMEASURED",
+                  "reason": "didOpen/didChange notifications have no server acknowledgement"
+                }
+              },
+              "gateway": {
+                "cacheHit": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                },
+                "shared": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                },
+                "backendRole": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                }
+              },
+              "operations": [
+                {
+                  "id": 1,
+                  "method": "textDocument/references",
+                  "callerMs": {
+                    "status": "MEASURED",
+                    "value": 60003.611
+                  },
+                  "callerSettlement": {
+                    "status": "MEASURED",
+                    "value": "DEADLINE_EXCEEDED"
+                  },
+                  "backendSettlement": {
+                    "status": "MEASURED",
+                    "value": "rejected"
+                  },
+                  "backendSettlementAfterCallerMs": {
+                    "status": "MEASURED",
+                    "value": 3003.381
+                  },
+                  "cancelSentMs": {
+                    "status": "MEASURED",
+                    "value": 60002.812
+                  },
+                  "cancelAckMs": {
+                    "status": "UNMEASURED",
+                    "reason": "LSP cancellation has no acknowledgement"
+                  }
+                }
+              ]
+            }
+          },
+          "errorCode": "DEADLINE_EXCEEDED",
+          "sessionPhaseMs": {
+            "ensureStart": 4583,
+            "textDocument/references": 60003,
+            "cancelBackendSettlementMs": 3003
+          },
+          "retainedWorkspace": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-g0ZpV0/tmp/codex-java-lsp-isolated-jdt-0GJGhk/tmp/semantic-first-touch-fresh-5XQwj5"
+        },
+        {
+          "projectId": "exam-parent-v3",
+          "repoCommit": "f90a0b475f7b",
+          "workspaceState": "fresh",
+          "prepare": "none",
+          "operation": "references",
+          "scenarioId": "exam-parent-v3-references",
+          "ensureStartedMs": 4359.381,
+          "prepareMs": 0,
+          "requestMs": 60003.094,
+          "totalMs": 64362.478,
+          "completion": "PARTIAL_TIMEOUT",
+          "resultFiles": 0,
+          "repoContainedFiles": 0,
+          "outsideRepoFiles": 0,
+          "suppressedLocations": 0,
+          "cacheHit": {
+            "status": "UNMEASURED",
+            "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+          },
+          "shared": {
+            "status": "UNMEASURED",
+            "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+          },
+          "backendSettlement": "within_5s",
+          "criticalPath": {
+            "wallMs": 64362.478,
+            "ensureStartedMs": 4359.381,
+            "prepareMs": 0,
+            "operationCallerMs": 60003.094,
+            "accountedMs": 64362.475,
+            "residualMs": 0.002,
+            "accountingErrorRatio": 0,
+            "gate": "PASS"
+          },
+          "jdtTelemetry": {
+            "status": "MEASURED",
+            "value": {
+              "schemaVersion": "java-intelligence-v32-jdt-first-touch-session/v1",
+              "execution": "new-process",
+              "startup": {
+                "filesystemSetupMs": {
+                  "status": "MEASURED",
+                  "value": 0.621
+                },
+                "processSpawnCallMs": {
+                  "status": "MEASURED",
+                  "value": 1.544
+                },
+                "initializeRoundTripMs": {
+                  "status": "MEASURED",
+                  "value": 4332.822
+                },
+                "configurationNotifySendMs": {
+                  "status": "MEASURED",
+                  "value": 0.131
+                },
+                "configurationAppliedMs": {
+                  "status": "UNMEASURED",
+                  "reason": "LSP configuration notifications have no server acknowledgement"
+                },
+                "jdtlsPid": {
+                  "status": "MEASURED",
+                  "value": 39901
+                }
+              },
+              "configuration": {
+                "requests": 0,
+                "responseBuildMs": {
+                  "status": "UNMEASURED",
+                  "reason": "JDT did not issue workspace/configuration during this attempt"
+                }
+              },
+              "progress": {
+                "events": [],
+                "projectImportMs": {
+                  "status": "UNMEASURED",
+                  "reason": "no complete project-import progress begin/end span was observed"
+                }
+              },
+              "document": {
+                "sourceReadMs": {
+                  "status": "MEASURED",
+                  "value": 0.485
+                },
+                "lruSynchronizeMs": {
+                  "status": "MEASURED",
+                  "value": 0.08
+                },
+                "syncAction": {
+                  "status": "MEASURED",
+                  "value": "didOpen"
+                },
+                "serverAppliedMs": {
+                  "status": "UNMEASURED",
+                  "reason": "didOpen/didChange notifications have no server acknowledgement"
+                }
+              },
+              "gateway": {
+                "cacheHit": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                },
+                "shared": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                },
+                "backendRole": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                }
+              },
+              "operations": [
+                {
+                  "id": 1,
+                  "method": "textDocument/references",
+                  "callerMs": {
+                    "status": "MEASURED",
+                    "value": 60002.233
+                  },
+                  "callerSettlement": {
+                    "status": "MEASURED",
+                    "value": "DEADLINE_EXCEEDED"
+                  },
+                  "backendSettlement": {
+                    "status": "MEASURED",
+                    "value": "rejected"
+                  },
+                  "backendSettlementAfterCallerMs": {
+                    "status": "MEASURED",
+                    "value": 3003.039
+                  },
+                  "cancelSentMs": {
+                    "status": "MEASURED",
+                    "value": 60001.847
+                  },
+                  "cancelAckMs": {
+                    "status": "UNMEASURED",
+                    "reason": "LSP cancellation has no acknowledgement"
+                  }
+                }
+              ]
+            }
+          },
+          "errorCode": "DEADLINE_EXCEEDED",
+          "sessionPhaseMs": {
+            "ensureStart": 4359,
+            "textDocument/references": 60002,
+            "cancelBackendSettlementMs": 3003
+          },
+          "retainedWorkspace": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-g0ZpV0/tmp/codex-java-lsp-isolated-jdt-0GJGhk/tmp/semantic-first-touch-fresh-5tUxrl"
+        },
+        {
+          "projectId": "exam-parent-v3",
+          "repoCommit": "f90a0b475f7b",
+          "workspaceState": "fresh",
+          "prepare": "none",
+          "operation": "references",
+          "scenarioId": "exam-parent-v3-references",
+          "ensureStartedMs": 4587.536,
+          "prepareMs": 0,
+          "requestMs": 60002.16,
+          "totalMs": 64589.698,
+          "completion": "PARTIAL_TIMEOUT",
+          "resultFiles": 0,
+          "repoContainedFiles": 0,
+          "outsideRepoFiles": 0,
+          "suppressedLocations": 0,
+          "cacheHit": {
+            "status": "UNMEASURED",
+            "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+          },
+          "shared": {
+            "status": "UNMEASURED",
+            "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+          },
+          "backendSettlement": "within_5s",
+          "criticalPath": {
+            "wallMs": 64589.698,
+            "ensureStartedMs": 4587.536,
+            "prepareMs": 0,
+            "operationCallerMs": 60002.16,
+            "accountedMs": 64589.696,
+            "residualMs": 0.002,
+            "accountingErrorRatio": 0,
+            "gate": "PASS"
+          },
+          "jdtTelemetry": {
+            "status": "MEASURED",
+            "value": {
+              "schemaVersion": "java-intelligence-v32-jdt-first-touch-session/v1",
+              "execution": "new-process",
+              "startup": {
+                "filesystemSetupMs": {
+                  "status": "MEASURED",
+                  "value": 0.436
+                },
+                "processSpawnCallMs": {
+                  "status": "MEASURED",
+                  "value": 0.941
+                },
+                "initializeRoundTripMs": {
+                  "status": "MEASURED",
+                  "value": 4562.492
+                },
+                "configurationNotifySendMs": {
+                  "status": "MEASURED",
+                  "value": 0.108
+                },
+                "configurationAppliedMs": {
+                  "status": "UNMEASURED",
+                  "reason": "LSP configuration notifications have no server acknowledgement"
+                },
+                "jdtlsPid": {
+                  "status": "MEASURED",
+                  "value": 40127
+                }
+              },
+              "configuration": {
+                "requests": 0,
+                "responseBuildMs": {
+                  "status": "UNMEASURED",
+                  "reason": "JDT did not issue workspace/configuration during this attempt"
+                }
+              },
+              "progress": {
+                "events": [],
+                "projectImportMs": {
+                  "status": "UNMEASURED",
+                  "reason": "no complete project-import progress begin/end span was observed"
+                }
+              },
+              "document": {
+                "sourceReadMs": {
+                  "status": "MEASURED",
+                  "value": 0.327
+                },
+                "lruSynchronizeMs": {
+                  "status": "MEASURED",
+                  "value": 0.122
+                },
+                "syncAction": {
+                  "status": "MEASURED",
+                  "value": "didOpen"
+                },
+                "serverAppliedMs": {
+                  "status": "UNMEASURED",
+                  "reason": "didOpen/didChange notifications have no server acknowledgement"
+                }
+              },
+              "gateway": {
+                "cacheHit": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                },
+                "shared": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                },
+                "backendRole": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                }
+              },
+              "operations": [
+                {
+                  "id": 1,
+                  "method": "textDocument/references",
+                  "callerMs": {
+                    "status": "MEASURED",
+                    "value": 60001.537
+                  },
+                  "callerSettlement": {
+                    "status": "MEASURED",
+                    "value": "DEADLINE_EXCEEDED"
+                  },
+                  "backendSettlement": {
+                    "status": "MEASURED",
+                    "value": "rejected"
+                  },
+                  "backendSettlementAfterCallerMs": {
+                    "status": "MEASURED",
+                    "value": 3002.531
+                  },
+                  "cancelSentMs": {
+                    "status": "MEASURED",
+                    "value": 60001.415
+                  },
+                  "cancelAckMs": {
+                    "status": "UNMEASURED",
+                    "reason": "LSP cancellation has no acknowledgement"
+                  }
+                }
+              ]
+            }
+          },
+          "errorCode": "DEADLINE_EXCEEDED",
+          "sessionPhaseMs": {
+            "ensureStart": 4588,
+            "textDocument/references": 60001,
+            "cancelBackendSettlementMs": 3002
+          },
+          "retainedWorkspace": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-g0ZpV0/tmp/codex-java-lsp-isolated-jdt-0GJGhk/tmp/semantic-first-touch-fresh-7mjojy"
+        },
+        {
+          "projectId": "exam-parent-v3",
+          "repoCommit": "f90a0b475f7b",
+          "workspaceState": "fresh",
+          "prepare": "none",
+          "operation": "references",
+          "scenarioId": "exam-parent-v3-references",
+          "ensureStartedMs": 4592.621,
+          "prepareMs": 0,
+          "requestMs": 60000.722,
+          "totalMs": 64593.349,
+          "completion": "PARTIAL_TIMEOUT",
+          "resultFiles": 0,
+          "repoContainedFiles": 0,
+          "outsideRepoFiles": 0,
+          "suppressedLocations": 0,
+          "cacheHit": {
+            "status": "UNMEASURED",
+            "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+          },
+          "shared": {
+            "status": "UNMEASURED",
+            "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+          },
+          "backendSettlement": "within_5s",
+          "criticalPath": {
+            "wallMs": 64593.349,
+            "ensureStartedMs": 4592.621,
+            "prepareMs": 0,
+            "operationCallerMs": 60000.722,
+            "accountedMs": 64593.343,
+            "residualMs": 0.007,
+            "accountingErrorRatio": 0,
+            "gate": "PASS"
+          },
+          "jdtTelemetry": {
+            "status": "MEASURED",
+            "value": {
+              "schemaVersion": "java-intelligence-v32-jdt-first-touch-session/v1",
+              "execution": "new-process",
+              "startup": {
+                "filesystemSetupMs": {
+                  "status": "MEASURED",
+                  "value": 0.479
+                },
+                "processSpawnCallMs": {
+                  "status": "MEASURED",
+                  "value": 0.7
+                },
+                "initializeRoundTripMs": {
+                  "status": "MEASURED",
+                  "value": 4566.873
+                },
+                "configurationNotifySendMs": {
+                  "status": "MEASURED",
+                  "value": 0.103
+                },
+                "configurationAppliedMs": {
+                  "status": "UNMEASURED",
+                  "reason": "LSP configuration notifications have no server acknowledgement"
+                },
+                "jdtlsPid": {
+                  "status": "MEASURED",
+                  "value": 40458
+                }
+              },
+              "configuration": {
+                "requests": 0,
+                "responseBuildMs": {
+                  "status": "UNMEASURED",
+                  "reason": "JDT did not issue workspace/configuration during this attempt"
+                }
+              },
+              "progress": {
+                "events": [],
+                "projectImportMs": {
+                  "status": "UNMEASURED",
+                  "reason": "no complete project-import progress begin/end span was observed"
+                }
+              },
+              "document": {
+                "sourceReadMs": {
+                  "status": "MEASURED",
+                  "value": 0.291
+                },
+                "lruSynchronizeMs": {
+                  "status": "MEASURED",
+                  "value": 0.046
+                },
+                "syncAction": {
+                  "status": "MEASURED",
+                  "value": "didOpen"
+                },
+                "serverAppliedMs": {
+                  "status": "UNMEASURED",
+                  "reason": "didOpen/didChange notifications have no server acknowledgement"
+                }
+              },
+              "gateway": {
+                "cacheHit": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                },
+                "shared": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                },
+                "backendRole": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                }
+              },
+              "operations": [
+                {
+                  "id": 1,
+                  "method": "textDocument/references",
+                  "callerMs": {
+                    "status": "MEASURED",
+                    "value": 60000.302
+                  },
+                  "callerSettlement": {
+                    "status": "MEASURED",
+                    "value": "DEADLINE_EXCEEDED"
+                  },
+                  "backendSettlement": {
+                    "status": "MEASURED",
+                    "value": "rejected"
+                  },
+                  "backendSettlementAfterCallerMs": {
+                    "status": "MEASURED",
+                    "value": 3002.997
+                  },
+                  "cancelSentMs": {
+                    "status": "MEASURED",
+                    "value": 60000.049
+                  },
+                  "cancelAckMs": {
+                    "status": "UNMEASURED",
+                    "reason": "LSP cancellation has no acknowledgement"
+                  }
+                }
+              ]
+            }
+          },
+          "errorCode": "DEADLINE_EXCEEDED",
+          "sessionPhaseMs": {
+            "ensureStart": 4593,
+            "textDocument/references": 60000,
+            "cancelBackendSettlementMs": 3003
+          },
+          "retainedWorkspace": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-g0ZpV0/tmp/codex-java-lsp-isolated-jdt-0GJGhk/tmp/semantic-first-touch-fresh-AG7bmI"
+        },
+        {
+          "projectId": "exam-parent-v3",
+          "repoCommit": "f90a0b475f7b",
+          "workspaceState": "fresh",
+          "prepare": "none",
+          "operation": "references",
+          "scenarioId": "exam-parent-v3-references",
+          "ensureStartedMs": 4705.569,
+          "prepareMs": 0,
+          "requestMs": 60003.284,
+          "totalMs": 64708.856,
+          "completion": "PARTIAL_TIMEOUT",
+          "resultFiles": 0,
+          "repoContainedFiles": 0,
+          "outsideRepoFiles": 0,
+          "suppressedLocations": 0,
+          "cacheHit": {
+            "status": "UNMEASURED",
+            "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+          },
+          "shared": {
+            "status": "UNMEASURED",
+            "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+          },
+          "backendSettlement": "within_5s",
+          "criticalPath": {
+            "wallMs": 64708.856,
+            "ensureStartedMs": 4705.569,
+            "prepareMs": 0,
+            "operationCallerMs": 60003.284,
+            "accountedMs": 64708.853,
+            "residualMs": 0.002,
+            "accountingErrorRatio": 0,
+            "gate": "PASS"
+          },
+          "jdtTelemetry": {
+            "status": "MEASURED",
+            "value": {
+              "schemaVersion": "java-intelligence-v32-jdt-first-touch-session/v1",
+              "execution": "new-process",
+              "startup": {
+                "filesystemSetupMs": {
+                  "status": "MEASURED",
+                  "value": 0.407
+                },
+                "processSpawnCallMs": {
+                  "status": "MEASURED",
+                  "value": 0.752
+                },
+                "initializeRoundTripMs": {
+                  "status": "MEASURED",
+                  "value": 4679.358
+                },
+                "configurationNotifySendMs": {
+                  "status": "MEASURED",
+                  "value": 0.106
+                },
+                "configurationAppliedMs": {
+                  "status": "UNMEASURED",
+                  "reason": "LSP configuration notifications have no server acknowledgement"
+                },
+                "jdtlsPid": {
+                  "status": "MEASURED",
+                  "value": 40643
+                }
+              },
+              "configuration": {
+                "requests": 0,
+                "responseBuildMs": {
+                  "status": "UNMEASURED",
+                  "reason": "JDT did not issue workspace/configuration during this attempt"
+                }
+              },
+              "progress": {
+                "events": [],
+                "projectImportMs": {
+                  "status": "UNMEASURED",
+                  "reason": "no complete project-import progress begin/end span was observed"
+                }
+              },
+              "document": {
+                "sourceReadMs": {
+                  "status": "MEASURED",
+                  "value": 0.353
+                },
+                "lruSynchronizeMs": {
+                  "status": "MEASURED",
+                  "value": 0.071
+                },
+                "syncAction": {
+                  "status": "MEASURED",
+                  "value": "didOpen"
+                },
+                "serverAppliedMs": {
+                  "status": "UNMEASURED",
+                  "reason": "didOpen/didChange notifications have no server acknowledgement"
+                }
+              },
+              "gateway": {
+                "cacheHit": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                },
+                "shared": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                },
+                "backendRole": {
+                  "status": "UNMEASURED",
+                  "reason": "raw JdtlsSession first-touch operations bypass SemanticGateway"
+                }
+              },
+              "operations": [
+                {
+                  "id": 1,
+                  "method": "textDocument/references",
+                  "callerMs": {
+                    "status": "MEASURED",
+                    "value": 60002.708
+                  },
+                  "callerSettlement": {
+                    "status": "MEASURED",
+                    "value": "DEADLINE_EXCEEDED"
+                  },
+                  "backendSettlement": {
+                    "status": "MEASURED",
+                    "value": "rejected"
+                  },
+                  "backendSettlementAfterCallerMs": {
+                    "status": "MEASURED",
+                    "value": 3002.949
+                  },
+                  "cancelSentMs": {
+                    "status": "MEASURED",
+                    "value": 60002.192
+                  },
+                  "cancelAckMs": {
+                    "status": "UNMEASURED",
+                    "reason": "LSP cancellation has no acknowledgement"
+                  }
+                }
+              ]
+            }
+          },
+          "errorCode": "DEADLINE_EXCEEDED",
+          "sessionPhaseMs": {
+            "ensureStart": 4706,
+            "textDocument/references": 60003,
+            "cancelBackendSettlementMs": 3003
+          },
+          "retainedWorkspace": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-g0ZpV0/tmp/codex-java-lsp-isolated-jdt-0GJGhk/tmp/semantic-first-touch-fresh-LhLLUg"
+        }
+      ]
+    }
+  }
+}

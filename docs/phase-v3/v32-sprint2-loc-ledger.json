@@ -1,0 +1,66 @@
+[
+  {
+    "task": "V3.2-11/V3.2-13/V3.2-14",
+    "scope": "bounded facts batching, request-scoped JavaIndex memoization, generation safety, and evidence-native type-reference collection",
+    "productionLocAdded": 950,
+    "productionLocRemoved": 4,
+    "netProductionLoc": 946,
+    "paths": [
+      { "path": "src/agent-router/candidate-collectors.ts", "oldLoc": 257, "newLoc": 268, "addedLoc": 11, "removedLoc": 0, "netLoc": 11, "contentChanged": true },
+      { "path": "src/agent-router/candidate-helpers.ts", "oldLoc": 111, "newLoc": 107, "addedLoc": 0, "removedLoc": 4, "netLoc": -4, "contentChanged": true },
+      { "path": "src/agent-router/providers/relationship-provider.ts", "oldLoc": 817, "newLoc": 990, "addedLoc": 173, "removedLoc": 0, "netLoc": 173, "contentChanged": true },
+      { "path": "src/agent-router/providers/shared.ts", "oldLoc": 72, "newLoc": 72, "addedLoc": 0, "removedLoc": 0, "netLoc": 0, "contentChanged": true },
+      { "path": "src/agent-router/providers/static-provider.ts", "oldLoc": 443, "newLoc": 481, "addedLoc": 38, "removedLoc": 0, "netLoc": 38, "contentChanged": true },
+      { "path": "src/agent-router/type-reference.ts", "oldLoc": 205, "newLoc": 449, "addedLoc": 244, "removedLoc": 0, "netLoc": 244, "contentChanged": true },
+      { "path": "src/java-index/java-index-worker.ts", "oldLoc": 1688, "newLoc": 1707, "addedLoc": 19, "removedLoc": 0, "netLoc": 19, "contentChanged": true },
+      { "path": "src/java-index/router-facts.ts", "oldLoc": 359, "newLoc": 405, "addedLoc": 46, "removedLoc": 0, "netLoc": 46, "contentChanged": true },
+      { "path": "src/java-index/router-java-index.ts", "oldLoc": 868, "newLoc": 1287, "addedLoc": 419, "removedLoc": 0, "netLoc": 419, "contentChanged": true }
+    ],
+    "repaymentTask": "V3.2-31",
+    "repaymentDecision": "Keep only batching and memoization paths that pass the source-locked Sprint 2 value gate; remove the rollback path and merge transitional evidence helpers before final convergence to the immutable 31,638-LOC target."
+  },
+  {
+    "task": "V3.2-33",
+    "scope": "replace shadow ranking and legacy single-arm matrix reporting with an internal observer of the actual production rank and selected read-plan paths",
+    "productionLocAdded": 3,
+    "productionLocRemoved": 829,
+    "netProductionLoc": -826,
+    "paths": [
+      { "path": "src/agent-router/format.ts", "oldLoc": 165, "newLoc": 163, "addedLoc": 0, "removedLoc": 2, "netLoc": -2, "contentChanged": true },
+      { "path": "src/agent-router/index.ts", "oldLoc": 535, "newLoc": 513, "addedLoc": 0, "removedLoc": 22, "netLoc": -22, "contentChanged": true },
+      { "path": "src/agent-router/rank-candidates.ts", "oldLoc": 245, "newLoc": 248, "addedLoc": 3, "removedLoc": 0, "netLoc": 3, "contentChanged": true },
+      { "path": "src/agent-router/shadow-ranking.ts", "oldLoc": 146, "newLoc": 0, "addedLoc": 0, "removedLoc": 146, "netLoc": -146, "contentChanged": true },
+      { "path": "src/agent-types.ts", "oldLoc": 238, "newLoc": 236, "addedLoc": 0, "removedLoc": 2, "netLoc": -2, "contentChanged": true },
+      { "path": "src/benchmark-agent-impact.ts", "oldLoc": 930, "newLoc": 889, "addedLoc": 0, "removedLoc": 41, "netLoc": -41, "contentChanged": true },
+      { "path": "src/benchmark/attribution-v3.ts", "oldLoc": 336, "newLoc": 322, "addedLoc": 0, "removedLoc": 14, "netLoc": -14, "contentChanged": true },
+      { "path": "src/benchmark/determinism.ts", "oldLoc": 196, "newLoc": 174, "addedLoc": 0, "removedLoc": 22, "netLoc": -22, "contentChanged": true },
+      { "path": "src/benchmark/golden-scenario.ts", "oldLoc": 320, "newLoc": 320, "addedLoc": 0, "removedLoc": 0, "netLoc": 0, "contentChanged": true },
+      { "path": "src/benchmark/matrix-runner-process.ts", "oldLoc": 24, "newLoc": 0, "addedLoc": 0, "removedLoc": 24, "netLoc": -24, "contentChanged": true },
+      { "path": "src/benchmark/matrix-runner.ts", "oldLoc": 321, "newLoc": 0, "addedLoc": 0, "removedLoc": 321, "netLoc": -321, "contentChanged": true },
+      { "path": "src/benchmark/phase-report.ts", "oldLoc": 79, "newLoc": 0, "addedLoc": 0, "removedLoc": 79, "netLoc": -79, "contentChanged": true },
+      { "path": "src/benchmark/run-matrix-report.ts", "oldLoc": 156, "newLoc": 0, "addedLoc": 0, "removedLoc": 156, "netLoc": -156, "contentChanged": true }
+    ],
+    "repaymentTask": "V3.2-33",
+    "repaymentDecision": "Retain only the production-ranking observer and hash-bound diagnostics; counterfactual families that cannot be measured from captured ranges stay explicitly measured=false."
+  },
+  {
+    "task": "V3.2-31",
+    "scope": "delete the unreferenced naming-recall transitional score helper",
+    "productionLocAdded": 0,
+    "productionLocRemoved": 41,
+    "netProductionLoc": -41,
+    "paths": [
+      { "path": "src/agent-router/naming-recall.ts", "oldLoc": 41, "newLoc": 0, "addedLoc": 0, "removedLoc": 41, "netLoc": -41, "contentChanged": true }
+    ]
+  },
+  {
+    "task": "V3.2-34",
+    "scope": "retire the unregistered historical JavaIndex aggregate benchmark while preserving its Phase 3 source-locked report and raw evidence",
+    "productionLocAdded": 0,
+    "productionLocRemoved": 863,
+    "netProductionLoc": -863,
+    "paths": [
+      { "path": "src/benchmark/java-index-benchmark.ts", "oldLoc": 863, "newLoc": 0, "addedLoc": 0, "removedLoc": 863, "netLoc": -863, "contentChanged": true }
+    ]
+  }
+]

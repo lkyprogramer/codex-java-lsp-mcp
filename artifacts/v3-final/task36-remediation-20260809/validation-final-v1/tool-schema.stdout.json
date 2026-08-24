@@ -1,0 +1,36 @@
+
+> codex-java-lsp-mcp@0.1.0 measure:tool-schema
+> node scripts/measure-tool-schema.mjs
+
+{
+  "tools": 5,
+  "jsonBytes": 5164,
+  "estimatedTokens": 1291,
+  "perTool": [
+    {
+      "name": "java_diagnostics",
+      "jsonBytes": 591,
+      "estimatedTokens": 148
+    },
+    {
+      "name": "java_impact",
+      "jsonBytes": 2145,
+      "estimatedTokens": 537
+    },
+    {
+      "name": "java_runtime",
+      "jsonBytes": 648,
+      "estimatedTokens": 162
+    },
+    {
+      "name": "java_status",
+      "jsonBytes": 526,
+      "estimatedTokens": 132
+    },
+    {
+      "name": "java_symbol",
+      "jsonBytes": 1248,
+      "estimatedTokens": 312
+    }
+  ]
+}

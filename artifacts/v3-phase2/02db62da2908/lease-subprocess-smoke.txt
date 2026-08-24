@@ -1,0 +1,4 @@
+scenario: same worktree, two processes -> {"resultA":{"pid":2061,"kind":"ACQUIRED"},"resultB":{"pid":2062,"kind":"BUSY_SAME_WORKTREE"}}
+PASS(same-worktree): the second process was rejected before a second JDT slot, across real OS processes.
+scenario: three worktrees, jdtSlots=2 -> [{"pid":2063,"kind":"ACQUIRED"},{"pid":2064,"kind":"ACQUIRED"},{"pid":2065,"kind":"NO_GLOBAL_SLOT"}]
+PASS(slot-cap): maxObservedClaimedJdtSlots never exceeded the configured 2 slots, across real OS processes.

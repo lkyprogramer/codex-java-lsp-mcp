@@ -1,0 +1,18 @@
+正克隆到 '/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-BBIrsO/candidate'...
+完成。
+HEAD 目前位于 d7f23d5 feat(v32): batch java index request hot paths
+正克隆到 '/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-BBIrsO/tmp/codex-java-lsp-progressive-sIVfN7/repositories/cipherlink'...
+完成。
+HEAD 目前位于 fa43398 feat: add provider-neutral client release storage refresh
+正克隆到 '/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-BBIrsO/tmp/codex-java-lsp-progressive-sIVfN7/repositories/lishuedu'...
+完成。
+HEAD 目前位于 db63b1a7e docs: 新增对接和气完整的相关改造文档
+正克隆到 '/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-BBIrsO/tmp/codex-java-lsp-progressive-sIVfN7/repositories/exam-parent-v3'...
+完成。
+HEAD 目前位于 f90a0b47 feat: 彻底优化批量下载座次表,门贴,桌贴等任务的性能
+Error: ENOENT: no such file or directory, open '/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-BBIrsO/sprint3-progressive-reorder-probe/raw/cipherlink-r1.json'
+    at async open (node:internal/fs/promises:633:25)
+    at async readFile (node:internal/fs/promises:1237:14)
+    at async stampAttempt (file:///private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-BBIrsO/candidate/scripts/run-progressive-index-three-repo.mjs:321:28)
+    at async main (file:///private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-BBIrsO/candidate/scripts/run-progressive-index-three-repo.mjs:224:9)
+node exited with 1

@@ -136,11 +136,16 @@ function findJar(dir: string): string | undefined {
   if (!existsSync(dir) || !statSync(dir).isDirectory()) return undefined;
   for (const entry of readdirSync(dir)) {
     const file = path.join(dir, entry);
-    if (file.endsWith(".jar") && path.basename(file).startsWith("lombok-")) return file;
+    if (isLombokAgentJar(file)) return file;
     if (statSync(file).isDirectory()) {
       const found = findJar(file);
       if (found) return found;
     }
   }
   return undefined;
+}
+
+function isLombokAgentJar(file: string): boolean {
+  const name = path.basename(file);
+  return /^lombok-.+\.jar$/.test(name) && !/-(sources|javadoc)\.jar$/.test(name);
 }

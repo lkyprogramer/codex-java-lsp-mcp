@@ -1,17 +1,33 @@
-import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import type { CandidateFile, ImpactOptions, ResolvedAnchor, RgPlanSection, RgSectionSummary } from "../agent-types.js";
 import type { RoutingPolicy } from "../routing-policy.js";
+import type { Completion } from "../runtime/completion.js";
+import { DeadlineBudget } from "../runtime/deadline-budget.js";
+import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
+import { RgRunner } from "../search/rg-runner.js";
+import type { RgQuery, SearchResult } from "../search/search-types.js";
 import { mergeCandidate } from "./candidate-helpers.js";
-import { parseRgOutput, type RgCommandSummary } from "./rg-plan.js";
+import { summaryFromSearchResult, type RgCommandSummary } from "./rg-plan.js";
+
+/** Upper bound on any single section; the request deadline is the real bound. */
+const RG_SECTION_CAP_MS = 15000;
+
+const DEFAULT_EXCLUDE_GLOBS = [
+  "!**/README.md",
+  "!docs/superpowers/plans/**",
+  "!**/{build,.gradle,node_modules,dist}/**"
+];
 
 export type RgExecutionResult = {
   files: CandidateFile[];
+  /** Full, non-rendered match attribution used by the lexical evidence provider. */
+  evidenceMatches: Array<{ file: CandidateFile; anchorId: string; category: RgPlanSection["category"] }>;
   sections: RgSectionSummary[];
   rawBytes: number;
   totalMatches: number;
   commandCount: number;
+  completion: Completion;
   suppressed: Record<string, unknown>;
 };
 
@@ -27,30 +43,41 @@ type ExecuteRgPlanInput = {
   ) => Promise<RgCommandSummary>;
 };
 
-type LoadRgCommandSummaryInput = {
+type RunRgSectionInput = {
   readonly repoRoot: string;
-  readonly routingPolicy: RoutingPolicy;
   readonly section: RgPlanSection;
-  readonly options: ImpactOptions;
-  readonly anchors: readonly ResolvedAnchor[];
+  readonly budget: DeadlineBudget;
+  readonly runner: RgRunner;
 };
 
 export async function executeRgPlan(input: ExecuteRgPlanInput): Promise<RgExecutionResult> {
   const fileMap = new Map<string, CandidateFile>();
+  const evidenceMatches: RgExecutionResult["evidenceMatches"] = [];
   const sections: RgSectionSummary[] = [];
   let rawBytes = 0;
   let totalMatches = 0;
   let commandCount = 0;
-  const results = await mapConcurrent(input.plan, input.concurrency, async item => ({
-    item,
-    summary: await input.loadSummary(item, input.options, input.anchors)
-  }));
-  for (const { item, summary } of results) {
+  const completions: Completion[] = [];
+  const results = await mapConcurrent(input.plan, input.concurrency, async item => {
+    const anchorId = requireSectionAnchorId(item, input.anchors);
+    return {
+      item,
+      anchorId,
+      summary: await input.loadSummary(item, input.options, input.anchors)
+    };
+  });
+  for (const { item, anchorId, summary } of results) {
     commandCount += 1;
     rawBytes += summary.rawBytes;
     totalMatches += summary.totalMatches;
+    completions.push(summary.completion);
     for (const file of summary.files) {
       mergeCandidate(fileMap, file);
+      evidenceMatches.push({
+        file,
+        anchorId,
+        category: item.category
+      });
     }
     sections.push({
       category: item.category,
@@ -60,6 +87,7 @@ export async function executeRgPlan(input: ExecuteRgPlanInput): Promise<RgExecut
       totalMatches: summary.totalMatches,
       rawBytes: summary.rawBytes,
       cacheHits: summary.cacheHit ? 1 : 0,
+      completion: summary.completion,
       files: summary.files
         .sort((left, right) => right.score - left.score)
         .slice(0, 6)
@@ -75,10 +103,12 @@ export async function executeRgPlan(input: ExecuteRgPlanInput): Promise<RgExecut
   }
   return {
     files: [...fileMap.values()],
+    evidenceMatches,
     sections,
     rawBytes,
     totalMatches,
     commandCount,
+    completion: worstCompletion(completions),
     suppressed: {
       rawBytes,
       note: "raw rg stdout is summarized inside MCP and not returned to the agent"
@@ -86,110 +116,60 @@ export async function executeRgPlan(input: ExecuteRgPlanInput): Promise<RgExecut
   };
 }
 
-export async function loadRgCommandSummary(input: LoadRgCommandSummaryInput): Promise<RgCommandSummary> {
-  const startedAt = Date.now();
-  const paths = input.section.paths.filter(item => existsSync(path.resolve(input.repoRoot, item)));
-  if (paths.length === 0) {
-    return {
-      rawBytes: 0,
-      totalMatches: 0,
-      elapsedMs: 0,
-      files: [],
-      cacheHit: false
-    };
+function requireSectionAnchorId(
+  section: RgPlanSection,
+  anchors: readonly ResolvedAnchor[]
+): string {
+  if (section.anchorId && anchors.some(anchor => anchor.id === section.anchorId)) {
+    return section.anchorId;
   }
-  const args = [
-    "-n",
-    input.section.pattern,
-    ...paths,
-    ...input.section.globs.flatMap(glob => ["-g", glob]),
-    "-g",
-    "!**/README.md",
-    "-g",
-    "!docs/superpowers/plans/**",
-    "-g",
-    "!**/{build,.gradle,node_modules,dist}/**"
-  ];
-  const result = await runRg(args, {
-    cwd: input.repoRoot,
-    maxBuffer: 12 * 1024 * 1024,
-    timeoutMs: 15000
-  });
-  if (result.error && result.error.code !== "ETIMEDOUT") {
-    throw result.error;
-  }
-  if (result.status && result.status !== 1) {
-    throw new Error(`rg failed for ${input.section.category}: ${(result.stderr || "").trim()}`);
-  }
-  return parseRgOutput({
-    policy: input.routingPolicy,
-    repoRoot: input.repoRoot,
-    section: input.section,
-    stdout: result.stdout || "",
-    elapsedMs: Date.now() - startedAt,
-    anchors: input.anchors,
-    options: input.options
-  });
+  throw new JavaIntelligenceError(
+    "INVALID_INPUT",
+    `rg plan section has unknown anchor ${String(section.anchorId)}`
+  );
 }
 
-export type RgRunResult = {
-  status: number | null;
-  stdout: string;
-  stderr: string;
-  error?: NodeJS.ErrnoException;
-};
+/**
+ * The plan's completion is the weakest of its sections: one truncated section
+ * means the lexical evidence as a whole is incomplete.
+ */
+export function worstCompletion(values: readonly Completion[]): Completion {
+  const rank: Record<Completion, number> = {
+    COMPLETE: 0,
+    PARTIAL_LIMIT: 1,
+    PARTIAL_TIMEOUT: 2,
+    CANCELLED: 3,
+    FAILED: 4
+  };
+  return values.reduce<Completion>(
+    (worst, value) => (rank[value] > rank[worst] ? value : worst),
+    "COMPLETE"
+  );
+}
 
-export function runRg(args: string[], options: { cwd: string; maxBuffer: number; timeoutMs: number }): Promise<RgRunResult> {
-  return new Promise(resolve => {
-    const child = spawn("rg", args, {
-      cwd: options.cwd,
-      stdio: ["ignore", "pipe", "pipe"]
-    });
-    let stdout = "";
-    let stderr = "";
-    let stdoutBytes = 0;
-    let stderrBytes = 0;
-    let settled = false;
-    const finish = (result: RgRunResult) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      clearTimeout(timer);
-      resolve(result);
-    };
-    const fail = (message: string, code: string) => {
-      const error = new Error(message) as NodeJS.ErrnoException;
-      error.code = code;
-      child.kill("SIGTERM");
-      finish({ status: null, stdout, stderr, error });
-    };
-    const append = (stream: "stdout" | "stderr", chunk: Buffer) => {
-      const nextBytes = (stream === "stdout" ? stdoutBytes : stderrBytes) + chunk.length;
-      if (nextBytes > options.maxBuffer) {
-        fail("rg output exceeded maxBuffer", "ENOBUFS");
-        return;
-      }
-      if (stream === "stdout") {
-        stdoutBytes = nextBytes;
-        stdout += chunk.toString("utf8");
-      } else {
-        stderrBytes = nextBytes;
-        stderr += chunk.toString("utf8");
-      }
-    };
-    const timer = setTimeout(() => {
-      const error = new Error(`Timed out waiting for rg after ${options.timeoutMs}ms`) as NodeJS.ErrnoException;
-      error.code = "ETIMEDOUT";
-      child.kill("SIGTERM");
-      finish({ status: null, stdout, stderr, error });
-    }, options.timeoutMs);
-    timer.unref?.();
-    child.stdout.on("data", chunk => append("stdout", chunk));
-    child.stderr.on("data", chunk => append("stderr", chunk));
-    child.on("error", error => finish({ status: null, stdout, stderr, error: error as NodeJS.ErrnoException }));
-    child.on("close", code => finish({ status: code, stdout, stderr }));
-  });
+/**
+ * Runs one plan section and returns the raw search result. Scoring is applied
+ * per request by `summaryFromSearchResult`, so a cached result is re-scored for
+ * the current anchors instead of replaying stale scores.
+ */
+export async function runRgSection(input: RunRgSectionInput): Promise<SearchResult> {
+  const paths = input.section.paths.filter(item => existsSync(path.resolve(input.repoRoot, item)));
+  if (paths.length === 0) {
+    return { files: [], completion: "COMPLETE", rawBytes: 0, totalMatches: 0, elapsedMs: 0 };
+  }
+  const query: RgQuery = {
+    pattern: input.section.pattern,
+    roots: paths,
+    globs: [...input.section.globs, ...DEFAULT_EXCLUDE_GLOBS],
+    cwd: input.repoRoot
+  };
+  // RgRunner reads `budget.remainingMs()`, so the per-section cap is applied by
+  // handing it a budget that is never longer than the cap or the request's
+  // remaining time, whichever is smaller.
+  const sectionBudget = DeadlineBudget.fromTimeout(
+    Math.max(1, input.budget.remainingMs(RG_SECTION_CAP_MS))
+  );
+  return input.runner.run(query, sectionBudget);
 }
 
 async function mapConcurrent<T, R>(items: readonly T[], concurrency: number, worker: (item: T) => Promise<R>): Promise<R[]> {

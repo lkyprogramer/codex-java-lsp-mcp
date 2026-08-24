@@ -26,8 +26,9 @@ test("benchmark loads scenarios from external jsonl and prints metadata", async 
     },
     golden: {
       mustHit: ["src/main/java/demo/Demo.java"],
+      taskBlocking: [],
       shouldHit: [],
-      side: []
+      support: []
     }
   })}\n`);
 
@@ -37,6 +38,7 @@ test("benchmark loads scenarios from external jsonl and prints metadata", async 
     "--scenarios", scenarioFile,
     "--project-id", "generic-java",
     "--warm-state", "cold-nolsp",
+    "--read-plan-max-bytes", "2048",
     "--list-scenarios"
   ], {
     cwd: path.resolve(import.meta.dirname, ".."),
@@ -47,7 +49,58 @@ test("benchmark loads scenarios from external jsonl and prints metadata", async 
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.metadata.projectId, "generic-java");
   assert.equal(payload.metadata.warmState, "cold-nolsp");
+  assert.equal(payload.metadata.indexBackend, "v2");
+  assert.equal(payload.metadata.indexPrepareTimeoutMs, 600000);
+  assert.equal(payload.metadata.readPlanMaxBytes, 2048);
   assert.equal(payload.scenarios[0].id, "demo");
+});
+
+test("retrieval continuation flags are rejected", () => {
+  const result = spawnSync(process.execPath, [
+    "dist/benchmark-agent-impact.js",
+    "--continue-policy", "in-pool-fifo",
+    "--list-scenarios"
+  ], {
+    cwd: path.resolve(import.meta.dirname, ".."),
+    encoding: "utf8",
+    env: { ...process.env, JAVA_LSP_ISOLATED_VALIDATION: "1" }
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(`${result.stderr}${result.stdout}`, /retrieval continuation was removed/);
+});
+
+test("benchmark records an explicitly isolated JavaIndex cache directory", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-benchmark-cache-"));
+  const scenarioFile = path.join(root, "generic-java.scenarios.jsonl");
+  const cacheDir = path.join(root, "isolated-index-cache");
+  await writeFile(scenarioFile, `${JSON.stringify({
+    id: "demo",
+    name: "Demo",
+    projectId: "generic-java",
+    anchor: {
+      file: "src/main/java/demo/Demo.java",
+      line: 1,
+      column: 1,
+      profile: "service"
+    }
+  })}\n`);
+
+  const result = spawnSync(process.execPath, [
+    "dist/benchmark-agent-impact.js",
+    "--repo-root", root,
+    "--scenarios", scenarioFile,
+    "--project-id", "generic-java",
+    "--warm-state", "cold-nolsp",
+    "--index-cache-dir", cacheDir,
+    "--list-scenarios"
+  ], {
+    cwd: path.resolve(import.meta.dirname, ".."),
+    encoding: "utf8"
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.metadata.indexCacheDir, cacheDir);
 });
 
 test("benchmark can run a no-lsp token baseline", async () => {
@@ -90,20 +143,9 @@ test("benchmark can run a no-lsp token baseline", async () => {
     },
     golden: {
       mustHit: ["src/main/java/demo/DemoController.java", "src/main/java/demo/DemoRequest.java", "src/main/java/demo/DemoResponse.java"],
-      shouldHit: ["src/main/java/demo/MissingService.java", "src/main/java/hidden/HiddenDto.java", "modules/billing/src/main/java/external/BillingClient.java"],
-      side: []
-    },
-    goldenMeta: {
-      "src/main/java/demo/MissingService.java": {
-        shouldBlocksTask: false,
-        note: "not needed for this fixture"
-      },
-      "src/main/java/hidden/HiddenDto.java": {
-        shouldBlocksTask: true
-      },
-      "modules/billing/src/main/java/external/BillingClient.java": {
-        shouldBlocksTask: true
-      }
+      taskBlocking: ["src/main/java/hidden/HiddenDto.java", "modules/billing/src/main/java/external/BillingClient.java"],
+      shouldHit: ["src/main/java/demo/MissingService.java"],
+      support: []
     }
   })}\n`);
 
@@ -127,6 +169,12 @@ test("benchmark can run a no-lsp token baseline", async () => {
   assert.equal(attempt.strategy, "no-lsp");
   assert.ok(attempt.estimatedTokens > 0);
   assert.ok(attempt.rgRawBytesExposed > 0);
+  // Regression: evaluate() computes rTaskBlocking but attemptPayload() once
+  // whitelisted quality fields without forwarding it, silently dropping the
+  // field from every attempt (fixed alongside this test). taskBlockingFiles()
+  // is mustHit UNION taskBlocking (5 files here); 3 of them (the mustHit
+  // trio) are read, neither taskBlocking file (HiddenDto/BillingClient) is.
+  assert.equal(attempt.rTaskBlocking, 0.6);
   assert.deepEqual(attempt.goldenAttribution.find((item: Record<string, unknown>) => item.file === "src/main/java/demo/DemoController.java"), {
     scenario: "DemoController#updateDemo",
     file: "src/main/java/demo/DemoController.java",
@@ -148,34 +196,31 @@ test("benchmark can run a no-lsp token baseline", async () => {
     blockedBy: "absent",
     absentReason: "golden-stale-or-low-value",
     profile: "controller",
-    semanticUsed: false,
-    shouldBlocksTask: false
+    semanticUsed: false
   });
   assert.deepEqual(attempt.goldenAttribution.find((item: Record<string, unknown>) => item.file === "src/main/java/hidden/HiddenDto.java"), {
     scenario: "DemoController#updateDemo",
     file: "src/main/java/hidden/HiddenDto.java",
-    kind: "should",
+    kind: "taskBlocking",
     inFiles: false,
     inReadPlan: false,
     source: "absent",
     blockedBy: "absent",
     absentReason: "no-type-edge",
     profile: "controller",
-    semanticUsed: false,
-    shouldBlocksTask: true
+    semanticUsed: false
   });
   assert.deepEqual(attempt.goldenAttribution.find((item: Record<string, unknown>) => item.file === "modules/billing/src/main/java/external/BillingClient.java"), {
     scenario: "DemoController#updateDemo",
     file: "modules/billing/src/main/java/external/BillingClient.java",
-    kind: "should",
+    kind: "taskBlocking",
     inFiles: false,
     inReadPlan: false,
     source: "absent",
     blockedBy: "absent",
     absentReason: "cross-module-cold",
     profile: "controller",
-    semanticUsed: false,
-    shouldBlocksTask: true
+    semanticUsed: false
   });
 });
 
@@ -211,12 +256,22 @@ test("impact benchmark exposes timing diagnostics", async () => {
     },
     golden: {
       mustHit: ["src/main/java/demo/DemoService.java"],
+      taskBlocking: [],
       shouldHit: [],
-      side: []
+      support: [],
+      mustReadRanges: {
+        "src/main/java/demo/DemoService.java": [{ startLine: 3, endLine: 3 }]
+      },
+      mustReadCoordinateRangesV2: [{
+          file: "src/main/java/demo/DemoService.java",
+          start: { line: 3, column: 1 },
+          end: { line: 4, column: 1 }
+        }]
     }
   })}\n`);
 
-  const result = spawnSync(process.execPath, [
+  const indexCacheA = path.join(root, "index-cache-a");
+  const benchmarkArgs = [
     "dist/benchmark-agent-impact.js",
     "--repo-root", root,
     "--scenarios", scenarioFile,
@@ -225,19 +280,43 @@ test("impact benchmark exposes timing diagnostics", async () => {
     "--strategy", "impact",
     "--runs", "1",
     "--verbosity", "diagnostic",
-    "--read-plan-max-items", "1"
-  ], {
+    "--payload-projections",
+    "--read-plan-max-items", "3",
+    "--read-plan-max-bytes", "2048",
+    "--index-cache-dir", indexCacheA
+  ];
+  const spawnOptions = {
     cwd: path.resolve(import.meta.dirname, ".."),
-    encoding: "utf8"
-  });
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      JAVA_LSP_JAVA_INDEX_RPC_TELEMETRY: "1"
+    }
+  } as const;
+  const result = spawnSync(process.execPath, benchmarkArgs, spawnOptions);
 
   assert.equal(result.status, 0, result.stderr);
   const payload = JSON.parse(result.stdout);
   const attempt = payload.rows[0].attempts[0];
   const timing = attempt.timing;
-  assert.equal(payload.metadata.readPlanMaxItems, 1);
-  assert.equal(attempt.readPlanItems, 1);
-  assert.equal(attempt.roundTrips, 2);
+  assert.equal(payload.metadata.indexBackend, "v2");
+  assert.equal(typeof payload.metadata.prepareJavaIndexMs, "number");
+  assert.ok(payload.metadata.prepareJavaIndexMs >= 0);
+  assert.equal(payload.metadata.prepareJavaIndexStatus.pendingBackground, 0);
+  assert.equal(payload.metadata.readPlanMaxItems, 3);
+  assert.equal(payload.metadata.readPlanMaxBytes, 2048);
+  assert.equal(payload.metadata.payloadProjections, true);
+  assert.ok(attempt.readPlanItems > 1, "the fixture must exercise a multi-file range batch");
+  assert.ok(attempt.readPlanFiles > 1);
+  assert.ok(attempt.readPlanRanges >= 1);
+  assert.ok(attempt.readPlanBytes > 0);
+  assert.ok(attempt.budgetUtilization > 0 && attempt.budgetUtilization <= 1);
+  assert.equal(typeof attempt.budgetExceededByAnchor, "boolean");
+  assert.equal(typeof attempt.marginalUtilityBySelectedFile, "object");
+  assert.equal(attempt.RangeLineRecall, 1);
+  assert.equal(attempt.RangeCoordinateRecall, 1);
+  assert.equal(JSON.stringify(attempt).includes("selectedCoordinateRangesByPath"), false);
+  assert.equal(attempt.roundTrips, 2, "one impact request and one batched range query replace per-read-plan-item round trips");
   assert.equal(typeof timing.phaseMs, "object");
   assert.equal(timing.semantic.policy, "fast");
   assert.equal(timing.semantic.used, false);
@@ -251,4 +330,58 @@ test("impact benchmark exposes timing diagnostics", async () => {
   assert.equal(typeof timing.persistedSemantic, "object");
   assert.equal(typeof timing.persistedSemantic.elapsedMs, "number");
   assert.equal(typeof timing.persistedSemantic.edgesSeen, "number");
+  assert.equal(timing.javaIndex.rpc.enabled, true);
+  assert.equal(timing.javaIndex.rpc.payloadBytes, "JSON_UTF8_ENVELOPE_ESTIMATE");
+  assert.ok(Object.keys(timing.javaIndex.rpc.operations).length > 0);
+  assert.equal(Array.isArray(attempt.goldenAttribution), true, "diagnostic benchmark attempts must retain production rank attribution");
+  assert.equal(attempt.shadowRanking, undefined, "retired shadow reranking must not leak into benchmark output");
+  assert.equal(attempt.payloadProjection.canonicalExecutions, 1);
+  assert.equal(typeof attempt.payloadProjectionElapsedMs, "number");
+  assert.ok(attempt.payloadProjectionElapsedMs >= 0);
+  assert.equal(attempt.payloadProjection.defaultToolResponse, "standard");
+  assert.equal(
+    new Set(Object.values(attempt.payloadProjection.projections).map((item: any) => item.candidateReadPlanSha256)).size,
+    1,
+    "all payload projections must come from the same candidate/read-plan result"
+  );
+  for (const projection of Object.values(attempt.payloadProjection.projections) as Array<Record<string, number>>) {
+    assert.equal(projection.serializedBytes, projection.costResultBytes);
+  }
+  assert.equal(attempt.shadowQuality, undefined, "production quality is already reported by the canonical attempt");
+  assert.equal(attempt.counterfactual.withoutStaticStructure.measured, false);
+  assert.equal(attempt.determinism.candidatePaths[0], "src/main/java/demo/DemoService.java");
+  assert.deepEqual(
+    [...attempt.determinism.candidatePaths.slice(1)].sort(),
+    ["src/main/java/demo/DemoCommand.java", "src/main/java/demo/DemoResult.java"]
+  );
+  assert.equal(Array.isArray(attempt.determinism.familyScores), true, "Task 36 determinism evidence requires opted-in family scores");
+  assert.deepEqual(
+    attempt.determinism.readPlan.map((item: Record<string, unknown>) => item.path).sort(),
+    ["src/main/java/demo/DemoCommand.java", "src/main/java/demo/DemoResult.java", "src/main/java/demo/DemoService.java"]
+  );
+  assert.deepEqual(attempt.determinism.completion, {
+    semantic: "COMPLETE",
+    semanticUsed: false,
+    readiness: "NEW",
+    coverage: "COMPLETE",
+    requestGeneration: 0,
+    indexedGeneration: 0,
+    changedDuringRequest: false
+  });
+
+  const replayArgs = [...benchmarkArgs];
+  replayArgs[replayArgs.indexOf(indexCacheA)] = path.join(root, "index-cache-b");
+  const replay = spawnSync(process.execPath, replayArgs, spawnOptions);
+  assert.equal(replay.status, 0, replay.stderr);
+  const replayAttempt = JSON.parse(replay.stdout).rows[0].attempts[0];
+  assert.deepEqual(
+    replayAttempt.determinism,
+    attempt.determinism,
+    `two isolated cold indexes of the same unchanged repo must agree\nfirst=${JSON.stringify(attempt.determinism)}\nsecond=${JSON.stringify(replayAttempt.determinism)}`
+  );
+  assert.deepEqual(
+    attempt.frameworkEvidence.mapstruct,
+    { selected: 0, readPlan: 0, golden: 0, byKind: {} },
+    "every impact attempt emits a stable MapStruct evidence summary, including zero-use repositories"
+  );
 });

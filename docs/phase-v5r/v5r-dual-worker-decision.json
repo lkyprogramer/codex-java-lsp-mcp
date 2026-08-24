@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "v5r-dual-worker-decision/v1",
+  "phase": 1,
+  "deadline": "2026-09-02",
+  "decidedAt": "2026-08-19",
+  "decision": "FAIL",
+  "flag": "JAVA_LSP_JAVA_INDEX_DUAL_WORKER",
+  "flagAfterDecision": "removed",
+  "sweepThread": "deleted",
+  "singleWorkerPath": "kept",
+  "defaultOn": false,
+  "gate": {
+    "script": "scripts/run-storm-gate.mjs",
+    "iterationsPerRound": 1,
+    "rounds": 2,
+    "ratioLimit": 1.1,
+    "staleCount": 0
+  },
+  "host": {
+    "loadavg1AtStart": 13.39,
+    "logicalCpus": 10,
+    "availableGiBApprox": 10.33,
+    "memoryFloorGiB": 4
+  },
+  "rounds": {
+    "round1": {
+      "summary": "docs/phase-v5r/storm-gate-20260819/round1-summary.json",
+      "sha256": "6604400f2e8edf1412a6ec794e7cd031f17151928cc5b93795da74ec8798cdef",
+      "executableTree": "50ceb09b7394bcd94a0c186a19fd8d89e6618fdb",
+      "passed": false,
+      "ratios": {
+        "lishuedu": 29.049,
+        "cipherlink": 5.280,
+        "exam-parent-v3": 7.919
+      }
+    },
+    "round2": {
+      "summary": "docs/phase-v5r/storm-gate-20260819/round2-summary.json",
+      "sha256": "2da4e976152aff4d47939a4fc245f856850548f56919c9daea77a17251b37aa2",
+      "executableTree": "50ceb09b7394bcd94a0c186a19fd8d89e6618fdb",
+      "passed": false,
+      "ratios": {
+        "lishuedu": 37.502,
+        "cipherlink": 5.918,
+        "exam-parent-v3": 3.943
+      }
+    }
+  },
+  "note": "Both rounds completed COMPLETE+DURABLE cells with staleCount=0. P95/quiet stayed 3.9x-37x versus 1.10. Sweep thread deleted as Phase 1 FAIL repayment. Query worker remains the unique store writer and the only background parser."
+}

@@ -1,0 +1,69 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { runColdIndexBuild } from "./cold-build.js";
+
+test("resolveAll pass 2 rereads the store instead of keeping a second resolved map", async () => {
+  const repoRoot = await mkdtemp(path.join(tmpdir(), "cold-build-resolve-"));
+  const cacheDir = await mkdtemp(path.join(tmpdir(), "cold-build-resolve-cache-"));
+  const javaDir = path.join(repoRoot, "src", "main", "java", "demo");
+  await mkdir(javaDir, { recursive: true });
+  await writeFile(path.join(repoRoot, "pom.xml"), "<project><modelVersion>4.0.0</modelVersion></project>\n");
+  await writeFile(path.join(javaDir, "Alpha.java"), "package demo;\n\nclass Alpha { Beta other; }\n");
+  await writeFile(path.join(javaDir, "Beta.java"), "package demo;\n\nclass Beta { Alpha other; }\n");
+  const result = await runColdIndexBuild(repoRoot, cacheDir, 1);
+  assert.equal(result.ok, true);
+  assert.equal(result.files, 2);
+});
+
+test("cold build resolves files across two source roots then reports both", async () => {
+  const repoRoot = await mkdtemp(path.join(tmpdir(), "cold-build-roots-"));
+  const cacheDir = await mkdtemp(path.join(tmpdir(), "cold-build-roots-cache-"));
+  const mainDir = path.join(repoRoot, "src", "main", "java", "demo");
+  const testDir = path.join(repoRoot, "src", "test", "java", "demo");
+  await mkdir(mainDir, { recursive: true });
+  await mkdir(testDir, { recursive: true });
+  await writeFile(path.join(repoRoot, "pom.xml"), "<project><modelVersion>4.0.0</modelVersion></project>\n");
+  await writeFile(path.join(mainDir, "Alpha.java"), "package demo;\n\nclass Alpha {}\n");
+  await writeFile(path.join(testDir, "AlphaTest.java"), "package demo;\n\nclass AlphaTest { Alpha target; }\n");
+  const result = await runColdIndexBuild(repoRoot, cacheDir, 1);
+  assert.equal(result.ok, true);
+  assert.equal(result.files, 2);
+});
+
+test("parse then resolve phases write the same file count as a single build", async () => {
+  const repoRoot = await mkdtemp(path.join(tmpdir(), "cold-build-split-"));
+  const cacheAll = await mkdtemp(path.join(tmpdir(), "cold-build-split-all-"));
+  const cacheSplit = await mkdtemp(path.join(tmpdir(), "cold-build-split-phases-"));
+  const javaDir = path.join(repoRoot, "src", "main", "java", "demo");
+  await mkdir(javaDir, { recursive: true });
+  await writeFile(path.join(repoRoot, "pom.xml"), "<project><modelVersion>4.0.0</modelVersion></project>\n");
+  await writeFile(path.join(javaDir, "Alpha.java"), "package demo;\n\nclass Alpha { Beta other; }\n");
+  await writeFile(path.join(javaDir, "Beta.java"), "package demo;\n\nclass Beta { Alpha other; }\n");
+  const all = await runColdIndexBuild(repoRoot, cacheAll, 1);
+  const parsed = await runColdIndexBuild(repoRoot, cacheSplit, 1, "parse");
+  const resolved = await runColdIndexBuild(repoRoot, cacheSplit, 1, "resolve");
+  assert.equal(all.ok, true);
+  assert.equal(parsed.ok, true);
+  assert.equal(resolved.ok, true);
+  assert.equal(all.files, 2);
+  assert.equal(parsed.files, 2);
+  assert.equal(resolved.files, 2);
+});
+
+test("cold build reports phase timings that cover the wall clock", async () => {
+  const repoRoot = await mkdtemp(path.join(tmpdir(), "cold-build-phases-"));
+  const cacheDir = await mkdtemp(path.join(tmpdir(), "cold-build-cache-"));
+  const javaDir = path.join(repoRoot, "src", "main", "java", "demo");
+  await mkdir(javaDir, { recursive: true });
+  await writeFile(path.join(repoRoot, "pom.xml"), "<project><modelVersion>4.0.0</modelVersion></project>\n");
+  await writeFile(path.join(javaDir, "Solo.java"), "package demo;\n\nclass Solo {}\n");
+  const result = await runColdIndexBuild(repoRoot, cacheDir, 1);
+  assert.equal(result.ok, true);
+  const sum = result.phasesMs.discover + result.phasesMs.parse + result.phasesMs.resolve
+    + result.phasesMs.snapshotPrepare + result.phasesMs.snapshotEncode + result.phasesMs.graphEncode;
+  assert.ok(result.phasesMs.total >= sum - 50, `total ${result.phasesMs.total} vs phases ${sum}`);
+  assert.ok(result.phasesMs.total > 0);
+});

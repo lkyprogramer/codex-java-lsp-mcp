@@ -1,0 +1,56 @@
+[
+  {
+    "task": "V3.2-08",
+    "scope": "multi-anchor evidence attribution, ranking, and protected read-plan coverage",
+    "productionLocAdded": 352,
+    "productionLocRemoved": 145,
+    "netProductionLoc": 207,
+    "paths": [
+      { "path": "src/agent-router/candidate-collectors.ts", "oldLoc": 250, "newLoc": 257, "addedLoc": 7, "removedLoc": 0, "netLoc": 7, "contentChanged": true },
+      { "path": "src/agent-router/family-ranker.ts", "oldLoc": 210, "newLoc": 211, "addedLoc": 1, "removedLoc": 0, "netLoc": 1, "contentChanged": true },
+      { "path": "src/agent-router/framework/adapter.ts", "oldLoc": 81, "newLoc": 138, "addedLoc": 57, "removedLoc": 0, "netLoc": 57, "contentChanged": true },
+      { "path": "src/agent-router/framework/mapstruct-adapter.ts", "oldLoc": 330, "newLoc": 288, "addedLoc": 0, "removedLoc": 42, "netLoc": -42, "contentChanged": true },
+      { "path": "src/agent-router/framework/mybatis-adapter.ts", "oldLoc": 366, "newLoc": 312, "addedLoc": 0, "removedLoc": 54, "netLoc": -54, "contentChanged": true },
+      { "path": "src/agent-router/framework/spring-adapter.ts", "oldLoc": 445, "newLoc": 396, "addedLoc": 0, "removedLoc": 49, "netLoc": -49, "contentChanged": true },
+      { "path": "src/agent-router/materialize-candidates.ts", "oldLoc": 193, "newLoc": 198, "addedLoc": 5, "removedLoc": 0, "netLoc": 5, "contentChanged": true },
+      { "path": "src/agent-router/providers/relationship-provider.ts", "oldLoc": 813, "newLoc": 817, "addedLoc": 4, "removedLoc": 0, "netLoc": 4, "contentChanged": true },
+      { "path": "src/agent-router/providers/semantic-provider.ts", "oldLoc": 169, "newLoc": 202, "addedLoc": 33, "removedLoc": 0, "netLoc": 33, "contentChanged": true },
+      { "path": "src/agent-router/providers/static-provider.ts", "oldLoc": 375, "newLoc": 443, "addedLoc": 68, "removedLoc": 0, "netLoc": 68, "contentChanged": true },
+      { "path": "src/agent-router/providers/support-provider.ts", "oldLoc": 78, "newLoc": 84, "addedLoc": 6, "removedLoc": 0, "netLoc": 6, "contentChanged": true },
+      { "path": "src/agent-router/rank-candidates.ts", "oldLoc": 241, "newLoc": 245, "addedLoc": 4, "removedLoc": 0, "netLoc": 4, "contentChanged": true },
+      { "path": "src/agent-router/read-plan.ts", "oldLoc": 686, "newLoc": 761, "addedLoc": 75, "removedLoc": 0, "netLoc": 75, "contentChanged": true },
+      { "path": "src/agent-router/rg-execution.ts", "oldLoc": 171, "newLoc": 189, "addedLoc": 18, "removedLoc": 0, "netLoc": 18, "contentChanged": true },
+      { "path": "src/agent-router/rg-plan.ts", "oldLoc": 144, "newLoc": 152, "addedLoc": 8, "removedLoc": 0, "netLoc": 8, "contentChanged": true },
+      { "path": "src/agent-router/semantic.ts", "oldLoc": 494, "newLoc": 560, "addedLoc": 66, "removedLoc": 0, "netLoc": 66, "contentChanged": true },
+      { "path": "src/agent-router/shadow-ranking.ts", "oldLoc": 146, "newLoc": 146, "addedLoc": 0, "removedLoc": 0, "netLoc": 0, "contentChanged": true }
+    ],
+    "repaymentTask": "V3.2-31",
+    "repaymentDecision": "Retain the canonical multi-anchor evidence contract; remove compatibility metadata and transitional score consumers once producer and single-anchor parity gates are complete."
+  },
+  {
+    "task": "V3.2-09",
+    "scope": "request-local EvidenceLedger ownership and normalization",
+    "productionLocAdded": 42,
+    "productionLocRemoved": 8,
+    "netProductionLoc": 34,
+    "paths": [
+      { "path": "src/agent-router/evidence-ledger.ts", "oldLoc": 0, "newLoc": 42, "addedLoc": 42, "removedLoc": 0, "netLoc": 42, "contentChanged": true },
+      { "path": "src/agent-router/index.ts", "oldLoc": 543, "newLoc": 535, "addedLoc": 0, "removedLoc": 8, "netLoc": -8, "contentChanged": true }
+    ],
+    "repaymentTask": "V3.2-31",
+    "repaymentDecision": "Keep one request-local ledger as the evidence truth; delete remaining parallel candidate folds and compatibility projections after all consumers migrate."
+  },
+  {
+    "task": "V3.2-10",
+    "scope": "shared lazy FrameworkPreflight and bounded framework query reuse",
+    "productionLocAdded": 185,
+    "productionLocRemoved": 0,
+    "netProductionLoc": 185,
+    "paths": [
+      { "path": "src/agent-router/framework/runner.ts", "oldLoc": 132, "newLoc": 159, "addedLoc": 27, "removedLoc": 0, "netLoc": 27, "contentChanged": true },
+      { "path": "src/agent-router/framework/shared.ts", "oldLoc": 0, "newLoc": 158, "addedLoc": 158, "removedLoc": 0, "netLoc": 158, "contentChanged": true }
+    ],
+    "repaymentTask": "V3.2-32",
+    "repaymentDecision": "Keep only shared preflight queries proven useful by provider attribution; merge duplicate adapter helpers and delete unused diagnostics at the framework convergence gate."
+  }
+]

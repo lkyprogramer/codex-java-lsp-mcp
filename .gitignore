@@ -9,3 +9,13 @@ coverage/
 .env
 .env.*
 !.env.example
+
+# Benchmark and eval dumps stay out of git. Track only manifests under docs/phase-v*/.
+artifacts/v3-*/
+artifacts/v4-*/
+artifacts/model-eval/
+graphify-out/
+
+# Local debug / orchestrator state. Not source.
+.task30-debug.mjs
+.workflow/

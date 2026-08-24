@@ -1,0 +1,49 @@
+{
+  "schemaVersion": "g-g1-closeout/v1",
+  "track": "g",
+  "card": "G1",
+  "dated": "2026-08-23",
+  "decision": "COMPLETE",
+  "mergeToMain": false,
+  "srcTouched": false,
+  "defaultChainIdentity": "UNCHANGED",
+  "project": "ruoyi-vue-pro",
+  "pin": "2bbe79b34ab8c9c7b0148300599dc8d4881c8db1",
+  "checkout": "/tmp/codex-java-v4-golden-20260823/ruoyi-vue-pro",
+  "manifest": "docs/phase-g/g1-golden-manifest.json",
+  "jsonl": "golden/ruoyi-vue-pro.scenarios.jsonl",
+  "jsonlSha256": "7e9eb15f41654f27b4bee743fa73965a514335df83c9964ccce726b217297982",
+  "generator": "scripts/generate-golden-scenarios.mjs",
+  "split": "time-ordered-splitTrainHoldout",
+  "handPicked": false,
+  "counts": {
+    "eligible": 382,
+    "scenarios": 40,
+    "tuning": 28,
+    "holdout": 12,
+    "droppedMissingAtPin": 41,
+    "droppedThin": 4,
+    "droppedNoise": 0
+  },
+  "quality": {
+    "thinOrNoiseRate": 0,
+    "gate": 0.3,
+    "decision": "GO"
+  },
+  "smoke": {
+    "loaded": 40,
+    "missingFiles": 0,
+    "loadScenarios": "GO",
+    "passed": true
+  },
+  "note": "Holdout gold is frozen. Do not inspect holdout mustHit or retune from it. Fourth repo remains outside FROZEN_GOLDEN_REPOS until G2.",
+  "isolation": {
+    "t0": {
+      "tests": 17,
+      "fail": 0,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "cde5366ce9d22e224f92569c2dac2a5ec8ca225a",
+      "logSha256": "71289e4ba1355d14fd14d4eb72c96a86931d77fc6ef051a38baae9f754d3d71c"
+    }
+  }
+}

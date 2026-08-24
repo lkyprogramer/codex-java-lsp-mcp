@@ -1,0 +1,99 @@
+{
+  "schemaVersion": "java-intelligence-jin-n5-three-arm-trace/v1",
+  "dated": "2026-08-22",
+  "status": "MEASURED",
+  "model": "stealth/ox-alpha",
+  "baseUrlHost": "openrouter.ai",
+  "contextWindowTokens": 114688,
+  "head": "0996e5f",
+  "isolation": {
+    "isolation": "detached-local-clone",
+    "jdtlsBin": "/usr/bin/false",
+    "executableTree": "967065d44ebd699248d62d476b465fa56260f51a"
+  },
+  "liveTraceSha256": "51e978f5b328f1719ef2a3016144262c85626038d3befb10858acfbb9bc67624",
+  "runLogSha256": "0b4c5390733a37deedcd31c63b2de89d138e5a15d5aa270938a44ce9deefd202",
+  "taskSuccess": {
+    "status": "MEASURED",
+    "tasks": 18,
+    "scored": 12,
+    "successes": 1,
+    "mean": 0.0833,
+    "note": "Path coverage of tool results vs mustHit∪taskBlocking. Model self-report ignored. SERENA_UNAVAILABLE excluded from mean. No FAILED_RUNTIME this run."
+  },
+  "successLayers": {
+    "localization": { "status": "MEASURED", "scored": 12, "successes": 1, "mean": 0.0833 },
+    "patchGeneration": { "status": "UNMEASURED" },
+    "compileTest": { "status": "UNMEASURED" }
+  },
+  "arms": {
+    "old": {
+      "tool": "java_impact",
+      "tasks": 6,
+      "scored": 6,
+      "successes": 1,
+      "mean": 0.1667,
+      "toolCallCount": 29,
+      "promptTokens": 18387,
+      "completionTokens": 7015,
+      "totalTokensMeasured": 25402,
+      "failedRuntime": 0,
+      "contextCapped": 0
+    },
+    "jin": {
+      "tool": "java_context",
+      "tasks": 6,
+      "scored": 6,
+      "successes": 0,
+      "mean": 0,
+      "toolCallCount": 22,
+      "promptTokens": 33038,
+      "completionTokens": 10505,
+      "totalTokensMeasured": 43543,
+      "failedRuntime": 0,
+      "contextCapped": 0
+    },
+    "serena": {
+      "tool": "serena-public-mcp",
+      "status": "UNAVAILABLE",
+      "tasks": 6,
+      "scored": 0,
+      "reason": "SERENA_MCP_COMMAND is not set"
+    }
+  },
+  "cells": [
+    { "task": "exam-score-export", "old": { "success": true, "hit": "13/13", "tools": 4 }, "jin": { "success": false, "hit": "6/13", "tools": 7 } },
+    { "task": "paper-task-claim", "old": { "success": false, "hit": "9/10", "tools": 6 }, "jin": { "success": false, "hit": "5/10", "tools": 3 } },
+    { "task": "client-release-presign", "old": { "success": false, "hit": "8/11", "tools": 4 }, "jin": { "success": false, "hit": "7/11", "tools": 3 } },
+    { "task": "backend-operation-log", "old": { "success": false, "hit": "9/12", "tools": 4 }, "jin": { "success": false, "hit": "5/12", "tools": 3 } },
+    { "task": "exam-room-print", "old": { "success": false, "hit": "5/8", "tools": 5 }, "jin": { "success": false, "hit": "2/8", "tools": 2 } },
+    { "task": "candidate-pay-order", "old": { "success": false, "hit": "7/12", "tools": 6 }, "jin": { "success": false, "hit": "2/12", "tools": 4 } }
+  ],
+  "gates": {
+    "taskSuccessNonInferior": "FAIL",
+    "toolRoundsAndTokenDrop": "FAIL",
+    "liveFalseClosed": "FAIL",
+    "noContextCapOrRuntimeDrop": "GO"
+  },
+  "killSignal": "UNMEASURED",
+  "mergeToMain": false,
+  "enterN6": false,
+  "harnessUsageAggregate": {
+    "status": "PARTIAL",
+    "totalTokens": 10892,
+    "note": "mergeUsage drops accumulated MEASURED totals when a SERENA_UNAVAILABLE UNMEASURED cell is folded in. Arm sums above are the SSOT."
+  },
+  "previousLive": {
+    "dated": "2026-08-21",
+    "model": "openclaw/Qwen3.8-27B-WORK",
+    "baseUrlHost": "192.168.10.29:28343",
+    "liveTraceSha256": "9a398537da83054fe6beab8d6270f9389854254a72de734dbba9c2c5426d503b",
+    "jinMean": 0.2,
+    "oldMean": 0.2,
+    "jinTools": 66,
+    "oldTools": 26,
+    "jinTokens": 197618,
+    "oldTokens": 25845
+  },
+  "note": "OpenRouter stealth/ox-alpha. jin localization 0/6 vs old 1/6 (exam-score-export). jin used fewer tool rounds (22 vs 29) but more tokens (43543 vs 25402). V5R live falses (presign / pay-order) stayed false. No 502/503 this run. Serena C arm unavailable. Raw live-trace stays off-git. Do not invent TaskSuccess."
+}

@@ -1,0 +1,143 @@
+{
+  "schemaVersion": 1,
+  "receiptKind": "task36-evidence-validation-receipt",
+  "generatedAt": "2026-08-09T07:33:33.522Z",
+  "targetManifest": {
+    "path": "artifacts/v3-final/task36-remediation-20260809/final-evidence-manifest.json",
+    "bytes": 110995,
+    "sha256": "2c327aa605c813799f83be5919a58e976ff6e23bb12f72df3c8e250951c12166"
+  },
+  "inventorySha256": "9650a5f2f60f38ece73aca7c205bd2e4475e855d3de90869b7b0bc07189019eb",
+  "validator": {
+    "scriptPath": "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/generate-final-evidence.mjs",
+    "scriptSha256": "20e5ddef262ccf33cb2a971d947be646ae03757beb2c9cea91e0e9e72750d7d2",
+    "argv": [
+      "node",
+      "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/generate-final-evidence.mjs"
+    ],
+    "exitCode": 0
+  },
+  "checks": [
+    {
+      "id": "all-listed-files-hash",
+      "status": "PASS",
+      "observed": {
+        "fileCount": 186,
+        "totalBytes": 54201774,
+        "mismatches": []
+      }
+    },
+    {
+      "id": "inventory-digest",
+      "status": "PASS",
+      "observed": "9650a5f2f60f38ece73aca7c205bd2e4475e855d3de90869b7b0bc07189019eb"
+    },
+    {
+      "id": "cold-v4-pass3-source-binding",
+      "status": "PASS",
+      "observed": {
+        "manifestSha256": "cfe9024849b3a7df55b82cea8704a6ac02924967e3a23560528b2b63701b5ff5",
+        "patchSha256": "dee1f4464adb670772c67f7e9eee3d644dc1b508ff3988bde7f2a04a00cb5638",
+        "candidateExecutableTree": "60ae785e8af9ac06012452ea41c6b1fe2d3606fd"
+      }
+    },
+    {
+      "id": "cold-v4-pass3-gate",
+      "status": "PASS",
+      "observed": {
+        "passed": true,
+        "cells": 18,
+        "projects": 3,
+        "warnings": []
+      }
+    },
+    {
+      "id": "supplemental-suite-gates",
+      "status": "PASS",
+      "observed": {
+        "fault": {
+          "requiredCaseCount": 13,
+          "passed": true
+        },
+        "mutation": {
+          "expectedCases": 9,
+          "staleCount": 0,
+          "passed": true
+        },
+        "overlap": {
+          "source": "agent-router",
+          "requestGeneration": 14,
+          "indexedGeneration": 15,
+          "changedDuringRequest": true
+        },
+        "multiprocess": {
+          "subprocessCases": "PASS",
+          "isolatedBehaviorCases": "PASS",
+          "task36Step6a": "PASS"
+        },
+        "determinism": {
+          "lishuedu": {
+            "gate": "PASS",
+            "rows": 8,
+            "expectedRuns": 20
+          },
+          "cipherlink": {
+            "gate": "PASS",
+            "rows": 8,
+            "expectedRuns": 20
+          },
+          "exam-parent-v3": {
+            "gate": "PASS",
+            "rows": 8,
+            "expectedRuns": 20
+          }
+        }
+      }
+    },
+    {
+      "id": "policy-evidence-boundaries",
+      "status": "PASS",
+      "observed": {
+        "decision": "KEEP_EXPLICIT",
+        "firstTouchGate": {
+          "expectedCells": 21,
+          "observedCells": 21,
+          "allCellsHaveTenAttempts": true,
+          "freshP95Under800ms": false,
+          "reusedObservedCacheHitP50Under100ms": "UNMEASURED_RAW_SESSION_API",
+          "failedAttempts": 0,
+          "partialTimeoutAttempts": 2,
+          "outsideRepoFilesMax": 0,
+          "stderrPolicy": "validated separately: all official cell stderr files are empty"
+        },
+        "warmCells": 6,
+        "lishueduRequiredReadMust": 0.95625
+      }
+    },
+    {
+      "id": "local-validation-output-contract",
+      "status": "PASS",
+      "observed": {
+        "npmTests": 836,
+        "scriptTests": 25,
+        "smokeTools": 5,
+        "fastWarnings": 0,
+        "npmCiVulnerabilities": 0
+      }
+    },
+    {
+      "id": "declared-unmeasured-not-promoted",
+      "status": "PASS",
+      "observed": [
+        "Phase0 48e665b three-repository numeric comparison",
+        "six end-to-end Agent trace before/after comparison",
+        "real foreground-anchor P95 under a 500-file storm",
+        "full readPlan range recall beyond the 15/120 measured attempts per cold variant",
+        "complete per-provider counterfactual cost attribution",
+        "DocumentLru performance attribution in a JDT-enabled paired matrix",
+        "SemanticGateway cacheHit/shared values from the raw-session first-touch API"
+      ]
+    }
+  ],
+  "result": "PASS"
+}

@@ -1,15 +1,22 @@
 // input: java_impact MCP request.
-// output: v5 source-index plus rg plus optional LSP impact result.
-// pos: Public recommended impact tool handler.
+// output: V6 analysis. Continuation is not on the production path.
+// pos: Public current-chain impact tool handler. Coexists with java_context during N5.
 import { z } from "zod";
-import { documentSymbolLimiter } from "../document-symbol-limiter.js";
-import { normalizeRepoFile } from "../repo-layout.js";
+import { withConvergedCostV6 } from "../agent-router/output-v6.js";
+import { DeadlineBudget } from "../runtime/deadline-budget.js";
+import { defaultDeadlineMs, MAX_REQUEST_DEADLINE_MS, type RequestContext } from "../runtime/request-context.js";
 import type { ToolContext } from "./context.js";
 import type { ImpactAnchorInput, ImpactOptions, ImpactResult, ImpactVerbosity } from "../agent-types.js";
+
+// Iteration A adapter: JDT calls still take a plain timeout, so the request-level
+// absolute deadline is projected onto the single legacy stage timeout. Task 7
+// replaces this by passing the budget itself down to every JDT call.
+const SEMANTIC_STAGE_CAP_MS = 1500;
 
 export const impactSchema = {
   projectId: z.string().min(1).optional(),
   repoRoot: z.string().min(1).optional(),
+  action: z.enum(["analyze"]).optional().default("analyze"),
   anchors: z.array(z.object({
     file: z.string(),
     line: z.number().int().positive(),
@@ -24,7 +31,7 @@ export const impactSchema = {
   profile: z.enum(["auto", "controller", "service", "port", "repository", "parser", "dto", "entity", "mapper", "vo", "job", "listener"]).default("auto"),
   anchorRole: z.enum(["auto", "controller", "service", "port", "repository", "parser", "dto", "entity", "mapper", "vo", "job", "listener"]).optional(),
   semanticPolicy: z.enum(["auto", "fast", "required"]).default("auto"),
-  semanticTimeoutMs: z.number().int().positive().max(10000).default(1500),
+  deadlineMs: z.number().int().positive().max(15000).optional(),
   readPlanMaxItems: z.number().int().positive().max(30).optional(),
   testReadMode: z.enum(["defer", "include", "priority"]).default("defer"),
   focusModules: z.array(z.string().min(1)).max(10).default([]),
@@ -34,73 +41,51 @@ export const impactSchema = {
   verbosity: z.enum(["compact", "standard", "diagnostic"]).default("standard")
 };
 
-export async function javaImpact(context: ToolContext, args: z.infer<z.ZodObject<typeof impactSchema>>): Promise<unknown> {
-  if (args.semanticPolicy === "required" && context.lsp && !context.lsp.enabled) {
+type ImpactArgs = z.input<z.ZodObject<typeof impactSchema>>;
+
+export async function javaImpact(
+  context: ToolContext,
+  args: ImpactArgs,
+  request?: RequestContext
+): Promise<unknown> {
+  const parsed = z.object(impactSchema).parse(args);
+  const action = parsed.action ?? "analyze";
+  if (action !== "analyze") {
+    throw new Error("java_impact action=continue is not available");
+  }
+  if (parsed.semanticPolicy === "required" && context.lsp && !context.lsp.enabled) {
     throw new Error(context.lsp.enableHint || "This repo is not LSP-enabled.");
   }
-  const semanticPolicy = context.lsp?.enabled ? args.semanticPolicy : "fast";
-  const anchors = normalizeAnchors(args);
+  const semanticPolicy = context.lsp?.enabled ? parsed.semanticPolicy : "fast";
+  const anchors = normalizeAnchors(parsed);
+  // The runtime manager's freshness barrier owns the request budget and
+  // generation. Fall back to a local budget only when called without one.
+  const budget = request?.budget ?? DeadlineBudget.fromTimeout(Math.min(
+    MAX_REQUEST_DEADLINE_MS,
+    parsed.deadlineMs ?? defaultDeadlineMs(parsed.mode, semanticPolicy)
+  ));
   const phaseMs: Record<string, number> = {};
-  if (semanticPolicy === "required" && context.lsp?.enabled) {
-    await timed(phaseMs, "warmDocumentSymbol", async () => warmDocumentSymbols(context, anchors, semanticPolicy));
-  } else {
-    warmDocumentSymbols(context, anchors, semanticPolicy).catch(() => undefined);
-  }
   mergePhaseMs(phaseMs, context.session.drainPhaseMetrics());
   const options: ImpactOptions = {
     anchors,
-    mode: args.mode,
-    profile: args.anchorRole || args.profile,
+    mode: parsed.mode,
+    profile: parsed.anchorRole || parsed.profile,
     semanticPolicy,
-    semanticTimeoutMs: args.semanticTimeoutMs,
-    readPlanMaxItems: args.readPlanMaxItems,
-    testReadMode: args.testReadMode,
-    focusModules: args.focusModules,
-    excludeModules: args.excludeModules,
-    taskKeywords: args.taskKeywords,
-    crossModulePolicy: args.crossModulePolicy,
-    verbosity: args.verbosity
+    semanticTimeoutMs: budget.remainingMs(SEMANTIC_STAGE_CAP_MS),
+    readPlanMaxItems: parsed.readPlanMaxItems,
+    testReadMode: parsed.testReadMode,
+    focusModules: parsed.focusModules,
+    excludeModules: parsed.excludeModules,
+    taskKeywords: parsed.taskKeywords,
+    crossModulePolicy: parsed.crossModulePolicy,
+    verbosity: parsed.verbosity
   };
-  const result = await context.router.impact(options);
+  const result = await context.router.impact(options, request);
   mergePhaseMs(phaseMs, context.session.drainPhaseMetrics());
-  return withPhaseMs(result, phaseMs);
+  return withPhaseMs(result, phaseMs, parsed.verbosity);
 }
 
-async function warmDocumentSymbols(
-  context: ToolContext,
-  anchors: ImpactAnchorInput[],
-  semanticPolicy: "auto" | "fast" | "required"
-): Promise<void> {
-  if (!context.lsp?.enabled || semanticPolicy === "fast") {
-    return;
-  }
-  const timeoutMs = Number(process.env.JAVA_LSP_DOCUMENT_SYMBOL_TIMEOUT_MS || (semanticPolicy === "required" ? 45000 : 2000));
-  const warmed = new Set<string>();
-  for (const anchor of anchors) {
-    if (warmed.has(anchor.file)) {
-      continue;
-    }
-    warmed.add(anchor.file);
-    const file = normalizeRepoFile(context.repoRoot, anchor.file);
-    context.sourceIndex.beginWarmIndex();
-    let success = false;
-    try {
-      await documentSymbolLimiter.withSlot(context.repoRoot, async () => {
-        const symbols = semanticPolicy === "required"
-          ? await context.session.documentSymbolsWithRetry(file, timeoutMs)
-          : await context.session.documentSymbols(file, timeoutMs);
-        context.sourceIndex.upsertDocumentSymbols(file, symbols);
-      });
-      success = true;
-    } catch {
-      // documentSymbol is a warm-index upgrade; semantic routing still has its own bounded LSP calls.
-    } finally {
-      context.sourceIndex.finishWarmIndex(success);
-    }
-  }
-}
-
-function normalizeAnchors(args: z.infer<z.ZodObject<typeof impactSchema>>): ImpactAnchorInput[] {
+function normalizeAnchors(args: Pick<ImpactArgs, "anchors" | "file" | "line" | "column" | "anchorRole">): ImpactAnchorInput[] {
   if (args.anchors && args.anchors.length > 0) {
     return args.anchors.map(anchor => ({
       ...anchor,
@@ -113,57 +98,28 @@ function normalizeAnchors(args: z.infer<z.ZodObject<typeof impactSchema>>): Impa
   throw new Error("java_impact requires anchors[] or file/line/column.");
 }
 
-async function timed<T>(phases: Record<string, number>, name: string, action: () => Promise<T>): Promise<T> {
-  const startedAt = Date.now();
-  try {
-    return await action();
-  } finally {
-    phases[name] = (phases[name] || 0) + Date.now() - startedAt;
-  }
-}
-
 function mergePhaseMs(target: Record<string, number>, source: Record<string, number>): void {
   for (const [name, elapsedMs] of Object.entries(source)) {
     target[name] = (target[name] || 0) + elapsedMs;
   }
 }
 
-function withPhaseMs(result: unknown, phases: Record<string, number>): unknown {
+/**
+ * V6 has no top-level `options`, so verbosity is threaded through explicitly
+ * from the same args the caller already validated, rather than read back out
+ * of the result the way the pre-V6 wrapper did.
+ */
+function withPhaseMs(result: unknown, phases: Record<string, number>, verbosity: ImpactVerbosity): unknown {
   if (!result || typeof result !== "object") {
     return result;
   }
-  const payload = result as ImpactResult;
-  if (impactVerbosity(payload) !== "diagnostic") {
-    updateOutputBytes(payload);
-    return payload;
+  const payload = result as ImpactResult & { metrics?: { phaseMs?: Record<string, number> } };
+  if (verbosity === "diagnostic" && payload.metrics && Object.keys(phases).length > 0) {
+    const existingPhaseMs = payload.metrics.phaseMs ?? {};
+    payload.metrics = {
+      ...payload.metrics,
+      phaseMs: { ...phases, ...existingPhaseMs }
+    };
   }
-  if (Object.keys(phases).length === 0) {
-    return result;
-  }
-  const metrics = payload.metrics || {};
-  const phaseMs = metrics.phaseMs && typeof metrics.phaseMs === "object" ? metrics.phaseMs as Record<string, number> : {};
-  payload.metrics = {
-    ...metrics,
-    phaseMs: {
-      ...phases,
-      ...phaseMs
-    }
-  };
-  updateOutputBytes(payload);
-  return payload;
-}
-
-function impactVerbosity(result: ImpactResult): ImpactVerbosity {
-  const value = result.options?.verbosity;
-  return value === "compact" || value === "diagnostic" ? value : "standard";
-}
-
-function updateOutputBytes(payload: ImpactResult): void {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const outputBytes = Buffer.byteLength(JSON.stringify(payload), "utf8");
-    if (payload.metrics.outputBytes === outputBytes) {
-      return;
-    }
-    payload.metrics.outputBytes = outputBytes;
-  }
+  return withConvergedCostV6(payload, payload.cost.readBytes, payload.cost.suppressedRawBytes);
 }

@@ -33,29 +33,59 @@ type RegistrySnapshot = {
   size?: number;
 };
 
+export type AliasRegistryStatus = {
+  lastReloadError?: string;
+  lastReloadErrorAt?: string;
+};
+
 export class AliasRegistry {
   private snapshot: RegistrySnapshot = { aliases: [], defaults: {} };
+  private loadedOnce = false;
+  private lastReloadError?: string;
+  private lastReloadErrorAt?: Date;
 
   constructor(private readonly configPath = defaultConfigPath()) {}
 
   async reloadIfChanged(): Promise<void> {
     if (!existsSync(this.configPath)) {
+      // Deletion is a valid state, not a parse failure: aliases become empty
+      // rather than retaining a now-stale last-known-good snapshot.
       this.snapshot = { aliases: [], defaults: {} };
+      this.lastReloadError = undefined;
+      this.lastReloadErrorAt = undefined;
       return;
     }
     const stat = statSync(this.configPath);
     if (this.snapshot.mtimeMs === stat.mtimeMs && this.snapshot.size === stat.size) {
       return;
     }
-    const parsed = configSchema.parse(JSON.parse(await readFile(this.configPath, "utf8")));
-    this.snapshot = {
-      aliases: parsed.aliases.map(alias => ({
-        ...alias,
-        root: canonicalPath(alias.root)
-      })),
-      defaults: parsed.defaults,
-      mtimeMs: stat.mtimeMs,
-      size: stat.size
+    try {
+      const parsed = configSchema.parse(JSON.parse(await readFile(this.configPath, "utf8")));
+      this.snapshot = {
+        aliases: parsed.aliases.map(alias => ({
+          ...alias,
+          root: canonicalPath(alias.root)
+        })),
+        defaults: parsed.defaults,
+        mtimeMs: stat.mtimeMs,
+        size: stat.size
+      };
+      this.loadedOnce = true;
+      this.lastReloadError = undefined;
+      this.lastReloadErrorAt = undefined;
+    } catch (error) {
+      this.lastReloadError = error instanceof Error ? error.message : String(error);
+      this.lastReloadErrorAt = new Date();
+      // Before any valid config has ever loaded there is no last-known-good
+      // to fall back to, so a broken first load must still fail loudly.
+      if (!this.loadedOnce) throw error;
+    }
+  }
+
+  status(): AliasRegistryStatus {
+    return {
+      lastReloadError: this.lastReloadError,
+      lastReloadErrorAt: this.lastReloadErrorAt?.toISOString()
     };
   }
 

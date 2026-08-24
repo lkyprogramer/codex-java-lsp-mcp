@@ -1,0 +1,648 @@
+{
+  "version": 4,
+  "verifiedAt": "2026-08-09T07:16:11.982Z",
+  "matrixDir": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix",
+  "manifest": {
+    "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/run-manifest.json",
+    "sha256": "cfe9024849b3a7df55b82cea8704a6ac02924967e3a23560528b2b63701b5ff5",
+    "verifierVersion": 4,
+    "runtimes": {
+      "old": {
+        "commit": "7df1a0eef98d709ef4307c2f66184746c0d95720",
+        "commitTree": "b096e87a952aa01c1d0a8b15092ac21e7e6b1929",
+        "executableTree": "b096e87a952aa01c1d0a8b15092ac21e7e6b1929",
+        "buildStamp": {
+          "gitSha": "7df1a0eef98d",
+          "generatedAt": "2026-08-09T07:08:38.260Z",
+          "defaults": {
+            "idleTtlMs": 2700000,
+            "importConcurrency": 2,
+            "jdtlsXmx": "2g",
+            "maxActiveRepos": 3
+          },
+          "defaultsFingerprint": "e5835394a86f"
+        }
+      },
+      "new": {
+        "commit": "4e147560c38b76f942a15a92b34cbea69d734ef5",
+        "commitTree": "53f77574738178a8c4a126fabea8a69fe1996495",
+        "executableTree": "60ae785e8af9ac06012452ea41c6b1fe2d3606fd",
+        "buildStamp": {
+          "gitSha": "4e147560c38b",
+          "generatedAt": "2026-08-09T07:08:41.161Z",
+          "defaults": {
+            "idleTtlMs": 2700000,
+            "importConcurrency": 2,
+            "jdtlsXmx": "2g",
+            "maxActiveRepos": 3
+          },
+          "defaultsFingerprint": "e5835394a86f"
+        }
+      }
+    },
+    "repositories": {
+      "lishuedu": {
+        "root": "/tmp/codex-java-v3-golden-20260809/lishuedu",
+        "head": "db63b1a7e393edd90449eb013d7d1c4d65c366f2",
+        "tree": "22f0ce444e4cac484de85c8a0bf02240ad70d712",
+        "clean": true,
+        "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "cipherlink": {
+        "root": "/tmp/codex-java-v3-golden-20260809/cipherlink",
+        "head": "fa433982e92e52dd610650d1e79f2d041179b1d3",
+        "tree": "21a1075c7b211932a4cdb2abf2742521b1eba31f",
+        "clean": true,
+        "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "exam-parent-v3": {
+        "root": "/tmp/codex-java-v3-golden-20260809/exam-parent-v3",
+        "head": "f90a0b475f7be2ed003703feecec8195bc7eb976",
+        "tree": "dcdb2024879686451859c64260c7e1f3a4721fa7",
+        "clean": true,
+        "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "scenarios": {
+      "lishuedu": {
+        "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/lishuedu.scenarios.jsonl",
+        "sha256": "579178746bb123822a2908025fc60aa26a8c79958079dc3043dfa936fd4ba916",
+        "rowIds": [
+          "storage-signed-url",
+          "school-template-parser",
+          "report-reusable-zip",
+          "school-confirm-controller",
+          "benefit-product-code-dto",
+          "school-mapstruct-uses",
+          "audit-order-repository-mapper-rule-type",
+          "audit-assignee-mapper-precision"
+        ]
+      },
+      "cipherlink": {
+        "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/cipherlink.scenarios.jsonl",
+        "sha256": "47850fd6ac88804ecec0d1d0abb42ff1369a6fc1e42ad447abc334417ab084ca",
+        "rowIds": [
+          "client-update-check",
+          "transfer-upload-init",
+          "transfer-upload-session-repository",
+          "aliyun-sms-gateway-send",
+          "operation-log-response-dto",
+          "organization-create-member-cross-module",
+          "auth-sms-login-lockout",
+          "account-admin-create-account-guard"
+        ]
+      },
+      "exam-parent-v3": {
+        "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+        "sha256": "83cfde7858cb3d24906c69808f321f525451afbd2b90b3f3805b2d65c62d0769",
+        "rowIds": [
+          "rule-engine-execute",
+          "candidate-position-select",
+          "apply-info-save-basic-service",
+          "position-repository-exists",
+          "ceb-order-create-dto",
+          "apply-info-update-cross-exam-guard",
+          "check-people-delete-site-guard",
+          "current-user-service-implementer-edge"
+        ]
+      }
+    },
+    "candidatePatch": {
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate.patch",
+      "sha256": "dee1f4464adb670772c67f7e9eee3d644dc1b508ff3988bde7f2a04a00cb5638",
+      "bytes": 704902,
+      "appliedToCommit": "4e147560c38b76f942a15a92b34cbea69d734ef5",
+      "appliedToCommitTree": "53f77574738178a8c4a126fabea8a69fe1996495",
+      "resultingExecutableTree": "60ae785e8af9ac06012452ea41c6b1fe2d3606fd",
+      "untrackedInputs": [
+        {
+          "path": "scripts/run-three-repo-cold-matrix.test.mjs",
+          "sha256": "bd56643ab165efe77eb37e711cc841d9266915da298a181ebba6dff815af58ef",
+          "bytes": 4215,
+          "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/run-three-repo-cold-matrix.test.mjs"
+        },
+        {
+          "path": "scripts/task36-fault-suite.mjs",
+          "sha256": "3719dc06e8d1acb21137575d33821ffb9945a28db3317ed0e6bc209c662d9e61",
+          "bytes": 9529,
+          "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-fault-suite.mjs"
+        },
+        {
+          "path": "scripts/task36-fault-suite.test.mjs",
+          "sha256": "43c088eb94fa31abd314f830cfb4ac71035ca2a4a471024068258044fc645928",
+          "bytes": 6521,
+          "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-fault-suite.test.mjs"
+        },
+        {
+          "path": "scripts/task36-multiprocess-smoke.mjs",
+          "sha256": "8b92fee60f151b48ecf81b73fef076c14e5ac49fc8f6034a2d201d7a76f4d161",
+          "bytes": 20100,
+          "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-multiprocess-smoke.mjs"
+        },
+        {
+          "path": "scripts/task36-multiprocess-smoke.test.mjs",
+          "sha256": "635cff9c6f0f43c851f85fb559dc56b6377ca9bce129c342d7368c0d3ee9b2de",
+          "bytes": 4725,
+          "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-multiprocess-smoke.test.mjs"
+        },
+        {
+          "path": "scripts/task36-multiprocess-worker.mjs",
+          "sha256": "590d8fcd7888f47be9f245bb9a63ba28baf97523deb85b8f30209f30a647a354",
+          "bytes": 4250,
+          "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-multiprocess-worker.mjs"
+        },
+        {
+          "path": "scripts/task36-tap-evidence.mjs",
+          "sha256": "e296c7958ce3852d302845bf22e5d4f8a3f72c72bf7cbcd6d952cba44b1f4c42",
+          "bytes": 1285,
+          "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-tap-evidence.mjs"
+        },
+        {
+          "path": "scripts/task36-tap-evidence.test.mjs",
+          "sha256": "59cf268d652e447890548ed13464826c91353466a6f2a540ec8c8e63c2e9175b",
+          "bytes": 2075,
+          "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-tap-evidence.test.mjs"
+        },
+        {
+          "path": "src/agent-router/request-budget.test.ts",
+          "sha256": "806acfca3333d3d38f1db24b210042af3ba4f1acb02b79e6eb29b77ececd56d7",
+          "bytes": 9215,
+          "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/agent-router/request-budget.test.ts"
+        },
+        {
+          "path": "src/benchmark/determinism.test.ts",
+          "sha256": "dab7fbbb4b12fef1955fdfd5178f17bf5de9a6b566f57e885bbd183d1b0b75cf",
+          "bytes": 6256,
+          "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/determinism.test.ts"
+        },
+        {
+          "path": "src/benchmark/determinism.ts",
+          "sha256": "ea96003c3307c30e396b0670794ec172a47ed19977f368402ffb8c33265dc3dd",
+          "bytes": 7486,
+          "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/determinism.ts"
+        },
+        {
+          "path": "src/benchmark/java-index-idle.test.ts",
+          "sha256": "d0f331b6cac581af986976c6817b2d91a6075946960356745a20e353bac9f77c",
+          "bytes": 1520,
+          "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/java-index-idle.test.ts"
+        },
+        {
+          "path": "src/benchmark/java-index-idle.ts",
+          "sha256": "5cef22f6bd2eb4e6084ba99078b27a456be0ff8af2805f72cd9e09820fefc8bb",
+          "bytes": 581,
+          "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/java-index-idle.ts"
+        },
+        {
+          "path": "src/benchmark/task36-mutation-matrix.test.ts",
+          "sha256": "d3b05870ff5e62b7252bfcbfb7e6019c6ea7a38f50f06099e24d82b8e9db8900",
+          "bytes": 2543,
+          "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/task36-mutation-matrix.test.ts"
+        },
+        {
+          "path": "src/benchmark/task36-mutation-matrix.ts",
+          "sha256": "7956c75de01494c235303add1318b31c1501d5fc8a2082b7594719347437d278",
+          "bytes": 24543,
+          "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/task36-mutation-matrix.ts"
+        },
+        {
+          "path": "src/benchmark/verify-determinism.ts",
+          "sha256": "ac59ec695856ab321e9df00151846d011ff6da822a48f820445a10d850099056",
+          "bytes": 1856,
+          "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/verify-determinism.ts"
+        }
+      ]
+    }
+  },
+  "inputSha256": "c2910b9e89222aa1883d54a3ddaef67c3f70115805bbde723c7a6480f53cb4ff",
+  "configuration": {
+    "projects": [
+      "lishuedu",
+      "cipherlink",
+      "exam-parent-v3"
+    ],
+    "rounds": [
+      1,
+      2,
+      3
+    ],
+    "variants": [
+      "old",
+      "new"
+    ],
+    "expectedCells": 18,
+    "expectedRuns": 5,
+    "p95Limit": 1.25
+  },
+  "scenarioFiles": {
+    "lishuedu": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/lishuedu.scenarios.jsonl",
+    "cipherlink": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/cipherlink.scenarios.jsonl",
+    "exam-parent-v3": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/exam-parent-v3.scenarios.jsonl"
+  },
+  "cells": [
+    {
+      "project": "lishuedu",
+      "round": 1,
+      "variant": "old",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/lishuedu-r1-old.json",
+      "sha256": "ecd30210db62c24348cdbb0db572994d1039e54faa871ef585bd71093d0b7883",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 8
+    },
+    {
+      "project": "lishuedu",
+      "round": 2,
+      "variant": "old",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/lishuedu-r2-old.json",
+      "sha256": "d3348f951acd0c34bb340ebc6f2731623a660721c2e7f59dc20a595d34b8d9e0",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 8
+    },
+    {
+      "project": "lishuedu",
+      "round": 3,
+      "variant": "old",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/lishuedu-r3-old.json",
+      "sha256": "53a68623cecb99144b011ece6f6cfdc63a3de015b5e5cb762453d2b9259c86e6",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 8
+    },
+    {
+      "project": "lishuedu",
+      "round": 1,
+      "variant": "new",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/lishuedu-r1-new.json",
+      "sha256": "b6b459357d78883fd235826eec2e2a39cdfe1f08d78f300d0830e9cf3a92b40e",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 8
+    },
+    {
+      "project": "lishuedu",
+      "round": 2,
+      "variant": "new",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/lishuedu-r2-new.json",
+      "sha256": "41ae06f24da3f622e8cec5f07d1f51d2a41f6635ed842034b913231974c8db1d",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 8
+    },
+    {
+      "project": "lishuedu",
+      "round": 3,
+      "variant": "new",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/lishuedu-r3-new.json",
+      "sha256": "42cedbb3a9107e2f0acc81ed72fbad9c86e75177a5d487602674851743b431ec",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 8
+    },
+    {
+      "project": "cipherlink",
+      "round": 1,
+      "variant": "old",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/cipherlink-r1-old.json",
+      "sha256": "da4c38740b975d9f6af557686916b47125258c51213d37fcd1b255d95a784c66",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 8
+    },
+    {
+      "project": "cipherlink",
+      "round": 2,
+      "variant": "old",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/cipherlink-r2-old.json",
+      "sha256": "7baef3770ab9f087bd98daaa1a1b751ab33e4af3e347a2fbd08781799d6f544e",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 8
+    },
+    {
+      "project": "cipherlink",
+      "round": 3,
+      "variant": "old",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/cipherlink-r3-old.json",
+      "sha256": "f0cd4e9156e7fc6e7fa4705ce87e5e690b6c367f22d9314de19fefb72702d15a",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 8
+    },
+    {
+      "project": "cipherlink",
+      "round": 1,
+      "variant": "new",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/cipherlink-r1-new.json",
+      "sha256": "2864e2fe0f54ac6e5f40437b5dc4609977bdda386e838503320762af5249bff2",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 8
+    },
+    {
+      "project": "cipherlink",
+      "round": 2,
+      "variant": "new",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/cipherlink-r2-new.json",
+      "sha256": "688c3604bc4c35d8c5cc36f2586f9a95345ec53925a619fd8dd6a5b277920ce7",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 8
+    },
+    {
+      "project": "cipherlink",
+      "round": 3,
+      "variant": "new",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/cipherlink-r3-new.json",
+      "sha256": "e01d62c0e769c0c36aa17876df2284e9ac72c5eb0cffc97dc1c0266c8653ce12",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 8
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 1,
+      "variant": "old",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/exam-parent-v3-r1-old.json",
+      "sha256": "337cbe4a07b9f37a7ff94250b40800846b03b824e1297ceeb57a1b7cae7a05d6",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 8
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 2,
+      "variant": "old",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/exam-parent-v3-r2-old.json",
+      "sha256": "ad0d5065786a082e58bf906d36e92610f42adce275a8bf6d757c55b7222d349b",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 8
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 3,
+      "variant": "old",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/exam-parent-v3-r3-old.json",
+      "sha256": "6ee4767c565214971c03dccca074cbc6d4507a4c27eba3a0949c8fc53ff58d62",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 8
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 1,
+      "variant": "new",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/exam-parent-v3-r1-new.json",
+      "sha256": "72a5ed8302ef87582e1972d2ab220465ad7b546d7c6c5bf1161c0c4d74e89463",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 8
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 2,
+      "variant": "new",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/exam-parent-v3-r2-new.json",
+      "sha256": "e31bf1957448f608d556995a3f8fef8e44f19f3acf76239d77bd6bd2638a013b",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 8
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 3,
+      "variant": "new",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/exam-parent-v3-r3-new.json",
+      "sha256": "469ca34c7b02e81ad520c0d509c0e9f6155e879e5c281f4743cdf36e3869bbaf",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 8
+    }
+  ],
+  "projects": [
+    {
+      "project": "lishuedu",
+      "old": {
+        "attempts": 120,
+        "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/lishuedu.scenarios.jsonl",
+        "recall": 0.784672619047619,
+        "pRead": 0.6770833333333333,
+        "rReadMust": 1,
+        "rTaskBlocking": 0.604563492063492,
+        "minReadMust": 1,
+        "minTaskBlocking": 0.42857142857142855,
+        "estimatedTokensP50": 8186,
+        "estimatedTokensP95": 10512,
+        "rangeEvidence": {
+          "status": "PARTIAL",
+          "measuredAttempts": 15,
+          "unmeasuredAttempts": 105,
+          "mean": 1,
+          "min": 1
+        },
+        "p50": 22.14354099999764,
+        "p95": 171.93491599999834,
+        "max": 276.3089159999945,
+        "mustFailureScenarios": []
+      },
+      "new": {
+        "attempts": 120,
+        "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/lishuedu.scenarios.jsonl",
+        "recall": 0.784672619047619,
+        "pRead": 0.6770833333333333,
+        "rReadMust": 1,
+        "rTaskBlocking": 0.604563492063492,
+        "minReadMust": 1,
+        "minTaskBlocking": 0.42857142857142855,
+        "estimatedTokensP50": 7554,
+        "estimatedTokensP95": 8911,
+        "rangeEvidence": {
+          "status": "PARTIAL",
+          "measuredAttempts": 15,
+          "unmeasuredAttempts": 105,
+          "mean": 1,
+          "min": 1
+        },
+        "p50": 23.211709000002884,
+        "p95": 166.7929159999985,
+        "max": 272.95587499999965,
+        "mustFailureScenarios": []
+      },
+      "delta": {
+        "recall": 0,
+        "pRead": 0,
+        "rReadMust": 0,
+        "rTaskBlocking": 0,
+        "estimatedTokensP50": -632,
+        "p95Ratio": 0.9700933346197123,
+        "p95ThresholdMs": 221.93491599999834
+      },
+      "gate": {
+        "rReadMust": true,
+        "rTaskBlocking": true,
+        "recall": true,
+        "pRead": true,
+        "estimatedTokens": true,
+        "p95": true
+      },
+      "passed": true
+    },
+    {
+      "project": "cipherlink",
+      "old": {
+        "attempts": 120,
+        "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/cipherlink.scenarios.jsonl",
+        "recall": 0.8322229853479857,
+        "pRead": 0.6375000000000001,
+        "rReadMust": 1,
+        "rTaskBlocking": 0.49141865079365077,
+        "minReadMust": 1,
+        "minTaskBlocking": 0.16666666666666666,
+        "estimatedTokensP50": 8171,
+        "estimatedTokensP95": 10573,
+        "rangeEvidence": {
+          "status": "PARTIAL",
+          "measuredAttempts": 15,
+          "unmeasuredAttempts": 105,
+          "mean": 1,
+          "min": 1
+        },
+        "p50": 56.954249999999774,
+        "p95": 161.09512500000073,
+        "max": 255.18175000000065,
+        "mustFailureScenarios": []
+      },
+      "new": {
+        "attempts": 120,
+        "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/cipherlink.scenarios.jsonl",
+        "recall": 0.8322229853479857,
+        "pRead": 0.6375000000000001,
+        "rReadMust": 1,
+        "rTaskBlocking": 0.49141865079365077,
+        "minReadMust": 1,
+        "minTaskBlocking": 0.16666666666666666,
+        "estimatedTokensP50": 7166,
+        "estimatedTokensP95": 9516,
+        "rangeEvidence": {
+          "status": "PARTIAL",
+          "measuredAttempts": 15,
+          "unmeasuredAttempts": 105,
+          "mean": 1,
+          "min": 1
+        },
+        "p50": 56.94179200000053,
+        "p95": 157.244917,
+        "max": 265.80462500000067,
+        "mustFailureScenarios": []
+      },
+      "delta": {
+        "recall": 0,
+        "pRead": 0,
+        "rReadMust": 0,
+        "rTaskBlocking": 0,
+        "estimatedTokensP50": -1005,
+        "p95Ratio": 0.9760997857632208,
+        "p95ThresholdMs": 211.09512500000073
+      },
+      "gate": {
+        "rReadMust": true,
+        "rTaskBlocking": true,
+        "recall": true,
+        "pRead": true,
+        "estimatedTokens": true,
+        "p95": true
+      },
+      "passed": true
+    },
+    {
+      "project": "exam-parent-v3",
+      "old": {
+        "attempts": 120,
+        "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+        "recall": 0.7789772727272726,
+        "pRead": 0.6041666666666665,
+        "rReadMust": 1,
+        "rTaskBlocking": 0.5002976190476192,
+        "minReadMust": 1,
+        "minTaskBlocking": 0.14285714285714285,
+        "estimatedTokensP50": 7299,
+        "estimatedTokensP95": 11608,
+        "rangeEvidence": {
+          "status": "PARTIAL",
+          "measuredAttempts": 15,
+          "unmeasuredAttempts": 105,
+          "mean": 1,
+          "min": 1
+        },
+        "p50": 34.67987500000072,
+        "p95": 135.17533300000014,
+        "max": 200.91895899999963,
+        "mustFailureScenarios": []
+      },
+      "new": {
+        "attempts": 120,
+        "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+        "recall": 0.7789772727272726,
+        "pRead": 0.6041666666666665,
+        "rReadMust": 1,
+        "rTaskBlocking": 0.5002976190476192,
+        "minReadMust": 1,
+        "minTaskBlocking": 0.14285714285714285,
+        "estimatedTokensP50": 6444,
+        "estimatedTokensP95": 10365,
+        "rangeEvidence": {
+          "status": "PARTIAL",
+          "measuredAttempts": 15,
+          "unmeasuredAttempts": 105,
+          "mean": 1,
+          "min": 1
+        },
+        "p50": 36.79833400000007,
+        "p95": 136.11770799999977,
+        "max": 204.52091699999983,
+        "mustFailureScenarios": []
+      },
+      "delta": {
+        "recall": 0,
+        "pRead": 0,
+        "rReadMust": 0,
+        "rTaskBlocking": 0,
+        "estimatedTokensP50": -855,
+        "p95Ratio": 1.0069715012279616,
+        "p95ThresholdMs": 185.17533300000014
+      },
+      "gate": {
+        "rReadMust": true,
+        "rTaskBlocking": true,
+        "recall": true,
+        "pRead": true,
+        "estimatedTokens": true,
+        "p95": true
+      },
+      "passed": true
+    }
+  ],
+  "warnings": [],
+  "passed": true,
+  "summaryFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix-summary.json"
+}

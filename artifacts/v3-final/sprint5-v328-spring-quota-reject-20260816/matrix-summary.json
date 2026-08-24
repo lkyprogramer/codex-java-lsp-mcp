@@ -1,0 +1,1161 @@
+{
+  "version": 6,
+  "verifiedAt": "2026-08-16T14:58:54.729Z",
+  "matrixDir": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/matrix",
+  "manifest": {
+    "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/run-manifest.json",
+    "sha256": "e2aff4581369bcc755fcc2527c2abca6bba8532e3d5f21ee445f623b0e62ebee",
+    "verifierVersion": 6,
+    "runtimes": {
+      "old": {
+        "commit": "869b3532eba9c02cd7211bb4920cde6a764ab60c",
+        "commitTree": "a7096428ec19565aec84d362e2158ef68454d0fb",
+        "executableTree": "a7096428ec19565aec84d362e2158ef68454d0fb",
+        "buildStamp": {
+          "gitSha": "869b3532eba9",
+          "generatedAt": "2026-08-16T14:50:18.386Z",
+          "defaults": {
+            "idleTtlMs": 2700000,
+            "importConcurrency": 2,
+            "jdtlsXmx": "2g",
+            "maxActiveRepos": 3
+          },
+          "defaultsFingerprint": "e5835394a86f"
+        }
+      },
+      "new": {
+        "commit": "869b3532eba9c02cd7211bb4920cde6a764ab60c",
+        "commitTree": "a7096428ec19565aec84d362e2158ef68454d0fb",
+        "executableTree": "ea86d039c23f00e8bae883464bf7cdbb03a988a4",
+        "buildStamp": {
+          "gitSha": "869b3532eba9",
+          "generatedAt": "2026-08-16T14:50:21.595Z",
+          "defaults": {
+            "idleTtlMs": 2700000,
+            "importConcurrency": 2,
+            "jdtlsXmx": "2g",
+            "maxActiveRepos": 3
+          },
+          "defaultsFingerprint": "e5835394a86f"
+        }
+      }
+    },
+    "repositories": {
+      "lishuedu": {
+        "root": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-mcp-three-repo-bKVy11/repositories/lishuedu",
+        "head": "db63b1a7e393edd90449eb013d7d1c4d65c366f2",
+        "tree": "22f0ce444e4cac484de85c8a0bf02240ad70d712",
+        "clean": true,
+        "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "sourceRoot": "/private/tmp/codex-java-v3-golden-20260809/lishuedu"
+      },
+      "cipherlink": {
+        "root": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-mcp-three-repo-bKVy11/repositories/cipherlink",
+        "head": "fa433982e92e52dd610650d1e79f2d041179b1d3",
+        "tree": "21a1075c7b211932a4cdb2abf2742521b1eba31f",
+        "clean": true,
+        "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "sourceRoot": "/private/tmp/codex-java-v3-golden-20260809/cipherlink"
+      },
+      "exam-parent-v3": {
+        "root": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-mcp-three-repo-bKVy11/repositories/exam-parent-v3",
+        "head": "f90a0b475f7be2ed003703feecec8195bc7eb976",
+        "tree": "dcdb2024879686451859c64260c7e1f3a4721fa7",
+        "clean": true,
+        "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "sourceRoot": "/private/tmp/codex-java-v3-golden-20260809/exam-parent-v3"
+      }
+    },
+    "scenarios": {
+      "lishuedu": {
+        "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/frozen-scenarios/lishuedu.scenarios.jsonl",
+        "sha256": "fba58bb3e3e77dfb37f7ded03fb2a9ff02612658b08ca48b15927d102c434c65",
+        "rowIds": [
+          "storage-signed-url",
+          "school-template-parser",
+          "report-reusable-zip",
+          "school-confirm-controller",
+          "benefit-product-code-dto",
+          "school-mapstruct-uses",
+          "audit-order-repository-mapper-rule-type",
+          "audit-assignee-mapper-precision",
+          "exam-score-export-cross-module-holdout",
+          "paper-task-claim-iam-holdout"
+        ],
+        "tuningRowIds": [
+          "storage-signed-url",
+          "school-template-parser",
+          "report-reusable-zip",
+          "school-confirm-controller",
+          "benefit-product-code-dto",
+          "school-mapstruct-uses",
+          "audit-order-repository-mapper-rule-type",
+          "audit-assignee-mapper-precision"
+        ],
+        "holdoutRowIds": [
+          "exam-score-export-cross-module-holdout",
+          "paper-task-claim-iam-holdout"
+        ]
+      },
+      "cipherlink": {
+        "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/frozen-scenarios/cipherlink.scenarios.jsonl",
+        "sha256": "e60dfebcc6cd764e6488c647793db72e098b7cf66385f8012e023fedcaf535d5",
+        "rowIds": [
+          "client-update-check",
+          "transfer-upload-init",
+          "transfer-upload-session-repository",
+          "aliyun-sms-gateway-send",
+          "operation-log-response-dto",
+          "organization-create-member-cross-module",
+          "auth-sms-login-lockout",
+          "account-admin-create-account-guard",
+          "client-release-storage-presign-holdout",
+          "backend-operation-log-aspect-async-audit-holdout"
+        ],
+        "tuningRowIds": [
+          "client-update-check",
+          "transfer-upload-init",
+          "transfer-upload-session-repository",
+          "aliyun-sms-gateway-send",
+          "operation-log-response-dto",
+          "organization-create-member-cross-module",
+          "auth-sms-login-lockout",
+          "account-admin-create-account-guard"
+        ],
+        "holdoutRowIds": [
+          "client-release-storage-presign-holdout",
+          "backend-operation-log-aspect-async-audit-holdout"
+        ]
+      },
+      "exam-parent-v3": {
+        "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+        "sha256": "da84c560c46c7c90d6dbabea38b43b5695a7a23dcd2f608e8c6dcd63cae4f69e",
+        "rowIds": [
+          "rule-engine-execute",
+          "candidate-position-select",
+          "apply-info-save-basic-service",
+          "position-repository-exists",
+          "ceb-order-create-dto",
+          "apply-info-update-cross-exam-guard",
+          "check-people-delete-site-guard",
+          "current-user-service-implementer-edge",
+          "exam-room-print-download-types-persistent-bundle",
+          "candidate-pay-order-cross-module-admission"
+        ],
+        "tuningRowIds": [
+          "rule-engine-execute",
+          "candidate-position-select",
+          "apply-info-save-basic-service",
+          "position-repository-exists",
+          "ceb-order-create-dto",
+          "apply-info-update-cross-exam-guard",
+          "check-people-delete-site-guard",
+          "current-user-service-implementer-edge"
+        ],
+        "holdoutRowIds": [
+          "exam-room-print-download-types-persistent-bundle",
+          "candidate-pay-order-cross-module-admission"
+        ]
+      }
+    },
+    "candidatePatch": {
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/candidate.patch",
+      "sha256": "64409037a06189e9b0d03a11613dc51ec6832965b4a5331b26bf6223ebe8a8ea",
+      "bytes": 26612,
+      "appliedToCommit": "869b3532eba9c02cd7211bb4920cde6a764ab60c",
+      "appliedToCommitTree": "a7096428ec19565aec84d362e2158ef68454d0fb",
+      "resultingExecutableTree": "ea86d039c23f00e8bae883464bf7cdbb03a988a4",
+      "untrackedInputs": [
+        {
+          "path": "scripts/run-idle-prewarm-experiment.mjs",
+          "sha256": "1a01e089c7b50ed0cbb0a0cae10f0e9527d513a06fd3da9b302286c8d71f4a5a",
+          "bytes": 12697,
+          "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/candidate-untracked/scripts/run-idle-prewarm-experiment.mjs"
+        },
+        {
+          "path": "scripts/run-v324-import-concurrency-experiment.mjs",
+          "sha256": "ec58ec7eb4b19739103ca2551bd521b46c068a487a4e37a6e09e3efe517b44c4",
+          "bytes": 10890,
+          "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/candidate-untracked/scripts/run-v324-import-concurrency-experiment.mjs"
+        }
+      ]
+    }
+  },
+  "inputSha256": "b77362064da0a48d030723f599265bc5c4da69619daf5bf94ce4ae3cdce4614f",
+  "configuration": {
+    "projects": [
+      "lishuedu",
+      "cipherlink",
+      "exam-parent-v3"
+    ],
+    "rounds": [
+      1,
+      2,
+      3
+    ],
+    "variants": [
+      "old",
+      "new"
+    ],
+    "expectedCells": 18,
+    "expectedRuns": 5,
+    "p95Limit": 1.25
+  },
+  "scenarioFiles": {
+    "lishuedu": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/frozen-scenarios/lishuedu.scenarios.jsonl",
+    "cipherlink": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/frozen-scenarios/cipherlink.scenarios.jsonl",
+    "exam-parent-v3": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/frozen-scenarios/exam-parent-v3.scenarios.jsonl"
+  },
+  "cells": [
+    {
+      "project": "lishuedu",
+      "round": 1,
+      "variant": "old",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/matrix/lishuedu-r1-old.json",
+      "sha256": "9a899d18cac1f1cc37bff4c7e75abb06a6ddc03fe4ee3b3ac5fec2bd6426199f",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "lishuedu",
+      "round": 2,
+      "variant": "old",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/matrix/lishuedu-r2-old.json",
+      "sha256": "116413e1ce0407de31d9d33013dba2e821e7f41c6c30ae390af9eb3c632a68c4",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "lishuedu",
+      "round": 3,
+      "variant": "old",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/matrix/lishuedu-r3-old.json",
+      "sha256": "6085258ffd25b53ba9813b1de07be0d2c4ffd20ae9c39194640dca80c51f84b6",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "lishuedu",
+      "round": 1,
+      "variant": "new",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/matrix/lishuedu-r1-new.json",
+      "sha256": "d902adf191c42eaee92abc54d42923f7875b73d0b0f9a9001988d5091383c22e",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "lishuedu",
+      "round": 2,
+      "variant": "new",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/matrix/lishuedu-r2-new.json",
+      "sha256": "c6a18908a15902366280441489c403b28212a5877ab2e4d83a610c3b4d6379dd",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "lishuedu",
+      "round": 3,
+      "variant": "new",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/matrix/lishuedu-r3-new.json",
+      "sha256": "b4b30094aeac80f3a756b3fdd0e365c7ff5b743e45a324dcb69b45970b796bb4",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "cipherlink",
+      "round": 1,
+      "variant": "old",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/matrix/cipherlink-r1-old.json",
+      "sha256": "b2fedce99e8dc070e2dd554b7305289e202d75f7bd1894d292d9c0d13dc52877",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "cipherlink",
+      "round": 2,
+      "variant": "old",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/matrix/cipherlink-r2-old.json",
+      "sha256": "deb10032f5f645a8aa8316e01f60e1cf0db8ab9d068635d08544d2fa594b35bd",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "cipherlink",
+      "round": 3,
+      "variant": "old",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/matrix/cipherlink-r3-old.json",
+      "sha256": "f4d278a0f67a2b5ecd10462601f7c9a7c915f0c205049c69fef8e1aebe5e3f5b",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "cipherlink",
+      "round": 1,
+      "variant": "new",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/matrix/cipherlink-r1-new.json",
+      "sha256": "c37c8d6d069760f9bb811064941591c0a857aeba355678a5f516573b3d96a67a",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "cipherlink",
+      "round": 2,
+      "variant": "new",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/matrix/cipherlink-r2-new.json",
+      "sha256": "a152bb2eda585d4725edb68c923aa7c3bdbbee7bc7c1228605828f30ff07804a",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "cipherlink",
+      "round": 3,
+      "variant": "new",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/matrix/cipherlink-r3-new.json",
+      "sha256": "af35f6410b94b205c5509b00fe7ee6015b719c355991224e1063687d049eb0d1",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 1,
+      "variant": "old",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/matrix/exam-parent-v3-r1-old.json",
+      "sha256": "0bb2075fb397a15fa48d09971fed82a59da3c4a0dbeb973723ad21055fc300d9",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 2,
+      "variant": "old",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/matrix/exam-parent-v3-r2-old.json",
+      "sha256": "626973572a2682dee0477300d494b435d99b1de7d5d9feae89df5340e3801399",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 3,
+      "variant": "old",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/matrix/exam-parent-v3-r3-old.json",
+      "sha256": "d518bceb66ce79b719018f17fa148ecc5cd854fbf0a133ab5db0bc0fe31bcefc",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 1,
+      "variant": "new",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/matrix/exam-parent-v3-r1-new.json",
+      "sha256": "903a3423d56e500198f3e0fbf4777ca70fbed1f98b397f251f8f48346796126c",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 2,
+      "variant": "new",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/matrix/exam-parent-v3-r2-new.json",
+      "sha256": "267642fadd3985ac61be80bb9e967a16550152a367cbd20758be8ab240967912",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 3,
+      "variant": "new",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/matrix/exam-parent-v3-r3-new.json",
+      "sha256": "21cf2025013a6253c4a1b3f6c764c8abd84d0bfcc68d5c05fd26ff2ca7bc638a",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    }
+  ],
+  "projects": [
+    {
+      "project": "lishuedu",
+      "old": {
+        "attempts": 150,
+        "recall": 0.7923214285714283,
+        "pRead": 0.7083333333333329,
+        "rReadMust": 0.9,
+        "rTaskBlocking": 0.5721123321123319,
+        "minReadMust": 0.5,
+        "minTaskBlocking": 0.38461538461538464,
+        "estimatedTokensP50": 4308,
+        "estimatedTokensP95": 5720,
+        "rangeEvidence": {
+          "line": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.6342857142857143,
+            "min": 0.14285714285714285
+          },
+          "coordinate": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.6342857142857143,
+            "min": 0.14285714285714285
+          }
+        },
+        "p50": 21.995249999999942,
+        "p95": 217.01487500000076,
+        "max": 295.5208330000023,
+        "mustFailureScenarios": [
+          "exam-score-export-cross-module-holdout",
+          "paper-task-claim-iam-holdout"
+        ],
+        "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/frozen-scenarios/lishuedu.scenarios.jsonl",
+        "splits": {
+          "tuning": {
+            "attempts": 120,
+            "recall": 0.784672619047619,
+            "pRead": 0.6770833333333333,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.604563492063492,
+            "minReadMust": 1,
+            "minTaskBlocking": 0.42857142857142855,
+            "estimatedTokensP50": 3953,
+            "estimatedTokensP95": 5720,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 0.75,
+                "min": 0.3333333333333333
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 0.75,
+                "min": 0.3333333333333333
+              }
+            },
+            "p50": 19.287374999999884,
+            "p95": 178.328042000001,
+            "max": 295.5208330000023,
+            "mustFailureScenarios": []
+          },
+          "holdout": {
+            "attempts": 30,
+            "recall": 0.8229166666666665,
+            "pRead": 0.8333333333333331,
+            "rReadMust": 0.5,
+            "rTaskBlocking": 0.44230769230769246,
+            "minReadMust": 0.5,
+            "minTaskBlocking": 0.38461538461538464,
+            "estimatedTokensP50": 5057,
+            "estimatedTokensP95": 5343,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.17142857142857146,
+                "min": 0.14285714285714285
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.17142857142857146,
+                "min": 0.14285714285714285
+              }
+            },
+            "p50": 37.08274999999412,
+            "p95": 217.01487500000076,
+            "max": 217.39895900000556,
+            "mustFailureScenarios": [
+              "exam-score-export-cross-module-holdout",
+              "paper-task-claim-iam-holdout"
+            ]
+          }
+        }
+      },
+      "new": {
+        "attempts": 150,
+        "recall": 0.7923214285714283,
+        "pRead": 0.7083333333333329,
+        "rReadMust": 0.9,
+        "rTaskBlocking": 0.5721123321123319,
+        "minReadMust": 0.5,
+        "minTaskBlocking": 0.38461538461538464,
+        "estimatedTokensP50": 4308,
+        "estimatedTokensP95": 5720,
+        "rangeEvidence": {
+          "line": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.6342857142857143,
+            "min": 0.14285714285714285
+          },
+          "coordinate": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.6342857142857143,
+            "min": 0.14285714285714285
+          }
+        },
+        "p50": 22.718999999997322,
+        "p95": 227.30504199999996,
+        "max": 337.63850000000093,
+        "mustFailureScenarios": [
+          "exam-score-export-cross-module-holdout",
+          "paper-task-claim-iam-holdout"
+        ],
+        "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/frozen-scenarios/lishuedu.scenarios.jsonl",
+        "splits": {
+          "tuning": {
+            "attempts": 120,
+            "recall": 0.784672619047619,
+            "pRead": 0.6770833333333333,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.604563492063492,
+            "minReadMust": 1,
+            "minTaskBlocking": 0.42857142857142855,
+            "estimatedTokensP50": 3953,
+            "estimatedTokensP95": 5720,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 0.75,
+                "min": 0.3333333333333333
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 0.75,
+                "min": 0.3333333333333333
+              }
+            },
+            "p50": 19.73687500000233,
+            "p95": 173.72820800000045,
+            "max": 288.78512500000215,
+            "mustFailureScenarios": []
+          },
+          "holdout": {
+            "attempts": 30,
+            "recall": 0.8229166666666665,
+            "pRead": 0.8333333333333331,
+            "rReadMust": 0.5,
+            "rTaskBlocking": 0.44230769230769246,
+            "minReadMust": 0.5,
+            "minTaskBlocking": 0.38461538461538464,
+            "estimatedTokensP50": 5057,
+            "estimatedTokensP95": 5343,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.17142857142857146,
+                "min": 0.14285714285714285
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.17142857142857146,
+                "min": 0.14285714285714285
+              }
+            },
+            "p50": 39.7414590000044,
+            "p95": 227.30504199999996,
+            "max": 337.63850000000093,
+            "mustFailureScenarios": [
+              "exam-score-export-cross-module-holdout",
+              "paper-task-claim-iam-holdout"
+            ]
+          }
+        }
+      },
+      "delta": {
+        "recall": 0,
+        "pRead": 0,
+        "rReadMust": 0,
+        "rTaskBlocking": 0,
+        "estimatedTokensP50": 0,
+        "p95Ratio": 1.0474168740737204,
+        "p95ThresholdMs": 271.26859375000095,
+        "holdout": {
+          "recall": 0,
+          "pRead": 0,
+          "rReadMust": 0,
+          "rTaskBlocking": 0
+        }
+      },
+      "gate": {
+        "rReadMust": false,
+        "rTaskBlocking": true,
+        "recall": true,
+        "pRead": true,
+        "estimatedTokens": true,
+        "p95": true,
+        "rangeLineRecall": false,
+        "rangeCoordinateRecall": false,
+        "holdoutRReadMust": false,
+        "holdoutRTaskBlocking": true,
+        "holdoutRecall": true,
+        "holdoutPRead": true
+      },
+      "passed": false
+    },
+    {
+      "project": "cipherlink",
+      "old": {
+        "attempts": 150,
+        "recall": 0.8157783882783886,
+        "pRead": 0.6433333333333329,
+        "rReadMust": 0.9099999999999996,
+        "rTaskBlocking": 0.45374098124098095,
+        "minReadMust": 0.5,
+        "minTaskBlocking": 0.16666666666666666,
+        "estimatedTokensP50": 3606,
+        "estimatedTokensP95": 5198,
+        "rangeEvidence": {
+          "line": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.85,
+            "min": 0
+          },
+          "coordinate": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.85,
+            "min": 0
+          }
+        },
+        "p50": 22.31512500000008,
+        "p95": 94.87395900000047,
+        "max": 205.08045800000036,
+        "mustFailureScenarios": [
+          "client-release-storage-presign-holdout",
+          "backend-operation-log-aspect-async-audit-holdout"
+        ],
+        "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/frozen-scenarios/cipherlink.scenarios.jsonl",
+        "splits": {
+          "tuning": {
+            "attempts": 120,
+            "recall": 0.8322229853479857,
+            "pRead": 0.6375000000000001,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.49141865079365077,
+            "minReadMust": 1,
+            "minTaskBlocking": 0.16666666666666666,
+            "estimatedTokensP50": 3572,
+            "estimatedTokensP95": 5198,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 1,
+                "min": 1
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 1,
+                "min": 1
+              }
+            },
+            "p50": 24.264624999999796,
+            "p95": 97.82695899999999,
+            "max": 205.08045800000036,
+            "mustFailureScenarios": []
+          },
+          "holdout": {
+            "attempts": 30,
+            "recall": 0.75,
+            "pRead": 0.6666666666666665,
+            "rReadMust": 0.5499999999999999,
+            "rTaskBlocking": 0.303030303030303,
+            "minReadMust": 0.5,
+            "minTaskBlocking": 0.2727272727272727,
+            "estimatedTokensP50": 3857,
+            "estimatedTokensP95": 4339,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.25,
+                "min": 0
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.25,
+                "min": 0
+              }
+            },
+            "p50": 12.626499999999396,
+            "p95": 48.74149999999918,
+            "max": 50.150542000000314,
+            "mustFailureScenarios": [
+              "client-release-storage-presign-holdout",
+              "backend-operation-log-aspect-async-audit-holdout"
+            ]
+          }
+        }
+      },
+      "new": {
+        "attempts": 150,
+        "recall": 0.801492673992674,
+        "pRead": 0.6433333333333329,
+        "rReadMust": 0.9099999999999996,
+        "rTaskBlocking": 0.45374098124098095,
+        "minReadMust": 0.5,
+        "minTaskBlocking": 0.16666666666666666,
+        "estimatedTokensP50": 3606,
+        "estimatedTokensP95": 5174,
+        "rangeEvidence": {
+          "line": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.85,
+            "min": 0
+          },
+          "coordinate": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.85,
+            "min": 0
+          }
+        },
+        "p50": 23.955791000000318,
+        "p95": 100.84579099999974,
+        "max": 229.0433750000002,
+        "mustFailureScenarios": [
+          "client-release-storage-presign-holdout",
+          "backend-operation-log-aspect-async-audit-holdout"
+        ],
+        "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/frozen-scenarios/cipherlink.scenarios.jsonl",
+        "splits": {
+          "tuning": {
+            "attempts": 120,
+            "recall": 0.8143658424908424,
+            "pRead": 0.6375000000000001,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.49141865079365077,
+            "minReadMust": 1,
+            "minTaskBlocking": 0.16666666666666666,
+            "estimatedTokensP50": 3572,
+            "estimatedTokensP95": 5174,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 1,
+                "min": 1
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 1,
+                "min": 1
+              }
+            },
+            "p50": 25.27387499999986,
+            "p95": 102.65516699999989,
+            "max": 229.0433750000002,
+            "mustFailureScenarios": []
+          },
+          "holdout": {
+            "attempts": 30,
+            "recall": 0.75,
+            "pRead": 0.6666666666666665,
+            "rReadMust": 0.5499999999999999,
+            "rTaskBlocking": 0.303030303030303,
+            "minReadMust": 0.5,
+            "minTaskBlocking": 0.2727272727272727,
+            "estimatedTokensP50": 3857,
+            "estimatedTokensP95": 4339,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.25,
+                "min": 0
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.25,
+                "min": 0
+              }
+            },
+            "p50": 12.9053329999997,
+            "p95": 54.28166599999986,
+            "max": 54.626624999999876,
+            "mustFailureScenarios": [
+              "client-release-storage-presign-holdout",
+              "backend-operation-log-aspect-async-audit-holdout"
+            ]
+          }
+        }
+      },
+      "delta": {
+        "recall": -0.014285714285714568,
+        "pRead": 0,
+        "rReadMust": 0,
+        "rTaskBlocking": 0,
+        "estimatedTokensP50": 0,
+        "p95Ratio": 1.0629449014560386,
+        "p95ThresholdMs": 144.87395900000047,
+        "holdout": {
+          "recall": 0,
+          "pRead": 0,
+          "rReadMust": 0,
+          "rTaskBlocking": 0
+        }
+      },
+      "gate": {
+        "rReadMust": false,
+        "rTaskBlocking": true,
+        "recall": false,
+        "pRead": true,
+        "estimatedTokens": true,
+        "p95": true,
+        "rangeLineRecall": false,
+        "rangeCoordinateRecall": false,
+        "holdoutRReadMust": false,
+        "holdoutRTaskBlocking": true,
+        "holdoutRecall": true,
+        "holdoutPRead": true
+      },
+      "passed": false
+    },
+    {
+      "project": "exam-parent-v3",
+      "old": {
+        "attempts": 150,
+        "recall": 0.7095066045066044,
+        "pRead": 0.5833333333333331,
+        "rReadMust": 0.8800000000000008,
+        "rTaskBlocking": 0.4502380952380954,
+        "minReadMust": 0.4,
+        "minTaskBlocking": 0.14285714285714285,
+        "estimatedTokensP50": 3395,
+        "estimatedTokensP95": 6085,
+        "rangeEvidence": {
+          "line": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.5525000000000001,
+            "min": 0
+          },
+          "coordinate": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.5525000000000001,
+            "min": 0
+          }
+        },
+        "p50": 20.05091700000048,
+        "p95": 128.60562500000015,
+        "max": 174.9484169999996,
+        "mustFailureScenarios": [
+          "exam-room-print-download-types-persistent-bundle",
+          "candidate-pay-order-cross-module-admission"
+        ],
+        "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+        "splits": {
+          "tuning": {
+            "attempts": 120,
+            "recall": 0.7789772727272726,
+            "pRead": 0.6041666666666665,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.5002976190476192,
+            "minReadMust": 1,
+            "minTaskBlocking": 0.14285714285714285,
+            "estimatedTokensP50": 3311,
+            "estimatedTokensP95": 6085,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 0.625,
+                "min": 0
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 0.625,
+                "min": 0
+              }
+            },
+            "p50": 15.404708000000028,
+            "p95": 96.40245900000082,
+            "max": 174.9484169999996,
+            "mustFailureScenarios": []
+          },
+          "holdout": {
+            "attempts": 30,
+            "recall": 0.4316239316239317,
+            "pRead": 0.5,
+            "rReadMust": 0.4000000000000002,
+            "rTaskBlocking": 0.25,
+            "minReadMust": 0.4,
+            "minTaskBlocking": 0.25,
+            "estimatedTokensP50": 3578,
+            "estimatedTokensP95": 3823,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.26250000000000007,
+                "min": 0.125
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.26250000000000007,
+                "min": 0.125
+              }
+            },
+            "p50": 30.71429100000023,
+            "p95": 135.36883300000045,
+            "max": 140.75974999999926,
+            "mustFailureScenarios": [
+              "exam-room-print-download-types-persistent-bundle",
+              "candidate-pay-order-cross-module-admission"
+            ]
+          }
+        }
+      },
+      "new": {
+        "attempts": 150,
+        "recall": 0.7095066045066044,
+        "pRead": 0.5833333333333331,
+        "rReadMust": 0.8800000000000008,
+        "rTaskBlocking": 0.4502380952380954,
+        "minReadMust": 0.4,
+        "minTaskBlocking": 0.14285714285714285,
+        "estimatedTokensP50": 3395,
+        "estimatedTokensP95": 6085,
+        "rangeEvidence": {
+          "line": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.5525000000000001,
+            "min": 0
+          },
+          "coordinate": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.5525000000000001,
+            "min": 0
+          }
+        },
+        "p50": 21.57929200000035,
+        "p95": 144.8332500000015,
+        "max": 313.18154200000026,
+        "mustFailureScenarios": [
+          "exam-room-print-download-types-persistent-bundle",
+          "candidate-pay-order-cross-module-admission"
+        ],
+        "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+        "splits": {
+          "tuning": {
+            "attempts": 120,
+            "recall": 0.7789772727272726,
+            "pRead": 0.6041666666666665,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.5002976190476192,
+            "minReadMust": 1,
+            "minTaskBlocking": 0.14285714285714285,
+            "estimatedTokensP50": 3311,
+            "estimatedTokensP95": 6085,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 0.625,
+                "min": 0
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 0.625,
+                "min": 0
+              }
+            },
+            "p50": 18.573624999999083,
+            "p95": 101.12445900000057,
+            "max": 313.18154200000026,
+            "mustFailureScenarios": []
+          },
+          "holdout": {
+            "attempts": 30,
+            "recall": 0.4316239316239317,
+            "pRead": 0.5,
+            "rReadMust": 0.4000000000000002,
+            "rTaskBlocking": 0.25,
+            "minReadMust": 0.4,
+            "minTaskBlocking": 0.25,
+            "estimatedTokensP50": 3578,
+            "estimatedTokensP95": 3823,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.26250000000000007,
+                "min": 0.125
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.26250000000000007,
+                "min": 0.125
+              }
+            },
+            "p50": 31.594750000000204,
+            "p95": 149.5951670000013,
+            "max": 152.0817079999997,
+            "mustFailureScenarios": [
+              "exam-room-print-download-types-persistent-bundle",
+              "candidate-pay-order-cross-module-admission"
+            ]
+          }
+        }
+      },
+      "delta": {
+        "recall": 0,
+        "pRead": 0,
+        "rReadMust": 0,
+        "rTaskBlocking": 0,
+        "estimatedTokensP50": 0,
+        "p95Ratio": 1.1261813003902539,
+        "p95ThresholdMs": 178.60562500000015,
+        "holdout": {
+          "recall": 0,
+          "pRead": 0,
+          "rReadMust": 0,
+          "rTaskBlocking": 0
+        }
+      },
+      "gate": {
+        "rReadMust": false,
+        "rTaskBlocking": true,
+        "recall": true,
+        "pRead": true,
+        "estimatedTokens": true,
+        "p95": true,
+        "rangeLineRecall": false,
+        "rangeCoordinateRecall": false,
+        "holdoutRReadMust": false,
+        "holdoutRTaskBlocking": true,
+        "holdoutRecall": true,
+        "holdoutPRead": true
+      },
+      "passed": false
+    }
+  ],
+  "warnings": [],
+  "passed": false,
+  "summaryFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-spring-quota-matrix-20260816-run2/matrix-summary.json"
+}

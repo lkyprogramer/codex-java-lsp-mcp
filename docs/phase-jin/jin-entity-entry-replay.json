@@ -1,0 +1,644 @@
+{
+  "schemaVersion": "jin-entity-entry-replay/v1",
+  "dated": "2026-08-20",
+  "query": "scenario.name + anchor.taskKeywords",
+  "limit": 3,
+  "gate": 0.8,
+  "scenarios": 30,
+  "hits": 30,
+  "hitRate": 1,
+  "passed": true,
+  "note": "Spec cited 159 frozen scenes; checked-in golden jsonl is 10 per repo (30). Query text is the scenario title plus taskKeywords, not scene id.",
+  "projects": [
+    {
+      "project": "lishuedu",
+      "scenarioFile": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-GJFLhP/candidate/golden/lishuedu.scenarios.jsonl",
+      "scenarioSha256": "93a00d2e3589ff1dabd8e94431e3defa98eec4bc1d2e77273f29f7f841a918b7",
+      "scenarios": 10,
+      "hits": 10,
+      "hitRate": 1,
+      "cases": [
+        {
+          "id": "storage-signed-url",
+          "task": "StorageGateway getSignedUrl storage signed url report",
+          "anchorFile": "modules/integration/src/main/java/com/lishu/edu/integration/domain/port/StorageGateway.java",
+          "hit": true,
+          "layer": "SIMPLE_NAME",
+          "top": [
+            {
+              "relativePath": "modules/integration/src/main/java/com/lishu/edu/integration/domain/port/StorageGateway.java",
+              "simpleName": "StorageGateway",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "school-template-parser",
+          "task": "SchoolTemplateImportParser parse school template import parser",
+          "anchorFile": "modules/school/src/main/java/com/lishu/edu/school/application/port/SchoolTemplateImportParser.java",
+          "hit": true,
+          "layer": "SIMPLE_NAME",
+          "top": [
+            {
+              "relativePath": "modules/school/src/main/java/com/lishu/edu/school/application/port/SchoolTemplateImportParser.java",
+              "simpleName": "SchoolTemplateImportParser",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            },
+            {
+              "relativePath": "modules/school/src/main/java/com/lishu/edu/school/domain/school/School.java",
+              "simpleName": "School",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "report-reusable-zip",
+          "task": "ReportBatchExportTaskRepository findReusableReadyZip report batch export zip task",
+          "anchorFile": "modules/report/src/main/java/com/lishu/edu/report/domain/port/ReportBatchExportTaskRepository.java",
+          "hit": true,
+          "layer": "SIMPLE_NAME",
+          "top": [
+            {
+              "relativePath": "modules/report/src/main/java/com/lishu/edu/report/domain/port/ReportBatchExportTaskRepository.java",
+              "simpleName": "ReportBatchExportTaskRepository",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "school-confirm-controller",
+          "task": "SchoolTemplateImportController confirm school template import confirm",
+          "anchorFile": "modules/school/src/main/java/com/lishu/edu/school/interfaces/web/SchoolTemplateImportController.java",
+          "hit": true,
+          "layer": "SIMPLE_NAME",
+          "top": [
+            {
+              "relativePath": "modules/school/src/main/java/com/lishu/edu/school/interfaces/web/SchoolTemplateImportController.java",
+              "simpleName": "SchoolTemplateImportController",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            },
+            {
+              "relativePath": "modules/school/src/main/java/com/lishu/edu/school/domain/school/School.java",
+              "simpleName": "School",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "benefit-product-code-dto",
+          "task": "ParentStudentBenefitItemResponse.productCode benefit product code parent",
+          "anchorFile": "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/dto/ParentStudentBenefitItemResponse.java",
+          "hit": true,
+          "layer": "SIMPLE_NAME",
+          "top": [
+            {
+              "relativePath": "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/dto/ParentStudentBenefitItemResponse.java",
+              "simpleName": "ParentStudentBenefitItemResponse",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            },
+            {
+              "relativePath": "modules/product/src/main/java/com/lishu/edu/product/domain/product/Product.java",
+              "simpleName": "Product",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "school-mapstruct-uses",
+          "task": "SchoolTemplateImportController confirm MapStruct uses school template import confirm",
+          "anchorFile": "modules/school/src/main/java/com/lishu/edu/school/interfaces/web/SchoolTemplateImportController.java",
+          "hit": true,
+          "layer": "SIMPLE_NAME",
+          "top": [
+            {
+              "relativePath": "modules/school/src/main/java/com/lishu/edu/school/interfaces/web/SchoolTemplateImportController.java",
+              "simpleName": "SchoolTemplateImportController",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            },
+            {
+              "relativePath": "modules/school/src/main/java/com/lishu/edu/school/domain/school/School.java",
+              "simpleName": "School",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "audit-order-repository-mapper-rule-type",
+          "task": "AuditOrderRepositoryImpl save new assignee rule type in MyBatis mapper audit order mapper assignee rule type mybatis sql",
+          "anchorFile": "modules/audit/src/main/java/com/lishu/edu/audit/infrastructure/persistence/repository/AuditOrderRepositoryImpl.java",
+          "hit": true,
+          "layer": "SIMPLE_NAME",
+          "top": [
+            {
+              "relativePath": "modules/audit/src/main/java/com/lishu/edu/audit/infrastructure/persistence/repository/AuditOrderRepositoryImpl.java",
+              "simpleName": "AuditOrderRepositoryImpl",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            },
+            {
+              "relativePath": "modules/order/src/main/java/com/lishu/edu/order/domain/order/Order.java",
+              "simpleName": "Order",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "audit-assignee-mapper-precision",
+          "task": "AuditAssigneeMapper toDomain new overload precision audit assignee mapstruct mapper todomain overload",
+          "anchorFile": "modules/audit/src/main/java/com/lishu/edu/audit/application/assembler/AuditAssigneeMapper.java",
+          "hit": true,
+          "layer": "SIMPLE_NAME",
+          "top": [
+            {
+              "relativePath": "modules/audit/src/main/java/com/lishu/edu/audit/application/assembler/AuditAssigneeMapper.java",
+              "simpleName": "AuditAssigneeMapper",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "exam-score-export-cross-module-holdout",
+          "task": "ExamScoreExportAppService export cross-module score workbook exam score export workbook student total excel",
+          "anchorFile": "modules/exam/src/main/java/com/lishu/edu/exam/application/service/ExamScoreExportAppService.java",
+          "hit": true,
+          "layer": "SIMPLE_NAME",
+          "top": [
+            {
+              "relativePath": "modules/exam/src/main/java/com/lishu/edu/exam/application/service/ExamScoreExportAppService.java",
+              "simpleName": "ExamScoreExportAppService",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            },
+            {
+              "relativePath": "modules/school/src/main/java/com/lishu/edu/school/domain/student/Student.java",
+              "simpleName": "Student",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            },
+            {
+              "relativePath": "modules/exam/src/main/java/com/lishu/edu/exam/interfaces/dto/ExamFlexibleImportResponses.java",
+              "simpleName": "Score",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "paper-task-claim-iam-holdout",
+          "task": "PaperTaskCommandAppService claimTask IAM identity and atomic claim paper task claim operator identity concurrency repository",
+          "anchorFile": "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperTaskCommandAppService.java",
+          "hit": true,
+          "layer": "SIMPLE_NAME",
+          "top": [
+            {
+              "relativePath": "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperTaskCommandAppService.java",
+              "simpleName": "PaperTaskCommandAppService",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            },
+            {
+              "relativePath": "modules/common/src/main/java/com/lishu/edu/common/domain/context/Operator.java",
+              "simpleName": "Operator",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            },
+            {
+              "relativePath": "modules/iam/src/main/java/com/lishu/edu/iam/domain/identity/Identity.java",
+              "simpleName": "Identity",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "project": "cipherlink",
+      "scenarioFile": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-GJFLhP/candidate/golden/cipherlink.scenarios.jsonl",
+      "scenarioSha256": "82bffc7e64087b59d18d4be56a80a60ebc8966b77529271f152a824a0bbaafb0",
+      "scenarios": 10,
+      "hits": 10,
+      "hitRate": 1,
+      "cases": [
+        {
+          "id": "client-update-check",
+          "task": "ClientUpdateController check client update check",
+          "anchorFile": "modules/client/src/main/java/com/hhtele/cipherlink/client/interfaces/web/ClientUpdateController.java",
+          "hit": true,
+          "layer": "SIMPLE_NAME",
+          "top": [
+            {
+              "relativePath": "modules/client/src/main/java/com/hhtele/cipherlink/client/interfaces/web/ClientUpdateController.java",
+              "simpleName": "ClientUpdateController",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            },
+            {
+              "relativePath": "apps/cipherlink-backend/src/main/java/com/hhtele/cipherlink/backend/config/BackendOrganizationNotificationProperties.java",
+              "simpleName": "Client",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "transfer-upload-init",
+          "task": "TransferUploadController init transfer upload init idempotency",
+          "anchorFile": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/interfaces/web/TransferUploadController.java",
+          "hit": true,
+          "layer": "SIMPLE_NAME",
+          "top": [
+            {
+              "relativePath": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/interfaces/web/TransferUploadController.java",
+              "simpleName": "TransferUploadController",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "transfer-upload-session-repository",
+          "task": "TransferRepository findUploadInitByOwnerAndIdempotencyKey transfer upload session idempotency repository",
+          "anchorFile": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/application/TransferRepository.java",
+          "hit": true,
+          "layer": "SIMPLE_NAME",
+          "top": [
+            {
+              "relativePath": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/application/TransferRepository.java",
+              "simpleName": "TransferRepository",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "aliyun-sms-gateway-send",
+          "task": "AliyunSmsGateway send aliyun sms gateway send provider",
+          "anchorFile": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/infrastructure/sms/aliyun/AliyunSmsGateway.java",
+          "hit": true,
+          "layer": "SIMPLE_NAME",
+          "top": [
+            {
+              "relativePath": "modules/integration/src/main/java/com/hhtele/cipherlink/integration/infrastructure/sms/aliyun/AliyunSmsGateway.java",
+              "simpleName": "AliyunSmsGateway",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "operation-log-response-dto",
+          "task": "OperationLogResponse from operation log response record",
+          "anchorFile": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/interfaces/dto/OperationLogResponse.java",
+          "hit": true,
+          "layer": "SIMPLE_NAME",
+          "top": [
+            {
+              "relativePath": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/interfaces/dto/OperationLogResponse.java",
+              "simpleName": "OperationLogResponse",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "organization-create-member-cross-module",
+          "task": "DefaultOrganizationAppService createMember organization member create invite account",
+          "anchorFile": "modules/organization/src/main/java/com/hhtele/cipherlink/organization/application/DefaultOrganizationAppService.java",
+          "hit": true,
+          "layer": "SIMPLE_NAME",
+          "top": [
+            {
+              "relativePath": "modules/organization/src/main/java/com/hhtele/cipherlink/organization/application/DefaultOrganizationAppService.java",
+              "simpleName": "DefaultOrganizationAppService",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            },
+            {
+              "relativePath": "modules/account/src/main/java/com/hhtele/cipherlink/account/application/AccountIdentityView.java",
+              "simpleName": "Organization",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            },
+            {
+              "relativePath": "modules/auth/src/main/java/com/hhtele/cipherlink/auth/application/AuthDetailResult.java",
+              "simpleName": "Organization",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "auth-sms-login-lockout",
+          "task": "DefaultAuthAppService smsLogin sms login lockout device auth",
+          "anchorFile": "modules/auth/src/main/java/com/hhtele/cipherlink/auth/application/DefaultAuthAppService.java",
+          "hit": true,
+          "layer": "SIMPLE_NAME",
+          "top": [
+            {
+              "relativePath": "modules/auth/src/main/java/com/hhtele/cipherlink/auth/application/DefaultAuthAppService.java",
+              "simpleName": "DefaultAuthAppService",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "account-admin-create-account-guard",
+          "task": "DefaultAccountAdminAppService createAccount account admin create guard session role",
+          "anchorFile": "modules/account/src/main/java/com/hhtele/cipherlink/account/application/DefaultAccountAdminAppService.java",
+          "hit": true,
+          "layer": "SIMPLE_NAME",
+          "top": [
+            {
+              "relativePath": "modules/account/src/main/java/com/hhtele/cipherlink/account/application/DefaultAccountAdminAppService.java",
+              "simpleName": "DefaultAccountAdminAppService",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            },
+            {
+              "relativePath": "modules/account/src/main/java/com/hhtele/cipherlink/account/application/AccountIdentityView.java",
+              "simpleName": "Role",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            },
+            {
+              "relativePath": "modules/auth/src/main/java/com/hhtele/cipherlink/auth/application/AuthDetailResult.java",
+              "simpleName": "Role",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "client-release-storage-presign-holdout",
+          "task": "DefaultClientReleasePackageStorageGateway storeAndPresign client release upload storage presign rollback",
+          "anchorFile": "modules/storage/src/main/java/com/hhtele/cipherlink/storage/infrastructure/DefaultClientReleasePackageStorageGateway.java",
+          "hit": true,
+          "layer": "SIMPLE_NAME",
+          "top": [
+            {
+              "relativePath": "modules/storage/src/main/java/com/hhtele/cipherlink/storage/infrastructure/DefaultClientReleasePackageStorageGateway.java",
+              "simpleName": "DefaultClientReleasePackageStorageGateway",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            },
+            {
+              "relativePath": "apps/cipherlink-backend/src/main/java/com/hhtele/cipherlink/backend/config/BackendOrganizationNotificationProperties.java",
+              "simpleName": "Client",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "backend-operation-log-aspect-async-audit-holdout",
+          "task": "BackendOperationLogAspect recordOperationLog operation log aspect audit async redaction request",
+          "anchorFile": "apps/cipherlink-backend/src/main/java/com/hhtele/cipherlink/backend/config/BackendOperationLogAspect.java",
+          "hit": true,
+          "layer": "SIMPLE_NAME",
+          "top": [
+            {
+              "relativePath": "apps/cipherlink-backend/src/main/java/com/hhtele/cipherlink/backend/config/BackendOperationLogAspect.java",
+              "simpleName": "BackendOperationLogAspect",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "project": "exam-parent-v3",
+      "scenarioFile": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-GJFLhP/candidate/golden/exam-parent-v3.scenarios.jsonl",
+      "scenarioSha256": "78f7932ee67adb8eab867fd5d05c47c360edcaafbeb9ad6e67dd87cf49a68ccc",
+      "scenarios": 10,
+      "hits": 10,
+      "hitRate": 1,
+      "cases": [
+        {
+          "id": "rule-engine-execute",
+          "task": "RuleEngine execute rule execute check",
+          "anchorFile": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/execute/RuleEngine.java",
+          "hit": true,
+          "layer": "SIMPLE_NAME",
+          "top": [
+            {
+              "relativePath": "exam-checkRule/src/main/java/com/hhtele/exam/check/rule/execute/RuleEngine.java",
+              "simpleName": "RuleEngine",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "candidate-position-select",
+          "task": "ExaminationController selectApplySite position apply site select candidate",
+          "anchorFile": "exam-candidate/src/main/java/com/hhtele/exam/candidate/controller/examination/ExaminationController.java",
+          "hit": true,
+          "layer": "SIMPLE_NAME",
+          "top": [
+            {
+              "relativePath": "exam-candidate/src/main/java/com/hhtele/exam/candidate/controller/examination/ExaminationController.java",
+              "simpleName": "ExaminationController",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            },
+            {
+              "relativePath": "exam-checker/src/main/java/com/hhtele/exam/checker/controller/examination/ExaminationController.java",
+              "simpleName": "ExaminationController",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            },
+            {
+              "relativePath": "exam-management/src/main/java/com/hhtele/exam/management/controller/examination/ExaminationController.java",
+              "simpleName": "ExaminationController",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "apply-info-save-basic-service",
+          "task": "ApplyInfoServiceImpl saveApplyBasicInfo apply basic info save position",
+          "anchorFile": "exam-service/exam-service-candidate/src/main/java/com/hhtele/exam/service/candidate/impl/ApplyInfoServiceImpl.java",
+          "hit": true,
+          "layer": "SIMPLE_NAME",
+          "top": [
+            {
+              "relativePath": "exam-service/exam-service-candidate/src/main/java/com/hhtele/exam/service/candidate/impl/ApplyInfoServiceImpl.java",
+              "simpleName": "ApplyInfoServiceImpl",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            },
+            {
+              "relativePath": "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/Position.java",
+              "simpleName": "Position",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "position-repository-exists",
+          "task": "PositionRepository existsByExamId position exists exam progress prepare",
+          "anchorFile": "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/PositionRepository.java",
+          "hit": true,
+          "layer": "SIMPLE_NAME",
+          "top": [
+            {
+              "relativePath": "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/PositionRepository.java",
+              "simpleName": "PositionRepository",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            },
+            {
+              "relativePath": "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/Position.java",
+              "simpleName": "Position",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "ceb-order-create-dto",
+          "task": "CebOrderRequest/CebOrderCreateResponse ceb order create pay response",
+          "anchorFile": "exam-common/src/main/java/com/hhtele/exam/dto/order/ceb/CebOrderRequest.java",
+          "hit": true,
+          "layer": "SIMPLE_NAME",
+          "top": [
+            {
+              "relativePath": "exam-common/src/main/java/com/hhtele/exam/dto/order/ceb/CebOrderCreateResponse.java",
+              "simpleName": "CebOrderCreateResponse",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            },
+            {
+              "relativePath": "exam-common/src/main/java/com/hhtele/exam/dto/order/ceb/CebOrderRequest.java",
+              "simpleName": "CebOrderRequest",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            },
+            {
+              "relativePath": "exam-data/src/main/java/com/hhtele/exam/data/entity/order/Order.java",
+              "simpleName": "Order",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "apply-info-update-cross-exam-guard",
+          "task": "ExamApplyServiceImpl updateApplyInfo cross-exam guard apply position update exam cross reassign",
+          "anchorFile": "exam-service/exam-service-examination/src/main/java/com/hhtele/exam/service/examination/service/impl/ExamApplyServiceImpl.java",
+          "hit": true,
+          "layer": "SIMPLE_NAME",
+          "top": [
+            {
+              "relativePath": "exam-service/exam-service-examination/src/main/java/com/hhtele/exam/service/examination/service/impl/ExamApplyServiceImpl.java",
+              "simpleName": "ExamApplyServiceImpl",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            },
+            {
+              "relativePath": "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/Position.java",
+              "simpleName": "Position",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "check-people-delete-site-guard",
+          "task": "ExaminationCheckController delete site guard check people delete site permission authorization",
+          "anchorFile": "exam-management/src/main/java/com/hhtele/exam/management/controller/examination/ExaminationCheckController.java",
+          "hit": true,
+          "layer": "SIMPLE_NAME",
+          "top": [
+            {
+              "relativePath": "exam-management/src/main/java/com/hhtele/exam/management/controller/examination/ExaminationCheckController.java",
+              "simpleName": "ExaminationCheckController",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "current-user-service-implementer-edge",
+          "task": "ExaminationCheckController currentUserService.currentUser() implementer edge currentUser classcast implementer bean componentscan",
+          "anchorFile": "exam-management/src/main/java/com/hhtele/exam/management/controller/examination/ExaminationCheckController.java",
+          "hit": true,
+          "layer": "SIMPLE_NAME",
+          "top": [
+            {
+              "relativePath": "exam-management/src/main/java/com/hhtele/exam/management/controller/examination/ExaminationCheckController.java",
+              "simpleName": "ExaminationCheckController",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            },
+            {
+              "relativePath": "exam-data/src/main/java/com/hhtele/exam/data/service/CurrentUserService.java",
+              "simpleName": "CurrentUserService",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "exam-room-print-download-types-persistent-bundle",
+          "task": "ExamRoomPrintController downloadByTypes persistent bundle admission exam-room print download bundle queue persistent",
+          "anchorFile": "exam-management/src/main/java/com/hhtele/exam/management/controller/examination/ExamRoomPrintController.java",
+          "hit": true,
+          "layer": "SIMPLE_NAME",
+          "top": [
+            {
+              "relativePath": "exam-management/src/main/java/com/hhtele/exam/management/controller/examination/ExamRoomPrintController.java",
+              "simpleName": "ExamRoomPrintController",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            }
+          ]
+        },
+        {
+          "id": "candidate-pay-order-cross-module-admission",
+          "task": "OrderController createPayOrder cross-module payment admission apply payment order idempotency pay-account provider",
+          "anchorFile": "exam-candidate/src/main/java/com/hhtele/exam/candidate/controller/order/OrderController.java",
+          "hit": true,
+          "layer": "SIMPLE_NAME",
+          "top": [
+            {
+              "relativePath": "exam-candidate/src/main/java/com/hhtele/exam/candidate/controller/order/OrderController.java",
+              "simpleName": "OrderController",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            },
+            {
+              "relativePath": "exam-management/src/main/java/com/hhtele/exam/management/controller/order/OrderController.java",
+              "simpleName": "OrderController",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            },
+            {
+              "relativePath": "exam-data/src/main/java/com/hhtele/exam/data/entity/order/Order.java",
+              "simpleName": "Order",
+              "layer": "SIMPLE_NAME",
+              "score": 1
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

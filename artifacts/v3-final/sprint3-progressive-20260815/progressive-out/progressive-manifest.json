@@ -1,0 +1,504 @@
+{
+  "schemaVersion": 1,
+  "kind": "v32-progressive-index-three-repo",
+  "verifierVersion": 1,
+  "createdAt": "2026-08-15T07:48:10.520Z",
+  "platform": {
+    "node": "v22.16.0",
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "runtime": {
+    "commit": "d7f23d5b9086922c8213b9f1735e45cca365b947",
+    "commitTree": "d3913c4432b10de9c112f890bddfd9f29269f76e",
+    "executableTree": "49b61b57dd2bb0f935874af9d202c7d44703132e",
+    "statusSha256": "6734b7a9b8a31aa530b8e9be179196ffc2c6c1d593b8aa2293d88ef37400debe",
+    "changedPaths": [
+      "README.md",
+      "golden/progressive-index-v1.json",
+      "install-runtime.sh",
+      "package.json",
+      "scripts/run-isolated-validation.mjs",
+      "scripts/run-progressive-index-three-repo.mjs",
+      "scripts/run-progressive-index-three-repo.test.mjs",
+      "scripts/run-progressive-index.mjs",
+      "scripts/run-progressive-index.test.mjs",
+      "scripts/run-storm-gate.mjs",
+      "scripts/verify-progressive-index.mjs",
+      "scripts/verify-progressive-index.test.mjs",
+      "src/agent-router/anchor.test.ts",
+      "src/agent-router/anchor.ts",
+      "src/agent-router/index.ts",
+      "src/benchmark-lsp-performance.ts",
+      "src/benchmark/java-index-idle.test.ts",
+      "src/benchmark/java-index-idle.ts",
+      "src/benchmark/progressive-index.test.ts",
+      "src/benchmark/progressive-index.ts",
+      "src/document-symbol-limiter.test.ts",
+      "src/document-symbol-limiter.ts",
+      "src/java-index/index-types.ts",
+      "src/java-index/java-index-client.test.ts",
+      "src/java-index/java-index-client.ts",
+      "src/java-index/java-index-worker.test.ts",
+      "src/java-index/java-index-worker.ts",
+      "src/java-index/manifest.test.ts",
+      "src/java-index/manifest.ts",
+      "src/java-index/router-facts.test.ts",
+      "src/java-index/router-facts.ts",
+      "src/java-index/router-integration.test.ts",
+      "src/java-index/router-java-index.test.ts",
+      "src/java-index/router-java-index.ts",
+      "src/java-index/worker-protocol.test.ts",
+      "src/java-index/worker-protocol.ts",
+      "src/java-index/worktree-snapshot-seeder.test.ts",
+      "src/jdtls-hierarchy.test.ts",
+      "src/jdtls-session.test.ts",
+      "src/jdtls-transport.test.ts",
+      "src/path-utils.ts",
+      "src/repo-change-coordinator.test.ts",
+      "src/repo-runtime-manager.test.ts",
+      "src/semantic-gateway.test.ts",
+      "src/test-support/deferred.test.ts",
+      "src/test-support/fake-jdtls.test.ts",
+      "src/test-support/git-worktree.test.ts",
+      "src/util/jsonl.ts",
+      "src/worktree-identity.test.ts",
+      "src/worktree-storm.test.ts"
+    ],
+    "patch": {
+      "file": "inputs/runtime.patch",
+      "bytes": 258331,
+      "sha256": "41139edb21a1052a87986777e30635ed3e7026fcf6a963b1e9042c1fc6881d6c"
+    },
+    "buildStamp": {
+      "gitSha": "d7f23d5b9086",
+      "generatedAt": "2026-08-15T07:41:54.787Z",
+      "defaults": {
+        "idleTtlMs": 2700000,
+        "importConcurrency": 2,
+        "jdtlsXmx": "2g",
+        "maxActiveRepos": 3
+      },
+      "defaultsFingerprint": "e5835394a86f"
+    },
+    "dependencies": {
+      "schemaVersion": 1,
+      "algorithm": "sha256-path-type-size-content-v1",
+      "fileCount": 4086,
+      "directoryCount": 660,
+      "symlinkCount": 7,
+      "totalBytes": 58951103,
+      "sha256": "0362908244299e2d61f87cb5d1037d9609abd11f8d0afae2cc89c3569ce13bc6"
+    }
+  },
+  "runPlan": {
+    "file": "progressive-run-plan.json",
+    "bytes": 6005,
+    "sha256": "b39dd8056b113056cb6bd77fd42765ab2b793b8f4b32e2d8ba873cfccd2bfe41"
+  },
+  "scenarioLock": {
+    "file": "inputs/progressive-index-v1.json",
+    "bytes": 3440,
+    "sha256": "ca52f31c9f68012f20354870dd3979dc667f52011100af8d82455a41cd4ebace",
+    "projectIds": [
+      "lishuedu",
+      "cipherlink",
+      "exam-parent-v3"
+    ]
+  },
+  "sourceFiles": [
+    {
+      "file": "inputs/runtime-sources/src/benchmark/progressive-index.ts",
+      "bytes": 17460,
+      "sha256": "4304afd31492dcc72fee3aff6ee27bd07129c3a7bf42f7226d43bc1faa57570e"
+    },
+    {
+      "file": "inputs/runtime-sources/src/benchmark/java-index-idle.ts",
+      "bytes": 2045,
+      "sha256": "383ec7e9533b086221931316aa428ce6c5aaac1ba47c2d12d1d9810422644338"
+    },
+    {
+      "file": "inputs/runtime-sources/scripts/run-progressive-index.mjs",
+      "bytes": 9335,
+      "sha256": "3ba6311d4c0ebd1794e6fcf3789f8728c39421631c53357549c6ffa4fb597ba1"
+    },
+    {
+      "file": "inputs/runtime-sources/scripts/run-progressive-index-three-repo.mjs",
+      "bytes": 18969,
+      "sha256": "80664ca26abe0bb5851d65634d52be6b86697e8a59b4f3cddee8c69b22f6d88b"
+    },
+    {
+      "file": "inputs/runtime-sources/scripts/verify-progressive-index.mjs",
+      "bytes": 19714,
+      "sha256": "5e79a78fe8f8d82758832bcd265f84992e28b7f4402395bc49974bd8bc0ed5dd"
+    },
+    {
+      "file": "inputs/runtime-sources/golden/progressive-index-v1.json",
+      "bytes": 3440,
+      "sha256": "ca52f31c9f68012f20354870dd3979dc667f52011100af8d82455a41cd4ebace"
+    }
+  ],
+  "repositories": {
+    "lishuedu": {
+      "sourceRoot": "/tmp/codex-java-v3-golden-20260809/lishuedu",
+      "head": "db63b1a7e393edd90449eb013d7d1c4d65c366f2",
+      "tree": "22f0ce444e4cac484de85c8a0bf02240ad70d712",
+      "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "cipherlink": {
+      "sourceRoot": "/tmp/codex-java-v3-golden-20260809/cipherlink",
+      "head": "fa433982e92e52dd610650d1e79f2d041179b1d3",
+      "tree": "21a1075c7b211932a4cdb2abf2742521b1eba31f",
+      "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "exam-parent-v3": {
+      "sourceRoot": "/tmp/codex-java-v3-golden-20260809/exam-parent-v3",
+      "head": "f90a0b475f7be2ed003703feecec8195bc7eb976",
+      "tree": "dcdb2024879686451859c64260c7e1f3a4721fa7",
+      "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "protocol": {
+    "runs": 5,
+    "generation": 1,
+    "pollMs": 50,
+    "timeoutMs": 180000,
+    "cache": "EMPTY_PRIVATE_PER_ATTEMPT",
+    "percentile": "nearest-rank-ceil",
+    "jdtlsDisabled": true,
+    "runtimeState": "PRIVATE_PER_ATTEMPT",
+    "scope": "QUIET_PROGRESSIVE_ONLY_STORM_GATE_SEPARATE"
+  },
+  "artifacts": [
+    {
+      "project": "lishuedu",
+      "run": 1,
+      "exitCode": 0,
+      "cacheIdentity": "af8e29ee96d5b72a160cb9cc64d1ca711646c91d8e7f1a5144ad2941718a120f",
+      "runtimeStateIdentity": "2079fef62472cecf39a17391af6ce9e0936539b82fefb62333edd58536c161a0",
+      "raw": {
+        "file": "raw/lishuedu-r1.json",
+        "bytes": 2583320,
+        "sha256": "559f9f41e4cd14f4be49054b62a671adc80a88fdc07767f3b9b20f5102e51048"
+      },
+      "stdout": {
+        "file": "logs/lishuedu-r1.stdout",
+        "bytes": 17356,
+        "sha256": "1e75a208851ac7af2df0c8b811a68bbbaf66c3dcefe3bf0b7746b48cbf467cf6"
+      },
+      "stderr": {
+        "file": "logs/lishuedu-r1.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "project": "lishuedu",
+      "run": 2,
+      "exitCode": 0,
+      "cacheIdentity": "7347147d08675bdddbaa92652ecb8831d15c87ec2925500cd03e69d19770f67b",
+      "runtimeStateIdentity": "189b2994025a7861b7adb9e5721776fe9ec2827e22f69b19520296675067cf6b",
+      "raw": {
+        "file": "raw/lishuedu-r2.json",
+        "bytes": 2583352,
+        "sha256": "7f7b51052a765f40b7579e39a93c8c154a025e3e3b5050051d820da0a7783ec6"
+      },
+      "stdout": {
+        "file": "logs/lishuedu-r2.stdout",
+        "bytes": 17370,
+        "sha256": "165aad041d0bcb478e19f9f3d585e007030722951c94713d2c2f16ca9c0785d3"
+      },
+      "stderr": {
+        "file": "logs/lishuedu-r2.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "project": "lishuedu",
+      "run": 3,
+      "exitCode": 0,
+      "cacheIdentity": "a904a55fdda0e3cccdd638deec2691c0b0ba73ecedf34020cedfe86c9f6dcb41",
+      "runtimeStateIdentity": "6811b121f796f3528d762f42680648d5f86caf2b35f330bb496c46759e9850b4",
+      "raw": {
+        "file": "raw/lishuedu-r3.json",
+        "bytes": 2560453,
+        "sha256": "5aaf3b4bf858f91703f3e00ff3a2b6bf55d723476ab0166b2f706b4d228128fb"
+      },
+      "stdout": {
+        "file": "logs/lishuedu-r3.stdout",
+        "bytes": 17355,
+        "sha256": "52b9a8399536e19281cce315035675e4890fc6f87d7d8048279e7430b2f95001"
+      },
+      "stderr": {
+        "file": "logs/lishuedu-r3.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "project": "lishuedu",
+      "run": 4,
+      "exitCode": 0,
+      "cacheIdentity": "d48068b2a0ee80576e8c5e6f8825e5aadc09fed73aab5f857001c522ff94edd4",
+      "runtimeStateIdentity": "5ceb15f78c08016c669df40747fc21df6f980c92f94fb37a1afe130a3ac64280",
+      "raw": {
+        "file": "raw/lishuedu-r4.json",
+        "bytes": 2583237,
+        "sha256": "b4bc84e400e97099de9d9ff0ebb8a819bca51239dbbc02b33a125a870554498b"
+      },
+      "stdout": {
+        "file": "logs/lishuedu-r4.stdout",
+        "bytes": 17366,
+        "sha256": "db7b0f293c155d3ec49d80e05741f399084d5d4f42c39021646822167990f513"
+      },
+      "stderr": {
+        "file": "logs/lishuedu-r4.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "project": "lishuedu",
+      "run": 5,
+      "exitCode": 0,
+      "cacheIdentity": "ae420fdf257a46a8ff728fbd591aa03e0e26d8e6055cccaa4831a9804204d1f2",
+      "runtimeStateIdentity": "dc492bef37819e020e8922ff6ae0ef7ab3c7102c40aaa1a17d5005f201486edc",
+      "raw": {
+        "file": "raw/lishuedu-r5.json",
+        "bytes": 2606336,
+        "sha256": "fddd0a632c63c96636b775c076735ae55d15e5634158d4b18c0080eab3df9655"
+      },
+      "stdout": {
+        "file": "logs/lishuedu-r5.stdout",
+        "bytes": 17380,
+        "sha256": "e9602611b6e8fa5b686de1c82ae7241a2154621e037be23c497d4f306fd004d8"
+      },
+      "stderr": {
+        "file": "logs/lishuedu-r5.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "project": "cipherlink",
+      "run": 1,
+      "exitCode": 0,
+      "cacheIdentity": "0040b2ff74546aeba84c003c8a017171904e9c1a65cd1e16895f656d26bd4ad0",
+      "runtimeStateIdentity": "f33277dbad430c1b279dccc486e78ceabd8ae9e2971dc2e84b02ad6957318d23",
+      "raw": {
+        "file": "raw/cipherlink-r1.json",
+        "bytes": 233036,
+        "sha256": "73149b039e25742f77cbdc84b37d1be03dbaf799df5f31ceaa7d3a2df29d2efe"
+      },
+      "stdout": {
+        "file": "logs/cipherlink-r1.stdout",
+        "bytes": 10466,
+        "sha256": "a2aa02800fcac987ebe259706f2f1c5ba9413f9ceef144081a4d2baeace0ab9f"
+      },
+      "stderr": {
+        "file": "logs/cipherlink-r1.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "project": "cipherlink",
+      "run": 2,
+      "exitCode": 0,
+      "cacheIdentity": "4a62179826865bd4a80a399adcb9408b1eab774ce021f385116c56f246c3423e",
+      "runtimeStateIdentity": "062af39bd75b91efe93e35ac7e7f51abf9b1b3f3bff79dc8d3d13b3a25b017a9",
+      "raw": {
+        "file": "raw/cipherlink-r2.json",
+        "bytes": 233007,
+        "sha256": "f9839b1ea5335be3799afaf3a25403e05b709d11ba1145287ed666a370944b39"
+      },
+      "stdout": {
+        "file": "logs/cipherlink-r2.stdout",
+        "bytes": 10461,
+        "sha256": "f33860cfb232d9158523144476ef1930f1552ae7cbe9cabc945cf45a6f4bfba3"
+      },
+      "stderr": {
+        "file": "logs/cipherlink-r2.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "project": "cipherlink",
+      "run": 3,
+      "exitCode": 0,
+      "cacheIdentity": "3ff482f5807ecc4edf28d6b2a65b0538e932fb42faade29146e7a02309b9131e",
+      "runtimeStateIdentity": "b0e930bbb9db4a3e5f7b2184c724adaf93ac745bab080ef70fe2e549a144a16a",
+      "raw": {
+        "file": "raw/cipherlink-r3.json",
+        "bytes": 233025,
+        "sha256": "f28d71211d0c81f095a3ed9f9727d5c71e719b3a0a9c289a1a8b6f05c6fba29e"
+      },
+      "stdout": {
+        "file": "logs/cipherlink-r3.stdout",
+        "bytes": 10469,
+        "sha256": "c0229813590ce1ad50ee641a0e864e8cd8559ab47226019e63592d639df3d6d5"
+      },
+      "stderr": {
+        "file": "logs/cipherlink-r3.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "project": "cipherlink",
+      "run": 4,
+      "exitCode": 0,
+      "cacheIdentity": "504b65058c46ceaf2ae922e3cbd21e12db4c0f034530ea02e2eb2a0671c7ad69",
+      "runtimeStateIdentity": "55c0fa1f348aaf1cfef4fe23c4ec76c0ff51edc3685b44c6cc8734cf1823436f",
+      "raw": {
+        "file": "raw/cipherlink-r4.json",
+        "bytes": 233041,
+        "sha256": "25e6b117063224c47019a76a04738f1668d459970d2b804625ba22db7d6cf074"
+      },
+      "stdout": {
+        "file": "logs/cipherlink-r4.stdout",
+        "bytes": 10463,
+        "sha256": "6320eb76f8263c4c46c1e3d13ac1600f11f8c7f2c8fd4cf5184b9e578f1eb2b3"
+      },
+      "stderr": {
+        "file": "logs/cipherlink-r4.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "project": "cipherlink",
+      "run": 5,
+      "exitCode": 0,
+      "cacheIdentity": "4eb73741b1a1069a726467d95a93c4f5f189b453e3a3a10ede5a8adb1c6b192f",
+      "runtimeStateIdentity": "fbb53243ed00174c563d1fdc7dc15dc225731d35d1cc48ba59634abe4e3db43e",
+      "raw": {
+        "file": "raw/cipherlink-r5.json",
+        "bytes": 233027,
+        "sha256": "12e6b9eb6f1415852d1be492c3b54616848ab0959acff5bf031593382deee392"
+      },
+      "stdout": {
+        "file": "logs/cipherlink-r5.stdout",
+        "bytes": 10468,
+        "sha256": "b9d4a709df749b0550cab75c33ed2257a51f8afb4080efe269cef69e991fdadd"
+      },
+      "stderr": {
+        "file": "logs/cipherlink-r5.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "project": "exam-parent-v3",
+      "run": 1,
+      "exitCode": 0,
+      "cacheIdentity": "beccaefda7fd74d0e8829ee499a94d48d660f1b94c2cd445c45b643483f6b9f9",
+      "runtimeStateIdentity": "702aa8fd30741d3729ebfddecb71c2e41f916b61ca8e8b2ae1b9fc0ae6efc7b6",
+      "raw": {
+        "file": "raw/exam-parent-v3-r1.json",
+        "bytes": 421928,
+        "sha256": "70fe402ac9def95446651f55c4dc11980cc98b9e01f2d242b7cc0505ab33ca1e"
+      },
+      "stdout": {
+        "file": "logs/exam-parent-v3-r1.stdout",
+        "bytes": 11229,
+        "sha256": "0b55a82b280443aee8a64b9d13cdb5eaf8bc583ab0c29423be00f799e6145610"
+      },
+      "stderr": {
+        "file": "logs/exam-parent-v3-r1.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "project": "exam-parent-v3",
+      "run": 2,
+      "exitCode": 0,
+      "cacheIdentity": "e9544889debe7dde0656fd9ad77c45e5dc36c9428669cf053acb37bba3a35077",
+      "runtimeStateIdentity": "fa750f1a3646dab90cd33902eccda8df89aea6b23eec50a11fbd4902d9d31314",
+      "raw": {
+        "file": "raw/exam-parent-v3-r2.json",
+        "bytes": 421914,
+        "sha256": "d70d8abe62b85cab5e4424cd870fc8af72962848916818b7e06a2430a3434019"
+      },
+      "stdout": {
+        "file": "logs/exam-parent-v3-r2.stdout",
+        "bytes": 11211,
+        "sha256": "194cc07233f87de22a47a5ee30c3c1a4956e6694d043919939a73d9dc32cd1da"
+      },
+      "stderr": {
+        "file": "logs/exam-parent-v3-r2.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "project": "exam-parent-v3",
+      "run": 3,
+      "exitCode": 0,
+      "cacheIdentity": "18ce548e78dfc0df248713654862a3e028dc237ffe023e8cf1c42010dbbe93f2",
+      "runtimeStateIdentity": "f66485c8ae0ad28a81e99730fad8ae1ae9527e67e6d60699414444a375391efc",
+      "raw": {
+        "file": "raw/exam-parent-v3-r3.json",
+        "bytes": 421929,
+        "sha256": "27c04a4c9a3cf3b3afe659ffcd3f20fa1a105d76463c0654b79038a0b5b1be88"
+      },
+      "stdout": {
+        "file": "logs/exam-parent-v3-r3.stdout",
+        "bytes": 11219,
+        "sha256": "f3ec312eb254823fbe82570d2f725eb8bb303bd9e045696f1f5f193ec5039d67"
+      },
+      "stderr": {
+        "file": "logs/exam-parent-v3-r3.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "project": "exam-parent-v3",
+      "run": 4,
+      "exitCode": 0,
+      "cacheIdentity": "1614dedba670fe404f5fe6b3f0271037d7d3ce07ddfa868153b4f5404dcb3206",
+      "runtimeStateIdentity": "620020458f80c350849792cffe6a09c304937865220928e4f5195f7669fb58b2",
+      "raw": {
+        "file": "raw/exam-parent-v3-r4.json",
+        "bytes": 421953,
+        "sha256": "a382639f5d61cf5734d72db54ec88f4d7230a7e589e7a40e7df11a5d77ef187b"
+      },
+      "stdout": {
+        "file": "logs/exam-parent-v3-r4.stdout",
+        "bytes": 11227,
+        "sha256": "781be9eb7e5777f50ccd7bf4cd934e0bf045d80b7b784863d23dce053c973ec2"
+      },
+      "stderr": {
+        "file": "logs/exam-parent-v3-r4.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "project": "exam-parent-v3",
+      "run": 5,
+      "exitCode": 0,
+      "cacheIdentity": "d217e86339f3697c79f332b18155a3e88c7ea1c73c8521152ebb0599f750ac2f",
+      "runtimeStateIdentity": "cc3321c48b751b06651b8594eedc74ae60bde832094f1c17f57e132c08c60a4e",
+      "raw": {
+        "file": "raw/exam-parent-v3-r5.json",
+        "bytes": 421996,
+        "sha256": "614c7c5ab3dee76b188768f4864dfc161894d86dac413e3bc46ce860ba164b66"
+      },
+      "stdout": {
+        "file": "logs/exam-parent-v3-r5.stdout",
+        "bytes": 11235,
+        "sha256": "368a08f9b7605e3d7ee17bdba6de416dac17f548e5ede278f0ecfd3a09fa2b34"
+      },
+      "stderr": {
+        "file": "logs/exam-parent-v3-r5.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  ]
+}

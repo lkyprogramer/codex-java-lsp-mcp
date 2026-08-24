@@ -1,0 +1,107 @@
+{
+  "schemaVersion": "jin-phase-n5-closeout/v1",
+  "phase": "N5",
+  "dated": "2026-08-22",
+  "decision": "FAIL",
+  "mergeToMain": false,
+  "enterN6": false,
+  "head": "0996e5f",
+  "n501": {
+    "result": "GO",
+    "handler": "src/tools/java-context.ts",
+    "measureToolSchema": {
+      "javaContextEstimatedTokens": 564,
+      "budget": 600,
+      "result": "GO"
+    },
+    "head": "b0c08dd",
+    "t1": {
+      "dist": 1146,
+      "scripts": 190,
+      "fail": 0,
+      "closeoutCommit": "4072580",
+      "note": "N5-01 closeout T1. HEAD T1 after N5-02 is isolation.t1 (scripts 194)."
+    }
+  },
+  "n502": {
+    "result": "MEASURED_FAIL",
+    "harness": "GO",
+    "live": "MEASURED",
+    "summary": "jin-n5-02-live-summary.json",
+    "liveTraceSha256": "51e978f5b328f1719ef2a3016144262c85626038d3befb10858acfbb9bc67624",
+    "liveSummarySha256": "bd5a20255efda362d75b625c268013ca437da11f6069f7086be3abff23748ad4",
+    "model": "stealth/ox-alpha",
+    "baseUrlHost": "openrouter.ai",
+    "executableTree": "967065d44ebd699248d62d476b465fa56260f51a",
+    "jdtlsBin": "/usr/bin/false",
+    "isolation": "detached-local-clone",
+    "taskSuccess": {
+      "old": { "scored": 6, "successes": 1, "mean": 0.1667 },
+      "jin": { "scored": 6, "successes": 0, "mean": 0 },
+      "serena": { "status": "UNAVAILABLE" }
+    },
+    "toolCallCount": { "old": 29, "jin": 22 },
+    "totalTokensMeasured": { "old": 25402, "jin": 43543 }
+  },
+  "gates": {
+    "agentQualityNonInferior": "FAIL",
+    "toolRoundsAndTokenDrop": "FAIL",
+    "liveFalseClosed": "FAIL",
+    "noContextCapOrRuntimeDrop": "GO"
+  },
+  "t2ContextReplay": {
+    "result": "GO",
+    "summary": "jin-n5-context-replay.json",
+    "sha256": "995713ebe88a8a52e783ffb2bdaeaf3035825a98f35601b350870b47d4119b5a",
+    "gates": {
+      "paperTaskMeQueryService": "GO",
+      "presignClientReleaseMapper": "GO",
+      "payOrderPayAccount": "GO"
+    },
+    "note": "Offline java_context search, no model. Live N5-02 remains MEASURED_FAIL. Do not enter N6."
+  },
+  "killSignal": "UNMEASURED",
+  "successLayers": {
+    "localization": "MEASURED",
+    "patchGeneration": "UNMEASURED",
+    "compileTest": "UNMEASURED"
+  },
+  "isolation": {
+    "t0": {
+      "tests": 29,
+      "pass": 29,
+      "fail": 0,
+      "jdtlsBin": "/usr/bin/false",
+      "isolation": "detached-local-clone",
+      "candidate": "XfUadH",
+      "executableTree": "4b212d2863abcb0808a9c5363432ae9206e2e0eb",
+      "head": "8ae1c1d",
+      "logSha256": "ee93dd54d63e63fd0243eac255ed374fea3b1ad84edc9450be5ff7a22cbc4c3b",
+      "bannerSha256": "802d16cc6550bde5a4e0ca5bce460028a2abc629e784555d7d370c561aaadd11"
+    },
+    "t1": {
+      "dist": 1146,
+      "scripts": 194,
+      "fail": 0,
+      "jdtlsBin": "/usr/bin/false",
+      "isolation": "detached-local-clone",
+      "candidate": "WKs1S9",
+      "executableTree": "4b212d2863abcb0808a9c5363432ae9206e2e0eb",
+      "head": "8ae1c1d",
+      "gitSha": "8ae1c1de291d",
+      "smokeTools": [
+        "java_context",
+        "java_diagnostics",
+        "java_impact",
+        "java_runtime",
+        "java_status",
+        "java_symbol"
+      ],
+      "logSha256": "fc5286ccbcf7de01bd195389ab39b518d3efc030eb897656e66667235eb9321d",
+      "bannerSha256": "0faee53aa311523f014460f39860e5072749d35426a4ac816c67275e3f5966e1"
+    }
+  },
+  "failureDisposition": {
+    "action": "do not enter N6; do not merge main; do not invent TaskSuccess; Serena C arm remains UNAVAILABLE"
+  }
+}

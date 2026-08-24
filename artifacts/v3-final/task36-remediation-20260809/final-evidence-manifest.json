@@ -1,0 +1,2236 @@
+{
+  "schemaVersion": 1,
+  "manifestKind": "task36-canonical-evidence",
+  "generatedAt": "2026-08-09T07:33:33.474Z",
+  "status": "FINAL",
+  "canonicalRoot": "artifacts/v3-final/task36-remediation-20260809",
+  "report": {
+    "path": "docs/phase-v3/final-java-intelligence-v3-report.md",
+    "bytes": 39232,
+    "sha256": "b6c9accec1301aae031bbc2ab7a17ae9f068dfa318c60f14bd021e48376587c8",
+    "kind": "report"
+  },
+  "sourceIdentity": {
+    "baselineSelection": {
+      "kind": "LATEST_EXECUTABLE_DOCS_BASELINE",
+      "revision": "7df1a0eef98d709ef4307c2f66184746c0d95720",
+      "executableTree": "b096e87a952aa01c1d0a8b15092ac21e7e6b1929",
+      "reason": "The user approved the latest executable docs report as the comparison baseline because Phase 0 real-repository raw files are empty and cannot support a numeric comparison."
+    },
+    "historicalPreV3": {
+      "revision": "48e665ba73dc332dccd4b34e71adc1c048170cf6",
+      "tree": "538661f26ae49c490227b760daa075dd8b6e64fe",
+      "numericComparison": "UNMEASURED_PHASE0_RAW_UNAVAILABLE"
+    },
+    "approvedOld": {
+      "commit": "7df1a0eef98d709ef4307c2f66184746c0d95720",
+      "commitTree": "b096e87a952aa01c1d0a8b15092ac21e7e6b1929",
+      "executableTree": "b096e87a952aa01c1d0a8b15092ac21e7e6b1929",
+      "buildStamp": {
+        "gitSha": "7df1a0eef98d",
+        "generatedAt": "2026-08-09T07:08:38.260Z",
+        "defaults": {
+          "idleTtlMs": 2700000,
+          "importConcurrency": 2,
+          "jdtlsXmx": "2g",
+          "maxActiveRepos": 3
+        },
+        "defaultsFingerprint": "e5835394a86f"
+      }
+    },
+    "candidateBase": {
+      "commit": "4e147560c38b76f942a15a92b34cbea69d734ef5",
+      "commitTree": "53f77574738178a8c4a126fabea8a69fe1996495"
+    },
+    "candidateExecutableTree": "60ae785e8af9ac06012452ea41c6b1fe2d3606fd",
+    "candidatePatch": {
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate.patch",
+      "sha256": "dee1f4464adb670772c67f7e9eee3d644dc1b508ff3988bde7f2a04a00cb5638",
+      "bytes": 704902,
+      "appliedToCommit": "4e147560c38b76f942a15a92b34cbea69d734ef5",
+      "appliedToCommitTree": "53f77574738178a8c4a126fabea8a69fe1996495",
+      "resultingExecutableTree": "60ae785e8af9ac06012452ea41c6b1fe2d3606fd",
+      "untrackedInputs": [
+        {
+          "path": "scripts/run-three-repo-cold-matrix.test.mjs",
+          "sha256": "bd56643ab165efe77eb37e711cc841d9266915da298a181ebba6dff815af58ef",
+          "bytes": 4215,
+          "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/run-three-repo-cold-matrix.test.mjs"
+        },
+        {
+          "path": "scripts/task36-fault-suite.mjs",
+          "sha256": "3719dc06e8d1acb21137575d33821ffb9945a28db3317ed0e6bc209c662d9e61",
+          "bytes": 9529,
+          "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-fault-suite.mjs"
+        },
+        {
+          "path": "scripts/task36-fault-suite.test.mjs",
+          "sha256": "43c088eb94fa31abd314f830cfb4ac71035ca2a4a471024068258044fc645928",
+          "bytes": 6521,
+          "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-fault-suite.test.mjs"
+        },
+        {
+          "path": "scripts/task36-multiprocess-smoke.mjs",
+          "sha256": "8b92fee60f151b48ecf81b73fef076c14e5ac49fc8f6034a2d201d7a76f4d161",
+          "bytes": 20100,
+          "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-multiprocess-smoke.mjs"
+        },
+        {
+          "path": "scripts/task36-multiprocess-smoke.test.mjs",
+          "sha256": "635cff9c6f0f43c851f85fb559dc56b6377ca9bce129c342d7368c0d3ee9b2de",
+          "bytes": 4725,
+          "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-multiprocess-smoke.test.mjs"
+        },
+        {
+          "path": "scripts/task36-multiprocess-worker.mjs",
+          "sha256": "590d8fcd7888f47be9f245bb9a63ba28baf97523deb85b8f30209f30a647a354",
+          "bytes": 4250,
+          "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-multiprocess-worker.mjs"
+        },
+        {
+          "path": "scripts/task36-tap-evidence.mjs",
+          "sha256": "e296c7958ce3852d302845bf22e5d4f8a3f72c72bf7cbcd6d952cba44b1f4c42",
+          "bytes": 1285,
+          "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-tap-evidence.mjs"
+        },
+        {
+          "path": "scripts/task36-tap-evidence.test.mjs",
+          "sha256": "59cf268d652e447890548ed13464826c91353466a6f2a540ec8c8e63c2e9175b",
+          "bytes": 2075,
+          "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-tap-evidence.test.mjs"
+        },
+        {
+          "path": "src/agent-router/request-budget.test.ts",
+          "sha256": "806acfca3333d3d38f1db24b210042af3ba4f1acb02b79e6eb29b77ececd56d7",
+          "bytes": 9215,
+          "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/agent-router/request-budget.test.ts"
+        },
+        {
+          "path": "src/benchmark/determinism.test.ts",
+          "sha256": "dab7fbbb4b12fef1955fdfd5178f17bf5de9a6b566f57e885bbd183d1b0b75cf",
+          "bytes": 6256,
+          "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/determinism.test.ts"
+        },
+        {
+          "path": "src/benchmark/determinism.ts",
+          "sha256": "ea96003c3307c30e396b0670794ec172a47ed19977f368402ffb8c33265dc3dd",
+          "bytes": 7486,
+          "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/determinism.ts"
+        },
+        {
+          "path": "src/benchmark/java-index-idle.test.ts",
+          "sha256": "d0f331b6cac581af986976c6817b2d91a6075946960356745a20e353bac9f77c",
+          "bytes": 1520,
+          "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/java-index-idle.test.ts"
+        },
+        {
+          "path": "src/benchmark/java-index-idle.ts",
+          "sha256": "5cef22f6bd2eb4e6084ba99078b27a456be0ff8af2805f72cd9e09820fefc8bb",
+          "bytes": 581,
+          "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/java-index-idle.ts"
+        },
+        {
+          "path": "src/benchmark/task36-mutation-matrix.test.ts",
+          "sha256": "d3b05870ff5e62b7252bfcbfb7e6019c6ea7a38f50f06099e24d82b8e9db8900",
+          "bytes": 2543,
+          "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/task36-mutation-matrix.test.ts"
+        },
+        {
+          "path": "src/benchmark/task36-mutation-matrix.ts",
+          "sha256": "7956c75de01494c235303add1318b31c1501d5fc8a2082b7594719347437d278",
+          "bytes": 24543,
+          "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/task36-mutation-matrix.ts"
+        },
+        {
+          "path": "src/benchmark/verify-determinism.ts",
+          "sha256": "ac59ec695856ab321e9df00151846d011ff6da822a48f820445a10d850099056",
+          "bytes": 1856,
+          "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/verify-determinism.ts"
+        }
+      ]
+    },
+    "repositories": {
+      "lishuedu": {
+        "root": "/tmp/codex-java-v3-golden-20260809/lishuedu",
+        "head": "db63b1a7e393edd90449eb013d7d1c4d65c366f2",
+        "tree": "22f0ce444e4cac484de85c8a0bf02240ad70d712",
+        "clean": true,
+        "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "cipherlink": {
+        "root": "/tmp/codex-java-v3-golden-20260809/cipherlink",
+        "head": "fa433982e92e52dd610650d1e79f2d041179b1d3",
+        "tree": "21a1075c7b211932a4cdb2abf2742521b1eba31f",
+        "clean": true,
+        "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "exam-parent-v3": {
+        "root": "/tmp/codex-java-v3-golden-20260809/exam-parent-v3",
+        "head": "f90a0b475f7be2ed003703feecec8195bc7eb976",
+        "tree": "dcdb2024879686451859c64260c7e1f3a4721fa7",
+        "clean": true,
+        "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "scenarios": {
+      "lishuedu": {
+        "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/lishuedu.scenarios.jsonl",
+        "sha256": "579178746bb123822a2908025fc60aa26a8c79958079dc3043dfa936fd4ba916",
+        "rowIds": [
+          "storage-signed-url",
+          "school-template-parser",
+          "report-reusable-zip",
+          "school-confirm-controller",
+          "benefit-product-code-dto",
+          "school-mapstruct-uses",
+          "audit-order-repository-mapper-rule-type",
+          "audit-assignee-mapper-precision"
+        ]
+      },
+      "cipherlink": {
+        "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/cipherlink.scenarios.jsonl",
+        "sha256": "47850fd6ac88804ecec0d1d0abb42ff1369a6fc1e42ad447abc334417ab084ca",
+        "rowIds": [
+          "client-update-check",
+          "transfer-upload-init",
+          "transfer-upload-session-repository",
+          "aliyun-sms-gateway-send",
+          "operation-log-response-dto",
+          "organization-create-member-cross-module",
+          "auth-sms-login-lockout",
+          "account-admin-create-account-guard"
+        ]
+      },
+      "exam-parent-v3": {
+        "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+        "sha256": "83cfde7858cb3d24906c69808f321f525451afbd2b90b3f3805b2d65c62d0769",
+        "rowIds": [
+          "rule-engine-execute",
+          "candidate-position-select",
+          "apply-info-save-basic-service",
+          "position-repository-exists",
+          "ceb-order-create-dto",
+          "apply-info-update-cross-exam-guard",
+          "check-people-delete-site-guard",
+          "current-user-service-implementer-edge"
+        ]
+      }
+    },
+    "binding": "BOUND_BY_COLD_V4_PASS3"
+  },
+  "inventory": {
+    "algorithm": "sha256",
+    "ordering": "relative-path-bytewise",
+    "digestEncoding": "path\\0bytes\\0sha256\\n",
+    "fileCount": 186,
+    "totalBytes": 54201774,
+    "inventorySha256": "9650a5f2f60f38ece73aca7c205bd2e4475e855d3de90869b7b0bc07189019eb",
+    "files": [
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/run-three-repo-cold-matrix.test.mjs",
+        "bytes": 4215,
+        "sha256": "bd56643ab165efe77eb37e711cc841d9266915da298a181ebba6dff815af58ef",
+        "kind": "candidate-source-snapshot"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-fault-suite.mjs",
+        "bytes": 9529,
+        "sha256": "3719dc06e8d1acb21137575d33821ffb9945a28db3317ed0e6bc209c662d9e61",
+        "kind": "candidate-source-snapshot"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-fault-suite.test.mjs",
+        "bytes": 6521,
+        "sha256": "43c088eb94fa31abd314f830cfb4ac71035ca2a4a471024068258044fc645928",
+        "kind": "candidate-source-snapshot"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-multiprocess-smoke.mjs",
+        "bytes": 20100,
+        "sha256": "8b92fee60f151b48ecf81b73fef076c14e5ac49fc8f6034a2d201d7a76f4d161",
+        "kind": "candidate-source-snapshot"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-multiprocess-smoke.test.mjs",
+        "bytes": 4725,
+        "sha256": "635cff9c6f0f43c851f85fb559dc56b6377ca9bce129c342d7368c0d3ee9b2de",
+        "kind": "candidate-source-snapshot"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-multiprocess-worker.mjs",
+        "bytes": 4250,
+        "sha256": "590d8fcd7888f47be9f245bb9a63ba28baf97523deb85b8f30209f30a647a354",
+        "kind": "candidate-source-snapshot"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-tap-evidence.mjs",
+        "bytes": 1285,
+        "sha256": "e296c7958ce3852d302845bf22e5d4f8a3f72c72bf7cbcd6d952cba44b1f4c42",
+        "kind": "candidate-source-snapshot"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-tap-evidence.test.mjs",
+        "bytes": 2075,
+        "sha256": "59cf268d652e447890548ed13464826c91353466a6f2a540ec8c8e63c2e9175b",
+        "kind": "candidate-source-snapshot"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/agent-router/request-budget.test.ts",
+        "bytes": 9215,
+        "sha256": "806acfca3333d3d38f1db24b210042af3ba4f1acb02b79e6eb29b77ececd56d7",
+        "kind": "candidate-source-snapshot"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/determinism.test.ts",
+        "bytes": 6256,
+        "sha256": "dab7fbbb4b12fef1955fdfd5178f17bf5de9a6b566f57e885bbd183d1b0b75cf",
+        "kind": "candidate-source-snapshot"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/determinism.ts",
+        "bytes": 7486,
+        "sha256": "ea96003c3307c30e396b0670794ec172a47ed19977f368402ffb8c33265dc3dd",
+        "kind": "candidate-source-snapshot"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/java-index-idle.test.ts",
+        "bytes": 1520,
+        "sha256": "d0f331b6cac581af986976c6817b2d91a6075946960356745a20e353bac9f77c",
+        "kind": "candidate-source-snapshot"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/java-index-idle.ts",
+        "bytes": 581,
+        "sha256": "5cef22f6bd2eb4e6084ba99078b27a456be0ff8af2805f72cd9e09820fefc8bb",
+        "kind": "candidate-source-snapshot"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/task36-mutation-matrix.test.ts",
+        "bytes": 2543,
+        "sha256": "d3b05870ff5e62b7252bfcbfb7e6019c6ea7a38f50f06099e24d82b8e9db8900",
+        "kind": "candidate-source-snapshot"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/task36-mutation-matrix.ts",
+        "bytes": 24543,
+        "sha256": "7956c75de01494c235303add1318b31c1501d5fc8a2082b7594719347437d278",
+        "kind": "candidate-source-snapshot"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/verify-determinism.ts",
+        "bytes": 1856,
+        "sha256": "ac59ec695856ab321e9df00151846d011ff6da822a48f820445a10d850099056",
+        "kind": "candidate-source-snapshot"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate.patch",
+        "bytes": 704902,
+        "sha256": "dee1f4464adb670772c67f7e9eee3d644dc1b508ff3988bde7f2a04a00cb5638",
+        "kind": "candidate-patch"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate.patch.sha256",
+        "bytes": 82,
+        "sha256": "ed847a3bc83bf7d307320b03b326da267ab12cc302906e436aeaefa5ac93c0e8",
+        "kind": "checksum-ledger"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios.sha256",
+        "bytes": 332,
+        "sha256": "b0269d03b8e94d5859b8c4ca9eac70f6fc4b13ccc33743dd8e9afc6125393de6",
+        "kind": "checksum-ledger"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/cipherlink.scenarios.jsonl",
+        "bytes": 22120,
+        "sha256": "47850fd6ac88804ecec0d1d0abb42ff1369a6fc1e42ad447abc334417ab084ca",
+        "kind": "scenario-input"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+        "bytes": 17735,
+        "sha256": "83cfde7858cb3d24906c69808f321f525451afbd2b90b3f3805b2d65c62d0769",
+        "kind": "scenario-input"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/lishuedu.scenarios.jsonl",
+        "bytes": 17039,
+        "sha256": "579178746bb123822a2908025fc60aa26a8c79958079dc3043dfa936fd4ba916",
+        "kind": "scenario-input"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix-summary.json",
+        "bytes": 32027,
+        "sha256": "4f66d5cd06834d5905f728d957c379bd3afaffc42254a0255fb74a261823fb60",
+        "kind": "summary"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/cipherlink-r1-new.json",
+        "bytes": 412849,
+        "sha256": "2864e2fe0f54ac6e5f40437b5dc4609977bdda386e838503320762af5249bff2",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/cipherlink-r1-new.json.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/cipherlink-r1-old.json",
+        "bytes": 188824,
+        "sha256": "da4c38740b975d9f6af557686916b47125258c51213d37fcd1b255d95a784c66",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/cipherlink-r1-old.json.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/cipherlink-r2-new.json",
+        "bytes": 412854,
+        "sha256": "688c3604bc4c35d8c5cc36f2586f9a95345ec53925a619fd8dd6a5b277920ce7",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/cipherlink-r2-new.json.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/cipherlink-r2-old.json",
+        "bytes": 188845,
+        "sha256": "7baef3770ab9f087bd98daaa1a1b751ab33e4af3e347a2fbd08781799d6f544e",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/cipherlink-r2-old.json.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/cipherlink-r3-new.json",
+        "bytes": 412826,
+        "sha256": "e01d62c0e769c0c36aa17876df2284e9ac72c5eb0cffc97dc1c0266c8653ce12",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/cipherlink-r3-new.json.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/cipherlink-r3-old.json",
+        "bytes": 188836,
+        "sha256": "f0cd4e9156e7fc6e7fa4705ce87e5e690b6c367f22d9314de19fefb72702d15a",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/cipherlink-r3-old.json.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/exam-parent-v3-r1-new.json",
+        "bytes": 401518,
+        "sha256": "72a5ed8302ef87582e1972d2ab220465ad7b546d7c6c5bf1161c0c4d74e89463",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/exam-parent-v3-r1-new.json.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/exam-parent-v3-r1-old.json",
+        "bytes": 188427,
+        "sha256": "337cbe4a07b9f37a7ff94250b40800846b03b824e1297ceeb57a1b7cae7a05d6",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/exam-parent-v3-r1-old.json.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/exam-parent-v3-r2-new.json",
+        "bytes": 401496,
+        "sha256": "e31bf1957448f608d556995a3f8fef8e44f19f3acf76239d77bd6bd2638a013b",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/exam-parent-v3-r2-new.json.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/exam-parent-v3-r2-old.json",
+        "bytes": 188423,
+        "sha256": "ad0d5065786a082e58bf906d36e92610f42adce275a8bf6d757c55b7222d349b",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/exam-parent-v3-r2-old.json.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/exam-parent-v3-r3-new.json",
+        "bytes": 401496,
+        "sha256": "469ca34c7b02e81ad520c0d509c0e9f6155e879e5c281f4743cdf36e3869bbaf",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/exam-parent-v3-r3-new.json.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/exam-parent-v3-r3-old.json",
+        "bytes": 188413,
+        "sha256": "6ee4767c565214971c03dccca074cbc6d4507a4c27eba3a0949c8fc53ff58d62",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/exam-parent-v3-r3-old.json.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/lishuedu-r1-new.json",
+        "bytes": 425711,
+        "sha256": "b6b459357d78883fd235826eec2e2a39cdfe1f08d78f300d0830e9cf3a92b40e",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/lishuedu-r1-new.json.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/lishuedu-r1-old.json",
+        "bytes": 205471,
+        "sha256": "ecd30210db62c24348cdbb0db572994d1039e54faa871ef585bd71093d0b7883",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/lishuedu-r1-old.json.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/lishuedu-r2-new.json",
+        "bytes": 425691,
+        "sha256": "41ae06f24da3f622e8cec5f07d1f51d2a41f6635ed842034b913231974c8db1d",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/lishuedu-r2-new.json.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/lishuedu-r2-old.json",
+        "bytes": 205477,
+        "sha256": "d3348f951acd0c34bb340ebc6f2731623a660721c2e7f59dc20a595d34b8d9e0",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/lishuedu-r2-old.json.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/lishuedu-r3-new.json",
+        "bytes": 425708,
+        "sha256": "42cedbb3a9107e2f0acc81ed72fbad9c86e75177a5d487602674851743b431ec",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/lishuedu-r3-new.json.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/lishuedu-r3-old.json",
+        "bytes": 205465,
+        "sha256": "53a68623cecb99144b011ece6f6cfdc63a3de015b5e5cb762453d2b9259c86e6",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/lishuedu-r3-old.json.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/run-manifest.json",
+        "bytes": 11507,
+        "sha256": "cfe9024849b3a7df55b82cea8704a6ac02924967e3a23560528b2b63701b5ff5",
+        "kind": "suite-manifest"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/determinism-final-v3/cipherlink.json",
+        "bytes": 13306044,
+        "sha256": "87c64fe77ff6c5389a464df68e992aca7f09f55898f5c8f97f1035841034a091",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/determinism-final-v3/cipherlink.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/determinism-final-v3/cipherlink.verify.json",
+        "bytes": 254,
+        "sha256": "f7a9c3b2a67b2ea34f88307c7dbea536b0a31c2585ff5667b0d3ce8a84c2665e",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/determinism-final-v3/cipherlink.verify.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/determinism-final-v3/exam-parent-v3.json",
+        "bytes": 11379787,
+        "sha256": "f45f7ae90c5b1e49d46cc508dc1ac0f6e922f01d4b4f39bbde5a64097591faf3",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/determinism-final-v3/exam-parent-v3.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/determinism-final-v3/exam-parent-v3.verify.json",
+        "bytes": 258,
+        "sha256": "1c64c9dec9c3b4f92069f0ffc33cf138a9316865832e11ff199a91b1de68df89",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/determinism-final-v3/exam-parent-v3.verify.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/determinism-final-v3/lishuedu.json",
+        "bytes": 19976005,
+        "sha256": "c3bec74dad2a558566dabe092f0833f60d80c4177fc12d95a0acfdc893354408",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/determinism-final-v3/lishuedu.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/determinism-final-v3/lishuedu.verify.json",
+        "bytes": 252,
+        "sha256": "396636024f278374b2ac0da5afd2543e18a7952c96293b9cb0804f807a8fac14",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/determinism-final-v3/lishuedu.verify.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/fault-suite-final-v4.json",
+        "bytes": 16388,
+        "sha256": "cf39ac5cd272187c72ee6c911d97345bba1685ca1207d48067e3ff4120aea295",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/fault-suite-final-v4.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/fault-suite-final-v4.stdout.json",
+        "bytes": 13029,
+        "sha256": "c52aeaa9ae78799e834a0289ce9b4e7bcd53b881b69e3b77dca725cd66503839",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-fresh-document-symbol-references.json",
+        "bytes": 8295,
+        "sha256": "d672597cee3a99959092f0424012f2b485d23c2e1c96a1414eea8d989e836e6c",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-fresh-document-symbol-references.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-fresh-document-symbol-references.stdout.json",
+        "bytes": 8296,
+        "sha256": "b85ebd484ca3d46670dab29298a961f5618093639690b31dc9c47d25b7c43b5c",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-fresh-none-definition.json",
+        "bytes": 7358,
+        "sha256": "933eda7ad075a63d73b8986a9c4132a7f7ddcba4e32bd59961d3a769d082e547",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-fresh-none-definition.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-fresh-none-definition.stdout.json",
+        "bytes": 7359,
+        "sha256": "1d67ef292dd06d75e7d98551d6cf3b2cfdaca55612d4c578fca264f8cd3cf20f",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-fresh-none-references.json",
+        "bytes": 7377,
+        "sha256": "f85bb8d30fcc963cacbf5ddeb1e4e6fdedf80ec31529bee38c7c68aec02fc1fe",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-fresh-none-references.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-fresh-none-references.stdout.json",
+        "bytes": 7378,
+        "sha256": "b7173fcdcc3ccde90d46651c1b724c1f5da69fb4758774df60e951bcbe131d5a",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-fresh-progress-idle-references.json",
+        "bytes": 7493,
+        "sha256": "41d313851c4d6e4e62939104d8db4424d5f2df79f2f5929ef014b95a5714831a",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-fresh-progress-idle-references.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-fresh-progress-idle-references.stdout.json",
+        "bytes": 7494,
+        "sha256": "190cf99d495262cffd29052b582127dfa680f6bbe49134b2f08f5f55ff890980",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-reused-shared-none-definition.json",
+        "bytes": 7116,
+        "sha256": "b06f20d1be709f94cdc5e398f6c9950b98cbe4f0a597236caf77c4a428c0f30f",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-reused-shared-none-definition.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-reused-shared-none-definition.stdout.json",
+        "bytes": 7117,
+        "sha256": "3ce5a17684b0fa46d4edce970add5b145ed910ce49257da1d029019757cf68d4",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-reused-shared-none-references.json",
+        "bytes": 7164,
+        "sha256": "5c8d75b75191d3cf6953ee1227cd078adbcc2f01a6bd856013d533e1332f54b1",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-reused-shared-none-references.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-reused-shared-none-references.stdout.json",
+        "bytes": 7165,
+        "sha256": "2299b621eb55e7c9c47606a512fed3cd0c6ca6cef7b4757f999939a2abecb911",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-reused-shared-none-type-hierarchy.json",
+        "bytes": 7701,
+        "sha256": "635a082e3124fd5b89c4a2c69d5496c1911f331cd364cc90faf6f259e31dcc07",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-reused-shared-none-type-hierarchy.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-reused-shared-none-type-hierarchy.stdout.json",
+        "bytes": 7702,
+        "sha256": "45c9de2be878938a2b68f55ef510e9a42cbe024e00b0af3c42db8573c7e1ecde",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-fresh-document-symbol-references.json",
+        "bytes": 8444,
+        "sha256": "648cf665551095fbb5b19f2818947d2901b80f0a38c2e2e417d17a0348506344",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-fresh-document-symbol-references.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-fresh-document-symbol-references.stdout.json",
+        "bytes": 8445,
+        "sha256": "d68156bc3fd16cf09c0faf20da9010f0fb133db002a700f7683222f9a4d89430",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-fresh-none-definition.json",
+        "bytes": 7445,
+        "sha256": "558172b907c8c0807e82dcd162678038b0f7b6898bc7f89bf870dd14ca46fb6d",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-fresh-none-definition.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-fresh-none-definition.stdout.json",
+        "bytes": 7446,
+        "sha256": "d75c047a1c7bfc4b78e205bac1687fbf83b28b31d73eb49d528bcff5c8bd64e0",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-fresh-none-references.json",
+        "bytes": 7501,
+        "sha256": "2d6f4a39a6a1f72794ebd9c1268acc37810c73d55a6289d3c92266fc55f38a93",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-fresh-none-references.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-fresh-none-references.stdout.json",
+        "bytes": 7502,
+        "sha256": "953feb514e5147a6437b3b21def62f20932e7931c3d5c7338799d3283d2324da",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-fresh-progress-idle-references.json",
+        "bytes": 7639,
+        "sha256": "6272cb15c564f8fcbe11b92c782bc24d4262a4c5b9204963492f5b29f30ccacc",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-fresh-progress-idle-references.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-fresh-progress-idle-references.stdout.json",
+        "bytes": 7640,
+        "sha256": "899c097c82227b1f7329d092220adcf20696dbad58e66c5123433ce690d4785a",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-reused-shared-none-definition.json",
+        "bytes": 7235,
+        "sha256": "86c2af546ab44199481912d245ccab970d926b73fa515d6fd297a1abcd0fc93f",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-reused-shared-none-definition.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-reused-shared-none-definition.stdout.json",
+        "bytes": 7236,
+        "sha256": "f0f10de3dee6db6fc5b266be4d4b254aeba31c6a3823a5c9c04f4abd333288a0",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-reused-shared-none-references.json",
+        "bytes": 7328,
+        "sha256": "2c031bae5f439ce97e1765d2dfe92780438c7cb1aedbefffd414fc393e072c5a",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-reused-shared-none-references.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-reused-shared-none-references.stdout.json",
+        "bytes": 7329,
+        "sha256": "37bcd2b57e1d28769011d83159121ad5803886ac3f8ac5379b3acf837665e393",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-reused-shared-none-type-hierarchy.json",
+        "bytes": 7802,
+        "sha256": "ad05f0643b2269d408e7e4c0fb725dba535188a504c27fbd006b88bec610ae1e",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-reused-shared-none-type-hierarchy.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-reused-shared-none-type-hierarchy.stdout.json",
+        "bytes": 7803,
+        "sha256": "30e2b34721b96883a7875568c95d42d3b8622e6596279e821004bcb703a94a4b",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/first-touch-summary.json",
+        "bytes": 33777,
+        "sha256": "ccfb45a12ebde7d1d29a2d8b6a3a2e46f5258f95aab21286b8e2cab7635b1039",
+        "kind": "summary"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-fresh-document-symbol-references.json",
+        "bytes": 8302,
+        "sha256": "f8bae77b8ff6e8ad9135a254dcd2bb7b06ac012c100da45d64d7aed2c56ec3f6",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-fresh-document-symbol-references.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-fresh-document-symbol-references.stdout.json",
+        "bytes": 8303,
+        "sha256": "202a7823a65f76bdebc847bac2f6c155f56a0c1cc211fde67843d9246ba84a12",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-fresh-none-definition.json",
+        "bytes": 7326,
+        "sha256": "7035c8aeb53a6195200ee07fb15c238980380fb058cf906894431bd6cd5d6162",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-fresh-none-definition.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-fresh-none-definition.stdout.json",
+        "bytes": 7327,
+        "sha256": "fc8da539afd4b3c1fb7e119a4611b9827bc2658d71852673440b3cbfa6946427",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-fresh-none-references.json",
+        "bytes": 7736,
+        "sha256": "9baa0942286f3fe17ea5eab34d0ac723ca3dbd93770e273c971cf7d81843f5ef",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-fresh-none-references.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-fresh-none-references.stdout.json",
+        "bytes": 7737,
+        "sha256": "2c4111833a0c885fb35e568639fca6eb5b01ecc44d11695843064be7f581fba6",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-fresh-progress-idle-references.json",
+        "bytes": 7480,
+        "sha256": "3e734f55177f904e8a6b6a4f676af63498d8ec371059457d0d78de8b58e0ceb1",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-fresh-progress-idle-references.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-fresh-progress-idle-references.stdout.json",
+        "bytes": 7481,
+        "sha256": "df9cc981575e84fbe0b952ce101c0b87903d5b6b3f25783f4d4f303ec8a23c0b",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-reused-shared-none-definition.json",
+        "bytes": 7084,
+        "sha256": "035c0aa03e3f378ce60c95bfb71ceaec37aaa86a5cea8d54115988c365747241",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-reused-shared-none-definition.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-reused-shared-none-definition.stdout.json",
+        "bytes": 7085,
+        "sha256": "e5f40f44e4962c38e7996c673e1db97a724cec8e0d0a428123a25051aa17b86e",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-reused-shared-none-references.json",
+        "bytes": 7126,
+        "sha256": "0c90ef52df0fae223e9946eb0aaa43547e265072bb29dc08d5ce69be5c2b0b47",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-reused-shared-none-references.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-reused-shared-none-references.stdout.json",
+        "bytes": 7127,
+        "sha256": "6950e47b46d5d9909bca411c74317fc78080dfebc139f8242bd26ce038a8c932",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-reused-shared-none-type-hierarchy.json",
+        "bytes": 7338,
+        "sha256": "2468f844e86b062a08181c7dee17108490c40530c1a4bf38ea9b3954b8740875",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-reused-shared-none-type-hierarchy.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-reused-shared-none-type-hierarchy.stdout.json",
+        "bytes": 7339,
+        "sha256": "f0d7238a243271dc245cee8a5dd18061b8edabf4bab1934e3a2d98b8f1c902d6",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/multiprocess-smoke-final-v4.json",
+        "bytes": 8821,
+        "sha256": "ec00b6fec208960ccb41752dd62e5d4131fa579ef7a9f184016774ee62c1a4e3",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/multiprocess-smoke-final-v4.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/mutation-matrix-final-v4.json",
+        "bytes": 2244,
+        "sha256": "51fa56e1e9502945f17fe7e48183e737a17c6fd0c05cbfd2606638e08db89588",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/mutation-matrix-final-v4.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/mutation-matrix-final-v4.stdout.json",
+        "bytes": 2244,
+        "sha256": "51fa56e1e9502945f17fe7e48183e737a17c6fd0c05cbfd2606638e08db89588",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/check-fast.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/check-fast.stdout",
+        "bytes": 867,
+        "sha256": "0e7b714cbb3e386a8c0eff032ddcd4f8b9e64eb0f086ffae6e87b7142c5797b7",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/dead-path-scan.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/dead-path-scan.stdout",
+        "bytes": 134,
+        "sha256": "206440863526d8c6cb0fa3acabc630072c2222d5602ffd1e61ebcaf68eaca539",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/environment.stderr",
+        "bytes": 150,
+        "sha256": "c20d776065f40c0f9583da6180b89d86425d97d340f25861d3dba8fff01c3272",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/environment.stdout",
+        "bytes": 229,
+        "sha256": "b21f372b91c18484cabed7433550a4ac4cb6ac9207e99ceb758fe12c7d81ea60",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/generate-final-evidence.mjs",
+        "bytes": 19844,
+        "sha256": "20e5ddef262ccf33cb2a971d947be646ae03757beb2c9cea91e0e9e72750d7d2",
+        "kind": "validator-source"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/git-diff-check.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/git-diff-check.stdout",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/npm-audit-prod.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/npm-audit-prod.stdout",
+        "bytes": 24,
+        "sha256": "6d8c5c8f3d7684adb070417bd608d01ae90aa3dc26a65af03ffda4955f38d9a3",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/npm-build.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/npm-build.stdout",
+        "bytes": 162,
+        "sha256": "f41ce54143176998d079e6bb5f58af001e5e113db16ae4744425acd4a7187dc5",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/npm-ci.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/npm-ci.stdout",
+        "bytes": 144,
+        "sha256": "4eac71ceb7d935a2188f7d1c43a93fb841d3db8b5237f96d2425b27f053e17a8",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/npm-ls-all.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/npm-ls-all.stdout",
+        "bytes": 7639,
+        "sha256": "475ebcf6f60e6788119f42b240de0c13f2f17bd910c1b80f819244816ac441c8",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/npm-outdated.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/npm-outdated.stdout",
+        "bytes": 448,
+        "sha256": "096bdf35fab6d4d1190e857dbf22a334d9bccadfb4382bde7486d37f27f6bf02",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/npm-smoke.stderr",
+        "bytes": 194,
+        "sha256": "056cc829b3667092a145b6d0aedef0048f997e313bd515dd9f446026538fac01",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/npm-smoke.stdout",
+        "bytes": 2708,
+        "sha256": "8d79ebfe883d41a933bdad6e77a4382f13baed5eaa82a91c8f956af08a7f4b41",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/npm-test.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/npm-test.stdout",
+        "bytes": 193465,
+        "sha256": "ea6ed0c35acc63e2c18c1a7b2765730dc88e14fdfd9404ad1d1ff0bebbcf0d7d",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/script-tests.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/script-tests.stdout",
+        "bytes": 5675,
+        "sha256": "d9c5be767af43c1a0f5daef2bf5cc3308758d70792485cb2ca7f9d984472412a",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/tool-schema.stderr",
+        "bytes": 34,
+        "sha256": "262c1a24300e30f948193e3b5aa0338408158101104bac962dae511c24d77946",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/tool-schema.stdout.json",
+        "bytes": 655,
+        "sha256": "928accbc99cfc774ff6c5b5efed10f4a39d4b56b4226aeff2823463c2bac08f4",
+        "kind": "stdout"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/warm-final-v2/cipherlink-warm-auto.json",
+        "bytes": 414927,
+        "sha256": "2f34a1281b56ed43e506d84a5cfccfc1371961f8f88a2e8ab693c63f1a3cde33",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/warm-final-v2/cipherlink-warm-auto.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/warm-final-v2/cipherlink-warm-required.json",
+        "bytes": 413781,
+        "sha256": "81ab332a8e350947196347bd3ee03d69a5bd7e9332a16a8d4517735b9d29182b",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/warm-final-v2/cipherlink-warm-required.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/warm-final-v2/exam-parent-v3-warm-auto.json",
+        "bytes": 403916,
+        "sha256": "bd425e999d5c2ba604805a0b99ca596a036e7deda666d724022a83954da47c8b",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/warm-final-v2/exam-parent-v3-warm-auto.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/warm-final-v2/exam-parent-v3-warm-required.json",
+        "bytes": 408424,
+        "sha256": "2aec9db48d03cd3c7b062d911c7a15cde1fb546b6e6b869c2e016ea871ab4cfe",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/warm-final-v2/exam-parent-v3-warm-required.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/warm-final-v2/lishuedu-warm-auto.json",
+        "bytes": 424609,
+        "sha256": "090bb98cd19866f4de0a2dfc71cc38f128adfd42cc6f6bb424dff63a6c6a3b22",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/warm-final-v2/lishuedu-warm-auto.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/warm-final-v2/lishuedu-warm-required.json",
+        "bytes": 423605,
+        "sha256": "c4f3771c0c2eb028970a96faf8565951a8145c43e01b82853400e916ffe5d6e5",
+        "kind": "raw-or-verification-json"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/warm-final-v2/lishuedu-warm-required.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/warm-final-v2/warm-summary.json",
+        "bytes": 4430,
+        "sha256": "ae378388fe571905245b759dfb48770b122e2560b4c53ce513b61c89ab484905",
+        "kind": "summary"
+      },
+      {
+        "path": "artifacts/v3-final/task36-remediation-20260809/warm-final-v2/warm-summary.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "kind": "stderr"
+      },
+      {
+        "path": "docs/phase-v3/final-java-intelligence-v3-report.md",
+        "bytes": 39232,
+        "sha256": "b6c9accec1301aae031bbc2ab7a17ae9f068dfa318c60f14bd021e48376587c8",
+        "kind": "report"
+      }
+    ]
+  },
+  "suites": [
+    {
+      "id": "cold-v4-pass3",
+      "role": "PRIMARY_PAIRED_ACCEPTANCE",
+      "selection": "CANONICAL",
+      "binding": "BOUND",
+      "claimCeiling": "STRICT_PAIRED_COLD_GATE",
+      "gate": "PASS",
+      "files": [
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/run-three-repo-cold-matrix.test.mjs",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-fault-suite.mjs",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-fault-suite.test.mjs",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-multiprocess-smoke.mjs",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-multiprocess-smoke.test.mjs",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-multiprocess-worker.mjs",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-tap-evidence.mjs",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/scripts/task36-tap-evidence.test.mjs",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/agent-router/request-budget.test.ts",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/determinism.test.ts",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/determinism.ts",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/java-index-idle.test.ts",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/java-index-idle.ts",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/task36-mutation-matrix.test.ts",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/task36-mutation-matrix.ts",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate-untracked/src/benchmark/verify-determinism.ts",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate.patch",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/candidate.patch.sha256",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios.sha256",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/cipherlink.scenarios.jsonl",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/lishuedu.scenarios.jsonl",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix-summary.json",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/cipherlink-r1-new.json",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/cipherlink-r1-new.json.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/cipherlink-r1-old.json",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/cipherlink-r1-old.json.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/cipherlink-r2-new.json",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/cipherlink-r2-new.json.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/cipherlink-r2-old.json",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/cipherlink-r2-old.json.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/cipherlink-r3-new.json",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/cipherlink-r3-new.json.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/cipherlink-r3-old.json",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/cipherlink-r3-old.json.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/exam-parent-v3-r1-new.json",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/exam-parent-v3-r1-new.json.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/exam-parent-v3-r1-old.json",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/exam-parent-v3-r1-old.json.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/exam-parent-v3-r2-new.json",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/exam-parent-v3-r2-new.json.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/exam-parent-v3-r2-old.json",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/exam-parent-v3-r2-old.json.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/exam-parent-v3-r3-new.json",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/exam-parent-v3-r3-new.json.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/exam-parent-v3-r3-old.json",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/exam-parent-v3-r3-old.json.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/lishuedu-r1-new.json",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/lishuedu-r1-new.json.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/lishuedu-r1-old.json",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/lishuedu-r1-old.json.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/lishuedu-r2-new.json",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/lishuedu-r2-new.json.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/lishuedu-r2-old.json",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/lishuedu-r2-old.json.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/lishuedu-r3-new.json",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/lishuedu-r3-new.json.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/lishuedu-r3-old.json",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/matrix/lishuedu-r3-old.json.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/run-manifest.json"
+      ],
+      "configuration": {
+        "projects": [
+          "lishuedu",
+          "cipherlink",
+          "exam-parent-v3"
+        ],
+        "rounds": [
+          1,
+          2,
+          3
+        ],
+        "variants": [
+          "old",
+          "new"
+        ],
+        "expectedCells": 18,
+        "expectedRuns": 5,
+        "p95Limit": 1.25
+      },
+      "warnings": [],
+      "projects": [
+        {
+          "project": "lishuedu",
+          "old": {
+            "attempts": 120,
+            "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/lishuedu.scenarios.jsonl",
+            "recall": 0.784672619047619,
+            "pRead": 0.6770833333333333,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.604563492063492,
+            "minReadMust": 1,
+            "minTaskBlocking": 0.42857142857142855,
+            "estimatedTokensP50": 8186,
+            "estimatedTokensP95": 10512,
+            "rangeEvidence": {
+              "status": "PARTIAL",
+              "measuredAttempts": 15,
+              "unmeasuredAttempts": 105,
+              "mean": 1,
+              "min": 1
+            },
+            "p50": 22.14354099999764,
+            "p95": 171.93491599999834,
+            "max": 276.3089159999945,
+            "mustFailureScenarios": []
+          },
+          "new": {
+            "attempts": 120,
+            "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/lishuedu.scenarios.jsonl",
+            "recall": 0.784672619047619,
+            "pRead": 0.6770833333333333,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.604563492063492,
+            "minReadMust": 1,
+            "minTaskBlocking": 0.42857142857142855,
+            "estimatedTokensP50": 7554,
+            "estimatedTokensP95": 8911,
+            "rangeEvidence": {
+              "status": "PARTIAL",
+              "measuredAttempts": 15,
+              "unmeasuredAttempts": 105,
+              "mean": 1,
+              "min": 1
+            },
+            "p50": 23.211709000002884,
+            "p95": 166.7929159999985,
+            "max": 272.95587499999965,
+            "mustFailureScenarios": []
+          },
+          "delta": {
+            "recall": 0,
+            "pRead": 0,
+            "rReadMust": 0,
+            "rTaskBlocking": 0,
+            "estimatedTokensP50": -632,
+            "p95Ratio": 0.9700933346197123,
+            "p95ThresholdMs": 221.93491599999834
+          },
+          "gate": {
+            "rReadMust": true,
+            "rTaskBlocking": true,
+            "recall": true,
+            "pRead": true,
+            "estimatedTokens": true,
+            "p95": true
+          },
+          "passed": true
+        },
+        {
+          "project": "cipherlink",
+          "old": {
+            "attempts": 120,
+            "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/cipherlink.scenarios.jsonl",
+            "recall": 0.8322229853479857,
+            "pRead": 0.6375000000000001,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.49141865079365077,
+            "minReadMust": 1,
+            "minTaskBlocking": 0.16666666666666666,
+            "estimatedTokensP50": 8171,
+            "estimatedTokensP95": 10573,
+            "rangeEvidence": {
+              "status": "PARTIAL",
+              "measuredAttempts": 15,
+              "unmeasuredAttempts": 105,
+              "mean": 1,
+              "min": 1
+            },
+            "p50": 56.954249999999774,
+            "p95": 161.09512500000073,
+            "max": 255.18175000000065,
+            "mustFailureScenarios": []
+          },
+          "new": {
+            "attempts": 120,
+            "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/cipherlink.scenarios.jsonl",
+            "recall": 0.8322229853479857,
+            "pRead": 0.6375000000000001,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.49141865079365077,
+            "minReadMust": 1,
+            "minTaskBlocking": 0.16666666666666666,
+            "estimatedTokensP50": 7166,
+            "estimatedTokensP95": 9516,
+            "rangeEvidence": {
+              "status": "PARTIAL",
+              "measuredAttempts": 15,
+              "unmeasuredAttempts": 105,
+              "mean": 1,
+              "min": 1
+            },
+            "p50": 56.94179200000053,
+            "p95": 157.244917,
+            "max": 265.80462500000067,
+            "mustFailureScenarios": []
+          },
+          "delta": {
+            "recall": 0,
+            "pRead": 0,
+            "rReadMust": 0,
+            "rTaskBlocking": 0,
+            "estimatedTokensP50": -1005,
+            "p95Ratio": 0.9760997857632208,
+            "p95ThresholdMs": 211.09512500000073
+          },
+          "gate": {
+            "rReadMust": true,
+            "rTaskBlocking": true,
+            "recall": true,
+            "pRead": true,
+            "estimatedTokens": true,
+            "p95": true
+          },
+          "passed": true
+        },
+        {
+          "project": "exam-parent-v3",
+          "old": {
+            "attempts": 120,
+            "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+            "recall": 0.7789772727272726,
+            "pRead": 0.6041666666666665,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.5002976190476192,
+            "minReadMust": 1,
+            "minTaskBlocking": 0.14285714285714285,
+            "estimatedTokensP50": 7299,
+            "estimatedTokensP95": 11608,
+            "rangeEvidence": {
+              "status": "PARTIAL",
+              "measuredAttempts": 15,
+              "unmeasuredAttempts": 105,
+              "mean": 1,
+              "min": 1
+            },
+            "p50": 34.67987500000072,
+            "p95": 135.17533300000014,
+            "max": 200.91895899999963,
+            "mustFailureScenarios": []
+          },
+          "new": {
+            "attempts": 120,
+            "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass3/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+            "recall": 0.7789772727272726,
+            "pRead": 0.6041666666666665,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.5002976190476192,
+            "minReadMust": 1,
+            "minTaskBlocking": 0.14285714285714285,
+            "estimatedTokensP50": 6444,
+            "estimatedTokensP95": 10365,
+            "rangeEvidence": {
+              "status": "PARTIAL",
+              "measuredAttempts": 15,
+              "unmeasuredAttempts": 105,
+              "mean": 1,
+              "min": 1
+            },
+            "p50": 36.79833400000007,
+            "p95": 136.11770799999977,
+            "max": 204.52091699999983,
+            "mustFailureScenarios": []
+          },
+          "delta": {
+            "recall": 0,
+            "pRead": 0,
+            "rReadMust": 0,
+            "rTaskBlocking": 0,
+            "estimatedTokensP50": -855,
+            "p95Ratio": 1.0069715012279616,
+            "p95ThresholdMs": 185.17533300000014
+          },
+          "gate": {
+            "rReadMust": true,
+            "rTaskBlocking": true,
+            "recall": true,
+            "pRead": true,
+            "estimatedTokens": true,
+            "p95": true
+          },
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "clean-local-validation-v1",
+      "role": "POST_BUILD_RECEIPT",
+      "selection": "CANONICAL_SUPPORTING",
+      "binding": "POST_BUILD_CURRENT_WORKTREE",
+      "claimCeiling": "LOCAL_BUILD_AND_TEST_BEHAVIOR",
+      "gate": "PASS_RECORDED_EXIT_ZERO",
+      "files": [
+        "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/check-fast.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/check-fast.stdout",
+        "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/dead-path-scan.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/dead-path-scan.stdout",
+        "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/environment.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/environment.stdout",
+        "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/generate-final-evidence.mjs",
+        "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/git-diff-check.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/git-diff-check.stdout",
+        "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/npm-audit-prod.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/npm-audit-prod.stdout",
+        "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/npm-build.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/npm-build.stdout",
+        "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/npm-ci.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/npm-ci.stdout",
+        "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/npm-ls-all.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/npm-ls-all.stdout",
+        "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/npm-outdated.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/npm-outdated.stdout",
+        "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/npm-smoke.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/npm-smoke.stdout",
+        "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/npm-test.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/npm-test.stdout",
+        "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/script-tests.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/script-tests.stdout",
+        "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/tool-schema.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/validation-final-v1/tool-schema.stdout.json"
+      ],
+      "observed": {
+        "npmTest": {
+          "pass": 836,
+          "fail": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "scriptTests": {
+          "pass": 25,
+          "fail": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "smokeTools": 5,
+        "fastCheckWarnings": 0,
+        "npmAuditProductionVulnerabilities": 0
+      }
+    },
+    {
+      "id": "fault-v4",
+      "role": "REQUIRED_REGRESSION_GATE",
+      "selection": "CANONICAL_SUPPORTING",
+      "binding": "POST_BUILD_CURRENT_WORKTREE",
+      "claimCeiling": "SELECTED_FAULT_BEHAVIOR",
+      "gate": "PASS",
+      "observed": {
+        "requiredCaseCount": 13,
+        "passed": true
+      },
+      "files": [
+        "artifacts/v3-final/task36-remediation-20260809/fault-suite-final-v4.json",
+        "artifacts/v3-final/task36-remediation-20260809/fault-suite-final-v4.stdout.json",
+        "artifacts/v3-final/task36-remediation-20260809/fault-suite-final-v4.stderr"
+      ]
+    },
+    {
+      "id": "mutation-v4",
+      "role": "REQUIRED_MUTATION_GATE",
+      "selection": "CANONICAL_SUPPORTING",
+      "binding": "POST_BUILD_CURRENT_WORKTREE",
+      "claimCeiling": "WATCHER_RUNTIME_MUTATION_BEHAVIOR",
+      "gate": "PASS",
+      "observed": {
+        "gate": {
+          "expectedCases": 9,
+          "staleCount": 0,
+          "passed": true
+        },
+        "watcher": {
+          "ready": true,
+          "batches": 13,
+          "generations": [
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        },
+        "overlapProbe": {
+          "source": "agent-router",
+          "requestGeneration": 14,
+          "indexedGeneration": 15,
+          "changedDuringRequest": true
+        }
+      },
+      "files": [
+        "artifacts/v3-final/task36-remediation-20260809/mutation-matrix-final-v4.json",
+        "artifacts/v3-final/task36-remediation-20260809/mutation-matrix-final-v4.stdout.json",
+        "artifacts/v3-final/task36-remediation-20260809/mutation-matrix-final-v4.stderr"
+      ]
+    },
+    {
+      "id": "multiprocess-v4",
+      "role": "REQUIRED_MULTIPROCESS_GATE",
+      "selection": "CANONICAL_SUPPORTING",
+      "binding": "POST_BUILD_CURRENT_WORKTREE",
+      "claimCeiling": "SELECTED_SUBPROCESS_AND_ISOLATED_BEHAVIOR",
+      "gate": "PASS",
+      "observed": {
+        "gate": {
+          "subprocessCases": "PASS",
+          "isolatedBehaviorCases": "PASS",
+          "task36Step6a": "PASS"
+        },
+        "configuredMax": {
+          "jdt": 2,
+          "sweep": 2
+        },
+        "observedMax": {
+          "jdt": 2,
+          "sweep": 2
+        },
+        "duplicateCount": {
+          "sameWorktreeJdt": 0
+        },
+        "reclaim": {
+          "deadLeaseReclaimed": true,
+          "staleLeaseReclaims": 2,
+          "livePidStolen": false
+        }
+      },
+      "files": [
+        "artifacts/v3-final/task36-remediation-20260809/multiprocess-smoke-final-v4.json",
+        "artifacts/v3-final/task36-remediation-20260809/multiprocess-smoke-final-v4.stderr"
+      ]
+    },
+    {
+      "id": "determinism-v3",
+      "role": "SUPPORTING_STABILITY_GATE",
+      "selection": "CANONICAL_SUPPORTING",
+      "binding": "POST_BUILD_SCENARIO_HASH_MATCHED",
+      "claimCeiling": "SEMANTIC_OUTPUT_STABILITY",
+      "gate": "PASS",
+      "observed": {
+        "lishuedu": {
+          "version": 1,
+          "input": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/determinism-final-v3/lishuedu.json",
+          "rows": 8,
+          "attempts": 160,
+          "expectedRuns": 20,
+          "stable": true,
+          "gate": "PASS"
+        },
+        "cipherlink": {
+          "version": 1,
+          "input": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/determinism-final-v3/cipherlink.json",
+          "rows": 8,
+          "attempts": 160,
+          "expectedRuns": 20,
+          "stable": true,
+          "gate": "PASS"
+        },
+        "exam-parent-v3": {
+          "version": 1,
+          "input": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/determinism-final-v3/exam-parent-v3.json",
+          "rows": 8,
+          "attempts": 160,
+          "expectedRuns": 20,
+          "stable": true,
+          "gate": "PASS"
+        }
+      },
+      "files": [
+        "artifacts/v3-final/task36-remediation-20260809/determinism-final-v3/cipherlink.json",
+        "artifacts/v3-final/task36-remediation-20260809/determinism-final-v3/cipherlink.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/determinism-final-v3/cipherlink.verify.json",
+        "artifacts/v3-final/task36-remediation-20260809/determinism-final-v3/cipherlink.verify.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/determinism-final-v3/exam-parent-v3.json",
+        "artifacts/v3-final/task36-remediation-20260809/determinism-final-v3/exam-parent-v3.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/determinism-final-v3/exam-parent-v3.verify.json",
+        "artifacts/v3-final/task36-remediation-20260809/determinism-final-v3/exam-parent-v3.verify.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/determinism-final-v3/lishuedu.json",
+        "artifacts/v3-final/task36-remediation-20260809/determinism-final-v3/lishuedu.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/determinism-final-v3/lishuedu.verify.json",
+        "artifacts/v3-final/task36-remediation-20260809/determinism-final-v3/lishuedu.verify.stderr"
+      ]
+    },
+    {
+      "id": "warm-final-v2",
+      "role": "SUPPORTING_POLICY_OBSERVATION",
+      "selection": "CANONICAL_POLICY_EVIDENCE",
+      "binding": "UNBOUND_TO_CANDIDATE_EXECUTABLE_TREE",
+      "claimCeiling": "KEEP_EXPLICIT_POLICY_ONLY",
+      "gate": "SUPPORTS_KEEP_EXPLICIT",
+      "comparability": "NOT_P95_COMPARABLE_TO_COLD: auto=3000ms, required=5000ms, JDT enabled",
+      "observed": {
+        "schemaVersion": 1,
+        "cells": [
+          {
+            "file": "cipherlink-warm-auto.json",
+            "projectId": "cipherlink",
+            "warmState": "warm-auto",
+            "semanticPolicy": "auto",
+            "deadlineMs": 3000,
+            "repoCommit": "fa433982e92e",
+            "rows": 8,
+            "attempts": 40,
+            "recall": 0.8322229853479858,
+            "pRead": 0.6375,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.4914186507936506,
+            "estimatedTokensP50": 7167,
+            "elapsedMsP50": 62.6043750000008,
+            "elapsedMsP95": 1696.2294999999995,
+            "maxElapsedMs": 1796.877708,
+            "semanticUsedAttempts": 15,
+            "semanticTimeoutAttempts": 11,
+            "coverageStates": [
+              "COMPLETE"
+            ],
+            "coverageFailedFiles": 0,
+            "stderrBytes": 0
+          },
+          {
+            "file": "cipherlink-warm-required.json",
+            "projectId": "cipherlink",
+            "warmState": "warm-required",
+            "semanticPolicy": "required",
+            "deadlineMs": 5000,
+            "repoCommit": "fa433982e92e",
+            "rows": 8,
+            "attempts": 40,
+            "recall": 0.8322229853479858,
+            "pRead": 0.6770833333333334,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.5164186507936506,
+            "estimatedTokensP50": 7162,
+            "elapsedMsP50": 62.821750000002794,
+            "elapsedMsP95": 1687.5846669999992,
+            "maxElapsedMs": 3701.2149580000005,
+            "semanticUsedAttempts": 40,
+            "semanticTimeoutAttempts": 0,
+            "coverageStates": [
+              "COMPLETE"
+            ],
+            "coverageFailedFiles": 0,
+            "stderrBytes": 0
+          },
+          {
+            "file": "exam-parent-v3-warm-auto.json",
+            "projectId": "exam-parent-v3",
+            "warmState": "warm-auto",
+            "semanticPolicy": "auto",
+            "deadlineMs": 3000,
+            "repoCommit": "f90a0b475f7b",
+            "rows": 8,
+            "attempts": 40,
+            "recall": 0.7789772727272728,
+            "pRead": 0.6041666666666665,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.5002976190476186,
+            "estimatedTokensP50": 6444,
+            "elapsedMsP50": 67.47195799999827,
+            "elapsedMsP95": 1619.940708,
+            "maxElapsedMs": 1646.7031249999964,
+            "semanticUsedAttempts": 15,
+            "semanticTimeoutAttempts": 15,
+            "coverageStates": [
+              "COMPLETE"
+            ],
+            "coverageFailedFiles": 0,
+            "stderrBytes": 0
+          },
+          {
+            "file": "exam-parent-v3-warm-required.json",
+            "projectId": "exam-parent-v3",
+            "warmState": "warm-required",
+            "semanticPolicy": "required",
+            "deadlineMs": 5000,
+            "repoCommit": "f90a0b475f7b",
+            "rows": 8,
+            "attempts": 40,
+            "recall": 0.7519886363636361,
+            "pRead": 0.6562499999999998,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.5431547619047615,
+            "estimatedTokensP50": 6740,
+            "elapsedMsP50": 69.02408299999661,
+            "elapsedMsP95": 4516.711750000002,
+            "maxElapsedMs": 4569.777666999995,
+            "semanticUsedAttempts": 40,
+            "semanticTimeoutAttempts": 8,
+            "coverageStates": [
+              "COMPLETE"
+            ],
+            "coverageFailedFiles": 0,
+            "stderrBytes": 0
+          },
+          {
+            "file": "lishuedu-warm-auto.json",
+            "projectId": "lishuedu",
+            "warmState": "warm-auto",
+            "semanticPolicy": "auto",
+            "deadlineMs": 3000,
+            "repoCommit": "db63b1a7e393",
+            "rows": 8,
+            "attempts": 40,
+            "recall": 0.784672619047619,
+            "pRead": 0.6770833333333335,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.6045634920634924,
+            "estimatedTokensP50": 7555,
+            "elapsedMsP50": 33.95616600000358,
+            "elapsedMsP95": 180.26162499999919,
+            "maxElapsedMs": 309.86054100000183,
+            "semanticUsedAttempts": 0,
+            "semanticTimeoutAttempts": 0,
+            "coverageStates": [
+              "COMPLETE"
+            ],
+            "coverageFailedFiles": 0,
+            "stderrBytes": 0
+          },
+          {
+            "file": "lishuedu-warm-required.json",
+            "projectId": "lishuedu",
+            "warmState": "warm-required",
+            "semanticPolicy": "required",
+            "deadlineMs": 5000,
+            "repoCommit": "db63b1a7e393",
+            "rows": 8,
+            "attempts": 40,
+            "recall": 0.7703869047619046,
+            "pRead": 0.7249999999999995,
+            "rReadMust": 0.95625,
+            "rTaskBlocking": 0.5874206349206352,
+            "estimatedTokensP50": 7208,
+            "elapsedMsP50": 110.2439999999915,
+            "elapsedMsP95": 4530.13341699999,
+            "maxElapsedMs": 4536.9502909999865,
+            "semanticUsedAttempts": 40,
+            "semanticTimeoutAttempts": 7,
+            "coverageStates": [
+              "COMPLETE"
+            ],
+            "coverageFailedFiles": 0,
+            "stderrBytes": 0
+          }
+        ]
+      },
+      "files": [
+        "artifacts/v3-final/task36-remediation-20260809/warm-final-v2/cipherlink-warm-auto.json",
+        "artifacts/v3-final/task36-remediation-20260809/warm-final-v2/cipherlink-warm-auto.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/warm-final-v2/cipherlink-warm-required.json",
+        "artifacts/v3-final/task36-remediation-20260809/warm-final-v2/cipherlink-warm-required.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/warm-final-v2/exam-parent-v3-warm-auto.json",
+        "artifacts/v3-final/task36-remediation-20260809/warm-final-v2/exam-parent-v3-warm-auto.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/warm-final-v2/exam-parent-v3-warm-required.json",
+        "artifacts/v3-final/task36-remediation-20260809/warm-final-v2/exam-parent-v3-warm-required.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/warm-final-v2/lishuedu-warm-auto.json",
+        "artifacts/v3-final/task36-remediation-20260809/warm-final-v2/lishuedu-warm-auto.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/warm-final-v2/lishuedu-warm-required.json",
+        "artifacts/v3-final/task36-remediation-20260809/warm-final-v2/lishuedu-warm-required.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/warm-final-v2/warm-summary.json",
+        "artifacts/v3-final/task36-remediation-20260809/warm-final-v2/warm-summary.stderr"
+      ]
+    },
+    {
+      "id": "first-touch-final",
+      "role": "POLICY_DECISION_EVIDENCE",
+      "selection": "CANONICAL_POLICY_EVIDENCE",
+      "binding": "UNBOUND_TO_CANDIDATE_EXECUTABLE_TREE",
+      "claimCeiling": "RAW_JDT_FIRST_TOUCH_POLICY_ONLY",
+      "gate": "SUPPORTS_KEEP_EXPLICIT",
+      "comparability": "NOT_P95_COMPARABLE_TO_COLD: raw JDT session API, timeout=60000ms",
+      "observed": {
+        "gate": {
+          "expectedCells": 21,
+          "observedCells": 21,
+          "allCellsHaveTenAttempts": true,
+          "freshP95Under800ms": false,
+          "reusedObservedCacheHitP50Under100ms": "UNMEASURED_RAW_SESSION_API",
+          "failedAttempts": 0,
+          "partialTimeoutAttempts": 2,
+          "outsideRepoFilesMax": 0,
+          "stderrPolicy": "validated separately: all official cell stderr files are empty"
+        },
+        "decision": "KEEP_EXPLICIT",
+        "anchors": {
+          "lishuedu": {
+            "scenarioId": "storage-signed-url",
+            "definitionReferences": {
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/domain/port/StorageGateway.java",
+              "cliOneBased": {
+                "line": 36,
+                "column": 28
+              },
+              "lspZeroBased": {
+                "line": 35,
+                "column": 27
+              }
+            },
+            "typeHierarchy": {
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/domain/port/StorageGateway.java",
+              "cliOneBased": {
+                "line": 18,
+                "column": 18
+              },
+              "lspZeroBased": {
+                "line": 17,
+                "column": 17
+              }
+            }
+          },
+          "cipherlink": {
+            "scenarioId": "transfer-upload-session-repository",
+            "definitionReferences": {
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/application/TransferRepository.java",
+              "cliOneBased": {
+                "line": 13,
+                "column": 32
+              },
+              "lspZeroBased": {
+                "line": 12,
+                "column": 31
+              }
+            },
+            "typeHierarchy": {
+              "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/application/TransferRepository.java",
+              "cliOneBased": {
+                "line": 7,
+                "column": 18
+              },
+              "lspZeroBased": {
+                "line": 6,
+                "column": 17
+              }
+            }
+          },
+          "exam-parent-v3": {
+            "scenarioId": "current-user-service-implementer-edge",
+            "definitionReferences": {
+              "file": "exam-management/src/main/java/com/hhtele/exam/management/controller/examination/ExaminationCheckController.java",
+              "cliOneBased": {
+                "line": 47,
+                "column": 88
+              },
+              "lspZeroBased": {
+                "line": 46,
+                "column": 87
+              }
+            },
+            "typeHierarchy": {
+              "file": "exam-data/src/main/java/com/hhtele/exam/data/service/CurrentUserService.java",
+              "cliOneBased": {
+                "line": 9,
+                "column": 18
+              },
+              "lspZeroBased": {
+                "line": 8,
+                "column": 17
+              }
+            }
+          }
+        }
+      },
+      "files": [
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-fresh-document-symbol-references.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-fresh-document-symbol-references.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-fresh-document-symbol-references.stdout.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-fresh-none-definition.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-fresh-none-definition.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-fresh-none-definition.stdout.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-fresh-none-references.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-fresh-none-references.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-fresh-none-references.stdout.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-fresh-progress-idle-references.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-fresh-progress-idle-references.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-fresh-progress-idle-references.stdout.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-reused-shared-none-definition.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-reused-shared-none-definition.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-reused-shared-none-definition.stdout.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-reused-shared-none-references.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-reused-shared-none-references.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-reused-shared-none-references.stdout.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-reused-shared-none-type-hierarchy.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-reused-shared-none-type-hierarchy.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-reused-shared-none-type-hierarchy.stdout.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-fresh-document-symbol-references.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-fresh-document-symbol-references.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-fresh-document-symbol-references.stdout.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-fresh-none-definition.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-fresh-none-definition.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-fresh-none-definition.stdout.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-fresh-none-references.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-fresh-none-references.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-fresh-none-references.stdout.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-fresh-progress-idle-references.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-fresh-progress-idle-references.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-fresh-progress-idle-references.stdout.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-reused-shared-none-definition.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-reused-shared-none-definition.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-reused-shared-none-definition.stdout.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-reused-shared-none-references.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-reused-shared-none-references.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-reused-shared-none-references.stdout.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-reused-shared-none-type-hierarchy.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-reused-shared-none-type-hierarchy.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-reused-shared-none-type-hierarchy.stdout.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/first-touch-summary.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-fresh-document-symbol-references.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-fresh-document-symbol-references.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-fresh-document-symbol-references.stdout.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-fresh-none-definition.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-fresh-none-definition.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-fresh-none-definition.stdout.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-fresh-none-references.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-fresh-none-references.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-fresh-none-references.stdout.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-fresh-progress-idle-references.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-fresh-progress-idle-references.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-fresh-progress-idle-references.stdout.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-reused-shared-none-definition.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-reused-shared-none-definition.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-reused-shared-none-definition.stdout.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-reused-shared-none-references.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-reused-shared-none-references.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-reused-shared-none-references.stdout.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-reused-shared-none-type-hierarchy.json",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-reused-shared-none-type-hierarchy.stderr",
+        "artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-reused-shared-none-type-hierarchy.stdout.json"
+      ]
+    }
+  ],
+  "supersedes": [
+    {
+      "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass1",
+      "reason": "SUPERSEDED_BY_PASS3"
+    },
+    {
+      "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-final-source-locked-v4-pass2",
+      "reason": "SUPERSEDED_ENVIRONMENT_INTERFERENCE"
+    },
+    {
+      "path": "artifacts/v3-final/task36-remediation-20260809/cold-matrix-phase5-baseline-final",
+      "reason": "SUPERSEDED_BY_SOURCE_LOCKED_V4"
+    },
+    {
+      "path": "artifacts/v3-final/task36-remediation-20260809/fault-suite-final-v3.json",
+      "reason": "SUPERSEDED_BY_V4"
+    },
+    {
+      "path": "artifacts/v3-final/task36-remediation-20260809/mutation-matrix-final-v3.json",
+      "reason": "SUPERSEDED_BY_V4"
+    },
+    {
+      "path": "artifacts/v3-final/task36-remediation-20260809/multiprocess-smoke-final-v3.json",
+      "reason": "SUPERSEDED_BY_V4"
+    },
+    {
+      "path": "artifacts/v3-final/task36-remediation-20260809/determinism-final-v2",
+      "reason": "SUPERSEDED_BY_V3"
+    }
+  ],
+  "knownUnmeasured": [
+    "Phase0 48e665b three-repository numeric comparison",
+    "six end-to-end Agent trace before/after comparison",
+    "real foreground-anchor P95 under a 500-file storm",
+    "full readPlan range recall beyond the 15/120 measured attempts per cold variant",
+    "complete per-provider counterfactual cost attribution",
+    "DocumentLru performance attribution in a JDT-enabled paired matrix",
+    "SemanticGateway cacheHit/shared values from the raw-session first-touch API"
+  ],
+  "overall": {
+    "deliveryGate": "ACCEPT_WITH_DOCUMENTED_EXCEPTION",
+    "policyDecision": "KEEP_EXPLICIT",
+    "evidenceCompleteness": "COMPLETE_WITH_DECLARED_UNMEASURED",
+    "strictComparisonScope": "7df1a0e approved executable docs baseline to candidate executable tree 60ae785e",
+    "prohibitedClaim": "Do not report an overall 48e665b-to-final improvement percentage."
+  }
+}

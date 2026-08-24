@@ -1,0 +1,253 @@
+{
+  "schemaVersion": 2,
+  "sprint": "V3.2 Sprint 1",
+  "decision": "CONTRACT_ACCEPTED_WITH_INHERITED_GAPS",
+  "createdAt": "2026-08-09T20:48:08Z",
+  "formalRun": {
+    "localRoot": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-ku4jAX/formal",
+    "retention": "LOCAL_EPHEMERAL",
+    "coldManifestVersion": 5,
+    "coldVerifierVersion": 5,
+    "optimizationManifestSchemaVersion": 2,
+    "artifacts": [
+      {
+        "path": "optimization-manifest.json",
+        "bytes": 108616,
+        "sha256": "653de3e6c343f1dabf45304b6b20753def929c6ffa97f8c85cd19887d6242db6",
+        "payloadSha256": "a53dfbce825a932aa2335c8fd3db05cb9a840b1a61fdfbe91117b5af3bbc766e"
+      },
+      {
+        "path": "cold/run-manifest.json",
+        "bytes": 9193,
+        "sha256": "550ef03aab9dc7e82ff02ddd310adc628f9e3bb7166b92315870b6833d41d98c"
+      },
+      {
+        "path": "cold/matrix-summary.json",
+        "bytes": 44582,
+        "sha256": "51f3a79fb2e5dafda5d65e7fd280901d836a32947b0b6271bb6572ea9edcbbaf",
+        "inputSha256": "cdee3d665750918b8747e9af453868f086367bcb873c7b3ab43abb573b63d8ab"
+      },
+      {
+        "path": "cold/candidate.patch",
+        "bytes": 194418,
+        "sha256": "006a3a5a76d4d276ac295e12ef279a0dcd8aa927b3b385c3ca3a844634cc138b"
+      },
+      {
+        "path": "task-ledger.json",
+        "bytes": 4716,
+        "sha256": "36535bb49288906daf06199ebfca6b66ed95b71892608eebad28d17b2a791c2f"
+      },
+      {
+        "path": "cold/candidate-tests/dist.tap",
+        "bytes": 208108,
+        "sha256": "0b6be5548af89e85e2237abb0f6ed795d83fcbffae1b56ee6fe19392f9880a3e"
+      },
+      {
+        "path": "cold/candidate-tests/scripts.tap",
+        "bytes": 16122,
+        "sha256": "5120bcf9b65210fabee9c83df7499972e3424cd8563866ed3f88503f40288d75"
+      }
+    ]
+  },
+  "independentVerification": {
+    "kind": "ARTIFACT_MANIFEST_INTEGRITY_REPLAY",
+    "path": "docs/phase-v3/v32-sprint1-verification-receipt.json",
+    "bytes": 2279,
+    "sha256": "452e15acef20c61d36efc45f550b0bd3d6618a6e71f9db4564d8129fe229a273",
+    "verificationStatus": "PASS",
+    "resultStatus": "BASELINE_RECORDED_WITH_GAPS",
+    "coldGatePassed": false,
+    "reranCandidateTests": false,
+    "reranMatrix": false
+  },
+  "sourceIdentity": {
+    "baselineCommit": "f7f080df80e8b96b336b1bfeeeb15a23798eab22",
+    "baselineTree": "628bb4d250b453d9e7ad5e5c7b23aa2f363e9e20",
+    "candidateBaseCommit": "f7f080df80e8b96b336b1bfeeeb15a23798eab22",
+    "candidateCommitTree": "628bb4d250b453d9e7ad5e5c7b23aa2f363e9e20",
+    "candidateExecutableTree": "487b242544039aafb014882d2beb0d147ec59550",
+    "candidatePatchSha256": "006a3a5a76d4d276ac295e12ef279a0dcd8aa927b3b385c3ca3a844634cc138b",
+    "candidatePatchPaths": 38,
+    "nestedRuntimeInputs": 0,
+    "lineageNote": "The outer detached-clone wrapper materialized the selected Sprint 1 worktree inputs before invoking the cold runner. The runtime candidate is the executable tree, not merely the base commit."
+  },
+  "tests": {
+    "dist": {
+      "discovered": 898,
+      "passed": 898,
+      "failed": 0,
+      "tapSha256": "0b6be5548af89e85e2237abb0f6ed795d83fcbffae1b56ee6fe19392f9880a3e"
+    },
+    "scripts": {
+      "discovered": 71,
+      "passed": 71,
+      "failed": 0,
+      "tapSha256": "5120bcf9b65210fabee9c83df7499972e3424cd8563866ed3f88503f40288d75"
+    }
+  },
+  "dependencies": {
+    "copyMode": "private-content-verified-copy",
+    "schemaVersion": 1,
+    "algorithm": "sha256-path-type-size-content-v1",
+    "files": 4086,
+    "directories": 660,
+    "symlinks": 7,
+    "bytes": 58951103,
+    "sha256": "0362908244299e2d61f87cb5d1037d9609abd11f8d0afae2cc89c3569ce13bc6"
+  },
+  "environment": {
+    "node": {
+      "version": "v22.16.0",
+      "execPath": "/Users/luo/.nvm/versions/node/v22.16.0/bin/node"
+    },
+    "platform": "darwin",
+    "arch": "arm64",
+    "jdt": {
+      "state": "DISABLED_FOR_COLD",
+      "binary": "/usr/bin/false",
+      "version": "UNMEASURED"
+    },
+    "typescript": "5.9.3",
+    "treeSitter": "0.25.0",
+    "treeSitterJava": "0.23.5",
+    "packageJsonSha256": "838eb208b19c8e672336074286c5c1739d91454ac5fce26c82f0b06014e9de02",
+    "packageLockSha256": "5a4135dc47b8ad14e27bfff700f16ef4094dccbaf262c4fd0c51688a678f3cf7"
+  },
+  "productionTypeScript": {
+    "baseline": {
+      "files": 130,
+      "bytes": 1338710,
+      "loc": 33208,
+      "inventorySha256": "cf14a1d11087f31ed6bfe7460e0bfb89d055f10bd5b9ede914b8c777fc6d2461"
+    },
+    "candidate": {
+      "files": 132,
+      "bytes": 1355798,
+      "loc": 33634,
+      "inventorySha256": "5ffc0bc090d38c1d39a58f10c67491124d52afb83f692bf89805cc91017f3b76"
+    },
+    "delta": {
+      "files": 2,
+      "bytes": 17088,
+      "loc": 426
+    },
+    "sprintMaximumLoc": 34868,
+    "finalTargetLoc": 33208,
+    "ledger": "docs/phase-v3/v32-sprint1-loc-ledger.json",
+    "ledgerSha256": "36535bb49288906daf06199ebfca6b66ed95b71892608eebad28d17b2a791c2f"
+  },
+  "repositories": {
+    "lishuedu": {
+      "commit": "db63b1a7e393edd90449eb013d7d1c4d65c366f2",
+      "tree": "22f0ce444e4cac484de85c8a0bf02240ad70d712",
+      "scenarioSha256": "fba58bb3e3e77dfb37f7ded03fb2a9ff02612658b08ca48b15927d102c434c65"
+    },
+    "cipherlink": {
+      "commit": "fa433982e92e52dd610650d1e79f2d041179b1d3",
+      "tree": "21a1075c7b211932a4cdb2abf2742521b1eba31f",
+      "scenarioSha256": "e60dfebcc6cd764e6488c647793db72e098b7cf66385f8012e023fedcaf535d5"
+    },
+    "exam-parent-v3": {
+      "commit": "f90a0b475f7be2ed003703feecec8195bc7eb976",
+      "tree": "dcdb2024879686451859c64260c7e1f3a4721fa7",
+      "scenarioSha256": "da84c560c46c7c90d6dbabea38b43b5695a7a23dcd2f608e8c6dcd63cae4f69e"
+    }
+  },
+  "matrix": {
+    "cells": 18,
+    "runsPerScenario": 5,
+    "scenarioRows": 30,
+    "attemptsPerProjectPerSide": 150,
+    "jdtlsDisabled": true,
+    "verbosity": "standard",
+    "projects": {
+      "lishuedu": {
+        "p50MsOld": 36.62449999999808,
+        "p50MsNew": 39.8785410000055,
+        "p95MsOld": 253.00770799999736,
+        "p95MsNew": 255.36895900000673,
+        "p95Ratio": 1.0093327235706566,
+        "estimatedTokensP50Old": 4382,
+        "estimatedTokensP50New": 4382,
+        "recallOld": 0.7923214285714283,
+        "recallNew": 0.7923214285714283,
+        "pReadOld": 0.7083333333333329,
+        "pReadNew": 0.7083333333333329,
+        "rReadMustOld": 0.9,
+        "rReadMustNew": 0.9,
+        "rangeCoordinateMeanOld": 0.6342857142857143,
+        "rangeCoordinateMeanNew": 0.6342857142857143,
+        "gate": "FAIL"
+      },
+      "cipherlink": {
+        "p50MsOld": 43.16087500000003,
+        "p50MsNew": 46.69116599999961,
+        "p95MsOld": 174.84362499999952,
+        "p95MsNew": 185.2217499999997,
+        "p95Ratio": 1.0593566108000805,
+        "estimatedTokensP50Old": 3682,
+        "estimatedTokensP50New": 3682,
+        "recallOld": 0.8157783882783886,
+        "recallNew": 0.8157783882783886,
+        "pReadOld": 0.6433333333333329,
+        "pReadNew": 0.6433333333333329,
+        "rReadMustOld": 0.9099999999999996,
+        "rReadMustNew": 0.9099999999999996,
+        "rangeCoordinateMeanOld": 0.85,
+        "rangeCoordinateMeanNew": 0.85,
+        "gate": "FAIL"
+      },
+      "exam-parent-v3": {
+        "p50MsOld": 68.1825000000008,
+        "p50MsNew": 66.96454199999971,
+        "p95MsOld": 184.8513750000002,
+        "p95MsNew": 186.7686250000006,
+        "p95Ratio": 1.0103718460303603,
+        "estimatedTokensP50Old": 3466,
+        "estimatedTokensP50New": 3466,
+        "recallOld": 0.7095066045066044,
+        "recallNew": 0.7095066045066044,
+        "pReadOld": 0.5833333333333331,
+        "pReadNew": 0.5833333333333331,
+        "rReadMustOld": 0.8800000000000008,
+        "rReadMustNew": 0.8800000000000008,
+        "rangeCoordinateMeanOld": 0.5525000000000001,
+        "rangeCoordinateMeanNew": 0.5525000000000001,
+        "gate": "FAIL"
+      }
+    }
+  },
+  "singleAnchorParity": {
+    "scenarioRows": 30,
+    "allRowsHaveExactlyOneAnchor": true,
+    "pairedAttempts": 450,
+    "rowIdMismatches": 0,
+    "determinismSnapshotMismatches": 0,
+    "candidatePathOrderMismatches": 0,
+    "readPlanMismatches": 0,
+    "completionMismatches": 0,
+    "roundTripMismatches": 0,
+    "aggregateQualityMetricDeltas": 0,
+    "estimatedTokenP50Scope": "PROJECT_AGGREGATE",
+    "estimatedTokenP50Deltas": 0,
+    "excludedDiagnosticVariability": {
+      "rgRawBytesSuppressedAttempts": 390,
+      "oneBytePayloadAttempts": 16,
+      "estimatedTokenAttemptDeltas": 7,
+      "rowLevelEstimatedTokenP50Deltas": 1,
+      "note": "These diagnostic byte deltas are not attributed to a proven cause. One row-level estimated-token P50 differs by one token, while every project-level estimated-token P50 is unchanged. They do not change candidate paths, read-plan contents, completion, round trips, or aggregate quality."
+    }
+  },
+  "taskStatus": {
+    "V3.2-08": "PASS",
+    "V3.2-09": "PASS",
+    "V3.2-10": "PASS"
+  },
+  "knownEvidenceGaps": [
+    "The formal cold matrix contains only single-anchor scenarios. Multi-anchor semantics are covered by the source-locked 898-test suite, not by a real-repository multi-anchor matrix cell.",
+    "The formal cold matrix disables JDT and therefore does not validate real JDT multi-anchor or first-touch behavior.",
+    "The inherited holdout R_read_must and exact range gates remain below 1 in all three repositories; Sprint 1 preserved them but did not improve them.",
+    "The large raw artifact directory is local and ephemeral. This receipt preserves hashes but is not immutable object-storage retention.",
+    "The independent replay validates recorded evidence integrity; it does not rerun candidate tests or matrix cells."
+  ]
+}

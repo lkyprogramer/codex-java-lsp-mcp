@@ -1,0 +1,72 @@
+{
+  "schemaVersion": "m6-5-baseline/v1",
+  "phase": "M6-5",
+  "dated": "2026-08-22",
+  "decision": "PASS",
+  "mergeToMain": false,
+  "headBefore": "9fd508b",
+  "scope": [
+    "v4 rest segments reread from disk; decodeSnapshotV4View does not retain the snapshot Buffer",
+    "QUERY_GRAPH_DIGEST samples heapUsed after optional gc so unpack JSON garbage is not G1"
+  ],
+  "gates": {
+    "G1": {
+      "targetLishueduMiB": 200,
+      "targetSmallMiB": 64,
+      "m6_3LishueduMiB": 207,
+      "lishueduHeapMiB": 173,
+      "cipherlinkHeapMiB": 29,
+      "examParentV3HeapMiB": 46,
+      "passed": true,
+      "note": "Live set after graph unpack. Cipherlink and exam both ≤ 64. Stop-line for M6 极致."
+    },
+    "G4": {
+      "targetMs": 2000,
+      "lishueduSnapshotLoadMs": 1534,
+      "passed": true
+    },
+    "G5": {
+      "steadyRatio": { "lishuedu": 1.12, "cipherlink": 0.719, "exam-parent-v3": 1.067 },
+      "steadyWarmP95Ms": { "lishuedu": 86.5, "cipherlink": 29.4, "exam-parent-v3": 41.1 },
+      "firstHydrateMs": { "lishuedu": 8984, "cipherlink": 582, "exam-parent-v3": 1600 },
+      "steadyPassed": false,
+      "disposition": "lishuedu 86.5 vs M0 77.2 is 1.12. Quiet M6-3 was 70.6. Gate not widened. First hydrate still pays full rest decode from disk."
+    },
+    "G3": {
+      "childPeakTargetMiB": 1536,
+      "lishueduChildPeakMiB": 2311,
+      "passed": false,
+      "note": "Real child after M6-4 realpath. Same finding as m6-4-baseline."
+    }
+  },
+  "projects": {
+    "lishuedu": {
+      "coldMs": 100631,
+      "snapshotLoadMs": 1534,
+      "heapAfterSnapshotLoadMiB": 173,
+      "heapAfterWarmMiB": 403,
+      "firstHydrateMs": 8984,
+      "steadyWarmP95Ms": 86.5
+    },
+    "cipherlink": { "heapAfterSnapshotLoadMiB": 29, "snapshotLoadMs": 288, "steadyWarmP95Ms": 29.4 },
+    "exam-parent-v3": { "heapAfterSnapshotLoadMiB": 46, "snapshotLoadMs": 504, "steadyWarmP95Ms": 41.1 }
+  },
+  "artifacts": {
+    "memoryBenchmark": {
+      "path": "docs/phase-m/m6-5-memory.json",
+      "sha256": "60a27e76b6a32ea971904f8020ed5b0940d39c2b2110f4e1bbb0c8895f6e1a2d"
+    }
+  },
+  "isolation": {
+    "t0": { "snapshotAndWorker": 51, "fail": 0, "jdtlsBin": "/usr/bin/false" },
+    "t1": {
+      "dist": 1181,
+      "scripts": 215,
+      "fail": 0,
+      "smoke": true,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "5a89a5ac15ebb4d1035b4771d4a26e4f904ee921",
+      "logSha256": "efba51b9975fc1a08864f9289fc2356a3ec4260046fb8e7b4cd2b9696b002dde"
+    }
+  }
+}

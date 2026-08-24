@@ -1,0 +1,23 @@
+{
+  "purpose": "V3.2-21 admission-gate design orientation: does semanticPolicy=auto's current profile-gated live JDT usage still produce zero measured quality delta on the current tree (post Sprint1/2/3), replicating Task 35's 2026-08-07/08 finding recorded in docs/phase-v3/phase5-semantic-first-touch-decision.md.",
+  "sourceCommit": "3030975",
+  "realJdtBinary": "/opt/homebrew/bin/jdtls (1.56.0)",
+  "isolation": "run-isolated-node.sh -> run-isolated-validation.mjs (--profile compile) -> run-isolated-jdt-benchmark.mjs -> dist/benchmark-agent-impact.js, detached clones for both the source repo and each golden Java repo",
+  "runsPerCell": 5,
+  "goldenScenariosPerRepo": 10,
+  "cells": {
+    "cipherlink": {
+      "cold-nolsp": { "recall": 0.8157783882783886, "pRead": 0.6433333333333333, "rReadMust": 0.9100000000000001, "rTaskBlocking": 0.45374098124098106, "estimatedTokens": 3852.8, "elapsedMsP50": 22.336499999999887, "elapsedMsP95": 100.671875 },
+      "warm-auto":  { "recall": 0.8157783882783886, "pRead": 0.6433333333333333, "rReadMust": 0.9100000000000001, "rTaskBlocking": 0.45374098124098106, "estimatedTokens": 3852.7, "elapsedMsP50": 24.089207999999417, "elapsedMsP95": 1571.0004169999993 }
+    },
+    "exam-parent-v3": {
+      "cold-nolsp": { "recall": 0.7095066045066045, "pRead": 0.5833333333333333, "rReadMust": 0.8799999999999997, "rTaskBlocking": 0.4502380952380949, "estimatedTokens": 3884.6, "elapsedMsP50": 18.972749999999905, "elapsedMsP95": 131.55191600000035 },
+      "warm-auto":  { "recall": 0.7095066045066045, "pRead": 0.5833333333333333, "rReadMust": 0.8799999999999997, "rTaskBlocking": 0.4502380952380949, "estimatedTokens": 3885.52, "elapsedMsP50": 30.024457999999868, "elapsedMsP95": 1611.257291 }
+    },
+    "lishuedu": {
+      "cold-nolsp": { "recall": 0.7923214285714287, "pRead": 0.7083333333333336, "rReadMust": 0.9, "rTaskBlocking": 0.5721123321123323, "estimatedTokens": 4356.74, "elapsedMsP50": 19.88054099999863, "elapsedMsP95": 223.04433399999834 },
+      "warm-auto":  { "recall": 0.7923214285714287, "pRead": 0.7083333333333336, "rReadMust": 0.9, "rTaskBlocking": 0.5721123321123323, "estimatedTokens": 4357.94, "elapsedMsP50": 19.238666999997804, "elapsedMsP95": 1571.7101249999978 }
+    }
+  },
+  "finding": "recall/pRead/rReadMust/rTaskBlocking are bit-identical between cold-nolsp and warm-auto on all three repos (estimatedTokens differs only at floating-point-noise scale, <=1.2 out of ~3850-4360). elapsedMsP95 jumps 7.0x-15.6x (cipherlink 100.7ms->1571.0ms, exam-parent-v3 131.6ms->1611.3ms, lishuedu 223.0ms->1571.7ms). This exactly replicates Task 35's original 2026-08-07/08 finding on the pre-Sprint1/2/3 tree - Sprint1's multi-anchor contract, Sprint2's JavaIndex batching, and Sprint3's progressive index did not change this outcome."
+}

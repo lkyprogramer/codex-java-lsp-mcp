@@ -1,0 +1,79 @@
+{
+  "schemaVersion": "jin-n2a-discovery-replay/v1",
+  "dated": "2026-08-20",
+  "passed": true,
+  "results": [
+    {
+      "project": "lishuedu",
+      "scenarioId": "paper-task-claim-iam-holdout",
+      "anchor": "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperTaskCommandAppService.java",
+      "target": "modules/iam/src/main/java/com/lishu/edu/iam/application/service/MeQueryService.java",
+      "maxHops": 2,
+      "hop": 2,
+      "hit": true
+    },
+    {
+      "project": "cipherlink",
+      "scenarioId": "backend-operation-log-aspect-async-audit-holdout",
+      "anchor": "apps/cipherlink-backend/src/main/java/com/hhtele/cipherlink/backend/config/BackendOperationLogAspect.java",
+      "target": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/DefaultOperationLogAppService.java",
+      "maxHops": 3,
+      "hop": 2,
+      "hit": true
+    },
+    {
+      "project": "cipherlink",
+      "scenarioId": "client-release-storage-presign-holdout",
+      "anchor": "modules/storage/src/main/java/com/hhtele/cipherlink/storage/infrastructure/DefaultClientReleasePackageStorageGateway.java",
+      "target": "modules/client/src/main/java/com/hhtele/cipherlink/client/infrastructure/persistence/mapper/ClientReleaseMapper.java",
+      "maxHops": 3,
+      "hop": 2,
+      "hit": true
+    },
+    {
+      "project": "exam-parent-v3",
+      "scenarioId": "exam-room-print-download-types-persistent-bundle",
+      "anchor": "exam-management/src/main/java/com/hhtele/exam/management/controller/examination/ExamRoomPrintController.java",
+      "target": "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/ExamRoomPrintBundleJob.java",
+      "maxHops": 3,
+      "hop": 2,
+      "hit": true
+    },
+    {
+      "project": "exam-parent-v3",
+      "scenarioId": "exam-room-print-download-types-persistent-bundle",
+      "anchor": "exam-management/src/main/java/com/hhtele/exam/management/controller/examination/ExamRoomPrintController.java",
+      "target": "exam-data/src/main/java/com/hhtele/exam/data/repository/examination/ExamRoomPrintBundleJobTemplate.java",
+      "maxHops": 3,
+      "hop": 2,
+      "hit": true
+    },
+    {
+      "project": "exam-parent-v3",
+      "scenarioId": "candidate-pay-order-cross-module-admission",
+      "anchor": "exam-candidate/src/main/java/com/hhtele/exam/candidate/controller/order/OrderController.java",
+      "target": "exam-data/src/main/java/com/hhtele/exam/data/repository/order/ApplyPayTemplate.java",
+      "maxHops": 3,
+      "hop": 2,
+      "hit": true
+    },
+    {
+      "project": "exam-parent-v3",
+      "scenarioId": "candidate-pay-order-cross-module-admission",
+      "anchor": "exam-candidate/src/main/java/com/hhtele/exam/candidate/controller/order/OrderController.java",
+      "target": "exam-data/src/main/java/com/hhtele/exam/data/repository/order/OrderRepository.java",
+      "maxHops": 3,
+      "hop": 3,
+      "hit": true
+    },
+    {
+      "project": "exam-parent-v3",
+      "scenarioId": "candidate-pay-order-cross-module-admission",
+      "anchor": "exam-candidate/src/main/java/com/hhtele/exam/candidate/controller/order/OrderController.java",
+      "target": "exam-data/src/main/java/com/hhtele/exam/data/entity/manage/PayAccount.java",
+      "maxHops": 4,
+      "hop": 1,
+      "hit": true
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": "e-e2-closeout/v1",
+  "track": "e",
+  "card": "E2",
+  "dated": "2026-08-23",
+  "decision": "COMPLETE",
+  "mergeToMain": false,
+  "scope": [
+    "scripts/run-agent-trace-live.mjs ARM_SYSTEM_PROMPTS + promptFingerprints"
+  ],
+  "srcTouched": false,
+  "defaultChainIdentity": "UNCHANGED",
+  "maxLiveRounds": 8,
+  "prompts": {
+    "old": {
+      "text": "Explore this task's impact surface with the java_impact tool only. If the result points to uncovered directions (unresolved / next / evidenceGaps), call again until you can fully describe the impact surface, or until the 8-round limit. Never ask for whole files. Never invent file paths.",
+      "sha256": "fc1de30f29b0dc86e4fc8195223d47c7827b10b756af7808c11d0467bb966bc8"
+    },
+    "jin": {
+      "text": "Explore this task's impact surface with the java_context tool only. Intent is required. If the result points to uncovered directions (unresolved / next / evidenceGaps), call again until you can fully describe the impact surface, or until the 8-round limit. Never ask for whole files. Never invent file paths.",
+      "sha256": "de27ad1405aed696a92055b384d552193070e73f3319ed250478ecb3d96001a8"
+    }
+  },
+  "residual": "JAVA_CONTEXT_TOOL description still says Prefer one search / mode=navigate only. Out of E2 ARM_SYSTEM_PROMPTS scope; leave for C1/E3 unless L1 still under-navigates.",
+  "isolation": {
+    "t0": {
+      "tests": 27,
+      "fail": 0,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "12fbec11c25a6105c95e9f66e1ec4e077d63ed73",
+      "logSha256": "121e5d7d8de1bc445ef2b1170904d1441a118cac3be3240f8611e5331b40dc77"
+    }
+  }
+}

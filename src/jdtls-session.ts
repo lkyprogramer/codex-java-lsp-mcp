@@ -1,102 +1,140 @@
 // input: MCP tool requests that need Java semantic information.
 // output: Managed Eclipse JDT LS requests and normalized raw LSP responses.
 // pos: Stateful LSP client and process manager for the generic Java LSP MCP bridge.
-import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { createWriteStream, existsSync, readFileSync, rmSync, statSync } from "node:fs";
+import { createWriteStream, existsSync, rmSync } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import {
-  createMessageConnection,
-  CancellationTokenSource,
-  StreamMessageReader,
-  StreamMessageWriter,
-  type MessageConnection
-} from "vscode-jsonrpc/node.js";
+  NoopCrossProcessLeaseStore,
+  type CompositeJdtLease,
+  type CrossProcessLeaseStore,
+  type JdtLeaseAcquireResult
+} from "./cross-process-lease.js";
+import { JdtRestartBackoff, type JdtRestartBackoffStatus } from "./jdt-restart-backoff.js";
 import {
-  isFileWatchEnabled,
-  JavaFileWatcher,
-  WatchedFileChangeType,
-  type FileWatcherStatus,
-  type WatchedFileChange
-} from "./file-watcher.js";
+  defaultJdtlsTransportFactory,
+  type JdtlsChild,
+  type JdtlsConnection,
+  type JdtlsTransportAttempt,
+  type JdtlsTransportFactory
+} from "./jdtls-transport.js";
+import { repoHash } from "./path-utils.js";
+import { DeadlineBudget } from "./runtime/deadline-budget.js";
+import { JavaIntelligenceError } from "./runtime/intelligence-error.js";
+import { DocumentLru } from "./document-lru.js";
 import { detectGeneratedCode, type GeneratedCodeStatus } from "./generated-code.js";
 import { detectBuildSystem, resolveProjectJdk, type BuildSystem, type ProjectJdkStatus } from "./project-jdk.js";
-import { fromFileUri, repoCacheRoot, toFileUri } from "./repo-layout.js";
-import { resourceDefaults } from "./resource-defaults.js";
+import { toFileUri } from "./repo-layout.js";
+import type { RepoOwnershipLease, RepoOwnerTransport } from "./repo-ownership-lease.js";
+import { processStartIdentityForPid } from "./repo-ownership-lease.js";
+import type { RepoChangeBatch } from "./repo-generation.js";
 import { touchRepoCache } from "./worktree-cache-cleanup.js";
+import type { WorktreeIdentity } from "./worktree-identity.js";
+import {
+  SemanticGateway,
+  type SemanticGatewayStatus
+} from "./semantic-gateway.js";
+import {
+  JdtFirstTouchRecorder,
+  type JdtFirstTouchExecution,
+  type JdtFirstTouchTraceHandle
+} from "./jdtls-first-touch.js";
+import {
+  createJdtlsSemanticBackend,
+  filterGeneratedCodeDiagnostics,
+  lifecycleGateFromRestartBackoffStatus,
+  buildInitializeParams,
+  buildJavaSettings,
+  pickJavaConfigurationSection
+} from "./jdtls-semantic-backend.js";
+import {
+  DEFAULT_LSP_REQUEST_TIMEOUT_MS,
+  JdtlsLspClient,
+  buildJdtlsEnv,
+  classifyJdtStartError,
+  findExecutable,
+  forceTerminateJdtlsChild,
+  isMissingFileError,
+  jvmArgs,
+  leaseAcquireResultToError,
+  positiveInteger,
+  resolveJdtlsRuntimePaths,
+  splitArgs,
+  terminateChild,
+  validateJdtlsTransportEnvironment,
+  watchedFileChange,
+  withTimeout,
+  type SemanticGenerationClock
+} from "./jdtls-lsp-io.js";
+import type { LspDiagnostic } from "./jdtls-lsp-types.js";
 
-export type LspPosition = {
-  line: number;
-  character: number;
-};
+export type { HierarchyEdge, HierarchyResult } from "./jdtls-hierarchy-walk.js";
+export {
+  createJdtlsSemanticBackend,
+  filterGeneratedCodeDiagnostics,
+  lifecycleGateFromRestartBackoffStatus,
+  semanticLifecycleGateFor
+} from "./jdtls-semantic-backend.js";
+export type {
+  JdtFirstTouchExecution,
+  JdtFirstTouchOperationTrace,
+  JdtFirstTouchSessionTrace,
+  JdtFirstTouchTraceHandle,
+  TelemetryObservation
+} from "./jdtls-first-touch.js";
+export type {
+  DiagnosticFilterInput,
+  LspDiagnostic,
+  LspDocumentSymbol,
+  LspLocation,
+  LspLocationLink,
+  LspPosition,
+  LspRange,
+  LspSymbol
+} from "./jdtls-lsp-types.js";
+export {
+  classifyJdtStartError,
+  forceTerminateJdtlsChild,
+  resolveJdtlsRuntimePaths,
+  validateJdtlsTransportEnvironment
+} from "./jdtls-lsp-io.js";
+export type { JdtlsRuntimePaths, SemanticGenerationClock } from "./jdtls-lsp-io.js";
 
-export type LspRange = {
-  start: LspPosition;
-  end: LspPosition;
-};
+export type JdtlsLifecycleState =
+  | "NEW"
+  | "STARTING"
+  | "READY"
+  | "BROKEN"
+  | "STOPPED";
 
-export type LspLocation = {
-  uri: string;
-  range: LspRange;
-};
-
-export type LspLocationLink = {
-  targetUri: string;
-  targetRange: LspRange;
-  targetSelectionRange: LspRange;
-};
-
-export type LspSymbol = {
-  name: string;
-  kind: number;
-  containerName?: string;
-  location?: LspLocation;
-  data?: unknown;
-};
-
-export type LspDocumentSymbol = {
-  name: string;
-  kind: number;
-  range: LspRange;
-  selectionRange?: LspRange;
-  children?: LspDocumentSymbol[];
-};
-
-export type LspDiagnostic = {
-  range: LspRange;
-  severity?: number;
-  code?: string | number;
-  source?: string;
-  message: string;
-};
-
-export type DiagnosticFilterInput = {
-  readonly generatedCode: GeneratedCodeStatus;
-  readonly source?: string;
-  readonly diagnostics: readonly LspDiagnostic[];
-};
-
-type OpenDocument = {
-  version: number;
-  text: string;
-};
+type LifecycleListener = (state: JdtlsLifecycleState) => void;
 
 type JdtlsStatus = {
   repoRoot: string;
   dataDir: string;
   logFile: string;
   jdtlsBin: string;
+  state: JdtlsLifecycleState;
   started: boolean;
   pid?: number;
+  startingPid?: number;
+  restartBackoff: JdtRestartBackoffStatus;
   knownDiagnostics: number;
   openDocuments: number;
   startedAt?: string;
-  fileWatcher: FileWatcherStatus;
   cache: JdtlsCacheStatus;
+  /** Task 33 Step 9. Aggregate counters only - no per-query file path, matching the plan's diagnostic-output constraint. */
+  semanticGateway: SemanticGatewayStatus;
   buildSystem: BuildSystem;
   projectJdk: ProjectJdkStatus;
   generatedCode: GeneratedCodeStatus;
   progress: JdtlsProgressStatus;
+  leaseHeartbeat: {
+    active: boolean;
+    intervalMs: number;
+    lastSuccessAt?: string;
+    lastError?: string;
+  };
 };
 
 export type JdtlsCacheStatus = {
@@ -121,23 +159,46 @@ type CacheEntry<T> = {
   dependencies: Set<string>;
 };
 
-const DEFAULT_LSP_REQUEST_TIMEOUT_MS = positiveInteger(process.env.JDTLS_REQUEST_TIMEOUT_MS, 120000);
 const DEFAULT_CACHE_TTL_MS = positiveInteger(process.env.JDTLS_CACHE_TTL_MS, 300000);
 
-export type HierarchyEdge = {
-  depth: number;
-  from: unknown;
-  to: unknown;
-  ranges?: LspRange[];
+export type JdtlsSessionOptions = {
+  transportMode?: RepoOwnerTransport;
+  ownershipLifecycle?: Pick<RepoOwnershipLease, "markJdtlsStarting" | "markJdtlsRunning" | "clearJdtlsState">;
+  transportFactory?: JdtlsTransportFactory;
+  now?: () => number;
+  leaseStore?: CrossProcessLeaseStore;
+  worktree?: WorktreeIdentity;
+  /**
+   * Coordinator GenerationClock. When bound, gateway keys read its snapshot
+   * instead of the session-local fallback counter.
+   */
+  generationClock?: SemanticGenerationClock;
 };
 
-export class JdtlsSession {
-  private connection?: MessageConnection;
-  private process?: ChildProcessWithoutNullStreams;
-  private starting?: Promise<void>;
+function isJdtlsSessionOptions(value: JdtlsTransportFactory | JdtlsSessionOptions): value is JdtlsSessionOptions {
+  return typeof value === "object" && value !== null && typeof (value as JdtlsTransportFactory).spawn !== "function";
+}
+
+export class JdtlsSession extends JdtlsLspClient {
+  private process?: JdtlsChild;
+  private lifecycleState: JdtlsLifecycleState = "NEW";
+  private startPromise?: Promise<void>;
+  private stopPromise?: Promise<void>;
+  private startAttempt?: JdtlsTransportAttempt;
+  private readonly lifecycleListeners = new Set<LifecycleListener>();
+  private readonly restartBackoff: JdtRestartBackoff;
+  private readyStableTimer?: NodeJS.Timeout;
+  private readonly readyStabilityMs = positiveInteger(
+    process.env.JDTLS_READY_STABILITY_MS,
+    30_000
+  );
+  private readonly startHardCapMs = positiveInteger(
+    process.env.JDTLS_START_TIMEOUT_MS,
+    120_000
+  );
   private startedAt?: Date;
-  private readonly openDocuments = new Map<string, OpenDocument>();
-  private readonly diagnostics = new Map<string, LspDiagnostic[]>();
+  private readonly transportFactory: JdtlsTransportFactory;
+  private readonly leaseStore: CrossProcessLeaseStore;
   private readonly dataDir: string;
   private readonly logDir: string;
   private readonly logFile: string;
@@ -146,22 +207,64 @@ export class JdtlsSession {
   private readonly projectJdk: ProjectJdkStatus;
   private readonly generatedCode: GeneratedCodeStatus;
   private readonly jdtlsRuntimeJavaHome?: string;
-  private fileWatcher?: JavaFileWatcher;
   private readonly cache = new Map<string, CacheEntry<unknown>>();
   private cacheHits = 0;
   private cacheMisses = 0;
   private cacheInvalidations = 0;
   private lastCacheInvalidatedAt?: Date;
-  private readonly activeProgress = new Map<string, string>();
-  private lastProgressAt?: Date;
   private lastLanguageStatus?: string;
-  private phaseMetrics: Record<string, number> = {};
+  private pendingLease?: CompositeJdtLease;
+  private leaseHeartbeatTimer?: NodeJS.Timeout;
+  private leaseHeartbeatPromise?: Promise<void>;
+  private leaseHeartbeatError?: JavaIntelligenceError;
+  private lastLeaseHeartbeatAt?: Date;
+  private readonly leaseHeartbeatMs = positiveInteger(
+    process.env.JAVA_LSP_JDT_LEASE_HEARTBEAT_MS,
+    30_000
+  );
+  private readonly firstTouchTraces = new Set<JdtFirstTouchRecorder>();
+  private ownershipLifecycle?: JdtlsSessionOptions["ownershipLifecycle"];
+  private ownershipJdtlsMarked = false;
+  private terminallyStopped = false;
 
-  constructor(private readonly repoRoot: string, aliases: string[] = []) {
-    const cacheRoot = repoCacheRoot(repoRoot);
-    this.dataDir = process.env.JDTLS_DATA_DIR || path.join(cacheRoot, "workspace");
-    this.logDir = process.env.JDTLS_LOG_DIR || path.join(cacheRoot, "logs");
+  constructor(
+    repoRoot: string,
+    aliases: string[] = [],
+    factoryOrOptions: JdtlsTransportFactory | JdtlsSessionOptions = defaultJdtlsTransportFactory,
+    now: () => number = Date.now,
+    leaseStore: CrossProcessLeaseStore = new NoopCrossProcessLeaseStore(),
+    worktree?: WorktreeIdentity
+  ) {
+    super(repoRoot);
+    const options = isJdtlsSessionOptions(factoryOrOptions) ? factoryOrOptions : {};
+    this.transportFactory = isJdtlsSessionOptions(factoryOrOptions)
+      ? (options.transportFactory ?? defaultJdtlsTransportFactory)
+      : factoryOrOptions;
+    now = options.now ?? now;
+    this.leaseStore = options.leaseStore ?? leaseStore;
+    this.ownershipLifecycle = options.ownershipLifecycle;
+    this.generationClock = options.generationClock;
+    worktree = options.worktree ?? worktree;
+    this.worktree = worktree ?? { repoRoot, repoHash: repoHash(repoRoot), isLinkedWorktree: false };
+    validateJdtlsTransportEnvironment(options.transportMode ?? "stdio");
+    const paths = resolveJdtlsRuntimePaths(repoRoot, options.transportMode ?? "stdio");
+    this.dataDir = paths.dataDir;
+    this.logDir = paths.logDir;
     this.logFile = path.join(this.logDir, "jdtls.log");
+    this.restartBackoff = new JdtRestartBackoff(now);
+    this.documents = new DocumentLru({
+      maxOpen: positiveInteger(process.env.JDTLS_MAX_OPEN_DOCUMENTS, 64),
+      notify: (method, params) => {
+        this.activeFirstTouchTrace?.recordDocumentNotification(method);
+        this.connection?.sendNotification(method, params);
+      }
+    });
+    this.semanticGateway = new SemanticGateway(createJdtlsSemanticBackend(this), {
+      now,
+      ttlMs: DEFAULT_CACHE_TTL_MS,
+      absoluteCapMs: DEFAULT_LSP_REQUEST_TIMEOUT_MS,
+      lifecycleGate: () => lifecycleGateFromRestartBackoffStatus(this.restartBackoff.status())
+    });
     this.jdtlsBin = process.env.JDTLS_BIN || findExecutable("jdtls");
     this.buildSystem = detectBuildSystem(repoRoot);
     this.projectJdk = resolveProjectJdk(repoRoot, aliases);
@@ -169,45 +272,292 @@ export class JdtlsSession {
     this.jdtlsRuntimeJavaHome = process.env.JDTLS_JAVA_HOME || process.env.JAVA_HOME;
   }
 
+  bindOwnershipLifecycle(ownership?: RepoOwnershipLease): void {
+    this.ownershipLifecycle = ownership;
+  }
+
+  bindGenerationClock(clock?: SemanticGenerationClock): void {
+    this.generationClock = clock;
+    if (clock) this.cacheGeneration = clock.snapshot().value;
+  }
+
   status(): JdtlsStatus {
+    // READY is the only state that may report `started`. A spawned-but-not-yet
+    // initialized child is STARTING, and callers must not route semantics to it.
+    const state = this.lifecycleState;
+    const started = state === "READY";
     return {
       repoRoot: this.repoRoot,
       dataDir: this.dataDir,
       logFile: this.logFile,
       jdtlsBin: this.jdtlsBin,
-      started: Boolean(this.connection && this.process && !this.process.killed),
-      pid: this.process?.pid,
+      state,
+      started,
+      pid: started ? this.process?.pid : undefined,
+      startingPid: state === "STARTING" ? this.startAttempt?.child.pid : undefined,
+      restartBackoff: this.restartBackoff.status(),
       knownDiagnostics: [...this.diagnostics.values()].reduce((sum, value) => sum + value.length, 0),
-      openDocuments: this.openDocuments.size,
+      openDocuments: this.documents.status().open,
       startedAt: this.startedAt?.toISOString(),
-      fileWatcher: this.fileWatcher?.status() ?? {
-        enabled: isFileWatchEnabled(),
-        active: false,
-        watchedRoots: [],
-        pendingChanges: 0,
-        lastFlushSize: 0
-      },
       cache: this.cacheStatus(),
+      semanticGateway: this.semanticGateway.status(),
       buildSystem: this.buildSystem,
       projectJdk: this.projectJdk,
       generatedCode: this.generatedCode,
-      progress: this.progressStatus()
+      progress: this.progressStatus(),
+      leaseHeartbeat: {
+        active: this.pendingLease !== undefined,
+        intervalMs: this.leaseHeartbeatMs,
+        lastSuccessAt: this.lastLeaseHeartbeatAt?.toISOString(),
+        lastError: this.leaseHeartbeatError?.message
+      }
     };
   }
 
-  async ensureStarted(): Promise<void> {
-    if (this.connection && this.process && !this.process.killed) {
-      return;
+  onLifecycleChange(listener: LifecycleListener): () => void {
+    this.lifecycleListeners.add(listener);
+    return () => this.lifecycleListeners.delete(listener);
+  }
+
+  /**
+   * Benchmark-only, single-attempt trace. Production requests never call this,
+   * so the normal path pays only nullable branch checks at the phase boundaries.
+   * The handle remains readable after endAttempt() so a late backend settlement
+   * can be attributed to the attempt that created it until close().
+   */
+  beginFirstTouchTrace(): JdtFirstTouchTraceHandle {
+    if (this.activeFirstTouchTrace) {
+      throw new Error("a JDT first-touch trace is already active for this session");
     }
+    const execution: JdtFirstTouchExecution = this.lifecycleState === "READY"
+      ? "reused-ready-session"
+      : this.lifecycleState === "STARTING"
+        ? "joined-existing-start"
+        : "new-process";
+    const recorder = new JdtFirstTouchRecorder(execution);
+    recorder.recordPid(this.process?.pid ?? this.startAttempt?.child.pid);
+    this.activeFirstTouchTrace = recorder;
+    this.firstTouchTraces.add(recorder);
+    let ended = false;
+    let closed = false;
+    const endAttempt = (): void => {
+      if (ended) return;
+      ended = true;
+      if (this.activeFirstTouchTrace === recorder) this.activeFirstTouchTrace = undefined;
+    };
+    return {
+      endAttempt,
+      snapshot: () => recorder.snapshot(),
+      close: () => {
+        if (closed) return recorder.snapshot();
+        endAttempt();
+        closed = true;
+        this.firstTouchTraces.delete(recorder);
+        return recorder.snapshot();
+      }
+    };
+  }
+
+  async ensureStarted(
+    callerBudget = DeadlineBudget.fromTimeout(DEFAULT_LSP_REQUEST_TIMEOUT_MS)
+  ): Promise<void> {
     const startedAt = Date.now();
-    if (!this.starting) {
-      this.starting = this.start();
-    }
     try {
-      await this.starting;
+      if (this.stopPromise) {
+        await callerBudget.race("jdtls.stop.wait", this.stopPromise);
+      }
+      if (this.lifecycleState === "READY") {
+        await callerBudget.race("jdtls.lease.heartbeat", this.heartbeatPendingLease());
+        return;
+      }
+      const gate = this.restartBackoff.check();
+      if (!gate.allowed) {
+        throw new JavaIntelligenceError(
+          gate.blockedUntilExplicitReset ? "JDT_CONFIG_ERROR" : "JDT_BACKOFF",
+          gate.blockedUntilExplicitReset
+            ? "JDT start is blocked until configuration changes or java_runtime(action=restart)"
+            : `JDT restart is backing off for ${gate.retryAfterMs}ms`
+        );
+      }
+      let sharedStart = this.startPromise;
+      if (!sharedStart) {
+        // Claim the singleflight synchronously (this.startPromise is assigned
+        // before any await below), so a second concurrent ensureStarted() call
+        // sees `sharedStart` already set instead of racing its own lease
+        // acquisition and spawn. The lease check itself happens inside
+        // startAfterLease, gating the spawn but not this synchronous claim.
+        this.transition("STARTING");
+        const created: Promise<void> = this.startAfterLease(callerBudget)
+          .catch(async (error: unknown) => {
+            const classified = classifyJdtStartError(error);
+            if (this.lifecycleState !== "STOPPED") this.transition("BROKEN");
+            // Cross-process contention (IGNORED_CODES) never pollutes the
+            // backoff counter; a genuine JDT start failure still does.
+            this.restartBackoff.recordFailure(classified.code);
+            await this.releasePendingLease();
+            throw classified;
+          })
+          .finally(() => {
+            if (this.startPromise === created) this.startPromise = undefined;
+          });
+        this.startPromise = created;
+        sharedStart = created;
+      }
+      await callerBudget.race("jdtls.start.wait", sharedStart);
     } finally {
       this.addPhaseMetric("ensureStart", Date.now() - startedAt);
-      this.starting = undefined;
+    }
+  }
+
+  private transition(next: JdtlsLifecycleState): void {
+    if (this.lifecycleState === next) return;
+    this.lifecycleState = next;
+    for (const listener of this.lifecycleListeners) listener(next);
+  }
+
+  private async startAfterLease(callerBudget: DeadlineBudget): Promise<void> {
+    const leaseResult = await this.acquireCrossProcessLease(callerBudget);
+    if (leaseResult.kind !== "ACQUIRED") {
+      throw leaseAcquireResultToError(leaseResult);
+    }
+    this.pendingLease = leaseResult.lease;
+    this.startLeaseHeartbeat(leaseResult.lease);
+    // The start owns its own hard cap. A caller deadline only stops that
+    // caller from waiting; it must never kill work shared with another caller.
+    const startBudget = DeadlineBudget.fromTimeout(this.startHardCapMs);
+    await this.startTransactional(startBudget);
+  }
+
+  /** A lease-store failure (corrupt shared config, lock timeout) is reported the same as a lease being unavailable. */
+  private async acquireCrossProcessLease(budget: DeadlineBudget): Promise<JdtLeaseAcquireResult> {
+    try {
+      return await this.leaseStore.acquireJdt(this.worktree, budget);
+    } catch (error) {
+      throw new JavaIntelligenceError(
+        "LEASE_CONFIG_ERROR",
+        error instanceof Error ? error.message : String(error),
+        error
+      );
+    }
+  }
+
+  private async releasePendingLease(): Promise<void> {
+    const lease = this.pendingLease;
+    this.pendingLease = undefined;
+    this.stopLeaseHeartbeat();
+    const heartbeat = this.leaseHeartbeatPromise;
+    if (heartbeat) await heartbeat.catch(() => undefined);
+    this.leaseHeartbeatError = undefined;
+    if (lease) await lease.release();
+  }
+
+  private startLeaseHeartbeat(lease: CompositeJdtLease): void {
+    this.stopLeaseHeartbeat();
+    const schedule = (): void => {
+      if (this.pendingLease !== lease) return;
+      const timer = setTimeout(() => {
+        if (this.leaseHeartbeatTimer === timer) this.leaseHeartbeatTimer = undefined;
+        void this.heartbeatPendingLease()
+          .catch(() => undefined)
+          .finally(schedule);
+      }, this.leaseHeartbeatMs);
+      timer.unref();
+      this.leaseHeartbeatTimer = timer;
+    };
+    schedule();
+  }
+
+  private stopLeaseHeartbeat(): void {
+    if (!this.leaseHeartbeatTimer) return;
+    clearTimeout(this.leaseHeartbeatTimer);
+    this.leaseHeartbeatTimer = undefined;
+  }
+
+  private heartbeatPendingLease(): Promise<void> {
+    const lease = this.pendingLease;
+    if (!lease) return Promise.resolve();
+    if (this.leaseHeartbeatPromise) return this.leaseHeartbeatPromise;
+    const operation = lease.heartbeat()
+      .then(() => {
+        if (this.pendingLease === lease) {
+          this.lastLeaseHeartbeatAt = new Date();
+          this.leaseHeartbeatError = undefined;
+        }
+      })
+      .catch((error: unknown) => {
+        const classified = error instanceof JavaIntelligenceError
+          ? error
+          : new JavaIntelligenceError(
+              "LEASE_CONFIG_ERROR",
+              error instanceof Error ? error.message : String(error),
+              error
+            );
+        if (this.pendingLease === lease) this.leaseHeartbeatError = classified;
+        throw classified;
+      })
+      .finally(() => {
+        if (this.leaseHeartbeatPromise === operation) this.leaseHeartbeatPromise = undefined;
+      });
+    this.leaseHeartbeatPromise = operation;
+    return operation;
+  }
+
+  /**
+   * Applies a coordinator change batch to the JDT completed-request cache.
+   * Changed/deleted files evict their dependent entries; a build change clears
+   * everything because classpath/import semantics may have shifted.
+   */
+  private invalidateForRepoChanges(batch: RepoChangeBatch): void {
+    // A storm is handled the same as a build change: filtering/invalidating
+    // per-path for hundreds of entries is strictly more work than one clear,
+    // for no precision benefit once that many files moved at once.
+    if (batch.storm || batch.changes.some(change => change.kind === "BUILD_CHANGE")) {
+      this.clearCache(batch);
+      return;
+    }
+    const files = batch.changes
+      .filter(change => change.kind.startsWith("JAVA_"))
+      .map(change => change.absolutePath);
+    if (files.length > 0) {
+      this.invalidateCacheFor(files);
+      this.invalidateSemanticGateway(batch);
+    }
+  }
+
+  /**
+   * Sole JDT-session consumer of RepoChangeCoordinator output. Cache
+   * invalidation always happens; LSP notifications are emitted only while a
+   * connection is live, and disk refreshes never synthesize didOpen.
+   */
+  async applyRepoChangeBatch(batch: RepoChangeBatch): Promise<void> {
+    this.invalidateForRepoChanges(batch);
+    const connection = this.connection;
+    if (!connection) return;
+    const watchedChanges = batch.changes
+      .map(change => watchedFileChange(change))
+      .filter((change): change is { uri: string; type: number } => change !== undefined);
+    if (watchedChanges.length > 0) {
+      connection.sendNotification("workspace/didChangeWatchedFiles", { changes: watchedChanges });
+    }
+    for (const change of batch.changes) {
+      if (change.kind === "JAVA_DELETE") {
+        this.documents.delete(change.absolutePath);
+        this.diagnostics.delete(toFileUri(change.absolutePath));
+        continue;
+      }
+      if (
+        (change.kind !== "JAVA_ADD" && change.kind !== "JAVA_CHANGE")
+        || !this.documents.has(change.absolutePath)
+      ) {
+        continue;
+      }
+      try {
+        const text = await readFile(change.absolutePath, "utf8");
+        await this.documents.updateIfOpen(change.absolutePath, text);
+      } catch (error) {
+        if (isMissingFileError(error)) continue;
+        throw error;
+      }
     }
   }
 
@@ -222,181 +572,98 @@ export class JdtlsSession {
     if (clearCache && existsSync(this.dataDir)) {
       rmSync(this.dataDir, { force: true, recursive: true });
     }
+    // An explicit restart is the operator saying "I changed something"; it is the
+    // only thing that clears a configuration block.
+    this.restartBackoff.reset();
     await this.ensureStarted();
     return this.status();
   }
 
   async stop(): Promise<void> {
-    this.stopFileWatcher();
+    if (this.stopPromise) {
+      return this.stopPromise;
+    }
+    const operation: Promise<void> = this.stopInternal().finally(() => {
+      for (const trace of this.firstTouchTraces) trace.markSessionStopped();
+      if (this.stopPromise === operation) this.stopPromise = undefined;
+    });
+    this.stopPromise = operation;
+    return operation;
+  }
+
+  private async stopInternal(): Promise<void> {
+    // Transition first so an in-flight startTransactional sees STOPPED and
+    // classifies its own failure as CANCELLED rather than a JDT fault.
+    this.transition("STOPPED");
     this.clearCache();
+    if (this.readyStableTimer) {
+      clearTimeout(this.readyStableTimer);
+      this.readyStableTimer = undefined;
+    }
+
+    const startAttempt = this.startAttempt;
+    const startPromise = this.startPromise;
     const connection = this.connection;
+    const child = this.process;
+    this.startAttempt = undefined;
+    this.startPromise = undefined;
     this.connection = undefined;
+    this.process = undefined;
+    this.startedAt = undefined;
+
+    if (startAttempt) {
+      await this.disposeAttempt(startAttempt);
+    }
+    if (startPromise) {
+      // Let startup waiters settle before stop() resolves, so a later
+      // ensureStarted() never races a half-torn-down attempt.
+      await startPromise.catch(() => undefined);
+    }
     if (connection) {
       try {
         await withTimeout(connection.sendRequest("shutdown"), 3000, "shutdown");
         connection.sendNotification("exit");
       } catch {
-        // Best-effort shutdown; the process is killed below if it remains alive.
+        // Best-effort shutdown; the process is terminated below if it remains alive.
       }
-      connection.dispose();
-    }
-    if (this.process && !this.process.killed) {
-      this.process.kill();
-    }
-    touchRepoCache(this.repoRoot);
-    this.openDocuments.clear();
-    this.diagnostics.clear();
-    this.process = undefined;
-    this.startedAt = undefined;
-  }
-
-  async workspaceSymbols(query: string, limit: number): Promise<{ items: LspSymbol[]; truncated: boolean }> {
-    return this.cached("workspaceSymbols", [query, limit], [], async () => {
-      await this.ensureStarted();
-      const items = await this.request<LspSymbol[]>("workspace/symbol", { query });
-      return truncate(items || [], limit);
-    });
-  }
-
-  async symbolContext(file: string, line: number, column: number, timeoutMs = DEFAULT_LSP_REQUEST_TIMEOUT_MS): Promise<{
-    hover: unknown;
-    definitions: Array<LspLocation | LspLocationLink>;
-    implementations: Array<LspLocation | LspLocationLink>;
-  }> {
-    return this.cached("symbolContext", [file, line, column, timeoutMs], [file], async () => {
-      await this.ensureStarted();
-      const params = await this.textDocumentPositionParams(file, line, column) as Record<string, unknown>;
-      const [hover, definitions, implementations] = await Promise.all([
-        this.requestSettled<unknown>("textDocument/hover", params, timeoutMs),
-        this.requestSettled<unknown>("textDocument/definition", params, timeoutMs),
-        this.requestSettled<unknown>("textDocument/implementation", params, timeoutMs)
-      ]);
-      return {
-        hover,
-        definitions: normalizeLocations(definitions),
-        implementations: normalizeLocations(implementations)
-      };
-    });
-  }
-
-  async semanticLocations(file: string, line: number, column: number, timeoutMs = DEFAULT_LSP_REQUEST_TIMEOUT_MS, includeImplementations = false): Promise<{
-    definitions: Array<LspLocation | LspLocationLink>;
-    implementations: Array<LspLocation | LspLocationLink>;
-  }> {
-    return this.cached("semanticLocations", [file, line, column, timeoutMs, includeImplementations], [file], async () => {
-      await this.ensureStarted();
-      const params = await this.textDocumentPositionParams(file, line, column) as Record<string, unknown>;
-      const definitions = await this.requestSettled<unknown>("textDocument/definition", params, timeoutMs);
-      const implementations = includeImplementations
-        ? await this.requestSettled<unknown>("textDocument/implementation", params, timeoutMs)
-        : undefined;
-      return {
-        definitions: normalizeLocations(definitions),
-        implementations: normalizeLocations(implementations)
-      };
-    });
-  }
-
-  async documentSymbols(file: string, timeoutMs = 2000): Promise<LspDocumentSymbol[]> {
-    return this.cached("documentSymbols", [file, timeoutMs], [file], async () => {
-      await this.ensureStarted();
-      const uri = await this.openDocument(file);
-      const symbols = await this.request<LspDocumentSymbol[]>("textDocument/documentSymbol", {
-        textDocument: { uri }
-      }, timeoutMs);
-      return symbols || [];
-    });
-  }
-
-  async documentSymbolsWithRetry(file: string, totalTimeoutMs = 20000): Promise<LspDocumentSymbol[]> {
-    const deadline = Date.now() + totalTimeoutMs;
-    await this.ensureStarted();
-    const waitStartedAt = Date.now();
-    await this.waitForProgressIdle(Math.max(1, deadline - Date.now()));
-    this.addPhaseMetric("progressIdleWait", Date.now() - waitStartedAt);
-    const attemptTimeoutMs = positiveInteger(process.env.JAVA_LSP_DOCUMENT_SYMBOL_ATTEMPT_TIMEOUT_MS, 10000);
-    let lastError: unknown;
-    while (Date.now() < deadline) {
       try {
-        return await this.documentSymbols(file, Math.min(attemptTimeoutMs, Math.max(1, deadline - Date.now())));
-      } catch (error) {
-        lastError = error;
-        await delay(Math.min(1000, Math.max(1, deadline - Date.now())));
+        connection.dispose();
+      } catch {
+        // A disposed connection must never mask the rest of the teardown.
       }
     }
-    throw lastError instanceof Error ? lastError : new Error("Timed out waiting for textDocument/documentSymbol retry budget.");
-  }
-
-  async references(file: string, line: number, column: number, includeDeclaration: boolean, timeoutMs = DEFAULT_LSP_REQUEST_TIMEOUT_MS): Promise<{
-    items: LspLocation[];
-    totalReferences: number;
-    truncated: boolean;
-  }> {
-    return this.cached("references", [file, line, column, includeDeclaration, timeoutMs], [file], async () => {
-      await this.ensureStarted();
-      const params = await this.textDocumentPositionParams(file, line, column) as Record<string, unknown>;
-      const items = await this.request<LspLocation[]>("textDocument/references", {
-        ...params,
-        context: { includeDeclaration }
-      }, timeoutMs);
-      const references = items || [];
-      return {
-        items: references,
-        totalReferences: references.length,
-        truncated: false
-      };
-    });
-  }
-
-  async diagnosticsFor(files: string[], waitMs: number): Promise<Record<string, LspDiagnostic[]>> {
-    await this.ensureStarted();
-    for (const file of files) {
-      await this.openDocument(file);
+    if (child) {
+      await terminateChild(child, 200);
     }
-    if (waitMs > 0) {
-      await delay(Math.min(waitMs, 10000));
-    }
-    const result: Record<string, LspDiagnostic[]> = {};
-    for (const file of files) {
-      result[file] = this.diagnostics.get(toFileUri(file)) || [];
-    }
-    return result;
+    // A start failure already releases via ensureStarted()'s own catch (awaited
+    // above through startPromise); this is a no-op in that case and the only
+    // release path when stop() is called on an already-READY session.
+    await this.releasePendingLease();
+    touchRepoCache(this.repoRoot, { jdtlsPid: undefined });
+    this.clearOwnershipJdtlsState();
+    this.documents.closeAll();
+    this.diagnostics.clear();
   }
 
-  async callHierarchy(
-    file: string,
-    line: number,
-    column: number,
-    direction: "incoming" | "outgoing",
-    depth: number,
-    limit: number
-  ): Promise<{ roots: unknown[]; edges: HierarchyEdge[]; truncated: boolean }> {
-    return this.cached("callHierarchy", [file, line, column, direction, depth, limit], [file], async () => {
-      await this.ensureStarted();
-      const params = await this.textDocumentPositionParams(file, line, column);
-      const roots = await this.request<unknown[]>("textDocument/prepareCallHierarchy", params);
-      const edges: HierarchyEdge[] = [];
-      await this.walkCallHierarchy(roots || [], direction, Math.max(1, depth), 1, edges, limit);
-      return { roots: roots || [], edges, truncated: edges.length >= limit };
-    });
+  async forceStop(deadlineMs = 1000): Promise<void> {
+    this.terminallyStopped = true;
+    if (this.process) {
+      await forceTerminateJdtlsChild(this.process, deadlineMs);
+    }
+    await this.stop();
   }
 
-  async typeHierarchy(
-    file: string,
-    line: number,
-    column: number,
-    direction: "supertypes" | "subtypes",
-    depth: number,
-    limit: number
-  ): Promise<{ roots: unknown[]; edges: HierarchyEdge[]; truncated: boolean }> {
-    return this.cached("typeHierarchy", [file, line, column, direction, depth, limit], [file], async () => {
-      await this.ensureStarted();
-      const params = await this.textDocumentPositionParams(file, line, column);
-      const roots = await this.request<unknown[]>("textDocument/prepareTypeHierarchy", params);
-      const edges: HierarchyEdge[] = [];
-      await this.walkTypeHierarchy(roots || [], direction, Math.max(1, depth), 1, edges, limit);
-      return { roots: roots || [], edges, truncated: edges.length >= limit };
-    });
+  private clearOwnershipJdtlsState(): void {
+    if (!this.ownershipJdtlsMarked) {
+      return;
+    }
+    try {
+      this.ownershipLifecycle?.clearJdtlsState?.();
+    } catch (error) {
+      console.error("[codex-java-lsp] failed to clear JDT LS ownership lifecycle state", error);
+    } finally {
+      this.ownershipJdtlsMarked = false;
+    }
   }
 
   cacheStatus(): JdtlsCacheStatus {
@@ -411,78 +678,229 @@ export class JdtlsSession {
     };
   }
 
-  private async start(): Promise<void> {
+  private async startTransactional(budget: DeadlineBudget): Promise<void> {
     if (!this.jdtlsBin) {
-      throw new Error("jdtls executable was not found. Install with `brew install jdtls` or set JDTLS_BIN.");
+      throw new JavaIntelligenceError(
+        "JDT_CONFIG_ERROR",
+        "jdtls executable was not found. Install with `brew install jdtls` or set JDTLS_BIN."
+      );
     }
-    await mkdir(this.dataDir, { recursive: true });
-    await mkdir(this.logDir, { recursive: true });
-
     if (this.projectJdk.status === "ambiguous" || this.projectJdk.status === "missing") {
-      throw new Error(`Project JDK is ${this.projectJdk.status}: ${this.projectJdk.notes.join(" ")}`);
+      throw new JavaIntelligenceError(
+        "JDT_CONFIG_ERROR",
+        `Project JDK is ${this.projectJdk.status}: ${this.projectJdk.notes.join(" ")}`
+      );
     }
-    const args = [
-      ...jvmArgs(this.generatedCode),
-      "-data",
-      this.dataDir,
-      ...splitArgs(process.env.JDTLS_EXTRA_ARGS)
-    ];
-    const child = spawn(this.jdtlsBin, args, {
-      cwd: this.repoRoot,
-      env: buildJdtlsEnv(this.jdtlsRuntimeJavaHome),
-      stdio: ["pipe", "pipe", "pipe"]
-    });
-    const logStream = createWriteStream(this.logFile, { flags: "a" });
-    child.stderr.on("data", chunk => {
-      logStream.write(chunk);
-    });
-    child.on("exit", (code, signal) => {
-      logStream.write(`\n[jdtls exited] code=${code ?? ""} signal=${signal ?? ""}\n`);
-      logStream.end();
-      this.stopFileWatcher();
-      this.connection?.dispose();
-      this.connection = undefined;
-      this.process = undefined;
+
+    const filesystemStartedAt = performance.now();
+    try {
+      await mkdir(this.dataDir, { recursive: true });
+      await mkdir(this.logDir, { recursive: true });
+    } finally {
+      this.activeFirstTouchTrace?.recordStartupPhase("filesystemSetupMs", performance.now() - filesystemStartedAt);
+    }
+    budget.throwIfExpired("jdtls.spawn");
+
+    const spawnStartedAt = performance.now();
+    let attempt: JdtlsTransportAttempt;
+    try {
+      attempt = this.transportFactory.spawn({
+        binary: this.jdtlsBin,
+        args: this.launchArgs(),
+        cwd: this.repoRoot,
+        env: buildJdtlsEnv(this.jdtlsRuntimeJavaHome)
+      });
+    } finally {
+      this.activeFirstTouchTrace?.recordStartupPhase("processSpawnCallMs", performance.now() - spawnStartedAt);
+    }
+    this.activeFirstTouchTrace?.recordPid(attempt.child.pid);
+    this.startAttempt = attempt;
+    if (this.ownershipLifecycle?.markJdtlsStarting) {
+      this.ownershipLifecycle.markJdtlsStarting();
+      this.ownershipJdtlsMarked = true;
+    }
+    if (attempt.child.pid !== undefined) {
+      const identity = processStartIdentityForPid(attempt.child.pid);
+      if (identity) {
+        this.ownershipLifecycle?.markJdtlsRunning?.(attempt.child.pid, identity);
+      }
+    }
+    this.registerClientHandlers(attempt.connection);
+    attempt.connection.listen();
+    this.attachAttemptLogging(attempt);
+
+    try {
+      if (this.pendingLease && attempt.child.pid !== undefined) {
+        const recorded = await this.pendingLease.recordJdtlsPid(attempt.child.pid);
+        if (!recorded) {
+          throw new JavaIntelligenceError(
+            "LEASE_CONFIG_ERROR",
+            "the cross-process JDT lease was lost before initialize could commit"
+          );
+        }
+      }
+      const initializeStartedAt = performance.now();
+      let initializeResult: unknown;
+      try {
+        initializeResult = await budget.race(
+          "jdtls.initialize",
+          attempt.connection.sendRequest("initialize", this.initializeParams()),
+          this.startHardCapMs,
+          () => { void terminateChild(attempt.child, 200); }
+        );
+      } finally {
+        this.activeFirstTouchTrace?.recordStartupPhase("initializeRoundTripMs", performance.now() - initializeStartedAt);
+      }
+      if (!initializeResult) {
+        throw new JavaIntelligenceError(
+          "JDT_SERVER_ERROR",
+          "JDT LS initialization returned an empty result"
+        );
+      }
+      if (this.lifecycleState !== "STARTING" || this.startAttempt !== attempt) {
+        throw new JavaIntelligenceError(
+          "CANCELLED",
+          "JDT LS startup was superseded or stopped before commit"
+        );
+      }
+      await this.heartbeatPendingLease();
+      const configurationStartedAt = performance.now();
+      try {
+        attempt.connection.sendNotification("initialized", {});
+        attempt.connection.sendNotification("workspace/didChangeConfiguration", {
+          settings: this.javaSettings()
+        });
+      } finally {
+        this.activeFirstTouchTrace?.recordStartupPhase(
+          "configurationNotifySendMs",
+          performance.now() - configurationStartedAt
+        );
+      }
+
+      this.process = attempt.child;
+      this.connection = attempt.connection;
+      this.startedAt = new Date();
+      this.startAttempt = undefined;
+      this.restartBackoff.recordReadyStarted();
+      this.transition("READY");
+      // The janitor's cross-process liveness check trusts a recorded jdtlsPid
+      // as proof this worktree is in use; writing it before READY would let a
+      // process that dies mid-STARTING leave a stale-but-plausible signal.
+      touchRepoCache(this.repoRoot, { jdtlsPid: attempt.child.pid });
+      this.armReadyStabilityReset(attempt);
+    } catch (error) {
+      const stoppedOrSuperseded =
+        this.lifecycleState === "STOPPED"
+        || (this.startAttempt !== attempt
+          && (this.lifecycleState === "STARTING" || this.lifecycleState === "READY"));
+      await this.disposeAttempt(attempt);
+      if (this.startAttempt === attempt) this.startAttempt = undefined;
+      if (this.process === attempt.child) this.process = undefined;
+      if (this.connection === attempt.connection) this.connection = undefined;
       this.startedAt = undefined;
-    });
-
-    const connection = createMessageConnection(
-      new StreamMessageReader(child.stdout),
-      new StreamMessageWriter(child.stdin)
-    );
-    this.registerClientHandlers(connection);
-    connection.listen();
-
-    this.process = child;
-    this.connection = connection;
-    touchRepoCache(this.repoRoot, { jdtlsPid: child.pid });
-    const initializeResult = await withTimeout(
-      connection.sendRequest("initialize", this.initializeParams()),
-      120000,
-      "initialize"
-    );
-    connection.sendNotification("initialized", {});
-    connection.sendNotification("workspace/didChangeConfiguration", { settings: this.javaSettings() });
-    this.startedAt = new Date();
-    await this.startFileWatcher();
-
-    if (!initializeResult) {
-      throw new Error("JDT LS initialization returned an empty result.");
+      if (stoppedOrSuperseded) {
+        throw new JavaIntelligenceError(
+          "CANCELLED",
+          "JDT LS startup was stopped or superseded",
+          error
+        );
+      }
+      throw error;
     }
   }
 
-  private registerClientHandlers(connection: MessageConnection): void {
+  private launchArgs(): string[] {
+    return [
+      ...jvmArgs(this.generatedCode),
+      "-data",
+      this.dataDir,
+      ...splitArgs(process.env.JDTLS_EXTRA_ARGS),
+      ...(process.env.JAVA_LSP_ISOLATED_VALIDATION === "1" && process.env.HOME
+        ? [`--jvm-arg=-Duser.home=${process.env.HOME}`]
+        : [])
+    ];
+  }
+
+  private attachAttemptLogging(attempt: JdtlsTransportAttempt): void {
+    const logStream = createWriteStream(this.logFile, { flags: "a" });
+    attempt.child.stderr.on("data", (chunk: Buffer) => {
+      logStream.write(chunk);
+    });
+    attempt.child.once("exit", (code, signal) => {
+      logStream.write(`\n[jdtls exited] code=${code ?? ""} signal=${signal ?? ""}\n`);
+      logStream.end();
+      // Identity guards: a stopped or superseded child's exit must never
+      // overwrite the state of the session that replaced it.
+      const ownsReadyProcess = this.process === attempt.child;
+      const ownsStartingAttempt = this.startAttempt === attempt;
+      if (!ownsReadyProcess && !ownsStartingAttempt) {
+        return;
+      }
+      if (ownsReadyProcess) {
+        if (this.readyStableTimer) {
+          clearTimeout(this.readyStableTimer);
+          this.readyStableTimer = undefined;
+        }
+        // A STARTING attempt's failure is recorded once by the shared start
+        // promise catch, so only a READY child's death is counted here. The
+        // same is true of the lease release: a STARTING attempt's failure
+        // releases it through that same catch.
+        this.restartBackoff.recordFailure("JDT_BROKEN");
+        touchRepoCache(this.repoRoot, { jdtlsPid: undefined });
+        void this.releasePendingLease();
+      }
+      try {
+        attempt.connection.dispose();
+      } catch {
+        // Disposing an already-dead connection must not break exit handling.
+      }
+      this.process = undefined;
+      this.connection = undefined;
+      this.startAttempt = undefined;
+      this.startedAt = undefined;
+      if (this.lifecycleState !== "STOPPED") {
+        this.transition("BROKEN");
+      }
+    });
+  }
+
+  private armReadyStabilityReset(attempt: JdtlsTransportAttempt): void {
+    if (this.readyStableTimer) clearTimeout(this.readyStableTimer);
+    this.readyStableTimer = setTimeout(() => {
+      if (this.lifecycleState === "READY" && this.process === attempt.child) {
+        this.restartBackoff.recordReadyStable();
+      }
+    }, this.readyStabilityMs);
+    this.readyStableTimer.unref?.();
+  }
+
+  private async disposeAttempt(attempt: JdtlsTransportAttempt): Promise<void> {
+    try {
+      attempt.connection.dispose();
+    } catch {
+      // Best-effort; the child is terminated regardless.
+    }
+    await terminateChild(attempt.child, 200);
+  }
+
+  private registerClientHandlers(connection: JdtlsConnection): void {
     connection.onRequest("client/registerCapability", async () => null);
     connection.onRequest("workspace/configuration", async (params: { items?: Array<{ section?: string }> }) => {
-      return (params.items || []).map(item => {
-        if (!item.section || item.section === "java") {
-          return this.javaSettings().java;
-        }
-        if (item.section.startsWith("java.")) {
-          return pickSection(this.javaSettings().java, item.section.replace(/^java\./, ""));
-        }
-        return null;
-      });
+      const startedAt = performance.now();
+      try {
+        return (params.items || []).map(item => {
+          const settings = this.javaSettings();
+          if (!item.section || item.section === "java") {
+            return settings.java;
+          }
+          if (item.section.startsWith("java.")) {
+            return pickJavaConfigurationSection(settings.java, item.section.replace(/^java\./, ""));
+          }
+          return null;
+        });
+      } finally {
+        this.activeFirstTouchTrace?.recordConfigurationRequest(performance.now() - startedAt);
+      }
     });
     connection.onRequest("workspace/applyEdit", async () => ({ applied: false }));
     connection.onRequest("window/workDoneProgress/create", async () => null);
@@ -507,255 +925,15 @@ export class JdtlsSession {
   }
 
   private initializeParams(): unknown {
-    const rootUri = toFileUri(this.repoRoot);
-    return {
-      processId: process.pid,
-      rootPath: this.repoRoot,
-      rootUri,
-      workspaceFolders: [{ uri: rootUri, name: path.basename(this.repoRoot) || "java-worktree" }],
-      capabilities: {
-        workspace: {
-          applyEdit: false,
-          configuration: true,
-          workspaceFolders: true,
-          didChangeWatchedFiles: { dynamicRegistration: false },
-          symbol: { dynamicRegistration: false }
-        },
-        textDocument: {
-          synchronization: {
-            dynamicRegistration: false,
-            didSave: false,
-            willSave: false,
-            willSaveWaitUntil: false
-          },
-          hover: { dynamicRegistration: false },
-          definition: { dynamicRegistration: false, linkSupport: true },
-          implementation: { dynamicRegistration: false, linkSupport: true },
-          references: { dynamicRegistration: false },
-          callHierarchy: { dynamicRegistration: false },
-          typeHierarchy: { dynamicRegistration: false },
-          documentSymbol: { dynamicRegistration: false, hierarchicalDocumentSymbolSupport: true }
-        },
-        window: { workDoneProgress: true },
-        general: { positionEncodings: ["utf-16"] }
-      },
-      initializationOptions: {
-        bundles: [],
-        extendedClientCapabilities: {
-          progressReportProvider: true,
-          classFileContentsSupport: false,
-          overrideMethodsPromptSupport: false,
-          hashCodeEqualsPromptSupport: false
-        },
-        settings: this.javaSettings()
-      }
-    };
+    return buildInitializeParams(this.repoRoot, this.javaSettings());
   }
 
   private javaSettings(): Record<string, unknown> {
-    const runtime = this.projectJdk.resolvedHome && this.projectJdk.runtimeName
-      ? [{ name: this.projectJdk.runtimeName, path: this.projectJdk.resolvedHome, default: true }]
-      : [];
-    const annotationProcessing = this.generatedCode.annotationProcessing.enabled;
-    return {
-      java: {
-        import: {
-          gradle: {
-            enabled: this.buildSystem !== "maven",
-            annotationProcessing: { enabled: annotationProcessing }
-          },
-          maven: {
-            enabled: this.buildSystem === "maven"
-          }
-        },
-        configuration: {
-          updateBuildConfiguration: "automatic",
-          runtimes: runtime
-        },
-        autobuild: {
-          enabled: ["1", "on", "true"].includes(process.env.JAVA_LSP_AUTOBUILD?.toLowerCase() || "")
-        },
-        compile: {
-          nullAnalysis: { mode: "disabled" }
-        },
-        maxConcurrentBuilds: positiveInteger(process.env.JAVA_LSP_IMPORT_CONCURRENCY, resourceDefaults().importConcurrency)
-      }
-    };
-  }
-
-  private async textDocumentPositionParams(file: string, line: number, column: number): Promise<unknown> {
-    const uri = await this.openDocument(file);
-    return {
-      textDocument: { uri },
-      position: {
-        line: Math.max(0, line - 1),
-        character: Math.max(0, column - 1)
-      }
-    };
-  }
-
-  private async openDocument(file: string): Promise<string> {
-    const uri = toFileUri(file);
-    const text = await readFile(file, "utf8");
-    const existing = this.openDocuments.get(uri);
-    if (!existing) {
-      this.openDocuments.set(uri, { version: 1, text });
-      this.connection?.sendNotification("textDocument/didOpen", {
-        textDocument: { uri, languageId: "java", version: 1, text }
-      });
-      return uri;
-    }
-    if (existing.text !== text) {
-      const version = existing.version + 1;
-      this.openDocuments.set(uri, { version, text });
-      this.connection?.sendNotification("textDocument/didChange", {
-        textDocument: { uri, version },
-        contentChanges: [{ text }]
-      });
-    }
-    return uri;
-  }
-
-  private sourceTextForUri(uri: string): string | undefined {
-    const opened = this.openDocuments.get(uri)?.text;
-    if (opened !== undefined) {
-      return opened;
-    }
-    const file = fromFileUri(uri);
-    if (!file || !existsSync(file)) {
-      return undefined;
-    }
-    try {
-      return readFileSync(file, "utf8");
-    } catch (error) {
-      if (error instanceof Error) {
-        return undefined;
-      }
-      throw error;
-    }
-  }
-
-  private async startFileWatcher(): Promise<void> {
-    this.stopFileWatcher();
-    const watcher = new JavaFileWatcher(this.repoRoot, {
-      notifyChanges: changes => this.notifyWatchedFileChanges(changes),
-      syncOpenDocument: change => this.syncOpenDocumentFromDisk(change)
-    });
-    this.fileWatcher = watcher;
-    await watcher.start();
-  }
-
-  private stopFileWatcher(): void {
-    this.fileWatcher?.close();
-    this.fileWatcher = undefined;
-  }
-
-  private notifyWatchedFileChanges(changes: WatchedFileChange[]): void {
-    if (!this.connection || changes.length === 0) {
-      return;
-    }
-    this.invalidateCacheFor(changes.map(change => change.filePath));
-    this.connection.sendNotification("workspace/didChangeWatchedFiles", {
-      changes: changes.map(change => ({
-        uri: change.uri,
-        type: change.type
-      }))
-    });
-  }
-
-  private async syncOpenDocumentFromDisk(change: WatchedFileChange): Promise<void> {
-    const existing = this.openDocuments.get(change.uri);
-    if (!existing || !this.connection) {
-      return;
-    }
-
-    if (change.type === WatchedFileChangeType.Deleted) {
-      this.openDocuments.delete(change.uri);
-      this.diagnostics.delete(change.uri);
-      this.connection.sendNotification("textDocument/didClose", {
-        textDocument: { uri: change.uri }
-      });
-      return;
-    }
-
-    if (!existsSync(change.filePath)) {
-      return;
-    }
-
-    const text = await readFile(change.filePath, "utf8");
-    if (existing.text === text) {
-      return;
-    }
-
-    const version = existing.version + 1;
-    this.openDocuments.set(change.uri, { version, text });
-    this.connection.sendNotification("textDocument/didChange", {
-      textDocument: { uri: change.uri, version },
-      contentChanges: [{ text }]
-    });
-  }
-
-  private async request<T>(method: string, params?: unknown, timeoutMs = DEFAULT_LSP_REQUEST_TIMEOUT_MS): Promise<T> {
-    if (!this.connection) {
-      throw new Error("JDT LS is not started.");
-    }
-    const cancellation = new CancellationTokenSource();
-    const startedAt = Date.now();
-    try {
-      return await withTimeout(this.connection.sendRequest(method, params, cancellation.token), timeoutMs, method, () => cancellation.cancel()) as T;
-    } finally {
-      this.addPhaseMetric(method, Date.now() - startedAt);
-      cancellation.dispose();
-    }
-  }
-
-  private async requestSettled<T>(method: string, params?: unknown, timeoutMs = DEFAULT_LSP_REQUEST_TIMEOUT_MS): Promise<T | undefined> {
-    try {
-      return await this.request<T>(method, params, timeoutMs);
-    } catch (error) {
-      console.error(`[codex-java-lsp] ${method} failed`, error);
-      return undefined;
-    }
-  }
-
-  private async cached<T>(
-    method: string,
-    parts: unknown[],
-    dependencies: string[],
-    compute: () => Promise<T>
-  ): Promise<T> {
-    if (DEFAULT_CACHE_TTL_MS <= 0) {
-      return compute();
-    }
-    const normalizedDependencies = dependencies.map(file => path.normalize(file));
-    const key = this.cacheKey(method, parts, normalizedDependencies);
-    const now = Date.now();
-    const existing = this.cache.get(key) as CacheEntry<T> | undefined;
-    if (existing && existing.expiresAt > now) {
-      this.cacheHits += 1;
-      return existing.value;
-    }
-    if (existing) {
-      this.cache.delete(key);
-    }
-    this.cacheMisses += 1;
-    const value = await compute();
-    this.cache.set(key, {
-      value,
-      expiresAt: now + DEFAULT_CACHE_TTL_MS,
-      dependencies: new Set(normalizedDependencies)
-    });
-    return value;
-  }
-
-  private cacheKey(method: string, parts: unknown[], dependencies: string[]): string {
-    return JSON.stringify({
-      method,
-      parts,
-      dependencies: dependencies.map(file => ({
-        file,
-        fingerprint: fileFingerprint(file)
-      }))
+    return buildJavaSettings({
+      repoRoot: this.repoRoot,
+      buildSystem: this.buildSystem,
+      projectJdk: this.projectJdk,
+      generatedCode: this.generatedCode
     });
   }
 
@@ -777,12 +955,25 @@ export class JdtlsSession {
     }
   }
 
-  private clearCache(): void {
+  private clearCache(batch?: RepoChangeBatch): void {
     if (this.cache.size > 0) {
       this.cacheInvalidations += this.cache.size;
       this.lastCacheInvalidatedAt = new Date();
     }
     this.cache.clear();
+    this.invalidateSemanticGateway(batch);
+  }
+
+  private invalidateSemanticGateway(batch?: RepoChangeBatch): void {
+    const clockValue = this.generationClock?.snapshot().value;
+    if (clockValue !== undefined) {
+      this.cacheGeneration = clockValue;
+    } else if (batch) {
+      this.cacheGeneration = Math.max(this.cacheGeneration + 1, batch.generation);
+    } else {
+      this.cacheGeneration += 1;
+    }
+    this.semanticGateway.clear();
   }
 
   private evictExpiredCacheEntries(): void {
@@ -807,6 +998,7 @@ export class JdtlsSession {
   }
 
   private recordProgress(params: { token?: string | number; value?: { kind?: string; title?: string; message?: string } }): void {
+    this.activeFirstTouchTrace?.recordProgress(params);
     const token = String(params.token ?? "unknown");
     const value = params.value || {};
     this.lastProgressAt = new Date();
@@ -816,223 +1008,6 @@ export class JdtlsSession {
       this.activeProgress.delete(token);
     } else if (this.activeProgress.has(token)) {
       this.activeProgress.set(token, [value.title, value.message].filter(Boolean).join(": ") || this.activeProgress.get(token) || token);
-    }
-  }
-
-  private addPhaseMetric(name: string, elapsedMs: number): void {
-    this.phaseMetrics[name] = (this.phaseMetrics[name] || 0) + elapsedMs;
-  }
-
-  private async waitForProgressIdle(maxWaitMs: number): Promise<void> {
-    const idleMs = positiveInteger(process.env.JAVA_LSP_PROGRESS_IDLE_MS, 1500);
-    const minimumWaitMs = positiveInteger(process.env.JAVA_LSP_MIN_SEMANTIC_WAIT_MS, 1000);
-    const started = Date.now();
-    const deadline = started + maxWaitMs;
-    while (Date.now() < deadline) {
-      const waited = Date.now() - started;
-      const idleFor = this.lastProgressAt ? Date.now() - this.lastProgressAt.getTime() : waited;
-      if (waited >= minimumWaitMs && this.activeProgress.size === 0 && idleFor >= idleMs) {
-        return;
-      }
-      await delay(250);
-    }
-  }
-
-  private async walkCallHierarchy(
-    items: unknown[],
-    direction: "incoming" | "outgoing",
-    maxDepth: number,
-    currentDepth: number,
-    edges: HierarchyEdge[],
-    limit: number
-  ): Promise<void> {
-    if (currentDepth > maxDepth || edges.length >= limit) {
-      return;
-    }
-    for (const item of items) {
-      if (edges.length >= limit) {
-        return;
-      }
-      const method = direction === "incoming" ? "callHierarchy/incomingCalls" : "callHierarchy/outgoingCalls";
-      const calls = await this.requestSettled<Array<{ from?: unknown; to?: unknown; fromRanges?: LspRange[] }>>(method, { item });
-      const nextItems: unknown[] = [];
-      for (const call of calls || []) {
-        if (edges.length >= limit) {
-          break;
-        }
-        const from = direction === "incoming" ? call.from : item;
-        const to = direction === "incoming" ? item : call.to;
-        edges.push({ depth: currentDepth, from, to, ranges: call.fromRanges });
-        if (direction === "incoming" && call.from) {
-          nextItems.push(call.from);
-        } else if (direction === "outgoing" && call.to) {
-          nextItems.push(call.to);
-        }
-      }
-      await this.walkCallHierarchy(nextItems, direction, maxDepth, currentDepth + 1, edges, limit);
-    }
-  }
-
-  private async walkTypeHierarchy(
-    items: unknown[],
-    direction: "supertypes" | "subtypes",
-    maxDepth: number,
-    currentDepth: number,
-    edges: HierarchyEdge[],
-    limit: number
-  ): Promise<void> {
-    if (currentDepth > maxDepth || edges.length >= limit) {
-      return;
-    }
-    const method = direction === "supertypes" ? "typeHierarchy/supertypes" : "typeHierarchy/subtypes";
-    for (const item of items) {
-      if (edges.length >= limit) {
-        return;
-      }
-      const related = await this.requestSettled<unknown[]>(method, { item });
-      for (const next of related || []) {
-        if (edges.length >= limit) {
-          break;
-        }
-        edges.push({
-          depth: currentDepth,
-          from: direction === "supertypes" ? item : next,
-          to: direction === "supertypes" ? next : item
-        });
-      }
-      await this.walkTypeHierarchy(related || [], direction, maxDepth, currentDepth + 1, edges, limit);
-    }
-  }
-}
-
-function findExecutable(name: string): string {
-  const result = spawnSync("sh", ["-lc", `command -v ${shellQuote(name)}`], { encoding: "utf8" });
-  return result.status === 0 ? result.stdout.trim() : "";
-}
-
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, "'\\''")}'`;
-}
-
-function buildJdtlsEnv(runtimeJavaHome?: string): NodeJS.ProcessEnv {
-  return {
-    HOME: process.env.HOME,
-    PATH: process.env.PATH,
-    SHELL: process.env.SHELL,
-    TMPDIR: process.env.TMPDIR,
-    LANG: process.env.LANG,
-    LC_ALL: process.env.LC_ALL,
-    JAVA_HOME: runtimeJavaHome
-  };
-}
-
-function jvmArgs(generatedCode: GeneratedCodeStatus): string[] {
-  const args = [`--jvm-arg=-Xmx${process.env.JAVA_LSP_JDTLS_XMX || resourceDefaults().jdtlsXmx}`];
-  if (generatedCode.lombok.agentEnabled && generatedCode.lombok.jar) {
-    args.push(`--jvm-arg=-javaagent:${generatedCode.lombok.jar}`);
-  }
-  return args;
-}
-
-const LOMBOK_LOG_ANNOTATION = /@(?:[A-Za-z_$][\w$]*\.)*(?:Slf4j|XSlf4j|Log4j2?|CommonsLog|Flogger|JBossLog|Log)\b/;
-
-export function filterGeneratedCodeDiagnostics(input: DiagnosticFilterInput): LspDiagnostic[] {
-  if (!input.source || !hasLombokLogSource(input.generatedCode, input.source)) {
-    return [...input.diagnostics];
-  }
-  const { source } = input;
-  return input.diagnostics.filter(diagnostic => !isLombokLogUnresolvedDiagnostic(source, diagnostic));
-}
-
-function hasLombokLogSource(generatedCode: GeneratedCodeStatus, source: string): boolean {
-  const lombokKnown = generatedCode.lombok.detected || /\blombok\.extern\./.test(source);
-  return lombokKnown && LOMBOK_LOG_ANNOTATION.test(source);
-}
-
-function isLombokLogUnresolvedDiagnostic(source: string, diagnostic: LspDiagnostic): boolean {
-  return tokenAt(source, diagnostic.range.start.line, diagnostic.range.start.character) === "log"
-    && unresolvedLogMessage(diagnostic.message);
-}
-
-function unresolvedLogMessage(message: string): boolean {
-  const normalized = message.toLowerCase();
-  return /\blog\b.*\bcannot be resolved\b/.test(normalized)
-    || /\bcannot resolve symbol\b[\s\S]*\blog\b/.test(normalized)
-    || /\bcannot find symbol\b[\s\S]*\blog\b/.test(normalized);
-}
-
-function tokenAt(source: string, lineNumber: number, character: number): string | undefined {
-  const line = source.split(/\r?\n/)[lineNumber];
-  if (line === undefined) {
-    return undefined;
-  }
-  return line.slice(Math.max(0, character)).match(/^[A-Za-z_$][\w$]*/)?.[0];
-}
-
-function pickSection(source: unknown, dottedPath: string): unknown {
-  return dottedPath.split(".").reduce<unknown>((current, part) => {
-    if (current && typeof current === "object" && part in current) {
-      return (current as Record<string, unknown>)[part];
-    }
-    return null;
-  }, source);
-}
-
-function splitArgs(value: string | undefined): string[] {
-  if (!value) {
-    return [];
-  }
-  return value.split(/\s+/).filter(Boolean);
-}
-
-function positiveInteger(value: string | undefined, fallback: number): number {
-  if (!value) {
-    return fallback;
-  }
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-function fileFingerprint(filePath: string): string {
-  try {
-    const stat = statSync(filePath);
-    return `${stat.size}:${stat.mtimeMs}`;
-  } catch {
-    return "missing";
-  }
-}
-
-function normalizeLocations(value: unknown): Array<LspLocation | LspLocationLink> {
-  if (!value) {
-    return [];
-  }
-  return Array.isArray(value) ? value as Array<LspLocation | LspLocationLink> : [value as LspLocation | LspLocationLink];
-}
-
-function truncate<T>(items: T[], limit: number): { items: T[]; truncated: boolean } {
-  return {
-    items: items.slice(0, limit),
-    truncated: items.length > limit
-  };
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string, onTimeout?: () => void): Promise<T> {
-  let timeout: NodeJS.Timeout | undefined;
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    timeout = setTimeout(() => {
-      onTimeout?.();
-      reject(new Error(`Timed out waiting for ${label} after ${timeoutMs}ms`));
-    }, timeoutMs);
-  });
-  try {
-    return await Promise.race([promise, timeoutPromise]);
-  } finally {
-    if (timeout) {
-      clearTimeout(timeout);
     }
   }
 }

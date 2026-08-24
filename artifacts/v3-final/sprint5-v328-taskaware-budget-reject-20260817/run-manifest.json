@@ -1,0 +1,248 @@
+{
+  "version": 6,
+  "createdAt": "2026-08-16T16:49:47.009Z",
+  "sourceRoot": "/Users/luo/Documents/github/codex-java-lsp-mcp",
+  "verifierVersion": 6,
+  "runtimes": {
+    "old": {
+      "commit": "4eedc6b087210def34d1d3d2277a7ad41488c31f",
+      "commitTree": "567058e518022a269273698a92ec5fbc961a53b6",
+      "executableTree": "567058e518022a269273698a92ec5fbc961a53b6",
+      "buildStamp": {
+        "gitSha": "4eedc6b08721",
+        "generatedAt": "2026-08-16T16:47:40.969Z",
+        "defaults": {
+          "idleTtlMs": 2700000,
+          "importConcurrency": 2,
+          "jdtlsXmx": "2g",
+          "maxActiveRepos": 3
+        },
+        "defaultsFingerprint": "e5835394a86f"
+      }
+    },
+    "new": {
+      "commit": "4eedc6b087210def34d1d3d2277a7ad41488c31f",
+      "commitTree": "567058e518022a269273698a92ec5fbc961a53b6",
+      "executableTree": "37c9924331098284c2c7f1d78b606577c6d4a8f9",
+      "buildStamp": {
+        "gitSha": "4eedc6b08721",
+        "generatedAt": "2026-08-16T16:47:44.255Z",
+        "defaults": {
+          "idleTtlMs": 2700000,
+          "importConcurrency": 2,
+          "jdtlsXmx": "2g",
+          "maxActiveRepos": 3
+        },
+        "defaultsFingerprint": "e5835394a86f"
+      }
+    }
+  },
+  "candidatePatch": {
+    "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/candidate.patch",
+    "sha256": "2ed27d60d31c1e883f048d59f1722f118a20e86ad4f3412a9a602b3d919521f3",
+    "bytes": 29384,
+    "appliedToCommit": "4eedc6b087210def34d1d3d2277a7ad41488c31f",
+    "appliedToCommitTree": "567058e518022a269273698a92ec5fbc961a53b6",
+    "resultingExecutableTree": "37c9924331098284c2c7f1d78b606577c6d4a8f9",
+    "untrackedInputs": [
+      {
+        "path": "scripts/run-idle-prewarm-experiment.mjs",
+        "sha256": "1a01e089c7b50ed0cbb0a0cae10f0e9527d513a06fd3da9b302286c8d71f4a5a",
+        "bytes": 12697,
+        "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/candidate-untracked/scripts/run-idle-prewarm-experiment.mjs"
+      },
+      {
+        "path": "scripts/run-v324-import-concurrency-experiment.mjs",
+        "sha256": "ec58ec7eb4b19739103ca2551bd521b46c068a487a4e37a6e09e3efe517b44c4",
+        "bytes": 10890,
+        "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/candidate-untracked/scripts/run-v324-import-concurrency-experiment.mjs"
+      }
+    ]
+  },
+  "runs": 5,
+  "p95Limit": 1.25,
+  "requestDeadlineMs": 2000,
+  "comparisonPolicy": {
+    "baseline": "executable-code-baseline",
+    "baselineRevision": "4eedc6b087210def34d1d3d2277a7ad41488c31f",
+    "goldenSchema": "java-intelligence-v32-range-holdout-v2",
+    "pReadTolerance": 0.02,
+    "p95AbsoluteSlackMs": 50,
+    "taskBlockingBaseline": "attempt-or-derived-attribution"
+  },
+  "rounds": [
+    "old/new",
+    "new/old",
+    "old/new"
+  ],
+  "repositories": {
+    "lishuedu": {
+      "root": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-mcp-three-repo-qAhm70/repositories/lishuedu",
+      "head": "db63b1a7e393edd90449eb013d7d1c4d65c366f2",
+      "tree": "22f0ce444e4cac484de85c8a0bf02240ad70d712",
+      "clean": true,
+      "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sourceRoot": "/private/tmp/codex-java-v3-golden-20260809/lishuedu"
+    },
+    "cipherlink": {
+      "root": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-mcp-three-repo-qAhm70/repositories/cipherlink",
+      "head": "fa433982e92e52dd610650d1e79f2d041179b1d3",
+      "tree": "21a1075c7b211932a4cdb2abf2742521b1eba31f",
+      "clean": true,
+      "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sourceRoot": "/private/tmp/codex-java-v3-golden-20260809/cipherlink"
+    },
+    "exam-parent-v3": {
+      "root": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-mcp-three-repo-qAhm70/repositories/exam-parent-v3",
+      "head": "f90a0b475f7be2ed003703feecec8195bc7eb976",
+      "tree": "dcdb2024879686451859c64260c7e1f3a4721fa7",
+      "clean": true,
+      "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sourceRoot": "/private/tmp/codex-java-v3-golden-20260809/exam-parent-v3"
+    }
+  },
+  "scenarios": {
+    "lishuedu": {
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "sha256": "fba58bb3e3e77dfb37f7ded03fb2a9ff02612658b08ca48b15927d102c434c65",
+      "rowIds": [
+        "storage-signed-url",
+        "school-template-parser",
+        "report-reusable-zip",
+        "school-confirm-controller",
+        "benefit-product-code-dto",
+        "school-mapstruct-uses",
+        "audit-order-repository-mapper-rule-type",
+        "audit-assignee-mapper-precision",
+        "exam-score-export-cross-module-holdout",
+        "paper-task-claim-iam-holdout"
+      ],
+      "tuningRowIds": [
+        "storage-signed-url",
+        "school-template-parser",
+        "report-reusable-zip",
+        "school-confirm-controller",
+        "benefit-product-code-dto",
+        "school-mapstruct-uses",
+        "audit-order-repository-mapper-rule-type",
+        "audit-assignee-mapper-precision"
+      ],
+      "holdoutRowIds": [
+        "exam-score-export-cross-module-holdout",
+        "paper-task-claim-iam-holdout"
+      ]
+    },
+    "cipherlink": {
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "sha256": "e60dfebcc6cd764e6488c647793db72e098b7cf66385f8012e023fedcaf535d5",
+      "rowIds": [
+        "client-update-check",
+        "transfer-upload-init",
+        "transfer-upload-session-repository",
+        "aliyun-sms-gateway-send",
+        "operation-log-response-dto",
+        "organization-create-member-cross-module",
+        "auth-sms-login-lockout",
+        "account-admin-create-account-guard",
+        "client-release-storage-presign-holdout",
+        "backend-operation-log-aspect-async-audit-holdout"
+      ],
+      "tuningRowIds": [
+        "client-update-check",
+        "transfer-upload-init",
+        "transfer-upload-session-repository",
+        "aliyun-sms-gateway-send",
+        "operation-log-response-dto",
+        "organization-create-member-cross-module",
+        "auth-sms-login-lockout",
+        "account-admin-create-account-guard"
+      ],
+      "holdoutRowIds": [
+        "client-release-storage-presign-holdout",
+        "backend-operation-log-aspect-async-audit-holdout"
+      ]
+    },
+    "exam-parent-v3": {
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "sha256": "da84c560c46c7c90d6dbabea38b43b5695a7a23dcd2f608e8c6dcd63cae4f69e",
+      "rowIds": [
+        "rule-engine-execute",
+        "candidate-position-select",
+        "apply-info-save-basic-service",
+        "position-repository-exists",
+        "ceb-order-create-dto",
+        "apply-info-update-cross-exam-guard",
+        "check-people-delete-site-guard",
+        "current-user-service-implementer-edge",
+        "exam-room-print-download-types-persistent-bundle",
+        "candidate-pay-order-cross-module-admission"
+      ],
+      "tuningRowIds": [
+        "rule-engine-execute",
+        "candidate-position-select",
+        "apply-info-save-basic-service",
+        "position-repository-exists",
+        "ceb-order-create-dto",
+        "apply-info-update-cross-exam-guard",
+        "check-people-delete-site-guard",
+        "current-user-service-implementer-edge"
+      ],
+      "holdoutRowIds": [
+        "exam-room-print-download-types-persistent-bundle",
+        "candidate-pay-order-cross-module-admission"
+      ]
+    }
+  },
+  "candidateTests": {
+    "dist": {
+      "discoveredTests": 923,
+      "passedTests": 923,
+      "stdout": {
+        "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/candidate-tests/dist.tap",
+        "bytes": 213030,
+        "sha256": "2a63b4e9b689c2e42bfe01288199c1677b1d06075b5b7b1fe81acbaacdefe080"
+      },
+      "stderr": {
+        "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/candidate-tests/dist.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "scripts": {
+      "discoveredTests": 100,
+      "passedTests": 100,
+      "stdout": {
+        "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/candidate-tests/scripts.tap",
+        "bytes": 22453,
+        "sha256": "a6b3ea529839efe368a3ece69ad45bcc7acda96edecd3d14b7b03040bb4abad7"
+      },
+      "stderr": {
+        "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/candidate-tests/scripts.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  },
+  "dependencies": {
+    "copyMode": "private-content-verified-copy",
+    "inventory": {
+      "schemaVersion": 1,
+      "algorithm": "sha256-path-type-size-content-v1",
+      "fileCount": 4086,
+      "directoryCount": 660,
+      "symlinkCount": 7,
+      "totalBytes": 58951103,
+      "sha256": "0362908244299e2d61f87cb5d1037d9609abd11f8d0afae2cc89c3569ce13bc6"
+    }
+  },
+  "diagnosticRpc": {
+    "requested": false,
+    "role": "DIAGNOSTIC_ONLY_NOT_STANDARD_TOKEN_GATE",
+    "gatePolicy": null,
+    "runtimeState": null,
+    "telemetryMode": null,
+    "outputFile": null
+  },
+  "jdtlsDisabled": true,
+  "workspaceRoot": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-mcp-three-repo-qAhm70"
+}

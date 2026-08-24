@@ -1,0 +1,44 @@
+{
+  "schemaVersion": "e-e4-closeout/v1",
+  "track": "e",
+  "card": "E4",
+  "dated": "2026-08-23",
+  "decision": "COMPLETE",
+  "mergeToMain": false,
+  "srcTouched": false,
+  "defaultChainIdentity": "UNCHANGED",
+  "scope": [
+    "scripts/run-agent-trace-matrix.mjs --model-profile",
+    "scripts/probe-serena-mcp.mjs two install paths",
+    "docs/deep harvest §3.5 kill criterion"
+  ],
+  "modelProfiles": {
+    "local-qwen": {
+      "host": "47.106.205.246:1082",
+      "model": "openclaw/Qwen3.8-27B-WORK"
+    },
+    "openrouter": {
+      "host": "openrouter.ai",
+      "model": "stealth/ox-alpha"
+    }
+  },
+  "serena": {
+    "status": "SERENA_ABANDONED",
+    "killCriterion": "old-jin-paired-hit-rate",
+    "attempts": [
+      "uvx --from git+https://github.com/oraios/serena serena-mcp-server --help",
+      "python3 -m pip show serena-mcp-server",
+      "python3 -m pip show serena"
+    ],
+    "note": "uvx cloned serena-agent and started building, then failed before a runnable command. pip packages are not installed. Binary not vendored. Smoke skipped because no command."
+  },
+  "isolation": {
+    "t0": {
+      "tests": 35,
+      "fail": 0,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "6462f634f3f1238bd22444ac98f805bb6ae800c7",
+      "logSha256": "8fb45c1c4b020486502536116f07a0c6f61f1a21bfe3577832691cc0d5322418"
+    }
+  }
+}

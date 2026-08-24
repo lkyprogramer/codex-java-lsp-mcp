@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "e-e3-closeout/v1",
+  "track": "e",
+  "card": "E3",
+  "dated": "2026-08-23",
+  "decision": "COMPLETE",
+  "mergeToMain": false,
+  "srcTouched": false,
+  "defaultChainIdentity": "UNCHANGED",
+  "scope": [
+    "scripts/run-agent-trace-live.mjs collectImpactPaths + compactContextForModel"
+  ],
+  "observedSources": [
+    "files[]",
+    "readPlan[]",
+    "contexts[]",
+    "evidence[]",
+    "candidates[]",
+    "unresolved path-like ids"
+  ],
+  "isolation": {
+    "t0": {
+      "tests": 22,
+      "fail": 0,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "ec21794e25abbc2d085f5cd68865071bb4049a9a",
+      "logSha256": "96fdc2d3372c294017d8fa1d485e87b7332b5bfeb9416651f0aa9b39e117b434"
+    }
+  }
+}

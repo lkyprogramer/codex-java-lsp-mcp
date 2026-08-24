@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "jin-phase-n3-closeout/v1",
+  "phase": "N3",
+  "dated": "2026-08-20",
+  "decision": "COMPLETE",
+  "mergeToMain": false,
+  "n300": {
+    "lishuedu": { "kept": 753, "train": 527, "holdout": 226, "minApplied": 30, "sha256": "919bf4e52420db3bd43da3393c20452ff8de6bee396239c34b2b7ce8d4fc01d0" },
+    "cipherlink": { "kept": 20, "train": 14, "holdout": 6, "minApplied": 20, "sha256": "a4320afec2cc6e2573407644c7d498fe5c679f5f0d630df62581b2638a0d4fad", "note": "fallback min 20 per N3-00" },
+    "exam-parent-v3": { "kept": 45, "train": 31, "holdout": 14, "minApplied": 30, "sha256": "13041477da3e684c8832b44136422833a705a7e666ea872a382e3099e78de2f9" },
+    "sanityTrain10": { "ok": 10, "n": 10 },
+    "fourthRepo": {
+      "attempted": ["macrozheng/mall"],
+      "selected": "YunaiV/ruoyi-vue-pro",
+      "pin": "2bbe79b34ab8c9c7b0148300599dc8d4881c8db1",
+      "javaLoc": 135873,
+      "kept": 427,
+      "maxCommitsScanned": 800,
+      "sha256": "d1c2be255d0bf7d4666da955c50343c66b69d67d2a7dd201aa205b1f8c144b28",
+      "mallRejected": { "kept": 8, "pin": "0504e86b1f1b6f1b8aa6a734d37a90fb67346be7", "reason": "kept < 20" },
+      "holdoutPeek": false
+    }
+  },
+  "t2": {
+    "mustHitRate": { "lishuedu": 1.0, "cipherlink": 1.0, "exam-parent-v3": 0.962 },
+    "gate": 0.95,
+    "passed": true,
+    "p95Ms": { "lishuedu": 37, "cipherlink": 20, "exam-parent-v3": 20 },
+    "p95VsDefaultImpact": "UNMEASURED",
+    "p95Note": "QUERY_CONTEXT_GRAPH wall p95 is 20-37ms. Default java_impact wall-clock was not paired this phase (T3 measures tokens). Do not claim the -35% latency gate.",
+    "fallbackRate": { "lishuedu": 0.1, "cipherlink": 0.0, "exam-parent-v3": 0.0 },
+    "replaySha256": "bcf303d4ce7c1b3185b2fde1cbf5708ec3683018e008ba9a5f015d7bf254aa26"
+  },
+  "productionLoc": {
+    "beforeN2a": 39642,
+    "after": 40157,
+    "deltaFromN2a": 515,
+    "fileCountAfter": 168,
+    "inventorySha256After": "ea70b7c8fbfaf0b714a2e3f138a6abdd5dcb5fd9605f2ee6d3d3daf95803f0ed"
+  },
+  "isolation": {
+    "t0": { "tests": 11, "fail": 0, "jdtlsBin": "/usr/bin/false" },
+    "t1": { "dist": 1091, "scripts": 190, "fail": 0, "jdtlsBin": "/usr/bin/false", "executableTree": "37cfdb217eb5c66725f9773dd5b4289a3ce1d548" },
+    "t2": { "isolation": "detached-local-clone", "jdtlsBin": "/usr/bin/false", "executableTree": "37cfdb217eb5c66725f9773dd5b4289a3ce1d548" }
+  }
+}

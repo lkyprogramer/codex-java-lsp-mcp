@@ -1,0 +1,1329 @@
+{
+  "version": 1,
+  "generatedAt": "2026-08-09T06:02:55.844Z",
+  "decision": "KEEP_EXPLICIT",
+  "runtimeBuild": {
+    "gitSha": "4e147560c38b",
+    "generatedAt": "2026-08-09T04:37:58.832Z",
+    "defaults": {
+      "idleTtlMs": 2700000,
+      "importConcurrency": 2,
+      "jdtlsXmx": "2g",
+      "maxActiveRepos": 3
+    },
+    "defaultsFingerprint": "e5835394a86f"
+  },
+  "semanticFirstTouchJsSha256": "e4b7c0bd33c8980072cf720e898d90c72b02cd4cee83fda1c265f09b222478ce",
+  "anchors": {
+    "lishuedu": {
+      "scenarioId": "storage-signed-url",
+      "definitionReferences": {
+        "file": "modules/integration/src/main/java/com/lishu/edu/integration/domain/port/StorageGateway.java",
+        "cliOneBased": {
+          "line": 36,
+          "column": 28
+        },
+        "lspZeroBased": {
+          "line": 35,
+          "column": 27
+        }
+      },
+      "typeHierarchy": {
+        "file": "modules/integration/src/main/java/com/lishu/edu/integration/domain/port/StorageGateway.java",
+        "cliOneBased": {
+          "line": 18,
+          "column": 18
+        },
+        "lspZeroBased": {
+          "line": 17,
+          "column": 17
+        }
+      }
+    },
+    "cipherlink": {
+      "scenarioId": "transfer-upload-session-repository",
+      "definitionReferences": {
+        "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/application/TransferRepository.java",
+        "cliOneBased": {
+          "line": 13,
+          "column": 32
+        },
+        "lspZeroBased": {
+          "line": 12,
+          "column": 31
+        }
+      },
+      "typeHierarchy": {
+        "file": "modules/transfer/src/main/java/com/hhtele/cipherlink/transfer/application/TransferRepository.java",
+        "cliOneBased": {
+          "line": 7,
+          "column": 18
+        },
+        "lspZeroBased": {
+          "line": 6,
+          "column": 17
+        }
+      }
+    },
+    "exam-parent-v3": {
+      "scenarioId": "current-user-service-implementer-edge",
+      "definitionReferences": {
+        "file": "exam-management/src/main/java/com/hhtele/exam/management/controller/examination/ExaminationCheckController.java",
+        "cliOneBased": {
+          "line": 47,
+          "column": 88
+        },
+        "lspZeroBased": {
+          "line": 46,
+          "column": 87
+        }
+      },
+      "typeHierarchy": {
+        "file": "exam-data/src/main/java/com/hhtele/exam/data/service/CurrentUserService.java",
+        "cliOneBased": {
+          "line": 9,
+          "column": 18
+        },
+        "lspZeroBased": {
+          "line": 8,
+          "column": 17
+        }
+      }
+    }
+  },
+  "cells": [
+    {
+      "file": "cipherlink-fresh-document-symbol-references.json",
+      "sha256": "d672597cee3a99959092f0424012f2b485d23c2e1c96a1414eea8d989e836e6c",
+      "metadata": {
+        "repoRoot": "/tmp/codex-java-v3-golden-20260809/cipherlink",
+        "projectId": "cipherlink",
+        "workspaceState": "fresh",
+        "prepare": "document-symbol",
+        "operation": "references",
+        "runs": 10,
+        "timeoutMs": 60000,
+        "output": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-fresh-document-symbol-references.json",
+        "repoCommit": "fa433982e92e"
+      },
+      "attempts": 10,
+      "totalMs": {
+        "p50": 22286,
+        "p95": 25431
+      },
+      "ensureStartedMs": {
+        "p50": 4739.519749999992,
+        "p95": 6625.128207999995
+      },
+      "prepareMs": {
+        "p50": 8558,
+        "p95": 9578
+      },
+      "requestMs": {
+        "p50": 9318,
+        "p95": 10736
+      },
+      "completion": {
+        "COMPLETE": 10
+      },
+      "backendSettlement": {
+        "unavailable": 10
+      },
+      "resultFiles": {
+        "min": 4,
+        "max": 4
+      },
+      "repoContainedFiles": {
+        "min": 2,
+        "max": 2
+      },
+      "outsideRepoFiles": {
+        "max": 0
+      },
+      "suppressedLocations": {
+        "max": 0
+      },
+      "cacheHit": {
+        "unavailable": 10
+      },
+      "shared": {
+        "unavailable": 10
+      }
+    },
+    {
+      "file": "cipherlink-fresh-none-definition.json",
+      "sha256": "933eda7ad075a63d73b8986a9c4132a7f7ddcba4e32bd59961d3a769d082e547",
+      "metadata": {
+        "repoRoot": "/tmp/codex-java-v3-golden-20260809/cipherlink",
+        "projectId": "cipherlink",
+        "workspaceState": "fresh",
+        "prepare": "none",
+        "operation": "definition",
+        "runs": 10,
+        "timeoutMs": 60000,
+        "output": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-fresh-none-definition.json",
+        "repoCommit": "fa433982e92e"
+      },
+      "attempts": 10,
+      "totalMs": {
+        "p50": 11632,
+        "p95": 12726
+      },
+      "ensureStartedMs": {
+        "p50": 4611.332709000009,
+        "p95": 4799.181042
+      },
+      "prepareMs": {
+        "p50": 0,
+        "p95": 0
+      },
+      "requestMs": {
+        "p50": 6977,
+        "p95": 7927
+      },
+      "completion": {
+        "COMPLETE": 10
+      },
+      "backendSettlement": {
+        "unavailable": 10
+      },
+      "resultFiles": {
+        "min": 1,
+        "max": 1
+      },
+      "repoContainedFiles": {
+        "min": 1,
+        "max": 1
+      },
+      "outsideRepoFiles": {
+        "max": 0
+      },
+      "suppressedLocations": {
+        "max": 0
+      },
+      "cacheHit": {
+        "unavailable": 10
+      },
+      "shared": {
+        "unavailable": 10
+      }
+    },
+    {
+      "file": "cipherlink-fresh-none-references.json",
+      "sha256": "f85bb8d30fcc963cacbf5ddeb1e4e6fdedf80ec31529bee38c7c68aec02fc1fe",
+      "metadata": {
+        "repoRoot": "/tmp/codex-java-v3-golden-20260809/cipherlink",
+        "projectId": "cipherlink",
+        "workspaceState": "fresh",
+        "prepare": "none",
+        "operation": "references",
+        "runs": 10,
+        "timeoutMs": 60000,
+        "output": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-fresh-none-references.json",
+        "repoCommit": "fa433982e92e"
+      },
+      "attempts": 10,
+      "totalMs": {
+        "p50": 22992,
+        "p95": 25821
+      },
+      "ensureStartedMs": {
+        "p50": 4915.326000000001,
+        "p95": 5441.84266699999
+      },
+      "prepareMs": {
+        "p50": 0,
+        "p95": 0
+      },
+      "requestMs": {
+        "p50": 18106,
+        "p95": 20379
+      },
+      "completion": {
+        "COMPLETE": 10
+      },
+      "backendSettlement": {
+        "unavailable": 10
+      },
+      "resultFiles": {
+        "min": 4,
+        "max": 4
+      },
+      "repoContainedFiles": {
+        "min": 2,
+        "max": 2
+      },
+      "outsideRepoFiles": {
+        "max": 0
+      },
+      "suppressedLocations": {
+        "max": 0
+      },
+      "cacheHit": {
+        "unavailable": 10
+      },
+      "shared": {
+        "unavailable": 10
+      }
+    },
+    {
+      "file": "cipherlink-fresh-progress-idle-references.json",
+      "sha256": "41d313851c4d6e4e62939104d8db4424d5f2df79f2f5929ef014b95a5714831a",
+      "metadata": {
+        "repoRoot": "/tmp/codex-java-v3-golden-20260809/cipherlink",
+        "projectId": "cipherlink",
+        "workspaceState": "fresh",
+        "prepare": "progress-idle",
+        "operation": "references",
+        "runs": 10,
+        "timeoutMs": 60000,
+        "output": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-fresh-progress-idle-references.json",
+        "repoCommit": "fa433982e92e"
+      },
+      "attempts": 10,
+      "totalMs": {
+        "p50": 22802,
+        "p95": 25108
+      },
+      "ensureStartedMs": {
+        "p50": 4906.451334000012,
+        "p95": 5687.876374999993
+      },
+      "prepareMs": {
+        "p50": 8306,
+        "p95": 8561
+      },
+      "requestMs": {
+        "p50": 9623,
+        "p95": 10859
+      },
+      "completion": {
+        "COMPLETE": 10
+      },
+      "backendSettlement": {
+        "unavailable": 10
+      },
+      "resultFiles": {
+        "min": 4,
+        "max": 4
+      },
+      "repoContainedFiles": {
+        "min": 2,
+        "max": 2
+      },
+      "outsideRepoFiles": {
+        "max": 0
+      },
+      "suppressedLocations": {
+        "max": 0
+      },
+      "cacheHit": {
+        "unavailable": 10
+      },
+      "shared": {
+        "unavailable": 10
+      }
+    },
+    {
+      "file": "cipherlink-reused-shared-none-definition.json",
+      "sha256": "b06f20d1be709f94cdc5e398f6c9950b98cbe4f0a597236caf77c4a428c0f30f",
+      "metadata": {
+        "repoRoot": "/tmp/codex-java-v3-golden-20260809/cipherlink",
+        "projectId": "cipherlink",
+        "workspaceState": "reused",
+        "prepare": "none",
+        "operation": "definition",
+        "runs": 10,
+        "timeoutMs": 60000,
+        "output": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-reused-shared-none-definition.json",
+        "repoCommit": "fa433982e92e"
+      },
+      "attempts": 10,
+      "totalMs": {
+        "p50": 5,
+        "p95": 11647
+      },
+      "ensureStartedMs": {
+        "p50": 0,
+        "p95": 4712.888542
+      },
+      "prepareMs": {
+        "p50": 0,
+        "p95": 0
+      },
+      "requestMs": {
+        "p50": 5,
+        "p95": 6934
+      },
+      "completion": {
+        "COMPLETE": 10
+      },
+      "backendSettlement": {
+        "unavailable": 10
+      },
+      "resultFiles": {
+        "min": 1,
+        "max": 1
+      },
+      "repoContainedFiles": {
+        "min": 1,
+        "max": 1
+      },
+      "outsideRepoFiles": {
+        "max": 0
+      },
+      "suppressedLocations": {
+        "max": 0
+      },
+      "cacheHit": {
+        "unavailable": 10
+      },
+      "shared": {
+        "unavailable": 10
+      }
+    },
+    {
+      "file": "cipherlink-reused-shared-none-references.json",
+      "sha256": "5c8d75b75191d3cf6953ee1227cd078adbcc2f01a6bd856013d533e1332f54b1",
+      "metadata": {
+        "repoRoot": "/tmp/codex-java-v3-golden-20260809/cipherlink",
+        "projectId": "cipherlink",
+        "workspaceState": "reused",
+        "prepare": "none",
+        "operation": "references",
+        "runs": 10,
+        "timeoutMs": 60000,
+        "output": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-reused-shared-none-references.json",
+        "repoCommit": "fa433982e92e"
+      },
+      "attempts": 10,
+      "totalMs": {
+        "p50": 98,
+        "p95": 21172
+      },
+      "ensureStartedMs": {
+        "p50": 0,
+        "p95": 1807.1622500000003
+      },
+      "prepareMs": {
+        "p50": 0,
+        "p95": 0
+      },
+      "requestMs": {
+        "p50": 98,
+        "p95": 19365
+      },
+      "completion": {
+        "COMPLETE": 10
+      },
+      "backendSettlement": {
+        "unavailable": 10
+      },
+      "resultFiles": {
+        "min": 4,
+        "max": 4
+      },
+      "repoContainedFiles": {
+        "min": 2,
+        "max": 2
+      },
+      "outsideRepoFiles": {
+        "max": 0
+      },
+      "suppressedLocations": {
+        "max": 0
+      },
+      "cacheHit": {
+        "unavailable": 10
+      },
+      "shared": {
+        "unavailable": 10
+      }
+    },
+    {
+      "file": "cipherlink-reused-shared-none-type-hierarchy.json",
+      "sha256": "635a082e3124fd5b89c4a2c69d5496c1911f331cd364cc90faf6f259e31dcc07",
+      "metadata": {
+        "repoRoot": "/tmp/codex-java-v3-golden-20260809/cipherlink",
+        "projectId": "cipherlink",
+        "workspaceState": "reused",
+        "prepare": "none",
+        "operation": "type-hierarchy",
+        "runs": 10,
+        "timeoutMs": 60000,
+        "output": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/first-touch-final/cipherlink-reused-shared-none-type-hierarchy.json",
+        "repoCommit": "fa433982e92e"
+      },
+      "attempts": 10,
+      "totalMs": {
+        "p50": 1005,
+        "p95": 3024
+      },
+      "ensureStartedMs": {
+        "p50": 0,
+        "p95": 2017.7495000000001
+      },
+      "prepareMs": {
+        "p50": 0,
+        "p95": 0
+      },
+      "requestMs": {
+        "p50": 1005,
+        "p95": 2126
+      },
+      "completion": {
+        "COMPLETE": 10
+      },
+      "backendSettlement": {
+        "after_5s": 1,
+        "unavailable": 6,
+        "within_250ms": 3
+      },
+      "resultFiles": {
+        "min": 0,
+        "max": 1
+      },
+      "repoContainedFiles": {
+        "min": 0,
+        "max": 2
+      },
+      "outsideRepoFiles": {
+        "max": 0
+      },
+      "suppressedLocations": {
+        "max": 0
+      },
+      "cacheHit": {
+        "unavailable": 10
+      },
+      "shared": {
+        "unavailable": 10
+      }
+    },
+    {
+      "file": "exam-parent-v3-fresh-document-symbol-references.json",
+      "sha256": "648cf665551095fbb5b19f2818947d2901b80f0a38c2e2e417d17a0348506344",
+      "metadata": {
+        "repoRoot": "/tmp/codex-java-v3-golden-20260809/exam-parent-v3",
+        "projectId": "exam-parent-v3",
+        "workspaceState": "fresh",
+        "prepare": "document-symbol",
+        "operation": "references",
+        "runs": 10,
+        "timeoutMs": 60000,
+        "output": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-fresh-document-symbol-references.json",
+        "repoCommit": "f90a0b475f7b"
+      },
+      "attempts": 10,
+      "totalMs": {
+        "p50": 46750,
+        "p95": 48762
+      },
+      "ensureStartedMs": {
+        "p50": 4900.2142080000485,
+        "p95": 5109.822083
+      },
+      "prepareMs": {
+        "p50": 5948,
+        "p95": 6692
+      },
+      "requestMs": {
+        "p50": 35589,
+        "p95": 37285
+      },
+      "completion": {
+        "COMPLETE": 10
+      },
+      "backendSettlement": {
+        "unavailable": 10
+      },
+      "resultFiles": {
+        "min": 247,
+        "max": 247
+      },
+      "repoContainedFiles": {
+        "min": 54,
+        "max": 54
+      },
+      "outsideRepoFiles": {
+        "max": 0
+      },
+      "suppressedLocations": {
+        "max": 0
+      },
+      "cacheHit": {
+        "unavailable": 10
+      },
+      "shared": {
+        "unavailable": 10
+      }
+    },
+    {
+      "file": "exam-parent-v3-fresh-none-definition.json",
+      "sha256": "558172b907c8c0807e82dcd162678038b0f7b6898bc7f89bf870dd14ca46fb6d",
+      "metadata": {
+        "repoRoot": "/tmp/codex-java-v3-golden-20260809/exam-parent-v3",
+        "projectId": "exam-parent-v3",
+        "workspaceState": "fresh",
+        "prepare": "none",
+        "operation": "definition",
+        "runs": 10,
+        "timeoutMs": 60000,
+        "output": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-fresh-none-definition.json",
+        "repoCommit": "f90a0b475f7b"
+      },
+      "attempts": 10,
+      "totalMs": {
+        "p50": 9824,
+        "p95": 11940
+      },
+      "ensureStartedMs": {
+        "p50": 4920.194041999988,
+        "p95": 5834.840083
+      },
+      "prepareMs": {
+        "p50": 0,
+        "p95": 0
+      },
+      "requestMs": {
+        "p50": 4981,
+        "p95": 6143
+      },
+      "completion": {
+        "COMPLETE": 10
+      },
+      "backendSettlement": {
+        "unavailable": 10
+      },
+      "resultFiles": {
+        "min": 1,
+        "max": 1
+      },
+      "repoContainedFiles": {
+        "min": 1,
+        "max": 1
+      },
+      "outsideRepoFiles": {
+        "max": 0
+      },
+      "suppressedLocations": {
+        "max": 0
+      },
+      "cacheHit": {
+        "unavailable": 10
+      },
+      "shared": {
+        "unavailable": 10
+      }
+    },
+    {
+      "file": "exam-parent-v3-fresh-none-references.json",
+      "sha256": "2d6f4a39a6a1f72794ebd9c1268acc37810c73d55a6289d3c92266fc55f38a93",
+      "metadata": {
+        "repoRoot": "/tmp/codex-java-v3-golden-20260809/exam-parent-v3",
+        "projectId": "exam-parent-v3",
+        "workspaceState": "fresh",
+        "prepare": "none",
+        "operation": "references",
+        "runs": 10,
+        "timeoutMs": 60000,
+        "output": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-fresh-none-references.json",
+        "repoCommit": "f90a0b475f7b"
+      },
+      "attempts": 10,
+      "totalMs": {
+        "p50": 46280,
+        "p95": 50615
+      },
+      "ensureStartedMs": {
+        "p50": 4913.581959000032,
+        "p95": 5487.580833999993
+      },
+      "prepareMs": {
+        "p50": 0,
+        "p95": 0
+      },
+      "requestMs": {
+        "p50": 41366,
+        "p95": 45127
+      },
+      "completion": {
+        "COMPLETE": 10
+      },
+      "backendSettlement": {
+        "unavailable": 10
+      },
+      "resultFiles": {
+        "min": 247,
+        "max": 247
+      },
+      "repoContainedFiles": {
+        "min": 54,
+        "max": 54
+      },
+      "outsideRepoFiles": {
+        "max": 0
+      },
+      "suppressedLocations": {
+        "max": 0
+      },
+      "cacheHit": {
+        "unavailable": 10
+      },
+      "shared": {
+        "unavailable": 10
+      }
+    },
+    {
+      "file": "exam-parent-v3-fresh-progress-idle-references.json",
+      "sha256": "6272cb15c564f8fcbe11b92c782bc24d4262a4c5b9204963492f5b29f30ccacc",
+      "metadata": {
+        "repoRoot": "/tmp/codex-java-v3-golden-20260809/exam-parent-v3",
+        "projectId": "exam-parent-v3",
+        "workspaceState": "fresh",
+        "prepare": "progress-idle",
+        "operation": "references",
+        "runs": 10,
+        "timeoutMs": 60000,
+        "output": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-fresh-progress-idle-references.json",
+        "repoCommit": "f90a0b475f7b"
+      },
+      "attempts": 10,
+      "totalMs": {
+        "p50": 47138,
+        "p95": 48694
+      },
+      "ensureStartedMs": {
+        "p50": 5091.342417000036,
+        "p95": 5332.208666999999
+      },
+      "prepareMs": {
+        "p50": 5534,
+        "p95": 5789
+      },
+      "requestMs": {
+        "p50": 36902,
+        "p95": 37828
+      },
+      "completion": {
+        "COMPLETE": 10
+      },
+      "backendSettlement": {
+        "unavailable": 10
+      },
+      "resultFiles": {
+        "min": 247,
+        "max": 247
+      },
+      "repoContainedFiles": {
+        "min": 54,
+        "max": 54
+      },
+      "outsideRepoFiles": {
+        "max": 0
+      },
+      "suppressedLocations": {
+        "max": 0
+      },
+      "cacheHit": {
+        "unavailable": 10
+      },
+      "shared": {
+        "unavailable": 10
+      }
+    },
+    {
+      "file": "exam-parent-v3-reused-shared-none-definition.json",
+      "sha256": "86c2af546ab44199481912d245ccab970d926b73fa515d6fd297a1abcd0fc93f",
+      "metadata": {
+        "repoRoot": "/tmp/codex-java-v3-golden-20260809/exam-parent-v3",
+        "projectId": "exam-parent-v3",
+        "workspaceState": "reused",
+        "prepare": "none",
+        "operation": "definition",
+        "runs": 10,
+        "timeoutMs": 60000,
+        "output": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-reused-shared-none-definition.json",
+        "repoCommit": "f90a0b475f7b"
+      },
+      "attempts": 10,
+      "totalMs": {
+        "p50": 32,
+        "p95": 12684
+      },
+      "ensureStartedMs": {
+        "p50": 0,
+        "p95": 6207.204375
+      },
+      "prepareMs": {
+        "p50": 0,
+        "p95": 0
+      },
+      "requestMs": {
+        "p50": 32,
+        "p95": 6476
+      },
+      "completion": {
+        "COMPLETE": 10
+      },
+      "backendSettlement": {
+        "unavailable": 10
+      },
+      "resultFiles": {
+        "min": 1,
+        "max": 1
+      },
+      "repoContainedFiles": {
+        "min": 1,
+        "max": 1
+      },
+      "outsideRepoFiles": {
+        "max": 0
+      },
+      "suppressedLocations": {
+        "max": 0
+      },
+      "cacheHit": {
+        "unavailable": 10
+      },
+      "shared": {
+        "unavailable": 10
+      }
+    },
+    {
+      "file": "exam-parent-v3-reused-shared-none-references.json",
+      "sha256": "2c031bae5f439ce97e1765d2dfe92780438c7cb1aedbefffd414fc393e072c5a",
+      "metadata": {
+        "repoRoot": "/tmp/codex-java-v3-golden-20260809/exam-parent-v3",
+        "projectId": "exam-parent-v3",
+        "workspaceState": "reused",
+        "prepare": "none",
+        "operation": "references",
+        "runs": 10,
+        "timeoutMs": 60000,
+        "output": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-reused-shared-none-references.json",
+        "repoCommit": "f90a0b475f7b"
+      },
+      "attempts": 10,
+      "totalMs": {
+        "p50": 1110,
+        "p95": 27195
+      },
+      "ensureStartedMs": {
+        "p50": 0,
+        "p95": 2419.1225000000004
+      },
+      "prepareMs": {
+        "p50": 0,
+        "p95": 0
+      },
+      "requestMs": {
+        "p50": 1110,
+        "p95": 24776
+      },
+      "completion": {
+        "COMPLETE": 10
+      },
+      "backendSettlement": {
+        "unavailable": 10
+      },
+      "resultFiles": {
+        "min": 247,
+        "max": 247
+      },
+      "repoContainedFiles": {
+        "min": 54,
+        "max": 54
+      },
+      "outsideRepoFiles": {
+        "max": 0
+      },
+      "suppressedLocations": {
+        "max": 0
+      },
+      "cacheHit": {
+        "unavailable": 10
+      },
+      "shared": {
+        "unavailable": 10
+      }
+    },
+    {
+      "file": "exam-parent-v3-reused-shared-none-type-hierarchy.json",
+      "sha256": "ad05f0643b2269d408e7e4c0fb725dba535188a504c27fbd006b88bec610ae1e",
+      "metadata": {
+        "repoRoot": "/tmp/codex-java-v3-golden-20260809/exam-parent-v3",
+        "projectId": "exam-parent-v3",
+        "workspaceState": "reused",
+        "prepare": "none",
+        "operation": "type-hierarchy",
+        "runs": 10,
+        "timeoutMs": 60000,
+        "output": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/first-touch-final/exam-parent-v3-reused-shared-none-type-hierarchy.json",
+        "repoCommit": "f90a0b475f7b"
+      },
+      "attempts": 10,
+      "totalMs": {
+        "p50": 73,
+        "p95": 3988
+      },
+      "ensureStartedMs": {
+        "p50": 0,
+        "p95": 2878.229542
+      },
+      "prepareMs": {
+        "p50": 0,
+        "p95": 0
+      },
+      "requestMs": {
+        "p50": 73,
+        "p95": 1110
+      },
+      "completion": {
+        "COMPLETE": 10
+      },
+      "backendSettlement": {
+        "unavailable": 10
+      },
+      "resultFiles": {
+        "min": 3,
+        "max": 3
+      },
+      "repoContainedFiles": {
+        "min": 4,
+        "max": 4
+      },
+      "outsideRepoFiles": {
+        "max": 0
+      },
+      "suppressedLocations": {
+        "max": 0
+      },
+      "cacheHit": {
+        "unavailable": 10
+      },
+      "shared": {
+        "unavailable": 10
+      }
+    },
+    {
+      "file": "lishuedu-fresh-document-symbol-references.json",
+      "sha256": "f8bae77b8ff6e8ad9135a254dcd2bb7b06ac012c100da45d64d7aed2c56ec3f6",
+      "metadata": {
+        "repoRoot": "/tmp/codex-java-v3-golden-20260809/lishuedu",
+        "projectId": "lishuedu",
+        "workspaceState": "fresh",
+        "prepare": "document-symbol",
+        "operation": "references",
+        "runs": 10,
+        "timeoutMs": 60000,
+        "output": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-fresh-document-symbol-references.json",
+        "repoCommit": "db63b1a7e393"
+      },
+      "attempts": 10,
+      "totalMs": {
+        "p50": 48340,
+        "p95": 53549
+      },
+      "ensureStartedMs": {
+        "p50": 4550.895709000004,
+        "p95": 5447.6628749999945
+      },
+      "prepareMs": {
+        "p50": 11026,
+        "p95": 12736
+      },
+      "requestMs": {
+        "p50": 32749,
+        "p95": 36098
+      },
+      "completion": {
+        "COMPLETE": 10
+      },
+      "backendSettlement": {
+        "unavailable": 10
+      },
+      "resultFiles": {
+        "min": 2,
+        "max": 2
+      },
+      "repoContainedFiles": {
+        "min": 2,
+        "max": 2
+      },
+      "outsideRepoFiles": {
+        "max": 0
+      },
+      "suppressedLocations": {
+        "max": 0
+      },
+      "cacheHit": {
+        "unavailable": 10
+      },
+      "shared": {
+        "unavailable": 10
+      }
+    },
+    {
+      "file": "lishuedu-fresh-none-definition.json",
+      "sha256": "7035c8aeb53a6195200ee07fb15c238980380fb058cf906894431bd6cd5d6162",
+      "metadata": {
+        "repoRoot": "/tmp/codex-java-v3-golden-20260809/lishuedu",
+        "projectId": "lishuedu",
+        "workspaceState": "fresh",
+        "prepare": "none",
+        "operation": "definition",
+        "runs": 10,
+        "timeoutMs": 60000,
+        "output": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-fresh-none-definition.json",
+        "repoCommit": "db63b1a7e393"
+      },
+      "attempts": 10,
+      "totalMs": {
+        "p50": 18395,
+        "p95": 19947
+      },
+      "ensureStartedMs": {
+        "p50": 5557.706292000003,
+        "p95": 8504.731791999977
+      },
+      "prepareMs": {
+        "p50": 0,
+        "p95": 0
+      },
+      "requestMs": {
+        "p50": 12166,
+        "p95": 13785
+      },
+      "completion": {
+        "COMPLETE": 10
+      },
+      "backendSettlement": {
+        "unavailable": 10
+      },
+      "resultFiles": {
+        "min": 1,
+        "max": 1
+      },
+      "repoContainedFiles": {
+        "min": 1,
+        "max": 1
+      },
+      "outsideRepoFiles": {
+        "max": 0
+      },
+      "suppressedLocations": {
+        "max": 0
+      },
+      "cacheHit": {
+        "unavailable": 10
+      },
+      "shared": {
+        "unavailable": 10
+      }
+    },
+    {
+      "file": "lishuedu-fresh-none-references.json",
+      "sha256": "9baa0942286f3fe17ea5eab34d0ac723ca3dbd93770e273c971cf7d81843f5ef",
+      "metadata": {
+        "repoRoot": "/tmp/codex-java-v3-golden-20260809/lishuedu",
+        "projectId": "lishuedu",
+        "workspaceState": "fresh",
+        "prepare": "none",
+        "operation": "references",
+        "runs": 10,
+        "timeoutMs": 60000,
+        "output": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-fresh-none-references.json",
+        "repoCommit": "db63b1a7e393"
+      },
+      "attempts": 10,
+      "totalMs": {
+        "p50": 59520,
+        "p95": 65787
+      },
+      "ensureStartedMs": {
+        "p50": 5700.635959000036,
+        "p95": 9958.736083999975
+      },
+      "prepareMs": {
+        "p50": 0,
+        "p95": 0
+      },
+      "requestMs": {
+        "p50": 51671,
+        "p95": 60015
+      },
+      "completion": {
+        "COMPLETE": 8,
+        "PARTIAL_TIMEOUT": 2
+      },
+      "backendSettlement": {
+        "unavailable": 8,
+        "within_250ms": 2
+      },
+      "resultFiles": {
+        "min": 0,
+        "max": 2
+      },
+      "repoContainedFiles": {
+        "min": 0,
+        "max": 2
+      },
+      "outsideRepoFiles": {
+        "max": 0
+      },
+      "suppressedLocations": {
+        "max": 0
+      },
+      "cacheHit": {
+        "unavailable": 10
+      },
+      "shared": {
+        "unavailable": 10
+      }
+    },
+    {
+      "file": "lishuedu-fresh-progress-idle-references.json",
+      "sha256": "3e734f55177f904e8a6b6a4f676af63498d8ec371059457d0d78de8b58e0ceb1",
+      "metadata": {
+        "repoRoot": "/tmp/codex-java-v3-golden-20260809/lishuedu",
+        "projectId": "lishuedu",
+        "workspaceState": "fresh",
+        "prepare": "progress-idle",
+        "operation": "references",
+        "runs": 10,
+        "timeoutMs": 60000,
+        "output": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-fresh-progress-idle-references.json",
+        "repoCommit": "db63b1a7e393"
+      },
+      "attempts": 10,
+      "totalMs": {
+        "p50": 54767,
+        "p95": 59930
+      },
+      "ensureStartedMs": {
+        "p50": 5004.780457999994,
+        "p95": 5399.676083000028
+      },
+      "prepareMs": {
+        "p50": 11078,
+        "p95": 12345
+      },
+      "requestMs": {
+        "p50": 38979,
+        "p95": 42359
+      },
+      "completion": {
+        "COMPLETE": 10
+      },
+      "backendSettlement": {
+        "unavailable": 10
+      },
+      "resultFiles": {
+        "min": 2,
+        "max": 2
+      },
+      "repoContainedFiles": {
+        "min": 2,
+        "max": 2
+      },
+      "outsideRepoFiles": {
+        "max": 0
+      },
+      "suppressedLocations": {
+        "max": 0
+      },
+      "cacheHit": {
+        "unavailable": 10
+      },
+      "shared": {
+        "unavailable": 10
+      }
+    },
+    {
+      "file": "lishuedu-reused-shared-none-definition.json",
+      "sha256": "035c0aa03e3f378ce60c95bfb71ceaec37aaa86a5cea8d54115988c365747241",
+      "metadata": {
+        "repoRoot": "/tmp/codex-java-v3-golden-20260809/lishuedu",
+        "projectId": "lishuedu",
+        "workspaceState": "reused",
+        "prepare": "none",
+        "operation": "definition",
+        "runs": 10,
+        "timeoutMs": 60000,
+        "output": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-reused-shared-none-definition.json",
+        "repoCommit": "db63b1a7e393"
+      },
+      "attempts": 10,
+      "totalMs": {
+        "p50": 6,
+        "p95": 15162
+      },
+      "ensureStartedMs": {
+        "p50": 0,
+        "p95": 4516.835583
+      },
+      "prepareMs": {
+        "p50": 0,
+        "p95": 0
+      },
+      "requestMs": {
+        "p50": 6,
+        "p95": 10645
+      },
+      "completion": {
+        "COMPLETE": 10
+      },
+      "backendSettlement": {
+        "unavailable": 10
+      },
+      "resultFiles": {
+        "min": 1,
+        "max": 1
+      },
+      "repoContainedFiles": {
+        "min": 1,
+        "max": 1
+      },
+      "outsideRepoFiles": {
+        "max": 0
+      },
+      "suppressedLocations": {
+        "max": 0
+      },
+      "cacheHit": {
+        "unavailable": 10
+      },
+      "shared": {
+        "unavailable": 10
+      }
+    },
+    {
+      "file": "lishuedu-reused-shared-none-references.json",
+      "sha256": "0c90ef52df0fae223e9946eb0aaa43547e265072bb29dc08d5ce69be5c2b0b47",
+      "metadata": {
+        "repoRoot": "/tmp/codex-java-v3-golden-20260809/lishuedu",
+        "projectId": "lishuedu",
+        "workspaceState": "reused",
+        "prepare": "none",
+        "operation": "references",
+        "runs": 10,
+        "timeoutMs": 60000,
+        "output": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-reused-shared-none-references.json",
+        "repoCommit": "db63b1a7e393"
+      },
+      "attempts": 10,
+      "totalMs": {
+        "p50": 178,
+        "p95": 37433
+      },
+      "ensureStartedMs": {
+        "p50": 0,
+        "p95": 2046.438167
+      },
+      "prepareMs": {
+        "p50": 0,
+        "p95": 0
+      },
+      "requestMs": {
+        "p50": 178,
+        "p95": 35386
+      },
+      "completion": {
+        "COMPLETE": 10
+      },
+      "backendSettlement": {
+        "unavailable": 10
+      },
+      "resultFiles": {
+        "min": 2,
+        "max": 2
+      },
+      "repoContainedFiles": {
+        "min": 2,
+        "max": 2
+      },
+      "outsideRepoFiles": {
+        "max": 0
+      },
+      "suppressedLocations": {
+        "max": 0
+      },
+      "cacheHit": {
+        "unavailable": 10
+      },
+      "shared": {
+        "unavailable": 10
+      }
+    },
+    {
+      "file": "lishuedu-reused-shared-none-type-hierarchy.json",
+      "sha256": "2468f844e86b062a08181c7dee17108490c40530c1a4bf38ea9b3954b8740875",
+      "metadata": {
+        "repoRoot": "/tmp/codex-java-v3-golden-20260809/lishuedu",
+        "projectId": "lishuedu",
+        "workspaceState": "reused",
+        "prepare": "none",
+        "operation": "type-hierarchy",
+        "runs": 10,
+        "timeoutMs": 60000,
+        "output": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/first-touch-final/lishuedu-reused-shared-none-type-hierarchy.json",
+        "repoCommit": "db63b1a7e393"
+      },
+      "attempts": 10,
+      "totalMs": {
+        "p50": 1003,
+        "p95": 3067
+      },
+      "ensureStartedMs": {
+        "p50": 0,
+        "p95": 2063.019875
+      },
+      "prepareMs": {
+        "p50": 0,
+        "p95": 0
+      },
+      "requestMs": {
+        "p50": 1003,
+        "p95": 1004
+      },
+      "completion": {
+        "COMPLETE": 10
+      },
+      "backendSettlement": {
+        "unavailable": 10
+      },
+      "resultFiles": {
+        "min": 0,
+        "max": 0
+      },
+      "repoContainedFiles": {
+        "min": 0,
+        "max": 0
+      },
+      "outsideRepoFiles": {
+        "max": 0
+      },
+      "suppressedLocations": {
+        "max": 0
+      },
+      "cacheHit": {
+        "unavailable": 10
+      },
+      "shared": {
+        "unavailable": 10
+      }
+    }
+  ],
+  "gate": {
+    "expectedCells": 21,
+    "observedCells": 21,
+    "allCellsHaveTenAttempts": true,
+    "freshP95Under800ms": false,
+    "reusedObservedCacheHitP50Under100ms": "UNMEASURED_RAW_SESSION_API",
+    "failedAttempts": 0,
+    "partialTimeoutAttempts": 2,
+    "outsideRepoFilesMax": 0,
+    "stderrPolicy": "validated separately: all official cell stderr files are empty"
+  }
+}

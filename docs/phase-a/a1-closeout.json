@@ -1,0 +1,62 @@
+{
+  "schemaVersion": "a-a1-closeout/v1",
+  "track": "a",
+  "card": "A1",
+  "dated": "2026-08-24",
+  "decision": "GOLDEN_NOISY",
+  "next": "A2a",
+  "mergeToMain": false,
+  "srcTouched": false,
+  "defaultChainIdentity": "UNCHANGED",
+  "killJavaContext": false,
+  "publicToolsStillExcludeJavaContext": true,
+  "holdoutInspected": false,
+  "taskSuccess": "UNMEASURED",
+  "audit": "docs/phase-a/a1-audit.json",
+  "auditSha256": "eaf5d9131db50ef545be3e0c6ec4a4e9b86c65d8e0271f465838f262ab5b26f5",
+  "rules": [
+    "mustHitGt8",
+    "testInMustHit",
+    "codegenShareGe50",
+    "modulesGe4",
+    "anchorOutsideDepNeighborhood",
+    "mergeOrDiffGt30"
+  ],
+  "gate": 0.3,
+  "ruoyi": {
+    "tuning": 28,
+    "holdoutSkipped": 12,
+    "audited": 28,
+    "noisy": 13,
+    "noisyRate": 0.4642857142857143,
+    "degradedCommits": 0,
+    "pin": "2bbe79b34ab8c9c7b0148300599dc8d4881c8db1",
+    "checkout": "/tmp/codex-java-v4-golden-20260823/ruoyi-vue-pro"
+  },
+  "control": {
+    "lishuedu": { "audited": 8, "noisyRate": 0, "holdoutSkipped": 2 },
+    "cipherlink": { "audited": 8, "noisyRate": 0, "holdoutSkipped": 2 },
+    "exam-parent-v3": { "audited": 8, "noisyRate": 0, "holdoutSkipped": 2 },
+    "mean": 0,
+    "ruleTooStrict": false
+  },
+  "verdict": {
+    "threshold": 0.3,
+    "decision": "GOLDEN_NOISY"
+  },
+  "isolation": {
+    "t0": {
+      "tests": 9,
+      "fail": 0,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "0dffb4089f42be2b19143348e813aec3c4b1b75c",
+      "logSha256": "e352b77f5c4d118b57ee2a8bcaebdce3e1d893a40c8a275f6e29e0915c875fd6",
+      "root": "codex-java-lsp-isolated-validation-eN8vI6"
+    },
+    "t2": {
+      "exit": 0,
+      "logSha256": "5b5551cf3f271abf3063d118e74cf79a31ad556ba0ac9d5e3ee4ccbc88917f9a"
+    }
+  },
+  "note": "H-golden holds: ruoyi tuning noisyRate 0.464 ≥ 0.30. Three-repo control 0 so rules are not too strict. Dominant labels testInMustHit (13) and mustHitGt8 (3). Holdout 12 unread. Next A2a re-derive with the inverse filter. Do not merge main. No live."
+}

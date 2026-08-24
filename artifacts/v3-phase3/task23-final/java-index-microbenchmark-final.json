@@ -1,0 +1,170 @@
+{
+  "generatedAt": "2026-07-29T02:23:41.991Z",
+  "node": "v22.16.0",
+  "fixture": {
+    "kind": "generated-java-worker-fixture",
+    "files": 512,
+    "workerCopies": 8
+  },
+  "measurements": {
+    "freshFullSweepMs": {
+      "samples": 5,
+      "minMs": 467.953,
+      "p50Ms": 497.205,
+      "p95Ms": 600.378,
+      "maxMs": 600.378
+    },
+    "snapshotLoadMs": {
+      "samples": 5,
+      "minMs": 82.274,
+      "p50Ms": 83.357,
+      "p95Ms": 85.999,
+      "maxMs": 85.999
+    },
+    "fullParseRefreshMs": {
+      "samples": 5,
+      "minMs": 4.896,
+      "p50Ms": 5.19,
+      "p95Ms": 6.217,
+      "maxMs": 6.217
+    },
+    "incrementalRefreshMs": {
+      "samples": 5,
+      "minMs": 5.484,
+      "p50Ms": 5.866,
+      "p95Ms": 7.224,
+      "maxMs": 7.224
+    },
+    "typeLookupMs": {
+      "samples": 5,
+      "minMs": 0.037,
+      "p50Ms": 0.055,
+      "p95Ms": 0.131,
+      "maxMs": 0.131
+    },
+    "implementerLookupMs": {
+      "samples": 5,
+      "minMs": 0.04,
+      "p50Ms": 0.072,
+      "p95Ms": 0.139,
+      "maxMs": 0.139
+    },
+    "callerLookupMs": {
+      "samples": 5,
+      "minMs": 0.452,
+      "p50Ms": 0.472,
+      "p95Ms": 0.966,
+      "maxMs": 0.966
+    }
+  },
+  "factEquivalence": {
+    "incrementalEqualsFull": true
+  },
+  "eventLoopDelay": {
+    "sweepP99Ms": 3.452927,
+    "samples": 5,
+    "perSweepP99Ms": [
+      3.452927,
+      1.548287,
+      1.471487,
+      1.422335,
+      1.363967
+    ]
+  },
+  "snapshot": {
+    "bytes": 83694,
+    "freshSweepMaxBytes": 83779
+  },
+  "mutationMatrix": {
+    "staleCount": 0,
+    "operations": [
+      {
+        "id": "method-signature",
+        "visibleMs": 2.51,
+        "previousFactAbsent": true
+      },
+      {
+        "id": "add-implementer",
+        "visibleMs": 0.925
+      },
+      {
+        "id": "rename-type",
+        "visibleMs": 1.759
+      },
+      {
+        "id": "move-package",
+        "visibleMs": 1.502
+      },
+      {
+        "id": "delete-type",
+        "visibleMs": 0.397
+      },
+      {
+        "id": "pom-module",
+        "visibleMs": 25.356
+      }
+    ]
+  },
+  "worktreeSeed": {
+    "synthetic": {
+      "sourceFiles": 512,
+      "noSeed": {
+        "reconcileElapsedMs": 351.44,
+        "fullParsedFiles": 512,
+        "mainEventLoopDelayP99Ms": 1.474,
+        "snapshotBytes": 57768
+      },
+      "seeded": {
+        "openElapsedMs": 216.256,
+        "firstIndexQueryElapsedMs": 0.362,
+        "firstIndexCoverage": "DEGRADED",
+        "firstIndexQueryResolved": true,
+        "manifestValidationMs": 157,
+        "reusedFiles": 510,
+        "deltaParsedFiles": 2,
+        "fullParsedFiles": 512,
+        "mainEventLoopDelayP99Ms": 1.64,
+        "snapshotBytes": 57839,
+        "modifiedTargetReused": false,
+        "deletedSourceFactVisible": false,
+        "negativeLookupAllowed": false
+      },
+      "postReconcileEquivalent": true
+    },
+    "real": {
+      "sourceRepoRoot": "/Users/luo/Documents/program/cipherlink",
+      "targetRepoRoot": "/private/tmp/task23-cipherlink-seed-target-final",
+      "sourceFiles": 629,
+      "targetFiles": 629,
+      "changedOrAddedTargetFiles": 0,
+      "deletedSourceFiles": 0,
+      "noSeed": {
+        "reconcileElapsedMs": 2875.973,
+        "fullParsedFiles": 629,
+        "mainEventLoopDelayP99Ms": 2.875,
+        "snapshotBytes": 1883341
+      },
+      "seeded": {
+        "attempted": true,
+        "openElapsedMs": 1000.003,
+        "firstIndexQueryElapsedMs": 0.6,
+        "firstIndexCoverage": "DEGRADED",
+        "firstIndexQueryResolved": true,
+        "candidateSourceDistribution": {
+          "siblingSnapshot": 1
+        },
+        "manifestValidationMs": 678,
+        "reusedFiles": 629,
+        "deltaParsedFiles": 0,
+        "fullParsedFiles": 629,
+        "reconcileElapsedMs": 676.024,
+        "mainEventLoopDelayP99Ms": 1.701,
+        "snapshotBytes": 1885341,
+        "modifiedTargetReused": false,
+        "deletedSourceFactVisible": false,
+        "negativeLookupAllowed": false
+      },
+      "postReconcileEquivalent": true
+    }
+  }
+}

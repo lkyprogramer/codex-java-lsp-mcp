@@ -30,6 +30,38 @@ test("evidenceClassOf classifies anchor, verified, structural, naming, and suppo
   assert.equal(evidenceClassOf(candidate({ absolutePath: "/h", sourceSet: "test", verifiedBy: ["reference"] })), "support");
 });
 
+test("evidenceClassOf gives only a framework pack's exact structural match the verified quota", () => {
+  assert.equal(
+    evidenceClassOf(candidate({ absolutePath: "/i", categories: ["framework"], verifiedBy: ["SPRING_CALL_PATH"], reasons: ["SPRING_CALL_PATH"] })),
+    "verified"
+  );
+  assert.equal(
+    evidenceClassOf(candidate({ absolutePath: "/injection", categories: ["framework"], verifiedBy: ["SPRING_INJECTION"], reasons: ["SPRING_INJECTION"] })),
+    "structural"
+  );
+  assert.equal(
+    evidenceClassOf(candidate({ absolutePath: "/request", categories: ["framework"], verifiedBy: ["SPRING_REQUEST_BODY"], reasons: ["SPRING_REQUEST_BODY"] })),
+    "structural"
+  );
+  assert.equal(
+    evidenceClassOf(candidate({ absolutePath: "/mapper-ns", categories: ["framework"], verifiedBy: ["MYBATIS_NAMESPACE"], reasons: ["MYBATIS_NAMESPACE"] })),
+    "verified"
+  );
+  assert.equal(
+    evidenceClassOf(candidate({ absolutePath: "/mapper-stmt", categories: ["framework"], verifiedBy: ["MYBATIS_STATEMENT_METHOD"], reasons: ["MYBATIS_STATEMENT_METHOD"] })),
+    "verified"
+  );
+  assert.equal(
+    evidenceClassOf(candidate({ absolutePath: "/mapper-param", categories: ["framework"], verifiedBy: ["MYBATIS_PARAMETER_TYPE"], reasons: ["MYBATIS_PARAMETER_TYPE"] })),
+    "structural"
+  );
+  // sourceSet=test / SUPPORT_CATEGORIES still take priority over "framework".
+  assert.equal(
+    evidenceClassOf(candidate({ absolutePath: "/j", categories: ["framework"], sourceSet: "test" })),
+    "support"
+  );
+});
+
 test("classQuotas favors structural evidence for six-slot read plans", () => {
   assert.deepEqual(classQuotas(6), { verified: 2, structural: 5, naming: 1, support: 1 });
 });

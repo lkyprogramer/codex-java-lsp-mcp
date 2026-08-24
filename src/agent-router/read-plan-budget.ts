@@ -1,3 +1,7 @@
+// Remaining production caller: selectReadPlanFiles() in read-plan.ts, used by
+// rank-candidates.ts baselineReadPlanCoverage() to seed candidate-tail coverage.
+// That is not the V6 byte-aware first-call selector. Do not delete this module
+// until a Phase 2+ parity run proves the tail coverage is unused.
 import type { CandidateFile } from "../agent-types.js";
 
 export type EvidenceClass = "anchor" | "verified" | "structural" | "naming" | "support";
@@ -13,6 +17,15 @@ const VERIFIED_EVIDENCE = new Set([
 ]);
 
 const STRUCTURAL_EVIDENCE = new Set(["typeGraph", "importGraph", "typeReference"]);
+
+/**
+ * Framework evidence has mixed strength. Only a pack's exact structural
+ * match - a resolved CALLS edge (Spring) or a resolved namespace/statement-id
+ * name match (MyBatis) - may spend the shared "verified" read-plan quota;
+ * weaker relationships (DI injection, XML parameter/result type references)
+ * stay structural so they cannot evict JDT-verified evidence as a group.
+ */
+const FRAMEWORK_VERIFIED_REASONS = new Set(["SPRING_CALL_PATH", "MYBATIS_NAMESPACE", "MYBATIS_STATEMENT_METHOD"]);
 
 const SUPPORT_CATEGORIES = new Set(["config", "persistence", "nonJava"]);
 
@@ -34,6 +47,9 @@ export function evidenceClassOf(file: CandidateFile): EvidenceClass {
   const verifiedBy = file.verifiedBy || [];
   if (verifiedBy.some(item => VERIFIED_EVIDENCE.has(item))) {
     return "verified";
+  }
+  if (file.categories.includes("framework")) {
+    return file.reasons.some(reason => FRAMEWORK_VERIFIED_REASONS.has(reason)) ? "verified" : "structural";
   }
   if (verifiedBy.includes("typeGraph") && file.reasons.includes("typeGraph:implementation-lookup")) {
     return "naming";

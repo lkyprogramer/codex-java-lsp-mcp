@@ -28,6 +28,7 @@ export function readRuntimeBuild(stampPath = path.join(path.dirname(fileURLToPat
   const defaults = resourceDefaults();
   const compactDefaults = {
     idleTtlMs: defaults.idleTtlMs,
+    hibernateTtlMs: defaults.hibernateTtlMs,
     importConcurrency: defaults.importConcurrency,
     jdtlsXmx: defaults.jdtlsXmx,
     maxActiveRepos: defaults.maxActiveRepos

@@ -1,0 +1,183 @@
+[
+  {
+    "task": "V3.2-16/17/18/19",
+    "productionLocAdded": 1071,
+    "productionLocRemoved": 706,
+    "netProductionLoc": 365,
+    "repaymentTask": "V3.2-16/17/18-repayment",
+    "repaymentDecision": "Deleted dead-code entrypoints (src/benchmark-lsp-performance.ts, src/document-symbol-limiter.ts + its test, src/util/jsonl.ts) with no remaining callers, and reclassified test-only helpers under src/test-support/ into *.test.ts naming; both are direct repayment for the progressive-index/snapshot/priority-sweep production additions in this diff. src/path-utils.ts's small addedLoc is a defensive TOCTOU fix (canonicalPotentialPath's existsSync-then-realpathSync.native race) discovered by the V3.2-17/18 storm gate crashing on a real chokidar remove-during-initial-scan race; it is a correctness fix surfaced by this sprint's own new storm-gate tooling, not unrelated cleanup. V3.2-19's telemetry additions (worktree-snapshot-seeder.ts, index-types.ts, worker-protocol.ts) have no offsetting deletion - they are net-new diagnostic fields with no prior dead code to repay against; two field-doc-comment merges (index-types.ts, worktree-snapshot-seeder.ts) trimmed a few lines to stay under the +5% ceiling, not a functional reduction.",
+    "paths": [
+      {
+        "path": "src/agent-router/anchor.ts",
+        "oldLoc": 168,
+        "newLoc": 224,
+        "addedLoc": 56,
+        "removedLoc": 0,
+        "netLoc": 56,
+        "contentChanged": true
+      },
+      {
+        "path": "src/agent-router/index.ts",
+        "oldLoc": 513,
+        "newLoc": 514,
+        "addedLoc": 1,
+        "removedLoc": 0,
+        "netLoc": 1,
+        "contentChanged": true
+      },
+      {
+        "path": "src/benchmark-lsp-performance.ts",
+        "oldLoc": 312,
+        "newLoc": 0,
+        "addedLoc": 0,
+        "removedLoc": 312,
+        "netLoc": -312,
+        "contentChanged": true
+      },
+      {
+        "path": "src/benchmark/java-index-idle.ts",
+        "oldLoc": 10,
+        "newLoc": 50,
+        "addedLoc": 40,
+        "removedLoc": 0,
+        "netLoc": 40,
+        "contentChanged": true
+      },
+      {
+        "path": "src/benchmark/progressive-index.ts",
+        "oldLoc": 0,
+        "newLoc": 374,
+        "addedLoc": 374,
+        "removedLoc": 0,
+        "netLoc": 374,
+        "contentChanged": true
+      },
+      {
+        "path": "src/document-symbol-limiter.ts",
+        "oldLoc": 74,
+        "newLoc": 0,
+        "addedLoc": 0,
+        "removedLoc": 74,
+        "netLoc": -74,
+        "contentChanged": true
+      },
+      {
+        "path": "src/java-index/index-types.ts",
+        "oldLoc": 296,
+        "newLoc": 326,
+        "addedLoc": 30,
+        "removedLoc": 0,
+        "netLoc": 30,
+        "contentChanged": true
+      },
+      {
+        "path": "src/java-index/java-index-client.ts",
+        "oldLoc": 695,
+        "newLoc": 721,
+        "addedLoc": 26,
+        "removedLoc": 0,
+        "netLoc": 26,
+        "contentChanged": true
+      },
+      {
+        "path": "src/java-index/java-index-worker.ts",
+        "oldLoc": 1707,
+        "newLoc": 1936,
+        "addedLoc": 229,
+        "removedLoc": 0,
+        "netLoc": 229,
+        "contentChanged": true
+      },
+      {
+        "path": "src/java-index/manifest.ts",
+        "oldLoc": 378,
+        "newLoc": 412,
+        "addedLoc": 34,
+        "removedLoc": 0,
+        "netLoc": 34,
+        "contentChanged": true
+      },
+      {
+        "path": "src/java-index/router-facts.ts",
+        "oldLoc": 405,
+        "newLoc": 405,
+        "addedLoc": 0,
+        "removedLoc": 0,
+        "netLoc": 0,
+        "contentChanged": true
+      },
+      {
+        "path": "src/java-index/router-java-index.ts",
+        "oldLoc": 1287,
+        "newLoc": 1436,
+        "addedLoc": 149,
+        "removedLoc": 0,
+        "netLoc": 149,
+        "contentChanged": true
+      },
+      {
+        "path": "src/java-index/worker-protocol.ts",
+        "oldLoc": 946,
+        "newLoc": 1028,
+        "addedLoc": 82,
+        "removedLoc": 0,
+        "netLoc": 82,
+        "contentChanged": true
+      },
+      {
+        "path": "src/java-index/worktree-snapshot-seeder.ts",
+        "oldLoc": 326,
+        "newLoc": 360,
+        "addedLoc": 34,
+        "removedLoc": 0,
+        "netLoc": 34,
+        "contentChanged": true
+      },
+      {
+        "path": "src/path-utils.ts",
+        "oldLoc": 59,
+        "newLoc": 75,
+        "addedLoc": 16,
+        "removedLoc": 0,
+        "netLoc": 16,
+        "contentChanged": true
+      },
+      {
+        "path": "src/test-support/deferred.ts",
+        "oldLoc": 15,
+        "newLoc": 0,
+        "addedLoc": 0,
+        "removedLoc": 15,
+        "netLoc": -15,
+        "contentChanged": true
+      },
+      {
+        "path": "src/test-support/fake-jdtls.ts",
+        "oldLoc": 242,
+        "newLoc": 0,
+        "addedLoc": 0,
+        "removedLoc": 242,
+        "netLoc": -242,
+        "contentChanged": true
+      },
+      {
+        "path": "src/test-support/git-worktree.ts",
+        "oldLoc": 52,
+        "newLoc": 0,
+        "addedLoc": 0,
+        "removedLoc": 52,
+        "netLoc": -52,
+        "contentChanged": true
+      },
+      {
+        "path": "src/util/jsonl.ts",
+        "oldLoc": 11,
+        "newLoc": 0,
+        "addedLoc": 0,
+        "removedLoc": 11,
+        "netLoc": -11,
+        "contentChanged": true
+      }
+    ]
+  }
+]

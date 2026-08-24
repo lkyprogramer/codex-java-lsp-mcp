@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "gate": {
+    "expectedCases": 9,
+    "staleCount": 0,
+    "passed": true
+  },
+  "cases": [
+    {
+      "id": "method-body",
+      "staleCount": 0,
+      "oldFactAbsent": true,
+      "changedDuringRequest": false,
+      "requestGeneration": 2,
+      "indexedGeneration": 2
+    },
+    {
+      "id": "package-private-method",
+      "staleCount": 0,
+      "oldFactAbsent": true,
+      "changedDuringRequest": false,
+      "requestGeneration": 3,
+      "indexedGeneration": 3
+    },
+    {
+      "id": "nested-record",
+      "staleCount": 0,
+      "oldFactAbsent": true,
+      "changedDuringRequest": false,
+      "requestGeneration": 4,
+      "indexedGeneration": 4
+    },
+    {
+      "id": "rename-java-type-file",
+      "staleCount": 0,
+      "oldFactAbsent": true,
+      "changedDuringRequest": false,
+      "requestGeneration": 7,
+      "indexedGeneration": 7
+    },
+    {
+      "id": "delete-java-file",
+      "staleCount": 0,
+      "oldFactAbsent": true,
+      "changedDuringRequest": false,
+      "requestGeneration": 8,
+      "indexedGeneration": 8
+    },
+    {
+      "id": "duplicate-simple-name-import-switch",
+      "staleCount": 0,
+      "oldFactAbsent": true,
+      "changedDuringRequest": false,
+      "requestGeneration": 9,
+      "indexedGeneration": 9
+    },
+    {
+      "id": "pom-module",
+      "staleCount": 0,
+      "oldFactAbsent": true,
+      "changedDuringRequest": false,
+      "requestGeneration": 11,
+      "indexedGeneration": 11
+    },
+    {
+      "id": "mybatis-xml-statement",
+      "staleCount": 0,
+      "oldFactAbsent": true,
+      "changedDuringRequest": false,
+      "requestGeneration": 12,
+      "indexedGeneration": 12
+    },
+    {
+      "id": "malformed-java-repair",
+      "staleCount": 0,
+      "oldFactAbsent": true,
+      "changedDuringRequest": false,
+      "requestGeneration": 14,
+      "indexedGeneration": 14
+    }
+  ],
+  "watcher": {
+    "ready": true,
+    "batches": 13,
+    "generations": [
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      11,
+      12,
+      13,
+      14,
+      15
+    ]
+  },
+  "overlapProbe": {
+    "source": "agent-router",
+    "requestGeneration": 14,
+    "indexedGeneration": 15,
+    "changedDuringRequest": true
+  }
+}

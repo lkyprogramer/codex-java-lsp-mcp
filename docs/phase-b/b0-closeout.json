@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "b-b0-closeout/v1",
+  "track": "b",
+  "card": "B0",
+  "dated": "2026-08-24",
+  "decision": "NOT_IN_POOL_STRUCTURAL",
+  "next": "B3",
+  "mergeToMain": false,
+  "srcTouched": false,
+  "defaultChainIdentity": "UNCHANGED",
+  "holdoutInspected": false,
+  "taskSuccess": "UNMEASURED",
+  "pool": "productionRanking.familyScores + GoldenAttributionV3",
+  "verbosity": "diagnostic",
+  "diagnosis": "docs/phase-b/b0-diagnosis.json",
+  "diagnosisSha256": "05719d43f0a6091e1ff20d0f7691fc3dec679a82102bef4021b04827740e8449",
+  "tuning": 28,
+  "holdoutSkipped": 12,
+  "missFiles": 76,
+  "blockedBy": {
+    "absent": 31,
+    "readplan-budget": 25,
+    "candidate-limit": 5,
+    "hit": 15
+  },
+  "shares": {
+    "NOT_IN_POOL": 0.40789473684210525,
+    "IN_POOL_EVICTED": 0.39473684210526316,
+    "RANGE_MISS": 0.19736842105263158,
+    "selectionLayer": 0.5921052631578947
+  },
+  "compactPoolWas": {
+    "NOT_IN_POOL": 0.5,
+    "note": "compact files[] after candidateLimit mislabeled wire-capped ranks as absent"
+  },
+  "gate": {
+    "notInPoolB3": 0.4,
+    "selectionB1": 0.6
+  },
+  "isolation": {
+    "t0": {
+      "tests": 6,
+      "fail": 0,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "12d3a1373e17dee067ed089dc1bceae75fab8898",
+      "logSha256": "745e9027ee271584236d64547d4915585b645ecf1d7601fc86961e317d3ff76e",
+      "root": "codex-java-lsp-isolated-validation-K1dX82"
+    },
+    "t2": {
+      "exit": 0,
+      "verbosity": "diagnostic",
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "12d3a1373e17dee067ed089dc1bceae75fab8898",
+      "logSha256": "74287711b885eb4ca7426fd0582b319e7794f1612600d520a0d533ea42f55848",
+      "root": "codex-java-lsp-isolated-validation-h0qpcr"
+    }
+  },
+  "note": "Corrected pool is productionRanking, not compact files[]. NOT_IN_POOL 0.408 > 0.40 still B3. candidate-limit 5 and readplan-budget 25 are IN_POOL_EVICTED. selectionLayer 0.592 < 0.60. No B1. Holdout unread. Do not merge main."
+}

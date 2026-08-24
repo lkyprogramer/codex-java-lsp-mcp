@@ -1,0 +1,57 @@
+{
+  "schemaVersion": "o-o3-closeout/v1",
+  "track": "o",
+  "card": "O3",
+  "dated": "2026-08-23",
+  "decision": "COMPLETE",
+  "mergeToMain": false,
+  "srcTouched": false,
+  "defaultChainIdentity": "UNCHANGED",
+  "knife": "G5_STEADY_WARMUP_ROUNDS=2 after first hydrate; LRU not needed",
+  "gate": 1.1,
+  "g5": {
+    "lishuedu": { "steadyWarmP95Ms": 61.89770899999712, "ratio": 0.802, "pass": true },
+    "cipherlink": { "steadyWarmP95Ms": 25.130084000000352, "ratio": 0.614, "pass": true },
+    "exam-parent-v3": { "steadyWarmP95Ms": 34.265292000000045, "ratio": 0.89, "pass": true }
+  },
+  "g1": {
+    "lishueduMiB": 173,
+    "cipherlinkMiB": 29,
+    "examParentV3MiB": 46,
+    "anchor": [173, 29, 46],
+    "regressed": false
+  },
+  "firstHydrate": {
+    "lishueduMs": 7296.542041000008,
+    "gateMs": 2000,
+    "note": "First-hydrate gate is not the O3 steady door; still MISS, unchanged."
+  },
+  "file": "docs/phase-o/o2-memory.json",
+  "fileSha256": "6386e1e3f5b5fefe033eb63624203646409e382d9bc580a37d548522b8e7ddac",
+  "originalO3Run": {
+    "file": "docs/phase-o/o3-memory.json",
+    "fileSha256": "fce3adc7501e367cbd15220391ae0f98c131c93291aad8345b6a7e22d5069822",
+    "g5": {
+      "lishuedu": { "steadyWarmP95Ms": 64.494, "ratio": 0.835, "pass": true },
+      "cipherlink": { "steadyWarmP95Ms": 22.369, "ratio": 0.547, "pass": true },
+      "exam-parent-v3": { "steadyWarmP95Ms": 34.11, "ratio": 0.886, "pass": true }
+    }
+  },
+  "note": "O3 knife is warmup=2. After O1 RSS knives and O2 registry reuse, isolated skip-concurrent memory-benchmark still has G5 0.802/0.614/0.890 ≤ 1.10 and G1 173/29/46. LRU not applied. Digest identity was not modified by O3.",
+  "isolation": {
+    "t0": {
+      "tests": 10,
+      "fail": 0,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "58d3fc065f02c8ee7e00cf66dee8c782440c2a2a",
+      "logSha256": "33962165ee3adf7dd2ca0790f66037d9acb4a8ed73136b6552e0d95ee9a472c5"
+    },
+    "remeasureAfterO1O2": {
+      "skipConcurrent": true,
+      "coldBuildChild": true,
+      "file": "docs/phase-o/o2-memory.json",
+      "executableTree": "c74732013631bb3032a90c7625c36c5daa482226",
+      "logSha256": "122d311047133da25cb7ad1eba39602383f29222bf3ca863562f7db7c9b49c81"
+    }
+  }
+}

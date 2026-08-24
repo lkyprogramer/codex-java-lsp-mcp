@@ -1,0 +1,80 @@
+{
+  "schemaVersion": "v5r-phase7-closeout/v1",
+  "phase": 7,
+  "deadline": "2026-09-02",
+  "decision": "BLOCKED",
+  "dated": "2026-08-19",
+  "liveTraceUpdated": "2026-08-20",
+  "parentPhase6": "docs/phase-v5r/v5r-phase6-closeout.json",
+  "phase7WriteTree": "6427540e291279b5a6a1eb2581a35f105a1056bd",
+  "headAtMeasurement": "3f10c7e877f65a5cbd4f2fb605b96ca2ec9417cd",
+  "productionLoc": 39280,
+  "commitCountOnelineFromSprint0Exclusive": 36,
+  "offlineProtocol": "COMPLETE",
+  "mergeToMain": false,
+  "cells": {
+    "liveTrace": {
+      "status": "MEASURED",
+      "harness": "scripts/run-agent-trace-matrix.mjs --authorize-external --execute-live",
+      "taskSuccess": "MEASURED",
+      "modelUsage": "MEASURED",
+      "report": "docs/phase-v5r/v5r-live-trace-20260820.md",
+      "exitCodeWithoutAuthorize": 3,
+      "note": "Six frozen holdouts MEASURED on 2026-08-20. Mean TaskSuccess 4/6. λ magnitude only; scalarAllowed false. Key not recorded."
+    },
+    "fourthRepo": {
+      "status": "UNMEASURED",
+      "frozen": false,
+      "note": "No declared fourth evaluation golden. Fixture jsonl under golden/ is not a fourth repo."
+    },
+    "leaveOneRepoOut": {
+      "protocol": "scripts/leave-one-repo-out.mjs",
+      "folds": 3,
+      "matrix": "UNMEASURED",
+      "retune": false,
+      "taskSuccess": "UNMEASURED"
+    },
+    "installHttpStdioCanary": {
+      "stdioSmoke": "covered by isolated-full smoke.js",
+      "httpSmoke": "scripts/run-v4-http-smoke.mjs on GATE_PROFILES.release",
+      "codexCliDesktop": "UNMEASURED"
+    },
+    "crashWorktreeRollback": {
+      "task36FaultSuite": "existing isolated tests",
+      "dualWorkerSweep": "deleted-on-FAIL",
+      "continuationLive": "UNMEASURED"
+    },
+    "releaseAttestation": {
+      "script": "scripts/v5r-release-attestation.mjs",
+      "mergeToMainAllowed": false
+    },
+    "lambda": {
+      "status": "LIVE_TRACE_MEASURED",
+      "scalarAllowed": false
+    }
+  },
+  "isolationFull": {
+    "tests": 1068,
+    "scripts": 170,
+    "fail": 0,
+    "targeted": { "tests": 18, "pass": 18, "fail": 0 }
+  },
+  "exitChecklist": {
+    "liveTraceBlockedExternal": false,
+    "taskSuccessUnmeasuredNotZero": true,
+    "noInventedTaskSuccess": true,
+    "fourthRepoUnmeasured": true,
+    "leaveOneRepoOutProtocolShipped": true,
+    "leaveOneRepoOutMatrixUnmeasured": true,
+    "gateProfilesDiffer": true,
+    "publicToolsExactlyFive": true,
+    "mergeToMainFalse": true,
+    "mainMergePlanWritten": true,
+    "noMainMerge": true
+  },
+  "unblockRequires": [
+    "declared frozen fourth evaluation golden before new ranking knives",
+    "leave-one-repo-out matrix MEASURED",
+    "explicit scalar-allowed decision before J(pi) KEEP/REJECT"
+  ]
+}

@@ -1,0 +1,4742 @@
+{
+  "metadata": {
+    "generatedAt": "2026-08-01T02:35:34.355Z",
+    "repoRoot": "/Users/luo/Documents/program/lishu/lishuedu",
+    "indexCacheDir": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task29-mapstruct-canary-20260801/matrix-final/cache-r2-off-lishuedu",
+    "repoCommit": "1b3dad620dcb",
+    "projectId": "lishuedu",
+    "layoutProfile": "ddd-gradle",
+    "warmState": "cold-nolsp",
+    "mode": "balanced",
+    "semanticPolicy": "fast",
+    "verbosity": "standard",
+    "strategy": "impact",
+    "indexBackend": "v2",
+    "deadlineMs": 2000,
+    "runs": 5,
+    "scenarioFile": "golden/lishuedu.scenarios.jsonl",
+    "runtimeBuild": {
+      "gitSha": "unknown",
+      "generatedAt": "1970-01-01T00:00:00.000Z",
+      "defaults": {
+        "idleTtlMs": 2700000,
+        "importConcurrency": 2,
+        "jdtlsXmx": "2g",
+        "maxActiveRepos": 3
+      },
+      "defaultsFingerprint": "e5835394a86f",
+      "stampPath": "/private/tmp/codex-task29-mapstruct-off/dist/build-stamp.json",
+      "missing": true
+    },
+    "prepareJavaIndexMs": 45473.49525,
+    "prepareJavaIndexReconciled": true,
+    "prepareJavaIndexStatus": {
+      "state": "READY",
+      "indexedGeneration": 0,
+      "files": 5312,
+      "types": 6365,
+      "methods": 21139,
+      "edges": 216766,
+      "snapshotBytes": 21175128,
+      "pendingForeground": 0,
+      "pendingBackground": 0,
+      "coverage": [
+        {
+          "root": "apps/lishu-edu-app/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 34,
+          "indexedFiles": 34,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "apps/lishu-edu-app/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 15,
+          "indexedFiles": 15,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/agency/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 160,
+          "indexedFiles": 160,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/agency/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 38,
+          "indexedFiles": 38,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/ai/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 307,
+          "indexedFiles": 307,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/ai/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 81,
+          "indexedFiles": 81,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/analysis/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 500,
+          "indexedFiles": 500,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/analysis/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 136,
+          "indexedFiles": 136,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/audit/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 62,
+          "indexedFiles": 62,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/audit/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 8,
+          "indexedFiles": 8,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/benefits/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 109,
+          "indexedFiles": 109,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/benefits/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 31,
+          "indexedFiles": 31,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/common/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 223,
+          "indexedFiles": 223,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/common/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 45,
+          "indexedFiles": 45,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/exam/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 302,
+          "indexedFiles": 302,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/exam/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 48,
+          "indexedFiles": 48,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/exercisebook/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 67,
+          "indexedFiles": 67,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/exercisebook/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 7,
+          "indexedFiles": 7,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/iam/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 235,
+          "indexedFiles": 235,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/iam/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 68,
+          "indexedFiles": 68,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/integration/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 278,
+          "indexedFiles": 278,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/integration/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 46,
+          "indexedFiles": 46,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/operationLog/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 17,
+          "indexedFiles": 17,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/operationLog/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 1,
+          "indexedFiles": 1,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/order/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 143,
+          "indexedFiles": 143,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/order/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 38,
+          "indexedFiles": 38,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/paper/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 253,
+          "indexedFiles": 253,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/paper/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 99,
+          "indexedFiles": 99,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/platform/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 191,
+          "indexedFiles": 191,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/platform/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 36,
+          "indexedFiles": 36,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/print/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 4,
+          "indexedFiles": 4,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/product/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 91,
+          "indexedFiles": 91,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/product/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 19,
+          "indexedFiles": 19,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/questionBank/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 468,
+          "indexedFiles": 468,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/questionBank/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 78,
+          "indexedFiles": 78,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/report/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 451,
+          "indexedFiles": 451,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/report/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 93,
+          "indexedFiles": 93,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/school/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 378,
+          "indexedFiles": 378,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/school/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 74,
+          "indexedFiles": 74,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/subscription/src/main/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 62,
+          "indexedFiles": 62,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        },
+        {
+          "root": "modules/subscription/src/test/java",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 16,
+          "indexedFiles": 16,
+          "failedFiles": 0,
+          "recoveredFiles": 0,
+          "extractorVersion": "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-unknown",
+          "completedAt": "2026-08-01T02:36:14.716Z"
+        }
+      ],
+      "resourceCoverage": [
+        {
+          "root": "apps/lishu-edu-app/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "docs/sql",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/agency/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/ai/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/analysis/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/audit/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/benefits/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/common/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/exam/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/exercisebook/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/iam/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/integration/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/operationLog/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/order/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/paper/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/platform/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/print/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/product/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/questionBank/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/report/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/school/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        },
+        {
+          "root": "modules/subscription/src/main/resources",
+          "generation": 0,
+          "state": "COMPLETE",
+          "discoveredFiles": 0,
+          "indexedFiles": 0,
+          "failedFiles": 0
+        }
+      ]
+    },
+    "indexPrepareTimeoutMs": 600000,
+    "prepareWarmMs": 0,
+    "prepareWarmPhaseMs": {}
+  },
+  "totals": {
+    "rawSearchPayload": 11796.233333333334,
+    "readingPayload": 8590,
+    "totalAgentVisiblePayload": 20386.233333333334,
+    "estimatedTokens": 5096.833333333333,
+    "elapsedMs": 57.98059999999968,
+    "roundTrips": 7,
+    "returnedFiles": 19,
+    "hitFiles": 5.666666666666667,
+    "precision": 0.3010650516245146,
+    "recall": 0.7426587301587304,
+    "pCandAt5": 0.7333333333333333,
+    "pCandAt10": 0.43333333333333324,
+    "rCand": 0.7426587301587304,
+    "pRead": 0.7222222222222219,
+    "rReadMust": 1,
+    "readPlanItems": 6,
+    "rgRawBytesSuppressed": 408593.5,
+    "rgRawBytesExposed": 0,
+    "elapsedMsP50": 33.709083000001556,
+    "elapsedMsP95": 212.84654199999932,
+    "rawSearchPayloadP50": 10590,
+    "rawSearchPayloadP95": 15210,
+    "readingPayloadP50": 8033,
+    "readingPayloadP95": 10404,
+    "totalAgentVisiblePayloadP50": 18422,
+    "totalAgentVisiblePayloadP95": 23946,
+    "estimatedTokensP50": 4606,
+    "estimatedTokensP95": 5987
+  },
+  "rows": [
+    {
+      "id": "storage-signed-url",
+      "name": "StorageGateway#getSignedUrl",
+      "attempts": [
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 10590,
+          "readingPayload": 7030,
+          "totalAgentVisiblePayload": 17620,
+          "estimatedTokens": 4405,
+          "elapsedMs": 212.84654199999932,
+          "roundTrips": 7,
+          "returnedFiles": 17,
+          "hitFiles": 7,
+          "precision": 0.4117647058823529,
+          "recall": 0.7,
+          "pCandAt5": 1,
+          "pCandAt10": 0.6,
+          "rCand": 0.7,
+          "pRead": 1,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 389791,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/domain/port/StorageGateway.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/domain/contract/StorageSignedUrlCommand.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/domain/contract/StorageSignedUrlResult.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/infrastructure/storage/AliyunOssGateway.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/infrastructure/storage/StubStorageGateway.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/infrastructure/storage/AliyunOssConfig.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/application/service/StorageAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/application/service/ReportBatchExportQueryService.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "cross-module-cold",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/application/service/ReportExportTaskCommandService.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "cross-module-cold",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/application/service/BusinessOperationDashboardAppService.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 10589,
+          "readingPayload": 7030,
+          "totalAgentVisiblePayload": 17619,
+          "estimatedTokens": 4405,
+          "elapsedMs": 38.54004200000054,
+          "roundTrips": 7,
+          "returnedFiles": 17,
+          "hitFiles": 7,
+          "precision": 0.4117647058823529,
+          "recall": 0.7,
+          "pCandAt5": 1,
+          "pCandAt10": 0.6,
+          "rCand": 0.7,
+          "pRead": 1,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 389791,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/domain/port/StorageGateway.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/domain/contract/StorageSignedUrlCommand.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/domain/contract/StorageSignedUrlResult.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/infrastructure/storage/AliyunOssGateway.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/infrastructure/storage/StubStorageGateway.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/infrastructure/storage/AliyunOssConfig.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/application/service/StorageAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/application/service/ReportBatchExportQueryService.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "cross-module-cold",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/application/service/ReportExportTaskCommandService.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "cross-module-cold",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/application/service/BusinessOperationDashboardAppService.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 10589,
+          "readingPayload": 7030,
+          "totalAgentVisiblePayload": 17619,
+          "estimatedTokens": 4405,
+          "elapsedMs": 36.86754099999962,
+          "roundTrips": 7,
+          "returnedFiles": 17,
+          "hitFiles": 7,
+          "precision": 0.4117647058823529,
+          "recall": 0.7,
+          "pCandAt5": 1,
+          "pCandAt10": 0.6,
+          "rCand": 0.7,
+          "pRead": 1,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 389791,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/domain/port/StorageGateway.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/domain/contract/StorageSignedUrlCommand.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/domain/contract/StorageSignedUrlResult.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/infrastructure/storage/AliyunOssGateway.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/infrastructure/storage/StubStorageGateway.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/infrastructure/storage/AliyunOssConfig.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/application/service/StorageAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/application/service/ReportBatchExportQueryService.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "cross-module-cold",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/application/service/ReportExportTaskCommandService.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "cross-module-cold",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/application/service/BusinessOperationDashboardAppService.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 10589,
+          "readingPayload": 7030,
+          "totalAgentVisiblePayload": 17619,
+          "estimatedTokens": 4405,
+          "elapsedMs": 33.709083000001556,
+          "roundTrips": 7,
+          "returnedFiles": 17,
+          "hitFiles": 7,
+          "precision": 0.4117647058823529,
+          "recall": 0.7,
+          "pCandAt5": 1,
+          "pCandAt10": 0.6,
+          "rCand": 0.7,
+          "pRead": 1,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 389791,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/domain/port/StorageGateway.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/domain/contract/StorageSignedUrlCommand.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/domain/contract/StorageSignedUrlResult.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/infrastructure/storage/AliyunOssGateway.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/infrastructure/storage/StubStorageGateway.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/infrastructure/storage/AliyunOssConfig.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/application/service/StorageAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/application/service/ReportBatchExportQueryService.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "cross-module-cold",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/application/service/ReportExportTaskCommandService.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "cross-module-cold",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/application/service/BusinessOperationDashboardAppService.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 10589,
+          "readingPayload": 7030,
+          "totalAgentVisiblePayload": 17619,
+          "estimatedTokens": 4405,
+          "elapsedMs": 30.71704199999658,
+          "roundTrips": 7,
+          "returnedFiles": 17,
+          "hitFiles": 7,
+          "precision": 0.4117647058823529,
+          "recall": 0.7,
+          "pCandAt5": 1,
+          "pCandAt10": 0.6,
+          "rCand": 0.7,
+          "pRead": 1,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 389791,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/domain/port/StorageGateway.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/domain/contract/StorageSignedUrlCommand.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/domain/contract/StorageSignedUrlResult.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/infrastructure/storage/AliyunOssGateway.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/infrastructure/storage/StubStorageGateway.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/infrastructure/storage/AliyunOssConfig.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/integration/src/main/java/com/lishu/edu/integration/application/service/StorageAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/application/service/ReportBatchExportQueryService.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "cross-module-cold",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/application/service/ReportExportTaskCommandService.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "cross-module-cold",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "StorageGateway#getSignedUrl",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/application/service/BusinessOperationDashboardAppService.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "port",
+              "semanticUsed": false,
+              "shouldBlocksTask": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        }
+      ],
+      "summary": {
+        "rawSearchPayload": 10589.2,
+        "readingPayload": 7030,
+        "totalAgentVisiblePayload": 17619.2,
+        "estimatedTokens": 4405,
+        "elapsedMs": 70.53604999999952,
+        "roundTrips": 7,
+        "returnedFiles": 17,
+        "hitFiles": 7,
+        "precision": 0.4117647058823529,
+        "recall": 0.7,
+        "pCandAt5": 1,
+        "pCandAt10": 0.6,
+        "rCand": 0.7,
+        "pRead": 1,
+        "rReadMust": 1,
+        "readPlanItems": 6,
+        "rgRawBytesSuppressed": 389791,
+        "rgRawBytesExposed": 0,
+        "elapsedMsP50": 36.86754099999962,
+        "elapsedMsP95": 212.84654199999932,
+        "rawSearchPayloadP50": 10589,
+        "rawSearchPayloadP95": 10590,
+        "readingPayloadP50": 7030,
+        "readingPayloadP95": 7030,
+        "totalAgentVisiblePayloadP50": 17619,
+        "totalAgentVisiblePayloadP95": 17620,
+        "estimatedTokensP50": 4405,
+        "estimatedTokensP95": 4405
+      }
+    },
+    {
+      "id": "school-template-parser",
+      "name": "SchoolTemplateImportParser#parse",
+      "attempts": [
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 10689,
+          "readingPayload": 9304,
+          "totalAgentVisiblePayload": 19993,
+          "estimatedTokens": 4998,
+          "elapsedMs": 174.42137499999808,
+          "roundTrips": 7,
+          "returnedFiles": 18,
+          "hitFiles": 5,
+          "precision": 0.2777777777777778,
+          "recall": 0.7142857142857143,
+          "pCandAt5": 1,
+          "pCandAt10": 0.5,
+          "rCand": 0.7142857142857143,
+          "pRead": 0.8333333333333334,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 313928,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/application/port/SchoolTemplateImportParser.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "parser",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/infrastructure/excel/SchoolTemplateImportExcelParser.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "parser",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/domain/template/SchoolTemplateParsedTemplate.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "parser",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolTemplateImportAppService.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "parser",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolTemplateImportDiffBuilder.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "parser",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/test/java/com/lishu/edu/school/infrastructure/excel/SchoolTemplateImportExcelParserTest.java",
+              "kind": "side",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "parser",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/test/java/com/lishu/edu/school/application/service/SchoolTemplateImportDiffBuilderTest.java",
+              "kind": "side",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "parser",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 10688,
+          "readingPayload": 9304,
+          "totalAgentVisiblePayload": 19992,
+          "estimatedTokens": 4998,
+          "elapsedMs": 60.76416600000084,
+          "roundTrips": 7,
+          "returnedFiles": 18,
+          "hitFiles": 5,
+          "precision": 0.2777777777777778,
+          "recall": 0.7142857142857143,
+          "pCandAt5": 1,
+          "pCandAt10": 0.5,
+          "rCand": 0.7142857142857143,
+          "pRead": 0.8333333333333334,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 313928,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/application/port/SchoolTemplateImportParser.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "parser",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/infrastructure/excel/SchoolTemplateImportExcelParser.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "parser",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/domain/template/SchoolTemplateParsedTemplate.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "parser",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolTemplateImportAppService.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "parser",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolTemplateImportDiffBuilder.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "parser",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/test/java/com/lishu/edu/school/infrastructure/excel/SchoolTemplateImportExcelParserTest.java",
+              "kind": "side",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "parser",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/test/java/com/lishu/edu/school/application/service/SchoolTemplateImportDiffBuilderTest.java",
+              "kind": "side",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "parser",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 10688,
+          "readingPayload": 9304,
+          "totalAgentVisiblePayload": 19992,
+          "estimatedTokens": 4998,
+          "elapsedMs": 59.402084000001196,
+          "roundTrips": 7,
+          "returnedFiles": 18,
+          "hitFiles": 5,
+          "precision": 0.2777777777777778,
+          "recall": 0.7142857142857143,
+          "pCandAt5": 1,
+          "pCandAt10": 0.5,
+          "rCand": 0.7142857142857143,
+          "pRead": 0.8333333333333334,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 313928,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/application/port/SchoolTemplateImportParser.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "parser",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/infrastructure/excel/SchoolTemplateImportExcelParser.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "parser",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/domain/template/SchoolTemplateParsedTemplate.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "parser",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolTemplateImportAppService.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "parser",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolTemplateImportDiffBuilder.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "parser",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/test/java/com/lishu/edu/school/infrastructure/excel/SchoolTemplateImportExcelParserTest.java",
+              "kind": "side",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "parser",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/test/java/com/lishu/edu/school/application/service/SchoolTemplateImportDiffBuilderTest.java",
+              "kind": "side",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "parser",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 10688,
+          "readingPayload": 9304,
+          "totalAgentVisiblePayload": 19992,
+          "estimatedTokens": 4998,
+          "elapsedMs": 61.08466600000247,
+          "roundTrips": 7,
+          "returnedFiles": 18,
+          "hitFiles": 5,
+          "precision": 0.2777777777777778,
+          "recall": 0.7142857142857143,
+          "pCandAt5": 1,
+          "pCandAt10": 0.5,
+          "rCand": 0.7142857142857143,
+          "pRead": 0.8333333333333334,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 313928,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/application/port/SchoolTemplateImportParser.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "parser",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/infrastructure/excel/SchoolTemplateImportExcelParser.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "parser",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/domain/template/SchoolTemplateParsedTemplate.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "parser",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolTemplateImportAppService.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "parser",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolTemplateImportDiffBuilder.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "parser",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/test/java/com/lishu/edu/school/infrastructure/excel/SchoolTemplateImportExcelParserTest.java",
+              "kind": "side",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "parser",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/test/java/com/lishu/edu/school/application/service/SchoolTemplateImportDiffBuilderTest.java",
+              "kind": "side",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "parser",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 10688,
+          "readingPayload": 9304,
+          "totalAgentVisiblePayload": 19992,
+          "estimatedTokens": 4998,
+          "elapsedMs": 63.4106249999968,
+          "roundTrips": 7,
+          "returnedFiles": 18,
+          "hitFiles": 5,
+          "precision": 0.2777777777777778,
+          "recall": 0.7142857142857143,
+          "pCandAt5": 1,
+          "pCandAt10": 0.5,
+          "rCand": 0.7142857142857143,
+          "pRead": 0.8333333333333334,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 313928,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/application/port/SchoolTemplateImportParser.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "parser",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/infrastructure/excel/SchoolTemplateImportExcelParser.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "parser",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/domain/template/SchoolTemplateParsedTemplate.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "parser",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolTemplateImportAppService.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "parser",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolTemplateImportDiffBuilder.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "parser",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/test/java/com/lishu/edu/school/infrastructure/excel/SchoolTemplateImportExcelParserTest.java",
+              "kind": "side",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "parser",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportParser#parse",
+              "file": "modules/school/src/test/java/com/lishu/edu/school/application/service/SchoolTemplateImportDiffBuilderTest.java",
+              "kind": "side",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "parser",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        }
+      ],
+      "summary": {
+        "rawSearchPayload": 10688.2,
+        "readingPayload": 9304,
+        "totalAgentVisiblePayload": 19992.2,
+        "estimatedTokens": 4998,
+        "elapsedMs": 83.81658319999988,
+        "roundTrips": 7,
+        "returnedFiles": 18,
+        "hitFiles": 5,
+        "precision": 0.2777777777777778,
+        "recall": 0.7142857142857143,
+        "pCandAt5": 1,
+        "pCandAt10": 0.5,
+        "rCand": 0.7142857142857143,
+        "pRead": 0.8333333333333334,
+        "rReadMust": 1,
+        "readPlanItems": 6,
+        "rgRawBytesSuppressed": 313928,
+        "rgRawBytesExposed": 0,
+        "elapsedMsP50": 61.08466600000247,
+        "elapsedMsP95": 174.42137499999808,
+        "rawSearchPayloadP50": 10688,
+        "rawSearchPayloadP95": 10689,
+        "readingPayloadP50": 9304,
+        "readingPayloadP95": 9304,
+        "totalAgentVisiblePayloadP50": 19992,
+        "totalAgentVisiblePayloadP95": 19993,
+        "estimatedTokensP50": 4998,
+        "estimatedTokensP95": 4998
+      }
+    },
+    {
+      "id": "report-reusable-zip",
+      "name": "ReportBatchExportTaskRepository#findReusableReadyZip",
+      "attempts": [
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 15210,
+          "readingPayload": 8736,
+          "totalAgentVisiblePayload": 23946,
+          "estimatedTokens": 5987,
+          "elapsedMs": 264.40045799999643,
+          "roundTrips": 7,
+          "returnedFiles": 23,
+          "hitFiles": 7,
+          "precision": 0.30434782608695654,
+          "recall": 0.875,
+          "pCandAt5": 0.4,
+          "pCandAt10": 0.3,
+          "rCand": 0.875,
+          "pRead": 0.6666666666666666,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 977923,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/domain/port/ReportBatchExportTaskRepository.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/infrastructure/persistence/repository/ReportBatchExportTaskRepositoryImpl.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/infrastructure/persistence/entity/ReportBatchExportTaskDO.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/infrastructure/persistence/mapper/ReportBatchExportTaskMapper.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/application/service/ReportBatchExportCommandService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/application/service/ReportBatchExportQueryService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/test/java/com/lishu/edu/report/application/service/ReportBatchExportCommandServiceTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/resources/db/migration/V011__report_batch_export_task.sql",
+              "kind": "side",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "repository",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 15210,
+          "readingPayload": 8736,
+          "totalAgentVisiblePayload": 23946,
+          "estimatedTokens": 5987,
+          "elapsedMs": 110.75770800000464,
+          "roundTrips": 7,
+          "returnedFiles": 23,
+          "hitFiles": 7,
+          "precision": 0.30434782608695654,
+          "recall": 0.875,
+          "pCandAt5": 0.4,
+          "pCandAt10": 0.3,
+          "rCand": 0.875,
+          "pRead": 0.6666666666666666,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 977923,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/domain/port/ReportBatchExportTaskRepository.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/infrastructure/persistence/repository/ReportBatchExportTaskRepositoryImpl.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/infrastructure/persistence/entity/ReportBatchExportTaskDO.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/infrastructure/persistence/mapper/ReportBatchExportTaskMapper.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/application/service/ReportBatchExportCommandService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/application/service/ReportBatchExportQueryService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/test/java/com/lishu/edu/report/application/service/ReportBatchExportCommandServiceTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/resources/db/migration/V011__report_batch_export_task.sql",
+              "kind": "side",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "repository",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 15210,
+          "readingPayload": 8736,
+          "totalAgentVisiblePayload": 23946,
+          "estimatedTokens": 5987,
+          "elapsedMs": 106.41612500000338,
+          "roundTrips": 7,
+          "returnedFiles": 23,
+          "hitFiles": 7,
+          "precision": 0.30434782608695654,
+          "recall": 0.875,
+          "pCandAt5": 0.4,
+          "pCandAt10": 0.3,
+          "rCand": 0.875,
+          "pRead": 0.6666666666666666,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 977923,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/domain/port/ReportBatchExportTaskRepository.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/infrastructure/persistence/repository/ReportBatchExportTaskRepositoryImpl.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/infrastructure/persistence/entity/ReportBatchExportTaskDO.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/infrastructure/persistence/mapper/ReportBatchExportTaskMapper.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/application/service/ReportBatchExportCommandService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/application/service/ReportBatchExportQueryService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/test/java/com/lishu/edu/report/application/service/ReportBatchExportCommandServiceTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/resources/db/migration/V011__report_batch_export_task.sql",
+              "kind": "side",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "repository",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 15210,
+          "readingPayload": 8736,
+          "totalAgentVisiblePayload": 23946,
+          "estimatedTokens": 5987,
+          "elapsedMs": 101.21229099999618,
+          "roundTrips": 7,
+          "returnedFiles": 23,
+          "hitFiles": 7,
+          "precision": 0.30434782608695654,
+          "recall": 0.875,
+          "pCandAt5": 0.4,
+          "pCandAt10": 0.3,
+          "rCand": 0.875,
+          "pRead": 0.6666666666666666,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 977923,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/domain/port/ReportBatchExportTaskRepository.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/infrastructure/persistence/repository/ReportBatchExportTaskRepositoryImpl.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/infrastructure/persistence/entity/ReportBatchExportTaskDO.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/infrastructure/persistence/mapper/ReportBatchExportTaskMapper.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/application/service/ReportBatchExportCommandService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/application/service/ReportBatchExportQueryService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/test/java/com/lishu/edu/report/application/service/ReportBatchExportCommandServiceTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/resources/db/migration/V011__report_batch_export_task.sql",
+              "kind": "side",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "repository",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 15210,
+          "readingPayload": 8736,
+          "totalAgentVisiblePayload": 23946,
+          "estimatedTokens": 5987,
+          "elapsedMs": 109.25004199999967,
+          "roundTrips": 7,
+          "returnedFiles": 23,
+          "hitFiles": 7,
+          "precision": 0.30434782608695654,
+          "recall": 0.875,
+          "pCandAt5": 0.4,
+          "pCandAt10": 0.3,
+          "rCand": 0.875,
+          "pRead": 0.6666666666666666,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 977923,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/domain/port/ReportBatchExportTaskRepository.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/infrastructure/persistence/repository/ReportBatchExportTaskRepositoryImpl.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/infrastructure/persistence/entity/ReportBatchExportTaskDO.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/infrastructure/persistence/mapper/ReportBatchExportTaskMapper.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/application/service/ReportBatchExportCommandService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/java/com/lishu/edu/report/application/service/ReportBatchExportQueryService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/test/java/com/lishu/edu/report/application/service/ReportBatchExportCommandServiceTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "repository",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ReportBatchExportTaskRepository#findReusableReadyZip",
+              "file": "modules/report/src/main/resources/db/migration/V011__report_batch_export_task.sql",
+              "kind": "side",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "repository",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        }
+      ],
+      "summary": {
+        "rawSearchPayload": 15210,
+        "readingPayload": 8736,
+        "totalAgentVisiblePayload": 23946,
+        "estimatedTokens": 5987,
+        "elapsedMs": 138.40732480000005,
+        "roundTrips": 7,
+        "returnedFiles": 23,
+        "hitFiles": 7,
+        "precision": 0.30434782608695654,
+        "recall": 0.875,
+        "pCandAt5": 0.4,
+        "pCandAt10": 0.3,
+        "rCand": 0.875,
+        "pRead": 0.6666666666666666,
+        "rReadMust": 1,
+        "readPlanItems": 6,
+        "rgRawBytesSuppressed": 977923,
+        "rgRawBytesExposed": 0,
+        "elapsedMsP50": 109.25004199999967,
+        "elapsedMsP95": 264.40045799999643,
+        "rawSearchPayloadP50": 15210,
+        "rawSearchPayloadP95": 15210,
+        "readingPayloadP50": 8736,
+        "readingPayloadP95": 8736,
+        "totalAgentVisiblePayloadP50": 23946,
+        "totalAgentVisiblePayloadP95": 23946,
+        "estimatedTokensP50": 5987,
+        "estimatedTokensP95": 5987
+      }
+    },
+    {
+      "id": "school-confirm-controller",
+      "name": "SchoolTemplateImportController#confirm",
+      "attempts": [
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 10389,
+          "readingPayload": 8033,
+          "totalAgentVisiblePayload": 18422,
+          "estimatedTokens": 4606,
+          "elapsedMs": 66.6585419999974,
+          "roundTrips": 7,
+          "returnedFiles": 16,
+          "hitFiles": 7,
+          "precision": 0.4375,
+          "recall": 1,
+          "pCandAt5": 1,
+          "pCandAt10": 0.7,
+          "rCand": 1,
+          "pRead": 1,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 266987,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/interfaces/web/SchoolTemplateImportController.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/interfaces/assembler/SchoolTemplateImportAssembler.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/interfaces/dto/SchoolTemplateImportConfirmRequest.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/interfaces/dto/SchoolTemplateImportConfirmResponse.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/application/dto/SchoolTemplateImportConfirmCommand.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/application/dto/SchoolTemplateImportConfirmResult.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolTemplateImportAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 10389,
+          "readingPayload": 8033,
+          "totalAgentVisiblePayload": 18422,
+          "estimatedTokens": 4606,
+          "elapsedMs": 11.706083000004583,
+          "roundTrips": 7,
+          "returnedFiles": 16,
+          "hitFiles": 7,
+          "precision": 0.4375,
+          "recall": 1,
+          "pCandAt5": 1,
+          "pCandAt10": 0.7,
+          "rCand": 1,
+          "pRead": 1,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 266987,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/interfaces/web/SchoolTemplateImportController.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/interfaces/assembler/SchoolTemplateImportAssembler.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/interfaces/dto/SchoolTemplateImportConfirmRequest.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/interfaces/dto/SchoolTemplateImportConfirmResponse.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/application/dto/SchoolTemplateImportConfirmCommand.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/application/dto/SchoolTemplateImportConfirmResult.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolTemplateImportAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 10389,
+          "readingPayload": 8033,
+          "totalAgentVisiblePayload": 18422,
+          "estimatedTokens": 4606,
+          "elapsedMs": 11.799542000000656,
+          "roundTrips": 7,
+          "returnedFiles": 16,
+          "hitFiles": 7,
+          "precision": 0.4375,
+          "recall": 1,
+          "pCandAt5": 1,
+          "pCandAt10": 0.7,
+          "rCand": 1,
+          "pRead": 1,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 266987,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/interfaces/web/SchoolTemplateImportController.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/interfaces/assembler/SchoolTemplateImportAssembler.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/interfaces/dto/SchoolTemplateImportConfirmRequest.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/interfaces/dto/SchoolTemplateImportConfirmResponse.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/application/dto/SchoolTemplateImportConfirmCommand.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/application/dto/SchoolTemplateImportConfirmResult.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolTemplateImportAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 10389,
+          "readingPayload": 8033,
+          "totalAgentVisiblePayload": 18422,
+          "estimatedTokens": 4606,
+          "elapsedMs": 10.878083999996306,
+          "roundTrips": 7,
+          "returnedFiles": 16,
+          "hitFiles": 7,
+          "precision": 0.4375,
+          "recall": 1,
+          "pCandAt5": 1,
+          "pCandAt10": 0.7,
+          "rCand": 1,
+          "pRead": 1,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 266987,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/interfaces/web/SchoolTemplateImportController.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/interfaces/assembler/SchoolTemplateImportAssembler.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/interfaces/dto/SchoolTemplateImportConfirmRequest.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/interfaces/dto/SchoolTemplateImportConfirmResponse.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/application/dto/SchoolTemplateImportConfirmCommand.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/application/dto/SchoolTemplateImportConfirmResult.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolTemplateImportAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 10389,
+          "readingPayload": 8033,
+          "totalAgentVisiblePayload": 18422,
+          "estimatedTokens": 4606,
+          "elapsedMs": 11.433916999994835,
+          "roundTrips": 7,
+          "returnedFiles": 16,
+          "hitFiles": 7,
+          "precision": 0.4375,
+          "recall": 1,
+          "pCandAt5": 1,
+          "pCandAt10": 0.7,
+          "rCand": 1,
+          "pRead": 1,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 266987,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/interfaces/web/SchoolTemplateImportController.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/interfaces/assembler/SchoolTemplateImportAssembler.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/interfaces/dto/SchoolTemplateImportConfirmRequest.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/interfaces/dto/SchoolTemplateImportConfirmResponse.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/application/dto/SchoolTemplateImportConfirmCommand.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/application/dto/SchoolTemplateImportConfirmResult.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/application/service/SchoolTemplateImportAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        }
+      ],
+      "summary": {
+        "rawSearchPayload": 10389,
+        "readingPayload": 8033,
+        "totalAgentVisiblePayload": 18422,
+        "estimatedTokens": 4606,
+        "elapsedMs": 22.495233599998755,
+        "roundTrips": 7,
+        "returnedFiles": 16,
+        "hitFiles": 7,
+        "precision": 0.4375,
+        "recall": 1,
+        "pCandAt5": 1,
+        "pCandAt10": 0.7,
+        "rCand": 1,
+        "pRead": 1,
+        "rReadMust": 1,
+        "readPlanItems": 6,
+        "rgRawBytesSuppressed": 266987,
+        "rgRawBytesExposed": 0,
+        "elapsedMsP50": 11.706083000004583,
+        "elapsedMsP95": 66.6585419999974,
+        "rawSearchPayloadP50": 10389,
+        "rawSearchPayloadP95": 10389,
+        "readingPayloadP50": 8033,
+        "readingPayloadP95": 8033,
+        "totalAgentVisiblePayloadP50": 18422,
+        "totalAgentVisiblePayloadP95": 18422,
+        "estimatedTokensP50": 4606,
+        "estimatedTokensP95": 4606
+      }
+    },
+    {
+      "id": "benefit-product-code-dto",
+      "name": "ParentStudentBenefitItemResponse.productCode",
+      "attempts": [
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 13512,
+          "readingPayload": 10404,
+          "totalAgentVisiblePayload": 23916,
+          "estimatedTokens": 5979,
+          "elapsedMs": 59.18445899999642,
+          "roundTrips": 7,
+          "returnedFiles": 24,
+          "hitFiles": 6,
+          "precision": 0.25,
+          "recall": 0.6666666666666666,
+          "pCandAt5": 0.6,
+          "pCandAt10": 0.3,
+          "rCand": 0.6666666666666666,
+          "pRead": 0.5,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 235945,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/dto/ParentStudentBenefitItemResponse.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/main/java/com/lishu/edu/benefits/application/dto/ParentStudentBenefitItemView.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/assembler/BenefitEntitlementAssembler.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/main/java/com/lishu/edu/benefits/application/service/ParentBenefitQueryAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/controller/ParentBenefitController.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/product/src/main/java/com/lishu/edu/product/application/service/ProductQueryAppService.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "cross-module-cold",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/product/src/main/java/com/lishu/edu/product/application/dto/ProductView.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "cross-module-cold",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/test/java/com/lishu/edu/benefits/application/service/ParentBenefitQueryAppServiceTest.java",
+              "kind": "side",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/test/java/com/lishu/edu/benefits/interfaces/assembler/BenefitEntitlementAssemblerTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "dto",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 13512,
+          "readingPayload": 10404,
+          "totalAgentVisiblePayload": 23916,
+          "estimatedTokens": 5979,
+          "elapsedMs": 12.886292000002868,
+          "roundTrips": 7,
+          "returnedFiles": 24,
+          "hitFiles": 6,
+          "precision": 0.25,
+          "recall": 0.6666666666666666,
+          "pCandAt5": 0.6,
+          "pCandAt10": 0.3,
+          "rCand": 0.6666666666666666,
+          "pRead": 0.5,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 235945,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/dto/ParentStudentBenefitItemResponse.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/main/java/com/lishu/edu/benefits/application/dto/ParentStudentBenefitItemView.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/assembler/BenefitEntitlementAssembler.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/main/java/com/lishu/edu/benefits/application/service/ParentBenefitQueryAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/controller/ParentBenefitController.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/product/src/main/java/com/lishu/edu/product/application/service/ProductQueryAppService.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "cross-module-cold",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/product/src/main/java/com/lishu/edu/product/application/dto/ProductView.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "cross-module-cold",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/test/java/com/lishu/edu/benefits/application/service/ParentBenefitQueryAppServiceTest.java",
+              "kind": "side",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/test/java/com/lishu/edu/benefits/interfaces/assembler/BenefitEntitlementAssemblerTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "dto",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 13512,
+          "readingPayload": 10404,
+          "totalAgentVisiblePayload": 23916,
+          "estimatedTokens": 5979,
+          "elapsedMs": 11.840959000001021,
+          "roundTrips": 7,
+          "returnedFiles": 24,
+          "hitFiles": 6,
+          "precision": 0.25,
+          "recall": 0.6666666666666666,
+          "pCandAt5": 0.6,
+          "pCandAt10": 0.3,
+          "rCand": 0.6666666666666666,
+          "pRead": 0.5,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 235945,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/dto/ParentStudentBenefitItemResponse.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/main/java/com/lishu/edu/benefits/application/dto/ParentStudentBenefitItemView.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/assembler/BenefitEntitlementAssembler.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/main/java/com/lishu/edu/benefits/application/service/ParentBenefitQueryAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/controller/ParentBenefitController.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/product/src/main/java/com/lishu/edu/product/application/service/ProductQueryAppService.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "cross-module-cold",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/product/src/main/java/com/lishu/edu/product/application/dto/ProductView.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "cross-module-cold",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/test/java/com/lishu/edu/benefits/application/service/ParentBenefitQueryAppServiceTest.java",
+              "kind": "side",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/test/java/com/lishu/edu/benefits/interfaces/assembler/BenefitEntitlementAssemblerTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "dto",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 13512,
+          "readingPayload": 10404,
+          "totalAgentVisiblePayload": 23916,
+          "estimatedTokens": 5979,
+          "elapsedMs": 12.132292000002053,
+          "roundTrips": 7,
+          "returnedFiles": 24,
+          "hitFiles": 6,
+          "precision": 0.25,
+          "recall": 0.6666666666666666,
+          "pCandAt5": 0.6,
+          "pCandAt10": 0.3,
+          "rCand": 0.6666666666666666,
+          "pRead": 0.5,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 235945,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/dto/ParentStudentBenefitItemResponse.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/main/java/com/lishu/edu/benefits/application/dto/ParentStudentBenefitItemView.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/assembler/BenefitEntitlementAssembler.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/main/java/com/lishu/edu/benefits/application/service/ParentBenefitQueryAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/controller/ParentBenefitController.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/product/src/main/java/com/lishu/edu/product/application/service/ProductQueryAppService.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "cross-module-cold",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/product/src/main/java/com/lishu/edu/product/application/dto/ProductView.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "cross-module-cold",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/test/java/com/lishu/edu/benefits/application/service/ParentBenefitQueryAppServiceTest.java",
+              "kind": "side",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/test/java/com/lishu/edu/benefits/interfaces/assembler/BenefitEntitlementAssemblerTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "dto",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 13512,
+          "readingPayload": 10404,
+          "totalAgentVisiblePayload": 23916,
+          "estimatedTokens": 5979,
+          "elapsedMs": 13.140041999999085,
+          "roundTrips": 7,
+          "returnedFiles": 24,
+          "hitFiles": 6,
+          "precision": 0.25,
+          "recall": 0.6666666666666666,
+          "pCandAt5": 0.6,
+          "pCandAt10": 0.3,
+          "rCand": 0.6666666666666666,
+          "pRead": 0.5,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 235945,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/dto/ParentStudentBenefitItemResponse.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/main/java/com/lishu/edu/benefits/application/dto/ParentStudentBenefitItemView.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/assembler/BenefitEntitlementAssembler.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/main/java/com/lishu/edu/benefits/application/service/ParentBenefitQueryAppService.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/main/java/com/lishu/edu/benefits/interfaces/controller/ParentBenefitController.java",
+              "kind": "should",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/product/src/main/java/com/lishu/edu/product/application/service/ProductQueryAppService.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "cross-module-cold",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/product/src/main/java/com/lishu/edu/product/application/dto/ProductView.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "cross-module-cold",
+              "profile": "dto",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/test/java/com/lishu/edu/benefits/application/service/ParentBenefitQueryAppServiceTest.java",
+              "kind": "side",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "golden-stale-or-low-value",
+              "profile": "dto",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "ParentStudentBenefitItemResponse.productCode",
+              "file": "modules/benefits/src/test/java/com/lishu/edu/benefits/interfaces/assembler/BenefitEntitlementAssemblerTest.java",
+              "kind": "side",
+              "inFiles": true,
+              "inReadPlan": false,
+              "source": "unknown",
+              "blockedBy": "readplan-full",
+              "profile": "dto",
+              "semanticUsed": false
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        }
+      ],
+      "summary": {
+        "rawSearchPayload": 13512,
+        "readingPayload": 10404,
+        "totalAgentVisiblePayload": 23916,
+        "estimatedTokens": 5979,
+        "elapsedMs": 21.83680880000029,
+        "roundTrips": 7,
+        "returnedFiles": 24,
+        "hitFiles": 6,
+        "precision": 0.25,
+        "recall": 0.6666666666666666,
+        "pCandAt5": 0.6,
+        "pCandAt10": 0.3,
+        "rCand": 0.6666666666666666,
+        "pRead": 0.5,
+        "rReadMust": 1,
+        "readPlanItems": 6,
+        "rgRawBytesSuppressed": 235945,
+        "rgRawBytesExposed": 0,
+        "elapsedMsP50": 12.886292000002868,
+        "elapsedMsP95": 59.18445899999642,
+        "rawSearchPayloadP50": 13512,
+        "rawSearchPayloadP95": 13512,
+        "readingPayloadP50": 10404,
+        "readingPayloadP95": 10404,
+        "totalAgentVisiblePayloadP50": 23916,
+        "totalAgentVisiblePayloadP95": 23916,
+        "estimatedTokensP50": 5979,
+        "estimatedTokensP95": 5979
+      }
+    },
+    {
+      "id": "school-mapstruct-uses",
+      "name": "SchoolTemplateImportController#confirm MapStruct uses",
+      "attempts": [
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 10389,
+          "readingPayload": 8033,
+          "totalAgentVisiblePayload": 18422,
+          "estimatedTokens": 4606,
+          "elapsedMs": 10.437125000004016,
+          "roundTrips": 7,
+          "returnedFiles": 16,
+          "hitFiles": 2,
+          "precision": 0.125,
+          "recall": 0.5,
+          "pCandAt5": 0.4,
+          "pCandAt10": 0.2,
+          "rCand": 0.5,
+          "pRead": 0.3333333333333333,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 266987,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "SchoolTemplateImportController#confirm MapStruct uses",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/interfaces/web/SchoolTemplateImportController.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm MapStruct uses",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/interfaces/assembler/SchoolTemplateImportAssembler.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm MapStruct uses",
+              "file": "modules/common/src/main/java/com/lishu/edu/common/interfaces/assembler/IdConverter.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "no-type-edge",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm MapStruct uses",
+              "file": "modules/common/src/main/java/com/lishu/edu/common/interfaces/assembler/DateTimeConverter.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "cross-module-cold",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 10389,
+          "readingPayload": 8033,
+          "totalAgentVisiblePayload": 18422,
+          "estimatedTokens": 4606,
+          "elapsedMs": 11.800041000002238,
+          "roundTrips": 7,
+          "returnedFiles": 16,
+          "hitFiles": 2,
+          "precision": 0.125,
+          "recall": 0.5,
+          "pCandAt5": 0.4,
+          "pCandAt10": 0.2,
+          "rCand": 0.5,
+          "pRead": 0.3333333333333333,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 266987,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "SchoolTemplateImportController#confirm MapStruct uses",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/interfaces/web/SchoolTemplateImportController.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm MapStruct uses",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/interfaces/assembler/SchoolTemplateImportAssembler.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm MapStruct uses",
+              "file": "modules/common/src/main/java/com/lishu/edu/common/interfaces/assembler/IdConverter.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "no-type-edge",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm MapStruct uses",
+              "file": "modules/common/src/main/java/com/lishu/edu/common/interfaces/assembler/DateTimeConverter.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "cross-module-cold",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 10389,
+          "readingPayload": 8033,
+          "totalAgentVisiblePayload": 18422,
+          "estimatedTokens": 4606,
+          "elapsedMs": 10.697332999996434,
+          "roundTrips": 7,
+          "returnedFiles": 16,
+          "hitFiles": 2,
+          "precision": 0.125,
+          "recall": 0.5,
+          "pCandAt5": 0.4,
+          "pCandAt10": 0.2,
+          "rCand": 0.5,
+          "pRead": 0.3333333333333333,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 266987,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "SchoolTemplateImportController#confirm MapStruct uses",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/interfaces/web/SchoolTemplateImportController.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm MapStruct uses",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/interfaces/assembler/SchoolTemplateImportAssembler.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm MapStruct uses",
+              "file": "modules/common/src/main/java/com/lishu/edu/common/interfaces/assembler/IdConverter.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "no-type-edge",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm MapStruct uses",
+              "file": "modules/common/src/main/java/com/lishu/edu/common/interfaces/assembler/DateTimeConverter.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "cross-module-cold",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 10389,
+          "readingPayload": 8033,
+          "totalAgentVisiblePayload": 18422,
+          "estimatedTokens": 4606,
+          "elapsedMs": 11.014208000000508,
+          "roundTrips": 7,
+          "returnedFiles": 16,
+          "hitFiles": 2,
+          "precision": 0.125,
+          "recall": 0.5,
+          "pCandAt5": 0.4,
+          "pCandAt10": 0.2,
+          "rCand": 0.5,
+          "pRead": 0.3333333333333333,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 266987,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "SchoolTemplateImportController#confirm MapStruct uses",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/interfaces/web/SchoolTemplateImportController.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm MapStruct uses",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/interfaces/assembler/SchoolTemplateImportAssembler.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm MapStruct uses",
+              "file": "modules/common/src/main/java/com/lishu/edu/common/interfaces/assembler/IdConverter.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "no-type-edge",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm MapStruct uses",
+              "file": "modules/common/src/main/java/com/lishu/edu/common/interfaces/assembler/DateTimeConverter.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "cross-module-cold",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        },
+        {
+          "strategy": "impact",
+          "rawSearchPayload": 10389,
+          "readingPayload": 8033,
+          "totalAgentVisiblePayload": 18422,
+          "estimatedTokens": 4606,
+          "elapsedMs": 10.009290999994846,
+          "roundTrips": 7,
+          "returnedFiles": 16,
+          "hitFiles": 2,
+          "precision": 0.125,
+          "recall": 0.5,
+          "pCandAt5": 0.4,
+          "pCandAt10": 0.2,
+          "rCand": 0.5,
+          "pRead": 0.3333333333333333,
+          "rReadMust": 1,
+          "readPlanItems": 6,
+          "rgRawBytesSuppressed": 266987,
+          "rgRawBytesExposed": 0,
+          "timing": {
+            "sessionPhaseMs": {},
+            "semantic": {
+              "used": false,
+              "skipped": true,
+              "timeout": false,
+              "policy": "fast"
+            }
+          },
+          "goldenAttribution": [
+            {
+              "scenario": "SchoolTemplateImportController#confirm MapStruct uses",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/interfaces/web/SchoolTemplateImportController.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm MapStruct uses",
+              "file": "modules/school/src/main/java/com/lishu/edu/school/interfaces/assembler/SchoolTemplateImportAssembler.java",
+              "kind": "must",
+              "inFiles": true,
+              "inReadPlan": true,
+              "source": "unknown",
+              "blockedBy": "hit",
+              "profile": "controller",
+              "semanticUsed": false
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm MapStruct uses",
+              "file": "modules/common/src/main/java/com/lishu/edu/common/interfaces/assembler/IdConverter.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "no-type-edge",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            },
+            {
+              "scenario": "SchoolTemplateImportController#confirm MapStruct uses",
+              "file": "modules/common/src/main/java/com/lishu/edu/common/interfaces/assembler/DateTimeConverter.java",
+              "kind": "should",
+              "inFiles": false,
+              "inReadPlan": false,
+              "source": "absent",
+              "blockedBy": "absent",
+              "absentReason": "cross-module-cold",
+              "profile": "controller",
+              "semanticUsed": false,
+              "shouldBlocksTask": true
+            }
+          ],
+          "frameworkEvidence": {
+            "mapstruct": {
+              "selected": 0,
+              "readPlan": 0,
+              "golden": 0,
+              "byKind": {}
+            }
+          }
+        }
+      ],
+      "summary": {
+        "rawSearchPayload": 10389,
+        "readingPayload": 8033,
+        "totalAgentVisiblePayload": 18422,
+        "estimatedTokens": 4606,
+        "elapsedMs": 10.791599599999609,
+        "roundTrips": 7,
+        "returnedFiles": 16,
+        "hitFiles": 2,
+        "precision": 0.125,
+        "recall": 0.5,
+        "pCandAt5": 0.4,
+        "pCandAt10": 0.2,
+        "rCand": 0.5,
+        "pRead": 0.3333333333333333,
+        "rReadMust": 1,
+        "readPlanItems": 6,
+        "rgRawBytesSuppressed": 266987,
+        "rgRawBytesExposed": 0,
+        "elapsedMsP50": 10.697332999996434,
+        "elapsedMsP95": 11.800041000002238,
+        "rawSearchPayloadP50": 10389,
+        "rawSearchPayloadP95": 10389,
+        "readingPayloadP50": 8033,
+        "readingPayloadP95": 8033,
+        "totalAgentVisiblePayloadP50": 18422,
+        "totalAgentVisiblePayloadP95": 18422,
+        "estimatedTokensP50": 4606,
+        "estimatedTokensP95": 4606
+      }
+    }
+  ]
+}

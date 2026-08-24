@@ -1,10 +1,30 @@
-// input: codex-java-lsp cache directories with repo metadata.
-// output: Best-effort deletion of stale inactive Git worktree caches.
-// pos: Startup cache janitor scoped to linked worktrees only.
+// input: codex-java-lsp cache directories, retained roots, and cross-process ownership state.
+// output: Best-effort deletion of stale inactive Git worktree caches under an exclusive root lease.
+// pos: Startup and periodic cache janitor; never deletes a retained or concurrently owned runtime.
+import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from "node:fs";
 import path from "node:path";
+import { observeRuntimeLeaseLiveness } from "./cross-process-lease.js";
+import { canonicalPath } from "./path-utils.js";
 import { repoCacheBase, repoCacheRoot } from "./repo-layout.js";
+import {
+  processStartIdentityForPid,
+  repoOwnershipBase,
+  RepoOwnershipManager,
+  type RepoOwnershipProvider,
+  type RepoOwnershipMetadata,
+  type RepoOwnerTransport
+} from "./repo-ownership-lease.js";
 
 const DAY_MS = 86400000;
 const META_FILE = "repo-meta.json";
@@ -14,40 +34,124 @@ type RepoCacheMeta = {
   repoRoot?: string;
   isGitWorktree?: boolean;
   jdtlsPid?: number;
+  jdtlsProcessStartIdentity?: string;
+  ownerToken?: string;
+  ownerPid?: number;
+  ownerProcessStartIdentity?: string;
+  ownerTransport?: RepoOwnerTransport;
+  ownerBuildSha?: string;
+  lastRequestAt?: string;
+  repoHash?: string;
+  familyHash?: string;
   updatedAt?: string;
+};
+
+export type RepoCacheTouch = {
+  jdtlsPid?: number | null;
+  jdtlsProcessStartIdentity?: string | null;
+  ownerPid?: number;
+  ownerToken?: string;
+  lastRequestAt?: string;
+  repoHash?: string;
+  familyHash?: string;
+  ownership?: RepoOwnershipMetadata;
 };
 
 export type WorktreeCacheCleanupResult = {
   scanned: number;
   removed: number;
   skipped: number;
+  failures: number;
   removedDirs: string[];
 };
 
-export function touchRepoCache(repoRoot: string, extra: Pick<RepoCacheMeta, "jdtlsPid"> = {}): void {
+export type WorktreeCacheCleanupFailure = {
+  phase: "delete" | "release";
+  repoRoot: string;
+  cacheRoot: string;
+  lockPath: string;
+  error: unknown;
+};
+
+export type WorktreeCacheCleanupOptions = {
+  cacheBase?: string;
+  ownershipBase?: string;
+  now?: number;
+  ttlDays?: number;
+  protectedRepoRoots?: ReadonlySet<string>;
+  transport?: RepoOwnerTransport;
+  ownership?: RepoOwnershipProvider;
+  leaseBase?: string;
+  /** Test seam; defaults to a real `process.kill(pid, 0)` liveness check. */
+  isAlive?: (pid: number) => boolean;
+  reportFailure?: (failure: WorktreeCacheCleanupFailure) => void;
+  removeCacheRoot?: (cacheRoot: string) => void;
+};
+
+export function touchRepoCache(repoRoot: string, extra: RepoCacheTouch = {}): void {
   try {
-    const cacheRoot = repoCacheRoot(repoRoot);
+    const root = canonicalPath(repoRoot);
+    const cacheRoot = repoCacheRoot(root);
     mkdirSync(cacheRoot, { recursive: true });
+    const previous = readRepoCacheMeta(cacheRoot);
     const meta: RepoCacheMeta = {
-      schemaVersion: 1,
-      repoRoot,
-      isGitWorktree: isLinkedGitWorktree(repoRoot),
-      updatedAt: new Date().toISOString(),
-      ...extra
+      ...(previous?.repoRoot === root ? previous : {}),
+      schemaVersion: 2,
+      repoRoot: root,
+      isGitWorktree: isLinkedGitWorktree(root),
+      updatedAt: new Date().toISOString()
     };
-    writeFileSync(path.join(cacheRoot, META_FILE), `${JSON.stringify(meta, null, 2)}\n`);
+    if (extra.ownership) {
+      meta.ownerToken = extra.ownership.ownerToken;
+      meta.ownerPid = extra.ownership.pid;
+      meta.ownerProcessStartIdentity = extra.ownership.processStartIdentity;
+      meta.ownerTransport = extra.ownership.transport;
+      meta.ownerBuildSha = extra.ownership.buildSha;
+    }
+    if ("ownerPid" in extra && extra.ownerPid === undefined) {
+      delete meta.ownerPid;
+    } else if (extra.ownerPid !== undefined) {
+      meta.ownerPid = extra.ownerPid;
+    }
+    if ("ownerToken" in extra && extra.ownerToken === undefined) {
+      delete meta.ownerToken;
+    } else if (extra.ownerToken !== undefined) {
+      meta.ownerToken = extra.ownerToken;
+    }
+    if (extra.lastRequestAt) {
+      meta.lastRequestAt = extra.lastRequestAt;
+    } else {
+      meta.lastRequestAt = new Date().toISOString();
+    }
+    if (extra.repoHash !== undefined) {
+      meta.repoHash = extra.repoHash;
+    }
+    if (extra.familyHash !== undefined) {
+      meta.familyHash = extra.familyHash;
+    }
+    if (extra.jdtlsPid === null || ("jdtlsPid" in extra && extra.jdtlsPid === undefined)) {
+      delete meta.jdtlsPid;
+      delete meta.jdtlsProcessStartIdentity;
+    } else if (extra.jdtlsPid !== undefined) {
+      meta.jdtlsPid = extra.jdtlsPid;
+      meta.jdtlsProcessStartIdentity = extra.jdtlsProcessStartIdentity
+        ?? processStartIdentityForPid(extra.jdtlsPid);
+    }
+    if (extra.jdtlsProcessStartIdentity === null) {
+      delete meta.jdtlsProcessStartIdentity;
+    }
+    const metaPath = path.join(cacheRoot, META_FILE);
+    const temporary = `${metaPath}.tmp-${randomUUID()}`;
+    writeFileSync(temporary, `${JSON.stringify(meta, null, 2)}\n`, { mode: 0o600 });
+    renameSync(temporary, metaPath);
   } catch {
     // Best-effort cache metadata only; Java navigation must not depend on it.
   }
 }
 
-export function cleanupStaleWorktreeCaches(options: {
-  cacheBase?: string;
-  now?: number;
-  ttlDays?: number;
-} = {}): WorktreeCacheCleanupResult {
+export function cleanupStaleWorktreeCaches(options: WorktreeCacheCleanupOptions = {}): WorktreeCacheCleanupResult {
   const ttlDays = options.ttlDays ?? worktreeCacheTtlDays();
-  const result: WorktreeCacheCleanupResult = { scanned: 0, removed: 0, skipped: 0, removedDirs: [] };
+  const result: WorktreeCacheCleanupResult = { scanned: 0, removed: 0, skipped: 0, failures: 0, removedDirs: [] };
   if (ttlDays <= 0) {
     return result;
   }
@@ -57,24 +161,128 @@ export function cleanupStaleWorktreeCaches(options: {
     return result;
   }
   const cutoff = (options.now ?? Date.now()) - ttlDays * DAY_MS;
+  const leaseBase = options.leaseBase ?? path.join(repoCacheBase(), "leases");
+  const isAlive = options.isAlive ?? isProcessAlive;
+  const protectedRoots = new Set(
+    [...(options.protectedRepoRoots ?? [])].map(root => canonicalPath(root))
+  );
+  const janitorOwnership = options.ownership ?? new RepoOwnershipManager({
+    baseDir: repoOwnershipBase(options.ownershipBase, options.cacheBase),
+    cacheBase: options.cacheBase,
+    transport: options.transport ?? "stdio",
+    buildSha: "cache-janitor"
+  });
 
   for (const entry of readdirSync(base, { withFileTypes: true })) {
-    if (!entry.isDirectory()) {
+    if (!entry.isDirectory() || entry.name.startsWith(".") || entry.name === "leases" || entry.name === "ownership") {
       continue;
     }
     result.scanned += 1;
     const cacheRoot = path.join(base, entry.name);
     const meta = readRepoCacheMeta(cacheRoot);
-    if (!meta?.repoRoot || cacheUpdatedAt(cacheRoot, meta) > cutoff || !isWorktreeCache(meta) || hasActiveJdtls(cacheRoot, meta)) {
+    const repoRoot = meta?.repoRoot ? canonicalPath(meta.repoRoot) : undefined;
+    if (!meta
+      || !repoRoot
+      || protectedRoots.has(repoRoot)
+      || !isRemovalCandidate(cacheRoot, meta, cutoff, leaseBase, isAlive)) {
       result.skipped += 1;
       continue;
     }
-    rmSync(cacheRoot, { recursive: true, force: true });
-    result.removed += 1;
-    result.removedDirs.push(cacheRoot);
+
+    let lease;
+    try {
+      lease = janitorOwnership.acquire(repoRoot);
+    } catch {
+      result.skipped += 1;
+      continue;
+    }
+    try {
+      const current = readRepoCacheMeta(cacheRoot);
+      if (!current?.repoRoot
+        || canonicalPath(current.repoRoot) !== repoRoot
+        || protectedRoots.has(repoRoot)
+        || !isRemovalCandidate(cacheRoot, current, cutoff, leaseBase, isAlive)) {
+        result.skipped += 1;
+        continue;
+      }
+      (options.removeCacheRoot ?? removeCacheRoot)(cacheRoot);
+      result.removed += 1;
+      result.removedDirs.push(cacheRoot);
+    } catch (error) {
+      result.skipped += 1;
+      result.failures += 1;
+      reportCleanupFailure(options, {
+        phase: "delete",
+        repoRoot,
+        cacheRoot,
+        lockPath: lease.lockPath,
+        error
+      });
+    } finally {
+      try {
+        lease.release();
+      } catch (error) {
+        result.failures += 1;
+        reportCleanupFailure(options, {
+          phase: "release",
+          repoRoot,
+          cacheRoot,
+          lockPath: lease.lockPath,
+          error
+        });
+      }
+    }
   }
 
   return result;
+}
+
+function removeCacheRoot(cacheRoot: string): void {
+  rmSync(cacheRoot, { recursive: true, force: true });
+}
+
+function isRemovalCandidate(
+  cacheRoot: string,
+  meta: RepoCacheMeta,
+  cutoff: number,
+  leaseBase: string,
+  isAlive: (pid: number) => boolean
+): boolean {
+  return Boolean(meta.repoRoot
+    && cacheUpdatedAt(cacheRoot, meta) <= cutoff
+    && isWorktreeCache(meta)
+    && !hasActiveJdtls(cacheRoot, meta)
+    && !hasActiveRuntimeOwner(meta, leaseBase, isAlive));
+}
+
+/**
+ * Decision order: a live runtime lease is the authoritative, multi-process
+ * signal that some MCP server still has this exact repo open, even for
+ * fast-only (never-started-JDT) use. `ownerPid` is a last-touch fallback
+ * only for legacy metadata that lacks an ownerToken.
+ */
+function hasActiveRuntimeOwner(
+  meta: RepoCacheMeta,
+  leaseBase: string,
+  isAlive: (pid: number) => boolean
+): boolean {
+  const familyKey = meta.familyHash ?? meta.repoHash;
+  if (familyKey && meta.repoHash) {
+    const runtime = observeRuntimeLeaseLiveness(leaseBase, familyKey, meta.repoHash, meta.ownerToken, isAlive);
+    if (runtime.matchingOwnerToken || runtime.anyLive) {
+      return true;
+    }
+  }
+  return meta.ownerToken === undefined && Boolean(meta.ownerPid && isAlive(meta.ownerPid));
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function worktreeCacheTtlDays(): number {
@@ -110,19 +318,46 @@ function isWorktreeCache(meta: RepoCacheMeta): boolean {
 }
 
 function hasActiveJdtls(cacheRoot: string, meta: RepoCacheMeta): boolean {
-  if (meta.jdtlsPid && isProcessAlive(meta.jdtlsPid)) {
-    return true;
+  if (meta.jdtlsPid) {
+    const liveness = processLiveness(meta.jdtlsPid, meta.jdtlsProcessStartIdentity);
+    return liveness !== "dead";
   }
   return existsSync(path.join(cacheRoot, "workspace", ".metadata", ".lock"));
 }
 
-function isProcessAlive(pid: number): boolean {
+function reportCleanupFailure(
+  options: WorktreeCacheCleanupOptions,
+  failure: WorktreeCacheCleanupFailure
+): void {
+  try {
+    if (options.reportFailure) {
+      options.reportFailure(failure);
+      return;
+    }
+    console.error(
+      `[codex-java-lsp] cache janitor ${failure.phase} failed `
+        + `(repoRoot=${failure.repoRoot}, cacheRoot=${failure.cacheRoot}, lockPath=${failure.lockPath})`,
+      failure.error
+    );
+  } catch {
+    // Diagnostics are best-effort; cleanup must continue scanning other entries.
+  }
+}
+
+function processLiveness(pid: number, expectedIdentity?: string): "alive" | "dead" | "unknown" {
   try {
     process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "ESRCH" ? "dead" : "unknown";
   }
+  if (!expectedIdentity) {
+    return "unknown";
+  }
+  const currentIdentity = processStartIdentityForPid(pid);
+  if (!currentIdentity) {
+    return "unknown";
+  }
+  return currentIdentity === expectedIdentity ? "alive" : "dead";
 }
 
 function isLinkedGitWorktree(repoRoot: string): boolean {

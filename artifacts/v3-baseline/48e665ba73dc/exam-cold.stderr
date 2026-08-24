@@ -1,0 +1,22 @@
+node:fs:442
+    return binding.readFileUtf8(path, stringToFlags(options.flag));
+                   ^
+
+Error: EPERM: operation not permitted, open '/Users/luo/Documents/program/exam-parent-v3/.sdkmanrc'
+    at readFileSync (node:fs:442:20)
+    at readIfExists (file:///Users/luo/Documents/github/codex-java-lsp-mcp/dist/project-jdk.js:195:31)
+    at readSdkman (file:///Users/luo/Documents/github/codex-java-lsp-mcp/dist/project-jdk.js:69:18)
+    at readRequirements (file:///Users/luo/Documents/github/codex-java-lsp-mcp/dist/project-jdk.js:61:9)
+    at resolveProjectJdk (file:///Users/luo/Documents/github/codex-java-lsp-mcp/dist/project-jdk.js:24:26)
+    at new JdtlsSession (file:///Users/luo/Documents/github/codex-java-lsp-mcp/dist/jdtls-session.js:51:27)
+    at file:///Users/luo/Documents/github/codex-java-lsp-mcp/dist/benchmark-agent-impact.js:52:45
+    at ModuleJob.run (node:internal/modules/esm/module_job:274:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:644:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5) {
+  errno: -1,
+  code: 'EPERM',
+  syscall: 'open',
+  path: '/Users/luo/Documents/program/exam-parent-v3/.sdkmanrc'
+}
+
+Node.js v22.16.0

@@ -52,6 +52,29 @@ test("JAVA_LSP_LOMBOK_JAR enables Lombok agent", async () => {
   }
 });
 
+test("Gradle cache resolver skips Lombok sources and javadoc jars", async () => {
+  const home = await mkdtemp(path.join(tmpdir(), "java-lsp-lombok-home-"));
+  const versionDir = path.join(home, ".gradle", "caches", "modules-2", "files-2.1", "org.projectlombok", "lombok", "1.18.42");
+  await mkdir(path.join(versionDir, "aaa"), { recursive: true });
+  await mkdir(path.join(versionDir, "bbb"), { recursive: true });
+  await writeFile(path.join(versionDir, "aaa", "lombok-1.18.42-sources.jar"), "");
+  await writeFile(path.join(versionDir, "aaa", "lombok-1.18.42-javadoc.jar"), "");
+  const agentJar = path.join(versionDir, "bbb", "lombok-1.18.42.jar");
+  await writeFile(agentJar, "");
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-lombok-repo-"));
+  await writeFile(path.join(root, "build.gradle.kts"), `annotationProcessor("org.projectlombok:lombok:1.18.42")`);
+  const previousHome = process.env.HOME;
+  process.env.HOME = home;
+  try {
+    const status = detectGeneratedCode(root);
+    assert.equal(status.lombok.jar, agentJar);
+    assert.equal(status.lombok.agentEnabled, true);
+  } finally {
+    if (previousHome === undefined) delete process.env.HOME;
+    else process.env.HOME = previousHome;
+  }
+});
+
 test("semantic version sorting prefers 1.18.38 over 1.18.4", () => {
   assert.deepEqual(["1.18.4", "1.18.38", "1.18.30"].sort(compareVersionsDesc), ["1.18.38", "1.18.30", "1.18.4"]);
 });

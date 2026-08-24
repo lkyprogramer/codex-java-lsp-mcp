@@ -1,0 +1,1161 @@
+{
+  "version": 6,
+  "verifiedAt": "2026-08-16T16:56:18.868Z",
+  "matrixDir": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/matrix",
+  "manifest": {
+    "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/run-manifest.json",
+    "sha256": "a0da42761c852165d6a1c2e5034ad3ca17908aabd919c18ad4e4b43374cc710f",
+    "verifierVersion": 6,
+    "runtimes": {
+      "old": {
+        "commit": "4eedc6b087210def34d1d3d2277a7ad41488c31f",
+        "commitTree": "567058e518022a269273698a92ec5fbc961a53b6",
+        "executableTree": "567058e518022a269273698a92ec5fbc961a53b6",
+        "buildStamp": {
+          "gitSha": "4eedc6b08721",
+          "generatedAt": "2026-08-16T16:47:40.969Z",
+          "defaults": {
+            "idleTtlMs": 2700000,
+            "importConcurrency": 2,
+            "jdtlsXmx": "2g",
+            "maxActiveRepos": 3
+          },
+          "defaultsFingerprint": "e5835394a86f"
+        }
+      },
+      "new": {
+        "commit": "4eedc6b087210def34d1d3d2277a7ad41488c31f",
+        "commitTree": "567058e518022a269273698a92ec5fbc961a53b6",
+        "executableTree": "37c9924331098284c2c7f1d78b606577c6d4a8f9",
+        "buildStamp": {
+          "gitSha": "4eedc6b08721",
+          "generatedAt": "2026-08-16T16:47:44.255Z",
+          "defaults": {
+            "idleTtlMs": 2700000,
+            "importConcurrency": 2,
+            "jdtlsXmx": "2g",
+            "maxActiveRepos": 3
+          },
+          "defaultsFingerprint": "e5835394a86f"
+        }
+      }
+    },
+    "repositories": {
+      "lishuedu": {
+        "root": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-mcp-three-repo-qAhm70/repositories/lishuedu",
+        "head": "db63b1a7e393edd90449eb013d7d1c4d65c366f2",
+        "tree": "22f0ce444e4cac484de85c8a0bf02240ad70d712",
+        "clean": true,
+        "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "sourceRoot": "/private/tmp/codex-java-v3-golden-20260809/lishuedu"
+      },
+      "cipherlink": {
+        "root": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-mcp-three-repo-qAhm70/repositories/cipherlink",
+        "head": "fa433982e92e52dd610650d1e79f2d041179b1d3",
+        "tree": "21a1075c7b211932a4cdb2abf2742521b1eba31f",
+        "clean": true,
+        "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "sourceRoot": "/private/tmp/codex-java-v3-golden-20260809/cipherlink"
+      },
+      "exam-parent-v3": {
+        "root": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-mcp-three-repo-qAhm70/repositories/exam-parent-v3",
+        "head": "f90a0b475f7be2ed003703feecec8195bc7eb976",
+        "tree": "dcdb2024879686451859c64260c7e1f3a4721fa7",
+        "clean": true,
+        "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "sourceRoot": "/private/tmp/codex-java-v3-golden-20260809/exam-parent-v3"
+      }
+    },
+    "scenarios": {
+      "lishuedu": {
+        "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/lishuedu.scenarios.jsonl",
+        "sha256": "fba58bb3e3e77dfb37f7ded03fb2a9ff02612658b08ca48b15927d102c434c65",
+        "rowIds": [
+          "storage-signed-url",
+          "school-template-parser",
+          "report-reusable-zip",
+          "school-confirm-controller",
+          "benefit-product-code-dto",
+          "school-mapstruct-uses",
+          "audit-order-repository-mapper-rule-type",
+          "audit-assignee-mapper-precision",
+          "exam-score-export-cross-module-holdout",
+          "paper-task-claim-iam-holdout"
+        ],
+        "tuningRowIds": [
+          "storage-signed-url",
+          "school-template-parser",
+          "report-reusable-zip",
+          "school-confirm-controller",
+          "benefit-product-code-dto",
+          "school-mapstruct-uses",
+          "audit-order-repository-mapper-rule-type",
+          "audit-assignee-mapper-precision"
+        ],
+        "holdoutRowIds": [
+          "exam-score-export-cross-module-holdout",
+          "paper-task-claim-iam-holdout"
+        ]
+      },
+      "cipherlink": {
+        "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/cipherlink.scenarios.jsonl",
+        "sha256": "e60dfebcc6cd764e6488c647793db72e098b7cf66385f8012e023fedcaf535d5",
+        "rowIds": [
+          "client-update-check",
+          "transfer-upload-init",
+          "transfer-upload-session-repository",
+          "aliyun-sms-gateway-send",
+          "operation-log-response-dto",
+          "organization-create-member-cross-module",
+          "auth-sms-login-lockout",
+          "account-admin-create-account-guard",
+          "client-release-storage-presign-holdout",
+          "backend-operation-log-aspect-async-audit-holdout"
+        ],
+        "tuningRowIds": [
+          "client-update-check",
+          "transfer-upload-init",
+          "transfer-upload-session-repository",
+          "aliyun-sms-gateway-send",
+          "operation-log-response-dto",
+          "organization-create-member-cross-module",
+          "auth-sms-login-lockout",
+          "account-admin-create-account-guard"
+        ],
+        "holdoutRowIds": [
+          "client-release-storage-presign-holdout",
+          "backend-operation-log-aspect-async-audit-holdout"
+        ]
+      },
+      "exam-parent-v3": {
+        "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+        "sha256": "da84c560c46c7c90d6dbabea38b43b5695a7a23dcd2f608e8c6dcd63cae4f69e",
+        "rowIds": [
+          "rule-engine-execute",
+          "candidate-position-select",
+          "apply-info-save-basic-service",
+          "position-repository-exists",
+          "ceb-order-create-dto",
+          "apply-info-update-cross-exam-guard",
+          "check-people-delete-site-guard",
+          "current-user-service-implementer-edge",
+          "exam-room-print-download-types-persistent-bundle",
+          "candidate-pay-order-cross-module-admission"
+        ],
+        "tuningRowIds": [
+          "rule-engine-execute",
+          "candidate-position-select",
+          "apply-info-save-basic-service",
+          "position-repository-exists",
+          "ceb-order-create-dto",
+          "apply-info-update-cross-exam-guard",
+          "check-people-delete-site-guard",
+          "current-user-service-implementer-edge"
+        ],
+        "holdoutRowIds": [
+          "exam-room-print-download-types-persistent-bundle",
+          "candidate-pay-order-cross-module-admission"
+        ]
+      }
+    },
+    "candidatePatch": {
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/candidate.patch",
+      "sha256": "2ed27d60d31c1e883f048d59f1722f118a20e86ad4f3412a9a602b3d919521f3",
+      "bytes": 29384,
+      "appliedToCommit": "4eedc6b087210def34d1d3d2277a7ad41488c31f",
+      "appliedToCommitTree": "567058e518022a269273698a92ec5fbc961a53b6",
+      "resultingExecutableTree": "37c9924331098284c2c7f1d78b606577c6d4a8f9",
+      "untrackedInputs": [
+        {
+          "path": "scripts/run-idle-prewarm-experiment.mjs",
+          "sha256": "1a01e089c7b50ed0cbb0a0cae10f0e9527d513a06fd3da9b302286c8d71f4a5a",
+          "bytes": 12697,
+          "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/candidate-untracked/scripts/run-idle-prewarm-experiment.mjs"
+        },
+        {
+          "path": "scripts/run-v324-import-concurrency-experiment.mjs",
+          "sha256": "ec58ec7eb4b19739103ca2551bd521b46c068a487a4e37a6e09e3efe517b44c4",
+          "bytes": 10890,
+          "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/candidate-untracked/scripts/run-v324-import-concurrency-experiment.mjs"
+        }
+      ]
+    }
+  },
+  "inputSha256": "afac9aecdb404fdd34f5424447b39f579769176e5401ee335b13e4be2538eeb4",
+  "configuration": {
+    "projects": [
+      "lishuedu",
+      "cipherlink",
+      "exam-parent-v3"
+    ],
+    "rounds": [
+      1,
+      2,
+      3
+    ],
+    "variants": [
+      "old",
+      "new"
+    ],
+    "expectedCells": 18,
+    "expectedRuns": 5,
+    "p95Limit": 1.25
+  },
+  "scenarioFiles": {
+    "lishuedu": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/lishuedu.scenarios.jsonl",
+    "cipherlink": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/cipherlink.scenarios.jsonl",
+    "exam-parent-v3": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/exam-parent-v3.scenarios.jsonl"
+  },
+  "cells": [
+    {
+      "project": "lishuedu",
+      "round": 1,
+      "variant": "old",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/matrix/lishuedu-r1-old.json",
+      "sha256": "c1c7c06d0fd552ed9d4fc0914e4b2f33f7f06110151d6299ba35a9120ab578b7",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "lishuedu",
+      "round": 2,
+      "variant": "old",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/matrix/lishuedu-r2-old.json",
+      "sha256": "67c46f8526e5b11dd04f24562497a84e0196964be1a240a6b77b20bf64c58a7b",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "lishuedu",
+      "round": 3,
+      "variant": "old",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/matrix/lishuedu-r3-old.json",
+      "sha256": "7f4e190234280a8ececf0be9f246c8a53ba7558638895a44189fd089a202420f",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "lishuedu",
+      "round": 1,
+      "variant": "new",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/matrix/lishuedu-r1-new.json",
+      "sha256": "d4bbb087550ae1803eb8e137766cf4331f6adc30a5321cac514b70e220e276f3",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "lishuedu",
+      "round": 2,
+      "variant": "new",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/matrix/lishuedu-r2-new.json",
+      "sha256": "6607815470ec59bbb400ef80d1cebd5e74de5a800796e67509ff4ff21b10d178",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "lishuedu",
+      "round": 3,
+      "variant": "new",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/matrix/lishuedu-r3-new.json",
+      "sha256": "8e0dd523b14ea2a95d1b76a495157dedba1b6ea5f58fc64fb7e5487d2f98faa9",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "cipherlink",
+      "round": 1,
+      "variant": "old",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/matrix/cipherlink-r1-old.json",
+      "sha256": "825396d31f398ec3c8d6df8b64dc66831f69560f7d412e145f9e2c928d28352f",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "cipherlink",
+      "round": 2,
+      "variant": "old",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/matrix/cipherlink-r2-old.json",
+      "sha256": "cd803c8bdfa85030f1abfa43fd959bf1e361659f0ddb19e9534cc1d00540a9a5",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "cipherlink",
+      "round": 3,
+      "variant": "old",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/matrix/cipherlink-r3-old.json",
+      "sha256": "83456f903bd89ec732abb654551ade2fb1c42861117f3d876bf5083a1787403a",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "cipherlink",
+      "round": 1,
+      "variant": "new",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/matrix/cipherlink-r1-new.json",
+      "sha256": "a3542046841f60183f2a7423d5c862096196c6b711fa7bddb8e01f3d412ba96b",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "cipherlink",
+      "round": 2,
+      "variant": "new",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/matrix/cipherlink-r2-new.json",
+      "sha256": "2c8b1d56f7c51321ef531d499090e699b2f69b85fc961380ff7b857227eb771e",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "cipherlink",
+      "round": 3,
+      "variant": "new",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/matrix/cipherlink-r3-new.json",
+      "sha256": "3b6cbb0ba2344f82dc38a8c19492caf101d6b1809cbe5d0d9ffd3f8a0544c432",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 1,
+      "variant": "old",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/matrix/exam-parent-v3-r1-old.json",
+      "sha256": "11be68c3206b3b2e58cbffcb36c55264007f5002b091ab1c3c98c7f0eb748a52",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 2,
+      "variant": "old",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/matrix/exam-parent-v3-r2-old.json",
+      "sha256": "933ed061dddae3197048b7d71b131da190810077dcac7e1c6e590702f0a2f755",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 3,
+      "variant": "old",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/matrix/exam-parent-v3-r3-old.json",
+      "sha256": "9fe1c95112d2782e5b94a593bc1b4fccc6a53c2bb2943c28704eee3402cbc4e0",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 1,
+      "variant": "new",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/matrix/exam-parent-v3-r1-new.json",
+      "sha256": "7d0805475d8eb0ca415e273a4ef4155b1192b17f1b91a84c812d5fee8697ff63",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 2,
+      "variant": "new",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/matrix/exam-parent-v3-r2-new.json",
+      "sha256": "6f03dfba8bc81f00acfba9f6c865b0a6dc370d2fc4d8037bb3ed6cc68408991b",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 3,
+      "variant": "new",
+      "file": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/matrix/exam-parent-v3-r3-new.json",
+      "sha256": "033a7080e427024b5b907c9d16206c1c7c4c3790c94c68dbe18ab4204b0db7f3",
+      "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    }
+  ],
+  "projects": [
+    {
+      "project": "lishuedu",
+      "old": {
+        "attempts": 150,
+        "recall": 0.7923214285714283,
+        "pRead": 0.7083333333333329,
+        "rReadMust": 0.9,
+        "rTaskBlocking": 0.5721123321123319,
+        "minReadMust": 0.5,
+        "minTaskBlocking": 0.38461538461538464,
+        "estimatedTokensP50": 4308,
+        "estimatedTokensP95": 5720,
+        "rangeEvidence": {
+          "line": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.6342857142857143,
+            "min": 0.14285714285714285
+          },
+          "coordinate": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.6342857142857143,
+            "min": 0.14285714285714285
+          }
+        },
+        "p50": 21.963833000001614,
+        "p95": 223.0526250000039,
+        "max": 339.39633299999696,
+        "mustFailureScenarios": [
+          "exam-score-export-cross-module-holdout",
+          "paper-task-claim-iam-holdout"
+        ],
+        "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/lishuedu.scenarios.jsonl",
+        "splits": {
+          "tuning": {
+            "attempts": 120,
+            "recall": 0.784672619047619,
+            "pRead": 0.6770833333333333,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.604563492063492,
+            "minReadMust": 1,
+            "minTaskBlocking": 0.42857142857142855,
+            "estimatedTokensP50": 3953,
+            "estimatedTokensP95": 5720,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 0.75,
+                "min": 0.3333333333333333
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 0.75,
+                "min": 0.3333333333333333
+              }
+            },
+            "p50": 19.39220799999748,
+            "p95": 165.98216700000194,
+            "max": 339.39633299999696,
+            "mustFailureScenarios": []
+          },
+          "holdout": {
+            "attempts": 30,
+            "recall": 0.8229166666666665,
+            "pRead": 0.8333333333333331,
+            "rReadMust": 0.5,
+            "rTaskBlocking": 0.44230769230769246,
+            "minReadMust": 0.5,
+            "minTaskBlocking": 0.38461538461538464,
+            "estimatedTokensP50": 5057,
+            "estimatedTokensP95": 5343,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.17142857142857146,
+                "min": 0.14285714285714285
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.17142857142857146,
+                "min": 0.14285714285714285
+              }
+            },
+            "p50": 38.477167000004556,
+            "p95": 223.0526250000039,
+            "max": 258.6199590000033,
+            "mustFailureScenarios": [
+              "exam-score-export-cross-module-holdout",
+              "paper-task-claim-iam-holdout"
+            ]
+          }
+        }
+      },
+      "new": {
+        "attempts": 150,
+        "recall": 0.7923214285714283,
+        "pRead": 0.6775641025641025,
+        "rReadMust": 0.9,
+        "rTaskBlocking": 0.6028815628815627,
+        "minReadMust": 0.5,
+        "minTaskBlocking": 0.42857142857142855,
+        "estimatedTokensP50": 4489,
+        "estimatedTokensP95": 6884,
+        "rangeEvidence": {
+          "line": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.6342857142857143,
+            "min": 0.14285714285714285
+          },
+          "coordinate": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.6342857142857143,
+            "min": 0.14285714285714285
+          }
+        },
+        "p50": 22.724999999998545,
+        "p95": 219.41825000000244,
+        "max": 313.6152080000029,
+        "mustFailureScenarios": [
+          "exam-score-export-cross-module-holdout",
+          "paper-task-claim-iam-holdout"
+        ],
+        "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/lishuedu.scenarios.jsonl",
+        "splits": {
+          "tuning": {
+            "attempts": 120,
+            "recall": 0.784672619047619,
+            "pRead": 0.6562500000000001,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.604563492063492,
+            "minReadMust": 1,
+            "minTaskBlocking": 0.42857142857142855,
+            "estimatedTokensP50": 3953,
+            "estimatedTokensP95": 5720,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 0.75,
+                "min": 0.3333333333333333
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 0.75,
+                "min": 0.3333333333333333
+              }
+            },
+            "p50": 19.666333000001032,
+            "p95": 219.41825000000244,
+            "max": 313.6152080000029,
+            "mustFailureScenarios": []
+          },
+          "holdout": {
+            "attempts": 30,
+            "recall": 0.8229166666666665,
+            "pRead": 0.7628205128205127,
+            "rReadMust": 0.5,
+            "rTaskBlocking": 0.596153846153846,
+            "minReadMust": 0.5,
+            "minTaskBlocking": 0.5,
+            "estimatedTokensP50": 5057,
+            "estimatedTokensP95": 6885,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.17142857142857146,
+                "min": 0.14285714285714285
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.17142857142857146,
+                "min": 0.14285714285714285
+              }
+            },
+            "p50": 49.54862499999581,
+            "p95": 217.07970899999782,
+            "max": 224.32212499999878,
+            "mustFailureScenarios": [
+              "exam-score-export-cross-module-holdout",
+              "paper-task-claim-iam-holdout"
+            ]
+          }
+        }
+      },
+      "delta": {
+        "recall": 0,
+        "pRead": -0.030769230769230438,
+        "rReadMust": 0,
+        "rTaskBlocking": 0.03076923076923077,
+        "estimatedTokensP50": 181,
+        "p95Ratio": 0.9837061993778312,
+        "p95ThresholdMs": 278.8157812500049,
+        "holdout": {
+          "recall": 0,
+          "pRead": -0.07051282051282048,
+          "rReadMust": 0,
+          "rTaskBlocking": 0.15384615384615358
+        }
+      },
+      "gate": {
+        "rReadMust": false,
+        "rTaskBlocking": true,
+        "recall": true,
+        "pRead": false,
+        "estimatedTokens": false,
+        "p95": true,
+        "rangeLineRecall": false,
+        "rangeCoordinateRecall": false,
+        "holdoutRReadMust": false,
+        "holdoutRTaskBlocking": true,
+        "holdoutRecall": true,
+        "holdoutPRead": false
+      },
+      "passed": false
+    },
+    {
+      "project": "cipherlink",
+      "old": {
+        "attempts": 150,
+        "recall": 0.8157783882783886,
+        "pRead": 0.6433333333333329,
+        "rReadMust": 0.9099999999999996,
+        "rTaskBlocking": 0.45374098124098095,
+        "minReadMust": 0.5,
+        "minTaskBlocking": 0.16666666666666666,
+        "estimatedTokensP50": 3606,
+        "estimatedTokensP95": 5198,
+        "rangeEvidence": {
+          "line": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.85,
+            "min": 0
+          },
+          "coordinate": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.85,
+            "min": 0
+          }
+        },
+        "p50": 23.18237500000032,
+        "p95": 102.19704200000069,
+        "max": 213.91899999999987,
+        "mustFailureScenarios": [
+          "client-release-storage-presign-holdout",
+          "backend-operation-log-aspect-async-audit-holdout"
+        ],
+        "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/cipherlink.scenarios.jsonl",
+        "splits": {
+          "tuning": {
+            "attempts": 120,
+            "recall": 0.8322229853479857,
+            "pRead": 0.6375000000000001,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.49141865079365077,
+            "minReadMust": 1,
+            "minTaskBlocking": 0.16666666666666666,
+            "estimatedTokensP50": 3572,
+            "estimatedTokensP95": 5198,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 1,
+                "min": 1
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 1,
+                "min": 1
+              }
+            },
+            "p50": 24.603165999999874,
+            "p95": 106.97587500000009,
+            "max": 213.91899999999987,
+            "mustFailureScenarios": []
+          },
+          "holdout": {
+            "attempts": 30,
+            "recall": 0.75,
+            "pRead": 0.6666666666666665,
+            "rReadMust": 0.5499999999999999,
+            "rTaskBlocking": 0.303030303030303,
+            "minReadMust": 0.5,
+            "minTaskBlocking": 0.2727272727272727,
+            "estimatedTokensP50": 3857,
+            "estimatedTokensP95": 4339,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.25,
+                "min": 0
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.25,
+                "min": 0
+              }
+            },
+            "p50": 13.533500000000458,
+            "p95": 50.936250000000655,
+            "max": 57.885041999999885,
+            "mustFailureScenarios": [
+              "client-release-storage-presign-holdout",
+              "backend-operation-log-aspect-async-audit-holdout"
+            ]
+          }
+        }
+      },
+      "new": {
+        "attempts": 150,
+        "recall": 0.768919413919414,
+        "pRead": 0.5105938505938507,
+        "rReadMust": 0.9099999999999996,
+        "rTaskBlocking": 0.45374098124098095,
+        "minReadMust": 0.5,
+        "minTaskBlocking": 0.16666666666666666,
+        "estimatedTokensP50": 3857,
+        "estimatedTokensP95": 5422,
+        "rangeEvidence": {
+          "line": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.85,
+            "min": 0
+          },
+          "coordinate": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.85,
+            "min": 0
+          }
+        },
+        "p50": 28.08904199999961,
+        "p95": 132.18883300000016,
+        "max": 270.17241699999977,
+        "mustFailureScenarios": [
+          "client-release-storage-presign-holdout",
+          "backend-operation-log-aspect-async-audit-holdout"
+        ],
+        "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/cipherlink.scenarios.jsonl",
+        "splits": {
+          "tuning": {
+            "attempts": 120,
+            "recall": 0.7736492673992674,
+            "pRead": 0.47157564657564655,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.49141865079365077,
+            "minReadMust": 1,
+            "minTaskBlocking": 0.16666666666666666,
+            "estimatedTokensP50": 3706,
+            "estimatedTokensP95": 5422,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 1,
+                "min": 1
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 1,
+                "min": 1
+              }
+            },
+            "p50": 30.023415999999997,
+            "p95": 141.078125,
+            "max": 270.17241699999977,
+            "mustFailureScenarios": []
+          },
+          "holdout": {
+            "attempts": 30,
+            "recall": 0.75,
+            "pRead": 0.6666666666666665,
+            "rReadMust": 0.5499999999999999,
+            "rTaskBlocking": 0.303030303030303,
+            "minReadMust": 0.5,
+            "minTaskBlocking": 0.2727272727272727,
+            "estimatedTokensP50": 3857,
+            "estimatedTokensP95": 4339,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.25,
+                "min": 0
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.25,
+                "min": 0
+              }
+            },
+            "p50": 12.584125000000313,
+            "p95": 48.9619160000002,
+            "max": 51.77508399999988,
+            "mustFailureScenarios": [
+              "client-release-storage-presign-holdout",
+              "backend-operation-log-aspect-async-audit-holdout"
+            ]
+          }
+        }
+      },
+      "delta": {
+        "recall": -0.04685897435897457,
+        "pRead": -0.13273948273948222,
+        "rReadMust": 0,
+        "rTaskBlocking": 0,
+        "estimatedTokensP50": 251,
+        "p95Ratio": 1.293470245449954,
+        "p95ThresholdMs": 152.1970420000007,
+        "holdout": {
+          "recall": 0,
+          "pRead": 0,
+          "rReadMust": 0,
+          "rTaskBlocking": 0
+        }
+      },
+      "gate": {
+        "rReadMust": false,
+        "rTaskBlocking": true,
+        "recall": false,
+        "pRead": false,
+        "estimatedTokens": false,
+        "p95": true,
+        "rangeLineRecall": false,
+        "rangeCoordinateRecall": false,
+        "holdoutRReadMust": false,
+        "holdoutRTaskBlocking": true,
+        "holdoutRecall": true,
+        "holdoutPRead": true
+      },
+      "passed": false
+    },
+    {
+      "project": "exam-parent-v3",
+      "old": {
+        "attempts": 150,
+        "recall": 0.7095066045066044,
+        "pRead": 0.5833333333333331,
+        "rReadMust": 0.8800000000000008,
+        "rTaskBlocking": 0.4502380952380954,
+        "minReadMust": 0.4,
+        "minTaskBlocking": 0.14285714285714285,
+        "estimatedTokensP50": 3395,
+        "estimatedTokensP95": 6085,
+        "rangeEvidence": {
+          "line": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.5525000000000001,
+            "min": 0
+          },
+          "coordinate": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.5525000000000001,
+            "min": 0
+          }
+        },
+        "p50": 21.304000000000087,
+        "p95": 132.27950000000055,
+        "max": 484.2778330000001,
+        "mustFailureScenarios": [
+          "exam-room-print-download-types-persistent-bundle",
+          "candidate-pay-order-cross-module-admission"
+        ],
+        "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+        "splits": {
+          "tuning": {
+            "attempts": 120,
+            "recall": 0.7789772727272726,
+            "pRead": 0.6041666666666665,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.5002976190476192,
+            "minReadMust": 1,
+            "minTaskBlocking": 0.14285714285714285,
+            "estimatedTokensP50": 3311,
+            "estimatedTokensP95": 6085,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 0.625,
+                "min": 0
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 0.625,
+                "min": 0
+              }
+            },
+            "p50": 17.173499999998967,
+            "p95": 99.8449580000015,
+            "max": 484.2778330000001,
+            "mustFailureScenarios": []
+          },
+          "holdout": {
+            "attempts": 30,
+            "recall": 0.4316239316239317,
+            "pRead": 0.5,
+            "rReadMust": 0.4000000000000002,
+            "rTaskBlocking": 0.25,
+            "minReadMust": 0.4,
+            "minTaskBlocking": 0.25,
+            "estimatedTokensP50": 3578,
+            "estimatedTokensP95": 3823,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.26250000000000007,
+                "min": 0.125
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.26250000000000007,
+                "min": 0.125
+              }
+            },
+            "p50": 31.32287499999984,
+            "p95": 138.8522499999999,
+            "max": 146.76979199999914,
+            "mustFailureScenarios": [
+              "exam-room-print-download-types-persistent-bundle",
+              "candidate-pay-order-cross-module-admission"
+            ]
+          }
+        }
+      },
+      "new": {
+        "attempts": 150,
+        "recall": 0.7095066045066044,
+        "pRead": 0.5186904761904758,
+        "rReadMust": 0.8800000000000008,
+        "rTaskBlocking": 0.4502380952380954,
+        "minReadMust": 0.4,
+        "minTaskBlocking": 0.14285714285714285,
+        "estimatedTokensP50": 3881,
+        "estimatedTokensP95": 6085,
+        "rangeEvidence": {
+          "line": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.5525000000000001,
+            "min": 0
+          },
+          "coordinate": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.5525000000000001,
+            "min": 0
+          }
+        },
+        "p50": 20.456292000000758,
+        "p95": 158.11683300000004,
+        "max": 195.5166250000002,
+        "mustFailureScenarios": [
+          "exam-room-print-download-types-persistent-bundle",
+          "candidate-pay-order-cross-module-admission"
+        ],
+        "scenarioFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+        "splits": {
+          "tuning": {
+            "attempts": 120,
+            "recall": 0.7789772727272726,
+            "pRead": 0.5691964285714286,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.5002976190476192,
+            "minReadMust": 1,
+            "minTaskBlocking": 0.14285714285714285,
+            "estimatedTokensP50": 3311,
+            "estimatedTokensP95": 6085,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 0.625,
+                "min": 0
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 0.625,
+                "min": 0
+              }
+            },
+            "p50": 18.686290999999983,
+            "p95": 96.97387499999968,
+            "max": 195.5166250000002,
+            "mustFailureScenarios": []
+          },
+          "holdout": {
+            "attempts": 30,
+            "recall": 0.4316239316239317,
+            "pRead": 0.31666666666666665,
+            "rReadMust": 0.4000000000000002,
+            "rTaskBlocking": 0.25,
+            "minReadMust": 0.4,
+            "minTaskBlocking": 0.25,
+            "estimatedTokensP50": 5418,
+            "estimatedTokensP95": 5934,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.26250000000000007,
+                "min": 0.125
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.26250000000000007,
+                "min": 0.125
+              }
+            },
+            "p50": 57.790624999999636,
+            "p95": 161.94162499999948,
+            "max": 166.2927920000002,
+            "mustFailureScenarios": [
+              "exam-room-print-download-types-persistent-bundle",
+              "candidate-pay-order-cross-module-admission"
+            ]
+          }
+        }
+      },
+      "delta": {
+        "recall": 0,
+        "pRead": -0.06464285714285734,
+        "rReadMust": 0,
+        "rTaskBlocking": 0,
+        "estimatedTokensP50": 486,
+        "p95Ratio": 1.1953237878885192,
+        "p95ThresholdMs": 182.27950000000055,
+        "holdout": {
+          "recall": 0,
+          "pRead": -0.18333333333333335,
+          "rReadMust": 0,
+          "rTaskBlocking": 0
+        }
+      },
+      "gate": {
+        "rReadMust": false,
+        "rTaskBlocking": true,
+        "recall": true,
+        "pRead": false,
+        "estimatedTokens": false,
+        "p95": true,
+        "rangeLineRecall": false,
+        "rangeCoordinateRecall": false,
+        "holdoutRReadMust": false,
+        "holdoutRTaskBlocking": true,
+        "holdoutRecall": true,
+        "holdoutPRead": false
+      },
+      "passed": false
+    }
+  ],
+  "warnings": [],
+  "passed": false,
+  "summaryFile": "/private/tmp/claude-501/-Users-luo-Documents-github-codex-java-lsp-mcp/a0a56dcd-ad50-4852-957f-1479bcb8000c/scratchpad/v328-taskaware-budget-matrix-20260817/matrix-summary.json"
+}

@@ -1,13 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import path from "node:path";
+import { homedir, tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { javaDiagnostics } from "./diagnostics.js";
-import { javaReferences } from "./references.js";
-import { javaRestart } from "./restart.js";
-import { javaShutdown } from "./shutdown.js";
+import { javaImpact } from "./impact.js";
+import { javaRuntime } from "./runtime.js";
 import { javaSymbol } from "./symbol.js";
 import type { ToolContext } from "./context.js";
+import { AgentRouter } from "../agent-router/index.js";
+import { JavaIndexClient } from "../java-index/java-index-client.js";
+import { RouterJavaIndex } from "../java-index/router-java-index.js";
+import { RgRunner } from "../search/rg-runner.js";
+import type { RgQuery, SearchResult } from "../search/search-types.js";
+import { DeadlineBudget } from "../runtime/deadline-budget.js";
 
 const repoRoot = "/tmp/demo";
 const sourceFile = path.join(repoRoot, "src", "main", "java", "demo", "DemoService.java");
@@ -40,13 +47,13 @@ test("action tools return summaries by default and diagnostic status on request"
     }
   } as unknown as ToolContext;
 
-  const restartSummary = record(await javaRestart(restartContext, { clearCache: false }));
-  const restartDiagnostic = record(await javaRestart(restartContext, { clearCache: false, detail: "diagnostic" }));
-  const shutdownSummary = record(await javaShutdown(shutdownContext, { all: false }));
+  const restartSummary = record(await javaRuntime(restartContext, { action: "restart", clearCache: false, all: false }));
+  const restartDiagnostic = record(await javaRuntime(restartContext, { action: "restart", clearCache: false, all: false, detail: "diagnostic" }));
+  const shutdownSummary = record(await javaRuntime(shutdownContext, { action: "shutdown", clearCache: false, all: false }));
 
   assert.equal(restartSummary.restarted, true);
   assert.equal(Object.hasOwn(restartSummary, "dataDir"), false);
-  assert.equal((restartSummary.fileWatcher as Record<string, unknown>).watchedRootCount, 1);
+  assert.equal(Object.hasOwn(restartSummary, "fileWatcher"), false);
   assert.equal(restartDiagnostic.dataDir, "/tmp/demo/.jdtls");
   assert.equal(shutdownSummary.stopped, true);
   assert.equal(shutdownSummary.started, false);
@@ -56,10 +63,13 @@ test("action tools return summaries by default and diagnostic status on request"
 });
 
 test("java_diagnostics summarizes repo-relative diagnostics by default", async () => {
+  const requestBudget = DeadlineBudget.fromTimeout(5000);
+  let observedBudget: DeadlineBudget | undefined;
   const context = {
     repoRoot,
     session: {
-      async diagnosticsFor(files: string[], _waitMs: number) {
+      async diagnosticsFor(files: string[], _waitMs: number, budget?: DeadlineBudget) {
+        observedBudget = budget;
         return {
           [files[0]]: [{
             range: {
@@ -76,21 +86,26 @@ test("java_diagnostics summarizes repo-relative diagnostics by default", async (
     }
   } as unknown as ToolContext;
 
-  const summary = record(await javaDiagnostics(context, { files: ["src/main/java/demo/DemoService.java"], waitMs: 0 }));
-  const diagnostic = record(await javaDiagnostics(context, { files: ["src/main/java/demo/DemoService.java"], waitMs: 0, detail: "diagnostic" }));
+  const request = { budget: requestBudget } as never;
+  const summary = record(await javaDiagnostics(context, { files: ["src/main/java/demo/DemoService.java"], waitMs: 0 }, request));
+  const diagnostic = record(await javaDiagnostics(context, { files: ["src/main/java/demo/DemoService.java"], waitMs: 0, detail: "diagnostic" }, request));
 
   assert.equal(summary.totalDiagnostics, 1);
   assert.equal((summary.files as Array<Record<string, unknown>>)[0]?.path, "src/main/java/demo/DemoService.java");
   assert.equal(Object.hasOwn(summary, "diagnostics"), false);
   assert.equal((diagnostic.files as string[])[0], sourceFile);
   assert.equal(Object.hasOwn(diagnostic, "diagnostics"), true);
+  assert.equal(observedBudget, requestBudget, "the public request budget must reach diagnostics startup/wait work");
 });
 
-test("java_symbol and java_references omit raw uri ranges unless diagnostic is requested", async () => {
+test("java_symbol (query/position/references operations) omits raw uri ranges unless diagnostic is requested", async () => {
+  const requestBudget = DeadlineBudget.fromTimeout(5000);
+  const observedBudgets: DeadlineBudget[] = [];
   const context = {
     repoRoot,
     session: {
-      async workspaceSymbols(_query: string, _limit: number) {
+      async workspaceSymbols(_query: string, _limit: number, budget: DeadlineBudget) {
+        observedBudgets.push(budget);
         return {
           truncated: false,
           items: [{
@@ -100,14 +115,16 @@ test("java_symbol and java_references omit raw uri ranges unless diagnostic is r
           }]
         };
       },
-      async symbolContext(_file: string, _line: number, _column: number, _timeoutMs: number) {
+      async symbolContext(_file: string, _line: number, _column: number, budget: DeadlineBudget) {
+        observedBudgets.push(budget);
         return {
           hover: { contents: "DemoService" },
           definitions: [locationAt(5, 9)],
           implementations: [locationAt(7, 11)]
         };
       },
-      async references(_file: string, _line: number, _column: number, _includeDeclaration: boolean) {
+      async references(_file: string, _line: number, _column: number, _includeDeclaration: boolean, budget: DeadlineBudget) {
+        observedBudgets.push(budget);
         return {
           items: [locationAt(5, 9), locationAt(7, 11)],
           totalReferences: 2,
@@ -117,11 +134,12 @@ test("java_symbol and java_references omit raw uri ranges unless diagnostic is r
     }
   } as unknown as ToolContext;
 
-  const symbolSummary = record(await javaSymbol(context, { query: "DemoService", semanticTimeoutMs: 3000 }));
-  const symbolDiagnostic = record(await javaSymbol(context, { query: "DemoService", semanticTimeoutMs: 3000, detail: "diagnostic" }));
-  const positionSummary = record(await javaSymbol(context, { file: "src/main/java/demo/DemoService.java", line: 5, column: 9, semanticTimeoutMs: 3000 }));
-  const referencesSummary = record(await javaReferences(context, { file: "src/main/java/demo/DemoService.java", line: 5, column: 9, includeDeclaration: false, positionsPerFile: 3 }));
-  const referencesDiagnostic = record(await javaReferences(context, { file: "src/main/java/demo/DemoService.java", line: 5, column: 9, includeDeclaration: false, positionsPerFile: 3, detail: "diagnostic" }));
+  const request = { budget: requestBudget } as never;
+  const symbolSummary = record(await javaSymbol(context, { operation: "query", query: "DemoService", semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3 }, request));
+  const symbolDiagnostic = record(await javaSymbol(context, { operation: "query", query: "DemoService", semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3, detail: "diagnostic" }, request));
+  const positionSummary = record(await javaSymbol(context, { operation: "position", file: "src/main/java/demo/DemoService.java", line: 5, column: 9, semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3 }, request));
+  const referencesSummary = record(await javaSymbol(context, { operation: "references", file: "src/main/java/demo/DemoService.java", line: 5, column: 9, semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3 }, request));
+  const referencesDiagnostic = record(await javaSymbol(context, { operation: "references", file: "src/main/java/demo/DemoService.java", line: 5, column: 9, semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3, detail: "diagnostic" }, request));
 
   const symbolLocation = ((symbolSummary.items as Array<Record<string, unknown>>)[0]?.location) as Record<string, unknown>;
   const diagnosticLocation = ((symbolDiagnostic.items as Array<Record<string, unknown>>)[0]?.location) as Record<string, unknown>;
@@ -138,6 +156,202 @@ test("java_symbol and java_references omit raw uri ranges unless diagnostic is r
   assert.equal(referencesSummary.returnedReferences, 2);
   assert.equal(Object.hasOwn(firstPosition, "range"), false);
   assert.equal(Object.hasOwn(firstDiagnosticPosition, "range"), true);
+  assert.equal(observedBudgets.length, 5);
+  assert.equal(observedBudgets.every(budget => budget === requestBudget), true, "every java_symbol operation must consume one immutable request budget");
+});
+
+test("semantic tools never emit locations from outside the repository", async () => {
+  const externalUri = pathToFileURL(path.join(tmpdir(), "dependency", "Library.java")).toString();
+  const jarUri = pathToFileURL(path.join(homedir(), ".m2", "repository", "org", "example", "Lib.java")).toString();
+  const jdkUri = pathToFileURL("/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home/lib/src/String.java").toString();
+  const external = (uri: string) => ({
+    uri,
+    range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }
+  });
+
+  const context = {
+    repoRoot,
+    session: {
+      async workspaceSymbols() {
+        return {
+          truncated: false,
+          items: [
+            { name: "Library", kind: 5, location: external(jarUri) },
+            { name: "DemoService", kind: 5, location: locationAt(5, 9) }
+          ]
+        };
+      },
+      async symbolContext() {
+        return {
+          hover: { contents: "DemoService" },
+          definitions: [external(jarUri), locationAt(5, 9)],
+          implementations: [external(jdkUri)]
+        };
+      },
+      async references() {
+        return {
+          items: [external(externalUri), locationAt(5, 9), external(jdkUri)],
+          totalReferences: 3,
+          truncated: false
+        };
+      }
+    }
+  } as unknown as ToolContext;
+
+  const results = [
+    record(await javaSymbol(context, { operation: "query", query: "Library", semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3 })),
+    record(await javaSymbol(context, { operation: "query", query: "Library", semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3, detail: "diagnostic" })),
+    record(await javaSymbol(context, { operation: "position", file: "src/main/java/demo/DemoService.java", line: 5, column: 9, semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3 })),
+    record(await javaSymbol(context, { operation: "position", file: "src/main/java/demo/DemoService.java", line: 5, column: 9, semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3, detail: "diagnostic" })),
+    record(await javaSymbol(context, { operation: "references", file: "src/main/java/demo/DemoService.java", line: 5, column: 9, semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3 })),
+    record(await javaSymbol(context, { operation: "references", file: "src/main/java/demo/DemoService.java", line: 5, column: 9, semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3, detail: "diagnostic" }))
+  ];
+
+  for (const result of results) {
+    const serialized = JSON.stringify(result);
+    assert.equal(serialized.includes(tmpdir()), false, "no temp-dir path leaks");
+    assert.equal(serialized.includes(".m2/repository"), false, "no Maven jar source leaks");
+    assert.equal(serialized.includes("Library/Java/JavaVirtualMachines"), false, "no JDK source leaks");
+  }
+
+  const symbolQuery = results[0];
+  assert.deepEqual(
+    (symbolQuery.items as Array<Record<string, unknown>>).map(item => item.name),
+    ["DemoService"],
+    "a symbol whose only location is outside the repo is dropped"
+  );
+
+  const positionResult = results[2];
+  assert.equal((positionResult.definitions as unknown[]).length, 1);
+  assert.equal((positionResult.implementations as unknown[]).length, 0);
+
+  const referencesResult = results[4];
+  assert.equal(referencesResult.totalReferences, 3, "the raw JDT total is still reported");
+  assert.equal(referencesResult.matchedReferences, 1);
+  assert.equal(referencesResult.externalReferencesSuppressed, 2);
+});
+
+class NoLspSession {
+  cacheStatus(): { invalidations: number; entries: number; hits: number; misses: number } {
+    return { invalidations: 0, entries: 0, hits: 0, misses: 0 };
+  }
+
+  status(): { started: boolean; progress: { active: number }; generatedCode: { lombok: { detected: false } } } {
+    return { started: false, progress: { active: 0 }, generatedCode: { lombok: { detected: false } } };
+  }
+
+  drainPhaseMetrics(): Record<string, number> {
+    return {};
+  }
+}
+
+class EmptyRgRunner extends RgRunner {
+  override async run(_query: RgQuery, _budget: DeadlineBudget): Promise<SearchResult> {
+    return { files: [], completion: "COMPLETE", rawBytes: 0, totalMatches: 0, elapsedMs: 0 };
+  }
+}
+
+async function waitForCompleteIndex(index: RouterJavaIndex): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if ((await index.routerStatus()).coverage === "complete") return;
+    await new Promise(resolve => setTimeout(resolve, 20));
+  }
+  assert.fail("fixture JavaIndex did not reach complete coverage within 2 seconds");
+}
+
+test("java_impact standard output matches the ImpactResultV6 contract - present/absent fields per architecture V3.1 §15", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "impact-shape-"));
+  const sourceDir = path.join(root, "src", "main", "java", "demo");
+  const serviceFile = path.join(sourceDir, "DemoService.java");
+  const repositoryFile = path.join(sourceDir, "DemoRepository.java");
+  const index = new RouterJavaIndex(root, new JavaIndexClient(root, path.join(root, ".cache")));
+  try {
+    await mkdir(sourceDir, { recursive: true });
+    await writeFile(path.join(root, "pom.xml"), "<project></project>\n");
+    await writeFile(repositoryFile, [
+      "package demo;",
+      "",
+      "public class DemoRepository {",
+      "  public String findById(String id) {",
+      "    return id;",
+      "  }",
+      "}",
+      ""
+    ].join("\n"));
+    await writeFile(serviceFile, [
+      "package demo;",
+      "",
+      "public class DemoService {",
+      "  private final DemoRepository repository = new DemoRepository();",
+      "",
+      "  public String process(String id) {",
+      "    return repository.findById(id);",
+      "  }",
+      "}",
+      ""
+    ].join("\n"));
+    await index.open(0);
+    await index.reconcile(0);
+    await waitForCompleteIndex(index);
+
+    const session = new NoLspSession();
+    const router = new AgentRouter(root, session as never, index, undefined, undefined, new EmptyRgRunner());
+    const context = { repoRoot: root, session, router } as unknown as ToolContext;
+
+    const impactArgs = {
+      anchors: [{ file: serviceFile, line: 6, column: 21 }],
+      mode: "balanced" as const,
+      profile: "auto" as const,
+      semanticPolicy: "fast" as const,
+      testReadMode: "defer" as const,
+      focusModules: [],
+      excludeModules: [],
+      taskKeywords: [],
+      crossModulePolicy: "auto" as const
+    };
+
+    const standard = record(await javaImpact(context, { ...impactArgs, verbosity: "standard" }));
+    const diagnostic = record(await javaImpact(context, { ...impactArgs, verbosity: "diagnostic" }));
+
+    for (const key of ["version", "target", "contexts", "unresolved", "cost"]) {
+      assert.equal(Object.hasOwn(standard, key), true, `standard output must carry top-level "${key}"`);
+    }
+    assert.equal(standard.version, 1);
+    assert.equal(Object.hasOwn(standard, "files"), false, "compact wire drops files[]");
+    assert.equal(Object.hasOwn(standard, "readPlan"), false, "compact wire drops readPlan[]");
+    assert.equal(Object.hasOwn(standard, "options"), false, "v5's top-level options is retired in V6");
+    assert.equal(Object.hasOwn(standard, "counts"), false, "v5's top-level counts is retired in V6");
+    assert.equal(Object.hasOwn(standard, "rgSummary"), false, "v5's top-level rgSummary is retired in V6");
+    assert.equal(Object.hasOwn(standard, "suppressed"), false, "v5's top-level suppressed is retired in V6");
+
+    const files = standard.contexts as Array<Record<string, unknown>>;
+    assert.ok(files.length > 0, "the fixture's direct field-receiver call must produce at least one candidate, or the absence assertions below are untested");
+    for (const file of files) {
+      assert.equal(Object.hasOwn(file, "score"), false);
+      assert.equal(Object.hasOwn(file, "scoreBreakdown"), false);
+      assert.equal(Object.hasOwn(file, "reasons"), false);
+      assert.equal(Object.hasOwn(file, "verifiedBy"), false);
+      assert.equal(Object.hasOwn(file, "absolutePath"), false);
+      assert.equal(Object.hasOwn(file, "id"), false);
+    }
+    const standardMetrics = (standard.metrics ?? {}) as Record<string, unknown>;
+    assert.equal(Object.hasOwn(standardMetrics, "phaseMs"), false);
+    assert.equal(Object.hasOwn(standardMetrics, "cache"), false);
+
+    const serializedStandard = JSON.stringify(standard);
+    assert.equal(serializedStandard.includes(root), false, "standard output must never leak the repo's absolute filesystem path");
+    assert.equal(serializedStandard.includes(".m2/repository"), false, "no Maven jar cache path leaks");
+    assert.equal(serializedStandard.includes("JavaVirtualMachines"), false, "no JDK source path leaks");
+
+    // Diagnostic mode is additive on top of the same base contract, not a
+    // different shape - the file-level provider attribution reappears, but
+    // the top-level V6 fields are unchanged.
+    const diagnosticFiles = diagnostic.files as Array<Record<string, unknown>>;
+    assert.ok(diagnosticFiles.some(file => Object.hasOwn(file, "reasons")), "diagnostic mode must expose provider attribution the standard mode hides");
+  } finally {
+    await index.close();
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 function locationAt(line: number, column: number) {
@@ -163,18 +377,13 @@ function sessionStatus(started: boolean) {
     dataDir: "/tmp/demo/.jdtls",
     logFile: "/tmp/demo/jdtls.log",
     jdtlsBin: "/opt/homebrew/bin/jdtls",
+    state: started ? "READY" : "NEW",
     started,
+    restartBackoff: { consecutiveFailures: 0, blockedUntilExplicitReset: false },
     pid: started ? 1234 : undefined,
     knownDiagnostics: 0,
     openDocuments: 0,
     startedAt: started ? "2026-07-01T00:00:00.000Z" : undefined,
-    fileWatcher: {
-      enabled: true,
-      active: started,
-      watchedRoots: [path.join(repoRoot, "src", "main", "java")],
-      pendingChanges: 0,
-      lastFlushSize: 0
-    },
     cache: {
       enabled: true,
       entries: 1,

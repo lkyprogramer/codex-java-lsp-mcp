@@ -1,0 +1,278 @@
+{
+  "version": 6,
+  "createdAt": "2026-08-15T08:59:24.156Z",
+  "sourceRoot": "/private/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/candidate",
+  "verifierVersion": 6,
+  "runtimes": {
+    "old": {
+      "commit": "d7f23d5b9086922c8213b9f1735e45cca365b947",
+      "commitTree": "d3913c4432b10de9c112f890bddfd9f29269f76e",
+      "executableTree": "d3913c4432b10de9c112f890bddfd9f29269f76e",
+      "buildStamp": {
+        "gitSha": "d7f23d5b9086",
+        "generatedAt": "2026-08-15T08:56:37.646Z",
+        "defaults": {
+          "idleTtlMs": 2700000,
+          "importConcurrency": 2,
+          "jdtlsXmx": "2g",
+          "maxActiveRepos": 3
+        },
+        "defaultsFingerprint": "e5835394a86f"
+      }
+    },
+    "new": {
+      "commit": "d7f23d5b9086922c8213b9f1735e45cca365b947",
+      "commitTree": "d3913c4432b10de9c112f890bddfd9f29269f76e",
+      "executableTree": "3ad359e1d43f4c9518eb469e26966aded8a4a744",
+      "buildStamp": {
+        "gitSha": "d7f23d5b9086",
+        "generatedAt": "2026-08-15T08:56:40.441Z",
+        "defaults": {
+          "idleTtlMs": 2700000,
+          "importConcurrency": 2,
+          "jdtlsXmx": "2g",
+          "maxActiveRepos": 3
+        },
+        "defaultsFingerprint": "e5835394a86f"
+      }
+    }
+  },
+  "candidatePatch": {
+    "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/sprint3-cold-matrix-v3/cold/candidate.patch",
+    "sha256": "1deb40037a90dffcbe977d5adc5eb70e9d59da5d1ab5455a5ddbd25049e69e50",
+    "bytes": 264632,
+    "appliedToCommit": "d7f23d5b9086922c8213b9f1735e45cca365b947",
+    "appliedToCommitTree": "d3913c4432b10de9c112f890bddfd9f29269f76e",
+    "resultingExecutableTree": "3ad359e1d43f4c9518eb469e26966aded8a4a744",
+    "untrackedInputs": []
+  },
+  "runs": 5,
+  "p95Limit": 1.25,
+  "requestDeadlineMs": 2000,
+  "comparisonPolicy": {
+    "baseline": "executable-code-baseline",
+    "baselineRevision": "d7f23d5b9086922c8213b9f1735e45cca365b947",
+    "goldenSchema": "java-intelligence-v32-range-holdout-v2",
+    "pReadTolerance": 0.02,
+    "p95AbsoluteSlackMs": 50,
+    "taskBlockingBaseline": "attempt-or-derived-attribution"
+  },
+  "rounds": [
+    "old/new",
+    "new/old",
+    "old/new"
+  ],
+  "repositories": {
+    "lishuedu": {
+      "root": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/tmp/codex-java-lsp-mcp-three-repo-o6XboK/repositories/lishuedu",
+      "head": "db63b1a7e393edd90449eb013d7d1c4d65c366f2",
+      "tree": "22f0ce444e4cac484de85c8a0bf02240ad70d712",
+      "clean": true,
+      "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sourceRoot": "/tmp/codex-java-v3-golden-20260809/lishuedu"
+    },
+    "cipherlink": {
+      "root": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/tmp/codex-java-lsp-mcp-three-repo-o6XboK/repositories/cipherlink",
+      "head": "fa433982e92e52dd610650d1e79f2d041179b1d3",
+      "tree": "21a1075c7b211932a4cdb2abf2742521b1eba31f",
+      "clean": true,
+      "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sourceRoot": "/tmp/codex-java-v3-golden-20260809/cipherlink"
+    },
+    "exam-parent-v3": {
+      "root": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/tmp/codex-java-lsp-mcp-three-repo-o6XboK/repositories/exam-parent-v3",
+      "head": "f90a0b475f7be2ed003703feecec8195bc7eb976",
+      "tree": "dcdb2024879686451859c64260c7e1f3a4721fa7",
+      "clean": true,
+      "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sourceRoot": "/tmp/codex-java-v3-golden-20260809/exam-parent-v3"
+    }
+  },
+  "scenarios": {
+    "lishuedu": {
+      "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/sprint3-cold-matrix-v3/cold/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "sha256": "fba58bb3e3e77dfb37f7ded03fb2a9ff02612658b08ca48b15927d102c434c65",
+      "rowIds": [
+        "storage-signed-url",
+        "school-template-parser",
+        "report-reusable-zip",
+        "school-confirm-controller",
+        "benefit-product-code-dto",
+        "school-mapstruct-uses",
+        "audit-order-repository-mapper-rule-type",
+        "audit-assignee-mapper-precision",
+        "exam-score-export-cross-module-holdout",
+        "paper-task-claim-iam-holdout"
+      ],
+      "tuningRowIds": [
+        "storage-signed-url",
+        "school-template-parser",
+        "report-reusable-zip",
+        "school-confirm-controller",
+        "benefit-product-code-dto",
+        "school-mapstruct-uses",
+        "audit-order-repository-mapper-rule-type",
+        "audit-assignee-mapper-precision"
+      ],
+      "holdoutRowIds": [
+        "exam-score-export-cross-module-holdout",
+        "paper-task-claim-iam-holdout"
+      ]
+    },
+    "cipherlink": {
+      "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/sprint3-cold-matrix-v3/cold/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "sha256": "e60dfebcc6cd764e6488c647793db72e098b7cf66385f8012e023fedcaf535d5",
+      "rowIds": [
+        "client-update-check",
+        "transfer-upload-init",
+        "transfer-upload-session-repository",
+        "aliyun-sms-gateway-send",
+        "operation-log-response-dto",
+        "organization-create-member-cross-module",
+        "auth-sms-login-lockout",
+        "account-admin-create-account-guard",
+        "client-release-storage-presign-holdout",
+        "backend-operation-log-aspect-async-audit-holdout"
+      ],
+      "tuningRowIds": [
+        "client-update-check",
+        "transfer-upload-init",
+        "transfer-upload-session-repository",
+        "aliyun-sms-gateway-send",
+        "operation-log-response-dto",
+        "organization-create-member-cross-module",
+        "auth-sms-login-lockout",
+        "account-admin-create-account-guard"
+      ],
+      "holdoutRowIds": [
+        "client-release-storage-presign-holdout",
+        "backend-operation-log-aspect-async-audit-holdout"
+      ]
+    },
+    "exam-parent-v3": {
+      "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/sprint3-cold-matrix-v3/cold/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "sha256": "da84c560c46c7c90d6dbabea38b43b5695a7a23dcd2f608e8c6dcd63cae4f69e",
+      "rowIds": [
+        "rule-engine-execute",
+        "candidate-position-select",
+        "apply-info-save-basic-service",
+        "position-repository-exists",
+        "ceb-order-create-dto",
+        "apply-info-update-cross-exam-guard",
+        "check-people-delete-site-guard",
+        "current-user-service-implementer-edge",
+        "exam-room-print-download-types-persistent-bundle",
+        "candidate-pay-order-cross-module-admission"
+      ],
+      "tuningRowIds": [
+        "rule-engine-execute",
+        "candidate-position-select",
+        "apply-info-save-basic-service",
+        "position-repository-exists",
+        "ceb-order-create-dto",
+        "apply-info-update-cross-exam-guard",
+        "check-people-delete-site-guard",
+        "current-user-service-implementer-edge"
+      ],
+      "holdoutRowIds": [
+        "exam-room-print-download-types-persistent-bundle",
+        "candidate-pay-order-cross-module-admission"
+      ]
+    }
+  },
+  "candidateTests": {
+    "dist": {
+      "discoveredTests": 921,
+      "passedTests": 921,
+      "stdout": {
+        "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/sprint3-cold-matrix-v3/cold/candidate-tests/dist.tap",
+        "bytes": 212878,
+        "sha256": "58212268eb45e5aad8a1f48d2f8b33ad84f477d0e9f65db9c9121ecbb89ea04e"
+      },
+      "stderr": {
+        "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/sprint3-cold-matrix-v3/cold/candidate-tests/dist.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "scripts": {
+      "discoveredTests": 100,
+      "passedTests": 100,
+      "stdout": {
+        "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/sprint3-cold-matrix-v3/cold/candidate-tests/scripts.tap",
+        "bytes": 22456,
+        "sha256": "3578be758e00b362af047f93bb69af55824b908352ffe92bf9a6ab01f786bb41"
+      },
+      "stderr": {
+        "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/sprint3-cold-matrix-v3/cold/candidate-tests/scripts.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  },
+  "dependencies": {
+    "copyMode": "private-content-verified-copy",
+    "inventory": {
+      "schemaVersion": 1,
+      "algorithm": "sha256-path-type-size-content-v1",
+      "fileCount": 4086,
+      "directoryCount": 660,
+      "symlinkCount": 7,
+      "totalBytes": 58951103,
+      "sha256": "0362908244299e2d61f87cb5d1037d9609abd11f8d0afae2cc89c3569ce13bc6"
+    }
+  },
+  "diagnosticRpc": {
+    "requested": true,
+    "role": "DIAGNOSTIC_ONLY_NOT_STANDARD_TOKEN_GATE",
+    "gatePolicy": {
+      "schemaVersion": 1,
+      "selection": "ALL_BASELINE_ROWS_WITH_TOTAL_JAVA_INDEX_RPC_GT_ZERO",
+      "latencyMetric": "REQUEST_ELAPSED_MS",
+      "minimumRpcCountReduction": 0.3,
+      "minimumAffectedP95Improvement": 0.2,
+      "implementerBatch": {
+        "baselineOperation": "QUERY_IMPLEMENTERS",
+        "minimumMedianFanoutExclusive": 1,
+        "minimumCallerWaitP95Ms": 10
+      }
+    },
+    "runtimeState": {
+      "standard": {
+        "HOME": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/tmp/codex-java-lsp-mcp-three-repo-o6XboK/home",
+        "XDG_CACHE_HOME": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/tmp/codex-java-lsp-mcp-three-repo-o6XboK/xdg-cache",
+        "XDG_CONFIG_HOME": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/tmp/codex-java-lsp-mcp-three-repo-o6XboK/xdg-config",
+        "XDG_DATA_HOME": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/tmp/codex-java-lsp-mcp-three-repo-o6XboK/xdg-data",
+        "XDG_STATE_HOME": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/tmp/codex-java-lsp-mcp-three-repo-o6XboK/xdg-state",
+        "TMPDIR": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/tmp/codex-java-lsp-mcp-three-repo-o6XboK/tmp",
+        "JAVA_LSP_CACHE_ROOT": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/tmp/codex-java-lsp-mcp-three-repo-o6XboK/process-cache",
+        "JDTLS_DATA_DIR": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/tmp/codex-java-lsp-mcp-three-repo-o6XboK/jdt-data",
+        "JDTLS_LOG_DIR": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/tmp/codex-java-lsp-mcp-three-repo-o6XboK/jdt-logs",
+        "JAVA_LSP_PROJECTS_JSON": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/tmp/codex-java-lsp-mcp-three-repo-o6XboK/projects.json",
+        "GRADLE_USER_HOME": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/tmp/codex-java-lsp-mcp-three-repo-o6XboK/gradle-home",
+        "MAVEN_USER_HOME": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/tmp/codex-java-lsp-mcp-three-repo-o6XboK/maven-home"
+      },
+      "diagnostic": {
+        "HOME": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/tmp/codex-java-lsp-mcp-three-repo-o6XboK/diagnostic-rpc-runtime/home",
+        "XDG_CACHE_HOME": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/tmp/codex-java-lsp-mcp-three-repo-o6XboK/diagnostic-rpc-runtime/xdg-cache",
+        "XDG_CONFIG_HOME": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/tmp/codex-java-lsp-mcp-three-repo-o6XboK/diagnostic-rpc-runtime/xdg-config",
+        "XDG_DATA_HOME": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/tmp/codex-java-lsp-mcp-three-repo-o6XboK/diagnostic-rpc-runtime/xdg-data",
+        "XDG_STATE_HOME": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/tmp/codex-java-lsp-mcp-three-repo-o6XboK/diagnostic-rpc-runtime/xdg-state",
+        "TMPDIR": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/tmp/codex-java-lsp-mcp-three-repo-o6XboK/diagnostic-rpc-runtime/tmp",
+        "JAVA_LSP_CACHE_ROOT": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/tmp/codex-java-lsp-mcp-three-repo-o6XboK/diagnostic-rpc-runtime/process-cache",
+        "JDTLS_DATA_DIR": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/tmp/codex-java-lsp-mcp-three-repo-o6XboK/diagnostic-rpc-runtime/jdt-data",
+        "JDTLS_LOG_DIR": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/tmp/codex-java-lsp-mcp-three-repo-o6XboK/diagnostic-rpc-runtime/jdt-logs",
+        "JAVA_LSP_PROJECTS_JSON": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/tmp/codex-java-lsp-mcp-three-repo-o6XboK/diagnostic-rpc-runtime/projects.json",
+        "GRADLE_USER_HOME": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/tmp/codex-java-lsp-mcp-three-repo-o6XboK/diagnostic-rpc-runtime/gradle-home",
+        "MAVEN_USER_HOME": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/tmp/codex-java-lsp-mcp-three-repo-o6XboK/diagnostic-rpc-runtime/maven-home"
+      }
+    },
+    "telemetryMode": {
+      "standard": "0",
+      "diagnostic": "1"
+    },
+    "outputFile": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/sprint3-cold-matrix-v3/cold/diagnostic-java-index-rpc/java-index-rpc-sidecar.json"
+  },
+  "jdtlsDisabled": true,
+  "workspaceRoot": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oblpgv/tmp/codex-java-lsp-mcp-three-repo-o6XboK"
+}

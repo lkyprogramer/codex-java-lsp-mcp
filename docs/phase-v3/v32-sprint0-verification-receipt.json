@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 2,
+  "sprint": "V3.2 Sprint 0",
+  "verifiedAt": "2026-08-09T18:37:53Z",
+  "exitCode": 0,
+  "verificationKind": "ARTIFACT_MANIFEST_INTEGRITY_REPLAY",
+  "isolation": {
+    "mode": "detached-local-clone",
+    "jdtlsBin": "/usr/bin/false",
+    "activeRuntimeStateAccessed": false,
+    "wrapperExecutableTree": "e5521c2e5f226b24a163ac7e60f44da673b7258c"
+  },
+  "command": [
+    "sh",
+    "scripts/run-isolated-node.sh",
+    "scripts/run-isolated-validation.mjs",
+    "--profile",
+    "targeted",
+    "--",
+    "node",
+    "scripts/run-v32-optimization-matrix.mjs",
+    "--verify",
+    "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-lobNkQ/formal/optimization-manifest.json"
+  ],
+  "verifiedManifest": {
+    "path": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-lobNkQ/formal/optimization-manifest.json",
+    "bytes": 107451,
+    "sha256": "aabed32b0576b4ee1daccf2da7c1a678931b534abf110d69494764aec4ab54d6",
+    "payloadSha256": "43d6a6923c5c9f5fe684bdfccaaf39d4f9ce1d7d15b82a39e0d4e2b12f30c7e5",
+    "candidateExecutableTree": "e5521c2e5f226b24a163ac7e60f44da673b7258c"
+  },
+  "boundEvidence": {
+    "taskLedgerSha256": "350e6abf5089d4b1e5c3826f249baa4676c60ce697dc919661b0b97dd5065784",
+    "dependencyInventorySha256": "0362908244299e2d61f87cb5d1037d9609abd11f8d0afae2cc89c3569ce13bc6",
+    "distTapSha256": "5cefe7c035a0c76275263d03840f6e0513711c3e9253a92c327de70092db02eb",
+    "scriptsTapSha256": "fc2fcf0200f05ac81d5ae04e1ce69fea6312903f14548d0e2c6feb2c5e7876f4"
+  },
+  "result": {
+    "verificationStatus": "PASS",
+    "resultStatus": "BASELINE_RECORDED_WITH_GAPS",
+    "coldGatePassed": false
+  },
+  "scopeNote": "The replay validates source identity, manifests, the copied task ledger, TAP evidence, the dependency inventory, and hash-bound matrix artifacts. It does not rerun candidate tests or the three-repository matrix; those ran in the formal isolated execution."
+}

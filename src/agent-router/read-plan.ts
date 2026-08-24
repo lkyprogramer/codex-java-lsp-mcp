@@ -1,21 +1,91 @@
-import type { SourceIndex, JavaMethodFact } from "../source-index.js";
+// input: Ranked candidates and one batched JavaIndex range query.
+// output: V6 multi-range plan constrained by file and exact UTF-8 byte budgets.
+// pos: Token-aware ReadPlan planner; candidate source bytes stay in the index worker.
 import type {
   CandidateFile,
   ImpactMode,
   ImpactOptions,
-  ReadPlanItem,
+  ReadPlanBudget,
+  ReadPlanItemV6,
   ReadPriority,
-  ResolvedImpactProfile,
-  RouterPosition
+  ReadRange,
+  ResolvedImpactProfile
 } from "../agent-types.js";
+import type { IndexedReadRangeResult } from "../java-index/index-types.js";
+import type { RouterIndex } from "../java-index/router-java-index.js";
+import type { SourceRange } from "../runtime/source-range.js";
+import { hasProtectedStructuralSignal } from "./ranking-signals.js";
 import { selectWithEvidenceBudget } from "./read-plan-budget.js";
+import { evidenceKeys, hasNovelEvidence as fileHasNovelEvidence } from "./retrieval/evidence-features.js";
+import { buildReadUnits, selectedReadUnits, windowsFromReadUnits } from "./retrieval/read-unit-builder.js";
+import {
+  retrievalBudgetFor,
+  type MaterializedReadWindow
+} from "./retrieval/retrieval-types.js";
+import { retrievalBudgetOverflowGaps } from "./retrieval/selection-policy.js";
+import { protectedSelectionUtility, selectionUtility, compareSelectionUtility } from "./retrieval/selection-utility.js";
+
+export const READ_PLAN_BUDGETS = {
+  minimal: { maxFiles: 4, maxReadBytes: 6 * 1024 },
+  balanced: { maxFiles: 6, maxReadBytes: 14 * 1024 },
+  precision: { maxFiles: 8, maxReadBytes: 20 * 1024 },
+  recall: { maxFiles: 12, maxReadBytes: 32 * 1024 }
+} as const satisfies Record<ImpactMode, ReadPlanBudget>;
+
+const SHORTLIST_MULTIPLIER = 4;
+const PROTECTED_CORE_KINDS = new Set([
+  "DEFINITION",
+  "IMPLEMENTATION",
+  "TYPEHIERARCHY",
+  "IMPLEMENTS",
+  "TYPE_RELATION",
+  "TYPE_SYMMETRIC",
+  "METHOD_RELATION",
+  "IMPLEMENTATION_METHOD_TYPE",
+  "CALLS",
+  "definition",
+  "implementation",
+  "typeHierarchy",
+  "typeGraph:implementation-lookup",
+  "SPRING_INJECTION",
+  "SPRING_CALL_PATH",
+  "MYBATIS_NAMESPACE",
+  "MYBATIS_STATEMENT_METHOD"
+]);
+
+// A concrete class that directly implements or extends the anchor's type is
+// the first actionable hop for an interface/port task. Its method parameter
+// and return types are useful follow-up context, but must not consume the
+// small protected core before the concrete alternatives themselves.
+const FIRST_HOP_IMPLEMENTATION_KINDS = new Set([
+  "IMPLEMENTS",
+  "IMPLEMENTATION",
+  "TYPE_RELATION"
+]);
+const SECOND_HOP_IMPLEMENTATION_KINDS = new Set(["IMPLEMENTATION_METHOD_TYPE"]);
+const RESPONSE_WRAPPER_TYPE_NAMES = new Set([
+  "CommonResult",
+  "CommonsResult",
+  "ResponseEntity",
+  "ApiResponse"
+]);
+const BUCKET_RULES = {
+  anchor: { min: 1, max: 1 },
+  core: { min: 2, max: 4 },
+  framework: { min: 0, max: 2 },
+  support: { min: 0, max: 1 },
+  lexical: { min: 0, max: 1 }
+} as const;
+
+type ReadPlanBucket = keyof typeof BUCKET_RULES;
 
 type BuildReadPlanInput = {
   readonly files: readonly CandidateFile[];
   readonly ids: ReadonlyMap<string, string>;
   readonly options: ImpactOptions;
-  readonly sourceIndex: SourceIndex;
+  readonly javaIndex: RouterIndex;
   readonly protectedPaths?: ReadonlySet<string>;
+  readonly generation?: number;
 };
 
 type SelectReadPlanInput = {
@@ -25,29 +95,95 @@ type SelectReadPlanInput = {
   readonly protectedPaths?: ReadonlySet<string>;
 };
 
-export function buildReadPlan(input: BuildReadPlanInput): ReadPlanItem[] {
+type CandidateWindow = MaterializedReadWindow;
+
+type ShortlistResult = {
+  readonly files: CandidateFile[];
+  readonly omittedProtected: number;
+};
+
+export type ReadPlanBuildResult = {
+  items: ReadPlanItemV6[];
+  /** Internal path identity used to re-key fileIds after output-tail truncation. */
+  selectedPaths: string[];
+  /** Benchmark-only exact coordinates. AgentRouter strips this before building public metrics. */
+  selectedCoordinateRangesByPath: ReadonlyMap<string, readonly SourceRange[]>;
+  totalBytes: number;
+  maxReadBytes: number;
+  maxFiles: number;
+  budgetExceededByAnchor: boolean;
+  evidenceGaps: string[];
+  /** Diagnostic-only selection trace; regular output consumers do not expose it. */
+  marginalUtilityBySelectedFile: Record<string, number>;
+};
+
+/**
+ * Shortlists at most four times the final file budget, then does exactly one
+ * worker request for AST/XML windows and exact UTF-8 byte counts. This is the
+ * hard boundary that keeps candidate-file I/O off the MCP request thread.
+ */
+export async function buildReadPlan(input: BuildReadPlanInput): Promise<ReadPlanBuildResult> {
+  const configuredBudget = readPlanBudget(input.options);
   const protectedPaths = input.protectedPaths || new Set<string>();
-  const maxItems = input.options.readPlanMaxItems ?? defaultReadPlanMax(input.options.mode);
-  const selected = input.options.semanticPolicy === "required"
-    ? selectLegacyReadPlanFiles({ files: input.files, options: input.options, maxItems, protectedPaths })
-    : selectReadPlanFiles({ files: input.files, options: input.options, maxItems, protectedPaths });
-  return selected.map(file => {
-    const priority = readPriority(file, input.options);
-    const planWindow = readWindow(input.sourceIndex, file, priority);
-    return {
-      priority,
-      fileId: input.ids.get(file.absolutePath) || "F?",
-      startLine: planWindow.startLine,
-      endLine: planWindow.endLine,
-      reason: readReason(file, priority)
-    };
+  const anchorFileCount = new Set(input.files
+    .filter(file => isAnchor(file, input.options))
+    .map(file => file.absolutePath)).size;
+  const selectionBudget = {
+    ...configuredBudget,
+    maxFiles: Math.max(configuredBudget.maxFiles, anchorFileCount)
+  };
+  const shortlist = shortlistCandidates(input.files, input.options, selectionBudget.maxFiles, protectedPaths);
+  const rangeResults = shortlist.files.length === 0
+    ? []
+    : await input.javaIndex.queryReadRanges(
+      shortlist.files.map(file => ({ file: file.absolutePath, positions: file.positions })),
+      input.generation
+    );
+  const windows = materializeWindows(shortlist.files, rangeResults);
+  const units = buildReadUnits({
+    windows,
+    ids: input.ids,
+    options: input.options,
+    priorityOf: v6ReadPriority
   });
+  const plannerWindows = windowsFromReadUnits(units);
+  const result = selectTokenAwarePlan(plannerWindows, input.ids, input.options, selectionBudget, protectedPaths);
+  const selectedUnits = selectedReadUnits(units, result.selectedPaths);
+  const retrievalBudget = retrievalBudgetFor(input.options.mode, selectionBudget);
+  const capGaps = retrievalBudgetOverflowGaps(selectedUnits, retrievalBudget);
+  if (capGaps.length > 0) {
+    result.evidenceGaps = [...new Set([...result.evidenceGaps, ...capGaps])];
+  }
+  if (shortlist.omittedProtected > 0) {
+    result.evidenceGaps = [...new Set([
+      `Protected candidates exceeded shortlist capacity; ${shortlist.omittedProtected} candidate(s) were not range-planned.`,
+      ...result.evidenceGaps
+    ])];
+  }
+  if (anchorFileCount > configuredBudget.maxFiles) {
+    result.maxFiles = configuredBudget.maxFiles;
+    result.budgetExceededByAnchor = true;
+    result.evidenceGaps = [...new Set([
+      `Anchor files exceeded the configured read file budget (${anchorFileCount} > ${configuredBudget.maxFiles}); all anchors were retained.`,
+      ...result.evidenceGaps
+    ])];
+  }
+  return result;
 }
 
+export function readPlanBudget(options: Pick<ImpactOptions, "mode" | "readPlanMaxItems" | "readPlanMaxBytes">): ReadPlanBudget {
+  const defaults = READ_PLAN_BUDGETS[options.mode];
+  return {
+    maxFiles: options.readPlanMaxItems ?? defaults.maxFiles,
+    maxReadBytes: options.readPlanMaxBytes ?? defaults.maxReadBytes
+  };
+}
+
+/** Retained for current ranking/shadow callers that need paths without a worker range batch. */
 export function selectReadPlanFiles(input: SelectReadPlanInput): CandidateFile[] {
   const protectedPaths = input.protectedPaths || new Set<string>();
   const sorted = sortedByReadPriority(input.files, input.options);
-  return selectWithEvidenceBudget(sorted, input.maxItems, protectedReadPlanPaths(sorted, protectedPaths))
+  return selectWithEvidenceBudget(sorted, input.maxItems, protectedReadPlanPaths(sorted, protectedPaths, input.options))
     .map(file => ({ file, priority: readPriority(file, input.options) }))
     .sort((left, right) => priorityRank(left.priority) - priorityRank(right.priority) || right.file.score - left.file.score)
     .map(entry => entry.file);
@@ -57,10 +193,23 @@ export function legacyReadPlanSorted(files: readonly CandidateFile[], options: I
   return sortedByReadPriority(files, options);
 }
 
-export function protectedReadPlanPaths(files: readonly CandidateFile[], protectedPaths: ReadonlySet<string> = new Set<string>()): Set<string> {
+export function protectedReadPlanPaths(
+  files: readonly CandidateFile[],
+  protectedPaths: ReadonlySet<string> = new Set<string>(),
+  options: Pick<ImpactOptions, "anchors" | "profile" | "focusModules" | "testReadMode"> = {
+    anchors: [],
+    profile: "auto",
+    focusModules: [],
+    testReadMode: "defer"
+  }
+): Set<string> {
   const paths = new Set(protectedPaths);
   for (const file of files) {
-    if (((file.verifiedBy || []).includes("typeGraph") && !file.reasons.includes("typeGraph:implementation-lookup")) || file.reasons.includes("implementation")) {
+    if (file.sourceSet === "test" && options.testReadMode === "defer") continue;
+    if (hasProtectedStructuralSignal(file)
+      || file.reasons.includes("persisted-implementation")
+      || file.reasons.includes("persisted-typeHierarchy")
+      || file.reasons.includes("implementation")) {
       paths.add(file.absolutePath);
     }
   }
@@ -68,50 +217,26 @@ export function protectedReadPlanPaths(files: readonly CandidateFile[], protecte
 }
 
 export function readPriority(file: CandidateFile, options: ImpactOptions): ReadPriority {
-  if (file.sourceSet === "test") {
-    return options.testReadMode === "priority" ? "P1" : "P2";
-  }
-  if (file.categories.includes("config") || file.categories.includes("nonJava")) {
-    return "P2";
-  }
-  if (isPureIndexRecall(file)) {
-    return "P2";
-  }
-  if (file.reasons.includes("target") || (file.reasons.includes("implementation") && file.sourceSet === "main")) {
-    return "P0";
-  }
-  if (file.sourceSet === "main") {
-    return "P1";
-  }
-  return "P2";
+  if (file.sourceSet === "test") return options.testReadMode === "priority" ? "P1" : "P2";
+  if (file.categories.includes("config") || file.categories.includes("nonJava")) return "P2";
+  if (isPureIndexRecall(file)) return "P2";
+  if (file.reasons.includes("target")
+    || (file.reasons.includes("implementation") && file.sourceSet === "main")) return "P0";
+  return file.sourceSet === "main" ? "P1" : "P2";
 }
 
 export function defaultReadPlanMax(mode: ImpactMode): number {
-  return mode === "minimal" ? 4 : mode === "precision" ? 8 : mode === "recall" ? 12 : 6;
+  return READ_PLAN_BUDGETS[mode].maxFiles;
 }
 
 export function candidateLimit(mode: ImpactMode, profile?: ResolvedImpactProfile): number {
-  if (mode === "minimal") {
-    return 18;
-  }
-  if (mode === "precision") {
-    return 45;
-  }
-  if (mode === "recall") {
-    return 70;
-  }
-  if (profile === "port") {
-    return 20;
-  }
-  if (profile === "parser") {
-    return 18;
-  }
-  if (profile === "controller") {
-    return 16;
-  }
-  if (profile === "dto") {
-    return 24;
-  }
+  if (mode === "minimal") return 18;
+  if (mode === "precision") return 45;
+  if (mode === "recall") return 70;
+  if (profile === "port") return 20;
+  if (profile === "parser") return 18;
+  if (profile === "controller") return 16;
+  if (profile === "dto") return 24;
   return 26;
 }
 
@@ -119,29 +244,501 @@ export function priorityRank(priority: ReadPriority): number {
   return priority === "P0" ? 0 : priority === "P1" ? 1 : 2;
 }
 
-function selectLegacyReadPlanFiles(input: SelectReadPlanInput & { readonly protectedPaths: ReadonlySet<string> }): CandidateFile[] {
-  const sorted = legacyReadPlanSorted(input.files, input.options);
-  const selected: CandidateFile[] = [];
+function shortlistCandidates(
+  files: readonly CandidateFile[],
+  options: ImpactOptions,
+  maxFiles: number,
+  protectedPaths: ReadonlySet<string>
+): ShortlistResult {
+  const limit = Math.max(1, maxFiles * SHORTLIST_MULTIPLIER);
+  const ordered = sortedForV6Shortlist(files, options);
+  const calledPorts = calledPortPaths(ordered);
+  const shortlisted: CandidateFile[] = [];
+  const selected = new Set<string>();
+  const add = (file: CandidateFile): void => {
+    if (shortlisted.length < limit && !selected.has(file.absolutePath)) {
+      shortlisted.push(file);
+      selected.add(file.absolutePath);
+    }
+  };
+  // Anchors and protected core cannot be displaced before the byte-aware pass.
+  ordered.filter(file => isAnchor(file, options)).forEach(add);
+  const protectedCandidates = coverageFirst(ordered
+    .filter(file => !isAnchor(file, options)
+      && !isDeferredTest(file, options)
+      && (isProtectedCore(file, options) || protectedPaths.has(file.absolutePath)))
+    .sort((left, right) =>
+      protectedCorePriority(right, options, calledPorts) - protectedCorePriority(left, options, calledPorts)
+      || right.score - left.score
+      || left.absolutePath.localeCompare(right.absolutePath)), file => file, options);
+  protectedCandidates.forEach(add);
+  const omittedProtected = protectedCandidates.filter(file => !selected.has(file.absolutePath)).length;
+  // Preserve early representation for each evidence bucket, but never force
+  // a representative into the final budgeted plan.
+  for (const bucket of Object.keys(BUCKET_RULES) as ReadPlanBucket[]) {
+    const representative = ordered.find(file =>
+      bucketOf(file, options, protectedPaths) === bucket
+      && !selected.has(file.absolutePath)
+      && !isAnchor(file, options));
+    if (representative) add(representative);
+  }
+  ordered.forEach(add);
+  return { files: shortlisted, omittedProtected };
+}
+
+function materializeWindows(files: readonly CandidateFile[], results: readonly IndexedReadRangeResult[]): CandidateWindow[] {
+  const byFile = new Map(results.map(result => [result.file, result]));
+  return files.map(file => {
+    const result = byFile.get(file.absolutePath);
+    const ranges = (result?.ranges || []).map(range => ({
+      startLine: range.startLine,
+      endLine: range.endLine,
+      reason: readRangeReason(range.kinds ?? [range.kind]),
+      estimatedBytes: range.estimatedBytes
+    }));
+    return {
+      file,
+      ranges,
+      coordinateRanges: (result?.ranges || []).map(range => range.range),
+      bytes: ranges.reduce((sum, range) => sum + range.estimatedBytes, 0),
+      extremeMethod: result?.extremeMethod === true,
+      rangeKinds: (result?.ranges || []).map(range => range.kind)
+    };
+  });
+}
+
+function selectTokenAwarePlan(
+  windows: readonly CandidateWindow[],
+  ids: ReadonlyMap<string, string>,
+  options: ImpactOptions,
+  budget: ReadPlanBudget,
+  protectedPaths: ReadonlySet<string>
+): ReadPlanBuildResult {
+  const anchors = windows.filter(window => isAnchor(window.file, options));
+  const selected: CandidateWindow[] = [];
   const selectedPaths = new Set<string>();
-  for (const file of sorted) {
-    if (selected.length >= input.maxItems) {
-      break;
+  const bucketCounts: Record<ReadPlanBucket, number> = { anchor: 0, core: 0, framework: 0, support: 0, lexical: 0 };
+  const marginalUtilityBySelectedFile: Record<string, number> = {};
+  const evidenceGaps: string[] = [];
+  let totalBytes = 0;
+  let budgetExceededByAnchor = false;
+  const add = (window: CandidateWindow, utility: number): void => {
+    selected.push(window);
+    selectedPaths.add(window.file.absolutePath);
+    totalBytes += window.bytes;
+    bucketCounts[bucketOf(window.file, options, protectedPaths)] += 1;
+    marginalUtilityBySelectedFile[window.file.path || window.file.absolutePath] = utility;
+    if (window.extremeMethod) {
+      evidenceGaps.push(`Extreme method range was bounded for ${window.file.path || window.file.absolutePath}; inspect omitted middle body if needed.`);
     }
-    if (input.protectedPaths.has(file.absolutePath)) {
-      selected.push(file);
-      selectedPaths.add(file.absolutePath);
+    if (window.ranges.length === 0) {
+      evidenceGaps.push(`No indexed read range was available for ${window.file.path || window.file.absolutePath}.`);
+    }
+  };
+
+  for (const anchor of anchors) {
+    add(anchor, anchor.file.score);
+    if (anchor.ranges.length === 0) {
+      evidenceGaps.push(`Read range unavailable for anchor ${anchor.file.path || anchor.file.absolutePath}.`);
     }
   }
-  for (const file of sorted) {
-    if (selected.length >= input.maxItems) {
-      break;
-    }
-    if (!selectedPaths.has(file.absolutePath)) {
-      selected.push(file);
-      selectedPaths.add(file.absolutePath);
+  if (totalBytes > budget.maxReadBytes) {
+      budgetExceededByAnchor = true;
+      evidenceGaps.push("Anchor range exceeded the read byte budget; no additional file was forced into the plan.");
+  }
+
+  // Keep deferred tests in discovery and range materialization. Removing them
+  // earlier reshapes the bounded shortlist and can displace unrelated main
+  // evidence. They are ineligible only when consuming a read-plan slot.
+  const readableWindows = windows.filter(window => window.ranges.length > 0);
+  for (const window of windows) {
+    if (!isAnchor(window.file, options) && window.ranges.length === 0) {
+      evidenceGaps.push(`Read range unavailable for ${window.file.path || window.file.absolutePath}; candidate was omitted.`);
     }
   }
-  return selected;
+
+  const fitsPlanBudget = (window: CandidateWindow): boolean =>
+    !selectedPaths.has(window.file.absolutePath)
+    && selected.length < budget.maxFiles
+    && !budgetExceededByAnchor
+    && totalBytes + window.bytes <= budget.maxReadBytes;
+  const canAdd = (window: CandidateWindow): boolean => {
+    const bucket = bucketOf(window.file, options, protectedPaths);
+    return !isDeferredTest(window.file, options)
+      && fitsPlanBudget(window)
+      && bucketCounts[bucket] < BUCKET_RULES[bucket].max;
+  };
+  // Core is a hard maximum: quota release may fill missing framework/support/
+  // lexical slots, but must not dilute the bounded exact-evidence core.
+  const canAddAfterQuotaRelease = (window: CandidateWindow): boolean => {
+    const bucket = bucketOf(window.file, options, protectedPaths);
+    return !isDeferredTest(window.file, options)
+      && fitsPlanBudget(window)
+      && (bucket !== "core" || bucketCounts.core < BUCKET_RULES.core.max);
+  };
+  const core = readableWindows
+    .filter(window => (isProtectedCore(window.file, options) || protectedPaths.has(window.file.absolutePath))
+      && !isAnchor(window.file, options)
+      && !isDeferredTest(window.file, options));
+  const coreUsesByteDensity = byteBudgetCanConstrainSelection(
+    core,
+    totalBytes,
+    budget,
+    Math.min(budget.maxFiles - selected.length, BUCKET_RULES.core.max - bucketCounts.core)
+  );
+  const calledPorts = calledPortPaths(windows.map(window => window.file));
+  core.sort((left, right) =>
+    protectedCorePriority(right.file, options, calledPorts) - protectedCorePriority(left.file, options, calledPorts)
+    || compareSelectionUtility(protectedUtility(left), left.bytes, protectedUtility(right), right.bytes, coreUsesByteDensity)
+    || left.file.absolutePath.localeCompare(right.file.absolutePath));
+  if (options.anchors.length > 1) {
+    const uncovered = new Set(stableAnchorEntries(options).map(entry => entry.id));
+    while (uncovered.size > 0) {
+      let best: CandidateWindow | undefined;
+      let bestCoverage = 0;
+      for (const window of core) {
+        if (!canAdd(window)) continue;
+        const coverage = [...protectedAnchorIds(window.file, options)].filter(id => uncovered.has(id)).length;
+        if (coverage > bestCoverage) {
+          best = window;
+          bestCoverage = coverage;
+        }
+      }
+      if (!best) break;
+      add(best, protectedUtility(best));
+      for (const id of protectedAnchorIds(best.file, options)) uncovered.delete(id);
+    }
+  }
+  for (const window of core) {
+    if (canAdd(window)) add(window, protectedUtility(window));
+  }
+  if (options.anchors.length > 1) {
+    for (const anchor of stableAnchorEntries(options)) {
+      const attributed = core.filter(window => protectedAnchorIds(window.file, options).has(anchor.id));
+      if (attributed.length > 0 && !attributed.some(window => selectedPaths.has(window.file.absolutePath))) {
+        evidenceGaps.push(`Protected core coverage omitted for anchor ${anchor.file}: read-plan limits.`);
+      }
+    }
+  }
+  if (core.some(window => !selectedPaths.has(window.file.absolutePath))) {
+    evidenceGaps.push("Protected core exceeded read-plan limits; lower-value core files were omitted.");
+  }
+
+  const remaining = readableWindows.filter(window => !selectedPaths.has(window.file.absolutePath));
+  const nextByMarginalUtility = (
+    canSelect: (window: CandidateWindow) => boolean,
+    requireNovelEvidence = false
+  ): { window: CandidateWindow; utility: number } | undefined =>
+    {
+      const eligible = remaining
+      .filter(window => canSelect(window) && (!requireNovelEvidence || hasNovelEvidence(window.file, selected)))
+      .map(window => ({ window, utility: marginalUtility(window, selected) }));
+      const preferDensity = byteBudgetCanConstrainSelection(
+        eligible.map(item => item.window),
+        totalBytes,
+        budget,
+        budget.maxFiles - selected.length
+      );
+      return eligible.sort((left, right) =>
+        compareSelectionUtility(left.utility, left.window.bytes, right.utility, right.window.bytes, preferDensity)
+        || right.window.file.score - left.window.file.score
+        || left.window.file.absolutePath.localeCompare(right.window.file.absolutePath))[0];
+    };
+  while (true) {
+    const next = nextByMarginalUtility(canAdd);
+    if (!next) break;
+    add(next.window, next.utility);
+    remaining.splice(remaining.indexOf(next.window), 1);
+  }
+  // Bucket caps create representation, not dead capacity. Once the bounded
+  // pass is exhausted, unavailable bucket capacity is released to the best
+  // remaining non-core evidence while retaining every hard file/byte limit.
+  while (true) {
+    const next = nextByMarginalUtility(canAddAfterQuotaRelease, true);
+    if (!next) break;
+    add(next.window, next.utility);
+    remaining.splice(remaining.indexOf(next.window), 1);
+  }
+
+  return {
+    items: selected.map(window => toPlanItem(window, ids, options)),
+    selectedPaths: selected.map(window => window.file.absolutePath),
+    selectedCoordinateRangesByPath: new Map(selected.map(window => [window.file.absolutePath, window.coordinateRanges])),
+    totalBytes,
+    maxReadBytes: budget.maxReadBytes,
+    maxFiles: budget.maxFiles,
+    budgetExceededByAnchor,
+    evidenceGaps: [...new Set(evidenceGaps)],
+    marginalUtilityBySelectedFile
+  };
+}
+
+function toPlanItem(window: CandidateWindow, ids: ReadonlyMap<string, string>, options: ImpactOptions): ReadPlanItemV6 {
+  const priority = v6ReadPriority(window.file, options);
+  return {
+    priority,
+    fileId: ids.get(window.file.absolutePath) || "F?",
+    ranges: window.ranges,
+    reason: readReason(window.file, priority),
+    expectedEvidence: evidenceKeys(window.file).slice(0, 4),
+    estimatedBytes: window.bytes
+  };
+}
+
+function protectedUtility(window: CandidateWindow): number {
+  return protectedSelectionUtility({ file: window.file, estimatedBytes: window.bytes });
+}
+
+/**
+ * The planner has two independent hard caps. Density breaks ties only while
+ * the byte cap can actually exclude a feasible choice. When the active limit
+ * is file count, favouring a cheap lower-value file would double-count byte
+ * cost (marginalUtility already carries a bounded byte penalty) and starve a
+ * stronger exact collaborator despite unused byte budget.
+ */
+function byteBudgetCanConstrainSelection(
+  candidates: readonly CandidateWindow[],
+  selectedBytes: number,
+  budget: ReadPlanBudget,
+  remainingSlots: number
+): boolean {
+  if (remainingSlots <= 0) return false;
+  const maximumPotentialBytes = [...candidates]
+    .map(candidate => candidate.bytes)
+    .sort((left, right) => right - left)
+    .slice(0, remainingSlots)
+    .reduce((sum, bytes) => sum + bytes, 0);
+  return selectedBytes + maximumPotentialBytes > budget.maxReadBytes;
+}
+
+function protectedCorePriority(
+  file: CandidateFile,
+  options: Pick<ImpactOptions, "anchors">,
+  calledPorts: ReadonlySet<string> = new Set()
+): number {
+  const kinds = new Set(file.plannerEvidence?.map(evidence => evidence.kind) || [
+    ...file.reasons,
+    ...(file.verifiedBy || [])
+  ]);
+  if ([...kinds].some(kind => kind === "DEFINITION"
+    || kind === "IMPLEMENTATION"
+    || kind === "TYPEHIERARCHY"
+    || kind === "definition"
+    || kind === "implementation"
+    || kind === "typeHierarchy")) {
+    return 3;
+  }
+  // A concrete anchor's directly declared interface/parent is its public
+  // contract, not a downstream expansion. Keep this inverse type edge ahead
+  // of implementation alternatives and field context when the bounded core
+  // must choose.
+  if (kinds.has("TYPE_SYMMETRIC")) {
+    return 2.75;
+  }
+  // Close a hop the anchor already opened: the implementer of a called port
+  // outranks other implementers. It must stay below sibling CALLS (2.5);
+  // raising all IMPLEMENTS to 2.65 evicted first-hop collaborators.
+  if ([...kinds].some(kind => FIRST_HOP_IMPLEMENTATION_KINDS.has(kind)
+    || kind === "typeGraph:implementation-lookup"
+    || kind === "implementation"
+    || kind === "persisted-implementation")) {
+    return closesCalledPort(file, calledPorts) ? 2.45 : 2.4;
+  }
+  if (kinds.has("METHOD_RELATION")) {
+    return 2;
+  }
+  // An anchor-body call has stronger locality than an implementation merely
+  // related to the anchor's declared type: it proves the exact receiver used
+  // by this task. Syntax nesting alone does not weaken that fact (response
+  // wrappers commonly contain the real receiver call). One-hop continuation
+  // calls intentionally remain below the first implementation alternatives,
+  // because they are downstream context.
+  // Transport envelopes (CommonResult.success, ResponseEntity.ok) are still
+  // CALLS, but they are not the task receiver and must not evict a first-hop
+  // implementer from the bounded core.
+  if (file.plannerEvidence?.some(evidence => evidence.kind === "CALLS"
+    && (evidence.callOrigin === "anchor" || (evidence.callOrigin === undefined && evidence.callDepth === 0))
+    && (evidence.callDepth ?? Infinity) <= 1)) {
+    return isResponseWrapperFile(file) ? 1.25 : 2.5;
+  }
+  if (file.plannerEvidence?.some(evidence => evidence.kind === "CALLS" && evidence.callDepth === 1)) {
+    return 1.75;
+  }
+  if ([...kinds].some(kind => SECOND_HOP_IMPLEMENTATION_KINDS.has(kind))) {
+    return 1.5;
+  }
+  // Framework inference may reserve a core slot, but never ranks ahead of a
+  // resolved call or method-local implementation dependency.
+  if (kinds.has("SPRING_INJECTION")) {
+    return 1;
+  }
+  return 0;
+}
+
+function marginalUtility(candidate: CandidateWindow, selected: readonly CandidateWindow[]): number {
+  return selectionUtility(
+    { file: candidate.file, estimatedBytes: candidate.bytes },
+    selected.map(window => ({ file: window.file, estimatedBytes: window.bytes }))
+  );
+}
+
+function hasNovelEvidence(candidate: CandidateFile, selected: readonly CandidateWindow[]): boolean {
+  return fileHasNovelEvidence(candidate, selected.map(window => window.file));
+}
+
+function calledPortPaths(files: readonly CandidateFile[]): Set<string> {
+  const paths = new Set<string>();
+  for (const file of files) {
+    if (file.plannerEvidence?.some(evidence => evidence.kind === "CALLS"
+      && (evidence.callOrigin === "anchor" || (evidence.callOrigin === undefined && (evidence.callDepth ?? 0) === 0)))) {
+      paths.add(file.absolutePath);
+    }
+  }
+  return paths;
+}
+
+function implementedTypePath(file: CandidateFile): string | undefined {
+  const evidence = file.plannerEvidence?.find(item => item.kind === "IMPLEMENTS"
+    || item.kind === "IMPLEMENTATION"
+    || item.kind === "TYPE_RELATION"
+    || item.kind === "typeGraph:implementation-lookup");
+  if (!evidence) return undefined;
+  const arrow = evidence.sourceTarget.lastIndexOf("->");
+  if (arrow < 0) return undefined;
+  const target = evidence.sourceTarget.slice(arrow + 2);
+  return target.includes("/") ? target : undefined;
+}
+
+function closesCalledPort(file: CandidateFile, calledPorts: ReadonlySet<string>): boolean {
+  const implemented = implementedTypePath(file);
+  return Boolean(implemented && calledPorts.has(implemented));
+}
+
+function isResponseWrapperFile(file: CandidateFile): boolean {
+  const base = (file.path || file.absolutePath).replace(/\\/g, "/").split("/").pop()?.replace(/\.java$/i, "");
+  return Boolean(base && RESPONSE_WRAPPER_TYPE_NAMES.has(base));
+}
+
+function isAnchor(
+  file: CandidateFile,
+  options: Pick<ImpactOptions, "anchors">
+): boolean {
+  return file.reasons.includes("target")
+    || options.anchors.some(anchor => anchor.file === file.absolutePath || anchor.file === file.path);
+}
+
+function isDeferredTest(
+  file: Pick<CandidateFile, "sourceSet">,
+  options: Pick<ImpactOptions, "testReadMode">
+): boolean {
+  return file.sourceSet === "test" && options.testReadMode === "defer";
+}
+
+function isProtectedCore(file: CandidateFile, options: Pick<ImpactOptions, "testReadMode" | "anchors">): boolean {
+  if (file.sourceSet === "test" && options.testReadMode === "defer") return false;
+  // Planner evidence retains the source of framework links.  A Spring call
+  // discovered while expanding a structural seed is useful framework context,
+  // but is not a call on this request's anchor path and therefore must not
+  // consume the bounded protected-core quota.  Legacy candidates without the
+  // structured projection retain their compatibility fallback below.
+  if ((file.plannerEvidence?.length ?? 0) > 0) {
+    return file.plannerEvidence!.some(evidence => isProtectedCoreEvidence(evidence, options));
+  }
+  if (file.reasons.some(reason => PROTECTED_CORE_KINDS.has(reason))
+    || (file.verifiedBy || []).some(reason => PROTECTED_CORE_KINDS.has(reason))) return true;
+  return (file.scoreBreakdown || []).some(item => item.delta > 0 && (
+    item.id === "finalize.type-relation"
+    || item.id === "finalize.method-relation"
+    || item.id === "finalize.structural.type-symmetric"
+  ));
+}
+
+function isProtectedCoreEvidence(
+  evidence: NonNullable<CandidateFile["plannerEvidence"]>[number],
+  options: Pick<ImpactOptions, "anchors">
+): boolean {
+  if (!PROTECTED_CORE_KINDS.has(evidence.kind)) return false;
+  // A CALLS edge receives a protected slot only when relationship-provider
+  // retained an exact, shallow anchor path. Native edge IDs without that
+  // call-site metadata may still rank normally, but cannot turn a deep
+  // getter or generic wrapper into protected core merely by sharing CALLS.
+  if (evidence.kind === "CALLS") {
+    return (evidence.callDepth ?? Infinity) <= 1;
+  }
+  if (evidence.kind !== "SPRING_CALL_PATH") return true;
+  const arrow = evidence.sourceTarget.indexOf("->");
+  if (arrow <= 0) return false;
+  const source = evidence.sourceTarget.slice(0, arrow);
+  return options.anchors.some((anchor, index) => source === `A${index + 1}:${anchor.file}`);
+}
+
+function protectedAnchorIds(
+  file: CandidateFile,
+  options: Pick<ImpactOptions, "anchors">
+): Set<string> {
+  const valid = new Set(options.anchors.map((_, index) => `A${index + 1}`));
+  return new Set((file.plannerEvidence ?? [])
+    .filter(evidence => isProtectedCoreEvidence(evidence, options))
+    .map(evidence => /^(A[1-9]\d*)(?=:|->)/.exec(evidence.sourceTarget)?.[1])
+    .filter((id): id is string => id !== undefined && valid.has(id)));
+}
+
+function stableAnchorEntries(options: Pick<ImpactOptions, "anchors">): Array<{ id: string; file: string }> {
+  return options.anchors
+    .map((anchor, index) => ({ id: `A${index + 1}`, ...anchor }))
+    .sort((left, right) => left.file.localeCompare(right.file)
+      || left.line - right.line
+      || left.column - right.column
+      || (left.role ?? "").localeCompare(right.role ?? ""));
+}
+
+function coverageFirst<T>(
+  values: readonly T[],
+  fileOf: (value: T) => CandidateFile,
+  options: Pick<ImpactOptions, "anchors">
+): T[] {
+  if (options.anchors.length <= 1) return [...values];
+  const remainingAnchors = new Set(stableAnchorEntries(options).map(anchor => anchor.id));
+  const remainingValues = [...values];
+  const selected: T[] = [];
+  while (remainingAnchors.size > 0) {
+    let bestIndex = -1;
+    let bestCoverage = 0;
+    for (let index = 0; index < remainingValues.length; index += 1) {
+      const coverage = [...protectedAnchorIds(fileOf(remainingValues[index]!), options)]
+        .filter(id => remainingAnchors.has(id)).length;
+      if (coverage > bestCoverage) {
+        bestIndex = index;
+        bestCoverage = coverage;
+      }
+    }
+    if (bestIndex < 0) break;
+    const [next] = remainingValues.splice(bestIndex, 1);
+    selected.push(next!);
+    for (const id of protectedAnchorIds(fileOf(next!), options)) remainingAnchors.delete(id);
+  }
+  return [...selected, ...remainingValues];
+}
+
+function bucketOf(file: CandidateFile, options: ImpactOptions, protectedPaths: ReadonlySet<string>): ReadPlanBucket {
+  if (isAnchor(file, options)) return "anchor";
+  if (file.sourceSet === "test" && options.testReadMode === "defer") return "support";
+  if (isProtectedCore(file, options) || protectedPaths.has(file.absolutePath)) return "core";
+  if (file.categories.includes("framework") || file.reasons.some(reason => reason.startsWith("SPRING_") || reason.startsWith("MYBATIS_") || reason.startsWith("MAPSTRUCT_"))) return "framework";
+  if (file.sourceSet === "test" || file.categories.some(category => category === "config" || category === "persistence" || category === "nonJava")) return "support";
+  return "lexical";
+}
+
+function readRangeReason(kinds: readonly IndexedReadRangeResult["ranges"][number]["kind"][]): string {
+  return [...new Set(kinds.map(readRangeKindReason))].join("; ");
+}
+
+function readRangeKindReason(kind: IndexedReadRangeResult["ranges"][number]["kind"]): string {
+  if (kind === "method") return "AST method range";
+  if (kind === "type") return "AST owner type header";
+  if (kind === "xml-statement") return "MyBatis XML statement";
+  if (kind === "xml-resultMap") return "MyBatis XML resultMap";
+  return "fixed-radius fallback";
 }
 
 function sortedByReadPriority(files: readonly CandidateFile[], options: ImpactOptions): CandidateFile[] {
@@ -151,50 +748,19 @@ function sortedByReadPriority(files: readonly CandidateFile[], options: ImpactOp
     .map(entry => entry.file);
 }
 
-function readWindow(sourceIndex: SourceIndex, file: CandidateFile, priority: ReadPriority): { startLine: number; endLine: number } {
-  const basePosition = file.positions[0] || { line: 1, column: 1 };
-  const radius = readRadius(priority);
-  const fixed = {
-    startLine: Math.max(1, basePosition.line - radius.before),
-    endLine: basePosition.line + radius.after
-  };
-  const position = readPosition(sourceIndex, file, priority);
-  const method = priority === "P2" ? undefined : methodContaining(sourceIndex, file.absolutePath, position.line);
-  if (!method) {
-    return fixed;
-  }
-  const padding = priority === "P0" ? { before: 12, after: 8 } : { before: 8, after: 8 };
-  const methodWindow = {
-    startLine: Math.max(1, method.line - padding.before),
-    endLine: method.endLine + padding.after
-  };
-  return methodWindow.startLine >= fixed.startLine && methodWindow.endLine <= fixed.endLine ? methodWindow : fixed;
+function sortedForV6Shortlist(files: readonly CandidateFile[], options: ImpactOptions): CandidateFile[] {
+  return [...files].sort((left, right) =>
+    Number(isAnchor(right, options)) - Number(isAnchor(left, options))
+    || right.score - left.score
+    || left.absolutePath.localeCompare(right.absolutePath));
 }
 
-function readPosition(sourceIndex: SourceIndex, file: CandidateFile, priority: ReadPriority): RouterPosition {
-  if (file.categories.includes("target")) {
-    return file.positions[0] || { line: 1, column: 1 };
-  }
-  if (priority !== "P2") {
-    const methodPosition = file.positions.find(position => methodContaining(sourceIndex, file.absolutePath, position.line));
-    if (methodPosition) {
-      return methodPosition;
-    }
-  }
-  return file.positions[0] || { line: 1, column: 1 };
-}
-
-function methodContaining(sourceIndex: SourceIndex, file: string, line: number): JavaMethodFact | undefined {
-  if (!file.endsWith(".java")) {
-    return undefined;
-  }
-  try {
-    return sourceIndex.factsFor(file).methods
-      .filter(method => method.line <= line && line <= method.endLine)
-      .sort((left, right) => right.line - left.line)[0];
-  } catch {
-    return undefined;
-  }
+function v6ReadPriority(file: CandidateFile, options: ImpactOptions): ReadPriority {
+  if (file.sourceSet === "test") return options.testReadMode === "priority" ? "P1" : "P2";
+  if (file.categories.includes("config") || file.categories.includes("nonJava")) return "P2";
+  if (isPureIndexRecall(file)) return "P2";
+  if (file.reasons.includes("target") || (file.reasons.includes("implementation") && file.sourceSet === "main")) return "P0";
+  return file.sourceSet === "main" ? "P1" : "P2";
 }
 
 const INDEX_RECALL_REASONS = new Set(["typeReference", "importGraph", "importGraph:reverse"]);
@@ -204,21 +770,9 @@ function isPureIndexRecall(file: CandidateFile): boolean {
 }
 
 function readReason(file: CandidateFile, priority: ReadPriority): string {
-  if (file.reasons.includes("target")) {
-    return "anchor symbol and local behavior";
-  }
-  if (file.reasons.includes("implementation")) {
-    return "main implementation candidate";
-  }
-  if (file.categories.includes("persistence")) {
-    return "persistence or migration evidence";
-  }
-  if (file.sourceSet === "test") {
-    return priority === "P1" ? "priority verification candidate" : "deferred verification candidate";
-  }
-  return "ranked candidate from source index, rg summary, and optional LSP";
-}
-
-function readRadius(priority: ReadPriority): { before: number; after: number } {
-  return priority === "P0" ? { before: 24, after: 44 } : priority === "P1" ? { before: 16, after: 32 } : { before: 10, after: 22 };
+  if (file.reasons.includes("target")) return "anchor symbol and local behavior";
+  if (file.reasons.includes("implementation")) return "main implementation candidate";
+  if (file.categories.includes("persistence")) return "persistence or migration evidence";
+  if (file.sourceSet === "test") return priority === "P1" ? "priority verification candidate" : "deferred verification candidate";
+  return "ranked candidate from Java index, rg summary, and optional LSP";
 }

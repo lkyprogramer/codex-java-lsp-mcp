@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "c-c2-closeout/v1",
+  "track": "c",
+  "card": "C2",
+  "dated": "2026-08-23",
+  "decision": "COMPLETE",
+  "mergeToMain": false,
+  "srcTouched": true,
+  "defaultChainIdentity": "UNCHANGED",
+  "note": "Output slim only. spans→ranges string; drop resolvedIntent/anchor/contexts echo; unresolved {path,role}; evidence cap 4. Wire candidates N=12 after P50 miss at 24. Did not delete candidates[].",
+  "contractVersion": 3,
+  "candidateWireN": 24,
+  "evidenceFileCap": 4,
+  "bytes": {
+    "p50": 0.9653199856989632,
+    "gate": 1.2,
+    "result": "GO",
+    "file": "docs/phase-c/c2-bytes.json",
+    "source": "T2 six holdout first-call MCP compact payloads on restored goldens"
+  },
+  "isolation": {
+    "t0": {
+      "tests": 50,
+      "fail": 0,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "eac3b28d12f67ec77458f1fcb982835d2a7374fb",
+      "logSha256": "72a4e7c10dd98c56d2ed0c7a5ff196304da0ceb965a87e6975e767c61a436db0"
+    },
+    "t1": {
+      "dist": 1185,
+      "scripts": 232,
+      "fail": 0,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "eac3b28d12f67ec77458f1fcb982835d2a7374fb",
+      "logSha256": "adeaf12e8d222ac24397b9a1dbd2ca1fd1a78588de3750db2be839746eee087c"
+    }
+  }
+}

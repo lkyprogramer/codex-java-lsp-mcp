@@ -1,0 +1,343 @@
+{
+  "schemaVersion": "jin-n5-context-replay/v1",
+  "dated": "2026-08-21",
+  "passed": true,
+  "gates": [
+    {
+      "project": "lishuedu",
+      "scenarioId": "paper-task-claim-iam-holdout",
+      "target": "modules/iam/src/main/java/com/lishu/edu/iam/application/service/MeQueryService.java",
+      "intents": [
+        "auto"
+      ],
+      "hit": true,
+      "selectedByIntent": {
+        "auto": true,
+        "PERSISTENCE_FLOW": true
+      }
+    },
+    {
+      "project": "cipherlink",
+      "scenarioId": "client-release-storage-presign-holdout",
+      "target": "modules/client/src/main/java/com/hhtele/cipherlink/client/infrastructure/persistence/mapper/ClientReleaseMapper.java",
+      "intents": [
+        "auto",
+        "PERSISTENCE_FLOW"
+      ],
+      "hit": true,
+      "selectedByIntent": {
+        "auto": true,
+        "PERSISTENCE_FLOW": true
+      }
+    },
+    {
+      "project": "exam-parent-v3",
+      "scenarioId": "candidate-pay-order-cross-module-admission",
+      "target": "exam-data/src/main/java/com/hhtele/exam/data/entity/manage/PayAccount.java",
+      "intents": [
+        "auto",
+        "PERSISTENCE_FLOW"
+      ],
+      "hit": true,
+      "selectedByIntent": {
+        "auto": true,
+        "PERSISTENCE_FLOW": true
+      }
+    }
+  ],
+  "results": [
+    {
+      "project": "lishuedu",
+      "scenarioId": "exam-score-export-cross-module-holdout",
+      "intent": "auto",
+      "resolvedIntent": "IMPLEMENTATION_CHANGE",
+      "taskText": "ExamScoreExportAppService#export cross-module score workbook exam score export workbook student total excel",
+      "anchor": "modules/exam/src/main/java/com/lishu/edu/exam/application/service/ExamScoreExportAppService.java",
+      "selected": [
+        "modules/exam/src/main/java/com/lishu/edu/exam/application/service/ExamScoreExportAppService.java",
+        "modules/exam/src/main/java/com/lishu/edu/exam/application/service/ExamScopeService.java",
+        "modules/exam/src/main/java/com/lishu/edu/exam/domain/port/ExamItemRepository.java",
+        "modules/exam/src/main/java/com/lishu/edu/exam/domain/port/ExamScoreExportGenerator.java",
+        "modules/exam/src/main/java/com/lishu/edu/exam/domain/port/ExamStudentItemScoreRepository.java",
+        "modules/exam/src/main/java/com/lishu/edu/exam/domain/score/ExamStudentSubjectScore.java",
+        "modules/exam/src/main/java/com/lishu/edu/exam/infrastructure/excel/ExamScoreExportExcelGenerator.java",
+        "modules/school/src/main/java/com/lishu/edu/school/application/dto/SchoolSummary.java",
+        "modules/exam/src/main/java/com/lishu/edu/exam/application/dto/ExamCreateResult.java"
+      ],
+      "tokenCost": 2450,
+      "discoveredCount": 639,
+      "gateTargetsDiscovered": [
+        "modules/iam/src/main/java/com/lishu/edu/iam/application/service/MeQueryService.java"
+      ]
+    },
+    {
+      "project": "lishuedu",
+      "scenarioId": "exam-score-export-cross-module-holdout",
+      "intent": "PERSISTENCE_FLOW",
+      "resolvedIntent": "PERSISTENCE_FLOW",
+      "taskText": "ExamScoreExportAppService#export cross-module score workbook exam score export workbook student total excel",
+      "anchor": "modules/exam/src/main/java/com/lishu/edu/exam/application/service/ExamScoreExportAppService.java",
+      "selected": [
+        "modules/exam/src/main/java/com/lishu/edu/exam/application/service/ExamScoreExportAppService.java",
+        "modules/exam/src/main/java/com/lishu/edu/exam/application/dto/ExamScoreExportFile.java",
+        "modules/exam/src/main/java/com/lishu/edu/exam/application/service/ExamScopeService.java",
+        "modules/exam/src/main/java/com/lishu/edu/exam/domain/exam/ExamItem.java",
+        "modules/exam/src/main/java/com/lishu/edu/exam/domain/port/ExamItemRepository.java",
+        "modules/exam/src/main/java/com/lishu/edu/exam/domain/port/ExamScoreExportGenerator.java",
+        "modules/exam/src/main/java/com/lishu/edu/exam/domain/score/ExamStudentSubjectScore.java",
+        "modules/exam/src/main/java/com/lishu/edu/exam/infrastructure/excel/ExamScoreExportExcelGenerator.java"
+      ],
+      "tokenCost": 2402,
+      "discoveredCount": 621,
+      "gateTargetsDiscovered": [
+        "modules/iam/src/main/java/com/lishu/edu/iam/application/service/MeQueryService.java"
+      ]
+    },
+    {
+      "project": "lishuedu",
+      "scenarioId": "paper-task-claim-iam-holdout",
+      "intent": "auto",
+      "resolvedIntent": "PERSISTENCE_FLOW",
+      "taskText": "PaperTaskCommandAppService#claimTask IAM identity and atomic claim paper task claim operator identity concurrency repository",
+      "anchor": "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperTaskCommandAppService.java",
+      "selected": [
+        "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperTaskCommandAppService.java",
+        "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperAccessService.java",
+        "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperTaskAppService.java",
+        "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperTaskQueryService.java",
+        "modules/paper/src/main/java/com/lishu/edu/paper/domain/port/PaperRecordTaskRepository.java",
+        "modules/paper/src/main/java/com/lishu/edu/paper/domain/task/PaperRecordTaskStatus.java",
+        "modules/paper/src/main/java/com/lishu/edu/paper/infrastructure/persistence/repository/PaperRecordTaskRepositoryImpl.java",
+        "modules/ai/src/main/java/com/lishu/edu/ai/application/service/AiKpTaggingCancelAppService.java",
+        "modules/exam/src/main/java/com/lishu/edu/exam/application/service/ExamPaperQueryService.java",
+        "modules/iam/src/main/java/com/lishu/edu/iam/application/service/MeQueryService.java",
+        "modules/school/src/main/java/com/lishu/edu/school/infrastructure/persistence/repository/SchoolFlexibleImportTaskRepositoryImpl.java"
+      ],
+      "tokenCost": 2147,
+      "discoveredCount": 637,
+      "gateTargetsDiscovered": [
+        "modules/iam/src/main/java/com/lishu/edu/iam/application/service/MeQueryService.java"
+      ]
+    },
+    {
+      "project": "lishuedu",
+      "scenarioId": "paper-task-claim-iam-holdout",
+      "intent": "PERSISTENCE_FLOW",
+      "resolvedIntent": "PERSISTENCE_FLOW",
+      "taskText": "PaperTaskCommandAppService#claimTask IAM identity and atomic claim paper task claim operator identity concurrency repository",
+      "anchor": "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperTaskCommandAppService.java",
+      "selected": [
+        "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperTaskCommandAppService.java",
+        "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperAccessService.java",
+        "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperTaskAppService.java",
+        "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperTaskQueryService.java",
+        "modules/paper/src/main/java/com/lishu/edu/paper/domain/port/PaperRecordTaskRepository.java",
+        "modules/paper/src/main/java/com/lishu/edu/paper/domain/task/PaperRecordTaskStatus.java",
+        "modules/paper/src/main/java/com/lishu/edu/paper/infrastructure/persistence/repository/PaperRecordTaskRepositoryImpl.java",
+        "modules/ai/src/main/java/com/lishu/edu/ai/application/service/AiKpTaggingCancelAppService.java",
+        "modules/exam/src/main/java/com/lishu/edu/exam/application/service/ExamPaperQueryService.java",
+        "modules/iam/src/main/java/com/lishu/edu/iam/application/service/MeQueryService.java",
+        "modules/school/src/main/java/com/lishu/edu/school/infrastructure/persistence/repository/SchoolFlexibleImportTaskRepositoryImpl.java"
+      ],
+      "tokenCost": 2147,
+      "discoveredCount": 637,
+      "gateTargetsDiscovered": [
+        "modules/iam/src/main/java/com/lishu/edu/iam/application/service/MeQueryService.java"
+      ]
+    },
+    {
+      "project": "cipherlink",
+      "scenarioId": "client-release-storage-presign-holdout",
+      "intent": "auto",
+      "resolvedIntent": "IMPLEMENTATION_CHANGE",
+      "taskText": "DefaultClientReleasePackageStorageGateway#storeAndPresign client release upload storage presign rollback",
+      "anchor": "modules/storage/src/main/java/com/hhtele/cipherlink/storage/infrastructure/DefaultClientReleasePackageStorageGateway.java",
+      "selected": [
+        "modules/storage/src/main/java/com/hhtele/cipherlink/storage/infrastructure/DefaultClientReleasePackageStorageGateway.java",
+        "modules/storage/src/main/java/com/hhtele/cipherlink/storage/application/ClientReleasePackageStorageGateway.java",
+        "modules/storage/src/main/java/com/hhtele/cipherlink/storage/application/StorageFailureCode.java",
+        "modules/storage/src/main/java/com/hhtele/cipherlink/storage/application/StorageProvider.java",
+        "modules/storage/src/main/java/com/hhtele/cipherlink/storage/application/StoredObjectMetadata.java",
+        "modules/storage/src/main/java/com/hhtele/cipherlink/storage/infrastructure/ObjectStorageRuntimeProperties.java",
+        "modules/account/src/main/java/com/hhtele/cipherlink/account/application/AccountAdminRoleResolver.java",
+        "modules/client/src/main/java/com/hhtele/cipherlink/client/application/ClientReleaseUrlRefreshAppService.java",
+        "modules/client/src/main/java/com/hhtele/cipherlink/client/application/ClientUpdateAppService.java",
+        "modules/client/src/main/java/com/hhtele/cipherlink/client/application/UploadClientReleaseCommand.java",
+        "modules/client/src/main/java/com/hhtele/cipherlink/client/infrastructure/persistence/mapper/ClientReleaseMapper.java",
+        "modules/client/src/main/java/com/hhtele/cipherlink/client/infrastructure/persistence/MybatisClientReleaseRepository.java"
+      ],
+      "tokenCost": 2663,
+      "discoveredCount": 369,
+      "gateTargetsDiscovered": [
+        "modules/client/src/main/java/com/hhtele/cipherlink/client/infrastructure/persistence/mapper/ClientReleaseMapper.java"
+      ]
+    },
+    {
+      "project": "cipherlink",
+      "scenarioId": "client-release-storage-presign-holdout",
+      "intent": "PERSISTENCE_FLOW",
+      "resolvedIntent": "PERSISTENCE_FLOW",
+      "taskText": "DefaultClientReleasePackageStorageGateway#storeAndPresign client release upload storage presign rollback",
+      "anchor": "modules/storage/src/main/java/com/hhtele/cipherlink/storage/infrastructure/DefaultClientReleasePackageStorageGateway.java",
+      "selected": [
+        "modules/storage/src/main/java/com/hhtele/cipherlink/storage/infrastructure/DefaultClientReleasePackageStorageGateway.java",
+        "modules/storage/src/main/java/com/hhtele/cipherlink/storage/application/ClientReleasePackageStorageGateway.java",
+        "modules/storage/src/main/java/com/hhtele/cipherlink/storage/application/StorageFailureCode.java",
+        "modules/storage/src/main/java/com/hhtele/cipherlink/storage/application/StorageProvider.java",
+        "modules/storage/src/main/java/com/hhtele/cipherlink/storage/application/StoredObjectMetadata.java",
+        "modules/storage/src/main/java/com/hhtele/cipherlink/storage/infrastructure/ObjectStorageRuntimeProperties.java",
+        "modules/account/src/main/java/com/hhtele/cipherlink/account/application/AccountAdminRoleResolver.java",
+        "modules/client/src/main/java/com/hhtele/cipherlink/client/application/ClientUpdateAppService.java",
+        "modules/client/src/main/java/com/hhtele/cipherlink/client/application/UploadClientReleaseCommand.java",
+        "modules/client/src/main/java/com/hhtele/cipherlink/client/infrastructure/persistence/mapper/ClientReleaseMapper.java",
+        "modules/client/src/main/java/com/hhtele/cipherlink/client/interfaces/web/ClientReleaseController.java",
+        "modules/storage/src/main/java/com/hhtele/cipherlink/storage/application/ChunkObjectStorageGateway.java"
+      ],
+      "tokenCost": 2651,
+      "discoveredCount": 349,
+      "gateTargetsDiscovered": [
+        "modules/client/src/main/java/com/hhtele/cipherlink/client/infrastructure/persistence/mapper/ClientReleaseMapper.java"
+      ]
+    },
+    {
+      "project": "cipherlink",
+      "scenarioId": "backend-operation-log-aspect-async-audit-holdout",
+      "intent": "auto",
+      "resolvedIntent": "CONTRACT_CHANGE",
+      "taskText": "BackendOperationLogAspect#recordOperationLog operation log aspect audit async redaction request",
+      "anchor": "apps/cipherlink-backend/src/main/java/com/hhtele/cipherlink/backend/config/BackendOperationLogAspect.java",
+      "selected": [
+        "apps/cipherlink-backend/src/main/java/com/hhtele/cipherlink/backend/config/BackendOperationLogAspect.java",
+        "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/DefaultOperationLogAppService.java",
+        "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/OperationLogAppService.java",
+        "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/OperationLogQueryService.java",
+        "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/OperationLogRequestSanitizer.java",
+        "modules/auth/src/main/java/com/hhtele/cipherlink/auth/application/CurrentAuthContext.java",
+        "modules/common/src/main/java/com/hhtele/cipherlink/common/operationlog/OperationLogResult.java"
+      ],
+      "tokenCost": 2356,
+      "discoveredCount": 404,
+      "gateTargetsDiscovered": [
+        "modules/client/src/main/java/com/hhtele/cipherlink/client/infrastructure/persistence/mapper/ClientReleaseMapper.java"
+      ]
+    },
+    {
+      "project": "cipherlink",
+      "scenarioId": "backend-operation-log-aspect-async-audit-holdout",
+      "intent": "PERSISTENCE_FLOW",
+      "resolvedIntent": "PERSISTENCE_FLOW",
+      "taskText": "BackendOperationLogAspect#recordOperationLog operation log aspect audit async redaction request",
+      "anchor": "apps/cipherlink-backend/src/main/java/com/hhtele/cipherlink/backend/config/BackendOperationLogAspect.java",
+      "selected": [
+        "apps/cipherlink-backend/src/main/java/com/hhtele/cipherlink/backend/config/BackendOperationLogAspect.java",
+        "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/DefaultOperationLogAppService.java",
+        "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/OperationLogAppService.java",
+        "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/OperationLogQueryService.java",
+        "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/OperationLogRequestSanitizer.java",
+        "modules/common/src/main/java/com/hhtele/cipherlink/common/operationlog/OperationLog.java",
+        "modules/common/src/main/java/com/hhtele/cipherlink/common/security/RedactionResult.java"
+      ],
+      "tokenCost": 2379,
+      "discoveredCount": 367,
+      "gateTargetsDiscovered": [
+        "modules/client/src/main/java/com/hhtele/cipherlink/client/infrastructure/persistence/mapper/ClientReleaseMapper.java"
+      ]
+    },
+    {
+      "project": "exam-parent-v3",
+      "scenarioId": "exam-room-print-download-types-persistent-bundle",
+      "intent": "auto",
+      "resolvedIntent": "CONTRACT_CHANGE",
+      "taskText": "ExamRoomPrintController#downloadByTypes persistent bundle admission exam-room print download bundle queue persistent",
+      "anchor": "exam-management/src/main/java/com/hhtele/exam/management/controller/examination/ExamRoomPrintController.java",
+      "selected": [
+        "exam-management/src/main/java/com/hhtele/exam/management/controller/examination/ExamRoomPrintController.java",
+        "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/ExamineesRoomInfo.java",
+        "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/ExamLocation.java",
+        "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/ExamRoomAllocateInfo.java",
+        "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/ExamRoomInfo.java",
+        "exam-data/src/main/java/com/hhtele/exam/data/service/CurrentUserService.java",
+        "exam-management/src/main/java/com/hhtele/exam/management/service/ExamRoomPrintMetrics.java",
+        "exam-service/exam-service-basic/src/main/java/com/hhtele/exam/service/basic/service/SecurityService.java",
+        "exam-service/exam-service-exam-site/src/main/java/com/hhtele/exam/service/exam/site/ExamRoomPrintAsyncService.java",
+        "exam-service/exam-service-exam-site/src/main/java/com/hhtele/exam/service/exam/site/ExamRoomPrintBundleService.java"
+      ],
+      "tokenCost": 2541,
+      "discoveredCount": 352,
+      "gateTargetsDiscovered": []
+    },
+    {
+      "project": "exam-parent-v3",
+      "scenarioId": "exam-room-print-download-types-persistent-bundle",
+      "intent": "PERSISTENCE_FLOW",
+      "resolvedIntent": "PERSISTENCE_FLOW",
+      "taskText": "ExamRoomPrintController#downloadByTypes persistent bundle admission exam-room print download bundle queue persistent",
+      "anchor": "exam-management/src/main/java/com/hhtele/exam/management/controller/examination/ExamRoomPrintController.java",
+      "selected": [
+        "exam-management/src/main/java/com/hhtele/exam/management/controller/examination/ExamRoomPrintController.java",
+        "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/ExamineesRoomInfo.java",
+        "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/ExamLocation.java",
+        "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/ExamRoomAllocateInfo.java",
+        "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/ExamRoomInfo.java",
+        "exam-data/src/main/java/com/hhtele/exam/data/service/CurrentUserService.java",
+        "exam-management/src/main/java/com/hhtele/exam/management/service/ExamRoomPrintMetrics.java",
+        "exam-service/exam-service-basic/src/main/java/com/hhtele/exam/service/basic/service/SecurityService.java",
+        "exam-service/exam-service-exam-site/src/main/java/com/hhtele/exam/service/exam/site/ExamRoomPrintAsyncService.java",
+        "exam-service/exam-service-exam-site/src/main/java/com/hhtele/exam/service/exam/site/ExamRoomPrintBundleService.java"
+      ],
+      "tokenCost": 2548,
+      "discoveredCount": 345,
+      "gateTargetsDiscovered": []
+    },
+    {
+      "project": "exam-parent-v3",
+      "scenarioId": "candidate-pay-order-cross-module-admission",
+      "intent": "auto",
+      "resolvedIntent": "CONTRACT_CHANGE",
+      "taskText": "OrderController#createPayOrder cross-module payment admission apply payment order idempotency pay-account provider",
+      "anchor": "exam-candidate/src/main/java/com/hhtele/exam/candidate/controller/order/OrderController.java",
+      "selected": [
+        "exam-candidate/src/main/java/com/hhtele/exam/candidate/controller/order/OrderController.java",
+        "exam-common/src/main/java/com/hhtele/exam/api/CommonsResult.java",
+        "exam-common/src/main/java/com/hhtele/exam/util/XmlUtil.java",
+        "exam-data/src/main/java/com/hhtele/exam/data/entity/manage/PayAccount.java",
+        "exam-data/src/main/java/com/hhtele/exam/data/repository/order/MsDownloadBillLogRepository.java",
+        "exam-data/src/main/java/com/hhtele/exam/data/repository/order/MsTradeBillRepository.java",
+        "exam-data/src/main/java/com/hhtele/exam/data/service/UserDetail.java",
+        "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/ApplyPayService.java",
+        "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/impl/MsPayServiceImpl.java",
+        "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/MsPayService.java"
+      ],
+      "tokenCost": 2491,
+      "discoveredCount": 393,
+      "gateTargetsDiscovered": [
+        "exam-data/src/main/java/com/hhtele/exam/data/entity/manage/PayAccount.java"
+      ]
+    },
+    {
+      "project": "exam-parent-v3",
+      "scenarioId": "candidate-pay-order-cross-module-admission",
+      "intent": "PERSISTENCE_FLOW",
+      "resolvedIntent": "PERSISTENCE_FLOW",
+      "taskText": "OrderController#createPayOrder cross-module payment admission apply payment order idempotency pay-account provider",
+      "anchor": "exam-candidate/src/main/java/com/hhtele/exam/candidate/controller/order/OrderController.java",
+      "selected": [
+        "exam-candidate/src/main/java/com/hhtele/exam/candidate/controller/order/OrderController.java",
+        "exam-common/src/main/java/com/hhtele/exam/api/CommonsResult.java",
+        "exam-common/src/main/java/com/hhtele/exam/util/XmlUtil.java",
+        "exam-data/src/main/java/com/hhtele/exam/data/entity/manage/PayAccount.java",
+        "exam-data/src/main/java/com/hhtele/exam/data/repository/order/MsDownloadBillLogRepository.java",
+        "exam-data/src/main/java/com/hhtele/exam/data/repository/order/MsTradeBillRepository.java",
+        "exam-data/src/main/java/com/hhtele/exam/data/service/UserDetail.java",
+        "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/ApplyPayService.java",
+        "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/impl/MsPayServiceImpl.java",
+        "exam-service/exam-service-order/src/main/java/com/hhtele/exam/service/order/service/MsPayService.java"
+      ],
+      "tokenCost": 2498,
+      "discoveredCount": 384,
+      "gateTargetsDiscovered": [
+        "exam-data/src/main/java/com/hhtele/exam/data/entity/manage/PayAccount.java"
+      ]
+    }
+  ]
+}

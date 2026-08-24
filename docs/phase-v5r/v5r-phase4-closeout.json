@@ -1,0 +1,61 @@
+{
+  "schemaVersion": "v5r-phase4-closeout/v1",
+  "phase": 4,
+  "deadline": "2026-09-02",
+  "decision": "COMPLETE",
+  "continuationDecision": "GO",
+  "parentPhase3": "docs/phase-v5r/v5r-phase3-closeout.json",
+  "phase4WriteTree": "2c35ab1c7bbe85c151be9f02f23c93567c946c55",
+  "productionLoc": 38437,
+  "v4LocBaseline": 35472,
+  "v4LocCap": 37245,
+  "locNote": "V5R does not treat 37245 as a hard merge gate. Phase 4 mapped +299 LOC versus Phase 3 to the frontier builder, oracle coverage, and reverse-query design note.",
+  "frontier": {
+    "defaultMode": "shadow",
+    "flag": "JAVA_LSP_FRONTIER_SHADOW=off|shadow",
+    "publicMcp": false,
+    "version": 6,
+    "attachPath": "diagnostic metrics.readPlan.frontierShadow",
+    "caps": {
+      "frontierMaxItems": 8,
+      "frontierMaxBytes": 8192,
+      "maxPerRelation": 2,
+      "maxPerFile": 1,
+      "maxPerFamily": 2
+    },
+    "notDroppedTopK": true,
+    "reverseQueryOpened": false
+  },
+  "holdoutOracle": {
+    "evidence": "docs/phase-v5r/v5r-phase4-holdout-oracle.json",
+    "firstMustHitMean": 0.525,
+    "poolOracleMustHitMean": 0.825,
+    "lift": 0.3,
+    "scenariosLiftedInShippedBuilder": ">=4 of 6",
+    "discoveryGapsRemain": ["paper-task MeQueryService", "exam-data print-bundle types", "exam-data pay templates"]
+  },
+  "lambda": {
+    "status": "CALIBRATED_OFFLINE",
+    "scalarAllowed": false,
+    "gate": "per-field cost-vector only; no J(π)"
+  },
+  "threeRepoMatrix": "not required: first-call ranking/readPlan identity preserved. Holdout oracle used V4-final r1-new first plans plus the shipped frontier builder.",
+  "isolationFull": {
+    "tests": 1052,
+    "scripts": 164,
+    "fail": 0,
+    "targetedFrontierPath": { "tests": 72, "pass": 72, "fail": 0 }
+  },
+  "exitChecklist": {
+    "frontierBuilderExists": true,
+    "shadowOnlyDiagnostic": true,
+    "oracleCoverageAboveFirstPlan": true,
+    "responseByteCap": true,
+    "notSingleFamilyTopK": true,
+    "firstPlanUnchanged": true,
+    "reverseQueryDesignOnly": true,
+    "noContinuationImplemented": true,
+    "noPublicPlannerScores": true
+  },
+  "phase5Note": "GO means budget-evicted / in-pool goldens justify a later continuation session. Do not claim discovery-gap files. Do not open reverse QUERY_CALLERS in Phase 5 unless that phase budgets the extra query."
+}

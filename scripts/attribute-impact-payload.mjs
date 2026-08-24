@@ -2,37 +2,46 @@
 // input: built dist plus benchmark scenarios.
 // output: runtime javaImpact payload bytes by verbosity and component.
 // pos: Verifies MCP handler payload shape, including withPhaseMs behavior.
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { AgentRouter } from "../dist/agent-router/index.js";
-import { SourceIndex } from "../dist/source-index.js";
+import { buildImpactPayloadProjectionV3 } from "../dist/benchmark/attribution-v3.js";
+import { JavaIndexClient } from "../dist/java-index/java-index-client.js";
+import { RouterJavaIndex } from "../dist/java-index/router-java-index.js";
 import { JdtlsSession } from "../dist/jdtls-session.js";
 import { javaImpact } from "../dist/tools/impact.js";
 
 const projectDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const cli = parseArgs(process.argv.slice(2));
+if (process.env.JAVA_LSP_ISOLATED_VALIDATION !== "1") {
+  throw new Error("attribute-impact-payload must run through the detached isolated validation harness");
+}
 const scenarioFile = cli.scenarios || path.join(projectDir, "golden", `${cli.projectId}.scenarios.jsonl`);
 if (!existsSync(path.join(projectDir, "dist", "tools", "impact.js"))) {
   throw new Error("dist/tools/impact.js does not exist; run npm run build first.");
 }
 
 const scenarios = loadScenarios(scenarioFile).filter(scenario => !scenario.projectId || scenario.projectId === cli.projectId);
+const isolatedIndexCache = cli.indexCacheDir || mkdtempSync(path.join(os.tmpdir(), "java-impact-payload-index-"));
+const ownsIndexCache = cli.indexCacheDir === undefined;
 const session = new JdtlsSession(cli.repoRoot);
-const sourceIndex = new SourceIndex(cli.repoRoot);
-const router = new AgentRouter(cli.repoRoot, session, sourceIndex);
+const javaIndexClient = new JavaIndexClient(cli.repoRoot, isolatedIndexCache);
+const javaIndex = new RouterJavaIndex(cli.repoRoot, javaIndexClient);
+const router = new AgentRouter(cli.repoRoot, session, javaIndex);
 const context = {
   repoRoot: cli.repoRoot,
   session,
-  sourceIndex,
+  javaIndex,
+  javaIndexClient,
   router
 };
 
 const rows = [];
-for (const scenario of scenarios) {
-  const byVerbosity = {};
-  for (const verbosity of ["standard", "diagnostic", "compact"]) {
-    const result = await javaImpact(context, {
+try {
+  for (const scenario of scenarios) {
+    const canonical = await javaImpact(context, {
       anchors: [scenario.anchor],
       mode: cli.mode,
       profile: scenario.anchor.profile,
@@ -44,54 +53,60 @@ for (const scenario of scenarios) {
       excludeModules: [],
       taskKeywords: scenario.anchor.taskKeywords || [],
       crossModulePolicy: "auto",
-      verbosity
+      verbosity: "diagnostic"
     });
-    byVerbosity[verbosity] = attribution(result);
+    const projection = buildImpactPayloadProjectionV3(canonical);
+    rows.push({
+      id: scenario.id,
+      name: scenario.name,
+      schemaVersion: projection.schemaVersion,
+      canonicalExecutions: projection.canonicalExecutions,
+      candidateReadPlanSha256: projection.candidateReadPlanSha256,
+      defaultToolSerializedBytes: projection.defaultToolSerializedBytes,
+      defaultToolEstimatedTokens: projection.defaultToolEstimatedTokens,
+      diagnosticSerializedBytes: projection.diagnosticSerializedBytes,
+      diagnosticEstimatedTokens: projection.diagnosticEstimatedTokens,
+      standardToDiagnosticBytesRatio: projection.standardToDiagnosticBytesRatio,
+      verbosity: projection.projections
+    });
   }
-  rows.push({
-    id: scenario.id,
-    name: scenario.name,
-    verbosity: byVerbosity
-  });
-}
 
-await session.stop();
-
-console.log(JSON.stringify({
-  metadata: {
-    generatedAt: new Date().toISOString(),
-    repoRoot: cli.repoRoot,
-    projectId: cli.projectId,
-    scenarios: scenarioFile,
-    mode: cli.mode
-  },
-  totals: averageAttribution(rows),
-  rows
-}, null, 2));
-
-function attribution(result) {
-  const payload = result && typeof result === "object" ? result : {};
-  const metrics = payload.metrics && typeof payload.metrics === "object" ? payload.metrics : {};
-  return {
-    totalBytes: byteLength(payload),
-    filesBytes: byteLength(payload.files || []),
-    readPlanBytes: byteLength(payload.readPlan || []),
-    rgSummaryBytes: byteLength(payload.rgSummary || {}),
-    rgSectionFilesBytes: byteLength((payload.rgSummary?.sections || []).map(section => section.files || [])),
-    evidenceGapsBytes: byteLength(payload.evidenceGaps || []),
-    metricsBytes: byteLength(metrics),
-    hasPhaseMs: Object.hasOwn(metrics, "phaseMs"),
-    hasCache: Object.hasOwn(metrics, "cache"),
-    hasRgCache: Object.hasOwn(metrics, "rgCache"),
-    hasSourceFacts: Object.hasOwn(metrics, "sourceFacts"),
-    outputBytes: metrics.outputBytes || 0
-  };
+  console.log(JSON.stringify({
+    metadata: {
+      generatedAt: new Date().toISOString(),
+      repoRoot: cli.repoRoot,
+      projectId: cli.projectId,
+      scenarios: scenarioFile,
+      indexBackend: "v2",
+      mode: cli.mode,
+      measurement: "single-diagnostic-canonical-with-pure-verbosity-projections",
+      canonicalExecutionsPerScenario: 1,
+      defaultToolResponse: "standard",
+      indexCacheDir: isolatedIndexCache,
+      indexCacheIsolation: ownsIndexCache ? "temporary-owned" : "caller-supplied"
+    },
+    totals: averageAttribution(rows),
+    rows
+  }, null, 2));
+} finally {
+  await session.stop().catch(() => undefined);
+  await javaIndexClient.close().catch(() => undefined);
+  if (ownsIndexCache) rmSync(isolatedIndexCache, { recursive: true, force: true });
 }
 
 function averageAttribution(rows) {
   const result = {};
   for (const verbosity of ["standard", "diagnostic", "compact"]) {
-    result[verbosity] = average(rows.map(row => row.verbosity[verbosity]));
+    const entries = rows.map(row => row.verbosity[verbosity]);
+    result[verbosity] = {
+      ...average(entries),
+      fields: Object.fromEntries(
+        Object.keys(entries[0]?.fields || {}).map(field => [
+          field,
+          average(entries.map(entry => entry.fields[field]))
+        ])
+      )
+    };
   }
   return result;
 }
@@ -109,10 +124,6 @@ function average(items) {
     totals[key] = round(totals[key] / (items.length || 1));
   }
   return totals;
-}
-
-function byteLength(value) {
-  return Buffer.byteLength(JSON.stringify(value), "utf8");
 }
 
 function loadScenarios(file) {
@@ -134,7 +145,8 @@ function parseArgs(args) {
     repoRoot: values.get("--repo-root") || path.join(projectDir, "fixtures", "generic-java"),
     scenarios: values.get("--scenarios"),
     projectId,
-    mode: values.get("--mode") || "balanced"
+    mode: values.get("--mode") || "balanced",
+    indexCacheDir: values.get("--index-cache-dir")
   };
 }
 

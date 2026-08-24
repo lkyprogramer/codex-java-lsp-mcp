@@ -1,0 +1,335 @@
+{
+  "schemaVersion": "m0-memory-benchmark/v2",
+  "dated": "2026-08-22",
+  "gates": {
+    "G1_LISHUEDU_HEAP_MIB": 200,
+    "G1_SMALL_HEAP_MIB": 64,
+    "G1_STAGING_LISHUEDU_HEAP_MIB": 500,
+    "G2_LISHUEDU_RSS_MIB": 400,
+    "G2_SMALL_RSS_MIB": 128,
+    "G3_CHILD_PEAK_MIB": 1536,
+    "G3_PARENT_COLD_INCREMENT_MIB": 100,
+    "G4_SNAPSHOT_LOAD_MS": 2000,
+    "G5_P95_RATIO": 1.1,
+    "G5_FIRST_HYDRATE_MS": 2000,
+    "S1_RSS_MIB": 1024,
+    "S2_RSS_MIB": 1433.6,
+    "S4_HIBERNATE_HEAP_MIB": 32
+  },
+  "m0WarmP95Ms": {
+    "lishuedu": 77.2,
+    "cipherlink": 40.9,
+    "exam-parent-v3": 38.5
+  },
+  "projects": [
+    {
+      "project": "lishuedu",
+      "coldMs": 100630.932,
+      "snapshotLoadMs": 1533.808124999996,
+      "rssBeforeBytes": 58441728,
+      "rssPeakBytes": 196689920,
+      "rssSteadySameProcessBytes": 760741888,
+      "rssDeltaSameProcessBytes": 702300160,
+      "heapUsedBytes": 181772896,
+      "coldHeapUsedBytes": 452150944,
+      "hotHeapUsedBytes": 422483456,
+      "clientHeapUsedBytes": 6482248,
+      "parentHeapStatistics": {
+        "usedHeapSize": 6483656,
+        "totalHeapSize": 24739840,
+        "heapSizeLimit": 4345298944,
+        "mallocedMemory": 278632,
+        "peakMallocedMemory": 3719168,
+        "numberOfNativeContexts": 1
+      },
+      "snapshotGzBytes": 23904851,
+      "childColdPeakRssBytes": 2423078912,
+      "parentColdIncrementBytes": 0,
+      "nodes": 58771,
+      "edges": 233293,
+      "files": 5312,
+      "types": 0,
+      "methods": 0,
+      "warm": {
+        "scenarios": 10,
+        "firstHydrateMs": 8983.623666999993,
+        "steadyScenarios": 9,
+        "steadyWarmP50Ms": 63.68374999999651,
+        "steadyWarmP95Ms": 86.4587920000049,
+        "p50Ms": 63.68374999999651,
+        "p95Ms": 8983.623666999993,
+        "latenciesMs": [
+          8983.623666999993,
+          62.0210839999927,
+          80.00525000000198,
+          61.253624999997555,
+          63.68374999999651,
+          66.30745800001023,
+          57.930291999990004,
+          62.71233300000313,
+          86.4587920000049,
+          72.22804200000246
+        ]
+      },
+      "attribution": {
+        "discovered": 5312,
+        "sampledBundles": 96,
+        "constructors": {
+          "other": 6171,
+          "JavaFileFacts": 96,
+          "JavaImportFact": 750,
+          "SourceRange": 15009,
+          "SourcePoint": 30018,
+          "JavaTypeFacts": 110,
+          "JavaFieldFacts": 405,
+          "JavaTypeRef": 6508,
+          "TypeResolution": 4059,
+          "JavaAnnotationFact": 184,
+          "JavaMethodFacts": 266,
+          "JavaCallSiteFact": 2922,
+          "StaticEdge": 3030,
+          "JavaTypeParameterFact": 1
+        },
+        "objects": 69529,
+        "arrays": 14043,
+        "strings": 68102,
+        "stringBytes": 6933504,
+        "uniqueStringBytes": 1956844,
+        "objectHeaderBytes": 6174496,
+        "arrayBytes": 788208,
+        "estimatedBytes": 13896208,
+        "duplicatedStringBytes": 4976660,
+        "shares": {
+          "strings": 0.4989,
+          "uniqueStrings": 0.1408,
+          "objects": 0.4443,
+          "arrays": 0.0567
+        }
+      },
+      "hibernate": {
+        "heapUsedBytes": 9838720,
+        "reheatMs": 149.8315830000065,
+        "hibernated": true
+      }
+    },
+    {
+      "project": "cipherlink",
+      "coldMs": 9424.426792,
+      "snapshotLoadMs": 287.8610000000008,
+      "rssBeforeBytes": 58228736,
+      "rssPeakBytes": 108298240,
+      "rssSteadySameProcessBytes": 391397376,
+      "rssDeltaSameProcessBytes": 333168640,
+      "heapUsedBytes": 30562336,
+      "coldHeapUsedBytes": 62850104,
+      "hotHeapUsedBytes": 59074392,
+      "clientHeapUsedBytes": 7306968,
+      "parentHeapStatistics": {
+        "usedHeapSize": 7307336,
+        "totalHeapSize": 44400640,
+        "heapSizeLimit": 4345298944,
+        "mallocedMemory": 278632,
+        "peakMallocedMemory": 4349952,
+        "numberOfNativeContexts": 1
+      },
+      "snapshotGzBytes": 2482227,
+      "childColdPeakRssBytes": 482148352,
+      "parentColdIncrementBytes": 131072,
+      "nodes": 7446,
+      "edges": 25443,
+      "files": 629,
+      "types": 0,
+      "methods": 0,
+      "warm": {
+        "scenarios": 10,
+        "firstHydrateMs": 582.1651249999995,
+        "steadyScenarios": 9,
+        "steadyWarmP50Ms": 23.19800000000032,
+        "steadyWarmP95Ms": 29.42108299999927,
+        "p50Ms": 23.19800000000032,
+        "p95Ms": 582.1651249999995,
+        "latenciesMs": [
+          582.1651249999995,
+          23.19800000000032,
+          17.620750000000044,
+          13.883582999998907,
+          13.334208000000217,
+          23.94245899999987,
+          24.073958000000857,
+          23.666541999999026,
+          29.42108299999927,
+          22.717791000000943
+        ]
+      },
+      "attribution": {
+        "discovered": 629,
+        "sampledBundles": 96,
+        "constructors": {
+          "other": 7243,
+          "JavaFileFacts": 96,
+          "JavaImportFact": 548,
+          "SourceRange": 16443,
+          "SourcePoint": 32886,
+          "JavaTypeFacts": 126,
+          "JavaAnnotationFact": 137,
+          "JavaMethodFacts": 482,
+          "JavaTypeRef": 6826,
+          "TypeResolution": 3672,
+          "JavaCallSiteFact": 3480,
+          "StaticEdge": 3189,
+          "JavaFieldFacts": 461
+        },
+        "objects": 75589,
+        "arrays": 16782,
+        "strings": 71677,
+        "stringBytes": 7319434,
+        "uniqueStringBytes": 2137180,
+        "objectHeaderBytes": 6700576,
+        "arrayBytes": 935392,
+        "estimatedBytes": 14955402,
+        "duplicatedStringBytes": 5182254,
+        "shares": {
+          "strings": 0.4894,
+          "uniqueStrings": 0.1429,
+          "objects": 0.448,
+          "arrays": 0.0625
+        }
+      },
+      "hibernate": {
+        "heapUsedBytes": 10947512,
+        "reheatMs": 13.6544159999994,
+        "hibernated": true
+      }
+    },
+    {
+      "project": "exam-parent-v3",
+      "coldMs": 18938.094917,
+      "snapshotLoadMs": 504.3437090000007,
+      "rssBeforeBytes": 58392576,
+      "rssPeakBytes": 116965376,
+      "rssSteadySameProcessBytes": 500842496,
+      "rssDeltaSameProcessBytes": 442449920,
+      "heapUsedBytes": 47868776,
+      "coldHeapUsedBytes": 110671320,
+      "hotHeapUsedBytes": 103543456,
+      "clientHeapUsedBytes": 7320160,
+      "parentHeapStatistics": {
+        "usedHeapSize": 7320528,
+        "totalHeapSize": 43352064,
+        "heapSizeLimit": 4345298944,
+        "mallocedMemory": 278632,
+        "peakMallocedMemory": 5009408,
+        "numberOfNativeContexts": 1
+      },
+      "snapshotGzBytes": 5335253,
+      "childColdPeakRssBytes": 767787008,
+      "parentColdIncrementBytes": 0,
+      "nodes": 15635,
+      "edges": 52811,
+      "files": 1369,
+      "types": 0,
+      "methods": 0,
+      "warm": {
+        "scenarios": 10,
+        "firstHydrateMs": 1599.9343750000007,
+        "steadyScenarios": 9,
+        "steadyWarmP50Ms": 23.645583000001352,
+        "steadyWarmP95Ms": 41.07612499999959,
+        "p50Ms": 23.645583000001352,
+        "p95Ms": 1599.9343750000007,
+        "latenciesMs": [
+          1599.9343750000007,
+          21.51941699999952,
+          23.308374999996886,
+          18.928125000002183,
+          23.645583000001352,
+          25.396749999999884,
+          41.07612499999959,
+          33.249542000001384,
+          26.9128329999985,
+          19.924666999999317
+        ]
+      },
+      "attribution": {
+        "discovered": 1369,
+        "sampledBundles": 96,
+        "constructors": {
+          "other": 6249,
+          "JavaFileFacts": 96,
+          "JavaImportFact": 916,
+          "SourceRange": 16056,
+          "SourcePoint": 32112,
+          "JavaTypeFacts": 115,
+          "JavaAnnotationFact": 192,
+          "JavaFieldFacts": 511,
+          "JavaTypeRef": 6546,
+          "TypeResolution": 4280,
+          "JavaMethodFacts": 269,
+          "JavaCallSiteFact": 3409,
+          "StaticEdge": 3176
+        },
+        "objects": 73927,
+        "arrays": 14845,
+        "strings": 72408,
+        "stringBytes": 6980510,
+        "uniqueStringBytes": 2099168,
+        "objectHeaderBytes": 6567088,
+        "arrayBytes": 834432,
+        "estimatedBytes": 14382030,
+        "duplicatedStringBytes": 4881342,
+        "shares": {
+          "strings": 0.4854,
+          "uniqueStrings": 0.146,
+          "objects": 0.4566,
+          "arrays": 0.058
+        }
+      },
+      "hibernate": {
+        "heapUsedBytes": 9825928,
+        "reheatMs": 38.85750000000189,
+        "hibernated": true
+      }
+    }
+  ],
+  "scenarios": {
+    "S1": {
+      "id": "S1",
+      "status": "UNMEASURED",
+      "reason": "skipped",
+      "rssSumBytes": null,
+      "rssDeltaBytes": null,
+      "heapUsedSumBytes": null,
+      "runtimes": []
+    },
+    "S2": {
+      "id": "S2",
+      "status": "UNMEASURED",
+      "reason": "skipped",
+      "rssSumBytes": null,
+      "rssDeltaBytes": null,
+      "heapUsedSumBytes": null,
+      "runtimes": []
+    },
+    "S4": {
+      "id": "S4",
+      "status": "MEASURED",
+      "projects": [
+        {
+          "heapUsedBytes": 9838720,
+          "reheatMs": 149.8315830000065,
+          "hibernated": true
+        },
+        {
+          "heapUsedBytes": 10947512,
+          "reheatMs": 13.6544159999994,
+          "hibernated": true
+        },
+        {
+          "heapUsedBytes": 9825928,
+          "reheatMs": 38.85750000000189,
+          "hibernated": true
+        }
+      ]
+    }
+  }
+}

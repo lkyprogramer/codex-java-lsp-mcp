@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "b-b3-closeout/v1",
+  "track": "b",
+  "card": "B3",
+  "dated": "2026-08-24",
+  "decision": "RESOLVED_OPTION_C",
+  "mergeToMain": false,
+  "srcTouched": false,
+  "defaultChainIdentity": "UNCHANGED",
+  "fourthLive": false,
+  "killJavaContext": false,
+  "publicToolsStillExcludeJavaContext": true,
+  "holdoutInspected": false,
+  "taskSuccess": "UNMEASURED",
+  "escalation": "docs/phase-b/b3-escalation.md",
+  "reason": "Corrected B0 pool is productionRanking. NOT_IN_POOL 0.408 > 0.40. Selection-layer 0.592 < 0.60. B1/B2 not entered. User chose C at 2026-08-24 11:53: ruoyi is observation-only; G2 is a pre-existing product gap, not a merge regression.",
+  "options": ["accept-risk-merge", "graph-index-project", "ruoyi-observation"],
+  "chosenOption": "C",
+  "f1Started": true,
+  "f2Started": false,
+  "note": "B3 stop lifted by option C. Execute F1 four doors + ruoyi old-vs-new identity sentinel, then F2 non-squash, then F3 soak. main untouched until F2."
+}

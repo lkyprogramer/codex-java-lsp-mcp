@@ -7,11 +7,12 @@ import { resourceDefaults } from "../dist/resource-defaults.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const defaults = resourceDefaults();
-const gitSha = run("git", ["rev-parse", "--short=12", "HEAD"]) || "unknown";
+const gitSha = process.env.CODEX_JAVA_LSP_BUILD_SHA || run("git", ["rev-parse", "--short=12", "HEAD"]) || "unknown";
 const generatedAt = new Date().toISOString();
 const defaultsFingerprint = createHash("sha1")
   .update(JSON.stringify({
     idleTtlMs: defaults.idleTtlMs,
+    hibernateTtlMs: defaults.hibernateTtlMs,
     importConcurrency: defaults.importConcurrency,
     jdtlsXmx: defaults.jdtlsXmx,
     maxActiveRepos: defaults.maxActiveRepos
@@ -25,6 +26,7 @@ writeFileSync(path.join(root, "dist", "build-stamp.json"), `${JSON.stringify({
   generatedAt,
   defaults: {
     idleTtlMs: defaults.idleTtlMs,
+    hibernateTtlMs: defaults.hibernateTtlMs,
     importConcurrency: defaults.importConcurrency,
     jdtlsXmx: defaults.jdtlsXmx,
     maxActiveRepos: defaults.maxActiveRepos

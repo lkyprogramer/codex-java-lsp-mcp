@@ -1,14 +1,21 @@
+// input: Anchors, JavaIndex facts, routing policy, and the persisted SemanticEdgeStoreV2.
+// output: Candidate map mutations for type graph, import graph, and persisted semantic edges.
+// pos: Static candidate collectors for AgentRouter (Task 22: async JavaIndex V2; Task 33
+//      moved collectPersistedSemanticCandidates onto the versioned semantic edge snapshot).
 import path from "node:path";
 import { classifyPath } from "../repo-layout.js";
-import type { EdgeStore, SemanticEdgeKind } from "../edge-store.js";
 import type { RoutingPolicy } from "../routing-policy.js";
-import type { JavaSourceFacts, SourceIndex } from "../source-index.js";
+import type { RouterIndex } from "../java-index/router-java-index.js";
+import type { JavaSourceFacts } from "../java-index/router-facts.js";
+import type { PersistedSemanticEdgeRelation, SemanticEdgeStoreV2 } from "../semantic-edge-store.js";
 import type { CandidateFile, ImpactOptions, ResolvedAnchor } from "../agent-types.js";
 import {
   breakdown,
+  calleeNamesFromRelations,
   candidateFromFacts,
   mergeCandidate,
-  scoreBase
+  scoreBase,
+  selectPreferredImplementers
 } from "./candidate-helpers.js";
 
 export type ImportGraphMetrics = {
@@ -22,8 +29,9 @@ type CollectCandidatesInput = {
   readonly candidates: Map<string, CandidateFile>;
   readonly anchors: readonly ResolvedAnchor[];
   readonly options: ImpactOptions;
-  readonly sourceIndex: SourceIndex;
+  readonly javaIndex: RouterIndex;
   readonly routingPolicy: RoutingPolicy;
+  readonly generation?: number;
 };
 
 type CollectImportGraphInput = CollectCandidatesInput & {
@@ -32,11 +40,14 @@ type CollectImportGraphInput = CollectCandidatesInput & {
 
 type CollectPersistedSemanticInput = {
   readonly candidates: Map<string, CandidateFile>;
+  readonly candidateMapForAnchor?: (anchor: ResolvedAnchor) => Map<string, CandidateFile>;
   readonly anchors: readonly ResolvedAnchor[];
   readonly options: ImpactOptions;
   readonly repoRoot: string;
   readonly routingPolicy: RoutingPolicy;
-  readonly edgeStore: EdgeStore;
+  readonly javaIndex: RouterIndex;
+  readonly edgeStoreV2: SemanticEdgeStoreV2;
+  readonly generation: number;
   readonly metrics: { edgesSeen: number; addedCandidates: number };
 };
 
@@ -58,105 +69,178 @@ export function candidateFromAnchor(anchor: ResolvedAnchor): CandidateFile {
   };
 }
 
-export function collectTypeGraphCandidates(input: CollectCandidatesInput): void {
-  const { candidates, anchors, options, sourceIndex, routingPolicy } = input;
+/**
+ * Returns exactly the implementation facts merged into `candidates`.  The
+ * provider needs that identity for a bounded, exact second hop; deriving it
+ * later from score/reason deltas is lossy when providers share candidates.
+ */
+export async function collectTypeGraphCandidates(input: CollectCandidatesInput): Promise<JavaSourceFacts[]> {
+  const { candidates, anchors, options, javaIndex, routingPolicy, generation } = input;
+  const implementations: JavaSourceFacts[] = [];
   for (const anchor of anchors) {
     if (!shouldUseTypeGraph(anchor)) {
       continue;
     }
+    let isInterface = anchor.profile === "port";
+    let anchorTypeId: string | undefined;
+    let calleeNames: string[] = [];
+    try {
+      const anchorFacts = await javaIndex.factsFor(anchor.absolutePath, generation);
+      isInterface = anchorFacts.kind === "interface";
+      anchorTypeId = anchorFacts.typeId;
+      const caller = anchorFacts.methods.find(method => method.name === anchor.methodName);
+      calleeNames = calleeNamesFromRelations(caller?.relations);
+    } catch {
+      // A failed fact read must not prevent the ordinary type lookup; it only
+      // means this candidate cannot claim the stronger implementation reason.
+    }
     const typeName = anchor.className || path.basename(anchor.absolutePath, ".java");
-    for (const facts of sourceIndex.findImplementers(typeName).slice(0, 20)) {
-      const candidate = candidateFromFacts(facts, scoreBase(routingPolicy, "semantic", facts, anchor, options) + 70, "typeGraph");
+    for (const facts of selectPreferredImplementers(await javaIndex.findImplementers(
+      typeName,
+      20,
+      anchor.absolutePath,
+      { typeId: anchorTypeId, hydrate: true }
+    ))) {
+      implementations.push(facts);
+      const candidate = candidateFromFacts(
+        facts,
+        scoreBase(routingPolicy, "semantic", facts, anchor, options) + 70,
+        "typeGraph",
+        { methodName: anchor.methodName, typeName: anchor.className, calleeNames }
+      );
+      if (isInterface) {
+        candidate.reasons = ["typeGraph:implementation-lookup"];
+      }
       mergeCandidate(candidates, candidate);
     }
   }
+  return implementations;
 }
 
-export function collectImportGraphCandidates(input: CollectImportGraphInput): void {
-  const { candidates, anchors, options, sourceIndex, routingPolicy, metrics } = input;
+export async function collectImportGraphCandidates(input: CollectImportGraphInput): Promise<void> {
+  const { candidates, anchors, options, javaIndex, routingPolicy, metrics, generation } = input;
   if (options.semanticPolicy === "required") {
     return;
   }
   for (const anchor of anchors) {
     let anchorFacts: JavaSourceFacts;
     try {
-      anchorFacts = sourceIndex.factsFor(anchor.absolutePath);
+      anchorFacts = await javaIndex.factsFor(anchor.absolutePath, generation);
     } catch {
       continue;
     }
     metrics.scannedAnchors += 1;
     const localImports = projectLocalImports(anchorFacts.imports, anchorFacts.packageName);
-    for (const facts of sourceIndex.findTypeDefinitions(localImports).slice(0, 40)) {
+    const positionHint = { methodName: anchor.methodName, typeName: anchor.className };
+    for (const facts of await javaIndex.findTypeDefinitions(localImports, 40, true)) {
       if (facts.absolutePath === anchor.absolutePath) {
         continue;
       }
-      if (candidates.has(facts.absolutePath)) {
+      const alreadyCandidate = candidates.has(facts.absolutePath);
+      if (alreadyCandidate) {
         metrics.skippedExisting += 1;
-        continue;
       }
-      mergeCandidate(candidates, candidateFromFacts(facts, scoreBase(routingPolicy, "semantic", facts, anchor, options) + 65, "importGraph"));
-      metrics.addedCandidates += 1;
+      mergeCandidate(
+        candidates,
+        candidateFromFacts(facts, scoreBase(routingPolicy, "semantic", facts, anchor, options) + 65, "importGraph", positionHint)
+      );
+      if (!alreadyCandidate) {
+        metrics.addedCandidates += 1;
+      }
     }
     const typeName = anchor.className || path.basename(anchor.absolutePath, ".java");
     const importerLookupName = anchorFacts.packageName ? `${anchorFacts.packageName}.${typeName}` : typeName;
-    for (const facts of sourceIndex.findImporters(importerLookupName).slice(0, 20)) {
+    for (const facts of await javaIndex.findImporters(importerLookupName, 20, {
+      typeId: anchorFacts.typeId,
+      hydrate: true
+    })) {
       if (facts.absolutePath === anchor.absolutePath) {
         continue;
       }
-      if (candidates.has(facts.absolutePath)) {
+      const alreadyCandidate = candidates.has(facts.absolutePath);
+      if (alreadyCandidate) {
         metrics.skippedExisting += 1;
-        continue;
       }
-      const candidate = candidateFromFacts(facts, scoreBase(routingPolicy, "semantic", facts, anchor, options) + 20, "importGraph");
+      const candidate = candidateFromFacts(
+        facts,
+        scoreBase(routingPolicy, "semantic", facts, anchor, options) + 20,
+        "importGraph",
+        positionHint
+      );
       candidate.reasons = ["importGraph:reverse"];
       mergeCandidate(candidates, candidate);
-      metrics.addedCandidates += 1;
+      if (!alreadyCandidate) {
+        metrics.addedCandidates += 1;
+      }
     }
   }
 }
 
-export function collectPersistedSemanticCandidates(input: CollectPersistedSemanticInput): void {
-  const { candidates, anchors, options, repoRoot, routingPolicy, edgeStore, metrics } = input;
+export async function collectPersistedSemanticCandidates(
+  input: CollectPersistedSemanticInput
+): Promise<{ failedAnchors: string[] }> {
+  const { candidates, anchors, options, repoRoot, routingPolicy, javaIndex, edgeStoreV2, generation, metrics } = input;
   if (options.semanticPolicy === "required") {
-    return;
+    return { failedAnchors: [] };
   }
+  const failedAnchors: string[] = [];
   for (const anchor of anchors) {
+    const anchorCandidates = input.candidateMapForAnchor?.(anchor) ?? candidates;
+    let anchorSymbol: { symbolId: string } | undefined;
+    try {
+      anchorSymbol = await javaIndex.queryAnchor(anchor.absolutePath, anchor.line, anchor.column);
+    } catch {
+      failedAnchors.push(anchor.id);
+      continue;
+    }
+    if (!anchorSymbol) {
+      continue;
+    }
     const seenEdges = new Set<string>();
     let uniqueEdges = 0;
-    for (const edge of edgeStore.edgesFor(anchor.absolutePath)) {
+    for (const edge of edgeStoreV2.findFrom(anchorSymbol.symbolId, generation)) {
       metrics.edgesSeen += 1;
-      const edgeKey = `${edge.kind}\0${edge.to}`;
+      const kind = persistedRelationToKind(edge.relation);
+      if (!kind) {
+        continue;
+      }
+      const edgeKey = `${kind}\0${edge.targetFile}`;
       if (seenEdges.has(edgeKey)) {
         continue;
       }
       seenEdges.add(edgeKey);
-      if (edge.to === anchor.absolutePath) {
+      if (edge.targetFile === anchor.absolutePath) {
         continue;
       }
       if (uniqueEdges >= 40) {
         break;
       }
-      const context = classifyPath(repoRoot, edge.to);
-      const score = scoreBase(routingPolicy, "semantic", context, anchor, options) + persistedEdgeScoreBonus(edge.kind);
-      mergeCandidate(candidates, {
-        absolutePath: edge.to,
+      const context = classifyPath(repoRoot, edge.targetFile);
+      const score = scoreBase(routingPolicy, "semantic", context, anchor, options) + persistedEdgeScoreBonus(kind);
+      // Edges written before targetRanges was added to the dual-write (Task
+      // 33 read-cutover) still carry an empty array; this rebuildable cache
+      // just falls back to {1,1} for those until they age out or are rewritten.
+      const range = edge.targetRanges[0]?.start ?? { line: 1, column: 1 };
+      mergeCandidate(anchorCandidates, {
+        absolutePath: edge.targetFile,
         path: context.relativePath,
         module: context.module,
         layer: context.layer,
         sourceSet: context.sourceSet,
         score,
         matchCount: 0,
-        positions: [{ line: edge.line, column: edge.column }],
+        positions: [{ line: range.line, column: range.column }],
         categories: ["semantic"],
-        reasons: [`persisted-${edge.kind}`],
+        reasons: [`persisted-${kind}`],
         confidence: "high",
-        verifiedBy: [`persisted-${edge.kind}`],
-        scoreBreakdown: [breakdown(`semantic.persisted-${edge.kind}`, "semantic-seed", score, `persisted ${edge.kind} edge`)]
+        verifiedBy: [`persisted-${kind}`],
+        scoreBreakdown: [breakdown(`semantic.persisted-${kind}`, "semantic-seed", score, `persisted ${kind} edge`)]
       });
       metrics.addedCandidates += 1;
       uniqueEdges += 1;
     }
   }
+  return { failedAnchors };
 }
 
 function shouldUseTypeGraph(anchor: ResolvedAnchor): boolean {
@@ -173,7 +257,22 @@ function projectLocalImports(imports: string[], packageName: string | undefined)
   return imports.filter(value => value.startsWith(`${prefix}.`));
 }
 
-function persistedEdgeScoreBonus(kind: SemanticEdgeKind): number {
+type PersistedEdgeKind = "reference" | "implementation" | "typeHierarchy";
+
+function persistedRelationToKind(relation: PersistedSemanticEdgeRelation): PersistedEdgeKind | undefined {
+  if (relation === "JDT_REFERENCE") {
+    return "reference";
+  }
+  if (relation === "JDT_IMPLEMENTATION") {
+    return "implementation";
+  }
+  if (relation === "JDT_TYPE_HIERARCHY") {
+    return "typeHierarchy";
+  }
+  return undefined;
+}
+
+function persistedEdgeScoreBonus(kind: PersistedEdgeKind): number {
   if (kind === "implementation") {
     return 90;
   }

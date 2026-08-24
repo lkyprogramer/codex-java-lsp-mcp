@@ -1,0 +1,1257 @@
+{
+  "version": 6,
+  "verifiedAt": "2026-08-19T09:21:00.250Z",
+  "matrixDir": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/matrix",
+  "manifest": {
+    "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/run-manifest.json",
+    "sha256": "ff9626a9478b1475eca9e7e20874142b8d550e22f1b07ed8470024fa8056b216",
+    "verifierVersion": 6,
+    "runtimes": {
+      "old": {
+        "commit": "63a80a2a0b4e9947bbf94a454ae1d14ece64dca9",
+        "commitTree": "cb34acd5e35d60fa02763bb8344639d1ac83fe86",
+        "executableTree": "cb34acd5e35d60fa02763bb8344639d1ac83fe86",
+        "buildStamp": {
+          "gitSha": "63a80a2a0b4e",
+          "generatedAt": "2026-08-19T09:11:56.467Z",
+          "defaults": {
+            "idleTtlMs": 2700000,
+            "importConcurrency": 2,
+            "jdtlsXmx": "2g",
+            "maxActiveRepos": 3
+          },
+          "defaultsFingerprint": "e5835394a86f"
+        }
+      },
+      "new": {
+        "commit": "4130e3a6ad6e5a6d0af3edb6c5731a6d316cdcd6",
+        "commitTree": "a3e3dbad76f12c3ddcff7236f48bfcd6cd159dbb",
+        "executableTree": "a56af2f9d469f8f0e7b47dd7bbc54d3f98778159",
+        "buildStamp": {
+          "gitSha": "4130e3a6ad6e",
+          "generatedAt": "2026-08-19T09:11:59.893Z",
+          "defaults": {
+            "idleTtlMs": 2700000,
+            "importConcurrency": 2,
+            "jdtlsXmx": "2g",
+            "maxActiveRepos": 3
+          },
+          "defaultsFingerprint": "e5835394a86f"
+        }
+      }
+    },
+    "repositories": {
+      "lishuedu": {
+        "root": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-mcp-three-repo-JMAX0C/repositories/lishuedu",
+        "head": "db63b1a7e393edd90449eb013d7d1c4d65c366f2",
+        "tree": "22f0ce444e4cac484de85c8a0bf02240ad70d712",
+        "clean": true,
+        "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "sourceRoot": "/tmp/codex-java-v3-golden-20260809/lishuedu"
+      },
+      "cipherlink": {
+        "root": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-mcp-three-repo-JMAX0C/repositories/cipherlink",
+        "head": "fa433982e92e52dd610650d1e79f2d041179b1d3",
+        "tree": "21a1075c7b211932a4cdb2abf2742521b1eba31f",
+        "clean": true,
+        "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "sourceRoot": "/tmp/codex-java-v3-golden-20260809/cipherlink"
+      },
+      "exam-parent-v3": {
+        "root": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-mcp-three-repo-JMAX0C/repositories/exam-parent-v3",
+        "head": "f90a0b475f7be2ed003703feecec8195bc7eb976",
+        "tree": "dcdb2024879686451859c64260c7e1f3a4721fa7",
+        "clean": true,
+        "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "sourceRoot": "/tmp/codex-java-v3-golden-20260809/exam-parent-v3"
+      }
+    },
+    "scenarios": {
+      "lishuedu": {
+        "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/frozen-scenarios/lishuedu.scenarios.jsonl",
+        "sha256": "fba58bb3e3e77dfb37f7ded03fb2a9ff02612658b08ca48b15927d102c434c65",
+        "rowIds": [
+          "storage-signed-url",
+          "school-template-parser",
+          "report-reusable-zip",
+          "school-confirm-controller",
+          "benefit-product-code-dto",
+          "school-mapstruct-uses",
+          "audit-order-repository-mapper-rule-type",
+          "audit-assignee-mapper-precision",
+          "exam-score-export-cross-module-holdout",
+          "paper-task-claim-iam-holdout"
+        ],
+        "tuningRowIds": [
+          "storage-signed-url",
+          "school-template-parser",
+          "report-reusable-zip",
+          "school-confirm-controller",
+          "benefit-product-code-dto",
+          "school-mapstruct-uses",
+          "audit-order-repository-mapper-rule-type",
+          "audit-assignee-mapper-precision"
+        ],
+        "holdoutRowIds": [
+          "exam-score-export-cross-module-holdout",
+          "paper-task-claim-iam-holdout"
+        ]
+      },
+      "cipherlink": {
+        "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/frozen-scenarios/cipherlink.scenarios.jsonl",
+        "sha256": "e60dfebcc6cd764e6488c647793db72e098b7cf66385f8012e023fedcaf535d5",
+        "rowIds": [
+          "client-update-check",
+          "transfer-upload-init",
+          "transfer-upload-session-repository",
+          "aliyun-sms-gateway-send",
+          "operation-log-response-dto",
+          "organization-create-member-cross-module",
+          "auth-sms-login-lockout",
+          "account-admin-create-account-guard",
+          "client-release-storage-presign-holdout",
+          "backend-operation-log-aspect-async-audit-holdout"
+        ],
+        "tuningRowIds": [
+          "client-update-check",
+          "transfer-upload-init",
+          "transfer-upload-session-repository",
+          "aliyun-sms-gateway-send",
+          "operation-log-response-dto",
+          "organization-create-member-cross-module",
+          "auth-sms-login-lockout",
+          "account-admin-create-account-guard"
+        ],
+        "holdoutRowIds": [
+          "client-release-storage-presign-holdout",
+          "backend-operation-log-aspect-async-audit-holdout"
+        ]
+      },
+      "exam-parent-v3": {
+        "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+        "sha256": "da84c560c46c7c90d6dbabea38b43b5695a7a23dcd2f608e8c6dcd63cae4f69e",
+        "rowIds": [
+          "rule-engine-execute",
+          "candidate-position-select",
+          "apply-info-save-basic-service",
+          "position-repository-exists",
+          "ceb-order-create-dto",
+          "apply-info-update-cross-exam-guard",
+          "check-people-delete-site-guard",
+          "current-user-service-implementer-edge",
+          "exam-room-print-download-types-persistent-bundle",
+          "candidate-pay-order-cross-module-admission"
+        ],
+        "tuningRowIds": [
+          "rule-engine-execute",
+          "candidate-position-select",
+          "apply-info-save-basic-service",
+          "position-repository-exists",
+          "ceb-order-create-dto",
+          "apply-info-update-cross-exam-guard",
+          "check-people-delete-site-guard",
+          "current-user-service-implementer-edge"
+        ],
+        "holdoutRowIds": [
+          "exam-room-print-download-types-persistent-bundle",
+          "candidate-pay-order-cross-module-admission"
+        ]
+      }
+    },
+    "candidatePatch": {
+      "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/candidate.patch",
+      "sha256": "5aeb953955619bef6d6f9cd070dd098da12e7db440d479a29c5b60e969781947",
+      "bytes": 243372,
+      "appliedToCommit": "4130e3a6ad6e5a6d0af3edb6c5731a6d316cdcd6",
+      "appliedToCommitTree": "a3e3dbad76f12c3ddcff7236f48bfcd6cd159dbb",
+      "resultingExecutableTree": "a56af2f9d469f8f0e7b47dd7bbc54d3f98778159",
+      "untrackedInputs": [
+        {
+          "path": "golden/framework-mybatis.scenarios.jsonl",
+          "sha256": "69ea666d455f0da5c858989e9b07160d931ff459200a0eac2a635d5294fbb90a",
+          "bytes": 598,
+          "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/candidate-untracked/golden/framework-mybatis.scenarios.jsonl"
+        },
+        {
+          "path": "scripts/run-idle-prewarm-experiment.mjs",
+          "sha256": "1a01e089c7b50ed0cbb0a0cae10f0e9527d513a06fd3da9b302286c8d71f4a5a",
+          "bytes": 12697,
+          "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/candidate-untracked/scripts/run-idle-prewarm-experiment.mjs"
+        },
+        {
+          "path": "scripts/run-v324-import-concurrency-experiment.mjs",
+          "sha256": "ec58ec7eb4b19739103ca2551bd521b46c068a487a4e37a6e09e3efe517b44c4",
+          "bytes": 10890,
+          "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/candidate-untracked/scripts/run-v324-import-concurrency-experiment.mjs"
+        },
+        {
+          "path": "scripts/run-v4-gates.mjs",
+          "sha256": "deaff6bf19227b352975eb045d3834df05e9ad90d9314cb4527e38cb5706dd1d",
+          "bytes": 2563,
+          "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/candidate-untracked/scripts/run-v4-gates.mjs"
+        },
+        {
+          "path": "scripts/run-v4-http-smoke.mjs",
+          "sha256": "c3b762bbfcba75a82a97a3e5a669dfef84addbf30aa69db81beb9586eee46495",
+          "bytes": 1905,
+          "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/candidate-untracked/scripts/run-v4-http-smoke.mjs"
+        },
+        {
+          "path": "scripts/run-v409-jdt-datadir-experiment.mjs",
+          "sha256": "73df523194c2c9623a98448a9d8c3b62a40d709bdaccfe3bfc75dfe6d78517a0",
+          "bytes": 4659,
+          "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/candidate-untracked/scripts/run-v409-jdt-datadir-experiment.mjs"
+        },
+        {
+          "path": "src/agent-router/prewarm-metrics.test.ts",
+          "sha256": "1b4ebb2ef6ecb43c0ae0aa50ac8aa5748887d6b7833353dbec9089994eb66088",
+          "bytes": 1630,
+          "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/candidate-untracked/src/agent-router/prewarm-metrics.test.ts"
+        },
+        {
+          "path": "src/agent-router/prewarm-metrics.ts",
+          "sha256": "a802875ad26a54beba6ab52297e4f437a3f20229c548d6f81f1c88aaae63e452",
+          "bytes": 2157,
+          "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/candidate-untracked/src/agent-router/prewarm-metrics.ts"
+        },
+        {
+          "path": "src/java-index/java-index-worker-mybatis.ts",
+          "sha256": "57c51ffef22b6e3b294bd44d0d32f663aa1ded461c173a8b3317c6022fefa234",
+          "bytes": 1433,
+          "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/candidate-untracked/src/java-index/java-index-worker-mybatis.ts"
+        },
+        {
+          "path": "src/java-index/java-index-worker-query.ts",
+          "sha256": "a5940da1a9a98b647979ecdab7e099d587b71b8a3538d621f50686964fb6f020",
+          "bytes": 4669,
+          "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/candidate-untracked/src/java-index/java-index-worker-query.ts"
+        },
+        {
+          "path": "src/java-index/router-java-index-cold.test.ts",
+          "sha256": "484b18a9d4bb5dd7ac47ff843666e7fbe1746c176777a179f0e48556c3388741",
+          "bytes": 912,
+          "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/candidate-untracked/src/java-index/router-java-index-cold.test.ts"
+        },
+        {
+          "path": "src/java-index/router-java-index-cold.ts",
+          "sha256": "fa48af1e5772edf7ff80ea570278ad060f8c4672186a4ba5d7601ddbcdd00476",
+          "bytes": 1628,
+          "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/candidate-untracked/src/java-index/router-java-index-cold.ts"
+        },
+        {
+          "path": "src/jdtls-first-touch.ts",
+          "sha256": "e0af488b09761c5ab1bbdf73ea9767410688854ede463ee5fabe1d6c1060ca5f",
+          "bytes": 11922,
+          "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/candidate-untracked/src/jdtls-first-touch.ts"
+        },
+        {
+          "path": "src/jdtls-hierarchy-walk.ts",
+          "sha256": "f094f039d6421a3a163e334aaa7c6b4de1340c864a74740abe22f847af290898",
+          "bytes": 7212,
+          "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/candidate-untracked/src/jdtls-hierarchy-walk.ts"
+        },
+        {
+          "path": "src/jdtls-lsp-io.ts",
+          "sha256": "3527a4ea1b4305e04df930d36694f69f83cea80f3c18b8ab999339635e5539ac",
+          "bytes": 37524,
+          "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/candidate-untracked/src/jdtls-lsp-io.ts"
+        },
+        {
+          "path": "src/jdtls-lsp-types.ts",
+          "sha256": "8eefbad7aa1d80cd984943db58874a2853686a25143aea21f8dfd785f5e00cd7",
+          "bytes": 1195,
+          "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/candidate-untracked/src/jdtls-lsp-types.ts"
+        },
+        {
+          "path": "src/jdtls-runtime-paths.test.ts",
+          "sha256": "b3e1ba1afc9ebc6d0ca2aa9680f22091f7b330e6279e3ffad36a901875dec6eb",
+          "bytes": 2200,
+          "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/candidate-untracked/src/jdtls-runtime-paths.test.ts"
+        },
+        {
+          "path": "src/jdtls-semantic-backend.ts",
+          "sha256": "112a4861afd7666a1f2fa5b1ec65be10b21cb5e6ef153b0cee7bba747ba74f34",
+          "bytes": 12527,
+          "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/candidate-untracked/src/jdtls-semantic-backend.ts"
+        }
+      ]
+    }
+  },
+  "inputSha256": "02814794c4cec3dd5b009c6947281d5d1cfbb0f9798853faba1d1e26af5b0865",
+  "configuration": {
+    "projects": [
+      "lishuedu",
+      "cipherlink",
+      "exam-parent-v3"
+    ],
+    "rounds": [
+      1,
+      2,
+      3
+    ],
+    "variants": [
+      "old",
+      "new"
+    ],
+    "expectedCells": 18,
+    "expectedRuns": 5,
+    "p95Limit": 1.25
+  },
+  "scenarioFiles": {
+    "lishuedu": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/frozen-scenarios/lishuedu.scenarios.jsonl",
+    "cipherlink": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/frozen-scenarios/cipherlink.scenarios.jsonl",
+    "exam-parent-v3": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/frozen-scenarios/exam-parent-v3.scenarios.jsonl"
+  },
+  "cells": [
+    {
+      "project": "lishuedu",
+      "round": 1,
+      "variant": "old",
+      "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/matrix/lishuedu-r1-old.json",
+      "sha256": "637531a2c17a3ac07eea14ee7ec80398b68076b043eec1bfd4d8cfe453c87951",
+      "scenarioFile": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "lishuedu",
+      "round": 2,
+      "variant": "old",
+      "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/matrix/lishuedu-r2-old.json",
+      "sha256": "49d0e343c3f90b83ccdee373e667ba6742669a4925e738c214a96524f1029f33",
+      "scenarioFile": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "lishuedu",
+      "round": 3,
+      "variant": "old",
+      "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/matrix/lishuedu-r3-old.json",
+      "sha256": "9302c03ae61300a5268a4efd5984ef638e757e71e12e00978773461d4e58e133",
+      "scenarioFile": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "lishuedu",
+      "round": 1,
+      "variant": "new",
+      "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/matrix/lishuedu-r1-new.json",
+      "sha256": "7b18815ab130f18eafc6b0073d980bbfaedbdfb2391c7eadb268a57e246cbaae",
+      "scenarioFile": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "lishuedu",
+      "round": 2,
+      "variant": "new",
+      "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/matrix/lishuedu-r2-new.json",
+      "sha256": "20639c9cee6b9c8aec99ce8167afb749eb36e6837e4e2e664588be29c226a092",
+      "scenarioFile": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "lishuedu",
+      "round": 3,
+      "variant": "new",
+      "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/matrix/lishuedu-r3-new.json",
+      "sha256": "a71e5b6698a8d75f2b2896b16b448e9c16f9b90886b58f27520854df5df9bc71",
+      "scenarioFile": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "cipherlink",
+      "round": 1,
+      "variant": "old",
+      "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/matrix/cipherlink-r1-old.json",
+      "sha256": "dd222ead5394fbecede9d6d532896d205bee5623ff5e56387afd9825b41f3c98",
+      "scenarioFile": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "cipherlink",
+      "round": 2,
+      "variant": "old",
+      "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/matrix/cipherlink-r2-old.json",
+      "sha256": "e49d88d92b8eb06237957111dcd70e8bc7ae1646abd1cec8479738a78ad49500",
+      "scenarioFile": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "cipherlink",
+      "round": 3,
+      "variant": "old",
+      "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/matrix/cipherlink-r3-old.json",
+      "sha256": "1b34a296f3f92ffffcd3b43bbc3996a4dfe13219fcef211c447247c8e7ae98e5",
+      "scenarioFile": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "cipherlink",
+      "round": 1,
+      "variant": "new",
+      "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/matrix/cipherlink-r1-new.json",
+      "sha256": "44b9f244511002877012f665262a91dd7d898d26bb2776753e6da3e9596e9d77",
+      "scenarioFile": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "cipherlink",
+      "round": 2,
+      "variant": "new",
+      "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/matrix/cipherlink-r2-new.json",
+      "sha256": "4f72ccc0bc37319e2e7385a5b6c89b276602937a7c74e83f4fd0fa961bea4626",
+      "scenarioFile": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "cipherlink",
+      "round": 3,
+      "variant": "new",
+      "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/matrix/cipherlink-r3-new.json",
+      "sha256": "42769ee907bf2c1ee8a37332444defdcfd546bbaf2a6f1926f75a46e5bf90577",
+      "scenarioFile": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 1,
+      "variant": "old",
+      "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/matrix/exam-parent-v3-r1-old.json",
+      "sha256": "0f610604af315c9f7d7566eebe459edbb46e3620dc170832d4b27ad21f129d2e",
+      "scenarioFile": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 2,
+      "variant": "old",
+      "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/matrix/exam-parent-v3-r2-old.json",
+      "sha256": "ace3adca1171da304abe8de68a831e2715b1d8df026e9269b83cec3e1c047016",
+      "scenarioFile": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 3,
+      "variant": "old",
+      "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/matrix/exam-parent-v3-r3-old.json",
+      "sha256": "71af2857fd55213ba6ca79c82d3b238b3305df86b12674ee3afbedb4af0ed1e1",
+      "scenarioFile": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 1,
+      "variant": "new",
+      "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/matrix/exam-parent-v3-r1-new.json",
+      "sha256": "970e8297dfba6195e0d735b725c2dee9e9117f78072740e01d2276c354c671af",
+      "scenarioFile": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 2,
+      "variant": "new",
+      "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/matrix/exam-parent-v3-r2-new.json",
+      "sha256": "b841f5b50cab7e90a36865f3b0025284c5f358f4b17ddd8662a0ca4c6bbc7397",
+      "scenarioFile": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 3,
+      "variant": "new",
+      "file": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/matrix/exam-parent-v3-r3-new.json",
+      "sha256": "ab0789810635042a38b496d2387911326dd2c67dacc8a6381f10870679d78356",
+      "scenarioFile": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rows": 10
+    }
+  ],
+  "projects": [
+    {
+      "project": "lishuedu",
+      "old": {
+        "attempts": 150,
+        "recall": 0.7923214285714283,
+        "pRead": 0.7083333333333329,
+        "rReadMust": 0.9,
+        "rTaskBlocking": 0.5721123321123319,
+        "minReadMust": 0.5,
+        "minTaskBlocking": 0.38461538461538464,
+        "estimatedTokensP50": 4308,
+        "estimatedTokensP95": 5720,
+        "rangeEvidence": {
+          "line": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.6342857142857143,
+            "min": 0.14285714285714285
+          },
+          "coordinate": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.6342857142857143,
+            "min": 0.14285714285714285
+          }
+        },
+        "p50": 20.650000000001455,
+        "p95": 212.79745800000092,
+        "max": 271.25554199999897,
+        "mustFailureScenarios": [
+          "exam-score-export-cross-module-holdout",
+          "paper-task-claim-iam-holdout"
+        ],
+        "scenarioFile": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/frozen-scenarios/lishuedu.scenarios.jsonl",
+        "splits": {
+          "tuning": {
+            "attempts": 120,
+            "recall": 0.784672619047619,
+            "pRead": 0.6770833333333333,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.604563492063492,
+            "minReadMust": 1,
+            "minTaskBlocking": 0.42857142857142855,
+            "estimatedTokensP50": 3953,
+            "estimatedTokensP95": 5720,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 0.75,
+                "min": 0.3333333333333333
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 0.75,
+                "min": 0.3333333333333333
+              }
+            },
+            "p50": 18.39716600000247,
+            "p95": 171.46704200000386,
+            "max": 271.25554199999897,
+            "mustFailureScenarios": []
+          },
+          "holdout": {
+            "attempts": 30,
+            "recall": 0.8229166666666665,
+            "pRead": 0.8333333333333331,
+            "rReadMust": 0.5,
+            "rTaskBlocking": 0.44230769230769246,
+            "minReadMust": 0.5,
+            "minTaskBlocking": 0.38461538461538464,
+            "estimatedTokensP50": 5057,
+            "estimatedTokensP95": 5343,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.17142857142857146,
+                "min": 0.14285714285714285
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.17142857142857146,
+                "min": 0.14285714285714285
+              }
+            },
+            "p50": 37.215541999998095,
+            "p95": 212.79745800000092,
+            "max": 221.06004199999734,
+            "mustFailureScenarios": [
+              "exam-score-export-cross-module-holdout",
+              "paper-task-claim-iam-holdout"
+            ]
+          }
+        }
+      },
+      "new": {
+        "attempts": 150,
+        "recall": 0.7985714285714284,
+        "pRead": 0.7216666666666659,
+        "rReadMust": 0.925,
+        "rTaskBlocking": 0.5721123321123319,
+        "minReadMust": 0.5,
+        "minTaskBlocking": 0.38461538461538464,
+        "estimatedTokensP50": 4662,
+        "estimatedTokensP95": 6262,
+        "rangeEvidence": {
+          "line": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.8419047619047617,
+            "min": 0.2857142857142857
+          },
+          "coordinate": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.8419047619047617,
+            "min": 0.2857142857142857
+          }
+        },
+        "p50": 41.84445799999958,
+        "p95": 224.1195419999931,
+        "max": 298.9752080000035,
+        "mustFailureScenarios": [
+          "exam-score-export-cross-module-holdout",
+          "paper-task-claim-iam-holdout"
+        ],
+        "scenarioFile": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/frozen-scenarios/lishuedu.scenarios.jsonl",
+        "splits": {
+          "tuning": {
+            "attempts": 120,
+            "recall": 0.784672619047619,
+            "pRead": 0.6937499999999999,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.604563492063492,
+            "minReadMust": 1,
+            "minTaskBlocking": 0.42857142857142855,
+            "estimatedTokensP50": 4159,
+            "estimatedTokensP95": 4906,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 0.9166666666666662,
+                "min": 0.3333333333333333
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 0.9166666666666662,
+                "min": 0.3333333333333333
+              }
+            },
+            "p50": 39.16437500000029,
+            "p95": 153.6838329999955,
+            "max": 298.9752080000035,
+            "mustFailureScenarios": []
+          },
+          "holdout": {
+            "attempts": 30,
+            "recall": 0.8541666666666664,
+            "pRead": 0.8333333333333331,
+            "rReadMust": 0.625,
+            "rTaskBlocking": 0.44230769230769246,
+            "minReadMust": 0.5,
+            "minTaskBlocking": 0.38461538461538464,
+            "estimatedTokensP50": 5872,
+            "estimatedTokensP95": 6262,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.542857142857143,
+                "min": 0.2857142857142857
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.542857142857143,
+                "min": 0.2857142857142857
+              }
+            },
+            "p50": 115.13124999999854,
+            "p95": 224.1195419999931,
+            "max": 226.31133299999783,
+            "mustFailureScenarios": [
+              "exam-score-export-cross-module-holdout",
+              "paper-task-claim-iam-holdout"
+            ]
+          }
+        }
+      },
+      "delta": {
+        "recall": 0.006250000000000089,
+        "pRead": 0.013333333333332975,
+        "rReadMust": 0.025000000000000022,
+        "rTaskBlocking": 0,
+        "estimatedTokensP50": 354,
+        "p95Ratio": 1.053205917525538,
+        "p95ThresholdMs": 265.99682250000114,
+        "holdout": {
+          "recall": 0.03124999999999989,
+          "pRead": 0,
+          "rReadMust": 0.125,
+          "rTaskBlocking": 0
+        }
+      },
+      "gate": {
+        "rReadMust": false,
+        "rTaskBlocking": true,
+        "recall": true,
+        "pRead": true,
+        "estimatedTokens": false,
+        "p95": true,
+        "rangeLineRecall": false,
+        "rangeCoordinateRecall": false,
+        "holdoutRReadMust": false,
+        "holdoutRTaskBlocking": true,
+        "holdoutRecall": true,
+        "holdoutPRead": true
+      },
+      "passed": false
+    },
+    {
+      "project": "cipherlink",
+      "old": {
+        "attempts": 150,
+        "recall": 0.8157783882783886,
+        "pRead": 0.6433333333333329,
+        "rReadMust": 0.9099999999999996,
+        "rTaskBlocking": 0.45374098124098095,
+        "minReadMust": 0.5,
+        "minTaskBlocking": 0.16666666666666666,
+        "estimatedTokensP50": 3606,
+        "estimatedTokensP95": 5198,
+        "rangeEvidence": {
+          "line": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.85,
+            "min": 0
+          },
+          "coordinate": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.85,
+            "min": 0
+          }
+        },
+        "p50": 22.358125000000655,
+        "p95": 95.14633299999969,
+        "max": 205.98420799999985,
+        "mustFailureScenarios": [
+          "client-release-storage-presign-holdout",
+          "backend-operation-log-aspect-async-audit-holdout"
+        ],
+        "scenarioFile": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/frozen-scenarios/cipherlink.scenarios.jsonl",
+        "splits": {
+          "tuning": {
+            "attempts": 120,
+            "recall": 0.8322229853479857,
+            "pRead": 0.6375000000000001,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.49141865079365077,
+            "minReadMust": 1,
+            "minTaskBlocking": 0.16666666666666666,
+            "estimatedTokensP50": 3572,
+            "estimatedTokensP95": 5198,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 1,
+                "min": 1
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 1,
+                "min": 1
+              }
+            },
+            "p50": 23.880333000000064,
+            "p95": 97.22425000000021,
+            "max": 205.98420799999985,
+            "mustFailureScenarios": []
+          },
+          "holdout": {
+            "attempts": 30,
+            "recall": 0.75,
+            "pRead": 0.6666666666666665,
+            "rReadMust": 0.5499999999999999,
+            "rTaskBlocking": 0.303030303030303,
+            "minReadMust": 0.5,
+            "minTaskBlocking": 0.2727272727272727,
+            "estimatedTokensP50": 3857,
+            "estimatedTokensP95": 4339,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.25,
+                "min": 0
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.25,
+                "min": 0
+              }
+            },
+            "p50": 12.141540999999961,
+            "p95": 48.16516700000011,
+            "max": 51.17504100000042,
+            "mustFailureScenarios": [
+              "client-release-storage-presign-holdout",
+              "backend-operation-log-aspect-async-audit-holdout"
+            ]
+          }
+        }
+      },
+      "new": {
+        "attempts": 150,
+        "recall": 0.8389926739926743,
+        "pRead": 0.6633333333333328,
+        "rReadMust": 0.9099999999999996,
+        "rTaskBlocking": 0.45195526695526667,
+        "minReadMust": 0.5,
+        "minTaskBlocking": 0.25,
+        "estimatedTokensP50": 4422,
+        "estimatedTokensP95": 5477,
+        "rangeEvidence": {
+          "line": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.875,
+            "min": 0.25
+          },
+          "coordinate": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.875,
+            "min": 0.25
+          }
+        },
+        "p50": 39.27425000000039,
+        "p95": 193.66700000000037,
+        "max": 251.25245799999993,
+        "mustFailureScenarios": [
+          "client-release-storage-presign-holdout",
+          "backend-operation-log-aspect-async-audit-holdout"
+        ],
+        "scenarioFile": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/frozen-scenarios/cipherlink.scenarios.jsonl",
+        "splits": {
+          "tuning": {
+            "attempts": 120,
+            "recall": 0.8612408424908428,
+            "pRead": 0.6624999999999995,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.4891865079365078,
+            "minReadMust": 1,
+            "minTaskBlocking": 0.25,
+            "estimatedTokensP50": 4393,
+            "estimatedTokensP95": 5477,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 1,
+                "min": 1
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 1,
+                "min": 1
+              }
+            },
+            "p50": 55.84195799999998,
+            "p95": 194.37737500000003,
+            "max": 251.25245799999993,
+            "mustFailureScenarios": []
+          },
+          "holdout": {
+            "attempts": 30,
+            "recall": 0.75,
+            "pRead": 0.6666666666666665,
+            "rReadMust": 0.5499999999999999,
+            "rTaskBlocking": 0.303030303030303,
+            "minReadMust": 0.5,
+            "minTaskBlocking": 0.2727272727272727,
+            "estimatedTokensP50": 4664,
+            "estimatedTokensP95": 5242,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.375,
+                "min": 0.25
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.375,
+                "min": 0.25
+              }
+            },
+            "p50": 24.312957999999526,
+            "p95": 52.61170800000036,
+            "max": 160.0721249999997,
+            "mustFailureScenarios": [
+              "client-release-storage-presign-holdout",
+              "backend-operation-log-aspect-async-audit-holdout"
+            ]
+          }
+        }
+      },
+      "delta": {
+        "recall": 0.023214285714285743,
+        "pRead": 0.019999999999999907,
+        "rReadMust": 0,
+        "rTaskBlocking": -0.0017857142857142794,
+        "estimatedTokensP50": 816,
+        "p95Ratio": 2.0354646773407548,
+        "p95ThresholdMs": 145.1463329999997,
+        "holdout": {
+          "recall": 0,
+          "pRead": 0,
+          "rReadMust": 0,
+          "rTaskBlocking": 0
+        }
+      },
+      "gate": {
+        "rReadMust": false,
+        "rTaskBlocking": false,
+        "recall": true,
+        "pRead": true,
+        "estimatedTokens": false,
+        "p95": false,
+        "rangeLineRecall": false,
+        "rangeCoordinateRecall": false,
+        "holdoutRReadMust": false,
+        "holdoutRTaskBlocking": true,
+        "holdoutRecall": true,
+        "holdoutPRead": true
+      },
+      "passed": false
+    },
+    {
+      "project": "exam-parent-v3",
+      "old": {
+        "attempts": 150,
+        "recall": 0.7095066045066044,
+        "pRead": 0.5833333333333331,
+        "rReadMust": 0.8800000000000008,
+        "rTaskBlocking": 0.4502380952380954,
+        "minReadMust": 0.4,
+        "minTaskBlocking": 0.14285714285714285,
+        "estimatedTokensP50": 3395,
+        "estimatedTokensP95": 6085,
+        "rangeEvidence": {
+          "line": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.5525000000000001,
+            "min": 0
+          },
+          "coordinate": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.5525000000000001,
+            "min": 0
+          }
+        },
+        "p50": 19.090041999999812,
+        "p95": 127.69370799999888,
+        "max": 169.21608300000025,
+        "mustFailureScenarios": [
+          "exam-room-print-download-types-persistent-bundle",
+          "candidate-pay-order-cross-module-admission"
+        ],
+        "scenarioFile": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+        "splits": {
+          "tuning": {
+            "attempts": 120,
+            "recall": 0.7789772727272726,
+            "pRead": 0.6041666666666665,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.5002976190476192,
+            "minReadMust": 1,
+            "minTaskBlocking": 0.14285714285714285,
+            "estimatedTokensP50": 3311,
+            "estimatedTokensP95": 6085,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 0.625,
+                "min": 0
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 0.625,
+                "min": 0
+              }
+            },
+            "p50": 14.84533300000112,
+            "p95": 95.1434589999999,
+            "max": 169.21608300000025,
+            "mustFailureScenarios": []
+          },
+          "holdout": {
+            "attempts": 30,
+            "recall": 0.4316239316239317,
+            "pRead": 0.5,
+            "rReadMust": 0.4000000000000002,
+            "rTaskBlocking": 0.25,
+            "minReadMust": 0.4,
+            "minTaskBlocking": 0.25,
+            "estimatedTokensP50": 3578,
+            "estimatedTokensP95": 3823,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.26250000000000007,
+                "min": 0.125
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.26250000000000007,
+                "min": 0.125
+              }
+            },
+            "p50": 30.599500000000262,
+            "p95": 135.68812500000058,
+            "max": 136.05712500000118,
+            "mustFailureScenarios": [
+              "exam-room-print-download-types-persistent-bundle",
+              "candidate-pay-order-cross-module-admission"
+            ]
+          }
+        }
+      },
+      "new": {
+        "attempts": 150,
+        "recall": 0.6970066045066045,
+        "pRead": 0.6,
+        "rReadMust": 0.8800000000000008,
+        "rTaskBlocking": 0.48190476190476167,
+        "minReadMust": 0.4,
+        "minTaskBlocking": 0.16666666666666666,
+        "estimatedTokensP50": 3869,
+        "estimatedTokensP95": 6332,
+        "rangeEvidence": {
+          "line": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.8525000000000004,
+            "min": 0.125
+          },
+          "coordinate": {
+            "status": "MEASURED",
+            "expectedAttempts": 150,
+            "measuredAttempts": 150,
+            "unmeasuredAttempts": 0,
+            "mean": 0.8525000000000004,
+            "min": 0.125
+          }
+        },
+        "p50": 91.43325000000004,
+        "p95": 226.87412500000028,
+        "max": 261.85549999999967,
+        "mustFailureScenarios": [
+          "exam-room-print-download-types-persistent-bundle",
+          "candidate-pay-order-cross-module-admission"
+        ],
+        "scenarioFile": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+        "splits": {
+          "tuning": {
+            "attempts": 120,
+            "recall": 0.7633522727272726,
+            "pRead": 0.6458333333333331,
+            "rReadMust": 1,
+            "rTaskBlocking": 0.5502976190476188,
+            "minReadMust": 1,
+            "minTaskBlocking": 0.2857142857142857,
+            "estimatedTokensP50": 3736,
+            "estimatedTokensP95": 6332,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 1,
+                "min": 1
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 120,
+                "measuredAttempts": 120,
+                "unmeasuredAttempts": 0,
+                "mean": 1,
+                "min": 1
+              }
+            },
+            "p50": 35.412874999999985,
+            "p95": 155.45529200000055,
+            "max": 203.02620899999965,
+            "mustFailureScenarios": []
+          },
+          "holdout": {
+            "attempts": 30,
+            "recall": 0.4316239316239317,
+            "pRead": 0.41666666666666674,
+            "rReadMust": 0.4000000000000002,
+            "rTaskBlocking": 0.20833333333333337,
+            "minReadMust": 0.4,
+            "minTaskBlocking": 0.16666666666666666,
+            "estimatedTokensP50": 3869,
+            "estimatedTokensP95": 4021,
+            "rangeEvidence": {
+              "line": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.26250000000000007,
+                "min": 0.125
+              },
+              "coordinate": {
+                "status": "MEASURED",
+                "expectedAttempts": 30,
+                "measuredAttempts": 30,
+                "unmeasuredAttempts": 0,
+                "mean": 0.26250000000000007,
+                "min": 0.125
+              }
+            },
+            "p50": 177.34816599999976,
+            "p95": 261.57808399999885,
+            "max": 261.85549999999967,
+            "mustFailureScenarios": [
+              "exam-room-print-download-types-persistent-bundle",
+              "candidate-pay-order-cross-module-admission"
+            ]
+          }
+        }
+      },
+      "delta": {
+        "recall": -0.012499999999999956,
+        "pRead": 0.01666666666666683,
+        "rReadMust": 0,
+        "rTaskBlocking": 0.03166666666666629,
+        "estimatedTokensP50": 474,
+        "p95Ratio": 1.7767055914767724,
+        "p95ThresholdMs": 177.69370799999888,
+        "holdout": {
+          "recall": 0,
+          "pRead": -0.08333333333333326,
+          "rReadMust": 0,
+          "rTaskBlocking": -0.04166666666666663
+        }
+      },
+      "gate": {
+        "rReadMust": false,
+        "rTaskBlocking": true,
+        "recall": false,
+        "pRead": true,
+        "estimatedTokens": false,
+        "p95": false,
+        "rangeLineRecall": false,
+        "rangeCoordinateRecall": false,
+        "holdoutRReadMust": false,
+        "holdoutRTaskBlocking": false,
+        "holdoutRecall": true,
+        "holdoutPRead": false
+      },
+      "passed": false
+    }
+  ],
+  "warnings": [],
+  "passed": false,
+  "summaryFile": "/tmp/codex-java-lsp-v4-final-cold-20260819-171144/matrix-summary.json"
+}

@@ -12,7 +12,7 @@ import {
   symmetricTypeRelationDelta,
   truncateCandidateTail
 } from "./agent-router/ranking-signals.js";
-import type { JavaSourceFacts } from "./source-index.js";
+import type { JavaSourceFacts } from "./java-index/router-facts.js";
 
 function facts(partial: Partial<JavaSourceFacts>): JavaSourceFacts {
   return {
@@ -23,7 +23,7 @@ function facts(partial: Partial<JavaSourceFacts>): JavaSourceFacts {
     wildcardImports: [],
     annotations: [],
     methods: [],
-    factSource: "regex",
+    factSource: "javaIndex",
     ...partial
   };
 }
@@ -96,6 +96,28 @@ test("hasProtectedStructuralSignal reads positive protected deltas from scoreBre
   assert.equal(hasProtectedStructuralSignal(weakFocus), false);
   const weakAnnotation = cand("/f.java", 10, [{ id: "finalize.structural.annotation", source: "finalize", delta: 50, reason: "" }]);
   assert.equal(hasProtectedStructuralSignal(weakAnnotation), false);
+  const directMethodType = cand("/g.java", 10, [{ id: "finalize.method-relation", source: "finalize", delta: 160, reason: "parameter type" }]);
+  assert.equal(
+    hasProtectedStructuralSignal(directMethodType),
+    true,
+    "a direct method parameter/return type is exact static evidence and must survive candidate-tail trimming"
+  );
+  const persistedReference = cand("/h.java", 10, [{ id: "finalize.match-count", source: "finalize", delta: 1, reason: "" }]);
+  persistedReference.verifiedBy = ["persisted-reference"];
+  assert.equal(
+    hasProtectedStructuralSignal(persistedReference),
+    true,
+    "an exact persisted semantic reference must survive candidate-tail trimming"
+  );
+  const mapstructUses = noise("/i.java", 10);
+  mapstructUses.categories = ["framework"];
+  mapstructUses.reasons = ["MAPSTRUCT_USES"];
+  mapstructUses.verifiedBy = ["MAPSTRUCT_USES"];
+  assert.equal(
+    hasProtectedStructuralSignal(mapstructUses),
+    true,
+    "an explicitly resolved @Mapper(uses = Type.class) edge must survive lexical candidate-tail trimming"
+  );
 });
 
 test("truncateCandidateTail returns input unchanged when 10 or fewer candidates", () => {
@@ -114,6 +136,40 @@ test("truncateCandidateTail keeps protected/structural, trims pure-string tail, 
   assert.ok(result.length < ranked.length);
 });
 
+test("truncateCandidateTail retains a deferred test candidate backed by an exact JavaIndex type reference", () => {
+  const structural = Array.from({ length: 8 }, (_, i) => strong(`/main/S${i}.java`, 200 - i));
+  const ordinaryTail = Array.from({ length: 6 }, (_, i) => noise(`/main/N${i}.java`, 100 - i));
+  const deferredTestReference = noise("/test/GatewayUsageTest.java", 10);
+  deferredTestReference.sourceSet = "test";
+  deferredTestReference.reasons = ["typeReference"];
+  deferredTestReference.verifiedBy = ["typeReference"];
+
+  const result = truncateCandidateTail(
+    [...structural, ...ordinaryTail, deferredTestReference, noise("/main/Last.java", 9)],
+    new Set<CandidateFile>()
+  );
+
+  assert.ok(
+    result.includes(deferredTestReference),
+    "testReadMode=defer controls read-plan slots, not visibility of an exact static test reference"
+  );
+});
+
+test("truncateCandidateTail retains an exact deferred test reference when sparse evidence reaches the caller limit", () => {
+  const ordinary = Array.from({ length: 12 }, (_, i) => noise(`/main/N${i}.java`, 100 - i));
+  const deferredTestReference = noise("/test/GatewayUsageTest.java", 1);
+  deferredTestReference.sourceSet = "test";
+  deferredTestReference.verifiedBy = ["typeReference"];
+
+  const result = truncateCandidateTail(
+    [...ordinary, deferredTestReference],
+    new Set<CandidateFile>(),
+    5
+  );
+
+  assert.ok(result.includes(deferredTestReference));
+});
+
 test("truncateCandidateTail cuts at a score cliff inside the discardable tail", () => {
   const struct = Array.from({ length: 8 }, (_, i) => strong(`/s/S${i}.java`, 300 - i));
   const tail = [noise("/n/A.java", 100), noise("/n/B.java", 95), noise("/n/C.java", 20)];
@@ -130,6 +186,72 @@ test("truncateCandidateTail skips tail trimming when structural evidence is too 
   const ranked = [...struct, ...tail];
   const result = truncateCandidateTail(ranked, new Set<CandidateFile>(), 20);
   assert.equal(result.length, 12);
+});
+
+test("a retained MapStruct uses edge does not by itself trigger the structural-tail compression threshold", () => {
+  const direct = Array.from({ length: 5 }, (_, i) => strong(`/s/S${i}.java`, 300 - i));
+  const mapstructUses = Array.from({ length: 2 }, (_, i) => {
+    const file = noise(`/m/Converter${i}.java`, 70 - i);
+    file.categories = ["framework"];
+    file.reasons = ["MAPSTRUCT_USES"];
+    file.verifiedBy = ["MAPSTRUCT_USES"];
+    return file;
+  });
+  const lexicalTail = Array.from({ length: 9 }, (_, i) => noise(`/n/N${i}.java`, 50 - i));
+
+  const result = truncateCandidateTail([...direct, ...mapstructUses, ...lexicalTail], new Set<CandidateFile>(), 20);
+
+  assert.equal(
+    result.length,
+    16,
+    "retaining an explicit MapStruct edge must not shrink unrelated candidates merely by crossing the dynamic-tail threshold"
+  );
+  assert.ok(mapstructUses.every(file => result.includes(file)));
+});
+
+test("truncateCandidateTail gives resolved MapStruct uses edges priority over generic structural retention", () => {
+  const anchor = noise("/anchor/OrderController.java", 1);
+  anchor.reasons = ["target"];
+  const genericStructural = Array.from({ length: 8 }, (_, index) => strong(`/structural/S${index}.java`, 200 - index));
+  const mapstructUses = ["IdConverter", "DateTimeConverter"].map(name => {
+    const file = noise(`/mapper/${name}.java`, 1);
+    file.categories = ["framework"];
+    file.reasons = ["MAPSTRUCT_USES"];
+    file.verifiedBy = ["MAPSTRUCT_USES"];
+    return file;
+  });
+
+  const result = truncateCandidateTail(
+    [anchor, ...genericStructural, ...mapstructUses],
+    new Set<CandidateFile>([anchor]),
+    6
+  );
+
+  assert.equal(result.length, 6);
+  assert.ok(mapstructUses.every(file => result.includes(file)), "both resolved helpers must survive a dense generic structural tail");
+});
+
+test("MapStruct uses protection remains deterministic without exceeding the caller candidate limit", () => {
+  const anchor = noise("/anchor/OrderMapper.java", 1);
+  anchor.reasons = ["target"];
+  const mapstructUses = Array.from({ length: 25 }, (_, i) => {
+    const file = noise(`/m/Converter${String(i).padStart(2, "0")}.java`, 100 - i);
+    file.categories = ["framework"];
+    file.reasons = ["MAPSTRUCT_USES"];
+    file.verifiedBy = ["MAPSTRUCT_USES"];
+    return file;
+  });
+
+  const result = truncateCandidateTail(
+    [anchor, ...mapstructUses],
+    new Set<CandidateFile>([anchor]),
+    18
+  );
+
+  assert.equal(result.length, 18, "protected framework edges must not break candidateLimit");
+  assert.ok(result.includes(anchor), "a read-plan-covered anchor remains mandatory even with lower score");
+  assert.ok(result.includes(mapstructUses[0]!));
+  assert.ok(!result.includes(mapstructUses.at(-1)!));
 });
 
 test("truncateCandidateTail applies limit to focus-only candidates", () => {

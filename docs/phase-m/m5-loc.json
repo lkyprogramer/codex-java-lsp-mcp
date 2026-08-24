@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "m5-loc/v1",
+  "old": {
+    "commit": "1f9eed44997ef6412c2ce3aeb718e1b23e5ba126",
+    "fileCount": 178,
+    "totalLoc": 41971,
+    "inventorySha256": "19032f1eb831b002d1b093792c5e78477a10bf867d25522a4d4435a584306cd2"
+  },
+  "new": {
+    "commit": "70f0939be86743b1c89f747a38f5fd7cf2c140c6",
+    "executableTree": "a2acd89e8077aa308ca85b1d6c5d9b51e0f28937",
+    "fileCount": 186,
+    "totalLoc": 44089,
+    "inventorySha256": "9f077557997886da16158a2f4ac71d43c8b2ec640c6e5916523cd0934e7b963a"
+  },
+  "deltaLoc": 2118,
+  "gate": 2500,
+  "passed": true
+}

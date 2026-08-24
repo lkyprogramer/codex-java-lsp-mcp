@@ -1,0 +1,72 @@
+{
+  "schemaVersion": "jin-index-benchmark/v1",
+  "dated": "2026-08-20",
+  "gates": {
+    "coldMs": 60000,
+    "incrementalMs": 500,
+    "rssBytes": 536870912
+  },
+  "passed": false,
+  "projects": [
+    {
+      "project": "lishuedu",
+      "coldMs": 51980.141584,
+      "incrementalMs": 14.422791999997571,
+      "rssDeltaBytes": 2431762432,
+      "heapUsedBytes": 965215440,
+      "clientHeapUsedBytes": 5435128,
+      "digest": "4c3f203cf10b01da0ef121a3bea00993dd52bb4e696ef1c64d405f31a6da35e5",
+      "digestRepeat": "4c3f203cf10b01da0ef121a3bea00993dd52bb4e696ef1c64d405f31a6da35e5",
+      "digestAfterIncremental": "4c3f203cf10b01da0ef121a3bea00993dd52bb4e696ef1c64d405f31a6da35e5",
+      "digestDeterministic": true,
+      "nodes": 60126,
+      "edges": 230357,
+      "gates": {
+        "cold": true,
+        "incremental": true,
+        "rss": false,
+        "digest": true
+      }
+    },
+    {
+      "project": "cipherlink",
+      "coldMs": 3276.086167,
+      "incrementalMs": 12.350415999999768,
+      "rssDeltaBytes": 530628608,
+      "heapUsedBytes": 203395784,
+      "clientHeapUsedBytes": 5368096,
+      "digest": "45744a78ef2b4d8a2ae86304c6a89618d4925cb21fbd782823fb3c6bbb92d0cf",
+      "digestRepeat": "45744a78ef2b4d8a2ae86304c6a89618d4925cb21fbd782823fb3c6bbb92d0cf",
+      "digestAfterIncremental": "45744a78ef2b4d8a2ae86304c6a89618d4925cb21fbd782823fb3c6bbb92d0cf",
+      "digestDeterministic": true,
+      "nodes": 7518,
+      "edges": 24824,
+      "gates": {
+        "cold": true,
+        "incremental": true,
+        "rss": true,
+        "digest": true
+      }
+    },
+    {
+      "project": "exam-parent-v3",
+      "coldMs": 7754.357792,
+      "incrementalMs": 2.7591250000004948,
+      "rssDeltaBytes": 994983936,
+      "heapUsedBytes": 236460344,
+      "clientHeapUsedBytes": 5416576,
+      "digest": "5040e79a874bc3d2ddf1ca72e0610e7d54636390dafc190f7eeae8b84e1f41df",
+      "digestRepeat": "5040e79a874bc3d2ddf1ca72e0610e7d54636390dafc190f7eeae8b84e1f41df",
+      "digestAfterIncremental": "5040e79a874bc3d2ddf1ca72e0610e7d54636390dafc190f7eeae8b84e1f41df",
+      "digestDeterministic": true,
+      "nodes": 15941,
+      "edges": 51636,
+      "gates": {
+        "cold": true,
+        "incremental": true,
+        "rss": false,
+        "digest": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "o2-cold/v1",
+  "dated": "2026-08-23",
+  "gateMs": 60000,
+  "knife": "reuse type-registry byId after pass-1 resolve instead of rebuilding for pass 2",
+  "projects": {
+    "lishuedu": {
+      "ok": true,
+      "files": 5312,
+      "discovered": 5312,
+      "parseFailed": 0,
+      "rssPeakBytes": 2359115776,
+      "phasesMs": {
+        "discover": 191.9,
+        "parse": 17403.0,
+        "resolve": 48778.4,
+        "snapshotPrepare": 5811.7,
+        "snapshotEncode": 7050.4,
+        "graphEncode": 385.3,
+        "total": 83488.9
+      },
+      "coldMs": 105322.500292
+    },
+    "cipherlink": {
+      "ok": true,
+      "files": 629,
+      "discovered": 629,
+      "parseFailed": 0,
+      "rssPeakBytes": 406470656,
+      "phasesMs": {
+        "discover": 39.5,
+        "parse": 1610.0,
+        "resolve": 4727.4,
+        "snapshotPrepare": 589.4,
+        "snapshotEncode": 641.7,
+        "graphEncode": 50.0,
+        "total": 8050.5
+      },
+      "coldMs": 10251.231915999999
+    },
+    "exam-parent-v3": {
+      "ok": true,
+      "files": 1369,
+      "discovered": 1369,
+      "parseFailed": 0,
+      "rssPeakBytes": 813416448,
+      "phasesMs": {
+        "discover": 52.8,
+        "parse": 3863.2,
+        "resolve": 7844.6,
+        "snapshotPrepare": 1126.2,
+        "snapshotEncode": 1397.0,
+        "graphEncode": 102.9,
+        "total": 15168.2
+      },
+      "coldMs": 19568.842
+    }
+  }
+}

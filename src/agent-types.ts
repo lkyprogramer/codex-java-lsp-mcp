@@ -1,6 +1,9 @@
 // input: Public java_impact options and internal routing state.
-// output: Shared v5 agent router types.
-// pos: Type contracts for the lishuedu JDT LS MCP v5 router.
+// output: Shared agent router types, including the public ImpactResultV6 output contract.
+// pos: Type contracts for the lishuedu JDT LS MCP router.
+import type { Completion } from "./runtime/completion.js";
+import type { SourceRange } from "./runtime/source-range.js";
+
 export type ImpactMode = "minimal" | "balanced" | "precision" | "recall";
 export type ImpactProfile = "auto" | "controller" | "service" | "port" | "repository" | "parser" | "dto" | "entity" | "mapper" | "vo" | "job" | "listener";
 export type ResolvedImpactProfile = Exclude<ImpactProfile, "auto">;
@@ -32,6 +35,8 @@ export type ImpactOptions = {
   semanticPolicy: SemanticPolicy;
   semanticTimeoutMs: number;
   readPlanMaxItems?: number;
+  /** Internal/benchmark override; the MCP schema deliberately exposes no byte knob. */
+  readPlanMaxBytes?: number;
   testReadMode: TestReadMode;
   focusModules: string[];
   excludeModules: string[];
@@ -54,7 +59,7 @@ export type ResolvedAnchor = {
   symbolName: string;
   methodName?: string;
   className?: string;
-  factSource?: "regex" | "documentSymbol";
+  factSource?: "javaIndex" | "fallback";
   kind: string;
 };
 
@@ -77,6 +82,8 @@ export type CandidateFile = {
   confidence?: Confidence;
   verifiedBy?: string[];
   scoreBreakdown?: ScoreBreakdownItem[];
+  /** Internal planner identity; formatCandidate never exposes this field. */
+  plannerEvidence?: CandidateEvidenceKey[];
 };
 
 export type RoutedCandidate = CandidateFile & {
@@ -85,15 +92,44 @@ export type RoutedCandidate = CandidateFile & {
   scoreBreakdown?: ScoreBreakdownItem[];
 };
 
-export type ReadPlanItem = {
-  priority: ReadPriority;
-  fileId: string;
+/** Internal Task 30 evidence identity used for diversity/overlap decisions. */
+export type CandidateEvidenceKey = {
+  family: string;
+  kind: string;
+  sourceTarget: string;
+  /** AST nesting depth for a resolved CALLS signal; internal read-plan tie-break metadata. */
+  callDepth?: number;
+  /** Whether CALLS originates in the anchor body, a same-owner helper, or one validated implementation dispatch. */
+  callOrigin?: "anchor" | "implementation" | "helper";
+};
+
+export type ReadRange = {
   startLine: number;
   endLine: number;
+  reason?: string; // diagnostic-only; stripped at standard/compact like files[].scoreBreakdown
+  estimatedBytes: number;
+};
+
+export type ReadPlanItemV6 = {
+  priority: ReadPriority;
+  fileId: string;
+  ranges: ReadRange[];
   reason: string;
+  expectedEvidence: string[];
+  estimatedBytes: number;
+};
+
+/** Task 30 keeps the public field name while upgrading its item payload to V6. */
+export type ReadPlanItem = ReadPlanItemV6;
+
+export type ReadPlanBudget = {
+  maxFiles: number;
+  maxReadBytes: number;
 };
 
 export type RgPlanSection = {
+  /** Internal producer identity for multi-anchor lexical evidence attribution. */
+  anchorId?: string;
   category: "java" | "protocol" | "persistence" | "config" | "tests" | "nonJava";
   reason: string;
   pattern: string;
@@ -101,6 +137,7 @@ export type RgPlanSection = {
   globs: string[];
 };
 
+/** Internal shape of RgExecutionResult.sections - no longer part of the public output contract (Task 31), still used by rg-execution.ts. */
 export type RgSectionSummary = {
   category: string;
   reason: string;
@@ -109,20 +146,147 @@ export type RgSectionSummary = {
   totalMatches: number;
   rawBytes: number;
   cacheHits: number;
+  completion: Completion;
   files: Array<Record<string, unknown>>;
 };
 
-export type ImpactResult = {
-  target: Record<string, unknown>;
-  options: Record<string, unknown>;
-  counts: Record<string, unknown>;
-  files: Array<Record<string, unknown>>;
-  readPlan: ReadPlanItem[];
-  rgSummary: {
-    sections: RgSectionSummary[];
-    suppressed: Record<string, unknown>;
-  };
-  suppressed: Record<string, unknown>;
-  evidenceGaps: string[];
-  metrics: Record<string, unknown>;
+// --- ImpactResultV6 (Task 31) - architecture V3.1 §15.2-15.5. ---
+
+export type ImpactTargetV6 = {
+  file: string;
+  symbol: string;
+  type?: string;
+  method?: string;
+  profile: string;
+  range: SourceRange;
 };
+
+export type ImpactFreshnessV6 = {
+  requestGeneration: number;
+  indexedGeneration: number;
+  coverage: "COMPLETE" | "PARTIAL" | "DEGRADED";
+  changedDuringRequest: boolean;
+};
+
+export type ImpactSemanticV6 = {
+  policy: SemanticPolicy;
+  used: boolean;
+  completion: Completion;
+  readiness?: string;
+};
+
+export type ImpactFileV6 = {
+  id: string;
+  path: string;
+  role: string;
+  confidence: Confidence;
+  evidence: string[];
+  locations: Array<{ line: number; column: number }>;
+  /** Diagnostic-only (verbosity="diagnostic"): raw provider-attribution kind strings behind `evidence`'s human phrases. Internal tooling (the benchmark harness) classifies by these, not by parsing phrases. */
+  reasons?: string[];
+  verifiedBy?: string[];
+  scoreBreakdown?: ScoreBreakdownItem[];
+};
+
+export type ImpactCostV6 = {
+  resultBytes: number;
+  readBytes: number;
+  estimatedTokens: number;
+  suppressedRawBytes: number;
+  /** ceil(resultBytes / 4). Report-only; not added into estimatedTokens. */
+  wireTokensProxy?: number;
+  /** ceil(readBytes / 4). Report-only; not added into estimatedTokens. */
+  plannedSourceTokensProxy?: number;
+  tokenEstimator?: "BYTE_DIV_4" | "MODEL_TOKENIZER";
+};
+
+/** Diagnostic-only decomposed cost. estimatedTokens stays ceil((wireBytes+plannedSourceBytes)/4). */
+export type RetrievalCostVectorV1 = {
+  wireBytes: number;
+  wireTokensProxy: number;
+  plannedSourceBytes: number;
+  plannedSourceTokensProxy: number;
+  additionalWireBytes: number;
+  additionalWireTokensProxy: number;
+  additionalSourceBytes: number;
+  additionalSourceTokensProxy: number;
+  toolCalls: number;
+  sourceReadCalls: number;
+  serviceMs: number;
+  cumulativeServiceMs: number;
+  tokenEstimator: "BYTE_DIV_4" | "MODEL_TOKENIZER";
+  modelId?: string;
+  taskSuccess?: boolean;
+  blockingMisses?: number;
+};
+
+/**
+ * `metrics` stays populated at every verbosity (routingVersion/elapsedMs/
+ * generatedSemantics are load-bearing outside diagnostic mode - the Lombok
+ * completeness signal from Task 29 must survive standard/compact requests),
+ * but only diagnostic requests get the larger diagnostic-only sections.
+ * Optional (`?`) reflects that a caller must not assume any single section
+ * is present, not that the whole object is diagnostic-exclusive.
+ */
+export type ImpactDiagnosticMetrics = {
+  routingVersion: number;
+  elapsedMs: number;
+  generatedSemantics?: "OK" | "INCOMPLETE" | "NOT_DETECTED";
+  phaseMs?: Record<string, number>;
+  semantic?: Record<string, unknown>;
+  typeReference?: Record<string, unknown>;
+  importGraph?: Record<string, unknown>;
+  persistedSemantic?: Record<string, unknown>;
+  javaIndex?: Record<string, unknown>;
+  readPlan?: Record<string, unknown>;
+  framework?: Record<string, unknown>;
+  cache?: Record<string, unknown>;
+  rgCache?: Record<string, unknown>;
+  sourceFacts?: Record<string, unknown>;
+  suppressed?: Record<string, unknown>;
+  retrievalCost?: RetrievalCostVectorV1;
+};
+
+export type ImpactResultV6 = {
+  version: 6;
+  target: ImpactTargetV6;
+  freshness: ImpactFreshnessV6;
+  semantic: ImpactSemanticV6;
+  files: ImpactFileV6[];
+  readPlan: ReadPlanItemV6[];
+  evidenceGaps: string[];
+  cost: ImpactCostV6;
+  metrics?: ImpactDiagnosticMetrics;
+};
+
+/** Public continuation unit. Paths are repo-relative. No planner scores. */
+export type RetrievalFrontierItemV1 = {
+  id: string;
+  fileId: string;
+  path: string;
+  ranges: Array<{ startLine: number; endLine: number; estimatedBytes: number }>;
+  relation: string;
+  expectedEvidence: string[];
+  confidence: Confidence;
+  estimatedReadBytes: number;
+  hop: 0 | 1 | 2 | "reverse" | "unknown";
+};
+
+export type RetrievalSectionV1 = {
+  sessionId: string;
+  generation: number;
+  step: number;
+  maxSteps: number;
+  expiresAt: string;
+  frontier: RetrievalFrontierItemV1[];
+  consumed?: string[];
+  stopReason: string;
+};
+
+export type ImpactResultV7 = Omit<ImpactResultV6, "version"> & {
+  version: 7;
+  kind: "analysis" | "continuation";
+  retrieval: RetrievalSectionV1;
+};
+
+export type ImpactResult = ImpactResultV6 | ImpactResultV7;

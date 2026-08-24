@@ -1,0 +1,217 @@
+{
+  "status": "BASELINE_RECORDED",
+  "schemaVersion": 1,
+  "verifierVersion": 1,
+  "verifiedAt": "2026-08-18T12:17:09.057Z",
+  "manifest": {
+    "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-z3vKlS/progressive/progressive-manifest.json",
+    "sha256": "0d99216fd1fd8be3498ecd9183967e3651bfe3c8ae75db5757db023d44a720c6"
+  },
+  "runtime": {
+    "commit": "63a80a2a0b4e9947bbf94a454ae1d14ece64dca9",
+    "commitTree": "cb34acd5e35d60fa02763bb8344639d1ac83fe86",
+    "executableTree": "27ecc270dcd3e59473dc28602570f71a1158bc1f",
+    "statusSha256": "91ebcc69cfc3cd10201fde3db9507f5a61b3e9095f710c3ce75e1e0939a93df1",
+    "changedPaths": [
+      "docs/phase-v4/v4-sprint0-runbook.md",
+      "scripts/host-quiet.mjs",
+      "scripts/host-quiet.test.mjs",
+      "scripts/run-idle-prewarm-experiment.mjs",
+      "scripts/run-v324-import-concurrency-experiment.mjs",
+      "scripts/run-v4-sprint0-baseline.mjs",
+      "scripts/run-v4-sprint0-baseline.test.mjs",
+      "scripts/verify-v4-sprint0-baseline.mjs",
+      "scripts/verify-v4-sprint0-baseline.test.mjs"
+    ],
+    "patch": {
+      "file": "inputs/runtime.patch",
+      "bytes": 54335,
+      "sha256": "233a07cd672ddf28aefe91ba2c7fc4a2c493b43914344a0b5c661e2607e2c113"
+    },
+    "buildStamp": {
+      "gitSha": "63a80a2a0b4e",
+      "generatedAt": "2026-08-18T12:11:09.664Z",
+      "defaults": {
+        "idleTtlMs": 2700000,
+        "importConcurrency": 2,
+        "jdtlsXmx": "2g",
+        "maxActiveRepos": 3
+      },
+      "defaultsFingerprint": "e5835394a86f"
+    },
+    "dependencies": {
+      "schemaVersion": 1,
+      "algorithm": "sha256-path-type-size-content-v1",
+      "fileCount": 4122,
+      "directoryCount": 669,
+      "symlinkCount": 7,
+      "totalBytes": 59058034,
+      "sha256": "5b1471d782246e183022fe2f3a84dc86944b8b0fb7e381b77ec905c3347aaa8c"
+    }
+  },
+  "scenarioLock": {
+    "file": "inputs/progressive-index-v1.json",
+    "bytes": 3440,
+    "sha256": "ca52f31c9f68012f20354870dd3979dc667f52011100af8d82455a41cd4ebace",
+    "projectIds": [
+      "lishuedu",
+      "cipherlink",
+      "exam-parent-v3"
+    ]
+  },
+  "protocol": {
+    "runs": 5,
+    "generation": 1,
+    "pollMs": 50,
+    "timeoutMs": 180000,
+    "cache": "EMPTY_PRIVATE_PER_ATTEMPT",
+    "percentile": "nearest-rank-ceil",
+    "jdtlsDisabled": true,
+    "runtimeState": "PRIVATE_PER_ATTEMPT",
+    "scope": "QUIET_PROGRESSIVE_ONLY_STORM_GATE_SEPARATE"
+  },
+  "projects": [
+    {
+      "project": "lishuedu",
+      "repository": {
+        "sourceRoot": "/tmp/codex-java-v3-golden-20260809/lishuedu",
+        "head": "db63b1a7e393edd90449eb013d7d1c4d65c366f2",
+        "tree": "22f0ce444e4cac484de85c8a0bf02240ad70d712",
+        "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "semanticDigest": "bcf75b8f17c2c3557d1a9062348f9077ab4d4c586acb7507022a8f6b4a6a4ab9",
+      "stages": {
+        "open": {
+          "samples": 5,
+          "min": 208.899709,
+          "p50": 265.081833,
+          "p95": 960.312833,
+          "max": 960.312833
+        },
+        "anchorReady": {
+          "samples": 5,
+          "min": 693.146959,
+          "p50": 874.6165000000001,
+          "p95": 1506.427,
+          "max": 1506.427
+        },
+        "moduleReady": {
+          "samples": 5,
+          "min": 37445.953167,
+          "p50": 38918.850416,
+          "p95": 40169.990083,
+          "max": 40169.990083
+        },
+        "complete": {
+          "samples": 5,
+          "min": 41133.037,
+          "p50": 42812.415333000004,
+          "p95": 43071.521167,
+          "max": 43071.521167
+        },
+        "snapshotDurable": {
+          "samples": 5,
+          "min": 55297.134833,
+          "p50": 56707.95316700001,
+          "p95": 57263.270583,
+          "max": 57263.270583
+        }
+      }
+    },
+    {
+      "project": "cipherlink",
+      "repository": {
+        "sourceRoot": "/tmp/codex-java-v3-golden-20260809/cipherlink",
+        "head": "fa433982e92e52dd610650d1e79f2d041179b1d3",
+        "tree": "21a1075c7b211932a4cdb2abf2742521b1eba31f",
+        "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "semanticDigest": "13a742d1260e86911050381fb8dbe9b241fbb4a67ac9ef7807a13ce937130bdb",
+      "stages": {
+        "open": {
+          "samples": 5,
+          "min": 88.606166,
+          "p50": 88.99199999999999,
+          "p95": 91.139625,
+          "max": 91.139625
+        },
+        "anchorReady": {
+          "samples": 5,
+          "min": 305.867041,
+          "p50": 307.72083299999997,
+          "p95": 324.07550000000003,
+          "max": 324.07550000000003
+        },
+        "moduleReady": {
+          "samples": 5,
+          "min": 2419.494167,
+          "p50": 2444.560875,
+          "p95": 2495.272958,
+          "max": 2495.272958
+        },
+        "complete": {
+          "samples": 5,
+          "min": 3016.253875,
+          "p50": 3047.823417,
+          "p95": 3097.493125,
+          "max": 3097.493125
+        },
+        "snapshotDurable": {
+          "samples": 5,
+          "min": 4298.809958,
+          "p50": 4351.13325,
+          "p95": 4400.097000000001,
+          "max": 4400.097000000001
+        }
+      }
+    },
+    {
+      "project": "exam-parent-v3",
+      "repository": {
+        "sourceRoot": "/tmp/codex-java-v3-golden-20260809/exam-parent-v3",
+        "head": "f90a0b475f7be2ed003703feecec8195bc7eb976",
+        "tree": "dcdb2024879686451859c64260c7e1f3a4721fa7",
+        "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "semanticDigest": "9259ba95b7f71a571cdb6961bc29357f2f64894c3d178bc9a860754cc2a28cab",
+      "stages": {
+        "open": {
+          "samples": 5,
+          "min": 103.12645800000001,
+          "p50": 106.50408300000001,
+          "p95": 108.26791600000001,
+          "max": 108.26791600000001
+        },
+        "anchorReady": {
+          "samples": 5,
+          "min": 372.9345,
+          "p50": 377.969584,
+          "p95": 385.951708,
+          "max": 385.951708
+        },
+        "moduleReady": {
+          "samples": 5,
+          "min": 5535.568499999999,
+          "p50": 5621.369208,
+          "p95": 5685.7856249999995,
+          "max": 5685.7856249999995
+        },
+        "complete": {
+          "samples": 5,
+          "min": 6648.199707999999,
+          "p50": 6731.205542,
+          "p95": 6791.6168339999995,
+          "max": 6791.6168339999995
+        },
+        "snapshotDurable": {
+          "samples": 5,
+          "min": 9519.523458,
+          "p50": 9627.978542,
+          "p95": 9748.677042,
+          "max": 9748.677042
+        }
+      }
+    }
+  ],
+  "passed": true
+}

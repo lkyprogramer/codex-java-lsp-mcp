@@ -5,9 +5,14 @@ export type ResourceDefaults = {
   logicalCpu: number;
   maxActiveRepos: number;
   idleTtlMs: number;
+  /** T_hibernate; overlay/facts drop. Independent of machine size. */
+  hibernateTtlMs: number;
   jdtlsXmx: string;
   importConcurrency: number;
 };
+
+export const DEFAULT_HIBERNATE_TTL_MS = 300000;
+export const DEFAULT_FREEMEM_PRESSURE_BYTES = 2 * 1024 * 1024 * 1024;
 
 export function resourceDefaults(): ResourceDefaults {
   const memoryGb = totalmem() / 1024 / 1024 / 1024;
@@ -31,6 +36,7 @@ function defaults(memoryGb: number, maxActiveRepos: number, idleTtlMs: number, j
     logicalCpu: cpus().length,
     maxActiveRepos,
     idleTtlMs,
+    hibernateTtlMs: DEFAULT_HIBERNATE_TTL_MS,
     jdtlsXmx,
     importConcurrency
   };

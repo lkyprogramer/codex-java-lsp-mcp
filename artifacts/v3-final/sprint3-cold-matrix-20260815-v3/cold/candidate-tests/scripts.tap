@@ -1,0 +1,610 @@
+TAP version 13
+# Subtest: RPC sidecar binds diagnostic cells and aggregates operations separately from the standard gate
+ok 1 - RPC sidecar binds diagnostic cells and aggregates operations separately from the standard gate
+  ---
+  duration_ms: 50.602792
+  type: 'test'
+  ...
+# Subtest: RPC sidecar rejects a diagnostic attempt without request telemetry
+ok 2 - RPC sidecar rejects a diagnostic attempt without request telemetry
+  ---
+  duration_ms: 8.790208
+  type: 'test'
+  ...
+# Subtest: RPC sidecar marks worker timing partial instead of inventing zero latency
+ok 3 - RPC sidecar marks worker timing partial instead of inventing zero latency
+  ---
+  duration_ms: 11.716084
+  type: 'test'
+  ...
+# Subtest: RPC sidecar replay rejects a duplicated 18-cell descriptor set
+ok 4 - RPC sidecar replay rejects a duplicated 18-cell descriptor set
+  ---
+  duration_ms: 14.324042
+  type: 'test'
+  ...
+# Subtest: RPC sidecar rejects diagnostic runtime provenance drift
+ok 5 - RPC sidecar rejects diagnostic runtime provenance drift
+  ---
+  duration_ms: 8.425917
+  type: 'test'
+  ...
+# Subtest: RPC sidecar rejects an empty or unrequested cold manifest before reading cells
+ok 6 - RPC sidecar rejects an empty or unrequested cold manifest before reading cells
+  ---
+  duration_ms: 6.800917
+  type: 'test'
+  ...
+# Subtest: RPC sidecar rejects missing or overlapping standard and diagnostic runtime state
+ok 7 - RPC sidecar rejects missing or overlapping standard and diagnostic runtime state
+  ---
+  duration_ms: 13.049292
+  type: 'test'
+  ...
+# Subtest: RPC sidecar output is created atomically and never overwritten
+ok 8 - RPC sidecar output is created atomically and never overwritten
+  ---
+  duration_ms: 25.544334
+  type: 'test'
+  ...
+# Subtest: RPC sidecar rejects internally inconsistent operation telemetry
+ok 9 - RPC sidecar rejects internally inconsistent operation telemetry
+  ---
+  duration_ms: 9.851
+  type: 'test'
+  ...
+# Subtest: RPC sidecar CLI rejects unknown, duplicate, missing, and positional arguments
+ok 10 - RPC sidecar CLI rejects unknown, duplicate, missing, and positional arguments
+  ---
+  duration_ms: 0.349375
+  type: 'test'
+  ...
+# Subtest: RPC sidecar gate records threshold failure instead of manufacturing a PASS
+ok 11 - RPC sidecar gate records threshold failure instead of manufacturing a PASS
+  ---
+  duration_ms: 11.173875
+  type: 'test'
+  ...
+# Subtest: RPC sidecar gate rejects a baseline with no affected JavaIndex scenario
+ok 12 - RPC sidecar gate rejects a baseline with no affected JavaIndex scenario
+  ---
+  duration_ms: 10.721583
+  type: 'test'
+  ...
+# Subtest: RPC sidecar derives the implementer batch entry decision from baseline fanout and wait
+ok 13 - RPC sidecar derives the implementer batch entry decision from baseline fanout and wait
+  ---
+  duration_ms: 12.232584
+  type: 'test'
+  ...
+# Subtest: countLines counts a final unterminated line without inventing one for an empty file
+ok 14 - countLines counts a final unterminated line without inventing one for an empty file
+  ---
+  duration_ms: 0.401708
+  type: 'test'
+  ...
+# Subtest: revision counting is source-locked and excludes only test TypeScript
+ok 15 - revision counting is source-locked and excludes only test TypeScript
+  ---
+  duration_ms: 129.398041
+  type: 'test'
+  ...
+# Subtest: worktree counting includes an untracked production file and detects manifest drift
+ok 16 - worktree counting includes an untracked production file and detects manifest drift
+  ---
+  duration_ms: 121.88875
+  type: 'test'
+  ...
+# Subtest: detached local clone never uses source worktree metadata
+ok 17 - detached local clone never uses source worktree metadata
+  ---
+  duration_ms: 1.042625
+  type: 'test'
+  ...
+# Subtest: isolated validation accepts candidate-relative Node scripts and rejects shell or active absolute scripts
+ok 18 - isolated validation accepts candidate-relative Node scripts and rejects shell or active absolute scripts
+  ---
+  duration_ms: 0.683666
+  type: 'test'
+  ...
+# Subtest: host Node runtime selectors never reach isolated child processes
+ok 19 - host Node runtime selectors never reach isolated child processes
+  ---
+  duration_ms: 0.108458
+  type: 'test'
+  ...
+# Subtest: shell bootstrap clears Node loaders before the isolation broker starts
+ok 20 - shell bootstrap clears Node loaders before the isolation broker starts
+  ---
+  duration_ms: 133.303542
+  type: 'test'
+  ...
+# Subtest: isolated dependency copy never links validation writes back to source node_modules
+ok 21 - isolated dependency copy never links validation writes back to source node_modules
+  ---
+  duration_ms: 7.1525
+  type: 'test'
+  ...
+# Subtest: dependency inventory binds file bytes and internal symlink targets deterministically
+ok 22 - dependency inventory binds file bytes and internal symlink targets deterministically
+  ---
+  duration_ms: 2.277
+  type: 'test'
+  ...
+# Subtest: dependency inventory rejects a symlink back to non-isolated state
+ok 23 - dependency inventory rejects a symlink back to non-isolated state
+  ---
+  duration_ms: 0.959833
+  type: 'test'
+  ...
+# Subtest: candidate commands bind writable and repository paths to private placeholders
+ok 24 - candidate commands bind writable and repository paths to private placeholders
+  ---
+  duration_ms: 0.3875
+  type: 'test'
+  ...
+# Subtest: nested JDT isolation broker retains its own repo and state placeholders
+ok 25 - nested JDT isolation broker retains its own repo and state placeholders
+  ---
+  duration_ms: 0.159125
+  type: 'test'
+  ...
+# Subtest: local MCP trace freezes six source-locked holdouts and replays exact request/response/tool/read evidence
+ok 26 - local MCP trace freezes six source-locked holdouts and replays exact request/response/tool/read evidence
+  ---
+  duration_ms: 1490.715125
+  type: 'test'
+  ...
+# Subtest: local MCP trace replay rejects valid but different source-locked event timing
+ok 27 - local MCP trace replay rejects valid but different source-locked event timing
+  ---
+  duration_ms: 1119.03025
+  type: 'test'
+  ...
+# Subtest: local MCP trace rejects an out-of-order or stale freshness event
+ok 28 - local MCP trace rejects an out-of-order or stale freshness event
+  ---
+  duration_ms: 559.49025
+  type: 'test'
+  ...
+# Subtest: local MCP trace rejects a repository at the wrong frozen commit and forged source bytes
+ok 29 - local MCP trace rejects a repository at the wrong frozen commit and forged source bytes
+  ---
+  duration_ms: 73.930041
+  type: 'test'
+  ...
+# Subtest: local MCP trace rejects a forged response artifact and file reads before the MCP response settles
+ok 30 - local MCP trace rejects a forged response artifact and file reads before the MCP response settles
+  ---
+  duration_ms: 703.553667
+  type: 'test'
+  ...
+# Subtest: real JDT benchmark environment forces private runtime state and detached repo selectors
+ok 31 - real JDT benchmark environment forces private runtime state and detached repo selectors
+  ---
+  duration_ms: 1.276208
+  type: 'test'
+  ...
+# Subtest: real JDT benchmark binds the command repo root to the detached clone
+ok 32 - real JDT benchmark binds the command repo root to the detached clone
+  ---
+  duration_ms: 1.32175
+  type: 'test'
+  ...
+# Subtest: real JDT benchmark replaces every repo placeholder without shell interpolation
+ok 33 - real JDT benchmark replaces every repo placeholder without shell interpolation
+  ---
+  duration_ms: 0.194
+  type: 'test'
+  ...
+# Subtest: isolated validation never inherits or accepts overrides for active LSP state directories
+ok 34 - isolated validation never inherits or accepts overrides for active LSP state directories
+  ---
+  duration_ms: 0.803208
+  type: 'test'
+  ...
+# Subtest: isolated validation drops inherited repo selectors and benchmark cache overrides
+ok 35 - isolated validation drops inherited repo selectors and benchmark cache overrides
+  ---
+  duration_ms: 0.325958
+  type: 'test'
+  ...
+# Subtest: isolated validation accepts only candidate-cwd repo selector overrides
+ok 36 - isolated validation accepts only candidate-cwd repo selector overrides
+  ---
+  duration_ms: 0.459
+  type: 'test'
+  ...
+# Subtest: resource manifest combines external and in-process observations without inventing missing values
+ok 37 - resource manifest combines external and in-process observations without inventing missing values
+  ---
+  duration_ms: 0.380541
+  type: 'test'
+  ...
+# Subtest: formal resource runner binds sidecars and truthfully reports optional fd sampling
+ok 38 - formal resource runner binds sidecars and truthfully reports optional fd sampling
+  ---
+  duration_ms: 451.543709
+  type: 'test'
+  ...
+# Subtest: progressive matrix requires the formal three repositories and five runs
+ok 39 - progressive matrix requires the formal three repositories and five runs
+  ---
+  duration_ms: 0.571375
+  type: 'test'
+  ...
+# Subtest: progressive scenario lock requires one exact-commit scenario per project
+ok 40 - progressive scenario lock requires one exact-commit scenario per project
+  ---
+  duration_ms: 0.231959
+  type: 'test'
+  ...
+# Subtest: progressive attempts scrub host runtime selectors and use private JDT/cache roots
+ok 41 - progressive attempts scrub host runtime selectors and use private JDT/cache roots
+  ---
+  duration_ms: 0.473708
+  type: 'test'
+  ...
+# Subtest: progressive CLI requires isolated state paths and exact inputs
+ok 42 - progressive CLI requires isolated state paths and exact inputs
+  ---
+  duration_ms: 0.615208
+  type: 'test'
+  ...
+# Subtest: progressive canonical paths reject an external symlink into the Java repository
+ok 43 - progressive canonical paths reject an external symlink into the Java repository
+  ---
+  duration_ms: 4.88975
+  type: 'test'
+  ...
+# Subtest: scenario lock selects exactly one exact-commit project contract
+ok 44 - scenario lock selects exactly one exact-commit project contract
+  ---
+  duration_ms: 0.245542
+  type: 'test'
+  ...
+# Subtest: formal matrix child processes cannot inherit Node loader or host output selectors
+ok 45 - formal matrix child processes cannot inherit Node loader or host output selectors
+  ---
+  duration_ms: 0.758833
+  type: 'test'
+  ...
+# Subtest: formal matrix scrubs inherited RPC telemetry and only accepts an explicit cell mode
+ok 46 - formal matrix scrubs inherited RPC telemetry and only accepts an explicit cell mode
+  ---
+  duration_ms: 0.563875
+  type: 'test'
+  ...
+# Subtest: formal matrix scrubs inherited benchmark selectors and fixes the request deadline
+ok 47 - formal matrix scrubs inherited benchmark selectors and fixes the request deadline
+  ---
+  duration_ms: 0.290083
+  type: 'test'
+  ...
+# Subtest: standard and diagnostic matrices use disjoint private runtime state
+ok 48 - standard and diagnostic matrices use disjoint private runtime state
+  ---
+  duration_ms: 1.992583
+  type: 'test'
+  ...
+# Subtest: cross-version scenario freeze gives Task0 and V3 the same golden set
+ok 49 - cross-version scenario freeze gives Task0 and V3 the same golden set
+  ---
+  duration_ms: 0.699834
+  type: 'test'
+  ...
+# Subtest: formal V3.2 scenarios bind 8 tuning and 2 holdout rows to exact isolated source coordinates
+ok 50 - formal V3.2 scenarios bind 8 tuning and 2 holdout rows to exact isolated source coordinates
+  ---
+  duration_ms: 6.867167
+  type: 'test'
+  ...
+# Subtest: candidate patch includes hash-bound untracked source inputs
+ok 51 - candidate patch includes hash-bound untracked source inputs
+  ---
+  duration_ms: 116.312417
+  type: 'test'
+  ...
+# Subtest: formal repository identity rejects a dirty checkout
+ok 52 - formal repository identity rejects a dirty checkout
+  ---
+  duration_ms: 66.029167
+  type: 'test'
+  ...
+# Subtest: formal output must resolve outside the candidate checkout
+ok 53 - formal output must resolve outside the candidate checkout
+  ---
+  duration_ms: 2.366292
+  type: 'test'
+  ...
+# Subtest: optimization manifest binds source inventories, runtime inputs, environment, and cold gate
+ok 54 - optimization manifest binds source inventories, runtime inputs, environment, and cold gate
+  ---
+  duration_ms: 5.25625
+  type: 'test'
+  ...
+# Subtest: optimization manifest rejects drift in its payload or LOC totals
+ok 55 - optimization manifest rejects drift in its payload or LOC totals
+  ---
+  duration_ms: 4.647083
+  type: 'test'
+  ...
+# Subtest: optimization LOC gate stays anchored to the immutable cycle baseline instead of compounding per sprint
+ok 56 - optimization LOC gate stays anchored to the immutable cycle baseline instead of compounding per sprint
+  ---
+  duration_ms: 0.971458
+  type: 'test'
+  ...
+# Subtest: optimization manifest requires a path-complete and repayment-bound LOC ledger
+ok 57 - optimization manifest requires a path-complete and repayment-bound LOC ledger
+  ---
+  duration_ms: 3.596875
+  type: 'test'
+  ...
+# Subtest: optimization baseline records a failed cold gate only with an explicit gap decision
+ok 58 - optimization baseline records a failed cold gate only with an explicit gap decision
+  ---
+  duration_ms: 1.129291
+  type: 'test'
+  ...
+# Subtest: optimization manifest requires both the standard cold gate and diagnostic RPC value gate
+ok 59 - optimization manifest requires both the standard cold gate and diagnostic RPC value gate
+  ---
+  duration_ms: 1.18175
+  type: 'test'
+  ...
+# Subtest: optimization LOC ledger owns equal-line content replacements
+ok 60 - optimization LOC ledger owns equal-line content replacements
+  ---
+  duration_ms: 1.281333
+  type: 'test'
+  ...
+# Subtest: optimization inventory replays the tested patch instead of reading later candidate-root edits
+ok 61 - optimization inventory replays the tested patch instead of reading later candidate-root edits
+  ---
+  duration_ms: 3567.618459
+  type: 'test'
+  ...
+# Subtest: optimization manifest refuses a diagnostic request that disagrees with the cold run
+ok 62 - optimization manifest refuses a diagnostic request that disagrees with the cold run
+  ---
+  duration_ms: 2.642958
+  type: 'test'
+  ...
+# Subtest: process sampler parses ps rows and retains only descendants of the spawned root
+ok 63 - process sampler parses ps rows and retains only descendants of the spawned root
+  ---
+  duration_ms: 1.207167
+  type: 'test'
+  ...
+# Subtest: resource summary reports peak RSS, CPU delta, fd peak and post-warmup retention slope
+ok 64 - resource summary reports peak RSS, CPU delta, fd peak and post-warmup retention slope
+  ---
+  duration_ms: 0.552958
+  type: 'test'
+  ...
+# Subtest: resource sampler writes PARTIAL for an externally sampled child and refuses to overwrite evidence
+ok 65 - resource sampler writes PARTIAL for an externally sampled child and refuses to overwrite evidence
+  ---
+  duration_ms: 509.61175
+  type: 'test'
+  ...
+# Subtest: Task 36 fault suite records the authority manifest, per-case evidence hashes, and a passing aggregate gate
+ok 66 - Task 36 fault suite records the authority manifest, per-case evidence hashes, and a passing aggregate gate
+  ---
+  duration_ms: 5887.691208
+  type: 'test'
+  ...
+# Subtest: Task 36 fault suite bounds every child test and records a timeout as a failed case
+ok 67 - Task 36 fault suite bounds every child test and records a timeout as a failed case
+  ---
+  duration_ms: 72.148833
+  type: 'test'
+  ...
+# Subtest: Task36 Step6a smoke enforces process lease caps and executes every isolated behavior gate
+ok 68 - Task36 Step6a smoke enforces process lease caps and executes every isolated behavior gate
+  ---
+  duration_ms: 4738.492542
+  type: 'test'
+  ...
+# Subtest: a Node test-file wrapper PASS does not count as a selected behavior test
+ok 69 - a Node test-file wrapper PASS does not count as a selected behavior test
+  ---
+  duration_ms: 0.806542
+  type: 'test'
+  ...
+# Subtest: only behavior subtests matching the authority pattern are selected
+ok 70 - only behavior subtests matching the authority pattern are selected
+  ---
+  duration_ms: 0.218542
+  type: 'test'
+  ...
+# Subtest: SKIP, TODO, and failed subtests are never accepted as passing behavior evidence
+ok 71 - SKIP, TODO, and failed subtests are never accepted as passing behavior evidence
+  ---
+  duration_ms: 0.500167
+  type: 'test'
+  ...
+# Subtest: nearest-rank uses the formal ceil rank with five samples
+ok 72 - nearest-rank uses the formal ceil rank with five samples
+  ---
+  duration_ms: 0.381916
+  type: 'test'
+  ...
+# Subtest: progressive verifier binds all attempts and rejects raw tampering
+ok 73 - progressive verifier binds all attempts and rejects raw tampering
+  ---
+  duration_ms: 31.503542
+  type: 'test'
+  ...
+# Subtest: progressive comparison uses zero slack and exact stage targets
+ok 74 - progressive comparison uses zero slack and exact stage targets
+  ---
+  duration_ms: 40.171458
+  type: 'test'
+  ...
+# Subtest: verifier accepts a complete frozen-scenario matrix that satisfies every paired gate
+ok 75 - verifier accepts a complete frozen-scenario matrix that satisfies every paired gate
+  ---
+  duration_ms: 24.00675
+  type: 'test'
+  ...
+# Subtest: verifier allows the Task36 P_read tolerance but rejects a larger regression
+ok 76 - verifier allows the Task36 P_read tolerance but rejects a larger regression
+  ---
+  duration_ms: 28.287375
+  type: 'test'
+  ...
+# Subtest: verifier gates task-blocking recall and standard estimated tokens
+ok 77 - verifier gates task-blocking recall and standard estimated tokens
+  ---
+  duration_ms: 13.285541
+  type: 'test'
+  ...
+# Subtest: verifier rejects a matrix whose old and new cells use different scenario files
+ok 78 - verifier rejects a matrix whose old and new cells use different scenario files
+  ---
+  duration_ms: 10.272958
+  type: 'test'
+  ...
+# Subtest: verifier rejects old and new cells from the same runtime commit and tree
+ok 79 - verifier rejects old and new cells from the same runtime commit and tree
+  ---
+  duration_ms: 9.670583
+  type: 'test'
+  ...
+# Subtest: verifier accepts a source-locked candidate patch on the same base commit
+ok 80 - verifier accepts a source-locked candidate patch on the same base commit
+  ---
+  duration_ms: 12.913166
+  type: 'test'
+  ...
+# Subtest: verifier rejects a frozen scenario replaced at the same absolute path
+ok 81 - verifier rejects a frozen scenario replaced at the same absolute path
+  ---
+  duration_ms: 9.253292
+  type: 'test'
+  ...
+# Subtest: verifier rejects a candidate cell that omits one frozen scenario row
+ok 82 - verifier rejects a candidate cell that omits one frozen scenario row
+  ---
+  duration_ms: 10.752667
+  type: 'test'
+  ...
+# Subtest: verifier rejects a candidate patch whose bytes no longer match the manifest
+ok 83 - verifier rejects a candidate patch whose bytes no longer match the manifest
+  ---
+  duration_ms: 8.827041
+  type: 'test'
+  ...
+# Subtest: verifier rejects drifted candidate TAP evidence or mismatched test counts
+ok 84 - verifier rejects drifted candidate TAP evidence or mismatched test counts
+  ---
+  duration_ms: 18.271417
+  type: 'test'
+  ...
+# Subtest: verifier requires a valid private dependency inventory
+ok 85 - verifier requires a valid private dependency inventory
+  ---
+  duration_ms: 9.40225
+  type: 'test'
+  ...
+# Subtest: verifier rejects a candidate patch whose replay tree is not the declared executable tree
+ok 86 - verifier rejects a candidate patch whose replay tree is not the declared executable tree
+  ---
+  duration_ms: 8.841875
+  type: 'test'
+  ...
+# Subtest: verifier rejects a hash-bound untracked source input changed after the run
+ok 87 - verifier rejects a hash-bound untracked source input changed after the run
+  ---
+  duration_ms: 10.109417
+  type: 'test'
+  ...
+# Subtest: verifier rejects a repository manifest without a clean tree identity
+ok 88 - verifier rejects a repository manifest without a clean tree identity
+  ---
+  duration_ms: 9.157
+  type: 'test'
+  ...
+# Subtest: verifier rejects an invalid or drifted tuning and holdout partition
+ok 89 - verifier rejects an invalid or drifted tuning and holdout partition
+  ---
+  duration_ms: 17.549
+  type: 'test'
+  ...
+# Subtest: verifier requires an explicit executable-baseline comparison policy
+ok 90 - verifier requires an explicit executable-baseline comparison policy
+  ---
+  duration_ms: 8.997333
+  type: 'test'
+  ...
+# Subtest: verifier reports missing real range evidence as UNMEASURED instead of folding it into PASS
+ok 91 - verifier reports missing real range evidence as UNMEASURED instead of folding it into PASS
+  ---
+  duration_ms: 12.30225
+  type: 'test'
+  ...
+# Subtest: verifier rejects candidate coordinate loss even when legacy line recall remains complete
+ok 92 - verifier rejects candidate coordinate loss even when legacy line recall remains complete
+  ---
+  duration_ms: 14.424209
+  type: 'test'
+  ...
+# Subtest: verifier gates holdout quality independently from the tuning aggregate
+ok 93 - verifier gates holdout quality independently from the tuning aggregate
+  ---
+  duration_ms: 13.082459
+  type: 'test'
+  ...
+# Subtest: verifier rejects a cell whose runtime build stamp does not match its manifest variant
+ok 94 - verifier rejects a cell whose runtime build stamp does not match its manifest variant
+  ---
+  duration_ms: 10.599084
+  type: 'test'
+  ...
+# Subtest: verifier binds the formal request deadline in both manifest and cells
+ok 95 - verifier binds the formal request deadline in both manifest and cells
+  ---
+  duration_ms: 19.061542
+  type: 'test'
+  ...
+# Subtest: verifier rejects non-empty stderr and an illegal cold semantic completion
+ok 96 - verifier rejects non-empty stderr and an illegal cold semantic completion
+  ---
+  duration_ms: 21.849583
+  type: 'test'
+  ...
+# Subtest: verifier accepts the standard projection's deterministic cold semantic proof
+ok 97 - verifier accepts the standard projection's deterministic cold semantic proof
+  ---
+  duration_ms: 13.146875
+  type: 'test'
+  ...
+# Subtest: verifier rejects an unsafe standard semantic snapshot
+ok 98 - verifier rejects an unsafe standard semantic snapshot
+  ---
+  duration_ms: 18.370458
+  type: 'test'
+  ...
+# Subtest: verifier rejects out-of-domain quality, token, and latency metrics
+ok 99 - verifier rejects out-of-domain quality, token, and latency metrics
+  ---
+  duration_ms: 81.901416
+  type: 'test'
+  ...
+# Subtest: verifier rejects inconsistent legacy and canonical line-range metrics
+ok 100 - verifier rejects inconsistent legacy and canonical line-range metrics
+  ---
+  duration_ms: 13.914625
+  type: 'test'
+  ...
+1..100
+# tests 100
+# suites 0
+# pass 100
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 65240.524

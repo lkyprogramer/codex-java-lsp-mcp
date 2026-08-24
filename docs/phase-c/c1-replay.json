@@ -1,0 +1,2220 @@
+{
+  "schemaVersion": "c1-replay/v3",
+  "dated": "2026-08-23",
+  "status": "T2_MEASURED",
+  "passed": true,
+  "floorEligible": false,
+  "inPoolNotPacked": 0,
+  "discoveryGap": 5,
+  "candidateWireN": 24,
+  "wireMix": "hop-1 core first; hop-2 reserve 4 companions/persist/cross-module CALLEE; hop-1 contract reserve 4 with Impl-port pairs",
+  "goldens": {
+    "root": "/tmp/codex-java-v3-golden-20260809",
+    "javaFiles": {
+      "lishuedu": 5312,
+      "cipherlink": 629,
+      "exam-parent-v3": 1369
+    }
+  },
+  "c1Coverage": {
+    "schemaVersion": "c1-holdout-coverage/v2",
+    "n": 6,
+    "mean": 0.9305555555555555,
+    "minMean": 0.9,
+    "passed": true,
+    "inPoolNotPacked": 0,
+    "discoveryGap": 5,
+    "floorEligible": false,
+    "rows": [
+      {
+        "project": "lishuedu",
+        "scenarioId": "exam-score-export-cross-module-holdout",
+        "required": 13,
+        "hit": 13,
+        "rate": 1,
+        "missing": [],
+        "missLabels": [],
+        "poolSize": 606
+      },
+      {
+        "project": "lishuedu",
+        "scenarioId": "paper-task-claim-iam-holdout",
+        "required": 10,
+        "hit": 10,
+        "rate": 1,
+        "missing": [],
+        "missLabels": [],
+        "poolSize": 594
+      },
+      {
+        "project": "cipherlink",
+        "scenarioId": "client-release-storage-presign-holdout",
+        "required": 11,
+        "hit": 11,
+        "rate": 1,
+        "missing": [],
+        "missLabels": [],
+        "poolSize": 394
+      },
+      {
+        "project": "cipherlink",
+        "scenarioId": "backend-operation-log-aspect-async-audit-holdout",
+        "required": 12,
+        "hit": 9,
+        "rate": 0.75,
+        "missing": [
+          "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/OperationLogRepository.java",
+          "modules/audit/src/main/java/com/hhtele/cipherlink/audit/infrastructure/persistence/MybatisOperationLogRepository.java",
+          "modules/audit/src/main/java/com/hhtele/cipherlink/audit/infrastructure/persistence/mapper/OperationLogMapper.java"
+        ],
+        "missLabels": [
+          {
+            "path": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/OperationLogRepository.java",
+            "label": "DISCOVERY_GAP",
+            "poolRank": null,
+            "poolSize": 405,
+            "onWire": false,
+            "onEvidence": false,
+            "hops": null,
+            "kinds": []
+          },
+          {
+            "path": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/infrastructure/persistence/MybatisOperationLogRepository.java",
+            "label": "DISCOVERY_GAP",
+            "poolRank": null,
+            "poolSize": 405,
+            "onWire": false,
+            "onEvidence": false,
+            "hops": null,
+            "kinds": []
+          },
+          {
+            "path": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/infrastructure/persistence/mapper/OperationLogMapper.java",
+            "label": "DISCOVERY_GAP",
+            "poolRank": null,
+            "poolSize": 405,
+            "onWire": false,
+            "onEvidence": false,
+            "hops": null,
+            "kinds": []
+          }
+        ],
+        "poolSize": 405
+      },
+      {
+        "project": "exam-parent-v3",
+        "scenarioId": "exam-room-print-download-types-persistent-bundle",
+        "required": 8,
+        "hit": 8,
+        "rate": 1,
+        "missing": [],
+        "missLabels": [],
+        "poolSize": 363
+      },
+      {
+        "project": "exam-parent-v3",
+        "scenarioId": "candidate-pay-order-cross-module-admission",
+        "required": 12,
+        "hit": 10,
+        "rate": 0.8333333333333334,
+        "missing": [
+          "exam-data/src/main/java/com/hhtele/exam/data/repository/order/OrderRepository.java",
+          "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/Examination.java"
+        ],
+        "missLabels": [
+          {
+            "path": "exam-data/src/main/java/com/hhtele/exam/data/repository/order/OrderRepository.java",
+            "label": "DISCOVERY_GAP",
+            "poolRank": null,
+            "poolSize": 368,
+            "onWire": false,
+            "onEvidence": false,
+            "hops": null,
+            "kinds": []
+          },
+          {
+            "path": "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/Examination.java",
+            "label": "DISCOVERY_GAP",
+            "poolRank": null,
+            "poolSize": 368,
+            "onWire": false,
+            "onEvidence": false,
+            "hops": null,
+            "kinds": []
+          }
+        ],
+        "poolSize": 368
+      }
+    ]
+  },
+  "c2Bytes": {
+    "schemaVersion": "c2-bytes/v2",
+    "n": 6,
+    "p50": 1.0130921619293711,
+    "gate": 1.2,
+    "passed": true,
+    "rows": [
+      {
+        "project": "lishuedu",
+        "scenarioId": "exam-score-export-cross-module-holdout",
+        "contextBytes": 5364,
+        "impactBytes": 5446,
+        "ratio": 0.9849430774880646
+      },
+      {
+        "project": "lishuedu",
+        "scenarioId": "paper-task-claim-iam-holdout",
+        "contextBytes": 5881,
+        "impactBytes": 5805,
+        "ratio": 1.0130921619293711
+      },
+      {
+        "project": "cipherlink",
+        "scenarioId": "client-release-storage-presign-holdout",
+        "contextBytes": 6048,
+        "impactBytes": 4798,
+        "ratio": 1.2605252188411837
+      },
+      {
+        "project": "cipherlink",
+        "scenarioId": "backend-operation-log-aspect-async-audit-holdout",
+        "contextBytes": 5162,
+        "impactBytes": 5594,
+        "ratio": 0.9227744011440829
+      },
+      {
+        "project": "exam-parent-v3",
+        "scenarioId": "exam-room-print-download-types-persistent-bundle",
+        "contextBytes": 5808,
+        "impactBytes": 4107,
+        "ratio": 1.4141709276844412
+      },
+      {
+        "project": "exam-parent-v3",
+        "scenarioId": "candidate-pay-order-cross-module-admission",
+        "contextBytes": 5350,
+        "impactBytes": 3997,
+        "ratio": 1.3385038779084313
+      }
+    ]
+  },
+  "missDump": [
+    {
+      "scenarioId": "exam-score-export-cross-module-holdout",
+      "anchor": "modules/exam/src/main/java/com/lishu/edu/exam/application/service/ExamScoreExportAppService.java",
+      "poolSize": 606,
+      "wire": [
+        {
+          "i": 1,
+          "hop": 0,
+          "kinds": [],
+          "file": "ExamScoreExportAppService.java"
+        },
+        {
+          "i": 2,
+          "hop": 1,
+          "kinds": [
+            "IMPLEMENTS",
+            "CALLS_VIRTUAL",
+            "DISPATCHES_TO"
+          ],
+          "file": "ExamScoreExportExcelGenerator.java"
+        },
+        {
+          "i": 3,
+          "hop": 1,
+          "kinds": [
+            "CALLS_EXACT",
+            "IMPORTS"
+          ],
+          "file": "ExamScoreExportGenerator.java"
+        },
+        {
+          "i": 4,
+          "hop": 1,
+          "kinds": [
+            "CALLS_EXACT"
+          ],
+          "file": "ExamScopeService.java"
+        },
+        {
+          "i": 5,
+          "hop": 1,
+          "kinds": [
+            "CALLS_EXACT",
+            "CALLS_EXACT",
+            "IMPORTS"
+          ],
+          "file": "SchoolQueryService.java"
+        },
+        {
+          "i": 6,
+          "hop": 2,
+          "kinds": [
+            "CALLS_EXACT",
+            "CALLS_VIRTUAL"
+          ],
+          "file": "SchoolRepository.java"
+        },
+        {
+          "i": 7,
+          "hop": 2,
+          "kinds": [
+            "CALLS_EXACT",
+            "CALLS_EXACT",
+            "CALLS_EXACT"
+          ],
+          "file": "MeQueryService.java"
+        },
+        {
+          "i": 8,
+          "hop": 2,
+          "kinds": [
+            "CALLS_EXACT",
+            "CALLS_EXACT",
+            "CALLS_EXACT"
+          ],
+          "file": "ScopeAppService.java"
+        },
+        {
+          "i": 9,
+          "hop": 2,
+          "kinds": [
+            "CALLS_EXACT",
+            "CALLS_VIRTUAL"
+          ],
+          "file": "StudentRepository.java"
+        },
+        {
+          "i": 10,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "ExamScoreExportFile.java"
+        },
+        {
+          "i": 11,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "ExamScoreExportItem.java"
+        },
+        {
+          "i": 12,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "ExamScoreExportRow.java"
+        },
+        {
+          "i": 13,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "ExamScoreExportWorkbook.java"
+        },
+        {
+          "i": 14,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "ExamStudentItemScoreRepository.java"
+        },
+        {
+          "i": 15,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "ExamStudentSubjectScoreRepository.java"
+        },
+        {
+          "i": 16,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "ExamStudentItemScore.java"
+        },
+        {
+          "i": 17,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "ExamStudentSubjectScore.java"
+        },
+        {
+          "i": 18,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "ExamErrorCode.java"
+        },
+        {
+          "i": 19,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "Exam.java"
+        },
+        {
+          "i": 20,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "ExamItem.java"
+        },
+        {
+          "i": 21,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "ExamSubject.java"
+        },
+        {
+          "i": 22,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "ExamItemRepository.java"
+        },
+        {
+          "i": 23,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "ExamRepository.java"
+        },
+        {
+          "i": 24,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "ExamSubjectRepository.java"
+        }
+      ],
+      "required": [
+        {
+          "hit": true,
+          "poolRank": 1,
+          "hops": 0,
+          "kinds": [],
+          "inSearchBundles": true,
+          "file": "ExamScoreExportAppService.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 27,
+          "hops": 1,
+          "kinds": [
+            "CALLS_EXACT",
+            "CALLS_EXACT",
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "SchoolQueryService.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 15,
+          "hops": 1,
+          "kinds": [
+            "CALLS_EXACT",
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "ExamScoreExportGenerator.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 21,
+          "hops": 1,
+          "kinds": [
+            "IMPLEMENTS",
+            "CALLS_VIRTUAL",
+            "DISPATCHES_TO"
+          ],
+          "inSearchBundles": true,
+          "file": "ExamScoreExportExcelGenerator.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 8,
+          "hops": 1,
+          "kinds": [
+            "CALLS_EXACT"
+          ],
+          "inSearchBundles": true,
+          "file": "ExamScopeService.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 18,
+          "hops": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "ExamSubjectRepository.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 14,
+          "hops": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "ExamRepository.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 13,
+          "hops": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "ExamItemRepository.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 17,
+          "hops": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "ExamStudentSubjectScoreRepository.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 16,
+          "hops": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "ExamStudentItemScoreRepository.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 7,
+          "hops": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "ExamScoreExportWorkbook.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 6,
+          "hops": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "ExamScoreExportRow.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 5,
+          "hops": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "ExamScoreExportItem.java"
+        }
+      ],
+      "misses": []
+    },
+    {
+      "scenarioId": "paper-task-claim-iam-holdout",
+      "anchor": "modules/paper/src/main/java/com/lishu/edu/paper/application/service/PaperTaskCommandAppService.java",
+      "poolSize": 594,
+      "wire": [
+        {
+          "i": 1,
+          "hop": 0,
+          "kinds": [],
+          "file": "PaperTaskCommandAppService.java"
+        },
+        {
+          "i": 2,
+          "hop": 1,
+          "kinds": [
+            "IMPLEMENTS",
+            "CALLS_VIRTUAL",
+            "DISPATCHES_TO"
+          ],
+          "file": "PaperRecordTaskRepositoryImpl.java"
+        },
+        {
+          "i": 3,
+          "hop": 1,
+          "kinds": [
+            "CALLED_BY"
+          ],
+          "file": "PaperTaskAppService.java"
+        },
+        {
+          "i": 4,
+          "hop": 1,
+          "kinds": [
+            "CALLS_EXACT"
+          ],
+          "file": "PaperTaskQueryService.java"
+        },
+        {
+          "i": 5,
+          "hop": 1,
+          "kinds": [
+            "CALLS_EXACT",
+            "IMPORTS"
+          ],
+          "file": "PaperRecordTaskRepository.java"
+        },
+        {
+          "i": 6,
+          "hop": 1,
+          "kinds": [
+            "CALLS_EXACT",
+            "CALLS_EXACT"
+          ],
+          "file": "PaperAccessService.java"
+        },
+        {
+          "i": 7,
+          "hop": 2,
+          "kinds": [
+            "CALLS_EXACT",
+            "DECLARES",
+            "IMPORTS"
+          ],
+          "file": "ExamQueryService.java"
+        },
+        {
+          "i": 8,
+          "hop": 2,
+          "kinds": [
+            "CALLS_VIRTUAL",
+            "CALLS_EXACT",
+            "CALLS_EXACT"
+          ],
+          "file": "MeQueryService.java"
+        },
+        {
+          "i": 9,
+          "hop": 2,
+          "kinds": [
+            "CALLS_EXACT",
+            "CALLS_EXACT"
+          ],
+          "file": "IdentityType.java"
+        },
+        {
+          "i": 10,
+          "hop": 2,
+          "kinds": [
+            "CALLS_EXACT",
+            "CALLS_VIRTUAL"
+          ],
+          "file": "PaperPaperRepository.java"
+        },
+        {
+          "i": 11,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "PaperRecordTask.java"
+        },
+        {
+          "i": 12,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "PaperRecordTaskStatus.java"
+        },
+        {
+          "i": 13,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "PaperTaskView.java"
+        },
+        {
+          "i": 14,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "BizException.java"
+        },
+        {
+          "i": 15,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "PaperErrorCode.java"
+        },
+        {
+          "i": 16,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "MeInfo.java"
+        },
+        {
+          "i": 17,
+          "hop": 2,
+          "kinds": [
+            "IMPORTS",
+            "CALLED_BY"
+          ],
+          "file": "ReportExportTaskCommandService.java"
+        },
+        {
+          "i": 18,
+          "hop": 2,
+          "kinds": [
+            "CALLS_EXACT",
+            "CALLED_BY"
+          ],
+          "file": "PaperTaskAuditService.java"
+        },
+        {
+          "i": 19,
+          "hop": 2,
+          "kinds": [
+            "IMPORTS",
+            "CALLED_BY"
+          ],
+          "file": "PaperTaskParseContextResolver.java"
+        },
+        {
+          "i": 20,
+          "hop": 2,
+          "kinds": [
+            "CALLS_EXACT",
+            "CALLED_BY"
+          ],
+          "file": "PaperTaskQueryAppService.java"
+        },
+        {
+          "i": 21,
+          "hop": 2,
+          "kinds": [
+            "CALLS_EXACT",
+            "CALLED_BY"
+          ],
+          "file": "PaperTaskShareAppService.java"
+        },
+        {
+          "i": 22,
+          "hop": 2,
+          "kinds": [
+            "CALLS_VIRTUAL",
+            "CALLS_EXACT",
+            "CALLS_EXACT"
+          ],
+          "file": "PaperTaskSummaryService.java"
+        },
+        {
+          "i": 23,
+          "hop": 2,
+          "kinds": [
+            "CALLS_EXACT",
+            "CALLED_BY"
+          ],
+          "file": "PaperTaskController.java"
+        },
+        {
+          "i": 24,
+          "hop": 2,
+          "kinds": [
+            "IMPORTS",
+            "CALLED_BY"
+          ],
+          "file": "PaperTaskShareController.java"
+        }
+      ],
+      "required": [
+        {
+          "hit": true,
+          "poolRank": 1,
+          "hops": 0,
+          "kinds": [],
+          "inSearchBundles": true,
+          "file": "PaperTaskCommandAppService.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 5,
+          "hops": 1,
+          "kinds": [
+            "CALLS_EXACT",
+            "CALLS_EXACT"
+          ],
+          "inSearchBundles": true,
+          "file": "PaperAccessService.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 233,
+          "hops": 2,
+          "kinds": [
+            "CALLS_VIRTUAL",
+            "CALLS_EXACT",
+            "CALLS_EXACT"
+          ],
+          "inSearchBundles": true,
+          "file": "MeQueryService.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 12,
+          "hops": 1,
+          "kinds": [
+            "IMPLEMENTS",
+            "CALLS_VIRTUAL",
+            "DISPATCHES_TO"
+          ],
+          "inSearchBundles": true,
+          "file": "PaperRecordTaskRepositoryImpl.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 9,
+          "hops": 1,
+          "kinds": [
+            "CALLS_EXACT",
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "PaperRecordTaskRepository.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 7,
+          "hops": 1,
+          "kinds": [
+            "CALLS_EXACT"
+          ],
+          "inSearchBundles": true,
+          "file": "PaperTaskQueryService.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 10,
+          "hops": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "PaperRecordTask.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 11,
+          "hops": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "PaperRecordTaskStatus.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 3,
+          "hops": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "MeInfo.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 4,
+          "hops": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "PaperTaskView.java"
+        }
+      ],
+      "misses": []
+    },
+    {
+      "scenarioId": "client-release-storage-presign-holdout",
+      "anchor": "modules/storage/src/main/java/com/hhtele/cipherlink/storage/infrastructure/DefaultClientReleasePackageStorageGateway.java",
+      "poolSize": 394,
+      "wire": [
+        {
+          "i": 1,
+          "hop": 0,
+          "kinds": [],
+          "file": "DefaultClientReleasePackageStorageGateway.java"
+        },
+        {
+          "i": 2,
+          "hop": 1,
+          "kinds": [
+            "CALLS_EXACT",
+            "CALLS_EXACT",
+            "CALLS_EXACT",
+            "SPRING_INJECTS"
+          ],
+          "file": "ObjectStorageRuntimeProperties.java"
+        },
+        {
+          "i": 3,
+          "hop": 2,
+          "kinds": [
+            "IMPORTS",
+            "IMPORTS"
+          ],
+          "file": "ClientReleaseRepository.java"
+        },
+        {
+          "i": 4,
+          "hop": 2,
+          "kinds": [
+            "IMPORTS",
+            "IMPORTS"
+          ],
+          "file": "ClientReleaseMapper.java"
+        },
+        {
+          "i": 5,
+          "hop": 2,
+          "kinds": [
+            "IMPORTS",
+            "CALLED_BY"
+          ],
+          "file": "MybatisClientReleaseRepository.java"
+        },
+        {
+          "i": 6,
+          "hop": 2,
+          "kinds": [
+            "IMPORTS",
+            "IMPORTS"
+          ],
+          "file": "ClientReleasePublishSettings.java"
+        },
+        {
+          "i": 7,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "ClientReleasePackageStorageGateway.java"
+        },
+        {
+          "i": 8,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "ObjectStorageProvider.java"
+        },
+        {
+          "i": 9,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "PresignedChunkUrl.java"
+        },
+        {
+          "i": 10,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "ProviderPutObjectCommand.java"
+        },
+        {
+          "i": 11,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "BusinessException.java"
+        },
+        {
+          "i": 12,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "CommonErrorCode.java"
+        },
+        {
+          "i": 13,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "StorageFailureCode.java"
+        },
+        {
+          "i": 14,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "StorageObjectRef.java"
+        },
+        {
+          "i": 15,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "StorageOperationException.java"
+        },
+        {
+          "i": 16,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "StorageProvider.java"
+        },
+        {
+          "i": 17,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "StoredObjectMetadata.java"
+        },
+        {
+          "i": 18,
+          "hop": 2,
+          "kinds": [
+            "IMPORTS",
+            "IMPORTS"
+          ],
+          "file": "ClientReleaseRecord.java"
+        },
+        {
+          "i": 19,
+          "hop": 2,
+          "kinds": [
+            "IMPORTS",
+            "IMPORTS"
+          ],
+          "file": "ClientReleaseUrlRefreshAppService.java"
+        },
+        {
+          "i": 20,
+          "hop": 2,
+          "kinds": [
+            "CALLS_EXACT",
+            "CALLED_BY"
+          ],
+          "file": "DefaultClientReleasePublishAppService.java"
+        },
+        {
+          "i": 21,
+          "hop": 2,
+          "kinds": [
+            "CALLS_EXACT",
+            "CALLED_BY"
+          ],
+          "file": "DefaultClientReleaseUrlRefreshAppService.java"
+        },
+        {
+          "i": 22,
+          "hop": 2,
+          "kinds": [
+            "IMPORTS",
+            "IMPORTS"
+          ],
+          "file": "UploadClientReleaseCommand.java"
+        },
+        {
+          "i": 23,
+          "hop": 2,
+          "kinds": [
+            "IMPORTS",
+            "IMPORTS"
+          ],
+          "file": "ClientReleaseProperties.java"
+        },
+        {
+          "i": 24,
+          "hop": 2,
+          "kinds": [
+            "IMPORTS",
+            "CALLED_BY"
+          ],
+          "file": "ClientReleaseAdminController.java"
+        }
+      ],
+      "required": [
+        {
+          "hit": true,
+          "poolRank": 1,
+          "hops": 0,
+          "kinds": [],
+          "inSearchBundles": true,
+          "file": "DefaultClientReleasePackageStorageGateway.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 4,
+          "hops": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "ClientReleasePackageStorageGateway.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 5,
+          "hops": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "ObjectStorageProvider.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 150,
+          "hops": 2,
+          "kinds": [
+            "CALLS_EXACT",
+            "CALLED_BY"
+          ],
+          "inSearchBundles": true,
+          "file": "DefaultClientReleasePublishAppService.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 7,
+          "hops": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "ProviderPutObjectCommand.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 9,
+          "hops": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "StorageObjectRef.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 12,
+          "hops": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "StoredObjectMetadata.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 6,
+          "hops": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "PresignedChunkUrl.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 147,
+          "hops": 2,
+          "kinds": [
+            "IMPORTS",
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "ClientReleaseRepository.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 158,
+          "hops": 2,
+          "kinds": [
+            "IMPORTS",
+            "CALLED_BY"
+          ],
+          "inSearchBundles": true,
+          "file": "MybatisClientReleaseRepository.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 157,
+          "hops": 2,
+          "kinds": [
+            "IMPORTS",
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "ClientReleaseMapper.java"
+        }
+      ],
+      "misses": []
+    },
+    {
+      "scenarioId": "backend-operation-log-aspect-async-audit-holdout",
+      "anchor": "apps/cipherlink-backend/src/main/java/com/hhtele/cipherlink/backend/config/BackendOperationLogAspect.java",
+      "poolSize": 405,
+      "wire": [
+        {
+          "i": 1,
+          "hop": 0,
+          "kinds": [],
+          "file": "BackendOperationLogAspect.java"
+        },
+        {
+          "i": 2,
+          "hop": 1,
+          "kinds": [
+            "IMPLEMENTS",
+            "CALLS_VIRTUAL",
+            "DISPATCHES_TO"
+          ],
+          "file": "DefaultOperationLogAppService.java"
+        },
+        {
+          "i": 3,
+          "hop": 1,
+          "kinds": [
+            "CALLS_EXACT",
+            "IMPORTS"
+          ],
+          "file": "OperationLogAppService.java"
+        },
+        {
+          "i": 4,
+          "hop": 1,
+          "kinds": [
+            "CALLS_EXACT",
+            "IMPORTS"
+          ],
+          "file": "OperationLogRequestSanitizer.java"
+        },
+        {
+          "i": 5,
+          "hop": 1,
+          "kinds": [
+            "CALLS_EXACT",
+            "SPRING_INJECTS"
+          ],
+          "file": "SystemInfoParser.java"
+        },
+        {
+          "i": 6,
+          "hop": 2,
+          "kinds": [
+            "IMPORTS",
+            "IMPORTS"
+          ],
+          "file": "OperationLogEntryDO.java"
+        },
+        {
+          "i": 7,
+          "hop": 2,
+          "kinds": [
+            "IMPORTS",
+            "CALLED_BY"
+          ],
+          "file": "OperationLogQueryRequest.java"
+        },
+        {
+          "i": 8,
+          "hop": 2,
+          "kinds": [
+            "IMPORTS",
+            "IMPORTS"
+          ],
+          "file": "OperationLogQuery.java"
+        },
+        {
+          "i": 9,
+          "hop": 2,
+          "kinds": [
+            "IMPORTS",
+            "IMPORTS"
+          ],
+          "file": "OperationLogRecord.java"
+        },
+        {
+          "i": 10,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "OperationLogCommand.java"
+        },
+        {
+          "i": 11,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "OperationLog.java"
+        },
+        {
+          "i": 12,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "OperationLogResult.java"
+        },
+        {
+          "i": 13,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "RequestContext.java"
+        },
+        {
+          "i": 14,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "GlobalExceptionHandler.java"
+        },
+        {
+          "i": 15,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "AuthSessionProfile.java"
+        },
+        {
+          "i": 16,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "CurrentAuthContext.java"
+        },
+        {
+          "i": 17,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "RequestContextHolder.java"
+        },
+        {
+          "i": 18,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "BusinessException.java"
+        },
+        {
+          "i": 19,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "CommonErrorCode.java"
+        },
+        {
+          "i": 20,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "ErrorCode.java"
+        },
+        {
+          "i": 21,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "InfraException.java"
+        },
+        {
+          "i": 22,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "RedactionService.java"
+        },
+        {
+          "i": 23,
+          "hop": 2,
+          "kinds": [
+            "IMPORTS",
+            "IMPORTS"
+          ],
+          "file": "OperationLogEntry.java"
+        },
+        {
+          "i": 24,
+          "hop": 2,
+          "kinds": [
+            "IMPORTS",
+            "ANNOTATED_WITH"
+          ],
+          "file": "OperationLogController.java"
+        }
+      ],
+      "required": [
+        {
+          "hit": true,
+          "poolRank": 1,
+          "hops": 0,
+          "kinds": [],
+          "inSearchBundles": true,
+          "file": "BackendOperationLogAspect.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 18,
+          "hops": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "OperationLog.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 7,
+          "hops": 1,
+          "kinds": [
+            "CALLS_EXACT",
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "OperationLogAppService.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 8,
+          "hops": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "OperationLogCommand.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 6,
+          "hops": 1,
+          "kinds": [
+            "IMPLEMENTS",
+            "CALLS_VIRTUAL",
+            "DISPATCHES_TO"
+          ],
+          "inSearchBundles": true,
+          "file": "DefaultOperationLogAppService.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 9,
+          "hops": 1,
+          "kinds": [
+            "CALLS_EXACT",
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "OperationLogRequestSanitizer.java"
+        },
+        {
+          "hit": false,
+          "poolRank": null,
+          "hops": null,
+          "kinds": null,
+          "inSearchBundles": false,
+          "file": "OperationLogRepository.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 78,
+          "hops": 2,
+          "kinds": [
+            "IMPORTS",
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "OperationLogEntry.java"
+        },
+        {
+          "hit": false,
+          "poolRank": null,
+          "hops": null,
+          "kinds": null,
+          "inSearchBundles": false,
+          "file": "MybatisOperationLogRepository.java"
+        },
+        {
+          "hit": false,
+          "poolRank": null,
+          "hops": null,
+          "kinds": null,
+          "inSearchBundles": false,
+          "file": "OperationLogMapper.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 11,
+          "hops": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "CurrentAuthContext.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 13,
+          "hops": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "RequestContextHolder.java"
+        }
+      ],
+      "misses": [
+        {
+          "path": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/application/OperationLogRepository.java",
+          "hit": false,
+          "onWire": false,
+          "onEvidence": false,
+          "poolRank": null,
+          "hops": null,
+          "kinds": null,
+          "inSearchBundles": false
+        },
+        {
+          "path": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/infrastructure/persistence/MybatisOperationLogRepository.java",
+          "hit": false,
+          "onWire": false,
+          "onEvidence": false,
+          "poolRank": null,
+          "hops": null,
+          "kinds": null,
+          "inSearchBundles": false
+        },
+        {
+          "path": "modules/audit/src/main/java/com/hhtele/cipherlink/audit/infrastructure/persistence/mapper/OperationLogMapper.java",
+          "hit": false,
+          "onWire": false,
+          "onEvidence": false,
+          "poolRank": null,
+          "hops": null,
+          "kinds": null,
+          "inSearchBundles": false
+        }
+      ]
+    },
+    {
+      "scenarioId": "exam-room-print-download-types-persistent-bundle",
+      "anchor": "exam-management/src/main/java/com/hhtele/exam/management/controller/examination/ExamRoomPrintController.java",
+      "poolSize": 363,
+      "wire": [
+        {
+          "i": 1,
+          "hop": 0,
+          "kinds": [],
+          "file": "ExamRoomPrintController.java"
+        },
+        {
+          "i": 2,
+          "hop": 1,
+          "kinds": [
+            "IMPLEMENTS",
+            "IMPORTS",
+            "IMPORTS"
+          ],
+          "file": "ExamRoomPrintBundleServiceImpl.java"
+        },
+        {
+          "i": 3,
+          "hop": 1,
+          "kinds": [
+            "CALLS_EXACT",
+            "IMPORTS"
+          ],
+          "file": "ExamRoomPrintMetrics.java"
+        },
+        {
+          "i": 4,
+          "hop": 1,
+          "kinds": [
+            "CALLS_EXACT",
+            "IMPORTS"
+          ],
+          "file": "ExamRoomPrintBundleService.java"
+        },
+        {
+          "i": 5,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS",
+            "REPOSITORY_MANAGES_ENTITY"
+          ],
+          "file": "ExamineesRoomInfo.java"
+        },
+        {
+          "i": 6,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS",
+            "REPOSITORY_MANAGES_ENTITY"
+          ],
+          "file": "ExamRoomAllocateInfo.java"
+        },
+        {
+          "i": 7,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS",
+            "REPOSITORY_MANAGES_ENTITY"
+          ],
+          "file": "ExamRoomInfo.java"
+        },
+        {
+          "i": 8,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS",
+            "REPOSITORY_MANAGES_ENTITY"
+          ],
+          "file": "ExamineesRoomInfoRepository.java"
+        },
+        {
+          "i": 9,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS",
+            "REPOSITORY_MANAGES_ENTITY"
+          ],
+          "file": "ExamRoomAllocateInfoRepository.java"
+        },
+        {
+          "i": 10,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS",
+            "REPOSITORY_MANAGES_ENTITY"
+          ],
+          "file": "ExamRoomInfoRepository.java"
+        },
+        {
+          "i": 11,
+          "hop": 1,
+          "kinds": [
+            "REPOSITORY_MANAGES_ENTITY",
+            "IMPORTS"
+          ],
+          "file": "Examination.java"
+        },
+        {
+          "i": 12,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS",
+            "REPOSITORY_MANAGES_ENTITY"
+          ],
+          "file": "ExamLocation.java"
+        },
+        {
+          "i": 13,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS",
+            "REPOSITORY_MANAGES_ENTITY"
+          ],
+          "file": "ExamLocationRepository.java"
+        },
+        {
+          "i": 14,
+          "hop": 1,
+          "kinds": [
+            "CALLS_VIRTUAL",
+            "DISPATCHES_TO"
+          ],
+          "file": "DownloadCenterServiceImpl.java"
+        },
+        {
+          "i": 15,
+          "hop": 1,
+          "kinds": [
+            "IMPLEMENTS",
+            "CALLS_VIRTUAL",
+            "DISPATCHES_TO"
+          ],
+          "file": "SecurityServiceImpl.java"
+        },
+        {
+          "i": 16,
+          "hop": 1,
+          "kinds": [
+            "IMPLEMENTS",
+            "CALLS_EXACT",
+            "CALLED_BY"
+          ],
+          "file": "CandidateCurrentServiceImpl.java"
+        },
+        {
+          "i": 17,
+          "hop": 2,
+          "kinds": [
+            "IMPORTS",
+            "IMPORTS"
+          ],
+          "file": "ExamRoomPrintBundleJob.java"
+        },
+        {
+          "i": 18,
+          "hop": 2,
+          "kinds": [
+            "CALLS_EXACT",
+            "CALLED_BY",
+            "CALLS_EXACT"
+          ],
+          "file": "ExamRoomPrintBundleJobTemplate.java"
+        },
+        {
+          "i": 19,
+          "hop": 2,
+          "kinds": [
+            "ANNOTATED_WITH",
+            "ANNOTATED_WITH"
+          ],
+          "file": "ExamRoomPrintChunkSource.java"
+        },
+        {
+          "i": 20,
+          "hop": 2,
+          "kinds": [
+            "IMPORTS",
+            "IMPORTS"
+          ],
+          "file": "ExamRoomPrintRendererRoute.java"
+        },
+        {
+          "i": 21,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "DownloadCenterService.java"
+        },
+        {
+          "i": 22,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "ExamRoomPrintBundleWorker.java"
+        },
+        {
+          "i": 23,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "ExaminationRoomDownloadDTO.java"
+        },
+        {
+          "i": 24,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "ExamAllocatePrintAsyncService.java"
+        }
+      ],
+      "required": [
+        {
+          "hit": true,
+          "poolRank": 1,
+          "hops": 0,
+          "kinds": [],
+          "inSearchBundles": true,
+          "file": "ExamRoomPrintController.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 56,
+          "hops": 1,
+          "kinds": [
+            "CALLS_EXACT",
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "ExamRoomPrintBundleService.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 57,
+          "hops": 1,
+          "kinds": [
+            "IMPLEMENTS",
+            "IMPORTS",
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "ExamRoomPrintBundleServiceImpl.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 136,
+          "hops": 2,
+          "kinds": [
+            "IMPORTS",
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "ExamRoomPrintBundleJob.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 154,
+          "hops": 2,
+          "kinds": [
+            "CALLS_EXACT",
+            "CALLED_BY",
+            "CALLS_EXACT"
+          ],
+          "inSearchBundles": true,
+          "file": "ExamRoomPrintBundleJobTemplate.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 10,
+          "hops": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "ExaminationRoomDownloadDTO.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 47,
+          "hops": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "DownloadCenterService.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 281,
+          "hops": 2,
+          "kinds": [
+            "IMPORTS",
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "ExamRoomPrintRendererRoute.java"
+        }
+      ],
+      "misses": []
+    },
+    {
+      "scenarioId": "candidate-pay-order-cross-module-admission",
+      "anchor": "exam-candidate/src/main/java/com/hhtele/exam/candidate/controller/order/OrderController.java",
+      "poolSize": 368,
+      "wire": [
+        {
+          "i": 1,
+          "hop": 0,
+          "kinds": [],
+          "file": "OrderController.java"
+        },
+        {
+          "i": 2,
+          "hop": 1,
+          "kinds": [
+            "REPOSITORY_MANAGES_ENTITY",
+            "IMPORTS"
+          ],
+          "file": "PayAccount.java"
+        },
+        {
+          "i": 3,
+          "hop": 1,
+          "kinds": [
+            "REPOSITORY_MANAGES_ENTITY",
+            "IMPORTS"
+          ],
+          "file": "MsDownloadBillLogRepository.java"
+        },
+        {
+          "i": 4,
+          "hop": 1,
+          "kinds": [
+            "REPOSITORY_MANAGES_ENTITY",
+            "IMPORTS"
+          ],
+          "file": "MsTradeBillRepository.java"
+        },
+        {
+          "i": 5,
+          "hop": 1,
+          "kinds": [
+            "IMPLEMENTS",
+            "IMPORTS",
+            "IMPORTS"
+          ],
+          "file": "ApplyPayServiceImpl.java"
+        },
+        {
+          "i": 6,
+          "hop": 1,
+          "kinds": [
+            "IMPLEMENTS",
+            "CALLS_EXACT",
+            "CALLED_BY"
+          ],
+          "file": "MsPayServiceImpl.java"
+        },
+        {
+          "i": 7,
+          "hop": 1,
+          "kinds": [
+            "CALLS_VIRTUAL"
+          ],
+          "file": "AlipayPayService.java"
+        },
+        {
+          "i": 8,
+          "hop": 1,
+          "kinds": [
+            "CALLS_EXACT",
+            "CALLS_VIRTUAL"
+          ],
+          "file": "ApplyPayService.java"
+        },
+        {
+          "i": 9,
+          "hop": 1,
+          "kinds": [
+            "CALLS_VIRTUAL"
+          ],
+          "file": "ApplyRefundService.java"
+        },
+        {
+          "i": 10,
+          "hop": 1,
+          "kinds": [
+            "CALLS_VIRTUAL"
+          ],
+          "file": "CebPayService.java"
+        },
+        {
+          "i": 11,
+          "hop": 1,
+          "kinds": [
+            "CALLS_EXACT",
+            "CALLS_VIRTUAL"
+          ],
+          "file": "MsPayService.java"
+        },
+        {
+          "i": 12,
+          "hop": 1,
+          "kinds": [
+            "CALLS_VIRTUAL"
+          ],
+          "file": "SwiftPassPayService.java"
+        },
+        {
+          "i": 13,
+          "hop": 1,
+          "kinds": [
+            "CALLS_VIRTUAL"
+          ],
+          "file": "WechatApplyService.java"
+        },
+        {
+          "i": 14,
+          "hop": 2,
+          "kinds": [
+            "IMPORTS",
+            "IMPORTS"
+          ],
+          "file": "ApplyPayTemplate.java"
+        },
+        {
+          "i": 15,
+          "hop": 2,
+          "kinds": [
+            "IMPORTS",
+            "REPOSITORY_MANAGES_ENTITY"
+          ],
+          "file": "PayAccountRepository.java"
+        },
+        {
+          "i": 16,
+          "hop": 2,
+          "kinds": [
+            "REPOSITORY_MANAGES_ENTITY",
+            "IMPORTS",
+            "IMPORTS"
+          ],
+          "file": "ApplyInfo.java"
+        },
+        {
+          "i": 17,
+          "hop": 2,
+          "kinds": [
+            "IMPORTS",
+            "IMPORTS"
+          ],
+          "file": "ErrorApplyInfo.java"
+        },
+        {
+          "i": 18,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "SimplePayAccountVO.java"
+        },
+        {
+          "i": 19,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "PayAccountService.java"
+        },
+        {
+          "i": 20,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "RefundStatusEnum.java"
+        },
+        {
+          "i": 21,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "RefundTypeEnum.java"
+        },
+        {
+          "i": 22,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "MsCreateOrderDTO.java"
+        },
+        {
+          "i": 23,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "OrderInsertDTO.java"
+        },
+        {
+          "i": 24,
+          "hop": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "file": "OrderPayStatusEnum.java"
+        }
+      ],
+      "required": [
+        {
+          "hit": true,
+          "poolRank": 1,
+          "hops": 0,
+          "kinds": [],
+          "inSearchBundles": true,
+          "file": "OrderController.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 33,
+          "hops": 1,
+          "kinds": [
+            "CALLS_EXACT",
+            "CALLS_VIRTUAL"
+          ],
+          "inSearchBundles": true,
+          "file": "ApplyPayService.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 37,
+          "hops": 1,
+          "kinds": [
+            "IMPLEMENTS",
+            "IMPORTS",
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "ApplyPayServiceImpl.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 149,
+          "hops": 2,
+          "kinds": [
+            "IMPORTS",
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "ApplyPayTemplate.java"
+        },
+        {
+          "hit": false,
+          "poolRank": null,
+          "hops": null,
+          "kinds": null,
+          "inSearchBundles": false,
+          "file": "OrderRepository.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 12,
+          "hops": 1,
+          "kinds": [
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "OrderInsertDTO.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 113,
+          "hops": 2,
+          "kinds": [
+            "REPOSITORY_MANAGES_ENTITY",
+            "IMPORTS",
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "ApplyInfo.java"
+        },
+        {
+          "hit": false,
+          "poolRank": null,
+          "hops": null,
+          "kinds": null,
+          "inSearchBundles": false,
+          "file": "Examination.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 25,
+          "hops": 1,
+          "kinds": [
+            "REPOSITORY_MANAGES_ENTITY",
+            "IMPORTS"
+          ],
+          "inSearchBundles": true,
+          "file": "PayAccount.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 42,
+          "hops": 1,
+          "kinds": [
+            "CALLS_VIRTUAL"
+          ],
+          "inSearchBundles": true,
+          "file": "WechatApplyService.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 32,
+          "hops": 1,
+          "kinds": [
+            "CALLS_VIRTUAL"
+          ],
+          "inSearchBundles": true,
+          "file": "AlipayPayService.java"
+        },
+        {
+          "hit": true,
+          "poolRank": 35,
+          "hops": 1,
+          "kinds": [
+            "CALLS_VIRTUAL"
+          ],
+          "inSearchBundles": true,
+          "file": "CebPayService.java"
+        }
+      ],
+      "misses": [
+        {
+          "path": "exam-data/src/main/java/com/hhtele/exam/data/repository/order/OrderRepository.java",
+          "hit": false,
+          "onWire": false,
+          "onEvidence": false,
+          "poolRank": null,
+          "hops": null,
+          "kinds": null,
+          "inSearchBundles": false
+        },
+        {
+          "path": "exam-data/src/main/java/com/hhtele/exam/data/entity/examination/Examination.java",
+          "hit": false,
+          "onWire": false,
+          "onEvidence": false,
+          "poolRank": null,
+          "hops": null,
+          "kinds": null,
+          "inSearchBundles": false
+        }
+      ]
+    }
+  ],
+  "note": "C1 coverage is candidates ∪ evidence. in-pool=0; remaining misses are DISCOVERY_GAP (absent from search.bundles). N5_CONTEXT_GATES hit=false is evidence packing (selected cap 3), not wire absence."
+}

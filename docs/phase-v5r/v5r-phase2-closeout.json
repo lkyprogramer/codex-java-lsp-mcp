@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "v5r-phase2-closeout/v1",
+  "phase": 2,
+  "deadline": "2026-09-02",
+  "decision": "COMPLETE",
+  "parentPhase1": "docs/phase-v5r/v5r-phase1-closeout.json",
+  "phase2WriteTree": "3110213e97b23c030af492e61d4b9c0fc0a03abe",
+  "productionLoc": 37767,
+  "v4LocBaseline": 35472,
+  "v4LocCap": 37245,
+  "locNote": "V5R does not treat 37245 as a hard merge gate. Phase 2 mapped +407 LOC versus Phase 1 to ReadUnit types, context-closure classification, unified utility, and hard-cap checks.",
+  "readUnit": {
+    "defaultPath": "buildReadUnits then windowsFromReadUnits then the existing V6 selector",
+    "contextClosure": "classifies existing indexed ranges; mergedRanges keep source order",
+    "shadowFlag": "JAVA_LSP_READUNIT_PLANNER=shadow",
+    "publicAbsolutePaths": false,
+    "spanCaps": { "maxSpansPerFile": 8, "maxSpans": "maxFiles * 8" }
+  },
+  "legacyBudgetCallers": "selectWithEvidenceBudget via selectReadPlanFiles for rank-candidates baselineReadPlanCoverage candidate-tail coverage, not the V6 byte-aware first-call selector",
+  "threeRepoMatrix": "not required: first-call selection identity preserved; no ranking/weight/budget-binding change",
+  "isolationFull": {
+    "tests": 1038,
+    "scripts": 164,
+    "fail": 0
+  },
+  "exitChecklist": {
+    "candidateWindowToReadUnit": true,
+    "contextClosureRuleDriven": true,
+    "unifiedSelectionUtility": true,
+    "legacySelectorShadowParity": true,
+    "hardFilesSpansBytesCaps": true,
+    "firstCallIdentityPreserved": true,
+    "deterministic": true,
+    "noPublicAbsolutePath": true,
+    "readPlanBudgetCallersExplained": true,
+    "noContinuation": true
+  }
+}

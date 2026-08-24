@@ -1,0 +1,97 @@
+{
+  "schemaVersion": "f-f1-n0-closeout/v1",
+  "track": "f",
+  "card": "F1-N0",
+  "dated": "2026-08-24",
+  "decision": "GO",
+  "mergeToMain": false,
+  "srcTouched": true,
+  "defaultChainIdentity": "UNCHANGED_VS_N0",
+  "holdoutInspected": false,
+  "taskSuccess": "UNMEASURED",
+  "fourthLive": false,
+  "baseline": {
+    "label": "N0",
+    "commit": "09772b29b3caea6bc9fd96685230746a8e8b601a",
+    "executableTree": "fc39b9cde6b58f6f9fe67c9abc3ab0fbd14b619a",
+    "reason": "Plan called github main V4-final. That tree is pre-V4 (54 files). N0 is the last quality-identity point before compact output."
+  },
+  "candidate": {
+    "commit": "d4baaa2c1d5f",
+    "executableTree": "36d42eab11944ee33c9641da2ba86343442852a1"
+  },
+  "wrongTreeF1": {
+    "file": "docs/phase-f/f1-closeout.json",
+    "old": "github main 48e665b",
+    "decision": "FAIL_WRONG_TREE"
+  },
+  "cipherlinkHoldoutProject": "docs/phase-f/cipherlink-holdout-project.md",
+  "host": {
+    "loadavg1AtStart": 129.67,
+    "loadWindow": "above 20; runner still executed (refuse=false)"
+  },
+  "doors": {
+    "quality": {
+      "result": "GO",
+      "identity": true,
+      "note": "recall/pRead/rReadMust/RangeLineRecall/holdout bit-identical vs N0 on all three repos"
+    },
+    "token": {
+      "result": "GO",
+      "projects": {
+        "lishuedu": { "oldP50": 4683, "newP50": 3393, "drop": 0.2755 },
+        "cipherlink": { "oldP50": 4443, "newP50": 3186, "drop": 0.2829 },
+        "exam-parent-v3": { "oldP50": 3890, "newP50": 2830, "drop": 0.2725 }
+      }
+    },
+    "p95": {
+      "result": "GO_VERIFIER",
+      "p95Limit": 1.1,
+      "absoluteSlackMs": 50,
+      "verifierP95": { "lishuedu": true, "cipherlink": true, "exam-parent-v3": true },
+      "rawRatio": { "lishuedu": 1.045, "cipherlink": 1.232, "exam-parent-v3": 1.077 },
+      "note": "Formal matrix --p95-limit 1.10 uses max(old*1.10, old+50ms). cipherlink raw 1.232 at load 129.67 still inside slack (244ms <= 248ms)."
+    },
+    "memory": {
+      "result": "GO",
+      "g1": { "lishuedu": 57, "cipherlink": 14, "exam-parent-v3": 21, "anchor": [173, 29, 46], "pass": true },
+      "s1": { "actual": 415, "gate": 1024, "pass": true },
+      "s2": { "actual": 725, "gate": 1433.6, "pass": true, "runtimes": 5 },
+      "knife": "QUERY_GRAPH_DIGEST no longer unpacks the live graph; OPEN delays tree-sitter until first parse. java_impact still unpacks on first query.",
+      "fileSha256": "310d30675949edc6d2fb7f94fbc5c539ccca7a6b60a21ad32bfad71d352c27ee"
+    },
+    "tools": {
+      "result": "GO",
+      "count": 5,
+      "names": ["java_diagnostics", "java_impact", "java_runtime", "java_status", "java_symbol"],
+      "estimatedTokens": 1308,
+      "java_context": false
+    }
+  },
+  "ruoyiObservation": {
+    "file": "docs/phase-f/f1-ruoyi-observation-n0.json",
+    "sha256": "f244489e5c2e37db8b8664d67c790a64fffdc3262415cd7fb9a27c7790ab4a16",
+    "decision": "GO",
+    "identity": true,
+    "tokenDrop": 0.2885,
+    "old": { "recall": 0.7482, "pRead": 0.2976, "rReadMust": 0.5384, "RangeLineRecall": 0.3526, "estimatedTokensP50": 3601 },
+    "new": { "recall": 0.7482, "pRead": 0.2976, "rReadMust": 0.5384, "RangeLineRecall": 0.3526, "estimatedTokensP50": 2562 }
+  },
+  "matrix": {
+    "baseline": "09772b29b3caea6bc9fd96685230746a8e8b601a",
+    "runs": 5,
+    "p95Limit": 1.1,
+    "verifierPassed": false,
+    "verifierResidual": "absolute minReadMust/range 1.0 (same N0.5 residual, not an F1 door)",
+    "summarySha256": "28ca68f751bcb9e3a46d2ab48200350eccff4b8218c6c152befaf226a98d1d70",
+    "logSha256": "753126c06bd043136487a930afc673826823374864ce97bfd8d3f764156ca6ec",
+    "worktrees": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-mcp-three-repo-krqY2I"
+  },
+  "residuals": {
+    "O1": "lishuedu child cold peak 1943 MiB > 1536",
+    "O2": "lishuedu firstHydrate 7502ms > 2000; cold build residual unchanged",
+    "S2": "was 1566; after digest-without-unpack + lazy parser: 725 ≤ 1433.6",
+    "cipherlinkHoldout": "0.55 rReadMust is V4-final residual; filed, not a merge knife"
+  },
+  "note": "Rebaseline restored quality identity and the N0.5 token −27% story, including ruoyi vs N0. S2 is 725 after not materializing the knowledge graph on digest. F2 not started in the S2 turn. main untouched. No live."
+}

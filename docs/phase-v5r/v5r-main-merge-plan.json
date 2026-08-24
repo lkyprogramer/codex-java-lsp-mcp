@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "v5r-main-merge-plan/v1",
+  "dated": "2026-08-20",
+  "mergeToMain": false,
+  "branch": "codex/java-intelligence-v3",
+  "mustHoldBeforeMerge": [
+    "live Agent trace authorized with --authorize-external and a provider key (MEASURED 2026-08-20)",
+    "TaskSuccess MEASURED and non-inferior (MEASURED 4/6; no old-side agent baseline, non-inferior not claimed)",
+    "λ CALIBRATED_LIVE or an explicit user exemption to remain LIVE_TRACE_MEASURED with scalarAllowed=false",
+    "fourth evaluation golden frozen before any new ranking knife",
+    "leave-one-repo-out matrix MEASURED on the three frozen repos",
+    "release gates green including isolated full and HTTP smoke",
+    "rollback attestation for the RC tree"
+  ],
+  "currentBlockers": [
+    { "id": "live-trace", "status": "MEASURED" },
+    { "id": "taskSuccess", "status": "MEASURED_NO_BASELINE" },
+    { "id": "fourth-golden", "status": "UNMEASURED" },
+    { "id": "leave-one-repo-out-matrix", "status": "UNMEASURED" }
+  ]
+}

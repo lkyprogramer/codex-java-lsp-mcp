@@ -1,0 +1,318 @@
+TAP version 13
+1..0
+# Subtest: dist/agent-router-direct-reference.test.js
+ok 1 - dist/agent-router-direct-reference.test.js
+  ---
+  duration_ms: 167.950167
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/agent-router-implementation-lookup.test.js
+ok 2 - dist/agent-router-implementation-lookup.test.js
+  ---
+  duration_ms: 161.679709
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/agent-router.test.js
+ok 3 - dist/agent-router.test.js
+  ---
+  duration_ms: 191.517084
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/agent-router/rg-partial-cache.test.js
+ok 4 - dist/agent-router/rg-partial-cache.test.js
+  ---
+  duration_ms: 180.445625
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/agent-router/semantic-failure.test.js
+ok 5 - dist/agent-router/semantic-failure.test.js
+  ---
+  duration_ms: 183.5635
+  type: 'test'
+  ...
+# Subtest: AliasRegistry retains last known good config when a reload is invalid JSON
+ok 6 - AliasRegistry retains last known good config when a reload is invalid JSON
+  ---
+  duration_ms: 10.565916
+  type: 'test'
+  ...
+# Subtest: AliasRegistry retains last known good config when a reload has a schema violation
+ok 7 - AliasRegistry retains last known good config when a reload has a schema violation
+  ---
+  duration_ms: 8.55325
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/benchmark-agent-impact.test.js
+ok 7 - dist/benchmark-agent-impact.test.js
+  ---
+  duration_ms: 146.746667
+  type: 'test'
+  ...
+# Subtest: two processes cannot exceed one machine JDT slot
+ok 9 - two processes cannot exceed one machine JDT slot
+  ---
+  duration_ms: 22.195375
+  type: 'test'
+  ...
+# Subtest: same worktree second process is rejected before a second JDT slot
+ok 10 - same worktree second process is rejected before a second JDT slot
+  ---
+  duration_ms: 5.92775
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/document-symbol-limiter.test.js
+ok 9 - dist/document-symbol-limiter.test.js
+  ---
+  duration_ms: 182.507084
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/edge-store.test.js
+ok 10 - dist/edge-store.test.js
+  ---
+  duration_ms: 104.013208
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/file-watcher.test.js
+ok 11 - dist/file-watcher.test.js
+  ---
+  duration_ms: 109.142292
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/freshness-integration.test.js
+ok 12 - dist/freshness-integration.test.js
+  ---
+  duration_ms: 118.930416
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/freshness-mutation.test.js
+ok 13 - dist/freshness-mutation.test.js
+  ---
+  duration_ms: 138.81275
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/generated-code.test.js
+ok 14 - dist/generated-code.test.js
+  ---
+  duration_ms: 94.890208
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/hooks/hook-gate.test.js
+ok 15 - dist/hooks/hook-gate.test.js
+  ---
+  duration_ms: 95.718583
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/jdt-restart-backoff.test.js
+ok 16 - dist/jdt-restart-backoff.test.js
+  ---
+  duration_ms: 103.265875
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/jdtls-hierarchy.test.js
+ok 17 - dist/jdtls-hierarchy.test.js
+  ---
+  duration_ms: 141.778584
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/jdtls-session.test.js
+ok 18 - dist/jdtls-session.test.js
+  ---
+  duration_ms: 129.544083
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/jdtls-transport.test.js
+ok 19 - dist/jdtls-transport.test.js
+  ---
+  duration_ms: 107.933042
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/layout-manager.test.js
+ok 20 - dist/layout-manager.test.js
+  ---
+  duration_ms: 107.747375
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/layout-probe.test.js
+ok 21 - dist/layout-probe.test.js
+  ---
+  duration_ms: 85.482833
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/path-utils.test.js
+ok 22 - dist/path-utils.test.js
+  ---
+  duration_ms: 92.04825
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/project-jdk.test.js
+ok 23 - dist/project-jdk.test.js
+  ---
+  duration_ms: 95.233834
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/ranking-signals.test.js
+ok 24 - dist/ranking-signals.test.js
+  ---
+  duration_ms: 84.400042
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/read-plan-budget.test.js
+ok 25 - dist/read-plan-budget.test.js
+  ---
+  duration_ms: 69.381125
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/repo-change-coordinator.test.js
+ok 26 - dist/repo-change-coordinator.test.js
+  ---
+  duration_ms: 86.541292
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/repo-generation.test.js
+ok 27 - dist/repo-generation.test.js
+  ---
+  duration_ms: 81.82175
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/repo-resolver.test.js
+ok 28 - dist/repo-resolver.test.js
+  ---
+  duration_ms: 140.452584
+  type: 'test'
+  ...
+# Subtest: fully stopped idle runtimes are removed from the runtime map beyond the retention bound
+ok 31 - fully stopped idle runtimes are removed from the runtime map beyond the retention bound
+  ---
+  duration_ms: 7.552291
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/routing-policy.test.js
+ok 30 - dist/routing-policy.test.js
+  ---
+  duration_ms: 82.197709
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/runtime/completion.test.js
+ok 31 - dist/runtime/completion.test.js
+  ---
+  duration_ms: 99.339083
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/runtime/deadline-budget.test.js
+ok 32 - dist/runtime/deadline-budget.test.js
+  ---
+  duration_ms: 92.657208
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/search/bounded-line-decoder.test.js
+ok 33 - dist/search/bounded-line-decoder.test.js
+  ---
+  duration_ms: 97.944375
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/search/rg-cache.test.js
+ok 34 - dist/search/rg-cache.test.js
+  ---
+  duration_ms: 112.824667
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/search/rg-runner.test.js
+ok 35 - dist/search/rg-runner.test.js
+  ---
+  duration_ms: 71.382667
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/semantic-location.test.js
+ok 36 - dist/semantic-location.test.js
+  ---
+  duration_ms: 76.280208
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/source-index.test.js
+ok 37 - dist/source-index.test.js
+  ---
+  duration_ms: 65.917
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/tools/impact.test.js
+ok 38 - dist/tools/impact.test.js
+  ---
+  duration_ms: 135.412209
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/tools/output-shape.test.js
+ok 39 - dist/tools/output-shape.test.js
+  ---
+  duration_ms: 135.551833
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/tools/status.test.js
+ok 40 - dist/tools/status.test.js
+  ---
+  duration_ms: 137.880166
+  type: 'test'
+  ...
+# Subtest: janitor does not delete a stale-looking cache owned by a live fast-only runtime
+ok 43 - janitor does not delete a stale-looking cache owned by a live fast-only runtime
+  ---
+  duration_ms: 19.477459
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/worktree-identity.test.js
+ok 42 - dist/worktree-identity.test.js
+  ---
+  duration_ms: 97.061916
+  type: 'test'
+  ...
+# Subtest: linked-worktree git metadata never advances Java generation, even under a large burst
+ok 45 - linked-worktree git metadata never advances Java generation, even under a large burst
+  ---
+  duration_ms: 120.446417
+  type: 'test'
+  ...
+1..45
+# tests 45
+# suites 0
+# pass 45
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 742.465292

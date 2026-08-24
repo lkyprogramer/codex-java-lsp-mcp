@@ -1,0 +1,1 @@
+src/benchmark-agent-impact.ts:734:  const result = spawnSync("rg", ["--line-number", "--no-heading", "-g", "*.java", pattern, "."], {

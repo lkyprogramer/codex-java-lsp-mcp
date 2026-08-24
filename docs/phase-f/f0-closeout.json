@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "f-f0-closeout/v1",
+  "track": "f",
+  "card": "F0",
+  "dated": "2026-08-23",
+  "decision": "COMPLETE",
+  "mergeToMain": false,
+  "scope": [
+    "docs/phase-f/final-panel.md harvest card table",
+    "scripts/live-model-profiles.mjs local-qwen host 47.106.205.246:1082 model openclaw/Qwen3.8-27B-WORK"
+  ],
+  "profiles": {
+    "local-qwen": {
+      "host": "47.106.205.246:1082",
+      "model": "openclaw/Qwen3.8-27B-WORK",
+      "retiredHost": "192.168.10.29:28343"
+    },
+    "openrouter": {
+      "host": "openrouter.ai",
+      "model": "stealth/ox-alpha"
+    }
+  },
+  "isolation": {
+    "t0": {
+      "tests": 4,
+      "fail": 0,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "5a4c20e2e54311856018f64bc927dde04857f7df",
+      "logSha256": "99b860a8792d04d38c805a8de8453d13e60c385e049ebb88391857ebbfa6c163"
+    }
+  }
+}

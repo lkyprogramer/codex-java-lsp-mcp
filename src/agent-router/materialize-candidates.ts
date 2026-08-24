@@ -1,0 +1,198 @@
+// input: family-ranker.ts's ranked CandidateEvidence[] (module/layer/sourceSet populated by normalizeEvidence(..., repoRoot)).
+// output: CandidateFile[] compatible with read-plan.ts/format.ts/ranking-signals.ts/read-plan-budget.ts.
+// pos: Task 25 production boundary between the evidence ranker and existing CandidateFile consumers.
+//      rank-candidates.ts calls this after evidence normalization.
+import { classifyPath } from "../repo-layout.js";
+import type { CandidateEvidenceKey, CandidateFile, ResolvedAnchor, RouterPosition, ScoreBreakdownItem } from "../agent-types.js";
+import { candidateFromAnchor } from "./candidate-collectors.js";
+import type { CandidateEvidence, EvidenceFamily } from "./evidence.js";
+
+/**
+ * `signal.kind` -> legacy `finalize.*` scoreBreakdown id, for relationships a
+ * bare kind string can honestly reconstruct today. `read-plan.ts`/
+ * `ranking-signals.ts`/`read-plan-budget.ts` check these ids' *presence*
+ * (delta > 0), not their numeric provenance - see Task 25 item 3 review.
+ *
+ * IMPLEMENTS (static-provider's typeGraph stage: implementers of the
+ * anchor's own type) and TYPE_RELATION (relationship-provider's
+ * structuralDeltas, item 4: any typeReference-verified candidate that
+ * implements/extends anchor.className, for anchor profiles typeGraph skips)
+ * are two different discovery paths to the same relationship, so both map
+ * to `finalize.type-relation` - `legacyCompatEntries` takes the max delta
+ * per id, matching the old `Math.max()` between directCollaboratorDelta and
+ * directReferencedTypeDelta, not a sum.
+ */
+const KIND_TO_LEGACY_ID: Partial<Record<string, { id: string; reason: string }>> = {
+  IMPLEMENTS: { id: "finalize.type-relation", reason: "implements or extends anchor type" },
+  TYPE_RELATION: { id: "finalize.type-relation", reason: "implements or extends anchor type" },
+  TASK_KEYWORD: { id: "finalize.task-keyword", reason: "task keyword evidence" },
+  DIRECT_COLLABORATOR: { id: "finalize.direct-collaborator", reason: "direct type-name collaborator" },
+  METHOD_RELATION: { id: "finalize.method-relation", reason: "method relation" },
+  TYPE_SYMMETRIC: { id: "finalize.structural.type-symmetric", reason: "anchor is candidate subtype" },
+  KIND_PAIRING: { id: "finalize.structural.kind", reason: "interface-impl pairing" }
+};
+
+/**
+ * `signal.family` -> a `CandidateFile.categories` tag. This is a coarser
+ * approximation than the old per-rg-section categories (config/persistence/
+ * nonJava/tests were distinguished by which rg section matched, not by a
+ * single family) - `read-plan.ts`'s persistence-category prioritization in
+ * particular is not fully reconstructable from family alone. Flagged as a
+ * known gap for item 4/5, not solved here.
+ */
+const FAMILY_TO_CATEGORY: Partial<Record<EvidenceFamily, string>> = {
+  EXACT_SEMANTIC: "semantic",
+  STATIC_STRUCTURE: "semantic",
+  TASK_CONTEXT: "task-context",
+  // Generic adapter vocabulary (Task 27 Slice C) - not "spring", since
+  // Task 28/29's MyBatis/JPA packs will emit the same family through the
+  // same runner. read-plan-budget.ts's evidenceClassOf treats this category
+  // as "verified": by the time a signal reaches here it already passed an
+  // adapter's own high-confidence gate (informational/low-confidence facts
+  // go to FrameworkCollectResult.metadata, never to evidence at all).
+  FRAMEWORK: "framework",
+};
+
+const MAX_POSITIONS = 8;
+
+/**
+ * The anchor is not evidence - old code (`candidateFromAnchor`) synthesized
+ * it directly with a fixed high score, and this keeps doing exactly that
+ * rather than inventing an ANCHOR family for family-ranker.ts to rank first.
+ * Presence is the guarantee; prepending it is what fixes its position.
+ */
+export function materializeRankedCandidates(
+  ranked: readonly CandidateEvidence[],
+  anchors: readonly ResolvedAnchor[],
+  repoRoot: string
+): CandidateFile[] {
+  const anchorFilesByPath = new Map<string, CandidateFile>();
+  const orderedAnchors = anchors.length <= 1 ? anchors : [...anchors].sort((left, right) =>
+    left.absolutePath.localeCompare(right.absolutePath)
+    || left.line - right.line
+    || left.column - right.column
+    || left.id.localeCompare(right.id));
+  for (const anchor of orderedAnchors) {
+    const incoming = candidateFromAnchor(anchor);
+    const existing = anchorFilesByPath.get(incoming.absolutePath);
+    if (!existing) {
+      anchorFilesByPath.set(incoming.absolutePath, incoming);
+      continue;
+    }
+    existing.positions = dedupePositions([...existing.positions, ...incoming.positions]);
+  }
+  const anchorFiles = [...anchorFilesByPath.values()];
+  const anchorPaths = new Set(anchorFilesByPath.keys());
+  const rest = ranked
+    .filter(candidate => !anchorPaths.has(candidate.file))
+    .map(candidate => materializeOne(candidate, repoRoot));
+  return [...anchorFiles, ...rest];
+}
+
+function materializeOne(candidate: CandidateEvidence, repoRoot: string): CandidateFile {
+  const path = classifyPath(repoRoot, candidate.file).relativePath;
+  const signalMetadata = candidate.signals.map(signal => signal.candidateMetadata ?? fallbackMetadata(signal));
+  const reasons = unique(signalMetadata.flatMap(metadata => metadata.reasons));
+  const categories = unique(signalMetadata.flatMap(metadata => metadata.categories));
+  const positions = dedupePositions(candidate.signals.flatMap(signal => signal.positions));
+  const scoreBreakdown: ScoreBreakdownItem[] = [
+    { id: "family-ranker.final-score", source: "policy", delta: candidate.finalScore, reason: "family-saturated score" },
+    ...legacyCompatEntries(candidate)
+  ];
+  const materialized: CandidateFile = {
+    absolutePath: candidate.file,
+    path,
+    module: candidate.module,
+    layer: candidate.layer,
+    sourceSet: candidate.sourceSet,
+    score: candidate.finalScore,
+    matchCount: signalMetadata.reduce((sum, metadata) => sum + metadata.matchCount, 0),
+    positions,
+    categories,
+    reasons,
+    confidence: candidate.confidence,
+    verifiedBy: unique(signalMetadata.flatMap(metadata => metadata.verifiedBy)),
+    scoreBreakdown
+  };
+  Object.defineProperty(materialized, "plannerEvidence", {
+    value: plannerEvidence(candidate),
+    enumerable: false,
+    configurable: false,
+    writable: false
+  });
+  return materialized;
+}
+
+function fallbackMetadata(signal: CandidateEvidence["signals"][number]): NonNullable<CandidateEvidence["signals"][number]["candidateMetadata"]> {
+  const lexical = lexicalCategory(signal.kind);
+  const category = signal.kind === "SUPPORT_FILE"
+    ? "config"
+    : lexical ?? FAMILY_TO_CATEGORY[signal.family] ?? (signal.family === "LEXICAL" ? "naming" : undefined);
+  return {
+    categories: category ? [category] : [],
+    reasons: [lexical ? `rg:${lexical}` : signal.kind],
+    verifiedBy: [lexical ? "rg" : signal.kind],
+    matchCount: signal.family === "LEXICAL" ? 1 : 0
+  };
+}
+
+function plannerEvidence(candidate: CandidateEvidence): CandidateEvidenceKey[] {
+  const evidence = new Map<string, CandidateEvidenceKey>();
+  for (const signal of candidate.signals) {
+    const sourceTarget = signal.family === "LEXICAL" || signal.family === "TASK_CONTEXT" || signal.family === "SUPPORT"
+      ? `${signal.anchorId}->${signal.kind}`
+      : `${signal.anchorId}:${signal.sourceFile}->${signal.candidateNodeId ?? signal.candidateFile}`;
+    const item = {
+      family: signal.family,
+      kind: signal.kind,
+      sourceTarget,
+      ...(signal.callDepth === undefined ? {} : { callDepth: signal.callDepth }),
+      ...(signal.callOrigin === undefined ? {} : { callOrigin: signal.callOrigin })
+    };
+    const key = `${item.family}\0${item.kind}\0${item.sourceTarget}\0${item.callOrigin ?? ""}`;
+    const current = evidence.get(key);
+    // Multiple resolved calls to the same candidate collapse to one planner
+    // identity; retain the shallowest AST call as the strongest direct path.
+    if (!current || (item.callDepth ?? Infinity) < (current.callDepth ?? Infinity)) {
+      evidence.set(key, item);
+    }
+  }
+  return [...evidence.values()];
+}
+
+function lexicalCategory(kind: string): string | undefined {
+  const category = kind.startsWith("LEXICAL:") ? kind.slice("LEXICAL:".length) : "";
+  return category.length > 0 ? category : undefined;
+}
+
+function legacyCompatEntries(candidate: CandidateEvidence): ScoreBreakdownItem[] {
+  const bestById = new Map<string, ScoreBreakdownItem>();
+  for (const signal of candidate.signals) {
+    const mapped = KIND_TO_LEGACY_ID[signal.kind];
+    if (!mapped) {
+      continue;
+    }
+    const current = bestById.get(mapped.id);
+    if (!current || signal.weight > current.delta) {
+      bestById.set(mapped.id, { id: mapped.id, source: "finalize", delta: signal.weight, reason: mapped.reason });
+    }
+  }
+  return [...bestById.values()];
+}
+
+function dedupePositions(positions: readonly RouterPosition[]): RouterPosition[] {
+  const result: RouterPosition[] = [];
+  for (const position of positions) {
+    if (result.length >= MAX_POSITIONS) {
+      break;
+    }
+    if (!result.some(item => item.line === position.line && item.column === position.column)) {
+      result.push(position);
+    }
+  }
+  return result;
+}
+
+function unique(values: string[]): string[] {
+  return [...new Set(values)];
+}

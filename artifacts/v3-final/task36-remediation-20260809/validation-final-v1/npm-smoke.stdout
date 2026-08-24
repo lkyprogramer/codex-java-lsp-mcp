@@ -1,0 +1,25 @@
+
+> codex-java-lsp-mcp@0.1.0 smoke
+> node dist/smoke.js
+
+{
+  "tools": [
+    "java_diagnostics",
+    "java_impact",
+    "java_runtime",
+    "java_status",
+    "java_symbol"
+  ],
+  "status": [
+    {
+      "type": "text",
+      "text": "{\"repoRoot\":\"/Users/luo/Documents/github/codex-java-lsp-mcp\",\"state\":\"NEW\",\"started\":false,\"restartBackoff\":{},\"knownDiagnostics\":0,\"openDocuments\":0,\"buildSystem\":\"unknown\",\"projectJdk\":{\"requiredMajor\":25,\"requiredRaw\":\"25\",\"resolvedHome\":\"/Users/luo/.sdkman/candidates/java/current\",\"runtimeName\":\"JavaSE-25\",\"primarySource\":\"fallback\",\"allSources\":[\"fallback\"],\"status\":\"degraded\",\"notes\":[\"No project JDK marker found; using JDT LS runtime JDK as parse fallback.\"]},\"generatedCode\":{\"lombok\":{\"detected\":false,\"agentEnabled\":false,\"status\":\"not-detected\"},\"annotationProcessing\":{\"detectedProcessors\":[],\"enabled\":false,\"source\":\"not-detected\"},\"generatedCodeSemantics\":\"not-detected\"},\"progress\":{\"active\":0,\"activeMessageCount\":0},\"repoHash\":\"a25223989a6a\",\"rootSource\":\"explicit\",\"aliases\":[],\"layoutProfile\":\"generic-java\",\"layout\":{\"layout\":\"single\",\"layoutProfile\":\"generic-java\",\"sourceRootCount\":7,\"resourceRootCount\":2,\"broadRoots\":[\"fixtures/framework-lombok\",\"fixtures/framework-mapstruct\",\"fixtures/framework-mybatis\",\"fixtures/framework-spring\",\"fixtures/generic-java\",\"fixtures/java-index-v2\"]},\"runtimeBuild\":{\"gitSha\":\"4e147560c38b\",\"generatedAt\":\"2026-08-09T07:01:28.732Z\",\"defaultsFingerprint\":\"e5835394a86f\"},\"rootWarnings\":[\"No pom.xml, build.gradle, or settings.gradle file was found at the resolved repo root.\"],\"lsp\":{\"enabled\":false,\"matchedBy\":\"unregistered\",\"effectiveRepoRoot\":\"/Users/luo/Documents/github/codex-java-lsp-mcp\",\"reason\":\"Project root is not LSP-enabled.\",\"enableHint\":\"./register-alias.sh --enable-lsp <id> /Users/luo/Documents/github/codex-java-lsp-mcp\"},\"javaIndex\":{\"state\":\"READY\",\"indexedGeneration\":1,\"files\":3,\"coverage\":\"partial\",\"pendingBackground\":52,\"worktreeSeed\":{\"completion\":\"NO_VALID_SOURCE\",\"reusedFiles\":0,\"dirtyFiles\":0,\"deltaParsedFiles\":0}},\"watcher\":{\"ready\":true,\"degraded\":false,\"pending\":0},\"resource\":{\"maxActiveRepos\":3,\"idleTtlMs\":2700000,\"jdtlsXmx\":\"2g\",\"activeRepos\":1,\"activeJdtlsPids\":[],\"importConcurrency\":2,\"workspaceRetainedOnShutdown\":true}}"
+    }
+  ],
+  "shutdown": [
+    {
+      "type": "text",
+      "text": "{\"stopped\":false,\"repoRoot\":\"/Users/luo/Documents/github/codex-java-lsp-mcp\",\"wasStarted\":false,\"started\":false,\"rgCacheCleared\":true}"
+    }
+  ]
+}

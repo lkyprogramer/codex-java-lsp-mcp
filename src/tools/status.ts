@@ -1,20 +1,32 @@
 // input: java_status MCP request and optional start flag.
-// output: Current JDT LS, watcher, source-index, and router cache status.
-// pos: v5 status tool handler.
+// output: Current JDT LS, watcher, JavaIndex, and router cache status.
+// pos: V6 status tool handler.
 import { z } from "zod";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { readRuntimeBuild, type RuntimeBuildInfo } from "../build-info.js";
 import { probeLayout, type LayoutContext } from "../layout-probe.js";
 import type { JdtlsProgressStatus } from "../jdtls-session.js";
-import type { FileWatcherStatus } from "../file-watcher.js";
 import type { GeneratedCodeStatus } from "../generated-code.js";
+import type { JavaIndexStatus } from "../java-index/index-types.js";
+import { summarizeCoverage } from "../java-index/java-index-view.js";
 import type { ProjectJdkStatus } from "../project-jdk.js";
-import type { SourceIndexStatus } from "../source-index.js";
+import type { RequestContext } from "../runtime/request-context.js";
 import type { ToolContext } from "./context.js";
 import { compact, detailSchema, isDiagnosticDetail } from "./shared.js";
 
 type SessionStatus = ReturnType<ToolContext["session"]["status"]>;
+
+/**
+ * Task 35 (Phase 5 decision KEEP_EXPLICIT): a real fresh-workspace first
+ * "references" request took 32-42s against a real repo - the plan's Step 8
+ * "java_status exposes why auto skipped" requirement, satisfied as a static
+ * policy explanation since the skip/run decision itself
+ * (agent-router/semantic.ts's shouldUseSemantic) never depends on live
+ * session state, only on options.semanticPolicy/mode/anchor.profile.
+ */
+const AUTO_SEMANTIC_POLICY_EXPLANATION =
+  "semanticPolicy=auto runs live JDT semantic lookups only for service-profile anchors, never merely because JDT reports READY (READY precedes real project import, which can take tens of seconds on a cold workspace - see docs/phase-v3/phase5-semantic-first-touch-decision.md). semanticPolicy=required (or mode=precision/recall) always runs it within the request deadline; semanticPolicy=fast never does.";
 
 type DisabledStatus = {
   readonly repoRoot: string;
@@ -36,7 +48,7 @@ type StatusSummaryInput = {
   readonly layout: LayoutContext;
   readonly runtimeBuild: RuntimeBuildInfo;
   readonly warnings: string[];
-  readonly sourceIndex: SourceIndexStatus;
+  readonly javaIndex?: JavaIndexStatus;
 };
 
 export const statusSchema = {
@@ -47,7 +59,11 @@ export const statusSchema = {
   detail: detailSchema
 };
 
-export async function javaStatus(context: ToolContext, _args: z.infer<z.ZodObject<typeof statusSchema>>): Promise<Record<string, unknown>> {
+export async function javaStatus(
+  context: ToolContext,
+  _args: z.infer<z.ZodObject<typeof statusSchema>>,
+  request?: Pick<RequestContext, "budget">
+): Promise<Record<string, unknown>> {
   const layout = probeLayout(context.repoRoot, context.layoutProfile);
   const runtimeBuild = readRuntimeBuild();
   const warnings = rootWarnings(context.repoRoot);
@@ -68,10 +84,10 @@ export async function javaStatus(context: ToolContext, _args: z.infer<z.ZodObjec
       };
       return isDiagnosticDetail(_args.detail) ? disabled : disabledSummary(disabled);
     }
-    await context.session.ensureStarted();
+    await context.session.ensureStarted(request?.budget);
   }
   const sessionStatus = context.session.status();
-  const sourceIndex = context.sourceIndex.status();
+  const javaIndex = await context.javaIndexClient?.status({ budget: request?.budget }).catch(() => undefined);
   const full = {
     ...sessionStatus,
     repoHash: context.repoHash,
@@ -83,27 +99,36 @@ export async function javaStatus(context: ToolContext, _args: z.infer<z.ZodObjec
     rootWarnings: warnings,
     lsp: context.lsp,
     repoRoot: context.repoRoot,
-    sourceIndex,
+    javaIndex,
+    watcher: context.watcher,
     rgCache: context.router.rgCacheStatus(),
+    semanticAutoPolicy: AUTO_SEMANTIC_POLICY_EXPLANATION,
     note: "This MCP server is read-only and exposes the Java impact router."
   };
   return isDiagnosticDetail(_args.detail)
     ? full
-    : statusSummary({ context, sessionStatus, layout, runtimeBuild, warnings, sourceIndex });
+    : statusSummary({ context, sessionStatus, layout, runtimeBuild, warnings, javaIndex });
 }
 
 export function summarizeSessionStatus(status: SessionStatus): Record<string, unknown> {
   return compact({
     repoRoot: status.repoRoot,
+    state: status.state,
     started: status.started,
     pid: status.pid,
+    startingPid: status.startingPid,
+    restartBackoff: compact({
+      consecutiveFailures: status.restartBackoff.consecutiveFailures || undefined,
+      retryAfterMs: status.restartBackoff.retryAfterMs,
+      blockedUntilExplicitReset: status.restartBackoff.blockedUntilExplicitReset || undefined,
+      lastErrorCode: status.restartBackoff.lastErrorCode
+    }),
     startedAt: status.startedAt,
     knownDiagnostics: status.knownDiagnostics,
     openDocuments: status.openDocuments,
     buildSystem: status.buildSystem,
     projectJdk: summarizeProjectJdk(status.projectJdk),
     generatedCode: summarizeGeneratedCode(status.generatedCode),
-    fileWatcher: summarizeFileWatcher(status.fileWatcher),
     progress: summarizeProgress(status.progress)
   });
 }
@@ -112,6 +137,7 @@ export function summarizeResourceStatus(resource: NonNullable<ToolContext["resou
   return {
     maxActiveRepos: resource.maxActiveRepos,
     idleTtlMs: resource.idleTtlMs,
+    hibernateTtlMs: resource.hibernateTtlMs,
     jdtlsXmx: resource.jdtlsXmx,
     activeRepos: resource.activeRepos,
     activeJdtlsPids: resource.activeJdtlsPids,
@@ -146,7 +172,37 @@ function statusSummary(input: StatusSummaryInput): Record<string, unknown> {
     rootWarnings: input.warnings,
     lsp: input.context.lsp,
     repoRoot: input.context.repoRoot,
-    sourceIndex: summarizeSourceIndex(input.sourceIndex)
+    javaIndex: input.javaIndex && summarizeJavaIndex(input.javaIndex),
+    watcher: input.context.watcher && summarizeWatcher(input.context.watcher)
+  });
+}
+
+function summarizeJavaIndex(status: JavaIndexStatus): Record<string, unknown> {
+  return compact({
+    state: status.state,
+    indexedGeneration: status.indexedGeneration,
+    files: status.files,
+    coverage: summarizeCoverage(status),
+    pendingBackground: status.pendingBackground,
+    worktreeSeed: status.worktreeSeed && compact({
+      completion: status.worktreeSeed.completion,
+      reusedFiles: status.worktreeSeed.reusedFiles,
+      dirtyFiles: status.worktreeSeed.dirtyFiles,
+      deltaParsedFiles: status.worktreeSeed.deltaParsedFiles
+    })
+  });
+}
+
+function summarizeWatcher(watcher: NonNullable<ToolContext["watcher"]>): Record<string, unknown> {
+  return compact({
+    ready: watcher.ready,
+    degraded: watcher.degraded,
+    pending: watcher.pending,
+    lastStorm: watcher.lastStorm && compact({
+      observedAt: watcher.lastStorm.observedAt,
+      changeCount: watcher.lastStorm.changeCount,
+      affectedRoots: watcher.lastStorm.affectedRoots
+    })
   });
 }
 
@@ -210,33 +266,11 @@ function summarizeGeneratedCode(generatedCode: GeneratedCodeStatus): Record<stri
   };
 }
 
-function summarizeFileWatcher(fileWatcher: FileWatcherStatus): Record<string, unknown> {
-  return compact({
-    enabled: fileWatcher.enabled,
-    active: fileWatcher.active,
-    watchedRootCount: fileWatcher.watchedRoots.length,
-    pendingChanges: fileWatcher.pendingChanges,
-    lastFlushAt: fileWatcher.lastFlushAt,
-    lastFlushSize: fileWatcher.lastFlushSize,
-    lastError: fileWatcher.lastError
-  });
-}
-
 function summarizeProgress(progress: JdtlsProgressStatus): Record<string, unknown> {
   return compact({
     active: progress.active,
     activeMessageCount: progress.activeMessages.length,
     lastProgressAt: progress.lastProgressAt,
     lastLanguageStatus: progress.lastLanguageStatus
-  });
-}
-
-function summarizeSourceIndex(sourceIndex: SourceIndexStatus): Record<string, unknown> {
-  return compact({
-    entries: sourceIndex.entries,
-    documentSymbolFacts: sourceIndex.documentSymbolFacts,
-    dirtyCount: sourceIndex.dirtyCount,
-    warmIndexPending: sourceIndex.warmIndexPending,
-    warmIndexFailed: sourceIndex.warmIndexFailed
   });
 }

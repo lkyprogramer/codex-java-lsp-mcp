@@ -1,9 +1,10 @@
 // input: java_diagnostics files and wait budget.
 // output: JDT LS diagnostics for opened files.
-// pos: Public v5 diagnostics tool handler.
+// pos: Public V6 diagnostics tool handler.
 import { z } from "zod";
 import { normalizeRepoFile } from "../repo-layout.js";
 import type { LspDiagnostic } from "../jdtls-session.js";
+import type { RequestContext } from "../runtime/request-context.js";
 import type { ToolContext } from "./context.js";
 import { compact, describeFile, detailSchema, isDiagnosticDetail } from "./shared.js";
 
@@ -15,9 +16,13 @@ export const diagnosticsSchema = {
   detail: detailSchema
 };
 
-export async function javaDiagnostics(context: ToolContext, args: z.infer<z.ZodObject<typeof diagnosticsSchema>>): Promise<unknown> {
+export async function javaDiagnostics(
+  context: ToolContext,
+  args: z.infer<z.ZodObject<typeof diagnosticsSchema>>,
+  request?: Pick<RequestContext, "budget">
+): Promise<unknown> {
   const files = args.files.map(file => normalizeRepoFile(context.repoRoot, file));
-  const diagnostics = await context.session.diagnosticsFor(files, args.waitMs);
+  const diagnostics = await context.session.diagnosticsFor(files, args.waitMs, request?.budget);
   if (isDiagnosticDetail(args.detail)) {
     return {
       files,

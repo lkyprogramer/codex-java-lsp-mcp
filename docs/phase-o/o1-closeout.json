@@ -1,0 +1,77 @@
+{
+  "schemaVersion": "o-o1-closeout/v1",
+  "track": "o",
+  "card": "O1",
+  "dated": "2026-08-23",
+  "decision": "G3_MISS",
+  "mergeToMain": false,
+  "srcTouched": true,
+  "defaultChainIdentity": "UNCHANGED",
+  "gateMiB": 1536,
+  "knivesLanded": [
+    "per-source-root resolve batches; drop each v4 segment body after gzip; drop the in-memory store after snapshot prepare",
+    "child --max-old-space-size=1536 --expose-gc plus explicit gc at source-root batch boundaries",
+    "serial parse/resolve grandchild processes with an intermediate parse snapshot"
+  ],
+  "knivesNotLanded": [],
+  "measured": {
+    "repo": "lishuedu",
+    "files": 5312,
+    "rssPeakBytes": 1941110784,
+    "rssPeakMiB": 1851.2,
+    "previousRssPeakMiB": 2790.3,
+    "afterKnife1And2MiB": 2408,
+    "heapUsedBytes": 576594576,
+    "coldMs": 111521.029,
+    "file": "docs/phase-o/o1-cold.json",
+    "sha256": "326acc3085247d757e5cdeda902b86b39efe81a8bf29ac5f4d2e647552aff8b3",
+    "threeRepo": {
+      "file": "docs/phase-o/o1-memory.json",
+      "sha256": "a30fd07e075b29414320e907021db1d19addf2a7b0d8ecc3cecd125933b14598",
+      "lishueduMiB": 1851.2,
+      "cipherlinkMiB": 386.5,
+      "examParentV3MiB": 777.3,
+      "g1HeapMiB": [173, 29, 46],
+      "g5SteadyRatio": [1.083, 0.595, 0.862]
+    }
+  },
+  "digest": {
+    "file": "docs/phase-o/o1-digest.json",
+    "sha256": "d069d398babd59e81bc4096f520c12b10b4257362ffa256d1625eda00ee7fefd",
+    "vsHeadB8d75ca": "BIT_IDENTICAL",
+    "lishuedu": "965a653e22e742508ecd47f11fc86e84c97e6744bcb90ae8f7c03a81999a2d14",
+    "cipherlink": "bc7f3be6cd13162c6a9ba16635f5f1f18954571930fe8ddb342213c5a2b6dcfc",
+    "examParentV3": "0a69feab2582dd1f855fcafdfda4ffe7d8e7b12888d3a94ddcfec2c112d0ceb0",
+    "vsM0": "ALREADY_DRIFTED_ON_HEAD",
+    "note": "HEAD b8d75ca already hashes to these SHAs. The three O1 knives did not change facts. m0 2026-08-21 lishuedu 1fe63bca… is already stale on this branch."
+  },
+  "note": "All three prescribed knives landed. lishuedu child RSS 1851 > 1536. Floor recorded. Gate kept as MISS and allowed into F1 risk bar (child is an isolated process). v4 on-disk format unchanged. G1 173/29/46 and G5 1.083/0.595/0.862 did not miss. Split adds a parse-snapshot encode/load; wall clock is an O2 residual.",
+  "isolation": {
+    "t0": {
+      "tests": 23,
+      "fail": 0,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "bb0e655bb52c4628c91edf06a69b53d4ca81deaa",
+      "note": "cold-build + snapshot-v4 + snapshot tests; included in T1"
+    },
+    "t1": {
+      "scope": "dist/java-index/*.test.js",
+      "tests": 277,
+      "fail": 0,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "bb0e655bb52c4628c91edf06a69b53d4ca81deaa",
+      "logSha256": "9a84899767cc721ed081e3e079ae4ac3d2c6da3acbb5f70f8d4f3b056d3b6871",
+      "note": "Not the full dist+scripts T1; java-index suite only."
+    },
+    "cold": {
+      "logSha256": "739b40de72620bd80878e734f3e10731d9b65bd75da014249c93ac0432dea521",
+      "executableTree": "bb0e655bb52c4628c91edf06a69b53d4ca81deaa",
+      "coldBuildChildEnv": true,
+      "inProcessAttribution": true
+    },
+    "digest": {
+      "logSha256": "5db6bee7d57f3e9b3fcc662cb35c3b057e6f6acab485642afee994dbb96b778c",
+      "headBaselineTree": "b6c7901c395c3eb5cc7d6201f68611b2ed5fc467"
+    }
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "v5r-phase3-closeout/v1",
+  "phase": 3,
+  "deadline": "2026-09-02",
+  "decision": "COMPLETE",
+  "parentPhase2": "docs/phase-v5r/v5r-phase2-closeout.json",
+  "phase3WriteTree": "ef2273d53ec1b83f39b799a5edc90dcfdf155ea7",
+  "productionLoc": 38138,
+  "v4LocBaseline": 35472,
+  "v4LocCap": 37245,
+  "locNote": "V5R does not treat 37245 as a hard merge gate. Phase 3 mapped +371 LOC versus Phase 2 to the cost vector, repair/oracle policies, required-groups adapter, and per-field scorecard.",
+  "costVector": {
+    "type": "RetrievalCostVectorV1",
+    "shippedEstimatedTokens": "ceil((resultBytes + readBytes) / 4) via reconstructEstimatedTokens(wireBytes, plannedSourceBytes)",
+    "bytesPerToken": 4,
+    "tokenEstimator": "BYTE_DIV_4",
+    "proxiesReportOnly": ["wireTokensProxy", "plannedSourceTokensProxy"],
+    "notSerializedIntoMcpCost": true,
+    "derivedFrom": "retrievalCostFromV6(withConvergedCostV6(...).cost)",
+    "accumulateRule": "sum bytes and calls, then re-ceil; never sum already-ceiled proxies"
+  },
+  "lambda": {
+    "status": "CALIBRATED_OFFLINE",
+    "evidence": "docs/phase-v5r/v5r-lambda-calibration.json",
+    "scalarAllowed": false,
+    "taskSuccess": "UNMEASURED"
+  },
+  "repairPolicies": [
+    "EXACT_RANGE_ORACLE",
+    "MEMBER_READ",
+    "WHOLE_FILE_UPPER_BOUND",
+    "CONTINUATION_DEFAULT"
+  ],
+  "retrievalPolicy": {
+    "names": ["DEFAULT", "ORACLE"],
+    "coverage": "weighted required-groups anyOf file hits; oracle picks available files, does not execute continuation"
+  },
+  "goldenV2": {
+    "requiredGroups": "optional on Scenario.golden; legacy mustHit becomes one anyOf file each",
+    "existingJsonlUnchanged": true
+  },
+  "scorecard": {
+    "splits": ["tuning", "holdout"],
+    "fields": ["wireBytes", "plannedSourceBytes", "toolCalls", "sourceReadCalls", "serviceMs", "estimatedTokens"],
+    "tail": "field-wise CVaR; no synthetic J(π)"
+  },
+  "threeRepoMatrix": "not required: first-call ranking/readPlan identity preserved; estimatedTokens reconstruction is a derived view of the Phase 0 V6 formula. Sprint0' denominator remains 63a80a2.",
+  "isolationFull": {
+    "tests": 1047,
+    "scripts": 164,
+    "fail": 0,
+    "targetedCostPath": { "tests": 40, "pass": 40, "fail": 0 }
+  },
+  "exitChecklist": {
+    "estimatedTokensRebuiltFromNewFields": true,
+    "noDoubleCountingProxies": true,
+    "firstSecondCallAccumulationStable": true,
+    "tuningHoldoutSplit": true,
+    "proxiesLabeledReportOnly": true,
+    "lambdaCalibratedOffline": true,
+    "noSyntheticScalar": true,
+    "noPublicPlannerScores": true,
+    "noContinuation": true
+  }
+}

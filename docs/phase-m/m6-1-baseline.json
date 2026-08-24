@@ -1,0 +1,134 @@
+{
+  "schemaVersion": "m6-1-baseline/v1",
+  "phase": "M6-1",
+  "dated": "2026-08-22",
+  "decision": "PARTIAL",
+  "mergeToMain": false,
+  "headBefore": "0f414ed",
+  "scope": [
+    "split firstHydrateMs vs steadyWarmP95 in run-memory-benchmark (schema v2)",
+    "G5 gates: first hydrate ≤ 2000ms; steady p95 ≤ 1.10 × M0",
+    "do not kick v4 rest hydrate at OPEN verification — same-thread decode blocked STATUS and moved G5 onto G4",
+    "edit-to-visible remeasure; warmup uses MAX_REQUEST_DEADLINE_MS for runtime.create"
+  ],
+  "asShipped0f414ed": {
+    "note": "First remeasure of 0f414ed as committed: kickBackgroundFactsHydrate in verification finally ran gzip+JSON+ingest on the worker thread, so waitForComplete absorbed rest hydrate.",
+    "lishuedu": {
+      "snapshotLoadMs": 9243,
+      "heapUsedMiB": 867,
+      "types": 6365,
+      "methods": 21139,
+      "firstHydrateMs": 85,
+      "steadyWarmP95Ms": 83,
+      "g5SteadyRatio": 1.07
+    },
+    "S1rssDeltaMiB": 2224,
+    "S2rssDeltaMiB": 3642,
+    "sha256": "477f5320f4676fe4e415c3a42c0c408dd8f7d13552975839dfc255a071c82cc4"
+  },
+  "gates": {
+    "G1": {
+      "targetLishueduMiB": 200,
+      "targetSmallMiB": 64,
+      "lishueduHeapMiB": 257,
+      "cipherlinkHeapMiB": 46,
+      "examParentV3HeapMiB": 77,
+      "passed": false,
+      "disposition": "Files+graph after digest, rest not hydrated (types=0). 257/46/77 vs 273/45/78 at M5. Gate not widened."
+    },
+    "G4": {
+      "targetMs": 2000,
+      "lishueduSnapshotLoadMs": 1131,
+      "cipherlinkSnapshotLoadMs": 281,
+      "examParentV3SnapshotLoadMs": 491,
+      "m5LishueduMs": 2114,
+      "asShippedLishueduMs": 9243,
+      "passed": true
+    },
+    "G5": {
+      "steadyRatioTarget": 1.1,
+      "firstHydrateTargetMs": 2000,
+      "m0WarmP95Ms": { "lishuedu": 77.2, "cipherlink": 40.9, "exam-parent-v3": 38.5 },
+      "firstHydrateMs": { "lishuedu": 7377, "cipherlink": 541, "exam-parent-v3": 1382 },
+      "steadyWarmP95Ms": { "lishuedu": 69.3, "cipherlink": 27.8, "exam-parent-v3": 34.4 },
+      "steadyRatio": { "lishuedu": 0.898, "cipherlink": 0.679, "exam-parent-v3": 0.895 },
+      "legacyAllScenarioP95Ms": { "lishuedu": 7377, "cipherlink": 541, "exam-parent-v3": 1382 },
+      "steadyPassed": true,
+      "firstHydratePassed": false,
+      "disposition": "Split is the G5 SSOT. Steady ≤ M0+10% on all three repos. lishuedu first query still pays full rest hydrate (~7.4s). Do not treat legacy all-scenario p95 as a query regression. First-hydrate gate not widened; per-segment hydrate is later."
+    },
+    "S1": { "targetMiB": 1024, "rssDeltaMiB": 686, "heapUsedSumMiB": 380, "passed": true },
+    "S2": { "targetMiB": 1433.6, "rssDeltaMiB": 1207, "heapUsedSumMiB": 681, "passed": true, "note": "More margin than M5 1291; 5-runtime 1207/1433." },
+    "S4": {
+      "hibernateHeapTargetMiB": 32,
+      "reheatTargetMs": 2000,
+      "lishueduHibernateHeapMiB": 9,
+      "lishueduReheatMs": 107,
+      "passed": true
+    },
+    "editToVisible": {
+      "status": "MEASURED",
+      "cycles": 30,
+      "staleCount": 0,
+      "warmupMs": 2532,
+      "p50Ms": 181,
+      "p95Ms": 188,
+      "targetP95Ms": 500,
+      "passed": true,
+      "note": "Synthetic fixture. Cycle 0 discarded. requestOptions.deadlineMs = MAX_REQUEST_DEADLINE_MS so runtime.create is not the hot 2000ms budget."
+    }
+  },
+  "projects": {
+    "lishuedu": {
+      "coldMs": 147318,
+      "snapshotLoadMs": 1131,
+      "heapAfterSnapshotLoadMiB": 257,
+      "heapAfterWarmMiB": 777,
+      "childColdPeakMiB": 109,
+      "parentColdIncrementMiB": 0,
+      "firstHydrateMs": 7377,
+      "steadyWarmP95Ms": 69.3
+    },
+    "cipherlink": {
+      "coldMs": 12333,
+      "snapshotLoadMs": 281,
+      "heapAfterSnapshotLoadMiB": 46,
+      "firstHydrateMs": 541,
+      "steadyWarmP95Ms": 27.8
+    },
+    "exam-parent-v3": {
+      "coldMs": 22251,
+      "snapshotLoadMs": 491,
+      "heapAfterSnapshotLoadMiB": 77,
+      "firstHydrateMs": 1382,
+      "steadyWarmP95Ms": 34.4
+    }
+  },
+  "artifacts": {
+    "memoryBenchmark": {
+      "path": "docs/phase-m/m6-1-memory.json",
+      "sha256": "95edcb8cc3c3bb9ca381db900ea8498e01d1e3576b24b7532ab98a3b191bb970"
+    },
+    "editToVisibleLogSha256": "6900fe96d25550d84b8deba33e817469f9716b731d1e33ac7ec9256d8a86ca9b"
+  },
+  "isolation": {
+    "t0MemoryScript": { "tests": 9, "fail": 0, "jdtlsBin": "/usr/bin/false" },
+    "t0LazyOpen": { "pass": true, "jdtlsBin": "/usr/bin/false", "executableTree": "b7fc23f2716cdca4737b6fb080a47b51d10c87d7" },
+    "t1": {
+      "dist": 1174,
+      "scripts": 215,
+      "fail": 0,
+      "smoke": true,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "b7fc23f2716cdca4737b6fb080a47b51d10c87d7",
+      "logSha256": "0a0f8e68971aec58d5a9132d61e4d4d53254dbfdab8ac1df55ee95bad2a8d1ea"
+    },
+    "gsRemeasure": {
+      "isolation": "detached-local-clone",
+      "jdtlsBin": "/usr/bin/false",
+      "coldBuildChild": "1",
+      "executableTree": "b7fc23f2716cdca4737b6fb080a47b51d10c87d7",
+      "logSha256": "5f73f2be367298be201f10ae96a188e25ee8ab9a4396b5686a78b392aef4193b"
+    }
+  }
+}

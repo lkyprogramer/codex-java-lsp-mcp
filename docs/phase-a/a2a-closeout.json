@@ -1,0 +1,58 @@
+{
+  "schemaVersion": "a-a2a-closeout/v1",
+  "track": "a",
+  "card": "A2a",
+  "dated": "2026-08-24",
+  "decision": "GOLDEN_FIXED_CHAIN_STILL_FAILS",
+  "next": "B0",
+  "mergeToMain": false,
+  "srcTouched": false,
+  "defaultChainIdentity": "UNCHANGED",
+  "holdoutInspected": false,
+  "taskSuccess": "UNMEASURED",
+  "filter": {
+    "ruleVersion": "a1-noisy-rules/v1",
+    "eligible": 382,
+    "filterPassed": 238,
+    "droppedA1Noisy": 144,
+    "selected": 40,
+    "tuning": 28,
+    "holdout": 12
+  },
+  "jsonl": "golden/ruoyi-vue-pro.scenarios.jsonl",
+  "jsonlSha256": "fb865714395885f30f4be6355e9101127bc93e2943ff25ddb771964bbd99ea15",
+  "manifest": "docs/phase-a/a2a-golden-manifest.json",
+  "tuningNoisyRateAfter": 0,
+  "loro": "docs/phase-a/a2a-loro.json",
+  "loroSha256": "8db64de73f2c05fb6972998ecca095c5ec8a90c2b2eb6265bfc1ef95cd925ff3",
+  "loroDecision": "G2_OVERFIT_FAIL",
+  "failingFold": {
+    "heldOut": "ruoyi-vue-pro",
+    "recallDrop": 0.12082337288667264,
+    "pReadDrop": 0.5356234096692113,
+    "rReadMustDrop": 0.4156930430164631,
+    "recallPass": true,
+    "pReadPass": false,
+    "rReadMustPass": false
+  },
+  "otherFolds": "GO",
+  "isolation": {
+    "t0": {
+      "tests": 19,
+      "fail": 0,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "58f635a837d135e4db0ee24142ae06e8b3db4b42",
+      "logSha256": "27111d3eec6f67ae9e8c23fae19e2628517c898731b8a4bd02757c082a798131",
+      "root": "codex-java-lsp-isolated-validation-ZZv5A4"
+    },
+    "t3": {
+      "decision": "G2_OVERFIT_FAIL",
+      "exitCode": 2,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "58f635a837d135e4db0ee24142ae06e8b3db4b42",
+      "logSha256": "5bc99a70832d7defb64de9d55d980e5db8eb9c08073b28e9e42e0c75996bf3fe",
+      "root": "codex-java-lsp-isolated-validation-NRb4BX"
+    }
+  },
+  "note": "Inverse A1 filter kept 238/382 eligible; 40 scenes written. Tuning re-audit noisyRate 0. LORO ruoyi pRead/rReadMust still >15% relative drop. Recall now passes. Next B0. Do not merge main. No live. Holdout unread."
+}

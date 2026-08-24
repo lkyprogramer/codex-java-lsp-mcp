@@ -1,0 +1,600 @@
+diff --git a/src/agent-router/evidence.ts b/src/agent-router/evidence.ts
+index a164503..b6de85b 100644
+--- a/src/agent-router/evidence.ts
++++ b/src/agent-router/evidence.ts
+@@ -10,6 +10,7 @@ import type { RoutingPolicy } from "../routing-policy.js";
+ import type { DeadlineBudget } from "../runtime/deadline-budget.js";
+ import type { JdtlsSession } from "../jdtls-session.js";
+ import type { EdgeStore } from "../edge-store.js";
++import type { SemanticEdgeStoreV2 } from "../semantic-edge-store.js";
+ import type { CandidateFile, Confidence, ImpactOptions, ResolvedAnchor, RgPlanSection } from "../agent-types.js";
+ import type { RgCommandSummary } from "./rg-plan.js";
+ import type { TypeReferenceMetrics } from "./type-reference.js";
+@@ -110,6 +111,10 @@ export type ProviderInput = {
+   readonly phaseMs: Record<string, number>;
+   readonly session: JdtlsSession;
+   readonly edgeStore: EdgeStore;
++  /** Task 33 Step 8 dual-write target; see semantic.ts's SemanticVerifyInput doc comment. */
++  readonly edgeStoreV2: SemanticEdgeStoreV2;
++  /** Cached once per repo-runtime (AgentRouter), recomputed only on a BUILD_CHANGE batch - never per request. */
++  readonly buildFingerprint: string;
+   readonly concurrency: number;
+   readonly loadRgSummary: (
+     section: RgPlanSection,
+diff --git a/src/agent-router/index.ts b/src/agent-router/index.ts
+index 92273c9..cf8191a 100644
+--- a/src/agent-router/index.ts
++++ b/src/agent-router/index.ts
+@@ -6,6 +6,8 @@ import { JdtlsSession } from "../jdtls-session.js";
+ import type { RouterIndex } from "../java-index/router-java-index.js";
+ import type { FrameworkIndexView } from "../java-index/framework-index-view.js";
+ import { EdgeStore } from "../edge-store.js";
++import { FileSemanticEdgeStoreV2, type SemanticEdgeStoreV2 } from "../semantic-edge-store.js";
++import { computeBuildFingerprint } from "../java-index/build-fingerprint.js";
+ import { probeLayout, type LayoutContext } from "../layout-probe.js";
+ import { resolveFamilyRankPolicy, resolveRoutingPolicy, type RoutingPolicy } from "../routing-policy.js";
+ import { resolveAnchor } from "./anchor.js";
+@@ -120,9 +122,28 @@ export class AgentRouter {
+     private readonly layoutContext: LayoutContext = probeLayout(repoRoot),
+     private readonly edgeStore: EdgeStore = new EdgeStore(repoRoot),
+     private readonly routingPolicy: RoutingPolicy = resolveRoutingPolicy(repoRoot),
+-    private readonly rgRunner: RgRunner = new RgRunner()
++    private readonly rgRunner: RgRunner = new RgRunner(),
++    // Appended last (not inserted among the params above) so every existing
++    // positional call site - several tests pass rgRunner positionally with
++    // `undefined` placeholders before it - keeps working unchanged.
++    private readonly edgeStoreV2: SemanticEdgeStoreV2 = new FileSemanticEdgeStoreV2(repoRoot)
+   ) {}
+ 
++  /**
++   * Computed once per AgentRouter instance (i.e. once per repo-runtime) and
++   * cached - computeBuildFingerprint() does real file I/O, so this must
++   * never run per request. Reset to undefined only by a BUILD_CHANGE batch
++   * in onRepoChanged().
++   */
++  private buildFingerprintCache: Promise<string> | undefined;
++
++  private buildFingerprint(): Promise<string> {
++    if (!this.buildFingerprintCache) {
++      this.buildFingerprintCache = computeBuildFingerprint(this.repoRoot, this.layoutContext);
++    }
++    return this.buildFingerprintCache;
++  }
++
+   rgCacheStatus(): RouterStatus {
+     this.rgCache.evictExpired();
+     return {
+@@ -139,6 +160,17 @@ export class AgentRouter {
+     this.rgCache.clear();
+   }
+ 
++  /**
++   * SemanticEdgeStoreV2's writes are debounced in-memory (see
++   * semantic-edge-store.ts's scheduleFlush) - this forces the pending gzip
++   * write immediately, for repo-runtime shutdown. A failed flush must never
++   * fail shutdown; callers are expected to `.catch()` this like the
++   * neighboring javaIndexClient?.close() call.
++   */
++  async flushSemanticEdgeStore(): Promise<void> {
++    await this.edgeStoreV2.flush();
++  }
++
+   /** Drop cache entries taken before the current generation. */
+   invalidateGeneration(generation: number): void {
+     this.rgCache.invalidateBefore(generation);
+@@ -146,8 +178,16 @@ export class AgentRouter {
+ 
+   /**
+    * Applies a coordinator change batch: the rg cache is invalidated below the
+-   * new generation, and any Java or build change clears the semantic edge store.
+-   * Iteration B keeps this deliberately coarse; Task 33 adds selective eviction.
++   * new generation, and any Java or build change clears the legacy semantic
++   * edge store. Iteration B keeps the legacy store deliberately coarse.
++   *
++   * SemanticEdgeStoreV2 (Task 33 Step 8) is more precise: a BUILD_CHANGE
++   * anywhere in the batch treats the whole batch as a build change (every
++   * prior buildFingerprint is suspect, so a full wipe via
++   * clearForBuildChange matches putComplete()'s own per-edge fingerprint
++   * semantics) and also invalidates the cached buildFingerprint so the next
++   * request recomputes it; otherwise applyChanges() does dependency-based
++   * selective invalidation instead of a full wipe.
+    */
+   onRepoChanged(batch: RepoChangeBatch): void {
+     this.rgCache.invalidateBefore(batch.generation);
+@@ -157,6 +197,12 @@ export class AgentRouter {
+       || change.kind === "JAVA_DELETE"
+       || change.kind === "BUILD_CHANGE");
+     if (semantic) this.edgeStore.invalidateAll();
++    if (batch.changes.some(change => change.kind === "BUILD_CHANGE")) {
++      this.edgeStoreV2.clearForBuildChange(batch.generation);
++      this.buildFingerprintCache = undefined;
++    } else {
++      this.edgeStoreV2.applyChanges(batch);
++    }
+   }
+ 
+   async impact(
+@@ -183,6 +229,7 @@ export class AgentRouter {
+     const typeReference = createTypeReferenceMetrics();
+     const importGraph = createImportGraphMetrics();
+     const persistedSemantic = createPersistedSemanticMetrics();
++    const buildFingerprint = await this.buildFingerprint();
+     const anchors = await timed(phaseMs, "resolveAnchors", async () => Promise.all(options.anchors.map((anchor, index) => resolveAnchor({
+       repoRoot: this.repoRoot,
+       javaIndex: this.javaIndex,
+@@ -205,6 +252,8 @@ export class AgentRouter {
+       phaseMs,
+       session: this.session,
+       edgeStore: this.edgeStore,
++      edgeStoreV2: this.edgeStoreV2,
++      buildFingerprint,
+       concurrency: RG_CONCURRENCY,
+       loadRgSummary: (section, currentOptions, currentAnchors) => this.rgSummary(section, currentOptions, currentAnchors, budget, freshness),
+       metrics: { typeReference, importGraph, persistedSemantic, semantic }
+diff --git a/src/agent-router/providers/semantic-provider.ts b/src/agent-router/providers/semantic-provider.ts
+index b5763a5..4973475 100644
+--- a/src/agent-router/providers/semantic-provider.ts
++++ b/src/agent-router/providers/semantic-provider.ts
+@@ -120,7 +120,11 @@ export async function collectLiveSemanticEvidence(input: ProviderInput): Promise
+     session: input.session,
+     routingPolicy: input.routingPolicy,
+     edgeStore: input.edgeStore,
+-    budget: input.budget
++    budget: input.budget,
++    javaIndex: input.javaIndex,
++    edgeStoreV2: input.edgeStoreV2,
++    buildFingerprint: input.buildFingerprint,
++    generation: input.generation
+   });
+   const touched = [...candidates.values()].filter(isTouchedCandidate);
+   const anchorId = input.anchors[0]?.id ?? "A1";
+diff --git a/src/agent-router/semantic.test.ts b/src/agent-router/semantic.test.ts
+index ec75e47..89d3bdd 100644
+--- a/src/agent-router/semantic.test.ts
++++ b/src/agent-router/semantic.test.ts
+@@ -81,6 +81,34 @@ function fakeEdgeStore(): { recordEdges: EdgeStore["recordEdges"]; calls: Array<
+   };
+ }
+ 
++/** No symbol ever resolves, so mapSemanticEdgeForPersistence always returns undefined and edgeStoreV2 never gets a real edge - these tests exercise the legacy edgeStore path only, matching their pre-Task-33-Step-8 assertions. */
++function fakeJavaIndex(): { queryAnchor: (file: string, line: number, column: number) => Promise<undefined> } {
++  return { queryAnchor: async () => undefined };
++}
++
++function fakeEdgeStoreV2(): { putComplete: (edges: readonly unknown[], generation: number) => Promise<void>; calls: unknown[][] } {
++  const calls: unknown[][] = [];
++  return {
++    calls,
++    putComplete: async (edges: readonly unknown[]) => {
++      calls.push([...edges]);
++    }
++  };
++}
++
++/** Every position resolves to a distinct symbol ID derived from its own coordinates - lets a test assert exactly which positions were (and were not) re-resolved. */
++function resolvingJavaIndex(): { queryAnchor: (file: string, line: number, column: number) => Promise<{ symbolId: string }>; calls: string[] } {
++  const calls: string[] = [];
++  return {
++    calls,
++    queryAnchor: async (file: string, line: number, column: number) => {
++      const key = `${file}:${line}:${column}`;
++      calls.push(key);
++      return { symbolId: key };
++    }
++  };
++}
++
+ test("semanticVerify ranks reference candidates by value instead of JDT server order", async () => {
+   const lowValueRefs = Array.from({ length: 60 }, (_, i) =>
+     location(`${repoRoot}/module-x/src/test/java/T${i}.java`, 1));
+@@ -98,7 +126,11 @@ test("semanticVerify ranks reference candidates by value instead of JDT server o
+     session: fakeSession([...lowValueRefs, highValueRef]) as never,
+     routingPolicy: resolveRoutingPolicy(repoRoot),
+     edgeStore: edgeStore as unknown as EdgeStore,
+-    budget: DeadlineBudget.fromTimeout(5_000)
++    budget: DeadlineBudget.fromTimeout(5_000),
++    javaIndex: fakeJavaIndex() as never,
++    edgeStoreV2: fakeEdgeStoreV2() as never,
++    buildFingerprint: "test-fingerprint",
++    generation: 1
+   });
+ 
+   assert.ok(
+@@ -124,7 +156,11 @@ test("semanticVerify skips persisted-edge writes when raw reference locations hi
+     session: fakeSession(manyRefs) as never,
+     routingPolicy: resolveRoutingPolicy(repoRoot),
+     edgeStore: edgeStore as unknown as EdgeStore,
+-    budget: DeadlineBudget.fromTimeout(5_000)
++    budget: DeadlineBudget.fromTimeout(5_000),
++    javaIndex: fakeJavaIndex() as never,
++    edgeStoreV2: fakeEdgeStoreV2() as never,
++    buildFingerprint: "test-fingerprint",
++    generation: 1
+   });
+ 
+   assert.equal(semantic.referenceTruncatedByLimit, true);
+@@ -152,7 +188,11 @@ test("semanticVerify caps returned reference files at referenceFileLimit(mode) a
+     session: fakeSession(refs) as never,
+     routingPolicy: resolveRoutingPolicy(repoRoot),
+     edgeStore: fakeEdgeStore() as unknown as EdgeStore,
+-    budget: DeadlineBudget.fromTimeout(5_000)
++    budget: DeadlineBudget.fromTimeout(5_000),
++    javaIndex: fakeJavaIndex() as never,
++    edgeStoreV2: fakeEdgeStoreV2() as never,
++    buildFingerprint: "test-fingerprint",
++    generation: 1
+   });
+ 
+   // referenceFileLimit("minimal") is 12 (reference-ranking.ts).
+@@ -160,3 +200,41 @@ test("semanticVerify caps returned reference files at referenceFileLimit(mode) a
+   assert.equal(semantic.referenceCollapsedFiles, 80);
+   assert.equal(semantic.referenceRawLocations, 80);
+ });
++
++test("semanticVerify dual-writes resolvable reference edges into edgeStoreV2, resolving the shared anchor source position only once", async () => {
++  const refs = [
++    location(`${repoRoot}/module-a/src/main/java/demo/One.java`, 10),
++    location(`${repoRoot}/module-a/src/main/java/demo/Two.java`, 20),
++    location(`${repoRoot}/module-a/src/main/java/demo/Three.java`, 30)
++  ];
++  const candidates = new Map<string, CandidateFile>();
++  const javaIndex = resolvingJavaIndex();
++  const edgeStoreV2 = fakeEdgeStoreV2();
++  const theAnchor = anchor();
++
++  await semanticVerify({
++    candidates,
++    anchors: [theAnchor],
++    options: options(),
++    semantic: semanticState(),
++    phaseMs: {},
++    repoRoot,
++    session: fakeSession(refs) as never,
++    routingPolicy: resolveRoutingPolicy(repoRoot),
++    edgeStore: fakeEdgeStore() as unknown as EdgeStore,
++    budget: DeadlineBudget.fromTimeout(5_000),
++    javaIndex: javaIndex as never,
++    edgeStoreV2: edgeStoreV2 as never,
++    buildFingerprint: "test-fingerprint",
++    generation: 7
++  });
++
++  assert.equal(edgeStoreV2.calls.length, 1, "one putComplete call for this anchor's batch");
++  assert.equal(edgeStoreV2.calls[0]?.length, 3, "all three resolvable reference edges are persisted");
++  const sourceKey = `${theAnchor.absolutePath}:${theAnchor.line}:${theAnchor.column}`;
++  assert.equal(
++    javaIndex.calls.filter(call => call === sourceKey).length,
++    1,
++    "the shared source anchor position is resolved exactly once across all three edges, not once per edge"
++  );
++});
+diff --git a/src/agent-router/semantic.ts b/src/agent-router/semantic.ts
+index 290b43e..a440e97 100644
+--- a/src/agent-router/semantic.ts
++++ b/src/agent-router/semantic.ts
+@@ -5,6 +5,13 @@ import type { EdgeStore, SemanticEdgeInput } from "../edge-store.js";
+ import type { JdtlsSession, LspLocation, LspLocationLink } from "../jdtls-session.js";
+ import type { RoutingPolicy } from "../routing-policy.js";
+ import type { DeadlineBudget } from "../runtime/deadline-budget.js";
++import type { RouterIndex } from "../java-index/router-java-index.js";
++import {
++  mapSemanticEdgeForPersistence,
++  type RawSemanticEdgeCandidate,
++  type SemanticEdgeStoreV2,
++  type SymbolAnchorResolver
++} from "../semantic-edge-store.js";
+ import type { CandidateFile, ImpactMode, ImpactOptions, ResolvedAnchor, SemanticPolicy } from "../agent-types.js";
+ import { breakdown, mergeCandidate, scoreBase } from "./candidate-helpers.js";
+ import { rankReferenceFiles, referenceFileLimit, type ReferenceLocation } from "./reference-ranking.js";
+@@ -54,6 +61,20 @@ type SemanticSeedInput = SemanticInput & {
+ type SemanticVerifyInput = SemanticInput & {
+   readonly semantic: SemanticVerifyState;
+   readonly edgeStore: EdgeStore;
++  /**
++   * Task 33 Step 8 dual-write (see semantic-edge-store.ts): resolves a
++   * location to a stable JavaIndex symbol ID and persists COMPLETE,
++   * repo-contained edges into SemanticEdgeStoreV2 alongside (not instead of)
++   * the legacy `edgeStore` above. `javaIndex` is the same underlying
++   * RouterIndex every other provider already sees via ProviderInput -
++   * SemanticVerifyInput just hadn't needed it before this.
++   */
++  readonly javaIndex: RouterIndex;
++  readonly edgeStoreV2: SemanticEdgeStoreV2;
++  /** Cached once per repo-runtime by the caller (see AgentRouter) - never recomputed per request. */
++  readonly buildFingerprint: string;
++  /** The RepoChangeBatch-derived freshness clock (ProviderInput.generation), distinct from JdtlsSession's own internal cacheGeneration. */
++  readonly generation: number;
+ };
+ 
+ type LocationCandidateInput = {
+@@ -122,10 +143,18 @@ export async function semanticVerify(input: SemanticVerifyInput): Promise<void>
+   }
+   input.semantic.verifyUsed = true;
+   const suppressed: SemanticSuppressed = { externalLocations: 0 };
++  // Shared across every anchor in this call: mapSemanticEdgeForPersistence
++  // resolves both endpoints of every candidate edge, but every edge from one
++  // anchor shares that anchor's source position - memoizing collapses what
++  // would otherwise be one JavaIndex worker round-trip per edge into one per
++  // distinct (file,line,column), matching the openDocument lesson from the
++  // gateway cutover (see v3-iteration-e-status memory).
++  const resolveAnchorSymbol = createMemoizedAnchorResolver(input.javaIndex);
+   await timed(input.phaseMs, "semanticVerify", async () => {
+     for (const anchor of input.anchors) {
+       const before = Date.now();
+       const verifiedEdges: SemanticEdgeInput[] = [];
++      const edgeCandidatesForPersistence: RawSemanticEdgeCandidate[] = [];
+       try {
+         const references = await input.session.references(anchor.absolutePath, anchor.line, anchor.column, false, input.options.semanticTimeoutMs);
+         input.semantic.timeout ||= Date.now() - before >= input.options.semanticTimeoutMs;
+@@ -160,11 +189,22 @@ export async function semanticVerify(input: SemanticVerifyInput): Promise<void>
+           // reference JDT has - persisting it as a complete edge would let a
+           // later request trust an incomplete reference set from cache.
+           if (!truncatedRaw && candidate.absolutePath !== anchor.absolutePath) {
+-            verifiedEdges.push({
+-              to: candidate.absolutePath,
+-              kind: "reference",
+-              line: candidate.positions[0]?.line || 1,
+-              column: candidate.positions[0]?.column || 1
++            const line = candidate.positions[0]?.line || 1;
++            const column = candidate.positions[0]?.column || 1;
++            verifiedEdges.push({ to: candidate.absolutePath, kind: "reference", line, column });
++            // references() throws on any non-COMPLETE outcome (Task 33 cutover),
++            // so reaching here already proves this batch was COMPLETE.
++            edgeCandidatesForPersistence.push({
++              sourceFile: anchor.absolutePath,
++              sourceLine: anchor.line,
++              sourceColumn: anchor.column,
++              targetFile: candidate.absolutePath,
++              targetLine: line,
++              targetColumn: column,
++              relation: "JDT_REFERENCE",
++              completion: "COMPLETE",
++              buildFingerprint: input.buildFingerprint,
++              generation: input.generation
+             });
+           }
+         }
+@@ -189,11 +229,26 @@ export async function semanticVerify(input: SemanticVerifyInput): Promise<void>
+               candidate.verifiedBy = ["typeHierarchy"];
+               mergeCandidate(input.candidates, candidate);
+               if (candidate.absolutePath !== anchor.absolutePath) {
+-                verifiedEdges.push({
+-                  to: candidate.absolutePath,
+-                  kind: "typeHierarchy",
+-                  line: candidate.positions[0]?.line || 1,
+-                  column: candidate.positions[0]?.column || 1
++                const line = candidate.positions[0]?.line || 1;
++                const column = candidate.positions[0]?.column || 1;
++                verifiedEdges.push({ to: candidate.absolutePath, kind: "typeHierarchy", line, column });
++                // Unlike references() above, typeHierarchy() resolves (never
++                // throws) on a caller-deadline timeout, so completion varies
++                // per anchor - mapSemanticEdgeForPersistence itself rejects
++                // anything but COMPLETE, matching the legacy store's own
++                // "only ever fed already-verified edges" invariant more
++                // strictly than the legacy store enforces today.
++                edgeCandidatesForPersistence.push({
++                  sourceFile: anchor.absolutePath,
++                  sourceLine: anchor.line,
++                  sourceColumn: anchor.column,
++                  targetFile: candidate.absolutePath,
++                  targetLine: line,
++                  targetColumn: column,
++                  relation: "JDT_TYPE_HIERARCHY",
++                  completion: hierarchy.completion,
++                  buildFingerprint: input.buildFingerprint,
++                  generation: input.generation
+                 });
+               }
+             }
+@@ -209,6 +264,22 @@ export async function semanticVerify(input: SemanticVerifyInput): Promise<void>
+           continue;
+         }
+       }
++      if (edgeCandidatesForPersistence.length > 0) {
++        try {
++          const bounded = edgeCandidatesForPersistence.slice(0, MAX_PERSISTED_EDGES_PER_ANCHOR);
++          const mapped = await Promise.all(
++            bounded.map(candidate => mapSemanticEdgeForPersistence(candidate, input.repoRoot, resolveAnchorSymbol))
++          );
++          const persistable = mapped.filter((edge): edge is NonNullable<typeof edge> => edge !== undefined);
++          if (persistable.length > 0) {
++            await input.edgeStoreV2.putComplete(persistable, input.generation);
++          }
++        } catch {
++          // Best-effort dual-write (Task 33 Step 8): a V2 persistence
++          // failure must never affect this anchor's candidates or the
++          // legacy edgeStore write above.
++        }
++      }
+     }
+   });
+   input.semantic.externalLocationsSuppressed += suppressed.externalLocations;
+@@ -281,6 +352,32 @@ function locationCandidate(input: LocationCandidateInput): CandidateFile | undef
+  */
+ const MAX_RAW_REFERENCE_LOCATIONS = 5000;
+ 
++/**
++ * Task 33 Step 8's own bound on top of MAX_RAW_REFERENCE_LOCATIONS: each
++ * persisted-edge candidate costs a JavaIndex worker round-trip to resolve
++ * its target symbol ID (source-side is deduped via the shared memoized
++ * resolver, but targets are not). referenceFileLimit(mode) alone already
++ * reaches 60 in recall mode, plus up to 40 typeHierarchy edges - capping
++ * here keeps the dual-write's added request-path cost bounded regardless of
++ * mode. A partial persisted set is fine: every edge is independently valid,
++ * and putComplete is additive across requests.
++ */
++const MAX_PERSISTED_EDGES_PER_ANCHOR = 30;
++
++/** Shared per semanticVerify() call: every edge from one anchor shares that anchor's source position. */
++function createMemoizedAnchorResolver(javaIndex: RouterIndex): SymbolAnchorResolver {
++  const cache = new Map<string, Promise<{ symbolId: string } | undefined>>();
++  return (file, line, column) => {
++    const key = `${file}\0${line}\0${column}`;
++    let pending = cache.get(key);
++    if (!pending) {
++      pending = javaIndex.queryAnchor(file, line, column).then(anchor => anchor ? { symbolId: anchor.symbolId } : undefined);
++      cache.set(key, pending);
++    }
++    return pending;
++  };
++}
++
+ /** The containment-check half of locationCandidate, without its scoring - reference ranking scores by file, not by raw location. */
+ function containedReferenceLocation(
+   repoRoot: string,
+diff --git a/src/repo-runtime-manager.test.ts b/src/repo-runtime-manager.test.ts
+index cdbf420..75c4878 100644
+--- a/src/repo-runtime-manager.test.ts
++++ b/src/repo-runtime-manager.test.ts
+@@ -489,7 +489,7 @@ test("reconcileIfDirty runs once under two concurrent requests and clears dirty
+       lsp: resolved.lsp,
+       session: new FakeSession() as never,
+       javaIndexClient: javaIndexClientStub as never,
+-      router: { clearRgCache() {} } as never,
++      router: { clearRgCache() {}, async flushSemanticEdgeStore() {} } as never,
+       javaIndex: { routerStatus: async () => ({}) } as never
+     }),
+     () => ({ generation: clock, coordinator, layout: { current: () => layout, refresh: () => ({ changed: false, layout }) } }),
+@@ -536,7 +536,7 @@ test("reconcileIfDirty leaves dirty set when reconcile fails, without failing th
+       lsp: resolved.lsp,
+       session: new FakeSession() as never,
+       javaIndexClient: javaIndexClientStub as never,
+-      router: { clearRgCache() {} } as never,
++      router: { clearRgCache() {}, async flushSemanticEdgeStore() {} } as never,
+       javaIndex: { routerStatus: async () => ({}) } as never
+     }),
+     () => ({ generation: clock, coordinator, layout: { current: () => layout, refresh: () => ({ changed: false, layout }) } }),
+@@ -584,7 +584,7 @@ test("V2 runtime reconciles only JavaIndex and records its OPEN source on the re
+           return { openSource: "sibling-seed" };
+         }
+       } as never,
+-      router: { clearRgCache() {}, onRepoChanged() {} } as never
++      router: { clearRgCache() {}, onRepoChanged() {}, async flushSemanticEdgeStore() {} } as never
+     }),
+     () => ({ generation: clock, coordinator, layout: { current: () => layout, refresh: () => ({ changed: false, layout }) } }),
+     new NoopCrossProcessLeaseStore()
+@@ -637,7 +637,7 @@ test("own snapshot verification stays worker-owned after OPEN instead of trigger
+       session: new FakeSession() as never,
+       javaIndexClient: javaIndexClient as never,
+       javaIndex: { routerStatus: async () => ({ openSource: "own-snapshot" }) } as never,
+-      router: { clearRgCache() {}, onRepoChanged() {} } as never
++      router: { clearRgCache() {}, onRepoChanged() {}, async flushSemanticEdgeStore() {} } as never
+     }),
+     () => ({ generation: clock, coordinator, layout: { current: () => layout, refresh: () => ({ changed: false, layout }) } }),
+     new NoopCrossProcessLeaseStore()
+@@ -810,7 +810,8 @@ function fakeContext(
+     session: session as never,
+     router: {
+       clearRgCache() {},
+-      onRepoChanged() {}
++      onRepoChanged() {},
++      async flushSemanticEdgeStore() {}
+     } as never,
+     javaIndex: {
+       routerStatus: async () => ({ entries: 0 })
+diff --git a/src/repo-runtime-manager.ts b/src/repo-runtime-manager.ts
+index ef8118b..7bcc7b1 100644
+--- a/src/repo-runtime-manager.ts
++++ b/src/repo-runtime-manager.ts
+@@ -353,6 +353,7 @@ export class RepoRuntimeManager {
+     await this.stopEntry(entry);
+     await entry.coordinator.close();
+     await entry.context.javaIndexClient?.close().catch(() => undefined);
++    await entry.context.router.flushSemanticEdgeStore().catch(() => undefined);
+     await entry.runtimeLease?.release();
+     entry.runtimeLease = undefined;
+     // This process's PID would otherwise keep looking alive to the janitor's
+@@ -386,6 +387,7 @@ export class RepoRuntimeManager {
+     await Promise.all([...this.runtimes.values()].map(async entry => {
+       await entry.coordinator.close();
+       await entry.context.javaIndexClient?.close().catch(() => undefined);
++      await entry.context.router.flushSemanticEdgeStore().catch(() => undefined);
+       await entry.runtimeLease?.release();
+       entry.runtimeLease = undefined;
+       touchRepoCache(entry.context.repoRoot, { ownerPid: undefined, ownerToken: undefined });
+diff --git a/src/semantic-edge-store.test.ts b/src/semantic-edge-store.test.ts
+index c18aa8c..85a151c 100644
+--- a/src/semantic-edge-store.test.ts
++++ b/src/semantic-edge-store.test.ts
+@@ -194,3 +194,50 @@ test("a failed atomic write leaves the previous snapshot readable", async () =>
+   assert.equal(survivors.length, 1);
+   assert.equal(survivors[0].relation, "JDT_REFERENCE");
+ });
++
++test("putComplete() loads the existing snapshot before its first write, even if load() was never called explicitly", async () => {
++  const repoRoot = scratchRepo();
++  const resolver = async (file: string, line: number, column: number) => ({ symbolId: `${path.basename(file)}:${line}:${column}` });
++  const firstEdge = await mapSemanticEdgeForPersistence(candidateFor(repoRoot), repoRoot, resolver);
++
++  const first = new FileSemanticEdgeStoreV2(repoRoot);
++  await first.load();
++  await first.putComplete([firstEdge!], 1);
++  await first.flush();
++
++  // A second store instance for the same repo, used the way a fresh
++  // AgentRouter/AgentRouter-in-a-new-process would: putComplete() is called
++  // directly, without an explicit load() first. If putComplete() did not
++  // load the snapshot before its first write, this second store's own
++  // flush() below would overwrite the on-disk snapshot with only its own
++  // edge, silently discarding `firstEdge` from the prior session.
++  const secondCandidate = candidateFor(repoRoot, { relation: "JDT_IMPLEMENTATION", targetLine: 2 });
++  const secondEdge = await mapSemanticEdgeForPersistence(secondCandidate, repoRoot, resolver);
++  const second = new FileSemanticEdgeStoreV2(repoRoot);
++  await second.putComplete([secondEdge!], 1);
++  await second.flush();
++
++  const reloaded = new FileSemanticEdgeStoreV2(repoRoot);
++  await reloaded.load();
++  const survivors = reloaded.findFrom(firstEdge!.sourceSymbolId, 1);
++  assert.equal(survivors.length, 2, "both the prior session's edge and this session's new edge must survive");
++  assert.deepEqual(survivors.map(edge => edge.relation).sort(), ["JDT_IMPLEMENTATION", "JDT_REFERENCE"]);
++});
++
++test("a debounced flush fires automatically after putComplete(), without an explicit flush() call", async () => {
++  const repoRoot = scratchRepo();
++  const candidate = candidateFor(repoRoot);
++  const edge = await mapSemanticEdgeForPersistence(candidate, repoRoot, async (file, line, column) => ({
++    symbolId: `${path.basename(file)}:${line}:${column}`
++  }));
++
++  const store = new FileSemanticEdgeStoreV2(repoRoot, { flushDebounceMs: 10 });
++  await store.load();
++  await store.putComplete([edge!], 1);
++  // No explicit store.flush() call.
++  await new Promise(resolve => setTimeout(resolve, 50));
++
++  const reloaded = new FileSemanticEdgeStoreV2(repoRoot);
++  await reloaded.load();
++  assert.equal(reloaded.findFrom(edge!.sourceSymbolId, 1).length, 1, "the debounced timer must have flushed to disk on its own");
++});
+diff --git a/src/semantic-edge-store.ts b/src/semantic-edge-store.ts
+index 72ec99e95df654238d7d80c199a2d6f3cf14dac4..4eb505b1965bb493ca6cc9f44136d061acdd0a8b 100644
+GIT binary patch
+delta 1996
+zcmah~L2nyH6joJHggLYqD3v%osX^XN?M*;}gVQ8}q*Ya#q%`RP5G3Q>S?@IKnPq0y
+zj$15WIdSnFA#vh{<Uhcf3lcXZ{sVu3Z)VrAlT_lkGxNUp-uJ%u?GNdXgWsOrx=kyu
+zVkQ%jFv}y&b7qB-W15Luf4?yyT3cPEBW`S4$$Ug=z_k_$r&MXO8K;DIRVibh5G$=}
+zr+H~I9Oi7aL4{UH89O*)`H+nam4+L7_~iNFqvPENpB+5k-+6GncNo#?T7$^P?$&sF
+zX1hZ&Ec;!qHyY!OMk7|z*sH;`NguASug`Yg{rB28gq&i4MkrS-;Yo*{YSkBp-ybNE
+zY|-~r%7mvv@?--U=Z}5nBhlx&L;EV>j}IgFrAoUTF<pP}pNXSmkN1^$>Cg>JIax(9
+z%X3PRiWpgt)v7*<((b5!k#oy~uxUsQCG|?ClNN!#uCf`m$@A){Ooc{+9*V`b1muV`
+zXNmDd8_5cj-B8xCHGS*O2h%@WjW4S<L%a|ssy;x7|4P&oa1ey9Q38-HwOoGZ&c}@<
+z7MK~ynCh_U?<==w(Vbu4o~*5r1EPNEs;k?fE{6ip`+40%EkHZk!I2(<a!`?KZZe-9
+zAVRkLAWn}eCGn)k$#6?URptrBx$0un9<bor2xFlsG(ADr%2F`QM0}3bXCulK!Z1NF
+z2~`=W%rwcNnh>0NAj!{cC9CLsXe~0z({NswL8Vf)RY5GZbqR}Ed;;ov7+H=Sq*5AY
+z2-l+5Ly;tG<YCy53F}e)5J39uua)$AlSrf#RO1lZj_N^~IO9o~^M`I*+~bdfyVs{b
+zHQ&5>>1Ouq-py;TyO@66`od|^WnZNo#ZX?1-D1=&or+wcZXhU8LZ3=<>b(?2hfciK
+zgYX1xwGG#T<&d%=j>R5TXt@}0Pb38gfmN2}#3fn=u`Li~=^&7NNPJQs;uMrR-3r+Q
+zC64_ixC={APupveVM%4LtxG9gU_C^v$#Uh$_3cMtRoGDJ(}?yRHi7X?^q0)HPV?_d
+zEFKliFV%&lYpf{p(N4xB#1VwfYiM<Pa_^mqQwp|h&bpf??Fp@wHdV?OY{1$Ao^jT8
+z*}0CaL4}9=pFTZ&bZ~Th#mig)5Rr`FG@7SPm;|e!3J#M+pMC(<Hch1O#Vgru5)2bV
+zgv{`^MKEPBWL%89%$czjQVRABhabWk7K3&!E0MLQS<KTCLp#GPgn_SM`p&Nzh6LpS
+zja5h!df}EDN?_*H(Bs`B@+)IueqPw#m**}yXQ@_ghn%O<D_7G(=Ds^`r6G2jGhG{L
+zwFFDI&VKNF@w>4&hIzpg<}pD?n_G2;*FC*p=B^B1(E>6EqnOz^3-HrI|4UdE+Vto5
+zKmTf6JLI@k6_Y7-Y9e3K;%7wL+gE=*b>JeO?>q8?-;RQC`b%s5<kD?;-p>EB;~KgY
+P4SFv1Jf8j0+Pd){<UyTR
+
+delta 92
+zcmV-i0Hgnoc8F%MQV<saBzt3FZe(d>VRU6Ka%F5`bZKvHeE_p*5ZMI*eY5Ho?*WrI
+y8QPPY8X~hc8>tJEq#zTsD=1C_v!g2@1GC>Q2?3J?FiVq3G$)h58V0l9G%p50a3N6u
+

@@ -1,0 +1,197 @@
+{
+  "schemaVersion": "m0-baseline/v1",
+  "phase": "M0",
+  "dated": "2026-08-21",
+  "decision": "MEASURED",
+  "mergeToMain": false,
+  "plan": "docs/deep/codex-java-lsp-mcp-memory-footprint-optimization-plan-2026-08-21.md",
+  "headBefore": "1f9eed4",
+  "notes": [
+    "Measurement only: no production query/selection change.",
+    "G1 reports worker-isolate heapUsed after coverage complete and pendingBackground=0.",
+    "coldHeapUsed is the incremental-parse worker heap in the cold-build process. heapAfterSnapshotLoad is v3 JSON.parse in a reopen of the same process; lishuedu roughly doubles (918 → 1897 MiB).",
+    "rssPeakBytes is sampled during cold wait. rssSteadySameProcessBytes keeps the allocator watermark because reload shares the cold-build process. Fresh-process hot RSS is the S1 runtime row.",
+    "S2 RSS can compress under 5-runtime host pressure; heapUsedSumBytes is the object-model floor and is not smaller than S1."
+  ],
+  "gates": {
+    "G1": {
+      "lishueduTargetMiB": 200,
+      "lishueduStagingMiB": 500,
+      "smallTargetMiB": 64,
+      "lishueduColdHeapMiB": 918,
+      "lishueduAfterSnapshotLoadMiB": 1897,
+      "cipherlinkAfterSnapshotLoadMiB": 117,
+      "examParentV3AfterSnapshotLoadMiB": 243
+    },
+    "G2": {
+      "lishueduTargetMiB": 400,
+      "smallTargetMiB": 128,
+      "lishueduFreshProcessRssMiB": 2997,
+      "lishueduSameProcessRssMiB": 4684
+    },
+    "G3": {
+      "childPeakTargetMiB": 1536,
+      "parentColdIncrementTargetMiB": 100,
+      "lishueduColdPeakMiB": 3870,
+      "note": "M0 still builds in-process; G3 parent/child split is an M3 measurement."
+    },
+    "G4": {
+      "targetMs": 2000,
+      "lishueduSnapshotLoadMs": 6197,
+      "cipherlinkSnapshotLoadMs": 859,
+      "examParentV3SnapshotLoadMs": 1559
+    },
+    "G5": {
+      "p95RatioTarget": 1.1,
+      "warmP95Ms": {
+        "lishuedu": 77.2,
+        "cipherlink": 40.9,
+        "exam-parent-v3": 38.5
+      },
+      "warmP50Ms": {
+        "lishuedu": 52.2,
+        "cipherlink": 22.9,
+        "exam-parent-v3": 21.6
+      },
+      "note": "M0 is the G5 baseline. Compare later cards with the same run-memory-benchmark warm query."
+    },
+    "S1": { "targetMiB": 1024, "rssDeltaMiB": 3911, "heapUsedSumMiB": 2462, "status": "MEASURED" },
+    "S2": {
+      "targetMiB": 1434,
+      "rssDeltaMiB": 3496,
+      "heapUsedSumMiB": 4490,
+      "status": "MEASURED",
+      "caveat": "RSS compressed relative to S1 under 5-runtime pressure. heapUsedSum 4490 MiB is the floor."
+    }
+  },
+  "projects": {
+    "lishuedu": {
+      "coldMs": 59477,
+      "snapshotLoadMs": 6197,
+      "rssPeakMiB": 3870,
+      "rssSteadySameProcessMiB": 4684,
+      "freshProcessRssMiB": 2997,
+      "heapColdMiB": 918,
+      "heapAfterSnapshotLoadMiB": 1897,
+      "heapAfterWarmMiB": 1928,
+      "snapshotGzBytes": 23813558,
+      "files": 5312,
+      "types": 6365,
+      "methods": 21139,
+      "nodes": 60126,
+      "edges": 230357,
+      "warm": { "scenarios": 10, "p50Ms": 52.2, "p95Ms": 77.2 },
+      "factsDigest": {
+        "discovered": 5312,
+        "digested": 5312,
+        "sha256": "1fe63bcaa6fb3319b6670a837ebca3055befe32422bf194668113c5e4837aaf3"
+      }
+    },
+    "cipherlink": {
+      "coldMs": 4149,
+      "snapshotLoadMs": 859,
+      "rssPeakMiB": 631,
+      "rssSteadySameProcessMiB": 410,
+      "freshProcessRssMiB": 313,
+      "heapColdMiB": 112,
+      "heapAfterSnapshotLoadMiB": 117,
+      "heapAfterWarmMiB": 129,
+      "snapshotGzBytes": 2476250,
+      "files": 629,
+      "types": 761,
+      "methods": 3098,
+      "nodes": 7518,
+      "edges": 24824,
+      "warm": { "scenarios": 10, "p50Ms": 22.9, "p95Ms": 40.9 },
+      "factsDigest": {
+        "discovered": 629,
+        "digested": 629,
+        "sha256": "eec7eef8e0f197a5abcf190328d5b471013c1317718ae9bb8f7fdea5bfd21a08"
+      }
+    },
+    "exam-parent-v3": {
+      "coldMs": 9405,
+      "snapshotLoadMs": 1559,
+      "rssPeakMiB": 1005,
+      "rssSteadySameProcessMiB": 1165,
+      "freshProcessRssMiB": 720,
+      "heapColdMiB": 220,
+      "heapAfterSnapshotLoadMiB": 243,
+      "heapAfterWarmMiB": 251,
+      "snapshotGzBytes": 5298305,
+      "files": 1369,
+      "types": 1494,
+      "methods": 4718,
+      "nodes": 15941,
+      "edges": 51636,
+      "warm": { "scenarios": 10, "p50Ms": 21.6, "p95Ms": 38.5 },
+      "factsDigest": {
+        "discovered": 1369,
+        "digested": 1369,
+        "sha256": "fb7fe71d0b7192fd0591dfc70ccf366d82e4367855cc671402f1cdd16c992177"
+      }
+    }
+  },
+  "attribution": {
+    "method": "Walk sampled QUERY_FILES JavaFileBundle object graphs (96 files/repo). Estimates UTF-16 string payload plus 64-byte object / 48-byte array headers. Not a V8 heap snapshot of the worker isolate.",
+    "matchesSection12": true,
+    "section12Threshold": "If attributed string share < 0.30, revise plan §4 before M1. Observed ~0.49; do not revise.",
+    "lishueduSample": {
+      "sampledBundles": 96,
+      "discovered": 5312,
+      "shares": { "strings": 0.4989, "uniqueStrings": 0.1408, "objects": 0.4443, "arrays": 0.0567 },
+      "duplicatedStringBytes": 4976660,
+      "uniqueStringBytes": 1956844,
+      "constructors": {
+        "SourcePoint": 30018,
+        "SourceRange": 15009,
+        "JavaTypeRef": 6508,
+        "TypeResolution": 4059,
+        "StaticEdge": 3030,
+        "JavaCallSiteFact": 2922,
+        "other": 6171
+      }
+    }
+  },
+  "n1Comparison": {
+    "lishueduN1HeapMiB": 838,
+    "lishueduN1RssMiB": 2344,
+    "lishueduN1Edges": 117630,
+    "note": "N1 heap 838 / RSS 2344 was structural-graph era. Current graph edges 230357; cold heap 918, snapshot-load heap 1897, cold RSS peak 3870."
+  },
+  "artifacts": {
+    "factsDigest": {
+      "path": "docs/phase-m/m0-facts-digest.json",
+      "sha256": "77fc3f8169c0d11cf29ad252cf57557847db2695e4292ffc6944cb7dc21d575c"
+    },
+    "memoryBenchmark": {
+      "path": "docs/phase-m/m0-memory.json",
+      "sha256": "d7597567ec65507612050b4c4d26b4cc5b0323c4a0bf2c65020335fee281f243"
+    }
+  },
+  "isolation": {
+    "t0": {
+      "tests": 15,
+      "fail": 0,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "120491d4063d90af5f19fa6d693ffbd8d42619d4",
+      "logSha256": "24e8e0aafd25f95a96210e6ab366df0ebebceb4d8ce2cb62de257381bc75f747"
+    },
+    "t1": {
+      "dist": 1155,
+      "scripts": 213,
+      "fail": 0,
+      "smoke": true,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "807b80634b49b422da9593dd096b19f4f687009b",
+      "logSha256": "94fdf388e697a68c1d42ecb72f47477aba2e16ae4e1d1d744a8ec092998e0e72"
+    },
+    "t2": {
+      "isolation": "detached-local-clone",
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "807b80634b49b422da9593dd096b19f4f687009b",
+      "digestLogSha256": "397258d42f15e3d2377f1248ffd53709137f565dc56808170457fa0bad591bb7",
+      "memoryLogSha256": "92a8e96544781b94190465dd47199af947b7e77194c94708fbcb7c86cb6a457d"
+    }
+  }
+}

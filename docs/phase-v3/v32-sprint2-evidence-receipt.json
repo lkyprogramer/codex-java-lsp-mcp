@@ -1,0 +1,161 @@
+{
+  "schemaVersion": 1,
+  "kind": "java-intelligence-v32-sprint2-evidence-receipt",
+  "date": "2026-08-10",
+  "decision": "BATCHING_ACCEPTED_WITH_INHERITED_GAPS",
+  "machineResult": "BASELINE_RECORDED_WITH_GAPS",
+  "evidenceRoot": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-iopsPv/formal",
+  "source": {
+    "optimizationBaseline": {
+      "commit": "94c4ebfb1c174b2ac3cab615d986c3061accd2ed",
+      "tree": "60ae785e8af9ac06012452ea41c6b1fe2d3606fd"
+    },
+    "old": {
+      "commit": "85a4102e7e34ee42a4b369d773805f4c45687f77",
+      "tree": "af79c0af4802e472b005f63883cda6d90f06ef34"
+    },
+    "new": {
+      "baseCommit": "85a4102e7e34ee42a4b369d773805f4c45687f77",
+      "commitTree": "af79c0af4802e472b005f63883cda6d90f06ef34",
+      "executableTree": "055a8e846cc3df97b767b01a95265153b41a34a6",
+      "candidatePatchSha256": "612bbf46cba8b86fee9505c6d94f3bb6c9fc42f209c94f428e0cf730f9aa9ab2"
+    }
+  },
+  "tests": {
+    "compiled": { "discovered": 904, "passed": 904, "failed": 0, "stderrBytes": 0, "stdoutSha256": "f6590e703cd35fb621b722072e7173e4642611b8ff5641f9ea3c7af5f690ead1" },
+    "scripts": { "discovered": 91, "passed": 91, "failed": 0, "stderrBytes": 0, "stdoutSha256": "044bb3b8a7fa42b6b66abb12cd0b830fc3968235273a9ddf8ad19bfa26a43811" },
+    "standardMatrix": { "cells": 18, "attempts": 900, "pairedAttempts": 450 },
+    "diagnosticRpcMatrix": { "cells": 18, "attempts": 900, "pairedAttempts": 450 }
+  },
+  "standard": {
+    "passed": false,
+    "allowFailure": true,
+    "qualityParity": true,
+    "candidatePathMismatches": 0,
+    "readPlanMismatches": 0,
+    "completionMismatches": 0,
+    "qualityMismatches": 0,
+    "estimatedTokenAttemptDeltas": 22,
+    "estimatedTokenDeltaDistribution": { "-1": 22 },
+    "projectTokenPercentilesUnchanged": true,
+    "projects": [
+      {
+        "project": "lishuedu",
+        "oldP50Ms": 39.079208000002836,
+        "newP50Ms": 21.542124999999942,
+        "oldP95Ms": 257.87070899999526,
+        "newP95Ms": 233.2893750000003,
+        "p95Ratio": 0.90467574198202,
+        "estimatedTokensP50": 4382,
+        "estimatedTokensP95": 5813,
+        "recall": 0.7923214285714283,
+        "pRead": 0.7083333333333329,
+        "rReadMust": 0.9,
+        "rTaskBlocking": 0.5721123321123319
+      },
+      {
+        "project": "cipherlink",
+        "oldP50Ms": 45.67545800000016,
+        "newP50Ms": 22.838291000000027,
+        "oldP95Ms": 182.25787500000024,
+        "newP95Ms": 103.55295900000056,
+        "p95Ratio": 0.568167268492516,
+        "estimatedTokensP50": 3682,
+        "estimatedTokensP95": 5296,
+        "recall": 0.8157783882783886,
+        "pRead": 0.6433333333333329,
+        "rReadMust": 0.9099999999999996,
+        "rTaskBlocking": 0.45374098124098095
+      },
+      {
+        "project": "exam-parent-v3",
+        "oldP50Ms": 69.51845800000046,
+        "newP50Ms": 20.284374999999272,
+        "oldP95Ms": 188.88245900000038,
+        "newP95Ms": 131.91508300000078,
+        "p95Ratio": 0.6983977426935156,
+        "estimatedTokensP50": 3466,
+        "estimatedTokensP95": 6189,
+        "recall": 0.7095066045066044,
+        "pRead": 0.5833333333333331,
+        "rReadMust": 0.8800000000000008,
+        "rTaskBlocking": 0.4502380952380954
+      }
+    ],
+    "inheritedFailedGates": [
+      "aggregate-r-read-must",
+      "holdout-r-read-must",
+      "range-line-recall",
+      "range-coordinate-recall"
+    ]
+  },
+  "diagnosticRpc": {
+    "passed": true,
+    "selection": "ALL_BASELINE_ROWS_WITH_TOTAL_JAVA_INDEX_RPC_GT_ZERO",
+    "selectedScenarios": 30,
+    "attemptsPerVariant": 450,
+    "oldRpcCount": 14532,
+    "newRpcCount": 8088,
+    "rpcCountReduction": 0.4434351775392238,
+    "oldRequestP50Ms": 51.01995799999713,
+    "newRequestP50Ms": 23.286165999999866,
+    "oldRequestP95Ms": 225.50700000000506,
+    "newRequestP95Ms": 162.7648749999994,
+    "p95Improvement": 0.27822695082637905,
+    "cipherlinkTypeReference": {
+      "oldSamples": 150,
+      "newSamples": 150,
+      "oldP50Ms": 26,
+      "newP50Ms": 1,
+      "oldP95Ms": 155,
+      "newP95Ms": 4,
+      "oldMaxMs": 160,
+      "newMaxMs": 4
+    },
+    "implementerBatch": {
+      "decision": "DO_NOT_IMPLEMENT_MEDIAN_FANOUT_LE_ONE",
+      "fanoutP50": 1,
+      "fanoutP95": 12,
+      "callerWaitP50Ms": 0.14883400000690017,
+      "callerWaitP95Ms": 1.113123999999516,
+      "callerWaitMaxMs": 2.061666999998124
+    }
+  },
+  "productionTs": {
+    "optimizationBaselineLoc": 31638,
+    "oldLoc": 33634,
+    "newLoc": 32850,
+    "immediateDeltaLoc": -784,
+    "cumulativeDeltaLoc": 1212,
+    "optimizationCycleMaximumLoc": 33219,
+    "finalTargetLoc": 31638,
+    "gatePassed": true
+  },
+  "artifacts": {
+    "count": 81,
+    "optimizationManifest": {
+      "sha256": "bb5af851723460a5059798785768eb43f4e9f4cd046138bc826b1357dbdc5472",
+      "payloadSha256": "aa76024ab05fb633e820d79ff0d63cbc32466a59a82b4905ece94558f0764412"
+    },
+    "coldManifestSha256": "22d6b41e49f53a892738a0b454362e773ff01657c54d6109aa3525d078ce6442",
+    "matrixSummarySha256": "c5af9fab3642343c57e8d9ae3d1299de353fb14d8e757d6570951f8fe182bee2",
+    "diagnosticSidecarSha256": "81bdca332533b997c888e688d2da8c4b1a818d5a043de578f74bc8643c3f3c62",
+    "diagnosticSidecarPayloadSha256": "60ef5f2bce0e3dd184a1c5b1aedbe9cfe18bbbd1eaf62a7e9d05a622b1f6a1b0",
+    "taskLedgerSha256": "6681f236edcf3acffe54830574178410d3ed546043f4eacf1d3de5b31fe40645"
+  },
+  "isolation": {
+    "mode": "detached-local-clone",
+    "jdtls": "DISABLED_FOR_COLD",
+    "jdtlsBinary": "/usr/bin/false",
+    "privateHomeXdgTmpCache": true,
+    "privateCopiedNodeModules": true,
+    "coldManifestVersion": 6,
+    "verifierVersion": 6,
+    "requestDeadlineMs": 2000,
+    "standardTelemetryMode": "0",
+    "diagnosticTelemetryMode": "1",
+    "standardAndDiagnosticStateDisjoint": true,
+    "runtimeStateSourceLocked": true,
+    "activeRuntimeStateAccessed": false
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "input": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-final/task36-remediation-20260809/determinism-final-v3/exam-parent-v3.json",
+  "rows": 8,
+  "attempts": 160,
+  "expectedRuns": 20,
+  "stable": true,
+  "gate": "PASS"
+}

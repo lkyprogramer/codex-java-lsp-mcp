@@ -1,0 +1,74 @@
+{
+  "schemaVersion": "m2-baseline/v1",
+  "phase": "M2",
+  "dated": "2026-08-21",
+  "decision": "PARTIAL",
+  "mergeToMain": false,
+  "headBefore": "de804b2",
+  "scope": [
+    "src/java-index/columnar/method-columns.ts TypeRef/CallSite/parameter/annotation arenas",
+    "JavaIndexStore methodsById materialize-on-read",
+    "rebuildRegistry methodsOfOwner (do not materialize every method per file)"
+  ],
+  "identity": {
+    "factsDigestEqualToM0": true,
+    "projects": {
+      "lishuedu": "1fe63bcaa6fb3319b6670a837ebca3055befe32422bf194668113c5e4837aaf3",
+      "cipherlink": "eec7eef8e0f197a5abcf190328d5b471013c1317718ae9bb8f7fdea5bfd21a08",
+      "exam-parent-v3": "fb7fe71d0b7192fd0591dfc70ccf366d82e4367855cc671402f1cdd16c992177"
+    }
+  },
+  "gates": {
+    "G1_final": {
+      "targetMiB": 200,
+      "lishueduAfterSnapshotLoadMiB": 873,
+      "lishueduColdMiB": 855,
+      "m1AfterSnapshotLoadMiB": 869,
+      "m0AfterSnapshotLoadMiB": 1897,
+      "passed": false,
+      "disposition": "G1 still 873 MiB after method/callSite/typeRef columns (no drop vs M1 869). Residual is types/fields/index Maps/graph/string+range JS memos, not method object trees. Identity holds. Do not widen 200; M3 snapshot v4 is the next heap attack on the JSON.parse forest."
+    },
+    "G5": {
+      "targetRatio": 1.1,
+      "warmP95Ms": { "lishuedu": 92, "cipherlink": 40, "exam-parent-v3": 46 },
+      "m0WarmP95Ms": { "lishuedu": 77.2, "cipherlink": 40.9, "exam-parent-v3": 38.5 },
+      "passed": false
+    }
+  },
+  "projects": {
+    "lishuedu": {
+      "heapColdMiB": 855,
+      "heapAfterSnapshotLoadMiB": 873,
+      "rssPeakMiB": 3257,
+      "snapshotLoadMs": 10142,
+      "warmP95Ms": 92
+    },
+    "cipherlink": {
+      "heapColdMiB": 108,
+      "heapAfterSnapshotLoadMiB": 215,
+      "rssPeakMiB": 628,
+      "snapshotLoadMs": 1112,
+      "warmP95Ms": 40
+    },
+    "exam-parent-v3": {
+      "heapColdMiB": 207,
+      "heapAfterSnapshotLoadMiB": 209,
+      "rssPeakMiB": 1032,
+      "snapshotLoadMs": 2249,
+      "warmP95Ms": 46
+    }
+  },
+  "isolation": {
+    "t0": { "tests": 96, "fail": 0, "jdtlsBin": "/usr/bin/false", "executableTree": "0b3ee5af8052217120f3b7887fc2f909cb449050" },
+    "t1": {
+      "dist": 1162,
+      "scripts": 213,
+      "fail": 0,
+      "smoke": true,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "0b3ee5af8052217120f3b7887fc2f909cb449050",
+      "logSha256": "5767aab15c888f8f43ff78fa1955343428facdcae319535d65b20c083f9b21b7"
+    },
+    "t2": { "isolation": "detached-local-clone", "jdtlsBin": "/usr/bin/false", "executableTree": "0b3ee5af8052217120f3b7887fc2f909cb449050" }
+  }
+}

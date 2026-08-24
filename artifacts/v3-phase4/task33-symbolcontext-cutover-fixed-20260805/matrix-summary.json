@@ -1,0 +1,318 @@
+{
+  "version": 1,
+  "verifiedAt": "2026-08-05T09:04:21.958Z",
+  "matrixDir": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/matrix",
+  "configuration": {
+    "projects": [
+      "lishuedu",
+      "cipherlink",
+      "exam-parent-v3"
+    ],
+    "rounds": [
+      1,
+      2,
+      3
+    ],
+    "variants": [
+      "old",
+      "new"
+    ],
+    "expectedCells": 18,
+    "expectedRuns": 5,
+    "p95Limit": 1.1
+  },
+  "scenarioFiles": {
+    "lishuedu": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/frozen-scenarios/lishuedu.scenarios.jsonl",
+    "cipherlink": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/frozen-scenarios/cipherlink.scenarios.jsonl",
+    "exam-parent-v3": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/frozen-scenarios/exam-parent-v3.scenarios.jsonl"
+  },
+  "cells": [
+    {
+      "project": "lishuedu",
+      "round": 1,
+      "variant": "old",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/matrix/lishuedu-r1-old.json",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "rows": 8
+    },
+    {
+      "project": "lishuedu",
+      "round": 2,
+      "variant": "old",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/matrix/lishuedu-r2-old.json",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "rows": 8
+    },
+    {
+      "project": "lishuedu",
+      "round": 3,
+      "variant": "old",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/matrix/lishuedu-r3-old.json",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "rows": 8
+    },
+    {
+      "project": "lishuedu",
+      "round": 1,
+      "variant": "new",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/matrix/lishuedu-r1-new.json",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "rows": 8
+    },
+    {
+      "project": "lishuedu",
+      "round": 2,
+      "variant": "new",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/matrix/lishuedu-r2-new.json",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "rows": 8
+    },
+    {
+      "project": "lishuedu",
+      "round": 3,
+      "variant": "new",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/matrix/lishuedu-r3-new.json",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "stderrBytes": 0,
+      "rows": 8
+    },
+    {
+      "project": "cipherlink",
+      "round": 1,
+      "variant": "old",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/matrix/cipherlink-r1-old.json",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "rows": 8
+    },
+    {
+      "project": "cipherlink",
+      "round": 2,
+      "variant": "old",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/matrix/cipherlink-r2-old.json",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "rows": 8
+    },
+    {
+      "project": "cipherlink",
+      "round": 3,
+      "variant": "old",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/matrix/cipherlink-r3-old.json",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "rows": 8
+    },
+    {
+      "project": "cipherlink",
+      "round": 1,
+      "variant": "new",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/matrix/cipherlink-r1-new.json",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "rows": 8
+    },
+    {
+      "project": "cipherlink",
+      "round": 2,
+      "variant": "new",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/matrix/cipherlink-r2-new.json",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "rows": 8
+    },
+    {
+      "project": "cipherlink",
+      "round": 3,
+      "variant": "new",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/matrix/cipherlink-r3-new.json",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "stderrBytes": 0,
+      "rows": 8
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 1,
+      "variant": "old",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/matrix/exam-parent-v3-r1-old.json",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "rows": 8
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 2,
+      "variant": "old",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/matrix/exam-parent-v3-r2-old.json",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "rows": 8
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 3,
+      "variant": "old",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/matrix/exam-parent-v3-r3-old.json",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "rows": 8
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 1,
+      "variant": "new",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/matrix/exam-parent-v3-r1-new.json",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "rows": 8
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 2,
+      "variant": "new",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/matrix/exam-parent-v3-r2-new.json",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "rows": 8
+    },
+    {
+      "project": "exam-parent-v3",
+      "round": 3,
+      "variant": "new",
+      "file": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/matrix/exam-parent-v3-r3-new.json",
+      "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "stderrBytes": 0,
+      "rows": 8
+    }
+  ],
+  "projects": [
+    {
+      "project": "lishuedu",
+      "old": {
+        "attempts": 120,
+        "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/frozen-scenarios/lishuedu.scenarios.jsonl",
+        "recall": 0.784672619047619,
+        "pRead": 0.6770833333333333,
+        "rReadMust": 1,
+        "minReadMust": 1,
+        "p50": 30.656125000008615,
+        "p95": 213.4163750000007,
+        "max": 353.7067920000045,
+        "mustFailureScenarios": []
+      },
+      "new": {
+        "attempts": 120,
+        "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/frozen-scenarios/lishuedu.scenarios.jsonl",
+        "recall": 0.784672619047619,
+        "pRead": 0.6770833333333333,
+        "rReadMust": 1,
+        "minReadMust": 1,
+        "p50": 52.64487500001269,
+        "p95": 323.5867919999946,
+        "max": 1160.1824590000033,
+        "mustFailureScenarios": []
+      },
+      "delta": {
+        "recall": 0,
+        "pRead": 0,
+        "rReadMust": 0,
+        "p95Ratio": 1.5162228858961433
+      },
+      "gate": {
+        "rReadMust": true,
+        "recall": true,
+        "pRead": true,
+        "p95": false
+      },
+      "passed": false
+    },
+    {
+      "project": "cipherlink",
+      "old": {
+        "attempts": 120,
+        "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/frozen-scenarios/cipherlink.scenarios.jsonl",
+        "recall": 0.8322229853479857,
+        "pRead": 0.6375000000000001,
+        "rReadMust": 1,
+        "minReadMust": 1,
+        "p50": 63.77416699999958,
+        "p95": 208.96149999999943,
+        "max": 309.23412499999995,
+        "mustFailureScenarios": []
+      },
+      "new": {
+        "attempts": 120,
+        "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/frozen-scenarios/cipherlink.scenarios.jsonl",
+        "recall": 0.8322229853479857,
+        "pRead": 0.6375000000000001,
+        "rReadMust": 1,
+        "minReadMust": 1,
+        "p50": 75.70308400000067,
+        "p95": 207.25433300000077,
+        "max": 577.1384580000013,
+        "mustFailureScenarios": []
+      },
+      "delta": {
+        "recall": 0,
+        "pRead": 0,
+        "rReadMust": 0,
+        "p95Ratio": 0.9918302318848272
+      },
+      "gate": {
+        "rReadMust": true,
+        "recall": true,
+        "pRead": true,
+        "p95": true
+      },
+      "passed": true
+    },
+    {
+      "project": "exam-parent-v3",
+      "old": {
+        "attempts": 120,
+        "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+        "recall": 0.7789772727272726,
+        "pRead": 0.6041666666666665,
+        "rReadMust": 1,
+        "minReadMust": 1,
+        "p50": 66.05291700000089,
+        "p95": 222.2233329999999,
+        "max": 629.1027919999997,
+        "mustFailureScenarios": []
+      },
+      "new": {
+        "attempts": 120,
+        "scenarioFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+        "recall": 0.7789772727272726,
+        "pRead": 0.6041666666666665,
+        "rReadMust": 1,
+        "minReadMust": 1,
+        "p50": 53.37083300000086,
+        "p95": 191.18933300000026,
+        "max": 282.94833299999846,
+        "mustFailureScenarios": []
+      },
+      "delta": {
+        "recall": 0,
+        "pRead": 0,
+        "rReadMust": 0,
+        "p95Ratio": 0.8603476980520328
+      },
+      "gate": {
+        "rReadMust": true,
+        "recall": true,
+        "pRead": true,
+        "p95": true
+      },
+      "passed": true
+    }
+  ],
+  "warnings": [],
+  "passed": false,
+  "summaryFile": "/Users/luo/Documents/github/codex-java-lsp-mcp/artifacts/v3-phase4/task33-symbolcontext-cutover-fixed-20260805/matrix-summary.json"
+}

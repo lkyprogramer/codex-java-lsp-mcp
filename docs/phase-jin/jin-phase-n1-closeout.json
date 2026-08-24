@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "jin-phase-n1-closeout/v1",
+  "phase": "N1",
+  "dated": "2026-08-20",
+  "decision": "FAIL",
+  "mergeToMain": false,
+  "escalate": {
+    "clause": "0A.4(4b)",
+    "reason": "N1-04 process RSS ≤ 512 MiB/repo is not achievable on lishuedu with the existing JavaIndex object model. Graph itself is small (60119 nodes / 117630 edges, gzip 1.7 MiB). Worker isolate heapUsed is 838 MiB and process RSS 2344 MiB after snapshot flush quiesced. Failure-disposition trims (no STATEMENT/PARAMETER/LOCAL materialization, empty lexicalFingerprint) were applied. Do not relax the numeric gate."
+  },
+  "gates": {
+    "cold": { "lishuedu": true, "cipherlink": true, "exam-parent-v3": true, "limitMs": 60000 },
+    "incremental": { "lishuedu": true, "cipherlink": true, "exam-parent-v3": true, "limitMs": 500 },
+    "rss": { "lishuedu": false, "cipherlink": true, "exam-parent-v3": false, "limitMiB": 512 },
+    "digestDeterministic": true,
+    "t1": true
+  },
+  "indexBenchmark": {
+    "schemaVersion": "jin-index-benchmark/v1",
+    "sha256": "69fc0c068c49004661259f873b2f7bc8361e7a8203c3bc15c9d3723ac303dbf1",
+    "projects": {
+      "lishuedu": { "coldMs": 46450, "incrementalMs": 43, "rssDeltaMiB": 2344, "heapUsedMiB": 838, "nodes": 60119, "edges": 117630 },
+      "cipherlink": { "coldMs": 3211, "incrementalMs": 12, "rssDeltaMiB": 484, "heapUsedMiB": 170, "nodes": 7515, "edges": 12610 },
+      "exam-parent-v3": { "coldMs": 7614, "incrementalMs": 3, "rssDeltaMiB": 938, "heapUsedMiB": 207, "nodes": 15936, "edges": 33958 }
+    },
+    "snapshotGz": {
+      "lishuedu": { "javaIndex": "23M", "knowledgeGraph": "1.7M" },
+      "cipherlink": { "javaIndex": "2.4M", "knowledgeGraph": "208K" },
+      "exam-parent-v3": { "javaIndex": "5.1M", "knowledgeGraph": "448K" }
+    },
+    "note": "Each repo ran in a forked Node process with --expose-gc. RSS is worker-thread process RSS after coverage complete and pendingBackground=0. heapUsed is the worker isolate. First T2 (shared process, digest via packGraphSnapshot) was incremental 1339ms / RSS 3836 MiB on lishuedu because QUERY_GRAPH_DIGEST rebuilt the whole graph whenever snapshotDirtyRevision moved."
+  },
+  "productionLoc": {
+    "beforeN05": 38181,
+    "after": 39105,
+    "deltaFromN05": 924,
+    "fileCountAfter": 157,
+    "inventorySha256After": "ab6adfa1372eaa35bf63c6a30714bf22c1c0312b0d15d6bc93e02cc23d729b8a"
+  },
+  "isolation": {
+    "t0": { "tests": 66, "fail": 0, "jdtlsBin": "/usr/bin/false", "executableTree": "56aec4fa62cd87dd7b4fccbc5a10224c3636bbc8" },
+    "t1": { "dist": 1076, "scripts": 185, "fail": 0, "jdtlsBin": "/usr/bin/false", "executableTree": "56aec4fa62cd87dd7b4fccbc5a10224c3636bbc8" },
+    "t2": { "isolation": "detached-local-clone", "jdtlsBin": "/usr/bin/false", "executableTree": "56aec4fa62cd87dd7b4fccbc5a10224c3636bbc8" }
+  },
+  "scope": {
+    "structuralEdgesOnly": true,
+    "callFrameworkDataflow": "deferred-N2a",
+    "parameterLocalStatementNodes": "reserved-not-materialized",
+    "java_context": "deferred-N5",
+    "defaultJavaImpact": "unchanged"
+  }
+}

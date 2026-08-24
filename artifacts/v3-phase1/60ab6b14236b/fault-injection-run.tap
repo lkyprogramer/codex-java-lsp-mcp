@@ -1,0 +1,277 @@
+TAP version 13
+1..0
+# Subtest: dist/agent-router-direct-reference.test.js
+ok 1 - dist/agent-router-direct-reference.test.js
+  ---
+  duration_ms: 200.023125
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/agent-router-implementation-lookup.test.js
+ok 2 - dist/agent-router-implementation-lookup.test.js
+  ---
+  duration_ms: 197.326416
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/agent-router.test.js
+ok 3 - dist/agent-router.test.js
+  ---
+  duration_ms: 224.026625
+  type: 'test'
+  ...
+# Subtest: a partial rg result is never cached, so the next request runs rg again
+ok 4 - a partial rg result is never cached, so the next request runs rg again
+  ---
+  duration_ms: 39.924208
+  type: 'test'
+  ...
+# Subtest: a JDT_BACKOFF JDT degrades the semantic stage instead of failing the request
+ok 5 - a JDT_BACKOFF JDT degrades the semantic stage instead of failing the request
+  ---
+  duration_ms: 31.258833
+  type: 'test'
+  ...
+# Subtest: a JDT_CONFIG_ERROR JDT degrades the semantic stage instead of failing the request
+ok 6 - a JDT_CONFIG_ERROR JDT degrades the semantic stage instead of failing the request
+  ---
+  duration_ms: 22.884709
+  type: 'test'
+  ...
+# [codex-java-lsp] semantic stage failed code=JDT_BROKEN simulated JDT_BROKEN
+# [codex-java-lsp] semantic stage failed code=JDT_BROKEN simulated JDT_BROKEN
+# Subtest: a JDT_BROKEN JDT degrades the semantic stage instead of failing the request
+ok 7 - a JDT_BROKEN JDT degrades the semantic stage instead of failing the request
+  ---
+  duration_ms: 21.235417
+  type: 'test'
+  ...
+# Subtest: a DEADLINE_EXCEEDED JDT degrades the semantic stage instead of failing the request
+ok 8 - a DEADLINE_EXCEEDED JDT degrades the semantic stage instead of failing the request
+  ---
+  duration_ms: 20.457708
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/benchmark-agent-impact.test.js
+ok 6 - dist/benchmark-agent-impact.test.js
+  ---
+  duration_ms: 186.802166
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/document-symbol-limiter.test.js
+ok 7 - dist/document-symbol-limiter.test.js
+  ---
+  duration_ms: 179.420291
+  type: 'test'
+  ...
+# Subtest: EdgeStore refuses to persist a target outside the repository
+ok 11 - EdgeStore refuses to persist a target outside the repository
+  ---
+  duration_ms: 18.62125
+  type: 'test'
+  ...
+# Subtest: EdgeStore refuses an anchor outside the repository
+ok 12 - EdgeStore refuses an anchor outside the repository
+  ---
+  duration_ms: 4.334
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/file-watcher.test.js
+ok 9 - dist/file-watcher.test.js
+  ---
+  duration_ms: 211.0475
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/generated-code.test.js
+ok 10 - dist/generated-code.test.js
+  ---
+  duration_ms: 104.725791
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/hooks/hook-gate.test.js
+ok 11 - dist/hooks/hook-gate.test.js
+  ---
+  duration_ms: 104.443375
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/jdt-restart-backoff.test.js
+ok 12 - dist/jdt-restart-backoff.test.js
+  ---
+  duration_ms: 98.567625
+  type: 'test'
+  ...
+# Subtest: type hierarchy stops on cycles and does not request the same item twice
+ok 17 - type hierarchy stops on cycles and does not request the same item twice
+  ---
+  duration_ms: 1113.999042
+  type: 'test'
+  ...
+# Subtest: hierarchy items outside the repository never become edges
+ok 18 - hierarchy items outside the repository never become edges
+  ---
+  duration_ms: 1143.773792
+  type: 'test'
+  ...
+# Subtest: concurrent ensureStarted shares one transactional start
+ok 19 - concurrent ensureStarted shares one transactional start
+  ---
+  duration_ms: 1102.344625
+  type: 'test'
+  ...
+# Subtest: failed initialize disposes the attempt and permits a clean retry
+ok 20 - failed initialize disposes the attempt and permits a clean retry
+  ---
+  duration_ms: 1160.252125
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/jdtls-transport.test.js
+ok 15 - dist/jdtls-transport.test.js
+  ---
+  duration_ms: 133.085666
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/layout-probe.test.js
+ok 16 - dist/layout-probe.test.js
+  ---
+  duration_ms: 150.544125
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/path-utils.test.js
+ok 17 - dist/path-utils.test.js
+  ---
+  duration_ms: 148.83875
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/project-jdk.test.js
+ok 18 - dist/project-jdk.test.js
+  ---
+  duration_ms: 280.344958
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/ranking-signals.test.js
+ok 19 - dist/ranking-signals.test.js
+  ---
+  duration_ms: 274.482667
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/read-plan-budget.test.js
+ok 20 - dist/read-plan-budget.test.js
+  ---
+  duration_ms: 278.717083
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/repo-resolver.test.js
+ok 21 - dist/repo-resolver.test.js
+  ---
+  duration_ms: 351.726292
+  type: 'test'
+  ...
+# Subtest: STARTING sessions count against the active repo limit
+ok 28 - STARTING sessions count against the active repo limit
+  ---
+  duration_ms: 28.963916
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/routing-policy.test.js
+ok 23 - dist/routing-policy.test.js
+  ---
+  duration_ms: 239.302333
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/runtime/completion.test.js
+ok 24 - dist/runtime/completion.test.js
+  ---
+  duration_ms: 232.31025
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/runtime/deadline-budget.test.js
+ok 25 - dist/runtime/deadline-budget.test.js
+  ---
+  duration_ms: 95.110375
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/search/bounded-line-decoder.test.js
+ok 26 - dist/search/bounded-line-decoder.test.js
+  ---
+  duration_ms: 89.355167
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/search/rg-cache.test.js
+ok 27 - dist/search/rg-cache.test.js
+  ---
+  duration_ms: 92.866959
+  type: 'test'
+  ...
+# Subtest: rg timeout returns partial evidence but is not complete
+ok 34 - rg timeout returns partial evidence but is not complete
+  ---
+  duration_ms: 128.407167
+  type: 'test'
+  ...
+# Subtest: semantic locations outside canonical repo root are rejected
+ok 35 - semantic locations outside canonical repo root are rejected
+  ---
+  duration_ms: 3.58575
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/source-index.test.js
+ok 30 - dist/source-index.test.js
+  ---
+  duration_ms: 86.411458
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/tools/impact.test.js
+ok 31 - dist/tools/impact.test.js
+  ---
+  duration_ms: 113.345792
+  type: 'test'
+  ...
+# Subtest: semantic tools never emit locations from outside the repository
+ok 38 - semantic tools never emit locations from outside the repository
+  ---
+  duration_ms: 3.417375
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/tools/status.test.js
+ok 33 - dist/tools/status.test.js
+  ---
+  duration_ms: 112.617083
+  type: 'test'
+  ...
+1..0
+# Subtest: dist/worktree-cache-cleanup.test.js
+ok 34 - dist/worktree-cache-cleanup.test.js
+  ---
+  duration_ms: 82.551292
+  type: 'test'
+  ...
+1..40
+# tests 40
+# suites 0
+# pass 40
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2609.496958

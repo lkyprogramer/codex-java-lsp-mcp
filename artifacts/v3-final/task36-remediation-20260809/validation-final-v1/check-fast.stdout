@@ -1,0 +1,15 @@
+OK   platform supported: macOS
+OK   node found: /Users/luo/.nvm/versions/node/v22.16.0/bin/node
+OK   npm found: /Users/luo/.nvm/versions/node/v22.16.0/bin/npm
+OK   codex found: /Users/luo/.nvm/versions/node/v22.16.0/bin/codex
+OK   jdtls found: /opt/homebrew/bin/jdtls
+OK   java available: openjdk version "25.0.1" 2025-10-21
+OK   local run.sh executable
+OK   local build artifact exists: /Users/luo/Documents/github/codex-java-lsp-mcp/dist/server.js
+OK   Codex MCP server registered: codex-java-lsp
+OK   Codex MCP server enabled
+OK   registered command executable: /Users/luo/Library/Application Support/codex-java-lsp-mcp/run.sh
+OK   registered runtime built: /Users/luo/Library/Application Support/codex-java-lsp-mcp/dist/server.js
+
+READY: codex-java-lsp checks passed with 0 warning(s).
+Enable a project with: ./register-alias.sh --enable-lsp <id> <absolute-root>

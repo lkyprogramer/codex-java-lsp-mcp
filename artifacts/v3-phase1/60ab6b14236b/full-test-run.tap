@@ -1,0 +1,1344 @@
+TAP version 13
+# Subtest: direct type references survive noisy cross-module tail truncation
+ok 1 - direct type references survive noisy cross-module tail truncation
+  ---
+  duration_ms: 2404.342916
+  type: 'test'
+  ...
+# Subtest: method receiver relations outrank noisy class fields
+ok 2 - method receiver relations outrank noisy class fields
+  ---
+  duration_ms: 1817.255041
+  type: 'test'
+  ...
+# Subtest: method parameter relations survive persistence score noise
+ok 3 - method parameter relations survive persistence score noise
+  ---
+  duration_ms: 1493.922416
+  type: 'test'
+  ...
+# Subtest: referenced interface implementers are added when the interface is already a candidate
+ok 4 - referenced interface implementers are added when the interface is already a candidate
+  ---
+  duration_ms: 2395.845667
+  type: 'test'
+  ...
+# Subtest: controller route infers profile and respects balanced read budget
+ok 5 - controller route infers profile and respects balanced read budget # SKIP
+  ---
+  duration_ms: 0.648208
+  type: 'test'
+  ...
+# Subtest: testReadMode defer keeps tests out of priority read slots
+ok 6 - testReadMode defer keeps tests out of priority read slots # SKIP
+  ---
+  duration_ms: 0.056375
+  type: 'test'
+  ...
+# Subtest: readPlanMaxItems and excludeModules are honored
+ok 7 - readPlanMaxItems and excludeModules are honored # SKIP
+  ---
+  duration_ms: 0.0915
+  type: 'test'
+  ...
+# Subtest: new Java anchor roles have explicit routing instead of service fallback
+ok 8 - new Java anchor roles have explicit routing instead of service fallback
+  ---
+  duration_ms: 8289.237958
+  type: 'test'
+  ...
+# Subtest: plain Maven repos without modules/apps still get rg expansion
+ok 9 - plain Maven repos without modules/apps still get rg expansion
+  ---
+  duration_ms: 2200.643
+  type: 'test'
+  ...
+# Subtest: annotation profile signal beats misleading path names
+ok 10 - annotation profile signal beats misleading path names
+  ---
+  duration_ms: 1084.883833
+  type: 'test'
+  ...
+# Subtest: verbosity trims diagnostics without dropping core routing output
+ok 11 - verbosity trims diagnostics without dropping core routing output
+  ---
+  duration_ms: 3384.782458
+  type: 'test'
+  ...
+# Subtest: readPlan uses strict method windows only for positions inside methods
+ok 12 - readPlan uses strict method windows only for positions inside methods
+  ---
+  duration_ms: 2506.230083
+  type: 'test'
+  ...
+# Subtest: semanticPolicy fast does not call semantic verify
+ok 13 - semanticPolicy fast does not call semantic verify
+  ---
+  duration_ms: 28.5565
+  type: 'test'
+  ...
+# Subtest: auto semantic verify is skipped when semantic seed is skipped
+ok 14 - auto semantic verify is skipped when semantic seed is skipped
+  ---
+  duration_ms: 33.529416
+  type: 'test'
+  ...
+# Subtest: required semantic verify promotes reference candidates
+ok 15 - required semantic verify promotes reference candidates
+  ---
+  duration_ms: 16.801167
+  type: 'test'
+  ...
+# Subtest: semantic verify timeout falls back to non-semantic candidates
+ok 16 - semantic verify timeout falls back to non-semantic candidates
+  ---
+  duration_ms: 12.278
+  type: 'test'
+  ...
+# Subtest: required semantic verify promotes type hierarchy subtype candidates
+ok 17 - required semantic verify promotes type hierarchy subtype candidates
+  ---
+  duration_ms: 16.687125
+  type: 'test'
+  ...
+# Subtest: cached type graph promotes implementers before rg naming fallback
+ok 18 - cached type graph promotes implementers before rg naming fallback
+  ---
+  duration_ms: 1183.757333
+  type: 'test'
+  ...
+# Subtest: signature type references promote typed collaborators
+ok 19 - signature type references promote typed collaborators
+  ---
+  duration_ms: 1014.606292
+  type: 'test'
+  ...
+# Subtest: type reference keeps source-order collaborators ahead of wildcard noise
+ok 20 - type reference keeps source-order collaborators ahead of wildcard noise
+  ---
+  duration_ms: 1043.132542
+  type: 'test'
+  ...
+# Subtest: controller type references promote field collaborators
+ok 21 - controller type references promote field collaborators
+  ---
+  duration_ms: 1805.563041
+  type: 'test'
+  ...
+# Subtest: method type references promote anchor method collaborators ahead of class noise
+ok 22 - method type references promote anchor method collaborators ahead of class noise
+  ---
+  duration_ms: 1088.1035
+  type: 'test'
+  ...
+# Subtest: method type references promote referenced interface implementers
+ok 23 - method type references promote referenced interface implementers
+  ---
+  duration_ms: 1004.038334
+  type: 'test'
+  ...
+# Subtest: type reference diagnostics report scanned, skipped, and added candidates
+ok 24 - type reference diagnostics report scanned, skipped, and added candidates
+  ---
+  duration_ms: 1064.839459
+  type: 'test'
+  ...
+# Subtest: required semantic policy skips local type reference expansion
+ok 25 - required semantic policy skips local type reference expansion
+  ---
+  duration_ms: 13.51575
+  type: 'test'
+  ...
+# Subtest: pure type references do not evict graph candidates from read plan
+ok 26 - pure type references do not evict graph candidates from read plan
+  ---
+  duration_ms: 1064.606292
+  type: 'test'
+  ...
+# Subtest: import graph recalls method-body collaborators invisible to signature scan
+ok 27 - import graph recalls method-body collaborators invisible to signature scan
+  ---
+  duration_ms: 995.213709
+  type: 'test'
+  ...
+# Subtest: import graph recalls cross-module importers outside rg roots
+ok 28 - import graph recalls cross-module importers outside rg roots
+  ---
+  duration_ms: 1126.595417
+  type: 'test'
+  ...
+# Subtest: required semantic policy skips import graph expansion
+ok 29 - required semantic policy skips import graph expansion
+  ---
+  duration_ms: 12.829708
+  type: 'test'
+  ...
+# Subtest: import graph diagnostics report scanned and added candidates
+ok 30 - import graph diagnostics report scanned and added candidates
+  ---
+  duration_ms: 1019.153542
+  type: 'test'
+  ...
+# Subtest: evidence budget keeps structural collaborator under naming flood
+ok 31 - evidence budget keeps structural collaborator under naming flood
+  ---
+  duration_ms: 1024.17
+  type: 'test'
+  ...
+# Subtest: diagnostic score breakdown sums to final score
+ok 32 - diagnostic score breakdown sums to final score
+  ---
+  duration_ms: 999.983917
+  type: 'test'
+  ...
+# Subtest: L1 structural signals are scored on a real collaborator candidate
+ok 33 - L1 structural signals are scored on a real collaborator candidate
+  ---
+  duration_ms: 1012.377375
+  type: 'test'
+  ...
+# Subtest: controller recall includes method-infix request response and assembler
+ok 34 - controller recall includes method-infix request response and assembler
+  ---
+  duration_ms: 1090.327458
+  type: 'test'
+  ...
+# Subtest: service recall includes executor and result collaborators
+ok 35 - service recall includes executor and result collaborators
+  ---
+  duration_ms: 1162.562667
+  type: 'test'
+  ...
+# Subtest: port recall includes action contracts and implementations under keyword noise
+ok 36 - port recall includes action contracts and implementations under keyword noise
+  ---
+  duration_ms: 1032.64475
+  type: 'test'
+  ...
+# Subtest: required semantic candidates do not evict non-LSP read plan neighbors
+ok 37 - required semantic candidates do not evict non-LSP read plan neighbors
+  ---
+  duration_ms: 21.361417
+  type: 'test'
+  ...
+# Subtest: required semantic verify persists reference edges for cold reuse
+ok 38 - required semantic verify persists reference edges for cold reuse
+  ---
+  duration_ms: 13.421959
+  type: 'test'
+  ...
+# Subtest: failed semantic verify does not persist edges
+ok 39 - failed semantic verify does not persist edges
+  ---
+  duration_ms: 12.437833
+  type: 'test'
+  ...
+# Subtest: persisted semantic edges provide high-confidence candidates without lsp
+ok 40 - persisted semantic edges provide high-confidence candidates without lsp
+  ---
+  duration_ms: 29.462958
+  type: 'test'
+  ...
+# Subtest: stale persisted edges are ignored after anchor changes
+ok 41 - stale persisted edges are ignored after anchor changes
+  ---
+  duration_ms: 1194.068709
+  type: 'test'
+  ...
+# Subtest: a partial rg result is never cached, so the next request runs rg again
+ok 42 - a partial rg result is never cached, so the next request runs rg again
+  ---
+  duration_ms: 32.122208
+  type: 'test'
+  ...
+# Subtest: a complete rg result is cached and the next request reuses it
+ok 43 - a complete rg result is cached and the next request reuses it
+  ---
+  duration_ms: 25.28825
+  type: 'test'
+  ...
+# Subtest: a failed rg result is not cached either
+ok 44 - a failed rg result is not cached either
+  ---
+  duration_ms: 29.547625
+  type: 'test'
+  ...
+# Subtest: a JDT_BACKOFF JDT degrades the semantic stage instead of failing the request
+ok 45 - a JDT_BACKOFF JDT degrades the semantic stage instead of failing the request
+  ---
+  duration_ms: 29.117708
+  type: 'test'
+  ...
+# Subtest: a JDT_CONFIG_ERROR JDT degrades the semantic stage instead of failing the request
+ok 46 - a JDT_CONFIG_ERROR JDT degrades the semantic stage instead of failing the request
+  ---
+  duration_ms: 26.454542
+  type: 'test'
+  ...
+# [codex-java-lsp] semantic stage failed code=JDT_BROKEN simulated JDT_BROKEN
+# [codex-java-lsp] semantic stage failed code=JDT_BROKEN simulated JDT_BROKEN
+# Subtest: a JDT_BROKEN JDT degrades the semantic stage instead of failing the request
+ok 47 - a JDT_BROKEN JDT degrades the semantic stage instead of failing the request
+  ---
+  duration_ms: 28.969625
+  type: 'test'
+  ...
+# Subtest: a DEADLINE_EXCEEDED JDT degrades the semantic stage instead of failing the request
+ok 48 - a DEADLINE_EXCEEDED JDT degrades the semantic stage instead of failing the request
+  ---
+  duration_ms: 17.794916
+  type: 'test'
+  ...
+# Subtest: a JDT failure is not reported as a timeout unless it actually was one
+ok 49 - a JDT failure is not reported as a timeout unless it actually was one
+  ---
+  duration_ms: 16.704958
+  type: 'test'
+  ...
+# Subtest: benchmark loads scenarios from external jsonl and prints metadata
+ok 50 - benchmark loads scenarios from external jsonl and prints metadata
+  ---
+  duration_ms: 114.4655
+  type: 'test'
+  ...
+# Subtest: benchmark can run a no-lsp token baseline
+ok 51 - benchmark can run a no-lsp token baseline
+  ---
+  duration_ms: 773.532584
+  type: 'test'
+  ...
+# Subtest: impact benchmark exposes timing diagnostics
+ok 52 - impact benchmark exposes timing diagnostics
+  ---
+  duration_ms: 1661.024667
+  type: 'test'
+  ...
+# Subtest: DocumentSymbolLimiter enforces per-repo concurrency
+ok 53 - DocumentSymbolLimiter enforces per-repo concurrency
+  ---
+  duration_ms: 11.282291
+  type: 'test'
+  ...
+# Subtest: EdgeStore records edges and returns them for a fresh anchor
+ok 54 - EdgeStore records edges and returns them for a fresh anchor
+  ---
+  duration_ms: 8.659625
+  type: 'test'
+  ...
+# Subtest: EdgeStore reloads persisted edges in a new instance
+ok 55 - EdgeStore reloads persisted edges in a new instance
+  ---
+  duration_ms: 7.084959
+  type: 'test'
+  ...
+# Subtest: EdgeStore drops edges after anchor mtime changes
+ok 56 - EdgeStore drops edges after anchor mtime changes
+  ---
+  duration_ms: 7.787959
+  type: 'test'
+  ...
+# Subtest: EdgeStore filters edges whose target file is gone
+ok 57 - EdgeStore filters edges whose target file is gone
+  ---
+  duration_ms: 2.938875
+  type: 'test'
+  ...
+# Subtest: EdgeStore re-record replaces previous edges for the same anchor
+ok 58 - EdgeStore re-record replaces previous edges for the same anchor
+  ---
+  duration_ms: 6.635167
+  type: 'test'
+  ...
+# Subtest: EdgeStore de-duplicates repeated edges to the same target and kind
+ok 59 - EdgeStore de-duplicates repeated edges to the same target and kind
+  ---
+  duration_ms: 3.981416
+  type: 'test'
+  ...
+# Subtest: EdgeStore refuses to persist a target outside the repository
+ok 60 - EdgeStore refuses to persist a target outside the repository
+  ---
+  duration_ms: 12.105375
+  type: 'test'
+  ...
+# Subtest: EdgeStore refuses an anchor outside the repository
+ok 61 - EdgeStore refuses an anchor outside the repository
+  ---
+  duration_ms: 9.942833
+  type: 'test'
+  ...
+# Subtest: JavaFileWatcher watches plain Maven and one-level module source roots
+ok 62 - JavaFileWatcher watches plain Maven and one-level module source roots
+  ---
+  duration_ms: 47.916375
+  type: 'test'
+  ...
+# Subtest: detects Lombok and annotation processors from Gradle build
+ok 63 - detects Lombok and annotation processors from Gradle build
+  ---
+  duration_ms: 4.065333
+  type: 'test'
+  ...
+# Subtest: detects Lombok from common module build files
+ok 64 - detects Lombok from common module build files
+  ---
+  duration_ms: 2.910708
+  type: 'test'
+  ...
+# Subtest: JAVA_LSP_LOMBOK_JAR enables Lombok agent
+ok 65 - JAVA_LSP_LOMBOK_JAR enables Lombok agent
+  ---
+  duration_ms: 1.97675
+  type: 'test'
+  ...
+# Subtest: semantic version sorting prefers 1.18.38 over 1.18.4
+ok 66 - semantic version sorting prefers 1.18.38 over 1.18.4
+  ---
+  duration_ms: 0.813083
+  type: 'test'
+  ...
+# Subtest: hook advice tells enabled projects to start a stopped LSP server
+ok 67 - hook advice tells enabled projects to start a stopped LSP server
+  ---
+  duration_ms: 253.870458
+  type: 'test'
+  ...
+# Subtest: retryable JDT failures back off and explicit reset clears the gate
+ok 68 - retryable JDT failures back off and explicit reset clears the gate
+  ---
+  duration_ms: 0.750708
+  type: 'test'
+  ...
+# Subtest: JDT configuration failures require explicit reset
+ok 69 - JDT configuration failures require explicit reset
+  ---
+  duration_ms: 0.071541
+  type: 'test'
+  ...
+# Subtest: caller deadlines and cancellation do not poison restart backoff
+ok 70 - caller deadlines and cancellation do not poison restart backoff
+  ---
+  duration_ms: 0.716
+  type: 'test'
+  ...
+# Subtest: READY does not reset failures until the stability window completes
+ok 71 - READY does not reset failures until the stability window completes
+  ---
+  duration_ms: 0.154458
+  type: 'test'
+  ...
+# Subtest: backoff delay grows exponentially and is capped at 30 seconds
+ok 72 - backoff delay grows exponentially and is capped at 30 seconds
+  ---
+  duration_ms: 0.19625
+  type: 'test'
+  ...
+# Subtest: type hierarchy stops on cycles and does not request the same item twice
+ok 73 - type hierarchy stops on cycles and does not request the same item twice
+  ---
+  duration_ms: 1587.452125
+  type: 'test'
+  ...
+# Subtest: hierarchy items outside the repository never become edges
+ok 74 - hierarchy items outside the repository never become edges
+  ---
+  duration_ms: 1760.817708
+  type: 'test'
+  ...
+# Subtest: an expired hierarchy budget returns partial edges rather than throwing
+ok 75 - an expired hierarchy budget returns partial edges rather than throwing
+  ---
+  duration_ms: 1585.904416
+  type: 'test'
+  ...
+# Subtest: a timed-out prepare returns an empty partial result without traversing
+ok 76 - a timed-out prepare returns an empty partial result without traversing
+  ---
+  duration_ms: 1497.7155
+  type: 'test'
+  ...
+# Subtest: the edge limit reports PARTIAL_LIMIT rather than COMPLETE
+ok 77 - the edge limit reports PARTIAL_LIMIT rather than COMPLETE
+  ---
+  duration_ms: 1032.941167
+  type: 'test'
+  ...
+# Subtest: an unexpected JDT error fails the hierarchy with a classified code
+ok 78 - an unexpected JDT error fails the hierarchy with a classified code
+  ---
+  duration_ms: 1071.343084
+  type: 'test'
+  ...
+# Subtest: call hierarchy applies the same visited and containment rules
+ok 79 - call hierarchy applies the same visited and containment rules
+  ---
+  duration_ms: 1150.753083
+  type: 'test'
+  ...
+# Subtest: a depth limit stops expansion without failing the result
+ok 80 - a depth limit stops expansion without failing the result
+  ---
+  duration_ms: 1086.720125
+  type: 'test'
+  ...
+# Subtest: filters only Lombok generated log unresolved diagnostics
+ok 81 - filters only Lombok generated log unresolved diagnostics
+  ---
+  duration_ms: 1.186417
+  type: 'test'
+  ...
+# Subtest: concurrent ensureStarted shares one transactional start
+ok 82 - concurrent ensureStarted shares one transactional start
+  ---
+  duration_ms: 1604.119584
+  type: 'test'
+  ...
+# Subtest: a short caller deadline does not cancel a shared JDT startup
+ok 83 - a short caller deadline does not cancel a shared JDT startup
+  ---
+  duration_ms: 1649.837334
+  type: 'test'
+  ...
+# Subtest: failed initialize disposes the attempt and permits a clean retry
+ok 84 - failed initialize disposes the attempt and permits a clean retry
+  ---
+  duration_ms: 1358.514625
+  type: 'test'
+  ...
+# Subtest: a missing jdtls binary blocks restarts until an explicit reset
+ok 85 - a missing jdtls binary blocks restarts until an explicit reset
+  ---
+  duration_ms: 2802.944458
+  type: 'test'
+  ...
+# Subtest: requests inside an active retry window share exactly one delayed restart
+ok 86 - requests inside an active retry window share exactly one delayed restart
+  ---
+  duration_ms: 1030.857666
+  type: 'test'
+  ...
+# Subtest: stop during STARTING cancels waiters without recording a restart failure
+ok 87 - stop during STARTING cancels waiters without recording a restart failure
+  ---
+  duration_ms: 1149.051375
+  type: 'test'
+  ...
+# Subtest: a READY child that exits marks the session BROKEN and restartable
+ok 88 - a READY child that exits marks the session BROKEN and restartable
+  ---
+  duration_ms: 1099.877
+  type: 'test'
+  ...
+# Subtest: status reports STARTING pid separately and never as started
+ok 89 - status reports STARTING pid separately and never as started
+  ---
+  duration_ms: 1090.648167
+  type: 'test'
+  ...
+# Subtest: the ready stability window clears earlier restart failures
+ok 90 - the ready stability window clears earlier restart failures
+  ---
+  duration_ms: 1104.830208
+  type: 'test'
+  ...
+# Subtest: lifecycle listeners observe every transition and can unsubscribe
+ok 91 - lifecycle listeners observe every transition and can unsubscribe
+  ---
+  duration_ms: 1149.72975
+  type: 'test'
+  ...
+# Subtest: fake transport exposes deterministic connection state
+ok 92 - fake transport exposes deterministic connection state
+  ---
+  duration_ms: 3.413
+  type: 'test'
+  ...
+# Subtest: fake transport records every spawn and its launch input
+ok 93 - fake transport records every spawn and its launch input
+  ---
+  duration_ms: 0.534584
+  type: 'test'
+  ...
+# Subtest: fake transport can defer initialize until the test resolves it
+ok 94 - fake transport can defer initialize until the test resolves it
+  ---
+  duration_ms: 0.158959
+  type: 'test'
+  ...
+# Subtest: fake transport can fail initialize and reports child termination
+ok 95 - fake transport can fail initialize and reports child termination
+  ---
+  duration_ms: 0.364791
+  type: 'test'
+  ...
+# Subtest: sequence transport factory returns a different attempt per spawn
+ok 96 - sequence transport factory returns a different attempt per spawn
+  ---
+  duration_ms: 0.339792
+  type: 'test'
+  ...
+# Subtest: fake child reports a hung process that ignores SIGTERM
+ok 97 - fake child reports a hung process that ignores SIGTERM
+  ---
+  duration_ms: 1.119958
+  type: 'test'
+  ...
+# Subtest: probeLayout detects single-module Maven source roots
+ok 98 - probeLayout detects single-module Maven source roots
+  ---
+  duration_ms: 32.676958
+  type: 'test'
+  ...
+# Subtest: probeLayout detects Maven reactor modules
+ok 99 - probeLayout detects Maven reactor modules
+  ---
+  duration_ms: 7.216583
+  type: 'test'
+  ...
+# Subtest: probeLayout detects Gradle modules/apps roots
+ok 100 - probeLayout detects Gradle modules/apps roots
+  ---
+  duration_ms: 9.05975
+  type: 'test'
+  ...
+# Subtest: a real file inside the repo is contained
+ok 101 - a real file inside the repo is contained
+  ---
+  duration_ms: 2.774708
+  type: 'test'
+  ...
+# Subtest: a real file outside the repo is not contained
+ok 102 - a real file outside the repo is not contained
+  ---
+  duration_ms: 0.841334
+  type: 'test'
+  ...
+# Subtest: a nonexistent child under a symlink that escapes the repo is not contained
+ok 103 - a nonexistent child under a symlink that escapes the repo is not contained
+  ---
+  duration_ms: 2.062709
+  type: 'test'
+  ...
+# Subtest: an existing file reached through an escaping symlink is not contained
+ok 104 - an existing file reached through an escaping symlink is not contained
+  ---
+  duration_ms: 0.929583
+  type: 'test'
+  ...
+# Subtest: a nonexistent file in a real repo directory is still contained
+ok 105 - a nonexistent file in a real repo directory is still contained
+  ---
+  duration_ms: 1.962542
+  type: 'test'
+  ...
+# Subtest: a parent-escaping relative path is not contained
+ok 106 - a parent-escaping relative path is not contained
+  ---
+  duration_ms: 0.835583
+  type: 'test'
+  ...
+# Subtest: a sibling directory sharing the repo name prefix is not contained
+ok 107 - a sibling directory sharing the repo name prefix is not contained
+  ---
+  duration_ms: 1.051917
+  type: 'test'
+  ...
+# Subtest: canonicalPotentialPath resolves the deepest existing ancestor
+ok 108 - canonicalPotentialPath resolves the deepest existing ancestor
+  ---
+  duration_ms: 2.635042
+  type: 'test'
+  ...
+# Subtest: detects Maven Java 8 requirement
+ok 109 - detects Maven Java 8 requirement
+  ---
+  duration_ms: 1431.528833
+  type: 'test'
+  ...
+# Subtest: detects Gradle JavaLanguageVersion requirement
+ok 110 - detects Gradle JavaLanguageVersion requirement
+  ---
+  duration_ms: 1664.933542
+  type: 'test'
+  ...
+# Subtest: alias-specific env override wins
+ok 111 - alias-specific env override wins
+  ---
+  duration_ms: 1342.082792
+  type: 'test'
+  ...
+# Subtest: annotationCollaborationDelta rewards known stereotype collaboration (symmetric)
+ok 112 - annotationCollaborationDelta rewards known stereotype collaboration (symmetric)
+  ---
+  duration_ms: 1.778458
+  type: 'test'
+  ...
+# Subtest: annotationCollaborationDelta ignores non-collaborating or missing stereotypes
+ok 113 - annotationCollaborationDelta ignores non-collaborating or missing stereotypes
+  ---
+  duration_ms: 0.213333
+  type: 'test'
+  ...
+# Subtest: packageProximityDelta grades by shared package prefix depth
+ok 114 - packageProximityDelta grades by shared package prefix depth
+  ---
+  duration_ms: 0.144458
+  type: 'test'
+  ...
+# Subtest: symmetricTypeRelationDelta rewards when anchor is a subtype of the candidate
+ok 115 - symmetricTypeRelationDelta rewards when anchor is a subtype of the candidate
+  ---
+  duration_ms: 0.19675
+  type: 'test'
+  ...
+# Subtest: kindPairingDelta rewards interface x impl only under port profile
+ok 116 - kindPairingDelta rewards interface x impl only under port profile
+  ---
+  duration_ms: 0.300166
+  type: 'test'
+  ...
+# Subtest: hasProtectedStructuralSignal reads positive protected deltas from scoreBreakdown
+ok 117 - hasProtectedStructuralSignal reads positive protected deltas from scoreBreakdown
+  ---
+  duration_ms: 0.145541
+  type: 'test'
+  ...
+# Subtest: truncateCandidateTail returns input unchanged when 10 or fewer candidates
+ok 118 - truncateCandidateTail returns input unchanged when 10 or fewer candidates
+  ---
+  duration_ms: 0.229834
+  type: 'test'
+  ...
+# Subtest: truncateCandidateTail keeps protected/structural, trims pure-string tail, honors floor
+ok 119 - truncateCandidateTail keeps protected/structural, trims pure-string tail, honors floor
+  ---
+  duration_ms: 0.215417
+  type: 'test'
+  ...
+# Subtest: truncateCandidateTail cuts at a score cliff inside the discardable tail
+ok 120 - truncateCandidateTail cuts at a score cliff inside the discardable tail
+  ---
+  duration_ms: 0.450625
+  type: 'test'
+  ...
+# Subtest: truncateCandidateTail skips tail trimming when structural evidence is too thin
+ok 121 - truncateCandidateTail skips tail trimming when structural evidence is too thin
+  ---
+  duration_ms: 2.126167
+  type: 'test'
+  ...
+# Subtest: truncateCandidateTail applies limit to focus-only candidates
+ok 122 - truncateCandidateTail applies limit to focus-only candidates
+  ---
+  duration_ms: 0.385209
+  type: 'test'
+  ...
+# Subtest: evidenceClassOf classifies anchor, verified, structural, naming, and support
+ok 123 - evidenceClassOf classifies anchor, verified, structural, naming, and support
+  ---
+  duration_ms: 1.331167
+  type: 'test'
+  ...
+# Subtest: classQuotas favors structural evidence for six-slot read plans
+ok 124 - classQuotas favors structural evidence for six-slot read plans
+  ---
+  duration_ms: 0.468583
+  type: 'test'
+  ...
+# Subtest: protected paths always enter the plan regardless of quota
+ok 125 - protected paths always enter the plan regardless of quota
+  ---
+  duration_ms: 0.504625
+  type: 'test'
+  ...
+# Subtest: anchor is protected even when structural protected paths fill the budget
+ok 126 - anchor is protected even when structural protected paths fill the budget
+  ---
+  duration_ms: 0.213125
+  type: 'test'
+  ...
+# Subtest: structural candidates keep quota slots under naming flood
+ok 127 - structural candidates keep quota slots under naming flood
+  ---
+  duration_ms: 0.228541
+  type: 'test'
+  ...
+# Subtest: task utility breaks structural score ties before generic wrappers
+ok 128 - task utility breaks structural score ties before generic wrappers
+  ---
+  duration_ms: 0.12875
+  type: 'test'
+  ...
+# Subtest: concrete naming family member replaces abstract base in a saturated slot
+ok 129 - concrete naming family member replaces abstract base in a saturated slot
+  ---
+  duration_ms: 0.154209
+  type: 'test'
+  ...
+# Subtest: unused quota backfills by sorted order
+ok 130 - unused quota backfills by sorted order
+  ---
+  duration_ms: 0.137084
+  type: 'test'
+  ...
+# Subtest: maxItems=1 keeps only the first sorted candidate
+ok 131 - maxItems=1 keeps only the first sorted candidate
+  ---
+  duration_ms: 0.293125
+  type: 'test'
+  ...
+# Subtest: isWithin respects path segment boundaries
+ok 132 - isWithin respects path segment boundaries
+  ---
+  duration_ms: 6.498917
+  type: 'test'
+  ...
+# Subtest: resolver uses deepest enabled absolute root
+ok 133 - resolver uses deepest enabled absolute root
+  ---
+  duration_ms: 30.702667
+  type: 'test'
+  ...
+# Subtest: resolver returns enable hint for unregistered repos
+ok 134 - resolver returns enable hint for unregistered repos
+  ---
+  duration_ms: 60.105416
+  type: 'test'
+  ...
+# Subtest: resolver reports where the repo root came from
+ok 135 - resolver reports where the repo root came from
+  ---
+  duration_ms: 8.083542
+  type: 'test'
+  ...
+# Subtest: registry rejects relative alias roots
+ok 136 - registry rejects relative alias roots
+  ---
+  duration_ms: 4.088291
+  type: 'test'
+  ...
+# Subtest: resolver lets Git worktrees inherit enablement without sharing runtime identity
+ok 137 - resolver lets Git worktrees inherit enablement without sharing runtime identity
+  ---
+  duration_ms: 175.165042
+  type: 'test'
+  ...
+# Subtest: RepoRuntimeManager evicts the oldest idle started runtime before starting another
+ok 138 - RepoRuntimeManager evicts the oldest idle started runtime before starting another
+  ---
+  duration_ms: 5.935667
+  type: 'test'
+  ...
+# Subtest: RepoRuntimeManager fails fast when all active runtimes are in use
+ok 139 - RepoRuntimeManager fails fast when all active runtimes are in use
+  ---
+  duration_ms: 34.291292
+  type: 'test'
+  ...
+# Subtest: STARTING sessions count against the active repo limit
+ok 140 - STARTING sessions count against the active repo limit
+  ---
+  duration_ms: 27.739084
+  type: 'test'
+  ...
+# Subtest: slot waiters are granted in FIFO order
+ok 141 - slot waiters are granted in FIFO order
+  ---
+  duration_ms: 26.782291
+  type: 'test'
+  ...
+# Subtest: a waiter that misses its deadline is removed and never granted later
+ok 142 - a waiter that misses its deadline is removed and never granted later
+  ---
+  duration_ms: 74.930209
+  type: 'test'
+  ...
+# Subtest: a reservation taken but never used is released for the next caller
+ok 143 - a reservation taken but never used is released for the next caller
+  ---
+  duration_ms: 1.24725
+  type: 'test'
+  ...
+# Subtest: a session that breaks releases its slot to a queued waiter
+ok 144 - a session that breaks releases its slot to a queued waiter
+  ---
+  duration_ms: 11.865417
+  type: 'test'
+  ...
+# Subtest: activeRepos exposes lifecycle state and reservation
+ok 145 - activeRepos exposes lifecycle state and reservation
+  ---
+  duration_ms: 0.4995
+  type: 'test'
+  ...
+# Subtest: legacy routing policy preserves parser boosts and penalties
+ok 146 - legacy routing policy preserves parser boosts and penalties
+  ---
+  duration_ms: 0.773208
+  type: 'test'
+  ...
+# Subtest: generic policy contains no lishuedu-specific tokens
+ok 147 - generic policy contains no lishuedu-specific tokens
+  ---
+  duration_ms: 1.13175
+  type: 'test'
+  ...
+# Subtest: lishuedu legacy policy keeps its original rule ids
+ok 148 - lishuedu legacy policy keeps its original rule ids
+  ---
+  duration_ms: 0.161042
+  type: 'test'
+  ...
+# Subtest: resolveRoutingPolicy picks by env override then repo basename
+ok 149 - resolveRoutingPolicy picks by env override then repo basename
+  ---
+  duration_ms: 0.104
+  type: 'test'
+  ...
+# Subtest: only COMPLETE results are cacheable
+ok 150 - only COMPLETE results are cacheable
+  ---
+  duration_ms: 0.55
+  type: 'test'
+  ...
+# Subtest: DeadlineBudget clamps each stage to the absolute remaining budget
+ok 151 - DeadlineBudget clamps each stage to the absolute remaining budget
+  ---
+  duration_ms: 0.4825
+  type: 'test'
+  ...
+# Subtest: DeadlineBudget rejects expired stages with a classified error
+ok 152 - DeadlineBudget rejects expired stages with a classified error
+  ---
+  duration_ms: 0.525
+  type: 'test'
+  ...
+# Subtest: DeadlineBudget.race calls timeout cleanup
+ok 153 - DeadlineBudget.race calls timeout cleanup
+  ---
+  duration_ms: 11.213209
+  type: 'test'
+  ...
+# Subtest: DeadlineBudget.race rejects immediately once the budget is already spent
+ok 154 - DeadlineBudget.race rejects immediately once the budget is already spent
+  ---
+  duration_ms: 0.5535
+  type: 'test'
+  ...
+# Subtest: DeadlineBudget.race resolves a fast operation without invoking cleanup
+ok 155 - DeadlineBudget.race resolves a fast operation without invoking cleanup
+  ---
+  duration_ms: 0.136542
+  type: 'test'
+  ...
+# Subtest: DeadlineBudget rejects non-positive and non-finite timeouts
+ok 156 - DeadlineBudget rejects non-positive and non-finite timeouts
+  ---
+  duration_ms: 0.109958
+  type: 'test'
+  ...
+# Subtest: splits multiple lines from a single chunk
+ok 157 - splits multiple lines from a single chunk
+  ---
+  duration_ms: 0.838667
+  type: 'test'
+  ...
+# Subtest: keeps a UTF-8 character split across chunk boundaries intact
+ok 158 - keeps a UTF-8 character split across chunk boundaries intact
+  ---
+  duration_ms: 3.021417
+  type: 'test'
+  ...
+# Subtest: strips a trailing CR so CRLF output parses
+ok 159 - strips a trailing CR so CRLF output parses
+  ---
+  duration_ms: 0.215708
+  type: 'test'
+  ...
+# Subtest: returns nothing for empty input
+ok 160 - returns nothing for empty input
+  ---
+  duration_ms: 0.138542
+  type: 'test'
+  ...
+# Subtest: rejects a completed line larger than the cap
+ok 161 - rejects a completed line larger than the cap
+  ---
+  duration_ms: 0.251958
+  type: 'test'
+  ...
+# Subtest: rejects an unterminated buffer that grows past the cap
+ok 162 - rejects an unterminated buffer that grows past the cap
+  ---
+  duration_ms: 0.275583
+  type: 'test'
+  ...
+# Subtest: returns a trailing unterminated record within the cap
+ok 163 - returns a trailing unterminated record within the cap
+  ---
+  duration_ms: 0.181
+  type: 'test'
+  ...
+# Subtest: generation rg cache rejects partial results
+ok 164 - generation rg cache rejects partial results
+  ---
+  duration_ms: 0.553459
+  type: 'test'
+  ...
+# Subtest: no non-COMPLETE completion is ever cacheable
+ok 165 - no non-COMPLETE completion is ever cacheable
+  ---
+  duration_ms: 1.661125
+  type: 'test'
+  ...
+# Subtest: a stale generation entry is dropped rather than returned
+ok 166 - a stale generation entry is dropped rather than returned
+  ---
+  duration_ms: 0.111584
+  type: 'test'
+  ...
+# Subtest: invalidateBefore removes only older generations
+ok 167 - invalidateBefore removes only older generations
+  ---
+  duration_ms: 0.107459
+  type: 'test'
+  ...
+# Subtest: a disabled ttl stores nothing
+ok 168 - a disabled ttl stores nothing
+  ---
+  duration_ms: 0.179083
+  type: 'test'
+  ...
+# Subtest: rg timeout returns partial evidence but is not complete
+ok 169 - rg timeout returns partial evidence but is not complete
+  ---
+  duration_ms: 128.46225
+  type: 'test'
+  ...
+# Subtest: a hung child is escalated from SIGTERM to SIGKILL
+ok 170 - a hung child is escalated from SIGTERM to SIGKILL
+  ---
+  duration_ms: 156.353166
+  type: 'test'
+  ...
+# Subtest: a noisy child cannot block on a full stderr pipe
+ok 171 - a noisy child cannot block on a full stderr pipe
+  ---
+  duration_ms: 48.929209
+  type: 'test'
+  ...
+# Subtest: malformed JSON fails the search instead of silently losing matches
+ok 172 - malformed JSON fails the search instead of silently losing matches
+  ---
+  duration_ms: 47.053083
+  type: 'test'
+  ...
+# Subtest: the match cap makes the result PARTIAL_LIMIT
+ok 173 - the match cap makes the result PARTIAL_LIMIT
+  ---
+  duration_ms: 53.573416
+  type: 'test'
+  ...
+# Subtest: the raw byte cap makes the result PARTIAL_LIMIT
+ok 174 - the raw byte cap makes the result PARTIAL_LIMIT
+  ---
+  duration_ms: 50.622208
+  type: 'test'
+  ...
+# Subtest: an oversized single JSON record makes the result PARTIAL_LIMIT
+ok 175 - an oversized single JSON record makes the result PARTIAL_LIMIT
+  ---
+  duration_ms: 117.589375
+  type: 'test'
+  ...
+# Subtest: a pattern beginning with a dash is treated as a pattern, not a flag
+ok 176 - a pattern beginning with a dash is treated as a pattern, not a flag
+  ---
+  duration_ms: 531.037291
+  type: 'test'
+  ...
+# Subtest: matches resolving outside the repo root are suppressed
+ok 177 - matches resolving outside the repo root are suppressed
+  ---
+  duration_ms: 274.67025
+  type: 'test'
+  ...
+# Subtest: exit status 1 with no matches is a complete search
+ok 178 - exit status 1 with no matches is a complete search
+  ---
+  duration_ms: 115.426333
+  type: 'test'
+  ...
+# Subtest: a non-zero, non-one exit status is a failure
+ok 179 - a non-zero, non-one exit status is a failure
+  ---
+  duration_ms: 42.075625
+  type: 'test'
+  ...
+# Subtest: a missing binary is reported as a failed search, not a throw
+ok 180 - a missing binary is reported as a failed search, not a throw
+  ---
+  duration_ms: 2.001458
+  type: 'test'
+  ...
+# Subtest: positions per file are bounded while matchCount keeps counting
+ok 181 - positions per file are bounded while matchCount keeps counting
+  ---
+  duration_ms: 45.147667
+  type: 'test'
+  ...
+# Subtest: semantic locations outside canonical repo root are rejected
+ok 182 - semantic locations outside canonical repo root are rejected
+  ---
+  duration_ms: 3.389291
+  type: 'test'
+  ...
+# Subtest: repo locations are returned as relative 1-based ranges
+ok 183 - repo locations are returned as relative 1-based ranges
+  ---
+  duration_ms: 2.527875
+  type: 'test'
+  ...
+# Subtest: the returned absolutePath stays in the caller's repoRoot namespace
+ok 184 - the returned absolutePath stays in the caller's repoRoot namespace
+  ---
+  duration_ms: 1.750333
+  type: 'test'
+  ...
+# Subtest: a Maven repository jar source is rejected
+ok 185 - a Maven repository jar source is rejected
+  ---
+  duration_ms: 0.9535
+  type: 'test'
+  ...
+# Subtest: a JDK source location is rejected
+ok 186 - a JDK source location is rejected
+  ---
+  duration_ms: 1.803959
+  type: 'test'
+  ...
+# Subtest: a location reached through a symlink out of the repo is rejected
+ok 187 - a location reached through a symlink out of the repo is rejected
+  ---
+  duration_ms: 1.665542
+  type: 'test'
+  ...
+# Subtest: a LocationLink uses its target selection range
+ok 188 - a LocationLink uses its target selection range
+  ---
+  duration_ms: 1.743583
+  type: 'test'
+  ...
+# Subtest: a non-file uri is rejected
+ok 189 - a non-file uri is rejected
+  ---
+  duration_ms: 1.236083
+  type: 'test'
+  ...
+# Subtest: the repo root itself is not a location
+ok 190 - the repo root itself is not a location
+  ---
+  duration_ms: 1.396333
+  type: 'test'
+  ...
+# Subtest: parseJavaSource extracts type, implements, annotations, and method ranges
+ok 191 - parseJavaSource extracts type, implements, annotations, and method ranges
+  ---
+  duration_ms: 2.628084
+  type: 'test'
+  ...
+# Subtest: parseJavaSource extracts signature referenced types
+ok 192 - parseJavaSource extracts signature referenced types
+  ---
+  duration_ms: 0.600542
+  type: 'test'
+  ...
+# Subtest: parseJavaSource extracts method relation facts
+ok 193 - parseJavaSource extracts method relation facts
+  ---
+  duration_ms: 0.401625
+  type: 'test'
+  ...
+# Subtest: parseJavaSource extracts import declarations as dependency facts
+ok 194 - parseJavaSource extracts import declarations as dependency facts
+  ---
+  duration_ms: 0.232584
+  type: 'test'
+  ...
+# Subtest: SourceIndex can replace regex facts with documentSymbol facts
+ok 195 - SourceIndex can replace regex facts with documentSymbol facts
+  ---
+  duration_ms: 13.106041
+  type: 'test'
+  ...
+# Subtest: SourceIndex reloads snapshot and discards corrupt snapshot
+ok 196 - SourceIndex reloads snapshot and discards corrupt snapshot
+  ---
+  duration_ms: 6.628375
+  type: 'test'
+  ...
+# Subtest: SourceIndex skips legacy snapshots without referenced types
+ok 197 - SourceIndex skips legacy snapshots without referenced types
+  ---
+  duration_ms: 7.917833
+  type: 'test'
+  ...
+# Subtest: SourceIndex skips legacy snapshots without imports
+ok 198 - SourceIndex skips legacy snapshots without imports
+  ---
+  duration_ms: 4.73825
+  type: 'test'
+  ...
+# Subtest: SourceIndex reloads legacy method symbols without relation fields
+ok 199 - SourceIndex reloads legacy method symbols without relation fields
+  ---
+  duration_ms: 6.2685
+  type: 'test'
+  ...
+# Subtest: SourceIndex compacts duplicate snapshot records
+ok 200 - SourceIndex compacts duplicate snapshot records
+  ---
+  duration_ms: 8.529041
+  type: 'test'
+  ...
+# Subtest: SourceIndex status throttles dirtyCount stat scans
+ok 201 - SourceIndex status throttles dirtyCount stat scans
+  ---
+  duration_ms: 1108.879334
+  type: 'test'
+  ...
+# Subtest: SourceIndex finds cached implementers for a type
+ok 202 - SourceIndex finds cached implementers for a type
+  ---
+  duration_ms: 2.829125
+  type: 'test'
+  ...
+# Subtest: SourceIndex finds cached signature type references
+ok 203 - SourceIndex finds cached signature type references
+  ---
+  duration_ms: 12.105167
+  type: 'test'
+  ...
+# Subtest: SourceIndex answers loaded type lookups without rg scans
+ok 204 - SourceIndex answers loaded type lookups without rg scans
+  ---
+  duration_ms: 3.178916
+  type: 'test'
+  ...
+# Subtest: SourceIndex finds importers via the imported type index
+ok 205 - SourceIndex finds importers via the imported type index
+  ---
+  duration_ms: 3.348625
+  type: 'test'
+  ...
+# Subtest: SourceIndex finds type definitions beyond the first sixteen requested names
+ok 206 - SourceIndex finds type definitions beyond the first sixteen requested names
+  ---
+  duration_ms: 19.100083
+  type: 'test'
+  ...
+# Subtest: SourceIndex resolves fully qualified type definitions without same-name collisions
+ok 207 - SourceIndex resolves fully qualified type definitions without same-name collisions
+  ---
+  duration_ms: 13.622041
+  type: 'test'
+  ...
+# Subtest: SourceIndex finds wildcard importers when queried with a fully qualified type
+ok 208 - SourceIndex finds wildcard importers when queried with a fully qualified type
+  ---
+  duration_ms: 12.260125
+  type: 'test'
+  ...
+# Subtest: SourceIndex falls back to rg scan for importers not yet cached
+ok 209 - SourceIndex falls back to rg scan for importers not yet cached
+  ---
+  duration_ms: 11.909708
+  type: 'test'
+  ...
+# Subtest: SourceIndex finds the nearest method around a real repo line
+ok 210 - SourceIndex finds the nearest method around a real repo line # SKIP
+  ---
+  duration_ms: 0.090917
+  type: 'test'
+  ...
+# Subtest: impact accepts one absolute deadline and rejects values above 15 seconds
+ok 211 - impact accepts one absolute deadline and rejects values above 15 seconds
+  ---
+  duration_ms: 1.939833
+  type: 'test'
+  ...
+# Subtest: impact exposes exactly one timeout control
+ok 212 - impact exposes exactly one timeout control
+  ---
+  duration_ms: 0.106208
+  type: 'test'
+  ...
+# Subtest: impact projects the absolute deadline onto the internal semantic stage timeout
+ok 213 - impact projects the absolute deadline onto the internal semantic stage timeout
+  ---
+  duration_ms: 0.337
+  type: 'test'
+  ...
+# Subtest: java_impact wrapper respects verbosity when adding phase metrics
+ok 214 - java_impact wrapper respects verbosity when adding phase metrics
+  ---
+  duration_ms: 0.21425
+  type: 'test'
+  ...
+# Subtest: action tools return summaries by default and diagnostic status on request
+ok 215 - action tools return summaries by default and diagnostic status on request
+  ---
+  duration_ms: 0.742334
+  type: 'test'
+  ...
+# Subtest: java_diagnostics summarizes repo-relative diagnostics by default
+ok 216 - java_diagnostics summarizes repo-relative diagnostics by default
+  ---
+  duration_ms: 0.341083
+  type: 'test'
+  ...
+# Subtest: java_symbol and java_references omit raw uri ranges unless diagnostic is requested
+ok 217 - java_symbol and java_references omit raw uri ranges unless diagnostic is requested
+  ---
+  duration_ms: 2.048833
+  type: 'test'
+  ...
+# Subtest: semantic tools never emit locations from outside the repository
+ok 218 - semantic tools never emit locations from outside the repository
+  ---
+  duration_ms: 2.101417
+  type: 'test'
+  ...
+# Subtest: java_status exposes runtime build and root source metadata
+ok 219 - java_status exposes runtime build and root source metadata
+  ---
+  duration_ms: 2.191042
+  type: 'test'
+  ...
+# Subtest: java_status returns summary by default and keeps diagnostics explicit
+ok 220 - java_status returns summary by default and keeps diagnostics explicit
+  ---
+  duration_ms: 1.278875
+  type: 'test'
+  ...
+# Subtest: cleanupStaleWorktreeCaches removes only stale inactive worktree caches by default
+ok 221 - cleanupStaleWorktreeCaches removes only stale inactive worktree caches by default
+  ---
+  duration_ms: 16.759333
+  type: 'test'
+  ...
+# Subtest: cleanupStaleWorktreeCaches ignores legacy source-index metadata
+ok 222 - cleanupStaleWorktreeCaches ignores legacy source-index metadata
+  ---
+  duration_ms: 4.666125
+  type: 'test'
+  ...
+1..222
+# tests 222
+# suites 0
+# pass 218
+# fail 0
+# cancelled 0
+# skipped 4
+# todo 0
+# duration_ms 37749.422208

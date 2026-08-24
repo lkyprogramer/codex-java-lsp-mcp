@@ -1,0 +1,420 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import type { ImpactOptions, ResolvedAnchor } from "../../agent-types.js";
+import { resolveRoutingPolicy } from "../../routing-policy.js";
+import type { ProviderInput } from "../evidence.js";
+import type { JavaSourceFacts } from "../../java-index/router-facts.js";
+import { JavaIntelligenceError } from "../../runtime/intelligence-error.js";
+import {
+  collectStaticEvidence,
+  collectStaticStructureEvidence,
+  collectTypeReferenceEvidence
+} from "./static-provider.js";
+
+const options: ImpactOptions = {
+  anchors: [],
+  mode: "balanced",
+  profile: "auto",
+  semanticPolicy: "fast",
+  semanticTimeoutMs: 1_500,
+  testReadMode: "defer",
+  focusModules: [],
+  excludeModules: [],
+  taskKeywords: [],
+  crossModulePolicy: "auto"
+};
+
+function anchor(id: string, className: string, profile: ResolvedAnchor["profile"] = "service"): ResolvedAnchor {
+  const absolutePath = `/repo/src/main/java/demo/${className}.java`;
+  return {
+    id,
+    absolutePath,
+    path: absolutePath.slice("/repo/".length),
+    sourceSet: "main",
+    line: 1,
+    column: 1,
+    profile,
+    symbolName: className,
+    className,
+    kind: "interface"
+  };
+}
+
+function facts(absolutePath: string, overrides: Partial<JavaSourceFacts> = {}): JavaSourceFacts {
+  const typeName = absolutePath.split("/").at(-1)!.replace(/\.java$/, "");
+  return {
+    absolutePath,
+    path: absolutePath.slice("/repo/".length),
+    sourceSet: "main",
+    packageName: "demo",
+    typeName,
+    qualifiedName: `demo.${typeName}`,
+    kind: "class",
+    implementsTypes: [],
+    referencedTypes: [],
+    imports: [],
+    wildcardImports: [],
+    annotations: [],
+    methods: [],
+    factSource: "javaIndex",
+    ...overrides
+  };
+}
+
+function providerInput(anchors: ResolvedAnchor[], javaIndex: Record<string, unknown>): ProviderInput {
+  return {
+    repoRoot: "/repo",
+    anchors,
+    options,
+    javaIndex,
+    routingPolicy: resolveRoutingPolicy("/repo"),
+    existingCandidatePaths: [],
+    generation: 0,
+    budget: { expired: () => false },
+    phaseMs: {},
+    metrics: {
+      importGraph: { scannedAnchors: 0, addedCandidates: 0, skippedExisting: 0, elapsedMs: 0 },
+      typeReference: {
+        scannedPatterns: 0,
+        addedCandidates: 0,
+        skippedExisting: 0,
+        elapsedMs: 0,
+        cacheHits: 0,
+        cacheMisses: 0,
+        cacheMissElapsedMs: 0,
+        indexHits: 0,
+        indexMisses: 0
+      }
+    }
+  } as unknown as ProviderInput;
+}
+
+function emptyRouterStatus(): Record<string, number> {
+  return { entries: 0, hits: 0, misses: 0, typeLookupIndexHits: 0, typeLookupIndexMisses: 0 };
+}
+
+test("static provider keeps each implementation evidence tied to its own anchor", async () => {
+  const first = anchor("A1", "FirstPort");
+  const second = anchor("A2", "SecondPort");
+  const firstImplementation = facts("/repo/src/main/java/demo/FirstPortImpl.java");
+  const secondImplementation = facts("/repo/src/main/java/demo/SecondPortImpl.java");
+  const result = await collectStaticEvidence(providerInput([first, second], {
+    factsFor: async (file: string) => facts(file, { kind: "interface" }),
+    findImplementers: async (typeName: string) => typeName === "FirstPort" ? [firstImplementation] : [secondImplementation],
+    findTypeDefinitions: async () => [],
+    findImporters: async () => [],
+    findTypeReferences: async () => [],
+    methodAt: async () => undefined,
+    routerStatus: async () => emptyRouterStatus()
+  }));
+
+  assert.deepEqual(
+    result.evidence.map(signal => [signal.candidateFile, signal.anchorId]),
+    [
+      [firstImplementation.absolutePath, "A1"],
+      [secondImplementation.absolutePath, "A2"]
+    ]
+  );
+});
+
+test("an A2 static lookup failure retains A1 evidence and degrades the provider outcome", async () => {
+  const first = anchor("A1", "FirstPort");
+  const second = anchor("A2", "SecondPort");
+  const firstImplementation = facts("/repo/src/main/java/demo/FirstPortImpl.java");
+  const result = await collectStaticStructureEvidence(providerInput([first, second], {
+    factsFor: async (file: string) => facts(file, { kind: "interface" }),
+    findImplementers: async (typeName: string) => {
+      if (typeName === "SecondPort") throw new Error("A2 index failure");
+      return [firstImplementation];
+    },
+    findTypeDefinitions: async () => [],
+    findImporters: async () => []
+  }));
+
+  assert.deepEqual(result.evidence.map(signal => [signal.anchorId, signal.candidateFile]), [
+    ["A1", firstImplementation.absolutePath]
+  ]);
+  assert.equal(result.completion, "FAILED");
+  assert.equal(result.degradation, "static provider failed for anchors: A2");
+});
+
+test("static provider classifies direct imported declarations as exact AST evidence", async () => {
+  const request = anchor("A1", "Request", "dto");
+  const directDeclaration = facts("/repo/src/main/java/demo/DirectCollaborator.java");
+  const result = await collectStaticEvidence(providerInput([request], {
+    factsFor: async (file: string) => facts(file, { imports: ["demo.DirectCollaborator"] }),
+    findImplementers: async () => [],
+    findTypeDefinitions: async () => [directDeclaration],
+    findImporters: async () => [],
+    findTypeReferences: async () => [],
+    methodAt: async () => undefined,
+    routerStatus: async () => emptyRouterStatus()
+  }));
+
+  const evidence = result.evidence.find(signal => signal.candidateFile === directDeclaration.absolutePath);
+  assert.equal(evidence?.kind, "DIRECT_DECLARATION");
+  assert.equal(evidence?.provenance, "AST_EXACT");
+  assert.equal(evidence?.confidence, 0.98);
+  assert.equal(evidence?.sourceFile, request.absolutePath, "the import declaration belongs to the anchor file, not the imported declaration");
+});
+
+test("static provider records direct type references as anchored AST relationships", async () => {
+  const request = anchor("A1", "Request", "service");
+  const referenced = facts("/repo/src/main/java/demo/RequestConsumer.java");
+  const result = await collectStaticEvidence(providerInput([request], {
+    factsFor: async (file: string) => facts(file),
+    findImplementers: async () => [],
+    findTypeDefinitions: async () => [],
+    findImporters: async () => [],
+    findTypeReferences: async () => [referenced],
+    methodAt: async () => undefined,
+    routerStatus: async () => emptyRouterStatus()
+  }));
+
+  const evidence = result.evidence.find(signal => signal.candidateFile === referenced.absolutePath);
+  assert.equal(evidence?.kind, "REFERENCE");
+  assert.equal(evidence?.sourceFile, request.absolutePath, "the direct JavaIndex edge must retain its request-anchor source");
+});
+
+test("a failed A2 type-reference query retains A1 evidence and identifies only A2 degradation", async () => {
+  const first = anchor("A1", "FirstService", "service");
+  const second = anchor("A2", "SecondService", "service");
+  const referenced = facts("/repo/src/main/java/demo/FirstUsage.java");
+  const result = await collectStaticEvidence(providerInput([first, second], {
+    factsForFiles: async () => ({
+      generation: 0,
+      completion: "COMPLETE",
+      truncated: false,
+      items: [
+        { state: "FOUND", facts: facts(first.absolutePath) },
+        { state: "FOUND", facts: facts(second.absolutePath) }
+      ]
+    }),
+    factsFor: async (file: string) => facts(file, { kind: "interface" }),
+    findImplementers: async () => [],
+    findTypeDefinitions: async () => [],
+    findImporters: async () => [],
+    findTypeReferences: async (typeName: string) => {
+      if (typeName === "SecondService") throw new Error("A2 query failed");
+      return [referenced];
+    },
+    methodAt: async () => undefined,
+    routerStatus: async () => emptyRouterStatus()
+  }));
+
+  assert.ok(result.evidence.some(signal => signal.anchorId === "A1" && signal.candidateFile === referenced.absolutePath));
+  assert.equal(result.evidence.some(signal => signal.anchorId === "A2"), false);
+  assert.equal(result.completion, "FAILED");
+  assert.match(result.degradation ?? "", /static provider failed for anchors: A2/);
+  assert.match(result.degradation ?? "", /direct reference lookup QUERY_FAILED/);
+});
+
+test("type-reference batch retains A1 evidence and propagates typed A2 partial outcomes", async () => {
+  const first = anchor("A1", "FirstService", "service");
+  const second = anchor("A2", "SecondService", "service");
+  const referenced = facts("/repo/src/main/java/demo/FirstUsage.java");
+  for (const [reason, expectedCompletion] of [
+    ["DEADLINE_EXCEEDED", "PARTIAL_TIMEOUT"],
+    ["CANCELLED", "CANCELLED"],
+    ["INDEX_INCOMPLETE", "PARTIAL_LIMIT"]
+  ] as const) {
+    let postBatchCalls = 0;
+    let statusCalls = 0;
+    const result = await collectTypeReferenceEvidence(providerInput([first, second], {
+      factsForFiles: async () => ({
+        generation: 0,
+        completion: "PARTIAL",
+        truncated: false,
+        items: [
+          { inputFile: first.absolutePath, absolutePath: first.absolutePath, state: "FOUND", facts: facts(first.absolutePath) },
+          { inputFile: second.absolutePath, absolutePath: second.absolutePath, state: "DEGRADED", reason }
+        ]
+      }),
+      findTypeReferences: async (typeName: string) => {
+        postBatchCalls += 1;
+        return typeName === "FirstService" ? [referenced] : [];
+      },
+      findTypeDefinitions: async () => [],
+      findImplementers: async () => [],
+      routerStatus: async () => {
+        statusCalls += 1;
+        return emptyRouterStatus();
+      }
+    }));
+
+    assert.equal(result.completion, expectedCompletion, reason);
+    if (reason === "INDEX_INCOMPLETE") {
+      assert.ok(result.evidence.some(signal => signal.anchorId === "A1" && signal.candidateFile === referenced.absolutePath));
+      assert.ok(postBatchCalls > 0);
+    } else {
+      assert.equal(result.evidence.length, 0, "deadline/cancellation stops post-batch JavaIndex work");
+      assert.equal(postBatchCalls, 0);
+    }
+    assert.equal(statusCalls, reason === "INDEX_INCOMPLETE" ? 2 : 1, "terminal outcomes skip the after-status probe");
+    assert.equal(result.evidence.some(signal => signal.anchorId === "A2"), false);
+    assert.match(result.degradation ?? "", new RegExp(reason));
+  }
+});
+
+test("an already-expired type-reference phase skips status and JavaIndex work", async () => {
+  const request = anchor("A1", "ExpiredController", "controller");
+  let calls = 0;
+  const input = providerInput([request], {
+    routerStatus: async () => { calls += 1; return emptyRouterStatus(); },
+    factsForFiles: async () => { calls += 1; throw new Error("must not run"); },
+    factsFor: async () => { calls += 1; throw new Error("must not run"); },
+    findTypeReferences: async () => { calls += 1; return []; },
+    findTypeDefinitions: async () => { calls += 1; return []; },
+    findImplementers: async () => { calls += 1; return []; }
+  });
+  const result = await collectTypeReferenceEvidence({
+    ...input,
+    budget: { expired: () => true }
+  } as never);
+
+  assert.equal(calls, 0);
+  assert.equal(result.completion, "PARTIAL_TIMEOUT");
+  assert.match(result.degradation ?? "", /request budget exhausted/);
+});
+
+test("type-reference operation exceptions distinguish deadline, cancellation, and ordinary failure", async () => {
+  const first = anchor("A1", "FirstService", "service");
+  const second = anchor("A2", "SecondService", "service");
+  const referenced = facts("/repo/src/main/java/demo/FirstUsage.java");
+  for (const [error, expectedCompletion] of [
+    [new JavaIntelligenceError("DEADLINE_EXCEEDED", "synthetic deadline"), "PARTIAL_TIMEOUT"],
+    [new JavaIntelligenceError("CANCELLED", "synthetic cancellation"), "CANCELLED"],
+    [new Error("synthetic query failure"), "FAILED"]
+  ] as const) {
+    let statusCalls = 0;
+    const result = await collectTypeReferenceEvidence(providerInput([first, second], {
+      factsForFiles: async () => ({
+        generation: 0,
+        completion: "COMPLETE",
+        truncated: false,
+        items: [
+          { inputFile: first.absolutePath, absolutePath: first.absolutePath, state: "FOUND", facts: facts(first.absolutePath) },
+          { inputFile: second.absolutePath, absolutePath: second.absolutePath, state: "FOUND", facts: facts(second.absolutePath) }
+        ]
+      }),
+      findTypeReferences: async (typeName: string) => {
+        if (typeName === "SecondService") throw error;
+        return [referenced];
+      },
+      findTypeDefinitions: async () => [],
+      findImplementers: async () => [],
+      routerStatus: async () => {
+        statusCalls += 1;
+        return emptyRouterStatus();
+      }
+    }));
+
+    assert.equal(result.completion, expectedCompletion);
+    assert.ok(result.evidence.some(signal => signal.anchorId === "A1" && signal.candidateFile === referenced.absolutePath));
+    assert.equal(statusCalls, expectedCompletion === "FAILED" ? 2 : 1, "terminal outcomes cannot restart JavaIndex for metrics");
+  }
+});
+
+test("a resolved implementation exposes its exact field and anchored-method collaborators", async () => {
+  const repository = { ...anchor("A1", "OrderPort", "port"), methodName: "findById", symbolName: "findById" };
+  const implementation = {
+    ...facts("/repo/src/main/java/demo/OrderPortImpl.java", {
+      imports: ["demo.OrderMapper", "demo.OrderEntity"],
+      methods: [{
+        name: "findById",
+        line: 20,
+        endLine: 30,
+        referencedTypes: ["OrderEntity"],
+        relations: [],
+        methodId: "method:demo.OrderPortImpl.findById"
+      }]
+    }),
+    fieldTypes: [{ typeName: "OrderMapper", qualifiedName: "demo.OrderMapper", typeId: "type:demo.OrderMapper" }]
+  } as JavaSourceFacts;
+  const mapper = facts("/repo/src/main/java/demo/OrderMapper.java");
+  const entity = facts("/repo/src/main/java/demo/OrderEntity.java");
+  const result = await collectStaticStructureEvidence(providerInput([repository], {
+    factsFor: async (file: string) => file === repository.absolutePath ? facts(file, { kind: "interface" }) : implementation,
+    findImplementers: async () => [implementation],
+    findTypeDefinitions: async (names: readonly string[]) => [
+      ...(names.includes("demo.OrderMapper") ? [mapper] : []),
+      ...(names.includes("demo.OrderEntity") ? [entity] : [])
+    ],
+    findImporters: async () => [],
+    findTypeReferences: async () => [],
+    methodAt: async () => undefined,
+    routerStatus: async () => emptyRouterStatus()
+  }));
+
+  assert.ok(result.evidence.some(signal => signal.candidateFile === mapper.absolutePath && signal.kind === "FIELD_TYPE"));
+  assert.ok(result.evidence.some(signal => signal.candidateFile === entity.absolutePath && signal.kind === "IMPLEMENTATION_METHOD_TYPE"));
+});
+
+test("implementation dependency cap gives every anchor a deterministic seat", async () => {
+  const first = { ...anchor("A1", "FirstPort", "port"), methodName: "load", symbolName: "load" };
+  const second = { ...anchor("A2", "SecondPort", "port"), methodName: "load", symbolName: "load" };
+  const firstImplementation = {
+    ...facts("/repo/src/main/java/demo/FirstPortImpl.java"),
+    fieldTypes: Array.from({ length: 24 }, (_, index) => ({
+      typeName: `FirstDependency${index}`,
+      qualifiedName: `demo.FirstDependency${index}`,
+      typeId: `type:demo.FirstDependency${index}`
+    }))
+  } as JavaSourceFacts;
+  const secondImplementation = {
+    ...facts("/repo/src/main/java/demo/SecondPortImpl.java"),
+    fieldTypes: [{ typeName: "SecondDependency", qualifiedName: "demo.SecondDependency", typeId: "type:demo.SecondDependency" }]
+  } as JavaSourceFacts;
+  const requestedDefinitionBatches: string[][] = [];
+  const result = await collectStaticStructureEvidence(providerInput([first, second], {
+    factsFor: async (file: string) => file === first.absolutePath || file === second.absolutePath
+      ? facts(file, { kind: "interface" })
+      : file === firstImplementation.absolutePath ? firstImplementation : secondImplementation,
+    findImplementers: async (typeName: string) => typeName === "FirstPort" ? [firstImplementation] : [secondImplementation],
+    findTypeDefinitions: async (names: readonly string[]) => {
+      requestedDefinitionBatches.push([...names]);
+      return names.map(name => facts(`/repo/src/main/java/demo/${name.split(".").at(-1)}.java`));
+    },
+    findImporters: async () => [],
+    findTypeReferences: async () => [],
+    methodAt: async () => undefined,
+    routerStatus: async () => emptyRouterStatus()
+  }));
+
+  const requestedDefinitions = requestedDefinitionBatches.find(names => names.length === 24) ?? [];
+  assert.equal(requestedDefinitions.length, 24);
+  assert.ok(requestedDefinitions.includes("demo.SecondDependency"));
+  assert.equal(requestedDefinitions.includes("demo.FirstDependency23"), false);
+  assert.ok(result.evidence.some(signal => signal.anchorId === "A2" && signal.kind === "FIELD_TYPE"));
+});
+
+test("deferred test implementations do not fan out their collaborators into a main-source request", async () => {
+  const repository = { ...anchor("A1", "OrderPort", "port"), methodName: "findById", symbolName: "findById" };
+  const mainImplementation = {
+    ...facts("/repo/src/main/java/demo/OrderPortImpl.java"),
+    fieldTypes: [{ typeName: "MainMapper", qualifiedName: "demo.MainMapper", typeId: "type:demo.MainMapper" }]
+  } as JavaSourceFacts;
+  const testImplementation = {
+    ...facts("/repo/src/test/java/demo/TestOrderPort.java", { sourceSet: "test" }),
+    fieldTypes: [{ typeName: "TestMapper", qualifiedName: "demo.TestMapper", typeId: "type:demo.TestMapper" }]
+  } as JavaSourceFacts;
+  const mainMapper = facts("/repo/src/main/java/demo/MainMapper.java");
+  const testMapper = facts("/repo/src/test/java/demo/TestMapper.java", { sourceSet: "test" });
+  const result = await collectStaticStructureEvidence(providerInput([repository], {
+    factsFor: async (file: string) => file === repository.absolutePath
+      ? facts(file, { kind: "interface" })
+      : file === mainImplementation.absolutePath ? mainImplementation : testImplementation,
+    findImplementers: async () => [mainImplementation, testImplementation],
+    findTypeDefinitions: async (names: readonly string[]) => [
+      ...(names.includes("demo.MainMapper") ? [mainMapper] : []),
+      ...(names.includes("demo.TestMapper") ? [testMapper] : [])
+    ],
+    findImporters: async () => [],
+    findTypeReferences: async () => [],
+    methodAt: async () => undefined,
+    routerStatus: async () => emptyRouterStatus()
+  }));
+
+  assert.ok(result.evidence.some(signal => signal.candidateFile === mainMapper.absolutePath && signal.kind === "FIELD_TYPE"));
+  assert.equal(result.evidence.some(signal => signal.candidateFile === testMapper.absolutePath), false);
+});

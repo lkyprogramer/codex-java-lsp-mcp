@@ -1,0 +1,108 @@
+{
+  "schemaVersion": "l-l1-closeout/v1",
+  "track": "l",
+  "card": "L1",
+  "dated": "2026-08-23",
+  "decision": "FAIL",
+  "jinPlan": "KILLED_AFTER_THREE_LIVES",
+  "mergeToMain": false,
+  "srcTouched": true,
+  "defaultChainIdentity": "UNCHANGED",
+  "killJavaContext": true,
+  "fourthLive": false,
+  "modelSensitive": false,
+  "taskSuccess": "MEASURED",
+  "modelUsage": "MEASURED",
+  "summary": "docs/phase-l/l1-live-summary.json",
+  "summarySha256": "cb15827888074fcd5850ba98c460d4d66dae1a851bfaf676e7123beb6e5ce574",
+  "publicTools": [
+    "java_status",
+    "java_impact",
+    "java_symbol",
+    "java_diagnostics",
+    "java_runtime"
+  ],
+  "profiles": {
+    "local-qwen": {
+      "host": "47.106.205.246:1082",
+      "model": "openclaw/Qwen3.8-27B-WORK",
+      "status": "MEASURED",
+      "scored": 12,
+      "successes": 1,
+      "mean": 0.08333333333333333,
+      "jinSuccesses": 0,
+      "oldSuccesses": 1,
+      "pairedDelta": -0.6293512043512043,
+      "notWorse": "0/6",
+      "tokenRatioJinOverOld": 1.7354268444150038
+    },
+    "openrouter": {
+      "model": "stealth/ox-alpha",
+      "status": "MEASURED",
+      "scored": 12,
+      "successes": 1,
+      "mean": 0.08333333333333333,
+      "jinSuccesses": 0,
+      "oldSuccesses": 1,
+      "pairedDelta": -0.3216783216783216,
+      "notWorse": "1/6",
+      "tokenRatioJinOverOld": 2.6944421040806583
+    }
+  },
+  "combined": {
+    "pairedDelta": -0.47551476301476294,
+    "direction": { "jinBetter": 0, "jinWorse": 11, "tie": 1, "n": 12 }
+  },
+  "gates": {
+    "pairedHitRate": "FAIL",
+    "token": "FAIL",
+    "leftoverFalse": "FAIL",
+    "noCapOrRuntimeDrop": "GO"
+  },
+  "leftoverFalse": {
+    "presignClosed": false,
+    "payOrderClosed": false
+  },
+  "harness": {
+    "prewarmSharedProjectCache": true,
+    "authorizeExternal": true,
+    "executeLive": true,
+    "maxTasks": 6,
+    "serena": "SERENA_UNAVAILABLE"
+  },
+  "isolation": {
+    "liveExecutableTree": "3715e8c1213b5d0835a638bc7b0c66d1586361d2",
+    "killExecutableTree": "a93251db1fb575bd3bd1f8ca19b3d68628295257",
+    "localQwen": {
+      "root": "codex-java-lsp-isolated-validation-uUW6VA",
+      "liveTraceSha256": "89844bfe42023965dca9794728e814cc5fe09968c00800da71e21d036d5b4887"
+    },
+    "openrouter": {
+      "root": "codex-java-lsp-isolated-validation-7IGboI",
+      "liveTraceSha256": "92807b268a94faf15c3942e75afabc4ab3a4e309648b4d5df539b9c2a46233ac",
+      "logSha256": "f7f50f91533338cccfcf00e458405859e8762e760a9b6f1c9a1db929ce0fd5e6"
+    },
+    "t0": {
+      "tests": 23,
+      "fail": 0,
+      "jdtlsBin": "/usr/bin/false",
+      "executableTree": "a93251db1fb575bd3bd1f8ca19b3d68628295257",
+      "logSha256": "153a23298cea81a9b45a19765c0081858e8974813ebba4aa0402d5c782940445",
+      "root": "codex-java-lsp-isolated-validation-zhVhSn"
+    },
+    "smoke": {
+      "exit": 0,
+      "tools": [
+        "java_diagnostics",
+        "java_impact",
+        "java_runtime",
+        "java_status",
+        "java_symbol"
+      ],
+      "executableTree": "a93251db1fb575bd3bd1f8ca19b3d68628295257",
+      "logSha256": "85fd99e4b2e5163f6622c94692121fcf1387594414e73fa0965b4338ab70169a",
+      "root": "codex-java-lsp-isolated-validation-UbtxgE"
+    }
+  },
+  "note": "Both models MEASURED FAIL in the same direction, so not MODEL_SENSITIVE. Combined paired mean delta -0.476; ≥4/6 not-worse missed on both profiles. Token jin > old×1.1 on both. presign and pay-order stayed false on every arm. No cap/runtime drop. java_context unregistered from PUBLIC_JAVA_TOOLS; handler and EvidenceBundle planner stay on the branch. Live ran C1 packing tree 3715e8c1. Kill T0/smoke tree a93251db. F still blocked by G2_OVERFIT_FAIL. Do not merge main. No fourth live."
+}

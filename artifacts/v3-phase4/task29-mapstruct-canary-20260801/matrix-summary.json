@@ -1,0 +1,67 @@
+{
+  "decision": "KEEP_MAPSTRUCT_REGISTERED",
+  "generatedAt": "2026-08-02T02:31:45Z",
+  "protocol": {
+    "order": ["off/on", "on/off", "off/on"],
+    "rounds": 3,
+    "runsPerCell": 5,
+    "warmState": "cold-nolsp",
+    "strategy": "impact",
+    "verbosity": "standard"
+  },
+  "gates": {
+    "rReadMust": 1,
+    "p95RatioMax": 1.1,
+    "recallNoRegression": true,
+    "pReadNoRegression": true
+  },
+  "projects": [
+    {
+      "projectId": "lishuedu",
+      "repoCommit": "1b3dad620dcb",
+      "medianP95OffMs": 212.84654199999932,
+      "medianP95OnMs": 219.33158299999923,
+      "p95Ratio": 1.030468152966281,
+      "recallOff": 0.7426587301587304,
+      "recallOn": 0.8259920634920638,
+      "pReadOff": 0.7222222222222219,
+      "pReadOn": 0.7222222222222219,
+      "rReadMustOff": 1,
+      "rReadMustOn": 1,
+      "mapstructOn": { "selected": 105, "readPlan": 15, "golden": 45 }
+    },
+    {
+      "projectId": "cipherlink",
+      "repoCommit": "fa433982e92e",
+      "medianP95OffMs": 95.19029200000023,
+      "medianP95OnMs": 96.03583300000037,
+      "p95Ratio": 1.0088826389985246,
+      "recallOff": 0.8964285714285716,
+      "recallOn": 0.8964285714285716,
+      "pReadOff": 0.6666666666666669,
+      "pReadOn": 0.6666666666666669,
+      "rReadMustOff": 1,
+      "rReadMustOn": 1,
+      "mapstructOn": { "selected": 0, "readPlan": 0, "golden": 0 }
+    },
+    {
+      "projectId": "exam-parent-v3",
+      "repoCommit": "629a9cce1117",
+      "medianP95OffMs": 123.4097499999998,
+      "medianP95OnMs": 123.28037500000028,
+      "p95Ratio": 0.9989516630574203,
+      "recallOff": 0.8999999999999999,
+      "recallOn": 0.8999999999999999,
+      "pReadOff": 0.6666666666666665,
+      "pReadOn": 0.6666666666666665,
+      "rReadMustOff": 1,
+      "rReadMustOn": 1,
+      "mapstructOn": { "selected": 0, "readPlan": 0, "golden": 0 }
+    }
+  ],
+  "limitations": [
+    "The canary worktrees shared HEAD 71f8c5b and differed only by MapStruct registration, but their dist build stamps reported runtimeBuild.gitSha=unknown.",
+    "The matrix reached COMPLETE JavaIndex coverage before impact requests; the cold-partial exact-FQN fallback is covered by a direct regression test, not by the P95 cells.",
+    "JPA remains unregistered because this evidence set does not prove real-repository value."
+  ]
+}

@@ -1,14 +1,22 @@
+// input: Anchors, existing candidate paths, and JavaIndex type/reference facts.
+// output: Evidence-native type-reference and implementation signals without additive CandidateFile scoring.
+// pos: Async type-reference collector for AgentRouter (V3.2-14).
 import path from "node:path";
-import type { RoutingPolicy } from "../routing-policy.js";
-import type { JavaSourceFacts, SourceIndex } from "../source-index.js";
-import type { CandidateFile, ImpactOptions, ResolvedAnchor } from "../agent-types.js";
+import type { RouterIndex } from "../java-index/router-java-index.js";
+import type { FactsForFileItem, JavaSourceFacts } from "../java-index/router-facts.js";
+import type { ImpactOptions, ResolvedAnchor, RouterPosition } from "../agent-types.js";
+import type { EvidenceSignal } from "./evidence.js";
+import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
+import type { DeadlineBudget } from "../runtime/deadline-budget.js";
 import {
-  candidateFromFacts,
+  calleeNamesFromRelations,
+  isSpringBootApplicationType,
   matchesAny,
-  mergeCandidate,
-  scoreBase,
+  positionFromFacts,
+  positionsFromFacts,
+  sameSourceModule,
+  selectPreferredImplementers,
   simpleTypeName,
-  typeReferenceOrderBonus,
   unique
 } from "./candidate-helpers.js";
 
@@ -24,139 +32,553 @@ export type TypeReferenceMetrics = {
   indexMisses: number;
 };
 
-type CollectTypeReferenceInput = {
-  candidates: Map<string, CandidateFile>;
-  anchors: ResolvedAnchor[];
-  options: ImpactOptions;
-  metrics: TypeReferenceMetrics;
-  sourceIndex: SourceIndex;
-  routingPolicy: RoutingPolicy;
+export type CollectTypeReferenceSignalsInput = {
+  readonly anchors: readonly ResolvedAnchor[];
+  readonly options: Pick<ImpactOptions, "taskKeywords">;
+  readonly metrics: TypeReferenceMetrics;
+  readonly javaIndex: RouterIndex;
+  readonly budget?: DeadlineBudget;
+  readonly generation?: number;
+  readonly existingCandidatePaths: readonly string[];
+  readonly providerId: string;
+  readonly providerVersion: string;
+  readonly nextSignalId: () => string;
 };
 
-export function collectTypeReferenceCandidates(input: CollectTypeReferenceInput): void {
-  const { candidates, anchors, options, metrics, sourceIndex, routingPolicy } = input;
-  if (options.semanticPolicy === "required") {
-    return;
+export type TypeReferenceSignalResult = {
+  readonly evidence: readonly EvidenceSignal[];
+  readonly failedAnchorIds: readonly string[];
+  readonly cancelledAnchorIds: readonly string[];
+  readonly deadlineExceededAnchorIds: readonly string[];
+  readonly partialAnchorIds: readonly string[];
+  readonly degradedReasons: readonly string[];
+};
+
+type TypeReferenceAnchorPlan = {
+  readonly anchor: ResolvedAnchor;
+  readonly referenceTypeName: string;
+};
+
+type TypeReferenceSignalDraft = Omit<EvidenceSignal, "signalId">;
+
+type TypeReferenceOutcome = {
+  readonly failedAnchorIds: Set<string>;
+  readonly cancelledAnchorIds: Set<string>;
+  readonly deadlineExceededAnchorIds: Set<string>;
+  readonly partialAnchorIds: Set<string>;
+  readonly degradedReasons: string[];
+};
+
+const REFERENCE_SPEC = {
+  kind: "REFERENCE",
+  weight: 55,
+  confidence: 0.8,
+  reason: "typeReference",
+  verifiedBy: "typeReference"
+} as const;
+
+const IMPLEMENTATION_SPEC = {
+  kind: "IMPLEMENTS",
+  weight: 70,
+  confidence: 0.9,
+  reason: "typeGraph:implementation-lookup",
+  verifiedBy: "typeGraph"
+} as const;
+
+const BOOT_APPLICATION_SPEC = {
+  kind: "SPRING_BOOT_APPLICATION",
+  weight: 90,
+  confidence: 0.85,
+  reason: "SPRING_BOOT_APPLICATION",
+  verifiedBy: "typeGraph"
+} as const;
+
+const SPRING_BOOT_APPLICATION_TYPE_ID = "external:org.springframework.boot.autoconfigure.SpringBootApplication";
+
+export async function collectTypeReferenceSignals(
+  input: CollectTypeReferenceSignalsInput
+): Promise<TypeReferenceSignalResult> {
+  const plans = input.anchors
+    .filter(shouldUseTypeReference)
+    .map(anchor => ({
+      anchor,
+      referenceTypeName: anchor.className || path.basename(anchor.absolutePath, ".java")
+    } satisfies TypeReferenceAnchorPlan));
+  const outcome = newTypeReferenceOutcome();
+  if (input.budget?.expired()) {
+    for (const plan of plans) recordBudgetDeadline(outcome, plan.anchor.id);
+    return materializeResult([], outcome);
   }
-  for (const anchor of anchors) {
-    if (!shouldUseTypeReference(anchor)) {
-      continue;
+  const anchorFacts = await loadAnchorFacts(input, plans, outcome);
+  const knownPaths = new Set(input.existingCandidatePaths);
+  const evidence: EvidenceSignal[] = [];
+
+  if (terminalOutcome(outcome)) return materializeResult(evidence, outcome);
+
+  for (const plan of plans) {
+    if (input.budget?.expired()) {
+      recordBudgetDeadline(outcome, plan.anchor.id);
+      break;
     }
-    const canReinforceExistingTypeReferences = routingPolicy.id !== "lishuedu-legacy";
-    if (anchor.profile === "controller" && !canReinforceExistingTypeReferences) {
-      continue;
+    const facts = anchorFacts.get(plan.anchor.id);
+    if (!facts) continue;
+    const drafts = new Map<string, TypeReferenceSignalDraft>();
+    const pathOrder = new Map<string, number>();
+    for (const candidatePath of input.existingCandidatePaths) {
+      if (!pathOrder.has(candidatePath)) pathOrder.set(candidatePath, pathOrder.size);
     }
-    const canUseReferenceOrderBonus = canReinforceExistingTypeReferences && anchor.profile === "controller";
-    const typeName = anchor.className || path.basename(anchor.absolutePath, ".java");
-    metrics.scannedPatterns += 1;
-    for (const facts of sourceIndex.findTypeReferences(typeName).slice(0, 20)) {
-      if (candidates.has(facts.absolutePath)) {
-        metrics.skippedExisting += 1;
-        continue;
+
+    let directReferences: readonly JavaSourceFacts[] = [];
+    try {
+      directReferences = await input.javaIndex.findTypeReferences(plan.referenceTypeName, 20, {
+        typeId: facts.typeId,
+        hydrate: false
+      });
+      input.metrics.scannedPatterns += 1;
+    } catch (error) {
+      recordOperationFailure(outcome, plan.anchor.id, "direct reference lookup", error);
+      if (terminalOutcome(outcome)) {
+        evidence.push(...materializeDrafts(input, drafts, pathOrder));
+        break;
       }
-      const candidate = candidateFromFacts(facts, scoreBase(routingPolicy, "semantic", facts, anchor, options) + 60, "typeReference");
-      mergeCandidate(candidates, candidate);
-      metrics.addedCandidates += 1;
     }
-    const anchorFacts = sourceIndex.factsFor(anchor.absolutePath);
-    const methodFact = canReinforceExistingTypeReferences
-      ? sourceIndex.methodAt(anchor.absolutePath, anchor.line)
-      : undefined;
+    for (const reference of directReferences) {
+      recordCandidateMetric(input.metrics, knownPaths, reference.absolutePath);
+      rememberPath(pathOrder, reference.absolutePath);
+      recordReferenceDraft(input, drafts, plan.anchor, reference.absolutePath, [{ line: 1, column: 1 }]);
+    }
+
+    const methodFact = methodAtFromFacts(facts, plan.anchor.line);
     const methodTypes = methodFact
       ? unique([...methodFact.relations.map(relation => relation.typeName), ...methodFact.referencedTypes])
       : [];
-    const referencedTypes = unique([...methodTypes, ...anchorFacts.referencedTypes]);
-    const referencedTypeOrder = new Map<string, number>();
-    referencedTypes.forEach((type, index) => {
-      const simple = simpleTypeName(type);
-      if (!referencedTypeOrder.has(simple)) {
-        referencedTypeOrder.set(simple, index);
+    const referencedTypes = unique([
+      ...methodTypes,
+      ...facts.referencedTypes,
+      ...facts.imports.filter(imported => matchesAny(simpleTypeName(imported), input.options.taskKeywords))
+    ]);
+    reinforceImportedCandidates(input, plan.anchor, referencedTypes, pathOrder, drafts);
+    if (referencedTypes.length === 0) {
+      evidence.push(...materializeDrafts(input, drafts, pathOrder));
+      continue;
+    }
+
+    input.metrics.scannedPatterns += 1;
+    if (input.budget?.expired()) {
+      recordBudgetDeadline(outcome, plan.anchor.id);
+      evidence.push(...materializeDrafts(input, drafts, pathOrder));
+      break;
+    }
+    let definitions: readonly JavaSourceFacts[] = [];
+    try {
+      definitions = await input.javaIndex.findTypeDefinitions(referencedTypes, 20, true);
+    } catch (error) {
+      recordOperationFailure(outcome, plan.anchor.id, "definition lookup", error);
+      evidence.push(...materializeDrafts(input, drafts, pathOrder));
+      if (terminalOutcome(outcome)) break;
+      continue;
+    }
+    let stopAfterPlan = false;
+    const preferredImplementers: JavaSourceFacts[] = [];
+    const calleeNames = calleeNamesFromRelations(methodFact?.relations);
+    for (const definition of definitions) {
+      if (definition.absolutePath === plan.anchor.absolutePath) continue;
+      recordCandidateMetric(input.metrics, knownPaths, definition.absolutePath);
+      rememberPath(pathOrder, definition.absolutePath);
+      recordReferenceDraft(
+        input,
+        drafts,
+        plan.anchor,
+        definition.absolutePath,
+        positionsFromFacts(definition, {
+          typeName: definition.typeName,
+          calleeNames
+        })
+      );
+      if (definition.kind !== "interface" || !definition.typeName) continue;
+      const qualifiedTypeName = definition.packageName
+        ? `${definition.packageName}.${definition.typeName}`
+        : definition.typeName;
+      if (input.budget?.expired()) {
+        recordBudgetDeadline(outcome, plan.anchor.id);
+        stopAfterPlan = true;
+        break;
       }
-    });
-    const existingTypeNames = candidateTypeNames(sourceIndex, candidates);
-    const existingReferencedTypes = new Set(referencedTypes.map(simpleTypeName).filter(type => existingTypeNames.has(type)));
-    if (canReinforceExistingTypeReferences) {
-      for (const existing of [...candidates.values()]) {
-        if (existing.absolutePath === anchor.absolutePath) {
-          continue;
+      try {
+        const preferred = selectPreferredImplementers(await input.javaIndex.findImplementers(
+          qualifiedTypeName,
+          8,
+          plan.anchor.absolutePath,
+          { typeId: definition.typeId, hydrate: true }
+        ));
+        preferredImplementers.push(...preferred);
+        for (const implementation of preferred) {
+          rememberPath(pathOrder, implementation.absolutePath);
+          recordImplementationDraft(
+            input,
+            drafts,
+            plan.anchor,
+            implementation.absolutePath,
+            [positionFromFacts(implementation, {
+              methodName: methodFact?.name ?? plan.anchor.methodName,
+              typeName: definition.typeName,
+              calleeNames: calleeNamesFromRelations(methodFact?.relations)
+            })],
+            definition.absolutePath
+          );
+          knownPaths.add(implementation.absolutePath);
         }
-        let existingFacts: JavaSourceFacts;
-        try {
-          existingFacts = sourceIndex.factsFor(existing.absolutePath);
-        } catch {
-          continue;
-        }
-        if (existingFacts.typeName && existingReferencedTypes.has(simpleTypeName(existingFacts.typeName))) {
-          const orderBonus = canUseReferenceOrderBonus ? typeReferenceOrderBonus(referencedTypeOrder.get(simpleTypeName(existingFacts.typeName))) : 0;
-          const candidate = candidateFromFacts(existingFacts, scoreBase(routingPolicy, "semantic", existingFacts, anchor, options) + 55 + orderBonus, "typeReference");
-          mergeCandidate(candidates, candidate);
-          if (shouldLookupReferencedImplementers(existingFacts, options)) {
-            for (const implFacts of sourceIndex.findImplementers(existingFacts.typeName, true).slice(0, 8)) {
-              if (implementationLookupInScope(implFacts, anchor, options)) {
-                const implCandidate = candidateFromFacts(implFacts, scoreBase(routingPolicy, "semantic", implFacts, anchor, options) + 70, "typeGraph");
-                implCandidate.reasons = ["typeGraph:implementation-lookup"];
-                mergeCandidate(candidates, implCandidate);
-              }
-            }
-          }
+      } catch (error) {
+        recordOperationFailure(outcome, plan.anchor.id, "implementer lookup", error);
+        if (terminalOutcome(outcome)) {
+          stopAfterPlan = true;
+          break;
         }
       }
     }
-    const missingTypes = referencedTypes.filter(type => !existingTypeNames.has(simpleTypeName(type)));
-    metrics.skippedExisting += referencedTypes.length - missingTypes.length;
-    if (missingTypes.length > 0) {
-      metrics.scannedPatterns += 1;
+    if (!stopAfterPlan && !input.budget?.expired() && needsAnchorBootApplication(facts, preferredImplementers)) {
+      try {
+        const application = await discoverAnchorBootApplication(input, facts);
+        if (application) {
+          recordCandidateMetric(input.metrics, knownPaths, application.absolutePath);
+          rememberPath(pathOrder, application.absolutePath);
+          recordBootApplicationDraft(input, drafts, plan.anchor, application);
+          knownPaths.add(application.absolutePath);
+        }
+      } catch (error) {
+        recordOperationFailure(outcome, plan.anchor.id, "boot application lookup", error);
+        if (terminalOutcome(outcome)) stopAfterPlan = true;
+      }
     }
-    for (const facts of sourceIndex.findTypeDefinitions(missingTypes).slice(0, 20)) {
-      if (facts.absolutePath === anchor.absolutePath) {
-        continue;
-      }
-      if (candidates.has(facts.absolutePath)) {
-        metrics.skippedExisting += 1;
-        continue;
-      }
-      const orderBonus = canUseReferenceOrderBonus ? typeReferenceOrderBonus(referencedTypeOrder.get(simpleTypeName(facts.typeName || ""))) : 0;
-      const candidate = candidateFromFacts(facts, scoreBase(routingPolicy, "semantic", facts, anchor, options) + 55 + orderBonus, "typeReference");
-      mergeCandidate(candidates, candidate);
-      metrics.addedCandidates += 1;
-      if (canReinforceExistingTypeReferences && facts.kind === "interface" && facts.typeName) {
-        for (const implFacts of sourceIndex.findImplementers(facts.typeName, true).slice(0, 8)) {
-          mergeCandidate(candidates, candidateFromFacts(implFacts, scoreBase(routingPolicy, "semantic", implFacts, anchor, options) + 70, "typeGraph"));
+    evidence.push(...materializeDrafts(input, drafts, pathOrder));
+    if (stopAfterPlan) break;
+  }
+
+  return materializeResult(evidence, outcome);
+}
+
+function materializeResult(
+  evidence: readonly EvidenceSignal[],
+  outcome: TypeReferenceOutcome
+): TypeReferenceSignalResult {
+  return {
+    evidence,
+    failedAnchorIds: [...outcome.failedAnchorIds],
+    cancelledAnchorIds: [...outcome.cancelledAnchorIds],
+    deadlineExceededAnchorIds: [...outcome.deadlineExceededAnchorIds],
+    partialAnchorIds: [...outcome.partialAnchorIds],
+    degradedReasons: unique(outcome.degradedReasons)
+  };
+}
+
+function terminalOutcome(outcome: TypeReferenceOutcome): boolean {
+  return outcome.cancelledAnchorIds.size > 0 || outcome.deadlineExceededAnchorIds.size > 0;
+}
+
+function recordBudgetDeadline(outcome: TypeReferenceOutcome, anchorId: string): void {
+  outcome.deadlineExceededAnchorIds.add(anchorId);
+  outcome.degradedReasons.push(`typeReference ${anchorId} request budget exhausted`);
+}
+
+async function loadAnchorFacts(
+  input: CollectTypeReferenceSignalsInput,
+  plans: readonly TypeReferenceAnchorPlan[],
+  outcome: TypeReferenceOutcome
+): Promise<Map<string, JavaSourceFacts>> {
+  const factsByAnchor = new Map<string, JavaSourceFacts>();
+  if (plans.length === 0) return factsByAnchor;
+  if (input.budget?.expired()) {
+    for (const plan of plans) recordBudgetDeadline(outcome, plan.anchor.id);
+    return factsByAnchor;
+  }
+  if (input.javaIndex.factsForFiles) {
+    try {
+      const result = await input.javaIndex.factsForFiles(plans.map(plan => plan.anchor.absolutePath), input.generation);
+      for (let index = 0; index < plans.length; index += 1) {
+        const plan = plans[index]!;
+        const item = result.items[index];
+        if (item?.state === "FOUND") {
+          factsByAnchor.set(plan.anchor.id, item.facts);
+        } else {
+          recordFactsItemOutcome(outcome, plan.anchor.id, item);
         }
       }
+      return factsByAnchor;
+    } catch (error) {
+      for (const plan of plans) recordOperationFailure(outcome, plan.anchor.id, "facts batch", error);
+      return factsByAnchor;
+    }
+  }
+  for (const plan of plans) {
+    if (input.budget?.expired()) {
+      recordBudgetDeadline(outcome, plan.anchor.id);
+      break;
+    }
+    try {
+      factsByAnchor.set(plan.anchor.id, await input.javaIndex.factsFor(plan.anchor.absolutePath, input.generation));
+    } catch (error) {
+      recordOperationFailure(outcome, plan.anchor.id, "anchor facts", error);
+    }
+  }
+  return factsByAnchor;
+}
+
+function newTypeReferenceOutcome(): TypeReferenceOutcome {
+  return {
+    failedAnchorIds: new Set(),
+    cancelledAnchorIds: new Set(),
+    deadlineExceededAnchorIds: new Set(),
+    partialAnchorIds: new Set(),
+    degradedReasons: []
+  };
+}
+
+function recordFactsItemOutcome(
+  outcome: TypeReferenceOutcome,
+  anchorId: string,
+  item: FactsForFileItem | undefined
+): void {
+  const reason = item?.state === "DEGRADED"
+    ? item.reason
+    : item?.state === "MISSING"
+      ? item.reason
+      : "INDEX_INCOMPLETE";
+  if (reason === "DEADLINE_EXCEEDED") outcome.deadlineExceededAnchorIds.add(anchorId);
+  else if (reason === "CANCELLED") outcome.cancelledAnchorIds.add(anchorId);
+  else if (reason === "QUERY_FAILED") outcome.failedAnchorIds.add(anchorId);
+  else outcome.partialAnchorIds.add(anchorId);
+  outcome.degradedReasons.push(`typeReference ${anchorId} ${reason}`);
+}
+
+function recordOperationFailure(
+  outcome: TypeReferenceOutcome,
+  anchorId: string,
+  operation: string,
+  error: unknown
+): void {
+  if (error instanceof JavaIntelligenceError && error.code === "DEADLINE_EXCEEDED") {
+    outcome.deadlineExceededAnchorIds.add(anchorId);
+  } else if (error instanceof JavaIntelligenceError && error.code === "CANCELLED") {
+    outcome.cancelledAnchorIds.add(anchorId);
+  } else {
+    outcome.failedAnchorIds.add(anchorId);
+  }
+  const reason = error instanceof JavaIntelligenceError ? error.code : "QUERY_FAILED";
+  outcome.degradedReasons.push(`typeReference ${anchorId} ${operation} ${reason}`);
+}
+
+function methodAtFromFacts(facts: JavaSourceFacts, line: number) {
+  return [...facts.methods]
+    .filter(method => method.line <= line && line <= method.endLine)
+    .sort((left, right) => right.line - left.line)[0]
+    ?? [...facts.methods]
+      .filter(method => method.line <= line)
+      .sort((left, right) => right.line - left.line)[0];
+}
+
+function reinforceImportedCandidates(
+  input: CollectTypeReferenceSignalsInput,
+  anchor: ResolvedAnchor,
+  referencedTypes: readonly string[],
+  pathOrder: ReadonlyMap<string, number>,
+  drafts: Map<string, TypeReferenceSignalDraft>
+): void {
+  const importedPaths = referencedTypes
+    .filter(typeName => typeName.includes("."))
+    .map(typeName => `${typeName.replace(/\./g, "/")}.java`);
+  if (importedPaths.length === 0) return;
+  for (const candidatePath of pathOrder.keys()) {
+    const normalized = candidatePath.replace(/\\/g, "/");
+    if (importedPaths.some(suffix => normalized.endsWith(suffix))) {
+      recordReferenceDraft(input, drafts, anchor, candidatePath, []);
     }
   }
 }
 
-function candidateTypeNames(sourceIndex: SourceIndex, candidates: Map<string, CandidateFile>): Set<string> {
-  const typeNames = new Set<string>();
-  for (const candidate of candidates.values()) {
-    if (!candidate.absolutePath.endsWith(".java")) {
-      continue;
+function recordReferenceDraft(
+  input: CollectTypeReferenceSignalsInput,
+  drafts: Map<string, TypeReferenceSignalDraft>,
+  anchor: ResolvedAnchor,
+  candidateFile: string,
+  positions: RouterPosition[],
+  weight: number = REFERENCE_SPEC.weight
+): void {
+  recordDraft(drafts, {
+    candidateFile,
+    anchorId: anchor.id,
+    kind: REFERENCE_SPEC.kind,
+    family: "STATIC_STRUCTURE",
+    provenance: "AST_RESOLVED",
+    confidence: REFERENCE_SPEC.confidence,
+    completeness: "COMPLETE",
+    weight,
+    sourceFile: anchor.absolutePath,
+    positions,
+    providerId: input.providerId,
+    providerVersion: input.providerVersion,
+    generation: input.generation ?? 0,
+    detail: REFERENCE_SPEC.reason,
+    candidateMetadata: {
+      categories: ["semantic"],
+      reasons: [REFERENCE_SPEC.reason],
+      verifiedBy: [REFERENCE_SPEC.verifiedBy],
+      matchCount: 0
     }
-    try {
-      const typeName = sourceIndex.factsFor(candidate.absolutePath).typeName;
-      if (typeName) {
-        typeNames.add(typeName);
-      }
-    } catch {
-      continue;
+  });
+}
+
+function needsAnchorBootApplication(
+  anchorFacts: JavaSourceFacts,
+  implementers: readonly JavaSourceFacts[]
+): boolean {
+  return implementers.some(implementation => !sameSourceModule(anchorFacts, implementation));
+}
+
+function pickAnchorBootApplication(
+  candidates: readonly JavaSourceFacts[],
+  anchorFacts: JavaSourceFacts
+): JavaSourceFacts | undefined {
+  const matches = candidates.filter(candidate =>
+    isSpringBootApplicationType(candidate) && sameSourceModule(anchorFacts, candidate));
+  if (matches.length === 0) return undefined;
+  return matches.find(candidate => (candidate.typeName ?? "").endsWith("Application")) ?? matches[0];
+}
+
+async function discoverAnchorBootApplication(
+  input: CollectTypeReferenceSignalsInput,
+  anchorFacts: JavaSourceFacts
+): Promise<JavaSourceFacts | undefined> {
+  const options = { typeId: SPRING_BOOT_APPLICATION_TYPE_ID, hydrate: true } as const;
+  const annotated = pickAnchorBootApplication(
+    await input.javaIndex.findTypeReferences("SpringBootApplication", 8, options),
+    anchorFacts
+  );
+  if (annotated) return annotated;
+  return pickAnchorBootApplication(
+    await input.javaIndex.findImporters("SpringBootApplication", 8, options),
+    anchorFacts
+  );
+}
+
+function recordBootApplicationDraft(
+  input: CollectTypeReferenceSignalsInput,
+  drafts: Map<string, TypeReferenceSignalDraft>,
+  anchor: ResolvedAnchor,
+  application: JavaSourceFacts
+): void {
+  recordDraft(drafts, {
+    candidateFile: application.absolutePath,
+    anchorId: anchor.id,
+    kind: BOOT_APPLICATION_SPEC.kind,
+    family: "FRAMEWORK",
+    provenance: "AST_RESOLVED",
+    confidence: BOOT_APPLICATION_SPEC.confidence,
+    completeness: "COMPLETE",
+    weight: BOOT_APPLICATION_SPEC.weight,
+    sourceFile: application.absolutePath,
+    positions: [positionFromFacts(application)],
+    providerId: input.providerId,
+    providerVersion: input.providerVersion,
+    generation: input.generation ?? 0,
+    detail: BOOT_APPLICATION_SPEC.reason,
+    candidateMetadata: {
+      categories: ["framework"],
+      reasons: [BOOT_APPLICATION_SPEC.reason],
+      verifiedBy: [BOOT_APPLICATION_SPEC.verifiedBy],
+      matchCount: 0
     }
+  });
+}
+
+function recordImplementationDraft(
+  input: CollectTypeReferenceSignalsInput,
+  drafts: Map<string, TypeReferenceSignalDraft>,
+  anchor: ResolvedAnchor,
+  candidateFile: string,
+  positions: RouterPosition[],
+  implementedTypeFile: string
+): void {
+  recordDraft(drafts, {
+    candidateFile,
+    candidateNodeId: implementedTypeFile,
+    anchorId: anchor.id,
+    kind: IMPLEMENTATION_SPEC.kind,
+    family: "STATIC_STRUCTURE",
+    provenance: "AST_RESOLVED",
+    confidence: IMPLEMENTATION_SPEC.confidence,
+    completeness: "COMPLETE",
+    weight: IMPLEMENTATION_SPEC.weight,
+    sourceFile: candidateFile,
+    positions,
+    providerId: input.providerId,
+    providerVersion: input.providerVersion,
+    generation: input.generation ?? 0,
+    detail: IMPLEMENTATION_SPEC.reason,
+    candidateMetadata: {
+      categories: ["semantic"],
+      reasons: [IMPLEMENTATION_SPEC.reason],
+      verifiedBy: [IMPLEMENTATION_SPEC.verifiedBy],
+      matchCount: 0
+    }
+  });
+}
+
+function recordDraft(drafts: Map<string, TypeReferenceSignalDraft>, draft: TypeReferenceSignalDraft): void {
+  const key = `${draft.anchorId}\0${draft.candidateFile}\0${draft.kind}\0${draft.sourceFile}`;
+  const existing = drafts.get(key);
+  if (!existing) {
+    drafts.set(key, draft);
+    return;
   }
-  return typeNames;
+  const positions = mergeDraftPositions(existing.positions, draft.positions);
+  drafts.set(key, {
+    ...(draft.weight > existing.weight ? draft : existing),
+    positions,
+    weight: Math.max(existing.weight, draft.weight)
+  });
+}
+
+function isFallbackPositions(positions: readonly RouterPosition[]): boolean {
+  return positions.length === 0 || positions.every(position => position.line === 1 && position.column === 1);
+}
+
+function mergeDraftPositions(
+  existing: readonly RouterPosition[],
+  incoming: readonly RouterPosition[]
+): RouterPosition[] {
+  const existingFallback = isFallbackPositions(existing);
+  const incomingFallback = isFallbackPositions(incoming);
+  if (existingFallback && !incomingFallback) return [...incoming];
+  if (!existingFallback && incomingFallback) return [...existing];
+  if (existingFallback && incomingFallback) return existing.length > 0 ? [...existing] : [...incoming];
+  const byLine = new Map<number, RouterPosition>();
+  for (const position of [...existing, ...incoming]) byLine.set(position.line, position);
+  return [...byLine.values()].sort((left, right) => left.line - right.line);
+}
+
+function materializeDrafts(
+  input: CollectTypeReferenceSignalsInput,
+  drafts: ReadonlyMap<string, TypeReferenceSignalDraft>,
+  pathOrder: ReadonlyMap<string, number>
+): EvidenceSignal[] {
+  return [...drafts.values()]
+    .sort((left, right) => (pathOrder.get(left.candidateFile) ?? Number.MAX_SAFE_INTEGER)
+      - (pathOrder.get(right.candidateFile) ?? Number.MAX_SAFE_INTEGER))
+    .map(draft => ({ ...draft, signalId: input.nextSignalId() }));
+}
+
+function recordCandidateMetric(metrics: TypeReferenceMetrics, knownPaths: Set<string>, candidateFile: string): void {
+  if (knownPaths.has(candidateFile)) metrics.skippedExisting += 1;
+  else {
+    knownPaths.add(candidateFile);
+    metrics.addedCandidates += 1;
+  }
+}
+
+function rememberPath(pathOrder: Map<string, number>, candidateFile: string): void {
+  if (!pathOrder.has(candidateFile)) pathOrder.set(candidateFile, pathOrder.size);
 }
 
 function shouldUseTypeReference(anchor: ResolvedAnchor): boolean {
   return new Set(["controller", "service", "repository", "dto", "port"]).has(anchor.profile);
-}
-
-function shouldLookupReferencedImplementers(facts: JavaSourceFacts, options: ImpactOptions): facts is JavaSourceFacts & { typeName: string } {
-  return facts.kind === "interface"
-    && typeof facts.typeName === "string"
-    && /(?:Service|Gateway|Port)$/.test(facts.typeName)
-    && (options.taskKeywords.length === 0 || matchesAny(facts.typeName, options.taskKeywords));
-}
-
-function implementationLookupInScope(facts: JavaSourceFacts, anchor: ResolvedAnchor, options: ImpactOptions): boolean {
-  return !facts.module || facts.module === anchor.module || options.focusModules.includes(facts.module) || options.focusModules.includes(path.basename(facts.module));
 }

@@ -1,0 +1,223 @@
+{
+  "schemaVersion": 2,
+  "sprint": "V3.2 Sprint 0",
+  "decision": "BASELINE_RECORDED_WITH_GAPS",
+  "createdAt": "2026-08-09T18:30:58.925Z",
+  "formalRun": {
+    "localRoot": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-lobNkQ/formal",
+    "retention": "LOCAL_EPHEMERAL",
+    "coldManifestVersion": 5,
+    "coldVerifierVersion": 5,
+    "optimizationManifestSchemaVersion": 2,
+    "artifacts": [
+      {
+        "path": "optimization-manifest.json",
+        "bytes": 107451,
+        "sha256": "aabed32b0576b4ee1daccf2da7c1a678931b534abf110d69494764aec4ab54d6",
+        "payloadSha256": "43d6a6923c5c9f5fe684bdfccaaf39d4f9ce1d7d15b82a39e0d4e2b12f30c7e5"
+      },
+      {
+        "path": "cold/run-manifest.json",
+        "bytes": 9193,
+        "sha256": "1ebe2565cb03c13fc52a4a8801878af70b8950b161779c234b85fd897850a09f"
+      },
+      {
+        "path": "cold/matrix-summary.json",
+        "bytes": 44016,
+        "sha256": "584ddd208499bb968f65e73e5a37392b7584409fff3d4b09721a9e58001f425d",
+        "inputSha256": "220394064d8ccc0a239fe41693a4b6f9be8824df8b926d78f40cbf4dcb4e491c"
+      },
+      {
+        "path": "cold/candidate.patch",
+        "bytes": 550656,
+        "sha256": "9d8458d3cc1336442c4978d99a2f77066a5cefa7ada27855ecd7d4c8a0e315fe"
+      },
+      {
+        "path": "task-ledger.json",
+        "bytes": 5053,
+        "sha256": "350e6abf5089d4b1e5c3826f249baa4676c60ce697dc919661b0b97dd5065784"
+      },
+      {
+        "path": "cold/candidate-tests/dist.tap",
+        "bytes": 199271,
+        "sha256": "5cefe7c035a0c76275263d03840f6e0513711c3e9253a92c327de70092db02eb"
+      },
+      {
+        "path": "cold/candidate-tests/scripts.tap",
+        "bytes": 16125,
+        "sha256": "fc2fcf0200f05ac81d5ae04e1ce69fea6312903f14548d0e2c6feb2c5e7876f4"
+      }
+    ]
+  },
+  "independentVerification": {
+    "kind": "ARTIFACT_MANIFEST_INTEGRITY_REPLAY",
+    "path": "docs/phase-v3/v32-sprint0-verification-receipt.json",
+    "bytes": 1974,
+    "sha256": "c24453fab6381ff132b55ee9e2cfdf6cc57b73b314a238a07ee0a8b8b8ba64ee",
+    "verificationStatus": "PASS",
+    "resultStatus": "BASELINE_RECORDED_WITH_GAPS",
+    "coldGatePassed": false,
+    "reranCandidateTests": false,
+    "reranMatrix": false
+  },
+  "sourceIdentity": {
+    "baselineCommit": "f85b9e56f640c7928c7ec99afaf2ddc6204751bd",
+    "baselineTree": "9b6645deb7c306db2744f1268af1c64c7e567432",
+    "candidateBaseCommit": "f85b9e56f640c7928c7ec99afaf2ddc6204751bd",
+    "candidateCommitTree": "9b6645deb7c306db2744f1268af1c64c7e567432",
+    "candidateExecutableTree": "e5521c2e5f226b24a163ac7e60f44da673b7258c",
+    "candidatePatchSha256": "9d8458d3cc1336442c4978d99a2f77066a5cefa7ada27855ecd7d4c8a0e315fe",
+    "candidatePatchPaths": 59,
+    "nestedRuntimeInputs": 0,
+    "lineageNote": "The outer detached-clone wrapper materialized the selected current worktree inputs before invoking the cold runner, so all 59 candidate paths are in candidate.patch and the nested cold manifest has no separate untracked runtime input."
+  },
+  "tests": {
+    "dist": {
+      "discovered": 857,
+      "passed": 857,
+      "failed": 0,
+      "tapSha256": "5cefe7c035a0c76275263d03840f6e0513711c3e9253a92c327de70092db02eb"
+    },
+    "scripts": {
+      "discovered": 71,
+      "passed": 71,
+      "failed": 0,
+      "tapSha256": "fc2fcf0200f05ac81d5ae04e1ce69fea6312903f14548d0e2c6feb2c5e7876f4"
+    }
+  },
+  "dependencies": {
+    "copyMode": "private-content-verified-copy",
+    "schemaVersion": 1,
+    "algorithm": "sha256-path-type-size-content-v1",
+    "files": 4086,
+    "directories": 660,
+    "symlinks": 7,
+    "bytes": 58951103,
+    "sha256": "0362908244299e2d61f87cb5d1037d9609abd11f8d0afae2cc89c3569ce13bc6"
+  },
+  "environment": {
+    "node": {
+      "version": "v22.16.0",
+      "execPath": "/Users/luo/.nvm/versions/node/v22.16.0/bin/node"
+    },
+    "platform": "darwin",
+    "arch": "arm64",
+    "jdt": {
+      "state": "DISABLED_FOR_COLD",
+      "binary": "/usr/bin/false",
+      "version": "UNMEASURED"
+    },
+    "typescript": "5.9.3",
+    "treeSitter": "0.25.0",
+    "treeSitterJava": "0.23.5",
+    "packageJsonSha256": "838eb208b19c8e672336074286c5c1739d91454ac5fce26c82f0b06014e9de02",
+    "packageLockSha256": "5a4135dc47b8ad14e27bfff700f16ef4094dccbaf262c4fd0c51688a678f3cf7"
+  },
+  "productionTypeScript": {
+    "baseline": {
+      "files": 129,
+      "bytes": 1273211,
+      "loc": 31638,
+      "inventorySha256": "8c3feaba965ca26a9f076608ad5c4e92dc3d074b3e657afbb32316bc17a6e9ea"
+    },
+    "candidate": {
+      "files": 130,
+      "bytes": 1338710,
+      "loc": 33208,
+      "inventorySha256": "cf14a1d11087f31ed6bfe7460e0bfb89d055f10bd5b9ede914b8c777fc6d2461"
+    },
+    "delta": {
+      "files": 1,
+      "bytes": 65499,
+      "loc": 1570
+    },
+    "sprintMaximumLoc": 33219,
+    "finalTargetLoc": 31638,
+    "ledger": "docs/phase-v3/v32-sprint0-loc-ledger.json",
+    "ledgerSha256": "350e6abf5089d4b1e5c3826f249baa4676c60ce697dc919661b0b97dd5065784"
+  },
+  "repositories": {
+    "lishuedu": {
+      "commit": "db63b1a7e393edd90449eb013d7d1c4d65c366f2",
+      "tree": "22f0ce444e4cac484de85c8a0bf02240ad70d712",
+      "scenarioSha256": "fba58bb3e3e77dfb37f7ded03fb2a9ff02612658b08ca48b15927d102c434c65"
+    },
+    "cipherlink": {
+      "commit": "fa433982e92e52dd610650d1e79f2d041179b1d3",
+      "tree": "21a1075c7b211932a4cdb2abf2742521b1eba31f",
+      "scenarioSha256": "e60dfebcc6cd764e6488c647793db72e098b7cf66385f8012e023fedcaf535d5"
+    },
+    "exam-parent-v3": {
+      "commit": "f90a0b475f7be2ed003703feecec8195bc7eb976",
+      "tree": "dcdb2024879686451859c64260c7e1f3a4721fa7",
+      "scenarioSha256": "da84c560c46c7c90d6dbabea38b43b5695a7a23dcd2f608e8c6dcd63cae4f69e"
+    }
+  },
+  "matrix": {
+    "cells": 18,
+    "runsPerScenario": 5,
+    "attemptsPerProjectPerSide": 150,
+    "jdtlsDisabled": true,
+    "verbosity": "standard",
+    "projects": {
+      "lishuedu": {
+        "p50MsOld": 38.186415999996825,
+        "p50MsNew": 36.86654099999578,
+        "p95MsOld": 254.00816699999996,
+        "p95MsNew": 258.12766700000066,
+        "p95Ratio": 1.0162179824714088,
+        "estimatedTokensP50Old": 4382,
+        "estimatedTokensP50New": 4382,
+        "recallOld": 0.7923214285714283,
+        "recallNew": 0.7923214285714283,
+        "pReadOld": 0.7083333333333329,
+        "pReadNew": 0.7083333333333329,
+        "rReadMustNew": 0.9,
+        "holdoutRReadMustNew": 0.5,
+        "rangeCoordinateMeanNew": 0.6342857142857143,
+        "gate": "FAIL"
+      },
+      "cipherlink": {
+        "p50MsOld": 41.21470899999986,
+        "p50MsNew": 41.41379199999983,
+        "p95MsOld": 176.24520799999982,
+        "p95MsNew": 172.03833300000042,
+        "p95Ratio": 0.9761305566957633,
+        "estimatedTokensP50Old": 3682,
+        "estimatedTokensP50New": 3682,
+        "recallOld": 0.8157783882783886,
+        "recallNew": 0.8157783882783886,
+        "pReadOld": 0.6433333333333329,
+        "pReadNew": 0.6433333333333329,
+        "rReadMustNew": 0.9099999999999996,
+        "holdoutRReadMustNew": 0.5499999999999999,
+        "rangeCoordinateMeanNew": 0.85,
+        "gate": "FAIL"
+      },
+      "exam-parent-v3": {
+        "p50MsOld": 66.9370829999998,
+        "p50MsNew": 67.61091699999997,
+        "p95MsOld": 187.13295900000048,
+        "p95MsNew": 181.51945800000067,
+        "p95Ratio": 0.9700026065424434,
+        "estimatedTokensP50Old": 3466,
+        "estimatedTokensP50New": 3466,
+        "recallOld": 0.7095066045066044,
+        "recallNew": 0.7095066045066044,
+        "pReadOld": 0.5833333333333331,
+        "pReadNew": 0.5833333333333331,
+        "rReadMustNew": 0.8800000000000008,
+        "holdoutRReadMustNew": 0.4000000000000002,
+        "rangeCoordinateMeanNew": 0.5525000000000001,
+        "gate": "FAIL"
+      }
+    }
+  },
+  "knownEvidenceGaps": [
+    "The formal cold matrix disables JDT and cannot validate real first-touch phases.",
+    "Payload attribution, resource sampling and six-task MCP traces are implemented and tested but have no hash-bound three-repository raw artifact in this receipt.",
+    "The source-locked scenario set has no real-repository XML or emoji/non-BMP holdout and no bound two-reviewer attestation.",
+    "The large raw artifact directory is local and ephemeral; this receipt preserves hashes but is not immutable object-storage retention.",
+    "The independent replay validates recorded evidence integrity; it does not rerun candidate tests or matrix cells."
+  ]
+}

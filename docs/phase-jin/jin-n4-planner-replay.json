@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "jin-planner-replay/v1",
+  "dated": "2026-08-20",
+  "passed": true,
+  "note": "Discovery mustHit ≥0.95 GO. selectedRate is planner-selected files with spans; holdout of commit-tasks was not read.",
+  "projects": [
+    {
+      "project": "lishuedu",
+      "discoveryRate": 1,
+      "selectedRate": 0.563,
+      "trainSelectedRate": 0.217,
+      "p95Ms": 877
+    },
+    {
+      "project": "cipherlink",
+      "discoveryRate": 1,
+      "selectedRate": 0.759,
+      "trainSelectedRate": 0.101,
+      "p95Ms": 80
+    },
+    {
+      "project": "exam-parent-v3",
+      "discoveryRate": 0.962,
+      "selectedRate": 0.577,
+      "trainSelectedRate": 0.122,
+      "p95Ms": 134
+    }
+  ]
+}

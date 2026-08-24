@@ -1,0 +1,70 @@
+{
+  "schemaVersion": "v5r-live-agent-trace-summary/v1",
+  "dated": "2026-08-20",
+  "status": "MEASURED",
+  "mergeToMain": false,
+  "scalarAllowed": false,
+  "headAtMeasurement": "1fb2b9a1993b885eeabc87085dda845d7f2c5d10",
+  "model": "openclaw/Qwen3.8-27B-WORK",
+  "baseUrlHost": "192.168.10.29:28343",
+  "contextWindowTokens": 114688,
+  "promptCapTokens": 100000,
+  "thinking": {
+    "disabled": true,
+    "mechanism": "chat_template_kwargs.enable_thinking=false",
+    "topLevelEnableThinking": "ignored-by-endpoint"
+  },
+  "isolationTests": {
+    "tests": 15,
+    "pass": 15,
+    "fail": 0,
+    "executableTree": "077aca81e7700d02fdd984d2a14a3d27d072785e"
+  },
+  "goldens": {
+    "lishuedu": "db63b1a7e393edd90449eb013d7d1c4d65c366f2",
+    "cipherlink": "fa433982e92e52dd610650d1e79f2d041179b1d3",
+    "exam-parent-v3": "f90a0b475f7be2ed003703feecec8195bc7eb976"
+  },
+  "batches": {
+    "l1": {
+      "offset": 0,
+      "executableTree": "9001ef8faeda7ce4b9926f88754b2121979eddbc",
+      "load": 7.38,
+      "liveTraceSha256": "eaaadb1ca22399cd1c201f6180b51b059eddacc0b85a5079efedbb160872cfa2",
+      "totalTokens": 82621,
+      "toolCallCount": 20,
+      "successes": 2,
+      "scored": 3
+    },
+    "l2": {
+      "offset": 1,
+      "executableTree": "077aca81e7700d02fdd984d2a14a3d27d072785e",
+      "load": 6.7,
+      "liveTraceSha256": "d24973bbad297a8f3644e236e8f8c8e65cab5eea25181691cccf91b3db5cbe5d",
+      "totalTokens": 101860,
+      "toolCallCount": 20,
+      "successes": 2,
+      "scored": 3
+    }
+  },
+  "combined": {
+    "tasks": 6,
+    "scored": 6,
+    "contextCapped": 0,
+    "successes": 4,
+    "mean": 0.6666666666666666,
+    "promptTokens": 177369,
+    "completionTokens": 7112,
+    "totalTokens": 184481,
+    "toolCallCount": 40,
+    "tokensPerToolRound": 4612.025,
+    "maxPromptTokens": 52449
+  },
+  "failures": {
+    "cipherlink:client-release-storage-presign-holdout": "modules/client/src/main/java/com/hhtele/cipherlink/client/infrastructure/persistence/mapper/ClientReleaseMapper.java",
+    "exam-parent-v3:candidate-pay-order-cross-module-admission": "exam-data/src/main/java/com/hhtele/exam/data/entity/manage/PayAccount.java"
+  },
+  "pass1Diagnostic": "Default 2s fast deadline aborted lishuedu runtime.create after 654ms and exam index worker restart. Not in the official mean.",
+  "notRun": ["24-cell AB/BA", "blindReview", "J(pi) KEEP/REJECT"],
+  "report": "docs/phase-v5r/v5r-live-trace-20260820.md"
+}
