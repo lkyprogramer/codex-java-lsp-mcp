@@ -30,6 +30,8 @@ export function isolatedValidationEnvironment(root, overrides = {}) {
   const {
     HOME: _home,
     JAVA_LSP_CACHE_ROOT: _cacheRoot,
+    JAVA_LSP_CACHE_BASE: _cacheBase,
+    JAVA_LSP_OWNERSHIP_BASE: _ownershipBase,
     XDG_CACHE_HOME: _xdgCacheHome,
     XDG_CONFIG_HOME: _xdgConfigHome,
     XDG_DATA_HOME: _xdgDataHome,
@@ -64,6 +66,8 @@ export function isolatedValidationEnvironment(root, overrides = {}) {
     JAVA_LSP_ISOLATED_VALIDATION: "1",
     JDTLS_BIN: typeof overrides.JDTLS_BIN === "string" ? overrides.JDTLS_BIN : "/usr/bin/false"
   };
+  delete environment.JAVA_LSP_CACHE_BASE;
+  delete environment.JAVA_LSP_OWNERSHIP_BASE;
   for (const inheritedSelector of [
     "JAVA_LSP_REPO_ROOT",
     "JAVA_LSP_SMOKE_REPO_ROOT",
