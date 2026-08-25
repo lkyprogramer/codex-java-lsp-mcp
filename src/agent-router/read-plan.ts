@@ -14,6 +14,7 @@ import type {
 import type { IndexedReadRangeResult } from "../java-index/index-types.js";
 import type { RouterIndex } from "../java-index/router-java-index.js";
 import type { SourceRange } from "../runtime/source-range.js";
+import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
 import { hasProtectedStructuralSignal } from "./ranking-signals.js";
 import { selectWithEvidenceBudget } from "./read-plan-budget.js";
 import { evidenceKeys, hasNovelEvidence as fileHasNovelEvidence } from "./retrieval/evidence-features.js";
@@ -133,12 +134,19 @@ export async function buildReadPlan(input: BuildReadPlanInput): Promise<ReadPlan
     maxFiles: Math.max(configuredBudget.maxFiles, anchorFileCount)
   };
   const shortlist = shortlistCandidates(input.files, input.options, selectionBudget.maxFiles, protectedPaths);
-  const rangeResults = shortlist.files.length === 0
-    ? []
-    : await input.javaIndex.queryReadRanges(
-      shortlist.files.map(file => ({ file: file.absolutePath, positions: file.positions })),
-      input.generation
-    );
+  let rangeDeadlineGap: string | undefined;
+  let rangeResults: IndexedReadRangeResult[] = [];
+  if (shortlist.files.length > 0) {
+    try {
+      rangeResults = await input.javaIndex.queryReadRanges(
+        shortlist.files.map(file => ({ file: file.absolutePath, positions: file.positions })),
+        input.generation
+      );
+    } catch (error) {
+      if (!(error instanceof JavaIntelligenceError) || error.code !== "DEADLINE_EXCEEDED") throw error;
+      rangeDeadlineGap = "Read-range query exceeded the request deadline; returning a file-only plan.";
+    }
+  }
   const windows = materializeWindows(shortlist.files, rangeResults);
   const units = buildReadUnits({
     windows,
@@ -153,6 +161,9 @@ export async function buildReadPlan(input: BuildReadPlanInput): Promise<ReadPlan
   const capGaps = retrievalBudgetOverflowGaps(selectedUnits, retrievalBudget);
   if (capGaps.length > 0) {
     result.evidenceGaps = [...new Set([...result.evidenceGaps, ...capGaps])];
+  }
+  if (rangeDeadlineGap) {
+    result.evidenceGaps = [...new Set([rangeDeadlineGap, ...result.evidenceGaps])];
   }
   if (shortlist.omittedProtected > 0) {
     result.evidenceGaps = [...new Set([

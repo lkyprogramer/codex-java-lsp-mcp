@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { buildReadPlan, protectedReadPlanPaths } from "./read-plan.js";
 import type { CandidateFile } from "../agent-types.js";
+import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
 
 function candidate(overrides: Partial<CandidateFile>): CandidateFile {
   return {
@@ -1872,6 +1873,51 @@ test("V6 shortlist does not promote a repository filename without protected stru
 
   assert.equal(queried.length, 4);
   assert.equal(queried.includes(structuralNameOnly.absolutePath), false);
+});
+
+test("buildReadPlan fail-softs a DEADLINE_EXCEEDED range query into a file-only plan", async () => {
+  const anchor = candidate({
+    absolutePath: "/repo/src/main/java/demo/Anchor.java",
+    path: "src/main/java/demo/Anchor.java",
+    reasons: ["target"],
+    categories: ["target"],
+    score: 1_000
+  });
+  const result = await buildReadPlan({
+    files: [anchor],
+    ids: new Map([[anchor.absolutePath, "F1"]]),
+    options: optionsFor(anchor),
+    javaIndex: {
+      async queryReadRanges() {
+        throw new JavaIntelligenceError("DEADLINE_EXCEEDED", "Deadline exceeded before java-index.query_read_ranges");
+      }
+    } as never
+  });
+  assert.ok(result.items.length >= 1);
+  assert.ok(result.evidenceGaps.some(gap => gap.includes("Read-range query exceeded")));
+});
+
+test("buildReadPlan still rejects INDEX_CORRUPT from the range query", async () => {
+  const anchor = candidate({
+    absolutePath: "/repo/src/main/java/demo/Anchor.java",
+    path: "src/main/java/demo/Anchor.java",
+    reasons: ["target"],
+    categories: ["target"],
+    score: 1_000
+  });
+  await assert.rejects(
+    () => buildReadPlan({
+      files: [anchor],
+      ids: new Map([[anchor.absolutePath, "F1"]]),
+      options: optionsFor(anchor),
+      javaIndex: {
+        async queryReadRanges() {
+          throw new JavaIntelligenceError("INDEX_CORRUPT", "bad payload");
+        }
+      } as never
+    }),
+    (error: unknown) => error instanceof JavaIntelligenceError && error.code === "INDEX_CORRUPT"
+  );
 });
 
 function optionsFor(anchor: CandidateFile, overrides: Partial<Parameters<typeof buildReadPlan>[0]["options"]> = {}): Parameters<typeof buildReadPlan>[0]["options"] {
