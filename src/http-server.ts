@@ -117,6 +117,7 @@ export class JavaLspHttpServer {
     try {
       this.nodeServer = await listen(app, this.configuredPort);
       this.lifecycle.markReady();
+      this.application.startPinnedRepoPrewarm();
       const address = this.nodeServer.address();
       if (!address || typeof address === "string") {
         throw new Error("HTTP daemon did not receive a TCP address.");

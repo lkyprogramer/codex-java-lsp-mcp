@@ -42,6 +42,27 @@ test("RepoRuntimeManager evicts the oldest idle started runtime before starting 
   assert.equal(sessions.get("/repo-b")?.stops, 0);
 });
 
+test("prewarmRepo opens a pinned runtime without starting JDT", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const manager = new RepoRuntimeManager(fakeResolver(), {
+    idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 1000
+  }, resolved => fakeContext(resolved, sessions), fakeCoordination(), new NoopCrossProcessLeaseStore());
+  await manager.prewarmRepo({ repoRoot: "/repo-a" });
+  assert.equal(manager.activeRepos().length, 1);
+  assert.equal(manager.activeRepos()[0]?.started, false);
+  assert.equal(sessions.get("/repo-a")?.ensureStartedCalls, 0);
+});
+
+test("prewarmRepo skips repos that are not LSP-enabled", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const manager = new RepoRuntimeManager(fakeResolver(false), {
+    idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 1000
+  }, resolved => fakeContext(resolved, sessions), fakeCoordination(), new NoopCrossProcessLeaseStore());
+  await manager.prewarmRepo({ repoRoot: "/repo-a" });
+  assert.equal(manager.activeRepos().length, 0);
+  assert.equal(sessions.has("/repo-a"), false);
+});
+
 test("RepoRuntimeManager binds the coordinator GenerationClock onto the session", async () => {
   const sessions = new Map<string, FakeSession>();
   const manager = managerWith({}, sessions);
@@ -1189,6 +1210,7 @@ async function waitFor(condition: () => boolean): Promise<void> {
 class FakeSession {
   state: JdtlsLifecycleState = "NEW";
   stops = 0;
+  ensureStartedCalls = 0;
   startGate?: Deferred<void>;
   repoChangeError?: Error;
   boundClock?: GenerationClock;
@@ -1212,6 +1234,7 @@ class FakeSession {
   }
 
   async ensureStarted(): Promise<void> {
+    this.ensureStartedCalls += 1;
     this.transition("STARTING");
     if (this.startGate) await this.startGate.promise;
     this.transition("READY");
@@ -1232,7 +1255,7 @@ class FakeSession {
   }
 }
 
-function fakeResolver(): { resolve(selector: { repoRoot?: string }): Promise<ResolvedRepo> } {
+function fakeResolver(enabled = true): { resolve(selector: { repoRoot?: string }): Promise<ResolvedRepo> } {
   return {
     async resolve(selector) {
       const repoRoot = selector.repoRoot || "/repo";
@@ -1244,8 +1267,8 @@ function fakeResolver(): { resolve(selector: { repoRoot?: string }): Promise<Res
         aliases: [],
         layoutProfile: "generic-java",
         lsp: {
-          enabled: true,
-          matchedBy: "direct-root",
+          enabled,
+          matchedBy: enabled ? "direct-root" : "unregistered",
           configuredRoot: repoRoot,
           effectiveRepoRoot: repoRoot
         },

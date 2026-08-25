@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { JavaLspApplication } from "./application.js";
+import { warmupInstalledJdks } from "./project-jdk.js";
 
 test("JavaLspApplication initialize opens the runtime lease store", async () => {
   let initialized = 0;
@@ -213,6 +214,116 @@ test("JavaLspApplication degrades cache janitor failures without failing startup
   } finally {
     console.error = originalError;
   }
+});
+
+test("HTTP application prewarms pinned repos serially and skips unpinned or duplicate roots", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "java-lsp-prewarm-"));
+  const first = path.join(dir, "one");
+  const second = path.join(dir, "two");
+  const skipped = path.join(dir, "skip");
+  await writeFile(path.join(dir, "projects.json"), JSON.stringify({
+    aliases: [
+      { id: "one", root: first, lspEnabled: true },
+      { id: "one-alias", root: first, lspEnabled: true },
+      { id: "skip", root: skipped, lspEnabled: false },
+      { id: "two", root: second, lspEnabled: true }
+    ]
+  }));
+  const events: string[] = [];
+  let releaseFirst: () => void = () => undefined;
+  const firstGate = new Promise<void>(resolve => {
+    releaseFirst = resolve;
+  });
+  const application = new JavaLspApplication({
+    transportMode: "streamable_http",
+    projectsConfigPath: path.join(dir, "projects.json"),
+    resolverOptions: { cwdFallback: "reject" },
+    cacheJanitorIntervalMs: 0,
+    cleanup: () => ({ scanned: 0, removed: 0, skipped: 0, failures: 0, removedDirs: [] }),
+    runtimes: {
+      initialize: async () => undefined,
+      shutdownAll: async () => undefined,
+      forceTerminateOwnedJdtls: async () => undefined,
+      prewarmRepo: async (selector: { projectId?: string }) => {
+        events.push(`start:${selector.projectId}`);
+        if (selector.projectId === "one") await firstGate;
+        events.push(`end:${selector.projectId}`);
+      }
+    } as never
+  });
+  await warmupInstalledJdks();
+  await application.initialize();
+  const prewarm = application.startPinnedRepoPrewarm();
+  for (let attempt = 0; attempt < 200 && !events.includes("start:one"); attempt += 1) {
+    await new Promise(resolve => setTimeout(resolve, 5));
+  }
+  assert.deepEqual(events, ["start:one"]);
+  releaseFirst();
+  await prewarm;
+  assert.deepEqual(events, ["start:one", "end:one", "start:two", "end:two"]);
+  await application.close();
+});
+
+test("HTTP application continues pinned prewarm after a per-repo failure", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "java-lsp-prewarm-fail-"));
+  await writeFile(path.join(dir, "projects.json"), JSON.stringify({
+    aliases: [
+      { id: "one", root: path.join(dir, "one"), lspEnabled: true },
+      { id: "two", root: path.join(dir, "two"), lspEnabled: true }
+    ]
+  }));
+  const events: string[] = [];
+  const originalError = console.error;
+  console.error = () => undefined;
+  const application = new JavaLspApplication({
+    transportMode: "streamable_http",
+    projectsConfigPath: path.join(dir, "projects.json"),
+    resolverOptions: { cwdFallback: "reject" },
+    cacheJanitorIntervalMs: 0,
+    cleanup: () => ({ scanned: 0, removed: 0, skipped: 0, failures: 0, removedDirs: [] }),
+    runtimes: {
+      initialize: async () => undefined,
+      shutdownAll: async () => undefined,
+      forceTerminateOwnedJdtls: async () => undefined,
+      prewarmRepo: async (selector: { projectId?: string }) => {
+        events.push(selector.projectId || "");
+        if (selector.projectId === "one") throw new Error("first pin failed");
+      }
+    } as never
+  });
+  try {
+    await warmupInstalledJdks();
+    await application.initialize();
+    await application.startPinnedRepoPrewarm();
+    assert.deepEqual(events, ["one", "two"]);
+    await application.close();
+  } finally {
+    console.error = originalError;
+  }
+});
+
+test("stdio application does not prewarm pinned repos", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "java-lsp-prewarm-stdio-"));
+  await writeFile(path.join(dir, "projects.json"), JSON.stringify({
+    aliases: [{ id: "one", root: path.join(dir, "one"), lspEnabled: true }]
+  }));
+  let prewarms = 0;
+  const application = new JavaLspApplication({
+    projectsConfigPath: path.join(dir, "projects.json"),
+    cacheJanitorIntervalMs: 0,
+    cleanup: () => ({ scanned: 0, removed: 0, skipped: 0, failures: 0, removedDirs: [] }),
+    runtimes: {
+      initialize: async () => undefined,
+      shutdownAll: async () => undefined,
+      prewarmRepo: async () => {
+        prewarms += 1;
+      }
+    } as never
+  });
+  await application.initialize();
+  await application.startPinnedRepoPrewarm();
+  assert.equal(prewarms, 0);
+  await application.close();
 });
 
 test("JavaLspApplication bounds janitor intervals to the Node timer range", async () => {

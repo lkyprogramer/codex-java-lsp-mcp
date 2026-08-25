@@ -12,6 +12,7 @@ import {
   type WorktreeCacheCleanupResult
 } from "./worktree-cache-cleanup.js";
 import { validateJdtlsTransportEnvironment } from "./jdtls-session.js";
+import { warmupInstalledJdks } from "./project-jdk.js";
 
 export type JavaLspApplicationState = "created" | "ready" | "draining" | "closed";
 
@@ -44,6 +45,8 @@ export class JavaLspApplication {
   private initializePromise?: Promise<WorktreeCacheCleanupResult>;
   private closePromise?: Promise<void>;
   private forceClosePromise?: Promise<void>;
+  private prewarmPromise?: Promise<void>;
+  private prewarmStopped = false;
   private activeRequests = 0;
   private currentState: JavaLspApplicationState = "created";
   private cacheJanitorTimer?: NodeJS.Timeout;
@@ -92,6 +95,16 @@ export class JavaLspApplication {
     return this.initializePromise;
   }
 
+  /** HTTP daemon only. JDK cache first, then one pinned repo at a time, no JDT. */
+  startPinnedRepoPrewarm(): Promise<void> {
+    if (this.transportMode !== "streamable_http") return Promise.resolve();
+    if (this.prewarmStopped || this.currentState !== "ready") return Promise.resolve();
+    if (!this.prewarmPromise) {
+      this.prewarmPromise = this.prewarmPinnedRepos();
+    }
+    return this.prewarmPromise;
+  }
+
   async runRequest<T>(operation: () => Promise<T>): Promise<T> {
     if (this.currentState !== "ready") {
       throw new Error(this.currentState === "draining"
@@ -117,6 +130,7 @@ export class JavaLspApplication {
       return;
     }
     this.currentState = "draining";
+    this.prewarmStopped = true;
     this.stopCacheJanitor();
     if (this.activeRequests === 0) {
       return;
@@ -171,12 +185,14 @@ export class JavaLspApplication {
     }
     if (!this.closePromise) {
       this.currentState = "draining";
+      this.prewarmStopped = true;
       this.stopCacheJanitor();
       const requestedOwnershipRelease = options.releaseOwnership ?? true;
       const activeAtClose = this.activeRequests;
       const releaseOwnership = requestedOwnershipRelease && activeAtClose === 0;
       this.closePromise = (async () => {
         try {
+          await this.prewarmPromise?.catch(() => undefined);
           await this.runtimes.shutdownAll({ releaseOwnership, terminal: true });
           if (requestedOwnershipRelease && !releaseOwnership) {
             throw new Error(`Refusing to release repository ownership while ${activeAtClose} MCP request(s) are active.`);
@@ -199,6 +215,7 @@ export class JavaLspApplication {
     }
     if (!this.forceClosePromise) {
       this.currentState = "draining";
+      this.prewarmStopped = true;
       this.stopCacheJanitor();
       this.forceClosePromise = (async () => {
         try {
@@ -215,6 +232,29 @@ export class JavaLspApplication {
       })();
     }
     return this.forceClosePromise;
+  }
+
+  private async prewarmPinnedRepos(): Promise<void> {
+    try {
+      await warmupInstalledJdks();
+      if (this.prewarmStopped || this.currentState !== "ready") return;
+      await this.registry.reloadIfChanged();
+      const seen = new Set<string>();
+      for (const alias of this.registry.aliases()) {
+        if (this.prewarmStopped || this.currentState !== "ready") return;
+        if (!alias.lspEnabled) continue;
+        const root = canonicalPath(alias.root);
+        if (seen.has(root)) continue;
+        seen.add(root);
+        try {
+          await this.runtimes.prewarmRepo({ projectId: alias.id });
+        } catch (error) {
+          console.error(`[codex-java-lsp] pinned repo prewarm failed (${alias.id})`, error);
+        }
+      }
+    } catch (error) {
+      console.error("[codex-java-lsp] pinned repo prewarm failed", error);
+    }
   }
 
   private runCacheJanitor(): WorktreeCacheCleanupResult {

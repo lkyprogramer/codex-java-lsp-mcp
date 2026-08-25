@@ -150,6 +150,40 @@ test("HTTP drain returns 503 for new MCP calls and lets entered calls finish", a
   assert.equal(daemon.state().state, "closed");
 });
 
+test("HTTP readyz does not wait for pinned repo prewarm", async t => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-http-prewarm-ready-"));
+  await writeFile(path.join(root, "projects.json"), JSON.stringify({
+    aliases: [{ id: "pinned", root: path.join(root, "pinned"), lspEnabled: true }]
+  }));
+  let release: () => void = () => undefined;
+  const hang = new Promise<void>(resolve => {
+    release = resolve;
+  });
+  const application = new JavaLspApplication({
+    transportMode: "streamable_http",
+    projectsConfigPath: path.join(root, "projects.json"),
+    resolverOptions: { cwdFallback: "reject" },
+    cacheJanitorIntervalMs: 0,
+    cleanup: () => ({ scanned: 0, removed: 0, skipped: 0, failures: 0, removedDirs: [] }),
+    runtimes: {
+      initialize: async () => undefined,
+      shutdownAll: async () => undefined,
+      forceTerminateOwnedJdtls: async () => undefined,
+      prewarmRepo: async () => hang
+    } as never
+  });
+  const daemon = new JavaLspHttpServer({ application, port: 0, reportError: () => undefined });
+  const address = await daemon.start();
+  t.after(async () => {
+    release();
+    await daemon.shutdown().catch(() => undefined);
+    await rm(root, { recursive: true, force: true });
+  });
+  const health = await fetch(`http://${address.host}:${address.port}/readyz`);
+  assert.equal(health.status, 200);
+  assert.equal((await health.json() as { status?: string }).status, "ok");
+});
+
 test("HTTP daemon configuration rejects unsafe ports and non-loopback origins", async () => {
   assert.throws(() => new JavaLspHttpServer({ port: 65536 }), /Invalid HTTP daemon port/);
   assert.throws(
@@ -372,7 +406,7 @@ test("two HTTP clients reuse one live LSP root and isolate linked worktree LSP r
   assert.equal(secondStatus.started, true);
   assert.equal(typeof firstStatus.pid, "number");
   assert.equal(firstStatus.pid, secondStatus.pid, "same root must reuse one JDT LS child");
-  assert.equal(application.runtimes.activeRepos().length, 1);
+  assert.equal(application.runtimes.activeRepos().filter(repo => repo.started).length, 1);
 
   const otherRoot = await secondClient.callTool({
     name: "java_status",

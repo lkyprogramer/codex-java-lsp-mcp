@@ -228,6 +228,15 @@ export class RepoRuntimeManager {
     return entry.context;
   }
 
+  /** Open JavaIndex + watcher for a pinned repo. Does not start JDT. */
+  async prewarmRepo(selector: RepoSelector): Promise<void> {
+    const resolved = await this.resolver.resolve(selector);
+    if (!resolved.lsp.enabled) return;
+    const entry = await this.getOrCreate(resolved);
+    this.refreshResource(entry);
+    this.scheduleIdleShutdown(entry);
+  }
+
   async withContext<T>(
     selector: RepoSelector,
     handler: (context: ManagedToolContext, request: RequestContext) => Promise<T>,

@@ -4,7 +4,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 
 export type BuildSystem = "gradle" | "maven" | "unknown";
 
@@ -195,8 +195,24 @@ function fromHome(home: string, source: ProjectJdkStatus["primarySource"], insta
 
 let installedJdksCache: { key: string; value: InstalledJdk[] } | undefined;
 
+export function warmupInstalledJdks(): Promise<InstalledJdk[]> {
+  const key = installedJdksCacheKey();
+  if (installedJdksCache?.key === key) {
+    return Promise.resolve(installedJdksCache.value);
+  }
+  return discoverInstalledJdksAsync().then(value => {
+    if (installedJdksCache?.key === key) return installedJdksCache.value;
+    installedJdksCache = { key, value };
+    return value;
+  });
+}
+
+export function resetInstalledJdksCacheForTests(): void {
+  installedJdksCache = undefined;
+}
+
 function listInstalledJdks(): InstalledJdk[] {
-  const key = process.env.JAVA_HOME ?? "";
+  const key = installedJdksCacheKey();
   if (installedJdksCache?.key === key) {
     return installedJdksCache.value;
   }
@@ -205,7 +221,27 @@ function listInstalledJdks(): InstalledJdk[] {
   return value;
 }
 
+function installedJdksCacheKey(): string {
+  return process.env.JAVA_HOME ?? "";
+}
+
 function discoverInstalledJdks(): InstalledJdk[] {
+  return collectJdkHomes()
+    .map(home => homeMajor(home))
+    .filter((value): value is InstalledJdk => value !== undefined)
+    .sort((a, b) => a.major - b.major);
+}
+
+async function discoverInstalledJdksAsync(): Promise<InstalledJdk[]> {
+  const installed: InstalledJdk[] = [];
+  for (const home of collectJdkHomes()) {
+    const resolved = await homeMajorAsync(home);
+    if (resolved) installed.push(resolved);
+  }
+  return installed.sort((a, b) => a.major - b.major);
+}
+
+function collectJdkHomes(): string[] {
   const homes = new Set<string>();
   for (const dir of [path.join(homedir(), ".sdkman", "candidates", "java"), "/Library/Java/JavaVirtualMachines"]) {
     if (!existsSync(dir)) continue;
@@ -223,21 +259,57 @@ function discoverInstalledJdks(): InstalledJdk[] {
   if (process.env.JAVA_HOME) {
     homes.add(process.env.JAVA_HOME);
   }
-  return [...homes]
-    .map(homeMajor)
-    .filter((value): value is InstalledJdk => value !== undefined)
-    .sort((a, b) => a.major - b.major);
+  return [...homes];
 }
 
 function homeMajor(home: string): InstalledJdk | undefined {
   if (!home || !existsSync(home)) return undefined;
   const label = path.basename(home);
+  const fromLabel = parseMajor(label);
+  if (fromLabel) return { major: fromLabel, home, label: `${fromLabel}:${home}` };
   const javaBin = path.join(home, "bin", "java");
   const spawned = existsSync(javaBin)
     ? spawnSync(javaBin, ["-version"], { encoding: "utf8", timeout: 2000, killSignal: "SIGKILL" })
     : undefined;
-  const major = parseMajor(label) || parseMajor(spawned?.stderr) || parseMajor(spawned?.stdout);
+  const major = parseMajor(spawned?.stderr) || parseMajor(spawned?.stdout);
   return major ? { major, home, label: `${major}:${home}` } : undefined;
+}
+
+async function homeMajorAsync(home: string): Promise<InstalledJdk | undefined> {
+  if (!home || !existsSync(home)) return undefined;
+  const label = path.basename(home);
+  const fromLabel = parseMajor(label);
+  if (fromLabel) return { major: fromLabel, home, label: `${fromLabel}:${home}` };
+  const javaBin = path.join(home, "bin", "java");
+  if (!existsSync(javaBin)) return undefined;
+  const spawned = await spawnJavaVersion(javaBin);
+  const major = parseMajor(spawned?.stderr) || parseMajor(spawned?.stdout);
+  return major ? { major, home, label: `${major}:${home}` } : undefined;
+}
+
+function spawnJavaVersion(javaBin: string): Promise<{ stdout: string; stderr: string } | undefined> {
+  return new Promise(resolve => {
+    let settled = false;
+    const finish = (value: { stdout: string; stderr: string } | undefined): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    };
+    const child = spawn(javaBin, ["-version"], { stdio: ["ignore", "pipe", "pipe"] });
+    const stdout: Buffer[] = [];
+    const stderr: Buffer[] = [];
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+    }, 2000);
+    child.stdout?.on("data", chunk => stdout.push(chunk as Buffer));
+    child.stderr?.on("data", chunk => stderr.push(chunk as Buffer));
+    child.once("error", () => finish(undefined));
+    child.once("close", () => finish({
+      stdout: Buffer.concat(stdout).toString("utf8"),
+      stderr: Buffer.concat(stderr).toString("utf8")
+    }));
+  });
 }
 
 function parseMajor(value: string | null | undefined): number | undefined {
