@@ -30,3 +30,7 @@ Isolated M4 tests are green (26/26 seeder+fingerprint after c8fe7c1; T0 278; gat
 Live D7 is blocked by the 15s public-tool deadline around `runtime.create`/`java-index.open` for this worktree, not by fingerprint veto. Options in §Next still apply; do not raise the public deadline as part of this card.
 
 Do not merge `main`. Do not treat this escalation as D7 PASS.
+
+## Resolution (same session, `54b7c09`)
+
+7. **Header-only sibling scan + no await post-OPEN reconcile + request-context fail-soft + files-only-first prewarm.** Isolated T0 278, gate:pr 1262. Install `releases/54b7c09699c6-20260825T094934Z`. Live torna at load 36.21: `SEEDED_DEGRADED`, reusedFiles 1423, dirty 69, `java_status` 7201 ms, `java_impact` 98 ms, no cold-build child. D7 PASS. Residual: pin hydrate can still OOM; D1 not re-soaked in this closeout.

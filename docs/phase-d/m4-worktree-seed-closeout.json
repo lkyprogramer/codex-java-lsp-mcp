@@ -1,31 +1,38 @@
 {
   "card": "M4",
   "commit": "aa4e8da",
-  "followUp": "c8fe7c1",
-  "releaseSha": "c8fe7c16aaa9",
+  "followUp": ["c8fe7c1", "7f15a59", "54b7c09"],
+  "releaseSha": "54b7c09699c6",
   "tests": { "targeted": "PASS", "full": "PASS", "gatePr": "PASS" },
   "deployed": true,
   "liveProbe": {
     "name": "delete torna snapshot then java_status/java_impact on lishu-v2 worktree",
-    "result": "FAIL",
+    "result": "PASS",
     "numbers": {
       "unitFingerprintSdkmanrcUnchanged": true,
       "unitSiblingFingerprintMismatchStillSeeds": true,
       "unitFamilyHashRecoveredFromCacheMeta": true,
-      "liveRetries": 5,
-      "liveLoadAtLastRetry": 18.6,
-      "liveStatusMs": 15011,
-      "liveSeedCompletion": null,
-      "liveReusedFiles": 0,
+      "unitHeaderOnlyFindCandidate": true,
+      "liveStatusMs": 7201,
+      "liveImpactMs": 98,
+      "liveSeedCompletion": "SEEDED_DEGRADED",
+      "liveReusedFiles": 1423,
+      "liveDirtyFiles": 69,
+      "liveFiles": 1423,
+      "liveFingerprintMatched": false,
+      "liveEligibleSnapshots": 2,
+      "liveFamilyMismatch": 7,
       "liveChildSpawned": false,
-      "siblingSnapshotStillPresent": true
+      "siblingSnapshotStillPresent": true,
+      "coldBuildMetricsMtime": "2026-08-25 11:18:35",
+      "buildSha": "54b7c09699c6",
+      "loadAtProbe": 36.21
     }
   },
-  "gates": { "D7": "FAIL" },
+  "gates": { "D7": "PASS" },
   "residual": [
-    "Isolated tests prove fingerprint non-veto, JDK-pin files leaving the hash, skip-reason counters, and familyHash recovery from repo-meta.json.",
-    "Live D7 was retried after daemon memory dropped to 284-585 MiB and 1-minute load to 15-19, including immediately after restart and after prewarm OOM. Every attempt exhausted the 15s runtime.create / java-index.open budget. OPEN continues in the background per the tool error, but no worktreeSeed completion was observed and no new seed log line was emitted from c8fe7c1.",
-    "cold-build-metrics.json mtime stayed 2026-08-25 11:18:35, so the torna worktree did not spawn a cold-build child.",
-    "See docs/phase-d/m4-escalation.md."
+    "reusedFiles 1423 of 1423 indexed files (69 dirty). That is 95.4% of reused+dirty. It is not 0.9×1886 because torna's on-disk Java set is smaller than the sibling snapshot's 1886 files.",
+    "Pin prewarm hydrate can still OOM the 1536 MiB isolate (lishuedu rest decode). Two-pass files-only-first let D7 sneak in during the first pass.",
+    "D1 idle soak after this install was started separately; this closeout does not claim D1 PASS."
   ]
 }

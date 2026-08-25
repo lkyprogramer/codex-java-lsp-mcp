@@ -1,6 +1,6 @@
 # V1 acceptance — daemon stability and memory (2026-08-25)
 
-Branch `codex/frontier-r1` @ `e66a0fd`. Live release `c8fe7c16aaa9-20260825T080518Z` (`http://127.0.0.1:38456/mcp`). Pins: `lishuedu`, `exam-parent-v3`, `cipherlink`, `lishu-v2`. Probe script: `scripts/probe-daemon-acceptance.mjs`.
+Branch `codex/frontier-r1` @ `54b7c09`. Live release `54b7c09699c6-20260825T094934Z` (`http://127.0.0.1:38456/mcp`). Pins: `lishuedu`, `exam-parent-v3`, `cipherlink`, `lishu-v2`. Probe script: `scripts/probe-daemon-acceptance.mjs`.
 
 ## Gates
 
@@ -13,9 +13,9 @@ Branch `codex/frontier-r1` @ `e66a0fd`. Live release `c8fe7c16aaa9-20260825T0805
 | D4 query timeout does not restart worker | PASS (unit) | S1: QUERY/STATUS `terminations === 0`; OPEN still retires. |
 | D5 cold-build peak ≤ 4 GiB | PARTIAL | Rebuild `phys_footprint_peak` 3054 MiB (< 4 GiB). lishu-v2 worker then `ERR_WORKER_OUT_OF_MEMORY` at 1536 MiB isolate. |
 | D6 unregistered `java_status` ≤ 3 s | PASS | W1: 442 ms. |
-| D7 worktree seed reusedFiles ≥ 0.9, no child, ≤ 15 s | FAIL | Isolated tests PASS. Live torna probe retried at load 15–19 after restart and after prewarm OOM; every `java_status`/`java_impact` hit the 15s `runtime.create` / `java-index.open` deadline. `cold-build-metrics.json` mtime unchanged (no child). No new `worktree seed` log from `c8fe7c1`. See `m4-escalation.md`. |
+| D7 worktree seed reusedFiles ≥ 0.9, no child, ≤ 15 s | PASS | `54b7c09` live torna: `SEEDED_DEGRADED`, reusedFiles 1423 / files 1423 (dirty 69), `java_status` 7201 ms, `java_impact` 98 ms, `fingerprintMatched=false`, eligibleSnapshots 2, familyMismatch 7, child not spawned (`cold-build-metrics.json` mtime 11:18:35). |
 | identity vs `main` first-plan content | PASS (content) / FAIL (formal floors) | Formal `--runs 5 --baseline main` on frozen scenario commits (`lishuedu db63b1a7`, `cipherlink fa43398`, `exam-parent-v3 f90a0b47`). Host logged `above-window, still running`. Three-repo recall/pRead/rReadMust/rTaskBlocking/token P50 **delta 0** old vs new. Verifier `passed=false` because `rReadMust`/`range*Recall`/`holdoutRReadMust` floors fail on **both** arms (pre-existing, not a candidate regression). Summary: `identity-matrix/matrix-summary.json`. |
 
 ## Overall
 
-**NOT COMPLETE.** W/S/M code is installed. Live D7 reuse was not observed inside the 15s tool deadline. D1 end-of-soak 973 MiB exceeds 900. Identity of normal-path plan content vs `main` held. Do not merge `main`. Rollback: `daemonctl.sh rollback-release`.
+**NOT COMPLETE.** D7 live PASS on `54b7c09`. D1 still FAIL on the previous soak (end 973 MiB); a fresh 31-minute soak after this install is running and is not claimed here. Pin prewarm hydrate can still OOM the 1536 MiB isolate. Identity of normal-path plan content vs `main` held. Do not merge `main`. Rollback: `daemonctl.sh rollback-release`.

@@ -2,7 +2,7 @@
 
 ## daemon 生产化三轨（2026-08-25）
 
-分支 `codex/frontier-r1`。live HTTP daemon `http://127.0.0.1:38456/mcp`，LaunchAgent `com.lky.codex-java-lsp-mcp`。当前 release `c8fe7c16aaa9-20260825T080518Z`。pin：`lishuedu`、`exam-parent-v3`、`cipherlink`、`lishu-v2`。不要把 `fat-service` / `analysis-develop-analysis` / `recognition-master` 加回 `projects.json`。不要合 `main`。回滚：`"$HOME/Library/Application Support/codex-java-lsp-mcp/daemonctl.sh" rollback-release`。
+分支 `codex/frontier-r1`。live HTTP daemon `http://127.0.0.1:38456/mcp`，LaunchAgent `com.lky.codex-java-lsp-mcp`。当前 release `54b7c09699c6-20260825T094934Z`。pin：`lishuedu`、`exam-parent-v3`、`cipherlink`、`lishu-v2`。不要把 `fat-service` / `analysis-develop-analysis` / `recognition-master` 加回 `projects.json`。不要合 `main`。回滚：`"$HOME/Library/Application Support/codex-java-lsp-mcp/daemonctl.sh" rollback-release`。
 
 计划真源：`docs/deep/codex-java-lsp-mcp-daemon-stability-and-memory-plan-2026-08-25.md`。closeout：`docs/phase-d/w1-closeout.json`、`s1`–`s3`、`m1`–`m4`、`v1-acceptance.md`。探针：`scripts/probe-daemon-acceptance.mjs`。
 
@@ -14,9 +14,11 @@
 - chokidar `ignored` 每事件路径禁止同步 fs。
 - Worker 不能用 `execArgv --max-old-space-size`（`ERR_WORKER_INVALID_EXEC_ARGV`），要用 `resourceLimits.maxOldGenerationSizeMb`。
 - linked worktree 的 live git `familyHash` 在 daemon 里可能缺失；seed 必须能从该仓自己的 `repo-meta.json` 回填。
-- M4c 指纹输入变化会让 own-snapshot 全部失效。部署后 pin 仓会串行冷建；host load 40–160 时 worker 会 `ERR_WORKER_OUT_OF_MEMORY`，D7 会在 15s `runtime.create` 预算内完不成。
+- M4c 指纹输入变化会让 own-snapshot 全部失效。部署后 pin 仓会串行冷建；host load 40–160 时 worker 会 `ERR_WORKER_OUT_OF_MEMORY`。
+- sibling `findCandidate` 只能读 v4 header，禁止对每个 family mate `toFacts()`。`createEntry` 不得 await 冷建 reconcile。OPEN 花光 15s 后 freshness barrier 必须 fail-soft，`java_status` 回退 `localStatus`。
+- pin 预热先 files-only 再 hydrate 热集，否则 lishuedu rest decode 会把 D7 OPEN 堵死。
 
-D7 现场未过：`docs/phase-d/m4-escalation.md`。选项：load 降到 ~20 后再打 torna worktree，或先让 `lishu-v2` pin 写出新快照再 seed。
+D7 现场已过（`54b7c09`）：torna `SEEDED_DEGRADED` reusedFiles 1423，`java_status` 7201 ms，`java_impact` 98 ms，无 cold-build child。D1 仍未在本 release 上交出 ≤900 MiB 的 30 分钟 idle。pin hydrate 仍可能 OOM。
 
 ## 当前任务
 
