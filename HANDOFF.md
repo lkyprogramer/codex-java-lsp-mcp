@@ -1,5 +1,23 @@
 # HANDOFF
 
+## daemon 生产化三轨（2026-08-25）
+
+分支 `codex/frontier-r1`。live HTTP daemon `http://127.0.0.1:38456/mcp`，LaunchAgent `com.lky.codex-java-lsp-mcp`。当前 release `c8fe7c16aaa9-20260825T080518Z`。pin：`lishuedu`、`exam-parent-v3`、`cipherlink`、`lishu-v2`。不要把 `fat-service` / `analysis-develop-analysis` / `recognition-master` 加回 `projects.json`。不要合 `main`。回滚：`"$HOME/Library/Application Support/codex-java-lsp-mcp/daemonctl.sh" rollback-release`。
+
+计划真源：`docs/deep/codex-java-lsp-mcp-daemon-stability-and-memory-plan-2026-08-25.md`。closeout：`docs/phase-d/w1-closeout.json`、`s1`–`s3`、`m1`–`m4`、`v1-acceptance.md`。探针：`scripts/probe-daemon-acceptance.mjs`。
+
+已落地：W1 watcher/JDK/EPIPE；S1 QUERY/STATUS 超时不 retire worker；S2 `factsHydrated` 预热；S3 read-plan `DEADLINE_EXCEEDED` fail-soft；M1 热集 hydrate / 冷集 hibernate；M2 20 分钟 index idle 关 isolate；M3 daemon `--max-old-space-size=768`、worker `resourceLimits` 1536、nofile 65536；M4 sibling seed 指纹不否决、JDK pin 文件退出指纹、拒绝原因遥测、cache-meta 回填 `familyHash`。
+
+坑：
+- 所有 git / npm / 测试加 `PATH="/opt/homebrew/bin:$PATH"`。
+- 内存口径用 `footprint -p <pid>` 的 `phys_footprint`，不要只用 `ps` RSS。
+- chokidar `ignored` 每事件路径禁止同步 fs。
+- Worker 不能用 `execArgv --max-old-space-size`（`ERR_WORKER_INVALID_EXEC_ARGV`），要用 `resourceLimits.maxOldGenerationSizeMb`。
+- linked worktree 的 live git `familyHash` 在 daemon 里可能缺失；seed 必须能从该仓自己的 `repo-meta.json` 回填。
+- M4c 指纹输入变化会让 own-snapshot 全部失效。部署后 pin 仓会串行冷建；host load 40–160 时 worker 会 `ERR_WORKER_OUT_OF_MEMORY`，D7 会在 15s `runtime.create` 预算内完不成。
+
+D7 现场未过：`docs/phase-d/m4-escalation.md`。选项：load 降到 ~20 后再打 torna worktree，或先让 `lishu-v2` pin 写出新快照再 seed。
+
 ## 当前任务
 
 **main 已切换。** merge `e48a253`（`48e665b` + `db61edc`，non-squash）。F2 attestation pr/nightly/release GO。未 push。F3 soak 已开始，24–48h 未过，计划未 COMPLETE。回滚：`git revert -m 1 e48a253`。cipherlink holdout 已立项。无 live。`java_context` 不公开。

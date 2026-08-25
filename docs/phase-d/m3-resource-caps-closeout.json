@@ -1,0 +1,25 @@
+{
+  "card": "M3",
+  "commit": "edf9438",
+  "hotfix": "cb6fd56",
+  "tests": { "targeted": "PASS", "full": "PASS", "gatePr": "PASS" },
+  "deployed": true,
+  "liveProbe": {
+    "name": "daemon heap cap, nofile, worker resourceLimits, rg EBADF wrap",
+    "result": "PASS",
+    "numbers": {
+      "daemonMaxOldSpaceMb": 768,
+      "workerMaxOldGenerationSizeMb": 1536,
+      "numberOfFiles": 65536,
+      "physFootprintAfterMInstallMiB": 509,
+      "physFootprintPeakDuringM4RebuildMiB": 2546
+    }
+  },
+  "gates": { "D5": "PARTIAL" },
+  "residual": [
+    "Worker --max-old-space-size via execArgv is invalid in this Node; M3 uses resourceLimits.maxOldGenerationSizeMb=1536.",
+    "cb6fd56 wraps rg spawn EBADF so java_impact returns a failed search instead of a tool error.",
+    "One machine-wide build lease is unchanged (2020ee7 serial path).",
+    "M4 fingerprint rebuild peaked phys_footprint at 2546 MiB (under 4 GiB) then a lishu-v2 worker hit ERR_WORKER_OUT_OF_MEMORY at the 1536 MiB isolate cap while host load was 40-160."
+  ]
+}

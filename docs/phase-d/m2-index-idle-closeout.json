@@ -1,0 +1,22 @@
+{
+  "card": "M2",
+  "commit": "edf9438",
+  "tests": { "targeted": "PASS", "full": "PASS", "gatePr": "PASS" },
+  "deployed": true,
+  "liveProbe": {
+    "name": "index idle TTL unit tests plus post-install footprint",
+    "result": "PARTIAL",
+    "numbers": {
+      "indexIdleTtlMs": 1200000,
+      "hotSetExempt": true,
+      "ttlZeroDisables": true,
+      "footprintAfterPrewarmMiB": 509
+    }
+  },
+  "gates": { "D1": "PARTIAL" },
+  "residual": [
+    "Fake-clock tests cover cold hibernated close, hot-set exemption, refCount>0, and TTL 0.",
+    "V1 30-minute idle soak is the production D1 measurement; this card does not wait 30 minutes itself.",
+    "M4 fingerprint invalidation later triggered serial cold rebuilds and worker OOM, so D1 must be re-measured after the rebuild storm."
+  ]
+}

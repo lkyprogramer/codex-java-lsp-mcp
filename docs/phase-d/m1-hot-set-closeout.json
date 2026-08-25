@@ -1,0 +1,22 @@
+{
+  "card": "M1",
+  "commit": "edf9438",
+  "tests": { "targeted": "PASS", "full": "PASS", "gatePr": "PASS" },
+  "deployed": true,
+  "liveProbe": {
+    "name": "M-track install then hot vs cold first impact",
+    "result": "PARTIAL",
+    "numbers": {
+      "defaultHotSet": "lishuedu,lishu-v2",
+      "cipherlinkFirstImpactMs": 873,
+      "cipherlinkWarmImpactMs": 12,
+      "footprintAfterPrewarmMiB": 509
+    }
+  },
+  "gates": { "D3a": "PARTIAL", "D3b": "PARTIAL" },
+  "residual": [
+    "Hot-set hydrate vs cold hibernate is covered by repo-runtime-manager unit tests.",
+    "Live lishuedu worker spent its one restart during first impact on the previous release; later cipherlink impacts succeeded.",
+    "Steady-state footprint after M1/M2/M3 install was 421-509 MiB before M4 fingerprint invalidation."
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "card": "M4",
+  "commit": "aa4e8da",
+  "followUp": "c8fe7c1",
+  "releaseSha": "c8fe7c16aaa9",
+  "tests": { "targeted": "PASS", "full": "PASS", "gatePr": "PASS" },
+  "deployed": true,
+  "liveProbe": {
+    "name": "delete torna snapshot then java_status/java_impact on lishu-v2 worktree",
+    "result": "FAIL",
+    "numbers": {
+      "unitFingerprintSdkmanrcUnchanged": true,
+      "unitSiblingFingerprintMismatchStillSeeds": true,
+      "unitFamilyHashRecoveredFromCacheMeta": true,
+      "liveStatusMs": 15009,
+      "liveSeedCompletion": null,
+      "liveReusedFiles": 0,
+      "liveChildSpawned": false,
+      "hostLoad1m": 42.73
+    }
+  },
+  "gates": { "D7": "FAIL" },
+  "residual": [
+    "Isolated tests prove: .sdkmanrc/.java-version/.mvn/jvm.config no longer change the fingerprint; sibling fingerprint mismatch still seeds; extractorVersion still refuses; matched fingerprint wins over a newer mismatch; skip-reason counters; familyHash recovered from the target cache meta.",
+    "First live D7 on aa4e8da used familyKey=repoHash (07230b6e0a13) so every sibling counted as familyMismatch. c8fe7c1 recovers familyHash from repo-meta.json.",
+    "After c8fe7c1 install, java_status on torna still exhausted the 15s runtime.create budget while host load was 40-70 and pin prewarm workers were OOMing at 1536 MiB. No new seed log line was emitted, so D7 reuse was not observed.",
+    "See docs/phase-d/m4-escalation.md."
+  ]
+}
