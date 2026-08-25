@@ -1,0 +1,19 @@
+{
+  "card": "S1",
+  "commit": "e4d0865",
+  "tests": { "targeted": "PASS", "full": "PASS", "gatePr": "PASS" },
+  "deployed": true,
+  "liveProbe": {
+    "name": "S-track install ca9f554 then java_impact D4-style retry",
+    "result": "PARTIAL",
+    "numbers": {
+      "unitQueryDeadlineTerminations": 0,
+      "silentOpenStillTerminates": true
+    }
+  },
+  "gates": { "D4": "PASS" },
+  "residual": [
+    "D4 unit tests prove QUERY/STATUS deadlines do not retire the worker; OPEN still does.",
+    "Live short-deadline java_impact was blocked by spawn EBADF from ~10k open .java FDs until M3 nofile; see m3-closeout."
+  ]
+}

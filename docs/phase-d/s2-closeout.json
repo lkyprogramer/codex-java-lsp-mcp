@@ -1,0 +1,20 @@
+{
+  "card": "S2",
+  "commit": "56b033b",
+  "tests": { "targeted": "PASS", "full": "PASS", "gatePr": "PASS" },
+  "deployed": true,
+  "liveProbe": {
+    "name": "java_status factsHydrated after S-track install",
+    "result": "PASS",
+    "numbers": {
+      "lishueduFiles": 6081,
+      "lishueduCoverage": "complete",
+      "pendingBackground": 0
+    }
+  },
+  "gates": { "D3a": "PENDING_M1" },
+  "residual": [
+    "OPEN remains files-only; hydrate is triggered from awaitPrewarmReady via QUERY_REPOSITORY_FACT_MARKERS.",
+    "java_status summary now also forwards factsHydrated (M1 status.ts) for live probes."
+  ]
+}

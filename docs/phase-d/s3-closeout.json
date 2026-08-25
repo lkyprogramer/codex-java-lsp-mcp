@@ -1,0 +1,20 @@
+{
+  "card": "S3",
+  "commit": "ca9f554",
+  "tests": { "targeted": "PASS", "full": "PASS", "gatePr": "PASS" },
+  "deployed": true,
+  "liveProbe": {
+    "name": "java_impact fail-soft vs query_read_ranges",
+    "result": "PARTIAL",
+    "numbers": {
+      "readPlanDeadlineEvidenceGap": "covered by unit test",
+      "indexCorruptStillThrows": true
+    }
+  },
+  "gates": { "D3b": "PASS", "D4": "PASS" },
+  "residual": [
+    "Unit test: DEADLINE_EXCEEDED from queryReadRanges returns a plan whose evidenceGaps include 'Read-range query exceeded'; INDEX_CORRUPT still rejects.",
+    "Live first-impact during prewarm returned Deadline exceeded before java-index.status (not query_read_ranges) at ~1.5s default minimal deadline; fail-soft does not cover STATUS.",
+    "Live later impacts failed spawn EBADF at 10k+ FDs; M3 raises NumberOfFiles to 65536."
+  ]
+}
