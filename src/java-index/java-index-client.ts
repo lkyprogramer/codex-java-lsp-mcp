@@ -137,6 +137,16 @@ function defaultWorkerFactory(): WorkerLike {
 const MAX_CANCELLED_TOMBSTONES = 64;
 /** Restart OPEN is shared and must outlive a short caller deadline (java_status ~2–3s). */
 const JAVA_INDEX_RESTART_OPEN_MS = 120_000;
+/** Mutating/long RPCs may mean a wedged worker; QUERY_* and STATUS only reject the caller. */
+const RETIRE_ON_DEADLINE = new Set<JavaIndexCommand["type"]>([
+  "OPEN",
+  "REFRESH",
+  "REFRESH_RESOURCES",
+  "RECONCILE",
+  "FLUSH",
+  "HIBERNATE",
+  "CLOSE"
+]);
 
 export class JavaIndexClient {
   private nextId = 1;
@@ -654,8 +664,9 @@ export class JavaIndexClient {
         "DEADLINE_EXCEEDED",
         `Deadline exceeded during ${stage}`
       );
-      if (this.rejectPending(id, error, "deadlineExceeded", "DEADLINE_EXCEEDED")) {
-        this.retireWorker(worker, error, "DEADLINE_EXCEEDED");
+      const retire = RETIRE_ON_DEADLINE.has(request.type);
+      if (this.rejectPending(id, error, "deadlineExceeded", retire ? "DEADLINE_EXCEEDED" : undefined, true)) {
+        if (retire) this.retireWorker(worker, error, "DEADLINE_EXCEEDED");
       }
     });
   }
@@ -760,12 +771,12 @@ export class JavaIndexClient {
     this.pending.delete(id);
     pending.cleanup();
     this.recordSettlement(pending, outcome, undefined, undefined, retireReason);
-    if (retainLateResponse && pending.telemetry) this.rememberCancelledTombstone(id, pending);
+    if (retainLateResponse) this.rememberCancelledTombstone(id, pending);
     pending.reject(error);
     return true;
   }
 
-  /** A deadline means the single-threaded worker may be wedged behind this RPC. */
+  /** Retire only for wedged mutating RPCs (OPEN/REFRESH/FLUSH/…); QUERY deadlines keep the worker. */
   private retireWorker(worker: WorkerLike, error: Error, reason: JavaIndexWorkerRetireReason): void {
     if (this.worker !== worker) return;
     this.worker = undefined;

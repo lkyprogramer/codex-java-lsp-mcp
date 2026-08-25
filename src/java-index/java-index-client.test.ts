@@ -349,7 +349,7 @@ test("a silent OPEN deadline terminates the worker and allows the next same-repo
   assert.equal((await statusPromise).state, "READY");
 });
 
-test("a silent query deadline removes its pending request, terminates the worker, and recovers on the next request", async () => {
+test("a silent query deadline rejects the caller without terminating the worker", async () => {
   const workers: FakeWorker[] = [];
   const client = new JavaIndexClient("/repo", "/cache", () => {
     const worker = new FakeWorker();
@@ -367,16 +367,33 @@ test("a silent query deadline removes its pending request, terminates the worker
   );
   assert.equal(outcome.kind, "rejected", "a live worker that never answers a query must reject at the request deadline");
   assert.equal(rejectedJavaIntelligenceError(outcome).code, "DEADLINE_EXCEEDED");
-  assert.equal(workers[0]!.terminations, 1, "the timed-out query must not leave a live, blocked worker behind");
-  assert.equal(client.localStatus().state, "DEGRADED");
+  assert.equal(workers[0]!.terminations, 0, "a query deadline must not retire a worker that may still be hydrating");
+  assert.equal(client.localStatus().state, "READY");
 
   workers[0]!.emitMessage({ id: workers[0]!.posted[1]!.id, ok: true, value: undefined });
   const statusPromise = budgeted.status({ budget: DeadlineBudget.fromTimeout(100) });
-  assert.equal(workers.length, 2);
-  workers[1]!.emitMessage({ id: workers[1]!.posted[0]!.id, ok: true, value: validStatus(1) });
   await flushMicrotasks();
-  workers[1]!.emitMessage({ id: workers[1]!.posted[1]!.id, ok: true, value: validStatus(1) });
+  assert.equal(workers.length, 1, "the next request must reuse the same worker");
+  workers[0]!.emitMessage({ id: workers[0]!.posted[2]!.id, ok: true, value: validStatus(1) });
   assert.equal((await statusPromise).state, "READY");
+});
+
+test("a query deadline tombstones the late response so the next query on the same worker can complete", async () => {
+  const { client, worker } = await openedClient();
+  const first = client.queryAnchor("A.java", 1, 1, { budget: DeadlineBudget.fromTimeout(20) });
+  await flushMicrotasks();
+  const firstMessage = worker.posted[1]!;
+  await assert.rejects(first, (error: unknown) => error instanceof JavaIntelligenceError && error.code === "DEADLINE_EXCEEDED");
+  assert.equal(worker.terminations, 0);
+
+  const second = client.queryAnchor("B.java", 2, 2);
+  await flushMicrotasks();
+  const secondMessage = worker.posted[2]!;
+  worker.emitMessage({ id: firstMessage.id, ok: true, value: undefined });
+  worker.emitMessage({ id: secondMessage.id, ok: true, value: undefined });
+  assert.equal(await second, undefined);
+  assert.equal(client.localStatus().state, "READY");
+  assert.equal(worker.terminations, 0);
 });
 
 test("a cancelled query rejects deterministically and drops its late response without terminating a healthy worker", async () => {
@@ -423,7 +440,7 @@ test("cancel telemetry records one terminal outcome and separately accounts for 
   assert.equal(worker.terminations, 0);
 });
 
-test("deadline telemetry distinguishes the triggering RPC from other requests retired with its worker", async () => {
+test("deadline telemetry records QUERY timeout without retiring a concurrent STATUS", async () => {
   const { client, worker } = await openedClient();
   const telemetry = new JavaIndexRpcTelemetryCollector();
   const anchor = client.queryAnchor("A.java", 1, 1, {
@@ -434,13 +451,16 @@ test("deadline telemetry distinguishes the triggering RPC from other requests re
   await flushMicrotasks();
 
   await assert.rejects(anchor, (error: unknown) => error instanceof JavaIntelligenceError && error.code === "DEADLINE_EXCEEDED");
-  await assert.rejects(status, (error: unknown) => error instanceof JavaIntelligenceError && error.code === "DEADLINE_EXCEEDED");
+  assert.equal(worker.terminations, 0);
+  assert.equal(client.localStatus().state, "READY");
+  const statusMessage = worker.posted[2]!;
+  worker.emitMessage({ id: statusMessage.id, ok: true, value: validStatus(1) });
+  assert.equal((await status).state, "READY");
   const snapshot = telemetry.snapshot().operations;
   assert.equal(snapshot.QUERY_ANCHOR?.deadlineExceeded, 1);
-  assert.equal(snapshot.QUERY_ANCHOR?.retireReasons.DEADLINE_EXCEEDED, 1);
-  assert.equal(snapshot.STATUS?.retired, 1);
-  assert.equal(snapshot.STATUS?.retireReasons.DEADLINE_EXCEEDED, 1);
-  assert.equal(worker.terminations, 1);
+  assert.equal(snapshot.QUERY_ANCHOR?.retireReasons.DEADLINE_EXCEEDED, undefined);
+  assert.equal(snapshot.STATUS?.completed, 1);
+  assert.equal(snapshot.STATUS?.retired ?? 0, 0);
 });
 
 test("after an unexpected exit, the next request restarts the worker exactly once", async () => {
@@ -915,7 +935,7 @@ test("RouterJavaIndex request scope forwards its absolute deadline to a silent w
 
   const error = rejectedJavaIntelligenceError(outcome);
   assert.equal(error.code, "DEADLINE_EXCEEDED");
-  assert.equal(worker.terminations, 1, "a deadline-wedged worker is retired so a later request can recover");
+  assert.equal(worker.terminations, 0, "a query deadline must not retire the worker");
 });
 
 test("nested RouterJavaIndex request scopes override the child budget while inheriting outer telemetry", async () => {
@@ -956,7 +976,7 @@ test("RouterJavaIndex does not downgrade a request deadline from routerStatus in
     80
   );
   assert.equal(rejectedJavaIntelligenceError(outcome).code, "DEADLINE_EXCEEDED");
-  assert.equal(worker.terminations, 1);
+  assert.equal(worker.terminations, 0, "a STATUS deadline must not retire the worker");
 });
 
 test("RouterJavaIndex request scope guards direct repository marker reads with the same deadline", async () => {
