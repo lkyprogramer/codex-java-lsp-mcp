@@ -262,11 +262,32 @@ function collectJdkHomes(): string[] {
   return [...homes];
 }
 
+/**
+ * Version detection without launching a JVM. macOS system JDKs live at
+ * `<container>.jdk/Contents/Home`, so basename parsing sees only "Home" and the
+ * old code fell through to a synchronous `java -version` per JDK (up to 2s each,
+ * x86_64 JDKs under Rosetta reliably hit the timeout). On a machine with many
+ * system JDKs that froze the daemon event loop for ~15s per cold discovery.
+ * The `release` file ships with every JDK 8+ and answers in microseconds.
+ */
+function majorFromHomeCheap(home: string): number | undefined {
+  const fromLabel = parseMajor(path.basename(home));
+  if (fromLabel) return fromLabel;
+  const release = readIfExists(path.join(home, "release"));
+  const fromRelease = parseMajor(release?.match(/JAVA_VERSION="([^"]+)"/)?.[1] || "");
+  if (fromRelease) return fromRelease;
+  if (home.endsWith(path.join("Contents", "Home"))) {
+    const container = path.basename(path.dirname(path.dirname(home)));
+    const fromContainer = parseMajor(container);
+    if (fromContainer) return fromContainer;
+  }
+  return undefined;
+}
+
 function homeMajor(home: string): InstalledJdk | undefined {
   if (!home || !existsSync(home)) return undefined;
-  const label = path.basename(home);
-  const fromLabel = parseMajor(label);
-  if (fromLabel) return { major: fromLabel, home, label: `${fromLabel}:${home}` };
+  const cheap = majorFromHomeCheap(home);
+  if (cheap) return { major: cheap, home, label: `${cheap}:${home}` };
   const javaBin = path.join(home, "bin", "java");
   const spawned = existsSync(javaBin)
     ? spawnSync(javaBin, ["-version"], { encoding: "utf8", timeout: 2000, killSignal: "SIGKILL" })
@@ -277,9 +298,8 @@ function homeMajor(home: string): InstalledJdk | undefined {
 
 async function homeMajorAsync(home: string): Promise<InstalledJdk | undefined> {
   if (!home || !existsSync(home)) return undefined;
-  const label = path.basename(home);
-  const fromLabel = parseMajor(label);
-  if (fromLabel) return { major: fromLabel, home, label: `${fromLabel}:${home}` };
+  const cheap = majorFromHomeCheap(home);
+  if (cheap) return { major: cheap, home, label: `${cheap}:${home}` };
   const javaBin = path.join(home, "bin", "java");
   if (!existsSync(javaBin)) return undefined;
   const spawned = await spawnJavaVersion(javaBin);

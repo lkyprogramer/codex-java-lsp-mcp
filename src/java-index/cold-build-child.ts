@@ -118,6 +118,14 @@ async function main(): Promise<void> {
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
+  // The parent daemon can be SIGTERMed mid-build (release upgrade restart).
+  // Losing the result pipe is a normal cancellation, not a crash: an unhandled
+  // EPIPE here previously took the child down with a stack trace and left the
+  // build lease unreleased.
+  process.stdout.on("error", (error: NodeJS.ErrnoException) => {
+    if (error.code === "EPIPE") process.exit(0);
+    throw error;
+  });
   main().catch(error => {
     console.error(error instanceof Error ? error.stack || error.message : String(error));
     process.exitCode = 1;

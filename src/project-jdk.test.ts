@@ -80,6 +80,36 @@ test("basename-parseable JAVA_HOME does not need java -version to resolve a majo
   }
 });
 
+test("Contents/Home JDK reads JAVA_VERSION from the release file without spawning java", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-release-jdk-"));
+  await writeFile(path.join(root, "pom.xml"), `
+<project>
+  <properties>
+    <maven.compiler.source>21</maven.compiler.source>
+  </properties>
+</project>`);
+  const fakeHome = path.join(root, "Temurin.jdk", "Contents", "Home");
+  await mkdir(path.join(fakeHome, "bin"), { recursive: true });
+  await writeFile(path.join(fakeHome, "release"), 'JAVA_VERSION="21.0.7"\nOS_NAME="Darwin"\n');
+  await writeFile(
+    path.join(fakeHome, "bin", "java"),
+    "#!/bin/sh\nsleep 30\nexit 1\n"
+  );
+  const previousHome = process.env.JAVA_HOME;
+  process.env.JAVA_HOME = fakeHome;
+  resetInstalledJdksCacheForTests();
+  try {
+    const started = Date.now();
+    const status = resolveProjectJdk(root);
+    assert.ok(Date.now() - started < 1000, "release-file discovery must not wait on java -version");
+    assert.equal(status.candidates.some(label => label.startsWith("21:")), true);
+  } finally {
+    resetInstalledJdksCacheForTests();
+    if (previousHome === undefined) delete process.env.JAVA_HOME;
+    else process.env.JAVA_HOME = previousHome;
+  }
+});
+
 test("listInstalledJdks survives a JAVA_HOME whose java -version has no stderr", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "java-lsp-silent-jdk-"));
   await writeFile(path.join(root, "pom.xml"), `

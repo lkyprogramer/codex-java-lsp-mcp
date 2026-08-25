@@ -8,7 +8,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import type { LayoutContext } from "./layout-probe.js";
 import type { LayoutSource } from "./layout-manager.js";
-import { isPotentiallyWithin } from "./path-utils.js";
+import { canonicalPotentialPath, isPotentiallyWithin } from "./path-utils.js";
 import {
   GenerationClock,
   isStormBatch,
@@ -114,24 +114,75 @@ function buildMarkerPaths(repoRoot: string, layout: LayoutContext): string[] {
 }
 
 /**
- * The single ignore contract. Linked-worktree `.git` metadata, the Git
- * common-dir, the MCP cache base and build-output segments never advance the
- * Java generation; an explicitly allowlisted generated root does.
+ * Precomputed, canonicalized prefix forms for the ignore contract. The chokidar
+ * `ignored` predicate runs for every initial-scan entry and every FS event; it
+ * must never touch the filesystem itself. All realpath/exists work happens once
+ * here, and the predicate below is pure string comparison. Skipping this turned
+ * the daemon main thread into a realpath storm whenever a watched repo ran a
+ * Gradle/Maven build (build/ churn paid full canonicalization per event).
  */
+export type RepoIgnoreContext = {
+  gitDir: string;
+  gitCommonDirPrefixes: readonly string[];
+  cacheBasePrefixes: readonly string[];
+  generatedRootPrefixes: readonly string[];
+  sourceRootPrefixes: readonly string[];
+};
+
+export function buildRepoIgnoreContext(
+  identity: WorktreeIdentity,
+  cacheBase: string,
+  explicitGeneratedRoots: readonly string[],
+  sourceRoots: readonly string[] = []
+): RepoIgnoreContext {
+  return {
+    gitDir: path.join(identity.repoRoot, ".git"),
+    gitCommonDirPrefixes: identity.gitCommonDir ? prefixForms(identity.gitCommonDir) : [],
+    cacheBasePrefixes: prefixForms(cacheBase),
+    generatedRootPrefixes: unique(explicitGeneratedRoots.flatMap(prefixForms)),
+    sourceRootPrefixes: unique(sourceRoots.flatMap(prefixForms))
+  };
+}
+
+/** Raw resolved and canonical (symlink-resolved) forms of a root, for string-prefix matching. */
+function prefixForms(value: string): string[] {
+  const resolved = path.resolve(value);
+  const canonical = canonicalPotentialPath(resolved);
+  return canonical === resolved ? [resolved] : [resolved, canonical];
+}
+
+function withinAny(prefixes: readonly string[], absolute: string): boolean {
+  return prefixes.some(prefix => absolute === prefix || absolute.startsWith(prefix + path.sep));
+}
+
+/**
+ * The single ignore contract, syscall-free. Linked-worktree `.git` metadata,
+ * the Git common-dir, the MCP cache base and build-output segments never
+ * advance the Java generation; an explicitly allowlisted generated root does.
+ */
+export function isIgnoredRepoPathFast(candidate: string, context: RepoIgnoreContext): boolean {
+  const absolute = path.resolve(candidate);
+  if (absolute === context.gitDir || absolute.startsWith(context.gitDir + path.sep)) return true;
+  if (withinAny(context.gitCommonDirPrefixes, absolute)) return true;
+  if (withinAny(context.cacheBasePrefixes, absolute)) return true;
+  for (const root of context.generatedRootPrefixes) {
+    // Either direction: a path inside a generated root is allowlisted, and an
+    // ancestor of one must stay unignored so chokidar can descend through it.
+    if (absolute === root || absolute.startsWith(root + path.sep) || root.startsWith(absolute + path.sep)) {
+      return false;
+    }
+  }
+  return absolute.split(path.sep).some(segment => IGNORED_SEGMENTS.has(segment));
+}
+
+/** Compatibility wrapper for callers/tests without a prebuilt context. Hot paths must use isIgnoredRepoPathFast. */
 export function isIgnoredRepoPath(
   candidate: string,
   identity: WorktreeIdentity,
   cacheBase: string,
   explicitGeneratedRoots: readonly string[]
 ): boolean {
-  const absolute = path.resolve(candidate);
-  if (absolute === path.join(identity.repoRoot, ".git")) return true;
-  if (identity.gitCommonDir && isPotentiallyWithin(identity.gitCommonDir, absolute)) return true;
-  if (isPotentiallyWithin(cacheBase, absolute)) return true;
-  if (explicitGeneratedRoots.some(root => isPotentiallyWithin(root, absolute) || isPotentiallyWithin(absolute, root))) {
-    return false;
-  }
-  return path.normalize(absolute).split(path.sep).some(segment => IGNORED_SEGMENTS.has(segment));
+  return isIgnoredRepoPathFast(candidate, buildRepoIgnoreContext(identity, cacheBase, explicitGeneratedRoots));
 }
 
 export type RepoChangeListener = (batch: RepoChangeBatch) => Promise<void> | void;
@@ -159,6 +210,7 @@ export class RepoChangeCoordinator {
   private degraded = false;
   private lastError?: string;
   private lastStorm?: RepoChangeCoordinatorStatus["lastStorm"];
+  private ignoreContextCache?: { plan: RepoWatchPlan | undefined; context: RepoIgnoreContext };
 
   constructor(
     private readonly repoRoot: string,
@@ -196,7 +248,8 @@ export class RepoChangeCoordinator {
         awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 20 },
         // Reads `this.plan` dynamically (not the `plan` captured above) so a
         // build-change reconfigure keeps the generated-root allowlist current.
-        ignored: candidate => isIgnoredRepoPath(candidate, this.identity, this.cacheBase, this.plan?.generatedRoots ?? [])
+        // Must stay syscall-free: it runs per initial-scan entry and per event.
+        ignored: candidate => isIgnoredRepoPathFast(candidate, this.currentIgnoreContext())
       });
       this.watcher = watcher;
       watcher
@@ -229,6 +282,18 @@ export class RepoChangeCoordinator {
       this.plan = buildRepoWatchPlan(this.repoRoot, this.layoutSource.current());
     }
     return this.plan;
+  }
+
+  /** Rebuilt only when the plan object changes; all canonicalization cost lives here, not per event. */
+  private currentIgnoreContext(): RepoIgnoreContext {
+    const plan = this.plan;
+    if (!this.ignoreContextCache || this.ignoreContextCache.plan !== plan) {
+      this.ignoreContextCache = {
+        plan,
+        context: buildRepoIgnoreContext(this.identity, this.cacheBase, plan?.generatedRoots ?? [], plan?.sourceRoots ?? [])
+      };
+    }
+    return this.ignoreContextCache.context;
   }
 
   /**
@@ -280,13 +345,15 @@ export class RepoChangeCoordinator {
     const absolute = path.resolve(file);
     const repoEvent: RepoChangeEvent = event === "unlink" ? "delete" : event;
     const plan = this.ensurePlan();
-    if (isIgnoredRepoPath(absolute, this.identity, this.cacheBase, plan.generatedRoots)) {
+    const ignoreContext = this.currentIgnoreContext();
+    if (isIgnoredRepoPathFast(absolute, ignoreContext)) {
       return undefined;
     }
     if (plan.buildFiles.includes(absolute)) {
       return { kind: "BUILD_CHANGE", absolutePath: absolute, event: repoEvent };
     }
-    const underSource = [...plan.sourceRoots, ...plan.generatedRoots].some(root => isPotentiallyWithin(root, absolute));
+    const underSource = withinAny(ignoreContext.sourceRootPrefixes, absolute)
+      || withinAny(ignoreContext.generatedRootPrefixes, absolute);
     if (absolute.endsWith(".java") && underSource) {
       return { kind: javaKind(event), absolutePath: absolute, event: repoEvent };
     }

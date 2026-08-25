@@ -4,8 +4,10 @@ import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
+  buildRepoIgnoreContext,
   buildRepoWatchPlan,
   isIgnoredRepoPath,
+  isIgnoredRepoPathFast,
   RepoChangeCoordinator
 } from "./repo-change-coordinator.js";
 import { GenerationClock, type RepoChangeBatch } from "./repo-generation.js";
@@ -74,6 +76,10 @@ test("ignore contract suppresses git/cache/build-output but not an allowlisted g
     isIgnoredRepoPath(path.join(generated, "demo", "Gen.java"), identity, cacheBase, [generated]),
     false
   );
+
+  const context = buildRepoIgnoreContext(identity, cacheBase, [generated]);
+  assert.equal(isIgnoredRepoPathFast(path.join(root, "build", "classes", "X.java"), context), true);
+  assert.equal(isIgnoredRepoPathFast(path.join(generated, "demo", "Gen.java"), context), false);
 });
 
 test("a linked-worktree .git file and common-dir are ignored", async () => {
