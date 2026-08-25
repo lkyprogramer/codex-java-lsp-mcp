@@ -73,10 +73,23 @@ export class RgRunner {
       "--",
       ...query.roots
     ];
-    const child = spawn(this.options.binary ?? "rg", args, {
-      cwd: query.cwd,
-      stdio: ["ignore", "pipe", "pipe"]
-    }) as RgChild;
+    let child: RgChild;
+    try {
+      child = spawn(this.options.binary ?? "rg", args, {
+        cwd: query.cwd,
+        stdio: ["ignore", "pipe", "pipe"]
+      }) as RgChild;
+    } catch (error) {
+      spawnError = error as NodeJS.ErrnoException;
+      return {
+        files: [],
+        completion: "FAILED",
+        rawBytes: 0,
+        totalMatches: 0,
+        elapsedMs: performance.now() - startedAt,
+        errorCode: "SEARCH_FAILED"
+      };
+    }
     const closed = new Promise<number | null>(resolve => child.once("close", resolve));
 
     const consumeLine = (line: string): void => {
