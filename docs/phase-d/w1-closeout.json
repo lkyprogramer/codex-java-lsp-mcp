@@ -1,0 +1,26 @@
+{
+  "card": "W1",
+  "commit": "22a3f01",
+  "releaseSha": "b599e076b771",
+  "tests": { "targeted": "PASS", "full": "PASS", "gatePr": "PASS" },
+  "deployed": true,
+  "liveProbe": {
+    "name": "storm-healthz-60 + unregistered-java_status + zombie",
+    "result": "PASS",
+    "numbers": {
+      "healthzTimeouts": 0,
+      "healthzSamples": 60,
+      "healthzMaxMs": 54.8,
+      "healthzP99Ms": 35.2,
+      "mainThreadStimeDeltaSec": 0.03,
+      "unregisteredJavaStatusMs": 442.1,
+      "zombieChildren": 0
+    }
+  },
+  "gates": { "D2": "PASS", "D6": "PASS" },
+  "residual": [
+    "D2 here is the W1 60-sample storm, not the V1 120×1s gradle-check probe.",
+    "Install required b599e07 (drop sub-ms critical-path gate from a containment-only first-touch test) because host load made residual/wall exceed 5%.",
+    "Plan document committed as 29c59b5 so install-runtime.sh would accept a clean source tree."
+  ]
+}
