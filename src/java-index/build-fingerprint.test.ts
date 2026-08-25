@@ -57,6 +57,19 @@ test("a build file content change changes the fingerprint", async () => {
   assert.notEqual(before, after);
 });
 
+test("an uncommitted .sdkmanrc does not change the build fingerprint", async () => {
+  const root = tempRepo();
+  write(root, "pom.xml", "<project/>");
+  const layout = probeLayout(root);
+  const before = await computeBuildFingerprint(root, layout);
+  write(root, ".sdkmanrc", "java=21.0.2-tem\n");
+  write(root, ".java-version", "21\n");
+  mkdirSync(path.join(root, ".mvn"), { recursive: true });
+  write(root, ".mvn/jvm.config", "-Xmx1g\n");
+  const after = await computeBuildFingerprint(root, layout);
+  assert.equal(before, after);
+});
+
 test("a module-level build file change changes the fingerprint", async () => {
   const root = tempRepo();
   write(root, "settings.gradle", "include 'module-a'");

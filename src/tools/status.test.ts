@@ -166,6 +166,10 @@ test("java_status exposes sibling-seed progress without requiring diagnostic det
             droppedCrossFileEdges: 2,
             manifestValidationMs: 18,
             deltaParsedFiles: 0,
+            fingerprintMatched: false,
+            cacheDirsScanned: 3,
+            eligibleSnapshots: 1,
+            identityMismatch: 0,
             completion: "SEEDED_DEGRADED"
           }
         };
@@ -182,6 +186,9 @@ test("java_status exposes sibling-seed progress without requiring diagnostic det
   assert.equal(seed.reusedFiles, 9);
   assert.equal(seed.dirtyFiles, 3);
   assert.equal(seed.deltaParsedFiles, 0);
+  assert.equal(seed.fingerprintMatched, false);
+  assert.equal(seed.cacheDirsScanned, 3);
+  assert.equal(seed.eligibleSnapshots, 1);
 });
 
 test("java_status forwards the request absolute budget to JavaIndex status", async () => {

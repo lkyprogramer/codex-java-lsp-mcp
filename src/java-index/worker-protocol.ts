@@ -708,6 +708,30 @@ function validateWorktreeSeedStatus(value: unknown, context: string): WorktreeSe
     dirtyResources: source.dirtyResources,
     cacheDirsScanned: source.cacheDirsScanned,
     eligibleSnapshots: source.eligibleSnapshots,
+    ...withOptional("fingerprintMatched", optional(source.fingerprintMatched, `${context}.fingerprintMatched`, (value, valueContext) => {
+      if (!isBoolean(value)) invalid(valueContext, "expected a boolean");
+      return value;
+    })),
+    ...withOptional("metaMissing", optional(source.metaMissing, `${context}.metaMissing`, (value, valueContext) => {
+      if (!isNumber(value)) invalid(valueContext, "expected a number");
+      return value;
+    })),
+    ...withOptional("selfSkip", optional(source.selfSkip, `${context}.selfSkip`, (value, valueContext) => {
+      if (!isNumber(value)) invalid(valueContext, "expected a number");
+      return value;
+    })),
+    ...withOptional("familyMismatch", optional(source.familyMismatch, `${context}.familyMismatch`, (value, valueContext) => {
+      if (!isNumber(value)) invalid(valueContext, "expected a number");
+      return value;
+    })),
+    ...withOptional("identityMismatch", optional(source.identityMismatch, `${context}.identityMismatch`, (value, valueContext) => {
+      if (!isNumber(value)) invalid(valueContext, "expected a number");
+      return value;
+    })),
+    ...withOptional("coverageIncomplete", optional(source.coverageIncomplete, `${context}.coverageIncomplete`, (value, valueContext) => {
+      if (!isNumber(value)) invalid(valueContext, "expected a number");
+      return value;
+    })),
     candidateDecompressMs: source.candidateDecompressMs,
     initialManifestScanMs: source.initialManifestScanMs,
     finalManifestScanMs: source.finalManifestScanMs,

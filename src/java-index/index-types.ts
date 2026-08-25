@@ -221,6 +221,12 @@ export type WorktreeSeedStatus = {
   cacheDirsScanned: number;
   /** Of those scanned, how many held a snapshot that passed every eligibility check (V3.2-19). */
   eligibleSnapshots: number;
+  fingerprintMatched?: boolean;
+  metaMissing?: number;
+  selfSkip?: number;
+  familyMismatch?: number;
+  identityMismatch?: number;
+  coverageIncomplete?: number;
   /** Decompress, pre-load scan, and publication-boundary re-scan phase timings (V3.2-19). */
   candidateDecompressMs: number;
   initialManifestScanMs: number;

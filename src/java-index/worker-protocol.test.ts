@@ -308,6 +308,34 @@ test("validateJavaIndexStatus accepts a well-formed status and rejects an unknow
     { ...status, factsHydrated: false }
   );
   assert.throws(() => validateJavaIndexStatus({ ...status, factsHydrated: "yes" }));
+  const seed = {
+    attempted: true,
+    reusedFiles: 9,
+    dirtyFiles: 1,
+    relinkFiles: 0,
+    droppedCrossFileEdges: 0,
+    droppedFrameworkEdges: 0,
+    manifestValidationMs: 4,
+    deltaParsedFiles: 0,
+    reusedResources: 0,
+    dirtyResources: 0,
+    cacheDirsScanned: 2,
+    eligibleSnapshots: 1,
+    fingerprintMatched: false,
+    metaMissing: 0,
+    selfSkip: 0,
+    familyMismatch: 0,
+    identityMismatch: 0,
+    coverageIncomplete: 0,
+    candidateDecompressMs: 1,
+    initialManifestScanMs: 1,
+    finalManifestScanMs: 1,
+    completion: "SEEDED_DEGRADED" as const
+  };
+  assert.deepEqual(
+    validateJavaIndexStatus({ ...status, worktreeSeed: seed }),
+    { ...status, worktreeSeed: seed }
+  );
 });
 
 test("validateAnchorFacts passes through undefined and rejects a payload missing required fields", () => {

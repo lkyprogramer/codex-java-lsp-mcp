@@ -21,12 +21,18 @@ export type WorktreeSeedCandidate = {
   indexedGeneration: number;
   buildFingerprint: string;
   manifestFingerprint: string;
+  fingerprintMatched: boolean;
 };
 
 /** `findCandidate()` scan diagnostics (V3.2-19), independent of whether a candidate was picked. */
 export type WorktreeScanTelemetry = {
   cacheDirsScanned: number;
   eligibleSnapshots: number;
+  metaMissing: number;
+  selfSkip: number;
+  familyMismatch: number;
+  identityMismatch: number;
+  coverageIncomplete: number;
 };
 
 export type WorktreeSeedResult = {
@@ -106,17 +112,27 @@ export class WorktreeSnapshotSeeder {
    * fresh instance is constructed per seed attempt (`attemptSiblingSeed`),
    * so this last-call side channel never crosses call boundaries.
    */
-  lastScanTelemetry: WorktreeScanTelemetry = { cacheDirsScanned: 0, eligibleSnapshots: 0 };
+  lastScanTelemetry: WorktreeScanTelemetry = {
+    cacheDirsScanned: 0,
+    eligibleSnapshots: 0,
+    metaMissing: 0,
+    selfSkip: 0,
+    familyMismatch: 0,
+    identityMismatch: 0,
+    coverageIncomplete: 0
+  };
 
   /**
    * Scans every cache directory under `cacheBase` for a sibling worktree's
    * snapshot: same family (shared Git common-dir) as `target`, a different
-   * repo, and a snapshot that is schema/extractor/stableId/buildFingerprint
-   * compatible, COMPLETE for every root it covers, and free of any failed or
-   * recovered file (a healthy-but-imperfect source must never be reused,
-   * since its own imperfect facts would become the target's without the
-   * target ever having verified them). Deterministic tie-break: newest
-   * `createdAt`, then `sourceRepoHash`.
+   * repo, and a snapshot that is extractor/stableId compatible, COMPLETE for
+   * every root it covers, and free of any failed or recovered file (a
+   * healthy-but-imperfect source must never be reused, since its own imperfect
+   * facts would become the target's without the target ever having verified
+   * them). `buildFingerprint` is recorded (`fingerprintMatched`) but does not
+   * veto: per-file contentHash + sourceRoot checks in `seedValidatedFacts`
+   * already cover content and layout drift. Deterministic tie-break:
+   * fingerprint match first, then newest `createdAt`, then `sourceRepoHash`.
    */
   async findCandidate(
     target: WorktreeIdentity,
@@ -127,22 +143,46 @@ export class WorktreeSnapshotSeeder {
     const familyKey = target.familyHash ?? target.repoHash;
     const candidates: WorktreeSeedCandidate[] = [];
     let cacheDirsScanned = 0;
+    let metaMissing = 0;
+    let selfSkip = 0;
+    let familyMismatch = 0;
+    let identityMismatch = 0;
+    let coverageIncomplete = 0;
     for (const entry of readdirSync(cacheBase, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
       cacheDirsScanned += 1;
       const cacheRoot = path.join(cacheBase, entry.name);
       const meta = readRepoCacheMetaFields(cacheRoot);
-      if (!meta?.repoRoot || !meta.repoHash) continue;
-      if (meta.repoHash === target.repoHash) continue; // never seed from the target itself
-      if ((meta.familyHash ?? meta.repoHash) !== familyKey) continue;
+      if (!meta?.repoRoot || !meta.repoHash) {
+        metaMissing += 1;
+        continue;
+      }
+      if (meta.repoHash === target.repoHash) {
+        selfSkip += 1;
+        continue;
+      }
+      if ((meta.familyHash ?? meta.repoHash) !== familyKey) {
+        familyMismatch += 1;
+        continue;
+      }
       const sourceSnapshotPath = path.join(cacheRoot, SNAPSHOT_FILE_NAME);
-      const snapshot = await loadSiblingSnapshot(sourceSnapshotPath, identity);
-      if (!snapshot) continue;
-      if (snapshot.coverage.length === 0) continue;
+      const loaded = await loadSiblingSnapshot(sourceSnapshotPath, identity);
+      if (!loaded) {
+        identityMismatch += 1;
+        continue;
+      }
+      const snapshot = loaded.snapshot;
+      if (snapshot.coverage.length === 0) {
+        coverageIncomplete += 1;
+        continue;
+      }
       const allHealthyComplete = snapshot.coverage.every(
         root => root.state === "COMPLETE" && root.failedFiles === 0 && root.recoveredFiles === 0
       );
-      if (!allHealthyComplete) continue;
+      if (!allHealthyComplete) {
+        coverageIncomplete += 1;
+        continue;
+      }
       candidates.push({
         sourceRepoRoot: meta.repoRoot,
         sourceRepoHash: meta.repoHash,
@@ -150,12 +190,30 @@ export class WorktreeSnapshotSeeder {
         createdAt: snapshot.createdAt,
         indexedGeneration: snapshot.indexedGeneration,
         buildFingerprint: snapshot.buildFingerprint,
-        manifestFingerprint: snapshot.manifestFingerprint
+        manifestFingerprint: snapshot.manifestFingerprint,
+        fingerprintMatched: loaded.fingerprintMatched
       });
     }
-    this.lastScanTelemetry = { cacheDirsScanned, eligibleSnapshots: candidates.length };
-    if (candidates.length === 0) return undefined;
-    candidates.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.sourceRepoHash.localeCompare(b.sourceRepoHash));
+    this.lastScanTelemetry = {
+      cacheDirsScanned,
+      eligibleSnapshots: candidates.length,
+      metaMissing,
+      selfSkip,
+      familyMismatch,
+      identityMismatch,
+      coverageIncomplete
+    };
+    if (candidates.length === 0) {
+      console.error(
+        `[codex-java-lsp] worktree seed found no candidate family=${familyKey} scanned=${cacheDirsScanned} metaMissing=${metaMissing} selfSkip=${selfSkip} familyMismatch=${familyMismatch} identityMismatch=${identityMismatch} coverageIncomplete=${coverageIncomplete}`
+      );
+      return undefined;
+    }
+    candidates.sort((a, b) =>
+      Number(b.fingerprintMatched) - Number(a.fingerprintMatched)
+      || b.createdAt.localeCompare(a.createdAt)
+      || a.sourceRepoHash.localeCompare(b.sourceRepoHash)
+    );
     return candidates[0];
   }
 
@@ -199,7 +257,8 @@ export class WorktreeSnapshotSeeder {
   ): Promise<{ result: WorktreeSeedResult; store: JavaIndexStore }> {
     const start = Date.now();
     const decompressStart = Date.now();
-    const snapshot = await loadSiblingSnapshot(candidate.sourceSnapshotPath, identity);
+    const loaded = await loadSiblingSnapshot(candidate.sourceSnapshotPath, identity);
+    const snapshot = loaded?.snapshot;
     const candidateDecompressMs = Date.now() - decompressStart;
     if (!snapshot) {
       // Disappeared, or changed shape, since findCandidate looked at it.

@@ -284,17 +284,25 @@ export type SiblingSnapshotIdentity = Omit<SnapshotIdentity, "canonicalRepoRoot"
  * manage - and a mismatch (including a corrupt file) is simply not a seed
  * candidate, reported the same way as a miss (`undefined`).
  */
+export type SiblingSnapshotLoad = {
+  snapshot: JavaIndexSnapshotV3;
+  fingerprintMatched: boolean;
+};
+
 export async function loadSiblingSnapshot(
   target: string,
   expected: SiblingSnapshotIdentity
-): Promise<JavaIndexSnapshotV3 | undefined> {
+): Promise<SiblingSnapshotLoad | undefined> {
   const parsed = await parseSnapshotFile(target);
   if (!parsed || "error" in parsed) return undefined;
-  if (!identityMatches(headerIdentity(parsed.view), { ...expected, canonicalRepoRoot: parsed.view.header.canonicalRepoRoot }, false)) {
-    return undefined;
-  }
+  const header = headerIdentity(parsed.view);
+  if (!extractorVersionsCompatible(header.extractorVersion, expected.extractorVersion)) return undefined;
+  if (header.stableIdVersion !== expected.stableIdVersion) return undefined;
   try {
-    return factsToV3(parsed.view.toFacts());
+    return {
+      snapshot: factsToV3(parsed.view.toFacts()),
+      fingerprintMatched: header.buildFingerprint === expected.buildFingerprint
+    };
   } catch {
     return undefined;
   }

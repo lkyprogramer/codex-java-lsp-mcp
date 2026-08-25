@@ -6,11 +6,11 @@ import type { LayoutContext } from "../layout-probe.js";
 
 const require = createRequire(import.meta.url);
 
-// Build/JDK markers checked at the repo root and at every detected module
-// directory. A parser/extractor code fix invalidates the AST cache via
-// extractorVersion (below), not via this list - this one only needs to
-// notice when the *build itself* (dependencies, JDK, layout) may have
-// changed what "correct" extraction even means for this repo.
+// Build markers checked at the repo root and at every detected module
+// directory. JDK pin files (.sdkmanrc, .java-version, .mvn/jvm.config) are
+// intentionally omitted: they only affect JDT/Maven JVM selection, not
+// tree-sitter facts or layout. A parser/extractor code fix invalidates the
+// AST cache via extractorVersion (below), not via this list.
 const BUILD_MARKER_RELATIVE_PATHS = [
   "pom.xml",
   "settings.gradle",
@@ -18,10 +18,7 @@ const BUILD_MARKER_RELATIVE_PATHS = [
   "build.gradle",
   "build.gradle.kts",
   "gradle.properties",
-  "gradle/libs.versions.toml",
-  ".java-version",
-  ".sdkmanrc",
-  ".mvn/jvm.config"
+  "gradle/libs.versions.toml"
 ];
 
 // Bumped whenever ast-extractor.ts's fact shape changes in a way that isn't
@@ -46,12 +43,12 @@ export function extractorVersionsCompatible(snapshot: string, expected: string):
 
 /**
  * Hashes sorted `relativePath + contentHash` entries for every detected
- * root/module build file and JDK marker that exists, plus sorted source and
- * resource roots and the layout kind/profile - independent of file mtime and
- * of filesystem enumeration order (both are normalized away by sorting
- * before hashing), so only content and repo shape can change the result.
+ * root/module build file that exists, plus sorted source and resource roots
+ * and the layout kind/profile - independent of file mtime and of filesystem
+ * enumeration order (both are normalized away by sorting before hashing), so
+ * only content and repo shape can change the result.
  */
-export async function computeBuildFingerprint(repoRoot: string, layout: LayoutContext): Promise<string> {
+export async function computeBuildFingerprintEntries(repoRoot: string, layout: LayoutContext): Promise<string[]> {
   const moduleDirs = new Set<string>([""]);
   for (const sourceRoot of layout.sourceRoots) {
     moduleDirs.add(sourceRoot.module ?? "");
@@ -78,5 +75,10 @@ export async function computeBuildFingerprint(repoRoot: string, layout: LayoutCo
   }
   entries.push(`layout:${layout.layout}`, `layoutProfile:${layout.layoutProfile}`);
   entries.sort();
+  return entries;
+}
+
+export async function computeBuildFingerprint(repoRoot: string, layout: LayoutContext): Promise<string> {
+  const entries = await computeBuildFingerprintEntries(repoRoot, layout);
   return createHash("sha256").update(entries.join("\n")).digest("hex");
 }

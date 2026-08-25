@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { execFile } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 import { probeLayout } from "../layout-probe.js";
 import { createGitWorktreeFamily } from "../test-support/git-worktree.test.js";
 import { resolveWorktreeIdentity } from "../worktree-identity.js";
@@ -10,7 +12,9 @@ import { computeBuildFingerprint, computeExtractorVersion } from "./build-finger
 import { JavaIndexClient } from "./java-index-client.js";
 import { readFileStable, scanCurrentManifestStable } from "./manifest.js";
 import { STABLE_ID_VERSION } from "./stable-id.js";
-import { WorktreeSnapshotSeeder, type WorktreeSeedCandidate } from "./worktree-snapshot-seeder.js";
+import { WorktreeSnapshotSeeder } from "./worktree-snapshot-seeder.js";
+
+const run = promisify(execFile);
 
 function write(root: string, relativePath: string, content: string): void {
   const absolutePath = path.join(root, relativePath);
@@ -42,6 +46,9 @@ async function buildCompleteSnapshot(repoRoot: string, cacheDir: string): Promis
   await client.open(1);
   await client.reconcile(1);
   await waitFor(async () => (await client.status()).pendingBackground === 0, 15000);
+  // Java sweep can durable-stamp before mapper XML is in the store; FLUSH
+  // rewrites the sibling snapshot so seed tests see the completed facts.
+  await client.flush();
   await client.close();
 }
 
@@ -219,6 +226,82 @@ test("no valid sibling candidate reports no candidate, not an error", async () =
   assert.equal(candidate, undefined);
   assert.equal(seeder.lastScanTelemetry.cacheDirsScanned, 0);
   assert.equal(seeder.lastScanTelemetry.eligibleSnapshots, 0);
+});
+
+test("a sibling snapshot with a mismatched build fingerprint is still seed-eligible", async () => {
+  const { family, cacheBase } = await seedableFamily();
+  write(family.linked, "pom.xml", "<project><artifactId>linked</artifactId></project>\n");
+  const targetIdentity = await resolveWorktreeIdentity(family.linked);
+  const { identity, layout } = await seedIdentityFor(family.linked);
+  const seeder = new WorktreeSnapshotSeeder();
+  const candidate = await seeder.findCandidate(targetIdentity, identity, cacheBase);
+  assert.ok(candidate);
+  assert.equal(candidate.fingerprintMatched, false);
+  const { result } = await seeder.seedValidatedFacts(candidate, identity, family.linked, layout, 2);
+  assert.ok(result.reusedFiles >= 1);
+});
+
+test("extractorVersion mismatch still refuses a sibling snapshot", async () => {
+  const { family, cacheBase } = await seedableFamily();
+  const targetIdentity = await resolveWorktreeIdentity(family.linked);
+  const { identity } = await seedIdentityFor(family.linked);
+  const seeder = new WorktreeSnapshotSeeder();
+  const candidate = await seeder.findCandidate(targetIdentity, { ...identity, extractorVersion: "schema-0|facts-0" }, cacheBase);
+  assert.equal(candidate, undefined);
+  assert.ok(seeder.lastScanTelemetry.identityMismatch >= 1);
+});
+
+test("findCandidate records skip reasons without treating them as errors", async () => {
+  const { family, cacheBase } = await seedableFamily();
+  mkdirSync(path.join(cacheBase, "empty"));
+  await writeRepoMeta(path.join(cacheBase, "self"), family.linked);
+  const otherDir = path.join(cacheBase, "other-family");
+  mkdirSync(otherDir, { recursive: true });
+  writeFileSync(
+    path.join(otherDir, "repo-meta.json"),
+    JSON.stringify({ repoRoot: "/tmp/other-family", repoHash: "other-repo-hash", familyHash: "not-this-family" })
+  );
+
+  const targetIdentity = await resolveWorktreeIdentity(family.linked);
+  const { identity } = await seedIdentityFor(family.linked);
+  const seeder = new WorktreeSnapshotSeeder();
+  const candidate = await seeder.findCandidate(targetIdentity, identity, cacheBase);
+  assert.ok(candidate);
+  assert.equal(seeder.lastScanTelemetry.metaMissing, 1);
+  assert.equal(seeder.lastScanTelemetry.selfSkip, 1);
+  assert.equal(seeder.lastScanTelemetry.familyMismatch, 1);
+  assert.equal(seeder.lastScanTelemetry.eligibleSnapshots, 1);
+});
+
+test("a fingerprint-matched sibling is preferred over a newer mismatched one", async () => {
+  const { family, cacheBase } = await seedableFamily();
+  const mismatched = path.join(path.dirname(family.primary), "mismatched");
+  await run("git", ["-C", family.primary, "worktree", "add", "-q", "-b", "mismatched", mismatched], {
+    env: {
+      ...process.env,
+      GIT_CONFIG_NOSYSTEM: "1",
+      GIT_AUTHOR_NAME: "fixture",
+      GIT_AUTHOR_EMAIL: "fixture@example.invalid",
+      GIT_COMMITTER_NAME: "fixture",
+      GIT_COMMITTER_EMAIL: "fixture@example.invalid"
+    }
+  });
+  write(mismatched, SAME, "package demo;\npublic class Same {}\n");
+  write(mismatched, CHANGED, "package demo;\npublic class Changed {}\n");
+  write(mismatched, "pom.xml", "<project><artifactId>mismatched</artifactId></project>\n");
+  await new Promise(resolve => setTimeout(resolve, 50));
+  const mismatchedCacheDir = path.join(cacheBase, "mismatched");
+  await buildCompleteSnapshot(mismatched, mismatchedCacheDir);
+  await writeRepoMeta(mismatchedCacheDir, mismatched);
+
+  const targetIdentity = await resolveWorktreeIdentity(family.linked);
+  const { identity } = await seedIdentityFor(family.linked);
+  const seeder = new WorktreeSnapshotSeeder();
+  const candidate = await seeder.findCandidate(targetIdentity, identity, cacheBase);
+  assert.ok(candidate);
+  assert.equal(candidate.sourceRepoRoot, family.primary);
+  assert.equal(candidate.fingerprintMatched, true);
+  assert.equal(seeder.lastScanTelemetry.eligibleSnapshots, 2);
 });
 
 test("an unchanged source file whose only target-visible dependency changed drops its resolved edge and enters relinkPaths", async () => {

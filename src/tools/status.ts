@@ -190,7 +190,15 @@ function summarizeJavaIndex(status: JavaIndexStatus): Record<string, unknown> {
       completion: status.worktreeSeed.completion,
       reusedFiles: status.worktreeSeed.reusedFiles,
       dirtyFiles: status.worktreeSeed.dirtyFiles,
-      deltaParsedFiles: status.worktreeSeed.deltaParsedFiles
+      deltaParsedFiles: status.worktreeSeed.deltaParsedFiles,
+      fingerprintMatched: status.worktreeSeed.fingerprintMatched,
+      cacheDirsScanned: status.worktreeSeed.cacheDirsScanned,
+      eligibleSnapshots: status.worktreeSeed.eligibleSnapshots,
+      metaMissing: status.worktreeSeed.metaMissing,
+      selfSkip: status.worktreeSeed.selfSkip,
+      familyMismatch: status.worktreeSeed.familyMismatch,
+      identityMismatch: status.worktreeSeed.identityMismatch,
+      coverageIncomplete: status.worktreeSeed.coverageIncomplete
     })
   });
 }

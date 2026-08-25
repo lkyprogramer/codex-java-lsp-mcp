@@ -17,7 +17,7 @@ import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import type { WorktreeIdentity } from "../worktree-identity.js";
 import type { JavaParserBackend } from "./java-parser-backend.js";
 import { deriveJavaSourceLayout, parseJavaSourceFile, resolvedPathWithinRepo as resolveReadableRepoPath } from "./java-index-file-parse.js";
-import { computeBuildFingerprint, computeExtractorVersion } from "./build-fingerprint.js";
+import { computeBuildFingerprint, computeBuildFingerprintEntries, computeExtractorVersion } from "./build-fingerprint.js";
 import { CoverageTracker } from "./coverage.js";
 import {
   computeCurrentSnapshotManifestFingerprint,
@@ -1543,8 +1543,19 @@ async function attemptSiblingSeed(
         ...emptyWorktreeSeedStatus("NO_VALID_SOURCE"),
         attempted: true,
         cacheDirsScanned: scanTelemetry.cacheDirsScanned,
-        eligibleSnapshots: scanTelemetry.eligibleSnapshots
+        eligibleSnapshots: scanTelemetry.eligibleSnapshots,
+        metaMissing: scanTelemetry.metaMissing,
+        selfSkip: scanTelemetry.selfSkip,
+        familyMismatch: scanTelemetry.familyMismatch,
+        identityMismatch: scanTelemetry.identityMismatch,
+        coverageIncomplete: scanTelemetry.coverageIncomplete
       };
+    }
+    if (!candidate.fingerprintMatched) {
+      const entries = await computeBuildFingerprintEntries(repoRoot, layout);
+      console.error(
+        `[codex-java-lsp] worktree seed fingerprint mismatch source=${candidate.sourceRepoHash} targetEntries=${entries.length}`
+      );
     }
     const seeded = await seeder.seedValidatedFacts(candidate, seedIdentity, repoRoot, layout, generation);
     store = seeded.store;
@@ -1566,6 +1577,12 @@ async function attemptSiblingSeed(
       dirtyResources: seeded.result.dirtyResources,
       cacheDirsScanned: scanTelemetry.cacheDirsScanned,
       eligibleSnapshots: scanTelemetry.eligibleSnapshots,
+      fingerprintMatched: candidate.fingerprintMatched,
+      metaMissing: scanTelemetry.metaMissing,
+      selfSkip: scanTelemetry.selfSkip,
+      familyMismatch: scanTelemetry.familyMismatch,
+      identityMismatch: scanTelemetry.identityMismatch,
+      coverageIncomplete: scanTelemetry.coverageIncomplete,
       candidateDecompressMs: seeded.result.candidateDecompressMs,
       initialManifestScanMs: seeded.result.initialManifestScanMs,
       finalManifestScanMs: seeded.result.finalManifestScanMs,
@@ -1889,7 +1906,15 @@ async function processBackgroundChunk(sweep: BackgroundSweep): Promise<void> {
     // knows the sweep's final, authoritative settled generation - rescan
     // here, before the flush below serializes resourceCoverage's state, so a
     // gap from any of those paths is closed regardless of its origin.
-    if (!closing && store && layout && !resourceCoverage.every(entry => entry.generation === sweep.generation)) {
+    if (
+      !closing
+      && store
+      && layout
+      && (
+        (layout.resourceRoots.length > 0 && resourceCoverage.length === 0)
+        || !resourceCoverage.every(entry => entry.generation === sweep.generation)
+      )
+    ) {
       await indexMyBatisResources(store, layout, sweep.generation);
     }
     // Step 5: a full sweep's completion forces an immediate (non-debounced)
