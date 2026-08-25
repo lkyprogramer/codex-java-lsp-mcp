@@ -163,6 +163,74 @@ test("isJavaIndexPrewarmReady requires durable snapshot or complete coverage wit
     hibernated: true
   }), false);
   assert.equal(isJavaIndexPrewarmReady(base), true);
+  assert.equal(isJavaIndexPrewarmReady({
+    ...base,
+    snapshot: { state: "DURABLE", durableGeneration: 1, durableManifestFingerprint: "m" },
+    factsHydrated: false
+  }, { hydrate: false }), true);
+});
+
+test("prewarmRepo hydrate:false hibernates after files-only ready", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const javaIndex = new RecordingJavaIndex(() => 0);
+  const manager = new RepoRuntimeManager(fakeResolver(), {
+    idleTtlMs: 100000, hibernateTtlMs: 100000, indexIdleTtlMs: 0, pressureIntervalMs: 0, requestTimeoutMs: 1000
+  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
+    fakeCoordination(), new NoopCrossProcessLeaseStore());
+  await manager.prewarmRepo({ repoRoot: "/repo-a" }, { hydrate: false });
+  assert.ok(javaIndex.calls.includes("hibernate"));
+  await manager.shutdownAll();
+});
+
+test("index idle TTL fully closes a hibernated cold runtime but not a hot-set alias", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const coldIndex = new RecordingJavaIndex(() => 0);
+  const hotIndex = new RecordingJavaIndex(() => 0);
+  const manager = new RepoRuntimeManager({
+    async resolve(selector: { repoRoot?: string }) {
+      const repoRoot = selector.repoRoot || "/repo";
+      const repoHash = repoRoot.replace(/\W/g, "");
+      return {
+        repoRoot,
+        repoHash,
+        rootSource: "explicit" as const,
+        aliases: repoRoot === "/hot" ? ["lishuedu"] : ["cipherlink"],
+        layoutProfile: "generic-java" as const,
+        lsp: { enabled: true, matchedBy: "direct-root" as const, configuredRoot: repoRoot, effectiveRepoRoot: repoRoot },
+        worktree: { repoRoot, repoHash, isLinkedWorktree: false }
+      };
+    }
+  }, {
+    idleTtlMs: 100000,
+    hibernateTtlMs: 100000,
+    indexIdleTtlMs: 40,
+    hotIndexAliases: new Set(["lishuedu"]),
+    pressureIntervalMs: 0,
+    requestTimeoutMs: 1000
+  }, resolved => ({
+    ...fakeContext(resolved, sessions),
+    javaIndexClient: (resolved.repoRoot === "/hot" ? hotIndex : coldIndex) as never
+  }), fakeCoordination(), new NoopCrossProcessLeaseStore());
+
+  await manager.prewarmRepo({ repoRoot: "/cold" }, { hydrate: false });
+  await manager.prewarmRepo({ repoRoot: "/hot" }, { hydrate: false });
+  await delay(120);
+  assert.ok(coldIndex.calls.includes("close"), "cold hibernated isolate must close");
+  assert.equal(hotIndex.calls.includes("close"), false, "hot-set isolate stays");
+  await manager.shutdownAll();
+});
+
+test("index idle TTL 0 never registers a close timer", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const javaIndex = new RecordingJavaIndex(() => 0);
+  const manager = new RepoRuntimeManager(fakeResolver(), {
+    idleTtlMs: 100000, hibernateTtlMs: 20, indexIdleTtlMs: 0, pressureIntervalMs: 0, requestTimeoutMs: 1000
+  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
+    fakeCoordination(), new NoopCrossProcessLeaseStore());
+  await manager.prewarmRepo({ repoRoot: "/repo-a" }, { hydrate: false });
+  await delay(80);
+  assert.equal(javaIndex.calls.includes("close"), false);
+  await manager.shutdownAll();
 });
 
 test("prewarmRepo skips repos that are not LSP-enabled", async () => {

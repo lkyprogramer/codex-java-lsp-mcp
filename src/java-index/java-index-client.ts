@@ -104,11 +104,20 @@ type PendingRequest = {
 
 type CancelledTombstone = Pick<PendingRequest, "operation" | "postedAtMs" | "telemetry">;
 
-export function isJavaIndexPrewarmReady(status: JavaIndexStatus): boolean {
+export type JavaIndexPrewarmReadyOptions = {
+  /** When false, files-only DURABLE is enough (cold-pin prewarm). Default true. */
+  hydrate?: boolean;
+};
+
+export function isJavaIndexPrewarmReady(
+  status: JavaIndexStatus,
+  options: JavaIndexPrewarmReadyOptions = {}
+): boolean {
+  const hydrate = options.hydrate !== false;
   if (status.snapshotVerificationPending) return false;
   if (status.pendingBackground > 0) return false;
-  if (status.hibernated) return false;
-  if (status.factsHydrated === false) return false;
+  if (hydrate && status.hibernated) return false;
+  if (hydrate && status.factsHydrated === false) return false;
   if (status.snapshot?.state === "DURABLE") return true;
   return status.files > 0
     && status.coverage.length > 0
@@ -133,7 +142,9 @@ function emptyStatus(): JavaIndexStatus {
 }
 
 function defaultWorkerFactory(): WorkerLike {
-  return new Worker(new URL("./java-index-worker.js", import.meta.url)) as unknown as WorkerLike;
+  return new Worker(new URL("./java-index-worker.js", import.meta.url), {
+    resourceLimits: { maxOldGenerationSizeMb: 1536 }
+  }) as unknown as WorkerLike;
 }
 
 const MAX_CANCELLED_TOMBSTONES = 64;
@@ -255,13 +266,17 @@ export class JavaIndexClient {
   }
 
   /** Poll STATUS until snapshot/coverage is usable, or the budget is spent. Does not throw on timeout. */
-  async awaitPrewarmReady(requestOptions: JavaIndexRequestOptions = {}): Promise<JavaIndexStatus> {
+  async awaitPrewarmReady(
+    requestOptions: JavaIndexRequestOptions & JavaIndexPrewarmReadyOptions = {}
+  ): Promise<JavaIndexStatus> {
+    const hydrate = requestOptions.hydrate !== false;
     const budget = requestOptions.budget ?? DeadlineBudget.fromTimeout(60_000);
-    const controls = { ...requestOptions, budget };
+    const controls: JavaIndexRequestOptions = { budget, signal: requestOptions.signal, telemetry: requestOptions.telemetry };
+    const readyOptions: JavaIndexPrewarmReadyOptions = { hydrate };
     let status = await this.status(controls);
     let hydrateAttempted = false;
-    while (!isJavaIndexPrewarmReady(status) && budget.remainingMs() > 50) {
-      if (status.factsHydrated === false && !hydrateAttempted && !status.snapshotVerificationPending) {
+    while (!isJavaIndexPrewarmReady(status, readyOptions) && budget.remainingMs() > 50) {
+      if (hydrate && status.factsHydrated === false && !hydrateAttempted && !status.snapshotVerificationPending) {
         hydrateAttempted = true;
         try {
           await this.queryRepositoryFactMarkers([], [], controls);

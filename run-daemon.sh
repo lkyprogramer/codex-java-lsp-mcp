@@ -23,4 +23,8 @@ if [[ -z "${JAVA_LSP_HTTP_PORT:-}" ]]; then
   exit 1
 fi
 
-exec "$NODE_BIN" "$CURRENT_DIR/dist/http-server.js"
+# Pin watchers plus JavaIndex verification can hold thousands of source FDs;
+# the default macOS nofile (often 256/10240) makes spawn() fail with EBADF.
+ulimit -n 65536 2>/dev/null || true
+
+exec "$NODE_BIN" --max-old-space-size=768 "$CURRENT_DIR/dist/http-server.js"

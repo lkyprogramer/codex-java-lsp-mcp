@@ -20,6 +20,16 @@
   </dict>
   <key>ThrottleInterval</key>
   <integer>10</integer>
+  <key>SoftResourceLimits</key>
+  <dict>
+    <key>NumberOfFiles</key>
+    <integer>65536</integer>
+  </dict>
+  <key>HardResourceLimits</key>
+  <dict>
+    <key>NumberOfFiles</key>
+    <integer>65536</integer>
+  </dict>
   <key>StandardOutPath</key>
   <string>__LOG_DIR__/daemon.stdout.log</string>
   <key>StandardErrorPath</key>

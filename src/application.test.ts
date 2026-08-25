@@ -244,8 +244,8 @@ test("HTTP application prewarms pinned repos serially and skips unpinned or dupl
       initialize: async () => undefined,
       shutdownAll: async () => undefined,
       forceTerminateOwnedJdtls: async () => undefined,
-      prewarmRepo: async (selector: { projectId?: string }) => {
-        events.push(`start:${selector.projectId}`);
+      prewarmRepo: async (selector: { projectId?: string }, options?: { hydrate?: boolean }) => {
+        events.push(`start:${selector.projectId}:${options?.hydrate ? "hot" : "cold"}`);
         if (selector.projectId === "one") await firstGate;
         events.push(`end:${selector.projectId}`);
       }
@@ -254,14 +254,62 @@ test("HTTP application prewarms pinned repos serially and skips unpinned or dupl
   await warmupInstalledJdks();
   await application.initialize();
   const prewarm = application.startPinnedRepoPrewarm();
-  for (let attempt = 0; attempt < 200 && !events.includes("start:one"); attempt += 1) {
+  for (let attempt = 0; attempt < 200 && !events.includes("start:one:cold"); attempt += 1) {
     await new Promise(resolve => setTimeout(resolve, 5));
   }
-  assert.deepEqual(events, ["start:one"]);
+  assert.deepEqual(events, ["start:one:cold"]);
   releaseFirst();
   await prewarm;
-  assert.deepEqual(events, ["start:one", "end:one", "start:two", "end:two"]);
+  assert.deepEqual(events, ["start:one:cold", "end:one", "start:two:cold", "end:two"]);
   await application.close();
+});
+
+test("HTTP application hydrates JAVA_LSP_PREWARM_HOT aliases and logs unknown ones", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "java-lsp-prewarm-hot-"));
+  await writeFile(path.join(dir, "projects.json"), JSON.stringify({
+    aliases: [
+      { id: "lishuedu", root: path.join(dir, "lishuedu"), lspEnabled: true },
+      { id: "cipherlink", root: path.join(dir, "cipherlink"), lspEnabled: true }
+    ]
+  }));
+  const flags: Array<{ id?: string; hydrate?: boolean }> = [];
+  const originalError = console.error;
+  const errors: string[] = [];
+  console.error = (...args: unknown[]) => {
+    errors.push(args.map(String).join(" "));
+  };
+  const previous = process.env.JAVA_LSP_PREWARM_HOT;
+  process.env.JAVA_LSP_PREWARM_HOT = "lishuedu,nope";
+  const application = new JavaLspApplication({
+    transportMode: "streamable_http",
+    projectsConfigPath: path.join(dir, "projects.json"),
+    resolverOptions: { cwdFallback: "reject" },
+    cacheJanitorIntervalMs: 0,
+    cleanup: () => ({ scanned: 0, removed: 0, skipped: 0, failures: 0, removedDirs: [] }),
+    runtimes: {
+      initialize: async () => undefined,
+      shutdownAll: async () => undefined,
+      forceTerminateOwnedJdtls: async () => undefined,
+      prewarmRepo: async (selector: { projectId?: string }, options?: { hydrate?: boolean }) => {
+        flags.push({ id: selector.projectId, hydrate: options?.hydrate });
+      }
+    } as never
+  });
+  try {
+    await warmupInstalledJdks();
+    await application.initialize();
+    await application.startPinnedRepoPrewarm();
+    assert.deepEqual(flags, [
+      { id: "lishuedu", hydrate: true },
+      { id: "cipherlink", hydrate: false }
+    ]);
+    assert.ok(errors.some(line => /unknown JAVA_LSP_PREWARM_HOT alias nope/.test(line)));
+    await application.close();
+  } finally {
+    console.error = originalError;
+    if (previous === undefined) delete process.env.JAVA_LSP_PREWARM_HOT;
+    else process.env.JAVA_LSP_PREWARM_HOT = previous;
+  }
 });
 
 test("HTTP application continues pinned prewarm after a per-repo failure", async () => {

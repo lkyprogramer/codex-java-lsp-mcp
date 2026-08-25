@@ -13,6 +13,7 @@ import {
 } from "./worktree-cache-cleanup.js";
 import { validateJdtlsTransportEnvironment } from "./jdtls-session.js";
 import { warmupInstalledJdks } from "./project-jdk.js";
+import { parsePrewarmHotSet } from "./resource-defaults.js";
 
 export type JavaLspApplicationState = "created" | "ready" | "draining" | "closed";
 
@@ -239,15 +240,20 @@ export class JavaLspApplication {
       await warmupInstalledJdks();
       if (this.prewarmStopped || this.currentState !== "ready") return;
       await this.registry.reloadIfChanged();
+      const aliases = this.registry.aliases();
+      const { hot, ignored } = parsePrewarmHotSet(aliases.map(alias => alias.id));
+      for (const id of ignored) {
+        console.error(`[codex-java-lsp] ignoring unknown JAVA_LSP_PREWARM_HOT alias ${id}`);
+      }
       const seen = new Set<string>();
-      for (const alias of this.registry.aliases()) {
+      for (const alias of aliases) {
         if (this.prewarmStopped || this.currentState !== "ready") return;
         if (!alias.lspEnabled) continue;
         const root = canonicalPath(alias.root);
         if (seen.has(root)) continue;
         seen.add(root);
         try {
-          await this.runtimes.prewarmRepo({ projectId: alias.id });
+          await this.runtimes.prewarmRepo({ projectId: alias.id }, { hydrate: hot.has(alias.id) });
         } catch (error) {
           console.error(`[codex-java-lsp] pinned repo prewarm failed (${alias.id})`, error);
         }

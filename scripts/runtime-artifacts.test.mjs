@@ -100,12 +100,15 @@ test("stable daemon runner resolves only the current immutable release", async t
   await symlink("releases/one", path.join(fixture, "current"));
   const capture = path.join(fixture, "node-argument.txt");
   const fakeNode = path.join(fixture, "fake-node.sh");
-  await writeFile(fakeNode, `#!/usr/bin/env bash\nprintf '%s' \"$1\" > \"${capture}\"\n`);
+  await writeFile(fakeNode, `#!/usr/bin/env bash\nprintf '%s\\n' "$@" > "${capture}"\n`);
   await chmod(fakeNode, 0o755);
   await writeFile(path.join(fixture, "run-daemon.sh"), await readFile(path.join(projectRoot, "run-daemon.sh"), "utf8"));
   await chmod(path.join(fixture, "run-daemon.sh"), 0o755);
   await run(path.join(fixture, "run-daemon.sh"), [], { NODE_BIN: fakeNode, JAVA_LSP_HTTP_PORT: "38456" });
-  assert.equal(await readFile(capture, "utf8"), path.join(fixture, "current", "dist", "http-server.js"));
+  assert.deepEqual((await readFile(capture, "utf8")).trim().split("\n"), [
+    "--max-old-space-size=768",
+    path.join(fixture, "current", "dist", "http-server.js")
+  ]);
 });
 
 test("stable hook runner resolves only the current immutable release", async t => {

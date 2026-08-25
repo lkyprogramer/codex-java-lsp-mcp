@@ -30,6 +30,28 @@ export function positiveInteger(value: string | undefined, fallback: number): nu
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
 }
 
+/** Like positiveInteger but 0 is a valid disable-the-timer sentinel. */
+export function nonNegativeInteger(value: string | undefined, fallback: number): number {
+  if (value === undefined || value === "") return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : fallback;
+}
+
+export const DEFAULT_PREWARM_HOT = "lishuedu,lishu-v2";
+export const DEFAULT_INDEX_IDLE_TTL_MS = 1_200_000;
+
+export function parsePrewarmHotSet(
+  knownIds: readonly string[] = [],
+  raw: string | undefined = process.env.JAVA_LSP_PREWARM_HOT
+): { hot: Set<string>; ignored: string[] } {
+  const source = raw === undefined || raw.trim() === "" ? DEFAULT_PREWARM_HOT : raw;
+  const wanted = [...new Set(source.split(",").map(id => id.trim()).filter(Boolean))];
+  if (knownIds.length === 0) return { hot: new Set(wanted), ignored: [] };
+  const known = new Set(knownIds);
+  const ignored = wanted.filter(id => !known.has(id));
+  return { hot: new Set(wanted.filter(id => known.has(id))), ignored };
+}
+
 function defaults(memoryGb: number, maxActiveRepos: number, idleTtlMs: number, jdtlsXmx: string, importConcurrency: number): ResourceDefaults {
   return {
     machineMemoryGb: Math.round(memoryGb),

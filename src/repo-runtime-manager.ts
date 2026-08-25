@@ -22,6 +22,9 @@ import { repoCacheBase, repoCacheRoot } from "./repo-layout.js";
 import { RepoResolver, type RepoSelector, type ResolvedRepo } from "./repo-resolver.js";
 import {
   DEFAULT_FREEMEM_PRESSURE_BYTES,
+  DEFAULT_INDEX_IDLE_TTL_MS,
+  nonNegativeInteger,
+  parsePrewarmHotSet,
   positiveInteger,
   resourceDefaults,
   type ResourceDefaults
@@ -106,6 +109,7 @@ type RuntimeEntry = {
   lastUsedAt: number;
   idleTimer?: NodeJS.Timeout;
   hibernateTimer?: NodeJS.Timeout;
+  indexIdleTimer?: NodeJS.Timeout;
   hibernated: boolean;
   lspReservation: LspReservation;
   unsubscribeLifecycle?: () => void;
@@ -133,6 +137,8 @@ type RuntimeManagerOptions = {
   maxActiveRepos: number;
   idleTtlMs: number;
   hibernateTtlMs: number;
+  indexIdleTtlMs: number;
+  hotIndexAliases: ReadonlySet<string>;
   freememPressureBytes: number;
   pressureIntervalMs: number;
   freemem?: () => number;
@@ -166,6 +172,8 @@ export class RepoRuntimeManager {
       maxActiveRepos: positiveInteger(process.env.JAVA_LSP_MAX_ACTIVE_REPOS, this.defaults.maxActiveRepos),
       idleTtlMs: positiveInteger(process.env.JAVA_LSP_IDLE_TTL_MS, this.defaults.idleTtlMs),
       hibernateTtlMs: positiveInteger(process.env.JAVA_LSP_HIBERNATE_TTL_MS, this.defaults.hibernateTtlMs),
+      indexIdleTtlMs: nonNegativeInteger(process.env.JAVA_LSP_INDEX_IDLE_TTL_MS, DEFAULT_INDEX_IDLE_TTL_MS),
+      hotIndexAliases: options.hotIndexAliases ?? parsePrewarmHotSet().hot,
       freememPressureBytes: positiveInteger(
         process.env.JAVA_LSP_FREEMEM_PRESSURE_BYTES,
         DEFAULT_FREEMEM_PRESSURE_BYTES
@@ -236,7 +244,8 @@ export class RepoRuntimeManager {
    * pinned repo must not be opened until this returns, or cold-build children
    * stampede the machine-wide BUILD_SLOT.
    */
-  async prewarmRepo(selector: RepoSelector): Promise<void> {
+  async prewarmRepo(selector: RepoSelector, options: { hydrate?: boolean } = {}): Promise<void> {
+    const hydrate = options.hydrate !== false;
     const resolved = await this.resolver.resolve(selector);
     if (!resolved.lsp.enabled) return;
     const entry = await this.getOrCreate(resolved);
@@ -245,21 +254,34 @@ export class RepoRuntimeManager {
     if (client && typeof client.awaitPrewarmReady === "function") {
       const budget = DeadlineBudget.fromTimeout(PREWARM_INDEX_MS);
       try {
-        let status = await client.awaitPrewarmReady({ budget });
-        if (!isJavaIndexPrewarmReady(status)) {
+        let status = await client.awaitPrewarmReady({ budget, hydrate });
+        if (!isJavaIndexPrewarmReady(status, { hydrate })) {
           await client.reconcile(entry.generation.snapshot().value, { budget });
-          status = await client.awaitPrewarmReady({ budget });
+          status = await client.awaitPrewarmReady({ budget, hydrate });
         }
-        if (isJavaIndexPrewarmReady(status) && status.snapshot?.state !== "DURABLE" && typeof client.flush === "function") {
+        if (
+          hydrate
+          && isJavaIndexPrewarmReady(status, { hydrate })
+          && status.snapshot?.state !== "DURABLE"
+          && typeof client.flush === "function"
+        ) {
           status = await client.flush({ budget });
         }
-        if (!isJavaIndexPrewarmReady(status)) {
+        if (hydrate && !isJavaIndexPrewarmReady(status, { hydrate })) {
           console.error(
             `[codex-java-lsp] pinned repo prewarm index incomplete files=${status.files} snapshot=${status.snapshot?.state ?? "none"}`
           );
         }
       } catch (error) {
         console.error("[codex-java-lsp] pinned repo prewarm index wait failed", error);
+      }
+    }
+    if (!hydrate && client && typeof client.hibernate === "function") {
+      try {
+        await client.hibernate({ budget: DeadlineBudget.fromTimeout(PREWARM_INDEX_MS) });
+        entry.hibernated = true;
+      } catch (error) {
+        console.error("[codex-java-lsp] pinned repo prewarm hibernate failed", error);
       }
     }
     this.scheduleIdleShutdown(entry);
@@ -1001,6 +1023,10 @@ export class RepoRuntimeManager {
       clearTimeout(entry.hibernateTimer);
       entry.hibernateTimer = undefined;
     }
+    if (entry.indexIdleTimer) {
+      clearTimeout(entry.indexIdleTimer);
+      entry.indexIdleTimer = undefined;
+    }
   }
 
   private scheduleIdleShutdown(entry: RuntimeEntry): void {
@@ -1022,6 +1048,20 @@ export class RepoRuntimeManager {
       }, this.options.idleTtlMs);
       entry.idleTimer.unref?.();
     }
+    if (this.options.indexIdleTtlMs > 0 && !this.isHotIndexEntry(entry)) {
+      entry.indexIdleTimer = setTimeout(() => {
+        if (entry.refCount === 0 && entry.hibernated && !this.isHotIndexEntry(entry)) {
+          void this.shutdown(entry.context.repoRoot);
+        }
+      }, this.options.indexIdleTtlMs);
+      entry.indexIdleTimer.unref?.();
+    }
+  }
+
+  private isHotIndexEntry(entry: RuntimeEntry): boolean {
+    const hot = this.options.hotIndexAliases;
+    if (hot.size === 0) return false;
+    return (entry.context.aliases ?? []).some(alias => hot.has(alias));
   }
 
   private startPressureWatch(): void {

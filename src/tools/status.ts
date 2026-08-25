@@ -184,6 +184,8 @@ function summarizeJavaIndex(status: JavaIndexStatus): Record<string, unknown> {
     files: status.files,
     coverage: summarizeCoverage(status),
     pendingBackground: status.pendingBackground,
+    factsHydrated: status.factsHydrated,
+    hibernated: status.hibernated,
     worktreeSeed: status.worktreeSeed && compact({
       completion: status.worktreeSeed.completion,
       reusedFiles: status.worktreeSeed.reusedFiles,
