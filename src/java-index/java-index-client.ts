@@ -107,6 +107,8 @@ type CancelledTombstone = Pick<PendingRequest, "operation" | "postedAtMs" | "tel
 export function isJavaIndexPrewarmReady(status: JavaIndexStatus): boolean {
   if (status.snapshotVerificationPending) return false;
   if (status.pendingBackground > 0) return false;
+  if (status.hibernated) return false;
+  if (status.factsHydrated === false) return false;
   if (status.snapshot?.state === "DURABLE") return true;
   return status.files > 0
     && status.coverage.length > 0
@@ -255,12 +257,25 @@ export class JavaIndexClient {
   /** Poll STATUS until snapshot/coverage is usable, or the budget is spent. Does not throw on timeout. */
   async awaitPrewarmReady(requestOptions: JavaIndexRequestOptions = {}): Promise<JavaIndexStatus> {
     const budget = requestOptions.budget ?? DeadlineBudget.fromTimeout(60_000);
-    let status = await this.status({ ...requestOptions, budget });
+    const controls = { ...requestOptions, budget };
+    let status = await this.status(controls);
+    let hydrateAttempted = false;
     while (!isJavaIndexPrewarmReady(status) && budget.remainingMs() > 50) {
+      if (status.factsHydrated === false && !hydrateAttempted && !status.snapshotVerificationPending) {
+        hydrateAttempted = true;
+        try {
+          await this.queryRepositoryFactMarkers([], [], controls);
+        } catch (error) {
+          if (!(error instanceof JavaIntelligenceError) || error.code !== "DEADLINE_EXCEEDED") throw error;
+        }
+        if (budget.remainingMs() <= 50) break;
+        status = await this.status(controls);
+        continue;
+      }
       await new Promise<void>(resolve => {
         setTimeout(resolve, Math.min(250, budget.remainingMs(250)));
       });
-      status = await this.status({ ...requestOptions, budget });
+      status = await this.status(controls);
     }
     return status;
   }

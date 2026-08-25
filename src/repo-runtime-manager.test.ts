@@ -152,6 +152,16 @@ test("isJavaIndexPrewarmReady requires durable snapshot or complete coverage wit
     ...base,
     snapshot: { state: "DURABLE", durableGeneration: 1, durableManifestFingerprint: "m" }
   }), true);
+  assert.equal(isJavaIndexPrewarmReady({
+    ...base,
+    snapshot: { state: "DURABLE", durableGeneration: 1, durableManifestFingerprint: "m" },
+    factsHydrated: false
+  }), false);
+  assert.equal(isJavaIndexPrewarmReady({
+    ...base,
+    snapshot: { state: "DURABLE", durableGeneration: 1, durableManifestFingerprint: "m" },
+    hibernated: true
+  }), false);
   assert.equal(isJavaIndexPrewarmReady(base), true);
 });
 

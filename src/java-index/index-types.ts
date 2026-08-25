@@ -268,6 +268,8 @@ export type JavaIndexStatus = {
   worktreeSeed?: WorktreeSeedStatus;
   /** Worker has unloaded facts/parse trees; next fact query reheats from v4. */
   hibernated?: boolean;
+  /** Rest-segment facts are in the store. Absent on older workers. */
+  factsHydrated?: boolean;
   /** Worker-local heapUsed, published on HIBERNATE (S4). */
   heapUsedBytes?: number;
 };

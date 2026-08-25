@@ -578,7 +578,9 @@ function currentStatus(overrides: Partial<JavaIndexStatus> = {}): JavaIndexStatu
     pendingForeground: foregroundQueue.length,
     pendingBackground: pendingSweep
       + (ownSnapshotVerificationPending ? 1 : 0)
-      + (snapshotFlushInProgress ? 1 : 0),
+      + (snapshotFlushInProgress ? 1 : 0)
+      + (factsHydrateInFlight ? 1 : 0),
+    factsHydrated: snapshotFactsHydrated && !hibernated,
     ...(ownSnapshotVerificationPending ? { snapshotVerificationPending: true } : {}),
     ...(lastRefreshError ? { lastError: lastRefreshError } : {}),
     ...(worktreeSeedStatus ? { worktreeSeed: worktreeSeedStatus } : {}),

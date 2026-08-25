@@ -812,6 +812,10 @@ export function validateJavaIndexStatus(value: unknown): JavaIndexStatus {
       if (!isBoolean(value)) invalid(valueContext, "expected a boolean");
       return value;
     })),
+    ...withOptional("factsHydrated", optional(source.factsHydrated, `${context}.factsHydrated`, (value, valueContext) => {
+      if (!isBoolean(value)) invalid(valueContext, "expected a boolean");
+      return value;
+    })),
     ...withOptional("heapUsedBytes", optional(source.heapUsedBytes, `${context}.heapUsedBytes`, (value, valueContext) => {
       if (!isNumber(value)) invalid(valueContext, "expected a number");
       return value;

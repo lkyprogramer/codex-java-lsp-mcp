@@ -303,6 +303,11 @@ test("validateJavaIndexStatus accepts a well-formed status and rejects an unknow
     ...status,
     snapshot: { state: "PENDING", durableGeneration: 3 }
   }));
+  assert.deepEqual(
+    validateJavaIndexStatus({ ...status, factsHydrated: false }),
+    { ...status, factsHydrated: false }
+  );
+  assert.throws(() => validateJavaIndexStatus({ ...status, factsHydrated: "yes" }));
 });
 
 test("validateAnchorFacts passes through undefined and rejects a payload missing required fields", () => {

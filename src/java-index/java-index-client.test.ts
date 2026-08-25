@@ -150,6 +150,36 @@ test("two out-of-order responses resolve correct promises", async () => {
   assert.equal(anchorResult, undefined);
 });
 
+test("awaitPrewarmReady posts fact-markers until a files-only DURABLE snapshot reports factsHydrated", async () => {
+  const { client, worker } = await openedClient();
+  const durable = {
+    ...validStatus(1),
+    files: 2,
+    snapshot: { state: "DURABLE" as const, durableGeneration: 1, durableManifestFingerprint: "m" }
+  };
+  const ready = client.awaitPrewarmReady({ budget: DeadlineBudget.fromTimeout(2000) });
+  await flushMicrotasks();
+  const firstStatus = worker.posted[1]!;
+  assert.equal(firstStatus.type, "STATUS");
+  worker.emitMessage({ id: firstStatus.id, ok: true, value: { ...durable, factsHydrated: false } });
+  let markers = worker.posted.find(message => message.type === "QUERY_REPOSITORY_FACT_MARKERS");
+  for (let attempt = 0; attempt < 20 && !markers; attempt += 1) {
+    await flushMicrotasks();
+    markers = worker.posted.find(message => message.type === "QUERY_REPOSITORY_FACT_MARKERS");
+  }
+  assert.ok(markers, "prewarm must trigger rest-segment hydrate via QUERY_REPOSITORY_FACT_MARKERS");
+  worker.emitMessage({
+    id: markers.id,
+    ok: true,
+    value: { importPrefixFound: false, annotationPrefixFound: false }
+  });
+  await flushMicrotasks();
+  const secondStatus = worker.posted.filter(message => message.type === "STATUS").at(-1)!;
+  worker.emitMessage({ id: secondStatus.id, ok: true, value: { ...durable, factsHydrated: true } });
+  const status = await ready;
+  assert.equal(status.factsHydrated, true);
+});
+
 test("request-local telemetry records JSON bytes and worker-local queue/processing timing", async () => {
   const { client, worker } = await openedClient();
   const telemetry = new JavaIndexRpcTelemetryCollector();
