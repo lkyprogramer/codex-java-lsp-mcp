@@ -12,18 +12,20 @@
       "unitFingerprintSdkmanrcUnchanged": true,
       "unitSiblingFingerprintMismatchStillSeeds": true,
       "unitFamilyHashRecoveredFromCacheMeta": true,
-      "liveStatusMs": 15009,
+      "liveRetries": 5,
+      "liveLoadAtLastRetry": 18.6,
+      "liveStatusMs": 15011,
       "liveSeedCompletion": null,
       "liveReusedFiles": 0,
       "liveChildSpawned": false,
-      "hostLoad1m": 42.73
+      "siblingSnapshotStillPresent": true
     }
   },
   "gates": { "D7": "FAIL" },
   "residual": [
-    "Isolated tests prove: .sdkmanrc/.java-version/.mvn/jvm.config no longer change the fingerprint; sibling fingerprint mismatch still seeds; extractorVersion still refuses; matched fingerprint wins over a newer mismatch; skip-reason counters; familyHash recovered from the target cache meta.",
-    "First live D7 on aa4e8da used familyKey=repoHash (07230b6e0a13) so every sibling counted as familyMismatch. c8fe7c1 recovers familyHash from repo-meta.json.",
-    "After c8fe7c1 install, java_status on torna still exhausted the 15s runtime.create budget while host load was 40-70 and pin prewarm workers were OOMing at 1536 MiB. No new seed log line was emitted, so D7 reuse was not observed.",
+    "Isolated tests prove fingerprint non-veto, JDK-pin files leaving the hash, skip-reason counters, and familyHash recovery from repo-meta.json.",
+    "Live D7 was retried after daemon memory dropped to 284-585 MiB and 1-minute load to 15-19, including immediately after restart and after prewarm OOM. Every attempt exhausted the 15s runtime.create / java-index.open budget. OPEN continues in the background per the tool error, but no worktreeSeed completion was observed and no new seed log line was emitted from c8fe7c1.",
+    "cold-build-metrics.json mtime stayed 2026-08-25 11:18:35, so the torna worktree did not spawn a cold-build child.",
     "See docs/phase-d/m4-escalation.md."
   ]
 }

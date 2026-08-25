@@ -10,13 +10,16 @@
       "indexIdleTtlMs": 1200000,
       "hotSetExempt": true,
       "ttlZeroDisables": true,
-      "footprintAfterPrewarmMiB": 509
+      "footprintAfterPrewarmMiB": 509,
+      "idleSoakEndMiB": 973,
+      "idleSoakPlateauMiB": 706,
+      "idleSoakMinutes": 31
     }
   },
   "gates": { "D1": "PARTIAL" },
   "residual": [
     "Fake-clock tests cover cold hibernated close, hot-set exemption, refCount>0, and TTL 0.",
-    "V1 30-minute idle soak is the production D1 measurement; this card does not wait 30 minutes itself.",
-    "M4 fingerprint invalidation later triggered serial cold rebuilds and worker OOM, so D1 must be re-measured after the rebuild storm."
+    "V1 31-minute idle soak ended at 973 MiB (FAIL vs D1 900). Minutes 6-19 sat at 706 MiB, then rose to 969-973 after minute 20.",
+    "M4 fingerprint invalidation triggered serial cold rebuilds and worker OOM; D1 was re-measured after that storm."
   ]
 }

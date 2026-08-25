@@ -21,4 +21,12 @@ Isolated M4 tests are green (26/26 seeder+fingerprint after c8fe7c1; T0 278; gat
 1. Re-run D7 when 1-minute load is back under ~20 and lishu-v2 pin has a durable snapshot (or keep the existing sibling snapshot at `a72d9f683fd8`). Expected: `familyHash` from torna `repo-meta.json` matches, `fingerprintMatched=false`, `reusedFiles ≥ 0.9 × 1886`, `cold-build-metrics.json` mtime unchanged.
 2. Raise the worker isolate cap or stop hydrating lishu-v2 during the fingerprint-invalidation storm so OPEN/seed can finish inside the 15s `java_status` budget. Do not lower the public tool deadline.
 
+## Additional retries (same session)
+
+4. **After 30-minute idle soak, load 19.54.** Same 15s `runtime.router-status` / `java-index.open` timeout. Sibling snapshot `a72d9f683fd8` still present.
+5. **Daemon restart at load 14.98, probe immediately.** `Deadline exceeded before runtime.request-context` then `before/during java-index.open`. Prewarm then OOMed lishu-v2 isolate again (`phys_footprint_peak` 2927 MiB).
+6. **Two minutes after that restart, load 18.60, prewarm already failed.** Same 15s OPEN timeout. `repo-meta.json` on torna was touched (17:05) so `runtime.create` did start; no snapshot was written.
+
+Live D7 is blocked by the 15s public-tool deadline around `runtime.create`/`java-index.open` for this worktree, not by fingerprint veto. Options in §Next still apply; do not raise the public deadline as part of this card.
+
 Do not merge `main`. Do not treat this escalation as D7 PASS.
