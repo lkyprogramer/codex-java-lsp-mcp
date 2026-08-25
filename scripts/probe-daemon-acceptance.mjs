@@ -37,7 +37,7 @@ const pins = {
   "exam-parent-v3": {
     projectId: "exam-parent-v3",
     hot: false,
-    file: "/Users/luo/Documents/program/exam-parent-v3/lishu-exam-service/src/main/java/com/lishu/exam/LishuExamApplication.java"
+    file: "/Users/luo/Documents/program/exam-parent-v3/exam-management/src/main/java/com/hhtele/exam/management/ExamManagementApplication.java"
   }
 };
 
