@@ -174,6 +174,7 @@ test("record writes JSONL under an isolated dir and JAVA_LSP_TELEMETRY=0 writes 
     enabled: true,
     maxBuffer: 1,
     flushEveryMs: 0,
+    now: () => new Date("2026-08-24T01:02:03.000Z"),
     appendFile: (file, data) => {
       writes.push(file);
       appendViaFs(file, data);
