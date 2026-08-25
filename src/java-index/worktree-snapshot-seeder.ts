@@ -8,6 +8,7 @@ import type { LayoutContext } from "../layout-probe.js";
 import type { WorktreeIdentity } from "../worktree-identity.js";
 import { JavaIndexStore } from "./index-store.js";
 import { scanCurrentManifestStable, scanCurrentMyBatisManifestStable } from "./manifest.js";
+import { familyHashFromGitFiles } from "../worktree-identity.js";
 import { loadSiblingSnapshot, type SiblingSnapshotIdentity } from "./snapshot.js";
 
 const SNAPSHOT_FILE_NAME = "java-index-snapshot.json.gz";
@@ -150,7 +151,10 @@ export class WorktreeSnapshotSeeder {
     cacheBase: string
   ): Promise<WorktreeSeedCandidate | undefined> {
     if (!existsSync(cacheBase)) return undefined;
-    const familyKey = target.familyHash ?? familyHashFromOwnCacheMeta(cacheBase, target.repoHash) ?? target.repoHash;
+    const familyKey = target.familyHash
+      ?? familyHashFromOwnCacheMeta(cacheBase, target.repoHash)
+      ?? familyHashFromGitFiles(target.repoRoot)
+      ?? target.repoHash;
     const candidates: WorktreeSeedCandidate[] = [];
     let cacheDirsScanned = 0;
     let metaMissing = 0;

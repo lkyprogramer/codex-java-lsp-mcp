@@ -4,6 +4,8 @@
 // pos: The single owner of Git common-dir discovery. repoHash is the correctness
 //      identity for caches/JDT; familyHash is ONLY for lease/seed/sweep scoping.
 import { execFile } from "node:child_process";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import path from "node:path";
 import { promisify } from "node:util";
 import { canonicalPath, repoHash as hashRepoPath } from "./path-utils.js";
 
@@ -30,6 +32,32 @@ async function gitPath(repoRoot: string, arg: "--git-dir" | "--git-common-dir"):
   }
 }
 
+/**
+ * Family hash without spawning git. `git rev-parse` can fail with EBADF when
+ * the daemon already holds thousands of source FDs; the on-disk `.git` file or
+ * directory is enough to recover the same common-dir hash sibling seed uses.
+ */
+export function familyHashFromGitFiles(repoRoot: string): string | undefined {
+  try {
+    const gitPathOnDisk = path.join(repoRoot, ".git");
+    const stat = statSync(gitPathOnDisk);
+    if (stat.isDirectory()) return hashRepoPath(canonicalPath(gitPathOnDisk));
+    if (!stat.isFile()) return undefined;
+    const text = readFileSync(gitPathOnDisk, "utf8");
+    const match = /^gitdir:\s*(.+)$/m.exec(text);
+    if (!match) return undefined;
+    const gitDir = match[1]!.trim();
+    const absoluteGitDir = canonicalPath(path.isAbsolute(gitDir) ? gitDir : path.resolve(repoRoot, gitDir));
+    const marker = `${path.sep}worktrees${path.sep}`;
+    const worktreesAt = absoluteGitDir.lastIndexOf(marker);
+    const commonDir = worktreesAt >= 0 ? absoluteGitDir.slice(0, worktreesAt) : absoluteGitDir;
+    if (!existsSync(commonDir)) return undefined;
+    return hashRepoPath(canonicalPath(commonDir));
+  } catch {
+    return undefined;
+  }
+}
+
 export async function resolveWorktreeIdentity(inputRoot: string): Promise<WorktreeIdentity> {
   const repoRoot = canonicalPath(inputRoot);
   const repoHash = hashRepoPath(repoRoot);
@@ -37,18 +65,21 @@ export async function resolveWorktreeIdentity(inputRoot: string): Promise<Worktr
     gitPath(repoRoot, "--git-dir"),
     gitPath(repoRoot, "--git-common-dir")
   ]);
-  // Missing Git metadata is a valid state (a plain directory), not an error.
-  if (!gitDir || !gitCommonDir) {
+  if (gitDir && gitCommonDir) {
+    return {
+      repoRoot,
+      repoHash,
+      gitDir,
+      gitCommonDir,
+      familyHash: hashRepoPath(gitCommonDir),
+      isLinkedWorktree: gitDir !== gitCommonDir
+    };
+  }
+  const familyHash = familyHashFromGitFiles(repoRoot);
+  if (!familyHash) {
     return { repoRoot, repoHash, isLinkedWorktree: false };
   }
-  return {
-    repoRoot,
-    repoHash,
-    gitDir,
-    gitCommonDir,
-    familyHash: hashRepoPath(gitCommonDir),
-    isLinkedWorktree: gitDir !== gitCommonDir
-  };
+  return { repoRoot, repoHash, familyHash, isLinkedWorktree: familyHash !== hashRepoPath(path.join(repoRoot, ".git")) };
 }
 
 /**

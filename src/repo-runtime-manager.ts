@@ -833,7 +833,13 @@ export class RepoRuntimeManager {
       // diff/sweep decision; it promotes COMPLETE or schedules the governed
       // sweep itself.  A real watcher batch still sets generationChanged and
       // takes the normal reconcile path.
-      if ((!fullyRestored && !openStatus.snapshotVerificationPending) || generationChangedDuringSeed) {
+      const seededDegraded = openStatus.worktreeSeed?.completion === "SEEDED_DEGRADED";
+      if (seededDegraded && !generationChangedDuringSeed) {
+        // Reused facts are already queryable. A blocking post-seed sweep here
+        // is what made torna OPEN miss the 15s public-tool budget even after
+        // a sibling snapshot was eligible.
+        void entry.context.javaIndexClient?.reconcile(generation.snapshot().value).catch(() => undefined);
+      } else if ((!fullyRestored && !openStatus.snapshotVerificationPending) || generationChangedDuringSeed) {
         await entry.context.javaIndexClient?.reconcile(
           generation.snapshot().value,
           budget ? { budget } : undefined

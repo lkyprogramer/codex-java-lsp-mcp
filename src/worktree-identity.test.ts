@@ -3,7 +3,7 @@ import test from "node:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { leaseFamilyKey, resolveWorktreeIdentity, WorktreeIdentityCache } from "./worktree-identity.js";
+import { familyHashFromGitFiles, leaseFamilyKey, resolveWorktreeIdentity, WorktreeIdentityCache } from "./worktree-identity.js";
 import { canonicalPath } from "./path-utils.js";
 import { createGitWorktreeFamily } from "./test-support/git-worktree.test.js";
 
@@ -23,6 +23,15 @@ test("the primary checkout has gitDir === gitCommonDir and is not linked", async
   assert.equal(primary.isLinkedWorktree, false);
   assert.equal(primary.gitDir, primary.gitCommonDir);
   assert.equal(typeof primary.familyHash, "string");
+});
+
+test("familyHashFromGitFiles matches live git identity without spawning git", async () => {
+  const fixture = await createGitWorktreeFamily();
+  const primary = await resolveWorktreeIdentity(fixture.primary);
+  const linked = await resolveWorktreeIdentity(fixture.linked);
+  assert.equal(familyHashFromGitFiles(fixture.primary), primary.familyHash);
+  assert.equal(familyHashFromGitFiles(fixture.linked), linked.familyHash);
+  assert.equal(familyHashFromGitFiles(fixture.primary), familyHashFromGitFiles(fixture.linked));
 });
 
 test("linked worktrees share familyHash but retain distinct repoHash", async () => {

@@ -14,7 +14,7 @@ import {
 import { probeLayout, type LayoutContext } from "../layout-probe.js";
 import { positiveInteger, resourceDefaults } from "../resource-defaults.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
-import type { WorktreeIdentity } from "../worktree-identity.js";
+import { familyHashFromGitFiles, type WorktreeIdentity } from "../worktree-identity.js";
 import type { JavaParserBackend } from "./java-parser-backend.js";
 import { deriveJavaSourceLayout, parseJavaSourceFile, resolvedPathWithinRepo as resolveReadableRepoPath } from "./java-index-file-parse.js";
 import { computeBuildFingerprint, computeBuildFingerprintEntries, computeExtractorVersion } from "./build-fingerprint.js";
@@ -2070,6 +2070,10 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         graphSyncedRevision = -1;
         entitySearchSyncedRevision = -1;
         worktreeIdentity = request.worktree;
+        if (worktreeIdentity && !worktreeIdentity.familyHash) {
+          const recovered = familyHashFromGitFiles(repoRoot);
+          if (recovered) worktreeIdentity = { ...worktreeIdentity, familyHash: recovered };
+        }
         if (request.leaseRoot) {
           const store_ = new FileCrossProcessLeaseStore(request.leaseRoot, defaultLeaseClockDeps());
           try {

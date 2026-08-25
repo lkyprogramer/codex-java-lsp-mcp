@@ -266,6 +266,20 @@ test("findCandidate recovers familyHash from the target cache meta when live ide
   assert.equal(candidate.sourceRepoRoot, family.primary);
 });
 
+test("findCandidate recovers family from the target .git file when cache meta and live familyHash are both missing", async () => {
+  const { family, cacheBase } = await seedableFamily();
+  const targetIdentity = await resolveWorktreeIdentity(family.linked);
+  const { identity } = await seedIdentityFor(family.linked);
+  const seeder = new WorktreeSnapshotSeeder();
+  const candidate = await seeder.findCandidate(
+    { repoRoot: targetIdentity.repoRoot, repoHash: targetIdentity.repoHash, isLinkedWorktree: true },
+    identity,
+    cacheBase
+  );
+  assert.ok(candidate);
+  assert.equal(candidate.sourceRepoRoot, family.primary);
+});
+
 test("findCandidate records skip reasons without treating them as errors", async () => {
   const { family, cacheBase } = await seedableFamily();
   mkdirSync(path.join(cacheBase, "empty"));

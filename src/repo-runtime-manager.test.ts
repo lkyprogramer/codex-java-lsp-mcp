@@ -1109,6 +1109,72 @@ test("reconcileIfDirty leaves dirty set when reconcile fails, without failing th
   assert.equal(clock.snapshot().dirty, true, "dirty remains set so the next request retries reconcile");
 });
 
+test("a sibling-seeded OPEN does not block runtime.create on the post-seed reconcile", async () => {
+  const clock = new GenerationClock();
+  const coordinator = new FakeCoordinator();
+  const layout = probeLayout("/repo-a");
+  let reconcileStarted = 0;
+  const reconcileGate = deferred<void>();
+  const javaIndexClient = {
+    localStatus() {
+      return { files: 9 };
+    },
+    async open(generation: number) {
+      return {
+        indexedGeneration: generation,
+        coverage: [{ state: "DEGRADED" as const, generation, failedFiles: 0, recoveredFiles: 0 }],
+        worktreeSeed: {
+          attempted: true,
+          reusedFiles: 9,
+          dirtyFiles: 1,
+          relinkFiles: 0,
+          droppedCrossFileEdges: 0,
+          droppedFrameworkEdges: 0,
+          manifestValidationMs: 1,
+          deltaParsedFiles: 0,
+          reusedResources: 0,
+          dirtyResources: 0,
+          cacheDirsScanned: 2,
+          eligibleSnapshots: 1,
+          candidateDecompressMs: 1,
+          initialManifestScanMs: 1,
+          finalManifestScanMs: 1,
+          completion: "SEEDED_DEGRADED" as const
+        }
+      };
+    },
+    async reconcile() {
+      reconcileStarted += 1;
+      await reconcileGate.promise;
+    },
+    async close() {}
+  };
+  const manager = new RepoRuntimeManager(
+    fakeResolver(),
+    { idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
+    resolved => ({
+      repoRoot: resolved.repoRoot,
+      rootSource: resolved.rootSource,
+      repoHash: resolved.repoHash,
+      aliases: resolved.aliases,
+      layoutProfile: resolved.layoutProfile,
+      lsp: resolved.lsp,
+      session: new FakeSession() as never,
+      javaIndexClient: javaIndexClient as never,
+      javaIndex: { routerStatus: async () => ({ openSource: "sibling-seed" }) } as never,
+      router: { clearRgCache() {}, onRepoChanged() {}, async flushSemanticEdgeStore() {} } as never
+    }),
+    () => ({ generation: clock, coordinator, layout: { current: () => layout, refresh: () => ({ changed: false, layout }) } }),
+    new NoopCrossProcessLeaseStore()
+  );
+
+  const served = await manager.withContext({ repoRoot: "/repo-a" }, async () => "served", {});
+  assert.equal(served, "served");
+  assert.equal(reconcileStarted, 1, "post-seed reconcile is kicked, but not awaited");
+  reconcileGate.resolve();
+  await manager.shutdownAll();
+});
+
 test("V2 runtime reconciles only JavaIndex and records its OPEN source on the request", async () => {
   const clock = new GenerationClock();
   const coordinator = new FakeCoordinator();
