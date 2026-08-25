@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
-import { readRuntimeBuild } from "../build-info.js";
 import type { LayoutContext } from "../layout-probe.js";
 
 const require = createRequire(import.meta.url);
@@ -26,22 +25,23 @@ const BUILD_MARKER_RELATIVE_PATHS = [
 ];
 
 // Bumped whenever ast-extractor.ts's fact shape changes in a way that isn't
-// already covered by a schemaVersion bump. `extractor-code-${gitSha}` below
-// only changes on a new commit (git rev-parse HEAD, blind to uncommitted or
-// same-commit source edits) - this is the mechanism that reliably
-// invalidates snapshots produced by an older extractor even when gitSha
-// hasn't moved. Bump on every extractor fact-shape change, not just this one.
+// already covered by a schemaVersion bump. Do not put gitSha in extractorVersion:
+// a telemetry/runtime install must not discard every repo's JavaIndex snapshot.
 const JAVA_FACTS_REVISION = 2;
+const LEGACY_EXTRACTOR_CODE_SUFFIX = /\|extractor-code-[0-9a-f]{7,40}$/i;
 
-// Process-wide and constant for the life of this runtime: identifies the
-// exact parser/extractor combination that produced a snapshot's facts, so a
-// parser or extractor-code fix invalidates old AST caches rather than
-// silently reusing stale facts under a matching schemaVersion.
+// Parser + facts revision only. tree-sitter version changes and JAVA_FACTS_REVISION
+// bumps still invalidate snapshots; daemon gitSha does not.
 export function computeExtractorVersion(): string {
   const treeSitterVersion = (require("tree-sitter/package.json") as { version: string }).version;
   const treeSitterJavaVersion = (require("tree-sitter-java/package.json") as { version: string }).version;
-  const buildHash = readRuntimeBuild().gitSha;
-  return `schema-3|facts-${JAVA_FACTS_REVISION}|tree-sitter-${treeSitterVersion}|tree-sitter-java-${treeSitterJavaVersion}|extractor-code-${buildHash}`;
+  return `schema-3|facts-${JAVA_FACTS_REVISION}|tree-sitter-${treeSitterVersion}|tree-sitter-java-${treeSitterJavaVersion}`;
+}
+
+/** Snapshots written when extractorVersion still ended with extractor-code-<gitSha>. */
+export function extractorVersionsCompatible(snapshot: string, expected: string): boolean {
+  if (snapshot === expected) return true;
+  return snapshot.startsWith(`${expected}|`) && LEGACY_EXTRACTOR_CODE_SUFFIX.test(snapshot.slice(expected.length));
 }
 
 /**

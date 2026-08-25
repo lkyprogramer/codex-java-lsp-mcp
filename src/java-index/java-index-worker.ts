@@ -77,9 +77,8 @@ import { handleMybatisCommand } from "./java-index-worker-mybatis.js";
 // (Task 20 Step 4), so a foreground request queued mid-sweep is serviced
 // promptly instead of waiting for the whole repo to finish.
 const SWEEP_CHUNK_SIZE = 50;
-// How long a background chunk waits for the machine-wide sweep slot before
-// giving up on this sweep for now; a later reconcile() call starts a fresh one.
-const SWEEP_LEASE_WAIT_MS = 10000;
+// Stray overlap only: prewarm waits for durability before the next repo OPEN.
+const SWEEP_LEASE_WAIT_MS = 180_000;
 const BUILD_LEASE_WAIT_MS = 180_000;
 const SNAPSHOT_FILE_NAME = "java-index-snapshot.json.gz";
 const GRAPH_SNAPSHOT_FILE_NAME = "java-knowledge-graph.json.gz";
@@ -1284,7 +1283,11 @@ async function spawnColdBuildChild(cacheDir: string, generation: number): Promis
       currentWorktreeIdentity(),
       DeadlineBudget.fromTimeout(BUILD_LEASE_WAIT_MS)
     );
-  } catch {
+  } catch (error) {
+    console.error(
+      `[codex-java-lsp] JavaIndex build slot not acquired within ${BUILD_LEASE_WAIT_MS}ms; continuing in-process`,
+      error instanceof Error ? error.message : error
+    );
     return undefined;
   }
   try {
@@ -1812,9 +1815,11 @@ async function processBackgroundChunk(sweep: BackgroundSweep): Promise<void> {
         currentWorktreeIdentity(),
         DeadlineBudget.fromTimeout(SWEEP_LEASE_WAIT_MS)
       );
-    } catch {
-      // Could not claim the machine-wide sweep slot within budget: give up on
-      // this sweep for now. A later reconcile() call starts a fresh one.
+    } catch (error) {
+      console.error(
+        `[codex-java-lsp] JavaIndex sweep slot not acquired within ${SWEEP_LEASE_WAIT_MS}ms; will retry on later reconcile`,
+        error instanceof Error ? error.message : error
+      );
       backgroundSweep = undefined;
       return;
     }

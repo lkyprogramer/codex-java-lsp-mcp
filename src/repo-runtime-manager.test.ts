@@ -8,6 +8,7 @@ import { GenerationClock, type RepoChangeBatch } from "./repo-generation.js";
 import type { JavaIndexStatus } from "./java-index/index-types.js";
 import { DeadlineBudget } from "./runtime/deadline-budget.js";
 import { JavaIntelligenceError } from "./runtime/intelligence-error.js";
+import { isJavaIndexPrewarmReady } from "./java-index/java-index-client.js";
 import { deferred, delay, type Deferred } from "./test-support/fake-jdtls.test.js";
 import type { JdtlsLifecycleState } from "./jdtls-session.js";
 import type { ResolvedRepo } from "./repo-resolver.js";
@@ -51,6 +52,107 @@ test("prewarmRepo opens a pinned runtime without starting JDT", async () => {
   assert.equal(manager.activeRepos().length, 1);
   assert.equal(manager.activeRepos()[0]?.started, false);
   assert.equal(sessions.get("/repo-a")?.ensureStartedCalls, 0);
+});
+
+test("prewarmRepo does not return until that repo's index is ready", async () => {
+  const sessions = new Map<string, FakeSession>();
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>(resolve => {
+    release = resolve;
+  });
+  const events: string[] = [];
+  const javaIndexClient = {
+    async open() {
+      return { indexedGeneration: 1, coverage: [] };
+    },
+    async awaitPrewarmReady() {
+      events.push("wait");
+      await gate;
+      events.push("ready");
+      return {
+        state: "READY",
+        indexedGeneration: 1,
+        files: 3,
+        types: 1,
+        methods: 1,
+        edges: 0,
+        snapshotBytes: 10,
+        snapshot: { state: "DURABLE" as const, durableGeneration: 1, durableManifestFingerprint: "m" },
+        pendingForeground: 0,
+        pendingBackground: 0,
+        coverage: [{ root: "src", generation: 1, state: "COMPLETE" as const, discoveredFiles: 3, indexedFiles: 3, failedFiles: 0, recoveredFiles: 0, extractorVersion: "test" }],
+        resourceCoverage: []
+      };
+    },
+    async flush() {
+      events.push("flush");
+      return {
+        state: "READY",
+        indexedGeneration: 1,
+        files: 3,
+        types: 1,
+        methods: 1,
+        edges: 0,
+        snapshotBytes: 10,
+        snapshot: { state: "DURABLE" as const, durableGeneration: 1, durableManifestFingerprint: "m" },
+        pendingForeground: 0,
+        pendingBackground: 0,
+        coverage: [],
+        resourceCoverage: []
+      };
+    }
+  };
+  const manager = new RepoRuntimeManager(fakeResolver(), {
+    idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 1000
+  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndexClient as never }),
+    fakeCoordination(), new NoopCrossProcessLeaseStore());
+  const done = manager.prewarmRepo({ repoRoot: "/repo-a" });
+  for (let attempt = 0; attempt < 200 && !events.includes("wait"); attempt += 1) {
+    await delay(5);
+  }
+  assert.deepEqual(events, ["wait"]);
+  release();
+  await done;
+  assert.deepEqual(events, ["wait", "ready"]);
+  assert.equal(sessions.get("/repo-a")?.ensureStartedCalls, 0);
+});
+
+test("isJavaIndexPrewarmReady requires durable snapshot or complete coverage without background work", () => {
+  const base = {
+    state: "READY" as const,
+    indexedGeneration: 1,
+    files: 2,
+    types: 1,
+    methods: 1,
+    edges: 0,
+    snapshotBytes: 1,
+    pendingForeground: 0,
+    pendingBackground: 0,
+    coverage: [{
+      root: "src",
+      generation: 1,
+      state: "COMPLETE" as const,
+      discoveredFiles: 2,
+      indexedFiles: 2,
+      failedFiles: 0,
+      recoveredFiles: 0,
+      extractorVersion: "test"
+    }],
+    resourceCoverage: []
+  };
+  assert.equal(isJavaIndexPrewarmReady({ ...base, snapshotVerificationPending: true }), false);
+  assert.equal(isJavaIndexPrewarmReady({ ...base, pendingBackground: 1 }), false);
+  assert.equal(isJavaIndexPrewarmReady({
+    ...base,
+    files: 0,
+    coverage: [],
+    snapshot: { state: "EMPTY" }
+  }), false);
+  assert.equal(isJavaIndexPrewarmReady({
+    ...base,
+    snapshot: { state: "DURABLE", durableGeneration: 1, durableManifestFingerprint: "m" }
+  }), true);
+  assert.equal(isJavaIndexPrewarmReady(base), true);
 });
 
 test("prewarmRepo skips repos that are not LSP-enabled", async () => {

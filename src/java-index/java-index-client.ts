@@ -104,6 +104,15 @@ type PendingRequest = {
 
 type CancelledTombstone = Pick<PendingRequest, "operation" | "postedAtMs" | "telemetry">;
 
+export function isJavaIndexPrewarmReady(status: JavaIndexStatus): boolean {
+  if (status.snapshotVerificationPending) return false;
+  if (status.pendingBackground > 0) return false;
+  if (status.snapshot?.state === "DURABLE") return true;
+  return status.files > 0
+    && status.coverage.length > 0
+    && status.coverage.every(entry => entry.state === "COMPLETE" && entry.generation === status.indexedGeneration);
+}
+
 function emptyStatus(): JavaIndexStatus {
   return {
     state: "NEW",
@@ -230,6 +239,19 @@ export class JavaIndexClient {
     await this.ensureOpen(requestOptions);
     const status = await this.request({ type: "RECONCILE", generation }, validateJavaIndexStatus, requestOptions);
     this.lastKnownStatus = status;
+    return status;
+  }
+
+  /** Poll STATUS until snapshot/coverage is usable, or the budget is spent. Does not throw on timeout. */
+  async awaitPrewarmReady(requestOptions: JavaIndexRequestOptions = {}): Promise<JavaIndexStatus> {
+    const budget = requestOptions.budget ?? DeadlineBudget.fromTimeout(60_000);
+    let status = await this.status({ ...requestOptions, budget });
+    while (!isJavaIndexPrewarmReady(status) && budget.remainingMs() > 50) {
+      await new Promise<void>(resolve => {
+        setTimeout(resolve, Math.min(250, budget.remainingMs(250)));
+      });
+      status = await this.status({ ...requestOptions, budget });
+    }
     return status;
   }
 

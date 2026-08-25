@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { probeLayout } from "../layout-probe.js";
-import { computeBuildFingerprint, computeExtractorVersion } from "./build-fingerprint.js";
+import { computeBuildFingerprint, computeExtractorVersion, extractorVersionsCompatible } from "./build-fingerprint.js";
 
 function tempRepo(): string {
   return mkdtempSync(path.join(tmpdir(), "build-fingerprint-"));
@@ -16,10 +16,20 @@ function write(root: string, relativePath: string, content: string): void {
   writeFileSync(absolutePath, content);
 }
 
-test("computeExtractorVersion follows the schema-3|facts-<n>|tree-sitter-<v>|tree-sitter-java-<v>|extractor-code-<hash> format", () => {
+test("computeExtractorVersion follows schema-3|facts-<n>|tree-sitter-<v>|tree-sitter-java-<v> and omits gitSha", () => {
   const version = computeExtractorVersion();
-  assert.match(version, /^schema-3\|facts-\d+\|tree-sitter-[^|]+\|tree-sitter-java-[^|]+\|extractor-code-.+$/);
+  assert.match(version, /^schema-3\|facts-\d+\|tree-sitter-[^|]+\|tree-sitter-java-[^|]+$/);
+  assert.equal(version.includes("extractor-code-"), false);
   assert.equal(computeExtractorVersion(), version, "must be stable across calls within one process");
+});
+
+test("extractorVersionsCompatible accepts the pre-gitSha-removal snapshot suffix", () => {
+  const expected = "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5";
+  assert.equal(extractorVersionsCompatible(expected, expected), true);
+  assert.equal(extractorVersionsCompatible(`${expected}|extractor-code-f3b12144c5ce`, expected), true);
+  assert.equal(extractorVersionsCompatible(`${expected}|extractor-code-25b1774a2a9d`, expected), true);
+  assert.equal(extractorVersionsCompatible("schema-3|facts-1|tree-sitter-0.25.0|tree-sitter-java-0.23.5|extractor-code-f3b12144c5ce", expected), false);
+  assert.equal(extractorVersionsCompatible(`${expected}|extractor-code-not-a-sha`, expected), false);
 });
 
 test("an mtime-only change does not change the build fingerprint", async () => {

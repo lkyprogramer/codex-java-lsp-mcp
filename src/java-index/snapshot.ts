@@ -18,6 +18,7 @@ import {
   type SnapshotV4Facts,
   type SnapshotV4View
 } from "./snapshot-v4.js";
+import { extractorVersionsCompatible } from "./build-fingerprint.js";
 
 /**
  * schemaVersion 3 (Task 28 Slice C) added myBatisResources/resourceCoverage;
@@ -265,7 +266,7 @@ function identityMatches(
   expected: SnapshotIdentity,
   checkRepoRoot: boolean
 ): boolean {
-  if (snapshot.extractorVersion !== expected.extractorVersion) return false;
+  if (!extractorVersionsCompatible(snapshot.extractorVersion, expected.extractorVersion)) return false;
   if (snapshot.stableIdVersion !== expected.stableIdVersion) return false;
   if (snapshot.buildFingerprint !== expected.buildFingerprint) return false;
   if (checkRepoRoot && snapshot.canonicalRepoRoot !== expected.canonicalRepoRoot) return false;

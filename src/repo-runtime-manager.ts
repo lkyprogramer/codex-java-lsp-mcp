@@ -12,7 +12,7 @@ import {
   type LeaseHandle
 } from "./cross-process-lease.js";
 import { JdtlsSession, type JdtlsLifecycleState } from "./jdtls-session.js";
-import { JavaIndexClient } from "./java-index/java-index-client.js";
+import { isJavaIndexPrewarmReady, JavaIndexClient } from "./java-index/java-index-client.js";
 import type { JavaIndexStatus } from "./java-index/index-types.js";
 import { RouterJavaIndex } from "./java-index/router-java-index.js";
 import { LayoutManager, type LayoutSource } from "./layout-manager.js";
@@ -55,6 +55,8 @@ export type RequestOptionsInput = {
 
 /** How long a watcher-ready wait may borrow from the request budget. */
 const WATCHER_READY_CAP_MS = 2000;
+/** Per pinned repo: cover one cold-build child (lishuedu ~106s) plus hydrate/flush. */
+const PREWARM_INDEX_MS = 300_000;
 
 /** The subset of RepoChangeCoordinator the runtime manager depends on. */
 export interface RuntimeCoordinator {
@@ -228,12 +230,38 @@ export class RepoRuntimeManager {
     return entry.context;
   }
 
-  /** Open JavaIndex + watcher for a pinned repo. Does not start JDT. */
+  /**
+   * Open JavaIndex for a pinned repo and wait until that repo's rebuild is
+   * durable (or the per-repo budget expires). Does not start JDT. The next
+   * pinned repo must not be opened until this returns, or cold-build children
+   * stampede the machine-wide BUILD_SLOT.
+   */
   async prewarmRepo(selector: RepoSelector): Promise<void> {
     const resolved = await this.resolver.resolve(selector);
     if (!resolved.lsp.enabled) return;
     const entry = await this.getOrCreate(resolved);
     this.refreshResource(entry);
+    const client = entry.context.javaIndexClient;
+    if (client && typeof client.awaitPrewarmReady === "function") {
+      const budget = DeadlineBudget.fromTimeout(PREWARM_INDEX_MS);
+      try {
+        let status = await client.awaitPrewarmReady({ budget });
+        if (!isJavaIndexPrewarmReady(status)) {
+          await client.reconcile(entry.generation.snapshot().value, { budget });
+          status = await client.awaitPrewarmReady({ budget });
+        }
+        if (isJavaIndexPrewarmReady(status) && status.snapshot?.state !== "DURABLE" && typeof client.flush === "function") {
+          status = await client.flush({ budget });
+        }
+        if (!isJavaIndexPrewarmReady(status)) {
+          console.error(
+            `[codex-java-lsp] pinned repo prewarm index incomplete files=${status.files} snapshot=${status.snapshot?.state ?? "none"}`
+          );
+        }
+      } catch (error) {
+        console.error("[codex-java-lsp] pinned repo prewarm index wait failed", error);
+      }
+    }
     this.scheduleIdleShutdown(entry);
   }
 

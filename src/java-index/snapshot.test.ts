@@ -176,6 +176,16 @@ test("an extractorVersion mismatch is rejected", async () => {
   assert.equal(loaded, undefined);
 });
 
+test("a snapshot whose extractorVersion only adds extractor-code-<gitSha> still loads", async () => {
+  const target = tempFile();
+  const current = "schema-3|facts-2|tree-sitter-0.25.0|tree-sitter-java-0.23.5";
+  const value = snapshot({ extractorVersion: `${current}|extractor-code-f3b12144c5ce` });
+  await writeSnapshotAtomic(target, value);
+  const loaded = await loadSnapshot(target, { ...identityFor(value), extractorVersion: current });
+  assert.equal(loaded?.indexedGeneration, value.indexedGeneration);
+  assert.equal(existsSync(target), true);
+});
+
 test("a canonicalRepoRoot mismatch in a normal own-snapshot load is rejected", async () => {
   const target = tempFile();
   const value = snapshot({ canonicalRepoRoot: "/some/other/repo" });
