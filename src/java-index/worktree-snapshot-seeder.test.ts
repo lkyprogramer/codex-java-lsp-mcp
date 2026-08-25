@@ -251,6 +251,21 @@ test("extractorVersion mismatch still refuses a sibling snapshot", async () => {
   assert.ok(seeder.lastScanTelemetry.identityMismatch >= 1);
 });
 
+test("findCandidate recovers familyHash from the target cache meta when live identity omitted it", async () => {
+  const { family, cacheBase } = await seedableFamily();
+  await writeRepoMeta(path.join(cacheBase, "linked-self"), family.linked);
+  const targetIdentity = await resolveWorktreeIdentity(family.linked);
+  const { identity } = await seedIdentityFor(family.linked);
+  const seeder = new WorktreeSnapshotSeeder();
+  const candidate = await seeder.findCandidate(
+    { ...targetIdentity, familyHash: undefined },
+    identity,
+    cacheBase
+  );
+  assert.ok(candidate);
+  assert.equal(candidate.sourceRepoRoot, family.primary);
+});
+
 test("findCandidate records skip reasons without treating them as errors", async () => {
   const { family, cacheBase } = await seedableFamily();
   mkdirSync(path.join(cacheBase, "empty"));

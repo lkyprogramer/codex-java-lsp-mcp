@@ -106,6 +106,16 @@ function readRepoCacheMetaFields(cacheRoot: string): RepoCacheMetaFields | undef
   }
 }
 
+/** Live git identity can omit familyHash (spawn failure); the target's own cache meta still has it. */
+function familyHashFromOwnCacheMeta(cacheBase: string, repoHash: string): string | undefined {
+  for (const entry of readdirSync(cacheBase, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const meta = readRepoCacheMetaFields(path.join(cacheBase, entry.name));
+    if (meta?.repoHash === repoHash && meta.familyHash) return meta.familyHash;
+  }
+  return undefined;
+}
+
 export class WorktreeSnapshotSeeder {
   /**
    * Diagnostics from the most recent `findCandidate()` call (V3.2-19). A
@@ -140,7 +150,7 @@ export class WorktreeSnapshotSeeder {
     cacheBase: string
   ): Promise<WorktreeSeedCandidate | undefined> {
     if (!existsSync(cacheBase)) return undefined;
-    const familyKey = target.familyHash ?? target.repoHash;
+    const familyKey = target.familyHash ?? familyHashFromOwnCacheMeta(cacheBase, target.repoHash) ?? target.repoHash;
     const candidates: WorktreeSeedCandidate[] = [];
     let cacheDirsScanned = 0;
     let metaMissing = 0;
