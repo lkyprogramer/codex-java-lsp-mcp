@@ -96,6 +96,13 @@ export class JavaLspApplication {
     return this.initializePromise;
   }
 
+  private waitForNoActiveRequests(): Promise<void> {
+    if (this.activeRequests === 0) return Promise.resolve();
+    return new Promise<void>(resolve => {
+      this.idleWaiters.add(resolve);
+    });
+  }
+
   /** HTTP daemon only. JDK cache first, then one pinned repo at a time, no JDT. */
   startPinnedRepoPrewarm(): Promise<void> {
     if (this.transportMode !== "streamable_http") return Promise.resolve();
@@ -246,16 +253,34 @@ export class JavaLspApplication {
         console.error(`[codex-java-lsp] ignoring unknown JAVA_LSP_PREWARM_HOT alias ${id}`);
       }
       const seen = new Set<string>();
+      const pins: Array<{ id: string }> = [];
       for (const alias of aliases) {
         if (this.prewarmStopped || this.currentState !== "ready") return;
         if (!alias.lspEnabled) continue;
         const root = canonicalPath(alias.root);
         if (seen.has(root)) continue;
         seen.add(root);
+        pins.push({ id: alias.id });
+      }
+      // Files-only OPEN for every pin first so a concurrent public worktree
+      // OPEN is not stuck behind lishuedu's 27 MiB rest hydrate (worker OOM).
+      for (const pin of pins) {
+        if (this.prewarmStopped || this.currentState !== "ready") return;
         try {
-          await this.runtimes.prewarmRepo({ projectId: alias.id }, { hydrate: hot.has(alias.id) });
+          await this.runtimes.prewarmRepo({ projectId: pin.id }, { hydrate: false });
         } catch (error) {
-          console.error(`[codex-java-lsp] pinned repo prewarm failed (${alias.id})`, error);
+          console.error(`[codex-java-lsp] pinned repo prewarm failed (${pin.id})`, error);
+        }
+      }
+      for (const pin of pins) {
+        if (this.prewarmStopped || this.currentState !== "ready") return;
+        if (!hot.has(pin.id)) continue;
+        await this.waitForNoActiveRequests();
+        if (this.prewarmStopped || this.currentState !== "ready") return;
+        try {
+          await this.runtimes.prewarmRepo({ projectId: pin.id }, { hydrate: true });
+        } catch (error) {
+          console.error(`[codex-java-lsp] pinned repo prewarm failed (${pin.id})`, error);
         }
       }
     } catch (error) {

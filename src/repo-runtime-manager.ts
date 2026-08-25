@@ -296,7 +296,6 @@ export class RepoRuntimeManager {
     const resolved = await this.resolver.resolve(selector);
     budget.throwIfExpired("runtime.repo-resolve");
     const entry = await this.getOrCreate(resolved, budget);
-    budget.throwIfExpired("runtime.create");
     this.refreshResource(entry);
     entry.refCount += 1;
     entry.hibernated = false;
@@ -380,7 +379,9 @@ export class RepoRuntimeManager {
       MAX_REQUEST_DEADLINE_MS,
       requestOptions?.deadlineMs ?? defaultDeadlineMs(mode, semanticPolicy)
     );
-    budget.throwIfExpired("runtime.request-context");
+    if (budget.expired()) {
+      return this.degradedRequestContext(entry, mode, semanticPolicy, deadlineMs, budget);
+    }
 
     const ready = await entry.coordinator.awaitReadyWithin(
       Math.min(WATCHER_READY_CAP_MS, budget.remainingMs())
@@ -402,7 +403,13 @@ export class RepoRuntimeManager {
       freshnessMode = entry.generation.snapshot().dirty ? "WATCHER_DEGRADED" : "WATCHER_NOT_READY";
     }
 
-    budget.throwIfExpired("runtime.request-context");
+    if (budget.expired()) {
+      return this.degradedRequestContext(entry, mode, semanticPolicy, deadlineMs, budget, {
+        freshnessMode,
+        cacheReadAllowed: false,
+        cacheWriteAllowed: false
+      });
+    }
     const generationBeforeIndexStatus = entry.generation.snapshot().value;
     let javaIndexStatus: JavaIndexStatus | undefined;
     try {
@@ -450,6 +457,38 @@ export class RepoRuntimeManager {
       cacheWriteAllowed,
       negativeLookupAllowed,
       indexOpenSource,
+      mode,
+      semanticPolicy,
+      deadlineMs,
+      budget
+    });
+  }
+
+  private degradedRequestContext(
+    entry: RuntimeEntry,
+    mode: RequestMode,
+    semanticPolicy: SemanticPolicy,
+    deadlineMs: number,
+    budget: DeadlineBudget,
+    overrides: {
+      freshnessMode?: RequestFreshnessMode;
+      cacheReadAllowed?: boolean;
+      cacheWriteAllowed?: boolean;
+      negativeLookupAllowed?: boolean;
+      generation?: number;
+    } = {}
+  ): RequestContext {
+    const clock = entry.generation.snapshot();
+    return createRequestContext({
+      repoRoot: entry.context.repoRoot,
+      repoHash: entry.context.repoHash,
+      familyHash: entry.context.worktree?.familyHash,
+      generation: overrides.generation ?? clock.value,
+      freshnessMode: overrides.freshnessMode
+        ?? (clock.dirty ? "WATCHER_DEGRADED" : "WATCHER_NOT_READY"),
+      cacheReadAllowed: overrides.cacheReadAllowed ?? false,
+      cacheWriteAllowed: overrides.cacheWriteAllowed ?? false,
+      negativeLookupAllowed: overrides.negativeLookupAllowed ?? false,
       mode,
       semanticPolicy,
       deadlineMs,
@@ -834,16 +873,18 @@ export class RepoRuntimeManager {
       // sweep itself.  A real watcher batch still sets generationChanged and
       // takes the normal reconcile path.
       const seededDegraded = openStatus.worktreeSeed?.completion === "SEEDED_DEGRADED";
-      if (seededDegraded && !generationChangedDuringSeed) {
-        // Reused facts are already queryable. A blocking post-seed sweep here
-        // is what made torna OPEN miss the 15s public-tool budget even after
-        // a sibling snapshot was eligible.
-        void entry.context.javaIndexClient?.reconcile(generation.snapshot().value).catch(() => undefined);
-      } else if ((!fullyRestored && !openStatus.snapshotVerificationPending) || generationChangedDuringSeed) {
-        await entry.context.javaIndexClient?.reconcile(
+      const needsFollowUp = seededDegraded
+        || (!fullyRestored && !openStatus.snapshotVerificationPending)
+        || generationChangedDuringSeed;
+      if (needsFollowUp) {
+        // Never await a sweep on runtime.create: a failed/empty seed used to
+        // block the 15s public tool on a cold-build child, and a successful
+        // seed already has queryable facts. Use a fresh manager cap so a
+        // nearly-spent OPEN budget cannot cancel the background sweep.
+        void entry.context.javaIndexClient?.reconcile(
           generation.snapshot().value,
-          budget ? { budget } : undefined
-        );
+          { budget: DeadlineBudget.fromTimeout(this.options.requestTimeoutMs) }
+        ).catch(() => undefined);
       }
     }).catch(() => {
       // An OPEN failure remains non-fatal, but watchers must not retain every

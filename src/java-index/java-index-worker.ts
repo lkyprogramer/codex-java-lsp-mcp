@@ -2108,19 +2108,23 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         let openedGeneration = request.generation;
         let ownSnapshotIdentity: SnapshotIdentity | undefined;
         const buildFingerprint = await computeBuildFingerprint(repoRoot, layout).catch(() => undefined);
-        if (buildFingerprint !== undefined) {
-          const identity: SnapshotIdentity = {
+        const ownSnapshotExists = await stat(snapshotPath).then(() => true).catch(() => false);
+        if (ownSnapshotExists && buildFingerprint !== undefined) {
+          ownSnapshotIdentity = {
             extractorVersion: computeExtractorVersion(),
             stableIdVersion: STABLE_ID_VERSION,
             canonicalRepoRoot: repoRoot,
             buildFingerprint
           };
-          const ownSnapshotExists = await stat(snapshotPath).then(() => true).catch(() => false);
-          if (ownSnapshotExists) {
-            ownSnapshotIdentity = identity;
-          } else if (request.siblingCacheBase) {
-            worktreeSeedStatus = await attemptSiblingSeed(request.siblingCacheBase, buildFingerprint, request.generation);
-          }
+        } else if (request.siblingCacheBase) {
+          // Fingerprint is recorded, not required: a failed marker walk must
+          // not skip sibling seed (M4 non-veto). Own-snapshot identity still
+          // needs a fingerprint to trust the on-disk file.
+          worktreeSeedStatus = await attemptSiblingSeed(
+            request.siblingCacheBase,
+            buildFingerprint ?? "",
+            request.generation
+          );
         }
         status = {
           ...status,

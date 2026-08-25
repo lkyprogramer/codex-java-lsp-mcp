@@ -56,7 +56,7 @@ type SegmentDirectoryEntry = {
   length: number;
 };
 
-type V4Header = {
+export type V4Header = {
   schemaVersion: typeof SNAPSHOT_V4_VERSION;
   extractorVersion: string;
   stableIdVersion: number;
@@ -163,12 +163,16 @@ export function encodeSnapshotV4(value: SnapshotV4Facts): Buffer {
   return Buffer.concat([prefix, headerBytes, ...compressed]);
 }
 
-export function decodeSnapshotV4View(bytes: Buffer, sourcePath?: string): SnapshotV4View | { error: string } {
+const MAX_V4_HEADER_BYTES = 4 * 1024 * 1024;
+
+/** Prefix + gzip header only. Does not decode files/rest segments. */
+export function decodeSnapshotV4Header(bytes: Buffer): V4Header | { error: string } {
   if (!isSnapshotV4(bytes)) return { error: "not a v4 snapshot" };
   if (bytes.length < 12) return { error: "truncated v4 header" };
   const version = bytes.readUInt32LE(4);
   if (version !== SNAPSHOT_V4_VERSION) return { error: `unsupported schemaVersion ${version}` };
   const headerLength = bytes.readUInt32LE(8);
+  if (headerLength <= 0 || headerLength > MAX_V4_HEADER_BYTES) return { error: "invalid v4 header length" };
   const headerStart = 12;
   const headerEnd = headerStart + headerLength;
   if (bytes.length < headerEnd) return { error: "truncated v4 header payload" };
@@ -181,6 +185,22 @@ export function decodeSnapshotV4View(bytes: Buffer, sourcePath?: string): Snapsh
   if (header.schemaVersion !== SNAPSHOT_V4_VERSION || !Array.isArray(header.segments)) {
     return { error: "invalid v4 header" };
   }
+  return header;
+}
+
+export function v4HeaderByteLength(prefix: Buffer): number | undefined {
+  if (prefix.length < 12 || !isSnapshotV4(prefix)) return undefined;
+  if (prefix.readUInt32LE(4) !== SNAPSHOT_V4_VERSION) return undefined;
+  const headerLength = prefix.readUInt32LE(8);
+  if (headerLength <= 0 || headerLength > MAX_V4_HEADER_BYTES) return undefined;
+  return headerLength;
+}
+
+export function decodeSnapshotV4View(bytes: Buffer, sourcePath?: string): SnapshotV4View | { error: string } {
+  const header = decodeSnapshotV4Header(bytes);
+  if ("error" in header) return header;
+  const headerLength = bytes.readUInt32LE(8);
+  const headerEnd = 12 + headerLength;
   const payload = bytes.subarray(headerEnd);
   const restSource: RestSource = sourcePath
     ? { kind: "file", path: sourcePath, payloadStart: headerEnd }

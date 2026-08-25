@@ -8,6 +8,8 @@ import { gzipSync } from "node:zlib";
 import { probeLayout } from "../layout-probe.js";
 import { computeCurrentManifestFingerprint } from "./manifest.js";
 import {
+  loadSiblingSnapshot,
+  loadSiblingSnapshotHeader,
   loadSnapshot,
   writeSnapshotAtomic,
   writeSnapshotIfManifestCurrent,
@@ -216,4 +218,48 @@ test("directory fsync during write tolerates EINVAL/ENOTSUP/EPERM but not other 
   const target = tempFile();
   await writeSnapshotAtomic(target, snapshot());
   assert.ok((await readFile(target)).length > 0);
+});
+
+test("loadSiblingSnapshotHeader reads coverage without decoding rest segments", async () => {
+  const target = tempFile();
+  const value = snapshot({
+    indexedGeneration: 9,
+    coverage: [{
+      root: "src/main/java",
+      generation: 9,
+      state: "COMPLETE",
+      discoveredFiles: 1,
+      indexedFiles: 1,
+      failedFiles: 0,
+      recoveredFiles: 0,
+      extractorVersion: "test"
+    }]
+  });
+  const expected = structuredClone(value);
+  await writeSnapshotAtomic(target, value);
+  const header = await loadSiblingSnapshotHeader(target, {
+    extractorVersion: expected.extractorVersion,
+    stableIdVersion: expected.stableIdVersion,
+    buildFingerprint: expected.buildFingerprint
+  });
+  assert.equal(header?.indexedGeneration, 9);
+  assert.equal(header?.coverage[0]?.state, "COMPLETE");
+  assert.equal(header?.fingerprintMatched, true);
+
+  const bytes = await readFile(target);
+  const headerLength = bytes.readUInt32LE(8);
+  const truncated = path.join(path.dirname(target), "header-only");
+  writeFileSync(truncated, bytes.subarray(0, 12 + headerLength));
+  const fromPrefix = await loadSiblingSnapshotHeader(truncated, {
+    extractorVersion: expected.extractorVersion,
+    stableIdVersion: expected.stableIdVersion,
+    buildFingerprint: expected.buildFingerprint
+  });
+  assert.equal(fromPrefix?.indexedGeneration, 9);
+  const full = await loadSiblingSnapshot(truncated, {
+    extractorVersion: expected.extractorVersion,
+    stableIdVersion: expected.stableIdVersion,
+    buildFingerprint: expected.buildFingerprint
+  });
+  assert.equal(full, undefined, "a header-only slice cannot decode files/rest");
 });

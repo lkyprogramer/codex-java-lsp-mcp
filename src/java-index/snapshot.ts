@@ -12,9 +12,11 @@ import type {
 import type { MyBatisMapperResourceFacts } from "./mybatis-types.js";
 import type { EntitySearchSnapshot } from "./entity-search.js";
 import {
+  decodeSnapshotV4Header,
   decodeSnapshotV4View,
   encodeSnapshotV4,
   isSnapshotV4,
+  v4HeaderByteLength,
   type SnapshotV4Facts,
   type SnapshotV4View
 } from "./snapshot-v4.js";
@@ -288,6 +290,58 @@ export type SiblingSnapshotLoad = {
   snapshot: JavaIndexSnapshotV3;
   fingerprintMatched: boolean;
 };
+
+export type SiblingSnapshotHeader = {
+  createdAt: string;
+  indexedGeneration: number;
+  buildFingerprint: string;
+  manifestFingerprint: string;
+  coverage: JavaIndexSnapshotV3["coverage"];
+  fingerprintMatched: boolean;
+};
+
+/**
+ * Candidate scan for sibling seed: gzip header + coverage only. Does not
+ * decode files/rest (16–27 MiB gz on lishu-v2 / lishuedu), so findCandidate
+ * can reject family-mates without paying toFacts() on every snapshot.
+ */
+export async function loadSiblingSnapshotHeader(
+  target: string,
+  expected: SiblingSnapshotIdentity
+): Promise<SiblingSnapshotHeader | undefined> {
+  let handle;
+  try {
+    handle = await open(target, "r");
+  } catch {
+    return undefined;
+  }
+  try {
+    const prefix = Buffer.alloc(12);
+    const prefixRead = await handle.read(prefix, 0, 12, 0);
+    if (prefixRead.bytesRead < 12) return undefined;
+    const headerLength = v4HeaderByteLength(prefix);
+    if (headerLength === undefined) return undefined;
+    const headerBytes = Buffer.allocUnsafe(headerLength);
+    const headerRead = await handle.read(headerBytes, 0, headerLength, 12);
+    if (headerRead.bytesRead !== headerLength) return undefined;
+    const header = decodeSnapshotV4Header(Buffer.concat([prefix, headerBytes], 12 + headerLength));
+    if ("error" in header) return undefined;
+    if (!extractorVersionsCompatible(header.extractorVersion, expected.extractorVersion)) return undefined;
+    if (header.stableIdVersion !== expected.stableIdVersion) return undefined;
+    return {
+      createdAt: header.createdAt,
+      indexedGeneration: header.indexedGeneration,
+      buildFingerprint: header.buildFingerprint,
+      manifestFingerprint: header.manifestFingerprint,
+      coverage: header.coverage,
+      fingerprintMatched: header.buildFingerprint === expected.buildFingerprint
+    };
+  } catch {
+    return undefined;
+  } finally {
+    await handle.close().catch(() => undefined);
+  }
+}
 
 export async function loadSiblingSnapshot(
   target: string,

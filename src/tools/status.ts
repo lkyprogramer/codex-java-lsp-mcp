@@ -87,7 +87,9 @@ export async function javaStatus(
     await context.session.ensureStarted(request?.budget);
   }
   const sessionStatus = context.session.status();
-  const javaIndex = await context.javaIndexClient?.status({ budget: request?.budget }).catch(() => undefined);
+  const javaIndex = await context.javaIndexClient?.status({ budget: request?.budget }).catch(
+    () => context.javaIndexClient?.localStatus?.()
+  );
   const full = {
     ...sessionStatus,
     repoHash: context.repoHash,

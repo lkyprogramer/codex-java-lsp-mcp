@@ -9,7 +9,7 @@ import type { WorktreeIdentity } from "../worktree-identity.js";
 import { JavaIndexStore } from "./index-store.js";
 import { scanCurrentManifestStable, scanCurrentMyBatisManifestStable } from "./manifest.js";
 import { familyHashFromGitFiles } from "../worktree-identity.js";
-import { loadSiblingSnapshot, type SiblingSnapshotIdentity } from "./snapshot.js";
+import { loadSiblingSnapshot, loadSiblingSnapshotHeader, type SiblingSnapshotIdentity } from "./snapshot.js";
 
 const SNAPSHOT_FILE_NAME = "java-index-snapshot.json.gz";
 const REPO_META_FILE_NAME = "repo-meta.json";
@@ -180,17 +180,16 @@ export class WorktreeSnapshotSeeder {
         continue;
       }
       const sourceSnapshotPath = path.join(cacheRoot, SNAPSHOT_FILE_NAME);
-      const loaded = await loadSiblingSnapshot(sourceSnapshotPath, identity);
+      const loaded = await loadSiblingSnapshotHeader(sourceSnapshotPath, identity);
       if (!loaded) {
         identityMismatch += 1;
         continue;
       }
-      const snapshot = loaded.snapshot;
-      if (snapshot.coverage.length === 0) {
+      if (loaded.coverage.length === 0) {
         coverageIncomplete += 1;
         continue;
       }
-      const allHealthyComplete = snapshot.coverage.every(
+      const allHealthyComplete = loaded.coverage.every(
         root => root.state === "COMPLETE" && root.failedFiles === 0 && root.recoveredFiles === 0
       );
       if (!allHealthyComplete) {
@@ -201,10 +200,10 @@ export class WorktreeSnapshotSeeder {
         sourceRepoRoot: meta.repoRoot,
         sourceRepoHash: meta.repoHash,
         sourceSnapshotPath,
-        createdAt: snapshot.createdAt,
-        indexedGeneration: snapshot.indexedGeneration,
-        buildFingerprint: snapshot.buildFingerprint,
-        manifestFingerprint: snapshot.manifestFingerprint,
+        createdAt: loaded.createdAt,
+        indexedGeneration: loaded.indexedGeneration,
+        buildFingerprint: loaded.buildFingerprint,
+        manifestFingerprint: loaded.manifestFingerprint,
         fingerprintMatched: loaded.fingerprintMatched
       });
     }
