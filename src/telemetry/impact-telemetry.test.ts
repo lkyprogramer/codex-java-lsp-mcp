@@ -169,20 +169,21 @@ test("non-impact tools emit only the one-line counter", () => {
 test("record writes JSONL under an isolated dir and JAVA_LSP_TELEMETRY=0 writes nothing", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "java-lsp-telemetry-"));
   const writes: string[] = [];
+  const stamp = new Date();
   const sink = createImpactTelemetry({
     dir,
     enabled: true,
     maxBuffer: 1,
     flushEveryMs: 0,
-    now: () => new Date("2026-08-24T01:02:03.000Z"),
+    now: () => stamp,
     appendFile: (file, data) => {
       writes.push(file);
       appendViaFs(file, data);
     }
   });
-  sink.record(buildToolCounter({ tool: "java_runtime", elapsedMs: 1, ok: true, now: new Date("2026-08-24T01:02:03.000Z") }));
+  sink.record(buildToolCounter({ tool: "java_runtime", elapsedMs: 1, ok: true, now: stamp }));
   assert.equal(writes.length, 1);
-  assert.match(writes[0]!, /impact-20260824\.jsonl$/);
+  assert.equal(path.basename(writes[0]!), `impact-${utcDayStamp(stamp)}.jsonl`);
   const text = await readFile(writes[0]!, "utf8");
   const line = JSON.parse(text.trim());
   assert.equal(line.tool, "java_runtime");
@@ -233,19 +234,20 @@ test("record path stays under 1ms across 1000 iterations", () => {
 
 test("initialization deletes telemetry files older than 30 days", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "java-lsp-telemetry-gc-"));
-  const stale = path.join(dir, "impact-20200101.jsonl");
-  const fresh = path.join(dir, "impact-20260824.jsonl");
-  await writeFile(stale, "{}\n");
-  await writeFile(fresh, "{}\n");
+  const now = new Date();
+  const staleName = `impact-${utcDayStamp(new Date(now.getTime() - 31 * 86400000))}.jsonl`;
+  const freshName = `impact-${utcDayStamp(now)}.jsonl`;
+  await writeFile(path.join(dir, staleName), "{}\n");
+  await writeFile(path.join(dir, freshName), "{}\n");
   createImpactTelemetry({
     dir,
     enabled: true,
     flushEveryMs: 0,
-    now: () => new Date("2026-08-24T00:00:00.000Z")
+    now: () => now
   });
   const names = await readdir(dir);
-  assert.equal(names.includes("impact-20200101.jsonl"), false);
-  assert.equal(names.includes("impact-20260824.jsonl"), true);
+  assert.equal(names.includes(staleName), false);
+  assert.equal(names.includes(freshName), true);
 });
 
 test("recordToolInvocation does not mutate the handler value", () => {
@@ -285,6 +287,10 @@ test("recordToolInvocation no-ops when JAVA_LSP_TELEMETRY=0", async () => {
   });
   assert.deepEqual(await readdir(dir).catch(() => []), []);
 });
+
+function utcDayStamp(date: Date): string {
+  return `${date.getUTCFullYear()}${String(date.getUTCMonth() + 1).padStart(2, "0")}${String(date.getUTCDate()).padStart(2, "0")}`;
+}
 
 function appendViaFs(file: string, data: string): void {
   mkdirSync(path.dirname(file), { recursive: true });
