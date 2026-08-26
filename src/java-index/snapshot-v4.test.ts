@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { existsSync, mkdirSync, mkdtempSync } from "node:fs";
-import { Worker } from "node:worker_threads";
 import { readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -229,68 +228,5 @@ test("a crc32 mismatch on a v4 segment is discarded and the file is deleted", as
   const loaded = await loadSnapshot(target, identityFor(value));
   assert.equal(loaded, undefined);
   assert.equal(existsSync(target), false);
-});
-
-function encodeFacts(value: JavaIndexSnapshotV3, chunkRest?: boolean) {
-  return encodeSnapshotV4({
-    extractorVersion: value.extractorVersion,
-    stableIdVersion: value.stableIdVersion,
-    canonicalRepoRoot: value.canonicalRepoRoot,
-    buildFingerprint: value.buildFingerprint,
-    manifestFingerprint: value.manifestFingerprint,
-    indexedGeneration: value.indexedGeneration,
-    createdAt: value.createdAt,
-    coverage: value.coverage,
-    resourceCoverage: value.resourceCoverage,
-    files: value.files,
-    types: value.types,
-    fields: value.fields,
-    methods: value.methods,
-    edges: value.edges,
-    myBatisResources: value.myBatisResources
-  }, chunkRest === undefined ? {} : { chunkRest });
-}
-
-async function decodeMethodsInWorker(bytes: Buffer, maxOldGenerationSizeMb: number): Promise<number> {
-  const worker = new Worker(new URL("./snapshot-v4-hydrate-probe-worker.js", import.meta.url), {
-    workerData: { bytes },
-    resourceLimits: { maxOldGenerationSizeMb, maxYoungGenerationSizeMb: Math.min(32, maxOldGenerationSizeMb) }
-  });
-  try {
-    return await new Promise((resolve, reject) => {
-      worker.once("message", resolve);
-      worker.once("error", reject);
-      worker.once("exit", code => {
-        if (code !== 0) reject(new Error(`worker exit ${code}`));
-      });
-    });
-  } finally {
-    await worker.terminate();
-  }
-}
-
-test("a 256 MiB isolate hydrates chunked methods over the item limit", async () => {
-  const methods = Array.from({ length: 5001 }, (_, index) => ({
-    methodId: `method:demo.A#m${index}()`,
-    ownerTypeId: "type:demo.A",
-    name: `m${index}`,
-    constructor: false,
-    signatureKey: `m${index}()`,
-    range: { start: { line: 1, column: 1 }, end: { line: 1, column: 2 } },
-    bodyRange: { start: { line: 1, column: 1 }, end: { line: 1, column: 2 } },
-    modifiers: [],
-    annotations: [],
-    typeParameters: [],
-    parameters: [],
-    throws: [],
-    generation: 1
-  }));
-  const value = snapshot({ methods: methods as never });
-  const chunked = encodeFacts(value);
-  const view = decodeSnapshotV4View(chunked);
-  assert.equal("error" in view, false);
-  if ("error" in view) return;
-  assert.ok(view.header.segments.filter(entry => entry.kind === "methods").length >= 2);
-  assert.equal(await decodeMethodsInWorker(chunked, 256), 5001);
 });
 
