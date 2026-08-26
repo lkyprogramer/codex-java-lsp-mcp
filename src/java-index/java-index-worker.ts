@@ -44,6 +44,7 @@ import {
   type SnapshotIdentity
 } from "./snapshot.js";
 import type { SnapshotV4View } from "./snapshot-v4.js";
+import { hydrateSnapshotView } from "./hydrate-snapshot-view.js";
 import type { ColdBuildResult } from "./cold-build.js";
 import { STABLE_ID_VERSION } from "./stable-id.js";
 import { EntitySearchIndex, type EntitySearchSnapshot } from "./entity-search.js";
@@ -1211,36 +1212,13 @@ async function ensureFactsHydrated(): Promise<void> {
   await factsHydrateInFlight;
 }
 
-function yieldHydrateTurn(): Promise<void> {
-  return new Promise(resolve => setImmediate(resolve));
-}
-
 async function hydratePendingFacts(): Promise<void> {
   if (snapshotFactsHydrated || !store || !pendingSnapshotView) {
     snapshotFactsHydrated = true;
     return;
   }
   const view = pendingSnapshotView;
-  const restKinds = ["types", "fields", "methods", "edges"] as const;
-  for (const kind of restKinds) {
-    const chunks = typeof view.readSegmentChunks === "function"
-      ? view.readSegmentChunks(kind)
-      : [view.readSegment(kind)];
-    for (const chunk of chunks) {
-      const items = Array.isArray(chunk) ? chunk : [];
-      store.ingestSnapshotFacts({
-        types: kind === "types" ? items as JavaTypeFacts[] : [],
-        fields: kind === "fields" ? items as JavaFieldFacts[] : [],
-        methods: kind === "methods" ? items as JavaMethodFacts[] : [],
-        edges: kind === "edges" ? items as StaticEdge[] : []
-      }, { onDuplicate: "skip" });
-      if (Array.isArray(chunk)) chunk.length = 0;
-      await yieldHydrateTurn();
-    }
-  }
-  const myBatisResources = view.readSegment("mybatis") as MyBatisMapperResourceFacts[];
-  store.ingestSnapshotFacts({ types: [], fields: [], methods: [], edges: [], myBatisResources }, { onDuplicate: "skip" });
-  myBatisResources.length = 0;
+  await hydrateSnapshotView(store, view);
   const entitySearchSnap = view.readSegment("entitySearch") as EntitySearchSnapshot | null;
   if (entitySearchSnap?.version === 1) {
     entitySearch.loadSnapshot(entitySearchSnap);
