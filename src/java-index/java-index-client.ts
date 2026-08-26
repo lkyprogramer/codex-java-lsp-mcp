@@ -141,9 +141,12 @@ function emptyStatus(): JavaIndexStatus {
   };
 }
 
+/** S4 stopgap: methods-segment JSON.parse peaks ~890 MiB. Roll back to 1536 after chunked snapshots land. */
+export const JAVA_INDEX_WORKER_MAX_OLD_GENERATION_SIZE_MB = 2560;
+
 function defaultWorkerFactory(): WorkerLike {
   return new Worker(new URL("./java-index-worker.js", import.meta.url), {
-    resourceLimits: { maxOldGenerationSizeMb: 1536 }
+    resourceLimits: { maxOldGenerationSizeMb: JAVA_INDEX_WORKER_MAX_OLD_GENERATION_SIZE_MB }
   }) as unknown as WorkerLike;
 }
 

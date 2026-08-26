@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,7 +8,7 @@ import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
 import { JavaIndexRpcTelemetryCollector } from "../agent-router/impact-metrics.js";
 import type { JavaIndexStatus } from "./index-types.js";
-import { JavaIndexClient, type WorkerLike } from "./java-index-client.js";
+import { JAVA_INDEX_WORKER_MAX_OLD_GENERATION_SIZE_MB, JavaIndexClient, type WorkerLike } from "./java-index-client.js";
 import { RouterJavaIndex } from "./router-java-index.js";
 import { JAVA_INDEX_CLOSE_GRACE_MS } from "./worker-protocol.js";
 
@@ -1195,4 +1195,14 @@ test("Task 19/27 query commands (anchor/type/implementers/referencers/callers/ca
   assert.ok(parameterMethods.includes(servicePayMethod.methodId));
 
   await client.close();
+});
+
+test("shipped JavaIndex worker factory uses the 2560 S4-stopgap old-generation cap", () => {
+  assert.equal(JAVA_INDEX_WORKER_MAX_OLD_GENERATION_SIZE_MB, 2560);
+  const source = readFileSync(fileURLToPath(new URL("./java-index-client.js", import.meta.url)), "utf8");
+  assert.match(
+    source,
+    /resourceLimits:\s*\{\s*maxOldGenerationSizeMb:\s*JAVA_INDEX_WORKER_MAX_OLD_GENERATION_SIZE_MB\s*\}/
+  );
+  assert.doesNotMatch(source, /maxOldGenerationSizeMb:\s*1536/);
 });
