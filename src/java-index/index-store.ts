@@ -536,6 +536,11 @@ export class JavaIndexStore {
   } {
     const hasPrefix = (value: string | undefined, prefixes: readonly string[]) =>
       value !== undefined && prefixes.some(prefix => value.startsWith(prefix));
+    // Prewarm kicks hydrate with empty prefixes. Scanning 250k edges for a
+    // match that cannot succeed blocks STATUS for hundreds of ms to minutes.
+    if (importPrefixes.length === 0 && annotationPrefixes.length === 0) {
+      return { importPrefixFound: false, annotationPrefixFound: false };
+    }
     let importPrefixFound = false;
     let annotationPrefixFound = false;
     for (const file of this.filesByPath.values()) {

@@ -141,8 +141,8 @@ function emptyStatus(): JavaIndexStatus {
   };
 }
 
-/** S4 stopgap: methods-segment JSON.parse peaks ~890 MiB. Roll back to 1536 after chunked snapshots land. */
-export const JAVA_INDEX_WORKER_MAX_OLD_GENERATION_SIZE_MB = 2560;
+/** Production isolate cap. S4 chunked rest segments keep hydrate under this old-generation limit. */
+export const JAVA_INDEX_WORKER_MAX_OLD_GENERATION_SIZE_MB = 1536;
 
 function defaultWorkerFactory(): WorkerLike {
   return new Worker(new URL("./java-index-worker.js", import.meta.url), {
@@ -279,7 +279,10 @@ export class JavaIndexClient {
     let status = await this.status(controls);
     let hydrateAttempted = false;
     while (!isJavaIndexPrewarmReady(status, readyOptions) && budget.remainingMs() > 50) {
-      if (hydrate && status.factsHydrated === false && !hydrateAttempted && !status.snapshotVerificationPending) {
+      // Files > 0 means OPEN already installed the snapshot view. Waiting for
+      // snapshotVerificationPending to clear lets lishuedu spend the whole
+      // 300s budget on manifest/mybatis work and never kick rest-hydrate.
+      if (hydrate && status.factsHydrated === false && !hydrateAttempted && status.files > 0) {
         hydrateAttempted = true;
         try {
           await this.queryRepositoryFactMarkers([], [], controls);

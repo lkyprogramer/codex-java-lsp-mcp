@@ -83,6 +83,8 @@ const SWEEP_CHUNK_SIZE = 50;
 // Stray overlap only: prewarm waits for durability before the next repo OPEN.
 const SWEEP_LEASE_WAIT_MS = 180_000;
 const BUILD_LEASE_WAIT_MS = 180_000;
+/** v5 chunked encode adds ~50s on lishuedu; 180s wall-clock under load SIGKILLs a finished child. */
+const COLD_BUILD_CHILD_TIMEOUT_MS = 300_000;
 const SNAPSHOT_FILE_NAME = "java-index-snapshot.json.gz";
 const GRAPH_SNAPSHOT_FILE_NAME = "java-knowledge-graph.json.gz";
 const COLD_BUILD_CHILD = fileURLToPath(new URL("./cold-build-child.js", import.meta.url));
@@ -1192,8 +1194,13 @@ async function ensureAwake(): Promise<void> {
 
 async function ensureFactsHydrated(): Promise<void> {
   await ensureAwake();
-  if (snapshotFactsHydrated || !store || !pendingSnapshotView) {
-    snapshotFactsHydrated = true;
+  if (snapshotFactsHydrated) return;
+  if (!store) return;
+  if (!pendingSnapshotView) {
+    // Missing view means either rest is already consumed, or OPEN is still
+    // loading the snapshot. Claiming hydrated in the latter window makes
+    // prewarm skip the later chunked ingest.
+    if (!ownSnapshotVerificationPending) snapshotFactsHydrated = true;
     return;
   }
   if (!factsHydrateInFlight) {
@@ -1341,7 +1348,7 @@ function spawnColdBuildChildProcess(cacheDir: string, generation: number): Promi
     const timer = setTimeout(() => {
       child.kill("SIGKILL");
       resolve(undefined);
-    }, 180_000);
+    }, COLD_BUILD_CHILD_TIMEOUT_MS);
     child.on("error", () => {
       clearTimeout(timer);
       resolve(undefined);

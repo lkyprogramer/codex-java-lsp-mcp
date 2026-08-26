@@ -150,6 +150,42 @@ test("two out-of-order responses resolve correct promises", async () => {
   assert.equal(anchorResult, undefined);
 });
 
+test("awaitPrewarmReady hydrates once files are loaded even while snapshot verification is pending", async () => {
+  const { client, worker } = await openedClient();
+  const pending = {
+    ...validStatus(1),
+    files: 6081,
+    snapshotVerificationPending: true,
+    factsHydrated: false,
+    snapshot: { state: "PENDING" as const, durableGeneration: 1, durableManifestFingerprint: "m" }
+  };
+  const ready = client.awaitPrewarmReady({ budget: DeadlineBudget.fromTimeout(2000) });
+  await flushMicrotasks();
+  const firstStatus = worker.posted[1]!;
+  assert.equal(firstStatus.type, "STATUS");
+  worker.emitMessage({ id: firstStatus.id, ok: true, value: pending });
+  let markers = worker.posted.find(message => message.type === "QUERY_REPOSITORY_FACT_MARKERS");
+  for (let attempt = 0; attempt < 20 && !markers; attempt += 1) {
+    await flushMicrotasks();
+    markers = worker.posted.find(message => message.type === "QUERY_REPOSITORY_FACT_MARKERS");
+  }
+  assert.ok(markers, "prewarm must kick hydrate before own-snapshot verification finishes");
+  worker.emitMessage({
+    id: markers.id,
+    ok: true,
+    value: { importPrefixFound: false, annotationPrefixFound: false }
+  });
+  await flushMicrotasks();
+  const secondStatus = worker.posted.filter(message => message.type === "STATUS").at(-1)!;
+  worker.emitMessage({
+    id: secondStatus.id,
+    ok: true,
+    value: { ...pending, snapshotVerificationPending: undefined, factsHydrated: true, snapshot: { state: "DURABLE" as const, durableGeneration: 1, durableManifestFingerprint: "m" } }
+  });
+  const status = await ready;
+  assert.equal(status.factsHydrated, true);
+});
+
 test("awaitPrewarmReady posts fact-markers until a files-only DURABLE snapshot reports factsHydrated", async () => {
   const { client, worker } = await openedClient();
   const durable = {
@@ -1197,12 +1233,12 @@ test("Task 19/27 query commands (anchor/type/implementers/referencers/callers/ca
   await client.close();
 });
 
-test("shipped JavaIndex worker factory uses the 2560 S4-stopgap old-generation cap", () => {
-  assert.equal(JAVA_INDEX_WORKER_MAX_OLD_GENERATION_SIZE_MB, 2560);
+test("shipped JavaIndex worker factory uses the 1536 production old-generation cap", () => {
+  assert.equal(JAVA_INDEX_WORKER_MAX_OLD_GENERATION_SIZE_MB, 1536);
   const source = readFileSync(fileURLToPath(new URL("./java-index-client.js", import.meta.url)), "utf8");
   assert.match(
     source,
     /resourceLimits:\s*\{\s*maxOldGenerationSizeMb:\s*JAVA_INDEX_WORKER_MAX_OLD_GENERATION_SIZE_MB\s*\}/
   );
-  assert.doesNotMatch(source, /maxOldGenerationSizeMb:\s*1536/);
+  assert.doesNotMatch(source, /maxOldGenerationSizeMb:\s*2560/);
 });

@@ -566,6 +566,21 @@ test("ingestSnapshotFacts stores two same-kind method chunks", () => {
   assert.deepEqual(methods.map(method => method.name).sort(), ["pay", "refund"]);
 });
 
+test("repositoryFactMarkers with empty prefixes skips the rest scan", () => {
+  const original = new JavaIndexStore();
+  const gateway = emptyBundle("src/main/java/demo/Gateway.java", "Gateway");
+  addMethod(gateway, "pay");
+  original.replaceFile(gateway);
+  const data = original.toSnapshotData();
+  const store = new JavaIndexStore();
+  store.loadSnapshotData({ files: data.files, types: [], fields: [], methods: [], edges: [], myBatisResources: [] });
+  store.ingestSnapshotFacts({ types: data.types, fields: data.fields, methods: data.methods, edges: data.edges });
+  assert.deepEqual(store.repositoryFactMarkers([], []), {
+    importPrefixFound: false,
+    annotationPrefixFound: false
+  });
+});
+
 test("ingestSnapshotFacts can skip a duplicate method id in a later chunk", () => {
   const original = new JavaIndexStore();
   const gateway = emptyBundle("src/main/java/demo/Gateway.java", "Gateway");
