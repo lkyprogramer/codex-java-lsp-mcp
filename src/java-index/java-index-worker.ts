@@ -1226,13 +1226,13 @@ async function hydratePendingFacts(): Promise<void> {
         fields: kind === "fields" ? items as JavaFieldFacts[] : [],
         methods: kind === "methods" ? items as JavaMethodFacts[] : [],
         edges: kind === "edges" ? items as StaticEdge[] : []
-      });
+      }, { onDuplicate: "skip" });
       if (Array.isArray(chunk)) chunk.length = 0;
       await yieldHydrateTurn();
     }
   }
   const myBatisResources = view.readSegment("mybatis") as MyBatisMapperResourceFacts[];
-  store.ingestSnapshotFacts({ types: [], fields: [], methods: [], edges: [], myBatisResources });
+  store.ingestSnapshotFacts({ types: [], fields: [], methods: [], edges: [], myBatisResources }, { onDuplicate: "skip" });
   myBatisResources.length = 0;
   const entitySearchSnap = view.readSegment("entitySearch") as EntitySearchSnapshot | null;
   if (entitySearchSnap?.version === 1) {

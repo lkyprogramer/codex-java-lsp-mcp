@@ -566,7 +566,7 @@ test("ingestSnapshotFacts stores two same-kind method chunks", () => {
   assert.deepEqual(methods.map(method => method.name).sort(), ["pay", "refund"]);
 });
 
-test("ingestSnapshotFacts skips a duplicate method id in a later chunk", () => {
+test("ingestSnapshotFacts can skip a duplicate method id in a later chunk", () => {
   const original = new JavaIndexStore();
   const gateway = emptyBundle("src/main/java/demo/Gateway.java", "Gateway");
   addMethod(gateway, "pay");
@@ -575,8 +575,12 @@ test("ingestSnapshotFacts skips a duplicate method id in a later chunk", () => {
   const store = new JavaIndexStore();
   store.loadSnapshotData({ files: data.files, types: [], fields: [], methods: [], edges: [], myBatisResources: [] });
   store.ingestSnapshotFacts({ types: data.types, fields: [], methods: data.methods, edges: [] });
-  store.ingestSnapshotFacts({ types: [], fields: [], methods: data.methods, edges: [] });
+  store.ingestSnapshotFacts({ types: [], fields: [], methods: data.methods, edges: [] }, { onDuplicate: "skip" });
   assert.equal(store.files(["src/main/java/demo/Gateway.java"])[0]?.methods.length, 1);
+  assert.throws(
+    () => store.ingestSnapshotFacts({ types: [], fields: [], methods: data.methods, edges: [] }),
+    /duplicate method id/
+  );
 });
 
 test("loadSnapshotData rejects a snapshot with a duplicate mybatis resource relativePath", () => {

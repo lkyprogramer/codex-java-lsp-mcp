@@ -662,7 +662,8 @@ export class JavaIndexStore {
     methods: readonly JavaMethodFacts[];
     edges: readonly StaticEdge[];
     myBatisResources?: readonly MyBatisMapperResourceFacts[];
-  }): void {
+  }, options: { onDuplicate?: "throw" | "skip" } = {}): void {
+    const onDuplicate = options.onDuplicate ?? "throw";
     // Empty arrays mean "this call does not carry that collection". Non-empty
     // arrays append; a second methods/edges/fields chunk must land, not skip.
     const skipExistingResources = this.myBatisResourcesByPath.size > 0;
@@ -681,7 +682,10 @@ export class JavaIndexStore {
       if (resource.namespace) addToSetMap(this.myBatisResourcesByNamespace, resource.namespace, resource.relativePath);
     }
     if (data.types.length > 0) for (const type of data.types) {
-      if (this.typesById.has(type.typeId)) continue;
+      if (this.typesById.has(type.typeId)) {
+        if (onDuplicate === "skip") continue;
+        throw new Error(`duplicate type id in snapshot: ${type.typeId}`);
+      }
       internType(this.edgeColumns.strings, this.edgeColumns.ranges, type);
       this.typesById.set(type.typeId, type);
       if (type.fqn) this.typeIdByFqn.set(type.fqn, type.typeId);
@@ -689,7 +693,10 @@ export class JavaIndexStore {
       addToSetMap(this.fileOwnedNodeIds, relativePathOfFileId(type.fileId), type.typeId);
     }
     if (data.fields.length > 0) for (const field of data.fields) {
-      if (this.fieldsById.has(field.fieldId)) continue;
+      if (this.fieldsById.has(field.fieldId)) {
+        if (onDuplicate === "skip") continue;
+        throw new Error(`duplicate field id in snapshot: ${field.fieldId}`);
+      }
       internField(this.edgeColumns.strings, this.edgeColumns.ranges, field);
       this.fieldsById.set(field.fieldId, field);
       const ownerType = this.typesById.get(field.ownerTypeId);
@@ -697,7 +704,10 @@ export class JavaIndexStore {
       addToSetMap(this.fileOwnedNodeIds, relativePathOfFileId(ownerType.fileId), field.fieldId);
     }
     if (data.methods.length > 0) for (const method of data.methods) {
-      if (this.methodColumns.has(method.methodId)) continue;
+      if (this.methodColumns.has(method.methodId)) {
+        if (onDuplicate === "skip") continue;
+        throw new Error(`duplicate method id in snapshot: ${method.methodId}`);
+      }
       internMethod(this.edgeColumns.strings, this.edgeColumns.ranges, method);
       this.methodColumns.add(method);
       addToSetMap(this.methodIdsByOwnerAndName, `${method.ownerTypeId}#${method.name}`, method.methodId);
@@ -707,7 +717,10 @@ export class JavaIndexStore {
     }
     const strings = this.edgeColumns.strings;
     if (data.edges.length > 0) for (const edge of data.edges) {
-      if (this.edgeColumns.has(edge.edgeId)) continue;
+      if (this.edgeColumns.has(edge.edgeId)) {
+        if (onDuplicate === "skip") continue;
+        throw new Error(`duplicate edge id in snapshot: ${edge.edgeId}`);
+      }
       this.edgeColumns.add(edge);
       const edgeId = strings.interned(edge.edgeId);
       addToSetMap(this.outEdgeIdsByNode, strings.interned(edge.fromId), edgeId);
