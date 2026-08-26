@@ -8,6 +8,7 @@ import test from "node:test";
 import { JavaLspApplication } from "./application.js";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { JAVA_IMPACT_TOOL_DESCRIPTION } from "./tools/impact.js";
 import { createMcpServer, PUBLIC_JAVA_TOOLS } from "./mcp-server-factory.js";
 import { AliasRegistry } from "./alias-registry.js";
 import { RepoResolver } from "./repo-resolver.js";
@@ -42,6 +43,37 @@ test("repo-scoped java_status uses the 15s budget even when start is false", () 
   assert.match(source, /mayStartLsp: args\.start/);
   assert.match(source, /deadlineMs: 15000/);
   assert.equal(source.includes("requestOptions: args.start ?"), false);
+});
+
+test("java_impact tools/list teaches auto-skip and the required/java_symbol retry", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "java-lsp-factory-schema-"));
+  await mkdir(path.join(root, "src", "main", "java"), { recursive: true });
+  await writeFile(path.join(root, "pom.xml"), "<project></project>");
+  const configPath = path.join(root, "projects.json");
+  await writeFile(configPath, JSON.stringify({ aliases: [] }));
+  const application = new JavaLspApplication({
+    transportMode: "streamable_http",
+    projectsConfigPath: configPath,
+    resolverOptions: { cwdFallback: "reject" },
+    cleanup: () => ({ scanned: 0, removed: 0, skipped: 0, failures: 0, removedDirs: [] })
+  });
+  await application.initialize();
+  const session = await connect(application, "schema");
+  try {
+    const listed = await session.client.listTools();
+    const impact = listed.tools.find(tool => tool.name === "java_impact");
+    const symbol = listed.tools.find(tool => tool.name === "java_symbol");
+    assert.equal(impact?.description, JAVA_IMPACT_TOOL_DESCRIPTION);
+    assert.match(impact?.description ?? "", /semanticPolicy=auto/);
+    assert.match(symbol?.description ?? "", /cheaper than java_impact semanticPolicy=required/);
+    const policy = JSON.stringify(impact?.inputSchema?.properties?.semanticPolicy ?? {});
+    assert.match(policy, /service-profile/);
+    assert.match(policy, /semantic\.used=false/);
+    assert.match(policy, /java_symbol/);
+  } finally {
+    await session.client.close();
+    await application.close();
+  }
 });
 
 test("idle-close deadline before status/create/request-context is a retryable evidence gap", () => {

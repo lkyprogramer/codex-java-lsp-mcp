@@ -9,7 +9,7 @@ import type { ManagedToolContext, RequestOptionsInput } from "./repo-runtime-man
 import type { RepoSelector } from "./repo-resolver.js";
 import type { RequestContext } from "./runtime/request-context.js";
 import { diagnosticsSchema, javaDiagnostics } from "./tools/diagnostics.js";
-import { impactSchema, javaImpact } from "./tools/impact.js";
+import { JAVA_IMPACT_TOOL_DESCRIPTION, impactSchema, javaImpact } from "./tools/impact.js";
 import { javaRuntime, runtimeSchema } from "./tools/runtime.js";
 import { isDiagnosticDetail } from "./tools/shared.js";
 import { javaStatus, statusSchema, summarizeResourceStatus } from "./tools/status.js";
@@ -53,7 +53,7 @@ export function createMcpServer(
     name: "codex-java-lsp",
     version: "0.1.0"
   }, {
-    instructions: "java_impact is the compact Java impact plan. Tools are read-only."
+    instructions: "java_impact is the compact Java impact plan. Tools are read-only. Default semanticPolicy=auto uses live JDT only for service-profile anchors; pass required or use java_symbol for exact implementations/references."
   });
 
   const registered: string[] = [];
@@ -70,7 +70,7 @@ export function createMcpServer(
 
   register(track("java_impact"), {
     title: "Java Impact",
-    description: "Build a compact Java impact plan with JavaIndex routing, internal rg summary, optional bounded LSP enrichment, and read plan. Omit readPlanMaxItems (max 30) and deadlineMs (max 15000); do not reuse older values such as 80 or 120000.",
+    description: JAVA_IMPACT_TOOL_DESCRIPTION,
     inputSchema: impactSchema
   }, args => withContext(args, (context, request) => javaImpact(context, args, request), {
     mayStartLsp: args.semanticPolicy !== "fast",
@@ -84,7 +84,7 @@ export function createMcpServer(
 
   register(track("java_symbol"), {
     title: "Java Symbol",
-    description: "operation=query (default): search workspace symbols. operation=position (default with file/line/column): hover/definition/implementation at a position. operation=references: summary-only references.",
+    description: "operation=query (default): search workspace symbols. operation=position (default with file/line/column): hover/definition/implementation at a position. operation=references: summary-only references. Always live JDT; cheaper than java_impact semanticPolicy=required for one symbol.",
     inputSchema: symbolSchema
   }, args => withContext(args, (context, request) => javaSymbol(context, args, request), {
     mayStartLsp: true,

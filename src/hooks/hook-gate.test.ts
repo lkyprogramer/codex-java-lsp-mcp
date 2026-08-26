@@ -30,4 +30,7 @@ test("hook advice tells enabled projects to start a stopped LSP server", async (
   assert.match(advice, /start:false/);
   assert.match(advice, /started=false/);
   assert.match(advice, /start:true/);
+  assert.match(advice, /semanticPolicy=auto/);
+  assert.match(advice, /semanticPolicy=required/);
+  assert.match(advice, /java_symbol/);
 });

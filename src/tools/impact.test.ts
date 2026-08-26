@@ -4,6 +4,8 @@ import { z } from "zod";
 import {
   IMPACT_DEADLINE_MS_ERROR,
   IMPACT_READ_PLAN_MAX_ITEMS_ERROR,
+  IMPACT_SEMANTIC_POLICY_DESCRIPTION,
+  JAVA_IMPACT_TOOL_DESCRIPTION,
   impactSchema,
   javaImpact
 } from "./impact.js";
@@ -49,6 +51,21 @@ test("impact rejects oversized readPlanMaxItems with an explicit omit-or-cap hin
 test("impact exposes exactly one timeout control", () => {
   assert.equal(Object.hasOwn(impactSchema, "deadlineMs"), true);
   assert.equal(Object.hasOwn(impactSchema, "semanticTimeoutMs"), false);
+});
+
+test("impact schema describes when auto skips JDT and how to retry", () => {
+  assert.match(IMPACT_SEMANTIC_POLICY_DESCRIPTION, /service-profile/);
+  assert.match(IMPACT_SEMANTIC_POLICY_DESCRIPTION, /semantic\.used=false/);
+  assert.match(IMPACT_SEMANTIC_POLICY_DESCRIPTION, /java_symbol/);
+  assert.equal(impactSchema.semanticPolicy.description, IMPACT_SEMANTIC_POLICY_DESCRIPTION);
+  assert.match(JAVA_IMPACT_TOOL_DESCRIPTION, /semanticPolicy=auto/);
+  assert.match(JAVA_IMPACT_TOOL_DESCRIPTION, /java_symbol/);
+  const parsed = z.object(impactSchema).parse({
+    file: "src/main/java/demo/Demo.java",
+    line: 1,
+    column: 1
+  });
+  assert.equal(parsed.semanticPolicy, "auto");
 });
 
 test("impact schema no longer exposes continue", () => {

@@ -20,6 +20,14 @@ export const IMPACT_DEADLINE_MS_ERROR =
 export const IMPACT_READ_PLAN_MAX_ITEMS_ERROR =
   "java_impact readPlanMaxItems maximum is 30. Omit readPlanMaxItems (default depends on mode, typically 6) or pass an integer 1–30. Do not pass 40/50/80 from older memory.";
 
+/** Agent-facing tools/list text. Does not change java_impact result bytes. */
+export const JAVA_IMPACT_TOOL_DESCRIPTION =
+  "Build a compact Java impact plan with JavaIndex routing, internal rg summary, optional bounded LSP enrichment, and read plan. Omit readPlanMaxItems (max 30) and deadlineMs (max 15000); do not reuse older values such as 80 or 120000. semanticPolicy=auto (default) uses live JDT only for service-profile anchors; pass required for exact implementations/references, or call java_symbol for a single position.";
+
+/** Field hint for tools/list. Compact output only has semantic.used; this names the retry lever. */
+export const IMPACT_SEMANTIC_POLICY_DESCRIPTION =
+  "auto (default): live JDT only for service-profile anchors; controller/dto/mapper skip. fast: never. required: always, needs LSP. If semantic.used=false and you need exact implementations/references, retry with required or call java_symbol.";
+
 export const impactSchema = {
   projectId: z.string().min(1).optional(),
   repoRoot: z.string().min(1).optional(),
@@ -37,7 +45,8 @@ export const impactSchema = {
   mode: z.enum(["minimal", "balanced", "precision", "recall"]).default("balanced"),
   profile: z.enum(["auto", "controller", "service", "port", "repository", "parser", "dto", "entity", "mapper", "vo", "job", "listener"]).default("auto"),
   anchorRole: z.enum(["auto", "controller", "service", "port", "repository", "parser", "dto", "entity", "mapper", "vo", "job", "listener"]).optional(),
-  semanticPolicy: z.enum(["auto", "fast", "required"]).default("auto"),
+  semanticPolicy: z.enum(["auto", "fast", "required"]).default("auto")
+    .describe(IMPACT_SEMANTIC_POLICY_DESCRIPTION),
   deadlineMs: z.number().int().positive().max(IMPACT_DEADLINE_MS_MAX, IMPACT_DEADLINE_MS_ERROR).optional()
     .describe("Optional request deadline in ms, maximum 15000. Omit this field; do not pass 60000 or 120000."),
   readPlanMaxItems: z.number().int().positive().max(IMPACT_READ_PLAN_MAX_ITEMS, IMPACT_READ_PLAN_MAX_ITEMS_ERROR).optional()

@@ -29,7 +29,7 @@ try {
   if (!lsp.enabled || !looksJavaSemantic(prompt)) {
     writeContinue();
   } else {
-    writeAdvice(`JAVA_LSP_ADVISOR: 当前路径已启用 codex-java-lsp (${lsp.matchedBy})。这是已配置项目，不能只报告 LSP server 未启动。先调用 java_status({repoRoot:"${lsp.effectiveRepoRoot}",start:false}) 校验 repoRoot；若返回 started=false，必须立即调用 java_status({repoRoot:"${lsp.effectiveRepoRoot}",start:true}) 启动 LSP server；随后优先用 java_impact 获取影响面。`);
+    writeAdvice(`JAVA_LSP_ADVISOR: 当前路径已启用 codex-java-lsp (${lsp.matchedBy})。这是已配置项目，不能只报告 LSP server 未启动。先调用 java_status({repoRoot:"${lsp.effectiveRepoRoot}",start:false}) 校验 repoRoot；若返回 started=false，必须立即调用 java_status({repoRoot:"${lsp.effectiveRepoRoot}",start:true}) 启动 LSP server；随后优先用 java_impact 获取影响面。java_impact 默认 semanticPolicy=auto，只对 service 锚点打 JDT；需要实现类或引用时传 semanticPolicy=required，或改用 java_symbol。`);
   }
 } catch {
   writeContinue();
