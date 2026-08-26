@@ -1628,6 +1628,40 @@ test("hibernate TTL unloads the index without tearing down JDT", async () => {
   await manager.shutdownAll();
 });
 
+test("freemem pressure does not recycle a hydrated hot-set pin", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const javaIndex = new RecordingJavaIndex(() => 0);
+  const manager = new RepoRuntimeManager({
+    async resolve(selector: { repoRoot?: string }) {
+      const repoRoot = selector.repoRoot || "/repo";
+      const repoHash = repoRoot.replace(/\W/g, "");
+      return {
+        repoRoot,
+        repoHash,
+        rootSource: "explicit" as const,
+        aliases: ["lishuedu"],
+        layoutProfile: "generic-java" as const,
+        lsp: { enabled: true, matchedBy: "direct-root" as const, configuredRoot: repoRoot, effectiveRepoRoot: repoRoot },
+        worktree: { repoRoot, repoHash, isLinkedWorktree: false }
+      };
+    }
+  }, {
+    idleTtlMs: 100000,
+    hibernateTtlMs: 100000,
+    indexIdleTtlMs: 0,
+    hotIndexAliases: new Set(["lishuedu"]),
+    pressureIntervalMs: 15,
+    freememPressureBytes: 1,
+    freemem: () => 0,
+    requestTimeoutMs: 5000
+  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
+    fakeCoordination(), new NoopCrossProcessLeaseStore());
+  await manager.prewarmRepo({ repoRoot: "/hot" }, { hydrate: true });
+  await delay(80);
+  assert.equal(javaIndex.calls.includes("recycle"), false, "hot-set hydrate must survive macOS os.freemem pressure; D1 uses index-idle TTL");
+  await manager.shutdownAll();
+});
+
 test("freemem pressure hibernates the LRU idle runtime", async () => {
   const sessions = new Map<string, FakeSession>();
   const javaIndex = new RecordingJavaIndex(() => 0);

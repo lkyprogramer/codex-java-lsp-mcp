@@ -24,7 +24,7 @@
 - D1 soak 不要等生产 20 分钟。用 `scripts/d1-fast-idle-soak.sh` 临时压 TTL，必须等到 `prewarm finished`（不要 log-quiet 提前停），测完必须去掉 LaunchAgent 里的 TTL env。`footprint -p` 只读 `phys_footprint:` 行。
 - in-isolate hibernate 还不了 old-gen。空闲路径必须 `recycle()`（terminate worker）或 index-idle `shutdown`。
 - 不要把 `artifacts/`、`graphify-out/`、`.workflow/` 打进 `releases/<id>`。安装验证也要看磁盘，不只看测试绿。
-- macOS `os.freemem()` 经常远低于 2 GiB 压力门（本机测到 104 MiB）。`prewarmRepo` 必须持有 `refCount`，否则 `maybeRelieveMemoryPressure` 会把正在 hydrate 的热 pin recycle 掉，D3a 退化成 8s on-demand hydrate。
+- macOS `os.freemem()` 经常远低于 2 GiB 压力门（本机测到 104 MiB）。`prewarmRepo` 必须持有 `refCount`；压力回收还必须跳过热集。否则刚 hydrate 完的 lishuedu 会在 5s 内被 recycle，D3a 变成 8s on-demand（lishu-v2 仍是 36ms，因为它更新）。D1 回落靠 index-idle TTL，不靠压力立刻杀热 pin。
 
 V1-R **COMPLETE**（`eb722cf`）。D1 639 MiB。D3a 874 / 50 ms。D3c 970 / 2093 ms。D5 peak 1358 / 10 min 189。D2/D3b/D4/D6/D7 PASS。Identity formal floors 两臂同失败，不阻塞。不要合 `main` 除非明确要求。
 

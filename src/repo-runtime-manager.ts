@@ -1073,6 +1073,10 @@ export class RepoRuntimeManager {
       .sort((left, right) => left.lastUsedAt - right.lastUsedAt)[0];
   }
 
+  private isHotIndexEntry(entry: RuntimeEntry): boolean {
+    return entry.context.aliases.some(alias => this.options.hotIndexAliases.has(alias));
+  }
+
   private clearIdleTimers(entry: RuntimeEntry): void {
     if (entry.idleTimer) {
       clearTimeout(entry.idleTimer);
@@ -1135,7 +1139,9 @@ export class RepoRuntimeManager {
     if (this.relievingPressure) return;
     const freemem = this.options.freemem ?? os.freemem;
     if (freemem() >= this.options.freememPressureBytes) return;
-    const victim = this.oldestIdleEntry();
+    const victim = [...this.runtimes.values()]
+      .filter(entry => entry.refCount === 0 && entry.stoppedAt === undefined && !this.isHotIndexEntry(entry))
+      .sort((left, right) => left.lastUsedAt - right.lastUsedAt)[0];
     if (!victim) return;
     this.relievingPressure = true;
     try {
