@@ -250,46 +250,53 @@ export class RepoRuntimeManager {
     if (!resolved.lsp.enabled) return;
     const entry = await this.getOrCreate(resolved);
     this.refreshResource(entry);
-    const client = entry.context.javaIndexClient;
-    if (client && typeof client.awaitPrewarmReady === "function") {
-      const budget = DeadlineBudget.fromTimeout(PREWARM_INDEX_MS);
-      try {
-        let status = await client.awaitPrewarmReady({ budget, hydrate });
-        if (!isJavaIndexPrewarmReady(status, { hydrate })) {
-          await client.reconcile(entry.generation.snapshot().value, { budget });
-          status = await client.awaitPrewarmReady({ budget, hydrate });
-        }
-        if (
-          hydrate
-          && isJavaIndexPrewarmReady(status, { hydrate })
-          && status.snapshot?.state !== "DURABLE"
-          && typeof client.flush === "function"
-        ) {
-          status = await client.flush({ budget });
-        }
-        if (hydrate && !isJavaIndexPrewarmReady(status, { hydrate })) {
-          console.error(
-            `[codex-java-lsp] pinned repo prewarm index incomplete files=${status.files} snapshot=${status.snapshot?.state ?? "none"}`
-          );
-        }
-      } catch (error) {
-        console.error("[codex-java-lsp] pinned repo prewarm index wait failed", error);
-      }
-    }
-    if (!hydrate && client) {
-      try {
+    // Hold a ref so macOS os.freemem() pressure (often < 2 GiB of "free"
+    // pages) cannot recycle the isolate while this pin is still hydrating.
+    entry.refCount += 1;
+    try {
+      const client = entry.context.javaIndexClient;
+      if (client && typeof client.awaitPrewarmReady === "function") {
         const budget = DeadlineBudget.fromTimeout(PREWARM_INDEX_MS);
-        if (typeof client.recycle === "function") {
-          await client.recycle({ budget });
-        } else if (typeof client.hibernate === "function") {
-          await client.hibernate({ budget });
+        try {
+          let status = await client.awaitPrewarmReady({ budget, hydrate });
+          if (!isJavaIndexPrewarmReady(status, { hydrate })) {
+            await client.reconcile(entry.generation.snapshot().value, { budget });
+            status = await client.awaitPrewarmReady({ budget, hydrate });
+          }
+          if (
+            hydrate
+            && isJavaIndexPrewarmReady(status, { hydrate })
+            && status.snapshot?.state !== "DURABLE"
+            && typeof client.flush === "function"
+          ) {
+            status = await client.flush({ budget });
+          }
+          if (hydrate && !isJavaIndexPrewarmReady(status, { hydrate })) {
+            console.error(
+              `[codex-java-lsp] pinned repo prewarm index incomplete files=${status.files} snapshot=${status.snapshot?.state ?? "none"}`
+            );
+          }
+        } catch (error) {
+          console.error("[codex-java-lsp] pinned repo prewarm index wait failed", error);
         }
-        entry.hibernated = true;
-      } catch (error) {
-        console.error("[codex-java-lsp] pinned repo prewarm hibernate failed", error);
       }
+      if (!hydrate && client) {
+        try {
+          const budget = DeadlineBudget.fromTimeout(PREWARM_INDEX_MS);
+          if (typeof client.recycle === "function") {
+            await client.recycle({ budget });
+          } else if (typeof client.hibernate === "function") {
+            await client.hibernate({ budget });
+          }
+          entry.hibernated = true;
+        } catch (error) {
+          console.error("[codex-java-lsp] pinned repo prewarm hibernate failed", error);
+        }
+      }
+    } finally {
+      entry.refCount = Math.max(0, entry.refCount - 1);
+      this.scheduleIdleShutdown(entry);
     }
-    this.scheduleIdleShutdown(entry);
   }
 
   async withContext<T>(

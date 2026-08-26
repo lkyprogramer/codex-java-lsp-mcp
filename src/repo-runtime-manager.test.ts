@@ -117,6 +117,60 @@ test("prewarmRepo does not return until that repo's index is ready", async () =>
   assert.equal(sessions.get("/repo-a")?.ensureStartedCalls, 0);
 });
 
+test("freemem pressure does not recycle a pin while prewarm is waiting", async () => {
+  const sessions = new Map<string, FakeSession>();
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>(resolve => {
+    release = resolve;
+  });
+  const calls: string[] = [];
+  const javaIndexClient = {
+    async open() {
+      return { indexedGeneration: 1, coverage: [] };
+    },
+    async awaitPrewarmReady() {
+      await gate;
+      return {
+        state: "READY",
+        indexedGeneration: 1,
+        files: 3,
+        types: 1,
+        methods: 1,
+        edges: 0,
+        snapshotBytes: 10,
+        factsHydrated: true,
+        snapshot: { state: "DURABLE" as const, durableGeneration: 1, durableManifestFingerprint: "m" },
+        pendingForeground: 0,
+        pendingBackground: 0,
+        coverage: [],
+        resourceCoverage: []
+      };
+    },
+    async recycle() {
+      calls.push("recycle");
+    },
+    async hibernate() {
+      calls.push("hibernate");
+    },
+    async close() {}
+  };
+  const manager = new RepoRuntimeManager(fakeResolver(), {
+    idleTtlMs: 100000,
+    hibernateTtlMs: 100000,
+    pressureIntervalMs: 15,
+    freememPressureBytes: 1,
+    freemem: () => 0,
+    requestTimeoutMs: 5000
+  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndexClient as never }),
+    fakeCoordination(), new NoopCrossProcessLeaseStore());
+  const done = manager.prewarmRepo({ repoRoot: "/repo-a" }, { hydrate: true });
+  await delay(80);
+  assert.equal(calls.includes("recycle"), false, "in-flight hot prewarm must not be a pressure victim");
+  release();
+  await done;
+  await manager.shutdownAll();
+});
+
 test("isJavaIndexPrewarmReady requires durable snapshot or complete coverage without background work", () => {
   const base = {
     state: "READY" as const,
