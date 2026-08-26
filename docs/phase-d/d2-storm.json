@@ -1,0 +1,8 @@
+{
+  "samples": 90,
+  "timeouts": 0,
+  "maxMs": 57.437957962974906,
+  "p99Ms": 31.189917004667222,
+  "gradleReturn": 0,
+  "pass": true
+}

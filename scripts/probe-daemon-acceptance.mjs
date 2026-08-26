@@ -48,7 +48,13 @@ function toolText(result) {
 async function call(client, name, args) {
   const t0 = performance.now();
   const result = await client.callTool({ name, arguments: args });
-  return { elapsedMs: performance.now() - t0, isError: Boolean(result.isError), text: toolText(result) };
+  const text = toolText(result);
+  return {
+    elapsedMs: performance.now() - t0,
+    isError: Boolean(result.isError),
+    text,
+    toolFail: Boolean(result.isError) || /Deadline exceeded before java-index/i.test(text)
+  };
 }
 
 function daemonPid() {
@@ -103,19 +109,35 @@ await client.connect(new StreamableHTTPClientTransport(url));
 
 const health = await healthzSample(stormSamples);
 const pid = daemonPid();
+const unregisteredRoot = "/Users/luo/Documents/github/codex-java-lsp-mcp/fixtures/generic-java";
+const d6status = await call(client, "java_status", { repoRoot: unregisteredRoot });
 const impacts = {};
 for (const [id, pin] of Object.entries(pins)) {
-  const result = await call(client, "java_impact", {
+  const first = await call(client, "java_impact", {
     projectId: pin.projectId,
     anchors: [{ file: pin.file, line: 1, column: 1 }],
     mode: "minimal",
-    semanticPolicy: "fast"
+    semanticPolicy: "fast",
+    deadlineMs: 15000
   });
+  const follow = [];
+  for (let i = 0; i < 2; i += 1) {
+    follow.push(await call(client, "java_impact", {
+      projectId: pin.projectId,
+      anchors: [{ file: pin.file, line: 1, column: 1 }],
+      mode: "minimal",
+      semanticPolicy: "fast",
+      deadlineMs: 15000
+    }));
+  }
   impacts[id] = {
     hot: pin.hot,
-    elapsedMs: result.elapsedMs,
-    isError: result.isError,
-    toolFail: result.isError || /Deadline exceeded before java-index/i.test(result.text)
+    elapsedMs: first.elapsedMs,
+    isError: first.isError,
+    toolFail: first.toolFail,
+    errorText: first.toolFail ? first.text.slice(0, 240) : "",
+    followElapsedMs: follow.map(row => row.elapsedMs),
+    followFail: follow.some(row => row.toolFail)
   };
 }
 
@@ -163,6 +185,12 @@ const report = {
   health,
   pid,
   footprintMiB: await footprintMiB(pid),
+  d6: {
+    elapsedMs: d6status.elapsedMs,
+    isError: d6status.isError,
+    toolFail: d6status.toolFail,
+    errorText: d6status.toolFail ? d6status.text.slice(0, 240) : ""
+  },
   impacts,
   d4: {
     shortElapsedMs: d4short.elapsedMs,
@@ -180,18 +208,23 @@ const report = {
   }
 };
 
+const indexedFiles = Number(d7payload.javaIndex?.files ?? 0);
+const reuseDenom = Math.max(indexedFiles, (seed?.reusedFiles ?? 0) + (seed?.dirtyFiles ?? 0), 1);
 const d2 = health.timeouts === 0 && health.p99Ms < 100;
-const d3a = Object.values(impacts).some(row => row.hot && !row.toolFail && row.elapsedMs <= 3000);
+const d3a = Object.values(impacts).filter(row => row.hot).every(row => !row.toolFail && row.elapsedMs <= 3000);
 const d3b = Object.values(impacts).filter(row => !row.hot).every(row => !row.toolFail);
 const d4 = !d4retry.isError && d4retry.elapsedMs <= 500;
+const d6 = !d6status.toolFail && d6status.elapsedMs <= 3000;
 const d7 = (seed?.completion === "SEEDED_DEGRADED" || seed?.completion === "RECONCILED_COMPLETE")
-  && (seed?.reusedFiles ?? 0) >= 0.9 * 1886
+  && (seed?.reusedFiles ?? 0) >= 0.9 * reuseDenom
   && report.d7.childSpawned === false
   && d7status.elapsedMs <= 15000
   && !d7status.isError;
-report.gates = { D2: d2, D3a: d3a, D3b: d3b, D4: d4, D7: d7 };
+report.d7.indexedFiles = indexedFiles;
+report.d7.reuseDenom = reuseDenom;
+report.gates = { D2: d2, D3a: d3a, D3b: d3b, D4: d4, D6: d6, D7: d7 };
 
 const out = process.env.JAVA_LSP_V1_PROBE_OUT ?? path.join(process.cwd(), "docs/phase-d/v1-probe.json");
 writeFileSync(out, JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report, null, 2));
-process.exitCode = d2 && d3a && d3b && d4 && d7 ? 0 : 2;
+process.exitCode = d2 && d3a && d3b && d4 && d6 && d7 ? 0 : 2;

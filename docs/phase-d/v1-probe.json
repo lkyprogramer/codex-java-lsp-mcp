@@ -1,0 +1,103 @@
+{
+  "health": {
+    "samples": 12,
+    "timeouts": 0,
+    "maxMs": 14.302292000000023,
+    "p99Ms": 14.302292000000023
+  },
+  "pid": "48831",
+  "footprintMiB": 2002,
+  "d6": {
+    "elapsedMs": 577.23325,
+    "isError": false,
+    "toolFail": false,
+    "errorText": ""
+  },
+  "impacts": {
+    "lishuedu": {
+      "hot": true,
+      "elapsedMs": 426.60533299999986,
+      "isError": false,
+      "toolFail": false,
+      "errorText": "",
+      "followElapsedMs": [
+        5579.196042,
+        9.413916999999856
+      ],
+      "followFail": true
+    },
+    "lishu-v2": {
+      "hot": true,
+      "elapsedMs": 4055.663457999999,
+      "isError": false,
+      "toolFail": false,
+      "errorText": "",
+      "followElapsedMs": [
+        22.564250000001266,
+        33.485375000000204
+      ],
+      "followFail": false
+    },
+    "cipherlink": {
+      "hot": false,
+      "elapsedMs": 25.667959000000337,
+      "isError": false,
+      "toolFail": false,
+      "errorText": "",
+      "followElapsedMs": [
+        17.725374999999985,
+        16.518167000000176
+      ],
+      "followFail": false
+    },
+    "exam-parent-v3": {
+      "hot": false,
+      "elapsedMs": 1908.321249999999,
+      "isError": false,
+      "toolFail": false,
+      "errorText": "",
+      "followElapsedMs": [
+        15.235333999999057,
+        10.168499999999767
+      ],
+      "followFail": false
+    }
+  },
+  "d4": {
+    "shortElapsedMs": 16.690042000000176,
+    "shortError": false,
+    "retryElapsedMs": 13.55566699999872,
+    "retryError": false,
+    "rangeGap": false
+  },
+  "d7": {
+    "statusElapsedMs": 45.43445799999972,
+    "statusError": false,
+    "seed": {
+      "completion": "RECONCILED_COMPLETE",
+      "reusedFiles": 1419,
+      "dirtyFiles": 73,
+      "deltaParsedFiles": 73,
+      "fingerprintMatched": false,
+      "cacheDirsScanned": 13,
+      "eligibleSnapshots": 3,
+      "metaMissing": 3,
+      "selfSkip": 1,
+      "familyMismatch": 6,
+      "identityMismatch": 0,
+      "coverageIncomplete": 0
+    },
+    "impactError": false,
+    "childSpawned": false,
+    "indexedFiles": 0,
+    "reuseDenom": 1492
+  },
+  "gates": {
+    "D2": true,
+    "D3a": false,
+    "D3b": true,
+    "D4": true,
+    "D6": true,
+    "D7": true
+  }
+}
