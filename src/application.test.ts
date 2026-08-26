@@ -304,6 +304,8 @@ test("HTTP application hydrates JAVA_LSP_PREWARM_HOT aliases and logs unknown on
       { id: "cipherlink", hydrate: false }
     ]);
     assert.ok(errors.some(line => /unknown JAVA_LSP_PREWARM_HOT alias nope/.test(line)));
+    assert.ok(errors.some(line => /pinned repo prewarm begin lishuedu/.test(line)));
+    assert.ok(errors.some(line => /pinned repo prewarm finished pins=2/.test(line)));
     await application.close();
   } finally {
     console.error = originalError;

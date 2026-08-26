@@ -261,10 +261,15 @@ export class JavaLspApplication {
       for (const pin of pins) {
         if (this.prewarmStopped || this.currentState !== "ready") return;
         try {
+          console.error(`[codex-java-lsp] pinned repo prewarm begin ${pin.id}`);
           await this.runtimes.prewarmRepo({ projectId: pin.id }, { hydrate: false });
+          console.error(`[codex-java-lsp] pinned repo prewarm end ${pin.id}`);
         } catch (error) {
           console.error(`[codex-java-lsp] pinned repo prewarm failed (${pin.id})`, error);
         }
+      }
+      if (!this.prewarmStopped && this.currentState === "ready") {
+        console.error(`[codex-java-lsp] pinned repo prewarm finished pins=${pins.length}`);
       }
     } catch (error) {
       console.error("[codex-java-lsp] pinned repo prewarm failed", error);

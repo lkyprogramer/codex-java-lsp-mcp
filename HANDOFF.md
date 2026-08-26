@@ -2,7 +2,7 @@
 
 ## daemon 生产化三轨（2026-08-25）
 
-分支 `codex/frontier-r1`。live HTTP daemon `http://127.0.0.1:38456/mcp`，LaunchAgent `com.lky.codex-java-lsp-mcp`。当前 release `54b7c09699c6-20260825T094934Z`。pin：`lishuedu`、`exam-parent-v3`、`cipherlink`、`lishu-v2`。不要把 `fat-service` / `analysis-develop-analysis` / `recognition-master` 加回 `projects.json`。不要合 `main`。回滚：`"$HOME/Library/Application Support/codex-java-lsp-mcp/daemonctl.sh" rollback-release`。
+分支 `codex/frontier-r1`。live HTTP daemon `http://127.0.0.1:38456/mcp`，LaunchAgent `com.lky.codex-java-lsp-mcp`。当前 release `425fd962fd2f-20260826T021910Z`。pin：`lishuedu`、`exam-parent-v3`、`cipherlink`、`lishu-v2`。不要把 `fat-service` / `analysis-develop-analysis` / `recognition-master` 加回 `projects.json`。不要合 `main`。回滚：`"$HOME/Library/Application Support/codex-java-lsp-mcp/daemonctl.sh" rollback-release`。
 
 计划真源：`docs/deep/codex-java-lsp-mcp-daemon-stability-and-memory-plan-2026-08-25.md`。closeout：`docs/phase-d/w1-closeout.json`、`s1`–`s3`、`m1`–`m4`、`v1-acceptance.md`。探针：`scripts/probe-daemon-acceptance.mjs`。
 
@@ -16,9 +16,10 @@
 - linked worktree 的 live git `familyHash` 在 daemon 里可能缺失；seed 必须能从该仓自己的 `repo-meta.json` 回填。
 - M4c 指纹输入变化会让 own-snapshot 全部失效。部署后 pin 仓会串行冷建；host load 40–160 时 worker 会 `ERR_WORKER_OUT_OF_MEMORY`。
 - sibling `findCandidate` 只能读 v4 header，禁止对每个 family mate `toFacts()`。`createEntry` 不得 await 冷建 reconcile。OPEN 花光 15s 后 freshness barrier 必须 fail-soft，`java_status` 回退 `localStatus`。
-- pin 预热先 files-only 再 hydrate 热集，否则 lishuedu rest decode 会把 D7 OPEN 堵死。
+- pin 预热保持 files-only。lishuedu rest-hydrate 会打爆 1536 MiB isolate；lishu-v2 hydrate 后 idle 曾到 961 MiB，过 D1 900。
+- D1 soak 不要等生产 20 分钟 index-idle。用 `scripts/d1-fast-idle-soak.sh` 把 hibernate/index-idle 临时压到秒级，测完必须把 LaunchAgent plist 里的 TTL env 去掉。`footprint -p` 只读 `phys_footprint:` 行，不要把 header 里的 `64-bit Footprint` 当数字。
 
-D7 现场已过（`54b7c09`）：torna `SEEDED_DEGRADED` reusedFiles 1423，`java_status` 7201 ms，`java_impact` 98 ms，无 cold-build child。D1 仍未在本 release 上交出 ≤900 MiB 的 30 分钟 idle。pin hydrate 仍可能 OOM。
+D7 现场已过（`54b7c09`）：torna `SEEDED_DEGRADED` reusedFiles 1423，`java_status` 7201 ms，`java_impact` 98 ms，无 cold-build child。D1 PASS on `425fd96` fast soak：end 807 MiB ≤ 900，peak 2458，生产 TTL 已恢复。pin rest-hydrate 仍可能 OOM。
 
 ## 当前任务
 
