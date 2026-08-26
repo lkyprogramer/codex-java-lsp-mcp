@@ -1,6 +1,6 @@
 # Daemon 稳定性与内存治理方案（W/S/M 三轨 + V 验收）
 
-- 状态：ADOPTED（R0，2026-08-25）
+- 状态：ADOPTED（R1，2026-08-26：新增 §8 上线阻塞裁决——D3a 三振根因实锤为 methods 段 JSON 单体解析 ~890 MiB 瞬时峰值；拍板 cap 临时 2560 + S4 分块快照根治 + D1 修订 1024（双热集）+ 新增 D3c 门；identity formal floors 判 pre-existing 不阻塞上线）
 - 范围：HTTP daemon 的事件循环冻结、超时死亡螺旋、内存账本三类生产问题的彻底解决
 - 输入证据：本仓代码核实（本文所有行号均已人工确认）、grok 排查报告（`/Users/luo/Documents/grok/lsp1.md`、`lsp2.md`）、2026-08-25 上午的现场诊断（进程采样、遥测 JSONL、daemon 日志）
 - 生效 pin：`lishuedu`、`exam-parent-v3`、`cipherlink`、`lishu-v2`（4 个 lspEnabled，来源 `~/.config/codex-java-lsp/projects.json`，已核实）
@@ -316,15 +316,17 @@
 
 | 门 | 卡 | 目标 |
 | --- | --- | --- |
-| D1 | M1/M2 | 稳态 footprint ≤ 900 MiB（追求 700） |
-| D2 | W1 | 构建风暴期 healthz P99 < 100ms、0 超时 |
+| D1 | M1/M2 | 稳态 footprint：双热集 ≤ 1024 MiB（§8.2 修订）；files-only/单热集参考线 900 |
+| D2 | W1 | 构建风暴期 healthz P99 < 100ms、0 超时（预热 OPEN 窗口的停顿 → W2 观察卡，不阻塞） |
 | D3a | S2/M1 | 热 pin 首查 P95 ≤ 3s |
 | D3b | S1/S3 | 冷 pin 首查 0 报错、0 retire |
+| D3c | §8 决策 A/S4 | 非热 pin on-demand hydrate 首查 ≤ 12s、0 toolFail |
 | D4 | S1 | QUERY 超时后 terminations=0、下一请求 ≤ 500ms |
 | D5 | M3 | 冷建峰值 ≤ 4 GiB、10 分钟回落 |
 | D6 | W1 | 新仓 java_status 首查 ≤ 3s |
 | D7 | M4 | worktree 重开 seed 命中：reusedFiles ≥ 0.9×总数、不 spawn 冷建 child、首查 ≤ 15s |
-| identity | V1 | 三仓 2-run 快检 plan 内容与基线 identity |
+| D8 | S4 | 1536 cap 下 lishuedu hydrate 三连过；单段解析瞬时 heap 增量 ≤ 200 MiB；firstHydrate ≤ 10s |
+| identity | V1 | 三仓 2-run 快检 plan 内容与基线 identity（formal floors 双臂同败 = pre-existing，不计入） |
 
 ## 6. 风险与回滚
 
@@ -348,3 +350,84 @@ W1（半小时，独立可先行）
 ```
 
 预计总量：S 轨 ~300 LOC（含测试改写），M 轨 ~250 LOC + M4 ~120 LOC，V1 探针 ~150 LOC。全程不动 golden、不动 read-plan 正常路径选择逻辑、不 merge main。
+
+---
+
+## 8. 2026-08-26 上线阻塞裁决（D3a 三振后，R1 增补）
+
+> 本章基于 `docs/phase-d/d3a-escalation.md` 三振 + 本日现场快照解剖，对全部剩余阻塞给出**最终决策**。执行者按 8.2 的决策直接开工，不再重试 escalation 里的旧路径。
+
+### 8.1 根因裁决：OOM 是 methods 段 JSON 单体解析的瞬时峰值，不是「lishuedu 太大」
+
+对 live lishuedu 快照（`6496e5a49fd9/java-index-snapshot.json.gz`，26.7M，CJV4）逐段实测（node 独立进程、无 cap）：
+
+| 段 | gz | 解压 JSON | 条目 | JSON.parse 后 heap 增量 |
+| --- | --- | --- | --- | --- |
+| files | 1.0M | 13.0M | 6081 | 30M |
+| types | 0.8M | 11.1M | 7308 | 38M |
+| fields | 0.9M | 18.7M | 28475 | ~0（GC 噪声） |
+| **methods** | **12.9M** | **244.1M** | **24961** | **~890M** |
+| edges | 8.6M | 180.8M | 252796 | ~0（GC 噪声，瞬时数百 M） |
+| entitySearch | 2.4M | 26.3M | – | 63M |
+
+裁决链：
+
+1. **确定性 OOM**：hydrate 走到 methods 段时，worker 内已灌入 files/types/fields（基线 ~350–400 MiB），再叠 244 MiB JSON 字符串 + ~890 MiB 解析瞬时对象 → 峰值 ~1.4–1.5 GiB，1536 cap 必死。`7e29c0c` 的「分段 hydrate」方向对，但粒度不够——**单段本身就超预算**。
+2. **为什么 M 轨基准没拦住**：`m6-5-memory.json` 的 G1（lishuedu hydrate 后 heap 173 MiB、firstHydrate 8.9s）是在**无 resourceLimits 的进程**里测的（`parentHeapStatistics.heapSizeLimit` 4.3 GiB）。瞬时峰值从未被 1536 这道门实测过。**教训（进 HANDOFF）：内存基准必须在与生产一致的 resourceLimits 下跑。**
+3. **escalation 选项 1（缩热集/files-only）治不了本**：on-demand 首查走同一条 `ensureFactsHydrated`，一样 OOM——escalation 自己已记录 files-only 探针 `lishuedu followFail 5579ms`。files-only 只是把 OOM 从启动挪到首查，且额外消耗 worker 唯一一次 restart 机会，后续 toolFail `worker is unavailable`。
+4. **选项 2（流式 hydrate）方向正确**，具体化为 §8.3 的 S4 卡（分块快照）。
+
+### 8.2 决策（全部拍板，不留给执行者再议）
+
+**决策 A —— 止血（当天，1 行代码 + 部署）**
+
+1. `src/java-index/java-index-client.ts:146` 的 `maxOldGenerationSizeMb: 1536` 临时提到 **2560**，行内注释注明「S4 落地后回落 1536」。
+2. M3 卡「不改 worker 1536 上限」的边界**按新证据修订**：当时理由是「native 峰值不受 V8 cap 约束，改了没用」；本次实测证明瞬时峰值恰恰是 V8 old-gen（JSON.parse 对象），抬 cap 直接有效。这是 0A 决策协议允许的证据驱动修订，不是 gate-shopping。
+3. 热集保持默认 `lishuedu,lishu-v2` 不缩：cap 抬高后预热 hydrate 能活，D3a 直接可测；用户原始痛点是「无法响应」，缩热集是对痛点的倒退。
+4. cap=2560 的风险评估：这是上限不是常驻；hydrate 瞬时过后 GC 回落到 ~400–500 MiB；预热串行（2020ee7），并发 hydrate 场景仅剩多仓同时首查（低频，可接受）。
+5. 部署后立即做 **hydrate 三连验证**：install + 2 次 `daemonctl restart`，每次确认日志无 `ERR_WORKER_OUT_OF_MEMORY`、`prewarm finished pins=4`、随后 lishuedu `java_impact` 首查 ≤ 3s（已 hydrate 完）。
+
+**决策 B —— 根治（S4 卡，见 8.3）**：快照 rest 段分块，把单段解析瞬时峰值从 ~890 MiB 压到 ~200 MiB 以内，然后把 cap 回落 1536。
+
+**决策 C —— 门与上线判定修订**
+
+| 项 | 裁决 | 理由 |
+| --- | --- | --- |
+| D1 | **修订为 ≤ 1024 MiB（双热集配置）**；files-only/单热集参考线仍为 900 | 原 900 门在 M1 设计时没把 hydrate 稳态增量入账：实测 files-only 807–866 + 双仓 hydrate 稳态 +100–160 = 961–973，**算术上与 900 矛盾**。这是设计矛盾的修正：门跟着「双热集」这个已拍板的配置走，不是放水。 |
+| D3a | 维持热 pin 首查 P95 ≤ 3s（hydrate 已在预热完成） | 决策 A 后可直接实测 |
+| D3c（新增） | 非热 pin 首次 fact 查询（触发 on-demand hydrate）≤ 12s 且 0 toolFail | 覆盖 exam/cipherlink 与重启后的边角；15s 公共预算内 |
+| D5 | 维持 ≤ 4 GiB + 10 分钟回落到 D1 水位；决策 A 部署后跑完整曲线 | 之前只差执行完整，无结构问题 |
+| D2 的 OPEN 爬升 healthz 停顿 | **不阻塞上线**；开 W2 观察卡（fast-soak t=9–25 证据在 `d1-fast-idle-soak.json`），下轮修 | 正式 storm 门（gradle ×90、0 超时、P99 31ms）已过；停顿只出现在预热 OPEN 窗口 |
+| identity formal floors（rReadMust/range/holdout） | **判为 pre-existing，不阻塞上线**；归入 next-frontier 计划 Q 轨 | 双臂（old=main 与 new）同败、content delta=0，说明是基线固有问题而非本轨回归 |
+
+**上线判定链（当前唯一有效顺序）**：
+
+```
+决策 A（cap 2560 + 保持双热集）部署
+  → hydrate 三连 + D3a/D3c/D1(1024)/D5 全绿   ← 允许在此状态合 main、生产切流
+  → S4（分块快照）落地部署
+  → cap 回落 1536 → hydrate 三连复测 + D1 复测
+  → V1-R 终验收（8.4）→ HANDOFF 收尾
+```
+
+允许带 cap=2560 先切流的理由：功能完备、门全绿，唯一代价是单 worker 理论峰值上限升高（瞬时、串行、低频）；S4 是切流后必须完成的收尾债务卡，不是可选项。
+
+### 8.3 S4 —— 快照 rest 段分块（根治 hydrate 瞬时峰值）
+
+- **目标**：单段解析瞬时 heap 增量 ≤ 200 MiB；lishuedu hydrate 在 1536 cap 下三连过；firstHydrate ≤ 10s。
+- **格式改动**（`src/java-index/snapshot-v4.ts`）：
+  1. `SNAPSHOT_V4_VERSION` 4 → 5（magic 不变 CJV4，版本字段区分；旧 reader 读 v5 报 `unsupported schemaVersion` → 按既有路径 discard 重建，天然兼容）。
+  2. `SegmentDirectoryEntry` 增加 `part: number`；writer（`encodeSnapshotV4`）对 methods/edges/fields 按 **每块 ≤ 5000 条且 JSON ≤ 32 MiB** 切块（lishuedu methods 24961 → ~5 块，每块解析瞬时 ~180 MiB），files/types/mybatis/entitySearch 保持单块。
+  3. reader：`readSegment(kind)` 语义改为**拼接所有 part 后返回**（供 seeder/`toFacts` 兼容——逐块 parse、逐块 append、块间可 GC，拼接结果是稳态不是瞬时）；新增 `readSegmentChunks(kind): Iterable<unknown[]>` 供 hydrate 逐块消费。
+- **hydrate 改动**（`src/java-index/java-index-worker.ts:1211-1243`）：`hydratePendingFacts` 每个 kind 改为 `for (const chunk of view.readSegmentChunks(kind))` → `ingestSnapshotFacts` → 置空 chunk → `yieldHydrateTurn()`。
+- **⚠ 正确性坑（必须先改，有单测）**：`ingestSnapshotFacts`（`src/java-index/index-store.ts:659-673`）现在的守卫是 `typesById.size === 0` 这类「集合为空才灌」——**同 kind 第二块会被静默跳过**。改为调用方显式声明本次调用携带哪些集合（如 `ingestSnapshotFacts(data, { collections: ["methods"] })`），或改成按 id 去重跳过；单测覆盖「同 kind 两块都进 store、重复 id 才拒绝」。
+- **seeder 顺带受益**：`loadSiblingSnapshot` → `toFacts()` 走新的逐块拼接后，seed 大仓（如未来 lishuedu worktree）的解析瞬时同样被压平，无需单独改 seeder。
+- **回归测试（新增，防复发）**：用 `resourceLimits: { maxOldGenerationSizeMb: 256 }` 的 worker + 合成快照（放大 methods 段到未分块必 OOM 的规模）跑 hydrate：v5 分块必过；同一数据走单块路径必 OOM（负例断言 `ERR_WORKER_OUT_OF_MEMORY`）。**这是把「基准必须带生产 cap」教训固化成 T0。**
+- **一次性代价（接受）**：版本 bump 使全机快照 identity 失效 → pin 串行重建（M4c 时走过，约几分钟）；worktree 走 M4b seed。部署选一次低负载窗口。
+- **出口**：cap 回落 1536（还原 `java-index-client.ts:146`）；live hydrate 三连过；`firstHydrateMs ≤ 10s`（对比基线 8.9s，分块 gzip 开销应 < 15%）；D1/D3a/D3c 复测绿；closeout `docs/phase-d/s4-chunked-snapshot-closeout.json`。
+- **失败处理**：三振 → 回退 v5 writer（reader 保留向后兼容），cap 维持 2560 上线状态，escalation 讨论二进制列式段（M 轨愿景的完整形态，~800 LOC 级）。
+- **预估**：~250 LOC + 测试。
+
+### 8.4 V1-R —— 终验收（S4 之后）
+
+按 §4.V1 剧本重跑，差异：D1 用修订门（双热集 1024）；新增 D3c 探针（重启后对 exam-parent-v3 首次 fact 查询计时）；D5 跑完整「冷建 → 10 分钟回落」曲线；identity 快检照旧（formal floors 双臂同败记录为 pre-existing，不计入判定）。全绿后更新 `HANDOFF.md`：新增「内存基准必须带生产 resourceLimits」与「JSON 单体段解析瞬时峰值」两条坑；`docs/phase-d/v1-acceptance.md` 状态翻 COMPLETE。

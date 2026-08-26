@@ -36,3 +36,15 @@ Evidence: scratch `live/d3a-prewarm-wait.json`, `live/d3a-after-hydrate-1.json`,
 2. **Do not raise the isolate cap.** Build a facts hydrate that does not decode the full rest segment into the 1536 heap (true streaming / query-scoped hydrate). That is a new card, not a fourth retry of `QUERY_REPOSITORY_FACT_MARKERS` on lishuedu.
 
 Do not merge `main`. Rollback: `daemonctl.sh rollback-release`.
+
+## RESOLVED — 2026-08-26 adjudication (plan §8)
+
+Root cause measured on the live snapshot: the **methods segment alone** is 244 MiB JSON / 24,961 items and its `JSON.parse` costs ~890 MiB transient heap; with the files/types/fields baseline already ingested, the 1536 cap is deterministically exceeded. Option 1 above is rejected: on-demand hydrate takes the same `ensureFactsHydrated` path and OOMs identically (this file already recorded `lishuedu followFail 5579 ms` under files-only). Option 2 is adopted and concretized.
+
+Decisions (see `docs/deep/codex-java-lsp-mcp-daemon-stability-and-memory-plan-2026-08-25.md` §8):
+
+- **A (stopgap, deploy now)**: raise `maxOldGenerationSizeMb` 1536 → 2560 (`java-index-client.ts:146`), keep hot set `lishuedu,lishu-v2`, verify hydrate ×3.
+- **B (root fix, S4 card)**: snapshot v5 chunked rest segments (methods/edges/fields ≤ 5000 items / 32 MiB JSON per chunk), chunked ingest (fix the `typesById.size === 0` ingest guards first), capped-worker regression test, then lower the cap back to 1536.
+- **C (gates)**: D1 revised to ≤ 1024 MiB for the two-pin hot set (the 900 gate never budgeted hydrate steady state); new D3c (on-demand hydrate first query ≤ 12 s, 0 toolFail); identity formal floors ruled pre-existing (both arms fail, content delta 0) and do not block cutover.
+
+Launch chain: A green (D3a/D3c/D1(1024)/D5) → merge `main` + cutover allowed → S4 → cap back to 1536 → V1-R final acceptance.
