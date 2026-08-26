@@ -2,7 +2,7 @@
 
 ## daemon 生产化三轨（2026-08-26）
 
-分支 `codex/frontier-r1`。live HTTP daemon `http://127.0.0.1:38456/mcp`，LaunchAgent `com.lky.codex-java-lsp-mcp`。当前 release `eb722cf5bd0b-20260826T091605Z`（热集 `hydrate:true`，worker cap **1536**，快照 schema v5，hibernate 时 recycle isolate）。pin：`lishuedu`、`exam-parent-v3`、`cipherlink`、`lishu-v2`。不要把 `fat-service` / `analysis-develop-analysis` / `recognition-master` 加回 `projects.json`。不要合 `main` 除非明确要求。回滚：`"$HOME/Library/Application Support/codex-java-lsp-mcp/daemonctl.sh" rollback-release`。
+分支 `codex/frontier-r1`。live HTTP daemon `http://127.0.0.1:38456/mcp`，LaunchAgent `com.lky.codex-java-lsp-mcp`。当前 release `f6cb33421b32-20260826T113824Z`（热集 `hydrate:true`，worker cap **1536**，快照 schema v5，hibernate 时 recycle isolate；预热持有 refCount；压力回收跳过热集）。pin：`lishuedu`、`exam-parent-v3`、`cipherlink`、`lishu-v2`。不要把 `fat-service` / `analysis-develop-analysis` / `recognition-master` 加回 `projects.json`。不要合 `main` 除非明确要求。回滚：`"$HOME/Library/Application Support/codex-java-lsp-mcp/daemonctl.sh" rollback-release`。
 
 计划真源：`docs/deep/codex-java-lsp-mcp-daemon-stability-and-memory-plan-2026-08-25.md` §8。closeout：`docs/phase-d/w1-closeout.json`、`s1`–`s4`、`m1`–`m4`、`v1-acceptance.md`。探针：`scripts/probe-daemon-acceptance.mjs`。
 
@@ -26,13 +26,11 @@
 - 不要把 `artifacts/`、`graphify-out/`、`.workflow/` 打进 `releases/<id>`。安装验证也要看磁盘，不只看测试绿。
 - macOS `os.freemem()` 经常远低于 2 GiB 压力门（本机测到 104 MiB）。`prewarmRepo` 必须持有 `refCount`；压力回收还必须跳过热集。否则刚 hydrate 完的 lishuedu 会在 5s 内被 recycle，D3a 变成 8s on-demand（lishu-v2 仍是 36ms，因为它更新）。D1 回落靠 index-idle TTL，不靠压力立刻杀热 pin。
 
-V1-R **COMPLETE**（`eb722cf`）。D1 639 MiB。D3a 874 / 50 ms。D3c 970 / 2093 ms。D5 peak 1358 / 10 min 189。D2/D3b/D4/D6/D7 PASS。Identity formal floors 两臂同失败，不阻塞。不要合 `main` 除非明确要求。
+V1-R **COMPLETE**（`f6cb334`）。D1 942 MiB。D3a 38 / 32 ms。D3c 1872 / 1833 ms。D5 peak 2165 / 10 min 170。D2/D3b/D6/D7 PASS。Identity formal floors 两臂同失败，不阻塞。不要合 `main` 除非明确要求。
 
 ## 当前任务
 
-live 仍在 `codex/frontier-r1`，**没有合 main，也没有 push**。生产 `current` → `releases/eb722cf5bd0b-20260826T091605Z`（V1-R COMPLETE：D1 639、D5 10 min 189）。不要合 main / 不要 push，除非明确要求。
-
-0401d04 已装成 90MB release，但 install 预热被 macOS `os.freemem()` 压力 recycle 打断，lishuedu D3a 8457ms FAIL。正在部署 `prewarmRepo` 持有 `refCount` 的修复后再跑 hydrate 三连 / D1 / D3a / D3c / D5。不要合 main。
+live 仍在 `codex/frontier-r1` @ `f6cb334`，**没有合 main，也没有 push**。生产 `current` → `releases/f6cb33421b32-20260826T113824Z`（90MB，previous=`009a3ff`）。V1-R COMPLETE：hydrate 三连 14.1/15.1/22.2s 0 OOM；D3a 38+32；D3c 1872+1833；D1 942；D5 peak 2165 / 10 min 170。不要合 main / 不要 push，除非明确要求。
 
 ## E1（2026-08-23）
 
