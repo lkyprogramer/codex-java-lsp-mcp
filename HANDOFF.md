@@ -19,7 +19,7 @@
 - pin 预热保持 files-only。lishuedu rest-hydrate 会打爆 1536 MiB isolate；lishu-v2 hydrate 后 idle 曾到 961 MiB，过 D1 900。
 - D1 soak 不要等生产 20 分钟 index-idle。用 `scripts/d1-fast-idle-soak.sh` 把 hibernate/index-idle 临时压到秒级，测完必须把 LaunchAgent plist 里的 TTL env 去掉。`footprint -p` 只读 `phys_footprint:` 行，不要把 header 里的 `64-bit Footprint` 当数字。
 
-D7 现场已过（`54b7c09`）：torna `SEEDED_DEGRADED` reusedFiles 1423，`java_status` 7201 ms，`java_impact` 98 ms，无 cold-build child。D1 PASS on `425fd96` fast soak：end 807 MiB ≤ 900，peak 2458，生产 TTL 已恢复。pin rest-hydrate 仍可能 OOM。
+D7 现场已过（`54b7c09` 首开 + V1 复测 `RECONCILED_COMPLETE` reused 1419/1492）。D1 PASS：fast soak 807 MiB，生产 TTL 下 ~25 min idle 840–866 MiB。D2 gradle storm 90 samples P99 31 ms 0 timeout。D3b/D4/D6 PASS。D3a/D5 PARTIAL：lishuedu rest-hydrate 仍 OOM 1536 isolate。Identity vs main：三仓 recall/pRead/token P50 delta 0；formal floors 两臂同失败。pin rest-hydrate 仍可能 OOM。
 
 ## 当前任务
 

@@ -16,8 +16,8 @@ Isolated T0: 1264 + 278 pass, exit 0. `gate:pr` exit 0. Targeted unit file set i
 | D5 cold-build peak ≤ 4 GiB | PARTIAL | Fast-soak peak 2458 MiB; M4 rebuild peak 2546; restored daemon peak 2389. All < 4 GiB. lishuedu/lishu-v2 rest-hydrate can still `ERR_WORKER_OUT_OF_MEMORY` at the 1536 isolate cap. |
 | D6 unregistered `java_status` ≤ 3 s | PASS | W1: 442 ms. V1 probe `fixtures/generic-java`: 577 ms. |
 | D7 worktree seed reusedFiles ≥ 0.9, no child, ≤ 15 s | PASS | `54b7c09` first open: `SEEDED_DEGRADED`, reused 1423/1423 (dirty 69), status 7201 ms, impact 98 ms, no child. V1 re-probe: `RECONCILED_COMPLETE`, reused 1419 / denom 1492, status 45 ms, no child. |
-| identity vs `main` first-plan content | PENDING | Re-running formal `--runs 5 --baseline main` on frozen clones (`lishuedu db63b1a7`, `cipherlink fa43398`, `exam-parent-v3 f90a0b47`). Live exam tree is dirty; not reset. Prior Aug 25 matrix: P50 quality-axis delta 0; verifier floors fail on both arms. |
+| identity vs `main` first-plan content | PASS (content) / FAIL (formal floors) | Formal `--runs 5 --baseline main` on frozen clones (`lishuedu db63b1a7`, `cipherlink fa43398`, `exam-parent-v3 f90a0b47`). Live exam tree was dirty; frozen clones used, user tree not reset. Load 18.6 (in window). recall/pRead/token P50 **delta 0** old vs new on all three repos. Verifier floors `rReadMust` / `range*Recall` / `holdoutRReadMust` fail on **both** arms (pre-existing). Summary: scratch `identity-matrix-v1-run/matrix-summary.json`. |
 
 ## Overall
 
-**IN PROGRESS (identity matrix running).** D1/D2/D3b/D4/D6/D7 PASS on live `425fd96`. D3a/D5 PARTIAL because pin rest-hydrate OOMs the 1536 isolate — production prewarm stays files-only. Do not merge `main`. Rollback: `daemonctl.sh rollback-release`.
+**COMPLETE with residuals.** D1/D2/D3b/D4/D6/D7 PASS on live `425fd96`. D3a/D5 PARTIAL: pin rest-hydrate still OOMs the 1536 isolate, so production prewarm stays files-only and first-impact hydrate-on-demand can exceed 3s / OOM. Identity of normal-path plan content vs `main` held. Do not merge `main`. Rollback: `daemonctl.sh rollback-release`.
