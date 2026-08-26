@@ -279,6 +279,51 @@ test("installer rejects dirty release provenance before assembling a new immutab
   assert.match(installer, /acquire_install_lock\nassert_clean_release_source\ncopy_legacy_release_if_needed/);
 });
 
+test("runtime installer excludes eval dumps from immutable releases and prunes unreferenced copies", () => {
+  const installer = readFileSync(path.join(projectRoot, "install-runtime.sh"), "utf8");
+  const rsyncFn = extractBashFunction(installer, "rsync_source_tree");
+  for (const name of ["artifacts", "graphify-out", ".workflow", "node_modules", "dist", ".git"]) {
+    assert.match(rsyncFn, new RegExp(`--exclude ${escapeRegex(name)}(?: |$)`, "m"));
+  }
+  assert.match(installer, /rsync_source_tree "\$SCRIPT_DIR\/" "\$RELEASE_DIR\/"/);
+  assert.match(installer, /prune_unreferenced_releases\(\)/);
+  assert.match(installer, /prune_unreferenced_releases \|\| true\n\necho "HTTP daemon is healthy/);
+});
+
+test("prune_unreferenced_releases keeps current and previous-current only", async t => {
+  const fixture = await mkdtemp(path.join(tmpdir(), "codex-java-lsp-prune-releases-"));
+  t.after(() => rm(fixture, { recursive: true, force: true }));
+  const releases = path.join(fixture, "releases");
+  await mkdir(path.join(releases, "keep-current"), { recursive: true });
+  await mkdir(path.join(releases, "keep-previous"), { recursive: true });
+  await mkdir(path.join(releases, "garbage-one"), { recursive: true });
+  await mkdir(path.join(releases, "garbage-two"), { recursive: true });
+  await writeFile(path.join(releases, "keep-current", "marker"), "current\n");
+  await writeFile(path.join(releases, "keep-previous", "marker"), "previous\n");
+  await writeFile(path.join(releases, "garbage-one", "blob"), "x");
+  await symlink("releases/keep-current", path.join(fixture, "current"));
+  await mkdir(path.join(fixture, "state"));
+  await symlink("releases/keep-previous", path.join(fixture, "state", "previous-current"));
+  const installer = readFileSync(path.join(projectRoot, "install-runtime.sh"), "utf8");
+  const script = [
+    "set -euo pipefail",
+    `RUNTIME_DIR=${shellValue(fixture)}`,
+    "RELEASES_DIR=\"$RUNTIME_DIR/releases\"",
+    "STATE_DIR=\"$RUNTIME_DIR/state\"",
+    "CURRENT_LINK=\"$RUNTIME_DIR/current\"",
+    extractBashFunction(installer, "release_link_id"),
+    extractBashFunction(installer, "prune_unreferenced_releases"),
+    "prune_unreferenced_releases"
+  ].join("\n");
+  await run("bash", ["-c", script]);
+  assert.equal(await readlink(path.join(fixture, "current")), "releases/keep-current");
+  assert.equal(await readlink(path.join(fixture, "state", "previous-current")), "releases/keep-previous");
+  assert.equal(await readFile(path.join(releases, "keep-current", "marker"), "utf8"), "current\n");
+  assert.equal(await readFile(path.join(releases, "keep-previous", "marker"), "utf8"), "previous\n");
+  await assert.rejects(readFile(path.join(releases, "garbage-one", "blob")), { code: "ENOENT" });
+  await assert.rejects(readFile(path.join(releases, "garbage-two", "marker")), { code: "ENOENT" });
+});
+
 test("daemon controller defaults to its own runtime root, starts only its configured LaunchAgent, and waits for the fixed URL", async t => {
   const fixture = await mkdtemp(path.join(tmpdir(), "codex-java-lsp-daemonctl-"));
   t.after(() => rm(fixture, { recursive: true, force: true }));
@@ -651,6 +696,14 @@ function shellValue(value) {
 
 function escapeRegex(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function extractBashFunction(source, name) {
+  const match = source.match(new RegExp(`^${escapeRegex(name)}\\(\\) \\{[\\s\\S]*?^\\}`, "m"));
+  if (!match) {
+    throw new Error(`install-runtime.sh is missing ${name}()`);
+  }
+  return match[0];
 }
 
 function unusedPort() {

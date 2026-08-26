@@ -23,6 +23,10 @@ By default this installs an immutable release and starts the launchd-managed HTT
 but preserves the existing Codex MCP registration. --activate-http is a separate,
 no-install transport switch that requires a fresh build-and-instance-bound Codex
 CLI/Desktop attestation for the already running daemon.
+
+A release copy excludes eval dumps (artifacts/, graphify-out/, .workflow/). After a
+successful current switch the installer keeps current plus previous-current and
+deletes every other releases/<id> directory.
 EOF
 }
 
@@ -242,6 +246,80 @@ wait_for_candidate_ready() {
   done
 }
 
+rsync_source_tree() {
+  local src="$1"
+  local dst="$2"
+  shift 2
+  rsync -a \
+    --exclude .git \
+    --exclude node_modules \
+    --exclude dist \
+    --exclude coverage \
+    --exclude .nyc_output \
+    --exclude .npm \
+    --exclude artifacts \
+    --exclude graphify-out \
+    --exclude .workflow \
+    --exclude .task30-debug.mjs \
+    --exclude .DS_Store \
+    --exclude "*.tsbuildinfo" \
+    --exclude "*.tgz" \
+    --exclude "*.log" \
+    --exclude .env \
+    --exclude ".env.*" \
+    "$@" \
+    "$src" "$dst"
+}
+
+release_link_id() {
+  local link="$1"
+  local target
+  if [[ ! -L "$link" ]]; then
+    return 1
+  fi
+  target="$(readlink "$link")"
+  case "$target" in
+    releases/*)
+      printf '%s' "${target#releases/}"
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+# Rollback only needs current + previous-current. Extra immutable copies are disk waste.
+prune_unreferenced_releases() {
+  local current_id previous_id dir name
+  if ! current_id="$(release_link_id "$CURRENT_LINK")"; then
+    echo "Skipping release prune because current is not an immutable releases/<build-id> symlink." >&2
+    return 0
+  fi
+  if [[ ! -d "$RELEASES_DIR/$current_id" ]]; then
+    echo "Skipping release prune because current release directory is missing: $current_id" >&2
+    return 0
+  fi
+  previous_id=""
+  if previous_id="$(release_link_id "$STATE_DIR/previous-current")"; then
+    :
+  else
+    previous_id=""
+  fi
+  for dir in "$RELEASES_DIR"/*; do
+    [[ -d "$dir" ]] || continue
+    name="$(basename "$dir")"
+    if [[ "$name" == "$current_id" ]]; then
+      continue
+    fi
+    if [[ -n "$previous_id" && "$name" == "$previous_id" ]]; then
+      continue
+    fi
+    echo "Pruning unreferenced immutable release: $name" >&2
+    rm -rf "$dir"
+  done
+}
+
 copy_legacy_release_if_needed() {
   if [[ -e "$CURRENT_LINK" || ! -f "$RUNTIME_DIR/dist/server.js" ]]; then
     return
@@ -249,13 +327,10 @@ copy_legacy_release_if_needed() {
   local legacy_id="legacy-$(date -u +%Y%m%dT%H%M%SZ)"
   local legacy_dir="$RELEASES_DIR/$legacy_id"
   mkdir -p "$legacy_dir"
-  rsync -a \
-    --exclude .git \
+  rsync_source_tree "$RUNTIME_DIR/" "$legacy_dir/" \
     --exclude releases \
     --exclude state \
-    --exclude current \
-    --exclude "*.log" \
-    "$RUNTIME_DIR/" "$legacy_dir/"
+    --exclude current
   ln -s "releases/$legacy_id" "$STATE_DIR/previous-current"
 }
 
@@ -269,19 +344,7 @@ copy_release() {
     exit 1
   fi
   mkdir -p "$RELEASE_DIR"
-  rsync -a \
-    --exclude .git \
-    --exclude node_modules \
-    --exclude dist \
-    --exclude coverage \
-    --exclude .nyc_output \
-    --exclude .npm \
-    --exclude "*.tsbuildinfo" \
-    --exclude "*.tgz" \
-    --exclude "*.log" \
-    --exclude .env \
-    --exclude ".env.*" \
-    "$SCRIPT_DIR/" "$RELEASE_DIR/"
+  rsync_source_tree "$SCRIPT_DIR/" "$RELEASE_DIR/"
   (
     cd "$RELEASE_DIR"
     if [[ -f package-lock.json ]]; then
@@ -837,6 +900,7 @@ restore_before_daemon_restart() {
   if [[ "$rollback_failed" == "true" ]]; then
     echo "Managed-file rollback failed; the existing daemon was not restarted." >&2
   fi
+  prune_unreferenced_releases || true
   exit 1
 }
 
@@ -903,6 +967,7 @@ if ! managed_daemonctl restart || ! managed_daemonctl smoke; then
   fi
   if ! restore_previous_managed_configuration; then
     echo "Failed to restore the previous managed daemon configuration; leaving daemon stopped." >&2
+    prune_unreferenced_releases || true
     exit 1
   fi
   if [[ "$restored_release" == "true" ]]; then
@@ -910,8 +975,11 @@ if ! managed_daemonctl restart || ! managed_daemonctl smoke; then
       echo "Previous release/configuration could not be restarted; leaving daemon stopped." >&2
     fi
   fi
+  prune_unreferenced_releases || true
   exit 1
 fi
+
+prune_unreferenced_releases || true
 
 echo "HTTP daemon is healthy, but existing Codex MCP registration was preserved." >&2
 echo "After the full Codex CLI/Desktop gate, switch explicitly with: $SCRIPT_DIR/install-runtime.sh --activate-http /absolute/path/to/attestation.json" >&2

@@ -112,7 +112,7 @@ sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile fu
 ~/.config/codex-java-lsp/projects.json
 ```
 
-`install-runtime.sh` 会构建新的 immutable release、在固定 loopback 端口启动 LaunchAgent 管理的 HTTP daemon，并保留至少一个前序 release。**默认不改** Codex MCP URL。本机生产已经是 HTTP `http://127.0.0.1:38456/mcp`，安装器替换的是 `current` 指向的 daemon 进程，不是重新注册 stdio。安装完成后必须 Restart Codex 并开**新** task；已出现 `Transport closed` 的旧 session 不能原地复活。禁止往 LaunchAgent 加 `JAVA_LSP_ENGINE`。
+`install-runtime.sh` 会构建新的 immutable release、在固定 loopback 端口启动 LaunchAgent 管理的 HTTP daemon，并保留至少一个前序 release（`previous-current`）。拷贝时排除 `artifacts/`、`graphify-out/`、`.workflow/` 这类 gitignored eval dump；成功切换后删除未被 `current` / `previous-current` 引用的旧 `releases/<id>`，避免每次安装再堆一份数 GB 的相同制品。**默认不改** Codex MCP URL。本机生产已经是 HTTP `http://127.0.0.1:38456/mcp`，安装器替换的是 `current` 指向的 daemon 进程，不是重新注册 stdio。安装完成后必须 Restart Codex 并开**新** task；已出现 `Transport closed` 的旧 session 不能原地复活。禁止往 LaunchAgent 加 `JAVA_LSP_ENGINE`。
 
 `npm test` 同样会自动创建并清理独立的 cache、ownership、projects、XDG 配置、`CODEX_HOME` 和 `HOME`；即使从携带运行态环境变量的 shell 调用，也不会读写当前 MCP/daemon 的运行目录或 Codex 配置。
 

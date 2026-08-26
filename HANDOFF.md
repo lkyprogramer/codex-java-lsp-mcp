@@ -23,12 +23,15 @@
 - 热集预热是 `hydrate:true`（`JAVA_LSP_PREWARM_HOT` 默认 `lishuedu,lishu-v2`）。不要缩热集。
 - D1 soak 不要等生产 20 分钟。用 `scripts/d1-fast-idle-soak.sh` 临时压 TTL，必须等到 `prewarm finished`（不要 log-quiet 提前停），测完必须去掉 LaunchAgent 里的 TTL env。`footprint -p` 只读 `phys_footprint:` 行。
 - in-isolate hibernate 还不了 old-gen。空闲路径必须 `recycle()`（terminate worker）或 index-idle `shutdown`。
+- 不要把 `artifacts/`、`graphify-out/`、`.workflow/` 打进 `releases/<id>`。安装验证也要看磁盘，不只看测试绿。
 
 V1-R **COMPLETE**（`eb722cf`）。D1 639 MiB。D3a 874 / 50 ms。D3c 970 / 2093 ms。D5 peak 1358 / 10 min 189。D2/D3b/D4/D6/D7 PASS。Identity formal floors 两臂同失败，不阻塞。不要合 `main` 除非明确要求。
 
 ## 当前任务
 
-**main 已切换。** merge `e48a253`（`48e665b` + `db61edc`，non-squash）。F2 attestation pr/nightly/release GO。未 push。F3 soak 已开始，24–48h 未过，计划未 COMPLETE。回滚：`git revert -m 1 e48a253`。cipherlink holdout 已立项。无 live。`java_context` 不公开。
+live 仍在 `codex/frontier-r1`，**没有合 main，也没有 push**。生产 `current` → `releases/eb722cf5bd0b-20260826T091605Z`（V1-R COMPLETE：D1 639、D5 10 min 189）。不要合 main / 不要 push，除非明确要求。
+
+本轮磁盘：`copy_release` 曾把 gitignored `artifacts/`（约 4.4GB）打进每份 immutable release，两天 21 份 ≈ 91GB。安装器现已排除 dumps，成功切换后只保留 `current` + `previous-current`。按用户要求现场只留 `eb722cf5bd0b-20260826T091605Z`，并去掉其中的 `artifacts/` / `graphify-out/`。`state/previous-current` 已摘掉，下一次成功安装前 `daemonctl.sh rollback-release` 没有前序目标。
 
 ## E1（2026-08-23）
 
