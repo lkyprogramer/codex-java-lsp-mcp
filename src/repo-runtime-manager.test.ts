@@ -236,7 +236,7 @@ test("prewarmRepo hydrate:false recycles the worker isolate after files-only rea
   await manager.shutdownAll();
 });
 
-test("index idle TTL fully closes hibernated cold and hot-set runtimes", async () => {
+test("index idle TTL closes hibernated cold runtimes and exempts the hot set", async () => {
   const sessions = new Map<string, FakeSession>();
   const coldIndex = new RecordingJavaIndex(() => 0);
   const hotIndex = new RecordingJavaIndex(() => 0);
@@ -270,7 +270,7 @@ test("index idle TTL fully closes hibernated cold and hot-set runtimes", async (
   await manager.prewarmRepo({ repoRoot: "/hot" }, { hydrate: false });
   await delay(120);
   assert.ok(coldIndex.calls.includes("close"), "cold hibernated isolate must close");
-  assert.ok(hotIndex.calls.includes("close"), "hot-set isolate must close on index idle so D1 can return RSS");
+  assert.equal(hotIndex.calls.includes("close"), false, "hot-set isolate must stay resident (M2b)");
   await manager.shutdownAll();
 });
 
@@ -1607,6 +1607,89 @@ test("own snapshot verification stays worker-owned after OPEN instead of trigger
   await manager.contextFor({ repoRoot: "/repo-a" });
 
   assert.equal(reconcileCalls, 0, "the worker verifies/queues the snapshot itself; manager must not race it with a full sweep");
+});
+
+test("hibernate TTL does not recycle a hot-set isolate", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const javaIndex = new RecordingJavaIndex(() => 0);
+  const manager = new RepoRuntimeManager({
+    async resolve(selector: { repoRoot?: string }) {
+      const repoRoot = selector.repoRoot || "/repo";
+      const repoHash = repoRoot.replace(/\W/g, "");
+      return {
+        repoRoot,
+        repoHash,
+        rootSource: "explicit" as const,
+        aliases: ["lishuedu"],
+        layoutProfile: "generic-java" as const,
+        lsp: { enabled: true, matchedBy: "direct-root" as const, configuredRoot: repoRoot, effectiveRepoRoot: repoRoot },
+        worktree: { repoRoot, repoHash, isLinkedWorktree: false }
+      };
+    }
+  }, {
+    idleTtlMs: 100000,
+    hibernateTtlMs: 25,
+    indexIdleTtlMs: 0,
+    hotIndexAliases: new Set(["lishuedu"]),
+    pressureIntervalMs: 0,
+    requestTimeoutMs: 5000
+  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
+    fakeCoordination(), new NoopCrossProcessLeaseStore());
+  await manager.prewarmRepo({ repoRoot: "/hot" }, { hydrate: true });
+  await delay(80);
+  assert.equal(javaIndex.calls.includes("recycle"), false, "hot-set isolate stays resident through T_hibernate");
+  await manager.shutdownAll();
+});
+
+test("idle-close first query uses the 15s public budget", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const javaIndex = new RecordingJavaIndex(() => 0);
+  const manager = new RepoRuntimeManager({
+    async resolve(selector: { repoRoot?: string }) {
+      const repoRoot = selector.repoRoot || "/repo";
+      const repoHash = repoRoot.replace(/\W/g, "");
+      return {
+        repoRoot,
+        repoHash,
+        rootSource: "explicit" as const,
+        aliases: ["cipherlink"],
+        layoutProfile: "generic-java" as const,
+        lsp: { enabled: true, matchedBy: "direct-root" as const, configuredRoot: repoRoot, effectiveRepoRoot: repoRoot },
+        worktree: { repoRoot, repoHash, isLinkedWorktree: false }
+      };
+    }
+  }, {
+    idleTtlMs: 100000,
+    hibernateTtlMs: 100000,
+    indexIdleTtlMs: 40,
+    hotIndexAliases: new Set(["lishuedu"]),
+    pressureIntervalMs: 0,
+    requestTimeoutMs: 5000
+  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
+    fakeCoordination(), new NoopCrossProcessLeaseStore());
+
+  await manager.prewarmRepo({ repoRoot: "/cold" }, { hydrate: false });
+  await delay(120);
+  assert.ok(javaIndex.calls.includes("close"), "cold isolate must idle-close before the first-query probe");
+
+  const openGate = deferred<{
+    indexedGeneration: number;
+    coverage: Array<{ state: "COMPLETE"; generation: number; failedFiles: number; recoveredFiles: number }>;
+  }>();
+  let openStarted = false;
+  javaIndex.openGate = openGate;
+  javaIndex.onOpen = () => { openStarted = true; };
+
+  let handled = false;
+  const pending = manager.withContext({ repoRoot: "/cold" }, async () => {
+    handled = true;
+  }, { requestOptions: { mode: "minimal", semanticPolicy: "fast" } });
+  await waitFor(() => openStarted);
+  await delay(1800);
+  openGate.resolve({ indexedGeneration: 1, coverage: [] });
+  await pending;
+  assert.equal(handled, true, "cold-start first query must use the 15s public budget, not the 1.5s fast default");
+  await manager.shutdownAll();
 });
 
 test("hibernate TTL unloads the index without tearing down JDT", async () => {

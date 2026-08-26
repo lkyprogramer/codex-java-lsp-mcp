@@ -44,6 +44,15 @@ test("repo-scoped java_status uses the 15s budget even when start is false", () 
   assert.equal(source.includes("requestOptions: args.start ?"), false);
 });
 
+test("idle-close deadline before status/create/request-context is a retryable evidence gap", () => {
+  const source = readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "src", "mcp-server-factory.ts"), "utf8");
+  assert.match(source, /java-index\\.status/);
+  assert.match(source, /runtime\\.request-context/);
+  assert.match(source, /runtime\\.create/);
+  assert.match(source, /warming after idle close/);
+  assert.match(source, /rethrowUnlessIdleWarming/);
+});
+
 test("HTTP protocol factory refuses an application with cwd fallback", () => {
   const registry = new AliasRegistry("/path/that/does/not/exist");
   const application = new JavaLspApplication({

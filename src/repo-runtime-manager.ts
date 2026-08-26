@@ -304,8 +304,9 @@ export class RepoRuntimeManager {
     handler: (context: ManagedToolContext, request: RequestContext) => Promise<T>,
     options: { mayStartLsp?: boolean; requestOptions?: RequestOptionsInput } = {}
   ): Promise<T> {
-    const budget = this.createRequestBudget(options.requestOptions);
     const resolved = await this.resolver.resolve(selector);
+    const requestOptions = this.requestOptionsForRuntime(resolved.repoRoot, options.requestOptions);
+    const budget = this.createRequestBudget(requestOptions);
     budget.throwIfExpired("runtime.repo-resolve");
     const entry = await this.getOrCreate(resolved, budget);
     this.refreshResource(entry);
@@ -313,7 +314,7 @@ export class RepoRuntimeManager {
     entry.hibernated = false;
     this.clearIdleTimers(entry);
     try {
-      const request = await this.prepareRequestContext(entry, options.requestOptions, budget);
+      const request = await this.prepareRequestContext(entry, requestOptions, budget);
       if (options.mayStartLsp) {
         idlePrewarmTracker.recordFirstSemanticRequest(resolved.repoRoot);
         await this.reserveLspSlot(entry, request.budget);
@@ -557,6 +558,27 @@ export class RepoRuntimeManager {
       requestOptions?.deadlineMs ?? defaultDeadlineMs(mode, semanticPolicy)
     );
     return DeadlineBudget.fromTimeout(deadlineMs);
+  }
+
+  /**
+   * Idle-close leaves a stopped placeholder (hasRuntime still true). A true
+   * cold start is "no live entry", and that path always gets the 15s public budget.
+   */
+  private hasLiveRuntime(repoRoot: string): boolean {
+    const entry = this.runtimes.get(repoRoot);
+    return entry !== undefined && entry.stoppedAt === undefined;
+  }
+
+  private requestOptionsForRuntime(
+    repoRoot: string,
+    requestOptions?: RequestOptionsInput
+  ): RequestOptionsInput {
+    const mode = requestOptions?.mode ?? "balanced";
+    const semanticPolicy = requestOptions?.semanticPolicy ?? "auto";
+    if (this.hasLiveRuntime(repoRoot) || requestOptions?.deadlineMs !== undefined) {
+      return requestOptions ?? { mode, semanticPolicy };
+    }
+    return { mode, semanticPolicy, deadlineMs: MAX_REQUEST_DEADLINE_MS };
   }
 
   /**
@@ -1095,7 +1117,10 @@ export class RepoRuntimeManager {
   private scheduleIdleShutdown(entry: RuntimeEntry): void {
     this.clearIdleTimers(entry);
     if (entry.refCount !== 0 || entry.stoppedAt !== undefined) return;
-    if (this.options.hibernateTtlMs > 0) {
+    const hotIndex = this.isHotIndexEntry(entry);
+    // Hot-set isolates stay resident (M2b). Hibernate now recycle()s the worker,
+    // so skipping only the index-idle timer would still destroy the isolate at T_hibernate.
+    if (this.options.hibernateTtlMs > 0 && !hotIndex) {
       entry.hibernateTimer = setTimeout(() => {
         if (entry.refCount === 0 && entry.stoppedAt === undefined) {
           void this.hibernateEntry(entry);
@@ -1111,7 +1136,7 @@ export class RepoRuntimeManager {
       }, this.options.idleTtlMs);
       entry.idleTimer.unref?.();
     }
-    if (this.options.indexIdleTtlMs > 0) {
+    if (this.options.indexIdleTtlMs > 0 && !hotIndex) {
       entry.indexIdleTimer = setTimeout(() => {
         if (entry.refCount === 0) {
           void this.shutdown(entry.context.repoRoot);

@@ -373,8 +373,8 @@ async function preflight({ cli, sourceRoot, outputDir }) {
       throw new Error(`${project} repository is not readable: ${repoRoot}`);
     });
   }
-  if (!(Number.isInteger(cli.runs) && cli.runs === 5)) {
-    throw new Error("formal three-repository gate requires --runs 5");
+  if (!(Number.isInteger(cli.runs) && (cli.runs === 2 || cli.runs === 5))) {
+    throw new Error("formal three-repository gate requires --runs 2 (identity) or --runs 5");
   }
 }
 

@@ -80,7 +80,7 @@ export function createMcpServer(
       semanticPolicy: args.semanticPolicy,
       deadlineMs: args.deadlineMs
     }
-  }));
+  }).catch(rethrowUnlessIdleWarming));
 
   register(track("java_symbol"), {
     title: "Java Symbol",
@@ -155,7 +155,7 @@ export function createMcpServer(
         semanticPolicy: args.start ? "required" : "auto",
         deadlineMs: 15000
       }
-    });
+    }).catch(rethrowUnlessIdleWarming);
   }
 
   async function runtimeFor(args: z.infer<z.ZodObject<typeof runtimeSchema>>): Promise<unknown> {
@@ -281,4 +281,22 @@ function errorResult(error: unknown): ToolResult {
     isError: true,
     content: [{ type: "text", text: message }]
   };
+}
+
+const IDLE_WARMING_BEFORE =
+  /Deadline exceeded before (?:java-index\.status|runtime\.request-context|runtime\.create)\b/;
+
+/** S5: idle-close first query may still miss 15s; return a retryable plan, not isError. */
+function idleWarmingPayload(error: unknown): { evidenceGaps: string[] } | undefined {
+  const message = error instanceof Error ? error.message : String(error);
+  if (!IDLE_WARMING_BEFORE.test(message)) return undefined;
+  return {
+    evidenceGaps: ["Index runtime is warming after idle close; retry the same request."]
+  };
+}
+
+function rethrowUnlessIdleWarming(error: unknown): { evidenceGaps: string[] } {
+  const payload = idleWarmingPayload(error);
+  if (payload) return payload;
+  throw error;
 }
