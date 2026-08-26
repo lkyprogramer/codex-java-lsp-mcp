@@ -1,0 +1,38 @@
+{
+  "schema": "d3-idle/v1",
+  "impacts": {
+    "lishuedu": {
+      "hot": true,
+      "elapsedMs": 176.67712500000016,
+      "isError": false,
+      "warming": false,
+      "errorText": "",
+      "pass": true
+    },
+    "lishu-v2": {
+      "hot": true,
+      "elapsedMs": 190.58529199999975,
+      "isError": false,
+      "warming": false,
+      "errorText": "",
+      "pass": true
+    },
+    "cipherlink": {
+      "hot": false,
+      "elapsedMs": 6468.437250000001,
+      "isError": false,
+      "warming": false,
+      "errorText": "",
+      "pass": true
+    },
+    "exam-parent-v3": {
+      "hot": false,
+      "elapsedMs": 2718.4101250000003,
+      "isError": false,
+      "warming": false,
+      "errorText": "",
+      "pass": true
+    }
+  },
+  "result": "PASS"
+}

@@ -1,0 +1,21 @@
+{
+  "card": "M2b",
+  "commit": "dbd18ca",
+  "releaseSha": "b180ec21a6ea",
+  "tests": { "targeted": "PASS", "full": "PASS", "gatePr": "PASS" },
+  "deployed": true,
+  "liveProbe": {
+    "name": "D3-idle after 60s index-idle TTL",
+    "result": "PASS",
+    "numbers": {
+      "lishueduMs": 176.7,
+      "lishuV2Ms": 190.6,
+      "hotIsError": false
+    }
+  },
+  "gates": { "D3-idle-hot": "PASS" },
+  "residual": [
+    "Hot-set skips both index-idle close and hibernate recycle, because hibernate now terminate()s the worker.",
+    "Hot first query after idle window is ~177–191 ms (fast policy), not the 38 ms immediate-post-prewarm D3a number."
+  ]
+}

@@ -1,25 +1,26 @@
-# V1-R acceptance — daemon stability and memory (2026-08-26)
+# V1-R / §9 acceptance — daemon stability and memory (2026-08-26)
 
-Branch `codex/frontier-r1`. Live release `f6cb33421b32-20260826T113824Z` (`http://127.0.0.1:38456/mcp`, hot-set `hydrate:true`, worker isolate cap **1536**, snapshot schema v5, isolate recycle on hibernate + index-idle close of hot pins, prewarm holds `refCount`, freemem pressure skips hot-set). Pins: `lishuedu`, `exam-parent-v3`, `cipherlink`, `lishu-v2`. Probe: `scripts/probe-daemon-acceptance.mjs`. Fast D1 soak: `scripts/d1-fast-idle-soak.sh`. S4 closeout: `docs/phase-d/s4-chunked-snapshot-closeout.json`.
+Branch `codex/frontier-r1`. Live release `b180ec21a6ea-20260826T150751Z` (`http://127.0.0.1:38456/mcp`, hot-set `hydrate:true`, worker isolate cap **1536**, snapshot schema v5, **hot-set exempt from hibernate recycle and index-idle close**, cold-start omits `deadlineMs` → 15s public budget). Pins: `lishuedu`, `exam-parent-v3`, `cipherlink`, `lishu-v2`. Probe: `scripts/d3-idle-probe.sh`, `scripts/d4-clean-probe.mjs`, `scripts/d1-controlled-soak.sh`. Identity: `/tmp/codex-java-lsp-matrix-s4-identity-20260826T152100`.
 
-Isolated T0: 1276 + 280 pass, exit 0 on `3cab7d1` (includes 256-cap Worker hydrate/OOM). `gate:pr` 1276 pass. Live daemon remains `f6cb334`. Install copies exclude `artifacts/` / `graphify-out/`; live `releases/` is two 90MB dirs.
+Isolated T0: 1279 + 280 pass, exit 0 on `b180ec2`. `gate:pr` 1279 pass. LaunchAgent has **no** soak TTL leftovers.
+
+## §9.2 dispositions
+
+D2 1 Hz×90 追认 PASS. ingest 空数组+onDuplicate 追认. Decision A 未采用追认. D8 satisfied-by-proxy. 24h 遥测 / W2 / floors 不阻塞.
 
 ## Gates
 
 | Gate | Result | Evidence |
 | --- | --- | --- |
-| D1 steady footprint ≤ 1024 MiB (dual-hot) after idle-close | PASS | `f6cb334` fast soak (hibernate 2s + index-idle 4s + 40s settle, wait for `prewarm finished`): peak **1676 MiB** (hydrate), end **942 MiB** ≤ 1024. Production TTLs restored after. |
-| D2 storm healthz P99 < 100 ms, 0 timeouts | PASS | `f6cb334` probe: 12 samples, 0 timeouts, P99 19.4 ms. OPEN/hydrate can still stall healthz; not a merge blocker per §8.2. |
-| S4 firstHydrateMs ≤ 10 s | PASS | lishuedu `prewarm begin`→`end` on live `f6cb334` (hydrate=true, 1536 cap): **8422 / 6570 / 6602 ms**. Evidence: scratch `live/first-hydrate.json`. Not D3a first impact. |
-| D3a hot pin first impact P95 ≤ 3 s | PASS | After prewarm on `f6cb334`: lishuedu **38 ms**, lishu-v2 **32 ms**, 0 toolFail. Follow-ups 12–15 ms. (`0401d04` / `009a3ff` failed at 8457 / 8573 ms because macOS `os.freemem()` pressure recycled the oldest hot pin.) |
-| D3b cold pin first impact no tool fail | PASS | cipherlink 1872 ms, exam-parent-v3 1833 ms, 0 toolFail. |
-| D3c non-hot on-demand hydrate ≤ 12 s | PASS | Same cold-pin first impacts: 1872 / 1833 ms, both ≤ 12 s, 0 toolFail. |
-| D4 query timeout does not restart worker | PASS | Unit: QUERY/STATUS `terminations === 0`. Live short-deadline during the D3c on-demand pair hit 1504 ms; not a worker restart. |
-| D5 cold-build peak ≤ 4 GiB + 10 min fallback to D1 | PASS | Deleted lishuedu snapshot, restarted, sampled daemon+descendants: **peak 2165 MiB ≤ 4 GiB**, **end 170 MiB after 10 min ≤ 1024**. Curve: scratch `live/d5.json`. |
-| D6 unregistered `java_status` ≤ 3 s | PASS | `f6cb334` probe `fixtures/generic-java`: 113 ms. |
-| D7 worktree seed reusedFiles ≥ 0.9, no child, ≤ 15 s | PASS | `f6cb334`: `SEEDED_DEGRADED`, reused 1413 / denom 1493, status 13462 ms, no child. |
-| identity vs `main` first-plan content | PASS (content) / FAIL (formal floors) | Unchanged: recall/pRead/token P50 **delta 0**; `rReadMust` / `range*` / `holdoutRReadMust` fail on **both** arms (pre-existing, not a cutover blocker per §8.2). |
+| D3-idle hot ≤ 3s, 0 isError | PASS | After 60s index-idle, `minimal`/`fast`: lishuedu **177 ms**, lishu-v2 **191 ms**, 0 isError. TTL restored. |
+| D3-idle cold ≤ 15s, 0 isError | PASS | cipherlink **6468 ms**, exam-parent-v3 **2718 ms**, 0 isError, no warming stub. |
+| D4 retry ≤ 500 ms, 0 restart | PASS | Warm lishuedu, avoid D3c: short 22 ms, retry **63 ms**, 0 isError. |
+| identity vs `main` `--runs 2` | PASS (content) / FAIL (formal floors) | old=`c8f8fd8` new=`b22dce4`. recall/pRead/token P50 **delta 0** on all three frozen clones. `passed=false` is floors on both arms (§8.2). |
+| D1 dual-metric (accelerated 3 min) | PARTIAL | Production TTLs, no LaunchAgent mutation. After prewarm, 180s samples: live RSS **39.2 MiB ≤ 700**. phys_footprint **1179 MiB** (peak 1356). **FAIL vs 1024**; **not** in 1024–1152 attribution window. Arena: MALLOC_LARGE dirty 310 MiB + MALLOC_SMALL dirty 243 MiB; daemon RSS 53 MiB. First 30 min soak was aborted (contaminated by identity) then replaced per user request. |
+| D1 30 min production soak | SKIPPED | User directed a few-minute soak. 20 min index-idle is a no-op for hot pins after M2b. |
+
+Prior V1-R numbers on `f6cb334` (D3a 38/32, D3c 1872/1833, D5 2165/170, firstHydrate 6570–8422, D2 90-sample P99 31 ms) are unchanged as historical.
 
 ## Overall
 
-**COMPLETE** on `f6cb334`. Hydrate 三连 14.1 / 15.1 / 22.2 s, 0 OOM, 0 recycle-during-prewarm. D1 942 / D3a 38+32 / D3c 1872+1833 / D5 peak 2165 end 170. Identity formal floors remain pre-existing. Do not merge `main` unless asked. Rollback: `daemonctl.sh rollback-release` → `009a3ff641cc-20260826T112416Z`.
+**M2b + S5 landed and live.** D3-idle / D4 / identity content are green. **D1 footprint 1179 > 1152 is the remaining §9.4 merge blocker** (live RSS already ≤ 700). Do not merge `main` unless asked. Rollback: `daemonctl.sh rollback-release`.

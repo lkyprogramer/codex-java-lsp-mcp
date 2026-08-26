@@ -1,0 +1,11 @@
+{
+  "schema": "d4-clean/v1",
+  "pin": "lishuedu",
+  "warmupMs": 547.250834,
+  "warmupError": false,
+  "shortElapsedMs": 21.95387500000004,
+  "shortError": false,
+  "retryElapsedMs": 62.705625000000055,
+  "retryError": false,
+  "result": "PASS"
+}

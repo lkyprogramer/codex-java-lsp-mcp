@@ -1,0 +1,21 @@
+{
+  "card": "S5",
+  "commit": "dbd18ca",
+  "releaseSha": "b180ec21a6ea",
+  "tests": { "targeted": "PASS", "full": "PASS", "gatePr": "PASS" },
+  "deployed": true,
+  "liveProbe": {
+    "name": "D3-idle cold pins after index-idle close",
+    "result": "PASS",
+    "numbers": {
+      "cipherlinkMs": 6468.4,
+      "examParentV3Ms": 2718.4,
+      "coldIsError": false
+    }
+  },
+  "gates": { "D3-idle-cold": "PASS" },
+  "residual": [
+    "Cold-start 15s budget applies only when deadlineMs is omitted; explicit short deadlines (D4) stay caller-owned.",
+    "Factory still maps Deadline exceeded before java-index.status / runtime.request-context / runtime.create to a retryable evidence gap (isError=false)."
+  ]
+}

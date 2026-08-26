@@ -1,0 +1,70 @@
+{
+  "schema": "d1-controlled-soak/v1",
+  "method": "production TTLs, wait prewarm finished, sample footprint and daemon+children RSS for 180s (user-accelerated; 30 min soak cancelled)",
+  "soakS": 180,
+  "liveGateMiB": 700.0,
+  "footGateMiB": 1024.0,
+  "footAttrMiB": 1152.0,
+  "pid": 64405,
+  "samples": [
+    {
+      "elapsedS": 0,
+      "physMiB": 1338.0,
+      "peakMiB": 1356.0,
+      "liveRssMiB": 1270.8
+    },
+    {
+      "elapsedS": 20,
+      "physMiB": 1256.0,
+      "peakMiB": 1356.0,
+      "liveRssMiB": 1024.9
+    },
+    {
+      "elapsedS": 40,
+      "physMiB": 1179.0,
+      "peakMiB": 1356.0,
+      "liveRssMiB": 998.4
+    },
+    {
+      "elapsedS": 60,
+      "physMiB": 1179.0,
+      "peakMiB": 1356.0,
+      "liveRssMiB": 987.9
+    },
+    {
+      "elapsedS": 80,
+      "physMiB": 1179.0,
+      "peakMiB": 1356.0,
+      "liveRssMiB": 943.8
+    },
+    {
+      "elapsedS": 100,
+      "physMiB": 1179.0,
+      "peakMiB": 1356.0,
+      "liveRssMiB": 36.0
+    },
+    {
+      "elapsedS": 121,
+      "physMiB": 1179.0,
+      "peakMiB": 1356.0,
+      "liveRssMiB": 38.7
+    },
+    {
+      "elapsedS": 141,
+      "physMiB": 1179.0,
+      "peakMiB": 1356.0,
+      "liveRssMiB": 39.2
+    },
+    {
+      "elapsedS": 161,
+      "physMiB": 1179.0,
+      "peakMiB": 1356.0,
+      "liveRssMiB": 39.2
+    }
+  ],
+  "endPhysMiB": 1179.0,
+  "endLiveRssMiB": 39.2,
+  "peakPhysMiB": 1356.0,
+  "attribution": "live RSS 39 MiB / ps RSS 53 MiB; footprint 1179 = MALLOC_LARGE dirty 310 + MALLOC_SMALL dirty 243 + other. Excess 155 over 1024, 27 over the 1152 attribution cap.",
+  "result": "FAIL"
+}

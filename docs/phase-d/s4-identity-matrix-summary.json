@@ -1,0 +1,41 @@
+{
+  "source": "/tmp/codex-java-lsp-matrix-s4-identity-20260826T152100/matrix-summary.json",
+  "passed": false,
+  "oldCommit": "c8f8fd8f543bfc5c4ba802edf7d197642a55911d",
+  "newCommit": "b22dce48296fc82f4069571af2a6a4bcdba79586",
+  "projects": [
+    {
+      "project": "lishuedu",
+      "recallOld": 0.7985714285714287,
+      "recallNew": 0.7985714285714287,
+      "pReadOld": 0.7216666666666668,
+      "pReadNew": 0.7216666666666668,
+      "tokensP50Old": 3393,
+      "tokensP50New": 3393,
+      "rReadMustOld": 0.925,
+      "rReadMustNew": 0.925
+    },
+    {
+      "project": "cipherlink",
+      "recallOld": 0.8389926739926739,
+      "recallNew": 0.8389926739926739,
+      "pReadOld": 0.6633333333333337,
+      "pReadNew": 0.6633333333333337,
+      "tokensP50Old": 3186,
+      "tokensP50New": 3186,
+      "rReadMustOld": 0.9100000000000001,
+      "rReadMustNew": 0.9100000000000001
+    },
+    {
+      "project": "exam-parent-v3",
+      "recallOld": 0.6970066045066046,
+      "recallNew": 0.6970066045066046,
+      "pReadOld": 0.6,
+      "pReadNew": 0.6,
+      "tokensP50Old": 2830,
+      "tokensP50New": 2830,
+      "rReadMustOld": 0.8799999999999997,
+      "rReadMustNew": 0.8799999999999997
+    }
+  ]
+}
