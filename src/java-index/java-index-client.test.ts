@@ -1233,6 +1233,15 @@ test("Task 19/27 query commands (anchor/type/implementers/referencers/callers/ca
   await client.close();
 });
 
+test("recycle destroys a real Worker isolate and the next status opens another", async () => {
+  const cacheDir = mkdtempSync(path.join(tmpdir(), "java-index-recycle-"));
+  const client = new JavaIndexClient(fixturesRepoRoot, cacheDir);
+  assert.equal((await client.open(1)).state, "READY");
+  await client.recycle();
+  assert.equal((await client.status()).state, "READY");
+  await client.close();
+});
+
 test("shipped JavaIndex worker factory uses the 1536 production old-generation cap", () => {
   assert.equal(JAVA_INDEX_WORKER_MAX_OLD_GENERATION_SIZE_MB, 1536);
   const source = readFileSync(fileURLToPath(new URL("./java-index-client.js", import.meta.url)), "utf8");

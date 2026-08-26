@@ -276,9 +276,14 @@ export class RepoRuntimeManager {
         console.error("[codex-java-lsp] pinned repo prewarm index wait failed", error);
       }
     }
-    if (!hydrate && client && typeof client.hibernate === "function") {
+    if (!hydrate && client) {
       try {
-        await client.hibernate({ budget: DeadlineBudget.fromTimeout(PREWARM_INDEX_MS) });
+        const budget = DeadlineBudget.fromTimeout(PREWARM_INDEX_MS);
+        if (typeof client.recycle === "function") {
+          await client.recycle({ budget });
+        } else if (typeof client.hibernate === "function") {
+          await client.hibernate({ budget });
+        }
         entry.hibernated = true;
       } catch (error) {
         console.error("[codex-java-lsp] pinned repo prewarm hibernate failed", error);
@@ -1095,20 +1100,14 @@ export class RepoRuntimeManager {
       }, this.options.idleTtlMs);
       entry.idleTimer.unref?.();
     }
-    if (this.options.indexIdleTtlMs > 0 && !this.isHotIndexEntry(entry)) {
+    if (this.options.indexIdleTtlMs > 0) {
       entry.indexIdleTimer = setTimeout(() => {
-        if (entry.refCount === 0 && !this.isHotIndexEntry(entry)) {
+        if (entry.refCount === 0) {
           void this.shutdown(entry.context.repoRoot);
         }
       }, this.options.indexIdleTtlMs);
       entry.indexIdleTimer.unref?.();
     }
-  }
-
-  private isHotIndexEntry(entry: RuntimeEntry): boolean {
-    const hot = this.options.hotIndexAliases;
-    if (hot.size === 0) return false;
-    return (entry.context.aliases ?? []).some(alias => hot.has(alias));
   }
 
   private startPressureWatch(): void {
@@ -1148,7 +1147,12 @@ export class RepoRuntimeManager {
   private async hibernateEntry(entry: RuntimeEntry): Promise<void> {
     if (entry.hibernated || entry.stoppedAt !== undefined || entry.refCount !== 0) return;
     entry.hibernated = true;
-    await entry.context.javaIndexClient?.hibernate().catch(() => undefined);
+    const client = entry.context.javaIndexClient;
+    if (client && typeof client.recycle === "function") {
+      await client.recycle().catch(() => undefined);
+      return;
+    }
+    await client?.hibernate().catch(() => undefined);
   }
 
   private async stopEntry(entry: RuntimeEntry): Promise<void> {

@@ -170,7 +170,7 @@ test("isJavaIndexPrewarmReady requires durable snapshot or complete coverage wit
   }, { hydrate: false }), true);
 });
 
-test("prewarmRepo hydrate:false hibernates after files-only ready", async () => {
+test("prewarmRepo hydrate:false recycles the worker isolate after files-only ready", async () => {
   const sessions = new Map<string, FakeSession>();
   const javaIndex = new RecordingJavaIndex(() => 0);
   const manager = new RepoRuntimeManager(fakeResolver(), {
@@ -178,11 +178,11 @@ test("prewarmRepo hydrate:false hibernates after files-only ready", async () => 
   }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
     fakeCoordination(), new NoopCrossProcessLeaseStore());
   await manager.prewarmRepo({ repoRoot: "/repo-a" }, { hydrate: false });
-  assert.ok(javaIndex.calls.includes("hibernate"));
+  assert.ok(javaIndex.calls.includes("recycle"), "cold prewarm must destroy the isolate, not only unload facts");
   await manager.shutdownAll();
 });
 
-test("index idle TTL fully closes a hibernated cold runtime but not a hot-set alias", async () => {
+test("index idle TTL fully closes hibernated cold and hot-set runtimes", async () => {
   const sessions = new Map<string, FakeSession>();
   const coldIndex = new RecordingJavaIndex(() => 0);
   const hotIndex = new RecordingJavaIndex(() => 0);
@@ -216,7 +216,7 @@ test("index idle TTL fully closes a hibernated cold runtime but not a hot-set al
   await manager.prewarmRepo({ repoRoot: "/hot" }, { hydrate: false });
   await delay(120);
   assert.ok(coldIndex.calls.includes("close"), "cold hibernated isolate must close");
-  assert.equal(hotIndex.calls.includes("close"), false, "hot-set isolate stays");
+  assert.ok(hotIndex.calls.includes("close"), "hot-set isolate must close on index idle so D1 can return RSS");
   await manager.shutdownAll();
 });
 
@@ -1569,7 +1569,7 @@ test("hibernate TTL unloads the index without tearing down JDT", async () => {
     await (context.session as unknown as FakeSession).ensureStarted();
   }, { mayStartLsp: true });
   await delay(80);
-  assert.ok(javaIndex.calls.includes("hibernate"));
+  assert.ok(javaIndex.calls.includes("recycle"), "T_hibernate must destroy the isolate so RSS returns");
   assert.equal(sessions.get("/repo-a")?.stops, 0, "T_hibernate must not call session.stop");
   await manager.shutdownAll();
 });
@@ -1593,7 +1593,7 @@ test("freemem pressure hibernates the LRU idle runtime", async () => {
   );
   await manager.withContext({ repoRoot: "/repo-a" }, async () => "ok");
   await delay(80);
-  assert.ok(javaIndex.calls.includes("hibernate"), "os.freemem below threshold must hibernate LRU idle");
+  assert.ok(javaIndex.calls.includes("recycle"), "os.freemem below threshold must recycle LRU idle isolate");
   await manager.shutdownAll();
 });
 
@@ -1743,6 +1743,7 @@ class RecordingJavaIndex {
   }
   async close(): Promise<void> { this.calls.push("close"); }
   async hibernate(): Promise<void> { this.calls.push("hibernate"); }
+  async recycle(): Promise<void> { this.calls.push("recycle"); }
 }
 
 function fakeLayoutSource(repoRoot: string): LayoutSource {

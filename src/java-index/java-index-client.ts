@@ -316,6 +316,35 @@ export class JavaIndexClient {
     return status;
   }
 
+  /**
+   * Hibernate then destroy the Worker isolate. `gc()` is unavailable
+   * (`execArgv --expose-gc` is invalid); terminate is what returns old-gen
+   * to the OS. The next request lazily OPEN's a fresh worker.
+   */
+  async recycle(requestOptions: JavaIndexRequestOptions = {}): Promise<void> {
+    if (this.state === "CLOSED") return;
+    if (this.worker) {
+      try {
+        await this.hibernate(requestOptions);
+      } catch {
+        // Isolate must still die; a failed HIBERNATE is not a reason to keep ~1 GiB.
+      }
+    }
+    const worker = this.worker;
+    this.worker = undefined;
+    this.rejectAllPending(new JavaIntelligenceError("INDEX_PARTIAL", "Java index worker was recycled"));
+    this.cancelledTombstones.clear();
+    if (worker) {
+      this.terminatedWorkers.add(worker);
+      await worker.terminate().catch(() => undefined);
+    }
+    const generation = this.lastKnownStatus.indexedGeneration;
+    this.state = "NEW";
+    this.restartCount = 0;
+    this.restarting = undefined;
+    this.lastKnownStatus = { ...emptyStatus(), indexedGeneration: generation };
+  }
+
   async queryAnchor(
     file: string,
     line: number,
