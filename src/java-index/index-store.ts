@@ -681,7 +681,7 @@ export class JavaIndexStore {
       if (resource.namespace) addToSetMap(this.myBatisResourcesByNamespace, resource.namespace, resource.relativePath);
     }
     if (data.types.length > 0) for (const type of data.types) {
-      if (this.typesById.has(type.typeId)) throw new Error(`duplicate type id in snapshot: ${type.typeId}`);
+      if (this.typesById.has(type.typeId)) continue;
       internType(this.edgeColumns.strings, this.edgeColumns.ranges, type);
       this.typesById.set(type.typeId, type);
       if (type.fqn) this.typeIdByFqn.set(type.fqn, type.typeId);
@@ -689,7 +689,7 @@ export class JavaIndexStore {
       addToSetMap(this.fileOwnedNodeIds, relativePathOfFileId(type.fileId), type.typeId);
     }
     if (data.fields.length > 0) for (const field of data.fields) {
-      if (this.fieldsById.has(field.fieldId)) throw new Error(`duplicate field id in snapshot: ${field.fieldId}`);
+      if (this.fieldsById.has(field.fieldId)) continue;
       internField(this.edgeColumns.strings, this.edgeColumns.ranges, field);
       this.fieldsById.set(field.fieldId, field);
       const ownerType = this.typesById.get(field.ownerTypeId);
@@ -697,8 +697,8 @@ export class JavaIndexStore {
       addToSetMap(this.fileOwnedNodeIds, relativePathOfFileId(ownerType.fileId), field.fieldId);
     }
     if (data.methods.length > 0) for (const method of data.methods) {
+      if (this.methodColumns.has(method.methodId)) continue;
       internMethod(this.edgeColumns.strings, this.edgeColumns.ranges, method);
-      if (this.methodColumns.has(method.methodId)) throw new Error(`duplicate method id in snapshot: ${method.methodId}`);
       this.methodColumns.add(method);
       addToSetMap(this.methodIdsByOwnerAndName, `${method.ownerTypeId}#${method.name}`, method.methodId);
       const ownerType = this.typesById.get(method.ownerTypeId);
@@ -707,7 +707,7 @@ export class JavaIndexStore {
     }
     const strings = this.edgeColumns.strings;
     if (data.edges.length > 0) for (const edge of data.edges) {
-      if (this.edgeColumns.has(edge.edgeId)) throw new Error(`duplicate edge id in snapshot: ${edge.edgeId}`);
+      if (this.edgeColumns.has(edge.edgeId)) continue;
       this.edgeColumns.add(edge);
       const edgeId = strings.interned(edge.edgeId);
       addToSetMap(this.outEdgeIdsByNode, strings.interned(edge.fromId), edgeId);
