@@ -1,6 +1,6 @@
 # V1 acceptance — daemon stability and memory (2026-08-25)
 
-Branch `codex/frontier-r1` @ `c834525`. Live release `425fd962fd2f-20260826T021910Z` (`http://127.0.0.1:38456/mcp`). Pins: `lishuedu`, `exam-parent-v3`, `cipherlink`, `lishu-v2`. Probe script: `scripts/probe-daemon-acceptance.mjs`. Fast D1 soak: `scripts/d1-fast-idle-soak.sh`.
+Branch `codex/frontier-r1`. Live release `3e9ef62e405c-20260826T034749Z` (`http://127.0.0.1:38456/mcp`, hot-set `hydrate:true`). Pins: `lishuedu`, `exam-parent-v3`, `cipherlink`, `lishu-v2`. Probe: `scripts/probe-daemon-acceptance.mjs`. Fast D1 soak: `scripts/d1-fast-idle-soak.sh`. D3a 三振：`docs/phase-d/d3a-escalation.md`.
 
 Isolated T0: 1264 + 278 pass, exit 0. `gate:pr` exit 0. Targeted unit file set in scratch `targeted-tests.log` 236 pass.
 
