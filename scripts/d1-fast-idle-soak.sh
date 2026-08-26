@@ -144,12 +144,6 @@ PY
     log "stop: prewarm finished + settle ${SETTLE_S}s"
     break
   fi
-  # Current live release may not emit the finished line; treat log quiet after
-  # a minimum OPEN window as prewarm-complete, then wait index-idle settle.
-  if [[ -z "$PREWARM_DONE_AT" && -n "$QUIET_SINCE" ]] && (( elapsed >= 20 && elapsed - QUIET_SINCE >= 8 && elapsed >= LAST_JUMP_AT + SETTLE_S )); then
-    log "stop: log-quiet fallback + settle ${SETTLE_S}s"
-    break
-  fi
   sleep 2
 done
 

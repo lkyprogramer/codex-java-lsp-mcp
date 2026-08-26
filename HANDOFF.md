@@ -2,11 +2,11 @@
 
 ## daemon 生产化三轨（2026-08-26）
 
-分支 `codex/frontier-r1`。live HTTP daemon `http://127.0.0.1:38456/mcp`，LaunchAgent `com.lky.codex-java-lsp-mcp`。当前 release `1ad5ee8fdd63-20260826T082846Z`（热集 `hydrate:true`，worker cap **1536**，快照 schema v5）。pin：`lishuedu`、`exam-parent-v3`、`cipherlink`、`lishu-v2`。不要把 `fat-service` / `analysis-develop-analysis` / `recognition-master` 加回 `projects.json`。不要合 `main`。回滚：`"$HOME/Library/Application Support/codex-java-lsp-mcp/daemonctl.sh" rollback-release`。
+分支 `codex/frontier-r1`。live HTTP daemon `http://127.0.0.1:38456/mcp`，LaunchAgent `com.lky.codex-java-lsp-mcp`。当前 release `eb722cf5bd0b-20260826T091605Z`（热集 `hydrate:true`，worker cap **1536**，快照 schema v5，hibernate 时 recycle isolate）。pin：`lishuedu`、`exam-parent-v3`、`cipherlink`、`lishu-v2`。不要把 `fat-service` / `analysis-develop-analysis` / `recognition-master` 加回 `projects.json`。不要合 `main` 除非明确要求。回滚：`"$HOME/Library/Application Support/codex-java-lsp-mcp/daemonctl.sh" rollback-release`。
 
 计划真源：`docs/deep/codex-java-lsp-mcp-daemon-stability-and-memory-plan-2026-08-25.md` §8。closeout：`docs/phase-d/w1-closeout.json`、`s1`–`s4`、`m1`–`m4`、`v1-acceptance.md`。探针：`scripts/probe-daemon-acceptance.mjs`。
 
-已落地：W1 watcher/JDK/EPIPE；S1 QUERY/STATUS 超时不 retire worker；S2 `factsHydrated` 预热；S3 read-plan `DEADLINE_EXCEEDED` fail-soft；S4 快照 rest 分块（methods/edges/fields ≤5000 且 JSON ≤32 MiB）+ cap 回落 1536；M1 热集 hydrate / 冷集 hibernate；M2 20 分钟 index idle 关 **冷** isolate（热集豁免）；M3 daemon `--max-old-space-size=768`、worker `resourceLimits` 1536、nofile 65536；M4 sibling seed 指纹不否决、JDK pin 文件退出指纹、拒绝原因遥测、cache-meta 回填 `familyHash`。
+已落地：W1 watcher/JDK/EPIPE；S1 QUERY/STATUS 超时不 retire worker；S2 `factsHydrated` 预热；S3 read-plan `DEADLINE_EXCEEDED` fail-soft；S4 快照 rest 分块（methods/edges/fields ≤5000 且 JSON ≤32 MiB）+ cap 回落 1536；M1 热集 hydrate / 冷集 hibernate；M2 index idle 关 isolate（含热集）；hibernate 走 `JavaIndexClient.recycle()` 终止 worker；M3 daemon `--max-old-space-size=768`、worker `resourceLimits` 1536、nofile 65536；M4 sibling seed 指纹不否决、JDK pin 文件退出指纹、拒绝原因遥测、cache-meta 回填 `familyHash`。
 
 坑：
 - 所有 git / npm / 测试加 `PATH="/opt/homebrew/bin:$PATH"`。
@@ -21,9 +21,10 @@
 - linked worktree 的 live git `familyHash` 在 daemon 里可能缺失；seed 必须能从该仓自己的 `repo-meta.json` 回填。
 - sibling `findCandidate` 只能读 v4/v5 header，禁止对每个 family mate `toFacts()`。
 - 热集预热是 `hydrate:true`（`JAVA_LSP_PREWARM_HOT` 默认 `lishuedu,lishu-v2`）。不要缩热集。
-- D1 soak 不要等生产 20 分钟。用 `scripts/d1-fast-idle-soak.sh` 临时压 TTL，测完必须去掉 LaunchAgent 里的 TTL env。热 isolate 不关时水位可到 1339；GC 后见过 861。`footprint -p` 只读 `phys_footprint:` 行。
+- D1 soak 不要等生产 20 分钟。用 `scripts/d1-fast-idle-soak.sh` 临时压 TTL，必须等到 `prewarm finished`（不要 log-quiet 提前停），测完必须去掉 LaunchAgent 里的 TTL env。`footprint -p` 只读 `phys_footprint:` 行。
+- in-isolate hibernate 还不了 old-gen。空闲路径必须 `recycle()`（terminate worker）或 index-idle `shutdown`。
 
-V1-R **NOT COMPLETE**。hydrate 三连 PASS（9/16/15 s，0 OOM）。D3a PASS（41.6 / 35.8 ms）。D3c PASS（689 / 2004 ms）。D1 FAIL（fast soak 1339 vs 1024）。D2/D3b/D4/D6 PASS。D5 PARTIAL。Identity vs main：三仓 recall/pRead/token P50 delta 0；formal floors 两臂同失败，不阻塞。不要合 `main`。
+V1-R **COMPLETE**（`eb722cf`）。D1 639 MiB。D3a 874 / 50 ms。D3c 970 / 2093 ms。D5 peak 1358 / 10 min 189。D2/D3b/D4/D6/D7 PASS。Identity formal floors 两臂同失败，不阻塞。不要合 `main` 除非明确要求。
 
 ## 当前任务
 
