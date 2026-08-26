@@ -1,0 +1,139 @@
+{
+  "release": "3e9ef62e405c-20260826T034749Z",
+  "attempts": [
+    {
+      "n": 1,
+      "trigger": "install",
+      "lishueduHydrate": "ERR_WORKER_OUT_OF_MEMORY",
+      "probe": {
+        "lishuedu": {
+          "hot": true,
+          "elapsedMs": 4975.440165999999,
+          "isError": true,
+          "toolFail": true,
+          "errorText": "Java index worker is unavailable after one restart attempt",
+          "followElapsedMs": [
+            13.488875000000007,
+            11.595416000000114
+          ],
+          "followFail": true
+        },
+        "lishu-v2": {
+          "hot": true,
+          "elapsedMs": 48.02083300000049,
+          "isError": false,
+          "toolFail": false,
+          "errorText": "",
+          "followElapsedMs": [
+            25.642416000000594,
+            30.811666999999943
+          ],
+          "followFail": false
+        },
+        "cipherlink": {
+          "hot": false,
+          "elapsedMs": 732.43325,
+          "isError": false,
+          "toolFail": false,
+          "errorText": "",
+          "followElapsedMs": [
+            16.014667000000372,
+            13.775166999999783
+          ],
+          "followFail": false
+        },
+        "exam-parent-v3": {
+          "hot": false,
+          "elapsedMs": 1800.9933330000003,
+          "isError": false,
+          "toolFail": false,
+          "errorText": "",
+          "followElapsedMs": [
+            23.32379199999923,
+            10.453832999999577
+          ],
+          "followFail": false
+        }
+      }
+    },
+    {
+      "attempt": 2,
+      "beginLishueduHydrateTrue": true,
+      "oom": true,
+      "finished": true,
+      "lishueduEnd": true,
+      "excerpt": [
+        "[codex-java-lsp] pinned repo prewarm begin lishuedu hydrate=true",
+        "[codex-java-lsp] pinned repo prewarm index wait failed Error [ERR_WORKER_OUT_OF_MEMORY]: Worker terminated due to reaching memory limit: JS heap out of memory",
+        "  code: 'ERR_WORKER_OUT_OF_MEMORY'",
+        "[codex-java-lsp] pinned repo prewarm end lishuedu",
+        "[codex-java-lsp] pinned repo prewarm begin exam-parent-v3 hydrate=false",
+        "[codex-java-lsp] pinned repo prewarm end exam-parent-v3",
+        "[codex-java-lsp] pinned repo prewarm begin cipherlink hydrate=false",
+        "[codex-java-lsp] pinned repo prewarm end cipherlink",
+        "[codex-java-lsp] pinned repo prewarm begin lishu-v2 hydrate=true",
+        "[codex-java-lsp] pinned repo prewarm end lishu-v2",
+        "[codex-java-lsp] pinned repo prewarm finished pins=4"
+      ]
+    },
+    {
+      "attempt": 3,
+      "beginLishueduHydrateTrue": true,
+      "oom": true,
+      "finished": true,
+      "lishueduEnd": true,
+      "excerpt": [
+        "[codex-java-lsp] pinned repo prewarm begin lishuedu hydrate=true",
+        "[codex-java-lsp] pinned repo prewarm index wait failed Error [ERR_WORKER_OUT_OF_MEMORY]: Worker terminated due to reaching memory limit: JS heap out of memory",
+        "  code: 'ERR_WORKER_OUT_OF_MEMORY'",
+        "[codex-java-lsp] pinned repo prewarm end lishuedu",
+        "[codex-java-lsp] pinned repo prewarm begin exam-parent-v3 hydrate=false",
+        "[codex-java-lsp] pinned repo prewarm end exam-parent-v3",
+        "[codex-java-lsp] pinned repo prewarm begin cipherlink hydrate=false",
+        "[codex-java-lsp] pinned repo prewarm end cipherlink",
+        "[codex-java-lsp] pinned repo prewarm begin lishu-v2 hydrate=true",
+        "[codex-java-lsp] pinned repo prewarm end lishu-v2",
+        "[codex-java-lsp] pinned repo prewarm finished pins=4"
+      ]
+    }
+  ],
+  "prewarmWait": {
+    "waitedS": 2.0,
+    "finished": true,
+    "prewarmLines": [
+      "[codex-java-lsp] pinned repo prewarm index wait failed Error [ERR_WORKER_OUT_OF_MEMORY]: Worker terminated due to reaching memory limit: JS heap out of memory",
+      "[codex-java-lsp] pinned repo prewarm index wait failed Error [ERR_WORKER_OUT_OF_MEMORY]: Worker terminated due to reaching memory limit: JS heap out of memory",
+      "[codex-java-lsp] pinned repo prewarm index wait failed Error [ERR_WORKER_OUT_OF_MEMORY]: Worker terminated due to reaching memory limit: JS heap out of memory",
+      "[codex-java-lsp] pinned repo prewarm index wait failed Error [ERR_WORKER_OUT_OF_MEMORY]: Worker terminated due to reaching memory limit: JS heap out of memory",
+      "[codex-java-lsp] pinned repo prewarm index wait failed Error [ERR_WORKER_OUT_OF_MEMORY]: Worker terminated due to reaching memory limit: JS heap out of memory",
+      "[codex-java-lsp] pinned repo prewarm index wait failed Error [ERR_WORKER_OUT_OF_MEMORY]: Worker terminated due to reaching memory limit: JS heap out of memory",
+      "[codex-java-lsp] pinned repo prewarm index wait failed Error [ERR_WORKER_OUT_OF_MEMORY]: Worker terminated due to reaching memory limit: JS heap out of memory",
+      "[codex-java-lsp] pinned repo prewarm index wait failed Error [ERR_WORKER_OUT_OF_MEMORY]: Worker terminated due to reaching memory limit: JS heap out of memory",
+      "[codex-java-lsp] pinned repo prewarm index wait failed JavaIntelligenceError: Deadline exceeded before java-index.status",
+      "[codex-java-lsp] pinned repo prewarm index wait failed Error [ERR_WORKER_OUT_OF_MEMORY]: Worker terminated due to reaching memory limit: JS heap out of memory",
+      "[codex-java-lsp] pinned repo prewarm begin lishuedu hydrate=true",
+      "[codex-java-lsp] pinned repo prewarm index wait failed Error [ERR_WORKER_OUT_OF_MEMORY]: Worker terminated due to reaching memory limit: JS heap out of memory",
+      "[codex-java-lsp] pinned repo prewarm end lishuedu",
+      "[codex-java-lsp] pinned repo prewarm begin exam-parent-v3 hydrate=false",
+      "[codex-java-lsp] pinned repo prewarm end exam-parent-v3",
+      "[codex-java-lsp] pinned repo prewarm begin cipherlink hydrate=false",
+      "[codex-java-lsp] pinned repo prewarm end cipherlink",
+      "[codex-java-lsp] pinned repo prewarm begin lishu-v2 hydrate=true",
+      "[codex-java-lsp] pinned repo prewarm end lishu-v2",
+      "[codex-java-lsp] pinned repo prewarm finished pins=4"
+    ],
+    "oomLines": [
+      "[codex-java-lsp] pinned repo prewarm index wait failed Error [ERR_WORKER_OUT_OF_MEMORY]: Worker terminated due to reaching memory limit: JS heap out of memory",
+      "  code: 'ERR_WORKER_OUT_OF_MEMORY'",
+      "[codex-java-lsp] pinned repo prewarm index wait failed Error [ERR_WORKER_OUT_OF_MEMORY]: Worker terminated due to reaching memory limit: JS heap out of memory",
+      "  code: 'ERR_WORKER_OUT_OF_MEMORY'",
+      "[codex-java-lsp] pinned repo prewarm index wait failed Error [ERR_WORKER_OUT_OF_MEMORY]: Worker terminated due to reaching memory limit: JS heap out of memory",
+      "  code: 'ERR_WORKER_OUT_OF_MEMORY'",
+      "[codex-java-lsp] pinned repo prewarm index wait failed Error [ERR_WORKER_OUT_OF_MEMORY]: Worker terminated due to reaching memory limit: JS heap out of memory",
+      "  code: 'ERR_WORKER_OUT_OF_MEMORY'",
+      "[codex-java-lsp] pinned repo prewarm index wait failed Error [ERR_WORKER_OUT_OF_MEMORY]: Worker terminated due to reaching memory limit: JS heap out of memory",
+      "  code: 'ERR_WORKER_OUT_OF_MEMORY'"
+    ],
+    "healthz": "{\"status\":\"ok\",\"state\":\"ready\",\"activeRequests\":0,\"uptimeMs\":20277,\"buildSha\":\"3e9ef62e405c\",\"instanceId\":\"managed-3e9ef62e405c-20260826T034749Z-096c647f-17bd-46cc-b01b-41bfdd92488c\"}"
+  }
+}
