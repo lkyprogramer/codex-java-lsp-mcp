@@ -1214,22 +1214,23 @@ async function hydratePendingFacts(): Promise<void> {
     return;
   }
   const view = pendingSnapshotView;
-  const types = view.readSegment("types") as JavaTypeFacts[];
-  store.ingestSnapshotFacts({ types, fields: [], methods: [], edges: [] });
-  types.length = 0;
-  await yieldHydrateTurn();
-  const fields = view.readSegment("fields") as JavaFieldFacts[];
-  store.ingestSnapshotFacts({ types: [], fields, methods: [], edges: [] });
-  fields.length = 0;
-  await yieldHydrateTurn();
-  const methods = view.readSegment("methods") as JavaMethodFacts[];
-  store.ingestSnapshotFacts({ types: [], fields: [], methods, edges: [] });
-  methods.length = 0;
-  await yieldHydrateTurn();
-  const edges = view.readSegment("edges") as StaticEdge[];
-  store.ingestSnapshotFacts({ types: [], fields: [], methods: [], edges });
-  edges.length = 0;
-  await yieldHydrateTurn();
+  const restKinds = ["types", "fields", "methods", "edges"] as const;
+  for (const kind of restKinds) {
+    const chunks = typeof view.readSegmentChunks === "function"
+      ? view.readSegmentChunks(kind)
+      : [view.readSegment(kind)];
+    for (const chunk of chunks) {
+      const items = Array.isArray(chunk) ? chunk : [];
+      store.ingestSnapshotFacts({
+        types: kind === "types" ? items as JavaTypeFacts[] : [],
+        fields: kind === "fields" ? items as JavaFieldFacts[] : [],
+        methods: kind === "methods" ? items as JavaMethodFacts[] : [],
+        edges: kind === "edges" ? items as StaticEdge[] : []
+      });
+      if (Array.isArray(chunk)) chunk.length = 0;
+      await yieldHydrateTurn();
+    }
+  }
   const myBatisResources = view.readSegment("mybatis") as MyBatisMapperResourceFacts[];
   store.ingestSnapshotFacts({ types: [], fields: [], methods: [], edges: [], myBatisResources });
   myBatisResources.length = 0;

@@ -548,6 +548,39 @@ test("ingestSnapshotFacts can install one rest segment at a time", () => {
   assert.equal(store.files(["src/main/java/demo/Gateway.java"])[0]?.methods.length, 1);
 });
 
+test("ingestSnapshotFacts stores two same-kind method chunks", () => {
+  const original = new JavaIndexStore();
+  const gateway = emptyBundle("src/main/java/demo/Gateway.java", "Gateway");
+  addMethod(gateway, "pay");
+  addMethod(gateway, "refund");
+  original.replaceFile(gateway);
+  const data = original.toSnapshotData();
+  const store = new JavaIndexStore();
+  store.loadSnapshotData({ files: data.files, types: [], fields: [], methods: [], edges: [], myBatisResources: [] });
+  store.ingestSnapshotFacts({ types: data.types, fields: [], methods: [], edges: [] });
+  assert.equal(data.methods.length, 2);
+  store.ingestSnapshotFacts({ types: [], fields: [], methods: [data.methods[0]!], edges: [] });
+  store.ingestSnapshotFacts({ types: [], fields: [], methods: [data.methods[1]!], edges: [] });
+  const methods = store.files(["src/main/java/demo/Gateway.java"])[0]?.methods ?? [];
+  assert.equal(methods.length, 2);
+  assert.deepEqual(methods.map(method => method.name).sort(), ["pay", "refund"]);
+});
+
+test("ingestSnapshotFacts rejects a duplicate method id in a later chunk", () => {
+  const original = new JavaIndexStore();
+  const gateway = emptyBundle("src/main/java/demo/Gateway.java", "Gateway");
+  addMethod(gateway, "pay");
+  original.replaceFile(gateway);
+  const data = original.toSnapshotData();
+  const store = new JavaIndexStore();
+  store.loadSnapshotData({ files: data.files, types: [], fields: [], methods: [], edges: [], myBatisResources: [] });
+  store.ingestSnapshotFacts({ types: data.types, fields: [], methods: data.methods, edges: [] });
+  assert.throws(
+    () => store.ingestSnapshotFacts({ types: [], fields: [], methods: data.methods, edges: [] }),
+    /duplicate method id/
+  );
+});
+
 test("loadSnapshotData rejects a snapshot with a duplicate mybatis resource relativePath", () => {
   const store = new JavaIndexStore();
   const resource = myBatisResource({ relativePath: "src/main/resources/mapper/Dup.xml" });

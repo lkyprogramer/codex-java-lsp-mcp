@@ -16,7 +16,10 @@ import type {
 import type { MyBatisMapperResourceFacts } from "./mybatis-types.js";
 
 export const SNAPSHOT_V4_MAGIC = Buffer.from("CJV4");
-export const SNAPSHOT_V4_VERSION = 4;
+/** Schema 5: chunked methods/edges/fields. Magic stays CJV4; old readers discard and rebuild. */
+export const SNAPSHOT_V4_VERSION = 5;
+export const SNAPSHOT_V4_CHUNK_ITEM_LIMIT = 5000;
+export const SNAPSHOT_V4_CHUNK_JSON_BYTES = 32 * 1024 * 1024;
 
 export const SNAPSHOT_V4_SEGMENT_KINDS = [
   "files",
@@ -29,6 +32,7 @@ export const SNAPSHOT_V4_SEGMENT_KINDS = [
 ] as const;
 
 export type SnapshotV4SegmentKind = (typeof SNAPSHOT_V4_SEGMENT_KINDS)[number];
+const CHUNKED_SEGMENT_KINDS = new Set<SnapshotV4SegmentKind>(["fields", "methods", "edges"]);
 
 export type SnapshotV4Facts = {
   extractorVersion: string;
@@ -51,6 +55,7 @@ export type SnapshotV4Facts = {
 
 type SegmentDirectoryEntry = {
   kind: SnapshotV4SegmentKind;
+  part: number;
   crc32: number;
   offset: number;
   length: number;
@@ -82,6 +87,7 @@ export type SnapshotV4View = {
   restOnDisk: boolean;
   readRest(): SnapshotV4Rest;
   readSegment(kind: Exclude<SnapshotV4SegmentKind, "files">): unknown;
+  readSegmentChunks(kind: Exclude<SnapshotV4SegmentKind, "files">): Iterable<unknown>;
   toFacts(): SnapshotV4Facts;
 };
 
@@ -91,6 +97,23 @@ type RestSource =
 
 export function isSnapshotV4(bytes: Buffer): boolean {
   return bytes.length >= 4 && bytes.subarray(0, 4).equals(SNAPSHOT_V4_MAGIC);
+}
+
+function splitJsonChunks(items: unknown[]): unknown[][] {
+  if (items.length === 0) return [items];
+  const chunks: unknown[][] = [];
+  let start = 0;
+  while (start < items.length) {
+    let end = Math.min(start + SNAPSHOT_V4_CHUNK_ITEM_LIMIT, items.length);
+    while (end > start + 1) {
+      const json = JSON.stringify(items.slice(start, end));
+      if (json.length <= SNAPSHOT_V4_CHUNK_JSON_BYTES) break;
+      end = start + Math.max(1, Math.floor((end - start) / 2));
+    }
+    chunks.push(items.slice(start, end));
+    start = end;
+  }
+  return chunks;
 }
 
 function releaseEncodedSegment(value: SnapshotV4Facts, kind: SnapshotV4SegmentKind): void {
@@ -120,7 +143,8 @@ function releaseEncodedSegment(value: SnapshotV4Facts, kind: SnapshotV4SegmentKi
   }
 }
 
-export function encodeSnapshotV4(value: SnapshotV4Facts): Buffer {
+export function encodeSnapshotV4(value: SnapshotV4Facts, options: { chunkRest?: boolean } = {}): Buffer {
+  const chunkRest = options.chunkRest !== false;
   const bodies: Record<SnapshotV4SegmentKind, unknown> = {
     files: value.files,
     types: value.types,
@@ -134,13 +158,20 @@ export function encodeSnapshotV4(value: SnapshotV4Facts): Buffer {
   const segments: SegmentDirectoryEntry[] = [];
   let offset = 0;
   for (const kind of SNAPSHOT_V4_SEGMENT_KINDS) {
-    const json = JSON.stringify(bodies[kind]);
+    const parts = chunkRest && CHUNKED_SEGMENT_KINDS.has(kind) && Array.isArray(bodies[kind])
+      ? splitJsonChunks(bodies[kind] as unknown[])
+      : [bodies[kind]];
+    const jsonParts = parts.map(part => JSON.stringify(part));
     bodies[kind] = null;
+    for (let part = 0; part < parts.length; part += 1) parts[part] = null;
     releaseEncodedSegment(value, kind);
-    const packed = gzipSync(Buffer.from(json), { level: 6 });
-    segments.push({ kind, crc32: crc32(packed), offset, length: packed.byteLength });
-    compressed.push(packed);
-    offset += packed.byteLength;
+    for (let part = 0; part < jsonParts.length; part += 1) {
+      const packed = gzipSync(Buffer.from(jsonParts[part]!), { level: 6 });
+      jsonParts[part] = "";
+      segments.push({ kind, part, crc32: crc32(packed), offset, length: packed.byteLength });
+      compressed.push(packed);
+      offset += packed.byteLength;
+    }
   }
   const header: V4Header = {
     schemaVersion: SNAPSHOT_V4_VERSION,
@@ -211,8 +242,10 @@ export function decodeSnapshotV4View(bytes: Buffer, sourcePath?: string): Snapsh
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) };
   }
+  const readSegmentChunks = (kind: Exclude<SnapshotV4SegmentKind, "files">): Iterable<unknown> =>
+    readDecodedSegmentParts(restSource, header.segments, kind);
   const readSegment = (kind: Exclude<SnapshotV4SegmentKind, "files">): unknown =>
-    decodeSegment(readSegmentBytes(restSource, header.segments, kind));
+    concatDecodedParts(kind, [...readSegmentChunks(kind)]);
   const readRest = (): SnapshotV4Rest => ({
     types: readSegment("types") as JavaTypeFacts[],
     fields: readSegment("fields") as JavaFieldFacts[],
@@ -227,6 +260,7 @@ export function decodeSnapshotV4View(bytes: Buffer, sourcePath?: string): Snapsh
     restOnDisk: restSource.kind === "file",
     readRest,
     readSegment,
+    readSegmentChunks,
     toFacts() {
       const rest = readRest();
       return {
@@ -246,15 +280,47 @@ export function decodeSnapshotV4View(bytes: Buffer, sourcePath?: string): Snapsh
   };
 }
 
-function readSegmentBytes(source: RestSource, directory: SegmentDirectoryEntry[], kind: SnapshotV4SegmentKind): Buffer {
-  const entry = directory.find(item => item.kind === kind);
-  if (!entry) throw new Error(`missing v4 segment ${kind}`);
+function segmentParts(directory: SegmentDirectoryEntry[], kind: SnapshotV4SegmentKind): SegmentDirectoryEntry[] {
+  return directory
+    .filter(item => item.kind === kind)
+    .sort((left, right) => (left.part ?? 0) - (right.part ?? 0));
+}
+
+function readSegmentPartBytes(source: RestSource, entry: SegmentDirectoryEntry): Buffer {
   const slice = source.kind === "buffer"
     ? source.payload.subarray(entry.offset, entry.offset + entry.length)
     : readFileRange(source.path, source.payloadStart + entry.offset, entry.length);
-  if (slice.byteLength !== entry.length) throw new Error(`truncated v4 segment ${kind}`);
-  if (crc32(slice) !== entry.crc32) throw new Error(`crc32 mismatch in v4 segment ${kind}`);
+  if (slice.byteLength !== entry.length) throw new Error(`truncated v4 segment ${entry.kind}`);
+  if (crc32(slice) !== entry.crc32) throw new Error(`crc32 mismatch in v4 segment ${entry.kind}`);
   return slice;
+}
+
+function* readDecodedSegmentParts(
+  source: RestSource,
+  directory: SegmentDirectoryEntry[],
+  kind: SnapshotV4SegmentKind
+): Iterable<unknown> {
+  const parts = segmentParts(directory, kind);
+  if (parts.length === 0) throw new Error(`missing v4 segment ${kind}`);
+  for (const entry of parts) {
+    yield decodeSegment(readSegmentPartBytes(source, entry));
+  }
+}
+
+function concatDecodedParts(kind: SnapshotV4SegmentKind, parts: unknown[]): unknown {
+  if (kind === "entitySearch") return parts[0];
+  const merged: unknown[] = [];
+  for (const part of parts) {
+    if (!Array.isArray(part)) return part;
+    merged.push(...part);
+  }
+  return merged;
+}
+
+function readSegmentBytes(source: RestSource, directory: SegmentDirectoryEntry[], kind: SnapshotV4SegmentKind): Buffer {
+  const entry = segmentParts(directory, kind)[0];
+  if (!entry) throw new Error(`missing v4 segment ${kind}`);
+  return readSegmentPartBytes(source, entry);
 }
 
 function decodeSegment(slice: Buffer): unknown {

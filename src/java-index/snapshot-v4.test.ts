@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { existsSync, mkdirSync, mkdtempSync } from "node:fs";
+import { Worker } from "node:worker_threads";
 import { readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadSnapshot, loadSnapshotView, writeSnapshotAtomic, type JavaIndexSnapshotV3, type SnapshotIdentity } from "./snapshot.js";
-import { encodeSnapshotV4, isSnapshotV4 } from "./snapshot-v4.js";
+import { decodeSnapshotV4View, encodeSnapshotV4, isSnapshotV4, SNAPSHOT_V4_VERSION } from "./snapshot-v4.js";
 
 function tempFile(): string {
   const dir = mkdtempSync(path.join(tmpdir(), "java-index-snapshot-v4-"));
@@ -117,6 +118,91 @@ test("encodeSnapshotV4 releases each segment body after gzip", async () => {
   assert.equal(value.edges.length, 0);
 });
 
+test("v5 splits methods over the item limit into multiple parts and concatenates on read", async () => {
+  const methods = Array.from({ length: 5001 }, (_, index) => ({
+    methodId: `method:demo.A#m${index}()`,
+    ownerTypeId: "type:demo.A",
+    name: `m${index}`,
+    constructor: false,
+    signatureKey: `m${index}()`,
+    range: { start: { line: 1, column: 1 }, end: { line: 1, column: 2 } },
+    bodyRange: { start: { line: 1, column: 1 }, end: { line: 1, column: 2 } },
+    modifiers: [],
+    annotations: [],
+    typeParameters: [],
+    parameters: [],
+    throws: [],
+    generation: 1
+  }));
+  const value = snapshot({ methods: methods as never });
+  const encoded = encodeSnapshotV4({
+    extractorVersion: value.extractorVersion,
+    stableIdVersion: value.stableIdVersion,
+    canonicalRepoRoot: value.canonicalRepoRoot,
+    buildFingerprint: value.buildFingerprint,
+    manifestFingerprint: value.manifestFingerprint,
+    indexedGeneration: value.indexedGeneration,
+    createdAt: value.createdAt,
+    coverage: value.coverage,
+    resourceCoverage: value.resourceCoverage,
+    files: value.files,
+    types: value.types,
+    fields: value.fields,
+    methods: value.methods,
+    edges: value.edges,
+    myBatisResources: value.myBatisResources
+  });
+  const view = decodeSnapshotV4View(encoded);
+  assert.equal("error" in view, false);
+  if ("error" in view) return;
+  assert.equal(view.header.schemaVersion, SNAPSHOT_V4_VERSION);
+  const methodParts = view.header.segments.filter(entry => entry.kind === "methods");
+  assert.ok(methodParts.length >= 2, `expected multiple method parts, got ${methodParts.length}`);
+  const chunks = [...view.readSegmentChunks("methods")] as unknown[][];
+  assert.equal(chunks.length, methodParts.length);
+  assert.equal((view.readSegment("methods") as unknown[]).length, 5001);
+});
+
+test("encodeSnapshotV4({ chunkRest: false }) keeps a single methods part", () => {
+  const methods = Array.from({ length: 5001 }, (_, index) => ({
+    methodId: `method:demo.A#m${index}()`,
+    ownerTypeId: "type:demo.A",
+    name: `m${index}`,
+    constructor: false,
+    signatureKey: `m${index}()`,
+    range: { start: { line: 1, column: 1 }, end: { line: 1, column: 2 } },
+    bodyRange: { start: { line: 1, column: 1 }, end: { line: 1, column: 2 } },
+    modifiers: [],
+    annotations: [],
+    typeParameters: [],
+    parameters: [],
+    throws: [],
+    generation: 1
+  }));
+  const value = snapshot({ methods: methods as never });
+  const encoded = encodeSnapshotV4({
+    extractorVersion: value.extractorVersion,
+    stableIdVersion: value.stableIdVersion,
+    canonicalRepoRoot: value.canonicalRepoRoot,
+    buildFingerprint: value.buildFingerprint,
+    manifestFingerprint: value.manifestFingerprint,
+    indexedGeneration: value.indexedGeneration,
+    createdAt: value.createdAt,
+    coverage: value.coverage,
+    resourceCoverage: value.resourceCoverage,
+    files: value.files,
+    types: value.types,
+    fields: value.fields,
+    methods: value.methods,
+    edges: value.edges,
+    myBatisResources: value.myBatisResources
+  }, { chunkRest: false });
+  const view = decodeSnapshotV4View(encoded);
+  assert.equal("error" in view, false);
+  if ("error" in view) return;
+  assert.equal(view.header.segments.filter(entry => entry.kind === "methods").length, 1);
+});
+
 test("a crc32 mismatch on a v4 segment is discarded and the file is deleted", async () => {
   const target = tempFile();
   const value = snapshot();
@@ -144,3 +230,74 @@ test("a crc32 mismatch on a v4 segment is discarded and the file is deleted", as
   assert.equal(loaded, undefined);
   assert.equal(existsSync(target), false);
 });
+
+function encodeFacts(value: JavaIndexSnapshotV3, chunkRest?: boolean) {
+  return encodeSnapshotV4({
+    extractorVersion: value.extractorVersion,
+    stableIdVersion: value.stableIdVersion,
+    canonicalRepoRoot: value.canonicalRepoRoot,
+    buildFingerprint: value.buildFingerprint,
+    manifestFingerprint: value.manifestFingerprint,
+    indexedGeneration: value.indexedGeneration,
+    createdAt: value.createdAt,
+    coverage: value.coverage,
+    resourceCoverage: value.resourceCoverage,
+    files: value.files,
+    types: value.types,
+    fields: value.fields,
+    methods: value.methods,
+    edges: value.edges,
+    myBatisResources: value.myBatisResources
+  }, chunkRest === undefined ? {} : { chunkRest });
+}
+
+async function decodeMethodsInWorker(bytes: Buffer, maxOldGenerationSizeMb: number): Promise<number> {
+  const worker = new Worker(new URL("./snapshot-v4-hydrate-probe-worker.js", import.meta.url), {
+    workerData: { bytes },
+    resourceLimits: { maxOldGenerationSizeMb, maxYoungGenerationSizeMb: Math.min(32, maxOldGenerationSizeMb) }
+  });
+  try {
+    return await new Promise((resolve, reject) => {
+      worker.once("message", resolve);
+      worker.once("error", reject);
+      worker.once("exit", code => {
+        if (code !== 0) reject(new Error(`worker exit ${code}`));
+      });
+    });
+  } finally {
+    await worker.terminate();
+  }
+}
+
+test("a 256 MiB isolate hydrates chunked methods that exceed one 32 MiB JSON part", async () => {
+  const pad = "x".repeat(20_000);
+  const methods = Array.from({ length: 6000 }, (_, index) => ({
+    methodId: `method:demo.A#m${index}()`,
+    ownerTypeId: "type:demo.A",
+    name: `m${index}`,
+    constructor: false,
+    signatureKey: `${pad}${index}`,
+    range: { start: { line: 1, column: 1 }, end: { line: 1, column: 2 } },
+    bodyRange: { start: { line: 1, column: 1 }, end: { line: 1, column: 2 } },
+    modifiers: [],
+    annotations: [],
+    typeParameters: [],
+    parameters: [],
+    throws: [],
+    generation: 1
+  }));
+  const value = snapshot({ methods: methods as never });
+  const chunked = encodeFacts(value);
+  const unchunkedValue = snapshot({ methods: methods as never });
+  const unchunked = encodeFacts(unchunkedValue, false);
+  const chunkedView = decodeSnapshotV4View(chunked);
+  const unchunkedView = decodeSnapshotV4View(unchunked);
+  assert.equal("error" in chunkedView, false);
+  assert.equal("error" in unchunkedView, false);
+  if ("error" in chunkedView || "error" in unchunkedView) return;
+  assert.ok(chunkedView.header.segments.filter(entry => entry.kind === "methods").length >= 2);
+  assert.equal(unchunkedView.header.segments.filter(entry => entry.kind === "methods").length, 1);
+  const count = await decodeMethodsInWorker(chunked, 256);
+  assert.equal(count, 6000);
+});
+

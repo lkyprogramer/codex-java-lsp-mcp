@@ -663,14 +663,9 @@ export class JavaIndexStore {
     edges: readonly StaticEdge[];
     myBatisResources?: readonly MyBatisMapperResourceFacts[];
   }): void {
-    // Collections are independent so callers can ingest one v4 rest segment at
-    // a time (lishuedu's combined rest decode OOMs the 1536 MiB isolate).
+    // Empty arrays mean "this call does not carry that collection". Non-empty
+    // arrays append; a second methods/edges/fields chunk must land, not skip.
     const skipExistingResources = this.myBatisResourcesByPath.size > 0;
-    const ingestTypes = this.typesById.size === 0;
-    const ingestFields = this.fieldsById.size === 0;
-    const ingestMethods = this.methodColumns.size === 0;
-    const ingestEdges = this.edgeColumns.size === 0;
-    if (!ingestTypes && !ingestFields && !ingestMethods && !ingestEdges && skipExistingResources) return;
     for (const resource of data.myBatisResources ?? []) {
       if (this.myBatisResourcesByPath.has(resource.relativePath)) {
         if (skipExistingResources) continue;
@@ -685,7 +680,7 @@ export class JavaIndexStore {
       }
       if (resource.namespace) addToSetMap(this.myBatisResourcesByNamespace, resource.namespace, resource.relativePath);
     }
-    if (ingestTypes) for (const type of data.types) {
+    if (data.types.length > 0) for (const type of data.types) {
       if (this.typesById.has(type.typeId)) throw new Error(`duplicate type id in snapshot: ${type.typeId}`);
       internType(this.edgeColumns.strings, this.edgeColumns.ranges, type);
       this.typesById.set(type.typeId, type);
@@ -693,7 +688,7 @@ export class JavaIndexStore {
       addToSetMap(this.typeIdsBySimpleName, type.simpleName, type.typeId);
       addToSetMap(this.fileOwnedNodeIds, relativePathOfFileId(type.fileId), type.typeId);
     }
-    if (ingestFields) for (const field of data.fields) {
+    if (data.fields.length > 0) for (const field of data.fields) {
       if (this.fieldsById.has(field.fieldId)) throw new Error(`duplicate field id in snapshot: ${field.fieldId}`);
       internField(this.edgeColumns.strings, this.edgeColumns.ranges, field);
       this.fieldsById.set(field.fieldId, field);
@@ -701,7 +696,7 @@ export class JavaIndexStore {
       if (!ownerType) throw new Error(`field ${field.fieldId} references unknown owner type ${field.ownerTypeId}`);
       addToSetMap(this.fileOwnedNodeIds, relativePathOfFileId(ownerType.fileId), field.fieldId);
     }
-    if (ingestMethods) for (const method of data.methods) {
+    if (data.methods.length > 0) for (const method of data.methods) {
       internMethod(this.edgeColumns.strings, this.edgeColumns.ranges, method);
       if (this.methodColumns.has(method.methodId)) throw new Error(`duplicate method id in snapshot: ${method.methodId}`);
       this.methodColumns.add(method);
@@ -711,7 +706,7 @@ export class JavaIndexStore {
       addToSetMap(this.fileOwnedNodeIds, relativePathOfFileId(ownerType.fileId), method.methodId);
     }
     const strings = this.edgeColumns.strings;
-    if (ingestEdges) for (const edge of data.edges) {
+    if (data.edges.length > 0) for (const edge of data.edges) {
       if (this.edgeColumns.has(edge.edgeId)) throw new Error(`duplicate edge id in snapshot: ${edge.edgeId}`);
       this.edgeColumns.add(edge);
       const edgeId = strings.interned(edge.edgeId);
