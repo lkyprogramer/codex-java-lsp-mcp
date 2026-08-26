@@ -1,123 +1,194 @@
 {
   "schema": "d1-fast-idle-soak/v1",
   "method": "temporarily set JAVA_LSP_HIBERNATE_TTL_MS and JAVA_LSP_INDEX_IDLE_TTL_MS on the live LaunchAgent, wait for prewarm plus those timers, sample footprint -p phys_footprint, restore production plist",
-  "gateMiB": 900,
+  "gateMiB": 1024,
   "hibernateTtlMs": 2000,
   "indexIdleTtlMs": 4000,
   "idleTtlMs": "production-default",
-  "pid": 48034,
+  "pid": 16030,
   "samples": [
     {
       "elapsedS": 0,
-      "physMiB": 265.0,
-      "peakMiB": 265.0
+      "physMiB": 344.0,
+      "peakMiB": 355.0
     },
     {
-      "elapsedS": 2,
-      "physMiB": 380.0,
-      "peakMiB": 381.0
+      "elapsedS": 3,
+      "physMiB": 541.0,
+      "peakMiB": 594.0
     },
     {
-      "elapsedS": 4,
-      "physMiB": 480.0,
-      "peakMiB": 480.0
+      "elapsedS": 5,
+      "physMiB": 649.0,
+      "peakMiB": 666.0
     },
     {
       "elapsedS": 7,
-      "physMiB": 1207.0,
-      "peakMiB": 1207.0
+      "physMiB": 779.0,
+      "peakMiB": 782.0
     },
     {
-      "elapsedS": 9,
-      "physMiB": 1158.0,
-      "peakMiB": 1340.0
+      "elapsedS": 10,
+      "physMiB": 924.0,
+      "peakMiB": 924.0
     },
     {
-      "elapsedS": 13,
-      "physMiB": 2226.0,
-      "peakMiB": 2236.0
+      "elapsedS": 12,
+      "physMiB": 973.0,
+      "peakMiB": 1017.0
     },
     {
-      "elapsedS": 17,
-      "physMiB": 2285.0,
-      "peakMiB": 2285.0
+      "elapsedS": 14,
+      "physMiB": 1273.0,
+      "peakMiB": 1312.0
     },
     {
-      "elapsedS": 21,
-      "physMiB": 2353.0,
-      "peakMiB": 2353.0
+      "elapsedS": 16,
+      "physMiB": 1314.0,
+      "peakMiB": 1314.0
     },
     {
-      "elapsedS": 25,
-      "physMiB": 2365.0,
-      "peakMiB": 2408.0
+      "elapsedS": 20,
+      "physMiB": 1442.0,
+      "peakMiB": 1471.0
     },
     {
-      "elapsedS": 29,
-      "physMiB": 2436.0,
-      "peakMiB": 2436.0
+      "elapsedS": 24,
+      "physMiB": 1353.0,
+      "peakMiB": 1471.0
+    },
+    {
+      "elapsedS": 28,
+      "physMiB": 1364.0,
+      "peakMiB": 1471.0
     },
     {
       "elapsedS": 33,
-      "physMiB": 1526.0,
-      "peakMiB": 2458.0
-    },
-    {
-      "elapsedS": 35,
-      "physMiB": 1526.0,
-      "peakMiB": 2458.0
+      "physMiB": 1372.0,
+      "peakMiB": 1471.0
     },
     {
       "elapsedS": 37,
-      "physMiB": 819.0,
-      "peakMiB": 2458.0
+      "physMiB": 1455.0,
+      "peakMiB": 1471.0
     },
     {
-      "elapsedS": 39,
-      "physMiB": 805.0,
-      "peakMiB": 2458.0
+      "elapsedS": 41,
+      "physMiB": 1525.0,
+      "peakMiB": 1525.0
     },
     {
-      "elapsedS": 42,
-      "physMiB": 805.0,
-      "peakMiB": 2458.0
+      "elapsedS": 43,
+      "physMiB": 1498.0,
+      "peakMiB": 1526.0
     },
     {
-      "elapsedS": 44,
-      "physMiB": 805.0,
-      "peakMiB": 2458.0
+      "elapsedS": 45,
+      "physMiB": 1498.0,
+      "peakMiB": 1526.0
     },
     {
-      "elapsedS": 46,
-      "physMiB": 805.0,
-      "peakMiB": 2458.0
-    },
-    {
-      "elapsedS": 48,
-      "physMiB": 806.0,
-      "peakMiB": 2458.0
+      "elapsedS": 47,
+      "physMiB": 1498.0,
+      "peakMiB": 1526.0
     },
     {
       "elapsedS": 50,
-      "physMiB": 807.0,
-      "peakMiB": 2458.0
+      "physMiB": 1419.0,
+      "peakMiB": 1526.0
+    },
+    {
+      "elapsedS": 52,
+      "physMiB": 1422.0,
+      "peakMiB": 1526.0
+    },
+    {
+      "elapsedS": 54,
+      "physMiB": 1422.0,
+      "peakMiB": 1526.0
+    },
+    {
+      "elapsedS": 56,
+      "physMiB": 1422.0,
+      "peakMiB": 1526.0
+    },
+    {
+      "elapsedS": 58,
+      "physMiB": 1422.0,
+      "peakMiB": 1526.0
+    },
+    {
+      "elapsedS": 60,
+      "physMiB": 1422.0,
+      "peakMiB": 1526.0
+    },
+    {
+      "elapsedS": 62,
+      "physMiB": 1422.0,
+      "peakMiB": 1526.0
+    },
+    {
+      "elapsedS": 65,
+      "physMiB": 1422.0,
+      "peakMiB": 1526.0
+    },
+    {
+      "elapsedS": 67,
+      "physMiB": 1422.0,
+      "peakMiB": 1526.0
+    },
+    {
+      "elapsedS": 69,
+      "physMiB": 1422.0,
+      "peakMiB": 1526.0
+    },
+    {
+      "elapsedS": 71,
+      "physMiB": 1422.0,
+      "peakMiB": 1526.0
+    },
+    {
+      "elapsedS": 73,
+      "physMiB": 1422.0,
+      "peakMiB": 1526.0
+    },
+    {
+      "elapsedS": 75,
+      "physMiB": 1422.0,
+      "peakMiB": 1526.0
+    },
+    {
+      "elapsedS": 77,
+      "physMiB": 1422.0,
+      "peakMiB": 1526.0
+    },
+    {
+      "elapsedS": 79,
+      "physMiB": 1339.0,
+      "peakMiB": 1526.0
+    },
+    {
+      "elapsedS": 82,
+      "physMiB": 1339.0,
+      "peakMiB": 1526.0
+    },
+    {
+      "elapsedS": 84,
+      "physMiB": 1339.0,
+      "peakMiB": 1526.0
+    },
+    {
+      "elapsedS": 86,
+      "physMiB": 1339.0,
+      "peakMiB": 1526.0
     }
   ],
-  "endMiB": 807.0,
+  "endMiB": 1339.0,
   "plateauMiB": [
-    805.0,
-    806.0,
-    807.0
+    1339.0,
+    1339.0,
+    1339.0
   ],
-  "peakMiB": 2458.0,
-  "result": "PASS",
-  "releaseSha": "425fd962fd2f",
-  "healthzDownSamples": [9, 13, 17, 21, 25],
-  "productionTtlsRestored": true,
-  "notes": [
-    "D1 wait is hibernate + index-idle, not a wall-clock 30 min. Live soak used 2000/4000 ms then restored the LaunchAgent plist (no TTL env = production 5 min / 20 min).",
-    "JAVA_LSP_IDLE_TTL_MS stayed at the production 45 min default; a 30 min soak would not have stopped JDT.",
-    "425fd96 files-only pin prewarm; hot-set lishuedu+lishu-v2 stay idle-exempt.",
-    "healthz 2s timeouts while OPEN ramped 1.1-2.4 GiB; event loop was busy, not a D1 miss."
-  ]
+  "peakMiB": 1526.0,
+  "result": "FAIL"
 }

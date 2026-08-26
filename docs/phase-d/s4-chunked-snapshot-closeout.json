@@ -1,0 +1,45 @@
+{
+  "card": "S4",
+  "commit": "1ad5ee8",
+  "chunkedWriter": "9a30602",
+  "tests": { "targeted": "PASS", "full": "PASS", "gatePr": "PASS" },
+  "deployed": true,
+  "liveProbe": {
+    "name": "1536-cap hydrate 三连, D3a/D3c, D1 fast soak vs 1024",
+    "result": "PASS",
+    "numbers": {
+      "workerMaxOldGenerationSizeMb": 1536,
+      "hydrateAttempts": 3,
+      "hydrateOom": 0,
+      "hydrateWaitS": [9.0, 16.1, 15.1],
+      "firstHydrateBudgetS": 10,
+      "d3aLishueduMs": 41.6,
+      "d3aLishuV2Ms": 35.8,
+      "d3cCipherlinkMs": 689.1,
+      "d3cExamMs": 2003.8,
+      "d1FastSoakEndMiB": 1339,
+      "d1GcWaterlineMiB": 861,
+      "d1PeakMiB": 1526,
+      "d1GateMiB": 1024,
+      "d5PeakMiB": 2572,
+      "d5EndMiB10min": 1648
+    }
+  },
+  "gates": {
+    "hydrateTriple": "PASS",
+    "D3a": "PASS",
+    "D3c": "PASS",
+    "D1": "FAIL",
+    "D5": "PARTIAL",
+    "firstHydrateMs": "PASS"
+  },
+  "residual": [
+    "v5 lishuedu snapshot is 10 method parts + 51 edge parts; unchunked 1536 hydrate OOMed three times before S4.",
+    "Prewarm must kick QUERY_REPOSITORY_FACT_MARKERS once files>0; waiting for snapshotVerificationPending spent the 300s budget and left D3a at 7695 ms.",
+    "Empty-prefix repositoryFactMarkers used to scan 250k edges; prewarm only needs the hydrate side effect.",
+    "Cold-build child timeout raised 180s→300s because v5 encode added ~48s and load 50+ SIGKILL'd a finished child.",
+    "Worker execArgv --expose-gc is invalid (same class as --max-old-space-size). Hibernate gc() is a no-op in the isolate.",
+    "Hot-set pins are exempt from index-idle isolate close. Fast D1 soak waterline can be 861 MiB after GC or 1339 MiB if old-gen is retained; end 1339 FAIL vs revised D1 1024.",
+    "D5: deleted lishuedu snapshot then probed; daemon phys_footprint peaked 2572 MiB (≤4 GiB) and was 1648 MiB after 10 min (FAIL vs D1 1024). Same hot-isolate residual as D1."
+  ]
+}

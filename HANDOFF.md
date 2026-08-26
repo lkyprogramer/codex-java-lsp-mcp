@@ -1,26 +1,29 @@
 # HANDOFF
 
-## daemon 生产化三轨（2026-08-25）
+## daemon 生产化三轨（2026-08-26）
 
-分支 `codex/frontier-r1`。live HTTP daemon `http://127.0.0.1:38456/mcp`，LaunchAgent `com.lky.codex-java-lsp-mcp`。当前 release `3e9ef62e405c-20260826T034749Z`（热集 `hydrate:true`）。pin：`lishuedu`、`exam-parent-v3`、`cipherlink`、`lishu-v2`。不要把 `fat-service` / `analysis-develop-analysis` / `recognition-master` 加回 `projects.json`。不要合 `main`。回滚：`"$HOME/Library/Application Support/codex-java-lsp-mcp/daemonctl.sh" rollback-release`。
+分支 `codex/frontier-r1`。live HTTP daemon `http://127.0.0.1:38456/mcp`，LaunchAgent `com.lky.codex-java-lsp-mcp`。当前 release `1ad5ee8fdd63-20260826T082846Z`（热集 `hydrate:true`，worker cap **1536**，快照 schema v5）。pin：`lishuedu`、`exam-parent-v3`、`cipherlink`、`lishu-v2`。不要把 `fat-service` / `analysis-develop-analysis` / `recognition-master` 加回 `projects.json`。不要合 `main`。回滚：`"$HOME/Library/Application Support/codex-java-lsp-mcp/daemonctl.sh" rollback-release`。
 
-计划真源：`docs/deep/codex-java-lsp-mcp-daemon-stability-and-memory-plan-2026-08-25.md`。closeout：`docs/phase-d/w1-closeout.json`、`s1`–`s3`、`m1`–`m4`、`v1-acceptance.md`。探针：`scripts/probe-daemon-acceptance.mjs`。
+计划真源：`docs/deep/codex-java-lsp-mcp-daemon-stability-and-memory-plan-2026-08-25.md` §8。closeout：`docs/phase-d/w1-closeout.json`、`s1`–`s4`、`m1`–`m4`、`v1-acceptance.md`。探针：`scripts/probe-daemon-acceptance.mjs`。
 
-已落地：W1 watcher/JDK/EPIPE；S1 QUERY/STATUS 超时不 retire worker；S2 `factsHydrated` 预热；S3 read-plan `DEADLINE_EXCEEDED` fail-soft；M1 热集 hydrate / 冷集 hibernate；M2 20 分钟 index idle 关 isolate；M3 daemon `--max-old-space-size=768`、worker `resourceLimits` 1536、nofile 65536；M4 sibling seed 指纹不否决、JDK pin 文件退出指纹、拒绝原因遥测、cache-meta 回填 `familyHash`。
+已落地：W1 watcher/JDK/EPIPE；S1 QUERY/STATUS 超时不 retire worker；S2 `factsHydrated` 预热；S3 read-plan `DEADLINE_EXCEEDED` fail-soft；S4 快照 rest 分块（methods/edges/fields ≤5000 且 JSON ≤32 MiB）+ cap 回落 1536；M1 热集 hydrate / 冷集 hibernate；M2 20 分钟 index idle 关 **冷** isolate（热集豁免）；M3 daemon `--max-old-space-size=768`、worker `resourceLimits` 1536、nofile 65536；M4 sibling seed 指纹不否决、JDK pin 文件退出指纹、拒绝原因遥测、cache-meta 回填 `familyHash`。
 
 坑：
 - 所有 git / npm / 测试加 `PATH="/opt/homebrew/bin:$PATH"`。
 - 内存口径用 `footprint -p <pid>` 的 `phys_footprint`，不要只用 `ps` RSS。
 - chokidar `ignored` 每事件路径禁止同步 fs。
-- Worker 不能用 `execArgv --max-old-space-size`（`ERR_WORKER_INVALID_EXEC_ARGV`），要用 `resourceLimits.maxOldGenerationSizeMb`。
+- Worker 不能用 `execArgv --max-old-space-size` 也不能 `--expose-gc`（都是 `ERR_WORKER_INVALID_EXEC_ARGV`）。只能 `resourceLimits.maxOldGenerationSizeMb`。hibernate 里的 `gc()` 在生产 isolate 上是空操作。
+- 内存基准必须带与生产一致的 `resourceLimits`。无 cap 的 G1/G5 数字（lishuedu heap 173 MiB）看不到 methods 段 JSON.parse ~890 MiB 瞬时峰值。
+- JSON 单体段解析瞬时峰值才是 1536 OOM 的根因（lishuedu methods 244 MiB JSON → ~890 MiB）。分段 OPEN（`7e29c0c`）不够；S4 把 methods 切成 ~10 块。
+- 预热必须在 `files>0` 时就 kick `QUERY_REPOSITORY_FACT_MARKERS`。等 `snapshotVerificationPending` 清掉会把 300s 预算花在 manifest/mybatis 上，D3a 退化成 7.7s on-demand hydrate。
+- 空 prefix 的 `repositoryFactMarkers` 不要扫 25 万条 edges；预热只需要 hydrate 副作用。
+- v5 encode 让 lishuedu 冷建 ~143s；child 超时必须 ≥300s，否则会 SIGKILL 一个已经写完快照的进程，父进程误报 `cold-build child failed`。
 - linked worktree 的 live git `familyHash` 在 daemon 里可能缺失；seed 必须能从该仓自己的 `repo-meta.json` 回填。
-- M4c 指纹输入变化会让 own-snapshot 全部失效。部署后 pin 仓会串行冷建；host load 40–160 时 worker 会 `ERR_WORKER_OUT_OF_MEMORY`。
-- sibling `findCandidate` 只能读 v4 header，禁止对每个 family mate `toFacts()`。`createEntry` 不得 await 冷建 reconcile。OPEN 花光 15s 后 freshness barrier 必须 fail-soft，`java_status` 回退 `localStatus`。
-- 热集预热是 `hydrate:true`（`JAVA_LSP_PREWARM_HOT` 默认 `lishuedu,lishu-v2`）。lishuedu rest-hydrate 三次打爆 1536 isolate（`docs/phase-d/d3a-escalation.md`）。不要再重试同一条 `QUERY_REPOSITORY_FACT_MARKERS`。
-- D1 数字 807/866 MiB 是 files-only `425fd96` 上测的，不是当前 hydrate live。hydrate 打开后 idle 曾到 961。
-- D1 soak 不要等生产 20 分钟 index-idle。用 `scripts/d1-fast-idle-soak.sh` 临时压 TTL，测完必须去掉 LaunchAgent 里的 TTL env。`footprint -p` 只读 `phys_footprint:` 行。
+- sibling `findCandidate` 只能读 v4/v5 header，禁止对每个 family mate `toFacts()`。
+- 热集预热是 `hydrate:true`（`JAVA_LSP_PREWARM_HOT` 默认 `lishuedu,lishu-v2`）。不要缩热集。
+- D1 soak 不要等生产 20 分钟。用 `scripts/d1-fast-idle-soak.sh` 临时压 TTL，测完必须去掉 LaunchAgent 里的 TTL env。热 isolate 不关时水位可到 1339；GC 后见过 861。`footprint -p` 只读 `phys_footprint:` 行。
 
-V1 **NOT COMPLETE**。D7 PASS。D1 仅 files-only 口径 PASS。D2 gradle storm P99 31 ms。D3a FAIL（lishuedu hydrate OOM，首查 4975 ms worker unavailable）。D3b/D4/D6 PASS。D5 PARTIAL。Identity vs main：三仓 recall/pRead/token P50 delta 0；formal floors 两臂同失败。后续：缩热集到 `lishu-v2`，或另开流式 hydrate 卡。
+V1-R **NOT COMPLETE**。hydrate 三连 PASS（9/16/15 s，0 OOM）。D3a PASS（41.6 / 35.8 ms）。D3c PASS（689 / 2004 ms）。D1 FAIL（fast soak 1339 vs 1024）。D2/D3b/D4/D6 PASS。D5 PARTIAL。Identity vs main：三仓 recall/pRead/token P50 delta 0；formal floors 两臂同失败，不阻塞。不要合 `main`。
 
 ## 当前任务
 

@@ -2,13 +2,13 @@
   "health": {
     "samples": 12,
     "timeouts": 0,
-    "maxMs": 14.302292000000023,
-    "p99Ms": 14.302292000000023
+    "maxMs": 2.398124999999993,
+    "p99Ms": 2.398124999999993
   },
-  "pid": "48831",
-  "footprintMiB": 2002,
+  "pid": "11323",
+  "footprintMiB": 1970,
   "d6": {
-    "elapsedMs": 577.23325,
+    "elapsedMs": 131.507625,
     "isError": false,
     "toolFail": false,
     "errorText": ""
@@ -16,88 +16,75 @@
   "impacts": {
     "lishuedu": {
       "hot": true,
-      "elapsedMs": 426.60533299999986,
+      "elapsedMs": 41.618875,
       "isError": false,
       "toolFail": false,
       "errorText": "",
       "followElapsedMs": [
-        5579.196042,
-        9.413916999999856
+        13.015416000000016,
+        12.576999999999998
       ],
-      "followFail": true
+      "followFail": false
     },
     "lishu-v2": {
       "hot": true,
-      "elapsedMs": 4055.663457999999,
+      "elapsedMs": 35.79454100000004,
       "isError": false,
       "toolFail": false,
       "errorText": "",
       "followElapsedMs": [
-        22.564250000001266,
-        33.485375000000204
+        19.854917,
+        21.812749999999994
       ],
       "followFail": false
     },
     "cipherlink": {
       "hot": false,
-      "elapsedMs": 25.667959000000337,
+      "elapsedMs": 689.140834,
       "isError": false,
       "toolFail": false,
       "errorText": "",
       "followElapsedMs": [
-        17.725374999999985,
-        16.518167000000176
+        10.578500000000076,
+        11.942207999999937
       ],
       "followFail": false
     },
     "exam-parent-v3": {
       "hot": false,
-      "elapsedMs": 1908.321249999999,
+      "elapsedMs": 2003.827375,
       "isError": false,
       "toolFail": false,
       "errorText": "",
       "followElapsedMs": [
-        15.235333999999057,
-        10.168499999999767
+        13.640165999999681,
+        9.604333000000224
       ],
       "followFail": false
     }
   },
   "d4": {
-    "shortElapsedMs": 16.690042000000176,
+    "shortElapsedMs": 81.83591699999988,
     "shortError": false,
-    "retryElapsedMs": 13.55566699999872,
+    "retryElapsedMs": 8.188415999999961,
     "retryError": false,
     "rangeGap": false
   },
   "d7": {
-    "statusElapsedMs": 45.43445799999972,
+    "statusElapsedMs": 1182.5310829999999,
     "statusError": false,
-    "seed": {
-      "completion": "RECONCILED_COMPLETE",
-      "reusedFiles": 1419,
-      "dirtyFiles": 73,
-      "deltaParsedFiles": 73,
-      "fingerprintMatched": false,
-      "cacheDirsScanned": 13,
-      "eligibleSnapshots": 3,
-      "metaMissing": 3,
-      "selfSkip": 1,
-      "familyMismatch": 6,
-      "identityMismatch": 0,
-      "coverageIncomplete": 0
-    },
+    "seed": null,
     "impactError": false,
     "childSpawned": false,
-    "indexedFiles": 0,
-    "reuseDenom": 1492
+    "indexedFiles": 1493,
+    "reuseDenom": 1493
   },
   "gates": {
     "D2": true,
-    "D3a": false,
+    "D3a": true,
     "D3b": true,
     "D4": true,
     "D6": true,
-    "D7": true
+    "D7": false
   }
 }
