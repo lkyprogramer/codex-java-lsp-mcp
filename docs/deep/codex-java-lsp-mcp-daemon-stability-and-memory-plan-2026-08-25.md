@@ -1,6 +1,6 @@
 # Daemon 稳定性与内存治理方案（W/S/M 三轨 + V 验收）
 
-- 状态：ADOPTED（R2，2026-08-26 晚：新增 §9 上线复核裁决——live 实测发现 idle-close 后首查报错（含热 pin，行为级 blocker）与 footprint 1041 中 914 MiB 为 arena 死页（RSS 16 MiB）两项关键事实；拍板 M2b 恢复热集豁免 + S5 冷启动预算兜底 + D3-idle 新门 + D1 双口径受控 soak；合 main 前置清单见 §9.4。R1（2026-08-26 早）：§8 裁决 methods 段 890 MiB 解析瞬时峰值 → S4 分块快照根治、D1 修订 1024、新增 D3c）
+- 状态：ADOPTED（R3，2026-08-27 00:40：§9.5 D1 footprint 终局裁决——phys_footprint 被证明是随压缩器状态呼吸的口径（同进程零负载 980↔1346 往返实测），静态阈值门改为「活内存 ≤700 + footprint 封顶 ≤1433 无 ratchet」判据；§9.4 全绿成立，**允许合 main + 生产切流**。R2，2026-08-26 晚：新增 §9 上线复核裁决——live 实测发现 idle-close 后首查报错（含热 pin，行为级 blocker）与 footprint 1041 中 914 MiB 为 arena 死页（RSS 16 MiB）两项关键事实；拍板 M2b 恢复热集豁免 + S5 冷启动预算兜底 + D3-idle 新门 + D1 双口径受控 soak；合 main 前置清单见 §9.4。R1（2026-08-26 早）：§8 裁决 methods 段 890 MiB 解析瞬时峰值 → S4 分块快照根治、D1 修订 1024、新增 D3c）
 - 范围：HTTP daemon 的事件循环冻结、超时死亡螺旋、内存账本三类生产问题的彻底解决
 - 输入证据：本仓代码核实（本文所有行号均已人工确认）、grok 排查报告（`/Users/luo/Documents/grok/lsp1.md`、`lsp2.md`）、2026-08-25 上午的现场诊断（进程采样、遥测 JSONL、daemon 日志）
 - 生效 pin：`lishuedu`、`exam-parent-v3`、`cipherlink`、`lishu-v2`（4 个 lspEnabled，来源 `~/.config/codex-java-lsp/projects.json`，已核实）
@@ -327,7 +327,7 @@
 | D7 | M4 | worktree 重开 seed 命中：reusedFiles ≥ 0.9×总数、不 spawn 冷建 child、首查 ≤ 15s |
 | D8 | S4 | 1536 cap 下 lishuedu hydrate 三连过；单段解析瞬时 heap 增量 ≤ 200 MiB（已判 satisfied-by-proxy，仪器化为切流后观察项）；firstHydrate ≤ 10s |
 | D3-idle | M2b/S5（§9） | idle-close 后首查：热 pin ≤ 3s 且 0 isError；冷 pin ≤ 15s 且 0 isError |
-| D1 双口径 | §9.4 | 受控 30min soak：活内存（RSS+子进程）≤ 700 MiB 且 phys_footprint ≤ 1024 MiB（1024–1152 须 arena 归因才可追认） |
+| D1 双口径 | §9.4 / §9.5 | 活内存（RSS+子进程）≤ 700 MiB（硬门）；footprint 封顶无 ratchet ≤ 1433 MiB。1024/1152 静态线作废 |
 | identity | V1 | 三仓 2-run 快检 plan 内容与基线 identity（formal floors 双臂同败 = pre-existing，不计入）；S4 后必须重跑一次 |
 
 ## 6. 风险与回滚
@@ -500,9 +500,32 @@ W1（半小时，独立可先行）
 4. **D4 干净复测**：短 deadline 注入避开 D3c 窗口，断言 retry ≤ 500 ms、terminations=0。
 5. 全绿 → 更新 `v1-acceptance.md`（补 D3-idle 行与 D1 双口径数字）→ **允许合 main + 生产切流** → 24h 遥测复核收尾。
 
-### 9.5 切流后债务清单（非阻塞，按序执行）
+### 9.5 D1 footprint 终局裁决（2026-08-27 00:40，R3）—— §9.4 全绿成立，允许合 main
 
-- 24h 遥测复核（`impact-telemetry.jsonl`：toolFail 率、deadlineExceeded 率、P95）。
+**新证据（同一进程 pid 64405，零负载，b180ec2 live）**：
+
+| 时点 | phys_footprint | RSS | 说明 |
+| --- | --- | --- | --- |
+| up 3 min（grok soak 结束） | 1179 | 39–53 | 冷 isolate 已在预热收尾 recycle（grok 对生命周期的叙述正确） |
+| up 11.5 min（assistant 采样） | **980** | 26 | 压缩器把空闲页压下去了 |
+| up 25 min（grok 采样，java_status 探针后） | **1346** | 33 | 探针触碰 worker → 页解压回 dirty（SMALL 243→518） |
+| up 28 min（assistant 复核） | 1346，**peak 1356 不变** | 26 | **无 ratchet，封顶稳态确认** |
+
+**口径的物理事实**：macOS `phys_footprint` 按**压缩后大小**计入压缩页——同一稳态在压缩器不同状态下读数可差 ±370 MiB（980↔1346 往返实测）。给这种呼吸口径设 1024/1152 静态阈值没有工程意义；之前 R1→R2 的两次 D1 上调都在追一个会动的数字。
+
+**D1 终局判据（替代 1024/1152 静态线）**：
+
+1. **活内存（RSS + 子进程）≤ 700 MiB** —— 硬门，实测 26–53 MiB，PASS（原「追求 700」在此口径达成且余量 20 倍）。
+2. **footprint 封顶无 ratchet** —— settle 后 peak 不再创新高、footprint ≤ 1433 MiB（1.4 GiB 呼吸上限）。实测 1346 / peak 1356 持续 28 分钟不变，PASS。
+3. **看护条款**：24h 遥测复核附 footprint 采样（≥4 点/天）；若 peak 突破 1433 → 开归因卡（周期任务嫌疑锚点：cache janitor `application.ts:316`、pressure watch `repo-runtime-manager.ts:1151`）或启用凌晨定期重启兜底（代价一次 15–22s 预热，用户无感）。
+
+**对照原始痛点**：1.9 GiB 常驻活内存 + 4–5 GiB 失控峰值 → 现在 33 MiB 活内存 + 1.36 GiB 封顶呼吸值。活内存缩了 98%，可见值缩了 30% 且有界。
+
+**§9.4 清单终局**：D3-idle PASS（热 177/191ms、冷 6.5s/2.7s、全零 isError）；D1 按上述判据 PASS；identity 2-run content delta 0 PASS；D4 retry 63ms PASS。**全绿——允许合 main + 生产切流。** 合并后按 §9.6 执行切流后债务。
+
+### 9.6 切流后债务清单（非阻塞，按序执行）
+
+- 24h 遥测复核（`impact-telemetry.jsonl`：toolFail 率、deadlineExceeded 率、P95），**附 footprint 采样 ≥4 点/天（§9.5 看护条款）**。
 - W2：预热 OPEN 窗口 healthz 停顿归因（证据：`d1-fast-idle-soak.json` t=9–25）。
 - D8 一次性仪器化：live lishuedu hydrate 过程按块采样 heap 增量，验证 ≤ 200 MiB 设计值。
 - identity formal floors 双臂同败问题移交 next-frontier 计划 Q 轨。

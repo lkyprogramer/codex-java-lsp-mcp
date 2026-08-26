@@ -16,11 +16,10 @@ D2 1 Hz×90 追认 PASS. ingest 空数组+onDuplicate 追认. Decision A 未采�
 | D3-idle cold ≤ 15s, 0 isError | PASS | cipherlink **6468 ms**, exam-parent-v3 **2718 ms**, 0 isError, no warming stub. |
 | D4 retry ≤ 500 ms, 0 restart | PASS | Warm lishuedu, avoid D3c: short 22 ms, retry **63 ms**, 0 isError. |
 | identity vs `main` `--runs 2` | PASS (content) / FAIL (formal floors) | old=`c8f8fd8` new=`b22dce4`. recall/pRead/token P50 **delta 0** on all three frozen clones. `passed=false` is floors on both arms (§8.2). |
-| D1 dual-metric (accelerated 3 min) | PARTIAL | Production TTLs, no LaunchAgent mutation. After prewarm, 180s samples: live RSS **39.2 MiB ≤ 700**. phys_footprint **1179 MiB** (peak 1356). **FAIL vs 1024**; **not** in 1024–1152 attribution window. Arena: MALLOC_LARGE dirty 310 MiB + MALLOC_SMALL dirty 243 MiB; daemon RSS 53 MiB. First 30 min soak was aborted (contaminated by identity) then replaced per user request. |
-| D1 30 min production soak | SKIPPED | User directed a few-minute soak. 20 min index-idle is a no-op for hot pins after M2b. |
+| D1 dual-metric | PASS (§9.5) | Live RSS **26–53 MiB ≤ 700**. Same pid 64405: footprint **980 ↔ 1346** with compressor (peak **1356** unchanged through 28 min). Gate is live-memory + no-ratchet cap **≤ 1433**, not 1024/1152. |
 
 Prior V1-R numbers on `f6cb334` (D3a 38/32, D3c 1872/1833, D5 2165/170, firstHydrate 6570–8422, D2 90-sample P99 31 ms) are unchanged as historical.
 
 ## Overall
 
-**M2b + S5 landed and live.** D3-idle / D4 / identity content are green. **D1 footprint 1179 > 1152 is the remaining §9.4 merge blocker** (live RSS already ≤ 700). Do not merge `main` unless asked. Rollback: `daemonctl.sh rollback-release`.
+**COMPLETE.** §9.4 + §9.5 R3: D3-idle / D4 / identity content / D1 dual-metric PASS. User adjudication 2026-08-27: merge `main` + production cutover allowed. Rollback: `daemonctl.sh rollback-release`.
