@@ -26,11 +26,11 @@
 - 不要把 `artifacts/`、`graphify-out/`、`.workflow/` 打进 `releases/<id>`。安装验证也要看磁盘，不只看测试绿。
 - macOS `os.freemem()` 经常远低于 2 GiB 压力门（本机测到 104 MiB）。`prewarmRepo` 必须持有 `refCount`；压力回收还必须跳过热集。否则刚 hydrate 完的 lishuedu 会在 5s 内被 recycle，D3a 变成 8s on-demand（lishu-v2 仍是 36ms，因为它更新）。D1 回落靠 index-idle TTL，不靠压力立刻杀热 pin。
 
-V1-R **COMPLETE**（`f6cb334`）。D1 942 MiB。D3a 38 / 32 ms。D3c 1872 / 1833 ms。D5 peak 2165 / 10 min 170。D2/D3b/D6/D7 PASS。Identity formal floors 两臂同失败，不阻塞。不要合 `main` 除非明确要求。
+V1-R **COMPLETE**（live `f6cb334`，测试 `3cab7d1`）。D1 942 MiB。lishuedu firstHydrateMs **6570–8422**。D3a 38 / 32 ms。D3c 1872 / 1833 ms。D5 peak 2165 / 10 min 170。D2/D3b/D6/D7 PASS。Identity formal floors 两臂同失败，不阻塞。不要合 `main` 除非明确要求。
 
 ## 当前任务
 
-live 仍在 `codex/frontier-r1` @ `f6cb334`，**没有合 main，也没有 push**。生产 `current` → `releases/f6cb33421b32-20260826T113824Z`（90MB，previous=`009a3ff`）。V1-R COMPLETE：hydrate 三连 14.1/15.1/22.2s 0 OOM；D3a 38+32；D3c 1872+1833；D1 942；D5 peak 2165 / 10 min 170。不要合 main / 不要 push，除非明确要求。
+live 仍在 `codex/frontier-r1` @ `f6cb334`，**没有合 main，也没有 push**。生产 `current` → `releases/f6cb33421b32-20260826T113824Z`（90MB，previous=`009a3ff`）。V1-R COMPLETE：hydrate 三连 14.1/15.1/22.2s 0 OOM；lishuedu firstHydrateMs 8422/6570/6602；D3a 38+32；D3c 1872+1833；D1 942；D5 peak 2165 / 10 min 170。256-cap Worker hydrate 测试在 `3cab7d1`。不要合 main / 不要 push，除非明确要求。
 
 ## E1（2026-08-23）
 

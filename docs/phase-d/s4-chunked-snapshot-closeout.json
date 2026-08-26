@@ -13,6 +13,11 @@
       "hydrateOom": 0,
       "hydrateWaitS": [14.1, 15.1, 22.2],
       "firstHydrateBudgetS": 10,
+      "firstHydrateMs": 6601.8,
+      "firstHydrateMsSamples": [8422.0, 6569.8, 6601.8],
+      "firstHydrateMsMin": 6569.8,
+      "firstHydrateMsMax": 8422.0,
+      "firstHydrateMethod": "daemonctl restart; poll daemon.stderr for lishuedu prewarm begin→end (hydrate=true). Not D3a first java_impact.",
       "d3aLishueduMs": 37.9,
       "d3aLishuV2Ms": 32.3,
       "d3cCipherlinkMs": 1871.7,
@@ -43,6 +48,7 @@
     "Cold-build child timeout raised 180s→300s because v5 encode added ~48s and load 50+ SIGKILL'd a finished child.",
     "Worker execArgv --expose-gc is invalid (same class as --max-old-space-size). Hibernate gc() is a no-op in the isolate.",
     "eb722cf recycles the worker on hibernate and index-idle-closes hot pins. Fast D1 end 639 / peak 927. D5 peak 1358 / 10 min 189.",
-    "f6cb334: prewarm holds refCount and pressure skips hot-set. Live D1 end 942 / D3a 38+32 / D3c 1872+1833 / D5 peak 2165 end 170. Releases are 90MB (artifacts excluded)."
+    "f6cb334: prewarm holds refCount and pressure skips hot-set. Live D1 end 942 / D3a 38+32 / D3c 1872+1833 / D5 peak 2165 end 170. Releases are 90MB (artifacts excluded).",
+    "lishuedu firstHydrateMs on f6cb334 (begin→end, 3 restarts): 8422 / 6570 / 6602 ms, all ≤ 10000. Do not substitute D3a 38ms (post-hydrate impact)."
   ]
 }

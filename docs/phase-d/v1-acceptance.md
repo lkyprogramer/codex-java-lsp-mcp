@@ -2,7 +2,7 @@
 
 Branch `codex/frontier-r1`. Live release `f6cb33421b32-20260826T113824Z` (`http://127.0.0.1:38456/mcp`, hot-set `hydrate:true`, worker isolate cap **1536**, snapshot schema v5, isolate recycle on hibernate + index-idle close of hot pins, prewarm holds `refCount`, freemem pressure skips hot-set). Pins: `lishuedu`, `exam-parent-v3`, `cipherlink`, `lishu-v2`. Probe: `scripts/probe-daemon-acceptance.mjs`. Fast D1 soak: `scripts/d1-fast-idle-soak.sh`. S4 closeout: `docs/phase-d/s4-chunked-snapshot-closeout.json`.
 
-Isolated T0: 1274 + 280 pass, exit 0. `gate:pr` 1274 pass, exit 0. Install copies exclude `artifacts/` / `graphify-out/`; live `releases/` is two 90MB dirs.
+Isolated T0: 1276 + 280 pass, exit 0 on `3cab7d1` (includes 256-cap Worker hydrate/OOM). `gate:pr` 1276 pass. Live daemon remains `f6cb334`. Install copies exclude `artifacts/` / `graphify-out/`; live `releases/` is two 90MB dirs.
 
 ## Gates
 
@@ -10,6 +10,7 @@ Isolated T0: 1274 + 280 pass, exit 0. `gate:pr` 1274 pass, exit 0. Install copie
 | --- | --- | --- |
 | D1 steady footprint ≤ 1024 MiB (dual-hot) after idle-close | PASS | `f6cb334` fast soak (hibernate 2s + index-idle 4s + 40s settle, wait for `prewarm finished`): peak **1676 MiB** (hydrate), end **942 MiB** ≤ 1024. Production TTLs restored after. |
 | D2 storm healthz P99 < 100 ms, 0 timeouts | PASS | `f6cb334` probe: 12 samples, 0 timeouts, P99 19.4 ms. OPEN/hydrate can still stall healthz; not a merge blocker per §8.2. |
+| S4 firstHydrateMs ≤ 10 s | PASS | lishuedu `prewarm begin`→`end` on live `f6cb334` (hydrate=true, 1536 cap): **8422 / 6570 / 6602 ms**. Evidence: scratch `live/first-hydrate.json`. Not D3a first impact. |
 | D3a hot pin first impact P95 ≤ 3 s | PASS | After prewarm on `f6cb334`: lishuedu **38 ms**, lishu-v2 **32 ms**, 0 toolFail. Follow-ups 12–15 ms. (`0401d04` / `009a3ff` failed at 8457 / 8573 ms because macOS `os.freemem()` pressure recycled the oldest hot pin.) |
 | D3b cold pin first impact no tool fail | PASS | cipherlink 1872 ms, exam-parent-v3 1833 ms, 0 toolFail. |
 | D3c non-hot on-demand hydrate ≤ 12 s | PASS | Same cold-pin first impacts: 1872 / 1833 ms, both ≤ 12 s, 0 toolFail. |
