@@ -220,6 +220,39 @@ test("index idle TTL fully closes a hibernated cold runtime but not a hot-set al
   await manager.shutdownAll();
 });
 
+test("index idle TTL closes a cold runtime even if it never hibernated", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const javaIndex = new RecordingJavaIndex(() => 0);
+  const manager = new RepoRuntimeManager({
+    async resolve(selector: { repoRoot?: string }) {
+      const repoRoot = selector.repoRoot || "/repo";
+      const repoHash = repoRoot.replace(/\W/g, "");
+      return {
+        repoRoot,
+        repoHash,
+        rootSource: "explicit" as const,
+        aliases: ["cipherlink"],
+        layoutProfile: "generic-java" as const,
+        lsp: { enabled: true, matchedBy: "direct-root" as const, configuredRoot: repoRoot, effectiveRepoRoot: repoRoot },
+        worktree: { repoRoot, repoHash, isLinkedWorktree: false }
+      };
+    }
+  }, {
+    idleTtlMs: 100000,
+    hibernateTtlMs: 100000,
+    indexIdleTtlMs: 40,
+    hotIndexAliases: new Set(["lishuedu"]),
+    pressureIntervalMs: 0,
+    requestTimeoutMs: 1000
+  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
+    fakeCoordination(), new NoopCrossProcessLeaseStore());
+
+  await manager.prewarmRepo({ repoRoot: "/cold" }, { hydrate: true });
+  await delay(120);
+  assert.ok(javaIndex.calls.includes("close"), "cold isolate must close without waiting for hibernate");
+  await manager.shutdownAll();
+});
+
 test("index idle TTL 0 never registers a close timer", async () => {
   const sessions = new Map<string, FakeSession>();
   const javaIndex = new RecordingJavaIndex(() => 0);

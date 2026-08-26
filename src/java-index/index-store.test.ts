@@ -531,6 +531,23 @@ test("loadSnapshotData round-trips MyBatis resources and clears whatever the sto
   assert.deepEqual([...(store.myBatisResourcesByNamespace.get("demo.OrderMapper") ?? [])], ["src/main/resources/mapper/OrderMapper.xml"]);
 });
 
+test("ingestSnapshotFacts can install one rest segment at a time", () => {
+  const original = new JavaIndexStore();
+  const gateway = emptyBundle("src/main/java/demo/Gateway.java", "Gateway");
+  addMethod(gateway, "pay");
+  addField(gateway, "name");
+  original.replaceFile(gateway);
+  const data = original.toSnapshotData();
+  const store = new JavaIndexStore();
+  store.loadSnapshotData({ files: data.files, types: [], fields: [], methods: [], edges: [], myBatisResources: [] });
+  store.ingestSnapshotFacts({ types: data.types, fields: [], methods: [], edges: [] });
+  store.ingestSnapshotFacts({ types: [], fields: data.fields, methods: [], edges: [] });
+  store.ingestSnapshotFacts({ types: [], fields: [], methods: data.methods, edges: [] });
+  store.ingestSnapshotFacts({ types: [], fields: [], methods: [], edges: data.edges });
+  assert.equal(store.typeByFqn("demo.Gateway")?.simpleName, "Gateway");
+  assert.equal(store.files(["src/main/java/demo/Gateway.java"])[0]?.methods.length, 1);
+});
+
 test("loadSnapshotData rejects a snapshot with a duplicate mybatis resource relativePath", () => {
   const store = new JavaIndexStore();
   const resource = myBatisResource({ relativePath: "src/main/resources/mapper/Dup.xml" });

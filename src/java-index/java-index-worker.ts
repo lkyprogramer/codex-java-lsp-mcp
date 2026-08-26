@@ -46,7 +46,7 @@ import {
 import type { SnapshotV4View } from "./snapshot-v4.js";
 import type { ColdBuildResult } from "./cold-build.js";
 import { STABLE_ID_VERSION } from "./stable-id.js";
-import { EntitySearchIndex } from "./entity-search.js";
+import { EntitySearchIndex, type EntitySearchSnapshot } from "./entity-search.js";
 import { KnowledgeGraphStore } from "../java-knowledge/graph-store.js";
 import { KnowledgeGraphBuilder } from "../java-knowledge/graph-builder.js";
 import { loadGraphSnapshot, packGraphSnapshot, unpackGraphSnapshot, writeGraphSnapshotAtomic } from "../java-knowledge/graph-snapshot.js";
@@ -55,14 +55,17 @@ import type {
   IndexedReadRange,
   IndexedReadRangeResult,
   JavaCallSiteFact,
+  JavaFieldFacts,
   JavaFileBundle,
   JavaIndexStatus,
   JavaMethodFacts,
+  JavaTypeFacts,
   JavaTypeLookupResult,
   MyBatisResourceCoverage,
   SourcePosition,
   SourceRange,
   SourceRootCoverage,
+  StaticEdge,
   WorktreeSeedStatus
 } from "./index-types.js";
 import {
@@ -1201,21 +1204,38 @@ async function ensureFactsHydrated(): Promise<void> {
   await factsHydrateInFlight;
 }
 
+function yieldHydrateTurn(): Promise<void> {
+  return new Promise(resolve => setImmediate(resolve));
+}
+
 async function hydratePendingFacts(): Promise<void> {
   if (snapshotFactsHydrated || !store || !pendingSnapshotView) {
     snapshotFactsHydrated = true;
     return;
   }
-  const rest = pendingSnapshotView.readRest();
-  store.ingestSnapshotFacts({
-    types: rest.types,
-    fields: rest.fields,
-    methods: rest.methods,
-    edges: rest.edges,
-    myBatisResources: rest.myBatisResources
-  });
-  if (rest.entitySearch?.version === 1) {
-    entitySearch.loadSnapshot(rest.entitySearch);
+  const view = pendingSnapshotView;
+  const types = view.readSegment("types") as JavaTypeFacts[];
+  store.ingestSnapshotFacts({ types, fields: [], methods: [], edges: [] });
+  types.length = 0;
+  await yieldHydrateTurn();
+  const fields = view.readSegment("fields") as JavaFieldFacts[];
+  store.ingestSnapshotFacts({ types: [], fields, methods: [], edges: [] });
+  fields.length = 0;
+  await yieldHydrateTurn();
+  const methods = view.readSegment("methods") as JavaMethodFacts[];
+  store.ingestSnapshotFacts({ types: [], fields: [], methods, edges: [] });
+  methods.length = 0;
+  await yieldHydrateTurn();
+  const edges = view.readSegment("edges") as StaticEdge[];
+  store.ingestSnapshotFacts({ types: [], fields: [], methods: [], edges });
+  edges.length = 0;
+  await yieldHydrateTurn();
+  const myBatisResources = view.readSegment("mybatis") as MyBatisMapperResourceFacts[];
+  store.ingestSnapshotFacts({ types: [], fields: [], methods: [], edges: [], myBatisResources });
+  myBatisResources.length = 0;
+  const entitySearchSnap = view.readSegment("entitySearch") as EntitySearchSnapshot | null;
+  if (entitySearchSnap?.version === 1) {
+    entitySearch.loadSnapshot(entitySearchSnap);
     entitySearchSyncedRevision = indexFactsRevision;
   }
   pendingSnapshotView = undefined;
@@ -1747,6 +1767,11 @@ async function beginBackgroundSweep(generation: number): Promise<void> {
         return;
       }
     }
+    // spawn EBADF / timeout / crash: in-process parse of a 6k-file repo is
+    // what blew the 1536 MiB isolate during pin prewarm. Stay files-only.
+    lastRefreshError = "cold-build child failed; staying files-only instead of in-process parse";
+    console.error(`[codex-java-lsp] ${lastRefreshError}`);
+    return;
   }
   if (backgroundSweep) {
     // A sweep is already in flight: piggyback on it rather than starting a
@@ -1766,14 +1791,15 @@ async function beginBackgroundSweep(generation: number): Promise<void> {
     byRoot.set(file.sourceRoot, (byRoot.get(file.sourceRoot) ?? 0) + 1);
   }
   for (const [root, count] of byRoot) coverage.begin(root, generation, count);
-  const reusedPaths = worktreeSeedStatus?.completion === "SEEDED_DEGRADED"
-    ? seededReconcilePlan?.reusedPaths
-    : undefined;
+  const skipIndexed = (relativePath: string): boolean => {
+    if (worktreeSeedStatus?.completion === "SEEDED_DEGRADED" && seededReconcilePlan?.reusedPaths) {
+      return seededReconcilePlan.reusedPaths.has(relativePath);
+    }
+    return Boolean(store && store.filesByPath.size > 0 && store.filesByPath.has(relativePath));
+  };
   backgroundSweep = {
     generation,
-    remaining: reusedPaths
-      ? discovered.filter(file => !reusedPaths.has(file.relativePath))
-      : discovered.slice(),
+    remaining: discovered.filter(file => !skipIndexed(file.relativePath)),
     priorityEpoch: 0,
     appliedPriorityEpoch: -1,
     allDiscovered: discovered,

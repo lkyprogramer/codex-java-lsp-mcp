@@ -1097,7 +1097,7 @@ export class RepoRuntimeManager {
     }
     if (this.options.indexIdleTtlMs > 0 && !this.isHotIndexEntry(entry)) {
       entry.indexIdleTimer = setTimeout(() => {
-        if (entry.refCount === 0 && entry.hibernated && !this.isHotIndexEntry(entry)) {
+        if (entry.refCount === 0 && !this.isHotIndexEntry(entry)) {
           void this.shutdown(entry.context.repoRoot);
         }
       }, this.options.indexIdleTtlMs);
