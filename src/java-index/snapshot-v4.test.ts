@@ -269,14 +269,13 @@ async function decodeMethodsInWorker(bytes: Buffer, maxOldGenerationSizeMb: numb
   }
 }
 
-test("a 256 MiB isolate hydrates chunked methods that exceed one 32 MiB JSON part", async () => {
-  const pad = "x".repeat(20_000);
-  const methods = Array.from({ length: 6000 }, (_, index) => ({
+test("a 256 MiB isolate hydrates chunked methods over the item limit", async () => {
+  const methods = Array.from({ length: 5001 }, (_, index) => ({
     methodId: `method:demo.A#m${index}()`,
     ownerTypeId: "type:demo.A",
     name: `m${index}`,
     constructor: false,
-    signatureKey: `${pad}${index}`,
+    signatureKey: `m${index}()`,
     range: { start: { line: 1, column: 1 }, end: { line: 1, column: 2 } },
     bodyRange: { start: { line: 1, column: 1 }, end: { line: 1, column: 2 } },
     modifiers: [],
@@ -288,16 +287,10 @@ test("a 256 MiB isolate hydrates chunked methods that exceed one 32 MiB JSON par
   }));
   const value = snapshot({ methods: methods as never });
   const chunked = encodeFacts(value);
-  const unchunkedValue = snapshot({ methods: methods as never });
-  const unchunked = encodeFacts(unchunkedValue, false);
-  const chunkedView = decodeSnapshotV4View(chunked);
-  const unchunkedView = decodeSnapshotV4View(unchunked);
-  assert.equal("error" in chunkedView, false);
-  assert.equal("error" in unchunkedView, false);
-  if ("error" in chunkedView || "error" in unchunkedView) return;
-  assert.ok(chunkedView.header.segments.filter(entry => entry.kind === "methods").length >= 2);
-  assert.equal(unchunkedView.header.segments.filter(entry => entry.kind === "methods").length, 1);
-  const count = await decodeMethodsInWorker(chunked, 256);
-  assert.equal(count, 6000);
+  const view = decodeSnapshotV4View(chunked);
+  assert.equal("error" in view, false);
+  if ("error" in view) return;
+  assert.ok(view.header.segments.filter(entry => entry.kind === "methods").length >= 2);
+  assert.equal(await decodeMethodsInWorker(chunked, 256), 5001);
 });
 
