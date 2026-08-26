@@ -2,7 +2,7 @@
 # Production-TTL D1 soak: wait for prewarm, then sample phys_footprint and live RSS
 # (daemon + children) for 30 minutes. Does not mutate LaunchAgent TTLs.
 set -euo pipefail
-export PATH="/opt/homebrew/bin:/usr/bin:/bin"
+export PATH="/opt/homebrew/bin:${HOME}/.nvm/versions/node/v22.16.0/bin:/usr/bin:/bin${PATH:+:$PATH}"
 
 SOAK_S="${JAVA_LSP_D1_SOAK_S:-1800}"
 SAMPLE_S="${JAVA_LSP_D1_SAMPLE_S:-60}"

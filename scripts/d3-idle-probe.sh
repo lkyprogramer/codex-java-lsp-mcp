@@ -2,7 +2,7 @@
 # Temporarily shrink index-idle TTL to 60s, wait for cold pins to close, probe
 # D3-idle (hot ≤3s / cold ≤15s, 0 isError), then restore production TTLs.
 set -euo pipefail
-export PATH="/opt/homebrew/bin:/usr/bin:/bin"
+export PATH="/opt/homebrew/bin:${HOME}/.nvm/versions/node/v22.16.0/bin:/usr/bin:/bin${PATH:+:$PATH}"
 
 INDEX_IDLE_TTL_MS="${JAVA_LSP_D3_IDLE_TTL_MS:-60000}"
 PREWARM_WAIT_S="${JAVA_LSP_D3_PREWARM_WAIT_S:-180}"
@@ -95,7 +95,12 @@ log "waiting ${SETTLE_S}s for cold index-idle close"
 sleep "$SETTLE_S"
 
 log "probing D3-idle"
-if ! node "$ROOT/scripts/d3-idle-probe.mjs" "$OUT_JSON" | tee -a "$OUT_LOG"; then
+NODE_BIN="${NODE_BIN:-$(command -v node)}"
+if [[ -z "$NODE_BIN" ]]; then
+  log "node not found on PATH"
+  exit 2
+fi
+if ! "$NODE_BIN" "$ROOT/scripts/d3-idle-probe.mjs" "$OUT_JSON" | tee -a "$OUT_LOG"; then
   log "D3-idle probe FAIL"
   restore_production_ttls
   trap - EXIT
