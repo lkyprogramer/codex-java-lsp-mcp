@@ -55,8 +55,8 @@ for (const [id, pin] of Object.entries(pins)) {
   const first = await call(client, "java_impact", {
     projectId: pin.projectId,
     anchors: [{ file: pin.file, line: 1, column: 1 }],
-    mode: "balanced",
-    semanticPolicy: "auto"
+    mode: "minimal",
+    semanticPolicy: "fast"
   });
   const gateMs = pin.hot ? 3000 : 15000;
   const warming = /warming after idle close/.test(first.text);
