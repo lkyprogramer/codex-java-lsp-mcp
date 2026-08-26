@@ -1,6 +1,6 @@
 # Daemon 稳定性与内存治理方案（W/S/M 三轨 + V 验收）
 
-- 状态：ADOPTED（R1，2026-08-26：新增 §8 上线阻塞裁决——D3a 三振根因实锤为 methods 段 JSON 单体解析 ~890 MiB 瞬时峰值；拍板 cap 临时 2560 + S4 分块快照根治 + D1 修订 1024（双热集）+ 新增 D3c 门；identity formal floors 判 pre-existing 不阻塞上线）
+- 状态：ADOPTED（R2，2026-08-26 晚：新增 §9 上线复核裁决——live 实测发现 idle-close 后首查报错（含热 pin，行为级 blocker）与 footprint 1041 中 914 MiB 为 arena 死页（RSS 16 MiB）两项关键事实；拍板 M2b 恢复热集豁免 + S5 冷启动预算兜底 + D3-idle 新门 + D1 双口径受控 soak；合 main 前置清单见 §9.4。R1（2026-08-26 早）：§8 裁决 methods 段 890 MiB 解析瞬时峰值 → S4 分块快照根治、D1 修订 1024、新增 D3c）
 - 范围：HTTP daemon 的事件循环冻结、超时死亡螺旋、内存账本三类生产问题的彻底解决
 - 输入证据：本仓代码核实（本文所有行号均已人工确认）、grok 排查报告（`/Users/luo/Documents/grok/lsp1.md`、`lsp2.md`）、2026-08-25 上午的现场诊断（进程采样、遥测 JSONL、daemon 日志）
 - 生效 pin：`lishuedu`、`exam-parent-v3`、`cipherlink`、`lishu-v2`（4 个 lspEnabled，来源 `~/.config/codex-java-lsp/projects.json`，已核实）
@@ -325,8 +325,10 @@
 | D5 | M3 | 冷建峰值 ≤ 4 GiB、10 分钟回落 |
 | D6 | W1 | 新仓 java_status 首查 ≤ 3s |
 | D7 | M4 | worktree 重开 seed 命中：reusedFiles ≥ 0.9×总数、不 spawn 冷建 child、首查 ≤ 15s |
-| D8 | S4 | 1536 cap 下 lishuedu hydrate 三连过；单段解析瞬时 heap 增量 ≤ 200 MiB；firstHydrate ≤ 10s |
-| identity | V1 | 三仓 2-run 快检 plan 内容与基线 identity（formal floors 双臂同败 = pre-existing，不计入） |
+| D8 | S4 | 1536 cap 下 lishuedu hydrate 三连过；单段解析瞬时 heap 增量 ≤ 200 MiB（已判 satisfied-by-proxy，仪器化为切流后观察项）；firstHydrate ≤ 10s |
+| D3-idle | M2b/S5（§9） | idle-close 后首查：热 pin ≤ 3s 且 0 isError；冷 pin ≤ 15s 且 0 isError |
+| D1 双口径 | §9.4 | 受控 30min soak：活内存（RSS+子进程）≤ 700 MiB 且 phys_footprint ≤ 1024 MiB（1024–1152 须 arena 归因才可追认） |
+| identity | V1 | 三仓 2-run 快检 plan 内容与基线 identity（formal floors 双臂同败 = pre-existing，不计入）；S4 后必须重跑一次 |
 
 ## 6. 风险与回滚
 
@@ -431,3 +433,77 @@ W1（半小时，独立可先行）
 ### 8.4 V1-R —— 终验收（S4 之后）
 
 按 §4.V1 剧本重跑，差异：D1 用修订门（双热集 1024）；新增 D3c 探针（重启后对 exam-parent-v3 首次 fact 查询计时）；D5 跑完整「冷建 → 10 分钟回落」曲线；identity 快检照旧（formal floors 双臂同败记录为 pre-existing，不计入判定）。全绿后更新 `HANDOFF.md`：新增「内存基准必须带生产 resourceLimits」与「JSON 单体段解析瞬时峰值」两条坑；`docs/phase-d/v1-acceptance.md` 状态翻 COMPLETE。
+
+---
+
+## 9. 2026-08-26 晚间上线复核裁决（V1-R COMPLETE 之后，R2 增补）
+
+> V1-R 在 `f6cb334` 盖章 COMPLETE 后，本次复核在 live 上做了两组独立实测，发现一个**行为级上线 blocker**（不在任何已有门的量法覆盖内），同时对 verify-claims 汇总里全部「未打标/偏离」项给出终局处置。执行者按 9.3 的卡开工，完成 9.4 清单后方可合 main。
+
+### 9.1 本次现场实测（live f6cb334，up ~90 min，activeRequests=0）
+
+**实测 A —— footprint 1041 MiB 的解剖（`footprint -p` + `ps`）**：
+
+- daemon 主进程 **RSS 仅 16 MiB**，**无任何子进程**（4 个 pin 的 worker isolate 全部已被 index-idle 关闭，M2 生效）。
+- footprint 1041 MiB 中 **914 MiB 是 MALLOC_SMALL dirty**——isolate 关闭后 malloc arena 不归还 OS 的高水位死页，多半已被 macOS 压缩器处理（RSS 16 MiB 是佐证）。**不是活内存、不是泄漏。**
+- 推论 1：此刻「1041 > 1024」不是 D1 失守，是 **phys_footprint 口径把 arena 死页计入**。活内存口径（RSS+子进程）此刻 ≈ 16 MiB，原文「追求 700」在活内存口径早已达成。
+- 推论 2：**关闭热集 isolate 换不来 footprint 下降**（arena 不还），M2 偏离（连热集也关）付出了代价却没拿到收益。
+
+**实测 B —— idle-close 之后的首查行为（正确 anchors 参数，走 MCP 公共入口）**：
+
+| 调用 | 耗时 | 结果 |
+| --- | --- | --- |
+| lishuedu 首查 | 3081 ms | **ERROR** `Deadline exceeded before java-index.status` |
+| lishuedu 第二查 | 3037 ms | **ERROR** `Deadline exceeded before runtime.request-context` |
+| lishu-v2 首查 | 3027 ms | **ERROR** `Deadline exceeded before java-index.status` |
+| lishu-v2 第二查 | 1084 ms | ok |
+
+**这是上线 blocker**：用户真实工作流是间歇 burst，任何一次间隔超过 20 分钟（`JAVA_LSP_INDEX_IDLE_TTL_MS` 默认），回来的前 1–2 条 `java_impact` **必报错**——包括热 pin。S 轨「首查允许慢但不许失败」的承诺在 idle-close 状态被打破；D3b/D3a 的验收都在预热后立刻测，从未覆盖这个每天必现的状态。S3 closeout 自己记录的「fail-soft 盖不住 `Deadline exceeded before java-index.status`」残余，就是它的冰山一角。
+
+### 9.2 verify-claims 汇总各项的终局处置
+
+| 项 | 处置 | 理由 |
+| --- | --- | --- |
+| D2「每秒 120 次」缺口 | **纠正误读后追认 PASS** | 原文 §4.V1 是「healthz **1s×120 次**」= 1 Hz × 120 样本，不是 120 Hz；实测 1 Hz × 90 样本盖住 gradle 全程、0 超时、P99 31 ms，实质等效 |
+| ingest 改法（空数组 + onDuplicate） | **追认** | 功能等价实现，有单测 |
+| fast-soak 替代 30 min soak | **追认为迭代手段，终章盖章需一次受控 soak**（见 9.4） | 快 soak 定位问题高效，但生产 TTL 下的稳态从未走完整 |
+| 决策 A（cap 2560）未采用 | **追认，且记一条诚实复盘** | `694969e` 抬到 2560 后 lishuedu 仍 OOM——§8.2 对瞬时峰值 ~1.4–1.5 GiB 的预估被现场推翻（实际更高）；三振纪律把它正确送进了 S4 根治。止血预估错误，根治路线正确 |
+| M2 关热集 isolate（偏离原文豁免） | **纠正：恢复豁免**（9.3 M2b 卡） | 实测 A 证明关热集换不来 footprint 下降；实测 B 证明它让热 pin 首查报错。原文 M2 的热集豁免设计被证据支持 |
+| D8 单段 heap 增量 ≤ 200 MiB 未仪器化 | **判 satisfied-by-proxy，留观察项** | 1536 cap 下 hydrate 三连 0 OOM 是足够的工程证据；一次性仪器化测量降级为非阻塞观察卡 |
+| D4 live「≤500 ms」没干净复测 | **补测**（9.4） | 5 分钟的事，短 deadline 注入别撞 D3c |
+| S4 后 identity 未重跑 | **补测（--runs 2）**（9.4） | S4 改了快照格式与 hydrate 路径；identity 检查的存在意义就是抓这类「不该影响 plan 的改动」 |
+| 24h 遥测复核 | **切流后第一天做**，天然是切流后动作 | 非阻塞 |
+| W2 OPEN 窗口停顿 | 维持 §8.2 判定：下轮 | 非阻塞 |
+| identity formal floors 双臂同败 | 维持 §8.2 判定：pre-existing，归 Q 轨 | 非阻塞 |
+
+### 9.3 新任务卡（阻塞合 main）
+
+**M2b —— 恢复热集 index-idle 豁免（~10 LOC + 单测）**
+
+- **锚点**：`src/repo-runtime-manager.ts:1114-1121`（`scheduleIdleShutdown` 第三 timer），加 `!this.isHotIndexEntry(entry)` 条件（`isHotIndexEntry` 已存在于 1076-1078，pressure recycle 已在用）。
+- **语义**：热集 pin（默认 `lishuedu,lishu-v2`）的 worker isolate 一旦 hydrate 完成即常驻，只受 pressure recycle（f6cb334 已豁免热集）与 daemon 重启管理；冷 pin 照旧 20 分钟 idle-close。
+- **代价论证（已实测）**：热集常驻活堆约 300–500 MiB，但 footprint 口径的差异远小于此（arena 高水位在关闭方案下同样存在）；换来热 pin 首查从「报错 + 重付 7s hydrate」回到恒定 ~38 ms。
+- **测试**：fake timer 单测：热集 entry 不注册第三 timer / 冷集照关；全量 T0。
+
+**S5 —— 冷启动首查预算兜底（idle-close 后 0 isError，~60 LOC）**
+
+- **目标**：任何 pin 在 runtime 被 idle-close 之后的首查，**不报错**——慢可以（≤ 15s 公共预算），isError 不行。
+- **改法（按优先序）**：`java_impact`/`java_status` 入口处，若目标 repo 当前无活 runtime（真冷启动），本次调用的内部 deadline 直接用 15s 公共预算（`54b7c09` 已有先例），不用默认 minimal 预算；覆盖 `java-index.status`、`runtime.request-context`、`runtime.create` 三条已实测报错的路径。若实现后仍有超时残余，退而返回结构化「预热中，请重试」响应（isError=false + evidence gap），复用 S3 文案纪律。
+- **测试**：单测模拟 idle-close 后首查（fake timers 快进第三 timer → 立即 impact）断言 0 isError；live 验证走 9.4 的 D3-idle 探针。
+- **边界**：不改 S1 的 retire 语义、不动 OPEN 超时 retire 契约（硬禁令 3）。
+
+### 9.4 合 main 前置清单（全绿才允许合）
+
+1. **D3-idle 新门**（M2b + S5 部署后）：临时把 `JAVA_LSP_INDEX_IDLE_TTL_MS` 压到 60s 复现 idle-close，然后：热 pin 首查 ≤ 3s 且 0 isError（M2b 后热 pin 不再关，应恒 ~38 ms）；冷 pin 首查 ≤ 15s 且 0 isError（S5 兜底）；测完还原 TTL。
+2. **受控 D1 soak（双口径）**：生产 TTL、预热完成后静置 30 分钟，同时记录 phys_footprint 与「活内存」（daemon RSS + 子进程 RSS 合计）。判定：活内存 ≤ 700 MiB **且** phys_footprint ≤ 1024 MiB；若 footprint 落在 1024–1152 且超额全部可归因 MALLOC arena 死页（RSS 佐证），追认 1152 为 footprint 口径终值并写明归因，不得无归因放行。
+3. **S4 后 identity 快检**：`--runs 2 --baseline main`，content delta 必须为 0（formal floors 照 §8.2 不计入）。
+4. **D4 干净复测**：短 deadline 注入避开 D3c 窗口，断言 retry ≤ 500 ms、terminations=0。
+5. 全绿 → 更新 `v1-acceptance.md`（补 D3-idle 行与 D1 双口径数字）→ **允许合 main + 生产切流** → 24h 遥测复核收尾。
+
+### 9.5 切流后债务清单（非阻塞，按序执行）
+
+- 24h 遥测复核（`impact-telemetry.jsonl`：toolFail 率、deadlineExceeded 率、P95）。
+- W2：预热 OPEN 窗口 healthz 停顿归因（证据：`d1-fast-idle-soak.json` t=9–25）。
+- D8 一次性仪器化：live lishuedu hydrate 过程按块采样 heap 增量，验证 ≤ 200 MiB 设计值。
+- identity formal floors 双臂同败问题移交 next-frontier 计划 Q 轨。
+- arena 高水位长期观察：若 footprint 口径在多天运行后持续爬升（而非稳定在高水位），再评估 M3 escalation 里的 daemon 定期重启兜底。
