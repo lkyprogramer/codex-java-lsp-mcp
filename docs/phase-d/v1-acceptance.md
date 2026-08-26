@@ -20,4 +20,4 @@ Isolated T0: 1264 + 278 pass, exit 0. `gate:pr` exit 0. Targeted unit file set i
 
 ## Overall
 
-**COMPLETE with residuals.** D1/D2/D3b/D4/D6/D7 PASS on live `425fd96`. D3a/D5 PARTIAL: pin rest-hydrate still OOMs the 1536 isolate, so production prewarm stays files-only and first-impact hydrate-on-demand can exceed 3s / OOM. Identity of normal-path plan content vs `main` held. Do not merge `main`. Rollback: `daemonctl.sh rollback-release`.
+**NOT COMPLETE.** Hot-set pin prewarm is being restored to `hydrate:true` (plan M1/D3a). Previous files-only idle met D1 (807 MiB) but D3a was false (`lishu-v2` 4055 ms, `lishuedu` followFail 5579 ms). Do not mark V1 complete until a post-hydrate D3a probe passes, or `docs/phase-d/d3a-escalation.md` records three honest hydrate failures. Do not merge `main`. Rollback: `daemonctl.sh rollback-release`.

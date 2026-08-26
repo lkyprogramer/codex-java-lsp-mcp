@@ -241,7 +241,7 @@ export class JavaLspApplication {
       if (this.prewarmStopped || this.currentState !== "ready") return;
       await this.registry.reloadIfChanged();
       const aliases = this.registry.aliases();
-      const { ignored } = parsePrewarmHotSet(aliases.map(alias => alias.id));
+      const { hot, ignored } = parsePrewarmHotSet(aliases.map(alias => alias.id));
       for (const id of ignored) {
         console.error(`[codex-java-lsp] ignoring unknown JAVA_LSP_PREWARM_HOT alias ${id}`);
       }
@@ -255,14 +255,14 @@ export class JavaLspApplication {
         seen.add(root);
         pins.push({ id: alias.id });
       }
-      // Files-only only. Rest hydrate of lishuedu OOMs the 1536 MiB isolate;
-      // hydrating lishu-v2 still left idle phys_footprint at 961 MiB (D1 900).
-      // Hot-set aliases stay files-only resident (idle-exempt).
+      // Hot-set aliases pay facts hydrate on the 300s prewarm budget (S2/M1/D3a).
+      // Cold pins stay files-only and hibernate immediately.
       for (const pin of pins) {
         if (this.prewarmStopped || this.currentState !== "ready") return;
+        const hydrate = hot.has(pin.id);
         try {
-          console.error(`[codex-java-lsp] pinned repo prewarm begin ${pin.id}`);
-          await this.runtimes.prewarmRepo({ projectId: pin.id }, { hydrate: false });
+          console.error(`[codex-java-lsp] pinned repo prewarm begin ${pin.id} hydrate=${hydrate}`);
+          await this.runtimes.prewarmRepo({ projectId: pin.id }, { hydrate });
           console.error(`[codex-java-lsp] pinned repo prewarm end ${pin.id}`);
         } catch (error) {
           console.error(`[codex-java-lsp] pinned repo prewarm failed (${pin.id})`, error);

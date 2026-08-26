@@ -300,11 +300,11 @@ test("HTTP application hydrates JAVA_LSP_PREWARM_HOT aliases and logs unknown on
     await application.initialize();
     await application.startPinnedRepoPrewarm();
     assert.deepEqual(flags, [
-      { id: "lishuedu", hydrate: false },
+      { id: "lishuedu", hydrate: true },
       { id: "cipherlink", hydrate: false }
     ]);
     assert.ok(errors.some(line => /unknown JAVA_LSP_PREWARM_HOT alias nope/.test(line)));
-    assert.ok(errors.some(line => /pinned repo prewarm begin lishuedu/.test(line)));
+    assert.ok(errors.some(line => /pinned repo prewarm begin lishuedu hydrate=true/.test(line)));
     assert.ok(errors.some(line => /pinned repo prewarm finished pins=2/.test(line)));
     await application.close();
   } finally {
