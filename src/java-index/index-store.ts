@@ -128,9 +128,11 @@ export class JavaIndexStore {
   readonly typeIdsBySimpleName = new Map<string, Set<string>>();
   readonly fieldsById = new Map<string, JavaFieldFacts>();
   private readonly methodColumns = new MethodColumns(this.edgeColumns.strings, this.edgeColumns.ranges);
-  readonly methodsById = new MethodIdMap(this.methodColumns);
+  private readonly overlayMethods = new Map<string, JavaMethodFacts>();
+  private readonly overlayEdges = new Map<string, StaticEdge>();
+  readonly methodsById = new MethodIdMap(this.methodColumns, this.overlayMethods);
   readonly methodIdsByOwnerAndName = new Map<string, Set<string>>();
-  readonly edgesById = new EdgeIdMap(this.edgeColumns);
+  readonly edgesById = new EdgeIdMap(this.edgeColumns, this.overlayEdges);
   readonly outEdgeIdsByNode = new Map<string, Set<string>>();
   readonly inEdgeIdsByNode = new Map<string, Set<string>>();
   readonly fileOwnedNodeIds = new Map<string, Set<string>>();
@@ -260,6 +262,56 @@ export class JavaIndexStore {
     }
     this.fileOwnedEdgeIds.set(relativePath, ownedEdgeIds);
     return dependents;
+  }
+
+  /**
+   * Install a pooled bundle without copying methods/edges into this store's
+   * SoA. Snapshot hydrate of a sibling root must not intern a second copy.
+   */
+  attachSharedBundle(bundle: JavaFileBundle): void {
+    validateBundleIds(bundle);
+    const relativePath = bundle.file.relativePath;
+    const previous = this.installedBundles.get(relativePath);
+    const installed = this.internOrShare(bundle, previous);
+    this.removeFileInternal(relativePath, false);
+    this.fileColumns.add(installed.file);
+    const ownedNodeIds = new Set<string>();
+    for (const type of installed.types) {
+      this.typesById.set(type.typeId, type);
+      if (type.fqn) this.typeIdByFqn.set(type.fqn, type.typeId);
+      addToSetMap(this.typeIdsBySimpleName, type.simpleName, type.typeId);
+      ownedNodeIds.add(type.typeId);
+    }
+    for (const field of installed.fields) {
+      this.fieldsById.set(field.fieldId, field);
+      ownedNodeIds.add(field.fieldId);
+    }
+    for (const method of installed.methods) {
+      this.overlayMethods.set(method.methodId, method);
+      addToSetMap(this.methodIdsByOwnerAndName, `${method.ownerTypeId}#${method.name}`, method.methodId);
+      ownedNodeIds.add(method.methodId);
+    }
+    this.fileOwnedNodeIds.set(relativePath, ownedNodeIds);
+    this.installedBundles.set(relativePath, installed);
+    const ownedEdgeIds = new Set<string>();
+    for (const edge of installed.edges) {
+      this.overlayEdges.set(edge.edgeId, edge);
+      addToSetMap(this.outEdgeIdsByNode, edge.fromId, edge.edgeId);
+      addToSetMap(this.inEdgeIdsByNode, edge.toId, edge.edgeId);
+      ownedEdgeIds.add(edge.edgeId);
+    }
+    this.fileOwnedEdgeIds.set(relativePath, ownedEdgeIds);
+  }
+
+  /** After snapshot ingest, register reconstructed bundles so siblings can attach. */
+  publishHydratedToPool(): void {
+    if (!this.factsPool) return;
+    for (const file of this.filesByPath.values()) {
+      if (this.installedBundles.has(file.relativePath)) continue;
+      const [bundle] = this.files([file.relativePath]);
+      if (!bundle) continue;
+      this.installedBundles.set(file.relativePath, this.internOrShare(bundle, undefined));
+    }
   }
 
   // Returns the relative paths of files with an edge into a node this
@@ -612,8 +664,10 @@ export class JavaIndexStore {
       files: [...this.filesByPath.values()].sort((a, b) => a.relativePath.localeCompare(b.relativePath)),
       types: [...this.typesById.values()].sort((a, b) => a.typeId.localeCompare(b.typeId)),
       fields: [...this.fieldsById.values()].sort((a, b) => a.fieldId.localeCompare(b.fieldId)),
-      methods: [...this.methodColumns.values()].sort((a, b) => a.methodId.localeCompare(b.methodId)),
-      edges: [...this.edgeColumns.values()].sort((a, b) => a.edgeId.localeCompare(b.edgeId)),
+      methods: [...this.methodColumns.values(), ...this.overlayMethods.values()]
+        .sort((a, b) => a.methodId.localeCompare(b.methodId)),
+      edges: [...this.edgeColumns.values(), ...this.overlayEdges.values()]
+        .sort((a, b) => a.edgeId.localeCompare(b.edgeId)),
       myBatisResources: [...this.myBatisResourcesByPath.values()].sort((a, b) => a.relativePath.localeCompare(b.relativePath))
     };
   }
@@ -635,6 +689,9 @@ export class JavaIndexStore {
     edges: readonly StaticEdge[];
     myBatisResources: readonly MyBatisMapperResourceFacts[];
   }): void {
+    this.disposeSharedFacts();
+    this.overlayMethods.clear();
+    this.overlayEdges.clear();
     this.fileColumns.clear();
     this.typesById.clear();
     this.typeIdByFqn.clear();
@@ -779,6 +836,8 @@ export class JavaIndexStore {
       this.factsPool?.release(bundle.file.contentHash);
     }
     this.installedBundles.clear();
+    this.overlayMethods.clear();
+    this.overlayEdges.clear();
   }
 
   private internOrShare(bundle: JavaFileBundle, previous: JavaFileBundle | undefined): JavaFileBundle {
@@ -815,7 +874,8 @@ export class JavaIndexStore {
         this.fieldsById.delete(nodeId);
         continue;
       }
-      const method = this.methodColumns.remove(nodeId);
+      const method = this.methodColumns.remove(nodeId) ?? this.overlayMethods.get(nodeId);
+      this.overlayMethods.delete(nodeId);
       if (method) {
         removeFromSetMap(this.methodIdsByOwnerAndName, `${method.ownerTypeId}#${method.name}`, nodeId);
         this.inEdgeIdsByNode.delete(nodeId);
@@ -824,7 +884,8 @@ export class JavaIndexStore {
     this.fileOwnedNodeIds.delete(relativePath);
 
     for (const edgeId of this.fileOwnedEdgeIds.get(relativePath) ?? []) {
-      const edge = this.edgeColumns.remove(edgeId);
+      const edge = this.edgeColumns.remove(edgeId) ?? this.overlayEdges.get(edgeId);
+      this.overlayEdges.delete(edgeId);
       if (!edge) continue;
       removeFromSetMap(this.outEdgeIdsByNode, edge.fromId, edgeId);
       removeFromSetMap(this.inEdgeIdsByNode, edge.toId, edgeId);
@@ -846,48 +907,66 @@ export class JavaIndexStore {
 }
 
 class EdgeIdMap {
-  constructor(private readonly columns: EdgeColumns) {}
+  constructor(
+    private readonly columns: EdgeColumns,
+    private readonly overlay: Map<string, StaticEdge> = new Map()
+  ) {}
 
   get size(): number {
-    return this.columns.size;
+    return this.columns.size + this.overlay.size;
   }
 
   get(id: string): StaticEdge | undefined {
     const row = this.columns.rowOf(id);
-    return row === undefined ? undefined : this.columns.materialize(row);
+    if (row !== undefined) return this.columns.materialize(row);
+    return this.overlay.get(id);
   }
 
   has(id: string): boolean {
-    return this.columns.has(id);
+    return this.columns.has(id) || this.overlay.has(id);
   }
 
   values(): IterableIterator<StaticEdge> {
-    return this.columns.values() as IterableIterator<StaticEdge>;
+    return this.iterate() as IterableIterator<StaticEdge>;
   }
 
   *[Symbol.iterator](): IterableIterator<[string, StaticEdge]> {
-    for (const edge of this.columns.values()) yield [edge.edgeId, edge];
+    for (const edge of this.iterate()) yield [edge.edgeId, edge];
+  }
+
+  private *iterate(): IterableIterator<StaticEdge> {
+    yield* this.columns.values();
+    yield* this.overlay.values();
   }
 }
 
 class MethodIdMap {
-  constructor(private readonly columns: MethodColumns) {}
+  constructor(
+    private readonly columns: MethodColumns,
+    private readonly overlay: Map<string, JavaMethodFacts> = new Map()
+  ) {}
 
   get size(): number {
-    return this.columns.size;
+    return this.columns.size + this.overlay.size;
   }
 
   get(id: string): JavaMethodFacts | undefined {
     const row = this.columns.rowOf(id);
-    return row === undefined ? undefined : this.columns.materialize(row);
+    if (row !== undefined) return this.columns.materialize(row);
+    return this.overlay.get(id);
   }
 
   has(id: string): boolean {
-    return this.columns.has(id);
+    return this.columns.has(id) || this.overlay.has(id);
   }
 
   values(): IterableIterator<JavaMethodFacts> {
-    return this.columns.values() as IterableIterator<JavaMethodFacts>;
+    return this.iterate() as IterableIterator<JavaMethodFacts>;
+  }
+
+  private *iterate(): IterableIterator<JavaMethodFacts> {
+    yield* this.columns.values();
+    yield* this.overlay.values();
   }
 }
 

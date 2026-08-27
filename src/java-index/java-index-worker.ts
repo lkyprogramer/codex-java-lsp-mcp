@@ -27,6 +27,7 @@ import {
   prioritizeJavaFilesForBackgroundSweep,
   readFileStable,
   resourceSourceRoot,
+  scanCurrentManifestStable,
   scanSnapshotManifestDiff,
   snapshotManifestEntries,
   type DiscoveredJavaFile
@@ -178,6 +179,16 @@ let worktreeSeedStatus: WorktreeSeedStatus | undefined;
 let seededReconcilePlan: { reusedPaths: Set<string> } | undefined;
 let coverage = new CoverageTracker();
 const familyFactsPool = new SharedFactsPool();
+
+function createStore(): JavaIndexStore {
+  return new JavaIndexStore(familyFactsPool);
+}
+
+function resetStore(): JavaIndexStore {
+  store?.disposeSharedFacts();
+  store = createStore();
+  return store;
+}
 let resourceCoverage: MyBatisResourceCoverage[] = [];
 // A single unreadable/unparsable file must not fail the whole REFRESH batch
 // (its previous cached state, if any, is left untouched), but a silently
@@ -1454,6 +1465,7 @@ async function hydratePendingFacts(): Promise<void> {
   }
   pendingSnapshotView = undefined;
   snapshotFactsHydrated = true;
+  store.publishHydratedToPool();
 }
 
 async function ensureGraphReady(): Promise<void> {
@@ -1498,7 +1510,7 @@ async function hibernateIndex(): Promise<void> {
     }
   }
   hibernatedStatusCounts = summarizeFiles();
-  store = new JavaIndexStore();
+  resetStore();
   entitySearch = new EntitySearchIndex();
   knowledgeGraph = new KnowledgeGraphStore();
   knowledgeBuilder = new KnowledgeGraphBuilder(knowledgeGraph);
@@ -1602,7 +1614,7 @@ function startOwnSnapshotHydration(
         return;
       }
       const durableRevisionAtHydration = snapshotDurableRevision;
-      store = new JavaIndexStore();
+      const restoredStore = resetStore();
       entitySearch = new EntitySearchIndex();
       knowledgeGraph = new KnowledgeGraphStore();
       knowledgeBuilder = new KnowledgeGraphBuilder(knowledgeGraph);
@@ -1613,7 +1625,7 @@ function startOwnSnapshotHydration(
       // read confirms their content hash. `indexMyBatisResources` can then
       // reuse exact snapshot facts without re-parsing them, while changed XML
       // is extracted fresh and is never visible through the interim store.
-      store.loadSnapshotData({
+      restoredStore.loadSnapshotData({
         files: loadedView.files,
         types: [],
         fields: [],
@@ -1621,7 +1633,7 @@ function startOwnSnapshotHydration(
         edges: [],
         myBatisResources: []
       });
-      store.stampGeneration(loaded.files.map(file => file.relativePath), requestedGeneration);
+      restoredStore.stampGeneration(loaded.files.map(file => file.relativePath), requestedGeneration);
       loadedView.files = [];
       pendingSnapshotView = loadedView;
       snapshotFactsHydrated = false;
@@ -1641,7 +1653,7 @@ function startOwnSnapshotHydration(
         && !ownSnapshotVerificationStale
         && status.indexedGeneration === expectedGeneration;
       const resourceReindex = layout
-        ? indexMyBatisResources(store, layout, expectedGeneration)
+        ? indexMyBatisResources(restoredStore, layout, expectedGeneration)
         : Promise.resolve();
       const verifiedGeneration = await verifyOwnSnapshot(loaded, expectedGeneration, canApply);
       await resourceReindex;
@@ -1761,6 +1773,27 @@ function startOwnSnapshotHydration(
  * negative-answer trust and is simply re-verified from scratch - like any
  * other not-yet-complete snapshot - the next time this repo is opened.
  */
+async function seedFromFamilyMemory(generation: number): Promise<{ attached: number; total: number }> {
+  if (!store || !layout) return { attached: 0, total: 0 };
+  for (const [rootId, session] of workerRoots) {
+    if (rootId === activeRootId) continue;
+    session.store?.publishHydratedToPool();
+  }
+  if (familyFactsPool.size === 0) return { attached: 0, total: 0 };
+  const { entries } = await scanCurrentManifestStable(repoRoot, layout);
+  let attached = 0;
+  const attachedPaths: string[] = [];
+  for (const entry of entries) {
+    const bundle = familyFactsPool.peek(entry.contentHash);
+    if (!bundle) continue;
+    store.attachSharedBundle(bundle);
+    attached += 1;
+    attachedPaths.push(entry.relativePath);
+  }
+  if (attachedPaths.length > 0) store.stampGeneration(attachedPaths, generation);
+  return { attached, total: entries.length };
+}
+
 async function attemptSiblingSeed(
   siblingCacheBase: string,
   buildFingerprint: string,
@@ -1823,7 +1856,7 @@ async function attemptSiblingSeed(
       completion: "SEEDED_DEGRADED"
     };
   } catch {
-    store = new JavaIndexStore();
+    resetStore();
     seededReconcilePlan = undefined;
     return { ...emptyWorktreeSeedStatus("FAILED"), attempted: true };
   }
@@ -2304,7 +2337,7 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         resolvedRepoRoot = await realpath(repoRoot).catch(() => path.resolve(repoRoot));
         backend = undefined;
         cache = new ParseTreeCache();
-        store = new JavaIndexStore(familyFactsPool);
+        resetStore();
         entitySearch = new EntitySearchIndex();
         knowledgeGraph = new KnowledgeGraphStore();
         knowledgeBuilder = new KnowledgeGraphBuilder(knowledgeGraph);
@@ -2351,7 +2384,12 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         let ownSnapshotIdentity: SnapshotIdentity | undefined;
         const buildFingerprint = await computeBuildFingerprint(repoRoot, layout).catch(() => undefined);
         const ownSnapshotExists = await stat(snapshotPath).then(() => true).catch(() => false);
-        if (ownSnapshotExists && buildFingerprint !== undefined) {
+        const familySeed = await seedFromFamilyMemory(openedGeneration);
+        const familySeeded = familySeed.total > 0 && familySeed.attached >= Math.ceil(familySeed.total * 0.5);
+        if (familySeeded) {
+          snapshotFactsHydrated = true;
+          pendingSnapshotView = undefined;
+        } else if (ownSnapshotExists && buildFingerprint !== undefined) {
           ownSnapshotIdentity = {
             extractorVersion: computeExtractorVersion(),
             stableIdVersion: STABLE_ID_VERSION,
@@ -2375,7 +2413,7 @@ async function handle(request: JavaIndexRequest): Promise<void> {
           snapshotBytes: 0,
           snapshot: { state: "EMPTY" }
         };
-        if (ownSnapshotIdentity && buildFingerprint !== undefined) {
+        if (!familySeeded && ownSnapshotIdentity && buildFingerprint !== undefined) {
           startOwnSnapshotHydration(ownSnapshotIdentity, openedGeneration, buildFingerprint, request.siblingCacheBase);
         }
         respond({ id: request.id, ok: true, value: currentStatus() });

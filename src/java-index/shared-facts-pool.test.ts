@@ -8,8 +8,8 @@ import { JavaIndexStore } from "./index-store.js";
 import { SharedFactsPool } from "./shared-facts-pool.js";
 import { FamilyWorkerPool } from "./family-worker-pool.js";
 import { JavaIndexClient } from "./java-index-client.js";
-import type { JavaFileBundle, JavaFileFacts, JavaTypeFacts, SourceRange } from "./index-types.js";
-import { javaFileId, javaTypeId } from "./stable-id.js";
+import type { JavaFileBundle, JavaFileFacts, JavaMethodFacts, JavaTypeFacts, SourceRange } from "./index-types.js";
+import { javaFileId, javaMethodId, javaTypeId } from "./stable-id.js";
 import type { WorkerLike } from "./java-index-worker-process.js";
 
 const RANGE: SourceRange = {
@@ -55,7 +55,24 @@ function fileBundle(relativePath: string, simpleName: string, contentHash: strin
   };
   file.topLevelTypeIds.push(typeId);
   file.allTypeIds.push(typeId);
-  return { file, types: [type], fields: [], methods: [], edges: [] };
+  const methodId = javaMethodId(typeId, "run()");
+  const method: JavaMethodFacts = {
+    methodId,
+    ownerTypeId: typeId,
+    name: "run",
+    constructor: false,
+    signatureKey: "run()",
+    range: RANGE,
+    modifiers: ["public"],
+    annotations: [],
+    typeParameters: [],
+    parameters: [],
+    throws: [],
+    callSites: [],
+    localTypes: []
+  };
+  type.methodIds.push(methodId);
+  return { file, types: [type], fields: [], methods: [method], edges: [] };
 }
 
 test("shared facts pool refcounts and evicts at zero", () => {
@@ -89,6 +106,25 @@ test("two stores share contentHash facts and isolate a changed file", () => {
   assert.equal(pool.refCount("hash-a"), 1);
   storeB.disposeSharedFacts();
   assert.equal(pool.size, 0);
+});
+
+test("sibling attachSharedBundle reuses methods without a second SoA intern", () => {
+  const pool = new SharedFactsPool();
+  const donor = new JavaIndexStore(pool);
+  const original = fileBundle("src/main/java/demo/A.java", "A", "hash-a");
+  donor.replaceFile(original);
+  donor.publishHydratedToPool();
+  const sibling = new JavaIndexStore(pool);
+  const pooled = pool.peek("hash-a");
+  assert.ok(pooled);
+  sibling.attachSharedBundle(pooled);
+  const methodId = original.methods[0]!.methodId;
+  assert.equal(sibling.methodsById.get(methodId), original.methods[0]);
+  assert.equal(sibling.typesById.get(original.types[0]!.typeId), donor.typesById.get(original.types[0]!.typeId));
+  assert.equal(sibling.filesByPath.size, 1);
+  donor.replaceFile(fileBundle("src/main/java/demo/A.java", "A", "hash-a-changed"));
+  assert.equal(sibling.methodsById.get(methodId), original.methods[0]);
+  assert.equal(sibling.installedBundle("src/main/java/demo/A.java")?.file.contentHash, "hash-a");
 });
 
 test("family worker pool keeps one process until the last root releases", async () => {
