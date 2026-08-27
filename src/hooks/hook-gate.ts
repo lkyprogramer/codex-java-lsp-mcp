@@ -4,7 +4,8 @@
 // pos: Out-of-process advisory gate; shares AliasRegistry and RepoResolver.
 import { readFileSync } from "node:fs";
 import { AliasRegistry } from "../alias-registry.js";
-import { RepoResolver } from "../repo-resolver.js";
+import { RepoResolver, type LspEnablement } from "../repo-resolver.js";
+import { WorktreeIdentityCache } from "../worktree-identity.js";
 
 type HookPayload = {
   cwd?: string;
@@ -25,14 +26,28 @@ try {
   const registry = new AliasRegistry();
   await registry.reloadIfChanged();
   const resolver = new RepoResolver(registry);
-  const lsp = await resolver.resolveEnablement(cwd);
+  const identities = new WorktreeIdentityCache();
+  const [lsp, identity] = await Promise.all([
+    resolver.resolveEnablement(cwd),
+    identities.resolve(cwd)
+  ]);
   if (!lsp.enabled || !looksJavaSemantic(prompt)) {
     writeContinue();
   } else {
-    writeAdvice(`JAVA_LSP_ADVISOR: 当前路径已启用 codex-java-lsp (${lsp.matchedBy})。这是已配置项目，不能只报告 LSP server 未启动。先调用 java_status({repoRoot:"${lsp.effectiveRepoRoot}",start:false}) 校验 repoRoot；若返回 started=false，必须立即调用 java_status({repoRoot:"${lsp.effectiveRepoRoot}",start:true}) 启动 LSP server；随后优先用 java_impact 获取影响面。java_impact 默认 semanticPolicy=auto，只对 service 锚点打 JDT；需要实现类或引用时传 semanticPolicy=required，或改用 java_symbol。`);
+    writeAdvice(advisorMessage(lsp, identity.isLinkedWorktree));
   }
 } catch {
   writeContinue();
+}
+
+function advisorMessage(lsp: LspEnablement, linkedWorktree: boolean): string {
+  const root = lsp.effectiveRepoRoot;
+  const impact =
+    "随后优先用 java_impact 获取影响面。java_impact 默认 semanticPolicy=auto，只对 service 锚点打 JDT；需要实现类或引用时传 semanticPolicy=required，或改用 java_symbol。";
+  if (linkedWorktree) {
+    return `JAVA_LSP_ADVISOR: 当前路径已启用 codex-java-lsp (${lsp.matchedBy})，这是 Git worktree。先调用 java_status({repoRoot:"${root}",start:false}) 校验 repoRoot。不要预启 JDT；符号级查询再调 java_symbol 或 java_diagnostics（按需启动）。${impact}`;
+  }
+  return `JAVA_LSP_ADVISOR: 当前路径已启用 codex-java-lsp (${lsp.matchedBy})。这是已配置项目，不能只报告 LSP server 未启动。先调用 java_status({repoRoot:"${root}",start:false}) 校验 repoRoot；若返回 started=false，必须立即调用 java_status({repoRoot:"${root}",start:true}) 启动 LSP server；${impact}`;
 }
 
 function readPayload(): HookPayload {

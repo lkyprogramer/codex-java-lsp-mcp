@@ -521,10 +521,34 @@ W1（半小时，独立可先行）
 
 **对照原始痛点**：1.9 GiB 常驻活内存 + 4–5 GiB 失控峰值 → 现在 33 MiB 活内存 + 1.36 GiB 封顶呼吸值。活内存缩了 98%，可见值缩了 30% 且有界。
 
-**§9.4 清单终局**：D3-idle PASS（热 177/191ms、冷 6.5s/2.7s、全零 isError）；D1 按上述判据 PASS；identity 2-run content delta 0 PASS；D4 retry 63ms PASS。**全绿——允许合 main + 生产切流。** 合并后按 §9.6 执行切流后债务。
+**§9.4 清单终局**：D3-idle PASS（热 177/191ms、冷 6.5s/2.7s、全零 isError）；D1 按上述判据 PASS；identity 2-run content delta 0 PASS；D4 retry 63ms PASS。**全绿——允许合 main + 生产切流。** 合并后按 §9.7 执行切流后债务。
 
-### 9.6 切流后债务清单（非阻塞，按序执行）
+### 9.6（R4，2026-08-27 下午）「切流后内存怎么还这么大」裁定：那是 JDT 的账，且旧版一分不少
 
+用户切流后观察到 ~1.4 GiB ×2 的大进程，怀疑不如旧版。核查结论：**那两个进程是 JDT LS（无头 Eclipse，lishu-v2 主仓 + worktree 各一个），不是我们优化的 JavaIndex**。且逐项对比旧 main（`48e665ba`，切流合并 `e48a253` 的第一父）后确认，**JDT 的内存账新旧版本完全相同**：
+
+| JDT 行为 | 旧 main | 新 main | 结论 |
+| --- | --- | --- | --- |
+| `-Xms` | 未设置 → 吃 Homebrew jdtls.py 硬编码 **-Xms1G** | 同（`JDTLS_XMS=256m` 修复在 HEAD `1c97ae0` 尚未上线） | 启动即 1 GiB 地板，旧版就有 |
+| `-Xmx` 分层 | 1536m/2g/3g（resource-defaults） | 完全一致 | 同 |
+| 并发上限 / idle TTL | 3 个 / 45 min | 完全一致 | 同 |
+| `java_status(start:true)` 启动语义 | 有，同 schema | 有 | 同 |
+| `java_impact` auto 是否启动 JDT | 不启动（只 warm 已启 session） | 不启动（`semantic.ts:392` 要求 `status.started`） | 同 |
+
+**「以前为什么没问题」的真实答案**：JDT 1.4 GiB/session 旧版一直存在；变的是**使用模式**——worktree 并行开发普及后，主仓 + 每个 worktree 各自是独立 repo → 各起一个 JDT（hook 里 `java_status(start:true)` 每个会话开场即拉起），2 个 session 仅 `-Xms` 地板就提交 2 GiB。加上这几天持续盯 Activity Monitor 的观察偏差。本计划优化的 JavaIndex 账已兑现（daemon footprint 1.3 GiB 封顶、活内存 33 MiB、0 OOM）；JDT 是另一本账，从未在本计划范围内。
+
+**J 轨处置（新增，按序执行）**：
+
+- **J1（立即部署）**：上线 HEAD 已有的 `-Xms256m` 覆盖（`jdtls-lsp-io.ts:793`）+ `1c97ae0`（教 agent impact auto 何时跳过 JDT）。消灭每 session 1 GiB 启动地板；import 后涨到工作集大小是正常的，但不再有硬地板。
+- **J2（最高杠杆，配置侧）**：改 hook 策略——worktree 会话不再 `java_status(start:true)` 预启 JDT（至多主仓保留），JDT 回归「`java_symbol`/`java_references`/`java_diagnostics` 用到才启动」。代价：首次符号级调用等一次 import；JavaIndex 工具（impact/search/read）完全不受影响。
+- **J3**：JDT idle TTL 从 45 min 降到 10–15 min（`JAVA_LSP_IDLE_TTL_MS`，LaunchAgent 层配置即可，不改代码默认）。burst 工作流下符号级功能用完尽快归还 1.x GiB。
+- **J4（可选，evidence-first）**：worktree JDT 策略卡——若 J1–J3 后 worktree 双 JDT 仍是常态痛点，再评估「worktree 默认禁 JDT（符号级降级 JavaIndex 近似）」或「worktree 专用短 TTL」。不做 session 共享（Eclipse workspace 模型不支持，硬禁令级复杂度）。
+
+**预期稳态**：JavaIndex daemon ~1.3 GiB footprint（33 MiB 活内存）+ JDT 仅在使用符号级功能的窗口内存在（256m 起步、用完 10–15 min 归还）。
+
+### 9.7 切流后债务清单（非阻塞，按序执行）
+
+- **J1–J3（§9.6，优先）**：部署 Xms256m + `1c97ae0`；hook 改按需启动；JDT idle TTL 降 10–15 min。
 - 24h 遥测复核（`impact-telemetry.jsonl`：toolFail 率、deadlineExceeded 率、P95），**附 footprint 采样 ≥4 点/天（§9.5 看护条款）**。
 - W2：预热 OPEN 窗口 healthz 停顿归因（证据：`d1-fast-idle-soak.json` t=9–25）。
 - D8 一次性仪器化：live lishuedu hydrate 过程按块采样 heap 增量，验证 ≤ 200 MiB 设计值。

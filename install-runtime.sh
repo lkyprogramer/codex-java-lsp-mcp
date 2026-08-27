@@ -668,6 +668,21 @@ restore_previous_managed_configuration() {
   fi
 }
 
+inherit_operator_idle_ttl() {
+  if [[ -n "${JAVA_LSP_IDLE_TTL_MS:-}" ]]; then
+    return
+  fi
+  if [[ ! -f "$STATE_DIR/daemon.env" ]]; then
+    return
+  fi
+  local previous
+  previous="$(bash -c 'source "$1"; printf "%s" "${JAVA_LSP_IDLE_TTL_MS:-}"' _ "$STATE_DIR/daemon.env" || true)"
+  if [[ -n "$previous" ]]; then
+    JAVA_LSP_IDLE_TTL_MS="$previous"
+    export JAVA_LSP_IDLE_TTL_MS
+  fi
+}
+
 write_state() {
   local staged="$STATE_DIR/daemon.env.next.$$"
   (
@@ -681,6 +696,9 @@ write_state() {
       printf 'JAVA_LSP_CACHE_BASE=%q\n' "$JAVA_LSP_CACHE_BASE"
       printf 'JAVA_LSP_OWNERSHIP_BASE=%q\n' "$JAVA_LSP_OWNERSHIP_BASE"
       printf 'NODE_BIN=%q\n' "$NODE_BIN"
+      if [[ -n "${JAVA_LSP_IDLE_TTL_MS:-}" ]]; then
+        printf 'JAVA_LSP_IDLE_TTL_MS=%q\n' "$JAVA_LSP_IDLE_TTL_MS"
+      fi
       if (( ${#PROJECT_JDK_ENV[@]} > 0 )); then
         local entry
         for entry in "${PROJECT_JDK_ENV[@]}"; do
@@ -948,6 +966,7 @@ copy_release
 run_candidate_smoke
 collect_project_jdk_env
 backup_managed_configuration
+inherit_operator_idle_ttl
 current_switched="false"
 if ! write_state; then restore_before_daemon_restart "daemon state update" "$current_switched"; fi
 if ! write_launch_agent; then restore_before_daemon_restart "LaunchAgent update" "$current_switched"; fi

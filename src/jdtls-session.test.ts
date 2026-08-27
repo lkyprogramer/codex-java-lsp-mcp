@@ -9,6 +9,7 @@ import {
   filterGeneratedCodeDiagnostics,
   lifecycleGateFromRestartBackoffStatus
 } from "./jdtls-session.js";
+import { JDTLS_XMS, jvmArgs } from "./jdtls-lsp-io.js";
 import type { SemanticCacheKey } from "./semantic-gateway.js";
 import { JavaIntelligenceError } from "./runtime/intelligence-error.js";
 import { DeadlineBudget } from "./runtime/deadline-budget.js";
@@ -45,6 +46,22 @@ const lombokStatus: GeneratedCodeStatus = {
   },
   generatedCodeSemantics: "ok"
 };
+
+test("jvmArgs overrides Homebrew -Xms1G with 256m and keeps Xmx", () => {
+  const args = jvmArgs({
+    ...lombokStatus,
+    lombok: { ...lombokStatus.lombok, agentEnabled: false }
+  });
+  assert.equal(JDTLS_XMS, "256m");
+  assert.equal(args[0], "--jvm-arg=-Xms256m");
+  assert.match(args[1] ?? "", /^--jvm-arg=-Xmx/);
+  const withAgent = jvmArgs({
+    ...lombokStatus,
+    lombok: { ...lombokStatus.lombok, jar: "/tmp/lombok.jar" }
+  });
+  assert.equal(withAgent[0], "--jvm-arg=-Xms256m");
+  assert.equal(withAgent.at(-1), "--jvm-arg=-javaagent:/tmp/lombok.jar");
+});
 
 test("filters only Lombok generated log unresolved diagnostics", () => {
   const source = [

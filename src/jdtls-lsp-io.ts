@@ -789,8 +789,14 @@ export function buildJdtlsEnv(runtimeJavaHome?: string): NodeJS.ProcessEnv {
   };
 }
 
+/** Overrides Homebrew jdtls.py's hardcoded `-Xms1G`. Last `-Xms` on the Java command line wins. */
+export const JDTLS_XMS = "256m";
+
 export function jvmArgs(generatedCode: GeneratedCodeStatus): string[] {
-  const args = [`--jvm-arg=-Xmx${process.env.JAVA_LSP_JDTLS_XMX || resourceDefaults().jdtlsXmx}`];
+  const args = [
+    `--jvm-arg=-Xms${JDTLS_XMS}`,
+    `--jvm-arg=-Xmx${process.env.JAVA_LSP_JDTLS_XMX || resourceDefaults().jdtlsXmx}`
+  ];
   if (generatedCode.lombok.agentEnabled && generatedCode.lombok.jar) {
     args.push(`--jvm-arg=-javaagent:${generatedCode.lombok.jar}`);
   }
