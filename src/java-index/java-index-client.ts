@@ -171,7 +171,8 @@ export class JavaIndexClient {
   constructor(
     private readonly repoRoot: string,
     private readonly cacheDir: string,
-    private readonly createWorker: () => WorkerLike = defaultWorkerFactory
+    private readonly createWorker: () => WorkerLike = defaultWorkerFactory,
+    private readonly rpcRootId?: string
   ) {}
 
   async open(
@@ -706,9 +707,12 @@ export class JavaIndexClient {
         return operation;
       }
     }
-    const envelope = requestOptions.telemetry
-      ? { ...request, id, telemetry: true as const }
-      : { ...request, id };
+    const envelope = {
+      ...request,
+      id,
+      ...(this.rpcRootId ? { rootId: this.rpcRootId } : {}),
+      ...(requestOptions.telemetry ? { telemetry: true as const } : {})
+    };
     this.safeTelemetry(() => requestOptions.telemetry?.requestStarted({
       operation: request.type,
       inputJsonBytes: jsonBytes(envelope)

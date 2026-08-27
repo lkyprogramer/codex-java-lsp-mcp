@@ -76,6 +76,7 @@ import {
 } from "./worker-protocol.js";
 import { handleQueryCommand } from "./java-index-worker-query.js";
 import { handleMybatisCommand } from "./java-index-worker-mybatis.js";
+import { SharedFactsPool } from "./shared-facts-pool.js";
 
 type IndexWorkerPort = {
   postMessage(value: unknown): void;
@@ -175,7 +176,8 @@ let worktreeSeedStatus: WorktreeSeedStatus | undefined;
 // created after validation) but parses only paths absent from this set; the
 // final batch re-link still revisits every discovered fact without AST work.
 let seededReconcilePlan: { reusedPaths: Set<string> } | undefined;
-const coverage = new CoverageTracker();
+let coverage = new CoverageTracker();
+const familyFactsPool = new SharedFactsPool();
 let resourceCoverage: MyBatisResourceCoverage[] = [];
 // A single unreadable/unparsable file must not fail the whole REFRESH batch
 // (its previous cached state, if any, is left untouched), but a silently
@@ -184,6 +186,7 @@ let resourceCoverage: MyBatisResourceCoverage[] = [];
 let lastRefreshError: string | undefined;
 
 type BackgroundSweep = {
+  rootId?: string;
   generation: number;
   remaining: DiscoveredJavaFile[];
   /** At most one root, set only by the primary A1 ACTIVE_ANCHOR request. */
@@ -250,10 +253,199 @@ let ownSnapshotVerificationPromise: Promise<void> = Promise.resolve();
 let queuedReconcileAfterSnapshotVerification: number | undefined;
 
 type ForegroundQueueEntry = {
+  rootId: string;
   request: JavaIndexRequest;
   enqueuedAtMs: number;
   queueDepthAtEnqueue: number;
 };
+
+type WorkerRootSession = {
+  status: JavaIndexStatus;
+  repoRoot: string;
+  resolvedRepoRoot: string;
+  backend: JavaParserBackend | undefined;
+  cache: ParseTreeCache | undefined;
+  store: JavaIndexStore | undefined;
+  entitySearch: EntitySearchIndex;
+  entitySearchSyncedRevision: number;
+  knowledgeGraph: KnowledgeGraphStore;
+  knowledgeBuilder: KnowledgeGraphBuilder;
+  graphSyncedRevision: number;
+  indexFactsRevision: number;
+  layout: LayoutContext | undefined;
+  leaseStore: CrossProcessLeaseStore;
+  worktreeIdentity: WorktreeIdentity | undefined;
+  worktreeSeedStatus: WorktreeSeedStatus | undefined;
+  seededReconcilePlan: { reusedPaths: Set<string> } | undefined;
+  coverage: CoverageTracker;
+  resourceCoverage: MyBatisResourceCoverage[];
+  lastRefreshError: string | undefined;
+  backgroundSweep: BackgroundSweep | undefined;
+  backgroundLoopPromise: Promise<void>;
+  closing: boolean;
+  snapshotPath: string | undefined;
+  pendingSnapshotView: SnapshotV4View | undefined;
+  snapshotFactsHydrated: boolean;
+  factsHydrateInFlight: Promise<void> | undefined;
+  hibernated: boolean;
+  hibernateIdentity: SnapshotIdentity | undefined;
+  hibernatedStatusCounts: { files: number; types: number; methods: number; edges: number } | undefined;
+  lastColdBuildMetrics: { rssPeakBytes: number; parentIncrementBytes: number } | undefined;
+  coldBuildAttempted: boolean;
+  snapshotDirtyRevision: number;
+  snapshotDurableRevision: number;
+  lastDurableSnapshotIdentity: { durableGeneration: number; durableManifestFingerprint: string } | undefined;
+  snapshotFlushTimer: NodeJS.Timeout | undefined;
+  snapshotFlushPromise: Promise<void>;
+  snapshotFlushTail: Promise<void>;
+  snapshotFlushInProgress: boolean;
+  ownSnapshotVerificationPending: boolean;
+  ownSnapshotVerificationStale: boolean;
+  ownSnapshotVerificationPromise: Promise<void>;
+  queuedReconcileAfterSnapshotVerification: number | undefined;
+};
+
+const workerRoots = new Map<string, WorkerRootSession>();
+let activeRootId: string | undefined;
+
+function captureRootSession(): WorkerRootSession {
+  return {
+    status, repoRoot, resolvedRepoRoot, backend, cache, store,
+    entitySearch, entitySearchSyncedRevision, knowledgeGraph, knowledgeBuilder,
+    graphSyncedRevision, indexFactsRevision, layout, leaseStore, worktreeIdentity,
+    worktreeSeedStatus, seededReconcilePlan, coverage, resourceCoverage, lastRefreshError,
+    backgroundSweep, backgroundLoopPromise, closing, snapshotPath, pendingSnapshotView,
+    snapshotFactsHydrated, factsHydrateInFlight, hibernated, hibernateIdentity,
+    hibernatedStatusCounts, lastColdBuildMetrics, coldBuildAttempted,
+    snapshotDirtyRevision, snapshotDurableRevision, lastDurableSnapshotIdentity,
+    snapshotFlushTimer, snapshotFlushPromise, snapshotFlushTail, snapshotFlushInProgress,
+    ownSnapshotVerificationPending, ownSnapshotVerificationStale,
+    ownSnapshotVerificationPromise, queuedReconcileAfterSnapshotVerification
+  };
+}
+
+function restoreRootSession(session: WorkerRootSession): void {
+  status = session.status;
+  repoRoot = session.repoRoot;
+  resolvedRepoRoot = session.resolvedRepoRoot;
+  backend = session.backend;
+  cache = session.cache;
+  store = session.store;
+  entitySearch = session.entitySearch;
+  entitySearchSyncedRevision = session.entitySearchSyncedRevision;
+  knowledgeGraph = session.knowledgeGraph;
+  knowledgeBuilder = session.knowledgeBuilder;
+  graphSyncedRevision = session.graphSyncedRevision;
+  indexFactsRevision = session.indexFactsRevision;
+  layout = session.layout;
+  leaseStore = session.leaseStore;
+  worktreeIdentity = session.worktreeIdentity;
+  worktreeSeedStatus = session.worktreeSeedStatus;
+  seededReconcilePlan = session.seededReconcilePlan;
+  coverage = session.coverage;
+  resourceCoverage = session.resourceCoverage;
+  lastRefreshError = session.lastRefreshError;
+  backgroundSweep = session.backgroundSweep;
+  backgroundLoopPromise = session.backgroundLoopPromise;
+  closing = session.closing;
+  snapshotPath = session.snapshotPath;
+  pendingSnapshotView = session.pendingSnapshotView;
+  snapshotFactsHydrated = session.snapshotFactsHydrated;
+  factsHydrateInFlight = session.factsHydrateInFlight;
+  hibernated = session.hibernated;
+  hibernateIdentity = session.hibernateIdentity;
+  hibernatedStatusCounts = session.hibernatedStatusCounts;
+  lastColdBuildMetrics = session.lastColdBuildMetrics;
+  coldBuildAttempted = session.coldBuildAttempted;
+  snapshotDirtyRevision = session.snapshotDirtyRevision;
+  snapshotDurableRevision = session.snapshotDurableRevision;
+  lastDurableSnapshotIdentity = session.lastDurableSnapshotIdentity;
+  snapshotFlushTimer = session.snapshotFlushTimer;
+  snapshotFlushPromise = session.snapshotFlushPromise;
+  snapshotFlushTail = session.snapshotFlushTail;
+  snapshotFlushInProgress = session.snapshotFlushInProgress;
+  ownSnapshotVerificationPending = session.ownSnapshotVerificationPending;
+  ownSnapshotVerificationStale = session.ownSnapshotVerificationStale;
+  ownSnapshotVerificationPromise = session.ownSnapshotVerificationPromise;
+  queuedReconcileAfterSnapshotVerification = session.queuedReconcileAfterSnapshotVerification;
+}
+
+function rootIdOf(request: JavaIndexRequest): string {
+  if (request.rootId) return request.rootId;
+  if (request.type === "OPEN") return request.repoRoot;
+  return activeRootId ?? "default";
+}
+
+function emptyRootSession(): WorkerRootSession {
+  const graph = new KnowledgeGraphStore();
+  return {
+    status: {
+      state: "NEW",
+      indexedGeneration: 0,
+      files: 0,
+      types: 0,
+      methods: 0,
+      edges: 0,
+      snapshotBytes: 0,
+      snapshot: { state: "EMPTY" },
+      pendingForeground: 0,
+      pendingBackground: 0,
+      coverage: [],
+      resourceCoverage: []
+    },
+    repoRoot: "",
+    resolvedRepoRoot: "",
+    backend: undefined,
+    cache: undefined,
+    store: undefined,
+    entitySearch: new EntitySearchIndex(),
+    entitySearchSyncedRevision: -1,
+    knowledgeGraph: graph,
+    knowledgeBuilder: new KnowledgeGraphBuilder(graph),
+    graphSyncedRevision: -1,
+    indexFactsRevision: 0,
+    layout: undefined,
+    leaseStore: new NoopCrossProcessLeaseStore(),
+    worktreeIdentity: undefined,
+    worktreeSeedStatus: undefined,
+    seededReconcilePlan: undefined,
+    coverage: new CoverageTracker(),
+    resourceCoverage: [],
+    lastRefreshError: undefined,
+    backgroundSweep: undefined,
+    backgroundLoopPromise: Promise.resolve(),
+    closing: false,
+    snapshotPath: undefined,
+    pendingSnapshotView: undefined,
+    snapshotFactsHydrated: true,
+    factsHydrateInFlight: undefined,
+    hibernated: false,
+    hibernateIdentity: undefined,
+    hibernatedStatusCounts: undefined,
+    lastColdBuildMetrics: undefined,
+    coldBuildAttempted: false,
+    snapshotDirtyRevision: 0,
+    snapshotDurableRevision: 0,
+    lastDurableSnapshotIdentity: undefined,
+    snapshotFlushTimer: undefined,
+    snapshotFlushPromise: Promise.resolve(),
+    snapshotFlushTail: Promise.resolve(),
+    snapshotFlushInProgress: false,
+    ownSnapshotVerificationPending: false,
+    ownSnapshotVerificationStale: false,
+    ownSnapshotVerificationPromise: Promise.resolve(),
+    queuedReconcileAfterSnapshotVerification: undefined
+  };
+}
+
+function activateRoot(rootId: string, creating = false): void {
+  if (activeRootId === rootId) return;
+  if (activeRootId) workerRoots.set(activeRootId, captureRootSession());
+  const existing = workerRoots.get(rootId);
+  if (existing) restoreRootSession(existing);
+  else if (creating) restoreRootSession(emptyRootSession());
+  activeRootId = rootId;
+}
 const foregroundQueue: ForegroundQueueEntry[] = [];
 let drainingForeground = false;
 let runningBackground = false;
@@ -622,6 +814,7 @@ function currentStatus(overrides: Partial<JavaIndexStatus> = {}): JavaIndexStatu
       + (snapshotFlushInProgress ? 1 : 0)
       + (factsHydrateInFlight ? 1 : 0),
     factsHydrated: snapshotFactsHydrated && !hibernated,
+    heapUsedBytes: process.memoryUsage().heapUsed,
     ...(ownSnapshotVerificationPending ? { snapshotVerificationPending: true } : {}),
     ...(lastRefreshError ? { lastError: lastRefreshError } : {}),
     ...(worktreeSeedStatus ? { worktreeSeed: worktreeSeedStatus } : {}),
@@ -1819,6 +2012,7 @@ async function beginBackgroundSweep(generation: number): Promise<void> {
     return Boolean(store && store.filesByPath.size > 0 && store.filesByPath.has(relativePath));
   };
   backgroundSweep = {
+    rootId: activeRootId,
     generation,
     remaining: discovered.filter(file => !skipIndexed(file.relativePath)),
     priorityEpoch: 0,
@@ -1875,6 +2069,7 @@ async function beginBackgroundSweep(generation: number): Promise<void> {
 }
 
 async function processBackgroundChunk(sweep: BackgroundSweep): Promise<void> {
+  if (sweep.rootId) activateRoot(sweep.rootId);
   if (!sweep.leaseHandle) {
     try {
       sweep.leaseHandle = await leaseStore.acquireSweep(
@@ -2109,7 +2304,7 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         resolvedRepoRoot = await realpath(repoRoot).catch(() => path.resolve(repoRoot));
         backend = undefined;
         cache = new ParseTreeCache();
-        store = new JavaIndexStore();
+        store = new JavaIndexStore(familyFactsPool);
         entitySearch = new EntitySearchIndex();
         knowledgeGraph = new KnowledgeGraphStore();
         knowledgeBuilder = new KnowledgeGraphBuilder(knowledgeGraph);
@@ -2225,6 +2420,7 @@ async function handle(request: JavaIndexRequest): Promise<void> {
           await flushSnapshotNow().catch(() => undefined);
         }
         status = { ...status, state: "CLOSED" };
+        store?.disposeSharedFacts();
         respond({ id: request.id, ok: true, value: currentStatus() });
         return;
       }
@@ -2314,6 +2510,7 @@ async function drainForeground(): Promise<void> {
     while (foregroundQueue.length > 0) {
       const next = foregroundQueue.shift();
       if (next) {
+        activateRoot(next.rootId, next.request.type === "OPEN");
         const processingStartedAtMs = performance.now();
         activeForegroundTiming = {
           requestId: next.request.id,
@@ -2326,6 +2523,12 @@ async function drainForeground(): Promise<void> {
           await handle(next.request);
         } finally {
           activeForegroundTiming = undefined;
+          if (next.request.type === "CLOSE") {
+            workerRoots.delete(next.rootId);
+            if (activeRootId === next.rootId) activeRootId = undefined;
+          } else if (activeRootId) {
+            workerRoots.set(activeRootId, captureRootSession());
+          }
         }
       }
     }
@@ -2335,11 +2538,16 @@ async function drainForeground(): Promise<void> {
 }
 
 workerPort?.onMessage((request: JavaIndexRequest) => {
-  // Stop scheduling later background chunks as soon as CLOSE arrives, even
-  // if an older foreground request is still draining ahead of it. The active
-  // chunk/writer keeps its own reference and is joined at the safe boundary.
-  if (request.type === "CLOSE") closing = true;
+  const rootId = rootIdOf(request);
+  if (request.type === "CLOSE") {
+    if (activeRootId === rootId) closing = true;
+    else {
+      const session = workerRoots.get(rootId);
+      if (session) session.closing = true;
+    }
+  }
   foregroundQueue.push({
+    rootId,
     request,
     enqueuedAtMs: performance.now(),
     queueDepthAtEnqueue: foregroundQueue.length + (drainingForeground ? 1 : 0)

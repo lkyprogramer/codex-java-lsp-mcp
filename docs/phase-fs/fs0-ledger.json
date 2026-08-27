@@ -1,0 +1,59 @@
+{
+  "sampledAt": "2026-08-27T14:24:16.997Z",
+  "familyOverlapRatio": 0.986187,
+  "pairCount": 10,
+  "sources": [
+    {
+      "repoHash": "1c6269869bc1",
+      "repoRoot": "/Users/luo/Documents/program/lishu-v2",
+      "familyHash": "97ec2e32dd8a",
+      "snapshotPath": "/Users/luo/Library/Caches/codex-java-lsp/1c6269869bc1/java-index-snapshot.json.gz",
+      "files": 2114
+    },
+    {
+      "repoHash": "467c85a9e593",
+      "repoRoot": "/Users/luo/.codex/worktrees/a7a5/lishu-v2",
+      "familyHash": "97ec2e32dd8a",
+      "snapshotPath": "/Users/luo/Library/Caches/codex-java-lsp/467c85a9e593/java-index-snapshot.json.gz",
+      "files": 2114
+    },
+    {
+      "repoHash": "a6335683caad",
+      "repoRoot": "/Users/luo/.codex/worktrees/d10f/lishu-v2",
+      "familyHash": "97ec2e32dd8a",
+      "snapshotPath": "/Users/luo/Library/Caches/codex-java-lsp/a6335683caad/java-index-snapshot.json.gz",
+      "files": 2114
+    },
+    {
+      "repoHash": "dc2fdcf48ff6",
+      "repoRoot": "/Users/luo/.codex/worktrees/0c78/lishu-v2",
+      "familyHash": "97ec2e32dd8a",
+      "snapshotPath": "/Users/luo/Library/Caches/codex-java-lsp/dc2fdcf48ff6/java-index-snapshot.json.gz",
+      "files": 2120
+    },
+    {
+      "repoHash": "fe1151feff0e",
+      "repoRoot": "/Users/luo/.codex/worktrees/ee80/lishu-v2",
+      "familyHash": "97ec2e32dd8a",
+      "snapshotPath": "/Users/luo/Library/Caches/codex-java-lsp/fe1151feff0e/java-index-snapshot.json.gz",
+      "files": 2114
+    }
+  ],
+  "workerFootprintMb": 641,
+  "workerHeapMb": 641,
+  "workers": [
+    {
+      "pid": 9490,
+      "footprintMb": 729
+    },
+    {
+      "pid": 75245,
+      "footprintMb": 483
+    },
+    {
+      "pid": 75397,
+      "footprintMb": 710
+    }
+  ],
+  "workerHeapSource": "phys_footprint_mean_of_live_index_workers"
+}

@@ -5,6 +5,7 @@ import { EdgeColumns } from "./columnar/edge-columns.js";
 import { FileColumns, FileIdMap } from "./columnar/file-columns.js";
 import { MethodColumns } from "./columnar/method-columns.js";
 import { internField, internFile, internFileBundle, internMethod, internType } from "./columnar/facts-view.js";
+import type { SharedFactsPool } from "./shared-facts-pool.js";
 import type {
   AnchorFacts,
   IndexedReference,
@@ -116,6 +117,9 @@ function validateBundleIds(bundle: JavaFileBundle): void {
 // method/edge id, plus reverse indexes so every Step 4 query is a map
 // lookup (bounded by result size), never a scan over every file or edge.
 export class JavaIndexStore {
+  constructor(private readonly factsPool?: SharedFactsPool) {}
+
+  private readonly installedBundles = new Map<string, JavaFileBundle>();
   private readonly edgeColumns = new EdgeColumns();
   private readonly fileColumns = new FileColumns(this.edgeColumns.strings, this.edgeColumns.ranges);
   readonly filesByPath = new FileIdMap(this.fileColumns);
@@ -209,31 +213,32 @@ export class JavaIndexStore {
    */
   replaceFile(bundle: JavaFileBundle): string[] {
     validateBundleIds(bundle);
-    internFileBundle(this.edgeColumns.strings, this.edgeColumns.ranges, bundle);
     const relativePath = bundle.file.relativePath;
-    const nextNodeIds = bundleNodeIds(bundle);
+    const previous = this.installedBundles.get(relativePath);
+    const installed = this.internOrShare(bundle, previous);
+    const nextNodeIds = bundleNodeIds(installed);
     const retainedIncoming = new Map<string, Set<string>>();
     for (const nodeId of nextNodeIds) {
       const inbound = this.inEdgeIdsByNode.get(nodeId);
       if (inbound) retainedIncoming.set(nodeId, new Set(inbound));
     }
     const dependents = this.dependentFilesForOwnedNodes(relativePath, nextNodeIds);
-    this.removeFileInternal(relativePath);
+    this.removeFileInternal(relativePath, false);
 
-    this.fileColumns.add(bundle.file);
+    this.fileColumns.add(installed.file);
 
     const ownedNodeIds = new Set<string>();
-    for (const type of bundle.types) {
+    for (const type of installed.types) {
       this.typesById.set(type.typeId, type);
       if (type.fqn) this.typeIdByFqn.set(type.fqn, type.typeId);
       addToSetMap(this.typeIdsBySimpleName, type.simpleName, type.typeId);
       ownedNodeIds.add(type.typeId);
     }
-    for (const field of bundle.fields) {
+    for (const field of installed.fields) {
       this.fieldsById.set(field.fieldId, field);
       ownedNodeIds.add(field.fieldId);
     }
-    for (const method of bundle.methods) {
+    for (const method of installed.methods) {
       this.methodColumns.add(method);
       addToSetMap(this.methodIdsByOwnerAndName, `${method.ownerTypeId}#${method.name}`, method.methodId);
       ownedNodeIds.add(method.methodId);
@@ -245,7 +250,8 @@ export class JavaIndexStore {
 
     const ownedEdgeIds = new Set<string>();
     const strings = this.edgeColumns.strings;
-    for (const edge of bundle.edges) {
+    this.installedBundles.set(relativePath, installed);
+    for (const edge of installed.edges) {
       const edgeId = strings.interned(edge.edgeId);
       this.edgeColumns.add(edge);
       addToSetMap(this.outEdgeIdsByNode, strings.interned(edge.fromId), edgeId);
@@ -764,7 +770,35 @@ export class JavaIndexStore {
     return results.slice(0, limit);
   }
 
-  private removeFileInternal(relativePath: string): void {
+  installedBundle(relativePath: string): JavaFileBundle | undefined {
+    return this.installedBundles.get(relativePath);
+  }
+
+  disposeSharedFacts(): void {
+    for (const bundle of this.installedBundles.values()) {
+      this.factsPool?.release(bundle.file.contentHash);
+    }
+    this.installedBundles.clear();
+  }
+
+  private internOrShare(bundle: JavaFileBundle, previous: JavaFileBundle | undefined): JavaFileBundle {
+    // contentHash keys file bytes, not the derived edge set. REFRESH installs
+    // `{ ...resolved, edges: [] }` then `withEdges` under the same hash.
+    if (previous) this.factsPool?.release(previous.file.contentHash);
+    if (this.factsPool) {
+      return this.factsPool.acquire(bundle.file.contentHash, () => {
+        internFileBundle(this.edgeColumns.strings, this.edgeColumns.ranges, bundle);
+        return bundle;
+      });
+    }
+    internFileBundle(this.edgeColumns.strings, this.edgeColumns.ranges, bundle);
+    return bundle;
+  }
+
+  private removeFileInternal(relativePath: string, releasePool = true): void {
+    const previous = this.installedBundles.get(relativePath);
+    this.installedBundles.delete(relativePath);
+    if (releasePool && previous) this.factsPool?.release(previous.file.contentHash);
     this.fileColumns.remove(relativePath);
 
     for (const nodeId of this.fileOwnedNodeIds.get(relativePath) ?? []) {

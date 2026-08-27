@@ -13,6 +13,7 @@ import {
 } from "./cross-process-lease.js";
 import { JdtlsSession, type JdtlsLifecycleState } from "./jdtls-session.js";
 import { isJavaIndexPrewarmReady, JavaIndexClient } from "./java-index/java-index-client.js";
+import { familyWorkerFactory } from "./java-index/family-worker-pool.js";
 import type { JavaIndexStatus } from "./java-index/index-types.js";
 import { RouterJavaIndex } from "./java-index/router-java-index.js";
 import { LayoutManager, type LayoutSource } from "./layout-manager.js";
@@ -21,6 +22,7 @@ import { GenerationClock, type RepoChangeBatch } from "./repo-generation.js";
 import { repoCacheBase, repoCacheRoot } from "./repo-layout.js";
 import { RepoResolver, type RepoSelector, type ResolvedRepo } from "./repo-resolver.js";
 import {
+  DEFAULT_COLD_HIBERNATE_TTL_MS,
   DEFAULT_FREEMEM_PRESSURE_BYTES,
   DEFAULT_INDEX_IDLE_TTL_MS,
   nonNegativeInteger,
@@ -137,6 +139,7 @@ type RuntimeManagerOptions = {
   maxActiveRepos: number;
   idleTtlMs: number;
   hibernateTtlMs: number;
+  coldHibernateTtlMs: number;
   indexIdleTtlMs: number;
   hotIndexAliases: ReadonlySet<string>;
   freememPressureBytes: number;
@@ -150,6 +153,7 @@ type RuntimeManagerOptions = {
 export class RepoRuntimeManager {
   private readonly runtimes = new Map<string, RuntimeEntry>();
   private readonly creating = new Map<string, Promise<RuntimeEntry>>();
+  private readonly familyGates = new Map<string, Promise<void>>();
   private readonly slotWaiters: SlotWaiter[] = [];
   private servicingWaiters = false;
   private readonly options: RuntimeManagerOptions;
@@ -185,7 +189,11 @@ export class RepoRuntimeManager {
       requestTimeoutMs: positiveInteger(process.env.JAVA_LSP_REQUEST_TIMEOUT_MS, 120000),
       maxRetainedStoppedRepos: positiveInteger(process.env.JAVA_LSP_MAX_RETAINED_STOPPED_REPOS, 2),
       transportMode: "stdio",
-      ...options
+      ...options,
+      coldHibernateTtlMs: options.coldHibernateTtlMs
+        ?? (typeof options.hibernateTtlMs === "number"
+          ? options.hibernateTtlMs
+          : nonNegativeInteger(process.env.JAVA_LSP_COLD_HIBERNATE_TTL_MS, DEFAULT_COLD_HIBERNATE_TTL_MS))
     };
     this.startPressureWatch();
     this.runtimeFactory = runtimeFactory ?? ((resolved, leases) => createRuntime(resolved, leases, this.options.transportMode));
@@ -761,18 +769,29 @@ export class RepoRuntimeManager {
     }
     const pending = this.creating.get(resolved.repoRoot);
     if (pending) return budget ? budget.race("runtime.create", pending) : pending;
-    // Runtime construction is shared by all concurrent callers. Its worker
-    // operations use the manager hard cap; each caller races the same promise
-    // with its own request deadline so a short caller neither hangs nor
-    // cancels creation needed by a longer caller.
-    const operationBudget = DeadlineBudget.fromTimeout(this.options.requestTimeoutMs);
-    const operation = this.createEntry(resolved, operationBudget).finally(() => {
-      if (this.creating.get(resolved.repoRoot) === operation) {
-        this.creating.delete(resolved.repoRoot);
-      }
+    const family = this.familyKey(resolved.worktree, resolved.repoHash);
+    const started = this.startFamilyCreate(family, resolved);
+    this.creating.set(resolved.repoRoot, started);
+    started.finally(() => {
+      if (this.creating.get(resolved.repoRoot) === started) this.creating.delete(resolved.repoRoot);
+    }).catch(() => undefined);
+    return budget ? budget.race("runtime.create", started) : started;
+  }
+
+  private async startFamilyCreate(family: string, resolved: ResolvedRepo): Promise<RuntimeEntry> {
+    const prev = this.familyGates.get(family) ?? Promise.resolve();
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => {
+      release = resolve;
     });
-    this.creating.set(resolved.repoRoot, operation);
-    return budget ? budget.race("runtime.create", operation) : operation;
+    this.familyGates.set(family, prev.then(() => gate));
+    await prev;
+    try {
+      await this.evictOldestNonHotFamilyPeer(resolved);
+      return await this.createEntry(resolved, DeadlineBudget.fromTimeout(this.options.requestTimeoutMs));
+    } finally {
+      release();
+    }
   }
 
   private async createEntry(resolved: ResolvedRepo, budget?: DeadlineBudget): Promise<RuntimeEntry> {
@@ -1099,6 +1118,25 @@ export class RepoRuntimeManager {
     return entry.context.aliases.some(alias => this.options.hotIndexAliases.has(alias));
   }
 
+  private familyKey(worktree: { familyHash?: string; repoHash: string } | undefined, repoHash: string): string {
+    return worktree?.familyHash ?? worktree?.repoHash ?? repoHash;
+  }
+
+  /** Same Git family: at most one non-hot index worker. LRU peer is recycled first. */
+  private async evictOldestNonHotFamilyPeer(resolved: ResolvedRepo): Promise<void> {
+    const family = this.familyKey(resolved.worktree, resolved.repoHash);
+    const peers = [...this.runtimes.values()].filter(entry =>
+      entry.stoppedAt === undefined
+      && !entry.hibernated
+      && !this.isHotIndexEntry(entry)
+      && entry.context.repoRoot !== resolved.repoRoot
+      && this.familyKey(entry.context.worktree, entry.context.repoHash) === family
+    );
+    if (peers.length === 0) return;
+    const victim = peers.sort((left, right) => left.lastUsedAt - right.lastUsedAt)[0]!;
+    await this.hibernateEntry(victim);
+  }
+
   private clearIdleTimers(entry: RuntimeEntry): void {
     if (entry.idleTimer) {
       clearTimeout(entry.idleTimer);
@@ -1118,14 +1156,14 @@ export class RepoRuntimeManager {
     this.clearIdleTimers(entry);
     if (entry.refCount !== 0 || entry.stoppedAt !== undefined) return;
     const hotIndex = this.isHotIndexEntry(entry);
-    // Hot-set isolates stay resident (M2b). Hibernate now recycle()s the worker,
-    // so skipping only the index-idle timer would still destroy the isolate at T_hibernate.
-    if (this.options.hibernateTtlMs > 0 && !hotIndex) {
+    // Hot-set isolates stay resident (M2b). Non-hot (worktrees) recycle on the
+    // cold hibernate TTL (~60s), not the 5-minute hot-path leftover.
+    if (this.options.coldHibernateTtlMs > 0 && !hotIndex) {
       entry.hibernateTimer = setTimeout(() => {
         if (entry.refCount === 0 && entry.stoppedAt === undefined) {
           void this.hibernateEntry(entry);
         }
-      }, this.options.hibernateTtlMs);
+      }, this.options.coldHibernateTtlMs);
       entry.hibernateTimer.unref?.();
     }
     if (this.options.idleTtlMs > 0) {
@@ -1216,7 +1254,14 @@ function createRuntime(
     leaseStore: leases,
     worktree: resolved.worktree
   });
-  const javaIndexClient = new JavaIndexClient(resolved.repoRoot, repoCacheRoot(resolved.repoRoot));
+  const familyKey = resolved.worktree.familyHash ?? resolved.repoHash;
+  const rootId = resolved.repoHash;
+  const javaIndexClient = new JavaIndexClient(
+    resolved.repoRoot,
+    repoCacheRoot(resolved.repoRoot),
+    familyWorkerFactory(familyKey, rootId),
+    rootId
+  );
   const javaIndex = new RouterJavaIndex(resolved.repoRoot, javaIndexClient);
   const router = new AgentRouter(resolved.repoRoot, session, javaIndex);
   return {

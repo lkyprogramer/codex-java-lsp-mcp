@@ -549,6 +549,7 @@ W1（半小时，独立可先行）
 ### 9.7 切流后债务清单（非阻塞，按序执行）
 
 - **J1–J3（§9.6，优先）**：部署 Xms256m + `1c97ae0`；hook 改按需启动；JDT idle TTL 降 10–15 min。
+- **FS 轨（2026-08-27 新开）**：worktree family 内存共享，见 `codex-java-lsp-mcp-worktree-family-memory-sharing-plan-2026-08-27.md`。每个 worktree 的 index worker 稳态 footprint 483–730 MiB 且互不共享，多 worktree 工作流不可接受；FS1 生命周期止血 + FS2 family 合并 worker + contentHash 结构共享。
 - 24h 遥测复核（`impact-telemetry.jsonl`：toolFail 率、deadlineExceeded 率、P95），**附 footprint 采样 ≥4 点/天（§9.5 看护条款）**。
 - W2：预热 OPEN 窗口 healthz 停顿归因（证据：`d1-fast-idle-soak.json` t=9–25）。
 - D8 一次性仪器化：live lishuedu hydrate 过程按块采样 heap 增量，验证 ≤ 200 MiB 设计值。

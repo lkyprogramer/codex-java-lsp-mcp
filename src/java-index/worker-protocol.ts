@@ -122,7 +122,7 @@ type JavaIndexRequestOperation =
   | { id: number; type: "CLOSE" };
 
 /** Optional request-local timing flag; absent keeps the legacy worker envelope byte-for-byte lean. */
-export type JavaIndexRequest = JavaIndexRequestOperation & { telemetry?: true };
+export type JavaIndexRequest = JavaIndexRequestOperation & { telemetry?: true; rootId?: string };
 
 export type JavaIndexCommand = JavaIndexRequestOperation extends infer Request
   ? Request extends { id: number }

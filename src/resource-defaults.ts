@@ -12,6 +12,8 @@ export type ResourceDefaults = {
 };
 
 export const DEFAULT_HIBERNATE_TTL_MS = 300000;
+/** Non-hot (worktree / cold pin) isolate recycle. Hot pins stay M2b-exempt. */
+export const DEFAULT_COLD_HIBERNATE_TTL_MS = 60_000;
 export const DEFAULT_FREEMEM_PRESSURE_BYTES = 2 * 1024 * 1024 * 1024;
 
 export function resourceDefaults(): ResourceDefaults {

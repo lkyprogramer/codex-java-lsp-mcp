@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  DEFAULT_COLD_HIBERNATE_TTL_MS,
   DEFAULT_FREEMEM_PRESSURE_BYTES,
   DEFAULT_HIBERNATE_TTL_MS,
   nonNegativeInteger,
@@ -14,6 +15,7 @@ test("hibernate TTL is 5 minutes on every machine class", () => {
   assert.equal(DEFAULT_HIBERNATE_TTL_MS, 300000);
   assert.equal(DEFAULT_FREEMEM_PRESSURE_BYTES, 2 * 1024 * 1024 * 1024);
   assert.ok(defaults.idleTtlMs >= defaults.hibernateTtlMs);
+  assert.equal(DEFAULT_COLD_HIBERNATE_TTL_MS, 60_000);
 });
 
 test("parsePrewarmHotSet defaults to lishuedu,lishu-v2 and ignores unknown aliases", () => {

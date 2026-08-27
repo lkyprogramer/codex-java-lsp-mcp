@@ -1692,6 +1692,84 @@ test("idle-close first query uses the 15s public budget", async () => {
   await manager.shutdownAll();
 });
 
+test("cold hibernate TTL recycles a non-hot isolate and exempts the hot pin", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const hotIndex = new RecordingJavaIndex(() => 0);
+  const coldIndex = new RecordingJavaIndex(() => 0);
+  const manager = new RepoRuntimeManager({
+    async resolve(selector: { repoRoot?: string }) {
+      const repoRoot = selector.repoRoot || "/repo";
+      const repoHash = repoRoot.replace(/\W/g, "");
+      const hot = repoRoot === "/hot";
+      return {
+        repoRoot,
+        repoHash,
+        rootSource: "explicit" as const,
+        aliases: hot ? ["lishuedu"] : [],
+        layoutProfile: "generic-java" as const,
+        lsp: { enabled: true, matchedBy: "direct-root" as const, configuredRoot: repoRoot, effectiveRepoRoot: repoRoot },
+        worktree: { repoRoot, repoHash, familyHash: "fam", isLinkedWorktree: !hot }
+      };
+    }
+  }, {
+    idleTtlMs: 100000,
+    hibernateTtlMs: 100000,
+    coldHibernateTtlMs: 25,
+    indexIdleTtlMs: 0,
+    hotIndexAliases: new Set(["lishuedu"]),
+    pressureIntervalMs: 0,
+    requestTimeoutMs: 5000
+  }, resolved => ({
+    ...fakeContext(resolved, sessions),
+    javaIndexClient: (resolved.repoRoot === "/hot" ? hotIndex : coldIndex) as never
+  }), fakeCoordination(), new NoopCrossProcessLeaseStore());
+
+  await manager.prewarmRepo({ repoRoot: "/hot" }, { hydrate: true });
+  await manager.prewarmRepo({ repoRoot: "/worktree" }, { hydrate: true });
+  await delay(80);
+  assert.ok(coldIndex.calls.includes("recycle"), "non-hot isolate recycles on cold hibernate TTL");
+  assert.equal(hotIndex.calls.includes("recycle"), false, "hot-pin isolate stays resident");
+  await manager.shutdownAll();
+});
+
+test("opening a second non-hot root in the same family recycles the LRU peer first", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const first = new RecordingJavaIndex(() => 0);
+  const second = new RecordingJavaIndex(() => 0);
+  const manager = new RepoRuntimeManager({
+    async resolve(selector: { repoRoot?: string }) {
+      const repoRoot = selector.repoRoot || "/repo";
+      const repoHash = repoRoot.replace(/\W/g, "");
+      return {
+        repoRoot,
+        repoHash,
+        rootSource: "explicit" as const,
+        aliases: [],
+        layoutProfile: "generic-java" as const,
+        lsp: { enabled: true, matchedBy: "direct-root" as const, configuredRoot: repoRoot, effectiveRepoRoot: repoRoot },
+        worktree: { repoRoot, repoHash, familyHash: "family-1", isLinkedWorktree: true }
+      };
+    }
+  }, {
+    idleTtlMs: 100000,
+    hibernateTtlMs: 100000,
+    coldHibernateTtlMs: 100000,
+    indexIdleTtlMs: 0,
+    hotIndexAliases: new Set(["lishuedu"]),
+    pressureIntervalMs: 0,
+    requestTimeoutMs: 5000
+  }, resolved => ({
+    ...fakeContext(resolved, sessions),
+    javaIndexClient: (resolved.repoRoot === "/wt-a" ? first : second) as never
+  }), fakeCoordination(), new NoopCrossProcessLeaseStore());
+
+  await manager.withContext({ repoRoot: "/wt-a" }, async () => undefined);
+  await manager.withContext({ repoRoot: "/wt-b" }, async () => undefined);
+  assert.ok(first.calls.includes("recycle"), "older non-hot family peer must recycle before the new worker opens");
+  assert.equal(second.calls.includes("recycle"), false, "the newly opened non-hot worker stays");
+  await manager.shutdownAll();
+});
+
 test("hibernate TTL unloads the index without tearing down JDT", async () => {
   const sessions = new Map<string, FakeSession>();
   const javaIndex = new RecordingJavaIndex(() => 0);
@@ -1986,6 +2064,7 @@ function fakeContext(
     aliases: resolved.aliases,
     layoutProfile: resolved.layoutProfile,
     lsp: resolved.lsp,
+    worktree: resolved.worktree,
     session: session as never,
     router: {
       clearRgCache() {},
