@@ -125,7 +125,11 @@ export class JavaIndexStore {
   private readonly overlayFiles = new Map<string, JavaFileFacts>();
   private readonly edgeColumns = new EdgeColumns();
   private readonly fileColumns = new FileColumns(this.edgeColumns.strings, this.edgeColumns.ranges);
-  readonly filesByPath = new FileIdMap(this.fileColumns, this.overlayFiles);
+  readonly filesByPath: FileIdMap = new FileIdMap(
+    this.fileColumns,
+    this.overlayFiles,
+    (): number => this.donor?.filesByPath.size ?? 0
+  );
   readonly typesById = new Map<string, JavaTypeFacts>();
   readonly typeIdByFqn = new Map<string, string>();
   readonly typeIdsBySimpleName = new Map<string, Set<string>>();
