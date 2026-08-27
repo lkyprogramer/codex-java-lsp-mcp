@@ -27,7 +27,6 @@ import {
   prioritizeJavaFilesForBackgroundSweep,
   readFileStable,
   resourceSourceRoot,
-  scanCurrentManifestStable,
   scanSnapshotManifestDiff,
   snapshotManifestEntries,
   type DiscoveredJavaFile
@@ -1773,25 +1772,22 @@ function startOwnSnapshotHydration(
  * negative-answer trust and is simply re-verified from scratch - like any
  * other not-yet-complete snapshot - the next time this repo is opened.
  */
-async function seedFromFamilyMemory(generation: number): Promise<{ attached: number; total: number }> {
-  if (!store || !layout) return { attached: 0, total: 0 };
+function seedFromFamilyMemory(generation: number): { attached: number; total: number } {
+  if (!store) return { attached: 0, total: 0 };
   for (const [rootId, session] of workerRoots) {
     if (rootId === activeRootId) continue;
-    session.store?.publishHydratedToPool();
+    const donor = session.store;
+    if (!donor || donor.filesByPath.size === 0 || donor.methodsById.size === 0) continue;
+    const attached = store.attachFromDonorStore(donor);
+    if (attached > 0) {
+      store.stampGeneration(
+        [...donor.filesByPath.values()].map(file => file.relativePath),
+        generation
+      );
+      return { attached, total: donor.filesByPath.size };
+    }
   }
-  if (familyFactsPool.size === 0) return { attached: 0, total: 0 };
-  const { entries } = await scanCurrentManifestStable(repoRoot, layout);
-  let attached = 0;
-  const attachedPaths: string[] = [];
-  for (const entry of entries) {
-    const bundle = familyFactsPool.peek(entry.contentHash);
-    if (!bundle) continue;
-    store.attachSharedBundle(bundle);
-    attached += 1;
-    attachedPaths.push(entry.relativePath);
-  }
-  if (attachedPaths.length > 0) store.stampGeneration(attachedPaths, generation);
-  return { attached, total: entries.length };
+  return { attached: 0, total: 0 };
 }
 
 async function attemptSiblingSeed(
@@ -2384,7 +2380,7 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         let ownSnapshotIdentity: SnapshotIdentity | undefined;
         const buildFingerprint = await computeBuildFingerprint(repoRoot, layout).catch(() => undefined);
         const ownSnapshotExists = await stat(snapshotPath).then(() => true).catch(() => false);
-        const familySeed = await seedFromFamilyMemory(openedGeneration);
+        const familySeed = seedFromFamilyMemory(openedGeneration);
         const familySeeded = familySeed.total > 0 && familySeed.attached >= Math.ceil(familySeed.total * 0.5);
         if (familySeeded) {
           snapshotFactsHydrated = true;

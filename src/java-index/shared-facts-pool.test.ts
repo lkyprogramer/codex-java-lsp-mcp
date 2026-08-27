@@ -108,6 +108,20 @@ test("two stores share contentHash facts and isolate a changed file", () => {
   assert.equal(pool.size, 0);
 });
 
+test("attachFromDonorStore resolves methods through the donor without a second intern", () => {
+  const pool = new SharedFactsPool();
+  const donor = new JavaIndexStore(pool);
+  const original = fileBundle("src/main/java/demo/A.java", "A", "hash-a");
+  donor.replaceFile(original);
+  const sibling = new JavaIndexStore(pool);
+  assert.equal(sibling.attachFromDonorStore(donor), 1);
+  const methodId = original.methods[0]!.methodId;
+  assert.equal(sibling.methodsById.get(methodId)?.name, "run");
+  assert.equal(sibling.typesById.get(original.types[0]!.typeId), donor.typesById.get(original.types[0]!.typeId));
+  donor.replaceFile(fileBundle("src/main/java/demo/A.java", "A", "hash-a-changed"));
+  assert.equal(sibling.typesById.get(original.types[0]!.typeId), original.types[0]);
+});
+
 test("sibling attachSharedBundle reuses methods without a second SoA intern", () => {
   const pool = new SharedFactsPool();
   const donor = new JavaIndexStore(pool);

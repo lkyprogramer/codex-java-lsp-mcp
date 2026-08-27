@@ -130,9 +130,11 @@ export class JavaIndexStore {
   private readonly methodColumns = new MethodColumns(this.edgeColumns.strings, this.edgeColumns.ranges);
   private readonly overlayMethods = new Map<string, JavaMethodFacts>();
   private readonly overlayEdges = new Map<string, StaticEdge>();
-  readonly methodsById = new MethodIdMap(this.methodColumns, this.overlayMethods);
+  private readonly methodRedirects = new Map<string, DonorRedirect>();
+  private readonly edgeRedirects = new Map<string, DonorRedirect>();
+  readonly methodsById = new MethodIdMap(this.methodColumns, this.overlayMethods, this.methodRedirects);
   readonly methodIdsByOwnerAndName = new Map<string, Set<string>>();
-  readonly edgesById = new EdgeIdMap(this.edgeColumns, this.overlayEdges);
+  readonly edgesById = new EdgeIdMap(this.edgeColumns, this.overlayEdges, this.edgeRedirects);
   readonly outEdgeIdsByNode = new Map<string, Set<string>>();
   readonly inEdgeIdsByNode = new Map<string, Set<string>>();
   readonly fileOwnedNodeIds = new Map<string, Set<string>>();
@@ -301,6 +303,58 @@ export class JavaIndexStore {
       ownedEdgeIds.add(edge.edgeId);
     }
     this.fileOwnedEdgeIds.set(relativePath, ownedEdgeIds);
+  }
+
+  /**
+   * Point this store at a sibling's interned facts without copying SoA rows.
+   * Methods/edges resolve through the donor until this root overlays a file.
+   */
+  attachFromDonorStore(donor: JavaIndexStore): number {
+    let attached = 0;
+    for (const file of donor.filesByPath.values()) {
+      this.fileColumns.add(file);
+      const nodes = new Set(donor.fileOwnedNodeIds.get(file.relativePath) ?? []);
+      this.fileOwnedNodeIds.set(file.relativePath, nodes);
+      for (const nodeId of nodes) {
+        const type = donor.typesById.get(nodeId);
+        if (type) {
+          this.typesById.set(nodeId, type);
+          if (type.fqn) this.typeIdByFqn.set(type.fqn, type.typeId);
+          addToSetMap(this.typeIdsBySimpleName, type.simpleName, type.typeId);
+          continue;
+        }
+        const field = donor.fieldsById.get(nodeId);
+        if (field) {
+          this.fieldsById.set(nodeId, field);
+          continue;
+        }
+        this.methodRedirects.set(nodeId, {
+          donor,
+          relativePath: file.relativePath,
+          contentHash: file.contentHash
+        });
+      }
+      const edgeIds = new Set(donor.fileOwnedEdgeIds.get(file.relativePath) ?? []);
+      this.fileOwnedEdgeIds.set(file.relativePath, edgeIds);
+      for (const edgeId of edgeIds) {
+        this.edgeRedirects.set(edgeId, {
+          donor,
+          relativePath: file.relativePath,
+          contentHash: file.contentHash
+        });
+      }
+      attached += 1;
+    }
+    for (const [key, ids] of donor.methodIdsByOwnerAndName) {
+      this.methodIdsByOwnerAndName.set(key, new Set(ids));
+    }
+    for (const [nodeId, ids] of donor.outEdgeIdsByNode) {
+      this.outEdgeIdsByNode.set(nodeId, new Set(ids));
+    }
+    for (const [nodeId, ids] of donor.inEdgeIdsByNode) {
+      this.inEdgeIdsByNode.set(nodeId, new Set(ids));
+    }
+    return attached;
   }
 
   /** After snapshot ingest, register reconstructed bundles so siblings can attach. */
@@ -690,8 +744,6 @@ export class JavaIndexStore {
     myBatisResources: readonly MyBatisMapperResourceFacts[];
   }): void {
     this.disposeSharedFacts();
-    this.overlayMethods.clear();
-    this.overlayEdges.clear();
     this.fileColumns.clear();
     this.typesById.clear();
     this.typeIdByFqn.clear();
@@ -838,6 +890,8 @@ export class JavaIndexStore {
     this.installedBundles.clear();
     this.overlayMethods.clear();
     this.overlayEdges.clear();
+    this.methodRedirects.clear();
+    this.edgeRedirects.clear();
   }
 
   private internOrShare(bundle: JavaFileBundle, previous: JavaFileBundle | undefined): JavaFileBundle {
@@ -876,6 +930,7 @@ export class JavaIndexStore {
       }
       const method = this.methodColumns.remove(nodeId) ?? this.overlayMethods.get(nodeId);
       this.overlayMethods.delete(nodeId);
+      this.methodRedirects.delete(nodeId);
       if (method) {
         removeFromSetMap(this.methodIdsByOwnerAndName, `${method.ownerTypeId}#${method.name}`, nodeId);
         this.inEdgeIdsByNode.delete(nodeId);
@@ -886,6 +941,7 @@ export class JavaIndexStore {
     for (const edgeId of this.fileOwnedEdgeIds.get(relativePath) ?? []) {
       const edge = this.edgeColumns.remove(edgeId) ?? this.overlayEdges.get(edgeId);
       this.overlayEdges.delete(edgeId);
+      this.edgeRedirects.delete(edgeId);
       if (!edge) continue;
       removeFromSetMap(this.outEdgeIdsByNode, edge.fromId, edgeId);
       removeFromSetMap(this.inEdgeIdsByNode, edge.toId, edgeId);
@@ -906,24 +962,51 @@ export class JavaIndexStore {
   }
 }
 
+type DonorRedirect = {
+  donor: {
+    file(relativePath: string): JavaFileFacts | undefined;
+    methodsById: { get(id: string): JavaMethodFacts | undefined };
+    edgesById: { get(id: string): StaticEdge | undefined };
+  };
+  relativePath: string;
+  contentHash: string;
+};
+
+function resolveRedirect<T>(
+  overlay: Map<string, T>,
+  redirects: Map<string, DonorRedirect>,
+  id: string,
+  read: (donor: DonorRedirect["donor"], id: string) => T | undefined
+): T | undefined {
+  const cached = overlay.get(id);
+  if (cached) return cached;
+  const redirect = redirects.get(id);
+  if (!redirect) return undefined;
+  if (redirect.donor.file(redirect.relativePath)?.contentHash !== redirect.contentHash) return undefined;
+  const value = read(redirect.donor, id);
+  if (value) overlay.set(id, value);
+  return value;
+}
+
 class EdgeIdMap {
   constructor(
     private readonly columns: EdgeColumns,
-    private readonly overlay: Map<string, StaticEdge> = new Map()
+    private readonly overlay: Map<string, StaticEdge> = new Map(),
+    private readonly redirects: Map<string, DonorRedirect> = new Map()
   ) {}
 
   get size(): number {
-    return this.columns.size + this.overlay.size;
+    return this.columns.size + this.overlay.size + this.redirects.size;
   }
 
   get(id: string): StaticEdge | undefined {
     const row = this.columns.rowOf(id);
     if (row !== undefined) return this.columns.materialize(row);
-    return this.overlay.get(id);
+    return resolveRedirect(this.overlay, this.redirects, id, (donor, edgeId) => donor.edgesById.get(edgeId));
   }
 
   has(id: string): boolean {
-    return this.columns.has(id) || this.overlay.has(id);
+    return this.columns.has(id) || this.overlay.has(id) || this.redirects.has(id);
   }
 
   values(): IterableIterator<StaticEdge> {
@@ -943,21 +1026,22 @@ class EdgeIdMap {
 class MethodIdMap {
   constructor(
     private readonly columns: MethodColumns,
-    private readonly overlay: Map<string, JavaMethodFacts> = new Map()
+    private readonly overlay: Map<string, JavaMethodFacts> = new Map(),
+    private readonly redirects: Map<string, DonorRedirect> = new Map()
   ) {}
 
   get size(): number {
-    return this.columns.size + this.overlay.size;
+    return this.columns.size + this.overlay.size + this.redirects.size;
   }
 
   get(id: string): JavaMethodFacts | undefined {
     const row = this.columns.rowOf(id);
     if (row !== undefined) return this.columns.materialize(row);
-    return this.overlay.get(id);
+    return resolveRedirect(this.overlay, this.redirects, id, (donor, methodId) => donor.methodsById.get(methodId));
   }
 
   has(id: string): boolean {
-    return this.columns.has(id) || this.overlay.has(id);
+    return this.columns.has(id) || this.overlay.has(id) || this.redirects.has(id);
   }
 
   values(): IterableIterator<JavaMethodFacts> {
