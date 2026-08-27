@@ -313,9 +313,9 @@ export class JavaIndexStore {
     let attached = 0;
     for (const file of donor.filesByPath.values()) {
       this.fileColumns.add(file);
-      const nodes = new Set(donor.fileOwnedNodeIds.get(file.relativePath) ?? []);
-      this.fileOwnedNodeIds.set(file.relativePath, nodes);
-      for (const nodeId of nodes) {
+      const nodes = donor.fileOwnedNodeIds.get(file.relativePath);
+      if (nodes) this.fileOwnedNodeIds.set(file.relativePath, nodes);
+      for (const nodeId of nodes ?? []) {
         const type = donor.typesById.get(nodeId);
         if (type) {
           this.typesById.set(nodeId, type);
@@ -334,9 +334,9 @@ export class JavaIndexStore {
           contentHash: file.contentHash
         });
       }
-      const edgeIds = new Set(donor.fileOwnedEdgeIds.get(file.relativePath) ?? []);
-      this.fileOwnedEdgeIds.set(file.relativePath, edgeIds);
-      for (const edgeId of edgeIds) {
+      const edgeIds = donor.fileOwnedEdgeIds.get(file.relativePath);
+      if (edgeIds) this.fileOwnedEdgeIds.set(file.relativePath, edgeIds);
+      for (const edgeId of edgeIds ?? []) {
         this.edgeRedirects.set(edgeId, {
           donor,
           relativePath: file.relativePath,
@@ -345,15 +345,9 @@ export class JavaIndexStore {
       }
       attached += 1;
     }
-    for (const [key, ids] of donor.methodIdsByOwnerAndName) {
-      this.methodIdsByOwnerAndName.set(key, new Set(ids));
-    }
-    for (const [nodeId, ids] of donor.outEdgeIdsByNode) {
-      this.outEdgeIdsByNode.set(nodeId, new Set(ids));
-    }
-    for (const [nodeId, ids] of donor.inEdgeIdsByNode) {
-      this.inEdgeIdsByNode.set(nodeId, new Set(ids));
-    }
+    for (const [key, ids] of donor.methodIdsByOwnerAndName) this.methodIdsByOwnerAndName.set(key, ids);
+    for (const [nodeId, ids] of donor.outEdgeIdsByNode) this.outEdgeIdsByNode.set(nodeId, ids);
+    for (const [nodeId, ids] of donor.inEdgeIdsByNode) this.inEdgeIdsByNode.set(nodeId, ids);
     return attached;
   }
 

@@ -186,6 +186,11 @@ function createStore(): JavaIndexStore {
 function resetStore(): JavaIndexStore {
   store?.disposeSharedFacts();
   store = createStore();
+  if (activeRootId) {
+    const session = workerRoots.get(activeRootId);
+    if (session) session.store = store;
+    else workerRoots.set(activeRootId, captureRootSession());
+  }
   return store;
 }
 let resourceCoverage: MyBatisResourceCoverage[] = [];
@@ -1465,6 +1470,7 @@ async function hydratePendingFacts(): Promise<void> {
   pendingSnapshotView = undefined;
   snapshotFactsHydrated = true;
   store.publishHydratedToPool();
+  if (activeRootId) workerRoots.set(activeRootId, captureRootSession());
 }
 
 async function ensureGraphReady(): Promise<void> {
@@ -1777,16 +1783,20 @@ function seedFromFamilyMemory(generation: number): { attached: number; total: nu
   for (const [rootId, session] of workerRoots) {
     if (rootId === activeRootId) continue;
     const donor = session.store;
-    if (!donor || donor.filesByPath.size === 0 || donor.methodsById.size === 0) continue;
+    const files = donor?.filesByPath.size ?? 0;
+    const methods = donor?.methodsById.size ?? 0;
+    if (!donor || files === 0 || methods === 0) continue;
     const attached = store.attachFromDonorStore(donor);
+    console.error(`[codex-java-lsp] family memory seed attached=${attached} donorFiles=${files} donorMethods=${methods} donorRoot=${rootId}`);
     if (attached > 0) {
       store.stampGeneration(
         [...donor.filesByPath.values()].map(file => file.relativePath),
         generation
       );
-      return { attached, total: donor.filesByPath.size };
+      return { attached, total: files };
     }
   }
+  console.error(`[codex-java-lsp] family memory seed miss workerRoots=${workerRoots.size} active=${activeRootId ?? ""}`);
   return { attached: 0, total: 0 };
 }
 
