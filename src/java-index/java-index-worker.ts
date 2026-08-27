@@ -2397,6 +2397,12 @@ async function handle(request: JavaIndexRequest): Promise<void> {
           pendingSnapshotView = undefined;
           graphSyncedRevision = indexFactsRevision;
           entitySearchSyncedRevision = indexFactsRevision;
+          if (layout) {
+            for (const source of layout.sourceRoots) {
+              coverage.begin(source.relativePath, openedGeneration, familySeed.attached);
+              coverage.complete(source.relativePath, openedGeneration);
+            }
+          }
         } else if (ownSnapshotExists && buildFingerprint !== undefined) {
           ownSnapshotIdentity = {
             extractorVersion: computeExtractorVersion(),
