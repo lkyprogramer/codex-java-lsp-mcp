@@ -120,9 +120,10 @@ export class JavaIndexStore {
   constructor(private readonly factsPool?: SharedFactsPool) {}
 
   private readonly installedBundles = new Map<string, JavaFileBundle>();
+  private readonly overlayFiles = new Map<string, JavaFileFacts>();
   private readonly edgeColumns = new EdgeColumns();
   private readonly fileColumns = new FileColumns(this.edgeColumns.strings, this.edgeColumns.ranges);
-  readonly filesByPath = new FileIdMap(this.fileColumns);
+  readonly filesByPath = new FileIdMap(this.fileColumns, this.overlayFiles);
   readonly typesById = new Map<string, JavaTypeFacts>();
   readonly typeIdByFqn = new Map<string, string>();
   readonly typeIdsBySimpleName = new Map<string, Set<string>>();
@@ -310,44 +311,30 @@ export class JavaIndexStore {
    * Methods/edges resolve through the donor until this root overlays a file.
    */
   attachFromDonorStore(donor: JavaIndexStore): number {
-    let attached = 0;
-    for (const file of donor.filesByPath.values()) {
-      this.fileColumns.add(file);
-      const nodes = donor.fileOwnedNodeIds.get(file.relativePath);
-      if (nodes) this.fileOwnedNodeIds.set(file.relativePath, nodes);
-      for (const nodeId of nodes ?? []) {
-        const type = donor.typesById.get(nodeId);
-        if (type) {
-          this.typesById.set(nodeId, type);
-          if (type.fqn) this.typeIdByFqn.set(type.fqn, type.typeId);
-          addToSetMap(this.typeIdsBySimpleName, type.simpleName, type.typeId);
-          continue;
-        }
-        const field = donor.fieldsById.get(nodeId);
-        if (field) {
-          this.fieldsById.set(nodeId, field);
-          continue;
-        }
-        this.methodRedirects.set(nodeId, {
-          donor,
-          relativePath: file.relativePath,
-          contentHash: file.contentHash
-        });
-      }
-      const edgeIds = donor.fileOwnedEdgeIds.get(file.relativePath);
-      if (edgeIds) this.fileOwnedEdgeIds.set(file.relativePath, edgeIds);
-      for (const edgeId of edgeIds ?? []) {
-        this.edgeRedirects.set(edgeId, {
-          donor,
-          relativePath: file.relativePath,
-          contentHash: file.contentHash
-        });
-      }
-      attached += 1;
+    for (const [typeId, type] of donor.typesById) {
+      this.typesById.set(typeId, type);
+      if (type.fqn) this.typeIdByFqn.set(type.fqn, type.typeId);
     }
+    for (const [name, ids] of donor.typeIdsBySimpleName) this.typeIdsBySimpleName.set(name, ids);
+    for (const [fieldId, field] of donor.fieldsById) this.fieldsById.set(fieldId, field);
+    for (const [path, nodes] of donor.fileOwnedNodeIds) this.fileOwnedNodeIds.set(path, nodes);
+    for (const [path, edgeIds] of donor.fileOwnedEdgeIds) this.fileOwnedEdgeIds.set(path, edgeIds);
     for (const [key, ids] of donor.methodIdsByOwnerAndName) this.methodIdsByOwnerAndName.set(key, ids);
     for (const [nodeId, ids] of donor.outEdgeIdsByNode) this.outEdgeIdsByNode.set(nodeId, ids);
     for (const [nodeId, ids] of donor.inEdgeIdsByNode) this.inEdgeIdsByNode.set(nodeId, ids);
+    let attached = 0;
+    for (const file of donor.filesByPath.values()) {
+      this.overlayFiles.set(file.relativePath, file);
+      const redirect = { donor, relativePath: file.relativePath, contentHash: file.contentHash };
+      for (const nodeId of donor.fileOwnedNodeIds.get(file.relativePath) ?? []) {
+        if (this.typesById.has(nodeId) || this.fieldsById.has(nodeId)) continue;
+        this.methodRedirects.set(nodeId, redirect);
+      }
+      for (const edgeId of donor.fileOwnedEdgeIds.get(file.relativePath) ?? []) {
+        this.edgeRedirects.set(edgeId, redirect);
+      }
+      attached += 1;
+    }
     return attached;
   }
 
@@ -882,6 +869,7 @@ export class JavaIndexStore {
       this.factsPool?.release(bundle.file.contentHash);
     }
     this.installedBundles.clear();
+    this.overlayFiles.clear();
     this.overlayMethods.clear();
     this.overlayEdges.clear();
     this.methodRedirects.clear();
@@ -906,6 +894,7 @@ export class JavaIndexStore {
     const previous = this.installedBundles.get(relativePath);
     this.installedBundles.delete(relativePath);
     if (releasePool && previous) this.factsPool?.release(previous.file.contentHash);
+    this.overlayFiles.delete(relativePath);
     this.fileColumns.remove(relativePath);
 
     for (const nodeId of this.fileOwnedNodeIds.get(relativePath) ?? []) {

@@ -228,23 +228,32 @@ export class FileColumns {
 }
 
 export class FileIdMap {
-  constructor(private readonly columns: FileColumns) {}
+  constructor(
+    private readonly columns: FileColumns,
+    private readonly overlay: Map<string, JavaFileFacts> = new Map()
+  ) {}
 
   get size(): number {
-    return this.columns.size;
+    return this.columns.size + this.overlay.size;
   }
 
   get(relativePath: string): JavaFileFacts | undefined {
     const row = this.columns.rowOf(relativePath);
-    return row === undefined ? undefined : this.columns.materialize(row);
+    if (row !== undefined) return this.columns.materialize(row);
+    return this.overlay.get(relativePath);
   }
 
   has(relativePath: string): boolean {
-    return this.columns.has(relativePath);
+    return this.columns.has(relativePath) || this.overlay.has(relativePath);
   }
 
   values(): IterableIterator<JavaFileFacts> {
-    return this.columns.values() as IterableIterator<JavaFileFacts>;
+    return this.iterate() as IterableIterator<JavaFileFacts>;
+  }
+
+  private *iterate(): IterableIterator<JavaFileFacts> {
+    yield* this.columns.values();
+    yield* this.overlay.values();
   }
 }
 
