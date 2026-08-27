@@ -977,9 +977,7 @@ function resolveRedirect<T>(
   const redirect = redirects.get(id);
   if (!redirect) return undefined;
   if (redirect.donor.file(redirect.relativePath)?.contentHash !== redirect.contentHash) return undefined;
-  const value = read(redirect.donor, id);
-  if (value) overlay.set(id, value);
-  return value;
+  return read(redirect.donor, id);
 }
 
 class EdgeIdMap {

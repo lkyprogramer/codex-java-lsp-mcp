@@ -2395,6 +2395,8 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         if (familySeeded) {
           snapshotFactsHydrated = true;
           pendingSnapshotView = undefined;
+          graphSyncedRevision = indexFactsRevision;
+          entitySearchSyncedRevision = indexFactsRevision;
         } else if (ownSnapshotExists && buildFingerprint !== undefined) {
           ownSnapshotIdentity = {
             extractorVersion: computeExtractorVersion(),
