@@ -1787,7 +1787,6 @@ function seedFromFamilyMemory(generation: number): { attached: number; total: nu
     const methods = donor?.methodsById.size ?? 0;
     if (!donor || files === 0 || methods === 0) continue;
     const attached = store.attachFromDonorStore(donor);
-    console.error(`[codex-java-lsp] family memory seed attached=${attached} donorFiles=${files} donorMethods=${methods} donorRoot=${rootId}`);
     if (attached > 0) {
       store.stampGeneration(
         [...donor.filesByPath.values()].map(file => file.relativePath),
@@ -1796,7 +1795,6 @@ function seedFromFamilyMemory(generation: number): { attached: number; total: nu
       return { attached, total: files };
     }
   }
-  console.error(`[codex-java-lsp] family memory seed miss workerRoots=${workerRoots.size} active=${activeRootId ?? ""}`);
   return { attached: 0, total: 0 };
 }
 
