@@ -27,4 +27,7 @@ fi
 # the default macOS nofile (often 256/10240) makes spawn() fail with EBADF.
 ulimit -n 65536 2>/dev/null || true
 
+# 768 caps the HTTP isolate only. JavaIndex runs in forked children with
+# --max-old-space-size=1536; Worker threads would inherit 768 and a hydrate
+# OOM would abort this daemon.
 exec "$NODE_BIN" --max-old-space-size=768 "$CURRENT_DIR/dist/http-server.js"

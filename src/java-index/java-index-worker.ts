@@ -77,6 +77,41 @@ import {
 import { handleQueryCommand } from "./java-index-worker-query.js";
 import { handleMybatisCommand } from "./java-index-worker-mybatis.js";
 
+type IndexWorkerPort = {
+  postMessage(value: unknown): void;
+  onMessage(listener: (request: JavaIndexRequest) => void): void;
+};
+
+function indexWorkerPort(): IndexWorkerPort | undefined {
+  if (parentPort) {
+    const port = parentPort;
+    return {
+      postMessage(value) {
+        port.postMessage(value);
+      },
+      onMessage(listener) {
+        port.on("message", listener);
+      }
+    };
+  }
+  if (typeof process.send !== "function") return undefined;
+  process.on("disconnect", () => {
+    process.exit(0);
+  });
+  return {
+    postMessage(value) {
+      process.send!(value);
+    },
+    onMessage(listener) {
+      process.on("message", message => {
+        listener(message as JavaIndexRequest);
+      });
+    }
+  };
+}
+
+const workerPort = indexWorkerPort();
+
 // A full sweep processes this many files before yielding to the message loop
 // (Task 20 Step 4), so a foreground request queued mid-sweep is serviced
 // promptly instead of waiting for the whole repo to finish.
@@ -235,7 +270,7 @@ let activeForegroundTiming:
 function respond(response: JavaIndexResponse): void {
   const timing = activeForegroundTiming;
   if (timing?.enabled && timing.requestId === response.id) {
-    parentPort?.postMessage({
+    workerPort?.postMessage({
       ...response,
       timing: {
         queueDepthAtEnqueue: timing.queueDepthAtEnqueue,
@@ -245,7 +280,7 @@ function respond(response: JavaIndexResponse): void {
     });
     return;
   }
-  parentPort?.postMessage(response);
+  workerPort?.postMessage(response);
 }
 
 function unresolvedTypeLookup(): JavaTypeLookupResult {
@@ -2299,7 +2334,7 @@ async function drainForeground(): Promise<void> {
   }
 }
 
-parentPort?.on("message", (request: JavaIndexRequest) => {
+workerPort?.onMessage((request: JavaIndexRequest) => {
   // Stop scheduling later background chunks as soon as CLOSE arrives, even
   // if an older foreground request is still draining ahead of it. The active
   // chunk/writer keeps its own reference and is joined at the safe boundary.

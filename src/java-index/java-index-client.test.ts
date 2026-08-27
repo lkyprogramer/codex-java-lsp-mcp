@@ -1242,12 +1242,12 @@ test("recycle destroys a real Worker isolate and the next status opens another",
   await client.close();
 });
 
-test("shipped JavaIndex worker factory uses the 1536 production old-generation cap", () => {
+test("shipped JavaIndex worker factory forks a 1536 process instead of an in-process Worker", () => {
   assert.equal(JAVA_INDEX_WORKER_MAX_OLD_GENERATION_SIZE_MB, 1536);
-  const source = readFileSync(fileURLToPath(new URL("./java-index-client.js", import.meta.url)), "utf8");
-  assert.match(
-    source,
-    /resourceLimits:\s*\{\s*maxOldGenerationSizeMb:\s*JAVA_INDEX_WORKER_MAX_OLD_GENERATION_SIZE_MB\s*\}/
-  );
-  assert.doesNotMatch(source, /maxOldGenerationSizeMb:\s*2560/);
+  const clientSource = readFileSync(fileURLToPath(new URL("./java-index-client.js", import.meta.url)), "utf8");
+  const processSource = readFileSync(fileURLToPath(new URL("./java-index-worker-process.js", import.meta.url)), "utf8");
+  assert.match(clientSource, /spawnJavaIndexWorkerProcess\(\)/);
+  assert.doesNotMatch(clientSource, /resourceLimits/);
+  assert.match(processSource, /--max-old-space-size=\$\{JAVA_INDEX_WORKER_MAX_OLD_GENERATION_SIZE_MB\}/);
+  assert.doesNotMatch(processSource, /maxOldGenerationSizeMb:\s*2560/);
 });

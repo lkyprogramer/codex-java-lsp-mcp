@@ -1,5 +1,8 @@
-import { Worker } from "node:worker_threads";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
+import {
+  spawnJavaIndexWorkerProcess,
+  type WorkerLike
+} from "./java-index-worker-process.js";
 import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
 import type {
   AnchorFacts,
@@ -83,14 +86,8 @@ export interface JavaIndexRpcTelemetrySink {
   lateResponse(event: Omit<JavaIndexRpcSettlement, "outcome">): void;
 }
 
-export interface WorkerLike {
-  postMessage(value: unknown): void;
-  on(event: "message", listener: (value: unknown) => void): this;
-  on(event: "error", listener: (error: Error) => void): this;
-  on(event: "exit", listener: (code: number) => void): this;
-  unref?(): void;
-  terminate(): Promise<number>;
-}
+export type { WorkerLike } from "./java-index-worker-process.js";
+export { JAVA_INDEX_WORKER_MAX_OLD_GENERATION_SIZE_MB } from "./java-index-worker-process.js";
 
 type PendingRequest = {
   operation: JavaIndexRpcOperation;
@@ -141,13 +138,8 @@ function emptyStatus(): JavaIndexStatus {
   };
 }
 
-/** Production isolate cap. S4 chunked rest segments keep hydrate under this old-generation limit. */
-export const JAVA_INDEX_WORKER_MAX_OLD_GENERATION_SIZE_MB = 1536;
-
 function defaultWorkerFactory(): WorkerLike {
-  return new Worker(new URL("./java-index-worker.js", import.meta.url), {
-    resourceLimits: { maxOldGenerationSizeMb: JAVA_INDEX_WORKER_MAX_OLD_GENERATION_SIZE_MB }
-  }) as unknown as WorkerLike;
+  return spawnJavaIndexWorkerProcess();
 }
 
 const MAX_CANCELLED_TOMBSTONES = 64;
@@ -317,9 +309,8 @@ export class JavaIndexClient {
   }
 
   /**
-   * Hibernate then destroy the Worker isolate. `gc()` is unavailable
-   * (`execArgv --expose-gc` is invalid); terminate is what returns old-gen
-   * to the OS. The next request lazily OPEN's a fresh worker.
+   * Hibernate then kill the index child process so its old-gen returns to the
+   * OS. The next request lazily OPEN's a fresh worker.
    */
   async recycle(requestOptions: JavaIndexRequestOptions = {}): Promise<void> {
     if (this.state === "CLOSED") return;
