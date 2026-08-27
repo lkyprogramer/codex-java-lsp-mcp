@@ -119,6 +119,8 @@ function validateBundleIds(bundle: JavaFileBundle): void {
 export class JavaIndexStore {
   constructor(private readonly factsPool?: SharedFactsPool) {}
 
+  private donor?: JavaIndexStore;
+
   private readonly installedBundles = new Map<string, JavaFileBundle>();
   private readonly overlayFiles = new Map<string, JavaFileFacts>();
   private readonly edgeColumns = new EdgeColumns();
@@ -311,31 +313,8 @@ export class JavaIndexStore {
    * Methods/edges resolve through the donor until this root overlays a file.
    */
   attachFromDonorStore(donor: JavaIndexStore): number {
-    for (const [typeId, type] of donor.typesById) {
-      this.typesById.set(typeId, type);
-      if (type.fqn) this.typeIdByFqn.set(type.fqn, type.typeId);
-    }
-    for (const [name, ids] of donor.typeIdsBySimpleName) this.typeIdsBySimpleName.set(name, ids);
-    for (const [fieldId, field] of donor.fieldsById) this.fieldsById.set(fieldId, field);
-    for (const [path, nodes] of donor.fileOwnedNodeIds) this.fileOwnedNodeIds.set(path, nodes);
-    for (const [path, edgeIds] of donor.fileOwnedEdgeIds) this.fileOwnedEdgeIds.set(path, edgeIds);
-    for (const [key, ids] of donor.methodIdsByOwnerAndName) this.methodIdsByOwnerAndName.set(key, ids);
-    for (const [nodeId, ids] of donor.outEdgeIdsByNode) this.outEdgeIdsByNode.set(nodeId, ids);
-    for (const [nodeId, ids] of donor.inEdgeIdsByNode) this.inEdgeIdsByNode.set(nodeId, ids);
-    let attached = 0;
-    for (const file of donor.filesByPath.values()) {
-      this.overlayFiles.set(file.relativePath, file);
-      const redirect = { donor, relativePath: file.relativePath, contentHash: file.contentHash };
-      for (const nodeId of donor.fileOwnedNodeIds.get(file.relativePath) ?? []) {
-        if (this.typesById.has(nodeId) || this.fieldsById.has(nodeId)) continue;
-        this.methodRedirects.set(nodeId, redirect);
-      }
-      for (const edgeId of donor.fileOwnedEdgeIds.get(file.relativePath) ?? []) {
-        this.edgeRedirects.set(edgeId, redirect);
-      }
-      attached += 1;
-    }
-    return attached;
+    this.donor = donor;
+    return donor.filesByPath.size;
   }
 
   /** After snapshot ingest, register reconstructed bundles so siblings can attach. */
@@ -409,12 +388,13 @@ export class JavaIndexStore {
   }
 
   file(relativePath: string): JavaFileFacts | undefined {
-    return this.filesByPath.get(relativePath);
+    return this.filesByPath.get(relativePath) ?? this.donor?.file(relativePath);
   }
 
   typeByFqn(fqn: string): JavaTypeFacts | undefined {
-    const typeId = this.typeIdByFqn.get(fqn);
-    return typeId ? this.typesById.get(typeId) : undefined;
+    const typeId = this.typeIdByFqn.get(fqn) ?? this.donor?.typeIdByFqn.get(fqn);
+    if (!typeId) return undefined;
+    return this.typesById.get(typeId) ?? this.donor?.typesById.get(typeId);
   }
 
   anchor(relativePath: string, line: number, column: number): AnchorFacts | undefined {
@@ -663,23 +643,25 @@ export class JavaIndexStore {
   files(paths: readonly string[]): JavaFileBundle[] {
     const results: JavaFileBundle[] = [];
     for (const relativePath of paths) {
-      const file = this.filesByPath.get(relativePath);
+      const file = this.file(relativePath);
       if (!file) continue;
       const types: JavaTypeFacts[] = [];
       const fields: JavaFieldFacts[] = [];
       const methods: JavaMethodFacts[] = [];
-      for (const nodeId of this.fileOwnedNodeIds.get(relativePath) ?? []) {
-        const type = this.typesById.get(nodeId);
+      const owned = this.fileOwnedNodeIds.get(relativePath) ?? this.donor?.fileOwnedNodeIds.get(relativePath);
+      for (const nodeId of owned ?? []) {
+        const type = this.typesById.get(nodeId) ?? this.donor?.typesById.get(nodeId);
         if (type) { types.push(type); continue; }
-        const field = this.fieldsById.get(nodeId);
+        const field = this.fieldsById.get(nodeId) ?? this.donor?.fieldsById.get(nodeId);
         if (field) { fields.push(field); continue; }
-        const method = this.methodsById.get(nodeId);
+        const method = this.methodsById.get(nodeId) ?? this.donor?.methodsById.get(nodeId);
         if (method) methods.push(method);
       }
       const edges: StaticEdge[] = [];
-      for (const edgeId of this.fileOwnedEdgeIds.get(relativePath) ?? []) {
-        const row = this.edgeColumns.rowOf(edgeId);
-        if (row !== undefined) edges.push(this.edgeColumns.materialize(row));
+      const ownedEdges = this.fileOwnedEdgeIds.get(relativePath) ?? this.donor?.fileOwnedEdgeIds.get(relativePath);
+      for (const edgeId of ownedEdges ?? []) {
+        const edge = this.edgesById.get(edgeId);
+        if (edge) edges.push(edge);
       }
       results.push({ file, types, fields, methods, edges });
     }
@@ -874,6 +856,7 @@ export class JavaIndexStore {
     this.overlayEdges.clear();
     this.methodRedirects.clear();
     this.edgeRedirects.clear();
+    this.donor = undefined;
   }
 
   private internOrShare(bundle: JavaFileBundle, previous: JavaFileBundle | undefined): JavaFileBundle {

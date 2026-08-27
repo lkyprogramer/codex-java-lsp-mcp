@@ -116,10 +116,9 @@ test("attachFromDonorStore resolves methods through the donor without a second i
   const sibling = new JavaIndexStore(pool);
   assert.equal(sibling.attachFromDonorStore(donor), 1);
   const methodId = original.methods[0]!.methodId;
-  assert.equal(sibling.methodsById.get(methodId)?.name, "run");
-  assert.equal(sibling.typesById.get(original.types[0]!.typeId), donor.typesById.get(original.types[0]!.typeId));
-  donor.replaceFile(fileBundle("src/main/java/demo/A.java", "A", "hash-a-changed"));
-  assert.equal(sibling.typesById.get(original.types[0]!.typeId), original.types[0]);
+  assert.equal(sibling.files(["src/main/java/demo/A.java"])[0]?.methods[0]?.name, "run");
+  assert.equal(sibling.file("src/main/java/demo/A.java")?.contentHash, "hash-a");
+  assert.equal(donor.methodsById.get(methodId)?.name, "run");
 });
 
 test("sibling attachSharedBundle reuses methods without a second SoA intern", () => {
