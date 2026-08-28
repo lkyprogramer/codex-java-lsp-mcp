@@ -133,7 +133,16 @@ export class JavaIndexStore {
   private readonly overlayEdges = new Map<string, StaticEdge>();
   private readonly methodRedirects = new Map<string, DonorRedirect>();
   private readonly edgeRedirects = new Map<string, DonorRedirect>();
-  readonly methodsById = new MethodIdMap(this.methodColumns, this.overlayMethods, this.methodRedirects);
+  private frozenMethodCount = 0;
+  private frozenEdgeCount = 0;
+  private frozenMethodIndex?: Map<string, JavaMethodFacts>;
+  readonly methodsById = new MethodIdMap(
+    this.methodColumns,
+    this.overlayMethods,
+    this.methodRedirects,
+    () => this.frozenMethodCount,
+    id => this.lookupFrozenMethod(id)
+  );
   readonly methodIdsByOwnerAndName = new Map<string, Set<string>>();
   readonly edgesById = new EdgeIdMap(this.edgeColumns, this.overlayEdges, this.edgeRedirects);
   readonly outEdgeIdsByNode = new Map<string, Set<string>>();
@@ -325,14 +334,18 @@ export class JavaIndexStore {
     return attached;
   }
 
-  /** Pointer-index a pooled bundle without fileColumns/methodColumns intern. */
+  /** Path→pooled bundle plus type indexes. Method/edge maps stay lazy. */
   private bindFrozenBundle(bundle: JavaFileBundle): void {
     validateBundleIds(bundle);
     const relativePath = bundle.file.relativePath;
     const previous = this.installedBundles.get(relativePath);
     const installed = this.acquirePooledBundle(bundle, previous);
-    this.removeFileInternal(relativePath, false);
+    if (previous) this.removeFileInternal(relativePath, false);
     this.overlayFiles.set(relativePath, installed.file);
+    this.installedBundles.set(relativePath, installed);
+    this.frozenMethodIndex = undefined;
+    this.frozenMethodCount += installed.methods.length;
+    this.frozenEdgeCount += installed.edges.length;
     const ownedNodeIds = new Set<string>();
     for (const type of installed.types) {
       this.typesById.set(type.typeId, type);
@@ -344,21 +357,20 @@ export class JavaIndexStore {
       this.fieldsById.set(field.fieldId, field);
       ownedNodeIds.add(field.fieldId);
     }
-    for (const method of installed.methods) {
-      this.overlayMethods.set(method.methodId, method);
-      addToSetMap(this.methodIdsByOwnerAndName, `${method.ownerTypeId}#${method.name}`, method.methodId);
-      ownedNodeIds.add(method.methodId);
-    }
     this.fileOwnedNodeIds.set(relativePath, ownedNodeIds);
-    this.installedBundles.set(relativePath, installed);
-    const ownedEdgeIds = new Set<string>();
-    for (const edge of installed.edges) {
-      this.overlayEdges.set(edge.edgeId, edge);
-      addToSetMap(this.outEdgeIdsByNode, edge.fromId, edge.edgeId);
-      addToSetMap(this.inEdgeIdsByNode, edge.toId, edge.edgeId);
-      ownedEdgeIds.add(edge.edgeId);
+  }
+
+  private lookupFrozenMethod(methodId: string): JavaMethodFacts | undefined {
+    if (!this.frozenMethodIndex) {
+      const index = new Map<string, JavaMethodFacts>();
+      for (const relativePath of this.overlayFiles.keys()) {
+        const frozen = this.installedBundles.get(relativePath);
+        if (!frozen) continue;
+        for (const method of frozen.methods) index.set(method.methodId, method);
+      }
+      this.frozenMethodIndex = index;
     }
-    this.fileOwnedEdgeIds.set(relativePath, ownedEdgeIds);
+    return this.frozenMethodIndex.get(methodId);
   }
 
   private acquirePooledBundle(bundle: JavaFileBundle, previous: JavaFileBundle | undefined): JavaFileBundle {
@@ -490,7 +502,10 @@ export class JavaIndexStore {
         }
       }
       for (const methodId of type.methodIds) {
-        const method = this.methodsById.get(methodId);
+        const frozen = this.overlayFiles.has(relativePath) ? this.installedBundles.get(relativePath) : undefined;
+        const method = frozen
+          ? frozen.methods.find(item => item.methodId === methodId)
+          : this.methodsById.get(methodId);
         if (method && rangeContains(method.range, position)) {
           candidates.push({
             range: method.range,
@@ -694,6 +709,11 @@ export class JavaIndexStore {
   files(paths: readonly string[]): JavaFileBundle[] {
     const results: JavaFileBundle[] = [];
     for (const relativePath of paths) {
+      const frozen = this.overlayFiles.has(relativePath) ? this.installedBundles.get(relativePath) : undefined;
+      if (frozen) {
+        results.push(frozen);
+        continue;
+      }
       const file = this.file(relativePath);
       if (!file) continue;
       const types: JavaTypeFacts[] = [];
@@ -907,6 +927,9 @@ export class JavaIndexStore {
     this.overlayEdges.clear();
     this.methodRedirects.clear();
     this.edgeRedirects.clear();
+    this.frozenMethodCount = 0;
+    this.frozenEdgeCount = 0;
+    this.frozenMethodIndex = undefined;
   }
 
   private internOrShare(bundle: JavaFileBundle, previous: JavaFileBundle | undefined): JavaFileBundle {
@@ -925,9 +948,15 @@ export class JavaIndexStore {
 
   private removeFileInternal(relativePath: string, releasePool = true): void {
     const previous = this.installedBundles.get(relativePath);
+    const wasFrozen = this.overlayFiles.has(relativePath);
     this.installedBundles.delete(relativePath);
     if (releasePool && previous) this.factsPool?.release(previous.file.contentHash);
     this.overlayFiles.delete(relativePath);
+    if (wasFrozen && previous) {
+      this.frozenMethodCount = Math.max(0, this.frozenMethodCount - previous.methods.length);
+      this.frozenEdgeCount = Math.max(0, this.frozenEdgeCount - previous.edges.length);
+      this.frozenMethodIndex = undefined;
+    }
     this.fileColumns.remove(relativePath);
 
     for (const nodeId of this.fileOwnedNodeIds.get(relativePath) ?? []) {
@@ -1041,21 +1070,24 @@ class MethodIdMap {
   constructor(
     private readonly columns: MethodColumns,
     private readonly overlay: Map<string, JavaMethodFacts> = new Map(),
-    private readonly redirects: Map<string, DonorRedirect> = new Map()
+    private readonly redirects: Map<string, DonorRedirect> = new Map(),
+    private readonly frozenSize: () => number = () => 0,
+    private readonly frozenGet: (id: string) => JavaMethodFacts | undefined = () => undefined
   ) {}
 
   get size(): number {
-    return this.columns.size + this.overlay.size + this.redirects.size;
+    return this.columns.size + this.overlay.size + this.redirects.size + this.frozenSize();
   }
 
   get(id: string): JavaMethodFacts | undefined {
     const row = this.columns.rowOf(id);
     if (row !== undefined) return this.columns.materialize(row);
-    return resolveRedirect(this.overlay, this.redirects, id, (donor, methodId) => donor.methodsById.get(methodId));
+    return resolveRedirect(this.overlay, this.redirects, id, (donor, methodId) => donor.methodsById.get(methodId))
+      ?? this.frozenGet(id);
   }
 
   has(id: string): boolean {
-    return this.columns.has(id) || this.overlay.has(id) || this.redirects.has(id);
+    return this.columns.has(id) || this.overlay.has(id) || this.redirects.has(id) || this.frozenGet(id) !== undefined;
   }
 
   values(): IterableIterator<JavaMethodFacts> {
