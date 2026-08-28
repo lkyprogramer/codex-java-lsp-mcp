@@ -125,6 +125,7 @@ test("attachFromDonorStore freezes the sibling view so donor.replaceFile does no
   assert.equal(anchored.file.contentHash, "hash-a");
   assert.equal(sibling.typesById.get(typeId)?.simpleName, "A");
   assert.equal(sibling.methodsById.get(methodId)?.name, "run");
+  assert.equal(sibling.typesById.get(typeId), donor.typesById.get(typeId), "frozen view must share the pooled type object");
   const lookup = sibling.typeLookup("demo.A");
   assert.equal(lookup.state, "RESOLVED");
   assert.equal((lookup as { type: JavaTypeFacts }).type.typeId, typeId);
@@ -143,6 +144,7 @@ test("attachFromDonorStore freezes the sibling view so donor.replaceFile does no
   const lookupAfter = sibling.typeLookup("demo.A");
   assert.equal(lookupAfter.state, "RESOLVED");
   assert.equal((lookupAfter as { type: JavaTypeFacts }).type.typeId, typeId);
+  assert.equal(sibling.filesByPath.size, 1);
 });
 
 test("sibling attachSharedBundle reuses methods without a second SoA intern", () => {

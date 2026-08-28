@@ -307,10 +307,11 @@ export class JavaIndexStore {
   }
 
   /**
-   * Freeze a sibling view of the donor's current bundles. SharedFactsPool
-   * keeps identical contentHash objects; a later donor.replaceFile must not
-   * become this root's facts. OPEN family seed uses this instead of a live
-   * donor pointer so file()/anchor()/typeLookup() read this store's maps.
+   * Freeze a sibling view as path→contentHash pool refs. Do not intern files
+   * or methods into this store's SoA — that is what OOM'd the 1536 isolate
+   * when three worktrees each attachSharedBundle'd 2114 files. Lookups use
+   * overlay pointer maps onto the pooled objects; donor.replaceFile installs
+   * a new hash and leaves this root's acquired bundles unchanged.
    */
   attachFromDonorStore(donor: JavaIndexStore): number {
     donor.publishHydratedToPool();
@@ -318,10 +319,53 @@ export class JavaIndexStore {
     for (const file of donor.filesByPath.values()) {
       const bundle = donor.installedBundle(file.relativePath) ?? donor.files([file.relativePath])[0];
       if (!bundle) continue;
-      this.attachSharedBundle(bundle);
+      this.bindFrozenBundle(bundle);
       attached += 1;
     }
     return attached;
+  }
+
+  /** Pointer-index a pooled bundle without fileColumns/methodColumns intern. */
+  private bindFrozenBundle(bundle: JavaFileBundle): void {
+    validateBundleIds(bundle);
+    const relativePath = bundle.file.relativePath;
+    const previous = this.installedBundles.get(relativePath);
+    const installed = this.acquirePooledBundle(bundle, previous);
+    this.removeFileInternal(relativePath, false);
+    this.overlayFiles.set(relativePath, installed.file);
+    const ownedNodeIds = new Set<string>();
+    for (const type of installed.types) {
+      this.typesById.set(type.typeId, type);
+      if (type.fqn) this.typeIdByFqn.set(type.fqn, type.typeId);
+      addToSetMap(this.typeIdsBySimpleName, type.simpleName, type.typeId);
+      ownedNodeIds.add(type.typeId);
+    }
+    for (const field of installed.fields) {
+      this.fieldsById.set(field.fieldId, field);
+      ownedNodeIds.add(field.fieldId);
+    }
+    for (const method of installed.methods) {
+      this.overlayMethods.set(method.methodId, method);
+      addToSetMap(this.methodIdsByOwnerAndName, `${method.ownerTypeId}#${method.name}`, method.methodId);
+      ownedNodeIds.add(method.methodId);
+    }
+    this.fileOwnedNodeIds.set(relativePath, ownedNodeIds);
+    this.installedBundles.set(relativePath, installed);
+    const ownedEdgeIds = new Set<string>();
+    for (const edge of installed.edges) {
+      this.overlayEdges.set(edge.edgeId, edge);
+      addToSetMap(this.outEdgeIdsByNode, edge.fromId, edge.edgeId);
+      addToSetMap(this.inEdgeIdsByNode, edge.toId, edge.edgeId);
+      ownedEdgeIds.add(edge.edgeId);
+    }
+    this.fileOwnedEdgeIds.set(relativePath, ownedEdgeIds);
+  }
+
+  private acquirePooledBundle(bundle: JavaFileBundle, previous: JavaFileBundle | undefined): JavaFileBundle {
+    if (previous) this.factsPool?.release(previous.file.contentHash);
+    if (!this.factsPool) return bundle;
+    // Never internFileBundle into this store: the donor already interned.
+    return this.factsPool.acquire(bundle.file.contentHash, () => bundle);
   }
 
   /** After snapshot ingest, register reconstructed bundles so siblings can attach. */
