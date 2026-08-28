@@ -1788,16 +1788,15 @@ function seedFromFamilyMemory(generation: number): {
     if (rootId === activeRootId) continue;
     const donor = session.store;
     const files = donor?.filesByPath.size ?? 0;
-    const methods = donor?.methodsById.size ?? 0;
-    if (!donor || files === 0 || methods === 0) continue;
+    if (!donor || files === 0) continue;
     const attached = store.attachFromDonorStore(donor);
     if (attached > 0) {
       store.stampGeneration(
         [...store.filesByPath.values()].map(file => file.relativePath),
         generation
       );
-      return { attached, total: files, donor: session };
     }
+    return { attached, total: files, donor: session };
   }
   return { attached: 0, total: 0 };
 }
