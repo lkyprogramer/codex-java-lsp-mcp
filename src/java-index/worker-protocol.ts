@@ -12,6 +12,7 @@ import type {
   JavaFileFacts,
   JavaImportFact,
   JavaIndexStatus,
+  JavaIndexHeapSplit,
   JavaIndexSnapshotStatus,
   JavaMethodFacts,
   JavaParseState,
@@ -843,7 +844,28 @@ export function validateJavaIndexStatus(value: unknown): JavaIndexStatus {
     ...withOptional("heapUsedBytes", optional(source.heapUsedBytes, `${context}.heapUsedBytes`, (value, valueContext) => {
       if (!isNumber(value)) invalid(valueContext, "expected a number");
       return value;
-    }))
+    })),
+    ...withOptional("heapSplit", optional(source.heapSplit, `${context}.heapSplit`, validateHeapSplit))
+  };
+}
+
+function validateHeapSplit(value: unknown, context: string): JavaIndexHeapSplit {
+  const source = record(value, context);
+  if (!isNumber(source.heapUsedMb)) invalid(context, "heapUsedMb");
+  if (!isNumber(source.rssMb)) invalid(context, "rssMb");
+  if (!isNumber(source.poolBundles)) invalid(context, "poolBundles");
+  if (!isNumber(source.familyRootCount)) invalid(context, "familyRootCount");
+  if (!isNumber(source.thisRootFiles)) invalid(context, "thisRootFiles");
+  if (!isNumber(source.thisRootOverlayFiles)) invalid(context, "thisRootOverlayFiles");
+  if (!isBoolean(source.graphSynced)) invalid(context, "graphSynced");
+  return {
+    heapUsedMb: source.heapUsedMb,
+    rssMb: source.rssMb,
+    poolBundles: source.poolBundles,
+    familyRootCount: source.familyRootCount,
+    thisRootFiles: source.thisRootFiles,
+    thisRootOverlayFiles: source.thisRootOverlayFiles,
+    graphSynced: source.graphSynced
   };
 }
 

@@ -77,6 +77,7 @@ import {
 import { handleQueryCommand } from "./java-index-worker-query.js";
 import { handleMybatisCommand } from "./java-index-worker-mybatis.js";
 import { SharedFactsPool } from "./shared-facts-pool.js";
+import { installProcessCrashMarkers } from "../process-crash-markers.js";
 
 type IndexWorkerPort = {
   postMessage(value: unknown): void;
@@ -112,6 +113,12 @@ function indexWorkerPort(): IndexWorkerPort | undefined {
 }
 
 const workerPort = indexWorkerPort();
+// Forked production workers only. Worker-thread tests load this module through
+// parentPort; an uncaughtException -> process.exit(1) marker there kills the
+// in-process isolate before snapshot/lease hooks can trip.
+if (workerPort && typeof process.send === "function") {
+  installProcessCrashMarkers("java-index-worker");
+}
 
 // A full sweep processes this many files before yielding to the message loop
 // (Task 20 Step 4), so a foreground request queued mid-sweep is serviced
@@ -321,6 +328,7 @@ type WorkerRootSession = {
 };
 
 const workerRoots = new Map<string, WorkerRootSession>();
+const retainedFamilyStores = new Map<string, WorkerRootSession>();
 let activeRootId: string | undefined;
 
 function captureRootSession(): WorkerRootSession {
@@ -830,6 +838,15 @@ function currentStatus(overrides: Partial<JavaIndexStatus> = {}): JavaIndexStatu
       + (factsHydrateInFlight ? 1 : 0),
     factsHydrated: snapshotFactsHydrated && !hibernated,
     heapUsedBytes: process.memoryUsage().heapUsed,
+    heapSplit: {
+      heapUsedMb: Math.round(process.memoryUsage().heapUsed / (1024 * 1024)),
+      rssMb: Math.round(process.memoryUsage().rss / (1024 * 1024)),
+      poolBundles: familyFactsPool.size,
+      familyRootCount: workerRoots.size + retainedFamilyStores.size,
+      thisRootFiles: store?.filesByPath.size ?? 0,
+      thisRootOverlayFiles: store?.overlayFileCount() ?? 0,
+      graphSynced: graphSyncedRevision >= 0 && graphSyncedRevision === indexFactsRevision
+    },
     ...(ownSnapshotVerificationPending ? { snapshotVerificationPending: true } : {}),
     ...(lastRefreshError ? { lastError: lastRefreshError } : {}),
     ...(worktreeSeedStatus ? { worktreeSeed: worktreeSeedStatus } : {}),
@@ -1591,18 +1608,24 @@ function spawnColdBuildChildProcess(cacheDir: string, generation: number): Promi
   });
 }
 
+function rebindHydrationRoot(rootId: string | undefined): void {
+  if (rootId) activateRoot(rootId);
+}
+
 function startOwnSnapshotHydration(
   identity: SnapshotIdentity,
   requestedGeneration: number,
   buildFingerprint: string,
   siblingCacheBase: string | undefined
 ): void {
+  const hydrationRootId = activeRootId;
   hibernateIdentity = identity;
   ownSnapshotVerificationPending = true;
   ownSnapshotVerificationStale = false;
   ownSnapshotVerificationPromise = (async () => {
     try {
       const loadedView = snapshotPath ? await loadSnapshotView(snapshotPath, identity) : undefined;
+      rebindHydrationRoot(hydrationRootId);
       const loaded = loadedView ? metaSnapshot(loadedView) : undefined;
       if (!loadedView || !loaded) {
         // Preserve Task 21a's immediate sibling-seed path when no own cache
@@ -1610,6 +1633,7 @@ function startOwnSnapshotHydration(
         // sibling attempt remains fail-soft, exactly as before.
         if (!ownSnapshotVerificationStale && siblingCacheBase) {
           worktreeSeedStatus = await attemptSiblingSeed(siblingCacheBase, buildFingerprint, requestedGeneration);
+          rebindHydrationRoot(hydrationRootId);
         }
         if (!closing) queueSnapshotVerificationReconcile(status.indexedGeneration);
         return;
@@ -1661,16 +1685,20 @@ function startOwnSnapshotHydration(
         ? indexMyBatisResources(restoredStore, layout, expectedGeneration)
         : Promise.resolve();
       const verifiedGeneration = await verifyOwnSnapshot(loaded, expectedGeneration, canApply);
+      rebindHydrationRoot(hydrationRootId);
       await resourceReindex;
+      rebindHydrationRoot(hydrationRootId);
       if (verifiedGeneration !== undefined && canApply()) {
         const hydratedManifestFingerprint = layout
           ? await computeCurrentSnapshotManifestFingerprint(repoRoot, layout)
           : loaded.manifestFingerprint;
+        rebindHydrationRoot(hydrationRootId);
         const hydratedManifestChanged = hydratedManifestFingerprint !== loaded.manifestFingerprint;
         const restoredFully = ownSnapshotCoverageFullyRestored(verifiedGeneration);
         const restoredBytes = snapshotPath
           ? await stat(snapshotPath).then(entry => entry.size).catch(() => undefined)
           : undefined;
+        rebindHydrationRoot(hydrationRootId);
         if (!canApply()) {
           queueSnapshotVerificationReconcile(status.indexedGeneration);
           return;
@@ -1726,6 +1754,7 @@ function startOwnSnapshotHydration(
         queuedReconcileAfterSnapshotVerification = undefined;
         while (reconcileGeneration !== undefined && !closing) {
           await beginBackgroundSweep(reconcileGeneration);
+          rebindHydrationRoot(hydrationRootId);
           status = { ...status, indexedGeneration: Math.max(status.indexedGeneration, reconcileGeneration) };
           // RECONCILE requests can arrive while discovery above yields. Fold
           // their latest generation into the just-installed sweep before
@@ -1778,14 +1807,26 @@ function startOwnSnapshotHydration(
  * negative-answer trust and is simply re-verified from scratch - like any
  * other not-yet-complete snapshot - the next time this repo is opened.
  */
+function familyDonorSessions(): Array<{ rootId: string; session: WorkerRootSession }> {
+  const out: Array<{ rootId: string; session: WorkerRootSession }> = [];
+  for (const [rootId, session] of workerRoots) {
+    if (rootId === activeRootId) continue;
+    out.push({ rootId, session });
+  }
+  for (const [rootId, session] of retainedFamilyStores) {
+    if (rootId === activeRootId) continue;
+    out.push({ rootId, session });
+  }
+  return out;
+}
+
 function seedFromFamilyMemory(generation: number): {
   attached: number;
   total: number;
   donor?: WorkerRootSession;
 } {
   if (!store) return { attached: 0, total: 0 };
-  for (const [rootId, session] of workerRoots) {
-    if (rootId === activeRootId) continue;
+  for (const { session } of familyDonorSessions()) {
     const donor = session.store;
     const files = donor?.filesByPath.size ?? 0;
     if (!donor || files === 0) continue;
@@ -1799,6 +1840,54 @@ function seedFromFamilyMemory(generation: number): {
     return { attached, total: files, donor: session };
   }
   return { attached: 0, total: 0 };
+}
+
+function findFamilyDonor(): { rootId: string; session: WorkerRootSession } | undefined {
+  for (const candidate of familyDonorSessions()) {
+    if (candidate.session.store) return candidate;
+  }
+  return undefined;
+}
+
+async function overlayOwnSnapshotDiffs(identity: SnapshotIdentity, generation: number): Promise<number> {
+  if (!snapshotPath || !store) return 0;
+  const view = await loadSnapshotView(snapshotPath, identity);
+  if (!view) return 0;
+  const divergent: string[] = [];
+  for (const file of view.files) {
+    const current = store.file(file.relativePath);
+    if (!current || current.contentHash !== file.contentHash) divergent.push(file.relativePath);
+  }
+  view.files.length = 0;
+  let overlaid = 0;
+  for (const relativePath of divergent) {
+    const absolutePath = path.join(repoRoot, relativePath);
+    try {
+      await stat(absolutePath);
+      await refreshFile(absolutePath, generation);
+      overlaid += 1;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        store.removeFiles([relativePath]);
+        overlaid += 1;
+      }
+    }
+  }
+  return overlaid;
+}
+
+async function seedFamilyBase(generation: number): Promise<{
+  attached: number;
+  donor?: WorkerRootSession;
+}> {
+  if (!store) return { attached: 0 };
+  const found = findFamilyDonor();
+  if (!found) return { attached: 0 };
+  if (found.session.ownSnapshotVerificationPending) {
+    await found.session.ownSnapshotVerificationPromise;
+    if (activeRootId) activateRoot(activeRootId);
+  }
+  return seedFromFamilyMemory(generation);
 }
 
 async function attemptSiblingSeed(
@@ -2396,8 +2485,8 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         let ownSnapshotIdentity: SnapshotIdentity | undefined;
         const buildFingerprint = await computeBuildFingerprint(repoRoot, layout).catch(() => undefined);
         const ownSnapshotExists = await stat(snapshotPath).then(() => true).catch(() => false);
-        const familySeed = seedFromFamilyMemory(openedGeneration);
-        const familySeeded = familySeed.total > 0 && familySeed.attached >= Math.ceil(familySeed.total * 0.5);
+        const familySeed = await seedFamilyBase(openedGeneration);
+        const familySeeded = familySeed.attached > 0;
         if (familySeeded) {
           snapshotFactsHydrated = true;
           pendingSnapshotView = undefined;
@@ -2421,6 +2510,16 @@ async function handle(request: JavaIndexRequest): Promise<void> {
               coverage.begin(source.relativePath, openedGeneration, familySeed.attached);
               coverage.complete(source.relativePath, openedGeneration);
             }
+          }
+          // Own snapshot is a contentHash overlay, never a second full intern.
+          if (ownSnapshotExists && buildFingerprint !== undefined) {
+            ownSnapshotIdentity = {
+              extractorVersion: computeExtractorVersion(),
+              stableIdVersion: STABLE_ID_VERSION,
+              canonicalRepoRoot: repoRoot,
+              buildFingerprint
+            };
+            await overlayOwnSnapshotDiffs(ownSnapshotIdentity, openedGeneration);
           }
         } else if (ownSnapshotExists && buildFingerprint !== undefined) {
           ownSnapshotIdentity = {
@@ -2459,20 +2558,25 @@ async function handle(request: JavaIndexRequest): Promise<void> {
       case "CLOSE": {
         const siblingIds = [...workerRoots.keys()].filter(id => id !== activeRootId);
         if (siblingIds.length > 0) {
-          // Family-shared isolate: drop this root's store only. Do not flush,
-          // join a sibling sweep, or set process-wide `closing` — that is what
-          // blocked the next worktree OPEN and hibernated the hot pin.
-          store?.disposeSharedFacts();
-          store = undefined;
+          // Family-shared isolate: keep this store as the base singleton while
+          // dependents remain (FSX2). Do not flush, join a sibling sweep, or
+          // set process-wide `closing` — that blocked the next worktree OPEN.
           const ownedSweep = backgroundSweep;
           if (ownedSweep && ownedSweep.rootId === activeRootId) {
             await ownedSweep.leaseHandle?.release().catch(() => undefined);
             if (backgroundSweep === ownedSweep) backgroundSweep = undefined;
           }
           status = { ...status, state: "CLOSED" };
+          if (activeRootId && store) {
+            retainedFamilyStores.set(activeRootId, captureRootSession());
+          }
           respond({ id: request.id, ok: true, value: currentStatus() });
           return;
         }
+        for (const session of retainedFamilyStores.values()) {
+          session.store?.disposeSharedFacts();
+        }
+        retainedFamilyStores.clear();
         // Never just null backgroundSweep here: processBackgroundChunk holds
         // its own reference to the sweep object and keeps parsing/mutating
         // the store regardless, and the client calls worker.terminate() right

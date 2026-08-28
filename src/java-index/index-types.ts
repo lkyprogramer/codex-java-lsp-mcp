@@ -278,6 +278,18 @@ export type JavaIndexStatus = {
   factsHydrated?: boolean;
   /** Worker-local heapUsed, published on HIBERNATE (S4). */
   heapUsedBytes?: number;
+  /** FSX0/FSX2: process heap plus family-store counts. Absent on older workers. */
+  heapSplit?: JavaIndexHeapSplit;
+};
+
+export type JavaIndexHeapSplit = {
+  heapUsedMb: number;
+  rssMb: number;
+  poolBundles: number;
+  familyRootCount: number;
+  thisRootFiles: number;
+  thisRootOverlayFiles: number;
+  graphSynced: boolean;
 };
 
 export type JavaTypeLookupResult =

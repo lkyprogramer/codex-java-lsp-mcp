@@ -5,7 +5,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -102,6 +102,33 @@ function footprintMiB(pid) {
       resolve(match ? Number(match[1]) : null);
     });
   });
+}
+
+const daemonLog = path.join(homedir(), "Library/Logs/codex-java-lsp-mcp/daemon.stderr.log");
+const logOffset = existsSync(daemonLog) ? statSync(daemonLog).size : 0;
+
+function scanDaemonLogWindow() {
+  if (!existsSync(daemonLog)) {
+    return { fatal: 0, ebadf: 0, crashMarkers: 0, ready: 0, windowBytes: 0 };
+  }
+  const buf = readFileSync(daemonLog);
+  const text = buf.subarray(Math.min(logOffset, buf.length)).toString("utf8");
+  return {
+    fatal: (text.match(/FATAL ERROR/g) ?? []).length,
+    ebadf: (text.match(/spawn EBADF/g) ?? []).length,
+    crashMarkers: (text.match(/codex-java-lsp-crash/g) ?? []).length,
+    ready: (text.match(/HTTP daemon ready/g) ?? []).length,
+    windowBytes: text.length
+  };
+}
+
+function crashMarkerSourcePresent() {
+  const candidates = [
+    path.join(process.cwd(), "src/process-crash-markers.ts"),
+    path.join(process.cwd(), "dist/process-crash-markers.js"),
+    path.join(homedir(), "Library/Application Support/codex-java-lsp-mcp/current/dist/process-crash-markers.js")
+  ];
+  return candidates.some(file => existsSync(file) && readFileSync(file, "utf8").includes("codex-java-lsp-crash"));
 }
 
 const client = new Client({ name: "v1-acceptance-probe", version: "0.1.0" });
@@ -220,11 +247,16 @@ const d7 = (seed?.completion === "SEEDED_DEGRADED" || seed?.completion === "RECO
   && report.d7.childSpawned === false
   && d7status.elapsedMs <= 15000
   && !d7status.isError;
+const logWindow = scanDaemonLogWindow();
+const fsxFatal = logWindow.fatal === 0;
+const fsxEbadf = logWindow.ebadf === 0;
+const fsxCrashMarkerSource = crashMarkerSourcePresent();
 report.d7.indexedFiles = indexedFiles;
 report.d7.reuseDenom = reuseDenom;
-report.gates = { D2: d2, D3a: d3a, D3b: d3b, D4: d4, D6: d6, D7: d7 };
+report.fsx = { ...logWindow, crashMarkerSource: fsxCrashMarkerSource };
+report.gates = { D2: d2, D3a: d3a, D3b: d3b, D4: d4, D6: d6, D7: d7, FSX_FATAL: fsxFatal, FSX_EBADF: fsxEbadf, FSX_CRASH_MARKER: fsxCrashMarkerSource };
 
 const out = process.env.JAVA_LSP_V1_PROBE_OUT ?? path.join(process.cwd(), "docs/phase-d/v1-probe.json");
 writeFileSync(out, JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report, null, 2));
-process.exitCode = d2 && d3a && d3b && d4 && d6 && d7 ? 0 : 2;
+process.exitCode = d2 && d3a && d3b && d4 && d6 && d7 && fsxFatal && fsxEbadf && fsxCrashMarkerSource ? 0 : 2;

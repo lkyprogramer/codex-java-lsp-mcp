@@ -38,14 +38,34 @@ export function envForJavaIndexWorker(source: NodeJS.ProcessEnv = process.env): 
   return env;
 }
 
+function isSpawnEbadf(error: unknown): boolean {
+  const err = error as NodeJS.ErrnoException;
+  return err?.code === "EBADF" || /spawn EBADF/i.test(String(err?.message ?? error));
+}
+
+function sleepSync(ms: number): void {
+  const buf = new Int32Array(new SharedArrayBuffer(4));
+  Atomics.wait(buf, 0, 0, ms);
+}
+
 export function spawnJavaIndexWorkerProcess(): WorkerLike {
-  const child = fork(fileURLToPath(javaIndexWorkerScriptUrl()), [], {
-    execArgv: javaIndexWorkerExecArgv(),
-    env: envForJavaIndexWorker(),
-    stdio: ["ignore", "inherit", "inherit", "ipc"],
-    serialization: "advanced"
-  });
-  return new ChildProcessWorker(child);
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      const child = fork(fileURLToPath(javaIndexWorkerScriptUrl()), [], {
+        execArgv: javaIndexWorkerExecArgv(),
+        env: envForJavaIndexWorker(),
+        stdio: ["ignore", "inherit", "inherit", "ipc"],
+        serialization: "advanced"
+      });
+      return new ChildProcessWorker(child);
+    } catch (error) {
+      lastError = error;
+      if (!isSpawnEbadf(error) || attempt === 4) throw error;
+      sleepSync(25 * 2 ** attempt);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
 class ChildProcessWorker implements WorkerLike {

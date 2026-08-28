@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -285,6 +285,29 @@ test("family-seeded OPEN answers QUERY_ANCHOR and QUERY_TYPE from the attached s
   }
 });
 
+test("overlayDivergentBundles interns only contentHash diffs after a frozen attach", () => {
+  const pool = new SharedFactsPool();
+  const donor = new JavaIndexStore(pool);
+  const sibling = new JavaIndexStore(pool);
+  const shared = fileBundle("src/main/java/demo/Shared.java", "Shared", "hash-shared");
+  const unique = fileBundle("src/main/java/demo/Unique.java", "Unique", "hash-unique");
+  donor.replaceFile(shared);
+  donor.replaceFile(unique);
+  assert.equal(sibling.attachFromDonorStore(donor), 2);
+  assert.equal(sibling.typesById.get(shared.types[0]!.typeId), donor.typesById.get(shared.types[0]!.typeId));
+  const changed = fileBundle("src/main/java/demo/Unique.java", "Unique", "hash-unique-b");
+  assert.equal(sibling.overlayDivergentBundles([shared, changed]), 1);
+  assert.equal(sibling.file("src/main/java/demo/Shared.java")?.contentHash, "hash-shared");
+  assert.equal(sibling.typesById.get(shared.types[0]!.typeId), donor.typesById.get(shared.types[0]!.typeId));
+  assert.equal(sibling.file("src/main/java/demo/Unique.java")?.contentHash, "hash-unique-b");
+  assert.notEqual(
+    sibling.typesById.get(changed.types[0]!.typeId),
+    donor.typesById.get(unique.types[0]!.typeId)
+  );
+  assert.equal(donor.file("src/main/java/demo/Unique.java")?.contentHash, "hash-unique");
+  assert.equal(pool.size, 3);
+});
+
 test("family-seeded worktree reuses the donor knowledge graph on first query", async () => {
   const pool = new FamilyWorkerPool();
   const fixtures = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "fixtures", "java-index-v2");
@@ -320,6 +343,92 @@ test("family-seeded worktree reuses the donor knowledge graph on first query", a
     assert.equal(siblingGraph.bundles.length, donorGraph.bundles.length);
   } finally {
     await clientA.close();
+    await clientB.close();
+  }
+});
+
+function writeMiniRepo(prefix: string, uniqueBody: string): string {
+  const root = mkdtempSync(path.join(tmpdir(), prefix));
+  writeFileSync(path.join(root, "pom.xml"), "<project></project>\n");
+  const dir = path.join(root, "src", "main", "java", "demo");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(path.join(dir, "Shared.java"), "package demo;\npublic class Shared {}\n");
+  writeFileSync(path.join(dir, "Unique.java"), uniqueBody);
+  return root;
+}
+
+async function waitFor(condition: () => Promise<boolean> | boolean, timeoutMs: number): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await condition()) return;
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+  throw new Error("waitFor timed out");
+}
+
+test("family OPEN with an own snapshot skips full hydrate and overlays only contentHash diffs", async () => {
+  const dirA = writeMiniRepo("fsx2-a-", "package demo;\npublic class Unique { int a; }\n");
+  const dirB = writeMiniRepo("fsx2-b-", "package demo;\npublic class Unique { int b; }\n");
+  const cacheA = mkdtempSync(path.join(tmpdir(), "fsx2-cache-a-"));
+  const cacheB = mkdtempSync(path.join(tmpdir(), "fsx2-cache-b-"));
+  const sharedRel = "src/main/java/demo/Shared.java";
+  const uniqueRel = "src/main/java/demo/Unique.java";
+  const soloB = new JavaIndexClient(dirB, cacheB);
+  try {
+    assert.equal((await soloB.open(1)).state, "READY");
+    await soloB.reconcile(1);
+    await waitFor(async () => (await soloB.status()).snapshot?.state === "DURABLE", 8000);
+    await soloB.close();
+  } finally {
+    await soloB.close().catch(() => undefined);
+  }
+
+  const pool = new FamilyWorkerPool();
+  const clientA = new JavaIndexClient(dirA, cacheA, () => pool.acquire("fam-fsx2", "root-a"), "root-a");
+  const clientB = new JavaIndexClient(dirB, cacheB, () => pool.acquire("fam-fsx2", "root-b"), "root-b");
+  try {
+    assert.equal((await clientA.open(1)).state, "READY");
+    await clientA.refresh(2, [path.join(dirA, sharedRel), path.join(dirA, uniqueRel)], []);
+    const openB = await clientB.open(1);
+    assert.equal(openB.state, "READY");
+    assert.ok((openB.files ?? 0) >= 2, "family seed must attach donor files immediately");
+    assert.notEqual(openB.snapshotVerificationPending, true, "own snapshot must not start a second full hydrate");
+    assert.equal(openB.coverage.every(entry => entry.state === "COMPLETE"), true);
+    const sharedA = (await clientA.queryFiles([path.join(dirA, sharedRel)]))[0];
+    const sharedB = (await clientB.queryFiles([path.join(dirB, sharedRel)]))[0];
+    const uniqueA = (await clientA.queryFiles([path.join(dirA, uniqueRel)]))[0];
+    const uniqueB = (await clientB.queryFiles([path.join(dirB, uniqueRel)]))[0];
+    assert.equal(sharedA?.file.contentHash, sharedB?.file.contentHash);
+    assert.notEqual(uniqueA?.file.contentHash, uniqueB?.file.contentHash);
+    const split = (await clientB.status()).heapSplit;
+    assert.ok(split);
+    assert.ok(split.poolBundles <= 4, `second intern would grow the pool, got ${split.poolBundles}`);
+    assert.ok(split.thisRootOverlayFiles >= 1);
+  } finally {
+    await clientA.close();
+    await clientB.close();
+  }
+});
+
+test("CLOSE of a donor root keeps shared facts for the remaining sibling", async () => {
+  const pool = new FamilyWorkerPool();
+  const fixtures = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "fixtures", "java-index-v2");
+  const cacheA = mkdtempSync(path.join(tmpdir(), "fsx2-retain-a-"));
+  const cacheB = mkdtempSync(path.join(tmpdir(), "fsx2-retain-b-"));
+  const clientA = new JavaIndexClient(fixtures, cacheA, () => pool.acquire("fam-retain", "root-a"), "root-a");
+  const clientB = new JavaIndexClient(fixtures, cacheB, () => pool.acquire("fam-retain", "root-b"), "root-b");
+  const absolutePath = path.join(fixtures, "src/main/java/demo/PaymentGateway.java");
+  try {
+    assert.equal((await clientA.open(1)).state, "READY");
+    await clientA.refresh(2, [absolutePath], []);
+    assert.equal((await clientB.open(1)).state, "READY");
+    await clientA.close();
+    const sibling = (await clientB.queryFiles([absolutePath]))[0];
+    assert.ok(sibling);
+    assert.ok(sibling.types.some(type => type.simpleName === "PaymentGateway"));
+    const typeLookup = await clientB.queryType("PaymentGateway", absolutePath);
+    assert.equal(typeLookup.state, "RESOLVED");
+  } finally {
     await clientB.close();
   }
 });

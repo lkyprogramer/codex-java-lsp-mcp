@@ -30,4 +30,7 @@ ulimit -n 65536 2>/dev/null || true
 # 768 caps the HTTP isolate only. JavaIndex runs in forked children with
 # --max-old-space-size=1536; Worker threads would inherit 768 and a hydrate
 # OOM would abort this daemon.
+# FSX0: 12 FATALs peaked at 848MB with JsonStringify on the native stack.
+# Do not raise to 1024 unless a post-FSX1 near-heap snapshot names a new
+# legitimate retainer. --heapsnapshot-near-heap-limit is evidence-only.
 exec "$NODE_BIN" --max-old-space-size=768 "$CURRENT_DIR/dist/http-server.js"

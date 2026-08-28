@@ -3,7 +3,7 @@
 //         clock — independent of whether JDT LS is running.
 // pos: The repo's freshness engine. Owns one chokidar watcher per worktree; the
 //      JDT session is only a listener, never the source of invalidation.
-import { watch, type FSWatcher } from "chokidar";
+import { watchRepoTargets, type RepoFsWatcher } from "./repo-fs-watch.js";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import type { LayoutContext } from "./layout-probe.js";
@@ -198,7 +198,7 @@ export type RepoChangeCoordinatorStatus = {
 };
 
 export class RepoChangeCoordinator {
-  private watcher?: FSWatcher;
+  private watcher?: RepoFsWatcher;
   private plan?: RepoWatchPlan;
   private readonly pending = new Map<string, RepoChange>();
   private readonly listeners = new Set<RepoChangeListener>();
@@ -236,19 +236,11 @@ export class RepoChangeCoordinator {
         return;
       }
       const plan = this.ensurePlan();
-      const watcher = watch(plan.targets, {
-        ignoreInitial: true,
+      // Darwin: one recursive fs.watch (FSEvents) per plan target, not chokidar 5's
+      // per-directory fs.watch. lishuedu source trees are ~19k dirs; that many FDs
+      // made fork() fail with spawn EBADF during 4-pin prewarm.
+      const watcher = watchRepoTargets(plan.targets, {
         persistent: true,
-        followSymlinks: false,
-        // Our own mergeRepoChange() already collapses delete+add of the same
-        // path into JAVA_CHANGE. Chokidar's atomic coalescing can suppress the
-        // unlink half of a real cross-path rename on macOS, leaving the old
-        // JavaIndex fact live, so keep the raw pair here.
-        atomic: false,
-        awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 20 },
-        // Reads `this.plan` dynamically (not the `plan` captured above) so a
-        // build-change reconfigure keeps the generated-root allowlist current.
-        // Must stay syscall-free: it runs per initial-scan entry and per event.
         ignored: candidate => isIgnoredRepoPathFast(candidate, this.currentIgnoreContext())
       });
       this.watcher = watcher;
@@ -256,7 +248,7 @@ export class RepoChangeCoordinator {
         .on("add", file => this.queueClassified(file, "add"))
         .on("change", file => this.queueClassified(file, "change"))
         .on("unlink", file => this.queueClassified(file, "unlink"))
-        .on("error", error => this.degrade(error));
+        .on("error", error => this.degrade(error instanceof Error ? error : new Error(String(error))));
       watcher.once("ready", () => {
         this.ready = true;
         resolve();

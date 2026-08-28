@@ -916,6 +916,25 @@ export class JavaIndexStore {
     return this.installedBundles.get(relativePath);
   }
 
+  overlayFileCount(): number {
+    return this.overlayFiles.size;
+  }
+
+  /**
+   * Replace only bundles whose contentHash differs from the frozen donor view.
+   * Identical hashes stay as pool refs — this is the FSX2 overlay, not a second intern.
+   */
+  overlayDivergentBundles(bundles: Iterable<JavaFileBundle>): number {
+    let overlaid = 0;
+    for (const bundle of bundles) {
+      const current = this.installedBundles.get(bundle.file.relativePath);
+      if (current && current.file.contentHash === bundle.file.contentHash) continue;
+      this.replaceFile(bundle);
+      overlaid += 1;
+    }
+    return overlaid;
+  }
+
   disposeSharedFacts(): void {
     for (const bundle of this.installedBundles.values()) {
       this.factsPool?.release(bundle.file.contentHash);

@@ -1,0 +1,73 @@
+{
+  "sampledAt": "2026-08-28T06:40:00.000Z",
+  "buildSha": "951e1e76d27c",
+  "method": "live idle sample + this-machine daemon.stderr.log V8 dumps. Did not leave --heapsnapshot-near-heap-limit=1 on the production launch flag.",
+  "daemon": {
+    "capMb": 768,
+    "capDecision": "keep-768",
+    "capDecisionReason": "11 of 12 FATAL stacks are v8::internal::JsonStringify while approaching the 768 isolate. Native stack names stringify, not a new family-pool retainer that would justify 1024. FSX1 recursive watch is the leak/fd fix; raise only if post-fix near-heap still OOMs.",
+    "idle": {
+      "sampledAt": "2026-08-28T06:32:00.000Z",
+      "pid": 44339,
+      "rssKb": 45920,
+      "rssMb": 44.8,
+      "fdTotal": 23,
+      "fdBuckets": {
+        "chr": 2,
+        "dir": 1,
+        "file": 5,
+        "kqueue": 3,
+        "net": 1,
+        "pipe": 10,
+        "unix": 1
+      },
+      "note": "Post-recycle idle. Watchers are not holding source FDs."
+    },
+    "oomWindow": {
+      "fatalCountInLog": 12,
+      "jsonStringifyFatalCount": 11,
+      "peakHeapMb": 848.3,
+      "peakHeapSource": "daemon.stderr.log pid=53873 Mark-Compact 848.3 (871.8) -> 821.5 (837.6) MB then FATAL heap limit",
+      "retainer": "JsonStringify",
+      "retainerEvidence": "Native stack: Factory::NewStringFromTwoByte <- JsonStringify <- Builtin_JsonStringify <- ArrayMap <- AsyncFunctionAwaitResolveClosure; AfterOpenFileHandle on the same dump (watcher/fs open coinciding with stringify)."
+    },
+    "predictedPrewarmFdIfPerDirWatch": {
+      "lishueduSourceRoots": 750,
+      "lishueduSourceTreeDirs": 19058,
+      "lishuV2SourceRoots": 37,
+      "lishuV2SourceTreeDirs": 709,
+      "cipherlinkSourceRoots": 27,
+      "cipherlinkSourceTreeDirs": 301,
+      "examParentV3SourceRoots": 32,
+      "examParentV3SourceTreeDirs": 387,
+      "sourceTreeDirSum": 20455,
+      "sourceRootSum": 846,
+      "note": "chokidar 5 fs.watch per directory on source trees. 20k FDs explains spawn EBADF. Recursive native watch is one FD per plan target (~846 source roots + resource/generated/build files), target <= 2000."
+    }
+  },
+  "familyWorker": {
+    "capMb": 1536,
+    "idle": {
+      "pid": 44497,
+      "rssKb": 25136,
+      "rssMb": 24.5,
+      "fdTotal": 19
+    },
+    "historicalHydratedDonorMb": 641,
+    "historicalHydratedDonorSource": "docs/phase-fs/fs0-ledger.json workerFootprintMb",
+    "oomPeakMb": 1459.4,
+    "oomPeakSource": "daemon.stderr.log pid=44361 Mark-Compact 1459.4 (1624.1) MB (worker 1536 isolate, own-snapshot hydrate stacked on donor)",
+    "heapSplitFields": [
+      "heapUsedMb",
+      "rssMb",
+      "poolBundles",
+      "familyRootCount",
+      "thisRootFiles",
+      "thisRootOverlayFiles",
+      "graphSynced"
+    ],
+    "steadyHeapCapMb": 891,
+    "steadyHeapCapRule": "donor+250MB calibrated from fs0-ledger donor 641 + plan default 250"
+  },
+  "fsx2FamilyWorkerSteadyHeapCapMb": 891
+}

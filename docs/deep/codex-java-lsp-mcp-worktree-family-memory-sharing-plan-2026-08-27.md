@@ -1,6 +1,6 @@
 # Worktree Family 内存共享方案（FS 轨）
 
-状态：PROPOSED（R0，2026-08-27）
+状态：ADOPTED（R1，2026-08-28）——§6 新增 FS2 落地后三类故障的终局裁决与 FSX 任务卡
 前置：`docs/deep/codex-java-lsp-mcp-daemon-stability-and-memory-plan-2026-08-25.md`（R4，已合 main）
 触发：用户反馈「每个 worktree ~1.5GB，多项目多 worktree 常开时不可接受，为什么不能共享」
 
@@ -113,3 +113,55 @@ flat binary 列式段 + mmap 只读共享。仅当 FS2 后单 family base 仍成
 ## 5. 执行顺序
 
 FS0 → FS1（止血，先上线）→ FS2(a)(b)(c) → 场景 S 终验 → 合 main。J 轨（JDT，daemon plan §9.6）与 FS 轨独立，可并行。
+
+---
+
+## 6. FS2 落地后终局裁决（R1，2026-08-28）
+
+### 6.1 现场证据（`codex/fs-track` 16 commits，live 951e1e7）
+
+FS0 实测 familyOverlapRatio **0.986**；FS2 已落 FamilyWorkerPool + donor overlay（`attachFromDonorStore` O(1) 引用）+ donor graph/search 复用（QUERY_CONTEXT_GRAPH 107ms vs 3982ms 建图）。但场景 S 仍 FAIL，`daemon.stderr.log` 揭示**三类叠加故障**：
+
+1. **family worker OOM（heap 1459MB 撞 1536 墙）**：`java-index-worker.ts` OPEN 路径对**有自己磁盘快照的 root 仍做全量 own-snapshot hydrate**（6 个 lishu-v2 worktree cache 全有 16–19MB 快照）。donor 共享只覆盖 graph/search 与无快照 root 的 seed。donor（~650MB）+ N×own hydrate（各数百 MB）+ graph 装进一个 1536 进程 → OOM。grok 实测 G1 2006MB footprint 即此。
+2. **daemon OOM（heap ~850MB 撞 run-daemon.sh 的 `--max-old-space-size=768` 墙）**：日志共 12 次 `FATAL ERROR: Reached heap limit`，多数 pid 在 prewarm(pins=4) 完成后 78–186s 崩溃。launchd KeepAlive 静默重启（ThrottleInterval 10s），表现为「所有 repo 突然 15s 超时」——遥测里 lishuedu java_status 15002ms FAIL 与 ee80 首查同窗即此。**成分未取证**（嫌疑：fork IPC 大响应物化、family pool 重试风暴放大）。
+3. **`spawn EBADF`（fork family worker 失败，errno -9）**：无 fsevents 时 chokidar 逐目录 `fs.watch` 占 fd；4 pin（lishuedu 目录数万计）常驻数万 fd，fork 时命中 EBADF。`run-daemon.sh` 注释早已自证（"Pin watchers … can hold thousands of source FDs"）。prewarm 期间 cipherlink worker spawn 直接失败。
+
+ee80 首查 19568ms（遥测，coldPath heuristic 优雅返回 0 items）≈ own hydrate 排队 + daemon 崩溃窗口；grok 目测的 55.2s 包含 daemon 重启期。**修复 (1) 后此项预期自然消失，仍需回归验证。**
+
+### 6.2 裁决
+
+- FS2 的「family 合并进程」方向正确（graph 复用已证 37 倍加速），但**合并进程放大了不彻底共享的代价**：以前 4 个 root 各自 700MB 分散在 4 个进程，现在挤进一个 1536 进程立即爆。**base 单例化不是优化项，是合并进程的前置条件**——必须让同 family 的 facts 在进程内只有一份。
+- daemon 768 cap 是 §9 时代按「daemon 只做路由」定的；FS2 后 daemon 是否多了大 heap 路径必须取证后再动 cap，不允许无证据抬 cap 掩盖泄漏。
+- EBADF 与 FS 轨无关但被 prewarm+family spawn 放大，独立成卡。
+
+### 6.3 FSX 任务卡
+
+**FSX0：三点取证（0.5 天，只读，先行）**
+- daemon：run-daemon.sh 临时加 `--heapsnapshot-near-heap-limit=1`，复现 prewarm 后 OOM，用 heap snapshot 钉出 daemon ~850MB 的 retainer（嫌疑顺序：IPC 响应物化 > family pool 句柄 > telemetry/watcher）。
+- worker：STATUS RPC 补 `heapUsedMb` 分解（donor store / 各 root store / graph），场景 S 各步采样落 `docs/phase-fs/fsx0-heap-ledger.json`。
+- fd：`lsof -p <daemon pid> | wc -l` 在 prewarm 前后采样，按类型（kqueue/dir/file）分桶。
+- 退出：三个数字落盘；FSX2/FSX3 的目标数值由此校准。
+
+**FSX1：watcher fd 治理，消灭 EBADF（1 天）**
+- 首选：引入 `fsevents`（macOS 原生，单 fd per watch root；chokidar 检测到即自动使用）为生产依赖；`package.json` optionalDependencies + 安装脚本校验。
+- 兜底（若 fsevents 与 Node 22 ABI 有问题）：watcher 范围收敛到 `sourceRoots`（现在 watch 整个 repoRoot），lishuedu 类超大仓的 fd 数量级下降。
+- 门：prewarm 4 pins 后 daemon fd 总数 ≤ 2000；重复 20 次 family worker spawn 0 EBADF。
+
+**FSX2：family base 单例化（3–5 天，主卡）**
+- 核心改动：`java-index-worker.ts` OPEN 路径——root 属于已有 donor 的 family 时，**跳过 own-snapshot 全量 hydrate**，改为：donor overlay 引用（已有 `attachFromDonorStore`）+ 对 own 快照逐文件 contentHash 对比，仅差异文件（FS0 实测 ~1.4%）物化进本 root overlay；其余引用 donor 池对象。
+- 覆盖语义：seed 后 coverage 直接 COMPLETE（per-file contentHash 已校验，与 Task 21a reconcile 同一信任链）；watcher 增量走本 root overlay，不碰 donor。
+- donor 生命周期：donor root 关闭时若仍有依赖 root，store 保留（引用计数），仅拆其 watcher/session 壳。
+- 门（场景 S）：family worker 稳态 heap ≤ donor+250MB（FSX0 校准后定死数字）；G1 总 footprint ≤ 1.1GiB；G2 worktree 首查 P95 ≤ 3s 且候选非 0；G4 worktree 改动文件差异可见性定向单测；identity 三仓 0 delta。
+- 失败处理：三振后回退到「family 合并进程仅限无 own 快照的 root，有快照的 root 退回独立 worker」（保住 FS1 收益），升级 0A.4(4b)。
+
+**FSX3：daemon heap 治理（取证后 0.5–1 天）**
+- 按 FSX0 heap snapshot 结论修真源（若是 IPC 物化：大响应改流式/分块或裁剪 payload；若是重试风暴：spawn 失败退避）。
+- cap 裁决：修复后 daemon 稳态 heap 若 ≤400MB，768 维持；确有合理新增（family pool 常驻）则一次性调至 1024 并在 run-daemon.sh 注释记账。
+- 门：连续 3 次 restart+prewarm+场景 S，0 次 daemon FATAL；`HTTP daemon ready` 在 24h 内出现次数 ≤ 安装次数+1。
+
+**FSX4：崩溃可观测性（0.5 天，随 FSX3 合并提交）**
+- daemon/worker `process.on("exit"/"uncaughtException")` 前落一行结构化 crash 标记；`probe-daemon-acceptance.mjs` 断言测试窗口内 0 FATAL / 0 EBADF（此前 12 次 OOM 全被 KeepAlive 掩盖，靠翻日志才发现，不可接受）。
+
+### 6.4 执行顺序（替代 §5，自 R1 起）
+
+FSX0（取证）→ FSX1（EBADF）→ FSX2（base 单例化）→ FSX3+FSX4（daemon 治理+可观测）→ 场景 S 终验（G1–G4 + 0 FATAL + 0 EBADF）→ 合 main。ee80 首查回归在 FSX2 门内验证，不单独设卡。
