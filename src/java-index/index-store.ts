@@ -325,9 +325,9 @@ export class JavaIndexStore {
   attachFromDonorStore(donor: JavaIndexStore): number {
     donor.publishHydratedToPool();
     let attached = 0;
-    for (const file of donor.filesByPath.values()) {
-      const bundle = donor.installedBundle(file.relativePath) ?? donor.files([file.relativePath])[0];
-      if (!bundle) continue;
+    // Walk the already-pooled map only. filesByPath.values()/files() would
+    // materialize 22k methods on the shared isolate and stall OPEN 12–45s.
+    for (const bundle of donor.installedBundles.values()) {
       this.bindFrozenBundle(bundle);
       attached += 1;
     }
