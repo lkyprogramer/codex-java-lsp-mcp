@@ -108,17 +108,41 @@ test("two stores share contentHash facts and isolate a changed file", () => {
   assert.equal(pool.size, 0);
 });
 
-test("attachFromDonorStore resolves methods through the donor without a second intern", () => {
+test("attachFromDonorStore freezes the sibling view so donor.replaceFile does not leak", () => {
   const pool = new SharedFactsPool();
   const donor = new JavaIndexStore(pool);
   const original = fileBundle("src/main/java/demo/A.java", "A", "hash-a");
   donor.replaceFile(original);
   const sibling = new JavaIndexStore(pool);
   assert.equal(sibling.attachFromDonorStore(donor), 1);
+
+  const relativePath = original.file.relativePath;
+  const typeId = original.types[0]!.typeId;
   const methodId = original.methods[0]!.methodId;
-  assert.equal(sibling.files(["src/main/java/demo/A.java"])[0]?.methods[0]?.name, "run");
-  assert.equal(sibling.file("src/main/java/demo/A.java")?.contentHash, "hash-a");
-  assert.equal(donor.methodsById.get(methodId)?.name, "run");
+  const anchored = sibling.anchor(relativePath, RANGE.start.line, RANGE.start.column);
+  assert.ok(anchored, "QUERY_ANCHOR entry point must resolve after family seed");
+  assert.notEqual(anchored.symbolKind, "FILE");
+  assert.equal(anchored.file.contentHash, "hash-a");
+  assert.equal(sibling.typesById.get(typeId)?.simpleName, "A");
+  assert.equal(sibling.methodsById.get(methodId)?.name, "run");
+  const lookup = sibling.typeLookup("demo.A");
+  assert.equal(lookup.state, "RESOLVED");
+  assert.equal((lookup as { type: JavaTypeFacts }).type.typeId, typeId);
+
+  const changed = fileBundle(relativePath, "A", "hash-a-changed");
+  changed.methods[0] = { ...changed.methods[0]!, name: "updated" };
+  donor.replaceFile(changed);
+  assert.equal(donor.file(relativePath)?.contentHash, "hash-a-changed");
+  assert.equal(donor.methodsById.get(methodId)?.name, "updated");
+  assert.equal(sibling.file(relativePath)?.contentHash, "hash-a");
+  assert.equal(sibling.installedBundle(relativePath)?.file.contentHash, "hash-a");
+  assert.equal(sibling.methodsById.get(methodId)?.name, "run");
+  const after = sibling.anchor(relativePath, RANGE.start.line, RANGE.start.column);
+  assert.ok(after);
+  assert.equal(after.file.contentHash, "hash-a");
+  const lookupAfter = sibling.typeLookup("demo.A");
+  assert.equal(lookupAfter.state, "RESOLVED");
+  assert.equal((lookupAfter as { type: JavaTypeFacts }).type.typeId, typeId);
 });
 
 test("sibling attachSharedBundle reuses methods without a second SoA intern", () => {
@@ -186,6 +210,73 @@ test("two family roots share one worker process and keep overlay isolation", asy
     const statusB = await clientB.status();
     assert.equal(statusA.state, "READY");
     assert.equal(statusB.state, "READY");
+  } finally {
+    await clientA.close();
+    await clientB.close();
+  }
+});
+
+test("recycling a family worktree does not hibernate the donor root", async () => {
+  const pool = new FamilyWorkerPool();
+  const fixtures = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "fixtures", "java-index-v2");
+  const cacheA = mkdtempSync(path.join(tmpdir(), "fs2-keep-a-"));
+  const cacheB = mkdtempSync(path.join(tmpdir(), "fs2-keep-b-"));
+  const clientA = new JavaIndexClient(fixtures, cacheA, () => pool.acquire("fam-keep", "root-a"), "root-a");
+  const clientB = new JavaIndexClient(fixtures, cacheB, () => pool.acquire("fam-keep", "root-b"), "root-b");
+  const absolutePath = path.join(fixtures, "src/main/java/demo/PaymentGateway.java");
+  try {
+    assert.equal((await clientA.open(1)).state, "READY");
+    await clientA.refresh(2, [absolutePath], []);
+    const donorBundle = (await clientA.queryFiles([absolutePath]))[0];
+    const paymentGateway = donorBundle?.types.find(type => type.simpleName === "PaymentGateway");
+    assert.ok(paymentGateway);
+    assert.equal((await clientB.open(1)).state, "READY");
+    assert.equal(pool.rootCount("fam-keep"), 2);
+    await clientB.recycle();
+    assert.equal(pool.rootCount("fam-keep"), 1);
+    const t0 = Date.now();
+    const anchor = await clientA.queryAnchor(
+      absolutePath,
+      paymentGateway.range.start.line,
+      paymentGateway.range.start.column
+    );
+    assert.ok(Date.now() - t0 < 2000, "donor query after sibling recycle must not rehydrate");
+    assert.equal(anchor?.symbolId, paymentGateway.typeId);
+  } finally {
+    await clientA.close();
+    await clientB.close();
+  }
+});
+
+test("family-seeded OPEN answers QUERY_ANCHOR and QUERY_TYPE from the attached store", async () => {
+  const pool = new FamilyWorkerPool();
+  const fixtures = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "fixtures", "java-index-v2");
+  const cacheA = mkdtempSync(path.join(tmpdir(), "fs2-open-a-"));
+  const cacheB = mkdtempSync(path.join(tmpdir(), "fs2-open-b-"));
+  const clientA = new JavaIndexClient(fixtures, cacheA, () => pool.acquire("fam-open", "root-a"), "root-a");
+  const clientB = new JavaIndexClient(fixtures, cacheB, () => pool.acquire("fam-open", "root-b"), "root-b");
+  const absolutePath = path.join(fixtures, "src/main/java/demo/PaymentGateway.java");
+  try {
+    assert.equal((await clientA.open(1)).state, "READY");
+    await clientA.refresh(2, [absolutePath], []);
+    const donorBundle = (await clientA.queryFiles([absolutePath]))[0];
+    assert.ok(donorBundle);
+    const paymentGateway = donorBundle.types.find(type => type.simpleName === "PaymentGateway");
+    assert.ok(paymentGateway);
+    assert.ok(donorBundle.methods.length > 0);
+
+    assert.equal((await clientB.open(1)).state, "READY");
+    const anchor = await clientB.queryAnchor(
+      absolutePath,
+      paymentGateway.range.start.line,
+      paymentGateway.range.start.column
+    );
+    assert.equal(anchor?.symbolId, paymentGateway.typeId);
+    const typeLookup = await clientB.queryType("PaymentGateway", absolutePath);
+    assert.equal(typeLookup.state, "RESOLVED");
+    assert.equal((typeLookup as { type: JavaTypeFacts }).type.typeId, paymentGateway.typeId);
+    const siblingBundle = (await clientB.queryFiles([absolutePath]))[0];
+    assert.equal(siblingBundle?.file.contentHash, donorBundle.file.contentHash);
   } finally {
     await clientA.close();
     await clientB.close();

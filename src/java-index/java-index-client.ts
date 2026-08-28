@@ -310,16 +310,18 @@ export class JavaIndexClient {
   }
 
   /**
-   * Hibernate then kill the index child process so its old-gen returns to the
-   * OS. The next request lazily OPEN's a fresh worker.
+   * Drop this root from the worker. On a family-shared process that is CLOSE
+   * of this rootId only — never process-wide HIBERNATE, which would flush and
+   * unload the hot pin sitting on the same isolate. The OS process dies only
+   * when FamilyWorkerPool releases the last root. Next request lazily OPEN's.
    */
   async recycle(requestOptions: JavaIndexRequestOptions = {}): Promise<void> {
     if (this.state === "CLOSED") return;
     if (this.worker) {
       try {
-        await this.hibernate(requestOptions);
+        await this.request({ type: "CLOSE" }, () => undefined, requestOptions);
       } catch {
-        // Isolate must still die; a failed HIBERNATE is not a reason to keep ~1 GiB.
+        // Isolate/handle must still drop; a failed CLOSE is not a reason to keep the root pinned.
       }
     }
     const worker = this.worker;

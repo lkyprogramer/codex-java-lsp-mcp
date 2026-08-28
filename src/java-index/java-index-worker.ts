@@ -1789,7 +1789,7 @@ function seedFromFamilyMemory(generation: number): { attached: number; total: nu
     const attached = store.attachFromDonorStore(donor);
     if (attached > 0) {
       store.stampGeneration(
-        [...donor.filesByPath.values()].map(file => file.relativePath),
+        [...store.filesByPath.values()].map(file => file.relativePath),
         generation
       );
       return { attached, total: files };
@@ -2106,6 +2106,7 @@ async function beginBackgroundSweep(generation: number): Promise<void> {
 }
 
 async function processBackgroundChunk(sweep: BackgroundSweep): Promise<void> {
+  if (backgroundSweep !== sweep) return;
   if (sweep.rootId) activateRoot(sweep.rootId);
   if (!sweep.leaseHandle) {
     try {
@@ -2119,6 +2120,10 @@ async function processBackgroundChunk(sweep: BackgroundSweep): Promise<void> {
         error instanceof Error ? error.message : error
       );
       backgroundSweep = undefined;
+      return;
+    }
+    if (backgroundSweep !== sweep) {
+      await sweep.leaseHandle.release().catch(() => undefined);
       return;
     }
   }
@@ -2436,6 +2441,22 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         return;
       }
       case "CLOSE": {
+        const siblingIds = [...workerRoots.keys()].filter(id => id !== activeRootId);
+        if (siblingIds.length > 0) {
+          // Family-shared isolate: drop this root's store only. Do not flush,
+          // join a sibling sweep, or set process-wide `closing` — that is what
+          // blocked the next worktree OPEN and hibernated the hot pin.
+          store?.disposeSharedFacts();
+          store = undefined;
+          const ownedSweep = backgroundSweep;
+          if (ownedSweep && ownedSweep.rootId === activeRootId) {
+            await ownedSweep.leaseHandle?.release().catch(() => undefined);
+            if (backgroundSweep === ownedSweep) backgroundSweep = undefined;
+          }
+          status = { ...status, state: "CLOSED" };
+          respond({ id: request.id, ok: true, value: currentStatus() });
+          return;
+        }
         // Never just null backgroundSweep here: processBackgroundChunk holds
         // its own reference to the sweep object and keeps parsing/mutating
         // the store regardless, and the client calls worker.terminate() right
@@ -2590,7 +2611,8 @@ async function drainForeground(): Promise<void> {
 workerPort?.onMessage((request: JavaIndexRequest) => {
   const rootId = rootIdOf(request);
   if (request.type === "CLOSE") {
-    if (activeRootId === rootId) closing = true;
+    const siblings = [...workerRoots.keys()].filter(id => id !== rootId);
+    if (siblings.length === 0 && activeRootId === rootId) closing = true;
     else {
       const session = workerRoots.get(rootId);
       if (session) session.closing = true;

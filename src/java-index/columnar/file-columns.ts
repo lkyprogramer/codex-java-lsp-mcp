@@ -230,12 +230,11 @@ export class FileColumns {
 export class FileIdMap {
   constructor(
     private readonly columns: FileColumns,
-    private readonly overlay: Map<string, JavaFileFacts> = new Map(),
-    private readonly extraSize: () => number = () => 0
+    private readonly overlay: Map<string, JavaFileFacts> = new Map()
   ) {}
 
   get size(): number {
-    return this.columns.size + this.overlay.size + this.extraSize();
+    return this.columns.size + this.overlay.size;
   }
 
   get(relativePath: string): JavaFileFacts | undefined {

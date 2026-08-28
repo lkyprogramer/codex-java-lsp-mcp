@@ -119,17 +119,11 @@ function validateBundleIds(bundle: JavaFileBundle): void {
 export class JavaIndexStore {
   constructor(private readonly factsPool?: SharedFactsPool) {}
 
-  private donor?: JavaIndexStore;
-
   private readonly installedBundles = new Map<string, JavaFileBundle>();
   private readonly overlayFiles = new Map<string, JavaFileFacts>();
   private readonly edgeColumns = new EdgeColumns();
   private readonly fileColumns = new FileColumns(this.edgeColumns.strings, this.edgeColumns.ranges);
-  readonly filesByPath: FileIdMap = new FileIdMap(
-    this.fileColumns,
-    this.overlayFiles,
-    (): number => this.donor?.filesByPath.size ?? 0
-  );
+  readonly filesByPath: FileIdMap = new FileIdMap(this.fileColumns, this.overlayFiles);
   readonly typesById = new Map<string, JavaTypeFacts>();
   readonly typeIdByFqn = new Map<string, string>();
   readonly typeIdsBySimpleName = new Map<string, Set<string>>();
@@ -313,12 +307,21 @@ export class JavaIndexStore {
   }
 
   /**
-   * Point this store at a sibling's interned facts without copying SoA rows.
-   * Methods/edges resolve through the donor until this root overlays a file.
+   * Freeze a sibling view of the donor's current bundles. SharedFactsPool
+   * keeps identical contentHash objects; a later donor.replaceFile must not
+   * become this root's facts. OPEN family seed uses this instead of a live
+   * donor pointer so file()/anchor()/typeLookup() read this store's maps.
    */
   attachFromDonorStore(donor: JavaIndexStore): number {
-    this.donor = donor;
-    return donor.filesByPath.size;
+    donor.publishHydratedToPool();
+    let attached = 0;
+    for (const file of donor.filesByPath.values()) {
+      const bundle = donor.installedBundle(file.relativePath) ?? donor.files([file.relativePath])[0];
+      if (!bundle) continue;
+      this.attachSharedBundle(bundle);
+      attached += 1;
+    }
+    return attached;
   }
 
   /** After snapshot ingest, register reconstructed bundles so siblings can attach. */
@@ -392,13 +395,13 @@ export class JavaIndexStore {
   }
 
   file(relativePath: string): JavaFileFacts | undefined {
-    return this.filesByPath.get(relativePath) ?? this.donor?.file(relativePath);
+    return this.filesByPath.get(relativePath);
   }
 
   typeByFqn(fqn: string): JavaTypeFacts | undefined {
-    const typeId = this.typeIdByFqn.get(fqn) ?? this.donor?.typeIdByFqn.get(fqn);
+    const typeId = this.typeIdByFqn.get(fqn);
     if (!typeId) return undefined;
-    return this.typesById.get(typeId) ?? this.donor?.typesById.get(typeId);
+    return this.typesById.get(typeId);
   }
 
   anchor(relativePath: string, line: number, column: number): AnchorFacts | undefined {
@@ -652,17 +655,17 @@ export class JavaIndexStore {
       const types: JavaTypeFacts[] = [];
       const fields: JavaFieldFacts[] = [];
       const methods: JavaMethodFacts[] = [];
-      const owned = this.fileOwnedNodeIds.get(relativePath) ?? this.donor?.fileOwnedNodeIds.get(relativePath);
+      const owned = this.fileOwnedNodeIds.get(relativePath);
       for (const nodeId of owned ?? []) {
-        const type = this.typesById.get(nodeId) ?? this.donor?.typesById.get(nodeId);
+        const type = this.typesById.get(nodeId);
         if (type) { types.push(type); continue; }
-        const field = this.fieldsById.get(nodeId) ?? this.donor?.fieldsById.get(nodeId);
+        const field = this.fieldsById.get(nodeId);
         if (field) { fields.push(field); continue; }
-        const method = this.methodsById.get(nodeId) ?? this.donor?.methodsById.get(nodeId);
+        const method = this.methodsById.get(nodeId);
         if (method) methods.push(method);
       }
       const edges: StaticEdge[] = [];
-      const ownedEdges = this.fileOwnedEdgeIds.get(relativePath) ?? this.donor?.fileOwnedEdgeIds.get(relativePath);
+      const ownedEdges = this.fileOwnedEdgeIds.get(relativePath);
       for (const edgeId of ownedEdges ?? []) {
         const edge = this.edgesById.get(edgeId);
         if (edge) edges.push(edge);
@@ -860,7 +863,6 @@ export class JavaIndexStore {
     this.overlayEdges.clear();
     this.methodRedirects.clear();
     this.edgeRedirects.clear();
-    this.donor = undefined;
   }
 
   private internOrShare(bundle: JavaFileBundle, previous: JavaFileBundle | undefined): JavaFileBundle {
