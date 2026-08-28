@@ -135,7 +135,6 @@ export class JavaIndexStore {
   private readonly edgeRedirects = new Map<string, DonorRedirect>();
   private frozenMethodCount = 0;
   private frozenEdgeCount = 0;
-  private frozenMethodIndex?: Map<string, JavaMethodFacts>;
   readonly methodsById = new MethodIdMap(
     this.methodColumns,
     this.overlayMethods,
@@ -343,7 +342,6 @@ export class JavaIndexStore {
     if (previous) this.removeFileInternal(relativePath, false);
     this.overlayFiles.set(relativePath, installed.file);
     this.installedBundles.set(relativePath, installed);
-    this.frozenMethodIndex = undefined;
     this.frozenMethodCount += installed.methods.length;
     this.frozenEdgeCount += installed.edges.length;
     const ownedNodeIds = new Set<string>();
@@ -361,16 +359,17 @@ export class JavaIndexStore {
   }
 
   private lookupFrozenMethod(methodId: string): JavaMethodFacts | undefined {
-    if (!this.frozenMethodIndex) {
-      const index = new Map<string, JavaMethodFacts>();
-      for (const relativePath of this.overlayFiles.keys()) {
-        const frozen = this.installedBundles.get(relativePath);
-        if (!frozen) continue;
-        for (const method of frozen.methods) index.set(method.methodId, method);
-      }
-      this.frozenMethodIndex = index;
-    }
-    return this.frozenMethodIndex.get(methodId);
+    if (!methodId.startsWith("method:")) return undefined;
+    const rest = methodId.slice("method:".length);
+    const hashAt = rest.indexOf("#");
+    if (hashAt < 0) return undefined;
+    const ownerType = this.typesById.get(rest.slice(0, hashAt));
+    if (!ownerType) return undefined;
+    const relativePath = ownerType.fileId.startsWith("file:")
+      ? ownerType.fileId.slice("file:".length)
+      : ownerType.fileId;
+    const frozen = this.overlayFiles.has(relativePath) ? this.installedBundles.get(relativePath) : undefined;
+    return frozen?.methods.find(method => method.methodId === methodId);
   }
 
   private acquirePooledBundle(bundle: JavaFileBundle, previous: JavaFileBundle | undefined): JavaFileBundle {
@@ -929,7 +928,6 @@ export class JavaIndexStore {
     this.edgeRedirects.clear();
     this.frozenMethodCount = 0;
     this.frozenEdgeCount = 0;
-    this.frozenMethodIndex = undefined;
   }
 
   private internOrShare(bundle: JavaFileBundle, previous: JavaFileBundle | undefined): JavaFileBundle {
@@ -955,7 +953,6 @@ export class JavaIndexStore {
     if (wasFrozen && previous) {
       this.frozenMethodCount = Math.max(0, this.frozenMethodCount - previous.methods.length);
       this.frozenEdgeCount = Math.max(0, this.frozenEdgeCount - previous.edges.length);
-      this.frozenMethodIndex = undefined;
     }
     this.fileColumns.remove(relativePath);
 

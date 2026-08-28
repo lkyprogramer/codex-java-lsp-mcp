@@ -284,3 +284,42 @@ test("family-seeded OPEN answers QUERY_ANCHOR and QUERY_TYPE from the attached s
     await clientB.close();
   }
 });
+
+test("family-seeded worktree reuses the donor knowledge graph on first query", async () => {
+  const pool = new FamilyWorkerPool();
+  const fixtures = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "fixtures", "java-index-v2");
+  const cacheA = mkdtempSync(path.join(tmpdir(), "fs2-graph-a-"));
+  const cacheB = mkdtempSync(path.join(tmpdir(), "fs2-graph-b-"));
+  const clientA = new JavaIndexClient(fixtures, cacheA, () => pool.acquire("fam-graph", "root-a"), "root-a");
+  const clientB = new JavaIndexClient(fixtures, cacheB, () => pool.acquire("fam-graph", "root-b"), "root-b");
+  const relativePath = "src/main/java/demo/PaymentGateway.java";
+  const absolutePath = path.join(fixtures, relativePath);
+  try {
+    assert.equal((await clientA.open(1)).state, "READY");
+    await clientA.refresh(2, [absolutePath], []);
+    const donorGraph = await clientA.queryContextGraph({
+      fromRelativePath: relativePath,
+      intent: "pay",
+      mode: "search",
+      maxHops: 2,
+      tokenBudget: 2000,
+      anchorLine: 6
+    });
+    assert.ok((donorGraph.bundles?.length ?? 0) > 0, "donor must have a built graph before the sibling opens");
+    const t0 = Date.now();
+    assert.equal((await clientB.open(1)).state, "READY");
+    const siblingGraph = await clientB.queryContextGraph({
+      fromRelativePath: relativePath,
+      intent: "pay",
+      mode: "search",
+      maxHops: 2,
+      tokenBudget: 2000,
+      anchorLine: 6
+    });
+    assert.ok(Date.now() - t0 < 2000, "first worktree graph query must reuse the donor graph");
+    assert.equal(siblingGraph.bundles.length, donorGraph.bundles.length);
+  } finally {
+    await clientA.close();
+    await clientB.close();
+  }
+});

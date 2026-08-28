@@ -1778,7 +1778,11 @@ function startOwnSnapshotHydration(
  * negative-answer trust and is simply re-verified from scratch - like any
  * other not-yet-complete snapshot - the next time this repo is opened.
  */
-function seedFromFamilyMemory(generation: number): { attached: number; total: number } {
+function seedFromFamilyMemory(generation: number): {
+  attached: number;
+  total: number;
+  donor?: WorkerRootSession;
+} {
   if (!store) return { attached: 0, total: 0 };
   for (const [rootId, session] of workerRoots) {
     if (rootId === activeRootId) continue;
@@ -1792,7 +1796,7 @@ function seedFromFamilyMemory(generation: number): { attached: number; total: nu
         [...store.filesByPath.values()].map(file => file.relativePath),
         generation
       );
-      return { attached, total: files };
+      return { attached, total: files, donor: session };
     }
   }
   return { attached: 0, total: 0 };
@@ -2398,8 +2402,21 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         if (familySeeded) {
           snapshotFactsHydrated = true;
           pendingSnapshotView = undefined;
-          graphSyncedRevision = indexFactsRevision;
-          entitySearchSyncedRevision = indexFactsRevision;
+          const donor = familySeed.donor;
+          if (donor) {
+            // Reuse the donor graph/search. A new empty KnowledgeGraph marked
+            // "synced" made the first worktree java_impact scan 22k store
+            // methods for ~60s instead of walking the already-built graph.
+            knowledgeGraph = donor.knowledgeGraph;
+            knowledgeBuilder = donor.knowledgeBuilder;
+            entitySearch = donor.entitySearch;
+            indexFactsRevision = donor.indexFactsRevision;
+            graphSyncedRevision = donor.graphSyncedRevision;
+            entitySearchSyncedRevision = donor.entitySearchSyncedRevision;
+          } else {
+            graphSyncedRevision = indexFactsRevision;
+            entitySearchSyncedRevision = indexFactsRevision;
+          }
           if (layout) {
             for (const source of layout.sourceRoots) {
               coverage.begin(source.relativePath, openedGeneration, familySeed.attached);
