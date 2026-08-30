@@ -163,6 +163,10 @@ export class ParseTreeCache {
     return this.entries.size;
   }
 
+  sourceByteSize(): number {
+    return this.totalSourceBytes;
+  }
+
   /** Drops every cached tree. Hibernate / CLOSE; not an LRU eviction. */
   clear(): void {
     for (const entry of this.entries.values()) entry.tree.delete();

@@ -146,6 +146,11 @@ test("reconcile() runs a background full sweep that discovers and indexes every 
 
   const status = await client.status();
   assert.equal(status.files, 3);
+  assert.equal(typeof status.heapSplit?.donorStoreBytes, "number");
+  assert.equal(typeof status.heapSplit?.overlayBytes, "number");
+  assert.equal(typeof status.heapSplit?.graphBytes, "number");
+  assert.equal(typeof status.heapSplit?.parseTreeCacheBytes, "number");
+  assert.equal(typeof status.heapSplit?.otherBytes, "number");
   assert.ok(status.coverage.length > 0, "expected discovered source roots to be tracked");
   assert.ok(
     status.coverage.every(entry => entry.state === "COMPLETE"),

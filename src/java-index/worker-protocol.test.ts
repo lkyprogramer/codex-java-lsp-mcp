@@ -308,6 +308,24 @@ test("validateJavaIndexStatus accepts a well-formed status and rejects an unknow
     { ...status, factsHydrated: false }
   );
   assert.throws(() => validateJavaIndexStatus({ ...status, factsHydrated: "yes" }));
+  const heapSplit = {
+    heapUsedMb: 400,
+    rssMb: 512,
+    poolBundles: 3,
+    familyRootCount: 2,
+    thisRootFiles: 10,
+    thisRootOverlayFiles: 1,
+    graphSynced: true,
+    donorStoreBytes: 1_000,
+    overlayBytes: 200,
+    graphBytes: 300,
+    parseTreeCacheBytes: 400,
+    otherBytes: 500
+  };
+  assert.deepEqual(
+    validateJavaIndexStatus({ ...status, heapSplit }),
+    { ...status, heapSplit }
+  );
   const seed = {
     attempted: true,
     reusedFiles: 9,

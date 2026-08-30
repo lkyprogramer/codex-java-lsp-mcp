@@ -209,7 +209,13 @@ export function cleanupStaleWorktreeCaches(options: WorktreeCacheCleanupOptions 
   const unpinnedKeep: RemovalTarget[] = [];
 
   for (const entry of readdirSync(base, { withFileTypes: true })) {
-    if (!entry.isDirectory() || entry.name.startsWith(".") || entry.name === "leases" || entry.name === "ownership") {
+    if (
+      !entry.isDirectory()
+      || entry.name.startsWith(".")
+      || entry.name === "leases"
+      || entry.name === "ownership"
+      || entry.name === "telemetry"
+    ) {
       continue;
     }
     result.scanned += 1;

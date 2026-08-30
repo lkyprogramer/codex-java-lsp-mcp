@@ -15,6 +15,7 @@ import type {
   StaticEdgeKind
 } from "./index-types.js";
 import type { MyBatisMapperResourceFacts } from "./mybatis-types.js";
+import { jsonStringifyBounded } from "./bounded-json.js";
 import {
   isJavaIndexResponse,
   validateAnchorFacts,
@@ -915,5 +916,5 @@ export class JavaIndexClient {
 }
 
 function jsonBytes(value: unknown): number {
-  return Buffer.byteLength(JSON.stringify(value), "utf8");
+  return jsonStringifyBounded(value).bytes;
 }

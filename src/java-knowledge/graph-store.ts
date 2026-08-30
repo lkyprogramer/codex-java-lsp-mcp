@@ -69,6 +69,10 @@ export class KnowledgeGraphStore {
   readonly summariesByMethodId = new Map<string, MethodSummary>();
   generation = 0;
 
+  estimatedBytes(): number {
+    return this.nodes.size * 192 + this.edges.size * 96 + this.summariesByMethodId.size * 64;
+  }
+
   private readonly outEdgeRowsByNode = new Map<string, number[]>();
   private readonly inEdgeRowsByNode = new Map<string, number[]>();
   private readonly nodeRowsByFile = new Map<string, Set<number>>();

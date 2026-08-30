@@ -290,6 +290,12 @@ export type JavaIndexHeapSplit = {
   thisRootFiles: number;
   thisRootOverlayFiles: number;
   graphSynced: boolean;
+  /** FSY2 byte ledger. Absent on older workers. */
+  donorStoreBytes?: number;
+  overlayBytes?: number;
+  graphBytes?: number;
+  parseTreeCacheBytes?: number;
+  otherBytes?: number;
 };
 
 export type JavaTypeLookupResult =

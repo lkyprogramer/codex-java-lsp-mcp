@@ -865,7 +865,12 @@ function validateHeapSplit(value: unknown, context: string): JavaIndexHeapSplit 
     familyRootCount: source.familyRootCount,
     thisRootFiles: source.thisRootFiles,
     thisRootOverlayFiles: source.thisRootOverlayFiles,
-    graphSynced: source.graphSynced
+    graphSynced: source.graphSynced,
+    ...(isNumber(source.donorStoreBytes) ? { donorStoreBytes: source.donorStoreBytes } : {}),
+    ...(isNumber(source.overlayBytes) ? { overlayBytes: source.overlayBytes } : {}),
+    ...(isNumber(source.graphBytes) ? { graphBytes: source.graphBytes } : {}),
+    ...(isNumber(source.parseTreeCacheBytes) ? { parseTreeCacheBytes: source.parseTreeCacheBytes } : {}),
+    ...(isNumber(source.otherBytes) ? { otherBytes: source.otherBytes } : {})
   };
 }
 

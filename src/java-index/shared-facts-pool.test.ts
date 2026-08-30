@@ -404,6 +404,11 @@ test("family OPEN with an own snapshot skips full hydrate and overlays only cont
     assert.ok(split);
     assert.ok(split.poolBundles <= 4, `second intern would grow the pool, got ${split.poolBundles}`);
     assert.ok(split.thisRootOverlayFiles >= 1);
+    assert.equal(typeof split.donorStoreBytes, "number");
+    assert.equal(typeof split.overlayBytes, "number");
+    assert.equal(typeof split.graphBytes, "number");
+    assert.equal(typeof split.parseTreeCacheBytes, "number");
+    assert.equal(typeof split.otherBytes, "number");
   } finally {
     await clientA.close();
     await clientB.close();

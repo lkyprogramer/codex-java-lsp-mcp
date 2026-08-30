@@ -920,6 +920,16 @@ export class JavaIndexStore {
     return this.overlayFiles.size;
   }
 
+  overlayEstimatedBytes(): number {
+    let bytes = this.overlayFiles.size * 48;
+    for (const relativePath of this.overlayFiles.keys()) {
+      const bundle = this.installedBundles.get(relativePath);
+      if (!bundle) continue;
+      bytes += bundle.types.length * 24 + bundle.methods.length * 16 + bundle.edges.length * 16;
+    }
+    return bytes;
+  }
+
   /**
    * Replace only bundles whose contentHash differs from the frozen donor view.
    * Identical hashes stay as pool refs — this is the FSX2 overlay, not a second intern.

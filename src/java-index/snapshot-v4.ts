@@ -14,6 +14,7 @@ import type {
   StaticEdge
 } from "./index-types.js";
 import type { MyBatisMapperResourceFacts } from "./mybatis-types.js";
+import { jsonStringifyBounded } from "./bounded-json.js";
 
 export const SNAPSHOT_V4_MAGIC = Buffer.from("CJV4");
 /** Schema 5: chunked methods/edges/fields. Magic stays CJV4; old readers discard and rebuild. */
@@ -106,8 +107,8 @@ function splitJsonChunks(items: unknown[]): unknown[][] {
   while (start < items.length) {
     let end = Math.min(start + SNAPSHOT_V4_CHUNK_ITEM_LIMIT, items.length);
     while (end > start + 1) {
-      const json = JSON.stringify(items.slice(start, end));
-      if (json.length <= SNAPSHOT_V4_CHUNK_JSON_BYTES) break;
+      const json = jsonStringifyBounded(items.slice(start, end), SNAPSHOT_V4_CHUNK_JSON_BYTES);
+      if (json.bytes <= SNAPSHOT_V4_CHUNK_JSON_BYTES && !json.truncated) break;
       end = start + Math.max(1, Math.floor((end - start) / 2));
     }
     chunks.push(items.slice(start, end));

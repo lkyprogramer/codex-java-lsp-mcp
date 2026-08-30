@@ -1,6 +1,6 @@
 # Worktree Family 内存共享方案（FS 轨）
 
-状态：ADOPTED（R1，2026-08-28）——§6 新增 FS2 落地后三类故障的终局裁决与 FSX 任务卡
+状态：ADOPTED（R2，2026-08-30）——§7 新增 48h 观察窗裁决与 FSY 收尾卡；§6 为 FS2 落地后三类故障的终局裁决与 FSX 任务卡
 前置：`docs/deep/codex-java-lsp-mcp-daemon-stability-and-memory-plan-2026-08-25.md`（R4，已合 main）
 触发：用户反馈「每个 worktree ~1.5GB，多项目多 worktree 常开时不可接受，为什么不能共享」
 
@@ -165,3 +165,52 @@ ee80 首查 19568ms（遥测，coldPath heuristic 优雅返回 0 items）≈ own
 ### 6.4 执行顺序（替代 §5，自 R1 起）
 
 FSX0（取证）→ FSX1（EBADF）→ FSX2（base 单例化）→ FSX3+FSX4（daemon 治理+可观测）→ 场景 S 终验（G1–G4 + 0 FATAL + 0 EBADF）→ 合 main。ee80 首查回归在 FSX2 门内验证，不单独设卡。
+
+---
+
+## 7. 48h 观察窗裁决与 FSY 收尾卡（R2，2026-08-30）
+
+### 7.1 FSX 落地核验（live bf2ee08，2026-08-28 15:24 部署）
+
+FSX 实际落地与 R1 字面有三处**已接受的偏离**（2026-08-28 评审裁定）：
+
+1. **FSX1 未加 fsevents 依赖**，Darwin 改用 Node `fs.watch({recursive:true})`（底层同为 FSEvents，一 watch root 一 fd）。裁定：优于原方案（零新增 native 依赖），门已过（fd 76–148）。**后续 AI 不得按 R1 字面补装 fsevents。**
+2. **FSX0 未跑 near-heap snapshot**，retainer 由既有 V8 dump 钉在 JsonStringify；heapSplit 是计数不是字节账。裁定：取证不完备但当时结论成立；字节账并入 FSY2。
+3. **FSX3 未做 IPC 流式**，daemon 稳态修 watcher 后已 <400MB，768 维持。裁定：当时正确；但见 §7.2——该债务 48h 内被真实触发。
+
+### 7.2 48h 观察结果（2026-08-28 15:24 → 2026-08-30 10:10）
+
+| 项 | 结果 | 证据 |
+| --- | --- | --- |
+| daemon 存活 | **PASS**：同一 pid 50992 连跑 42.7h，0 重启 | `ps etime` 01-18:44；最后一条 `daemon ready` 在当前进程（log:1534） |
+| daemon 内存/fd | **PASS**：footprint 80→102 MiB 无棘轮，RSS 27 MiB，fd 80 | 对比 §9.5 时代 1346 MiB 呼吸带——watcher 状态即当年 footprint 呼吸主因，D1「呼吸天花板」条款自本裁决作废 |
+| EBADF | **PASS**：0 新增 | 最后一次 EBADF 在 log:1436（当前进程启动前） |
+| worker FATAL | **FAIL（1 次，自愈型）**：热 pin worker pid 51048 运行 40.8h 后 heap 1530 MiB 撞 1536 墙 OOM | log:1552 GC dump；崩溃栈顶 `JsonStringify`（ArrayMap → stringify → OOM） |
+| 遥测连续性 | **FAIL**：`~/Library/Caches/codex-java-lsp/telemetry/` 目录整体消失，48h 调用质量数据丢失 | 2026-08-28 尚存 `impact-20260828.jsonl` |
+
+**裁决**：故障等级已从「全局瘫痪」（12 次 daemon OOM + KeepAlive 循环）降到「单 worker 自愈」（daemon 无感、下次查询自动重建）。但严格 0 FATAL 门未过，且崩溃机制清楚：**worker 长跑 heap 爬升（启动数百 MB → 40h 后 1.5 GiB）+ 一次大 JsonStringify 压垮**。stringify 是最后一根稻草，爬升是真问题。合 main 前先落 FSY1/FSY2。
+
+### 7.3 FSY 任务卡
+
+**FSY1：worker heap 阈值自愈（1 天，止血，合 main 前必做）**
+- 核心：worker STATUS 已带 heap 数据的基础上，daemon 侧（`repo-runtime-manager.ts` 或 client 心跳处）检测 worker `heapUsedMb > 1200`（cap 1536 的 78%）时，标记该 entry 在**空闲时刻**（activeRequests=0 且非查询窗口）主动 `recycle()`。S5 冷启预算保证重建后首查不报错，热 pin 重建走既有 prewarm hydrate 路径。
+- 边界：不抬 1536；不在查询中途杀 worker；阈值 env `JAVA_LSP_WORKER_HEAP_RECYCLE_MB` 可调，0 关闭。
+- 门：单测（阈值触发、查询中不杀、重建后可查）；模拟压 heap 到阈值验证有序换气；identity 三仓 0 delta。
+- 失败处理：若空闲窗口判定复杂，退化为「阈值触发后仅打结构化告警日志」，把换气交给下一张卡的根因修复。
+
+**FSY2：长跑 heap 爬升取证 + stringify 债务清偿（2–3 天，根因）**
+- 取证：STATUS 增加字节级 heap 分解（donor store / root overlays / graph / parse-tree cache / 其他），probe 脚本每 6h 采样落 `docs/phase-fs/fsy2-heap-growth.jsonl`；钉出 40h 从数百 MB 爬到 1.5 GiB 的成分（嫌疑顺序：reconcile 残留引用 > graph/entity 索引增长 > parse tree cache 边界失效 > IPC 缓冲累积）。
+- 修复：按取证结论修真源；同时清偿 JsonStringify 债务——worker 侧超大响应（>32 MiB 序列化产物）改分块或裁剪，禁止一次性 stringify 无界 payload（锚点：崩溃栈对应的 IPC 响应序列化处，FSX0 dump 已在案）。
+- 门：修复后模拟 48h 等效负载（加速回放 reconcile/查询循环），worker heap 增长斜率 ≤ 50 MiB/24h；0 FATAL。
+- 失败处理：三振后接受 FSY1 的定期换气作为长期机制，把本卡降级为观察项并升级 0A.4(4b) 记录。
+
+**FSY3：遥测目录消失取证（0.5 天，随 FSY2 提交）**
+- 查 `telemetry/` 被谁删（嫌疑：`worktree-cache-cleanup.ts` 清扫范围过宽 > release 安装脚本 > 手工误删）；修复后 telemetry 写入点加目录自愈（不存在则重建）。
+- 门：连续两次 daemon restart + 若干查询后 `impact-*.jsonl` 存在且追加正常；cleanup 单测覆盖「不得触碰 telemetry/」。
+
+### 7.4 合 main 前置清单（替代 §6.4 尾部「合 main」条件）
+
+1. FSY1 落地并过门（必做）。
+2. FSY3 落地（遥测恢复，否则下一个观察窗又是盲的）。
+3. FSY2 至少完成取证部分（成分账落盘）；根因修复可作为合 main 后首个跟进项，但 stringify 无界 payload 上限必须在合并前落地（它是已两次现身的确定性风险）。
+4. 重跑 24h 干净窗（0 daemon FATAL、0 EBADF、worker 0 撞墙崩溃——FSY1 的有序换气不计为 FAIL，但换气次数入账，24h 内 >3 次视为 FSY2 未收敛）。

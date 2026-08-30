@@ -15,6 +15,19 @@ export class SharedFactsPool {
     return this.entries.size;
   }
 
+  estimatedBytes(): number {
+    let bytes = 0;
+    for (const { bundle } of this.entries.values()) {
+      bytes += 128
+        + bundle.file.relativePath.length * 2
+        + bundle.types.length * 160
+        + bundle.fields.length * 80
+        + bundle.methods.length * 220
+        + bundle.edges.length * 96;
+    }
+    return bytes;
+  }
+
   refCount(contentHash: string): number {
     return this.entries.get(contentHash)?.refs ?? 0;
   }

@@ -31,6 +31,7 @@ import {
 } from "./benchmark/attribution-v3.js";
 import { buildImpactDeterminismSnapshot } from "./benchmark/determinism.js";
 import { isJavaIndexQuiescent } from "./benchmark/java-index-idle.js";
+import { jsonBytesForImpactTokens } from "./benchmark/identity-token-json.js";
 import { startBenchmarkProcessResourceObserverFromEnvironment } from "./benchmark/process-resource-observer.js";
 import {
   firstTaskBlockingRank,
@@ -320,7 +321,7 @@ async function jinAttempt(javaIndex: RouterJavaIndex, cli: Cli, scenario: Scenar
     throw new Error("JAVA_LSP_ENGINE=jin expected QUERY_CONTEXT_GRAPH contract");
   }
   const result = toCompactFromContract(graph.contract, elapsedMs);
-  const rawSearchPayload = Buffer.byteLength(JSON.stringify(result), "utf8");
+  const rawSearchPayload = jsonBytesForImpactTokens(result);
   const readingPayload = readPlanBytes(result);
   const candidatePaths = viewImpactFiles(result);
   const readFiles = distinctReadFiles(result);
@@ -421,7 +422,7 @@ async function impactAttempt(router: AgentRouter, session: JdtlsSession, cli: Cl
     ? performance.now() - projectionStartedAt
     : undefined;
   const elapsedMs = routerElapsedMs;
-  const rawSearchPayload = Buffer.byteLength(JSON.stringify(result), "utf8");
+  const rawSearchPayload = jsonBytesForImpactTokens(result);
   const readingPayload = readPlanBytes(result);
   const candidatePaths = viewImpactFiles(result);
   const readFiles = distinctReadFiles(result);

@@ -77,6 +77,7 @@ import {
 import { handleQueryCommand } from "./java-index-worker-query.js";
 import { handleMybatisCommand } from "./java-index-worker-mybatis.js";
 import { SharedFactsPool } from "./shared-facts-pool.js";
+import { truncateToJsonCap } from "./bounded-json.js";
 import { installProcessCrashMarkers } from "../process-crash-markers.js";
 
 type IndexWorkerPort = {
@@ -483,10 +484,13 @@ let activeForegroundTiming:
   | undefined;
 
 function respond(response: JavaIndexResponse): void {
+  const capped = response.ok
+    ? { ...response, value: truncateToJsonCap(response.value) }
+    : response;
   const timing = activeForegroundTiming;
-  if (timing?.enabled && timing.requestId === response.id) {
+  if (timing?.enabled && timing.requestId === capped.id) {
     workerPort?.postMessage({
-      ...response,
+      ...capped,
       timing: {
         queueDepthAtEnqueue: timing.queueDepthAtEnqueue,
         queueMs: timing.queueMs,
@@ -495,7 +499,7 @@ function respond(response: JavaIndexResponse): void {
     });
     return;
   }
-  workerPort?.postMessage(response);
+  workerPort?.postMessage(capped);
 }
 
 function unresolvedTypeLookup(): JavaTypeLookupResult {
@@ -826,6 +830,12 @@ function summarizeFiles(): Pick<JavaIndexStatus, "files" | "types" | "methods" |
 
 function currentStatus(overrides: Partial<JavaIndexStatus> = {}): JavaIndexStatus {
   const pendingSweep = backgroundSweep?.remaining.length ?? 0;
+  const heapUsed = process.memoryUsage().heapUsed;
+  const donorStoreBytes = familyFactsPool.estimatedBytes();
+  const overlayBytes = store?.overlayEstimatedBytes() ?? 0;
+  const graphBytes = knowledgeGraph.estimatedBytes();
+  const parseTreeCacheBytes = cache?.sourceByteSize() ?? 0;
+  const accounted = donorStoreBytes + overlayBytes + graphBytes + parseTreeCacheBytes;
   return {
     ...status,
     ...summarizeFiles(),
@@ -837,15 +847,20 @@ function currentStatus(overrides: Partial<JavaIndexStatus> = {}): JavaIndexStatu
       + (snapshotFlushInProgress ? 1 : 0)
       + (factsHydrateInFlight ? 1 : 0),
     factsHydrated: snapshotFactsHydrated && !hibernated,
-    heapUsedBytes: process.memoryUsage().heapUsed,
+    heapUsedBytes: heapUsed,
     heapSplit: {
-      heapUsedMb: Math.round(process.memoryUsage().heapUsed / (1024 * 1024)),
+      heapUsedMb: Math.round(heapUsed / (1024 * 1024)),
       rssMb: Math.round(process.memoryUsage().rss / (1024 * 1024)),
       poolBundles: familyFactsPool.size,
       familyRootCount: workerRoots.size + retainedFamilyStores.size,
       thisRootFiles: store?.filesByPath.size ?? 0,
       thisRootOverlayFiles: store?.overlayFileCount() ?? 0,
-      graphSynced: graphSyncedRevision >= 0 && graphSyncedRevision === indexFactsRevision
+      graphSynced: graphSyncedRevision >= 0 && graphSyncedRevision === indexFactsRevision,
+      donorStoreBytes,
+      overlayBytes,
+      graphBytes,
+      parseTreeCacheBytes,
+      otherBytes: Math.max(0, heapUsed - accounted)
     },
     ...(ownSnapshotVerificationPending ? { snapshotVerificationPending: true } : {}),
     ...(lastRefreshError ? { lastError: lastRefreshError } : {}),

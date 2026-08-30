@@ -148,6 +148,8 @@ type RuntimeManagerOptions = {
   requestTimeoutMs: number;
   maxRetainedStoppedRepos: number;
   transportMode: RepoOwnerTransport;
+  /** MiB. Recycle idle isolate above this heap. 0 disables. Default 1200. */
+  workerHeapRecycleMb: number;
 };
 
 export class RepoRuntimeManager {
@@ -189,6 +191,7 @@ export class RepoRuntimeManager {
       requestTimeoutMs: positiveInteger(process.env.JAVA_LSP_REQUEST_TIMEOUT_MS, 120000),
       maxRetainedStoppedRepos: positiveInteger(process.env.JAVA_LSP_MAX_RETAINED_STOPPED_REPOS, 2),
       transportMode: "stdio",
+      workerHeapRecycleMb: nonNegativeInteger(process.env.JAVA_LSP_WORKER_HEAP_RECYCLE_MB, 1200),
       ...options,
       coldHibernateTtlMs: options.coldHibernateTtlMs
         ?? (typeof options.hibernateTtlMs === "number"
@@ -334,6 +337,7 @@ export class RepoRuntimeManager {
       this.releaseUnusedReservation(entry);
       this.scheduleIdleShutdown(entry);
       void this.serviceSlotWaiters();
+      await this.maybeRecycleHighHeap(entry);
     }
   }
 
@@ -1150,6 +1154,51 @@ export class RepoRuntimeManager {
       clearTimeout(entry.indexIdleTimer);
       entry.indexIdleTimer = undefined;
     }
+  }
+
+  /**
+   * FSY1: after a request (refCount already decremented), recycle an idle
+   * isolate whose last STATUS heap is above 78% of the 1536 cap. Never runs
+   * while another tool still holds this entry or a live family sibling — the
+   * isolate is the family process, so one busy root must keep it alive.
+   */
+  private async maybeRecycleHighHeap(entry: RuntimeEntry): Promise<void> {
+    const thresholdMb = this.options.workerHeapRecycleMb;
+    if (thresholdMb <= 0) return;
+    if (!this.isEntryIdle(entry)) return;
+    const client = entry.context.javaIndexClient;
+    if (!client || typeof client.status !== "function" || typeof client.recycle !== "function") return;
+    let status: JavaIndexStatus;
+    try {
+      status = await client.status();
+    } catch {
+      return;
+    }
+    if (!this.isEntryIdle(entry)) return;
+    if ((status.pendingForeground ?? 0) > 0 || (status.pendingBackground ?? 0) > 0) return;
+    const heapMb = status.heapSplit?.heapUsedMb
+      ?? (typeof status.heapUsedBytes === "number" ? status.heapUsedBytes / (1024 * 1024) : 0);
+    if (heapMb <= thresholdMb) return;
+    const family = this.familyKey(entry.context.worktree, entry.context.repoHash);
+    const live = [...this.runtimes.values()].filter(peer =>
+      peer.stoppedAt === undefined
+      && this.familyKey(peer.context.worktree, peer.context.repoHash) === family
+    );
+    if (live.some(peer => peer.refCount !== 0)) return;
+    console.error(
+      `[codex-java-lsp] worker heap recycle heapUsedMb=${Math.round(heapMb)} thresholdMb=${thresholdMb} family=${family} roots=${live.length}`
+    );
+    for (const peer of live) {
+      const peerClient = peer.context.javaIndexClient;
+      if (peerClient && typeof peerClient.recycle === "function") {
+        await peerClient.recycle().catch(() => undefined);
+        peer.hibernated = true;
+      }
+    }
+  }
+
+  private isEntryIdle(entry: RuntimeEntry): boolean {
+    return entry.refCount === 0 && entry.stoppedAt === undefined;
   }
 
   private scheduleIdleShutdown(entry: RuntimeEntry): void {

@@ -1846,6 +1846,151 @@ test("freemem pressure hibernates the LRU idle runtime", async () => {
   await manager.shutdownAll();
 });
 
+test("idle worker heap above threshold recycles the isolate", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const javaIndex = recordingHeapIndex(1300);
+  const manager = new RepoRuntimeManager(fakeResolver(), {
+    idleTtlMs: 100000,
+    hibernateTtlMs: 100000,
+    indexIdleTtlMs: 0,
+    pressureIntervalMs: 0,
+    requestTimeoutMs: 5000,
+    workerHeapRecycleMb: 1200
+  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
+    fakeCoordination(), new NoopCrossProcessLeaseStore());
+  await manager.withContext({ repoRoot: "/repo-a" }, async () => "ok");
+  assert.ok(javaIndex.calls.includes("recycle"), "idle STATUS heap above 1200 MiB must recycle");
+  await manager.shutdownAll();
+});
+
+test("in-flight withContext is not recycled by the high-heap check", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const javaIndex = recordingHeapIndex(1400);
+  const manager = new RepoRuntimeManager(fakeResolver(), {
+    idleTtlMs: 100000,
+    hibernateTtlMs: 100000,
+    indexIdleTtlMs: 0,
+    pressureIntervalMs: 0,
+    requestTimeoutMs: 5000,
+    workerHeapRecycleMb: 1200
+  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
+    fakeCoordination(), new NoopCrossProcessLeaseStore());
+  const hold = deferred<void>();
+  let firstEntered = false;
+  const first = manager.withContext({ repoRoot: "/repo-a" }, async () => {
+    firstEntered = true;
+    await hold.promise;
+    return "first";
+  });
+  await waitFor(() => firstEntered);
+  await manager.withContext({ repoRoot: "/repo-a" }, async () => "second");
+  assert.equal(javaIndex.calls.includes("recycle"), false, "a live withContext must keep the isolate");
+  hold.resolve();
+  assert.equal(await first, "first");
+  assert.ok(javaIndex.calls.includes("recycle"), "recycle runs only after the last in-flight request");
+  await manager.shutdownAll();
+});
+
+test("workerHeapRecycleMb 0 disables idle heap recycle", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const javaIndex = recordingHeapIndex(1500);
+  const manager = new RepoRuntimeManager(fakeResolver(), {
+    idleTtlMs: 100000,
+    hibernateTtlMs: 100000,
+    indexIdleTtlMs: 0,
+    pressureIntervalMs: 0,
+    requestTimeoutMs: 5000,
+    workerHeapRecycleMb: 0
+  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
+    fakeCoordination(), new NoopCrossProcessLeaseStore());
+  await manager.withContext({ repoRoot: "/repo-a" }, async () => "ok");
+  assert.equal(javaIndex.calls.includes("recycle"), false, "threshold 0 must not recycle even at 1500 MiB");
+  await manager.shutdownAll();
+});
+
+test("after heap recycle the next withContext succeeds", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const javaIndex = recordingHeapIndex(1300);
+  const manager = new RepoRuntimeManager(fakeResolver(), {
+    idleTtlMs: 100000,
+    hibernateTtlMs: 100000,
+    indexIdleTtlMs: 0,
+    pressureIntervalMs: 0,
+    requestTimeoutMs: 5000,
+    workerHeapRecycleMb: 1200
+  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
+    fakeCoordination(), new NoopCrossProcessLeaseStore());
+  await manager.withContext({ repoRoot: "/repo-a" }, async () => "one");
+  assert.ok(javaIndex.calls.includes("recycle"));
+  const second = await manager.withContext({ repoRoot: "/repo-a" }, async () => "two");
+  assert.equal(second, "two");
+  await manager.shutdownAll();
+});
+
+test("pendingForeground skips high-heap recycle", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const javaIndex = recordingHeapIndex(1400, { pendingForeground: 1 });
+  const manager = new RepoRuntimeManager(fakeResolver(), {
+    idleTtlMs: 100000,
+    hibernateTtlMs: 100000,
+    indexIdleTtlMs: 0,
+    pressureIntervalMs: 0,
+    requestTimeoutMs: 5000,
+    workerHeapRecycleMb: 1200
+  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
+    fakeCoordination(), new NoopCrossProcessLeaseStore());
+  await manager.withContext({ repoRoot: "/repo-a" }, async () => "ok");
+  assert.equal(javaIndex.calls.includes("recycle"), false);
+  await manager.shutdownAll();
+});
+
+test("a busy family sibling keeps the shared isolate through high-heap recycle", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const first = recordingHeapIndex(1400);
+  const second = recordingHeapIndex(1400);
+  const manager = new RepoRuntimeManager({
+    async resolve(selector: { repoRoot?: string }) {
+      const repoRoot = selector.repoRoot || "/repo";
+      const repoHash = repoRoot.replace(/\W/g, "");
+      return {
+        repoRoot,
+        repoHash,
+        rootSource: "explicit" as const,
+        aliases: [],
+        layoutProfile: "generic-java" as const,
+        lsp: { enabled: true, matchedBy: "direct-root" as const, configuredRoot: repoRoot, effectiveRepoRoot: repoRoot },
+        worktree: { repoRoot, repoHash, familyHash: "family-heap", isLinkedWorktree: true }
+      };
+    }
+  }, {
+    idleTtlMs: 100000,
+    hibernateTtlMs: 100000,
+    coldHibernateTtlMs: 100000,
+    indexIdleTtlMs: 0,
+    pressureIntervalMs: 0,
+    requestTimeoutMs: 5000,
+    workerHeapRecycleMb: 1200
+  }, resolved => ({
+    ...fakeContext(resolved, sessions),
+    javaIndexClient: (resolved.repoRoot === "/wt-a" ? first : second) as never
+  }), fakeCoordination(), new NoopCrossProcessLeaseStore());
+  const hold = deferred<void>();
+  let siblingEntered = false;
+  const sibling = manager.withContext({ repoRoot: "/wt-b" }, async () => {
+    siblingEntered = true;
+    await hold.promise;
+    return "busy";
+  });
+  await waitFor(() => siblingEntered);
+  await manager.withContext({ repoRoot: "/wt-a" }, async () => "idle-peer");
+  assert.equal(first.calls.includes("recycle"), false, "busy sibling must block family isolate recycle");
+  assert.equal(second.calls.includes("recycle"), false);
+  hold.resolve();
+  assert.equal(await sibling, "busy");
+  assert.ok(first.calls.includes("recycle") && second.calls.includes("recycle"), "idle family recycles every root so the process can die");
+  await manager.shutdownAll();
+});
+
 async function waitFor(condition: () => boolean): Promise<void> {
   for (let attempt = 0; attempt < 200 && !condition(); attempt += 1) {
     await delay(5);
@@ -1950,6 +2095,47 @@ class FakeCoordinator {
   status(): { ready: boolean; degraded: boolean; pending: number } {
     return { ready: this.ready, degraded: this.degraded, pending: this.pending };
   }
+}
+
+function recordingHeapIndex(heapUsedMb: number, extra: Partial<JavaIndexStatus> = {}) {
+  const calls: string[] = [];
+  let heap = heapUsedMb;
+  return {
+    calls,
+    async status(): Promise<JavaIndexStatus> {
+      calls.push("status");
+      return {
+        ...completeJavaIndexStatus(1),
+        heapUsedBytes: heap * 1024 * 1024,
+        heapSplit: {
+          heapUsedMb: heap,
+          rssMb: heap,
+          poolBundles: 1,
+          familyRootCount: 1,
+          thisRootFiles: 1,
+          thisRootOverlayFiles: 0,
+          graphSynced: true,
+          donorStoreBytes: 10,
+          overlayBytes: 2,
+          graphBytes: 3,
+          parseTreeCacheBytes: 4,
+          otherBytes: 5
+        },
+        ...extra
+      };
+    },
+    async recycle(): Promise<void> {
+      calls.push("recycle");
+      heap = Math.min(heap, 200);
+    },
+    async open(): Promise<JavaIndexStatus> {
+      calls.push("open");
+      return completeJavaIndexStatus(1);
+    },
+    async close(): Promise<void> {
+      calls.push("close");
+    }
+  };
 }
 
 class RecordingJavaIndex {
