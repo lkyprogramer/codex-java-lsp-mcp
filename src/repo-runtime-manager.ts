@@ -1173,7 +1173,7 @@ export class RepoRuntimeManager {
   private async maybeRecycleHighHeap(entry: RuntimeEntry): Promise<void> {
     const thresholdMb = this.options.workerHeapRecycleMb;
     if (thresholdMb <= 0) return;
-    if (!this.isEntryIdle(entry)) return;
+    if (!this.isEntryIdle(entry) || entry.hibernated) return;
     const client = entry.context.javaIndexClient;
     if (!client || typeof client.status !== "function" || typeof client.recycle !== "function") return;
     let status: JavaIndexStatus;
@@ -1196,11 +1196,21 @@ export class RepoRuntimeManager {
     console.error(
       `[codex-java-lsp] worker heap recycle heapUsedMb=${Math.round(heapMb)} thresholdMb=${thresholdMb} family=${family} roots=${live.length} source=heartbeat`
     );
+    const recycledHot: RuntimeEntry[] = [];
     for (const peer of live) {
       const peerClient = peer.context.javaIndexClient;
       if (peerClient && typeof peerClient.recycle === "function") {
         await peerClient.recycle().catch(() => undefined);
         peer.hibernated = true;
+        if (this.isHotIndexEntry(peer)) recycledHot.push(peer);
+      }
+    }
+    for (const peer of recycledHot) {
+      try {
+        await this.prewarmRepo({ repoRoot: peer.context.repoRoot });
+        peer.hibernated = false;
+      } catch (error) {
+        console.error("[codex-java-lsp] hot-pin prewarm after heap recycle failed", error);
       }
     }
   }
@@ -1262,7 +1272,7 @@ export class RepoRuntimeManager {
     try {
       const seen = new Set<string>();
       for (const entry of this.runtimes.values()) {
-        if (!this.isEntryIdle(entry)) continue;
+        if (!this.isEntryIdle(entry) || entry.hibernated) continue;
         const family = this.familyKey(entry.context.worktree, entry.context.repoHash);
         if (seen.has(family)) continue;
         seen.add(family);

@@ -2001,6 +2001,32 @@ test("a busy family sibling keeps the shared isolate through high-heap recycle",
   await manager.shutdownAll();
 });
 
+test("heartbeat does not status() a hibernated isolate after recycle", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const javaIndex = recordingHeapIndex(1300);
+  const manager = new RepoRuntimeManager(fakeResolver(), {
+    idleTtlMs: 100000,
+    hibernateTtlMs: 100000,
+    indexIdleTtlMs: 0,
+    pressureIntervalMs: 0,
+    requestTimeoutMs: 5000,
+    workerHeapRecycleMb: 1200,
+    heapRecycleIntervalMs: 40,
+    hotIndexAliases: new Set()
+  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
+    fakeCoordination(), new NoopCrossProcessLeaseStore());
+  await manager.withContext({ repoRoot: "/repo-a" }, async () => "ok");
+  await waitFor(() => javaIndex.calls.includes("recycle"));
+  const statusAfterRecycle = javaIndex.calls.filter(call => call === "status").length;
+  await delay(160);
+  assert.equal(
+    javaIndex.calls.filter(call => call === "status").length,
+    statusAfterRecycle,
+    "hibernated isolate must not be ensureOpened by heartbeat status()"
+  );
+  await manager.shutdownAll();
+});
+
 async function waitFor(condition: () => boolean): Promise<void> {
   for (let attempt = 0; attempt < 200 && !condition(); attempt += 1) {
     await delay(5);

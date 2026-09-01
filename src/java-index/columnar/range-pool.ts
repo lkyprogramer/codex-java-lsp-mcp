@@ -6,14 +6,16 @@ import { growU32, hashBytes } from "./string-table.js";
 
 const EMPTY_SLOT = 0xffffffff;
 export const NO_RANGE = 0;
+const RANGE_POOL_INITIAL_COORDS = 1024;
+const RANGE_POOL_INITIAL_BUCKETS = 2048;
 
 type I32 = Int32Array<ArrayBufferLike>;
 type U32 = Uint32Array<ArrayBufferLike>;
 
 export class RangePool {
-  private coords: I32 = new Int32Array(1024);
+  private coords: I32 = new Int32Array(RANGE_POOL_INITIAL_COORDS);
   private count = 1; // handle 0 is absent
-  private buckets: U32 = new Uint32Array(2048).fill(EMPTY_SLOT);
+  private buckets: U32 = new Uint32Array(RANGE_POOL_INITIAL_BUCKETS).fill(EMPTY_SLOT);
   private memo: Array<SourceRange | undefined> = [undefined];
 
   get size(): number {
@@ -70,8 +72,9 @@ export class RangePool {
   }
 
   clear(): void {
+    this.coords = new Int32Array(RANGE_POOL_INITIAL_COORDS);
     this.count = 1;
-    this.buckets.fill(EMPTY_SLOT);
+    this.buckets = new Uint32Array(RANGE_POOL_INITIAL_BUCKETS).fill(EMPTY_SLOT);
     this.memo = [undefined];
   }
 

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { StringTable } from "./string-table.js";
+import { STRING_TABLE_INITIAL_BYTES, StringTable } from "./string-table.js";
 
 test("StringTable intern is stable, empty is 0, and get round-trips unicode", () => {
   const table = new StringTable();
@@ -24,7 +24,9 @@ test("StringTable grows past the initial buffer and hash capacity", () => {
   assert.equal(handles.size, 4000);
   const last = `id:3999:${"x".repeat(3999 % 40)}`;
   assert.equal(table.get(table.intern(last)), last);
+  assert.ok(table.allocatedPayloadBytes() > STRING_TABLE_INITIAL_BYTES);
   table.clear();
   assert.equal(table.size, 1);
+  assert.equal(table.allocatedPayloadBytes(), STRING_TABLE_INITIAL_BYTES);
   assert.equal(table.intern("id:0:"), 1);
 });

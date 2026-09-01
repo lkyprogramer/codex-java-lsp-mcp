@@ -338,7 +338,19 @@ class TypeRefArena {
   }
 
   clear(): void {
+    this.capacity = 16;
     this.rowCount = 1;
+    this.text = new Uint32Array(this.capacity);
+    this.simpleName = new Uint32Array(this.capacity);
+    this.qualifiedName = new Uint32Array(this.capacity);
+    this.rangeIdx = new Uint32Array(this.capacity);
+    this.argStart = new Uint32Array(this.capacity);
+    this.argCount = new Uint32Array(this.capacity);
+    this.payload = new Uint32Array(this.capacity);
+    this.payload2 = new Uint32Array(this.capacity);
+    this.arrayDepth = new Uint8Array(this.capacity);
+    this.wildcard = new Uint8Array(this.capacity);
+    this.resKind = new Uint8Array(this.capacity);
     this.argHandles = [];
     this.candidateHandles = [];
   }
@@ -456,7 +468,16 @@ class CallSiteArena {
   }
 
   clear(): void {
+    this.capacity = 16;
     this.count = 0;
+    this.kind = new Uint8Array(this.capacity);
+    this.name = new Uint32Array(this.capacity);
+    this.receiverText = new Uint32Array(this.capacity);
+    this.receiverType = new Uint32Array(this.capacity);
+    this.rangeIdx = new Uint32Array(this.capacity);
+    this.argStart = new Uint32Array(this.capacity);
+    this.argCount = new Uint32Array(this.capacity);
+    this.arity = new Uint32Array(this.capacity);
     this.argHandles = [];
   }
 
@@ -509,7 +530,12 @@ class AnnotationArena {
   }
 
   clear(): void {
+    this.capacity = 16;
     this.count = 0;
+    this.name = new Uint32Array(this.capacity);
+    this.qualifiedName = new Uint32Array(this.capacity);
+    this.argumentsText = new Uint32Array(this.capacity);
+    this.rangeIdx = new Uint32Array(this.capacity);
   }
 
   private ensure(min: number): void {
@@ -563,7 +589,14 @@ class ParameterArena {
   }
 
   clear(): void {
+    this.capacity = 16;
     this.count = 0;
+    this.name = new Uint32Array(this.capacity);
+    this.typeRef = new Uint32Array(this.capacity);
+    this.rangeIdx = new Uint32Array(this.capacity);
+    this.annotationStart = new Uint32Array(this.capacity);
+    this.annotationCount = new Uint32Array(this.capacity);
+    this.varargs = new Uint8Array(this.capacity);
   }
 
   private ensure(min: number): void {

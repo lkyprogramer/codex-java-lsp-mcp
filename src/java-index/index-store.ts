@@ -933,6 +933,7 @@ export class JavaIndexStore {
   columnarStats(): {
     tombstoneRatio: number;
     stringTableBytes: number;
+    stringTableAllocatedBytes: number;
     rangePoolBytes: number;
     columnarBytes: number;
   } {
@@ -941,6 +942,7 @@ export class JavaIndexStore {
     return {
       tombstoneRatio: rows === 0 ? 0 : (rows - live) / rows,
       stringTableBytes: this.edgeColumns.strings.byteSize(),
+      stringTableAllocatedBytes: this.edgeColumns.strings.allocatedPayloadBytes(),
       rangePoolBytes: this.edgeColumns.ranges.byteSize(),
       columnarBytes: this.fileColumns.estimatedBytes()
         + this.methodColumns.estimatedBytes()

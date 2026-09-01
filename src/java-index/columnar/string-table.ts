@@ -4,17 +4,20 @@
 
 const EMPTY = 0;
 const EMPTY_SLOT = 0xffffffff;
+export const STRING_TABLE_INITIAL_BYTES = 1 << 16;
+const STRING_TABLE_INITIAL_HANDLES = 1024;
+const STRING_TABLE_INITIAL_BUCKETS = 2048;
 
 export type U8 = Uint8Array<ArrayBufferLike>;
 export type U32 = Uint32Array<ArrayBufferLike>;
 
 export class StringTable {
-  private bytes = Buffer.allocUnsafe(1 << 16);
+  private bytes = Buffer.allocUnsafe(STRING_TABLE_INITIAL_BYTES);
   private used = 0;
-  private offsets: U32 = new Uint32Array(1024);
-  private lengths: U32 = new Uint32Array(1024);
+  private offsets: U32 = new Uint32Array(STRING_TABLE_INITIAL_HANDLES);
+  private lengths: U32 = new Uint32Array(STRING_TABLE_INITIAL_HANDLES);
   private count = 1; // handle 0 is the empty string
-  private buckets: U32 = new Uint32Array(2048).fill(EMPTY_SLOT);
+  private buckets: U32 = new Uint32Array(STRING_TABLE_INITIAL_BUCKETS).fill(EMPTY_SLOT);
   private memo: Array<string | undefined> = [""];
 
   get size(): number {
@@ -22,7 +25,11 @@ export class StringTable {
   }
 
   byteSize(): number {
-    return this.used + this.offsets.byteLength + this.lengths.byteLength + this.buckets.byteLength;
+    return this.bytes.byteLength + this.offsets.byteLength + this.lengths.byteLength + this.buckets.byteLength;
+  }
+
+  allocatedPayloadBytes(): number {
+    return this.bytes.byteLength;
   }
 
   intern(value: string): number {
@@ -63,9 +70,12 @@ export class StringTable {
   }
 
   clear(): void {
+    this.bytes = Buffer.allocUnsafe(STRING_TABLE_INITIAL_BYTES);
     this.used = 0;
+    this.offsets = new Uint32Array(STRING_TABLE_INITIAL_HANDLES);
+    this.lengths = new Uint32Array(STRING_TABLE_INITIAL_HANDLES);
     this.count = 1;
-    this.buckets.fill(EMPTY_SLOT);
+    this.buckets = new Uint32Array(STRING_TABLE_INITIAL_BUCKETS).fill(EMPTY_SLOT);
     this.memo = [""];
   }
 
