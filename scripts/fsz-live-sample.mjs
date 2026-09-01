@@ -349,12 +349,18 @@ try {
   failures.push(`java_status failed: ${error instanceof Error ? error.message : String(error)}`);
 }
 
+const isFirstSample = (state.samples ?? 0) === 0;
 state.recycleEvents = [...(state.recycleEvents ?? []), ...logs.newRecycles];
 state.compactEvents = [...(state.compactEvents ?? []), ...logs.newCompacts];
+if (isFirstSample) {
+  state.recycleBaseline = state.recycleEvents.length;
+  state.compactBaseline = state.compactEvents.length;
+}
 const watchHours = (Date.parse(sampledAt) - Date.parse(state.watchStartedAt)) / 3600000;
-const events24h = state.recycleEvents.length + state.compactEvents.length;
-if (watchHours >= 24 && events24h > 3) {
-  failures.push(`FSZ §8.4 not converged: ${state.recycleEvents.length} recycle + ${state.compactEvents.length} compact in ${watchHours.toFixed(1)}h`);
+const recycleBudgeted = Math.max(0, state.recycleEvents.length - (state.recycleBaseline ?? 0));
+const compactBudgeted = Math.max(0, state.compactEvents.length - (state.compactBaseline ?? 0));
+if (watchHours >= 24 && recycleBudgeted + compactBudgeted > 3) {
+  failures.push(`FSZ §8.4 not converged: ${recycleBudgeted} recycle + ${compactBudgeted} compact after T0 in ${watchHours.toFixed(1)}h`);
 }
 
 const priorSamples = existsSync(JSONL)
@@ -398,7 +404,9 @@ const sample = {
     recycleHeartbeatThisWindow: logs.heartbeat.length,
     compactThisWindow: logs.compact.length,
     recycleSinceWatch: state.recycleEvents.length,
-    compactSinceWatch: state.compactEvents.length
+    compactSinceWatch: state.compactEvents.length,
+    recycleBudgeted,
+    compactBudgeted
   },
   slope,
   climb,
@@ -422,6 +430,8 @@ process.stdout.write(`${JSON.stringify({
   buildSha: health?.buildSha,
   recycleSinceWatch: state.recycleEvents.length,
   compactSinceWatch: state.compactEvents.length,
+  recycleBudgeted,
+  compactBudgeted,
   telemetryLines: telemetry.lines,
   pins: pins.map(pin => ({
     projectId: pin.projectId,
