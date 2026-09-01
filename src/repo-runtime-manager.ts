@@ -150,6 +150,8 @@ type RuntimeManagerOptions = {
   transportMode: RepoOwnerTransport;
   /** MiB. Recycle idle isolate above this heap. 0 disables. Default 1200. */
   workerHeapRecycleMb: number;
+  /** STATUS poll for FSZ1 heap recycle. 0 disables. Default 5 min. */
+  heapRecycleIntervalMs: number;
 };
 
 export class RepoRuntimeManager {
@@ -164,7 +166,9 @@ export class RepoRuntimeManager {
   private leaseReady?: Promise<void>;
   private leaseInitError?: string;
   private pressureTimer?: NodeJS.Timeout;
+  private heapRecycleTimer?: NodeJS.Timeout;
   private relievingPressure = false;
+  private recyclingHeap = false;
 
   constructor(
     private readonly resolver: Pick<RepoResolver, "resolve">,
@@ -192,6 +196,10 @@ export class RepoRuntimeManager {
       maxRetainedStoppedRepos: positiveInteger(process.env.JAVA_LSP_MAX_RETAINED_STOPPED_REPOS, 2),
       transportMode: "stdio",
       workerHeapRecycleMb: nonNegativeInteger(process.env.JAVA_LSP_WORKER_HEAP_RECYCLE_MB, 1200),
+      heapRecycleIntervalMs: nonNegativeInteger(
+        process.env.JAVA_LSP_WORKER_HEAP_RECYCLE_INTERVAL_MS,
+        process.env.JAVA_LSP_ISOLATED_VALIDATION === "1" ? 0 : 300_000
+      ),
       ...options,
       coldHibernateTtlMs: options.coldHibernateTtlMs
         ?? (typeof options.hibernateTtlMs === "number"
@@ -199,6 +207,7 @@ export class RepoRuntimeManager {
           : nonNegativeInteger(process.env.JAVA_LSP_COLD_HIBERNATE_TTL_MS, DEFAULT_COLD_HIBERNATE_TTL_MS))
     };
     this.startPressureWatch();
+    this.startHeapRecycleWatch();
     this.runtimeFactory = runtimeFactory ?? ((resolved, leases) => createRuntime(resolved, leases, this.options.transportMode));
     if (isOwnershipProvider(coordinationOrOwnership)) {
       this.coordinationFactory = createCoordination;
@@ -337,7 +346,6 @@ export class RepoRuntimeManager {
       this.releaseUnusedReservation(entry);
       this.scheduleIdleShutdown(entry);
       void this.serviceSlotWaiters();
-      await this.maybeRecycleHighHeap(entry);
     }
   }
 
@@ -725,6 +733,7 @@ export class RepoRuntimeManager {
 
   async shutdownAll(options: { releaseOwnership?: boolean; terminal?: boolean } = {}): Promise<void> {
     this.stopPressureWatch();
+    this.stopHeapRecycleWatch();
     for (const waiter of this.slotWaiters.splice(0)) {
       waiter.cancel();
     }
@@ -1157,10 +1166,9 @@ export class RepoRuntimeManager {
   }
 
   /**
-   * FSY1: after a request (refCount already decremented), recycle an idle
-   * isolate whose last STATUS heap is above 78% of the 1536 cap. Never runs
-   * while another tool still holds this entry or a live family sibling — the
-   * isolate is the family process, so one busy root must keep it alive.
+   * FSZ1: recycle an idle isolate whose STATUS heap is above 78% of the 1536
+   * cap. Driven by the STATUS heartbeat, never by a tool-request edge. Never
+   * runs while a tool holds this entry or a live family sibling.
    */
   private async maybeRecycleHighHeap(entry: RuntimeEntry): Promise<void> {
     const thresholdMb = this.options.workerHeapRecycleMb;
@@ -1186,7 +1194,7 @@ export class RepoRuntimeManager {
     );
     if (live.some(peer => peer.refCount !== 0)) return;
     console.error(
-      `[codex-java-lsp] worker heap recycle heapUsedMb=${Math.round(heapMb)} thresholdMb=${thresholdMb} family=${family} roots=${live.length}`
+      `[codex-java-lsp] worker heap recycle heapUsedMb=${Math.round(heapMb)} thresholdMb=${thresholdMb} family=${family} roots=${live.length} source=heartbeat`
     );
     for (const peer of live) {
       const peerClient = peer.context.javaIndexClient;
@@ -1230,6 +1238,38 @@ export class RepoRuntimeManager {
         }
       }, this.options.indexIdleTtlMs);
       entry.indexIdleTimer.unref?.();
+    }
+  }
+
+  private startHeapRecycleWatch(): void {
+    if (this.heapRecycleTimer || this.options.heapRecycleIntervalMs <= 0) return;
+    if (this.options.workerHeapRecycleMb <= 0) return;
+    this.heapRecycleTimer = setInterval(() => {
+      void this.pollIdleHeapRecycle();
+    }, this.options.heapRecycleIntervalMs);
+    this.heapRecycleTimer.unref?.();
+  }
+
+  private stopHeapRecycleWatch(): void {
+    if (!this.heapRecycleTimer) return;
+    clearInterval(this.heapRecycleTimer);
+    this.heapRecycleTimer = undefined;
+  }
+
+  private async pollIdleHeapRecycle(): Promise<void> {
+    if (this.recyclingHeap) return;
+    this.recyclingHeap = true;
+    try {
+      const seen = new Set<string>();
+      for (const entry of this.runtimes.values()) {
+        if (!this.isEntryIdle(entry)) continue;
+        const family = this.familyKey(entry.context.worktree, entry.context.repoHash);
+        if (seen.has(family)) continue;
+        seen.add(family);
+        await this.maybeRecycleHighHeap(entry);
+      }
+    } finally {
+      this.recyclingHeap = false;
     }
   }
 

@@ -1,6 +1,6 @@
 # Worktree Family 内存共享方案（FS 轨）
 
-状态：ADOPTED（R2，2026-08-30）——§7 新增 48h 观察窗裁决与 FSY 收尾卡；§6 为 FS2 落地后三类故障的终局裁决与 FSX 任务卡
+状态：ADOPTED（R3，2026-09-01）——§8 新增零调用 24h 窗 FAIL 的根因闭环与 FSZ 生产级收尾卡；§7 为 48h 观察窗裁决与 FSY 卡；§6 为 FS2 落地后三类故障的终局裁决与 FSX 卡
 前置：`docs/deep/codex-java-lsp-mcp-daemon-stability-and-memory-plan-2026-08-25.md`（R4，已合 main）
 触发：用户反馈「每个 worktree ~1.5GB，多项目多 worktree 常开时不可接受，为什么不能共享」
 
@@ -214,3 +214,47 @@ FSX 实际落地与 R1 字面有三处**已接受的偏离**（2026-08-28 评审
 2. FSY3 落地（遥测恢复，否则下一个观察窗又是盲的）。
 3. FSY2 至少完成取证部分（成分账落盘）；根因修复可作为合 main 后首个跟进项，但 stringify 无界 payload 上限必须在合并前落地（它是已两次现身的确定性风险）。
 4. 重跑 24h 干净窗（0 daemon FATAL、0 EBADF、worker 0 撞墙崩溃——FSY1 的有序换气不计为 FAIL，但换气次数入账，24h 内 >3 次视为 FSY2 未收敛）。
+
+---
+
+## 8. 零调用 24h 窗 FAIL：根因闭环与 FSZ 生产级收尾卡（R3，2026-09-01）
+
+### 8.1 事实（live 0f9cc14，窗口 2026-08-30 → 08-31）
+
+用户 24h 内**一次 MCP 调用都没有**，lishu-v2 family worker（pid 22417）仍从 784 MiB 爬到 1103 MiB，运行 30.5h 后 heap 1442 MiB 撞 1536 墙 OOM（log:1638，栈顶 JsonStringify ← ArrayMap，与 40.8h 那次同型）。lishuedu 全程 484 MiB 平线。FSY1 换气 0 次。daemon 本体、EBADF、telemetry 三项 PASS。
+
+### 8.2 根因闭环（三个环节各错一处，已全部对上代码）
+
+1. **增长源：列式存储墓碑无回收 + intern 表 append-only。** `columnar/*.ts` 的 `remove` 只置 `deleted[row]=1`，行永不回收；`add` 永远追加新行；`StringTable` 只增。watcher 驱动的 REFRESH（`handleRefresh` → `replaceFile`）每轮编辑都墓碑旧行、追加新行、intern 新字符串，再对 dependents `resolveAndBuildEdges` 放大。**用户在 lishu-v2 写代码（不调工具）即触发**——爬升与工作时段强相关（白天 +270 MiB、夜间 +25 MiB），lishuedu 无编辑故平线。SharedFactsPool 的 refcount/归零驱逐本身正确（index-store.ts:376/950/965/980 均有 release），不是泄漏点。
+2. **致命稻草：快照编码全量物化。** `snapshot-v4.ts:165` `parts.map(part => JSON.stringify(part))` 把所有分块的 JSON 字符串同时驻留内存。S4 分块只救了解析侧（hydrate），编码侧仍是全量。REFRESH 后的 `scheduleSnapshotFlush` 在高水位上执行它 → OOM。FSY2 的 32 MiB stringify 上限只盖了 IPC 响应，没盖快照编码。
+3. **看护失效：FSY1 是边沿触发。** heap 阈值检查只挂在工具请求结束后，零调用 → 阈值永远不被看见。两次 OOM（40.8h / 30.5h）全部发生在无调用的后台路径上，这个挂载点选错了。
+
+另записано：本窗 prewarm 时主仓快照因 `snapshot identity mismatch` 被丢弃、seed 走 d10f worktree——快照身份的脆弱性是独立问题，列入 FSZ4 取证范围，不阻塞。
+
+### 8.3 FSZ 任务卡（生产级收尾，全部合 main 前完成）
+
+**FSZ1：heap 看护改周期心跳（0.5 天，兜底，最先落）**
+- daemon 侧每 5 min 对活跃 index worker 发 STATUS（或复用现有心跳），`heapUsedMb > JAVA_LSP_WORKER_HEAP_RECYCLE_MB`（默认 1200）且 activeRequests=0 即换气（`recycle()`；热 pin 换气后走既有 prewarm hydrate 重建）。彻底去掉「工具请求结束」这个边沿依赖。
+- 门：单测（定时触发、查询中不杀）；模拟压 heap 验证零调用场景下换气发生；换气事件落结构化日志（计数入 24h 窗账本）。
+
+**FSZ2：快照编码流式化（0.5–1 天，消灭致命稻草）**
+- `snapshot-v4.ts` `encodeSnapshotV5`：逐 part `JSON.stringify → gzip → append 写盘`，任何时刻只驻留一个 part 的 JSON 字符串；禁止 `parts.map(stringify)` 数组物化。格式不变（V5 读取端无感）。
+- 门：单测（大 store 编码峰值 heap 增量 ≤ 单 part 大小 ×2）；编码产物与旧实现字节等价或可被现有 `readSegment/readSegmentChunks` 正确读回（roundtrip 测试）。
+
+**FSZ3：REFRESH 增长有界化（1–2 天，治本）**
+- 首选（工程性价比）：**墓碑比例触发的空闲重建**——STATUS 增加 `tombstoneRatio`（deleted 行 / 总行）与 `stringTableBytes`；任一超阈值（默认 tombstone > 0.35 或列字节 > 启动值 ×1.5）且空闲时，worker 原地重建列（新 SoA 只复制存活行 + 重建 intern 表），不换进程、不丢 store 状态。
+- 兜底：若原地重建实现风险高（引用 row index 的地方多），退化为「阈值触发 FSZ1 的换气」——换气本身就是终极 compaction，代价是热 pin 一次 ~7s 重建。
+- 门：模拟 500 轮 REFRESH（脚本回放同一批文件反复改写），heap 增长有界（触发重建/换气后回落到基线 ±10%）；identity 三仓 0 delta。
+
+**FSZ4：增长字节账与快照身份取证（0.5 天，随 FSZ3 提交）**
+- 补齐 FSY2 承诺未兑现的字节级分解：STATUS heapSplit 落真实值（列字节、intern 表字节、墓碑比例、knowledgeBuilder/entitySearch 各自字节——后两者的增量语义是否 append-only 在此一并取证），`fsy2-heap-growth.jsonl` 改为生产 worker 每 6h 自动采样。
+- 查 prewarm 丢弃主仓快照的 `snapshot identity mismatch` 触发条件（嫌疑：分支切换/commit 变动使身份过严），单独出结论，若确认过严则另立小卡。
+
+### 8.4 生产级验收（替代 §7.4 第 4 条）
+
+**编辑负载 48h 窗**（不再是安静窗——安静窗测不出这条链）：窗口内正常在 lishu-v2 写代码，结束时同时满足：
+1. 0 daemon FATAL、0 EBADF、0 worker 撞墙崩溃；
+2. 换气/重建事件有序且 ≤3 次/24h，每次后 heap 回落到基线 ±10%；
+3. `fsy2-heap-growth.jsonl` 连续采样显示 heap 有界（无单调爬升段超过 12h）；
+4. 期间抽查 java_impact 正常（延迟、候选数与基线一致）。
+全绿后合 main 并生产切流；任何一条不过，回到 FSZ3 的失败处理路径重新裁决。

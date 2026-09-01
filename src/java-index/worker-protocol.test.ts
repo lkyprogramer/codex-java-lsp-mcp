@@ -320,7 +320,12 @@ test("validateJavaIndexStatus accepts a well-formed status and rejects an unknow
     overlayBytes: 200,
     graphBytes: 300,
     parseTreeCacheBytes: 400,
-    otherBytes: 500
+    otherBytes: 500,
+    columnarBytes: 600,
+    stringTableBytes: 700,
+    tombstoneRatio: 0.2,
+    knowledgeBuilderBytes: 0,
+    entitySearchBytes: 80
   };
   assert.deepEqual(
     validateJavaIndexStatus({ ...status, heapSplit }),

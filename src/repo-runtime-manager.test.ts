@@ -1855,11 +1855,13 @@ test("idle worker heap above threshold recycles the isolate", async () => {
     indexIdleTtlMs: 0,
     pressureIntervalMs: 0,
     requestTimeoutMs: 5000,
-    workerHeapRecycleMb: 1200
+    workerHeapRecycleMb: 1200,
+    heapRecycleIntervalMs: 40
   }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
     fakeCoordination(), new NoopCrossProcessLeaseStore());
   await manager.withContext({ repoRoot: "/repo-a" }, async () => "ok");
-  assert.ok(javaIndex.calls.includes("recycle"), "idle STATUS heap above 1200 MiB must recycle");
+  assert.equal(javaIndex.calls.includes("recycle"), false, "tool completion must not recycle; heartbeat does");
+  await waitFor(() => javaIndex.calls.includes("recycle"));
   await manager.shutdownAll();
 });
 
@@ -1872,7 +1874,8 @@ test("in-flight withContext is not recycled by the high-heap check", async () =>
     indexIdleTtlMs: 0,
     pressureIntervalMs: 0,
     requestTimeoutMs: 5000,
-    workerHeapRecycleMb: 1200
+    workerHeapRecycleMb: 1200,
+    heapRecycleIntervalMs: 40
   }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
     fakeCoordination(), new NoopCrossProcessLeaseStore());
   const hold = deferred<void>();
@@ -1883,11 +1886,11 @@ test("in-flight withContext is not recycled by the high-heap check", async () =>
     return "first";
   });
   await waitFor(() => firstEntered);
-  await manager.withContext({ repoRoot: "/repo-a" }, async () => "second");
+  await delay(120);
   assert.equal(javaIndex.calls.includes("recycle"), false, "a live withContext must keep the isolate");
   hold.resolve();
   assert.equal(await first, "first");
-  assert.ok(javaIndex.calls.includes("recycle"), "recycle runs only after the last in-flight request");
+  await waitFor(() => javaIndex.calls.includes("recycle"));
   await manager.shutdownAll();
 });
 
@@ -1900,10 +1903,12 @@ test("workerHeapRecycleMb 0 disables idle heap recycle", async () => {
     indexIdleTtlMs: 0,
     pressureIntervalMs: 0,
     requestTimeoutMs: 5000,
-    workerHeapRecycleMb: 0
+    workerHeapRecycleMb: 0,
+    heapRecycleIntervalMs: 40
   }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
     fakeCoordination(), new NoopCrossProcessLeaseStore());
   await manager.withContext({ repoRoot: "/repo-a" }, async () => "ok");
+  await delay(120);
   assert.equal(javaIndex.calls.includes("recycle"), false, "threshold 0 must not recycle even at 1500 MiB");
   await manager.shutdownAll();
 });
@@ -1917,11 +1922,12 @@ test("after heap recycle the next withContext succeeds", async () => {
     indexIdleTtlMs: 0,
     pressureIntervalMs: 0,
     requestTimeoutMs: 5000,
-    workerHeapRecycleMb: 1200
+    workerHeapRecycleMb: 1200,
+    heapRecycleIntervalMs: 40
   }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
     fakeCoordination(), new NoopCrossProcessLeaseStore());
   await manager.withContext({ repoRoot: "/repo-a" }, async () => "one");
-  assert.ok(javaIndex.calls.includes("recycle"));
+  await waitFor(() => javaIndex.calls.includes("recycle"));
   const second = await manager.withContext({ repoRoot: "/repo-a" }, async () => "two");
   assert.equal(second, "two");
   await manager.shutdownAll();
@@ -1936,10 +1942,12 @@ test("pendingForeground skips high-heap recycle", async () => {
     indexIdleTtlMs: 0,
     pressureIntervalMs: 0,
     requestTimeoutMs: 5000,
-    workerHeapRecycleMb: 1200
+    workerHeapRecycleMb: 1200,
+    heapRecycleIntervalMs: 40
   }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
     fakeCoordination(), new NoopCrossProcessLeaseStore());
   await manager.withContext({ repoRoot: "/repo-a" }, async () => "ok");
+  await delay(120);
   assert.equal(javaIndex.calls.includes("recycle"), false);
   await manager.shutdownAll();
 });
@@ -1969,7 +1977,8 @@ test("a busy family sibling keeps the shared isolate through high-heap recycle",
     indexIdleTtlMs: 0,
     pressureIntervalMs: 0,
     requestTimeoutMs: 5000,
-    workerHeapRecycleMb: 1200
+    workerHeapRecycleMb: 1200,
+    heapRecycleIntervalMs: 40
   }, resolved => ({
     ...fakeContext(resolved, sessions),
     javaIndexClient: (resolved.repoRoot === "/wt-a" ? first : second) as never
@@ -1983,11 +1992,12 @@ test("a busy family sibling keeps the shared isolate through high-heap recycle",
   });
   await waitFor(() => siblingEntered);
   await manager.withContext({ repoRoot: "/wt-a" }, async () => "idle-peer");
+  await delay(120);
   assert.equal(first.calls.includes("recycle"), false, "busy sibling must block family isolate recycle");
   assert.equal(second.calls.includes("recycle"), false);
   hold.resolve();
   assert.equal(await sibling, "busy");
-  assert.ok(first.calls.includes("recycle") && second.calls.includes("recycle"), "idle family recycles every root so the process can die");
+  await waitFor(() => first.calls.includes("recycle") && second.calls.includes("recycle"));
   await manager.shutdownAll();
 });
 

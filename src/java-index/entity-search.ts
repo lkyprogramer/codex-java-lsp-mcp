@@ -405,6 +405,19 @@ export class EntitySearchIndex {
     return searchEntities([...this.entitiesById.values()], task, limit);
   }
 
+  estimatedBytes(): number {
+    let bytes = this.entitiesById.size * 48 + this.entityIdsByPath.size * 24;
+    for (const entity of this.entitiesById.values()) {
+      bytes += entity.entityId.length * 2
+        + entity.fqn.length * 2
+        + entity.simpleName.length * 2
+        + entity.relativePath.length * 2;
+      for (const token of entity.identifierTokens) bytes += token.length * 2;
+      for (const token of entity.chunkTokens) bytes += token.length * 2;
+    }
+    return bytes;
+  }
+
   toSnapshot(): EntitySearchSnapshot {
     return {
       version: ENTITY_SEARCH_VERSION,

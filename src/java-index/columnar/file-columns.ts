@@ -56,6 +56,68 @@ export class FileColumns {
     return this.liveCount;
   }
 
+  get rows(): number {
+    return this.rowCount;
+  }
+
+  tombstoneRatio(): number {
+    return this.rowCount === 0 ? 0 : (this.rowCount - this.liveCount) / this.rowCount;
+  }
+
+  estimatedBytes(): number {
+    return this.fileId.byteLength
+      + this.relativePath.byteLength
+      + this.sourceRoot.byteLength
+      + this.module.byteLength
+      + this.packageName.byteLength
+      + this.contentHash.byteLength
+      + this.sizeBytes.byteLength
+      + this.generation.byteLength
+      + this.parseErrorCount.byteLength
+      + this.importStart.byteLength
+      + this.importCount.byteLength
+      + this.topStart.byteLength
+      + this.topCount.byteLength
+      + this.allStart.byteLength
+      + this.allCount.byteLength
+      + this.mtimeMs.byteLength
+      + this.ctimeMs.byteLength
+      + this.sourceSet.byteLength
+      + this.parseState.byteLength
+      + this.deleted.byteLength
+      + this.importName.length * 8
+      + this.importFlags.length * 8
+      + this.importRange.length * 8
+      + this.typeIds.length * 8;
+  }
+
+  reclaimFrom(live: readonly JavaFileFacts[]): void {
+    this.clear();
+    const next = Math.max(16, live.length);
+    this.fileId = new Uint32Array(next);
+    this.relativePath = new Uint32Array(next);
+    this.sourceRoot = new Uint32Array(next);
+    this.module = new Uint32Array(next);
+    this.packageName = new Uint32Array(next);
+    this.contentHash = new Uint32Array(next);
+    this.sizeBytes = new Uint32Array(next);
+    this.generation = new Uint32Array(next);
+    this.parseErrorCount = new Uint32Array(next);
+    this.importStart = new Uint32Array(next);
+    this.importCount = new Uint32Array(next);
+    this.topStart = new Uint32Array(next);
+    this.topCount = new Uint32Array(next);
+    this.allStart = new Uint32Array(next);
+    this.allCount = new Uint32Array(next);
+    this.mtimeMs = new Float64Array(next);
+    this.ctimeMs = new Float64Array(next);
+    this.sourceSet = new Uint8Array(next);
+    this.parseState = new Uint8Array(next);
+    this.deleted = new Uint8Array(next);
+    this.capacity = next;
+    for (const file of live) this.add(file);
+  }
+
   has(relativePath: string): boolean {
     return this.byPath.has(relativePath);
   }

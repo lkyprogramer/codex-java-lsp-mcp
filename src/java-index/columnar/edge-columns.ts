@@ -79,6 +79,42 @@ export class EdgeColumns {
     return this.rowCount;
   }
 
+  tombstoneRatio(): number {
+    return this.rowCount === 0 ? 0 : (this.rowCount - this.liveCount) / this.rowCount;
+  }
+
+  estimatedBytes(): number {
+    return this.edgeId.byteLength
+      + this.fromId.byteLength
+      + this.toId.byteLength
+      + this.sourceFile.byteLength
+      + this.rangeIdx.byteLength
+      + this.generation.byteLength
+      + this.kind.byteLength
+      + this.resolutionKind.byteLength
+      + this.typeStrategy.byteLength
+      + this.deleted.byteLength
+      + this.confidence.byteLength;
+  }
+
+  reclaimFrom(live: readonly StaticEdge[]): void {
+    this.clear();
+    const next = Math.max(16, live.length);
+    this.edgeId = new Uint32Array(next);
+    this.fromId = new Uint32Array(next);
+    this.toId = new Uint32Array(next);
+    this.sourceFile = new Uint32Array(next);
+    this.rangeIdx = new Uint32Array(next);
+    this.generation = new Uint32Array(next);
+    this.kind = new Uint8Array(next);
+    this.resolutionKind = new Uint8Array(next);
+    this.typeStrategy = new Uint8Array(next);
+    this.deleted = new Uint8Array(next);
+    this.confidence = new Uint32Array(next);
+    this.capacity = next;
+    for (const edge of live) this.add(edge);
+  }
+
   has(edgeId: string): boolean {
     return this.byEdgeId.has(edgeId);
   }

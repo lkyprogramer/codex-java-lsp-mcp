@@ -144,35 +144,52 @@ function releaseEncodedSegment(value: SnapshotV4Facts, kind: SnapshotV4SegmentKi
   }
 }
 
+/** Peak count of part JSON strings retained at once during the last encode. */
+export let encodePeakLiveJsonParts = 0;
+
+function segmentBody(value: SnapshotV4Facts, kind: SnapshotV4SegmentKind): unknown {
+  switch (kind) {
+    case "files":
+      return value.files;
+    case "types":
+      return value.types;
+    case "fields":
+      return value.fields;
+    case "methods":
+      return value.methods;
+    case "edges":
+      return value.edges;
+    case "mybatis":
+      return value.myBatisResources;
+    case "entitySearch":
+      return value.entitySearch ?? null;
+  }
+}
+
 export function encodeSnapshotV4(value: SnapshotV4Facts, options: { chunkRest?: boolean } = {}): Buffer {
   const chunkRest = options.chunkRest !== false;
-  const bodies: Record<SnapshotV4SegmentKind, unknown> = {
-    files: value.files,
-    types: value.types,
-    fields: value.fields,
-    methods: value.methods,
-    edges: value.edges,
-    mybatis: value.myBatisResources,
-    entitySearch: value.entitySearch ?? null
-  };
   const compressed: Buffer[] = [];
   const segments: SegmentDirectoryEntry[] = [];
   let offset = 0;
+  let liveJsonParts = 0;
+  encodePeakLiveJsonParts = 0;
   for (const kind of SNAPSHOT_V4_SEGMENT_KINDS) {
-    const parts = chunkRest && CHUNKED_SEGMENT_KINDS.has(kind) && Array.isArray(bodies[kind])
-      ? splitJsonChunks(bodies[kind] as unknown[])
-      : [bodies[kind]];
-    const jsonParts = parts.map(part => JSON.stringify(part));
-    bodies[kind] = null;
-    for (let part = 0; part < parts.length; part += 1) parts[part] = null;
-    releaseEncodedSegment(value, kind);
-    for (let part = 0; part < jsonParts.length; part += 1) {
-      const packed = gzipSync(Buffer.from(jsonParts[part]!), { level: 6 });
-      jsonParts[part] = "";
+    const body = segmentBody(value, kind);
+    const parts = chunkRest && CHUNKED_SEGMENT_KINDS.has(kind) && Array.isArray(body)
+      ? splitJsonChunks(body)
+      : [body];
+    for (let part = 0; part < parts.length; part += 1) {
+      const json = JSON.stringify(parts[part]);
+      parts[part] = null;
+      liveJsonParts += 1;
+      encodePeakLiveJsonParts = Math.max(encodePeakLiveJsonParts, liveJsonParts);
+      const packed = gzipSync(Buffer.from(json), { level: 6 });
+      liveJsonParts -= 1;
       segments.push({ kind, part, crc32: crc32(packed), offset, length: packed.byteLength });
       compressed.push(packed);
       offset += packed.byteLength;
     }
+    releaseEncodedSegment(value, kind);
   }
   const header: V4Header = {
     schemaVersion: SNAPSHOT_V4_VERSION,

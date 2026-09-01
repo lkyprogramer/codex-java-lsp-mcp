@@ -598,6 +598,33 @@ test("ingestSnapshotFacts can skip a duplicate method id in a later chunk", () =
   );
 });
 
+test("500 replaceFile cycles compact live rows and intern table back to baseline", () => {
+  const store = new JavaIndexStore();
+  const path = "src/main/java/demo/Grow.java";
+  const first = emptyBundle(path, "Grow", 1);
+  addMethod(first, "run");
+  store.replaceFile(first);
+  const baseline = store.columnarStats();
+  assert.ok(baseline.stringTableBytes > 0);
+  for (let generation = 2; generation <= 501; generation += 1) {
+    const next = emptyBundle(path, "Grow", generation);
+    addMethod(next, "run");
+    store.replaceFile(next);
+  }
+  const grown = store.columnarStats();
+  assert.ok(grown.tombstoneRatio > 0.35, `tombstoneRatio ${grown.tombstoneRatio}`);
+  assert.ok(grown.stringTableBytes > baseline.stringTableBytes, "intern table must grow across unique contentHash");
+  store.compactColumnar();
+  const compacted = store.columnarStats();
+  assert.ok(compacted.tombstoneRatio === 0, `compacted tombstoneRatio ${compacted.tombstoneRatio}`);
+  assert.equal(store.filesByPath.get(path)?.generation, 501);
+  assert.equal(store.files([path])[0]?.methods.length, 1);
+  const delta = Math.abs(compacted.stringTableBytes - baseline.stringTableBytes) / baseline.stringTableBytes;
+  assert.ok(delta <= 0.10, `stringTableBytes baseline ${baseline.stringTableBytes} compacted ${compacted.stringTableBytes}`);
+  const heapDelta = Math.abs(compacted.columnarBytes - baseline.columnarBytes) / Math.max(1, baseline.columnarBytes);
+  assert.ok(heapDelta <= 0.10, `columnarBytes baseline ${baseline.columnarBytes} compacted ${compacted.columnarBytes}`);
+});
+
 test("loadSnapshotData rejects a snapshot with a duplicate mybatis resource relativePath", () => {
   const store = new JavaIndexStore();
   const resource = myBatisResource({ relativePath: "src/main/resources/mapper/Dup.xml" });

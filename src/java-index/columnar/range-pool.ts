@@ -20,6 +20,10 @@ export class RangePool {
     return this.count - 1;
   }
 
+  byteSize(): number {
+    return this.coords.byteLength + this.buckets.byteLength;
+  }
+
   intern(range: SourceRange | undefined): number {
     if (!range) return NO_RANGE;
     const startLine = range.start.line;

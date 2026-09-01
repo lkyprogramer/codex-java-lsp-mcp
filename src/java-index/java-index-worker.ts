@@ -194,6 +194,7 @@ function createStore(): JavaIndexStore {
 function resetStore(): JavaIndexStore {
   store?.disposeSharedFacts();
   store = createStore();
+  columnarBaselineBytes = 0;
   if (activeRootId) {
     const session = workerRoots.get(activeRootId);
     if (session) session.store = store;
@@ -828,6 +829,34 @@ function summarizeFiles(): Pick<JavaIndexStatus, "files" | "types" | "methods" |
   };
 }
 
+const COLUMNAR_TOMBSTONE_RATIO_LIMIT = 0.35;
+const STRING_TABLE_GROWTH_LIMIT = 1.5;
+let columnarBaselineBytes = 0;
+
+function captureColumnarBaseline(): void {
+  if (!store) return;
+  columnarBaselineBytes = store.columnarStats().stringTableBytes;
+}
+
+function maybeCompactColumnar(): void {
+  if (!store || hibernated) return;
+  if (foregroundQueue.length > 0) return;
+  if (columnarBaselineBytes === 0) {
+    if (snapshotFactsHydrated) captureColumnarBaseline();
+    return;
+  }
+  const stats = store.columnarStats();
+  const overTombstone = stats.tombstoneRatio > COLUMNAR_TOMBSTONE_RATIO_LIMIT;
+  const overIntern = stats.stringTableBytes > columnarBaselineBytes * STRING_TABLE_GROWTH_LIMIT;
+  if (!overTombstone && !overIntern) return;
+  store.compactColumnar();
+  const after = store.columnarStats();
+  console.error(
+    `[codex-java-lsp] columnar compact tombstoneRatio=${stats.tombstoneRatio.toFixed(3)}->${after.tombstoneRatio.toFixed(3)} stringTableBytes=${stats.stringTableBytes}->${after.stringTableBytes} baseline=${columnarBaselineBytes}`
+  );
+  columnarBaselineBytes = after.stringTableBytes;
+}
+
 function currentStatus(overrides: Partial<JavaIndexStatus> = {}): JavaIndexStatus {
   const pendingSweep = backgroundSweep?.remaining.length ?? 0;
   const heapUsed = process.memoryUsage().heapUsed;
@@ -835,7 +864,18 @@ function currentStatus(overrides: Partial<JavaIndexStatus> = {}): JavaIndexStatu
   const overlayBytes = store?.overlayEstimatedBytes() ?? 0;
   const graphBytes = knowledgeGraph.estimatedBytes();
   const parseTreeCacheBytes = cache?.sourceByteSize() ?? 0;
-  const accounted = donorStoreBytes + overlayBytes + graphBytes + parseTreeCacheBytes;
+  const columnar = store?.columnarStats();
+  const entitySearchBytes = entitySearch.estimatedBytes();
+  const knowledgeBuilderBytes = 0;
+  const accounted = donorStoreBytes
+    + overlayBytes
+    + graphBytes
+    + parseTreeCacheBytes
+    + (columnar?.columnarBytes ?? 0)
+    + (columnar?.stringTableBytes ?? 0)
+    + (columnar?.rangePoolBytes ?? 0)
+    + entitySearchBytes
+    + knowledgeBuilderBytes;
   return {
     ...status,
     ...summarizeFiles(),
@@ -860,7 +900,12 @@ function currentStatus(overrides: Partial<JavaIndexStatus> = {}): JavaIndexStatu
       overlayBytes,
       graphBytes,
       parseTreeCacheBytes,
-      otherBytes: Math.max(0, heapUsed - accounted)
+      otherBytes: Math.max(0, heapUsed - accounted),
+      columnarBytes: columnar?.columnarBytes ?? 0,
+      stringTableBytes: columnar?.stringTableBytes ?? 0,
+      tombstoneRatio: columnar?.tombstoneRatio ?? 0,
+      knowledgeBuilderBytes,
+      entitySearchBytes
     },
     ...(ownSnapshotVerificationPending ? { snapshotVerificationPending: true } : {}),
     ...(lastRefreshError ? { lastError: lastRefreshError } : {}),
@@ -1222,6 +1267,7 @@ async function handleRefresh(request: Extract<JavaIndexRequest, { type: "REFRESH
     if (rootHadIssue.has(entry.root)) continue;
     if (entry.state === "COMPLETE") coverage.complete(entry.root, request.generation);
   }
+  maybeCompactColumnar();
   scheduleSnapshotFlush();
   return rootHadIssue;
 }
@@ -1502,6 +1548,7 @@ async function hydratePendingFacts(): Promise<void> {
   pendingSnapshotView = undefined;
   snapshotFactsHydrated = true;
   store.publishHydratedToPool();
+  captureColumnarBaseline();
   if (activeRootId) workerRoots.set(activeRootId, captureRootSession());
 }
 
@@ -1937,6 +1984,8 @@ async function attemptSiblingSeed(
     }
     const seeded = await seeder.seedValidatedFacts(candidate, seedIdentity, repoRoot, layout, generation);
     store = seeded.store;
+    columnarBaselineBytes = 0;
+    captureColumnarBaseline();
     seededReconcilePlan = { reusedPaths: new Set(seeded.result.reusedPaths) };
     const discovered = await discoverJavaFiles(repoRoot, layout);
     const roots = new Set(discovered.map(file => file.sourceRoot));

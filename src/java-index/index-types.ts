@@ -296,6 +296,12 @@ export type JavaIndexHeapSplit = {
   graphBytes?: number;
   parseTreeCacheBytes?: number;
   otherBytes?: number;
+  /** FSZ4 measured columnar / intern / search ledger. */
+  columnarBytes?: number;
+  stringTableBytes?: number;
+  tombstoneRatio?: number;
+  knowledgeBuilderBytes?: number;
+  entitySearchBytes?: number;
 };
 
 export type JavaTypeLookupResult =

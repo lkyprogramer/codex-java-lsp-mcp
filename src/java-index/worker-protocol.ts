@@ -870,7 +870,12 @@ function validateHeapSplit(value: unknown, context: string): JavaIndexHeapSplit 
     ...(isNumber(source.overlayBytes) ? { overlayBytes: source.overlayBytes } : {}),
     ...(isNumber(source.graphBytes) ? { graphBytes: source.graphBytes } : {}),
     ...(isNumber(source.parseTreeCacheBytes) ? { parseTreeCacheBytes: source.parseTreeCacheBytes } : {}),
-    ...(isNumber(source.otherBytes) ? { otherBytes: source.otherBytes } : {})
+    ...(isNumber(source.otherBytes) ? { otherBytes: source.otherBytes } : {}),
+    ...(isNumber(source.columnarBytes) ? { columnarBytes: source.columnarBytes } : {}),
+    ...(isNumber(source.stringTableBytes) ? { stringTableBytes: source.stringTableBytes } : {}),
+    ...(isNumber(source.tombstoneRatio) ? { tombstoneRatio: source.tombstoneRatio } : {}),
+    ...(isNumber(source.knowledgeBuilderBytes) ? { knowledgeBuilderBytes: source.knowledgeBuilderBytes } : {}),
+    ...(isNumber(source.entitySearchBytes) ? { entitySearchBytes: source.entitySearchBytes } : {})
   };
 }
 

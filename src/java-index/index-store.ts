@@ -930,6 +930,40 @@ export class JavaIndexStore {
     return bytes;
   }
 
+  columnarStats(): {
+    tombstoneRatio: number;
+    stringTableBytes: number;
+    rangePoolBytes: number;
+    columnarBytes: number;
+  } {
+    const rows = this.fileColumns.rows + this.methodColumns.rows + this.edgeColumns.rows;
+    const live = this.fileColumns.size + this.methodColumns.size + this.edgeColumns.size;
+    return {
+      tombstoneRatio: rows === 0 ? 0 : (rows - live) / rows,
+      stringTableBytes: this.edgeColumns.strings.byteSize(),
+      rangePoolBytes: this.edgeColumns.ranges.byteSize(),
+      columnarBytes: this.fileColumns.estimatedBytes()
+        + this.methodColumns.estimatedBytes()
+        + this.edgeColumns.estimatedBytes()
+    };
+  }
+
+  /**
+   * Rebuild live columnar rows and the shared intern/range tables in place.
+   * Row indexes are not cached outside these columns; FileIdMap/MethodIdMap
+   * re-resolve via rowOf after add().
+   */
+  compactColumnar(): void {
+    const files = [...this.fileColumns.values()];
+    const methods = [...this.methodColumns.values()];
+    const edges = [...this.edgeColumns.values()];
+    this.edgeColumns.strings.clear();
+    this.edgeColumns.ranges.clear();
+    this.fileColumns.reclaimFrom(files);
+    this.methodColumns.reclaimFrom(methods);
+    this.edgeColumns.reclaimFrom(edges);
+  }
+
   /**
    * Replace only bundles whose contentHash differs from the frozen donor view.
    * Identical hashes stay as pool refs — this is the FSX2 overlay, not a second intern.

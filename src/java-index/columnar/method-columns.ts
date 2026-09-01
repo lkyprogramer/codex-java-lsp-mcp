@@ -74,6 +74,69 @@ export class MethodColumns {
     return this.liveCount;
   }
 
+  get rows(): number {
+    return this.rowCount;
+  }
+
+  tombstoneRatio(): number {
+    return this.rowCount === 0 ? 0 : (this.rowCount - this.liveCount) / this.rowCount;
+  }
+
+  estimatedBytes(): number {
+    return this.methodId.byteLength
+      + this.ownerTypeId.byteLength
+      + this.name.byteLength
+      + this.signatureKey.byteLength
+      + this.rangeIdx.byteLength
+      + this.bodyRangeIdx.byteLength
+      + this.returnRef.byteLength
+      + this.modifierStart.byteLength
+      + this.modifierCount.byteLength
+      + this.annotationStart.byteLength
+      + this.annotationCount.byteLength
+      + this.paramStart.byteLength
+      + this.paramCount.byteLength
+      + this.throwsStart.byteLength
+      + this.throwsCount.byteLength
+      + this.callStart.byteLength
+      + this.callCount.byteLength
+      + this.localStart.byteLength
+      + this.localCount.byteLength
+      + this.ctor.byteLength
+      + this.deleted.byteLength
+      + this.modifierHandles.length * 8
+      + this.throwsHandles.length * 8
+      + this.localHandles.length * 8;
+  }
+
+  reclaimFrom(live: readonly JavaMethodFacts[]): void {
+    this.clear();
+    const next = Math.max(16, live.length);
+    this.methodId = new Uint32Array(next);
+    this.ownerTypeId = new Uint32Array(next);
+    this.name = new Uint32Array(next);
+    this.signatureKey = new Uint32Array(next);
+    this.rangeIdx = new Uint32Array(next);
+    this.bodyRangeIdx = new Uint32Array(next);
+    this.returnRef = new Uint32Array(next);
+    this.modifierStart = new Uint32Array(next);
+    this.modifierCount = new Uint32Array(next);
+    this.annotationStart = new Uint32Array(next);
+    this.annotationCount = new Uint32Array(next);
+    this.paramStart = new Uint32Array(next);
+    this.paramCount = new Uint32Array(next);
+    this.throwsStart = new Uint32Array(next);
+    this.throwsCount = new Uint32Array(next);
+    this.callStart = new Uint32Array(next);
+    this.callCount = new Uint32Array(next);
+    this.localStart = new Uint32Array(next);
+    this.localCount = new Uint32Array(next);
+    this.ctor = new Uint8Array(next);
+    this.deleted = new Uint8Array(next);
+    this.capacity = next;
+    for (const method of live) this.add(method);
+  }
+
   has(id: string): boolean {
     return this.byId.has(id);
   }

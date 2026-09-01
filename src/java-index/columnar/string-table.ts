@@ -21,6 +21,10 @@ export class StringTable {
     return this.count;
   }
 
+  byteSize(): number {
+    return this.used + this.offsets.byteLength + this.lengths.byteLength + this.buckets.byteLength;
+  }
+
   intern(value: string): number {
     if (value.length === 0) return EMPTY;
     const encoded = Buffer.from(value, "utf8");

@@ -151,6 +151,11 @@ test("reconcile() runs a background full sweep that discovers and indexes every 
   assert.equal(typeof status.heapSplit?.graphBytes, "number");
   assert.equal(typeof status.heapSplit?.parseTreeCacheBytes, "number");
   assert.equal(typeof status.heapSplit?.otherBytes, "number");
+  assert.equal(typeof status.heapSplit?.columnarBytes, "number");
+  assert.equal(typeof status.heapSplit?.stringTableBytes, "number");
+  assert.equal(typeof status.heapSplit?.tombstoneRatio, "number");
+  assert.equal(typeof status.heapSplit?.knowledgeBuilderBytes, "number");
+  assert.equal(typeof status.heapSplit?.entitySearchBytes, "number");
   assert.ok(status.coverage.length > 0, "expected discovered source roots to be tracked");
   assert.ok(
     status.coverage.every(entry => entry.state === "COMPLETE"),
