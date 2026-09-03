@@ -1,0 +1,104 @@
+{
+  "probedAt": "2026-09-03T02:10:29.038Z",
+  "file": "/Users/luo/Documents/program/lishu-v2/apps/lishu-education-backend/src/main/java/com/lishu/edu/education/LishuEducationBackendApplication.java",
+  "before": {
+    "elapsedMs": 173,
+    "isError": false,
+    "heap": {
+      "indexState": "READY",
+      "files": 2924,
+      "factsHydrated": true,
+      "heapUsedMb": 874,
+      "rssMb": 523,
+      "tombstoneRatio": 0.04767328901502886,
+      "columnarBytes": 20434742,
+      "stringTableBytes": 75497472,
+      "entitySearchBytes": 48837752,
+      "graphBytes": 39904320,
+      "otherBytes": 708312907,
+      "graphSynced": true
+    }
+  },
+  "impact1": {
+    "elapsedMs": 133,
+    "isError": false,
+    "keys": [
+      "version",
+      "target",
+      "contexts",
+      "unresolved",
+      "cost",
+      "freshness",
+      "semantic",
+      "metrics"
+    ],
+    "error": null,
+    "serverElapsedMs": null,
+    "readPlanItems": 0,
+    "readPlanHead": [],
+    "candidateCount": 0,
+    "summary": null,
+    "warning": null
+  },
+  "impact2": {
+    "elapsedMs": 147,
+    "isError": false,
+    "keys": [
+      "version",
+      "target",
+      "contexts",
+      "unresolved",
+      "cost",
+      "freshness",
+      "semantic",
+      "metrics"
+    ],
+    "error": null,
+    "serverElapsedMs": null,
+    "readPlanItems": 0,
+    "readPlanHead": [],
+    "candidateCount": 0,
+    "summary": null,
+    "warning": null
+  },
+  "after": {
+    "elapsedMs": 111,
+    "isError": false,
+    "heap": {
+      "indexState": "READY",
+      "files": 2924,
+      "factsHydrated": true,
+      "heapUsedMb": 874,
+      "rssMb": 527,
+      "tombstoneRatio": 0.04767328901502886,
+      "columnarBytes": 20434742,
+      "stringTableBytes": 75497472,
+      "entitySearchBytes": 48837752,
+      "graphBytes": 39904320,
+      "otherBytes": 708811747,
+      "graphSynced": true
+    }
+  },
+  "lishueduAfter": {
+    "elapsedMs": 193,
+    "isError": false,
+    "heap": {
+      "indexState": "READY",
+      "files": 6109,
+      "factsHydrated": true,
+      "heapUsedMb": 1136,
+      "rssMb": 715,
+      "tombstoneRatio": 0.0005410613179555562,
+      "columnarBytes": 23008566,
+      "stringTableBytes": 142606336,
+      "entitySearchBytes": 43208426,
+      "graphBytes": 40513568,
+      "otherBytes": 884186387,
+      "graphSynced": true
+    }
+  },
+  "deltaMb": {
+    "lishuV2": 0
+  },
+  "impact1RawHead": "{\"version\":1,\"target\":{\"file\":\"apps/lishu-education-backend/src/main/java/com/lishu/edu/education/LishuEducationBackendApplication.java\",\"symbol\":\"package\"},\"contexts\":[{\"path\":\"apps/lishu-education-backend/src/main/java/com/lishu/edu/education/LishuEducationBackendApplication.java\",\"role\":\"TGT\",\"proof\":[\"ANCHOR\"],\"spans\":[{\"s\":1,\"e\":23,\"b\":1164}]},{\"path\":\"apps/lishu-education-backend/src/main/java/com/lishu/edu/education/composition/AccountLifecycleSuccessorFeignClient.java\",\"role\":\"REL\",\"proof\":[\"NAME/TASK\"],\"spans\":[{\"s\":1,\"e\":23,\"b\":745}]},{\"path\":\"apps/lishu-education-backend/src/main/java/com/lishu/edu/education/composition/EducationAccountLifecycleSuccessorComposition.java\",\"role\":\"REL\",\"proof\":[\"NAME/TASK\"],\"spans\":[]},{\"path\":\"apps/lishu-education-backend/src/main/java/com/lishu/edu/education/composition/EducationOutboxDispatchContract.java\",\"role\":\"REL\",\"proof\":[\"NAME/TASK\"],\"spans\":[]},{\"path\":\"apps/lishu-education-backend/src/main/java/com/lishu/edu/education/composition/EntrustMarkCompletionComposition.java\",\"role\":\"REL\",\"proof\":[\"NAME/TASK\"],\"spans\":[]},{\"path\":\"apps/lishu-education-backend/src/main/java/com/lishu/edu/education/composition/EntrustSettlementAuthorizationComposition.java\",\"role\":\"REL\",\"proof\":[\"NAME/TASK\"],\"spans\":[]},{\"path\":\"apps/lishu-education-backend/src/main/java/com/lishu/edu/education/composition/ExamAnalysisScopeComposition.java\",\"role\":\"REL\",\"proof\":[\"NAME/TASK\"],\"spans\":[]},{\"path\":\"apps/lishu-education-backend/src/main/java/com/lishu/edu/education/composition/ExamAnalysisScopeFeignClient.java\",\"role\":\"REL\",\"proof\":[\"NAME/TASK\"],\"spans\":[]},{\"path\":\"apps/lishu-education-backend/src/main/java/com/lishu/edu/education/composition/ExamGradeContextComposition.java\",\"role\":\"REL\",\"proof\":[\"NAME/TASK\"],\"spans\":[]},{\"path\":\"apps/lishu-education-backend/src/main/java/com/lishu/edu/education/composition/ExamGradeContextFeignClient.java\",\"role\":\"REL\",\"proof\":[\"NAME/TASK\"],\"spans\":[]},{\"path\":\"apps/lishu-education-backend/src/main/java/com/lishu/edu/education/composition/ExamResultVersionMetadataClientProperties.java\",\"role\":\"REL\",\"proof\":[\"NAME/TASK\"],\"spans\":[]},{\"path\":\"apps/lishu-education-backend/src/main/java/com/lishu/edu/education/composition/ExamResultVersionMetadataComposition.java\",\"role\":\"REL\",\"proof\":[\"NAME/TASK\"],\"spans\":[]},{\"path\":\"apps/lishu-education-backend/src/main/java/com/lishu/edu/education/composition/QuestionCourseScopeFeignClient.java\",\"role\":\"REL\",\"proof\":[\"NAME/TASK\"],\"spans\":[]},{\"path\":\"apps/lishu-education-backend/src/main/java/com/lishu/edu/education/composition/QuestionSchoolCourseScopeComposition.java\",\"role\":\"REL\",\"proof\":[\"NAME/TASK\"],\"spans\":[]},{\"path\":\"apps/lishu-education-backend/src/main/java/com/lishu/edu/education/composition/RecognitionEngineAvailabilityConfiguration.java\",\"role\":\"REL\",\"proof\":[\"NAME/TASK\"],\"spans\":[]},{\"path\":\"apps/lishu-education-backend/src/main/java/com/lishu/edu/education/composition/RecognitionEngineAvailabilityProperties.java\",\"role\":\"REL\",\"proof\":[\"NA"
+}
