@@ -1,6 +1,6 @@
 # Worktree Family 内存共享方案（FS 轨）
 
-状态：ADOPTED（R3，2026-09-01）——§8 新增零调用 24h 窗 FAIL 的根因闭环与 FSZ 生产级收尾卡；§7 为 48h 观察窗裁决与 FSY 卡；§6 为 FS2 落地后三类故障的终局裁决与 FSX 卡
+状态：ADOPTED（R4，2026-09-03）——§9 新增 FSZ 48h 编辑负载窗的真因（堆主体未归因 + 表示路径不对称 + 冷建链三连错）与 FSR 收尾卡；§8 为零调用窗根因与 FSZ 卡；§7 为 48h 观察窗裁决与 FSY 卡；§6 为 FS2 三类故障与 FSX 卡
 前置：`docs/deep/codex-java-lsp-mcp-daemon-stability-and-memory-plan-2026-08-25.md`（R4，已合 main）
 触发：用户反馈「每个 worktree ~1.5GB，多项目多 worktree 常开时不可接受，为什么不能共享」
 
@@ -258,3 +258,79 @@ FSX 实际落地与 R1 字面有三处**已接受的偏离**（2026-08-28 评审
 3. `fsy2-heap-growth.jsonl` 连续采样显示 heap 有界（无单调爬升段超过 12h）；
 4. 期间抽查 java_impact 正常（延迟、候选数与基线一致）。
 全绿后合 main 并生产切流；任何一条不过，回到 FSZ3 的失败处理路径重新裁决。
+
+---
+
+## 9. FSZ 48h 编辑负载窗：真因与 FSR 收尾卡（R4，2026-09-03）
+
+### 9.1 窗口事实（live 6148de2，`docs/phase-fs/fsz-48h-soak-report-2026-09-03.md`）
+
+FSZ 对准的那条链**已死**：0 FATAL、0 EBADF、0 撞墙；lishu-v2 在 +111 文件编辑负载下 48h 净 +120 MiB，intern 锁死 72 MiB、墓碑被 compact 压回、快照流式编码未再出现 JsonStringify 栈。查询抽查 133–153 ms、heap Δ0。**FSZ1–4 各自的机制都成立。**
+
+窗口仍 FAIL 的三件事，逐一拆解后发现真正的问题在 FSZ 没覆盖到的地方：
+
+| 现象 | 报告归因 | 真因（本节） |
+| --- | --- | --- |
+| lishuedu 484 → 1139 阶跃后 22h 不回落 | 「一次指纹丢快照后重建」 | 冷建链三连错（§9.3）+ 表示路径不对称（§9.2）|
+| compact 23 次 / 换气 0 次 | 「计数口径」 | 口径确实错，但 FSZ1 阈值 1200 绝对值在 1139 平台下等于没有看护（§9.4）|
+| lishu-v2 otherBytes 576 → 729 MiB | 「V8 / 解析残留」 | **堆主体 75% 未归因**——这才是本窗最重要的发现（§9.2）|
+
+### 9.2 真因一：堆主体未归因，且表示随到达路径不同
+
+heapSplit 已归因项（columnar 20M + stringTable 75M + graph 40M + entitySearch 49M + donor 30M + parseTree 2M）合计 ~216 MiB，而 lishu-v2 heap 894、lishuedu 1139——**`otherBytes` 占 75–78%**。FSZ3 的 compact 只作用在已归因的 ~15% 上，所以「墓碑清了、intern 锁了、heap 不动」是必然结果，不是 compact 失效。
+
+决定性对照：lishuedu 同一批 6.1k 文件，**从快照 hydrate 出来 484 MiB；进程内 parse 重建出来 1135 MiB**。同一份 facts、2.3 倍堆。代码层面已定位到的不对称与无界结构：
+
+1. **`RangePool.memo`（`columnar/range-pool.ts`）**：`Array<SourceRange|undefined>` 按 handle 追加、handle 永不释放；`byteSize()` 只计 coords/buckets 两个 typed array，**memo 里的 JS 对象完全不计**。编辑造成的行号偏移让每个 REFRESH 都产生新 range → 新 handle → memo 永久增长，全部落入 otherBytes。compact 是否重建 RangePool 待核（8500eef 改了 13 行）。
+2. **parse 路径 bundle 肥、hydrate 路径 bundle 瘦**：`refreshFile` → `parseJavaSourceFile` 产出的 `JavaFileBundle` 带完整 callSites/typeRefs/annotations/imports 对象数组，经 `replaceFile` → `internOrShare` 进 `installedBundles` 与 SharedFactsPool 后**整个对象图长期保留**；hydrate 路径的 bundle 由 `publishHydratedToPool` 用 `files()` 从列式物化（d30ddc3 还把 method maps 做成 lazy）。SharedFactsPool.estimatedBytes 用 `methods×220B` 一类常数估算（lishuedu 6.1k 文件估 35 MiB），与真实对象图相差一个数量级，把肥 bundle 全部藏进了 otherBytes。
+3. **`resolveAndBuildEdges` 每文件两次 `replaceFile` + 两次 `rebuildRegistry()`**（`java-index-worker.ts:969-998`）：`rebuildRegistry` 是 `[...typesById.values()]` 全量物化整个类型注册表。6k 文件进程内重建 = 1.2 万次全量注册表构建，CPU 与瞬时分配都是 O(N²)。这是 300 s 冷建的主因之一，也是「进程内重建把热 worker 拖成 1135 平台」的放大器。
+4. **`knowledgeBuilderBytes` 恒为 0 是「未测量」不是「为零」**（报告原话「按设计不在热路径累加」）。`syncKnowledgeGraphBundle` 每 REFRESH 都喂它，其保留量未知。
+
+**结论**：稳态堆的大小取决于 facts 是怎么到达的，而不是 facts 有多少。任何走 parse 的路径（REFRESH、进程内冷建、reconcile 差异文件）都留下肥表示，且现有 compact 不会把肥转瘦。这就是 lishu-v2 慢爬（编辑越多肥越多）与 lishuedu 阶跃（一次全量 parse 全肥）的共同根。
+
+### 9.3 真因二：lishuedu 冷建链三连错（同一事件、三处独立缺陷）
+
+`build.gradle.kts` 加一行依赖 →
+1. **buildFingerprint 变 → 整份快照 `rm`**（`java-index-worker.ts:1099-1153`）。M4b 已对 sibling seed 放松了指纹要求（靠 per-file contentHash 兜底），**own 快照仍是字节级严格匹配**。构建文件只影响 layout 推导（source roots / modules / generated roots），而 layout 变化本身就能被 reconcile 发现（新 root 的文件是新路径、消失 root 的文件是删除）。指纹作为快照有效性的门是多余的。
+2. **子进程 300.55 s 被 300 s 硬超时 SIGKILL**（`COLD_BUILD_CHILD_TIMEOUT_MS=300_000`，`java-index-worker.ts:1651`）——快照已在 11:16–17 写完 28 MB。超时既是绝对值（不随文件数缩放），又不看进度、不看产物。
+3. **子进程「失败」后回退到热 worker 进程内全量 parse**——这正是 M3 用子进程隔离冷建要避免的事。回退方向错了：应该是 files-only + 后台重试子进程，而不是把 6k 文件的肥表示塞进常驻 isolate。
+
+### 9.4 真因三：看护与验收口径
+
+- FSZ1 阈值 1200 是绝对值。lishuedu 在 1139 平台停 22h、距墙 397 MiB、距阈 61 MiB——任何一次 registry 重建或查询突发都可能越线，但心跳永不开火。阈值必须相对于本 worker 的 **hydrate 后基线**（如 ≥1.6×）或由事件触发（进程内重建完成即换气），而非绝对数。
+- 采样器把每条 compact 日志计为一次「重建」、把 +8 MiB/13h 与 +650 MiB 阶跃都判成「爬升」。compact 是内部维护动作，不应入验收账；阶跃与斜坡应分开判定。
+
+### 9.5 FSR 任务卡（R = representation & rebuild）
+
+**FSR0：真实堆归因（1 天，只读，先行且不可跳过）**
+- 在与生产同规模的 lishuedu/lishu-v2 上（可用隔离 daemon 实例），对 worker 触发 `v8.writeHeapSnapshot`（新增 STATUS 子命令或 SIGUSR2），分别在「hydrate 后」「进程内重建后」「48h 编辑负载后」三个状态各取一份，按 constructor 聚合 retained size：`JavaMethodFacts / JavaCallSiteFact / JavaTypeRef / SourceRange / Map / Set / string / Array`，并按 retainer 路径归到 `installedBundles / SharedFactsPool / RangePool.memo / knowledgeBuilder / entitySearch / registry`。
+- 顺带核：compact 是否重建 RangePool；`buildTypeRegistryView` 返回值是否被任何长期结构引用。
+- 产出 `docs/phase-fs/fsr0-heap-attribution.json`；heapSplit 改为按此结论给出真实字节（含 rangePoolMemoBytes、bundleObjectBytes、knowledgeBuilderBytes、registryBytes），`otherBytes` 目标 ≤ 15%。
+- 退出：三态归因落盘；FSR2 的实施顺序按 retained size 排序确定。
+
+**FSR1：冷建链三处修复（1–2 天，独立于归因结果，可并行）**
+- (a) own 快照的 buildFingerprint 不再作为 discard 条件：mismatch → 正常加载 + 强制全量 reconcile（复用 M4b/Task 21a 的 per-file contentHash 信任链 + layout 重推导对比）。仅 `extractorVersion / stableIdVersion / schemaVersion` 三者保留 discard 语义。
+- (b) 子进程超时改为**进度型**：子进程每完成一个阶段/每 N 文件向父进程写一行进度；父进程只在「无进度 ≥ 120 s」时 kill，取消绝对上限；kill 前先检查目标快照是否已完整落盘（校验尾部/manifest），若已落盘则按成功处理。
+- (c) 子进程真失败时的回退改为：保持 files-only（coverage DEGRADED）+ 指数退避重试子进程（最多 3 次）+ S5/coldPath heuristic 继续给出可重试的降级响应。**禁止**在常驻 worker 内做超过阈值（默认 500 文件）的进程内全量 parse。
+- 门：单测（指纹变更不丢快照、进度型超时、慢子进程在完成线不被误杀、失败回退不进进程内 parse）；实测：改 lishuedu 根 `build.gradle.kts` 一行 → 无 discard、无子进程、reconcile 完成后 heap 与改前 ±5%。
+
+**FSR2：表示路径归一（3–5 天，主卡，按 FSR0 排序实施）**
+- 目标：稳态堆与 facts 到达路径无关——parse 路径产出的 facts 在进入 store 后必须与 hydrate 路径同形。
+- 首选实现：REFRESH/reconcile 的 `replaceFile` 在 intern 进列式后**丢弃肥 bundle 对象**，`installedBundles`/SharedFactsPool 改持有从列式物化的瘦 bundle（与 `publishHydratedToPool` 同一来源）；RangePool.memo 改为 LRU 或按 compact 重建（handle 回收）；`rebuildRegistry` 改增量维护（typesById 变更时局部更新注册表，或至少按 REFRESH 批次缓存一次而非每文件两次）。
+- 备选（若首选在 FSR0 后证明改动面过大）：**事件触发换气**——任何进程内 parse 超过阈值文件数（默认 200）或肥 bundle 比例超阈值时，flush 快照后在空闲时刻 recycle，让 hydrate 路径把表示归一。这等价于把「表示归一」交给快照往返，代价是热 pin 一次 ~7 s 重建。
+- 门：lishuedu「hydrate 后」与「进程内重建 + 归一后」heap 差 ≤ 15%（现为 2.3×）；lishu-v2 模拟 500 轮 REFRESH 后 heap 回到 hydrate 基线 ±10%；identity 三仓 0 delta。
+
+**FSR3：看护改相对阈值 + 事件触发（0.5 天，随 FSR1 提交）**
+- FSZ1 心跳阈值改为 `max(JAVA_LSP_WORKER_HEAP_RECYCLE_MB 的显式值, 1.6 × 本 worker hydrate 后 heapUsed)`，默认关闭绝对 1200；新增事件触发：进程内 parse 文件数超阈值后的下一个空闲窗必换气。
+- 门：lishuedu 复现 §9.3 场景（若 FSR1 未落地前）时，重建完成后 ≤10 min 内换气回 484±10%。
+
+**FSR4：验收口径重定义（0.5 天，随 FSR3 提交，替代 §8.4）**
+- compact 不入账；分别计「recycle 事件」「cold-build 子进程事件」「进程内 parse 事件（应为 0）」。
+- 爬升判定改为**相对 hydrate 基线**：任一热 worker heap > 1.4 × 基线持续 ≥ 6h 为 FAIL；阶跃（单拍 > +30%）单独标记并要求 24h 内回落。
+- 48h 编辑负载窗 PASS 条件：0 FATAL / 0 EBADF / 0 进程内 parse 事件；recycle ≤ 2 次/24h 且每次回落到基线 ±10%；heapSplit otherBytes ≤ 15%；查询抽查通过。
+
+### 9.6 执行顺序与合 main
+
+FSR0（归因）‖ FSR1（冷建链）→ FSR3+FSR4 → FSR2（按 FSR0 排序）→ 48h 编辑负载窗（§9.5 FSR4 口径）→ 合 main。
+
+FSR0 与 FSR1 互不依赖、并行开工；FSR2 必须等 FSR0 的 retained-size 排序，不允许再按猜测挑结构改。若 FSR0 显示 otherBytes 主体不在 §9.2 列出的四项里，回到本节重新裁决而不是硬做 FSR2。

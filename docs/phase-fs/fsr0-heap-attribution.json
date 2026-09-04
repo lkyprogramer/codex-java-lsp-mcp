@@ -1,0 +1,114 @@
+{
+  "generatedAt": "2026-09-03T08:32:12.532Z",
+  "notes": {
+    "compactRebuildsRangePool": true,
+    "buildTypeRegistryViewRetained": false,
+    "knowledgeBuilderRetainsOnlyGraphStore": true,
+    "heapSnapshots": "STATUS-walked live structures; v8.writeHeapSnapshot optional via STATUS heapSnapshotPath"
+  },
+  "fixture": {
+    "afterHydrate": {
+      "heapUsedMb": 10,
+      "files": 2,
+      "factsHydrated": true,
+      "hydrateBaselineHeapMb": 10,
+      "pendingIdleRecycle": false,
+      "donorStoreBytes": 1308,
+      "overlayBytes": 0,
+      "graphBytes": 0,
+      "parseTreeCacheBytes": 0,
+      "columnarBytes": 3056,
+      "stringTableBytes": 81920,
+      "rangePoolMemoBytes": 1160,
+      "bundleObjectBytes": 1728,
+      "registryBytes": 360,
+      "knowledgeBuilderBytes": 0,
+      "entitySearchBytes": 728,
+      "otherBytes": 10591788,
+      "accountedShare": -0.010111618041992232
+    },
+    "afterInProcess": {
+      "heapUsedMb": 11,
+      "files": 2,
+      "factsHydrated": false,
+      "pendingIdleRecycle": false,
+      "donorStoreBytes": 0,
+      "overlayBytes": 0,
+      "graphBytes": 0,
+      "parseTreeCacheBytes": 0,
+      "columnarBytes": 3056,
+      "stringTableBytes": 81920,
+      "rangePoolMemoBytes": 8,
+      "bundleObjectBytes": 0,
+      "registryBytes": 0,
+      "knowledgeBuilderBytes": 0,
+      "entitySearchBytes": 0,
+      "otherBytes": 11134704,
+      "accountedShare": 0.03464716131036927
+    },
+    "afterEdit": {
+      "heapUsedMb": 14,
+      "files": 2,
+      "factsHydrated": true,
+      "hydrateBaselineHeapMb": 10,
+      "pendingIdleRecycle": false,
+      "donorStoreBytes": 1308,
+      "overlayBytes": 0,
+      "graphBytes": 2912,
+      "parseTreeCacheBytes": 51,
+      "columnarBytes": 3064,
+      "stringTableBytes": 81920,
+      "rangePoolMemoBytes": 8,
+      "bundleObjectBytes": 1792,
+      "registryBytes": 360,
+      "knowledgeBuilderBytes": 0,
+      "entitySearchBytes": 734,
+      "otherBytes": 14245363,
+      "accountedShare": 0.02961165564400814
+    }
+  },
+  "fsr2Order": [
+    {
+      "name": "otherBytes",
+      "bytes": 11134704
+    },
+    {
+      "name": "stringTableBytes",
+      "bytes": 81920
+    },
+    {
+      "name": "columnarBytes",
+      "bytes": 3056
+    },
+    {
+      "name": "rangePoolMemoBytes",
+      "bytes": 8
+    },
+    {
+      "name": "bundleObjectBytes",
+      "bytes": 0
+    },
+    {
+      "name": "registryBytes",
+      "bytes": 0
+    },
+    {
+      "name": "knowledgeBuilderBytes",
+      "bytes": 0
+    },
+    {
+      "name": "entitySearchBytes",
+      "bytes": 0
+    },
+    {
+      "name": "graphBytes",
+      "bytes": 0
+    }
+  ],
+  "fsr2Decision": "fallback-event-recycle",
+  "productionScale": {
+    "attempted": true,
+    "blocked": "second worker on live cache 6496e5a49fd9 would race :38456; see fsr0-skip.txt",
+    "liveSnapshotStill28MiB": true
+  }
+}

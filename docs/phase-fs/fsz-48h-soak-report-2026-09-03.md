@@ -170,6 +170,10 @@ T0 是 files-only 水线。重建后 graph 进进程、`otherBytes` +600MB，之
 
 合 main：文档写「全绿后合 main」。当前不是全绿。若改为意图验收（0 撞墙 + 编辑仓有界 + 查询可用），需要显式改 §8.4 口径后再合；本报告不代替那次改口。
 
+## 9.1 裁决落点（2026-09-03 补）
+
+上述 4 点已在计划 §9（R4）拆成真因与 FSR0–FSR4 卡：本窗最重要的事实不是「重建次数」，而是 **heap 主体 75–78% 落在 `otherBytes` 未归因**，且同一批 facts 从快照 hydrate 是 484 MiB、进程内 parse 是 1135 MiB——表示随到达路径不同。§9 中「compact 拉不回 otherBytes」由此得到解释：compact 只作用在已归因的 ~15%。合 main 条件改按 §9.5 FSR4 口径。
+
 ## 10. 监视
 
 6h durable scheduler `01a05bc4e9ba7c019944c9f32b46b0ba` 仍在。48h 点已采。继续挂只会重复 FAILED，除非要盯 lishuedu 会不会破 1200 触发第一次心跳换气。
