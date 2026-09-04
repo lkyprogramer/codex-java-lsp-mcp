@@ -14,7 +14,7 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const HOME = homedir();
 const RUNTIME = path.join(HOME, "Library/Application Support/codex-java-lsp-mcp");
