@@ -13,4 +13,8 @@ test("RangePool intern is coordinate-identity and 0 means absent", () => {
   assert.notEqual(first, other);
   assert.deepEqual(pool.get(first), { start: { line: 10, column: 2 }, end: { line: 12, column: 1 } });
   assert.equal(pool.getObject(first), pool.getObject(second));
+  assert.ok(pool.memoBytes() > 0, "memo JS objects are measured");
+  assert.ok(pool.memoLiveCount() >= 1);
+  pool.clear();
+  assert.equal(pool.memoLiveCount(), 0);
 });

@@ -935,6 +935,7 @@ export class JavaIndexStore {
     stringTableBytes: number;
     stringTableAllocatedBytes: number;
     rangePoolBytes: number;
+    rangePoolMemoBytes: number;
     columnarBytes: number;
   } {
     const rows = this.fileColumns.rows + this.methodColumns.rows + this.edgeColumns.rows;
@@ -944,10 +945,33 @@ export class JavaIndexStore {
       stringTableBytes: this.edgeColumns.strings.byteSize(),
       stringTableAllocatedBytes: this.edgeColumns.strings.allocatedPayloadBytes(),
       rangePoolBytes: this.edgeColumns.ranges.byteSize(),
+      rangePoolMemoBytes: this.edgeColumns.ranges.memoBytes(),
       columnarBytes: this.fileColumns.estimatedBytes()
         + this.methodColumns.estimatedBytes()
         + this.edgeColumns.estimatedBytes()
     };
+  }
+
+  bundleObjectBytes(): number {
+    let bytes = this.installedBundles.size * 64;
+    for (const bundle of this.installedBundles.values()) {
+      bytes += 256;
+      bytes += bundle.types.length * 180;
+      bytes += bundle.fields.length * 120;
+      bytes += bundle.methods.length * 220;
+      bytes += bundle.edges.length * 96;
+      for (const method of bundle.methods) {
+        bytes += (method.callSites?.length ?? 0) * 96;
+        bytes += (method.localTypes?.length ?? 0) * 64;
+        bytes += (method.annotations?.length ?? 0) * 48;
+        bytes += (method.parameters?.length ?? 0) * 48;
+      }
+    }
+    return bytes;
+  }
+
+  registryBytes(): number {
+    return this.typesById.size * 180 + this.fieldsById.size * 120;
   }
 
   /**

@@ -17,15 +17,43 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 const HOME = homedir();
-const WATCH = path.join(HOME, "Library/Logs/codex-java-lsp-mcp/fsz-watch");
+const RUNTIME = path.join(HOME, "Library/Application Support/codex-java-lsp-mcp");
+const WATCH = path.join(HOME, "Library/Logs/codex-java-lsp-mcp/fsr-watch");
 const JSONL = path.join(WATCH, "heap-growth.jsonl");
 const STATE_PATH = path.join(WATCH, "state.json");
 const LATEST = path.join(WATCH, "latest.json");
 const LOG = path.join(HOME, "Library/Logs/codex-java-lsp-mcp/daemon.stderr.log");
 const TELEMETRY = path.join(HOME, "Library/Caches/codex-java-lsp/telemetry");
-const RUNTIME = path.join(HOME, "Library/Application Support/codex-java-lsp-mcp");
 const FSY_JSONL = path.join(HOME, "Library/Logs/codex-java-lsp-mcp/fsy-watch/heap-growth.jsonl");
-const EXPECTED_SHA = "6148de23d3cd";
+const FSZ_JSONL = path.join(HOME, "Library/Logs/codex-java-lsp-mcp/fsz-watch/heap-growth.jsonl");
+
+function expectedSha() {
+  if (process.env.JAVA_LSP_EXPECTED_SHA) return process.env.JAVA_LSP_EXPECTED_SHA;
+  const stamp = path.join(RUNTIME, "current/dist/build-stamp.json");
+  if (existsSync(stamp)) {
+    try {
+      const sha = JSON.parse(readFileSync(stamp, "utf8")).gitSha;
+      if (typeof sha === "string" && sha.length >= 12) return sha.slice(0, 12);
+    } catch {
+      // fall through
+    }
+  }
+  return "";
+}
+
+async function loadGates() {
+  const candidates = [
+    path.join(RUNTIME, "current/dist/java-index/fsr4-soak-gates.js"),
+    path.join(path.dirname(fileURLToPath(import.meta.url)), "../dist/java-index/fsr4-soak-gates.js")
+  ];
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return import(pathToFileURL(candidate).href);
+  }
+  throw new Error("fsr4-soak-gates.js not found under runtime current/dist or repo dist");
+}
+
+const { fsr4HoursAboveClimb, fsr4SoakVerdict, fsr4StepStatus } = await loadGates();
+const EXPECTED_SHA = expectedSha();
 const PORT = process.env.JAVA_LSP_HTTP_PORT ?? "38456";
 const PINS = [
   { projectId: "lishu-v2", hot: true },
@@ -38,7 +66,10 @@ const FSZ_SPLIT_KEYS = [
   "stringTableBytes",
   "tombstoneRatio",
   "knowledgeBuilderBytes",
-  "entitySearchBytes"
+  "entitySearchBytes",
+  "rangePoolMemoBytes",
+  "bundleObjectBytes",
+  "registryBytes"
 ];
 
 mkdirSync(WATCH, { recursive: true });
@@ -83,7 +114,10 @@ function pickSplit(heapSplit) {
     stringTableBytes: heapSplit.stringTableBytes,
     tombstoneRatio: heapSplit.tombstoneRatio,
     knowledgeBuilderBytes: heapSplit.knowledgeBuilderBytes,
-    entitySearchBytes: heapSplit.entitySearchBytes
+    entitySearchBytes: heapSplit.entitySearchBytes,
+    rangePoolMemoBytes: heapSplit.rangePoolMemoBytes,
+    bundleObjectBytes: heapSplit.bundleObjectBytes,
+    registryBytes: heapSplit.registryBytes
   };
 }
 
@@ -91,7 +125,9 @@ async function healthz() {
   const response = await fetch(`http://127.0.0.1:${PORT}/healthz`, { signal: AbortSignal.timeout(5000) });
   const body = await response.json();
   if (!response.ok || body.status !== "ok") failures.push(`healthz not ok: ${JSON.stringify(body)}`);
-  if (body.buildSha && !String(body.buildSha).startsWith(EXPECTED_SHA)) {
+  if (!EXPECTED_SHA) {
+    failures.push("no expected buildSha (current/dist/build-stamp.json or JAVA_LSP_EXPECTED_SHA)");
+  } else if (body.buildSha && !String(body.buildSha).startsWith(EXPECTED_SHA)) {
     failures.push(`unexpected buildSha ${body.buildSha} (want ${EXPECTED_SHA})`);
   }
   return body;
@@ -152,8 +188,11 @@ function scanLogs(state) {
       recycle: [],
       compact: [],
       heartbeat: [],
+      inProcessParse: [],
+      coldBuild: [],
       newRecycles: [],
-      newCompacts: [],
+      newParses: [],
+      newColds: [],
       windowStart: -1
     };
   }
@@ -172,19 +211,29 @@ function scanLogs(state) {
   const recycle = window.filter(line => line.includes("worker heap recycle"));
   const heartbeat = window.filter(line => line.includes("source=heartbeat"));
   const compact = window.filter(line => line.includes("columnar compact"));
+  const inProcessParse = window.filter(line => line.includes("in-process parse files="));
+  const coldBuild = window.filter(line =>
+    line.includes("cold-build child") || line.includes("in-process parse skipped")
+  );
   if (fatal > 0) failures.push(`FATAL ERROR in current process window: ${fatal}`);
   if (ebadf > 0) failures.push(`spawn EBADF in current process window: ${ebadf}`);
   const seenRecycle = new Set((state.recycleEvents ?? []).map(event => event.line));
-  const seenCompact = new Set((state.compactEvents ?? []).map(event => event.line));
+  const seenParse = new Set((state.inProcessParseEvents ?? []).map(event => event.line));
+  const seenCold = new Set((state.coldBuildEvents ?? []).map(event => event.line));
   const newRecycles = [];
-  const newCompacts = [];
+  const newParses = [];
+  const newColds = [];
   for (const line of recycle) {
     if (seenRecycle.has(line)) continue;
     newRecycles.push({ ts: sampledAt, line: line.slice(0, 240) });
   }
-  for (const line of compact) {
-    if (seenCompact.has(line)) continue;
-    newCompacts.push({ ts: sampledAt, line: line.slice(0, 240) });
+  for (const line of inProcessParse) {
+    if (seenParse.has(line)) continue;
+    newParses.push({ ts: sampledAt, line: line.slice(0, 240) });
+  }
+  for (const line of coldBuild) {
+    if (seenCold.has(line)) continue;
+    newColds.push({ ts: sampledAt, line: line.slice(0, 240) });
   }
   return {
     readyLine: readyIndex >= 0 ? readyIndex + 1 : null,
@@ -193,8 +242,11 @@ function scanLogs(state) {
     recycle,
     compact,
     heartbeat,
+    inProcessParse,
+    coldBuild,
     newRecycles,
-    newCompacts,
+    newParses,
+    newColds,
     windowStart: readyIndex
   };
 }
@@ -235,6 +287,8 @@ async function pinStatuses() {
         factsHydrated: javaIndex.factsHydrated,
         hibernated: javaIndex.hibernated,
         heapUsedMb: heapUsedMb == null ? null : Math.round(heapUsedMb),
+        hydrateBaselineHeapMb: javaIndex.hydrateBaselineHeapMb,
+        pendingIdleRecycle: javaIndex.pendingIdleRecycle,
         heapSplit
       };
       pins.push(pinSample);
@@ -351,17 +405,17 @@ try {
 
 const isFirstSample = (state.samples ?? 0) === 0;
 state.recycleEvents = [...(state.recycleEvents ?? []), ...logs.newRecycles];
-state.compactEvents = [...(state.compactEvents ?? []), ...logs.newCompacts];
+state.inProcessParseEvents = [...(state.inProcessParseEvents ?? []), ...(logs.newParses ?? [])];
+state.coldBuildEvents = [...(state.coldBuildEvents ?? []), ...(logs.newColds ?? [])];
 if (isFirstSample) {
   state.recycleBaseline = state.recycleEvents.length;
-  state.compactBaseline = state.compactEvents.length;
+  state.parseBaseline = state.inProcessParseEvents.length;
+  state.coldBaseline = state.coldBuildEvents.length;
 }
 const watchHours = (Date.parse(sampledAt) - Date.parse(state.watchStartedAt)) / 3600000;
 const recycleBudgeted = Math.max(0, state.recycleEvents.length - (state.recycleBaseline ?? 0));
-const compactBudgeted = Math.max(0, state.compactEvents.length - (state.compactBaseline ?? 0));
-if (watchHours >= 24 && recycleBudgeted + compactBudgeted > 3) {
-  failures.push(`FSZ §8.4 not converged: ${recycleBudgeted} recycle + ${compactBudgeted} compact after T0 in ${watchHours.toFixed(1)}h`);
-}
+const parseBudgeted = Math.max(0, state.inProcessParseEvents.length - (state.parseBaseline ?? 0));
+const coldBudgeted = Math.max(0, state.coldBuildEvents.length - (state.coldBaseline ?? 0));
 
 const priorSamples = existsSync(JSONL)
   ? readFileSync(JSONL, "utf8").split("\n").filter(Boolean).map(line => {
@@ -377,9 +431,45 @@ if (slope?.value != null && slope.value > 50) {
   warnings.push(`hot-pin heap slope ${slope.value.toFixed(1)} MiB/24h exceeds 50`);
 }
 const climb = monotonicClimbHours(priorSamples, pins);
-if (climb?.hours >= 12 && climb.to > climb.from) {
-  warnings.push(`hot-pin heap climbed ${climb.from}->${climb.to} over ${climb.hours.toFixed(1)}h`);
+function pinHeapSeries(projectId) {
+  return [...priorSamples, { sampledAt, pins }]
+    .map(sample => {
+      const pin = (sample.pins ?? []).find(item => item.projectId === projectId);
+      if (!pin || typeof pin.heapUsedMb !== "number") return null;
+      return {
+        sampledAt: sample.sampledAt,
+        heapMb: pin.heapUsedMb,
+        hydrateBaselineHeapMb: pin.hydrateBaselineHeapMb
+      };
+    })
+    .filter(Boolean);
 }
+let worst = { hours: 0, heapMb: 0, baseline: 0, series: [] };
+for (const pin of pins.filter(item => item.hot && typeof item.heapUsedMb === "number")) {
+  const series = pinHeapSeries(pin.projectId);
+  const hours = fsr4HoursAboveClimb(series);
+  const last = series.at(-1);
+  if (!last) continue;
+  if (hours > worst.hours || (hours === worst.hours && last.heapMb > worst.heapMb)) {
+    worst = { hours, heapMb: last.heapMb, baseline: last.hydrateBaselineHeapMb ?? 0, series };
+  }
+}
+const step = fsr4StepStatus(worst.series);
+const soak = fsr4SoakVerdict({
+  fatal: 0,
+  ebadf: 0,
+  inProcessParseEvents: parseBudgeted,
+  coldBuildChildEvents: coldBudgeted,
+  recycleBudgeted,
+  watchHours,
+  heapMb: worst.heapMb,
+  hydrateBaselineHeapMb: worst.baseline,
+  hoursAboveClimb: worst.hours,
+  stepPct: step.stepPct,
+  stepRecoveredWithin24h: step.stepRecoveredWithin24h
+});
+failures.push(...soak.failures);
+warnings.push(...soak.warnings);
 
 const soak24h = watchHours >= 24 && failures.length === 0 ? "PASS" : watchHours >= 24 ? "FAIL" : "IN_PROGRESS";
 const verdict = failures.length > 0 ? "FAILED" : warnings.length > 0 ? "WARN" : "OK";
@@ -403,10 +493,12 @@ const sample = {
     recycleThisWindow: logs.recycle.length,
     recycleHeartbeatThisWindow: logs.heartbeat.length,
     compactThisWindow: logs.compact.length,
+    inProcessParseThisWindow: logs.inProcessParse?.length ?? 0,
+    coldBuildThisWindow: logs.coldBuild?.length ?? 0,
     recycleSinceWatch: state.recycleEvents.length,
-    compactSinceWatch: state.compactEvents.length,
     recycleBudgeted,
-    compactBudgeted
+    parseBudgeted,
+    coldBudgeted
   },
   slope,
   climb,
@@ -429,9 +521,9 @@ process.stdout.write(`${JSON.stringify({
   sampledAt,
   buildSha: health?.buildSha,
   recycleSinceWatch: state.recycleEvents.length,
-  compactSinceWatch: state.compactEvents.length,
   recycleBudgeted,
-  compactBudgeted,
+  parseBudgeted,
+  coldBudgeted,
   telemetryLines: telemetry.lines,
   pins: pins.map(pin => ({
     projectId: pin.projectId,

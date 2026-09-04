@@ -215,22 +215,16 @@ function factsToV3(value: SnapshotV4Facts): JavaIndexSnapshotV3 {
 }
 
 /**
- * Loads and validates a snapshot for a *normal own-repo* load: any corruption
- * (bad gzip, bad JSON, wrong schemaVersion) or identity mismatch (extractor,
- * stableId, canonicalRepoRoot, buildFingerprint) is treated as unusable,
- * logged once, and the file is deleted (this is a rebuildable cache, not a
- * durable store - no timestamped corrupt copies are retained). Never throws;
- * a miss is `undefined`, matching every other "index not ready" path in this
- * module. `manifestFingerprint` is intentionally not checked here (see
- * `SnapshotIdentity`'s own doc comment) - Step 6a compares it separately
- * after an independent manifest re-scan.
+ * Loads and validates a snapshot for a *normal own-repo* load. Corruption
+ * (bad gzip, bad JSON, wrong schemaVersion) or a hard identity mismatch
+ * (extractorVersion / stableIdVersion) is treated as unusable, logged once,
+ * and the file is deleted. buildFingerprint and canonicalRepoRoot drift do
+ * **not** discard: the bytes still load and the caller must force reconcile
+ * (FSR1). Never throws; a miss is `undefined`.
  *
  * This function's delete-on-mismatch behavior is specific to trusting one's
- * *own* cache directory; use `loadSiblingSnapshot` instead to validate a
- * snapshot found in a *different* worktree's cache before deciding whether
- * to seed from it (Task 21a), since an expected canonicalRepoRoot mismatch
- * there is normal, not corruption, and must never delete the sibling's own
- * valid snapshot.
+ * *own* cache directory; use `loadSiblingSnapshot` instead for a sibling
+ * worktree's cache (Task 21a).
  */
 export async function loadSnapshot(
   target: string,
@@ -239,7 +233,7 @@ export async function loadSnapshot(
   const parsed = await parseSnapshotFile(target);
   if (!parsed) return undefined;
   if ("error" in parsed) return discard(target, parsed.error);
-  if (!identityMatches(headerIdentity(parsed.view), expected, true)) {
+  if (!hardIdentityMatches(headerIdentity(parsed.view), expected)) {
     return discard(target, "snapshot identity mismatch");
   }
   try {
@@ -257,22 +251,35 @@ export async function loadSnapshotView(
   const parsed = await parseSnapshotFile(target);
   if (!parsed) return undefined;
   if ("error" in parsed) return discard(target, parsed.error);
-  if (!identityMatches(headerIdentity(parsed.view), expected, true)) {
+  if (!hardIdentityMatches(headerIdentity(parsed.view), expected)) {
     return discard(target, "snapshot identity mismatch");
   }
   return parsed.view;
 }
 
-function identityMatches(
-  snapshot: Pick<JavaIndexSnapshotV3, "extractorVersion" | "stableIdVersion" | "canonicalRepoRoot" | "buildFingerprint">,
-  expected: SnapshotIdentity,
-  checkRepoRoot: boolean
+/** True when the on-disk v4 snapshot header and files segment decode. */
+export async function isCompleteSnapshotFile(target: string): Promise<boolean> {
+  const parsed = await parseSnapshotFile(target);
+  return Boolean(parsed && !("error" in parsed));
+}
+
+export function hardIdentityMatches(
+  snapshot: Pick<JavaIndexSnapshotV3, "extractorVersion" | "stableIdVersion">,
+  expected: Pick<SnapshotIdentity, "extractorVersion" | "stableIdVersion">
 ): boolean {
   if (!extractorVersionsCompatible(snapshot.extractorVersion, expected.extractorVersion)) return false;
   if (snapshot.stableIdVersion !== expected.stableIdVersion) return false;
-  if (snapshot.buildFingerprint !== expected.buildFingerprint) return false;
-  if (checkRepoRoot && snapshot.canonicalRepoRoot !== expected.canonicalRepoRoot) return false;
   return true;
+}
+
+export function snapshotSoftIdentityDrift(
+  snapshot: Pick<JavaIndexSnapshotV3, "canonicalRepoRoot" | "buildFingerprint">,
+  expected: Pick<SnapshotIdentity, "canonicalRepoRoot" | "buildFingerprint">
+): { fingerprint: boolean; canonical: boolean } {
+  return {
+    fingerprint: snapshot.buildFingerprint !== expected.buildFingerprint,
+    canonical: snapshot.canonicalRepoRoot !== expected.canonicalRepoRoot
+  };
 }
 
 /** The identity a sibling worktree's snapshot must match to be seed-eligible; `canonicalRepoRoot` is deliberately excluded - a sibling legitimately has a different one. */

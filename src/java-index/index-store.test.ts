@@ -620,9 +620,11 @@ test("500 replaceFile cycles compact live rows and intern table back to baseline
     grown.stringTableAllocatedBytes > STRING_TABLE_INITIAL_BYTES,
     `intern payload stayed at ${grown.stringTableAllocatedBytes}, expected growth past ${STRING_TABLE_INITIAL_BYTES}`
   );
+  assert.ok(typeof grown.rangePoolMemoBytes === "number");
   store.compactColumnar();
   const compacted = store.columnarStats();
   assert.ok(compacted.tombstoneRatio === 0, `compacted tombstoneRatio ${compacted.tombstoneRatio}`);
+  assert.equal(typeof compacted.rangePoolMemoBytes, "number");
   assert.equal(store.filesByPath.get(path)?.generation, 501);
   assert.equal(store.files([path])[0]?.methods.length, 1);
   assert.equal(

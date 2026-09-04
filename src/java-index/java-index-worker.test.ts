@@ -156,6 +156,9 @@ test("reconcile() runs a background full sweep that discovers and indexes every 
   assert.equal(typeof status.heapSplit?.tombstoneRatio, "number");
   assert.equal(typeof status.heapSplit?.knowledgeBuilderBytes, "number");
   assert.equal(typeof status.heapSplit?.entitySearchBytes, "number");
+  assert.equal(typeof status.heapSplit?.rangePoolMemoBytes, "number");
+  assert.equal(typeof status.heapSplit?.bundleObjectBytes, "number");
+  assert.equal(typeof status.heapSplit?.registryBytes, "number");
   assert.ok(status.coverage.length > 0, "expected discovered source roots to be tracked");
   assert.ok(
     status.coverage.every(entry => entry.state === "COMPLETE"),
@@ -1240,6 +1243,35 @@ test("a malformed sibling snapshot fails the seed attempt softly - OPEN still su
   assert.equal(openStatus.files, 0, "a failed seed must fall back to an empty store, never partial/garbage facts");
 
   await client.close();
+});
+
+test("own snapshot buildFingerprint drift loads files and does not delete the snapshot", async () => {
+  const repoRoot = tempRepo("java-index-worker-fsr1-fingerprint-");
+  writeJavaFile(repoRoot, "src/main/java/demo/Solo.java", "package demo;\n\nclass Solo {}\n");
+  const cacheDir = tempCacheDir();
+  const client = new JavaIndexClient(repoRoot, cacheDir);
+  await client.open(1);
+  await client.reconcile(1);
+  await waitFor(async () => (await client.status()).pendingBackground === 0, 8000);
+  await client.flush();
+  await client.close();
+  const snapshotPath = path.join(cacheDir, SNAPSHOT_FILE_NAME);
+  assert.equal(existsSync(snapshotPath), true);
+  const layout = probeLayout(repoRoot);
+  const raw = await loadSnapshot(snapshotPath, {
+    extractorVersion: computeExtractorVersion(),
+    stableIdVersion: STABLE_ID_VERSION,
+    canonicalRepoRoot: repoRoot,
+    buildFingerprint: (await computeBuildFingerprint(repoRoot, layout))!
+  });
+  assert.ok(raw);
+  raw.buildFingerprint = "mutated-for-fsr1";
+  await writeSnapshotAtomic(snapshotPath, raw);
+  const again = new JavaIndexClient(repoRoot, cacheDir);
+  await again.open(1);
+  assert.equal(existsSync(snapshotPath), true, "FSR1 must not rm the own snapshot");
+  await waitFor(async () => ((await again.status()).files ?? 0) >= 1, 8000);
+  await again.close();
 });
 
 function writeResourceFile(repoRoot: string, relativePath: string, content: string): void {

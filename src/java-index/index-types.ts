@@ -280,6 +280,11 @@ export type JavaIndexStatus = {
   heapUsedBytes?: number;
   /** FSX0/FSX2: process heap plus family-store counts. Absent on older workers. */
   heapSplit?: JavaIndexHeapSplit;
+  /** Heap at first snapshot hydrate; used as FSR3 1.6× recycle baseline. */
+  hydrateBaselineHeapMb?: number;
+  /** Next idle window must recycle (in-process parse over threshold). */
+  pendingIdleRecycle?: boolean;
+  inProcessParseFiles?: number;
 };
 
 export type JavaIndexHeapSplit = {
@@ -302,6 +307,16 @@ export type JavaIndexHeapSplit = {
   tombstoneRatio?: number;
   knowledgeBuilderBytes?: number;
   entitySearchBytes?: number;
+  /** FSR0 measured retained-ish JS graphs, not STATUS leftovers. */
+  rangePoolMemoBytes?: number;
+  bundleObjectBytes?: number;
+  registryBytes?: number;
+};
+
+export type JavaIndexHeapAttribution = {
+  hydrateBaselineHeapMb?: number;
+  pendingIdleRecycle?: boolean;
+  inProcessParseFiles?: number;
 };
 
 export type JavaTypeLookupResult =

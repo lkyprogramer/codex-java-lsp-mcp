@@ -56,6 +56,10 @@ export type ColdBuildResult = {
   phasesMs: ColdBuildPhasesMs;
 };
 
+function emitColdBuildProgress(phase: string, files: number): void {
+  process.stdout.write(`${JSON.stringify({ type: "progress", phase, files, t: Date.now() })}\n`);
+}
+
 export async function runColdIndexBuild(
   repoRoot: string,
   cacheDir: string,
@@ -94,6 +98,7 @@ export async function runColdIndexBuild(
       const discovered = await discoverJavaFiles(resolvedRepoRoot, layout);
       discoverMs = mark(phase);
       discoveredCount = discovered.length;
+      emitColdBuildProgress("discover", discoveredCount);
       const byRoot = new Map<string, number>();
       for (const file of discovered) byRoot.set(file.sourceRoot, (byRoot.get(file.sourceRoot) ?? 0) + 1);
       for (const [root, count] of byRoot) coverage.begin(root, generation, count);
@@ -119,8 +124,12 @@ export async function runColdIndexBuild(
           if (!lastParseError) lastParseError = error instanceof Error ? error.stack ?? error.message : String(error);
           coverage.failed(file.sourceRoot, file.relativePath, error);
         }
+        if ((pathsByRoot.size + parseFailed) % 50 === 0) {
+          emitColdBuildProgress("parse", [...pathsByRoot.values()].reduce((sum, files) => sum + files.length, 0));
+        }
       }
       parseMs = mark(phase);
+      emitColdBuildProgress("parse-done", discoveredCount);
     } else {
       const buildFingerprint = await computeBuildFingerprint(resolvedRepoRoot, layout);
       if (!buildFingerprint) throw new Error("snapshot build fingerprint unavailable");
@@ -166,8 +175,10 @@ export async function runColdIndexBuild(
     }
 
     let phase = performance.now();
+    emitColdBuildProgress("resolve", discoveredCount);
     resolveAll(store, pathsByRoot, graphBuilder, generation);
     maybeGc();
+    emitColdBuildProgress("resolve-done", discoveredCount);
     const resolveMs = mark(phase);
     for (const entry of coverage.snapshot()) coverage.complete(entry.root, generation);
     const result = await finish(cacheDir, {

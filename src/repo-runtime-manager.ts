@@ -126,6 +126,8 @@ type RuntimeEntry = {
   runtimeLease?: LeaseHandle;
   gate: RuntimeLifecycleGate;
   ownership?: RepoOwnershipLease;
+  /** First snapshot-hydrate heap (MiB); FSR3 relative recycle baseline. */
+  hydrateBaselineHeapMb?: number;
 };
 
 type SlotWaiter = {
@@ -148,7 +150,7 @@ type RuntimeManagerOptions = {
   requestTimeoutMs: number;
   maxRetainedStoppedRepos: number;
   transportMode: RepoOwnerTransport;
-  /** MiB. Recycle idle isolate above this heap. 0 disables. Default 1200. */
+  /** MiB. Explicit absolute recycle floor. 0 means unset (FSR3 relative 1.6× hydrate). */
   workerHeapRecycleMb: number;
   /** STATUS poll for FSZ1 heap recycle. 0 disables. Default 5 min. */
   heapRecycleIntervalMs: number;
@@ -195,7 +197,7 @@ export class RepoRuntimeManager {
       requestTimeoutMs: positiveInteger(process.env.JAVA_LSP_REQUEST_TIMEOUT_MS, 120000),
       maxRetainedStoppedRepos: positiveInteger(process.env.JAVA_LSP_MAX_RETAINED_STOPPED_REPOS, 2),
       transportMode: "stdio",
-      workerHeapRecycleMb: nonNegativeInteger(process.env.JAVA_LSP_WORKER_HEAP_RECYCLE_MB, 1200),
+      workerHeapRecycleMb: nonNegativeInteger(process.env.JAVA_LSP_WORKER_HEAP_RECYCLE_MB, 0),
       heapRecycleIntervalMs: nonNegativeInteger(
         process.env.JAVA_LSP_WORKER_HEAP_RECYCLE_INTERVAL_MS,
         process.env.JAVA_LSP_ISOLATED_VALIDATION === "1" ? 0 : 300_000
@@ -1166,13 +1168,12 @@ export class RepoRuntimeManager {
   }
 
   /**
-   * FSZ1: recycle an idle isolate whose STATUS heap is above 78% of the 1536
-   * cap. Driven by the STATUS heartbeat, never by a tool-request edge. Never
-   * runs while a tool holds this entry or a live family sibling.
+   * FSR3: recycle an idle isolate whose STATUS heap is above
+   * max(explicit JAVA_LSP_WORKER_HEAP_RECYCLE_MB, 1.6 × hydrate baseline),
+   * or that set pendingIdleRecycle after an in-process parse over threshold.
+   * Driven by the STATUS heartbeat, never by a tool-request edge.
    */
   private async maybeRecycleHighHeap(entry: RuntimeEntry): Promise<void> {
-    const thresholdMb = this.options.workerHeapRecycleMb;
-    if (thresholdMb <= 0) return;
     if (!this.isEntryIdle(entry) || entry.hibernated) return;
     const client = entry.context.javaIndexClient;
     if (!client || typeof client.status !== "function" || typeof client.recycle !== "function") return;
@@ -1184,9 +1185,18 @@ export class RepoRuntimeManager {
     }
     if (!this.isEntryIdle(entry)) return;
     if ((status.pendingForeground ?? 0) > 0 || (status.pendingBackground ?? 0) > 0) return;
+    if (typeof status.hydrateBaselineHeapMb === "number" && status.hydrateBaselineHeapMb > 0) {
+      entry.hydrateBaselineHeapMb ??= status.hydrateBaselineHeapMb;
+    }
+    const relativeMb = entry.hydrateBaselineHeapMb && entry.hydrateBaselineHeapMb > 0
+      ? Math.round(entry.hydrateBaselineHeapMb * 1.6)
+      : 0;
+    const thresholdMb = Math.max(this.options.workerHeapRecycleMb, relativeMb);
     const heapMb = status.heapSplit?.heapUsedMb
       ?? (typeof status.heapUsedBytes === "number" ? status.heapUsedBytes / (1024 * 1024) : 0);
-    if (heapMb <= thresholdMb) return;
+    const eventRecycle = Boolean(status.pendingIdleRecycle);
+    if (!eventRecycle && thresholdMb <= 0) return;
+    if (!eventRecycle && heapMb <= thresholdMb) return;
     const family = this.familyKey(entry.context.worktree, entry.context.repoHash);
     const live = [...this.runtimes.values()].filter(peer =>
       peer.stoppedAt === undefined
@@ -1194,7 +1204,7 @@ export class RepoRuntimeManager {
     );
     if (live.some(peer => peer.refCount !== 0)) return;
     console.error(
-      `[codex-java-lsp] worker heap recycle heapUsedMb=${Math.round(heapMb)} thresholdMb=${thresholdMb} family=${family} roots=${live.length} source=heartbeat`
+      `[codex-java-lsp] worker heap recycle heapUsedMb=${Math.round(heapMb)} thresholdMb=${thresholdMb} event=${eventRecycle} family=${family} roots=${live.length} source=heartbeat`
     );
     const recycledHot: RuntimeEntry[] = [];
     for (const peer of live) {
@@ -1253,7 +1263,6 @@ export class RepoRuntimeManager {
 
   private startHeapRecycleWatch(): void {
     if (this.heapRecycleTimer || this.options.heapRecycleIntervalMs <= 0) return;
-    if (this.options.workerHeapRecycleMb <= 0) return;
     this.heapRecycleTimer = setInterval(() => {
       void this.pollIdleHeapRecycle();
     }, this.options.heapRecycleIntervalMs);

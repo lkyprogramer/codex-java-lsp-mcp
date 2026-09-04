@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { writeHeapSnapshot } from "node:v8";
 import { createHash } from "node:crypto";
 import { readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
@@ -38,14 +39,28 @@ import { buildStaticEdges, resolveFileRefs } from "./edge-builder.js";
 import { JavaIndexStore } from "./index-store.js";
 import { JavaNameResolver, buildTypeRegistryView, type TypeRegistryView } from "./name-resolver.js";
 import {
+  isCompleteSnapshotFile,
   loadSnapshotView,
+  snapshotSoftIdentityDrift,
   writeSnapshotIfManifestCurrent,
   type JavaIndexSnapshotV3,
   type SnapshotIdentity
 } from "./snapshot.js";
+import {
+  COLD_BUILD_CHILD_RETRIES,
+  COLD_BUILD_STALL_MS,
+  IN_PROCESS_PARSE_FILE_LIMIT,
+  IN_PROCESS_PARSE_RECYCLE_FILES,
+  coldBuildRetryDelayMs,
+  coldBuildStallExceeded,
+  inProcessParseDecision,
+  parseColdBuildStdoutLine,
+  resolveClosedColdBuild,
+  resolveStalledColdBuild
+} from "./cold-build-watch.js";
+import type { ColdBuildResult } from "./cold-build.js";
 import type { SnapshotV4View } from "./snapshot-v4.js";
 import { hydrateSnapshotView } from "./hydrate-snapshot-view.js";
-import type { ColdBuildResult } from "./cold-build.js";
 import { STABLE_ID_VERSION } from "./stable-id.js";
 import { EntitySearchIndex, type EntitySearchSnapshot } from "./entity-search.js";
 import { KnowledgeGraphStore } from "../java-knowledge/graph-store.js";
@@ -128,8 +143,6 @@ const SWEEP_CHUNK_SIZE = 50;
 // Stray overlap only: prewarm waits for durability before the next repo OPEN.
 const SWEEP_LEASE_WAIT_MS = 180_000;
 const BUILD_LEASE_WAIT_MS = 180_000;
-/** v5 chunked encode adds ~50s on lishuedu; 180s wall-clock under load SIGKILLs a finished child. */
-const COLD_BUILD_CHILD_TIMEOUT_MS = 300_000;
 const SNAPSHOT_FILE_NAME = "java-index-snapshot.json.gz";
 const GRAPH_SNAPSHOT_FILE_NAME = "java-knowledge-graph.json.gz";
 const COLD_BUILD_CHILD = fileURLToPath(new URL("./cold-build-child.js", import.meta.url));
@@ -832,6 +845,9 @@ function summarizeFiles(): Pick<JavaIndexStatus, "files" | "types" | "methods" |
 const COLUMNAR_TOMBSTONE_RATIO_LIMIT = 0.35;
 const STRING_TABLE_GROWTH_LIMIT = 1.5;
 let columnarBaselineBytes = 0;
+let inProcessParseFiles = 0;
+let pendingIdleRecycle = false;
+let hydrateBaselineHeapMb: number | undefined;
 
 function captureColumnarBaseline(): void {
   if (!store) return;
@@ -867,6 +883,9 @@ function currentStatus(overrides: Partial<JavaIndexStatus> = {}): JavaIndexStatu
   const columnar = store?.columnarStats();
   const entitySearchBytes = entitySearch.estimatedBytes();
   const knowledgeBuilderBytes = 0;
+  const rangePoolMemoBytes = columnar?.rangePoolMemoBytes ?? 0;
+  const bundleObjectBytes = store?.bundleObjectBytes() ?? 0;
+  const registryBytes = store?.registryBytes() ?? 0;
   const accounted = donorStoreBytes
     + overlayBytes
     + graphBytes
@@ -874,6 +893,9 @@ function currentStatus(overrides: Partial<JavaIndexStatus> = {}): JavaIndexStatu
     + (columnar?.columnarBytes ?? 0)
     + (columnar?.stringTableBytes ?? 0)
     + (columnar?.rangePoolBytes ?? 0)
+    + rangePoolMemoBytes
+    + bundleObjectBytes
+    + registryBytes
     + entitySearchBytes
     + knowledgeBuilderBytes;
   return {
@@ -905,8 +927,14 @@ function currentStatus(overrides: Partial<JavaIndexStatus> = {}): JavaIndexStatu
       stringTableBytes: columnar?.stringTableBytes ?? 0,
       tombstoneRatio: columnar?.tombstoneRatio ?? 0,
       knowledgeBuilderBytes,
-      entitySearchBytes
+      entitySearchBytes,
+      rangePoolMemoBytes,
+      bundleObjectBytes,
+      registryBytes
     },
+    ...(hydrateBaselineHeapMb !== undefined ? { hydrateBaselineHeapMb } : {}),
+    ...(pendingIdleRecycle ? { pendingIdleRecycle: true } : {}),
+    ...(inProcessParseFiles > 0 ? { inProcessParseFiles } : {}),
     ...(ownSnapshotVerificationPending ? { snapshotVerificationPending: true } : {}),
     ...(lastRefreshError ? { lastError: lastRefreshError } : {}),
     ...(worktreeSeedStatus ? { worktreeSeed: worktreeSeedStatus } : {}),
@@ -1549,6 +1577,9 @@ async function hydratePendingFacts(): Promise<void> {
   snapshotFactsHydrated = true;
   store.publishHydratedToPool();
   captureColumnarBaseline();
+  if (hydrateBaselineHeapMb === undefined) {
+    hydrateBaselineHeapMb = Math.round(process.memoryUsage().heapUsed / (1024 * 1024));
+  }
   if (activeRootId) workerRoots.set(activeRootId, captureRootSession());
 }
 
@@ -1623,13 +1654,45 @@ async function spawnColdBuildChild(cacheDir: string, generation: number): Promis
     return undefined;
   }
   try {
-    return await spawnColdBuildChildProcess(cacheDir, generation);
+    const snapshotTarget = path.join(cacheDir, SNAPSHOT_FILE_NAME);
+    const retries = process.env.JAVA_LSP_ISOLATED_VALIDATION === "1" ? 1 : COLD_BUILD_CHILD_RETRIES;
+    for (let attempt = 0; attempt < retries; attempt += 1) {
+      const result = await spawnColdBuildChildProcess(cacheDir, generation);
+      if (result?.ok) return result;
+      if (await isCompleteSnapshotFile(snapshotTarget)) return emptyColdBuildSuccess();
+      if (attempt + 1 < retries) {
+        await new Promise(resolve => setTimeout(resolve, coldBuildRetryDelayMs(attempt)));
+      }
+    }
+    return undefined;
   } finally {
     await buildLease.release().catch(() => undefined);
   }
 }
 
+function emptyColdBuildSuccess(): ColdBuildResult {
+  return {
+    ok: true,
+    files: 0,
+    discovered: 0,
+    parseFailed: 0,
+    snapshotBytes: 0,
+    rssPeakBytes: 0,
+    heapUsedBytes: 0,
+    phasesMs: {
+      discover: 0,
+      parse: 0,
+      resolve: 0,
+      snapshotPrepare: 0,
+      snapshotEncode: 0,
+      graphEncode: 0,
+      total: 0
+    }
+  };
+}
+
 function spawnColdBuildChildProcess(cacheDir: string, generation: number): Promise<ColdBuildResult | undefined> {
+  const snapshotTarget = path.join(cacheDir, SNAPSHOT_FILE_NAME);
   return new Promise(resolve => {
     const child = spawn(process.execPath, [
       "--max-old-space-size=1536",
@@ -1643,29 +1706,46 @@ function spawnColdBuildChildProcess(cacheDir: string, generation: number): Promi
       String(generation)
     ], { stdio: ["ignore", "pipe", "inherit"] });
     let stdout = "";
+    let lastProgressAt = Date.now();
+    let settled = false;
+    const finish = (value: ColdBuildResult | undefined) => {
+      if (settled) return;
+      settled = true;
+      clearInterval(stallTimer);
+      resolve(value);
+    };
     child.stdout?.setEncoding("utf8");
     child.stdout?.on("data", chunk => {
       stdout += chunk;
+      lastProgressAt = Date.now();
+      for (const line of String(chunk).split("\n")) {
+        if (parseColdBuildStdoutLine(line).kind === "progress") lastProgressAt = Date.now();
+      }
     });
-    const timer = setTimeout(() => {
-      child.kill("SIGKILL");
-      resolve(undefined);
-    }, COLD_BUILD_CHILD_TIMEOUT_MS);
-    child.on("error", () => {
-      clearTimeout(timer);
-      resolve(undefined);
-    });
+    const stallTimer = setInterval(() => {
+      if (!coldBuildStallExceeded(lastProgressAt, Date.now(), COLD_BUILD_STALL_MS)) return;
+      void isCompleteSnapshotFile(snapshotTarget).then(complete => {
+        const outcome = resolveStalledColdBuild(complete);
+        child.kill(outcome === "success" ? "SIGTERM" : "SIGKILL");
+        finish(outcome === "success" ? emptyColdBuildSuccess() : undefined);
+      });
+    }, 5_000);
+    stallTimer.unref?.();
+    child.on("error", () => finish(undefined));
     child.on("close", code => {
-      clearTimeout(timer);
-      if (code !== 0) {
-        resolve(undefined);
-        return;
-      }
-      try {
-        resolve(JSON.parse(stdout.trim().split("\n").filter(Boolean).at(-1) ?? ""));
-      } catch {
-        resolve(undefined);
-      }
+      void isCompleteSnapshotFile(snapshotTarget).then(complete => {
+        const outcome = resolveClosedColdBuild(code, complete);
+        if (outcome === "failure") {
+          finish(undefined);
+          return;
+        }
+        try {
+          const parsed = JSON.parse(stdout.trim().split("\n").filter(Boolean).at(-1) ?? "") as ColdBuildResult;
+          finish(parsed?.ok ? parsed : emptyColdBuildSuccess());
+        } catch {
+          finish(complete ? emptyColdBuildSuccess() : undefined);
+        }
+      });
     });
   });
 }
@@ -1689,6 +1769,14 @@ function startOwnSnapshotHydration(
       const loadedView = snapshotPath ? await loadSnapshotView(snapshotPath, identity) : undefined;
       rebindHydrationRoot(hydrationRootId);
       const loaded = loadedView ? metaSnapshot(loadedView) : undefined;
+      const softDrift = loadedView
+        ? snapshotSoftIdentityDrift(loadedView.header, identity)
+        : { fingerprint: false, canonical: false };
+      if (loadedView && (softDrift.fingerprint || softDrift.canonical)) {
+        console.error(
+          `[codex-java-lsp] own snapshot soft-identity drift fingerprint=${softDrift.fingerprint} canonical=${softDrift.canonical}; loading and forcing reconcile`
+        );
+      }
       if (!loadedView || !loaded) {
         // Preserve Task 21a's immediate sibling-seed path when no own cache
         // exists. A corrupt own snapshot is simply a cache miss here; its
@@ -1797,7 +1885,7 @@ function startOwnSnapshotHydration(
         ) {
           scheduleSnapshotFlush();
         }
-        if (!restoredFully) {
+        if (!restoredFully || softDrift.fingerprint || softDrift.canonical) {
           queueSnapshotVerificationReconcile(verifiedGeneration);
         }
       } else if (!closing) {
@@ -2178,7 +2266,8 @@ async function beginBackgroundSweep(generation: number): Promise<void> {
     // what blew the 1536 MiB isolate during pin prewarm. Stay files-only.
     lastRefreshError = "cold-build child failed; staying files-only instead of in-process parse";
     console.error(`[codex-java-lsp] ${lastRefreshError}`);
-    return;
+    // Fall through to discover: in-process parse is still allowed under the
+    // file cap (FSR1). Over-cap sweeps return files-only in the skip branch.
   }
   if (backgroundSweep) {
     // A sweep is already in flight: piggyback on it rather than starting a
@@ -2193,17 +2282,36 @@ async function beginBackgroundSweep(generation: number): Promise<void> {
   // reconcile() triggered by one must discover against the current layout.
   layout = probeLayout(repoRoot);
   const discovered = await discoverJavaFiles(repoRoot, layout);
-  const byRoot = new Map<string, number>();
-  for (const file of discovered) {
-    byRoot.set(file.sourceRoot, (byRoot.get(file.sourceRoot) ?? 0) + 1);
-  }
-  for (const [root, count] of byRoot) coverage.begin(root, generation, count);
   const skipIndexed = (relativePath: string): boolean => {
     if (worktreeSeedStatus?.completion === "SEEDED_DEGRADED" && seededReconcilePlan?.reusedPaths) {
       return seededReconcilePlan.reusedPaths.has(relativePath);
     }
     return Boolean(store && store.filesByPath.size > 0 && store.filesByPath.has(relativePath));
   };
+  const unindexed = discovered.filter(file => !skipIndexed(file.relativePath));
+  const byRoot = new Map<string, number>();
+  for (const file of discovered) {
+    byRoot.set(file.sourceRoot, (byRoot.get(file.sourceRoot) ?? 0) + 1);
+  }
+  const parseDecision = inProcessParseDecision(unindexed.length);
+  const childEnabled = process.env.JAVA_LSP_ISOLATED_VALIDATION === "1"
+    ? process.env.JAVA_LSP_COLD_BUILD_CHILD === "1"
+    : process.env.JAVA_LSP_COLD_BUILD_CHILD !== "0";
+  if (parseDecision === "skip" && childEnabled) {
+    lastRefreshError = `in-process parse skipped files=${unindexed.length} cap=${IN_PROCESS_PARSE_FILE_LIMIT}`;
+    console.error(`[codex-java-lsp] ${lastRefreshError}`);
+    for (const [root, count] of byRoot) coverage.begin(root, generation, count);
+    for (const file of unindexed) coverage.failed(file.sourceRoot, file.relativePath, lastRefreshError);
+    return;
+  }
+  if (parseDecision === "skip" && !childEnabled) {
+    pendingIdleRecycle = true;
+    console.error(`[codex-java-lsp] in-process parse files=${unindexed.length} (cold-build child disabled; cap waived)`);
+  } else if (parseDecision === "recycle") {
+    pendingIdleRecycle = true;
+    console.error(`[codex-java-lsp] in-process parse files=${unindexed.length}`);
+  }
+  for (const [root, count] of byRoot) coverage.begin(root, generation, count);
   backgroundSweep = {
     rootId: activeRootId,
     generation,
@@ -2316,6 +2424,8 @@ async function processBackgroundChunk(sweep: BackgroundSweep): Promise<void> {
     }
   }
   sweep.parsedFiles += chunk.length;
+  inProcessParseFiles += chunk.length;
+  if (inProcessParseFiles >= IN_PROCESS_PARSE_RECYCLE_FILES) pendingIdleRecycle = true;
   await sweep.leaseHandle.heartbeat();
   if (finalChunk) {
     const relinkErrors = resolveAllAndBuildEdges(sweep.allDiscovered.map(file => file.relativePath));
@@ -2544,6 +2654,9 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         hibernatedStatusCounts = undefined;
         lastColdBuildMetrics = undefined;
         coldBuildAttempted = false;
+        inProcessParseFiles = 0;
+        pendingIdleRecycle = false;
+        hydrateBaselineHeapMb = undefined;
 
         let openedGeneration = request.generation;
         let ownSnapshotIdentity: SnapshotIdentity | undefined;
@@ -2616,6 +2729,10 @@ async function handle(request: JavaIndexRequest): Promise<void> {
         return;
       }
       case "STATUS": {
+        const snapshotPathRequest = "heapSnapshotPath" in request ? request.heapSnapshotPath : undefined;
+        if (typeof snapshotPathRequest === "string" && snapshotPathRequest.length > 0) {
+          writeHeapSnapshot(snapshotPathRequest);
+        }
         respond({ id: request.id, ok: true, value: currentStatus() });
         return;
       }

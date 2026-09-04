@@ -26,6 +26,23 @@ export class RangePool {
     return this.coords.byteLength + this.buckets.byteLength;
   }
 
+  /** JS SourceRange objects in `memo`, excluded from byteSize() typed arrays. */
+  memoBytes(): number {
+    let live = 0;
+    for (let index = 0; index < this.memo.length; index += 1) {
+      if (this.memo[index]) live += 1;
+    }
+    return this.memo.length * 8 + live * 136;
+  }
+
+  memoLiveCount(): number {
+    let live = 0;
+    for (let index = 0; index < this.memo.length; index += 1) {
+      if (this.memo[index]) live += 1;
+    }
+    return live;
+  }
+
   intern(range: SourceRange | undefined): number {
     if (!range) return NO_RANGE;
     const startLine = range.start.line;

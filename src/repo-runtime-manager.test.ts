@@ -1894,6 +1894,72 @@ test("in-flight withContext is not recycled by the high-heap check", async () =>
   await manager.shutdownAll();
 });
 
+test("relative 1.6x hydrate baseline recycles when explicit 1200 is unset", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const javaIndex = recordingHeapIndex(200, { hydrateBaselineHeapMb: 100 });
+  const manager = new RepoRuntimeManager(fakeResolver(), {
+    idleTtlMs: 100000,
+    hibernateTtlMs: 100000,
+    indexIdleTtlMs: 0,
+    pressureIntervalMs: 0,
+    requestTimeoutMs: 5000,
+    workerHeapRecycleMb: 0,
+    heapRecycleIntervalMs: 40
+  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
+    fakeCoordination(), new NoopCrossProcessLeaseStore());
+  await manager.withContext({ repoRoot: "/repo-a" }, async () => "ok");
+  await waitFor(() => javaIndex.calls.includes("recycle"));
+  await manager.shutdownAll();
+});
+
+test("explicit recycle floor wins via max with the relative baseline", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const javaIndex = recordingHeapIndex(200, { hydrateBaselineHeapMb: 100 });
+  const manager = new RepoRuntimeManager(fakeResolver(), {
+    idleTtlMs: 100000,
+    hibernateTtlMs: 100000,
+    indexIdleTtlMs: 0,
+    pressureIntervalMs: 0,
+    requestTimeoutMs: 5000,
+    workerHeapRecycleMb: 1200,
+    heapRecycleIntervalMs: 40
+  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
+    fakeCoordination(), new NoopCrossProcessLeaseStore());
+  await manager.withContext({ repoRoot: "/repo-a" }, async () => "ok");
+  await delay(120);
+  assert.equal(javaIndex.calls.includes("recycle"), false, "200 < max(1200, 160) must not recycle");
+  await manager.shutdownAll();
+});
+
+test("in-process parse pendingIdleRecycle recycles on the next idle window", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const javaIndex = recordingHeapIndex(80, { hydrateBaselineHeapMb: 80, pendingIdleRecycle: true });
+  const manager = new RepoRuntimeManager(fakeResolver(), {
+    idleTtlMs: 100000,
+    hibernateTtlMs: 100000,
+    indexIdleTtlMs: 0,
+    pressureIntervalMs: 0,
+    requestTimeoutMs: 5000,
+    workerHeapRecycleMb: 0,
+    heapRecycleIntervalMs: 40
+  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
+    fakeCoordination(), new NoopCrossProcessLeaseStore());
+  const hold = deferred<void>();
+  let entered = false;
+  const first = manager.withContext({ repoRoot: "/repo-a" }, async () => {
+    entered = true;
+    await hold.promise;
+    return "busy";
+  });
+  await waitFor(() => entered);
+  await delay(80);
+  assert.equal(javaIndex.calls.includes("recycle"), false, "in-flight query must not recycle");
+  hold.resolve();
+  assert.equal(await first, "busy");
+  await waitFor(() => javaIndex.calls.includes("recycle"));
+  await manager.shutdownAll();
+});
+
 test("workerHeapRecycleMb 0 disables idle heap recycle", async () => {
   const sessions = new Map<string, FakeSession>();
   const javaIndex = recordingHeapIndex(1500);

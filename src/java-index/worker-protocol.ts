@@ -117,7 +117,7 @@ type JavaIndexRequestOperation =
       generation?: number;
       repoHash?: string;
     }
-  | { id: number; type: "STATUS" }
+  | { id: number; type: "STATUS"; heapSnapshotPath?: string }
   | { id: number; type: "FLUSH" }
   | { id: number; type: "HIBERNATE" }
   | { id: number; type: "CLOSE" };
@@ -845,7 +845,19 @@ export function validateJavaIndexStatus(value: unknown): JavaIndexStatus {
       if (!isNumber(value)) invalid(valueContext, "expected a number");
       return value;
     })),
-    ...withOptional("heapSplit", optional(source.heapSplit, `${context}.heapSplit`, validateHeapSplit))
+    ...withOptional("heapSplit", optional(source.heapSplit, `${context}.heapSplit`, validateHeapSplit)),
+    ...withOptional("hydrateBaselineHeapMb", optional(source.hydrateBaselineHeapMb, `${context}.hydrateBaselineHeapMb`, (value, valueContext) => {
+      if (!isNumber(value)) invalid(valueContext, "expected a number");
+      return value;
+    })),
+    ...withOptional("pendingIdleRecycle", optional(source.pendingIdleRecycle, `${context}.pendingIdleRecycle`, (value, valueContext) => {
+      if (!isBoolean(value)) invalid(valueContext, "expected a boolean");
+      return value;
+    })),
+    ...withOptional("inProcessParseFiles", optional(source.inProcessParseFiles, `${context}.inProcessParseFiles`, (value, valueContext) => {
+      if (!isNumber(value)) invalid(valueContext, "expected a number");
+      return value;
+    }))
   };
 }
 
@@ -875,7 +887,10 @@ function validateHeapSplit(value: unknown, context: string): JavaIndexHeapSplit 
     ...(isNumber(source.stringTableBytes) ? { stringTableBytes: source.stringTableBytes } : {}),
     ...(isNumber(source.tombstoneRatio) ? { tombstoneRatio: source.tombstoneRatio } : {}),
     ...(isNumber(source.knowledgeBuilderBytes) ? { knowledgeBuilderBytes: source.knowledgeBuilderBytes } : {}),
-    ...(isNumber(source.entitySearchBytes) ? { entitySearchBytes: source.entitySearchBytes } : {})
+    ...(isNumber(source.entitySearchBytes) ? { entitySearchBytes: source.entitySearchBytes } : {}),
+    ...(isNumber(source.rangePoolMemoBytes) ? { rangePoolMemoBytes: source.rangePoolMemoBytes } : {}),
+    ...(isNumber(source.bundleObjectBytes) ? { bundleObjectBytes: source.bundleObjectBytes } : {}),
+    ...(isNumber(source.registryBytes) ? { registryBytes: source.registryBytes } : {})
   };
 }
 

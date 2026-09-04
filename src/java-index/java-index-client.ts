@@ -191,9 +191,18 @@ export class JavaIndexClient {
     return this.spawnAndOpen(generation, requestOptions);
   }
 
-  async status(requestOptions: JavaIndexRequestOptions = {}): Promise<JavaIndexStatus> {
+  async status(
+    requestOptions: JavaIndexRequestOptions & { heapSnapshotPath?: string } = {}
+  ): Promise<JavaIndexStatus> {
     await this.ensureOpen(requestOptions);
-    const status = await this.request({ type: "STATUS" }, validateJavaIndexStatus, requestOptions);
+    const status = await this.request(
+      {
+        type: "STATUS",
+        ...(requestOptions.heapSnapshotPath ? { heapSnapshotPath: requestOptions.heapSnapshotPath } : {})
+      },
+      validateJavaIndexStatus,
+      requestOptions
+    );
     this.lastKnownStatus = status;
     return status;
   }

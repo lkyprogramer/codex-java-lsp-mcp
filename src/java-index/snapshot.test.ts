@@ -10,6 +10,7 @@ import { computeCurrentManifestFingerprint } from "./manifest.js";
 import {
   loadSiblingSnapshot,
   loadSiblingSnapshotHeader,
+  isCompleteSnapshotFile,
   loadSnapshot,
   writeSnapshotAtomic,
   writeSnapshotIfManifestCurrent,
@@ -188,20 +189,23 @@ test("a snapshot whose extractorVersion only adds extractor-code-<gitSha> still 
   assert.equal(existsSync(target), true);
 });
 
-test("a canonicalRepoRoot mismatch in a normal own-snapshot load is rejected", async () => {
+test("a canonicalRepoRoot mismatch loads the own snapshot and keeps the file", async () => {
   const target = tempFile();
   const value = snapshot({ canonicalRepoRoot: "/some/other/repo" });
   await writeSnapshotAtomic(target, value);
   const loaded = await loadSnapshot(target, identityFor(snapshot()));
-  assert.equal(loaded, undefined);
+  assert.equal(loaded?.indexedGeneration, value.indexedGeneration);
+  assert.equal(existsSync(target), true, "FSR1: canonical drift must not discard");
 });
 
-test("a buildFingerprint mismatch is rejected", async () => {
+test("a buildFingerprint mismatch loads the own snapshot and keeps the file", async () => {
   const target = tempFile();
   const value = snapshot({ buildFingerprint: "build-different" });
   await writeSnapshotAtomic(target, value);
   const loaded = await loadSnapshot(target, identityFor(snapshot()));
-  assert.equal(loaded, undefined);
+  assert.equal(loaded?.indexedGeneration, value.indexedGeneration);
+  assert.equal(existsSync(target), true, "FSR1: fingerprint drift must not discard");
+  assert.equal(await isCompleteSnapshotFile(target), true);
 });
 
 test("a stableIdVersion mismatch is rejected", async () => {
