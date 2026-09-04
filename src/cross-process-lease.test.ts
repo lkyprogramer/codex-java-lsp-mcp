@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -193,7 +193,11 @@ test("a directory created without metadata is reclaimed only after orphanGraceMs
 
   // Simulate a crash between mkdir and the metadata rename: the directory
   // exists but metadata.json never landed.
-  mkdirSync(path.join(shared, "jdt-worktree", "a"), { recursive: true });
+  const orphanDir = path.join(shared, "jdt-worktree", "a");
+  mkdirSync(orphanDir, { recursive: true });
+  // inspectLeaseDir uses the directory's real ctime, not the fake clock. Align
+  // after mkdir so store.open() latency cannot eat the +10ms grace slack.
+  clock.value = statSync(orphanDir).ctimeMs;
 
   const tooEarly = await store.tryAcquireJdt(id);
   assert.equal(tooEarly.kind, "BUSY_SAME_WORKTREE", "not yet reclaimable within the grace window");
