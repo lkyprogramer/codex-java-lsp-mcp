@@ -3,7 +3,9 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import { JavaIndexClient } from "./java-index-client.js";
+import type { JavaIndexStatus } from "./index-types.js";
 
 const FILE_COUNT = 220;
 const REFRESH_CYCLES = 500;
@@ -28,7 +30,17 @@ function heapBytes(status: { heapUsedBytes?: number; heapSplit?: { heapUsedMb?: 
   return (status.heapSplit?.heapUsedMb ?? 0) * 1024 * 1024;
 }
 
-test("FSR2: in-process rebuild plus recycle unifies worker heap to hydrate ±15%, and 500 REFRESH stays ±10%", async () => {
+async function awaitHydrated(client: JavaIndexClient, timeoutMs = 120_000): Promise<JavaIndexStatus> {
+  const status = await client.awaitPrewarmReady({
+    hydrate: true,
+    budget: DeadlineBudget.fromTimeout(timeoutMs)
+  });
+  assert.equal(status.factsHydrated, true, "OPEN returns before rest hydrate; kick only after files-only snapshot is in");
+  assert.equal(status.files, FILE_COUNT);
+  return status;
+}
+
+test("FSR2: in-process rebuild plus recycle unifies worker heap to hydrate ±15%, and 500 REFRESH stays ±10%", { timeout: 300_000 }, async () => {
   process.env.JAVA_LSP_ISOLATED_VALIDATION = "1";
   delete process.env.JAVA_LSP_COLD_BUILD_CHILD;
   const repoRoot = mkdtempSync(path.join(tmpdir(), "fsr2-unify-repo-"));
@@ -56,25 +68,13 @@ test("FSR2: in-process rebuild plus recycle unifies worker heap to hydrate ±15%
   const unified = new JavaIndexClient(repoRoot, cacheDir);
   clients.push(unified);
   await unified.open(1);
-  try {
-    await unified.queryRepositoryFactMarkers([], []);
-  } catch {
-    // hydrate kick
-  }
-  await waitFor(async () => (await unified.status()).factsHydrated === true, 30_000);
-  const afterUnify = await unified.status();
+  const afterUnify = await awaitHydrated(unified);
   const unifyBytes = heapBytes(afterUnify);
 
   const hydrated = new JavaIndexClient(repoRoot, cacheDir);
   clients.push(hydrated);
   await hydrated.open(1);
-  try {
-    await hydrated.queryRepositoryFactMarkers([], []);
-  } catch {
-    // hydrate kick
-  }
-  await waitFor(async () => (await hydrated.status()).factsHydrated === true, 30_000);
-  const afterHydrate = await hydrated.status();
+  const afterHydrate = await awaitHydrated(hydrated);
   const hydrateBytes = heapBytes(afterHydrate);
   const originalBaselineMb = afterHydrate.hydrateBaselineHeapMb ?? afterHydrate.heapSplit?.heapUsedMb;
   assert.ok(typeof originalBaselineMb === "number" && originalBaselineMb > 0);
@@ -104,13 +104,7 @@ test("FSR2: in-process rebuild plus recycle unifies worker heap to hydrate ±15%
   const afterCycles = new JavaIndexClient(repoRoot, cacheDir);
   clients.push(afterCycles);
   await afterCycles.open(lastGeneration + 1);
-  try {
-    await afterCycles.queryRepositoryFactMarkers([], []);
-  } catch {
-    // hydrate the post-500 snapshot
-  }
-  await waitFor(async () => (await afterCycles.status()).factsHydrated === true, 30_000);
-  const returned = await afterCycles.status();
+  const returned = await awaitHydrated(afterCycles);
   const returnedBytes = heapBytes(returned);
   const refreshDelta = Math.abs(returnedBytes - hydrateBytes) / Math.max(hydrateBytes, 1);
   assert.ok(
