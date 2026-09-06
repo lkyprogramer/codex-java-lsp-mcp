@@ -4,9 +4,9 @@ import { cpus } from "node:os";
 import path from "node:path";
 import { probeLayout } from "../../layout-probe.js";
 import { buildStaticEdges, resolveFileRefs } from "../edge-builder.js";
-import { recordsFromBundle, type EntityRecord } from "../entity-search.js";
+import { recordsFromBundle } from "../entity-search.js";
 import type { JavaIndexStore } from "../index-store.js";
-import type { JavaFileBundle } from "../index-types.js";
+import type { JavaAnnotationFact, JavaFileBundle, JavaMethodFacts, JavaTypeFacts, JavaTypeRef } from "../index-types.js";
 import { parseJavaSourceFile } from "../java-index-file-parse.js";
 import { createJavaParserBackend } from "../java-parser-backend.js";
 import { discoverJavaFiles, discoverMyBatisResourceFiles } from "../manifest.js";
@@ -16,8 +16,8 @@ import { JavaNameResolver } from "../name-resolver.js";
 import { KnowledgeGraphBuilder } from "../../java-knowledge/graph-builder.js";
 import type { KnowledgeGraphStore } from "../../java-knowledge/graph-store.js";
 import { DEFAULT_PARSE_TREE_CACHE_OPTIONS, ParseTreeCache } from "../parse-tree-cache.js";
-import { withTransaction, type IndexDatabase } from "../sql/driver.js";
-import { replaceAllEntities } from "../sql/entity-tokens.js";
+import { prepareCached, withTransaction, type IndexDatabase } from "../sql/driver.js";
+import { rebuildEntityDf, writeEntityRecord } from "../sql/entity-tokens.js";
 import { SqlFactsStore } from "../sql/facts-store.js";
 import { SqlKnowledgeGraph } from "../sql/knowledge-graph.js";
 import { buildSqlRegistryView } from "../sql/registry-view.js";
@@ -223,19 +223,79 @@ export async function runSqlColdBuild(options: SqlColdBuildOptions): Promise<Sql
   return { ok: true, parseFailed, ...counts };
 }
 
-function sqlStoreAsIndex(sql: SqlFactsStore): JavaIndexStore {
+type SlimType = Pick<JavaTypeFacts, "typeId" | "fqn" | "simpleName" | "fileId">;
+
+const EMPTY_RANGE = { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } };
+const STUB_PARAM = {
+  name: "",
+  type: { text: "", simpleName: "", typeArguments: [] as JavaTypeRef[], arrayDepth: 0, resolution: { state: "UNRESOLVED" as const } },
+  varargs: false,
+  annotations: [] as JavaAnnotationFact[],
+  range: EMPTY_RANGE
+};
+const STUB_PARAMS = Array.from({ length: 24 }, (_, arity) => Array.from({ length: arity }, () => STUB_PARAM));
+
+function parseStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string");
+  if (typeof value !== "string" || value.length === 0) return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function loadMethodStub(db: IndexDatabase, methodId: string): JavaMethodFacts | undefined {
+  const row = prepareCached(
+    db,
+    `SELECT method_id AS methodId, owner_type_id AS ownerTypeId, name, is_ctor AS isCtor, arity,
+            json_extract(facts, '$.signatureKey') AS signatureKey,
+            json_extract(facts, '$.modifiers') AS modifiers
+     FROM method WHERE method_id=?`
+  ).get(methodId) as {
+    methodId?: unknown;
+    ownerTypeId?: unknown;
+    name?: unknown;
+    isCtor?: unknown;
+    arity?: unknown;
+    signatureKey?: unknown;
+    modifiers?: unknown;
+  } | undefined;
+  if (typeof row?.methodId !== "string" || typeof row.ownerTypeId !== "string" || typeof row.name !== "string") {
+    return undefined;
+  }
+  const arity = Number(row.arity) || 0;
+  return {
+    methodId: row.methodId,
+    ownerTypeId: row.ownerTypeId,
+    name: row.name,
+    constructor: Number(row.isCtor) === 1,
+    signatureKey: typeof row.signatureKey === "string" ? row.signatureKey : "",
+    range: EMPTY_RANGE,
+    modifiers: parseStringArray(row.modifiers),
+    annotations: [],
+    typeParameters: [],
+    parameters: STUB_PARAMS[arity] ?? Array.from({ length: arity }, () => STUB_PARAM),
+    throws: [],
+    callSites: [],
+    localTypes: []
+  };
+}
+
+function sqlStoreAsIndex(db: IndexDatabase, sql: SqlFactsStore, types: readonly SlimType[]): JavaIndexStore {
   return {
     typesById: {
       get: (id: string) => sql.typesById.get(id),
       has: (id: string) => sql.typesById.has(id),
-      values: () => sql.iterTypes()
+      values: () => types
     },
     fieldsById: {
       get: (id: string) => sql.fieldsById.get(id),
       values: () => sql.iterFields()
     },
     methodsById: {
-      get: (id: string) => sql.methodsById.get(id),
+      get: (id: string) => loadMethodStub(db, id),
       values: () => sql.iterMethods()
     },
     filesByPath: {
@@ -254,14 +314,26 @@ function sqlStoreAsIndex(sql: SqlFactsStore): JavaIndexStore {
 function writeKnowledgeAndEntities(db: IndexDatabase, generation: number): void {
   const sql = new SqlFactsStore(db);
   const graph = new SqlKnowledgeGraph(db);
+  const types: SlimType[] = [];
+  for (const type of sql.iterTypes()) {
+    types.push({ typeId: type.typeId, fqn: type.fqn, simpleName: type.simpleName, fileId: type.fileId });
+  }
+  const index = sqlStoreAsIndex(db, sql, types);
+  const builder = new KnowledgeGraphBuilder(graph as unknown as KnowledgeGraphStore);
+  graph.clear();
+  graph.generation = generation;
   withTransaction(db, () => {
-    new KnowledgeGraphBuilder(graph as unknown as KnowledgeGraphStore).rebuildFromStore(sqlStoreAsIndex(sql), generation);
-    const records: EntityRecord[] = [];
-    for (const file of sql.iterFiles()) {
-      const bundle = readBundle(db, file.relativePath);
-      if (bundle) records.push(...recordsFromBundle(bundle));
-    }
-    replaceAllEntities(db, records);
-    graph.flushMeta();
+    db.exec("DELETE FROM entity_token; DELETE FROM entity_df; DELETE FROM entity;");
   });
+  for (const file of sql.iterFiles()) {
+    const bundle = readBundle(db, file.relativePath);
+    if (!bundle) continue;
+    withTransaction(db, () => {
+      builder.replaceFile(bundle, index, generation);
+      for (const record of recordsFromBundle(bundle)) writeEntityRecord(db, record);
+    });
+    sql.clearRequestCache();
+  }
+  rebuildEntityDf(db);
+  graph.flushMeta();
 }

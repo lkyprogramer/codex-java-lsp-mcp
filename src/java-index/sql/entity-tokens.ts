@@ -55,10 +55,15 @@ export function writeEntityRecord(db: IndexDatabase, record: EntityRecord): void
 }
 
 export function rebuildEntityDf(db: IndexDatabase): void {
-  runInWriteTx(db, () => {
-    db.exec("DELETE FROM entity_df");
-    db.exec("INSERT INTO entity_df(field, token, df) SELECT field, token, count(*) FROM entity_token GROUP BY field, token");
-  });
+  db.exec("PRAGMA temp_store=FILE");
+  try {
+    runInWriteTx(db, () => {
+      db.exec("DELETE FROM entity_df");
+      db.exec("INSERT INTO entity_df(field, token, df) SELECT field, token, count(*) FROM entity_token GROUP BY field, token");
+    });
+  } finally {
+    db.exec("PRAGMA temp_store=MEMORY");
+  }
 }
 
 export function replaceAllEntities(db: IndexDatabase, records: readonly EntityRecord[]): void {
