@@ -202,6 +202,7 @@ export class SqlFactsStore {
   }
 
   implementers(typeId: string, limit = 40): JavaTypeFacts[] {
+    // Range lives in zlib facts, so ORDER BY/LIMIT cannot match compareTypes; sort then slice.
     const results: JavaTypeFacts[] = [];
     const seen = new Set<string>();
     for (const row of prepareCached(this.db, "SELECT DISTINCT from_id AS id FROM edge WHERE to_id=? AND kind IN ('IMPLEMENTS','EXTENDS')").all(typeId)) {
@@ -213,7 +214,7 @@ export class SqlFactsStore {
     }
     results.sort(compareTypes);
     this.clearRequestCache();
-    return results.slice(0, limit);
+    return results.slice(0, Math.max(0, limit));
   }
 
   callers(methodId: string, limit = 80): IndexedReference[] {
@@ -478,22 +479,22 @@ export class SqlFactsStore {
 
   private references(column: "from_id" | "to_id", nodeId: string, kinds: readonly string[], limit: number): IndexedReference[] {
     if (kinds.length === 0) return [];
+    const cap = Math.max(0, limit);
     const rows = prepareCached(
       this.db,
-      `SELECT e.facts AS facts, f.facts AS file_facts
+      `SELECT e.facts AS facts, f.path AS path, f.module AS module
        FROM edge e JOIN file f ON f.id=e.source_file_id
        WHERE e.${column}=? AND e.kind IN ${inClause(kinds.length)}`
     ).all(nodeId, ...kinds);
     const results: IndexedReference[] = [];
     for (const row of rows) {
       const edge = decodeFacts<StaticEdge>(row.facts);
-      const file = decodeFacts<JavaFileFacts>(row.file_facts);
       results.push({
         sourceId: edge.fromId,
         targetId: edge.toId,
         sourceFile: edge.sourceFile,
-        sourceModule: file.module ?? "",
-        sourceSet: file.sourceSet ?? "unknown",
+        sourceModule: typeof row.module === "string" ? row.module : "",
+        sourceSet: "unknown",
         kind: edge.kind,
         confidence: edge.confidence,
         ...(edge.range ? { range: edge.range } : {}),
@@ -501,8 +502,12 @@ export class SqlFactsStore {
       });
     }
     results.sort(compareReferences);
+    const sliced = results.slice(0, cap);
+    for (const item of sliced) {
+      item.sourceSet = this.filesByPath.get(item.sourceFile)?.sourceSet ?? "unknown";
+    }
     this.clearRequestCache();
-    return results.slice(0, limit);
+    return sliced;
   }
 
   private refTargetsType(ref: JavaTypeRef, target: JavaTypeFacts, implementerFile?: string): boolean {

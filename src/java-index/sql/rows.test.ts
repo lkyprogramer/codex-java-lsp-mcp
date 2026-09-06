@@ -92,6 +92,9 @@ test("writeBundle last-write-wins when two files share a type_id", async () => {
     assert.equal(files.n, 2);
     assert.equal(types.n, first.types.length);
     assert.equal(owner.path, second.file.relativePath);
+    const lost = readBundle(db, first.file.relativePath);
+    assert.ok(lost);
+    assert.ok(lost.types.some(type => type.typeId === first.types[0]!.typeId));
   } finally {
     close(db);
   }

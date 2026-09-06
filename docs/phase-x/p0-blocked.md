@@ -2,7 +2,7 @@
 
 - dated: 2026-09-07
 - branch: `codex/index-on-disk`
-- sha: `86de82e`
+- sha: `f9cbe18` (HEAD / G1); G2–G4 measured on `86de82e` zlib DB still at `/tmp/iod-lishuedu.sqlite`
 - phase base: `6885b17`
 - repo: `/Users/luo/Documents/program/lishu/lishuedu`
 - db: `/tmp/iod-lishuedu.sqlite`
@@ -37,7 +37,11 @@ Later gates (still no P0 closeout while G4 fails):
 | P0-G5 | four-repo counts ±1% vs live snapshot | lishuedu/cipherlink/exam-parent-v3 exact; lishu-v2 files 3036 vs 3013 (+0.763%), types +0.714%, fields +0.754%, methods +0.917%, edges +0.886% after last-write-wins upsert | yes |
 | P0-G6 | kill -9 at 90s then resume ≤ 1.3× G2 (173.134 s) | resume 133.61 s; kill at `phase=resolve, done=6090/6090`; WAL 5702763952 B at kill | yes |
 | P0-G7 diff | old src files vs `6885b17` only `entity-search.ts` + `graph-store.ts` | `docs/phase-x/p0-gate-raw/P0-G7-diff-stat.txt` | yes |
-| P0-G1 / P0-G7 `gate:pr` | isolated `full` + `gate:pr` (three-repo required while loadavg < 20) | not run | — |
+| P0-G1 | isolated `full` | SHA `f9cbe18`; dist 1351 pass + scripts 282 pass + stdio smoke; `FULL_EXIT=0` (~234 s) | yes |
+| P0-G7 `gate:pr` | isolated compile + `dist/**/*.test.js` | `exitCode` 0; `rawSha256` `6f7af5804a57cbbb2ed3143b25283d00aaa94fea738db3dcdddbe45a2698a9d7`; 1351 pass | yes |
+| three-repo cold-nolsp | `--runs 5` vs `6885b17` (load < 20, must run) | live trees dirty / HEAD ≠ golden `repoCommit`. Retrying on detached clones: lishuedu `db63b1a7e`, cipherlink `fa43398`, exam-parent-v3 `f90a0b47` | retrying |
+
+Round-1 Code Reviewer (`d2a9b60d`): no code-level P0; P1-1–P1-7 addressed in `fix(iod): P0 review fixes` (`docs/phase-x/p0-review.md`). G4 still blocks closeout.
 
 lishu-v2 first G5 attempt failed `UNIQUE constraint failed: type.type_id` on duplicated FQN `com.limou.answercard.AnswerCard` under two `deploy/recognition-runners/` trees. Heap `typesById.set` last-write-wins; SQL `writeBundle` now `ON CONFLICT DO UPDATE` for type/field/method/edge.
 

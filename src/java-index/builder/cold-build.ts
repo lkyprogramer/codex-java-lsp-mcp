@@ -50,6 +50,7 @@ export type SqlColdBuildOptions = {
 export type SqlColdBuildResult = IndexCounts & {
   ok: true;
   parseFailed: number;
+  parseFailures: Array<{ relativePath: string; message: string }>;
 };
 
 export function builderParallelism(override?: number): number {
@@ -115,6 +116,7 @@ export async function runSqlColdBuild(options: SqlColdBuildOptions): Promise<Sql
   let progress = readBuildProgress(db) ?? { phase: "declare" as const, done: 0, total };
   progress = { ...progress, total };
   let parseFailed = 0;
+  const parseFailures: Array<{ relativePath: string; message: string }> = [];
 
   if (progress.phase === "declare") {
     const skip = existingPaths(db);
@@ -140,7 +142,12 @@ export async function runSqlColdBuild(options: SqlColdBuildOptions): Promise<Sql
           });
           cache.delete(bundle.file.relativePath);
           return bundle;
-        } catch {
+        } catch (err) {
+          if (isFatalIndexIoError(err)) throw err;
+          parseFailures.push({
+            relativePath: file.relativePath,
+            message: err instanceof Error ? err.message : String(err)
+          });
           return undefined;
         }
       });
@@ -223,12 +230,21 @@ export async function runSqlColdBuild(options: SqlColdBuildOptions): Promise<Sql
     return refreshIndexCounts(db);
   });
 
-  return { ok: true, parseFailed, ...counts };
+  return { ok: true, parseFailed, parseFailures, ...counts };
 }
 
 type SlimType = Pick<JavaTypeFacts, "typeId" | "fqn" | "simpleName" | "fileId">;
 
 const EMPTY_RANGE = { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } };
+
+function isFatalIndexIoError(err: unknown): boolean {
+  if (typeof err === "object" && err !== null && "code" in err) {
+    const code = String((err as { code: unknown }).code);
+    if (code === "ENOENT" || code === "EACCES" || code === "EPERM" || code === "EISDIR") return true;
+  }
+  const message = err instanceof Error ? err.message : String(err);
+  return /invalid repo-relative|not within the repo/.test(message);
+}
 const STUB_PARAM = {
   name: "",
   type: { text: "", simpleName: "", typeArguments: [] as JavaTypeRef[], arrayDepth: 0, resolution: { state: "UNRESOLVED" as const } },
@@ -343,6 +359,14 @@ function loadTypeStub(db: IndexDatabase, typeId: string): JavaTypeFacts | undefi
   if (typeof row?.typeId !== "string" || typeof row.simpleName !== "string" || typeof row.kind !== "string" || typeof row.path !== "string") {
     return undefined;
   }
+  const fieldIds = prepareCached(db, "SELECT field_id AS id FROM field WHERE owner_type_id=? ORDER BY id")
+    .all(row.typeId)
+    .map(item => item.id)
+    .filter((id): id is string => typeof id === "string");
+  const methodIds = prepareCached(db, "SELECT method_id AS id FROM method WHERE owner_type_id=? ORDER BY id")
+    .all(row.typeId)
+    .map(item => item.id)
+    .filter((id): id is string => typeof id === "string");
   return {
     typeId: row.typeId,
     ...(typeof row.fqn === "string" ? { fqn: row.fqn } : {}),
@@ -356,8 +380,8 @@ function loadTypeStub(db: IndexDatabase, typeId: string): JavaTypeFacts | undefi
     extends: [],
     implements: [],
     permits: [],
-    fieldIds: [],
-    methodIds: [],
+    fieldIds,
+    methodIds,
     confidence: 0
   };
 }

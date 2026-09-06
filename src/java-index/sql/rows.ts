@@ -277,19 +277,53 @@ export function replaceBundleEdges(db: IndexDatabase, filePath: string, edges: r
 export function readBundle(db: IndexDatabase, path: string): JavaFileBundle | undefined {
   const file = prepareCached(db, "SELECT facts FROM file WHERE path=?").get(path);
   if (!file) return undefined;
+  const fileFacts = decodeFacts<JavaFileFacts>(file.facts);
+  const types: JavaTypeFacts[] = [];
+  const fields: JavaFieldFacts[] = [];
+  const methods: JavaMethodFacts[] = [];
+  const seenField = new Set<string>();
+  const seenMethod = new Set<string>();
+  for (const typeId of fileFacts.allTypeIds) {
+    const type = lookupFacts<JavaTypeFacts>(db, "type", "type_id", typeId);
+    if (!type) continue;
+    types.push(type);
+    for (const fieldId of type.fieldIds) {
+      if (seenField.has(fieldId)) continue;
+      const field = lookupFacts<JavaFieldFacts>(db, "field", "field_id", fieldId);
+      if (field) {
+        seenField.add(fieldId);
+        fields.push(field);
+      }
+    }
+    for (const methodId of type.methodIds) {
+      if (seenMethod.has(methodId)) continue;
+      const method = lookupFacts<JavaMethodFacts>(db, "method", "method_id", methodId);
+      if (method) {
+        seenMethod.add(methodId);
+        methods.push(method);
+      }
+    }
+  }
   const idRow = prepareCached(db, "SELECT id FROM file WHERE path=?").get(path);
   const fileId = asRowId(idRow?.id as number | bigint);
-  const types = prepareCached(db, "SELECT facts FROM type WHERE file_id=? ORDER BY id").all(fileId);
-  const fields = prepareCached(db, "SELECT facts FROM field WHERE file_id=? ORDER BY id").all(fileId);
-  const methods = prepareCached(db, "SELECT facts FROM method WHERE file_id=? ORDER BY id").all(fileId);
   const edges = prepareCached(db, "SELECT facts FROM edge WHERE source_file_id=? ORDER BY id").all(fileId);
   return {
-    file: decodeFacts<JavaFileFacts>(file.facts),
-    types: types.map(row => decodeFacts<JavaTypeFacts>(row.facts)),
-    fields: fields.map(row => decodeFacts<JavaFieldFacts>(row.facts)),
-    methods: methods.map(row => decodeFacts<JavaMethodFacts>(row.facts)),
+    file: fileFacts,
+    types,
+    fields,
+    methods,
     edges: edges.map(row => decodeFacts<StaticEdge>(row.facts))
   };
+}
+
+function lookupFacts<T>(
+  db: IndexDatabase,
+  table: "type" | "field" | "method",
+  column: "type_id" | "field_id" | "method_id",
+  id: string
+): T | undefined {
+  const row = prepareCached(db, `SELECT facts FROM ${table} WHERE ${column}=?`).get(id);
+  return row ? decodeFacts<T>(row.facts) : undefined;
 }
 
 export function writeMyBatisResource(db: IndexDatabase, resource: MyBatisMapperResourceFacts): void {

@@ -1,3 +1,8 @@
+PHASE_BASE=6885b17
+SHA_PHASE=f9cbe18b408faf584b853213283c4e21ee28937e
+command: git diff --stat 6885b17..f9cbe18 -- src
+whitelist: entity-search.ts, graph-store.ts (old files); rest are new sql/ builder/ entity-scoring.ts
+
  src/java-index/builder/builder-main.ts     |  61 ++++
  src/java-index/builder/cold-build.test.ts  | 120 +++++++
  src/java-index/builder/cold-build.ts       | 421 +++++++++++++++++++++++
@@ -14,8 +19,8 @@
  src/java-index/sql/knowledge-graph.ts      | 296 +++++++++++++++++
  src/java-index/sql/registry-view.test.ts   |  84 +++++
  src/java-index/sql/registry-view.ts        |  38 +++
- src/java-index/sql/rows.test.ts            |  95 ++++++
- src/java-index/sql/rows.ts                 | 293 ++++++++++++++++
+ src/java-index/sql/rows.test.ts            | 119 +++++++
+ src/java-index/sql/rows.ts                 | 308 +++++++++++++++++
  src/java-index/sql/schema.ts               |  87 +++++
  src/java-knowledge/graph-store.ts          |  15 +
- 20 files changed, 3072 insertions(+), 133 deletions(-)
+ 20 files changed, 3111 insertions(+), 133 deletions(-)

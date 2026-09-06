@@ -164,3 +164,36 @@ test("SqlKnowledgeGraph reverse edges, removeFiles, and digest match the in-memo
     close(db);
   }
 });
+
+test("SqlKnowledgeGraph keeps a shared edge after removing one owner", () => {
+  const db = openIndexDb(":memory:");
+  try {
+    ensureSchema(db);
+    const mem = new KnowledgeGraphStore();
+    const sql = new SqlKnowledgeGraph(db);
+    const edge: GraphEdge = {
+      edgeId: knowledgeEdgeId({ kind: "MODULE_DEPENDS_ON", fromId: "module:a", toId: "module:b", ordinal: 0 }),
+      kind: "MODULE_DEPENDS_ON",
+      fromId: "module:a",
+      toId: "module:b",
+      generation: 1
+    };
+    for (const graph of [mem, sql]) {
+      graph.upsertNode({ id: "module:a", kind: "MODULE", generation: 1 }, "src/A.java");
+      graph.upsertNode({ id: "module:b", kind: "MODULE", generation: 1 }, "src/B.java");
+      graph.upsertNode({ id: "module:a", kind: "MODULE", generation: 1 }, "src/B.java");
+      graph.addEdge(edge, "src/A.java");
+      graph.addEdge(edge, "src/B.java");
+    }
+    sql.removeFiles(["src/A.java"]);
+    mem.removeFiles(["src/A.java"]);
+    assert.equal(sql.digest(), mem.digest());
+    assert.equal(sql.successors("module:a", "MODULE_DEPENDS_ON").length, 1);
+    assert.equal(sql.nodesById.has("module:a"), true);
+    const reopened = new SqlKnowledgeGraph(db);
+    reopened.removeFiles(["src/B.java"]);
+    assert.equal(reopened.successors("module:a", "MODULE_DEPENDS_ON").length, 0);
+  } finally {
+    close(db);
+  }
+});

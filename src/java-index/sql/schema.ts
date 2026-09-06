@@ -1,6 +1,6 @@
 import { forgetPrepared, prepareCached, type IndexDatabase } from "./driver.js";
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const INDEX_SCHEMA_SQL = `
 CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -84,4 +84,5 @@ export function ensureSchema(db: IndexDatabase): void {
   forgetPrepared(db);
   db.exec(INDEX_SCHEMA_SQL);
   db.prepare("INSERT INTO meta(key, value) VALUES ('schemaVersion', ?)").run(String(SCHEMA_VERSION));
+  db.prepare("INSERT INTO meta(key, value) VALUES ('factsEncoding', 'deflate-raw')").run();
 }

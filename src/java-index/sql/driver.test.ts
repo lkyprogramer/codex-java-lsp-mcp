@@ -65,11 +65,14 @@ test("schemaVersion mismatch drops all tables and rebuilds", () => {
     db.exec("UPDATE meta SET value='0' WHERE key='schemaVersion'");
     assert.equal(db.prepare("SELECT count(*) AS n FROM file").get()?.n, 1);
     ensureSchema(db);
-    const version = db.prepare("SELECT value FROM meta WHERE key='schemaVersion'").get() as
-      | { value: string }
-      | undefined;
-    assert.equal(version?.value, String(SCHEMA_VERSION));
+    assert.equal(db.prepare("SELECT value FROM meta WHERE key='schemaVersion'").get()?.value, String(SCHEMA_VERSION));
     assert.equal(db.prepare("SELECT count(*) AS n FROM file").get()?.n, 0);
+    db.exec("INSERT INTO file(path, content_hash, generation, facts) VALUES ('a.java', 'h', 1, jsonb('{}'))");
+    db.exec("UPDATE meta SET value='1' WHERE key='schemaVersion'");
+    ensureSchema(db);
+    assert.equal(db.prepare("SELECT value FROM meta WHERE key='schemaVersion'").get()?.value, String(SCHEMA_VERSION));
+    assert.equal(db.prepare("SELECT count(*) AS n FROM file").get()?.n, 0);
+    assert.equal(db.prepare("SELECT value FROM meta WHERE key='factsEncoding'").get()?.value, "deflate-raw");
     assert.equal(db.prepare("SELECT count(*) AS n FROM sqlite_master WHERE type='table' AND name='entity_token'").get()?.n, 1);
   } finally {
     close(db);

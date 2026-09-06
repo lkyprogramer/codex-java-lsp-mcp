@@ -1,0 +1,11 @@
+dated: 2026-09-07
+measurement_sha: 86de82e
+repo: /Users/luo/Documents/program/lishu/lishuedu
+db: /tmp/iod-lishuedu.sqlite
+command: /usr/bin/time -l node --disable-warning=ExperimentalWarning dist/java-index/builder/builder-main.js --repo /Users/luo/Documents/program/lishu/lishuedu --db /tmp/iod-lishuedu.sqlite --mode cold
+wall_s: 133.18
+source: docs/phase-x/p0-gate-raw/P0-G6.txt line 1 G2_BASE_S=133.18; p0-blocked.md measured-gates table
+original_time_l_stdout: not retained as a dedicated file
+pass: yes
+target_s: 180
+note: not re-run; re-running would move the G6 1.3x baseline.
