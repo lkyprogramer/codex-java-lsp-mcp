@@ -59,7 +59,7 @@ No separate Gate Runner subagent. Implementer ran the handbook gate table. Raw f
 | P0-G5 | ±1% vs live snapshot | lishuedu/cipherlink/exam-parent-v3 exact; lishu-v2 all <1% after upsert | yes | `P0-G5.txt` |
 | P0-G6 | resume ≤ 1.3× G2 (173.134 s) | 133.61 s | yes | `P0-G6.txt` |
 | P0-G7 | old src whitelist vs `6885b17` | only `entity-search.ts` + `graph-store.ts` | yes | `P0-G7-diff-stat.txt` |
-| three-repo `--runs 5` | loadavg < 20 must run | retry on frozen clones still running at review-fix commit | pending | `P0-three-repo.txt` (live append; not in this commit) |
+| three-repo `--runs 5` | loadavg < 20 must run | `THREE_REPO_EXIT=2`; 18 cells written; verifier empty-stderr fail (in-process parse cap-waived log on old and new) | **no** | `P0-three-repo.txt`, `P0-three-repo-summary.txt` |
 
 ---
 

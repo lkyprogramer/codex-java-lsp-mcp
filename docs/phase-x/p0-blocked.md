@@ -39,7 +39,7 @@ Later gates (still no P0 closeout while G4 fails):
 | P0-G7 diff | old src files vs `6885b17` only `entity-search.ts` + `graph-store.ts` | `docs/phase-x/p0-gate-raw/P0-G7-diff-stat.txt` | yes |
 | P0-G1 | isolated `full` | SHA `f9cbe18`; dist 1351 pass + scripts 282 pass + stdio smoke; `FULL_EXIT=0` (~234 s) | yes |
 | P0-G7 `gate:pr` | isolated compile + `dist/**/*.test.js` | `exitCode` 0; `rawSha256` `6f7af5804a57cbbb2ed3143b25283d00aaa94fea738db3dcdddbe45a2698a9d7`; 1351 pass | yes |
-| three-repo cold-nolsp | `--runs 5` vs `6885b17` (load < 20, must run) | live trees dirty / HEAD ≠ golden `repoCommit`. Retrying on detached clones: lishuedu `db63b1a7e`, cipherlink `fa43398`, exam-parent-v3 `f90a0b47` | retrying |
+| three-repo cold-nolsp | `--runs 5` vs `6885b17` (load < 20, must run) | `THREE_REPO_EXIT=2`. 18 cells written on frozen clones (lishuedu `db63b1a7e`, cipherlink `fa43398`, exam-parent-v3 `f90a0b47`). Verifier: every `*.json.stderr` is the in-process-parse cap-waived line (isolated validation disables cold-build child). Quality/p95 never scored. | **no** |
 
 Round-1 Code Reviewer (`d2a9b60d`): no code-level P0; P1-1–P1-7 addressed in `fix(iod): P0 review fixes` (`docs/phase-x/p0-review.md`). G4 still blocks closeout.
 

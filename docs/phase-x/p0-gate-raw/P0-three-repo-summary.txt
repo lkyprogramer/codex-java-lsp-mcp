@@ -1,0 +1,28 @@
+dated: 2026-09-07
+sha_candidate: f9cbe18b408faf584b853213283c4e21ee28937e
+sha_baseline: 6885b17b77e8353e756ba46ede80f8273e3953ca
+output_dir: /tmp/iod-p0-three-repo-20260907-024002
+loadavg1: 6.73 (proceed window < 20: yes)
+THREE_REPO_EXIT: 2
+pass: no
+
+frozen_repos:
+  lishuedu=db63b1a7e393edd90449eb013d7d1c4d65c366f2
+  cipherlink=fa433982e92e52dd610650d1e79f2d041179b1d3
+  exam-parent-v3=f90a0b475f7be2ed003703feecec8195bc7eb976
+
+cells: 18/18 written (3 rounds × old/new × 3 repos); each cell metadata.runs=5
+candidate_tests: dist 1351 pass, scripts 282 pass (inside the matrix isolate)
+
+verifier:
+  MatrixValidationError: matrix/lishuedu-r1-old.json.stderr must be empty for a formal matrix
+
+stderr_all_18_cells: one line each, both old and new
+  lishuedu:     [codex-java-lsp] in-process parse files=5312 (cold-build child disabled; cap waived)
+  cipherlink:   [codex-java-lsp] in-process parse files=629 (cold-build child disabled; cap waived)
+  exam-parent-v3: [codex-java-lsp] in-process parse files=1369 (cold-build child disabled; cap waived)
+
+cause: run-three-repo-cold-matrix.mjs sets JAVA_LSP_ISOLATED_VALIDATION=1, which disables the cold-build child unless JAVA_LSP_COLD_BUILD_CHILD=1; java-index-worker.ts:2307-2309 then console.error that line. Not an IOD SQL-builder path (P3 cutover not done). Same line on baseline 6885b17 and candidate f9cbe18.
+
+not_done: quality/p95 comparison never ran; no matrix-summary.json
+raw_log: docs/phase-x/p0-gate-raw/P0-three-repo.txt
