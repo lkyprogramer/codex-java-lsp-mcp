@@ -210,6 +210,52 @@ export function writeBundle(db: IndexDatabase, bundle: JavaFileBundle, fileId?: 
   });
 }
 
+function fileIdByPath(db: IndexDatabase, path: string): number {
+  const row = prepareCached(db, "SELECT id FROM file WHERE path=?").get(path);
+  if (!row) throw new Error(`file not found: ${path}`);
+  return asRowId(row.id as number | bigint);
+}
+
+export function updateBundleFacts(db: IndexDatabase, bundle: JavaFileBundle): number {
+  return runInWriteTx(db, () => {
+    const id = fileIdByPath(db, bundle.file.relativePath);
+    const row = fileRow(bundle);
+    prepareCached(db, "UPDATE file SET facts=jsonb(?), parse_state=?, generation=? WHERE id=?").run(
+      encodeFacts(row.facts),
+      row.parseState,
+      row.generation,
+      id
+    );
+    const updateType = prepareCached(db, "UPDATE type SET facts=jsonb(?), fqn=? WHERE type_id=?");
+    for (const type of typeRows(bundle)) {
+      updateType.run(encodeFacts(type.facts), type.fqn, type.typeId);
+    }
+    const updateField = prepareCached(db, "UPDATE field SET facts=jsonb(?) WHERE field_id=?");
+    for (const field of fieldRows(bundle)) {
+      updateField.run(encodeFacts(field.facts), field.fieldId);
+    }
+    const updateMethod = prepareCached(db, "UPDATE method SET facts=jsonb(?), arity=? WHERE method_id=?");
+    for (const method of methodRows(bundle)) {
+      updateMethod.run(encodeFacts(method.facts), method.arity, method.methodId);
+    }
+    return id;
+  });
+}
+
+export function replaceBundleEdges(db: IndexDatabase, filePath: string, edges: readonly StaticEdge[]): void {
+  runInWriteTx(db, () => {
+    const id = fileIdByPath(db, filePath);
+    prepareCached(db, "DELETE FROM edge WHERE source_file_id=?").run(id);
+    const insertEdge = prepareCached(
+      db,
+      "INSERT INTO edge(edge_id, from_id, to_id, kind, source_file_id, facts) VALUES (?, ?, ?, ?, ?, jsonb(?))"
+    );
+    for (const edge of edgeRows(edges, id)) {
+      insertEdge.run(edge.edgeId, edge.fromId, edge.toId, edge.kind, edge.sourceFileId, encodeFacts(edge.facts));
+    }
+  });
+}
+
 export function readBundle(db: IndexDatabase, path: string): JavaFileBundle | undefined {
   const file = prepareCached(db, "SELECT json(facts) AS facts FROM file WHERE path=?").get(path);
   if (!file) return undefined;
