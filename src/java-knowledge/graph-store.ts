@@ -193,6 +193,21 @@ export class KnowledgeGraphStore {
     return edges;
   }
 
+  nodesByPath(path: string): GraphNode[] {
+    const nodes: GraphNode[] = [];
+    for (const node of this.nodesById.values()) {
+      if (node.relativePath === path) nodes.push(node);
+    }
+    return nodes;
+  }
+
+  nodeIdForJavaIndexId(jid: string): string | undefined {
+    for (const node of this.nodesById.values()) {
+      if (node.javaIndexId === jid) return node.id;
+    }
+    return undefined;
+  }
+
   private removeNodeRow(row: number): void {
     const node = this.nodes.remove(this.nodes.idAt(row));
     if (!node) return;
