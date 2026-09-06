@@ -3,8 +3,8 @@
 - dated: 2026-09-07
 - SHA_PHASE: `f9cbe18` (`docs(iod): P0 record G5 G6 G7 gate evidence`)
 - PHASE_BASE: `6885b17` (`codex/fs-track`)
-- SHA_FIX: `226e8a9` (`fix(iod): P0 review fixes`); round-2 follow-up is the later `fix(iod): P0 review fixes` commit after `ca79c6ba`
-- closeout: **not written**. P0-G4 still fails. No `iod/P0` tag. P1 not started.
+- SHA_FIX: `226e8a9` then `8670700` (`fix(iod): P0 review fixes`)
+- closeout: **not written**. Review protocol has no remaining P0/P1. P0-G4 still fails. No `iod/P0` tag. P1 not started.
 
 ---
 
@@ -91,7 +91,7 @@ No separate Gate Runner subagent. Implementer ran the handbook gate table. Raw f
 | item | action |
 | --- | --- |
 | G4 1342 MiB | wait for user: raise gate / change schema / defer entity tables. Do not edit the handbook number. |
-| closeout JSON | only after G4 decision and round-2 with no P0/P1 |
+| closeout JSON | only after G4 decision; 0.6 review has no remaining P0/P1 at `8670700` |
 | G7 diffstat SHA | regenerated `6885b17..f9cbe18` |
 | G2/G3/G4 raw | provenance files added; original `time -l` stdout not recovered |
 | T5 resolve from offset 0 | **not in this fix** (P2-1 family; G6 still within budget) |
@@ -121,6 +121,21 @@ G4 1342 MiB remains a product gate, not a code P0.
 
 ---
 
+## Round-3 Code Reviewer (`1be73a6c-0939-447d-9a04-a73057ed99b3`)
+
+Range: `226e8a9..8670700` src/scripts. Verdict: **approve fix diff**. No remaining P0 or P1. Independently: isolated compile exit 0; 14 pass / 0 fail. Confirmed `knownEdgeIds` gone, heap-parity on digest/ordinals/reopen/`removeFiles`, and `references()` window identical to full sort+slice (BizException-scale 3217 in-edges `limit=80`: 1.66 ms vs 22.62 ms).
+
+| id | finding | action |
+| --- | --- | --- |
+| P2-R3-1 | One-extra-group collation slack breaks if SQLite BINARY vs JS UTF-16 invert by more than one group (supplementary-plane vs U+E000–U+FFFF). BMP/CJK/ASCII paths sort identically. Reproduced on synthetic astral paths. | **not this fix.** Target repos are ASCII paths. Query-layer can fall back unbounded when a collected path has code point > 0x7F. |
+| P2-R3-2 | `ORDER BY f.path` uses a temp B-tree (`PRAGMA temp_store=MEMORY`). Bound is on decode work, not total RSS: 100k in-edges / `limit=80` ≈ 29 MiB transient; 3217-row case ≈ 1 MiB. Not a regression vs `226e8a9`. | **note only.** P1 query layer must not assume `references()` is O(limit) in memory without a path-ordered covering index. |
+| P2-R3-3 | Dropping the Set moves duplicate-edge probes onto SQL+inflate (~5.55 µs/call). ~1M re-adds ≈ 5.5 s vs G2 133.18 s / 180 s gate. G2/G6 not re-run after `8670700`. | **not this fix.** Re-measure G2/G6 only if G4 is raised and closeout is attempted. `references()` is not on the cold-build write path. |
+| P2-R3-4 | `UPDATE kg_edge … WHERE from_id/to_id/kind` updates ordinal siblings, not the matched row id. No observable divergence today (ordinals share owner; NULL-owner CONTAINS has no siblings). | **not this fix.** Pre-existing at `226e8a9`. |
+
+Round-2 P2-1 `implementers()` unbounded inflate stays P2 (~210 rows ≈ 1.5 ms).
+
+---
+
 ## Verification (review-fix)
 
 Isolated `compile` + targeted:
@@ -132,7 +147,7 @@ Isolated `compile` + targeted:
 `dist/java-index/sql/facts-store.test.js`
 `dist/java-index/sql/entity-tokens.test.js`
 
-**ran: 14 pass / 0 fail.** Phase `full` / G2–G6 not re-run on the fix (G4 still blocking; G2/G3/G6 would need another lishuedu cold build).
+**ran: 14 pass / 0 fail** after the round-2 P1-A/P1-B follow-up (includes `callers`/`callees` `limit=1`). Phase `full` / G2–G6 not re-run (G4 still blocking).
 
 ---
 
@@ -140,5 +155,5 @@ Isolated `compile` + targeted:
 
 - P0 cannot close while G4 is 1342 MiB.
 - Three-repo `--runs 5` failed empty-stderr (`7d6d62b`); not a SQL-builder path.
-- Round-2 P1-A/P1-B addressed in the follow-up fix commit; needs a third Code Reviewer pass on that delta.
-- Round-2 P2-1–P2-4 and P2-6–P2-11 still open.
+- 0.6 code review is complete at `8670700` (no remaining P0/P1). Round-2/round-3 P2s are recorded above and not started.
+- `references()` memory is O(fan-in) for the SQLite temp sort, O(limit + one path group) for JS inflate.

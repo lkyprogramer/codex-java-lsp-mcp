@@ -41,7 +41,7 @@ Later gates (still no P0 closeout while G4 fails):
 | P0-G7 `gate:pr` | isolated compile + `dist/**/*.test.js` | `exitCode` 0; `rawSha256` `6f7af5804a57cbbb2ed3143b25283d00aaa94fea738db3dcdddbe45a2698a9d7`; 1351 pass | yes |
 | three-repo cold-nolsp | `--runs 5` vs `6885b17` (load < 20, must run) | `THREE_REPO_EXIT=2`. 18 cells written on frozen clones (lishuedu `db63b1a7e`, cipherlink `fa43398`, exam-parent-v3 `f90a0b47`). Verifier: every `*.json.stderr` is the in-process-parse cap-waived line (isolated validation disables cold-build child). Quality/p95 never scored. | **no** |
 
-Round-1 Code Reviewer (`d2a9b60d`): no code-level P0; P1-1–P1-7 addressed in `fix(iod): P0 review fixes` (`docs/phase-x/p0-review.md`). G4 still blocks closeout.
+0.6 code review complete at `8670700` (round-3 approved `226e8a9..8670700`, no remaining P0/P1). G4 still blocks closeout. Details: `docs/phase-x/p0-review.md`.
 
 lishu-v2 first G5 attempt failed `UNIQUE constraint failed: type.type_id` on duplicated FQN `com.limou.answercard.AnswerCard` under two `deploy/recognition-runners/` trees. Heap `typesById.set` last-write-wins; SQL `writeBundle` now `ON CONFLICT DO UPDATE` for type/field/method/edge.
 
