@@ -7,7 +7,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { buildStaticEdges, resolveFileRefs } from "../edge-builder.js";
 import { JavaIndexStore } from "../index-store.js";
-import type { JavaFileBundle } from "../index-types.js";
+import type { JavaFileBundle, JavaTypeFacts, JavaTypeRef, StaticEdgeKind } from "../index-types.js";
 import { parseJavaSourceFile } from "../java-index-file-parse.js";
 import { createJavaParserBackend } from "../java-parser-backend.js";
 import { myBatisQualifiedId, type MyBatisMapperResourceFacts } from "../mybatis-types.js";
@@ -166,6 +166,143 @@ test("SqlFactsStore point lookups, files, mybatis, and iterators match JavaIndex
         );
       }
     }
+  } finally {
+    close(db);
+  }
+});
+
+function relativePathOfFileId(fileId: string): string {
+  return fileId.startsWith("file:") ? fileId.slice("file:".length) : fileId;
+}
+
+function resolvedRepoTypeIds(ref: JavaTypeRef | undefined): string[] {
+  if (!ref) return [];
+  const ids: string[] = [];
+  if (ref.resolution.state === "RESOLVED_REPO") ids.push(ref.resolution.typeId);
+  for (const argument of ref.typeArguments) ids.push(...resolvedRepoTypeIds(argument));
+  return ids;
+}
+
+function refTargetsType(ref: JavaTypeRef, target: JavaTypeFacts, store: JavaIndexStore, implementerFile?: string): boolean {
+  if (resolvedRepoTypeIds(ref).includes(target.typeId)) return true;
+  if (ref.simpleName !== target.simpleName) return false;
+  if (target.fqn && ref.qualifiedName === target.fqn) return true;
+  const ids = store.typeIdsBySimpleName.get(ref.simpleName);
+  if (ids && ids.size === 1 && [...ids][0] === target.typeId) return true;
+  if (!implementerFile || !target.fqn) return false;
+  const file = store.filesByPath.get(implementerFile);
+  return Boolean(file?.imports.some(item => item.qualifiedName === target.fqn));
+}
+
+function implementersOfAnyFromStore(store: JavaIndexStore, typeIds: readonly string[]): string[] {
+  const targets = typeIds.map(id => store.typesById.get(id)).filter((type): type is JavaTypeFacts => type !== undefined);
+  if (targets.length === 0) return [];
+  const fromIds = new Set<string>();
+  for (const typeId of typeIds) {
+    for (const edgeId of store.inEdgeIdsByNode.get(typeId) ?? []) {
+      const edge = store.edgesById.get(edgeId);
+      if (!edge || (edge.kind !== "IMPLEMENTS" && edge.kind !== "EXTENDS")) continue;
+      fromIds.add(edge.fromId);
+    }
+  }
+  const hits: string[] = [];
+  for (const fromId of fromIds) {
+    const type = store.typesById.get(fromId);
+    if (!type) continue;
+    const refs = [...type.implements, ...type.extends];
+    const implementerFile = relativePathOfFileId(type.fileId);
+    if (targets.some(target => refs.some(ref => refTargetsType(ref, target, store, implementerFile)))) hits.push(type.typeId);
+  }
+  return hits;
+}
+
+function typesBySimpleNameOrFqnFromStore(store: JavaIndexStore, simple: string, fqn: string): JavaTypeFacts[] {
+  return [...store.typesById.values()].filter(type => type.simpleName === simple || type.fqn === fqn);
+}
+
+const REFERENCE_KINDS: StaticEdgeKind[][] = [
+  ["IMPLEMENTS"],
+  ["EXTENDS"],
+  ["CALLS"],
+  ["PARAM_TYPE"],
+  ["RETURN_TYPE"],
+  ["FIELD_TYPE"],
+  ["ANNOTATED_WITH"],
+  ["IMPLEMENTS", "EXTENDS"]
+];
+
+test("SqlFactsStore reference queries, anchor, and typeLookup match JavaIndexStore", async () => {
+  const bundles = await loadResolvedBundles();
+  const db = openIndexDb(":memory:");
+  try {
+    const store = new JavaIndexStore();
+    const sql = fill(store, db, bundles);
+    const typeIds = [...store.typesById.keys()];
+    const methodIds = [...store.methodsById.values()].map(method => method.methodId);
+    const fieldIds = [...store.fieldsById.keys()];
+
+    assert.equal(sql.anchor("missing.java", 1, 1), undefined);
+    assert.deepEqual(sql.repositoryFactMarkers([], []), store.repositoryFactMarkers([], []));
+    assert.deepEqual(
+      sql.repositoryFactMarkers(["org.springframework"], ["org.springframework"]),
+      store.repositoryFactMarkers(["org.springframework"], ["org.springframework"])
+    );
+
+    for (const typeId of typeIds) {
+      assert.deepEqual(jsonClone(sql.implementers(typeId)), jsonClone(store.implementers(typeId)), typeId);
+      assert.deepEqual(jsonClone(sql.implementers(typeId, 1)), jsonClone(store.implementers(typeId, 1)), `${typeId}:limit1`);
+      for (const kinds of REFERENCE_KINDS) {
+        const set = new Set(kinds);
+        assert.deepEqual(jsonClone(sql.typeReferencers(typeId, set)), jsonClone(store.typeReferencers(typeId, set)), `${typeId}:${kinds.join(",")}`);
+      }
+      const type = store.typesById.get(typeId)!;
+      const scope = relativePathOfFileId(type.fileId);
+      assert.deepEqual(jsonClone(sql.typeLookup(type.simpleName, scope)), jsonClone(store.typeLookup(type.simpleName, scope)), type.simpleName);
+      if (type.fqn) {
+        assert.deepEqual(jsonClone(sql.typeLookup(type.fqn, scope)), jsonClone(store.typeLookup(type.fqn, scope)), type.fqn);
+      }
+      const start = type.range.start;
+      assert.deepEqual(jsonClone(sql.anchor(scope, start.line, start.column)), jsonClone(store.anchor(scope, start.line, start.column)), `anchor:${typeId}`);
+      assert.deepEqual(
+        sorted(sql.typesBySimpleNameOrFqn(type.simpleName, type.fqn ?? type.simpleName).map(item => item.typeId)),
+        sorted(typesBySimpleNameOrFqnFromStore(store, type.simpleName, type.fqn ?? type.simpleName).map(item => item.typeId))
+      );
+    }
+
+    for (const methodId of methodIds) {
+      assert.deepEqual(jsonClone(sql.callers(methodId)), jsonClone(store.callers(methodId)), `callers:${methodId}`);
+      assert.deepEqual(jsonClone(sql.callees(methodId)), jsonClone(store.callees(methodId)), `callees:${methodId}`);
+      const method = store.methodsById.get(methodId)!;
+      const owner = store.typesById.get(method.ownerTypeId);
+      if (owner) {
+        const scope = relativePathOfFileId(owner.fileId);
+        const start = method.range.start;
+        assert.deepEqual(jsonClone(sql.anchor(scope, start.line, start.column)), jsonClone(store.anchor(scope, start.line, start.column)), `anchor:${methodId}`);
+      }
+    }
+
+    for (const fieldId of fieldIds) {
+      const field = store.fieldsById.get(fieldId)!;
+      const owner = store.typesById.get(field.ownerTypeId);
+      if (!owner) continue;
+      const scope = relativePathOfFileId(owner.fileId);
+      const start = field.range.start;
+      assert.deepEqual(jsonClone(sql.anchor(scope, start.line, start.column)), jsonClone(store.anchor(scope, start.line, start.column)), `anchor:${fieldId}`);
+    }
+
+    for (const path of bundles.map(bundle => bundle.file.relativePath)) {
+      assert.deepEqual(jsonClone(sql.anchor(path, 9999, 1)), jsonClone(store.anchor(path, 9999, 1)), `file-anchor:${path}`);
+    }
+
+    assert.deepEqual(sorted(sql.implementersOfAny(typeIds)), sorted(implementersOfAnyFromStore(store, typeIds)));
+    assert.deepEqual(sql.implementersOfAny([]), []);
+    for (const typeId of typeIds) {
+      assert.deepEqual(sorted(sql.implementersOfAny([typeId])), sorted(implementersOfAnyFromStore(store, [typeId])), `any:${typeId}`);
+    }
+    assert.deepEqual(sql.methodsWithParameterTypes(typeIds), store.methodsWithParameterTypes(typeIds));
+    assert.deepEqual(sql.methodsWithParameterTypes(typeIds, 1), store.methodsWithParameterTypes(typeIds, 1));
+    assert.deepEqual(sql.methodsWithParameterTypes([]), []);
+    assert.deepEqual(jsonClone(sql.typeLookup("MissingType")), jsonClone(store.typeLookup("MissingType")));
   } finally {
     close(db);
   }

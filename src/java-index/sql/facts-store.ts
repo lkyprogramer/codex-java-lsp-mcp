@@ -1,12 +1,21 @@
 import type { SQLOutputValue } from "node:sqlite";
 import type {
+  AnchorFacts,
+  IndexedReference,
   JavaFieldFacts,
   JavaFileBundle,
   JavaFileFacts,
   JavaMethodFacts,
   JavaTypeFacts,
-  StaticEdge
+  JavaTypeLookupResult,
+  JavaTypeRef,
+  SourcePosition,
+  SourceRange,
+  StaticEdge,
+  StaticEdgeKind
 } from "../index-types.js";
+import { javaFileId } from "../stable-id.js";
+import { JavaNameResolver, type TypeRegistryView } from "../name-resolver.js";
 import type { MyBatisMapperResourceFacts } from "../mybatis-types.js";
 import { myBatisQualifiedId } from "../mybatis-types.js";
 import { prepareCached, type IndexDatabase } from "./driver.js";
@@ -28,6 +37,49 @@ export function decodeFacts<T>(value: SQLOutputValue): T {
 export function asCount(row: Record<string, SQLOutputValue> | undefined): number {
   const value = row?.n;
   return typeof value === "number" ? value : typeof value === "bigint" ? Number(value) : 0;
+}
+
+function rangeContains(range: SourceRange, position: SourcePosition): boolean {
+  const afterStart = position.line > range.start.line
+    || (position.line === range.start.line && position.column >= range.start.column);
+  const beforeEnd = position.line < range.end.line
+    || (position.line === range.end.line && position.column <= range.end.column);
+  return afterStart && beforeEnd;
+}
+
+function relativePathOfFileId(fileId: string): string {
+  return fileId.startsWith("file:") ? fileId.slice("file:".length) : fileId;
+}
+
+function compareByLocation(fileIdA: string, rangeA: SourceRange, idA: string, fileIdB: string, rangeB: SourceRange, idB: string): number {
+  const pathA = relativePathOfFileId(fileIdA);
+  const pathB = relativePathOfFileId(fileIdB);
+  if (pathA !== pathB) return pathA < pathB ? -1 : 1;
+  if (rangeA.start.line !== rangeB.start.line) return rangeA.start.line - rangeB.start.line;
+  if (rangeA.start.column !== rangeB.start.column) return rangeA.start.column - rangeB.start.column;
+  return idA < idB ? -1 : idA > idB ? 1 : 0;
+}
+
+function compareTypes(a: JavaTypeFacts, b: JavaTypeFacts): number {
+  return compareByLocation(a.fileId, a.range, a.typeId, b.fileId, b.range, b.typeId);
+}
+
+function compareReferences(a: IndexedReference, b: IndexedReference): number {
+  const rangeA = a.range ?? { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } };
+  const rangeB = b.range ?? { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } };
+  return compareByLocation(javaFileId(a.sourceFile), rangeA, a.sourceId, javaFileId(b.sourceFile), rangeB, b.sourceId);
+}
+
+function inClause(count: number): string {
+  return `(${Array.from({ length: count }, () => "?").join(",")})`;
+}
+
+function resolvedRepoTypeIds(ref: JavaTypeRef | undefined): string[] {
+  if (!ref) return [];
+  const ids: string[] = [];
+  if (ref.resolution.state === "RESOLVED_REPO") ids.push(ref.resolution.typeId);
+  for (const argument of ref.typeArguments) ids.push(...resolvedRepoTypeIds(argument));
+  return ids;
 }
 
 class PointMap<V> implements PointLookup<V> {
@@ -146,6 +198,240 @@ export class SqlFactsStore {
     return undefined;
   }
 
+  implementers(typeId: string, limit = 40): JavaTypeFacts[] {
+    const results: JavaTypeFacts[] = [];
+    const seen = new Set<string>();
+    for (const row of prepareCached(this.db, "SELECT DISTINCT from_id AS id FROM edge WHERE to_id=? AND kind IN ('IMPLEMENTS','EXTENDS')").all(typeId)) {
+      if (typeof row.id !== "string" || seen.has(row.id)) continue;
+      const type = this.typesById.get(row.id);
+      if (!type) continue;
+      seen.add(row.id);
+      results.push(type);
+    }
+    results.sort(compareTypes);
+    this.clearRequestCache();
+    return results.slice(0, limit);
+  }
+
+  callers(methodId: string, limit = 80): IndexedReference[] {
+    return this.references("to_id", methodId, ["CALLS", "METHOD_REFERENCE"], limit);
+  }
+
+  callees(methodId: string, limit = 80): IndexedReference[] {
+    return this.references("from_id", methodId, ["CALLS", "CONSTRUCTS", "METHOD_REFERENCE"], limit);
+  }
+
+  typeReferencers(typeId: string, kinds: ReadonlySet<StaticEdgeKind>, limit = 80): IndexedReference[] {
+    return this.references("to_id", typeId, [...kinds], limit);
+  }
+
+  methodsWithParameterTypes(typeIds: readonly string[], limit = 64): string[] {
+    if (typeIds.length === 0) return [];
+    const rows = prepareCached(
+      this.db,
+      `SELECT DISTINCT e.from_id AS id FROM edge e
+       WHERE e.kind='PARAM_TYPE' AND e.to_id IN ${inClause(typeIds.length)}
+         AND EXISTS (SELECT 1 FROM method m WHERE m.method_id=e.from_id)`
+    ).all(...typeIds);
+    const methods = rows
+      .map(row => typeof row.id === "string" ? this.methodsById.get(row.id) : undefined)
+      .filter((method): method is JavaMethodFacts => method !== undefined)
+      .sort((left, right) => compareByLocation(
+        this.typesById.get(left.ownerTypeId)?.fileId ?? "",
+        left.range,
+        left.methodId,
+        this.typesById.get(right.ownerTypeId)?.fileId ?? "",
+        right.range,
+        right.methodId
+      ));
+    this.clearRequestCache();
+    return methods.slice(0, Math.max(0, limit)).map(method => method.methodId);
+  }
+
+  anchor(path: string, line: number, column: number): AnchorFacts | undefined {
+    const file = this.filesByPath.get(path);
+    if (!file) return undefined;
+    const position: SourcePosition = { line, column };
+    type Candidate = {
+      range: SourceRange;
+      isMember: boolean;
+      depth: number;
+      symbolKind: AnchorFacts["symbolKind"];
+      symbolId: string;
+      symbolName: string;
+      type?: JavaTypeFacts;
+      method?: JavaMethodFacts;
+      field?: JavaFieldFacts;
+    };
+    const candidates: Candidate[] = [];
+    for (const typeId of file.allTypeIds) {
+      const type = this.typesById.get(typeId);
+      if (!type) continue;
+      let depth = 0;
+      for (let owner = type.enclosingTypeId; owner; owner = this.typesById.get(owner)?.enclosingTypeId) depth += 1;
+      if (rangeContains(type.range, position)) {
+        candidates.push({ range: type.range, isMember: false, depth, symbolKind: "TYPE", symbolId: type.typeId, symbolName: type.simpleName, type });
+      }
+      for (const fieldId of type.fieldIds) {
+        const field = this.fieldsById.get(fieldId);
+        if (field && rangeContains(field.range, position)) {
+          candidates.push({ range: field.range, isMember: true, depth: depth + 1, symbolKind: "FIELD", symbolId: field.fieldId, symbolName: field.name, type, field });
+        }
+      }
+      for (const methodId of type.methodIds) {
+        const method = this.methodsById.get(methodId);
+        if (method && rangeContains(method.range, position)) {
+          candidates.push({
+            range: method.range,
+            isMember: true,
+            depth: depth + 1,
+            symbolKind: method.constructor ? "CONSTRUCTOR" : "METHOD",
+            symbolId: method.methodId,
+            symbolName: method.name,
+            type,
+            method
+          });
+        }
+      }
+    }
+    this.clearRequestCache();
+    if (candidates.length === 0) {
+      return {
+        file,
+        symbolId: file.fileId,
+        symbolKind: "FILE",
+        symbolName: file.relativePath,
+        range: { start: position, end: position },
+        coverage: "DEGRADED",
+        confidence: 1
+      };
+    }
+    candidates.sort((a, b) => (a.isMember !== b.isMember ? (a.isMember ? -1 : 1) : b.depth - a.depth));
+    const best = candidates[0]!;
+    return {
+      file,
+      symbolId: best.symbolId,
+      symbolKind: best.symbolKind,
+      symbolName: best.symbolName,
+      range: best.range,
+      ...(best.type ? { type: best.type } : {}),
+      ...(best.method ? { method: best.method } : {}),
+      ...(best.field ? { field: best.field } : {}),
+      coverage: "DEGRADED",
+      confidence: 1
+    };
+  }
+
+  typeLookup(typeText: string, scopeFile?: string): JavaTypeLookupResult {
+    const registry: TypeRegistryView = {
+      byId: this.typesById as unknown as TypeRegistryView["byId"],
+      byFqn: this.typeIdByFqn as unknown as TypeRegistryView["byFqn"],
+      bySimpleName: this.typeIdsBySimpleName as unknown as TypeRegistryView["bySimpleName"],
+      nestedByOwnerAndSimpleName: new Map(),
+      methodsByOwnerTypeId: new Map()
+    };
+    const resolver = new JavaNameResolver(registry);
+    const file = scopeFile ? this.filesByPath.get(scopeFile) : undefined;
+    const resolution = resolver.resolveTypeText(typeText, {
+      packageName: file?.packageName ?? "",
+      imports: file?.imports ?? [],
+      enclosingTypeIds: [],
+      typeParameterNames: new Set()
+    }).resolution;
+    this.clearRequestCache();
+    switch (resolution.state) {
+      case "RESOLVED_REPO": {
+        const type = this.typesById.get(resolution.typeId);
+        return type ? { state: "RESOLVED", type } : { state: "UNRESOLVED", coverage: "DEGRADED" };
+      }
+      case "AMBIGUOUS": {
+        const candidates = resolution.candidates
+          .map(id => this.typesById.get(id))
+          .filter((type): type is JavaTypeFacts => type !== undefined);
+        return { state: "AMBIGUOUS", candidates };
+      }
+      default:
+        return { state: "UNRESOLVED", coverage: "DEGRADED" };
+    }
+  }
+
+  repositoryFactMarkers(importPrefixes: readonly string[], annotationPrefixes: readonly string[]): {
+    importPrefixFound: boolean;
+    annotationPrefixFound: boolean;
+  } {
+    if (importPrefixes.length === 0 && annotationPrefixes.length === 0) {
+      return { importPrefixFound: false, annotationPrefixFound: false };
+    }
+    const hasPrefix = (value: string | undefined, prefixes: readonly string[]) =>
+      value !== undefined && prefixes.some(prefix => value.startsWith(prefix));
+    let importPrefixFound = false;
+    if (importPrefixes.length > 0) {
+      for (const row of prepareCached(this.db, "SELECT json_extract(j.value, '$.qualifiedName') AS name FROM file, json_each(json(facts), '$.imports') AS j").iterate()) {
+        if (hasPrefix(typeof row.name === "string" ? row.name : undefined, importPrefixes)) {
+          importPrefixFound = true;
+          break;
+        }
+      }
+    }
+    let annotationPrefixFound = false;
+    if (annotationPrefixes.length > 0) {
+      const sqls = [
+        "SELECT json_extract(j.value, '$.qualifiedName') AS name FROM type, json_each(json(facts), '$.annotations') AS j",
+        "SELECT json_extract(j.value, '$.qualifiedName') AS name FROM field, json_each(json(facts), '$.annotations') AS j",
+        "SELECT json_extract(j.value, '$.qualifiedName') AS name FROM method, json_each(json(facts), '$.annotations') AS j",
+        "SELECT json_extract(a.value, '$.qualifiedName') AS name FROM method, json_each(json(facts), '$.parameters') AS p, json_each(p.value, '$.annotations') AS a"
+      ];
+      outer: for (const sql of sqls) {
+        for (const row of prepareCached(this.db, sql).iterate()) {
+          if (hasPrefix(typeof row.name === "string" ? row.name : undefined, annotationPrefixes)) {
+            annotationPrefixFound = true;
+            break outer;
+          }
+        }
+      }
+      if (!annotationPrefixFound) {
+        for (const row of prepareCached(this.db, "SELECT to_id AS id FROM edge WHERE kind='ANNOTATED_WITH'").iterate()) {
+          const toId = typeof row.id === "string" ? row.id : "";
+          const name = toId.startsWith("external:") ? toId.slice("external:".length) : undefined;
+          if (hasPrefix(name, annotationPrefixes)) {
+            annotationPrefixFound = true;
+            break;
+          }
+        }
+      }
+    }
+    this.clearRequestCache();
+    return { importPrefixFound, annotationPrefixFound };
+  }
+
+  implementersOfAny(typeIds: readonly string[]): string[] {
+    if (typeIds.length === 0) return [];
+    const targets = typeIds.map(id => this.typesById.get(id)).filter((type): type is JavaTypeFacts => type !== undefined);
+    if (targets.length === 0) return [];
+    const rows = prepareCached(
+      this.db,
+      `SELECT DISTINCT from_id AS id FROM edge WHERE kind IN ('IMPLEMENTS','EXTENDS') AND to_id IN ${inClause(typeIds.length)}`
+    ).all(...typeIds);
+    const hits: string[] = [];
+    for (const row of rows) {
+      if (typeof row.id !== "string") continue;
+      const type = this.typesById.get(row.id);
+      if (!type) continue;
+      const refs = [...type.implements, ...type.extends];
+      const implementerFile = relativePathOfFileId(type.fileId);
+      if (targets.some(target => refs.some(ref => this.refTargetsType(ref, target, implementerFile)))) hits.push(type.typeId);
+    }
+    this.clearRequestCache();
+    return hits;
+  }
+
+  typesBySimpleNameOrFqn(simple: string, fqn: string): JavaTypeFacts[] {
+    const rows = prepareCached(this.db, "SELECT json(facts) AS facts FROM type WHERE simple_name=? OR fqn=?").all(simple, fqn);
+    const hits = rows.map(row => decodeFacts<JavaTypeFacts>(row.facts)).filter(type => type.simpleName === simple || type.fqn === fqn);
+    this.clearRequestCache();
+    return hits;
+  }
+
   *iterTypes(): IterableIterator<JavaTypeFacts> { yield* this.iterFacts("type"); }
   *iterFields(): IterableIterator<JavaFieldFacts> { yield* this.iterFacts("field"); }
   *iterMethods(): IterableIterator<JavaMethodFacts> { yield* this.iterFacts("method"); }
@@ -175,5 +461,45 @@ export class SqlFactsStore {
       }
       return ids.size === 0 ? undefined : ids;
     });
+  }
+
+  private references(column: "from_id" | "to_id", nodeId: string, kinds: readonly string[], limit: number): IndexedReference[] {
+    if (kinds.length === 0) return [];
+    const rows = prepareCached(
+      this.db,
+      `SELECT json(e.facts) AS facts, json(f.facts) AS file_facts
+       FROM edge e JOIN file f ON f.id=e.source_file_id
+       WHERE e.${column}=? AND e.kind IN ${inClause(kinds.length)}`
+    ).all(nodeId, ...kinds);
+    const results: IndexedReference[] = [];
+    for (const row of rows) {
+      const edge = decodeFacts<StaticEdge>(row.facts);
+      const file = decodeFacts<JavaFileFacts>(row.file_facts);
+      results.push({
+        sourceId: edge.fromId,
+        targetId: edge.toId,
+        sourceFile: edge.sourceFile,
+        sourceModule: file.module ?? "",
+        sourceSet: file.sourceSet ?? "unknown",
+        kind: edge.kind,
+        confidence: edge.confidence,
+        ...(edge.range ? { range: edge.range } : {}),
+        generation: edge.generation
+      });
+    }
+    results.sort(compareReferences);
+    this.clearRequestCache();
+    return results.slice(0, limit);
+  }
+
+  private refTargetsType(ref: JavaTypeRef, target: JavaTypeFacts, implementerFile?: string): boolean {
+    if (resolvedRepoTypeIds(ref).includes(target.typeId)) return true;
+    if (ref.simpleName !== target.simpleName) return false;
+    if (target.fqn && ref.qualifiedName === target.fqn) return true;
+    const ids = this.typeIdsBySimpleName.get(ref.simpleName);
+    if (ids && ids.size === 1 && [...ids][0] === target.typeId) return true;
+    if (!implementerFile || !target.fqn) return false;
+    const file = this.filesByPath.get(implementerFile);
+    return Boolean(file?.imports.some(item => item.qualifiedName === target.fqn));
   }
 }
