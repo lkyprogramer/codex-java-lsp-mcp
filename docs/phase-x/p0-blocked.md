@@ -30,7 +30,16 @@ stat -f %z /tmp/iod-lishuedu.sqlite
 | P0-G4 | ≤ 350 MB | 1407225856 B = 1342.0 MiB (`stat -f %z`); freelist 0 | **no** |
 | counts | A.1 | files 6090, types 7319, methods 25077, edges 253711 | yes (exact) |
 
-P0-G1 / P0-G5 / P0-G6 / P0-G7 `gate:pr` were not run after this G4 failure.
+Later gates (still no P0 closeout while G4 fails):
+
+| id | target | measured | pass |
+| --- | --- | --- | --- |
+| P0-G5 | four-repo counts ±1% vs live snapshot | lishuedu/cipherlink/exam-parent-v3 exact; lishu-v2 files 3036 vs 3013 (+0.763%), types +0.714%, fields +0.754%, methods +0.917%, edges +0.886% after last-write-wins upsert | yes |
+| P0-G6 | kill -9 at 90s then resume ≤ 1.3× G2 (173.134 s) | resume 133.61 s; kill at `phase=resolve, done=6090/6090`; WAL 5702763952 B at kill | yes |
+| P0-G7 diff | old src files vs `6885b17` only `entity-search.ts` + `graph-store.ts` | `docs/phase-x/p0-gate-raw/P0-G7-diff-stat.txt` | yes |
+| P0-G1 / P0-G7 `gate:pr` | isolated `full` + `gate:pr` (three-repo required while loadavg < 20) | not run | — |
+
+lishu-v2 first G5 attempt failed `UNIQUE constraint failed: type.type_id` on duplicated FQN `com.limou.answercard.AnswerCard` under two `deploy/recognition-runners/` trees. Heap `typesById.set` last-write-wins; SQL `writeBundle` now `ON CONFLICT DO UPDATE` for type/field/method/edge.
 
 Before zlib, the same corpus was 2090668032 B (1993.4 MiB). zlib cut about 650 MiB of `facts` payload and left indexes + `entity_token` dominant.
 

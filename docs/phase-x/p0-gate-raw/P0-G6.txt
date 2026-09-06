@@ -1,0 +1,35 @@
+G2_BASE_S=133.18
+LIMIT_1_3_G2_S=173.134
+kill_after_s=90
+start_epoch=1788718762.3918269
+pid=17621
+kill_epoch=1788718852.498081
+after_kill ls:
+-rw-r--r--@ 1 luo  wheel   441294848 Sep  7 02:20 /tmp/iod-lishuedu-g6.sqlite
+-rw-r--r--@ 1 luo  wheel    11075584 Sep  7 02:20 /tmp/iod-lishuedu-g6.sqlite-shm
+-rw-r--r--@ 1 luo  wheel  5702763952 Sep  7 02:20 /tmp/iod-lishuedu-g6.sqlite-wal
+buildState BUILDING
+buildProgress {"phase":"resolve","done":6090,"total":6090}
+counts {"files":6090,"types":7319,"methods":25077,"edges":253711}
+RESUME_START_EPOCH=1788718854.936125
+{"ok":true,"parseFailed":0,"files":6090,"types":7319,"methods":25077,"edges":253711}
+      133.61 real        61.04 user        21.14 sys
+           614252544  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               52440  page reclaims
+                 486  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+              665605  voluntary context switches
+              156367  involuntary context switches
+        636154141478  instructions retired
+        253633569672  cycles elapsed
+           616481944  peak memory footprint
+RESUME_END_EPOCH=1788718988.6273532
+DONE

@@ -1,0 +1,21 @@
+ src/java-index/builder/builder-main.ts     |  61 ++++
+ src/java-index/builder/cold-build.test.ts  | 120 +++++++
+ src/java-index/builder/cold-build.ts       | 421 +++++++++++++++++++++++
+ src/java-index/builder/progress.ts         |  76 +++++
+ src/java-index/entity-scoring.ts           | 136 ++++++++
+ src/java-index/entity-search.ts            | 153 ++-------
+ src/java-index/sql/driver.test.ts          |  77 +++++
+ src/java-index/sql/driver.ts               |  83 +++++
+ src/java-index/sql/entity-tokens.test.ts   | 101 ++++++
+ src/java-index/sql/entity-tokens.ts        |  76 +++++
+ src/java-index/sql/facts-store.test.ts     | 309 +++++++++++++++++
+ src/java-index/sql/facts-store.ts          | 518 +++++++++++++++++++++++++++++
+ src/java-index/sql/knowledge-graph.test.ts | 166 +++++++++
+ src/java-index/sql/knowledge-graph.ts      | 296 +++++++++++++++++
+ src/java-index/sql/registry-view.test.ts   |  84 +++++
+ src/java-index/sql/registry-view.ts        |  38 +++
+ src/java-index/sql/rows.test.ts            |  95 ++++++
+ src/java-index/sql/rows.ts                 | 293 ++++++++++++++++
+ src/java-index/sql/schema.ts               |  87 +++++
+ src/java-knowledge/graph-store.ts          |  15 +
+ 20 files changed, 3072 insertions(+), 133 deletions(-)
