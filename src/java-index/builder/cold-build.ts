@@ -262,5 +262,6 @@ function writeKnowledgeAndEntities(db: IndexDatabase, generation: number): void 
       if (bundle) records.push(...recordsFromBundle(bundle));
     }
     replaceAllEntities(db, records);
+    graph.flushMeta();
   });
 }

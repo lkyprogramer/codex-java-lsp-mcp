@@ -40,11 +40,6 @@ function xorFromMeta(db: IndexDatabase, key: string): Buffer {
   return buf.length === 32 ? buf : Buffer.alloc(32);
 }
 
-function runInWriteTx<T>(db: IndexDatabase, fn: () => T): T {
-  if (db.isTransaction) return fn();
-  return withTransaction(db, fn);
-}
-
 function edgeFacts(row: Record<string, SQLOutputValue>): GraphEdge {
   const edge = decodeFacts<GraphEdge>(row.facts);
   return {
@@ -108,6 +103,7 @@ export class SqlKnowledgeGraph {
 
   private readonly nodeXor: Buffer;
   private readonly edgeXor: Buffer;
+  private readonly knownEdgeIds = new Set<string>();
 
   constructor(private readonly db: IndexDatabase) {
     this.nodeXor = xorFromMeta(db, "graphNodeXor");
@@ -128,6 +124,23 @@ export class SqlKnowledgeGraph {
         return asCount(prepareCached(self.db, "SELECT count(*) AS n FROM kg_edge").get());
       }
     };
+    for (const row of prepareCached(db, "SELECT json_extract(facts, '$.edgeId') AS edgeId FROM kg_edge").iterate()) {
+      if (typeof row.edgeId === "string") this.knownEdgeIds.add(row.edgeId);
+    }
+  }
+
+  flushMeta(): void {
+    this.persistXor();
+    this.persistGeneration();
+  }
+
+  private writeTx<T>(fn: () => T): T {
+    if (this.db.isTransaction) return fn();
+    return withTransaction(this.db, () => {
+      const value = fn();
+      this.flushMeta();
+      return value;
+    });
   }
 
   digest(): string {
@@ -140,7 +153,7 @@ export class SqlKnowledgeGraph {
   }
 
   upsertNode(node: GraphNode, ownerFile?: string): void {
-    runInWriteTx(this.db, () => {
+    this.writeTx(() => {
       const existing = prepareCached(this.db, "SELECT kind FROM kg_node WHERE id=?").get(node.id) as
         | { kind: string }
         | undefined;
@@ -168,29 +181,26 @@ export class SqlKnowledgeGraph {
         ownerFile ?? null,
         encodeFacts(node)
       );
-      this.persistXor();
-      this.persistGeneration();
     });
   }
 
   addEdge(edge: GraphEdge, ownerFile?: string): GraphEdge {
-    return runInWriteTx(this.db, () => {
-      const existing = prepareCached(this.db, "SELECT json(facts) AS facts FROM kg_edge WHERE json_extract(facts, '$.edgeId')=?").get(edge.edgeId);
-      if (existing) {
+    return this.writeTx(() => {
+      if (this.knownEdgeIds.has(edge.edgeId)) {
         if (ownerFile) {
           prepareCached(
             this.db,
-            "UPDATE kg_edge SET owner_file=COALESCE(owner_file, ?) WHERE json_extract(facts, '$.edgeId')=?"
-          ).run(ownerFile, edge.edgeId);
+            "UPDATE kg_edge SET owner_file=COALESCE(owner_file, ?) WHERE from_id=? AND to_id=? AND kind=?"
+          ).run(ownerFile, edge.fromId, edge.toId, edge.kind);
         }
-        return edgeFacts(existing);
+        return edge;
       }
       prepareCached(
         this.db,
         "INSERT INTO kg_edge(from_id, to_id, kind, owner_file, facts) VALUES (?, ?, ?, ?, jsonb(?))"
       ).run(edge.fromId, edge.toId, edge.kind, ownerFile ?? null, encodeFacts(edge));
+      this.knownEdgeIds.add(edge.edgeId);
       xorBuffers(this.edgeXor, itemHash(`e:${edge.edgeId}`));
-      this.persistXor();
       const reverseKind = REVERSE_EDGE_KIND[edge.kind];
       if (reverseKind) {
         this.addEdge({
@@ -208,13 +218,15 @@ export class SqlKnowledgeGraph {
 
   removeFiles(relativePaths: readonly string[]): void {
     if (relativePaths.length === 0) return;
-    runInWriteTx(this.db, () => {
+    this.writeTx(() => {
       const placeholders = relativePaths.map(() => "?").join(",");
       const edges = this.db.prepare(
         `SELECT json(facts) AS facts FROM kg_edge WHERE owner_file IN (${placeholders})`
       ).all(...relativePaths) as Array<{ facts: SQLOutputValue }>;
       for (const row of edges) {
-        xorBuffers(this.edgeXor, itemHash(`e:${edgeFacts(row).edgeId}`));
+        const edgeId = edgeFacts(row).edgeId;
+        xorBuffers(this.edgeXor, itemHash(`e:${edgeId}`));
+        this.knownEdgeIds.delete(edgeId);
       }
       const nodes = this.db.prepare(
         `SELECT id, kind FROM kg_node WHERE owner_file IN (${placeholders})`
@@ -225,7 +237,6 @@ export class SqlKnowledgeGraph {
       }
       this.db.prepare(`DELETE FROM kg_edge WHERE owner_file IN (${placeholders})`).run(...relativePaths);
       this.db.prepare(`DELETE FROM kg_node WHERE owner_file IN (${placeholders})`).run(...relativePaths);
-      this.persistXor();
     });
   }
 
@@ -255,13 +266,12 @@ export class SqlKnowledgeGraph {
   }
 
   clear(): void {
-    runInWriteTx(this.db, () => {
+    this.writeTx(() => {
       this.db.exec("DELETE FROM kg_summary; DELETE FROM kg_edge; DELETE FROM kg_node;");
       this.nodeXor.fill(0);
       this.edgeXor.fill(0);
       this.generation = 0;
-      this.persistXor();
-      this.persistGeneration();
+      this.knownEdgeIds.clear();
     });
   }
 
