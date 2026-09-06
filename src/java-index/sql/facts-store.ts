@@ -2,6 +2,7 @@ import type { SQLOutputValue } from "node:sqlite";
 import type {
   AnchorFacts,
   IndexedReference,
+  JavaAnnotationFact,
   JavaFieldFacts,
   JavaFileBundle,
   JavaFileFacts,
@@ -19,7 +20,9 @@ import { JavaNameResolver, type TypeRegistryView } from "../name-resolver.js";
 import type { MyBatisMapperResourceFacts } from "../mybatis-types.js";
 import { myBatisQualifiedId } from "../mybatis-types.js";
 import { prepareCached, type IndexDatabase } from "./driver.js";
-import { readBundle } from "./rows.js";
+import { decodeFacts, readBundle } from "./rows.js";
+
+export { decodeFacts };
 
 const LRU_LIMIT = 2048;
 
@@ -28,11 +31,6 @@ export type PointLookup<V> = {
   has(key: string): boolean;
   readonly size: number;
 };
-
-export function decodeFacts<T>(value: SQLOutputValue): T {
-  if (typeof value !== "string") throw new Error("expected json(facts) text");
-  return JSON.parse(value) as T;
-}
 
 export function asCount(row: Record<string, SQLOutputValue> | undefined): number {
   const value = row?.n;
@@ -182,7 +180,7 @@ export class SqlFactsStore {
   }
 
   myBatisResource(path: string): MyBatisMapperResourceFacts | undefined {
-    const row = prepareCached(this.db, "SELECT json(facts) AS facts FROM mybatis_resource WHERE path=?").get(path);
+    const row = prepareCached(this.db, "SELECT facts FROM mybatis_resource WHERE path=?").get(path);
     return row ? decodeFacts<MyBatisMapperResourceFacts>(row.facts) : undefined;
   }
 
@@ -193,7 +191,7 @@ export class SqlFactsStore {
   }
 
   myBatisStatement(qid: string): MyBatisMapperResourceFacts["statements"][number] | undefined {
-    for (const row of prepareCached(this.db, "SELECT json(facts) AS facts FROM mybatis_resource").iterate()) {
+    for (const row of prepareCached(this.db, "SELECT facts FROM mybatis_resource").iterate()) {
       const resource = decodeFacts<MyBatisMapperResourceFacts>(row.facts);
       const hit = resource.statements.find(statement =>
         myBatisQualifiedId(resource.namespace, statement.id) === qid || statement.statementId === qid
@@ -369,10 +367,12 @@ export class SqlFactsStore {
     }
     const hasPrefix = (value: string | undefined, prefixes: readonly string[]) =>
       value !== undefined && prefixes.some(prefix => value.startsWith(prefix));
+    const annotationsMatch = (items: readonly JavaAnnotationFact[] | undefined): boolean =>
+      (items ?? []).some(item => hasPrefix(item.qualifiedName, annotationPrefixes));
     let importPrefixFound = false;
     if (importPrefixes.length > 0) {
-      for (const row of prepareCached(this.db, "SELECT json_extract(j.value, '$.qualifiedName') AS name FROM file, json_each(json(facts), '$.imports') AS j").iterate()) {
-        if (hasPrefix(typeof row.name === "string" ? row.name : undefined, importPrefixes)) {
+      for (const file of this.iterFiles()) {
+        if (file.imports.some(item => hasPrefix(item.qualifiedName, importPrefixes))) {
           importPrefixFound = true;
           break;
         }
@@ -380,17 +380,25 @@ export class SqlFactsStore {
     }
     let annotationPrefixFound = false;
     if (annotationPrefixes.length > 0) {
-      const sqls = [
-        "SELECT json_extract(j.value, '$.qualifiedName') AS name FROM type, json_each(json(facts), '$.annotations') AS j",
-        "SELECT json_extract(j.value, '$.qualifiedName') AS name FROM field, json_each(json(facts), '$.annotations') AS j",
-        "SELECT json_extract(j.value, '$.qualifiedName') AS name FROM method, json_each(json(facts), '$.annotations') AS j",
-        "SELECT json_extract(a.value, '$.qualifiedName') AS name FROM method, json_each(json(facts), '$.parameters') AS p, json_each(p.value, '$.annotations') AS a"
-      ];
-      outer: for (const sql of sqls) {
-        for (const row of prepareCached(this.db, sql).iterate()) {
-          if (hasPrefix(typeof row.name === "string" ? row.name : undefined, annotationPrefixes)) {
+      for (const type of this.iterTypes()) {
+        if (annotationsMatch(type.annotations)) {
+          annotationPrefixFound = true;
+          break;
+        }
+      }
+      if (!annotationPrefixFound) {
+        for (const field of this.iterFields()) {
+          if (annotationsMatch(field.annotations)) {
             annotationPrefixFound = true;
-            break outer;
+            break;
+          }
+        }
+      }
+      if (!annotationPrefixFound) {
+        for (const method of this.iterMethods()) {
+          if (annotationsMatch(method.annotations) || method.parameters.some(parameter => annotationsMatch(parameter.annotations))) {
+            annotationPrefixFound = true;
+            break;
           }
         }
       }
@@ -431,7 +439,7 @@ export class SqlFactsStore {
   }
 
   typesBySimpleNameOrFqn(simple: string, fqn: string): JavaTypeFacts[] {
-    const rows = prepareCached(this.db, "SELECT json(facts) AS facts FROM type WHERE simple_name=? OR fqn=?").all(simple, fqn);
+    const rows = prepareCached(this.db, "SELECT facts FROM type WHERE simple_name=? OR fqn=?").all(simple, fqn);
     const hits = rows.map(row => decodeFacts<JavaTypeFacts>(row.facts)).filter(type => type.simpleName === simple || type.fqn === fqn);
     this.clearRequestCache();
     return hits;
@@ -444,13 +452,13 @@ export class SqlFactsStore {
   *iterFiles(): IterableIterator<JavaFileFacts> { yield* this.iterFacts("file"); }
 
   private *iterFacts<T>(table: string): IterableIterator<T> {
-    for (const row of prepareCached(this.db, `SELECT json(facts) AS facts FROM ${table} ORDER BY rowid`).iterate()) {
+    for (const row of prepareCached(this.db, `SELECT facts FROM ${table} ORDER BY rowid`).iterate()) {
       yield decodeFacts<T>(row.facts);
     }
   }
 
   private selectFacts<T>(table: string, column: string, key: string): T | undefined {
-    const row = prepareCached(this.db, `SELECT json(facts) AS facts FROM ${table} WHERE ${column}=?`).get(key);
+    const row = prepareCached(this.db, `SELECT facts FROM ${table} WHERE ${column}=?`).get(key);
     return row ? decodeFacts<T>(row.facts) : undefined;
   }
 
@@ -472,7 +480,7 @@ export class SqlFactsStore {
     if (kinds.length === 0) return [];
     const rows = prepareCached(
       this.db,
-      `SELECT json(e.facts) AS facts, json(f.facts) AS file_facts
+      `SELECT e.facts AS facts, f.facts AS file_facts
        FROM edge e JOIN file f ON f.id=e.source_file_id
        WHERE e.${column}=? AND e.kind IN ${inClause(kinds.length)}`
     ).all(nodeId, ...kinds);

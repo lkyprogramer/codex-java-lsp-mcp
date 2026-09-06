@@ -5,7 +5,8 @@ import { knowledgeEdgeId } from "../../java-knowledge/entity-id.js";
 import type { MethodSummary } from "../../java-knowledge/method-summary.js";
 import type { GraphEdge, GraphNode } from "../../java-knowledge/schema.js";
 import { prepareCached, withTransaction, type IndexDatabase } from "./driver.js";
-import { asCount, decodeFacts } from "./facts-store.js";
+import { asCount } from "./facts-store.js";
+import { decodeFacts, encodeFacts } from "./rows.js";
 
 function itemHash(value: string): Buffer {
   return createHash("sha256").update(value, "utf8").digest();
@@ -15,10 +16,6 @@ function xorBuffers(target: Buffer, item: Buffer): void {
   for (let index = 0; index < target.length; index += 1) {
     target[index] = (target[index] ?? 0) ^ (item[index] ?? 0);
   }
-}
-
-function encodeFacts(value: unknown): string {
-  return JSON.stringify(value);
 }
 
 function readMeta(db: IndexDatabase, key: string): string | undefined {
@@ -68,14 +65,14 @@ class SqlSummaryMap {
   constructor(private readonly db: IndexDatabase) {}
 
   get(methodId: string): MethodSummary | undefined {
-    const row = prepareCached(this.db, "SELECT json(facts) AS facts FROM kg_summary WHERE method_id=?").get(methodId);
+    const row = prepareCached(this.db, "SELECT facts FROM kg_summary WHERE method_id=?").get(methodId);
     return row ? decodeFacts<MethodSummary>(row.facts) : undefined;
   }
 
   set(methodId: string, summary: MethodSummary): this {
     prepareCached(
       this.db,
-      "INSERT INTO kg_summary(method_id, facts) VALUES (?, jsonb(?)) ON CONFLICT(method_id) DO UPDATE SET facts=excluded.facts"
+      "INSERT INTO kg_summary(method_id, facts) VALUES (?, ?) ON CONFLICT(method_id) DO UPDATE SET facts=excluded.facts"
     ).run(methodId, encodeFacts(summary));
     return this;
   }
@@ -124,8 +121,9 @@ export class SqlKnowledgeGraph {
         return asCount(prepareCached(self.db, "SELECT count(*) AS n FROM kg_edge").get());
       }
     };
-    for (const row of prepareCached(db, "SELECT json_extract(facts, '$.edgeId') AS edgeId FROM kg_edge").iterate()) {
-      if (typeof row.edgeId === "string") this.knownEdgeIds.add(row.edgeId);
+    for (const row of prepareCached(db, "SELECT facts FROM kg_edge").iterate()) {
+      const edgeId = decodeFacts<GraphEdge>(row.facts).edgeId;
+      if (typeof edgeId === "string") this.knownEdgeIds.add(edgeId);
     }
   }
 
@@ -166,7 +164,7 @@ export class SqlKnowledgeGraph {
       prepareCached(
         this.db,
         `INSERT INTO kg_node(id, kind, relative_path, java_index_id, owner_file, facts)
-         VALUES (?, ?, ?, ?, ?, jsonb(?))
+         VALUES (?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            kind=excluded.kind,
            relative_path=excluded.relative_path,
@@ -197,7 +195,7 @@ export class SqlKnowledgeGraph {
       }
       prepareCached(
         this.db,
-        "INSERT INTO kg_edge(from_id, to_id, kind, owner_file, facts) VALUES (?, ?, ?, ?, jsonb(?))"
+        "INSERT INTO kg_edge(from_id, to_id, kind, owner_file, facts) VALUES (?, ?, ?, ?, ?)"
       ).run(edge.fromId, edge.toId, edge.kind, ownerFile ?? null, encodeFacts(edge));
       this.knownEdgeIds.add(edge.edgeId);
       xorBuffers(this.edgeXor, itemHash(`e:${edge.edgeId}`));
@@ -221,7 +219,7 @@ export class SqlKnowledgeGraph {
     this.writeTx(() => {
       const placeholders = relativePaths.map(() => "?").join(",");
       const edges = this.db.prepare(
-        `SELECT json(facts) AS facts FROM kg_edge WHERE owner_file IN (${placeholders})`
+        `SELECT facts FROM kg_edge WHERE owner_file IN (${placeholders})`
       ).all(...relativePaths) as Array<{ facts: SQLOutputValue }>;
       for (const row of edges) {
         const edgeId = edgeFacts(row).edgeId;
@@ -242,20 +240,20 @@ export class SqlKnowledgeGraph {
 
   successors(nodeId: string, kind?: EdgeKind): GraphEdge[] {
     const rows = kind === undefined
-      ? prepareCached(this.db, "SELECT json(facts) AS facts FROM kg_edge WHERE from_id=? ORDER BY id").all(nodeId)
-      : prepareCached(this.db, "SELECT json(facts) AS facts FROM kg_edge WHERE from_id=? AND kind=? ORDER BY id").all(nodeId, kind);
+      ? prepareCached(this.db, "SELECT facts FROM kg_edge WHERE from_id=? ORDER BY id").all(nodeId)
+      : prepareCached(this.db, "SELECT facts FROM kg_edge WHERE from_id=? AND kind=? ORDER BY id").all(nodeId, kind);
     return rows.map(edgeFacts);
   }
 
   predecessors(nodeId: string, kind?: EdgeKind): GraphEdge[] {
     const rows = kind === undefined
-      ? prepareCached(this.db, "SELECT json(facts) AS facts FROM kg_edge WHERE to_id=? ORDER BY id").all(nodeId)
-      : prepareCached(this.db, "SELECT json(facts) AS facts FROM kg_edge WHERE to_id=? AND kind=? ORDER BY id").all(nodeId, kind);
+      ? prepareCached(this.db, "SELECT facts FROM kg_edge WHERE to_id=? ORDER BY id").all(nodeId)
+      : prepareCached(this.db, "SELECT facts FROM kg_edge WHERE to_id=? AND kind=? ORDER BY id").all(nodeId, kind);
     return rows.map(edgeFacts);
   }
 
   nodesByPath(path: string): GraphNode[] {
-    return prepareCached(this.db, "SELECT json(facts) AS facts FROM kg_node WHERE relative_path=? ORDER BY id")
+    return prepareCached(this.db, "SELECT facts FROM kg_node WHERE relative_path=? ORDER BY id")
       .all(path)
       .map(row => nodeFacts(row));
   }
@@ -276,12 +274,12 @@ export class SqlKnowledgeGraph {
   }
 
   private nodeById(id: string): GraphNode | undefined {
-    const row = prepareCached(this.db, "SELECT json(facts) AS facts FROM kg_node WHERE id=?").get(id);
+    const row = prepareCached(this.db, "SELECT facts FROM kg_node WHERE id=?").get(id);
     return row ? nodeFacts(row) : undefined;
   }
 
   private *nodeEntries(): IterableIterator<[string, GraphNode]> {
-    const rows = prepareCached(this.db, "SELECT id, json(facts) AS facts FROM kg_node ORDER BY id").all();
+    const rows = prepareCached(this.db, "SELECT id, facts FROM kg_node ORDER BY id").all();
     for (const row of rows) {
       yield [row.id as string, nodeFacts(row)];
     }

@@ -1,3 +1,4 @@
+import { deflateRawSync, inflateRawSync } from "node:zlib";
 import type { SQLOutputValue } from "node:sqlite";
 import type {
   JavaFieldFacts,
@@ -65,13 +66,15 @@ export type MyBatisRow = {
   facts: MyBatisMapperResourceFacts;
 };
 
-function encodeFacts(value: unknown): string {
-  return JSON.stringify(value);
+export function encodeFacts(value: unknown): Buffer {
+  return deflateRawSync(Buffer.from(JSON.stringify(value), "utf8"));
 }
 
-function decodeFacts<T>(value: SQLOutputValue): T {
-  if (typeof value !== "string") throw new Error("expected json(facts) text");
-  return JSON.parse(value) as T;
+export function decodeFacts<T>(value: SQLOutputValue): T {
+  if (value instanceof Uint8Array) {
+    return JSON.parse(inflateRawSync(value).toString("utf8")) as T;
+  }
+  throw new Error("expected facts blob");
 }
 
 function asRowId(value: number | bigint): number {
@@ -161,7 +164,7 @@ export function writeBundle(db: IndexDatabase, bundle: JavaFileBundle, fileId?: 
       ? prepareCached(
         db,
         `INSERT INTO file(path, content_hash, size, mtime_ms, ctime_ms, source_root, module, package, parse_state, generation, facts)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, jsonb(?))`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
         row.path, row.contentHash, row.size, row.mtimeMs, row.ctimeMs, row.sourceRoot,
         row.module, row.packageName, row.parseState, row.generation, encodeFacts(row.facts)
@@ -169,7 +172,7 @@ export function writeBundle(db: IndexDatabase, bundle: JavaFileBundle, fileId?: 
       : prepareCached(
         db,
         `INSERT INTO file(id, path, content_hash, size, mtime_ms, ctime_ms, source_root, module, package, parse_state, generation, facts)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, jsonb(?))`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
         fileId, row.path, row.contentHash, row.size, row.mtimeMs, row.ctimeMs, row.sourceRoot,
         row.module, row.packageName, row.parseState, row.generation, encodeFacts(row.facts)
@@ -178,21 +181,21 @@ export function writeBundle(db: IndexDatabase, bundle: JavaFileBundle, fileId?: 
     const insertType = prepareCached(
       db,
       `INSERT INTO type(type_id, file_id, fqn, simple_name, kind, owner_type_id, facts)
-       VALUES (?, ?, ?, ?, ?, ?, jsonb(?))`
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
     );
     for (const type of typeRows(bundle)) {
       insertType.run(type.typeId, id, type.fqn, type.simpleName, type.kind, type.ownerTypeId, encodeFacts(type.facts));
     }
     const insertField = prepareCached(
       db,
-      "INSERT INTO field(field_id, owner_type_id, file_id, name, facts) VALUES (?, ?, ?, ?, jsonb(?))"
+      "INSERT INTO field(field_id, owner_type_id, file_id, name, facts) VALUES (?, ?, ?, ?, ?)"
     );
     for (const field of fieldRows(bundle)) {
       insertField.run(field.fieldId, field.ownerTypeId, id, field.name, encodeFacts(field.facts));
     }
     const insertMethod = prepareCached(
       db,
-      "INSERT INTO method(method_id, owner_type_id, file_id, name, is_ctor, arity, facts) VALUES (?, ?, ?, ?, ?, ?, jsonb(?))"
+      "INSERT INTO method(method_id, owner_type_id, file_id, name, is_ctor, arity, facts) VALUES (?, ?, ?, ?, ?, ?, ?)"
     );
     for (const method of methodRows(bundle)) {
       insertMethod.run(
@@ -201,7 +204,7 @@ export function writeBundle(db: IndexDatabase, bundle: JavaFileBundle, fileId?: 
     }
     const insertEdge = prepareCached(
       db,
-      "INSERT INTO edge(edge_id, from_id, to_id, kind, source_file_id, facts) VALUES (?, ?, ?, ?, ?, jsonb(?))"
+      "INSERT INTO edge(edge_id, from_id, to_id, kind, source_file_id, facts) VALUES (?, ?, ?, ?, ?, ?)"
     );
     for (const edge of edgeRows(bundle.edges, id)) {
       insertEdge.run(edge.edgeId, edge.fromId, edge.toId, edge.kind, edge.sourceFileId, encodeFacts(edge.facts));
@@ -220,21 +223,21 @@ export function updateBundleFacts(db: IndexDatabase, bundle: JavaFileBundle): nu
   return runInWriteTx(db, () => {
     const id = fileIdByPath(db, bundle.file.relativePath);
     const row = fileRow(bundle);
-    prepareCached(db, "UPDATE file SET facts=jsonb(?), parse_state=?, generation=? WHERE id=?").run(
+    prepareCached(db, "UPDATE file SET facts=?, parse_state=?, generation=? WHERE id=?").run(
       encodeFacts(row.facts),
       row.parseState,
       row.generation,
       id
     );
-    const updateType = prepareCached(db, "UPDATE type SET facts=jsonb(?), fqn=? WHERE type_id=?");
+    const updateType = prepareCached(db, "UPDATE type SET facts=?, fqn=? WHERE type_id=?");
     for (const type of typeRows(bundle)) {
       updateType.run(encodeFacts(type.facts), type.fqn, type.typeId);
     }
-    const updateField = prepareCached(db, "UPDATE field SET facts=jsonb(?) WHERE field_id=?");
+    const updateField = prepareCached(db, "UPDATE field SET facts=? WHERE field_id=?");
     for (const field of fieldRows(bundle)) {
       updateField.run(encodeFacts(field.facts), field.fieldId);
     }
-    const updateMethod = prepareCached(db, "UPDATE method SET facts=jsonb(?), arity=? WHERE method_id=?");
+    const updateMethod = prepareCached(db, "UPDATE method SET facts=?, arity=? WHERE method_id=?");
     for (const method of methodRows(bundle)) {
       updateMethod.run(encodeFacts(method.facts), method.arity, method.methodId);
     }
@@ -248,7 +251,7 @@ export function replaceBundleEdges(db: IndexDatabase, filePath: string, edges: r
     prepareCached(db, "DELETE FROM edge WHERE source_file_id=?").run(id);
     const insertEdge = prepareCached(
       db,
-      "INSERT INTO edge(edge_id, from_id, to_id, kind, source_file_id, facts) VALUES (?, ?, ?, ?, ?, jsonb(?))"
+      "INSERT INTO edge(edge_id, from_id, to_id, kind, source_file_id, facts) VALUES (?, ?, ?, ?, ?, ?)"
     );
     for (const edge of edgeRows(edges, id)) {
       insertEdge.run(edge.edgeId, edge.fromId, edge.toId, edge.kind, edge.sourceFileId, encodeFacts(edge.facts));
@@ -257,14 +260,14 @@ export function replaceBundleEdges(db: IndexDatabase, filePath: string, edges: r
 }
 
 export function readBundle(db: IndexDatabase, path: string): JavaFileBundle | undefined {
-  const file = prepareCached(db, "SELECT json(facts) AS facts FROM file WHERE path=?").get(path);
+  const file = prepareCached(db, "SELECT facts FROM file WHERE path=?").get(path);
   if (!file) return undefined;
   const idRow = prepareCached(db, "SELECT id FROM file WHERE path=?").get(path);
   const fileId = asRowId(idRow?.id as number | bigint);
-  const types = prepareCached(db, "SELECT json(facts) AS facts FROM type WHERE file_id=? ORDER BY id").all(fileId);
-  const fields = prepareCached(db, "SELECT json(facts) AS facts FROM field WHERE file_id=? ORDER BY id").all(fileId);
-  const methods = prepareCached(db, "SELECT json(facts) AS facts FROM method WHERE file_id=? ORDER BY id").all(fileId);
-  const edges = prepareCached(db, "SELECT json(facts) AS facts FROM edge WHERE source_file_id=? ORDER BY id").all(fileId);
+  const types = prepareCached(db, "SELECT facts FROM type WHERE file_id=? ORDER BY id").all(fileId);
+  const fields = prepareCached(db, "SELECT facts FROM field WHERE file_id=? ORDER BY id").all(fileId);
+  const methods = prepareCached(db, "SELECT facts FROM method WHERE file_id=? ORDER BY id").all(fileId);
+  const edges = prepareCached(db, "SELECT facts FROM edge WHERE source_file_id=? ORDER BY id").all(fileId);
   return {
     file: decodeFacts<JavaFileFacts>(file.facts),
     types: types.map(row => decodeFacts<JavaTypeFacts>(row.facts)),
@@ -278,13 +281,13 @@ export function writeMyBatisResource(db: IndexDatabase, resource: MyBatisMapperR
   const row = myBatisRow(resource);
   prepareCached(
     db,
-    `INSERT INTO mybatis_resource(path, namespace, content_hash, facts) VALUES (?, ?, ?, jsonb(?))
+    `INSERT INTO mybatis_resource(path, namespace, content_hash, facts) VALUES (?, ?, ?, ?)
      ON CONFLICT(path) DO UPDATE SET namespace=excluded.namespace, content_hash=excluded.content_hash, facts=excluded.facts`
   ).run(row.path, row.namespace, row.contentHash, encodeFacts(row.facts));
 }
 
 export function readMyBatisResource(db: IndexDatabase, path: string): MyBatisMapperResourceFacts | undefined {
-  const row = prepareCached(db, "SELECT json(facts) AS facts FROM mybatis_resource WHERE path=?").get(path);
+  const row = prepareCached(db, "SELECT facts FROM mybatis_resource WHERE path=?").get(path);
   if (!row) return undefined;
   return decodeFacts<MyBatisMapperResourceFacts>(row.facts);
 }

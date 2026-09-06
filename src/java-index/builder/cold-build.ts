@@ -2,11 +2,13 @@ import { createHash } from "node:crypto";
 import { realpath, readFile } from "node:fs/promises";
 import { cpus } from "node:os";
 import path from "node:path";
+import { inflateRawSync } from "node:zlib";
 import { probeLayout } from "../../layout-probe.js";
 import { buildStaticEdges, resolveFileRefs } from "../edge-builder.js";
 import { recordsFromBundle } from "../entity-search.js";
 import type { JavaIndexStore } from "../index-store.js";
-import type { JavaAnnotationFact, JavaFileBundle, JavaMethodFacts, JavaTypeFacts, JavaTypeRef } from "../index-types.js";
+import type { JavaAnnotationFact, JavaFileBundle, JavaMethodFacts, JavaTypeFacts, JavaTypeKind, JavaTypeRef } from "../index-types.js";
+import { javaFileId } from "../stable-id.js";
 import { parseJavaSourceFile } from "../java-index-file-parse.js";
 import { createJavaParserBackend } from "../java-parser-backend.js";
 import { discoverJavaFiles, discoverMyBatisResourceFiles } from "../manifest.js";
@@ -98,6 +100,7 @@ export async function runSqlColdBuild(options: SqlColdBuildOptions): Promise<Sql
   const batchSize = options.batchSize && options.batchSize > 0 ? Math.floor(options.batchSize) : COLD_BUILD_BATCH_SIZE;
   const parallelism = builderParallelism(options.parallelism);
   const db = options.db;
+  db.exec("PRAGMA cache_size=-16384");
   const resolvedRepoRoot = await realpath(options.repoRoot).catch(() => path.resolve(options.repoRoot));
   const layout = probeLayout(resolvedRepoRoot);
 
@@ -235,45 +238,86 @@ const STUB_PARAM = {
 };
 const STUB_PARAMS = Array.from({ length: 24 }, (_, arity) => Array.from({ length: arity }, () => STUB_PARAM));
 
-function parseStringArray(value: unknown): string[] {
-  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string");
-  if (typeof value !== "string" || value.length === 0) return [];
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
-  } catch {
-    return [];
+function inflateFactsJson(value: unknown): string {
+  if (!(value instanceof Uint8Array)) throw new Error("expected facts blob");
+  return inflateRawSync(value).toString("utf8");
+}
+
+function jsonTopLevelString(json: string, key: string): string {
+  const token = `"${key}":`;
+  const start = json.indexOf(token);
+  if (start < 0) return "";
+  let index = start + token.length;
+  while (json[index] === " " || json[index] === "\n") index += 1;
+  if (json[index] !== "\"") return "";
+  index += 1;
+  let out = "";
+  while (index < json.length) {
+    const ch = json[index]!;
+    if (ch === "\"") return out;
+    if (ch === "\\") {
+      out += json[index + 1] ?? "";
+      index += 2;
+      continue;
+    }
+    out += ch;
+    index += 1;
   }
+  return out;
+}
+
+function jsonTopLevelStringArray(json: string, key: string): string[] {
+  const token = `"${key}":`;
+  const start = json.indexOf(token);
+  if (start < 0) return [];
+  let index = start + token.length;
+  while (json[index] === " " || json[index] === "\n") index += 1;
+  if (json[index] !== "[") return [];
+  const from = index;
+  let depth = 0;
+  for (; index < json.length; index += 1) {
+    const ch = json[index]!;
+    if (ch === "[") depth += 1;
+    else if (ch === "]") {
+      depth -= 1;
+      if (depth === 0) {
+        try {
+          const parsed = JSON.parse(json.slice(from, index + 1)) as unknown;
+          return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+        } catch {
+          return [];
+        }
+      }
+    }
+  }
+  return [];
 }
 
 function loadMethodStub(db: IndexDatabase, methodId: string): JavaMethodFacts | undefined {
   const row = prepareCached(
     db,
-    `SELECT method_id AS methodId, owner_type_id AS ownerTypeId, name, is_ctor AS isCtor, arity,
-            json_extract(facts, '$.signatureKey') AS signatureKey,
-            json_extract(facts, '$.modifiers') AS modifiers
-     FROM method WHERE method_id=?`
+    "SELECT method_id AS methodId, owner_type_id AS ownerTypeId, name, is_ctor AS isCtor, arity, facts FROM method WHERE method_id=?"
   ).get(methodId) as {
     methodId?: unknown;
     ownerTypeId?: unknown;
     name?: unknown;
     isCtor?: unknown;
     arity?: unknown;
-    signatureKey?: unknown;
-    modifiers?: unknown;
+    facts?: unknown;
   } | undefined;
   if (typeof row?.methodId !== "string" || typeof row.ownerTypeId !== "string" || typeof row.name !== "string") {
     return undefined;
   }
+  const json = inflateFactsJson(row.facts);
   const arity = Number(row.arity) || 0;
   return {
     methodId: row.methodId,
     ownerTypeId: row.ownerTypeId,
     name: row.name,
     constructor: Number(row.isCtor) === 1,
-    signatureKey: typeof row.signatureKey === "string" ? row.signatureKey : "",
+    signatureKey: jsonTopLevelString(json, "signatureKey"),
     range: EMPTY_RANGE,
-    modifiers: parseStringArray(row.modifiers),
+    modifiers: jsonTopLevelStringArray(json, "modifiers"),
     annotations: [],
     typeParameters: [],
     parameters: STUB_PARAMS[arity] ?? Array.from({ length: arity }, () => STUB_PARAM),
@@ -283,11 +327,46 @@ function loadMethodStub(db: IndexDatabase, methodId: string): JavaMethodFacts | 
   };
 }
 
+function loadTypeStub(db: IndexDatabase, typeId: string): JavaTypeFacts | undefined {
+  const row = prepareCached(
+    db,
+    `SELECT t.type_id AS typeId, t.fqn AS fqn, t.simple_name AS simpleName, t.kind AS kind, f.path AS path, t.facts AS facts
+     FROM type t JOIN file f ON f.id=t.file_id WHERE t.type_id=?`
+  ).get(typeId) as {
+    typeId?: unknown;
+    fqn?: unknown;
+    simpleName?: unknown;
+    kind?: unknown;
+    path?: unknown;
+    facts?: unknown;
+  } | undefined;
+  if (typeof row?.typeId !== "string" || typeof row.simpleName !== "string" || typeof row.kind !== "string" || typeof row.path !== "string") {
+    return undefined;
+  }
+  return {
+    typeId: row.typeId,
+    ...(typeof row.fqn === "string" ? { fqn: row.fqn } : {}),
+    simpleName: row.simpleName,
+    kind: row.kind as JavaTypeKind,
+    fileId: javaFileId(row.path),
+    range: EMPTY_RANGE,
+    modifiers: jsonTopLevelStringArray(inflateFactsJson(row.facts), "modifiers"),
+    annotations: [],
+    typeParameters: [],
+    extends: [],
+    implements: [],
+    permits: [],
+    fieldIds: [],
+    methodIds: [],
+    confidence: 0
+  };
+}
+
 function sqlStoreAsIndex(db: IndexDatabase, sql: SqlFactsStore, types: readonly SlimType[]): JavaIndexStore {
   return {
     typesById: {
-      get: (id: string) => sql.typesById.get(id),
-      has: (id: string) => sql.typesById.has(id),
+      get: (id: string) => loadTypeStub(db, id),
+      has: (id: string) => prepareCached(db, "SELECT 1 AS n FROM type WHERE type_id=?").get(id) !== undefined,
       values: () => types
     },
     fieldsById: {
@@ -305,7 +384,10 @@ function sqlStoreAsIndex(db: IndexDatabase, sql: SqlFactsStore, types: readonly 
     edgesById: {
       values: () => sql.iterEdges()
     },
-    typeByFqn: (fqn: string) => sql.typeByFqn(fqn),
+    typeByFqn: (fqn: string) => {
+      const typeId = sql.typeIdByFqn.get(fqn);
+      return typeId ? loadTypeStub(db, typeId) : undefined;
+    },
     myBatisResourceForNamespace: (ns: string) => sql.myBatisResourceForNamespace(ns),
     implementers: (typeId: string, limit?: number) => sql.implementers(typeId, limit)
   } as unknown as JavaIndexStore;

@@ -1,10 +1,6 @@
 import type { EntityRecord } from "../entity-search.js";
 import { prepareCached, withTransaction, type IndexDatabase } from "./driver.js";
-import { decodeFacts } from "./facts-store.js";
-
-function encodeFacts(value: unknown): string {
-  return JSON.stringify(value);
-}
+import { decodeFacts, encodeFacts } from "./rows.js";
 
 function runInWriteTx<T>(db: IndexDatabase, fn: () => T): T {
   if (db.isTransaction) return fn();
@@ -33,7 +29,7 @@ export function writeEntityRecord(db: IndexDatabase, record: EntityRecord): void
     prepareCached(
       db,
       `INSERT INTO entity(entity_id, kind, fqn, simple_name_lc, relative_path, owner_file, ident_len, chunk_len, facts)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, jsonb(?))
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(entity_id) DO UPDATE SET
          kind=excluded.kind, fqn=excluded.fqn, simple_name_lc=excluded.simple_name_lc,
          relative_path=excluded.relative_path, owner_file=excluded.owner_file,
@@ -75,6 +71,6 @@ export function replaceAllEntities(db: IndexDatabase, records: readonly EntityRe
 }
 
 export function readEntityRecords(db: IndexDatabase): EntityRecord[] {
-  const rows = prepareCached(db, "SELECT json(facts) AS facts FROM entity ORDER BY entity_id").all();
+  const rows = prepareCached(db, "SELECT facts FROM entity ORDER BY entity_id").all();
   return rows.map(row => decodeFacts<EntityRecord>(row.facts));
 }
