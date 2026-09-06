@@ -271,7 +271,9 @@ test("SqlFactsStore reference queries, anchor, and typeLookup match JavaIndexSto
 
     for (const methodId of methodIds) {
       assert.deepEqual(jsonClone(sql.callers(methodId)), jsonClone(store.callers(methodId)), `callers:${methodId}`);
+      assert.deepEqual(jsonClone(sql.callers(methodId, 1)), jsonClone(store.callers(methodId, 1)), `callers1:${methodId}`);
       assert.deepEqual(jsonClone(sql.callees(methodId)), jsonClone(store.callees(methodId)), `callees:${methodId}`);
+      assert.deepEqual(jsonClone(sql.callees(methodId, 1)), jsonClone(store.callees(methodId, 1)), `callees1:${methodId}`);
       const method = store.methodsById.get(methodId)!;
       const owner = store.typesById.get(method.ownerTypeId);
       if (owner) {

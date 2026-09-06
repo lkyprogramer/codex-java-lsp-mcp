@@ -214,7 +214,7 @@ export class SqlFactsStore {
     }
     results.sort(compareTypes);
     this.clearRequestCache();
-    return results.slice(0, Math.max(0, limit));
+    return results.slice(0, limit);
   }
 
   callers(methodId: string, limit = 80): IndexedReference[] {
@@ -479,21 +479,34 @@ export class SqlFactsStore {
 
   private references(column: "from_id" | "to_id", nodeId: string, kinds: readonly string[], limit: number): IndexedReference[] {
     if (kinds.length === 0) return [];
-    const cap = Math.max(0, limit);
-    const rows = prepareCached(
-      this.db,
-      `SELECT e.facts AS facts, f.path AS path, f.module AS module
+    const sql = `SELECT e.facts AS facts, f.path AS path, f.module AS module
        FROM edge e JOIN file f ON f.id=e.source_file_id
-       WHERE e.${column}=? AND e.kind IN ${inClause(kinds.length)}`
-    ).all(nodeId, ...kinds);
+       WHERE e.${column}=? AND e.kind IN ${inClause(kinds.length)}
+       ORDER BY f.path`;
+    const collected: Array<{ facts: SQLOutputValue; path: string; module: string }> = [];
+    let boundPath: string | undefined;
+    let extraPath: string | undefined;
+    for (const row of prepareCached(this.db, sql).iterate(nodeId, ...kinds)) {
+      const path = typeof row.path === "string" ? row.path : "";
+      if (limit > 0 && boundPath !== undefined && path !== boundPath) {
+        if (extraPath === undefined) extraPath = path;
+        else if (path !== extraPath) break;
+      }
+      collected.push({
+        facts: row.facts,
+        path,
+        module: typeof row.module === "string" ? row.module : ""
+      });
+      if (limit > 0 && boundPath === undefined && collected.length >= limit) boundPath = path;
+    }
     const results: IndexedReference[] = [];
-    for (const row of rows) {
+    for (const row of collected) {
       const edge = decodeFacts<StaticEdge>(row.facts);
       results.push({
         sourceId: edge.fromId,
         targetId: edge.toId,
         sourceFile: edge.sourceFile,
-        sourceModule: typeof row.module === "string" ? row.module : "",
+        sourceModule: row.module,
         sourceSet: "unknown",
         kind: edge.kind,
         confidence: edge.confidence,
@@ -502,7 +515,7 @@ export class SqlFactsStore {
       });
     }
     results.sort(compareReferences);
-    const sliced = results.slice(0, cap);
+    const sliced = results.slice(0, limit);
     for (const item of sliced) {
       item.sourceSet = this.filesByPath.get(item.sourceFile)?.sourceSet ?? "unknown";
     }

@@ -100,7 +100,6 @@ export class SqlKnowledgeGraph {
 
   private readonly nodeXor: Buffer;
   private readonly edgeXor: Buffer;
-  private readonly knownEdgeIds = new Set<string>();
   private readonly extraEdgeOwners = new Map<string, Set<string>>();
   private readonly extraNodeOwners = new Map<string, Set<string>>();
 
@@ -198,7 +197,6 @@ export class SqlKnowledgeGraph {
         this.db,
         "INSERT INTO kg_edge(from_id, to_id, kind, owner_file, facts) VALUES (?, ?, ?, ?, ?)"
       ).run(edge.fromId, edge.toId, edge.kind, ownerFile ?? null, encodeFacts(edge));
-      this.knownEdgeIds.add(edge.edgeId);
       xorBuffers(this.edgeXor, itemHash(`e:${edge.edgeId}`));
       if (ownerFile) this.extraEdgeOwners.delete(edge.edgeId);
       const reverseKind = REVERSE_EDGE_KIND[edge.kind];
@@ -256,7 +254,6 @@ export class SqlKnowledgeGraph {
       this.nodeXor.fill(0);
       this.edgeXor.fill(0);
       this.generation = 0;
-      this.knownEdgeIds.clear();
       this.extraEdgeOwners.clear();
       this.extraNodeOwners.clear();
     });
@@ -291,16 +288,12 @@ export class SqlKnowledgeGraph {
   }
 
   private findStoredEdge(edge: GraphEdge): boolean {
-    if (this.knownEdgeIds.has(edge.edgeId)) return true;
     const rows = prepareCached(
       this.db,
       "SELECT facts FROM kg_edge WHERE from_id=? AND to_id=? AND kind=?"
     ).all(edge.fromId, edge.toId, edge.kind);
     for (const row of rows) {
-      if (decodeFacts<GraphEdge>(row.facts).edgeId === edge.edgeId) {
-        this.knownEdgeIds.add(edge.edgeId);
-        return true;
-      }
+      if (decodeFacts<GraphEdge>(row.facts).edgeId === edge.edgeId) return true;
     }
     return false;
   }
@@ -336,7 +329,6 @@ export class SqlKnowledgeGraph {
       }
       this.extraEdgeOwners.delete(edge.edgeId);
       xorBuffers(this.edgeXor, itemHash(`e:${edge.edgeId}`));
-      this.knownEdgeIds.delete(edge.edgeId);
       prepareCached(this.db, "DELETE FROM kg_edge WHERE id=?").run(row.id);
     }
     for (const [edgeId, extra] of [...this.extraEdgeOwners]) {

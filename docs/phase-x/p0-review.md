@@ -3,10 +3,8 @@
 - dated: 2026-09-07
 - SHA_PHASE: `f9cbe18` (`docs(iod): P0 record G5 G6 G7 gate evidence`)
 - PHASE_BASE: `6885b17` (`codex/fs-track`)
-- SHA_FIX: the `fix(iod): P0 review fixes` commit that adds this file
+- SHA_FIX: `226e8a9` (`fix(iod): P0 review fixes`); round-2 follow-up is the later `fix(iod): P0 review fixes` commit after `ca79c6ba`
 - closeout: **not written**. P0-G4 still fails. No `iod/P0` tag. P1 not started.
-
-Round-2 Code Reviewer input is `f9cbe18..SHA_FIX` (src/scripts only).
 
 ---
 
@@ -71,8 +69,8 @@ No separate Gate Runner subagent. Implementer ran the handbook gate table. Raw f
 | --- | --- |
 | P1-1 | **fixed.** Extra owners in `meta.graphExtraEdgeOwners` / `graphExtraNodeOwners`. `removeFiles` promotes the next owner; deletes only at zero owners. Test: shared `MODULE_DEPENDS_ON`, drop one owner, edge remains; reopen then drop the last owner. |
 | P1-2 | **fixed.** `readBundle` walks `file.allTypeIds` then global type/field/method point lookups (heap `files()` / `fileOwnedNodeIds`). Last-write-wins UNIQUE unchanged. Test: loser file still contains the shared `type_id`. |
-| P1-3 | **partial.** `references()` still sorts the match set (range is in zlib facts; SQL `ORDER BY` cannot match `compareReferences`) then inflates `sourceSet` only for the `limit` slice. `implementers` keeps JS `compareTypes` + `slice` for the same reason. `facts-store.test` already `deepEqual`s `implementers(id, 1)` to the heap store. Covering range columns would break the frozen schema; leftover work is P1 query layer, not a silent LIMIT that would fork heap order. |
-| P1-4 | **fixed.** Constructor no longer inflates `kg_edge`. Existence is `knownEdgeIds` plus point query `from_id/to_id/kind`. |
+| P1-3 | **fixed in round-2 follow-up.** `references()` streams `ORDER BY f.path`, inflates the limit-th path group plus one extra SQL path group (collation slack), then `compareReferences` + `slice(limit)`. `callers`/`callees` `limit=1` now deepEqual the heap store. `implementers` stays JS sort+slice (P2-1; fan-in ~210). |
+| P1-4 | **fixed in round-2 follow-up.** Dropped `knownEdgeIds`. Existence is the indexed `(from_id, to_id, kind)` probe only. |
 | P1-5 | **fixed.** Cold-build test now compares `SqlKnowledgeGraph.digest()` to heap `KnowledgeGraphBuilder.rebuildFromStore` (fixture store includes MyBatis, matching pass 3) and entity ids to `recordsFromBundle` over `JavaIndexStore.files()`. First digest mismatch was the test omitting mapper XML, not xor. |
 | P1-6 | **fixed.** `ENOENT` / `EACCES` / `EPERM` / `EISDIR` and invalid repo-relative rethrow. Other parse errors append `{ relativePath, message }` to `parseFailures` and still count as `parseFailed`. |
 | P1-7 | **fixed.** `SCHEMA_VERSION = 2` and `meta.factsEncoding=deflate-raw`. Version `0` or `1` drops all tables. Driver test covers both. |
@@ -104,6 +102,25 @@ No separate Gate Runner subagent. Implementer ran the handbook gate table. Raw f
 
 ---
 
+## Round-2 Code Reviewer (`ca79c6ba-e307-4f3d-b30f-1063377236ec`)
+
+Range: `f9cbe18..226e8a9` src/scripts. Verdict: **must-fix remaining P1s**. No P0 in the fix diff. Independently reproduced 14 pass / 0 fail.
+
+| id | finding | action |
+| --- | --- | --- |
+| P1-A | `knownEdgeIds` still accumulated every live `kg_edge` id (~95–180 MB on lishuedu). Constructor preload was gone but the Set stayed a pure cache. | Dropped the Set; `findStoredEdge` is the indexed probe only. |
+| P1-B | `references()` inflated full fan-in (BizException 3,217 in-edges, 33.1 ms). Disposition that zlib range blocks bounding was wrong: primary sort key is `f.path`. | Path-ordered iterate, inflate limit-th path + one extra group, then `compareReferences`. |
+| P2-1 | `implementers()` same unbounded inflate, ~210 rows. | **not this fix** (order of magnitude smaller). |
+| P2-2 | JS xor/owners mutated inside tx, not restored on rollback. | **not this fix**; P0 only `clear()` then abort. |
+| P2-3 | `readBundle` via `type.fieldIds` can return winner facts for a loser file. | **not this fix**; duplicate-id last-write-wins is the G5 contract. |
+| P2-4 | `readBundle` query count. | **not this fix**. |
+| P2-5 | `Math.max(0, limit)` forks heap negative-limit `slice`. | Reverted to `slice(0, limit)` in `implementers` / `references`. |
+| P2-6–P2-11 | parseFailures size, ENOENT fatal, inert factsEncoding, corrupt extra-owner meta, unused `f.path`, refcount test gaps. | **not this fix**. |
+
+G4 1342 MiB remains a product gate, not a code P0.
+
+---
+
 ## Verification (review-fix)
 
 Isolated `compile` + targeted:
@@ -122,6 +139,6 @@ Isolated `compile` + targeted:
 ## Residual
 
 - P0 cannot close while G4 is 1342 MiB.
-- P1-3 SQL `LIMIT` that preserves `compareTypes` / `compareReferences` needs sort keys outside zlib blobs (P1 schema or query-layer decision).
-- Three-repo `--runs 5` on frozen SHAs was still running at this commit.
-- Round-2 reviewer has not yet signed the fix diff.
+- Three-repo `--runs 5` failed empty-stderr (`7d6d62b`); not a SQL-builder path.
+- Round-2 P1-A/P1-B addressed in the follow-up fix commit; needs a third Code Reviewer pass on that delta.
+- Round-2 P2-1–P2-4 and P2-6–P2-11 still open.
