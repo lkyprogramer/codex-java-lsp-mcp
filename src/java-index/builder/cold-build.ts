@@ -4,6 +4,8 @@ import { cpus } from "node:os";
 import path from "node:path";
 import { probeLayout } from "../../layout-probe.js";
 import { buildStaticEdges, resolveFileRefs } from "../edge-builder.js";
+import { recordsFromBundle, type EntityRecord } from "../entity-search.js";
+import type { JavaIndexStore } from "../index-store.js";
 import type { JavaFileBundle } from "../index-types.js";
 import { parseJavaSourceFile } from "../java-index-file-parse.js";
 import { createJavaParserBackend } from "../java-parser-backend.js";
@@ -11,9 +13,13 @@ import { discoverJavaFiles, discoverMyBatisResourceFiles } from "../manifest.js"
 import { extractMyBatisMapperFacts } from "../mybatis-xml-extractor.js";
 import type { MyBatisMapperResourceFacts } from "../mybatis-types.js";
 import { JavaNameResolver } from "../name-resolver.js";
+import { KnowledgeGraphBuilder } from "../../java-knowledge/graph-builder.js";
+import type { KnowledgeGraphStore } from "../../java-knowledge/graph-store.js";
 import { DEFAULT_PARSE_TREE_CACHE_OPTIONS, ParseTreeCache } from "../parse-tree-cache.js";
 import { withTransaction, type IndexDatabase } from "../sql/driver.js";
+import { replaceAllEntities } from "../sql/entity-tokens.js";
 import { SqlFactsStore } from "../sql/facts-store.js";
+import { SqlKnowledgeGraph } from "../sql/knowledge-graph.js";
 import { buildSqlRegistryView } from "../sql/registry-view.js";
 import { readBundle, replaceBundleEdges, updateBundleFacts, writeBundle, writeMyBatisResource } from "../sql/rows.js";
 import {
@@ -200,6 +206,8 @@ export async function runSqlColdBuild(options: SqlColdBuildOptions): Promise<Sql
     afterCommit(progress, options);
   }
 
+  writeKnowledgeAndEntities(db, generation);
+
   const roots = layout.sourceRoots.map(root => root.relativePath);
   const counts = withTransaction(db, () => {
     const stmt = db.prepare(
@@ -213,4 +221,46 @@ export async function runSqlColdBuild(options: SqlColdBuildOptions): Promise<Sql
   });
 
   return { ok: true, parseFailed, ...counts };
+}
+
+function sqlStoreAsIndex(sql: SqlFactsStore): JavaIndexStore {
+  return {
+    typesById: {
+      get: (id: string) => sql.typesById.get(id),
+      has: (id: string) => sql.typesById.has(id),
+      values: () => sql.iterTypes()
+    },
+    fieldsById: {
+      get: (id: string) => sql.fieldsById.get(id),
+      values: () => sql.iterFields()
+    },
+    methodsById: {
+      get: (id: string) => sql.methodsById.get(id),
+      values: () => sql.iterMethods()
+    },
+    filesByPath: {
+      get: (path: string) => sql.filesByPath.get(path),
+      values: () => sql.iterFiles()
+    },
+    edgesById: {
+      values: () => sql.iterEdges()
+    },
+    typeByFqn: (fqn: string) => sql.typeByFqn(fqn),
+    myBatisResourceForNamespace: (ns: string) => sql.myBatisResourceForNamespace(ns),
+    implementers: (typeId: string, limit?: number) => sql.implementers(typeId, limit)
+  } as unknown as JavaIndexStore;
+}
+
+function writeKnowledgeAndEntities(db: IndexDatabase, generation: number): void {
+  const sql = new SqlFactsStore(db);
+  const graph = new SqlKnowledgeGraph(db);
+  withTransaction(db, () => {
+    new KnowledgeGraphBuilder(graph as unknown as KnowledgeGraphStore).rebuildFromStore(sqlStoreAsIndex(sql), generation);
+    const records: EntityRecord[] = [];
+    for (const file of sql.iterFiles()) {
+      const bundle = readBundle(db, file.relativePath);
+      if (bundle) records.push(...recordsFromBundle(bundle));
+    }
+    replaceAllEntities(db, records);
+  });
 }

@@ -70,6 +70,10 @@ test("sql cold build table counts match JavaIndexStore", async () => {
     assert.equal(result.methods, store.methodsById.size);
     assert.equal(result.edges, store.edgesById.size);
     assert.equal(readMeta(db, "buildState"), "READY");
+    const kgNodes = db.prepare("SELECT count(*) AS n FROM kg_node").get() as { n: number };
+    const entities = db.prepare("SELECT count(*) AS n FROM entity").get() as { n: number };
+    assert.ok(kgNodes.n > 0);
+    assert.ok(entities.n > 0);
   } finally {
     close(db);
   }
