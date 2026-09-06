@@ -181,21 +181,30 @@ export function writeBundle(db: IndexDatabase, bundle: JavaFileBundle, fileId?: 
     const insertType = prepareCached(
       db,
       `INSERT INTO type(type_id, file_id, fqn, simple_name, kind, owner_type_id, facts)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(type_id) DO UPDATE SET
+         file_id=excluded.file_id, fqn=excluded.fqn, simple_name=excluded.simple_name,
+         kind=excluded.kind, owner_type_id=excluded.owner_type_id, facts=excluded.facts`
     );
     for (const type of typeRows(bundle)) {
       insertType.run(type.typeId, id, type.fqn, type.simpleName, type.kind, type.ownerTypeId, encodeFacts(type.facts));
     }
     const insertField = prepareCached(
       db,
-      "INSERT INTO field(field_id, owner_type_id, file_id, name, facts) VALUES (?, ?, ?, ?, ?)"
+      `INSERT INTO field(field_id, owner_type_id, file_id, name, facts) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(field_id) DO UPDATE SET
+         owner_type_id=excluded.owner_type_id, file_id=excluded.file_id, name=excluded.name, facts=excluded.facts`
     );
     for (const field of fieldRows(bundle)) {
       insertField.run(field.fieldId, field.ownerTypeId, id, field.name, encodeFacts(field.facts));
     }
     const insertMethod = prepareCached(
       db,
-      "INSERT INTO method(method_id, owner_type_id, file_id, name, is_ctor, arity, facts) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      `INSERT INTO method(method_id, owner_type_id, file_id, name, is_ctor, arity, facts)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(method_id) DO UPDATE SET
+         owner_type_id=excluded.owner_type_id, file_id=excluded.file_id, name=excluded.name,
+         is_ctor=excluded.is_ctor, arity=excluded.arity, facts=excluded.facts`
     );
     for (const method of methodRows(bundle)) {
       insertMethod.run(
@@ -204,7 +213,10 @@ export function writeBundle(db: IndexDatabase, bundle: JavaFileBundle, fileId?: 
     }
     const insertEdge = prepareCached(
       db,
-      "INSERT INTO edge(edge_id, from_id, to_id, kind, source_file_id, facts) VALUES (?, ?, ?, ?, ?, ?)"
+      `INSERT INTO edge(edge_id, from_id, to_id, kind, source_file_id, facts) VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(edge_id) DO UPDATE SET
+         from_id=excluded.from_id, to_id=excluded.to_id, kind=excluded.kind,
+         source_file_id=excluded.source_file_id, facts=excluded.facts`
     );
     for (const edge of edgeRows(bundle.edges, id)) {
       insertEdge.run(edge.edgeId, edge.fromId, edge.toId, edge.kind, edge.sourceFileId, encodeFacts(edge.facts));
@@ -251,7 +263,10 @@ export function replaceBundleEdges(db: IndexDatabase, filePath: string, edges: r
     prepareCached(db, "DELETE FROM edge WHERE source_file_id=?").run(id);
     const insertEdge = prepareCached(
       db,
-      "INSERT INTO edge(edge_id, from_id, to_id, kind, source_file_id, facts) VALUES (?, ?, ?, ?, ?, ?)"
+      `INSERT INTO edge(edge_id, from_id, to_id, kind, source_file_id, facts) VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(edge_id) DO UPDATE SET
+         from_id=excluded.from_id, to_id=excluded.to_id, kind=excluded.kind,
+         source_file_id=excluded.source_file_id, facts=excluded.facts`
     );
     for (const edge of edgeRows(edges, id)) {
       insertEdge.run(edge.edgeId, edge.fromId, edge.toId, edge.kind, edge.sourceFileId, encodeFacts(edge.facts));

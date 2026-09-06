@@ -73,6 +73,30 @@ test("writeBundle/readBundle round-trips java-index-v2 and matches JavaIndexStor
   }
 });
 
+test("writeBundle last-write-wins when two files share a type_id", async () => {
+  const bundles = await parseFixtures();
+  const first = bundles[0]!;
+  assert.ok(first.types.length > 0);
+  const second = structuredClone(first);
+  second.file = { ...second.file, relativePath: "dup/" + first.file.relativePath };
+  const db = openIndexDb(":memory:");
+  try {
+    ensureSchema(db);
+    writeBundle(db, first);
+    writeBundle(db, second);
+    const files = db.prepare("SELECT count(*) AS n FROM file").get() as { n: number };
+    const types = db.prepare("SELECT count(*) AS n FROM type").get() as { n: number };
+    const owner = db.prepare("SELECT file.path AS path FROM type JOIN file ON file.id=type.file_id WHERE type.type_id=?").get(
+      first.types[0]!.typeId
+    ) as { path: string };
+    assert.equal(files.n, 2);
+    assert.equal(types.n, first.types.length);
+    assert.equal(owner.path, second.file.relativePath);
+  } finally {
+    close(db);
+  }
+});
+
 test("myBatisRow round-trips java-index-v2 mapper XML", () => {
   const db = openIndexDb(":memory:");
   try {
