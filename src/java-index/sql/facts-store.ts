@@ -165,6 +165,11 @@ export class SqlFactsStore {
     return typeId ? this.typesById.get(typeId) : undefined;
   }
 
+  nestedTypeId(ownerTypeId: string, simpleName: string): string | undefined {
+    const row = prepareCached(this.db, "SELECT type_id AS id FROM type WHERE owner_type_id=? AND simple_name=?").get(ownerTypeId, simpleName);
+    return typeof row?.id === "string" ? row.id : undefined;
+  }
+
   methodsOfOwner(typeId: string): JavaMethodFacts[] {
     const type = this.typesById.get(typeId);
     if (!type) return [];
