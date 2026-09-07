@@ -171,7 +171,6 @@ test("freemem pressure does not recycle a pin while prewarm is waiting", async (
   };
   const manager = new RepoRuntimeManager(fakeResolver(), {
     idleTtlMs: 100000,
-    hibernateTtlMs: 100000,
     pressureIntervalMs: 15,
     freememPressureBytes: 1,
     freemem: () => 0,
@@ -243,7 +242,7 @@ test("index idle TTL 0 never registers a close timer", async () => {
   const sessions = new Map<string, FakeSession>();
   const javaIndex = new RecordingJavaIndex(() => 0);
   const manager = new RepoRuntimeManager(fakeResolver(), {
-    idleTtlMs: 100000, hibernateTtlMs: 20, indexIdleTtlMs: 0, pressureIntervalMs: 0, requestTimeoutMs: 1000
+    idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 1000
   }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
     fakeCoordination(), new NoopCrossProcessLeaseStore());
   await manager.prewarmRepo({ repoRoot: "/repo-a" }, { hydrate: false });
@@ -1560,9 +1559,6 @@ test("hibernate TTL does not recycle a hot-set isolate", async () => {
     }
   }, {
     idleTtlMs: 100000,
-    hibernateTtlMs: 25,
-    indexIdleTtlMs: 0,
-    hotIndexAliases: new Set(["lishuedu"]),
     pressureIntervalMs: 0,
     requestTimeoutMs: 5000
   }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
@@ -1592,9 +1588,6 @@ test("freemem pressure does not recycle a hydrated hot-set pin", async () => {
     }
   }, {
     idleTtlMs: 100000,
-    hibernateTtlMs: 100000,
-    indexIdleTtlMs: 0,
-    hotIndexAliases: new Set(["lishuedu"]),
     pressureIntervalMs: 15,
     freememPressureBytes: 1,
     freemem: () => 0,
@@ -1612,12 +1605,8 @@ test("explicit recycle floor wins via max with the relative baseline", async () 
   const javaIndex = recordingHeapIndex(200, { hydrateBaselineHeapMb: 100 });
   const manager = new RepoRuntimeManager(fakeResolver(), {
     idleTtlMs: 100000,
-    hibernateTtlMs: 100000,
-    indexIdleTtlMs: 0,
     pressureIntervalMs: 0,
     requestTimeoutMs: 5000,
-    workerHeapRecycleMb: 1200,
-    heapRecycleIntervalMs: 40
   }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
     fakeCoordination(), new NoopCrossProcessLeaseStore());
   await manager.withContext({ repoRoot: "/repo-a" }, async () => "ok");
@@ -1631,12 +1620,8 @@ test("workerHeapRecycleMb 0 disables idle heap recycle", async () => {
   const javaIndex = recordingHeapIndex(1500);
   const manager = new RepoRuntimeManager(fakeResolver(), {
     idleTtlMs: 100000,
-    hibernateTtlMs: 100000,
-    indexIdleTtlMs: 0,
     pressureIntervalMs: 0,
     requestTimeoutMs: 5000,
-    workerHeapRecycleMb: 0,
-    heapRecycleIntervalMs: 40
   }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
     fakeCoordination(), new NoopCrossProcessLeaseStore());
   await manager.withContext({ repoRoot: "/repo-a" }, async () => "ok");
@@ -1650,12 +1635,8 @@ test("pendingForeground skips high-heap recycle", async () => {
   const javaIndex = recordingHeapIndex(1400, { pendingForeground: 1 });
   const manager = new RepoRuntimeManager(fakeResolver(), {
     idleTtlMs: 100000,
-    hibernateTtlMs: 100000,
-    indexIdleTtlMs: 0,
     pressureIntervalMs: 0,
     requestTimeoutMs: 5000,
-    workerHeapRecycleMb: 1200,
-    heapRecycleIntervalMs: 40
   }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
     fakeCoordination(), new NoopCrossProcessLeaseStore());
   await manager.withContext({ repoRoot: "/repo-a" }, async () => "ok");
@@ -1906,7 +1887,6 @@ function managerWith(
   options: Partial<{
     maxActiveRepos: number;
     idleTtlMs: number;
-    hibernateTtlMs: number;
     requestTimeoutMs: number;
     maxRetainedStoppedRepos: number;
     pressureIntervalMs: number;

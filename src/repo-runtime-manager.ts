@@ -24,11 +24,7 @@ import { GenerationClock, type RepoChangeBatch } from "./repo-generation.js";
 import { repoCacheBase, repoCacheRoot, scanFamilySiblingIndex } from "./repo-layout.js";
 import { RepoResolver, type RepoSelector, type ResolvedRepo } from "./repo-resolver.js";
 import {
-  DEFAULT_COLD_HIBERNATE_TTL_MS,
   DEFAULT_FREEMEM_PRESSURE_BYTES,
-  DEFAULT_INDEX_IDLE_TTL_MS,
-  nonNegativeInteger,
-  parsePrewarmHotSet,
   positiveInteger,
   resourceDefaults,
   type ResourceDefaults
@@ -137,20 +133,12 @@ type SlotWaiter = {
 type RuntimeManagerOptions = {
   maxActiveRepos: number;
   idleTtlMs: number;
-  hibernateTtlMs: number;
-  coldHibernateTtlMs: number;
-  indexIdleTtlMs: number;
-  hotIndexAliases: ReadonlySet<string>;
   freememPressureBytes: number;
   pressureIntervalMs: number;
   freemem?: () => number;
   requestTimeoutMs: number;
   maxRetainedStoppedRepos: number;
   transportMode: RepoOwnerTransport;
-  /** MiB. Explicit absolute recycle floor. 0 means unset (FSR3 relative 1.6× hydrate). */
-  workerHeapRecycleMb: number;
-  /** STATUS poll for FSZ1 heap recycle. 0 disables. Default 5 min. */
-  heapRecycleIntervalMs: number;
 };
 
 export class RepoRuntimeManager {
@@ -178,9 +166,6 @@ export class RepoRuntimeManager {
     this.options = {
       maxActiveRepos: positiveInteger(process.env.JAVA_LSP_MAX_ACTIVE_REPOS, this.defaults.maxActiveRepos),
       idleTtlMs: positiveInteger(process.env.JAVA_LSP_IDLE_TTL_MS, this.defaults.idleTtlMs),
-      hibernateTtlMs: positiveInteger(process.env.JAVA_LSP_HIBERNATE_TTL_MS, this.defaults.hibernateTtlMs),
-      indexIdleTtlMs: nonNegativeInteger(process.env.JAVA_LSP_INDEX_IDLE_TTL_MS, DEFAULT_INDEX_IDLE_TTL_MS),
-      hotIndexAliases: options.hotIndexAliases ?? parsePrewarmHotSet().hot,
       freememPressureBytes: positiveInteger(
         process.env.JAVA_LSP_FREEMEM_PRESSURE_BYTES,
         DEFAULT_FREEMEM_PRESSURE_BYTES
@@ -192,16 +177,7 @@ export class RepoRuntimeManager {
       requestTimeoutMs: positiveInteger(process.env.JAVA_LSP_REQUEST_TIMEOUT_MS, 120000),
       maxRetainedStoppedRepos: positiveInteger(process.env.JAVA_LSP_MAX_RETAINED_STOPPED_REPOS, 2),
       transportMode: "stdio",
-      workerHeapRecycleMb: nonNegativeInteger(process.env.JAVA_LSP_WORKER_HEAP_RECYCLE_MB, 0),
-      heapRecycleIntervalMs: nonNegativeInteger(
-        process.env.JAVA_LSP_WORKER_HEAP_RECYCLE_INTERVAL_MS,
-        process.env.JAVA_LSP_ISOLATED_VALIDATION === "1" ? 0 : 300_000
-      ),
-      ...options,
-      coldHibernateTtlMs: options.coldHibernateTtlMs
-        ?? (typeof options.hibernateTtlMs === "number"
-          ? options.hibernateTtlMs
-          : nonNegativeInteger(process.env.JAVA_LSP_COLD_HIBERNATE_TTL_MS, DEFAULT_COLD_HIBERNATE_TTL_MS))
+      ...options
     };
     this.startPressureWatch();
     this.runtimeFactory = runtimeFactory ?? ((resolved, leases) => createRuntime(resolved, leases, this.options.transportMode));
@@ -234,7 +210,7 @@ export class RepoRuntimeManager {
     return this.leaseReady ??= this.leases
       .open({
         jdtSlots: this.options.maxActiveRepos,
-        sweepSlots: positiveInteger(process.env.JAVA_LSP_MAX_BACKGROUND_SWEEPS, 1)
+        sweepSlots: 1
       })
       .catch(error => {
         this.leaseInitError = error instanceof Error ? error.message : String(error);
@@ -647,7 +623,7 @@ export class RepoRuntimeManager {
       logicalCpu: this.defaults.logicalCpu,
       maxActiveRepos: this.options.maxActiveRepos,
       idleTtlMs: this.options.idleTtlMs,
-      hibernateTtlMs: this.options.hibernateTtlMs,
+      hibernateTtlMs: 0,
       jdtlsXmx: process.env.JAVA_LSP_JDTLS_XMX || this.defaults.jdtlsXmx,
       activeRepos: this.runtimes.size,
       activeJdtlsPids: started,
@@ -780,9 +756,6 @@ export class RepoRuntimeManager {
       () => context.javaIndexClient?.localStatus().files ?? 0
     );
     context.session.bindGenerationClock?.(generation);
-    if (process.env.JAVA_LSP_IDLE_PREWARM === "1") {
-      idlePrewarmTracker.recordPrewarm(resolved.repoRoot);
-    }
     const leaseOperation = this.leases.acquireRuntime(resolved.worktree).catch(() => undefined);
     let leaseTimedOut = false;
     // A caller deadline only stops that caller, but the shared creation itself
@@ -1087,10 +1060,6 @@ export class RepoRuntimeManager {
       .sort((left, right) => left.lastUsedAt - right.lastUsedAt)[0];
   }
 
-  private isHotIndexEntry(entry: RuntimeEntry): boolean {
-    return entry.context.aliases.some(alias => this.options.hotIndexAliases.has(alias));
-  }
-
   private familyKey(worktree: { familyHash?: string; repoHash: string } | undefined, repoHash: string): string {
     return worktree?.familyHash ?? worktree?.repoHash ?? repoHash;
   }
@@ -1154,7 +1123,7 @@ export class RepoRuntimeManager {
     const freemem = this.options.freemem ?? os.freemem;
     if (freemem() >= this.options.freememPressureBytes) return;
     const victim = [...this.runtimes.values()]
-      .filter(entry => entry.refCount === 0 && entry.stoppedAt === undefined && !this.isHotIndexEntry(entry))
+      .filter(entry => entry.refCount === 0 && entry.stoppedAt === undefined)
       .sort((left, right) => left.lastUsedAt - right.lastUsedAt)[0];
     if (!victim) return;
     this.relievingPressure = true;

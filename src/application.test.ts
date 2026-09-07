@@ -278,8 +278,6 @@ test("HTTP application prewarms pinned aliases without a hydrate hot-set", async
   console.error = (...args: unknown[]) => {
     errors.push(args.map(String).join(" "));
   };
-  const previous = process.env.JAVA_LSP_PREWARM_HOT;
-  process.env.JAVA_LSP_PREWARM_HOT = "lishuedu,nope";
   const application = new JavaLspApplication({
     transportMode: "streamable_http",
     projectsConfigPath: path.join(dir, "projects.json"),
@@ -308,8 +306,6 @@ test("HTTP application prewarms pinned aliases without a hydrate hot-set", async
     await application.close();
   } finally {
     console.error = originalError;
-    if (previous === undefined) delete process.env.JAVA_LSP_PREWARM_HOT;
-    else process.env.JAVA_LSP_PREWARM_HOT = previous;
   }
 });
 

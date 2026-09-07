@@ -490,6 +490,7 @@ P1-G3 超门：`EXPLAIN QUERY PLAN` 加索引或拆查询；**不开线程**。�
 
 - **范围**：删 `snapshot.ts`、`snapshot-v4.ts`、`columnar/*`、`shared-facts-pool.ts`、`worktree-snapshot-seeder.ts`、`build-fingerprint.ts`、`manifest.ts` 中仅供快照的部分、`scripts/fsz-live-sample.mjs`、`run-fsz-unit-taps.mjs`、`fsr2-heap-unify.test.ts`、`fsr4-soak-gates.test.ts`、`cold-build-watch.test.ts`；`resource-defaults.ts` 删 `DEFAULT_HIBERNATE_TTL_MS / DEFAULT_COLD_HIBERNATE_TTL_MS / parsePrewarmHotSet / DEFAULT_PREWARM_HOT`；删环境变量读取：`JAVA_LSP_PREWARM_HOT / HIBERNATE_TTL_MS / COLD_HIBERNATE_TTL_MS / INDEX_IDLE_TTL_MS / WORKER_HEAP_RECYCLE_MB / WORKER_HEAP_RECYCLE_INTERVAL_MS / COLD_BUILD_CHILD / PARSE_TREE_SOURCE_BYTES / MAX_BACKGROUND_SWEEPS / IDLE_PREWARM / JAVA_INDEX_RPC_TELEMETRY`（后者若 telemetry 仍有用则保留并在 closeout 说明）；`install-runtime.sh:739-751` 透传列表同步删除已无读取的变量；`worktree-cache-cleanup.ts` 中识别旧快照文件名的逻辑改为识别 `index.sqlite*`，并在启动时删除 `java-index-snapshot*.json.gz*` / `java-knowledge-graph.json.gz` 旧文件；P3-G2 完成后删除 `verify-three-repo-cold-matrix.mjs` 中 P0-T9 加的 `cap waived` 行豁免（3.9.5）。
 - **门**：T0 绿；`rg -c "process.env.JAVA_LSP_" src --glob '!*.test.ts'` 的去重变量数 ≤ 30；`rg -n "heapUsed|rssMb|hibernat|recycle" src --glob '!*.test.ts'` 仅剩 JDT 相关命中（逐条列入 closeout）。
+- **拆分（2026-09-08）**：`P3-T2.d` manager/resource-defaults 去掉 hibernate/prewarm/recycle 读取；`P3-T2.e` install 透传 + cache GC + cap waived + telemetry；`P3-T2.f` parse-tree-cache 内联；`P3-T2.g` benchmark/smoke env 收到 ≤30。
 
 ### P3-T3 脚本与文档
 
