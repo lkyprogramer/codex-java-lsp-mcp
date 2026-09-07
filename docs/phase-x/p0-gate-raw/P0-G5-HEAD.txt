@@ -1,0 +1,90 @@
+SHA=017a62737e0e8b3e02ead08026069a154e683c61
+builder_commit=5198b8b (T1.d; subsequent 017a627 is docs-only pr evidence)
+dated=2026-09-07T08:47:31Z
+node=node v22.16.0
+note: remasure P0-G5 after T1.d cold-build write path. frozen: lishuedu=db63b1a7e cipherlink=fa43398 exam-parent-v3=f90a0b47. live lishu-v2=10de9c3fe (clean). Did not use dirty live lishuedu or dirty live exam-parent-v3.
+snapshot_baselines
+{"id": "lishuedu", "files": 6090, "types": 7319, "fields": 28556, "methods": 25077, "edges": 253711}
+{"id": "lishu-v2", "files": 3013, "types": 8125, "fields": 33949, "methods": 31395, "edges": 223190}
+{"id": "cipherlink", "files": 629, "types": 761, "fields": 2514, "methods": 3098, "edges": 21399}
+{"id": "exam-parent-v3", "files": 1432, "types": 1604, "fields": 7866, "methods": 5422, "edges": 56191}
+BUILD cipherlink repo=/tmp/iod-p0-matrix-repos-v3/cipherlink sha=fa433982e92e52dd610650d1e79f2d041179b1d3
+wall_s=8.83 exit=0
+{"ok":true,"parseFailed":0,"parseFailures":[],"files":629,"types":761,"methods":3098,"edges":21399}
+SQL cipherlink {"file":629,"type":761,"field":2514,"method":3098,"edge":21399}
+  file 629 vs 629 (+0.000%) PASS
+  type 761 vs 761 (+0.000%) PASS
+  field 2514 vs 2514 (+0.000%) PASS
+  method 3098 vs 3098 (+0.000%) PASS
+  edge 21399 vs 21399 (+0.000%) PASS
+repo_pass True
+stat_z=22360064
+BUILD exam-parent-v3 repo=/tmp/iod-p0-matrix-repos-v3/exam-parent-v3 sha=f90a0b475f7be2ed003703feecec8195bc7eb976
+wall_s=19.95 exit=0
+{"ok":true,"parseFailed":0,"parseFailures":[],"files":1369,"types":1494,"methods":4718,"edges":50470}
+SQL exam-parent-v3 {"file":1369,"type":1494,"field":7354,"method":4718,"edge":50470}
+  file 1369 vs 1432 (-4.399%) FAIL
+  type 1494 vs 1604 (-6.858%) FAIL
+  field 7354 vs 7866 (-6.509%) FAIL
+  method 4718 vs 5422 (-12.984%) FAIL
+  edge 50470 vs 56191 (-10.181%) FAIL
+repo_pass False
+stat_z=43335680
+BUILD lishuedu repo=/tmp/iod-p0-matrix-repos-v3/lishuedu sha=db63b1a7e393edd90449eb013d7d1c4d65c366f2
+wall_s=116.25 exit=0
+{"ok":true,"parseFailed":0,"parseFailures":[],"files":5312,"types":6365,"methods":21139,"edges":219226}
+SQL lishuedu {"file":5312,"type":6365,"field":25097,"method":21139,"edge":219226}
+  file 5312 vs 6090 (-12.775%) FAIL
+  type 6365 vs 7319 (-13.035%) FAIL
+  field 25097 vs 28556 (-12.113%) FAIL
+  method 21139 vs 25077 (-15.704%) FAIL
+  edge 219226 vs 253711 (-13.592%) FAIL
+repo_pass False
+stat_z=200806400
+BUILD lishu-v2 repo=/Users/luo/Documents/program/lishu-v2 sha=10de9c3fee6b71967faf7239d0fef5f3a3c5f14c
+wall_s=120.68 exit=0
+{"ok":true,"parseFailed":0,"parseFailures":[],"files":3036,"types":8183,"methods":31683,"edges":225168}
+SQL lishu-v2 {"file":3036,"type":8183,"field":34205,"method":31683,"edge":225168}
+  file 3036 vs 3013 (+0.763%) PASS
+  type 8183 vs 8125 (+0.714%) PASS
+  field 34205 vs 33949 (+0.754%) PASS
+  method 31683 vs 31395 (+0.917%) PASS
+  edge 225168 vs 223190 (+0.886%) PASS
+repo_pass True
+stat_z=256000000
+DONE
+
+RETRY_LIVE (frozen clones incomplete: lishuedu 140MiB/5312 java vs live 6GiB; exam 86MiB/1370 vs live 1433). Same trees as P0-G5-v3. Read-only, no writes into repo working trees.
+BUILD exam-parent-v3 LIVE repo=/Users/luo/Documents/program/exam-parent-v3 sha=1d2b09f18e80bff0bf0dc21eb4ee5f50e07952ac dirty=2
+wall_s=22.35 exit=0
+{"ok":true,"parseFailed":0,"parseFailures":[],"files":1432,"types":1604,"methods":5425,"edges":56221}
+stderr:
+compdef:153: _comps: assignment to invalid subscript range
+SQL exam-parent-v3 {"file":1432,"type":1604,"field":7866,"method":5425,"edge":56221}
+  file 1432 vs 1432 (+0.000%) PASS
+  type 1604 vs 1604 (+0.000%) PASS
+  field 7866 vs 7866 (+0.000%) PASS
+  method 5425 vs 5422 (+0.055%) PASS
+  edge 56221 vs 56191 (+0.053%) PASS
+repo_pass True
+stat_z=48746496
+BUILD lishuedu LIVE repo=/Users/luo/Documents/program/lishu/lishuedu sha=0a02a090eb6f557a7d1c9adbd88380e0f4b09e60 dirty=3
+wall_s=130.99 exit=0
+{"ok":true,"parseFailed":0,"parseFailures":[],"files":6090,"types":7319,"methods":25083,"edges":253757}
+SQL lishuedu {"file":6090,"type":7319,"field":28557,"method":25083,"edge":253757}
+  file 6090 vs 6090 (+0.000%) PASS
+  type 7319 vs 7319 (+0.000%) PASS
+  field 28557 vs 28556 (+0.004%) PASS
+  method 25083 vs 25077 (+0.024%) PASS
+  edge 253757 vs 253711 (+0.018%) PASS
+repo_pass True
+stat_z=235409408
+LIVE_RETRY_DONE
+
+VERDICT P0-G5 PASS ±1% vs A.1 snapshot (adjudicate LIVE trees, same as P0-G5-v3).
+Frozen /tmp/iod-p0-matrix-repos-v3/{lishuedu,exam-parent-v3} are incomplete checkouts (140MiB/86MiB vs live 6GiB/8.8GiB); do not use those counts.
+cipherlink frozen==live SHA fa43398 exact 0.000%.
+lishu-v2 live identical to G5-v3 SQL (3036/8183/34205/31683/225168), max +0.917%.
+exam-parent-v3 live identical to G5-v3 SQL (1432/1604/7866/5425/56221), dirty DataCryptUtil, methods +0.055% edges +0.053%.
+lishuedu live files/types exact A.1; field +0.004% method +0.024% edge +0.018% (dirty SourceSyncAdminAppService.java vs T8.c exact). T1.d write path did not move counts outside ±1%.
+Did not write into exam-parent-v3 or lishuedu working trees.
