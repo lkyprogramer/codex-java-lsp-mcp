@@ -99,14 +99,11 @@ const DEFAULT_INDEX_PREPARE_TIMEOUT_MS = 600_000;
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const projectDir = path.resolve(scriptDir, "..");
 const cli = parseCli(process.argv.slice(2), projectDir);
-const jinEngine = process.env.JAVA_LSP_ENGINE === "jin";
+const jinEngine = false;
 if (process.env.JAVA_LSP_ISOLATED_VALIDATION !== "1") {
   throw new Error(
     "benchmark-agent-impact requires the detached isolated validation harness; refusing to use a caller runtime cache"
   );
-}
-if (cli.warmState !== "cold-nolsp" && process.env.JAVA_LSP_ISOLATED_REPO_WORKTREE !== "1") {
-  throw new Error("warm benchmark-agent-impact runs require a detached Java repository from run-isolated-jdt-benchmark.mjs");
 }
 const scenarios = loadScenarios(cli.scenarioFile).filter(scenario => !scenario.projectId || scenario.projectId === cli.projectId);
 const runtimeBuild = readRuntimeBuild();
@@ -246,10 +243,10 @@ function parseCli(args: string[], root: string): Cli {
       index += 1;
     }
   }
-  const projectId = stringArg(values, "--project-id", process.env.JAVA_LSP_BENCH_PROJECT_ID || "lishuedu");
-  const warmState = stringArg(values, "--warm-state", process.env.JAVA_LSP_BENCH_WARM_STATE || "cold-nolsp") as WarmState;
-  const mode = stringArg(values, "--mode", process.env.JAVA_LSP_BENCH_MODE || "balanced") as ImpactOptions["mode"];
-  const semanticPolicy = stringArg(values, "--semantic-policy", process.env.JAVA_LSP_BENCH_SEMANTIC_POLICY || "auto") as ImpactOptions["semanticPolicy"];
+  const projectId = stringArg(values, "--project-id", "lishuedu");
+  const warmState = stringArg(values, "--warm-state", "cold-nolsp") as WarmState;
+  const mode = stringArg(values, "--mode", "balanced") as ImpactOptions["mode"];
+  const semanticPolicy = stringArg(values, "--semantic-policy", "auto") as ImpactOptions["semanticPolicy"];
   // Match the policy java_impact will actually run under for this warm state,
   // so the derived deadline equals what a real caller gets. Using the raw
   // --semantic-policy default (auto) would budget 3000ms while a cold-nolsp
@@ -259,34 +256,34 @@ function parseCli(args: string[], root: string): Cli {
   const repoRoot = stringArg(
     values,
     "--repo-root",
-    process.env.JAVA_LSP_BENCH_REPO_ROOT || process.env.LISHUEDU_ROOT || path.resolve(root, "..", "..")
+    process.env.LISHUEDU_ROOT || path.resolve(root, "..", "..")
   );
   return {
     repoRoot,
     indexCacheDir: path.resolve(stringArg(
       values,
       "--index-cache-dir",
-      process.env.JAVA_LSP_BENCH_INDEX_CACHE_DIR || repoCacheRoot(repoRoot)
+      repoCacheRoot(repoRoot)
     )),
-    scenarioFile: stringArg(values, "--scenarios", process.env.JAVA_LSP_BENCH_SCENARIOS || path.join(root, "golden", `${projectId}.scenarios.jsonl`)),
+    scenarioFile: stringArg(values, "--scenarios", path.join(root, "golden", `${projectId}.scenarios.jsonl`)),
     projectId,
-    layoutProfile: stringArg(values, "--layout-profile", process.env.JAVA_LSP_BENCH_LAYOUT_PROFILE || (projectId === "exam-parent-v3" ? "maven-reactor" : projectId === "generic-java" || projectId === "java-index-v2" ? "generic-java" : "ddd-gradle")),
+    layoutProfile: stringArg(values, "--layout-profile", projectId === "exam-parent-v3" ? "maven-reactor" : projectId === "generic-java" || projectId === "java-index-v2" ? "generic-java" : "ddd-gradle"),
     warmState,
     mode,
     semanticPolicy,
-    verbosity: stringArg(values, "--verbosity", process.env.JAVA_LSP_BENCH_VERBOSITY || "standard") as NonNullable<ImpactOptions["verbosity"]>,
+    verbosity: stringArg(values, "--verbosity", "standard") as NonNullable<ImpactOptions["verbosity"]>,
     payloadProjections: values.get("--payload-projections") === true,
-    runs: Number(stringArg(values, "--runs", process.env.JAVA_LSP_BENCH_RUNS || "1")),
-    readPlanMaxItems: optionalPositiveIntegerArg(values, "--read-plan-max-items", process.env.JAVA_LSP_BENCH_READ_PLAN_MAX_ITEMS),
-    readPlanMaxBytes: optionalPositiveIntegerArg(values, "--read-plan-max-bytes", process.env.JAVA_LSP_BENCH_READ_PLAN_MAX_BYTES),
+    runs: Number(stringArg(values, "--runs", "1")),
+    readPlanMaxItems: optionalPositiveIntegerArg(values, "--read-plan-max-items"),
+    readPlanMaxBytes: optionalPositiveIntegerArg(values, "--read-plan-max-bytes"),
     listScenarios: values.get("--list-scenarios") === true,
-    strategy: stringArg(values, "--strategy", process.env.JAVA_LSP_BENCH_STRATEGY || "impact") as BenchmarkStrategy,
-    excludeFrameworkAdapter: stringArg(values, "--exclude-framework-adapter", process.env.JAVA_LSP_BENCH_EXCLUDE_FRAMEWORK_ADAPTER || ""),
+    strategy: stringArg(values, "--strategy", "impact") as BenchmarkStrategy,
+    excludeFrameworkAdapter: stringArg(values, "--exclude-framework-adapter", ""),
     // The same absolute deadline java_impact gives a real caller in this warm
     // state, so the benchmark measures what users actually get.
     deadlineMs: Math.min(
       MAX_REQUEST_DEADLINE_MS,
-      optionalPositiveIntegerArg(values, "--deadline-ms", process.env.JAVA_LSP_BENCH_DEADLINE_MS)
+      optionalPositiveIntegerArg(values, "--deadline-ms")
         ?? defaultDeadlineMs(mode, effectivePolicy)
     ),
     // This is startup-only work and is deliberately excluded from steady P95.
@@ -295,8 +292,7 @@ function parseCli(args: string[], root: string): Cli {
     // diagnostic run without changing the benchmark's request budget.
     indexPrepareTimeoutMs: optionalPositiveIntegerArg(
       values,
-      "--index-prepare-timeout-ms",
-      process.env.JAVA_LSP_BENCH_INDEX_PREPARE_TIMEOUT_MS
+      "--index-prepare-timeout-ms"
     ) ?? DEFAULT_INDEX_PREPARE_TIMEOUT_MS
   };
 }

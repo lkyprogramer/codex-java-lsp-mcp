@@ -89,7 +89,7 @@ async function main(): Promise<void> {
 }
 
 export function parseSmokeArguments(args: string[]): SmokeArguments {
-  let urlValue = process.env.JAVA_LSP_HTTP_URL;
+  let urlValue: string | undefined;
   let repoRoot: string | undefined;
   let projectId: string | undefined;
   let expectedBuildSha: string | undefined;
@@ -103,7 +103,7 @@ export function parseSmokeArguments(args: string[]): SmokeArguments {
     else if (value === "--start") start = true;
     else throw new Error(`Unknown argument: ${value}`);
   }
-  if (!urlValue) throw new Error("--url or JAVA_LSP_HTTP_URL is required.");
+  if (!urlValue) throw new Error("--url is required.");
   if (repoRoot && projectId) throw new Error("--repo-root and --project-id are mutually exclusive.");
   return { url: new URL(urlValue), repoRoot, projectId, expectedBuildSha, start };
 }

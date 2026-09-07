@@ -174,8 +174,8 @@ export class RepoRuntimeManager {
         process.env.JAVA_LSP_FREEMEM_PRESSURE_INTERVAL_MS,
         process.env.JAVA_LSP_ISOLATED_VALIDATION === "1" ? 0 : 5000
       ),
-      requestTimeoutMs: positiveInteger(process.env.JAVA_LSP_REQUEST_TIMEOUT_MS, 120000),
-      maxRetainedStoppedRepos: positiveInteger(process.env.JAVA_LSP_MAX_RETAINED_STOPPED_REPOS, 2),
+      requestTimeoutMs: 120000,
+      maxRetainedStoppedRepos: 2,
       transportMode: "stdio",
       ...options
     };

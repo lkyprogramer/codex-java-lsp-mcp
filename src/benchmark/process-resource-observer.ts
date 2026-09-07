@@ -15,7 +15,7 @@ export function startBenchmarkProcessResourceObserver(options: BenchmarkProcessR
   if (!options.outputFile) return undefined;
   const isolated = options.isolated ?? process.env.JAVA_LSP_ISOLATED_VALIDATION === "1";
   if (!isolated) throw new Error("in-process resource telemetry is allowed only inside isolated validation");
-  const intervalMs = positiveInteger(options.intervalMs ?? Number(process.env.JAVA_LSP_RESOURCE_INTERVAL_MS || 100));
+  const intervalMs = positiveInteger(options.intervalMs ?? 100);
   const outputFile = path.resolve(options.outputFile);
   const startedAt = performance.now();
   const initialCpu = process.cpuUsage();
@@ -84,8 +84,6 @@ export function startBenchmarkProcessResourceObserver(options: BenchmarkProcessR
 }
 export function startBenchmarkProcessResourceObserverFromEnvironment(profile: string, javaIndex: JavaIndexPresence): BenchmarkProcessResourceHandle | undefined {
   return startBenchmarkProcessResourceObserver({
-    outputFile: process.env.JAVA_LSP_RESOURCE_TELEMETRY_FILE,
-    intervalMs: process.env.JAVA_LSP_RESOURCE_INTERVAL_MS ? Number(process.env.JAVA_LSP_RESOURCE_INTERVAL_MS) : undefined,
     profile, javaIndex });
 }
 export function summarizeInProcessSamples(samples: readonly Sample[]): Record<string, number | undefined> {
