@@ -3,7 +3,7 @@
 // output: F1 ruoyi old-vs-new observation. Tuning only. Holdout unread.
 // pos: Option C sentinel. Quality must be bit-identical; token P50 drop >= 20%.
 import { spawn } from "node:child_process";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, stat, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadTuningScenes } from "./audit-golden-quality.mjs";
@@ -124,6 +124,21 @@ export function f1BenchmarkEnvironment(variant, env = process.env) {
   return { ...env, JAVA_LSP_COLD_BUILD_CHILD: "1" };
 }
 
+export async function materializeRuntimeWithNodeModules(runtimeRoot, nodeModules, dest) {
+  const source = path.resolve(runtimeRoot);
+  const modules = path.resolve(nodeModules);
+  const target = path.resolve(dest);
+  await cp(source, target, {
+    recursive: true,
+    filter: src => {
+      const base = path.basename(src);
+      return base !== "node_modules" && base !== ".git";
+    }
+  });
+  await symlink(modules, path.join(target, "node_modules"));
+  return target;
+}
+
 export function indexStatusSummary(payload) {
   const status = payload?.metadata?.prepareJavaIndexStatus;
   if (!status || typeof status !== "object") return null;
@@ -221,9 +236,15 @@ async function main() {
   const scenarioFile = path.join(workDir, "ruoyi-vue-pro.tuning.jsonl");
   await writeFile(scenarioFile, filtered.jsonl);
   const repoRoot = path.resolve(cli.repo);
+  const newRuntime = path.resolve(cli.newRuntime);
+  const oldRuntime = await materializeRuntimeWithNodeModules(
+    path.resolve(cli.oldRuntime),
+    path.join(newRuntime, "node_modules"),
+    path.join(workDir, "old-runtime")
+  );
   const variants = [
-    { name: "old", runtimeRoot: path.resolve(cli.oldRuntime) },
-    { name: "new", runtimeRoot: path.resolve(cli.newRuntime) }
+    { name: "old", runtimeRoot: oldRuntime },
+    { name: "new", runtimeRoot: newRuntime }
   ];
   const payloads = {};
   const metrics = {};

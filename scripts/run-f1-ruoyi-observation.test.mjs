@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { lstat, mkdtemp, mkdir, readFile, readlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -12,6 +12,7 @@ import {
   f1BenchmarkEnvironment,
   indexStatusSummary,
   inspectIndexCache,
+  materializeRuntimeWithNodeModules,
   metricsFromBenchmark,
   prepareIndexCacheDir,
   qualityIdentity,
@@ -101,6 +102,29 @@ test("old F1 arm enables the heap cold-build child; new arm does not", () => {
   const env = { JAVA_LSP_ISOLATED_VALIDATION: "1" };
   assert.equal(f1BenchmarkEnvironment("old", env).JAVA_LSP_COLD_BUILD_CHILD, "1");
   assert.equal(f1BenchmarkEnvironment("new", env).JAVA_LSP_COLD_BUILD_CHILD, undefined);
+});
+
+test("materializeRuntimeWithNodeModules copies dist and binds isolated node_modules", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "f1-runtime-overlay-"));
+  const runtimeRoot = path.join(root, "old-runtime");
+  const modules = path.join(root, "isolated-modules");
+  const dest = path.join(root, "overlay");
+  await mkdir(path.join(runtimeRoot, "dist"), { recursive: true });
+  await mkdir(path.join(runtimeRoot, "node_modules", "tree-sitter"), { recursive: true });
+  await mkdir(path.join(runtimeRoot, ".git"), { recursive: true });
+  await writeFile(path.join(runtimeRoot, "dist", "benchmark.js"), "ok");
+  await writeFile(path.join(runtimeRoot, "node_modules", "tree-sitter", "missing-native"), "bad");
+  await writeFile(path.join(runtimeRoot, ".git", "HEAD"), "ref");
+  await mkdir(path.join(modules, "tree-sitter", "build"), { recursive: true });
+  await writeFile(path.join(modules, "tree-sitter", "build", "Release.node"), "native");
+  const materialized = await materializeRuntimeWithNodeModules(runtimeRoot, modules, dest);
+  assert.equal(materialized, dest);
+  const linked = await lstat(path.join(dest, "node_modules"));
+  assert.equal(linked.isSymbolicLink(), true);
+  assert.equal(path.resolve(dest, await readlink(path.join(dest, "node_modules"))), modules);
+  assert.equal(await readFile(path.join(dest, "dist", "benchmark.js"), "utf8"), "ok");
+  await assert.rejects(() => lstat(path.join(dest, ".git")), { code: "ENOENT" });
+  await assert.rejects(() => lstat(path.join(dest, "node_modules", "tree-sitter", "missing-native")), { code: "ENOENT" });
 });
 
 test("indexStatusSummary reads prepareJavaIndexStatus without inventing files", () => {
