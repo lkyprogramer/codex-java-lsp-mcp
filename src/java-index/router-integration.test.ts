@@ -322,8 +322,6 @@ test("complete JavaIndex resolves implementation relations even when naming reca
   }
 });
 
-);
-
 test("production ranking observer sees the exact in-request family rank and selected read plan", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "java-index-router-production-ranking-"));
   const request = await writeJava(root, "src/main/java/demo/api/OrderRequest.java", [
@@ -495,4 +493,3 @@ test("RouterJavaIndex reuses COMPLETE coverage without reparsing an indexed cand
   }
 });
 
-);

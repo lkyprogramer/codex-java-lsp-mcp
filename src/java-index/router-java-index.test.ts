@@ -616,8 +616,6 @@ test("declarationsById foreground-refreshes a conventional cross-module type pat
   }
 });
 
-);
-
 test("declarationsById caps an oversized id list rather than issuing an unbounded worker query, and reports it as truncated", async () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), "framework-view-decl-cap-repo-"));
   write(repoRoot, "src/main/java/demo/Only.java", "package demo;\nclass Only {\n  void run() {}\n}\n");
@@ -669,8 +667,6 @@ test("repositoryMarkers reads a small marker file's content and caches it indepe
     await router.close();
   }
 });
-
-);
 
 test("myBatisResourcesByNamespaces batches a namespace lookup against real background-swept mapper XML", async () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), "framework-view-mybatis-repo-"));

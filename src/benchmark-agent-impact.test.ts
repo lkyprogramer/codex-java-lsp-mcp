@@ -223,5 +223,3 @@ test("benchmark can run a no-lsp token baseline", async () => {
     semanticUsed: false
   });
 });
-
-);
