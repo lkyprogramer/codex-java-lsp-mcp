@@ -139,9 +139,9 @@ test("SqlJavaIndexClient point RPCs match a real forked JavaIndexClient on java-
     await assert.rejects(() => sql.reconcile(2), notImplemented);
     await assert.rejects(() => sql.ensureFresh([], 2), notImplemented);
     await assert.rejects(() => sql.awaitPrewarmReady(), notImplemented);
-    await assert.rejects(() => sql.flush(), notImplemented);
-    await assert.rejects(() => sql.hibernate(), notImplemented);
-    await assert.rejects(() => sql.recycle(), notImplemented);
+    assert.equal((await sql.flush()).state, sqlStatus.state);
+    assert.equal((await sql.hibernate()).hibernated, false);
+    await sql.recycle();
   } finally {
     await sql.close();
     await heap.close();

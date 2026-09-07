@@ -49,6 +49,7 @@ import {
   validateIndexedReadRangeResults
 } from "../worker-protocol.js";
 import { readIndexCounts, readMeta } from "../builder/progress.js";
+import { BuilderSupervisor, type BuilderSupervisorJob } from "../builder-supervisor.js";
 import { close as closeDb, openIndexDb, prepareCached, type IndexDatabase } from "./driver.js";
 import { SqlEntitySearch } from "./entity-search.js";
 import { SqlFactsStore } from "./facts-store.js";
@@ -97,7 +98,8 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
 
   constructor(
     private readonly repoRoot: string,
-    private readonly dbPath: string
+    private readonly dbPath: string,
+    private readonly supervisor?: BuilderSupervisor
   ) {}
 
   async open(_generation: number, _options?: JavaIndexOpenOptions, _requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus> {
@@ -144,27 +146,51 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
   }
 
   async refresh(
-    _generation: number,
-    _changed: string[],
-    _deleted: string[],
+    generation: number,
+    changed: string[],
+    deleted: string[],
     _requestOptions?: JavaIndexRequestOptions,
     _priority?: JavaIndexRefreshPriority
-  ): Promise<JavaIndexStatus> { return notImplemented("refresh"); }
-  async refreshResources(_generation: number, _paths: string[], _requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus> {
-    return notImplemented("refreshResources");
+  ): Promise<JavaIndexStatus> {
+    return this.runBuilderJob({ kind: "refresh", generation, changed, deleted });
   }
-  async ensureFresh(_files: string[], _generation: number, _requestOptions?: JavaIndexRequestOptions): Promise<void> {
-    notImplemented("ensureFresh");
+  async refreshResources(generation: number, paths: string[], _requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus> {
+    return this.runBuilderJob({ kind: "resources", generation, changed: paths, deleted: [] });
   }
-  async reconcile(_generation: number, _requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus> {
-    return notImplemented("reconcile");
+  async ensureFresh(files: string[], generation: number, _requestOptions?: JavaIndexRequestOptions): Promise<void> {
+    this.requireSupervisor("ensureFresh");
+    this.reloadIfOpen();
+    const indexed = Number(readMeta(this.requireDb(), "indexedGeneration") ?? "0") || 0;
+    if (indexed >= generation) return;
+    const stale = files.some(file => this.fileGeneration(file) < generation);
+    if (!stale) return;
+    await this.refresh(generation, files, []);
   }
-  async awaitPrewarmReady(_requestOptions?: JavaIndexRequestOptions & JavaIndexPrewarmReadyOptions): Promise<JavaIndexStatus> {
-    return notImplemented("awaitPrewarmReady");
+  async reconcile(generation: number, _requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus> {
+    return this.runBuilderJob({ kind: "reconcile", generation, changed: [], deleted: [] });
   }
-  async flush(_requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus> { return notImplemented("flush"); }
-  async hibernate(_requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus> { return notImplemented("hibernate"); }
-  async recycle(_requestOptions?: JavaIndexRequestOptions): Promise<void> { notImplemented("recycle"); }
+  async awaitPrewarmReady(requestOptions?: JavaIndexRequestOptions & JavaIndexPrewarmReadyOptions): Promise<JavaIndexStatus> {
+    this.requireSupervisor("awaitPrewarmReady");
+    for (;;) {
+      requestOptions?.budget?.throwIfExpired("awaitPrewarmReady");
+      this.reloadIfOpen();
+      if (existsSync(this.dbPath) && !this.db) this.reload();
+      if (this.db && readMeta(this.db, "buildState") === "READY") {
+        this.lastStatus = this.assembleStatus();
+        return this.lastStatus;
+      }
+      const waitMs = Math.min(250, requestOptions?.budget?.remainingMs(250) ?? 250);
+      if (waitMs <= 0) requestOptions?.budget?.throwIfExpired("awaitPrewarmReady");
+      await new Promise(resolve => setTimeout(resolve, waitMs));
+    }
+  }
+  async flush(_requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus> {
+    return this.db ? this.assembleStatus() : this.lastStatus;
+  }
+  async hibernate(_requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus> {
+    return this.db ? this.assembleStatus() : this.lastStatus;
+  }
+  async recycle(_requestOptions?: JavaIndexRequestOptions): Promise<void> {}
   async queryReadRanges(
     requests: Array<{ file: string; positions: Array<{ line: number; column: number }> }>,
     _requestOptions?: JavaIndexRequestOptions
@@ -282,6 +308,55 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     return validateRepositoryFactMarkers(
       this.requireStore().repositoryFactMarkers(importPrefixes, annotationPrefixes)
     );
+  }
+
+  private requireSupervisor(method: string): BuilderSupervisor {
+    if (!this.supervisor) notImplemented(method);
+    return this.supervisor;
+  }
+
+  private requireDb(): IndexDatabase {
+    if (!this.db) throw new JavaIntelligenceError("INDEX_PARTIAL", "Java index client is not open");
+    return this.db;
+  }
+
+  private async runBuilderJob(job: BuilderSupervisorJob): Promise<JavaIndexStatus> {
+    const result = await this.requireSupervisor(job.kind).submit(job);
+    if (!result.ok) throw new JavaIntelligenceError("INDEX_PARTIAL", result.error ?? "builder failed");
+    this.reload();
+    return this.lastStatus;
+  }
+
+  private reloadIfOpen(): void {
+    if (this.db) this.reload();
+  }
+
+  private reload(): void {
+    if (this.db) closeDb(this.db);
+    this.db = undefined;
+    this.store = undefined;
+    this.graph = undefined;
+    this.search = undefined;
+    if (!existsSync(this.dbPath)) {
+      this.lastStatus = emptyStatus("DEGRADED");
+      return;
+    }
+    this.db = openIndexDb(this.dbPath, { readOnly: true });
+    this.store = new SqlFactsStore(this.db);
+    this.graph = new SqlKnowledgeGraph(this.db);
+    this.graph.prefetch();
+    this.search = new SqlEntitySearch(this.db);
+    this.lastStatus = this.assembleStatus();
+  }
+
+  private fileGeneration(inputPath: string): number {
+    if (!this.db) return 0;
+    const relative = this.toRelative(inputPath) ?? inputPath.split("\\").join("/");
+    const row = prepareCached(this.db, "SELECT generation AS generation FROM file WHERE path=?").get(relative) as
+      | { generation?: number | bigint }
+      | undefined;
+    if (row?.generation === undefined) return 0;
+    return typeof row.generation === "bigint" ? Number(row.generation) : Number(row.generation);
   }
 
   private requireStore(): SqlFactsStore {
