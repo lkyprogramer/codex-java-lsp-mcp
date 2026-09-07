@@ -126,7 +126,11 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
           this.copySibling(options.siblingDbPath);
           this.reload();
           void this.supervisor?.submit({ kind: "reconcile", generation, changed: [], deleted: [] })
-            .then(() => { if (this.opened) this.reload(); })
+            .then(result => {
+              if (!this.opened || this.lastStatus.state === "CLOSED") return;
+              if (!result.ok) this.markDegraded(result.error ?? "reconcile failed");
+              else this.reload();
+            })
             .catch(error => this.markDegraded(error));
           this.opened = true;
           return this.lastStatus;
@@ -136,7 +140,7 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
           this.lastStatus = { ...emptyStatus("BUILDING"), builder, pendingBackground: builder.queued };
           this.opened = true;
           void this.supervisor.coldBuild()
-            .then(() => { if (this.opened) this.reload(); })
+            .then(() => { if (this.opened && this.lastStatus.state !== "CLOSED") this.reload(); })
             .catch(error => this.markDegraded(error));
           return this.lastStatus;
         }
@@ -174,6 +178,7 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
 
   async close(): Promise<void> {
     if (this.lastStatus.state === "CLOSED") return;
+    this.opened = false;
     this.clearIdle();
     if (this.db) closeDb(this.db);
     this.db = undefined;
@@ -418,7 +423,7 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
   }
 
   private markDegraded(error: unknown): void {
-    if (!this.opened) return;
+    if (!this.opened || this.lastStatus.state === "CLOSED") return;
     const lastError = error instanceof Error ? error.message : String(error);
     const builder = this.supervisor?.status();
     this.lastStatus = {

@@ -158,6 +158,80 @@ test("failed sibling copy does not leave dest and allows a later open", async ()
   }
 });
 
+test("close while BUILDING does not reopen after coldBuild", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "iod-life-close-cold-"));
+  const dbPath = path.join(dir, "index.sqlite");
+  const scriptPath = path.join(dir, "fake-builder.mjs");
+  await writeFile(scriptPath, `import { setTimeout as delay } from "node:timers/promises";
+const mode = process.argv[process.argv.indexOf("--mode") + 1];
+if (mode === "cold") {
+  await delay(80);
+  process.exit(0);
+}
+`);
+  const supervisor = new BuilderSupervisor({
+    repoRoot: dir,
+    dbPath,
+    scriptPath,
+    idleMs: 5_000,
+    stallMs: 5_000,
+    watchdogIntervalMs: 200
+  });
+  const client = new SqlJavaIndexClient(dir, dbPath, supervisor, 5_000);
+  try {
+    const status = await client.open(1);
+    assert.equal(status.state, "BUILDING");
+    await client.close();
+    await new Promise(resolve => setTimeout(resolve, 150));
+    assert.equal(client.localStatus().state, "CLOSED");
+    assert.equal((client as unknown as ClientInternals).db, undefined);
+  } finally {
+    await client.close();
+    await supervisor.stop();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("failed sibling reconcile marks DEGRADED", async () => {
+  const repo = await mkdtemp(path.join(tmpdir(), "iod-life-recon-fail-"));
+  await cp(fixturesRoot, repo, { recursive: true });
+  const sibling = await coldDb(repo);
+  const destDir = await mkdtemp(path.join(tmpdir(), "iod-life-recon-dest-"));
+  const dest = path.join(destDir, "index.sqlite");
+  const scriptPath = path.join(destDir, "fake-builder.mjs");
+  await writeFile(scriptPath, `import readline from "node:readline";
+const mode = process.argv[process.argv.indexOf("--mode") + 1];
+if (mode === "cold") process.exit(0);
+const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
+for await (const line of rl) {
+  const job = JSON.parse(String(line).trim() || "{}");
+  if (job.kind === "exit") process.exit(0);
+  process.stdout.write(JSON.stringify({
+    id: job.id, ok: false, indexedGeneration: 0, files: 0, error: "boom"
+  }) + "\\n");
+}
+`);
+  const supervisor = new BuilderSupervisor({
+    repoRoot: repo,
+    dbPath: dest,
+    scriptPath,
+    idleMs: 5_000,
+    stallMs: 30_000
+  });
+  const client = new SqlJavaIndexClient(repo, dest, supervisor, 5_000);
+  try {
+    const opened = await client.open(1, { siblingDbPath: sibling });
+    assert.ok(opened.files > 0);
+    await waitUntil(() => client.localStatus().state === "DEGRADED");
+    assert.match(client.localStatus().lastError ?? "", /boom|reconcile/i);
+  } finally {
+    await client.close();
+    await supervisor.stop();
+    await rm(repo, { recursive: true, force: true });
+    await rm(destDir, { recursive: true, force: true });
+  }
+});
+
 test("sibling VACUUM INTO copy is opened without waiting for reconcile", async () => {
   const repo = await mkdtemp(path.join(tmpdir(), "iod-life-sib-"));
   await cp(fixturesRoot, repo, { recursive: true });

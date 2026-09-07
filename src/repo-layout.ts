@@ -67,26 +67,35 @@ export function repoCacheRoot(repoRoot: string, cacheBase = repoCacheBase()): st
 
 export function scanFamilySiblingIndex(cacheBase: string, familyKey: string, selfDbPath: string): string | undefined {
   if (!familyKey || !existsSync(cacheBase)) return undefined;
-  let best: { path: string; mtime: number } | undefined;
-  for (const entry of readdirSync(cacheBase, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    const cacheRoot = path.join(cacheBase, entry.name);
-    const dbPath = path.join(cacheRoot, "index.sqlite");
-    if (dbPath === selfDbPath || !existsSync(dbPath)) continue;
-    let family: string | undefined;
-    try {
-      const meta = JSON.parse(readFileSync(path.join(cacheRoot, "repo-meta.json"), "utf8")) as {
-        familyHash?: string; repoHash?: string;
-      };
-      family = meta.familyHash ?? meta.repoHash;
-    } catch {
-      continue;
+  try {
+    let best: { path: string; mtime: number } | undefined;
+    for (const entry of readdirSync(cacheBase, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const cacheRoot = path.join(cacheBase, entry.name);
+      const dbPath = path.join(cacheRoot, "index.sqlite");
+      if (dbPath === selfDbPath || !existsSync(dbPath)) continue;
+      let family: string | undefined;
+      try {
+        const meta = JSON.parse(readFileSync(path.join(cacheRoot, "repo-meta.json"), "utf8")) as {
+          familyHash?: string; repoHash?: string;
+        };
+        family = meta.familyHash ?? meta.repoHash;
+      } catch {
+        continue;
+      }
+      if (family !== familyKey) continue;
+      let mtime: number;
+      try {
+        mtime = statSync(dbPath).mtimeMs;
+      } catch {
+        continue;
+      }
+      if (!best || mtime > best.mtime) best = { path: dbPath, mtime };
     }
-    if (family !== familyKey) continue;
-    const mtime = statSync(dbPath).mtimeMs;
-    if (!best || mtime > best.mtime) best = { path: dbPath, mtime };
+    return best?.path;
+  } catch {
+    return undefined;
   }
-  return best?.path;
 }
 
 export function repoCacheBase(env: NodeJS.ProcessEnv = process.env): string {
