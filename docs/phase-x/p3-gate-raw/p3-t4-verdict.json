@@ -1,6 +1,6 @@
 {
   "schemaVersion": "iod-p3-t4-verdict/v1",
-  "head": "9ab16e5",
+  "head": "c82cc2e",
   "identityMatrix": {
     "dir": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-74d3761dc961/implementer/p3-t4-identity-8",
     "candidateHead": "9ac1249",
@@ -133,41 +133,44 @@
     "run4": "p3-t4-release-4.txt exit 0"
   },
   "ruoyi": {
-    "decision": "QUALITY_IDENTITY_FAIL",
+    "rawFile": "p3-t4-ruoyi.json",
+    "logFile": "p3-t4-ruoyi.txt",
+    "isolatedRoot": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-muUY5m",
+    "head": "c82cc2e",
+    "decision": "TOKEN_FAIL",
+    "qualityBitIdentical": true,
     "identity": {
-      "identical": false,
-      "diffs": [
-        {
-          "metric": "recall",
-          "old": 0.4490221088435377,
-          "new": 0.7482142857142859
-        },
-        {
-          "metric": "pRead",
-          "old": 0.5863095238095238,
-          "new": 0.2976190476190475
-        },
-        {
-          "metric": "rReadMust",
-          "old": 0.3361394557823133,
-          "new": 0.5383503401360543
-        },
-        {
-          "metric": "RangeLineRecall",
-          "old": 0.3216720779220783,
-          "new": 0.35258194186765596
-        }
-      ],
+      "identical": true,
+      "diffs": [],
       "unmeasured": []
     },
     "token": {
-      "drop": -0.4623287671232877,
+      "drop": 0,
       "pass": false,
       "gate": 0.2
     },
-    "oldCacheBytes": 0,
-    "newCache": "208MiB index.sqlite",
-    "note": "Old heap arm wrote no snapshot under --index-cache-dir; metrics are not a same-index identity."
+    "prepared": {
+      "old": { "state": "READY", "files": 6447, "snapshotBytes": 21188212, "coverageRoots": 66 },
+      "new": { "state": "READY", "files": 6447, "snapshotBytes": 0, "coverageRoots": 66 }
+    },
+    "caches": {
+      "oldSnapshotBytes": 21188212,
+      "newSqliteBytes": 215199744
+    },
+    "metrics": {
+      "recall": 0.7482142857142859,
+      "pRead": 0.2976190476190475,
+      "rReadMust": 0.5383503401360543,
+      "RangeLineRecall": 0.35258194186765596,
+      "estimatedTokensP50": 2562
+    },
+    "note": "P3-T4 ruoyi door is quality bit-identical; F1 20% token-drop is recorded, not a T4 identity fail. Both arms READY at 6447 files."
+  },
+  "t4Gates": {
+    "threeRepoContentDelta0": true,
+    "gateReleaseTwice": true,
+    "ruoyiQualityBitIdentical": true,
+    "installRuntime": false
   },
   "installRuntime": false
 }
