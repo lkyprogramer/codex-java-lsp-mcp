@@ -41,11 +41,24 @@ import {
   validateStringArray,
   validateTypeFactsArray,
   validateTypeLookup,
-  validateTypeLookupArray
+  validateTypeLookupArray,
+  validateContextGraphResult,
+  validateEntitySearchHits,
+  validateGraphDigest,
+  validateGraphReachable
 } from "../worker-protocol.js";
 import { readIndexCounts, readMeta } from "../builder/progress.js";
 import { close as closeDb, openIndexDb, prepareCached, type IndexDatabase } from "./driver.js";
+import { SqlEntitySearch } from "./entity-search.js";
 import { SqlFactsStore } from "./facts-store.js";
+import { SqlKnowledgeGraph } from "./knowledge-graph.js";
+import {
+  queryContextGraph as runContextGraph,
+  queryEntitySearch as runEntitySearch,
+  queryGraphDigest as runGraphDigest,
+  queryGraphReachable as runGraphReachable,
+  type SqlQueryDeps
+} from "./sql-queries.js";
 
 function notImplemented(method: string): never {
   const error = new Error(`${method} is not implemented until P2`);
@@ -74,6 +87,8 @@ function emptyStatus(state: JavaIndexStatus["state"] = "NEW"): JavaIndexStatus {
 export class SqlJavaIndexClient implements JavaIndexClientApi {
   private db: IndexDatabase | undefined;
   private store: SqlFactsStore | undefined;
+  private graph: SqlKnowledgeGraph | undefined;
+  private search: SqlEntitySearch | undefined;
   private layout: LayoutContext | undefined;
   private lastStatus: JavaIndexStatus = emptyStatus();
   private opened = false;
@@ -95,6 +110,8 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     }
     this.db = openIndexDb(this.dbPath, { readOnly: true });
     this.store = new SqlFactsStore(this.db);
+    this.graph = new SqlKnowledgeGraph(this.db);
+    this.search = new SqlEntitySearch(this.db);
     this.layout = probeLayout(this.repoRoot);
     this.lastStatus = this.assembleStatus();
     return this.lastStatus;
@@ -118,6 +135,8 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     if (this.db) closeDb(this.db);
     this.db = undefined;
     this.store = undefined;
+    this.graph = undefined;
+    this.search = undefined;
     this.lastStatus = { ...this.lastStatus, state: "CLOSED" };
   }
 
@@ -147,17 +166,24 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     _requests: Array<{ file: string; positions: Array<{ line: number; column: number }> }>,
     _requestOptions?: JavaIndexRequestOptions
   ): Promise<IndexedReadRangeResult[]> { return notImplemented("queryReadRanges"); }
-  async queryGraphDigest(_requestOptions?: JavaIndexRequestOptions): Promise<GraphDigest> { return notImplemented("queryGraphDigest"); }
-  async queryGraphReachable(
-    _fromRelativePath: string,
-    _maxHops: number,
-    _requestOptions?: JavaIndexRequestOptions
-  ): Promise<GraphReachable> { return notImplemented("queryGraphReachable"); }
-  async queryContextGraph(_input: Parameters<JavaIndexClientApi["queryContextGraph"]>[0], _requestOptions?: JavaIndexRequestOptions): Promise<ContextGraphResult> {
-    return notImplemented("queryContextGraph");
+  async queryGraphDigest(_requestOptions?: JavaIndexRequestOptions): Promise<GraphDigest> {
+    return validateGraphDigest(runGraphDigest(this.queryDeps()));
   }
-  async queryEntitySearch(_task: string, _limit = ENTITY_SEARCH_DEFAULT_LIMIT, _requestOptions?: JavaIndexRequestOptions): Promise<EntityHit[]> {
-    return notImplemented("queryEntitySearch");
+  async queryGraphReachable(
+    fromRelativePath: string,
+    maxHops: number,
+    _requestOptions?: JavaIndexRequestOptions
+  ): Promise<GraphReachable> {
+    return validateGraphReachable(runGraphReachable(this.queryDeps(), fromRelativePath, maxHops));
+  }
+  async queryContextGraph(
+    input: Parameters<JavaIndexClientApi["queryContextGraph"]>[0],
+    _requestOptions?: JavaIndexRequestOptions
+  ): Promise<ContextGraphResult> {
+    return validateContextGraphResult(runContextGraph(this.queryDeps(), input));
+  }
+  async queryEntitySearch(task: string, limit = ENTITY_SEARCH_DEFAULT_LIMIT, _requestOptions?: JavaIndexRequestOptions): Promise<EntityHit[]> {
+    return validateEntitySearchHits(runEntitySearch(this.queryDeps(), task, limit));
   }
 
   async queryAnchor(file: string, line: number, column: number): Promise<AnchorFacts | undefined> {
@@ -255,6 +281,17 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
   private requireStore(): SqlFactsStore {
     if (!this.store) throw new JavaIntelligenceError("INDEX_PARTIAL", "Java index client is not open");
     return this.store;
+  }
+
+  private queryDeps(): SqlQueryDeps {
+    if (!this.graph || !this.search) throw new JavaIntelligenceError("INDEX_PARTIAL", "Java index client is not open");
+    return {
+      store: this.requireStore(),
+      graph: this.graph,
+      search: this.search,
+      indexedGeneration: this.lastStatus.indexedGeneration,
+      toRelative: inputPath => this.toRelative(inputPath) ?? inputPath.replaceAll("\\", "/")
+    };
   }
 
   private toRelative(inputPath: string): string | undefined {

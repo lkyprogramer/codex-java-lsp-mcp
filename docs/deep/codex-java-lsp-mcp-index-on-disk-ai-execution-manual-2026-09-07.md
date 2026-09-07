@@ -393,6 +393,7 @@ CREATE TABLE entity_df(field INTEGER NOT NULL, token_sym INTEGER NOT NULL, df IN
 - **范围**：新增 `src/java-index/sql/sql-queries.ts`：把 `java-index-worker-query.ts` 中 `QUERY_GRAPH_DIGEST / QUERY_GRAPH_REACHABLE / QUERY_CONTEXT_GRAPH / QUERY_ENTITY_SEARCH / QUERY_READ_RANGES` 五个 case 的处理体移植为函数（输入 `FactsReader + GraphReader + SqlEntitySearch`），`sql-client.ts` 对应方法委托之；`QUERY_READ_RANGES` 用 `readBundle` 的 range/bodyRange + `fallbackReadRange`（不再依赖 parse-tree cache；语义以 `java-index-worker.ts:577-604` 为准）。`QueryHandlerDeps` 里的 `coverageStateFor / worstTypeLookupCoverage / unresolvedTypeLookup` 从 `source_root_coverage` 与 `meta` 读。
 - **测试**：`sql-queries.test.ts`：fixtures + golden `generic-java.scenarios.jsonl` 的锚点，五个 RPC 双端 deepEqual（`ContextGraphResult` 去除 `elapsedMs` 类时间字段后比较）。
 - **门**：deepEqual。
+- **拆分（2026-09-07）**：`P1-T4.a` `QUERY_GRAPH_DIGEST` / `QUERY_GRAPH_REACHABLE` / `QUERY_CONTEXT_GRAPH` / `QUERY_ENTITY_SEARCH`；`P1-T4.b` `QUERY_READ_RANGES`。
 
 ### P1-T5 差分 harness（生产规模）
 
