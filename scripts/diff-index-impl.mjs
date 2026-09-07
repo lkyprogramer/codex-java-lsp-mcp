@@ -11,7 +11,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { performance } from "node:perf_hooks";
 import { runSqlColdBuild } from "../dist/java-index/builder/cold-build.js";
-import { JavaIndexClient } from "../dist/java-index/java-index-client.js";
 import { close, openIndexDb } from "../dist/java-index/sql/driver.js";
 import { ensureSchema } from "../dist/java-index/sql/schema.js";
 import { SqlJavaIndexClient } from "../dist/java-index/sql/sql-client.js";
@@ -161,19 +160,9 @@ async function ensureDb(repo, dbPath) {
   }
 }
 
-async function openHeap(repo) {
-  if (!process.env.JAVA_LSP_COLD_BUILD_CHILD) process.env.JAVA_LSP_COLD_BUILD_CHILD = "0";
-  const heap = new JavaIndexClient(repo, mkdtempSync(path.join(tmpdir(), "iod-diff-heap-")));
+async function openHeap(repo, dbPath) {
+  const heap = new SqlJavaIndexClient(repo, dbPath);
   await heap.open(1);
-  const java = listFiles(repo, ".java");
-  if (java.length > 0 && java.length <= 400) await heap.refresh(1, java, []);
-  const xml = listFiles(repo, ".xml").filter(file => file.includes(`${path.sep}mapper${path.sep}`));
-  if (xml.length > 0) await heap.refreshResources(1, xml);
-  await heap.reconcile(1);
-  await waitUntil(async () => {
-    const status = await heap.status();
-    return status.pendingBackground === 0 && status.files > 0;
-  }, 600_000);
   return heap;
 }
 
@@ -257,7 +246,7 @@ export async function runDiff(options) {
     setTimeout(() => drifts.push(Date.now() - expected - 1), 0);
   }, 1);
   const sql = new SqlJavaIndexClient(repo, dbPath);
-  const heap = await openHeap(repo);
+  const heap = await openHeap(repo, dbPath);
   await sql.open(1);
   const golden = loadGolden(repo, options.golden);
   const anchors = sampleAnchors(repo, golden, options.anchors ?? 200);
