@@ -18,7 +18,6 @@ import { probeLayout } from "../layout-probe.js";
 import { computeBuildFingerprint, computeExtractorVersion } from "./build-fingerprint.js";
 import { SqlJavaIndexClient } from "./sql/sql-client.js";
 import { RouterJavaIndex } from "./router-java-index.js";
-import { loadSnapshot, writeSnapshotAtomic } from "./snapshot.js";
 import { STABLE_ID_VERSION } from "./stable-id.js";
 
 function options<const T extends Partial<ImpactOptions>>(overrides: T): ImpactOptions & T {

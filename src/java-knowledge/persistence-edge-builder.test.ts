@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { JavaIndexStore } from "../java-index/index-store.js";
+import { openIndexDb } from "../java-index/sql/driver.js";
+import { ensureSchema } from "../java-index/sql/schema.js";
+import { SqlFactsStore } from "../java-index/sql/facts-store.js";
+import { writeBundle, writeMyBatisResource } from "../java-index/sql/rows.js";
 import type { JavaFileBundle, JavaFileFacts, JavaMethodFacts, JavaTypeFacts, JavaTypeRef, SourceRange } from "../java-index/index-types.js";
 import { myBatisResourceId, myBatisStatementId } from "../java-index/mybatis-types.js";
 import { javaFileId, javaMethodId, javaTypeId } from "../java-index/stable-id.js";
 import { KnowledgeGraphBuilder } from "./graph-builder.js";
-import { openIndexDb } from "../java-index/sql/driver.js";
-import { ensureSchema } from "../java-index/sql/schema.js";
 import { SqlKnowledgeGraph } from "../java-index/sql/knowledge-graph.js";
 
 function sqlGraph() {
@@ -14,6 +15,25 @@ function sqlGraph() {
   ensureSchema(db);
   return new SqlKnowledgeGraph(db);
 }
+
+
+class MemoryFacts {
+  readonly db = openIndexDb(":memory:");
+  readonly store: SqlFactsStore;
+  constructor() {
+    ensureSchema(this.db);
+    this.store = new SqlFactsStore(this.db);
+  }
+  replaceFile(bundle: JavaFileBundle) {
+    writeBundle(this.db, bundle);
+    this.store.clearRequestCache();
+  }
+  replaceMyBatisResource(resource: Parameters<typeof writeMyBatisResource>[1]) {
+    writeMyBatisResource(this.db, resource);
+    this.store.clearRequestCache();
+  }
+}
+
 
 
 function allSqlEdges(graph: { nodesById: { entries(): Iterable<[string, unknown]> }; successors(id: string): Array<{ kind: string; toId?: string; fromId?: string }> }) {
@@ -184,7 +204,7 @@ function templateBundle(entityTypeId: string): JavaFileBundle {
 test("mapper method binds the XML statement and statement uses the entity", () => {
   const mapper = mapperBundle();
   const entity = entityBundle();
-  const index = new JavaIndexStore();
+  const index = new MemoryFacts();
   index.replaceFile(entity);
   index.replaceFile(mapper);
   index.replaceMyBatisResource({
@@ -205,7 +225,7 @@ test("mapper method binds the XML statement and statement uses the entity", () =
     parseState: "COMPLETE"
   });
   const graph = sqlGraph();
-  new KnowledgeGraphBuilder(graph).rebuildFromStore(index, 1);
+  new KnowledgeGraphBuilder(graph).rebuildFromStore(index.store, 1);
   const binds = allSqlEdges(graph).filter(edge => edge.kind === "MYBATIS_METHOD_BINDS_STATEMENT");
   const uses = allSqlEdges(graph).filter(edge => edge.kind === "MYBATIS_STATEMENT_USES_ENTITY");
   assert.equal(binds.length, 1);
@@ -215,11 +235,11 @@ test("mapper method binds the XML statement and statement uses the entity", () =
 test("Template suffix plus generic argument emits REPOSITORY_MANAGES_ENTITY", () => {
   const entity = entityBundle();
   const template = templateBundle(entity.types[0]!.typeId);
-  const index = new JavaIndexStore();
+  const index = new MemoryFacts();
   index.replaceFile(entity);
   index.replaceFile(template);
   const graph = sqlGraph();
-  new KnowledgeGraphBuilder(graph).rebuildFromStore(index, 1);
+  new KnowledgeGraphBuilder(graph).rebuildFromStore(index.store, 1);
   const managed = allSqlEdges(graph).filter(edge => edge.kind === "REPOSITORY_MANAGES_ENTITY");
   assert.equal(managed.length, 1);
   assert.ok(managed[0]?.toId?.includes("Order"));

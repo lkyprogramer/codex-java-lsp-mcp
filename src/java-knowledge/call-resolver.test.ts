@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { JavaIndexStore } from "../java-index/index-store.js";
+import { openIndexDb } from "../java-index/sql/driver.js";
+import { ensureSchema } from "../java-index/sql/schema.js";
+import { SqlFactsStore } from "../java-index/sql/facts-store.js";
+import { writeBundle, writeMyBatisResource } from "../java-index/sql/rows.js";
 import type { JavaFileBundle, JavaFileFacts, JavaMethodFacts, JavaTypeFacts, SourceRange, StaticEdge } from "../java-index/index-types.js";
 import { javaEdgeId, javaFileId, javaMethodId, javaTypeId } from "../java-index/stable-id.js";
 import { KnowledgeGraphBuilder } from "./graph-builder.js";
-import { openIndexDb } from "../java-index/sql/driver.js";
-import { ensureSchema } from "../java-index/sql/schema.js";
 import { SqlKnowledgeGraph } from "../java-index/sql/knowledge-graph.js";
 import { reachableFiles } from "./graph-walk.js";
 
@@ -14,6 +15,25 @@ function sqlGraph() {
   ensureSchema(db);
   return new SqlKnowledgeGraph(db);
 }
+
+
+class MemoryFacts {
+  readonly db = openIndexDb(":memory:");
+  readonly store: SqlFactsStore;
+  constructor() {
+    ensureSchema(this.db);
+    this.store = new SqlFactsStore(this.db);
+  }
+  replaceFile(bundle: JavaFileBundle) {
+    writeBundle(this.db, bundle);
+    this.store.clearRequestCache();
+  }
+  replaceMyBatisResource(resource: Parameters<typeof writeMyBatisResource>[1]) {
+    writeMyBatisResource(this.db, resource);
+    this.store.clearRequestCache();
+  }
+}
+
 
 const RANGE: SourceRange = { start: { line: 1, column: 1 }, end: { line: 8, column: 2 } };
 
@@ -99,11 +119,11 @@ test("unique class call becomes CALLS_EXACT and materializes CALLED_BY", () => {
   const caller = typeBundle("Caller", "class", ["run"]);
   const target = typeBundle("Service", "class", ["save"]);
   caller.edges = [calls(caller, target)];
-  const index = new JavaIndexStore();
+  const index = new MemoryFacts();
   index.replaceFile(target);
   index.replaceFile(caller);
   const graph = sqlGraph();
-  new KnowledgeGraphBuilder(graph).rebuildFromStore(index, 1);
+  new KnowledgeGraphBuilder(graph).rebuildFromStore(index.store, 1);
   const callerMethod = [...graph.nodesById.entries()].map(([id]) => id).find(id => id.includes("#run#"));
   const serviceMethod = [...graph.nodesById.entries()].map(([id]) => id).find(id => id.includes("#save#"));
   assert.ok(callerMethod && serviceMethod);
@@ -127,12 +147,12 @@ test("interface call emits CALLS_VIRTUAL plus DISPATCHES_TO each implementer", (
     resolution: { kind: "TYPE_REFERENCE" }
   }];
   caller.edges = [calls(caller, port)];
-  const index = new JavaIndexStore();
+  const index = new MemoryFacts();
   index.replaceFile(port);
   index.replaceFile(impl);
   index.replaceFile(caller);
   const graph = sqlGraph();
-  new KnowledgeGraphBuilder(graph).rebuildFromStore(index, 1);
+  new KnowledgeGraphBuilder(graph).rebuildFromStore(index.store, 1);
   const callerMethod = [...graph.nodesById.entries()].map(([id]) => id).find(id => id.includes("Caller.java") && id.includes("#run#"))!;
   const portMethod = [...graph.nodesById.entries()].map(([id]) => id).find(id => id.includes("Port.java") && id.includes("#save#"))!;
   const implMethod = [...graph.nodesById.entries()].map(([id]) => id).find(id => id.includes("PortImpl.java") && id.includes("#save#"))!;
@@ -144,15 +164,15 @@ test("removing a call edge leaves no stale CALLS_EXACT", () => {
   const caller = typeBundle("Caller", "class", ["run"]);
   const target = typeBundle("Service", "class", ["save"]);
   caller.edges = [calls(caller, target)];
-  const index = new JavaIndexStore();
+  const index = new MemoryFacts();
   index.replaceFile(target);
   index.replaceFile(caller);
   const graph = sqlGraph();
   const builder = new KnowledgeGraphBuilder(graph);
-  builder.rebuildFromStore(index, 1);
+  builder.rebuildFromStore(index.store, 1);
   const cleaned = typeBundle("Caller", "class", ["run"]);
   index.replaceFile(cleaned);
-  builder.replaceFile(cleaned, index, 2);
+  builder.replaceFile(cleaned, index.store, 2);
   const callerMethod = [...graph.nodesById.entries()].map(([id]) => id).find(id => id.includes("Caller.java") && id.includes("#run#"))!;
   assert.equal(graph.successors(callerMethod, "CALLS_EXACT").length, 0);
 });
@@ -161,11 +181,11 @@ test("undirected walk reaches a callee file in one hop", () => {
   const caller = typeBundle("Caller", "class", ["run"]);
   const target = typeBundle("Service", "class", ["save"]);
   caller.edges = [calls(caller, target)];
-  const index = new JavaIndexStore();
+  const index = new MemoryFacts();
   index.replaceFile(target);
   index.replaceFile(caller);
   const graph = sqlGraph();
-  new KnowledgeGraphBuilder(graph).rebuildFromStore(index, 1);
+  new KnowledgeGraphBuilder(graph).rebuildFromStore(index.store, 1);
   const reached = reachableFiles(graph, caller.file.relativePath, 3);
   assert.equal(reached.hops[target.file.relativePath], 1);
 });

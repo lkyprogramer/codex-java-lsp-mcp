@@ -9,7 +9,8 @@ import { KnowledgeGraphBuilder } from "../../java-knowledge/graph-builder.js";
 import { knowledgeEdgeId } from "../../java-knowledge/entity-id.js";
 import type { GraphEdge, GraphNode } from "../../java-knowledge/schema.js";
 import { buildStaticEdges, resolveFileRefs } from "../edge-builder.js";
-import { JavaIndexStore } from "../index-store.js";
+import { writeBundle, writeMyBatisResource } from "./rows.js";
+import { SqlFactsStore } from "./facts-store.js";
 import type { JavaFileBundle, JavaTypeFacts } from "../index-types.js";
 import { parseJavaSourceFile } from "../java-index-file-parse.js";
 import { createJavaParserBackend } from "../java-parser-backend.js";
@@ -42,7 +43,7 @@ function listFiles(root: string, suffix: string): string[] {
   return out.sort();
 }
 
-async function loadStore(): Promise<JavaIndexStore> {
+async function loadStore(): Promise<SqlFactsStore> {
   const backend = await createJavaParserBackend();
   const cache = new ParseTreeCache({ ...DEFAULT_PARSE_TREE_CACHE_OPTIONS, maxEntries: 8 });
   const resolvedRepoRoot = await realpath(fixturesRoot);
@@ -60,7 +61,8 @@ async function loadStore(): Promise<JavaIndexStore> {
   const registry = buildTypeRegistryView(parsed.flatMap(bundle => bundle.types), parsed.flatMap(bundle => bundle.methods));
   const resolver = new JavaNameResolver(registry);
   const byId = registry.byId as Map<string, JavaTypeFacts>;
-  const store = new JavaIndexStore();
+  const db = openIndexDb(":memory:");
+  ensureSchema(db);
   const resolved: JavaFileBundle[] = [];
   for (const raw of parsed) {
     const next = resolveFileRefs(raw, resolver, registry);
@@ -68,7 +70,7 @@ async function loadStore(): Promise<JavaIndexStore> {
     resolved.push({ ...next, edges: [] });
   }
   for (const bundle of resolved) {
-    store.replaceFile({ ...bundle, edges: buildStaticEdges(bundle, registry, resolver) });
+    writeBundle(db, { ...bundle, edges: buildStaticEdges(bundle, registry, resolver) });
   }
   for (const relativePath of listFiles(fixturesRoot, ".xml").filter(item => item.includes("/mapper/"))) {
     const content = readFileSync(path.join(fixturesRoot, relativePath), "utf8");
@@ -78,9 +80,9 @@ async function loadStore(): Promise<JavaIndexStore> {
       contentHash: createHash("sha256").update(content, "utf8").digest("hex"),
       generation: 1
     });
-    if (resource) store.replaceMyBatisResource(resource);
+    if (resource) writeMyBatisResource(db, resource);
   }
-  return store;
+  return new SqlFactsStore(db);
 }
 
 function jsonClone<T>(value: T): T {
@@ -125,7 +127,7 @@ test("SqlKnowledgeGraph matches KnowledgeGraphStore for fixtures via graph-build
       assert.deepEqual(jsonClone(sortedEdges(sql.predecessors(id))), jsonClone(sortedEdges(mem.predecessors(id))), `pred:${id}`);
     }
 
-    for (const file of store.filesByPath.values()) {
+    for (const file of store.iterFiles()) {
       const path = file.relativePath;
       const memNodes = jsonClone(mem.nodesByPath(path)).sort((a, b) => a.id.localeCompare(b.id));
       const sqlNodes = jsonClone(sql.nodesByPath(path)).sort((a, b) => a.id.localeCompare(b.id));

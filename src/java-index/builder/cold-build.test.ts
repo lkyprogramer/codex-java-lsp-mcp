@@ -6,7 +6,8 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { buildStaticEdges, resolveFileRefs } from "../edge-builder.js";
-import { JavaIndexStore } from "../index-store.js";
+import { writeBundle, writeMyBatisResource } from "../sql/rows.js";
+import { SqlFactsStore } from "../sql/facts-store.js";
 import type { JavaFileBundle, JavaTypeFacts } from "../index-types.js";
 import { parseJavaSourceFile } from "../java-index-file-parse.js";
 import { createJavaParserBackend } from "../java-parser-backend.js";
@@ -33,7 +34,7 @@ function sqlGraph() {
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const fixturesRoot = path.resolve(dirname, "..", "..", "..", "fixtures", "java-index-v2");
 
-async function memoryStoreFromFixtures(): Promise<JavaIndexStore> {
+async function memoryStoreFromFixtures(): Promise<SqlFactsStore> {
   const backend = await createJavaParserBackend();
   const cache = new ParseTreeCache({ ...DEFAULT_PARSE_TREE_CACHE_OPTIONS, maxEntries: 8 });
   const resolvedRepoRoot = await realpath(fixturesRoot);
@@ -63,9 +64,10 @@ async function memoryStoreFromFixtures(): Promise<JavaIndexStore> {
     for (const type of next.types) byId.set(type.typeId, type);
     resolved.push({ ...next, edges: [] });
   }
-  const store = new JavaIndexStore();
+  const expectedDb = openIndexDb(":memory:");
+  ensureSchema(expectedDb);
   for (const bundle of resolved) {
-    store.replaceFile({ ...bundle, edges: buildStaticEdges(bundle, registry, resolver) });
+    writeBundle(expectedDb, { ...bundle, edges: buildStaticEdges(bundle, registry, resolver) });
   }
   for (const file of await discoverMyBatisResourceFiles(resolvedRepoRoot, layout)) {
     const content = await readFile(file.absolutePath, "utf8");
@@ -75,9 +77,9 @@ async function memoryStoreFromFixtures(): Promise<JavaIndexStore> {
       contentHash: createHash("sha256").update(content, "utf8").digest("hex"),
       generation: 1
     });
-    if (resource) store.replaceMyBatisResource(resource);
+    if (resource) writeMyBatisResource(expectedDb, resource);
   }
-  return store;
+  return new SqlFactsStore(expectedDb);
 }
 
 test("sql cold build table counts match JavaIndexStore", async () => {
@@ -92,7 +94,7 @@ test("sql cold build table counts match JavaIndexStore", async () => {
     assert.equal(result.files, store.filesByPath.size);
     assert.equal(result.types, store.typesById.size);
     assert.equal(result.methods, store.methodsById.size);
-    assert.equal(result.edges, store.edgesById.size);
+    assert.equal(result.edges, [...store.iterEdges()].length);
     assert.equal(readMeta(db, "buildState"), "READY");
     const kgNodes = db.prepare("SELECT count(*) AS n FROM kg_node").get() as { n: number };
     const entities = db.prepare("SELECT count(*) AS n FROM entity").get() as { n: number };
@@ -105,7 +107,7 @@ test("sql cold build table counts match JavaIndexStore", async () => {
     assert.equal(rebuilt.edgesById.size, expectedGraph.edgesById.size);
     assert.equal(rebuilt.digest(), expectedGraph.digest());
     const expectedEntities = store.files(
-      [...store.filesByPath.values()].map(file => file.relativePath)
+      [...store.iterFiles()].map(file => file.relativePath)
     ).flatMap(recordsFromBundle);
     const actualEntities = readEntityRecords(db);
     assert.equal(actualEntities.length, expectedEntities.length);
@@ -151,7 +153,7 @@ test("sql cold build resumes resolve after an injected abort", async () => {
     assert.equal(result.files, store.filesByPath.size);
     assert.equal(result.types, store.typesById.size);
     assert.equal(result.methods, store.methodsById.size);
-    assert.equal(result.edges, store.edgesById.size);
+    assert.equal(result.edges, [...store.iterEdges()].length);
     assert.equal(readMeta(second, "buildState"), "READY");
   } finally {
     close(second);

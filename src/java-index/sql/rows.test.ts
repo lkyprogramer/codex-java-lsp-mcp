@@ -5,7 +5,7 @@ import { realpath } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { JavaIndexStore } from "../index-store.js";
+
 import { parseJavaSourceFile } from "../java-index-file-parse.js";
 import type { JavaFileBundle } from "../index-types.js";
 import { extractMyBatisMapperFacts } from "../mybatis-xml-extractor.js";
@@ -55,13 +55,10 @@ test("writeBundle/readBundle round-trips java-index-v2 and matches JavaIndexStor
   const db = openIndexDb(":memory:");
   try {
     ensureSchema(db);
-    const store = new JavaIndexStore();
     for (const bundle of bundles) {
       writeBundle(db, bundle);
       const read = readBundle(db, bundle.file.relativePath);
       assert.deepEqual(read, bundle, bundle.file.relativePath);
-      store.replaceFile(structuredClone(bundle));
-      assert.deepEqual(store.files([bundle.file.relativePath])[0], read, bundle.file.relativePath);
     }
     const first = bundles[0]!;
     const rewritten = { ...first, file: { ...first.file, generation: 2, contentHash: "rewritten" } };

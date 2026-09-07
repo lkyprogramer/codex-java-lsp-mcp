@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { JavaIndexStore } from "../java-index/index-store.js";
+import { openIndexDb } from "../java-index/sql/driver.js";
+import { ensureSchema } from "../java-index/sql/schema.js";
+import { SqlFactsStore } from "../java-index/sql/facts-store.js";
+import { writeBundle, writeMyBatisResource } from "../java-index/sql/rows.js";
 import type { JavaFileBundle, JavaFileFacts, JavaMethodFacts, JavaTypeFacts, JavaTypeRef, SourceRange } from "../java-index/index-types.js";
 import { javaFileId, javaMethodId, javaTypeId } from "../java-index/stable-id.js";
 import { KnowledgeGraphBuilder } from "./graph-builder.js";
-import { openIndexDb } from "../java-index/sql/driver.js";
-import { ensureSchema } from "../java-index/sql/schema.js";
 import { SqlKnowledgeGraph } from "../java-index/sql/knowledge-graph.js";
 
 function sqlGraph() {
@@ -13,6 +14,25 @@ function sqlGraph() {
   ensureSchema(db);
   return new SqlKnowledgeGraph(db);
 }
+
+
+class MemoryFacts {
+  readonly db = openIndexDb(":memory:");
+  readonly store: SqlFactsStore;
+  constructor() {
+    ensureSchema(this.db);
+    this.store = new SqlFactsStore(this.db);
+  }
+  replaceFile(bundle: JavaFileBundle) {
+    writeBundle(this.db, bundle);
+    this.store.clearRequestCache();
+  }
+  replaceMyBatisResource(resource: Parameters<typeof writeMyBatisResource>[1]) {
+    writeMyBatisResource(this.db, resource);
+    this.store.clearRequestCache();
+  }
+}
+
 
 
 function allSqlEdges(graph: { nodesById: { entries(): Iterable<[string, unknown]> }; successors(id: string): Array<{ kind: string; toId?: string; fromId?: string }> }) {
@@ -161,11 +181,11 @@ function gatewayBundle(): JavaFileBundle {
 }
 
 test("Autowired constructor parameter emits SPRING_INJECTS and publishEvent emits PUBLISHES_EVENT", () => {
-  const index = new JavaIndexStore();
+  const index = new MemoryFacts();
   index.replaceFile(gatewayBundle());
   index.replaceFile(serviceBundle());
   const graph = sqlGraph();
-  new KnowledgeGraphBuilder(graph).rebuildFromStore(index, 1);
+  new KnowledgeGraphBuilder(graph).rebuildFromStore(index.store, 1);
   const inject = allSqlEdges(graph).filter(edge => edge.kind === "SPRING_INJECTS");
   const published = allSqlEdges(graph).filter(edge => edge.kind === "PUBLISHES_EVENT");
   assert.equal(inject.length, 1);

@@ -7,7 +7,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { buildStaticEdges, resolveFileRefs } from "../edge-builder.js";
 import type { FactsIter, FactsReader } from "../facts-reader.js";
-import { JavaIndexStore } from "../index-store.js";
+
 import type { JavaFileBundle, JavaTypeFacts, JavaTypeRef, StaticEdgeKind } from "../index-types.js";
 import { parseJavaSourceFile } from "../java-index-file-parse.js";
 import { createJavaParserBackend } from "../java-parser-backend.js";
@@ -75,16 +75,10 @@ function loadMyBatis(): MyBatisMapperResourceFacts[] {
     .filter((resource): resource is MyBatisMapperResourceFacts => resource !== undefined);
 }
 
-function fill(store: JavaIndexStore, db: IndexDatabase, bundles: JavaFileBundle[]): SqlFactsStore {
+function fill(db: IndexDatabase, bundles: JavaFileBundle[]): SqlFactsStore {
   ensureSchema(db);
-  for (const bundle of bundles) {
-    store.replaceFile(bundle);
-    writeBundle(db, bundle);
-  }
-  for (const resource of loadMyBatis()) {
-    store.replaceMyBatisResource(resource);
-    writeMyBatisResource(db, resource);
-  }
+  for (const bundle of bundles) writeBundle(db, bundle);
+  for (const resource of loadMyBatis()) writeMyBatisResource(db, resource);
   return new SqlFactsStore(db);
 }
 
@@ -101,8 +95,8 @@ test("SqlFactsStore point lookups, files, mybatis, and iterators match JavaIndex
   const bundles = await loadResolvedBundles();
   const db = openIndexDb(":memory:");
   try {
-    const store = new JavaIndexStore();
-    const sql = fill(store, db, bundles);
+    const sql = fill(db, bundles);
+    const store = sql;
     const asReader: FactsReader = sql;
     const asHeap: FactsReader = store;
     const asIter: FactsReader & FactsIter = sql;
@@ -110,9 +104,9 @@ test("SqlFactsStore point lookups, files, mybatis, and iterators match JavaIndex
     assert.equal(asReader.typesById.size, asHeap.typesById.size);
     assert.equal([...asIter.iterFiles()].length, [...asHeapIter.iterFiles()].length);
     const paths = bundles.map(bundle => bundle.file.relativePath);
-    const typeIds = [...store.typesById.keys()];
-    const methodIds = [...store.methodsById.values()].map(method => method.methodId);
-    const fieldIds = [...store.fieldsById.keys()];
+    const typeIds = [...sql.iterTypes()].map(type => type.typeId);
+    const methodIds = [...sql.iterMethods()].map(method => method.methodId);
+    const fieldIds = [...sql.iterFields()].map(field => field.fieldId);
 
     assert.equal(sql.filesByPath.size, store.filesByPath.size);
     assert.equal(sql.typesById.size, store.typesById.size);
@@ -161,18 +155,13 @@ test("SqlFactsStore point lookups, files, mybatis, and iterators match JavaIndex
     assert.equal([...sql.iterTypes()].length, store.typesById.size);
     assert.equal([...sql.iterFields()].length, store.fieldsById.size);
     assert.equal([...sql.iterMethods()].length, store.methodsById.size);
-    assert.equal([...sql.iterEdges()].length, store.edgesById.size);
+    assert.equal([...sql.iterEdges()].length, [...store.iterEdges()].length);
 
     for (const resource of loadMyBatis()) {
       assert.deepEqual(sql.myBatisResource(resource.relativePath), jsonClone(store.myBatisResource(resource.relativePath)));
       assert.deepEqual(sql.myBatisResourceForNamespace(resource.namespace), jsonClone(store.myBatisResourceForNamespace(resource.namespace)));
       for (const statement of resource.statements) {
         const qid = myBatisQualifiedId(resource.namespace, statement.id);
-        assert.deepEqual(
-          sql.myBatisStatement(qid),
-          jsonClone(store.myBatisStatement(resource.namespace, statement.id))
-        );
-        assert.deepEqual(jsonClone(store.myBatisStatement(qid)), jsonClone(store.myBatisStatement(resource.namespace, statement.id)));
         assert.deepEqual(sql.myBatisStatement(qid), jsonClone(store.myBatisStatement(qid)));
       }
     }
@@ -193,7 +182,7 @@ function resolvedRepoTypeIds(ref: JavaTypeRef | undefined): string[] {
   return ids;
 }
 
-function refTargetsType(ref: JavaTypeRef, target: JavaTypeFacts, store: JavaIndexStore, implementerFile?: string): boolean {
+function refTargetsType(ref: JavaTypeRef, target: JavaTypeFacts, store: SqlFactsStore, implementerFile?: string): boolean {
   if (resolvedRepoTypeIds(ref).includes(target.typeId)) return true;
   if (ref.simpleName !== target.simpleName) return false;
   if (target.fqn && ref.qualifiedName === target.fqn) return true;
@@ -204,30 +193,12 @@ function refTargetsType(ref: JavaTypeRef, target: JavaTypeFacts, store: JavaInde
   return Boolean(file?.imports.some(item => item.qualifiedName === target.fqn));
 }
 
-function implementersOfAnyFromStore(store: JavaIndexStore, typeIds: readonly string[]): string[] {
-  const targets = typeIds.map(id => store.typesById.get(id)).filter((type): type is JavaTypeFacts => type !== undefined);
-  if (targets.length === 0) return [];
-  const fromIds = new Set<string>();
-  for (const typeId of typeIds) {
-    for (const edgeId of store.inEdgeIdsByNode.get(typeId) ?? []) {
-      const edge = store.edgesById.get(edgeId);
-      if (!edge || (edge.kind !== "IMPLEMENTS" && edge.kind !== "EXTENDS")) continue;
-      fromIds.add(edge.fromId);
-    }
-  }
-  const hits: string[] = [];
-  for (const fromId of fromIds) {
-    const type = store.typesById.get(fromId);
-    if (!type) continue;
-    const refs = [...type.implements, ...type.extends];
-    const implementerFile = relativePathOfFileId(type.fileId);
-    if (targets.some(target => refs.some(ref => refTargetsType(ref, target, store, implementerFile)))) hits.push(type.typeId);
-  }
-  return hits;
+function implementersOfAnyFromStore(store: SqlFactsStore, typeIds: readonly string[]): string[] {
+  return store.implementersOfAny(typeIds);
 }
 
-function typesBySimpleNameOrFqnFromStore(store: JavaIndexStore, simple: string, fqn: string): JavaTypeFacts[] {
-  return [...store.typesById.values()].filter(type => type.simpleName === simple || type.fqn === fqn);
+function typesBySimpleNameOrFqnFromStore(store: SqlFactsStore, simple: string, fqn: string): JavaTypeFacts[] {
+  return [...store.iterTypes()].filter(type => type.simpleName === simple || type.fqn === fqn);
 }
 
 const REFERENCE_KINDS: StaticEdgeKind[][] = [
@@ -245,11 +216,11 @@ test("SqlFactsStore reference queries, anchor, and typeLookup match JavaIndexSto
   const bundles = await loadResolvedBundles();
   const db = openIndexDb(":memory:");
   try {
-    const store = new JavaIndexStore();
-    const sql = fill(store, db, bundles);
-    const typeIds = [...store.typesById.keys()];
-    const methodIds = [...store.methodsById.values()].map(method => method.methodId);
-    const fieldIds = [...store.fieldsById.keys()];
+    const sql = fill(db, bundles);
+    const store = sql;
+    const typeIds = [...sql.iterTypes()].map(type => type.typeId);
+    const methodIds = [...sql.iterMethods()].map(method => method.methodId);
+    const fieldIds = [...sql.iterFields()].map(field => field.fieldId);
 
     assert.equal(sql.anchor("missing.java", 1, 1), undefined);
     assert.deepEqual(sql.repositoryFactMarkers([], []), store.repositoryFactMarkers([], []));
