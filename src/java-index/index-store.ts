@@ -15,6 +15,7 @@ import type {
   JavaMethodFacts,
   JavaTypeFacts,
   JavaTypeLookupResult,
+  JavaTypeRef,
   SourcePosition,
   SourceRange,
   StaticEdge,
@@ -44,6 +45,14 @@ function rangeContains(range: SourceRange, position: SourcePosition): boolean {
 
 function relativePathOfFileId(fileId: string): string {
   return fileId.startsWith("file:") ? fileId.slice("file:".length) : fileId;
+}
+
+function resolvedRepoTypeIds(ref: JavaTypeRef | undefined): string[] {
+  if (!ref) return [];
+  const ids: string[] = [];
+  if (ref.resolution.state === "RESOLVED_REPO") ids.push(ref.resolution.typeId);
+  for (const argument of ref.typeArguments) ids.push(...resolvedRepoTypeIds(argument));
+  return ids;
 }
 
 function compareByLocation(fileIdA: string, rangeA: SourceRange, idA: string, fileIdB: string, rangeB: SourceRange, idB: string): number {
@@ -611,6 +620,42 @@ export class JavaIndexStore {
     }
     results.sort(compareTypes);
     return results.slice(0, limit);
+  }
+
+  implementersOfAny(typeIds: readonly string[]): string[] {
+    const targets = typeIds
+      .map(id => this.typesById.get(id))
+      .filter((type): type is JavaTypeFacts => Boolean(type));
+    if (targets.length === 0) return [];
+    const hits: string[] = [];
+    for (const type of this.typesById.values()) {
+      const refs = [...type.implements, ...type.extends];
+      if (refs.length === 0) continue;
+      const implementerFile = relativePathOfFileId(type.fileId);
+      if (targets.some(target => refs.some(ref => this.refTargetsType(ref, target, implementerFile)))) {
+        hits.push(type.typeId);
+      }
+    }
+    return hits;
+  }
+
+  typesBySimpleNameOrFqn(simple: string, fqn: string): JavaTypeFacts[] {
+    const hits: JavaTypeFacts[] = [];
+    for (const type of this.typesById.values()) {
+      if (type.simpleName === simple || type.fqn === fqn) hits.push(type);
+    }
+    return hits;
+  }
+
+  private refTargetsType(ref: JavaTypeRef, target: JavaTypeFacts, implementerFile?: string): boolean {
+    if (resolvedRepoTypeIds(ref).includes(target.typeId)) return true;
+    if (ref.simpleName !== target.simpleName) return false;
+    if (target.fqn && ref.qualifiedName === target.fqn) return true;
+    const ids = this.typeIdsBySimpleName.get(ref.simpleName);
+    if (ids && ids.size === 1 && [...ids][0] === target.typeId) return true;
+    if (!implementerFile || !target.fqn) return false;
+    const file = this.filesByPath.get(implementerFile);
+    return Boolean(file?.imports.some(item => item.qualifiedName === target.fqn));
   }
 
   typeReferencers(typeId: string, kinds: ReadonlySet<StaticEdgeKind>, limit = 80): IndexedReference[] {

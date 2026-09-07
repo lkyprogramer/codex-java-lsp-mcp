@@ -2,8 +2,8 @@
 // output: Planned ContextContract. One worker-side planning step after QUERY_CONTEXT_GRAPH search.
 // pos: JIN N4-02/03 planner. N5 java_context calls QUERY_CONTEXT_GRAPH plan=true.
 import type { EdgeKind } from "../java-knowledge/edge-kinds.js";
-import type { KnowledgeGraphStore } from "../java-knowledge/graph-store.js";
-import type { JavaIndexStore } from "../java-index/index-store.js";
+import type { GraphReader } from "../java-knowledge/graph-reader.js";
+import type { FactsReader } from "../java-index/facts-reader.js";
 import { closeSearchResult, type ClosureFacts } from "./context-closure.js";
 import { planEvidenceBundles, DEFAULT_TOKEN_BUDGET } from "./context-planner.js";
 import { serializeContext } from "./context-serializer.js";
@@ -14,8 +14,8 @@ import type { JavaFileBundle, JavaMethodFacts, JavaTypeFacts, JavaTypeRef } from
 import { splitIdentifier } from "../java-index/entity-search.js";
 
 export type PlanQueryInput = {
-  graph: KnowledgeGraphStore;
-  store?: JavaIndexStore;
+  graph: GraphReader;
+  store?: FactsReader;
   search: GraphSearchResult;
   tokenBudget?: number;
   includeSource?: boolean;
@@ -83,7 +83,7 @@ function importBySimpleName(bundle: JavaFileBundle): Map<string, string> {
   return imports;
 }
 
-function typeModule(store: JavaIndexStore | undefined, bundle: JavaFileBundle, ref: JavaTypeRef | undefined): string | undefined {
+function typeModule(store: FactsReader | undefined, bundle: JavaFileBundle, ref: JavaTypeRef | undefined): string | undefined {
   if (!store || !ref) return undefined;
   const ids = [...resolvedRepoTypeIds(ref)];
   if (ids.length === 0) {
@@ -99,7 +99,7 @@ function typeModule(store: JavaIndexStore | undefined, bundle: JavaFileBundle, r
   return undefined;
 }
 
-function hop0Methods(bundle: JavaFileBundle, anchorLine: number, store?: JavaIndexStore): JavaMethodFacts[] {
+function hop0Methods(bundle: JavaFileBundle, anchorLine: number, store?: FactsReader): JavaMethodFacts[] {
   const containing = bundle.methods.filter(method => methodContainsLine(method, anchorLine));
   if (containing.length === 0) return [];
   const owners = new Set(containing.map(method => method.ownerTypeId));
@@ -152,7 +152,7 @@ function sameFileCallees(bundle: JavaFileBundle, selected: JavaMethodFacts[]): J
   return [...keep.values()];
 }
 
-function methodsFromStore(store: JavaIndexStore, path: string, graph: KnowledgeGraphStore, provingIds: Set<string>, anchorLine?: number): SliceMethod[] {
+function methodsFromStore(store: FactsReader, path: string, graph: GraphReader, provingIds: Set<string>, anchorLine?: number): SliceMethod[] {
   const bundle = store.files([path])[0];
   if (!bundle) return [];
   const wantedMethods = new Set<string>();
@@ -172,8 +172,8 @@ function methodsFromStore(store: JavaIndexStore, path: string, graph: KnowledgeG
 }
 
 export function anchorMethodStartIds(
-  graph: KnowledgeGraphStore,
-  store: JavaIndexStore | undefined,
+  graph: GraphReader,
+  store: FactsReader | undefined,
   path: string,
   anchorLine: number | undefined
 ): string[] | undefined {
@@ -187,9 +187,9 @@ export function anchorMethodStartIds(
     wanted.add(method.methodId);
     wanted.add(method.ownerTypeId);
   }
-  const ids = [...graph.nodesById.entries()]
-    .filter(([, node]) => node.relativePath === path && node.javaIndexId !== undefined && wanted.has(node.javaIndexId))
-    .map(([id]) => id);
+  const ids = graph.nodesByPath(path)
+    .filter(node => node.javaIndexId !== undefined && wanted.has(node.javaIndexId))
+    .map(node => node.id);
   return ids.length > 0 ? ids : undefined;
 }
 
@@ -198,17 +198,17 @@ function simpleNamesOfRef(ref: JavaTypeRef | undefined): string[] {
   return [ref.simpleName, ...ref.typeArguments.flatMap(simpleNamesOfRef)].filter(name => name.length > 1);
 }
 
-function typeIdByFqn(store: JavaIndexStore, fqn: string): string | undefined {
+function typeIdByFqn(store: FactsReader, fqn: string): string | undefined {
   return store.typeIdByFqn.get(fqn);
 }
 
-function uniqueTypeIdBySimpleName(store: JavaIndexStore, simpleName: string): string | undefined {
+function uniqueTypeIdBySimpleName(store: FactsReader, simpleName: string): string | undefined {
   const ids = store.typeIdsBySimpleName.get(simpleName);
   if (!ids || ids.size !== 1) return undefined;
   return [...ids][0];
 }
 
-function refTargetsType(ref: JavaTypeRef, target: JavaTypeFacts, store: JavaIndexStore, implementerFile?: string): boolean {
+function refTargetsType(ref: JavaTypeRef, target: JavaTypeFacts, store: FactsReader, implementerFile?: string): boolean {
   if (resolvedRepoTypeIds(ref).includes(target.typeId)) return true;
   if (ref.simpleName !== target.simpleName) return false;
   if (target.fqn && ref.qualifiedName === target.fqn) return true;
@@ -218,17 +218,8 @@ function refTargetsType(ref: JavaTypeRef, target: JavaTypeFacts, store: JavaInde
   return Boolean(file?.imports.some(item => item.qualifiedName === target.fqn));
 }
 
-function implementerTypeIds(store: JavaIndexStore, targetIds: Iterable<string>): string[] {
-  const targets = [...targetIds].map(id => store.typesById.get(id)).filter((type): type is JavaTypeFacts => Boolean(type));
-  if (targets.length === 0) return [];
-  const hits: string[] = [];
-  for (const type of store.typesById.values()) {
-    const refs = [...type.implements, ...type.extends];
-    if (refs.length === 0) continue;
-    const implementerFile = relativePathOfFileId(type.fileId);
-    if (targets.some(target => refs.some(ref => refTargetsType(ref, target, store, implementerFile)))) hits.push(type.typeId);
-  }
-  return hits;
+function implementerTypeIds(store: FactsReader, targetIds: Iterable<string>): string[] {
+  return store.implementersOfAny([...targetIds]);
 }
 
 type DiscoveryKind = "IMPORTS" | "IMPLEMENTS" | "EXTENDS" | "CALLS_EXACT" | "CALLS_VIRTUAL";
@@ -262,7 +253,7 @@ function seedType(seeds: Map<string, DiscoverySeed>, typeId: string, hops: 1 | 2
 }
 
 function mentionRef(
-  store: JavaIndexStore,
+  store: FactsReader,
   importBySimple: Map<string, string>,
   seeds: Map<string, DiscoverySeed>,
   ref: JavaTypeRef | undefined,
@@ -280,7 +271,7 @@ function mentionRef(
   }
 }
 
-function collectAnchorSeeds(store: JavaIndexStore, bundle: JavaFileBundle, anchorLine: number): Map<string, DiscoverySeed> {
+function collectAnchorSeeds(store: FactsReader, bundle: JavaFileBundle, anchorLine: number): Map<string, DiscoverySeed> {
   const containing = bundle.methods.filter(method => methodContainsLine(method, anchorLine));
   const hop0 = hop0Methods(bundle, anchorLine, store);
   const owners = new Set(containing.map(method => method.ownerTypeId));
@@ -425,8 +416,8 @@ function addDiscoveryBundle(
 
 export function attachAnchorSignatureBundles(
   search: GraphSearchResult,
-  graph: KnowledgeGraphStore,
-  store: JavaIndexStore | undefined,
+  graph: GraphReader,
+  store: FactsReader | undefined,
   path: string,
   anchorLine: number | undefined
 ): GraphSearchResult {
@@ -436,14 +427,10 @@ export function attachAnchorSignatureBundles(
   const seeds = collectAnchorSeeds(store, bundle, anchorLine);
   const known = new Set(search.bundles.map(item => item.path));
   const extra = [...search.bundles];
-  const nodeIdByJavaId = new Map<string, string>();
-  for (const [id, node] of graph.nodesById) {
-    if (node.javaIndexId) nodeIdByJavaId.set(node.javaIndexId, id);
-  }
   for (const [typeId, seed] of seeds) {
     const type = store.typesById.get(typeId);
     if (!type) continue;
-    const typeNodeId = nodeIdByJavaId.get(typeId);
+    const typeNodeId = graph.nodeIdForJavaIndexId(typeId);
     const relative = relativePathOfFileId(type.fileId);
     const names = seed.names.length > 0 ? seed.names : [undefined];
     for (const name of names) {
@@ -473,7 +460,7 @@ export function attachAnchorSignatureBundles(
   return extra.length === search.bundles.length ? search : { ...search, bundles: extra };
 }
 
-function typeRangesFromStore(store: JavaIndexStore, path: string, graph: KnowledgeGraphStore, provingIds: Set<string>): { start: number; end: number }[] {
+function typeRangesFromStore(store: FactsReader, path: string, graph: GraphReader, provingIds: Set<string>): { start: number; end: number }[] {
   const bundle = store.files([path])[0];
   if (!bundle) return [];
   const wantedTypes = new Set<string>();
@@ -508,7 +495,7 @@ function typeRangesFromStore(store: JavaIndexStore, path: string, graph: Knowled
   return types.map(type => ({ start: type.range.start.line, end: Math.max(type.range.start.line, type.range.end.line) }));
 }
 
-export function factsForStore(graph: KnowledgeGraphStore, store: JavaIndexStore | undefined, path: string, provingIds: Set<string>, anchorLine?: number): ClosureFacts {
+export function factsForStore(graph: GraphReader, store: FactsReader | undefined, path: string, provingIds: Set<string>, anchorLine?: number): ClosureFacts {
   if (!store) return { methods: [] };
   const resource = store.myBatisResource(path);
   const names: string[] = [];

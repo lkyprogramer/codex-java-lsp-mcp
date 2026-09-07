@@ -372,6 +372,7 @@ CREATE TABLE entity_df(field INTEGER NOT NULL, token_sym INTEGER NOT NULL, df IN
 - **范围**：新增 `src/java-index/facts-reader.ts`（`FactsReader` = `Pick<JavaIndexStore, 附录 A.2 读成员>` + `implementersOfAny` + `typesBySimpleNameOrFqn`）、`src/java-knowledge/graph-reader.ts`（`GraphReader` = 附录 A.4 读成员 + `nodesByPath` + `nodeIdForJavaIndexId`）。给 `JavaIndexStore` 加 `implementersOfAny`、`typesBySimpleNameOrFqn`（线性实现）。把 `plan-query.ts`、`graph-search.ts`、`graph-walk.ts`、`call-resolver.ts`、`framework-edge-builder.ts`、`persistence-edge-builder.ts`、`graph-builder.ts`（仅读侧类型）、`java-index-worker-query.ts` 的参数类型改为 `FactsReader` / `GraphReader`；替换 6 处全扫描：`plan-query.ts:190,225,440`、`graph-search.ts:42,107`、`graph-walk.ts:20`、`persistence-edge-builder.ts:57`（后者在 builder 侧也走同一方法）。
 - **测试**：现有 `plan-query.test.ts`、`graph-search.test.ts`、`graph-walk` 相关、`persistence-edge-builder.test.ts`、`call-resolver.test.ts`、`graph-builder.test.ts` 全部不改断言继续绿。
 - **门**：T0 + 上述测试绿。旧 worker 行为不变（P1-T5 差分会证明）。
+- **拆分（2026-09-07）**：`P1-T1.a` `FactsReader` / `GraphReader` + heap `implementersOfAny` / `typesBySimpleNameOrFqn` + `plan-query` / `graph-search` / `graph-walk`；`P1-T1.b` 其余 A.3 与 `call-resolver` / `framework-edge-builder` / `persistence-edge-builder` / `graph-builder` / `java-index-worker-query` 类型收窄。
 
 ### P1-T2 `SqlEntitySearch`
 

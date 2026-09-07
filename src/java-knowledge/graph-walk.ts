@@ -1,9 +1,9 @@
 // input: Knowledge graph plus a start file and hop budget.
 // output: Repo-relative files reachable by walking successors and predecessors.
 // pos: N2a discovery walk. Undirected because CALLED_BY and inject/persistence edges are first-class.
-import type { KnowledgeGraphStore } from "./graph-store.js";
+import type { GraphReader } from "./graph-reader.js";
 
-function fileOf(graph: KnowledgeGraphStore, nodeId: string): string | undefined {
+function fileOf(graph: GraphReader, nodeId: string): string | undefined {
   const node = graph.nodesById.get(nodeId);
   if (node?.relativePath) return node.relativePath;
   if (node?.kind === "FILE") return node.id;
@@ -11,15 +11,14 @@ function fileOf(graph: KnowledgeGraphStore, nodeId: string): string | undefined 
 }
 
 export function reachableFiles(
-  graph: KnowledgeGraphStore,
+  graph: GraphReader,
   startRelativePath: string,
   maxHops: number
 ): { files: string[]; hops: Record<string, number> } {
   const hops = new Map<string, number>();
-  const startNodes: string[] = [];
-  for (const [id, node] of graph.nodesById) {
-    if (node.relativePath === startRelativePath || id === startRelativePath) startNodes.push(id);
-  }
+  const startNodes = graph.nodesByPath(startRelativePath).map(node => node.id);
+  const startNode = graph.nodesById.get(startRelativePath);
+  if (startNode && !startNodes.includes(startNode.id)) startNodes.push(startNode.id);
   if (startNodes.length === 0) return { files: [], hops: {} };
   const queue: Array<{ id: string; hop: number }> = startNodes.map(id => ({ id, hop: 0 }));
   const seen = new Set(startNodes);
