@@ -498,6 +498,12 @@ function sameDependencyInventory(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+export const NODE_CELL_DISABLE_EXPERIMENTAL_WARNING = "--disable-warning=ExperimentalWarning";
+
+export function cellProcessArguments(scriptArgs) {
+  return [NODE_CELL_DISABLE_EXPERIMENTAL_WARNING, ...scriptArgs];
+}
+
 export function benchmarkCellArguments({ runtimeRoot, repoRoot, project, scenarioFile, cacheDir, runs, verbosity, extraArgs = [] }) {
   return [
     path.join(runtimeRoot, "dist", "benchmark-agent-impact.js"),
@@ -523,7 +529,7 @@ async function runCell({ runtimeRoot, variant, round, project, repoRoot, reposit
   console.log(`${verbosity === "standard" ? "matrix" : "diagnostic-rpc"}: r${round} ${variant} ${project}`);
   await runToFiles(
     process.execPath,
-    benchmarkCellArguments({ runtimeRoot, repoRoot, project, scenarioFile, cacheDir, runs, verbosity, extraArgs }),
+    cellProcessArguments(benchmarkCellArguments({ runtimeRoot, repoRoot, project, scenarioFile, cacheDir, runs, verbosity, extraArgs })),
     outputFile,
     `${outputFile}.stderr`,
     { cwd: runtimeRoot, env }

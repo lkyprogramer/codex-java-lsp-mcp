@@ -30,7 +30,9 @@ function envIdleMs(): number {
 }
 
 function builderExecArgv(source = process.execArgv): string[] {
-  return source.filter(arg => !/--max[-_]old[-_]space[-_]size/i.test(arg) && !arg.startsWith("--test"));
+  const filtered = source.filter(arg => !/--max[-_]old[-_]space[-_]size/i.test(arg) && !arg.startsWith("--test"));
+  if (filtered.includes("--disable-warning=ExperimentalWarning")) return filtered;
+  return ["--disable-warning=ExperimentalWarning", ...filtered];
 }
 
 function builderEnv(extra?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
