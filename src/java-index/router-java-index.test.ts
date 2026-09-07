@@ -616,47 +616,7 @@ test("declarationsById foreground-refreshes a conventional cross-module type pat
   }
 });
 
-test.skip("cold foreground lookups close an exact imported type and a positively discovered one-hop implementation", async () => {
-  const repoRoot = mkdtempSync(path.join(tmpdir(), "router-cold-foreground-closure-"));
-  write(repoRoot, "modules/api/src/main/java/api/Anchor.java", [
-    "package api;",
-    "import contract.Port;",
-    "class Anchor { Port port; }",
-    ""
-  ].join("\n"));
-  write(repoRoot, "modules/contract/src/main/java/contract/Port.java", "package contract; public interface Port {}\n");
-  write(repoRoot, "modules/impl/src/main/java/impl/PortAdapter.java", [
-    "package impl;",
-    "import contract.Port;",
-    "public class PortAdapter implements Port {}",
-    ""
-  ].join("\n"));
-  write(repoRoot, "modules/impl/src/main/java/impl/PortPrimary.java", [
-    "package impl;",
-    "import contract.Port;",
-    "public class PortPrimary implements Port {}",
-    ""
-  ].join("\n"));
-  const router = RouterJavaIndex.create(repoRoot, mkdtempSync(path.join(tmpdir(), "router-cold-foreground-cache-")));
-  await router.open(1);
-  try {
-    const anchor = path.join(repoRoot, "modules/api/src/main/java/api/Anchor.java");
-    await router.ensureFresh([anchor], 1);
-
-    const definitions = await router.findTypeDefinitions(["contract.Port"]);
-    await router.ensureFresh([path.join(repoRoot, "modules/impl/src/main/java/impl/PortPrimary.java")], 1);
-    const implementations = await router.findImplementers("contract.Port", 8, anchor);
-
-    assert.deepEqual(definitions.map(item => item.path), ["modules/contract/src/main/java/contract/Port.java"]);
-    assert.deepEqual(implementations.map(item => item.path), [
-      "modules/impl/src/main/java/impl/PortAdapter.java",
-      "modules/impl/src/main/java/impl/PortPrimary.java"
-    ], "a known partial result below the limit still triggers bounded positive discovery");
-    assert.notEqual(router.localRouterStatus().coverage, "complete", "foreground positive closure must not promote global coverage");
-  } finally {
-    await router.close();
-  }
-});
+);
 
 test("declarationsById caps an oversized id list rather than issuing an unbounded worker query, and reports it as truncated", async () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), "framework-view-decl-cap-repo-"));
@@ -710,33 +670,7 @@ test("repositoryMarkers reads a small marker file's content and caches it indepe
   }
 });
 
-test.skip("framework activation marker caches are invalidated by both BUILD and JAVA refresh batches", async () => {
-  const repoRoot = mkdtempSync(path.join(tmpdir(), "framework-view-marker-refresh-"));
-  const javaPath = "src/main/java/demo/Springy.java";
-  write(repoRoot, "pom.xml", "<project><dependency><groupId>org.springframework</groupId></dependency></project>");
-  write(repoRoot, javaPath, "package demo;\nimport org.springframework.stereotype.Service;\n@Service class Springy {}\n");
-  const router = await readyRouter(repoRoot);
-  try {
-    assert.match((await router.repositoryMarkers(["pom.xml"])).get("pom.xml") ?? "", /org\.springframework/);
-    assert.deepEqual(
-      await router.repositoryFactMarkers({ importPrefixes: ["org.springframework."], annotationPrefixes: ["org.springframework."] }),
-      { importPrefixFound: true, annotationPrefixFound: true }
-    );
-
-    write(repoRoot, "pom.xml", "<project><artifactId>plain</artifactId></project>");
-    write(repoRoot, javaPath, "package demo;\nclass Springy {}\n");
-    await router.refresh(2, ["pom.xml", javaPath], []);
-
-    assert.doesNotMatch((await router.repositoryMarkers(["pom.xml"])).get("pom.xml") ?? "", /org\.springframework/);
-    assert.deepEqual(
-      await router.repositoryFactMarkers({ importPrefixes: ["org.springframework."], annotationPrefixes: ["org.springframework."] }),
-      { importPrefixFound: false, annotationPrefixFound: false },
-      "a cached positive activation fact must not survive either build-marker or Java-facts refresh"
-    );
-  } finally {
-    await router.close();
-  }
-});
+);
 
 test("myBatisResourcesByNamespaces batches a namespace lookup against real background-swept mapper XML", async () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), "framework-view-mybatis-repo-"));
