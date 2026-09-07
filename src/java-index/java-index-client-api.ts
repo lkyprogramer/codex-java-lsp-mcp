@@ -24,6 +24,7 @@ export type JavaIndexOpenOptions = {
   leaseRoot?: string;
   worktree?: JavaIndexWorktreeIdentity;
   siblingCacheBase?: string;
+  siblingDbPath?: string;
 };
 
 export type JavaIndexRequestOptions = {

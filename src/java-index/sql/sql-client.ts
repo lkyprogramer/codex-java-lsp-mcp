@@ -1,4 +1,5 @@
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, statSync } from "node:fs";
+import { dirname } from "node:path";
 import { probeLayout } from "../../layout-probe.js";
 import type { LayoutContext } from "../../layout-probe.js";
 import { JavaIntelligenceError } from "../../runtime/intelligence-error.js";
@@ -50,7 +51,7 @@ import {
 } from "../worker-protocol.js";
 import { readIndexCounts, readMeta } from "../builder/progress.js";
 import { BuilderSupervisor, type BuilderSupervisorJob } from "../builder-supervisor.js";
-import { close as closeDb, openIndexDb, prepareCached, type IndexDatabase } from "./driver.js";
+import { close as closeDb, DEFAULT_SQLITE_CACHE_KB, openIndexDb, prepareCached, type IndexDatabase } from "./driver.js";
 import { SqlEntitySearch } from "./entity-search.js";
 import { SqlFactsStore } from "./facts-store.js";
 import { SqlKnowledgeGraph } from "./knowledge-graph.js";
@@ -95,37 +96,59 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
   private layout: LayoutContext | undefined;
   private lastStatus: JavaIndexStatus = emptyStatus();
   private opened = false;
+  private idleTimer: ReturnType<typeof setTimeout> | undefined;
+  private readonly connIdleMs: number;
 
   constructor(
     private readonly repoRoot: string,
     private readonly dbPath: string,
-    private readonly supervisor?: BuilderSupervisor
-  ) {}
+    private readonly supervisor?: BuilderSupervisor,
+    connIdleMs?: number
+  ) {
+    const fromEnv = Number(process.env.JAVA_LSP_CONN_IDLE_MS);
+    this.connIdleMs = connIdleMs && connIdleMs > 0
+      ? Math.floor(connIdleMs)
+      : Number.isFinite(fromEnv) && fromEnv > 0
+        ? Math.floor(fromEnv)
+        : 600_000;
+  }
 
-  async open(_generation: number, _options?: JavaIndexOpenOptions, _requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus> {
+  async open(generation: number, options?: JavaIndexOpenOptions, _requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus> {
     if (this.opened) {
       throw new JavaIntelligenceError("INDEX_PARTIAL", `Java index client cannot open from state ${this.lastStatus.state}`);
     }
     this.opened = true;
+    this.layout = probeLayout(this.repoRoot);
     if (!existsSync(this.dbPath)) {
+      if (options?.siblingDbPath && existsSync(options.siblingDbPath)) {
+        this.copySibling(options.siblingDbPath);
+        this.reload();
+        void this.supervisor?.submit({ kind: "reconcile", generation, changed: [], deleted: [] }).then(() => this.reloadIfOpen());
+        return this.lastStatus;
+      }
+      if (this.supervisor) {
+        const builder = this.supervisor.status();
+        this.lastStatus = { ...emptyStatus("BUILDING"), builder, pendingBackground: builder.queued };
+        void this.supervisor.coldBuild().then(() => this.reloadIfOpen()).catch(() => undefined);
+        return this.lastStatus;
+      }
       this.lastStatus = emptyStatus("DEGRADED");
       this.lastStatus.lastError = "EMPTY";
       return this.lastStatus;
     }
-    this.db = openIndexDb(this.dbPath, { readOnly: true });
-    this.store = new SqlFactsStore(this.db);
-    this.graph = new SqlKnowledgeGraph(this.db);
-    this.graph.prefetch();
-    this.search = new SqlEntitySearch(this.db);
-    this.layout = probeLayout(this.repoRoot);
-    this.lastStatus = this.assembleStatus();
+    this.reload();
     return this.lastStatus;
   }
 
   async status(_requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus> {
+    if (!this.opened) throw new JavaIntelligenceError("INDEX_PARTIAL", "Java index client is not open");
+    this.ensureConn();
     if (!this.db) {
-      if (this.opened) return this.lastStatus;
-      throw new JavaIntelligenceError("INDEX_PARTIAL", "Java index client is not open");
+      if (this.supervisor) {
+        const builder = this.supervisor.status();
+        this.lastStatus = { ...this.lastStatus, builder, pendingBackground: builder.queued };
+      }
+      return this.lastStatus;
     }
     this.lastStatus = this.assembleStatus();
     return this.lastStatus;
@@ -137,6 +160,7 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
 
   async close(): Promise<void> {
     if (this.lastStatus.state === "CLOSED") return;
+    this.clearIdle();
     if (this.db) closeDb(this.db);
     this.db = undefined;
     this.store = undefined;
@@ -338,7 +362,7 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     this.graph = undefined;
     this.search = undefined;
     if (!existsSync(this.dbPath)) {
-      this.lastStatus = emptyStatus("DEGRADED");
+      if (this.lastStatus.state !== "BUILDING") this.lastStatus = emptyStatus("DEGRADED");
       return;
     }
     this.db = openIndexDb(this.dbPath, { readOnly: true });
@@ -347,6 +371,44 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     this.graph.prefetch();
     this.search = new SqlEntitySearch(this.db);
     this.lastStatus = this.assembleStatus();
+    this.touch();
+  }
+
+  private ensureConn(): void {
+    if (!this.opened) throw new JavaIntelligenceError("INDEX_PARTIAL", "Java index client is not open");
+    if (!this.db && existsSync(this.dbPath)) this.reload();
+    else this.touch();
+  }
+
+  private touch(): void {
+    this.clearIdle();
+    if (!this.db || this.connIdleMs <= 0) return;
+    this.idleTimer = setTimeout(() => this.dropConn(), this.connIdleMs);
+  }
+
+  private dropConn(): void {
+    this.clearIdle();
+    if (!this.db) return;
+    closeDb(this.db);
+    this.db = undefined;
+    this.store = undefined;
+    this.graph = undefined;
+    this.search = undefined;
+  }
+
+  private clearIdle(): void {
+    if (this.idleTimer) clearTimeout(this.idleTimer);
+    this.idleTimer = undefined;
+  }
+
+  private copySibling(fromPath: string): void {
+    mkdirSync(dirname(this.dbPath), { recursive: true });
+    const source = openIndexDb(fromPath, { readOnly: true });
+    try {
+      source.exec(`VACUUM INTO '${this.dbPath.replaceAll("'", "''")}'`);
+    } finally {
+      closeDb(source);
+    }
   }
 
   private fileGeneration(inputPath: string): number {
@@ -360,11 +422,13 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
   }
 
   private requireStore(): SqlFactsStore {
+    this.ensureConn();
     if (!this.store) throw new JavaIntelligenceError("INDEX_PARTIAL", "Java index client is not open");
     return this.store;
   }
 
   private queryDeps(): SqlQueryDeps {
+    this.ensureConn();
     if (!this.graph || !this.search) throw new JavaIntelligenceError("INDEX_PARTIAL", "Java index client is not open");
     return {
       store: this.requireStore(),
@@ -434,8 +498,11 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     const counts = readIndexCounts(this.db) ?? { files: 0, types: 0, methods: 0, edges: 0 };
     const indexedGeneration = Number(readMeta(this.db, "indexedGeneration") ?? "0") || 0;
     const buildState = readMeta(this.db, "buildState");
+    const builder = this.supervisor?.status();
+    const bytes = existsSync(this.dbPath) ? statSync(this.dbPath).size : 0;
+    const cacheKb = Number(process.env.JAVA_LSP_SQLITE_CACHE_KB);
     const status: JavaIndexStatus = {
-      state: buildState === "READY" ? "READY" : "DEGRADED",
+      state: buildState === "READY" ? "READY" : this.lastStatus.state === "BUILDING" ? "BUILDING" : "DEGRADED",
       indexedGeneration,
       files: counts.files,
       types: counts.types,
@@ -443,11 +510,16 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
       edges: counts.edges,
       snapshotBytes: 0,
       pendingForeground: 0,
-      pendingBackground: 0,
+      pendingBackground: builder?.queued ?? 0,
       coverage: this.coverageRows(),
       resourceCoverage: [],
       factsHydrated: true,
-      hibernated: false
+      hibernated: false,
+      db: {
+        bytes,
+        cacheKb: Number.isFinite(cacheKb) && cacheKb > 0 ? Math.floor(cacheKb) : DEFAULT_SQLITE_CACHE_KB
+      },
+      ...(builder ? { builder } : {})
     };
     return validateJavaIndexStatus(status);
   }

@@ -12,6 +12,8 @@ import type {
   JavaFileFacts,
   JavaImportFact,
   JavaIndexStatus,
+  JavaIndexBuilderStatus,
+  JavaIndexDbStatus,
   JavaIndexHeapSplit,
   JavaIndexSnapshotStatus,
   JavaMethodFacts,
@@ -795,7 +797,7 @@ function validateSnapshotStatus(value: unknown, context: string): JavaIndexSnaps
 export function validateJavaIndexStatus(value: unknown): JavaIndexStatus {
   const context = "JavaIndexStatus";
   const source = record(value, context);
-  const states = ["NEW", "OPENING", "READY", "DEGRADED", "CLOSED"] as const;
+  const states = ["NEW", "OPENING", "READY", "DEGRADED", "CLOSED", "BUILDING"] as const;
   if (!isOneOf(source.state, states)) invalid(context, "state");
   if (!isNumber(source.indexedGeneration)) invalid(context, "indexedGeneration");
   if (!isNumber(source.files)) invalid(context, "files");
@@ -857,8 +859,29 @@ export function validateJavaIndexStatus(value: unknown): JavaIndexStatus {
     ...withOptional("inProcessParseFiles", optional(source.inProcessParseFiles, `${context}.inProcessParseFiles`, (value, valueContext) => {
       if (!isNumber(value)) invalid(valueContext, "expected a number");
       return value;
-    }))
+    })),
+    ...withOptional("db", optional(source.db, `${context}.db`, validateStatusDb)),
+    ...withOptional("builder", optional(source.builder, `${context}.builder`, validateStatusBuilder))
   };
+}
+
+function validateStatusDb(value: unknown, context: string): JavaIndexDbStatus {
+  const source = record(value, context);
+  if (!isNumber(source.bytes)) invalid(context, "bytes");
+  if (!isNumber(source.cacheKb)) invalid(context, "cacheKb");
+  return { bytes: source.bytes, cacheKb: source.cacheKb };
+}
+
+function validateStatusBuilder(value: unknown, context: string): JavaIndexBuilderStatus {
+  const source = record(value, context);
+  const states = ["idle", "busy", "cold-building", "absent"] as const;
+  if (!isOneOf(source.state, states)) invalid(context, "state");
+  if (!isNumber(source.queued)) invalid(context, "queued");
+  const pid = optional(source.pid, `${context}.pid`, (item, itemContext) => {
+    if (!isNumber(item)) invalid(itemContext, "expected a number");
+    return item;
+  });
+  return { state: source.state, queued: source.queued, ...withOptional("pid", pid) };
 }
 
 function validateHeapSplit(value: unknown, context: string): JavaIndexHeapSplit {

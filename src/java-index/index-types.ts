@@ -254,8 +254,15 @@ export type JavaIndexSnapshotStatus =
       failure: "MANIFEST_CHANGED" | "WRITE_FAILED";
     };
 
+export type JavaIndexDbStatus = { bytes: number; cacheKb: number };
+export type JavaIndexBuilderStatus = {
+  state: "idle" | "busy" | "cold-building" | "absent";
+  pid?: number;
+  queued: number;
+};
+
 export type JavaIndexStatus = {
-  state: "NEW" | "OPENING" | "READY" | "DEGRADED" | "CLOSED";
+  state: "NEW" | "OPENING" | "READY" | "DEGRADED" | "CLOSED" | "BUILDING";
   indexedGeneration: number;
   files: number;
   types: number;
@@ -272,19 +279,21 @@ export type JavaIndexStatus = {
   resourceCoverage: MyBatisResourceCoverage[];
   lastError?: string;
   worktreeSeed?: WorktreeSeedStatus;
-  /** Worker has unloaded facts/parse trees; next fact query reheats from v4. */
+  /** @deprecated Heap hibernate; P3 deletes this field. */
   hibernated?: boolean;
-  /** Rest-segment facts are in the store. Absent on older workers. */
+  /** @deprecated Always true on the SQL client; P3 deletes this field. */
   factsHydrated?: boolean;
-  /** Worker-local heapUsed, published on HIBERNATE (S4). */
+  /** @deprecated Worker-local heapUsed, published on HIBERNATE (S4). */
   heapUsedBytes?: number;
-  /** FSX0/FSX2: process heap plus family-store counts. Absent on older workers. */
+  /** @deprecated FSX0/FSX2: process heap plus family-store counts. */
   heapSplit?: JavaIndexHeapSplit;
-  /** Heap at first snapshot hydrate; used as FSR3 1.6× recycle baseline. */
+  /** @deprecated Heap at first snapshot hydrate; used as FSR3 1.6× recycle baseline. */
   hydrateBaselineHeapMb?: number;
-  /** Next idle window must recycle (in-process parse over threshold). */
+  /** @deprecated Next idle window must recycle (in-process parse over threshold). */
   pendingIdleRecycle?: boolean;
   inProcessParseFiles?: number;
+  db?: JavaIndexDbStatus;
+  builder?: JavaIndexBuilderStatus;
 };
 
 export type JavaIndexHeapSplit = {

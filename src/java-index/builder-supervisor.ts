@@ -170,11 +170,12 @@ export class BuilderSupervisor {
   private async runServe(job: BuilderSupervisorJob): Promise<BuilderSupervisorResult> {
     const id = job.id ?? -1;
     for (let attempt = 0; attempt <= this.maxRestarts; attempt += 1) {
+      if (this.stopped) return failResult(id, "builder stopped");
       try {
         return await this.runServeOnce(job);
       } catch (err) {
         await this.killChild();
-        if (attempt === this.maxRestarts) {
+        if (this.stopped || attempt === this.maxRestarts) {
           return failResult(id, err instanceof Error ? err.message : String(err));
         }
       }
@@ -184,12 +185,13 @@ export class BuilderSupervisor {
 
   private async runCold(): Promise<void> {
     for (let attempt = 0; attempt <= this.maxRestarts; attempt += 1) {
+      if (this.stopped) return;
       try {
         await this.runColdOnce();
         return;
       } catch (err) {
         await this.killChild();
-        if (attempt === this.maxRestarts) throw err instanceof Error ? err : new Error(String(err));
+        if (this.stopped || attempt === this.maxRestarts) throw err instanceof Error ? err : new Error(String(err));
       }
     }
   }
