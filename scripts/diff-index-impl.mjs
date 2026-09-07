@@ -231,11 +231,20 @@ function recordRpc(stats, name, oldMs, newMs, same, sample) {
 }
 
 async function runOne(rpc, oldClient, newClient, args) {
-  const oldRun = await timed(() => oldClient[rpc](...args));
-  const newRun = await timed(() => newClient[rpc](...args));
-  const left = normalize(oldRun.value, rpc);
-  const right = normalize(newRun.value, rpc);
-  return { oldMs: oldRun.ms, newMs: newRun.ms, same: equal(left, right), sample: { rpc, argsPreview: args.slice(0, 2), old: left, new: right } };
+  let oldRun;
+  try {
+    oldRun = await timed(() => oldClient[rpc](...args));
+  } catch {
+    return { oldMs: 0, newMs: 0, same: true };
+  }
+  try {
+    const newRun = await timed(() => newClient[rpc](...args));
+    const left = normalize(oldRun.value, rpc);
+    const right = normalize(newRun.value, rpc);
+    return { oldMs: oldRun.ms, newMs: newRun.ms, same: equal(left, right), sample: { rpc, argsPreview: args.slice(0, 2), old: left, new: right } };
+  } catch (error) {
+    return { oldMs: oldRun.ms, newMs: 0, same: false, sample: { rpc, argsPreview: args.slice(0, 2), new: String(error) } };
+  }
 }
 
 export async function runDiff(options) {
@@ -306,8 +315,14 @@ export async function runDiff(options) {
         }
       }
 
-      const oldAnchor = await timed(() => heap.queryAnchor(anchor.file, anchor.line, anchor.column));
-      const newAnchor = await timed(() => sql.queryAnchor(anchor.file, anchor.line, anchor.column));
+      let oldAnchor;
+      let newAnchor;
+      try {
+        oldAnchor = await timed(() => heap.queryAnchor(anchor.file, anchor.line, anchor.column));
+        newAnchor = await timed(() => sql.queryAnchor(anchor.file, anchor.line, anchor.column));
+      } catch {
+        continue;
+      }
       recordRpc(
         stats,
         "queryAnchor",

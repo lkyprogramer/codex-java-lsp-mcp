@@ -1,0 +1,322 @@
+{
+  "repo": "/Users/luo/Documents/program/lishu-v2",
+  "rpc": {
+    "queryAnchor": {
+      "calls": 184,
+      "diffs": 0,
+      "p50Ms": {
+        "old": 1.114958000020124,
+        "new": 0.7102500000037253
+      },
+      "p95Ms": {
+        "old": 4.1979580000042915,
+        "new": 2.944000000017695
+      }
+    },
+    "queryType": {
+      "calls": 184,
+      "diffs": 0,
+      "p50Ms": {
+        "old": 0.277957999962382,
+        "new": 0.22000000003026798
+      },
+      "p95Ms": {
+        "old": 1.7092080000438727,
+        "new": 0.48625000001629815
+      }
+    },
+    "queryTypes": {
+      "calls": 184,
+      "diffs": 0,
+      "p50Ms": {
+        "old": 0.18199999997159466,
+        "new": 0.0953330000047572
+      },
+      "p95Ms": {
+        "old": 0.4622080000117421,
+        "new": 0.17820800002664328
+      }
+    },
+    "queryFiles": {
+      "calls": 184,
+      "diffs": 0,
+      "p50Ms": {
+        "old": 7.254208000027575,
+        "new": 2.2852920000441372
+      },
+      "p95Ms": {
+        "old": 58.51779199996963,
+        "new": 6.8462080000317656
+      }
+    },
+    "queryImplementers": {
+      "calls": 184,
+      "diffs": 0,
+      "p50Ms": {
+        "old": 0.09458299999823794,
+        "new": 0.24508399999467656
+      },
+      "p95Ms": {
+        "old": 0.3486249999841675,
+        "new": 0.8110410000081174
+      }
+    },
+    "queryTypeReferencers": {
+      "calls": 184,
+      "diffs": 0,
+      "p50Ms": {
+        "old": 0.08191599999554455,
+        "new": 0.030000000027939677
+      },
+      "p95Ms": {
+        "old": 0.22350000002188608,
+        "new": 0.36225000000558794
+      }
+    },
+    "queryCallers": {
+      "calls": 184,
+      "diffs": 0,
+      "p50Ms": {
+        "old": 0.12229200004367158,
+        "new": 0.06554200005484745
+      },
+      "p95Ms": {
+        "old": 0.3507499999832362,
+        "new": 1.0376669999677688
+      }
+    },
+    "queryCallees": {
+      "calls": 184,
+      "diffs": 0,
+      "p50Ms": {
+        "old": 0.10891700000502169,
+        "new": 0.1875
+      },
+      "p95Ms": {
+        "old": 0.36179100000299513,
+        "new": 0.4196249999804422
+      }
+    },
+    "queryCalleesBatch": {
+      "calls": 184,
+      "diffs": 0,
+      "p50Ms": {
+        "old": 0.09750000003259629,
+        "new": 0.054666000010911375
+      },
+      "p95Ms": {
+        "old": 0.2893749999930151,
+        "new": 0.17108300002291799
+      }
+    },
+    "queryMethodsWithParameterTypes": {
+      "calls": 184,
+      "diffs": 0,
+      "p50Ms": {
+        "old": 0.07483299996238202,
+        "new": 1.3461670000106096
+      },
+      "p95Ms": {
+        "old": 0.27937499998370185,
+        "new": 3.2803749999729916
+      }
+    },
+    "queryMyBatisResource": {
+      "calls": 0,
+      "diffs": 0,
+      "p50Ms": {
+        "old": 0,
+        "new": 0
+      },
+      "p95Ms": {
+        "old": 0,
+        "new": 0
+      }
+    },
+    "queryMyBatisResourcesByNamespace": {
+      "calls": 0,
+      "diffs": 0,
+      "p50Ms": {
+        "old": 0,
+        "new": 0
+      },
+      "p95Ms": {
+        "old": 0,
+        "new": 0
+      }
+    },
+    "queryRepositoryFactMarkers": {
+      "calls": 1,
+      "diffs": 0,
+      "p50Ms": {
+        "old": 0.996958999952767,
+        "new": 3.0447080000303686
+      },
+      "p95Ms": {
+        "old": 0.996958999952767,
+        "new": 3.0447080000303686
+      }
+    },
+    "queryReadRanges": {
+      "calls": 184,
+      "diffs": 0,
+      "p50Ms": {
+        "old": 1.014666999981273,
+        "new": 1.1413330000359565
+      },
+      "p95Ms": {
+        "old": 1.8815840000170283,
+        "new": 4.383709000016097
+      }
+    },
+    "queryGraphDigest": {
+      "calls": 1,
+      "diffs": 1,
+      "p50Ms": {
+        "old": 0.6693749999976717,
+        "new": 128.23787499999162
+      },
+      "p95Ms": {
+        "old": 0.6693749999976717,
+        "new": 128.23787499999162
+      }
+    },
+    "queryGraphReachable": {
+      "calls": 0,
+      "diffs": 0,
+      "p50Ms": {
+        "old": 0,
+        "new": 0
+      },
+      "p95Ms": {
+        "old": 0,
+        "new": 0
+      }
+    },
+    "queryContextGraph": {
+      "calls": 0,
+      "diffs": 0,
+      "p50Ms": {
+        "old": 0,
+        "new": 0
+      },
+      "p95Ms": {
+        "old": 0,
+        "new": 0
+      }
+    },
+    "queryContextGraphPersistence": {
+      "calls": 0,
+      "diffs": 0,
+      "p50Ms": {
+        "old": 0,
+        "new": 0
+      },
+      "p95Ms": {
+        "old": 0,
+        "new": 0
+      }
+    },
+    "queryContextGraphNavigateCallees": {
+      "calls": 0,
+      "diffs": 0,
+      "p50Ms": {
+        "old": 0,
+        "new": 0
+      },
+      "p95Ms": {
+        "old": 0,
+        "new": 0
+      }
+    },
+    "queryContextGraphNavigateCallers": {
+      "calls": 0,
+      "diffs": 0,
+      "p50Ms": {
+        "old": 0,
+        "new": 0
+      },
+      "p95Ms": {
+        "old": 0,
+        "new": 0
+      }
+    },
+    "queryEntitySearch": {
+      "calls": 184,
+      "diffs": 0,
+      "p50Ms": {
+        "old": 244.98391700000502,
+        "new": 17.550000000046566
+      },
+      "p95Ms": {
+        "old": 338.3080830000108,
+        "new": 199.38229200005298
+      }
+    },
+    "queryTypeUnresolved": {
+      "calls": 1,
+      "diffs": 0,
+      "p50Ms": {
+        "old": 0.4392909999587573,
+        "new": 0.6614160000463016
+      },
+      "p95Ms": {
+        "old": 0.4392909999587573,
+        "new": 0.6614160000463016
+      }
+    },
+    "queryFilesEmpty": {
+      "calls": 1,
+      "diffs": 0,
+      "p50Ms": {
+        "old": 0.3191660000011325,
+        "new": 0.08583299996098503
+      },
+      "p95Ms": {
+        "old": 0.3191660000011325,
+        "new": 0.08583299996098503
+      }
+    },
+    "queryCalleesBatchEmpty": {
+      "calls": 1,
+      "diffs": 0,
+      "p50Ms": {
+        "old": 0.01604099996620789,
+        "new": 0.012541999982204288
+      },
+      "p95Ms": {
+        "old": 0.01604099996620789,
+        "new": 0.012541999982204288
+      }
+    },
+    "queryTypesEmpty": {
+      "calls": 1,
+      "diffs": 0,
+      "p50Ms": {
+        "old": 0.02866599999833852,
+        "new": 0.021040999970864505
+      },
+      "p95Ms": {
+        "old": 0.02866599999833852,
+        "new": 0.021040999970864505
+      }
+    }
+  },
+  "diffSamples": [
+    {
+      "rpc": "queryGraphDigest",
+      "argsPreview": [],
+      "old": {
+        "digest": "7296eef32f09f1a99a3da911eed76be0eabea0efbaa273562080df0a792b86f7",
+        "edges": 252041,
+        "nodes": 79641
+      },
+      "new": {
+        "digest": "fb9cb98537dfbebd302bb3d82fbf08bc45b801371bccd4e32de400fe071a5f22",
+        "edges": 256102,
+        "nodes": 79229
+      }
+    }
+  ],
+  "intervalP99Ms": 1
+}
