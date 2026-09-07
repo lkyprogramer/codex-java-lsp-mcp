@@ -1,6 +1,6 @@
 # Worktree Family 内存共享方案（FS 轨）
 
-状态：ADOPTED（R4，2026-09-03）——§9 新增 FSZ 48h 编辑负载窗的真因（堆主体未归因 + 表示路径不对称 + 冷建链三连错）与 FSR 收尾卡；§8 为零调用窗根因与 FSZ 卡；§7 为 48h 观察窗裁决与 FSY 卡；§6 为 FS2 三类故障与 FSX 卡
+状态：SUPERSEDED（2026-09-06）——§9 FSR0–FSR4 卡**全部作废**，由 `codex-java-lsp-mcp-index-on-disk-rearchitecture-plan-2026-09-06.md` 取代：FSR 24h 窗（`docs/phase-fs/fsr-24h-soak-report-2026-09-06.md`）证明相对阈值换气自身成为故障源（基线不刷新 → 连打 8 次 → skip 帽把 lishu-v2 打成 43 文件空壳 24h），且 FSR0 归因实际在 2 文件 fixture 上完成、无决策价值。本文 §0–§8 保留为历史记录。原 R4 状态行：§9 新增 FSZ 48h 编辑负载窗的真因（堆主体未归因 + 表示路径不对称 + 冷建链三连错）与 FSR 收尾卡；§8 为零调用窗根因与 FSZ 卡；§7 为 48h 观察窗裁决与 FSY 卡；§6 为 FS2 三类故障与 FSX 卡
 前置：`docs/deep/codex-java-lsp-mcp-daemon-stability-and-memory-plan-2026-08-25.md`（R4，已合 main）
 触发：用户反馈「每个 worktree ~1.5GB，多项目多 worktree 常开时不可接受，为什么不能共享」
 
