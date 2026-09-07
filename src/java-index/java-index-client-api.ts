@@ -15,8 +15,10 @@ import type {
   ContextGraphResult,
   GraphDigest,
   GraphReachable,
+  JavaIndexCommand,
   JavaIndexRefreshPriority,
   JavaIndexWorktreeIdentity,
+  JavaIndexWorkerTiming,
   MyBatisResourceByNamespaceBatch
 } from "./worker-protocol.js";
 
@@ -30,6 +32,29 @@ export type JavaIndexOpenOptions = {
 export type JavaIndexRequestOptions = {
   budget?: DeadlineBudget;
   signal?: AbortSignal;
+  telemetry?: JavaIndexRpcTelemetrySink;
+};
+
+export type JavaIndexRpcOperation = JavaIndexCommand["type"];
+export type JavaIndexRpcOutcome = "completed" | "cancelled" | "deadlineExceeded" | "failed" | "retired";
+export type JavaIndexWorkerRetireReason =
+  | "DEADLINE_EXCEEDED"
+  | "MALFORMED_RESPONSE"
+  | "WORKER_ERROR"
+  | "WORKER_EXIT"
+  | "OPEN_FAILURE";
+export type JavaIndexRpcSettlement = {
+  operation: JavaIndexRpcOperation;
+  outcome: JavaIndexRpcOutcome;
+  callerWaitMs: number;
+  outputJsonBytes?: number;
+  workerTiming?: JavaIndexWorkerTiming;
+  retireReason?: JavaIndexWorkerRetireReason;
+};
+export interface JavaIndexRpcTelemetrySink {
+  requestStarted(event: { operation: JavaIndexRpcOperation; inputJsonBytes: number }): void;
+  requestSettled(event: JavaIndexRpcSettlement): void;
+  lateResponse(event: Omit<JavaIndexRpcSettlement, "outcome">): void;
 };
 
 export type JavaIndexPrewarmReadyOptions = {

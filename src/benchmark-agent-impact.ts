@@ -46,7 +46,7 @@ import {
   type Scenario,
   type WarmState
 } from "./benchmark/golden-scenario.js";
-import { JavaIndexClient } from "./java-index/java-index-client.js";
+import { SqlJavaIndexClient } from "./java-index/sql/sql-client.js";
 import type { JavaIndexStatus } from "./java-index/index-types.js";
 import { RouterJavaIndex } from "./java-index/router-java-index.js";
 import { repoCacheRoot } from "./repo-layout.js";
@@ -170,7 +170,7 @@ const session = cli.strategy === "impact" && !jinEngine ? new JdtlsSession(cli.r
 // A benchmark has no runtime coordinator, so it must close the worker itself
 // after printing its results.
 const javaIndexClient = cli.strategy === "impact"
-  ? new JavaIndexClient(cli.repoRoot, cli.indexCacheDir)
+  ? new SqlJavaIndexClient(cli.repoRoot, path.join(cli.indexCacheDir, "index.sqlite"))
   : undefined;
 const routerJavaIndex = javaIndexClient
   ? new RouterJavaIndex(cli.repoRoot, javaIndexClient)
@@ -650,7 +650,7 @@ async function prepareWarmState(cli: Cli, session: JdtlsSession, items: Scenario
 async function prepareJavaIndex(
   cli: Cli,
   index: RouterJavaIndex,
-  client: JavaIndexClient
+  client: SqlJavaIndexClient
 ): Promise<{ reconciled: boolean; status: JavaIndexStatus }> {
   await index.open(0);
   let reconciled = false;
@@ -662,7 +662,7 @@ async function prepareJavaIndex(
   return { reconciled, status: await waitForJavaIndexIdle(client, cli.indexPrepareTimeoutMs) };
 }
 
-async function waitForJavaIndexIdle(client: JavaIndexClient, timeoutMs: number): Promise<JavaIndexStatus> {
+async function waitForJavaIndexIdle(client: SqlJavaIndexClient, timeoutMs: number): Promise<JavaIndexStatus> {
   const deadline = Date.now() + timeoutMs;
   let status = await client.status();
   while (!isJavaIndexQuiescent(status)) {

@@ -10,12 +10,8 @@ import { normalizeRepoFile, repoCacheRoot } from "../repo-layout.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
 import { RgRunner } from "../search/rg-runner.js";
-import {
-  JavaIndexClient,
-  type JavaIndexOpenOptions,
-  type JavaIndexRequestOptions
-} from "./java-index-client.js";
-import type { JavaIndexClientApi } from "./java-index-client-api.js";
+import type { JavaIndexClientApi, JavaIndexOpenOptions, JavaIndexRequestOptions } from "./java-index-client-api.js";
+import { SqlJavaIndexClient } from "./sql/sql-client.js";
 import type { ContextGraphResult, GraphDigest, GraphReachable, JavaIndexRefreshPriority } from "./worker-protocol.js";
 import { ENTITY_SEARCH_DEFAULT_LIMIT, type EntityHit } from "./entity-search.js";
 import type {
@@ -236,7 +232,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
   }
 
   static create(repoRoot: string, cacheDir = repoCacheRoot(repoRoot), openOptions: JavaIndexOpenOptions = {}): RouterJavaIndex {
-    return new RouterJavaIndex(repoRoot, new JavaIndexClient(repoRoot, cacheDir), openOptions);
+    return new RouterJavaIndex(repoRoot, new SqlJavaIndexClient(repoRoot, path.join(cacheDir, "index.sqlite")), openOptions);
   }
 
   rawClient(): JavaIndexClientApi {

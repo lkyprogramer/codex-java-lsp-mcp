@@ -7,7 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ImpactOptions } from "../agent-types.js";
 import { AgentRouter } from "../agent-router/index.js";
-import { JavaIndexClient } from "../java-index/java-index-client.js";
+import { SqlJavaIndexClient } from "../java-index/sql/sql-client.js";
 import type { JavaFileBundle, JavaIndexStatus } from "../java-index/index-types.js";
 import { RouterJavaIndex, type RouterIndex } from "../java-index/router-java-index.js";
 import { LayoutManager } from "../layout-manager.js";
@@ -93,7 +93,7 @@ class EmptyRgRunner extends RgRunner {
 
 export async function runTask36MutationMatrix(): Promise<Task36MutationMatrix> {
   const fixture = await createFixture();
-  const client = new JavaIndexClient(fixture.root, fixture.cacheDir);
+  const client = new SqlJavaIndexClient(fixture.root, path.join(fixture.cacheDir, "index.sqlite"));
   const index = new RouterJavaIndex(fixture.root, client);
   const clock = new GenerationClock();
   const layout = new LayoutManager(fixture.root);
@@ -260,7 +260,7 @@ export async function runTask36MutationMatrix(): Promise<Task36MutationMatrix> {
 }
 
 async function observeCase(
-  client: JavaIndexClient,
+  client: SqlJavaIndexClient,
   id: Task36MutationCaseId,
   mutation: SettledMutation,
   assertLatest: () => Promise<boolean>
@@ -287,7 +287,7 @@ async function observeCase(
 
 async function applyBatchToIndex(
   index: RouterJavaIndex,
-  client: JavaIndexClient,
+  client: SqlJavaIndexClient,
   batch: RepoChangeBatch
 ): Promise<void> {
   if (batch.storm || batch.changes.some(change => change.kind === "BUILD_CHANGE")) {
@@ -312,7 +312,7 @@ async function applyBatchToIndex(
 
 async function settleWatchedMutation(
   coordinator: RepoChangeCoordinator,
-  client: JavaIndexClient,
+  client: SqlJavaIndexClient,
   clock: GenerationClock,
   batches: readonly RepoChangeBatch[],
   expectedPaths: readonly string[],
@@ -355,7 +355,7 @@ async function settleWatchedMutation(
 
 async function verifyChangedDuringRequest(input: {
   index: RouterJavaIndex;
-  client: JavaIndexClient;
+  client: SqlJavaIndexClient;
   coordinator: RepoChangeCoordinator;
   clock: GenerationClock;
   batches: readonly RepoChangeBatch[];
@@ -564,7 +564,7 @@ function mapperSource(statementId: "findStale" | "findFresh"): string {
   return `<mapper namespace="demo.OrderMapper"><select id="${statementId}" resultType="demo.Order">select 1</select></mapper>\n`;
 }
 
-async function waitForIdle(client: JavaIndexClient): Promise<JavaIndexStatus> {
+async function waitForIdle(client: SqlJavaIndexClient): Promise<JavaIndexStatus> {
   const deadline = Date.now() + IDLE_TIMEOUT_MS;
   let status = await client.status();
   while (!isJavaIndexQuiescent(status)) {
@@ -575,7 +575,7 @@ async function waitForIdle(client: JavaIndexClient): Promise<JavaIndexStatus> {
   return status;
 }
 
-async function requiredBundle(client: JavaIndexClient, absolutePath: string): Promise<JavaFileBundle> {
+async function requiredBundle(client: SqlJavaIndexClient, absolutePath: string): Promise<JavaFileBundle> {
   const bundle = (await client.queryFiles([absolutePath]))[0];
   if (!bundle) throw new Error(`expected JavaIndex facts for ${absolutePath}`);
   return bundle;
@@ -587,11 +587,11 @@ function requiredMethod(bundle: JavaFileBundle, name: string) {
   return method;
 }
 
-async function isResolved(client: JavaIndexClient, typeText: string): Promise<boolean> {
+async function isResolved(client: SqlJavaIndexClient, typeText: string): Promise<boolean> {
   return (await client.queryType(typeText)).state === "RESOLVED";
 }
 
-async function isUnresolved(client: JavaIndexClient, typeText: string): Promise<boolean> {
+async function isUnresolved(client: SqlJavaIndexClient, typeText: string): Promise<boolean> {
   return (await client.queryType(typeText)).state === "UNRESOLVED";
 }
 

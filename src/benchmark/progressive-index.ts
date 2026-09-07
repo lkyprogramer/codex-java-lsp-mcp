@@ -7,7 +7,7 @@ import path from "node:path";
 import { probeLayout } from "../layout-probe.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import { computeBuildFingerprint, computeExtractorVersion } from "../java-index/build-fingerprint.js";
-import { JavaIndexClient } from "../java-index/java-index-client.js";
+import { SqlJavaIndexClient } from "../java-index/sql/sql-client.js";
 import type { JavaIndexStatus } from "../java-index/index-types.js";
 import { computeCurrentSnapshotManifestFingerprint } from "../java-index/manifest.js";
 import { RouterJavaIndex } from "../java-index/router-java-index.js";
@@ -71,7 +71,7 @@ export async function runProgressiveIndex(input: {
   const elapsed = () => performance.now() - startedAt;
   const deadlineAt = startedAt + timeoutMs;
   const budget = DeadlineBudget.fromTimeout(timeoutMs);
-  const client = new JavaIndexClient(input.repoRoot, input.indexCacheDir);
+  const client = new SqlJavaIndexClient(input.repoRoot, path.join(input.indexCacheDir, "index.sqlite"));
   const router = new RouterJavaIndex(input.repoRoot, client);
   const layout = probeLayout(input.repoRoot);
   const anchorFile = path.resolve(input.repoRoot, input.scenario.anchor.file);
@@ -116,7 +116,7 @@ export async function runProgressiveIndex(input: {
         root.root === anchorRoot && root.generation === generation && root.state === "BUILDING"
       );
       if (observedBuilding) {
-        const negative = await client.queryType(input.scenario.missingTypeFqn, anchorFile, { budget });
+        const negative = await client.queryType(input.scenario.missingTypeFqn, anchorFile);
         beforeComplete = negative.state === "UNRESOLVED"
           ? {
               state: negative.state,
@@ -138,7 +138,7 @@ export async function runProgressiveIndex(input: {
           root.root === anchorRoot && root.generation === generation && root.state === "BUILDING"
         );
         if (!observedBuilding && buildingNow) {
-          const negative = await client.queryType(input.scenario.missingTypeFqn, anchorFile, { budget });
+          const negative = await client.queryType(input.scenario.missingTypeFqn, anchorFile);
           beforeComplete = negative.state === "UNRESOLVED"
             ? {
                 state: negative.state,
@@ -202,7 +202,7 @@ export async function runProgressiveIndex(input: {
         stages.snapshotDurable = snapshotProof.ok
           ? { state: "REACHED", elapsedMs: elapsed(), proof: snapshotProof }
           : failed(snapshotProof.reason);
-        const negative = await client.queryType(input.scenario.missingTypeFqn, anchorFile, { budget });
+        const negative = await client.queryType(input.scenario.missingTypeFqn, anchorFile);
         afterComplete = negative.state === "UNRESOLVED"
           ? {
               state: negative.state,
