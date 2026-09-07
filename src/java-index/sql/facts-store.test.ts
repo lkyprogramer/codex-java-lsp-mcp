@@ -6,6 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { buildStaticEdges, resolveFileRefs } from "../edge-builder.js";
+import type { FactsReader } from "../facts-reader.js";
 import { JavaIndexStore } from "../index-store.js";
 import type { JavaFileBundle, JavaTypeFacts, JavaTypeRef, StaticEdgeKind } from "../index-types.js";
 import { parseJavaSourceFile } from "../java-index-file-parse.js";
@@ -102,6 +103,9 @@ test("SqlFactsStore point lookups, files, mybatis, and iterators match JavaIndex
   try {
     const store = new JavaIndexStore();
     const sql = fill(store, db, bundles);
+    const asReader: FactsReader = sql;
+    const asHeap: FactsReader = store;
+    assert.equal(asReader.typesById.size, asHeap.typesById.size);
     const paths = bundles.map(bundle => bundle.file.relativePath);
     const typeIds = [...store.typesById.keys()];
     const methodIds = [...store.methodsById.values()].map(method => method.methodId);
@@ -160,10 +164,13 @@ test("SqlFactsStore point lookups, files, mybatis, and iterators match JavaIndex
       assert.deepEqual(sql.myBatisResource(resource.relativePath), jsonClone(store.myBatisResource(resource.relativePath)));
       assert.deepEqual(sql.myBatisResourceForNamespace(resource.namespace), jsonClone(store.myBatisResourceForNamespace(resource.namespace)));
       for (const statement of resource.statements) {
+        const qid = myBatisQualifiedId(resource.namespace, statement.id);
         assert.deepEqual(
-          sql.myBatisStatement(myBatisQualifiedId(resource.namespace, statement.id)),
+          sql.myBatisStatement(qid),
           jsonClone(store.myBatisStatement(resource.namespace, statement.id))
         );
+        assert.deepEqual(jsonClone(store.myBatisStatement(qid)), jsonClone(store.myBatisStatement(resource.namespace, statement.id)));
+        assert.deepEqual(sql.myBatisStatement(qid), jsonClone(store.myBatisStatement(qid)));
       }
     }
   } finally {
@@ -297,9 +304,12 @@ test("SqlFactsStore reference queries, anchor, and typeLookup match JavaIndexSto
     }
 
     assert.deepEqual(sorted(sql.implementersOfAny(typeIds)), sorted(implementersOfAnyFromStore(store, typeIds)));
+    assert.deepEqual(sorted(store.implementersOfAny(typeIds)), sorted(sql.implementersOfAny(typeIds)));
     assert.deepEqual(sql.implementersOfAny([]), []);
+    assert.deepEqual(store.implementersOfAny([]), []);
     for (const typeId of typeIds) {
       assert.deepEqual(sorted(sql.implementersOfAny([typeId])), sorted(implementersOfAnyFromStore(store, [typeId])), `any:${typeId}`);
+      assert.deepEqual(sorted(store.implementersOfAny([typeId])), sorted(sql.implementersOfAny([typeId])), `heap-sql:${typeId}`);
     }
     assert.deepEqual(sql.methodsWithParameterTypes(typeIds), store.methodsWithParameterTypes(typeIds));
     assert.deepEqual(sql.methodsWithParameterTypes(typeIds, 1), store.methodsWithParameterTypes(typeIds, 1));

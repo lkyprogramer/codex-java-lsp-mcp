@@ -93,10 +93,19 @@ function scanRefTargetsType(
 function scanImplementersOfAny(store: JavaIndexStore, typeIds: readonly string[]): string[] {
   const targets = typeIds.map(id => store.typesById.get(id)).filter((type): type is JavaTypeFacts => Boolean(type));
   if (targets.length === 0) return [];
+  const fromIds = new Set<string>();
+  for (const typeId of typeIds) {
+    for (const edgeId of store.inEdgeIdsByNode.get(typeId) ?? []) {
+      const edge = store.edgesById.get(edgeId);
+      if (!edge || (edge.kind !== "IMPLEMENTS" && edge.kind !== "EXTENDS")) continue;
+      fromIds.add(edge.fromId);
+    }
+  }
   const hits: string[] = [];
-  for (const type of store.typesById.values()) {
+  for (const fromId of fromIds) {
+    const type = store.typesById.get(fromId);
+    if (!type) continue;
     const refs = [...type.implements, ...type.extends];
-    if (refs.length === 0) continue;
     const implementerFile = relativePathOfFileId(type.fileId);
     if (targets.some(target => refs.some(ref => scanRefTargetsType(store, ref, target, implementerFile)))) {
       hits.push(type.typeId);

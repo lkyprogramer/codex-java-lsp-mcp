@@ -38,7 +38,7 @@ export type FactsReader = {
   typeLookup(typeText: string, scopeFile?: string): JavaTypeLookupResult;
   myBatisResource(path: string): MyBatisMapperResourceFacts | undefined;
   myBatisResourceForNamespace(ns: string): MyBatisMapperResourceFacts | undefined;
-  myBatisStatement(namespace: string, id: string): MyBatisMapperResourceFacts["statements"][number] | undefined;
+  myBatisStatement(qid: string): MyBatisMapperResourceFacts["statements"][number] | undefined;
   repositoryFactMarkers(importPrefixes: readonly string[], annotationPrefixes: readonly string[]): {
     importPrefixFound: boolean;
     annotationPrefixFound: boolean;

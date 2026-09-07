@@ -7,7 +7,7 @@ import { searchContextGraph, type GraphSearchResult } from "./graph-search.js";
 import { attachAnchorSignatureBundles, factsForStore, planContextQuery } from "./plan-query.js";
 import { JavaIndexStore } from "../java-index/index-store.js";
 import type { JavaFileBundle, JavaFileFacts, JavaFieldFacts, JavaMethodFacts, JavaTypeFacts, JavaTypeRef, SourceRange } from "../java-index/index-types.js";
-import { javaFieldId, javaFileId, javaMethodId, javaTypeId } from "../java-index/stable-id.js";
+import { javaEdgeId, javaFieldId, javaFileId, javaMethodId, javaTypeId } from "../java-index/stable-id.js";
 import { PLANNER_VERSION, StaleSessionError, contextSessions } from "./context-contract.js";
 
 function seed(): KnowledgeGraphStore {
@@ -282,6 +282,18 @@ test("attachAnchorSignatureBundles copies callee names onto implementers and exi
   const port = fileBundle("Generator", { methods: [{ name: "generate", start: 4, end: 4 }] });
   const impl = fileBundle("Excel", { methods: [{ name: "generate", start: 10, end: 40 }] });
   impl.types[0]!.implements.push(repoRef("Generator", port.types[0]!.typeId));
+  const implTypeId = impl.types[0]!.typeId;
+  const portTypeId = port.types[0]!.typeId;
+  impl.edges.push({
+    edgeId: javaEdgeId({ kind: "IMPLEMENTS", fromId: implTypeId, toId: portTypeId }),
+    fromId: implTypeId,
+    toId: portTypeId,
+    kind: "IMPLEMENTS",
+    confidence: 1,
+    sourceFile: impl.file.relativePath,
+    generation: 1,
+    resolution: { kind: "TYPE_REFERENCE", typeStrategy: "QUALIFIED" }
+  });
   const service = fileBundle("Service", {
     methods: [{
       name: "export",

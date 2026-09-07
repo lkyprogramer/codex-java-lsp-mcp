@@ -373,6 +373,7 @@ CREATE TABLE entity_df(field INTEGER NOT NULL, token_sym INTEGER NOT NULL, df IN
 - **测试**：现有 `plan-query.test.ts`、`graph-search.test.ts`、`graph-walk` 相关、`persistence-edge-builder.test.ts`、`call-resolver.test.ts`、`graph-builder.test.ts` 全部不改断言继续绿。
 - **门**：T0 + 上述测试绿。旧 worker 行为不变（P1-T5 差分会证明）。
 - **拆分（2026-09-07）**：`P1-T1.a` `FactsReader` / `GraphReader` + heap `implementersOfAny` / `typesBySimpleNameOrFqn` + `plan-query` / `graph-search` / `graph-walk`；`P1-T1.b` 其余 A.3 与 `call-resolver` / `framework-edge-builder` / `persistence-edge-builder` / `graph-builder` / `java-index-worker-query` 类型收窄。
+- **拆分（续）**：`P1-T1.c` `FactsReader.myBatisStatement(qid)` 与 heap/SQL `implementersOfAny` 同语义；`P1-T1.d` `FactsIter` + `graph-builder.rebuildFromStore`。
 
 ### P1-T2 `SqlEntitySearch`
 

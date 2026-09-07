@@ -185,8 +185,18 @@ export class JavaIndexStore {
     return this.myBatisResourcesByPath.get(relativePath);
   }
 
-  myBatisStatement(namespace: string, id: string): MyBatisMapperResourceFacts["statements"][number] | undefined {
-    return this.myBatisStatementsByQualifiedId.get(myBatisQualifiedId(namespace, id))?.statement;
+  myBatisStatement(qid: string): MyBatisMapperResourceFacts["statements"][number] | undefined;
+  myBatisStatement(namespace: string, id: string): MyBatisMapperResourceFacts["statements"][number] | undefined;
+  myBatisStatement(namespaceOrQid: string, id?: string): MyBatisMapperResourceFacts["statements"][number] | undefined {
+    if (id !== undefined) {
+      return this.myBatisStatementsByQualifiedId.get(myBatisQualifiedId(namespaceOrQid, id))?.statement;
+    }
+    const direct = this.myBatisStatementsByQualifiedId.get(namespaceOrQid);
+    if (direct) return direct.statement;
+    for (const entry of this.myBatisStatementsByQualifiedId.values()) {
+      if (entry.statement.statementId === namespaceOrQid) return entry.statement;
+    }
+    return undefined;
   }
 
   /** A namespace is exact only when one mapper resource claims it. */
@@ -627,10 +637,19 @@ export class JavaIndexStore {
       .map(id => this.typesById.get(id))
       .filter((type): type is JavaTypeFacts => Boolean(type));
     if (targets.length === 0) return [];
+    const fromIds = new Set<string>();
+    for (const typeId of typeIds) {
+      for (const edgeId of this.inEdgeIdsByNode.get(typeId) ?? []) {
+        const edge = this.edgesById.get(edgeId);
+        if (!edge || (edge.kind !== "IMPLEMENTS" && edge.kind !== "EXTENDS")) continue;
+        fromIds.add(edge.fromId);
+      }
+    }
     const hits: string[] = [];
-    for (const type of this.typesById.values()) {
+    for (const fromId of fromIds) {
+      const type = this.typesById.get(fromId);
+      if (!type) continue;
       const refs = [...type.implements, ...type.extends];
-      if (refs.length === 0) continue;
       const implementerFile = relativePathOfFileId(type.fileId);
       if (targets.some(target => refs.some(ref => this.refTargetsType(ref, target, implementerFile)))) {
         hits.push(type.typeId);
