@@ -113,6 +113,7 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     this.db = openIndexDb(this.dbPath, { readOnly: true });
     this.store = new SqlFactsStore(this.db);
     this.graph = new SqlKnowledgeGraph(this.db);
+    this.graph.prefetch();
     this.search = new SqlEntitySearch(this.db);
     this.layout = probeLayout(this.repoRoot);
     this.lastStatus = this.assembleStatus();

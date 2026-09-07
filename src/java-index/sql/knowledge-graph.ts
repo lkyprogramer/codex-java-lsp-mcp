@@ -158,6 +158,9 @@ export class SqlKnowledgeGraph {
   private readonly edgeXor: Buffer;
   private readonly extraEdgeOwners = new Map<string, Set<string>>();
   private readonly extraNodeOwners = new Map<string, Set<string>>();
+  private outByNode: Map<string, GraphEdge[]> | undefined;
+  private inByNode: Map<string, GraphEdge[]> | undefined;
+  private nodeMap: Map<string, GraphNode> | undefined;
 
   constructor(private readonly db: IndexDatabase) {
     this.nodeXor = xorFromMeta(db, "graphNodeXor");
@@ -186,7 +189,14 @@ export class SqlKnowledgeGraph {
     this.persistGeneration();
   }
 
+  private invalidateAdj(): void {
+    this.outByNode = undefined;
+    this.inByNode = undefined;
+    this.nodeMap = undefined;
+  }
+
   private writeTx<T>(fn: () => T): T {
+    this.invalidateAdj();
     if (this.db.isTransaction) return fn();
     return withTransaction(this.db, () => {
       const value = fn();
@@ -296,12 +306,20 @@ export class SqlKnowledgeGraph {
     });
   }
 
+  prefetch(): void {
+    this.ensureAdj();
+  }
+
   successors(nodeId: string, kind?: EdgeKind): GraphEdge[] {
-    return this.edgesFrom("from_sym", nodeId, kind);
+    this.ensureAdj();
+    const edges = this.outByNode!.get(nodeId) ?? [];
+    return kind === undefined ? edges : edges.filter(edge => edge.kind === kind);
   }
 
   predecessors(nodeId: string, kind?: EdgeKind): GraphEdge[] {
-    return this.edgesFrom("to_sym", nodeId, kind);
+    this.ensureAdj();
+    const edges = this.inByNode!.get(nodeId) ?? [];
+    return kind === undefined ? edges : edges.filter(edge => edge.kind === kind);
   }
 
   nodesByPath(path: string): GraphNode[] {
@@ -330,24 +348,32 @@ export class SqlKnowledgeGraph {
     });
   }
 
-  private edgesFrom(side: "from_sym" | "to_sym", nodeId: string, kind?: EdgeKind): GraphEdge[] {
-    const nodeSym = symId(this.db, nodeId);
-    if (nodeSym === undefined) return [];
-    if (kind === undefined) {
-      return prepareCached(this.db, `${KG_EDGE_SELECT} WHERE e.${side}=? ORDER BY e.id`)
-        .all(nodeSym)
-        .map(graphEdgeFromRow);
+  private ensureAdj(): void {
+    if (this.outByNode) return;
+    const nodes = new Map<string, GraphNode>();
+    for (const row of prepareCached(this.db, KG_NODE_SELECT).iterate()) {
+      const node = graphNodeFromRow(row);
+      nodes.set(node.id, node);
     }
-    const kindSym = symId(this.db, kind);
-    if (kindSym === undefined) return [];
-    return prepareCached(this.db, `${KG_EDGE_SELECT} WHERE e.${side}=? AND e.kind_sym=? ORDER BY e.id`)
-      .all(nodeSym, kindSym)
-      .map(graphEdgeFromRow);
+    const out = new Map<string, GraphEdge[]>();
+    const inn = new Map<string, GraphEdge[]>();
+    for (const row of prepareCached(this.db, `${KG_EDGE_SELECT} ORDER BY e.id`).iterate()) {
+      const edge = graphEdgeFromRow(row);
+      const outs = out.get(edge.fromId);
+      if (outs) outs.push(edge);
+      else out.set(edge.fromId, [edge]);
+      const ins = inn.get(edge.toId);
+      if (ins) ins.push(edge);
+      else inn.set(edge.toId, [edge]);
+    }
+    this.nodeMap = nodes;
+    this.outByNode = out;
+    this.inByNode = inn;
   }
 
   private nodeById(id: string): GraphNode | undefined {
-    const row = prepareCached(this.db, `${KG_NODE_SELECT} WHERE ns.text=?`).get(id);
-    return row ? graphNodeFromRow(row) : undefined;
+    this.ensureAdj();
+    return this.nodeMap!.get(id);
   }
 
   private *nodeEntries(): IterableIterator<[string, GraphNode]> {
