@@ -60,6 +60,25 @@ export function refreshIndexCounts(db: IndexDatabase): IndexCounts {
   return counts;
 }
 
+export function readIndexCounts(db: IndexDatabase): IndexCounts | undefined {
+  const raw = readMeta(db, "counts");
+  if (!raw) return undefined;
+  try {
+    const parsed = JSON.parse(raw) as Partial<IndexCounts>;
+    if (![parsed.files, parsed.types, parsed.methods, parsed.edges].every(value => typeof value === "number")) {
+      return undefined;
+    }
+    return {
+      files: parsed.files!,
+      types: parsed.types!,
+      methods: parsed.methods!,
+      edges: parsed.edges!
+    };
+  } catch {
+    return undefined;
+  }
+}
+
 export function clearIndexData(db: IndexDatabase): void {
   db.exec(`
     DELETE FROM entity_token;
