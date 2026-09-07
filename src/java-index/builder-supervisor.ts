@@ -344,13 +344,15 @@ export class BuilderSupervisor {
     if (!child) return;
     this.exiting = true;
     this.clearIdle();
-    if (this.role === "serve" && child.stdin?.writable) {
+    child.stdin?.on("error", () => {});
+    const alive = child.exitCode === null && child.signalCode === null;
+    if (this.role === "serve" && alive && child.stdin?.writable) {
       try {
         child.stdin.write(`${JSON.stringify({ kind: "exit" })}\n`);
       } catch {
         child.kill("SIGKILL");
       }
-    } else {
+    } else if (alive) {
       child.kill("SIGKILL");
     }
     const timedOut = await Promise.race([
