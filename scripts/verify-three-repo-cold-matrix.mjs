@@ -17,9 +17,6 @@ export const COMPARISON_POLICY_ENV_LOCKED = "env-locked-same-tree";
 export const ENV_AB_ALLOWLIST = Object.freeze(["JAVA_LSP_ENGINE"]);
 export const CONTINUE_POLICY_IN_POOL_FIFO = "in-pool-fifo";
 
-const ISOLATED_PARSE_CAP_WAIVED_LINE =
-  /^\[codex-java-lsp\] in-process parse files=\d+ \(cold-build child disabled; cap waived\)$/;
-
 const EPSILON = 1e-12;
 const P_READ_TOLERANCE = 0.02;
 const P95_ABSOLUTE_SLACK_MS = 50;
@@ -427,19 +424,14 @@ function readStderr(file) {
   try {
     const bytes = readFileSync(`${file}.stderr`);
     const kept = [];
-    let waivedLines = 0;
     for (const line of bytes.toString("utf8").split(/\r?\n/)) {
       if (line === "") continue;
-      if (ISOLATED_PARSE_CAP_WAIVED_LINE.test(line)) {
-        waivedLines += 1;
-        continue;
-      }
       kept.push(line);
     }
     if (kept.length > 0) {
       throw new MatrixValidationError(`${file}.stderr must be empty for a formal matrix`);
     }
-    return { bytes: bytes.length, sha256: sha256(bytes), waivedLines };
+    return { bytes: bytes.length, sha256: sha256(bytes), waivedLines: 0 };
   } catch (error) {
     if (error instanceof MatrixValidationError) throw error;
     if (error && typeof error === "object" && error.code === "ENOENT") {

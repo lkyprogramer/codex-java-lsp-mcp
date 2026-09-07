@@ -358,26 +358,14 @@ test("verifier binds the formal request deadline in both manifest and cells", as
   assert.throws(() => verifyMatrix({ matrixDir: cellMatrix }), /metadata\.deadlineMs must be 2000/);
 });
 
-test("verifier waives isolated cold-build-child-disabled parse-cap stderr lines", async t => {
-  const okMatrix = await fixtureMatrix();
-  const badMatrix = await fixtureMatrix();
-  t.after(() => Promise.all([
-    rm(path.dirname(okMatrix), { recursive: true, force: true }),
-    rm(path.dirname(badMatrix), { recursive: true, force: true })
-  ]));
-  const waived = "[codex-java-lsp] in-process parse files=6086 (cold-build child disabled; cap waived)\n";
-  await writeFile(path.join(okMatrix, "cipherlink-r1-old.json.stderr"), waived);
-  const ok = verifyMatrix({ matrixDir: okMatrix });
-  assert.equal(ok.passed, true);
-  const cell = ok.cells.find(item => item.file.endsWith("cipherlink-r1-old.json"));
-  assert.equal(cell?.stderrWaivedLines, 1);
-  assert.equal(ok.stderrWaivedLines, 1);
-
+test("verifier no longer waives isolated cold-build-child-disabled parse-cap stderr", async t => {
+  const matrixDir = await fixtureMatrix();
+  t.after(() => rm(path.dirname(matrixDir), { recursive: true, force: true }));
   await writeFile(
-    path.join(badMatrix, "cipherlink-r1-old.json.stderr"),
-    `${waived}other bytes\n`
+    path.join(matrixDir, "cipherlink-r1-old.json.stderr"),
+    "[codex-java-lsp] in-process parse files=6086 (cold-build child disabled; cap waived)\n"
   );
-  assert.throws(() => verifyMatrix({ matrixDir: badMatrix }), /stderr must be empty/);
+  assert.throws(() => verifyMatrix({ matrixDir }), /stderr must be empty/);
 });
 
 test("verifier rejects non-empty stderr and an illegal cold semantic completion", async t => {

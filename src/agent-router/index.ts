@@ -220,7 +220,6 @@ export class AgentRouter {
   ): Promise<ImpactResult | CompactImpact> {
     const budget = request?.budget ?? DeadlineBudget.fromTimeout(DEFAULT_ROUTER_DEADLINE_MS);
     const javaIndexTelemetry = options.verbosity === "diagnostic"
-      && process.env.JAVA_LSP_JAVA_INDEX_RPC_TELEMETRY !== "0"
       ? new JavaIndexRpcTelemetryCollector()
       : undefined;
     const execute = () => this.impactWithinRequest(options, request, budget, javaIndexTelemetry, internalObserver);

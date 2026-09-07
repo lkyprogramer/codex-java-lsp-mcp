@@ -593,6 +593,8 @@ test("L0 reclaims retired index files even when ttlDays is 0 and the root is pin
     await writeFile(path.join(dir, "keep-v4.json.gz"), Buffer.concat([Buffer.from("CJV4"), Buffer.from("rest")]));
     await writeMeta(cacheBase, "pin", { repoRoot: pinRoot });
     await writeFile(path.join(dir, "java-index-snapshot-v4.json.gz"), Buffer.concat([Buffer.from("CJV4"), Buffer.alloc(4)]));
+    await writeFile(path.join(dir, "index.sqlite"), "sql\n");
+    await writeFile(path.join(dir, "java-knowledge-graph.json.gz"), gzipSync(Buffer.from("{}")));
 
     const result = cleanupStaleWorktreeCaches({
       cacheBase,
@@ -605,6 +607,8 @@ test("L0 reclaims retired index files even when ttlDays is 0 and the root is pin
     assert.equal(existsSync(path.join(dir, "semantic-edges.jsonl")), false);
     assert.equal(existsSync(path.join(dir, "java-index-v2.initialized")), false);
     assert.equal(existsSync(path.join(dir, "java-index-snapshot.json.gz")), false);
+    assert.equal(existsSync(path.join(dir, "java-knowledge-graph.json.gz")), false);
+    assert.equal(existsSync(path.join(dir, "index.sqlite")), true);
     assert.equal(existsSync(path.join(dir, "workspace", "keep.txt")), true);
     assert.equal(result.removed, 0);
     assert.ok((result.reclaimedFiles ?? 0) >= 4);
