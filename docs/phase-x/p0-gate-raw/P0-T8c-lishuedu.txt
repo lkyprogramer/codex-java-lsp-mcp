@@ -1,0 +1,50 @@
+P0-T8.c lishuedu cold build (schema v3)
+dated: 2026-09-07
+sha: pending T8.c commit
+repo: /Users/luo/Documents/program/lishu/lishuedu
+db: /tmp/iod-lishuedu-v3.sqlite
+
+command:
+/usr/bin/time -l node --disable-warning=ExperimentalWarning \
+  dist/java-index/builder/builder-main.js \
+  --repo /Users/luo/Documents/program/lishu/lishuedu \
+  --db /tmp/iod-lishuedu-v3.sqlite --mode cold
+stat -f %z /tmp/iod-lishuedu-v3.sqlite
+
+result JSON:
+{"ok":true,"parseFailed":0,"parseFailures":[],"files":6090,"types":7319,"methods":25077,"edges":253711}
+
+wall: 134.52 s
+user: 112.88 s
+sys: 12.02 s
+maximum resident set size: 539656192 B = 514.6 MiB
+stat -f %z: 235376640 B = 224.5 MiB
+G4 target: <= 350 MB  PASS (was 1342.0 MiB on v2 zlib)
+
+counts (A.1):
+file 6090
+type 7319
+field 28556
+method 25077
+edge 253711
+sym 171988
+kg_node 67989
+kg_edge 270720
+entity 32396
+entity_token 1155427
+
+dbstat (top families, MiB):
+method 34.2
+sqlite_autoindex_sym_1 25.0
+sym 22.9  (171988 rows, 140 B/row)
+entity_token 17.0  (1155427 rows, 15 B/row)
+entity_token_lookup 15.7
+edge 11.9  (253711 rows, 49 B/row)
+field 10.2
+kg_summary 10.1
+kg_edge 7.8  (270720 rows, 30 B/row)
+sqlite_autoindex_edge_1 7.5
+file 5.8
+meta 5.7
+entity 5.4
+kg_node 3.2  (67989 rows, 50 B/row)

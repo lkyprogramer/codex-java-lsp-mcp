@@ -1,8 +1,35 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { close, openIndexDb } from "../sql/driver.js";
+import { close, openIndexDb, type IndexDatabase } from "../sql/driver.js";
 import { ensureSchema } from "../sql/schema.js";
 import { runSqlColdBuild } from "./cold-build.js";
+
+function dbstatByName(db: IndexDatabase): Array<{ name: string; bytes: number; miB: number; rows?: number; bytesPerRow?: number }> {
+  try {
+    const rows = db.prepare(
+      "SELECT name AS name, SUM(pgsize) AS bytes FROM dbstat GROUP BY name ORDER BY bytes DESC"
+    ).all() as Array<{ name: string; bytes: number | bigint }>;
+    const counts = new Map<string, number>();
+    for (const table of db.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+    ).all() as Array<{ name: string }>) {
+      const n = db.prepare(`SELECT count(*) AS n FROM "${table.name.replaceAll("\"", "\"\"")}"`).get() as { n: number | bigint };
+      counts.set(table.name, typeof n.n === "bigint" ? Number(n.n) : Number(n.n));
+    }
+    return rows.map(row => {
+      const bytes = typeof row.bytes === "bigint" ? Number(row.bytes) : Number(row.bytes);
+      const n = counts.get(row.name);
+      return {
+        name: row.name,
+        bytes,
+        miB: Math.round((bytes / (1024 * 1024)) * 10) / 10,
+        ...(n !== undefined ? { rows: n, bytesPerRow: n > 0 ? Math.round(bytes / n) : 0 } : {})
+      };
+    });
+  } catch {
+    return [];
+  }
+}
 
 export function parseBuilderArgs(argv: string[]): {
   repo: string;
@@ -47,6 +74,7 @@ export async function runBuilderMain(argv = process.argv.slice(2)): Promise<void
         : undefined
     });
     process.stdout.write(`${JSON.stringify(result)}\n`);
+    process.stdout.write(`${JSON.stringify({ dbstat: dbstatByName(db) })}\n`);
   } finally {
     close(db);
   }

@@ -312,7 +312,8 @@ function jsonTopLevelStringArray(json: string, key: string): string[] {
 function loadMethodStub(db: IndexDatabase, methodId: string): JavaMethodFacts | undefined {
   const row = prepareCached(
     db,
-    "SELECT method_id AS methodId, owner_type_id AS ownerTypeId, name, is_ctor AS isCtor, arity, facts FROM method WHERE method_id=?"
+    `SELECT s.text AS methodId, os.text AS ownerTypeId, m.name AS name, m.is_ctor AS isCtor, m.arity AS arity, m.facts AS facts
+     FROM method m JOIN sym s ON s.id=m.sym JOIN sym os ON os.id=m.owner_sym WHERE s.text=?`
   ).get(methodId) as {
     methodId?: unknown;
     ownerTypeId?: unknown;
@@ -346,8 +347,8 @@ function loadMethodStub(db: IndexDatabase, methodId: string): JavaMethodFacts | 
 function loadTypeStub(db: IndexDatabase, typeId: string): JavaTypeFacts | undefined {
   const row = prepareCached(
     db,
-    `SELECT t.type_id AS typeId, t.fqn AS fqn, t.simple_name AS simpleName, t.kind AS kind, f.path AS path, t.facts AS facts
-     FROM type t JOIN file f ON f.id=t.file_id WHERE t.type_id=?`
+    `SELECT s.text AS typeId, t.fqn AS fqn, t.simple_name AS simpleName, t.kind AS kind, f.path AS path, t.facts AS facts
+     FROM type t JOIN sym s ON s.id=t.sym JOIN file f ON f.id=t.file_id WHERE s.text=?`
   ).get(typeId) as {
     typeId?: unknown;
     fqn?: unknown;
@@ -359,11 +360,19 @@ function loadTypeStub(db: IndexDatabase, typeId: string): JavaTypeFacts | undefi
   if (typeof row?.typeId !== "string" || typeof row.simpleName !== "string" || typeof row.kind !== "string" || typeof row.path !== "string") {
     return undefined;
   }
-  const fieldIds = prepareCached(db, "SELECT field_id AS id FROM field WHERE owner_type_id=? ORDER BY id")
+  const fieldIds = prepareCached(
+    db,
+    `SELECT s.text AS id FROM field f JOIN sym s ON s.id=f.sym JOIN sym os ON os.id=f.owner_sym
+     WHERE os.text=? ORDER BY f.sym`
+  )
     .all(row.typeId)
     .map(item => item.id)
     .filter((id): id is string => typeof id === "string");
-  const methodIds = prepareCached(db, "SELECT method_id AS id FROM method WHERE owner_type_id=? ORDER BY id")
+  const methodIds = prepareCached(
+    db,
+    `SELECT s.text AS id FROM method m JOIN sym s ON s.id=m.sym JOIN sym os ON os.id=m.owner_sym
+     WHERE os.text=? ORDER BY m.sym`
+  )
     .all(row.typeId)
     .map(item => item.id)
     .filter((id): id is string => typeof id === "string");
@@ -390,7 +399,7 @@ function sqlStoreAsIndex(db: IndexDatabase, sql: SqlFactsStore, types: readonly 
   return {
     typesById: {
       get: (id: string) => loadTypeStub(db, id),
-      has: (id: string) => prepareCached(db, "SELECT 1 AS n FROM type WHERE type_id=?").get(id) !== undefined,
+      has: (id: string) => prepareCached(db, "SELECT 1 AS n FROM type t JOIN sym s ON s.id=t.sym WHERE s.text=?").get(id) !== undefined,
       values: () => types
     },
     fieldsById: {
