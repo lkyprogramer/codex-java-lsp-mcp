@@ -33,4 +33,4 @@ ulimit -n 65536 2>/dev/null || true
 # FSX0: 12 FATALs peaked at 848MB with JsonStringify on the native stack.
 # Do not raise to 1024 unless a post-FSX1 near-heap snapshot names a new
 # legitimate retainer. --heapsnapshot-near-heap-limit is evidence-only.
-exec "$NODE_BIN" --max-old-space-size=768 "$CURRENT_DIR/dist/http-server.js"
+exec "$NODE_BIN" --disable-warning=ExperimentalWarning --max-old-space-size=768 "$CURRENT_DIR/dist/http-server.js"

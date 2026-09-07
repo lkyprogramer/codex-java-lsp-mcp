@@ -461,7 +461,7 @@ run_candidate_smoke() {
       "CODEX_HOME=$CANDIDATE_TEST_ROOT/codex-home" \
       "HOME=$CANDIDATE_TEST_ROOT/home" \
       "JDTLS_BIN=$JDTLS_BIN" \
-      "$NODE_BIN" dist/http-server.js
+      "$NODE_BIN" --disable-warning=ExperimentalWarning dist/http-server.js
   ) >"$CANDIDATE_LOG" 2>&1 &
   CANDIDATE_PID="$!"
   if ! wait_for_candidate_ready "$candidate_url/readyz"; then

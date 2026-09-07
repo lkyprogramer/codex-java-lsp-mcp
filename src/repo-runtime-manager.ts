@@ -1,6 +1,7 @@
 // input: Resolved repo roots.
 // output: Per-repo runtime contexts.
 // pos: Lazy runtime manager; one context per canonical repoRoot with small LRU/idle control.
+import { existsSync, statSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { AgentRouter } from "./agent-router/index.js";
@@ -861,7 +862,8 @@ export class RepoRuntimeManager {
     await entry.context.javaIndexClient?.open(validationGeneration, {
       leaseRoot: path.join(repoCacheBase(), "leases"),
       worktree: resolved.worktree,
-      siblingCacheBase: repoCacheBase()
+      siblingCacheBase: repoCacheBase(),
+      siblingDbPath: this.findSiblingDb(resolved)
     }, budget ? { budget } : undefined).then(async openStatus => {
       // A restored-and-verified snapshot (Task 21 Step 6a) reports its own
       // (possibly higher) generation; the repo's clock must never regress
@@ -1091,6 +1093,21 @@ export class RepoRuntimeManager {
 
   private familyKey(worktree: { familyHash?: string; repoHash: string } | undefined, repoHash: string): string {
     return worktree?.familyHash ?? worktree?.repoHash ?? repoHash;
+  }
+
+  private findSiblingDb(resolved: ResolvedRepo): string | undefined {
+    const family = this.familyKey(resolved.worktree, resolved.repoHash);
+    const self = indexDbPath(resolved.repoRoot);
+    let best: { path: string; mtime: number } | undefined;
+    for (const entry of this.runtimes.values()) {
+      if (entry.stoppedAt !== undefined) continue;
+      if (this.familyKey(entry.context.worktree, entry.context.repoHash) !== family) continue;
+      const dbPath = indexDbPath(entry.context.repoRoot);
+      if (dbPath === self || !existsSync(dbPath)) continue;
+      const mtime = statSync(dbPath).mtimeMs;
+      if (!best || mtime > best.mtime) best = { path: dbPath, mtime };
+    }
+    return best?.path;
   }
 
   private clearIdleTimers(entry: RuntimeEntry): void {
