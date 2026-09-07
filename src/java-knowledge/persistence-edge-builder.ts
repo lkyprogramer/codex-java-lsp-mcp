@@ -7,7 +7,7 @@ import {
   myBatisStatementId,
   type MyBatisMapperResourceFacts
 } from "../java-index/mybatis-types.js";
-import type { KnowledgeGraphStore } from "./graph-store.js";
+import type { KnowledgeGraphStore } from "./graph-reader.js";
 import { knowledgeEdgeId, knowledgeExternalTypeId, knowledgeFileId, knowledgeTypeId } from "./entity-id.js";
 import type { EdgeKind } from "./edge-kinds.js";
 

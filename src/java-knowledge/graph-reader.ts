@@ -20,3 +20,14 @@ export type GraphReader = {
   nodesByPath(path: string): GraphNode[];
   nodeIdForJavaIndexId(jid: string): string | undefined;
 };
+
+export type KnowledgeGraphStore = Omit<GraphReader, "summariesByMethodId"> & {
+  upsertNode(node: GraphNode, ownerFile?: string): void;
+  addEdge(edge: GraphEdge, ownerFile?: string): GraphEdge;
+  removeFiles(relativePaths: readonly string[]): void;
+  clear(): void;
+  summariesByMethodId: {
+    get(id: string): MethodSummary | undefined;
+    set(id: string, summary: MethodSummary): unknown;
+  };
+};

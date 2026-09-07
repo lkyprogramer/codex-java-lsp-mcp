@@ -18,7 +18,7 @@ import {
   knowledgeSourceRootId,
   knowledgeTypeId
 } from "./entity-id.js";
-import { KnowledgeGraphStore } from "./graph-store.js";
+import type { KnowledgeGraphStore } from "./graph-reader.js";
 import type { GraphEdge, GraphNode, NodeKind } from "./schema.js";
 
 function relativePathOfFileId(fileId: string): string {

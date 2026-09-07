@@ -3,7 +3,7 @@
 // pos: N2a-02. Does not invent extra annotations. Multi-implementer injection binds the declared type only.
 import type { JavaAnnotationFact, JavaFileBundle, JavaMethodFacts, JavaTypeFacts, JavaTypeRef } from "../java-index/index-types.js";
 import type { FactsReader } from "../java-index/facts-reader.js";
-import type { KnowledgeGraphStore } from "./graph-store.js";
+import type { KnowledgeGraphStore } from "./graph-reader.js";
 import { knowledgeEdgeId, knowledgeExternalTypeId, knowledgeTypeId } from "./entity-id.js";
 import type { EdgeKind } from "./edge-kinds.js";
 

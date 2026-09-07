@@ -3,7 +3,7 @@
 // pos: N2a-01. No pointer analysis; ambiguous overloads emit no edge.
 import type { JavaFileBundle, JavaMethodFacts, JavaTypeFacts, StaticEdge } from "../java-index/index-types.js";
 import type { FactsReader } from "../java-index/facts-reader.js";
-import type { KnowledgeGraphStore } from "./graph-store.js";
+import type { KnowledgeGraphStore } from "./graph-reader.js";
 import { knowledgeEdgeId } from "./entity-id.js";
 import type { EdgeKind } from "./edge-kinds.js";
 
