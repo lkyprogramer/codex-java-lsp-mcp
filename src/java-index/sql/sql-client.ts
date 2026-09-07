@@ -1,5 +1,7 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, statSync } from "node:fs";
 import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { probeLayout } from "../../layout-probe.js";
 import type { LayoutContext } from "../../layout-probe.js";
 import { JavaIntelligenceError } from "../../runtime/intelligence-error.js";
@@ -405,11 +407,15 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
 
   private copySibling(fromPath: string): void {
     mkdirSync(dirname(this.dbPath), { recursive: true });
-    const source = openIndexDb(fromPath, { readOnly: true });
-    try {
-      source.exec(`VACUUM INTO '${this.dbPath.replaceAll("'", "''")}'`);
-    } finally {
-      closeDb(source);
+    const helper = fileURLToPath(new URL("./vacuum-into.js", import.meta.url));
+    const result = spawnSync(
+      process.execPath,
+      ["--disable-warning=ExperimentalWarning", helper, fromPath, this.dbPath],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 120_000 }
+    );
+    if (result.status !== 0 || !existsSync(this.dbPath)) {
+      const detail = (result.stderr || result.stdout || `status ${result.status}`).trim().slice(0, 400);
+      throw new JavaIntelligenceError("INDEX_PARTIAL", `sibling VACUUM INTO failed: ${detail}`);
     }
   }
 

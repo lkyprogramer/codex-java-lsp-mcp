@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { close, openIndexDb, prepareCached, withTransaction } from "./driver.js";
 import { SCHEMA_VERSION, ensureSchema } from "./schema.js";
+import { vacuumInto } from "./vacuum-into.js";
 
 function pragma(db: ReturnType<typeof openIndexDb>, name: string): unknown {
   const row = db.prepare(`PRAGMA ${name}`).get() as Record<string, unknown> | undefined;
@@ -53,6 +54,29 @@ test("file database enables WAL and incremental auto_vacuum", () => {
     assert.equal(first, second);
   } finally {
     close(db);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("vacuumInto copies a file database to a new path", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "iod-vacuum-"));
+  const source = path.join(dir, "src.sqlite");
+  const dest = path.join(dir, "nested", "dst.sqlite");
+  const db = openIndexDb(source);
+  try {
+    ensureSchema(db);
+    db.exec("INSERT INTO file(path, content_hash, generation, facts) VALUES ('a.java', 'h', 1, jsonb('{}'))");
+  } finally {
+    close(db);
+  }
+  vacuumInto(source, dest);
+  assert.equal(existsSync(dest), true);
+  const copied = openIndexDb(dest, { readOnly: true });
+  try {
+    assert.equal(copied.prepare("SELECT count(*) AS n FROM file").get()?.n, 1);
+    assert.equal(copied.prepare("SELECT path AS path FROM file").get()?.path, "a.java");
+  } finally {
+    close(copied);
     rmSync(dir, { recursive: true, force: true });
   }
 });
