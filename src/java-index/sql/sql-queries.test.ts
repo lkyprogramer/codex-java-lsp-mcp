@@ -44,6 +44,7 @@ function normalizeContext(value: unknown): unknown {
     bundles?: Array<{ path: string; closedObligations?: string[] }>;
     unresolved?: Array<{ id?: string; role?: string }>;
   };
+  const contract = (cloned as { contract?: { evidence?: Array<{ path?: string }> } }).contract;
   return {
     resolvedIntent: cloned.resolvedIntent,
     coverage: cloned.coverage,
@@ -53,7 +54,8 @@ function normalizeContext(value: unknown): unknown {
         closedObligations: [...(bundle.closedObligations ?? [])].sort()
       }))
       .sort(byPath),
-    unresolved: [...(cloned.unresolved ?? [])].sort(byPath)
+    unresolved: [...(cloned.unresolved ?? [])].sort(byPath),
+    evidence: [...(contract?.evidence ?? [])].map(item => item.path ?? "").sort()
   };
 }
 
@@ -160,17 +162,18 @@ test("SqlJavaIndexClient graph/entity RPCs match a real forked JavaIndexClient o
         assert.deepEqual(sqlContext.unresolved, heapContext.unresolved, `${row.name}:${intent}:unresolved`);
       }
     }
+    const paymentInput = {
+      fromRelativePath: "src/main/java/demo/PaymentGateway.java",
+      intent: "IMPLEMENTATION_CHANGE",
+      anchorLine: 6
+    };
     assert.deepEqual(
-      normalizeContext(await sql.queryContextGraph({
-        fromRelativePath: "src/main/java/demo/PaymentGateway.java",
-        intent: "IMPLEMENTATION_CHANGE",
-        anchorLine: 6
-      })),
-      normalizeContext(await heap.queryContextGraph({
-        fromRelativePath: "src/main/java/demo/PaymentGateway.java",
-        intent: "IMPLEMENTATION_CHANGE",
-        anchorLine: 6
-      }))
+      normalizeContext(await sql.queryContextGraph(paymentInput)),
+      normalizeContext(await heap.queryContextGraph(paymentInput))
+    );
+    assert.deepEqual(
+      normalizeContext(await sql.queryContextGraph({ ...paymentInput, plan: true })),
+      normalizeContext(await heap.queryContextGraph({ ...paymentInput, plan: true }))
     );
     const payment = path.join(fixturesRoot, "src/main/java/demo/PaymentGateway.java");
     assert.deepEqual(

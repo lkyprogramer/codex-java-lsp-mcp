@@ -311,15 +311,15 @@ export class SqlKnowledgeGraph {
   }
 
   successors(nodeId: string, kind?: EdgeKind): GraphEdge[] {
-    this.ensureAdj();
-    const edges = this.outByNode!.get(nodeId) ?? [];
-    return kind === undefined ? edges : edges.filter(edge => edge.kind === kind);
+    if (!this.outByNode) return this.edgesFrom("from_sym", nodeId, kind);
+    const edges = this.outByNode.get(nodeId) ?? [];
+    return kind === undefined ? [...edges] : edges.filter(edge => edge.kind === kind);
   }
 
   predecessors(nodeId: string, kind?: EdgeKind): GraphEdge[] {
-    this.ensureAdj();
-    const edges = this.inByNode!.get(nodeId) ?? [];
-    return kind === undefined ? edges : edges.filter(edge => edge.kind === kind);
+    if (!this.inByNode) return this.edgesFrom("to_sym", nodeId, kind);
+    const edges = this.inByNode.get(nodeId) ?? [];
+    return kind === undefined ? [...edges] : edges.filter(edge => edge.kind === kind);
   }
 
   nodesByPath(path: string): GraphNode[] {
@@ -371,9 +371,25 @@ export class SqlKnowledgeGraph {
     this.inByNode = inn;
   }
 
+  private edgesFrom(side: "from_sym" | "to_sym", nodeId: string, kind?: EdgeKind): GraphEdge[] {
+    const nodeSym = symId(this.db, nodeId);
+    if (nodeSym === undefined) return [];
+    if (kind === undefined) {
+      return prepareCached(this.db, `${KG_EDGE_SELECT} WHERE e.${side}=? ORDER BY e.id`)
+        .all(nodeSym)
+        .map(graphEdgeFromRow);
+    }
+    const kindSym = symId(this.db, kind);
+    if (kindSym === undefined) return [];
+    return prepareCached(this.db, `${KG_EDGE_SELECT} WHERE e.${side}=? AND e.kind_sym=? ORDER BY e.id`)
+      .all(nodeSym, kindSym)
+      .map(graphEdgeFromRow);
+  }
+
   private nodeById(id: string): GraphNode | undefined {
-    this.ensureAdj();
-    return this.nodeMap!.get(id);
+    if (this.nodeMap) return this.nodeMap.get(id);
+    const row = prepareCached(this.db, `${KG_NODE_SELECT} WHERE ns.text=?`).get(id);
+    return row ? graphNodeFromRow(row) : undefined;
   }
 
   private *nodeEntries(): IterableIterator<[string, GraphNode]> {
