@@ -17,7 +17,7 @@ const goldenPath = path.resolve(dirname, "..", "..", "..", "golden", "java-index
 
 type GoldenRow = {
   name?: string;
-  anchor?: { file?: string; line?: number; profile?: string; taskKeywords?: string[] };
+  anchor?: { file?: string; line?: number; column?: number; profile?: string; taskKeywords?: string[] };
 };
 
 function jsonClone<T>(value: T): T {
@@ -172,6 +172,29 @@ test("SqlJavaIndexClient graph/entity RPCs match a real forked JavaIndexClient o
         anchorLine: 6
       }))
     );
+    const payment = path.join(fixturesRoot, "src/main/java/demo/PaymentGateway.java");
+    assert.deepEqual(
+      jsonClone(await sql.queryReadRanges([{ file: payment, positions: [{ line: 7, column: 3 }] }])),
+      jsonClone(await heap.queryReadRanges([{ file: payment, positions: [{ line: 7, column: 3 }] }]))
+    );
+    const mapper = path.join(fixturesRoot, "src/main/resources/mapper/OrderMapper.xml");
+    assert.deepEqual(
+      jsonClone(await sql.queryReadRanges([{ file: mapper, positions: [{ line: 1, column: 1 }] }])),
+      jsonClone(await heap.queryReadRanges([{ file: mapper, positions: [{ line: 1, column: 1 }] }]))
+    );
+    for (const row of rows) {
+      const relative = row.anchor?.file;
+      const line = row.anchor?.line;
+      if (!relative || line === undefined) continue;
+      const file = path.join(fixturesRoot, relative);
+      const positions = [{ line, column: row.anchor?.column ?? 1 }];
+      assert.deepEqual(
+        jsonClone(await sql.queryReadRanges([{ file, positions }])),
+        jsonClone(await heap.queryReadRanges([{ file, positions }])),
+        `read-ranges ${row.name ?? relative}`
+      );
+    }
+    assert.deepEqual(await sql.queryReadRanges([]), []);
   } finally {
     await sql.close();
     await heap.close();

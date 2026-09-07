@@ -142,7 +142,6 @@ test("SqlJavaIndexClient point RPCs match a real forked JavaIndexClient on java-
     await assert.rejects(() => sql.flush(), notImplemented);
     await assert.rejects(() => sql.hibernate(), notImplemented);
     await assert.rejects(() => sql.recycle(), notImplemented);
-    await assert.rejects(() => sql.queryReadRanges([{ file: paymentGateway, positions: [{ line: 7, column: 3 }] }]), notImplemented);
   } finally {
     await sql.close();
     await heap.close();

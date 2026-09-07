@@ -24,6 +24,7 @@ export type SqlQueryDeps = {
   graph: GraphReader;
   search: EntitySearchPort;
   indexedGeneration: number;
+  repoRoot: string;
   toRelative(inputPath: string): string;
 };
 
@@ -120,3 +121,5 @@ export function queryContextGraph(deps: SqlQueryDeps, input: ContextGraphInput):
   });
   return { ...result, contract };
 }
+
+export { queryReadRanges } from "./sql-read-ranges.js";

@@ -45,7 +45,8 @@ import {
   validateContextGraphResult,
   validateEntitySearchHits,
   validateGraphDigest,
-  validateGraphReachable
+  validateGraphReachable,
+  validateIndexedReadRangeResults
 } from "../worker-protocol.js";
 import { readIndexCounts, readMeta } from "../builder/progress.js";
 import { close as closeDb, openIndexDb, prepareCached, type IndexDatabase } from "./driver.js";
@@ -57,6 +58,7 @@ import {
   queryEntitySearch as runEntitySearch,
   queryGraphDigest as runGraphDigest,
   queryGraphReachable as runGraphReachable,
+  queryReadRanges as runReadRanges,
   type SqlQueryDeps
 } from "./sql-queries.js";
 
@@ -163,9 +165,12 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
   async hibernate(_requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus> { return notImplemented("hibernate"); }
   async recycle(_requestOptions?: JavaIndexRequestOptions): Promise<void> { notImplemented("recycle"); }
   async queryReadRanges(
-    _requests: Array<{ file: string; positions: Array<{ line: number; column: number }> }>,
+    requests: Array<{ file: string; positions: Array<{ line: number; column: number }> }>,
     _requestOptions?: JavaIndexRequestOptions
-  ): Promise<IndexedReadRangeResult[]> { return notImplemented("queryReadRanges"); }
+  ): Promise<IndexedReadRangeResult[]> {
+    if (requests.length === 0) return [];
+    return validateIndexedReadRangeResults(await runReadRanges(this.queryDeps(), requests));
+  }
   async queryGraphDigest(_requestOptions?: JavaIndexRequestOptions): Promise<GraphDigest> {
     return validateGraphDigest(runGraphDigest(this.queryDeps()));
   }
@@ -290,6 +295,7 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
       graph: this.graph,
       search: this.search,
       indexedGeneration: this.lastStatus.indexedGeneration,
+      repoRoot: this.repoRoot,
       toRelative: inputPath => this.toRelative(inputPath) ?? inputPath.replaceAll("\\", "/")
     };
   }
