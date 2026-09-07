@@ -6,7 +6,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
-const { JavaIndexClient } = await import(pathToFileURL(path.join(ROOT, "dist/java-index/java-index-client.js")).href);
+const { SqlJavaIndexClient } = await import(pathToFileURL(path.join(ROOT, "dist/java-index/sql/sql-client.js")).href);
 
 const repoRoot = process.env.LISHUEDU_ROOT || "/Users/luo/Documents/program/lishu/lishuedu";
 const liveCache = path.join(homedir(), "Library/Caches/codex-java-lsp/6496e5a49fd9");
@@ -37,7 +37,7 @@ function heapBytes(status) {
 }
 
 async function hydrate(label) {
-  const client = new JavaIndexClient(repoRoot, cacheDir);
+  const client = new SqlJavaIndexClient(repoRoot, cacheDir);
   await client.open(1);
   try {
     await waitFor(async () => {

@@ -8,7 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { probeLayout } from "../dist/layout-probe.js";
 import { discoverJavaFiles } from "../dist/java-index/manifest.js";
-import { JavaIndexClient } from "../dist/java-index/java-index-client.js";
+import { SqlJavaIndexClient } from "../dist/java-index/sql/sql-client.js";
 import { RouterJavaIndex } from "../dist/java-index/router-java-index.js";
 import { digestFileBundle, digestManifest } from "./facts-digest.mjs";
 
@@ -57,7 +57,7 @@ async function waitForComplete(index, timeoutMs) {
 export async function digestRepo(repoRoot, timeoutMs, cacheRoot) {
   const layout = probeLayout(repoRoot);
   const discovered = await discoverJavaFiles(repoRoot, layout);
-  const client = new JavaIndexClient(repoRoot, cacheRoot);
+  const client = new SqlJavaIndexClient(repoRoot, path.join(cacheRoot, "index.sqlite"));
   const index = new RouterJavaIndex(repoRoot, client);
   const files = [];
   try {

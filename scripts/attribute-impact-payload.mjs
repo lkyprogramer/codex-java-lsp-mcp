@@ -8,7 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { AgentRouter } from "../dist/agent-router/index.js";
 import { buildImpactPayloadProjectionV3 } from "../dist/benchmark/attribution-v3.js";
-import { JavaIndexClient } from "../dist/java-index/java-index-client.js";
+import { SqlJavaIndexClient } from "../dist/java-index/sql/sql-client.js";
 import { RouterJavaIndex } from "../dist/java-index/router-java-index.js";
 import { JdtlsSession } from "../dist/jdtls-session.js";
 import { javaImpact } from "../dist/tools/impact.js";
@@ -27,7 +27,7 @@ const scenarios = loadScenarios(scenarioFile).filter(scenario => !scenario.proje
 const isolatedIndexCache = cli.indexCacheDir || mkdtempSync(path.join(os.tmpdir(), "java-impact-payload-index-"));
 const ownsIndexCache = cli.indexCacheDir === undefined;
 const session = new JdtlsSession(cli.repoRoot);
-const javaIndexClient = new JavaIndexClient(cli.repoRoot, isolatedIndexCache);
+const javaIndexClient = new SqlJavaIndexClient(cli.repoRoot, isolatedIndexCache);
 const javaIndex = new RouterJavaIndex(cli.repoRoot, javaIndexClient);
 const router = new AgentRouter(cli.repoRoot, session, javaIndex);
 const context = {

@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import v8 from "node:v8";
 import { fileURLToPath } from "node:url";
-import { JavaIndexClient } from "../dist/java-index/java-index-client.js";
+import { SqlJavaIndexClient } from "../dist/java-index/sql/sql-client.js";
 import { RouterJavaIndex } from "../dist/java-index/router-java-index.js";
 import { probeLayout } from "../dist/layout-probe.js";
 import { discoverJavaFiles } from "../dist/java-index/manifest.js";
@@ -318,7 +318,7 @@ export async function benchProject(project, repoRoot, timeoutMs, cacheRoot) {
   const cacheDir = path.join(cacheRoot, project);
   await mkdir(cacheDir, { recursive: true });
   const rssBefore = collectHeap();
-  const client = new JavaIndexClient(repoRoot, cacheDir);
+  const client = new SqlJavaIndexClient(repoRoot, path.join(cacheDir, "index.sqlite"));
   const index = new RouterJavaIndex(repoRoot, client);
   try {
     const coldStarted = performance.now();
@@ -331,7 +331,7 @@ export async function benchProject(project, repoRoot, timeoutMs, cacheRoot) {
     const attribution = await attributeSample(index, repoRoot);
     await index.close();
 
-    const reloadClient = new JavaIndexClient(repoRoot, cacheDir);
+    const reloadClient = new SqlJavaIndexClient(repoRoot, cacheDir);
     const reloadIndex = new RouterJavaIndex(repoRoot, reloadClient);
     let snapshotLoadMs = 0;
     let loaded;
@@ -403,7 +403,7 @@ export async function benchProject(project, repoRoot, timeoutMs, cacheRoot) {
 export async function holdProject(project, repoRoot, timeoutMs, cacheDir, holdMs, runtimeId) {
   await mkdir(cacheDir, { recursive: true });
   const before = collectHeap();
-  const client = new JavaIndexClient(repoRoot, cacheDir);
+  const client = new SqlJavaIndexClient(repoRoot, path.join(cacheDir, "index.sqlite"));
   const index = new RouterJavaIndex(repoRoot, client);
   try {
     await index.open(1);

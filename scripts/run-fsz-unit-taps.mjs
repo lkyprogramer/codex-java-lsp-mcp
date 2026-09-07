@@ -7,7 +7,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { JavaIndexClient } from "../dist/java-index/java-index-client.js";
+import { SqlJavaIndexClient } from "../dist/java-index/sql/sql-client.js";
 
 const candidateRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const tapDir = process.env.FSZ_TAP_DIR;
@@ -48,7 +48,7 @@ await runTests(path.join(tapDir, "fsz3-refresh.tap"), [
 
 const repo = path.join(candidateRoot, "fixtures", "java-index-v2");
 const cache = mkdtempSync(path.join(tmpdir(), "fsz4-heap-"));
-const client = new JavaIndexClient(repo, cache);
+const client = new SqlJavaIndexClient(repo, cache);
 await client.open(1);
 await client.reconcile(1);
 const deadline = Date.now() + 10000;

@@ -9,7 +9,7 @@ const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..")
 const outDoc = path.join(ROOT, "docs/phase-fs/fsr0-heap-attribution.json");
 const scratch = process.env.FSR0_SCRATCH || path.join(ROOT, "docs/phase-fs");
 
-const { JavaIndexClient } = await import(pathToFileURL(path.join(ROOT, "dist/java-index/java-index-client.js")).href);
+const { SqlJavaIndexClient } = await import(pathToFileURL(path.join(ROOT, "dist/java-index/sql/sql-client.js")).href);
 
 function writeJavaFile(repoRoot, relativePath, content) {
   const absolutePath = path.join(repoRoot, relativePath);
@@ -57,7 +57,7 @@ async function fixtureThreeState() {
   writeJavaFile(repoRoot, "src/main/java/demo/A.java", "package demo;\nclass A { void run() {} }\n");
   writeJavaFile(repoRoot, "src/main/java/demo/B.java", "package demo;\nclass B extends A { void run() { super.run(); } }\n");
   const cacheDir = mkdtempSync(path.join(tmpdir(), "fsr0-cache-"));
-  const client = new JavaIndexClient(repoRoot, cacheDir);
+  const client = new SqlJavaIndexClient(repoRoot, cacheDir);
   await client.open(1);
   await client.reconcile(1);
   await waitFor(async () => (await client.status()).pendingBackground === 0, 15000);
@@ -65,7 +65,7 @@ async function fixtureThreeState() {
   await client.flush();
   await client.close();
 
-  const hydrated = new JavaIndexClient(repoRoot, cacheDir);
+  const hydrated = new SqlJavaIndexClient(repoRoot, cacheDir);
   await hydrated.open(1);
   try {
     await hydrated.queryRepositoryFactMarkers([], []);

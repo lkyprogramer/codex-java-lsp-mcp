@@ -7,7 +7,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { JavaIndexClient } from "../dist/java-index/java-index-client.js";
+import { SqlJavaIndexClient } from "../dist/java-index/sql/sql-client.js";
 import { RouterJavaIndex } from "../dist/java-index/router-java-index.js";
 
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -340,7 +340,7 @@ async function main() {
   for (const project of ["lishuedu", "cipherlink", "exam-parent-v3"]) {
     const repoRoot = path.resolve(cli.repositories[project]);
     console.error(`jin-n5-context-replay: ${project} root=${repoRoot} exists=${existsSync(repoRoot)}`);
-    const client = new JavaIndexClient(repoRoot, path.join(cacheRoot, project));
+    const client = new SqlJavaIndexClient(repoRoot, path.join(cacheRoot, project));
     const index = new RouterJavaIndex(repoRoot, client);
     const session = new JdtlsSession(repoRoot);
     const router = new AgentRouter(repoRoot, session, index);

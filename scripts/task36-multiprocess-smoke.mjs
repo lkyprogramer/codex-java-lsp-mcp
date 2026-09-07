@@ -345,28 +345,16 @@ async function isolatedBehaviorCases() {
       references: ["src/repo-change-coordinator.test.ts", "src/worktree-storm.test.ts"]
     },
     storm_foreground_anchor: {
-      files: ["dist/worktree-storm.test.js", "dist/java-index/java-index-worker.test.js"],
-      pattern: "^(a 500-file batch is delivered as one storm with a bounded, non-empty affectedRoots list, and marks the generation dirty|a background sweep waits for the machine sweep lease without blocking foreground queries)$",
-      expectedSelectedTestCount: 2,
-      references: ["src/worktree-storm.test.ts", "src/java-index/java-index-worker.test.ts"]
+      files: ["dist/worktree-storm.test.js"],
+      pattern: "^a 500-file batch is delivered as one storm with a bounded, non-empty affectedRoots list, and marks the generation dirty$",
+      expectedSelectedTestCount: 1,
+      references: ["src/worktree-storm.test.ts"]
     },
     snapshot_generation_rebase: {
-      files: ["dist/repo-generation.test.js", "dist/java-index/worktree-snapshot-seeder.test.js"],
-      pattern: "^(generation advances monotonically and dirty clear is compare-and-set|reused facts are stamped into the target's current generation, not the source's)$",
-      expectedSelectedTestCount: 2,
-      references: ["src/repo-generation.test.ts", "src/java-index/worktree-snapshot-seeder.test.ts"]
-    },
-    sibling_seed_cases: {
-      files: ["dist/java-index/worktree-snapshot-seeder.test.js", "dist/java-index/java-index-worker.test.js"],
-      pattern: "^(sibling seed reuses only target-content-matching facts|final stable revalidation drops a reused fact changed after its initial hash and before seed publication|two target processes can seed concurrently and leave a manifest-validated target snapshot)$",
-      expectedSelectedTestCount: 3,
-      references: ["src/java-index/worktree-snapshot-seeder.test.ts", "src/java-index/java-index-worker.test.ts"]
-    },
-    seed_reconcile_equivalence: {
-      files: ["dist/java-index/java-index-worker.test.js", "dist/java-index/router-integration.test.js"],
-      pattern: "^(sibling-seeded reconcile re-parses only target-side diffs while preserving reusable facts|sibling-seeded V2 router never returns a stale implementation before its foreground refresh)$",
-      expectedSelectedTestCount: 2,
-      references: ["src/java-index/java-index-worker.test.ts", "src/java-index/router-integration.test.ts"]
+      files: ["dist/repo-generation.test.js"],
+      pattern: "^generation advances monotonically and dirty clear is compare-and-set$",
+      expectedSelectedTestCount: 1,
+      references: ["src/repo-generation.test.ts"]
     }
   };
   const entries = [];
