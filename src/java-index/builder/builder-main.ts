@@ -1,8 +1,10 @@
+import readline from "node:readline";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { close, openIndexDb, type IndexDatabase } from "../sql/driver.js";
 import { ensureSchema } from "../sql/schema.js";
 import { runSqlColdBuild } from "./cold-build.js";
+import { runBuilderServe } from "./incremental.js";
 
 function dbstatByName(db: IndexDatabase): Array<{ name: string; bytes: number; miB: number; rows?: number; bytesPerRow?: number }> {
   try {
@@ -60,12 +62,17 @@ export function parseBuilderArgs(argv: string[]): {
 
 export async function runBuilderMain(argv = process.argv.slice(2)): Promise<void> {
   const args = parseBuilderArgs(argv);
-  if (!args.repo || !args.db || args.mode !== "cold") {
-    throw new Error("usage: builder-main --repo <root> --db <path> --mode cold [--parallelism N]");
+  if (!args.repo || !args.db || (args.mode !== "cold" && args.mode !== "serve")) {
+    throw new Error("usage: builder-main --repo <root> --db <path> --mode cold|serve [--parallelism N]");
   }
   const db = openIndexDb(args.db);
   try {
     ensureSchema(db);
+    if (args.mode === "serve") {
+      const lines = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
+      await runBuilderServe(args.repo, db, lines, process.stdout);
+      return;
+    }
     const result = await runSqlColdBuild({
       repoRoot: args.repo,
       db,
