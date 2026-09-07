@@ -4,11 +4,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { close, openIndexDb } from "../sql/driver.js";
+import { close, openIndexDb, SQLITE_MAX_VARIABLE_NUMBER, withTransaction } from "../sql/driver.js";
 import { ensureSchema } from "../sql/schema.js";
 import { readEntityRecords } from "../sql/entity-tokens.js";
 import { SqlKnowledgeGraph } from "../sql/knowledge-graph.js";
-import { STATIC_EDGE_SELECT } from "../sql/rows.js";
+import { encodeFacts, STATIC_EDGE_SELECT } from "../sql/rows.js";
 import { internSym } from "../sql/sym.js";
 import { runSqlColdBuild } from "./cold-build.js";
 import { applyBuilderJob, runBuilderServe } from "./incremental.js";
@@ -196,6 +196,48 @@ test("reconcile sees an external edit and matches recold-build", async () => {
     }
   } finally {
     close(incremental.db);
+    await rm(repo, { recursive: true, force: true });
+  }
+});
+
+test("refresh with more owned ids than SQLITE_MAX_VARIABLE_NUMBER still completes", async () => {
+  const repo = await copyFixtures();
+  const built = await cold(repo, 1);
+  try {
+    const file = built.db.prepare("SELECT id AS id FROM file WHERE path=?").get(serviceRel) as { id: number } | undefined;
+    assert.ok(file, "fixture OrderService file");
+    const fileId = Number(file.id);
+    const owner = built.db.prepare("SELECT t.sym AS sym FROM type t WHERE t.file_id=?").get(fileId) as { sym: number } | undefined;
+    assert.ok(owner, "fixture OrderService type");
+    const ownerSym = Number(owner.sym);
+    const dummyFacts = encodeFacts({});
+    const padPrefix = "iod-pad:";
+    withTransaction(built.db, () => {
+      const insert = built.db.prepare(
+        "INSERT INTO method(sym, owner_sym, file_id, name, is_ctor, arity, facts) VALUES (?, ?, ?, ?, 0, 0, ?)"
+      );
+      for (let index = 0; index < SQLITE_MAX_VARIABLE_NUMBER; index += 1) {
+        insert.run(internSym(built.db, `${padPrefix}${index}`), ownerSym, fileId, `pad${index}`, dummyFacts);
+      }
+    });
+    const padded = built.db.prepare(
+      "SELECT count(*) AS n FROM method m JOIN file f ON f.id=m.file_id WHERE f.path=?"
+    ).get(serviceRel) as { n: number };
+    assert.ok(Number(padded.n) > SQLITE_MAX_VARIABLE_NUMBER, `owned methods ${padded.n}`);
+    const result = await applyBuilderJob({
+      repoRoot: repo,
+      db: built.db,
+      job: { id: 9, kind: "refresh", generation: 2, changed: [path.join(repo, serviceRel)], deleted: [] }
+    });
+    assert.equal(result.ok, true, result.error);
+    assert.equal(readMeta(built.db, "indexedGeneration"), "2");
+    const leftover = built.db.prepare(
+      "SELECT count(*) AS n FROM method m JOIN sym s ON s.id=m.sym WHERE s.text LIKE ?"
+    ).get(`${padPrefix}%`) as { n: number };
+    assert.equal(Number(leftover.n), 0);
+    assert.ok(cascadeCounts(built.db, serviceRel).files > 0);
+  } finally {
+    close(built.db);
     await rm(repo, { recursive: true, force: true });
   }
 });

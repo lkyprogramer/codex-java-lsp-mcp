@@ -19,7 +19,7 @@ import { javaFileId } from "../stable-id.js";
 import { JavaNameResolver, type TypeRegistryView } from "../name-resolver.js";
 import type { MyBatisMapperResourceFacts } from "../mybatis-types.js";
 import { myBatisQualifiedId } from "../mybatis-types.js";
-import { prepareCached, type IndexDatabase } from "./driver.js";
+import { bindChunks, inClause, prepareCached, type IndexDatabase } from "./driver.js";
 import { decodeFacts, readBundle, STATIC_EDGE_SELECT, staticEdgeFromSqlRow } from "./rows.js";
 import { internSym, symId } from "./sym.js";
 
@@ -67,10 +67,6 @@ function compareReferences(a: IndexedReference, b: IndexedReference): number {
   const rangeA = a.range ?? { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } };
   const rangeB = b.range ?? { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } };
   return compareByLocation(javaFileId(a.sourceFile), rangeA, a.sourceId, javaFileId(b.sourceFile), rangeB, b.sourceId);
-}
-
-function inClause(count: number): string {
-  return `(${Array.from({ length: count }, () => "?").join(",")})`;
 }
 
 function resolvedRepoTypeIds(ref: JavaTypeRef | undefined): string[] {
@@ -252,13 +248,18 @@ export class SqlFactsStore {
       this.clearRequestCache();
       return [];
     }
-    const rows = prepareCached(
-      this.db,
-      `SELECT DISTINCT fs.text AS id FROM edge e
-       JOIN sym fs ON fs.id=e.from_sym
-       WHERE e.kind_sym=? AND e.to_sym IN ${inClause(toIds.length)}
-         AND EXISTS (SELECT 1 FROM method m WHERE m.sym=e.from_sym)`
-    ).all(paramKind, ...toIds);
+    const rows: Array<Record<string, unknown>> = [];
+    for (const chunk of bindChunks(toIds, 1)) {
+      rows.push(
+        ...prepareCached(
+          this.db,
+          `SELECT DISTINCT fs.text AS id FROM edge e
+           JOIN sym fs ON fs.id=e.from_sym
+           WHERE e.kind_sym=? AND e.to_sym IN ${inClause(chunk.length)}
+             AND EXISTS (SELECT 1 FROM method m WHERE m.sym=e.from_sym)`
+        ).all(paramKind, ...chunk)
+      );
+    }
     const methods = rows
       .map(row => typeof row.id === "string" ? this.methodsById.get(row.id) : undefined)
       .filter((method): method is JavaMethodFacts => method !== undefined)
@@ -454,11 +455,16 @@ export class SqlFactsStore {
       this.clearRequestCache();
       return [];
     }
-    const rows = prepareCached(
-      this.db,
-      `SELECT DISTINCT fs.text AS id FROM edge e JOIN sym fs ON fs.id=e.from_sym
-       WHERE e.kind_sym IN ${inClause(kindIds.length)} AND e.to_sym IN ${inClause(toIds.length)}`
-    ).all(...kindIds, ...toIds);
+    const rows: Array<Record<string, unknown>> = [];
+    for (const chunk of bindChunks(toIds, kindIds.length)) {
+      rows.push(
+        ...prepareCached(
+          this.db,
+          `SELECT DISTINCT fs.text AS id FROM edge e JOIN sym fs ON fs.id=e.from_sym
+           WHERE e.kind_sym IN ${inClause(kindIds.length)} AND e.to_sym IN ${inClause(chunk.length)}`
+        ).all(...kindIds, ...chunk)
+      );
+    }
     const hits: string[] = [];
     for (const row of rows) {
       if (typeof row.id !== "string") continue;

@@ -4,7 +4,7 @@ import { REVERSE_EDGE_KIND, type EdgeKind } from "../../java-knowledge/edge-kind
 import { knowledgeEdgeId } from "../../java-knowledge/entity-id.js";
 import type { MethodSummary } from "../../java-knowledge/method-summary.js";
 import type { GraphEdge, GraphNode, NodeKind } from "../../java-knowledge/schema.js";
-import { prepareCached, withTransaction, type IndexDatabase } from "./driver.js";
+import { bindChunks, inClause, prepareCached, withTransaction, type IndexDatabase } from "./driver.js";
 import { asCount } from "./facts-store.js";
 import { decodeFacts, encodeFacts } from "./rows.js";
 import { internSym, internSymNullable, symId, symText } from "./sym.js";
@@ -444,11 +444,12 @@ export class SqlKnowledgeGraph {
       this.pruneExtraOwners(this.extraEdgeOwners, removed);
       return;
     }
-    const placeholders = ownerSyms.map(() => "?").join(",");
-    const primary = prepareCached(
-      this.db,
-      `${KG_EDGE_SELECT} WHERE e.owner_sym IN (${placeholders})`
-    ).all(...ownerSyms);
+    const primary: Array<Record<string, SQLOutputValue>> = [];
+    for (const chunk of bindChunks(ownerSyms)) {
+      primary.push(
+        ...prepareCached(this.db, `${KG_EDGE_SELECT} WHERE e.owner_sym IN ${inClause(chunk.length)}`).all(...chunk)
+      );
+    }
     for (const row of primary) {
       const edge = graphEdgeFromRow(row);
       const ownerFile = optionalText(row.ownerFile) ?? "";
@@ -475,11 +476,12 @@ export class SqlKnowledgeGraph {
       this.pruneExtraOwners(this.extraNodeOwners, removed);
       return;
     }
-    const placeholders = ownerSyms.map(() => "?").join(",");
-    const primary = prepareCached(
-      this.db,
-      `${KG_NODE_SELECT} WHERE n.owner_sym IN (${placeholders})`
-    ).all(...ownerSyms);
+    const primary: Array<Record<string, SQLOutputValue>> = [];
+    for (const chunk of bindChunks(ownerSyms)) {
+      primary.push(
+        ...prepareCached(this.db, `${KG_NODE_SELECT} WHERE n.owner_sym IN ${inClause(chunk.length)}`).all(...chunk)
+      );
+    }
     for (const row of primary) {
       const node = graphNodeFromRow(row);
       const ownerFile = optionalText(row.ownerFile) ?? "";

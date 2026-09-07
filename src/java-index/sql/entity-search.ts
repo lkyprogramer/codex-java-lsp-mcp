@@ -12,16 +12,12 @@ import {
   type EntityKind,
   type EntityLayer
 } from "../entity-search.js";
-import { prepareCached, type IndexDatabase } from "./driver.js";
+import { bindChunks, inClause, prepareCached, type IndexDatabase } from "./driver.js";
 import { asCount } from "./facts-store.js";
 import { symId, symText } from "./sym.js";
 
 const FIELD_IDENTIFIER = 0;
 const FIELD_CHUNK = 1;
-
-function inClause(count: number): string {
-  return `(${Array.from({ length: count }, () => "?").join(",")})`;
-}
 
 function clampLimit(limit: number): number {
   return Math.min(Math.max(1, limit), ENTITY_SEARCH_MAX_LIMIT);
@@ -108,11 +104,13 @@ function simpleNameHits(db: IndexDatabase, task: string, cap: number): EntityHit
   const lexemes = identifierLexemes(task);
   if (lexemes.length === 0) return [];
   const hits: EntityRow[] = [];
-  for (const row of prepareCached(
-    db,
-    `${ENTITY_SELECT} WHERE e.kind='type' AND e.simple_name_lc IN ${inClause(lexemes.length)}`
-  ).iterate(...lexemes) as Iterable<Record<string, SQLOutputValue>>) {
-    hits.push(loadEntityRow(db, row));
+  for (const chunk of bindChunks(lexemes)) {
+    for (const row of prepareCached(
+      db,
+      `${ENTITY_SELECT} WHERE e.kind='type' AND e.simple_name_lc IN ${inClause(chunk.length)}`
+    ).iterate(...chunk) as Iterable<Record<string, SQLOutputValue>>) {
+      hits.push(loadEntityRow(db, row));
+    }
   }
   if (hits.length === 0) return [];
   const df = new Map<string, number>();
@@ -159,20 +157,22 @@ function rankBm25(db: IndexDatabase, task: string, field: 0 | 1, layer: EntityLa
     dfByToken.set(token, asCount(dfRow));
   }
   const grouped = new Map<string, { entity: EntityRow; tf: Map<string, number> }>();
-  for (const row of prepareCached(
-    db,
-    `SELECT s.text AS entityId, e.kind AS kind, e.fqn AS fqn, e.simple_name AS simpleName,
-      e.path_sym AS pathSym, e.ident_len AS identLen, e.chunk_len AS chunkLen,
-      t.token_sym AS tokenSym, t.tf AS tf
-     FROM entity e JOIN sym s ON s.id=e.sym
-     JOIN entity_token t ON t.entity_sym=e.sym
-     WHERE t.field=? AND t.token_sym IN ${inClause(tokenSyms.length)}`
-  ).iterate(field, ...tokenSyms) as Iterable<Record<string, SQLOutputValue>>) {
-    const entity = loadEntityRow(db, row);
-    const token = symText(db, asInt(row.tokenSym));
-    const bucket = grouped.get(entity.entityId) ?? { entity, tf: new Map<string, number>() };
-    bucket.tf.set(token, asInt(row.tf));
-    grouped.set(entity.entityId, bucket);
+  for (const chunk of bindChunks(tokenSyms, 1)) {
+    for (const row of prepareCached(
+      db,
+      `SELECT s.text AS entityId, e.kind AS kind, e.fqn AS fqn, e.simple_name AS simpleName,
+        e.path_sym AS pathSym, e.ident_len AS identLen, e.chunk_len AS chunkLen,
+        t.token_sym AS tokenSym, t.tf AS tf
+       FROM entity e JOIN sym s ON s.id=e.sym
+       JOIN entity_token t ON t.entity_sym=e.sym
+       WHERE t.field=? AND t.token_sym IN ${inClause(chunk.length)}`
+    ).iterate(field, ...chunk) as Iterable<Record<string, SQLOutputValue>>) {
+      const entity = loadEntityRow(db, row);
+      const token = symText(db, asInt(row.tokenSym));
+      const bucket = grouped.get(entity.entityId) ?? { entity, tf: new Map<string, number>() };
+      bucket.tf.set(token, asInt(row.tf));
+      grouped.set(entity.entityId, bucket);
+    }
   }
   const scored: Array<{ entity: EntityRow; score: number }> = [];
   for (const item of grouped.values()) {

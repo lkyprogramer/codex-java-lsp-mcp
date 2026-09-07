@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { close, openIndexDb, prepareCached, withTransaction } from "./driver.js";
+import { bindChunks, close, inClause, openIndexDb, prepareCached, SQLITE_MAX_VARIABLE_NUMBER, withTransaction } from "./driver.js";
 import { SCHEMA_VERSION, ensureSchema } from "./schema.js";
 import { vacuumInto } from "./vacuum-into.js";
 
@@ -83,6 +83,25 @@ test("vacuumInto copies a file database to a new path", () => {
 
 test("vacuumInto rejects quoted paths", () => {
   assert.throws(() => vacuumInto("/tmp/a.sqlite", "/tmp/o'reilly.sqlite"), /unsafe dest/);
+});
+
+test("IN lists above SQLITE_MAX_VARIABLE_NUMBER fail unless chunked", () => {
+  const db = openIndexDb(":memory:");
+  try {
+    const overflow = Array.from({ length: SQLITE_MAX_VARIABLE_NUMBER + 1 }, (_, index) => index + 1);
+    assert.throws(
+      () => db.prepare(`SELECT 1 AS ok WHERE 1 IN ${inClause(overflow.length)}`).get(...overflow),
+      /too many SQL variables/
+    );
+    let seen = 0;
+    for (const chunk of bindChunks(overflow)) {
+      db.prepare(`SELECT 1 AS ok WHERE 1 IN ${inClause(chunk.length)}`).get(...chunk);
+      seen += chunk.length;
+    }
+    assert.equal(seen, overflow.length);
+  } finally {
+    close(db);
+  }
 });
 
 test("schemaVersion mismatch drops all tables and rebuilds", () => {

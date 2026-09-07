@@ -4,6 +4,24 @@ import { DatabaseSync, type StatementSync } from "node:sqlite";
 
 export const DEFAULT_SQLITE_CACHE_KB = 32768;
 
+/** node:sqlite compile-time SQLITE_MAX_VARIABLE_NUMBER. */
+export const SQLITE_MAX_VARIABLE_NUMBER = 32766;
+
+export function inClause(count: number): string {
+  if (!Number.isInteger(count) || count < 1) {
+    throw new Error(`inClause count must be a positive integer, got ${String(count)}`);
+  }
+  return `(${Array.from({ length: count }, () => "?").join(",")})`;
+}
+
+export function* bindChunks<T>(values: readonly T[], extraBinds = 0): Generator<T[]> {
+  const extra = Number.isFinite(extraBinds) && extraBinds > 0 ? Math.floor(extraBinds) : 0;
+  const size = Math.max(1, SQLITE_MAX_VARIABLE_NUMBER - extra);
+  for (let offset = 0; offset < values.length; offset += size) {
+    yield values.slice(offset, offset + size);
+  }
+}
+
 export type OpenIndexDbOptions = {
   readOnly?: boolean;
   cacheKb?: number;

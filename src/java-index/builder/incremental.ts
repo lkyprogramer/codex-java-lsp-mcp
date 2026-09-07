@@ -13,7 +13,7 @@ import { discoverJavaFiles } from "../manifest.js";
 import { extractMyBatisMapperFacts } from "../mybatis-xml-extractor.js";
 import { JavaNameResolver } from "../name-resolver.js";
 import { DEFAULT_PARSE_TREE_CACHE_OPTIONS, ParseTreeCache } from "../parse-tree-cache.js";
-import { prepareCached, withTransaction, type IndexDatabase } from "../sql/driver.js";
+import { bindChunks, inClause, prepareCached, withTransaction, type IndexDatabase } from "../sql/driver.js";
 import { rebuildEntityDf, writeEntityRecord } from "../sql/entity-tokens.js";
 import { SqlFactsStore } from "../sql/facts-store.js";
 import { SqlKnowledgeGraph } from "../sql/knowledge-graph.js";
@@ -81,12 +81,17 @@ function ownedIds(db: IndexDatabase, relativePath: string): string[] {
 function dependentPaths(db: IndexDatabase, ids: readonly string[], exclude: ReadonlySet<string>): string[] {
   const syms = ids.map(id => symId(db, id)).filter((sym): sym is number => sym !== undefined);
   if (syms.length === 0) return [];
-  const placeholders = syms.map(() => "?").join(",");
-  const rows = prepareCached(
-    db,
-    `SELECT DISTINCT f.path AS path FROM edge e JOIN file f ON f.id=e.file_id WHERE e.to_sym IN (${placeholders})`
-  ).all(...syms) as Array<{ path: string }>;
-  return rows.map(row => row.path).filter(item => !exclude.has(item));
+  const paths = new Set<string>();
+  for (const chunk of bindChunks(syms)) {
+    const rows = prepareCached(
+      db,
+      `SELECT DISTINCT f.path AS path FROM edge e JOIN file f ON f.id=e.file_id WHERE e.to_sym IN ${inClause(chunk.length)}`
+    ).all(...chunk) as Array<{ path: string }>;
+    for (const row of rows) {
+      if (!exclude.has(row.path)) paths.add(row.path);
+    }
+  }
+  return [...paths];
 }
 
 function resolveTouched(db: IndexDatabase, relativePaths: readonly string[]): void {
