@@ -3,10 +3,29 @@ import type { SQLOutputValue } from "node:sqlite";
 import { REVERSE_EDGE_KIND, type EdgeKind } from "../../java-knowledge/edge-kinds.js";
 import { knowledgeEdgeId } from "../../java-knowledge/entity-id.js";
 import type { MethodSummary } from "../../java-knowledge/method-summary.js";
-import type { GraphEdge, GraphNode } from "../../java-knowledge/schema.js";
+import type { GraphEdge, GraphNode, NodeKind } from "../../java-knowledge/schema.js";
 import { prepareCached, withTransaction, type IndexDatabase } from "./driver.js";
 import { asCount } from "./facts-store.js";
 import { decodeFacts, encodeFacts } from "./rows.js";
+import { internSym, internSymNullable, symId, symText } from "./sym.js";
+
+const KG_NODE_SELECT = `SELECT n.generation AS generation, ns.text AS id, ks.text AS kind, ps.text AS relativePath,
+  n.simple_name AS simpleName, js.text AS javaIndexId, os.text AS ownerFile
+  FROM kg_node n
+  JOIN sym ns ON ns.id=n.sym
+  JOIN sym ks ON ks.id=n.kind_sym
+  LEFT JOIN sym ps ON ps.id=n.path_sym
+  LEFT JOIN sym js ON js.id=n.jid_sym
+  LEFT JOIN sym os ON os.id=n.owner_sym`;
+
+const KG_EDGE_SELECT = `SELECT e.id AS rowId, e.ordinal AS ordinal, e.generation AS generation,
+  fs.text AS fromId, ts.text AS toId, ks.text AS kind, fl.text AS sourceFile, os.text AS ownerFile
+  FROM kg_edge e
+  JOIN sym fs ON fs.id=e.from_sym
+  JOIN sym ts ON ts.id=e.to_sym
+  JOIN sym ks ON ks.id=e.kind_sym
+  LEFT JOIN sym fl ON fl.id=e.file_sym
+  LEFT JOIN sym os ON os.id=e.owner_sym`;
 
 function itemHash(value: string): Buffer {
   return createHash("sha256").update(value, "utf8").digest();
@@ -16,6 +35,12 @@ function xorBuffers(target: Buffer, item: Buffer): void {
   for (let index = 0; index < target.length; index += 1) {
     target[index] = (target[index] ?? 0) ^ (item[index] ?? 0);
   }
+}
+
+function asInt(value: SQLOutputValue | undefined): number {
+  if (typeof value === "bigint") return Number(value);
+  if (typeof value === "number") return value;
+  throw new Error(`expected integer, got ${String(value)}`);
 }
 
 function readMeta(db: IndexDatabase, key: string): string | undefined {
@@ -37,48 +62,79 @@ function xorFromMeta(db: IndexDatabase, key: string): Buffer {
   return buf.length === 32 ? buf : Buffer.alloc(32);
 }
 
-function edgeFacts(row: Record<string, SQLOutputValue>): GraphEdge {
-  const edge = decodeFacts<GraphEdge>(row.facts);
+function optionalText(value: SQLOutputValue | undefined): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function graphNodeFromRow(row: Record<string, SQLOutputValue>): GraphNode {
+  const relativePath = optionalText(row.relativePath);
+  const simpleName = optionalText(row.simpleName);
+  const javaIndexId = optionalText(row.javaIndexId);
   return {
-    edgeId: edge.edgeId,
-    kind: edge.kind,
-    fromId: edge.fromId,
-    toId: edge.toId,
-    generation: edge.generation,
-    ...(edge.sourceFile ? { sourceFile: edge.sourceFile } : {})
+    id: String(row.id),
+    kind: String(row.kind) as NodeKind,
+    generation: asInt(row.generation),
+    ...(relativePath ? { relativePath } : {}),
+    ...(simpleName ? { simpleName } : {}),
+    ...(javaIndexId ? { javaIndexId } : {})
   };
 }
 
-function nodeFacts(row: Record<string, SQLOutputValue>): GraphNode {
-  const node = decodeFacts<GraphNode>(row.facts);
+function graphEdgeOrdinal(edge: GraphEdge): number {
+  const prefix = `e:${edge.kind}:${edge.fromId}->${edge.toId}:`;
+  if (edge.edgeId.startsWith(prefix)) {
+    const parsed = Number(edge.edgeId.slice(prefix.length));
+    if (Number.isInteger(parsed) && parsed >= 0) return parsed;
+  }
+  return 0;
+}
+
+function graphEdgeFromRow(row: Record<string, SQLOutputValue>): GraphEdge {
+  const kind = String(row.kind) as EdgeKind;
+  const fromId = String(row.fromId);
+  const toId = String(row.toId);
+  const ordinal = asInt(row.ordinal);
+  const sourceFile = optionalText(row.sourceFile);
   return {
-    id: node.id,
-    kind: node.kind,
-    generation: node.generation,
-    ...(node.relativePath ? { relativePath: node.relativePath } : {}),
-    ...(node.simpleName ? { simpleName: node.simpleName } : {}),
-    ...(node.javaIndexId ? { javaIndexId: node.javaIndexId } : {})
+    edgeId: knowledgeEdgeId({ kind, fromId, toId, ordinal }),
+    kind,
+    fromId,
+    toId,
+    generation: asInt(row.generation),
+    ...(sourceFile ? { sourceFile } : {})
   };
+}
+
+function existingSyms(db: IndexDatabase, texts: Iterable<string>): number[] {
+  const ids: number[] = [];
+  for (const text of texts) {
+    const id = symId(db, text);
+    if (id !== undefined) ids.push(id);
+  }
+  return ids;
 }
 
 class SqlSummaryMap {
   constructor(private readonly db: IndexDatabase) {}
 
   get(methodId: string): MethodSummary | undefined {
-    const row = prepareCached(this.db, "SELECT facts FROM kg_summary WHERE method_id=?").get(methodId);
+    const methodSym = symId(this.db, methodId);
+    if (methodSym === undefined) return undefined;
+    const row = prepareCached(this.db, "SELECT facts FROM kg_summary WHERE method_sym=?").get(methodSym);
     return row ? decodeFacts<MethodSummary>(row.facts) : undefined;
   }
 
   set(methodId: string, summary: MethodSummary): this {
     prepareCached(
       this.db,
-      "INSERT INTO kg_summary(method_id, facts) VALUES (?, ?) ON CONFLICT(method_id) DO UPDATE SET facts=excluded.facts"
-    ).run(methodId, encodeFacts(summary));
+      "INSERT INTO kg_summary(method_sym, facts) VALUES (?, ?) ON CONFLICT(method_sym) DO UPDATE SET facts=excluded.facts"
+    ).run(internSym(this.db, methodId), encodeFacts(summary));
     return this;
   }
 
   delete(methodId: string): boolean {
-    const result = prepareCached(this.db, "DELETE FROM kg_summary WHERE method_id=?").run(methodId);
+    const methodSym = internSym(this.db, methodId);
+    const result = prepareCached(this.db, "DELETE FROM kg_summary WHERE method_sym=?").run(methodSym);
     return result.changes > 0;
   }
 
@@ -150,32 +206,34 @@ export class SqlKnowledgeGraph {
 
   upsertNode(node: GraphNode, ownerFile?: string): void {
     this.writeTx(() => {
-      const existing = prepareCached(this.db, "SELECT kind FROM kg_node WHERE id=?").get(node.id) as
-        | { kind: string }
+      const existing = prepareCached(this.db, `${KG_NODE_SELECT} WHERE ns.text=?`).get(node.id) as
+        | Record<string, SQLOutputValue>
         | undefined;
       if (!existing) {
         xorBuffers(this.nodeXor, itemHash(`n:${node.id}:${node.kind}`));
-      } else if (existing.kind !== node.kind) {
-        xorBuffers(this.nodeXor, itemHash(`n:${node.id}:${existing.kind}`));
+      } else if (String(existing.kind) !== node.kind) {
+        xorBuffers(this.nodeXor, itemHash(`n:${node.id}:${String(existing.kind)}`));
         xorBuffers(this.nodeXor, itemHash(`n:${node.id}:${node.kind}`));
       }
       prepareCached(
         this.db,
-        `INSERT INTO kg_node(id, kind, relative_path, java_index_id, owner_file, facts)
-         VALUES (?, ?, ?, ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET
-           kind=excluded.kind,
-           relative_path=excluded.relative_path,
-           java_index_id=excluded.java_index_id,
-           owner_file=COALESCE(kg_node.owner_file, excluded.owner_file),
-           facts=excluded.facts`
+        `INSERT INTO kg_node(sym, kind_sym, path_sym, simple_name, jid_sym, owner_sym, generation)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(sym) DO UPDATE SET
+           kind_sym=excluded.kind_sym,
+           path_sym=excluded.path_sym,
+           simple_name=excluded.simple_name,
+           jid_sym=excluded.jid_sym,
+           owner_sym=COALESCE(kg_node.owner_sym, excluded.owner_sym),
+           generation=excluded.generation`
       ).run(
-        node.id,
-        node.kind,
-        node.relativePath ?? null,
-        node.javaIndexId ?? null,
-        ownerFile ?? null,
-        encodeFacts(node)
+        internSym(this.db, node.id),
+        internSym(this.db, node.kind),
+        internSymNullable(this.db, node.relativePath),
+        node.simpleName ?? null,
+        internSymNullable(this.db, node.javaIndexId),
+        internSymNullable(this.db, ownerFile),
+        node.generation
       );
       if (ownerFile) this.addExtraOwner(this.extraNodeOwners, node.id, ownerFile, existing !== undefined);
     });
@@ -186,17 +244,32 @@ export class SqlKnowledgeGraph {
       if (this.findStoredEdge(edge)) {
         if (ownerFile) {
           this.addExtraOwner(this.extraEdgeOwners, edge.edgeId, ownerFile, true);
+          const ownerSym = internSym(this.db, ownerFile);
+          const fromSym = internSym(this.db, edge.fromId);
+          const toSym = internSym(this.db, edge.toId);
+          const kindSym = internSym(this.db, edge.kind);
+          const ordinal = graphEdgeOrdinal(edge);
           prepareCached(
             this.db,
-            "UPDATE kg_edge SET owner_file=COALESCE(owner_file, ?) WHERE from_id=? AND to_id=? AND kind=?"
-          ).run(ownerFile, edge.fromId, edge.toId, edge.kind);
+            `UPDATE kg_edge SET owner_sym=COALESCE(owner_sym, ?)
+             WHERE from_sym=? AND to_sym=? AND kind_sym=? AND ordinal=?`
+          ).run(ownerSym, fromSym, toSym, kindSym, ordinal);
         }
         return edge;
       }
       prepareCached(
         this.db,
-        "INSERT INTO kg_edge(from_id, to_id, kind, owner_file, facts) VALUES (?, ?, ?, ?, ?)"
-      ).run(edge.fromId, edge.toId, edge.kind, ownerFile ?? null, encodeFacts(edge));
+        `INSERT INTO kg_edge(from_sym, to_sym, kind_sym, ordinal, file_sym, owner_sym, generation)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        internSym(this.db, edge.fromId),
+        internSym(this.db, edge.toId),
+        internSym(this.db, edge.kind),
+        graphEdgeOrdinal(edge),
+        internSymNullable(this.db, edge.sourceFile),
+        internSymNullable(this.db, ownerFile),
+        edge.generation
+      );
       xorBuffers(this.edgeXor, itemHash(`e:${edge.edgeId}`));
       if (ownerFile) this.extraEdgeOwners.delete(edge.edgeId);
       const reverseKind = REVERSE_EDGE_KIND[edge.kind];
@@ -224,28 +297,26 @@ export class SqlKnowledgeGraph {
   }
 
   successors(nodeId: string, kind?: EdgeKind): GraphEdge[] {
-    const rows = kind === undefined
-      ? prepareCached(this.db, "SELECT facts FROM kg_edge WHERE from_id=? ORDER BY id").all(nodeId)
-      : prepareCached(this.db, "SELECT facts FROM kg_edge WHERE from_id=? AND kind=? ORDER BY id").all(nodeId, kind);
-    return rows.map(edgeFacts);
+    return this.edgesFrom("from_sym", nodeId, kind);
   }
 
   predecessors(nodeId: string, kind?: EdgeKind): GraphEdge[] {
-    const rows = kind === undefined
-      ? prepareCached(this.db, "SELECT facts FROM kg_edge WHERE to_id=? ORDER BY id").all(nodeId)
-      : prepareCached(this.db, "SELECT facts FROM kg_edge WHERE to_id=? AND kind=? ORDER BY id").all(nodeId, kind);
-    return rows.map(edgeFacts);
+    return this.edgesFrom("to_sym", nodeId, kind);
   }
 
   nodesByPath(path: string): GraphNode[] {
-    return prepareCached(this.db, "SELECT facts FROM kg_node WHERE relative_path=? ORDER BY id")
-      .all(path)
-      .map(row => nodeFacts(row));
+    const pathSym = symId(this.db, path);
+    if (pathSym === undefined) return [];
+    return prepareCached(this.db, `${KG_NODE_SELECT} WHERE n.path_sym=? ORDER BY ns.text`)
+      .all(pathSym)
+      .map(row => graphNodeFromRow(row));
   }
 
   nodeIdForJavaIndexId(jid: string): string | undefined {
-    const row = prepareCached(this.db, "SELECT id FROM kg_node WHERE java_index_id=?").get(jid) as { id?: string } | undefined;
-    return typeof row?.id === "string" ? row.id : undefined;
+    const jidSym = symId(this.db, jid);
+    if (jidSym === undefined) return undefined;
+    const row = prepareCached(this.db, `${KG_NODE_SELECT} WHERE n.jid_sym=?`).get(jidSym);
+    return row ? String(row.id) : undefined;
   }
 
   clear(): void {
@@ -259,15 +330,30 @@ export class SqlKnowledgeGraph {
     });
   }
 
+  private edgesFrom(side: "from_sym" | "to_sym", nodeId: string, kind?: EdgeKind): GraphEdge[] {
+    const nodeSym = symId(this.db, nodeId);
+    if (nodeSym === undefined) return [];
+    if (kind === undefined) {
+      return prepareCached(this.db, `${KG_EDGE_SELECT} WHERE e.${side}=? ORDER BY e.id`)
+        .all(nodeSym)
+        .map(graphEdgeFromRow);
+    }
+    const kindSym = symId(this.db, kind);
+    if (kindSym === undefined) return [];
+    return prepareCached(this.db, `${KG_EDGE_SELECT} WHERE e.${side}=? AND e.kind_sym=? ORDER BY e.id`)
+      .all(nodeSym, kindSym)
+      .map(graphEdgeFromRow);
+  }
+
   private nodeById(id: string): GraphNode | undefined {
-    const row = prepareCached(this.db, "SELECT facts FROM kg_node WHERE id=?").get(id);
-    return row ? nodeFacts(row) : undefined;
+    const row = prepareCached(this.db, `${KG_NODE_SELECT} WHERE ns.text=?`).get(id);
+    return row ? graphNodeFromRow(row) : undefined;
   }
 
   private *nodeEntries(): IterableIterator<[string, GraphNode]> {
-    const rows = prepareCached(this.db, "SELECT id, facts FROM kg_node ORDER BY id").all();
-    for (const row of rows) {
-      yield [row.id as string, nodeFacts(row)];
+    for (const row of prepareCached(this.db, `${KG_NODE_SELECT} ORDER BY ns.text`).iterate()) {
+      const node = graphNodeFromRow(row);
+      yield [node.id, node];
     }
   }
 
@@ -288,14 +374,14 @@ export class SqlKnowledgeGraph {
   }
 
   private findStoredEdge(edge: GraphEdge): boolean {
-    const rows = prepareCached(
+    const fromSym = internSym(this.db, edge.fromId);
+    const toSym = internSym(this.db, edge.toId);
+    const kindSym = internSym(this.db, edge.kind);
+    const row = prepareCached(
       this.db,
-      "SELECT facts FROM kg_edge WHERE from_id=? AND to_id=? AND kind=?"
-    ).all(edge.fromId, edge.toId, edge.kind);
-    for (const row of rows) {
-      if (decodeFacts<GraphEdge>(row.facts).edgeId === edge.edgeId) return true;
-    }
-    return false;
+      "SELECT 1 AS ok FROM kg_edge WHERE from_sym=? AND to_sym=? AND kind_sym=? AND ordinal=?"
+    ).get(fromSym, toSym, kindSym, graphEdgeOrdinal(edge));
+    return row !== undefined;
   }
 
   private addExtraOwner(
@@ -311,64 +397,80 @@ export class SqlKnowledgeGraph {
   }
 
   private dropOwnedEdges(removed: ReadonlySet<string>): void {
-    const placeholders = [...removed].map(() => "?").join(",");
-    const primary = this.db.prepare(
-      `SELECT id, facts, owner_file FROM kg_edge WHERE owner_file IN (${placeholders})`
-    ).all(...removed) as Array<{ id: number; facts: SQLOutputValue; owner_file: string | null }>;
+    const ownerSyms = existingSyms(this.db, removed);
+    if (ownerSyms.length === 0) {
+      this.pruneExtraOwners(this.extraEdgeOwners, removed);
+      return;
+    }
+    const placeholders = ownerSyms.map(() => "?").join(",");
+    const primary = prepareCached(
+      this.db,
+      `${KG_EDGE_SELECT} WHERE e.owner_sym IN (${placeholders})`
+    ).all(...ownerSyms);
     for (const row of primary) {
-      const edge = edgeFacts(row);
+      const edge = graphEdgeFromRow(row);
+      const ownerFile = optionalText(row.ownerFile) ?? "";
       const extra = this.extraEdgeOwners.get(edge.edgeId);
-      extra?.delete(row.owner_file ?? "");
+      extra?.delete(ownerFile);
       for (const path of removed) extra?.delete(path);
       if (extra && extra.size > 0) {
         const next = [...extra][0]!;
         extra.delete(next);
         if (extra.size === 0) this.extraEdgeOwners.delete(edge.edgeId);
-        prepareCached(this.db, "UPDATE kg_edge SET owner_file=? WHERE id=?").run(next, row.id);
+        prepareCached(this.db, "UPDATE kg_edge SET owner_sym=? WHERE id=?").run(internSym(this.db, next), asInt(row.rowId));
         continue;
       }
       this.extraEdgeOwners.delete(edge.edgeId);
       xorBuffers(this.edgeXor, itemHash(`e:${edge.edgeId}`));
-      prepareCached(this.db, "DELETE FROM kg_edge WHERE id=?").run(row.id);
+      prepareCached(this.db, "DELETE FROM kg_edge WHERE id=?").run(asInt(row.rowId));
     }
-    for (const [edgeId, extra] of [...this.extraEdgeOwners]) {
-      let changed = false;
-      for (const path of removed) {
-        if (extra.delete(path)) changed = true;
-      }
-      if (!changed) continue;
-      if (extra.size === 0) this.extraEdgeOwners.delete(edgeId);
-    }
+    this.pruneExtraOwners(this.extraEdgeOwners, removed);
   }
 
   private dropOwnedNodes(removed: ReadonlySet<string>): void {
-    const placeholders = [...removed].map(() => "?").join(",");
-    const primary = this.db.prepare(
-      `SELECT id, kind, owner_file FROM kg_node WHERE owner_file IN (${placeholders})`
-    ).all(...removed) as Array<{ id: string; kind: string; owner_file: string | null }>;
-    for (const node of primary) {
+    const ownerSyms = existingSyms(this.db, removed);
+    if (ownerSyms.length === 0) {
+      this.pruneExtraOwners(this.extraNodeOwners, removed);
+      return;
+    }
+    const placeholders = ownerSyms.map(() => "?").join(",");
+    const primary = prepareCached(
+      this.db,
+      `${KG_NODE_SELECT} WHERE n.owner_sym IN (${placeholders})`
+    ).all(...ownerSyms);
+    for (const row of primary) {
+      const node = graphNodeFromRow(row);
+      const ownerFile = optionalText(row.ownerFile) ?? "";
       const extra = this.extraNodeOwners.get(node.id);
-      extra?.delete(node.owner_file ?? "");
+      extra?.delete(ownerFile);
       for (const path of removed) extra?.delete(path);
       if (extra && extra.size > 0) {
         const next = [...extra][0]!;
         extra.delete(next);
         if (extra.size === 0) this.extraNodeOwners.delete(node.id);
-        prepareCached(this.db, "UPDATE kg_node SET owner_file=? WHERE id=?").run(next, node.id);
+        prepareCached(this.db, "UPDATE kg_node SET owner_sym=? WHERE sym=?").run(
+          internSym(this.db, next),
+          internSym(this.db, node.id)
+        );
         continue;
       }
       this.extraNodeOwners.delete(node.id);
       xorBuffers(this.nodeXor, itemHash(`n:${node.id}:${node.kind}`));
-      prepareCached(this.db, "DELETE FROM kg_summary WHERE method_id=?").run(node.id);
-      prepareCached(this.db, "DELETE FROM kg_node WHERE id=?").run(node.id);
+      const methodSym = internSym(this.db, node.id);
+      prepareCached(this.db, "DELETE FROM kg_summary WHERE method_sym=?").run(methodSym);
+      prepareCached(this.db, "DELETE FROM kg_node WHERE sym=?").run(methodSym);
     }
-    for (const [nodeId, extra] of [...this.extraNodeOwners]) {
+    this.pruneExtraOwners(this.extraNodeOwners, removed);
+  }
+
+  private pruneExtraOwners(map: Map<string, Set<string>>, removed: ReadonlySet<string>): void {
+    for (const [id, extra] of [...map]) {
       let changed = false;
       for (const path of removed) {
         if (extra.delete(path)) changed = true;
       }
       if (!changed) continue;
-      if (extra.size === 0) this.extraNodeOwners.delete(nodeId);
+      if (extra.size === 0) map.delete(id);
     }
   }
 }
