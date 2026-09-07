@@ -1,0 +1,41 @@
+{
+  "schema": "iod-p2-g8-summary/v1",
+  "pointRpcDiffs": 0,
+  "repos": {
+    "cipherlink": {
+      "totalDiffs": 12,
+      "nonzero": {
+        "queryGraphDigest": 1,
+        "queryGraphReachable": 10,
+        "queryContextGraph": 1
+      },
+      "intervalP99Ms": 2
+    },
+    "lishu-v2": {
+      "totalDiffs": 1,
+      "nonzero": {
+        "queryGraphDigest": 1
+      },
+      "intervalP99Ms": 1
+    },
+    "exam-parent-v3": {
+      "totalDiffs": 10,
+      "nonzero": {
+        "queryGraphDigest": 1,
+        "queryGraphReachable": 7,
+        "queryContextGraph": 1,
+        "queryContextGraphPersistence": 1
+      },
+      "intervalP99Ms": 1
+    },
+    "lishuedu": {
+      "totalDiffs": 12,
+      "nonzero": {
+        "queryGraphDigest": 1,
+        "queryGraphReachable": 9,
+        "queryContextGraph": 2
+      },
+      "intervalP99Ms": 1
+    }
+  }
+}

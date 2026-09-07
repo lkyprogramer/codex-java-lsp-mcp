@@ -1,0 +1,1 @@
+canary-2 pid=10690 after four-repo+G2+G6 rssKb=220288 rssMiB=215.1

@@ -1,0 +1,10 @@
+{
+  "rounds": 2000,
+  "dbBefore": 256004096,
+  "dbAfter": 256004096,
+  "dbGrowth": 0,
+  "rssBeforeKb": 87008,
+  "rssAfterKb": 87456,
+  "rssDeltaMiB": 0.4375,
+  "pass": true
+}
