@@ -13,6 +13,7 @@ import {
 } from "./cross-process-lease.js";
 import { JdtlsSession, type JdtlsLifecycleState } from "./jdtls-session.js";
 import { isJavaIndexPrewarmReady, JavaIndexClient } from "./java-index/java-index-client.js";
+import type { JavaIndexClientApi } from "./java-index/java-index-client-api.js";
 import { familyWorkerFactory } from "./java-index/family-worker-pool.js";
 import type { JavaIndexStatus } from "./java-index/index-types.js";
 import { RouterJavaIndex } from "./java-index/router-java-index.js";
@@ -973,7 +974,7 @@ export class RepoRuntimeManager {
    * which marks the generation dirty for the next request's retry.
    */
   private async applyBatchToJavaIndex(
-    javaIndex: JavaIndexClient | undefined,
+    javaIndex: JavaIndexClientApi | undefined,
     batch: RepoChangeBatch
   ): Promise<void> {
     if (!javaIndex) return;

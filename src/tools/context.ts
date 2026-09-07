@@ -2,7 +2,7 @@
 // output: Shared tool context for the public MCP handlers.
 // pos: Dependency bundle passed from server.ts into individual tools.
 import { AgentRouter } from "../agent-router/index.js";
-import type { JavaIndexClient } from "../java-index/java-index-client.js";
+import type { JavaIndexClientApi } from "../java-index/java-index-client-api.js";
 import type { RouterIndex } from "../java-index/router-java-index.js";
 import { JdtlsSession } from "../jdtls-session.js";
 import type { WorktreeIdentity } from "../worktree-identity.js";
@@ -47,6 +47,6 @@ export type ToolContext = {
   /** Router-facing JavaIndex V2 facts used by AgentRouter. */
   javaIndex: RouterIndex;
   /** Raw V2 worker client; optional only to keep isolated handler tests lightweight. */
-  javaIndexClient?: JavaIndexClient;
+  javaIndexClient?: JavaIndexClientApi;
   router: AgentRouter;
 };

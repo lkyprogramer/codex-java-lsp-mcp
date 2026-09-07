@@ -15,6 +15,7 @@ import {
   type JavaIndexOpenOptions,
   type JavaIndexRequestOptions
 } from "./java-index-client.js";
+import type { JavaIndexClientApi } from "./java-index-client-api.js";
 import type { ContextGraphResult, GraphDigest, GraphReachable, JavaIndexRefreshPriority } from "./worker-protocol.js";
 import { ENTITY_SEARCH_DEFAULT_LIMIT, type EntityHit } from "./entity-search.js";
 import type {
@@ -224,7 +225,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
 
   constructor(
     private readonly repoRoot: string,
-    private readonly client: JavaIndexClient,
+    private readonly client: JavaIndexClientApi,
     private readonly openOptions: JavaIndexOpenOptions = {}
   ) {
     const layout = probeLayout(repoRoot);
@@ -238,7 +239,7 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
     return new RouterJavaIndex(repoRoot, new JavaIndexClient(repoRoot, cacheDir), openOptions);
   }
 
-  rawClient(): JavaIndexClient {
+  rawClient(): JavaIndexClientApi {
     return this.client;
   }
 

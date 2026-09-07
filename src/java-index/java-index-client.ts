@@ -47,6 +47,7 @@ import {
   type MyBatisResourceByNamespaceBatch
 } from "./worker-protocol.js";
 import { ENTITY_SEARCH_DEFAULT_LIMIT, type EntityHit } from "./entity-search.js";
+import type { JavaIndexClientApi } from "./java-index-client-api.js";
 
 export type JavaIndexOpenOptions = {
   /** Absent => the worker never acquires a machine-level sweep lease. */
@@ -157,7 +158,7 @@ const RETIRE_ON_DEADLINE = new Set<JavaIndexCommand["type"]>([
   "CLOSE"
 ]);
 
-export class JavaIndexClient {
+export class JavaIndexClient implements JavaIndexClientApi {
   private nextId = 1;
   private worker?: WorkerLike;
   private state: JavaIndexStatus["state"] = "NEW";
