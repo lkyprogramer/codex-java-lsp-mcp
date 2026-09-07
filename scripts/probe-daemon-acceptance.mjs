@@ -1,21 +1,15 @@
 #!/usr/bin/env node
-// input: a healthy loopback daemon at JAVA_LSP_HTTP_PORT (default 38456).
-// output: JSON with D2/D4/D6 and P2-G2/G5 probe numbers.
+// input: a healthy loopback daemon at JAVA_LSP_HTTP_PORT (canary default 38457).
+// output: JSON with D2/D4/D6 and P2-G2/G5/G6 probe numbers.
 // pos: P3-T3 acceptance: drop D3a/D3b/D7/FSX_*; index-on-disk SQLite daemon.
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { execFileSync, spawn } from "node:child_process";
-import { existsSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { execFileSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
 import path from "node:path";
 
-const port = process.env.JAVA_LSP_HTTP_PORT ?? "38456";
+const port = process.env.JAVA_LSP_HTTP_PORT ?? "38457";
 const url = new URL(`http://127.0.0.1:${port}/mcp`);
-const cacheBase = path.join(homedir(), "Library/Caches/codex-java-lsp");
-const tornaRoot = "/Users/luo/Documents/program/lishu-v2-worktrees/torna-rest-all-apps";
-const tornaCache = path.join(cacheBase, "07230b6e0a13");
-const tornaSnap = path.join(tornaCache, "java-index-snapshot.json.gz");
-const tornaMetrics = path.join(tornaCache, "cold-build-metrics.json");
 const stormSamples = Number(process.env.JAVA_LSP_V1_STORM_SAMPLES ?? "12");
 
 const pins = {
@@ -89,54 +83,12 @@ async function healthzSample(n) {
   };
 }
 
-function footprintMiB(pid) {
-  if (!pid) return Promise.resolve(null);
-  return new Promise(resolve => {
-    const child = spawn("footprint", ["-p", pid], { stdio: ["ignore", "pipe", "ignore"] });
-    let out = "";
-    child.stdout.setEncoding("utf8");
-    child.stdout.on("data", chunk => { out += chunk; });
-    child.on("close", () => {
-      const match = /phys_footprint:\s+([\d.]+)\s+MB/i.exec(out);
-      resolve(match ? Number(match[1]) : null);
-    });
-  });
-}
-
-const daemonLog = path.join(homedir(), "Library/Logs/codex-java-lsp-mcp/daemon.stderr.log");
-const logOffset = existsSync(daemonLog) ? statSync(daemonLog).size : 0;
-
-function scanDaemonLogWindow() {
-  if (!existsSync(daemonLog)) {
-    return { fatal: 0, ebadf: 0, crashMarkers: 0, ready: 0, windowBytes: 0 };
-  }
-  const buf = readFileSync(daemonLog);
-  const text = buf.subarray(Math.min(logOffset, buf.length)).toString("utf8");
-  return {
-    fatal: (text.match(/FATAL ERROR/g) ?? []).length,
-    ebadf: (text.match(/spawn EBADF/g) ?? []).length,
-    crashMarkers: (text.match(/codex-java-lsp-crash/g) ?? []).length,
-    ready: (text.match(/HTTP daemon ready/g) ?? []).length,
-    windowBytes: text.length
-  };
-}
-
-function crashMarkerSourcePresent() {
-  const candidates = [
-    path.join(process.cwd(), "src/process-crash-markers.ts"),
-    path.join(process.cwd(), "dist/process-crash-markers.js"),
-    path.join(homedir(), "Library/Application Support/codex-java-lsp-mcp/current/dist/process-crash-markers.js")
-  ];
-  return candidates.some(file => existsSync(file) && readFileSync(file, "utf8").includes("codex-java-lsp-crash"));
-}
-
 const client = new Client({ name: "v1-acceptance-probe", version: "0.1.0" });
 await client.connect(new StreamableHTTPClientTransport(url));
 
 const health = await healthzSample(stormSamples);
 const pid = daemonPid();
 const unregisteredRoot = "/Users/luo/Documents/github/codex-java-lsp-mcp/fixtures/generic-java";
-const d6status = await call(client, "java_status", { repoRoot: unregisteredRoot });
 const impacts = {};
 for (const [id, pin] of Object.entries(pins)) {
   const first = await call(client, "java_impact", {
@@ -199,6 +151,9 @@ const g2 = await call(client, "java_impact", {
   deadlineMs: 15000
 });
 const rssAfterQuery = rssMiB(pid);
+const rssBeforeExtra = rssAfterQuery;
+const d6status = await call(client, "java_status", { repoRoot: unregisteredRoot });
+const rssAfterExtra = rssMiB(pid);
 await client.close().catch(() => undefined);
 
 const d2 = health.timeouts === 0 && health.p99Ms < 100;
@@ -206,6 +161,8 @@ const d4 = !d4retry.isError && d4retry.elapsedMs <= 500;
 const d6 = !d6status.toolFail && d6status.elapsedMs <= 3000;
 const g2pass = !g2.toolFail && g2.elapsedMs <= 300;
 const g5pass = rssAfterQuery !== null && rssAfterQuery <= 250;
+const extraDelta = rssBeforeExtra !== null && rssAfterExtra !== null ? rssAfterExtra - rssBeforeExtra : null;
+const g6pass = extraDelta !== null && extraDelta <= 48;
 const report = {
   health,
   pid,
@@ -223,11 +180,12 @@ const report = {
   },
   g2: { elapsedMs: g2.elapsedMs, toolFail: g2.toolFail },
   g5: { rssAfterQueryMiB: rssAfterQuery },
-  gates: { D2: d2, D4: d4, D6: d6, "P2-G2": g2pass, "P2-G5": g5pass }
+  g6: { extraRootMs: d6status.elapsedMs, rssBeforeMiB: rssBeforeExtra, rssAfterMiB: rssAfterExtra, deltaMiB: extraDelta },
+  gates: { D2: d2, D4: d4, D6: d6, "P2-G2": g2pass, "P2-G5": g5pass, "P2-G6": g6pass }
 };
 const out = process.env.JAVA_LSP_V1_PROBE_OUT ?? path.join(process.cwd(), "docs/phase-x/p3-probe.json");
 writeFileSync(out, JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report, null, 2));
-process.exitCode = d2 && d4 && d6 && g2pass && g5pass ? 0 : 2;
+process.exitCode = d2 && d4 && d6 && g2pass && g5pass && g6pass ? 0 : 2;
 process.exit();
 

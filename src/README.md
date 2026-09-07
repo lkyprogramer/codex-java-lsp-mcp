@@ -1,6 +1,6 @@
 # `src/` architecture map
 
-本目录是 `codex-java-lsp` MCP 的 TypeScript 源码层。生产链只有一套 Java V3 路径：RepoChangeCoordinator generation → Tree-sitter JavaIndex → bounded JDT/SemanticGateway → typed evidence/family ranker → token-aware `readPlan` → 5 个 MCP tools。stdio 与 HTTP daemon 共用 `JavaLspApplication`。
+本目录是 `codex-java-lsp` MCP 的 TypeScript 源码层。生产链只有一套 Java V3 路径：RepoChangeCoordinator generation → SQLite `index.sqlite`（SqlJavaIndexClient）→ bounded JDT/SemanticGateway → typed evidence/family ranker → token-aware `readPlan` → 5 个 MCP tools。stdio 与 HTTP daemon 共用 `JavaLspApplication`。
 
 ## 文件清单
 
@@ -21,7 +21,7 @@
 - `semantic-gateway.ts` | 所有 semantic operations 的 same-key singleflight、per-caller deadline、complete-only bounded cache。
 - `repo-change-coordinator.ts` | 唯一文件 watcher owner；输出 normalized batch 和单调 generation，处理 storm/degraded 状态。
 - `repo-ownership-lease.ts` | cross-process ownership | 通过原子目录交接、PID 启动身份和 owner token 保证同 root 单 owner。
-- `repo-runtime-manager.ts` | 管理每个 repo/worktree 的 coordinator、JavaIndex、JDT session、request budget 与 lifecycle。
+- `repo-runtime-manager.ts` | 管理每个 repo/worktree 的 coordinator、SQL JavaIndex、JDT session、request budget 与 lifecycle。
 - `path-utils.ts` | canonical/potential path、segment-safe containment、repo hash。
 - `project-jdk.ts` | 解析项目 JDK 与 JDT LS runtime JDK 的配置关系。
 - `repo-layout.ts` | 识别 repo root、模块、layer、sourceSet 和路径规范化。

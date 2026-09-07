@@ -34,14 +34,14 @@
 - 默认推荐入口是 `java_impact`，用于生成影响面、候选文件、`readPlan`、证据缺口和指标。
 - 未启用 LSP 的 Java repo 仍可走 fast path：repo/layout/JDK 探测、Tree-sitter JavaIndex、增量 watcher 和有界 streaming `rg`。
 - 启用 LSP 后，JDT LS 为 symbol、references、hierarchy、diagnostics 和精确位置语义提供增强结果；同键请求由 SemanticGateway singleflight 合并。
-- Git worktree family 可继承 LSP enablement 和经过内容验证的不可变 seed facts；每个 worktree 的 generation、JavaIndex、JDT workspace、日志和可变缓存保持隔离。
+- Git worktree family 可继承 LSP enablement；同家族可 `VACUUM INTO` sibling `index.sqlite`。每个 worktree 的 generation、JavaIndex DB、JDT workspace、日志和可变缓存保持隔离。
 - `ImpactResultV6` 显式暴露 freshness/completeness、证据来源、任务导向的候选顺序和文件/范围级 `readPlan`。
 - stdio 与共享 HTTP daemon 共用 canonical-root ownership；同一个 worktree 同一时刻只允许一个进程持有 JDT workspace、JavaIndex 和 cache。
 
 ## 五层架构
 
 1. **Repo identity 与 freshness**：`repo-resolver`、`RepoChangeCoordinator` 和单调 generation 统一处理 canonical containment、edit/add/delete/rename/build/resource 事件、storm 降级和 worktree identity。
-2. **JavaIndex 静态事实层**：Tree-sitter Java AST、FQN/import 解析、静态关系、MyBatis resource facts、按 source root 的 coverage，以及 versioned atomic snapshot。后台 sweep 分块且受跨进程 lease 限制，前台 refresh 不等待整仓 sweep。
+2. **JavaIndex 静态事实层**：Tree-sitter Java AST、FQN/import 解析、静态关系、MyBatis resource facts、按 source root 的 coverage，持久化在 `index.sqlite`。builder 子进程串行写库；daemon 只读打开，空闲关连接。
 3. **JDT 精确语义层**：`JdtlsSession`、`SemanticGateway`、跨进程 JDT slot、restart backoff、complete-only bounded cache 和 64-entry `DocumentLru`。同键 semantic operation 只执行一次 backend work，每个 caller 独立消费自己的 deadline。
 4. **Evidence、ranking 与 readPlan**：providers 只产生 typed evidence；family ranker 对同族证据饱和；Spring、MyBatis、MapStruct pack 只在有证据时参与；planner 一次批量读取精确 ranges，并同时约束文件、字节和估算 token。
 5. **MCP surface 与 observability**：5 个工具提供 compact/standard/diagnostic 输出；`java_status` 汇总 runtime、watcher、JavaIndex coverage、generation、lease 和缓存状态，不把绝对私有路径泄漏到标准结果。stdio 与 HTTP daemon 共用同一套 `JavaLspApplication`。
@@ -55,11 +55,11 @@
 
 ### Cache、freshness 与 completeness
 
-- JavaIndex snapshot 只接受当前 schema/build identity/manifest；不匹配、损坏或部分写入会被忽略并重建，不读取 V1 cache，也不做双读/双写迁移。
+- `index.sqlite` schema 不匹配则 drop-all 重建；启动时 janitor 删除旧的 `java-index-snapshot*.json.gz` / `java-knowledge-graph.json.gz`。不做堆快照双读/双写。
 - 每个 normalized repo batch 只推进一次 generation，并同时驱动 AgentRouter、JDT document/cache 同步和 JavaIndex refresh。请求结果记录 `requestGeneration`、`indexedGeneration` 与 `changedDuringRequest`。
 - source root 只有在同 generation、无 failed/recovered/pending 条目且 coverage=`COMPLETE` 时才能回答负查询；其余状态返回未知或降级结果，不能把缺失当成不存在。
 - SemanticGateway 只缓存 `COMPLETE`，有 TTL、容量上限和 generation 失效；partial/timeout/cancelled 结果不会写成 complete cache。
-- worktree sibling seed 在目标内容验证完成前不可查询，且在 reconcile 结束前保持 `DEGRADED`。schema 不兼容时直接重建目标 cache。
+- worktree sibling 拷贝的是 `index.sqlite`（`VACUUM INTO`），随后 reconcile；schema 不兼容时重建目标库。
 
 ## 设计边界
 
@@ -240,7 +240,7 @@ hook 行为：
 {"tool":"java_impact","arguments":{"repoRoot":"/absolute/repo","anchors":[{"file":"src/main/java/demo/OrderService.java","line":42,"column":18}],"semanticPolicy":"auto"}}
 ```
 
-只要 JDT 时再 `java_status({start:true})`。daemon 刚重启后的第一次 `java_status` 会冷建 JavaIndex（大仓可能数秒到十几秒）；磁盘 CJV4 快照在，后续是 hydrate 不是从零扫树。`projects.json` 里 `lspEnabled` 的 pin 仓不会因为 2 天不用被 janitor 删掉。
+只要 JDT 时再 `java_status({start:true})`。daemon 刚重启后的第一次 `java_status` 会冷建 `index.sqlite`（大仓可能 1–3 分钟 `BUILDING`）；库已在则只读打开。`projects.json` 里 `lspEnabled` 的 pin 仓不会因为 2 天不用被 janitor 删掉。
 
 排查 runtime、watcher roots、JDK candidates、raw LSP URI/range 或完整 diagnostics 时显式打开诊断字段：
 
@@ -248,7 +248,7 @@ hook 行为：
 {"tool":"java_status","arguments":{"repoRoot":"/absolute/repo","start":false,"detail":"diagnostic"}}
 ```
 
-默认不要在每次查询后调用 `java_runtime(action=shutdown)`；让 idle TTL 回收 JDT LS，才能复用 workspace import、JDT LS 内存索引和 JavaIndex snapshot。
+默认不要在每次查询后调用 `java_runtime(action=shutdown)`；让 idle TTL 回收 JDT LS，才能复用 workspace import 和磁盘上的 `index.sqlite`。
 
 需要强语义结果时：
 
