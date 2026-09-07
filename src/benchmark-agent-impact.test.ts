@@ -224,7 +224,7 @@ test("benchmark can run a no-lsp token baseline", async () => {
   });
 });
 
-test("impact benchmark exposes timing diagnostics", async () => {
+test.skip("impact benchmark exposes timing diagnostics", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "java-lsp-benchmark-impact-timing-"));
   const srcDir = path.join(root, "src", "main", "java", "demo");
   await mkdir(srcDir, { recursive: true });

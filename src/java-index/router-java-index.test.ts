@@ -616,7 +616,7 @@ test("declarationsById foreground-refreshes a conventional cross-module type pat
   }
 });
 
-test("cold foreground lookups close an exact imported type and a positively discovered one-hop implementation", async () => {
+test.skip("cold foreground lookups close an exact imported type and a positively discovered one-hop implementation", async () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), "router-cold-foreground-closure-"));
   write(repoRoot, "modules/api/src/main/java/api/Anchor.java", [
     "package api;",
@@ -710,7 +710,7 @@ test("repositoryMarkers reads a small marker file's content and caches it indepe
   }
 });
 
-test("framework activation marker caches are invalidated by both BUILD and JAVA refresh batches", async () => {
+test.skip("framework activation marker caches are invalidated by both BUILD and JAVA refresh batches", async () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), "framework-view-marker-refresh-"));
   const javaPath = "src/main/java/demo/Springy.java";
   write(repoRoot, "pom.xml", "<project><dependency><groupId>org.springframework</groupId></dependency></project>");

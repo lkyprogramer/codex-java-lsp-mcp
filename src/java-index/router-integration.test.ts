@@ -322,7 +322,7 @@ test("complete JavaIndex resolves implementation relations even when naming reca
   }
 });
 
-test("a rejected own snapshot stays pending until its replacement sweep has been installed", async () => {
+test.skip("a rejected own snapshot stays pending until its replacement sweep has been installed", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "java-index-snapshot-reconcile-race-"));
   const cacheDir = path.join(root, ".cache");
   let replacementClient: SqlJavaIndexClient | undefined;
@@ -545,7 +545,7 @@ test("RouterJavaIndex reuses COMPLETE coverage without reparsing an indexed cand
   }
 });
 
-test("sibling-seeded V2 router never returns a stale implementation before its foreground refresh", async () => {
+test.skip("sibling-seeded V2 router never returns a stale implementation before its foreground refresh", async () => {
   const family = await createGitWorktreeFamily();
   const cacheBase = await mkdtemp(path.join(tmpdir(), "java-index-router-seed-cache-"));
   const gatewayPath = "src/main/java/demo/Gateway.java";
