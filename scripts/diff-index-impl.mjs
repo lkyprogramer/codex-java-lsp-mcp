@@ -67,7 +67,7 @@ function listFiles(root, suffix) {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (entry.name === "node_modules" || entry.name === "target" || entry.name === ".git") continue;
+        if (["node_modules", "target", "build", ".git", "out", "dist"].includes(entry.name)) continue;
         walk(full);
       } else if (entry.name.endsWith(suffix)) out.push(full);
     }
@@ -162,18 +162,18 @@ async function ensureDb(repo, dbPath) {
 }
 
 async function openHeap(repo) {
+  if (!process.env.JAVA_LSP_COLD_BUILD_CHILD) process.env.JAVA_LSP_COLD_BUILD_CHILD = "0";
   const heap = new JavaIndexClient(repo, mkdtempSync(path.join(tmpdir(), "iod-diff-heap-")));
   await heap.open(1);
-  const java = listFiles(path.join(repo, "src"), ".java");
-  if (java.length > 0) await heap.refresh(1, java, []);
-  const xml = listFiles(path.join(repo, "src"), ".xml").filter(file => file.includes(`${path.sep}mapper${path.sep}`));
+  const java = listFiles(repo, ".java");
+  if (java.length > 0 && java.length <= 400) await heap.refresh(1, java, []);
+  const xml = listFiles(repo, ".xml").filter(file => file.includes(`${path.sep}mapper${path.sep}`));
   if (xml.length > 0) await heap.refreshResources(1, xml);
   await heap.reconcile(1);
   await waitUntil(async () => {
     const status = await heap.status();
     return status.pendingBackground === 0 && status.files > 0;
-  }, 180_000);
-  await heap.awaitPrewarmReady({ hydrate: true });
+  }, 600_000);
   return heap;
 }
 
@@ -199,7 +199,7 @@ function sampleAnchors(repo, golden, limit) {
 
 async function addMethodAnchors(repo, heap, anchors, limit) {
   const seen = new Set(anchors.map(item => item.relative));
-  const javaFiles = listFiles(path.join(repo, "src"), ".java");
+  const javaFiles = listFiles(repo, ".java");
   const remaining = Math.max(0, limit - anchors.length);
   const step = javaFiles.length === 0 ? 1 : Math.max(1, Math.floor(javaFiles.length / Math.max(1, remaining)));
   for (let index = 0; index < javaFiles.length && anchors.length < limit; index += step) {
@@ -258,7 +258,7 @@ export async function runDiff(options) {
     value: { calls: 0, diffs: 0, oldMs: [], newMs: [], diffSamples: [] }
   })).map(item => [item.name, item.value]));
   try {
-    const xmlFiles = listFiles(path.join(repo, "src"), ".xml").filter(file => file.includes(`${path.sep}mapper${path.sep}`));
+    const xmlFiles = listFiles(repo, ".xml").filter(file => file.includes(`${path.sep}mapper${path.sep}`));
     const digest = await runOne("queryGraphDigest", heap, sql, []);
     recordRpc(stats, "queryGraphDigest", digest.oldMs, digest.newMs, digest.same, digest.same ? undefined : digest.sample);
     const markers = await runOne("queryRepositoryFactMarkers", heap, sql, [["org.springframework"], ["org.springframework"]]);
