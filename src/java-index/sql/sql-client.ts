@@ -237,6 +237,8 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     input: Parameters<JavaIndexClientApi["queryContextGraph"]>[0],
     _requestOptions?: JavaIndexRequestOptions
   ): Promise<ContextGraphResult> {
+    this.ensureConn();
+    this.graph?.prefetch();
     return validateContextGraphResult(runContextGraph(this.queryDeps(), input));
   }
   async queryEntitySearch(task: string, limit = ENTITY_SEARCH_DEFAULT_LIMIT, _requestOptions?: JavaIndexRequestOptions): Promise<EntityHit[]> {
@@ -369,7 +371,6 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     this.db = openIndexDb(this.dbPath, { readOnly: true });
     this.store = new SqlFactsStore(this.db);
     this.graph = new SqlKnowledgeGraph(this.db);
-    this.graph.prefetch();
     this.search = new SqlEntitySearch(this.db);
     this.lastStatus = this.assembleStatus();
     this.touch();
