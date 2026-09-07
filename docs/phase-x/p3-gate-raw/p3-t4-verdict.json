@@ -1,0 +1,173 @@
+{
+  "schemaVersion": "iod-p3-t4-verdict/v1",
+  "head": "9ab16e5",
+  "identityMatrix": {
+    "dir": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-74d3761dc961/implementer/p3-t4-identity-8",
+    "candidateHead": "9ac1249",
+    "baseline": "d02f398",
+    "matrixExit": 1,
+    "contentDelta0": true,
+    "metrics": [
+      "recall",
+      "pRead",
+      "rReadMust",
+      "estimatedTokensP50"
+    ],
+    "absoluteFloorsFailedBothArms": true,
+    "projects": [
+      {
+        "project": "lishuedu",
+        "delta": {
+          "recall": 0,
+          "pRead": 0,
+          "rReadMust": 0,
+          "rTaskBlocking": 0,
+          "estimatedTokensP50": 0,
+          "p95Ratio": 1.0418351131282575,
+          "p95ThresholdMs": 347.01833374998387,
+          "holdout": {
+            "recall": 0,
+            "pRead": 0,
+            "rReadMust": 0,
+            "rTaskBlocking": 0
+          }
+        },
+        "gate": {
+          "rReadMust": false,
+          "rTaskBlocking": true,
+          "recall": true,
+          "pRead": true,
+          "estimatedTokens": true,
+          "p95": true,
+          "rangeLineRecall": false,
+          "rangeCoordinateRecall": false,
+          "holdoutRReadMust": false,
+          "holdoutRTaskBlocking": true,
+          "holdoutRecall": true,
+          "holdoutPRead": true
+        },
+        "passed": false,
+        "mustFailureScenarios": [
+          "exam-score-export-cross-module-holdout",
+          "paper-task-claim-iam-holdout"
+        ]
+      },
+      {
+        "project": "cipherlink",
+        "delta": {
+          "recall": 0,
+          "pRead": 0,
+          "rReadMust": 0,
+          "rTaskBlocking": 0,
+          "estimatedTokensP50": 0,
+          "p95Ratio": 1.0851083426704322,
+          "p95ThresholdMs": 309.9841675000016,
+          "holdout": {
+            "recall": 0,
+            "pRead": 0,
+            "rReadMust": 0,
+            "rTaskBlocking": 0
+          }
+        },
+        "gate": {
+          "rReadMust": false,
+          "rTaskBlocking": true,
+          "recall": true,
+          "pRead": true,
+          "estimatedTokens": true,
+          "p95": true,
+          "rangeLineRecall": false,
+          "rangeCoordinateRecall": false,
+          "holdoutRReadMust": false,
+          "holdoutRTaskBlocking": true,
+          "holdoutRecall": true,
+          "holdoutPRead": true
+        },
+        "passed": false,
+        "mustFailureScenarios": [
+          "client-release-storage-presign-holdout",
+          "backend-operation-log-aspect-async-audit-holdout"
+        ]
+      },
+      {
+        "project": "exam-parent-v3",
+        "delta": {
+          "recall": 0,
+          "pRead": 0,
+          "rReadMust": 0,
+          "rTaskBlocking": 0,
+          "estimatedTokensP50": 0,
+          "p95Ratio": 0.9903651662405809,
+          "p95ThresholdMs": 444.8701562499991,
+          "holdout": {
+            "recall": 0,
+            "pRead": 0,
+            "rReadMust": 0,
+            "rTaskBlocking": 0
+          }
+        },
+        "gate": {
+          "rReadMust": false,
+          "rTaskBlocking": true,
+          "recall": true,
+          "pRead": true,
+          "estimatedTokens": true,
+          "p95": true,
+          "rangeLineRecall": false,
+          "rangeCoordinateRecall": false,
+          "holdoutRReadMust": false,
+          "holdoutRTaskBlocking": true,
+          "holdoutRecall": true,
+          "holdoutPRead": true
+        },
+        "passed": false,
+        "mustFailureScenarios": [
+          "exam-room-print-download-types-persistent-bundle",
+          "candidate-pay-order-cross-module-admission"
+        ]
+      }
+    ]
+  },
+  "gateRelease": {
+    "run3": "p3-t4-release-3.txt exit 0",
+    "run4": "p3-t4-release-4.txt exit 0"
+  },
+  "ruoyi": {
+    "decision": "QUALITY_IDENTITY_FAIL",
+    "identity": {
+      "identical": false,
+      "diffs": [
+        {
+          "metric": "recall",
+          "old": 0.4490221088435377,
+          "new": 0.7482142857142859
+        },
+        {
+          "metric": "pRead",
+          "old": 0.5863095238095238,
+          "new": 0.2976190476190475
+        },
+        {
+          "metric": "rReadMust",
+          "old": 0.3361394557823133,
+          "new": 0.5383503401360543
+        },
+        {
+          "metric": "RangeLineRecall",
+          "old": 0.3216720779220783,
+          "new": 0.35258194186765596
+        }
+      ],
+      "unmeasured": []
+    },
+    "token": {
+      "drop": -0.4623287671232877,
+      "pass": false,
+      "gate": 0.2
+    },
+    "oldCacheBytes": 0,
+    "newCache": "208MiB index.sqlite",
+    "note": "Old heap arm wrote no snapshot under --index-cache-dir; metrics are not a same-index identity."
+  },
+  "installRuntime": false
+}
