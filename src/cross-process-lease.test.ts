@@ -264,6 +264,30 @@ test("two stores requesting different jdtSlots while one lease is live both obey
   assert.equal(thirdStatus.capacityConflict, false);
 });
 
+test("concurrent open() does not throw ENOENT when capacity.lock vanishes mid-inspect", async () => {
+  const shared = tempLeaseRoot();
+  const errors: unknown[] = [];
+  await Promise.all(Array.from({ length: 16 }, async (_, index) => {
+    const store = new FileCrossProcessLeaseStore(shared, {
+      pid: 700 + index,
+      isAlive: () => true,
+      now: () => Date.now(),
+      orphanGraceMs: 30,
+      capacityLockTimeoutMs: 2000
+    });
+    try {
+      await store.open({ jdtSlots: 1, sweepSlots: 1 });
+    } catch (error) {
+      errors.push(error);
+    }
+  }));
+  assert.equal(
+    errors.filter(error => (error as NodeJS.ErrnoException).code === "ENOENT").length,
+    0,
+    errors.map(error => error instanceof Error ? error.stack ?? error.message : String(error)).join("\n")
+  );
+});
+
 test("a dead or metadata-less expired capacity.lock is reclaimed, while a live lock owner is never stolen", async () => {
   const shared = tempLeaseRoot();
   // A crash mid-negotiation: capacity.lock exists with no metadata.
