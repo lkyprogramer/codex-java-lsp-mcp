@@ -484,6 +484,7 @@ P1-G3 超门：`EXPLAIN QUERY PLAN` 加索引或拆查询；**不开线程**。�
 
 - **范围**：删 `java-index-worker.ts`、`java-index-worker-process.ts`、`java-index-worker-query.ts`、`java-index-worker-mybatis.ts`、`worker-protocol.ts`（**保留** `validate*` 与类型：先移到 `src/java-index/index-validate.ts`，再删原文件）、`java-index-client.ts`（旧类；`JavaIndexClientApi` 接口留）、`family-worker-pool.ts`、`index-store.ts`、`parse-tree-cache.ts`（builder 用到的最小 LRU 若依赖它，先内联到 builder）、`cold-build.ts`、`cold-build-child.ts`、`hydrate-snapshot-view.ts`、`entity-search.ts`（旧类；`entity-scoring.ts` 留）、`java-knowledge/graph-store.ts`、`graph-snapshot.ts`、`graph-columns.ts`；对应测试文件（附录 A.6 列表）删除；`diff-index-impl.mjs` 改为只做 SQL 端自检（或删除，closeout 记录）。
 - **门**：T0 全绿（此时全量测试文件数下降为正常现象，closeout 记录前后数量）。
+- **拆分（2026-09-07）**：`P3-T1.0` `worker-protocol.ts` → `index-validate.ts` + re-export shim；`P3-T1.a` 叶子 `family-worker-pool.ts`；`P3-T1.b` 起按文件删除 worker/client/store（单文件超 400 行者单独 commit）。
 
 ### P3-T2 删除快照/列式/家族/seed + 开关收敛
 
