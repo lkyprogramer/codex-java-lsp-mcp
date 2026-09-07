@@ -4,8 +4,16 @@ import { JavaIndexStore } from "../java-index/index-store.js";
 import type { JavaFileBundle, JavaFileFacts, JavaMethodFacts, JavaTypeFacts, SourceRange, StaticEdge } from "../java-index/index-types.js";
 import { javaEdgeId, javaFileId, javaMethodId, javaTypeId } from "../java-index/stable-id.js";
 import { KnowledgeGraphBuilder } from "./graph-builder.js";
-import { KnowledgeGraphStore } from "./graph-store.js";
+import { openIndexDb } from "../java-index/sql/driver.js";
+import { ensureSchema } from "../java-index/sql/schema.js";
+import { SqlKnowledgeGraph } from "../java-index/sql/knowledge-graph.js";
 import { reachableFiles } from "./graph-walk.js";
+
+function sqlGraph() {
+  const db = openIndexDb(":memory:");
+  ensureSchema(db);
+  return new SqlKnowledgeGraph(db);
+}
 
 const RANGE: SourceRange = { start: { line: 1, column: 1 }, end: { line: 8, column: 2 } };
 
@@ -94,10 +102,10 @@ test("unique class call becomes CALLS_EXACT and materializes CALLED_BY", () => {
   const index = new JavaIndexStore();
   index.replaceFile(target);
   index.replaceFile(caller);
-  const graph = new KnowledgeGraphStore();
+  const graph = sqlGraph();
   new KnowledgeGraphBuilder(graph).rebuildFromStore(index, 1);
-  const callerMethod = [...graph.nodesById.keys()].find(id => id.includes("#run#"));
-  const serviceMethod = [...graph.nodesById.keys()].find(id => id.includes("#save#"));
+  const callerMethod = [...graph.nodesById.entries()].map(([id]) => id).find(id => id.includes("#run#"));
+  const serviceMethod = [...graph.nodesById.entries()].map(([id]) => id).find(id => id.includes("#save#"));
   assert.ok(callerMethod && serviceMethod);
   assert.ok(graph.successors(callerMethod, "CALLS_EXACT").some(edge => edge.toId === serviceMethod));
   assert.ok(graph.predecessors(callerMethod, "CALLED_BY").some(edge => edge.fromId === serviceMethod));
@@ -123,11 +131,11 @@ test("interface call emits CALLS_VIRTUAL plus DISPATCHES_TO each implementer", (
   index.replaceFile(port);
   index.replaceFile(impl);
   index.replaceFile(caller);
-  const graph = new KnowledgeGraphStore();
+  const graph = sqlGraph();
   new KnowledgeGraphBuilder(graph).rebuildFromStore(index, 1);
-  const callerMethod = [...graph.nodesById.keys()].find(id => id.includes("Caller.java") && id.includes("#run#"))!;
-  const portMethod = [...graph.nodesById.keys()].find(id => id.includes("Port.java") && id.includes("#save#"))!;
-  const implMethod = [...graph.nodesById.keys()].find(id => id.includes("PortImpl.java") && id.includes("#save#"))!;
+  const callerMethod = [...graph.nodesById.entries()].map(([id]) => id).find(id => id.includes("Caller.java") && id.includes("#run#"))!;
+  const portMethod = [...graph.nodesById.entries()].map(([id]) => id).find(id => id.includes("Port.java") && id.includes("#save#"))!;
+  const implMethod = [...graph.nodesById.entries()].map(([id]) => id).find(id => id.includes("PortImpl.java") && id.includes("#save#"))!;
   assert.ok(graph.successors(callerMethod, "CALLS_VIRTUAL").some(edge => edge.toId === portMethod));
   assert.ok(graph.successors(portMethod, "DISPATCHES_TO").some(edge => edge.toId === implMethod));
 });
@@ -139,13 +147,13 @@ test("removing a call edge leaves no stale CALLS_EXACT", () => {
   const index = new JavaIndexStore();
   index.replaceFile(target);
   index.replaceFile(caller);
-  const graph = new KnowledgeGraphStore();
+  const graph = sqlGraph();
   const builder = new KnowledgeGraphBuilder(graph);
   builder.rebuildFromStore(index, 1);
   const cleaned = typeBundle("Caller", "class", ["run"]);
   index.replaceFile(cleaned);
   builder.replaceFile(cleaned, index, 2);
-  const callerMethod = [...graph.nodesById.keys()].find(id => id.includes("Caller.java") && id.includes("#run#"))!;
+  const callerMethod = [...graph.nodesById.entries()].map(([id]) => id).find(id => id.includes("Caller.java") && id.includes("#run#"))!;
   assert.equal(graph.successors(callerMethod, "CALLS_EXACT").length, 0);
 });
 
@@ -156,7 +164,7 @@ test("undirected walk reaches a callee file in one hop", () => {
   const index = new JavaIndexStore();
   index.replaceFile(target);
   index.replaceFile(caller);
-  const graph = new KnowledgeGraphStore();
+  const graph = sqlGraph();
   new KnowledgeGraphBuilder(graph).rebuildFromStore(index, 1);
   const reached = reachableFiles(graph, caller.file.relativePath, 3);
   assert.equal(reached.hops[target.file.relativePath], 1);

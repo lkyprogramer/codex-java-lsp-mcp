@@ -13,7 +13,15 @@ import { createJavaParserBackend } from "./java-parser-backend.js";
 import { buildTypeRegistryView, JavaNameResolver } from "./name-resolver.js";
 import { DEFAULT_PARSE_TREE_CACHE_OPTIONS, ParseTreeCache } from "./parse-tree-cache.js";
 import type { GraphReader } from "../java-knowledge/graph-reader.js";
-import { KnowledgeGraphStore } from "../java-knowledge/graph-store.js";
+import { openIndexDb } from "./sql/driver.js";
+import { ensureSchema } from "./sql/schema.js";
+import { SqlKnowledgeGraph } from "./sql/knowledge-graph.js";
+
+function sqlGraph() {
+  const db = openIndexDb(":memory:");
+  ensureSchema(db);
+  return new SqlKnowledgeGraph(db);
+}
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const fixturesRoot = path.resolve(dirname, "..", "..", "fixtures", "java-index-v2");
@@ -120,7 +128,7 @@ function scanTypesBySimpleNameOrFqn(store: JavaIndexStore, simple: string, fqn: 
 
 test("JavaIndexStore is a FactsReader and KnowledgeGraphStore is a GraphReader", () => {
   const store: FactsReader = new JavaIndexStore();
-  const graph: GraphReader = new KnowledgeGraphStore();
+  const graph: GraphReader = sqlGraph();
   assert.equal(store.typesById.size, 0);
   assert.equal(graph.nodesById.size, 0);
 });

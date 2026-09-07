@@ -4,7 +4,15 @@ import { JavaIndexStore } from "../java-index/index-store.js";
 import type { JavaFileBundle, JavaFileFacts, JavaMethodFacts, JavaTypeFacts, SourceRange } from "../java-index/index-types.js";
 import { javaFileId, javaMethodId, javaTypeId } from "../java-index/stable-id.js";
 import { KnowledgeGraphBuilder } from "./graph-builder.js";
-import { KnowledgeGraphStore } from "./graph-store.js";
+import { openIndexDb } from "../java-index/sql/driver.js";
+import { ensureSchema } from "../java-index/sql/schema.js";
+import { SqlKnowledgeGraph } from "../java-index/sql/knowledge-graph.js";
+
+function sqlGraph() {
+  const db = openIndexDb(":memory:");
+  ensureSchema(db);
+  return new SqlKnowledgeGraph(db);
+}
 
 const RANGE: SourceRange = { start: { line: 1, column: 1 }, end: { line: 8, column: 2 } };
 
@@ -72,7 +80,7 @@ function bundle(simpleName: string, methods: string[] = []): JavaFileBundle {
 test("builder emits CONTAINS and DECLARES structural edges from JavaIndex facts", () => {
   const index = new JavaIndexStore();
   index.replaceFile(bundle("Widget", ["save"]));
-  const graph = new KnowledgeGraphStore();
+  const graph = sqlGraph();
   new KnowledgeGraphBuilder(graph).rebuildFromStore(index, 1);
   const typeId = "src/main/java/demo/Widget.java#demo.Widget";
   const fileId = "src/main/java/demo/Widget.java";
@@ -86,7 +94,7 @@ test("replaceFile removes a deleted method and does not leave a stale DECLARES e
   const index = new JavaIndexStore();
   const first = bundle("Widget", ["save", "load"]);
   index.replaceFile(first);
-  const graph = new KnowledgeGraphStore();
+  const graph = sqlGraph();
   const builder = new KnowledgeGraphBuilder(graph);
   builder.rebuildFromStore(index, 1);
   const typeId = "src/main/java/demo/Widget.java#demo.Widget";
@@ -111,9 +119,9 @@ test("N1 does not materialize PARAMETER or STATEMENT nodes", () => {
     range: RANGE
   });
   index.replaceFile(widget);
-  const graph = new KnowledgeGraphStore();
+  const graph = sqlGraph();
   new KnowledgeGraphBuilder(graph).rebuildFromStore(index, 1);
-  for (const node of graph.nodesById.values()) {
+  for (const node of [...graph.nodesById.entries()].map(([, node]) => node)) {
     assert.notEqual(node.kind, "PARAMETER");
     assert.notEqual(node.kind, "STATEMENT");
     assert.notEqual(node.kind, "LOCAL");
@@ -126,7 +134,7 @@ test("removing one file in a two-file module keeps MODULE CONTAINS", () => {
   const second = bundle("Beta", ["b"]);
   index.replaceFile(first);
   index.replaceFile(second);
-  const graph = new KnowledgeGraphStore();
+  const graph = sqlGraph();
   const builder = new KnowledgeGraphBuilder(graph);
   builder.rebuildFromStore(index, 1);
   builder.replaceFile(first, index, 2);

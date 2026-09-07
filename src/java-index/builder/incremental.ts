@@ -3,7 +3,6 @@ import { readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { probeLayout, type LayoutContext } from "../../layout-probe.js";
 import { KnowledgeGraphBuilder } from "../../java-knowledge/graph-builder.js";
-import type { KnowledgeGraphStore } from "../../java-knowledge/graph-store.js";
 import { buildStaticEdges, resolveFileRefs } from "../edge-builder.js";
 import { recordsFromBundle } from "../entity-search.js";
 import type { JavaFileBundle } from "../index-types.js";
@@ -117,7 +116,7 @@ function rewriteGraphAndEntities(
 ): void {
   const store = new SqlFactsStore(db);
   const graph = new SqlKnowledgeGraph(db);
-  const builder = new KnowledgeGraphBuilder(graph as unknown as KnowledgeGraphStore);
+  const builder = new KnowledgeGraphBuilder(graph);
   if (deleted.length > 0) graph.removeFiles(deleted);
   for (const relativePath of rewritten) {
     const bundle = readBundle(db, relativePath);
@@ -239,7 +238,7 @@ function resyncNamespace(db: IndexDatabase, generation: number, namespace: strin
   const bundle = readBundle(db, relativePath);
   if (!bundle) return;
   const graph = new SqlKnowledgeGraph(db);
-  new KnowledgeGraphBuilder(graph as unknown as KnowledgeGraphStore).replaceFile(bundle, store, generation);
+  new KnowledgeGraphBuilder(graph).replaceFile(bundle, store, generation);
   graph.flushMeta();
 }
 

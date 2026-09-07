@@ -16,7 +16,6 @@ import { buildTypeRegistryView, JavaNameResolver } from "../name-resolver.js";
 import { DEFAULT_PARSE_TREE_CACHE_OPTIONS, ParseTreeCache } from "../parse-tree-cache.js";
 import { probeLayout } from "../../layout-probe.js";
 import { KnowledgeGraphBuilder } from "../../java-knowledge/graph-builder.js";
-import { KnowledgeGraphStore } from "../../java-knowledge/graph-store.js";
 import { recordsFromBundle } from "../entity-search.js";
 import { close, openIndexDb } from "../sql/driver.js";
 import { ensureSchema } from "../sql/schema.js";
@@ -24,6 +23,12 @@ import { SqlKnowledgeGraph } from "../sql/knowledge-graph.js";
 import { readEntityRecords } from "../sql/entity-tokens.js";
 import { runSqlColdBuild } from "./cold-build.js";
 import { readBuildProgress, readMeta } from "./progress.js";
+
+function sqlGraph() {
+  const db = openIndexDb(":memory:");
+  ensureSchema(db);
+  return new SqlKnowledgeGraph(db);
+}
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const fixturesRoot = path.resolve(dirname, "..", "..", "..", "fixtures", "java-index-v2");
@@ -93,12 +98,12 @@ test("sql cold build table counts match JavaIndexStore", async () => {
     const entities = db.prepare("SELECT count(*) AS n FROM entity").get() as { n: number };
     assert.ok(kgNodes.n > 0);
     assert.ok(entities.n > 0);
-    const memGraph = new KnowledgeGraphStore();
-    new KnowledgeGraphBuilder(memGraph).rebuildFromStore(store, 1);
-    const sqlGraph = new SqlKnowledgeGraph(db);
-    assert.equal(sqlGraph.nodesById.size, memGraph.nodesById.size);
-    assert.equal(sqlGraph.edgesById.size, memGraph.edgesById.size);
-    assert.equal(sqlGraph.digest(), memGraph.digest());
+    const expectedGraph = sqlGraph();
+    new KnowledgeGraphBuilder(expectedGraph).rebuildFromStore(store, 1);
+    const rebuilt = new SqlKnowledgeGraph(db);
+    assert.equal(rebuilt.nodesById.size, expectedGraph.nodesById.size);
+    assert.equal(rebuilt.edgesById.size, expectedGraph.edgesById.size);
+    assert.equal(rebuilt.digest(), expectedGraph.digest());
     const expectedEntities = store.files(
       [...store.filesByPath.values()].map(file => file.relativePath)
     ).flatMap(recordsFromBundle);

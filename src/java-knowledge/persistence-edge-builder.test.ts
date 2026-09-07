@@ -5,7 +5,23 @@ import type { JavaFileBundle, JavaFileFacts, JavaMethodFacts, JavaTypeFacts, Jav
 import { myBatisResourceId, myBatisStatementId } from "../java-index/mybatis-types.js";
 import { javaFileId, javaMethodId, javaTypeId } from "../java-index/stable-id.js";
 import { KnowledgeGraphBuilder } from "./graph-builder.js";
-import { KnowledgeGraphStore } from "./graph-store.js";
+import { openIndexDb } from "../java-index/sql/driver.js";
+import { ensureSchema } from "../java-index/sql/schema.js";
+import { SqlKnowledgeGraph } from "../java-index/sql/knowledge-graph.js";
+
+function sqlGraph() {
+  const db = openIndexDb(":memory:");
+  ensureSchema(db);
+  return new SqlKnowledgeGraph(db);
+}
+
+
+function allSqlEdges(graph: { nodesById: { entries(): Iterable<[string, unknown]> }; successors(id: string): Array<{ kind: string; toId?: string; fromId?: string }> }) {
+  const edges: Array<{ kind: string; toId?: string; fromId?: string }> = [];
+  for (const [id] of graph.nodesById.entries()) edges.push(...graph.successors(id));
+  return edges;
+}
+
 
 const RANGE: SourceRange = { start: { line: 1, column: 1 }, end: { line: 8, column: 2 } };
 
@@ -188,10 +204,10 @@ test("mapper method binds the XML statement and statement uses the entity", () =
     generation: 1,
     parseState: "COMPLETE"
   });
-  const graph = new KnowledgeGraphStore();
+  const graph = sqlGraph();
   new KnowledgeGraphBuilder(graph).rebuildFromStore(index, 1);
-  const binds = [...graph.edgesById.values()].filter(edge => edge.kind === "MYBATIS_METHOD_BINDS_STATEMENT");
-  const uses = [...graph.edgesById.values()].filter(edge => edge.kind === "MYBATIS_STATEMENT_USES_ENTITY");
+  const binds = allSqlEdges(graph).filter(edge => edge.kind === "MYBATIS_METHOD_BINDS_STATEMENT");
+  const uses = allSqlEdges(graph).filter(edge => edge.kind === "MYBATIS_STATEMENT_USES_ENTITY");
   assert.equal(binds.length, 1);
   assert.equal(uses.length, 1);
 });
@@ -202,9 +218,9 @@ test("Template suffix plus generic argument emits REPOSITORY_MANAGES_ENTITY", ()
   const index = new JavaIndexStore();
   index.replaceFile(entity);
   index.replaceFile(template);
-  const graph = new KnowledgeGraphStore();
+  const graph = sqlGraph();
   new KnowledgeGraphBuilder(graph).rebuildFromStore(index, 1);
-  const managed = [...graph.edgesById.values()].filter(edge => edge.kind === "REPOSITORY_MANAGES_ENTITY");
+  const managed = allSqlEdges(graph).filter(edge => edge.kind === "REPOSITORY_MANAGES_ENTITY");
   assert.equal(managed.length, 1);
-  assert.ok(managed[0]?.toId.includes("Order"));
+  assert.ok(managed[0]?.toId?.includes("Order"));
 });

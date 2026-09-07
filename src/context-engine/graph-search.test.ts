@@ -1,14 +1,22 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { KnowledgeGraphStore } from "../java-knowledge/graph-store.js";
+import { openIndexDb } from "../java-index/sql/driver.js";
+import { ensureSchema } from "../java-index/sql/schema.js";
+import { SqlKnowledgeGraph } from "../java-index/sql/knowledge-graph.js";
 import { knowledgeEdgeId } from "../java-knowledge/entity-id.js";
 import { compileIntent } from "./intent-compiler.js";
 import { navigateGraph, searchContextGraph } from "./graph-search.js";
 import { shouldLexicalFallback } from "./lexical-fallback.js";
 import { shouldEscalateToJdt } from "./semantic-escalation.js";
 
-function seed(): KnowledgeGraphStore {
-  const graph = new KnowledgeGraphStore();
+function sqlGraph() {
+  const db = openIndexDb(":memory:");
+  ensureSchema(db);
+  return new SqlKnowledgeGraph(db);
+}
+
+function seed(): SqlKnowledgeGraph {
+  const graph = sqlGraph();
   graph.upsertNode({ id: "src/A.java", kind: "FILE", generation: 1, relativePath: "src/A.java" }, "src/A.java");
   graph.upsertNode({ id: "src/A.java#A#run#1", kind: "METHOD", generation: 1, relativePath: "src/A.java" }, "src/A.java");
   graph.upsertNode({ id: "src/B.java", kind: "FILE", generation: 1, relativePath: "src/B.java" }, "src/B.java");

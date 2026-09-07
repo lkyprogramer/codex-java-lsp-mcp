@@ -7,7 +7,6 @@ import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { KnowledgeGraphBuilder } from "../../java-knowledge/graph-builder.js";
 import { knowledgeEdgeId } from "../../java-knowledge/entity-id.js";
-import { KnowledgeGraphStore } from "../../java-knowledge/graph-store.js";
 import type { GraphEdge, GraphNode } from "../../java-knowledge/schema.js";
 import { buildStaticEdges, resolveFileRefs } from "../edge-builder.js";
 import { JavaIndexStore } from "../index-store.js";
@@ -20,6 +19,12 @@ import { DEFAULT_PARSE_TREE_CACHE_OPTIONS, ParseTreeCache } from "../parse-tree-
 import { close, openIndexDb } from "./driver.js";
 import { SqlKnowledgeGraph } from "./knowledge-graph.js";
 import { ensureSchema } from "./schema.js";
+
+function sqlGraph() {
+  const db = openIndexDb(":memory:");
+  ensureSchema(db);
+  return new SqlKnowledgeGraph(db);
+}
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const fixturesRoot = path.resolve(dirname, "..", "..", "..", "fixtures", "java-index-v2");
@@ -90,7 +95,7 @@ function sortedEdges(edges: readonly GraphEdge[]): GraphEdge[] {
   return [...edges].sort((a, b) => a.edgeId.localeCompare(b.edgeId));
 }
 
-function allEdges(graph: KnowledgeGraphStore | SqlKnowledgeGraph): GraphEdge[] {
+function allEdges(graph: SqlKnowledgeGraph): GraphEdge[] {
   const edges: GraphEdge[] = [];
   for (const [id] of graph.nodesById.entries()) {
     edges.push(...graph.successors(id));
@@ -100,14 +105,14 @@ function allEdges(graph: KnowledgeGraphStore | SqlKnowledgeGraph): GraphEdge[] {
 
 test("SqlKnowledgeGraph matches KnowledgeGraphStore for fixtures via graph-builder", async () => {
   const store = await loadStore();
-  const mem = new KnowledgeGraphStore();
+  const mem = sqlGraph();
   new KnowledgeGraphBuilder(mem).rebuildFromStore(store, 1);
 
   const db = openIndexDb(":memory:");
   try {
     ensureSchema(db);
     const sql = new SqlKnowledgeGraph(db);
-    new KnowledgeGraphBuilder(sql as unknown as KnowledgeGraphStore).rebuildFromStore(store, 1);
+    new KnowledgeGraphBuilder(sql).rebuildFromStore(store, 1);
 
     assert.equal(sql.nodesById.size, mem.nodesById.size);
     assert.equal(sql.edgesById.size, mem.edgesById.size);
@@ -138,7 +143,7 @@ test("SqlKnowledgeGraph reverse edges, removeFiles, and digest match the in-memo
   const db = openIndexDb(":memory:");
   try {
     ensureSchema(db);
-    const mem = new KnowledgeGraphStore();
+    const mem = sqlGraph();
     const sql = new SqlKnowledgeGraph(db);
     for (const graph of [mem, sql]) {
       graph.upsertNode({ id: "src/A.java#A#m#1", kind: "METHOD", generation: 1, relativePath: "src/A.java" }, "src/A.java");
@@ -169,7 +174,7 @@ test("SqlKnowledgeGraph keeps a shared edge after removing one owner", () => {
   const db = openIndexDb(":memory:");
   try {
     ensureSchema(db);
-    const mem = new KnowledgeGraphStore();
+    const mem = sqlGraph();
     const sql = new SqlKnowledgeGraph(db);
     const edge: GraphEdge = {
       edgeId: knowledgeEdgeId({ kind: "MODULE_DEPENDS_ON", fromId: "module:a", toId: "module:b", ordinal: 0 }),

@@ -13,7 +13,6 @@ import { extractMyBatisMapperFacts } from "../mybatis-xml-extractor.js";
 import type { MyBatisMapperResourceFacts } from "../mybatis-types.js";
 import { JavaNameResolver } from "../name-resolver.js";
 import { KnowledgeGraphBuilder } from "../../java-knowledge/graph-builder.js";
-import type { KnowledgeGraphStore } from "../../java-knowledge/graph-store.js";
 import { DEFAULT_PARSE_TREE_CACHE_OPTIONS, ParseTreeCache } from "../parse-tree-cache.js";
 import { prepareCached, withTransaction, type IndexDatabase } from "../sql/driver.js";
 import { rebuildEntityDf, writeEntityRecord } from "../sql/entity-tokens.js";
@@ -242,7 +241,7 @@ function isFatalIndexIoError(err: unknown): boolean {
 function writeKnowledgeAndEntities(db: IndexDatabase, generation: number): void {
   const sql = new SqlFactsStore(db);
   const graph = new SqlKnowledgeGraph(db);
-  const builder = new KnowledgeGraphBuilder(graph as unknown as KnowledgeGraphStore);
+  const builder = new KnowledgeGraphBuilder(graph);
   graph.clear();
   graph.generation = generation;
   withTransaction(db, () => {

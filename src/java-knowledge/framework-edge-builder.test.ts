@@ -4,7 +4,23 @@ import { JavaIndexStore } from "../java-index/index-store.js";
 import type { JavaFileBundle, JavaFileFacts, JavaMethodFacts, JavaTypeFacts, JavaTypeRef, SourceRange } from "../java-index/index-types.js";
 import { javaFileId, javaMethodId, javaTypeId } from "../java-index/stable-id.js";
 import { KnowledgeGraphBuilder } from "./graph-builder.js";
-import { KnowledgeGraphStore } from "./graph-store.js";
+import { openIndexDb } from "../java-index/sql/driver.js";
+import { ensureSchema } from "../java-index/sql/schema.js";
+import { SqlKnowledgeGraph } from "../java-index/sql/knowledge-graph.js";
+
+function sqlGraph() {
+  const db = openIndexDb(":memory:");
+  ensureSchema(db);
+  return new SqlKnowledgeGraph(db);
+}
+
+
+function allSqlEdges(graph: { nodesById: { entries(): Iterable<[string, unknown]> }; successors(id: string): Array<{ kind: string; toId?: string; fromId?: string }> }) {
+  const edges: Array<{ kind: string; toId?: string; fromId?: string }> = [];
+  for (const [id] of graph.nodesById.entries()) edges.push(...graph.successors(id));
+  return edges;
+}
+
 
 const RANGE: SourceRange = { start: { line: 1, column: 1 }, end: { line: 8, column: 2 } };
 
@@ -148,11 +164,11 @@ test("Autowired constructor parameter emits SPRING_INJECTS and publishEvent emit
   const index = new JavaIndexStore();
   index.replaceFile(gatewayBundle());
   index.replaceFile(serviceBundle());
-  const graph = new KnowledgeGraphStore();
+  const graph = sqlGraph();
   new KnowledgeGraphBuilder(graph).rebuildFromStore(index, 1);
-  const inject = [...graph.edgesById.values()].filter(edge => edge.kind === "SPRING_INJECTS");
-  const published = [...graph.edgesById.values()].filter(edge => edge.kind === "PUBLISHES_EVENT");
+  const inject = allSqlEdges(graph).filter(edge => edge.kind === "SPRING_INJECTS");
+  const published = allSqlEdges(graph).filter(edge => edge.kind === "PUBLISHES_EVENT");
   assert.equal(inject.length, 1);
   assert.equal(published.length, 1);
-  assert.ok(published[0]?.toId.includes("Created") || published[0]?.toId.startsWith("ext:"));
+  assert.ok(published[0]?.toId?.includes("Created") || published[0]?.toId?.startsWith("ext:"));
 });
