@@ -66,12 +66,6 @@ import {
   type SqlQueryDeps
 } from "./sql-queries.js";
 
-function notImplemented(method: string): never {
-  const error = new Error(`${method} is not implemented until P2`);
-  error.name = "NOT_IMPLEMENTED";
-  throw error;
-}
-
 function emptyStatus(state: JavaIndexStatus["state"] = "NEW"): JavaIndexStatus {
   return {
     state,
@@ -105,7 +99,7 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
   constructor(
     private readonly repoRoot: string,
     private readonly dbPath: string,
-    private readonly supervisor?: BuilderSupervisor,
+    private supervisor?: BuilderSupervisor,
     connIdleMs?: number
   ) {
     const fromEnv = Number(process.env.JAVA_LSP_CONN_IDLE_MS);
@@ -358,8 +352,10 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     );
   }
 
-  private requireSupervisor(method: string): BuilderSupervisor {
-    if (!this.supervisor) notImplemented(method);
+  private requireSupervisor(_method: string): BuilderSupervisor {
+    if (!this.supervisor) {
+      this.supervisor = new BuilderSupervisor({ repoRoot: this.repoRoot, dbPath: this.dbPath });
+    }
     return this.supervisor;
   }
 

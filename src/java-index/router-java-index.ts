@@ -11,6 +11,7 @@ import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
 import { RgRunner } from "../search/rg-runner.js";
 import type { JavaIndexClientApi, JavaIndexOpenOptions, JavaIndexRequestOptions } from "./java-index-client-api.js";
+import { BuilderSupervisor } from "./builder-supervisor.js";
 import { SqlJavaIndexClient } from "./sql/sql-client.js";
 import type { ContextGraphResult, GraphDigest, GraphReachable, JavaIndexRefreshPriority } from "./worker-protocol.js";
 import { ENTITY_SEARCH_DEFAULT_LIMIT, type EntityHit } from "./entity-search.js";
@@ -232,7 +233,9 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
   }
 
   static create(repoRoot: string, cacheDir = repoCacheRoot(repoRoot), openOptions: JavaIndexOpenOptions = {}): RouterJavaIndex {
-    return new RouterJavaIndex(repoRoot, new SqlJavaIndexClient(repoRoot, path.join(cacheDir, "index.sqlite")), openOptions);
+    const dbPath = path.join(cacheDir, "index.sqlite");
+    const supervisor = new BuilderSupervisor({ repoRoot, dbPath });
+    return new RouterJavaIndex(repoRoot, new SqlJavaIndexClient(repoRoot, dbPath, supervisor), openOptions);
   }
 
   rawClient(): JavaIndexClientApi {

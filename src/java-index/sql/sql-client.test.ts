@@ -128,12 +128,6 @@ test("SqlJavaIndexClient point RPCs match a real forked JavaIndexClient on java-
       jsonClone(await sql.queryRepositoryFactMarkers(["org.springframework"], ["org.springframework"])),
       jsonClone(await heap.queryRepositoryFactMarkers(["org.springframework"], ["org.springframework"]))
     );
-    const notImplemented = (error: Error) => error.name === "NOT_IMPLEMENTED";
-    await assert.rejects(() => sql.refresh(2, [], []), notImplemented);
-    await assert.rejects(() => sql.refreshResources(2, []), notImplemented);
-    await assert.rejects(() => sql.reconcile(2), notImplemented);
-    await assert.rejects(() => sql.ensureFresh([], 2), notImplemented);
-    await assert.rejects(() => sql.awaitPrewarmReady(), notImplemented);
     assert.equal((await sql.flush()).state, sqlStatus.state);
     assert.equal((await sql.hibernate()).hibernated, false);
     await sql.recycle();
