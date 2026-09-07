@@ -13,7 +13,7 @@ import {
 } from "./worktree-cache-cleanup.js";
 import { validateJdtlsTransportEnvironment } from "./jdtls-session.js";
 import { warmupInstalledJdks } from "./project-jdk.js";
-import { parsePrewarmHotSet } from "./resource-defaults.js";
+
 
 export type JavaLspApplicationState = "created" | "ready" | "draining" | "closed";
 
@@ -241,10 +241,6 @@ export class JavaLspApplication {
       if (this.prewarmStopped || this.currentState !== "ready") return;
       await this.registry.reloadIfChanged();
       const aliases = this.registry.aliases();
-      const { hot, ignored } = parsePrewarmHotSet(aliases.map(alias => alias.id));
-      for (const id of ignored) {
-        console.error(`[codex-java-lsp] ignoring unknown JAVA_LSP_PREWARM_HOT alias ${id}`);
-      }
       const seen = new Set<string>();
       const pins: Array<{ id: string }> = [];
       for (const alias of aliases) {
@@ -255,14 +251,11 @@ export class JavaLspApplication {
         seen.add(root);
         pins.push({ id: alias.id });
       }
-      // Hot-set aliases pay facts hydrate on the 300s prewarm budget (S2/M1/D3a).
-      // Cold pins stay files-only and hibernate immediately.
       for (const pin of pins) {
         if (this.prewarmStopped || this.currentState !== "ready") return;
-        const hydrate = hot.has(pin.id);
         try {
-          console.error(`[codex-java-lsp] pinned repo prewarm begin ${pin.id} hydrate=${hydrate}`);
-          await this.runtimes.prewarmRepo({ projectId: pin.id }, { hydrate });
+          console.error(`[codex-java-lsp] pinned repo prewarm begin ${pin.id}`);
+          await this.runtimes.prewarmRepo({ projectId: pin.id });
           console.error(`[codex-java-lsp] pinned repo prewarm end ${pin.id}`);
         } catch (error) {
           console.error(`[codex-java-lsp] pinned repo prewarm failed (${pin.id})`, error);

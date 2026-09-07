@@ -167,6 +167,7 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     this.graph = undefined;
     this.search = undefined;
     this.lastStatus = { ...this.lastStatus, state: "CLOSED" };
+    await this.supervisor?.stop().catch(() => undefined);
   }
 
   async refresh(
