@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import type { ImpactOptions } from "../agent-types.js";
-import type { JavaIndexRequestOptions } from "../java-index/java-index-client.js";
+import type { JavaIndexRequestOptions } from "../java-index/java-index-client-api.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import { RgRunner } from "../search/rg-runner.js";
 import type { RgQuery, SearchResult } from "../search/search-types.js";

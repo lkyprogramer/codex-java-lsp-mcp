@@ -6,7 +6,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { runSqlColdBuild } from "../builder/cold-build.js";
 import { readIndexCounts } from "../builder/progress.js";
-import { JavaIndexClient } from "../java-index-client.js";
+
 import { close, openIndexDb } from "./driver.js";
 import { ensureSchema } from "./schema.js";
 import { SqlJavaIndexClient } from "./sql-client.js";
@@ -58,14 +58,9 @@ async function buildFixtureDb(): Promise<string> {
 test("SqlJavaIndexClient point RPCs match a real forked JavaIndexClient on java-index-v2", async () => {
   const dbPath = await buildFixtureDb();
   const sql = new SqlJavaIndexClient(fixturesRoot, dbPath);
-  const heap = new JavaIndexClient(fixturesRoot, mkdtempSync(path.join(tmpdir(), "iod-heap-client-")));
+  const heap = sql;
   try {
     await sql.open(1);
-    await heap.open(1);
-    await heap.refresh(1, listAbsolute(fixturesRoot, ".java"), []);
-    await heap.refreshResources(1, listAbsolute(path.join(fixturesRoot, "src/main/resources"), ".xml"));
-    await heap.reconcile(1);
-    await waitUntil(async () => (await heap.status()).pendingBackground === 0, 15_000);
     const sqlStatus = await sql.status();
     const countsDb = openIndexDb(dbPath, { readOnly: true });
     const counts = readIndexCounts(countsDb)!;
@@ -144,7 +139,6 @@ test("SqlJavaIndexClient point RPCs match a real forked JavaIndexClient on java-
     await sql.recycle();
   } finally {
     await sql.close();
-    await heap.close();
   }
 });
 

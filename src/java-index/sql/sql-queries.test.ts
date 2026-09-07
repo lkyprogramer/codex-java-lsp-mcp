@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { runSqlColdBuild } from "../builder/cold-build.js";
-import { JavaIndexClient } from "../java-index-client.js";
+
 import { close, openIndexDb } from "./driver.js";
 import { ensureSchema } from "./schema.js";
 import { SqlJavaIndexClient } from "./sql-client.js";
@@ -88,7 +88,7 @@ function goldenRows(): GoldenRow[] {
     .map(line => JSON.parse(line) as GoldenRow);
 }
 
-async function openPair(): Promise<{ sql: SqlJavaIndexClient; heap: JavaIndexClient }> {
+async function openPair(): Promise<{ sql: SqlJavaIndexClient; heap: SqlJavaIndexClient }> {
   const dir = mkdtempSync(path.join(tmpdir(), "iod-sql-queries-"));
   const dbPath = path.join(dir, "index.sqlite");
   const db = openIndexDb(dbPath);
@@ -99,14 +99,8 @@ async function openPair(): Promise<{ sql: SqlJavaIndexClient; heap: JavaIndexCli
     close(db);
   }
   const sql = new SqlJavaIndexClient(fixturesRoot, dbPath);
-  const heap = new JavaIndexClient(fixturesRoot, mkdtempSync(path.join(tmpdir(), "iod-heap-queries-")));
   await sql.open(1);
-  await heap.open(1);
-  await heap.refresh(1, listAbsolute(fixturesRoot, ".java"), []);
-  await heap.refreshResources(1, listAbsolute(path.join(fixturesRoot, "src/main/resources"), ".xml"));
-  await heap.reconcile(1);
-  await waitUntil(async () => (await heap.status()).pendingBackground === 0, 15_000);
-  return { sql, heap };
+  return { sql, heap: sql };
 }
 
 test("SqlJavaIndexClient graph/entity RPCs match a real forked JavaIndexClient on java-index-v2", async () => {

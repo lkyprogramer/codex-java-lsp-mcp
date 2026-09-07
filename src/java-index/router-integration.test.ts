@@ -16,7 +16,7 @@ import { createGitWorktreeFamily } from "../test-support/git-worktree.test.js";
 import { resolveWorktreeIdentity } from "../worktree-identity.js";
 import { probeLayout } from "../layout-probe.js";
 import { computeBuildFingerprint, computeExtractorVersion } from "./build-fingerprint.js";
-import { JavaIndexClient } from "./java-index-client.js";
+import { SqlJavaIndexClient } from "./sql/sql-client.js";
 import { RouterJavaIndex } from "./router-java-index.js";
 import { loadSnapshot, writeSnapshotAtomic } from "./snapshot.js";
 import { STABLE_ID_VERSION } from "./stable-id.js";
@@ -67,7 +67,7 @@ class FixedFileRgRunner extends RgRunner {
   }
 }
 
-class RecordingJavaIndexClient extends JavaIndexClient {
+class RecordingJavaIndexClient extends SqlJavaIndexClient {
   refreshCalls = 0;
 
   override async refresh(generation: number, changed: string[], deleted: string[]) {
@@ -107,7 +107,7 @@ async function waitForCompleteIndex(index: RouterJavaIndex): Promise<void> {
   assert.fail("fixture JavaIndex did not reach complete coverage within 2 seconds");
 }
 
-async function waitForBackgroundSweep(client: JavaIndexClient): Promise<void> {
+async function waitForBackgroundSweep(client: SqlJavaIndexClient): Promise<void> {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     if ((await client.status()).pendingBackground === 0) return;
     await new Promise(resolve => setTimeout(resolve, 20));
@@ -116,7 +116,7 @@ async function waitForBackgroundSweep(client: JavaIndexClient): Promise<void> {
 }
 
 async function buildCompleteSnapshot(root: string, cacheDir: string): Promise<void> {
-  const client = new JavaIndexClient(root, cacheDir);
+  const client = new SqlJavaIndexClient(root, path.join(cacheDir, "index.sqlite"));
   try {
     await client.open(0);
     await client.reconcile(0);
@@ -185,7 +185,7 @@ test("complete JavaIndex resolves implementation relations even when naming reca
     ""
   ].join("\n"));
 
-  const client = new JavaIndexClient(root, path.join(root, ".cache"));
+  const client = new SqlJavaIndexClient(root, path.join(root, ".cache", "index.sqlite"));
   const originalQueryFiles = client.queryFiles.bind(client);
   const originalQueryTypes = client.queryTypes.bind(client);
   let definitionFileQueryCount = 0;
@@ -325,7 +325,7 @@ test("complete JavaIndex resolves implementation relations even when naming reca
 test("a rejected own snapshot stays pending until its replacement sweep has been installed", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "java-index-snapshot-reconcile-race-"));
   const cacheDir = path.join(root, ".cache");
-  let replacementClient: JavaIndexClient | undefined;
+  let replacementClient: SqlJavaIndexClient | undefined;
   try {
     for (let index = 0; index < 300; index += 1) {
       await writeJava(
@@ -347,7 +347,7 @@ test("a rejected own snapshot stays pending until its replacement sweep has been
     snapshot.extractorVersion = "intentionally-stale";
     await writeSnapshotAtomic(snapshotPath, snapshot);
 
-    replacementClient = new JavaIndexClient(root, cacheDir);
+    replacementClient = new SqlJavaIndexClient(root, path.join(cacheDir, "index.sqlite"));
     const replacementIndex = new RouterJavaIndex(root, replacementClient);
     await replacementIndex.open(0);
 
@@ -392,7 +392,7 @@ test("production ranking observer sees the exact in-request family rank and sele
     "}",
     ""
   ].join("\n"));
-  const index = new RouterJavaIndex(root, new JavaIndexClient(root, path.join(root, ".cache")));
+  const index = new RouterJavaIndex(root, new SqlJavaIndexClient(root, path.join(root, ".cache", "index.sqlite")));
   try {
     await index.open(0);
     await index.reconcile(0);
@@ -470,7 +470,7 @@ test("V2 type-reference evidence upgrades a candidate that naming recall found f
     "}",
     ""
   ].join("\n"));
-  const index = new RouterJavaIndex(root, new JavaIndexClient(root, path.join(root, ".cache")));
+  const index = new RouterJavaIndex(root, new SqlJavaIndexClient(root, path.join(root, ".cache", "index.sqlite")));
   try {
     await index.open(0);
     await index.reconcile(0);
@@ -512,7 +512,7 @@ test("V2 type-reference evidence upgrades a candidate that naming recall found f
 test("RouterJavaIndex reuses facts refreshed at the current generation", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "java-index-router-facts-cache-"));
   const source = await writeJava(root, "src/main/java/demo/Demo.java", "package demo;\nclass Demo { void run() {} }\n");
-  const client = new RecordingJavaIndexClient(root, path.join(root, ".cache"));
+  const client = new RecordingJavaIndexClient(root, path.join(root, ".cache", "index.sqlite"));
   const index = new RouterJavaIndex(root, client);
   try {
     await index.open(0);
@@ -528,7 +528,7 @@ test("RouterJavaIndex reuses facts refreshed at the current generation", async (
 test("RouterJavaIndex reuses COMPLETE coverage without reparsing an indexed candidate", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "java-index-router-complete-facts-cache-"));
   const source = await writeJava(root, "src/main/java/demo/Demo.java", "package demo;\nclass Demo { void run() {} }\n");
-  const client = new RecordingJavaIndexClient(root, path.join(root, ".cache"));
+  const client = new RecordingJavaIndexClient(root, path.join(root, ".cache", "index.sqlite"));
   const index = new RouterJavaIndex(root, client);
   try {
     await index.open(0);
@@ -601,7 +601,7 @@ test("sibling-seeded V2 router never returns a stale implementation before its f
   ].join("\n");
   const primaryCache = path.join(cacheBase, "primary");
   const linkedCache = path.join(cacheBase, "linked");
-  const primaryClient = new JavaIndexClient(family.primary, primaryCache);
+  const primaryClient = new SqlJavaIndexClient(family.primary, path.join(primaryCache, "index.sqlite"));
   let linkedIndex: RouterJavaIndex | undefined;
   try {
     for (const root of [family.primary, family.linked]) {
@@ -630,7 +630,7 @@ test("sibling-seeded V2 router never returns a stale implementation before its f
     const linkedIdentity = await resolveWorktreeIdentity(family.linked);
     linkedIndex = new RouterJavaIndex(
       family.linked,
-      new JavaIndexClient(family.linked, linkedCache)
+      new SqlJavaIndexClient(family.linked, path.join(linkedCache, "index.sqlite"))
     );
     await linkedIndex.open(2, { worktree: linkedIdentity, siblingCacheBase: cacheBase });
     assert.equal((await linkedIndex.routerStatus()).openSource, "sibling-seed");

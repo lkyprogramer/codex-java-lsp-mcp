@@ -9,7 +9,8 @@ import path from "node:path";
 import test from "node:test";
 import { AgentRouter } from "./index.js";
 import type { ImpactOptions } from "../agent-types.js";
-import { JavaIndexClient } from "../java-index/java-index-client.js";
+
+import { SqlJavaIndexClient } from "../java-index/sql/sql-client.js";
 import { RouterJavaIndex } from "../java-index/router-java-index.js";
 import { RgRunner } from "../search/rg-runner.js";
 import type { RgQuery, SearchResult } from "../search/search-types.js";
@@ -68,7 +69,7 @@ test("service task that reads a Lombok-generated getter keeps its selected DTO a
   const sourceDir = path.join(root, "src", "main", "java", "demo");
   const serviceFile = path.join(sourceDir, "OrderService.java");
   const dtoFile = path.join(sourceDir, "LombokOrder.java");
-  const index = new RouterJavaIndex(root, new JavaIndexClient(root, path.join(root, ".cache")));
+  const index = new RouterJavaIndex(root, new SqlJavaIndexClient(root, path.join(root, ".cache", "index.sqlite")));
   try {
     await mkdir(sourceDir, { recursive: true });
     await writeFile(path.join(root, "pom.xml"), "<project></project>\n");

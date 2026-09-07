@@ -9,7 +9,8 @@ import { probeLayout } from "../layout-probe.js";
 import { createGitWorktreeFamily } from "../test-support/git-worktree.test.js";
 import { resolveWorktreeIdentity } from "../worktree-identity.js";
 import { computeBuildFingerprint, computeExtractorVersion } from "./build-fingerprint.js";
-import { JavaIndexClient } from "./java-index-client.js";
+
+import { SqlJavaIndexClient } from "./sql/sql-client.js";
 import { readFileStable, scanCurrentManifestStable } from "./manifest.js";
 import { STABLE_ID_VERSION } from "./stable-id.js";
 import { WorktreeSnapshotSeeder } from "./worktree-snapshot-seeder.js";
@@ -42,7 +43,7 @@ const NEW_IN_B = "src/main/java/demo/NewInB.java";
 
 /** Builds a real COMPLETE snapshot for `repoRoot` under `cacheDir`, via a real worker thread (never hand-assembled). */
 async function buildCompleteSnapshot(repoRoot: string, cacheDir: string): Promise<void> {
-  const client = new JavaIndexClient(repoRoot, cacheDir);
+  const client = new SqlJavaIndexClient(repoRoot, path.join(cacheDir, "index.sqlite"));
   await client.open(1);
   await client.reconcile(1);
   await waitFor(async () => (await client.status()).pendingBackground === 0, 15000);
@@ -482,7 +483,7 @@ test("a linked worktree opened via siblingCacheBase reuses an unchanged mapper r
   write(family.linked, MAPPER_RELATIVE_PATH, CHANGED_MAPPER_XML);
 
   const identity = await resolveWorktreeIdentity(family.linked);
-  const client = new JavaIndexClient(family.linked, tempCacheBase());
+  const client = new SqlJavaIndexClient(family.linked, path.join(tempCacheBase(), "index.sqlite"));
   try {
     const openStatus = await client.open(1, { worktree: identity, siblingCacheBase: cacheBase });
 

@@ -61,6 +61,21 @@ export type JavaIndexPrewarmReadyOptions = {
   hydrate?: boolean;
 };
 
+export function isJavaIndexPrewarmReady(
+  status: JavaIndexStatus,
+  options: JavaIndexPrewarmReadyOptions = {}
+): boolean {
+  const hydrate = options.hydrate !== false;
+  if (status.snapshotVerificationPending) return false;
+  if (status.pendingBackground > 0) return false;
+  if (hydrate && status.hibernated) return false;
+  if (hydrate && status.factsHydrated === false) return false;
+  if (status.snapshot?.state === "DURABLE") return true;
+  return status.files > 0
+    && status.coverage.length > 0
+    && status.coverage.every(entry => entry.state === "COMPLETE" && entry.generation === status.indexedGeneration);
+}
+
 export interface JavaIndexClientApi {
   open(generation: number, options?: JavaIndexOpenOptions, requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus>;
   status(requestOptions?: JavaIndexRequestOptions & { heapSnapshotPath?: string }): Promise<JavaIndexStatus>;

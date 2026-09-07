@@ -8,7 +8,7 @@ import { GenerationClock, type RepoChangeBatch } from "./repo-generation.js";
 import type { JavaIndexStatus } from "./java-index/index-types.js";
 import { DeadlineBudget } from "./runtime/deadline-budget.js";
 import { JavaIntelligenceError } from "./runtime/intelligence-error.js";
-import { isJavaIndexPrewarmReady } from "./java-index/java-index-client.js";
+import { isJavaIndexPrewarmReady } from "./java-index/java-index-client-api.js";
 import { deferred, delay, type Deferred } from "./test-support/fake-jdtls.test.js";
 import type { JdtlsLifecycleState } from "./jdtls-session.js";
 import type { ResolvedRepo } from "./repo-resolver.js";

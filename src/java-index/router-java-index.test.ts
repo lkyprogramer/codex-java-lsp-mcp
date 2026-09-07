@@ -11,7 +11,7 @@ import path from "node:path";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import { JavaIntelligenceError } from "../runtime/intelligence-error.js";
 import type { JavaFileBundle, JavaIndexStatus, JavaParseState } from "./index-types.js";
-import { JavaIndexClient } from "./java-index-client.js";
+
 import { MAX_FRAMEWORK_FACT_FILES } from "./framework-index-view.js";
 import { MAX_FACTS_FOR_FILES } from "./router-facts.js";
 import { RouterJavaIndex } from "./router-java-index.js";
