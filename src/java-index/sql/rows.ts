@@ -6,10 +6,16 @@ import type {
   JavaFileFacts,
   JavaMethodFacts,
   JavaTypeFacts,
-  StaticEdge
+  SourceRange,
+  StaticEdge,
+  StaticEdgeKind,
+  StaticEdgeResolutionKind,
+  TypeResolutionStrategy
 } from "../index-types.js";
 import type { MyBatisMapperResourceFacts } from "../mybatis-types.js";
+import { javaEdgeId } from "../stable-id.js";
 import { prepareCached, withTransaction, type IndexDatabase } from "./driver.js";
+import { internSym, internSymNullable } from "./sym.js";
 
 export type FileRow = {
   path: string;
@@ -50,21 +56,23 @@ export type MethodRow = {
   facts: JavaMethodFacts;
 };
 
-export type EdgeRow = {
-  edgeId: string;
-  fromId: string;
-  toId: string;
-  kind: string;
-  sourceFileId: number;
-  facts: StaticEdge;
-};
-
 export type MyBatisRow = {
   path: string;
   namespace: string | null;
   contentHash: string | null;
   facts: MyBatisMapperResourceFacts;
 };
+
+export const STATIC_EDGE_SELECT = `SELECT e.sl AS sl, e.sc AS sc, e.el AS el, e.ec AS ec, e.confidence AS confidence,
+  e.generation AS generation, ks.text AS kind, fs.text AS fromId, ts.text AS toId, rs.text AS resKind,
+  ss.text AS resStrategy, f.path AS sourceFile, f.path AS path, f.module AS module
+  FROM edge e
+  JOIN file f ON f.id=e.file_id
+  JOIN sym ks ON ks.id=e.kind_sym
+  JOIN sym fs ON fs.id=e.from_sym
+  JOIN sym ts ON ts.id=e.to_sym
+  JOIN sym rs ON rs.id=e.res_kind_sym
+  LEFT JOIN sym ss ON ss.id=e.res_strategy_sym`;
 
 export function encodeFacts(value: unknown): Buffer {
   return deflateRawSync(Buffer.from(JSON.stringify(value), "utf8"));
@@ -83,9 +91,73 @@ function asRowId(value: number | bigint): number {
   return rowId;
 }
 
+function asInt(value: SQLOutputValue | undefined): number {
+  if (typeof value === "bigint") return Number(value);
+  if (typeof value === "number") return value;
+  throw new Error(`expected integer, got ${String(value)}`);
+}
+
 function runInWriteTx<T>(db: IndexDatabase, fn: () => T): T {
   if (db.isTransaction) return fn();
   return withTransaction(db, fn);
+}
+
+function rangeColumns(range: SourceRange | undefined): [number, number, number, number] {
+  if (!range) return [-1, -1, -1, -1];
+  return [range.start.line, range.start.column, range.end.line, range.end.column];
+}
+
+export function staticEdgeFromSqlRow(row: Record<string, SQLOutputValue>): StaticEdge {
+  const sl = asInt(row.sl);
+  const sc = asInt(row.sc);
+  const el = asInt(row.el);
+  const ec = asInt(row.ec);
+  const range = sl === -1 && sc === -1 && el === -1 && ec === -1
+    ? undefined
+    : { start: { line: sl, column: sc }, end: { line: el, column: ec } };
+  const kind = String(row.kind);
+  const fromId = String(row.fromId);
+  const toId = String(row.toId);
+  const resStrategy = typeof row.resStrategy === "string" ? row.resStrategy : undefined;
+  return {
+    edgeId: javaEdgeId({ kind, fromId, toId, range }),
+    fromId,
+    toId,
+    kind: kind as StaticEdgeKind,
+    confidence: Number(row.confidence),
+    ...(range ? { range } : {}),
+    sourceFile: String(row.sourceFile),
+    generation: asInt(row.generation),
+    resolution: {
+      kind: String(row.resKind) as StaticEdgeResolutionKind,
+      ...(resStrategy ? { typeStrategy: resStrategy as TypeResolutionStrategy } : {})
+    }
+  };
+}
+
+function insertStaticEdge(db: IndexDatabase, edge: StaticEdge, fileId: number): void {
+  const [sl, sc, el, ec] = rangeColumns(edge.range);
+  prepareCached(
+    db,
+    `INSERT INTO edge(kind_sym, from_sym, to_sym, file_id, sl, sc, el, ec, confidence, res_kind_sym, res_strategy_sym, generation)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(kind_sym, from_sym, to_sym, sl, sc, el, ec) DO UPDATE SET
+       file_id=excluded.file_id, confidence=excluded.confidence, res_kind_sym=excluded.res_kind_sym,
+       res_strategy_sym=excluded.res_strategy_sym, generation=excluded.generation`
+  ).run(
+    internSym(db, edge.kind),
+    internSym(db, edge.fromId),
+    internSym(db, edge.toId),
+    fileId,
+    sl,
+    sc,
+    el,
+    ec,
+    edge.confidence,
+    internSym(db, edge.resolution.kind),
+    internSymNullable(db, edge.resolution.typeStrategy),
+    edge.generation
+  );
 }
 
 export function fileRow(bundle: JavaFileBundle): FileRow {
@@ -136,17 +208,6 @@ export function methodRows(bundle: JavaFileBundle): MethodRow[] {
   }));
 }
 
-export function edgeRows(edges: readonly StaticEdge[], fileId: number): EdgeRow[] {
-  return edges.map(edge => ({
-    edgeId: edge.edgeId,
-    fromId: edge.fromId,
-    toId: edge.toId,
-    kind: edge.kind,
-    sourceFileId: fileId,
-    facts: edge
-  }));
-}
-
 export function myBatisRow(resource: MyBatisMapperResourceFacts): MyBatisRow {
   return {
     path: resource.relativePath,
@@ -180,47 +241,44 @@ export function writeBundle(db: IndexDatabase, bundle: JavaFileBundle, fileId?: 
     const id = fileId ?? asRowId(inserted.lastInsertRowid);
     const insertType = prepareCached(
       db,
-      `INSERT INTO type(type_id, file_id, fqn, simple_name, kind, owner_type_id, facts)
+      `INSERT INTO type(sym, file_id, fqn, simple_name, kind, owner_sym, facts)
        VALUES (?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(type_id) DO UPDATE SET
+       ON CONFLICT(sym) DO UPDATE SET
          file_id=excluded.file_id, fqn=excluded.fqn, simple_name=excluded.simple_name,
-         kind=excluded.kind, owner_type_id=excluded.owner_type_id, facts=excluded.facts`
+         kind=excluded.kind, owner_sym=excluded.owner_sym, facts=excluded.facts`
     );
     for (const type of typeRows(bundle)) {
-      insertType.run(type.typeId, id, type.fqn, type.simpleName, type.kind, type.ownerTypeId, encodeFacts(type.facts));
+      insertType.run(
+        internSym(db, type.typeId), id, type.fqn, type.simpleName, type.kind,
+        internSymNullable(db, type.ownerTypeId), encodeFacts(type.facts)
+      );
     }
     const insertField = prepareCached(
       db,
-      `INSERT INTO field(field_id, owner_type_id, file_id, name, facts) VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT(field_id) DO UPDATE SET
-         owner_type_id=excluded.owner_type_id, file_id=excluded.file_id, name=excluded.name, facts=excluded.facts`
+      `INSERT INTO field(sym, owner_sym, file_id, name, facts) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(sym) DO UPDATE SET
+         owner_sym=excluded.owner_sym, file_id=excluded.file_id, name=excluded.name, facts=excluded.facts`
     );
     for (const field of fieldRows(bundle)) {
-      insertField.run(field.fieldId, field.ownerTypeId, id, field.name, encodeFacts(field.facts));
+      insertField.run(
+        internSym(db, field.fieldId), internSym(db, field.ownerTypeId), id, field.name, encodeFacts(field.facts)
+      );
     }
     const insertMethod = prepareCached(
       db,
-      `INSERT INTO method(method_id, owner_type_id, file_id, name, is_ctor, arity, facts)
+      `INSERT INTO method(sym, owner_sym, file_id, name, is_ctor, arity, facts)
        VALUES (?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(method_id) DO UPDATE SET
-         owner_type_id=excluded.owner_type_id, file_id=excluded.file_id, name=excluded.name,
+       ON CONFLICT(sym) DO UPDATE SET
+         owner_sym=excluded.owner_sym, file_id=excluded.file_id, name=excluded.name,
          is_ctor=excluded.is_ctor, arity=excluded.arity, facts=excluded.facts`
     );
     for (const method of methodRows(bundle)) {
       insertMethod.run(
-        method.methodId, method.ownerTypeId, id, method.name, method.isCtor, method.arity, encodeFacts(method.facts)
+        internSym(db, method.methodId), internSym(db, method.ownerTypeId), id,
+        method.name, method.isCtor, method.arity, encodeFacts(method.facts)
       );
     }
-    const insertEdge = prepareCached(
-      db,
-      `INSERT INTO edge(edge_id, from_id, to_id, kind, source_file_id, facts) VALUES (?, ?, ?, ?, ?, ?)
-       ON CONFLICT(edge_id) DO UPDATE SET
-         from_id=excluded.from_id, to_id=excluded.to_id, kind=excluded.kind,
-         source_file_id=excluded.source_file_id, facts=excluded.facts`
-    );
-    for (const edge of edgeRows(bundle.edges, id)) {
-      insertEdge.run(edge.edgeId, edge.fromId, edge.toId, edge.kind, edge.sourceFileId, encodeFacts(edge.facts));
-    }
+    for (const edge of bundle.edges) insertStaticEdge(db, edge, id);
     return id;
   });
 }
@@ -241,17 +299,17 @@ export function updateBundleFacts(db: IndexDatabase, bundle: JavaFileBundle): nu
       row.generation,
       id
     );
-    const updateType = prepareCached(db, "UPDATE type SET facts=?, fqn=? WHERE type_id=?");
+    const updateType = prepareCached(db, "UPDATE type SET facts=?, fqn=? WHERE sym=?");
     for (const type of typeRows(bundle)) {
-      updateType.run(encodeFacts(type.facts), type.fqn, type.typeId);
+      updateType.run(encodeFacts(type.facts), type.fqn, internSym(db, type.typeId));
     }
-    const updateField = prepareCached(db, "UPDATE field SET facts=? WHERE field_id=?");
+    const updateField = prepareCached(db, "UPDATE field SET facts=? WHERE sym=?");
     for (const field of fieldRows(bundle)) {
-      updateField.run(encodeFacts(field.facts), field.fieldId);
+      updateField.run(encodeFacts(field.facts), internSym(db, field.fieldId));
     }
-    const updateMethod = prepareCached(db, "UPDATE method SET facts=?, arity=? WHERE method_id=?");
+    const updateMethod = prepareCached(db, "UPDATE method SET facts=?, arity=? WHERE sym=?");
     for (const method of methodRows(bundle)) {
-      updateMethod.run(encodeFacts(method.facts), method.arity, method.methodId);
+      updateMethod.run(encodeFacts(method.facts), method.arity, internSym(db, method.methodId));
     }
     return id;
   });
@@ -260,17 +318,8 @@ export function updateBundleFacts(db: IndexDatabase, bundle: JavaFileBundle): nu
 export function replaceBundleEdges(db: IndexDatabase, filePath: string, edges: readonly StaticEdge[]): void {
   runInWriteTx(db, () => {
     const id = fileIdByPath(db, filePath);
-    prepareCached(db, "DELETE FROM edge WHERE source_file_id=?").run(id);
-    const insertEdge = prepareCached(
-      db,
-      `INSERT INTO edge(edge_id, from_id, to_id, kind, source_file_id, facts) VALUES (?, ?, ?, ?, ?, ?)
-       ON CONFLICT(edge_id) DO UPDATE SET
-         from_id=excluded.from_id, to_id=excluded.to_id, kind=excluded.kind,
-         source_file_id=excluded.source_file_id, facts=excluded.facts`
-    );
-    for (const edge of edgeRows(edges, id)) {
-      insertEdge.run(edge.edgeId, edge.fromId, edge.toId, edge.kind, edge.sourceFileId, encodeFacts(edge.facts));
-    }
+    prepareCached(db, "DELETE FROM edge WHERE file_id=?").run(id);
+    for (const edge of edges) insertStaticEdge(db, edge, id);
   });
 }
 
@@ -284,12 +333,12 @@ export function readBundle(db: IndexDatabase, path: string): JavaFileBundle | un
   const seenField = new Set<string>();
   const seenMethod = new Set<string>();
   for (const typeId of fileFacts.allTypeIds) {
-    const type = lookupFacts<JavaTypeFacts>(db, "type", "type_id", typeId);
+    const type = lookupMemberFacts<JavaTypeFacts>(db, "type", typeId);
     if (!type) continue;
     types.push(type);
     for (const fieldId of type.fieldIds) {
       if (seenField.has(fieldId)) continue;
-      const field = lookupFacts<JavaFieldFacts>(db, "field", "field_id", fieldId);
+      const field = lookupMemberFacts<JavaFieldFacts>(db, "field", fieldId);
       if (field) {
         seenField.add(fieldId);
         fields.push(field);
@@ -297,7 +346,7 @@ export function readBundle(db: IndexDatabase, path: string): JavaFileBundle | un
     }
     for (const methodId of type.methodIds) {
       if (seenMethod.has(methodId)) continue;
-      const method = lookupFacts<JavaMethodFacts>(db, "method", "method_id", methodId);
+      const method = lookupMemberFacts<JavaMethodFacts>(db, "method", methodId);
       if (method) {
         seenMethod.add(methodId);
         methods.push(method);
@@ -306,23 +355,21 @@ export function readBundle(db: IndexDatabase, path: string): JavaFileBundle | un
   }
   const idRow = prepareCached(db, "SELECT id FROM file WHERE path=?").get(path);
   const fileId = asRowId(idRow?.id as number | bigint);
-  const edges = prepareCached(db, "SELECT facts FROM edge WHERE source_file_id=? ORDER BY id").all(fileId);
+  const edges = prepareCached(db, `${STATIC_EDGE_SELECT} WHERE e.file_id=? ORDER BY e.id`).all(fileId);
   return {
     file: fileFacts,
     types,
     fields,
     methods,
-    edges: edges.map(row => decodeFacts<StaticEdge>(row.facts))
+    edges: edges.map(row => staticEdgeFromSqlRow(row))
   };
 }
 
-function lookupFacts<T>(
-  db: IndexDatabase,
-  table: "type" | "field" | "method",
-  column: "type_id" | "field_id" | "method_id",
-  id: string
-): T | undefined {
-  const row = prepareCached(db, `SELECT facts FROM ${table} WHERE ${column}=?`).get(id);
+function lookupMemberFacts<T>(db: IndexDatabase, table: "type" | "field" | "method", id: string): T | undefined {
+  const row = prepareCached(
+    db,
+    `SELECT t.facts FROM ${table} t JOIN sym s ON s.id=t.sym WHERE s.text=?`
+  ).get(id);
   return row ? decodeFacts<T>(row.facts) : undefined;
 }
 

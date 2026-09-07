@@ -86,15 +86,56 @@ test("writeBundle last-write-wins when two files share a type_id", async () => {
     writeBundle(db, second);
     const files = db.prepare("SELECT count(*) AS n FROM file").get() as { n: number };
     const types = db.prepare("SELECT count(*) AS n FROM type").get() as { n: number };
-    const owner = db.prepare("SELECT file.path AS path FROM type JOIN file ON file.id=type.file_id WHERE type.type_id=?").get(
-      first.types[0]!.typeId
-    ) as { path: string };
+    const owner = db.prepare(
+      "SELECT f.path AS path FROM type t JOIN file f ON f.id=t.file_id JOIN sym s ON s.id=t.sym WHERE s.text=?"
+    ).get(first.types[0]!.typeId) as { path: string };
     assert.equal(files.n, 2);
     assert.equal(types.n, first.types.length);
     assert.equal(owner.path, second.file.relativePath);
     const lost = readBundle(db, first.file.relativePath);
     assert.ok(lost);
     assert.ok(lost.types.some(type => type.typeId === first.types[0]!.typeId));
+  } finally {
+    close(db);
+  }
+});
+
+const NO_FACTS_TABLES = ["edge", "kg_node", "kg_edge", "entity"] as const;
+const TEXT_BLOB_ALLOW = new Set([
+  "meta.key", "meta.value",
+  "sym.text",
+  "file.path", "file.content_hash", "file.source_root", "file.module", "file.package", "file.parse_state", "file.facts",
+  "type.fqn", "type.simple_name", "type.kind", "type.facts",
+  "field.name", "field.facts",
+  "method.name", "method.facts",
+  "kg_node.simple_name",
+  "kg_summary.facts",
+  "entity.kind", "entity.fqn", "entity.simple_name", "entity.simple_name_lc",
+  "mybatis_resource.path", "mybatis_resource.namespace", "mybatis_resource.content_hash", "mybatis_resource.facts",
+  "source_root_coverage.root", "source_root_coverage.state"
+]);
+
+test("schema v3 has no facts on reconstructable tables and no extra TEXT/BLOB columns", () => {
+  const db = openIndexDb(":memory:");
+  try {
+    ensureSchema(db);
+    const tables = db.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+    ).all() as Array<{ name: string }>;
+    for (const { name } of tables) {
+      const columns = db.prepare(`PRAGMA table_info(${JSON.stringify(name)})`).all() as Array<{
+        name: string;
+        type: string;
+      }>;
+      if ((NO_FACTS_TABLES as readonly string[]).includes(name)) {
+        assert.equal(columns.some(column => column.name === "facts"), false, `${name}.facts`);
+      }
+      for (const column of columns) {
+        const affinity = column.type.toUpperCase();
+        if (affinity !== "TEXT" && affinity !== "BLOB") continue;
+        assert.ok(TEXT_BLOB_ALLOW.has(`${name}.${column.name}`), `${name}.${column.name} ${column.type}`);
+      }
+    }
   } finally {
     close(db);
   }

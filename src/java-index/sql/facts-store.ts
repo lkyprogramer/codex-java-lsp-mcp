@@ -20,7 +20,8 @@ import { JavaNameResolver, type TypeRegistryView } from "../name-resolver.js";
 import type { MyBatisMapperResourceFacts } from "../mybatis-types.js";
 import { myBatisQualifiedId } from "../mybatis-types.js";
 import { prepareCached, type IndexDatabase } from "./driver.js";
-import { decodeFacts, readBundle } from "./rows.js";
+import { decodeFacts, readBundle, STATIC_EDGE_SELECT, staticEdgeFromSqlRow } from "./rows.js";
+import { internSym, symId } from "./sym.js";
 
 export { decodeFacts };
 
@@ -103,28 +104,30 @@ export class SqlFactsStore {
 
   constructor(db: IndexDatabase) {
     this.db = db;
-    this.typesById = new PointMap(id => this.cached(`type:${id}`, () => this.selectFacts("type", "type_id", id)), () => this.countTable("type"));
-    this.methodsById = new PointMap(id => this.cached(`method:${id}`, () => this.selectFacts("method", "method_id", id)), () => this.countTable("method"));
-    this.fieldsById = new PointMap(id => this.cached(`field:${id}`, () => this.selectFacts("field", "field_id", id)), () => this.countTable("field"));
+    this.typesById = new PointMap(id => this.cached(`type:${id}`, () => this.selectMemberFacts("type", id)), () => this.countTable("type"));
+    this.methodsById = new PointMap(id => this.cached(`method:${id}`, () => this.selectMemberFacts("method", id)), () => this.countTable("method"));
+    this.fieldsById = new PointMap(id => this.cached(`field:${id}`, () => this.selectMemberFacts("field", id)), () => this.countTable("field"));
     this.filesByPath = new PointMap(path => this.cached(`file:${path}`, () => this.selectFacts("file", "path", path)), () => this.countTable("file"));
     this.typeIdByFqn = new PointMap(fqn => this.cached(`fqn:${fqn}`, () => {
-      const row = prepareCached(this.db, "SELECT type_id AS id FROM type WHERE fqn=?").get(fqn);
+      const row = prepareCached(this.db, "SELECT s.text AS id FROM type t JOIN sym s ON s.id=t.sym WHERE t.fqn=?").get(fqn);
       return typeof row?.id === "string" ? row.id : undefined;
     }), () => asCount(prepareCached(this.db, "SELECT count(DISTINCT fqn) AS n FROM type WHERE fqn IS NOT NULL").get()));
     this.typeIdsBySimpleName = new PointMap(
-      name => this.loadIdSet(`simple:${name}`, "SELECT type_id AS id FROM type WHERE simple_name=?", name),
+      name => this.loadIdSet(`simple:${name}`, "SELECT s.text AS id FROM type t JOIN sym s ON s.id=t.sym WHERE t.simple_name=?", name),
       () => asCount(prepareCached(this.db, "SELECT count(DISTINCT simple_name) AS n FROM type").get())
     );
     this.methodIdsByOwnerAndName = new PointMap(key => {
       const sep = key.indexOf("#");
       if (sep < 0) return undefined;
+      const owner = symId(this.db, key.slice(0, sep));
+      if (owner === undefined) return undefined;
       return this.loadIdSet(
         `owner:${key}`,
-        "SELECT method_id AS id FROM method WHERE owner_type_id=? AND name=?",
-        key.slice(0, sep),
+        "SELECT s.text AS id FROM method m JOIN sym s ON s.id=m.sym WHERE m.owner_sym=? AND m.name=?",
+        owner,
         key.slice(sep + 1)
       );
-    }, () => asCount(prepareCached(this.db, "SELECT count(*) AS n FROM (SELECT 1 FROM method GROUP BY owner_type_id, name)").get()));
+    }, () => asCount(prepareCached(this.db, "SELECT count(*) AS n FROM (SELECT 1 FROM method GROUP BY owner_sym, name)").get()));
   }
 
   clearRequestCache(): void { this.lru.clear(); }
@@ -164,7 +167,9 @@ export class SqlFactsStore {
   }
 
   nestedTypeId(ownerTypeId: string, simpleName: string): string | undefined {
-    const row = prepareCached(this.db, "SELECT type_id AS id FROM type WHERE owner_type_id=? AND simple_name=?").get(ownerTypeId, simpleName);
+    const owner = symId(this.db, ownerTypeId);
+    if (owner === undefined) return undefined;
+    const row = prepareCached(this.db, "SELECT s.text AS id FROM type t JOIN sym s ON s.id=t.sym WHERE t.owner_sym=? AND t.simple_name=?").get(owner, simpleName);
     return typeof row?.id === "string" ? row.id : undefined;
   }
 
@@ -205,7 +210,17 @@ export class SqlFactsStore {
     // Range lives in zlib facts, so ORDER BY/LIMIT cannot match compareTypes; sort then slice.
     const results: JavaTypeFacts[] = [];
     const seen = new Set<string>();
-    for (const row of prepareCached(this.db, "SELECT DISTINCT from_id AS id FROM edge WHERE to_id=? AND kind IN ('IMPLEMENTS','EXTENDS')").all(typeId)) {
+    const toSym = symId(this.db, typeId);
+    const kindIds = this.existingSymIds(["IMPLEMENTS", "EXTENDS"]);
+    if (toSym === undefined || kindIds.length === 0) {
+      this.clearRequestCache();
+      return [];
+    }
+    for (const row of prepareCached(
+      this.db,
+      `SELECT DISTINCT fs.text AS id FROM edge e JOIN sym fs ON fs.id=e.from_sym
+       WHERE e.to_sym=? AND e.kind_sym IN ${inClause(kindIds.length)}`
+    ).all(toSym, ...kindIds)) {
       if (typeof row.id !== "string" || seen.has(row.id)) continue;
       const type = this.typesById.get(row.id);
       if (!type) continue;
@@ -218,25 +233,32 @@ export class SqlFactsStore {
   }
 
   callers(methodId: string, limit = 80): IndexedReference[] {
-    return this.references("to_id", methodId, ["CALLS", "METHOD_REFERENCE"], limit);
+    return this.references("to", methodId, ["CALLS", "METHOD_REFERENCE"], limit);
   }
 
   callees(methodId: string, limit = 80): IndexedReference[] {
-    return this.references("from_id", methodId, ["CALLS", "CONSTRUCTS", "METHOD_REFERENCE"], limit);
+    return this.references("from", methodId, ["CALLS", "CONSTRUCTS", "METHOD_REFERENCE"], limit);
   }
 
   typeReferencers(typeId: string, kinds: ReadonlySet<StaticEdgeKind>, limit = 80): IndexedReference[] {
-    return this.references("to_id", typeId, [...kinds], limit);
+    return this.references("to", typeId, [...kinds], limit);
   }
 
   methodsWithParameterTypes(typeIds: readonly string[], limit = 64): string[] {
     if (typeIds.length === 0) return [];
+    const paramKind = symId(this.db, "PARAM_TYPE");
+    const toIds = this.existingSymIds(typeIds);
+    if (paramKind === undefined || toIds.length === 0) {
+      this.clearRequestCache();
+      return [];
+    }
     const rows = prepareCached(
       this.db,
-      `SELECT DISTINCT e.from_id AS id FROM edge e
-       WHERE e.kind='PARAM_TYPE' AND e.to_id IN ${inClause(typeIds.length)}
-         AND EXISTS (SELECT 1 FROM method m WHERE m.method_id=e.from_id)`
-    ).all(...typeIds);
+      `SELECT DISTINCT fs.text AS id FROM edge e
+       JOIN sym fs ON fs.id=e.from_sym
+       WHERE e.kind_sym=? AND e.to_sym IN ${inClause(toIds.length)}
+         AND EXISTS (SELECT 1 FROM method m WHERE m.sym=e.from_sym)`
+    ).all(paramKind, ...toIds);
     const methods = rows
       .map(row => typeof row.id === "string" ? this.methodsById.get(row.id) : undefined)
       .filter((method): method is JavaMethodFacts => method !== undefined)
@@ -404,7 +426,11 @@ export class SqlFactsStore {
         }
       }
       if (!annotationPrefixFound) {
-        for (const row of prepareCached(this.db, "SELECT to_id AS id FROM edge WHERE kind='ANNOTATED_WITH'").iterate()) {
+        const annotated = symId(this.db, "ANNOTATED_WITH");
+        for (const row of annotated === undefined ? [] : prepareCached(
+          this.db,
+          `SELECT s.text AS id FROM edge e JOIN sym s ON s.id=e.to_sym WHERE e.kind_sym=?`
+        ).iterate(annotated)) {
           const toId = typeof row.id === "string" ? row.id : "";
           const name = toId.startsWith("external:") ? toId.slice("external:".length) : undefined;
           if (hasPrefix(name, annotationPrefixes)) {
@@ -422,10 +448,17 @@ export class SqlFactsStore {
     if (typeIds.length === 0) return [];
     const targets = typeIds.map(id => this.typesById.get(id)).filter((type): type is JavaTypeFacts => type !== undefined);
     if (targets.length === 0) return [];
+    const kindIds = this.existingSymIds(["IMPLEMENTS", "EXTENDS"]);
+    const toIds = this.existingSymIds(typeIds);
+    if (kindIds.length === 0 || toIds.length === 0) {
+      this.clearRequestCache();
+      return [];
+    }
     const rows = prepareCached(
       this.db,
-      `SELECT DISTINCT from_id AS id FROM edge WHERE kind IN ('IMPLEMENTS','EXTENDS') AND to_id IN ${inClause(typeIds.length)}`
-    ).all(...typeIds);
+      `SELECT DISTINCT fs.text AS id FROM edge e JOIN sym fs ON fs.id=e.from_sym
+       WHERE e.kind_sym IN ${inClause(kindIds.length)} AND e.to_sym IN ${inClause(toIds.length)}`
+    ).all(...kindIds, ...toIds);
     const hits: string[] = [];
     for (const row of rows) {
       if (typeof row.id !== "string") continue;
@@ -449,7 +482,11 @@ export class SqlFactsStore {
   *iterTypes(): IterableIterator<JavaTypeFacts> { yield* this.iterFacts("type"); }
   *iterFields(): IterableIterator<JavaFieldFacts> { yield* this.iterFacts("field"); }
   *iterMethods(): IterableIterator<JavaMethodFacts> { yield* this.iterFacts("method"); }
-  *iterEdges(): IterableIterator<StaticEdge> { yield* this.iterFacts("edge"); }
+  *iterEdges(): IterableIterator<StaticEdge> {
+    for (const row of prepareCached(this.db, `${STATIC_EDGE_SELECT} ORDER BY e.id`).iterate()) {
+      yield staticEdgeFromSqlRow(row);
+    }
+  }
   *iterFiles(): IterableIterator<JavaFileFacts> { yield* this.iterFacts("file"); }
 
   private *iterFacts<T>(table: string): IterableIterator<T> {
@@ -463,11 +500,28 @@ export class SqlFactsStore {
     return row ? decodeFacts<T>(row.facts) : undefined;
   }
 
+  private selectMemberFacts<T>(table: "type" | "field" | "method", id: string): T | undefined {
+    const row = prepareCached(
+      this.db,
+      `SELECT t.facts FROM ${table} t JOIN sym s ON s.id=t.sym WHERE s.text=?`
+    ).get(id);
+    return row ? decodeFacts<T>(row.facts) : undefined;
+  }
+
+  private existingSymIds(texts: readonly string[]): number[] {
+    const ids: number[] = [];
+    for (const text of texts) {
+      const id = symId(this.db, text);
+      if (id !== undefined) ids.push(id);
+    }
+    return ids;
+  }
+
   private countTable(table: string): number {
     return asCount(prepareCached(this.db, `SELECT count(*) AS n FROM ${table}`).get());
   }
 
-  private loadIdSet(cacheKey: string, sql: string, ...params: string[]): ReadonlySet<string> | undefined {
+  private loadIdSet(cacheKey: string, sql: string, ...params: Array<string | number>): ReadonlySet<string> | undefined {
     return this.cached(cacheKey, () => {
       const ids = new Set<string>();
       for (const row of prepareCached(this.db, sql).all(...params)) {
@@ -477,23 +531,24 @@ export class SqlFactsStore {
     });
   }
 
-  private references(column: "from_id" | "to_id", nodeId: string, kinds: readonly string[], limit: number): IndexedReference[] {
+  private references(column: "from" | "to", nodeId: string, kinds: readonly string[], limit: number): IndexedReference[] {
     if (kinds.length === 0) return [];
-    const sql = `SELECT e.facts AS facts, f.path AS path, f.module AS module
-       FROM edge e JOIN file f ON f.id=e.source_file_id
-       WHERE e.${column}=? AND e.kind IN ${inClause(kinds.length)}
-       ORDER BY f.path`;
-    const collected: Array<{ facts: SQLOutputValue; path: string; module: string }> = [];
+    const node = symId(this.db, nodeId);
+    const kindIds = this.existingSymIds(kinds);
+    if (node === undefined || kindIds.length === 0) return [];
+    const side = column === "from" ? "e.from_sym" : "e.to_sym";
+    const sql = `${STATIC_EDGE_SELECT} WHERE ${side}=? AND e.kind_sym IN ${inClause(kindIds.length)} ORDER BY f.path`;
+    const collected: Array<{ edge: StaticEdge; path: string; module: string }> = [];
     let boundPath: string | undefined;
     let extraPath: string | undefined;
-    for (const row of prepareCached(this.db, sql).iterate(nodeId, ...kinds)) {
+    for (const row of prepareCached(this.db, sql).iterate(node, ...kindIds)) {
       const path = typeof row.path === "string" ? row.path : "";
       if (limit > 0 && boundPath !== undefined && path !== boundPath) {
         if (extraPath === undefined) extraPath = path;
         else if (path !== extraPath) break;
       }
       collected.push({
-        facts: row.facts,
+        edge: staticEdgeFromSqlRow(row),
         path,
         module: typeof row.module === "string" ? row.module : ""
       });
@@ -501,17 +556,16 @@ export class SqlFactsStore {
     }
     const results: IndexedReference[] = [];
     for (const row of collected) {
-      const edge = decodeFacts<StaticEdge>(row.facts);
       results.push({
-        sourceId: edge.fromId,
-        targetId: edge.toId,
-        sourceFile: edge.sourceFile,
+        sourceId: row.edge.fromId,
+        targetId: row.edge.toId,
+        sourceFile: row.edge.sourceFile,
         sourceModule: row.module,
         sourceSet: "unknown",
-        kind: edge.kind,
-        confidence: edge.confidence,
-        ...(edge.range ? { range: edge.range } : {}),
-        generation: edge.generation
+        kind: row.edge.kind,
+        confidence: row.edge.confidence,
+        ...(row.edge.range ? { range: row.edge.range } : {}),
+        generation: row.edge.generation
       });
     }
     results.sort(compareReferences);

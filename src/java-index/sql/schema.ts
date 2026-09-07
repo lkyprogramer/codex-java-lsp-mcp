@@ -1,53 +1,59 @@
 import { forgetPrepared, prepareCached, type IndexDatabase } from "./driver.js";
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export const INDEX_SCHEMA_SQL = `
 CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE sym(id INTEGER PRIMARY KEY, text TEXT NOT NULL UNIQUE);
 CREATE TABLE file(id INTEGER PRIMARY KEY, path TEXT NOT NULL UNIQUE, content_hash TEXT NOT NULL, size INTEGER, mtime_ms REAL,
   ctime_ms REAL, source_root TEXT, module TEXT, package TEXT, parse_state TEXT, generation INTEGER NOT NULL, facts BLOB NOT NULL);
 CREATE INDEX file_content_hash ON file(content_hash);
 CREATE INDEX file_source_root ON file(source_root);
-CREATE TABLE type(id INTEGER PRIMARY KEY, type_id TEXT NOT NULL UNIQUE, file_id INTEGER NOT NULL REFERENCES file(id) ON DELETE CASCADE,
-  fqn TEXT, simple_name TEXT NOT NULL, kind TEXT NOT NULL, owner_type_id TEXT, facts BLOB NOT NULL);
+CREATE TABLE type(sym INTEGER PRIMARY KEY REFERENCES sym(id), file_id INTEGER NOT NULL REFERENCES file(id) ON DELETE CASCADE,
+  fqn TEXT, simple_name TEXT NOT NULL, kind TEXT NOT NULL, owner_sym INTEGER, facts BLOB NOT NULL);
 CREATE INDEX type_fqn ON type(fqn);
 CREATE INDEX type_simple ON type(simple_name);
 CREATE INDEX type_file ON type(file_id);
-CREATE INDEX type_owner_simple ON type(owner_type_id, simple_name);
-CREATE TABLE field(id INTEGER PRIMARY KEY, field_id TEXT NOT NULL UNIQUE, owner_type_id TEXT NOT NULL, file_id INTEGER NOT NULL REFERENCES file(id) ON DELETE CASCADE,
+CREATE INDEX type_owner_simple ON type(owner_sym, simple_name);
+CREATE TABLE field(sym INTEGER PRIMARY KEY REFERENCES sym(id), owner_sym INTEGER NOT NULL, file_id INTEGER NOT NULL REFERENCES file(id) ON DELETE CASCADE,
   name TEXT NOT NULL, facts BLOB NOT NULL);
-CREATE INDEX field_owner ON field(owner_type_id);
+CREATE INDEX field_owner ON field(owner_sym);
 CREATE INDEX field_file ON field(file_id);
-CREATE TABLE method(id INTEGER PRIMARY KEY, method_id TEXT NOT NULL UNIQUE, owner_type_id TEXT NOT NULL, file_id INTEGER NOT NULL REFERENCES file(id) ON DELETE CASCADE,
+CREATE TABLE method(sym INTEGER PRIMARY KEY REFERENCES sym(id), owner_sym INTEGER NOT NULL, file_id INTEGER NOT NULL REFERENCES file(id) ON DELETE CASCADE,
   name TEXT NOT NULL, is_ctor INTEGER NOT NULL, arity INTEGER NOT NULL, facts BLOB NOT NULL);
-CREATE INDEX method_owner_name ON method(owner_type_id, name);
+CREATE INDEX method_owner_name ON method(owner_sym, name);
 CREATE INDEX method_file ON method(file_id);
-CREATE TABLE edge(id INTEGER PRIMARY KEY, edge_id TEXT NOT NULL UNIQUE, from_id TEXT NOT NULL, to_id TEXT NOT NULL, kind TEXT NOT NULL,
-  source_file_id INTEGER NOT NULL REFERENCES file(id) ON DELETE CASCADE, facts BLOB NOT NULL);
-CREATE INDEX edge_from_kind ON edge(from_id, kind);
-CREATE INDEX edge_to_kind ON edge(to_id, kind);
-CREATE INDEX edge_file ON edge(source_file_id);
+CREATE TABLE edge(id INTEGER PRIMARY KEY, kind_sym INTEGER NOT NULL, from_sym INTEGER NOT NULL, to_sym INTEGER NOT NULL,
+  file_id INTEGER NOT NULL REFERENCES file(id) ON DELETE CASCADE,
+  sl INTEGER NOT NULL, sc INTEGER NOT NULL, el INTEGER NOT NULL, ec INTEGER NOT NULL,
+  confidence REAL NOT NULL, res_kind_sym INTEGER NOT NULL, res_strategy_sym INTEGER, generation INTEGER NOT NULL,
+  UNIQUE(kind_sym, from_sym, to_sym, sl, sc, el, ec));
+CREATE INDEX edge_from_kind ON edge(from_sym, kind_sym);
+CREATE INDEX edge_to_kind ON edge(to_sym, kind_sym);
+CREATE INDEX edge_file ON edge(file_id);
 CREATE TABLE mybatis_resource(path TEXT PRIMARY KEY, namespace TEXT, content_hash TEXT, facts BLOB NOT NULL);
 CREATE INDEX mybatis_ns ON mybatis_resource(namespace);
 CREATE TABLE source_root_coverage(root TEXT PRIMARY KEY, state TEXT NOT NULL, generation INTEGER NOT NULL);
-CREATE TABLE kg_node(id TEXT PRIMARY KEY, kind TEXT NOT NULL, relative_path TEXT, java_index_id TEXT, owner_file TEXT, facts BLOB NOT NULL);
-CREATE INDEX kg_node_path ON kg_node(relative_path);
-CREATE INDEX kg_node_jid ON kg_node(java_index_id);
-CREATE INDEX kg_node_owner ON kg_node(owner_file);
-CREATE TABLE kg_edge(id INTEGER PRIMARY KEY, from_id TEXT NOT NULL, to_id TEXT NOT NULL, kind TEXT NOT NULL, owner_file TEXT, facts BLOB NOT NULL);
-CREATE INDEX kg_edge_from ON kg_edge(from_id, kind);
-CREATE INDEX kg_edge_to ON kg_edge(to_id, kind);
-CREATE INDEX kg_edge_owner ON kg_edge(owner_file);
-CREATE TABLE kg_summary(method_id TEXT PRIMARY KEY, facts BLOB NOT NULL);
-CREATE TABLE entity(entity_id TEXT PRIMARY KEY, kind TEXT NOT NULL, fqn TEXT NOT NULL, simple_name_lc TEXT, relative_path TEXT, owner_file TEXT,
-  ident_len INTEGER NOT NULL, chunk_len INTEGER NOT NULL, facts BLOB NOT NULL);
+CREATE TABLE kg_node(sym INTEGER PRIMARY KEY REFERENCES sym(id), kind_sym INTEGER NOT NULL, path_sym INTEGER, simple_name TEXT,
+  jid_sym INTEGER, owner_sym INTEGER, generation INTEGER NOT NULL);
+CREATE INDEX kg_node_path ON kg_node(path_sym);
+CREATE INDEX kg_node_jid ON kg_node(jid_sym);
+CREATE INDEX kg_node_owner ON kg_node(owner_sym);
+CREATE TABLE kg_edge(id INTEGER PRIMARY KEY, from_sym INTEGER NOT NULL, to_sym INTEGER NOT NULL, kind_sym INTEGER NOT NULL, ordinal INTEGER NOT NULL,
+  file_sym INTEGER, owner_sym INTEGER, generation INTEGER NOT NULL);
+CREATE INDEX kg_edge_from ON kg_edge(from_sym, kind_sym);
+CREATE INDEX kg_edge_to ON kg_edge(to_sym, kind_sym);
+CREATE INDEX kg_edge_owner ON kg_edge(owner_sym);
+CREATE TABLE kg_summary(method_sym INTEGER PRIMARY KEY REFERENCES sym(id), facts BLOB NOT NULL);
+CREATE TABLE entity(sym INTEGER PRIMARY KEY REFERENCES sym(id), kind TEXT NOT NULL, fqn TEXT NOT NULL, simple_name TEXT NOT NULL, simple_name_lc TEXT NOT NULL,
+  path_sym INTEGER, owner_sym INTEGER, ident_len INTEGER NOT NULL, chunk_len INTEGER NOT NULL);
 CREATE INDEX entity_fqn ON entity(fqn);
 CREATE INDEX entity_simple ON entity(simple_name_lc);
-CREATE INDEX entity_owner ON entity(owner_file);
-CREATE TABLE entity_token(entity_id TEXT NOT NULL REFERENCES entity(entity_id) ON DELETE CASCADE, field TEXT NOT NULL, token TEXT NOT NULL, tf INTEGER NOT NULL,
-  PRIMARY KEY(entity_id, field, token)) WITHOUT ROWID;
-CREATE INDEX entity_token_lookup ON entity_token(field, token);
-CREATE TABLE entity_df(field TEXT NOT NULL, token TEXT NOT NULL, df INTEGER NOT NULL, PRIMARY KEY(field, token)) WITHOUT ROWID;
+CREATE INDEX entity_owner ON entity(owner_sym);
+CREATE TABLE entity_token(entity_sym INTEGER NOT NULL REFERENCES entity(sym) ON DELETE CASCADE, field INTEGER NOT NULL, token_sym INTEGER NOT NULL, tf INTEGER NOT NULL,
+  PRIMARY KEY(entity_sym, field, token_sym)) WITHOUT ROWID;
+CREATE INDEX entity_token_lookup ON entity_token(field, token_sym);
+CREATE TABLE entity_df(field INTEGER NOT NULL, token_sym INTEGER NOT NULL, df INTEGER NOT NULL, PRIMARY KEY(field, token_sym)) WITHOUT ROWID;
 `;
 
 function quoteIdent(name: string): string {
