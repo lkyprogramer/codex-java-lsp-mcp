@@ -48,7 +48,17 @@
           "holdoutPRead": true
         },
         "passed": false,
-        "mustFailureScenarios": null
+        "mustFailureScenarios": {
+          "old": [
+            "exam-score-export-cross-module-holdout",
+            "paper-task-claim-iam-holdout"
+          ],
+          "new": [
+            "exam-score-export-cross-module-holdout",
+            "paper-task-claim-iam-holdout"
+          ],
+          "identical": true
+        }
       },
       {
         "project": "cipherlink",
@@ -82,7 +92,17 @@
           "holdoutPRead": true
         },
         "passed": false,
-        "mustFailureScenarios": null
+        "mustFailureScenarios": {
+          "old": [
+            "client-release-storage-presign-holdout",
+            "backend-operation-log-aspect-async-audit-holdout"
+          ],
+          "new": [
+            "client-release-storage-presign-holdout",
+            "backend-operation-log-aspect-async-audit-holdout"
+          ],
+          "identical": true
+        }
       },
       {
         "project": "exam-parent-v3",
@@ -116,13 +136,24 @@
           "holdoutPRead": true
         },
         "passed": false,
-        "mustFailureScenarios": null
+        "mustFailureScenarios": {
+          "old": [
+            "exam-room-print-download-types-persistent-bundle",
+            "candidate-pay-order-cross-module-admission"
+          ],
+          "new": [
+            "exam-room-print-download-types-persistent-bundle",
+            "candidate-pay-order-cross-module-admission"
+          ],
+          "identical": true
+        }
       }
     ]
   },
   "gateRelease": {
-    "run1": "p3-t4-release-1.txt exit 0 sha256=85fe5bf8e029b384e7b064ffc0b0fd02ea3d86f76e379be970f5b3baf7da19c3",
-    "run2": "p3-t4-release-2.txt exit 0 sha256=2626252f69c1713e5e9636ffbef8c254ca41d65cffdb24a3614e1eb96dd1a584"
+    "run1": "p3-t4-release-1.json exitCode=0 rawSha256=85fe5bf8e029b384e7b064ffc0b0fd02ea3d86f76e379be970f5b3baf7da19c3",
+    "run2": "p3-t4-release-2.json exitCode=0 rawSha256=2626252f69c1713e5e9636ffbef8c254ca41d65cffdb24a3614e1eb96dd1a584",
+    "note": "rawSha256 is the run-v4-gates captured payload, not the wrapper txt hash"
   },
   "ruoyi": {
     "rawFile": "p3-t4-ruoyi.json",
