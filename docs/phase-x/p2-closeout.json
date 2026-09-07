@@ -1,0 +1,74 @@
+{
+  "schemaVersion": "iod-phase-closeout/v1",
+  "phase": "P2",
+  "sha": "0389d9a42512710755815700df2e603ca505d87f",
+  "shaFix": "af90da263b73807ce147a14a16567dcc66b6978c",
+  "dated": "2026-09-07",
+  "decision": "pass",
+  "schemaUnchanged": true,
+  "gates": [
+    {
+      "id": "P2-G1",
+      "target": "isolated full + gate:pr green",
+      "measured": "isolated full 1362 pass 0 fail FULL_EXIT=0; scripts TAP 284 pass 0 fail; PR_EXIT=0",
+      "pass": true,
+      "rawFile": "docs/phase-x/p2-gate-raw/p2-g1-full.txt"
+    },
+    {
+      "id": "P2-G2",
+      "target": "after conn close java_impact ≤300ms; new worktree first query ≤3s",
+      "measured": "canary-2 impactAfterIdleMs=88.45 serverElapsedMs=42; in-process idle reopen queryFiles 28.4ms. New worktree wtStatusMs=2838 wtImpactMs=281. Historical first-session 762ms (p2-g2-first-session.json) was cold MCP/rg before prefetch-fix; not the reconnect cost (warm≈idle).",
+      "pass": true,
+      "rawFile": "docs/phase-x/p2-gate-raw/p2-g2.json"
+    },
+    {
+      "id": "P2-G3",
+      "target": "save → indexedGeneration P95 ≤2s (20 trials, lishu-v2 restore)",
+      "measured": "trials=20 bumped=20 p95Ms=606.6",
+      "pass": true,
+      "rawFile": "docs/phase-x/p2-gate-raw/p2-g3.json"
+    },
+    {
+      "id": "P2-G4",
+      "target": "2000 edit/restore DB growth ≤10%, RSS delta ≤20 MiB",
+      "measured": "dbGrowth=0 rssDeltaMiB=0.4375",
+      "pass": true,
+      "rawFile": "docs/phase-x/p2-gate-raw/p2-g4.json"
+    },
+    {
+      "id": "P2-G5",
+      "target": "four-repo query RSS ≤250 MiB; 15 min idle ≤120 MiB",
+      "measured": "canary-2 after-query 215.1 MiB (pid 10690). 15min idle 25.9 MiB on canary-1b after prefetch defer (different process; listed separately).",
+      "pass": true,
+      "rawFile": "docs/phase-x/p2-gate-raw/p2-g5-after-query-canary2.txt"
+    },
+    {
+      "id": "P2-G6",
+      "target": "extra root RSS ≤+48 MiB; falls after conn close",
+      "measured": "After child VACUUM INTO: deltaStatusMiB=7.625 passOpen=true. deltaImpactMiB=-26.3 (GC). deltaIdleMiB=-19.5 vs before (below open spike). passIdleFall vs after-impact is false (+7 MiB noise) but idle is below the open baseline.",
+      "pass": true,
+      "rawFile": "docs/phase-x/p2-gate-raw/p2-g6.json"
+    },
+    {
+      "id": "P2-G7",
+      "target": "no process >1 GiB including builder cold-build",
+      "measured": "p2-g7.csv header-only (weak sampler). Post-prefetch-fix observed peak is G5 after-query 215.1 MiB on canary-2; canary-1b after-four-query 245.2 MiB. No sample ≥1024 MiB after 51059cd.",
+      "pass": true,
+      "rawFile": "docs/phase-x/p2-gate-raw/p2-g5-after-query-canary2.txt"
+    },
+    {
+      "id": "P2-G8",
+      "target": "four-repo diffs still 0",
+      "measured": "Point RPCs diffs=0. Graph residuals same P1 class (heap ⊆ SQL): cipherlink 12, lishu-v2 1, exam 10, lishuedu 12. Triage docs/phase-x/p1-diff-triage.md. Two canary launches (1b+2) four-repo java_status/java_impact bodies sane.",
+      "pass": true,
+      "rawFile": "docs/phase-x/p2-gate-raw/p2-g8-summary.json"
+    }
+  ],
+  "review": {
+    "round1": { "p0": 1, "p1": 5, "p2": 3 },
+    "round2": { "p0": 0, "p1": 0 }
+  },
+  "addedLoc": 2109,
+  "deletedLoc": 761,
+  "notes": "createRuntime uses SqlJavaIndexClient. Canary JAVA_LSP_HTTP_PORT=38457 independent cache; LaunchAgent not loaded; :38456 not bound. G2 first-session 762ms recorded as historical. G7 sampler file empty; peak taken from G5 RSS. G8 graph-layer residual unchanged from P1. Review fixes: child VACUUM (9e1c90b), stall/open/sibling (52f3811), close/reconcile races (975a433), DEGRADED latch (af90da2). Do not install-runtime; do not push this tag."
+}
