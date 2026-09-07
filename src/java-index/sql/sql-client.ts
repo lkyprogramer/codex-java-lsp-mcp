@@ -97,6 +97,7 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
   private search: SqlEntitySearch | undefined;
   private layout: LayoutContext | undefined;
   private lastStatus: JavaIndexStatus = emptyStatus();
+  private failReason: string | undefined;
   private opened = false;
   private idleTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly connIdleMs: number;
@@ -140,7 +141,7 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
           this.lastStatus = { ...emptyStatus("BUILDING"), builder, pendingBackground: builder.queued };
           this.opened = true;
           void this.supervisor.coldBuild()
-            .then(() => { if (this.opened && this.lastStatus.state !== "CLOSED") this.reload(); })
+            .then(() => { if (this.opened && this.lastStatus.state !== "CLOSED") this.reload(true); })
             .catch(error => this.markDegraded(error));
           return this.lastStatus;
         }
@@ -179,6 +180,7 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
   async close(): Promise<void> {
     if (this.lastStatus.state === "CLOSED") return;
     this.opened = false;
+    this.failReason = undefined;
     this.clearIdle();
     if (this.db) closeDb(this.db);
     this.db = undefined;
@@ -369,7 +371,7 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
   private async runBuilderJob(job: BuilderSupervisorJob): Promise<JavaIndexStatus> {
     const result = await this.requireSupervisor(job.kind).submit(job);
     if (!result.ok) throw new JavaIntelligenceError("INDEX_PARTIAL", result.error ?? "builder failed");
-    this.reload();
+    this.reload(true);
     return this.lastStatus;
   }
 
@@ -377,7 +379,7 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     if (this.db) this.reload();
   }
 
-  private reload(): void {
+  private reload(clearError = false): void {
     if (this.db) closeDb(this.db);
     this.db = undefined;
     this.store = undefined;
@@ -391,6 +393,7 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     this.store = new SqlFactsStore(this.db);
     this.graph = new SqlKnowledgeGraph(this.db);
     this.search = new SqlEntitySearch(this.db);
+    if (clearError) this.failReason = undefined;
     this.lastStatus = this.assembleStatus();
     this.touch();
   }
@@ -425,6 +428,7 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
   private markDegraded(error: unknown): void {
     if (!this.opened || this.lastStatus.state === "CLOSED") return;
     const lastError = error instanceof Error ? error.message : String(error);
+    this.failReason = lastError;
     const builder = this.supervisor?.status();
     this.lastStatus = {
       ...emptyStatus("DEGRADED"),
@@ -543,7 +547,9 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     const bytes = existsSync(this.dbPath) ? statSync(this.dbPath).size : 0;
     const cacheKb = Number(process.env.JAVA_LSP_SQLITE_CACHE_KB);
     const status: JavaIndexStatus = {
-      state: buildState === "READY" ? "READY" : this.lastStatus.state === "BUILDING" ? "BUILDING" : "DEGRADED",
+      state: this.failReason
+        ? "DEGRADED"
+        : buildState === "READY" ? "READY" : this.lastStatus.state === "BUILDING" ? "BUILDING" : "DEGRADED",
       indexedGeneration,
       files: counts.files,
       types: counts.types,
@@ -556,6 +562,7 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
       resourceCoverage: [],
       factsHydrated: true,
       hibernated: false,
+      ...(this.failReason ? { lastError: this.failReason } : {}),
       db: {
         bytes,
         cacheKb: Number.isFinite(cacheKb) && cacheKb > 0 ? Math.floor(cacheKb) : DEFAULT_SQLITE_CACHE_KB

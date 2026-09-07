@@ -223,7 +223,9 @@ for await (const line of rl) {
     const opened = await client.open(1, { siblingDbPath: sibling });
     assert.ok(opened.files > 0);
     await waitUntil(() => client.localStatus().state === "DEGRADED");
-    assert.match(client.localStatus().lastError ?? "", /boom|reconcile/i);
+    const published = await client.status();
+    assert.equal(published.state, "DEGRADED");
+    assert.match(published.lastError ?? "", /boom|reconcile/i);
   } finally {
     await client.close();
     await supervisor.stop();
