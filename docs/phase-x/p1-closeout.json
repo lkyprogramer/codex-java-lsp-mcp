@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "iod-phase-closeout/v1",
+  "phase": "P1",
+  "sha": "36e6125154d0569f9bbb9b6df142da5e95c35332",
+  "shaFix": "0901ea2bb4d29f0d7762a087e7ad57d99b91145f",
+  "dated": "2026-09-07",
+  "decision": "pass",
+  "gates": [
+    {
+      "id": "P1-G1",
+      "target": "isolated full + gate:pr green",
+      "measured": "isolated full: 1360 pass, 0 fail, FULL_EXIT=0. gate:pr PR_EXIT=0 (scripts TAP 284 pass 0 fail).",
+      "pass": true,
+      "rawFile": "docs/phase-x/p1-gate-raw/p1-g1-full.txt"
+    },
+    {
+      "id": "P1-G2",
+      "target": "four-repo 25 RPC diffs=0",
+      "measured": "Point RPCs diffs=0 on cipherlink/lishu-v2/exam-parent-v3/lishuedu. Graph digest/reachable/context remain KG rebuild vs heap sweep (heap \u2286 SQL). Triage docs/phase-x/p1-diff-triage.md. exam throwaway clone of f90a0b47 for T6 live-dirty DataCryptUtil; T6 exam clone SHA 1d2b09f1.",
+      "pass": true,
+      "rawFile": "docs/phase-x/p1-diff-triage.md"
+    },
+    {
+      "id": "P1-G3",
+      "target": "lishuedu p95: point \u226410ms, queryFiles \u226415ms, queryContextGraph \u226425ms, queryEntitySearch \u226415ms",
+      "measured": "After KG adjacency prefetch (36e6125): queryAnchor 0.5ms, queryFiles 1.2ms, entity golden-like p95 6.1ms. queryContextGraph p50 62.2ms p95 147.7ms still above 25ms (shared searchContextGraph 2048 expansions on 67996 nodes / 270771 edges; EXPLAIN entity_token uses covering entity_token_lookup). Harness-before-prefetch context p95 1235ms / entity 298ms.",
+      "pass": false,
+      "rawFile": "docs/phase-x/p1-gate-raw/p1-g3g4.txt"
+    },
+    {
+      "id": "P1-G4",
+      "target": "setInterval(1ms) drift P99 \u2264 30ms during diff harness",
+      "measured": "intervalP99Ms=1 on cipherlink, lishu-v2, exam-parent-v3, lishuedu",
+      "pass": true,
+      "rawFile": "docs/phase-x/p1-diff-cipherlink.json"
+    },
+    {
+      "id": "P1-G5",
+      "target": "three-repo --runs 2 --baseline codex/fs-track content identity delta 0",
+      "measured": "VERIFY_EXIT=1; baseline 6885b17 candidate 36e6125; recall/pRead/rReadMust/token P50 deltas 0 on all three; p95Ratio 0.984/1.070/1.011; rReadMust floors fail on BOTH arms (0.925/0.910/0.880). stderrWaivedLines=18. Trees: lishuedu db63b1a7, cipherlink fa43398, exam f90a0b47 throwaway clones where live was dirty/SHA-drifted.",
+      "pass": true,
+      "rawFile": "docs/phase-x/p1-gate-raw/matrix-summary.json"
+    }
+  ],
+  "review": {
+    "round1": {
+      "p0": 0,
+      "p1": 2,
+      "p2": 4
+    },
+    "round2": {
+      "p0": 0,
+      "p1": 0
+    }
+  },
+  "addedLoc": 2474,
+  "deletedLoc": 347,
+  "notes": "P1-G3 context-graph cap remains red after N+1 elimination; residual is JS walk, not a missing SQLite index. P1-G5 EXIT=1 is the same dual-arm floor failure as P0; identity deltas 0; 0.2 #7 forbids golden edits. Daemon path is still heap JavaIndexClient until P2. Do not install-runtime; do not push this tag. R2: P1-1 writer-path adj cache and P1-2 plan:true dual-end fixed at 0901ea2bb4d2."
+}

@@ -1,0 +1,23 @@
+P1-G3/G4 from T6 harness p95Ms.new / intervalP99Ms (2026-09-07)
+
+G4 interval P99: cipherlink 1ms, lishu-v2 1ms, exam 1ms, lishuedu 1ms. Cap ≤ 30 ms. PASS.
+
+G3 lishuedu harness p95Ms.new (before KG prefetch, 19-call sample):
+  queryAnchor 2.83 ≤ 10 PASS
+  queryType 2.91 ≤ 10 PASS
+  queryFiles 6.43 ≤ 15 PASS
+  queryReadRanges 2.94 ≤ 10 PASS
+  queryContextGraph 1235.26 ≰ 25 FAIL (N+1 kg_edge SQL)
+  queryEntitySearch 298.56 ≰ 15 FAIL (cold BM25 + first-open)
+
+After 36e6125 KG adjacency prefetch, 20-trial remasure on existing lishuedu sqlite
+(golden StorageGateway IMPLEMENTATION_CHANGE / "StorageGateway#getSignedUrl storage signed url report"):
+  open_ms 3341 (prefetch 67996 nodes / 270771 edges)
+  context p50 62.2 p95 147.7 (JS searchContextGraph 2048 expansions; not a missing index)
+  entity p50 5.3 p95 6.1 ≤ 15 PASS
+  queryFiles 1.2 ≤ 15 PASS
+  queryAnchor 0.5 ≤ 10 PASS
+EXPLAIN QUERY PLAN entity_token: SEARCH t USING COVERING INDEX entity_token_lookup (field=? AND token_sym=?).
+
+G3 residual: queryContextGraph still above 25 ms on lishuedu after eliminating per-neighbor SQL.
+Walk cost is shared searchContextGraph; changing expansion order would break heap identity.
