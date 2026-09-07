@@ -3,9 +3,9 @@
 // pos: Command-domain split of java-index-worker.ts query handlers.
 import type { JavaIndexRequest, JavaIndexResponse } from "./worker-protocol.js";
 import type { JavaIndexStatus, JavaTypeLookupResult, SourceRootCoverage } from "./index-types.js";
-import type { JavaIndexStore } from "./index-store.js";
+import type { FactsReader } from "./facts-reader.js";
 import { ENTITY_SEARCH_DEFAULT_LIMIT, ENTITY_SEARCH_MAX_LIMIT, type EntitySearchIndex } from "./entity-search.js";
-import type { KnowledgeGraphStore } from "../java-knowledge/graph-store.js";
+import type { GraphReader } from "../java-knowledge/graph-reader.js";
 import { reachableFiles } from "../java-knowledge/graph-walk.js";
 import { compileIntent } from "../context-engine/intent-compiler.js";
 import { navigateGraph, searchContextGraph } from "../context-engine/graph-search.js";
@@ -15,7 +15,7 @@ import { anchorMethodStartIds, attachAnchorSignatureBundles, planContextQuery } 
 import { PLANNER_VERSION } from "../context-engine/context-contract.js";
 
 export type QueryHandlerDeps = {
-  store?: JavaIndexStore;
+  store?: FactsReader;
   status: JavaIndexStatus;
   deriveSourceLayout(inputPath: string): { relativePath: string };
   queryReadRanges(requests: Array<{ file: string; positions: Array<{ line: number; column: number }> }>): Promise<unknown>;
@@ -23,7 +23,7 @@ export type QueryHandlerDeps = {
   worstTypeLookupCoverage(generation: number): "COMPLETE" | "PARTIAL" | "DEGRADED";
   unresolvedTypeLookup(): JavaTypeLookupResult;
   readyEntitySearch(): EntitySearchIndex;
-  readyKnowledgeGraph(): KnowledgeGraphStore;
+  readyKnowledgeGraph(): GraphReader;
   graphIsReady(): boolean;
   peekGraphSnapshot(): Promise<{ digest: string; generation: number; nodes: unknown[]; edges: unknown[] } | undefined>;
   ensureFactsHydrated(): Promise<void>;

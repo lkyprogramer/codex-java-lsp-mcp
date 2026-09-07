@@ -35,7 +35,7 @@ export type FactsReader = {
   typeReferencers(typeId: string, kinds: ReadonlySet<StaticEdgeKind>, limit?: number): IndexedReference[];
   methodsWithParameterTypes(typeIds: readonly string[], limit?: number): string[];
   anchor(path: string, line: number, col: number): AnchorFacts | undefined;
-  typeLookup(typeText: string, scopeFile: string): JavaTypeLookupResult;
+  typeLookup(typeText: string, scopeFile?: string): JavaTypeLookupResult;
   myBatisResource(path: string): MyBatisMapperResourceFacts | undefined;
   myBatisResourceForNamespace(ns: string): MyBatisMapperResourceFacts | undefined;
   myBatisStatement(namespace: string, id: string): MyBatisMapperResourceFacts["statements"][number] | undefined;

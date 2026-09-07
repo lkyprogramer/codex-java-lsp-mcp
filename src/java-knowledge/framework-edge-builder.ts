@@ -2,7 +2,7 @@
 // output: Spring inject/bean/event knowledge-graph edges. Annotation set matches the existing Spring adapter.
 // pos: N2a-02. Does not invent extra annotations. Multi-implementer injection binds the declared type only.
 import type { JavaAnnotationFact, JavaFileBundle, JavaMethodFacts, JavaTypeFacts, JavaTypeRef } from "../java-index/index-types.js";
-import type { JavaIndexStore } from "../java-index/index-store.js";
+import type { FactsReader } from "../java-index/facts-reader.js";
 import type { KnowledgeGraphStore } from "./graph-store.js";
 import { knowledgeEdgeId, knowledgeExternalTypeId, knowledgeTypeId } from "./entity-id.js";
 import type { EdgeKind } from "./edge-kinds.js";
@@ -34,7 +34,7 @@ function hasName(annotations: readonly JavaAnnotationFact[], fqn: string): boole
   return names.has(fqn) || names.has(simple);
 }
 
-function typeRefId(ref: JavaTypeRef | undefined, store: JavaIndexStore): string | undefined {
+function typeRefId(ref: JavaTypeRef | undefined, store: FactsReader): string | undefined {
   if (!ref) return undefined;
   if (ref.resolution.state === "RESOLVED_REPO") {
     const type = store.typesById.get(ref.resolution.typeId);
@@ -73,7 +73,7 @@ function injectingConstructor(methods: readonly JavaMethodFacts[]): JavaMethodFa
 export function addFrameworkEdges(
   graph: KnowledgeGraphStore,
   bundle: JavaFileBundle,
-  store: JavaIndexStore,
+  store: FactsReader,
   generation: number,
   resolve: (javaIndexId: string) => string | undefined
 ): void {

@@ -2,6 +2,7 @@
 // output: Structural + N2a call/framework/persistence knowledge-graph edges.
 // pos: N1/N2a builder. Reuses ast-extractor facts; does not re-parse.
 import type { JavaFieldFacts, JavaFileBundle, JavaFileFacts, JavaMethodFacts, JavaTypeFacts } from "../java-index/index-types.js";
+import type { FactsReader } from "../java-index/facts-reader.js";
 import type { JavaIndexStore } from "../java-index/index-store.js";
 import { addCallEdges } from "./call-resolver.js";
 import { isStructuralEdgeKind } from "./edge-kinds.js";
@@ -109,7 +110,7 @@ export class KnowledgeGraphBuilder {
     }
   }
 
-  replaceFile(bundle: JavaFileBundle, store: JavaIndexStore, generation: number): void {
+  replaceFile(bundle: JavaFileBundle, store: FactsReader, generation: number): void {
     this.graph.removeFiles([bundle.file.relativePath]);
     this.graph.generation = Math.max(this.graph.generation, generation);
     this.ensureRepository(generation);
@@ -127,7 +128,7 @@ export class KnowledgeGraphBuilder {
     }
   }
 
-  private addBundle(bundle: JavaFileBundle, store: JavaIndexStore, generation: number): void {
+  private addBundle(bundle: JavaFileBundle, store: FactsReader, generation: number): void {
     const owner = bundle.file.relativePath;
     const fileId = knowledgeFileId(owner);
     const moduleId = knowledgeModuleId(bundle.file.module);
@@ -246,7 +247,7 @@ export class KnowledgeGraphBuilder {
   private resolveEndpoint(
     javaIndexId: string,
     local: Map<string, string>,
-    store: JavaIndexStore
+    store: FactsReader
   ): string | undefined {
     const hit = local.get(javaIndexId);
     if (hit) return hit;
