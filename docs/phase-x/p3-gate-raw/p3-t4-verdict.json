@@ -1,9 +1,9 @@
 {
   "schemaVersion": "iod-p3-t4-verdict/v1",
-  "head": "c82cc2e",
+  "head": "d0ea177",
   "identityMatrix": {
-    "dir": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-74d3761dc961/implementer/p3-t4-identity-8",
-    "candidateHead": "9ac1249",
+    "dir": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-74d3761dc961/implementer/p3-t4-matrix",
+    "candidateHead": "d0ea177",
     "baseline": "d02f398",
     "matrixExit": 1,
     "contentDelta0": true,
@@ -14,6 +14,7 @@
       "estimatedTokensP50"
     ],
     "absoluteFloorsFailedBothArms": true,
+    "stderrWaivedLines": 0,
     "projects": [
       {
         "project": "lishuedu",
@@ -23,8 +24,8 @@
           "rReadMust": 0,
           "rTaskBlocking": 0,
           "estimatedTokensP50": 0,
-          "p95Ratio": 1.0418351131282575,
-          "p95ThresholdMs": 347.01833374998387,
+          "p95Ratio": 1.0605800829693723,
+          "p95ThresholdMs": 354.0647387499848,
           "holdout": {
             "recall": 0,
             "pRead": 0,
@@ -47,10 +48,7 @@
           "holdoutPRead": true
         },
         "passed": false,
-        "mustFailureScenarios": [
-          "exam-score-export-cross-module-holdout",
-          "paper-task-claim-iam-holdout"
-        ]
+        "mustFailureScenarios": null
       },
       {
         "project": "cipherlink",
@@ -60,8 +58,8 @@
           "rReadMust": 0,
           "rTaskBlocking": 0,
           "estimatedTokensP50": 0,
-          "p95Ratio": 1.0851083426704322,
-          "p95ThresholdMs": 309.9841675000016,
+          "p95Ratio": 1.2477841393619629,
+          "p95ThresholdMs": 279.2368750000014,
           "holdout": {
             "recall": 0,
             "pRead": 0,
@@ -84,10 +82,7 @@
           "holdoutPRead": true
         },
         "passed": false,
-        "mustFailureScenarios": [
-          "client-release-storage-presign-holdout",
-          "backend-operation-log-aspect-async-audit-holdout"
-        ]
+        "mustFailureScenarios": null
       },
       {
         "project": "exam-parent-v3",
@@ -97,8 +92,8 @@
           "rReadMust": 0,
           "rTaskBlocking": 0,
           "estimatedTokensP50": 0,
-          "p95Ratio": 0.9903651662405809,
-          "p95ThresholdMs": 444.8701562499991,
+          "p95Ratio": 1.2605930462758452,
+          "p95ThresholdMs": 334.097916249998,
           "holdout": {
             "recall": 0,
             "pRead": 0,
@@ -112,7 +107,7 @@
           "recall": true,
           "pRead": true,
           "estimatedTokens": true,
-          "p95": true,
+          "p95": false,
           "rangeLineRecall": false,
           "rangeCoordinateRecall": false,
           "holdoutRReadMust": false,
@@ -121,22 +116,19 @@
           "holdoutPRead": true
         },
         "passed": false,
-        "mustFailureScenarios": [
-          "exam-room-print-download-types-persistent-bundle",
-          "candidate-pay-order-cross-module-admission"
-        ]
+        "mustFailureScenarios": null
       }
     ]
   },
   "gateRelease": {
-    "run3": "p3-t4-release-3.txt exit 0",
-    "run4": "p3-t4-release-4.txt exit 0"
+    "run1": "p3-t4-release-1.txt exit 0 sha256=85fe5bf8e029b384e7b064ffc0b0fd02ea3d86f76e379be970f5b3baf7da19c3",
+    "run2": "p3-t4-release-2.txt exit 0 sha256=2626252f69c1713e5e9636ffbef8c254ca41d65cffdb24a3614e1eb96dd1a584"
   },
   "ruoyi": {
     "rawFile": "p3-t4-ruoyi.json",
     "logFile": "p3-t4-ruoyi.txt",
-    "isolatedRoot": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-muUY5m",
-    "head": "c82cc2e",
+    "isolatedRoot": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oLNzyf",
+    "head": "d0ea177",
     "decision": "TOKEN_FAIL",
     "qualityBitIdentical": true,
     "identity": {
@@ -150,8 +142,22 @@
       "gate": 0.2
     },
     "prepared": {
-      "old": { "state": "READY", "files": 6447, "snapshotBytes": 21188212, "coverageRoots": 66 },
-      "new": { "state": "READY", "files": 6447, "snapshotBytes": 0, "coverageRoots": 66 }
+      "old": {
+        "state": "READY",
+        "files": 6447,
+        "snapshotBytes": 21188212,
+        "lastError": null,
+        "coverageRoots": 66,
+        "pendingBackground": 0
+      },
+      "new": {
+        "state": "READY",
+        "files": 6447,
+        "snapshotBytes": 0,
+        "lastError": null,
+        "coverageRoots": 66,
+        "pendingBackground": 0
+      }
     },
     "caches": {
       "oldSnapshotBytes": 21188212,
@@ -162,9 +168,10 @@
       "pRead": 0.2976190476190475,
       "rReadMust": 0.5383503401360543,
       "RangeLineRecall": 0.35258194186765596,
-      "estimatedTokensP50": 2562
+      "estimatedTokensP50": 2562,
+      "scenarios": 28
     },
-    "note": "P3-T4 ruoyi door is quality bit-identical; F1 20% token-drop is recorded, not a T4 identity fail. Both arms READY at 6447 files."
+    "note": "P3-T4 ruoyi door is quality bit-identical; F1 20% token-drop is recorded, not a T4 identity fail."
   },
   "t4Gates": {
     "threeRepoContentDelta0": true,

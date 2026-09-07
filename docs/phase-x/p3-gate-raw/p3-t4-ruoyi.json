@@ -28,13 +28,13 @@
   },
   "caches": {
     "old": {
-      "cacheDir": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-muUY5m/f1-ruoyi-work/old-cache",
+      "cacheDir": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oLNzyf/f1-ruoyi-work/old-cache",
       "sqliteBytes": 0,
       "snapshotBytes": 21188212,
       "populated": true
     },
     "new": {
-      "cacheDir": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-muUY5m/f1-ruoyi-work/new-cache",
+      "cacheDir": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oLNzyf/f1-ruoyi-work/new-cache",
       "sqliteBytes": 215199744,
       "snapshotBytes": 0,
       "populated": true
