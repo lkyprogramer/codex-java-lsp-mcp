@@ -82,9 +82,18 @@ export function startBenchmarkProcessResourceObserver(options: BenchmarkProcessR
     }
   };
 }
-export function startBenchmarkProcessResourceObserverFromEnvironment(profile: string, javaIndex: JavaIndexPresence): BenchmarkProcessResourceHandle | undefined {
+export function startBenchmarkProcessResourceObserverFromEnvironment(
+  profile: string,
+  javaIndex: JavaIndexPresence,
+  env: NodeJS.ProcessEnv = process.env
+): BenchmarkProcessResourceHandle | undefined {
+  const intervalMs = env.JAVA_LSP_RESOURCE_INTERVAL_MS ? Number(env.JAVA_LSP_RESOURCE_INTERVAL_MS) : undefined;
   return startBenchmarkProcessResourceObserver({
-    profile, javaIndex });
+    outputFile: env.JAVA_LSP_RESOURCE_TELEMETRY_FILE,
+    intervalMs,
+    profile,
+    javaIndex
+  });
 }
 export function summarizeInProcessSamples(samples: readonly Sample[]): Record<string, number | undefined> {
   if (samples.length === 0) {

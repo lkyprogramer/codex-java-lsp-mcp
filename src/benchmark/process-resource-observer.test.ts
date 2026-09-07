@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import {
   startBenchmarkProcessResourceObserver,
+  startBenchmarkProcessResourceObserverFromEnvironment,
   summarizeInProcessSamples
 } from "./process-resource-observer.js";
 
@@ -49,6 +50,29 @@ test("in-process summary keeps zero samples unmeasured instead of reporting zero
     cpuUserMicros: undefined,
     cpuSystemMicros: undefined
   });
+});
+
+test("FromEnvironment binds the sidecar path from the provided env map", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "process-resource-observer-env-"));
+  const output = path.join(root, "resources.json");
+  const previous = process.env.JAVA_LSP_ISOLATED_VALIDATION;
+  process.env.JAVA_LSP_ISOLATED_VALIDATION = "1";
+  try {
+    const observer = startBenchmarkProcessResourceObserverFromEnvironment("runner-test", "PRESENT", {
+      ...process.env,
+      JAVA_LSP_RESOURCE_TELEMETRY_FILE: output,
+      JAVA_LSP_RESOURCE_INTERVAL_MS: "5"
+    })!;
+    observer.recordQueueDepth("java-index:test", 1);
+    await new Promise(resolve => setTimeout(resolve, 15));
+    await observer.stop();
+    const persisted = JSON.parse(await readFile(output, "utf8"));
+    assert.equal(persisted.observations.queueDepth.status, "MEASURED");
+  } finally {
+    if (previous === undefined) delete process.env.JAVA_LSP_ISOLATED_VALIDATION;
+    else process.env.JAVA_LSP_ISOLATED_VALIDATION = previous;
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("an immediately stopped observer reports an unsampled event loop as UNMEASURED", async () => {
