@@ -118,6 +118,46 @@ test("status publishes db and builder fields", async () => {
   }
 });
 
+test("idle close then ensureFresh reopens the connection", async () => {
+  const dbPath = await coldDb(fixturesRoot);
+  const supervisor = new BuilderSupervisor({
+    repoRoot: fixturesRoot,
+    dbPath,
+    idleMs: 5_000,
+    stallMs: 30_000
+  });
+  const client = new SqlJavaIndexClient(fixturesRoot, dbPath, supervisor, 40);
+  try {
+    await client.open(1);
+    await waitUntil(() => (client as unknown as ClientInternals).db === undefined);
+    await client.ensureFresh(["src/main/java/demo/PaymentGateway.java"], 1);
+    assert.ok((client as unknown as ClientInternals).db);
+  } finally {
+    await client.close();
+    await supervisor.stop();
+  }
+});
+
+test("failed sibling copy does not leave dest and allows a later open", async () => {
+  const destDir = await mkdtemp(path.join(tmpdir(), "iod-life-failcopy-"));
+  const dest = path.join(destDir, "index.sqlite");
+  const bogus = path.join(destDir, "not-a-db");
+  await writeFile(bogus, "not sqlite");
+  const supervisor = new BuilderSupervisor({ repoRoot: destDir, dbPath: dest, idleMs: 5_000, stallMs: 30_000 });
+  const client = new SqlJavaIndexClient(destDir, dest, supervisor, 5_000);
+  try {
+    await assert.rejects(() => client.open(1, { siblingDbPath: bogus }), /VACUUM INTO|INDEX_PARTIAL/);
+    assert.equal(existsSync(dest), false);
+    assert.equal(existsSync(`${dest}.copying`), false);
+    const status = await client.open(1);
+    assert.equal(status.state, "BUILDING");
+  } finally {
+    await client.close();
+    await supervisor.stop();
+    await rm(destDir, { recursive: true, force: true });
+  }
+});
+
 test("sibling VACUUM INTO copy is opened without waiting for reconcile", async () => {
   const repo = await mkdtemp(path.join(tmpdir(), "iod-life-sib-"));
   await cp(fixturesRoot, repo, { recursive: true });

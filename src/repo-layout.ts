@@ -1,7 +1,7 @@
 // input: Repository paths and LSP file locations.
 // output: Normalized repo metadata, DDD layer classification, and source previews.
 // pos: Shared path helper for the lishuedu JDT LS MCP bridge.
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
@@ -63,6 +63,30 @@ function findBuildRoot(startDir: string): string | undefined {
 
 export function repoCacheRoot(repoRoot: string, cacheBase = repoCacheBase()): string {
   return path.join(cacheBase, repoHash(repoRoot));
+}
+
+export function scanFamilySiblingIndex(cacheBase: string, familyKey: string, selfDbPath: string): string | undefined {
+  if (!familyKey || !existsSync(cacheBase)) return undefined;
+  let best: { path: string; mtime: number } | undefined;
+  for (const entry of readdirSync(cacheBase, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const cacheRoot = path.join(cacheBase, entry.name);
+    const dbPath = path.join(cacheRoot, "index.sqlite");
+    if (dbPath === selfDbPath || !existsSync(dbPath)) continue;
+    let family: string | undefined;
+    try {
+      const meta = JSON.parse(readFileSync(path.join(cacheRoot, "repo-meta.json"), "utf8")) as {
+        familyHash?: string; repoHash?: string;
+      };
+      family = meta.familyHash ?? meta.repoHash;
+    } catch {
+      continue;
+    }
+    if (family !== familyKey) continue;
+    const mtime = statSync(dbPath).mtimeMs;
+    if (!best || mtime > best.mtime) best = { path: dbPath, mtime };
+  }
+  return best?.path;
 }
 
 export function repoCacheBase(env: NodeJS.ProcessEnv = process.env): string {

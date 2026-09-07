@@ -2,14 +2,22 @@ import { existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
+function assertSafeSqlitePath(value: string, label: string): void {
+  if (!value || value.includes("\0") || value.includes("\n") || value.includes("'")) {
+    throw new Error(`VACUUM INTO unsafe ${label}`);
+  }
+}
+
 export function vacuumInto(sourcePath: string, destPath: string): void {
+  assertSafeSqlitePath(sourcePath, "source");
+  assertSafeSqlitePath(destPath, "dest");
   if (!existsSync(sourcePath)) {
     throw new Error(`VACUUM INTO missing source ${sourcePath}`);
   }
   mkdirSync(dirname(destPath), { recursive: true });
   const db = new DatabaseSync(sourcePath, { readOnly: true });
   try {
-    db.exec(`VACUUM INTO '${destPath.replaceAll("'", "''")}'`);
+    db.exec(`VACUUM INTO '${destPath}'`);
   } finally {
     db.close();
   }

@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, renameSync, rmSync, statSync } from "node:fs";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { probeLayout } from "../../layout-probe.js";
@@ -119,27 +119,39 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     if (this.opened) {
       throw new JavaIntelligenceError("INDEX_PARTIAL", `Java index client cannot open from state ${this.lastStatus.state}`);
     }
-    this.opened = true;
     this.layout = probeLayout(this.repoRoot);
-    if (!existsSync(this.dbPath)) {
-      if (options?.siblingDbPath && existsSync(options.siblingDbPath)) {
-        this.copySibling(options.siblingDbPath);
-        this.reload();
-        void this.supervisor?.submit({ kind: "reconcile", generation, changed: [], deleted: [] }).then(() => this.reloadIfOpen());
+    try {
+      if (!existsSync(this.dbPath)) {
+        if (options?.siblingDbPath && existsSync(options.siblingDbPath)) {
+          this.copySibling(options.siblingDbPath);
+          this.reload();
+          void this.supervisor?.submit({ kind: "reconcile", generation, changed: [], deleted: [] })
+            .then(() => { if (this.opened) this.reload(); })
+            .catch(error => this.markDegraded(error));
+          this.opened = true;
+          return this.lastStatus;
+        }
+        if (this.supervisor) {
+          const builder = this.supervisor.status();
+          this.lastStatus = { ...emptyStatus("BUILDING"), builder, pendingBackground: builder.queued };
+          this.opened = true;
+          void this.supervisor.coldBuild()
+            .then(() => { if (this.opened) this.reload(); })
+            .catch(error => this.markDegraded(error));
+          return this.lastStatus;
+        }
+        this.lastStatus = emptyStatus("DEGRADED");
+        this.lastStatus.lastError = "EMPTY";
+        this.opened = true;
         return this.lastStatus;
       }
-      if (this.supervisor) {
-        const builder = this.supervisor.status();
-        this.lastStatus = { ...emptyStatus("BUILDING"), builder, pendingBackground: builder.queued };
-        void this.supervisor.coldBuild().then(() => this.reloadIfOpen()).catch(() => undefined);
-        return this.lastStatus;
-      }
-      this.lastStatus = emptyStatus("DEGRADED");
-      this.lastStatus.lastError = "EMPTY";
+      this.reload();
+      this.opened = true;
       return this.lastStatus;
+    } catch (error) {
+      this.opened = false;
+      throw error;
     }
-    this.reload();
-    return this.lastStatus;
   }
 
   async status(_requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus> {
@@ -186,7 +198,7 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
   }
   async ensureFresh(files: string[], generation: number, _requestOptions?: JavaIndexRequestOptions): Promise<void> {
     this.requireSupervisor("ensureFresh");
-    this.reloadIfOpen();
+    this.ensureConn();
     const indexed = Number(readMeta(this.requireDb(), "indexedGeneration") ?? "0") || 0;
     if (indexed >= generation) return;
     const stale = files.some(file => this.fileGeneration(file) < generation);
@@ -405,18 +417,34 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     this.idleTimer = undefined;
   }
 
+  private markDegraded(error: unknown): void {
+    if (!this.opened) return;
+    const lastError = error instanceof Error ? error.message : String(error);
+    const builder = this.supervisor?.status();
+    this.lastStatus = {
+      ...emptyStatus("DEGRADED"),
+      lastError,
+      builder,
+      pendingBackground: builder?.queued ?? 0
+    };
+  }
+
   private copySibling(fromPath: string): void {
     mkdirSync(dirname(this.dbPath), { recursive: true });
+    const tmp = `${this.dbPath}.copying`;
+    rmSync(tmp, { force: true });
     const helper = fileURLToPath(new URL("./vacuum-into.js", import.meta.url));
     const result = spawnSync(
       process.execPath,
-      ["--disable-warning=ExperimentalWarning", helper, fromPath, this.dbPath],
+      ["--disable-warning=ExperimentalWarning", helper, fromPath, tmp],
       { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 120_000 }
     );
-    if (result.status !== 0 || !existsSync(this.dbPath)) {
+    if (result.status !== 0 || !existsSync(tmp)) {
+      rmSync(tmp, { force: true });
       const detail = (result.stderr || result.stdout || `status ${result.status}`).trim().slice(0, 400);
       throw new JavaIntelligenceError("INDEX_PARTIAL", `sibling VACUUM INTO failed: ${detail}`);
     }
+    renameSync(tmp, this.dbPath);
   }
 
   private fileGeneration(inputPath: string): number {

@@ -21,7 +21,7 @@ import { RouterJavaIndex } from "./java-index/router-java-index.js";
 import { LayoutManager, type LayoutSource } from "./layout-manager.js";
 import { RepoChangeCoordinator } from "./repo-change-coordinator.js";
 import { GenerationClock, type RepoChangeBatch } from "./repo-generation.js";
-import { repoCacheBase, repoCacheRoot } from "./repo-layout.js";
+import { repoCacheBase, repoCacheRoot, scanFamilySiblingIndex } from "./repo-layout.js";
 import { RepoResolver, type RepoSelector, type ResolvedRepo } from "./repo-resolver.js";
 import {
   DEFAULT_COLD_HIBERNATE_TTL_MS,
@@ -1106,6 +1106,11 @@ export class RepoRuntimeManager {
       if (dbPath === self || !existsSync(dbPath)) continue;
       const mtime = statSync(dbPath).mtimeMs;
       if (!best || mtime > best.mtime) best = { path: dbPath, mtime };
+    }
+    const fromDisk = scanFamilySiblingIndex(repoCacheBase(), family, self);
+    if (fromDisk && existsSync(fromDisk)) {
+      const mtime = statSync(fromDisk).mtimeMs;
+      if (!best || mtime > best.mtime) best = { path: fromDisk, mtime };
     }
     return best?.path;
   }

@@ -20,7 +20,7 @@ import { SqlKnowledgeGraph } from "../sql/knowledge-graph.js";
 import { buildSqlRegistryView } from "../sql/registry-view.js";
 import { readBundle, readMyBatisResource, replaceBundleEdges, updateBundleFacts, writeBundle, writeMyBatisResource } from "../sql/rows.js";
 import { internSym, symId } from "../sql/sym.js";
-import { readIndexCounts, readMeta, refreshIndexCounts, writeMeta } from "./progress.js";
+import { readIndexCounts, readMeta, refreshIndexCounts, writeBuildProgress, writeMeta } from "./progress.js";
 
 export type BuilderJobKind = "refresh" | "resources" | "reconcile" | "exit";
 export type BuilderJob = { id?: number; kind: BuilderJobKind; generation?: number; changed?: string[]; deleted?: string[] };
@@ -145,6 +145,7 @@ function finishIndex(db: IndexDatabase, generation: number, roots: readonly stri
 }
 
 async function parseChanged(
+  db: IndexDatabase,
   repoRoot: string,
   layout: LayoutContext,
   generation: number,
@@ -154,7 +155,9 @@ async function parseChanged(
   const cache = new ParseTreeCache({ ...DEFAULT_PARSE_TREE_CACHE_OPTIONS, maxEntries: 8 });
   const bundles: JavaFileBundle[] = [];
   const missing: string[] = [];
-  for (const inputPath of absolutePaths) {
+  const total = Math.max(1, absolutePaths.length);
+  for (const [index, inputPath] of absolutePaths.entries()) {
+    writeBuildProgress(db, { phase: "declare", done: index, total });
     try {
       const bundle = await parseJavaSourceFile({
         repoRoot, resolvedRepoRoot: repoRoot, inputPath, generation, backend, cache, layout
@@ -166,6 +169,7 @@ async function parseChanged(
       else throw err;
     }
   }
+  writeBuildProgress(db, { phase: "declare", done: absolutePaths.length, total });
   return { bundles, missing };
 }
 
@@ -215,7 +219,9 @@ async function applyRefresh(
     withTransaction(db, () => finishIndex(db, generation, roots));
     return;
   }
-  const parsed = await parseChanged(repoRoot, layout, generation, existing);
+  writeBuildProgress(db, { phase: "declare", done: 0, total: Math.max(1, existing.length) });
+  const parsed = await parseChanged(db, repoRoot, layout, generation, existing);
+  writeBuildProgress(db, { phase: "resolve", done: 0, total: Math.max(1, parsed.bundles.length) });
   applyParsedRefresh(db, generation, roots, [...uniqueDeleted, ...parsed.missing], parsed.bundles);
 }
 
@@ -240,6 +246,7 @@ async function applyResources(
   deletedInputs: readonly string[]
 ): Promise<void> {
   const layout = probeLayout(repoRoot);
+  writeBuildProgress(db, { phase: "declare", done: 0, total: Math.max(1, changedInputs.length + deletedInputs.length) });
   const namespaces = new Set<string>();
   const deletePaths: string[] = [];
   for (const input of deletedInputs) deletePaths.push((await resolveInput(repoRoot, input)).rel);
@@ -282,6 +289,7 @@ async function applyResources(
 async function applyReconcile(db: IndexDatabase, repoRoot: string, generation: number): Promise<void> {
   const layout = probeLayout(repoRoot);
   const roots = layout.sourceRoots.map(root => root.relativePath);
+  writeBuildProgress(db, { phase: "declare", done: 0, total: 1 });
   const discovered = await discoverJavaFiles(repoRoot, layout);
   const indexed = new Map(
     (prepareCached(db, "SELECT path, mtime_ms AS mtime, size AS size FROM file").all() as Array<{

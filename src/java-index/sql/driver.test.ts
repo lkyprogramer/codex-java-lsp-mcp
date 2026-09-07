@@ -81,6 +81,10 @@ test("vacuumInto copies a file database to a new path", () => {
   }
 });
 
+test("vacuumInto rejects quoted paths", () => {
+  assert.throws(() => vacuumInto("/tmp/a.sqlite", "/tmp/o'reilly.sqlite"), /unsafe dest/);
+});
+
 test("schemaVersion mismatch drops all tables and rebuilds", () => {
   const db = openIndexDb(":memory:");
   try {

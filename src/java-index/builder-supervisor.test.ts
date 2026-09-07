@@ -204,3 +204,32 @@ test("coldBuild uses a one-shot child and the same watchdog", async () => {
     await supervisor.stop();
   }
 });
+
+test("cold stall SIGKILLs the hung child before restarting", async () => {
+  const { supervisor, logPath } = await setup({
+    IOD_FAKE_COLD_HANG: "1",
+    IOD_STALL_MS: "80",
+    IOD_WATCHDOG_MS: "20"
+  });
+  try {
+    await assert.rejects(() => supervisor.coldBuild(), /stall/i);
+    const events = await readLog(logPath);
+    const pids = events.filter(line => line.startsWith("spawn ") && line.endsWith(" cold")).map(line => Number(line.split(" ")[1]));
+    assert.ok(pids.length >= 2, `expected restarts, got ${pids.join(",")}`);
+    for (const pid of pids) {
+      assert.equal(alive(pid), false, `stalled cold pid ${pid} still alive`);
+    }
+  } finally {
+    await supervisor.stop();
+  }
+});
+
+function alive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}

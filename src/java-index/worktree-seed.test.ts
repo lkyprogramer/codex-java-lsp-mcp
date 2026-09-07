@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { cp, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -9,6 +10,7 @@ import { runSqlColdBuild } from "./builder/cold-build.js";
 import { close, openIndexDb } from "./sql/driver.js";
 import { ensureSchema } from "./sql/schema.js";
 import { SqlJavaIndexClient } from "./sql/sql-client.js";
+import { scanFamilySiblingIndex } from "../repo-layout.js";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const fixturesRoot = path.resolve(dirname, "..", "..", "fixtures", "java-index-v2");
@@ -56,5 +58,24 @@ test("second family root opens via VACUUM INTO and matches sibling counts", asyn
     await supervisor.stop();
     await rm(primaryRepo, { recursive: true, force: true });
     await rm(secondaryRepo, { recursive: true, force: true });
+  }
+});
+
+test("scanFamilySiblingIndex picks the newest same-family index.sqlite on disk", async () => {
+  const cache = await mkdtemp(path.join(tmpdir(), "iod-family-scan-"));
+  const older = path.join(cache, "aaaa");
+  const newer = path.join(cache, "bbbb");
+  mkdirSync(older);
+  mkdirSync(newer);
+  writeFileSync(path.join(older, "index.sqlite"), "old");
+  await new Promise(resolve => setTimeout(resolve, 20));
+  writeFileSync(path.join(newer, "index.sqlite"), "new");
+  writeFileSync(path.join(older, "repo-meta.json"), JSON.stringify({ familyHash: "fam", repoHash: "aaaa" }));
+  writeFileSync(path.join(newer, "repo-meta.json"), JSON.stringify({ familyHash: "fam", repoHash: "bbbb" }));
+  const self = path.join(cache, "cccc", "index.sqlite");
+  try {
+    assert.equal(scanFamilySiblingIndex(cache, "fam", self), path.join(newer, "index.sqlite"));
+  } finally {
+    await rm(cache, { recursive: true, force: true });
   }
 });

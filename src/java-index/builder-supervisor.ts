@@ -60,6 +60,11 @@ function progressFingerprint(dbPath: string): string {
   }
 }
 
+function waitForExit(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
+  return once(child, "exit").then(() => undefined, () => undefined);
+}
+
 function failResult(id: number, error: string): BuilderSupervisorResult {
   return { id, ok: false, indexedGeneration: 0, files: 0, error };
 }
@@ -219,13 +224,17 @@ export class BuilderSupervisor {
     try {
       const outcome = await Promise.race([
         exit.then(([code, signal]) => ({ type: "exit" as const, code, signal })),
-        stalled.then(() => ({ type: "stall" as const }))
+        stalled.then(() => ({ type: "stall" as const }), () => ({ type: "stall" as const }))
       ]);
-      if (outcome.type === "stall") throw new Error("builder stalled");
+      if (outcome.type === "stall") {
+        child.kill("SIGKILL");
+        await waitForExit(child);
+        throw new Error("builder stalled");
+      }
       if (outcome.code !== 0) throw new Error(`cold-build exited ${outcome.code ?? outcome.signal ?? "unknown"}`);
     } finally {
       this.clearWatchdog();
-      this.clearChild(child);
+      if (this.child === child) this.clearChild(child);
     }
   }
 
@@ -342,14 +351,16 @@ export class BuilderSupervisor {
     } else {
       child.kill("SIGKILL");
     }
-    const done = once(child, "exit");
-    const timeout = new Promise<void>(resolve => {
-      setTimeout(() => {
-        child.kill("SIGKILL");
-        resolve();
-      }, 1000);
-    });
-    await Promise.race([done, timeout]);
+    const timedOut = await Promise.race([
+      waitForExit(child).then(() => false),
+      new Promise<boolean>(resolve => {
+        setTimeout(() => resolve(true), 1000);
+      })
+    ]);
+    if (timedOut) {
+      child.kill("SIGKILL");
+      await waitForExit(child);
+    }
     this.clearChild(child);
   }
 
