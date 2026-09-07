@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createJavaParserBackend, type JavaSyntaxTree } from "./java-parser-backend.js";
-import { extractFromParsedTree, type ExtractJavaInput } from "./ast-extractor.js";
+import { createJavaParserBackend, type JavaSyntaxTree } from "../java-parser-backend.js";
+import { extractFromParsedTree, type ExtractJavaInput } from "../ast-extractor.js";
 import {
   ParseTreeCache,
   computeSingleEdit,
   effectiveParseTreeSourceBudget,
   refreshParseTree,
   type ParseTreeCacheOptions
-} from "./parse-tree-cache.js";
+} from "./parse-cache.js";
 
 function assertValidEdit(oldSource: string, newSource: string, edit: ReturnType<typeof computeSingleEdit>): void {
   assert.ok(edit, "expected an edit to be computed");

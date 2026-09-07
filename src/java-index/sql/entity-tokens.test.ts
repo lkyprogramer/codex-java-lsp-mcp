@@ -10,7 +10,7 @@ import type { JavaFileBundle, JavaTypeFacts } from "../index-types.js";
 import { parseJavaSourceFile } from "../java-index-file-parse.js";
 import { createJavaParserBackend } from "../java-parser-backend.js";
 import { buildTypeRegistryView, JavaNameResolver } from "../name-resolver.js";
-import { DEFAULT_PARSE_TREE_CACHE_OPTIONS, ParseTreeCache } from "../parse-tree-cache.js";
+import { DEFAULT_PARSE_TREE_CACHE_OPTIONS, ParseTreeCache } from "../builder/parse-cache.js";
 import { close, openIndexDb } from "./driver.js";
 import { readEntityRecords, replaceAllEntities } from "./entity-tokens.js";
 import { ensureSchema } from "./schema.js";

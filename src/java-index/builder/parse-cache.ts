@@ -1,4 +1,4 @@
-import type { JavaInputEdit, JavaParserBackend, JavaPoint, JavaSyntaxTree } from "./java-parser-backend.js";
+import type { JavaInputEdit, JavaParserBackend, JavaPoint, JavaSyntaxTree } from "../java-parser-backend.js";
 
 export type ParseTreeCacheOptions = {
   maxEntries: number;

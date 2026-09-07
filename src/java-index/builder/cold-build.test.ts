@@ -14,7 +14,7 @@ import { createJavaParserBackend } from "../java-parser-backend.js";
 import { discoverJavaFiles, discoverMyBatisResourceFiles } from "../manifest.js";
 import { extractMyBatisMapperFacts } from "../mybatis-xml-extractor.js";
 import { buildTypeRegistryView, JavaNameResolver } from "../name-resolver.js";
-import { DEFAULT_PARSE_TREE_CACHE_OPTIONS, ParseTreeCache } from "../parse-tree-cache.js";
+import { DEFAULT_PARSE_TREE_CACHE_OPTIONS, ParseTreeCache } from "./parse-cache.js";
 import { probeLayout } from "../../layout-probe.js";
 import { KnowledgeGraphBuilder } from "../../java-knowledge/graph-builder.js";
 import { recordsFromBundle } from "../entity-search.js";

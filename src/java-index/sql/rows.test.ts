@@ -10,7 +10,7 @@ import { parseJavaSourceFile } from "../java-index-file-parse.js";
 import type { JavaFileBundle } from "../index-types.js";
 import { extractMyBatisMapperFacts } from "../mybatis-xml-extractor.js";
 import { createJavaParserBackend } from "../java-parser-backend.js";
-import { DEFAULT_PARSE_TREE_CACHE_OPTIONS, ParseTreeCache } from "../parse-tree-cache.js";
+import { DEFAULT_PARSE_TREE_CACHE_OPTIONS, ParseTreeCache } from "../builder/parse-cache.js";
 import { close, openIndexDb } from "./driver.js";
 import { ensureSchema } from "./schema.js";
 import { readBundle, readMyBatisResource, writeBundle, writeMyBatisResource } from "./rows.js";

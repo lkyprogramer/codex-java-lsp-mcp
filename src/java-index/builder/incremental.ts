@@ -11,7 +11,7 @@ import { createJavaParserBackend } from "../java-parser-backend.js";
 import { discoverJavaFiles } from "../manifest.js";
 import { extractMyBatisMapperFacts } from "../mybatis-xml-extractor.js";
 import { JavaNameResolver } from "../name-resolver.js";
-import { DEFAULT_PARSE_TREE_CACHE_OPTIONS, ParseTreeCache } from "../parse-tree-cache.js";
+import { DEFAULT_PARSE_TREE_CACHE_OPTIONS, ParseTreeCache } from "./parse-cache.js";
 import { bindChunks, inClause, prepareCached, withTransaction, type IndexDatabase } from "../sql/driver.js";
 import { rebuildEntityDf, writeEntityRecord } from "../sql/entity-tokens.js";
 import { SqlFactsStore } from "../sql/facts-store.js";
