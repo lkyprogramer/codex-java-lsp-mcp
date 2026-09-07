@@ -8,7 +8,7 @@
 
 它不是完整 IDE，也不是通用语言平台。项目边界以 canonical `repoRoot` 和 `repoHash` 为准，`projectId` 只作为 alias/display name；所有请求都受绝对 deadline、仓库边界和完整性状态约束。
 
-当前生产形态（2026-08-24 cutover 之后）：本机 Codex 走共享 HTTP daemon `http://127.0.0.1:38456/mcp`。公开工具是 `java_status`、`java_impact`、`java_symbol`、`java_diagnostics`、`java_runtime`（没有 `java_context` / `java_references` / `java_restart` / `java_shutdown`）。索引真源是 JavaIndex v4 快照，不是 SourceIndex。替换正在使用的 daemon 用 `./install-runtime.sh`（不要加 `--activate-http`）；操作真源是 [生产切流手册](docs/phase-f/production-cutover-runbook.md)。下一周期计划见 [token accuracy 计划](docs/deep/codex-java-lsp-mcp-next-frontier-token-accuracy-plan-2026-08-24.md)。
+当前生产形态：本机 Codex 走共享 HTTP daemon `http://127.0.0.1:38456/mcp`。公开工具是 `java_status`、`java_impact`、`java_symbol`、`java_diagnostics`、`java_runtime`。索引真源是 on-disk SQLite `index.sqlite`（`SqlJavaIndexClient`），不是 SourceIndex / 堆快照。替换正在使用的 daemon 用 `./install-runtime.sh`（不要加 `--activate-http`），且须等 index-on-disk P3-T4 证据与用户确认。操作真源是 [生产切流手册](docs/phase-f/production-cutover-runbook.md)。
 
 ## 目录
 

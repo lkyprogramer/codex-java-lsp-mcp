@@ -1,6 +1,6 @@
 # Index-on-Disk 重构：AI 自主开发执行手册（Phase / Task 级）
 
-状态：ADOPTED（R0，2026-09-07）；**R1 修订（2026-09-07，§3.9）：P0-G4 阻塞裁决 → schema v3 归一化 + P0-T8 / P0-T9，用户已批准（2026-09-07）**
+状态：IMPLEMENTED（P3）（2026-09-07）；R1 修订（§3.9 schema v3）仍适用。生产切流仍须 T4 证据 + 用户确认。
 上位方案：`codex-java-lsp-mcp-index-on-disk-rearchitecture-plan-2026-09-06.md`（以下称「方案」）。本手册把方案 §7 的 X0–X5 细化为 4 个 Phase、23 个 Task，并规定 Task 级与 Phase 级的验证、Phase 末的子代理 review 协议。方案与本手册冲突时，以本手册为准（本手册基于三份只读代码探索写成，锚点更准）。
 用户决定：**不留过渡期**，重构期间不使用本 LSP；以最快切换为目标。
 

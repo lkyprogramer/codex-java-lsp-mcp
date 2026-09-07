@@ -1,8 +1,10 @@
 # HANDOFF
 
-## daemon 生产化三轨（2026-08-27 切流）
+## daemon 生产化三轨（index-on-disk P3）
 
-计划 §9.5 R3：**允许合 main + 生产切流**。HTTP daemon `http://127.0.0.1:38456/mcp`，LaunchAgent `com.lky.codex-java-lsp-mcp`。热集 `hydrate:true`，worker cap **1536**，快照 schema v5，热集豁免 hibernate recycle 与 index-idle。pin：`lishuedu`、`exam-parent-v3`、`cipherlink`、`lishu-v2`。不要把 `fat-service` / `analysis-develop-analysis` / `recognition-master` 加回 `projects.json`。不要 `--activate-http`、不要 `JAVA_LSP_ENGINE`。回滚：`"$HOME/Library/Application Support/codex-java-lsp-mcp/daemonctl.sh" rollback-release`。
+索引真源是 SQLite `index.sqlite`（schema v3 intern）+ `SqlJavaIndexClient`，不是 JavaIndex v4/v5 堆快照。builder 子进程 `--mode serve` 串行写库；daemon 只读打开，空闲关连接。不要再加 heap/RSS 看护、hydrate、hibernate recycle。pin：`lishuedu`、`exam-parent-v3`、`cipherlink`、`lishu-v2`。不要 `--activate-http`、不要 `JAVA_LSP_ENGINE`。生产切流仍须 **P3-T4 证据 + 用户确认** 后 `./install-runtime.sh`。回滚：`"$HOME/Library/Application Support/codex-java-lsp-mcp/daemonctl.sh" rollback-release`。
+
+已删堆 worker/client；图 RPC 相对旧 heap 仍是 SQL 超集（P1 triage）。陷阱：不要把 `fat-service` 加回 pins；不要第四个 live daemon；canary 用 `:38457`。
 
 计划真源：`docs/deep/codex-java-lsp-mcp-daemon-stability-and-memory-plan-2026-08-25.md` §8。closeout：`docs/phase-d/w1-closeout.json`、`s1`–`s4`、`m1`–`m4`、`v1-acceptance.md`。探针：`scripts/probe-daemon-acceptance.mjs`。
 

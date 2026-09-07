@@ -1,6 +1,6 @@
 # Daemon 稳定性与内存治理方案（W/S/M 三轨 + V 验收）
 
-- 状态：ADOPTED（R3，2026-08-27 00:40：§9.5 D1 footprint 终局裁决——phys_footprint 被证明是随压缩器状态呼吸的口径（同进程零负载 980↔1346 往返实测），静态阈值门改为「活内存 ≤700 + footprint 封顶 ≤1433 无 ratchet」判据；§9.4 全绿成立，**允许合 main + 生产切流**。R2，2026-08-26 晚：新增 §9 上线复核裁决——live 实测发现 idle-close 后首查报错（含热 pin，行为级 blocker）与 footprint 1041 中 914 MiB 为 arena 死页（RSS 16 MiB）两项关键事实；拍板 M2b 恢复热集豁免 + S5 冷启动预算兜底 + D3-idle 新门 + D1 双口径受控 soak；合 main 前置清单见 §9.4。R1（2026-08-26 早）：§8 裁决 methods 段 890 MiB 解析瞬时峰值 → S4 分块快照根治、D1 修订 1024、新增 D3c）
+- 状态：ADOPTED（R3，2026-08-27）；**JavaIndex 部分已由 index-on-disk 取代（P3，2026-09-07）**。原 R3 文：§9.5 D1 footprint 终局裁决——phys_footprint 被证明是随压缩器状态呼吸的口径（同进程零负载 980↔1346 往返实测），静态阈值门改为「活内存 ≤700 + footprint 封顶 ≤1433 无 ratchet」判据；§9.4 全绿成立，**允许合 main + 生产切流**。R2，2026-08-26 晚：新增 §9 上线复核裁决——live 实测发现 idle-close 后首查报错（含热 pin，行为级 blocker）与 footprint 1041 中 914 MiB 为 arena 死页（RSS 16 MiB）两项关键事实；拍板 M2b 恢复热集豁免 + S5 冷启动预算兜底 + D3-idle 新门 + D1 双口径受控 soak；合 main 前置清单见 §9.4。R1（2026-08-26 早）：§8 裁决 methods 段 890 MiB 解析瞬时峰值 → S4 分块快照根治、D1 修订 1024、新增 D3c
 - 范围：HTTP daemon 的事件循环冻结、超时死亡螺旋、内存账本三类生产问题的彻底解决
 - 输入证据：本仓代码核实（本文所有行号均已人工确认）、grok 排查报告（`/Users/luo/Documents/grok/lsp1.md`、`lsp2.md`）、2026-08-25 上午的现场诊断（进程采样、遥测 JSONL、daemon 日志）
 - 生效 pin：`lishuedu`、`exam-parent-v3`、`cipherlink`、`lishu-v2`（4 个 lspEnabled，来源 `~/.config/codex-java-lsp/projects.json`，已核实）

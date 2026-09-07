@@ -1,6 +1,6 @@
 # codex-java-lsp-mcp：JavaIndex 落盘重构方案（Index-on-Disk，SQLite 单写者架构）
 
-状态：ADOPTED（R1，2026-09-07）
+状态：IMPLEMENTED（P3）（2026-09-07）。JavaIndex 堆路径已由 index-on-disk 取代；生产切流仍须 T4 + 用户确认。
 执行手册：`codex-java-lsp-mcp-index-on-disk-ai-execution-manual-2026-09-07.md`（Phase/Task 级，含子代理 review 协议）。**§7 的 X0–X5 由手册的 P0–P3 取代；两者冲突以手册为准。** R1 变更：(1) 用户决定不留过渡期，§9 作废；(2) 迁移策略细化为「适配器复用算法模块」——`SqlFactsStore` / `SqlKnowledgeGraph` 实现现有 `JavaIndexStore` 读接口与 `KnowledgeGraphStore` 同形接口，`plan-query / graph-search / graph-walk / call-resolver / *-edge-builder / graph-builder` 原样复用，只替换 7 处全表扫描；(3) entity search **不用 FTS5**（IDF 公式与现有 BM25 不同会破坏 0 diff），改为 token 表 + 抽出的打分纯函数；(4) 事实存储采用「索引标量列 + 每行 JSONB 原样 facts」混合模型，`files()` 物化即反序列化，消灭字段映射漂移；§2.3 schema 以手册 P0-T1 为准。
 作者：Cursor agent（基于 `codex/fs-track` 至 `6885b17`、`docs/phase-fs/fsr-24h-soak-report-2026-09-06.md`、live pid 1611 现场）
 取代：`codex-java-lsp-mcp-worktree-family-memory-sharing-plan-2026-08-27.md` §9 FSR 卡（FSR0–FSR4 全部作废）；`codex-java-lsp-mcp-memory-footprint-optimization-plan-2026-08-21.md` 的列式/快照路线（M1–M6 产物随本方案删除）
