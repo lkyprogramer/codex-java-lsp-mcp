@@ -11,6 +11,8 @@
 
 P0 stops here. Manual P0-G4 required `zlib.deflateRawSync` on `facts` and a remeasure; the remeasure is still over the 350 MB cap. No remaining in-schema compression step is specified.
 
+**User 2026-09-07:** keep P0 at this blocked report; do not raise G4, do not change the frozen schema, do not defer entity tables in-phase, do not write `p0-closeout.json`, do not tag `iod/P0`, **do not start P1** until a later explicit instruction.
+
 ## Measured gates (lishuedu cold build, `86de82e`)
 
 Command:
