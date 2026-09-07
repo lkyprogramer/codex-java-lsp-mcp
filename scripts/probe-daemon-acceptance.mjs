@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // input: a healthy loopback daemon at JAVA_LSP_HTTP_PORT (default 38456).
-// output: JSON with D2/D3/D4/D7 probe numbers; D1 footprint is sampled if `footprint` exists.
-// pos: V1 acceptance script for the 2026-08-25 daemon stability/memory plan.
+// output: JSON with D2/D4/D6 and P2-G2/G5 probe numbers.
+// pos: P3-T3 acceptance: drop D3a/D3b/D7/FSX_*; index-on-disk SQLite daemon.
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { execFileSync, spawn } from "node:child_process";
@@ -59,9 +59,8 @@ async function call(client, name, args) {
 
 function daemonPid() {
   try {
-    return execFileSync("pgrep", ["-f", "max-old-space-size=768.*http-server.js"], { encoding: "utf8" })
-      .trim()
-      .split("\n")[0] || null;
+    const out = execFileSync("lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-t"], { encoding: "utf8" }).trim();
+    return out.split("\n")[0] || null;
   } catch {
     return null;
   }
@@ -182,81 +181,53 @@ const d4retry = await call(client, "java_impact", {
   semanticPolicy: "fast"
 });
 
-const metricsBefore = existsSync(tornaMetrics) ? statSync(tornaMetrics).mtimeMs : null;
-if (existsSync(tornaSnap) && process.env.JAVA_LSP_V1_KEEP_TORNA_SNAP !== "1") {
-  unlinkSync(tornaSnap);
+function rssMiB(targetPid) {
+  if (!targetPid) return null;
+  try {
+    return Number(execFileSync("/bin/ps", ["-o", "rss=", "-p", String(targetPid)], { encoding: "utf8" }).trim()) / 1024;
+  } catch {
+    return null;
+  }
 }
-const d7status = await call(client, "java_status", { repoRoot: tornaRoot });
-let d7payload;
-try {
-  d7payload = JSON.parse(d7status.text);
-} catch {
-  d7payload = { parseError: d7status.text.slice(0, 400) };
-}
-const d7impact = await call(client, "java_impact", {
-  repoRoot: tornaRoot,
-  anchors: [{
-    file: `${tornaRoot}/apps/lishu-education-backend/src/main/java/com/lishu/edu/education/LishuEducationBackendApplication.java`,
-    line: 1,
-    column: 1
-  }],
+
+await new Promise(resolve => setTimeout(resolve, 5000));
+const g2 = await call(client, "java_impact", {
+  projectId: "lishu-v2",
+  anchors: [{ file: pins["lishu-v2"].file, line: 1, column: 1 }],
   mode: "minimal",
   semanticPolicy: "fast",
   deadlineMs: 15000
 });
+const rssAfterQuery = rssMiB(pid);
 await client.close().catch(() => undefined);
 
-const seed = d7payload.javaIndex?.worktreeSeed ?? null;
-const metricsAfter = existsSync(tornaMetrics) ? statSync(tornaMetrics).mtimeMs : null;
+const d2 = health.timeouts === 0 && health.p99Ms < 100;
+const d4 = !d4retry.isError && d4retry.elapsedMs <= 500;
+const d6 = !d6status.toolFail && d6status.elapsedMs <= 3000;
+const g2pass = !g2.toolFail && g2.elapsedMs <= 300;
+const g5pass = rssAfterQuery !== null && rssAfterQuery <= 250;
 const report = {
   health,
   pid,
-  footprintMiB: await footprintMiB(pid),
   d6: {
     elapsedMs: d6status.elapsedMs,
     isError: d6status.isError,
     toolFail: d6status.toolFail,
     errorText: d6status.toolFail ? d6status.text.slice(0, 240) : ""
   },
-  impacts,
   d4: {
     shortElapsedMs: d4short.elapsedMs,
     shortError: d4short.isError,
     retryElapsedMs: d4retry.elapsedMs,
-    retryError: d4retry.isError,
-    rangeGap: d4short.text.includes("Read-range query exceeded")
+    retryError: d4retry.isError
   },
-  d7: {
-    statusElapsedMs: d7status.elapsedMs,
-    statusError: d7status.isError,
-    seed,
-    impactError: d7impact.isError,
-    childSpawned: metricsAfter !== null && metricsBefore !== null && metricsAfter > metricsBefore + 500
-  }
+  g2: { elapsedMs: g2.elapsedMs, toolFail: g2.toolFail },
+  g5: { rssAfterQueryMiB: rssAfterQuery },
+  gates: { D2: d2, D4: d4, D6: d6, "P2-G2": g2pass, "P2-G5": g5pass }
 };
-
-const indexedFiles = Number(d7payload.javaIndex?.files ?? 0);
-const reuseDenom = Math.max(indexedFiles, (seed?.reusedFiles ?? 0) + (seed?.dirtyFiles ?? 0), 1);
-const d2 = health.timeouts === 0 && health.p99Ms < 100;
-const d3a = Object.values(impacts).filter(row => row.hot).every(row => !row.toolFail && row.elapsedMs <= 3000);
-const d3b = Object.values(impacts).filter(row => !row.hot).every(row => !row.toolFail);
-const d4 = !d4retry.isError && d4retry.elapsedMs <= 500;
-const d6 = !d6status.toolFail && d6status.elapsedMs <= 3000;
-const d7 = (seed?.completion === "SEEDED_DEGRADED" || seed?.completion === "RECONCILED_COMPLETE")
-  && (seed?.reusedFiles ?? 0) >= 0.9 * reuseDenom
-  && report.d7.childSpawned === false
-  && d7status.elapsedMs <= 15000
-  && !d7status.isError;
-const logWindow = scanDaemonLogWindow();
-const fsxFatal = logWindow.fatal === 0;
-const fsxEbadf = logWindow.ebadf === 0;
-const fsxCrashMarkerSource = crashMarkerSourcePresent();
-report.d7.indexedFiles = indexedFiles;
-report.d7.reuseDenom = reuseDenom;
-report.fsx = { ...logWindow, crashMarkerSource: fsxCrashMarkerSource };
-report.gates = { D2: d2, D3a: d3a, D3b: d3b, D4: d4, D6: d6, D7: d7, FSX_FATAL: fsxFatal, FSX_EBADF: fsxEbadf, FSX_CRASH_MARKER: fsxCrashMarkerSource };
-
-const out = process.env.JAVA_LSP_V1_PROBE_OUT ?? path.join(process.cwd(), "docs/phase-d/v1-probe.json");
+const out = process.env.JAVA_LSP_V1_PROBE_OUT ?? path.join(process.cwd(), "docs/phase-x/p3-probe.json");
 writeFileSync(out, JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report, null, 2));
-process.exitCode = d2 && d3a && d3b && d4 && d6 && d7 && fsxFatal && fsxEbadf && fsxCrashMarkerSource ? 0 : 2;
+process.exitCode = d2 && d4 && d6 && g2pass && g5pass ? 0 : 2;
+process.exit();
+
