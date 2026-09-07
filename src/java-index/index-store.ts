@@ -666,6 +666,12 @@ export class JavaIndexStore {
     return hits;
   }
 
+  *iterTypes(): IterableIterator<JavaTypeFacts> { yield* this.typesById.values(); }
+  *iterFields(): IterableIterator<JavaFieldFacts> { yield* this.fieldsById.values(); }
+  *iterMethods(): IterableIterator<JavaMethodFacts> { yield* this.methodsById.values(); }
+  *iterEdges(): IterableIterator<StaticEdge> { yield* this.edgesById.values(); }
+  *iterFiles(): IterableIterator<JavaFileFacts> { yield* this.filesByPath.values(); }
+
   private refTargetsType(ref: JavaTypeRef, target: JavaTypeFacts, implementerFile?: string): boolean {
     if (resolvedRepoTypeIds(ref).includes(target.typeId)) return true;
     if (ref.simpleName !== target.simpleName) return false;

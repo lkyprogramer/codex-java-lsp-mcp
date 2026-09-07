@@ -7,6 +7,7 @@ import type {
   JavaMethodFacts,
   JavaTypeFacts,
   JavaTypeLookupResult,
+  StaticEdge,
   StaticEdgeKind
 } from "./index-types.js";
 import type { MyBatisMapperResourceFacts } from "./mybatis-types.js";
@@ -45,4 +46,12 @@ export type FactsReader = {
   };
   implementersOfAny(typeIds: readonly string[]): string[];
   typesBySimpleNameOrFqn(simple: string, fqn: string): JavaTypeFacts[];
+};
+
+export type FactsIter = {
+  iterTypes(): IterableIterator<JavaTypeFacts>;
+  iterFields(): IterableIterator<JavaFieldFacts>;
+  iterMethods(): IterableIterator<JavaMethodFacts>;
+  iterEdges(): IterableIterator<StaticEdge>;
+  iterFiles(): IterableIterator<JavaFileFacts>;
 };

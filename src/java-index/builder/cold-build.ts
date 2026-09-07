@@ -2,13 +2,10 @@ import { createHash } from "node:crypto";
 import { realpath, readFile } from "node:fs/promises";
 import { cpus } from "node:os";
 import path from "node:path";
-import { inflateRawSync } from "node:zlib";
 import { probeLayout } from "../../layout-probe.js";
 import { buildStaticEdges, resolveFileRefs } from "../edge-builder.js";
 import { recordsFromBundle } from "../entity-search.js";
-import type { JavaIndexStore } from "../index-store.js";
-import type { JavaAnnotationFact, JavaFileBundle, JavaMethodFacts, JavaTypeFacts, JavaTypeKind, JavaTypeRef } from "../index-types.js";
-import { javaFileId } from "../stable-id.js";
+import type { JavaFileBundle } from "../index-types.js";
 import { parseJavaSourceFile } from "../java-index-file-parse.js";
 import { createJavaParserBackend } from "../java-parser-backend.js";
 import { discoverJavaFiles, discoverMyBatisResourceFiles } from "../manifest.js";
@@ -233,10 +230,6 @@ export async function runSqlColdBuild(options: SqlColdBuildOptions): Promise<Sql
   return { ok: true, parseFailed, parseFailures, ...counts };
 }
 
-type SlimType = Pick<JavaTypeFacts, "typeId" | "fqn" | "simpleName" | "fileId">;
-
-const EMPTY_RANGE = { start: { line: 0, column: 0 }, end: { line: 0, column: 0 } };
-
 function isFatalIndexIoError(err: unknown): boolean {
   if (typeof err === "object" && err !== null && "code" in err) {
     const code = String((err as { code: unknown }).code);
@@ -245,195 +238,10 @@ function isFatalIndexIoError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err);
   return /invalid repo-relative|not within the repo/.test(message);
 }
-const STUB_PARAM = {
-  name: "",
-  type: { text: "", simpleName: "", typeArguments: [] as JavaTypeRef[], arrayDepth: 0, resolution: { state: "UNRESOLVED" as const } },
-  varargs: false,
-  annotations: [] as JavaAnnotationFact[],
-  range: EMPTY_RANGE
-};
-const STUB_PARAMS = Array.from({ length: 24 }, (_, arity) => Array.from({ length: arity }, () => STUB_PARAM));
-
-function inflateFactsJson(value: unknown): string {
-  if (!(value instanceof Uint8Array)) throw new Error("expected facts blob");
-  return inflateRawSync(value).toString("utf8");
-}
-
-function jsonTopLevelString(json: string, key: string): string {
-  const token = `"${key}":`;
-  const start = json.indexOf(token);
-  if (start < 0) return "";
-  let index = start + token.length;
-  while (json[index] === " " || json[index] === "\n") index += 1;
-  if (json[index] !== "\"") return "";
-  index += 1;
-  let out = "";
-  while (index < json.length) {
-    const ch = json[index]!;
-    if (ch === "\"") return out;
-    if (ch === "\\") {
-      out += json[index + 1] ?? "";
-      index += 2;
-      continue;
-    }
-    out += ch;
-    index += 1;
-  }
-  return out;
-}
-
-function jsonTopLevelStringArray(json: string, key: string): string[] {
-  const token = `"${key}":`;
-  const start = json.indexOf(token);
-  if (start < 0) return [];
-  let index = start + token.length;
-  while (json[index] === " " || json[index] === "\n") index += 1;
-  if (json[index] !== "[") return [];
-  const from = index;
-  let depth = 0;
-  for (; index < json.length; index += 1) {
-    const ch = json[index]!;
-    if (ch === "[") depth += 1;
-    else if (ch === "]") {
-      depth -= 1;
-      if (depth === 0) {
-        try {
-          const parsed = JSON.parse(json.slice(from, index + 1)) as unknown;
-          return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
-        } catch {
-          return [];
-        }
-      }
-    }
-  }
-  return [];
-}
-
-function loadMethodStub(db: IndexDatabase, methodId: string): JavaMethodFacts | undefined {
-  const row = prepareCached(
-    db,
-    `SELECT s.text AS methodId, os.text AS ownerTypeId, m.name AS name, m.is_ctor AS isCtor, m.arity AS arity, m.facts AS facts
-     FROM method m JOIN sym s ON s.id=m.sym JOIN sym os ON os.id=m.owner_sym WHERE s.text=?`
-  ).get(methodId) as {
-    methodId?: unknown;
-    ownerTypeId?: unknown;
-    name?: unknown;
-    isCtor?: unknown;
-    arity?: unknown;
-    facts?: unknown;
-  } | undefined;
-  if (typeof row?.methodId !== "string" || typeof row.ownerTypeId !== "string" || typeof row.name !== "string") {
-    return undefined;
-  }
-  const json = inflateFactsJson(row.facts);
-  const arity = Number(row.arity) || 0;
-  return {
-    methodId: row.methodId,
-    ownerTypeId: row.ownerTypeId,
-    name: row.name,
-    constructor: Number(row.isCtor) === 1,
-    signatureKey: jsonTopLevelString(json, "signatureKey"),
-    range: EMPTY_RANGE,
-    modifiers: jsonTopLevelStringArray(json, "modifiers"),
-    annotations: [],
-    typeParameters: [],
-    parameters: STUB_PARAMS[arity] ?? Array.from({ length: arity }, () => STUB_PARAM),
-    throws: [],
-    callSites: [],
-    localTypes: []
-  };
-}
-
-function loadTypeStub(db: IndexDatabase, typeId: string): JavaTypeFacts | undefined {
-  const row = prepareCached(
-    db,
-    `SELECT s.text AS typeId, t.fqn AS fqn, t.simple_name AS simpleName, t.kind AS kind, f.path AS path, t.facts AS facts
-     FROM type t JOIN sym s ON s.id=t.sym JOIN file f ON f.id=t.file_id WHERE s.text=?`
-  ).get(typeId) as {
-    typeId?: unknown;
-    fqn?: unknown;
-    simpleName?: unknown;
-    kind?: unknown;
-    path?: unknown;
-    facts?: unknown;
-  } | undefined;
-  if (typeof row?.typeId !== "string" || typeof row.simpleName !== "string" || typeof row.kind !== "string" || typeof row.path !== "string") {
-    return undefined;
-  }
-  const fieldIds = prepareCached(
-    db,
-    `SELECT s.text AS id FROM field f JOIN sym s ON s.id=f.sym JOIN sym os ON os.id=f.owner_sym
-     WHERE os.text=? ORDER BY f.sym`
-  )
-    .all(row.typeId)
-    .map(item => item.id)
-    .filter((id): id is string => typeof id === "string");
-  const methodIds = prepareCached(
-    db,
-    `SELECT s.text AS id FROM method m JOIN sym s ON s.id=m.sym JOIN sym os ON os.id=m.owner_sym
-     WHERE os.text=? ORDER BY m.sym`
-  )
-    .all(row.typeId)
-    .map(item => item.id)
-    .filter((id): id is string => typeof id === "string");
-  return {
-    typeId: row.typeId,
-    ...(typeof row.fqn === "string" ? { fqn: row.fqn } : {}),
-    simpleName: row.simpleName,
-    kind: row.kind as JavaTypeKind,
-    fileId: javaFileId(row.path),
-    range: EMPTY_RANGE,
-    modifiers: jsonTopLevelStringArray(inflateFactsJson(row.facts), "modifiers"),
-    annotations: [],
-    typeParameters: [],
-    extends: [],
-    implements: [],
-    permits: [],
-    fieldIds,
-    methodIds,
-    confidence: 0
-  };
-}
-
-function sqlStoreAsIndex(db: IndexDatabase, sql: SqlFactsStore, types: readonly SlimType[]): JavaIndexStore {
-  return {
-    typesById: {
-      get: (id: string) => loadTypeStub(db, id),
-      has: (id: string) => prepareCached(db, "SELECT 1 AS n FROM type t JOIN sym s ON s.id=t.sym WHERE s.text=?").get(id) !== undefined,
-      values: () => types
-    },
-    fieldsById: {
-      get: (id: string) => sql.fieldsById.get(id),
-      values: () => sql.iterFields()
-    },
-    methodsById: {
-      get: (id: string) => loadMethodStub(db, id),
-      values: () => sql.iterMethods()
-    },
-    filesByPath: {
-      get: (path: string) => sql.filesByPath.get(path),
-      values: () => sql.iterFiles()
-    },
-    edgesById: {
-      values: () => sql.iterEdges()
-    },
-    typeByFqn: (fqn: string) => {
-      const typeId = sql.typeIdByFqn.get(fqn);
-      return typeId ? loadTypeStub(db, typeId) : undefined;
-    },
-    myBatisResourceForNamespace: (ns: string) => sql.myBatisResourceForNamespace(ns),
-    implementers: (typeId: string, limit?: number) => sql.implementers(typeId, limit)
-  } as unknown as JavaIndexStore;
-}
 
 function writeKnowledgeAndEntities(db: IndexDatabase, generation: number): void {
   const sql = new SqlFactsStore(db);
   const graph = new SqlKnowledgeGraph(db);
-  const types: SlimType[] = [];
-  for (const type of sql.iterTypes()) {
-    types.push({ typeId: type.typeId, fqn: type.fqn, simpleName: type.simpleName, fileId: type.fileId });
-  }
-  const index = sqlStoreAsIndex(db, sql, types);
   const builder = new KnowledgeGraphBuilder(graph as unknown as KnowledgeGraphStore);
   graph.clear();
   graph.generation = generation;
@@ -444,7 +252,7 @@ function writeKnowledgeAndEntities(db: IndexDatabase, generation: number): void 
     const bundle = readBundle(db, file.relativePath);
     if (!bundle) continue;
     withTransaction(db, () => {
-      builder.replaceFile(bundle, index, generation);
+      builder.replaceFile(bundle, sql, generation);
       for (const record of recordsFromBundle(bundle)) writeEntityRecord(db, record);
     });
     sql.clearRequestCache();
