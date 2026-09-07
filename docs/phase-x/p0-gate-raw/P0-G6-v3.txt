@@ -1,0 +1,36 @@
+G2_BASE_S=134.52
+LIMIT_1_3_G2_S=174.876
+kill_after_s=90
+start_epoch=1788753499.71055
+pid=90096
+kill_epoch=1788753589.75562
+after_kill ls:
+-rw-r--r--  1 luo  wheel   111226880  9月  7 11:59 /tmp/iod-lishuedu-g6.sqlite
+-rw-r--r--  1 luo  wheel     4194304  9月  7 11:59 /tmp/iod-lishuedu-g6.sqlite-shm
+-rw-r--r--  1 luo  wheel  2143623672  9月  7 11:59 /tmp/iod-lishuedu-g6.sqlite-wal
+buildState BUILDING
+buildProgress {"phase":"resolve","done":6090,"total":6090}
+counts {"files":6090,"types":7319,"methods":25077,"edges":253711}
+RESUME_START_EPOCH=1788753589.847562
+{"ok":true,"parseFailed":0,"parseFailures":[],"files":6090,"types":7319,"methods":25077,"edges":253711}
+{"dbstat":[{"name":"method","bytes":35880960,"miB":34.2,"rows":25077,"bytesPerRow":1431},{"name":"sqlite_autoindex_sym_1","bytes":26337280,"miB":25.1},{"name":"sym","bytes":24018944,"miB":22.9,"rows":171988,"bytesPerRow":140},{"name":"entity_token","bytes":17829888,"miB":17,"rows":1155427,"bytesPerRow":15},{"name":"entity_token_lookup","bytes":16470016,"miB":15.7},{"name":"edge","bytes":12427264,"miB":11.9,"rows":253711,"bytesPerRow":49},{"name":"field","bytes":10698752,"miB":10.2,"rows":28556,"bytesPerRow":375},{"name":"kg_summary","bytes":10596352,"miB":10.1,"rows":25077,"bytesPerRow":423},{"name":"kg_edge","bytes":8167424,"miB":7.8,"rows":270720,"bytesPerRow":30},{"name":"sqlite_autoindex_edge_1","bytes":7876608,"miB":7.5},{"name":"file","bytes":6111232,"miB":5.8,"rows":6090,"bytesPerRow":1003},{"name":"meta","bytes":5984256,"miB":5.7,"rows":12,"bytesPerRow":498688},{"name":"entity","bytes":5668864,"miB":5.4,"rows":32396,"bytesPerRow":175},{"name":"kg_edge_from","bytes":4898816,"miB":4.7},{"name":"kg_edge_to","bytes":4890624,"miB":4.7},{"name":"type","bytes":4591616,"miB":4.4,"rows":7319,"bytesPerRow":627},{"name":"edge_to_kind","bytes":4472832,"miB":4.3},{"name":"edge_from_kind","bytes":4288512,"miB":4.1},{"name":"entity_fqn","bytes":3702784,"miB":3.5},{"name":"kg_edge_owner","bytes":3690496,"miB":3.5},{"name":"kg_node","bytes":3399680,"miB":3.2,"rows":67989,"bytesPerRow":50},{"name":"edge_file","bytes":3162112,"miB":3},{"name":"entity_simple","bytes":1171456,"miB":1.1},{"name":"method_owner_name","bytes":991232,"miB":0.9},{"name":"kg_node_path","bytes":937984,"miB":0.9},{"name":"kg_node_owner","bytes":937984,"miB":0.9},{"name":"kg_node_jid","bytes":892928,"miB":0.9},{"name":"sqlite_autoindex_file_1","bytes":790528,"miB":0.8},{"name":"entity_df","bytes":684032,"miB":0.7,"rows":56538,"bytesPerRow":12},{"name":"type_fqn","bytes":679936,"miB":0.6},{"name":"file_content_hash","bytes":512000,"miB":0.5},{"name":"entity_owner","bytes":425984,"miB":0.4},{"name":"field_owner","bytes":360448,"miB":0.3},{"name":"field_file","bytes":344064,"miB":0.3},{"name":"type_owner_simple","bytes":303104,"miB":0.3},{"name":"method_file","bytes":303104,"miB":0.3},{"name":"type_simple","bytes":282624,"miB":0.3},{"name":"file_source_root","bytes":262144,"miB":0.3},{"name":"type_file","bytes":90112,"miB":0.1},{"name":"sqlite_schema","bytes":12288,"miB":0},{"name":"sqlite_autoindex_source_root_coverage_1","bytes":4096,"miB":0},{"name":"sqlite_autoindex_mybatis_resource_1","bytes":4096,"miB":0},{"name":"sqlite_autoindex_meta_1","bytes":4096,"miB":0},{"name":"source_root_coverage","bytes":4096,"miB":0,"rows":43,"bytesPerRow":95},{"name":"mybatis_resource","bytes":4096,"miB":0,"rows":0,"bytesPerRow":0},{"name":"mybatis_ns","bytes":4096,"miB":0}]}
+       84.35 real        63.86 user         7.57 sys
+           341311488  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               71038  page reclaims
+                   2  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+              182371  voluntary context switches
+              108354  involuntary context switches
+        527305362975  instructions retired
+        219777766771  cycles elapsed
+           301404376  peak memory footprint
+RESUME_END_EPOCH=1788753674.237407
+DONE

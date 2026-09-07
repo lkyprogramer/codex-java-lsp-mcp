@@ -1,0 +1,6 @@
+SHA=6292a89
+isolated full profile
+dist tests 1354 fail 0
+scripts tests 283 fail 0
+FULL_EXIT=0
+Task36 Step6a smoke isolated 3/3 pass after lease ENOENT fix
