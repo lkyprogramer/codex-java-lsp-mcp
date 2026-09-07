@@ -53,7 +53,7 @@ async function call(client, name, args) {
 
 function daemonPid() {
   try {
-    const out = execFileSync("lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-t"], { encoding: "utf8" }).trim();
+    const out = execFileSync("/usr/sbin/lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-t"], { encoding: "utf8" }).trim();
     return out.split("\n")[0] || null;
   } catch {
     return null;

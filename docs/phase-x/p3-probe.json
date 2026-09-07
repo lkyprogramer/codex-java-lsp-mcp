@@ -1,0 +1,42 @@
+{
+  "health": {
+    "samples": 12,
+    "timeouts": 0,
+    "maxMs": 2.2669159999999806,
+    "p99Ms": 2.2669159999999806
+  },
+  "pid": "10690",
+  "d6": {
+    "elapsedMs": 21.659500000000662,
+    "isError": false,
+    "toolFail": false,
+    "errorText": ""
+  },
+  "d4": {
+    "shortElapsedMs": 31.40441699999974,
+    "shortError": false,
+    "retryElapsedMs": 28.93229199999996,
+    "retryError": false
+  },
+  "g2": {
+    "elapsedMs": 75.32058299999971,
+    "toolFail": false
+  },
+  "g5": {
+    "rssAfterQueryMiB": 159.875
+  },
+  "g6": {
+    "extraRootMs": 21.659500000000662,
+    "rssBeforeMiB": 159.875,
+    "rssAfterMiB": 159.890625,
+    "deltaMiB": 0.015625
+  },
+  "gates": {
+    "D2": true,
+    "D4": true,
+    "D6": true,
+    "P2-G2": true,
+    "P2-G5": true,
+    "P2-G6": true
+  }
+}
