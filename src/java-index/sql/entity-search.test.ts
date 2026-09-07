@@ -5,8 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { buildStaticEdges, resolveFileRefs } from "../edge-builder.js";
-import { EntitySearchIndex } from "../entity-search.js";
-import { JavaIndexStore } from "../index-store.js";
+import { recordsFromBundle, searchEntities, type EntityRecord } from "../entity-search.js";
 import type { JavaFileBundle, JavaTypeFacts } from "../index-types.js";
 import { parseJavaSourceFile } from "../java-index-file-parse.js";
 import { createJavaParserBackend } from "../java-parser-backend.js";
@@ -34,7 +33,7 @@ function listJavaFiles(root: string): string[] {
   return out.sort();
 }
 
-async function loadStore(): Promise<JavaIndexStore> {
+async function loadRecords(): Promise<EntityRecord[]> {
   const backend = await createJavaParserBackend();
   const cache = new ParseTreeCache({ ...DEFAULT_PARSE_TREE_CACHE_OPTIONS, maxEntries: 8 });
   const resolvedRepoRoot = await realpath(fixturesRoot);
@@ -52,17 +51,13 @@ async function loadStore(): Promise<JavaIndexStore> {
   const registry = buildTypeRegistryView(parsed.flatMap(bundle => bundle.types), parsed.flatMap(bundle => bundle.methods));
   const resolver = new JavaNameResolver(registry);
   const byId = registry.byId as Map<string, JavaTypeFacts>;
-  const store = new JavaIndexStore();
-  const resolved: JavaFileBundle[] = [];
+  const records: EntityRecord[] = [];
   for (const raw of parsed) {
     const next = resolveFileRefs(raw, resolver, registry);
     for (const type of next.types) byId.set(type.typeId, type);
-    resolved.push({ ...next, edges: [] });
+    records.push(...recordsFromBundle({ ...next, edges: buildStaticEdges(next, registry, resolver) }));
   }
-  for (const bundle of resolved) {
-    store.replaceFile({ ...bundle, edges: buildStaticEdges(bundle, registry, resolver) });
-  }
-  return store;
+  return records;
 }
 
 function goldenTasks(): string[] {
@@ -77,7 +72,7 @@ function goldenTasks(): string[] {
   return tasks;
 }
 
-function collectTasks(index: EntitySearchIndex): string[] {
+function collectTasks(records: readonly EntityRecord[]): string[] {
   const tasks = new Set<string>([
     "",
     "the",
@@ -85,7 +80,7 @@ function collectTasks(index: EntitySearchIndex): string[] {
     "please open demo.pay.ApplyPayService for the Pay flow",
     ...goldenTasks()
   ]);
-  for (const entity of index.toSnapshot().entities) {
+  for (const entity of records) {
     tasks.add(entity.simpleName);
     if (entity.fqn) {
       tasks.add(entity.fqn);
@@ -95,23 +90,21 @@ function collectTasks(index: EntitySearchIndex): string[] {
   return [...tasks];
 }
 
-test("SqlEntitySearch matches heap four-layer search on java-index-v2 for ≥50 tasks", async () => {
-  const store = await loadStore();
-  const heap = new EntitySearchIndex();
-  heap.rebuildFromStore(store);
+test("SqlEntitySearch matches searchEntities on java-index-v2 for ≥50 tasks", async () => {
+  const records = await loadRecords();
   const db = openIndexDb(":memory:");
   try {
     ensureSchema(db);
-    replaceAllEntities(db, heap.toSnapshot().entities);
+    replaceAllEntities(db, records);
     const sql = new SqlEntitySearch(db);
-    const tasks = collectTasks(heap);
+    const tasks = collectTasks(records);
     assert.ok(tasks.length >= 50, `need ≥50 tasks, got ${tasks.length}`);
     for (const task of tasks) {
-      assert.deepEqual(sql.search(task), heap.search(task), task);
-      assert.deepEqual(sql.search(task, 1), heap.search(task, 1), `limit1:${task}`);
-      assert.deepEqual(sql.search(task, 99), heap.search(task, 99), `limit99:${task}`);
+      assert.deepEqual(sql.search(task), searchEntities(records, task), task);
+      assert.deepEqual(sql.search(task, 1), searchEntities(records, task, 1), `limit1:${task}`);
+      assert.deepEqual(sql.search(task, 99), searchEntities(records, task, 99), `limit99:${task}`);
     }
-    assert.deepEqual(sql.search("OrderService", 0), heap.search("OrderService", 0));
+    assert.deepEqual(sql.search("OrderService", 0), searchEntities(records, "OrderService", 0));
     assert.equal(sql.search("OrderService", 0).length, sql.search("OrderService", 1).length);
   } finally {
     close(db);

@@ -7,7 +7,6 @@ import type {
   JavaMethodFacts,
   JavaTypeFacts
 } from "./index-types.js";
-import type { JavaIndexStore } from "./index-store.js";
 import {
   bm25Score,
   chunkTokensForMethod,
@@ -59,10 +58,6 @@ export type EntitySearchSnapshot = {
   version: typeof ENTITY_SEARCH_VERSION;
   entities: EntityRecord[];
 };
-
-function relativePathOfFileId(fileId: string): string {
-  return fileId.startsWith("file:") ? fileId.slice("file:".length) : fileId;
-}
 
 function typeRecord(type: JavaTypeFacts, relativePath: string, fields: readonly JavaFieldFacts[], methods: readonly JavaMethodFacts[]): EntityRecord {
   const fqn = type.fqn ?? type.simpleName;
@@ -223,104 +218,4 @@ export function searchEntities(entities: readonly EntityRecord[], task: string, 
   const identifierHits = rankByBm25(entities, queryTokens, "identifierTokens", "BM25_IDENTIFIER", cap);
   if (identifierHits.length > 0) return identifierHits;
   return rankByBm25(entities, queryTokens, "chunkTokens", "CHUNK", cap);
-}
-
-export class EntitySearchIndex {
-  private readonly entitiesById = new Map<string, EntityRecord>();
-  private readonly entityIdsByPath = new Map<string, Set<string>>();
-
-  replaceFile(bundle: JavaFileBundle): void {
-    this.removeFiles([bundle.file.relativePath]);
-    const records = recordsFromBundle(bundle);
-    const ids = new Set<string>();
-    for (const record of records) {
-      this.entitiesById.set(record.entityId, record);
-      ids.add(record.entityId);
-    }
-    this.entityIdsByPath.set(bundle.file.relativePath, ids);
-  }
-
-  removeFiles(relativePaths: readonly string[]): void {
-    for (const relativePath of relativePaths) {
-      for (const entityId of this.entityIdsByPath.get(relativePath) ?? []) {
-        this.entitiesById.delete(entityId);
-      }
-      this.entityIdsByPath.delete(relativePath);
-    }
-  }
-
-  rebuildFromStore(store: Pick<JavaIndexStore, "filesByPath" | "typesById" | "methodsById" | "fieldsById">): void {
-    this.entitiesById.clear();
-    this.entityIdsByPath.clear();
-    const fieldsByOwner = new Map<string, JavaFieldFacts[]>();
-    for (const field of store.fieldsById.values()) {
-      const bucket = fieldsByOwner.get(field.ownerTypeId) ?? [];
-      bucket.push(field);
-      fieldsByOwner.set(field.ownerTypeId, bucket);
-    }
-    const methodsByOwner = new Map<string, JavaMethodFacts[]>();
-    for (const method of store.methodsById.values()) {
-      const bucket = methodsByOwner.get(method.ownerTypeId) ?? [];
-      bucket.push(method);
-      methodsByOwner.set(method.ownerTypeId, bucket);
-    }
-    for (const type of store.typesById.values()) {
-      const relativePath = relativePathOfFileId(type.fileId);
-      const record = typeRecord(
-        type,
-        store.filesByPath.get(relativePath)?.relativePath ?? relativePath,
-        fieldsByOwner.get(type.typeId) ?? [],
-        methodsByOwner.get(type.typeId) ?? []
-      );
-      this.entitiesById.set(record.entityId, record);
-      const ids = this.entityIdsByPath.get(record.relativePath) ?? new Set();
-      ids.add(record.entityId);
-      this.entityIdsByPath.set(record.relativePath, ids);
-    }
-    for (const method of store.methodsById.values()) {
-      const owner = store.typesById.get(method.ownerTypeId);
-      const relativePath = owner ? relativePathOfFileId(owner.fileId) : "";
-      const record = methodRecord(method, owner, store.filesByPath.get(relativePath)?.relativePath ?? relativePath);
-      this.entitiesById.set(record.entityId, record);
-      const ids = this.entityIdsByPath.get(record.relativePath) ?? new Set();
-      ids.add(record.entityId);
-      this.entityIdsByPath.set(record.relativePath, ids);
-    }
-  }
-
-  search(task: string, limit = ENTITY_SEARCH_DEFAULT_LIMIT): EntityHit[] {
-    return searchEntities([...this.entitiesById.values()], task, limit);
-  }
-
-  estimatedBytes(): number {
-    let bytes = this.entitiesById.size * 48 + this.entityIdsByPath.size * 24;
-    for (const entity of this.entitiesById.values()) {
-      bytes += entity.entityId.length * 2
-        + entity.fqn.length * 2
-        + entity.simpleName.length * 2
-        + entity.relativePath.length * 2;
-      for (const token of entity.identifierTokens) bytes += token.length * 2;
-      for (const token of entity.chunkTokens) bytes += token.length * 2;
-    }
-    return bytes;
-  }
-
-  toSnapshot(): EntitySearchSnapshot {
-    return {
-      version: ENTITY_SEARCH_VERSION,
-      entities: [...this.entitiesById.values()].sort((left, right) => left.entityId.localeCompare(right.entityId))
-    };
-  }
-
-  loadSnapshot(snapshot: EntitySearchSnapshot): void {
-    this.entitiesById.clear();
-    this.entityIdsByPath.clear();
-    if (snapshot.version !== ENTITY_SEARCH_VERSION) return;
-    for (const entity of snapshot.entities) {
-      this.entitiesById.set(entity.entityId, entity);
-      const ids = this.entityIdsByPath.get(entity.relativePath) ?? new Set();
-      ids.add(entity.entityId);
-      this.entityIdsByPath.set(entity.relativePath, ids);
-    }
-  }
 }

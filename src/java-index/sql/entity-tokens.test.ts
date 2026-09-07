@@ -5,8 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { buildStaticEdges, resolveFileRefs } from "../edge-builder.js";
-import { EntitySearchIndex } from "../entity-search.js";
-import { JavaIndexStore } from "../index-store.js";
+import { recordsFromBundle, type EntityRecord } from "../entity-search.js";
 import type { JavaFileBundle, JavaTypeFacts } from "../index-types.js";
 import { parseJavaSourceFile } from "../java-index-file-parse.js";
 import { createJavaParserBackend } from "../java-parser-backend.js";
@@ -32,7 +31,7 @@ function listJavaFiles(root: string): string[] {
   return out.sort();
 }
 
-async function loadStore(): Promise<JavaIndexStore> {
+async function loadRecords(): Promise<EntityRecord[]> {
   const backend = await createJavaParserBackend();
   const cache = new ParseTreeCache({ ...DEFAULT_PARSE_TREE_CACHE_OPTIONS, maxEntries: 8 });
   const resolvedRepoRoot = await realpath(fixturesRoot);
@@ -50,28 +49,21 @@ async function loadStore(): Promise<JavaIndexStore> {
   const registry = buildTypeRegistryView(parsed.flatMap(bundle => bundle.types), parsed.flatMap(bundle => bundle.methods));
   const resolver = new JavaNameResolver(registry);
   const byId = registry.byId as Map<string, JavaTypeFacts>;
-  const store = new JavaIndexStore();
-  const resolved: JavaFileBundle[] = [];
+  const records: EntityRecord[] = [];
   for (const raw of parsed) {
     const next = resolveFileRefs(raw, resolver, registry);
     for (const type of next.types) byId.set(type.typeId, type);
-    resolved.push({ ...next, edges: [] });
+    records.push(...recordsFromBundle({ ...next, edges: buildStaticEdges(next, registry, resolver) }));
   }
-  for (const bundle of resolved) {
-    store.replaceFile({ ...bundle, edges: buildStaticEdges(bundle, registry, resolver) });
-  }
-  return store;
+  return records;
 }
 
 function sortedTokens(tokens: readonly string[]): string[] {
   return [...tokens].sort();
 }
 
-test("SQL entity rows match EntitySearchIndex snapshot records", async () => {
-  const store = await loadStore();
-  const index = new EntitySearchIndex();
-  index.rebuildFromStore(store);
-  const expected = index.toSnapshot().entities;
+test("SQL entity rows round-trip recordsFromBundle", async () => {
+  const expected = await loadRecords();
 
   const db = openIndexDb(":memory:");
   try {
@@ -79,22 +71,16 @@ test("SQL entity rows match EntitySearchIndex snapshot records", async () => {
     replaceAllEntities(db, expected);
     const actual = readEntityRecords(db);
     assert.equal(actual.length, expected.length);
-    assert.deepEqual(
-      actual.map(record => ({
-        entityId: record.entityId,
-        kind: record.kind,
-        fqn: record.fqn,
-        identifierTokens: sortedTokens(record.identifierTokens),
-        chunkTokens: sortedTokens(record.chunkTokens)
-      })),
-      expected.map(record => ({
+    const normalize = (records: readonly EntityRecord[]) => records
+      .map(record => ({
         entityId: record.entityId,
         kind: record.kind,
         fqn: record.fqn,
         identifierTokens: sortedTokens(record.identifierTokens),
         chunkTokens: sortedTokens(record.chunkTokens)
       }))
-    );
+      .sort((left, right) => left.entityId.localeCompare(right.entityId));
+    assert.deepEqual(normalize(actual), normalize(expected));
   } finally {
     close(db);
   }
