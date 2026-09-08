@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { performance } from "node:perf_hooks";
-import { runSqlColdBuild } from "../dist/java-index/builder/cold-build.js";
+import { runSqlColdBuild } from "../dist/index-builder/cold-build.js";
 import { close, openIndexDb } from "../dist/java-index/sql/driver.js";
 import { ensureSchema } from "../dist/java-index/sql/schema.js";
 import { SqlJavaIndexClient } from "../dist/java-index/sql/sql-client.js";
