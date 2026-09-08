@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -10,9 +10,11 @@ import { readEntityRecords } from "../sql/entity-tokens.js";
 import { SqlKnowledgeGraph } from "../sql/knowledge-graph.js";
 import { encodeFacts, STATIC_EDGE_SELECT } from "../sql/rows.js";
 import { internSym } from "../sql/sym.js";
+import { probeLayout } from "../../layout-probe.js";
 import { runSqlColdBuild } from "../../index-builder/cold-build.js";
 import { applyBuilderJob, runBuilderServe } from "../../index-builder/incremental.js";
 import { readMeta } from "../../index-builder/progress.js";
+import { discoverJavaFiles } from "../manifest.js";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const fixturesRoot = path.resolve(dirname, "..", "..", "..", "fixtures", "java-index-v2");
@@ -108,6 +110,23 @@ function cascadeCounts(db: ReturnType<typeof openIndexDb>, relativePath: string)
   };
 }
 
+function fileIdentity(db: ReturnType<typeof openIndexDb>) {
+  return (db.prepare(
+    "SELECT path, content_hash AS contentHash, generation, mtime_ms AS mtime FROM file ORDER BY path"
+  ).all() as Array<{ path: string; contentHash: string; generation: number; mtime: number }>).map(row => ({
+    path: row.path,
+    contentHash: row.contentHash,
+    generation: Number(row.generation),
+    mtime: Number(row.mtime)
+  }));
+}
+
+async function bumpAllJavaMtimes(repo: string, whenMs: number): Promise<void> {
+  const files = await discoverJavaFiles(repo, probeLayout(repo));
+  const at = new Date(whenMs);
+  for (const file of files) await utimes(file.absolutePath, at, at);
+}
+
 test("refresh after a signature change matches recold-build edges/KG/entity", async () => {
   const repo = await copyFixtures();
   const incremental = await cold(repo, 1);
@@ -167,6 +186,66 @@ test("deleting a file cascades facts/KG/entity rows to zero", async () => {
     });
   } finally {
     close(built.db);
+    await rm(repo, { recursive: true, force: true });
+  }
+});
+
+test("reconcile with rewritten mtimes does not reparse identical Java content", async () => {
+  const repo = await copyFixtures();
+  const incremental = await cold(repo, 1);
+  try {
+    const before = fileIdentity(incremental.db);
+    const edgesBefore = edgeSnapshot(incremental.db);
+    await bumpAllJavaMtimes(repo, Date.now() + 120_000);
+    const result = await applyBuilderJob({
+      repoRoot: repo,
+      db: incremental.db,
+      job: { id: 4, kind: "reconcile", generation: 2 }
+    });
+    assert.equal(result.ok, true, result.error);
+    assert.equal(readMeta(incremental.db, "indexedGeneration"), "2");
+    const after = fileIdentity(incremental.db);
+    assert.deepEqual(
+      after.map(row => ({ path: row.path, contentHash: row.contentHash, generation: row.generation })),
+      before.map(row => ({ path: row.path, contentHash: row.contentHash, generation: row.generation }))
+    );
+    assert.ok(after.every((row, index) => row.mtime > before[index]!.mtime), "mtime stamps must follow the checkout");
+    assert.deepEqual(edgeSnapshot(incremental.db), edgesBefore);
+  } finally {
+    close(incremental.db);
+    await rm(repo, { recursive: true, force: true });
+  }
+});
+
+test("mtime-only siblings still refresh a file whose content actually changed", async () => {
+  const repo = await copyFixtures();
+  const incremental = await cold(repo, 1);
+  try {
+    const before = new Map(fileIdentity(incremental.db).map(row => [row.path, row]));
+    await bumpAllJavaMtimes(repo, Date.now() + 120_000);
+    const service = path.join(repo, serviceRel);
+    const original = await readFile(service, "utf8");
+    await writeFile(service, original.replace("repository.save", "repository.save /* iod-mtime */"));
+    const result = await applyBuilderJob({
+      repoRoot: repo,
+      db: incremental.db,
+      job: { id: 5, kind: "reconcile", generation: 2 }
+    });
+    assert.equal(result.ok, true, result.error);
+    const after = fileIdentity(incremental.db);
+    for (const row of after) {
+      const previous = before.get(row.path);
+      assert.ok(previous, row.path);
+      if (row.path === serviceRel) {
+        assert.equal(row.generation, 2);
+        assert.notEqual(row.contentHash, previous.contentHash);
+      } else {
+        assert.equal(row.generation, previous.generation);
+        assert.equal(row.contentHash, previous.contentHash);
+      }
+    }
+  } finally {
+    close(incremental.db);
     await rm(repo, { recursive: true, force: true });
   }
 });

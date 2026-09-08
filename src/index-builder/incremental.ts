@@ -290,33 +290,74 @@ async function applyResources(
   });
 }
 
+type IndexedFileRow = {
+  path: string;
+  mtime: number | null;
+  size: number | null;
+  contentHash: string | null;
+};
+
+type MtimeStamp = {
+  path: string;
+  mtimeMs: number;
+  ctimeMs: number;
+};
+
+async function contentHashOf(absolutePath: string): Promise<string> {
+  const content = await readFile(absolutePath, "utf8");
+  return createHash("sha256").update(content, "utf8").digest("hex");
+}
+
+function stampFileTimes(db: IndexDatabase, stamps: readonly MtimeStamp[]): void {
+  if (stamps.length === 0) return;
+  const stmt = prepareCached(db, "UPDATE file SET mtime_ms=?, ctime_ms=? WHERE path=?");
+  for (const stamp of stamps) stmt.run(stamp.mtimeMs, stamp.ctimeMs, stamp.path);
+}
+
 async function applyReconcile(db: IndexDatabase, repoRoot: string, generation: number): Promise<void> {
   const layout = probeLayout(repoRoot);
   const roots = layout.sourceRoots.map(root => root.relativePath);
   writeBuildProgress(db, { phase: "declare", done: 0, total: 1 });
   const discovered = await discoverJavaFiles(repoRoot, layout);
   const indexed = new Map(
-    (prepareCached(db, "SELECT path, mtime_ms AS mtime, size AS size FROM file").all() as Array<{
-      path: string; mtime: number | null; size: number | null;
-    }>).map(row => [row.path, row])
+    (prepareCached(
+      db,
+      "SELECT path, mtime_ms AS mtime, size AS size, content_hash AS contentHash FROM file"
+    ).all() as IndexedFileRow[]).map(row => [row.path, row])
   );
   const changed: string[] = [];
+  const mtimeStamps: MtimeStamp[] = [];
   const seen = new Set<string>();
   for (const file of discovered) {
     seen.add(file.relativePath);
     const previous = indexed.get(file.relativePath);
-    if (!previous) { changed.push(file.absolutePath); continue; }
+    if (!previous) {
+      changed.push(file.absolutePath);
+      continue;
+    }
     const info = await stat(file.absolutePath);
     const size = Number(previous.size);
     const mtime = Number(previous.mtime);
-    if (size !== info.size || !Number.isFinite(mtime) || Math.abs(mtime - info.mtimeMs) > 0.5) {
-      changed.push(file.absolutePath);
+    const sizeMatch = Number.isFinite(size) && size === info.size;
+    const mtimeMatch = Number.isFinite(mtime) && Math.abs(mtime - info.mtimeMs) <= 0.5;
+    if (sizeMatch && mtimeMatch) continue;
+    // git worktree add rewrites mtimes; identical size+hash must not reparse.
+    if (sizeMatch && previous.contentHash && await contentHashOf(file.absolutePath) === previous.contentHash) {
+      mtimeStamps.push({ path: file.relativePath, mtimeMs: info.mtimeMs, ctimeMs: info.ctimeMs });
+      continue;
     }
+    changed.push(file.absolutePath);
   }
   const deleted = [...indexed.keys()].filter(relativePath => !seen.has(relativePath));
   if (changed.length === 0 && deleted.length === 0) {
-    withTransaction(db, () => finishIndex(db, generation, roots));
+    withTransaction(db, () => {
+      stampFileTimes(db, mtimeStamps);
+      finishIndex(db, generation, roots);
+    });
     return;
+  }
+  if (mtimeStamps.length > 0) {
+    withTransaction(db, () => stampFileTimes(db, mtimeStamps));
   }
   await applyRefresh(db, repoRoot, generation, changed, deleted);
 }
