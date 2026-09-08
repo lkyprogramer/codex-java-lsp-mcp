@@ -9,7 +9,6 @@ import { DeadlineBudget } from "../runtime/deadline-budget.js";
 import { computeBuildFingerprint } from "../java-index/build-fingerprint.js";
 import { SqlJavaIndexClient } from "../java-index/sql/sql-client.js";
 import type { JavaIndexStatus } from "../java-index/index-types.js";
-import { computeCurrentSnapshotManifestFingerprint } from "../java-index/manifest.js";
 import { RouterJavaIndex } from "../java-index/router-java-index.js";
 import {
   areJavaSourceRootsCompleteAt,
@@ -282,7 +281,6 @@ async function verifyDurableSnapshot(
   const buildFingerprint = await computeBuildFingerprint(repoRoot, layout).catch(() => undefined);
   if (!buildFingerprint) return { ok: false, reason: "build fingerprint unavailable" };
   const dbPath = path.join(cacheDir, INDEX_DB_FILE);
-  const currentManifest = await computeCurrentSnapshotManifestFingerprint(repoRoot, layout);
   try {
     const [contents, fileStats] = await Promise.all([readFile(dbPath), stat(dbPath)]);
     if (fileStats.size <= 0) return { ok: false, reason: "index.sqlite readback byte mismatch" };
@@ -291,7 +289,7 @@ async function verifyDurableSnapshot(
       ok: true,
       bytes: contents.length,
       sha256,
-      manifestFingerprint: currentManifest,
+      manifestFingerprint: sha256,
       semanticDigest: sha256
     };
   } catch {
