@@ -70,8 +70,6 @@ test("SqlJavaIndexClient point RPCs match a real forked JavaIndexClient on java-
     assert.equal(sqlStatus.methods, counts.methods);
     assert.equal(sqlStatus.edges, counts.edges);
     assert.equal(sqlStatus.pendingForeground, 0);
-    assert.equal(sqlStatus.factsHydrated, undefined);
-    assert.equal(sqlStatus.hibernated, undefined);
     assert.doesNotMatch(readFileSync(fileURLToPath(new URL("./sql-client.js", import.meta.url)), "utf8"), /count\(\*\)/);
 
     const files = await sql.queryFiles([paymentGateway]);

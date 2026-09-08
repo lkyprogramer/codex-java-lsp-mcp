@@ -153,7 +153,6 @@ test("freemem pressure does not recycle a pin while prewarm is waiting", async (
         methods: 1,
         edges: 0,
         snapshotBytes: 10,
-        factsHydrated: true,
         snapshot: { state: "DURABLE" as const, durableGeneration: 1, durableManifestFingerprint: "m" },
         pendingForeground: 0,
         pendingBackground: 0,
@@ -1124,25 +1123,7 @@ test("a sibling-seeded OPEN does not block runtime.create on the post-seed recon
     async open(generation: number) {
       return {
         indexedGeneration: generation,
-        coverage: [{ state: "DEGRADED" as const, generation, failedFiles: 0, recoveredFiles: 0 }],
-        worktreeSeed: {
-          attempted: true,
-          reusedFiles: 9,
-          dirtyFiles: 1,
-          relinkFiles: 0,
-          droppedCrossFileEdges: 0,
-          droppedFrameworkEdges: 0,
-          manifestValidationMs: 1,
-          deltaParsedFiles: 0,
-          reusedResources: 0,
-          dirtyResources: 0,
-          cacheDirsScanned: 2,
-          eligibleSnapshots: 1,
-          candidateDecompressMs: 1,
-          initialManifestScanMs: 1,
-          finalManifestScanMs: 1,
-          completion: "SEEDED_DEGRADED" as const
-        }
+        coverage: [{ state: "DEGRADED" as const, generation, failedFiles: 0, recoveredFiles: 0 }]
       };
     },
     async reconcile() {
@@ -1240,25 +1221,7 @@ test("a request whose freshness barrier hits the public deadline still serves af
     async open(generation: number) {
       return {
         indexedGeneration: generation,
-        coverage: [{ state: "COMPLETE" as const, generation, failedFiles: 0, recoveredFiles: 0 }],
-        worktreeSeed: {
-          attempted: true,
-          reusedFiles: 1,
-          dirtyFiles: 0,
-          relinkFiles: 0,
-          droppedCrossFileEdges: 0,
-          droppedFrameworkEdges: 0,
-          manifestValidationMs: 1,
-          deltaParsedFiles: 0,
-          reusedResources: 0,
-          dirtyResources: 0,
-          cacheDirsScanned: 1,
-          eligibleSnapshots: 1,
-          candidateDecompressMs: 1,
-          initialManifestScanMs: 1,
-          finalManifestScanMs: 1,
-          completion: "SEEDED_DEGRADED" as const
-        }
+        coverage: [{ state: "COMPLETE" as const, generation, failedFiles: 0, recoveredFiles: 0 }]
       };
     },
     async reconcile() {},
@@ -1586,7 +1549,7 @@ test("freemem pressure does not recycle a hydrated hot-set pin", async () => {
 
 test("explicit recycle floor wins via max with the relative baseline", async () => {
   const sessions = new Map<string, FakeSession>();
-  const javaIndex = recordingHeapIndex(200, { hydrateBaselineHeapMb: 100 });
+  const javaIndex = recordingHeapIndex(200);
   const manager = new RepoRuntimeManager(fakeResolver(), {
     idleTtlMs: 100000,
     pressureIntervalMs: 0,
@@ -1762,21 +1725,6 @@ function recordingHeapIndex(heapUsedMb: number, extra: Partial<JavaIndexStatus> 
       calls.push("status");
       return {
         ...completeJavaIndexStatus(1),
-        heapUsedBytes: heap * 1024 * 1024,
-        heapSplit: {
-          heapUsedMb: heap,
-          rssMb: heap,
-          poolBundles: 1,
-          familyRootCount: 1,
-          thisRootFiles: 1,
-          thisRootOverlayFiles: 0,
-          graphSynced: true,
-          donorStoreBytes: 10,
-          overlayBytes: 2,
-          graphBytes: 3,
-          parseTreeCacheBytes: 4,
-          otherBytes: 5
-        },
         ...extra
       };
     },

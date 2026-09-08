@@ -870,9 +870,7 @@ export class RepoRuntimeManager {
       // diff/sweep decision; it promotes COMPLETE or schedules the governed
       // sweep itself.  A real watcher batch still sets generationChanged and
       // takes the normal reconcile path.
-      const seededDegraded = openStatus.worktreeSeed?.completion === "SEEDED_DEGRADED";
-      const needsFollowUp = seededDegraded
-        || (!fullyRestored && !openStatus.snapshotVerificationPending)
+      const needsFollowUp = (!fullyRestored && !openStatus.snapshotVerificationPending)
         || generationChangedDuringSeed;
       if (needsFollowUp) {
         // Never await a sweep on runtime.create: a failed/empty seed used to

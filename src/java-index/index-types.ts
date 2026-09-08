@@ -204,39 +204,7 @@ export type MyBatisResourceCoverage = {
   failedFiles: number;
 };
 
-/** Task 21a diagnostic summary of the OPEN-time sibling-worktree seed attempt, if any. */
-export type WorktreeSeedStatus = {
-  attempted: boolean;
-  sourceRepoHash?: string;
-  reusedFiles: number;
-  dirtyFiles: number;
-  relinkFiles: number;
-  droppedCrossFileEdges: number;
-  droppedFrameworkEdges: number;
-  manifestValidationMs: number;
-  /** Files actually passed through the target's post-seed reconciliation sweep. */
-  deltaParsedFiles: number;
-  /** Task 28 Slice C: MyBatis resources reused (content-hash matched) vs. left for the normal post-seed sweep to re-derive. */
-  reusedResources: number;
-  dirtyResources: number;
-  /** How many sibling cache directories findCandidate() scanned, regardless of eligibility (V3.2-19). */
-  cacheDirsScanned: number;
-  /** Of those scanned, how many held a snapshot that passed every eligibility check (V3.2-19). */
-  eligibleSnapshots: number;
-  fingerprintMatched?: boolean;
-  metaMissing?: number;
-  selfSkip?: number;
-  familyMismatch?: number;
-  identityMismatch?: number;
-  coverageIncomplete?: number;
-  /** Decompress, pre-load scan, and publication-boundary re-scan phase timings (V3.2-19). */
-  candidateDecompressMs: number;
-  initialManifestScanMs: number;
-  finalManifestScanMs: number;
-  completion: "NOT_ATTEMPTED" | "SEEDED_DEGRADED" | "RECONCILED_COMPLETE" | "NO_VALID_SOURCE" | "FAILED";
-};
-
-/** Observable publication state for the rebuildable JavaIndex snapshot. */
+/** Observable publication state for a durable index, if a caller still publishes one. */
 export type JavaIndexSnapshotStatus =
   | { state: "EMPTY" }
   | {
@@ -313,59 +281,12 @@ export type JavaIndexStatus = {
   snapshot?: JavaIndexSnapshotStatus;
   pendingForeground: number;
   pendingBackground: number;
-  /** Own-snapshot manifest validation still running after OPEN returned. */
   snapshotVerificationPending?: boolean;
   coverage: SourceRootCoverage[];
   resourceCoverage: MyBatisResourceCoverage[];
   lastError?: string;
-  worktreeSeed?: WorktreeSeedStatus;
-  /** @deprecated Heap hibernate; P3 deletes this field. */
-  hibernated?: boolean;
-  /** @deprecated Always true on the SQL client; P3 deletes this field. */
-  factsHydrated?: boolean;
-  /** @deprecated Worker-local heapUsed, published on HIBERNATE (S4). */
-  heapUsedBytes?: number;
-  /** @deprecated FSX0/FSX2: process heap plus family-store counts. */
-  heapSplit?: JavaIndexHeapSplit;
-  /** @deprecated Heap at first snapshot hydrate; used as FSR3 1.6× recycle baseline. */
-  hydrateBaselineHeapMb?: number;
-  /** @deprecated Next idle window must recycle (in-process parse over threshold). */
-  pendingIdleRecycle?: boolean;
-  inProcessParseFiles?: number;
   db?: JavaIndexDbStatus;
   builder?: JavaIndexBuilderStatus;
-};
-
-export type JavaIndexHeapSplit = {
-  heapUsedMb: number;
-  rssMb: number;
-  poolBundles: number;
-  familyRootCount: number;
-  thisRootFiles: number;
-  thisRootOverlayFiles: number;
-  graphSynced: boolean;
-  /** FSY2 byte ledger. Absent on older workers. */
-  donorStoreBytes?: number;
-  overlayBytes?: number;
-  graphBytes?: number;
-  parseTreeCacheBytes?: number;
-  otherBytes?: number;
-  /** FSZ4 measured columnar / intern / search ledger. */
-  columnarBytes?: number;
-  stringTableBytes?: number;
-  tombstoneRatio?: number;
-  knowledgeBuilderBytes?: number;
-  entitySearchBytes?: number;
-  /** FSR0 measured retained-ish JS graphs, not STATUS leftovers. */
-  rangePoolMemoBytes?: number;
-  bundleObjectBytes?: number;
-  registryBytes?: number;
-};
-
-export type JavaIndexHeapAttribution = {
-  hydrateBaselineHeapMb?: number;
-  pendingIdleRecycle?: boolean;
-  inProcessParseFiles?: number;
 };
 
 export type JavaTypeLookupResult =

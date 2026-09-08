@@ -169,9 +169,6 @@ test("java_status exposes db and builder fields without requiring diagnostic det
   assert.equal(javaIndex.files, 12);
   assert.deepEqual(javaIndex.db, { bytes: 4096, cacheKb: 32768 });
   assert.deepEqual(javaIndex.builder, { state: "idle", queued: 0, pid: 4242 });
-  assert.equal(javaIndex.factsHydrated, undefined);
-  assert.equal(javaIndex.hibernated, undefined);
-  assert.equal(javaIndex.worktreeSeed, undefined);
 });
 
 test("java_status forwards the request absolute budget to JavaIndex status", async () => {
