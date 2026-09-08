@@ -9,7 +9,6 @@ import { deriveJavaSourceLayout } from "../java-index-file-parse.js";
 import type { JavaIndexClientApi } from "../java-index-client-api.js";
 import type {
   JavaIndexOpenOptions,
-  JavaIndexPrewarmReadyOptions,
   JavaIndexRequestOptions
 } from "../java-index-client-api.js";
 import { ENTITY_SEARCH_DEFAULT_LIMIT, type EntityHit } from "../entity-search.js";
@@ -78,9 +77,7 @@ function emptyStatus(state: JavaIndexStatus["state"] = "NEW"): JavaIndexStatus {
     pendingForeground: 0,
     pendingBackground: 0,
     coverage: [],
-    resourceCoverage: [],
-    factsHydrated: true,
-    hibernated: false
+    resourceCoverage: []
   };
 }
 
@@ -209,7 +206,7 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
   async reconcile(generation: number, _requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus> {
     return this.runBuilderJob({ kind: "reconcile", generation, changed: [], deleted: [] });
   }
-  async awaitPrewarmReady(requestOptions?: JavaIndexRequestOptions & JavaIndexPrewarmReadyOptions): Promise<JavaIndexStatus> {
+  async awaitPrewarmReady(requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus> {
     this.requireSupervisor("awaitPrewarmReady");
     for (;;) {
       requestOptions?.budget?.throwIfExpired("awaitPrewarmReady");
@@ -227,10 +224,6 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
   async flush(_requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus> {
     return this.db ? this.assembleStatus() : this.lastStatus;
   }
-  async hibernate(_requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus> {
-    return this.db ? this.assembleStatus() : this.lastStatus;
-  }
-  async recycle(_requestOptions?: JavaIndexRequestOptions): Promise<void> {}
   async queryReadRanges(
     requests: Array<{ file: string; positions: Array<{ line: number; column: number }> }>,
     _requestOptions?: JavaIndexRequestOptions
@@ -556,8 +549,6 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
       pendingBackground: builder?.queued ?? 0,
       coverage: this.coverageRows(),
       resourceCoverage: [],
-      factsHydrated: true,
-      hibernated: false,
       ...(this.failReason ? { lastError: this.failReason } : {}),
       db: {
         bytes,

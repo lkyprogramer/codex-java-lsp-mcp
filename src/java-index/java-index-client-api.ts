@@ -57,19 +57,8 @@ export interface JavaIndexRpcTelemetrySink {
   lateResponse(event: Omit<JavaIndexRpcSettlement, "outcome">): void;
 };
 
-export type JavaIndexPrewarmReadyOptions = {
-  hydrate?: boolean;
-};
-
-export function isJavaIndexPrewarmReady(
-  status: JavaIndexStatus,
-  options: JavaIndexPrewarmReadyOptions = {}
-): boolean {
-  const hydrate = options.hydrate !== false;
-  if (status.snapshotVerificationPending) return false;
+export function isJavaIndexPrewarmReady(status: JavaIndexStatus): boolean {
   if (status.pendingBackground > 0) return false;
-  if (hydrate && status.hibernated) return false;
-  if (hydrate && status.factsHydrated === false) return false;
   if (status.snapshot?.state === "DURABLE") return true;
   return status.files > 0
     && status.coverage.length > 0
@@ -78,7 +67,7 @@ export function isJavaIndexPrewarmReady(
 
 export interface JavaIndexClientApi {
   open(generation: number, options?: JavaIndexOpenOptions, requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus>;
-  status(requestOptions?: JavaIndexRequestOptions & { heapSnapshotPath?: string }): Promise<JavaIndexStatus>;
+  status(requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus>;
   refresh(
     generation: number,
     changed: string[],
@@ -89,12 +78,8 @@ export interface JavaIndexClientApi {
   refreshResources(generation: number, paths: string[], requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus>;
   ensureFresh(files: string[], generation: number, requestOptions?: JavaIndexRequestOptions): Promise<void>;
   reconcile(generation: number, requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus>;
-  awaitPrewarmReady(
-    requestOptions?: JavaIndexRequestOptions & JavaIndexPrewarmReadyOptions
-  ): Promise<JavaIndexStatus>;
+  awaitPrewarmReady(requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus>;
   flush(requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus>;
-  hibernate(requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus>;
-  recycle(requestOptions?: JavaIndexRequestOptions): Promise<void>;
   queryAnchor(file: string, line: number, column: number, requestOptions?: JavaIndexRequestOptions): Promise<AnchorFacts | undefined>;
   queryType(typeText: string, scopeFile?: string, requestOptions?: JavaIndexRequestOptions): Promise<JavaTypeLookupResult>;
   queryTypes(

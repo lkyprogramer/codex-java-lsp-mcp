@@ -623,7 +623,6 @@ export class RepoRuntimeManager {
       logicalCpu: this.defaults.logicalCpu,
       maxActiveRepos: this.options.maxActiveRepos,
       idleTtlMs: this.options.idleTtlMs,
-      hibernateTtlMs: 0,
       jdtlsXmx: process.env.JAVA_LSP_JDTLS_XMX || this.defaults.jdtlsXmx,
       activeRepos: this.runtimes.size,
       activeJdtlsPids: started,

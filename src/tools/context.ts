@@ -27,7 +27,6 @@ export type ToolContext = {
     logicalCpu: number;
     maxActiveRepos: number;
     idleTtlMs: number;
-    hibernateTtlMs: number;
     jdtlsXmx: string;
     activeRepos: number;
     reservedRepos: number;

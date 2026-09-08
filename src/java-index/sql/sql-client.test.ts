@@ -69,9 +69,9 @@ test("SqlJavaIndexClient point RPCs match a real forked JavaIndexClient on java-
     assert.equal(sqlStatus.types, counts.types);
     assert.equal(sqlStatus.methods, counts.methods);
     assert.equal(sqlStatus.edges, counts.edges);
-    assert.equal(sqlStatus.factsHydrated, true);
-    assert.equal(sqlStatus.hibernated, false);
     assert.equal(sqlStatus.pendingForeground, 0);
+    assert.equal(sqlStatus.factsHydrated, undefined);
+    assert.equal(sqlStatus.hibernated, undefined);
     assert.doesNotMatch(readFileSync(fileURLToPath(new URL("./sql-client.js", import.meta.url)), "utf8"), /count\(\*\)/);
 
     const files = await sql.queryFiles([paymentGateway]);
@@ -129,8 +129,6 @@ test("SqlJavaIndexClient point RPCs match a real forked JavaIndexClient on java-
       jsonClone(await heap.queryRepositoryFactMarkers(["org.springframework"], ["org.springframework"]))
     );
     assert.equal((await sql.flush()).state, sqlStatus.state);
-    assert.equal((await sql.hibernate()).hibernated, false);
-    await sql.recycle();
   } finally {
     await sql.close();
   }

@@ -139,7 +139,6 @@ export function summarizeResourceStatus(resource: NonNullable<ToolContext["resou
   return {
     maxActiveRepos: resource.maxActiveRepos,
     idleTtlMs: resource.idleTtlMs,
-    hibernateTtlMs: resource.hibernateTtlMs,
     jdtlsXmx: resource.jdtlsXmx,
     activeRepos: resource.activeRepos,
     activeJdtlsPids: resource.activeJdtlsPids,

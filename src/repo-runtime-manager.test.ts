@@ -208,7 +208,6 @@ test("isJavaIndexPrewarmReady requires durable snapshot or complete coverage wit
     }],
     resourceCoverage: []
   };
-  assert.equal(isJavaIndexPrewarmReady({ ...base, snapshotVerificationPending: true }), false);
   assert.equal(isJavaIndexPrewarmReady({ ...base, pendingBackground: 1 }), false);
   assert.equal(isJavaIndexPrewarmReady({
     ...base,
@@ -220,22 +219,7 @@ test("isJavaIndexPrewarmReady requires durable snapshot or complete coverage wit
     ...base,
     snapshot: { state: "DURABLE", durableGeneration: 1, durableManifestFingerprint: "m" }
   }), true);
-  assert.equal(isJavaIndexPrewarmReady({
-    ...base,
-    snapshot: { state: "DURABLE", durableGeneration: 1, durableManifestFingerprint: "m" },
-    factsHydrated: false
-  }), false);
-  assert.equal(isJavaIndexPrewarmReady({
-    ...base,
-    snapshot: { state: "DURABLE", durableGeneration: 1, durableManifestFingerprint: "m" },
-    hibernated: true
-  }), false);
   assert.equal(isJavaIndexPrewarmReady(base), true);
-  assert.equal(isJavaIndexPrewarmReady({
-    ...base,
-    snapshot: { state: "DURABLE", durableGeneration: 1, durableManifestFingerprint: "m" },
-    factsHydrated: false
-  }, { hydrate: false }), true);
 });
 
 test("index idle TTL 0 never registers a close timer", async () => {
