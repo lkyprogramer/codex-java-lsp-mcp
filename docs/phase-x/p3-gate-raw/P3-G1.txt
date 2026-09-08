@@ -1,0 +1,34 @@
+sha=6a2cbdd1fdf5f4f9c30f5891f4a08fab7e8a9b2b
+profile=isolated full (compile + node --test dist/**/*.test.js + scripts/*.test.mjs + dist/smoke.js)
+exit=0
+--- TAP footers ---
+6882:1..1129
+6883:# tests 1129
+6885:# pass 1129
+6886:# fail 0
+6887:# cancelled 0
+6888:# skipped 0
+8628:1..288
+8629:# tests 288
+8631:# pass 288
+8632:# fail 0
+8633:# cancelled 0
+8634:# skipped 0
+--- smoke tools ---
+5108:# Subtest: repo-scoped java_status uses the 15s budget even when start is false
+5109:ok 838 - repo-scoped java_status uses the 15s budget even when start is false
+5138:# Subtest: register wrapper records a counter line without changing java_status bytes
+5139:ok 843 - register wrapper records a counter line without changing java_status bytes
+6648:# Subtest: java_status exposes runtime build and root source metadata
+6649:ok 1091 - java_status exposes runtime build and root source metadata
+6654:# Subtest: java_status returns summary by default and keeps diagnostics explicit
+6655:ok 1092 - java_status returns summary by default and keeps diagnostics explicit
+6660:# Subtest: java_status exposes db and builder fields without requiring diagnostic detail
+6661:ok 1093 - java_status exposes db and builder fields without requiring diagnostic detail
+6666:# Subtest: java_status forwards the request absolute budget to JavaIndex status
+6667:ok 1094 - java_status forwards the request absolute budget to JavaIndex status
+6672:# Subtest: java_status start consumes the same absolute request budget
+6673:ok 1095 - java_status start consumes the same absolute request budget
+8640:[codex-java-lsp] MCP server ready
+8642:  "tools": [
+8646:    "java_status",

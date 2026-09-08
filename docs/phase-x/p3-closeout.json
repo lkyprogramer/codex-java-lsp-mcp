@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "iod-phase-closeout/v1",
+  "phase": "P3",
+  "sha": "6a2cbdd1fdf5f4f9c30f5891f4a08fab7e8a9b2b",
+  "shaFix": "6a2cbdd1fdf5f4f9c30f5891f4a08fab7e8a9b2b",
+  "dated": "2026-09-08",
+  "decision": "pass",
+  "schemaUnchanged": true,
+  "gates": [
+    {
+      "id": "P3-G1",
+      "target": "isolated full + gate:release green",
+      "measured": "At 6a2cbdd isolated full: unit 1129 pass 0 fail, scripts TAP 288 pass 0 fail, smoke exit 0. gate:release last twice exit 0 at d0ea177 (p3-t4-release-1/2).",
+      "pass": true,
+      "rawFile": "docs/phase-x/p3-gate-raw/P3-G1.txt"
+    },
+    {
+      "id": "P3-G2",
+      "target": "three-repo content identity delta 0; ruoyi observation bit-identical",
+      "measured": "At d0ea177: contentDelta0 true (recall/pRead/rReadMust/token P50). MATRIX_EXIT=1 because formal floors fail both arms identically. ruoyi qualityBitIdentical true (TOKEN_FAIL is F1 20% token door). Not re-run after G3 loc commits; reviewer found those commits do not change query algorithms.",
+      "pass": true,
+      "rawFile": "docs/phase-x/p3-gate-raw/p3-t4-verdict.json"
+    },
+    {
+      "id": "P3-G3",
+      "target": "java-index/** + java-knowledge/** + repo-runtime-manager.ts non-test loc ≤9000; JAVA_LSP_* ≤30; manager setTimeout/setInterval ≤3",
+      "measured": "loc=8971 files=46; JAVA_LSP_distinct=30; manager timers=2 (JDT idle setTimeout, freemem pressure setInterval). Conn idle timer lives in sql-client.",
+      "pass": true,
+      "rawFile": "docs/phase-x/p3-gate-raw/P3-G3.txt"
+    },
+    {
+      "id": "P3-G4",
+      "target": "after cutover, retest P2-G5/G6/G7 on production daemon",
+      "measured": "Not run. install-runtime.sh was not executed.",
+      "pass": false,
+      "rawFile": null
+    },
+    {
+      "id": "P3-G5",
+      "target": "48h observation after cutover: 0 FATAL, 0 query errors, 0 watchdog restarts; sampler has no recycle/compact metrics",
+      "measured": "Not run. install-runtime.sh was not executed.",
+      "pass": false,
+      "rawFile": null
+    }
+  ],
+  "review": {
+    "round1": { "p0": 0, "p1": 0, "p2": 5 },
+    "round2": { "p0": 0, "p1": 0 }
+  },
+  "addedLoc": 3698,
+  "deletedLoc": 24035,
+  "notes": "G3 loc cuts: drop hibernateTtlMs/hibernate/recycle API and heap status types; delete bounded-json, CoverageTracker, tree-sitter-smoke-worker, index-validate/worker-protocol; drop snapshot-manifest helpers; move heap searchEntities to src/test-support; re-export RouterJavaIndex/facts/view from agent-router; move cold/incremental builder to src/index-builder. java_status resource no longer emits hibernateTtlMs. Remaining heapUsedBytes hits are process-crash-markers and benchmark process-resource-observer (not index recycle). T4 identity/release oracles remain d0ea177. G4/G5 wait on user confirm of install-runtime.sh. Do not push this tag. Do not merge to main. Schema unchanged (v3)."
+}
