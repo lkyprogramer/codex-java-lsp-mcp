@@ -13,7 +13,12 @@ import { RgRunner } from "../search/rg-runner.js";
 import type { JavaIndexClientApi, JavaIndexOpenOptions, JavaIndexRequestOptions } from "./java-index-client-api.js";
 import { BuilderSupervisor } from "./builder-supervisor.js";
 import { SqlJavaIndexClient } from "./sql/sql-client.js";
-import type { ContextGraphResult, GraphDigest, GraphReachable, JavaIndexRefreshPriority } from "./worker-protocol.js";
+import type {
+  ContextGraphResult,
+  GraphDigest,
+  GraphReachable,
+  JavaIndexRefreshPriority
+} from "./index-types.js";
 import { ENTITY_SEARCH_DEFAULT_LIMIT, type EntityHit } from "./entity-search.js";
 import type {
   AnchorFacts,

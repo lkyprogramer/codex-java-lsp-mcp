@@ -1,4 +1,6 @@
+import type { ContextContract } from "../context-engine/context-contract.js";
 import type { SourceRange } from "../runtime/source-range.js";
+import type { MyBatisMapperResourceFacts } from "./mybatis-types.js";
 export type { SourcePosition, SourceRange } from "../runtime/source-range.js";
 
 export type JavaSourceSet = "main" | "test" | "generated" | "unknown";
@@ -253,6 +255,44 @@ export type JavaIndexSnapshotStatus =
       durableManifestFingerprint?: string;
       failure: "MANIFEST_CHANGED" | "WRITE_FAILED";
     };
+
+export type JavaIndexWorktreeIdentity = {
+  repoRoot: string;
+  repoHash: string;
+  familyHash?: string;
+  isLinkedWorktree: boolean;
+};
+
+export type JavaIndexRefreshPriority = "ACTIVE_ANCHOR";
+
+export type GraphDigest = {
+  digest: string;
+  generation: number;
+  nodes: number;
+  edges: number;
+};
+
+export type GraphReachable = {
+  files: string[];
+  hops: Record<string, number>;
+};
+
+export type ContextGraphResult = {
+  resolvedIntent: string;
+  coverage: "COMPLETE" | "PARTIAL";
+  bundles: Array<{
+    path: string;
+    hops: number;
+    estimatedTokens: number;
+    provingPath: Array<{ kind: string; fromId: string; toId: string }>;
+    closedObligations: string[];
+  }>;
+  unresolved: Array<{ id: string; role: string }>;
+  metrics: { expansions: number; hops: number; estimatedTokens: number };
+  contract?: ContextContract;
+};
+
+export type MyBatisResourceByNamespaceBatch = Array<{ namespace: string; resource?: MyBatisMapperResourceFacts }>;
 
 export type JavaIndexDbStatus = { bytes: number; cacheKb: number };
 export type JavaIndexBuilderStatus = {

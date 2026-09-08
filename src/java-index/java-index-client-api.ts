@@ -2,25 +2,21 @@ import type { DeadlineBudget } from "../runtime/deadline-budget.js";
 import type { EntityHit } from "./entity-search.js";
 import type {
   AnchorFacts,
-  IndexedReadRangeResult,
-  IndexedReference,
-  JavaFileBundle,
-  JavaIndexStatus,
-  JavaTypeFacts,
-  JavaTypeLookupResult,
-  StaticEdgeKind
-} from "./index-types.js";
-import type { MyBatisMapperResourceFacts } from "./mybatis-types.js";
-import type {
   ContextGraphResult,
   GraphDigest,
   GraphReachable,
-  JavaIndexCommand,
+  IndexedReadRangeResult,
+  IndexedReference,
+  JavaFileBundle,
   JavaIndexRefreshPriority,
+  JavaIndexStatus,
   JavaIndexWorktreeIdentity,
-  JavaIndexWorkerTiming,
-  MyBatisResourceByNamespaceBatch
-} from "./worker-protocol.js";
+  JavaTypeFacts,
+  JavaTypeLookupResult,
+  MyBatisResourceByNamespaceBatch,
+  StaticEdgeKind
+} from "./index-types.js";
+import type { MyBatisMapperResourceFacts } from "./mybatis-types.js";
 
 export type JavaIndexOpenOptions = {
   leaseRoot?: string;
@@ -35,8 +31,38 @@ export type JavaIndexRequestOptions = {
   telemetry?: JavaIndexRpcTelemetrySink;
 };
 
-export type JavaIndexRpcOperation = JavaIndexCommand["type"];
+export type JavaIndexRpcOperation =
+  | "OPEN"
+  | "REFRESH"
+  | "REFRESH_RESOURCES"
+  | "RECONCILE"
+  | "QUERY_ANCHOR"
+  | "QUERY_TYPE"
+  | "QUERY_TYPES"
+  | "QUERY_IMPLEMENTERS"
+  | "QUERY_TYPE_REFERENCERS"
+  | "QUERY_CALLERS"
+  | "QUERY_CALLEES"
+  | "QUERY_CALLEES_BATCH"
+  | "QUERY_METHODS_WITH_PARAMETER_TYPES"
+  | "QUERY_FILES"
+  | "QUERY_READ_RANGES"
+  | "QUERY_MYBATIS_RESOURCE"
+  | "QUERY_MYBATIS_RESOURCES_BY_NAMESPACE"
+  | "QUERY_REPOSITORY_FACT_MARKERS"
+  | "QUERY_ENTITY_SEARCH"
+  | "QUERY_GRAPH_DIGEST"
+  | "QUERY_GRAPH_REACHABLE"
+  | "QUERY_CONTEXT_GRAPH"
+  | "STATUS"
+  | "FLUSH"
+  | "CLOSE";
 export type JavaIndexRpcOutcome = "completed" | "cancelled" | "deadlineExceeded" | "failed" | "retired";
+export type JavaIndexWorkerTiming = {
+  queueDepthAtEnqueue: number;
+  queueMs: number;
+  processingMs: number;
+};
 export type JavaIndexWorkerRetireReason =
   | "DEADLINE_EXCEEDED"
   | "MALFORMED_RESPONSE"

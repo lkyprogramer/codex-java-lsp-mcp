@@ -13,7 +13,7 @@ import {
   type EntityHit
 } from "../entity-search.js";
 import type { JavaIndexClientApi } from "../java-index-client-api.js";
-import type { ContextGraphResult, GraphDigest, GraphReachable } from "../worker-protocol.js";
+import type { ContextGraphResult, GraphDigest, GraphReachable } from "../index-types.js";
 
 export type EntitySearchPort = {
   search(task: string, limit?: number): EntityHit[];
@@ -36,14 +36,11 @@ function relativePathOf(deps: SqlQueryDeps, inputPath: string): string {
 }
 
 export function queryGraphDigest(deps: SqlQueryDeps): GraphDigest {
-  const memory = process.memoryUsage();
   return {
     digest: deps.graph.digest(),
     generation: deps.graph.generation,
     nodes: deps.graph.nodesById.size,
-    edges: deps.graph.edgesById.size,
-    heapUsedBytes: memory.heapUsed,
-    rssBytes: memory.rss
+    edges: deps.graph.edgesById.size
   };
 }
 

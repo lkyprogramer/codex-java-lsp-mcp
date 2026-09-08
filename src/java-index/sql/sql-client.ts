@@ -14,42 +14,21 @@ import type {
 import { ENTITY_SEARCH_DEFAULT_LIMIT, type EntityHit } from "../entity-search.js";
 import type {
   AnchorFacts,
+  ContextGraphResult,
+  GraphDigest,
+  GraphReachable,
   IndexedReadRangeResult,
   IndexedReference,
   JavaFileBundle,
+  JavaIndexRefreshPriority,
   JavaIndexStatus,
   JavaTypeFacts,
   JavaTypeLookupResult,
+  MyBatisResourceByNamespaceBatch,
   SourceRootCoverage,
   StaticEdgeKind
 } from "../index-types.js";
 import type { MyBatisMapperResourceFacts } from "../mybatis-types.js";
-import type {
-  ContextGraphResult,
-  GraphDigest,
-  GraphReachable,
-  JavaIndexRefreshPriority,
-  MyBatisResourceByNamespaceBatch
-} from "../worker-protocol.js";
-import {
-  validateAnchorFacts,
-  validateFileBundleArray,
-  validateIndexedReferenceArray,
-  validateIndexedReferenceBatch,
-  validateJavaIndexStatus,
-  validateMyBatisMapperResourceFacts,
-  validateMyBatisResourceByNamespaceBatch,
-  validateRepositoryFactMarkers,
-  validateStringArray,
-  validateTypeFactsArray,
-  validateTypeLookup,
-  validateTypeLookupArray,
-  validateContextGraphResult,
-  validateEntitySearchHits,
-  validateGraphDigest,
-  validateGraphReachable,
-  validateIndexedReadRangeResults
-} from "../worker-protocol.js";
 import { readIndexCounts, readMeta } from "../builder/progress.js";
 import { BuilderSupervisor, type BuilderSupervisorJob } from "../builder-supervisor.js";
 import { close as closeDb, DEFAULT_SQLITE_CACHE_KB, openIndexDb, prepareCached, type IndexDatabase } from "./driver.js";
@@ -229,17 +208,17 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     _requestOptions?: JavaIndexRequestOptions
   ): Promise<IndexedReadRangeResult[]> {
     if (requests.length === 0) return [];
-    return validateIndexedReadRangeResults(await runReadRanges(this.queryDeps(), requests));
+    return runReadRanges(this.queryDeps(), requests);
   }
   async queryGraphDigest(_requestOptions?: JavaIndexRequestOptions): Promise<GraphDigest> {
-    return validateGraphDigest(runGraphDigest(this.queryDeps()));
+    return runGraphDigest(this.queryDeps());
   }
   async queryGraphReachable(
     fromRelativePath: string,
     maxHops: number,
     _requestOptions?: JavaIndexRequestOptions
   ): Promise<GraphReachable> {
-    return validateGraphReachable(runGraphReachable(this.queryDeps(), fromRelativePath, maxHops));
+    return runGraphReachable(this.queryDeps(), fromRelativePath, maxHops);
   }
   async queryContextGraph(
     input: Parameters<JavaIndexClientApi["queryContextGraph"]>[0],
@@ -247,10 +226,10 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
   ): Promise<ContextGraphResult> {
     this.ensureConn();
     this.graph?.prefetch();
-    return validateContextGraphResult(runContextGraph(this.queryDeps(), input));
+    return runContextGraph(this.queryDeps(), input);
   }
   async queryEntitySearch(task: string, limit = ENTITY_SEARCH_DEFAULT_LIMIT, _requestOptions?: JavaIndexRequestOptions): Promise<EntityHit[]> {
-    return validateEntitySearchHits(runEntitySearch(this.queryDeps(), task, limit));
+    return runEntitySearch(this.queryDeps(), task, limit);
   }
 
   async queryAnchor(file: string, line: number, column: number): Promise<AnchorFacts | undefined> {
@@ -260,89 +239,81 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     const value = anchor
       ? { ...anchor, coverage: this.coverageStateFor(anchor.file.sourceRoot, generation) }
       : undefined;
-    return validateAnchorFacts(value);
+    return value;
   }
 
   async queryType(typeText: string, scopeFile?: string): Promise<JavaTypeLookupResult> {
     const scope = scopeFile ? this.toRelative(scopeFile) : undefined;
     const result = this.requireStore().typeLookup(typeText, scope);
-    const value = result.state === "UNRESOLVED"
+    return result.state === "UNRESOLVED"
       ? { ...result, coverage: this.worstTypeLookupCoverage(this.lastStatus.indexedGeneration) }
       : result;
-    return validateTypeLookup(value);
   }
 
   async queryTypes(queries: Array<{ typeText: string; scopeFile?: string }>): Promise<JavaTypeLookupResult[]> {
     if (queries.length === 0) return [];
     const generation = this.lastStatus.indexedGeneration;
     const store = this.requireStore();
-    const value = queries.map(query => {
+    return queries.map(query => {
       const scope = query.scopeFile ? this.toRelative(query.scopeFile) : undefined;
       const result = store.typeLookup(query.typeText, scope);
       return result.state === "UNRESOLVED"
         ? { ...result, coverage: this.worstTypeLookupCoverage(generation) }
         : result;
     });
-    return validateTypeLookupArray(value);
   }
 
   async queryImplementers(typeId: string, limit: number): Promise<JavaTypeFacts[]> {
-    return validateTypeFactsArray(this.requireStore().implementers(typeId, limit));
+    return this.requireStore().implementers(typeId, limit);
   }
 
   async queryTypeReferencers(typeId: string, edgeKinds: StaticEdgeKind[], limit: number): Promise<IndexedReference[]> {
-    return validateIndexedReferenceArray(this.requireStore().typeReferencers(typeId, new Set(edgeKinds), limit));
+    return this.requireStore().typeReferencers(typeId, new Set(edgeKinds), limit);
   }
 
   async queryCallers(methodId: string, limit: number): Promise<IndexedReference[]> {
-    return validateIndexedReferenceArray(this.requireStore().callers(methodId, limit));
+    return this.requireStore().callers(methodId, limit);
   }
 
   async queryCallees(methodId: string, limit: number): Promise<IndexedReference[]> {
-    return validateIndexedReferenceArray(this.requireStore().callees(methodId, limit));
+    return this.requireStore().callees(methodId, limit);
   }
 
   async queryCalleesBatch(methodIds: string[], limit: number): Promise<Array<{ methodId: string; callees: IndexedReference[] }>> {
     if (methodIds.length === 0) return [];
     const store = this.requireStore();
-    return validateIndexedReferenceBatch(
-      methodIds.map(methodId => ({ methodId, callees: store.callees(methodId, limit) }))
-    );
+    return methodIds.map(methodId => ({ methodId, callees: store.callees(methodId, limit) }));
   }
 
   async queryMethodsWithParameterTypes(typeIds: string[], limit: number): Promise<string[]> {
     if (typeIds.length === 0) return [];
-    return validateStringArray(this.requireStore().methodsWithParameterTypes(typeIds, limit));
+    return this.requireStore().methodsWithParameterTypes(typeIds, limit);
   }
 
   async queryFiles(files: string[]): Promise<JavaFileBundle[]> {
     const relative = files.map(file => this.toRelative(file)).filter((path): path is string => path !== undefined);
-    return validateFileBundleArray(this.requireStore().files(relative));
+    return this.requireStore().files(relative);
   }
 
   async queryMyBatisResource(relativePath: string): Promise<MyBatisMapperResourceFacts | undefined> {
     const relative = this.toRelative(relativePath) ?? relativePath;
-    return validateMyBatisMapperResourceFacts(this.requireStore().myBatisResource(relative));
+    return this.requireStore().myBatisResource(relative);
   }
 
   async queryMyBatisResourcesByNamespace(namespaces: string[]): Promise<MyBatisResourceByNamespaceBatch> {
     if (namespaces.length === 0) return [];
     const store = this.requireStore();
-    return validateMyBatisResourceByNamespaceBatch(
-      namespaces.map(namespace => {
-        const resource = store.myBatisResourceForNamespace(namespace);
-        return resource ? { namespace, resource } : { namespace };
-      })
-    );
+    return namespaces.map(namespace => {
+      const resource = store.myBatisResourceForNamespace(namespace);
+      return resource ? { namespace, resource } : { namespace };
+    });
   }
 
   async queryRepositoryFactMarkers(
     importPrefixes: string[],
     annotationPrefixes: string[]
   ): Promise<{ importPrefixFound: boolean; annotationPrefixFound: boolean }> {
-    return validateRepositoryFactMarkers(
-      this.requireStore().repositoryFactMarkers(importPrefixes, annotationPrefixes)
-    );
+    return this.requireStore().repositoryFactMarkers(importPrefixes, annotationPrefixes);
   }
 
   private requireSupervisor(_method: string): BuilderSupervisor {
@@ -556,6 +527,6 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
       },
       ...(builder ? { builder } : {})
     };
-    return validateJavaIndexStatus(status);
+    return status;
   }
 }
