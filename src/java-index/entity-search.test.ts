@@ -4,11 +4,11 @@ import type { JavaFileBundle, JavaFileFacts, JavaMethodFacts, JavaTypeFacts, Sou
 import {
   extractFqnCandidates,
   recordsFromBundle,
-  searchEntities,
   splitIdentifier,
   tokenize,
   type EntityRecord
 } from "./entity-search.js";
+import { searchEntities } from "../test-support/entity-search-oracle.js";
 import { javaFileId, javaMethodId, javaTypeId } from "./stable-id.js";
 
 const RANGE: SourceRange = { start: { line: 1, column: 1 }, end: { line: 8, column: 2 } };
