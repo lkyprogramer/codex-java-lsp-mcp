@@ -10,9 +10,9 @@ import { readEntityRecords } from "../sql/entity-tokens.js";
 import { SqlKnowledgeGraph } from "../sql/knowledge-graph.js";
 import { encodeFacts, STATIC_EDGE_SELECT } from "../sql/rows.js";
 import { internSym } from "../sql/sym.js";
-import { runSqlColdBuild } from "./cold-build.js";
-import { applyBuilderJob, runBuilderServe } from "./incremental.js";
-import { readMeta } from "./progress.js";
+import { runSqlColdBuild } from "../../index-builder/cold-build.js";
+import { applyBuilderJob, runBuilderServe } from "../../index-builder/incremental.js";
+import { readMeta } from "../../index-builder/progress.js";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const fixturesRoot = path.resolve(dirname, "..", "..", "..", "fixtures", "java-index-v2");

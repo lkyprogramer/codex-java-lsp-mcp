@@ -3,7 +3,7 @@ import { once } from "node:events";
 import { createInterface, type Interface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { close, openIndexDb } from "./sql/driver.js";
-import { readBuildProgress } from "./builder/progress.js";
+import { readBuildProgress } from "../index-builder/progress.js";
 
 export const DEFAULT_BUILDER_IDLE_MS = 60_000;
 export const DEFAULT_WATCHDOG_INTERVAL_MS = 30_000;
@@ -45,7 +45,7 @@ function builderEnv(extra?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
 }
 
 function defaultScriptPath(): string {
-  return fileURLToPath(new URL("./builder/builder-main.js", import.meta.url));
+  return fileURLToPath(new URL("../index-builder/builder-main.js", import.meta.url));
 }
 
 function progressFingerprint(dbPath: string): string {

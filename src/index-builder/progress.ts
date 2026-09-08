@@ -1,4 +1,4 @@
-import { prepareCached, type IndexDatabase } from "../sql/driver.js";
+import { prepareCached, type IndexDatabase } from "../java-index/sql/driver.js";
 
 export type BuildPhase = "declare" | "resolve";
 

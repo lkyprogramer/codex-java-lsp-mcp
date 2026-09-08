@@ -1,8 +1,8 @@
 import readline from "node:readline";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { close, openIndexDb, type IndexDatabase } from "../sql/driver.js";
-import { ensureSchema } from "../sql/schema.js";
+import { close, openIndexDb, type IndexDatabase } from "../java-index/sql/driver.js";
+import { ensureSchema } from "../java-index/sql/schema.js";
 import { runSqlColdBuild } from "./cold-build.js";
 import { runBuilderServe } from "./incremental.js";
 

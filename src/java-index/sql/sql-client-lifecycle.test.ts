@@ -6,7 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { BuilderSupervisor } from "../builder-supervisor.js";
-import { runSqlColdBuild } from "../builder/cold-build.js";
+import { runSqlColdBuild } from "../../index-builder/cold-build.js";
 import { close, openIndexDb } from "./driver.js";
 import { ensureSchema } from "./schema.js";
 import { SqlJavaIndexClient } from "./sql-client.js";

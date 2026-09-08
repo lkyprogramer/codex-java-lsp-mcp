@@ -29,7 +29,7 @@ import type {
   StaticEdgeKind
 } from "../index-types.js";
 import type { MyBatisMapperResourceFacts } from "../mybatis-types.js";
-import { readIndexCounts, readMeta } from "../builder/progress.js";
+import { readIndexCounts, readMeta } from "../../index-builder/progress.js";
 import { BuilderSupervisor, type BuilderSupervisorJob } from "../builder-supervisor.js";
 import { close as closeDb, DEFAULT_SQLITE_CACHE_KB, openIndexDb, prepareCached, type IndexDatabase } from "./driver.js";
 import { SqlEntitySearch } from "./entity-search.js";

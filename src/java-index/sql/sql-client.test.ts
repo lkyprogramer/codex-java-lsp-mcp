@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { runSqlColdBuild } from "../builder/cold-build.js";
-import { readIndexCounts } from "../builder/progress.js";
+import { runSqlColdBuild } from "../../index-builder/cold-build.js";
+import { readIndexCounts } from "../../index-builder/progress.js";
 
 import { close, openIndexDb } from "./driver.js";
 import { ensureSchema } from "./schema.js";

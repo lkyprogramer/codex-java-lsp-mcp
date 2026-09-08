@@ -22,8 +22,8 @@ import { close, openIndexDb } from "../sql/driver.js";
 import { ensureSchema } from "../sql/schema.js";
 import { SqlKnowledgeGraph } from "../sql/knowledge-graph.js";
 import { readEntityRecords } from "../sql/entity-tokens.js";
-import { runSqlColdBuild } from "./cold-build.js";
-import { readBuildProgress, readMeta } from "./progress.js";
+import { runSqlColdBuild } from "../../index-builder/cold-build.js";
+import { readBuildProgress, readMeta } from "../../index-builder/progress.js";
 
 function sqlGraph() {
   const db = openIndexDb(":memory:");
