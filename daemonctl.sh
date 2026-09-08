@@ -196,7 +196,11 @@ start_daemon() {
     if [[ "$state" != "1" ]]; then
       return 1
     fi
-    "$LAUNCHCTL_BIN" bootstrap "gui/$UID" "$LAUNCH_AGENT_PLIST"
+    if ! "$LAUNCHCTL_BIN" bootstrap "gui/$UID" "$LAUNCH_AGENT_PLIST"; then
+      # Aqua login domain can return EIO (5) to bootstrap from some agent
+      # sessions; legacy load still attaches the same LaunchAgent.
+      "$LAUNCHCTL_BIN" load -w "$LAUNCH_AGENT_PLIST"
+    fi
   fi
   wait_ready
 }
