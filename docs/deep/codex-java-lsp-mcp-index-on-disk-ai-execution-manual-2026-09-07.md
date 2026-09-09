@@ -1,8 +1,7 @@
 # Index-on-Disk 重构：AI 自主开发执行手册（Phase / Task 级）
 
-状态：IMPLEMENTED（P3）（2026-09-07）；R1 修订（§3.9 schema v3）仍适用。生产切流仍须 T4 证据 + 用户确认。
+状态：**LANDED**（2026-09-09）。P0–P3 已在 `codex/index-on-disk` 落地并装进本机 daemon `03f5a4154081`。T4 身份证据在 `d0ea177`；G3 loc 在 `6a2cbdd`；切流后补了 worktree mtime-hash reconcile（`e320e60`）和 WAL truncate（`03f5a41`）。现行操作见 `docs/phase-f/production-operations.md`。本手册保留为当时的 Task 协议，不再当待办。
 上位方案：`codex-java-lsp-mcp-index-on-disk-rearchitecture-plan-2026-09-06.md`（以下称「方案」）。本手册把方案 §7 的 X0–X5 细化为 4 个 Phase、23 个 Task，并规定 Task 级与 Phase 级的验证、Phase 末的子代理 review 协议。方案与本手册冲突时，以本手册为准（本手册基于三份只读代码探索写成，锚点更准）。
-用户决定：**不留过渡期**，重构期间不使用本 LSP；以最快切换为目标。
 
 ---
 

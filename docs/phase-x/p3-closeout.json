@@ -31,16 +31,16 @@
     {
       "id": "P3-G4",
       "target": "after cutover, retest P2-G5/G6/G7 on production daemon",
-      "measured": "Not run. install-runtime.sh was not executed.",
-      "pass": false,
-      "rawFile": null
+      "measured": "Installed e320e60 then 03f5a41. Idle RSS 119 MiB after 15.4h (≤120). Four-repo java_status+impact spiked 364 MiB page cache then fell to 98. Cipherlink sibling worktree: first java_status 528ms, file.id 629/629, mtime-only reconcile. No index process ≥1 GiB; JDT xmx=2g is separate. Query-spike >250 is sqlite cache, not heap recycle.",
+      "pass": true,
+      "rawFile": "docs/phase-f/production-operations.md"
     },
     {
       "id": "P3-G5",
       "target": "48h observation after cutover: 0 FATAL, 0 query errors, 0 watchdog restarts; sampler has no recycle/compact metrics",
-      "measured": "Not run. install-runtime.sh was not executed.",
+      "measured": "IOD live from 2026-09-08T03:21Z; sampled 2026-09-09T02:33Z (~23h wall, 15.4h current process) then reinstalled 03f5a41 for WAL. After IOD: 0 heap FATAL/recycle/hibernate. One builder 'database is locked' (non-fatal). LaunchAgent login auto-start worked. WAL 8.5GiB truncated to 0 on pins after idle. Not a full 48h uninterrupted process.",
       "pass": false,
-      "rawFile": null
+      "rawFile": "docs/phase-f/production-operations.md"
     }
   ],
   "review": {
@@ -49,5 +49,5 @@
   },
   "addedLoc": 3698,
   "deletedLoc": 24035,
-  "notes": "G3 loc cuts: drop hibernateTtlMs/hibernate/recycle API and heap status types; delete bounded-json, CoverageTracker, tree-sitter-smoke-worker, index-validate/worker-protocol; drop snapshot-manifest helpers; move heap searchEntities to src/test-support; re-export RouterJavaIndex/facts/view from agent-router; move cold/incremental builder to src/index-builder. java_status resource no longer emits hibernateTtlMs. Remaining heapUsedBytes hits are process-crash-markers and benchmark process-resource-observer (not index recycle). T4 identity/release oracles remain d0ea177. G4/G5 wait on user confirm of install-runtime.sh. Do not push this tag. Do not merge to main. Schema unchanged (v3)."
+  "notes": "G3 loc cuts: drop hibernateTtlMs/hibernate/recycle API and heap status types; delete bounded-json, CoverageTracker, tree-sitter-smoke-worker, index-validate/worker-protocol; drop snapshot-manifest helpers; move heap searchEntities to src/test-support; re-export RouterJavaIndex/facts/view from agent-router; move cold/incremental builder to src/index-builder. java_status resource no longer emits hibernateTtlMs. Remaining heapUsedBytes hits are process-crash-markers and benchmark process-resource-observer (not index recycle). T4 identity/release oracles remain d0ea177. Production cutover e320e60/03f5a41. G5 48h not complete. Schema unchanged (v3)."
 }
