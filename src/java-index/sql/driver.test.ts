@@ -1,9 +1,20 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { bindChunks, close, inClause, openIndexDb, prepareCached, SQLITE_MAX_VARIABLE_NUMBER, withTransaction } from "./driver.js";
+import {
+  bindChunks,
+  close,
+  compactWalFile,
+  DEFAULT_JOURNAL_SIZE_LIMIT_BYTES,
+  DEFAULT_WAL_AUTOCHECKPOINT_PAGES,
+  inClause,
+  openIndexDb,
+  prepareCached,
+  SQLITE_MAX_VARIABLE_NUMBER,
+  withTransaction
+} from "./driver.js";
 import { SCHEMA_VERSION, ensureSchema } from "./schema.js";
 import { vacuumInto } from "./vacuum-into.js";
 
@@ -48,6 +59,8 @@ test("file database enables WAL and incremental auto_vacuum", () => {
     assert.equal(pragma(db, "auto_vacuum"), 2);
     assert.equal(pragma(db, "synchronous"), 1);
     assert.equal(pragma(db, "cache_size"), -32768);
+    assert.equal(pragma(db, "wal_autocheckpoint"), DEFAULT_WAL_AUTOCHECKPOINT_PAGES);
+    assert.equal(pragma(db, "journal_size_limit"), DEFAULT_JOURNAL_SIZE_LIMIT_BYTES);
     ensureSchema(db);
     const first = prepareCached(db, "SELECT value FROM meta WHERE key='schemaVersion'");
     const second = prepareCached(db, "SELECT value FROM meta WHERE key='schemaVersion'");
@@ -56,6 +69,41 @@ test("file database enables WAL and incremental auto_vacuum", () => {
     close(db);
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("writer close truncates WAL; a held reader can delay that until compactWalFile", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "iod-wal-"));
+  const file = path.join(dir, "index.sqlite");
+  const wal = `${file}-wal`;
+  const writer = openIndexDb(file);
+  ensureSchema(writer);
+  withTransaction(writer, () => {
+    writer.exec("CREATE TABLE bulk(id INTEGER PRIMARY KEY, payload TEXT)");
+    const insert = writer.prepare("INSERT INTO bulk(payload) VALUES (?)");
+    const payload = "x".repeat(4096);
+    for (let i = 0; i < 400; i += 1) insert.run(payload);
+  });
+  close(writer);
+  assert.equal(existsSync(file), true);
+  if (existsSync(wal)) {
+    assert.ok(statSync(wal).size <= DEFAULT_JOURNAL_SIZE_LIMIT_BYTES, `wal ${statSync(wal).size}`);
+  }
+
+  const heldWriter = openIndexDb(file);
+  const reader = openIndexDb(file, { readOnly: true });
+  withTransaction(heldWriter, () => {
+    const insert = heldWriter.prepare("INSERT INTO bulk(payload) VALUES (?)");
+    const payload = "y".repeat(4096);
+    for (let i = 0; i < 800; i += 1) insert.run(payload);
+  });
+  close(heldWriter);
+  const pinned = existsSync(wal) ? statSync(wal).size : 0;
+  close(reader);
+  compactWalFile(file);
+  const after = existsSync(wal) ? statSync(wal).size : 0;
+  assert.ok(after <= DEFAULT_JOURNAL_SIZE_LIMIT_BYTES, `compacted wal ${after}`);
+  assert.ok(after <= pinned, `compact ${after} should not grow pinned ${pinned}`);
+  rmSync(dir, { recursive: true, force: true });
 });
 
 test("vacuumInto copies a file database to a new path", () => {

@@ -31,7 +31,7 @@ import type {
 import type { MyBatisMapperResourceFacts } from "../mybatis-types.js";
 import { readIndexCounts, readMeta } from "../../index-builder/progress.js";
 import { BuilderSupervisor, type BuilderSupervisorJob } from "../builder-supervisor.js";
-import { close as closeDb, DEFAULT_SQLITE_CACHE_KB, openIndexDb, prepareCached, type IndexDatabase } from "./driver.js";
+import { close as closeDb, compactWalFile, DEFAULT_SQLITE_CACHE_KB, openIndexDb, prepareCached, type IndexDatabase } from "./driver.js";
 import { SqlEntitySearch } from "./entity-search.js";
 import { SqlFactsStore } from "./facts-store.js";
 import { SqlKnowledgeGraph } from "./knowledge-graph.js";
@@ -187,12 +187,11 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
   }
   async awaitPrewarmReady(requestOptions?: JavaIndexRequestOptions): Promise<JavaIndexStatus> {
     this.requireSupervisor("awaitPrewarmReady");
+    this.dropConn();
     for (;;) {
       requestOptions?.budget?.throwIfExpired("awaitPrewarmReady");
-      this.reloadIfOpen();
-      if (existsSync(this.dbPath) && !this.db) this.reload();
-      if (this.db && readMeta(this.db, "buildState") === "READY") {
-        this.lastStatus = this.assembleStatus();
+      if (this.peekBuildState() === "READY") {
+        this.reload();
         return this.lastStatus;
       }
       const waitMs = Math.min(250, requestOptions?.budget?.remainingMs(250) ?? 250);
@@ -335,10 +334,6 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     return this.lastStatus;
   }
 
-  private reloadIfOpen(): void {
-    if (this.db) this.reload();
-  }
-
   private reload(clearError = false): void {
     if (this.db) closeDb(this.db);
     this.db = undefined;
@@ -370,6 +365,18 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     this.idleTimer = setTimeout(() => this.dropConn(), this.connIdleMs);
   }
 
+  private peekBuildState(): string | undefined {
+    if (!existsSync(this.dbPath)) return undefined;
+    const db = openIndexDb(this.dbPath, { readOnly: true });
+    try {
+      return readMeta(db, "buildState");
+    } catch {
+      return undefined;
+    } finally {
+      closeDb(db);
+    }
+  }
+
   private dropConn(): void {
     this.clearIdle();
     if (!this.db) return;
@@ -378,6 +385,7 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     this.store = undefined;
     this.graph = undefined;
     this.search = undefined;
+    compactWalFile(this.dbPath);
   }
 
   private clearIdle(): void {

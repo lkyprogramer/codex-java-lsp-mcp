@@ -1,8 +1,13 @@
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync, type StatementSync } from "node:sqlite";
 
 export const DEFAULT_SQLITE_CACHE_KB = 32768;
+/** SQLite default; kept explicit so write connections always autocheckpoint. */
+export const DEFAULT_WAL_AUTOCHECKPOINT_PAGES = 1000;
+/** After a successful checkpoint, cap leftover WAL (bytes). */
+export const DEFAULT_JOURNAL_SIZE_LIMIT_BYTES = 64 * 1024 * 1024;
+export const DEFAULT_BUSY_TIMEOUT_MS = 5000;
 
 /** node:sqlite compile-time SQLITE_MAX_VARIABLE_NUMBER. */
 export const SQLITE_MAX_VARIABLE_NUMBER = 32766;
@@ -55,11 +60,33 @@ export function openIndexDb(path: string, options: OpenIndexDbOptions = {}): Ind
     db.exec("PRAGMA auto_vacuum=INCREMENTAL");
     db.exec("PRAGMA journal_mode=WAL");
     db.exec("PRAGMA synchronous=NORMAL");
+    db.exec(`PRAGMA wal_autocheckpoint=${DEFAULT_WAL_AUTOCHECKPOINT_PAGES}`);
+    db.exec(`PRAGMA journal_size_limit=${DEFAULT_JOURNAL_SIZE_LIMIT_BYTES}`);
+    db.exec(`PRAGMA busy_timeout=${DEFAULT_BUSY_TIMEOUT_MS}`);
   }
   db.exec(`PRAGMA cache_size=-${cacheKb}`);
   db.exec("PRAGMA foreign_keys=ON");
   db.exec("PRAGMA temp_store=MEMORY");
   return db;
+}
+
+export function checkpointWal(db: IndexDatabase, mode: "PASSIVE" | "TRUNCATE" | "RESTART" = "PASSIVE"): void {
+  try {
+    db.exec(`PRAGMA wal_checkpoint(${mode})`);
+  } catch {
+    // Readonly connections and SQLITE_BUSY writers cannot checkpoint.
+  }
+}
+
+/** Open a writer just long enough to truncate WAL after the last reader drops. */
+export function compactWalFile(dbPath: string): void {
+  if (isMemoryPath(dbPath) || !existsSync(dbPath)) return;
+  try {
+    const db = openIndexDb(dbPath);
+    close(db);
+  } catch {
+    // Another writer (builder) owns the file; the next close will truncate.
+  }
 }
 
 export function withTransaction<T>(db: IndexDatabase, fn: () => T): T {
@@ -97,5 +124,6 @@ export function forgetPrepared(db: IndexDatabase): void {
 
 export function close(db: IndexDatabase): void {
   forgetPrepared(db);
+  checkpointWal(db, "TRUNCATE");
   db.close();
 }
