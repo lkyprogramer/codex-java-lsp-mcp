@@ -1,0 +1,9 @@
+dated: 2026-09-07
+measurement_sha: 86de82e
+db: /tmp/iod-lishuedu.sqlite
+command: stat -f %z /tmp/iod-lishuedu.sqlite
+remeasure_this_session: 1407225856
+ls: -rw-r--r--  1407225856 Sep  7 02:13 /tmp/iod-lishuedu.sqlite
+pass: no
+target_bytes: 367001600
+note: original cold-build /usr/bin/time -l stdout was not kept as a dedicated file; size matches p0-blocked.md G4.

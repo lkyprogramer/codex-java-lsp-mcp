@@ -92,9 +92,7 @@ test("Task36 Step6a smoke enforces process lease caps and executes every isolate
     "fast_only_cache_janitor",
     "linked_worktree_ignore",
     "storm_foreground_anchor",
-    "snapshot_generation_rebase",
-    "sibling_seed_cases",
-    "seed_reconcile_equivalence"
+    "snapshot_generation_rebase"
   ];
   for (const name of unitBackedCases) {
     assert.equal(report.cases[name].execution, "subprocess_test");

@@ -6,7 +6,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { JavaIndexClient } from "../dist/java-index/java-index-client.js";
+import { SqlJavaIndexClient } from "../dist/java-index/sql/sql-client.js";
 import { RouterJavaIndex } from "../dist/java-index/router-java-index.js";
 
 const PROJECTS = ["lishuedu", "cipherlink", "exam-parent-v3"];
@@ -85,7 +85,7 @@ async function queryPlan(index, fromRelativePath, taskText, profile, anchorLine)
 async function replayProject(project, repoRoot, timeoutMs, cacheRoot) {
   const scenarios = await loadScenarios(project);
   const train = await loadTrainTasks(project);
-  const client = new JavaIndexClient(repoRoot, path.join(cacheRoot, project));
+  const client = new SqlJavaIndexClient(repoRoot, path.join(cacheRoot, project));
   const index = new RouterJavaIndex(repoRoot, client);
   const latencies = [];
   let hits = 0;

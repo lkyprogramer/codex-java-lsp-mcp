@@ -1,8 +1,8 @@
 // input: JavaIndex store facts after AST extract/resolve.
 // output: Structural + N2a call/framework/persistence knowledge-graph edges.
 // pos: N1/N2a builder. Reuses ast-extractor facts; does not re-parse.
-import type { JavaFieldFacts, JavaFileBundle, JavaFileFacts, JavaMethodFacts, JavaTypeFacts } from "../java-index/index-types.js";
-import type { JavaIndexStore } from "../java-index/index-store.js";
+import type { JavaFileBundle, JavaMethodFacts, JavaTypeFacts } from "../java-index/index-types.js";
+import type { FactsIter, FactsReader } from "../java-index/facts-reader.js";
 import { addCallEdges } from "./call-resolver.js";
 import { isStructuralEdgeKind } from "./edge-kinds.js";
 import { addFrameworkEdges } from "./framework-edge-builder.js";
@@ -18,7 +18,7 @@ import {
   knowledgeSourceRootId,
   knowledgeTypeId
 } from "./entity-id.js";
-import { KnowledgeGraphStore } from "./graph-store.js";
+import type { KnowledgeGraphStore } from "./graph-reader.js";
 import type { GraphEdge, GraphNode, NodeKind } from "./schema.js";
 
 function relativePathOfFileId(fileId: string): string {
@@ -63,53 +63,17 @@ function edge(kind: GraphEdge["kind"], fromId: string, toId: string, generation:
 export class KnowledgeGraphBuilder {
   constructor(private readonly graph: KnowledgeGraphStore) {}
 
-  rebuildFromStore(store: JavaIndexStore, generation: number): void {
+  rebuildFromStore(store: FactsReader & FactsIter, generation: number): void {
     this.graph.clear();
     this.graph.generation = generation;
     this.ensureRepository(generation);
-    const typesByFile = new Map<string, JavaTypeFacts[]>();
-    const fieldsByFile = new Map<string, JavaFieldFacts[]>();
-    const methodsByFile = new Map<string, JavaMethodFacts[]>();
-    const edgesByFile = new Map<string, JavaFileBundle["edges"]>();
-    for (const type of store.typesById.values()) {
-      const path = relativePathOfFileId(type.fileId);
-      const bucket = typesByFile.get(path) ?? [];
-      bucket.push(type);
-      typesByFile.set(path, bucket);
-    }
-    for (const field of store.fieldsById.values()) {
-      const owner = store.typesById.get(field.ownerTypeId);
-      const path = owner ? relativePathOfFileId(owner.fileId) : "";
-      if (!path) continue;
-      const bucket = fieldsByFile.get(path) ?? [];
-      bucket.push(field);
-      fieldsByFile.set(path, bucket);
-    }
-    for (const method of store.methodsById.values()) {
-      const owner = store.typesById.get(method.ownerTypeId);
-      const path = owner ? relativePathOfFileId(owner.fileId) : "";
-      if (!path) continue;
-      const bucket = methodsByFile.get(path) ?? [];
-      bucket.push(method);
-      methodsByFile.set(path, bucket);
-    }
-    for (const item of store.edgesById.values()) {
-      const bucket = edgesByFile.get(item.sourceFile) ?? [];
-      bucket.push(item);
-      edgesByFile.set(item.sourceFile, bucket);
-    }
-    for (const file of store.filesByPath.values()) {
-      this.addBundle({
-        file,
-        types: typesByFile.get(file.relativePath) ?? [],
-        fields: fieldsByFile.get(file.relativePath) ?? [],
-        methods: methodsByFile.get(file.relativePath) ?? [],
-        edges: edgesByFile.get(file.relativePath) ?? []
-      }, store, generation);
+    for (const file of store.iterFiles()) {
+      const bundle = store.files([file.relativePath])[0];
+      if (bundle) this.addBundle(bundle, store, generation);
     }
   }
 
-  replaceFile(bundle: JavaFileBundle, store: JavaIndexStore, generation: number): void {
+  replaceFile(bundle: JavaFileBundle, store: FactsReader, generation: number): void {
     this.graph.removeFiles([bundle.file.relativePath]);
     this.graph.generation = Math.max(this.graph.generation, generation);
     this.ensureRepository(generation);
@@ -127,7 +91,7 @@ export class KnowledgeGraphBuilder {
     }
   }
 
-  private addBundle(bundle: JavaFileBundle, store: JavaIndexStore, generation: number): void {
+  private addBundle(bundle: JavaFileBundle, store: FactsReader, generation: number): void {
     const owner = bundle.file.relativePath;
     const fileId = knowledgeFileId(owner);
     const moduleId = knowledgeModuleId(bundle.file.module);
@@ -246,7 +210,7 @@ export class KnowledgeGraphBuilder {
   private resolveEndpoint(
     javaIndexId: string,
     local: Map<string, string>,
-    store: JavaIndexStore
+    store: FactsReader
   ): string | undefined {
     const hit = local.get(javaIndexId);
     if (hit) return hit;

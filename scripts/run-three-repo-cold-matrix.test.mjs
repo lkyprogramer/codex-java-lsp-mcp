@@ -10,6 +10,7 @@ import {
   assertDisjointRuntimeState,
   assertOutputOutsideSource,
   benchmarkCellArguments,
+  cellProcessArguments,
   captureCandidatePatch,
   isolatedChildEnvironment,
   matrixRuntimeEnvironment,
@@ -123,6 +124,9 @@ test("formal matrix scrubs inherited benchmark selectors and fixes the request d
     assert.equal(args[args.indexOf("--deadline-ms") + 1], "2000");
     assert.equal(args[args.indexOf("--mode") + 1], "balanced");
     assert.equal(args[args.indexOf("--semantic-policy") + 1], "fast");
+    const processArgs = cellProcessArguments(args);
+    assert.equal(processArgs[0], "--disable-warning=ExperimentalWarning");
+    assert.deepEqual(processArgs.slice(1), args);
   } finally {
     restoreEnvironment("JAVA_LSP_BENCH_DEADLINE_MS", previousDeadline);
     restoreEnvironment("JAVA_LSP_BENCH_INDEX_PREPARE_TIMEOUT_MS", previousPrepare);

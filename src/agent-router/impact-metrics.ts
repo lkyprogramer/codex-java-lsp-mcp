@@ -5,7 +5,7 @@ import type {
   JavaIndexRpcSettlement,
   JavaIndexRpcTelemetrySink,
   JavaIndexWorkerRetireReason
-} from "../java-index/java-index-client.js";
+} from "../java-index/java-index-client-api.js";
 import type { ImportGraphMetrics } from "./candidate-collectors.js";
 import type { TypeReferenceMetrics } from "./type-reference.js";
 

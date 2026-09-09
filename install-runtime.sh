@@ -461,7 +461,7 @@ run_candidate_smoke() {
       "CODEX_HOME=$CANDIDATE_TEST_ROOT/codex-home" \
       "HOME=$CANDIDATE_TEST_ROOT/home" \
       "JDTLS_BIN=$JDTLS_BIN" \
-      "$NODE_BIN" dist/http-server.js
+      "$NODE_BIN" --disable-warning=ExperimentalWarning dist/http-server.js
   ) >"$CANDIDATE_LOG" 2>&1 &
   CANDIDATE_PID="$!"
   if ! wait_for_candidate_ready "$candidate_url/readyz"; then
@@ -732,9 +732,6 @@ write_launch_agent() {
     JAVA_LSP_JDTLS_XMX \
     JAVA_LSP_MAX_ACTIVE_REPOS \
     JAVA_LSP_IDLE_TTL_MS \
-    JAVA_LSP_HIBERNATE_TTL_MS \
-    JAVA_LSP_INDEX_IDLE_TTL_MS \
-    JAVA_LSP_PREWARM_HOT \
     JAVA_LSP_RUNTIME_ENTRY_TTL_MS \
     JAVA_LSP_MAX_RUNTIME_ENTRIES \
     JAVA_LSP_CACHE_JANITOR_INTERVAL_MS \

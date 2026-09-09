@@ -6,7 +6,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { JavaIndexClient } from "../dist/java-index/java-index-client.js";
+import { SqlJavaIndexClient } from "../dist/java-index/sql/sql-client.js";
 import { RouterJavaIndex } from "../dist/java-index/router-java-index.js";
 
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -124,7 +124,7 @@ async function main() {
   for (const item of CASES) {
     if (!indexes.has(item.project)) {
       const repoRoot = path.resolve(cli.repositories[item.project]);
-      const client = new JavaIndexClient(repoRoot, path.join(cacheRoot, item.project));
+      const client = new SqlJavaIndexClient(repoRoot, path.join(cacheRoot, item.project));
       const index = new RouterJavaIndex(repoRoot, client);
       await index.open(1);
       await index.reconcile(1);

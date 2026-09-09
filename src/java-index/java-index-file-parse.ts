@@ -6,7 +6,7 @@ import { classifyPath, normalizeRepoFile } from "../repo-layout.js";
 import { extractFromParsedTree, type ExtractJavaInput } from "./ast-extractor.js";
 import type { JavaFileBundle, JavaSourceSet } from "./index-types.js";
 import type { JavaParserBackend } from "./java-parser-backend.js";
-import { refreshParseTree, type ParseTreeCache } from "./parse-tree-cache.js";
+import { refreshParseTree, type ParseTreeCache } from "./builder/parse-cache.js";
 
 export type JavaSourceLayout = {
   absolutePath: string;

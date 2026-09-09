@@ -1,0 +1,10 @@
+SHA=f9cbe18b408faf584b853213283c4e21ee28937e
+FULL_EXIT=0
+PR_EXIT=0
+full_dist_tests=1351 pass / 0 fail
+full_script_tests=282 pass / 0 fail
+stdio_smoke=tools java_diagnostics,java_impact,java_runtime,java_status,java_symbol
+gate_pr_exitCode=0
+gate_pr_rawSha256=6f7af5804a57cbbb2ed3143b25283d00aaa94fea738db3dcdddbe45a2698a9d7
+raw_tap: docs/phase-x/p0-gate-raw/P0-G1.txt
+wall_s_approx=234

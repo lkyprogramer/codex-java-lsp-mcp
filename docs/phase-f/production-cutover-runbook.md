@@ -1,13 +1,15 @@
-# 本机 Java LSP 生产切流手册
+# 本机 Java LSP 生产切流手册（历史）
 
-- 日期：2026-08-24
+> **2026-09-09：Index-on-disk 已在线上。** 现行操作、cache/WAL/worktree、LSP 启动与安装回滚见 [production-operations.md](production-operations.md)。不要再按本文的 hibernate 5 分钟、7 仓 SourceIndex 冷建、或 `bc3ca3b` 基线执行。
+
+- 日期：2026-08-24（历史切流）；IOD 切流 2026-09-08/09
 - 机器：lky 本机 macOS（Codex CLI / Desktop 正在用的 HTTP daemon）
 - 从：runtime `bc3ca3b13ff5`（2026-08-14，7 工具 + SourceIndex）
-- 到：git `main` `2f60a87`（merge `e48a253`，5 工具 + JavaIndex）
-- 范围：**只切这台机器上正在服务的 daemon**。不 push、不改远程、不复活 `java_context`。
-- 本文件本身会使 git 工作区变脏；**跑 `./install-runtime.sh` 之前必须先处理干净工作区**（见 §3）。
+- 经：`2f60a87`（5 工具 + 堆 JavaIndex）
+- 到：`03f5a4154081`（5 工具 + on-disk `index.sqlite`）
+- 范围：当时是只切本机 daemon。现行安装仍是 `./install-runtime.sh`（不要 `--activate-http`）。
 
-本文是操作真源。旧 canary runbook（`docs/shared-http-daemon-canary-runbook.md`）仍写着 SourceIndex 和 `allSevenTools`，**这次不要照那份做 HTTP 激活**。
+旧 canary runbook（`docs/shared-http-daemon-canary-runbook.md`）仍写着 SourceIndex 和 `allSevenTools`，不要照那份做 HTTP 激活。
 
 ---
 
@@ -296,7 +298,7 @@ done
 
 lishuedu 可能第一次 `java_status` 在 120s 请求预算内返回 `partial`，循环再问即可，后台 child 不会停。
 
-预热完 hibernate 默认 5 分钟会卸内存里的 facts；**磁盘快照留下**。之后第一次真实查询是 hydrate，不是再扫树。
+预热完 **不会** hibernate / hydrate。空闲只关 sqlite 连接；磁盘 `index.sqlite` 留下，再查是打开文件。
 
 ---
 

@@ -1,0 +1,1584 @@
+{
+  "schema": "iod-p2-canary/v1",
+  "port": "38457",
+  "allSane": true,
+  "repos": {
+    "lishuedu": {
+      "statusReadyElapsedMs": 1040.709458,
+      "statusReadyState": "READY",
+      "status": {
+        "elapsedMs": 70.29220899999996,
+        "isError": false,
+        "sane": true,
+        "state": "READY",
+        "indexedGeneration": 1,
+        "files": 6090,
+        "coverage": [
+          {
+            "root": "apps/lishu-edu-app/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "apps/lishu-edu-app/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/agency/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/agency/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/ai/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/ai/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/analysis/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/analysis/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/audit/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/audit/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/benefits/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/benefits/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/common/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/common/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/exam/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/exam/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/exercisebook/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/exercisebook/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/familyEducation/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/familyEducation/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/iam/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/iam/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/integration/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/integration/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/operationLog/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/operationLog/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/order/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/order/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/paper/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/paper/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/platform/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/platform/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/print/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/product/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/product/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/questionBank/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/questionBank/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/report/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/report/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/school/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/school/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/subscription/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/subscription/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          }
+        ],
+        "db": {
+          "bytes": 229425152,
+          "cacheKb": 32768
+        },
+        "builder": {
+          "state": "absent",
+          "queued": 0
+        }
+      },
+      "impact": {
+        "elapsedMs": 96.11254200000008,
+        "isError": false,
+        "sane": true,
+        "freshness": {
+          "coverage": "COMPLETE",
+          "requestGeneration": 1,
+          "indexedGeneration": 1,
+          "changedDuringRequest": false
+        },
+        "hasContext": false
+      }
+    },
+    "lishu-v2": {
+      "statusReadyElapsedMs": 68.28895899999998,
+      "statusReadyState": "READY",
+      "status": {
+        "elapsedMs": 44.73562500000003,
+        "isError": false,
+        "sane": true,
+        "state": "READY",
+        "indexedGeneration": 44,
+        "files": 3036,
+        "coverage": [
+          {
+            "root": "apps/lishu-analysis-backend/src/main/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "apps/lishu-analysis-backend/src/test/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "apps/lishu-education-backend/src/main/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "apps/lishu-education-backend/src/test/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "apps/lishu-foundation-backend/src/main/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "apps/lishu-foundation-backend/src/test/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "apps/lishu-gateway/src/main/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "apps/lishu-gateway/src/test/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "deploy/recognition-runners/core/src/main/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "deploy/recognition-runners/core/src/test/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "deploy/recognition-runners/full-answer-card/src/main/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "deploy/recognition-runners/full-answer-card/src/test/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "deploy/recognition-runners/printed-digit-correction/src/main/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "deploy/recognition-runners/printed-digit-correction/src/test/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/analysis/src/main/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/analysis/src/test/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/card-rec/src/main/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/card-rec/src/test/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/exam/src/main/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/exam/src/test/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/identity/src/main/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/identity/src/test/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/integration/src/main/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/integration/src/test/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/paper/src/main/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/paper/src/test/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/platform-configuration/src/main/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/platform-configuration/src/test/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/platform-core/src/main/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/platform-core/src/test/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/platform-data/src/main/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/platform-data/src/test/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/platform-infra/src/main/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/platform-infra/src/test/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/platform-web/src/main/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/platform-web/src/test/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/question-bank/src/main/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/question-bank/src/test/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/report/src/main/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/report/src/test/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/school/src/main/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/school/src/test/java",
+            "generation": 44,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          }
+        ],
+        "db": {
+          "bytes": 261746688,
+          "cacheKb": 32768
+        },
+        "builder": {
+          "state": "idle",
+          "queued": 0,
+          "pid": 10890
+        }
+      },
+      "impact": {
+        "elapsedMs": 168.55899999999997,
+        "isError": false,
+        "sane": true,
+        "freshness": {
+          "coverage": "COMPLETE",
+          "requestGeneration": 44,
+          "indexedGeneration": 44,
+          "changedDuringRequest": false
+        },
+        "hasContext": false
+      }
+    },
+    "cipherlink": {
+      "statusReadyElapsedMs": 122.80158299999994,
+      "statusReadyState": "READY",
+      "status": {
+        "elapsedMs": 28.117292000000134,
+        "isError": false,
+        "sane": true,
+        "state": "READY",
+        "indexedGeneration": 1,
+        "files": 629,
+        "coverage": [
+          {
+            "root": "apps/cipherlink-backend/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "apps/cipherlink-backend/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "apps/cipherlink-gateway/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "apps/cipherlink-gateway/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/account/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/account/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/audit/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/audit/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/auth/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/auth/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/client/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/client/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/common/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/common/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/integration/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/integration/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/organization/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/organization/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/rbac/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/rbac/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/storage/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/storage/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/transfer/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/transfer/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/worker/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "modules/worker/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          }
+        ],
+        "db": {
+          "bytes": 21934080,
+          "cacheKb": 32768
+        },
+        "builder": {
+          "state": "absent",
+          "queued": 0
+        }
+      },
+      "impact": {
+        "elapsedMs": 300.73874999999975,
+        "isError": false,
+        "sane": true,
+        "freshness": {
+          "coverage": "COMPLETE",
+          "requestGeneration": 1,
+          "indexedGeneration": 1,
+          "changedDuringRequest": false
+        },
+        "hasContext": false
+      }
+    },
+    "exam-parent-v3": {
+      "statusReadyElapsedMs": 422.8800419999998,
+      "statusReadyState": "READY",
+      "status": {
+        "elapsedMs": 33.49754200000007,
+        "isError": false,
+        "sane": true,
+        "state": "READY",
+        "indexedGeneration": 1,
+        "files": 1432,
+        "coverage": [
+          {
+            "root": "exam-candidate/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "exam-candidate/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "exam-checker/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "exam-checker/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "exam-checkRule/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "exam-checkRule/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "exam-common/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "exam-common/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "exam-data-transfer/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "exam-data-transfer/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "exam-data/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "exam-data/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "exam-gateway/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "exam-gateway/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "exam-management/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "exam-management/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "exam-service/exam-service-basic/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "exam-service/exam-service-basic/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "exam-service/exam-service-candidate/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "exam-service/exam-service-candidate/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "exam-service/exam-service-check/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "exam-service/exam-service-check/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "exam-service/exam-service-exam-site/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "exam-service/exam-service-exam-site/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "exam-service/exam-service-examination/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "exam-service/exam-service-examination/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "exam-service/exam-service-management/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "exam-service/exam-service-management/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "exam-service/exam-service-order/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "exam-service/exam-service-order/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "exam-service/exam-service-statistics/src/main/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          },
+          {
+            "root": "exam-service/exam-service-statistics/src/test/java",
+            "generation": 1,
+            "state": "COMPLETE",
+            "discoveredFiles": 0,
+            "indexedFiles": 0,
+            "failedFiles": 0,
+            "recoveredFiles": 0,
+            "extractorVersion": ""
+          }
+        ],
+        "db": {
+          "bytes": 47919104,
+          "cacheKb": 32768
+        },
+        "builder": {
+          "state": "absent",
+          "queued": 0
+        }
+      },
+      "impact": {
+        "elapsedMs": 646.6237920000003,
+        "isError": false,
+        "sane": true,
+        "freshness": {
+          "coverage": "COMPLETE",
+          "requestGeneration": 1,
+          "indexedGeneration": 1,
+          "changedDuringRequest": false
+        },
+        "hasContext": false
+      }
+    }
+  }
+}

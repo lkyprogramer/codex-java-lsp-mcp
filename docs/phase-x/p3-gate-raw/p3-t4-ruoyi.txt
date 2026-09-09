@@ -1,0 +1,13 @@
+HEAD=d0ea177
+START=2026-09-07T19:31:31Z
+正克隆到 '/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oLNzyf/candidate'...
+完成。
+HEAD 目前位于 d0ea177 fix(iod): restore resource sidecar bind without a new JAVA_LSP_* read
+{"isolation":"detached-local-clone","candidateRoot":"/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oLNzyf/candidate","cacheRoot":"/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oLNzyf/cache","jdtlsBin":"/usr/bin/false","executableTree":"06b07a7dc8ce1f99e6150e63a060e2f560361ac3"}
+f1-ruoyi: old
+f1-ruoyi: new
+{"decision":"TOKEN_FAIL","output":"/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oLNzyf/p3-t4-ruoyi.json","identity":true,"tokenDrop":0}
+preserved isolated validation root: /var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oLNzyf
+node exited with 2
+RUOYI_EXIT:1
+END=2026-09-07T19:35:15Z

@@ -1,17 +1,45 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { KnowledgeGraphStore } from "../java-knowledge/graph-store.js";
+import { openIndexDb } from "../java-index/sql/driver.js";
+import { ensureSchema } from "../java-index/sql/schema.js";
+import { SqlKnowledgeGraph } from "../java-index/sql/knowledge-graph.js";
 import { knowledgeEdgeId } from "../java-knowledge/entity-id.js";
 import { compileIntent } from "./intent-compiler.js";
 import { searchContextGraph, type GraphSearchResult } from "./graph-search.js";
 import { attachAnchorSignatureBundles, factsForStore, planContextQuery } from "./plan-query.js";
-import { JavaIndexStore } from "../java-index/index-store.js";
+import { SqlFactsStore } from "../java-index/sql/facts-store.js";
+import { writeBundle, writeMyBatisResource } from "../java-index/sql/rows.js";
 import type { JavaFileBundle, JavaFileFacts, JavaFieldFacts, JavaMethodFacts, JavaTypeFacts, JavaTypeRef, SourceRange } from "../java-index/index-types.js";
-import { javaFieldId, javaFileId, javaMethodId, javaTypeId } from "../java-index/stable-id.js";
+import { javaEdgeId, javaFieldId, javaFileId, javaMethodId, javaTypeId } from "../java-index/stable-id.js";
 import { PLANNER_VERSION, StaleSessionError, contextSessions } from "./context-contract.js";
 
-function seed(): KnowledgeGraphStore {
-  const graph = new KnowledgeGraphStore();
+function sqlGraph() {
+  const db = openIndexDb(":memory:");
+  ensureSchema(db);
+  return new SqlKnowledgeGraph(db);
+}
+
+
+class MemoryFacts {
+  readonly db = openIndexDb(":memory:");
+  readonly store: SqlFactsStore;
+  constructor() {
+    ensureSchema(this.db);
+    this.store = new SqlFactsStore(this.db);
+  }
+  replaceFile(bundle: JavaFileBundle) {
+    writeBundle(this.db, bundle);
+    this.store.clearRequestCache();
+  }
+  replaceMyBatisResource(resource: Parameters<typeof writeMyBatisResource>[1]) {
+    writeMyBatisResource(this.db, resource);
+    this.store.clearRequestCache();
+  }
+}
+
+
+function seed(): SqlKnowledgeGraph {
+  const graph = sqlGraph();
   graph.upsertNode({ id: "src/A.java", kind: "FILE", generation: 1, relativePath: "src/A.java" }, "src/A.java");
   graph.upsertNode({ id: "src/A.java#A#run#1", kind: "METHOD", generation: 1, relativePath: "src/A.java", simpleName: "run" }, "src/A.java");
   graph.upsertNode({ id: "src/B.java", kind: "FILE", generation: 1, relativePath: "src/B.java" }, "src/B.java");
@@ -183,16 +211,16 @@ test("attachAnchorSignatureBundles names field callees and does not walk unused 
       { name: "unused", typeId: unused.types[0]!.typeId, simpleName: "Unused" }
     ]
   });
-  const store = new JavaIndexStore();
+  const store = new MemoryFacts();
   store.replaceFile(service);
   store.replaceFile(collab);
   store.replaceFile(generator);
   store.replaceFile(helper);
   store.replaceFile(unused);
   store.replaceFile(other);
-  const graph = new KnowledgeGraphStore();
+  const graph = sqlGraph();
   graph.upsertNode({ id: "src/Service.java", kind: "FILE", generation: 1, relativePath: "src/Service.java" }, "src/Service.java");
-  const attached = attachAnchorSignatureBundles(emptySearch(), graph, store, "src/Service.java", 12);
+  const attached = attachAnchorSignatureBundles(emptySearch(), graph, store.store, "src/Service.java", 12);
   const paths = attached.bundles.map(item => item.path).sort();
   assert.ok(paths.includes("src/Generator.java"), `missing callee, got ${paths.join(",")}`);
   assert.ok(paths.includes("src/Collab.java"), `missing hop-1 callee, got ${paths.join(",")}`);
@@ -221,12 +249,12 @@ test("attachAnchorSignatureBundles follows same-file private callees onto hop-1 
     ],
     fields: [{ name: "school", typeId: school.types[0]!.typeId, simpleName: "School" }]
   });
-  const store = new JavaIndexStore();
+  const store = new MemoryFacts();
   store.replaceFile(service);
   store.replaceFile(school);
-  const graph = new KnowledgeGraphStore();
+  const graph = sqlGraph();
   graph.upsertNode({ id: "src/Service.java", kind: "FILE", generation: 1, relativePath: "src/Service.java" }, "src/Service.java");
-  const attached = attachAnchorSignatureBundles(emptySearch(), graph, store, "src/Service.java", 12);
+  const attached = attachAnchorSignatureBundles(emptySearch(), graph, store.store, "src/Service.java", 12);
   const schoolBundle = attached.bundles.find(item => item.path === "src/School.java");
   assert.ok(schoolBundle, `missing hop-1 receiver, got ${attached.bundles.map(item => item.path).join(",")}`);
   assert.ok(schoolBundle?.provingPath.some(step => step.toId.includes("#listStudents#")), JSON.stringify(schoolBundle?.provingPath));
@@ -247,12 +275,12 @@ test("attachAnchorSignatureBundles records every hop-0 call name on a field type
     ],
     fields: [{ name: "school", typeId: school.types[0]!.typeId, simpleName: "School" }]
   });
-  const store = new JavaIndexStore();
+  const store = new MemoryFacts();
   store.replaceFile(service);
   store.replaceFile(school);
-  const graph = new KnowledgeGraphStore();
+  const graph = sqlGraph();
   graph.upsertNode({ id: "src/Service.java", kind: "FILE", generation: 1, relativePath: "src/Service.java" }, "src/Service.java");
-  const attached = attachAnchorSignatureBundles(emptySearch(), graph, store, "src/Service.java", 12);
+  const attached = attachAnchorSignatureBundles(emptySearch(), graph, store.store, "src/Service.java", 12);
   const schoolBundle = attached.bundles.find(item => item.path === "src/School.java");
   const ids = schoolBundle?.provingPath.map(step => step.toId).join(",") ?? "";
   assert.ok(ids.includes("#listStudents#"), ids);
@@ -268,12 +296,12 @@ test("attachAnchorSignatureBundles matches field-type methods without a receiver
     ],
     fields: [{ name: "school", typeId: school.types[0]!.typeId, simpleName: "School" }]
   });
-  const store = new JavaIndexStore();
+  const store = new MemoryFacts();
   store.replaceFile(service);
   store.replaceFile(school);
-  const graph = new KnowledgeGraphStore();
+  const graph = sqlGraph();
   graph.upsertNode({ id: "src/Service.java", kind: "FILE", generation: 1, relativePath: "src/Service.java" }, "src/Service.java");
-  const attached = attachAnchorSignatureBundles(emptySearch(), graph, store, "src/Service.java", 12);
+  const attached = attachAnchorSignatureBundles(emptySearch(), graph, store.store, "src/Service.java", 12);
   const schoolBundle = attached.bundles.find(item => item.path === "src/School.java");
   assert.ok(schoolBundle?.provingPath.some(step => step.toId.includes("#listStudents#")), JSON.stringify(schoolBundle?.provingPath));
 });
@@ -282,6 +310,18 @@ test("attachAnchorSignatureBundles copies callee names onto implementers and exi
   const port = fileBundle("Generator", { methods: [{ name: "generate", start: 4, end: 4 }] });
   const impl = fileBundle("Excel", { methods: [{ name: "generate", start: 10, end: 40 }] });
   impl.types[0]!.implements.push(repoRef("Generator", port.types[0]!.typeId));
+  const implTypeId = impl.types[0]!.typeId;
+  const portTypeId = port.types[0]!.typeId;
+  impl.edges.push({
+    edgeId: javaEdgeId({ kind: "IMPLEMENTS", fromId: implTypeId, toId: portTypeId }),
+    fromId: implTypeId,
+    toId: portTypeId,
+    kind: "IMPLEMENTS",
+    confidence: 1,
+    sourceFile: impl.file.relativePath,
+    generation: 1,
+    resolution: { kind: "TYPE_REFERENCE", typeStrategy: "QUALIFIED" }
+  });
   const service = fileBundle("Service", {
     methods: [{
       name: "export",
@@ -291,11 +331,11 @@ test("attachAnchorSignatureBundles copies callee names onto implementers and exi
     }],
     fields: [{ name: "generator", typeId: port.types[0]!.typeId, simpleName: "Generator" }]
   });
-  const store = new JavaIndexStore();
+  const store = new MemoryFacts();
   store.replaceFile(service);
   store.replaceFile(port);
   store.replaceFile(impl);
-  const graph = new KnowledgeGraphStore();
+  const graph = sqlGraph();
   graph.upsertNode({ id: "src/Service.java", kind: "FILE", generation: 1, relativePath: "src/Service.java" }, "src/Service.java");
   const search = emptySearch();
   search.bundles.push({
@@ -305,7 +345,7 @@ test("attachAnchorSignatureBundles copies callee names onto implementers and exi
     provingPath: [{ kind: "IMPLEMENTS" as const, fromId: "src/Service.java", toId: "src/Excel.java#Excel" }],
     closedObligations: []
   });
-  const attached = attachAnchorSignatureBundles(search, graph, store, "src/Service.java", 12);
+  const attached = attachAnchorSignatureBundles(search, graph, store.store, "src/Service.java", 12);
   const excel = attached.bundles.filter(item => item.path === "src/Excel.java");
   assert.equal(excel.length, 1);
   assert.ok(excel[0]?.provingPath.some(step => step.toId.includes("#generate#")), JSON.stringify(excel[0]?.provingPath));
@@ -326,13 +366,13 @@ test("attachAnchorSignatureBundles hop-2 matches callee field methods without re
     }],
     fields: [{ name: "collab", typeId: collab.types[0]!.typeId, simpleName: "Collab" }]
   });
-  const store = new JavaIndexStore();
+  const store = new MemoryFacts();
   store.replaceFile(service);
   store.replaceFile(collab);
   store.replaceFile(helper);
-  const graph = new KnowledgeGraphStore();
+  const graph = sqlGraph();
   graph.upsertNode({ id: "src/Service.java", kind: "FILE", generation: 1, relativePath: "src/Service.java" }, "src/Service.java");
-  const attached = attachAnchorSignatureBundles(emptySearch(), graph, store, "src/Service.java", 30);
+  const attached = attachAnchorSignatureBundles(emptySearch(), graph, store.store, "src/Service.java", 30);
   const helperBundle = attached.bundles.find(item => item.path === "src/Helper.java");
   assert.ok(helperBundle, `missing hop-2, got ${attached.bundles.map(item => item.path).join(",")}`);
   assert.ok(helperBundle?.provingPath.some(step => step.toId.includes("#getMe#")), JSON.stringify(helperBundle?.provingPath));
@@ -350,10 +390,10 @@ test("hop0 keeps field-calling callees and not unrelated same-file helpers", () 
     ],
     fields: [{ name: "school", typeId: school.types[0]!.typeId, simpleName: "School" }]
   });
-  const store = new JavaIndexStore();
+  const store = new MemoryFacts();
   store.replaceFile(service);
-  const graph = new KnowledgeGraphStore();
-  const facts = factsForStore(graph, store, "src/Service.java", new Set(), 60);
+  const graph = sqlGraph();
+  const facts = factsForStore(graph, store.store, "src/Service.java", new Set(), 60);
   const names = new Set(facts.methods.map(method => method.name));
   assert.ok(names.has("export"), [...names].join(","));
   assert.ok(names.has("loadMap"), [...names].join(","));
@@ -394,12 +434,12 @@ test("hop0 prefers two cross-module field callees over nearer same-module helper
       { name: "school", typeId: school.types[0]!.typeId, simpleName: "School" }
     ]
   });
-  const store = new JavaIndexStore();
+  const store = new MemoryFacts();
   store.replaceFile(service);
   store.replaceFile(school);
   store.replaceFile(items);
-  const graph = new KnowledgeGraphStore();
-  const facts = factsForStore(graph, store, "src/Service.java", new Set(), 60);
+  const graph = sqlGraph();
+  const facts = factsForStore(graph, store.store, "src/Service.java", new Set(), 60);
   const names = new Set(facts.methods.map(method => method.name));
   assert.ok(names.has("export"), [...names].join(","));
   assert.ok(names.has("loadMap"), [...names].join(","));
@@ -415,14 +455,14 @@ test("factsForStore unions proving method names and keeps a same-file callee", (
       { name: "unused", start: 100, end: 140 }
     ]
   });
-  const store = new JavaIndexStore();
+  const store = new MemoryFacts();
   store.replaceFile(excel);
-  const graph = new KnowledgeGraphStore();
+  const graph = sqlGraph();
   const proving = new Set([
     "src/Excel.java#Excel#generate#n",
     "src/School.java#School#listSummaries#n"
   ]);
-  const facts = factsForStore(graph, store, "src/Excel.java", proving);
+  const facts = factsForStore(graph, store.store, "src/Excel.java", proving);
   const names = new Set(facts.methods.map(method => method.name));
   assert.ok(names.has("generate"), [...names].join(","));
   assert.ok(names.has("fillWorkbook"), [...names].join(","));
@@ -431,20 +471,20 @@ test("factsForStore unions proving method names and keeps a same-file callee", (
 
 test("factsForStore keeps a type span for a hop-1 DTO with no matching method name", () => {
   const dto = fileBundle("SignedUrl", { methods: [] });
-  const store = new JavaIndexStore();
+  const store = new MemoryFacts();
   store.replaceFile(dto);
-  const graph = new KnowledgeGraphStore();
+  const graph = sqlGraph();
   const proving = new Set([`src/SignedUrl.java#SignedUrl#n`]);
-  const facts = factsForStore(graph, store, "src/SignedUrl.java", proving);
+  const facts = factsForStore(graph, store.store, "src/SignedUrl.java", proving);
   assert.equal(facts.methods.length, 0);
   assert.ok((facts.types ?? []).some(span => span.start === 1));
 });
 
 test("factsForStore keeps a type span when the proving id is a graph TYPE node on that path", () => {
   const entity = fileBundle("PayAccount", { methods: [{ name: "getId", start: 4, end: 8 }] });
-  const store = new JavaIndexStore();
+  const store = new MemoryFacts();
   store.replaceFile(entity);
-  const graph = new KnowledgeGraphStore();
+  const graph = sqlGraph();
   graph.upsertNode({
     id: "entity:PayAccount",
     kind: "JPA_ENTITY",
@@ -452,17 +492,17 @@ test("factsForStore keeps a type span when the proving id is a graph TYPE node o
     relativePath: "src/PayAccount.java",
     simpleName: "PayAccount"
   }, "src/PayAccount.java");
-  const facts = factsForStore(graph, store, "src/PayAccount.java", new Set(["entity:PayAccount"]));
+  const facts = factsForStore(graph, store.store, "src/PayAccount.java", new Set(["entity:PayAccount"]));
   assert.ok((facts.types ?? []).some(span => span.start === 1), JSON.stringify(facts.types));
 });
 
 test("planContextQuery selects a hop-1 persistence entity from type spans", () => {
   const order = fileBundle("Order", { methods: [{ name: "create", start: 10, end: 20 }] });
   const account = fileBundle("PayAccount", { methods: [{ name: "getId", start: 4, end: 8 }] });
-  const store = new JavaIndexStore();
+  const store = new MemoryFacts();
   store.replaceFile(order);
   store.replaceFile(account);
-  const graph = new KnowledgeGraphStore();
+  const graph = sqlGraph();
   graph.upsertNode({ id: "src/Order.java", kind: "FILE", generation: 1, relativePath: "src/Order.java" }, "src/Order.java");
   graph.upsertNode({
     id: "entity:PayAccount",
@@ -491,7 +531,7 @@ test("planContextQuery selects a hop-1 persistence entity from type spans", () =
     unresolved: [],
     metrics: { expansions: 2, hops: 1, estimatedTokens: 120 }
   };
-  const contract = planContextQuery({ graph, store, search, tokenBudget: 400, generation: 1, anchorLine: 12 });
+  const contract = planContextQuery({ graph, store: store.store, search, tokenBudget: 400, generation: 1, anchorLine: 12 });
   assert.ok(contract.evidence.some(item => item.path === "src/PayAccount.java"), contract.evidence.map(item => item.path).join(","));
 });
 
@@ -507,11 +547,11 @@ test("attachAnchorSignatureBundles follows persistence edges from a hop-1 field 
     }],
     fields: [{ name: "mapper", typeId: mapper.types[0]!.typeId, simpleName: "ReleaseMapper" }]
   });
-  const store = new JavaIndexStore();
+  const store = new MemoryFacts();
   store.replaceFile(gateway);
   store.replaceFile(mapper);
   store.replaceFile(entity);
-  const graph = new KnowledgeGraphStore();
+  const graph = sqlGraph();
   graph.upsertNode({ id: "src/Gateway.java", kind: "FILE", generation: 1, relativePath: "src/Gateway.java" }, "src/Gateway.java");
   graph.upsertNode({
     id: "src/ReleaseMapper.java#ReleaseMapper",
@@ -540,7 +580,7 @@ test("attachAnchorSignatureBundles follows persistence edges from a hop-1 field 
     generation: 1,
     sourceFile: "src/ReleaseMapper.java"
   }, "src/ReleaseMapper.java");
-  const attached = attachAnchorSignatureBundles(emptySearch("src/Gateway.java"), graph, store, "src/Gateway.java", 12);
+  const attached = attachAnchorSignatureBundles(emptySearch("src/Gateway.java"), graph, store.store, "src/Gateway.java", 12);
   const paths = attached.bundles.map(item => item.path).sort();
   assert.ok(paths.includes("src/ReleaseMapper.java"), `missing mapper, got ${paths.join(",")}`);
   assert.ok(paths.includes("src/PayAccount.java"), `missing persistence entity, got ${paths.join(",")}`);

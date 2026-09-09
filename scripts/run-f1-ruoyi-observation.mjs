@@ -3,7 +3,7 @@
 // output: F1 ruoyi old-vs-new observation. Tuning only. Holdout unread.
 // pos: Option C sentinel. Quality must be bit-identical; token P50 drop >= 20%.
 import { spawn } from "node:child_process";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, stat, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadTuningScenes } from "./audit-golden-quality.mjs";
@@ -16,6 +16,8 @@ export const F1_QUALITY_METRICS = Object.freeze(["recall", "pRead", "rReadMust",
 export const F1_TOKEN_DROP_GATE = 0.2;
 export const F1_RUOYI_LAYOUT = "maven-reactor";
 export const F1_RUOYI_DEADLINE_MS = 30_000;
+export const F1_INDEX_SQLITE = "index.sqlite";
+export const F1_INDEX_SNAPSHOT = "java-index-snapshot.json.gz";
 
 export function parseF1RuoyiCli(args) {
   const options = new Map();
@@ -92,6 +94,64 @@ export function adjudicateRuoyiObservation({ identity, token }) {
   return "GO";
 }
 
+export async function prepareIndexCacheDir(cacheDir) {
+  await mkdir(cacheDir, { recursive: true });
+  return cacheDir;
+}
+
+export async function inspectIndexCache(cacheDir) {
+  const sqliteBytes = await fileSize(path.join(cacheDir, F1_INDEX_SQLITE));
+  const snapshotBytes = await fileSize(path.join(cacheDir, F1_INDEX_SNAPSHOT));
+  return {
+    cacheDir,
+    sqliteBytes,
+    snapshotBytes,
+    populated: sqliteBytes > 0 || snapshotBytes > 0
+  };
+}
+
+export function assertIndexCachePopulated(inspection, variant) {
+  if (inspection?.populated) return inspection;
+  throw new Error(
+    `${variant} --index-cache-dir is empty `
+    + `(sqlite=${inspection?.sqliteBytes ?? 0} snapshot=${inspection?.snapshotBytes ?? 0}); `
+    + "refusing quality identity"
+  );
+}
+
+export function f1BenchmarkEnvironment(variant, env = process.env) {
+  if (variant !== "old") return { ...env };
+  return { ...env, JAVA_LSP_COLD_BUILD_CHILD: "1" };
+}
+
+export async function materializeRuntimeWithNodeModules(runtimeRoot, nodeModules, dest) {
+  const source = path.resolve(runtimeRoot);
+  const modules = path.resolve(nodeModules);
+  const target = path.resolve(dest);
+  await cp(source, target, {
+    recursive: true,
+    filter: src => {
+      const base = path.basename(src);
+      return base !== "node_modules" && base !== ".git";
+    }
+  });
+  await symlink(modules, path.join(target, "node_modules"));
+  return target;
+}
+
+export function indexStatusSummary(payload) {
+  const status = payload?.metadata?.prepareJavaIndexStatus;
+  if (!status || typeof status !== "object") return null;
+  return {
+    state: status.state ?? null,
+    files: numberOrNull(status.files),
+    snapshotBytes: numberOrNull(status.snapshotBytes),
+    lastError: status.lastError ?? null,
+    coverageRoots: Array.isArray(status.coverage) ? status.coverage.length : 0,
+    pendingBackground: numberOrNull(status.pendingBackground)
+  };
+}
+
 function isFiniteNumber(value) {
   return typeof value === "number" && Number.isFinite(value);
 }
@@ -107,9 +167,19 @@ function extractJson(text) {
   return JSON.parse(text.slice(start, end + 1));
 }
 
-function runBenchmark({ runtimeRoot, repoRoot, scenarioFile, runs, deadlineMs, cacheDir }) {
+async function fileSize(filePath) {
+  try {
+    const info = await stat(filePath);
+    return info.isFile() ? info.size : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function runBenchmark({ runtimeRoot, repoRoot, scenarioFile, runs, deadlineMs, cacheDir, env }) {
   const script = path.join(runtimeRoot, "dist", "benchmark-agent-impact.js");
   const args = [
+    "--disable-warning=ExperimentalWarning",
     "--max-old-space-size=8192",
     script,
     "--project-id", "ruoyi-vue-pro",
@@ -128,7 +198,7 @@ function runBenchmark({ runtimeRoot, repoRoot, scenarioFile, runs, deadlineMs, c
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, args, {
       cwd: runtimeRoot,
-      env: process.env,
+      env,
       stdio: ["ignore", "pipe", "inherit"]
     });
     let stdout = "";
@@ -166,22 +236,35 @@ async function main() {
   const scenarioFile = path.join(workDir, "ruoyi-vue-pro.tuning.jsonl");
   await writeFile(scenarioFile, filtered.jsonl);
   const repoRoot = path.resolve(cli.repo);
+  const newRuntime = path.resolve(cli.newRuntime);
+  const oldRuntime = await materializeRuntimeWithNodeModules(
+    path.resolve(cli.oldRuntime),
+    path.join(newRuntime, "node_modules"),
+    path.join(workDir, "old-runtime")
+  );
   const variants = [
-    { name: "old", runtimeRoot: path.resolve(cli.oldRuntime) },
-    { name: "new", runtimeRoot: path.resolve(cli.newRuntime) }
+    { name: "old", runtimeRoot: oldRuntime },
+    { name: "new", runtimeRoot: newRuntime }
   ];
   const payloads = {};
   const metrics = {};
+  const caches = {};
+  const prepared = {};
   for (const variant of variants) {
     console.error(`f1-ruoyi: ${variant.name}`);
+    const cacheDir = path.join(workDir, `${variant.name}-cache`);
+    await prepareIndexCacheDir(cacheDir);
     payloads[variant.name] = await runBenchmark({
       runtimeRoot: variant.runtimeRoot,
       repoRoot,
       scenarioFile,
       runs: cli.runs,
       deadlineMs: cli.deadlineMs,
-      cacheDir: path.join(workDir, `${variant.name}-cache`)
+      cacheDir,
+      env: f1BenchmarkEnvironment(variant.name)
     });
+    caches[variant.name] = assertIndexCachePopulated(await inspectIndexCache(cacheDir), variant.name);
+    prepared[variant.name] = indexStatusSummary(payloads[variant.name]);
     metrics[variant.name] = metricsFromBenchmark(payloads[variant.name]);
   }
   const identity = qualityIdentity(metrics.old, metrics.new);
@@ -201,6 +284,8 @@ async function main() {
     deadlineMs: cli.deadlineMs,
     old: metrics.old,
     new: metrics.new,
+    caches,
+    prepared,
     identity,
     token,
     decision,

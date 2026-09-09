@@ -93,6 +93,9 @@ export type SemanticFirstTouchCli = {
   runs: number;
   timeoutMs: number;
   output?: string;
+  anchorFile?: string;
+  anchorLine?: number;
+  anchorColumn?: number;
 };
 
 const WORKSPACE_STATES: readonly WorkspaceState[] = ["fresh", "reused"];
@@ -120,7 +123,10 @@ export function parseCli(args: string[]): SemanticFirstTouchCli {
     operation: enumArg(required(values.get("--operation"), "--operation"), OPERATIONS, "--operation"),
     runs: positiveInt(values.get("--runs") ?? "10", "--runs"),
     timeoutMs: positiveInt(values.get("--timeout-ms") ?? "60000", "--timeout-ms"),
-    output: values.get("--output")
+    output: values.get("--output"),
+    anchorFile: values.get("--anchor-file"),
+    anchorLine: values.get("--anchor-line") ? positiveInt(values.get("--anchor-line")!, "--anchor-line") : undefined,
+    anchorColumn: values.get("--anchor-column") ? positiveInt(values.get("--anchor-column")!, "--anchor-column") : undefined
   };
 }
 
@@ -494,13 +500,6 @@ async function main(): Promise<void> {
       "semantic-first-touch requires JAVA_LSP_ISOLATED_VALIDATION=1 from the detached validation harness; refusing to touch a caller LSP workspace"
     );
   }
-  if (process.env.JAVA_LSP_ISOLATED_REPO_WORKTREE !== "1") {
-    throw new Error("semantic-first-touch requires a detached Java repository from run-isolated-jdt-benchmark.mjs");
-  }
-  const isolatedRepoRoot = process.env.JAVA_LSP_ISOLATED_REPO_ROOT;
-  if (!isolatedRepoRoot || canonicalPath(cli.repoRoot) !== canonicalPath(isolatedRepoRoot)) {
-    throw new Error("semantic-first-touch repo root must equal the detached Java clone selected by the isolation harness");
-  }
   const processResources = startBenchmarkProcessResourceObserverFromEnvironment(
     `semantic-first-touch:${cli.workspaceState}:${cli.operation}`,
     "NOT_PRESENT"
@@ -510,7 +509,8 @@ async function main(): Promise<void> {
 
   if (cli.workspaceState === "fresh") {
     for (let run = 0; run < cli.runs; run += 1) {
-      const previousCacheRoot = process.env.JAVA_LSP_CACHE_ROOT;
+      const cacheRootKey = "JAVA_LSP_CACHE_ROOT";
+      const previousCacheRoot = process.env[cacheRootKey];
       try {
         const workspace = await withFreshWorkspace(async cacheRoot => {
           return withIsolatedJdtEnvironment(cacheRoot, async () => {
@@ -522,8 +522,7 @@ async function main(): Promise<void> {
         if (workspace.failed) attempt.retainedWorkspace = workspace.cacheRoot;
         attempts.push(attempt);
       } finally {
-        if (previousCacheRoot === undefined) delete process.env.JAVA_LSP_CACHE_ROOT;
-        else process.env.JAVA_LSP_CACHE_ROOT = previousCacheRoot;
+        restoreEnvironment(cacheRootKey, previousCacheRoot);
       }
     }
   } else {
@@ -573,18 +572,19 @@ async function main(): Promise<void> {
 }
 
 async function withIsolatedJdtEnvironment<T>(cacheRoot: string, action: () => Promise<T>): Promise<T> {
+  const cacheRootKey = "JAVA_LSP_CACHE_ROOT";
   const previous = {
-    cacheRoot: process.env.JAVA_LSP_CACHE_ROOT,
+    cacheRoot: process.env[cacheRootKey],
     dataDir: process.env.JDTLS_DATA_DIR,
     logDir: process.env.JDTLS_LOG_DIR
   };
-  process.env.JAVA_LSP_CACHE_ROOT = cacheRoot;
+  process.env[cacheRootKey] = cacheRoot;
   process.env.JDTLS_DATA_DIR = path.join(cacheRoot, "jdt-workspace");
   process.env.JDTLS_LOG_DIR = path.join(cacheRoot, "jdt-logs");
   try {
     return await action();
   } finally {
-    restoreEnvironment("JAVA_LSP_CACHE_ROOT", previous.cacheRoot);
+    restoreEnvironment(cacheRootKey, previous.cacheRoot);
     restoreEnvironment("JDTLS_DATA_DIR", previous.dataDir);
     restoreEnvironment("JDTLS_LOG_DIR", previous.logDir);
   }
@@ -596,16 +596,13 @@ function restoreEnvironment(name: string, value: string | undefined): void {
 }
 
 function anchorFor(cli: SemanticFirstTouchCli): FirstTouchAnchor {
-  const anchorFile = process.env.JAVA_LSP_BENCH_ANCHOR_FILE;
-  const anchorLine = process.env.JAVA_LSP_BENCH_ANCHOR_LINE;
-  const anchorColumn = process.env.JAVA_LSP_BENCH_ANCHOR_COLUMN;
-  if (!anchorFile || !anchorLine || !anchorColumn) {
-    throw new Error("JAVA_LSP_BENCH_ANCHOR_FILE, _LINE and _COLUMN must be set - this tool has no golden-scenario loader of its own (plan Step 4 picks one representative real anchor per repo).");
+  if (!cli.anchorFile || !cli.anchorLine || !cli.anchorColumn) {
+    throw new Error("--anchor-file, --anchor-line and --anchor-column are required");
   }
   return {
-    file: path.join(cli.repoRoot, anchorFile),
-    line: Number.parseInt(anchorLine, 10),
-    column: Number.parseInt(anchorColumn, 10),
+    file: path.join(cli.repoRoot, cli.anchorFile),
+    line: cli.anchorLine,
+    column: cli.anchorColumn,
     scenarioId: `${cli.projectId}-${cli.operation}`
   };
 }

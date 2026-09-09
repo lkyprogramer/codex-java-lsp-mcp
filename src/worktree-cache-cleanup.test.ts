@@ -361,6 +361,24 @@ test("the janitor never recursively deletes the global leases/ base, even though
   }
 });
 
+test("the janitor never deletes the telemetry/ directory even when it has no repo-meta", async () => {
+  const cacheBase = await mkdtemp(path.join(tmpdir(), "java-lsp-worktree-telemetry-"));
+  const now = Date.parse("2026-06-21T00:00:00.000Z");
+  try {
+    const telemetry = path.join(cacheBase, "telemetry");
+    await mkdir(telemetry, { recursive: true });
+    await writeFile(path.join(telemetry, "impact-20260101.jsonl"), "{}\n");
+    const old = new Date(now - 2 * 3600000);
+    await utimes(telemetry, old, old);
+    const result = cleanupStaleWorktreeCaches({ cacheBase, now, noMetaGraceMs: 3600000 });
+    assert.equal(existsSync(telemetry), true, "telemetry/ must survive L1 no-meta reclaim");
+    assert.equal(existsSync(path.join(telemetry, "impact-20260101.jsonl")), true);
+    assert.equal(result.removedDirs.includes(telemetry), false);
+  } finally {
+    await rm(cacheBase, { recursive: true, force: true });
+  }
+});
+
 type JanitorFixture = {
   cacheBase: string;
   leaseBase: string;
@@ -575,6 +593,8 @@ test("L0 reclaims retired index files even when ttlDays is 0 and the root is pin
     await writeFile(path.join(dir, "keep-v4.json.gz"), Buffer.concat([Buffer.from("CJV4"), Buffer.from("rest")]));
     await writeMeta(cacheBase, "pin", { repoRoot: pinRoot });
     await writeFile(path.join(dir, "java-index-snapshot-v4.json.gz"), Buffer.concat([Buffer.from("CJV4"), Buffer.alloc(4)]));
+    await writeFile(path.join(dir, "index.sqlite"), "sql\n");
+    await writeFile(path.join(dir, "java-knowledge-graph.json.gz"), gzipSync(Buffer.from("{}")));
 
     const result = cleanupStaleWorktreeCaches({
       cacheBase,
@@ -587,6 +607,8 @@ test("L0 reclaims retired index files even when ttlDays is 0 and the root is pin
     assert.equal(existsSync(path.join(dir, "semantic-edges.jsonl")), false);
     assert.equal(existsSync(path.join(dir, "java-index-v2.initialized")), false);
     assert.equal(existsSync(path.join(dir, "java-index-snapshot.json.gz")), false);
+    assert.equal(existsSync(path.join(dir, "java-knowledge-graph.json.gz")), false);
+    assert.equal(existsSync(path.join(dir, "index.sqlite")), true);
     assert.equal(existsSync(path.join(dir, "workspace", "keep.txt")), true);
     assert.equal(result.removed, 0);
     assert.ok((result.reclaimedFiles ?? 0) >= 4);

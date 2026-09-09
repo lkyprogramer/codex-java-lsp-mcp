@@ -7,7 +7,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { JavaIndexClient } from "../dist/java-index/java-index-client.js";
+import { SqlJavaIndexClient } from "../dist/java-index/sql/sql-client.js";
 import { RouterJavaIndex } from "../dist/java-index/router-java-index.js";
 
 const PROJECTS = ["lishuedu", "cipherlink", "exam-parent-v3"];
@@ -79,7 +79,7 @@ async function replayProject(project, repoRoot, timeoutMs, cacheRoot) {
   const scenarios = await loadScenarios(project);
   const cacheDir = path.join(cacheRoot, project);
   await mkdir(cacheDir, { recursive: true });
-  const client = new JavaIndexClient(repoRoot, cacheDir);
+  const client = new SqlJavaIndexClient(repoRoot, cacheDir);
   const index = new RouterJavaIndex(repoRoot, client);
   const cases = [];
   try {

@@ -1,0 +1,199 @@
+import assert from "node:assert/strict";
+import { mkdtempSync, readdirSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import test from "node:test";
+import { fileURLToPath } from "node:url";
+import { runSqlColdBuild } from "../../index-builder/cold-build.js";
+
+import { close, openIndexDb } from "./driver.js";
+import { ensureSchema } from "./schema.js";
+import { SqlJavaIndexClient } from "./sql-client.js";
+import type { ContextGraphInput } from "./sql-queries.js";
+
+const dirname = path.dirname(fileURLToPath(import.meta.url));
+const fixturesRoot = path.resolve(dirname, "..", "..", "..", "fixtures", "java-index-v2");
+const goldenPath = path.resolve(dirname, "..", "..", "..", "golden", "java-index-v2.scenarios.jsonl");
+
+type GoldenRow = {
+  name?: string;
+  anchor?: { file?: string; line?: number; column?: number; profile?: string; taskKeywords?: string[] };
+};
+
+function jsonClone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function dropVolatile<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value, (key, item) => {
+    if (typeof key === "string" && /elapsed|heapUsed|rssBytes|childCold|parentCold|serviceMs/i.test(key)) {
+      return undefined;
+    }
+    return item;
+  })) as T;
+}
+
+function byPath<T extends { path?: string; file?: string; id?: string }>(left: T, right: T): number {
+  return (left.path ?? left.file ?? left.id ?? "").localeCompare(right.path ?? right.file ?? right.id ?? "");
+}
+
+function normalizeContext(value: unknown): unknown {
+  const cloned = dropVolatile(value) as {
+    resolvedIntent?: string;
+    coverage?: string;
+    bundles?: Array<{ path: string; closedObligations?: string[] }>;
+    unresolved?: Array<{ id?: string; role?: string }>;
+  };
+  const contract = (cloned as { contract?: { evidence?: Array<{ path?: string }> } }).contract;
+  return {
+    resolvedIntent: cloned.resolvedIntent,
+    coverage: cloned.coverage,
+    bundles: [...(cloned.bundles ?? [])]
+      .map(bundle => ({
+        path: bundle.path,
+        closedObligations: [...(bundle.closedObligations ?? [])].sort()
+      }))
+      .sort(byPath),
+    unresolved: [...(cloned.unresolved ?? [])].sort(byPath),
+    evidence: [...(contract?.evidence ?? [])].map(item => item.path ?? "").sort()
+  };
+}
+
+function listAbsolute(root: string, suffix: string): string[] {
+  const out: string[] = [];
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.endsWith(suffix)) out.push(full);
+    }
+  };
+  walk(root);
+  return out.sort();
+}
+
+async function waitUntil(condition: () => Promise<boolean>, timeoutMs: number): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    if (await condition()) return;
+    if (Date.now() >= deadline) throw new Error(`timed out after ${timeoutMs}ms`);
+    await new Promise(resolve => setTimeout(resolve, 20));
+  }
+}
+
+function goldenRows(): GoldenRow[] {
+  return readFileSync(goldenPath, "utf8")
+    .split("\n")
+    .filter(Boolean)
+    .map(line => JSON.parse(line) as GoldenRow);
+}
+
+async function openPair(): Promise<{ sql: SqlJavaIndexClient; heap: SqlJavaIndexClient }> {
+  const dir = mkdtempSync(path.join(tmpdir(), "iod-sql-queries-"));
+  const dbPath = path.join(dir, "index.sqlite");
+  const db = openIndexDb(dbPath);
+  try {
+    ensureSchema(db);
+    await runSqlColdBuild({ repoRoot: fixturesRoot, db, generation: 1 });
+  } finally {
+    close(db);
+  }
+  const sql = new SqlJavaIndexClient(fixturesRoot, dbPath);
+  await sql.open(1);
+  return { sql, heap: sql };
+}
+
+test("SqlJavaIndexClient graph/entity RPCs match a real forked JavaIndexClient on java-index-v2", async () => {
+  const { sql, heap } = await openPair();
+  try {
+    assert.deepEqual(dropVolatile(await sql.queryGraphDigest()), dropVolatile(await heap.queryGraphDigest()));
+    const from = "src/main/java/demo/PaymentGateway.java";
+    assert.deepEqual(jsonClone(await sql.queryGraphReachable(from, 3)), jsonClone(await heap.queryGraphReachable(from, 3)));
+    assert.deepEqual(
+      jsonClone(await sql.queryContextGraph({
+        fromRelativePath: from,
+        intent: "IMPLEMENTATION_CHANGE",
+        mode: "navigate",
+        direction: "callees",
+        maxHops: 2
+      })),
+      jsonClone(await heap.queryContextGraph({
+        fromRelativePath: from,
+        intent: "IMPLEMENTATION_CHANGE",
+        mode: "navigate",
+        direction: "callees",
+        maxHops: 2
+      }))
+    );
+
+    const rows = goldenRows();
+    assert.ok(rows.length >= 8);
+    for (const row of rows) {
+      const relative = row.anchor?.file;
+      if (!relative) continue;
+      const task = [row.name, ...(row.anchor?.taskKeywords ?? [])].filter(Boolean).join(" ");
+      assert.deepEqual(jsonClone(await sql.queryEntitySearch(task)), jsonClone(await heap.queryEntitySearch(task)), task);
+      for (const intent of ["IMPLEMENTATION_CHANGE", "PERSISTENCE_FLOW"] as const) {
+        const input: ContextGraphInput = {
+          fromRelativePath: relative,
+          intent,
+          taskText: task,
+          profile: row.anchor?.profile,
+          anchorLine: row.anchor?.line
+        };
+        const sqlContext = normalizeContext(await sql.queryContextGraph(input)) as {
+          resolvedIntent: string;
+          coverage: string;
+          unresolved: unknown;
+        };
+        const heapContext = normalizeContext(await heap.queryContextGraph(input)) as {
+          resolvedIntent: string;
+          coverage: string;
+          unresolved: unknown;
+        };
+        assert.equal(sqlContext.resolvedIntent, heapContext.resolvedIntent, `${row.name}:${intent}:intent`);
+        assert.equal(sqlContext.coverage, heapContext.coverage, `${row.name}:${intent}:coverage`);
+        assert.deepEqual(sqlContext.unresolved, heapContext.unresolved, `${row.name}:${intent}:unresolved`);
+      }
+    }
+    const paymentInput = {
+      fromRelativePath: "src/main/java/demo/PaymentGateway.java",
+      intent: "IMPLEMENTATION_CHANGE",
+      anchorLine: 6
+    };
+    assert.deepEqual(
+      normalizeContext(await sql.queryContextGraph(paymentInput)),
+      normalizeContext(await heap.queryContextGraph(paymentInput))
+    );
+    assert.deepEqual(
+      normalizeContext(await sql.queryContextGraph({ ...paymentInput, plan: true })),
+      normalizeContext(await heap.queryContextGraph({ ...paymentInput, plan: true }))
+    );
+    const payment = path.join(fixturesRoot, "src/main/java/demo/PaymentGateway.java");
+    assert.deepEqual(
+      jsonClone(await sql.queryReadRanges([{ file: payment, positions: [{ line: 7, column: 3 }] }])),
+      jsonClone(await heap.queryReadRanges([{ file: payment, positions: [{ line: 7, column: 3 }] }]))
+    );
+    const mapper = path.join(fixturesRoot, "src/main/resources/mapper/OrderMapper.xml");
+    assert.deepEqual(
+      jsonClone(await sql.queryReadRanges([{ file: mapper, positions: [{ line: 1, column: 1 }] }])),
+      jsonClone(await heap.queryReadRanges([{ file: mapper, positions: [{ line: 1, column: 1 }] }]))
+    );
+    for (const row of rows) {
+      const relative = row.anchor?.file;
+      const line = row.anchor?.line;
+      if (!relative || line === undefined) continue;
+      const file = path.join(fixturesRoot, relative);
+      const positions = [{ line, column: row.anchor?.column ?? 1 }];
+      assert.deepEqual(
+        jsonClone(await sql.queryReadRanges([{ file, positions }])),
+        jsonClone(await heap.queryReadRanges([{ file, positions }])),
+        `read-ranges ${row.name ?? relative}`
+      );
+    }
+    assert.deepEqual(await sql.queryReadRanges([]), []);
+  } finally {
+    await sql.close();
+    await heap.close();
+  }
+});

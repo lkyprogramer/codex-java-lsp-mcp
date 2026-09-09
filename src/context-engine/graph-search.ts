@@ -3,7 +3,7 @@
 // pos: N3-02. One RPC path; no provider pipeline. Planner selection stays N4.
 import type { EdgeKind } from "../java-knowledge/edge-kinds.js";
 import type { GraphEdge } from "../java-knowledge/schema.js";
-import type { KnowledgeGraphStore } from "../java-knowledge/graph-store.js";
+import type { GraphReader } from "../java-knowledge/graph-reader.js";
 import type { CompiledIntent } from "./intent-compiler.js";
 import type { Obligation } from "./obligations.js";
 import { pathCost } from "./path-cost.js";
@@ -37,18 +37,11 @@ function isPersistenceKind(kind: EdgeKind): boolean {
   return PERSISTENCE_EDGE.test(kind);
 }
 
-function annotatePersistenceProof(graph: KnowledgeGraphStore, bundles: Map<string, EvidenceBundleCandidate>): void {
-  const nodesByPath = new Map<string, string[]>();
-  for (const [id, node] of graph.nodesById) {
-    if (!node.relativePath) continue;
-    const list = nodesByPath.get(node.relativePath);
-    if (list) list.push(id);
-    else nodesByPath.set(node.relativePath, [id]);
-  }
+function annotatePersistenceProof(graph: GraphReader, bundles: Map<string, EvidenceBundleCandidate>): void {
   for (const bundle of bundles.values()) {
     if (bundle.provingPath.some(step => isPersistenceKind(step.kind))) continue;
-    for (const id of nodesByPath.get(bundle.path) ?? []) {
-      const hit = [...graph.successors(id), ...graph.predecessors(id)].find(edge => isPersistenceKind(edge.kind));
+    for (const node of graph.nodesByPath(bundle.path)) {
+      const hit = [...graph.successors(node.id), ...graph.predecessors(node.id)].find(edge => isPersistenceKind(edge.kind));
       if (!hit) continue;
       bundle.provingPath = [{ kind: hit.kind, fromId: hit.fromId, toId: hit.toId }, ...bundle.provingPath];
       break;
@@ -72,7 +65,7 @@ function upgradeBundle(
   }
 }
 
-function fileOf(graph: KnowledgeGraphStore, nodeId: string): string | undefined {
+function fileOf(graph: GraphReader, nodeId: string): string | undefined {
   const node = graph.nodesById.get(nodeId);
   if (!node || NON_BUNDLE_PATH_KINDS.has(node.kind)) return undefined;
   if (node.relativePath) return node.relativePath;
@@ -80,7 +73,7 @@ function fileOf(graph: KnowledgeGraphStore, nodeId: string): string | undefined 
   return undefined;
 }
 
-function moduleOf(graph: KnowledgeGraphStore, nodeId: string): string | undefined {
+function moduleOf(graph: GraphReader, nodeId: string): string | undefined {
   const path = fileOf(graph, nodeId);
   if (!path) return undefined;
   const hit = path.match(/^([^/]+)\//);
@@ -94,7 +87,7 @@ function closes(obligation: Obligation, kind: EdgeKind): boolean {
 const DEFAULT_BUDGETS: GraphSearchBudgets = { maxHops: 3, maxExpansions: 4096, tokenBudget: 12000 };
 
 export function searchContextGraph(
-  graph: KnowledgeGraphStore,
+  graph: GraphReader,
   startRelativePath: string,
   compiled: CompiledIntent,
   budgets: Partial<GraphSearchBudgets> = {},
@@ -104,9 +97,9 @@ export function searchContextGraph(
   const maxHops = Math.min(8, Math.max(0, budgets.maxHops ?? DEFAULT_BUDGETS.maxHops));
   const maxExpansions = Math.min(2048, Math.max(1, budgets.maxExpansions ?? DEFAULT_BUDGETS.maxExpansions));
   const tokenBudget = Math.max(256, budgets.tokenBudget ?? DEFAULT_BUDGETS.tokenBudget);
-  const pathNodes = [...graph.nodesById.entries()]
-    .filter(([id, node]) => node.relativePath === startRelativePath || id === startRelativePath)
-    .map(([id]) => id);
+  const pathNodes = graph.nodesByPath(startRelativePath).map(node => node.id);
+  const startNode = graph.nodesById.get(startRelativePath);
+  if (startNode && !pathNodes.includes(startNode.id)) pathNodes.push(startNode.id);
   const scoped = (startNodeIds ?? []).filter(id => graph.nodesById.has(id));
   const startNodes = scoped.length > 0 ? scoped : pathNodes;
   const bundles = new Map<string, EvidenceBundleCandidate>();
@@ -193,7 +186,7 @@ export function searchContextGraph(
 }
 
 export function navigateGraph(
-  graph: KnowledgeGraphStore,
+  graph: GraphReader,
   startRelativePath: string,
   options: { direction?: "callers" | "callees"; closure?: "persistence" | "framework"; maxHops?: number }
 ): GraphSearchResult {

@@ -1,6 +1,7 @@
 // input: Resolved repo roots.
 // output: Per-repo runtime contexts.
 // pos: Lazy runtime manager; one context per canonical repoRoot with small LRU/idle control.
+import { existsSync, statSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { AgentRouter } from "./agent-router/index.js";
@@ -12,19 +13,18 @@ import {
   type LeaseHandle
 } from "./cross-process-lease.js";
 import { JdtlsSession, type JdtlsLifecycleState } from "./jdtls-session.js";
-import { isJavaIndexPrewarmReady, JavaIndexClient } from "./java-index/java-index-client.js";
+import { BuilderSupervisor } from "./java-index/builder-supervisor.js";
+import type { JavaIndexClientApi } from "./java-index/java-index-client-api.js";
 import type { JavaIndexStatus } from "./java-index/index-types.js";
+import { SqlJavaIndexClient } from "./java-index/sql/sql-client.js";
 import { RouterJavaIndex } from "./java-index/router-java-index.js";
 import { LayoutManager, type LayoutSource } from "./layout-manager.js";
 import { RepoChangeCoordinator } from "./repo-change-coordinator.js";
 import { GenerationClock, type RepoChangeBatch } from "./repo-generation.js";
-import { repoCacheBase, repoCacheRoot } from "./repo-layout.js";
+import { repoCacheBase, repoCacheRoot, scanFamilySiblingIndex } from "./repo-layout.js";
 import { RepoResolver, type RepoSelector, type ResolvedRepo } from "./repo-resolver.js";
 import {
   DEFAULT_FREEMEM_PRESSURE_BYTES,
-  DEFAULT_INDEX_IDLE_TTL_MS,
-  nonNegativeInteger,
-  parsePrewarmHotSet,
   positiveInteger,
   resourceDefaults,
   type ResourceDefaults
@@ -108,9 +108,6 @@ type RuntimeEntry = {
   refCount: number;
   lastUsedAt: number;
   idleTimer?: NodeJS.Timeout;
-  hibernateTimer?: NodeJS.Timeout;
-  indexIdleTimer?: NodeJS.Timeout;
-  hibernated: boolean;
   lspReservation: LspReservation;
   unsubscribeLifecycle?: () => void;
   reconcilePromise?: Promise<void>;
@@ -136,9 +133,6 @@ type SlotWaiter = {
 type RuntimeManagerOptions = {
   maxActiveRepos: number;
   idleTtlMs: number;
-  hibernateTtlMs: number;
-  indexIdleTtlMs: number;
-  hotIndexAliases: ReadonlySet<string>;
   freememPressureBytes: number;
   pressureIntervalMs: number;
   freemem?: () => number;
@@ -150,6 +144,7 @@ type RuntimeManagerOptions = {
 export class RepoRuntimeManager {
   private readonly runtimes = new Map<string, RuntimeEntry>();
   private readonly creating = new Map<string, Promise<RuntimeEntry>>();
+  private readonly familyGates = new Map<string, Promise<void>>();
   private readonly slotWaiters: SlotWaiter[] = [];
   private servicingWaiters = false;
   private readonly options: RuntimeManagerOptions;
@@ -171,9 +166,6 @@ export class RepoRuntimeManager {
     this.options = {
       maxActiveRepos: positiveInteger(process.env.JAVA_LSP_MAX_ACTIVE_REPOS, this.defaults.maxActiveRepos),
       idleTtlMs: positiveInteger(process.env.JAVA_LSP_IDLE_TTL_MS, this.defaults.idleTtlMs),
-      hibernateTtlMs: positiveInteger(process.env.JAVA_LSP_HIBERNATE_TTL_MS, this.defaults.hibernateTtlMs),
-      indexIdleTtlMs: nonNegativeInteger(process.env.JAVA_LSP_INDEX_IDLE_TTL_MS, DEFAULT_INDEX_IDLE_TTL_MS),
-      hotIndexAliases: options.hotIndexAliases ?? parsePrewarmHotSet().hot,
       freememPressureBytes: positiveInteger(
         process.env.JAVA_LSP_FREEMEM_PRESSURE_BYTES,
         DEFAULT_FREEMEM_PRESSURE_BYTES
@@ -182,8 +174,8 @@ export class RepoRuntimeManager {
         process.env.JAVA_LSP_FREEMEM_PRESSURE_INTERVAL_MS,
         process.env.JAVA_LSP_ISOLATED_VALIDATION === "1" ? 0 : 5000
       ),
-      requestTimeoutMs: positiveInteger(process.env.JAVA_LSP_REQUEST_TIMEOUT_MS, 120000),
-      maxRetainedStoppedRepos: positiveInteger(process.env.JAVA_LSP_MAX_RETAINED_STOPPED_REPOS, 2),
+      requestTimeoutMs: 120000,
+      maxRetainedStoppedRepos: 2,
       transportMode: "stdio",
       ...options
     };
@@ -218,7 +210,7 @@ export class RepoRuntimeManager {
     return this.leaseReady ??= this.leases
       .open({
         jdtSlots: this.options.maxActiveRepos,
-        sweepSlots: positiveInteger(process.env.JAVA_LSP_MAX_BACKGROUND_SWEEPS, 1)
+        sweepSlots: 1
       })
       .catch(error => {
         this.leaseInitError = error instanceof Error ? error.message : String(error);
@@ -244,55 +236,22 @@ export class RepoRuntimeManager {
    * pinned repo must not be opened until this returns, or cold-build children
    * stampede the machine-wide BUILD_SLOT.
    */
-  async prewarmRepo(selector: RepoSelector, options: { hydrate?: boolean } = {}): Promise<void> {
-    const hydrate = options.hydrate !== false;
+  async prewarmRepo(selector: RepoSelector, _options: { hydrate?: boolean } = {}): Promise<void> {
     const resolved = await this.resolver.resolve(selector);
     if (!resolved.lsp.enabled) return;
     const entry = await this.getOrCreate(resolved);
     this.refreshResource(entry);
-    // Hold a ref so macOS os.freemem() pressure (often < 2 GiB of "free"
-    // pages) cannot recycle the isolate while this pin is still hydrating.
     entry.refCount += 1;
     try {
       const client = entry.context.javaIndexClient;
-      if (client && typeof client.awaitPrewarmReady === "function") {
-        const budget = DeadlineBudget.fromTimeout(PREWARM_INDEX_MS);
-        try {
-          let status = await client.awaitPrewarmReady({ budget, hydrate });
-          if (!isJavaIndexPrewarmReady(status, { hydrate })) {
-            await client.reconcile(entry.generation.snapshot().value, { budget });
-            status = await client.awaitPrewarmReady({ budget, hydrate });
-          }
-          if (
-            hydrate
-            && isJavaIndexPrewarmReady(status, { hydrate })
-            && status.snapshot?.state !== "DURABLE"
-            && typeof client.flush === "function"
-          ) {
-            status = await client.flush({ budget });
-          }
-          if (hydrate && !isJavaIndexPrewarmReady(status, { hydrate })) {
-            console.error(
-              `[codex-java-lsp] pinned repo prewarm index incomplete files=${status.files} snapshot=${status.snapshot?.state ?? "none"}`
-            );
-          }
-        } catch (error) {
-          console.error("[codex-java-lsp] pinned repo prewarm index wait failed", error);
-        }
+      if (!client) return;
+      const budget = DeadlineBudget.fromTimeout(PREWARM_INDEX_MS);
+      const status = await client.status({ budget }).catch(() => undefined);
+      if (status?.state === "BUILDING") {
+        await client.awaitPrewarmReady({ budget });
       }
-      if (!hydrate && client) {
-        try {
-          const budget = DeadlineBudget.fromTimeout(PREWARM_INDEX_MS);
-          if (typeof client.recycle === "function") {
-            await client.recycle({ budget });
-          } else if (typeof client.hibernate === "function") {
-            await client.hibernate({ budget });
-          }
-          entry.hibernated = true;
-        } catch (error) {
-          console.error("[codex-java-lsp] pinned repo prewarm hibernate failed", error);
-        }
-      }
+    } catch (error) {
+      console.error("[codex-java-lsp] pinned repo prewarm index wait failed", error);
     } finally {
       entry.refCount = Math.max(0, entry.refCount - 1);
       this.scheduleIdleShutdown(entry);
@@ -311,7 +270,6 @@ export class RepoRuntimeManager {
     const entry = await this.getOrCreate(resolved, budget);
     this.refreshResource(entry);
     entry.refCount += 1;
-    entry.hibernated = false;
     this.clearIdleTimers(entry);
     try {
       const request = await this.prepareRequestContext(entry, requestOptions, budget);
@@ -665,7 +623,6 @@ export class RepoRuntimeManager {
       logicalCpu: this.defaults.logicalCpu,
       maxActiveRepos: this.options.maxActiveRepos,
       idleTtlMs: this.options.idleTtlMs,
-      hibernateTtlMs: this.options.hibernateTtlMs,
       jdtlsXmx: process.env.JAVA_LSP_JDTLS_XMX || this.defaults.jdtlsXmx,
       activeRepos: this.runtimes.size,
       activeJdtlsPids: started,
@@ -761,18 +718,28 @@ export class RepoRuntimeManager {
     }
     const pending = this.creating.get(resolved.repoRoot);
     if (pending) return budget ? budget.race("runtime.create", pending) : pending;
-    // Runtime construction is shared by all concurrent callers. Its worker
-    // operations use the manager hard cap; each caller races the same promise
-    // with its own request deadline so a short caller neither hangs nor
-    // cancels creation needed by a longer caller.
-    const operationBudget = DeadlineBudget.fromTimeout(this.options.requestTimeoutMs);
-    const operation = this.createEntry(resolved, operationBudget).finally(() => {
-      if (this.creating.get(resolved.repoRoot) === operation) {
-        this.creating.delete(resolved.repoRoot);
-      }
+    const family = this.familyKey(resolved.worktree, resolved.repoHash);
+    const started = this.startFamilyCreate(family, resolved);
+    this.creating.set(resolved.repoRoot, started);
+    started.finally(() => {
+      if (this.creating.get(resolved.repoRoot) === started) this.creating.delete(resolved.repoRoot);
+    }).catch(() => undefined);
+    return budget ? budget.race("runtime.create", started) : started;
+  }
+
+  private async startFamilyCreate(family: string, resolved: ResolvedRepo): Promise<RuntimeEntry> {
+    const prev = this.familyGates.get(family) ?? Promise.resolve();
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => {
+      release = resolve;
     });
-    this.creating.set(resolved.repoRoot, operation);
-    return budget ? budget.race("runtime.create", operation) : operation;
+    this.familyGates.set(family, prev.then(() => gate));
+    await prev;
+    try {
+      return await this.createEntry(resolved, DeadlineBudget.fromTimeout(this.options.requestTimeoutMs));
+    } finally {
+      release();
+    }
   }
 
   private async createEntry(resolved: ResolvedRepo, budget?: DeadlineBudget): Promise<RuntimeEntry> {
@@ -788,9 +755,6 @@ export class RepoRuntimeManager {
       () => context.javaIndexClient?.localStatus().files ?? 0
     );
     context.session.bindGenerationClock?.(generation);
-    if (process.env.JAVA_LSP_IDLE_PREWARM === "1") {
-      idlePrewarmTracker.recordPrewarm(resolved.repoRoot);
-    }
     const leaseOperation = this.leases.acquireRuntime(resolved.worktree).catch(() => undefined);
     let leaseTimedOut = false;
     // A caller deadline only stops that caller, but the shared creation itself
@@ -811,7 +775,6 @@ export class RepoRuntimeManager {
       ready: Promise.resolve(),
       refCount: 0,
       lastUsedAt: Date.now(),
-      hibernated: false,
       lspReservation: "NONE",
       // Best-effort: a degraded or unopened lease store must never block a
       // runtime from being created, so acquisition failure is swallowed here.
@@ -871,7 +834,8 @@ export class RepoRuntimeManager {
     await entry.context.javaIndexClient?.open(validationGeneration, {
       leaseRoot: path.join(repoCacheBase(), "leases"),
       worktree: resolved.worktree,
-      siblingCacheBase: repoCacheBase()
+      siblingCacheBase: repoCacheBase(),
+      siblingDbPath: this.findSiblingDb(resolved)
     }, budget ? { budget } : undefined).then(async openStatus => {
       // A restored-and-verified snapshot (Task 21 Step 6a) reports its own
       // (possibly higher) generation; the repo's clock must never regress
@@ -906,9 +870,7 @@ export class RepoRuntimeManager {
       // diff/sweep decision; it promotes COMPLETE or schedules the governed
       // sweep itself.  A real watcher batch still sets generationChanged and
       // takes the normal reconcile path.
-      const seededDegraded = openStatus.worktreeSeed?.completion === "SEEDED_DEGRADED";
-      const needsFollowUp = seededDegraded
-        || (!fullyRestored && !openStatus.snapshotVerificationPending)
+      const needsFollowUp = (!fullyRestored && !openStatus.snapshotVerificationPending)
         || generationChangedDuringSeed;
       if (needsFollowUp) {
         // Never await a sweep on runtime.create: a failed/empty seed used to
@@ -939,7 +901,7 @@ export class RepoRuntimeManager {
    * which marks the generation dirty for the next request's retry.
    */
   private async applyBatchToJavaIndex(
-    javaIndex: JavaIndexClient | undefined,
+    javaIndex: JavaIndexClientApi | undefined,
     batch: RepoChangeBatch
   ): Promise<void> {
     if (!javaIndex) return;
@@ -1095,8 +1057,28 @@ export class RepoRuntimeManager {
       .sort((left, right) => left.lastUsedAt - right.lastUsedAt)[0];
   }
 
-  private isHotIndexEntry(entry: RuntimeEntry): boolean {
-    return entry.context.aliases.some(alias => this.options.hotIndexAliases.has(alias));
+  private familyKey(worktree: { familyHash?: string; repoHash: string } | undefined, repoHash: string): string {
+    return worktree?.familyHash ?? worktree?.repoHash ?? repoHash;
+  }
+
+  private findSiblingDb(resolved: ResolvedRepo): string | undefined {
+    const family = this.familyKey(resolved.worktree, resolved.repoHash);
+    const self = indexDbPath(resolved.repoRoot);
+    let best: { path: string; mtime: number } | undefined;
+    for (const entry of this.runtimes.values()) {
+      if (entry.stoppedAt !== undefined) continue;
+      if (this.familyKey(entry.context.worktree, entry.context.repoHash) !== family) continue;
+      const dbPath = indexDbPath(entry.context.repoRoot);
+      if (dbPath === self || !existsSync(dbPath)) continue;
+      const mtime = statSync(dbPath).mtimeMs;
+      if (!best || mtime > best.mtime) best = { path: dbPath, mtime };
+    }
+    const fromDisk = scanFamilySiblingIndex(repoCacheBase(), family, self);
+    if (fromDisk && existsSync(fromDisk)) {
+      const mtime = statSync(fromDisk).mtimeMs;
+      if (!best || mtime > best.mtime) best = { path: fromDisk, mtime };
+    }
+    return best?.path;
   }
 
   private clearIdleTimers(entry: RuntimeEntry): void {
@@ -1104,30 +1086,11 @@ export class RepoRuntimeManager {
       clearTimeout(entry.idleTimer);
       entry.idleTimer = undefined;
     }
-    if (entry.hibernateTimer) {
-      clearTimeout(entry.hibernateTimer);
-      entry.hibernateTimer = undefined;
-    }
-    if (entry.indexIdleTimer) {
-      clearTimeout(entry.indexIdleTimer);
-      entry.indexIdleTimer = undefined;
-    }
   }
 
   private scheduleIdleShutdown(entry: RuntimeEntry): void {
     this.clearIdleTimers(entry);
     if (entry.refCount !== 0 || entry.stoppedAt !== undefined) return;
-    const hotIndex = this.isHotIndexEntry(entry);
-    // Hot-set isolates stay resident (M2b). Hibernate now recycle()s the worker,
-    // so skipping only the index-idle timer would still destroy the isolate at T_hibernate.
-    if (this.options.hibernateTtlMs > 0 && !hotIndex) {
-      entry.hibernateTimer = setTimeout(() => {
-        if (entry.refCount === 0 && entry.stoppedAt === undefined) {
-          void this.hibernateEntry(entry);
-        }
-      }, this.options.hibernateTtlMs);
-      entry.hibernateTimer.unref?.();
-    }
     if (this.options.idleTtlMs > 0) {
       entry.idleTimer = setTimeout(() => {
         if (entry.refCount === 0 && entry.lspReservation !== "NONE") {
@@ -1135,14 +1098,6 @@ export class RepoRuntimeManager {
         }
       }, this.options.idleTtlMs);
       entry.idleTimer.unref?.();
-    }
-    if (this.options.indexIdleTtlMs > 0 && !hotIndex) {
-      entry.indexIdleTimer = setTimeout(() => {
-        if (entry.refCount === 0) {
-          void this.shutdown(entry.context.repoRoot);
-        }
-      }, this.options.indexIdleTtlMs);
-      entry.indexIdleTimer.unref?.();
     }
   }
 
@@ -1165,32 +1120,17 @@ export class RepoRuntimeManager {
     const freemem = this.options.freemem ?? os.freemem;
     if (freemem() >= this.options.freememPressureBytes) return;
     const victim = [...this.runtimes.values()]
-      .filter(entry => entry.refCount === 0 && entry.stoppedAt === undefined && !this.isHotIndexEntry(entry))
+      .filter(entry => entry.refCount === 0 && entry.stoppedAt === undefined)
       .sort((left, right) => left.lastUsedAt - right.lastUsedAt)[0];
     if (!victim) return;
     this.relievingPressure = true;
     try {
-      if (!victim.hibernated) {
-        await this.hibernateEntry(victim);
-        return;
-      }
       if (victim.lspReservation !== "NONE") {
         await this.stopEntry(victim);
       }
     } finally {
       this.relievingPressure = false;
     }
-  }
-
-  private async hibernateEntry(entry: RuntimeEntry): Promise<void> {
-    if (entry.hibernated || entry.stoppedAt !== undefined || entry.refCount !== 0) return;
-    entry.hibernated = true;
-    const client = entry.context.javaIndexClient;
-    if (client && typeof client.recycle === "function") {
-      await client.recycle().catch(() => undefined);
-      return;
-    }
-    await client?.hibernate().catch(() => undefined);
   }
 
   private async stopEntry(entry: RuntimeEntry): Promise<void> {
@@ -1202,6 +1142,11 @@ export class RepoRuntimeManager {
     entry.lspReservation = "NONE";
     this.drainSlotWaiters();
   }
+}
+
+function indexDbPath(repoRoot: string): string {
+  const dir = process.env.JAVA_LSP_INDEX_DIR?.trim();
+  return path.join(dir && dir.length > 0 ? dir : repoCacheRoot(repoRoot), "index.sqlite");
 }
 
 function createRuntime(
@@ -1216,7 +1161,9 @@ function createRuntime(
     leaseStore: leases,
     worktree: resolved.worktree
   });
-  const javaIndexClient = new JavaIndexClient(resolved.repoRoot, repoCacheRoot(resolved.repoRoot));
+  const dbPath = indexDbPath(resolved.repoRoot);
+  const supervisor = new BuilderSupervisor({ repoRoot: resolved.repoRoot, dbPath });
+  const javaIndexClient = new SqlJavaIndexClient(resolved.repoRoot, dbPath, supervisor);
   const javaIndex = new RouterJavaIndex(resolved.repoRoot, javaIndexClient);
   const router = new AgentRouter(resolved.repoRoot, session, javaIndex);
   return {

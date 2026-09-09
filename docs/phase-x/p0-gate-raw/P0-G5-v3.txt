@@ -1,0 +1,33 @@
+snapshot_baselines
+{"id": "lishuedu", "files": 6090, "types": 7319, "fields": 28556, "methods": 25077, "edges": 253711}
+{"id": "lishu-v2", "files": 3013, "types": 8125, "fields": 33949, "methods": 31395, "edges": 223190}
+{"id": "cipherlink", "files": 629, "types": 761, "fields": 2514, "methods": 3098, "edges": 21399}
+{"id": "exam-parent-v3", "files": 1432, "types": 1604, "fields": 7866, "methods": 5422, "edges": 56191}
+lishuedu_v3_sql files=6090 types=7319 methods=25077 edges=253711 stat=235376640 (cfbf0ec T8.c)
+BUILD cipherlink
+{"ok":true,"parseFailed":0,"parseFailures":[],"files":629,"types":761,"methods":3098,"edges":21399}
+wall_s=8.81 exit=0
+SQL cipherlink {"file": 629, "type": 761, "field": 2514, "method": 3098, "edge": 21399}
+  file 629 vs 629 (+0.000%)
+  type 761 vs 761 (+0.000%)
+  field 2514 vs 2514 (+0.000%)
+  method 3098 vs 3098 (+0.000%)
+  edge 21399 vs 21399 (+0.000%)
+BUILD exam-parent-v3
+{"ok":true,"parseFailed":0,"parseFailures":[],"files":1432,"types":1604,"methods":5425,"edges":56221}
+wall_s=22.91 exit=0
+SQL exam-parent-v3 {"file": 1432, "type": 1604, "field": 7866, "method": 5425, "edge": 56221}
+  file 1432 vs 1432 (+0.000%)
+  type 1604 vs 1604 (+0.000%)
+  field 7866 vs 7866 (+0.000%)
+  method 5425 vs 5422 (+0.055%)
+  edge 56221 vs 56191 (+0.053%)
+BUILD lishu-v2
+{"ok":true,"parseFailed":0,"parseFailures":[],"files":3036,"types":8183,"methods":31683,"edges":225168}
+wall_s=165.29 exit=0
+SQL lishu-v2 {"file": 3036, "type": 8183, "field": 34205, "method": 31683, "edge": 225168}
+  file 3036 vs 3013 (+0.763%)
+  type 8183 vs 8125 (+0.714%)
+  field 34205 vs 33949 (+0.754%)
+  method 31683 vs 31395 (+0.917%)
+  edge 225168 vs 223190 (+0.886%)

@@ -130,7 +130,7 @@ test("java_status returns summary by default and keeps diagnostics explicit", as
   assert.match(diagnostic.semanticAutoPolicy as string, /auto runs live JDT semantic lookups only for service-profile anchors/);
 });
 
-test("java_status exposes sibling-seed progress without requiring diagnostic detail", async () => {
+test("java_status exposes db and builder fields without requiring diagnostic detail", async () => {
   const context = {
     repoRoot: "/tmp/demo",
     session: { status: () => testSessionStatus(false) },
@@ -157,21 +157,8 @@ test("java_status exposes sibling-seed progress without requiring diagnostic det
             recoveredFiles: 0,
             extractorVersion: "test"
           }],
-          worktreeSeed: {
-            attempted: true,
-            sourceRepoHash: "sibling-hash",
-            reusedFiles: 9,
-            dirtyFiles: 3,
-            relinkFiles: 1,
-            droppedCrossFileEdges: 2,
-            manifestValidationMs: 18,
-            deltaParsedFiles: 0,
-            fingerprintMatched: false,
-            cacheDirsScanned: 3,
-            eligibleSnapshots: 1,
-            identityMismatch: 0,
-            completion: "SEEDED_DEGRADED"
-          }
+          db: { bytes: 4096, cacheKb: 32768 },
+          builder: { state: "idle", queued: 0, pid: 4242 }
         };
       }
     }
@@ -179,16 +166,9 @@ test("java_status exposes sibling-seed progress without requiring diagnostic det
 
   const result = await javaStatus(context, { start: false });
   const javaIndex = result.javaIndex as Record<string, unknown>;
-  const seed = javaIndex.worktreeSeed as Record<string, unknown>;
   assert.equal(javaIndex.files, 12);
-  assert.equal(javaIndex.coverage, "partial");
-  assert.equal(seed.completion, "SEEDED_DEGRADED");
-  assert.equal(seed.reusedFiles, 9);
-  assert.equal(seed.dirtyFiles, 3);
-  assert.equal(seed.deltaParsedFiles, 0);
-  assert.equal(seed.fingerprintMatched, false);
-  assert.equal(seed.cacheDirsScanned, 3);
-  assert.equal(seed.eligibleSnapshots, 1);
+  assert.deepEqual(javaIndex.db, { bytes: 4096, cacheKb: 32768 });
+  assert.deepEqual(javaIndex.builder, { state: "idle", queued: 0, pid: 4242 });
 });
 
 test("java_status forwards the request absolute budget to JavaIndex status", async () => {

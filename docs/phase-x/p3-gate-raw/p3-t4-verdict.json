@@ -1,0 +1,214 @@
+{
+  "schemaVersion": "iod-p3-t4-verdict/v1",
+  "head": "d0ea177",
+  "identityMatrix": {
+    "dir": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-74d3761dc961/implementer/p3-t4-matrix",
+    "candidateHead": "d0ea177",
+    "baseline": "d02f398",
+    "matrixExit": 1,
+    "contentDelta0": true,
+    "metrics": [
+      "recall",
+      "pRead",
+      "rReadMust",
+      "estimatedTokensP50"
+    ],
+    "absoluteFloorsFailedBothArms": true,
+    "stderrWaivedLines": 0,
+    "projects": [
+      {
+        "project": "lishuedu",
+        "delta": {
+          "recall": 0,
+          "pRead": 0,
+          "rReadMust": 0,
+          "rTaskBlocking": 0,
+          "estimatedTokensP50": 0,
+          "p95Ratio": 1.0605800829693723,
+          "p95ThresholdMs": 354.0647387499848,
+          "holdout": {
+            "recall": 0,
+            "pRead": 0,
+            "rReadMust": 0,
+            "rTaskBlocking": 0
+          }
+        },
+        "gate": {
+          "rReadMust": false,
+          "rTaskBlocking": true,
+          "recall": true,
+          "pRead": true,
+          "estimatedTokens": true,
+          "p95": true,
+          "rangeLineRecall": false,
+          "rangeCoordinateRecall": false,
+          "holdoutRReadMust": false,
+          "holdoutRTaskBlocking": true,
+          "holdoutRecall": true,
+          "holdoutPRead": true
+        },
+        "passed": false,
+        "mustFailureScenarios": {
+          "old": [
+            "exam-score-export-cross-module-holdout",
+            "paper-task-claim-iam-holdout"
+          ],
+          "new": [
+            "exam-score-export-cross-module-holdout",
+            "paper-task-claim-iam-holdout"
+          ],
+          "identical": true
+        }
+      },
+      {
+        "project": "cipherlink",
+        "delta": {
+          "recall": 0,
+          "pRead": 0,
+          "rReadMust": 0,
+          "rTaskBlocking": 0,
+          "estimatedTokensP50": 0,
+          "p95Ratio": 1.2477841393619629,
+          "p95ThresholdMs": 279.2368750000014,
+          "holdout": {
+            "recall": 0,
+            "pRead": 0,
+            "rReadMust": 0,
+            "rTaskBlocking": 0
+          }
+        },
+        "gate": {
+          "rReadMust": false,
+          "rTaskBlocking": true,
+          "recall": true,
+          "pRead": true,
+          "estimatedTokens": true,
+          "p95": true,
+          "rangeLineRecall": false,
+          "rangeCoordinateRecall": false,
+          "holdoutRReadMust": false,
+          "holdoutRTaskBlocking": true,
+          "holdoutRecall": true,
+          "holdoutPRead": true
+        },
+        "passed": false,
+        "mustFailureScenarios": {
+          "old": [
+            "client-release-storage-presign-holdout",
+            "backend-operation-log-aspect-async-audit-holdout"
+          ],
+          "new": [
+            "client-release-storage-presign-holdout",
+            "backend-operation-log-aspect-async-audit-holdout"
+          ],
+          "identical": true
+        }
+      },
+      {
+        "project": "exam-parent-v3",
+        "delta": {
+          "recall": 0,
+          "pRead": 0,
+          "rReadMust": 0,
+          "rTaskBlocking": 0,
+          "estimatedTokensP50": 0,
+          "p95Ratio": 1.2605930462758452,
+          "p95ThresholdMs": 334.097916249998,
+          "holdout": {
+            "recall": 0,
+            "pRead": 0,
+            "rReadMust": 0,
+            "rTaskBlocking": 0
+          }
+        },
+        "gate": {
+          "rReadMust": false,
+          "rTaskBlocking": true,
+          "recall": true,
+          "pRead": true,
+          "estimatedTokens": true,
+          "p95": false,
+          "rangeLineRecall": false,
+          "rangeCoordinateRecall": false,
+          "holdoutRReadMust": false,
+          "holdoutRTaskBlocking": true,
+          "holdoutRecall": true,
+          "holdoutPRead": true
+        },
+        "passed": false,
+        "mustFailureScenarios": {
+          "old": [
+            "exam-room-print-download-types-persistent-bundle",
+            "candidate-pay-order-cross-module-admission"
+          ],
+          "new": [
+            "exam-room-print-download-types-persistent-bundle",
+            "candidate-pay-order-cross-module-admission"
+          ],
+          "identical": true
+        }
+      }
+    ]
+  },
+  "gateRelease": {
+    "run1": "p3-t4-release-1.json exitCode=0 rawSha256=85fe5bf8e029b384e7b064ffc0b0fd02ea3d86f76e379be970f5b3baf7da19c3",
+    "run2": "p3-t4-release-2.json exitCode=0 rawSha256=2626252f69c1713e5e9636ffbef8c254ca41d65cffdb24a3614e1eb96dd1a584",
+    "note": "rawSha256 is the run-v4-gates captured payload, not the wrapper txt hash"
+  },
+  "ruoyi": {
+    "rawFile": "p3-t4-ruoyi.json",
+    "logFile": "p3-t4-ruoyi.txt",
+    "isolatedRoot": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oLNzyf",
+    "head": "d0ea177",
+    "decision": "TOKEN_FAIL",
+    "qualityBitIdentical": true,
+    "identity": {
+      "identical": true,
+      "diffs": [],
+      "unmeasured": []
+    },
+    "token": {
+      "drop": 0,
+      "pass": false,
+      "gate": 0.2
+    },
+    "prepared": {
+      "old": {
+        "state": "READY",
+        "files": 6447,
+        "snapshotBytes": 21188212,
+        "lastError": null,
+        "coverageRoots": 66,
+        "pendingBackground": 0
+      },
+      "new": {
+        "state": "READY",
+        "files": 6447,
+        "snapshotBytes": 0,
+        "lastError": null,
+        "coverageRoots": 66,
+        "pendingBackground": 0
+      }
+    },
+    "caches": {
+      "oldSnapshotBytes": 21188212,
+      "newSqliteBytes": 215199744
+    },
+    "metrics": {
+      "recall": 0.7482142857142859,
+      "pRead": 0.2976190476190475,
+      "rReadMust": 0.5383503401360543,
+      "RangeLineRecall": 0.35258194186765596,
+      "estimatedTokensP50": 2562,
+      "scenarios": 28
+    },
+    "note": "P3-T4 ruoyi door is quality bit-identical; F1 20% token-drop is recorded, not a T4 identity fail."
+  },
+  "t4Gates": {
+    "threeRepoContentDelta0": true,
+    "gateReleaseTwice": true,
+    "ruoyiQualityBitIdentical": true,
+    "installRuntime": false
+  },
+  "installRuntime": false
+}

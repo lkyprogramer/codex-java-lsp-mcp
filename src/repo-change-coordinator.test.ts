@@ -10,6 +10,7 @@ import {
   isIgnoredRepoPathFast,
   RepoChangeCoordinator
 } from "./repo-change-coordinator.js";
+import { repoWatchBackend } from "./repo-fs-watch.js";
 import { GenerationClock, type RepoChangeBatch } from "./repo-generation.js";
 import { probeLayout, type LayoutContext } from "./layout-probe.js";
 import { LayoutManager, type LayoutSource } from "./layout-manager.js";
@@ -52,6 +53,8 @@ test("watch plan unions source/resource/generated roots and exact build markers"
   assert.ok(plan.generatedRoots.some(item => item.endsWith(path.join("target", "generated-sources", "annotations"))));
   assert.ok(plan.buildFiles.includes(path.join(root, "pom.xml")));
   assert.equal(plan.targets.length, new Set(plan.targets).size, "targets are unique");
+  assert.equal(plan.targets.includes(root), false, "repoRoot is not a catch-all watch target");
+  assert.equal(repoWatchBackend("darwin"), "fs-watch-recursive");
 });
 
 test("ignore contract suppresses git/cache/build-output but not an allowlisted generated root", () => {

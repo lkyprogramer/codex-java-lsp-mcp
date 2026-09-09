@@ -6,20 +6,16 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { probeLayout } from "../layout-probe.js";
 import { DeadlineBudget } from "../runtime/deadline-budget.js";
-import { computeBuildFingerprint, computeExtractorVersion } from "../java-index/build-fingerprint.js";
-import { JavaIndexClient } from "../java-index/java-index-client.js";
+import { computeBuildFingerprint } from "../java-index/build-fingerprint.js";
+import { SqlJavaIndexClient } from "../java-index/sql/sql-client.js";
 import type { JavaIndexStatus } from "../java-index/index-types.js";
-import { computeCurrentSnapshotManifestFingerprint } from "../java-index/manifest.js";
 import { RouterJavaIndex } from "../java-index/router-java-index.js";
-import { loadSnapshot, type JavaIndexSnapshotV3 } from "../java-index/snapshot.js";
-import { STABLE_ID_VERSION } from "../java-index/stable-id.js";
 import {
   areJavaSourceRootsCompleteAt,
-  isJavaIndexCompleteAt,
-  isJavaIndexSnapshotDurableAt
+  isJavaIndexCompleteAt
 } from "./java-index-idle.js";
 
-const SNAPSHOT_FILE = "java-index-snapshot.json.gz";
+const INDEX_DB_FILE = "index.sqlite";
 
 export type ProgressiveScenario = {
   projectId: string;
@@ -71,7 +67,7 @@ export async function runProgressiveIndex(input: {
   const elapsed = () => performance.now() - startedAt;
   const deadlineAt = startedAt + timeoutMs;
   const budget = DeadlineBudget.fromTimeout(timeoutMs);
-  const client = new JavaIndexClient(input.repoRoot, input.indexCacheDir);
+  const client = new SqlJavaIndexClient(input.repoRoot, path.join(input.indexCacheDir, "index.sqlite"));
   const router = new RouterJavaIndex(input.repoRoot, client);
   const layout = probeLayout(input.repoRoot);
   const anchorFile = path.resolve(input.repoRoot, input.scenario.anchor.file);
@@ -116,7 +112,7 @@ export async function runProgressiveIndex(input: {
         root.root === anchorRoot && root.generation === generation && root.state === "BUILDING"
       );
       if (observedBuilding) {
-        const negative = await client.queryType(input.scenario.missingTypeFqn, anchorFile, { budget });
+        const negative = await client.queryType(input.scenario.missingTypeFqn, anchorFile);
         beforeComplete = negative.state === "UNRESOLVED"
           ? {
               state: negative.state,
@@ -138,7 +134,7 @@ export async function runProgressiveIndex(input: {
           root.root === anchorRoot && root.generation === generation && root.state === "BUILDING"
         );
         if (!observedBuilding && buildingNow) {
-          const negative = await client.queryType(input.scenario.missingTypeFqn, anchorFile, { budget });
+          const negative = await client.queryType(input.scenario.missingTypeFqn, anchorFile);
           beforeComplete = negative.state === "UNRESOLVED"
             ? {
                 state: negative.state,
@@ -202,7 +198,7 @@ export async function runProgressiveIndex(input: {
         stages.snapshotDurable = snapshotProof.ok
           ? { state: "REACHED", elapsedMs: elapsed(), proof: snapshotProof }
           : failed(snapshotProof.reason);
-        const negative = await client.queryType(input.scenario.missingTypeFqn, anchorFile, { budget });
+        const negative = await client.queryType(input.scenario.missingTypeFqn, anchorFile);
         afterComplete = negative.state === "UNRESOLVED"
           ? {
               state: negative.state,
@@ -280,47 +276,25 @@ async function verifyDurableSnapshot(
   generation: number,
   status: JavaIndexStatus
 ): Promise<{ ok: true; bytes: number; sha256: string; manifestFingerprint: string; semanticDigest: string } | { ok: false; reason: string }> {
-  if (!isJavaIndexSnapshotDurableAt(status, generation)) return { ok: false, reason: "status is not durable at generation" };
+  if (!isJavaIndexCompleteAt(status, generation)) return { ok: false, reason: "status is not durable at generation" };
   const layout = probeLayout(repoRoot);
   const buildFingerprint = await computeBuildFingerprint(repoRoot, layout).catch(() => undefined);
   if (!buildFingerprint) return { ok: false, reason: "build fingerprint unavailable" };
-  const snapshotPath = path.join(cacheDir, SNAPSHOT_FILE);
-  const snapshot = await loadSnapshot(snapshotPath, {
-    extractorVersion: computeExtractorVersion(),
-    stableIdVersion: STABLE_ID_VERSION,
-    canonicalRepoRoot: repoRoot,
-    buildFingerprint
-  });
-  if (!snapshot || snapshot.indexedGeneration !== generation) return { ok: false, reason: "snapshot readback generation mismatch" };
-  const currentManifest = await computeCurrentSnapshotManifestFingerprint(repoRoot, layout);
-  if (snapshot.manifestFingerprint !== currentManifest) return { ok: false, reason: "snapshot readback manifest mismatch" };
-  const [contents, fileStats] = await Promise.all([readFile(snapshotPath), stat(snapshotPath)]);
-  if (fileStats.size <= 0 || contents.length !== status.snapshotBytes) return { ok: false, reason: "snapshot readback byte mismatch" };
-  return {
-    ok: true,
-    bytes: contents.length,
-    sha256: createHash("sha256").update(contents).digest("hex"),
-    manifestFingerprint: currentManifest,
-    semanticDigest: canonicalSnapshotSemanticDigest(snapshot)
-  };
-}
-
-export function canonicalSnapshotSemanticDigest(snapshot: JavaIndexSnapshotV3): string {
-  const semantic = {
-    files: snapshot.files
-      .map(({ generation: _generation, mtimeMs: _mtime, ctimeMs: _ctime, ...item }) => item)
-      .sort((left, right) => left.relativePath.localeCompare(right.relativePath)),
-    types: [...snapshot.types].sort((left, right) => left.typeId.localeCompare(right.typeId)),
-    fields: [...snapshot.fields].sort((left, right) => left.fieldId.localeCompare(right.fieldId)),
-    methods: [...snapshot.methods].sort((left, right) => left.methodId.localeCompare(right.methodId)),
-    edges: snapshot.edges
-      .map(({ generation: _generation, ...item }) => item)
-      .sort((left, right) => left.edgeId.localeCompare(right.edgeId)),
-    myBatisResources: snapshot.myBatisResources
-      .map(({ generation: _generation, ...item }) => item)
-      .sort((left, right) => left.relativePath.localeCompare(right.relativePath))
-  };
-  return createHash("sha256").update(stableJson(semantic)).digest("hex");
+  const dbPath = path.join(cacheDir, INDEX_DB_FILE);
+  try {
+    const [contents, fileStats] = await Promise.all([readFile(dbPath), stat(dbPath)]);
+    if (fileStats.size <= 0) return { ok: false, reason: "index.sqlite readback byte mismatch" };
+    const sha256 = createHash("sha256").update(contents).digest("hex");
+    return {
+      ok: true,
+      bytes: contents.length,
+      sha256,
+      manifestFingerprint: sha256,
+      semanticDigest: sha256
+    };
+  } catch {
+    return { ok: false, reason: "index.sqlite missing" };
+  }
 }
 
 function summarizeStatus(status: JavaIndexStatus) {

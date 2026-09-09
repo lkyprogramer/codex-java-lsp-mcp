@@ -1,0 +1,254 @@
+{
+  "version": 6,
+  "createdAt": "2026-09-07T19:07:54.262Z",
+  "sourceRoot": "/Users/luo/Documents/github/codex-java-lsp-mcp",
+  "verifierVersion": 6,
+  "hostLoad": {
+    "loadavg1": 7.96484375,
+    "logicalCpus": 10,
+    "perCpu": 0.796484375,
+    "maxLoadavgPerCpu": 1.2,
+    "loadPolicy": {
+      "loadavg1": 7.96484375,
+      "proceedBelow": 20,
+      "belowThreshold": true,
+      "refuse": false
+    },
+    "memory": {
+      "totalBytes": 34359738368,
+      "availableBytes": 8018526208,
+      "minAvailableBytes": 4294967296
+    },
+    "passed": true
+  },
+  "runtimes": {
+    "old": {
+      "commit": "d02f398f5bfd516a8586ed4d13b7f0c87a9fda5d",
+      "commitTree": "14e2bfb7dabcf1c939cba689afb37402beda3f67",
+      "executableTree": "14e2bfb7dabcf1c939cba689afb37402beda3f67",
+      "buildStamp": {
+        "gitSha": "d02f398f5bfd",
+        "generatedAt": "2026-09-07T19:04:53.007Z",
+        "defaults": {
+          "idleTtlMs": 2700000,
+          "hibernateTtlMs": 300000,
+          "importConcurrency": 2,
+          "jdtlsXmx": "2g",
+          "maxActiveRepos": 3
+        },
+        "defaultsFingerprint": "a27fa44edb37"
+      }
+    },
+    "new": {
+      "commit": "d0ea1776239db095fec6922f0e507582b8d72392",
+      "commitTree": "5373a2ef4940df431e57939c7bdc3858ede001f0",
+      "executableTree": "5373a2ef4940df431e57939c7bdc3858ede001f0",
+      "buildStamp": {
+        "gitSha": "d0ea1776239d",
+        "generatedAt": "2026-09-07T19:04:56.622Z",
+        "defaults": {
+          "idleTtlMs": 2700000,
+          "importConcurrency": 2,
+          "jdtlsXmx": "2g",
+          "maxActiveRepos": 3
+        },
+        "defaultsFingerprint": "e5835394a86f"
+      }
+    }
+  },
+  "candidatePatch": {
+    "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-74d3761dc961/implementer/p3-t4-matrix/candidate.patch",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0,
+    "appliedToCommit": "d0ea1776239db095fec6922f0e507582b8d72392",
+    "appliedToCommitTree": "5373a2ef4940df431e57939c7bdc3858ede001f0",
+    "resultingExecutableTree": "5373a2ef4940df431e57939c7bdc3858ede001f0",
+    "untrackedInputs": []
+  },
+  "runs": 2,
+  "p95Limit": 1.25,
+  "requestDeadlineMs": 2000,
+  "comparisonPolicy": {
+    "baseline": "executable-code-baseline",
+    "baselineRevision": "d02f398f5bfd516a8586ed4d13b7f0c87a9fda5d",
+    "goldenSchema": "java-intelligence-v32-range-holdout-v2",
+    "pReadTolerance": 0.02,
+    "p95AbsoluteSlackMs": 50,
+    "taskBlockingBaseline": "attempt-or-derived-attribution"
+  },
+  "rounds": [
+    "old/new",
+    "new/old",
+    "old/new"
+  ],
+  "repositories": {
+    "lishuedu": {
+      "root": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-mcp-three-repo-ufmw8f/repositories/lishuedu",
+      "head": "db63b1a7e393edd90449eb013d7d1c4d65c366f2",
+      "tree": "22f0ce444e4cac484de85c8a0bf02240ad70d712",
+      "clean": true,
+      "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sourceRoot": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-74d3761dc961/implementer/repos/lishuedu"
+    },
+    "cipherlink": {
+      "root": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-mcp-three-repo-ufmw8f/repositories/cipherlink",
+      "head": "fa433982e92e52dd610650d1e79f2d041179b1d3",
+      "tree": "21a1075c7b211932a4cdb2abf2742521b1eba31f",
+      "clean": true,
+      "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sourceRoot": "/Users/luo/Documents/program/cipherlink"
+    },
+    "exam-parent-v3": {
+      "root": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-mcp-three-repo-ufmw8f/repositories/exam-parent-v3",
+      "head": "f90a0b475f7be2ed003703feecec8195bc7eb976",
+      "tree": "dcdb2024879686451859c64260c7e1f3a4721fa7",
+      "clean": true,
+      "statusSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sourceRoot": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-74d3761dc961/implementer/repos/exam-parent-v3"
+    }
+  },
+  "scenarios": {
+    "lishuedu": {
+      "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-74d3761dc961/implementer/p3-t4-matrix/frozen-scenarios/lishuedu.scenarios.jsonl",
+      "sha256": "fba58bb3e3e77dfb37f7ded03fb2a9ff02612658b08ca48b15927d102c434c65",
+      "rowIds": [
+        "storage-signed-url",
+        "school-template-parser",
+        "report-reusable-zip",
+        "school-confirm-controller",
+        "benefit-product-code-dto",
+        "school-mapstruct-uses",
+        "audit-order-repository-mapper-rule-type",
+        "audit-assignee-mapper-precision",
+        "exam-score-export-cross-module-holdout",
+        "paper-task-claim-iam-holdout"
+      ],
+      "tuningRowIds": [
+        "storage-signed-url",
+        "school-template-parser",
+        "report-reusable-zip",
+        "school-confirm-controller",
+        "benefit-product-code-dto",
+        "school-mapstruct-uses",
+        "audit-order-repository-mapper-rule-type",
+        "audit-assignee-mapper-precision"
+      ],
+      "holdoutRowIds": [
+        "exam-score-export-cross-module-holdout",
+        "paper-task-claim-iam-holdout"
+      ]
+    },
+    "cipherlink": {
+      "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-74d3761dc961/implementer/p3-t4-matrix/frozen-scenarios/cipherlink.scenarios.jsonl",
+      "sha256": "e60dfebcc6cd764e6488c647793db72e098b7cf66385f8012e023fedcaf535d5",
+      "rowIds": [
+        "client-update-check",
+        "transfer-upload-init",
+        "transfer-upload-session-repository",
+        "aliyun-sms-gateway-send",
+        "operation-log-response-dto",
+        "organization-create-member-cross-module",
+        "auth-sms-login-lockout",
+        "account-admin-create-account-guard",
+        "client-release-storage-presign-holdout",
+        "backend-operation-log-aspect-async-audit-holdout"
+      ],
+      "tuningRowIds": [
+        "client-update-check",
+        "transfer-upload-init",
+        "transfer-upload-session-repository",
+        "aliyun-sms-gateway-send",
+        "operation-log-response-dto",
+        "organization-create-member-cross-module",
+        "auth-sms-login-lockout",
+        "account-admin-create-account-guard"
+      ],
+      "holdoutRowIds": [
+        "client-release-storage-presign-holdout",
+        "backend-operation-log-aspect-async-audit-holdout"
+      ]
+    },
+    "exam-parent-v3": {
+      "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-74d3761dc961/implementer/p3-t4-matrix/frozen-scenarios/exam-parent-v3.scenarios.jsonl",
+      "sha256": "da84c560c46c7c90d6dbabea38b43b5695a7a23dcd2f608e8c6dcd63cae4f69e",
+      "rowIds": [
+        "rule-engine-execute",
+        "candidate-position-select",
+        "apply-info-save-basic-service",
+        "position-repository-exists",
+        "ceb-order-create-dto",
+        "apply-info-update-cross-exam-guard",
+        "check-people-delete-site-guard",
+        "current-user-service-implementer-edge",
+        "exam-room-print-download-types-persistent-bundle",
+        "candidate-pay-order-cross-module-admission"
+      ],
+      "tuningRowIds": [
+        "rule-engine-execute",
+        "candidate-position-select",
+        "apply-info-save-basic-service",
+        "position-repository-exists",
+        "ceb-order-create-dto",
+        "apply-info-update-cross-exam-guard",
+        "check-people-delete-site-guard",
+        "current-user-service-implementer-edge"
+      ],
+      "holdoutRowIds": [
+        "exam-room-print-download-types-persistent-bundle",
+        "candidate-pay-order-cross-module-admission"
+      ]
+    }
+  },
+  "candidateTests": {
+    "dist": {
+      "discoveredTests": 1161,
+      "passedTests": 1161,
+      "stdout": {
+        "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-74d3761dc961/implementer/p3-t4-matrix/candidate-tests/dist.tap",
+        "bytes": 265932,
+        "sha256": "d7c1501f288b0920cfb8cd3806bdff8a95d9e7c368248b8edc443a1bee6d76ff"
+      },
+      "stderr": {
+        "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-74d3761dc961/implementer/p3-t4-matrix/candidate-tests/dist.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "scripts": {
+      "discoveredTests": 288,
+      "passedTests": 288,
+      "stdout": {
+        "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-74d3761dc961/implementer/p3-t4-matrix/candidate-tests/scripts.tap",
+        "bytes": 61083,
+        "sha256": "4a9e494ab2026d141b395660703b762032252cf7b6ba996545ce47e7db7807f5"
+      },
+      "stderr": {
+        "file": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-74d3761dc961/implementer/p3-t4-matrix/candidate-tests/scripts.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  },
+  "dependencies": {
+    "copyMode": "private-content-verified-copy",
+    "inventory": {
+      "schemaVersion": 1,
+      "algorithm": "sha256-path-type-size-content-v1",
+      "fileCount": 4122,
+      "directoryCount": 669,
+      "symlinkCount": 7,
+      "totalBytes": 59058034,
+      "sha256": "5b1471d782246e183022fe2f3a84dc86944b8b0fb7e381b77ec905c3347aaa8c"
+    }
+  },
+  "diagnosticRpc": {
+    "requested": false,
+    "role": "DIAGNOSTIC_ONLY_NOT_STANDARD_TOKEN_GATE",
+    "gatePolicy": null,
+    "runtimeState": null,
+    "telemetryMode": null,
+    "outputFile": null
+  },
+  "jdtlsDisabled": true,
+  "workspaceRoot": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-mcp-three-repo-ufmw8f"
+}

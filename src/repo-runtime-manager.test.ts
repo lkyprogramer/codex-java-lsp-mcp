@@ -8,7 +8,7 @@ import { GenerationClock, type RepoChangeBatch } from "./repo-generation.js";
 import type { JavaIndexStatus } from "./java-index/index-types.js";
 import { DeadlineBudget } from "./runtime/deadline-budget.js";
 import { JavaIntelligenceError } from "./runtime/intelligence-error.js";
-import { isJavaIndexPrewarmReady } from "./java-index/java-index-client.js";
+import { isJavaIndexPrewarmReady } from "./java-index/java-index-client-api.js";
 import { deferred, delay, type Deferred } from "./test-support/fake-jdtls.test.js";
 import type { JdtlsLifecycleState } from "./jdtls-session.js";
 import type { ResolvedRepo } from "./repo-resolver.js";
@@ -63,7 +63,22 @@ test("prewarmRepo does not return until that repo's index is ready", async () =>
   const events: string[] = [];
   const javaIndexClient = {
     async open() {
-      return { indexedGeneration: 1, coverage: [] };
+      return { indexedGeneration: 1, coverage: [], state: "BUILDING" as const };
+    },
+    async status() {
+      return {
+        state: "BUILDING" as const,
+        indexedGeneration: 1,
+        files: 0,
+        types: 0,
+        methods: 0,
+        edges: 0,
+        snapshotBytes: 0,
+        pendingForeground: 0,
+        pendingBackground: 0,
+        coverage: [],
+        resourceCoverage: []
+      };
     },
     async awaitPrewarmReady() {
       events.push("wait");
@@ -138,7 +153,6 @@ test("freemem pressure does not recycle a pin while prewarm is waiting", async (
         methods: 1,
         edges: 0,
         snapshotBytes: 10,
-        factsHydrated: true,
         snapshot: { state: "DURABLE" as const, durableGeneration: 1, durableManifestFingerprint: "m" },
         pendingForeground: 0,
         pendingBackground: 0,
@@ -156,7 +170,6 @@ test("freemem pressure does not recycle a pin while prewarm is waiting", async (
   };
   const manager = new RepoRuntimeManager(fakeResolver(), {
     idleTtlMs: 100000,
-    hibernateTtlMs: 100000,
     pressureIntervalMs: 15,
     freememPressureBytes: 1,
     freemem: () => 0,
@@ -194,7 +207,6 @@ test("isJavaIndexPrewarmReady requires durable snapshot or complete coverage wit
     }],
     resourceCoverage: []
   };
-  assert.equal(isJavaIndexPrewarmReady({ ...base, snapshotVerificationPending: true }), false);
   assert.equal(isJavaIndexPrewarmReady({ ...base, pendingBackground: 1 }), false);
   assert.equal(isJavaIndexPrewarmReady({
     ...base,
@@ -206,112 +218,14 @@ test("isJavaIndexPrewarmReady requires durable snapshot or complete coverage wit
     ...base,
     snapshot: { state: "DURABLE", durableGeneration: 1, durableManifestFingerprint: "m" }
   }), true);
-  assert.equal(isJavaIndexPrewarmReady({
-    ...base,
-    snapshot: { state: "DURABLE", durableGeneration: 1, durableManifestFingerprint: "m" },
-    factsHydrated: false
-  }), false);
-  assert.equal(isJavaIndexPrewarmReady({
-    ...base,
-    snapshot: { state: "DURABLE", durableGeneration: 1, durableManifestFingerprint: "m" },
-    hibernated: true
-  }), false);
   assert.equal(isJavaIndexPrewarmReady(base), true);
-  assert.equal(isJavaIndexPrewarmReady({
-    ...base,
-    snapshot: { state: "DURABLE", durableGeneration: 1, durableManifestFingerprint: "m" },
-    factsHydrated: false
-  }, { hydrate: false }), true);
-});
-
-test("prewarmRepo hydrate:false recycles the worker isolate after files-only ready", async () => {
-  const sessions = new Map<string, FakeSession>();
-  const javaIndex = new RecordingJavaIndex(() => 0);
-  const manager = new RepoRuntimeManager(fakeResolver(), {
-    idleTtlMs: 100000, hibernateTtlMs: 100000, indexIdleTtlMs: 0, pressureIntervalMs: 0, requestTimeoutMs: 1000
-  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
-    fakeCoordination(), new NoopCrossProcessLeaseStore());
-  await manager.prewarmRepo({ repoRoot: "/repo-a" }, { hydrate: false });
-  assert.ok(javaIndex.calls.includes("recycle"), "cold prewarm must destroy the isolate, not only unload facts");
-  await manager.shutdownAll();
-});
-
-test("index idle TTL closes hibernated cold runtimes and exempts the hot set", async () => {
-  const sessions = new Map<string, FakeSession>();
-  const coldIndex = new RecordingJavaIndex(() => 0);
-  const hotIndex = new RecordingJavaIndex(() => 0);
-  const manager = new RepoRuntimeManager({
-    async resolve(selector: { repoRoot?: string }) {
-      const repoRoot = selector.repoRoot || "/repo";
-      const repoHash = repoRoot.replace(/\W/g, "");
-      return {
-        repoRoot,
-        repoHash,
-        rootSource: "explicit" as const,
-        aliases: repoRoot === "/hot" ? ["lishuedu"] : ["cipherlink"],
-        layoutProfile: "generic-java" as const,
-        lsp: { enabled: true, matchedBy: "direct-root" as const, configuredRoot: repoRoot, effectiveRepoRoot: repoRoot },
-        worktree: { repoRoot, repoHash, isLinkedWorktree: false }
-      };
-    }
-  }, {
-    idleTtlMs: 100000,
-    hibernateTtlMs: 100000,
-    indexIdleTtlMs: 40,
-    hotIndexAliases: new Set(["lishuedu"]),
-    pressureIntervalMs: 0,
-    requestTimeoutMs: 1000
-  }, resolved => ({
-    ...fakeContext(resolved, sessions),
-    javaIndexClient: (resolved.repoRoot === "/hot" ? hotIndex : coldIndex) as never
-  }), fakeCoordination(), new NoopCrossProcessLeaseStore());
-
-  await manager.prewarmRepo({ repoRoot: "/cold" }, { hydrate: false });
-  await manager.prewarmRepo({ repoRoot: "/hot" }, { hydrate: false });
-  await delay(120);
-  assert.ok(coldIndex.calls.includes("close"), "cold hibernated isolate must close");
-  assert.equal(hotIndex.calls.includes("close"), false, "hot-set isolate must stay resident (M2b)");
-  await manager.shutdownAll();
-});
-
-test("index idle TTL closes a cold runtime even if it never hibernated", async () => {
-  const sessions = new Map<string, FakeSession>();
-  const javaIndex = new RecordingJavaIndex(() => 0);
-  const manager = new RepoRuntimeManager({
-    async resolve(selector: { repoRoot?: string }) {
-      const repoRoot = selector.repoRoot || "/repo";
-      const repoHash = repoRoot.replace(/\W/g, "");
-      return {
-        repoRoot,
-        repoHash,
-        rootSource: "explicit" as const,
-        aliases: ["cipherlink"],
-        layoutProfile: "generic-java" as const,
-        lsp: { enabled: true, matchedBy: "direct-root" as const, configuredRoot: repoRoot, effectiveRepoRoot: repoRoot },
-        worktree: { repoRoot, repoHash, isLinkedWorktree: false }
-      };
-    }
-  }, {
-    idleTtlMs: 100000,
-    hibernateTtlMs: 100000,
-    indexIdleTtlMs: 40,
-    hotIndexAliases: new Set(["lishuedu"]),
-    pressureIntervalMs: 0,
-    requestTimeoutMs: 1000
-  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
-    fakeCoordination(), new NoopCrossProcessLeaseStore());
-
-  await manager.prewarmRepo({ repoRoot: "/cold" }, { hydrate: true });
-  await delay(120);
-  assert.ok(javaIndex.calls.includes("close"), "cold isolate must close without waiting for hibernate");
-  await manager.shutdownAll();
 });
 
 test("index idle TTL 0 never registers a close timer", async () => {
   const sessions = new Map<string, FakeSession>();
   const javaIndex = new RecordingJavaIndex(() => 0);
   const manager = new RepoRuntimeManager(fakeResolver(), {
-    idleTtlMs: 100000, hibernateTtlMs: 20, indexIdleTtlMs: 0, pressureIntervalMs: 0, requestTimeoutMs: 1000
+    idleTtlMs: 100000, pressureIntervalMs: 0, requestTimeoutMs: 1000
   }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
     fakeCoordination(), new NoopCrossProcessLeaseStore());
   await manager.prewarmRepo({ repoRoot: "/repo-a" }, { hydrate: false });
@@ -1209,25 +1123,7 @@ test("a sibling-seeded OPEN does not block runtime.create on the post-seed recon
     async open(generation: number) {
       return {
         indexedGeneration: generation,
-        coverage: [{ state: "DEGRADED" as const, generation, failedFiles: 0, recoveredFiles: 0 }],
-        worktreeSeed: {
-          attempted: true,
-          reusedFiles: 9,
-          dirtyFiles: 1,
-          relinkFiles: 0,
-          droppedCrossFileEdges: 0,
-          droppedFrameworkEdges: 0,
-          manifestValidationMs: 1,
-          deltaParsedFiles: 0,
-          reusedResources: 0,
-          dirtyResources: 0,
-          cacheDirsScanned: 2,
-          eligibleSnapshots: 1,
-          candidateDecompressMs: 1,
-          initialManifestScanMs: 1,
-          finalManifestScanMs: 1,
-          completion: "SEEDED_DEGRADED" as const
-        }
+        coverage: [{ state: "DEGRADED" as const, generation, failedFiles: 0, recoveredFiles: 0 }]
       };
     },
     async reconcile() {
@@ -1325,25 +1221,7 @@ test("a request whose freshness barrier hits the public deadline still serves af
     async open(generation: number) {
       return {
         indexedGeneration: generation,
-        coverage: [{ state: "COMPLETE" as const, generation, failedFiles: 0, recoveredFiles: 0 }],
-        worktreeSeed: {
-          attempted: true,
-          reusedFiles: 1,
-          dirtyFiles: 0,
-          relinkFiles: 0,
-          droppedCrossFileEdges: 0,
-          droppedFrameworkEdges: 0,
-          manifestValidationMs: 1,
-          deltaParsedFiles: 0,
-          reusedResources: 0,
-          dirtyResources: 0,
-          cacheDirsScanned: 1,
-          eligibleSnapshots: 1,
-          candidateDecompressMs: 1,
-          initialManifestScanMs: 1,
-          finalManifestScanMs: 1,
-          completion: "SEEDED_DEGRADED" as const
-        }
+        coverage: [{ state: "COMPLETE" as const, generation, failedFiles: 0, recoveredFiles: 0 }]
       };
     },
     async reconcile() {},
@@ -1628,9 +1506,6 @@ test("hibernate TTL does not recycle a hot-set isolate", async () => {
     }
   }, {
     idleTtlMs: 100000,
-    hibernateTtlMs: 25,
-    indexIdleTtlMs: 0,
-    hotIndexAliases: new Set(["lishuedu"]),
     pressureIntervalMs: 0,
     requestTimeoutMs: 5000
   }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
@@ -1638,76 +1513,6 @@ test("hibernate TTL does not recycle a hot-set isolate", async () => {
   await manager.prewarmRepo({ repoRoot: "/hot" }, { hydrate: true });
   await delay(80);
   assert.equal(javaIndex.calls.includes("recycle"), false, "hot-set isolate stays resident through T_hibernate");
-  await manager.shutdownAll();
-});
-
-test("idle-close first query uses the 15s public budget", async () => {
-  const sessions = new Map<string, FakeSession>();
-  const javaIndex = new RecordingJavaIndex(() => 0);
-  const manager = new RepoRuntimeManager({
-    async resolve(selector: { repoRoot?: string }) {
-      const repoRoot = selector.repoRoot || "/repo";
-      const repoHash = repoRoot.replace(/\W/g, "");
-      return {
-        repoRoot,
-        repoHash,
-        rootSource: "explicit" as const,
-        aliases: ["cipherlink"],
-        layoutProfile: "generic-java" as const,
-        lsp: { enabled: true, matchedBy: "direct-root" as const, configuredRoot: repoRoot, effectiveRepoRoot: repoRoot },
-        worktree: { repoRoot, repoHash, isLinkedWorktree: false }
-      };
-    }
-  }, {
-    idleTtlMs: 100000,
-    hibernateTtlMs: 100000,
-    indexIdleTtlMs: 40,
-    hotIndexAliases: new Set(["lishuedu"]),
-    pressureIntervalMs: 0,
-    requestTimeoutMs: 5000
-  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
-    fakeCoordination(), new NoopCrossProcessLeaseStore());
-
-  await manager.prewarmRepo({ repoRoot: "/cold" }, { hydrate: false });
-  await delay(120);
-  assert.ok(javaIndex.calls.includes("close"), "cold isolate must idle-close before the first-query probe");
-
-  const openGate = deferred<{
-    indexedGeneration: number;
-    coverage: Array<{ state: "COMPLETE"; generation: number; failedFiles: number; recoveredFiles: number }>;
-  }>();
-  let openStarted = false;
-  javaIndex.openGate = openGate;
-  javaIndex.onOpen = () => { openStarted = true; };
-
-  let handled = false;
-  const pending = manager.withContext({ repoRoot: "/cold" }, async () => {
-    handled = true;
-  }, { requestOptions: { mode: "minimal", semanticPolicy: "fast" } });
-  await waitFor(() => openStarted);
-  await delay(1800);
-  openGate.resolve({ indexedGeneration: 1, coverage: [] });
-  await pending;
-  assert.equal(handled, true, "cold-start first query must use the 15s public budget, not the 1.5s fast default");
-  await manager.shutdownAll();
-});
-
-test("hibernate TTL unloads the index without tearing down JDT", async () => {
-  const sessions = new Map<string, FakeSession>();
-  const javaIndex = new RecordingJavaIndex(() => 0);
-  const manager = new RepoRuntimeManager(
-    fakeResolver(),
-    { idleTtlMs: 100000, hibernateTtlMs: 25, pressureIntervalMs: 0, requestTimeoutMs: 5000 },
-    resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
-    fakeCoordination(),
-    new NoopCrossProcessLeaseStore()
-  );
-  await manager.withContext({ repoRoot: "/repo-a" }, async context => {
-    await (context.session as unknown as FakeSession).ensureStarted();
-  }, { mayStartLsp: true });
-  await delay(80);
-  assert.ok(javaIndex.calls.includes("recycle"), "T_hibernate must destroy the isolate so RSS returns");
-  assert.equal(sessions.get("/repo-a")?.stops, 0, "T_hibernate must not call session.stop");
   await manager.shutdownAll();
 });
 
@@ -1730,9 +1535,6 @@ test("freemem pressure does not recycle a hydrated hot-set pin", async () => {
     }
   }, {
     idleTtlMs: 100000,
-    hibernateTtlMs: 100000,
-    indexIdleTtlMs: 0,
-    hotIndexAliases: new Set(["lishuedu"]),
     pressureIntervalMs: 15,
     freememPressureBytes: 1,
     freemem: () => 0,
@@ -1745,26 +1547,66 @@ test("freemem pressure does not recycle a hydrated hot-set pin", async () => {
   await manager.shutdownAll();
 });
 
-test("freemem pressure hibernates the LRU idle runtime", async () => {
+test("explicit recycle floor wins via max with the relative baseline", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const javaIndex = recordingHeapIndex(200);
+  const manager = new RepoRuntimeManager(fakeResolver(), {
+    idleTtlMs: 100000,
+    pressureIntervalMs: 0,
+    requestTimeoutMs: 5000,
+  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
+    fakeCoordination(), new NoopCrossProcessLeaseStore());
+  await manager.withContext({ repoRoot: "/repo-a" }, async () => "ok");
+  await delay(120);
+  assert.equal(javaIndex.calls.includes("recycle"), false, "200 < max(1200, 160) must not recycle");
+  await manager.shutdownAll();
+});
+
+test("workerHeapRecycleMb 0 disables idle heap recycle", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const javaIndex = recordingHeapIndex(1500);
+  const manager = new RepoRuntimeManager(fakeResolver(), {
+    idleTtlMs: 100000,
+    pressureIntervalMs: 0,
+    requestTimeoutMs: 5000,
+  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
+    fakeCoordination(), new NoopCrossProcessLeaseStore());
+  await manager.withContext({ repoRoot: "/repo-a" }, async () => "ok");
+  await delay(120);
+  assert.equal(javaIndex.calls.includes("recycle"), false, "threshold 0 must not recycle even at 1500 MiB");
+  await manager.shutdownAll();
+});
+
+test("pendingForeground skips high-heap recycle", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const javaIndex = recordingHeapIndex(1400, { pendingForeground: 1 });
+  const manager = new RepoRuntimeManager(fakeResolver(), {
+    idleTtlMs: 100000,
+    pressureIntervalMs: 0,
+    requestTimeoutMs: 5000,
+  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
+    fakeCoordination(), new NoopCrossProcessLeaseStore());
+  await manager.withContext({ repoRoot: "/repo-a" }, async () => "ok");
+  await delay(120);
+  assert.equal(javaIndex.calls.includes("recycle"), false);
+  await manager.shutdownAll();
+});
+
+test("idle TTL stops JDT without closing the Java index client", async () => {
   const sessions = new Map<string, FakeSession>();
   const javaIndex = new RecordingJavaIndex(() => 0);
-  const manager = new RepoRuntimeManager(
-    fakeResolver(),
-    {
-      idleTtlMs: 100000,
-      hibernateTtlMs: 100000,
-      pressureIntervalMs: 15,
-      freememPressureBytes: 1,
-      freemem: () => 0,
-      requestTimeoutMs: 5000
-    },
-    resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
-    fakeCoordination(),
-    new NoopCrossProcessLeaseStore()
-  );
-  await manager.withContext({ repoRoot: "/repo-a" }, async () => "ok");
-  await delay(80);
-  assert.ok(javaIndex.calls.includes("recycle"), "os.freemem below threshold must recycle LRU idle isolate");
+  const manager = new RepoRuntimeManager(fakeResolver(), {
+    idleTtlMs: 40,
+    pressureIntervalMs: 0,
+    requestTimeoutMs: 1000
+  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
+    fakeCoordination(), new NoopCrossProcessLeaseStore());
+  await manager.withContext({ repoRoot: "/repo-a" }, async context => {
+    await (context.session as unknown as FakeSession).ensureStarted();
+  }, { mayStartLsp: true });
+  await delay(120);
+  assert.equal(sessions.get("/repo-a")?.stops, 1);
+  assert.equal(javaIndex.calls.includes("close"), false);
   await manager.shutdownAll();
 });
 
@@ -1874,6 +1716,32 @@ class FakeCoordinator {
   }
 }
 
+function recordingHeapIndex(heapUsedMb: number, extra: Partial<JavaIndexStatus> = {}) {
+  const calls: string[] = [];
+  let heap = heapUsedMb;
+  return {
+    calls,
+    async status(): Promise<JavaIndexStatus> {
+      calls.push("status");
+      return {
+        ...completeJavaIndexStatus(1),
+        ...extra
+      };
+    },
+    async recycle(): Promise<void> {
+      calls.push("recycle");
+      heap = Math.min(heap, 200);
+    },
+    async open(): Promise<JavaIndexStatus> {
+      calls.push("open");
+      return completeJavaIndexStatus(1);
+    },
+    async close(): Promise<void> {
+      calls.push("close");
+    }
+  };
+}
+
 class RecordingJavaIndex {
   readonly calls: string[] = [];
   readonly boundedCalls: string[] = [];
@@ -1951,7 +1819,6 @@ function managerWith(
   options: Partial<{
     maxActiveRepos: number;
     idleTtlMs: number;
-    hibernateTtlMs: number;
     requestTimeoutMs: number;
     maxRetainedStoppedRepos: number;
     pressureIntervalMs: number;
@@ -1986,6 +1853,7 @@ function fakeContext(
     aliases: resolved.aliases,
     layoutProfile: resolved.layoutProfile,
     lsp: resolved.lsp,
+    worktree: resolved.worktree,
     session: session as never,
     router: {
       clearRgCache() {},

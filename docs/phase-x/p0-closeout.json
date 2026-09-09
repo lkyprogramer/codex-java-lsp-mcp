@@ -1,0 +1,73 @@
+{
+  "schemaVersion": "iod-phase-closeout/v1",
+  "phase": "P0",
+  "sha": "f99c67a7b9d4133bc7c6f6212e2897b3fa9a43b6",
+  "shaFix": "f99c67a7b9d4133bc7c6f6212e2897b3fa9a43b6",
+  "dated": "2026-09-07",
+  "decision": "pass",
+  "gates": [
+    {
+      "id": "P0-G1",
+      "target": "isolated full + gate:pr green",
+      "measured": "SHA=6292a89 isolated full: dist tests 1354 fail 0; scripts tests 283 fail 0; FULL_EXIT=0; Task36 Step6a smoke 3/3. v3 raw does not record PR_EXIT (pre-R1 P0-G1-summary.txt PR_EXIT=0 on f9cbe18). HEAD after 6292a89 is docs-only.",
+      "pass": true,
+      "rawFile": "docs/phase-x/p0-gate-raw/P0-G1-v3.txt"
+    },
+    {
+      "id": "P0-G2",
+      "target": "lishuedu cold-build wall ≤ 180 s",
+      "measured": "wall 134.52 s",
+      "pass": true,
+      "rawFile": "docs/phase-x/p0-gate-raw/P0-T8c-lishuedu.txt"
+    },
+    {
+      "id": "P0-G3",
+      "target": "builder peak RSS ≤ 600 MiB",
+      "measured": "maximum resident set size 539656192 B = 514.6 MiB",
+      "pass": true,
+      "rawFile": "docs/phase-x/p0-gate-raw/P0-T8c-lishuedu.txt"
+    },
+    {
+      "id": "P0-G4",
+      "target": "lishuedu DB ≤ 350 MB",
+      "measured": "stat -f %z 235376640 B = 224.5 MiB",
+      "pass": true,
+      "rawFile": "docs/phase-x/p0-gate-raw/P0-T8c-lishuedu.txt"
+    },
+    {
+      "id": "P0-G5",
+      "target": "four-repo counts vs snapshot ±1%",
+      "measured": "cipherlink 0.000%; exam-parent-v3 methods +0.055% edges +0.053%; lishu-v2 files +0.763% types +0.714% fields +0.754% methods +0.917% edges +0.886%; lishuedu exact vs A.1 (6090/7319/25077/253711)",
+      "pass": true,
+      "rawFile": "docs/phase-x/p0-gate-raw/P0-G5-v3.txt"
+    },
+    {
+      "id": "P0-G6",
+      "target": "kill -9 resume ≤ 1.3× G2 (174.876 s)",
+      "measured": "resume 84.35 s; kill at resolve 6090/6090; WAL 2143623672 B (~2.00 GiB; v2 was 5.7 GB)",
+      "pass": true,
+      "rawFile": "docs/phase-x/p0-gate-raw/P0-G6-v3.txt"
+    },
+    {
+      "id": "P0-G7",
+      "target": "old src files vs 6885b17 only entity-search.ts + graph-store.ts",
+      "measured": "whitelist files plus approved exception: src/cross-process-lease.ts and src/cross-process-lease.test.ts (6292a89 ENOENT→ABSENT for G1). scripts/verify-three-repo-cold-matrix.mjs is T9 (not src whitelist).",
+      "pass": true,
+      "rawFile": "docs/phase-x/p0-gate-raw/P0-G7-diff-stat.txt"
+    },
+    {
+      "id": "three-repo",
+      "target": "THREE_REPO_EXIT=0; identity vs 6885b17; --runs 5",
+      "measured": "THREE_REPO_EXIT=1; SHA_CANDIDATE=6292a89 BASELINE=6885b17; 18/18 cells; stderrWaivedLines=18; identity deltas 0; p95Ratio 1.038/1.028/0.987 gate true; absolute floors fail on BOTH arms (rReadMust/holdoutRReadMust/rangeLineRecall/rangeCoordinateRecall)",
+      "pass": false,
+      "rawFile": "docs/phase-x/p0-gate-raw/P0-three-repo-v3-summary.txt"
+    }
+  ],
+  "review": {
+    "round1": { "p0": 0, "p1": 0, "p2": 5 },
+    "round2": { "p0": 0, "p1": 0 }
+  },
+  "addedLoc": 3855,
+  "deletedLoc": 139,
+  "notes": "R1 (2026-09-07): G4 stays 350 MB; schema v3 intern (SCHEMA_VERSION=3). v2 zlib DB 1407225856 B = 1342.0 MiB (stale P0-G4.txt) → v3 stat -f %z 235376640 B = 224.5 MiB. dbstat families (P0-T8c-lishuedu.txt): method 34.2, sqlite_autoindex_sym_1 25.0, sym 22.9 (171988 rows, 140 B/row), entity_token 17.0, entity_token_lookup 15.7, edge 11.9 (253711 rows, 49 B/row), field 10.2, kg_summary 10.1, kg_edge 7.8, sqlite_autoindex_edge_1 7.5. T9 waives exact line ^\\[codex-java-lsp\\] in-process parse files=\\d+ \\(cold-build child disabled; cap waived\\)$; matrix stderrWaivedLines=18. THREE_REPO_EXIT=1 is not a candidate regression (quality deltas 0; floors fail on both arms); 0.2 #7 forbids golden/threshold edits; do not rerun to force EXIT=0. G7 exception: 6292a89 lease ENOENT→ABSENT (user-ordered before G6/three-repo). T8.a non-test added 340 / churn 480; remaining facts-store refs folded because *_id→*_sym could not split green. sha/shaFix are the reviewed code SHA f99c67a (no review-fix commit). addedLoc/deletedLoc are git diff --numstat 6885b17..f99c67a -- src scripts. Pre-R1 p0-review.md/p0-blocked.md (G4 fail at f9cbe18) superseded. P2-1..P2-5 recorded in p0-review.md, not fixed in P0. Do not install-runtime; do not push this tag."
+}

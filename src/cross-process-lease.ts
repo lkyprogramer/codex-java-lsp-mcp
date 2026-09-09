@@ -544,12 +544,20 @@ export class FileCrossProcessLeaseStore implements CrossProcessLeaseStore {
   }
 
   private inspectLeaseDir(dir: string): LeaseInspection {
-    if (!existsSync(dir)) return { state: "ABSENT" };
-    const owner = this.readOwner(dir);
-    if (!owner) {
+    try {
+      if (!existsSync(dir)) return { state: "ABSENT" };
+      const owner = this.readOwner(dir);
+      if (owner) {
+        return this.deps.isAlive(owner.pid) ? { state: "LIVE", owner } : { state: "DEAD_OWNER", owner };
+      }
       return { state: "METADATA_LESS", createdAtMs: statSync(dir).ctimeMs };
+    } catch (error) {
+      // existsSync/readOwner/statSync is not atomic. A concurrent reclaim or
+      // capacity.lock release can delete the directory between checks; treat
+      // that the same as never having seen it.
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return { state: "ABSENT" };
+      throw error;
     }
-    return this.deps.isAlive(owner.pid) ? { state: "LIVE", owner } : { state: "DEAD_OWNER", owner };
   }
 
   private readOwner(dir: string): LeaseOwner | undefined {

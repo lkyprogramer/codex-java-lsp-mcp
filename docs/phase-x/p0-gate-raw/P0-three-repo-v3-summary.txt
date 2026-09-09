@@ -1,0 +1,28 @@
+THREE_REPO_EXIT=1
+OUTPUT=/tmp/iod-p0-three-repo-20260907T043327Z
+SHA_CANDIDATE=6292a89
+BASELINE=6885b17
+load_at_start=25.59 (above-window, still running; refuse=false)
+frozen:
+  lishuedu=db63b1a7e393edd90449eb013d7d1c4d65c366f2
+  cipherlink=fa433982e92e52dd610650d1e79f2d041179b1d3
+  exam-parent-v3=f90a0b475f7be2ed003703feecec8195bc7eb976
+
+T9: stderrWaivedLines=18 (one parse-cap line per cell). No cell aborted on that line.
+Prior two attempts aborted with THREE_REPO_EXIT=2:
+  1) exam-parent-v3-r2-old (baseline) DEADLINE_EXCEEDED before java-index.status
+  2) cipherlink-r1-new (candidate) same
+Those are uncaught 2s-deadline flakes during isolated in-process parse, not the T9 waiver.
+
+Attempt 3 completed all 18 cells. Identity:
+  lishuedu recall 0.7986/0.7986 pRead 0.7217/0.7217 tokensP50 delta 0 p95Ratio 1.038
+  cipherlink recall 0.8390/0.8390 pRead 0.6633/0.6633 tokensP50 delta 0 p95Ratio 1.028
+  exam-parent-v3 recall 0.6970/0.6970 pRead 0.6000/0.6000 tokensP50 delta 0 p95Ratio 0.987
+p95 gate true on all three (limit 1.25).
+
+EXIT=1 because absolute floors fail on BOTH arms equally:
+  rReadMust / holdoutRReadMust (minReadMust===1; lishuedu min=0.5 holdout exam-score-export / paper-task-claim)
+  rangeLineRecall / rangeCoordinateRecall
+This is not a candidate regression (all quality deltas 0).
+
+summary: /tmp/iod-p0-three-repo-20260907T043327Z/matrix-summary.json

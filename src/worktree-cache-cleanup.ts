@@ -15,7 +15,6 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { observeRuntimeLeaseLiveness } from "./cross-process-lease.js";
-import { SNAPSHOT_V4_MAGIC } from "./java-index/snapshot-v4.js";
 import { canonicalPath } from "./path-utils.js";
 import { repoCacheBase, repoCacheRoot } from "./repo-layout.js";
 import {
@@ -209,7 +208,13 @@ export function cleanupStaleWorktreeCaches(options: WorktreeCacheCleanupOptions 
   const unpinnedKeep: RemovalTarget[] = [];
 
   for (const entry of readdirSync(base, { withFileTypes: true })) {
-    if (!entry.isDirectory() || entry.name.startsWith(".") || entry.name === "leases" || entry.name === "ownership") {
+    if (
+      !entry.isDirectory()
+      || entry.name.startsWith(".")
+      || entry.name === "leases"
+      || entry.name === "ownership"
+      || entry.name === "telemetry"
+    ) {
       continue;
     }
     result.scanned += 1;
@@ -289,26 +294,11 @@ export function reclaimRetiredIndexFiles(cacheRoot: string, dryRun = false): num
   return removed;
 }
 
-function isRetiredIndexFileName(name: string, filePath: string): boolean {
+function isRetiredIndexFileName(name: string, _filePath: string): boolean {
   if (name.startsWith("source-index.") || (RETIRED_INDEX_FILES as readonly string[]).includes(name)) {
     return true;
   }
-  if (name !== "java-index-snapshot.json.gz") {
-    return false;
-  }
-  return isRetiredJavaIndexSnapshot(filePath);
-}
-
-function isRetiredJavaIndexSnapshot(filePath: string): boolean {
-  try {
-    const bytes = readFileSync(filePath);
-    if (bytes.length >= SNAPSHOT_V4_MAGIC.length && bytes.subarray(0, SNAPSHOT_V4_MAGIC.length).equals(SNAPSHOT_V4_MAGIC)) {
-      return false;
-    }
-    return bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
-  } catch {
-    return false;
-  }
+  return /^(java-index-snapshot.*\.json\.gz.*|java-knowledge-graph\.json\.gz)$/.test(name);
 }
 
 function selectUnpinnedOverflow(

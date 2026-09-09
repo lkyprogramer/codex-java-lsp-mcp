@@ -358,6 +358,16 @@ test("verifier binds the formal request deadline in both manifest and cells", as
   assert.throws(() => verifyMatrix({ matrixDir: cellMatrix }), /metadata\.deadlineMs must be 2000/);
 });
 
+test("verifier no longer waives isolated cold-build-child-disabled parse-cap stderr", async t => {
+  const matrixDir = await fixtureMatrix();
+  t.after(() => rm(path.dirname(matrixDir), { recursive: true, force: true }));
+  await writeFile(
+    path.join(matrixDir, "cipherlink-r1-old.json.stderr"),
+    "[codex-java-lsp] in-process parse files=6086 (cold-build child disabled; cap waived)\n"
+  );
+  assert.throws(() => verifyMatrix({ matrixDir }), /stderr must be empty/);
+});
+
 test("verifier rejects non-empty stderr and an illegal cold semantic completion", async t => {
   const stderrMatrix = await fixtureMatrix();
   const completionMatrix = await fixtureMatrix();

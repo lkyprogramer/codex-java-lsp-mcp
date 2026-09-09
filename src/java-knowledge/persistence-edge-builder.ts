@@ -2,12 +2,12 @@
 // output: Persistence knowledge-graph edges (mapper↔statement, statement↔entity, Template/Repository↔entity, JPA relations).
 // pos: N2a-03. Template/Repository matching is a name suffix + generic type argument, never a class allowlist.
 import type { JavaFileBundle, JavaTypeFacts, JavaTypeRef } from "../java-index/index-types.js";
-import type { JavaIndexStore } from "../java-index/index-store.js";
+import type { FactsReader } from "../java-index/facts-reader.js";
 import {
   myBatisStatementId,
   type MyBatisMapperResourceFacts
 } from "../java-index/mybatis-types.js";
-import type { KnowledgeGraphStore } from "./graph-store.js";
+import type { KnowledgeGraphStore } from "./graph-reader.js";
 import { knowledgeEdgeId, knowledgeExternalTypeId, knowledgeFileId, knowledgeTypeId } from "./entity-id.js";
 import type { EdgeKind } from "./edge-kinds.js";
 
@@ -48,28 +48,25 @@ function upsert(
   graph.upsertNode({ id, kind, generation, ...extra }, ownerFile);
 }
 
-function resolveNamedType(name: string | undefined, store: JavaIndexStore): string | undefined {
+function resolveNamedType(name: string | undefined, store: FactsReader): string | undefined {
   if (!name) return undefined;
   const byFqn = store.typeByFqn(name);
   if (byFqn) return knowledgeIdForType(byFqn);
   const simple = name.includes(".") ? name.slice(name.lastIndexOf(".") + 1) : name;
-  const hits: JavaTypeFacts[] = [];
-  for (const type of store.typesById.values()) {
-    if (type.simpleName === simple || type.fqn === name) hits.push(type);
-  }
+  const hits = store.typesBySimpleNameOrFqn(simple, name);
   if (hits.length === 1) return knowledgeIdForType(hits[0]!);
   if (name.includes(".")) return knowledgeExternalTypeId(name);
   return undefined;
 }
 
-function typeArgEntity(ref: JavaTypeRef | undefined, store: JavaIndexStore): string | undefined {
+function typeArgEntity(ref: JavaTypeRef | undefined, store: FactsReader): string | undefined {
   const argument = ref?.typeArguments[0];
   if (!argument) return undefined;
   return resolveNamedType(argument.qualifiedName ?? argument.simpleName ?? argument.text, store)
     ?? typeRefResolved(argument, store);
 }
 
-function typeRefResolved(ref: JavaTypeRef, store: JavaIndexStore): string | undefined {
+function typeRefResolved(ref: JavaTypeRef, store: FactsReader): string | undefined {
   if (ref.resolution.state === "RESOLVED_REPO") {
     const type = store.typesById.get(ref.resolution.typeId);
     return type ? knowledgeIdForType(type) : undefined;
@@ -87,7 +84,7 @@ function addMapperBindings(
   type: JavaTypeFacts,
   bundle: JavaFileBundle,
   resource: MyBatisMapperResourceFacts,
-  store: JavaIndexStore,
+  store: FactsReader,
   generation: number,
   resolve: (javaIndexId: string) => string | undefined
 ): void {
@@ -117,7 +114,7 @@ function addMapperBindings(
 export function addPersistenceEdges(
   graph: KnowledgeGraphStore,
   bundle: JavaFileBundle,
-  store: JavaIndexStore,
+  store: FactsReader,
   generation: number,
   resolve: (javaIndexId: string) => string | undefined
 ): void {

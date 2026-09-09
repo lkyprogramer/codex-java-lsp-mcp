@@ -45,14 +45,14 @@ const EXPECTED_CASES = [
   },
   {
     id: "java-index-crash",
-    testFile: "dist/java-index/java-index-client.test.js",
-    testNamePattern: "^worker exit rejects all pending requests and marks the client DEGRADED$",
+    testFile: "dist/java-index/sql/sql-client-lifecycle.test.js",
+    testNamePattern: "^failed sibling reconcile marks DEGRADED$",
     expectedInvariant: "a worker crash rejects pending requests and degrades the client"
   },
   {
     id: "snapshot-corruption",
-    testFile: "dist/java-index/java-index-worker.test.js",
-    testNamePattern: "^a malformed sibling snapshot fails the seed attempt softly - OPEN still succeeds with an empty store$",
+    testFile: "dist/java-index/sql/sql-client-lifecycle.test.js",
+    testNamePattern: "^failed sibling copy does not leave dest and allows a later open$",
     expectedInvariant: "a corrupt sibling snapshot falls back to an empty OPEN store"
   },
   {

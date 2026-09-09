@@ -44,7 +44,10 @@ test("parseCli accepts a full flag set and applies defaults for --prepare/--runs
     operation: "references",
     runs: 10,
     timeoutMs: 60000,
-    output: undefined
+    output: undefined,
+    anchorFile: undefined,
+    anchorLine: undefined,
+    anchorColumn: undefined
   });
 });
 
@@ -57,7 +60,10 @@ test("parseCli accepts every documented flag explicitly", () => {
     "--operation", "type-hierarchy",
     "--runs", "5",
     "--timeout-ms", "15000",
-    "--output", "out.json"
+    "--output", "out.json",
+    "--anchor-file", "src/A.java",
+    "--anchor-line", "4",
+    "--anchor-column", "2"
   ]);
   assert.deepEqual(cli, {
     repoRoot: "/tmp/repo",
@@ -67,7 +73,10 @@ test("parseCli accepts every documented flag explicitly", () => {
     operation: "type-hierarchy",
     runs: 5,
     timeoutMs: 15000,
-    output: "out.json"
+    output: "out.json",
+    anchorFile: "src/A.java",
+    anchorLine: 4,
+    anchorColumn: 2
   });
 });
 

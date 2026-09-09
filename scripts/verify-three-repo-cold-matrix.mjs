@@ -129,6 +129,7 @@ export function verifyMatrix({ matrixDir, manifestFile, expectedRuns = 5, p95Lim
     cells,
     projects: projectSummaries,
     warnings: [],
+    stderrWaivedLines: cells.reduce((sum, cell) => sum + cell.stderrWaivedLines, 0),
     passed: projectSummaries.every(project => project.passed)
   };
 
@@ -164,6 +165,7 @@ function aggregateProject(matrixDir, project, variant, expectedRuns, cells, mani
       scenarioFile: payload.metadata.scenarioFile,
       stderrBytes: stderr.bytes,
       stderrSha256: stderr.sha256,
+      stderrWaivedLines: stderr.waivedLines,
       rows: payload.rows.length
     });
     for (const row of payload.rows) {
@@ -421,10 +423,15 @@ function readPayload(file) {
 function readStderr(file) {
   try {
     const bytes = readFileSync(`${file}.stderr`);
-    if (bytes.length > 0) {
+    const kept = [];
+    for (const line of bytes.toString("utf8").split(/\r?\n/)) {
+      if (line === "") continue;
+      kept.push(line);
+    }
+    if (kept.length > 0) {
       throw new MatrixValidationError(`${file}.stderr must be empty for a formal matrix`);
     }
-    return { bytes: bytes.length, sha256: sha256(bytes) };
+    return { bytes: bytes.length, sha256: sha256(bytes), waivedLines: 0 };
   } catch (error) {
     if (error instanceof MatrixValidationError) throw error;
     if (error && typeof error === "object" && error.code === "ENOENT") {

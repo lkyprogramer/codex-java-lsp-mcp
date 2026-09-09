@@ -1,21 +1,15 @@
 #!/usr/bin/env node
-// input: a healthy loopback daemon at JAVA_LSP_HTTP_PORT (default 38456).
-// output: JSON with D2/D3/D4/D7 probe numbers; D1 footprint is sampled if `footprint` exists.
-// pos: V1 acceptance script for the 2026-08-25 daemon stability/memory plan.
+// input: a healthy loopback daemon at JAVA_LSP_HTTP_PORT (canary default 38457).
+// output: JSON with D2/D4/D6 and P2-G2/G5/G6 probe numbers.
+// pos: P3-T3 acceptance: drop D3a/D3b/D7/FSX_*; index-on-disk SQLite daemon.
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { execFileSync, spawn } from "node:child_process";
-import { existsSync, statSync, unlinkSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { execFileSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
 import path from "node:path";
 
-const port = process.env.JAVA_LSP_HTTP_PORT ?? "38456";
+const port = process.env.JAVA_LSP_HTTP_PORT ?? "38457";
 const url = new URL(`http://127.0.0.1:${port}/mcp`);
-const cacheBase = path.join(homedir(), "Library/Caches/codex-java-lsp");
-const tornaRoot = "/Users/luo/Documents/program/lishu-v2-worktrees/torna-rest-all-apps";
-const tornaCache = path.join(cacheBase, "07230b6e0a13");
-const tornaSnap = path.join(tornaCache, "java-index-snapshot.json.gz");
-const tornaMetrics = path.join(tornaCache, "cold-build-metrics.json");
 const stormSamples = Number(process.env.JAVA_LSP_V1_STORM_SAMPLES ?? "12");
 
 const pins = {
@@ -59,9 +53,8 @@ async function call(client, name, args) {
 
 function daemonPid() {
   try {
-    return execFileSync("pgrep", ["-f", "max-old-space-size=768.*http-server.js"], { encoding: "utf8" })
-      .trim()
-      .split("\n")[0] || null;
+    const out = execFileSync("/usr/sbin/lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-t"], { encoding: "utf8" }).trim();
+    return out.split("\n")[0] || null;
   } catch {
     return null;
   }
@@ -90,27 +83,12 @@ async function healthzSample(n) {
   };
 }
 
-function footprintMiB(pid) {
-  if (!pid) return Promise.resolve(null);
-  return new Promise(resolve => {
-    const child = spawn("footprint", ["-p", pid], { stdio: ["ignore", "pipe", "ignore"] });
-    let out = "";
-    child.stdout.setEncoding("utf8");
-    child.stdout.on("data", chunk => { out += chunk; });
-    child.on("close", () => {
-      const match = /phys_footprint:\s+([\d.]+)\s+MB/i.exec(out);
-      resolve(match ? Number(match[1]) : null);
-    });
-  });
-}
-
 const client = new Client({ name: "v1-acceptance-probe", version: "0.1.0" });
 await client.connect(new StreamableHTTPClientTransport(url));
 
 const health = await healthzSample(stormSamples);
 const pid = daemonPid();
 const unregisteredRoot = "/Users/luo/Documents/github/codex-java-lsp-mcp/fixtures/generic-java";
-const d6status = await call(client, "java_status", { repoRoot: unregisteredRoot });
 const impacts = {};
 for (const [id, pin] of Object.entries(pins)) {
   const first = await call(client, "java_impact", {
@@ -155,76 +133,59 @@ const d4retry = await call(client, "java_impact", {
   semanticPolicy: "fast"
 });
 
-const metricsBefore = existsSync(tornaMetrics) ? statSync(tornaMetrics).mtimeMs : null;
-if (existsSync(tornaSnap) && process.env.JAVA_LSP_V1_KEEP_TORNA_SNAP !== "1") {
-  unlinkSync(tornaSnap);
+function rssMiB(targetPid) {
+  if (!targetPid) return null;
+  try {
+    return Number(execFileSync("/bin/ps", ["-o", "rss=", "-p", String(targetPid)], { encoding: "utf8" }).trim()) / 1024;
+  } catch {
+    return null;
+  }
 }
-const d7status = await call(client, "java_status", { repoRoot: tornaRoot });
-let d7payload;
-try {
-  d7payload = JSON.parse(d7status.text);
-} catch {
-  d7payload = { parseError: d7status.text.slice(0, 400) };
-}
-const d7impact = await call(client, "java_impact", {
-  repoRoot: tornaRoot,
-  anchors: [{
-    file: `${tornaRoot}/apps/lishu-education-backend/src/main/java/com/lishu/edu/education/LishuEducationBackendApplication.java`,
-    line: 1,
-    column: 1
-  }],
+
+await new Promise(resolve => setTimeout(resolve, 5000));
+const g2 = await call(client, "java_impact", {
+  projectId: "lishu-v2",
+  anchors: [{ file: pins["lishu-v2"].file, line: 1, column: 1 }],
   mode: "minimal",
   semanticPolicy: "fast",
   deadlineMs: 15000
 });
+const rssAfterQuery = rssMiB(pid);
+const rssBeforeExtra = rssAfterQuery;
+const d6status = await call(client, "java_status", { repoRoot: unregisteredRoot });
+const rssAfterExtra = rssMiB(pid);
 await client.close().catch(() => undefined);
 
-const seed = d7payload.javaIndex?.worktreeSeed ?? null;
-const metricsAfter = existsSync(tornaMetrics) ? statSync(tornaMetrics).mtimeMs : null;
+const d2 = health.timeouts === 0 && health.p99Ms < 100;
+const d4 = !d4retry.isError && d4retry.elapsedMs <= 500;
+const d6 = !d6status.toolFail && d6status.elapsedMs <= 3000;
+const g2pass = !g2.toolFail && g2.elapsedMs <= 300;
+const g5pass = rssAfterQuery !== null && rssAfterQuery <= 250;
+const extraDelta = rssBeforeExtra !== null && rssAfterExtra !== null ? rssAfterExtra - rssBeforeExtra : null;
+const g6pass = extraDelta !== null && extraDelta <= 48;
 const report = {
   health,
   pid,
-  footprintMiB: await footprintMiB(pid),
   d6: {
     elapsedMs: d6status.elapsedMs,
     isError: d6status.isError,
     toolFail: d6status.toolFail,
     errorText: d6status.toolFail ? d6status.text.slice(0, 240) : ""
   },
-  impacts,
   d4: {
     shortElapsedMs: d4short.elapsedMs,
     shortError: d4short.isError,
     retryElapsedMs: d4retry.elapsedMs,
-    retryError: d4retry.isError,
-    rangeGap: d4short.text.includes("Read-range query exceeded")
+    retryError: d4retry.isError
   },
-  d7: {
-    statusElapsedMs: d7status.elapsedMs,
-    statusError: d7status.isError,
-    seed,
-    impactError: d7impact.isError,
-    childSpawned: metricsAfter !== null && metricsBefore !== null && metricsAfter > metricsBefore + 500
-  }
+  g2: { elapsedMs: g2.elapsedMs, toolFail: g2.toolFail },
+  g5: { rssAfterQueryMiB: rssAfterQuery },
+  g6: { extraRootMs: d6status.elapsedMs, rssBeforeMiB: rssBeforeExtra, rssAfterMiB: rssAfterExtra, deltaMiB: extraDelta },
+  gates: { D2: d2, D4: d4, D6: d6, "P2-G2": g2pass, "P2-G5": g5pass, "P2-G6": g6pass }
 };
-
-const indexedFiles = Number(d7payload.javaIndex?.files ?? 0);
-const reuseDenom = Math.max(indexedFiles, (seed?.reusedFiles ?? 0) + (seed?.dirtyFiles ?? 0), 1);
-const d2 = health.timeouts === 0 && health.p99Ms < 100;
-const d3a = Object.values(impacts).filter(row => row.hot).every(row => !row.toolFail && row.elapsedMs <= 3000);
-const d3b = Object.values(impacts).filter(row => !row.hot).every(row => !row.toolFail);
-const d4 = !d4retry.isError && d4retry.elapsedMs <= 500;
-const d6 = !d6status.toolFail && d6status.elapsedMs <= 3000;
-const d7 = (seed?.completion === "SEEDED_DEGRADED" || seed?.completion === "RECONCILED_COMPLETE")
-  && (seed?.reusedFiles ?? 0) >= 0.9 * reuseDenom
-  && report.d7.childSpawned === false
-  && d7status.elapsedMs <= 15000
-  && !d7status.isError;
-report.d7.indexedFiles = indexedFiles;
-report.d7.reuseDenom = reuseDenom;
-report.gates = { D2: d2, D3a: d3a, D3b: d3b, D4: d4, D6: d6, D7: d7 };
-
-const out = process.env.JAVA_LSP_V1_PROBE_OUT ?? path.join(process.cwd(), "docs/phase-d/v1-probe.json");
+const out = process.env.JAVA_LSP_V1_PROBE_OUT ?? path.join(process.cwd(), "docs/phase-x/p3-probe.json");
 writeFileSync(out, JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report, null, 2));
-process.exitCode = d2 && d3a && d3b && d4 && d6 && d7 ? 0 : 2;
+process.exitCode = d2 && d4 && d6 && g2pass && g5pass && g6pass ? 0 : 2;
+process.exit();
+

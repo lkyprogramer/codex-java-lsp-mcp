@@ -16,9 +16,8 @@ import { createGitWorktreeFamily } from "../test-support/git-worktree.test.js";
 import { resolveWorktreeIdentity } from "../worktree-identity.js";
 import { probeLayout } from "../layout-probe.js";
 import { computeBuildFingerprint, computeExtractorVersion } from "./build-fingerprint.js";
-import { JavaIndexClient } from "./java-index-client.js";
+import { SqlJavaIndexClient } from "./sql/sql-client.js";
 import { RouterJavaIndex } from "./router-java-index.js";
-import { loadSnapshot, writeSnapshotAtomic } from "./snapshot.js";
 import { STABLE_ID_VERSION } from "./stable-id.js";
 
 function options<const T extends Partial<ImpactOptions>>(overrides: T): ImpactOptions & T {
@@ -67,7 +66,7 @@ class FixedFileRgRunner extends RgRunner {
   }
 }
 
-class RecordingJavaIndexClient extends JavaIndexClient {
+class RecordingJavaIndexClient extends SqlJavaIndexClient {
   refreshCalls = 0;
 
   override async refresh(generation: number, changed: string[], deleted: string[]) {
@@ -107,7 +106,7 @@ async function waitForCompleteIndex(index: RouterJavaIndex): Promise<void> {
   assert.fail("fixture JavaIndex did not reach complete coverage within 2 seconds");
 }
 
-async function waitForBackgroundSweep(client: JavaIndexClient): Promise<void> {
+async function waitForBackgroundSweep(client: SqlJavaIndexClient): Promise<void> {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     if ((await client.status()).pendingBackground === 0) return;
     await new Promise(resolve => setTimeout(resolve, 20));
@@ -116,7 +115,7 @@ async function waitForBackgroundSweep(client: JavaIndexClient): Promise<void> {
 }
 
 async function buildCompleteSnapshot(root: string, cacheDir: string): Promise<void> {
-  const client = new JavaIndexClient(root, cacheDir);
+  const client = new SqlJavaIndexClient(root, path.join(cacheDir, "index.sqlite"));
   try {
     await client.open(0);
     await client.reconcile(0);
@@ -185,7 +184,7 @@ test("complete JavaIndex resolves implementation relations even when naming reca
     ""
   ].join("\n"));
 
-  const client = new JavaIndexClient(root, path.join(root, ".cache"));
+  const client = new SqlJavaIndexClient(root, path.join(root, ".cache", "index.sqlite"));
   const originalQueryFiles = client.queryFiles.bind(client);
   const originalQueryTypes = client.queryTypes.bind(client);
   let definitionFileQueryCount = 0;
@@ -322,58 +321,6 @@ test("complete JavaIndex resolves implementation relations even when naming reca
   }
 });
 
-test("a rejected own snapshot stays pending until its replacement sweep has been installed", async () => {
-  const root = await mkdtemp(path.join(tmpdir(), "java-index-snapshot-reconcile-race-"));
-  const cacheDir = path.join(root, ".cache");
-  let replacementClient: JavaIndexClient | undefined;
-  try {
-    for (let index = 0; index < 300; index += 1) {
-      await writeJava(
-        root,
-        `src/main/java/demo/Type${index}.java`,
-        `package demo; class Type${index} {}`
-      );
-    }
-    await buildCompleteSnapshot(root, cacheDir);
-
-    const snapshotPath = path.join(cacheDir, "java-index-snapshot.json.gz");
-    const snapshot = await loadSnapshot(snapshotPath, {
-      extractorVersion: computeExtractorVersion(),
-      stableIdVersion: STABLE_ID_VERSION,
-      canonicalRepoRoot: root,
-      buildFingerprint: (await computeBuildFingerprint(root, probeLayout(root)))!
-    });
-    assert.ok(snapshot);
-    snapshot.extractorVersion = "intentionally-stale";
-    await writeSnapshotAtomic(snapshotPath, snapshot);
-
-    replacementClient = new JavaIndexClient(root, cacheDir);
-    const replacementIndex = new RouterJavaIndex(root, replacementClient);
-    await replacementIndex.open(0);
-
-    let observedIdleEmptyIndex = false;
-    for (let attempt = 0; attempt < 500; attempt += 1) {
-      const status = await replacementClient.status();
-      if (status.pendingBackground === 0 && status.files === 0) {
-        observedIdleEmptyIndex = true;
-        break;
-      }
-      if (status.files === 300 && status.pendingBackground === 0) break;
-      await new Promise(resolve => setTimeout(resolve, 1));
-    }
-
-    assert.equal(
-      observedIdleEmptyIndex,
-      false,
-      "a caller must not observe an idle empty index between rejected snapshot hydration and its replacement sweep"
-    );
-    await waitForCompleteIndex(replacementIndex);
-  } finally {
-    await replacementClient?.close().catch(() => undefined);
-    await rm(root, { recursive: true, force: true });
-  }
-});
-
 test("production ranking observer sees the exact in-request family rank and selected read plan", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "java-index-router-production-ranking-"));
   const request = await writeJava(root, "src/main/java/demo/api/OrderRequest.java", [
@@ -392,7 +339,7 @@ test("production ranking observer sees the exact in-request family rank and sele
     "}",
     ""
   ].join("\n"));
-  const index = new RouterJavaIndex(root, new JavaIndexClient(root, path.join(root, ".cache")));
+  const index = new RouterJavaIndex(root, new SqlJavaIndexClient(root, path.join(root, ".cache", "index.sqlite")));
   try {
     await index.open(0);
     await index.reconcile(0);
@@ -470,7 +417,7 @@ test("V2 type-reference evidence upgrades a candidate that naming recall found f
     "}",
     ""
   ].join("\n"));
-  const index = new RouterJavaIndex(root, new JavaIndexClient(root, path.join(root, ".cache")));
+  const index = new RouterJavaIndex(root, new SqlJavaIndexClient(root, path.join(root, ".cache", "index.sqlite")));
   try {
     await index.open(0);
     await index.reconcile(0);
@@ -512,7 +459,7 @@ test("V2 type-reference evidence upgrades a candidate that naming recall found f
 test("RouterJavaIndex reuses facts refreshed at the current generation", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "java-index-router-facts-cache-"));
   const source = await writeJava(root, "src/main/java/demo/Demo.java", "package demo;\nclass Demo { void run() {} }\n");
-  const client = new RecordingJavaIndexClient(root, path.join(root, ".cache"));
+  const client = new RecordingJavaIndexClient(root, path.join(root, ".cache", "index.sqlite"));
   const index = new RouterJavaIndex(root, client);
   try {
     await index.open(0);
@@ -528,7 +475,7 @@ test("RouterJavaIndex reuses facts refreshed at the current generation", async (
 test("RouterJavaIndex reuses COMPLETE coverage without reparsing an indexed candidate", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "java-index-router-complete-facts-cache-"));
   const source = await writeJava(root, "src/main/java/demo/Demo.java", "package demo;\nclass Demo { void run() {} }\n");
-  const client = new RecordingJavaIndexClient(root, path.join(root, ".cache"));
+  const client = new RecordingJavaIndexClient(root, path.join(root, ".cache", "index.sqlite"));
   const index = new RouterJavaIndex(root, client);
   try {
     await index.open(0);
@@ -545,145 +492,3 @@ test("RouterJavaIndex reuses COMPLETE coverage without reparsing an indexed cand
   }
 });
 
-test("sibling-seeded V2 router never returns a stale implementation before its foreground refresh", async () => {
-  const family = await createGitWorktreeFamily();
-  const cacheBase = await mkdtemp(path.join(tmpdir(), "java-index-router-seed-cache-"));
-  const gatewayPath = "src/main/java/demo/Gateway.java";
-  const commandPath = "src/main/java/demo/PaymentCommand.java";
-  const implementationPath = "src/main/java/demo/GatewayImpl.java";
-  // Sits under a test source root so it is outside both the sibling-seed's
-  // exact-content reuse (excluded like GatewayImpl below) and the bounded
-  // foreground implementer scan's roots, which are main-only (router-java-index.ts's
-  // foregroundImplementationRoots filters to sourceSet === "main"). It must
-  // therefore stay unresolved - never surfaced with primary's stale content -
-  // even after the main-root implementation below self-heals.
-  const testImplementationPath = "src/test/java/demo/TestGatewayImpl.java";
-  const gateway = [
-    "package demo;",
-    "",
-    "interface Gateway { PaymentResult pay(PaymentCommand command); }",
-    ""
-  ].join("\n");
-  const command = "package demo;\nrecord PaymentCommand(String id) {}\nrecord PaymentResult(boolean accepted) {}\n";
-  const primaryImplementation = [
-    "package demo;",
-    "",
-    "final class GatewayImpl implements Gateway {",
-    "  public PaymentResult pay(PaymentCommand command) { return new PaymentResult(false); }",
-    "}",
-    ""
-  ].join("\n");
-  const linkedImplementation = [
-    "package demo;",
-    "",
-    "final class GatewayImpl implements Gateway {",
-    "  public PaymentResult pay(PaymentCommand command) { return new PaymentResult(true); }",
-    "  String linkedOnlyBehavior() { return \"linked\"; }",
-    "}",
-    ""
-  ].join("\n");
-  const primaryTestImplementation = [
-    "package demo;",
-    "",
-    "final class TestGatewayImpl implements Gateway {",
-    "  public PaymentResult pay(PaymentCommand command) { return new PaymentResult(false); }",
-    "}",
-    ""
-  ].join("\n");
-  const linkedTestImplementation = [
-    "package demo;",
-    "",
-    "final class TestGatewayImpl implements Gateway {",
-    "  public PaymentResult pay(PaymentCommand command) { return new PaymentResult(true); }",
-    "  String linkedTestOnlyBehavior() { return \"linked-test\"; }",
-    "}",
-    ""
-  ].join("\n");
-  const primaryCache = path.join(cacheBase, "primary");
-  const linkedCache = path.join(cacheBase, "linked");
-  const primaryClient = new JavaIndexClient(family.primary, primaryCache);
-  let linkedIndex: RouterJavaIndex | undefined;
-  try {
-    for (const root of [family.primary, family.linked]) {
-      await writeJava(root, gatewayPath, gateway);
-      await writeJava(root, commandPath, command);
-    }
-    await writeJava(family.primary, implementationPath, primaryImplementation);
-    await writeJava(family.primary, testImplementationPath, primaryTestImplementation);
-    const linkedImplementationFile = await writeJava(family.linked, implementationPath, linkedImplementation);
-    await writeJava(family.linked, testImplementationPath, linkedTestImplementation);
-
-    await primaryClient.open(1);
-    await primaryClient.reconcile(1);
-    await waitForBackgroundSweep(primaryClient);
-    await primaryClient.close();
-    const primaryIdentity = await resolveWorktreeIdentity(family.primary);
-    await writeFile(
-      path.join(primaryCache, "repo-meta.json"),
-      JSON.stringify({
-        repoRoot: family.primary,
-        repoHash: primaryIdentity.repoHash,
-        familyHash: primaryIdentity.familyHash
-      })
-    );
-
-    const linkedIdentity = await resolveWorktreeIdentity(family.linked);
-    linkedIndex = new RouterJavaIndex(
-      family.linked,
-      new JavaIndexClient(family.linked, linkedCache)
-    );
-    await linkedIndex.open(2, { worktree: linkedIdentity, siblingCacheBase: cacheBase });
-    assert.equal((await linkedIndex.routerStatus()).openSource, "sibling-seed");
-
-    const router = new AgentRouter(
-      family.linked,
-      new NoLspSession() as never,
-      linkedIndex,
-      undefined,
-      undefined,
-      new EmptyRgRunner()
-    );
-    const beforeRefresh = await router.impact(options({
-      anchors: [{ file: gatewayPath, line: 3, column: 12 }],
-      profile: "port",
-      // "include" (not the file default "defer") so TestGatewayImpl's
-      // absence below is isolated to the foreground implementer scan's
-      // main-only roots, not conflated with generic test-file deferral.
-      testReadMode: "include"
-    }));
-    const beforePaths = viewImpactFiles(beforeRefresh);
-    const beforeMainImpl = beforePaths.find(file => file.endsWith("GatewayImpl.java") && !file.includes("Test"));
-    if (beforeMainImpl) {
-      // The router's bounded foreground closure (V3.2-17) may proactively
-      // self-heal an anchor-adjacent interface's implementer before this
-      // test's own explicit refresh below - that is expected. What must
-      // never happen is surfacing it with primary's excluded, sibling-borrowed
-      // content instead of a genuine re-parse of the linked worktree's file.
-      const beforeFacts = await linkedIndex.factsFor(linkedImplementationFile, 2);
-      assert.ok(
-        beforeFacts.methods.some(method => method.name === "linkedOnlyBehavior"),
-        "an implementation surfacing before explicit refresh must be the linked worktree's real content, never primary's stale sibling-borrowed fact"
-      );
-    }
-    assert.equal(
-      beforePaths.some(file => file.endsWith("TestGatewayImpl.java")),
-      false,
-      "an implementer outside the bounded foreground scan's main-only roots must stay unresolved, not fall back to primary's stale content"
-    );
-
-    await linkedIndex.ensureFresh([linkedImplementationFile], 2);
-    const afterRefresh = await router.impact(options({
-      anchors: [{ file: gatewayPath, line: 3, column: 12 }],
-      profile: "port"
-    }));
-    assert.ok(
-      viewImpactFiles(afterRefresh).some(file => file.endsWith("GatewayImpl.java") && !file.includes("Test")),
-      "after target foreground refresh, the linked worktree implementation must be selected"
-    );
-  } finally {
-    await linkedIndex?.close();
-    await primaryClient.close().catch(() => undefined);
-    await rm(path.dirname(family.primary), { recursive: true, force: true });
-    await rm(cacheBase, { recursive: true, force: true });
-  }
-});

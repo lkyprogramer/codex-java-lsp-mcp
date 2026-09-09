@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { z } from "zod";
 import type { ContextContract } from "../context-engine/context-contract.js";
-import type { ContextGraphResult } from "../java-index/worker-protocol.js";
+import type { ContextGraphResult } from "../java-index/index-types.js";
 import type { EntityHit } from "../java-index/entity-search.js";
 import type { ToolContext } from "./context.js";
 import {

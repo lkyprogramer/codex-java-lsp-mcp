@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { JavaFileBundle, JavaFileFacts, JavaMethodFacts, JavaTypeFacts, SourceRange } from "./index-types.js";
 import {
-  EntitySearchIndex,
   extractFqnCandidates,
-  searchEntities,
+  recordsFromBundle,
   splitIdentifier,
   tokenize,
   type EntityRecord
 } from "./entity-search.js";
+import { searchEntities } from "../test-support/entity-search-oracle.js";
 import { javaFileId, javaMethodId, javaTypeId } from "./stable-id.js";
 
 const RANGE: SourceRange = { start: { line: 1, column: 1 }, end: { line: 8, column: 2 } };
@@ -198,7 +198,7 @@ test("extractFqnCandidates finds dotted and Type#method forms", () => {
   );
 });
 
-test("EntitySearchIndex rebuilds from a file bundle and round-trips a snapshot", () => {
+test("recordsFromBundle plus searchEntities ranks a file bundle", () => {
   const relativePath = "src/main/java/demo/StorageGateway.java";
   const file: JavaFileFacts = {
     fileId: javaFileId(relativePath),
@@ -262,13 +262,9 @@ test("EntitySearchIndex rebuilds from a file bundle and round-trips a snapshot",
   file.allTypeIds.push(typeId);
   const bundle: JavaFileBundle = { file, types: [type], fields: [], methods: [method], edges: [] };
 
-  const index = new EntitySearchIndex();
-  index.replaceFile(bundle);
-  const hits = index.search("storage signed url", 3);
+  const records = recordsFromBundle(bundle);
+  const hits = searchEntities(records, "storage signed url", 3);
   assert.ok(hits.some(hit => hit.relativePath === relativePath));
   assert.ok(hits[0]?.layer === "BM25_IDENTIFIER" || hits[0]?.layer === "SIMPLE_NAME");
-
-  const restored = new EntitySearchIndex();
-  restored.loadSnapshot(index.toSnapshot());
-  assert.deepEqual(restored.search("demo.StorageGateway", 1)[0]?.layer, "FQN");
+  assert.deepEqual(searchEntities(records, "demo.StorageGateway", 1)[0]?.layer, "FQN");
 });

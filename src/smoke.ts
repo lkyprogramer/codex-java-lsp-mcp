@@ -8,9 +8,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const projectDir = path.resolve(scriptDir, "..");
-const repoRoot = process.env.JAVA_LSP_SMOKE_REPO_ROOT || process.env.JAVA_LSP_TEST_REPO_ROOT || process.env.LISHUEDU_ROOT || process.cwd();
-const projectId = process.env.JAVA_LSP_SMOKE_PROJECT_ID;
-const start = process.env.JAVA_LSP_SMOKE_START === "true";
+const repoRoot = process.env.LISHUEDU_ROOT || process.cwd();
 const expectedTools = ["java_status", "java_impact", "java_symbol", "java_diagnostics", "java_runtime"];
 
 const transport = new StdioClientTransport({
@@ -34,8 +32,8 @@ try {
   if (JSON.stringify(names) !== JSON.stringify(expected)) {
     throw new Error(`Unexpected tools: ${names.join(", ")}`);
   }
-  const selector = projectId ? { projectId, start } : { repoRoot, start };
-  const shutdownSelector = projectId ? { projectId, action: "shutdown" } : { repoRoot, action: "shutdown" };
+  const selector = { repoRoot, start: false };
+  const shutdownSelector = { repoRoot, action: "shutdown" };
   const status = await client.callTool({ name: "java_status", arguments: selector }, undefined, {
     timeout: 180000
   });

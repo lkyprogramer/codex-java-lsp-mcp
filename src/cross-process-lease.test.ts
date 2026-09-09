@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -193,7 +193,11 @@ test("a directory created without metadata is reclaimed only after orphanGraceMs
 
   // Simulate a crash between mkdir and the metadata rename: the directory
   // exists but metadata.json never landed.
-  mkdirSync(path.join(shared, "jdt-worktree", "a"), { recursive: true });
+  const orphanDir = path.join(shared, "jdt-worktree", "a");
+  mkdirSync(orphanDir, { recursive: true });
+  // inspectLeaseDir uses the directory's real ctime, not the fake clock. Align
+  // after mkdir so store.open() latency cannot eat the +10ms grace slack.
+  clock.value = statSync(orphanDir).ctimeMs;
 
   const tooEarly = await store.tryAcquireJdt(id);
   assert.equal(tooEarly.kind, "BUSY_SAME_WORKTREE", "not yet reclaimable within the grace window");
@@ -258,6 +262,30 @@ test("two stores requesting different jdtSlots while one lease is live both obey
   const thirdStatus = await third.status();
   assert.equal(thirdStatus.configuredJdtSlots, 5, "capacity can be replaced once no lease is live");
   assert.equal(thirdStatus.capacityConflict, false);
+});
+
+test("concurrent open() does not throw ENOENT when capacity.lock vanishes mid-inspect", async () => {
+  const shared = tempLeaseRoot();
+  const errors: unknown[] = [];
+  await Promise.all(Array.from({ length: 16 }, async (_, index) => {
+    const store = new FileCrossProcessLeaseStore(shared, {
+      pid: 700 + index,
+      isAlive: () => true,
+      now: () => Date.now(),
+      orphanGraceMs: 30,
+      capacityLockTimeoutMs: 2000
+    });
+    try {
+      await store.open({ jdtSlots: 1, sweepSlots: 1 });
+    } catch (error) {
+      errors.push(error);
+    }
+  }));
+  assert.equal(
+    errors.filter(error => (error as NodeJS.ErrnoException).code === "ENOENT").length,
+    0,
+    errors.map(error => error instanceof Error ? error.stack ?? error.message : String(error)).join("\n")
+  );
 });
 
 test("a dead or metadata-less expired capacity.lock is reclaimed, while a live lock owner is never stolen", async () => {

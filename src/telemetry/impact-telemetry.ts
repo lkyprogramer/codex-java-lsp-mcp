@@ -141,6 +141,7 @@ function defaultSinkFor(env: NodeJS.ProcessEnv): TelemetrySink {
 
 function gcOldFiles(dir: string, now: Date): void {
   try {
+    mkdirSync(dir, { recursive: true });
     const cutoff = now.getTime() - 30 * DAY_MS;
     for (const name of readdirSync(dir)) {
       const match = name.match(/^impact-(\d{8})\.jsonl$/);

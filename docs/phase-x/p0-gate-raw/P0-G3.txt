@@ -1,0 +1,9 @@
+dated: 2026-09-07
+measurement_sha: 86de82e
+command: /usr/bin/time -l ... builder-main.js --mode cold  (same G2 run)
+maximum_resident_set_size_bytes: 461504512
+mib: 440.1
+source: p0-blocked.md measured-gates table
+original_time_l_stdout: not retained as a dedicated file
+pass: yes
+target_mib: 600

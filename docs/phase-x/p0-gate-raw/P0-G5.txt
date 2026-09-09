@@ -1,0 +1,87 @@
+snapshot_baselines
+{"id":"lishuedu","files":6090,"types":7319,"fields":28556,"methods":25077,"edges":253711}
+{"id":"lishu-v2","files":3013,"types":8125,"fields":33949,"methods":31395,"edges":223190}
+{"id":"cipherlink","files":629,"types":761,"fields":2514,"methods":3098,"edges":21399}
+{"id":"exam-parent-v3","files":1432,"types":1604,"fields":7866,"methods":5422,"edges":56191}
+lishuedu_prior_sql_counts files=6090 types=7319 methods=25077 edges=253711 (86de82e G2/G4 run)
+BUILD cipherlink
+{"ok":true,"parseFailed":0,"files":629,"types":761,"methods":3098,"edges":21399}
+        7.83 real         7.65 user         1.08 sys
+           292847616  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               18346  page reclaims
+                  53  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                2926  voluntary context switches
+               18464  involuntary context switches
+         80976304251  instructions retired
+         27731174770  cycles elapsed
+           218436440  peak memory footprint
+SQL cipherlink {"file":629,"type":761,"field":2514,"method":3098,"edge":21399}
+BUILD exam-parent-v3
+{"ok":true,"parseFailed":0,"files":1432,"types":1604,"methods":5422,"edges":56191}
+       21.65 real        18.62 user         2.95 sys
+           331628544  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               29555  page reclaims
+                   0  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+               19070  voluntary context switches
+               51611  involuntary context switches
+        193346206720  instructions retired
+         67049449122  cycles elapsed
+           328201160  peak memory footprint
+SQL exam-parent-v3 {"file":1432,"type":1604,"field":7866,"method":5422,"edge":56191}
+BUILD lishu-v2
+Error: UNIQUE constraint failed: type.type_id
+    at file:///Users/luo/Documents/github/codex-java-lsp-mcp/dist/java-index/sql/rows.js:98:24
+    at runInWriteTx (file:///Users/luo/Documents/github/codex-java-lsp-mcp/dist/java-index/sql/rows.js:20:16)
+    at writeBundle (file:///Users/luo/Documents/github/codex-java-lsp-mcp/dist/java-index/sql/rows.js:86:12)
+    at file:///Users/luo/Documents/github/codex-java-lsp-mcp/dist/java-index/builder/cold-build.js:114:21
+    at withTransaction (file:///Users/luo/Documents/github/codex-java-lsp-mcp/dist/java-index/sql/driver.js:38:23)
+    at runSqlColdBuild (file:///Users/luo/Documents/github/codex-java-lsp-mcp/dist/java-index/builder/cold-build.js:112:26)
+    at async runBuilderMain (file:///Users/luo/Documents/github/codex-java-lsp-mcp/dist/java-index/builder/builder-main.js:38:24)
+        1.24 real         1.19 user         0.17 sys
+           181960704  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               11454  page reclaims
+                   0  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                1162  voluntary context switches
+               12709  involuntary context switches
+         14709982124  instructions retired
+          4282974382  cycles elapsed
+           148253496  peak memory footprint
+SQL lishu-v2 {"file":0,"type":0,"field":0,"method":0,"edge":0}
+
+RETRY lishu-v2 after writeBundle ON CONFLICT last-write-wins
+collision type:com.limou.answercard.AnswerCard
+  first=deploy/recognition-runners/full-answer-card/src/main/java/com/limou/answercard/AnswerCard.java
+  second=deploy/recognition-runners/printed-digit-correction/src/main/java/com/limou/answercard/AnswerCard.java
+{"ok":true,"parseFailed":0,"files":3036,"types":8183,"methods":31683,"edges":225168}
+      119.80 real        83.81 user        15.22 sys
+           539820032  maximum resident set size
+SQL lishu-v2 {"file":3036,"type":8183,"field":34205,"method":31683,"edge":225168}
+DELTA vs snapshot {"file":"0.763%","type":"0.714%","field":"0.754%","method":"0.917%","edge":"0.886%"}
+VERDICT all four repos within ±1% (lishuedu/cipherlink/exam-parent-v3 exact; lishu-v2 <1%)

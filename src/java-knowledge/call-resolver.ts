@@ -2,8 +2,8 @@
 // output: JIN call kinds with CALLED_BY materialized by the store. Dispatch is a conservative closed set.
 // pos: N2a-01. No pointer analysis; ambiguous overloads emit no edge.
 import type { JavaFileBundle, JavaMethodFacts, JavaTypeFacts, StaticEdge } from "../java-index/index-types.js";
-import type { JavaIndexStore } from "../java-index/index-store.js";
-import type { KnowledgeGraphStore } from "./graph-store.js";
+import type { FactsReader } from "../java-index/facts-reader.js";
+import type { KnowledgeGraphStore } from "./graph-reader.js";
 import { knowledgeEdgeId } from "./entity-id.js";
 import type { EdgeKind } from "./edge-kinds.js";
 
@@ -21,7 +21,7 @@ function isVirtualOwner(type: JavaTypeFacts, method: JavaMethodFacts | undefined
   return false;
 }
 
-function matchingMethod(type: JavaTypeFacts, name: string, arity: number, store: JavaIndexStore): JavaMethodFacts | undefined {
+function matchingMethod(type: JavaTypeFacts, name: string, arity: number, store: FactsReader): JavaMethodFacts | undefined {
   const hits: JavaMethodFacts[] = [];
   for (const methodId of type.methodIds) {
     const method = store.methodsById.get(methodId);
@@ -51,7 +51,7 @@ function push(
 export function addCallEdges(
   graph: KnowledgeGraphStore,
   bundle: JavaFileBundle,
-  store: JavaIndexStore,
+  store: FactsReader,
   generation: number,
   resolve: (javaIndexId: string) => string | undefined
 ): void {

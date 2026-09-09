@@ -8,7 +8,7 @@
 
 它不是完整 IDE，也不是通用语言平台。项目边界以 canonical `repoRoot` 和 `repoHash` 为准，`projectId` 只作为 alias/display name；所有请求都受绝对 deadline、仓库边界和完整性状态约束。
 
-当前生产形态（2026-08-24 cutover 之后）：本机 Codex 走共享 HTTP daemon `http://127.0.0.1:38456/mcp`。公开工具是 `java_status`、`java_impact`、`java_symbol`、`java_diagnostics`、`java_runtime`（没有 `java_context` / `java_references` / `java_restart` / `java_shutdown`）。索引真源是 JavaIndex v4 快照，不是 SourceIndex。替换正在使用的 daemon 用 `./install-runtime.sh`（不要加 `--activate-http`）；操作真源是 [生产切流手册](docs/phase-f/production-cutover-runbook.md)。下一周期计划见 [token accuracy 计划](docs/deep/codex-java-lsp-mcp-next-frontier-token-accuracy-plan-2026-08-24.md)。
+当前生产形态：本机 Codex 走共享 HTTP daemon `http://127.0.0.1:38456/mcp`。公开工具是 `java_status`、`java_impact`、`java_symbol`、`java_diagnostics`、`java_runtime`。索引真源是 on-disk SQLite `index.sqlite`（`SqlJavaIndexClient`），不是 SourceIndex / 堆快照。Index-on-disk 已切流（2026-09-08/09，线上 `03f5a4154081`）。替换 daemon 用 `./install-runtime.sh`（不要加 `--activate-http`）。现行操作是 [生产操作](docs/phase-f/production-operations.md)；[切流手册](docs/phase-f/production-cutover-runbook.md) 只保留历史步骤。
 
 ## 目录
 
@@ -34,17 +34,17 @@
 - 默认推荐入口是 `java_impact`，用于生成影响面、候选文件、`readPlan`、证据缺口和指标。
 - 未启用 LSP 的 Java repo 仍可走 fast path：repo/layout/JDK 探测、Tree-sitter JavaIndex、增量 watcher 和有界 streaming `rg`。
 - 启用 LSP 后，JDT LS 为 symbol、references、hierarchy、diagnostics 和精确位置语义提供增强结果；同键请求由 SemanticGateway singleflight 合并。
-- Git worktree family 可继承 LSP enablement 和经过内容验证的不可变 seed facts；每个 worktree 的 generation、JavaIndex、JDT workspace、日志和可变缓存保持隔离。
+- Git worktree family 可继承 LSP enablement；同家族无库时 `VACUUM INTO` sibling `index.sqlite`，再按 `content_hash` reconcile（mtime 被 `git worktree add` 刷掉但内容相同则不 parse）。每个 worktree 的 generation、DB、JDT workspace、日志保持隔离。未提交的 `.env` / `.sdkmanrc` 不进索引。
 - `ImpactResultV6` 显式暴露 freshness/completeness、证据来源、任务导向的候选顺序和文件/范围级 `readPlan`。
 - stdio 与共享 HTTP daemon 共用 canonical-root ownership；同一个 worktree 同一时刻只允许一个进程持有 JDT workspace、JavaIndex 和 cache。
 
 ## 五层架构
 
 1. **Repo identity 与 freshness**：`repo-resolver`、`RepoChangeCoordinator` 和单调 generation 统一处理 canonical containment、edit/add/delete/rename/build/resource 事件、storm 降级和 worktree identity。
-2. **JavaIndex 静态事实层**：Tree-sitter Java AST、FQN/import 解析、静态关系、MyBatis resource facts、按 source root 的 coverage，以及 versioned atomic snapshot。后台 sweep 分块且受跨进程 lease 限制，前台 refresh 不等待整仓 sweep。
+2. **JavaIndex 静态事实层**：Tree-sitter Java AST、FQN/import 解析、静态关系、MyBatis resource facts、按 source root 的 coverage，持久化在 `index.sqlite`。builder 子进程串行写库；daemon 只读打开，空闲关连接。
 3. **JDT 精确语义层**：`JdtlsSession`、`SemanticGateway`、跨进程 JDT slot、restart backoff、complete-only bounded cache 和 64-entry `DocumentLru`。同键 semantic operation 只执行一次 backend work，每个 caller 独立消费自己的 deadline。
 4. **Evidence、ranking 与 readPlan**：providers 只产生 typed evidence；family ranker 对同族证据饱和；Spring、MyBatis、MapStruct pack 只在有证据时参与；planner 一次批量读取精确 ranges，并同时约束文件、字节和估算 token。
-5. **MCP surface 与 observability**：5 个工具提供 compact/standard/diagnostic 输出；`java_status` 汇总 runtime、watcher、JavaIndex coverage、generation、lease 和缓存状态，不把绝对私有路径泄漏到标准结果。stdio 与 HTTP daemon 共用同一套 `JavaLspApplication`。
+5. **MCP surface 与 observability**：5 个工具提供 compact/standard/diagnostic 输出；`java_status` 汇总 runtime、JavaIndex coverage/`db`/`builder`、generation、lease 和 JDT 状态，不把绝对私有路径泄漏到标准结果。stdio 与 HTTP daemon 共用同一套 `JavaLspApplication`。索引路径没有 hibernate/recycle。
 
 ### cold、auto、required
 
@@ -55,11 +55,11 @@
 
 ### Cache、freshness 与 completeness
 
-- JavaIndex snapshot 只接受当前 schema/build identity/manifest；不匹配、损坏或部分写入会被忽略并重建，不读取 V1 cache，也不做双读/双写迁移。
+- `index.sqlite` schema 不匹配则 drop-all 重建；启动时 janitor 删除旧的 `java-index-snapshot*.json.gz` / `java-knowledge-graph.json.gz`。不做堆快照双读/双写。
 - 每个 normalized repo batch 只推进一次 generation，并同时驱动 AgentRouter、JDT document/cache 同步和 JavaIndex refresh。请求结果记录 `requestGeneration`、`indexedGeneration` 与 `changedDuringRequest`。
 - source root 只有在同 generation、无 failed/recovered/pending 条目且 coverage=`COMPLETE` 时才能回答负查询；其余状态返回未知或降级结果，不能把缺失当成不存在。
 - SemanticGateway 只缓存 `COMPLETE`，有 TTL、容量上限和 generation 失效；partial/timeout/cancelled 结果不会写成 complete cache。
-- worktree sibling seed 在目标内容验证完成前不可查询，且在 reconcile 结束前保持 `DEGRADED`。schema 不兼容时直接重建目标 cache。
+- worktree sibling 拷贝的是 `index.sqlite`（`VACUUM INTO`），随后 reconcile；schema 不兼容时重建目标库。
 
 ## 设计边界
 
@@ -127,7 +127,7 @@ sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile fu
 "$HOME/Library/Application Support/codex-java-lsp-mcp/daemonctl.sh" smoke
 ```
 
-本机已经在 HTTP 上。替换正在使用的 LSP 按 [生产切流手册](docs/phase-f/production-cutover-runbook.md) 执行：`./install-runtime.sh`（**不要** `--activate-http`）。`--activate-http` 是历史上 stdio→HTTP 的首次激活门，凭据仍写着旧的七工具面，**这次生产树不要走那条门**。旧 canary runbook（`docs/shared-http-daemon-canary-runbook.md`）同样过期，不要照它做 HTTP 激活。
+本机已经在 HTTP 上。替换正在使用的 LSP 按 [生产操作](docs/phase-f/production-operations.md) 执行：`./install-runtime.sh`（**不要** `--activate-http`）。`--activate-http` 是历史上 stdio→HTTP 的首次激活门，凭据仍写着旧的七工具面，不要走。旧 canary runbook 过期，不要照它做 HTTP 激活。
 
 切换或热补 daemon 后仍必须 Restart Codex/Desktop 并开新 task。回滚用 `daemonctl.sh rollback-release`（回到 `previous-current`），不要手改 plist 或 MCP URL。
 
@@ -202,7 +202,7 @@ release rollback 使用 `daemonctl.sh rollback-release`。它会先验证前一 
 
 - 如果当前 worktree 与某个 `lspEnabled=true` 配置 root 共享同一个 Git `common-dir`，允许继承“可启动 LSP”的权限。
 - 继承的只是 enablement，不继承主工作区的 runtime/cache。
-- 当前 worktree 仍使用自己的 canonical `repoRoot`、`repoHash`、generation、JavaIndex snapshot、JDT LS workspace 和日志。
+- 当前 worktree 仍使用自己的 canonical `repoRoot`、`repoHash`、generation、`index.sqlite`、JDT LS workspace 和日志。
 - 独立 clone、复制目录、不同 Git `common-dir` 的 review worktree 不自动继承，需要单独注册绝对路径。
 - 如果多个 enabled alias 共享同一 Git family 且无法唯一判断，hook 静默放行，`java_status` 返回 conflict。
 
@@ -240,7 +240,7 @@ hook 行为：
 {"tool":"java_impact","arguments":{"repoRoot":"/absolute/repo","anchors":[{"file":"src/main/java/demo/OrderService.java","line":42,"column":18}],"semanticPolicy":"auto"}}
 ```
 
-只要 JDT 时再 `java_status({start:true})`。daemon 刚重启后的第一次 `java_status` 会冷建 JavaIndex（大仓可能数秒到十几秒）；磁盘 CJV4 快照在，后续是 hydrate 不是从零扫树。`projects.json` 里 `lspEnabled` 的 pin 仓不会因为 2 天不用被 janitor 删掉。
+只要 JDT 时再 `java_status({start:true})`。daemon 刚重启后的第一次 `java_status` 会冷建 `index.sqlite`（大仓可能 1–3 分钟 `BUILDING`）；库已在则只读打开。`projects.json` 里 `lspEnabled` 的 pin 仓不会因为 2 天不用被 janitor 删掉。
 
 排查 runtime、watcher roots、JDK candidates、raw LSP URI/range 或完整 diagnostics 时显式打开诊断字段：
 
@@ -248,7 +248,7 @@ hook 行为：
 {"tool":"java_status","arguments":{"repoRoot":"/absolute/repo","start":false,"detail":"diagnostic"}}
 ```
 
-默认不要在每次查询后调用 `java_runtime(action=shutdown)`；让 idle TTL 回收 JDT LS，才能复用 workspace import、JDT LS 内存索引和 JavaIndex snapshot。
+默认不要在每次查询后调用 `java_runtime(action=shutdown)`；让 idle TTL 回收 JDT LS，才能复用 workspace import 和磁盘上的 `index.sqlite`。
 
 需要强语义结果时：
 
@@ -284,6 +284,11 @@ hook 行为：
 | `JDTLS_JAVA_HOME` | 指定运行 JDT LS 的 Java home。 |
 | `JDTLS_EXTRA_ARGS` | 追加传给在线 `jdtls` launcher 的参数，例如额外 `--jvm-arg=`；隔离 benchmark 会丢弃调用者提供的值，禁止用第二个 `-data` 覆盖私有 workspace。 |
 | `JAVA_LSP_CACHE_BASE` | 覆盖统一 cache base；每个 canonical repo 始终追加独立 repoHash。 |
+| `JAVA_LSP_SQLITE_CACHE_KB` | sqlite page cache，默认 `32768`（32 MiB / 打开的连接）。 |
+| `JAVA_LSP_CONN_IDLE_MS` | 只读 sqlite 连接空闲后关闭的时间，默认 `600000`；关闭后会 truncate WAL。 |
+| `JAVA_LSP_BUILDER_IDLE_MS` | index builder 子进程空闲退出，默认 `60000`。 |
+| `JAVA_LSP_BUILDER_PARALLELISM` | 冷建解析并行度，默认 `min(4, cpus-1)`。 |
+| `JAVA_LSP_INDEX_DIR` | 若设置，该进程把 `index.sqlite` 写进这个目录（**不**再拼 repoHash）。生产 LaunchAgent **不要设**，否则多 root 会抢同一文件。 |
 | `JAVA_LSP_PROJECT_JAVA_HOME` | 指定默认项目 JDK。 |
 | `JAVA_LSP_PROJECT_JAVA_HOME_<ALIAS>` | 为某个 alias 指定项目 JDK，alias 会转成大写并把非字母数字替换成 `_`。 |
 | `JAVA_LSP_JDTLS_XMX` | 覆盖 JDT LS heap，例如 `2g`。 |
@@ -312,7 +317,7 @@ hook 行为：
 
 `streamable_http` 模式拒绝 `JDTLS_DATA_DIR` / `JDTLS_LOG_DIR` 单例目录覆盖；stdio 兼容模式仅把它们视为 base，并强制追加 canonical repoHash。
 
-生产 cache 不要 `rm -rf ~/Library/Caches/codex-java-lsp`。一次性收割（默认 dry-run）：
+生产 cache 不要 `rm -rf ~/Library/Caches/codex-java-lsp`，也不要手删 `index.sqlite-wal`（由写连接 close / 只读 idle 后 `wal_checkpoint(TRUNCATE)`，上限 64 MiB）。一次性收割（默认 dry-run）：
 
 ```bash
 npm run cache:harvest
@@ -422,7 +427,8 @@ sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile ta
 
 当前运维与下一周期：
 
-- [生产切流手册](docs/phase-f/production-cutover-runbook.md)
+- [生产操作（IOD 现行）](docs/phase-f/production-operations.md)
+- [生产切流手册（历史）](docs/phase-f/production-cutover-runbook.md)
 - [下一周期 token accuracy 计划](docs/deep/codex-java-lsp-mcp-next-frontier-token-accuracy-plan-2026-08-24.md)
 - 三仓 paired gate：[three-repo-cold-matrix-runbook](docs/three-repo-cold-matrix-runbook.md)
 
@@ -443,7 +449,8 @@ sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile ta
 - `No idle Java LSP runtime available`：降低并发、关闭空闲 repo，或调整 `JAVA_LSP_MAX_ACTIVE_REPOS`。
 - `Deadline exceeded before runtime.create`：repo 级 `java_status` 现在是 15s 预算。若仍超时，等几秒再调一次（create 在后台继续）；不要为了「不超时」乱传 `deadlineMs=120000`。
 - `Too big … readPlanMaxItems` / `deadlineMs`：省略这两个字段，或分别 ≤30 / ≤15000。不要用旧记忆里的 80 / 120000。
-- `Java index worker is unavailable after one restart attempt`：短 deadline 打死过 worker。再调一次不带 `deadlineMs` 的 `java_status`/`java_impact`；仍失败则 `daemonctl.sh restart` 后开新 task。
+- `Java index worker is unavailable after one restart attempt`：堆时代文案。IOD 下应看 `javaIndex.builder` / stderr 的 `database is locked`；再调一次不带 `deadlineMs` 的 `java_status`/`java_impact`；仍失败则 `daemonctl.sh restart` 后开新 task。
+- `index.sqlite-wal` 涨到 GiB：只读连接钉住 WAL。等 `JAVA_LSP_CONN_IDLE_MS` 后应自动 truncate；不要 `rm *-wal`。
 - hook 没有 `JAVA_LSP_ADVISOR`：cwd 未启用，或 prompt 没命中 `Service`/`修复`/`影响面` 等词。工具仍可用，模型应直接调 `java_status` / `java_impact`。
 
 ## 安全说明

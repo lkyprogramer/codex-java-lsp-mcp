@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "v5r-gate-profile/v1",
+  "profile": "release",
+  "description": "release: isolated full plus HTTP five-tool smoke",
+  "steps": [
+    [
+      "scripts/run-isolated-validation.mjs",
+      "--profile",
+      "full"
+    ],
+    [
+      "scripts/run-isolated-validation.mjs",
+      "--profile",
+      "targeted",
+      "--env",
+      "JAVA_LSP_HTTP_PORT=38491",
+      "--",
+      "node",
+      "scripts/run-v4-http-smoke.mjs"
+    ]
+  ],
+  "exitCode": 0,
+  "rawSha256": "2626252f69c1713e5e9636ffbef8c254ca41d65cffdb24a3614e1eb96dd1a584",
+  "bytes": 332152
+}

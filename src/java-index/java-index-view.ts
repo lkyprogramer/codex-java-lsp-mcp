@@ -31,23 +31,6 @@ export interface JavaIndexView {
 }
 
 export function openSourceFromStatus(status: JavaIndexStatus): JavaIndexOpenSource {
-  const seed = status.worktreeSeed;
-  if (!seed || !seed.attempted) {
-    return status.files > 0 ? "own-snapshot" : "cold";
-  }
-  // Reconciliation upgrades coverage, not provenance: after a sibling seed
-  // finishes its mandatory target sweep it is still a sibling-seeded OPEN,
-  // not an own-snapshot OPEN.  Keep that source in request diagnostics.
-  if (
-    seed.completion === "SEEDED_DEGRADED"
-    || seed.completion === "RECONCILED_COMPLETE"
-    || seed.reusedFiles > 0
-  ) {
-    return "sibling-seed";
-  }
-  if (seed.completion === "NO_VALID_SOURCE" || seed.completion === "FAILED" || seed.completion === "NOT_ATTEMPTED") {
-    return status.files > 0 ? "own-snapshot" : "cold";
-  }
   return status.files > 0 ? "own-snapshot" : "cold";
 }
 

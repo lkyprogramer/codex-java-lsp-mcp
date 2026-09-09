@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { appendFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync } from "node:fs";
 import { mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -230,6 +230,24 @@ test("record path stays under 1ms across 1000 iterations", () => {
   }
   const perCall = (performance.now() - started) / 1000;
   assert.ok(perCall < 1, `record path ${perCall}ms per call`);
+});
+
+test("missing telemetry directory is recreated and a line appends", async () => {
+  const parent = await mkdtemp(path.join(tmpdir(), "java-lsp-telemetry-parent-"));
+  const dir = path.join(parent, "telemetry");
+  const stamp = new Date("2026-08-30T00:00:00.000Z");
+  const sink = createImpactTelemetry({
+    dir,
+    enabled: true,
+    maxBuffer: 1,
+    flushEveryMs: 0,
+    now: () => stamp
+  });
+  sink.record(buildToolCounter({ tool: "java_status", elapsedMs: 1, ok: true, now: stamp }));
+  const file = path.join(dir, `impact-${utcDayStamp(stamp)}.jsonl`);
+  assert.equal(existsSync(dir), true);
+  const text = await readFile(file, "utf8");
+  assert.match(text, /java_status/);
 });
 
 test("initialization deletes telemetry files older than 30 days", async () => {

@@ -1,10 +1,38 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { JavaIndexStore } from "../java-index/index-store.js";
+import { openIndexDb } from "../java-index/sql/driver.js";
+import { ensureSchema } from "../java-index/sql/schema.js";
+import { SqlFactsStore } from "../java-index/sql/facts-store.js";
+import { writeBundle, writeMyBatisResource } from "../java-index/sql/rows.js";
 import type { JavaFileBundle, JavaFileFacts, JavaMethodFacts, JavaTypeFacts, SourceRange } from "../java-index/index-types.js";
 import { javaFileId, javaMethodId, javaTypeId } from "../java-index/stable-id.js";
 import { KnowledgeGraphBuilder } from "./graph-builder.js";
-import { KnowledgeGraphStore } from "./graph-store.js";
+import { SqlKnowledgeGraph } from "../java-index/sql/knowledge-graph.js";
+
+function sqlGraph() {
+  const db = openIndexDb(":memory:");
+  ensureSchema(db);
+  return new SqlKnowledgeGraph(db);
+}
+
+
+class MemoryFacts {
+  readonly db = openIndexDb(":memory:");
+  readonly store: SqlFactsStore;
+  constructor() {
+    ensureSchema(this.db);
+    this.store = new SqlFactsStore(this.db);
+  }
+  replaceFile(bundle: JavaFileBundle) {
+    writeBundle(this.db, bundle);
+    this.store.clearRequestCache();
+  }
+  replaceMyBatisResource(resource: Parameters<typeof writeMyBatisResource>[1]) {
+    writeMyBatisResource(this.db, resource);
+    this.store.clearRequestCache();
+  }
+}
+
 
 const RANGE: SourceRange = { start: { line: 1, column: 1 }, end: { line: 8, column: 2 } };
 
@@ -70,10 +98,10 @@ function bundle(simpleName: string, methods: string[] = []): JavaFileBundle {
 }
 
 test("builder emits CONTAINS and DECLARES structural edges from JavaIndex facts", () => {
-  const index = new JavaIndexStore();
+  const index = new MemoryFacts();
   index.replaceFile(bundle("Widget", ["save"]));
-  const graph = new KnowledgeGraphStore();
-  new KnowledgeGraphBuilder(graph).rebuildFromStore(index, 1);
+  const graph = sqlGraph();
+  new KnowledgeGraphBuilder(graph).rebuildFromStore(index.store, 1);
   const typeId = "src/main/java/demo/Widget.java#demo.Widget";
   const fileId = "src/main/java/demo/Widget.java";
   assert.equal(graph.nodesById.get(fileId)?.kind, "FILE");
@@ -83,25 +111,25 @@ test("builder emits CONTAINS and DECLARES structural edges from JavaIndex facts"
 });
 
 test("replaceFile removes a deleted method and does not leave a stale DECLARES edge", () => {
-  const index = new JavaIndexStore();
+  const index = new MemoryFacts();
   const first = bundle("Widget", ["save", "load"]);
   index.replaceFile(first);
-  const graph = new KnowledgeGraphStore();
+  const graph = sqlGraph();
   const builder = new KnowledgeGraphBuilder(graph);
-  builder.rebuildFromStore(index, 1);
+  builder.rebuildFromStore(index.store, 1);
   const typeId = "src/main/java/demo/Widget.java#demo.Widget";
   assert.equal(graph.successors(typeId, "DECLARES").length, 2);
 
   const second = bundle("Widget", ["save"]);
   index.replaceFile(second);
-  builder.replaceFile(second, index, 2);
+  builder.replaceFile(second, index.store, 2);
   const declared = graph.successors(typeId, "DECLARES").map(edge => graph.nodesById.get(edge.toId)?.simpleName);
   assert.deepEqual(declared.sort(), ["save"]);
   assert.equal(graph.successors(typeId, "DECLARES").length, 1);
 });
 
 test("N1 does not materialize PARAMETER or STATEMENT nodes", () => {
-  const index = new JavaIndexStore();
+  const index = new MemoryFacts();
   const widget = bundle("Widget", ["save"]);
   widget.methods[0]!.parameters.push({
     name: "id",
@@ -111,9 +139,9 @@ test("N1 does not materialize PARAMETER or STATEMENT nodes", () => {
     range: RANGE
   });
   index.replaceFile(widget);
-  const graph = new KnowledgeGraphStore();
-  new KnowledgeGraphBuilder(graph).rebuildFromStore(index, 1);
-  for (const node of graph.nodesById.values()) {
+  const graph = sqlGraph();
+  new KnowledgeGraphBuilder(graph).rebuildFromStore(index.store, 1);
+  for (const node of [...graph.nodesById.entries()].map(([, node]) => node)) {
     assert.notEqual(node.kind, "PARAMETER");
     assert.notEqual(node.kind, "STATEMENT");
     assert.notEqual(node.kind, "LOCAL");
@@ -121,15 +149,15 @@ test("N1 does not materialize PARAMETER or STATEMENT nodes", () => {
 });
 
 test("removing one file in a two-file module keeps MODULE CONTAINS", () => {
-  const index = new JavaIndexStore();
+  const index = new MemoryFacts();
   const first = bundle("Alpha", ["a"]);
   const second = bundle("Beta", ["b"]);
   index.replaceFile(first);
   index.replaceFile(second);
-  const graph = new KnowledgeGraphStore();
+  const graph = sqlGraph();
   const builder = new KnowledgeGraphBuilder(graph);
-  builder.rebuildFromStore(index, 1);
-  builder.replaceFile(first, index, 2);
+  builder.rebuildFromStore(index.store, 1);
+  builder.replaceFile(first, index.store, 2);
   builder.removeFiles(["src/main/java/demo/Alpha.java"]);
   const moduleId = "module:demo";
   assert.equal(graph.nodesById.get(moduleId)?.kind, "MODULE");

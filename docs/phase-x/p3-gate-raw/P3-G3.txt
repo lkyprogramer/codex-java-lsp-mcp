@@ -1,0 +1,96 @@
+dated=2026-09-08
+sha=6a2cbdd1fdf5f4f9c30f5891f4a08fab7e8a9b2b
+files=46
+loc=8971
+limit=9000
+pass=True
+--- files ---
+ 1209 src/repo-runtime-manager.ts
+  702 src/java-index/ast-extractor.ts
+  596 src/java-index/sql/facts-store.ts
+  544 src/java-index/sql/knowledge-graph.ts
+  532 src/java-index/sql/sql-client.ts
+  389 src/java-index/sql/rows.ts
+  387 src/java-index/builder-supervisor.ts
+  380 src/java-index/edge-builder.ts
+  347 src/java-index/index-types.ts
+  324 src/java-index/name-resolver.ts
+  298 src/java-index/mybatis-xml-extractor.ts
+  264 src/java-index/sql/sql-read-ranges.ts
+  239 src/java-knowledge/graph-builder.ts
+  221 src/java-index/builder/parse-cache.ts
+  200 src/java-index/sql/entity-search.ts
+  178 src/java-index/java-index-client-api.ts
+  149 src/java-knowledge/persistence-edge-builder.ts
+  137 src/java-knowledge/framework-edge-builder.ts
+  136 src/java-index/entity-scoring.ts
+  122 src/java-index/sql/sql-queries.ts
+  111 src/java-index/sql/entity-tokens.ts
+  108 src/java-index/java-parser-backend.ts
+  107 src/java-index/java-index-file-parse.ts
+  104 src/java-index/entity-search.ts
+  101 src/java-index/sql/driver.ts
+   96 src/java-knowledge/edge-kinds.ts
+   94 src/java-index/sql/schema.ts
+   93 src/java-index/sql/sym.ts
+   93 src/java-index/manifest.ts
+   91 src/java-knowledge/call-resolver.ts
+   84 src/java-index/build-fingerprint.ts
+   65 src/java-index/java-index-view.ts
+   57 src/java-index/stable-id.ts
+   57 src/java-index/facts-reader.ts
+   52 src/java-knowledge/entity-id.ts
+   51 src/java-index/mybatis-types.ts
+   50 src/java-knowledge/schema.ts
+   49 src/java-knowledge/method-summary.ts
+   43 src/java-knowledge/graph-walk.ts
+   38 src/java-index/sql/registry-view.ts
+   36 src/java-index/sql/vacuum-into.ts
+   33 src/java-knowledge/graph-reader.ts
+    1 src/java-index/router-java-index.ts
+    1 src/java-index/router-java-index-cold.ts
+    1 src/java-index/router-facts.ts
+    1 src/java-index/framework-index-view.ts
+===== JAVA_LSP =====
+process.env.JAVA_LSP_AUTOBUILD
+process.env.JAVA_LSP_BUILDER_IDLE_MS
+process.env.JAVA_LSP_BUILDER_PARALLELISM
+process.env.JAVA_LSP_CACHE_JANITOR_INTERVAL_MS
+process.env.JAVA_LSP_CONN_IDLE_MS
+process.env.JAVA_LSP_DOCUMENT_SYMBOL_ATTEMPT_TIMEOUT_MS
+process.env.JAVA_LSP_FREEMEM_PRESSURE_BYTES
+process.env.JAVA_LSP_FREEMEM_PRESSURE_INTERVAL_MS
+process.env.JAVA_LSP_HTTP_ALLOWED_ORIGINS
+process.env.JAVA_LSP_HTTP_INSTANCE_ID
+process.env.JAVA_LSP_HTTP_PORT
+process.env.JAVA_LSP_IDLE_TTL_MS
+process.env.JAVA_LSP_IMPORT_CONCURRENCY
+process.env.JAVA_LSP_INDEX_DIR
+process.env.JAVA_LSP_ISOLATED_VALIDATION
+process.env.JAVA_LSP_JDT_LEASE_HEARTBEAT_MS
+process.env.JAVA_LSP_JDTLS_XMX
+process.env.JAVA_LSP_LOMBOK_JAR
+process.env.JAVA_LSP_MAX_ACTIVE_REPOS
+process.env.JAVA_LSP_MIN_SEMANTIC_WAIT_MS
+process.env.JAVA_LSP_OWNERSHIP_BASE
+process.env.JAVA_LSP_PROGRESS_IDLE_MS
+process.env.JAVA_LSP_PROJECT_JAVA_HOME
+process.env.JAVA_LSP_PROJECTS_JSON
+process.env.JAVA_LSP_RG_CACHE_TTL_MS
+process.env.JAVA_LSP_RG_CONCURRENCY
+process.env.JAVA_LSP_ROUTER_DEADLINE_MS
+process.env.JAVA_LSP_ROUTING_POLICY
+process.env.JAVA_LSP_SQLITE_CACHE_KB
+process.env.JAVA_LSP_WORKTREE_CACHE_TTL_DAYS
+JAVA_LSP_distinct=30
+===== manager timers =====
+1095:      entry.idleTimer = setTimeout(() => {
+1106:    this.pressureTimer = setInterval(() => {
+===== hibernate leftover non-test =====
+src/process-crash-markers.ts:18:  heapUsedBytes?: number;
+src/process-crash-markers.ts:70:      v8 as { setNearHeapLimitCallback?: (callback: (heapLimitBytes: number, heapUsedBytes: number) => number) => void }
+src/process-crash-markers.ts:73:      setNearHeapLimitCallback?.((heapLimitBytes, heapUsedBytes) => {
+src/process-crash-markers.ts:74:        emit("nearHeapLimit", { heapLimitBytes, heapUsedBytes });
+src/benchmark/process-resource-observer.ts:11:type Sample = { tMs: number; rssBytes: number; heapUsedBytes: number; heapTotalBytes: number; externalBytes: number;
+src/benchmark/process-resource-observer.ts:45:      heapUsedBytes: memory.heapUsed, heapTotalBytes: memory.heapTotal, externalBytes: memory.external,
+src/benchmark/process-resource-observer.ts:105:    peakHeapUsedBytes: Math.max(...samples.map(sample => sample.heapUsedBytes)),

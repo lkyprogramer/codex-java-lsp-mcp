@@ -1,32 +1,20 @@
 # HANDOFF
 
-## daemon 生产化三轨（2026-08-27 切流）
+## daemon 生产化（index-on-disk P3）
 
-计划 §9.5 R3：**允许合 main + 生产切流**。HTTP daemon `http://127.0.0.1:38456/mcp`，LaunchAgent `com.lky.codex-java-lsp-mcp`。热集 `hydrate:true`，worker cap **1536**，快照 schema v5，热集豁免 hibernate recycle 与 index-idle。pin：`lishuedu`、`exam-parent-v3`、`cipherlink`、`lishu-v2`。不要把 `fat-service` / `analysis-develop-analysis` / `recognition-master` 加回 `projects.json`。不要 `--activate-http`、不要 `JAVA_LSP_ENGINE`。回滚：`"$HOME/Library/Application Support/codex-java-lsp-mcp/daemonctl.sh" rollback-release`。
+**存储层**：真源是每仓 `index.sqlite`（schema v3 intern）+ `SqlJavaIndexClient`。facts 标量列 + JSONB；KG / entity token 在同一库。不要再写 `java-index-snapshot*.json.gz`。
 
-计划真源：`docs/deep/codex-java-lsp-mcp-daemon-stability-and-memory-plan-2026-08-25.md` §8。closeout：`docs/phase-d/w1-closeout.json`、`s1`–`s4`、`m1`–`m4`、`v1-acceptance.md`。探针：`scripts/probe-daemon-acceptance.mjs`。
+**builder**：`BuilderSupervisor` 拉起 `builder-main --mode serve`（冷建 `cold`）。串行 job、空闲退出、watchdog ≤2。daemon 只读打开；缺库时 `BUILDING` 或 sibling `VACUUM INTO` + reconcile。
 
-已落地：W1 watcher/JDK/EPIPE；S1 QUERY/STATUS 超时不 retire worker；S2 `factsHydrated` 预热；S3 read-plan `DEADLINE_EXCEEDED` fail-soft；S4 快照 rest 分块 + cap 1536；M1 热集 hydrate / 冷集 hibernate；M2 index-idle 关冷 isolate，**M2b 热集豁免**；hibernate `recycle()` 终止冷 worker；S5 无活 runtime 且未传 deadlineMs → 15s；M3 daemon 768 / worker 1536 / nofile 65536；M4 sibling seed 指纹不否决、JDK pin 退出指纹。
+**生命周期**：`JAVA_LSP_CONN_IDLE_MS` 关只读连接，下次查询重开。JDT idle 仍走 `JAVA_LSP_IDLE_TTL_MS`。不要 hydrate / hibernate recycle / 按 RSS 杀 isolate。
 
-坑：
-- 所有 git / npm / 测试加 `PATH="/opt/homebrew/bin:$PATH"`。
-- 内存口径用 `footprint -p <pid>` 的 `phys_footprint`，不要只用 `ps` RSS。
-- chokidar `ignored` 每事件路径禁止同步 fs。
-- Worker 不能用 `execArgv --max-old-space-size` 也不能 `--expose-gc`（都是 `ERR_WORKER_INVALID_EXEC_ARGV`）。只能 `resourceLimits.maxOldGenerationSizeMb`。hibernate 里的 `gc()` 在生产 isolate 上是空操作。
-- 内存基准必须带与生产一致的 `resourceLimits`。无 cap 的 G1/G5 数字（lishuedu heap 173 MiB）看不到 methods 段 JSON.parse ~890 MiB 瞬时峰值。
-- JSON 单体段解析瞬时峰值才是 1536 OOM 的根因（lishuedu methods 244 MiB JSON → ~890 MiB）。分段 OPEN（`7e29c0c`）不够；S4 把 methods 切成 ~10 块。
-- 预热必须在 `files>0` 时就 kick `QUERY_REPOSITORY_FACT_MARKERS`。等 `snapshotVerificationPending` 清掉会把 300s 预算花在 manifest/mybatis 上，D3a 退化成 7.7s on-demand hydrate。
-- 空 prefix 的 `repositoryFactMarkers` 不要扫 25 万条 edges；预热只需要 hydrate 副作用。
-- v5 encode 让 lishuedu 冷建 ~143s；child 超时必须 ≥300s，否则会 SIGKILL 一个已经写完快照的进程，父进程误报 `cold-build child failed`。
-- linked worktree 的 live git `familyHash` 在 daemon 里可能缺失；seed 必须能从该仓自己的 `repo-meta.json` 回填。
-- sibling `findCandidate` 只能读 v4/v5 header，禁止对每个 family mate `toFacts()`。
-- 热集预热是 `hydrate:true`（`JAVA_LSP_PREWARM_HOT` 默认 `lishuedu,lishu-v2`）。不要缩热集。
-- D1 不要用 1024/1152 静态 footprint 门。活内存看 RSS；footprint 会随压缩器在 ~980–1346 呼吸。测完必须去掉 LaunchAgent 里的 TTL env。
-- in-isolate hibernate 还不了 old-gen。空闲路径必须 `recycle()`（terminate worker）或 index-idle `shutdown`。
-- 不要把 `artifacts/`、`graphify-out/`、`.workflow/` 打进 `releases/<id>`。安装验证也要看磁盘，不只看测试绿。
-- macOS `os.freemem()` 经常远低于 2 GiB 压力门（本机测到 104 MiB）。`prewarmRepo` 必须持有 `refCount`；压力回收还必须跳过热集。否则刚 hydrate 完的 lishuedu 会在 5s 内被 recycle，D3a 变成 8s on-demand（lishu-v2 仍是 36ms，因为它更新）。D1 回落靠 index-idle TTL，不靠压力立刻杀热 pin。
+**已删**：heap worker/client/store、EntitySearchIndex 类、KnowledgeGraphStore 堆实现、snapshot/columnar/seeder、hibernate/prewarm/recycle 环境变量读取。`parse-tree-cache` 已内联到 `src/java-index/builder/parse-cache.ts`。
 
-V1-R / §9 **COMPLETE**。D3-idle 177/191 + 6.5s/2.7s；D4 retry 63ms；identity content delta 0；D1 活内存 26–53、footprint 980↔1346 peak 1356 无 ratchet（§9.5 帽 1433）。切流后债：24h 遥测+footprint 看护、W2、D8 仪器化。不要 push 除非明确要求。
+**陷阱**：不要再加 heap/RSS 看护。不要 `--activate-http`。不要 `JAVA_LSP_ENGINE`。不要第四个 live daemon。canary `:38457`。不要把 `fat-service` 加回 pins。生产切流仍须 **P3-T4 证据 + 用户确认** 后 `./install-runtime.sh`。回滚：`"$HOME/Library/Application Support/codex-java-lsp-mcp/daemonctl.sh" rollback-release`。
+
+pin：`lishuedu`、`exam-parent-v3`、`cipherlink`、`lishu-v2`。探针：`scripts/probe-daemon-acceptance.mjs`（D2/D4/D6 + P2-G2/G5/G6）。手册：`docs/deep/codex-java-lsp-mcp-index-on-disk-ai-execution-manual-2026-09-07.md`。
+
+隔离验证：`PATH="/opt/homebrew/bin:$PATH"` + `sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs`。
 
 ## 当前任务
 

@@ -1,0 +1,13 @@
+┌─────────┬──────────────────┬───────────┬───────────┬──────────┬──────────┬──────────────┬──────────┬────────┐
+│ (index) │ project          │ oldRecall │ newRecall │ oldPRead │ newPRead │ newRReadMust │ p95Ratio │ gate   │
+├─────────┼──────────────────┼───────────┼───────────┼──────────┼──────────┼──────────────┼──────────┼────────┤
+│ 0       │ 'lishuedu'       │ '0.7986'  │ '0.7986'  │ '0.7217' │ '0.7217' │ '0.9250'     │ '1.061'  │ 'FAIL' │
+│ 1       │ 'cipherlink'     │ '0.8390'  │ '0.8390'  │ '0.6633' │ '0.6633' │ '0.9100'     │ '1.248'  │ 'FAIL' │
+│ 2       │ 'exam-parent-v3' │ '0.6970'  │ '0.6970'  │ '0.6000' │ '0.6000' │ '0.8800'     │ '1.261'  │ 'FAIL' │
+└─────────┴──────────────────┴───────────┴───────────┴──────────┴──────────┴──────────────┴──────────┴────────┘
+summary: undefined
+
+summary: /var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/grok-goal-74d3761dc961/implementer/p3-t4-matrix/matrix-summary.json
+MATRIX_EXIT:1
+contentDelta0: true (recall/pRead/rReadMust/estimatedTokensP50)
+absoluteFloorsFailedBothArms: true

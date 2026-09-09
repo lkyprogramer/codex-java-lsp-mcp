@@ -23,3 +23,14 @@ test("HTTP smoke accepts exactly one explicit repository selector", () => {
     "--project-id", "fixture"
   ]), /mutually exclusive/);
 });
+
+test("HTTP smoke requires --url and does not read JAVA_LSP_HTTP_URL", () => {
+  const previous = process.env.JAVA_LSP_HTTP_URL;
+  process.env.JAVA_LSP_HTTP_URL = "http://127.0.0.1:1/mcp";
+  try {
+    assert.throws(() => parseSmokeArguments([]), /--url is required/);
+  } finally {
+    if (previous === undefined) delete process.env.JAVA_LSP_HTTP_URL;
+    else process.env.JAVA_LSP_HTTP_URL = previous;
+  }
+});

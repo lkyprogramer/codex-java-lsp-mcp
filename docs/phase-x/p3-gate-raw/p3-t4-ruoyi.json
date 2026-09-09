@@ -1,0 +1,75 @@
+{
+  "schemaVersion": "f-f1-ruoyi-observation/v1",
+  "dated": "2026-09-07",
+  "card": "F1",
+  "repo": "ruoyi-vue-pro",
+  "evaluationSplit": "tuning",
+  "holdoutInspected": false,
+  "holdoutSkipped": 12,
+  "tuningCount": 28,
+  "runs": 5,
+  "layoutProfile": "maven-reactor",
+  "deadlineMs": 30000,
+  "old": {
+    "recall": 0.7482142857142859,
+    "pRead": 0.2976190476190475,
+    "rReadMust": 0.5383503401360543,
+    "RangeLineRecall": 0.35258194186765596,
+    "estimatedTokensP50": 2562,
+    "scenarios": 28
+  },
+  "new": {
+    "recall": 0.7482142857142859,
+    "pRead": 0.2976190476190475,
+    "rReadMust": 0.5383503401360543,
+    "RangeLineRecall": 0.35258194186765596,
+    "estimatedTokensP50": 2562,
+    "scenarios": 28
+  },
+  "caches": {
+    "old": {
+      "cacheDir": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oLNzyf/f1-ruoyi-work/old-cache",
+      "sqliteBytes": 0,
+      "snapshotBytes": 21188212,
+      "populated": true
+    },
+    "new": {
+      "cacheDir": "/var/folders/yt/10k_hqkn30x18d7lbn28_gnc0000gn/T/codex-java-lsp-isolated-validation-oLNzyf/f1-ruoyi-work/new-cache",
+      "sqliteBytes": 215199744,
+      "snapshotBytes": 0,
+      "populated": true
+    }
+  },
+  "prepared": {
+    "old": {
+      "state": "READY",
+      "files": 6447,
+      "snapshotBytes": 21188212,
+      "lastError": null,
+      "coverageRoots": 66,
+      "pendingBackground": 0
+    },
+    "new": {
+      "state": "READY",
+      "files": 6447,
+      "snapshotBytes": 0,
+      "lastError": null,
+      "coverageRoots": 66,
+      "pendingBackground": 0
+    }
+  },
+  "identity": {
+    "identical": true,
+    "diffs": [],
+    "unmeasured": []
+  },
+  "token": {
+    "drop": 0,
+    "pass": false,
+    "gate": 0.2
+  },
+  "decision": "TOKEN_FAIL",
+  "taskSuccess": "UNMEASURED",
+  "mergeToMain": false,
+  "note": "Quality identity held; token P50 drop missed the 20% F1 door."
+}

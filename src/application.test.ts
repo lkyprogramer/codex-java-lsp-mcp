@@ -264,7 +264,7 @@ test("HTTP application prewarms pinned repos serially and skips unpinned or dupl
   await application.close();
 });
 
-test("HTTP application hydrates JAVA_LSP_PREWARM_HOT aliases and logs unknown ones", async () => {
+test("HTTP application prewarms pinned aliases without a hydrate hot-set", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "java-lsp-prewarm-hot-"));
   await writeFile(path.join(dir, "projects.json"), JSON.stringify({
     aliases: [
@@ -278,8 +278,6 @@ test("HTTP application hydrates JAVA_LSP_PREWARM_HOT aliases and logs unknown on
   console.error = (...args: unknown[]) => {
     errors.push(args.map(String).join(" "));
   };
-  const previous = process.env.JAVA_LSP_PREWARM_HOT;
-  process.env.JAVA_LSP_PREWARM_HOT = "lishuedu,nope";
   const application = new JavaLspApplication({
     transportMode: "streamable_http",
     projectsConfigPath: path.join(dir, "projects.json"),
@@ -290,8 +288,8 @@ test("HTTP application hydrates JAVA_LSP_PREWARM_HOT aliases and logs unknown on
       initialize: async () => undefined,
       shutdownAll: async () => undefined,
       forceTerminateOwnedJdtls: async () => undefined,
-      prewarmRepo: async (selector: { projectId?: string }, options?: { hydrate?: boolean }) => {
-        flags.push({ id: selector.projectId, hydrate: options?.hydrate });
+      prewarmRepo: async (selector: { projectId?: string }) => {
+        flags.push({ id: selector.projectId });
       }
     } as never
   });
@@ -300,17 +298,14 @@ test("HTTP application hydrates JAVA_LSP_PREWARM_HOT aliases and logs unknown on
     await application.initialize();
     await application.startPinnedRepoPrewarm();
     assert.deepEqual(flags, [
-      { id: "lishuedu", hydrate: true },
-      { id: "cipherlink", hydrate: false }
+      { id: "lishuedu" },
+      { id: "cipherlink" }
     ]);
-    assert.ok(errors.some(line => /unknown JAVA_LSP_PREWARM_HOT alias nope/.test(line)));
-    assert.ok(errors.some(line => /pinned repo prewarm begin lishuedu hydrate=true/.test(line)));
+    assert.ok(errors.some(line => /pinned repo prewarm begin lishuedu/.test(line)));
     assert.ok(errors.some(line => /pinned repo prewarm finished pins=2/.test(line)));
     await application.close();
   } finally {
     console.error = originalError;
-    if (previous === undefined) delete process.env.JAVA_LSP_PREWARM_HOT;
-    else process.env.JAVA_LSP_PREWARM_HOT = previous;
   }
 });
 

@@ -106,6 +106,7 @@ test("stable daemon runner resolves only the current immutable release", async t
   await chmod(path.join(fixture, "run-daemon.sh"), 0o755);
   await run(path.join(fixture, "run-daemon.sh"), [], { NODE_BIN: fakeNode, JAVA_LSP_HTTP_PORT: "38456" });
   assert.deepEqual((await readFile(capture, "utf8")).trim().split("\n"), [
+    "--disable-warning=ExperimentalWarning",
     "--max-old-space-size=768",
     path.join(fixture, "current", "dist", "http-server.js")
   ]);

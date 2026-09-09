@@ -1,0 +1,35 @@
+{
+  "health": {
+    "samples": 12,
+    "timeouts": 0,
+    "maxMs": 2.319874999999996,
+    "p99Ms": 2.319874999999996
+  },
+  "pid": "10690",
+  "d6": {
+    "elapsedMs": 32.08966700000002,
+    "isError": false,
+    "toolFail": false,
+    "errorText": ""
+  },
+  "d4": {
+    "shortElapsedMs": 29.955875000000106,
+    "shortError": false,
+    "retryElapsedMs": 27.761749999999665,
+    "retryError": false
+  },
+  "g2": {
+    "elapsedMs": 81.16975000000002,
+    "toolFail": false
+  },
+  "g5": {
+    "rssAfterQueryMiB": 159.90625
+  },
+  "gates": {
+    "D2": true,
+    "D4": true,
+    "D6": true,
+    "P2-G2": true,
+    "P2-G5": true
+  }
+}

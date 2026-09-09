@@ -1,4 +1,6 @@
+import type { ContextContract } from "../context-engine/context-contract.js";
 import type { SourceRange } from "../runtime/source-range.js";
+import type { MyBatisMapperResourceFacts } from "./mybatis-types.js";
 export type { SourcePosition, SourceRange } from "../runtime/source-range.js";
 
 export type JavaSourceSet = "main" | "test" | "generated" | "unknown";
@@ -202,39 +204,7 @@ export type MyBatisResourceCoverage = {
   failedFiles: number;
 };
 
-/** Task 21a diagnostic summary of the OPEN-time sibling-worktree seed attempt, if any. */
-export type WorktreeSeedStatus = {
-  attempted: boolean;
-  sourceRepoHash?: string;
-  reusedFiles: number;
-  dirtyFiles: number;
-  relinkFiles: number;
-  droppedCrossFileEdges: number;
-  droppedFrameworkEdges: number;
-  manifestValidationMs: number;
-  /** Files actually passed through the target's post-seed reconciliation sweep. */
-  deltaParsedFiles: number;
-  /** Task 28 Slice C: MyBatis resources reused (content-hash matched) vs. left for the normal post-seed sweep to re-derive. */
-  reusedResources: number;
-  dirtyResources: number;
-  /** How many sibling cache directories findCandidate() scanned, regardless of eligibility (V3.2-19). */
-  cacheDirsScanned: number;
-  /** Of those scanned, how many held a snapshot that passed every eligibility check (V3.2-19). */
-  eligibleSnapshots: number;
-  fingerprintMatched?: boolean;
-  metaMissing?: number;
-  selfSkip?: number;
-  familyMismatch?: number;
-  identityMismatch?: number;
-  coverageIncomplete?: number;
-  /** Decompress, pre-load scan, and publication-boundary re-scan phase timings (V3.2-19). */
-  candidateDecompressMs: number;
-  initialManifestScanMs: number;
-  finalManifestScanMs: number;
-  completion: "NOT_ATTEMPTED" | "SEEDED_DEGRADED" | "RECONCILED_COMPLETE" | "NO_VALID_SOURCE" | "FAILED";
-};
-
-/** Observable publication state for the rebuildable JavaIndex snapshot. */
+/** Observable publication state for a durable index, if a caller still publishes one. */
 export type JavaIndexSnapshotStatus =
   | { state: "EMPTY" }
   | {
@@ -254,8 +224,53 @@ export type JavaIndexSnapshotStatus =
       failure: "MANIFEST_CHANGED" | "WRITE_FAILED";
     };
 
+export type JavaIndexWorktreeIdentity = {
+  repoRoot: string;
+  repoHash: string;
+  familyHash?: string;
+  isLinkedWorktree: boolean;
+};
+
+export type JavaIndexRefreshPriority = "ACTIVE_ANCHOR";
+
+export type GraphDigest = {
+  digest: string;
+  generation: number;
+  nodes: number;
+  edges: number;
+};
+
+export type GraphReachable = {
+  files: string[];
+  hops: Record<string, number>;
+};
+
+export type ContextGraphResult = {
+  resolvedIntent: string;
+  coverage: "COMPLETE" | "PARTIAL";
+  bundles: Array<{
+    path: string;
+    hops: number;
+    estimatedTokens: number;
+    provingPath: Array<{ kind: string; fromId: string; toId: string }>;
+    closedObligations: string[];
+  }>;
+  unresolved: Array<{ id: string; role: string }>;
+  metrics: { expansions: number; hops: number; estimatedTokens: number };
+  contract?: ContextContract;
+};
+
+export type MyBatisResourceByNamespaceBatch = Array<{ namespace: string; resource?: MyBatisMapperResourceFacts }>;
+
+export type JavaIndexDbStatus = { bytes: number; cacheKb: number };
+export type JavaIndexBuilderStatus = {
+  state: "idle" | "busy" | "cold-building" | "absent";
+  pid?: number;
+  queued: number;
+};
+
 export type JavaIndexStatus = {
-  state: "NEW" | "OPENING" | "READY" | "DEGRADED" | "CLOSED";
+  state: "NEW" | "OPENING" | "READY" | "DEGRADED" | "CLOSED" | "BUILDING";
   indexedGeneration: number;
   files: number;
   types: number;
@@ -266,18 +281,12 @@ export type JavaIndexStatus = {
   snapshot?: JavaIndexSnapshotStatus;
   pendingForeground: number;
   pendingBackground: number;
-  /** Own-snapshot manifest validation still running after OPEN returned. */
   snapshotVerificationPending?: boolean;
   coverage: SourceRootCoverage[];
   resourceCoverage: MyBatisResourceCoverage[];
   lastError?: string;
-  worktreeSeed?: WorktreeSeedStatus;
-  /** Worker has unloaded facts/parse trees; next fact query reheats from v4. */
-  hibernated?: boolean;
-  /** Rest-segment facts are in the store. Absent on older workers. */
-  factsHydrated?: boolean;
-  /** Worker-local heapUsed, published on HIBERNATE (S4). */
-  heapUsedBytes?: number;
+  db?: JavaIndexDbStatus;
+  builder?: JavaIndexBuilderStatus;
 };
 
 export type JavaTypeLookupResult =
