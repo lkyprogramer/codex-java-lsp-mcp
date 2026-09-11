@@ -72,6 +72,14 @@ launchctl enable "gui/$(id -u)/com.lky.codex-java-lsp-mcp"
 
 `daemonctl.sh stop` 只卸当前会话；下次登录仍会按 `RunAtLoad` 拉起，除非 `launchctl disable`。
 
+## 48h 观察（P3-G5）
+
+- 结论：**pass**。`03f5a4154081` pid 15387 `runs=1` 连续 **49.7h**（采到 2026-09-11T04:58Z）。
+- 8 针 6h 采样全部 ok：IOD 后 heap FATAL/recycle/hibernate/compact = 0，watchdog = 0，pin WAL = 0。
+- 空闲 RSS 26–76 MiB；干活时 3 个 JDT 把 daemon 抬到 172.5 MiB，收回后 46 MiB。
+- 表：`docs/phase-x/p3-gate-raw/P3-G5-samples.md`。原始 JSON：`~/Library/Logs/codex-java-lsp-mcp/samples/`。
+- caveat：第一次 IOD 安装（2026-09-08T03:21Z）被 WAL 截断重装切开；48h 连续指当前进程。6h 采样未每针打 `java_impact`。
+
 ## 观察口径（非阻塞）
 
 - `/healthz` `ok`，无第四端口，plist 无 `JAVA_LSP_ENGINE`
