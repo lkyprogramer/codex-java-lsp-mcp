@@ -10,6 +10,7 @@ import {
   buildImpactDetail,
   buildToolCounter,
   createImpactTelemetry,
+  noteTelemetryHydratePhases,
   noteTelemetryRepoHash,
   recordToolInvocation,
   resetImpactTelemetryForTests,
@@ -147,6 +148,32 @@ test("context.repoHash survives await inside the telemetry request scope", async
   assert.equal(row.repoHash, "deadbeef1234");
 });
 
+test("siblingCopy hydrate phase is a real cold path", () => {
+  const row = withTelemetryRequestScope(() => {
+    noteTelemetryHydratePhases({ siblingCopy: 2700, reconcileWait: 80 });
+    return buildImpactDetail({
+      args: {},
+      value: { metrics: { phaseMs: { query: 10 } } },
+      elapsedMs: 2800,
+      error: false
+    });
+  });
+  assert.equal(row.coldPath, true);
+  assert.equal(row.coldPathHeuristic, undefined);
+});
+
+test("impact errors record errorCode", () => {
+  const row = buildImpactDetail({
+    args: {},
+    value: {},
+    elapsedMs: 12,
+    error: true,
+    errorCode: "INDEX_PARTIAL"
+  });
+  assert.equal(row.error, true);
+  assert.equal(row.errorCode, "INDEX_PARTIAL");
+});
+
 test("elapsedMs over 2000 without hydrate phases is a heuristic cold path", () => {
   const row = buildImpactDetail({
     args: {},
@@ -162,8 +189,23 @@ test("elapsedMs over 2000 without hydrate phases is a heuristic cold path", () =
 test("non-impact tools emit only the one-line counter", () => {
   const row = buildToolCounter({ tool: "java_status", elapsedMs: 8.2, ok: true, now: new Date("2026-08-24T15:00:00.000Z") });
   assert.deepEqual(Object.keys(row).sort(), ["elapsedMs", "ok", "tool", "ts"]);
+});
+
+test("java_status counter can include start and repoHash", () => {
+  const row = withTelemetryRequestScope(() => {
+    noteTelemetryRepoHash("abc123abc123");
+    return buildToolCounter({
+      tool: "java_status",
+      elapsedMs: 20,
+      ok: true,
+      start: true,
+      repoHash: "abc123abc123"
+    });
+  });
+  assert.equal(row.start, true);
+  assert.equal(row.repoHash, "abc123abc123");
   assert.equal(row.ok, true);
-  assert.equal(row.elapsedMs, 8);
+  assert.equal(row.elapsedMs, 20);
 });
 
 test("record writes JSONL under an isolated dir and JAVA_LSP_TELEMETRY=0 writes nothing", async () => {

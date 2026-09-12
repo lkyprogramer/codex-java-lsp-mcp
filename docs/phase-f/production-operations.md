@@ -17,10 +17,10 @@
 | 行为 | 实际 |
 |---|---|
 | 身份 | `repoHash` = 规范化 worktree 路径哈希。一 root 一 DB。 |
-| 同 Git family | `familyHash` = common-dir 哈希。新 worktree 无库时 `VACUUM INTO` sibling，再 reconcile。 |
+| 同 Git family | `familyHash` = common-dir 哈希。新 worktree 无库时异步 `VACUUM INTO` sibling，改写 `meta.repoRoot`，并等 reconcile 完成再对外 READY。 |
 | 未提交 `.env` / `.sdkmanrc` | 不进 JavaIndex。JDT JDK 优先已提交的 gradle/maven toolchain。 |
 | `git worktree add` 刷掉全部 `.java` mtime | 比 `content_hash`；相同则只戳时间戳，不整树 parse。 |
-| 空闲 | 关 SQLite 连接（默认 10 min），**不删库、不 hydrate**。 |
+| 空闲 | 关 SQLite 连接（默认 10 min）。非 pin worktree 再过 JDT idle TTL 会 `shutdown` 释放 runtime lease（库文件留下，再开直接 reload）。**不 hydrate。** |
 | WAL | 写连接 close / 只读 idle drop 后 `wal_checkpoint(TRUNCATE)`；`journal_size_limit=64MiB`。不要手删 `*-wal`。 |
 | `JAVA_LSP_INDEX_DIR` | 若设成全局目录，所有 root 会抢同一个 `index.sqlite`。**生产 plist 不要设。** |
 
@@ -45,7 +45,7 @@ JDT **默认不随 daemon / `java_status` / `java_impact(fast)` 启动。**
 | 空闲仓的 `workspace/` | 只影响下次 JDT import |
 | `logs/`、`telemetry/`、`cold-build-metrics.json` | 可删 |
 
-Janitor 每 6 小时：L0 退役 gz；L1 非 pin 且 `lastRequestAt` 超 2 天或路径已死；L2 非 pin 超 48 目录 / 6 GiB。`lspEnabled` pin 和活 runtime **永不因 TTL 删除**。先看再删：
+Janitor 每 6 小时：L0 退役 gz；回收死 pid 的 `leases/runtime` 目录；L1 非 pin 且 `lastRequestAt` 超 2 天或路径已死；L2 非 pin 超 48 目录 / 6 GiB。`lspEnabled` pin 永不因 TTL 删除。活 JDT / 未 idle 退役的 runtime lease 仍 skip。非 pin 空闲后会放 lease，L1/L2 才能收盘。先看再删：
 
 ```bash
 npm run cache:harvest

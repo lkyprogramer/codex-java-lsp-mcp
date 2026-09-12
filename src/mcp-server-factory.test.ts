@@ -174,7 +174,8 @@ test("register wrapper records a counter line without changing java_status bytes
     assert.equal(line.tool, "java_status");
     assert.equal(typeof line.elapsedMs, "number");
     assert.equal(line.ok, true);
-    assert.deepEqual(Object.keys(line).sort(), ["elapsedMs", "ok", "tool", "ts"]);
+    assert.deepEqual(Object.keys(line).sort(), ["elapsedMs", "ok", "start", "tool", "ts"]);
+    assert.equal(line.start, false);
 
     process.env.JAVA_LSP_TELEMETRY = "0";
     resetImpactTelemetryForTests();

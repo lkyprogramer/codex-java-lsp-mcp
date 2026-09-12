@@ -14,6 +14,7 @@ import { javaRuntime, runtimeSchema } from "./tools/runtime.js";
 import { isDiagnosticDetail } from "./tools/shared.js";
 import { javaStatus, statusSchema, summarizeResourceStatus } from "./tools/status.js";
 import { javaSymbol, symbolSchema } from "./tools/symbol.js";
+import { logToolFailure } from "./log.js";
 import { noteTelemetryRepoHash, recordToolInvocation, withTelemetryRequestScope } from "./telemetry/impact-telemetry.js";
 
 export type McpTransportMode = "stdio" | "streamable_http";
@@ -215,8 +216,10 @@ export function createMcpServer(
             args,
             value: undefined,
             elapsedMs: performance.now() - started,
-            error: true
+            error: true,
+            failure: error
           });
+          logToolFailure(name, error);
           throw error;
         }
       }));

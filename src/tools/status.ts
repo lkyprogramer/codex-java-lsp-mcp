@@ -84,7 +84,12 @@ export async function javaStatus(
       };
       return isDiagnosticDetail(_args.detail) ? disabled : disabledSummary(disabled);
     }
-    await context.session.ensureStarted(request?.budget);
+    try {
+      await context.session.ensureStarted(request?.budget);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!/deadline exceeded|timed out/i.test(message)) throw error;
+    }
   }
   const sessionStatus = context.session.status();
   const javaIndex = await context.javaIndexClient?.status({ budget: request?.budget }).catch(

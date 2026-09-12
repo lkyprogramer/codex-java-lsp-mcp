@@ -12,6 +12,7 @@ import { readRuntimeBuild } from "./build-info.js";
 import { HttpServerLifecycle, type HttpServerLifecycleSnapshot } from "./http-server-lifecycle.js";
 import { createMcpServer } from "./mcp-server-factory.js";
 import { installProcessCrashMarkers } from "./process-crash-markers.js";
+import { installConsoleTimestamps } from "./log.js";
 
 export const HTTP_LOOPBACK_HOST = "127.0.0.1";
 export const HTTP_BODY_LIMIT_BYTES = 100 * 1024;
@@ -376,6 +377,7 @@ function closeServer(server: Server): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  installConsoleTimestamps();
   installProcessCrashMarkers("http-daemon");
   const daemon = new JavaLspHttpServer();
   const address = await daemon.start();
