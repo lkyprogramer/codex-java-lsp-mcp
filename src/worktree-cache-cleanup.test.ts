@@ -762,6 +762,29 @@ test("dry-run reports removals without deleting directories or retired files", a
   }
 });
 
+test("cleanupStaleWorktreeCaches removes dead runtime lease directories", async () => {
+  const cacheBase = await mkdtemp(path.join(tmpdir(), "java-lsp-lease-gc-"));
+  const leaseBase = path.join(cacheBase, "leases");
+  const deadDir = path.join(leaseBase, "runtime", "familydead", "repodead", "token-dead");
+  const liveDir = path.join(leaseBase, "runtime", "familylive", "repolive", "token-live");
+  try {
+    await mkdir(deadDir, { recursive: true });
+    await mkdir(liveDir, { recursive: true });
+    await writeFile(path.join(deadDir, "metadata.json"), JSON.stringify({ pid: 1, ownerToken: "dead" }));
+    await writeFile(path.join(liveDir, "metadata.json"), JSON.stringify({ pid: process.pid, ownerToken: "live" }));
+    const result = cleanupStaleWorktreeCaches({
+      cacheBase,
+      leaseBase,
+      isAlive: pid => pid === process.pid
+    });
+    assert.equal(existsSync(deadDir), false);
+    assert.equal(existsSync(liveDir), true);
+    assert.ok((result.reclaimedLeases ?? 0) >= 1);
+  } finally {
+    await rm(cacheBase, { recursive: true, force: true });
+  }
+});
+
 async function writeMeta(cacheBase: string, name: string, meta: Record<string, unknown>): Promise<void> {
   const dir = path.join(cacheBase, name);
   await mkdir(dir, { recursive: true });

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { JavaLspApplication } from "./application.js";
+import { repoHash } from "./path-utils.js";
 import { warmupInstalledJdks } from "./project-jdk.js";
 
 test("JavaLspApplication initialize opens the runtime lease store", async () => {
@@ -179,7 +180,7 @@ test("JavaLspApplication runs cache janitor periodically with retained roots and
     cacheJanitorIntervalMs: 15,
     cleanup: options => {
       cleanupCalls += 1;
-      cleanupRoots.push([...(options.protectedRepoRoots || [])]);
+      cleanupRoots.push([...(options.protectedCacheDirNames || [])]);
       return { scanned: 0, removed: 0, skipped: 0, failures: 0, removedDirs: [] };
     }
   });
@@ -187,7 +188,7 @@ test("JavaLspApplication runs cache janitor periodically with retained roots and
   await application.initialize();
   await new Promise(resolve => setTimeout(resolve, 55));
   assert.ok(cleanupCalls >= 3, `expected startup plus periodic cleanup, got ${cleanupCalls}`);
-  assert.ok(cleanupRoots.every(roots => roots.includes("/repo-retained")));
+  assert.ok(cleanupRoots.every(dirs => dirs.includes(repoHash("/repo-retained"))));
 
   await application.drain(100);
   const callsAtDrain = cleanupCalls;

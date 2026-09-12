@@ -139,6 +139,8 @@ type RuntimeManagerOptions = {
   requestTimeoutMs: number;
   maxRetainedStoppedRepos: number;
   transportMode: RepoOwnerTransport;
+  /** Pin roots keep their index runtime after JDT idle-stop. */
+  isProtectedRepo?: (repoRoot: string) => boolean;
 };
 
 export class RepoRuntimeManager {
@@ -316,7 +318,11 @@ export class RepoRuntimeManager {
   }
 
   retainedRepoRoots(): Set<string> {
-    return new Set([...this.runtimes.keys()]);
+    return new Set(
+      [...this.runtimes.entries()]
+        .filter(([, entry]) => entry.stoppedAt === undefined)
+        .map(([repoRoot]) => repoRoot)
+    );
   }
 
   async forceTerminateOwnedJdtls(deadlineMs = 1000): Promise<void> {
@@ -1093,11 +1099,23 @@ export class RepoRuntimeManager {
     if (entry.refCount !== 0 || entry.stoppedAt !== undefined) return;
     if (this.options.idleTtlMs > 0) {
       entry.idleTimer = setTimeout(() => {
-        if (entry.refCount === 0 && entry.lspReservation !== "NONE") {
-          void this.stopEntry(entry);
-        }
+        if (entry.refCount !== 0 || entry.stoppedAt !== undefined) return;
+        void this.retireIdleEntry(entry);
       }, this.options.idleTtlMs);
       entry.idleTimer.unref?.();
+    }
+  }
+
+  private async retireIdleEntry(entry: RuntimeEntry): Promise<void> {
+    try {
+      if (entry.lspReservation !== "NONE") {
+        await this.stopEntry(entry);
+      }
+      if (entry.refCount !== 0 || entry.stoppedAt !== undefined) return;
+      if (this.options.isProtectedRepo?.(entry.context.repoRoot)) return;
+      await this.shutdown(entry.context.repoRoot);
+    } catch {
+      // Idle retirement must not throw into the timer.
     }
   }
 
@@ -1127,6 +1145,9 @@ export class RepoRuntimeManager {
     try {
       if (victim.lspReservation !== "NONE") {
         await this.stopEntry(victim);
+      }
+      if (victim.refCount === 0 && !this.options.isProtectedRepo?.(victim.context.repoRoot)) {
+        await this.shutdown(victim.context.repoRoot);
       }
     } finally {
       this.relievingPressure = false;

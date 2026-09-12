@@ -60,7 +60,10 @@ export class JavaLspApplication {
     });
     this.runtimes = options.runtimes ?? new RepoRuntimeManager(
       this.resolver,
-      { transportMode: this.transportMode },
+      {
+        transportMode: this.transportMode,
+        isProtectedRepo: root => this.lspEnabledPinRoots().has(canonicalPath(root))
+      },
       undefined,
       options.ownership ?? new RepoOwnershipManager({ transport: this.transportMode })
     );
@@ -273,7 +276,7 @@ export class JavaLspApplication {
     try {
       const retained = this.retainedRepoRoots();
       return this.cleanup({
-        protectedRepoRoots: this.pinRepoRoots(retained),
+        protectedRepoRoots: this.lspEnabledPinRoots(),
         protectedCacheDirNames: this.activeCacheDirNames(retained),
         transport: this.transportMode
       });
@@ -288,8 +291,8 @@ export class JavaLspApplication {
     return typeof runtimes.retainedRepoRoots === "function" ? runtimes.retainedRepoRoots() : new Set();
   }
 
-  private pinRepoRoots(retained: ReadonlySet<string>): Set<string> {
-    const pins = new Set<string>([...retained].map(root => canonicalPath(root)));
+  private lspEnabledPinRoots(): Set<string> {
+    const pins = new Set<string>();
     for (const alias of this.registry.aliases()) {
       if (alias.lspEnabled) {
         pins.add(canonicalPath(alias.root));

@@ -80,6 +80,7 @@ export type WorktreeCacheCleanupResult = {
   failures: number;
   removedDirs: string[];
   reclaimedFiles?: number;
+  reclaimedLeases?: number;
 };
 
 export type WorktreeCacheCleanupFailure = {
@@ -178,7 +179,8 @@ export function cleanupStaleWorktreeCaches(options: WorktreeCacheCleanupOptions 
     skipped: 0,
     failures: 0,
     removedDirs: [],
-    reclaimedFiles: 0
+    reclaimedFiles: 0,
+    reclaimedLeases: 0
   };
   const base = options.cacheBase ?? repoCacheBase();
   if (!existsSync(base)) {
@@ -203,6 +205,8 @@ export function cleanupStaleWorktreeCaches(options: WorktreeCacheCleanupOptions 
     transport: options.transport ?? "stdio",
     buildSha: "cache-janitor"
   });
+
+  result.reclaimedLeases = reclaimDeadRuntimeLeases(leaseBase, isAlive, dryRun);
 
   const l1Removes: RemovalTarget[] = [];
   const unpinnedKeep: RemovalTarget[] = [];
@@ -431,6 +435,78 @@ function hasActiveRuntimeOwner(
     }
   }
   return meta.ownerToken === undefined && Boolean(meta.ownerPid && isAlive(meta.ownerPid));
+}
+
+export function reclaimDeadRuntimeLeases(
+  leaseBase: string,
+  isAlive: (pid: number) => boolean = isProcessAlive,
+  dryRun = false
+): number {
+  const runtimeRoot = path.join(leaseBase, "runtime");
+  if (!existsSync(runtimeRoot)) return 0;
+  let removed = 0;
+  let families: string[];
+  try {
+    families = readdirSync(runtimeRoot, { withFileTypes: true })
+      .filter(entry => entry.isDirectory())
+      .map(entry => entry.name);
+  } catch {
+    return 0;
+  }
+  for (const family of families) {
+    const familyDir = path.join(runtimeRoot, family);
+    let repos: string[];
+    try {
+      repos = readdirSync(familyDir, { withFileTypes: true })
+        .filter(entry => entry.isDirectory())
+        .map(entry => entry.name);
+    } catch {
+      continue;
+    }
+    for (const repo of repos) {
+      const repoDir = path.join(familyDir, repo);
+      let tokens: string[];
+      try {
+        tokens = readdirSync(repoDir, { withFileTypes: true })
+          .filter(entry => entry.isDirectory())
+          .map(entry => entry.name);
+      } catch {
+        continue;
+      }
+      for (const token of tokens) {
+        const tokenDir = path.join(repoDir, token);
+        let pid: number | undefined;
+        try {
+          const owner = JSON.parse(readFileSync(path.join(tokenDir, "metadata.json"), "utf8")) as { pid?: unknown };
+          pid = typeof owner.pid === "number" ? owner.pid : undefined;
+        } catch {
+          pid = undefined;
+        }
+        const live = pid !== undefined && isAlive(pid);
+        if (live) continue;
+        removed += 1;
+        if (!dryRun) {
+          try {
+            rmSync(tokenDir, { recursive: true, force: true });
+          } catch {
+            // Best-effort lease GC.
+          }
+        }
+      }
+      pruneEmptyDir(repoDir, dryRun);
+    }
+    pruneEmptyDir(familyDir, dryRun);
+  }
+  return removed;
+}
+
+function pruneEmptyDir(dir: string, dryRun: boolean): void {
+  if (dryRun) return;
+  try {
+    if (readdirSync(dir).length === 0) rmSync(dir, { recursive: true, force: true });
+  } catch {
+    // Best-effort.
+  }
 }
 
 function isProcessAlive(pid: number): boolean {

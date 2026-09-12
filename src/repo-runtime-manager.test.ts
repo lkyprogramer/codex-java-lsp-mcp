@@ -1598,7 +1598,8 @@ test("idle TTL stops JDT without closing the Java index client", async () => {
   const manager = new RepoRuntimeManager(fakeResolver(), {
     idleTtlMs: 40,
     pressureIntervalMs: 0,
-    requestTimeoutMs: 1000
+    requestTimeoutMs: 1000,
+    isProtectedRepo: () => true
   }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
     fakeCoordination(), new NoopCrossProcessLeaseStore());
   await manager.withContext({ repoRoot: "/repo-a" }, async context => {
@@ -1607,6 +1608,23 @@ test("idle TTL stops JDT without closing the Java index client", async () => {
   await delay(120);
   assert.equal(sessions.get("/repo-a")?.stops, 1);
   assert.equal(javaIndex.calls.includes("close"), false);
+  await manager.shutdownAll();
+});
+
+test("idle TTL shuts down an unprotected worktree runtime and closes the index client", async () => {
+  const sessions = new Map<string, FakeSession>();
+  const javaIndex = new RecordingJavaIndex(() => 0);
+  const manager = new RepoRuntimeManager(fakeResolver(), {
+    idleTtlMs: 40,
+    pressureIntervalMs: 0,
+    requestTimeoutMs: 1000,
+    isProtectedRepo: () => false
+  }, resolved => ({ ...fakeContext(resolved, sessions), javaIndexClient: javaIndex as never }),
+    fakeCoordination(), new NoopCrossProcessLeaseStore());
+  await manager.withContext({ repoRoot: "/repo-wt" }, async () => "ok");
+  await delay(120);
+  assert.equal(javaIndex.calls.includes("close"), true);
+  assert.equal(manager.retainedRepoRoots().has("/repo-wt"), false);
   await manager.shutdownAll();
 });
 
