@@ -17,6 +17,7 @@ export function vacuumInto(sourcePath: string, destPath: string): void {
   mkdirSync(dirname(destPath), { recursive: true });
   const db = new DatabaseSync(sourcePath, { readOnly: true });
   try {
+    db.exec("PRAGMA busy_timeout=5000");
     db.exec(`VACUUM INTO '${destPath}'`);
   } finally {
     db.close();

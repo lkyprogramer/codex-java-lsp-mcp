@@ -1,7 +1,8 @@
-import { spawnSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import { existsSync, mkdirSync, renameSync, rmSync, statSync } from "node:fs";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import { probeLayout } from "../../layout-probe.js";
 import type { LayoutContext } from "../../layout-probe.js";
 import { JavaIntelligenceError } from "../../runtime/intelligence-error.js";
@@ -29,9 +30,12 @@ import type {
   StaticEdgeKind
 } from "../index-types.js";
 import type { MyBatisMapperResourceFacts } from "../mybatis-types.js";
-import { readIndexCounts, readMeta } from "../../index-builder/progress.js";
+import { readIndexCounts, readMeta, writeBuildProgress, writeMeta } from "../../index-builder/progress.js";
 import { BuilderSupervisor, type BuilderSupervisorJob } from "../builder-supervisor.js";
-import { close as closeDb, compactWalFile, DEFAULT_SQLITE_CACHE_KB, openIndexDb, prepareCached, type IndexDatabase } from "./driver.js";
+import { noteTelemetryHydratePhases } from "../../telemetry/impact-telemetry.js";
+import { close as closeDb, compactWalFile, DEFAULT_SQLITE_CACHE_KB, openIndexDb, prepareCached, withTransaction, type IndexDatabase } from "./driver.js";
+
+const execFileAsync = promisify(execFile);
 import { SqlEntitySearch } from "./entity-search.js";
 import { SqlFactsStore } from "./facts-store.js";
 import { SqlKnowledgeGraph } from "./knowledge-graph.js";
@@ -71,6 +75,7 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
   private opened = false;
   private idleTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly connIdleMs: number;
+  private hydratePhases: Record<string, number> = {};
 
   constructor(
     private readonly repoRoot: string,
@@ -94,16 +99,25 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     try {
       if (!existsSync(this.dbPath)) {
         if (options?.siblingDbPath && existsSync(options.siblingDbPath)) {
-          this.copySibling(options.siblingDbPath);
+          this.opened = true;
+          this.lastStatus = emptyStatus("BUILDING");
+          const copied = await this.copySibling(options.siblingDbPath);
+          this.hydratePhases.siblingCopy = copied;
+          this.retargetCopiedDb();
           this.reload();
-          void this.supervisor?.submit({ kind: "reconcile", generation, changed: [], deleted: [] })
-            .then(result => {
-              if (!this.opened || this.lastStatus.state === "CLOSED") return;
+          if (this.supervisor) {
+            const waitStarted = Date.now();
+            try {
+              const result = await this.supervisor.submit({ kind: "reconcile", generation, changed: [], deleted: [] });
+              this.hydratePhases.reconcileWait = Date.now() - waitStarted;
               if (!result.ok) this.markDegraded(result.error ?? "reconcile failed");
               else this.reload();
-            })
-            .catch(error => this.markDegraded(error));
-          this.opened = true;
+            } catch (error) {
+              this.hydratePhases.reconcileWait = Date.now() - waitStarted;
+              this.markDegraded(error);
+            }
+          }
+          noteTelemetryHydratePhases(this.hydratePhases);
           return this.lastStatus;
         }
         if (this.supervisor) {
@@ -406,22 +420,40 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     };
   }
 
-  private copySibling(fromPath: string): void {
+  private async copySibling(fromPath: string): Promise<number> {
     mkdirSync(dirname(this.dbPath), { recursive: true });
     const tmp = `${this.dbPath}.copying`;
     rmSync(tmp, { force: true });
     const helper = fileURLToPath(new URL("./vacuum-into.js", import.meta.url));
-    const result = spawnSync(
-      process.execPath,
-      ["--disable-warning=ExperimentalWarning", helper, fromPath, tmp],
-      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 120_000 }
-    );
-    if (result.status !== 0 || !existsSync(tmp)) {
+    const started = Date.now();
+    try {
+      await execFileAsync(
+        process.execPath,
+        ["--disable-warning=ExperimentalWarning", helper, fromPath, tmp],
+        { timeout: 120_000 }
+      );
+    } catch (error) {
       rmSync(tmp, { force: true });
-      const detail = (result.stderr || result.stdout || `status ${result.status}`).trim().slice(0, 400);
-      throw new JavaIntelligenceError("INDEX_PARTIAL", `sibling VACUUM INTO failed: ${detail}`);
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new JavaIntelligenceError("INDEX_PARTIAL", `sibling VACUUM INTO failed: ${detail.slice(0, 400)}`);
+    }
+    if (!existsSync(tmp)) {
+      throw new JavaIntelligenceError("INDEX_PARTIAL", "sibling VACUUM INTO failed: missing output");
     }
     renameSync(tmp, this.dbPath);
+    return Date.now() - started;
+  }
+
+  private retargetCopiedDb(): void {
+    const db = openIndexDb(this.dbPath);
+    try {
+      withTransaction(db, () => {
+        writeMeta(db, "repoRoot", this.repoRoot);
+        writeBuildProgress(db, { phase: "declare", done: 1, total: 1 });
+      });
+    } finally {
+      closeDb(db);
+    }
   }
 
   private fileGeneration(inputPath: string): number {

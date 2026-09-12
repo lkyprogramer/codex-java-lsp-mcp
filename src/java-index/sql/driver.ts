@@ -54,6 +54,7 @@ export function openIndexDb(path: string, options: OpenIndexDbOptions = {}): Ind
     mkdirSync(dirname(path), { recursive: true });
   }
   const db = new DatabaseSync(path, { readOnly: options.readOnly === true });
+  db.exec(`PRAGMA busy_timeout=${DEFAULT_BUSY_TIMEOUT_MS}`);
   const cacheKb = resolveCacheKb(options.cacheKb);
   if (!options.readOnly) {
     // auto_vacuum is a create-time file setting; applying WAL first freezes it at NONE.
@@ -62,7 +63,6 @@ export function openIndexDb(path: string, options: OpenIndexDbOptions = {}): Ind
     db.exec("PRAGMA synchronous=NORMAL");
     db.exec(`PRAGMA wal_autocheckpoint=${DEFAULT_WAL_AUTOCHECKPOINT_PAGES}`);
     db.exec(`PRAGMA journal_size_limit=${DEFAULT_JOURNAL_SIZE_LIMIT_BYTES}`);
-    db.exec(`PRAGMA busy_timeout=${DEFAULT_BUSY_TIMEOUT_MS}`);
   }
   db.exec(`PRAGMA cache_size=-${cacheKb}`);
   db.exec("PRAGMA foreign_keys=ON");

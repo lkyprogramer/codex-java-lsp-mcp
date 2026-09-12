@@ -61,6 +61,7 @@ test("file database enables WAL and incremental auto_vacuum", () => {
     assert.equal(pragma(db, "cache_size"), -32768);
     assert.equal(pragma(db, "wal_autocheckpoint"), DEFAULT_WAL_AUTOCHECKPOINT_PAGES);
     assert.equal(pragma(db, "journal_size_limit"), DEFAULT_JOURNAL_SIZE_LIMIT_BYTES);
+    assert.equal((db.prepare("PRAGMA busy_timeout").get() as { timeout?: number }).timeout, 5000);
     ensureSchema(db);
     const first = prepareCached(db, "SELECT value FROM meta WHERE key='schemaVersion'");
     const second = prepareCached(db, "SELECT value FROM meta WHERE key='schemaVersion'");

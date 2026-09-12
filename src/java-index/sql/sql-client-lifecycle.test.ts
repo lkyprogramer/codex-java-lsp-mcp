@@ -221,11 +221,10 @@ for await (const line of rl) {
   const client = new SqlJavaIndexClient(repo, dest, supervisor, 5_000);
   try {
     const opened = await client.open(1, { siblingDbPath: sibling });
-    assert.ok(opened.files > 0);
-    await waitUntil(() => client.localStatus().state === "DEGRADED");
+    assert.equal(opened.state, "DEGRADED");
+    assert.match(opened.lastError ?? "", /boom|reconcile/i);
     const published = await client.status();
     assert.equal(published.state, "DEGRADED");
-    assert.match(published.lastError ?? "", /boom|reconcile/i);
   } finally {
     await client.close();
     await supervisor.stop();
@@ -234,7 +233,7 @@ for await (const line of rl) {
   }
 });
 
-test("sibling VACUUM INTO copy is opened without waiting for reconcile", async () => {
+test("sibling VACUUM INTO copy retargets repoRoot and waits for reconcile", async () => {
   const repo = await mkdtemp(path.join(tmpdir(), "iod-life-sib-"));
   await cp(fixturesRoot, repo, { recursive: true });
   const sibling = await coldDb(repo);
@@ -247,6 +246,16 @@ test("sibling VACUUM INTO copy is opened without waiting for reconcile", async (
     assert.equal(existsSync(dest), true);
     assert.ok(status.files > 0);
     assert.ok(status.db?.bytes && status.db.bytes > 0);
+    assert.equal(status.state, "READY");
+    const db = openIndexDb(dest, { readOnly: true });
+    try {
+      const root = db.prepare("SELECT value FROM meta WHERE key='repoRoot'").get() as { value?: string } | undefined;
+      assert.equal(root?.value, repo);
+      const progress = db.prepare("SELECT value FROM meta WHERE key='buildProgress'").get() as { value?: string } | undefined;
+      assert.match(progress?.value ?? "", /"phase":"declare"/);
+    } finally {
+      close(db);
+    }
   } finally {
     await client.close();
     await supervisor.stop();
