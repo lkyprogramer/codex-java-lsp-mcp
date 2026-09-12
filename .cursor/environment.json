@@ -1,0 +1,17 @@
+{
+  "name": "codex-java-lsp-mcp",
+  "install": "npm ci && npm run build",
+  "terminals": [
+    {
+      "name": "http-daemon",
+      "description": "Shared Java LSP MCP HTTP daemon on 127.0.0.1:38456 (isolated cache/ownership under $HOME/.cache/codex-java-lsp).",
+      "command": "mkdir -p \"$HOME/.cache/codex-java-lsp/cache\" \"$HOME/.cache/codex-java-lsp/ownership\" && JAVA_LSP_HTTP_PORT=38456 JAVA_LSP_CACHE_BASE=\"$HOME/.cache/codex-java-lsp/cache\" JAVA_LSP_OWNERSHIP_BASE=\"$HOME/.cache/codex-java-lsp/ownership\" npm run start:http"
+    }
+  ],
+  "ports": [
+    {
+      "name": "http-daemon",
+      "port": 38456
+    }
+  ]
+}
