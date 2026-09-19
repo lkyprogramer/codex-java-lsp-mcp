@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // input: Frozen holdout tasks, OpenAI-compatible credentials, and local java_impact via MCP stdio.
-// output: MEASURED usage and path-coverage TaskSuccess. Never invents 0 for missing usage.
+// output: MEASURED usage and a path-coverage proxy; real task outcome stays UNMEASURED until the external evaluator (T09). Never invents 0 for missing usage.
 // pos: V5R live agent-trace execute path. 112K context cap. Golden mustHit is never sent to the model.
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -230,7 +230,8 @@ export function serenaUnavailableResult(task, reason = "SERENA_MCP_COMMAND is no
     wallMs: 0,
     toolCallCount: 0,
     usage: { status: "UNMEASURED" },
-    coverage: taskSuccessFromCoverage(task.requiredContextFiles, []),
+    coverage: coverageProxy(task.requiredContextFiles, []),
+    taskOutcome: unmeasuredTaskOutcome(),
     taskSuccess: null,
     contextCapped: false,
     error: reason.slice(0, 500)
@@ -280,7 +281,11 @@ export function compactImpactForModel(result, maxChars = MAX_TOOL_RESULT_CHARS) 
   return { text, paths: collectImpactPaths(result) };
 }
 
-export function taskSuccessFromCoverage(requiredFiles, observedPaths) {
+// Path-coverage proxy: reports how many required context files were observed in
+// tool results. It is a localization signal only and NEVER establishes task
+// success; real task outcome is measured by the external evaluator (T09) and
+// stays UNMEASURED until then. Renamed from taskSuccessFromCoverage (T01).
+export function coverageProxy(requiredFiles, observedPaths) {
   const required = [...new Set((requiredFiles ?? []).map(normalizeRel))];
   const observed = new Set((observedPaths ?? []).map(normalizeRel));
   const missing = required.filter(file => !observed.has(file));
@@ -290,6 +295,34 @@ export function taskSuccessFromCoverage(requiredFiles, observedPaths) {
     success: required.length > 0 && missing.length === 0,
     missing
   };
+}
+
+// The only legal task-outcome value before the external evaluator (T09) runs.
+// A path mention or a complete coverage proxy must never promote this to PASS.
+export function unmeasuredTaskOutcome() {
+  return { status: "UNMEASURED", authority: "external-evaluator" };
+}
+
+// Fields a source-only probe report may never overwrite: live runtime identity
+// and measurement outcomes belong to their own scopes.
+export const SOURCE_REPORT_PROTECTED_FIELDS = Object.freeze([
+  "installedRuntimeSha",
+  "taskOutcome",
+  "modelUsage",
+  "scopes"
+]);
+
+// Merge a source-scope probe/coverage report into a summary without letting it
+// overwrite live runtime identity or outcome fields (T01 scope separation).
+export function mergeSourceReport(summary, sourceReport) {
+  const base = { ...(summary ?? {}) };
+  const report = { ...(sourceReport ?? {}) };
+  for (const field of SOURCE_REPORT_PROTECTED_FIELDS) delete report[field];
+  base.scopes = {
+    ...(base.scopes ?? {}),
+    sourceReport: { status: sourceReport ? "INCLUDED" : "NOT_INCLUDED" }
+  };
+  return { ...base, ...report };
 }
 
 export function parseHitFraction(text) {
@@ -537,7 +570,7 @@ export async function runLiveAgentTask({
     stopReason = "FAILED_RUNTIME";
     runtimeError = error instanceof Error ? error.message : String(error);
   }
-  const coverage = taskSuccessFromCoverage(task.requiredContextFiles, [...observedPaths]);
+  const coverage = coverageProxy(task.requiredContextFiles, [...observedPaths]);
   const unscored = stopReason === "FAILED_CONTEXT_CAP"
     || stopReason === "FAILED_RUNTIME"
     || stopReason === "SERENA_UNAVAILABLE";
@@ -550,6 +583,7 @@ export async function runLiveAgentTask({
     usage,
     coverage,
     candidatePaths: [...candidatePaths],
+    taskOutcome: unmeasuredTaskOutcome(),
     taskSuccess: unscored ? null : coverage.success,
     contextCapped: stopReason === "FAILED_CONTEXT_CAP",
     ...(runtimeError ? { error: runtimeError.slice(0, 500) } : {})
@@ -691,12 +725,20 @@ export function summarizeLiveTasks(results, {
     model,
     baseUrlHost,
     modelUsage: measuredUsage,
+    taskOutcome: unmeasuredTaskOutcome(),
     taskSuccess: {
       status: scored.length ? "MEASURED" : "UNMEASURED",
       tasks: results.length,
       scored: scored.length,
       successes,
       mean: scored.length ? successes / scored.length : null
+    },
+    scopes: {
+      fixture: { status: "NOT_RUN" },
+      function: { status: "NOT_RUN" },
+      mcp: { status: "NOT_RUN" },
+      live: { status: results.length ? "MEASURED" : "UNMEASURED", model },
+      sourceReport: { status: "NOT_INCLUDED", note: "source probe reports are recorded separately and cannot overwrite live runtime identity" }
     },
     successLayers: {
       localization: {
@@ -788,7 +830,8 @@ function runtimeFailure(task, message) {
     wallMs: 0,
     toolCallCount: 0,
     usage: { status: "UNMEASURED" },
-    coverage: taskSuccessFromCoverage(task.requiredContextFiles, []),
+    coverage: coverageProxy(task.requiredContextFiles, []),
+    taskOutcome: unmeasuredTaskOutcome(),
     taskSuccess: null,
     contextCapped: false,
     error: message.slice(0, 500)

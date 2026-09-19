@@ -27,7 +27,7 @@ import {
   selectLiveTasks,
   serenaUnavailableResult,
   summarizeLiveTasks,
-  taskSuccessFromCoverage,
+  coverageProxy,
   runLiveAgentTask
 } from "./run-agent-trace-live.mjs";
 import { mergeUsage, openaiCompatibleChat, usageFromCompletion } from "./openai-compatible-chat.mjs";
@@ -87,13 +87,57 @@ test("selectLiveTasks picks the first holdout of each project", () => {
   ]);
 });
 
+test("T01: coverage proxy is renamed and can never claim task success", async () => {
+  const mod = await import("./run-agent-trace-live.mjs");
+  assert.equal(typeof mod.coverageProxy, "function", "taskSuccessFromCoverage must be renamed to coverageProxy");
+  assert.equal(typeof mod.taskSuccessFromCoverage, "undefined", "no taskSuccessFromCoverage export may remain");
+  const hit = mod.coverageProxy(["src/A.java", "src/B.java"], ["src/A.java", "src/B.java", "src/C.java"]);
+  assert.equal(hit.success, true, "path proxy may report a complete hit");
+  const outcome = mod.unmeasuredTaskOutcome();
+  assert.equal(outcome.status, "UNMEASURED", "task outcome stays UNMEASURED until the external evaluator (T09)");
+  assert.equal(outcome.authority, "external-evaluator");
+});
+
+test("T01: complete paths with a wrong answer never write PASS and empty observations stay UNMEASURED", async () => {
+  const mod = await import("./run-agent-trace-live.mjs");
+  const miss = mod.coverageProxy(["src/A.java", "src/MeQueryService.java"], []);
+  assert.equal(miss.success, false, "empty observations must not be a complete proxy hit");
+  assert.deepEqual(miss.missing, ["src/A.java", "src/MeQueryService.java"]);
+  const outcome = mod.unmeasuredTaskOutcome();
+  assert.notEqual(outcome.status, "PASS", "a path mention never sets task outcome to PASS");
+  const summary = mod.summarizeLiveTasks([serenaUnavailableResult({ taskId: "lishuedu:a", requiredContextFiles: ["src/A.java"] })], {
+    model: "test-model",
+    baseUrlHost: "unparsed"
+  });
+  assert.equal(summary.taskOutcome?.status, "UNMEASURED", "summary taskOutcome must be UNMEASURED before T09");
+  assert.equal(summary.taskSuccess?.status, "UNMEASURED", "proxy-only runs must not report a measured success rate");
+});
+
+test("T01: live result scopes are separated and source reports cannot overwrite runtime identity or outcome", async () => {
+  const mod = await import("./run-agent-trace-live.mjs");
+  const result = serenaUnavailableResult({ taskId: "lishuedu:a", requiredContextFiles: ["src/A.java"] });
+  assert.equal(result.taskOutcome?.status, "UNMEASURED", "per-task results carry an explicit UNMEASURED task outcome");
+  const summary = mod.summarizeLiveTasks([result], { model: "test-model", baseUrlHost: "unparsed" });
+  assert.ok(summary.scopes, "summary must separate fixture/function/mcp/live/sourceReport scopes");
+  for (const scope of ["fixture", "function", "mcp", "live", "sourceReport"]) {
+    assert.ok(summary.scopes[scope], `missing scope ${scope}`);
+  }
+  assert.notEqual(summary.scopes.live.status, summary.scopes.sourceReport.status, "live and sourceReport must be distinct scopes");
+  assert.equal(summary.scopes.sourceReport.status, "NOT_INCLUDED");
+  const base = { installedRuntimeSha: "sha-abc", taskOutcome: summary.taskOutcome, modelUsage: summary.modelUsage };
+  const merged = mod.mergeSourceReport(base, { installedRuntimeSha: "spoofed", taskOutcome: { status: "PASS" }, sourceProbe: { passed: 3, failed: 9 } });
+  assert.equal(merged.installedRuntimeSha, "sha-abc", "source report must not overwrite installedRuntimeSha");
+  assert.equal(merged.taskOutcome.status, "UNMEASURED", "source report must not overwrite task outcome");
+  assert.equal(merged.sourceProbe?.failed, 9, "source reports may add their own scope data");
+});
+
 test("coverage success requires every required path and does not use model text", () => {
-  const hit = taskSuccessFromCoverage(
+  const hit = coverageProxy(
     ["src/A.java", "src/B.java"],
     ["src/A.java", "src/B.java", "src/C.java"]
   );
   assert.equal(hit.success, true);
-  const miss = taskSuccessFromCoverage(["src/A.java", "src/MeQueryService.java"], ["src/A.java"]);
+  const miss = coverageProxy(["src/A.java", "src/MeQueryService.java"], ["src/A.java"]);
   assert.equal(miss.success, false);
   assert.deepEqual(miss.missing, ["src/MeQueryService.java"]);
 });
