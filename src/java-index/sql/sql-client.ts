@@ -129,6 +129,8 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
             siblingReused = true;
           } catch (error) {
             // Discard the unusable copy and fall through to a cold rebuild.
+            // Its timing must not leak into reported hydrate phases.
+            this.hydratePhases = {};
             rmSync(this.dbPath, { force: true });
             this.reload();
             this.markDegraded(error instanceof Error ? error.message : String(error));

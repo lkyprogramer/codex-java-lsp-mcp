@@ -260,7 +260,7 @@ function mergeWorkerReadRanges(ranges: UnlocatedReadRange[]): UnlocatedReadRange
   return merged;
 }
 
-function lineStartOffsets(content: string): number[] {
+export function lineStartOffsets(content: string): number[] {
   const starts = [0];
   for (let index = 0; index < content.length; index += 1) {
     if (content.charCodeAt(index) === 10) starts.push(index + 1);
@@ -268,13 +268,13 @@ function lineStartOffsets(content: string): number[] {
   return starts;
 }
 
-function utf8BytesForLines(content: string, starts: readonly number[], startLine: number, endLine: number): number {
+export function utf8BytesForLines(content: string, starts: readonly number[], startLine: number, endLine: number): number {
   const start = starts[Math.min(Math.max(startLine - 1, 0), starts.length - 1)]!;
   const end = endLine < starts.length ? starts[endLine]! : content.length;
   return Buffer.byteLength(content.slice(start, Math.max(start, end)), "utf8");
 }
 
-function sourceRangeForLines(content: string, starts: readonly number[], startLine: number, endLine: number): SourceRange {
+export function sourceRangeForLines(content: string, starts: readonly number[], startLine: number, endLine: number): SourceRange {
   const startOffset = starts[Math.min(Math.max(startLine - 1, 0), starts.length - 1)]!;
   const endOffset = endLine < starts.length ? starts[endLine]! : content.length;
   return {

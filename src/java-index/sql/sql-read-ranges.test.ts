@@ -96,3 +96,34 @@ test("T03: a position on the owning type's closing line still gets a window with
   assert.ok(ranges.length > 0, "the request still produces windows");
   assert.ok(covered([201], ranges), `the in-method anchor keeps its window, got ${JSON.stringify(ranges.map(w => [w.startLine, w.endLine]))}`);
 });
+import { Buffer } from "node:buffer";
+import { lineStartOffsets, sourceRangeForLines, utf8BytesForLines } from "./sql-read-ranges.js";
+
+// T03: window costs and coordinates must be exact UTF-8 bytes on CRLF content
+// with multibyte characters - never a character-count estimate.
+test("T03: CRLF + emoji window bytes equal the real UTF-8 slice and ranges land on the right lines", () => {
+  const content = [
+    "package demo;",
+    "public class EmojiService {",
+    "    // emoji cost check: 🚀🚀🚀 (3 x 4 bytes)",
+    "    int a = 1;",
+    "    int b = 2;",
+    "}",
+    ""
+  ].join("\r\n");
+  const starts = lineStartOffsets(content);
+  const bytes = utf8BytesForLines(content, starts, 2, 4);
+  // Lines 2..4 end-exclusive at the start of line 5.
+  const startOffset = starts[1]!;
+  const endOffset = starts[4]!;
+  assert.equal(bytes, Buffer.byteLength(content.slice(startOffset, endOffset), "utf8"), "reported cost must equal the real UTF-8 byte slice");
+  assert.ok(bytes > endOffset - startOffset, "multibyte emoji + CRLF must cost more bytes than characters");
+  const range = sourceRangeForLines(content, starts, 2, 4);
+  assert.equal(range.start.line, 2);
+  assert.equal(range.start.column, 1);
+  // End-exclusive convention: covering lines 2..4 ends at the first column of line 5.
+  assert.equal(range.end.line, 5);
+  assert.equal(range.end.column, 1);
+  const line3 = content.split("\r\n")[2]!;
+  assert.ok(line3.includes("🚀"), "sanity: the window really contains the emoji line");
+});

@@ -1943,3 +1943,48 @@ function fixedRangeIndex(): Parameters<typeof buildReadPlan>[0]["javaIndex"] {
     }
   } as never;
 }
+
+test("T03: budget-trimmed anchor lines are enumerated per line in the final plan, never a silent complete", async () => {
+  const anchor = candidate({
+    absolutePath: "/repo/src/main/java/demo/LongService.java",
+    path: "src/main/java/demo/LongService.java",
+    reasons: ["target"],
+    categories: ["target"],
+    score: 1_000,
+    positions: [{ line: 1, column: 1 }, { line: 50, column: 3 }]
+  });
+  // The index only returns a head window [1,4]; anchor line 50 has no window
+  // in the final plan and must be named explicitly instead of a silent complete.
+  const result = await buildReadPlan({
+    files: [anchor],
+    ids: new Map([[anchor.absolutePath, "F1"]]),
+    options: optionsFor(anchor, { mode: "minimal", readPlanMaxItems: 2 }),
+    javaIndex: fixedRangeIndex()
+  });
+  assert.ok(result.items.some(item => item.fileId === "F1"), "the anchor file itself is retained");
+  const gap = result.evidenceGaps.find(entry => entry.includes("LongService.java") && entry.includes("50"));
+  assert.ok(gap, `dropped anchor line 50 must be named in evidenceGaps, got ${JSON.stringify(result.evidenceGaps)}`);
+  assert.ok(gap!.includes("partial"), "an enumerated anchor loss must mark the plan partial");
+});
+
+test("T03: a zero-byte read budget yields an explicitly partial plan naming its lost anchors", async () => {
+  const anchor = candidate({
+    absolutePath: "/repo/src/main/java/demo/LongService.java",
+    path: "src/main/java/demo/LongService.java",
+    reasons: ["target"],
+    categories: ["target"],
+    score: 1_000,
+    positions: [{ line: 1, column: 1 }, { line: 50, column: 3 }]
+  });
+  const result = await buildReadPlan({
+    files: [anchor],
+    ids: new Map([[anchor.absolutePath, "F1"]]),
+    options: optionsFor(anchor, { mode: "minimal", readPlanMaxItems: 2, readPlanMaxBytes: 0 }),
+    javaIndex: fixedRangeIndex()
+  });
+  assert.ok(result.evidenceGaps.length > 0, "a zero-byte budget plan must not claim complete");
+  assert.ok(
+    result.evidenceGaps.some(entry => entry.includes("50")),
+    `the lost anchor line must be enumerated, got ${JSON.stringify(result.evidenceGaps)}`
+  );
+});

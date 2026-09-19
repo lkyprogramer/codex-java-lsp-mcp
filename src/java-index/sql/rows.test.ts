@@ -252,3 +252,100 @@ test("myBatisRow round-trips java-index-v2 mapper XML", () => {
     close(db);
   }
 });
+
+test("T02: overloaded methods keep distinct owner-scoped IDs under one v2 owner", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "java-index-t02-overload-"));
+  try {
+    const backend = await createJavaParserBackend();
+    const cache = new ParseTreeCache({ ...DEFAULT_PARSE_TREE_CACHE_OPTIONS, maxEntries: 4 });
+    const rel = "src/main/java/demo/Over.java";
+    await mkdir(path.join(root, path.dirname(rel)), { recursive: true });
+    await writeFile(path.join(root, rel), [
+      "package demo;",
+      "public class Over {",
+      "  int pick(int a) { return a; }",
+      "  int pick(int a, int b) { return a + b; }",
+      "}"
+    ].join("\n"), "utf8");
+    const bundle = await parseJavaSourceFile({
+      repoRoot: root,
+      resolvedRepoRoot: await realpath(root),
+      inputPath: path.join(root, rel),
+      generation: 1,
+      backend,
+      cache
+    });
+    const picks = bundle.methods.filter(method => method.name === "pick");
+    assert.equal(picks.length, 2, "both overloads are parsed");
+    const ids = picks.map(method => method.methodId);
+    assert.notEqual(ids[0], ids[1], "overloads keep distinct owner-scoped method ids");
+    const owner = bundle.types[0]!.typeId;
+    assert.ok(owner.startsWith("type:v2:"), "owner is a v2 source-scoped id");
+    for (const id of ids) {
+      assert.ok(id.startsWith(`method:${owner}#`), `method id ${id} is scoped under owner ${owner}`);
+    }
+    const db = openIndexDb(":memory:");
+    try {
+      ensureSchema(db);
+      writeBundle(db, bundle);
+      const read = readBundle(db, bundle.file.relativePath);
+      assert.ok(read);
+      const readPicks = read!.methods.filter(method => method.name === "pick");
+      assert.equal(readPicks.length, 2, "both overloads survive the round trip under the same owner");
+      assert.deepEqual(readPicks.map(method => method.methodId).sort(), [...ids].sort());
+    } finally {
+      close(db);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("T02: the same FQN in main and test source sets keeps source-set-isolated identities", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "java-index-t02-sourceSet-"));
+  try {
+    const backend = await createJavaParserBackend();
+    const cache = new ParseTreeCache({ ...DEFAULT_PARSE_TREE_CACHE_OPTIONS, maxEntries: 4 });
+    const files = [
+      "src/main/java/demo/Svc.java",
+      "src/test/java/demo/Svc.java"
+    ];
+    const bundles = [] as JavaFileBundle[];
+    for (const rel of files) {
+      await mkdir(path.join(root, path.dirname(rel)), { recursive: true });
+      await writeFile(path.join(root, rel), "package demo;\npublic class Svc {\n  void run() {\n  }\n}\n", "utf8");
+      bundles.push(await parseJavaSourceFile({
+        repoRoot: root,
+        resolvedRepoRoot: await realpath(root),
+        inputPath: path.join(root, rel),
+        generation: 1,
+        backend,
+        cache
+      }));
+    }
+    const [main, testBundle] = [bundles[0]!, bundles[1]!];
+    assert.equal(main.file.sourceSet, "main");
+    assert.equal(testBundle.file.sourceSet, "test");
+    assert.equal(main.types[0]!.fqn, testBundle.types[0]!.fqn, "both declarations share the FQN");
+    assert.notEqual(main.types[0]!.typeId, testBundle.types[0]!.typeId, "source set isolation: same FQN in main/test keeps distinct ids");
+    const db = openIndexDb(":memory:");
+    try {
+      ensureSchema(db);
+      writeBundle(db, main);
+      writeBundle(db, testBundle);
+      const types = db.prepare("SELECT count(*) AS n FROM type").get() as { n: number };
+      assert.equal(types.n, 2, "main and test declarations keep separate type rows");
+      const readMain = readBundle(db, main.file.relativePath);
+      const readTest = readBundle(db, testBundle.file.relativePath);
+      assert.ok(readMain);
+      assert.ok(readTest);
+      assert.equal(readMain!.file.sourceSet, "main");
+      assert.equal(readTest!.file.sourceSet, "test");
+      assert.notEqual(readMain!.types[0]!.typeId, readTest!.types[0]!.typeId, "the round trip keeps the source sets apart");
+    } finally {
+      close(db);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

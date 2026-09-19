@@ -21,7 +21,8 @@ import { evidenceKeys, hasNovelEvidence as fileHasNovelEvidence } from "./retrie
 import { buildReadUnits, selectedReadUnits, windowsFromReadUnits } from "./retrieval/read-unit-builder.js";
 import {
   retrievalBudgetFor,
-  type MaterializedReadWindow
+  type MaterializedReadWindow,
+  type ReadUnit
 } from "./retrieval/retrieval-types.js";
 import { retrievalBudgetOverflowGaps } from "./retrieval/selection-policy.js";
 import { protectedSelectionUtility, selectionUtility, compareSelectionUtility } from "./retrieval/selection-utility.js";
@@ -98,6 +99,35 @@ type SelectReadPlanInput = {
 
 type CandidateWindow = MaterializedReadWindow;
 
+// Final serializer truth (T03): for every shortlisted candidate, requested
+// anchor lines that no selected read window covers are enumerated per line.
+// A plan that dropped anchors is partial and must name them instead of
+// reporting a trimmed selection as complete.
+function uncoveredAnchorLineGaps(
+  files: readonly CandidateFile[],
+  units: readonly ReadUnit[]
+): string[] {
+  const coverageByPath = new Map<string, Array<{ startLine: number; endLine: number }>>();
+  for (const unit of units) {
+    const windows = coverageByPath.get(unit.absolutePath) ?? [];
+    for (const range of unit.mergedRanges) {
+      windows.push({ startLine: range.startLine, endLine: range.endLine });
+    }
+    coverageByPath.set(unit.absolutePath, windows);
+  }
+  const gaps: string[] = [];
+  for (const file of files) {
+    if (file.positions.length === 0) continue;
+    const windows = coverageByPath.get(file.absolutePath) ?? [];
+    const uncovered = [...new Set(file.positions.map(position => position.line))]
+      .filter(line => !windows.some(window => window.startLine <= line && line <= window.endLine))
+      .sort((a, b) => a - b);
+    if (uncovered.length === 0) continue;
+    gaps.push(`Anchor lines ${uncovered.join(", ")} in ${file.absolutePath} were dropped by read-plan budget trimming; the plan is partial.`);
+  }
+  return gaps;
+}
+
 type ShortlistResult = {
   readonly files: CandidateFile[];
   readonly omittedProtected: number;
@@ -165,14 +195,11 @@ export async function buildReadPlan(input: BuildReadPlanInput): Promise<ReadPlan
   if (rangeDeadlineGap) {
     result.evidenceGaps = [...new Set([rangeDeadlineGap, ...result.evidenceGaps])];
   }
-  // Uncovered anchors after range budget trimming make the plan explicitly
-  // partial - the serializer must never report a trimmed anchor plan as complete.
-  const uncoveredAnchorGaps = rangeResults
-    .filter(rangeResult => (rangeResult.uncoveredAnchorLines ?? []).length > 0)
-    .map(rangeResult =>
-      `Anchor lines ${rangeResult.uncoveredAnchorLines!.join(", ")} were dropped by range budget trimming in ${rangeResult.file}; the read plan is partial.`);
-  if (uncoveredAnchorGaps.length > 0) {
-    result.evidenceGaps = [...new Set([...uncoveredAnchorGaps, ...result.evidenceGaps])];
+  // Explicit anchors whose windows the plan dropped are enumerated per line:
+  // a budget-trimmed plan is partial and must name the anchors it lost.
+  const anchorLineGaps = uncoveredAnchorLineGaps(shortlist.files, selectedUnits);
+  if (anchorLineGaps.length > 0) {
+    result.evidenceGaps = [...new Set([...anchorLineGaps, ...result.evidenceGaps])];
   }
   if (shortlist.omittedProtected > 0) {
     result.evidenceGaps = [...new Set([
