@@ -1,5 +1,9 @@
 import type { DeadlineBudget } from "../runtime/deadline-budget.js";
-import type { EntityHit } from "./entity-search.js";
+import type {
+  DetailedEntitySearchResult,
+  EntityHit,
+  EntitySearchOptions
+} from "./entity-search.js";
 import type {
   AnchorFacts,
   ContextGraphResult,
@@ -138,6 +142,10 @@ export interface JavaIndexClientApi {
     requestOptions?: JavaIndexRequestOptions
   ): Promise<MyBatisResourceByNamespaceBatch>;
   queryGraphDigest(requestOptions?: JavaIndexRequestOptions): Promise<GraphDigest>;
+  /** T07: budgeted, scoped entity search. The result reports an explicit
+   *  partial state (truncated + stopReason + work counters) when the work
+   *  budget runs out, plus the index generation the scan observed. */
+  querySearch(task: string, options?: EntitySearchOptions, requestOptions?: JavaIndexRequestOptions): Promise<DetailedEntitySearchResult>;
   queryGraphReachable(
     fromRelativePath: string,
     maxHops: number,

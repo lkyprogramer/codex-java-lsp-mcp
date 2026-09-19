@@ -10,13 +10,23 @@ import type { FactsReader } from "../facts-reader.js";
 import {
   ENTITY_SEARCH_DEFAULT_LIMIT,
   ENTITY_SEARCH_MAX_LIMIT,
-  type EntityHit
+  type DetailedEntitySearchResult,
+  type EntityHit,
+  type EntitySearchMode,
+  type EntitySearchOptions
 } from "../entity-search.js";
 import type { JavaIndexClientApi } from "../java-index-client-api.js";
 import type { ContextGraphResult, GraphDigest, GraphReachable } from "../index-types.js";
 
 export type EntitySearchPort = {
   search(task: string, limit?: number): EntityHit[];
+  // T07: budgeted, scoped retrieval reporting explicit partial results.
+  searchDetailed(
+    task: string,
+    limit?: number,
+    mode?: EntitySearchMode,
+    options?: EntitySearchOptions
+  ): DetailedEntitySearchResult;
 };
 
 export type SqlQueryDeps = {

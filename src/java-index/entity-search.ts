@@ -26,7 +26,7 @@ export const ENTITY_SEARCH_MAX_LIMIT = 10;
 export type EntitySearchMode = "auto" | "exact" | "text";
 
 export type EntityKind = "type" | "method";
-export type EntityLayer = "FQN" | "SIMPLE_NAME" | "BM25_IDENTIFIER" | "CHUNK";
+export type EntityLayer = "FQN" | "SIMPLE_NAME" | "BM25_IDENTIFIER" | "CHUNK" | "DOCUMENT";
 
 export type EntityRecord = {
   entityId: string;
@@ -47,6 +47,52 @@ export type EntityHit = {
   layer: EntityLayer;
   score: number;
 };
+
+// T07: query work budget is not the returned row count. It bounds physical
+// posting rows visited by the retrieval routes; the returned rows are still
+// capped separately by ENTITY_SEARCH_MAX_LIMIT.
+export const DEFAULT_QUERY_MAX_POSTINGS = 20_000;
+
+export type EntitySearchScope = {
+  /** Relative source-root prefixes; undefined means the whole repository. */
+  sourceRoots?: readonly string[];
+};
+
+export type EntitySearchStopReason = "deadline" | "postings";
+
+export type DetailedEntitySearchResult = {
+  hits: EntityHit[];
+  /** True when the candidate scan stopped before it could be exhaustive. */
+  truncated: boolean;
+  stopReason?: EntitySearchStopReason;
+  /** Physical work counters for the budget that was applied (if any). */
+  work: { postings: number };
+  /** Index generation the scan observed; 0 when the db has no generation meta. */
+  generation: number;
+};
+
+export type EntitySearchOptions = {
+  limit?: number;
+  mode?: EntitySearchMode;
+  scope?: EntitySearchScope;
+  budget?: {
+    maxPostings?: number;
+    remainingMs?: () => number;
+  };
+};
+
+/** Scope is applied before the result cap: a scoped candidate can never be
+ *  pushed out of the cap by an out-of-scope candidate. */
+export function filterHitsByScope(hits: readonly EntityHit[], scope: EntitySearchScope | undefined): EntityHit[] {
+  const roots = scope?.sourceRoots;
+  if (!roots || roots.length === 0) return [...hits];
+  return hits.filter(hit =>
+    roots.some(root => {
+      const prefix = root.endsWith("/") ? root : `${root}/`;
+      return hit.relativePath === root || hit.relativePath.startsWith(prefix);
+    })
+  );
+}
 
 function typeRecord(type: JavaTypeFacts, relativePath: string, fields: readonly JavaFieldFacts[], methods: readonly JavaMethodFacts[]): EntityRecord {
   const fqn = type.fqn ?? type.simpleName;

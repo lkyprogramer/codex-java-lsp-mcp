@@ -8,7 +8,9 @@ import {
   type EntityHit,
   type EntityLayer,
   type EntityRecord,
-  type EntitySearchMode
+  type EntitySearchMode,
+  type DetailedEntitySearchResult,
+  type EntitySearchOptions
 } from "../java-index/entity-search.js";
 import { classifyQuery } from "../discovery/query-intent.js";
 
@@ -127,6 +129,31 @@ export function searchEntities(
   if (intent === "text") return mergeByRank(identifierHits, chunkHits, cap);
   if (identifierHits.length > 0) return identifierHits;
   return chunkHits;
+}
+
+// T07: the in-memory reference has no physical work, so a budget can never
+// truncate it; scope is applied before the cap with the same predicate as
+// the SQL engine, which keeps no-budget parity tests meaningful.
+export function searchEntitiesDetailed(
+  entities: readonly EntityRecord[],
+  task: string,
+  limit = ENTITY_SEARCH_DEFAULT_LIMIT,
+  mode: EntitySearchMode = "auto",
+  options: EntitySearchOptions = {}
+): DetailedEntitySearchResult {
+  const roots = options.scope?.sourceRoots;
+  const pool =
+    roots && roots.length > 0
+      ? entities.filter(record =>
+          roots.some(root => record.relativePath === root || record.relativePath.startsWith(`${root}/`))
+        )
+      : entities;
+  return {
+    hits: searchEntities(pool, task, limit, mode),
+    truncated: false,
+    work: { postings: 0 },
+    generation: 0
+  };
 }
 
 function mergeByRank(identifier: EntityHit[], chunk: EntityHit[], cap: number): EntityHit[] {

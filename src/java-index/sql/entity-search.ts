@@ -1,5 +1,6 @@
 import type { SQLOutputValue } from "node:sqlite";
 import { classifyQuery } from "../../discovery/query-intent.js";
+import { QueryWorkBudget } from "../../discovery/query-budget.js";
 import {
   bm25Score,
   extractFqnCandidates,
@@ -7,12 +8,17 @@ import {
   tokenize
 } from "../entity-scoring.js";
 import {
+  DEFAULT_QUERY_MAX_POSTINGS,
   ENTITY_SEARCH_DEFAULT_LIMIT,
   ENTITY_SEARCH_MAX_LIMIT,
+  filterHitsByScope,
+  type DetailedEntitySearchResult,
   type EntityHit,
   type EntityKind,
   type EntityLayer,
-  type EntitySearchMode
+  type EntitySearchMode,
+  type EntitySearchOptions,
+  type EntitySearchStopReason
 } from "../entity-search.js";
 import { bindChunks, inClause, prepareCached, type IndexDatabase } from "./driver.js";
 import { asCount } from "./facts-store.js";
@@ -131,7 +137,22 @@ function simpleNameHits(db: IndexDatabase, task: string, cap: number): EntityHit
   return hits.slice(0, cap).map(entity => toHit(entity, "SIMPLE_NAME", 1));
 }
 
+// T07: corpus statistics are maintained by the writer (rebuildEntityDf)
+// in meta so a query never pays for a full entity scan to derive BM25
+// normalization. DBs written before the stats existed fall back to a scan.
+const ENTITY_STATS_KEYS = { identifier: "entityStats:identifier", chunk: "entityStats:chunk" } as const;
+
 function avgLength(db: IndexDatabase, column: "ident_len" | "chunk_len"): { avgdl: number; documentCount: number } {
+  const key = column === "ident_len" ? ENTITY_STATS_KEYS.identifier : ENTITY_STATS_KEYS.chunk;
+  const metaRow = prepareCached(db, "SELECT value FROM meta WHERE key=?").get(key) as { value: string } | undefined;
+  if (metaRow && typeof metaRow.value === "string") {
+    const [countRaw, totalRaw] = metaRow.value.split(":");
+    const documentCount = Number(countRaw);
+    const total = Number(totalRaw);
+    if (Number.isFinite(documentCount) && Number.isFinite(total)) {
+      return { documentCount, avgdl: documentCount === 0 ? 0 : total / documentCount };
+    }
+  }
   const row = prepareCached(db, `SELECT count(*) AS n, coalesce(sum(${column}), 0) AS total FROM entity`).get() as
     | { n: SQLOutputValue; total: SQLOutputValue }
     | undefined;
@@ -140,7 +161,26 @@ function avgLength(db: IndexDatabase, column: "ident_len" | "chunk_len"): { avgd
   return { documentCount, avgdl: documentCount === 0 ? 0 : total / documentCount };
 }
 
-function rankBm25(db: IndexDatabase, task: string, field: 0 | 1, layer: EntityLayer, cap: number): EntityHit[] {
+// A scan stop is sticky; a deadline always outranks the posting cap so the
+// reported reason is the most severe one observed.
+function recordStop(stop: { reason?: EntitySearchStopReason }, verdict: "deadline" | "postings"): void {
+  if (verdict === "deadline" || stop.reason === undefined) stop.reason = verdict;
+}
+
+export function readIndexGeneration(db: IndexDatabase): number {
+  const row = prepareCached(db, "SELECT value FROM meta WHERE key=?").get("indexedGeneration") as { value: string } | undefined;
+  return row && typeof row.value === "string" ? Number(row.value) || 0 : 0;
+}
+
+function rankBm25(
+  db: IndexDatabase,
+  task: string,
+  field: 0 | 1,
+  layer: EntityLayer,
+  cap: number,
+  budget?: QueryWorkBudget,
+  stop?: { reason?: EntitySearchStopReason }
+): EntityHit[] {
   const queryTokens = tokenize(task);
   const tokenSyms = existingTokenSyms(db, queryTokens);
   if (tokenSyms.length === 0) return [];
@@ -170,6 +210,16 @@ function rankBm25(db: IndexDatabase, task: string, field: 0 | 1, layer: EntityLa
        JOIN entity_token t ON t.entity_sym=e.sym
        WHERE t.field=? AND t.token_sym IN ${inClause(chunk.length)}`
     ).iterate(field, ...chunk) as Iterable<Record<string, SQLOutputValue>>) {
+      // T07: every posting row is billed against the query work budget at
+      // the interruptible boundary between rows; synchronous SQL cannot stop
+      // mid-statement, so the scan ends at the row boundary.
+      if (budget) {
+        const verdict = budget.take();
+        if (verdict !== "ok") {
+          if (stop) recordStop(stop, verdict);
+          break;
+        }
+      }
       const entity = loadEntityRow(db, row);
       const token = symText(db, asInt(row.tokenSym));
       const bucket = grouped.get(entity.entityId) ?? { entity, tf: new Map<string, number>() };
@@ -189,7 +239,13 @@ function rankBm25(db: IndexDatabase, task: string, field: 0 | 1, layer: EntityLa
 
 // Source-linked document route (T05): signature/comment/framework-key text
 // indexed by the writer; statistics are writer-maintained, never rescanned.
-function docHits(db: IndexDatabase, task: string, cap: number): EntityHit[] {
+function docHits(
+  db: IndexDatabase,
+  task: string,
+  cap: number,
+  budget?: QueryWorkBudget,
+  stop?: { reason?: EntitySearchStopReason }
+): EntityHit[] {
   const queryTokens = tokenize(task);
   const tokenSyms = existingTokenSyms(db, queryTokens);
   if (tokenSyms.length === 0) return [];
@@ -208,7 +264,8 @@ function docHits(db: IndexDatabase, task: string, cap: number): EntityHit[] {
     dfByToken.set(token, df);
     if (df > 0) postingSyms.push(tokenSym);
   }
-  if (postingSyms.length === 0) return [];  // docSym -> { tfByToken, docLen, declarationSym, pathSym }
+  if (postingSyms.length === 0) return [];
+  // docSym -> { tfByToken, docLen, declarationSym, pathSym }
   const docs = new Map<number, { tf: Map<string, number>; docLen: number; declarationSym: number; pathSym: number | undefined }>();
   for (const chunk of bindChunks(postingSyms)) {
     for (const row of prepareCached(
@@ -217,13 +274,21 @@ function docHits(db: IndexDatabase, task: string, cap: number): EntityHit[] {
          FROM search_doc_token t JOIN search_doc d ON d.sym=t.doc_sym
         WHERE t.token_sym IN ${inClause(chunk.length)}`
     ).iterate(...chunk) as Iterable<Record<string, SQLOutputValue>>) {
+      if (budget) {
+        const verdict = budget.take();
+        if (verdict !== "ok") {
+          if (stop) recordStop(stop, verdict);
+          break;
+        }
+      }
       const docSym = asInt(row.docSym);
       const bucket = docs.get(docSym) ?? { tf: new Map<string, number>(), docLen: asInt(row.docLen), declarationSym: 0, pathSym: undefined };
       bucket.tf.set(symText(db, asInt(row.tokenSym)), asInt(row.tf));
       docs.set(docSym, bucket);
     }
   }
-  if (docs.size === 0) return [];  for (const chunk of bindChunks([...docs.keys()])) {
+  if (docs.size === 0) return [];
+  for (const chunk of bindChunks([...docs.keys()])) {
     for (const row of prepareCached(
       db,
       `SELECT sym AS docSym, declaration_sym AS declarationSym, path_sym AS pathSym FROM search_doc WHERE sym IN ${inClause(chunk.length)}`
@@ -295,6 +360,58 @@ export class SqlEntitySearch {
       return mergeByRank([identifier, chunk, doc], cap);
     }
     return firstNonEmpty(identifier, chunk, cap);
+  }
+
+  // T07: budgeted, scoped retrieval. The work budget bounds posting rows
+  // visited (never the returned rows); scope is applied before the result
+  // cap; any exhausted budget reports an explicit partial result with the
+  // stop reason instead of pretending the scan was complete. The reported
+  // generation labels the snapshot the scan observed (K20).
+  searchDetailed(
+    task: string,
+    limit: number = ENTITY_SEARCH_DEFAULT_LIMIT,
+    mode: EntitySearchMode = "auto",
+    options: EntitySearchOptions = {}
+  ): DetailedEntitySearchResult {
+    const cap = clampLimit(limit);
+    const generation = readIndexGeneration(this.db);
+    let budget: QueryWorkBudget | undefined;
+    if (options.budget) {
+      budget = new QueryWorkBudget(
+        options.budget.maxPostings ?? DEFAULT_QUERY_MAX_POSTINGS,
+        options.budget.remainingMs ?? (() => Number.POSITIVE_INFINITY)
+      );
+    }
+    const work = { postings: budget ? 0 : 0 };
+    const stop: { reason?: EntitySearchStopReason } = {};
+    const finish = (hits: EntityHit[]): DetailedEntitySearchResult => {
+      const result: DetailedEntitySearchResult = {
+        hits,
+        truncated: stop.reason !== undefined,
+        work: { postings: budget ? budget.visited() : 0 },
+        generation
+      };
+      if (stop.reason !== undefined) result.stopReason = stop.reason;
+      return result;
+    };
+    if (task.trim().length === 0) return finish([]);
+    const intent = classifyQuery(task, mode);
+    if (intent === "exact") {
+      const fqn = filterHitsByScope(fqnHits(this.db, task, cap), options.scope);
+      if (fqn.length > 0) return finish(fqn);
+      const simple = filterHitsByScope(simpleNameHits(this.db, task, cap), options.scope);
+      if (simple.length > 0) return finish(simple);
+    }
+    const identifier = filterHitsByScope(
+      rankBm25(this.db, task, 0, "BM25_IDENTIFIER", cap, budget, stop),
+      options.scope
+    );
+    const chunk = filterHitsByScope(rankBm25(this.db, task, 1, "CHUNK", cap, budget, stop), options.scope);
+    if (intent === "text") {
+      const doc = filterHitsByScope(docHits(this.db, task, cap, budget, stop), options.scope);
+      return finish(mergeByRank([identifier, chunk, doc], cap));
+    }
+    return finish(firstNonEmpty(identifier, chunk, cap));
   }
 }
 

@@ -75,10 +75,35 @@ export function rebuildEntityDf(db: IndexDatabase): void {
       db.exec(
         "INSERT INTO entity_df(field, token_sym, df) SELECT field, token_sym, count(*) FROM entity_token GROUP BY field, token_sym"
       );
+      // T07: corpus normalization stats ride the same writer transaction as
+      // the df table, so both are consistent for every published generation.
+      commitEntityStats(db);
     });
   } finally {
     db.exec("PRAGMA temp_store=MEMORY");
   }
+}
+
+const ENTITY_STATS_KEYS = { identifier: "entityStats:identifier", chunk: "entityStats:chunk" } as const;
+
+/** Publishes per-field docCount/totalLen so queries never scan the entity table. */
+export function commitEntityStats(db: IndexDatabase): void {
+  const identifier = entityFieldStats(db, "ident_len");
+  const chunk = entityFieldStats(db, "chunk_len");
+  const upsert = prepareCached(
+    db,
+    `INSERT INTO meta(key, value) VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value=excluded.value`
+  );
+  upsert.run(ENTITY_STATS_KEYS.identifier, `${identifier.count}:${identifier.total}`);
+  upsert.run(ENTITY_STATS_KEYS.chunk, `${chunk.count}:${chunk.total}`);
+}
+
+function entityFieldStats(db: IndexDatabase, column: "ident_len" | "chunk_len"): { count: number; total: number } {
+  const row = prepareCached(db, `SELECT count(*) AS c, coalesce(sum(${column}), 0) AS t FROM entity`).get() as
+    | { c: number | bigint; t: number | bigint }
+    | undefined;
+  return { count: Number(row?.c ?? 0), total: Number(row?.t ?? 0) };
 }
 
 export function replaceAllEntities(db: IndexDatabase, records: readonly EntityRecord[]): void {

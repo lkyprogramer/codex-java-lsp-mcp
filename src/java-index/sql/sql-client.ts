@@ -13,6 +13,7 @@ import type {
   JavaIndexRequestOptions
 } from "../java-index-client-api.js";
 import { ENTITY_SEARCH_DEFAULT_LIMIT, type EntityHit } from "../entity-search.js";
+import type { DetailedEntitySearchResult, EntitySearchOptions } from "../entity-search.js";
 import type {
   AnchorFacts,
   ContextGraphResult,
@@ -245,6 +246,24 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
   }
   async queryGraphDigest(_requestOptions?: JavaIndexRequestOptions): Promise<GraphDigest> {
     return runGraphDigest(this.queryDeps());
+  }
+  async querySearch(task: string, options: EntitySearchOptions = {}, requestOptions?: JavaIndexRequestOptions): Promise<DetailedEntitySearchResult> {
+    const deps = this.queryDeps();
+    // T07: the parent request deadline (if any) is the default remaining-time
+    // source for the query work budget; callers can override it explicitly.
+    const parentBudget = requestOptions?.budget;
+    const parentRemaining = parentBudget ? () => parentBudget.remainingMs() : undefined;
+    const budget = options.budget
+      ? { ...options.budget, remainingMs: options.budget.remainingMs ?? parentRemaining }
+      : parentRemaining
+        ? { remainingMs: parentRemaining }
+        : undefined;
+    return deps.search.searchDetailed(
+      task,
+      options.limit ?? ENTITY_SEARCH_DEFAULT_LIMIT,
+      options.mode ?? "auto",
+      { scope: options.scope, budget }
+    );
   }
   async queryGraphReachable(
     fromRelativePath: string,
