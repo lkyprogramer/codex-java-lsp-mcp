@@ -79,3 +79,22 @@
 4. `installed_runtime_sha=null`：JDT/LSP 未启用，静态轨道结论不外推到动态语义
 
 **决定**：**GO**（M0 完成度）—— 三张任务卡的真实函数契约全部转绿（C1 5/5、C3 4/4、T01 测量语义 31/31 + 记录器），边界门 `build:isolated` / `npm test` / `gate:pr` 全过，产品回归 1155+295 无失败；M1 入口条件：先关闭 C2 多词查询（T04）再开真实 MCP 轨道。
+
+## 附录：一致性审查期补测（原边界仅执行 6 条统一回归命令中的前 3 条）
+
+| Command | Exit | Raw log（$RUN/…） | SHA-256（前 12 位） | Meaning |
+|---|---:|---|---|---|
+| `npm run measure:tool-schema` | 0 | boundary-measure-tool-schema.log | 916f2d194906 | 工具 schema 测量通过 |
+| `npm run measure:production-ts` | 0 | boundary-measure-production-ts.log | ba01a00a8b5c | 生产 TS 盘点，inventorySha256=abc21fa440bd… |
+| `npm run gate:release` | 0 | boundary-gate-release.log | 3d9f6aba0ada | 发布门（全量+smoke 档）通过，末段 rawSha256=b53e836318b9… |
+| `python3 -m unittest discover -s harness/tests -v`（T01 卡命令） | 0 | harness-unittest-final.log | c338f2d08ec5 | 56 tests OK；scorer 判定 JSON 为 QUALIFICATION_FAIL（预期：无真实运行输入） |
+
+至此主计划"统一产品回归命令"6/6 全部在本环境执行并通过；此前 M0 报告"gate:release NOT_RUN"的表述由本附录更正。
+
+## 附录：卡片级一致性审查发现的未闭环项（M1 前置清单）
+
+1. **C2 多词查询**（`OrderService rollback refund`）基线与终态均 FAIL —— M1（T04）首个关闭项。
+2. T03 卡列明的两条单测断言未实现：emoji/CRLF 成本与原字节一致性、budget=0 不得输出空 complete；现有 C3 探针覆盖行覆盖与 LF/CRLF，字节等价与零预算 PARTIAL 无直接单测。
+3. 预算裁剪后"逐锚点未覆盖清单"目前仅在 `queryReadRanges` 层暴露（该层恒为空）；serializer 层仅有通用 `retrievalBudgetOverflowGaps`/`evidenceGaps`，未按锚点行逐项列出 —— 卡要求"列出未覆盖 anchor"为部分满足。
+4. T02 卡的补测清单中"方法重载"与"main/test 源集隔离"无专项测试（删除、重建、AB/BA、同 ID 注入冲突策略、parser 同 FQN 不同 ID 均有）。
+5. K07–K10/K12/K32（T03 绑定）与 K01–K06/K31（T02 绑定）的 runtime 级契约未执行，本里程碑仅函数级/探针级通过；按卡要求在此逐卡列出。
