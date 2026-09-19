@@ -165,6 +165,15 @@ export async function buildReadPlan(input: BuildReadPlanInput): Promise<ReadPlan
   if (rangeDeadlineGap) {
     result.evidenceGaps = [...new Set([rangeDeadlineGap, ...result.evidenceGaps])];
   }
+  // Uncovered anchors after range budget trimming make the plan explicitly
+  // partial - the serializer must never report a trimmed anchor plan as complete.
+  const uncoveredAnchorGaps = rangeResults
+    .filter(rangeResult => (rangeResult.uncoveredAnchorLines ?? []).length > 0)
+    .map(rangeResult =>
+      `Anchor lines ${rangeResult.uncoveredAnchorLines!.join(", ")} were dropped by range budget trimming in ${rangeResult.file}; the read plan is partial.`);
+  if (uncoveredAnchorGaps.length > 0) {
+    result.evidenceGaps = [...new Set([...uncoveredAnchorGaps, ...result.evidenceGaps])];
+  }
   if (shortlist.omittedProtected > 0) {
     result.evidenceGaps = [...new Set([
       `Protected candidates exceeded shortlist capacity; ${shortlist.omittedProtected} candidate(s) were not range-planned.`,

@@ -1,5 +1,6 @@
 import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
+import { anchorWindows } from "../../discovery/anchor-windows.js";
 import { resolvedPathWithinRepo } from "../java-index-file-parse.js";
 import type {
   IndexedReadRange,
@@ -21,6 +22,8 @@ export type ReadRangeDeps = {
 
 const EXTREME_METHOD_LINES = 300;
 const EXTREME_METHOD_WINDOW_LINES = 40;
+const EXTREME_METHOD_TAIL_LINES = 5;
+const ANCHOR_WINDOW_RADIUS = 16;
 const READ_RANGE_MERGE_GAP_LINES = 3;
 const METHODLESS_TYPE_MAX_LINES = 80;
 const SIBLING_CALLEE_MAX = 2;
@@ -48,7 +51,7 @@ export async function queryReadRanges(
       const positions = request.positions.length > 0 ? request.positions : [{ line: 1, column: 1 }];
       const bundle = relative.endsWith(".java") ? deps.store.files([relative])[0] : undefined;
       const resource = bundle ? undefined : deps.store.myBatisResource(relative);
-      const java = bundle ? javaReadRanges(bundle, positions) : { ranges: [] as UnlocatedReadRange[], extremeMethod: false };
+      const java = bundle ? javaReadRanges(bundle, positions) : { ranges: [] as UnlocatedReadRange[], extremeMethod: false, anchorLines: [] as number[] };
       const xmlRanges = !bundle && resource ? xmlReadRanges(resource, positions) : [];
       const unmerged = java.ranges.length > 0 || xmlRanges.length > 0
         ? [...java.ranges, ...xmlRanges]
@@ -59,36 +62,57 @@ export async function queryReadRanges(
         range: sourceRangeForLines(content, starts, range.startLine, range.endLine),
         estimatedBytes: utf8BytesForLines(content, starts, range.startLine, range.endLine)
       }));
-      return { file: request.file, ranges, ...(java.extremeMethod ? { extremeMethod: true } : {}) };
+      // Anchors whose window no longer exists after budget-driven trimming must
+      // be reported explicitly - a trimmed plan may never claim complete.
+      const uncoveredAnchorLines = [...new Set(java.anchorLines)]
+        .filter(line => !ranges.some(range => range.startLine <= line && line <= range.endLine))
+        .sort((a, b) => a - b);
+      return {
+        file: request.file,
+        ranges,
+        ...(java.extremeMethod ? { extremeMethod: true } : {}),
+        ...(uncoveredAnchorLines.length > 0 ? { uncoveredAnchorLines } : {})
+      };
     } catch {
       return { file: request.file, ranges: [] };
     }
   }));
 }
 
-function javaReadRanges(bundle: JavaFileBundle, positions: SourcePosition[]): { ranges: UnlocatedReadRange[]; extremeMethod: boolean } {
+export function javaReadRanges(bundle: JavaFileBundle, positions: SourcePosition[]): { ranges: UnlocatedReadRange[]; extremeMethod: boolean; anchorLines: number[] } {
   const ranges: UnlocatedReadRange[] = [];
   const headerTypes = new Set<string>();
   const emittedMethods = new Set<string>();
   let extremeMethod = false;
-  const emitMethod = (method: JavaMethodFacts): void => {
+  // Collect EVERY requested anchor per method first: a second position in the
+  // same long method must not be dropped just because the first one selected
+  // it (the old per-position pass lost every mid-body anchor).
+  const anchorsByMethodId = new Map<string, number[]>();
+  const selectedMethods: JavaMethodFacts[] = [];
+  const emitMethod = (method: JavaMethodFacts, anchors: readonly number[]): void => {
     if (emittedMethods.has(method.methodId)) return;
     emittedMethods.add(method.methodId);
     const endLine = methodRangeEnd(method.range, method.bodyRange);
     if (endLine - method.range.start.line + 1 > EXTREME_METHOD_LINES) {
       extremeMethod = true;
+      // Head window keeps the signature; the small tail window keeps the
+      // closing brace. Explicit anchors get their own centered windows.
       ranges.push({
         startLine: method.range.start.line,
         endLine: Math.min(endLine, method.range.start.line + EXTREME_METHOD_WINDOW_LINES - 1),
         kind: "method",
         estimatedBytes: 0
       });
-      ranges.push({
-        startLine: Math.max(method.range.start.line + EXTREME_METHOD_WINDOW_LINES, endLine - EXTREME_METHOD_WINDOW_LINES + 1),
-        endLine,
-        kind: "method",
-        estimatedBytes: 0
-      });
+      if (anchors.length > 0) {
+        for (const window of anchorWindows(method.range.start.line, endLine, anchors, ANCHOR_WINDOW_RADIUS)) {
+          ranges.push({ startLine: window.startLine, endLine: window.endLine, kind: "method", estimatedBytes: 0 });
+        }
+      }
+      const tailStart = Math.max(
+        method.range.start.line + EXTREME_METHOD_WINDOW_LINES,
+        endLine - (anchors.length > 0 ? EXTREME_METHOD_TAIL_LINES : EXTREME_METHOD_WINDOW_LINES) + 1
+      );
+      ranges.push({ startLine: tailStart, endLine, kind: "method", estimatedBytes: 0 });
     } else {
       ranges.push({ startLine: method.range.start.line, endLine, kind: "method", estimatedBytes: 0 });
     }
@@ -103,8 +127,10 @@ function javaReadRanges(bundle: JavaFileBundle, positions: SourcePosition[]): { 
       .filter(item => rangeContainsLine(item.range, position.line))
       .sort((left, right) => right.range.start.line - left.range.start.line)[0];
     if (method) {
-      emitMethod(method);
-      for (const sibling of sameOwnerCallees(bundle, method)) emitMethod(sibling);
+      const anchors = anchorsByMethodId.get(method.methodId) ?? [];
+      anchors.push(position.line);
+      anchorsByMethodId.set(method.methodId, anchors);
+      if (!selectedMethods.some(item => item.methodId === method.methodId)) selectedMethods.push(method);
       continue;
     }
     const owner = bundle.types
@@ -117,7 +143,12 @@ function javaReadRanges(bundle: JavaFileBundle, positions: SourcePosition[]): { 
       ranges.push(fallbackReadRange(position));
     }
   }
-  return { ranges, extremeMethod };
+  for (const method of selectedMethods) {
+    emitMethod(method, anchorsByMethodId.get(method.methodId) ?? []);
+    for (const sibling of sameOwnerCallees(bundle, method)) emitMethod(sibling, []);
+  }
+  const anchorLines = [...anchorsByMethodId.values()].flat();
+  return { ranges, extremeMethod, anchorLines };
 }
 
 function sameOwnerCallees(bundle: JavaFileBundle, method: JavaMethodFacts): JavaMethodFacts[] {

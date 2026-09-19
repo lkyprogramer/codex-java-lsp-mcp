@@ -342,6 +342,8 @@ export type IndexedReadRange = {
 export type IndexedReadRangeResult = {
   file: string;
   ranges: IndexedReadRange[];
-  /** An extreme method is represented by bounded first/last windows instead of a broken body fragment. */
+  /** An extreme method is represented by bounded windows instead of a broken body fragment. */
   extremeMethod?: boolean;
+  /** Requested anchor lines that no returned range covers (budget trimming); presence means the plan is not complete. */
+  uncoveredAnchorLines?: number[];
 };
