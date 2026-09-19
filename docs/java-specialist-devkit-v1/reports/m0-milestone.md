@@ -93,8 +93,23 @@
 
 ## 附录：卡片级一致性审查发现的未闭环项（M1 前置清单）
 
-1. **C2 多词查询**（`OrderService rollback refund`）基线与终态均 FAIL —— M1（T04）首个关闭项。
-2. T03 卡列明的两条单测断言未实现：emoji/CRLF 成本与原字节一致性、budget=0 不得输出空 complete；现有 C3 探针覆盖行覆盖与 LF/CRLF，字节等价与零预算 PARTIAL 无直接单测。
-3. 预算裁剪后"逐锚点未覆盖清单"目前仅在 `queryReadRanges` 层暴露（该层恒为空）；serializer 层仅有通用 `retrievalBudgetOverflowGaps`/`evidenceGaps`，未按锚点行逐项列出 —— 卡要求"列出未覆盖 anchor"为部分满足。
-4. T02 卡的补测清单中"方法重载"与"main/test 源集隔离"无专项测试（删除、重建、AB/BA、同 ID 注入冲突策略、parser 同 FQN 不同 ID 均有）。
-5. K07–K10/K12/K32（T03 绑定）与 K01–K06/K31（T02 绑定）的 runtime 级契约未执行，本里程碑仅函数级/探针级通过；按卡要求在此逐卡列出。
+1. **C2 多词查询**（`OrderService rollback refund`）基线与终态均 FAIL —— M1（T04）首个关闭项。【未修：非 M0 范围】
+2. T03 卡列明的两条单测断言已实现：`sql-read-ranges.test.ts` 新增 CRLF+emoji 窗口字节与真实 UTF-8 切片等价断言（含 bytes > 字符数检查）；`read-plan.test.ts` 新增零字节预算不得输出空 complete、且逐行列出丢失锚点的断言。【已修：commit 0425598】
+3. 预算裁剪后“逐锚点未覆盖清单”已下沉到最终 serializer：`read-plan.ts` 新增 `uncoveredAnchorLineGaps`（按 selectedUnits 的 mergedRanges 对每个候选文件的请求锚点行逐项比对），未覆盖行逐项写入 `evidenceGaps` 并标注 partial；替换了原 provider 层恒为空的空转块。【已修：commit 0425598】
+4. T02 补测清单已闭环：`rows.test.ts` 新增“同名重载方法在同一 v2 owner 下保持不同 owner-scoped ID（含 SQL 往返）”与“同 FQN 在 main/test 源集保持源集隔离身份（含 type 行/round-trip）”两项专项测试。【已修：commit 0425598】
+5. K07–K10/K12/K32（T03 绑定）与 K01–K06/K31（T02 绑定）的 runtime 级契约未执行，本里程碑仅函数级/探针级通过；按卡要求在此逐卡列出。【M1+】
+
+### 审查期其余非阻断发现的处置
+
+- **sibling 副本丢弃时的遥测失真**：`sql-client.ts` 在丢弃不可用副本的 catch 分支重置 `hydratePhases = {}`，被丢弃副本的耗时不再泄漏进后续 hydrate 阶段报告。【已修：commit 0425598】
+- **`v1AliasIds` 每次 `bundlesToRequestedDeclarations` 调用 O(n) 重建**：保持现状。框架视图 bundle 集合有界（`MAX_DECLARATION_IDS_PER_CALL=64` 请求上限、每 worktree 少量文件），且每次请求的 bundle 组合不同、无法跨调用安全缓存；引入缓存会增加失效复杂度而无实际收益。记录为本审查的接受决定而非缺陷。【接受，不改码】
+
+### 修复后回归证据（$RUN/fix-*.log）
+
+| Command | Exit | Raw log | Meaning |
+|---|---:|---|---|
+| 定向（read-plan / sql-read-ranges / rows / sql-client-lifecycle）RED | 1 | fix-red.log | 2 条新行为测试按真实断言失败（serializer 未枚举锚点行），2 条为断言笔误当场修正（`method:` 前缀、end-exclusive 约定），非产品缺陷 |
+| 同组定向 GREEN | 0 | fix-green.log | 73/73 |
+| 全量产品测试 | 0 | fix-full.log | 1160 + 295 全绿 |
+| `npm run gate:pr` | 0 | fix-gate-pr.log | PR-fast 门通过 |
+| 全组探针 | 1 | probe-fix.json | 11/12，唯一失败仍为 C2 多词查询（M1），零回退 |
