@@ -10,6 +10,7 @@ import { AgentRouter } from "../agent-router/index.js";
 import { SqlJavaIndexClient } from "../java-index/sql/sql-client.js";
 import type { JavaFileBundle, JavaIndexStatus } from "../java-index/index-types.js";
 import { RouterJavaIndex, type RouterIndex } from "../java-index/router-java-index.js";
+import { fqnOfTypeId } from "../java-index/framework-index-view.js";
 import { LayoutManager } from "../layout-manager.js";
 import { RepoChangeCoordinator } from "../repo-change-coordinator.js";
 import { GenerationClock, type RepoChangeBatch } from "../repo-generation.js";
@@ -184,8 +185,9 @@ export async function runTask36MutationMatrix(): Promise<Task36MutationMatrix> {
       const bundle = await requiredBundle(client, fixture.importConsumer);
       const field = bundle.fields.find(candidate => candidate.name === "user");
       return field?.type.resolution.state === "RESOLVED_REPO"
-        && field.type.resolution.typeId === "type:b.User"
-        && !bundle.edges.some(edge => edge.kind === "FIELD_TYPE" && edge.toId === "type:a.User");
+        // v2 declaration ids are source-scoped; compare the embedded FQN, not a v1 literal.
+        && fqnOfTypeId(field.type.resolution.typeId) === "b.User"
+        && !bundle.edges.some(edge => edge.kind === "FIELD_TYPE" && fqnOfTypeId(edge.toId) === "a.User");
     }));
 
     const modulePom = path.join(fixture.root, "modules", "extra", "pom.xml");

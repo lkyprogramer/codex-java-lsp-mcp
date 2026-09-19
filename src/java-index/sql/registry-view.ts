@@ -1,5 +1,6 @@
 import type { JavaMethodFacts } from "../index-types.js";
 import type { TypeRegistryView } from "../name-resolver.js";
+import { splitOwnerMemberKey } from "../stable-id.js";
 import type { SqlFactsStore } from "./facts-store.js";
 
 const LRU_LIMIT = 2048;
@@ -18,8 +19,8 @@ export function buildSqlRegistryView(store: SqlFactsStore): TypeRegistryView {
           nested.set(key, cached);
           return cached === "" ? undefined : cached;
         }
-        const sep = key.indexOf("#");
-        const id = sep < 0 ? undefined : store.nestedTypeId(key.slice(0, sep), key.slice(sep + 1));
+        const split = splitOwnerMemberKey(key);
+        const id = split === undefined ? undefined : store.nestedTypeId(split.owner, split.member);
         if (nested.size >= LRU_LIMIT) {
           const oldest = nested.keys().next().value;
           if (oldest !== undefined) nested.delete(oldest);

@@ -8,7 +8,8 @@ import {
   type FrameworkIndexStatus,
   type FrameworkIndexView,
   type FrameworkMethodDeclaration,
-  type FrameworkRepositoryFactMarkers
+  type FrameworkRepositoryFactMarkers,
+  v1AliasIds
 } from "../../java-index/framework-index-view.js";
 import {
   hasStaticStructureEvidence,
@@ -20,6 +21,30 @@ type FactMarkerInput = {
   importPrefixes: readonly string[];
   annotationPrefixes: readonly string[];
 };
+
+/**
+ * id -> relativePath lookup for hydrated framework targets. Besides the v2
+ * source-scoped ids it also answers legacy v1 "type:<fqn>" and
+ * "method:/field:type:<fqn>#..." request ids (lowest-id declaration wins for
+ * duplicated FQNs), so adapter evidence keyed by bare-FQN target ids still
+ * resolves after the identity bump.
+ */
+export function relativePathLookup(declarations: FrameworkDeclarations): Map<string, string> {
+  const out = new Map<string, string>();
+  const entries: Array<readonly [string, string]> = [
+    ...declarations.types.map(type => [type.typeId, type.relativePath] as const),
+    ...declarations.methods.map(method => [method.methodId, method.relativePath] as const),
+    ...declarations.fields.map(field => [field.fieldId, field.relativePath] as const)
+  ];
+  entries.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  for (const [id, relativePath] of entries) {
+    out.set(id, relativePath);
+    for (const alias of v1AliasIds(id)) {
+      if (!out.has(alias)) out.set(alias, relativePath);
+    }
+  }
+  return out;
+}
 
 export function createFrameworkPreflight(index: FrameworkIndexView): FrameworkPreflight {
   let statusRequest: Promise<FrameworkIndexStatus> | undefined;

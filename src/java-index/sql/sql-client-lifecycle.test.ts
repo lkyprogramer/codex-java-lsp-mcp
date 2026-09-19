@@ -138,7 +138,7 @@ test("idle close then ensureFresh reopens the connection", async () => {
   }
 });
 
-test("failed sibling copy does not leave dest and allows a later open", async () => {
+test("failed sibling copy does not leave dest and falls back to cold build", async () => {
   const destDir = await mkdtemp(path.join(tmpdir(), "iod-life-failcopy-"));
   const dest = path.join(destDir, "index.sqlite");
   const bogus = path.join(destDir, "not-a-db");
@@ -146,11 +146,33 @@ test("failed sibling copy does not leave dest and allows a later open", async ()
   const supervisor = new BuilderSupervisor({ repoRoot: destDir, dbPath: dest, idleMs: 5_000, stallMs: 30_000 });
   const client = new SqlJavaIndexClient(destDir, dest, supervisor, 5_000);
   try {
-    await assert.rejects(() => client.open(1, { siblingDbPath: bogus }), /VACUUM INTO|INDEX_PARTIAL/);
+    const status = await client.open(1, { siblingDbPath: bogus });
+    assert.equal(status.state, "BUILDING", "an unusable sibling copy falls back to a cold rebuild instead of rejecting");
     assert.equal(existsSync(dest), false);
     assert.equal(existsSync(`${dest}.copying`), false);
-    const status = await client.open(1);
-    assert.equal(status.state, "BUILDING");
+  } finally {
+    await client.close();
+    await supervisor.stop();
+    await rm(destDir, { recursive: true, force: true });
+  }
+});
+
+test("sibling copy with a stale schema/identity version is discarded and rebuilt", async () => {
+  const destDir = await mkdtemp(path.join(tmpdir(), "iod-life-stale-"));
+  const dest = path.join(destDir, "index.sqlite");
+  const stale = path.join(destDir, "stale.sqlite");
+  {
+    const db = openIndexDb(stale);
+    db.exec("CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);");
+    db.prepare("INSERT INTO meta(key, value) VALUES ('schemaVersion', ?)").run("3");
+    close(db);
+  }
+  const supervisor = new BuilderSupervisor({ repoRoot: destDir, dbPath: dest, idleMs: 5_000, stallMs: 30_000 });
+  const client = new SqlJavaIndexClient(destDir, dest, supervisor, 5_000);
+  try {
+    const status = await client.open(1, { siblingDbPath: stale });
+    assert.equal(status.state, "BUILDING", "a stale-identity seed is never reused; it is rebuilt");
+    assert.equal(existsSync(`${dest}.copying`), false);
   } finally {
     await client.close();
     await supervisor.stop();

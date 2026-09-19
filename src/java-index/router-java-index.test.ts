@@ -584,9 +584,14 @@ test("declarationsById hydrates a method/field/type id across two files with one
 
     const result = await router.declarationsById([methodId, fieldId, typeId, "method:type:demo.Missing#gone()"]);
 
-    assert.deepEqual(result.methods.map(m => m.methodId), [methodId]);
-    assert.deepEqual(result.fields.map(f => f.fieldId), [fieldId]);
-    assert.deepEqual(result.types.map(t => t.typeId), [typeId]);
+    // Legacy v1-shaped request ids still resolve; the hydrated declarations
+    // report their canonical v2 source-scoped ids.
+    assert.equal(result.methods.length, 1);
+    assert.match(result.methods[0]!.methodId, /^method:type:v2:.+#demo\.A#run\(\)$/);
+    assert.equal(result.fields.length, 1);
+    assert.match(result.fields[0]!.fieldId, /^field:type:v2:.+#demo\.A#name$/);
+    assert.equal(result.types.length, 1);
+    assert.match(result.types[0]!.typeId, /^type:v2:.+#demo\.B$/);
     assert.deepEqual(result.missingIds, ["method:type:demo.Missing#gone()"]);
     assert.equal(result.truncated, false);
   } finally {
@@ -629,7 +634,9 @@ test("declarationsById caps an oversized id list rather than issuing an unbounde
     const result = await router.declarationsById(oversizedIds);
 
     assert.equal(result.truncated, true);
-    assert.deepEqual(result.methods.map(m => m.methodId), [realId], "an id within the cap must still resolve normally");
+    assert.equal(result.methods.length, 1);
+    // The v1-shaped request resolves to the canonical v2 method id.
+    assert.match(result.methods[0]!.methodId, /^method:type:v2:.+#demo\.Only#run\(\)$/);
     assert.ok(result.missingIds.length >= 6, "ids beyond the cap must be reported, not silently dropped");
   } finally {
     await router.close();
@@ -641,11 +648,13 @@ test("resolvedCallees returns the real CALLS edge with truncated=false for an or
   write(repoRoot, "src/main/java/demo/Caller.java", "package demo;\nclass Caller {\n  void run() {\n    target();\n  }\n  void target() {}\n}\n");
   const router = await readyRouter(repoRoot);
   try {
-    const callerMethodId = "method:type:demo.Caller#run()";
+    // Resolve the caller's canonical v2 method id from the parsed bundle.
+    const callerBundle = (await router.queryFiles([path.join(repoRoot, "src/main/java/demo/Caller.java")]))[0];
+    const callerMethodId = callerBundle.methods.find(m => m.name === "run")!.methodId;
     const { callees, truncated } = await router.resolvedCallees(callerMethodId, 80);
 
     assert.equal(truncated, false);
-    assert.ok(callees.some(c => c.targetId === "method:type:demo.Caller#target()" && c.kind === "CALLS"));
+    assert.ok(callees.some(c => c.kind === "CALLS" && /^method:type:v2:.+#demo\.Caller#target\(\)$/.test(c.targetId)));
   } finally {
     await router.close();
   }

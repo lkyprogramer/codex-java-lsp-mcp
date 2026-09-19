@@ -1,6 +1,10 @@
 import type { SourceRange } from "../runtime/source-range.js";
 
-export const STABLE_ID_VERSION = 1;
+// v2: named declaration ids are scoped by the normalized repo-relative source
+// path, not by the FQN alone. Two declarations sharing an FQN in different
+// files (same module duplicate, or the same FQN in different source roots)
+// are distinct identities; the FQN remains a multi-valued search attribute.
+export const STABLE_ID_VERSION = 2;
 
 export function normalizeStableRelativePath(relativePath: string): string {
   const normalized = relativePath.replaceAll("\\", "/").replace(/^\.\//, "");
@@ -8,6 +12,21 @@ export function normalizeStableRelativePath(relativePath: string): string {
     throw new Error(`invalid repo-relative path: ${relativePath}`);
   }
   return normalized;
+}
+
+// Identity for a NAMED declaration (v2). The separator "#" and every special
+// character are escaped via encodeURIComponent on both segments, so a path
+// containing "#", "%", spaces, or non-ASCII text cannot forge the separator
+// or collide with another path. Rejects absolute paths, traversal, empty
+// segments, and control/separator characters that make a path non-relative.
+export function scopedNamedTypeId(relativePath: string, fqn: string): string {
+  const p = relativePath.replaceAll("\\", "/").replace(/^\.\//, "");
+  if (!p || p.startsWith("/") || p.includes("\0") || p.includes(":") ||
+      p.split("/").some(s => !s || s === "." || s === "..")) {
+    throw new Error("invalid repo-relative path");
+  }
+  if (!fqn) throw new Error("named type requires FQN");
+  return `type:v2:${encodeURIComponent(p)}#${encodeURIComponent(fqn)}`;
 }
 
 export function javaFileId(relativePath: string): string {
@@ -19,7 +38,9 @@ export function javaTypeId(input: {
   relativePath: string;
   range: SourceRange;
 }): string {
-  if (input.fqn) return `type:${input.fqn}`;
+  if (input.fqn) return scopedNamedTypeId(input.relativePath, input.fqn);
+  // Anonymous/local declarations have no FQN; they stay position-keyed, scoped
+  // to their file. Named top-level/nested declarations always carry an FQN.
   const path = normalizeStableRelativePath(input.relativePath);
   return `type-local:${path}:${input.range.start.line}:${input.range.start.column}`;
 }
@@ -42,6 +63,23 @@ export function javaFieldId(ownerTypeId: string, fieldName: string): string {
 // is: a parameter reorder changes signatureKey, which changes methodId too.
 export function javaParameterId(methodId: string, index: number): string {
   return `${methodId}#p${index}`;
+}
+
+// v2 owner ids ("type:v2:<path>#<fqn>") embed one "#" inside the owner itself,
+// so "owner#member" keys cannot be split on the first "#". Split on the owner
+// boundary instead: v2 owners end at their second "#", v1/local owners at their
+// first "#". Returns undefined for malformed keys.
+export function splitOwnerMemberKey(key: string): { owner: string; member: string } | undefined {
+  if (key.startsWith("type:v2:")) {
+    const first = key.indexOf("#");
+    if (first === -1) return undefined;
+    const second = key.indexOf("#", first + 1);
+    if (second === -1) return undefined;
+    return { owner: key.slice(0, second), member: key.slice(second + 1) };
+  }
+  const sep = key.indexOf("#");
+  if (sep === -1) return undefined;
+  return { owner: key.slice(0, sep), member: key.slice(sep + 1) };
 }
 
 export function javaEdgeId(input: {

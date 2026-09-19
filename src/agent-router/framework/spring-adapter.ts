@@ -18,6 +18,7 @@ import {
   frameworkSeedFiles,
   frameworkStatus,
   rankableFrameworkMethods,
+  relativePathLookup,
   resolveFrameworkTargets
 } from "./shared.js";
 import {
@@ -344,9 +345,7 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
     ? { declarations: { types: [], methods: [], fields: [], missingIds: [], truncated: false }, timedOut: true }
     : await resolveFrameworkTargets(context, targetIds);
   timedOut = timedOut || resolved.timedOut;
-  const relativePathById = new Map<string, string>();
-  for (const type of resolved.declarations.types) relativePathById.set(type.typeId, type.relativePath);
-  for (const method of resolved.declarations.methods) relativePathById.set(method.methodId, method.relativePath);
+  const relativePathById = relativePathLookup(resolved.declarations);
 
   const evidence: EvidenceSignal[] = [];
   let signalSeq = 0;

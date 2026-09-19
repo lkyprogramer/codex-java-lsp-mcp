@@ -1,6 +1,76 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { javaEdgeId, javaFileId, javaMethodId, javaTypeId } from "./stable-id.js";
+import { STABLE_ID_VERSION, javaEdgeId, javaFileId, javaMethodId, javaTypeId, scopedNamedTypeId } from "./stable-id.js";
+
+test("T02: named type IDs are source-scoped so duplicate FQNs across files stay distinct", () => {
+  const a = javaTypeId({
+    fqn: "demo.Shared",
+    relativePath: "modules/a/src/main/java/demo/Shared.java",
+    range: { start: { line: 1, column: 1 }, end: { line: 9, column: 2 } }
+  });
+  const b = javaTypeId({
+    fqn: "demo.Shared",
+    relativePath: "modules/b/src/main/java/demo/Shared.java",
+    range: { start: { line: 1, column: 1 }, end: { line: 9, column: 2 } }
+  });
+  assert.notEqual(a, b, "same FQN in two files must produce two declaration IDs");
+  assert.ok(a.startsWith("type:v2:"), `expected v2 source-scoped id, got ${a}`);
+  assert.ok(b.startsWith("type:v2:"), `expected v2 source-scoped id, got ${b}`);
+});
+
+test("T02: source-scoped type IDs are stable to line shifts and change on rename", () => {
+  const before = javaTypeId({
+    fqn: "demo.Shared",
+    relativePath: "modules/a/src/main/java/demo/Shared.java",
+    range: { start: { line: 4, column: 12 }, end: { line: 9, column: 2 } }
+  });
+  const afterBlankLineInsert = javaTypeId({
+    fqn: "demo.Shared",
+    relativePath: "modules/a/src/main/java/demo/Shared.java",
+    range: { start: { line: 5, column: 12 }, end: { line: 10, column: 2 } }
+  });
+  assert.equal(before, afterBlankLineInsert, "blank-line insertion must not move a named type id");
+  const renamed = javaTypeId({
+    fqn: "demo.Shared",
+    relativePath: "modules/a/src/main/java/demo/Renamed.java",
+    range: { start: { line: 4, column: 12 }, end: { line: 9, column: 2 } }
+  });
+  assert.notEqual(before, renamed, "a rename changes the declaration id");
+  assert.equal(STABLE_ID_VERSION, 2, "identity version must be bumped with the v2 id format");
+});
+
+test("T02: separator and special characters are escaped in source-scoped ids", () => {
+  const tricky = scopedNamedTypeId("modules/a/src/main/java/demo/#weird  Shared.java", "demo.Shared");
+  assert.equal(tricky, `type:v2:${encodeURIComponent("modules/a/src/main/java/demo/#weird  Shared.java")}#${encodeURIComponent("demo.Shared")}`);
+  const body = tricky.slice("type:v2:".length);
+  const hash = body.indexOf("#");
+  assert.ok(hash > 0, "the separator is a raw # while the escaped path carries none");
+  assert.equal(decodeURIComponent(body.slice(hash + 1)), "demo.Shared");
+  assert.equal(decodeURIComponent(body.slice(0, hash)), "modules/a/src/main/java/demo/#weird  Shared.java");
+});
+
+test("T02: scopedNamedTypeId rejects absolute, URI, traversal, and empty-segment paths", () => {
+  for (const invalid of ["/abs/Shared.java", "../Shared.java", "a/../b/Shared.java", "a\0b.java", "a:b.java", "a/./b.java", "a//b.java", ""]) {
+    assert.throws(() => scopedNamedTypeId(invalid, "demo.Shared"), `path ${JSON.stringify(invalid)} must be rejected`);
+  }
+  assert.throws(() => scopedNamedTypeId("a/Shared.java", ""), "named types require an FQN");
+});
+
+test("T02: method IDs derive from the source-scoped owner and stay per-file", () => {
+  const ownerA = javaTypeId({
+    fqn: "demo.Shared",
+    relativePath: "modules/a/src/main/java/demo/Shared.java",
+    range: { start: { line: 1, column: 1 }, end: { line: 9, column: 2 } }
+  });
+  const ownerB = javaTypeId({
+    fqn: "demo.Shared",
+    relativePath: "modules/b/src/main/java/demo/Shared.java",
+    range: { start: { line: 1, column: 1 }, end: { line: 9, column: 2 } }
+  });
+  assert.notEqual(javaMethodId(ownerA, "save()"), javaMethodId(ownerB, "save()"), "same method on same-FQN owners in different files must have distinct ids");
+  assert.equal(javaMethodId(ownerA, "save()"), `method:${ownerA}#save()`);
+});
+
 
 test("stable IDs are independent of worktree absolute root", () => {
   const left = javaFileId("src/main/java/demo/A.java");

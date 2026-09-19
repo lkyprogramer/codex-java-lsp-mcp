@@ -22,7 +22,13 @@ export function buildTypeRegistryView(
 
   for (const type of types) {
     byId.set(type.typeId, type);
-    if (type.fqn) byFqn.set(type.fqn, type.typeId);
+    if (type.fqn) {
+      // Several declarations can share one FQN (duplicate in different source
+      // roots); keep the lowest v2 id - the same deterministic winner the
+      // SQL store (facts-store typeIdByFqn) returns.
+      const existing = byFqn.get(type.fqn);
+      if (!existing || type.typeId < existing) byFqn.set(type.fqn, type.typeId);
+    }
 
     const bucket = bySimpleName.get(type.simpleName);
     if (bucket) bucket.add(type.typeId);

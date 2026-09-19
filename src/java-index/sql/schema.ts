@@ -1,6 +1,10 @@
+import { STABLE_ID_VERSION } from "../stable-id.js";
 import { forgetPrepared, prepareCached, type IndexDatabase } from "./driver.js";
 
-export const SCHEMA_VERSION = 3;
+// v4: identity v2 (source-scoped declaration ids, STABLE_ID_VERSION = 2).
+// Bumping this version drops and rebuilds derived DBs; sibling copies are
+// only reused when their recorded schema+identity versions match exactly.
+export const SCHEMA_VERSION = 4;
 
 export const INDEX_SCHEMA_SQL = `
 CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -71,24 +75,31 @@ function dropAllTables(db: IndexDatabase): void {
   db.exec("PRAGMA foreign_keys=ON");
 }
 
-function currentSchemaVersion(db: IndexDatabase): number | undefined {
-  const table = db.prepare(
-    "SELECT 1 AS ok FROM sqlite_master WHERE type='table' AND name='meta'"
-  ).get();
-  if (!table) return undefined;
-  const row = prepareCached(db, "SELECT value FROM meta WHERE key='schemaVersion'").get() as
-    | { value: string }
-    | undefined;
-  if (!row) return undefined;
-  const parsed = Number(row.value);
-  return Number.isInteger(parsed) ? parsed : undefined;
-}
-
 export function ensureSchema(db: IndexDatabase): void {
-  if (currentSchemaVersion(db) === SCHEMA_VERSION) return;
+  if (schemaVersionsMatch(db)) return;
   dropAllTables(db);
   forgetPrepared(db);
   db.exec(INDEX_SCHEMA_SQL);
   db.prepare("INSERT INTO meta(key, value) VALUES ('schemaVersion', ?)").run(String(SCHEMA_VERSION));
+  db.prepare("INSERT INTO meta(key, value) VALUES ('identityVersion', ?)").run(String(STABLE_ID_VERSION));
   db.prepare("INSERT INTO meta(key, value) VALUES ('factsEncoding', 'deflate-raw')").run();
+}
+
+// True when this database was written by the current schema+identity pair.
+// Sibling-seed copies must pass this check before reuse; anything else is
+// dropped and rebuilt rather than silently mixing old and new identities.
+export function schemaVersionsMatch(db: IndexDatabase): boolean {
+  const table = db.prepare(
+    "SELECT 1 AS ok FROM sqlite_master WHERE type='table' AND name='meta'"
+  ).get();
+  if (!table) return false;
+  const schema = prepareCached(db, "SELECT value FROM meta WHERE key='schemaVersion'").get() as
+    | { value: string }
+    | undefined;
+  if (!schema) return false;
+  if (Number(schema.value) !== SCHEMA_VERSION) return false;
+  const identity = prepareCached(db, "SELECT value FROM meta WHERE key='identityVersion'").get() as
+    | { value: string }
+    | undefined;
+  return !!identity && Number(identity.value) === STABLE_ID_VERSION;
 }

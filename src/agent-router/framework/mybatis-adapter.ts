@@ -25,6 +25,7 @@ import {
   frameworkRepositoryMarkers,
   frameworkSeedFiles,
   frameworkStatus,
+  relativePathLookup,
   rankableFrameworkMethods,
   resolveFrameworkTargets
 } from "./shared.js";
@@ -252,7 +253,7 @@ async function collect(context: FrameworkAdapterContext): Promise<FrameworkColle
     ? { declarations: { types: [], methods: [], fields: [], missingIds: [], truncated: false }, timedOut }
     : await resolveFrameworkTargets(context, targetIds);
   timedOut = timedOut || resolved.timedOut;
-  const relativePathByTypeId = new Map(resolved.declarations.types.map(type => [type.typeId, type.relativePath]));
+  const relativePathByTypeId = relativePathLookup(resolved.declarations);
   for (const item of pendingTypeTargets) {
     const relativePath = relativePathByTypeId.get(item.targetId);
     if (!relativePath) continue;

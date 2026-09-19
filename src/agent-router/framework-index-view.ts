@@ -18,7 +18,7 @@ import type {
   TypeResolutionStrategy
 } from "../java-index/index-types.js";
 import type { MyBatisMapperResourceFacts } from "../java-index/mybatis-types.js";
-import { javaParameterId } from "../java-index/stable-id.js";
+import { javaParameterId, splitOwnerMemberKey } from "../java-index/stable-id.js";
 
 export type FrameworkAnnotation = {
   name: string;
@@ -188,19 +188,28 @@ export const MAX_FRAMEWORK_MYBATIS_NAMESPACES = 256;
  */
 export const MAX_DECLARATION_IDS_PER_CALL = 64;
 
-/** The owning type id embedded in a "type:"/"type-local:" id (itself) or a "field:"/"method:" id (the prefix before its first "#"). undefined for anything else (e.g. a parameter id - declarationsById does not resolve those; parameters are reached via their owning method). */
+/** The owning type id embedded in a "type:"/"type-local:" id (itself) or a "field:"/"method:" id (the owner prefix before the member separator). v2 owner ids ("type:v2:<path>#<fqn>") embed one "#", so a member id carries a second "#" before its signature/name. undefined for anything else (e.g. a parameter id - declarationsById does not resolve those; parameters are reached via their owning method). */
 export function ownerTypeIdOf(id: string): string | undefined {
   if (id.startsWith("type:") || id.startsWith("type-local:")) return id;
   for (const prefix of ["field:", "method:"]) {
     if (!id.startsWith(prefix)) continue;
-    const hashIndex = id.indexOf("#");
-    if (hashIndex === -1) return undefined;
+    const rest = id.slice(prefix.length);
+    if (!rest.startsWith("type:") && !rest.startsWith("type-local:")) return undefined;
+    let ownerEnd: number;
+    if (rest.startsWith("type:v2:")) {
+      const first = rest.indexOf("#");
+      if (first === -1) return undefined;
+      ownerEnd = rest.indexOf("#", first + 1);
+    } else {
+      ownerEnd = rest.indexOf("#");
+    }
+    if (ownerEnd === -1) return undefined;
     // A parameter id (method:<owner>#<sig>#p<N>, see javaParameterId) has a
-    // second "#" after the owner/member split - reject rather than resolve
-    // to the enclosing method's owner type, since declarationsById only
-    // hydrates types/methods/fields, not standalone parameters.
-    if (id.indexOf("#", hashIndex + 1) !== -1) return undefined;
-    return id.slice(prefix.length, hashIndex);
+    // "#" after the owner/member split - reject rather than resolve to the
+    // enclosing method's owner type, since declarationsById only hydrates
+    // types/methods/fields, not standalone parameters.
+    if (rest.indexOf("#", ownerEnd + 1) !== -1) return undefined;
+    return rest.slice(0, ownerEnd);
   }
   return undefined;
 }
@@ -213,8 +222,17 @@ export function relativePathOfLocalTypeId(typeId: string): string | undefined {
   return match ? match[1] : undefined;
 }
 
-/** The bare fqn embedded in a "type:<fqn>" id, or undefined for a "type-local:..." id. */
+/** The bare fqn embedded in a "type:v2:<path>#<fqn>" id (escaped, decoded) or a legacy "type:<fqn>" id, or undefined for a "type-local:…" id. */
 export function fqnOfTypeId(typeId: string): string | undefined {
+  if (typeId.startsWith("type:v2:")) {
+    const hash = typeId.indexOf("#");
+    if (hash === -1) return undefined;
+    try {
+      return decodeURIComponent(typeId.slice(hash + 1));
+    } catch {
+      return undefined;
+    }
+  }
   return typeId.startsWith("type:") ? typeId.slice("type:".length) : undefined;
 }
 
@@ -319,6 +337,29 @@ export function bundleToFrameworkFileFacts(bundle: JavaFileBundle): FrameworkFil
  * fetched to answer the request). ids not found in any of the given bundles
  * are reported in missingIds instead of silently omitted.
  */
+// A v2 declaration also answers legacy "type:<fqn>" (and
+// "method:type:<fqn>#<sig>" / "field:type:<fqn>#<name>") request ids: the
+// framework adapters and older persisted consumers still reference types by
+// bare FQN. Aliases keep the lowest-id declaration, mirroring the
+// deterministic byFqn winner in the store and the in-memory registry.
+export function v1AliasIds(id: string): string[] {
+  if (id.startsWith("type:v2:")) {
+    const fqn = fqnOfTypeId(id);
+    return fqn ? [`type:${fqn}`] : [];
+  }
+  for (const prefix of ["method:", "field:"]) {
+    if (!id.startsWith(prefix)) continue;
+    // splitOwnerMemberKey expects the bare "owner#member" key, not the
+    // prefixed id.
+    const split = splitOwnerMemberKey(id.slice(prefix.length));
+    if (!split) continue;
+    const ownerFqn = fqnOfTypeId(split.owner);
+    if (!ownerFqn) continue;
+    return [`${prefix}type:${ownerFqn}#${split.member}`];
+  }
+  return [];
+}
+
 export function bundlesToRequestedDeclarations(
   bundles: readonly JavaFileBundle[],
   requestedIds: readonly string[]
@@ -332,16 +373,26 @@ export function bundlesToRequestedDeclarations(
     for (const method of declarations.methods) methodsById.set(method.methodId, method);
     for (const field of declarations.fields) fieldsById.set(field.fieldId, field);
   }
+  const typeAliasById = new Map<string, { id: string; decl: FrameworkTypeDeclaration }>();
+  const methodAliasById = new Map<string, { id: string; decl: FrameworkMethodDeclaration }>();
+  const fieldAliasById = new Map<string, { id: string; decl: FrameworkFieldDeclaration }>();
+  const aliasWin = <T,>(map: Map<string, { id: string; decl: T }>, alias: string, id: string, decl: T): void => {
+    const current = map.get(alias);
+    if (current === undefined || current.id > id) map.set(alias, { id, decl });
+  };
+  for (const [id, type] of typesById) for (const alias of v1AliasIds(id)) aliasWin(typeAliasById, alias, id, type);
+  for (const [id, method] of methodsById) for (const alias of v1AliasIds(id)) aliasWin(methodAliasById, alias, id, method);
+  for (const [id, field] of fieldsById) for (const alias of v1AliasIds(id)) aliasWin(fieldAliasById, alias, id, field);
   const types: FrameworkTypeDeclaration[] = [];
   const methods: FrameworkMethodDeclaration[] = [];
   const fields: FrameworkFieldDeclaration[] = [];
   const missingIds: string[] = [];
   for (const id of requestedIds) {
-    const type = typesById.get(id);
+    const type = typesById.get(id) ?? typeAliasById.get(id)?.decl;
     if (type) { types.push(type); continue; }
-    const method = methodsById.get(id);
+    const method = methodsById.get(id) ?? methodAliasById.get(id)?.decl;
     if (method) { methods.push(method); continue; }
-    const field = fieldsById.get(id);
+    const field = fieldsById.get(id) ?? fieldAliasById.get(id)?.decl;
     if (field) { fields.push(field); continue; }
     missingIds.push(id);
   }

@@ -52,7 +52,7 @@ const EXPECTED_CASES = [
   {
     id: "snapshot-corruption",
     testFile: "dist/java-index/sql/sql-client-lifecycle.test.js",
-    testNamePattern: "^failed sibling copy does not leave dest and allows a later open$",
+    testNamePattern: "^failed sibling copy does not leave dest and falls back to cold build$",
     expectedInvariant: "a corrupt sibling snapshot falls back to an empty OPEN store"
   },
   {

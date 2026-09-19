@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
-import { realpath } from "node:fs/promises";
+import { mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -70,12 +71,108 @@ test("writeBundle/readBundle round-trips java-index-v2 and matches JavaIndexStor
   }
 });
 
-test("writeBundle last-write-wins when two files share a type_id", async () => {
+async function parseSameFqnDuplicateModules(backend: Awaited<ReturnType<typeof createJavaParserBackend>>, cache: ParseTreeCache, root: string): Promise<{ a: JavaFileBundle; b: JavaFileBundle }> {
+  const files = [
+    { rel: "modA/src/main/java/demo/Shared.java", body: "package demo;\npublic class Shared {\n  void saveA() {\n  }\n  int valueA = 1;\n}\n" },
+    { rel: "modB/src/main/java/demo/Shared.java", body: "package demo;\npublic class Shared {\n  void saveB() {\n  }\n  int valueB = 2;\n}\n" }
+  ];
+  const bundles = [] as JavaFileBundle[];
+  for (const file of files) {
+    await mkdir(path.join(root, path.dirname(file.rel)), { recursive: true });
+    await writeFile(path.join(root, file.rel), file.body, "utf8");
+    bundles.push(await parseJavaSourceFile({
+      repoRoot: root,
+      resolvedRepoRoot: await realpath(root),
+      inputPath: path.join(root, file.rel),
+      generation: 1,
+      backend,
+      cache
+    }));
+  }
+  return { a: bundles[0]!, b: bundles[1]! };
+}
+
+function sortedTypeIds(db: import("node:sqlite").DatabaseSync): string[] {
+  const rows = db.prepare(
+    "SELECT s.text AS id FROM type t JOIN sym s ON s.id=t.sym ORDER BY s.text"
+  ).all() as Array<{ id: string }>;
+  return rows.map(row => row.id);
+}
+
+test("T02: parser-produced same-FQN declarations in different modules keep distinct source-scoped IDs", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "java-index-t02-samefqn-"));
+  try {
+    const backend = await createJavaParserBackend();
+    const cache = new ParseTreeCache({ ...DEFAULT_PARSE_TREE_CACHE_OPTIONS, maxEntries: 4 });
+    const { a, b } = await parseSameFqnDuplicateModules(backend, cache, root);
+    assert.equal(a.types[0]!.fqn, "demo.Shared");
+    assert.equal(b.types[0]!.fqn, "demo.Shared");
+    const idA = a.types[0]!.typeId;
+    const idB = b.types[0]!.typeId;
+    assert.notEqual(idA, idB, "two parser-produced declarations with the same FQN must have distinct source-scoped ids");
+    const db = openIndexDb(":memory:");
+    try {
+      ensureSchema(db);
+      writeBundle(db, a);
+      writeBundle(db, b);
+      const types = db.prepare("SELECT count(*) AS n FROM type").get() as { n: number };
+      assert.equal(types.n, 2, "each same-FQN declaration keeps its own type row");
+      // Deleting file A's row (writeBundle's delete-then-insert path) must not
+      // touch B's declaration or facts.
+      db.prepare("DELETE FROM file WHERE path=?").run(a.file.relativePath);
+      const remaining = db.prepare("SELECT count(*) AS n FROM type").get() as { n: number };
+      assert.equal(remaining.n, 1);
+      const readB = readBundle(db, b.file.relativePath);
+      assert.ok(readB);
+      assert.ok(readB.types.some(type => type.typeId === idB), "B's declaration survives A's deletion");
+      assert.equal(readB!.methods.some(m => m.methodId.endsWith("#saveB()")), true);
+    } finally {
+      close(db);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("T02: AB and BA write orders produce the same ownership set", async () => {
+  const backend = await createJavaParserBackend();
+  const rootA = await mkdtemp(path.join(os.tmpdir(), "java-index-t02-ab-"));
+  const rootB = await mkdtemp(path.join(os.tmpdir(), "java-index-t02-ba-"));
+  try {
+    const ab = await parseSameFqnDuplicateModules(backend, new ParseTreeCache({ ...DEFAULT_PARSE_TREE_CACHE_OPTIONS, maxEntries: 4 }), rootA);
+    const ba = await parseSameFqnDuplicateModules(backend, new ParseTreeCache({ ...DEFAULT_PARSE_TREE_CACHE_OPTIONS, maxEntries: 4 }), rootB);
+    const dbAb = openIndexDb(":memory:");
+    const dbBa = openIndexDb(":memory:");
+    try {
+      ensureSchema(dbAb);
+      ensureSchema(dbBa);
+      writeBundle(dbAb, ab.a);
+      writeBundle(dbAb, ab.b);
+      writeBundle(dbBa, ba.b);
+      writeBundle(dbBa, ba.a);
+      const namesAb = sortedTypeIds(dbAb as unknown as import("node:sqlite").DatabaseSync);
+      const namesBa = sortedTypeIds(dbBa as unknown as import("node:sqlite").DatabaseSync);
+      assert.equal(namesAb.length, 2);
+      assert.equal(namesBa.length, 2);
+      assert.deepEqual(namesAb, namesBa, "ownership set must not depend on write order");
+    } finally {
+      close(dbAb);
+      close(dbBa);
+    }
+  } finally {
+    await rm(rootA, { recursive: true, force: true });
+    await rm(rootB, { recursive: true, force: true });
+  }
+});
+
+test("artificially injected identical type_id keeps the documented last-write-wins conflict policy", async () => {
   const bundles = await parseFixtures();
   const first = bundles[0]!;
   assert.ok(first.types.length > 0);
   const second = structuredClone(first);
   second.file = { ...second.file, relativePath: "dup/" + first.file.relativePath };
+  // Inject the SAME declaration ids into the second file: a manual collision
+  // (the parser never produces this for distinct source files).
   const db = openIndexDb(":memory:");
   try {
     ensureSchema(db);
@@ -89,9 +186,6 @@ test("writeBundle last-write-wins when two files share a type_id", async () => {
     assert.equal(files.n, 2);
     assert.equal(types.n, first.types.length);
     assert.equal(owner.path, second.file.relativePath);
-    const lost = readBundle(db, first.file.relativePath);
-    assert.ok(lost);
-    assert.ok(lost.types.some(type => type.typeId === first.types[0]!.typeId));
   } finally {
     close(db);
   }

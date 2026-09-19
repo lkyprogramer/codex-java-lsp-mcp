@@ -88,6 +88,18 @@ function edge(overrides: Partial<StaticEdge> & { fromId: string; toId: string; r
   };
 }
 
+test("T02: v2 source-scoped ids parse through the # separator in owner/fqn lookups", () => {
+  const owner = `type:v2:${encodeURIComponent("modules/a/src/main/java/demo/Shared.java")}#demo.Shared`;
+  assert.equal(ownerTypeIdOf(owner), owner, "a v2 type id is its own owner");
+  assert.equal(fqnOfTypeId(owner), "demo.Shared", "fqnOfTypeId must decode the v2 fqn segment");
+  assert.equal(ownerTypeIdOf(`method:${owner}#save(java.lang.String,int)`), owner);
+  assert.equal(ownerTypeIdOf(`field:${owner}#count`), owner);
+  assert.equal(ownerTypeIdOf(javaParameterId(`method:${owner}#save()`, 0)), undefined, "v2 parameter ids stay unresolved");
+  const tricky = `type:v2:${encodeURIComponent("a #b/Shared.java")}#demo.Shared`;
+  assert.equal(fqnOfTypeId(tricky), "demo.Shared");
+  assert.equal(ownerTypeIdOf(`method:${tricky}#run()`), tricky);
+});
+
 test("ownerTypeIdOf: types/type-local ids are their own owner, field/method ids are split on the first #", () => {
   assert.equal(ownerTypeIdOf("type:demo.Widget"), "type:demo.Widget");
   assert.equal(ownerTypeIdOf("type-local:src/main/java/demo/W.java:3:1"), "type-local:src/main/java/demo/W.java:3:1");

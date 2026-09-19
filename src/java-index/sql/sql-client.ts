@@ -34,6 +34,7 @@ import { readIndexCounts, readMeta, writeBuildProgress, writeMeta } from "../../
 import { BuilderSupervisor, type BuilderSupervisorJob } from "../builder-supervisor.js";
 import { noteTelemetryHydratePhases } from "../../telemetry/impact-telemetry.js";
 import { close as closeDb, compactWalFile, DEFAULT_SQLITE_CACHE_KB, openIndexDb, prepareCached, withTransaction, type IndexDatabase } from "./driver.js";
+import { schemaVersionsMatch } from "./schema.js";
 
 const execFileAsync = promisify(execFile);
 import { SqlEntitySearch } from "./entity-search.js";
@@ -98,25 +99,42 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     this.layout = probeLayout(this.repoRoot);
     try {
       if (!existsSync(this.dbPath)) {
+        let siblingReused = false;
         if (options?.siblingDbPath && existsSync(options.siblingDbPath)) {
           this.opened = true;
           this.lastStatus = emptyStatus("BUILDING");
-          const copied = await this.copySibling(options.siblingDbPath);
-          this.hydratePhases.siblingCopy = copied;
-          this.retargetCopiedDb();
-          this.reload();
-          if (this.supervisor) {
-            const waitStarted = Date.now();
-            try {
-              const result = await this.supervisor.submit({ kind: "reconcile", generation, changed: [], deleted: [] });
-              this.hydratePhases.reconcileWait = Date.now() - waitStarted;
-              if (!result.ok) this.markDegraded(result.error ?? "reconcile failed");
-              else this.reload();
-            } catch (error) {
-              this.hydratePhases.reconcileWait = Date.now() - waitStarted;
-              this.markDegraded(error);
+          try {
+            const copied = await this.copySibling(options.siblingDbPath);
+            this.hydratePhases.siblingCopy = copied;
+            // A seed written by an older schema/identity pair must be rebuilt,
+            // never reused: mixing old identity strings with new ones would
+            // split one declaration's edges and facts across two ids.
+            if (!this.copiedSchemaMatches()) {
+              throw new JavaIntelligenceError("INDEX_PARTIAL", "sibling copy schema/identity mismatch; cold rebuild required");
             }
+            this.retargetCopiedDb();
+            this.reload();
+            if (this.supervisor) {
+              const waitStarted = Date.now();
+              try {
+                const result = await this.supervisor.submit({ kind: "reconcile", generation, changed: [], deleted: [] });
+                this.hydratePhases.reconcileWait = Date.now() - waitStarted;
+                if (!result.ok) this.markDegraded(result.error ?? "reconcile failed");
+                else this.reload();
+              } catch (error) {
+                this.hydratePhases.reconcileWait = Date.now() - waitStarted;
+                this.markDegraded(error);
+              }
+            }
+            siblingReused = true;
+          } catch (error) {
+            // Discard the unusable copy and fall through to a cold rebuild.
+            rmSync(this.dbPath, { force: true });
+            this.reload();
+            this.markDegraded(error instanceof Error ? error.message : String(error));
           }
+        }
+        if (siblingReused) {
           noteTelemetryHydratePhases(this.hydratePhases);
           return this.lastStatus;
         }
@@ -442,6 +460,15 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     }
     renameSync(tmp, this.dbPath);
     return Date.now() - started;
+  }
+
+  private copiedSchemaMatches(): boolean {
+    const db = openIndexDb(this.dbPath);
+    try {
+      return schemaVersionsMatch(db);
+    } finally {
+      closeDb(db);
+    }
   }
 
   private retargetCopiedDb(): void {

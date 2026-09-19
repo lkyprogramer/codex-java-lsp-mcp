@@ -15,7 +15,7 @@ import type {
   StaticEdge,
   StaticEdgeKind
 } from "../index-types.js";
-import { javaFileId } from "../stable-id.js";
+import { javaFileId, splitOwnerMemberKey } from "../stable-id.js";
 import { JavaNameResolver, type TypeRegistryView } from "../name-resolver.js";
 import type { MyBatisMapperResourceFacts } from "../mybatis-types.js";
 import { myBatisQualifiedId } from "../mybatis-types.js";
@@ -105,7 +105,14 @@ export class SqlFactsStore {
     this.fieldsById = new PointMap(id => this.cached(`field:${id}`, () => this.selectMemberFacts("field", id)), () => this.countTable("field"));
     this.filesByPath = new PointMap(path => this.cached(`file:${path}`, () => this.selectFacts("file", "path", path)), () => this.countTable("file"));
     this.typeIdByFqn = new PointMap(fqn => this.cached(`fqn:${fqn}`, () => {
-      const row = prepareCached(this.db, "SELECT s.text AS id FROM type t JOIN sym s ON s.id=t.sym WHERE t.fqn=?").get(fqn);
+      // A FQN can name several declarations (same FQN in different source
+      // roots). The winner is deterministic: the lowest v2 id text, which is
+      // scoped by source path - so the same store always resolves the same
+      // declaration, regardless of write order.
+      const row = prepareCached(
+        this.db,
+        "SELECT s.text AS id FROM type t JOIN sym s ON s.id=t.sym WHERE t.fqn=? ORDER BY s.text LIMIT 1"
+      ).get(fqn);
       return typeof row?.id === "string" ? row.id : undefined;
     }), () => asCount(prepareCached(this.db, "SELECT count(DISTINCT fqn) AS n FROM type WHERE fqn IS NOT NULL").get()));
     this.typeIdsBySimpleName = new PointMap(
@@ -113,15 +120,17 @@ export class SqlFactsStore {
       () => asCount(prepareCached(this.db, "SELECT count(DISTINCT simple_name) AS n FROM type").get())
     );
     this.methodIdsByOwnerAndName = new PointMap(key => {
-      const sep = key.indexOf("#");
-      if (sep < 0) return undefined;
-      const owner = symId(this.db, key.slice(0, sep));
+      // v2 owner ids embed their own "#" (path#fqn) - split on the owner
+      // boundary, never on the first "#".
+      const split = splitOwnerMemberKey(key);
+      if (!split) return undefined;
+      const owner = symId(this.db, split.owner);
       if (owner === undefined) return undefined;
       return this.loadIdSet(
         `owner:${key}`,
         "SELECT s.text AS id FROM method m JOIN sym s ON s.id=m.sym WHERE m.owner_sym=? AND m.name=?",
         owner,
-        key.slice(sep + 1)
+        split.member
       );
     }, () => asCount(prepareCached(this.db, "SELECT count(*) AS n FROM (SELECT 1 FROM method GROUP BY owner_sym, name)").get()));
   }

@@ -63,12 +63,13 @@ test("declaration/type edges: implements, field type, return type, param type", 
   const gatewayField = resolved.fields.find(f => f.ownerTypeId === paymentService.typeId && f.name === "gateway")!;
   const payMethod = resolved.methods.find(m => m.ownerTypeId === paymentService.typeId && m.name === "pay")!;
 
-  assert.equal(aliyunGateway.typeId, "type:demo.AliyunGateway");
-  assert.equal(paymentGateway.typeId, "type:demo.PaymentGateway");
-  // javaFieldId (Task 15) embeds the owner's full "type:"-prefixed id, not
-  // just its bare fqn - the plan's illustrative "field:demo.Foo#bar" string
-  // doesn't match that already-established, already-tested convention.
-  assert.equal(gatewayField.fieldId, "field:type:demo.PaymentService#gateway");
+  // v2: declaration ids are source-scoped ("type:v2:<escaped path>#<fqn>");
+  // the FQN stays embedded as a search attribute after the final "#".
+  assert.match(aliyunGateway.typeId, /^type:v2:.+#demo\.AliyunGateway$/);
+  assert.match(paymentGateway.typeId, /^type:v2:.+#demo\.PaymentGateway$/);
+  assert.notEqual(aliyunGateway.typeId, paymentGateway.typeId);
+  // javaFieldId embeds the owner's full source-scoped id, not a bare fqn.
+  assert.match(gatewayField.fieldId, /^field:type:v2:.+#demo\.PaymentService#gateway$/);
 
   const implementsEdge = findEdge(edges, aliyunGateway.typeId, paymentGateway.typeId, "IMPLEMENTS");
   assert.ok(implementsEdge, "expected AliyunGateway IMPLEMENTS PaymentGateway");
