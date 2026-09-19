@@ -203,10 +203,13 @@ const TEXT_BLOB_ALLOW = new Set([
   "kg_summary.facts",
   "entity.kind", "entity.fqn", "entity.simple_name", "entity.simple_name_lc",
   "mybatis_resource.path", "mybatis_resource.namespace", "mybatis_resource.content_hash", "mybatis_resource.facts",
+  // T05: document kind is source metadata and content_hash pins each document
+  // to the file content it was derived from (freshness anchor).
+  "search_doc.kind", "search_doc.content_hash",
   "source_root_coverage.root", "source_root_coverage.state"
 ]);
 
-test("schema v3 has no facts on reconstructable tables and no extra TEXT/BLOB columns", () => {
+test("schema v5 has no facts on reconstructable tables and no extra TEXT/BLOB columns", () => {
   const db = openIndexDb(":memory:");
   try {
     ensureSchema(db);

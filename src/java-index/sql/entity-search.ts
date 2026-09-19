@@ -17,6 +17,7 @@ import {
 import { bindChunks, inClause, prepareCached, type IndexDatabase } from "./driver.js";
 import { asCount } from "./facts-store.js";
 import { symId, symText } from "./sym.js";
+import { searchDocStats } from "./search-docs.js";
 
 const FIELD_IDENTIFIER = 0;
 const FIELD_CHUNK = 1;
@@ -186,6 +187,89 @@ function rankBm25(db: IndexDatabase, task: string, field: 0 | 1, layer: EntityLa
   return scored.slice(0, cap).map(item => toHit(item.entity, layer, item.score));
 }
 
+// Source-linked document route (T05): signature/comment/framework-key text
+// indexed by the writer; statistics are writer-maintained, never rescanned.
+function docHits(db: IndexDatabase, task: string, cap: number): EntityHit[] {
+  const queryTokens = tokenize(task);
+  const tokenSyms = existingTokenSyms(db, queryTokens);
+  if (tokenSyms.length === 0) return [];
+  const stats = searchDocStats(db);
+  if (stats.docCount === 0 || stats.totalLen <= 0) return [];
+  const avgdl = stats.totalLen / stats.docCount;
+  const dfByToken = new Map<string, number>();
+  const postingSyms: number[] = [];
+  for (const token of queryTokens) {
+    const tokenSym = symId(db, token);
+    if (tokenSym === undefined) { dfByToken.set(token, 0); continue; }
+    const dfRow = prepareCached(db, "SELECT df AS n FROM search_doc_df WHERE token_sym=?").get(tokenSym) as
+      | { n: SQLOutputValue }
+      | undefined;
+    const df = asCount(dfRow);
+    dfByToken.set(token, df);
+    if (df > 0) postingSyms.push(tokenSym);
+  }
+  if (postingSyms.length === 0) return [];  // docSym -> { tfByToken, docLen, declarationSym, pathSym }
+  const docs = new Map<number, { tf: Map<string, number>; docLen: number; declarationSym: number; pathSym: number | undefined }>();
+  for (const chunk of bindChunks(postingSyms)) {
+    for (const row of prepareCached(
+      db,
+      `SELECT t.doc_sym AS docSym, t.token_sym AS tokenSym, t.tf AS tf, d.token_len AS docLen
+         FROM search_doc_token t JOIN search_doc d ON d.sym=t.doc_sym
+        WHERE t.token_sym IN ${inClause(chunk.length)}`
+    ).iterate(...chunk) as Iterable<Record<string, SQLOutputValue>>) {
+      const docSym = asInt(row.docSym);
+      const bucket = docs.get(docSym) ?? { tf: new Map<string, number>(), docLen: asInt(row.docLen), declarationSym: 0, pathSym: undefined };
+      bucket.tf.set(symText(db, asInt(row.tokenSym)), asInt(row.tf));
+      docs.set(docSym, bucket);
+    }
+  }
+  if (docs.size === 0) return [];  for (const chunk of bindChunks([...docs.keys()])) {
+    for (const row of prepareCached(
+      db,
+      `SELECT sym AS docSym, declaration_sym AS declarationSym, path_sym AS pathSym FROM search_doc WHERE sym IN ${inClause(chunk.length)}`
+    ).iterate(...chunk) as Iterable<Record<string, SQLOutputValue>>) {
+      const bucket = docs.get(asInt(row.docSym));
+      if (!bucket) continue;
+      bucket.declarationSym = asInt(row.declarationSym);
+      bucket.pathSym = row.pathSym == null ? undefined : asInt(row.pathSym);
+    }
+  }
+  const bestByDeclaration = new Map<number, { score: number; docPathSym: number | undefined; docSym: number }>();
+  for (const [docSym, bucket] of docs) {
+    const score = bm25Score(queryTokens, bucket.tf, bucket.docLen, avgdl, dfByToken, stats.docCount);
+    if (score <= 0) continue;
+    const current = bestByDeclaration.get(bucket.declarationSym);
+    if (!current || score > current.score || (score === current.score && docSym < current.docSym)) {
+      bestByDeclaration.set(bucket.declarationSym, { score, docPathSym: bucket.pathSym, docSym });
+    }
+  }
+  if (bestByDeclaration.size === 0) return [];
+  const declarationSyms = [...bestByDeclaration.keys()];
+  const out: EntityHit[] = [];
+  for (const chunk of bindChunks(declarationSyms)) {
+    for (const row of prepareCached(
+      db,
+      `SELECT e.sym AS sym, e.kind AS kind, e.fqn AS fqn, e.simple_name AS simpleName, e.path_sym AS pathSym
+         FROM entity e WHERE e.sym IN ${inClause(chunk.length)}`
+    ).iterate(...chunk) as Iterable<Record<string, SQLOutputValue>>) {
+      const sym = asInt(row.sym);
+      const best = bestByDeclaration.get(sym);
+      if (!best) continue;
+      out.push({
+        entityId: symText(db, sym),
+        kind: String(row.kind) as EntityKind,
+        fqn: String(row.fqn),
+        simpleName: String(row.simpleName),
+        relativePath: rowPath(db, row.pathSym as SQLOutputValue | null | undefined),
+        layer: "DOCUMENT",
+        score: best.score
+      });
+    }
+  }
+  out.sort((left, right) => right.score - left.score || left.entityId.localeCompare(right.entityId));
+  return out.slice(0, cap);
+}
+
 export class SqlEntitySearch {
   constructor(private readonly db: IndexDatabase) {}
 
@@ -206,8 +290,11 @@ export class SqlEntitySearch {
     }
     const identifier = rankBm25(this.db, task, FIELD_IDENTIFIER, "BM25_IDENTIFIER", cap);
     const chunk = rankBm25(this.db, task, FIELD_CHUNK, "CHUNK", cap);
-    const hits = intent === "text" ? mergeByRank(identifier, chunk, cap) : firstNonEmpty(identifier, chunk, cap);
-    return hits;
+    if (intent === "text") {
+      const doc = docHits(this.db, task, cap);
+      return mergeByRank([identifier, chunk, doc], cap);
+    }
+    return firstNonEmpty(identifier, chunk, cap);
   }
 }
 
@@ -215,12 +302,13 @@ export class SqlEntitySearch {
 // hit. Results interleave by per-route RANK (not cross-field score, which is
 // not comparable across fields); the in-memory oracle performs the identical
 // interleave to keep the parity test meaningful.
-function mergeByRank(identifier: EntityHit[], chunk: EntityHit[], cap: number): EntityHit[] {
+function mergeByRank(routes: EntityHit[][], cap: number): EntityHit[] {
   const seen = new Set<string>();
   const merged: EntityHit[] = [];
   let rank = 0;
-  while (merged.length < cap && rank < Math.max(identifier.length, chunk.length)) {
-    for (const route of [identifier, chunk]) {
+  const maxLen = Math.max(0, ...routes.map(route => route.length));
+  while (merged.length < cap && rank < maxLen) {
+    for (const route of routes) {
       const hit = route[rank];
       if (!hit || seen.has(hit.entityId)) continue;
       seen.add(hit.entityId);

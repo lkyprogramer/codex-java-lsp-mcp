@@ -5,6 +5,7 @@ import type {
   JavaFieldFacts,
   JavaFileFacts,
   JavaImportFact,
+  JavaLeadingComment,
   JavaMethodFacts,
   JavaParseState,
   JavaSourceSet,
@@ -84,6 +85,10 @@ export function extractFromParsedTree(input: ExtractJavaInput, tree: JavaSyntaxT
 
   const root = tree.rootNode;
   for (const child of root.namedChildren) visitCompilationUnit(child, context);
+  // Direct comments (JavaDoc, //, /* */) are discovery clues: they are bound
+  // to the nearest declaration below them, never the other way around - a
+  // comment may hint, program facts stay authoritative.
+  attachLeadingComments(root, context.source, context.types, context.methods);
 
   // countErrorNodes should already catch every ERROR/MISSING node, but a
   // non-COMPLETE parse must never persist parseErrorCount: 0 - that would be
@@ -692,6 +697,57 @@ function simpleNameOf(dotted: string): string {
 
 function textOf(node: JavaSyntaxNode, source: string): string {
   return source.slice(node.startIndex, node.endIndex);
+}
+
+const COMMENT_NODE_TYPES = new Set(["comment", "line_comment", "block_comment", "documentation_comment"]);
+const LEADING_COMMENT_GAP_LINES = 3;
+const LEADING_COMMENT_MAX = 4;
+
+type CollectedComment = { text: string; startLine: number; endLine: number };
+
+function collectComments(node: JavaSyntaxNode, source: string, out: CollectedComment[]): void {
+  if (COMMENT_NODE_TYPES.has(node.type)) {
+    const text = stripCommentMarkers(textOf(node, source));
+    if (text.length > 0) {
+      out.push({ text, startLine: node.startPosition.row + 1, endLine: node.endPosition.row + 1 });
+    }
+  }
+  for (const child of node.children) collectComments(child, source, out);
+}
+
+function attachLeadingComments(
+  root: JavaSyntaxNode,
+  source: string,
+  types: JavaTypeFacts[],
+  methods: JavaMethodFacts[]
+): void {
+  const comments: CollectedComment[] = [];
+  collectComments(root, source, comments);
+  if (comments.length === 0) return;
+  const assign = (startLine: number, target: { leadingComments?: JavaLeadingComment[] }): void => {
+    const leads = comments
+      .filter(comment => comment.endLine <= startLine - 1 && comment.endLine >= startLine - LEADING_COMMENT_GAP_LINES)
+      .sort((a, b) => a.startLine - b.startLine)
+      .slice(-LEADING_COMMENT_MAX);
+    if (leads.length > 0) target.leadingComments = leads;
+  };
+  for (const type of types) assign(type.range.start.line, type);
+  for (const method of methods) assign(method.range.start.line, method);
+}
+
+function stripCommentMarkers(text: string): string {
+  const trimmed = text.trim();
+  if (trimmed.startsWith("/*")) {
+    const inner = trimmed.replace(/^\/\*+/, "").replace(/\*+\/$/, "");
+    const joined = inner
+      .split(/\r?\n/)
+      .map(line => line.replace(/^\s*\*+\s?/, "").trim())
+      .filter(Boolean)
+      .join(" ");
+    return joined || trimmed;
+  }
+  if (trimmed.startsWith("//")) return trimmed.replace(/^\/\/\s?/, "");
+  return trimmed;
 }
 
 function rangeOf(node: JavaSyntaxNode): SourceRange {

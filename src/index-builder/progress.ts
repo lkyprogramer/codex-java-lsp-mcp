@@ -84,6 +84,9 @@ export function clearIndexData(db: IndexDatabase): void {
     DELETE FROM entity_token;
     DELETE FROM entity;
     DELETE FROM entity_df;
+    DELETE FROM search_doc_token;
+    DELETE FROM search_doc;
+    DELETE FROM search_doc_df;
     DELETE FROM kg_summary;
     DELETE FROM kg_edge;
     DELETE FROM kg_node;

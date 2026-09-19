@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { realpath, readFile } from "node:fs/promises";
 import { cpus } from "node:os";
 import path from "node:path";
@@ -16,10 +17,16 @@ import { KnowledgeGraphBuilder } from "../java-knowledge/graph-builder.js";
 import { DEFAULT_PARSE_TREE_CACHE_OPTIONS, ParseTreeCache } from "../java-index/builder/parse-cache.js";
 import { prepareCached, withTransaction, type IndexDatabase } from "../java-index/sql/driver.js";
 import { rebuildEntityDf, writeEntityRecord } from "../java-index/sql/entity-tokens.js";
+import {
+  commitSearchDocStats,
+  rebuildSearchDocDf,
+  replaceSearchDocuments
+} from "../java-index/sql/search-docs.js";
+import { buildSearchDocuments } from "../discovery/search-document.js";
 import { SqlFactsStore } from "../java-index/sql/facts-store.js";
 import { SqlKnowledgeGraph } from "../java-index/sql/knowledge-graph.js";
 import { buildSqlRegistryView } from "../java-index/sql/registry-view.js";
-import { readBundle, replaceBundleEdges, updateBundleFacts, writeBundle, writeMyBatisResource } from "../java-index/sql/rows.js";
+import { readBundle, readMyBatisResource, replaceBundleEdges, updateBundleFacts, writeBundle, writeMyBatisResource } from "../java-index/sql/rows.js";
 import {
   clearIndexData,
   readBuildProgress,
@@ -246,16 +253,44 @@ function writeKnowledgeAndEntities(db: IndexDatabase, generation: number): void 
   graph.generation = generation;
   withTransaction(db, () => {
     db.exec("DELETE FROM entity_token; DELETE FROM entity_df; DELETE FROM entity;");
+    db.exec("DELETE FROM search_doc_token; DELETE FROM search_doc; DELETE FROM search_doc_df;");
+    db.prepare("DELETE FROM meta WHERE key=?").run("searchDocStats");
   });
+  const repoRoot = readMeta(db, "repoRoot") ?? "";
+  const resources = listMyBatisResources(db);
   for (const file of sql.iterFiles()) {
     const bundle = readBundle(db, file.relativePath);
     if (!bundle) continue;
+    const content = repoRoot ? readFileSyncSafe(path.join(repoRoot, file.relativePath)) : undefined;
     withTransaction(db, () => {
       builder.replaceFile(bundle, sql, generation);
       for (const record of recordsFromBundle(bundle)) writeEntityRecord(db, record);
+      // Documents, entities and the file row move in one transaction so a
+      // query can never rank text from a newer hash against facts of an older
+      // one.
+      replaceSearchDocuments(db, bundle.file.relativePath, buildSearchDocuments({ bundle, content, myBatisResources: resources }));
     });
     sql.clearRequestCache();
   }
   rebuildEntityDf(db);
+  rebuildSearchDocDf(db);
+  commitSearchDocStats(db);
   graph.flushMeta();
+}
+
+function readFileSyncSafe(absolutePath: string): string | undefined {
+  try {
+    return readFileSync(absolutePath, "utf8");
+  } catch {
+    return undefined;
+  }
+}
+
+function listMyBatisResources(db: IndexDatabase): MyBatisMapperResourceFacts[] {
+  const out: MyBatisMapperResourceFacts[] = [];
+  for (const row of db.prepare("SELECT path FROM mybatis_resource").iterate() as Iterable<{ path: string }>) {
+    const resource = readMyBatisResource(db, row.path);
+    if (resource) out.push(resource);
+  }
+  return out;
 }

@@ -1,0 +1,99 @@
+// input: Search documents for one file (or a deletion) and the writer DB.
+// output: search_doc/search_doc_token/search_doc_df kept in the same write
+//         transaction as entity rows; docCount/totalLen maintained by the
+//         writer in meta so queries never rescan the corpus.
+// pos: T05 writer; deletion/rename undoes old documents and old df before the
+//      new hash and generation are published.
+import type { IndexDatabase } from "./driver.js";
+import { prepareCached, withTransaction } from "./driver.js";
+
+function runInWriteTx<T>(db: IndexDatabase, fn: () => T): T {
+  if (db.isTransaction) return fn();
+  return withTransaction(db, fn);
+}
+import type { SearchDocument } from "../../discovery/search-document.js";
+import { documentTokens } from "../../discovery/search-document.js";
+import { internSym, internSymNullable } from "./sym.js";
+
+export const SEARCH_DOC_STATS_KEY = "searchDocStats";
+export const SEARCH_DOC_STATS_EMPTY = "0:0";
+
+export function searchDocStats(db: IndexDatabase): { docCount: number; totalLen: number } {
+  const row = prepareCached(db, "SELECT value FROM meta WHERE key=?").get(SEARCH_DOC_STATS_KEY) as { value: string } | undefined;
+  if (!row) return { docCount: 0, totalLen: 0 };
+  const [count, total] = row.value.split(":");
+  return { docCount: Number(count) || 0, totalLen: Number(total) || 0 };
+}
+
+/** Publishes writer-maintained docCount/totalLen (one call per change batch). */
+export function commitSearchDocStats(db: IndexDatabase): void {
+  const docCount = (prepareCached(db, "SELECT count(*) AS n FROM search_doc").get() as { n: number | bigint }).n;
+  const totalLen = (prepareCached(db, "SELECT coalesce(sum(token_len), 0) AS n FROM search_doc").get() as { n: number | bigint }).n;
+  prepareCached(
+    db,
+    `INSERT INTO meta(key, value) VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value=excluded.value`
+  ).run(SEARCH_DOC_STATS_KEY, `${Number(docCount)}:${Number(totalLen)}`);
+}
+
+function deleteTokensForPath(db: IndexDatabase, pathSym: number): void {
+  prepareCached(
+    db,
+    `DELETE FROM search_doc_token WHERE doc_sym IN (SELECT sym FROM search_doc WHERE path_sym=?)`
+  ).run(pathSym);
+  prepareCached(db, "DELETE FROM search_doc WHERE path_sym=?").run(pathSym);
+}
+
+/** Rebuilds search_doc_df from the current postings (writer-side only). */
+export function rebuildSearchDocDf(db: IndexDatabase): void {
+  runInWriteTx(db, () => {
+    db.exec("DELETE FROM search_doc_df");
+    db.exec(
+      "INSERT INTO search_doc_df(token_sym, df) SELECT token_sym, count(*) FROM search_doc_token GROUP BY token_sym"
+    );
+  });
+}
+
+/**
+ * Replaces every document that belongs to one file path. The path key doubles
+ * as the undo handle: a rename or content change deletes the old hash's
+ * documents before the new ones publish, so queries never see both.
+ */
+export function replaceSearchDocuments(db: IndexDatabase, relativePath: string, documents: readonly SearchDocument[]): void {
+  runInWriteTx(db, () => {
+    const pathSym = internSym(db, relativePath);
+    deleteTokensForPath(db, pathSym);
+    const insertDoc = prepareCached(
+      db,
+      `INSERT INTO search_doc(sym, declaration_sym, path_sym, content_hash, kind, start_line, end_line, token_len)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+    const insertToken = prepareCached(db, "INSERT INTO search_doc_token(doc_sym, token_sym, tf) VALUES (?, ?, ?)");
+    for (const doc of documents) {
+      const docSym = internSym(db, doc.documentId);
+      const tokens = documentTokens(doc.normalizedText);
+      insertDoc.run(
+        docSym,
+        internSym(db, doc.declarationId),
+        internSymNullable(db, doc.path),
+        doc.contentHash,
+        doc.sourceKind,
+        doc.startLine,
+        doc.endLine,
+        tokens.length
+      );
+      const tf = new Map<string, number>();
+      for (const token of tokens) tf.set(token, (tf.get(token) ?? 0) + 1);
+      for (const [token, count] of tf) insertToken.run(docSym, internSym(db, token), count);
+    }
+  });
+}
+
+export function deleteSearchDocumentsForPath(db: IndexDatabase, relativePath: string): void {
+  runInWriteTx(db, () => {
+    const row = prepareCached(db, "SELECT id FROM sym WHERE text=?").get(relativePath) as { id: number | bigint } | undefined;
+    if (!row) return;
+    deleteTokensForPath(db, Number(row.id));
+    commitSearchDocStats(db);
+  });
+}

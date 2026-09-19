@@ -1,10 +1,10 @@
 import { STABLE_ID_VERSION } from "../stable-id.js";
 import { forgetPrepared, prepareCached, type IndexDatabase } from "./driver.js";
 
-// v4: identity v2 (source-scoped declaration ids, STABLE_ID_VERSION = 2).
-// Bumping this version drops and rebuilds derived DBs; sibling copies are
-// only reused when their recorded schema+identity versions match exactly.
-export const SCHEMA_VERSION = 4;
+// v5: source-linked search documents (T05). Bumping this version drops and
+// rebuilds derived DBs; sibling copies are only reused when their recorded
+// schema+identity versions match exactly.
+export const SCHEMA_VERSION = 5;
 
 export const INDEX_SCHEMA_SQL = `
 CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -58,6 +58,19 @@ CREATE TABLE entity_token(entity_sym INTEGER NOT NULL REFERENCES entity(sym) ON 
   PRIMARY KEY(entity_sym, field, token_sym)) WITHOUT ROWID;
 CREATE INDEX entity_token_lookup ON entity_token(field, token_sym);
 CREATE TABLE entity_df(field INTEGER NOT NULL, token_sym INTEGER NOT NULL, df INTEGER NOT NULL, PRIMARY KEY(field, token_sym)) WITHOUT ROWID;
+-- Source-linked search documents (T05). Documents, postings and df are written
+-- in the same file-update transaction as entity rows; queries read writer-
+-- maintained stats and never rescan the corpus.
+CREATE TABLE search_doc(sym INTEGER PRIMARY KEY REFERENCES sym(id), declaration_sym INTEGER NOT NULL,
+  path_sym INTEGER, content_hash TEXT NOT NULL, kind TEXT NOT NULL,
+  start_line INTEGER NOT NULL, end_line INTEGER NOT NULL, token_len INTEGER NOT NULL);
+CREATE INDEX search_doc_declaration ON search_doc(declaration_sym);
+CREATE INDEX search_doc_path ON search_doc(path_sym);
+CREATE TABLE search_doc_token(doc_sym INTEGER NOT NULL REFERENCES search_doc(sym) ON DELETE CASCADE,
+  token_sym INTEGER NOT NULL, tf INTEGER NOT NULL,
+  PRIMARY KEY(doc_sym, token_sym)) WITHOUT ROWID;
+CREATE INDEX search_doc_token_lookup ON search_doc_token(token_sym);
+CREATE TABLE search_doc_df(token_sym INTEGER NOT NULL, df INTEGER NOT NULL, PRIMARY KEY(token_sym)) WITHOUT ROWID;
 `;
 
 function quoteIdent(name: string): string {

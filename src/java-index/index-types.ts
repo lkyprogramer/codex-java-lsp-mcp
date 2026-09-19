@@ -85,6 +85,14 @@ export type JavaFieldFacts = {
   range: SourceRange;
 };
 
+export type JavaLeadingComment = {
+  /** Raw comment text without the leading // or /* markers. */
+  text: string;
+  /** 1-based inclusive line bounds within the file. */
+  startLine: number;
+  endLine: number;
+};
+
 export type JavaMethodFacts = {
   methodId: string;
   ownerTypeId: string;
@@ -101,6 +109,8 @@ export type JavaMethodFacts = {
   throws: JavaTypeRef[];
   callSites: JavaCallSiteFact[];
   localTypes: JavaTypeRef[];
+  /** Comments directly above the declaration (most recent within 3 lines); discovery documents their text with the range. */
+  leadingComments?: JavaLeadingComment[];
 };
 
 export type JavaTypeFacts = {
@@ -120,6 +130,8 @@ export type JavaTypeFacts = {
   fieldIds: string[];
   methodIds: string[];
   confidence: number;
+  /** Comments directly above the declaration (most recent within 3 lines). */
+  leadingComments?: JavaLeadingComment[];
 };
 
 export type JavaFileFacts = {
