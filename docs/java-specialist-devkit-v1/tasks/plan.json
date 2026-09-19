@@ -1,0 +1,167 @@
+{
+  "schema": "autonomous-task-plan/v1",
+  "tasks": [
+    {
+      "id": "T01",
+      "spec": "tasks/T01.md",
+      "depends_on": [],
+      "state": "NOT_STARTED",
+      "source_sha": null,
+      "evidence_files": [],
+      "valid_terminal_states": [
+        "DONE"
+      ]
+    },
+    {
+      "id": "T02",
+      "spec": "tasks/T02.md",
+      "depends_on": [
+        "T01"
+      ],
+      "state": "NOT_STARTED",
+      "source_sha": null,
+      "evidence_files": [],
+      "valid_terminal_states": [
+        "DONE"
+      ]
+    },
+    {
+      "id": "T03",
+      "spec": "tasks/T03.md",
+      "depends_on": [
+        "T01"
+      ],
+      "state": "NOT_STARTED",
+      "source_sha": null,
+      "evidence_files": [],
+      "valid_terminal_states": [
+        "DONE"
+      ]
+    },
+    {
+      "id": "T04",
+      "spec": "tasks/T04.md",
+      "depends_on": [
+        "T02"
+      ],
+      "state": "NOT_STARTED",
+      "source_sha": null,
+      "evidence_files": [],
+      "valid_terminal_states": [
+        "DONE"
+      ]
+    },
+    {
+      "id": "T05",
+      "spec": "tasks/T05.md",
+      "depends_on": [
+        "T04"
+      ],
+      "state": "NOT_STARTED",
+      "source_sha": null,
+      "evidence_files": [],
+      "valid_terminal_states": [
+        "DONE"
+      ]
+    },
+    {
+      "id": "T07",
+      "spec": "tasks/T07.md",
+      "depends_on": [
+        "T05"
+      ],
+      "state": "NOT_STARTED",
+      "source_sha": null,
+      "evidence_files": [],
+      "valid_terminal_states": [
+        "DONE"
+      ]
+    },
+    {
+      "id": "T06",
+      "spec": "tasks/T06.md",
+      "depends_on": [
+        "T04",
+        "T05",
+        "T07"
+      ],
+      "state": "NOT_STARTED",
+      "source_sha": null,
+      "evidence_files": [],
+      "valid_terminal_states": [
+        "DONE"
+      ]
+    },
+    {
+      "id": "T08",
+      "spec": "tasks/T08.md",
+      "depends_on": [
+        "T03",
+        "T06"
+      ],
+      "state": "NOT_STARTED",
+      "source_sha": null,
+      "evidence_files": [],
+      "valid_terminal_states": [
+        "DONE"
+      ]
+    },
+    {
+      "id": "T09",
+      "spec": "tasks/T09.md",
+      "depends_on": [
+        "T01",
+        "T06",
+        "T08"
+      ],
+      "state": "NOT_STARTED",
+      "source_sha": null,
+      "evidence_files": [],
+      "valid_terminal_states": [
+        "DONE"
+      ]
+    },
+    {
+      "id": "T10",
+      "spec": "tasks/T10.md",
+      "depends_on": [
+        "T09"
+      ],
+      "state": "NOT_STARTED",
+      "source_sha": null,
+      "evidence_files": [],
+      "valid_terminal_states": [
+        "DONE"
+      ]
+    },
+    {
+      "id": "T11",
+      "spec": "tasks/T11.md",
+      "depends_on": [
+        "T09"
+      ],
+      "state": "NOT_STARTED",
+      "source_sha": null,
+      "evidence_files": [],
+      "valid_terminal_states": [
+        "DONE",
+        "NOT_NEEDED"
+      ]
+    },
+    {
+      "id": "T12",
+      "spec": "tasks/T12.md",
+      "depends_on": [
+        "T09",
+        "T10",
+        "T11"
+      ],
+      "state": "NOT_STARTED",
+      "source_sha": null,
+      "evidence_files": [],
+      "valid_terminal_states": [
+        "DONE"
+      ]
+    }
+  ]
+}

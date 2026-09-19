@@ -1,0 +1,6 @@
+{
+  "task_id": "JSB-LEDGER-03",
+  "path": "src/main/java/lab/ledger/Ledger.java",
+  "before": "cents == 0",
+  "after": "cents <= 0"
+}

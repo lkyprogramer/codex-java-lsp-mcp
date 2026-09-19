@@ -1,0 +1,21 @@
+{
+  "schema": "java-specialist-gates/v1",
+  "status": "proposed-v1-frozen-at-bundle-build",
+  "qa_contract_floor": 0.8,
+  "correctness_floor": 1.0,
+  "new_critical_regressions_allowed": 0,
+  "warm_static_query_p95_target_ms": 150,
+  "event_loop_p95_target_ms": 20,
+  "anchored_impact_p95_max_ratio": 1.2,
+  "dense_recall_at_10_min_delta": 0.1,
+  "dense_input_token_median_max_ratio": 0.85,
+  "release_requires": [
+    "all product-level contract tests measured and passed",
+    "independent locked task evaluation with no new critical regression",
+    "all 8 frozen repair outcomes measured on actual agent patches",
+    "full upstream corpus profile measured separately",
+    "actual paired task runs with provider usage or explicit cost-unmeasured restriction",
+    "macOS product build, native dependencies, JDT and existing release checks",
+    "review of per-case results and known limits"
+  ]
+}

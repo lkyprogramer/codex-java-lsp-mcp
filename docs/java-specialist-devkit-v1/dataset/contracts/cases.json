@@ -1,0 +1,322 @@
+[
+  {
+    "id": "K01",
+    "category": "identity",
+    "given": "modules/a and modules/b define demo.Shared",
+    "expected": "type/method/field identities remain distinct",
+    "owner_task": "T02",
+    "execution": "source-probe:C1-ID-PATH",
+    "product_result": "SEE_CURRENT_SOURCE_PROBES",
+    "severity": "hard-correctness"
+  },
+  {
+    "id": "K02",
+    "category": "identity",
+    "given": "write A then B and B then A",
+    "expected": "declaration rows and path ownership invariant",
+    "owner_task": "T02",
+    "execution": "source-probe:C1-SQL-WRITE-AB",
+    "product_result": "SEE_CURRENT_SOURCE_PROBES",
+    "severity": "hard-correctness"
+  },
+  {
+    "id": "K03",
+    "category": "identity",
+    "given": "main and test declare identical FQN",
+    "expected": "no source-set overwrite; unresolved scope is ambiguous",
+    "owner_task": "T02",
+    "execution": "runtime",
+    "product_result": "NOT_RUN",
+    "severity": "hard-correctness"
+  },
+  {
+    "id": "K04",
+    "category": "identity",
+    "given": "insert blank lines before a named declaration",
+    "expected": "named ID stable; coordinates updated",
+    "owner_task": "T02",
+    "execution": "source-probe:C1-ID-LINE-STABLE",
+    "product_result": "SEE_CURRENT_SOURCE_PROBES",
+    "severity": "hard-correctness"
+  },
+  {
+    "id": "K05",
+    "category": "identity",
+    "given": "delete module A file after both indexed",
+    "expected": "B remains, A declarations/edges/search docs removed",
+    "owner_task": "T02",
+    "execution": "runtime",
+    "product_result": "NOT_RUN",
+    "severity": "hard-correctness"
+  },
+  {
+    "id": "K06",
+    "category": "identity",
+    "given": "same path in two sibling worktrees with different content",
+    "expected": "IDs may be equal locally; repoHash/contentHash cannot be mixed",
+    "owner_task": "T02",
+    "execution": "runtime",
+    "product_result": "NOT_RUN",
+    "severity": "hard-correctness"
+  },
+  {
+    "id": "K07",
+    "category": "range",
+    "given": "long method match line201",
+    "expected": "selected source covers requested line",
+    "owner_task": "T03",
+    "execution": "source-probe:C3-RANGES-LF-201",
+    "product_result": "SEE_CURRENT_SOURCE_PROBES",
+    "severity": "hard-correctness"
+  },
+  {
+    "id": "K08",
+    "category": "range",
+    "given": "two far positions in same long method",
+    "expected": "both anchors survive merge and final serialize",
+    "owner_task": "T03",
+    "execution": "source-probe:C3-RANGES-LF-100,350",
+    "product_result": "SEE_CURRENT_SOURCE_PROBES",
+    "severity": "hard-correctness"
+  },
+  {
+    "id": "K09",
+    "category": "range",
+    "given": "CRLF long method",
+    "expected": "same line containment, original byte costs",
+    "owner_task": "T03",
+    "execution": "source-probe:C3-RANGES-CRLF-201",
+    "product_result": "SEE_CURRENT_SOURCE_PROBES",
+    "severity": "hard-correctness"
+  },
+  {
+    "id": "K10",
+    "category": "range",
+    "given": "emoji before symbol in Unicode.java",
+    "expected": "1-based UTF-16 columns, not UTF-8 byte offsets",
+    "owner_task": "T03",
+    "execution": "fixtures/unicode",
+    "product_result": "NOT_RUN",
+    "severity": "hard-correctness"
+  },
+  {
+    "id": "K11",
+    "category": "range",
+    "given": "helper moved before caller",
+    "expected": "relation unchanged, required evidence still available",
+    "owner_task": "T08",
+    "execution": "runtime",
+    "product_result": "NOT_RUN",
+    "severity": "hard-correctness"
+  },
+  {
+    "id": "K12",
+    "category": "range",
+    "given": "zero budget or anchor larger than budget",
+    "expected": "explicit BUDGET_TOO_SMALL/PARTIAL, no claimed complete output",
+    "owner_task": "T03",
+    "execution": "runtime",
+    "product_result": "NOT_RUN",
+    "severity": "hard-correctness"
+  },
+  {
+    "id": "K13",
+    "category": "discovery",
+    "given": "OrderService rollback refund",
+    "expected": "relevant method competes, not type-only short circuit",
+    "owner_task": "T04",
+    "execution": "source-probe:C2-QUERY-OrderService rollback refund",
+    "product_result": "SEE_CURRENT_SOURCE_PROBES",
+    "severity": "hard-correctness"
+  },
+  {
+    "id": "K14",
+    "category": "discovery",
+    "given": "exact owner#method",
+    "expected": "deterministic exact hit, no vector call",
+    "owner_task": "T04",
+    "execution": "source-probe:C2-QUERY-demo.OrderService#reverseDuplicateCharge",
+    "product_result": "SEE_CURRENT_SOURCE_PROBES",
+    "severity": "hard-correctness"
+  },
+  {
+    "id": "K15",
+    "category": "discovery",
+    "given": "Chinese comment changed without code change",
+    "expected": "current comment retrievable at current content hash",
+    "owner_task": "T05",
+    "execution": "runtime",
+    "product_result": "NOT_RUN",
+    "severity": "hard-correctness"
+  },
+  {
+    "id": "K16",
+    "category": "discovery",
+    "given": "XML namespace plus statement id",
+    "expected": "source-linked mapper statement, not unrelated same-name XML",
+    "owner_task": "T05",
+    "execution": "fixtures/resource",
+    "product_result": "NOT_RUN",
+    "severity": "hard-correctness"
+  },
+  {
+    "id": "K17",
+    "category": "discovery",
+    "given": "broad common terms with scope",
+    "expected": "filter before cap; bounded scan; truncation reason recorded",
+    "owner_task": "T07",
+    "execution": "runtime",
+    "product_result": "NOT_RUN",
+    "severity": "hard-correctness"
+  },
+  {
+    "id": "K18",
+    "category": "discovery",
+    "given": "api.token property value canary",
+    "expected": "key may be indexed, secret value must not be emitted/embedded",
+    "owner_task": "T05",
+    "execution": "fixtures/resource",
+    "product_result": "NOT_RUN",
+    "severity": "hard-correctness"
+  },
+  {
+    "id": "K19",
+    "category": "freshness",
+    "given": "delete/rename/add unknown Java file",
+    "expected": "negative cache invalidated; no stale path resurrection",
+    "owner_task": "T07",
+    "execution": "runtime",
+    "product_result": "NOT_RUN",
+    "severity": "hard-correctness"
+  },
+  {
+    "id": "K20",
+    "category": "freshness",
+    "given": "query begins at generation G, file changes to G+1",
+    "expected": "coherent snapshot or explicit changedDuringRequest/PARTIAL",
+    "owner_task": "T07",
+    "execution": "runtime",
+    "product_result": "NOT_RUN",
+    "severity": "hard-correctness"
+  },
+  {
+    "id": "K21",
+    "category": "freshness",
+    "given": "sibling copy with modified XML only",
+    "expected": "reconcile resource hash before publishing related evidence",
+    "owner_task": "T07",
+    "execution": "runtime",
+    "product_result": "NOT_RUN",
+    "severity": "hard-correctness"
+  },
+  {
+    "id": "K22",
+    "category": "bindings",
+    "given": "overloads with same arity",
+    "expected": "ambiguous/static candidate unless compiler-bound",
+    "owner_task": "T11",
+    "execution": "fixtures/syntax",
+    "product_result": "NOT_RUN",
+    "severity": "hard-correctness"
+  },
+  {
+    "id": "K23",
+    "category": "bindings",
+    "given": "Parent parameter runtime instance Child",
+    "expected": "static target does not assert sole runtime dispatch",
+    "owner_task": "T11",
+    "execution": "fixtures/bindings",
+    "product_result": "NOT_RUN",
+    "severity": "hard-correctness"
+  },
+  {
+    "id": "K24",
+    "category": "bindings",
+    "given": "broken Java source",
+    "expected": "partial parse is not complete negative evidence",
+    "owner_task": "T11",
+    "execution": "fixtures/broken",
+    "product_result": "NOT_RUN",
+    "severity": "hard-correctness"
+  },
+  {
+    "id": "K25",
+    "category": "api",
+    "given": "static query with JDT_BIN=/usr/bin/false",
+    "expected": "successful static results and zero JDT launches",
+    "owner_task": "T06",
+    "execution": "runtime",
+    "product_result": "NOT_RUN",
+    "severity": "hard-correctness"
+  },
+  {
+    "id": "K26",
+    "category": "api",
+    "given": "position/references request",
+    "expected": "keeps explicit JDT requirement and budget",
+    "owner_task": "T06",
+    "execution": "runtime",
+    "product_result": "NOT_RUN",
+    "severity": "hard-correctness"
+  },
+  {
+    "id": "K27",
+    "category": "runtime",
+    "given": "provider timeout/offline/invalid hash",
+    "expected": "fallback to lexical, no negative complete cache",
+    "owner_task": "T10",
+    "execution": "runtime",
+    "product_result": "NOT_RUN",
+    "severity": "runtime-gate"
+  },
+  {
+    "id": "K28",
+    "category": "runtime",
+    "given": "cancel one waiter on shared JDT request",
+    "expected": "other waiters unaffected; backend settled within policy",
+    "owner_task": "T11",
+    "execution": "runtime",
+    "product_result": "NOT_RUN",
+    "severity": "runtime-gate"
+  },
+  {
+    "id": "K29",
+    "category": "runtime",
+    "given": "20 concurrent broad queries",
+    "expected": "queue bounded; deadline/loop delay measured; no full graph prefetch",
+    "owner_task": "T07",
+    "execution": "runtime",
+    "product_result": "NOT_RUN",
+    "severity": "runtime-gate"
+  },
+  {
+    "id": "K30",
+    "category": "runtime",
+    "given": "idle read connection after writer completes",
+    "expected": "WAL converges; no stale snapshot held indefinitely",
+    "owner_task": "T12",
+    "execution": "runtime",
+    "product_result": "NOT_RUN",
+    "severity": "runtime-gate"
+  },
+  {
+    "id": "K31",
+    "category": "syntax",
+    "given": "nested/local/package-private declarations",
+    "expected": "all source declarations remain separately addressable",
+    "owner_task": "T02",
+    "execution": "fixtures/syntax",
+    "product_result": "NOT_RUN",
+    "severity": "hard-correctness"
+  },
+  {
+    "id": "K32",
+    "category": "syntax",
+    "given": "record compact constructor and text block",
+    "expected": "correct ranges and identifiers; braces in text ignored",
+    "owner_task": "T03",
+    "execution": "fixtures/syntax",
+    "product_result": "NOT_RUN",
+    "severity": "hard-correctness"
+  }
+]

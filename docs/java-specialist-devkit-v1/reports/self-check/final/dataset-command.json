@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "/opt/pyvenv/bin/python",
+    "-m",
+    "harness",
+    "validate"
+  ],
+  "exit_code": 0,
+  "timeout": false,
+  "output_limit": false,
+  "elapsed_ms": 633.499,
+  "stdout": "{\"schema\": \"dataset-validation/v1\", \"task_groups\": 36, \"query_variants\": 72, \"clusters\": 12, \"split_counts\": {\"dev\": 24, \"locked\": 12}, \"origin_counts\": {\"authored\": 24, \"upstream-scoped\": 12}, \"errors\": [], \"dataset_hash\": \"c34a7c7c2f261bb273bc622739eae6beff8479ca96512c48942638cd912b8c4d\"}\n",
+  "stderr": ""
+}

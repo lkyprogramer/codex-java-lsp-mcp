@@ -1,0 +1,9 @@
+{
+  "kit_version": "1.0",
+  "created": "2026-09-19",
+  "basis_source_commit": "d86dba38fccc9bf4b6d83703c9effacedbe9a972",
+  "basis_zip_sha256": "0e0dae4432a4467c110cde04532654fd449e7b32f6ef55302316609701f3d427",
+  "guide_sha256": "eff1701033df7e187010dc18d0791993b2bce51da175ef8c3ee3629d1d288197",
+  "guide_is_plan_not_new_measurement": true,
+  "external_labels_independently_reviewed": false
+}

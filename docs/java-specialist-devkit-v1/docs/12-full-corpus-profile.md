@@ -1,0 +1,13 @@
+# 完整公开语料扩展与泛化限制
+
+随包公开任务的源文件是从4个固定commit读取的未改动内容，已核对Git blob。为控制离线包大小与工具下载限制，没有伪装完整仓库。单源文件上很高的file hit没有说服力，因此公共检索效果主张必须跑full profile。
+
+`hydrate-public`用git init→按SHA浅fetch→checkout固定FETCH_HEAD，再逐文件校验seed SHA-256。获取完整PetClinic/MyBatis/Gson/Hikari源码，原创8工程原样复制。只获取源码，不执行仓库install/build脚本；不会获取任意用户指定repo。目录必须不存在，网络必须显式允许。
+
+SHA固定保证源码稳定，不保证依赖仓库可用；若fetch失败，记录BLOCKED_NETWORK，不用默认分支替换。上游源码任务仍是本包原创QA标注，不是上游官方benchmark或历史issue修复验证。
+
+full模式所有检索器都读取同一完整语料与相同忽略规则。当前简单BM25/词面对照只跳过非目标文本和2MiB以上文件，忽略策略应在真实SUT对照时统一声明。若一方只读src/main而另一方还读tests/docs，应先统一或明确为系统差异；禁止报告为单一ranking增益。
+
+完整仓库可能存在多个匹配声明；scope错误和同名collision更有机会暴露。gold required仍对应固定种子范围，不需要编译库就能验证这些源码行为；但Java绑定、运行配置与真正上游repair需要额外build profile。它们不在本包的已测范围。
+
+下一版推荐引入另一个独立标注者选出的真实跨文件issue任务，再冻结新holdout。不得把本次12个局部QA改名为“12个真实开源缺陷修复”。

@@ -1,0 +1,6 @@
+{
+  "task_id": "JSB-ACCESS-03",
+  "path": "src/main/java/lab/access/SignedAccessPolicy.java",
+  "before": "if (now > expiresAt) return false;",
+  "after": "if (now >= expiresAt) return false;"
+}

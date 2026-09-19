@@ -1,0 +1,24 @@
+{
+  "schema": "java-specialist-experiment/v1",
+  "approved_network": false,
+  "approved_model_spend": false,
+  "pilot": {
+    "split": "dev",
+    "task_ids": ["JSB-PAYMENTS-01","JSB-PAYMENTS-03","JSB-INVENTORY-02","JSB-INVENTORY-03","JSB-ACCESS-01","JSB-ACCESS-03","JSB-ADMISSIONS-01","JSB-PRICING-03","JSB-PETCLINIC-02","JSB-MYBATIS-01","JSB-MYBATIS-02","JSB-GSON-03"],
+    "model_profiles": 1,
+    "arms": ["improved-lexical", "lexical-plus-optional-discovery"],
+    "repeats_per_arm": 3,
+    "max_agent_turns": 20,
+    "max_wall_seconds": 180,
+    "max_model_input_tokens": 64000,
+    "max_model_output_tokens": 12000,
+    "raw_usage_required": true
+  },
+  "rules": [
+    "Network and paid inference require separate explicit user authorization.",
+    "Do not use locked labels to select weights or fix query prompts.",
+    "Each arm shares model, system prompt, native tools and task budget.",
+    "Compare stock zvec as a system; claim dense-only effect only on aligned representations.",
+    "Repeats are averaged within tasks, then analyzed by corpus clusters."
+  ]
+}

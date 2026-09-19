@@ -1,0 +1,20 @@
+{
+  "schema": "kit-package-static-audit/v1",
+  "passed": true,
+  "counts_before_manifest": {
+    "*.json": 43,
+    "*.jsonl": 4,
+    "*.md": 74,
+    "*.py": 17,
+    "*.mjs": 1
+  },
+  "checks": [
+    "UTF8",
+    "JSON_JSONL_parse",
+    "Python_compile",
+    "Node_check",
+    "Markdown_fences",
+    "new_document_relative_links"
+  ],
+  "errors": []
+}

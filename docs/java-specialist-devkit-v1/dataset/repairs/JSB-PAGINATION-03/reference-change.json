@@ -1,0 +1,6 @@
+{
+  "task_id": "JSB-PAGINATION-03",
+  "path": "src/main/java/lab/pagination/PageWindow.java",
+  "before": "return (page - 1) * size;",
+  "after": "return ((long) page - 1) * size;"
+}
