@@ -1,4 +1,5 @@
 import type { SQLOutputValue } from "node:sqlite";
+import { classifyQuery } from "../../discovery/query-intent.js";
 import {
   bm25Score,
   extractFqnCandidates,
@@ -10,7 +11,8 @@ import {
   ENTITY_SEARCH_MAX_LIMIT,
   type EntityHit,
   type EntityKind,
-  type EntityLayer
+  type EntityLayer,
+  type EntitySearchMode
 } from "../entity-search.js";
 import { bindChunks, inClause, prepareCached, type IndexDatabase } from "./driver.js";
 import { asCount } from "./facts-store.js";
@@ -187,14 +189,50 @@ function rankBm25(db: IndexDatabase, task: string, field: 0 | 1, layer: EntityLa
 export class SqlEntitySearch {
   constructor(private readonly db: IndexDatabase) {}
 
-  search(task: string, limit = ENTITY_SEARCH_DEFAULT_LIMIT): EntityHit[] {
+  search(task: string, limit: number = ENTITY_SEARCH_DEFAULT_LIMIT, mode: EntitySearchMode = "auto"): EntityHit[] {
     const cap = clampLimit(limit);
-    const fqn = fqnHits(this.db, task, cap);
-    if (fqn.length > 0) return fqn;
-    const simple = simpleNameHits(this.db, task, cap);
-    if (simple.length > 0) return simple;
+    if (task.trim().length === 0) return [];
+    // T04: exact code shapes may short-circuit on the name layers; free-text
+    // task intent must let every route compete, so a class name in the query
+    // never hides the method that matches the intent words. The 1..512 length
+    // contract is enforced at the discovery API boundary, not here, because
+    // internal callers pass empty task text on purpose.
+    const intent = classifyQuery(task, mode);
+    if (intent === "exact") {
+      const fqn = fqnHits(this.db, task, cap);
+      if (fqn.length > 0) return fqn;
+      const simple = simpleNameHits(this.db, task, cap);
+      if (simple.length > 0) return simple;
+    }
     const identifier = rankBm25(this.db, task, FIELD_IDENTIFIER, "BM25_IDENTIFIER", cap);
-    if (identifier.length > 0) return identifier;
-    return rankBm25(this.db, task, FIELD_CHUNK, "CHUNK", cap);
+    const chunk = rankBm25(this.db, task, FIELD_CHUNK, "CHUNK", cap);
+    const hits = intent === "text" ? mergeByRank(identifier, chunk, cap) : firstNonEmpty(identifier, chunk, cap);
+    return hits;
   }
+}
+
+// text intent merges both BM25 routes so a type hit never preempts a method
+// hit. Results interleave by per-route RANK (not cross-field score, which is
+// not comparable across fields); the in-memory oracle performs the identical
+// interleave to keep the parity test meaningful.
+function mergeByRank(identifier: EntityHit[], chunk: EntityHit[], cap: number): EntityHit[] {
+  const seen = new Set<string>();
+  const merged: EntityHit[] = [];
+  let rank = 0;
+  while (merged.length < cap && rank < Math.max(identifier.length, chunk.length)) {
+    for (const route of [identifier, chunk]) {
+      const hit = route[rank];
+      if (!hit || seen.has(hit.entityId)) continue;
+      seen.add(hit.entityId);
+      merged.push(hit);
+      if (merged.length >= cap) break;
+    }
+    rank += 1;
+  }
+  return merged;
+}
+
+function firstNonEmpty(identifier: EntityHit[], chunk: EntityHit[], cap: number): EntityHit[] {
+  if (identifier.length > 0) return identifier.slice(0, cap);
+  return chunk.slice(0, cap);
 }

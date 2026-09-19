@@ -23,6 +23,8 @@ export {
 export const ENTITY_SEARCH_DEFAULT_LIMIT = 3;
 export const ENTITY_SEARCH_MAX_LIMIT = 10;
 
+export type EntitySearchMode = "auto" | "exact" | "text";
+
 export type EntityKind = "type" | "method";
 export type EntityLayer = "FQN" | "SIMPLE_NAME" | "BM25_IDENTIFIER" | "CHUNK";
 

@@ -56,7 +56,7 @@ test("four-layer fallback: FQN exact match beats simpleName", () => {
       relativePath: "src/pay/ApplyPayService.java"
     })
   ];
-  const hits = searchEntities(entities, "please open demo.pay.ApplyPayService for the Pay flow", 3);
+  const hits = searchEntities(entities, "please open demo.pay.ApplyPayService for the Pay flow", 3, "exact");
   assert.equal(hits[0]?.layer, "FQN");
   assert.equal(hits[0]?.fqn, "demo.pay.ApplyPayService");
   assert.equal(hits.every(hit => hit.layer === "FQN"), true);
@@ -79,7 +79,7 @@ test("four-layer fallback: unique simpleName beats identifier BM25", () => {
       identifierTokens: tokenize("storage signed url Unrelated")
     })
   ];
-  const hits = searchEntities(entities, "StorageGateway storage signed url", 3);
+  const hits = searchEntities(entities, "StorageGateway storage signed url", 3, "exact");
   assert.equal(hits[0]?.layer, "SIMPLE_NAME");
   assert.equal(hits[0]?.simpleName, "StorageGateway");
 });
@@ -101,7 +101,7 @@ test("simpleName dictionary ignores camelCase fragments", () => {
       identifierTokens: tokenize("OrderController createPayOrder")
     })
   ];
-  const hits = searchEntities(entities, "OrderController createPayOrder payment admission", 3);
+  const hits = searchEntities(entities, "OrderController createPayOrder payment admission", 3, "exact");
   assert.equal(hits[0]?.layer, "SIMPLE_NAME");
   assert.equal(hits[0]?.simpleName, "OrderController");
   assert.equal(hits.some(hit => hit.simpleName === "Order" && hit.layer === "SIMPLE_NAME"), false);
@@ -135,10 +135,10 @@ test("simpleName dictionary is type-only and prefers the longer exact name", () 
       relativePath: "src/OrderController.java"
     })
   ];
-  const repoHits = searchEntities(entities, "ReportBatchExportTaskRepository findReusableReadyZip report batch", 3);
+  const repoHits = searchEntities(entities, "ReportBatchExportTaskRepository findReusableReadyZip report batch", 3, "exact");
   assert.equal(repoHits[0]?.simpleName, "ReportBatchExportTaskRepository");
   assert.equal(repoHits[0]?.layer, "SIMPLE_NAME");
-  const orderHits = searchEntities(entities, "OrderController createPayOrder payment order", 3);
+  const orderHits = searchEntities(entities, "OrderController createPayOrder payment order", 3, "exact");
   assert.equal(orderHits[0]?.simpleName, "OrderController");
 });
 

@@ -7,8 +7,10 @@ import {
   ENTITY_SEARCH_MAX_LIMIT,
   type EntityHit,
   type EntityLayer,
-  type EntityRecord
+  type EntityRecord,
+  type EntitySearchMode
 } from "../java-index/entity-search.js";
+import { classifyQuery } from "../discovery/query-intent.js";
 
 type Posting = { df: number; tf: Map<string, number> };
 
@@ -80,36 +82,66 @@ function toHit(entity: EntityRecord, layer: EntityLayer, score: number): EntityH
   };
 }
 
-export function searchEntities(entities: readonly EntityRecord[], task: string, limit = ENTITY_SEARCH_DEFAULT_LIMIT): EntityHit[] {
+export function searchEntities(
+  entities: readonly EntityRecord[],
+  task: string,
+  limit = ENTITY_SEARCH_DEFAULT_LIMIT,
+  mode: EntitySearchMode = "auto"
+): EntityHit[] {
   const cap = Math.min(Math.max(1, limit), ENTITY_SEARCH_MAX_LIMIT);
+  if (task.trim().length === 0) return [];
+  // Mirrors SqlEntitySearch: the in-memory reference follows the same intent
+  // routing so the SQL parity test stays a meaningful check (T04).
+  const intent = classifyQuery(task, mode);
   const queryTokens = tokenize(task);
-  const fqnHits = extractFqnCandidates(task)
-    .flatMap(candidate => entities.filter(entity => entity.fqn === candidate || entity.fqn.endsWith(`.${candidate}`)))
-    .filter((entity, index, all) => all.findIndex(item => item.entityId === entity.entityId) === index);
-  if (fqnHits.length > 0) {
-    return fqnHits
-      .slice()
-      .sort((left, right) => left.entityId.localeCompare(right.entityId))
-      .slice(0, cap)
-      .map(entity => toHit(entity, "FQN", 1));
-  }
+  if (intent === "exact") {
+    const fqnHits = extractFqnCandidates(task)
+      .flatMap(candidate => entities.filter(entity => entity.fqn === candidate || entity.fqn.endsWith(`.${candidate}`)))
+      .filter((entity, index, all) => all.findIndex(item => item.entityId === entity.entityId) === index);
+    if (fqnHits.length > 0) {
+      return fqnHits
+        .slice()
+        .sort((left, right) => left.entityId.localeCompare(right.entityId))
+        .slice(0, cap)
+        .map(entity => toHit(entity, "FQN", 1));
+    }
 
-  const nameLexemes = identifierLexemes(task);
-  const simpleHits = entities.filter(entity => entity.kind === "type" && nameLexemes.includes(entity.simpleName.toLowerCase()));
-  if (simpleHits.length > 0) {
-    const df = new Map<string, number>();
-    for (const entity of simpleHits) df.set(entity.simpleName.toLowerCase(), (df.get(entity.simpleName.toLowerCase()) ?? 0) + 1);
-    simpleHits.sort((left, right) => {
-      const lengthDelta = right.simpleName.length - left.simpleName.length;
-      if (lengthDelta !== 0) return lengthDelta;
-      const uniqueDelta = (df.get(left.simpleName.toLowerCase()) ?? 0) - (df.get(right.simpleName.toLowerCase()) ?? 0);
-      if (uniqueDelta !== 0) return uniqueDelta;
-      return left.entityId.localeCompare(right.entityId);
-    });
-    return simpleHits.slice(0, cap).map(entity => toHit(entity, "SIMPLE_NAME", 1));
+    const nameLexemes = identifierLexemes(task);
+    const simpleHits = entities.filter(entity => entity.kind === "type" && nameLexemes.includes(entity.simpleName.toLowerCase()));
+    if (simpleHits.length > 0) {
+      const df = new Map<string, number>();
+      for (const entity of simpleHits) df.set(entity.simpleName.toLowerCase(), (df.get(entity.simpleName.toLowerCase()) ?? 0) + 1);
+      simpleHits.sort((left, right) => {
+        const lengthDelta = right.simpleName.length - left.simpleName.length;
+        if (lengthDelta !== 0) return lengthDelta;
+        const uniqueDelta = (df.get(left.simpleName.toLowerCase()) ?? 0) - (df.get(right.simpleName.toLowerCase()) ?? 0);
+        if (uniqueDelta !== 0) return uniqueDelta;
+        return left.entityId.localeCompare(right.entityId);
+      });
+      return simpleHits.slice(0, cap).map(entity => toHit(entity, "SIMPLE_NAME", 1));
+    }
   }
 
   const identifierHits = rankByBm25(entities, queryTokens, "identifierTokens", "BM25_IDENTIFIER", cap);
+  const chunkHits = rankByBm25(entities, queryTokens, "chunkTokens", "CHUNK", cap);
+  if (intent === "text") return mergeByRank(identifierHits, chunkHits, cap);
   if (identifierHits.length > 0) return identifierHits;
-  return rankByBm25(entities, queryTokens, "chunkTokens", "CHUNK", cap);
+  return chunkHits;
+}
+
+function mergeByRank(identifier: EntityHit[], chunk: EntityHit[], cap: number): EntityHit[] {
+  const seen = new Set<string>();
+  const merged: EntityHit[] = [];
+  let rank = 0;
+  while (merged.length < cap && rank < Math.max(identifier.length, chunk.length)) {
+    for (const route of [identifier, chunk]) {
+      const hit = route[rank];
+      if (!hit || seen.has(hit.entityId)) continue;
+      seen.add(hit.entityId);
+      merged.push(hit);
+      if (merged.length >= cap) break;
+    }
+    rank += 1;
+  }
+  return merged;
 }
