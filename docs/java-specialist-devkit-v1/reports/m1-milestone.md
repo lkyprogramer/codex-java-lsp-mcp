@@ -119,3 +119,19 @@
 ### 附录 A 对结论的影响
 
 `56ffc3f` 修复的是独立评测契约层的真实缺陷（evidence 越界 → 全部 region 作废），修复前"canary 24/24 OK"只有状态级意义；修复后 24/24 valid 且质量数字如上。M1 的 GO 决定不变（边界门 6/6、probe 12/12、真链路 canary、质量对照补齐），但"检索质量与词法控制持平、排序显著更优、证据输出更紧凑"是修复后才可宣称的事实。
+
+## 附录 B：M2 前置清单（M1 审查交接项，含 owner 与详细验收条件）
+
+本轮一致性审查 + code review 的处置结果：**P2 四项中三项已在 M1 修复**（`56ffc3f` preview 幻影行；`5b0b3c6`：ENTITY_STATS_KEYS 合并为 writer 单一导出、`attachLeadingComments` 祖先感知排除（前一方法体注释不再误绑下一声明）、`searchDocStats` 无 meta 时回退一次性扫描（镜像 entity avgLength 模式，文档路由不再静默消失）、冗余三目删除），对应 RED→GREEN 与 1194+295 全量、probe 12/12、canary 24/24（证据：`$RUN/m1b-red.log` e300d9e2a471、`m1b-full.log` 829e0d00b2b5、`m1b-probe.json` 12/12、`m1b-canary/m1-dev-adapter.json` b3f702ada103（source_sha=5b0b3c6e…）、`m1b-boundary/` 六条命令 + 终态 preflight 2a4b002c834d、kit selfcheck 5/5；HEAD `5b0b3c6` tracked diff 空）。以下项**不适合在 M1 修**（依赖 M2 的测量轨道或缺乏当前语料的失败证据），逐条交接：
+
+| # | 项 | 详细背景 | M2 owner | 验收条件 |
+|---|---|---|---|---|
+| M2-1 | `attachLocators` 每命中 3–4 次 PK 点查（sym→type/method→file） | 当前 `src/java-index/sql/entity-search.ts` 对每个 hit 逐条 `SELECT ... WHERE sym=?`；limit≤20 时 ≤80 次点查，M1 语料量级无影响。M2 LIVE 轨道将实测 `event_loop_p95=20ms` 门，若真实长会话下该路径成为热点，再批量化：按 kind 分组、每表一条 `WHERE sym IN (…)`（复用 `bindChunks` 分块），一次取回全部 declaration 行与 file 行 | T08（证据/阅读计划同层，且 M2 是首个实测事件循环延迟的里程碑） | 批量化前后 `searchDetailed` 结果 deepEqual 不变；10k 语料 20 查询队列 P95 不劣化；EXPLAIN 仍全走 PK |
+| M2-2 | explicit `mode=exact` 遇复杂泛型签名不返回明确错误 | T04 卡 step 3 要求"未支持时返回明确错误，不伪造匹配"；M1 的 auto 路径已按卡片回落 text，但显式 `mode=exact` 传入 `List<Map<String,Object>>` 时 `fqnHits`/`simpleNameHits` 零命中后回落 BM25 模糊候选，未报"该形状不支持"。M1 冻结 dev 集无此类查询，无观测失败，故不留 M1 修 | T08（discovery exact 路由的错误契约属证据链上游） | `mode=exact` + 含 `<>` 的签名返回结构化"不支持的形状"错误（而非模糊 hits）；auto 行为不变；exact 回归（C2 探针）保持 3/3 |
+| M2-3 | `symbolSchema.query` 缺外层 `max(512)` | T04 卡"length 约束于外层 schema 与 worker 都执行"：worker 层（`classifyQuery`/`validateArgs`）已执行 512 上限，MCP schema 只有 `min(1)`，超长查询在 server 端才报错（行为等价、报错位置不同） | T09 首项 API 变更顺带（一行 `z.string().min(1).max(512)` + schema 测量） | `measure:tool-schema` 通过；>512 查询在 schema 层即拒 |
+| M2-4 | "注释 HALF_UP vs 代码 DOWN"反向 fixture 单测缺失 | T05 卡 step 6 的专项 fixture 未在 M1 实现（结构上注释只进搜索文本、程序事实全来自 AST；任务级由 `JSB-PRICING-03` 覆盖）。M1 已补"前一方法体注释不迁移"fixture（`5b0b3c6`），但"注释与代码矛盾时注释是线索不是事实"的断言仍缺 | T09（QA/repair 评测直接消费该 fixture 语料） | 新增 fixture：注释写 HALF_UP、代码用 DOWN；断言 (a) 注释词可检索且绑定该声明，(b) 程序事实（常量/调用）仍以 AST 为准，(c) 修复后注释词随新 hash 更新 |
+| M2-5 | K15/K19/K21 runtime 级 freshness 契约 NOT_RUN | M1 仅函数/fixture 级：K20 由 `generation` 快照语义覆盖；K19（删除/重命名负缓存失效）、K21（sibling 副本 XML-only 变更的 resource hash 对账）需要真实运行时（watcher/reconcile 循环）才能判定 | T09（真实 Agent 运行时轨道） | 在 LIVE 轨道按 dataset/contracts/cases.json 的 runtime 定义逐项执行并回填 product_result |
+| M2-6 | full（公开全语料）检索结果 UNMEASURED | T06 验收"dev+full corpus 分别有结果"：M1 仅 bundled-scoped dev split；full 需 `hydrate-public --allow-network`（付费/网络策略外） | T09（LIVE 轨道前置数据准备） | hydrate 后对 full corpus 跑同一 static-m1 臂，报告与 dev 分列，不混算 |
+| M2-7 | framework config key 覆盖面窄于 T05 卡表述 | 现仅 `@RequestMapping` 系/`@FeignClient`/`@Mapper` 注解进 framework-key 文档；任意 config key（properties/yml）未做。dev 集无未覆盖失败 | T11（M3-conditional，按失败归因决定）；若 M2 出现相关失败则提前 | 由 M2 失败归因触发才扩展，不预做 |
+
+**M2 入口检查**：以上 M2-1/M2-2 属于"低成本但缺测量动机/失败证据"项，禁止在无 M2 测量数据前动码（防止无因果证据的效果分支）；M2-3/M2-4 是一行/一个 fixture 的收尾，可在 M2 首个 API 变更或 T09 fixture 准备中顺带完成；M2-5/6/7 依赖 LIVE 轨道本身。
