@@ -65,7 +65,8 @@ test("java_impact tools/list teaches auto-skip and the required/java_symbol retr
     const symbol = listed.tools.find(tool => tool.name === "java_symbol");
     assert.equal(impact?.description, JAVA_IMPACT_TOOL_DESCRIPTION);
     assert.match(impact?.description ?? "", /semanticPolicy=auto/);
-    assert.match(symbol?.description ?? "", /cheaper than java_impact semanticPolicy=required/);
+    assert.match(symbol?.description ?? "", /static discovery over the on-disk index/);
+    assert.match(symbol?.description ?? "", /backend=jdt/);
     const policy = JSON.stringify(impact?.inputSchema?.properties?.semanticPolicy ?? {});
     assert.match(policy, /service-profile/);
     assert.match(policy, /semantic\.used=false/);

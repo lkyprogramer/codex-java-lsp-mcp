@@ -5,6 +5,9 @@
 //      cleared the plan's savedTokens>=200 merge gate).
 import { z } from "zod";
 import { clampLimit, normalizeRepoFile } from "../repo-layout.js";
+import { runStaticDiscovery } from "../discovery/query.js";
+import type { JavaIndexClientApi } from "../java-index/java-index-client-api.js";
+import type { DeadlineBudget } from "../runtime/deadline-budget.js";
 import type { LspLocation, LspLocationLink } from "../jdtls-session.js";
 import type { RequestContext } from "../runtime/request-context.js";
 import type { ToolContext } from "./context.js";
@@ -24,11 +27,25 @@ export const symbolSchema = {
   positionsPerFile: z.number().int().positive().max(20).default(3),
   module: z.string().min(1).optional(),
   layer: z.string().min(1).optional(),
-  sourceSet: z.string().min(1).optional(),
+  sourceSet: z.enum(["main", "test"]).optional(),
+  // T06: operation=query defaults to the static discovery backend (on-disk
+  // index, no JDT); backend=jdt keeps the legacy workspace-symbol channel.
+  backend: z.enum(["static", "jdt"]).optional(),
+  searchMode: z.enum(["auto", "exact", "text"]).optional(),
+  terms: z.array(z.string().min(1).max(64)).max(6).optional(),
   detail: detailSchema
 };
 
 type SymbolArgs = z.infer<z.ZodObject<typeof symbolSchema>>;
+
+/** T06: single JDT admission predicate shared by the public registration
+ *  (mayStartLsp/requireLspEnabled) and the handler, so a static query can
+ *  never be admitted by one layer and rejected by the other. */
+export function symbolNeedsJdt(args: Pick<SymbolArgs, "operation" | "query" | "backend">): boolean {
+  const operation = args.operation ?? (args.query ? "query" : "position");
+  const backend = args.backend ?? (operation === "query" ? "static" : "jdt");
+  return operation !== "query" || backend === "jdt";
+}
 
 export async function javaSymbol(
   context: ToolContext,
@@ -42,6 +59,31 @@ export async function javaSymbol(
   if (operation === "query") {
     if (!args.query) {
       throw new Error("java_symbol operation=query requires query.");
+    }
+    const backend = args.backend ?? "static";
+    if (backend !== "jdt") {
+      const client = context.javaIndexClient;
+      if (!client) {
+        throw new Error("java_symbol operation=query backend=static requires the on-disk Java index; open the repository first.");
+      }
+      // A cold repo may still be building its snapshot; the static route waits
+      // for the index to become servable instead of answering "not open",
+      // mirroring the router's lazy-open semantics for java_impact.
+      await waitStaticIndexReady(client, request?.budget);
+      // Static discovery consumes the shared index snapshot; it never touches
+      // the LSP session, so no semantic timeout is projected onto it. The
+      // request deadline (when present) bounds the query work instead.
+      return runStaticDiscovery(client, {
+        query: args.query,
+        terms: args.terms,
+        searchMode: args.searchMode,
+        limit: args.limit,
+        module: args.module,
+        sourceSet: args.sourceSet,
+        repoRoot: context.repoRoot,
+        repoHash: context.repoHash,
+        budget: request ? { remainingMs: () => request.budget.remainingMs() } : undefined
+      });
     }
     const limit = clampLimit(args.limit);
     const result = await context.session.workspaceSymbols(args.query, limit, request?.budget ?? args.semanticTimeoutMs);
@@ -82,6 +124,20 @@ export async function javaSymbol(
     definitions: await describeContainedLocations(context.repoRoot, result.definitions, args.detail),
     implementations: await describeContainedLocations(context.repoRoot, result.implementations, args.detail)
   };
+}
+
+async function waitStaticIndexReady(client: JavaIndexClientApi, budget?: DeadlineBudget): Promise<void> {
+  try {
+    const status = await client.status();
+    if (status.state !== "BUILDING") return; // READY/DEGRADED serve the current snapshot; discovery reports its coverage
+  } catch {
+    // Client not opened yet (cold repository).
+  }
+  try {
+    await client.awaitPrewarmReady(budget ? { budget } : undefined);
+  } catch {
+    throw new Error("java_symbol static query requires the on-disk Java index, which is not ready yet (repository still building or index unavailable). Retry once the index is READY.");
+  }
 }
 
 async function javaSymbolReferences(

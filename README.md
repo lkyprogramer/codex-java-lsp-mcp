@@ -229,7 +229,7 @@ hook 行为：
 | --- | --- | --- |
 | `java_status` | 查看 server、repo、JDT LS、RepoChangeCoordinator、JavaIndex coverage/generation、lease 和 resource 摘要。`start=false` 仍会为该仓 create runtime（不拉 JDT）；repo 级请求预算 15s。`start=true` 才启动 JDT LS。`detail=diagnostic` 返回完整排障字段。 | 否；启动时需要启用 |
 | `java_impact` | 推荐入口。生成 Java 影响面、候选文件、内部 `rg` 摘要、可读计划、证据缺口和指标。必须给 `anchors[]` 或 `file`/`line`/`column`。**省略** `readPlanMaxItems`（最大 30）和 `deadlineMs`（最大 15000）；不要用旧记忆里的 80 / 120000。 | `semanticPolicy=fast` 不要求；`required` 要求 |
-| `java_symbol` | `operation=query`（默认，给了 query）按 query 搜索 workspace symbols；`operation=position`（默认，给了 file/line/column）查 hover、definition、implementation；`operation=references` 对精确符号位置返回 summary-only references。默认返回 repo-relative 位置、隐藏 raw URI/range。 | 是 |
+| `java_symbol` | `operation=query`（默认，给了 query）走静态 discovery：消费磁盘 Java 索引（`java-discovery/v1`：显式 name、1-based UTF-16 locator、按 contentHash 校验的源码 preview），**不需要 JDT**；`backend=jdt` 保留旧 workspace-symbol 通道。`operation=position`（默认，给了 file/line/column）查 hover、definition、implementation；`operation=references` 对精确符号位置返回 summary-only references（两者始终走 JDT）。默认返回 repo-relative 位置、隐藏 raw URI/range。 | query 默认否（`backend=jdt`、position、references 是） |
 | `java_diagnostics` | 打开 Java 文件并等待短时间返回 JDT LS diagnostics；默认按 repo-relative 文件聚合。 | 是 |
 | `java_runtime` | `action=restart` 重启当前 repo 的 JDT LS session（默认返回动作摘要，只有显式参数才清 cache）；`action=shutdown` 停止当前或全部（`all=true`）JDT LS 子进程，MCP server 保持存活。HTTP daemon 固定拒绝 `all=true`。 | restart 是；shutdown 否 |
 
@@ -253,8 +253,10 @@ hook 行为：
 需要强语义结果时：
 
 ```json
-{"tool":"java_symbol","arguments":{"repoRoot":"/absolute/repo","query":"OrderService"}}
+{"tool":"java_symbol","arguments":{"repoRoot":"/absolute/repo","query":"OrderService","backend":"jdt"}}
 ```
+
+静态 query 返回的 locator（`declaration.selection`，1-based UTF-16）可直接喂给 `java_impact` 的 `file`/`line`/`column`，无需重搜行号；preview 仅在磁盘文件与索引 `contentHash` 一致时返回（`previewKind=source`），否则只报无 preview，不拿摘要冒充源码。
 
 ## 配置
 

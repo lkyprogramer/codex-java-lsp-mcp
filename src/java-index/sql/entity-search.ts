@@ -22,8 +22,10 @@ import {
 } from "../entity-search.js";
 import { bindChunks, inClause, prepareCached, type IndexDatabase } from "./driver.js";
 import { asCount } from "./facts-store.js";
+import { decodeFacts } from "./rows.js";
 import { symId, symText } from "./sym.js";
 import { searchDocStats } from "./search-docs.js";
+import type { JavaMethodFacts, JavaTypeFacts } from "../index-types.js";
 
 const FIELD_IDENTIFIER = 0;
 const FIELD_CHUNK = 1;
@@ -335,6 +337,46 @@ function docHits(
   return out.slice(0, cap);
 }
 
+// T06: declaration locator enrichment for the discovery API. Point lookups
+// only (sym PK, then declaration row, then file row); a hit without a stored
+// range stays unlocatable instead of guessing a line.
+function attachLocators(db: IndexDatabase, hits: EntityHit[]): EntityHit[] {
+  const byEntity = new Map<string, EntityHit>();
+  for (const hit of hits) byEntity.set(hit.entityId, hit);
+  for (const hit of byEntity.values()) {
+    const symRow = prepareCached(db, "SELECT id FROM sym WHERE text=?").get(hit.entityId) as { id: SQLOutputValue } | undefined;
+    const sym = symRow ? asInt(symRow.id) : undefined;
+    if (sym === undefined) continue;
+    const fileRow = hit.kind === "type"
+      ? (prepareCached(db, "SELECT file_id AS fileId, facts FROM type WHERE sym=?").get(sym) as { fileId: SQLOutputValue; facts: SQLOutputValue } | undefined)
+      : (prepareCached(db, "SELECT file_id AS fileId, facts, arity FROM method WHERE sym=?").get(sym) as { fileId: SQLOutputValue; facts: SQLOutputValue; arity: SQLOutputValue } | undefined);
+    if (!fileRow) continue;
+    const declaration = hit.kind === "type"
+      ? (decodeFacts<JavaTypeFacts>(fileRow.facts) ?? undefined)
+      : (decodeFacts<JavaMethodFacts>(fileRow.facts) ?? undefined);
+    const range = declaration?.range;
+    if (range) {
+      hit.line = range.start.line;
+      hit.column = range.start.column;
+    }
+    if (hit.kind === "method") {
+      const arity = (fileRow as { arity?: SQLOutputValue }).arity;
+      if (typeof arity !== "undefined") hit.signature = `${hit.simpleName}(${asInt(arity)} args)`;
+    } else {
+      hit.signature = hit.fqn;
+    }
+    const file = prepareCached(db, "SELECT content_hash AS contentHash, source_root AS sourceRoot, module AS module FROM file WHERE id=?").get(asInt(fileRow.fileId)) as
+      | { contentHash: SQLOutputValue; sourceRoot: SQLOutputValue; module: SQLOutputValue }
+      | undefined;
+    if (file) {
+      hit.contentHash = String(file.contentHash);
+      if (typeof file.sourceRoot === "string" && file.sourceRoot) hit.sourceRoot = file.sourceRoot;
+      if (typeof file.module === "string" && file.module) hit.module = file.module;
+    }
+  }
+  return hits;
+}
+
 export class SqlEntitySearch {
   constructor(private readonly db: IndexDatabase) {}
 
@@ -386,7 +428,7 @@ export class SqlEntitySearch {
     const stop: { reason?: EntitySearchStopReason } = {};
     const finish = (hits: EntityHit[]): DetailedEntitySearchResult => {
       const result: DetailedEntitySearchResult = {
-        hits,
+        hits: attachLocators(this.db, hits),
         truncated: stop.reason !== undefined,
         work: { postings: budget ? budget.visited() : 0 },
         generation

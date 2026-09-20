@@ -46,6 +46,14 @@ export type EntityHit = {
   relativePath: string;
   layer: EntityLayer;
   score: number;
+  // T06: optional declaration locator filled by producers that can resolve it
+  // (SQL client, in-memory oracle). 1-based UTF-16, ready for java_impact.
+  line?: number;
+  column?: number;
+  contentHash?: string;
+  module?: string;
+  sourceRoot?: string;
+  signature?: string;
 };
 
 // T07: query work budget is not the returned row count. It bounds physical

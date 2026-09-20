@@ -13,7 +13,7 @@ import { JAVA_IMPACT_TOOL_DESCRIPTION, impactSchema, javaImpact } from "./tools/
 import { javaRuntime, runtimeSchema } from "./tools/runtime.js";
 import { isDiagnosticDetail } from "./tools/shared.js";
 import { javaStatus, statusSchema, summarizeResourceStatus } from "./tools/status.js";
-import { javaSymbol, symbolSchema } from "./tools/symbol.js";
+import { javaSymbol, symbolNeedsJdt, symbolSchema } from "./tools/symbol.js";
 import { logToolFailure } from "./log.js";
 import { noteTelemetryRepoHash, recordToolInvocation, withTelemetryRequestScope } from "./telemetry/impact-telemetry.js";
 
@@ -85,15 +85,18 @@ export function createMcpServer(
 
   register(track("java_symbol"), {
     title: "Java Symbol",
-    description: "operation=query (default): search workspace symbols. operation=position (default with file/line/column): hover/definition/implementation at a position. operation=references: summary-only references. Always live JDT; cheaper than java_impact semanticPolicy=required for one symbol.",
+    description: "operation=query (default): static discovery over the on-disk index (no JDT); pass backend=jdt for legacy workspace symbols. operation=position (default with file/line/column): hover/definition/implementation at a position. operation=references: summary-only references. position/references and backend=jdt always use live JDT.",
     inputSchema: symbolSchema
   }, args => withContext(args, (context, request) => javaSymbol(context, args, request), {
-    mayStartLsp: true,
-    requireLspEnabled: true,
+    // T06: the JDT admission predicate is computed per request and must match
+    // the handler's own route, or a static query would be rejected by the
+    // outer policy (or worse, start JDT the handler never uses).
+    mayStartLsp: symbolNeedsJdt(args),
+    requireLspEnabled: symbolNeedsJdt(args),
     requestOptions: {
       mode: "balanced",
-      semanticPolicy: "required",
-      deadlineMs: args.semanticTimeoutMs
+      semanticPolicy: symbolNeedsJdt(args) ? "required" : "auto",
+      deadlineMs: symbolNeedsJdt(args) ? args.semanticTimeoutMs : 15000
     }
   }));
 

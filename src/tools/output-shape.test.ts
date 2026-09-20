@@ -136,8 +136,8 @@ test("java_symbol (query/position/references operations) omits raw uri ranges un
   } as unknown as ToolContext;
 
   const request = { budget: requestBudget } as never;
-  const symbolSummary = record(await javaSymbol(context, { operation: "query", query: "DemoService", semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3 }, request));
-  const symbolDiagnostic = record(await javaSymbol(context, { operation: "query", query: "DemoService", semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3, detail: "diagnostic" }, request));
+  const symbolSummary = record(await javaSymbol(context, { operation: "query", backend: "jdt", query: "DemoService", semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3 }, request));
+  const symbolDiagnostic = record(await javaSymbol(context, { operation: "query", backend: "jdt", query: "DemoService", semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3, detail: "diagnostic" }, request));
   const positionSummary = record(await javaSymbol(context, { operation: "position", file: "src/main/java/demo/DemoService.java", line: 5, column: 9, semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3 }, request));
   const referencesSummary = record(await javaSymbol(context, { operation: "references", file: "src/main/java/demo/DemoService.java", line: 5, column: 9, semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3 }, request));
   const referencesDiagnostic = record(await javaSymbol(context, { operation: "references", file: "src/main/java/demo/DemoService.java", line: 5, column: 9, semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3, detail: "diagnostic" }, request));
@@ -200,8 +200,8 @@ test("semantic tools never emit locations from outside the repository", async ()
   } as unknown as ToolContext;
 
   const results = [
-    record(await javaSymbol(context, { operation: "query", query: "Library", semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3 })),
-    record(await javaSymbol(context, { operation: "query", query: "Library", semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3, detail: "diagnostic" })),
+    record(await javaSymbol(context, { operation: "query", backend: "jdt", query: "Library", semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3 })),
+    record(await javaSymbol(context, { operation: "query", backend: "jdt", query: "Library", semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3, detail: "diagnostic" })),
     record(await javaSymbol(context, { operation: "position", file: "src/main/java/demo/DemoService.java", line: 5, column: 9, semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3 })),
     record(await javaSymbol(context, { operation: "position", file: "src/main/java/demo/DemoService.java", line: 5, column: 9, semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3, detail: "diagnostic" })),
     record(await javaSymbol(context, { operation: "references", file: "src/main/java/demo/DemoService.java", line: 5, column: 9, semanticTimeoutMs: 3000, includeDeclaration: false, positionsPerFile: 3 })),

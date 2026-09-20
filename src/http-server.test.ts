@@ -421,7 +421,7 @@ test("two HTTP clients reuse one live LSP root and isolate linked worktree LSP r
 
   const semantic = await firstClient.callTool({
     name: "java_symbol",
-    arguments: { repoRoot: firstRoot, query: "Demo" }
+    arguments: { repoRoot: firstRoot, query: "Demo", backend: "jdt" }
   });
   assert.equal(semantic.isError, undefined);
   assert.deepEqual(toolJson(semantic).items, [], "workspace/symbol must travel through the started LSP connection");
