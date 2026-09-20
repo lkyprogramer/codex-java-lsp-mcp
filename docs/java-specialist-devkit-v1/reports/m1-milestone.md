@@ -90,3 +90,32 @@
 5. **冻结面完好**：`gates.json` / `schemas/` / `dataset/` / `harness/` 自 bundle 至 HEAD 0 行 diff（preflight 校验）；`LIVE_TRACE_V1_FIELD_NAMES` 未扩展；source 报告保护字段未被覆盖
 
 **决定**：**GO**（M1 完成度）——四张任务卡（T04/T05/T07/T06）机制全部落地并提交（`13e0882`/`1df7a6b`/`cb3c58c`/`557ffb7`），M0 唯一探针失败项（C2 多词查询）关闭，probe 12/12，统一产品回归 6/6（1191+295 全绿），真实隔离 MCP canary 24/24 OK 且全程无 JDT。M2 入口条件：开启真实 Agent（LIVE）轨道与全语料基线/对比，实测五项发布门数值；届时 canary 结论方可外推为发布结论。
+## 附录 A：卡片一致性审查（M1 交付后补做）与质量对照补测
+
+对 T04/T05/T07/T06 四张卡逐条对照原始要求，并补跑卡片要求但主报告遗漏的独立数据集质量对照（同一冻结 dataset/corpus，kit `score`/`compare`）。
+
+### 已闭环的缺口（本附录新增证据，代码修复 `56ffc3f`）
+
+1. **产品臂独立检索质量对照（T04/T05/T07 卡均要求）**：主报告此前只有 `static-m1` adapter 状态级结果（24/24 OK），未出 R@10/MRR。补测：对 dev split 24 任务持久化 stage 后，经真实 MCP server（38457，`JDT_BIN=/usr/bin/false`）+ kit `mcp_static.py` 采集，`harness score` 打分，并与 M0 BM25 词法控制臂（`$M0/baseline-bm25-report.json`）做 `harness compare`。
+   - 产品臂（`$RUN/m1-quality/product-scored.json`，sha 前缀 d78fccbeb2e3）：24/24 valid，declaration_recall@10=0.7083，mrr=0.6424，ndcg@10=0.6351，required_line_recall=0.6232，invalid=0，over_budget=0
+   - 对照（`compare-bm25-vs-product.json`，e2122c968baa；同 dataset_hash c34a7c7c…）：recall@10 持平（Δ=0.0，bootstrap 95% [-0.167, +0.250]）；**MRR +0.270（CI [+0.048, +0.516]，显著为正）**；required/received_line_recall **−0.151（CI [-0.316, −0.019]）**；emitted_bytes −816（产品臂输出更紧凑：8 候选 × 12 行 preview，控制臂为 32 行大窗口）。kit 判定 REVIEW_REQUIRED（方向混合），如实记录，不宣称胜出。
+   - 中文/英文分组：两臂同 dataset（zh 查询 + en 变体，primary 变体均为查询主语言），per-cluster 分解见 product-scored.json（gson 1.0/1.0，petclinic 0.0/0.0 为最弱簇）。
+2. **preview `evidenceRange` off-by-one（审查发现的产品真实缺陷，`56ffc3f` 修复）**：`previewAt` 用 `content.split("\n")` 计行，文件尾换行产生幻影行，声明靠近文件尾时 `endLine` 超出物理行数（实测 payments 语料 14 行文件给出 endLine=15）→ kit scorer 将全部 region 判 invalid，22/24 任务质量分全部归零。修复：按 `(?<=\r\n|\n|\r)` 保留行终止符切分（CRLF 亦字节一致），preview 改为 `join("")` 即逐字节源窗口；RED（新测试 `symbol-static.test.ts` "preview evidenceRange stays within physical file lines"）→ GREEN，全量 1192+295 绿，probe 12/12，canary 重跑 24/24 OK（`$RUN/m1-canary-final/`，sha 29c89a66eab8）。修复后产品臂 invalid 22→0，上表质量数字即修复后的真实值。
+3. **边界命令在 `56ffc3f` 重跑**：build:isolated / npm test（1192+295）/ gate:pr / gate:release / measure:tool-schema / measure:production-ts 全部 exit 0（`$RUN/m1-fix-boundary/`、`m1-fix-full.log` 100bac67c230），终态 preflight（`$RUN/m1-fix-boundary/preflight-final.json`，b62ff4c84f9f）source_sha=56ffc3f，tracked diff 空。
+
+### 与卡片要求存在差别的未闭环项（如实列出）
+
+| 卡片要求 | 现状 | 影响 |
+|---|---|---|
+| T04-3：explicit exact 遇复杂泛型签名"返回明确错误，不伪造匹配" | auto 路径对非代码形状回落 text（已实现）；但 `mode=exact` 显式传入 `List<Map<String,Object>>` 时不报错，回落 BM25 模糊候选 | 显式 exact 的复杂泛型请求可能收到模糊结果而非明确错误；对冻结 dev 集无观测影响（无此类查询），影响有限，留 M2 |
+| T04-5/T06：`query` 长度 512 约束"外层 schema 与 worker 都执行" | worker（`classifyQuery`/`validateArgs`）已执行；MCP `symbolSchema` 的 `query` 仅有 `min(1)`，无 `max(512)` | 超长查询在 server 端才报错（功能等价，报错位置不同）；低影响 |
+| T05-6：fixture 反向测试"注释说 HALF_UP 但代码 DOWN" | 结构上成立（注释只进入搜索文本，程序事实全部来自 AST），但 T05 单测未实现该反向 fixture（数据集 `JSB-PRICING-03` 在 M2 任务级覆盖） | 文档级断言缺少专项单测；M2 补 |
+| T05-1："路由/statement/config key" 中的 MyBatis statement 已做（K16）；任意 framework config key 未做 | 仅 `@RequestMapping` 系/`@FeignClient`/`@Mapper` 注解进入 framework-key 文档 | 覆盖面窄于卡片表述，dev 集无未覆盖失败；留 M2 扩展 |
+| T06 验收："bundle dev+full corpus 分别有结果" | 仅 dev split（bundled-scoped）执行；full（公开全语料）需 `hydrate-public --allow-network`，本环境未运行 | full corpus 检索结果 UNMEASURED，与 M0 口径一致 |
+| T07 绑定 K19/K20/K21（runtime 级 freshness 契约） | K20 由 `generation` 字段 + 快照语义覆盖（函数级）；K19/K21 runtime 级未执行，列 NOT_RUN | 与 M0 的 K07–K12 处置一致，M2 真实运行时补 |
+| T04/T05/T07："独立 dataset 同语料预算对照" | 本附录补测后已满足（产品臂 vs BM25 控制臂，同 dataset/corpus/预算档） | 已闭环 |
+| 主报告措辞：T04 "三路合并（entity + search-doc + 名称前缀）" | 实际三路 = identifier BM25 + chunk BM25 + search-doc BM25（T05 前为两路），无独立"名称前缀"路由 | 措辞更正；机制本身符合卡片"identifier 与 body/comment 合并" |
+
+### 附录 A 对结论的影响
+
+`56ffc3f` 修复的是独立评测契约层的真实缺陷（evidence 越界 → 全部 region 作废），修复前"canary 24/24 OK"只有状态级意义；修复后 24/24 valid 且质量数字如上。M1 的 GO 决定不变（边界门 6/6、probe 12/12、真链路 canary、质量对照补齐），但"检索质量与词法控制持平、排序显著更优、证据输出更紧凑"是修复后才可宣称的事实。
