@@ -20,9 +20,22 @@ export const SEARCH_DOC_STATS_EMPTY = "0:0";
 
 export function searchDocStats(db: IndexDatabase): { docCount: number; totalLen: number } {
   const row = prepareCached(db, "SELECT value FROM meta WHERE key=?").get(SEARCH_DOC_STATS_KEY) as { value: string } | undefined;
-  if (!row) return { docCount: 0, totalLen: 0 };
-  const [count, total] = row.value.split(":");
-  return { docCount: Number(count) || 0, totalLen: Number(total) || 0 };
+  if (row && typeof row.value === "string") {
+    const [count, total] = row.value.split(":");
+    const docCount = Number(count);
+    const totalLen = Number(total);
+    if (Number.isFinite(docCount) && Number.isFinite(totalLen)) {
+      return { docCount, totalLen };
+    }
+  }
+  // Legacy or degraded DB without writer-published stats: one-shot scan
+  // fallback (same pattern as the entity-field avgLength reader) so the
+  // document route degrades to a slower-but-correct read instead of silently
+  // disappearing from results.
+  const scan = prepareCached(db, "SELECT count(*) AS n, coalesce(sum(token_len), 0) AS t FROM search_doc").get() as
+    | { n: number | bigint; t: number | bigint }
+    | undefined;
+  return { docCount: Number(scan?.n ?? 0), totalLen: Number(scan?.t ?? 0) };
 }
 
 /** Publishes writer-maintained docCount/totalLen (one call per change batch). */

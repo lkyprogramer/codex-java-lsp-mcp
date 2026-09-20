@@ -84,7 +84,7 @@ export function rebuildEntityDf(db: IndexDatabase): void {
   }
 }
 
-const ENTITY_STATS_KEYS = { identifier: "entityStats:identifier", chunk: "entityStats:chunk" } as const;
+export const ENTITY_STATS_KEYS = { identifier: "entityStats:identifier", chunk: "entityStats:chunk" } as const;
 
 /** Publishes per-field docCount/totalLen so queries never scan the entity table. */
 export function commitEntityStats(db: IndexDatabase): void {

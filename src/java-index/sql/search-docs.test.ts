@@ -17,7 +17,8 @@ import { rebuildEntityDf, writeEntityRecord } from "./entity-tokens.js";
 import {
   commitSearchDocStats,
   rebuildSearchDocDf,
-  replaceSearchDocuments
+  replaceSearchDocuments,
+  searchDocStats
 } from "./search-docs.js";
 import { SqlEntitySearch } from "./entity-search.js";
 
@@ -40,6 +41,20 @@ const SERVICE_SOURCE_V2 = [
   "public class Svc {",
   "    /** 执行冻结步骤 */",
   "    public void refund() {",
+  "    }",
+  "}",
+  ""
+].join("\n");
+
+const MISBIND_SOURCE = [
+  "package demo;",
+  "",
+  "public class Mis {",
+  "    public void first() {",
+  "        // ledger-only note ZQXV77",
+  "    }",
+  "    /** step for second */",
+  "    public void second() {",
   "    }",
   "}",
   ""
@@ -215,4 +230,70 @@ test("T05: document ids are deterministic over declaration, kind, range, hash an
   assert.equal(searchDocumentId(base), "method:demo.Svc#refund()|comment|3|3|h1|1");
   const other: SearchDocument = { documentId: "", ...base, contentHash: "h2" };
   assert.notEqual(searchDocumentId(other), searchDocumentId(base), "a content change produces a new document identity");
+});
+test("T05: a body comment inside the previous method never migrates to the next declaration", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "java-index-t05-misbind-"));
+  try {
+    const backend = await createJavaParserBackend();
+    const db = openIndexDb(":memory:");
+    try {
+      ensureSchema(db);
+      const bundle = await writeAndParse(root, backend, MISBIND_SOURCE);
+      const second = bundle.methods.find(method => method.name === "second");
+      assert.ok(second, "the method parses");
+      assert.ok(second!.leadingComments?.some(comment => comment.text.includes("step for second")),
+        "the direct comment above the method still binds to it");
+      assert.ok(!second!.leadingComments?.some(comment => comment.text.includes("ZQXV77")),
+        `the sibling method's body comment must not become the next declaration's leading comment, got ${JSON.stringify(second?.leadingComments)}`);
+      const first = bundle.methods.find(method => method.name === "first");
+      assert.ok(!first!.leadingComments?.some(comment => comment.text.includes("ZQXV77")),
+        "a body comment is not a leading comment of its own method");
+
+      writeBundle(db, bundle);
+      for (const record of recordsFromBundle(bundle)) writeEntityRecord(db, record);
+      replaceSearchDocuments(db, bundle.file.relativePath, buildSearchDocuments({ bundle, content: MISBIND_SOURCE }));
+      rebuildEntityDf(db);
+      rebuildSearchDocDf(db);
+      commitSearchDocStats(db);
+      const search = new SqlEntitySearch(db);
+      assert.equal(
+        search.search("ZQXV77", 5).filter(hit => hit.layer === "DOCUMENT").length,
+        0,
+        "an in-body comment is not a source-linked document of any declaration"
+      );
+    } finally {
+      close(db);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("T05: without writer-published stats the document route scans instead of vanishing", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "java-index-t05-stats-fallback-"));
+  try {
+    const backend = await createJavaParserBackend();
+    const db = openIndexDb(":memory:");
+    try {
+      ensureSchema(db);
+      const bundle = await writeAndParse(root, backend, SERVICE_SOURCE);
+      writeBundle(db, bundle);
+      for (const record of recordsFromBundle(bundle)) writeEntityRecord(db, record);
+      replaceSearchDocuments(db, bundle.file.relativePath, buildSearchDocuments({ bundle, content: SERVICE_SOURCE }));
+      rebuildEntityDf(db);
+      rebuildSearchDocDf(db);
+      // Deliberately no commitSearchDocStats: simulate a legacy/degraded DB
+      // whose documents exist but whose meta stats row was never published.
+      const stats = searchDocStats(db);
+      assert.ok(stats.docCount > 0 && stats.totalLen > 0,
+        `stats must fall back to the stored documents, got ${JSON.stringify(stats)}`);
+      const search = new SqlEntitySearch(db);
+      assert.ok(search.search("冲正", 5).some(hit => hit.layer === "DOCUMENT"),
+        "the document route stays alive without the meta stats row");
+    } finally {
+      close(db);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

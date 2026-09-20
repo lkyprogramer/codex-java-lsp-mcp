@@ -724,15 +724,29 @@ function attachLeadingComments(
   const comments: CollectedComment[] = [];
   collectComments(root, source, comments);
   if (comments.length === 0) return;
-  const assign = (startLine: number, target: { leadingComments?: JavaLeadingComment[] }): void => {
+  const decls = [
+    ...types.map(type => ({ start: type.range.start.line, end: type.range.end.line, target: type })),
+    ...methods.map(method => ({ start: method.range.start.line, end: method.range.end.line, target: method }))
+  ];
+  const assign = (decl: { start: number; end: number; target: { leadingComments?: JavaLeadingComment[] } }): void => {
+    const startLine = decl.start;
+    // A comment inside the body of a *sibling* declaration (one the target
+    // does not live inside, such as the previous method) belongs to that
+    // declaration and must not become the next declaration's leading comment;
+    // enclosing types are ancestors and never block a direct comment.
     const leads = comments
       .filter(comment => comment.endLine <= startLine - 1 && comment.endLine >= startLine - LEADING_COMMENT_GAP_LINES)
+      .filter(comment => !decls.some(other =>
+        other !== decl &&
+        !(startLine > other.start && startLine <= other.end) &&
+        comment.startLine >= other.start &&
+        comment.endLine <= other.end
+      ))
       .sort((a, b) => a.startLine - b.startLine)
       .slice(-LEADING_COMMENT_MAX);
-    if (leads.length > 0) target.leadingComments = leads;
+    if (leads.length > 0) decl.target.leadingComments = leads;
   };
-  for (const type of types) assign(type.range.start.line, type);
-  for (const method of methods) assign(method.range.start.line, method);
+  for (const decl of decls) assign(decl);
 }
 
 function stripCommentMarkers(text: string): string {

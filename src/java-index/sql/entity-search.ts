@@ -25,6 +25,7 @@ import { asCount } from "./facts-store.js";
 import { decodeFacts } from "./rows.js";
 import { symId, symText } from "./sym.js";
 import { searchDocStats } from "./search-docs.js";
+import { ENTITY_STATS_KEYS } from "./entity-tokens.js";
 import type { JavaMethodFacts, JavaTypeFacts } from "../index-types.js";
 
 const FIELD_IDENTIFIER = 0;
@@ -142,8 +143,8 @@ function simpleNameHits(db: IndexDatabase, task: string, cap: number): EntityHit
 // T07: corpus statistics are maintained by the writer (rebuildEntityDf)
 // in meta so a query never pays for a full entity scan to derive BM25
 // normalization. DBs written before the stats existed fall back to a scan.
-const ENTITY_STATS_KEYS = { identifier: "entityStats:identifier", chunk: "entityStats:chunk" } as const;
-
+// The key constants are owned by the writer (entity-tokens) so the reader can
+// never drift from the keys the writer publishes.
 function avgLength(db: IndexDatabase, column: "ident_len" | "chunk_len"): { avgdl: number; documentCount: number } {
   const key = column === "ident_len" ? ENTITY_STATS_KEYS.identifier : ENTITY_STATS_KEYS.chunk;
   const metaRow = prepareCached(db, "SELECT value FROM meta WHERE key=?").get(key) as { value: string } | undefined;
@@ -424,7 +425,6 @@ export class SqlEntitySearch {
         options.budget.remainingMs ?? (() => Number.POSITIVE_INFINITY)
       );
     }
-    const work = { postings: budget ? 0 : 0 };
     const stop: { reason?: EntitySearchStopReason } = {};
     const finish = (hits: EntityHit[]): DetailedEntitySearchResult => {
       const result: DetailedEntitySearchResult = {
