@@ -209,6 +209,33 @@ test("K25: static query succeeds with JDT disabled and zero JDT interactions", a
   }
 });
 
+test("T06: preview evidenceRange stays within physical file lines and is byte-exact", async () => {
+  // A file whose last line ends with a newline has N physical lines but
+  // N+1 elements when split on "\\n"; the evidence range and preview must
+  // use the physical count, or independent scoring rejects every region
+  // near end-of-file as out of bounds.
+  const fixture = await buildFixture();
+  await openFixtureClient(fixture);
+  const probe: JdtProbe = { startCalls: 0, workspaceSymbolsCalls: 0, referencesCalls: 0, symbolContextCalls: 0 };
+  const context = makeContext(fixture.repoRoot, fixture.client, probe);
+  try {
+    const result = (await javaSymbol(context, args({ query: "refundOrder", semanticTimeoutMs: 3000 }))) as Record<string, unknown>;
+    const candidates = (result.candidates as Array<Record<string, unknown>>).filter(candidate => typeof candidate.preview === "string");
+    assert.ok(candidates.length > 0, "expected at least one end-of-file candidate with a source preview");
+    const withPreview = candidates[candidates.length - 1] as { declaration: { relativePath: string }; evidenceRange?: { startLine: number; endLine: number }; preview?: string };
+    const raw = await readFile(path.join(fixture.repoRoot, withPreview.declaration.relativePath), "utf8");
+    const physical = raw.split(/(?<=\r\n|\n|\r)/);
+    if (physical[physical.length - 1] === "") physical.pop();
+    const { startLine, endLine } = withPreview.evidenceRange as { startLine: number; endLine: number };
+    assert.ok(startLine >= 1 && startLine <= endLine && endLine <= physical.length,
+      `evidence range ${startLine}..${endLine} must fit the ${physical.length} physical lines`);
+    assert.equal(withPreview.preview, physical.slice(startLine - 1, endLine).join(""),
+      "the preview must be the exact source window, not a re-serialized one");
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
 test("K25: exact FQN query returns a unique source-declaration with a usable locator", async () => {
   const fixture = await buildFixture();
   await openFixtureClient(fixture);

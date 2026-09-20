@@ -134,11 +134,15 @@ function previewAt(repoRoot: string, relativePath: string, line: number, content
   if (contentHash && createHash("sha256").update(content, "utf8").digest("hex") !== contentHash) {
     return undefined;
   }
-  const lines = content.split("\n");
+  // Lines keep their terminators (CRLF/LF/CR) so the preview is the exact
+  // source window; a trailing newline does not create a phantom line, which
+  // would push evidenceRange.endLine past the physical line count.
+  const lines = content.split(/(?<=\r\n|\n|\r)/);
+  if (lines[lines.length - 1] === "") lines.pop();
   if (line < 1 || line > lines.length) return undefined;
   const end = Math.min(lines.length, line + DISCOVERY_PREVIEW_LINES - 1);
   return {
-    preview: lines.slice(line - 1, end).join("\n"),
+    preview: lines.slice(line - 1, end).join(""),
     previewKind: "source",
     evidenceRange: { startLine: line, endLine: end }
   };
