@@ -83,6 +83,21 @@ export function materializeRankedCandidates(
   }
   const anchorFiles = [...anchorFilesByPath.values()];
   const anchorPaths = new Set(anchorFilesByPath.keys());
+  // K11: a ranked candidate whose file is already an anchor must not be
+  // dropped - that is how a helper method sitting before OR after the caller
+  // in the same file loses its read window. Merge its positions (and the
+  // relationship reasons) into the anchor file so both layouts keep the
+  // helper's evidence; the byte budget still decides what the plan carries.
+  for (const candidate of ranked) {
+    if (!anchorPaths.has(candidate.file)) continue;
+    const target = anchorFilesByPath.get(candidate.file);
+    if (!target) continue;
+    const mirror = materializeOne(candidate, repoRoot);
+    target.positions = dedupePositions([...target.positions, ...mirror.positions]);
+    for (const reason of mirror.reasons) {
+      if (!target.reasons.includes(reason)) target.reasons.push(reason);
+    }
+  }
   const rest = ranked
     .filter(candidate => !anchorPaths.has(candidate.file))
     .map(candidate => materializeOne(candidate, repoRoot));

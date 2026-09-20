@@ -81,6 +81,32 @@ const BUCKET_RULES = {
 
 type ReadPlanBucket = keyof typeof BUCKET_RULES;
 
+// T08: the same plan can lose evidence in three structurally different ways.
+// Classifying them keeps an absent index entry from being "solved" by more
+// files, an evicted candidate from being confused with a missing window, and
+// a range miss from being hidden inside a generic partial message.
+export type EvidenceGapKind = "ENTRY_ABSENT" | "EVICTED" | "RANGE_MISS";
+
+export type ClassifiedEvidenceGap = {
+  readonly kind: EvidenceGapKind;
+  readonly message: string;
+};
+
+function noteGap(ledger: ClassifiedEvidenceGap[], kind: EvidenceGapKind, message: string): void {
+  ledger.push({ kind, message });
+}
+
+function uniqueByMessage(gaps: readonly ClassifiedEvidenceGap[]): ClassifiedEvidenceGap[] {
+  const seen = new Set<string>();
+  const out: ClassifiedEvidenceGap[] = [];
+  for (const gap of gaps) {
+    if (seen.has(gap.message)) continue;
+    seen.add(gap.message);
+    out.push(gap);
+  }
+  return out;
+}
+
 type BuildReadPlanInput = {
   readonly files: readonly CandidateFile[];
   readonly ids: ReadonlyMap<string, string>;
@@ -144,6 +170,10 @@ export type ReadPlanBuildResult = {
   maxFiles: number;
   budgetExceededByAnchor: boolean;
   evidenceGaps: string[];
+  /** T08 structured view of evidenceGaps: ENTRY_ABSENT (no index entry),
+   *  EVICTED (budget/capacity dropped it), RANGE_MISS (entry exists but the
+   *  selected windows miss required lines). Diagnostic-only. */
+  evidenceGapLedger: readonly ClassifiedEvidenceGap[];
   /** Diagnostic-only selection trace; regular output consumers do not expose it. */
   marginalUtilityBySelectedFile: Record<string, number>;
 };
@@ -167,9 +197,28 @@ export async function buildReadPlan(input: BuildReadPlanInput): Promise<ReadPlan
   let rangeDeadlineGap: string | undefined;
   let rangeResults: IndexedReadRangeResult[] = [];
   if (shortlist.files.length > 0) {
+    // K11: the shortlist dedupes candidate files by path, but a file can carry
+    // several evidence positions (anchor call site plus a helper method that
+    // sits before OR after the caller in the same file). Merging the positions
+    // of every candidate that maps to a shortlisted path keeps the helper's
+    // window position-independent instead of silently dropping it.
+    const shortlistedPaths = new Set(shortlist.files.map(file => file.absolutePath));
+    const positionsByPath = new Map<string, Array<{ line: number; column: number }>>();
+    for (const file of input.files) {
+      if (!shortlistedPaths.has(file.absolutePath)) continue;
+      const list = positionsByPath.get(file.absolutePath) ?? [];
+      for (const position of file.positions) {
+        if (list.some(existing => existing.line === position.line && existing.column === position.column)) continue;
+        list.push(position);
+      }
+      positionsByPath.set(file.absolutePath, list);
+    }
     try {
       rangeResults = await input.javaIndex.queryReadRanges(
-        shortlist.files.map(file => ({ file: file.absolutePath, positions: file.positions })),
+        shortlist.files.map(file => ({
+          file: file.absolutePath,
+          positions: positionsByPath.get(file.absolutePath) ?? file.positions
+        })),
         input.generation
       );
     } catch (error) {
@@ -189,33 +238,38 @@ export async function buildReadPlan(input: BuildReadPlanInput): Promise<ReadPlan
   const selectedUnits = selectedReadUnits(units, result.selectedPaths);
   const retrievalBudget = retrievalBudgetFor(input.options.mode, selectionBudget);
   const capGaps = retrievalBudgetOverflowGaps(selectedUnits, retrievalBudget);
+  const extraLedger: ClassifiedEvidenceGap[] = [];
   if (capGaps.length > 0) {
     result.evidenceGaps = [...new Set([...result.evidenceGaps, ...capGaps])];
+    for (const message of capGaps) noteGap(extraLedger, "EVICTED", message);
   }
   if (rangeDeadlineGap) {
     result.evidenceGaps = [...new Set([rangeDeadlineGap, ...result.evidenceGaps])];
+    noteGap(extraLedger, "RANGE_MISS", rangeDeadlineGap);
   }
   // Explicit anchors whose windows the plan dropped are enumerated per line:
   // a budget-trimmed plan is partial and must name the anchors it lost.
   const anchorLineGaps = uncoveredAnchorLineGaps(shortlist.files, selectedUnits);
   if (anchorLineGaps.length > 0) {
     result.evidenceGaps = [...new Set([...anchorLineGaps, ...result.evidenceGaps])];
+    for (const message of anchorLineGaps) noteGap(extraLedger, "RANGE_MISS", message);
   }
   if (shortlist.omittedProtected > 0) {
-    result.evidenceGaps = [...new Set([
-      `Protected candidates exceeded shortlist capacity; ${shortlist.omittedProtected} candidate(s) were not range-planned.`,
-      ...result.evidenceGaps
-    ])];
+    const shortlistGap = `Protected candidates exceeded shortlist capacity; ${shortlist.omittedProtected} candidate(s) were not range-planned.`;
+    result.evidenceGaps = [...new Set([shortlistGap, ...result.evidenceGaps])];
+    noteGap(extraLedger, "EVICTED", shortlistGap);
   }
   if (anchorFileCount > configuredBudget.maxFiles) {
     result.maxFiles = configuredBudget.maxFiles;
     result.budgetExceededByAnchor = true;
-    result.evidenceGaps = [...new Set([
-      `Anchor files exceeded the configured read file budget (${anchorFileCount} > ${configuredBudget.maxFiles}); all anchors were retained.`,
-      ...result.evidenceGaps
-    ])];
+    const anchorBudgetGap = `Anchor files exceeded the configured read file budget (${anchorFileCount} > ${configuredBudget.maxFiles}); all anchors were retained.`;
+    result.evidenceGaps = [...new Set([anchorBudgetGap, ...result.evidenceGaps])];
+    noteGap(extraLedger, "EVICTED", anchorBudgetGap);
   }
-  return result;
+  return {
+    ...result,
+    evidenceGapLedger: uniqueByMessage([...result.evidenceGapLedger, ...extraLedger])
+  };
 }
 
 export function readPlanBudget(options: Pick<ImpactOptions, "mode" | "readPlanMaxItems" | "readPlanMaxBytes">): ReadPlanBudget {
@@ -366,7 +420,12 @@ function selectTokenAwarePlan(
   const selectedPaths = new Set<string>();
   const bucketCounts: Record<ReadPlanBucket, number> = { anchor: 0, core: 0, framework: 0, support: 0, lexical: 0 };
   const marginalUtilityBySelectedFile: Record<string, number> = {};
+  const gapLedger: ClassifiedEvidenceGap[] = [];
   const evidenceGaps: string[] = [];
+  const note = (kind: EvidenceGapKind, message: string): void => {
+    noteGap(gapLedger, kind, message);
+    evidenceGaps.push(message);
+  };
   let totalBytes = 0;
   let budgetExceededByAnchor = false;
   const add = (window: CandidateWindow, utility: number): void => {
@@ -376,22 +435,22 @@ function selectTokenAwarePlan(
     bucketCounts[bucketOf(window.file, options, protectedPaths)] += 1;
     marginalUtilityBySelectedFile[window.file.path || window.file.absolutePath] = utility;
     if (window.extremeMethod) {
-      evidenceGaps.push(`Extreme method range was bounded for ${window.file.path || window.file.absolutePath}; inspect omitted middle body if needed.`);
+      note("RANGE_MISS", `Extreme method range was bounded for ${window.file.path || window.file.absolutePath}; inspect omitted middle body if needed.`);
     }
     if (window.ranges.length === 0) {
-      evidenceGaps.push(`No indexed read range was available for ${window.file.path || window.file.absolutePath}.`);
+      note("ENTRY_ABSENT", `No indexed read range was available for ${window.file.path || window.file.absolutePath}.`);
     }
   };
 
   for (const anchor of anchors) {
     add(anchor, anchor.file.score);
     if (anchor.ranges.length === 0) {
-      evidenceGaps.push(`Read range unavailable for anchor ${anchor.file.path || anchor.file.absolutePath}.`);
+      note("ENTRY_ABSENT", `Read range unavailable for anchor ${anchor.file.path || anchor.file.absolutePath}.`);
     }
   }
   if (totalBytes > budget.maxReadBytes) {
       budgetExceededByAnchor = true;
-      evidenceGaps.push("Anchor range exceeded the read byte budget; no additional file was forced into the plan.");
+      note("EVICTED", "Anchor range exceeded the read byte budget; no additional file was forced into the plan.");
   }
 
   // Keep deferred tests in discovery and range materialization. Removing them
@@ -400,7 +459,7 @@ function selectTokenAwarePlan(
   const readableWindows = windows.filter(window => window.ranges.length > 0);
   for (const window of windows) {
     if (!isAnchor(window.file, options) && window.ranges.length === 0) {
-      evidenceGaps.push(`Read range unavailable for ${window.file.path || window.file.absolutePath}; candidate was omitted.`);
+      note("ENTRY_ABSENT", `Read range unavailable for ${window.file.path || window.file.absolutePath}; candidate was omitted.`);
     }
   }
 
@@ -463,12 +522,12 @@ function selectTokenAwarePlan(
     for (const anchor of stableAnchorEntries(options)) {
       const attributed = core.filter(window => protectedAnchorIds(window.file, options).has(anchor.id));
       if (attributed.length > 0 && !attributed.some(window => selectedPaths.has(window.file.absolutePath))) {
-        evidenceGaps.push(`Protected core coverage omitted for anchor ${anchor.file}: read-plan limits.`);
+        note("EVICTED", `Protected core coverage omitted for anchor ${anchor.file}: read-plan limits.`);
       }
     }
   }
   if (core.some(window => !selectedPaths.has(window.file.absolutePath))) {
-    evidenceGaps.push("Protected core exceeded read-plan limits; lower-value core files were omitted.");
+    note("EVICTED", "Protected core exceeded read-plan limits; lower-value core files were omitted.");
   }
 
   const remaining = readableWindows.filter(window => !selectedPaths.has(window.file.absolutePath));
@@ -516,6 +575,7 @@ function selectTokenAwarePlan(
     maxFiles: budget.maxFiles,
     budgetExceededByAnchor,
     evidenceGaps: [...new Set(evidenceGaps)],
+    evidenceGapLedger: uniqueByMessage(gapLedger),
     marginalUtilityBySelectedFile
   };
 }
