@@ -17,7 +17,7 @@ export const symbolSchema = {
   projectId: z.string().min(1).optional(),
   repoRoot: z.string().min(1).optional(),
   operation: z.enum(["query", "position", "references"]).optional(),
-  query: z.string().min(1).optional(),
+  query: z.string().min(1).max(512).optional(),
   file: z.string().optional(),
   line: z.number().int().positive().optional(),
   column: z.number().int().positive().optional(),

@@ -12,6 +12,20 @@ import type { JavaIndexClientApi } from "../java-index/java-index-client-api.js"
 import type { EntityHit, EntitySearchMode, EntitySearchOptions } from "../java-index/entity-search.js";
 
 export const DISCOVERY_SCHEMA_VERSION = "java-discovery/v1" as const;
+
+/**
+ * M2 T08 M2-2: an exact discovery request can ask for a shape the static
+ * index never stores (parameterized/generic type arguments). Failing with a
+ * stable structured code keeps callers from reading a silent zero-hit result
+ * as "symbol absent" and tells them the raw-name retry.
+ */
+export class DiscoveryUnsupportedError extends Error {
+  readonly code = "DISCOVERY_UNSUPPORTED" as const;
+  constructor(message: string) {
+    super(message);
+    this.name = "DiscoveryUnsupportedError";
+  }
+}
 export const DISCOVERY_DEFAULT_LIMIT = 8;
 export const DISCOVERY_MAX_LIMIT = 20;
 export const DISCOVERY_QUERY_MAX_UNITS = 512;
@@ -101,6 +115,17 @@ function validateArgs(args: StaticDiscoveryArgs): { task: string; limit: number;
   }
   const limit = Math.min(Math.max(1, Math.trunc(args.limit ?? DISCOVERY_DEFAULT_LIMIT)), DISCOVERY_MAX_LIMIT);
   const searchMode: EntitySearchMode = args.searchMode ?? "auto";
+  // M2-2: generic type arguments ("Map<String, V>") are not declarations the
+  // static index stores; an explicit exact request must say so instead of
+  // returning zero hits that read as "symbol absent". Auto mode keeps the
+  // text route: there the query is task intent, not an address.
+  if (searchMode === "exact" && /</.test(task)) {
+    const raw = task.replace(/<.*>/, "").trim();
+    throw new DiscoveryUnsupportedError(
+      `exact discovery cannot address parameterized shapes: the static index stores raw declarations, so "${task}" never matches. ` +
+      (raw ? `Retry with the raw name "${raw}" ` : "") + "or use searchMode auto/text for task intent."
+    );
+  }
   const sourceRoots: string[] = [];
   if (args.sourceSet) sourceRoots.push(args.sourceSet === "test" ? "src/test" : "src/main");
   // A module is honored when the repository is actually laid out as a
