@@ -512,6 +512,9 @@ export async function runLiveAgentTask({
     }
   ];
   let stopReason = "MODEL_STOP";
+  // T09: the strict-JSON Q-track answer is the last assistant turn; expose it
+  // so the external evaluator can score the answer itself (never the proxy).
+  let finalContent = "";
   let runtimeError;
   try {
     for (let round = 0; round < maxRounds; round += 1) {
@@ -536,6 +539,7 @@ export async function runLiveAgentTask({
       });
       if (!calls.length) {
         stopReason = choice?.finish_reason === "length" ? "MAX_COMPLETION_TOKENS" : "MODEL_STOP";
+        finalContent = message.content ?? "";
         break;
       }
       for (const call of calls) {
@@ -585,6 +589,7 @@ export async function runLiveAgentTask({
     candidatePaths: [...candidatePaths],
     taskOutcome: unmeasuredTaskOutcome(),
     taskSuccess: unscored ? null : coverage.success,
+    finalContent,
     contextCapped: stopReason === "FAILED_CONTEXT_CAP",
     ...(runtimeError ? { error: runtimeError.slice(0, 500) } : {})
   };
@@ -838,7 +843,7 @@ function runtimeFailure(task, message) {
   };
 }
 
-async function openImpactSession({ repoRoot, serverJs, cacheRoot, env }) {
+export async function openImpactSession({ repoRoot, serverJs, cacheRoot, env }) {
   const childEnv = { ...env };
   for (const name of ["OPENAI_API_KEY", "JAVA_LSP_AGENT_API_KEY", "ANTHROPIC_API_KEY"]) {
     delete childEnv[name];
@@ -869,6 +874,27 @@ async function openImpactSession({ repoRoot, serverJs, cacheRoot, env }) {
     return JSON.parse(text);
   }
   return {
+    // T09: raw discovery call for the task-eval host recorder. Returns the
+    // parsed java-discovery/v1 payload so the recorder can hash the exact
+    // source previews that crossed the wire.
+    async symbol(args, wireText) {
+      const result = await client.callTool({
+        name: "java_symbol",
+        arguments: {
+          repoRoot,
+          query: args.query,
+          ...(args.terms ? { terms: args.terms } : {}),
+          ...(args.searchMode ? { searchMode: args.searchMode } : {}),
+          ...(args.limit ? { limit: args.limit } : {}),
+          ...(args.module ? { module: args.module } : {}),
+          ...(args.sourceSet ? { sourceSet: args.sourceSet } : {})
+        }
+      }, undefined, { timeout: IMPACT_TIMEOUT_MS });
+      const text = result.content?.map(part => part.text).join("\n") ?? "{}";
+      if (typeof wireText === "function") wireText(text);
+      if (result.isError) return { error: text };
+      return JSON.parse(text);
+    },
     async impact(args) {
       return callNamed("java_impact", {
         repoRoot,
