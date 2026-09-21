@@ -147,13 +147,20 @@ export function extractSourceEvents({ callId, toolName, result }) {
   }
   const text = typeof result === "string" ? result
     : Array.isArray(result) ? result.map(block => (typeof block?.text === "string" ? block.text : "")).join("")
-      : typeof result.text === "string" ? result.text
+      : typeof result?.text === "string" ? result.text
         : "";
-  if (!text) return events;
   let payload;
-  try {
-    payload = JSON.parse(text);
-  } catch {
+  if (typeof result === "object" && result !== null && !Array.isArray(result) && "schemaVersion" in result) {
+    // The live session parses discovery wire text before handing it to the
+    // recorder; accept the already-parsed payload instead of re-parsing.
+    payload = result;
+  } else if (text) {
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      return events;
+    }
+  } else {
     return events;
   }
   if (!payload || payload.schemaVersion !== DISCOVERY_SCHEMA || !Array.isArray(payload.candidates)) {
@@ -186,12 +193,27 @@ export function createRecorder() {
   };
 }
 
+/**
+ * Q track: the answer is strict JSON; every gold key must match exactly.
+ * Model emitters frequently wrap the JSON in a markdown fence; the fence is
+ * packaging, not content, so it is stripped before the strict parse.
+ */
+function extractStrictJson(rawAnswer) {
+  if (typeof rawAnswer !== "string") return undefined;
+  let text = rawAnswer.trim();
+  const fence = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
+  if (fence) text = fence[1].trim();
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
 /** Q track: the answer is strict JSON; every gold key must match exactly. */
 export function scoreQaAnswer(goldAnswer, rawAnswer) {
-  let parsed;
-  try {
-    parsed = JSON.parse(rawAnswer);
-  } catch {
+  const parsed = extractStrictJson(rawAnswer);
+  if (parsed === undefined) {
     return { status: "INVALID_ANSWER", correct: false };
   }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
@@ -229,6 +251,8 @@ export function assemblePack({ status, backend, datasetHash, arms, repeats, runs
     sourceReceived: run.sourceReceived ?? [],
     usage: usageOrZero(run.usage),
     timedOut: Boolean(run.timedOut),
+    ...(run.stopReason ? { stopReason: run.stopReason } : {}),
+    ...(typeof run.finalAnswer === "string" && run.finalAnswer.length > 0 ? { finalAnswer: run.finalAnswer } : {}),
     error: run.error ?? null
   }));
   const measured = packs.filter(pack => pack.taskSuccess === true || pack.taskSuccess === false);
@@ -312,18 +336,32 @@ export async function runLiveEvalRun({
         });
         for (let repeat = 1; repeat <= repeats; repeat += 1) {
           let callSeq = 0;
+          const eventsBefore = recorder.events().length;
+          // The frozen output contract (answer keys) is part of the task both
+          // arms see; without it the model invents its own key names.
+          const contract = task.output_contract?.answer_keys
+            ? Object.entries(task.output_contract.answer_keys)
+                .map(([key, type]) => `${key}: ${type}`)
+                .join(", ")
+            : "";
           const run = await runLiveAgentTask({
             task: {
               taskId: task.id,
-              taskText: task.query,
+              taskText: `${task.query}${contract ? `\nAnswer contract: reply with ONE JSON object with exactly these keys: ${contract}.` : ""}`,
               projectId: task.corpus,
               requiredContextFiles: (goldRow?.required_evidence ?? []).map(item => item.path),
               anchor: task.anchors?.[0] ?? { file: "unknown", line: 1, column: 1 }
             },
             arm: "old",
+            // Two-arm A/B: the product arm gets the java_symbol MCP tool,
+            // the control arm only the host read tool. Same model, prompt and
+            // budget otherwise - the arm label is carried on the run record.
             systemPrompt: EVAL_SYSTEM_PROMPT,
-            tools: [EVAL_JAVA_SYMBOL_TOOL, EVAL_READ_TOOL],
+            tools: arm === "control" ? [EVAL_READ_TOOL] : [EVAL_JAVA_SYMBOL_TOOL, EVAL_READ_TOOL],
             chat: ({ messages, tools, maxTokens }) => openaiCompatibleChat({ ...config, messages, tools, maxTokens }),
+            // Both arms get the same, larger round budget; the model is free
+            // to stop earlier whenever it has its answer.
+            maxRounds: 16,
             invoke: (name, args) => {
               callSeq += 1;
               const callId = `eval:${task.id}:${arm}:${repeat}:${callSeq}`;
@@ -367,6 +405,8 @@ export async function runLiveEvalRun({
             stopReason: run.stopReason,
             toolCallCount: run.toolCallCount,
             usage: run.usage,
+            sourceReceived: recorder.events().slice(eventsBefore),
+            finalAnswer: typeof run.finalContent === "string" ? run.finalContent.slice(0, 1000) : "",
             timedOut: run.stopReason === "MAX_ROUNDS" || run.stopReason === "FAILED_RUNTIME",
             ...(run.error ? { error: run.error } : {})
           });
@@ -438,14 +478,16 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   const arms = (flag("--arms") ?? "product,control").split(",").filter(Boolean);
   const repeats = Math.max(1, Number(flag("--repeats") ?? 1));
   const dryRun = argv.includes("--dry-run");
+  const filter = (flag("--filter") ?? "").split(",").filter(Boolean);
   if (!tasksFile || !output) {
-    console.error("usage: evaluate-java-task.mjs --tasks <dev.jsonl> [--gold <gold.jsonl>] --output <dir> [--arms product,control] [--repeats N] [--dry-run]");
+    console.error("usage: evaluate-java-task.mjs --tasks <dev.jsonl> [--gold <gold.jsonl>] [--filter <id,id..>] [--repo-roots <corpus=path,..>] --output <dir> [--arms product,control] [--repeats N] [--dry-run]");
     return 2;
   }
   const datasetHash = goldFile
     ? createHash("sha256").update(readFileSync(goldFile)).digest("hex")
     : null;
-  const tasks = loadTaskFile(tasksFile);
+  const allTasks = loadTaskFile(tasksFile);
+  const tasks = filter.length > 0 ? allTasks.filter(task => filter.includes(task.id)) : allTasks;
   const backend = detectBackend(env);
   if (!backend || dryRun) {
     const runs = tasks.flatMap(task => arms.flatMap(arm =>

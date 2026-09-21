@@ -515,6 +515,10 @@ export async function runLiveAgentTask({
   // T09: the strict-JSON Q-track answer is the last assistant turn; expose it
   // so the external evaluator can score the answer itself (never the proxy).
   let finalContent = "";
+  // T09: some open-weight models keep calling tools past the point where the
+  // evidence is complete. A single stop nudge (identical for every arm) is a
+  // harness-level convergence aid, not a hint about the answer.
+  let answerNudgeSent = false;
   let runtimeError;
   try {
     for (let round = 0; round < maxRounds; round += 1) {
@@ -562,6 +566,13 @@ export async function runLiveAgentTask({
           });
           continue;
         }
+        if (!answerNudgeSent && round >= Math.floor(maxRounds * 0.6)) {
+          answerNudgeSent = true;
+          messages.push({
+            role: "user",
+            content: "You have gathered enough evidence. Stop calling tools and answer the task now with ONE strict JSON object only, using exactly the keys named in the task."
+          });
+        }
         const compact = name === "java_context" ? compactContextForModel(raw) : compactImpactForModel(raw);
         for (const filePath of compact.paths) observedPaths.add(filePath);
         for (const filePath of collectCandidatePaths(raw)) candidatePaths.add(filePath);
@@ -573,6 +584,30 @@ export async function runLiveAgentTask({
   } catch (error) {
     stopReason = "FAILED_RUNTIME";
     runtimeError = error instanceof Error ? error.message : String(error);
+  }
+  // Forced-answer fallback: if the loop exhausted its rounds without a final
+  // answer, ask once more with no tools at all so the model must commit to
+  // an answer (or fail honestly). Identical for every arm.
+  if (finalContent === "" && stopReason !== "FAILED_RUNTIME" && stopReason !== "FAILED_CONTEXT_CAP") {
+    try {
+      const forced = await chat({
+        messages: [
+          ...messages,
+          {
+            role: "user",
+            content: "Final answer now. No tools. Reply with ONE strict JSON object only, using exactly the keys named in the task."
+          }
+        ],
+        tools: [],
+        maxTokens: maxCompletionTokens
+      });
+      usage = mergeUsage(usage, usageFromCompletion(forced));
+      const forcedMessage = forced?.choices?.[0]?.message ?? {};
+      finalContent = forcedMessage.content ?? "";
+      if (finalContent) stopReason = "FORCED_ANSWER";
+    } catch {
+      // the run keeps its stopReason; an empty answer scores INVALID, not a crash
+    }
   }
   const coverage = coverageProxy(task.requiredContextFiles, [...observedPaths]);
   const unscored = stopReason === "FAILED_CONTEXT_CAP"

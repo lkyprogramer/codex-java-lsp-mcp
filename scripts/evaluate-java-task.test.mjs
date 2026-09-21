@@ -154,6 +154,22 @@ test("SOURCE_RECEIVED: the read tool is explicit_read; summaries create no event
   assert.equal(noPreview.length, 0);
 });
 
+test("SOURCE_RECEIVED: a pre-parsed discovery payload (live session path) still records", () => {
+  const payload = {
+    schemaVersion: "java-discovery/v1",
+    candidates: [{
+      declaration: { relativePath: "a/B.java", selection: { line: 3, column: 1 } },
+      preview: "class B {\n}",
+      previewKind: "source",
+      evidenceRange: { startLine: 3, endLine: 4 }
+    }]
+  };
+  const events = extractSourceEvents({ callId: "call-9", toolName: "java_symbol", result: payload });
+  assert.equal(events.length, 1);
+  assert.equal(events[0].contentHash, createHash("sha256").update("class B {\n}", "utf8").digest("hex"));
+  assert.equal(events[0].origin, "tool_response");
+});
+
 test("Q-track scoring: strict JSON, exact keys, no partial credit", () => {
   const gold = { storageType: "Set<String>", method: "accept" };
   assert.equal(scoreQaAnswer(gold, JSON.stringify(gold)).status, "CORRECT");
@@ -162,6 +178,8 @@ test("Q-track scoring: strict JSON, exact keys, no partial credit", () => {
   assert.equal(scoreQaAnswer(gold, JSON.stringify({ storageType: "Set<String>" })).status, "INCOMPLETE_ANSWER");
   assert.equal(scoreQaAnswer(gold, "not json").status, "INVALID_ANSWER");
   assert.equal(scoreQaAnswer(gold, "[]").status, "INVALID_ANSWER");
+  // Markdown fences are packaging, not content: strict JSON inside is scored.
+  assert.equal(scoreQaAnswer(gold, "```json\n" + JSON.stringify(gold) + "\n```").status, "CORRECT");
   // The answer key set comes from frozen gold; extra model keys are ignored.
   assert.equal(scoreQaAnswer(gold, JSON.stringify({ ...gold, extra: 1 })).correct, true);
 });
