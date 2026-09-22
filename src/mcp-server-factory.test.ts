@@ -26,7 +26,7 @@ test("PUBLIC_JAVA_TOOLS drops java_context after L1 kill and keeps java_impact",
 
 test("production MCP factory, java_impact, and java_context do not read JAVA_LSP_ENGINE", () => {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "src");
-  for (const relative of ["mcp-server-factory.ts", "tools/impact.ts", "tools/java-context.ts", "application.ts"]) {
+  for (const relative of ["mcp-server-factory.ts", "tools/impact.ts", "application.ts"]) {
     const source = readFileSync(path.join(root, relative), "utf8");
     assert.equal(source.includes("JAVA_LSP_ENGINE"), false, relative);
   }

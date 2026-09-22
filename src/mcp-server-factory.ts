@@ -19,7 +19,7 @@ import { noteTelemetryRepoHash, recordToolInvocation, withTelemetryRequestScope 
 
 export type McpTransportMode = "stdio" | "streamable_http";
 
-/** Public MCP tool surface. java_impact is the current compact chain. java_context stays on the branch but is not registered after L1 FAIL. */
+/** Public MCP tool surface. java_impact is the current compact chain. The legacy java_context handler was removed in M3 T12 (single main line). */
 export const PUBLIC_JAVA_TOOLS = [
   "java_status",
   "java_impact",
