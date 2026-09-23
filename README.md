@@ -22,6 +22,7 @@
 - [Public MCP Tools](#public-mcp-tools)
 - [配置](#配置)
 - [开发与验证](#开发与验证)
+- [Java Specialist Devkit v1（M0–M3）](#java-specialist-devkit-v1m0m3)
 - [故障排查](#故障排查)
 - [安全说明](#安全说明)
 - [贡献规范](#贡献规范)
@@ -475,6 +476,15 @@ sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile fu
 ```
 
 - 贡献代码默认按 Apache License 2.0 授权，除非贡献者在提交中明确说明更严格且兼容的授权边界。
+
+## Java Specialist Devkit v1（M0–M3）
+
+本仓库同时是 Java Specialist Devkit v1 的执行载体：静态发现层（`java_symbol` 词法/结构化检索，A2 主线）+ 真实 agent 评测轨道。M0–M3 全部收口：
+
+- **M1** 静态发现 + canary；**M2** 关键证据/读计划/真实 agent 评测（144 runs MEASURED，27B 后端）；**M3** 语义发现预注册实验（T10，INCONCLUSIVE，分支关闭）+ 绑定加深归因（T11，NOT_NEEDED）+ 单主线收口（T12）。
+- **单主线**：生产工具面 `java_status` / `java_impact` / `java_symbol` / `java_diagnostics` / `java_runtime`；未注册的 `java_context` 旧逻辑已在 M3 删除，`context-engine` 模块仍由 `java_impact`/SQL 层消费。
+- **语义路线**：独立实验包 `experiments/semantic-discovery/`（外部 dense 对照，零产品依赖/零钩子）。产品默认线保持 A2 词法；dense 为外部可选项。报告见 [`docs/java-specialist-devkit-v1/reports/`](docs/java-specialist-devkit-v1/reports/)（m0/m1/m2/m3-t10/m3-t11/m3 里程碑）。
+- 历史路线（JIN/phase-f/v3 矩阵等）文档保留在 `docs/deep` 与 `docs/` 顶层，作为历史设计记录（当前生产主线以上文“单主线”节与 devkit 报告为准）；运行产物不在仓库内（仓库外 `java-devkit-v1-runs/`）。
 
 ## 许可证
 
