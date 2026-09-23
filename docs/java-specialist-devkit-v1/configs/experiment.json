@@ -1,7 +1,14 @@
 {
   "schema": "java-specialist-experiment/v1",
-  "approved_network": false,
-  "approved_model_spend": false,
+  "approved_network": true,
+  "approved_model_spend": true,
+  "authorization": "用户于 M3 阶段显式授权：提供 OpenRouter embedding 端点（liquid/lfm-2.5-embedding-350m:free，免费）并授权网络访问与免费模型推理；chat 后端沿用 M2 授权的 openclaw 27B 实例。凭据仅存仓库外运行目录。",
+  "embedding_provider": {
+    "endpoint": "https://openrouter.ai/api/v1/embeddings",
+    "model": "liquid/lfm-2.5-embedding-350m:free",
+    "dimensions": 1024,
+    "credential_ref": "/Users/luo/Documents/github/java-devkit-v1-runs/m3/openrouter.env.json (outside repo)"
+  },
   "pilot": {
     "split": "dev",
     "task_ids": ["JSB-PAYMENTS-01","JSB-PAYMENTS-03","JSB-INVENTORY-02","JSB-INVENTORY-03","JSB-ACCESS-01","JSB-ACCESS-03","JSB-ADMISSIONS-01","JSB-PRICING-03","JSB-PETCLINIC-02","JSB-MYBATIS-01","JSB-MYBATIS-02","JSB-GSON-03"],
