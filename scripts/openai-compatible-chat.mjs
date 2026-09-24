@@ -10,7 +10,8 @@ export function openaiCompatibleConfig(env = process.env) {
   const baseUrl = (env.OPENAI_BASE_URL || "").replace(/\/$/, "");
   const apiKey = env.OPENAI_API_KEY || env.JAVA_LSP_AGENT_API_KEY || "";
   const model = env.OPENAI_MODEL || "";
-  return { baseUrl, apiKey, model };
+  const reasoningEffort = env.OPENAI_REASONING_EFFORT || undefined;
+  return { baseUrl, apiKey, model, reasoningEffort };
 }
 
 export async function openaiCompatibleChat({
@@ -22,29 +23,35 @@ export async function openaiCompatibleChat({
   toolChoice = "auto",
   maxTokens = DEFAULT_MAX_COMPLETION_TOKENS,
   temperature = 0,
+  reasoningEffort,
   fetchImpl = globalThis.fetch
 }) {
   if (!baseUrl) throw new Error("OPENAI_BASE_URL is required");
   if (!apiKey) throw new Error("OPENAI_API_KEY is required");
   if (!model) throw new Error("OPENAI_MODEL is required");
   const url = `${baseUrl}/chat/completions`;
+  const body = {
+    model,
+    messages,
+    tools,
+    tool_choice: tools?.length ? toolChoice : undefined,
+    max_tokens: maxTokens,
+    temperature,
+    // Qwen3 thinking can consume the whole max_tokens budget before tool_calls.
+    // This endpoint honors chat_template_kwargs.enable_thinking=false (top-level enable_thinking is ignored).
+    chat_template_kwargs: { enable_thinking: false }
+  };
+  // Reasoning-level passthrough for gateways that accept it (e.g. local
+  // codex gateways); symmetric for every arm. Ignored by endpoints that
+  // do not recognize the field.
+  if (reasoningEffort) body.reasoning_effort = reasoningEffort;
   const response = await fetchImpl(url, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({
-      model,
-      messages,
-      tools,
-      tool_choice: tools?.length ? toolChoice : undefined,
-      max_tokens: maxTokens,
-      temperature,
-      // Qwen3 thinking can consume the whole max_tokens budget before tool_calls.
-      // This endpoint honors chat_template_kwargs.enable_thinking=false (top-level enable_thinking is ignored).
-      chat_template_kwargs: { enable_thinking: false }
-    })
+    body: JSON.stringify(body)
   });
   const text = await response.text();
   if (!response.ok) {

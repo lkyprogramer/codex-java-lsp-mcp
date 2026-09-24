@@ -103,16 +103,19 @@ async function main() {
   // the connection mid-run. Retry a bounded number of times so FAILED_RUNTIME
   // means a genuine infrastructure failure, not a single flaky request.
   const chatWithRetry = async (payload) => {
+    const backoffs = [5_000, 15_000, 30_000, 45_000, 60_000, 60_000];
     let last;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    for (let attempt = 0; attempt < backoffs.length; attempt += 1) {
       try {
         return await chat(payload);
       } catch (error) {
         last = error;
         const text = String(error?.message ?? error);
+        // 5xx/429 plus upstream-gateway failures (the local codex gateway can
+        // flap its upstream OAuth session for tens of seconds at a time).
         const retryable = /HTTP 429|HTTP 5\d\d|fetch failed|socket|timeout|aborted/i.test(text);
-        if (!retryable || attempt === 2) throw error;
-        await new Promise(resolve => setTimeout(resolve, 4000 * (attempt + 1)));
+        if (!retryable || attempt === backoffs.length - 1) throw error;
+        await new Promise(resolve => setTimeout(resolve, backoffs[attempt]));
       }
     }
     throw last;
