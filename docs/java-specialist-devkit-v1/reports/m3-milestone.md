@@ -88,7 +88,7 @@ f78b610 docs(m2): final milestone report - live track measured   ← M2 边界
 | 项 | 状态 | 阻塞原因 |
 |---|---|---|
 | fullPublicCorpus（全公开语料 A2/A3/agent 臂） | UNMEASURED | 语料下载需 `--allow-network` 授权（M2-6 同因） |
-| 强模型后端 agent 层 A/B | NOT_RUN | 需额外模型授权/预算；27B 后端能力封顶 |
+| agent 层 A/B 第二轮（`stealth/space-bunny-alpha`） | 已执行 | A2 4/22 vs A3 5/22（+1，方差仍大于效应）；GPT-4 级后端仍缺，任务层方差未压到效应量以下 |
 | K22/K23/K24/K28 运行态绑定契约 | NOT_RUN | T11 无触发失败 |
 | M2-5 runtime 级 freshness（K15/K19/K21） | 未执行 | 需 per-item runtime 契约回填 + 真实 runtime 环境 |
 | 第二轮 embedding 模型对照 | NOT_RUN | 一轮已足够四向判定 + 分支关闭 |
