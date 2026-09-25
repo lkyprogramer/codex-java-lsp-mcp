@@ -5,7 +5,7 @@
 // output: java-devkit-task-eval/v1 兼容 results pack（仓库外）+ 每任务提示块留档。
 // pos:    docs/10 实验控制 —— 各臂共享 model/prompt/native tools/预算；
 //         provider 开销进总账（本驱动记录 embedding 调用与建库成本）。
-import { existsSync, readFileSync, readdirSync, statSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync, mkdirSync, cpSync, rmSync } from "node:fs";
 import { writeFile, readFile } from "node:fs/promises";
 import path from "node:path";
 import {
@@ -22,6 +22,25 @@ import {
 } from "../../scripts/evaluate-java-task.mjs";
 import { DenseDiscoveryIndex, EmbeddingProvider, readSearchDocumentFacts, cosine } from "./provider.mjs";
 import { gatedDenseSearch, shouldRunDense } from "./gate.mjs";
+import { judgeRepair } from "./repair-judge.mjs";
+
+// docs/07：agent 在自己的候选拷贝里干活；判断器比较 candidate 与原始
+// fixture 的全部文件 hash，非 allowed_edits 变动即拒绝。
+const EVAL_WRITE_FILE_TOOL = {
+  type: "function",
+  function: {
+    name: "write_file",
+    description: "Write a full file into your working copy of the repository (repo-relative path). Use for repair tasks; the evaluator judges the resulting file diff.",
+    parameters: {
+      type: "object",
+      properties: {
+        path: { type: "string" },
+        content: { type: "string" }
+      },
+      required: ["path", "content"]
+    }
+  }
+};
 
 const KIT = "/Users/luo/Documents/github/codex-java-lsp-mcp/docs/java-specialist-devkit-v1";
 const STAGE = process.env.M3_STAGE ?? "/Users/luo/Documents/github/java-devkit-v1-runs/m1/m1-quality/stage";
@@ -73,11 +92,14 @@ async function main() {
   const provider = new EmbeddingProvider({
     apiKey: process.env.OPENROUTER_API_KEY,
     model: process.env.OPENROUTER_EMBEDDING_MODEL ?? orEnv.OPENROUTER_EMBEDDING_MODEL,
-    timeoutMs: 60_000
+    timeoutMs: 60_000,
+    cacheFile: path.join(process.env.M3_CACHE ?? "/Users/luo/Documents/github/java-devkit-v1-runs/m3/index-cache", "embeddings-cache.json")
   });
   await mkdirSync(OUTPUT, { recursive: true });
   const hintsDir = path.join(OUTPUT, "hints");
   await mkdirSync(hintsDir, { recursive: true });
+  const workRoot = path.join(OUTPUT, "repair-work");
+  await mkdirSync(workRoot, { recursive: true });
 
   const tasks = (await readFile(TASKS_FILE, "utf8"))
     .trim().split("\n").map(line => JSON.parse(line))
@@ -150,7 +172,7 @@ async function main() {
             continue;
           }
           try {
-            const vectors = await provider.embed([task.query]);
+            const vectors = await provider.embed([task.query], [`${provider.model}::query::${task.query}`]);
             const result = { hints: index.search(vectors[0], { topK: 8 }), reason: "ok" };
             dense.set(task.id, result);
           } catch {
@@ -176,14 +198,29 @@ async function main() {
 
     for (const task of corpusTasks) {
       const goldRow = goldMap.get(task.id);
-      const contract = task.output_contract?.answer_keys
-        ? Object.entries(task.output_contract.answer_keys).map(([key, type]) => `${key}: ${type}`).join(", ")
-        : "";
-      const baseText = `${task.query}${contract ? `\nAnswer contract: reply with ONE JSON object with exactly these keys: ${contract}.` : ""}`;
+      const isRepair = task.kind === "repair";
+      const contract = isRepair
+        ? "patchApplied: boolean, summary: string"
+        : (task.output_contract?.answer_keys
+          ? Object.entries(task.output_contract.answer_keys).map(([key, type]) => `${key}: ${type}`).join(", ")
+          : "");
+      const baseText = isRepair
+        ? `${task.query}\nThis is a repair task: locate the defect and FIX it by using the write_file tool to write the full corrected content of each source file you change (repo-relative path). Only change what the fix requires. Finish by replying with ONE JSON object with exactly these keys: ${contract}.`
+        : `${task.query}${contract ? `\nAnswer contract: reply with ONE JSON object with exactly these keys: ${contract}.` : ""}`;
+      const repairManifestEntry = isRepair
+        ? JSON.parse(await readFile(path.join(KIT, "dataset/repairs/manifest.json"), "utf8")).find(e => e.task_id === task.id)
+        : undefined;
       const hintBlock = formatHintBlock((dense.get(task.id) ?? { hints: [] }).hints ?? []);
       for (const arm of ["a2-lexical", "a3-dense-hint"]) {
         const session = await openImpactSession({ repoRoot, serverJs: SERVER_JS, cacheRoot, env: process.env });
         for (let repeat = 1; repeat <= REPEATS; repeat += 1) {
+          // 每轮独立候选拷贝：agent 的 read/write 都作用于它；judge 比较它与 fixture。
+          const runWork = path.join(OUTPUT, "repair-work", `${task.id}:${arm}:r${repeat}`);
+          rmSync(runWork, { recursive: true, force: true });
+          mkdirSync(runWork, { recursive: true });
+          const candidateRoot = path.join(runWork, "candidate");
+          cpSync(repoRoot, candidateRoot, { recursive: true });
+          const toolTrace = [];
           const run = await runLiveAgentTask({
             task: {
               taskId: task.id,
@@ -196,46 +233,103 @@ async function main() {
             },
             arm: "old",
             systemPrompt: EVAL_SYSTEM_PROMPT,
-            tools: [EVAL_JAVA_SYMBOL_TOOL, EVAL_READ_TOOL],
+            tools: isRepair
+              ? [EVAL_JAVA_SYMBOL_TOOL, EVAL_READ_TOOL, EVAL_WRITE_FILE_TOOL]
+              : [EVAL_JAVA_SYMBOL_TOOL, EVAL_READ_TOOL],
             chat: ({ messages, tools, maxTokens }) => chatWithRetry({ messages, tools, maxTokens }),
             maxRounds: MAX_ROUNDS,
-            invoke: (name, args) => {
-              if (name === "java_symbol") return session.symbol(args);
-              if (name === "read") {
+            invoke: async (name, args) => {
+              let result;
+              if (name === "java_symbol") {
+                result = await session.symbol(args);
+              } else if (name === "read") {
                 try {
-                  const absolute = path.join(repoRoot, String(args.path).replaceAll("\\", "/"));
+                  const absolute = path.join(candidateRoot, String(args.path).replaceAll("\\", "/"));
                   const full = readFileSync(absolute, "utf8");
                   const lines = full.split("\n");
                   const startLine = Math.max(1, Math.trunc(args.startLine ?? 1));
                   const maxLines = Math.max(1, Math.min(400, Math.trunc(args.maxLines ?? 200)));
-                  return {
+                  result = {
                     path: args.path,
                     text: lines.slice(startLine - 1, startLine - 1 + maxLines).join("\n"),
                     startLine,
                     endLine: Math.min(lines.length, startLine - 1 + maxLines)
                   };
                 } catch (error) {
-                  return { error: String(error.message ?? error) };
+                  result = { error: String(error.message ?? error) };
                 }
+              } else if (name === "write_file") {
+                try {
+                  const absolute = path.join(candidateRoot, String(args.path).replaceAll("\\", "/"));
+                  if (!path.resolve(absolute).startsWith(path.resolve(candidateRoot))) {
+                    result = { error: "path escapes the working copy" };
+                  } else {
+                    mkdirSync(path.dirname(absolute), { recursive: true });
+                    await writeFile(absolute, String(args.content ?? ""), "utf8");
+                    result = { path: args.path, written: true };
+                  }
+                } catch (error) {
+                  result = { error: String(error.message ?? error) };
+                }
+              } else {
+                result = { error: `unknown tool ${name}` };
               }
-              return { error: `unknown tool ${name}` };
+              const errText = typeof result?.error === "string" ? result.error : null;
+              toolTrace.push({
+                name,
+                args: { query: args.query, path: args.path, startLine: args.startLine },
+                ok: !errText,
+                error: errText ? errText.slice(0, 200) : undefined,
+                candidateCount: Array.isArray(result?.candidates) ? result.candidates.length : undefined,
+                written: result?.written === true || undefined
+              });
+              return result;
             }
           });
-          const scored = scoreRunOutcome({
-            task,
-            goldRow,
-            run: {
-              stopReason: run.stopReason,
-              error: run.error,
-              finalContent: run.finalContent,
-              usage: run.usage,
-              toolCallCount: run.toolCallCount
+          // docs/07：repair 结果由实际文件 diff + 外部冻结测试判定；
+          // 模型声称的 patchApplied/summary、实际 diff、外部测试三分记录，不合并。
+          let judge = null;
+          if (isRepair && repairManifestEntry) {
+            try {
+              judge = await judgeRepair({
+                task: { id: task.id },
+                manifestEntry: repairManifestEntry,
+                fixtureRoot: repoRoot,
+                candidateRoot,
+                workDir: path.join(runWork, "judge"),
+                javaHome: process.env.JAVA_HOME || null,
+                testSourceFile: path.join(KIT, "dataset", repairManifestEntry.test_file)
+              });
+            } catch (error) {
+              judge = {
+                status: "JUDGE_ERROR",
+                passed: false,
+                detail: error instanceof Error ? `${error.message}\n${error.stack?.split("\n").slice(1, 4).join("\n")}` : String(error)
+              };
             }
-          });
+          }
+          const scored = isRepair && repairManifestEntry
+            ? {
+                taskOutcome: "MEASURED",
+                taskSuccess: judge.passed,
+                answerStatus: judge.passed ? "REPAIR_PASS" : `REPAIR_FAIL_${judge.status}`
+              }
+            : scoreRunOutcome({
+                task,
+                goldRow,
+                run: {
+                  stopReason: run.stopReason,
+                  error: run.error,
+                  finalContent: run.finalContent,
+                  usage: run.usage,
+                  toolCallCount: run.toolCallCount
+                }
+              });
           runs.push({
             taskId: task.id,
             arm,
             repeat,
+            kind: task.kind,
             stopReason: run.stopReason,
             error: run.error ?? null,
             toolCallCount: run.toolCallCount,
@@ -243,6 +337,8 @@ async function main() {
             taskOutcome: scored.taskOutcome,
             taskSuccess: scored.taskSuccess,
             answerStatus: scored.answerStatus,
+            judge: judge ? { status: judge.status, passed: judge.passed, detail: judge.detail, diffReport: judge.diffReport } : undefined,
+            toolTrace,
             finalAnswer: (run.finalContent ?? "").slice(0, 400)
           });
           process.stderr.write(`[m3-ab] ${task.id} ${arm} r${repeat} ${scored.taskOutcome}/${scored.answerStatus} success=${scored.taskSuccess}\n`);
@@ -255,12 +351,18 @@ async function main() {
   const measured = runs.filter(run => run.taskOutcome === "MEASURED");
   const summarize = arm => {
     const subset = measured.filter(run => run.arm === arm);
+    const byKind = kind => {
+      const ks = subset.filter(run => (run.kind ?? "qa") === kind);
+      return ks.length ? { measured: ks.length, successes: ks.filter(run => run.taskSuccess).length, rate: ks.filter(run => run.taskSuccess).length / ks.length } : null;
+    };
     return {
       arm,
       measured: subset.length,
       denominator: runs.filter(run => run.arm === arm).length,
       successes: subset.filter(run => run.taskSuccess).length,
-      rate: subset.length ? subset.filter(run => run.taskSuccess).length / subset.length : null
+      rate: subset.length ? subset.filter(run => run.taskSuccess).length / subset.length : null,
+      qa: byKind("qa"),
+      repair: byKind("repair")
     };
   };
   const pack = {

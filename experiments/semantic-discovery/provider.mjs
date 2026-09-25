@@ -7,7 +7,7 @@
 //         无 indexedContentHash 时调用方必须重读并重新定位声明，不承认旧行号。
 // 授权:   用户显式提供 OpenRouter key（仓库外存储）并授权网络与免费 embedding 推理。
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
@@ -34,7 +34,7 @@ export function discoveryHint({ provider, providerIndexIdentity, relativePath, s
  * 仅对 429/5xx 做有限退避，最多 maxRetries 次）。
  */
 export class EmbeddingProvider {
-  constructor({ apiKey, model, baseUrl = "https://openrouter.ai/api/v1", fetchImpl = globalThis.fetch, timeoutMs = 30_000, maxRetries = 2 }) {
+  constructor({ apiKey, model, baseUrl = "https://openrouter.ai/api/v1", fetchImpl = globalThis.fetch, timeoutMs = 30_000, maxRetries = 2, cacheFile = null }) {
     if (!apiKey) throw new Error("EMBEDDING_NOT_AUTHORIZED: no API key");
     this.apiKey = apiKey;
     this.model = model;
@@ -42,6 +42,7 @@ export class EmbeddingProvider {
     this.fetchImpl = fetchImpl;
     this.timeoutMs = timeoutMs;
     this.maxRetries = maxRetries;
+    this.cacheFile = cacheFile; // 磁盘 embedding 缓存（按 contentHash 键控），避免免费额度重打。
     this.calls = 0;
     this.batchCalls = 0;
     this.itemsEmbedded = 0;
@@ -53,17 +54,55 @@ export class EmbeddingProvider {
     return "openrouter";
   }
 
-  async embed(texts) {
+  async embed(texts, keys) {
     if (!Array.isArray(texts) || texts.length === 0) return [];
-    const vectorByIndex = new Map();
-    for (let i = 0; i < texts.length; i += 16) {
-      const batch = texts.slice(i, i + 16);
-      const vector = await this.embedBatch(batch);
-      for (let j = 0; j < batch.length; j += 1) {
-        vectorByIndex.set(i + j, vector[j]);
+    const vectors = new Array(texts.length).fill(null);
+    const missing = [];
+    for (let i = 0; i < texts.length; i += 1) {
+      const cached = this.cacheGet?.(keys?.[i]);
+      if (Array.isArray(cached) && cached.length === EMBEDDING_DIM) vectors[i] = cached;
+      else missing.push(i);
+    }
+    if (missing.length > 0) {
+      const remaining = [];
+      for (const i of missing) remaining.push(texts[i]);
+      const fetched = [];
+      for (let i = 0; i < remaining.length; i += 16) {
+        const batch = remaining.slice(i, i + 16);
+        const vector = await this.embedBatch(batch);
+        fetched.push(...vector);
+      }
+      let n = 0;
+      for (const i of missing) {
+        vectors[i] = fetched[n];
+        this.cachePut?.(keys?.[i], fetched[n]);
+        n += 1;
       }
     }
-    return texts.map((_, index) => vectorByIndex.get(index));
+    return vectors;
+  }
+
+  cacheGet(key) {
+    if (!this.cacheFile || key == null) return undefined;
+    try {
+      const data = JSON.parse(readFileSync(this.cacheFile, "utf8"));
+      return data[key];
+    } catch {
+      return undefined;
+    }
+  }
+
+  cachePut(key, vector) {
+    if (!this.cacheFile || key == null) return;
+    let data = {};
+    try {
+      data = JSON.parse(readFileSync(this.cacheFile, "utf8"));
+    } catch {
+      data = {};
+    }
+    data[key] = vector;
+    mkdirSync(path.dirname(this.cacheFile), { recursive: true });
+    writeFileSync(this.cacheFile, JSON.stringify(data));
   }
 
   async embedBatch(batch) {
@@ -215,11 +254,13 @@ export class DenseDiscoveryIndex {
 
   async build() {
     // 每个声明归并其全部文档文本，一次 embed，行与事实一一对应。
+    // 磁盘缓存键：model::relativePath::contentHash（同一声明同一内容不重打 API）。
     const rows = this.declarationRows();
     const texts = rows.map(row => (row.text.join(" ").length > 0 ? row.text.join(" ") : row.relativePath));
+    const keys = rows.map(row => `${this.provider.model}::${row.relativePath}::${row.contentHash ?? ""}`);
     const costBefore = { ...this.provider.costReport() };
     const startedAt = Date.now();
-    const vectors = await this.provider.embed(texts);
+    const vectors = await this.provider.embed(texts, keys);
     this.buildCost = {
       ...this.provider.costReport(),
       deltaHttpCalls: this.provider.calls - costBefore.calls,

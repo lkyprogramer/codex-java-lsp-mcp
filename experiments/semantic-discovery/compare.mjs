@@ -13,8 +13,15 @@ import { DenseDiscoveryIndex, EmbeddingProvider, readSearchDocumentFacts } from 
 import { gatedDenseSearch } from "./gate.mjs";
 
 const KIT = "/Users/luo/Documents/github/codex-java-lsp-mcp/docs/java-specialist-devkit-v1";
-const STAGE = "/Users/luo/Documents/github/java-devkit-v1-runs/m1/m1-quality/stage";
-const CACHE_ROOT = "/Users/luo/Documents/github/java-devkit-v1-runs/m3/index-cache";
+// M3_STAGE：语料根目录。两种布局自动识别：
+//  - full profile：full-stage/<corpus>/... （每语料一个目录，含全部任务的任务集）
+//  - scoped：m1-stage/JSB-XXX/repo、locked-stage/JSB-XXX/repo（按任务 ID 分目录）
+const STAGE = process.env.M3_STAGE ?? "/Users/luo/Documents/github/java-devkit-v1-runs/m1/m1-quality/stage";
+const STAGE_FULL = existsSync(path.join(STAGE, "gson")) || existsSync(path.join(STAGE, "ledger", "src"));
+const PROFILE = STAGE_FULL ? "external-full" : "scoped";
+const TASKS_FILES = (process.env.M3_TASKS ?? "").split(",").filter(Boolean);
+const GOLD_FILES = (process.env.M3_GOLD ?? "").split(",").filter(Boolean);
+const CACHE_ROOT = process.env.M3_CACHE ?? "/Users/luo/Documents/github/java-devkit-v1-runs/m3/index-cache";
 const SERVER_JS = "/Users/luo/Documents/github/codex-java-lsp-mcp/dist/server.js";
 const OUTPUT = process.env.M3_OUT ?? "/Users/luo/Documents/github/java-devkit-v1-runs/m3/retrieval-comparison";
 
@@ -68,16 +75,21 @@ async function main() {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("EMBEDDING_NOT_AUTHORIZED: OPENROUTER_API_KEY missing");
   const model = process.env.OPENROUTER_EMBEDDING_MODEL ?? "liquid/lfm-2.5-embedding-350m:free";
-  const provider = new EmbeddingProvider({ apiKey, model, timeoutMs: 60_000 });
+  const provider = new EmbeddingProvider({
+    apiKey,
+    model,
+    timeoutMs: 60_000,
+    cacheFile: path.join(process.env.M3_CACHE ?? "/Users/luo/Documents/github/java-devkit-v1-runs/m3/index-cache", "embeddings-cache.json")
+  });
   mkdirSync(CACHE_ROOT, { recursive: true });
   mkdirSync(OUTPUT, { recursive: true });
 
-  const tasks = (await readFile(path.join(KIT, "dataset/prompts/dev.jsonl"), "utf8"))
-    .trim().split("\n").map(line => JSON.parse(line));
-  const gold = new Map(
-    (await readFile(path.join(KIT, "dataset/gold/dev.jsonl"), "utf8"))
-      .trim().split("\n").map(line => JSON.parse(line)).map(g => [g.id, g])
-  );
+  const taskLines = [...(TASKS_FILES.length ? [] : [path.join(KIT, "dataset/prompts/dev.jsonl")]), ...TASKS_FILES];
+  const goldLines = [...(GOLD_FILES.length ? [] : [path.join(KIT, "dataset/gold/dev.jsonl")]), ...GOLD_FILES];
+  const tasks = [];
+  for (const file of taskLines) tasks.push(...(await readFile(file, "utf8")).trim().split("\n").map(line => JSON.parse(line)));
+  const gold = new Map();
+  for (const file of goldLines) for (const g of (await readFile(file, "utf8")).trim().split("\n").map(line => JSON.parse(line))) gold.set(g.id, g);
   for (const task of tasks) {
     if (!gold.get(task.id)) throw new Error(`gold missing for ${task.id}`);
   }
@@ -97,8 +109,9 @@ async function main() {
 
   for (const [corpus, corpusTasks] of byCorpus) {
     const first = corpusTasks[0];
-    const repoRoot = path.join(STAGE, first.id, "repo");
-    const cacheRoot = path.join(CACHE_ROOT, corpus);
+    // full 布局：STAGE/<corpus>；scoped 布局：STAGE/<task-id>/repo。
+    const repoRoot = STAGE_FULL ? path.join(STAGE, corpus) : path.join(STAGE, first.id, "repo");
+    const cacheRoot = path.join(CACHE_ROOT, `${PROFILE}-${corpus}`);
     process.stderr.write(`[m3] corpus=${corpus} tasks=${corpusTasks.length}\n`);
 
     const session = await openImpactSession({ repoRoot, serverJs: SERVER_JS, cacheRoot, env: process.env });
@@ -234,6 +247,9 @@ async function main() {
     schema: "java-specialist-m3-retrieval/v1",
     generatedAt: new Date().toISOString(),
     wallMs: Date.now() - startedWall,
+    profile: PROFILE,
+    stage: STAGE,
+    taskFiles: TASKS_FILES.length ? TASKS_FILES : ["dev.jsonl(default)"],
     provider: { ...provider.costReport(), model },
     arms: {
       a2: "product java_symbol (lexical, production MCP path)",
