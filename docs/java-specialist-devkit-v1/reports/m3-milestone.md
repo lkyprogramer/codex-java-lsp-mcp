@@ -121,7 +121,7 @@ f78b610 docs(m2): final milestone report - live track measured   ← M2 边界
 | 项 | 状态 | 阻塞原因 / 处置 |
 |---|---|---|
 | fullPublicCorpus（全公开语料独立 profile，docs/14 明确"不能用 scoped 高分替代"） | UNMEASURED | 语料下载需 `--allow-network` 授权（M2-6 同因）→ **docs/14 该项不绿，最终验收未全勾** |
-| **locked 集逐 case 结果（docs/14："dev 和未用于调参的 locked 分别有逐 case 结果"）** | **M3 收口时漏跑，正在补齐** | 12 locked 任务（hikari/ledger/notifications/pagination 四语料）此前从未执行；本里程碑报告更新后随即执行（见后续提交与 locked 报告） |
+| **locked 集逐 case 结果（docs/14："dev 和未用于调参的 locked 分别有逐 case 结果"）** | **已补齐**（M3 收口后执行） | 12 locked 任务（hikari/ledger/notifications/pagination，自创失败机制 fixture）× 2 臂 × 3 重复，GPT-6-Luna 判官：QA 9 任务两臂各 3/27 成功（逐任务差异：PAGINATION-01 A3 +1、HIKARI-02 A3 +1、HIKARI-01 A3 −2，净 0）；repair 9 行 UNMEASURED（无 repairTester）。结果：`/Users/luo/Documents/github/java-devkit-v1-runs/m3/agent-locked/`。解读：locked fixture 设计目标是隔离失败机制，两臂低成功率符合预期；dense 在未见过的自创语料上同样无净收益/无伤害，与 dev 集结论一致（跨语料稳健） |
 | Agent repair（P 轨，docs/14 "实际 Agent QA/repair"） | QA 已测（M2 144 + M3 3×72 runs）；**repair UNMEASURED** | repairTester 冻结测试 oracle 未接线（M2 遗留，接口就绪） |
 | 资源矩阵（task36 变异矩阵）与独立 benchmark 在 M3 边界重跑 | 未重跑 | M3 边界执行了 6 命令 + probe + selfcheck + preflight；task36/独立 benchmark 为 M1 产物未在本边界复跑，列入后续补跑清单 |
 | agent 层 A/B 第二/三轮（space-bunny / 本地网关 `codex/gpt-6-luna` reasoning=max，用户提供） | 已执行 | 轮 2：4/22 vs 5/22；轮 3（强判官）：A2 11/24 vs A3 10/24 → 任务层 dense 贡献被干净测得为无净收益、无伤害 → 主判定 KEEP_EXTERNAL |
@@ -129,7 +129,7 @@ f78b610 docs(m2): final milestone report - live track measured   ← M2 边界
 | M2-5 runtime 级 freshness（K15/K19/K21 等） | 未执行 | 需 per-item runtime 契约回填 + 真实 runtime 环境 |
 | 第二轮 embedding 模型对照 | NOT_RUN | 三轮后端 + 检索层已足够四向判定 + 分支关闭 |
 
-**结论修正（对前版报告的严格化）**：M3 = GO 的准确含义是**任务卡路线收口 + 实验分支关闭 + 产品边界全绿**；docs/14 最终验收清单在 full public corpus / locked 逐 case / repair 三项补齐前**不构成完整签字**。
+**结论修正（对前版报告的严格化）**：M3 = GO 的准确含义是**任务卡路线收口 + 实验分支关闭 + 产品边界全绿 + dev/locked 逐 case 覆盖**；docs/14 最终验收清单仅剩 **full public corpus（需网络授权）** 与 **Agent repair（需冻结测试 oracle 接线）** 两项在现有授权下不可执行，最终签字待这两项补齐。
 
 ## Reviewer 检查项（对照任务卡）
 

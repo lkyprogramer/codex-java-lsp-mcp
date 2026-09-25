@@ -6,7 +6,7 @@
 // pos:    docs/10 实验控制 —— 各臂共享 model/prompt/native tools/预算；
 //         provider 开销进总账（本驱动记录 embedding 调用与建库成本）。
 import { existsSync, readFileSync, readdirSync, statSync, mkdirSync } from "node:fs";
-import { writeFile } from "node:fs/promises";
+import { writeFile, readFile } from "node:fs/promises";
 import path from "node:path";
 import {
   runLiveAgentTask,
@@ -24,17 +24,15 @@ import { DenseDiscoveryIndex, EmbeddingProvider, readSearchDocumentFacts, cosine
 import { gatedDenseSearch, shouldRunDense } from "./gate.mjs";
 
 const KIT = "/Users/luo/Documents/github/codex-java-lsp-mcp/docs/java-specialist-devkit-v1";
-const STAGE = "/Users/luo/Documents/github/java-devkit-v1-runs/m1/m1-quality/stage";
+const STAGE = process.env.M3_STAGE ?? "/Users/luo/Documents/github/java-devkit-v1-runs/m1/m1-quality/stage";
 const SERVER_JS = "/Users/luo/Documents/github/codex-java-lsp-mcp/dist/server.js";
 const RUN = "/Users/luo/Documents/github/java-devkit-v1-runs/m3";
 const OUTPUT = process.env.M3_OUT ?? path.join(RUN, "agent-ab");
+const TASKS_FILE = process.env.M3_TASKS ?? path.join(KIT, "dataset/prompts/dev.jsonl");
+const GOLD_FILE = process.env.M3_GOLD ?? path.join(KIT, "dataset/gold/dev.jsonl");
 const PILOT_TASK_IDS = (process.env.M3_PILOT
   ? process.env.M3_PILOT.split(",").filter(Boolean)
-  : [
-      "JSB-PAYMENTS-01", "JSB-PAYMENTS-03", "JSB-INVENTORY-02", "JSB-INVENTORY-03",
-      "JSB-ACCESS-01", "JSB-ACCESS-03", "JSB-ADMISSIONS-01", "JSB-PRICING-03",
-      "JSB-PETCLINIC-02", "JSB-MYBATIS-01", "JSB-MYBATIS-02", "JSB-GSON-03"
-    ]);
+  : (() => { return readFileSync(TASKS_FILE, "utf8").trim().split("\n").map(l => JSON.parse(l).id); })());
 const REPEATS = Math.max(1, Number(process.env.M3_REPEATS ?? 3));
 const MAX_ROUNDS = 16;
 
@@ -81,11 +79,11 @@ async function main() {
   const hintsDir = path.join(OUTPUT, "hints");
   await mkdirSync(hintsDir, { recursive: true });
 
-  const tasks = (await import("node:fs/promises").then(m => m.readFile(path.join(KIT, "dataset/prompts/dev.jsonl"), "utf8")))
+  const tasks = (await readFile(TASKS_FILE, "utf8"))
     .trim().split("\n").map(line => JSON.parse(line))
     .filter(task => PILOT_TASK_IDS.includes(task.id));
   const goldMap = new Map(
-    (await import("node:fs/promises").then(m => m.readFile(path.join(KIT, "dataset/gold/dev.jsonl"), "utf8")))
+    (await readFile(GOLD_FILE, "utf8"))
       .trim().split("\n").map(line => JSON.parse(line)).map(g => [g.id, g])
   );
 
