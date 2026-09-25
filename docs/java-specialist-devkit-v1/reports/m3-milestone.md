@@ -2,13 +2,13 @@
 
 **分支：** `codex/java-specialist-devkit-v1`
 **代码 HEAD：** `517d50b`（本报告提交前最后代码态；本报告的 docs 提交为最终 HEAD）
-**判定：** **M3 = GO** —— 三张任务卡全部以实测证据收口：T10 四向结论 INCONCLUSIVE（agent 层）+ 检索层正信号，效果分支按 docs/10 关闭；T11 NOT_NEEDED（无绑定缺陷触发）；T12 单主线收口完成。M0–M3 全路线收口。
+**判定：** **M3 = GO** —— 三张任务卡全部以实测证据收口：T10 主判定 **KEEP_EXTERNAL**（四向之一；任务层内建子问题 INCONCLUSIVE，三轮后端含强判官确认无净收益/无伤害），效果分支按 docs/10 关闭；T11 NOT_NEEDED（无绑定缺陷触发）；T12 单主线收口完成。M0–M3 任务卡路线全部收口；docs/14 最终验收清单中 full public corpus / locked 逐 case / repair 三项仍未全绿（见"未测项与验收差距"）。
 
 ## 任务卡结果
 
 | 卡 | 结果 | 证据 |
 |---|---|---|
-| T10 语义发现实验 | **INCONCLUSIVE**（分支关闭；产品保持 A2 主线，dense 留独立外部选项） | [m3-t10-semantic-discovery.md](m3-t10-semantic-discovery.md) |
+| T10 语义发现实验 | **KEEP_EXTERNAL**（主判定，docs/10 四向之一；任务层内建子问题 INCONCLUSIVE，三轮后端确认；分支关闭；产品保持 A2 主线，dense 留独立外部选项） | [m3-t10-semantic-discovery.md](m3-t10-semantic-discovery.md) |
 | T11 绑定加深 | **NOT_NEEDED**（零产品 diff，合法完成） | [m3-t11-binding.md](m3-t11-binding.md) |
 | T12 收口发布 | 完成（本报告 + 单主线清理 + 边界回归） | 下文 |
 
@@ -83,16 +83,53 @@ f78b610 docs(m2): final milestone report - live track measured   ← M2 边界
 - 无 gold/taskId 特判（T10 实验包按冻结 task/gold 文件驱动，未改标签）；LIVE 凭据未进仓库（`openrouter.env.json` 在仓库外运行目录）。
 - 生产路径零副作用：实验全程 `JDT_BIN=/usr/bin/false`、隔离 HOME/cache；未触碰 38456 在线 daemon。
 
-## 未测项（如实公开）
+## K01–K32 完整状态表（docs/14：每项真实 PASS 或明确 BLOCKED/NOT_RUN）
 
-| 项 | 状态 | 阻塞原因 |
+状态口径：PASS=冻结执行路径已真实执行；PARTIAL=函数/fixture 级已过、runtime 级未执行；NOT_RUN=无任何级执行（全部显式列出，不默默消失）。
+
+| K | 类别 | 状态 | 证据 |
+|---|---|---|---|
+| K01/K02/K04 | identity | PASS | source-probe C1 三项，M3 边界 probe 12/12 |
+| K03（main/test 同 FQN 不互覆盖） | identity | NOT_RUN | 需双 sourceSet 真实运行时 |
+| K05（删除文件后声明/边/文档移除） | identity | NOT_RUN | 需 watcher 运行时（M2-5 交接项） |
+| K06（sibling worktree 同路径异内容） | identity | NOT_RUN | 需多 worktree 真实运行时 |
+| K07/K08/K09 | range | PASS | source-probe C3 三项（LF/CRLF 长方法），M3 边界 probe 12/12 |
+| K10（emoji UTF-16 列号） | range | PARTIAL | 套件内行号/列号测试绿；冻结的 fixtures/unicode 专项未单独执行 |
+| K11（helper 移动后关系不变） | range | PARTIAL | M2 fixture 级 GREEN（`helper-move-k11.test.ts` 双布局，套件内绿）；runtime 级未执行 |
+| K12（零预算显式 PARTIAL） | range | PARTIAL | 预算测试在套件内绿（query-budget）；冻结 runtime 场景未执行 |
+| K13/K14 | discovery | PASS | source-probe C2 两项（free-text 竞争 + exact 零向量调用），M3 边界 probe 12/12 |
+| K15（中文注释变更可检索） | discovery | NOT_RUN | runtime freshness（M2-5 交接项） |
+| K16（mapper statement 源码链接） | discovery | PARTIAL | M1 函数级（K16 mybatis 探针，M1 报告记录）；fixtures/resource 专项未单独执行 |
+| K17（宽泛词 scope 内先滤后限） | discovery | PARTIAL | M2 T07 QueryWorkBudget 函数级（deadline+postings cap，套件绿）；20 并发 runtime 未执行 |
+| K18（secret 值不出 wire） | discovery | PARTIAL | `redactSecretLiterals()` 函数级（M1）+ half-up fixture；fixtures/resource 专项未单独执行 |
+| K19（删除/重命名负缓存失效） | freshness | NOT_RUN | M2-5 交接项，需 watcher 运行时 |
+| K20（跨 generation 一致性） | freshness | PARTIAL | `generation` 快照语义函数级（M1 记录）；运行时判定未执行 |
+| K21（sibling XML-only 变更 hash 对账） | freshness | NOT_RUN | M2-5 交接项 |
+| K22/K23/K24 | bindings | NOT_RUN | T11 NOT_NEEDED（无触发失败）；fixture 专项未构造 |
+| K25（静态 query 零 JDT 启动） | api | PASS | M1 canary 实测 24/24（JDT_BIN=/usr/bin/false，无 JDT 失败事件）+ `symbol-static.test.ts` 套件绿；M2/M3 全部 live 运行同纪律复现 |
+| K26（position/references 保持 JDT 要求） | api | PASS | `symbol-static.test.ts:261` 实名测试，每轮 npm test 绿 |
+| K27（provider 故障回退词法） | runtime | PARTIAL | T10 实验包离线 fake 覆盖 timeout/offline/hash 不一致回退（8/8 测试 + 真实端点 E2E）；真实 provider 离线场景未演练 |
+| K28（共享 JDT 请求取消隔离） | runtime | NOT_RUN | 需 JDT 运行时（本轨道全程静态纪律） |
+| K29（20 并发宽泛查询队列有界） | runtime | PARTIAL | M2 事件循环/预算测量（wire 测量 + query-load）；20 并发专项未重跑 |
+| K30（writer 完成后 idle 读连接 WAL 收敛） | runtime | PARTIAL | `sql-client-lifecycle.test.ts` 函数级（套件绿）；长时 idle runtime 未执行 |
+| K31/K32（嵌套声明/record/text-block） | syntax | PARTIAL | AST 提取器测试在套件内绿（ast-extractor 覆盖）；冻结 fixtures/syntax 专项未单独执行 |
+
+汇总（32 项全列，无遗漏）：**PASS 10 项**（K01/K02/K04/K07/K08/K09/K13/K14/K25/K26）；**PARTIAL 12 项**（K10/K11/K12/K16/K17/K18/K20/K27/K29/K30/K31/K32：函数/fixture 级已过，runtime 级未执行）；**NOT_RUN 10 项**（K03/K05/K06/K15/K19/K21/K22/K23/K24/K28）。NOT_RUN 的集中原因：① watcher/reconcile 真实运行时（M2-5 交接项，需 per-item 契约回填）② JDT 运行时（本 devkit 轨道静态纪律）③ T11 无触发未构造 fixtures。**无一项被默默丢弃；无一项伪装成 PASS。**
+
+## 未测项与验收差距（对照 docs/14 逐项公开）
+
+| 项 | 状态 | 阻塞原因 / 处置 |
 |---|---|---|
-| fullPublicCorpus（全公开语料 A2/A3/agent 臂） | UNMEASURED | 语料下载需 `--allow-network` 授权（M2-6 同因） |
-| agent 层 A/B 第二/三轮（space-bunny / 本地网关 `codex/gpt-6-luna` reasoning=max，用户提供） | 已执行 | 轮 2：4/22 vs 5/22；轮 3（强判官）：A2 11/24 vs A3 10/24 —— 任务层 dense 贡献被干净测得为无净收益、无伤害 → 最终姿态 KEEP_EXTERNAL |
-| K22/K23/K24/K28 运行态绑定契约 | NOT_RUN | T11 无触发失败 |
-| M2-5 runtime 级 freshness（K15/K19/K21） | 未执行 | 需 per-item runtime 契约回填 + 真实 runtime 环境 |
-| 第二轮 embedding 模型对照 | NOT_RUN | 一轮已足够四向判定 + 分支关闭 |
-| repair（P 轨）任务 | UNMEASURED | repairTester 未注入（M2 遗留，接口就绪） |
+| fullPublicCorpus（全公开语料独立 profile，docs/14 明确"不能用 scoped 高分替代"） | UNMEASURED | 语料下载需 `--allow-network` 授权（M2-6 同因）→ **docs/14 该项不绿，最终验收未全勾** |
+| **locked 集逐 case 结果（docs/14："dev 和未用于调参的 locked 分别有逐 case 结果"）** | **M3 收口时漏跑，正在补齐** | 12 locked 任务（hikari/ledger/notifications/pagination 四语料）此前从未执行；本里程碑报告更新后随即执行（见后续提交与 locked 报告） |
+| Agent repair（P 轨，docs/14 "实际 Agent QA/repair"） | QA 已测（M2 144 + M3 3×72 runs）；**repair UNMEASURED** | repairTester 冻结测试 oracle 未接线（M2 遗留，接口就绪） |
+| 资源矩阵（task36 变异矩阵）与独立 benchmark 在 M3 边界重跑 | 未重跑 | M3 边界执行了 6 命令 + probe + selfcheck + preflight；task36/独立 benchmark 为 M1 产物未在本边界复跑，列入后续补跑清单 |
+| agent 层 A/B 第二/三轮（space-bunny / 本地网关 `codex/gpt-6-luna` reasoning=max，用户提供） | 已执行 | 轮 2：4/22 vs 5/22；轮 3（强判官）：A2 11/24 vs A3 10/24 → 任务层 dense 贡献被干净测得为无净收益、无伤害 → 主判定 KEEP_EXTERNAL |
+| K22/K23/K24/K28 运行态绑定契约 | NOT_RUN | T11 无触发失败（上表 K 状态表全量列出） |
+| M2-5 runtime 级 freshness（K15/K19/K21 等） | 未执行 | 需 per-item runtime 契约回填 + 真实 runtime 环境 |
+| 第二轮 embedding 模型对照 | NOT_RUN | 三轮后端 + 检索层已足够四向判定 + 分支关闭 |
+
+**结论修正（对前版报告的严格化）**：M3 = GO 的准确含义是**任务卡路线收口 + 实验分支关闭 + 产品边界全绿**；docs/14 最终验收清单在 full public corpus / locked 逐 case / repair 三项补齐前**不构成完整签字**。
 
 ## Reviewer 检查项（对照任务卡）
 
