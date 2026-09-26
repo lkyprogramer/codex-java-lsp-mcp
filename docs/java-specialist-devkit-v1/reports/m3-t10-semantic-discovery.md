@@ -91,3 +91,30 @@
 - `experiments/semantic-discovery/`：`provider.mjs`（EmbeddingProvider/DenseDiscoveryIndex/discoveryHint）、`gate.mjs`（Z2 门控）、`semantic-discovery.test.mjs`（8 离线 + 1 可选 E2E）、`compare.mjs`（检索层 A/B）、`agent-ab.mjs`（agent 层 A/B）、`package.json`
 - `docs/java-specialist-devkit-v1/configs/experiment.json`：用户授权记录 + embedding provider 身份
 - 运行产物（仓库外）：`/Users/luo/Documents/github/java-devkit-v1-runs/m3/`（retrieval-comparison/、agent-full2/、openrouter.env.json 凭据——不进产品仓库）
+## 终局增补：三 provider 对照与 docs/14 双缺口关闭（M3 closure）
+
+预注册 provider（lfm-2.5:free，1024 维）的 OpenRouter 免费档是**账户级 50 请求/天**，full profile 建库中途击穿（429），用户先后追加授权两个替代 provider。维度自适应 + 按 model 键控的磁盘缓存保证三轮互不污染；每条 hint/结果包带 provider 身份，**跨 provider 数字不可混比**。
+
+| provider | 维度 | 额度 | 覆盖 |
+|---|---|---|---|
+| liquid/lfm-2.5-embedding-350m:free（预注册） | 1024 | 50 请求/天 | scoped 检索 A/B + 任务 A/B 轮 1–3 + full 6/12 语料 |
+| nvidia/nemotron-3-embed-1b:free（追加） | 2048 | 同上（账户级共享） | repair 矩阵 48 runs + full 9/12 语料 |
+| Qwen/Qwen3-VL-Embedding-8B @ SiliconFlow（追加） | 4096 | 无日墙 | **full 12/12 + repair 矩阵 48 runs（终局口径）** |
+
+### Full public corpus（external-full profile，12/12 dense，SiliconFlow 轮）
+- 语料：`hydrate-public`（git 固定 SHA 浅 fetch + seed SHA-256 校验，网络已授权），1725 文件；大语料声明量 mybatis 1042 / gson 664 / hikari 488
+- **micro：A2 0.5741 → A3 0.6250（+0.0509）**；净增益：notifications +0.333、admissions +0.167、pricing +0.111；其余持平，零回归
+- 负对照：36 条文本查询嵌入、exact 0 泄漏；API 190 次调用、0 错误、无模型下载
+- 证据：`/Users/luo/Documents/github/java-devkit-v1-runs/m3/retrieval-full-final/`
+- **docs/14 "full public corpus 独立 profile 运行" 关闭**
+
+### Repair 轨道（P 轨）从 UNMEASURED → MEASURED
+- 冻结判定器 `repair-judge.mjs`（docs/07）：allowed_edits 文件哈希越权拒绝、干净 fixture + 候选叠加、外部 FrozenJudgeRunner 在冻结测试 main 正常返回后写回执、`javac -proc:none --release 8`；离线 RED→GREEN 20/20（8 基线原工程必败 + reference 补丁必过 + 越权必拒，真实 javac/java）
+- 矩阵：8 任务 × 2 臂 × 3 重复 = 48 runs（GPT-6-Luna 执行，luna 判官 + 冻结测试双轨；write_file 工具两臂对称；每 run 独立候选拷贝 + 工具追踪）
+- **结果：A2 0/24、A3 0/24（dev 0/15+0/15，locked 0/9+0/9）；nemotron 轮与 siliconflow 轮完全一致**
+- 归因（工具追踪为证）：非 harness——java_symbol 全部成功、模型确实读对了 gold 文件；是模型行为——读完后拒绝提交修改（"无法安全修复"），唯一一次真实写入（PRICING-03 a3 r2 改 MoneyPolicy.java）改错并被判定器正确判 COMPILE_FAILED。检索/dense hint 不是 repair 的瓶颈
+- 证据：`/Users/luo/Documents/github/java-devkit-v1-runs/m3/repair-dev|repair-locked/`（siliconflow 轮为终局口径）
+- **docs/14 "实际 Agent QA/repair" 关闭（repair 以诚实的零关闭）**
+
+### 四向判定不变
+provider 更替不改变实验结论：KEEP_EXTERNAL 为运行姿态（外部独立实验包，产品零钩子），任务层内建 dense 的 INCONCLUSIVE 维持。SiliconFlow 终局轮的检索层 +0.051（12/12 语料）进一步支持"外部 dense 有真实机制收益、无回归"。

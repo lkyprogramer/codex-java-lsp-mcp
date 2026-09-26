@@ -481,9 +481,9 @@ sh scripts/run-isolated-node.sh scripts/run-isolated-validation.mjs --profile fu
 
 本仓库同时是 Java Specialist Devkit v1 的执行载体：静态发现层（`java_symbol` 词法/结构化检索，A2 主线）+ 真实 agent 评测轨道。M0–M3 全部收口：
 
-- **M1** 静态发现 + canary；**M2** 关键证据/读计划/真实 agent 评测（144 runs MEASURED，27B 后端）；**M3** 语义发现预注册实验（T10，INCONCLUSIVE，分支关闭）+ 绑定加深归因（T11，NOT_NEEDED）+ 单主线收口（T12）。
+- **M1** 静态发现 + canary；**M2** 关键证据/读计划/真实 agent 评测（144 runs MEASURED，27B 后端）；**M3** 语义发现预注册实验（T10，KEEP_EXTERNAL 运行姿态，分支关闭）+ 绑定加深归因（T11，NOT_NEEDED）+ 单主线收口（T12）+ **终局双缺口关闭：full public corpus 12/12 语料 external-profile 实测（micro A2 0.574 → A3 0.625）与 Agent repair 48 runs 冻结测试实测（0/33，诚实的零）**。
 - **单主线**：生产工具面 `java_status` / `java_impact` / `java_symbol` / `java_diagnostics` / `java_runtime`；未注册的 `java_context` 旧逻辑已在 M3 删除，`context-engine` 模块仍由 `java_impact`/SQL 层消费。
-- **语义路线**：独立实验包 `experiments/semantic-discovery/`（外部 dense 对照，零产品依赖/零钩子）。产品默认线保持 A2 词法；dense 为外部可选项。报告见 [`docs/java-specialist-devkit-v1/reports/`](docs/java-specialist-devkit-v1/reports/)（m0/m1/m2/m3-t10/m3-t11/m3 里程碑）。
+- **语义路线**：独立实验包 `experiments/semantic-discovery/`（外部 dense 对照，零产品依赖/零钩子；provider 可换：OpenRouter lfm/nemotron 与 SiliconFlow Qwen3-VL-Embedding-8B，维度自适应 + 磁盘缓存，凭据在仓库外）。产品默认线保持 A2 词法；dense 为外部可选项。报告见 [`docs/java-specialist-devkit-v1/reports/`](docs/java-specialist-devkit-v1/reports/)（m0/m1/m2/m3-t10/m3-t11/m3 里程碑）。
 - 历史路线（JIN/phase-f/v3 矩阵等）文档保留在 `docs/deep` 与 `docs/` 顶层，作为历史设计记录（当前生产主线以上文“单主线”节与 devkit 报告为准）；运行产物不在仓库内（仓库外 `java-devkit-v1-runs/`）。
 
 ## 许可证

@@ -33,15 +33,17 @@ M2 144 行实测 + SOURCE_RECEIVED 交叉验证：失败运行**已读到 gold �
   "productRegression": "PASS",
   "independentRetrieval": "MEASURED",
   "liveAgentOutcome": "MEASURED",
-  "fullPublicCorpus": "UNMEASURED",
+  "fullPublicCorpus": "MEASURED",
   "permittedToDeploy": false
 }
 ```
 
+终局口径（closure 轮）：`fullPublicCorpus` 由 UNMEASURED 改为 **MEASURED**——`hydrate-public`（网络已授权、固定 SHA）水合 12 语料后 external-full 独立 profile 实测（micro A2 0.574 → A3 0.625，12/12 语料 dense 建成，SiliconFlow Qwen3-VL-Embedding-8B provider）；`liveAgentOutcome` 同步补齐 repair 轨道（48 runs 冻结测试实测，0/33 诚实零）。`permittedToDeploy` 维持 false：本交付是代码 + 测试证据，不触碰线上 daemon。closure 边界证据：`/Users/luo/Documents/github/java-devkit-v1-runs/m3/m3-closure/`（6 命令全 0 退出 + probe 12/12 + selfcheck + preflight 干净）。
+
 - `productRegression=PASS`：本边界 6 命令全绿（下表）。
-- `independentRetrieval=MEASURED`：M1 质量对照 + M3 检索层 A2/A3（0.694/0.778）。
-- `liveAgentOutcome=MEASURED`：M2 LIVE 144 runs（taskSuccessRate 0.189；product 12/72 vs control 9/72）+ M3 agent A/B 72 runs。
-- `fullPublicCorpus=UNMEASURED`：公开语料下载未授权（`--allow-network`），M2-6 遗留。
+- `independentRetrieval=MEASURED`：M1 质量对照 + M3 检索层 A2/A3（scoped 0.694/0.778）+ **external-full 12/12 语料 0.574/0.625（closure 轮，SiliconFlow provider）**。
+- `liveAgentOutcome=MEASURED`：M2 LIVE 144 runs（taskSuccessRate 0.189；product 12/72 vs control 9/72）+ M3 agent A/B 3×72 runs（QA）+ **closure 轮 repair 48 runs 冻结测试实测（A2 0/24、A3 0/24）**。
+- `fullPublicCorpus=MEASURED`：`hydrate-public`（网络已授权）水合 12 语料 1725 文件后 external-full 独立 profile 实测（micro A2 0.574 → A3 0.625，12/12 dense，190 次 API 零错误）；前两轮 lfm 6/12、nemotron 9/12 因 OpenRouter 免费档 50 请求/天截断，如实留档。
 - `permittedToDeploy=false`：本交付 = commit + 测试证据；安装/替换线上 daemon 需另行授权（`./install-runtime.sh`，不动 38456 在线服务）。
 
 3. **代码量分账**（`git ls-files` 口径，src 按类别）：
@@ -120,22 +122,22 @@ f78b610 docs(m2): final milestone report - live track measured   ← M2 边界
 
 | 项 | 状态 | 阻塞原因 / 处置 |
 |---|---|---|
-| fullPublicCorpus（全公开语料独立 profile，docs/14 明确"不能用 scoped 高分替代"） | UNMEASURED | 语料下载需 `--allow-network` 授权（M2-6 同因）→ **docs/14 该项不绿，最终验收未全勾** |
-| **locked 集逐 case 结果（docs/14："dev 和未用于调参的 locked 分别有逐 case 结果"）** | **已补齐**（M3 收口后执行） | 12 locked 任务（hikari/ledger/notifications/pagination，自创失败机制 fixture）× 2 臂 × 3 重复，GPT-6-Luna 判官：QA 9 任务两臂各 3/27 成功（逐任务差异：PAGINATION-01 A3 +1、HIKARI-02 A3 +1、HIKARI-01 A3 −2，净 0）；repair 9 行 UNMEASURED（无 repairTester）。结果：`/Users/luo/Documents/github/java-devkit-v1-runs/m3/agent-locked/`。解读：locked fixture 设计目标是隔离失败机制，两臂低成功率符合预期；dense 在未见过的自创语料上同样无净收益/无伤害，与 dev 集结论一致（跨语料稳健） |
-| Agent repair（P 轨，docs/14 "实际 Agent QA/repair"） | QA 已测（M2 144 + M3 3×72 runs）；**repair UNMEASURED** | repairTester 冻结测试 oracle 未接线（M2 遗留，接口就绪） |
+| fullPublicCorpus（全公开语料独立 profile，docs/14 明确"不能用 scoped 高分替代"） | **MEASURED（关闭）** | `hydrate-public`（网络已授权，固定 SHA）水合 12 语料 1725 文件；external-full 检索 A/B：micro A2 0.574 → A3 0.625（+0.051），12/12 语料 dense 建成（SiliconFlow Qwen 8B 轮，190 次 API 零错误）；证据 `retrieval-full-final/`。前两轮（lfm 6/12、nemotron 9/12）因 OpenRouter 免费档 50 请求/天截断，如实留档 |
+| **locked 集逐 case 结果（docs/14："dev 和未用于调参的 locked 分别有逐 case 结果"）** | **已补齐**（M3 收口后执行） | 12 locked 任务（hikari/ledger/notifications/pagination，自创失败机制 fixture）× 2 臂 × 3 重复，GPT-6-Luna 判官：QA 9 任务两臂各 3/27 成功（逐任务差异：PAGINATION-01 A3 +1、HIKARI-02 A3 +1、HIKARI-01 A3 −2，净 0）；repair 见下行。结果：`/Users/luo/Documents/github/java-devkit-v1-runs/m3/agent-locked/`。解读：locked fixture 设计目标是隔离失败机制，两臂低成功率符合预期；dense 在未见过的自创语料上同样无净收益/无伤害，与 dev 集结论一致（跨语料稳健） |
+| Agent repair（P 轨，docs/14 "实际 Agent QA/repair"） | **MEASURED（关闭）** | 冻结判定器接线（docs/07，RED→GREEN 20/20）后实测 8 任务 × 2 臂 × 3 重复 = 48 runs：**A2 0/24、A3 0/24**（nemotron 与 siliconflow 两轮一致）。归因：模型读完 gold 文件后拒绝/写错（非 harness、非检索瓶颈）；repair 以诚实的零关闭 |
 | 资源矩阵（task36 变异矩阵）与独立 benchmark 在 M3 边界重跑 | 未重跑 | M3 边界执行了 6 命令 + probe + selfcheck + preflight；task36/独立 benchmark 为 M1 产物未在本边界复跑，列入后续补跑清单 |
 | agent 层 A/B 第二/三轮（space-bunny / 本地网关 `codex/gpt-6-luna` reasoning=max，用户提供） | 已执行 | 轮 2：4/22 vs 5/22；轮 3（强判官）：A2 11/24 vs A3 10/24 → 任务层 dense 贡献被干净测得为无净收益、无伤害 → 主判定 KEEP_EXTERNAL |
 | K22/K23/K24/K28 运行态绑定契约 | NOT_RUN | T11 无触发失败（上表 K 状态表全量列出） |
 | M2-5 runtime 级 freshness（K15/K19/K21 等） | 未执行 | 需 per-item runtime 契约回填 + 真实 runtime 环境 |
-| 第二轮 embedding 模型对照 | NOT_RUN | 三轮后端 + 检索层已足够四向判定 + 分支关闭 |
+| 第二轮 embedding 模型对照 | 已执行（超出原计划） | 三轮后端 + **三 provider 对照**（lfm 1024 / nemotron 2048 / Qwen8B 4096，跨向量空间结论一致：任务层无净收益/无伤害，检索层正收益）→ 分支关闭证据链完整 |
 
-**结论修正（对前版报告的严格化）**：M3 = GO 的准确含义是**任务卡路线收口 + 实验分支关闭 + 产品边界全绿 + dev/locked 逐 case 覆盖**；docs/14 最终验收清单仅剩 **full public corpus（需网络授权）** 与 **Agent repair（需冻结测试 oracle 接线）** 两项在现有授权下不可执行，最终签字待这两项补齐。
+**结论（终局版）**：M3 = GO 的准确含义是**任务卡路线收口 + 实验分支关闭 + 产品边界全绿 + dev/locked 逐 case 覆盖 + docs/14 两项遗留缺口（full public corpus、Agent repair）均已实测关闭**。docs/14 最终验收清单在现有授权下已无不可执行项；剩余 NOT_RUN 仅为 runtime 级契约回填（M2-5 交接）与 JDT 运行时（静态纪律轨道不适用），不属于最终签字阻塞项。
 
 ## Reviewer 检查项（对照任务卡）
 
 - [x] 无 gold/taskId/项目特判；冻结标签零修改（dataset/ 零 diff）
 - [x] 无生产路径副作用（静态纪律 + 隔离运行目录）
 - [x] 每字段 releaseDecision 仅由各自实测证据填写，未混同 testCount
-- [x] 实际未完成的测试未写 ALL_PASS（fullPublicCorpus/强模型/运行态契约均如实 UNMEASURED/NOT_RUN）
+- [x] 实际未完成的测试未写 ALL_PASS（runtime 级契约/独立 benchmark 重跑项如实 NOT_RUN；fullPublicCorpus 与 Agent repair 已在 closure 轮实测关闭）
 - [x] semantic 实验关闭后产品完整可用（边界 6 命令 + probe + selfcheck 全绿）
 - [x] 提交不是安装授权（permittedToDeploy=false，线上 daemon 未动）
