@@ -12,7 +12,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 export const HINT_AUTHORITY = "DISCOVERY_HINT";
-export const EMBEDDING_DIM = 1024;
+export const EMBEDDING_DIM = 1024; // 历史默认（lfm-2.5）；实际维度以首次响应探测为准（this.dim）。
 
 /** docs/10 Z1 契约：提示的身份与可信度边界。 */
 export function discoveryHint({ provider, providerIndexIdentity, relativePath, startLine, endLine, rank, indexedContentHash }) {
@@ -43,6 +43,7 @@ export class EmbeddingProvider {
     this.timeoutMs = timeoutMs;
     this.maxRetries = maxRetries;
     this.cacheFile = cacheFile; // 磁盘 embedding 缓存（按 contentHash 键控），避免免费额度重打。
+    this.dim = null; // 首次成功响应/缓存命中时探测；不同 provider 模型的维度不同（1024/2048）。
     this.calls = 0;
     this.batchCalls = 0;
     this.itemsEmbedded = 0;
@@ -60,8 +61,12 @@ export class EmbeddingProvider {
     const missing = [];
     for (let i = 0; i < texts.length; i += 1) {
       const cached = this.cacheGet?.(keys?.[i]);
-      if (Array.isArray(cached) && cached.length === EMBEDDING_DIM) vectors[i] = cached;
-      else missing.push(i);
+      if (Array.isArray(cached) && cached.length > 0) {
+        vectors[i] = cached;
+        this.dim = this.dim ?? cached.length;
+      } else {
+        missing.push(i);
+      }
     }
     if (missing.length > 0) {
       const remaining = [];
@@ -140,7 +145,7 @@ export class EmbeddingProvider {
           .slice()
           .sort((a, b) => (a.index ?? 0) - (b.index ?? 0))
           .map(row => row.embedding);
-        if (ordered.length !== batch.length || ordered.some(v => !Array.isArray(v) || v.length !== EMBEDDING_DIM)) {
+        if (ordered.length !== batch.length || ordered.some(v => !Array.isArray(v) || (this.dim = this.dim ?? ordered[0].length, v.length !== this.dim))) {
           throw new EmbeddingProviderError(`embedding shape mismatch: got ${ordered.length} rows`);
         }
         this.itemsEmbedded += batch.length;
@@ -249,7 +254,7 @@ export class DenseDiscoveryIndex {
   }
 
   get providerIndexIdentity() {
-    return `openrouter:${this.provider.model}:dim${EMBEDDING_DIM}:${this.corpusHash.slice(0, 12)}`;
+    return `openrouter:${this.provider.model}:dim${this.provider.dim ?? "?"}:${this.corpusHash.slice(0, 12)}`;
   }
 
   async build() {

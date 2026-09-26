@@ -1,31 +1,59 @@
 {
-  "schema": "java-specialist-experiment/v1",
-  "approved_network": true,
-  "approved_model_spend": true,
-  "authorization": "用户于 M3 阶段显式授权：提供 OpenRouter embedding 端点（liquid/lfm-2.5-embedding-350m:free，免费）并授权网络访问与免费模型推理；chat 后端沿用 M2 授权的 openclaw 27B 实例。凭据仅存仓库外运行目录。",
-  "embedding_provider": {
-    "endpoint": "https://openrouter.ai/api/v1/embeddings",
+ "schema": "java-specialist-experiment/v1",
+ "approved_network": true,
+ "approved_model_spend": true,
+ "authorization": "用户于 M3 阶段显式授权：提供 OpenRouter embedding 端点（liquid/lfm-2.5-embedding-350m:free，免费）并授权网络访问与免费模型推理；chat 后端沿用 M2 授权的 openclaw 27B 实例。凭据仅存仓库外运行目录。 M3 终局阶段用户追加授权：同一 OpenRouter key 改用 nvidia/nemotron-3-embed-1b:free（免费、2048 维）以绕过 lfm 免费档日额度限制；仅换 provider 身份，机制/维度自适应/预算/双臂对称不变。",
+ "embedding_provider": {
+  "endpoint": "https://openrouter.ai/api/v1/embeddings",
+  "model": "nvidia/nemotron-3-embed-1b:free",
+  "dimensions": 2048,
+  "credential_ref": "/Users/luo/Documents/github/java-devkit-v1-runs/m3/openrouter.env.json (outside repo)",
+  "provider_history": [
+   {
     "model": "liquid/lfm-2.5-embedding-350m:free",
     "dimensions": 1024,
-    "credential_ref": "/Users/luo/Documents/github/java-devkit-v1-runs/m3/openrouter.env.json (outside repo)"
-  },
-  "pilot": {
-    "split": "dev",
-    "task_ids": ["JSB-PAYMENTS-01","JSB-PAYMENTS-03","JSB-INVENTORY-02","JSB-INVENTORY-03","JSB-ACCESS-01","JSB-ACCESS-03","JSB-ADMISSIONS-01","JSB-PRICING-03","JSB-PETCLINIC-02","JSB-MYBATIS-01","JSB-MYBATIS-02","JSB-GSON-03"],
-    "model_profiles": 1,
-    "arms": ["improved-lexical", "lexical-plus-optional-discovery"],
-    "repeats_per_arm": 3,
-    "max_agent_turns": 20,
-    "max_wall_seconds": 180,
-    "max_model_input_tokens": 64000,
-    "max_model_output_tokens": 12000,
-    "raw_usage_required": true
-  },
-  "rules": [
-    "Network and paid inference require separate explicit user authorization.",
-    "Do not use locked labels to select weights or fix query prompts.",
-    "Each arm shares model, system prompt, native tools and task budget.",
-    "Compare stock zvec as a system; claim dense-only effect only on aligned representations.",
-    "Repeats are averaged within tasks, then analyzed by corpus clusters."
+    "note": "M3 预注册 provider；免费档 50 请求/天日额度在 full-profile 建库中被击穿(429)，6/12 语料 dense 建成后额度耗尽"
+   },
+   {
+    "model": "nvidia/nemotron-3-embed-1b:free",
+    "dimensions": 2048,
+    "note": "用户授权的同账号替代 provider（同一 key/端点）；同一 dense 机制，向量空间不同 → 切换后全部 A3 轮次用新 provider 重跑，不与 lfm 轮次混比"
+   }
   ]
+ },
+ "pilot": {
+  "split": "dev",
+  "task_ids": [
+   "JSB-PAYMENTS-01",
+   "JSB-PAYMENTS-03",
+   "JSB-INVENTORY-02",
+   "JSB-INVENTORY-03",
+   "JSB-ACCESS-01",
+   "JSB-ACCESS-03",
+   "JSB-ADMISSIONS-01",
+   "JSB-PRICING-03",
+   "JSB-PETCLINIC-02",
+   "JSB-MYBATIS-01",
+   "JSB-MYBATIS-02",
+   "JSB-GSON-03"
+  ],
+  "model_profiles": 1,
+  "arms": [
+   "improved-lexical",
+   "lexical-plus-optional-discovery"
+  ],
+  "repeats_per_arm": 3,
+  "max_agent_turns": 20,
+  "max_wall_seconds": 180,
+  "max_model_input_tokens": 64000,
+  "max_model_output_tokens": 12000,
+  "raw_usage_required": true
+ },
+ "rules": [
+  "Network and paid inference require separate explicit user authorization.",
+  "Do not use locked labels to select weights or fix query prompts.",
+  "Each arm shares model, system prompt, native tools and task budget.",
+  "Compare stock zvec as a system; claim dense-only effect only on aligned representations.",
+  "Repeats are averaged within tasks, then analyzed by corpus clusters."
+ ]
 }
