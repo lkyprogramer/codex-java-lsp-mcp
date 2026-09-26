@@ -2,12 +2,12 @@
  "schema": "java-specialist-experiment/v1",
  "approved_network": true,
  "approved_model_spend": true,
- "authorization": "用户于 M3 阶段显式授权：提供 OpenRouter embedding 端点（liquid/lfm-2.5-embedding-350m:free，免费）并授权网络访问与免费模型推理；chat 后端沿用 M2 授权的 openclaw 27B 实例。凭据仅存仓库外运行目录。 M3 终局阶段用户追加授权：同一 OpenRouter key 改用 nvidia/nemotron-3-embed-1b:free（免费、2048 维）以绕过 lfm 免费档日额度限制；仅换 provider 身份，机制/维度自适应/预算/双臂对称不变。",
+ "authorization": "用户于 M3 阶段显式授权：提供 OpenRouter embedding 端点（liquid/lfm-2.5-embedding-350m:free，免费）并授权网络访问与免费模型推理；chat 后端沿用 M2 授权的 openclaw 27B 实例。凭据仅存仓库外运行目录。 M3 终局阶段用户追加授权：同一 OpenRouter key 改用 nvidia/nemotron-3-embed-1b:free（免费、2048 维）以绕过 lfm 免费档日额度限制；仅换 provider 身份，机制/维度自适应/预算/双臂对称不变。 终局阶段用户追加授权:SiliconFlow Qwen3-VL-Embedding-8B(4096 维)作为 embedding provider,凭据存仓库外 siliconflow.env.json。",
  "embedding_provider": {
-  "endpoint": "https://openrouter.ai/api/v1/embeddings",
-  "model": "nvidia/nemotron-3-embed-1b:free",
-  "dimensions": 2048,
-  "credential_ref": "/Users/luo/Documents/github/java-devkit-v1-runs/m3/openrouter.env.json (outside repo)",
+  "endpoint": "https://api.siliconflow.cn/v1/embeddings",
+  "model": "Qwen/Qwen3-VL-Embedding-8B",
+  "dimensions": 4096,
+  "credential_ref": "/Users/luo/Documents/github/java-devkit-v1-runs/m3/siliconflow.env.json (outside repo)",
   "provider_history": [
    {
     "model": "liquid/lfm-2.5-embedding-350m:free",
@@ -18,6 +18,16 @@
     "model": "nvidia/nemotron-3-embed-1b:free",
     "dimensions": 2048,
     "note": "用户授权的同账号替代 provider（同一 key/端点）；同一 dense 机制，向量空间不同 → 切换后全部 A3 轮次用新 provider 重跑，不与 lfm 轮次混比"
+   },
+   {
+    "model": "nvidia/nemotron-3-embed-1b:free",
+    "dimensions": 2048,
+    "note": "同 OpenRouter 账号免费档,与 lfm 共享 50 请求/天账户额度;repair 矩阵 48 runs 与 full 9/12 语料即以该 provider 测得"
+   },
+   {
+    "model": "Qwen/Qwen3-VL-Embedding-8B",
+    "dimensions": 4096,
+    "note": "用户授权 SiliconFlow 端点(独立 key, 无日额度墙);终局 repair 矩阵与 full 12/12 profile 以该 provider 重跑;跨语言 cos 0.69 vs 0.47"
    }
   ]
  },

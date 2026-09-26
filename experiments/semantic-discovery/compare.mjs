@@ -72,12 +72,13 @@ function coverage(pathsWithRanges, gold) {
 }
 
 async function main() {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new Error("EMBEDDING_NOT_AUTHORIZED: OPENROUTER_API_KEY missing");
+  const apiKey = process.env.EMBEDDING_API_KEY ?? process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw new Error("EMBEDDING_NOT_AUTHORIZED: no embedding API key");
   const model = process.env.OPENROUTER_EMBEDDING_MODEL ?? "liquid/lfm-2.5-embedding-350m:free";
   const provider = new EmbeddingProvider({
     apiKey,
     model,
+    baseUrl: process.env.EMBEDDING_BASE_URL ?? "https://openrouter.ai/api/v1",
     timeoutMs: 60_000,
     cacheFile: path.join(process.env.M3_CACHE ?? "/Users/luo/Documents/github/java-devkit-v1-runs/m3/index-cache", "embeddings-cache.json")
   });

@@ -90,8 +90,9 @@ async function main() {
     throw new Error("chat backend not configured: source /Users/luo/Documents/grok/.env (PCR_LIVE_* -> OPENAI_*) first");
   }
   const provider = new EmbeddingProvider({
-    apiKey: process.env.OPENROUTER_API_KEY,
+    apiKey: process.env.EMBEDDING_API_KEY ?? process.env.OPENROUTER_API_KEY,
     model: process.env.OPENROUTER_EMBEDDING_MODEL ?? orEnv.OPENROUTER_EMBEDDING_MODEL,
+    baseUrl: process.env.EMBEDDING_BASE_URL ?? "https://openrouter.ai/api/v1",
     timeoutMs: 60_000,
     cacheFile: path.join(process.env.M3_CACHE ?? "/Users/luo/Documents/github/java-devkit-v1-runs/m3/index-cache", "embeddings-cache.json")
   });
