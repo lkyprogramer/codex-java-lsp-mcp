@@ -18,4 +18,5 @@ graphify-out/
 
 # Local debug / orchestrator state. Not source.
 .task30-debug.mjs
+.commandcode/
 .workflow/
