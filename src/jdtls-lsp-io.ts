@@ -845,19 +845,36 @@ export function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-export async function terminateChild(child: JdtlsChild, graceMs: number): Promise<void> {
-  // `child.killed` only records that kill() was called, so exit status is the
-  // single source of truth for "the OS process is gone".
-  if (child.exitCode !== null || child.signalCode !== null) {
-    return;
+export function childHasExited(child: JdtlsChild): boolean {
+  return child.exitCode !== null || child.signalCode !== null;
+}
+
+/**
+ * SIGTERM, then SIGKILL. Returns false when the child is still alive.
+ * Callers must keep the handle: a timed-out wait is not proof the process died.
+ */
+export async function terminateChild(child: JdtlsChild, graceMs: number): Promise<boolean> {
+  if (childHasExited(child)) return true;
+  const exited = new Promise<void>(resolve => {
+    if (childHasExited(child)) {
+      resolve();
+      return;
+    }
+    child.once("close", () => resolve());
+  });
+  try {
+    child.kill("SIGTERM");
+  } catch {
+    // The handle may already be gone. SIGKILL below, then the caller's pid check, decide.
   }
-  const exited = new Promise<void>(resolve => child.once("close", () => resolve()));
-  child.kill("SIGTERM");
-  if (await settlesWithin(exited, graceMs)) {
-    return;
+  if (await settlesWithin(exited, graceMs) && childHasExited(child)) return true;
+  try {
+    child.kill("SIGKILL");
+  } catch {
+    // Same as above.
   }
-  child.kill("SIGKILL");
-  await settlesWithin(exited, 1000);
+  if (await settlesWithin(exited, 1000) && childHasExited(child)) return true;
+  return childHasExited(child);
 }
 
 export function validateJdtlsTransportEnvironment(
@@ -926,8 +943,10 @@ export async function forceTerminateJdtlsChild(child: JdtlsChild, deadlineMs = 1
 
 function settlesWithin(operation: Promise<void>, timeoutMs: number): Promise<boolean> {
   return new Promise(resolve => {
+    // Referenced on purpose: this wait is the last step of killing a JDT child.
+    // An unref'd timer lets the process exit before SIGKILL when nothing else
+    // is on the loop, which is how a shutdown dropped a live JVM.
     const timer = setTimeout(() => resolve(false), timeoutMs);
-    timer.unref?.();
     operation.then(() => {
       clearTimeout(timer);
       resolve(true);

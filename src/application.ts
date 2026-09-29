@@ -8,6 +8,7 @@ import { RepoOwnershipManager, type RepoOwnershipProvider, type RepoOwnerTranspo
 import { canonicalPath, repoHash } from "./path-utils.js";
 import {
   cleanupStaleWorktreeCaches,
+  reapAbandonedWorkspaceJdtls,
   type WorktreeCacheCleanupOptions,
   type WorktreeCacheCleanupResult
 } from "./worktree-cache-cleanup.js";
@@ -90,6 +91,11 @@ export class JavaLspApplication {
         validateJdtlsTransportEnvironment(this.transportMode);
         await this.runtimes.initialize?.();
         await this.registry.reloadIfChanged();
+        try {
+          reapAbandonedWorkspaceJdtls();
+        } catch (error) {
+          console.error("[codex-java-lsp] abandoned JDT reap failed", error);
+        }
         const result = this.runCacheJanitor();
         this.currentState = "ready";
         this.startCacheJanitor();

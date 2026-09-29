@@ -135,6 +135,27 @@ test("fake transport can fail initialize and reports child termination", async (
   assert.equal(factory.connections[0].disposed, true);
 });
 
+test("dispose before sendRequest rejects the later call and leaves the parked deferred unsettled", async () => {
+  const initialize = deferred<unknown>();
+  const factory = fakeTransportFactory({ initialize });
+  const attempt = factory.spawn(spawnInput);
+
+  attempt.connection.dispose();
+  await assert.rejects(() => attempt.connection.sendRequest("initialize"), /disposed/);
+  assert.equal(initialize.settled, false);
+});
+
+test("dispose rejects a request that is already in flight", async () => {
+  const initialize = deferred<unknown>();
+  const factory = fakeTransportFactory({ initialize });
+  const attempt = factory.spawn(spawnInput);
+
+  const pending = attempt.connection.sendRequest("initialize");
+  attempt.connection.dispose();
+  await assert.rejects(() => pending, /disposed/);
+  assert.equal(initialize.settled, true);
+});
+
 test("sequence transport factory returns a different attempt per spawn", async () => {
   const factory = sequenceTransportFactory([
     { initializeError: new Error("first attempt fails") },

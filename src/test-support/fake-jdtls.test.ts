@@ -60,6 +60,8 @@ export class FakeJdtlsChild implements JdtlsChild {
   signalCode: NodeJS.Signals | null = null;
   /** When false, kill() records the call but the process never exits (hung child). */
   exitsOnKill = true;
+  /** Signals that record the kill but do not exit. SIGKILL can still win when omitted. */
+  surviveSignals = new Set<NodeJS.Signals>();
 
   private readonly events = new EventEmitter();
 
@@ -72,8 +74,10 @@ export class FakeJdtlsChild implements JdtlsChild {
     this.killCalls += 1;
     this.killSignals.push(signal);
     this.killed = true;
+    const delivered = signal ?? "SIGTERM";
+    if (this.surviveSignals.has(delivered)) return true;
     if (this.exitsOnKill && this.exitCode === null && this.signalCode === null) {
-      this.exit(null, signal ?? "SIGTERM");
+      this.exit(null, delivered);
     }
     return true;
   }
@@ -106,6 +110,8 @@ export class FakeJdtlsConnection implements JdtlsConnection {
   disposed = false;
   listening = false;
 
+  /** Deferreds `sendRequest` is already awaiting. A parked `pending` entry is not in flight. */
+  private readonly inFlight = new Set<Deferred<unknown>>();
   private readonly requestHandlers = new Map<string, (...args: any[]) => unknown>();
   private readonly notificationHandlers = new Map<string, (...args: any[]) => void>();
 
@@ -113,6 +119,9 @@ export class FakeJdtlsConnection implements JdtlsConnection {
   handlers = new Map<string, (params: unknown) => unknown>();
 
   async sendRequest<R>(method: string, params?: unknown): Promise<R> {
+    if (this.disposed) {
+      throw new Error("The JSON-RPC connection was disposed");
+    }
     this.requests.push(method);
     const failure = this.errors.get(method);
     if (failure !== undefined) {
@@ -120,7 +129,12 @@ export class FakeJdtlsConnection implements JdtlsConnection {
     }
     const waiting = this.pending.get(method);
     if (waiting) {
-      return await waiting.promise as R;
+      this.inFlight.add(waiting);
+      try {
+        return await waiting.promise as R;
+      } finally {
+        this.inFlight.delete(waiting);
+      }
     }
     const handler = this.handlers.get(method);
     if (handler) {
@@ -152,11 +166,13 @@ export class FakeJdtlsConnection implements JdtlsConnection {
 
   dispose(): void {
     this.disposed = true;
-    // vscode-jsonrpc rejects in-flight requests when the connection is disposed;
-    // the fake must do the same or startup waiters would hang forever.
-    for (const waiting of this.pending.values()) {
+    // vscode-jsonrpc rejects outstanding requests. A deferred only parked in
+    // `pending` has no waiter yet; rejecting it is an unhandled rejection when
+    // stop() disposes the connection before sendRequest("initialize").
+    for (const waiting of this.inFlight) {
       waiting.reject(new Error("The JSON-RPC connection was disposed"));
     }
+    this.inFlight.clear();
   }
 
   count(method: string): number {
@@ -189,6 +205,12 @@ export type FakeAttemptOptions = {
   errors?: Record<string, unknown>;
   /** Throw from spawn() itself, simulating a missing binary. */
   spawnError?: unknown;
+  /** When false, the child ignores every signal. */
+  exitsOnKill?: boolean;
+  /** Signals the child ignores. Other signals still exit when exitsOnKill is not false. */
+  surviveSignals?: NodeJS.Signals[];
+  /** Use a real pid so identity capture can see that process's command line. */
+  pid?: number;
 };
 
 export class FakeJdtlsTransportFactory implements JdtlsTransportFactory {
@@ -206,7 +228,9 @@ export class FakeJdtlsTransportFactory implements JdtlsTransportFactory {
     if (options.spawnError) {
       throw options.spawnError;
     }
-    const child = new FakeJdtlsChild(40000 + this.spawnCalls);
+    const child = new FakeJdtlsChild(options.pid ?? 40000 + this.spawnCalls);
+    if (options.exitsOnKill === false) child.exitsOnKill = false;
+    if (options.surviveSignals) child.surviveSignals = new Set(options.surviveSignals);
     const connection = new FakeJdtlsConnection();
     if (options.initialize) {
       connection.pending.set("initialize", options.initialize);

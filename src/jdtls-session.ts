@@ -27,6 +27,7 @@ import { detectBuildSystem, resolveProjectJdk, type BuildSystem, type ProjectJdk
 import { toFileUri } from "./repo-layout.js";
 import type { RepoOwnershipLease, RepoOwnerTransport } from "./repo-ownership-lease.js";
 import { processStartIdentityForPid } from "./repo-ownership-lease.js";
+import { classifyWorkspaceCommand, killOwnedProcessTree, ownedPidStillAlive, processCommand } from "./jdt-process-tree.js";
 import type { RepoChangeBatch } from "./repo-generation.js";
 import { touchRepoCache } from "./worktree-cache-cleanup.js";
 import type { WorktreeIdentity } from "./worktree-identity.js";
@@ -59,7 +60,9 @@ import {
   leaseAcquireResultToError,
   positiveInteger,
   resolveJdtlsRuntimePaths,
+  childHasExited,
   splitArgs,
+  delay,
   terminateChild,
   validateJdtlsTransportEnvironment,
   watchedFileChange,
@@ -185,6 +188,10 @@ export class JdtlsSession extends JdtlsLspClient {
   private startPromise?: Promise<void>;
   private stopPromise?: Promise<void>;
   private startAttempt?: JdtlsTransportAttempt;
+  /** Every spawned child stays here until its exit is observed. Dropping this set is what leaked JVMs. */
+  private readonly liveAttempts = new Set<JdtlsTransportAttempt>();
+  private readonly childIdentity = new WeakMap<JdtlsChild, string>();
+
   private readonly lifecycleListeners = new Set<LifecycleListener>();
   private readonly restartBackoff: JdtRestartBackoff;
   private readyStableTimer?: NodeJS.Timeout;
@@ -356,6 +363,15 @@ export class JdtlsSession extends JdtlsLspClient {
         return recorder.snapshot();
       }
     };
+  }
+
+  /**
+   * Kill every child this session no longer owns. A READY or STARTING child is
+   * kept. A BROKEN session has no owned child: anything still in `liveAttempts`
+   * is the leak and is killed here.
+   */
+  async reapAbandonedChildren(): Promise<void> {
+    return this.reapChildren("abandoned");
   }
 
   async ensureStarted(
@@ -605,36 +621,40 @@ export class JdtlsSession extends JdtlsLspClient {
     const startPromise = this.startPromise;
     const connection = this.connection;
     const child = this.process;
-    this.startAttempt = undefined;
-    this.startPromise = undefined;
-    this.connection = undefined;
-    this.process = undefined;
-    this.startedAt = undefined;
 
-    if (startAttempt) {
-      await this.disposeAttempt(startAttempt);
-    }
-    if (startPromise) {
-      // Let startup waiters settle before stop() resolves, so a later
-      // ensureStarted() never races a half-torn-down attempt.
-      await startPromise.catch(() => undefined);
-    }
-    if (connection) {
+    if (connection && connection !== startAttempt?.connection) {
       try {
         await withTimeout(connection.sendRequest("shutdown"), 3000, "shutdown");
         connection.sendNotification("exit");
       } catch {
         // Best-effort shutdown; the process is terminated below if it remains alive.
       }
-      try {
-        connection.dispose();
-      } catch {
-        // A disposed connection must never mask the rest of the teardown.
-      }
     }
-    if (child) {
+    if (startAttempt) {
+      await this.finishChild(startAttempt);
+    }
+    const readyAttempt = [...this.liveAttempts].find(item => item.child === child);
+    if (readyAttempt) {
+      await this.finishChild(readyAttempt);
+    } else if (child && !childHasExited(child)) {
       await terminateChild(child, 200);
     }
+    for (const attempt of [...this.liveAttempts]) {
+      await this.finishChild(attempt);
+    }
+    if (startPromise) {
+      // Let startup waiters settle before stop() resolves, so a later
+      // ensureStarted() never races a half-torn-down attempt.
+      await startPromise.catch(() => undefined);
+    }
+    if (this.liveAttempts.size > 0) {
+      throw new Error("JDT LS child is still alive after SIGKILL");
+    }
+    this.startAttempt = undefined;
+    this.startPromise = undefined;
+    this.connection = undefined;
+    this.process = undefined;
+    this.startedAt = undefined;
     // A start failure already releases via ensureStarted()'s own catch (awaited
     // above through startPromise); this is a no-op in that case and the only
     // release path when stop() is called on an already-READY session.
@@ -647,10 +667,16 @@ export class JdtlsSession extends JdtlsLspClient {
 
   async forceStop(deadlineMs = 1000): Promise<void> {
     this.terminallyStopped = true;
-    if (this.process) {
-      await forceTerminateJdtlsChild(this.process, deadlineMs);
+    let failure: unknown;
+    try {
+      if (this.process) {
+        await forceTerminateJdtlsChild(this.process, deadlineMs);
+      }
+    } catch (error) {
+      failure = error;
     }
     await this.stop();
+    if (failure && this.liveAttempts.size > 0) throw failure;
   }
 
   private clearOwnershipJdtlsState(): void {
@@ -700,6 +726,13 @@ export class JdtlsSession extends JdtlsLspClient {
       this.activeFirstTouchTrace?.recordStartupPhase("filesystemSetupMs", performance.now() - filesystemStartedAt);
     }
     budget.throwIfExpired("jdtls.spawn");
+    await this.reapChildren("all");
+    if (this.liveAttempts.size > 0) {
+      throw new JavaIntelligenceError(
+        "JDT_BROKEN",
+        "JDT LS child is still alive; refusing to spawn another"
+      );
+    }
 
     const spawnStartedAt = performance.now();
     let attempt: JdtlsTransportAttempt;
@@ -715,6 +748,7 @@ export class JdtlsSession extends JdtlsLspClient {
     }
     this.activeFirstTouchTrace?.recordPid(attempt.child.pid);
     this.startAttempt = attempt;
+    await this.trackSpawnedChild(attempt);
     if (this.ownershipLifecycle?.markJdtlsStarting) {
       this.ownershipLifecycle.markJdtlsStarting();
       this.ownershipJdtlsMarked = true;
@@ -783,21 +817,25 @@ export class JdtlsSession extends JdtlsLspClient {
       this.startAttempt = undefined;
       this.restartBackoff.recordReadyStarted();
       this.transition("READY");
-      // The janitor's cross-process liveness check trusts a recorded jdtlsPid
-      // as proof this worktree is in use; writing it before READY would let a
-      // process that dies mid-STARTING leave a stale-but-plausible signal.
-      touchRepoCache(this.repoRoot, { jdtlsPid: attempt.child.pid });
+      // Refresh the pid recorded at spawn. Identity is written only after the
+      // command line matches this workspace. Omitting the field would let
+      // touchRepoCache fill it from `ps` with no command check.
+      if (attempt.child.pid !== undefined) {
+        const recordedIdentity = await this.rememberOwnedIdentity(attempt.child, attempt.child.pid);
+        touchRepoCache(this.repoRoot, {
+          jdtlsPid: attempt.child.pid,
+          jdtlsProcessStartIdentity: recordedIdentity ?? null
+        });
+      }
       this.armReadyStabilityReset(attempt);
     } catch (error) {
       const stoppedOrSuperseded =
         this.lifecycleState === "STOPPED"
         || (this.startAttempt !== attempt
           && (this.lifecycleState === "STARTING" || this.lifecycleState === "READY"));
-      await this.disposeAttempt(attempt);
-      if (this.startAttempt === attempt) this.startAttempt = undefined;
-      if (this.process === attempt.child) this.process = undefined;
-      if (this.connection === attempt.connection) this.connection = undefined;
-      this.startedAt = undefined;
+      // Pointers are cleared only after the OS process is gone. A child that
+      // survives SIGKILL stays in liveAttempts and blocks the next spawn.
+      await this.finishChild(attempt);
       if (stoppedOrSuperseded) {
         throw new JavaIntelligenceError(
           "CANCELLED",
@@ -829,6 +867,10 @@ export class JdtlsSession extends JdtlsLspClient {
     attempt.child.once("exit", (code, signal) => {
       logStream.write(`\n[jdtls exited] code=${code ?? ""} signal=${signal ?? ""}\n`);
       logStream.end();
+      this.liveAttempts.delete(attempt);
+      if (this.liveAttempts.size === 0) {
+        touchRepoCache(this.repoRoot, { jdtlsPid: undefined });
+      }
       // Identity guards: a stopped or superseded child's exit must never
       // overwrite the state of the session that replaced it.
       const ownsReadyProcess = this.process === attempt.child;
@@ -846,7 +888,6 @@ export class JdtlsSession extends JdtlsLspClient {
         // same is true of the lease release: a STARTING attempt's failure
         // releases it through that same catch.
         this.restartBackoff.recordFailure("JDT_BROKEN");
-        touchRepoCache(this.repoRoot, { jdtlsPid: undefined });
         void this.releasePendingLease();
       }
       try {
@@ -875,12 +916,121 @@ export class JdtlsSession extends JdtlsLspClient {
   }
 
   private async disposeAttempt(attempt: JdtlsTransportAttempt): Promise<void> {
+    await this.finishChild(attempt);
+  }
+
+  private async trackSpawnedChild(attempt: JdtlsTransportAttempt): Promise<void> {
+    this.liveAttempts.add(attempt);
+    const pid = attempt.child.pid;
+    if (pid === undefined) return;
+    const identity = await this.captureOwnedIdentity(pid);
+    if (identity) this.childIdentity.set(attempt.child, identity);
+    // `null` suppresses touchRepoCache's ps fallback. A collided pid, or one
+    // still invisible after the retries, must not be stored under an identity
+    // we did not match to this workspace.
+    touchRepoCache(this.repoRoot, {
+      jdtlsPid: pid,
+      jdtlsProcessStartIdentity: identity ?? null
+    });
+  }
+
+  private async rememberOwnedIdentity(child: JdtlsChild, pid: number): Promise<string | undefined> {
+    const known = this.childIdentity.get(child);
+    if (known) return known;
+    const identity = await this.captureOwnedIdentity(pid);
+    if (identity) this.childIdentity.set(child, identity);
+    return identity;
+  }
+
+  private async captureOwnedIdentity(pid: number): Promise<string | undefined> {
+    // Spawn returns before `ps` always sees the new pid. A missing command is
+    // unseen, not a collision, so it retries. A visible command that is not
+    // this workspace stops immediately.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const command = processCommand(pid);
+      const verdict = classifyWorkspaceCommand(command, this.dataDir);
+      if (verdict === "collision") return undefined;
+      if (verdict === "owned") {
+        const identity = processStartIdentityForPid(pid);
+        if (identity) return identity;
+      }
+      if (attempt < 2) await delay(25);
+    }
+    return undefined;
+  }
+
+  private ownedChild(): JdtlsChild | undefined {
+    if (this.lifecycleState === "READY") return this.process;
+    if (this.lifecycleState === "STARTING") return this.startAttempt?.child ?? this.process;
+    return undefined;
+  }
+
+  private reapChildren(mode: "abandoned" | "all"): Promise<void> {
+    return this.reapChildrenNow(mode);
+  }
+
+  private async reapChildrenNow(mode: "abandoned" | "all"): Promise<void> {
+    const keep = mode === "abandoned" ? this.ownedChild() : undefined;
+    for (const attempt of [...this.liveAttempts]) {
+      if (attempt.child === keep) continue;
+      await this.finishChild(attempt);
+    }
+  }
+
+  private async finishChild(attempt: JdtlsTransportAttempt): Promise<boolean> {
+    if (!this.liveAttempts.has(attempt) && childHasExited(attempt.child)) {
+      return true;
+    }
+    // Detach before kill so the exit handler does not treat this reap as the
+    // active session dying and overwrite a start that is about to replace it.
+    const wasStart = this.startAttempt === attempt;
+    const wasProcess = this.process === attempt.child;
+    if (wasStart) this.startAttempt = undefined;
+    if (wasProcess) {
+      this.process = undefined;
+      this.connection = undefined;
+      this.startedAt = undefined;
+    }
     try {
       attempt.connection.dispose();
     } catch {
       // Best-effort; the child is terminated regardless.
     }
-    await terminateChild(attempt.child, 200);
+    let dead = childHasExited(attempt.child) || await terminateChild(attempt.child, 200);
+    if (!dead) {
+      const pid = attempt.child.pid;
+      const identity = pid === undefined ? undefined : await this.rememberOwnedIdentity(attempt.child, pid);
+      if (pid !== undefined && identity) {
+        killOwnedProcessTree(pid, this.dataDir, identity);
+        dead = await this.waitUntilChildGone(attempt.child, identity, 1000);
+      }
+    }
+    if (!dead) {
+      if (wasStart && this.startAttempt === undefined) this.startAttempt = attempt;
+      if (wasProcess && this.process === undefined) {
+        this.process = attempt.child;
+        this.connection = attempt.connection;
+      }
+      return false;
+    }
+    this.liveAttempts.delete(attempt);
+    if (this.liveAttempts.size === 0) {
+      touchRepoCache(this.repoRoot, { jdtlsPid: undefined });
+    }
+    return true;
+  }
+
+  private async waitUntilChildGone(child: JdtlsChild, identity: string, timeoutMs: number): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (childHasExited(child)) return true;
+      const pid = child.pid;
+      if (pid === undefined || !ownedPidStillAlive(pid, identity)) return true;
+      await delay(25);
+    }
+    if (childHasExited(child)) return true;
+    const pid = child.pid;
+    return pid === undefined || !ownedPidStillAlive(pid, identity);
   }
 
   private registerClientHandlers(connection: JdtlsConnection): void {

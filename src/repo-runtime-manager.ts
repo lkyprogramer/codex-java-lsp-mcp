@@ -794,6 +794,9 @@ export class RepoRuntimeManager {
       else {
         entry.lspReservation = "NONE";
         this.drainSlotWaiters();
+        // BROKEN used to drop the slot and assume the JVM had already exited.
+        // Reap here so a child that survived SIGKILL cannot outlive the session.
+        if (state === "BROKEN") void this.reapSession(entry);
       }
     });
     // Register invalidation before start() so the first event cannot be lost.
@@ -1108,6 +1111,7 @@ export class RepoRuntimeManager {
 
   private async retireIdleEntry(entry: RuntimeEntry): Promise<void> {
     try {
+      await this.reapSession(entry);
       if (entry.lspReservation !== "NONE") {
         await this.stopEntry(entry);
       }
@@ -1151,6 +1155,16 @@ export class RepoRuntimeManager {
       }
     } finally {
       this.relievingPressure = false;
+    }
+  }
+
+  private async reapSession(entry: RuntimeEntry): Promise<void> {
+    const session = entry.context.session as { reapAbandonedChildren?: () => Promise<void> };
+    if (typeof session.reapAbandonedChildren !== "function") return;
+    try {
+      await session.reapAbandonedChildren();
+    } catch (error) {
+      console.error("[codex-java-lsp] failed to reap abandoned JDT", error);
     }
   }
 

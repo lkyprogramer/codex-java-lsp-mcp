@@ -718,6 +718,7 @@ test("a session that breaks releases its slot to a queued waiter", async () => {
   await second;
   assert.equal(bRan, true);
   assert.equal(sessions.get("/repo-a")!.stops, 0, "a BROKEN session releases without being stopped again");
+  assert.equal(sessions.get("/repo-a")!.reaps >= 1, true, "breaking the session still reaps a surviving child");
 });
 
 test("activeRepos exposes lifecycle state and reservation", async () => {
@@ -1638,6 +1639,7 @@ async function waitFor(condition: () => boolean): Promise<void> {
 class FakeSession {
   state: JdtlsLifecycleState = "NEW";
   stops = 0;
+  reaps = 0;
   ensureStartedCalls = 0;
   startGate?: Deferred<void>;
   repoChangeError?: Error;
@@ -1671,6 +1673,10 @@ class FakeSession {
   async stop(): Promise<void> {
     this.stops += 1;
     this.transition("STOPPED");
+  }
+
+  async reapAbandonedChildren(): Promise<void> {
+    this.reaps += 1;
   }
 
   bindGenerationClock(clock?: GenerationClock): void {

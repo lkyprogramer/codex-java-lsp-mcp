@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import test from "node:test";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -23,7 +24,9 @@ import {
 import type { GeneratedCodeStatus } from "./generated-code.js";
 import type { LspDiagnostic } from "./jdtls-session.js";
 import { GenerationClock, type RepoChange, type RepoChangeBatch } from "./repo-generation.js";
-import { toFileUri } from "./repo-layout.js";
+import { processStartIdentityForPid } from "./repo-ownership-lease.js";
+import { canonicalPath } from "./path-utils.js";
+import { repoCacheRoot, toFileUri } from "./repo-layout.js";
 import type {
   CompositeJdtLease,
   CrossProcessLeaseStore,
@@ -852,6 +855,82 @@ test("a READY child that exits marks the session BROKEN and restartable", async 
   assert.equal(session.status().state, "READY");
   assert.equal(factory.spawnCalls, 2);
   await session.stop();
+});
+
+test("a child that ignores SIGTERM is SIGKILLed before another JDT is spawned", async () => {
+  const factory = sequenceTransportFactory([
+    { initializeError: new Error("first boom"), surviveSignals: ["SIGTERM"] },
+    { initializeResult: { capabilities: {} } }
+  ]);
+  const { session, advance } = harness(factory);
+  await assert.rejects(() => session.ensureStarted(DeadlineBudget.fromTimeout(5000)), /first boom/);
+  assert.equal(factory.spawnCalls, 1);
+  assert.equal(factory.children[0]?.signalCode, "SIGKILL");
+  advance(500);
+  await session.ensureStarted(DeadlineBudget.fromTimeout(5000));
+  assert.equal(factory.spawnCalls, 2);
+  await session.stop();
+});
+
+test("a child that survives SIGKILL blocks the next spawn", { timeout: 20_000 }, async () => {
+  const factory = sequenceTransportFactory([
+    { initializeError: new Error("first boom"), exitsOnKill: false }
+  ]);
+  const { session, advance, repoRoot } = harness(factory);
+  try {
+    await assert.rejects(() => session.ensureStarted(DeadlineBudget.fromTimeout(5000)), /first boom/);
+    assert.equal(factory.spawnCalls, 1);
+    advance(500);
+    await assert.rejects(
+      () => session.ensureStarted(DeadlineBudget.fromTimeout(5000)),
+      /still alive/
+    );
+    assert.equal(factory.spawnCalls, 1);
+    await assert.rejects(() => session.stop(), /still alive/);
+  } finally {
+    // stop() refuses to clear repo-meta while the child is still alive. This
+    // fake pid must not remain recorded against the real cache.
+    rmSync(repoCacheRoot(canonicalPath(repoRoot)), { recursive: true, force: true });
+  }
+});
+
+test("READY does not record a collided pid's start identity", async () => {
+  const sleeper = spawn(process.execPath, ["-e", "setInterval(()=>{},1000000);"], { stdio: "ignore" });
+  const sleeperPid = sleeper.pid;
+  assert.equal(typeof sleeperPid, "number");
+  const deadline = Date.now() + 3000;
+  let sleeperIdentity: string | undefined;
+  while (Date.now() < deadline && !sleeperIdentity) {
+    sleeperIdentity = processStartIdentityForPid(sleeperPid!);
+    if (!sleeperIdentity) await delay(20);
+  }
+  assert.equal(typeof sleeperIdentity, "string");
+  const factory = fakeTransportFactory({
+    pid: sleeperPid,
+    initializeResult: { capabilities: {} }
+  });
+  const { session, repoRoot } = harness(factory);
+  try {
+    await session.ensureStarted(DeadlineBudget.fromTimeout(5000));
+    const meta = JSON.parse(readFileSync(
+      path.join(repoCacheRoot(canonicalPath(repoRoot)), "repo-meta.json"),
+      "utf8"
+    )) as { jdtlsPid?: number; jdtlsProcessStartIdentity?: string };
+    assert.equal(meta.jdtlsPid, sleeperPid);
+    assert.equal(meta.jdtlsProcessStartIdentity, undefined);
+    assert.equal(sleeper.exitCode, null);
+    await session.stop();
+    assert.equal(sleeper.exitCode, null);
+  } finally {
+    rmSync(repoCacheRoot(canonicalPath(repoRoot)), { recursive: true, force: true });
+    if (sleeperPid !== undefined) {
+      try {
+        process.kill(sleeperPid, "SIGKILL");
+      } catch {
+        // Already gone.
+      }
+    }
+  }
 });
 
 test("status reports STARTING pid separately and never as started", async () => {
