@@ -1,0 +1,35 @@
+{
+  "schema": "java-specialist-task-result/v1.1",
+  "taskId": "R00",
+  "state": "NOT_STARTED",
+  "source": {
+    "baselineSha": "b9c3cc325491947b198342575e9ea251c024b521",
+    "candidateSha": null,
+    "dirtyDiffHash": null,
+    "compiledArtifactHash": null
+  },
+  "datasetHash": null,
+  "scorerHash": null,
+  "protocolHash": null,
+  "red": {
+    "status": "NOT_RUN",
+    "commands": [],
+    "evidence": []
+  },
+  "green": {
+    "status": "NOT_RUN",
+    "commands": [],
+    "evidence": []
+  },
+  "verificationLevel": null,
+  "contractResults": [],
+  "counterexampleResults": [],
+  "changedFiles": [],
+  "criticalRegressions": null,
+  "remainingGaps": [],
+  "review": {
+    "reviewer": null,
+    "decision": "NOT_RUN"
+  },
+  "deploymentPerformed": false
+}

@@ -73,3 +73,6 @@
 - **M2 = GO**：离线机制 + LIVE 轨道（真实模型、真实产品 MCP、外部 gold 评分、完整 144 行分母、usage 全实测、3,321 条 wire 源码证据）按 T09 协议达成；M2_LIVE 由 BLOCKED_AUTH 转为 **MEASURED**。
 - 本轮 27B 后端的成功率数字是**真实测量**，但按评测协议不构成发布结论；发布级对比留 M3（强模型 + 锁定集 + 预注册实验）。
 - **M3 入口**：repair 冻结测试注入、发布门逐项实测、M2-1 事件循环节裁决、锁定集与全语料臂。
+## 历史更正（release-audit-v1.1 R00，2026-09-26，不删除原文与数字）
+
+本里程碑的 LIVE 轨道测量（144 runs、taskSuccessRate 0.189、product 12/72 vs control 9/72）随 `docs/java-specialist-release-audit-v1.1` 审计登记为 **INVALID_EXPERIMENT**：A01 冻结 Unicode fixture 字节漂移（CRLF→LF）+ W01–W05 最终 model 消息载荷丢失 + E01–E04 评分口径缺陷，所有模型共用同一错误 loop，跨模型一致不能排除系统性混淆。上述数字保留为历史记录，**不再支撑任何能力归因或 release 资格**；逐 run 失效清单见 `docs/next-stage/invalidated-runs.json`（`causalClaimEligible=false`）。修复与复测按 v1.1 计划 S1（R01–R04）执行。

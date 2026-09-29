@@ -1,0 +1,16 @@
+{
+  "schema": "dataset-validation/v1",
+  "task_groups": 36,
+  "query_variants": 72,
+  "clusters": 12,
+  "split_counts": {
+    "dev": 24,
+    "locked": 12
+  },
+  "origin_counts": {
+    "authored": 24,
+    "upstream-scoped": 12
+  },
+  "errors": [],
+  "dataset_hash": "7cbdc0d0685159fc34e2dcaee73a0049e1c35a3f1e44ff9d58cb5302e99ae21a"
+}

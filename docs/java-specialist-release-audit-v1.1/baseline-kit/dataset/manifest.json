@@ -1,0 +1,674 @@
+{
+  "schema": "java-specialist-dataset-manifest/v1",
+  "name": "Java Specialist Bench",
+  "version": "1.0",
+  "dated": "2026-09-19",
+  "dataset_hash": "c34a7c7c2f261bb273bc622739eae6beff8479ca96512c48942638cd912b8c4d",
+  "task_groups": 36,
+  "query_variants": 72,
+  "clusters": 12,
+  "label_review": "single-author-source-checked",
+  "locked_policy": "public-locked-reference-not-cryptographically-hidden",
+  "files": [
+    {
+      "path": "contracts/cases.json",
+      "bytes": 9918,
+      "sha256": "dc53bbc2115dcd2944699117dbefc83659d5cc3ff8ea05577ff78990da3a79c7"
+    },
+    {
+      "path": "contracts/fixtures/bindings/src/main/java/demo/Selector.java",
+      "bytes": 309,
+      "sha256": "b85eba245a2c897e3446faac6b73c48f231167be13e5d91826d8e56e8d7ecdab"
+    },
+    {
+      "path": "contracts/fixtures/broken/src/main/java/demo/Partial.java",
+      "bytes": 42,
+      "sha256": "eaee4426d7ee4056f7baf3e088e45064483a82921245daa272ed59dab5464cb2"
+    },
+    {
+      "path": "contracts/fixtures/resource/src/main/java/demo/UserMapper.java",
+      "bytes": 68,
+      "sha256": "b9a4b50cd5ffb0fa5650283315ee26dbbd7585901aeadf258d8282d1aa1346d3"
+    },
+    {
+      "path": "contracts/fixtures/resource/src/main/resources/application.properties",
+      "bytes": 66,
+      "sha256": "87c2390608f7f6eb040672bb0b13539b830389fc97e323f85ee62c9c4998ace5"
+    },
+    {
+      "path": "contracts/fixtures/resource/src/main/resources/mapper/UserMapper.xml",
+      "bytes": 162,
+      "sha256": "35378ec19f32405d7996ee63e87dde63d2f71982effdb25d16afb8913a04bb82"
+    },
+    {
+      "path": "contracts/fixtures/syntax/src/main/java/demo/Modern.java",
+      "bytes": 200,
+      "sha256": "ca6e81a1b20eedfab0618fa5b3c16c879ea79ae7415551f729a506b7339fed39"
+    },
+    {
+      "path": "contracts/fixtures/syntax/src/main/java/demo/Shapes.java",
+      "bytes": 293,
+      "sha256": "d2e107fab01bcb7bcefbccca03aeba2f652ec8dbc82eec0159f88b587e97b28f"
+    },
+    {
+      "path": "contracts/fixtures/unicode/src/main/java/demo/Unicode.java",
+      "bytes": 86,
+      "sha256": "294cd139daf877efe01a66a81da59ca3ec652806837da749eb60486eb0dd43b3"
+    },
+    {
+      "path": "contracts/mutations.json",
+      "bytes": 2225,
+      "sha256": "e06919e15cfbddf4e8637fc22e57973dc6a663f52fa73ac429898ab88c049d12"
+    },
+    {
+      "path": "corpora/access/pom.xml",
+      "bytes": 358,
+      "sha256": "c888343fdcddf94bfbb569b3804ad41005bbaaa333968b4f90380aeb86b4c8bd"
+    },
+    {
+      "path": "corpora/access/src/main/java/lab/access/AccessEndpoint.java",
+      "bytes": 273,
+      "sha256": "0235e1df9979df3a879ca598dec7c38b35a30ff85814d1aaf5f1ab5144a0662b"
+    },
+    {
+      "path": "corpora/access/src/main/java/lab/access/AccessGrant.java",
+      "bytes": 154,
+      "sha256": "4691700577c6c235eb4c57a329d91583363604e8299c2256eef935da71cf8480"
+    },
+    {
+      "path": "corpora/access/src/main/java/lab/access/AuditTrail.java",
+      "bytes": 356,
+      "sha256": "824506c2d44a171abc638622565a12bf523a0f52dec9f4526b69f56d100c53ac"
+    },
+    {
+      "path": "corpora/access/src/main/java/lab/access/PreviewService.java",
+      "bytes": 195,
+      "sha256": "9fac5e7f62699b60c00ccc00f8c902ce588aa19aa8d927ba701a408c027f3340"
+    },
+    {
+      "path": "corpora/access/src/main/java/lab/access/RetryPolicy.java",
+      "bytes": 196,
+      "sha256": "cc3ea7115a4e9daf12282605481e9195b21951102f337369ef7dcd8723f88786"
+    },
+    {
+      "path": "corpora/access/src/main/java/lab/access/SignedAccessPolicy.java",
+      "bytes": 8282,
+      "sha256": "35923cef4ccd5722e23cd5b97efbe104b371cdbf45591ab46bbbf1bdf5e9b86d"
+    },
+    {
+      "path": "corpora/admissions/modules/graduate/pom.xml",
+      "bytes": 129,
+      "sha256": "723a56116c096e946457015ba3f79e738db67c3fecab0f7328f26949e9198493"
+    },
+    {
+      "path": "corpora/admissions/modules/graduate/src/main/java/demo/Shared.java",
+      "bytes": 85,
+      "sha256": "58dde2edbe8bfdc1184875b1a36c1690c8aa989dd904c0ba5d77d1167dfcc007"
+    },
+    {
+      "path": "corpora/admissions/modules/undergrad/pom.xml",
+      "bytes": 130,
+      "sha256": "8223a40aa2b75d549506b1d763fc5f6aabe773b88923f6e3c9061ec2440b0040"
+    },
+    {
+      "path": "corpora/admissions/modules/undergrad/src/main/java/demo/Shared.java",
+      "bytes": 90,
+      "sha256": "583f5f05831359eae467e942186519c26a2369c9d8dd70e133a328479014870d"
+    },
+    {
+      "path": "corpora/admissions/pom.xml",
+      "bytes": 362,
+      "sha256": "10489d664b3ae7e047a239afd2ba4882d73c455e62980c9f2d48373b537eedc4"
+    },
+    {
+      "path": "corpora/admissions/src/main/java/lab/admissions/AdmissionService.java",
+      "bytes": 183,
+      "sha256": "1ede518061f6eda19359d2325a07b9cc1d2953d1ab33604eff9d1f5083f1a520"
+    },
+    {
+      "path": "corpora/admissions/src/main/java/lab/admissions/AuditTrail.java",
+      "bytes": 360,
+      "sha256": "e48f10014709661419a98d41df0885389bb432c0418703cd487564a4e0804fc3"
+    },
+    {
+      "path": "corpora/admissions/src/main/java/lab/admissions/DecisionAssembler.java",
+      "bytes": 154,
+      "sha256": "eff13536820912f7dc1fc49f2276b1f1aa26b15ebeb6375c6eec73b4edff0597"
+    },
+    {
+      "path": "corpora/admissions/src/main/java/lab/admissions/PreviewService.java",
+      "bytes": 199,
+      "sha256": "bbf48d11cace49dc4dc6ec287c4b31b31db411c9a4a9a73f74efbb77eac51749"
+    },
+    {
+      "path": "corpora/admissions/src/main/java/lab/admissions/RetryPolicy.java",
+      "bytes": 200,
+      "sha256": "0b88201ad80a58942a3f024135cd8e8d6c917b7ee6ae674f865888efb34d9380"
+    },
+    {
+      "path": "corpora/gson/gson/src/main/java/com/google/gson/FieldNamingPolicy.java",
+      "bytes": 7125,
+      "sha256": "9f070ba47fde3e4d2ced3ce92f80e83924424d8e049763f80ef64103f4767657"
+    },
+    {
+      "path": "corpora/hikari/src/main/java/com/zaxxer/hikari/util/FastList.java",
+      "bytes": 8491,
+      "sha256": "fd5cc4cf2b0ff565f5d60c7ce77fb25557a55c6e419771b05e8f92974f1f68de"
+    },
+    {
+      "path": "corpora/inventory/pom.xml",
+      "bytes": 361,
+      "sha256": "55546671f0100aeeb5da06d82e2628b1fb11b804c0c2d871bd187698adf847cc"
+    },
+    {
+      "path": "corpora/inventory/src/main/java/lab/inventory/AuditTrail.java",
+      "bytes": 359,
+      "sha256": "43e4451eab0243432ed9efba45c8e5af029d66098dd85e8bd4580cb5dad1de32"
+    },
+    {
+      "path": "corpora/inventory/src/main/java/lab/inventory/PreviewService.java",
+      "bytes": 198,
+      "sha256": "de29ff741a12f1e236479c55a51ff32b082948e0fc265631d9a9fce8574781c2"
+    },
+    {
+      "path": "corpora/inventory/src/main/java/lab/inventory/Reservation.java",
+      "bytes": 181,
+      "sha256": "e44ef130afa2323f2c52060b105e517ad23d98af0223783ca86c90581a7b6405"
+    },
+    {
+      "path": "corpora/inventory/src/main/java/lab/inventory/RetryPolicy.java",
+      "bytes": 199,
+      "sha256": "c6e8c9a74835e617540bf591a6753cc416dfa3609326fabe4141706b32d1284e"
+    },
+    {
+      "path": "corpora/inventory/src/main/java/lab/inventory/StockEndpoint.java",
+      "bytes": 310,
+      "sha256": "b4f87ef0bdde71c3f786c47fa550587fb86737a845c73de3b90a19f05e371f0d"
+    },
+    {
+      "path": "corpora/inventory/src/main/java/lab/inventory/StockService.java",
+      "bytes": 552,
+      "sha256": "5a7ac88281ef400983c6065c0e26aae9804472d368fcee2ca3a008458d7bc9e9"
+    },
+    {
+      "path": "corpora/ledger/pom.xml",
+      "bytes": 358,
+      "sha256": "34a8d4c565bd214d67bf4c90cc682444267c34edf8bff30d39c8b56fd9c8abc4"
+    },
+    {
+      "path": "corpora/ledger/src/main/java/lab/ledger/AuditTrail.java",
+      "bytes": 356,
+      "sha256": "8d147b301b611f7c9b149ed125994006c501d3ede40753e3816cc1f57f22c1a4"
+    },
+    {
+      "path": "corpora/ledger/src/main/java/lab/ledger/Ledger.java",
+      "bytes": 462,
+      "sha256": "9a202b7388153392770b79b0caa85ac5455229becddfa67736c41d07e5dc2bf8"
+    },
+    {
+      "path": "corpora/ledger/src/main/java/lab/ledger/PreviewService.java",
+      "bytes": 195,
+      "sha256": "86cc17918a3f27bb265a16e530ab4d39ead30126b588cd55106d2418567ca3cc"
+    },
+    {
+      "path": "corpora/ledger/src/main/java/lab/ledger/RetryPolicy.java",
+      "bytes": 196,
+      "sha256": "7642f14436969300165d1ea3acfadb980912178f4c86252070045ffe7fa57d33"
+    },
+    {
+      "path": "corpora/ledger/src/main/java/lab/ledger/TransferCommand.java",
+      "bytes": 146,
+      "sha256": "50528c4da235728b11501b76d882da75f3698727cc69a5014ee5b94117c00295"
+    },
+    {
+      "path": "corpora/ledger/src/main/java/lab/ledger/TransferEndpoint.java",
+      "bytes": 239,
+      "sha256": "c6c9b01ff8ea5935c631f27c3eb4b72da984b457defa2c51c7ba3be345742f11"
+    },
+    {
+      "path": "corpora/mybatis/src/main/java/org/apache/ibatis/reflection/ParamNameResolver.java",
+      "bytes": 6125,
+      "sha256": "487674e517ef594aa9a8f1938ec7e48e0e947644cc2b94d70944d91752ebe6e9"
+    },
+    {
+      "path": "corpora/notifications/pom.xml",
+      "bytes": 365,
+      "sha256": "23c7aff77f5b36d40c0783df5b3b32023b322c7814da199c749a47945fe81d2a"
+    },
+    {
+      "path": "corpora/notifications/src/main/java/lab/notifications/AuditTrail.java",
+      "bytes": 363,
+      "sha256": "cbbd6c68ad7e0b5ba95893f52b4ff9bf73ba70f3bfc33130433915000b6d7e68"
+    },
+    {
+      "path": "corpora/notifications/src/main/java/lab/notifications/DispatchBus.java",
+      "bytes": 561,
+      "sha256": "967c3a46b33f7fee929297eba73da099acb482bd0477e3098491125d3b49ad87"
+    },
+    {
+      "path": "corpora/notifications/src/main/java/lab/notifications/NotificationEndpoint.java",
+      "bytes": 244,
+      "sha256": "fe3a53bcfcb7f457b2aba9c1346c039cb5debaed33f632943a6b3434a6409897"
+    },
+    {
+      "path": "corpora/notifications/src/main/java/lab/notifications/PreviewService.java",
+      "bytes": 202,
+      "sha256": "868c1fb9ac08efed17aee22b49e233f4abacfa2a33c2db543f74f0c94a617d52"
+    },
+    {
+      "path": "corpora/notifications/src/main/java/lab/notifications/RetryPolicy.java",
+      "bytes": 203,
+      "sha256": "8acfa496bce94763956f076fdfa4144fe4b08ab97428f327ed072bd45c44c347"
+    },
+    {
+      "path": "corpora/notifications/src/main/java/lab/notifications/Subscription.java",
+      "bytes": 206,
+      "sha256": "aa4bd7e0fba32dbaa0f22e3eb304cdc21c5cd632df774181280dff13bade6c90"
+    },
+    {
+      "path": "corpora/pagination/pom.xml",
+      "bytes": 362,
+      "sha256": "818c1904737707e3009c4ed8167a29c8d222aa62581d7127b7efc1f32ab445dc"
+    },
+    {
+      "path": "corpora/pagination/src/main/java/lab/pagination/AuditTrail.java",
+      "bytes": 360,
+      "sha256": "e63676a62aee3abf95a245df0dc5a2690e5de512db209e643361f28f11039ee9"
+    },
+    {
+      "path": "corpora/pagination/src/main/java/lab/pagination/PageEndpoint.java",
+      "bytes": 192,
+      "sha256": "ed4fbc07f9808d692ef263696813bb2be65072bc5d013c461b1e98dc21097414"
+    },
+    {
+      "path": "corpora/pagination/src/main/java/lab/pagination/PageRequest.java",
+      "bytes": 185,
+      "sha256": "f20b36c45090626dbd44922ca7cfe6df4f0a8cf86bac7ea8ab0d413008a21b82"
+    },
+    {
+      "path": "corpora/pagination/src/main/java/lab/pagination/PageWindow.java",
+      "bytes": 273,
+      "sha256": "8e92e6ca3f3f187e415db61e6b21ad635810ddf598771d0850ed1b7f52a5b90f"
+    },
+    {
+      "path": "corpora/pagination/src/main/java/lab/pagination/PreviewService.java",
+      "bytes": 199,
+      "sha256": "1ead53b47e8f9be110816b15cf6ed5e14f556b5bf9413e127b037bd315524d91"
+    },
+    {
+      "path": "corpora/pagination/src/main/java/lab/pagination/RetryPolicy.java",
+      "bytes": 200,
+      "sha256": "1794d9d07c9dd418a812bbfea4c32d2405c1fd23e8c11b07e7d211b8dc806c8e"
+    },
+    {
+      "path": "corpora/payments/pom.xml",
+      "bytes": 360,
+      "sha256": "e11a1439311d879703f727f0100e8a750af2ec86ee4062aa89119de1c450c651"
+    },
+    {
+      "path": "corpora/payments/src/main/java/lab/payments/AuditTrail.java",
+      "bytes": 358,
+      "sha256": "51b8b713178d43b57b5b5fbccb71e1acd9cbb72bc7eb4ab297cbc736eeebf261"
+    },
+    {
+      "path": "corpora/payments/src/main/java/lab/payments/PaymentService.java",
+      "bytes": 539,
+      "sha256": "bc37e8cc290b381475814d146409ccda9dfd0140d794da4df28be8928f3c86ea"
+    },
+    {
+      "path": "corpora/payments/src/main/java/lab/payments/PreviewService.java",
+      "bytes": 197,
+      "sha256": "deefffb9a311837d4bd1bfa87fd07ce793111d96d8729d80e465e0572ef5aa8a"
+    },
+    {
+      "path": "corpora/payments/src/main/java/lab/payments/Receipt.java",
+      "bytes": 233,
+      "sha256": "80895c0fa3140438c59b7594af67bf19dfd2948f9d28d8a28e4b08ecca000534"
+    },
+    {
+      "path": "corpora/payments/src/main/java/lab/payments/ReceiptAssembler.java",
+      "bytes": 160,
+      "sha256": "1d09de9afb6d680598f0cabbd27d02bdc682830c5dd1289c1503b186fbb1220d"
+    },
+    {
+      "path": "corpora/payments/src/main/java/lab/payments/RetryPolicy.java",
+      "bytes": 198,
+      "sha256": "f3564c58c2db2dafdeb7c739ff28d52d1fa30e03886502f7f9d75ba11fabe8f8"
+    },
+    {
+      "path": "corpora/payments/src/main/resources/mapper/ReceiptMapper.xml",
+      "bytes": 187,
+      "sha256": "bd6bdae71328162c6a037e75539afd4bb0fb8e6036268042a48eb155fbebb876"
+    },
+    {
+      "path": "corpora/petclinic/src/main/java/org/springframework/samples/petclinic/owner/PetValidator.java",
+      "bytes": 1988,
+      "sha256": "1cee4c2a57afd7edb3521fa7a19c4b643f23c2f5b91406ecd638319c6cce9f7f"
+    },
+    {
+      "path": "corpora/pricing/pom.xml",
+      "bytes": 359,
+      "sha256": "fbe09e3d9d90775474f0ae9907c21e5c5fd911897705d54f7dbe9daecb3c866b"
+    },
+    {
+      "path": "corpora/pricing/src/main/java/lab/pricing/AuditTrail.java",
+      "bytes": 357,
+      "sha256": "c8fcb04ca8b3d7f0587a9fb152b0ecfedde8e75a60ced27021b4167682a89a6a"
+    },
+    {
+      "path": "corpora/pricing/src/main/java/lab/pricing/InvoiceAssembler.java",
+      "bytes": 212,
+      "sha256": "e2ed12f5dc7b9422dfb233865dc5c9513e6cf74a61196a48c73faeed72741777"
+    },
+    {
+      "path": "corpora/pricing/src/main/java/lab/pricing/InvoiceLine.java",
+      "bytes": 212,
+      "sha256": "d01087d10c0eeedbb0ac0ef0cfb94fb3d9283590b40d90a4744b77b6aed16d66"
+    },
+    {
+      "path": "corpora/pricing/src/main/java/lab/pricing/MoneyPolicy.java",
+      "bytes": 283,
+      "sha256": "e5f054b3703631187968bfd36d013e259f2af58fe8ce257eac46174d9d4ba5d6"
+    },
+    {
+      "path": "corpora/pricing/src/main/java/lab/pricing/PreviewService.java",
+      "bytes": 196,
+      "sha256": "1c70e29474a58bb497be8b9a8223385a173a2430022c8a840373f48166972da0"
+    },
+    {
+      "path": "corpora/pricing/src/main/java/lab/pricing/RetryPolicy.java",
+      "bytes": 197,
+      "sha256": "33a017ce942f9702df8f436dac2b57fab39d6898e8c3153a844c1bccd536ad59"
+    },
+    {
+      "path": "corpora.json",
+      "bytes": 4370,
+      "sha256": "a9b35ac1d60136264d6ff1883282aedd50d2a3f4e9e8478a689617a37234abf2"
+    },
+    {
+      "path": "gold/dev.jsonl",
+      "bytes": 17454,
+      "sha256": "62ec6600ef43f393e31b4bfdbc54aedb1076e9614c99ee735db34063369c8e66"
+    },
+    {
+      "path": "gold/locked.jsonl",
+      "bytes": 7674,
+      "sha256": "2e952b8cfc2c9279e10d3bef6be529cd86fe8e57638bd11ce672a5d0706408b9"
+    },
+    {
+      "path": "prompts/dev.jsonl",
+      "bytes": 18221,
+      "sha256": "d013523a7c7ceb979c8359203e36bfc3cacd545d8499bbfa0cf5abca25232d3e"
+    },
+    {
+      "path": "prompts/locked.jsonl",
+      "bytes": 8772,
+      "sha256": "04e2cb5cef89e191e05db851efacf758d9896812ae1fa5650bd8b7cfc526daaa"
+    },
+    {
+      "path": "repairs/JSB-ACCESS-03/FrozenAccessTest.java",
+      "bytes": 461,
+      "sha256": "fc6016c1c9fdfb0101e1a12458de6d17ef7d74e8f2ad71bdc122c96355b3ce22"
+    },
+    {
+      "path": "repairs/JSB-ACCESS-03/reference-change.json",
+      "bytes": 195,
+      "sha256": "06c3085eeefd026b9b2bd660b716ef19cbc69f964660760bc1861c3fb24a70ce"
+    },
+    {
+      "path": "repairs/JSB-ADMISSIONS-03/FrozenAdmissionsTest.java",
+      "bytes": 346,
+      "sha256": "166e92d79f72fc0b3de43127382dc24d077284b1c9d35340b9c3c447e028b720"
+    },
+    {
+      "path": "repairs/JSB-ADMISSIONS-03/reference-change.json",
+      "bytes": 179,
+      "sha256": "d769923c1acf1f894a91fc49177d538b46fc28b3be4e3fc9171d1018478e8e02"
+    },
+    {
+      "path": "repairs/JSB-INVENTORY-03/FrozenInventoryTest.java",
+      "bytes": 616,
+      "sha256": "0fd1d0b9fa08e20cb361f03ccfce19532a02c2f77eaeb2e4ae975530f094b60f"
+    },
+    {
+      "path": "repairs/JSB-INVENTORY-03/reference-change.json",
+      "bytes": 198,
+      "sha256": "b2c2fc1a5dc6ad3c24fc83e3911febc522b45acae40fc7ba5d005f47378d628a"
+    },
+    {
+      "path": "repairs/JSB-LEDGER-03/FrozenLedgerTest.java",
+      "bytes": 582,
+      "sha256": "00861e6565745512e9ab88bb72095b5ac1a44ee48f51a9f4204c09b31593d9c0"
+    },
+    {
+      "path": "repairs/JSB-LEDGER-03/reference-change.json",
+      "bytes": 134,
+      "sha256": "08665d4aab3f544f247161b4341a6be9fe82f15a6e80adff90c46f5eca341af6"
+    },
+    {
+      "path": "repairs/JSB-NOTIFICATIONS-03/FrozenNotificationsTest.java",
+      "bytes": 487,
+      "sha256": "34f684431e01995423b61fc4afa986f00fe540387db8fe5d126bd0efff84ebf2"
+    },
+    {
+      "path": "repairs/JSB-NOTIFICATIONS-03/reference-change.json",
+      "bytes": 187,
+      "sha256": "58b7ddbc04f7db370d1966e2913e71c854b6dae1843dc6854cc86cb3f8af8dd1"
+    },
+    {
+      "path": "repairs/JSB-PAGINATION-03/FrozenPaginationTest.java",
+      "bytes": 531,
+      "sha256": "ac0d569bd1c2ef9364a9b34db8616ccb3b9be2d4172e95f3759c580cd3b751f6"
+    },
+    {
+      "path": "repairs/JSB-PAGINATION-03/reference-change.json",
+      "bytes": 183,
+      "sha256": "eddcf237a425d8105bdea70d2f6e4c08a63d2c36a96767be17268a4750e9d9b9"
+    },
+    {
+      "path": "repairs/JSB-PAYMENTS-03/FrozenPaymentsTest.java",
+      "bytes": 493,
+      "sha256": "3333adff438444011005d30f342ff54849f2683299e78ad56301128c6dba1323"
+    },
+    {
+      "path": "repairs/JSB-PAYMENTS-03/reference-change.json",
+      "bytes": 204,
+      "sha256": "2a00b35d002ec847376ba3aec4482ce6bbc7786cbad67dfb1c61e4af4b0e3e00"
+    },
+    {
+      "path": "repairs/JSB-PRICING-03/FrozenPricingTest.java",
+      "bytes": 525,
+      "sha256": "010e364c82ef5cb6128cfd4bccd9d5505906f4cc6e3d5f55749b5b457b60edaf"
+    },
+    {
+      "path": "repairs/JSB-PRICING-03/reference-change.json",
+      "bytes": 158,
+      "sha256": "b92d97d49d73a96f8eae75567b6227388921d74fecde8e8332eec321d8e8322b"
+    },
+    {
+      "path": "repairs/manifest.json",
+      "bytes": 3613,
+      "sha256": "5f73684f0f991697d84145643f599ace4a2590eef287d314e1d410b3bc1bdee0"
+    },
+    {
+      "path": "task-cards/dev/JSB-ACCESS-01.md",
+      "bytes": 492,
+      "sha256": "b8ac2db05d43cb84ad4b7cec6b2cbfa9ee7a34ebcfb80b45e576c644314308ac"
+    },
+    {
+      "path": "task-cards/dev/JSB-ACCESS-02.md",
+      "bytes": 488,
+      "sha256": "0555073223ce1cb0f32dac0ccfa8d27a525502411ef855e0769f0f66147010e9"
+    },
+    {
+      "path": "task-cards/dev/JSB-ACCESS-03.md",
+      "bytes": 551,
+      "sha256": "4ad64cc2560cfc53f2143526aa38411adcd04178d4c2fcacdf386e2612ed938f"
+    },
+    {
+      "path": "task-cards/dev/JSB-ADMISSIONS-01.md",
+      "bytes": 535,
+      "sha256": "70cffad7e4625c8ca4a55fa9c15df08124baf6cf016fede8e18614f77c1e651f"
+    },
+    {
+      "path": "task-cards/dev/JSB-ADMISSIONS-02.md",
+      "bytes": 551,
+      "sha256": "e437dd7e59920e4e4ac3ee11f76d9e3237efde5727eb3b6ff3c4a3fc799f4a0c"
+    },
+    {
+      "path": "task-cards/dev/JSB-ADMISSIONS-03.md",
+      "bytes": 496,
+      "sha256": "ee906108032668c3525db9744b96836b7ae3a3a34ea3a91edef4971ea213f474"
+    },
+    {
+      "path": "task-cards/dev/JSB-GSON-01.md",
+      "bytes": 587,
+      "sha256": "d57dcf809bdda1948781093e8e593da7ef7e4c2542593abbc45071a1f0d74db2"
+    },
+    {
+      "path": "task-cards/dev/JSB-GSON-02.md",
+      "bytes": 571,
+      "sha256": "2197afd9292755ae18514c9a170ba92965454e943c897a45eb78036e0e22a3fb"
+    },
+    {
+      "path": "task-cards/dev/JSB-GSON-03.md",
+      "bytes": 557,
+      "sha256": "31b63ef04b607c989e4e96bb8bb7faba7a638b1a801054cb00a3e0f7334b1ea9"
+    },
+    {
+      "path": "task-cards/dev/JSB-INVENTORY-01.md",
+      "bytes": 565,
+      "sha256": "a05574f21ddc9b3309a43fd4dbe46cc07ebe3f9408ce5a00cab25f3240289d71"
+    },
+    {
+      "path": "task-cards/dev/JSB-INVENTORY-02.md",
+      "bytes": 518,
+      "sha256": "4bcb6ab73fc3b1d53dc5c4d1c88284621055f20cadb97d4e77b37a2745d953d5"
+    },
+    {
+      "path": "task-cards/dev/JSB-INVENTORY-03.md",
+      "bytes": 520,
+      "sha256": "bcbdfce23b06c7c314da6c821255b6ec22c339a979619a4f4874457b33b57cb6"
+    },
+    {
+      "path": "task-cards/dev/JSB-MYBATIS-01.md",
+      "bytes": 751,
+      "sha256": "7d857987830461165f0e98bffa028d28b14041003ec40e2cad3c89a2e18b9251"
+    },
+    {
+      "path": "task-cards/dev/JSB-MYBATIS-02.md",
+      "bytes": 737,
+      "sha256": "8ed0db3d211c4b60789c5945919a0e14f31b960664761651a3b4a0929f8fdcf4"
+    },
+    {
+      "path": "task-cards/dev/JSB-MYBATIS-03.md",
+      "bytes": 584,
+      "sha256": "282a99a616a33ce99d99437e0ce03db3f45f7c6bc0eb3bc02fe23dab27d01dce"
+    },
+    {
+      "path": "task-cards/dev/JSB-PAYMENTS-01.md",
+      "bytes": 519,
+      "sha256": "344a541bd0a79bf3f2e95c2f4163067f9ea577c9271664a4141b33eb77feaecf"
+    },
+    {
+      "path": "task-cards/dev/JSB-PAYMENTS-02.md",
+      "bytes": 545,
+      "sha256": "1c8391719287c10ebb4ed990af533d124cfc80b2dc7214fcaba05b5bd91c07ae"
+    },
+    {
+      "path": "task-cards/dev/JSB-PAYMENTS-03.md",
+      "bytes": 536,
+      "sha256": "9fbeba05552e5ee83c57e183c9f1a684f147a1e45be8dd5bab69f94c12ee18f9"
+    },
+    {
+      "path": "task-cards/dev/JSB-PETCLINIC-01.md",
+      "bytes": 590,
+      "sha256": "acedee0e7766728eedfc90e8eb7912d21c8124ba72bced44e9e3a95d7f5da0a3"
+    },
+    {
+      "path": "task-cards/dev/JSB-PETCLINIC-02.md",
+      "bytes": 608,
+      "sha256": "d596f58270ff8c373ee7b1e87c4eaedb699f3b62db9de5ba72bf1121b694a6b4"
+    },
+    {
+      "path": "task-cards/dev/JSB-PETCLINIC-03.md",
+      "bytes": 626,
+      "sha256": "ef48e8ae834a3d6ebdf2e7c59254c16368689b7721ea0220fcb1b7c70516415e"
+    },
+    {
+      "path": "task-cards/dev/JSB-PRICING-01.md",
+      "bytes": 549,
+      "sha256": "3364732de1defb436a70905e06f5886e3fd78a1f1e793c46122020d0fd99bf15"
+    },
+    {
+      "path": "task-cards/dev/JSB-PRICING-02.md",
+      "bytes": 514,
+      "sha256": "b4d86509cfacc699805e37ec074a6d66a5a19e5806cede74ebc5aaf68052aadf"
+    },
+    {
+      "path": "task-cards/dev/JSB-PRICING-03.md",
+      "bytes": 508,
+      "sha256": "f6b596b1f3950682963cc36548fd52f35d2c7af3fc94069825abd6c2c52e0084"
+    },
+    {
+      "path": "task-cards/locked/JSB-HIKARI-01.md",
+      "bytes": 614,
+      "sha256": "fbacd5a87203db744865a1c5eae11c6a38fb855b26a736291422bc496e4415e3"
+    },
+    {
+      "path": "task-cards/locked/JSB-HIKARI-02.md",
+      "bytes": 609,
+      "sha256": "42c4b0db25e37f6c7a1d541042747ce5b761202eca413849872079dcdad812b4"
+    },
+    {
+      "path": "task-cards/locked/JSB-HIKARI-03.md",
+      "bytes": 553,
+      "sha256": "7039bd101a4c24518634199cc97f8d0f60e3e5cb26221041a2692fcc423f26e2"
+    },
+    {
+      "path": "task-cards/locked/JSB-LEDGER-01.md",
+      "bytes": 484,
+      "sha256": "9da4444186a3fa37f793009f3dc1d0de696217de70b8b214eac7d8da72f536f9"
+    },
+    {
+      "path": "task-cards/locked/JSB-LEDGER-02.md",
+      "bytes": 542,
+      "sha256": "50c0fe609d228bc870cb4463b06e2df2c3564c5f8235c4c9bc8981efca9eab7c"
+    },
+    {
+      "path": "task-cards/locked/JSB-LEDGER-03.md",
+      "bytes": 495,
+      "sha256": "618c9a51ecbbe0c3f93f7464d1e617523b0bc64e9c8b62e22ef109bc4eb6ee1d"
+    },
+    {
+      "path": "task-cards/locked/JSB-NOTIFICATIONS-01.md",
+      "bytes": 531,
+      "sha256": "4d15e22cd23e13bc6cabe3b3d58108e56040637aeab12ed1b635ba168f1e3c38"
+    },
+    {
+      "path": "task-cards/locked/JSB-NOTIFICATIONS-02.md",
+      "bytes": 510,
+      "sha256": "621a8465875510eaf2ab9531e3210a12e0c54235f0863f8c4911831440dd87a4"
+    },
+    {
+      "path": "task-cards/locked/JSB-NOTIFICATIONS-03.md",
+      "bytes": 523,
+      "sha256": "eb636d9ae6d3c8d9e5e08d8bec5ff836b04a816ac7875d69782e2c465ece0580"
+    },
+    {
+      "path": "task-cards/locked/JSB-PAGINATION-01.md",
+      "bytes": 494,
+      "sha256": "a077dfb95c166ed15e5079061ade91cc0b782b52c05d1cd4f9def7c9488941fa"
+    },
+    {
+      "path": "task-cards/locked/JSB-PAGINATION-02.md",
+      "bytes": 520,
+      "sha256": "d96210418ac1837e62ae9b44e972a6fa79eacfc869afd0756d8ffaf9a81b2093"
+    },
+    {
+      "path": "task-cards/locked/JSB-PAGINATION-03.md",
+      "bytes": 545,
+      "sha256": "476a328b17cb5bf96a48f40d4d313b0c7d23ac79e984170148f0bf98e8b7dcd1"
+    }
+  ]
+}

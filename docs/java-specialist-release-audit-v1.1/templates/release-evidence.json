@@ -1,0 +1,262 @@
+{
+  "schema": "java-specialist-release-evidence/v1.1",
+  "candidateSha": "b9c3cc325491947b198342575e9ea251c024b521",
+  "datasetHash": null,
+  "scorerHash": null,
+  "protocolHash": null,
+  "gates": [
+    {
+      "id": "DATASET",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "ORIGINAL_PROBES",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "WIRE_SENTINEL",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "CANONICAL_SCORER",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "REPAIR_JUDGE",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "PRODUCT_COUNTEREXAMPLES",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "MACOS_BUILD",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "MACOS_FULL_TEST",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "MCP_ROUNDTRIP",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "INDEPENDENT_LOCKED",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "FULL_PUBLIC",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "LIVE_PAIRED",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "PERFORMANCE",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "EXISTING_RELEASE_GATE",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "REVIEW",
+      "status": "NOT_RUN",
+      "evidence": []
+    }
+  ],
+  "contracts": [
+    {
+      "id": "K01",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K02",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K03",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K04",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K05",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K06",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K07",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K08",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K09",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K10",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K11",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K12",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K13",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K14",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K15",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K16",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K17",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K18",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K19",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K20",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K21",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K22",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K23",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K24",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K25",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K26",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K27",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K28",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K29",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K30",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K31",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K32",
+      "status": "NOT_RUN",
+      "evidence": []
+    }
+  ],
+  "metrics": {
+    "qaContractRate": null,
+    "newCriticalRegressions": null,
+    "actualRepairTaskGroups": null,
+    "scheduledRuns": null,
+    "receivedRuns": null,
+    "runMode": "NOT_RUN",
+    "scoringProtocol": "NOT_RUN",
+    "usageComplete": false
+  },
+  "claims": {
+    "costReduction": false
+  },
+  "optionalExperimentEnabled": false,
+  "optionalExperimentDecision": "INVALID_EXPERIMENT",
+  "deploymentAuthorized": false
+}

@@ -1,0 +1,10 @@
+{
+  "schema": "java-specialist-release-policy/v1.1",
+  "qualification": "Evidence completeness check, not proof of execution or deployment authorization",
+  "requiredGates": ["DATASET", "ORIGINAL_PROBES", "WIRE_SENTINEL", "CANONICAL_SCORER", "REPAIR_JUDGE", "PRODUCT_COUNTEREXAMPLES", "MACOS_BUILD", "MACOS_FULL_TEST", "MCP_ROUNDTRIP", "INDEPENDENT_LOCKED", "FULL_PUBLIC", "LIVE_PAIRED", "PERFORMANCE", "EXISTING_RELEASE_GATE", "REVIEW"],
+  "requiredContracts": ["K01","K02","K03","K04","K05","K06","K07","K08","K09","K10","K11","K12","K13","K14","K15","K16","K17","K18","K19","K20","K21","K22","K23","K24","K25","K26","K27","K28","K29","K30","K31","K32"],
+  "minimumQaContractRate": 0.8,
+  "maximumNewCriticalRegressions": 0,
+  "actualRepairTaskGroups": 8,
+  "deploymentPerformed": false
+}

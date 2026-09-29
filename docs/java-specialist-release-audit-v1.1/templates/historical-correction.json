@@ -1,0 +1,26 @@
+{
+  "schema": "java-specialist-experiment-correction/v1.1",
+  "affectedSourceSha": "b9c3cc325491947b198342575e9ea251c024b521",
+  "affectedExperiments": [
+    "M2 LIVE",
+    "M3 LIVE A/B",
+    "M3 dense cache/retrieval comparison"
+  ],
+  "validity": "INVALID_EXPERIMENT",
+  "rawArtifactsRetained": true,
+  "retractedInterpretations": [
+    "SOURCE_RECEIVED proves model was shown source",
+    "repair failure is model behavior rather than harness",
+    "fixed-budget dense contribution and no harm established"
+  ],
+  "knownMechanisms": [
+    "W01-W04: final tool payload compaction",
+    "E01-E05: noncanonical scorer and denominator",
+    "D01-D04: cache identity and timeout",
+    "R11: unequal candidate/range budgets"
+  ],
+  "replacementProtocolHash": null,
+  "rerunStatus": "NOT_RUN",
+  "independentModelQualityConclusion": "INCONCLUSIVE",
+  "productionPolicy": "keep optional disabled/external pending valid evaluation"
+}

@@ -1,0 +1,222 @@
+{
+  "schema": "counterexample-catalog/v1",
+  "notIndependentWorkloadSamples": true,
+  "rows": [
+    {
+      "id": "W01",
+      "title": "read source survives final model-message boundary",
+      "owner": "R01",
+      "executionLevel": "actual-export-offline",
+      "expectedAfterRepair": "PASS",
+      "b9c3cc3Status": "FAIL"
+    },
+    {
+      "id": "W02",
+      "title": "java_symbol candidates survive final model-message boundary",
+      "owner": "R01",
+      "executionLevel": "actual-export-offline",
+      "expectedAfterRepair": "PASS",
+      "b9c3cc3Status": "FAIL"
+    },
+    {
+      "id": "W03",
+      "title": "write acknowledgement survives final model-message boundary",
+      "owner": "R01",
+      "executionLevel": "actual-export-offline",
+      "expectedAfterRepair": "PASS",
+      "b9c3cc3Status": "FAIL"
+    },
+    {
+      "id": "W04",
+      "title": "SOURCE_RECEIVED cannot precede a lossy projection",
+      "owner": "R01",
+      "executionLevel": "actual-export-offline",
+      "expectedAfterRepair": "PASS",
+      "b9c3cc3Status": "FAIL"
+    },
+    {
+      "id": "W05",
+      "title": "evaluation prompt does not restrict to an unavailable tool",
+      "owner": "R03",
+      "executionLevel": "actual-export-offline",
+      "expectedAfterRepair": "PASS",
+      "b9c3cc3Status": "FAIL"
+    },
+    {
+      "id": "E01",
+      "title": "strict QA types do not coerce string to boolean",
+      "owner": "R02",
+      "executionLevel": "actual-export-offline",
+      "expectedAfterRepair": "PASS",
+      "b9c3cc3Status": "FAIL"
+    },
+    {
+      "id": "E02",
+      "title": "strict QA rejects extra keys",
+      "owner": "R02",
+      "executionLevel": "actual-export-offline",
+      "expectedAfterRepair": "PASS",
+      "b9c3cc3Status": "FAIL"
+    },
+    {
+      "id": "E03",
+      "title": "strict QA rejects duplicate keys",
+      "owner": "R02",
+      "executionLevel": "actual-export-offline",
+      "expectedAfterRepair": "PASS",
+      "b9c3cc3Status": "FAIL"
+    },
+    {
+      "id": "E04",
+      "title": "contract QA cannot succeed with no received required source",
+      "owner": "R02",
+      "executionLevel": "actual-export-offline",
+      "expectedAfterRepair": "PASS",
+      "b9c3cc3Status": "FAIL"
+    },
+    {
+      "id": "E05",
+      "title": "failed scheduled runs remain in success-rate denominator",
+      "owner": "R02",
+      "executionLevel": "actual-export-offline",
+      "expectedAfterRepair": "PASS",
+      "b9c3cc3Status": "FAIL"
+    },
+    {
+      "id": "E06",
+      "title": "wrong QA answer is rejected (positive guard)",
+      "owner": "R02",
+      "executionLevel": "actual-export-offline",
+      "expectedAfterRepair": "PASS",
+      "b9c3cc3Status": "PASS"
+    },
+    {
+      "id": "D01",
+      "title": "two declarations in one file retain vectors after cache reload",
+      "owner": "R10",
+      "executionLevel": "actual-export-offline",
+      "expectedAfterRepair": "PASS",
+      "b9c3cc3Status": "FAIL"
+    },
+    {
+      "id": "D02",
+      "title": "provider identity includes endpoint",
+      "owner": "R10",
+      "executionLevel": "actual-export-offline",
+      "expectedAfterRepair": "PASS",
+      "b9c3cc3Status": "FAIL"
+    },
+    {
+      "id": "D03",
+      "title": "stale dense hints do not carry actionable stale line ranges",
+      "owner": "R10",
+      "executionLevel": "actual-export-offline",
+      "expectedAfterRepair": "PASS",
+      "b9c3cc3Status": "FAIL"
+    },
+    {
+      "id": "D04",
+      "title": "body-read time is covered by embedding deadline",
+      "owner": "R10",
+      "executionLevel": "actual-export-offline",
+      "expectedAfterRepair": "PASS",
+      "b9c3cc3Status": "FAIL"
+    },
+    {
+      "id": "Q01",
+      "title": "scope is applied before route result cap",
+      "owner": "R06",
+      "executionLevel": "actual-export-offline",
+      "expectedAfterRepair": "PASS",
+      "b9c3cc3Status": "FAIL"
+    },
+    {
+      "id": "Q02",
+      "title": "unknown exact FQN does not fall back to fuzzy BM25",
+      "owner": "R07",
+      "executionLevel": "actual-export-offline",
+      "expectedAfterRepair": "PASS",
+      "b9c3cc3Status": "FAIL"
+    },
+    {
+      "id": "Q03",
+      "title": "expired exact request reports deadline rather than success",
+      "owner": "R09",
+      "executionLevel": "actual-export-offline",
+      "expectedAfterRepair": "PASS",
+      "b9c3cc3Status": "FAIL"
+    },
+    {
+      "id": "Q04",
+      "title": "20 requested candidates are not silently capped at 10 as complete",
+      "owner": "R07",
+      "executionLevel": "actual-export-offline",
+      "expectedAfterRepair": "PASS",
+      "b9c3cc3Status": "FAIL"
+    },
+    {
+      "id": "Q05",
+      "title": "explicit expansion terms supplement rather than replace query",
+      "owner": "R07",
+      "executionLevel": "actual-export-offline",
+      "expectedAfterRepair": "PASS",
+      "b9c3cc3Status": "FAIL"
+    },
+    {
+      "id": "Q06",
+      "title": "module and sourceSet combine as AND, not union",
+      "owner": "R06",
+      "executionLevel": "actual-export-offline",
+      "expectedAfterRepair": "PASS",
+      "b9c3cc3Status": "FAIL"
+    },
+    {
+      "id": "Q07",
+      "title": "unknown module is not silently widened to whole repository",
+      "owner": "R06",
+      "executionLevel": "actual-export-offline",
+      "expectedAfterRepair": "PASS",
+      "b9c3cc3Status": "FAIL"
+    },
+    {
+      "id": "Q08",
+      "title": "file changed after index cannot remain READY with stale locator",
+      "owner": "R08",
+      "executionLevel": "actual-export-offline",
+      "expectedAfterRepair": "PASS",
+      "b9c3cc3Status": "FAIL"
+    },
+    {
+      "id": "Q09",
+      "title": "preview has a byte cap, not just a line cap",
+      "owner": "R08",
+      "executionLevel": "actual-export-offline",
+      "expectedAfterRepair": "PASS",
+      "b9c3cc3Status": "FAIL"
+    },
+    {
+      "id": "N01",
+      "title": "duplicate FQN with unknown compilation context stays ambiguous",
+      "owner": "R05",
+      "executionLevel": "actual-export-offline",
+      "expectedAfterRepair": "PASS",
+      "b9c3cc3Status": "FAIL"
+    },
+    {
+      "id": "P01",
+      "title": "MyBatis evidence uses XML path/hash rather than Java path with XML lines",
+      "owner": "R08",
+      "executionLevel": "actual-export-offline",
+      "expectedAfterRepair": "PASS",
+      "b9c3cc3Status": "FAIL"
+    },
+    {
+      "id": "J01",
+      "title": "repair judge must not restore an allowed file deleted by the candidate",
+      "owner": "R04",
+      "executionLevel": "actual-export-offline",
+      "expectedAfterRepair": "PASS",
+      "b9c3cc3Status": "FAIL"
+    }
+  ]
+}

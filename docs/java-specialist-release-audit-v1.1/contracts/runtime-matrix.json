@@ -1,0 +1,576 @@
+{
+  "schema": "java-specialist-runtime-matrix/v1.1",
+  "source": "baseline-kit/dataset/contracts/cases.json",
+  "classification": "SPECIFICATION_NOT_EXECUTED",
+  "contracts": [
+    {
+      "id": "K01",
+      "originalOwnerTask": "T02",
+      "originalExecution": "source-probe:C1-ID-PATH",
+      "originalGiven": "modules/a and modules/b define demo.Shared",
+      "originalExpected": "type/method/field identities remain distinct",
+      "remediationOwners": [
+        "R05"
+      ],
+      "requiredLevel": "source-export",
+      "setupAndAction": "写入 modules/a 与 modules/b 的 demo.Shared，分别含同名字段及方法。",
+      "oracle": "断言两份 type/method/field ID、file_id 不相同；查出的每条边端点存在。",
+      "historicalReportState": "PASS",
+      "historicalEvidenceClass": "SOURCE_REPORTED",
+      "candidateVerificationState": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K02",
+      "originalOwnerTask": "T02",
+      "originalExecution": "source-probe:C1-SQL-WRITE-AB",
+      "originalGiven": "write A then B and B then A",
+      "originalExpected": "declaration rows and path ownership invariant",
+      "remediationOwners": [
+        "R05"
+      ],
+      "requiredLevel": "source-export",
+      "setupAndAction": "用两个全新 DB 分别按 AB/BA 次序写同一对文件。",
+      "oracle": "对实体与归属排序后比对完全一致；不能只比较条数。",
+      "historicalReportState": "PASS",
+      "historicalEvidenceClass": "SOURCE_REPORTED",
+      "candidateVerificationState": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K03",
+      "originalOwnerTask": "T02",
+      "originalExecution": "runtime",
+      "originalGiven": "main and test declare identical FQN",
+      "originalExpected": "no source-set overwrite; unresolved scope is ambiguous",
+      "remediationOwners": [
+        "R05",
+        "R12"
+      ],
+      "requiredLevel": "runtime-index",
+      "setupAndAction": "用独立 main/test source-root 建索引，查询同 FQN，不传可消歧范围；再指定范围。",
+      "oracle": "未指定编译范围保留歧义候选；指定 main 不出现 test；test 的可见性显式遵循 build。",
+      "historicalReportState": "NOT_RUN",
+      "historicalEvidenceClass": "SOURCE_REPORTED",
+      "candidateVerificationState": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K04",
+      "originalOwnerTask": "T02",
+      "originalExecution": "source-probe:C1-ID-LINE-STABLE",
+      "originalGiven": "insert blank lines before a named declaration",
+      "originalExpected": "named ID stable; coordinates updated",
+      "remediationOwners": [
+        "R05"
+      ],
+      "requiredLevel": "source-export",
+      "setupAndAction": "在 named type 前插入5空行，重新解析/写入。",
+      "oracle": "named ID 不变，selection 坐标加5；匿名/局部类型允许文件局部 ID 变化。",
+      "historicalReportState": "PASS",
+      "historicalEvidenceClass": "SOURCE_REPORTED",
+      "candidateVerificationState": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K05",
+      "originalOwnerTask": "T02",
+      "originalExecution": "runtime",
+      "originalGiven": "delete module A file after both indexed",
+      "originalExpected": "B remains, A declarations/edges/search docs removed",
+      "remediationOwners": [
+        "R05",
+        "R12"
+      ],
+      "requiredLevel": "runtime-watcher",
+      "setupAndAction": "双模块完成索引后从磁盘删 A，等待实际变更代次完成；再查 A/B。",
+      "oracle": "A 的声明、边、search-doc 清除；B 的归属和结果保持；不得手动清整个库假装增量通过。",
+      "historicalReportState": "NOT_RUN",
+      "historicalEvidenceClass": "SOURCE_REPORTED",
+      "candidateVerificationState": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K06",
+      "originalOwnerTask": "T02",
+      "originalExecution": "runtime",
+      "originalGiven": "same path in two sibling worktrees with different content",
+      "originalExpected": "IDs may be equal locally; repoHash/contentHash cannot be mixed",
+      "remediationOwners": [
+        "R05",
+        "R12"
+      ],
+      "requiredLevel": "runtime-worktree",
+      "setupAndAction": "git init 临时repo并创建两个 linked worktree；同一relativePath分别写不同内容。",
+      "oracle": "局部named ID允许相同，但每个结果repoHash/sourceHash匹配本worktree；无兄弟内容串入。",
+      "historicalReportState": "NOT_RUN",
+      "historicalEvidenceClass": "SOURCE_REPORTED",
+      "candidateVerificationState": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K07",
+      "originalOwnerTask": "T03",
+      "originalExecution": "source-probe:C3-RANGES-LF-201",
+      "originalGiven": "long method match line201",
+      "originalExpected": "selected source covers requested line",
+      "remediationOwners": [
+        "R08"
+      ],
+      "requiredLevel": "source-export",
+      "setupAndAction": "对长方法fixture显式请求第201行。",
+      "oracle": "最终range包含201；provider和最后serializer均检查，不能只中间结果通过。",
+      "historicalReportState": "PASS",
+      "historicalEvidenceClass": "SOURCE_REPORTED",
+      "candidateVerificationState": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K08",
+      "originalOwnerTask": "T03",
+      "originalExecution": "source-probe:C3-RANGES-LF-100,350",
+      "originalGiven": "two far positions in same long method",
+      "originalExpected": "both anchors survive merge and final serialize",
+      "remediationOwners": [
+        "R08"
+      ],
+      "requiredLevel": "source-export",
+      "setupAndAction": "同一长方法请求第100与350行；合并后走最终序列化。",
+      "oracle": "正常预算两行都在；预算不足不得声称完整覆盖。",
+      "historicalReportState": "PASS",
+      "historicalEvidenceClass": "SOURCE_REPORTED",
+      "candidateVerificationState": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K09",
+      "originalOwnerTask": "T03",
+      "originalExecution": "source-probe:C3-RANGES-CRLF-201",
+      "originalGiven": "CRLF long method",
+      "originalExpected": "same line containment, original byte costs",
+      "remediationOwners": [
+        "R00",
+        "R08"
+      ],
+      "requiredLevel": "source-export",
+      "setupAndAction": "使用原始CRLF字节运行长方法range与source slice。",
+      "oracle": "行号对应一致，源码slice哈希与byte计数基于原始文件；不全局改LF。",
+      "historicalReportState": "PASS",
+      "historicalEvidenceClass": "SOURCE_REPORTED",
+      "candidateVerificationState": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K10",
+      "originalOwnerTask": "T03",
+      "originalExecution": "fixtures/unicode",
+      "originalGiven": "emoji before symbol in Unicode.java",
+      "originalExpected": "1-based UTF-16 columns, not UTF-8 byte offsets",
+      "remediationOwners": [
+        "R08"
+      ],
+      "requiredLevel": "parser-fixture",
+      "setupAndAction": "原Unicode.java含emoji的行，用真实parser读取声明及引用selection。",
+      "oracle": "列为1-based UTF-16 code units；与独立字符串编码长度oracle一致，不用同parser反算作oracle。",
+      "historicalReportState": "PARTIAL",
+      "historicalEvidenceClass": "SOURCE_REPORTED",
+      "candidateVerificationState": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K11",
+      "originalOwnerTask": "T08",
+      "originalExecution": "runtime",
+      "originalGiven": "helper moved before caller",
+      "originalExpected": "relation unchanged, required evidence still available",
+      "remediationOwners": [
+        "R08",
+        "R12"
+      ],
+      "requiredLevel": "runtime-index",
+      "setupAndAction": "索引 caller+helper，helper从caller后移到前，正常触发更新。",
+      "oracle": "显式调用事实不消失；返回的必要证据移动到当前range；不要求排序分数bit-identical。",
+      "historicalReportState": "PARTIAL",
+      "historicalEvidenceClass": "SOURCE_REPORTED",
+      "candidateVerificationState": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K12",
+      "originalOwnerTask": "T03",
+      "originalExecution": "runtime",
+      "originalGiven": "zero budget or anchor larger than budget",
+      "originalExpected": "explicit BUDGET_TOO_SMALL/PARTIAL, no claimed complete output",
+      "remediationOwners": [
+        "R08",
+        "R09",
+        "R12"
+      ],
+      "requiredLevel": "runtime-MCP",
+      "setupAndAction": "对静态query/impact给零剩余时间或小于必要anchor的字节预算。",
+      "oracle": "明确BUDGET_TOO_SMALL/PARTIAL或现有等价错误；无虚假COMPLETE，无无限等待。",
+      "historicalReportState": "PARTIAL",
+      "historicalEvidenceClass": "SOURCE_REPORTED",
+      "candidateVerificationState": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K13",
+      "originalOwnerTask": "T04",
+      "originalExecution": "source-probe:C2-QUERY-OrderService rollback refund",
+      "originalGiven": "OrderService rollback refund",
+      "originalExpected": "relevant method competes, not type-only short circuit",
+      "remediationOwners": [
+        "R07"
+      ],
+      "requiredLevel": "source-export",
+      "setupAndAction": "查询 OrderService rollback refund，并给无词法关联的其他类型作干扰。",
+      "oracle": "相关method参与且可用作anchor；纯type命中不结束text搜索。",
+      "historicalReportState": "PASS",
+      "historicalEvidenceClass": "SOURCE_REPORTED",
+      "candidateVerificationState": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K14",
+      "originalOwnerTask": "T04",
+      "originalExecution": "source-probe:C2-QUERY-demo.OrderService#reverseDuplicateCharge",
+      "originalGiven": "exact owner#method",
+      "originalExpected": "deterministic exact hit, no vector call",
+      "remediationOwners": [
+        "R07"
+      ],
+      "requiredLevel": "source-export",
+      "setupAndAction": "exact owner#method，计数所有dense/JDT调用；再查不存在exact。",
+      "oracle": "精确声明命中且dense=0；静态后端JDT=0；不存在不得回退模糊召回。",
+      "historicalReportState": "PASS",
+      "historicalEvidenceClass": "SOURCE_REPORTED",
+      "candidateVerificationState": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K15",
+      "originalOwnerTask": "T05",
+      "originalExecution": "runtime",
+      "originalGiven": "Chinese comment changed without code change",
+      "originalExpected": "current comment retrievable at current content hash",
+      "remediationOwners": [
+        "R08",
+        "R12"
+      ],
+      "requiredLevel": "runtime-watcher",
+      "setupAndAction": "仅改中文JavaDoc为新业务词，执行真实变更协调后查询新旧词。",
+      "oracle": "新词对应当前sourceHash；旧表示被替换；不改Java逻辑仍须刷新文档。",
+      "historicalReportState": "NOT_RUN",
+      "historicalEvidenceClass": "SOURCE_REPORTED",
+      "candidateVerificationState": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K16",
+      "originalOwnerTask": "T05",
+      "originalExecution": "fixtures/resource",
+      "originalGiven": "XML namespace plus statement id",
+      "originalExpected": "source-linked mapper statement, not unrelated same-name XML",
+      "remediationOwners": [
+        "R08"
+      ],
+      "requiredLevel": "parser-resource",
+      "setupAndAction": "两个同名statement、不同namespace的XML，Java mapper接口作目标。",
+      "oracle": "证据source为正确XML path/hash/range，目标declaration为对应Java方法；N01/P01独立断言不能替代真实parser测试。",
+      "historicalReportState": "PARTIAL",
+      "historicalEvidenceClass": "SOURCE_REPORTED",
+      "candidateVerificationState": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K17",
+      "originalOwnerTask": "T07",
+      "originalExecution": "runtime",
+      "originalGiven": "broad common terms with scope",
+      "originalExpected": "filter before cap; bounded scan; truncation reason recorded",
+      "remediationOwners": [
+        "R06",
+        "R09",
+        "R12"
+      ],
+      "requiredLevel": "runtime-MCP",
+      "setupAndAction": "20个scope外高分干扰 + 第21个scope内候选；并测broad common terms。",
+      "oracle": "scope在cap前生效；module与sourceSet AND；未知module不扩大范围；记录物理work与truncated理由。",
+      "historicalReportState": "PARTIAL",
+      "historicalEvidenceClass": "SOURCE_REPORTED",
+      "candidateVerificationState": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K18",
+      "originalOwnerTask": "T05",
+      "originalExecution": "fixtures/resource",
+      "originalGiven": "api.token property value canary",
+      "originalExpected": "key may be indexed, secret value must not be emitted/embedded",
+      "remediationOwners": [
+        "R08"
+      ],
+      "requiredLevel": "parser-resource",
+      "setupAndAction": "fixture含api.token唯一canary，查询配置key并请求preview，使用假的embed捕获输入。",
+      "oracle": "key可检索，canary不得进入model payload或embedding；不得外发真实凭据。",
+      "historicalReportState": "PARTIAL",
+      "historicalEvidenceClass": "SOURCE_REPORTED",
+      "candidateVerificationState": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K19",
+      "originalOwnerTask": "T07",
+      "originalExecution": "runtime",
+      "originalGiven": "delete/rename/add unknown Java file",
+      "originalExpected": "negative cache invalidated; no stale path resurrection",
+      "remediationOwners": [
+        "R07",
+        "R09",
+        "R12"
+      ],
+      "requiredLevel": "runtime-watcher",
+      "setupAndAction": "先查未存在名称；add→query→rename→query→delete→query，每步等待正常代次。",
+      "oracle": "负缓存随变更失效；新名称可达；旧路径不复活；采用bounded wait，不用任意sleep断言已一致。",
+      "historicalReportState": "NOT_RUN",
+      "historicalEvidenceClass": "SOURCE_REPORTED",
+      "candidateVerificationState": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K20",
+      "originalOwnerTask": "T07",
+      "originalExecution": "runtime",
+      "originalGiven": "query begins at generation G, file changes to G+1",
+      "originalExpected": "coherent snapshot or explicit changedDuringRequest/PARTIAL",
+      "remediationOwners": [
+        "R08",
+        "R12"
+      ],
+      "requiredLevel": "runtime-concurrent",
+      "setupAndAction": "在query获取hits后、coverage/preview之前注入一次G+1变更，用barrier控制时序。",
+      "oracle": "返回同snapshot的全部G证据或显式changedDuringRequest/PARTIAL；不拼新status与旧locator。",
+      "historicalReportState": "PARTIAL",
+      "historicalEvidenceClass": "SOURCE_REPORTED",
+      "candidateVerificationState": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K21",
+      "originalOwnerTask": "T07",
+      "originalExecution": "runtime",
+      "originalGiven": "sibling copy with modified XML only",
+      "originalExpected": "reconcile resource hash before publishing related evidence",
+      "remediationOwners": [
+        "R08",
+        "R12"
+      ],
+      "requiredLevel": "runtime-worktree",
+      "setupAndAction": "完成兄弟DB拷贝，只修改目标worktree XML，Java保持hash相同。",
+      "oracle": "XML-source文档先reconcile再READY；不能因Java相同复用旧SQL证据。",
+      "historicalReportState": "NOT_RUN",
+      "historicalEvidenceClass": "SOURCE_REPORTED",
+      "candidateVerificationState": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K22",
+      "originalOwnerTask": "T11",
+      "originalExecution": "fixtures/syntax",
+      "originalGiven": "overloads with same arity",
+      "originalExpected": "ambiguous/static candidate unless compiler-bound",
+      "remediationOwners": [
+        "R05",
+        "R12"
+      ],
+      "requiredLevel": "parser-fixture",
+      "setupAndAction": "同arity重载且仅凭语法不能确定实参绑定，使用原syntax fixture。",
+      "oracle": "输出STATIC_CANDIDATE/AMBIGUOUS而非虚假JDT_BOUND；如主动请求JDT证据另跑真实JDT层。",
+      "historicalReportState": "NOT_RUN",
+      "historicalEvidenceClass": "SOURCE_REPORTED",
+      "candidateVerificationState": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K23",
+      "originalOwnerTask": "T11",
+      "originalExecution": "fixtures/bindings",
+      "originalGiven": "Parent parameter runtime instance Child",
+      "originalExpected": "static target does not assert sole runtime dispatch",
+      "remediationOwners": [
+        "R05",
+        "R12"
+      ],
+      "requiredLevel": "parser-fixture",
+      "setupAndAction": "Parent类型参数实际可能Child实例，Child覆盖非final方法。",
+      "oracle": "区分静态目标与运行时分派；不声称Parent是唯一运行目标；不需要新建全程序分析器。",
+      "historicalReportState": "NOT_RUN",
+      "historicalEvidenceClass": "SOURCE_REPORTED",
+      "candidateVerificationState": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K24",
+      "originalOwnerTask": "T11",
+      "originalExecution": "fixtures/broken",
+      "originalGiven": "broken Java source",
+      "originalExpected": "partial parse is not complete negative evidence",
+      "remediationOwners": [
+        "R09",
+        "R12"
+      ],
+      "requiredLevel": "parser-fixture",
+      "setupAndAction": "真实Tree-sitter解析不完整Java文件，然后查询未找到符号。",
+      "oracle": "parse/coverage保持PARTIAL；不能写COMPLETE的负缓存。",
+      "historicalReportState": "NOT_RUN",
+      "historicalEvidenceClass": "SOURCE_REPORTED",
+      "candidateVerificationState": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K25",
+      "originalOwnerTask": "T06",
+      "originalExecution": "runtime",
+      "originalGiven": "static query with JDT_BIN=/usr/bin/false",
+      "originalExpected": "successful static results and zero JDT launches",
+      "remediationOwners": [
+        "R07",
+        "R12"
+      ],
+      "requiredLevel": "runtime-MCP",
+      "setupAndAction": "隔离MCP static query，JDT_BIN设为必失败程序并观察启动计数。",
+      "oracle": "静态结果有效，JDT启动=0；不是用假的MCP factory直接调用函数替代。",
+      "historicalReportState": "PASS",
+      "historicalEvidenceClass": "SOURCE_REPORTED",
+      "candidateVerificationState": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K26",
+      "originalOwnerTask": "T06",
+      "originalExecution": "runtime",
+      "originalGiven": "position/references request",
+      "originalExpected": "keeps explicit JDT requirement and budget",
+      "remediationOwners": [
+        "R09",
+        "R12"
+      ],
+      "requiredLevel": "runtime-JDT",
+      "setupAndAction": "同工具operation=position/references；关闭LSP时检查enablement，再启用真实JDT。",
+      "oracle": "关闭时明确配置错误；启用时实际绑定/引用可用且同一absolute deadline；记录runtime JDK/project JDK分离。",
+      "historicalReportState": "PASS",
+      "historicalEvidenceClass": "SOURCE_REPORTED",
+      "candidateVerificationState": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K27",
+      "originalOwnerTask": "T10",
+      "originalExecution": "runtime",
+      "originalGiven": "provider timeout/offline/invalid hash",
+      "originalExpected": "fallback to lexical, no negative complete cache",
+      "remediationOwners": [
+        "R10",
+        "R12"
+      ],
+      "requiredLevel": "runtime-provider",
+      "setupAndAction": "optional关闭/无模型/超时/hash不符；使用受控假provider通过真实调用边界注入。",
+      "oracle": "lexical仍可用；不写COMPLETE负缓存；关闭时provider调用=0。optional未接核心时记录实际集成边界，不伪造不存在的自动fallback。",
+      "historicalReportState": "PARTIAL",
+      "historicalEvidenceClass": "SOURCE_REPORTED",
+      "candidateVerificationState": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K28",
+      "originalOwnerTask": "T11",
+      "originalExecution": "runtime",
+      "originalGiven": "cancel one waiter on shared JDT request",
+      "originalExpected": "other waiters unaffected; backend settled within policy",
+      "remediationOwners": [
+        "R09",
+        "R12"
+      ],
+      "requiredLevel": "runtime-JDT",
+      "setupAndAction": "两caller共享同JDT请求，取消deadline更短caller，保留另一个。",
+      "oracle": "短caller退出不取消长caller；backend按现有policy结算、资源释放；先fake协议单测，再真实JDT集成证据。",
+      "historicalReportState": "NOT_RUN",
+      "historicalEvidenceClass": "SOURCE_REPORTED",
+      "candidateVerificationState": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K29",
+      "originalOwnerTask": "T07",
+      "originalExecution": "runtime",
+      "originalGiven": "20 concurrent broad queries",
+      "originalExpected": "queue bounded; deadline/loop delay measured; no full graph prefetch",
+      "remediationOwners": [
+        "R09",
+        "R12"
+      ],
+      "requiredLevel": "runtime-load",
+      "setupAndAction": "固定生成语料和同机基线，20并发broad query，计队列/耗时/loop delay/RSS。",
+      "oracle": "队列有界，超时不遗留无界工作；不得全图prefetch；按原150ms/20ms SLO独立记录，不以机器不同推算通过。",
+      "historicalReportState": "PARTIAL",
+      "historicalEvidenceClass": "SOURCE_REPORTED",
+      "candidateVerificationState": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K30",
+      "originalOwnerTask": "T12",
+      "originalExecution": "runtime",
+      "originalGiven": "idle read connection after writer completes",
+      "originalExpected": "WAL converges; no stale snapshot held indefinitely",
+      "remediationOwners": [
+        "R09",
+        "R12"
+      ],
+      "requiredLevel": "runtime-SQL",
+      "setupAndAction": "写库期间持只读query连接，写完后停止流量，观察reader idle释放与checkpoint。",
+      "oracle": "WAL在配置的idle TTL+有界grace后收敛；无无限snapshot；不得以删库作为收敛。",
+      "historicalReportState": "PARTIAL",
+      "historicalEvidenceClass": "SOURCE_REPORTED",
+      "candidateVerificationState": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K31",
+      "originalOwnerTask": "T02",
+      "originalExecution": "fixtures/syntax",
+      "originalGiven": "nested/local/package-private declarations",
+      "originalExpected": "all source declarations remain separately addressable",
+      "remediationOwners": [
+        "R05",
+        "R12"
+      ],
+      "requiredLevel": "parser-fixture",
+      "setupAndAction": "真实parser遍历nested/local/package-private源声明，并查询各selection。",
+      "oracle": "各声明独立可寻址；不以constructor伪造局部type身份；数据库归属正确。",
+      "historicalReportState": "PARTIAL",
+      "historicalEvidenceClass": "SOURCE_REPORTED",
+      "candidateVerificationState": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "K32",
+      "originalOwnerTask": "T03",
+      "originalExecution": "fixtures/syntax",
+      "originalGiven": "record compact constructor and text block",
+      "originalExpected": "correct ranges and identifiers; braces in text ignored",
+      "remediationOwners": [
+        "R08",
+        "R12"
+      ],
+      "requiredLevel": "parser-fixture",
+      "setupAndAction": "JDK17+编译record/compact constructor合法fixture，text block里有括号与花括号。",
+      "oracle": "真实parser的声明/range正确，文本括号不影响方法边界；JDK8业务源码与fixture目标级别分开。",
+      "historicalReportState": "PARTIAL",
+      "historicalEvidenceClass": "SOURCE_REPORTED",
+      "candidateVerificationState": "NOT_RUN",
+      "evidence": []
+    }
+  ]
+}

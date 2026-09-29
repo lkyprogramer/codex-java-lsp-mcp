@@ -1,0 +1,59 @@
+{
+  "schema": "audit-run/v1",
+  "project": "/mnt/data/audit_b9/work/current/codex-java-lsp-mcp-main",
+  "sources": [
+    {
+      "path": "scripts/run-agent-trace-live.mjs",
+      "sha256": "b7c1ba892c5b13c3d53a15acc38f14dced2df0b1bd57e5f4e007e6b73473d26a"
+    },
+    {
+      "path": "scripts/evaluate-java-task.mjs",
+      "sha256": "d477653903310a8f5b991d0d437ec97cc987a45eb0187e3dbeba05a89d64c429"
+    },
+    {
+      "path": "src/discovery/query.ts",
+      "sha256": "a5ef11135c2ab457245c14d9a294279a9f654b665f824cef4c1bcd2c0e4dcaf2"
+    },
+    {
+      "path": "src/discovery/search-document.ts",
+      "sha256": "454c29c377359c6222f76809afc8a280cce9a27ab6ac6595d21ed5876dab47c0"
+    },
+    {
+      "path": "src/java-index/sql/entity-search.ts",
+      "sha256": "a52acb4f08588a92af39cc064bc04d509a3a3f0b897724a20afc7e88d91dafd1"
+    },
+    {
+      "path": "src/java-index/name-resolver.ts",
+      "sha256": "19551a4a252672edbe2e1f821315ecc1130bbfd3b4f298a52ac2f13b3b9f9dd8"
+    },
+    {
+      "path": "experiments/semantic-discovery/provider.mjs",
+      "sha256": "a39abfbef4378f76421170de4bb5433a573145567910b4bab164af5d3ad04a73"
+    },
+    {
+      "path": "experiments/semantic-discovery/compare.mjs",
+      "sha256": "dad5bfcabe22b37dc6d302ee3eb6aa59aab10f4d4b56fb114050f1fde74ba3ff"
+    },
+    {
+      "path": "experiments/semantic-discovery/agent-ab.mjs",
+      "sha256": "859ec72ba85df9346b997612b7633fe1e3aa3e00b292f9bac813707bd5f49e68"
+    },
+    {
+      "path": "experiments/semantic-discovery/repair-judge.mjs",
+      "sha256": "bfac6c721717c22fc22d6fb8d021961f1c6ac14dce7d008dee448d20e0950eef"
+    },
+    {
+      "path": "docs/java-specialist-devkit-v1/reports/m3-milestone.md",
+      "sha256": "e63915af904999121e0c760fadc18198f2751f8a128e870f05e54ca0ca14489a"
+    },
+    {
+      "path": "docs/java-specialist-devkit-v1/schemas/gates.json",
+      "sha256": "6125a647eb31dc5fa9093cf4e4b08f70d1ea402a91d6cb777bb53acb6211844b"
+    }
+  ],
+  "selectedCases": "",
+  "noNetwork": true,
+  "noLiveModel": true,
+  "noJdt": true,
+  "notTypechecked": true
+}

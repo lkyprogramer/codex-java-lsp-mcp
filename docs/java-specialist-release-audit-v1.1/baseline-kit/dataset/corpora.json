@@ -1,0 +1,138 @@
+[
+  {
+    "id": "access",
+    "origin": "authored",
+    "split": "dev",
+    "scope": "complete-fixture",
+    "license": "Apache-2.0",
+    "java_release": 8,
+    "build_claim": "javac main sources; admissions duplicate modules compiled separately",
+    "notes": [
+      "Not sampled production incidence; designed to isolate a failure mechanism."
+    ]
+  },
+  {
+    "id": "admissions",
+    "origin": "authored",
+    "split": "dev",
+    "scope": "complete-fixture",
+    "license": "Apache-2.0",
+    "java_release": 8,
+    "build_claim": "javac main sources; admissions duplicate modules compiled separately",
+    "notes": [
+      "Not sampled production incidence; designed to isolate a failure mechanism."
+    ]
+  },
+  {
+    "id": "inventory",
+    "origin": "authored",
+    "split": "dev",
+    "scope": "complete-fixture",
+    "license": "Apache-2.0",
+    "java_release": 8,
+    "build_claim": "javac main sources; admissions duplicate modules compiled separately",
+    "notes": [
+      "Not sampled production incidence; designed to isolate a failure mechanism."
+    ]
+  },
+  {
+    "id": "ledger",
+    "origin": "authored",
+    "split": "locked",
+    "scope": "complete-fixture",
+    "license": "Apache-2.0",
+    "java_release": 8,
+    "build_claim": "javac main sources; admissions duplicate modules compiled separately",
+    "notes": [
+      "Not sampled production incidence; designed to isolate a failure mechanism."
+    ]
+  },
+  {
+    "id": "notifications",
+    "origin": "authored",
+    "split": "locked",
+    "scope": "complete-fixture",
+    "license": "Apache-2.0",
+    "java_release": 8,
+    "build_claim": "javac main sources; admissions duplicate modules compiled separately",
+    "notes": [
+      "Not sampled production incidence; designed to isolate a failure mechanism."
+    ]
+  },
+  {
+    "id": "pagination",
+    "origin": "authored",
+    "split": "locked",
+    "scope": "complete-fixture",
+    "license": "Apache-2.0",
+    "java_release": 8,
+    "build_claim": "javac main sources; admissions duplicate modules compiled separately",
+    "notes": [
+      "Not sampled production incidence; designed to isolate a failure mechanism."
+    ]
+  },
+  {
+    "id": "payments",
+    "origin": "authored",
+    "split": "dev",
+    "scope": "complete-fixture",
+    "license": "Apache-2.0",
+    "java_release": 8,
+    "build_claim": "javac main sources; admissions duplicate modules compiled separately",
+    "notes": [
+      "Not sampled production incidence; designed to isolate a failure mechanism."
+    ]
+  },
+  {
+    "id": "pricing",
+    "origin": "authored",
+    "split": "dev",
+    "scope": "complete-fixture",
+    "license": "Apache-2.0",
+    "java_release": 8,
+    "build_claim": "javac main sources; admissions duplicate modules compiled separately",
+    "notes": [
+      "Not sampled production incidence; designed to isolate a failure mechanism."
+    ]
+  },
+  {
+    "id": "petclinic",
+    "origin": "upstream-scoped",
+    "split": "dev",
+    "scope": "scoped-upstream-files",
+    "license": "Apache-2.0",
+    "commit": "818c4136ea971c21674525f9053de0d9c7ad8cfe",
+    "repository": "spring-projects/spring-petclinic",
+    "build_claim": "No upstream full build executed; static source QA only. Use hydrate-public for full retrieval corpus."
+  },
+  {
+    "id": "mybatis",
+    "origin": "upstream-scoped",
+    "split": "dev",
+    "scope": "scoped-upstream-files",
+    "license": "Apache-2.0",
+    "commit": "78bb677e2bf04b43386d3f1544cec51ff47662a2",
+    "repository": "mybatis/mybatis-3",
+    "build_claim": "No upstream full build executed; static source QA only. Use hydrate-public for full retrieval corpus."
+  },
+  {
+    "id": "hikari",
+    "origin": "upstream-scoped",
+    "split": "locked",
+    "scope": "scoped-upstream-files",
+    "license": "Apache-2.0",
+    "commit": "98bd21c8fe506cfb6f329002669b2129bdb847db",
+    "repository": "brettwooldridge/HikariCP",
+    "build_claim": "No upstream full build executed; static source QA only. Use hydrate-public for full retrieval corpus."
+  },
+  {
+    "id": "gson",
+    "origin": "upstream-scoped",
+    "split": "dev",
+    "scope": "scoped-upstream-files",
+    "license": "Apache-2.0",
+    "commit": "828a97be0f8d58108b140b77df8dc76b657f4a87",
+    "repository": "google/gson",
+    "build_claim": "No upstream full build executed; static source QA only. Use hydrate-public for full retrieval corpus."
+  }
+]

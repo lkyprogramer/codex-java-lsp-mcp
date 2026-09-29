@@ -1,0 +1,5 @@
+<mapper namespace="lab.payments.ReceiptMapper">
+  <resultMap id="receipt" type="lab.payments.Receipt">
+    <result property="amountCents" column="amount_cents"/>
+  </resultMap>
+</mapper>

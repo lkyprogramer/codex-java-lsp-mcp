@@ -1,0 +1,43 @@
+{
+  "schema": "java-specialist-package-validation/v1.1",
+  "productDecision": "NO_GO",
+  "productFixesImplemented": false,
+  "originalFrozenFilesByteIdentical": 246,
+  "newDocs": 29,
+  "taskCards": 14,
+  "runtimeContractSpecifications": 32,
+  "newCounterexamples": {
+    "total": 27,
+    "passed": 1,
+    "failed": 26,
+    "errors": 0,
+    "resultMeaning": "CURRENT_PRODUCT_DEFECT_BASELINE"
+  },
+  "packageVerifierUnitTests": {
+    "passed": 22,
+    "failed": 0,
+    "scope": "CHECKER_ONLY"
+  },
+  "frozenKitSelfcheck": {
+    "stagesPassed": 5,
+    "scope": "KIT_ONLY",
+    "liveAgent": "NOT_RUN"
+  },
+  "initialReleaseManifest": {
+    "expectedExit": 1,
+    "eligibility": "NO_GO"
+  },
+  "syntaxAndDocumentChecks": "PASS",
+  "zipExtractionCheck": {
+    "status": "PASS",
+    "integrity": "all tracked hashes and ZIP CRC passed",
+    "packageVerifierTests": 22,
+    "note": "Verified extracted payload; final archive rebuilt only to include this verification record, then integrity/tests rechecked externally."
+  },
+  "limitations": [
+    "No full product typecheck/native dependency installation",
+    "No real JDT or macOS release test",
+    "No new paid model or embedding call",
+    "Historical raw model runs not attached"
+  ]
+}

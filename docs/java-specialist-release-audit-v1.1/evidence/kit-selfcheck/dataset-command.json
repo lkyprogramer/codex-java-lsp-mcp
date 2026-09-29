@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "/opt/pyvenv/bin/python",
+    "-m",
+    "harness",
+    "validate"
+  ],
+  "exit_code": 2,
+  "timeout": false,
+  "output_limit": false,
+  "elapsed_ms": 753.529,
+  "stdout": "",
+  "stderr": "ERROR: dataset differs from frozen manifest\n"
+}

@@ -1,0 +1,46 @@
+[
+  {
+    "corpus": "petclinic",
+    "repository": "spring-projects/spring-petclinic",
+    "commit": "818c4136ea971c21674525f9053de0d9c7ad8cfe",
+    "path": "src/main/java/org/springframework/samples/petclinic/owner/PetValidator.java",
+    "git_blob_sha1": "db847c8385d3434b001ddf579ae82bf250a21348",
+    "sha256": "1cee4c2a57afd7edb3521fa7a19c4b643f23c2f5b91406ecd638319c6cce9f7f",
+    "license": "Apache-2.0",
+    "modification": "none",
+    "scope": "scoped-upstream-files"
+  },
+  {
+    "corpus": "mybatis",
+    "repository": "mybatis/mybatis-3",
+    "commit": "78bb677e2bf04b43386d3f1544cec51ff47662a2",
+    "path": "src/main/java/org/apache/ibatis/reflection/ParamNameResolver.java",
+    "git_blob_sha1": "53d0c82702c33fb56b750973e472689c5c906e6f",
+    "sha256": "487674e517ef594aa9a8f1938ec7e48e0e947644cc2b94d70944d91752ebe6e9",
+    "license": "Apache-2.0",
+    "modification": "none",
+    "scope": "scoped-upstream-files"
+  },
+  {
+    "corpus": "hikari",
+    "repository": "brettwooldridge/HikariCP",
+    "commit": "98bd21c8fe506cfb6f329002669b2129bdb847db",
+    "path": "src/main/java/com/zaxxer/hikari/util/FastList.java",
+    "git_blob_sha1": "ef384a422c60320114df5a338f27b157b77d3e10",
+    "sha256": "fd5cc4cf2b0ff565f5d60c7ce77fb25557a55c6e419771b05e8f92974f1f68de",
+    "license": "Apache-2.0",
+    "modification": "none",
+    "scope": "scoped-upstream-files"
+  },
+  {
+    "corpus": "gson",
+    "repository": "google/gson",
+    "commit": "828a97be0f8d58108b140b77df8dc76b657f4a87",
+    "path": "gson/src/main/java/com/google/gson/FieldNamingPolicy.java",
+    "git_blob_sha1": "e6d452d1a939d1aa164f87cd45a53698e9b9bceb",
+    "sha256": "9f070ba47fde3e4d2ced3ce92f80e83924424d8e049763f80ef64103f4767657",
+    "license": "Apache-2.0",
+    "modification": "none",
+    "scope": "scoped-upstream-files"
+  }
+]

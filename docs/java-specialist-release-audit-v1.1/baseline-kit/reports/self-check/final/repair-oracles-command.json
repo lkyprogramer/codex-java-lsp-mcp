@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "/opt/pyvenv/bin/python",
+    "-m",
+    "harness",
+    "check-repairs",
+    "--output",
+    "/mnt/data/java-specialist-devkit-v1/reports/self-check/final/repair-oracles.json"
+  ],
+  "exit_code": 0,
+  "timeout": false,
+  "output_limit": false,
+  "elapsed_ms": 9559.577,
+  "stdout": "ORACLE_CHECK_PASS\n",
+  "stderr": ""
+}

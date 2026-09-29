@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "/opt/pyvenv/bin/python",
+    "-m",
+    "harness",
+    "check-repairs",
+    "--output",
+    "/mnt/data/audit_b9/evidence/kit-selfcheck/repair-oracles.json"
+  ],
+  "exit_code": 2,
+  "timeout": false,
+  "output_limit": false,
+  "elapsed_ms": 672.747,
+  "stdout": "",
+  "stderr": "ERROR: dataset differs from frozen manifest\n"
+}

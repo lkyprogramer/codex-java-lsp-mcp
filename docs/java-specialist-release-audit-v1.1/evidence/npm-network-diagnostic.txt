@@ -1,0 +1,18 @@
+255 http fetch GET https://registry.npmjs.org/zod-to-json-schema/-/zod-to-json-schema-3.25.2.tgz attempt 1 failed with EAI_AGAIN
+256 http fetch GET https://registry.npmjs.org/wrappy/-/wrappy-1.0.2.tgz attempt 1 failed with EAI_AGAIN
+257 http fetch GET https://registry.npmjs.org/zod/-/zod-4.4.3.tgz attempt 1 failed with EAI_AGAIN
+258 http fetch GET https://registry.npmjs.org/vscode-jsonrpc/-/vscode-jsonrpc-8.2.1.tgz attempt 1 failed with EAI_AGAIN
+259 http fetch GET https://registry.npmjs.org/xml-naming/-/xml-naming-0.3.0.tgz attempt 1 failed with EAI_AGAIN
+260 http fetch GET https://registry.npmjs.org/which/-/which-2.0.2.tgz attempt 1 failed with EAI_AGAIN
+261 http fetch GET https://registry.npmjs.org/vary/-/vary-1.1.2.tgz attempt 1 failed with EAI_AGAIN
+262 http fetch GET https://registry.npmjs.org/unpipe/-/unpipe-1.0.0.tgz attempt 1 failed with EAI_AGAIN
+263 http fetch GET https://registry.npmjs.org/type-is/-/type-is-2.1.0.tgz attempt 1 failed with EAI_AGAIN
+264 http fetch GET https://registry.npmjs.org/tree-sitter-java/-/tree-sitter-java-0.23.5.tgz attempt 1 failed with EAI_AGAIN
+265 http fetch GET https://registry.npmjs.org/undici-types/-/undici-types-6.21.0.tgz attempt 1 failed with EAI_AGAIN
+266 http fetch GET https://registry.npmjs.org/typescript/-/typescript-5.9.3.tgz attempt 1 failed with EAI_AGAIN
+267 http fetch GET https://registry.npmjs.org/tree-sitter/-/tree-sitter-0.25.0.tgz attempt 1 failed with EAI_AGAIN
+268 http fetch GET https://registry.npmjs.org/strnum/-/strnum-2.4.1.tgz attempt 1 failed with EAI_AGAIN
+269 http fetch GET https://registry.npmjs.org/toidentifier/-/toidentifier-1.0.1.tgz attempt 1 failed with EAI_AGAIN
+272 verbose node v22.16.0
+273 verbose npm  v10.9.2
+274 error Exit handler never called!

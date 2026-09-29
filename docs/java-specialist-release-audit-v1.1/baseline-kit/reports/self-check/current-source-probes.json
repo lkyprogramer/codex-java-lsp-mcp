@@ -1,0 +1,132 @@
+{
+  "schema": "product-regression-probe/v1",
+  "mode": "real-source-functions-with-constructed-facts",
+  "typecheck": "NOT_RUN",
+  "jdt": "NOT_RUN",
+  "source_dir": "/mnt/data/work/source",
+  "typescript": "5.8.3",
+  "rows": [
+    {
+      "id": "C1-ID-PATH",
+      "pass": false,
+      "actual": [
+        "type:demo.Shared",
+        "type:demo.Shared"
+      ]
+    },
+    {
+      "id": "C1-ID-LINE-STABLE",
+      "pass": true,
+      "actual": "line insertion"
+    },
+    {
+      "id": "C1-METHOD-OWNER",
+      "pass": false,
+      "actual": "owner-scoped method IDs"
+    },
+    {
+      "id": "C1-SQL-WRITE-AB",
+      "pass": false,
+      "actual": {
+        "type_rows": 1,
+        "file_rows": 2
+      }
+    },
+    {
+      "id": "C1-SQL-WRITE-BA",
+      "pass": false,
+      "actual": {
+        "type_rows": 1,
+        "file_rows": 2
+      }
+    },
+    {
+      "id": "C2-QUERY-demo.OrderService#reverseDuplicateCharge",
+      "pass": true,
+      "actual": [
+        {
+          "name": "reverseDuplicateCharge",
+          "layer": "FQN"
+        }
+      ]
+    },
+    {
+      "id": "C2-QUERY-rollback refund",
+      "pass": true,
+      "actual": [
+        {
+          "name": "reverseDuplicateCharge",
+          "layer": "CHUNK"
+        }
+      ]
+    },
+    {
+      "id": "C2-QUERY-OrderService rollback refund",
+      "pass": false,
+      "actual": [
+        {
+          "name": "OrderService",
+          "layer": "SIMPLE_NAME"
+        }
+      ]
+    },
+    {
+      "id": "C3-RANGES-LF-201",
+      "pass": false,
+      "actual": [
+        [
+          1,
+          41
+        ],
+        [
+          382,
+          421
+        ]
+      ]
+    },
+    {
+      "id": "C3-RANGES-LF-100,350",
+      "pass": false,
+      "actual": [
+        [
+          1,
+          41
+        ],
+        [
+          382,
+          421
+        ]
+      ]
+    },
+    {
+      "id": "C3-RANGES-CRLF-201",
+      "pass": false,
+      "actual": [
+        [
+          1,
+          41
+        ],
+        [
+          382,
+          421
+        ]
+      ]
+    },
+    {
+      "id": "C3-RANGES-CRLF-100,350",
+      "pass": false,
+      "actual": [
+        [
+          1,
+          41
+        ],
+        [
+          382,
+          421
+        ]
+      ]
+    }
+  ],
+  "passed": 3,
+  "failed": 9
+}

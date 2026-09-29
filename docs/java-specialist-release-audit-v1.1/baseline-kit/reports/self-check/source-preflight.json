@@ -1,0 +1,22 @@
+{
+  "schema": "source-preflight/v1",
+  "source_sha": null,
+  "git_metadata_status": "UNAVAILABLE",
+  "git_status": null,
+  "tracked_diff_sha256": null,
+  "node": "v22.16.0",
+  "javac": "javac 21.0.11",
+  "python": "3.13.5",
+  "files": {
+    "src/java-index/stable-id.ts": "6cf502d3af7dcef6256cc8bdd7f2b87330f37e02291002425be841933e5ee192",
+    "src/java-index/sql/entity-search.ts": "0a8d2bda8a4dd6a38ee3fe19d8a161a8327e15be301f8a0c398bc42961302799",
+    "src/java-index/sql/sql-read-ranges.ts": "51ebe4bcbaa73faa1a6024360b07b3641a8b848833edc57f480b576d507e924d",
+    "src/mcp-server-factory.ts": "c25b71d346d33252f3a1008d12a938d0ff83bd4d39a6bb2720af417eee085d37",
+    "src/tools/symbol.ts": "3b601ae0560fa5320ca7e9c44f39b15559b53776ae636d98cccb689535c2eb79",
+    "package.json": "8377234269a1e49d11a1a024f46f42bb338e2df9a19466a210edccc793323f96",
+    "package-lock.json": "fc612ac3b894495daab26226e08ac171cab20e62f20b56da7bdc14e49245ef9c"
+  },
+  "installed_runtime_sha": null,
+  "sut_tests": "NOT_RUN",
+  "note": "Untracked files are listed by git status but not in tracked diff hash; snapshot them before formal runs."
+}

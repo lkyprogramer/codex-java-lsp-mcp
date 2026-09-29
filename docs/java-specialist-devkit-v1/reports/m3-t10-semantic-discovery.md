@@ -118,3 +118,12 @@
 
 ### 四向判定不变
 provider 更替不改变实验结论：KEEP_EXTERNAL 为运行姿态（外部独立实验包，产品零钩子），任务层内建 dense 的 INCONCLUSIVE 维持。SiliconFlow 终局轮的检索层 +0.051（12/12 语料）进一步支持"外部 dense 有真实机制收益、无回归"。
+
+## 历史更正（release-audit-v1.1 R00，2026-09-26，不删除原文与数字）
+
+本报告的 **agent 层（任务层）A/B 各轮结果**（轮 1–3、locked、closure repair 矩阵）随 v1.1 审计登记为 INVALID_EXPERIMENT（W01–W05 最终 model 消息载荷丢失 + E01–E04 评分口径 + A01 冻结 fixture 漂移），不再支撑"任务层无净收益/无伤害/能力封顶"等**证据性**结论。
+
+保留的边界：
+- **检索层 A2/A3 对照（scoped 与 external-full 两轮 recall 数字）不受影响**——它们不经过模型 chat loop；
+- **KEEP_EXTERNAL 作为隔离政策仍可保留**（dense 为独立实验包、零产品依赖/钩子），但其中依据 agent 层的"无伤害"证据性表述划为 INVALID_EVIDENCE；
+- 要恢复 T10 的效果结论，必须按 v1.1 R10/R11 重做（可信评测 + 四向决策），不得复用本报告的 agent 层数字。

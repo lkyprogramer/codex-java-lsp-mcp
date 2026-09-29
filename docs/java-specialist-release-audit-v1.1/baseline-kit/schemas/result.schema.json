@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Java Specialist results v1",
+  "type": "object",
+  "required": [
+    "schema",
+    "dataset_hash",
+    "run_profile",
+    "arm",
+    "source_sha",
+    "results"
+  ],
+  "properties": {
+    "schema": {
+      "const": "java-specialist-results/v1"
+    },
+    "dataset_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "arm": {
+      "type": "string"
+    },
+    "source_sha": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "run_profile": {
+      "type": "object",
+      "required": [
+        "corpus_hash",
+        "variant_set",
+        "evaluation_mode"
+      ],
+      "properties": {
+        "corpus_hash": {
+          "type": "string"
+        },
+        "variant_set": {
+          "enum": [
+            "primary",
+            "all"
+          ]
+        },
+        "repeats": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "evaluation_mode": {
+          "enum": [
+            "retrieval",
+            "structured-qa",
+            "agent"
+          ]
+        }
+      }
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "task_id",
+          "status"
+        ],
+        "properties": {
+          "task_id": {
+            "type": "string"
+          },
+          "variant": {
+            "type": "string"
+          },
+          "repeat": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "status": {
+            "enum": [
+              "OK",
+              "PARTIAL",
+              "NOT_FOUND",
+              "MISSING",
+              "ERROR",
+              "TIMEOUT",
+              "UNSUPPORTED"
+            ]
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "path",
+                "line",
+                "name"
+              ],
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "line": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": true
+            }
+          },
+          "regions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "path",
+                "start_line",
+                "end_line",
+                "content_hash"
+              ],
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "start_line": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "end_line": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "content_hash": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "text": {
+                  "type": "string"
+                },
+                "origin": {
+                  "enum": [
+                    "tool_response",
+                    "explicit_read"
+                  ]
+                }
+              },
+              "additionalProperties": true
+            }
+          },
+          "read_events": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "path",
+                "start_line",
+                "end_line",
+                "content_hash"
+              ],
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "start_line": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "end_line": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "content_hash": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "text": {
+                  "type": "string"
+                },
+                "origin": {
+                  "enum": [
+                    "tool_response",
+                    "explicit_read"
+                  ]
+                }
+              },
+              "additionalProperties": true
+            }
+          },
+          "answer": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "usage": {
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

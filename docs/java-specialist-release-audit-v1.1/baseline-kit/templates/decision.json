@@ -1,0 +1,18 @@
+{
+  "schema": "java-specialist-decision/v1",
+  "decision": "INCONCLUSIVE",
+  "baseline_sha": null,
+  "candidate_sha": null,
+  "dataset_hash": null,
+  "quality": {
+    "new_critical_failures": null,
+    "qa": "UNMEASURED",
+    "repair": "UNMEASURED"
+  },
+  "cost": {
+    "actual_provider_usage": "UNMEASURED",
+    "index_build_separately_reported": false
+  },
+  "evidence_files": [],
+  "known_limits": []
+}

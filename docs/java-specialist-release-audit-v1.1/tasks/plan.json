@@ -1,0 +1,202 @@
+{
+  "schema": "java-specialist-remediation-plan/v1.1",
+  "tasks": [
+    {
+      "id": "R00",
+      "title": "冻结输入、恢复原始字节、撤回不成立的结论",
+      "depends_on": [],
+      "cases": [],
+      "spec": "tasks/R00.md",
+      "state": "NOT_STARTED"
+    },
+    {
+      "id": "R01",
+      "title": "修正最后一跳工具序列化与交付收据",
+      "depends_on": [
+        "R00"
+      ],
+      "cases": [
+        "W01",
+        "W02",
+        "W03",
+        "W04"
+      ],
+      "spec": "tasks/R01.md",
+      "state": "NOT_STARTED"
+    },
+    {
+      "id": "R02",
+      "title": "使用唯一冻结评分器、严格答案与完整分母",
+      "depends_on": [
+        "R01"
+      ],
+      "cases": [
+        "E01",
+        "E02",
+        "E03",
+        "E04",
+        "E05",
+        "E06"
+      ],
+      "spec": "tasks/R02.md",
+      "state": "NOT_STARTED"
+    },
+    {
+      "id": "R03",
+      "title": "中性对称工具与每次修复一致工作区",
+      "depends_on": [
+        "R01",
+        "R02"
+      ],
+      "cases": [
+        "W05"
+      ],
+      "spec": "tasks/R03.md",
+      "state": "NOT_STARTED"
+    },
+    {
+      "id": "R04",
+      "title": "修复判定器复用、候选物化和可搬运测试",
+      "depends_on": [
+        "R00",
+        "R02"
+      ],
+      "cases": [
+        "J01"
+      ],
+      "spec": "tasks/R04.md",
+      "state": "NOT_STARTED"
+    },
+    {
+      "id": "R05",
+      "title": "贯通重复FQN多候选与编译范围消歧",
+      "depends_on": [
+        "R00"
+      ],
+      "cases": [
+        "N01"
+      ],
+      "spec": "tasks/R05.md",
+      "state": "NOT_STARTED"
+    },
+    {
+      "id": "R06",
+      "title": "真实source-root AND scope与SQL先过滤",
+      "depends_on": [
+        "R05"
+      ],
+      "cases": [
+        "Q01",
+        "Q06",
+        "Q07"
+      ],
+      "spec": "tasks/R06.md",
+      "state": "NOT_STARTED"
+    },
+    {
+      "id": "R07",
+      "title": "exact/terms/limit统一语义",
+      "depends_on": [
+        "R06"
+      ],
+      "cases": [
+        "Q02",
+        "Q04",
+        "Q05"
+      ],
+      "spec": "tasks/R07.md",
+      "state": "NOT_STARTED"
+    },
+    {
+      "id": "R08",
+      "title": "证据路径/hash归属与有界新鲜preview",
+      "depends_on": [
+        "R05",
+        "R07"
+      ],
+      "cases": [
+        "P01",
+        "Q08",
+        "Q09"
+      ],
+      "spec": "tasks/R08.md",
+      "state": "NOT_STARTED"
+    },
+    {
+      "id": "R09",
+      "title": "贯通绝对deadline和真实物理预算",
+      "depends_on": [
+        "R06",
+        "R07",
+        "R08"
+      ],
+      "cases": [
+        "Q03"
+      ],
+      "spec": "tasks/R09.md",
+      "state": "NOT_STARTED"
+    },
+    {
+      "id": "R10",
+      "title": "可选实验缓存身份、body截止与stale安全",
+      "depends_on": [
+        "R00"
+      ],
+      "cases": [
+        "D01",
+        "D02",
+        "D03",
+        "D04"
+      ],
+      "spec": "tasks/R10.md",
+      "state": "NOT_STARTED"
+    },
+    {
+      "id": "R11",
+      "title": "同预算实验和有效的四向结论",
+      "depends_on": [
+        "R01",
+        "R02",
+        "R03",
+        "R04",
+        "R09",
+        "R10"
+      ],
+      "cases": [],
+      "spec": "tasks/R11.md",
+      "state": "NOT_STARTED"
+    },
+    {
+      "id": "R12",
+      "title": "32契约运行态与公开任务闭环",
+      "depends_on": [
+        "R01",
+        "R02",
+        "R03",
+        "R04",
+        "R05",
+        "R06",
+        "R07",
+        "R08",
+        "R09"
+      ],
+      "cases": [],
+      "spec": "tasks/R12.md",
+      "state": "NOT_STARTED"
+    },
+    {
+      "id": "R13",
+      "title": "可交付证据、上线资格与回滚演练",
+      "depends_on": [
+        "R00",
+        "R02",
+        "R04",
+        "R09",
+        "R12"
+      ],
+      "cases": [],
+      "spec": "tasks/R13.md",
+      "state": "NOT_STARTED"
+    }
+  ]
+}
