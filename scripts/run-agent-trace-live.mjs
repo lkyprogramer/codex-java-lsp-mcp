@@ -40,6 +40,134 @@ export const MISS_DISCOVERY_GAP = "DISCOVERY_GAP";
 export const MISS_SINGLE_ARM_MISS = "SINGLE_ARM_MISS";
 export const MAX_LIVE_ROUNDS = 8;
 export const MAX_TOOL_RESULT_CHARS = 16_000;
+
+// R01: per-tool boundary serializer (see serializeModelToolResult below).
+const TOOL_RESULT_DECODERS = new Set(["read", "java_symbol", "write_file", "java_impact", "java_context"]);
+export { TOOL_RESULT_DECODERS };
+/**
+ * R01: per-tool decoding and re-encoding at the final model-message boundary.
+ * Every tool's RAW result shape must survive to the model within the byte
+ * budget; the legacy java_impact projection ({files,readPlan,evidenceGaps})
+ * is only legal for impact-shaped results, never a catch-all. `slices` covers
+ * only source text actually retained in `content`.
+ */
+export function serializeModelToolResult(toolName, raw, options = {}) {
+  const maxBytes = Number.isFinite(options.maxBytes) ? Math.max(512, Math.trunc(options.maxBytes)) : MAX_TOOL_RESULT_CHARS;
+  const textOf = value => (typeof value === "string" ? value : "");
+  // MCP envelope normalization: dedupe structuredContent vs text (structured
+  // content wins when both carry the same payload) so the model payload never
+  // carries the same source twice and the byte budget is spent once.
+  let domain = raw;
+  if (domain && typeof domain === "object" && !Array.isArray(domain) && ("content" in domain || "structuredContent" in domain)) {
+    if (domain.structuredContent && typeof domain.structuredContent === "object") {
+      domain = domain.structuredContent;
+    } else {
+      const text = Array.isArray(domain.content)
+        ? domain.content.map(p => (typeof p?.text === "string" ? p.text : "")).join("\n")
+        : textOf(domain.content);
+      try {
+        domain = JSON.parse(text);
+      } catch {
+        domain = { text };
+      }
+    }
+  }
+  const payload = {};
+  let slices = [];
+  switch (toolName) {
+    case "read": {
+      payload.path = textOf(domain?.path);
+      payload.startLine = domain?.startLine;
+      payload.endLine = domain?.endLine;
+      // Multi-text-block read results (or an unwrapped envelope that fell
+      // through to {text}) join into one byte-faithful string.
+      const text = typeof domain?.text === "string"
+        ? domain.text
+        : Array.isArray(domain?.text) ? domain.text.map(b => (typeof b?.text === "string" ? b.text : "")).join("")
+        : (Array.isArray(domain) ? domain.map(b => (typeof b?.text === "string" ? b.text : "")).join("") : textOf(domain));
+      let retained = text;
+      const skeleton = Buffer.byteLength(JSON.stringify({ path: payload.path, startLine: payload.startLine, endLine: payload.endLine, text: "" }), "utf8");
+      const budgetForText = Math.max(0, maxBytes - skeleton - 16);
+      if (Buffer.byteLength(text, "utf8") > budgetForText) {
+        // Trim source line-wise from the tail so kept lines stay whole.
+        const lines = text.split("\n");
+        let kept = lines.length;
+        while (kept > 1 && Buffer.byteLength(lines.slice(0, kept).join("\n"), "utf8") > budgetForText) kept -= 1;
+        retained = kept === lines.length ? text : lines.slice(0, kept).join("\n") + "\n...[truncated]";
+      }
+      payload.text = retained;
+      if (text.length > 0 && retained !== text) payload.truncated = true;
+      slices = [{ path: payload.path, startLine: payload.startLine, endLine: payload.endLine, text: retained }];
+      break;
+    }
+    case "java_symbol": {
+      payload.schemaVersion = domain?.schemaVersion;
+      payload.mode = domain?.mode;
+      payload.query = domain?.query;
+      const keptCandidates = (domain?.candidates ?? []).slice(0, 32);
+      payload.candidates = keptCandidates.map(c => ({
+        declaration: {
+          name: c?.declaration?.name,
+          relativePath: c?.declaration?.relativePath ?? c?.relativePath,
+          ...(c?.declaration?.kind ? { kind: c.declaration.kind } : {}),
+          ...(c?.declaration?.selection ? { selection: c.declaration.selection } : {})
+        },
+        ...(typeof c?.preview === "string" ? { preview: c.preview, previewKind: c.previewKind } : {})
+      }));
+      slices = keptCandidates
+        .filter(c => typeof c?.preview === "string")
+        .map(c => {
+          const line = c?.declaration?.selection?.line;
+          const previewLines = c.preview.split("\n").length;
+          return {
+            path: c?.declaration?.relativePath ?? c?.relativePath,
+            startLine: line,
+            endLine: line != null ? line + previewLines - 1 : undefined,
+            text: c.preview
+          };
+        });
+      break;
+    }
+    case "write_file":
+      payload.path = textOf(domain?.path);
+      payload.written = domain?.written === true;
+      if (Number.isFinite(domain?.bytes)) payload.bytes = domain.bytes;
+      break;
+    case "java_impact":
+    case "java_context": {
+      const compact = toolName === "java_context" ? compactContextForModel(domain, maxBytes) : compactImpactForModel(domain, maxBytes);
+      return { toolName, content: compact.text, slices: [], paths: compact.paths };
+    }
+    default: {
+      // Unknown tool: never force the impact projection; bounded verbatim JSON.
+      payload.raw = domain;
+      break;
+    }
+  }
+  let content = JSON.stringify(payload);
+  if (Buffer.byteLength(content, "utf8") > maxBytes) {
+    // Trim the object before re-encoding; never slice a JSON string.
+    if (Array.isArray(payload.candidates)) {
+      while (payload.candidates.length > 1 && Buffer.byteLength(JSON.stringify(payload), "utf8") > maxBytes) {
+        payload.candidates.pop();
+      }
+      const kept = new Set(payload.candidates.map(c => c.declaration.relativePath));
+      slices = slices.filter(s => !s.text || !kept.has(s.path) || payload.candidates.some(c => c.declaration.relativePath === s.path && c.preview === s.text));
+    }
+    if (typeof payload.text === "string" && Buffer.byteLength(JSON.stringify(payload), "utf8") > maxBytes) {
+      let text = payload.text;
+      while (Buffer.byteLength(text, "utf8") > 64 && Buffer.byteLength(JSON.stringify(payload), "utf8") > maxBytes) {
+        text = text.slice(0, Math.floor(text.length / 2));
+        payload.text = text + "...[truncated]";
+      }
+      payload.truncated = true;
+      if (slices.length && slices[0].path === payload.path) slices[0].text = payload.text;
+    }
+    content = JSON.stringify(payload);
+  }
+  return { toolName, content, slices };
+}
+
 export const IMPACT_TIMEOUT_MS = 180_000;
 export const SHUTDOWN_TIMEOUT_MS = 30_000;
 
@@ -482,12 +610,15 @@ export async function runLiveAgentTask({
   arm = "old",
   promptCap = DEFAULT_PROMPT_CAP_TOKENS,
   maxRounds = MAX_LIVE_ROUNDS,
-  maxCompletionTokens = DEFAULT_MAX_COMPLETION_TOKENS
+  maxCompletionTokens = DEFAULT_MAX_COMPLETION_TOKENS,
+  toolResultMaxBytes = MAX_TOOL_RESULT_CHARS,
+  onChat
 }) {
   const started = Date.now();
   const observedPaths = new Set();
   const candidatePaths = new Set();
   const toolCalls = [];
+  const toolReceipts = [];
   let usage = { status: "UNMEASURED" };
   const exposedTools = tools ?? [JAVA_IMPACT_TOOL];
   const callTool = invoke ?? (async (name, args) => {
@@ -532,6 +663,17 @@ export async function runLiveAgentTask({
         tools: exposedTools,
         maxTokens: maxCompletionTokens
       });
+      // R01: delivery receipts are minted at the chat request boundary, after
+      // the final payload is fixed; raw (source) hashes and model-payload
+      // hashes stay separate.
+      if (typeof onChat === "function") {
+        onChat({
+          round,
+          messages: structuredClone(messages),
+          receipts: toolReceipts.slice(),
+          payloadHash: createHash("sha256").update(JSON.stringify(messages), "utf8").digest("hex")
+        });
+      }
       usage = mergeUsage(usage, usageFromCompletion(completion));
       const choice = completion?.choices?.[0];
       const message = choice?.message ?? {};
@@ -573,11 +715,23 @@ export async function runLiveAgentTask({
             content: "You have gathered enough evidence. Stop calling tools and answer the task now with ONE strict JSON object only, using exactly the keys named in the task."
           });
         }
-        const compact = name === "java_context" ? compactContextForModel(raw) : compactImpactForModel(raw);
-        for (const filePath of compact.paths) observedPaths.add(filePath);
+        // R01: per-tool serialization at the final model-message boundary; the
+        // java_impact projection is only legal for impact-shaped results.
+        const serialized = serializeModelToolResult(name, raw, { maxBytes: toolResultMaxBytes });
+        const toolPaths = name === "java_impact" || name === "java_context"
+          ? collectImpactPaths(raw)
+          : [...(raw?.path ? [raw.path] : []), ...collectCandidatePaths(raw)];
+        for (const filePath of toolPaths) observedPaths.add(filePath);
         for (const filePath of collectCandidatePaths(raw)) candidatePaths.add(filePath);
-        toolCalls.push({ name, args, pathCount: compact.paths.length });
-        messages.push({ role: "tool", tool_call_id: id, content: compact.text });
+        toolCalls.push({ name, args, pathCount: toolPaths.length });
+        messages.push({ role: "tool", tool_call_id: id, content: serialized.content });
+        toolReceipts.push({
+          callId: id,
+          toolName: name,
+          contentHash: createHash("sha256").update(serialized.content, "utf8").digest("hex"),
+          payloadBytes: Buffer.byteLength(serialized.content, "utf8"),
+          slices: serialized.slices ?? []
+        });
       }
       if (round === maxRounds - 1) stopReason = "MAX_ROUNDS";
     }

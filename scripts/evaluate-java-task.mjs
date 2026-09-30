@@ -18,8 +18,7 @@ import path from "node:path";
 import {
   runLiveAgentTask,
   openImpactSession,
-  liveProjectCacheRoot,
-  ARM_SYSTEM_PROMPTS
+  liveProjectCacheRoot
 } from "./run-agent-trace-live.mjs";
 import { openaiCompatibleChat, openaiCompatibleConfig } from "./openai-compatible-chat.mjs";
 
@@ -28,7 +27,9 @@ const DISCOVERY_SCHEMA = "java-discovery/v1";
 
 // T09 step 3: the agent gets the same model, prompt and budget and may use
 // its tools freely - it is never forced to call java_symbol first.
-export const EVAL_SYSTEM_PROMPT = `${ARM_SYSTEM_PROMPTS.old ?? "You are a Java specialist agent."}\n\nYou may use the java_symbol and read tools in any order, or none at all. Finish by replying with ONE strict JSON object and nothing else: for qa tasks use exactly the keys named in the task; for repair tasks use {"patchApplied": true|false, "summary": "..."}.`;;
+// R01/W05: the eval prompt must only reference tools that are actually
+// provided; it no longer inherits the legacy java_impact-only arm prompt.
+export const EVAL_SYSTEM_PROMPT = `You are a Java specialist agent working in the repository given in the task. Use only the tools actually provided in this session (for these evaluations: java_symbol and read; repair tasks additionally get write_file), in any order, or none at all. Never assume a tool that is not listed. Finish by replying with ONE strict JSON object and nothing else: for qa tasks use exactly the keys named in the task; for repair tasks use {"patchApplied": true|false, "summary": "..."}.`;;
 
 export const EVAL_JAVA_SYMBOL_TOOL = {
   type: "function",
@@ -189,6 +190,20 @@ export function createRecorder() {
       for (const event of extractSourceEvents({ callId, toolName, result })) events.push(event);
       return events.length;
     },
+    // R01: minted only at the chat request boundary. A delivery receipt proves
+    // the exact model payload contained the tool content; it does NOT prove
+    // the model attended to it.
+    recordModelDelivery(receipt) {
+      events.push({
+        type: "MODEL_TOOL_DELIVERED",
+        callId: receipt.callId,
+        toolName: receipt.toolName,
+        contentHash: receipt.contentHash,
+        payloadBytes: receipt.payloadBytes,
+        ...(receipt.slices?.length ? { slices: receipt.slices } : {})
+      });
+      return events.length;
+    },
     events: () => events
   };
 }
@@ -337,6 +352,7 @@ export async function runLiveEvalRun({
         for (let repeat = 1; repeat <= repeats; repeat += 1) {
           let callSeq = 0;
           const eventsBefore = recorder.events().length;
+          const deliveredReceipts = new Set();
           // The frozen output contract (answer keys) is part of the task both
           // arms see; without it the model invents its own key names.
           const contract = task.output_contract?.answer_keys
@@ -359,6 +375,16 @@ export async function runLiveEvalRun({
             systemPrompt: EVAL_SYSTEM_PROMPT,
             tools: arm === "control" ? [EVAL_READ_TOOL] : [EVAL_JAVA_SYMBOL_TOOL, EVAL_READ_TOOL],
             chat: ({ messages, tools, maxTokens }) => openaiCompatibleChat({ ...config, messages, tools, maxTokens }),
+            // R01: delivery receipts are minted at the chat request boundary;
+            // payload-attached evidence is only credited after this point.
+            onChat: ({ receipts, payloadHash }) => {
+              for (const receipt of receipts) {
+                if (!deliveredReceipts.has(receipt.callId)) {
+                  deliveredReceipts.add(receipt.callId);
+                  recorder.recordModelDelivery(receipt);
+                }
+              }
+            },
             // Both arms get the same, larger round budget; the model is free
             // to stop earlier whenever it has its answer.
             maxRounds: 16,
