@@ -60,6 +60,8 @@ export async function openaiCompatibleChat({
   return JSON.parse(text);
 }
 
+import { createHash } from "node:crypto";
+
 export function estimateTokensFromText(text) {
   return Math.ceil(Buffer.byteLength(String(text ?? ""), "utf8") / 4);
 }
@@ -77,25 +79,46 @@ export function usageFromCompletion(completion) {
   if (prompt === undefined && completionTokens === undefined && total === undefined) {
     return { status: "UNMEASURED" };
   }
+  // v1.1: unknown fields stay null, never 0; the provider's raw usage object
+  // (it never carries credentials - auth lives in the request header only) is
+  // preserved and hashed so post-hoc audit can re-derive the measurement.
+  const cached = numberOrMissing(usage.prompt_tokens_details?.cached_tokens);
+  const reasoning = numberOrMissing(usage.completion_tokens_details?.reasoning_tokens);
+  const rawUsage = JSON.parse(JSON.stringify(usage, (_k, v) => (typeof v === "number" && !Number.isFinite(v) ? null : v)));
   return {
     status: "MEASURED",
     promptTokens: prompt,
     completionTokens,
-    totalTokens: total ?? ((prompt ?? 0) + (completionTokens ?? 0))
+    totalTokens: total ?? ((prompt ?? 0) + (completionTokens ?? 0)),
+    cachedInputTokens: cached,
+    reasoningTokens: reasoning,
+    rawUsage,
+    rawUsageHash: createHash("sha256").update(JSON.stringify(rawUsage), "utf8").digest("hex")
   };
 }
 
 export function mergeUsage(left, right) {
+  const add = (a, b) => (a == null && b == null) ? null : (a ?? 0) + (b ?? 0);
+  const bothMeasured = left?.status === "MEASURED" && right?.status === "MEASURED";
   if (left?.status !== "MEASURED" && right?.status !== "MEASURED") {
     return { status: "UNMEASURED" };
   }
   if (left?.status !== "MEASURED") return { ...right };
   if (right?.status !== "MEASURED") return { ...left, status: "PARTIAL" };
   return {
-    status: "MEASURED",
-    promptTokens: (left.promptTokens ?? 0) + (right.promptTokens ?? 0),
-    completionTokens: (left.completionTokens ?? 0) + (right.completionTokens ?? 0),
-    totalTokens: (left.totalTokens ?? 0) + (right.totalTokens ?? 0)
+    status: bothMeasured ? "MEASURED" : "PARTIAL",
+    promptTokens: add(left.promptTokens, right.promptTokens),
+    completionTokens: add(left.completionTokens, right.completionTokens),
+    totalTokens: add(left.totalTokens, right.totalTokens),
+    // Per-field provenance: a detail missing on one round is merged null,
+    // never promoted to 0.
+    cachedInputTokens: add(left.cachedInputTokens, right.cachedInputTokens),
+    reasoningTokens: add(left.reasoningTokens, right.reasoningTokens),
+    rawUsage: { left: left.rawUsage ?? null, right: right.rawUsage ?? null },
+    rawUsageHash: {
+      ...(left.rawUsageHash ? { left: left.rawUsageHash } : {}),
+      ...(right.rawUsageHash ? { right: right.rawUsageHash } : {})
+    }
   };
 }
 

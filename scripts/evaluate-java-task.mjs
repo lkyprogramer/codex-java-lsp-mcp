@@ -89,14 +89,185 @@ export function backendDeficit(env = process.env, checks = { hasCodexCli: () => 
   return [...openaiMissing, "codex CLI"];
 }
 
-/** K-contract: missing usage stays null; it is never estimated from bytes/4. */
-function usageOrZero(usage) {
+/** v1.1: missing or unmeasured usage stays null per field - never 0, never
+ * estimated from bytes/4. Provider raw usage (credentials never appear in it;
+ * auth lives only in the request header) is preserved plus its hash. */
+export function usageOrNull(usage) {
   if (!usage || typeof usage !== "object") return null;
   if (usage.status !== "MEASURED" && usage.status !== "PARTIAL") return null;
-  return {
+  const intOr = value => (typeof value === "number" && Number.isFinite(value)) ? value : null;
+  const out = {
     status: usage.status,
-    promptTokens: Number(usage.promptTokens ?? usage.prompt_tokens ?? 0),
-    completionTokens: Number(usage.completionTokens ?? usage.completion_tokens ?? 0)
+    inputTokens: intOr(usage.promptTokens ?? usage.prompt_tokens),
+    outputTokens: intOr(usage.completionTokens ?? usage.completion_tokens)
+  };
+  if (usage.cachedInputTokens != null) out.cachedInputTokens = intOr(usage.cachedInputTokens);
+  if (usage.reasoningTokens != null) out.reasoningTokens = intOr(usage.reasoningTokens);
+  if (usage.rawUsage != null) out.rawUsage = usage.rawUsage;
+  if (usage.rawUsageHash != null) out.rawUsageHash = usage.rawUsageHash;
+  return out;
+}
+
+/**
+ * R02: strict JSON answer parsing, equivalent to the frozen kit's
+ * parse_json (object_pairs_hook rejects duplicate keys at ANY nesting depth;
+ * JSON literals NaN/Infinity are rejected by JSON.parse; input length is
+ * bounded). Markdown fences are packaging the frozen task contract does not
+ * accept for strict answers - they are a transport format failure, reported
+ * as INVALID_ANSWER, never silently stripped or gold-mutated.
+ */
+export const MAX_STRICT_ANSWER_CHARS = 262_144;
+
+export function findDuplicateJsonKeys(text) {
+  const duplicates = new Set();
+  const frameStack = [];
+  let inString = false;
+  let escape = false;
+  let buffer = "";
+  // expectKey tracks whether the next JSON string is an object key: true
+  // after `{` or `,` inside an object; reset by `:` once the key is consumed.
+  let expectKey = false;
+  const topFrame = () => frameStack[frameStack.length - 1];
+  const afterValue = () => { const top = topFrame(); expectKey = Boolean(top && top.kind === "obj"); };
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (inString) {
+      if (escape) escape = false;
+      else if (ch === "\\") escape = true;
+      else if (ch === '"') {
+        inString = false;
+        const value = buffer;
+        buffer = "";
+        if (expectKey) {
+          const top = topFrame();
+          if (top && top.kind === "obj") {
+            if (top.keys.has(value)) duplicates.add(value);
+            top.keys.add(value);
+          }
+          // expectKey stays set until the ':' that follows the key.
+        } else {
+          afterValue();
+        }
+      } else {
+        buffer += ch;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      buffer = "";
+      escape = false;
+      continue;
+    }
+    if (ch === ":") { expectKey = false; continue; }
+    if (ch === "{") {
+      frameStack.push({ kind: "obj", keys: new Set() });
+      expectKey = true;
+      continue;
+    }
+    if (ch === "}") { frameStack.pop(); afterValue(); continue; }
+    if (ch === "[") { afterValue(); frameStack.push({ kind: "arr" }); expectKey = false; continue; }
+    if (ch === "]") { frameStack.pop(); afterValue(); continue; }
+    if (ch === ",") {
+      const top = topFrame();
+      expectKey = Boolean(top && top.kind === "obj");
+      continue;
+    }
+  }
+  return [...duplicates];
+}
+
+/** Frozen-kit type semantics ported to JS: type identity, exact key sets,
+ * element-wise list equality. (JS has one number type, so int/float is not
+ * distinguishable - recorded in the evaluation protocol.) */
+export function strictEqualDeep(a, b) {
+  if (typeof a !== typeof b) return false;
+  if (a === null || b === null) return a === b;
+  if (typeof a !== "object") return a === b;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) {
+    return a.length === b.length && a.every((x, i) => strictEqualDeep(x, b[i]));
+  }
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length || !aKeys.every(key => key in b)) return false;
+  return aKeys.every(key => strictEqualDeep(a[key], b[key]));
+}
+
+/**
+ * R02: the single strict QA scorer. extra/missing/duplicate keys, type
+ * mismatches (no String() coercion) and bounded-input violations all fail.
+ * The answer alone is NOT an answer: scoreRunOutcome additionally gates on
+ * the frozen required_evidence lines having been received.
+ */
+export function scoreQaAnswer(goldAnswer, rawAnswer) {
+  if (typeof rawAnswer !== "string") {
+    return { status: "INVALID_ANSWER", correct: false, reason: "not_string" };
+  }
+  const text = rawAnswer.trim();
+  if (text.length > MAX_STRICT_ANSWER_CHARS) {
+    return { status: "INVALID_ANSWER", correct: false, reason: "input_too_long" };
+  }
+  const duplicates = findDuplicateJsonKeys(text);
+  if (duplicates.length > 0) {
+    return { status: "INVALID_ANSWER", correct: false, reason: "duplicate_keys", duplicates };
+  }
+  let value;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return { status: "INVALID_ANSWER", correct: false, reason: "parse_error" };
+  }
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return { status: "INVALID_ANSWER", correct: false, reason: "not_object" };
+  }
+  if (!goldAnswer || typeof goldAnswer !== "object" || Array.isArray(goldAnswer)) {
+    return { status: "NO_GOLD", correct: false };
+  }
+  const goldKeys = Object.keys(goldAnswer);
+  const missing = goldKeys.filter(key => !(key in value));
+  if (missing.length > 0) return { status: "INCOMPLETE_ANSWER", correct: false, missing };
+  const extra = Object.keys(value).filter(key => !goldKeys.includes(key));
+  if (extra.length > 0) return { status: "EXTRA_KEYS", correct: false, extra };
+  const wrong = goldKeys.filter(key => !strictEqualDeep(value[key], goldAnswer[key]));
+  if (wrong.length > 0) return { status: "WRONG_ANSWER", correct: false, wrong };
+  return { status: "CORRECT", correct: true };
+}
+
+/** Line-set coverage of frozen required_evidence by actually received source
+ * (SOURCE_RECEIVED rows). Mirrors the kit's line_set/validate_regions
+ * semantics on the host-recorded events. */
+export function receivedLineCoverage(requiredEvidence, sourceReceived) {
+  const required = (Array.isArray(requiredEvidence) ? requiredEvidence : [])
+    .map(item => ({
+      path: String(item?.path ?? "").replaceAll("\\", "/"),
+      startLine: Number(item?.start_line),
+      endLine: Number(item?.end_line)
+    }))
+    .filter(item => item.path.length > 0
+      && Number.isInteger(item.startLine) && item.startLine >= 1
+      && Number.isInteger(item.endLine) && item.endLine >= item.startLine);
+  const covered = new Set();
+  for (const event of Array.isArray(sourceReceived) ? sourceReceived : []) {
+    const path = String(event?.path ?? "").replaceAll("\\", "/");
+    const start = Number(event?.startLine);
+    const end = Number(event?.endLine);
+    if (path.length === 0 || !Number.isInteger(start) || start < 1
+      || !Number.isInteger(end) || end < start) continue;
+    for (let line = start; line <= end; line += 1) covered.add(`${path}:${line}`);
+  }
+  const missing = [];
+  for (const item of required) {
+    for (let line = item.startLine; line <= item.endLine; line += 1) {
+      if (!covered.has(`${item.path}:${line}`)) {
+        missing.push({ path: item.path, startLine: item.startLine, endLine: item.endLine });
+        break;
+      }
+    }
+  }
+  return {
+    requiredLines: required.reduce((sum, item) => sum + item.endLine - item.startLine + 1, 0),
+    missing
   };
 }
 
@@ -209,68 +380,63 @@ export function createRecorder() {
 }
 
 /**
- * Q track: the answer is strict JSON; every gold key must match exactly.
- * Model emitters frequently wrap the JSON in a markdown fence; the fence is
- * packaging, not content, so it is stripped before the strict parse.
+ * Assembles the results pack over the FULL scheduled plan. v1.1 semantics:
+ * successRate = successes / scheduled attempts (every planned
+ * task x arm x repeat row, failures and missing included); conditional
+ * accuracy is reported separately and can never replace it. A task whose
+ * outcome was never externally measured stays UNMEASURED - the pack never
+ * promotes a proxy into a task success.
  */
-function extractStrictJson(rawAnswer) {
-  if (typeof rawAnswer !== "string") return undefined;
-  let text = rawAnswer.trim();
-  const fence = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
-  if (fence) text = fence[1].trim();
-  try {
-    return JSON.parse(text);
-  } catch {
-    return undefined;
-  }
-}
-
-/** Q track: the answer is strict JSON; every gold key must match exactly. */
-export function scoreQaAnswer(goldAnswer, rawAnswer) {
-  const parsed = extractStrictJson(rawAnswer);
-  if (parsed === undefined) {
-    return { status: "INVALID_ANSWER", correct: false };
-  }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return { status: "INVALID_ANSWER", correct: false };
-  }
-  if (!goldAnswer || typeof goldAnswer !== "object") {
-    return { status: "NO_GOLD", correct: false };
-  }
-  const keys = Object.keys(goldAnswer);
-  for (const key of keys) {
-    if (!(key in parsed)) return { status: "INCOMPLETE_ANSWER", correct: false, missing: [key] };
-  }
-  for (const key of keys) {
-    if (String(parsed[key]) !== String(goldAnswer[key])) {
-      return { status: "WRONG_ANSWER", correct: false, wrong: [key] };
+export function assemblePack({ status, backend, datasetHash, arms, repeats, runs, blockedReasons, planned }) {
+  const byKey = new Map();
+  for (const run of runs) {
+    const key = `${run.taskId}\u0000${run.arm}\u0000${run.repeat}`;
+    if (byKey.has(key)) {
+      throw new Error(`duplicate scheduled attempt row: ${run.taskId} / ${run.arm} / repeat ${run.repeat}`);
     }
+    byKey.set(key, run);
   }
-  return { status: "CORRECT", correct: true };
-}
-
-/**
- * Assembles the results pack. The denominator keeps every task (timeouts and
- * errors included); a task whose outcome was never externally measured stays
- * UNMEASURED - the pack never promotes a proxy into a task success.
- */
-export function assemblePack({ status, backend, datasetHash, arms, repeats, runs, blockedReasons }) {
-  const packs = runs.map(run => ({
+  const packRow = run => ({
     taskId: run.taskId,
     arm: run.arm,
     repeat: run.repeat,
     taskOutcome: run.taskOutcome ?? "UNMEASURED",
-    taskSuccess: run.taskSuccess ?? null,
+    taskSuccess: run.taskSuccess === true ? true : (run.taskSuccess === false ? false : null),
     answerStatus: run.answerStatus ?? null,
     toolCallCount: run.toolCallCount ?? 0,
     sourceReceived: run.sourceReceived ?? [],
-    usage: usageOrZero(run.usage),
+    usage: usageOrNull(run.usage),
     timedOut: Boolean(run.timedOut),
     ...(run.stopReason ? { stopReason: run.stopReason } : {}),
     ...(typeof run.finalAnswer === "string" && run.finalAnswer.length > 0 ? { finalAnswer: run.finalAnswer } : {}),
     error: run.error ?? null
-  }));
+  });
+  // The scheduled universe: the explicit plan when provided (missing rows are
+  // synthesized as MISSING_RESULT), otherwise the rows actually delivered.
+  const keyOf = row => `${row.taskId ?? row}\u0000${row.arm ?? ""}\u0000${row.repeat ?? 1}`;
+  const universe = Array.isArray(planned) && planned.length > 0 ? planned : [...byKey.values()];
+  const missing = [];
+  const packs = [];
+  for (const row of universe) {
+    const run = byKey.get(keyOf(row));
+    if (run) {
+      packs.push(packRow(run));
+    } else {
+      const synthetic = {
+        taskId: typeof row === "string" ? row : row.taskId,
+        arm: row.arm ?? "",
+        repeat: row.repeat ?? 1,
+        taskOutcome: "UNMEASURED",
+        taskSuccess: null,
+        answerStatus: "MISSING_RESULT",
+        error: "planned attempt has no recorded result"
+      };
+      missing.push(synthetic);
+      packs.push(packRow(synthetic));
+    }
+  }
   const measured = packs.filter(pack => pack.taskSuccess === true || pack.taskSuccess === false);
+  const successes = packs.filter(pack => pack.taskSuccess === true).length;
   return {
     schemaVersion: EVAL_PACK_SCHEMA_VERSION,
     status,
@@ -280,8 +446,12 @@ export function assemblePack({ status, backend, datasetHash, arms, repeats, runs
     arms,
     repeats,
     denominator: packs.length,
+    ...(missing.length > 0 ? { missingResults: missing.map(m => m.taskId) } : {}),
     packs,
-    taskSuccessRate: measured.length > 0 ? measured.filter(pack => pack.taskSuccess === true).length / measured.length : null
+    // End-to-end rate: successes / scheduled. Never successes / measured.
+    taskSuccessRate: packs.length > 0 ? successes / packs.length : null,
+    conditionalAccuracy: measured.length > 0 ? successes / measured.length : null,
+    measuredAttempts: measured.length
   };
 }
 
@@ -414,12 +584,14 @@ export async function runLiveEvalRun({
               return { error: `unknown tool ${name}` };
             }
           });
+          const sourceReceived = recorder.events().slice(eventsBefore);
           const scored = scoreRunOutcome({ task, goldRow, run: {
             stopReason: run.stopReason,
             error: run.error,
             finalContent: run.finalContent,
             usage: run.usage,
-            toolCallCount: run.toolCallCount
+            toolCallCount: run.toolCallCount,
+            sourceReceived
           }, repairTester });
           runs.push({
             taskId: task.id,
@@ -462,10 +634,12 @@ export async function runLiveEvalRun({
 }
 
 /**
- * Task outcome is scored externally, never by the retrieval proxy: qa tasks
- * against frozen gold; repair tasks only through an injected frozen-test
- * runner; anything else stays UNMEASURED. Timeouts and errors stay in the
- * denominator with taskSuccess null.
+ * R02: the single canonical outcome scorer - there is no parallel weak
+ * path. QA requires the strict answer AND full receipt of the frozen
+ * required_evidence lines; repair requires the injected frozen judge to
+ * return `passed === true` (a Promise or truthy object is never a success).
+ * Failed stops and unmeasured kinds stay taskSuccess null - but their
+ * scheduled row remains in the denominator.
  */
 export function scoreRunOutcome({ task, goldRow, run, repairTester }) {
   const failed = run.stopReason === "FAILED_RUNTIME"
@@ -475,19 +649,35 @@ export function scoreRunOutcome({ task, goldRow, run, repairTester }) {
     return { taskOutcome: "UNMEASURED", taskSuccess: null, answerStatus: run.stopReason };
   }
   if (task.kind === "qa") {
-    const score = scoreQaAnswer(goldRow?.answer, run.finalContent);
-    return {
-      taskOutcome: "MEASURED",
-      taskSuccess: score.correct,
-      answerStatus: score.status
-    };
+    if (goldRow?.answer === undefined || goldRow?.answer === null) {
+      return { taskOutcome: "UNMEASURED", taskSuccess: null, answerStatus: "NO_GOLD" };
+    }
+    const score = scoreQaAnswer(goldRow.answer, run.finalContent);
+    if (!score.correct) {
+      return { taskOutcome: "MEASURED", taskSuccess: false, answerStatus: score.status };
+    }
+    // E04: a correct answer is not an answer until the required frozen
+    // source lines were actually received on this attempt.
+    const required = Array.isArray(goldRow.required_evidence) ? goldRow.required_evidence : [];
+    if (required.length === 0) {
+      return { taskOutcome: "MEASURED", taskSuccess: false, answerStatus: "NO_REQUIRED_EVIDENCE" };
+    }
+    const coverage = receivedLineCoverage(required, run.sourceReceived ?? []);
+    if (coverage.missing.length > 0) {
+      return { taskOutcome: "MEASURED", taskSuccess: false, answerStatus: "MISSING_REQUIRED_EVIDENCE", missingEvidence: coverage.missing };
+    }
+    return { taskOutcome: "MEASURED", taskSuccess: true, answerStatus: score.status };
   }
-  if (task.kind === "repair" && repairTester) {
+  if (task.kind === "repair") {
+    if (typeof repairTester !== "function") {
+      return { taskOutcome: "UNMEASURED", taskSuccess: null, answerStatus: "NO_FROZEN_JUDGE" };
+    }
     const verdict = repairTester({ task, finalContent: run.finalContent });
+    const passed = verdict != null && verdict.passed === true;
     return {
       taskOutcome: "MEASURED",
-      taskSuccess: Boolean(verdict?.passed),
-      answerStatus: verdict?.status ?? "external"
+      taskSuccess: passed,
+      answerStatus: passed ? (verdict?.status ?? "external") : (verdict?.status ?? "REJECTED")
     };
   }
   return { taskOutcome: "UNMEASURED", taskSuccess: null, answerStatus: task.kind };
@@ -532,8 +722,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
       repeats,
       runs,
       blockedReasons: dryRun ? undefined : backendDeficit(env)
-    });
-    mkdirSync(output, { recursive: true });
+    });    mkdirSync(output, { recursive: true });
     writeFileSync(path.join(output, "results-pack.json"), `${JSON.stringify(pack, null, 2)}\n`, "utf8");
     console.log(JSON.stringify({ status: pack.status, denominator: pack.denominator, taskSuccessRate: pack.taskSuccessRate, output: path.join(output, "results-pack.json") }, null, 2));
     return 0;
@@ -567,7 +756,11 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     datasetHash,
     arms,
     repeats,
-    runs: live.runs
+    runs: live.runs,
+    // Full scheduled plan: every task x arm x repeat row stays in the
+    // denominator even if its result row never materialized.
+    planned: tasks.flatMap(task => arms.map(arm =>
+      Array.from({ length: repeats }, (_, i) => ({ taskId: task.id, arm, repeat: i + 1 }))))
   });
   mkdirSync(output, { recursive: true });
   writeFileSync(path.join(output, "results-pack.json"), `${JSON.stringify(pack, null, 2)}\n`, "utf8");

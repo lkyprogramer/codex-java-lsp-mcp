@@ -78,7 +78,9 @@ test("BLOCKED_AUTH pack: every task UNMEASURED, null success, null usage, exit 0
     assert.ok(pack.blockedReasons.length > 0);
     // 2 tasks x 2 arms x 3 repeats = 12 denominator entries, all UNMEASURED
     assert.equal(pack.denominator, 12);
-    assert.equal(pack.taskSuccessRate, null);
+    // Gate metric is successes / scheduled: zero successes over 12 scheduled.
+    assert.equal(pack.taskSuccessRate, 0);
+    assert.equal(pack.conditionalAccuracy, null, "nothing measured: no conditional rate");
     for (const runPack of pack.packs) {
       assert.equal(runPack.taskOutcome, "UNMEASURED");
       assert.equal(runPack.taskSuccess, null);
@@ -178,10 +180,11 @@ test("Q-track scoring: strict JSON, exact keys, no partial credit", () => {
   assert.equal(scoreQaAnswer(gold, JSON.stringify({ storageType: "Set<String>" })).status, "INCOMPLETE_ANSWER");
   assert.equal(scoreQaAnswer(gold, "not json").status, "INVALID_ANSWER");
   assert.equal(scoreQaAnswer(gold, "[]").status, "INVALID_ANSWER");
-  // Markdown fences are packaging, not content: strict JSON inside is scored.
-  assert.equal(scoreQaAnswer(gold, "```json\n" + JSON.stringify(gold) + "\n```").status, "CORRECT");
-  // The answer key set comes from frozen gold; extra model keys are ignored.
-  assert.equal(scoreQaAnswer(gold, JSON.stringify({ ...gold, extra: 1 })).correct, true);
+  // R02: markdown fences are a format failure under strict JSON - never
+  // stripped, never a pass.
+  assert.equal(scoreQaAnswer(gold, "```json\n" + JSON.stringify(gold) + "\n```").status, "INVALID_ANSWER");
+  // R02: the answer key set comes from frozen gold; extra keys are rejected.
+  assert.equal(scoreQaAnswer(gold, JSON.stringify({ ...gold, extra: 1 })).status, "EXTRA_KEYS");
 });
 
 test("scoreRunOutcome: failures stay UNMEASURED in the denominator; qa outcomes are external", () => {
@@ -191,11 +194,27 @@ test("scoreRunOutcome: failures stay UNMEASURED in the denominator; qa outcomes 
   assert.equal(failed.taskSuccess, null);
   const qaGood = scoreRunOutcome({
     task,
-    goldRow: { answer: { a: "1" } },
-    run: { stopReason: "MODEL_STOP", finalContent: JSON.stringify({ a: "1" }) }
+    goldRow: { answer: { a: "1" }, required_evidence: [{ path: "A.java", start_line: 1, end_line: 1 }] },
+    run: {
+      stopReason: "MODEL_STOP",
+      finalContent: JSON.stringify({ a: "1" }),
+      sourceReceived: [{ path: "A.java", startLine: 1, endLine: 1, text: "t", origin: "explicit_read" }]
+    }
   });
   assert.equal(qaGood.taskOutcome, "MEASURED");
   assert.equal(qaGood.taskSuccess, true);
+  // correct answer without the required frozen source is NOT a success
+  const qaNoEvidence = scoreRunOutcome({
+    task,
+    goldRow: { answer: { a: "1" }, required_evidence: [{ path: "A.java", start_line: 1, end_line: 1 }] },
+    run: { stopReason: "MODEL_STOP", finalContent: JSON.stringify({ a: "1" }), sourceReceived: [] }
+  });
+  assert.equal(qaNoEvidence.taskSuccess, false);
+  assert.equal(qaNoEvidence.answerStatus, "MISSING_REQUIRED_EVIDENCE");
+  // gold without a frozen answer is a protocol gap, not a measured failure
+  const qaNoGold = scoreRunOutcome({ task, goldRow: null, run: { stopReason: "MODEL_STOP", finalContent: "{}" } });
+  assert.equal(qaNoGold.taskOutcome, "UNMEASURED");
+  assert.equal(qaNoGold.taskSuccess, null);
   const repairWithoutTester = scoreRunOutcome({
     task: { id: "T-B", kind: "repair" },
     goldRow: null,
@@ -226,8 +245,11 @@ test("recorded-run replay: pack invariants hold for a mix of measured and failed
     ]
   });
   assert.equal(pack.denominator, 3, "timeout/error runs stay in the denominator");
-  assert.equal(pack.taskSuccessRate, 0.5, "only externally measured runs feed the rate");
-  assert.equal(pack.packs[0].usage.promptTokens, 100);
+  assert.equal(pack.taskSuccessRate, 1 / 3, "gate metric is successes / scheduled");
+  assert.equal(pack.conditionalAccuracy, 0.5, "conditional accuracy is context, not the gate");
+  assert.equal(pack.measuredAttempts, 2);
+  assert.equal(pack.packs[0].usage.inputTokens, 100);
+  assert.equal(pack.packs[0].usage.outputTokens, 20);
   assert.equal(pack.packs[1].usage, null, "UNMEASURED usage stays null");
   assert.equal(pack.packs[2].usage, null);
   assert.equal(pack.packs[2].timedOut, true);

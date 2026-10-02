@@ -481,6 +481,17 @@ export function classifyRequiredFile(file, { oldHit, jinHit, inPool }) {
 export function liveV1Fields(summary) {
   const fields = {};
   for (const key of LIVE_TRACE_V1_FIELD_NAMES) fields[key] = summary?.[key];
+  // v1.1 usage rows gain auditable fields (rawUsage, per-field nulls). The
+  // v1 contract is the stable core, so the compatibility view projects it
+  // back to the exact v1 usage shape rather than byte-comparing extensions.
+  if (fields.modelUsage && typeof fields.modelUsage === "object") {
+    fields.modelUsage = {
+      status: fields.modelUsage.status,
+      ...(fields.modelUsage.promptTokens != null ? { promptTokens: fields.modelUsage.promptTokens } : {}),
+      ...(fields.modelUsage.completionTokens != null ? { completionTokens: fields.modelUsage.completionTokens } : {}),
+      ...(fields.modelUsage.totalTokens != null ? { totalTokens: fields.modelUsage.totalTokens } : {})
+    };
+  }
   return fields;
 }
 
