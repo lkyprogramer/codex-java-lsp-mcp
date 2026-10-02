@@ -14,6 +14,7 @@ import {
   liveProjectCacheRoot
 } from "../../scripts/run-agent-trace-live.mjs";
 import { openaiCompatibleChat, openaiCompatibleConfig } from "../../scripts/openai-compatible-chat.mjs";
+import { resolveInCandidate } from "../../scripts/eval-native-tools.mjs";
 import {
   EVAL_SYSTEM_PROMPT,
   EVAL_JAVA_SYMBOL_TOOL,
@@ -197,7 +198,6 @@ async function main() {
       }, null, 1));
     }
 
-    for (const task of corpusTasks) {
       const goldRow = goldMap.get(task.id);
       const isRepair = task.kind === "repair";
       const contract = isRepair
@@ -213,14 +213,20 @@ async function main() {
         : undefined;
       const hintBlock = formatHintBlock((dense.get(task.id) ?? { hints: [] }).hints ?? []);
       for (const arm of ["a2-lexical", "a3-dense-hint"]) {
-        const session = await openImpactSession({ repoRoot, serverJs: SERVER_JS, cacheRoot, env: process.env });
         for (let repeat = 1; repeat <= REPEATS; repeat += 1) {
-          // 每轮独立候选拷贝：agent 的 read/write 都作用于它；judge 比较它与 fixture。
+          // 每轮独立候选拷贝 + 独立会话：会话初始绑定 fixture，agent 写入
+          // candidate 后 rebind 到 candidate，使下一跳 java_symbol 观察到修改。
           const runWork = path.join(OUTPUT, "repair-work", `${task.id}:${arm}:r${repeat}`);
           rmSync(runWork, { recursive: true, force: true });
           mkdirSync(runWork, { recursive: true });
           const candidateRoot = path.join(runWork, "candidate");
           cpSync(repoRoot, candidateRoot, { recursive: true });
+          const attemptSession = { session: await openImpactSession({ repoRoot, serverJs: SERVER_JS, cacheRoot, env: process.env }) };
+          const rebond = async () => {
+            const old = attemptSession.session;
+            attemptSession.session = await openImpactSession({ repoRoot: candidateRoot, serverJs: SERVER_JS, cacheRoot: `${cacheRoot}-cand-r${repeat}`, env: process.env });
+            await old.close().catch(() => undefined);
+          };
           const toolTrace = [];
           const run = await runLiveAgentTask({
             task: {
@@ -242,35 +248,41 @@ async function main() {
             invoke: async (name, args) => {
               let result;
               if (name === "java_symbol") {
-                result = await session.symbol(args);
+                result = await attemptSession.session.symbol(args);
               } else if (name === "read") {
-                try {
-                  const absolute = path.join(candidateRoot, String(args.path).replaceAll("\\", "/"));
-                  const full = readFileSync(absolute, "utf8");
-                  const lines = full.split("\n");
-                  const startLine = Math.max(1, Math.trunc(args.startLine ?? 1));
-                  const maxLines = Math.max(1, Math.min(400, Math.trunc(args.maxLines ?? 200)));
-                  result = {
-                    path: args.path,
-                    text: lines.slice(startLine - 1, startLine - 1 + maxLines).join("\n"),
-                    startLine,
-                    endLine: Math.min(lines.length, startLine - 1 + maxLines)
-                  };
-                } catch (error) {
-                  result = { error: String(error.message ?? error) };
+                const check = resolveInCandidate(candidateRoot, args.path);
+                if (check.error) {
+                  result = { error: check.error };
+                } else {
+                  try {
+                    const full = readFileSync(check.target, "utf8");
+                    const lines = full.split("\n");
+                    const startLine = Math.max(1, Math.trunc(args.startLine ?? 1));
+                    const maxLines = Math.max(1, Math.min(400, Math.trunc(args.maxLines ?? 200)));
+                    result = {
+                      path: args.path,
+                      text: lines.slice(startLine - 1, startLine - 1 + maxLines).join("\n"),
+                      startLine,
+                      endLine: Math.min(lines.length, startLine - 1 + maxLines)
+                    };
+                  } catch (error) {
+                    result = { error: String(error.message ?? error) };
+                  }
                 }
               } else if (name === "write_file") {
-                try {
-                  const absolute = path.join(candidateRoot, String(args.path).replaceAll("\\", "/"));
-                  if (!path.resolve(absolute).startsWith(path.resolve(candidateRoot))) {
-                    result = { error: "path escapes the working copy" };
-                  } else {
-                    mkdirSync(path.dirname(absolute), { recursive: true });
-                    await writeFile(absolute, String(args.content ?? ""), "utf8");
+                const check = resolveInCandidate(candidateRoot, args.path);
+                if (check.error) {
+                  result = { error: check.error };
+                } else {
+                  try {
+                    mkdirSync(path.dirname(check.target), { recursive: true });
+                    await writeFile(check.target, String(args.content ?? ""), "utf8");
                     result = { path: args.path, written: true };
+                    // 写入后把会话 rebind 到 candidate：下一跳 java_symbol 观察修改。
+                    await rebond();
+                  } catch (error) {
+                    result = { error: String(error.message ?? error) };
                   }
-                } catch (error) {
-                  result = { error: String(error.message ?? error) };
                 }
               } else {
                 result = { error: `unknown tool ${name}` };
@@ -343,13 +355,14 @@ async function main() {
             finalAnswer: (run.finalContent ?? "").slice(0, 400)
           });
           process.stderr.write(`[m3-ab] ${task.id} ${arm} r${repeat} ${scored.taskOutcome}/${scored.answerStatus} success=${scored.taskSuccess}\n`);
+          await attemptSession.session.close?.().catch(() => undefined);
         }
-        await session.close?.().catch(() => undefined);
       }
     }
   }
 
-  const measured = runs.filter(run => run.taskOutcome === "MEASURED");
+  for (const [corpus, corpusTasks] of byCorpus) {
+    const measured = runs.filter(run => run.taskOutcome === "MEASURED");
   const summarize = arm => {
     const subset = measured.filter(run => run.arm === arm);
     const byKind = kind => {

@@ -21,15 +21,26 @@ import {
   liveProjectCacheRoot
 } from "./run-agent-trace-live.mjs";
 import { openaiCompatibleChat, openaiCompatibleConfig } from "./openai-compatible-chat.mjs";
+import { buildToolSet, createAttemptWorkspace, nativeToolNames } from "./eval-native-tools.mjs";
+
+/** R03: the native tool surface shared by BOTH arms; the only arm
+ * difference is java_symbol on the product arm. */
+export function nativeNames(arm) {
+  if (arm && !["product", "control"].includes(arm)) {
+    throw new Error(`unknown arm: ${arm}`);
+  }
+  return nativeToolNames();
+}
 
 export const EVAL_PACK_SCHEMA_VERSION = "java-devkit-task-eval/v1";
 const DISCOVERY_SCHEMA = "java-discovery/v1";
 
 // T09 step 3: the agent gets the same model, prompt and budget and may use
 // its tools freely - it is never forced to call java_symbol first.
-// R01/W05: the eval prompt must only reference tools that are actually
-// provided; it no longer inherits the legacy java_impact-only arm prompt.
-export const EVAL_SYSTEM_PROMPT = `You are a Java specialist agent working in the repository given in the task. Use only the tools actually provided in this session (for these evaluations: java_symbol and read; repair tasks additionally get write_file), in any order, or none at all. Never assume a tool that is not listed. Finish by replying with ONE strict JSON object and nothing else: for qa tasks use exactly the keys named in the task; for repair tasks use {"patchApplied": true|false, "summary": "..."}.`;;
+// R01/W05 + R03: the prompt only references tools actually provided; both
+// arms share the same native tools (list/rg/read; repair adds write_file)
+// and the ONLY arm difference is the product arm's java_symbol.
+export const EVAL_SYSTEM_PROMPT = `You are a Java specialist agent working in the repository given in the task. Use only the tools actually provided in this session - both arms share the native list, rg and read tools; the product arm additionally provides java_symbol; repair tasks additionally get write_file - in any order, or none at all. Never assume a tool that is not listed. Finish by replying with ONE strict JSON object and nothing else: for qa tasks use exactly the keys named in the task; for repair tasks use {"patchApplied": true|false, "summary": "..."}.`;;
 
 export const EVAL_JAVA_SYMBOL_TOOL = {
   type: "function",
@@ -510,19 +521,62 @@ export async function runLiveEvalRun({
       continue;
     }
     const goldRow = gold?.get(task.id);
+    // R03: the pristine fixture is opened ONCE per corpus for the MCP
+    // session's index; each attempt then gets its own candidate workspace
+    // that all host tools (list/rg/read/write) operate on.
+    const fixtureRoot = repoRoot;
+    const lastCandidateSession = {};
     for (const arm of arms) {
-      let session;
+      let fixtureSession;
       try {
-        session = await openImpactSession({
-          repoRoot,
+        fixtureSession = await openImpactSession({
+          repoRoot: fixtureRoot,
           serverJs,
           cacheRoot: liveProjectCacheRoot(outputDir, task.corpus),
           env
         });
         for (let repeat = 1; repeat <= repeats; repeat += 1) {
+          // Each attempt starts from a live session bound to the PRISTINE
+          // fixture; a previous attempt's write-rebind may have closed it.
+          if (!fixtureSession) {
+            fixtureSession = await openImpactSession({
+              repoRoot: fixtureRoot,
+              serverJs,
+              cacheRoot: liveProjectCacheRoot(outputDir, task.corpus),
+              env
+            });
+          }
           let callSeq = 0;
           const eventsBefore = recorder.events().length;
           const deliveredReceipts = new Set();
+          // One isolated candidate copy per attempt (arm x repeat); the
+          // candidate root is the single read/write root for this attempt.
+          const candidateRoot = createAttemptWorkspace(
+            fixtureRoot,
+            `${task.id}:${arm}:r${repeat}`,
+            path.join(outputDir, "candidates")
+          );
+          const toolSet = buildToolSet(
+            arm === "product" ? "product" : "control",
+            task.kind === "repair" ? "repair" : "qa",
+            { candidateRoot }
+          );
+          const attemptSession = { session: fixtureSession };
+          const rebinding = { value: false };
+          const rebindingError = { value: null };
+          const rebondSession = async () => {
+            const old = attemptSession.session;
+            const cache = liveProjectCacheRoot(outputDir, task.corpus, `${arm}-cand-r${repeat}`);
+            attemptSession.session = await openImpactSession({
+              repoRoot: candidateRoot,
+              serverJs,
+              cacheRoot: cache,
+              env
+            });
+            lastCandidateSession[arm] = attemptSession.session;
+            fixtureSession = null; // the bound session is consumed by the rebind
+            await old.close().catch(() => undefined);
+          };
           // The frozen output contract (answer keys) is part of the task both
           // arms see; without it the model invents its own key names.
           const contract = task.output_contract?.answer_keys
@@ -539,11 +593,12 @@ export async function runLiveEvalRun({
               anchor: task.anchors?.[0] ?? { file: "unknown", line: 1, column: 1 }
             },
             arm: "old",
-            // Two-arm A/B: the product arm gets the java_symbol MCP tool,
-            // the control arm only the host read tool. Same model, prompt and
-            // budget otherwise - the arm label is carried on the run record.
+            // R03 symmetric tools: both arms get list/rg/read (repair adds
+            // write_file); the ONLY arm difference is java_symbol.
             systemPrompt: EVAL_SYSTEM_PROMPT,
-            tools: arm === "control" ? [EVAL_READ_TOOL] : [EVAL_JAVA_SYMBOL_TOOL, EVAL_READ_TOOL],
+            tools: arm === "product"
+              ? [EVAL_JAVA_SYMBOL_TOOL, ...toolSet.tools]
+              : toolSet.tools,
             chat: ({ messages, tools, maxTokens }) => openaiCompatibleChat({ ...config, messages, tools, maxTokens }),
             // R01: delivery receipts are minted at the chat request boundary;
             // payload-attached evidence is only credited after this point.
@@ -558,32 +613,36 @@ export async function runLiveEvalRun({
             // Both arms get the same, larger round budget; the model is free
             // to stop earlier whenever it has its answer.
             maxRounds: 16,
-            invoke: (name, args) => {
+            invoke: async (name, args) => {
               callSeq += 1;
               const callId = `eval:${task.id}:${arm}:${repeat}:${callSeq}`;
               if (name === "java_symbol") {
-                return session.symbol(args, text => {
+                return attemptSession.session.symbol(args, text => {
                   recorder.recordToolResult({ callId, toolName: name, result: text });
                 });
               }
-              if (name === "read") {
-                try {
-                  const absolute = path.join(repoRoot, String(args.path).replaceAll("\\", "/"));
-                  const full = readFileSync(absolute, "utf8");
-                  const lines = full.split("\n");
-                  const startLine = Math.max(1, Math.trunc(args.startLine ?? 1));
-                  const maxLines = Math.max(1, Math.min(400, Math.trunc(args.maxLines ?? 200)));
-                  const text = lines.slice(startLine - 1, startLine - 1 + maxLines).join("\n");
-                  const result = { path: args.path, text, startLine, endLine: Math.min(lines.length, startLine - 1 + maxLines) };
-                  recorder.recordToolResult({ callId, toolName: name, result });
-                  return result;
-                } catch (error) {
-                  return { error: String(error.message ?? error) };
+              const result = await toolSet.invoke(name, args);
+              if (result && result.written === true) {
+                recorder.recordToolResult({ callId, toolName: name, result });
+                // The candidate changed: rebase the discovery session onto
+                // the candidate so the NEXT query observes the modification.
+                if (!rebinding.value) {
+                  rebinding.value = true;
+                  try {
+                    await rebondSession();
+                  } catch (error) {
+                    rebindingError.value = error instanceof Error ? error.message : String(error);
+                  }
                 }
+              } else if (result && result.text != null) {
+                recorder.recordToolResult({ callId, toolName: name, result });
               }
-              return { error: `unknown tool ${name}` };
+              return result;
             }
           });
+          if (rebindingError.value) {
+            recorder.recordToolResult({ callId: `eval:${task.id}:${arm}:${repeat}:rebind`, toolName: "session_rebind", result: { error: rebindingError.value } });
+          }
           const sourceReceived = recorder.events().slice(eventsBefore);
           const scored = scoreRunOutcome({ task, goldRow, run: {
             stopReason: run.stopReason,
@@ -622,7 +681,14 @@ export async function runLiveEvalRun({
           });
         }
       } finally {
-        if (session) await session.close().catch(() => undefined);
+        // Close whatever session this arm is currently bound to (fixture or
+        // rebound candidate) so no server process leaks.
+        const toClose = new Set();
+        if (fixtureSession) toClose.add(fixtureSession);
+        if (lastCandidateSession[arm]) toClose.add(lastCandidateSession[arm]);
+        for (const s of toClose) {
+          await s.close().catch(() => undefined);
+        }
       }
     }
   }
