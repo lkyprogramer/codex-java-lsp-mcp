@@ -8,6 +8,7 @@
 import { existsSync, readFileSync, readdirSync, statSync, mkdirSync, cpSync, rmSync } from "node:fs";
 import { writeFile, readFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   runLiveAgentTask,
   openImpactSession,
@@ -24,6 +25,7 @@ import {
 import { DenseDiscoveryIndex, EmbeddingProvider, readSearchDocumentFacts, cosine } from "./provider.mjs";
 import { gatedDenseSearch, shouldRunDense } from "./gate.mjs";
 import { judgeRepair } from "./repair-judge.mjs";
+import { REPAIR_STATE, evaluateRepair } from "../../scripts/eval-repair-adapter.mjs";
 
 // docs/07：agent 在自己的候选拷贝里干活；判断器比较 candidate 与原始
 // fixture 的全部文件 hash，非 allowed_edits 变动即拒绝。
@@ -43,13 +45,29 @@ const EVAL_WRITE_FILE_TOOL = {
   }
 };
 
-const KIT = "/Users/luo/Documents/github/codex-java-lsp-mcp/docs/java-specialist-devkit-v1";
-const STAGE = process.env.M3_STAGE ?? "/Users/luo/Documents/github/java-devkit-v1-runs/m1/m1-quality/stage";
-const SERVER_JS = "/Users/luo/Documents/github/codex-java-lsp-mcp/dist/server.js";
-const RUN = "/Users/luo/Documents/github/java-devkit-v1-runs/m3";
-const OUTPUT = process.env.M3_OUT ?? path.join(RUN, "agent-ab");
-const TASKS_FILE = process.env.M3_TASKS ?? path.join(KIT, "dataset/prompts/dev.jsonl");
-const GOLD_FILE = process.env.M3_GOLD ?? path.join(KIT, "dataset/gold/dev.jsonl");
+// 可搬运：每个根目录都来自 CLI 参数或环境变量；没有个人绝对路径默认值，
+// 缺参数就直接失败，而不是悄悄写到某个人的家目录。
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(HERE, "..", "..");
+function cliValue(flag) {
+  const index = process.argv.indexOf(flag);
+  return index >= 0 ? process.argv[index + 1] : undefined;
+}
+function requiredPath({ flag, env, fallback, label }) {
+  const value = cliValue(flag) ?? process.env[env] ?? fallback;
+  if (!value) {
+    throw new Error(`${label} is required: pass ${flag} <path> or set ${env}. This driver has no personal absolute-path defaults.`);
+  }
+  return path.resolve(value);
+}
+const KIT = requiredPath({ flag: "--kit-root", env: "JSB_KIT_ROOT", fallback: path.join(REPO_ROOT, "docs/java-specialist-release-audit-v1.1/baseline-kit"), label: "frozen kit root" });
+const STAGE = requiredPath({ flag: "--stage", env: "M3_STAGE", label: "stage root (per-task repo copies)" });
+const SERVER_JS = requiredPath({ flag: "--server-js", env: "M3_SERVER_JS", fallback: path.join(REPO_ROOT, "dist/server.js"), label: "product dist/server.js" });
+const OUTPUT = requiredPath({ flag: "--out", env: "M3_OUT", label: "run output root (outside the checkout)" });
+const CACHE_ROOT = requiredPath({ flag: "--cache", env: "M3_CACHE", fallback: path.join(OUTPUT, "index-cache"), label: "index cache root (outside the checkout)" });
+const TASKS_FILE = requiredPath({ flag: "--tasks", env: "M3_TASKS", fallback: path.join(KIT, "dataset/prompts/dev.jsonl"), label: "task split file" });
+const GOLD_FILE = requiredPath({ flag: "--gold", env: "M3_GOLD", fallback: path.join(KIT, "dataset/gold/dev.jsonl"), label: "gold split file" });
+const CHAT_ENV_FILE = cliValue("--chat-env") ?? process.env.M3_CHAT_ENV ?? null;
 const PILOT_TASK_IDS = (process.env.M3_PILOT
   ? process.env.M3_PILOT.split(",").filter(Boolean)
   : (() => { return readFileSync(TASKS_FILE, "utf8").trim().split("\n").map(l => JSON.parse(l).id); })());
@@ -84,18 +102,20 @@ function formatHintBlock(hints) {
 }
 
 async function main() {
-  const orEnv = JSON.parse(readFileSync(path.join(RUN, "openrouter.env.json"), "utf8"));
-  process.env.OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? orEnv.OPENROUTER_API_KEY;
+  const chatEnvFile = CHAT_ENV_FILE ? JSON.parse(readFileSync(CHAT_ENV_FILE, "utf8")) : {};
+  process.env.OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? chatEnvFile.OPENROUTER_API_KEY;
   const chatEnv = openaiCompatibleConfig();
   if (!chatEnv.baseUrl || !chatEnv.apiKey || !chatEnv.model) {
-    throw new Error("chat backend not configured: source /Users/luo/Documents/grok/.env (PCR_LIVE_* -> OPENAI_*) first");
+    throw new Error(
+      "chat backend not configured: pass --chat-env <json> or export PCR_LIVE_*/OPENAI_* (base URL, API key, model). No model call is made without it."
+    );
   }
   const provider = new EmbeddingProvider({
     apiKey: process.env.EMBEDDING_API_KEY ?? process.env.OPENROUTER_API_KEY,
-    model: process.env.OPENROUTER_EMBEDDING_MODEL ?? orEnv.OPENROUTER_EMBEDDING_MODEL,
+    model: process.env.OPENROUTER_EMBEDDING_MODEL ?? chatEnvFile.OPENROUTER_EMBEDDING_MODEL,
     baseUrl: process.env.EMBEDDING_BASE_URL ?? "https://openrouter.ai/api/v1",
     timeoutMs: 60_000,
-    cacheFile: path.join(process.env.M3_CACHE ?? "/Users/luo/Documents/github/java-devkit-v1-runs/m3/index-cache", "embeddings-cache.json")
+    cacheFile: path.join(CACHE_ROOT, "embeddings-cache.json")
   });
   await mkdirSync(OUTPUT, { recursive: true });
   const hintsDir = path.join(OUTPUT, "hints");
@@ -189,6 +209,9 @@ async function main() {
     }
     corpusCosts.push({ corpus, denseBuild });
     for (const task of corpusTasks) {
+      // 提示先落盘，然后在同一个 task 作用域里跑两臂。HEAD 上这个循环提前
+      // 闭合，连带后面的括号把 main() 也提前关掉，汇总段落到模块作用域，
+      // 驱动一运行就 ReferenceError: byCorpus is not defined。
       const hints = (dense.get(task.id) ?? { hints: [], reason: "unavailable" }).hints ?? [];
       await writeFile(path.join(hintsDir, `${task.id}.json`), JSON.stringify({
         taskId: task.id,
@@ -196,7 +219,6 @@ async function main() {
         hintBlock: formatHintBlock(hints),
         hints
       }, null, 1));
-    }
 
       const goldRow = goldMap.get(task.id);
       const isRepair = task.kind === "repair";
@@ -301,31 +323,47 @@ async function main() {
           });
           // docs/07：repair 结果由实际文件 diff + 外部冻结测试判定；
           // 模型声称的 patchApplied/summary、实际 diff、外部测试三分记录，不合并。
+          // R04：优先走原 Python frozen judge（thin bridge）；只有环境阻塞
+          // （无 Python/无编译器）时才退回同策略的离线判定器，并如实记录实现。
           let judge = null;
           if (isRepair && repairManifestEntry) {
-            try {
-              judge = await judgeRepair({
+            const bridged = await evaluateRepair({
+              kitRoot: KIT,
+              taskId: task.id,
+              mode: "candidate",
+              candidateRoot,
+              outputRoot: path.join(runWork, "judge"),
+              timeoutMs: (repairManifestEntry.timeout_seconds ?? 10) * 4_000 + 60_000
+            });
+            judge = {
+              judgeImplementation: "frozen-python-bridge",
+              status: bridged.state,
+              passed: bridged.validatedSuccess,
+              detail: bridged.reason ?? null,
+              diffReport: bridged.policy ?? null,
+              judgeArtifactPath: bridged.judgeArtifactPath ?? null
+            };
+            if ([REPAIR_STATE.BLOCKED_ENV, REPAIR_STATE.BLOCKED_SETUP].includes(bridged.state)) {
+              const offline = await judgeRepair({
                 task: { id: task.id },
                 manifestEntry: repairManifestEntry,
                 fixtureRoot: repoRoot,
                 candidateRoot,
-                workDir: path.join(runWork, "judge"),
+                workDir: path.join(runWork, "judge-offline"),
                 javaHome: process.env.JAVA_HOME || null,
                 testSourceFile: path.join(KIT, "dataset", repairManifestEntry.test_file)
               });
-            } catch (error) {
-              judge = {
-                status: "JUDGE_ERROR",
-                passed: false,
-                detail: error instanceof Error ? `${error.message}\n${error.stack?.split("\n").slice(1, 4).join("\n")}` : String(error)
-              };
+              judge = { ...offline, judgeImplementation: "js-offline-fallback", blockedBy: bridged.reason };
             }
           }
+          const judgeBlocked = judge
+            ? [REPAIR_STATE.BLOCKED_ENV, REPAIR_STATE.BLOCKED_SETUP, REPAIR_STATE.JUDGE_ERROR, REPAIR_STATE.TIMEOUT].includes(judge.status)
+            : false;
           const scored = isRepair && repairManifestEntry
             ? {
-                taskOutcome: "MEASURED",
-                taskSuccess: judge.passed,
-                answerStatus: judge.passed ? "REPAIR_PASS" : `REPAIR_FAIL_${judge.status}`
+                taskOutcome: judgeBlocked ? "BLOCKED" : "MEASURED",
+                taskSuccess: judgeBlocked ? null : judge.passed,
+                answerStatus: judgeBlocked ? `REPAIR_${judge.status}` : judge.passed ? "REPAIR_PASS" : `REPAIR_FAIL_${judge.status}`
               }
             : scoreRunOutcome({
                 task,
@@ -350,7 +388,16 @@ async function main() {
             taskOutcome: scored.taskOutcome,
             taskSuccess: scored.taskSuccess,
             answerStatus: scored.answerStatus,
-            judge: judge ? { status: judge.status, passed: judge.passed, detail: judge.detail, diffReport: judge.diffReport } : undefined,
+            judge: judge
+              ? {
+                  status: judge.status,
+                  passed: judge.passed,
+                  detail: judge.detail,
+                  diffReport: judge.diffReport ?? judge.policy ?? null,
+                  judgeImplementation: judge.judgeImplementation,
+                  judgeArtifactPath: judge.judgeArtifactPath
+                }
+              : undefined,
             toolTrace,
             finalAnswer: (run.finalContent ?? "").slice(0, 400)
           });
@@ -361,7 +408,9 @@ async function main() {
     }
   }
 
-  for (const [corpus, corpusTasks] of byCorpus) {
+  // 汇总：两臂共享分母（全部 attempt），measured 只计可判定 attempt；
+  // BLOCKED 的 attempt 留在分母里，不静默丢弃。
+  {
     const measured = runs.filter(run => run.taskOutcome === "MEASURED");
   const summarize = arm => {
     const subset = measured.filter(run => run.arm === arm);
@@ -402,6 +451,7 @@ async function main() {
   };
   await writeFile(path.join(OUTPUT, "results-pack.json"), `${JSON.stringify(pack, null, 2)}\n`);
   process.stdout.write(JSON.stringify({ summary: pack.summary, runs: runs.length }, null, 1));
+  }
 }
 
 main().catch(error => {

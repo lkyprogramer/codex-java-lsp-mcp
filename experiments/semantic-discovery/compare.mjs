@@ -8,22 +8,37 @@
 import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { openImpactSession } from "../../scripts/run-agent-trace-live.mjs";
 import { DenseDiscoveryIndex, EmbeddingProvider, readSearchDocumentFacts } from "./provider.mjs";
 import { gatedDenseSearch } from "./gate.mjs";
 
-const KIT = "/Users/luo/Documents/github/codex-java-lsp-mcp/docs/java-specialist-devkit-v1";
-// M3_STAGE：语料根目录。两种布局自动识别：
+// 可搬运：语料根、索引缓存、输出目录、server.js 全部来自 CLI/env；没有个人
+// 绝对路径默认值。STAGE 两种布局自动识别：
 //  - full profile：full-stage/<corpus>/... （每语料一个目录，含全部任务的任务集）
-//  - scoped：m1-stage/JSB-XXX/repo、locked-stage/JSB-XXX/repo（按任务 ID 分目录）
-const STAGE = process.env.M3_STAGE ?? "/Users/luo/Documents/github/java-devkit-v1-runs/m1/m1-quality/stage";
+//  - scoped：stage/<taskId>/repo（按任务 ID 分目录）
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(HERE, "..", "..");
+function cliValue(flag) {
+  const index = process.argv.indexOf(flag);
+  return index >= 0 ? process.argv[index + 1] : undefined;
+}
+function requiredPath({ flag, env, fallback, label }) {
+  const value = cliValue(flag) ?? process.env[env] ?? fallback;
+  if (!value) {
+    throw new Error(`${label} is required: pass ${flag} <path> or set ${env}. This driver has no personal absolute-path defaults.`);
+  }
+  return path.resolve(value);
+}
+const KIT = requiredPath({ flag: "--kit-root", env: "JSB_KIT_ROOT", fallback: path.join(REPO_ROOT, "docs/java-specialist-release-audit-v1.1/baseline-kit"), label: "frozen kit root" });
+const STAGE = requiredPath({ flag: "--stage", env: "M3_STAGE", label: "stage root (corpus or per-task repo copies)" });
 const STAGE_FULL = existsSync(path.join(STAGE, "gson")) || existsSync(path.join(STAGE, "ledger", "src"));
 const PROFILE = STAGE_FULL ? "external-full" : "scoped";
-const TASKS_FILES = (process.env.M3_TASKS ?? "").split(",").filter(Boolean);
-const GOLD_FILES = (process.env.M3_GOLD ?? "").split(",").filter(Boolean);
-const CACHE_ROOT = process.env.M3_CACHE ?? "/Users/luo/Documents/github/java-devkit-v1-runs/m3/index-cache";
-const SERVER_JS = "/Users/luo/Documents/github/codex-java-lsp-mcp/dist/server.js";
-const OUTPUT = process.env.M3_OUT ?? "/Users/luo/Documents/github/java-devkit-v1-runs/m3/retrieval-comparison";
+const TASKS_FILES = (cliValue("--tasks") ?? process.env.M3_TASKS ?? "").split(",").filter(Boolean);
+const GOLD_FILES = (cliValue("--gold") ?? process.env.M3_GOLD ?? "").split(",").filter(Boolean);
+const SERVER_JS = requiredPath({ flag: "--server-js", env: "M3_SERVER_JS", fallback: path.join(REPO_ROOT, "dist/server.js"), label: "product dist/server.js" });
+const OUTPUT = requiredPath({ flag: "--out", env: "M3_OUT", label: "run output root (outside the checkout)" });
+const CACHE_ROOT = requiredPath({ flag: "--cache", env: "M3_CACHE", fallback: path.join(OUTPUT, "index-cache"), label: "index cache root (outside the checkout)" });
 
 function overlap(evidence, startLine, endLine) {
   return startLine <= evidence.end_line && endLine >= evidence.start_line;
@@ -80,7 +95,7 @@ async function main() {
     model,
     baseUrl: process.env.EMBEDDING_BASE_URL ?? "https://openrouter.ai/api/v1",
     timeoutMs: 60_000,
-    cacheFile: path.join(process.env.M3_CACHE ?? "/Users/luo/Documents/github/java-devkit-v1-runs/m3/index-cache", "embeddings-cache.json")
+    cacheFile: path.join(CACHE_ROOT, "embeddings-cache.json")
   });
   mkdirSync(CACHE_ROOT, { recursive: true });
   mkdirSync(OUTPUT, { recursive: true });
