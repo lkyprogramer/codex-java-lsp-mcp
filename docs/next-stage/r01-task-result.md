@@ -8,7 +8,7 @@
 - `r01-green-remaining/run.json` = `7156515ea7dad4917a06d386a9048bc739c007e8d20baf511b4eac3b886544a9`（E01–E06：1/6，属 R02）
 - 冻结自检 `r01-selfcheck/summary.json` = `5f6f4cb1412546249221239568a57fa3dbb176a8a209d266967e466d56dcbc02`（5/5 exit 0）
 **Commit**: 见 git log（fix(eval): preserve tool payloads at the model boundary）
-**Date**: 2026-07-17
+**Date**: 2026-09-30（原文误写为 2026-07-17，2026-10-09 按提交时间更正）
 
 ## RED / GREEN 证据（不可复签）
 

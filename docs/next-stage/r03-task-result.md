@@ -5,7 +5,7 @@
 {
   "schema": "java-specialist-r03-task-result/v1",
   "status": "GREEN",
-  "date": "2026-07-17",
+  "date": "2026-10-02",
   "source_head": "ee3e774339c9064b62bb40af48701224243adb09",
   "red": {
     "command": "python tools/run_audit.py --project $RUNS/r03-b9 --output $RUNS/r03-red --cases W05",

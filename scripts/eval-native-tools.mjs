@@ -6,11 +6,14 @@
 //         root；唯一臂间差异是 product 的 java_symbol（待测 discovery）。
 //         路径检查用 resolve/realpath + relative 包含判断（prefix 字符串
 //         比较不算 containment）；rg 用参数数组 spawn，绝不拼 shell。
-import { cpSync, mkdirSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
-import { readdir } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import { readdir, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { promisify } from "node:util";
+import os from "node:os";
 import path from "node:path";
+import { splitSourceLines } from "./eval-tool-wire.mjs";
 
 export const EVAL_READ_TOOL = {
   type: "function",
@@ -31,6 +34,9 @@ export const EVAL_READ_TOOL = {
 
 export const RGP_BIN = process.env.EVAL_RG_BIN || "rg";
 export const NATIVE_TOOL_LIMIT = 8_000;
+/** docs/03 §1.1: an ordinary read returns at most 16000 source bytes. */
+export const READ_MAX_SOURCE_BYTES = 16_000;
+const MAX_READ_LINES = 400;
 const LIST_MAX_ENTRIES = 500;
 
 export const EVAL_LIST_TOOL = {
@@ -67,17 +73,44 @@ const executeFile = promisify((command, args, options, callback) => {
   const child = spawn(command, args, { cwd: options.cwd, timeout: options.timeoutMs ?? 20_000 });
   let stdout = "";
   let stderr = "";
+  let outputLimited = false;
+  const started = Date.now();
   child.stdout.on("data", chunk => {
     stdout += chunk;
-    if (Buffer.byteLength(stdout, "utf8") > options.outputCapBytes) child.kill("SIGKILL");
+    if (Buffer.byteLength(stdout, "utf8") > options.outputCapBytes) {
+      outputLimited = true;
+      child.kill("SIGKILL");
+    }
   });
   child.stderr.on("data", chunk => {
     stderr += chunk;
-    if (Buffer.byteLength(stderr, "utf8") > options.outputCapBytes) child.kill("SIGKILL");
+    if (Buffer.byteLength(stderr, "utf8") > options.outputCapBytes) {
+      outputLimited = true;
+      child.kill("SIGKILL");
+    }
   });
   child.on("error", error => callback(error));
-  child.on("close", (code, signal) => callback(null, { code, signal, stdout, stderr }));
+  child.on("close", (code, signal) => callback(null, {
+    code,
+    signal,
+    stdout,
+    stderr,
+    outputLimited,
+    // spawn's own timeout kills with SIGTERM; a kill we did not cause for the
+    // output cap is a timeout, never a complete result.
+    timedOut: signal !== null && !outputLimited && Date.now() - started >= (options.timeoutMs ?? 20_000) - 50
+  }));
 });
+
+/** Repair-only compile check shared by both arms. */
+export const EVAL_TEST_TOOL = {
+  type: "function",
+  function: {
+    name: "test",
+    description: "Compile all Java sources of the working copy (javac) and report the diagnostics. Evaluator tests are not available.",
+    parameters: { type: "object", properties: {} }
+  }
+};
 
 /** Shared declaration of the repair-only write_file tool. */
 export const EVAL_WRITE_FILE_TOOL = {
@@ -93,66 +126,99 @@ export const EVAL_WRITE_FILE_TOOL = {
   }
 };
 
+/** True when `target` is `root` itself or strictly inside it. */
+function isInside(root, target) {
+  const rel = path.relative(root, target);
+  return rel === "" || (rel !== ".." && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel));
+}
+
 /** Canonical containment check: normalize separators, resolve against the
- * candidate root, then require the resolved target's relative position
- * inside the resolved root to be a real path ("" for the root itself, never
- * "../..."). Existing targets are additionally checked through realpath so
- * a symlink inside the workspace cannot reach a file outside it. String
- * startsWith is NOT used anywhere. */
+ * candidate root, require logical containment, then require the REAL path
+ * of the target - or, for a not-yet-existing write target, of its nearest
+ * existing ancestor - to stay inside the real root, so a symlinked
+ * directory cannot carry a read or write outside the workspace. String
+ * prefix comparison is not used. */
 export function resolveInCandidate(candidateRoot, repoRelativePath) {
   const normalized = String(repoRelativePath ?? "").replaceAll("\\", "/");
   if (normalized.length === 0) return { error: "path is required" };
-  if (path.isAbsolute(normalized)) return { error: "path must be repo-relative" };
+  if (path.isAbsolute(normalized) || /^[A-Za-z]:\//.test(normalized)) return { error: "path must be repo-relative" };
   const candidate = path.resolve(candidateRoot);
   const target = path.resolve(candidate, normalized);
-  // Logical containment (applies to all targets, including non-existent
-  // write targets).
-  if (path.relative(candidate, target).startsWith("..")) {
+  if (!isInside(candidate, target)) {
     return { error: "path escapes the candidate workspace" };
   }
-  let exists = false;
-  try {
-    statSync(target);
-    exists = true;
-  } catch {
-    exists = false;
-  }
-  if (!exists) {
-    return { candidateRoot: candidate, target, normalized };
-  }
-  // Symlink escape: the RESOLVED target must stay inside the resolved root.
   const resolvedRoot = realpathSync(candidate);
-  const resolvedTarget = realpathSync(target);
-  const rel = path.relative(resolvedRoot, resolvedTarget);
-  if (rel === "" || (rel.startsWith("..") === false && !path.isAbsolute(rel))) {
-    return { candidateRoot: resolvedRoot, target: resolvedTarget, normalized };
+  let probe = target;
+  while (!existsSync(probe) && isInside(candidate, path.dirname(probe)) && probe !== candidate) {
+    probe = path.dirname(probe);
   }
-  return { error: "path resolves outside the candidate workspace (symlink escape)" };
+  let resolvedProbe;
+  try {
+    resolvedProbe = realpathSync(probe);
+  } catch {
+    return { error: "path cannot be resolved inside the candidate workspace" };
+  }
+  if (!isInside(resolvedRoot, resolvedProbe)) {
+    return { error: "path resolves outside the candidate workspace (symlink escape)" };
+  }
+  const exists = probe === target;
+  return {
+    candidateRoot: resolvedRoot,
+    target: exists ? resolvedProbe : path.join(resolvedProbe, path.relative(probe, target)),
+    normalized,
+    exists
+  };
 }
 
 /** Create an isolated per-attempt candidate workspace: a full copy of
- * fixtureRoot under outputRoot, keyed by attemptKey. Each attempt (arm x
- * repeat) gets its own root; the root NEVER aliases the fixture or another
- * attempt's copy. */
+ * fixtureRoot (minus `.git` directories) under outputRoot/candidates. The
+ * directory name embeds a hash of the full attempt key, so two attempts can
+ * never share a root, and an existing root is refused rather than merged
+ * (a re-run must use a fresh output directory; old candidates are evidence). */
 export function createAttemptWorkspace(fixtureRoot, attemptKey, outputRoot) {
   if (!fixtureRoot || !path.isAbsolute(fixtureRoot)) {
     throw new Error("fixtureRoot must be an absolute path");
   }
-  const attemptId = String(attemptKey ?? "").replace(/[^\w.\-]+/g, "_").slice(0, 120) || "attempt";
+  const key = String(attemptKey ?? "");
+  if (key.length === 0) throw new Error("attemptKey is required");
+  const readable = key.replace(/[^\w.\-]+/g, "_").slice(0, 80);
+  const digest = createHash("sha256").update(key, "utf8").digest("hex").slice(0, 16);
   const output = path.resolve(outputRoot);
-  const candidateRoot = path.join(output, "candidates", attemptId);
+  const candidateRoot = path.join(output, "candidates", `${readable}-${digest}`);
+  if (existsSync(candidateRoot)) {
+    throw new Error(`attempt workspace already exists: ${candidateRoot} (use a fresh output directory)`);
+  }
+  const fixture = path.resolve(fixtureRoot);
+  if (isInside(fixture, output)) {
+    throw new Error("outputRoot must not be inside the fixture");
+  }
   mkdirSync(path.dirname(candidateRoot), { recursive: true });
-  cpSync(fixtureRoot, candidateRoot, { recursive: true, filter: src => !src.includes(".git") });
+  cpSync(fixture, candidateRoot, {
+    recursive: true,
+    verbatimSymlinks: true,
+    filter: src => !path.relative(fixture, src).split(path.sep).includes(".git")
+  });
   return candidateRoot;
 }
 
+/** Bounded navigation text: whole lines only (a lone oversized first line is
+ * cut on a character boundary); truncation is reported by the flag. */
 function boundedText(text, limit = NATIVE_TOOL_LIMIT) {
-  const buf = Buffer.from(text, "utf8");
-  if (buf.byteLength <= limit) return { text, truncated: false };
-  let kept = buf.slice(0, limit).toString("utf8");
-  const lastNewline = kept.lastIndexOf("\n");
-  if (lastNewline > kept.length - 256) kept = kept.slice(0, lastNewline);
-  return { text: `${kept}\n...[truncated]`, truncated: true };
+  if (Buffer.byteLength(text, "utf8") <= limit) return { text, truncated: false };
+  const lines = splitSourceLines(text);
+  let used = 0;
+  let kept = 0;
+  while (kept < lines.length && used + Buffer.byteLength(lines[kept], "utf8") <= limit) {
+    used += Buffer.byteLength(lines[kept], "utf8");
+    kept += 1;
+  }
+  if (kept > 0) return { text: lines.slice(0, kept).join(""), truncated: true };
+  let head = "";
+  for (const ch of lines[0] ?? "") {
+    if (Buffer.byteLength(head + ch, "utf8") > limit) break;
+    head += ch;
+  }
+  return { text: head, truncated: true };
 }
 
 /** Shared native tool executor bound to ONE candidate root. Returns the
@@ -176,7 +242,8 @@ export function buildToolSet(profile, kind, { candidateRoot, budget = {} } = {})
   const outputCapBytes = budget.outputCapBytes ?? NATIVE_TOOL_LIMIT;
   const rgTimeoutMs = budget.rgTimeoutMs ?? 20_000;
   const maxLines = budget.maxLines ?? 200;
-  const tools = [...(kind === "repair" ? [EVAL_WRITE_FILE_TOOL] : []), EVAL_LIST_TOOL, EVAL_RG_TOOL, EVAL_READ_TOOL];
+  const readMaxBytes = budget.readMaxBytes ?? READ_MAX_SOURCE_BYTES;
+  const tools = [...(kind === "repair" ? [EVAL_WRITE_FILE_TOOL, EVAL_TEST_TOOL] : []), EVAL_LIST_TOOL, EVAL_RG_TOOL, EVAL_READ_TOOL];
   const invoke = async (name, args) => {
     if (name === "list") {
       return invokeList(args, candidateRoot, outputCapBytes);
@@ -185,10 +252,13 @@ export function buildToolSet(profile, kind, { candidateRoot, budget = {} } = {})
       return invokeRg(args, candidateRoot, outputCapBytes, rgTimeoutMs);
     }
     if (name === "read") {
-      return invokeRead(args, candidateRoot, maxLines);
+      return invokeRead(args, candidateRoot, maxLines, readMaxBytes);
     }
     if (name === "write_file" && kind === "repair") {
       return invokeWrite(args, candidateRoot);
+    }
+    if (name === "test" && kind === "repair") {
+      return invokeCompileCheck(candidateRoot, { javaHome: budget.javaHome ?? process.env.JAVA_HOME ?? null, timeoutMs: budget.testTimeoutMs ?? 60_000, outputCapBytes });
     }
     return { error: `tool ${name} is not provided in this session` };
   };
@@ -252,50 +322,142 @@ async function invokeRg(args, candidateRoot, outputCapBytes, timeoutMs) {
     if (code === "ENOENT") return { error: `rg binary not found at ${RGP_BIN} (BLOCKED_ENV)` };
     return { error: String(error.message ?? error) };
   }
-  if (result.code > 1) {
+  if (result.code !== null && result.code > 1) {
     return { error: `rg failed (code ${result.code}): ${String(result.stderr).slice(0, 300)}` };
   }
-  const bounded = boundedText(result.stdout, outputCapBytes);
+  // --max-count is per file; maxResults is the TOTAL line cap.
+  const allLines = splitSourceLines(result.stdout);
+  const kept = allLines.slice(0, maxResults);
+  const bounded = boundedText(kept.join(""), outputCapBytes);
+  const truncated = bounded.truncated || kept.length < allLines.length || result.outputLimited || result.timedOut;
   return {
     pattern,
     path: String(args?.path ?? "."),
     output: bounded.text,
-    matches: result.stdout === "" ? 0 : result.stdout.split("\n").length - (result.stdout.endsWith("\n") ? 1 : 0),
-    ...(bounded.truncated ? { truncated: true } : {}),
-    ...(result.code === 1 ? { noMatches: true } : {})
+    matches: kept.length,
+    ...(truncated ? { truncated: true } : {}),
+    ...(result.timedOut ? { timedOut: true } : {}),
+    ...(result.code === 1 && allLines.length === 0 ? { noMatches: true } : {})
   };
 }
 
-function invokeRead(args, candidateRoot, maxLines) {
+/** Exact source window: lines keep their terminators (the text is the
+ * literal bytes of lines startLine..endLine, as the frozen kit validates),
+ * no phantom line after a trailing newline, a per-call source byte cap of
+ * whole lines, and the whole-file sha256 for provenance. */
+function invokeRead(args, candidateRoot, maxLines, maxBytes) {
   const check = resolveInCandidate(candidateRoot, args?.path);
   if (check.error) return { error: check.error };
-  let full;
+  const startArg = args?.startLine ?? 1;
+  const linesArg = args?.maxLines ?? maxLines;
+  if (!Number.isInteger(startArg) || startArg < 1) return { error: "startLine must be a positive integer" };
+  if (!Number.isInteger(linesArg) || linesArg < 1) return { error: "maxLines must be a positive integer" };
+  let bytes;
   try {
-    full = readFileSync(check.target, "utf8");
+    if (!lstatSync(check.target).isFile()) return { error: "read failed: not a regular file" };
+    bytes = readFileSync(check.target);
   } catch (error) {
     return { error: `read failed: ${String(error.message ?? error)}` };
   }
-  const lines = full.split("\n");
-  const startLine = Math.max(1, Math.max(1, Math.trunc(args?.startLine ?? 1)));
-  const limit = Math.max(1, Math.min(400, Math.trunc(args?.maxLines ?? maxLines)));
-  const endLine = Math.min(lines.length, startLine - 1 + limit);
-  const text = lines.slice(startLine - 1, endLine).join("\n");
-  return { path: check.normalized, text, startLine, endLine };
+  const full = bytes.toString("utf8");
+  const lines = splitSourceLines(full);
+  const contentHash = createHash("sha256").update(bytes).digest("hex");
+  if (startArg > lines.length) {
+    return { path: check.normalized, text: "", startLine: startArg, endLine: startArg - 1, totalLines: lines.length, contentHash };
+  }
+  const limit = Math.min(MAX_READ_LINES, linesArg);
+  const window = lines.slice(startArg - 1, startArg - 1 + limit);
+  let kept = 0;
+  let used = 0;
+  for (const line of window) {
+    const size = Buffer.byteLength(line, "utf8");
+    if (kept > 0 && used + size > maxBytes) break;
+    if (kept === 0 && size > maxBytes) {
+      return { error: `line ${startArg} alone exceeds the ${maxBytes}-byte read cap`, errorClass: "READ_BUDGET" };
+    }
+    used += size;
+    kept += 1;
+  }
+  const endLine = startArg + kept - 1;
+  const truncatedByBytes = kept < window.length;
+  return {
+    path: check.normalized,
+    text: window.slice(0, kept).join(""),
+    startLine: startArg,
+    endLine,
+    totalLines: lines.length,
+    contentHash,
+    ...(truncatedByBytes ? { truncated: true, nextStartLine: endLine + 1 } : {})
+  };
 }
 
 async function invokeWrite(args, candidateRoot) {
   const check = resolveInCandidate(candidateRoot, args?.path);
   if (check.error) return { error: check.error };
-  const content = String(args?.content ?? "");
+  if (typeof args?.content !== "string") return { error: "content must be a string" };
   try {
-    if (!path.isAbsolute(check.target)) throw new Error("internal: unresolved target");
-    const parent = path.dirname(check.target);
-    mkdirSync(parent, { recursive: true });
-    const { writeFile } = await import("node:fs/promises");
-    await writeFile(check.target, content, "utf8");
-    return { path: check.normalized, written: true, bytes: Buffer.byteLength(content, "utf8") };
+    if (check.exists && !lstatSync(check.target).isFile()) return { error: "write failed: target is not a regular file" };
+    mkdirSync(path.dirname(check.target), { recursive: true });
+    // Re-check after directory creation: nothing on the path may have become
+    // an escape in between.
+    const recheck = resolveInCandidate(candidateRoot, args.path);
+    if (recheck.error) return { error: recheck.error };
+    await writeFile(recheck.target, args.content, "utf8");
+    return { path: check.normalized, written: true, bytes: Buffer.byteLength(args.content, "utf8") };
   } catch (error) {
     return { error: `write failed: ${String(error.message ?? error)}` };
+  }
+}
+
+async function collectJavaSources(root) {
+  const out = [];
+  const walk = async dir => {
+    let items;
+    try {
+      items = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const item of items.sort((a, b) => a.name.localeCompare(b.name))) {
+      if (item.name === ".git" || item.isSymbolicLink()) continue;
+      const full = path.join(dir, item.name);
+      if (item.isDirectory()) await walk(full);
+      else if (item.isFile() && item.name.endsWith(".java")) out.push(full);
+    }
+  };
+  await walk(root);
+  return out;
+}
+
+/** Repair-only `test` tool: compiles every .java file of the working copy
+ * with javac into a scratch directory OUTSIDE the candidate (the candidate
+ * tree is never polluted) and reports the diagnostics. No evaluator test is
+ * ever exposed; this is the neutral compile/test check both arms share. */
+async function invokeCompileCheck(candidateRoot, { javaHome, timeoutMs, outputCapBytes }) {
+  const sources = await collectJavaSources(candidateRoot);
+  if (sources.length === 0) return { status: "NO_SOURCES", exitCode: null, output: "" };
+  const javac = javaHome ? path.join(javaHome, "bin", "javac") : "javac";
+  const classes = mkdtempSync(path.join(os.tmpdir(), "eval-compile-check-"));
+  try {
+    let result;
+    try {
+      result = await executeFile(javac, ["-encoding", "UTF-8", "-proc:none", "-d", classes, ...sources], { cwd: candidateRoot, timeoutMs, outputCapBytes: outputCapBytes * 4 });
+    } catch (error) {
+      if (error?.code === "ENOENT") return { error: `javac not found at ${javac} (BLOCKED_ENV)`, errorClass: "BLOCKED_ENV" };
+      return { error: String(error.message ?? error) };
+    }
+    const text = `${result.stdout}${result.stderr}`.replaceAll(`${candidateRoot}${path.sep}`, "");
+    const bounded = boundedText(text, outputCapBytes);
+    return {
+      status: result.timedOut ? "TIMEOUT" : result.code === 0 ? "COMPILED" : "COMPILE_FAILED",
+      exitCode: result.code,
+      compiledFiles: sources.length,
+      output: bounded.text,
+      ...(result.timedOut ? { timedOut: true } : {}),
+      ...(bounded.truncated || result.outputLimited ? { truncated: true } : {})
+    };
+  } finally {
+    rmSync(classes, { recursive: true, force: true });
   }
 }
 

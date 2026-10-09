@@ -75,7 +75,7 @@ test("E04: contract QA cannot succeed with no received required source", () => {
     run: {
       stopReason: "MODEL_STOP",
       finalContent: '{"ok":true}',
-      sourceReceived: [{ path: "A.java", startLine: 1, endLine: 1, text: "t", origin: "explicit_read" }]
+      sourceReceived: [{ type: "SOURCE_RECEIVED", path: "A.java", startLine: 1, endLine: 1, text: "t", origin: "explicit_read" }]
     }
   });
   assert.equal(partial.taskSuccess, false);
@@ -87,12 +87,12 @@ test("E04: contract QA cannot succeed with no received required source", () => {
     run: {
       stopReason: "MODEL_STOP",
       finalContent: '{"ok":true}',
-      sourceReceived: [{ path: "A.java", startLine: 1, endLine: 1, text: "t", origin: "explicit_read" }]
+      sourceReceived: [{ type: "SOURCE_RECEIVED", path: "A.java", startLine: 1, endLine: 1, text: "t", origin: "explicit_read" }]
     }
   });
   assert.equal(full.taskSuccess, true);
   // coverage helper: line-set semantics
-  const cov = receivedLineCoverage([{ path: "A.java", start_line: 2, end_line: 3 }], [{ path: "A.java", startLine: 1, endLine: 2 }]);
+  const cov = receivedLineCoverage([{ path: "A.java", start_line: 2, end_line: 3 }], [{ type: "SOURCE_RECEIVED", path: "A.java", startLine: 1, endLine: 2 }]);
   assert.equal(cov.missing.length, 1);
 });
 
@@ -139,15 +139,26 @@ test("E06: wrong QA answer is rejected (positive guard)", () => {
   assert.equal(scoreQaAnswer({ n: 2 }, "```json\n{\"n\":2}\n```").status, "INVALID_ANSWER");
 });
 
-test("repair verdicts: only passed === true is a success", () => {
-  const base = { task: { kind: "repair" }, goldRow: null, run: { stopReason: "MODEL_STOP", finalContent: "{}" } };
-  assert.equal(scoreRunOutcome({ ...base, repairTester: () => ({ passed: true }) }).taskSuccess, true);
-  assert.equal(scoreRunOutcome({ ...base, repairTester: () => ({ passed: "yes" }) }).taskSuccess, false);
-  assert.equal(scoreRunOutcome({ ...base, repairTester: () => ({ passed: Promise.resolve(true) }) }).taskSuccess, false);
-  assert.equal(scoreRunOutcome({ ...base, repairTester: () => ({}) }).taskSuccess, false);
-  const noJudge = scoreRunOutcome({ ...base, repairTester: undefined });
+test("repair verdicts: only the frozen judge's validatedSuccess === true is a success", () => {
+  const base = { task: { kind: "repair" }, goldRow: null, run: { stopReason: "MODEL_STOP", finalContent: '{"patchApplied":true}' } };
+  assert.equal(scoreRunOutcome({ ...base, repairVerdict: { state: "VALIDATED_SUCCESS", validatedSuccess: true } }).taskSuccess, true);
+  assert.equal(scoreRunOutcome({ ...base, repairVerdict: { state: "TEST_FAILED", validatedSuccess: "yes" } }).taskSuccess, false);
+  assert.equal(scoreRunOutcome({ ...base, repairVerdict: { state: "TEST_FAILED", validatedSuccess: false } }).taskSuccess, false);
+  assert.equal(scoreRunOutcome({ ...base, repairVerdict: { state: "TIMEOUT", validatedSuccess: false } }).taskSuccess, false, "a hanging candidate is a failed candidate");
+  const promise = scoreRunOutcome({ ...base, repairVerdict: Promise.resolve({ validatedSuccess: true }) });
+  assert.equal(promise.taskSuccess, null);
+  assert.equal(promise.answerStatus, "INVALID_JUDGE_VERDICT");
+  for (const state of ["BLOCKED_ENV", "BLOCKED_SETUP", "JUDGE_ERROR"]) {
+    const blocked = scoreRunOutcome({ ...base, repairVerdict: { state, validatedSuccess: false } });
+    assert.equal(blocked.taskSuccess, null, `${state} is unmeasured, not a failure`);
+    assert.equal(blocked.taskOutcome, "UNMEASURED");
+  }
+  const noJudge = scoreRunOutcome({ ...base });
   assert.equal(noJudge.taskOutcome, "UNMEASURED");
   assert.equal(noJudge.taskSuccess, null);
+  // the candidate tree is judged even when the agent loop itself failed
+  const failedLoop = scoreRunOutcome({ ...base, run: { stopReason: "FAILED_RUNTIME" }, repairVerdict: { state: "VALIDATED_SUCCESS", validatedSuccess: true } });
+  assert.equal(failedLoop.taskSuccess, true);
 });
 
 test("usage: unknown stays null, provider raw preserved with hash", () => {
@@ -180,14 +191,15 @@ test("adapter: usage mapping to kit rows", () => {
   });
 });
 
-test("adapter: SOURCE_RECEIVED rows become kit read_events", () => {
+test("adapter: only SOURCE_RECEIVED rows become kit read_events, with the file hash", () => {
   const events = sourceReceivedToReadEvents([
-    { type: "SOURCE_RECEIVED", path: "a\\B.java", startLine: 3, endLine: 5, contentHash: "h", text: "t", origin: "explicit_read" },
-    { type: "SOURCE_RECEIVED", path: "C.java", startLine: 1, endLine: 1, contentHash: "h2", text: "u", origin: "tool_response" },
-    { type: "MODEL_TOOL_DELIVERED", path: "ignored" }
+    { type: "SOURCE_RECEIVED", path: "a\\B.java", startLine: 3, endLine: 5, contentHash: "slice", fileContentHash: "file", text: "t", origin: "explicit_read" },
+    { type: "SOURCE_RECEIVED", path: "C.java", startLine: 1, endLine: 1, contentHash: "h2", fileContentHash: "f2", text: "u", origin: "tool_response" },
+    { type: "SOURCE_FETCHED", path: "D.java", startLine: 1, endLine: 1, text: "raw only" },
+    { type: "MODEL_PAYLOAD_ATTACHED", path: "ignored" }
   ]);
   assert.equal(events.length, 2);
-  assert.deepEqual(events[0], { path: "a/B.java", start_line: 3, end_line: 5, content_hash: "h", text: "t", origin: "explicit_read" });
+  assert.deepEqual(events[0], { path: "a/B.java", start_line: 3, end_line: 5, content_hash: "file", text: "t", origin: "explicit_read" });
   assert.equal(events[1].origin, "tool_response");
 });
 
@@ -196,7 +208,8 @@ test("adapter: full plan - missing synthesized as MISSING, duplicates throw", ()
     { taskId: "T-A", variant: "primary", repeat: 0 },
     { taskId: "T-B", variant: "primary", repeat: 0 }
   ];
-  const profile = runProfileFrom({ corpusHash: "ch", repeats: 1 });
+  const profile = runProfileFrom({ corpusHash: "ch", corpusMode: "bundled-scoped", repeats: 1 });
+  assert.throws(() => runProfileFrom({ corpusHash: "ch", repeats: 1 }), /corpusMode/);
   const pack = buildFrozenResultsPack({
     plan,
     arm: "product",
@@ -234,6 +247,15 @@ test("adapter: full plan - missing synthesized as MISSING, duplicates throw", ()
     () => buildFrozenResultsPack({ plan, arm: "control", datasetHash: "dh", corpusHash: "ch", runProfile: profile, attempts: [dup] }),
     /belongs to arm/
   );
+  const stray = { ...dup, key: { taskId: "T-Z", variant: "primary", arm: "product", repeat: 0 } };
+  assert.throws(
+    () => buildFrozenResultsPack({ plan, arm: "product", datasetHash: "dh", corpusHash: "ch", runProfile: profile, attempts: [stray] }),
+    /outside the frozen plan/
+  );
+  assert.throws(
+    () => buildFrozenResultsPack({ plan: [...plan, plan[0]], arm: "product", datasetHash: "dh", corpusHash: "ch", runProfile: profile, attempts: [] }),
+    /duplicate planned attempt/
+  );
 });
 
 test("adapter: scheduled denominator summary matches the gate metric", () => {
@@ -250,76 +272,72 @@ test("adapter: scheduled denominator summary matches the gate metric", () => {
   assert.equal(summary.successes, 1);
   assert.equal(summary.successRate, 1 / 2);
   assert.throws(() => scheduledDenominatorSummary({ plan, attempts: [{ ...attempts[0], taskSuccess: { truthy: true } }] }), /must be true\/false\/null/);
+  // an attempt outside the plan can never inflate the rate above 1
+  assert.throws(() => scheduledDenominatorSummary({ plan: [plan[0]], attempts }), /outside the frozen plan/);
 });
 
-// The authoritative check: the adapter's pack must be accepted and re-scored
-// by the ORIGINAL frozen kit scorer (score_pack, the same function
-// `python -m harness score` runs). Requires python3 + the staged kit;
-// skipped as BLOCKED_ENV when absent.
-test("adapter end-to-end: kit scorer re-scores the adapter pack", async t => {
-  let python = "python3";
+// The authoritative check: the pack the ADAPTER builds (from received
+// slices produced by the real read tool + model-boundary serializer) is
+// scored by the ORIGINAL frozen kit CLI. A required line that the budget cut
+// out of the model payload must not be credited. Needs python3 (else
+// BLOCKED_ENV skip).
+test("adapter end-to-end: frozen kit CLI scores the adapter's own pack", async t => {
   try {
-    execFileSync(python, ["--version"], { stdio: "ignore" });
+    execFileSync("python3", ["--version"], { stdio: "ignore" });
   } catch {
     t.skip("python3 unavailable (BLOCKED_ENV)");
     return;
   }
-  if (!existsSync(path.join(kitRoot, "harness"))) {
-    t.skip("frozen kit not staged (BLOCKED_ENV)");
-    return;
-  }
-  const { execFileSync: runPy } = await import("node:child_process");
-  const { writeFileSync } = await import("node:fs");
+  const { buildToolSet, createAttemptWorkspace } = await import("./eval-native-tools.mjs");
+  const { serializeModelToolResult } = await import("./eval-tool-wire.mjs");
+  const { createRecorder, loadTaskFile, loadGoldFile } = await import("./evaluate-java-task.mjs");
+  const { writeFileSync, rmSync } = await import("node:fs");
+  const dataset = path.join(kitRoot, "dataset");
+  const task = loadTaskFile(path.join(dataset, "prompts", "dev.jsonl")).find(row => row.id === "JSB-PAYMENTS-01");
+  const gold = loadGoldFile(path.join(dataset, "gold", "dev.jsonl")).get(task.id);
   const tmp = mkdtempSync(path.join(os.tmpdir(), "eval-frozen-adapter-"));
-  const params = JSON.stringify({
-    kitRoot,
-    datasetDir: path.join(kitRoot, "dataset"),
-    tmp
-  });
-  writeFileSync(path.join(tmp, "params.json"), params, "utf8");
-  const buildScript = `
-import json, sys
-from pathlib import Path
-params = json.loads(Path(sys.argv[1]).read_text())
-sys.path.insert(0, params["kitRoot"])
-from harness import cli
-from harness.dataset import load_dataset
-dataset_path = Path(params["datasetDir"])
-ds = load_dataset(dataset_path)
-corpus_root = (Path(params["kitRoot"]) / "dataset" / "corpora").resolve()
-task = next(t for t in ds["tasks"] if t["kind"] == "qa" and t["split"] == "dev")
-gold = ds["gold"][task["id"]]
-events = []
-import hashlib
-for r in gold["required_evidence"]:
-    p = corpus_root / task["corpus"] / r["path"]
-    raw = p.read_bytes(); raw.decode("utf-8")
-    lines = raw.splitlines(keepends=True)
-    events.append({"path": r["path"], "start_line": 1, "end_line": len(lines),
-                   "content_hash": hashlib.sha256(raw).hexdigest(),
-                   "text": b"".join(lines).decode("utf-8"), "origin": "explicit_read"})
-pack = {"schema": "java-specialist-results/v1",
-        "dataset_hash": cli.dataset_digest(Path(params["datasetDir"])),
-        "run_profile": {"corpus_mode": "bundled-scoped", "corpus_hash": cli.corpus_fingerprint(corpus_root), "variant_set": "primary",
-                        "evaluation_mode": "structured-qa", "repeats": 1, "cache_state": "per-attempt-retrieval-control",
-                        "model_id": None, "host_id": "eval-frozen-adapter/v1"},
-        "arm": "product",
-        "results": [{"task_id": task["id"], "variant": "primary", "repeat": 0, "status": "OK",
-                     "regions": [], "candidates": [], "answer": gold["answer"],
-                     "usage": None, "read_events": events, "elapsed_ms": 42}]}
-(Path(params["tmp"]) / "results.json").write_text(json.dumps(pack, ensure_ascii=False))
-rep = cli.score_pack(dataset_path, corpus_root, pack, "dev")
-row = rep["rows"][0]
-unattempted = sum(1 for r in rep["rows"] if r["status"] == "MISSING")
-print(json.dumps({"qa": row["qa_contract_pass"], "valid": row["valid"],
-                  "received_complete": row["received_evidence_complete"],
-                  "unattempted": unattempted, "scorer_hash": rep["scorer_hash"]}))
-`;
-  const out = runPy(python, ["-c", buildScript, path.join(tmp, "params.json")], { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 }).trim();
-  const parsed = JSON.parse(out);
-  assert.equal(parsed.valid, true, "kit must accept the adapter-shaped row");
-  assert.equal(parsed.qa, true, "original scorer must mark a correct-and-received QA as passing");
-  assert.equal(parsed.received_complete, true);
-  assert.equal(parsed.unattempted, 23, "split-dev universe stays in the denominator");
-  assert.match(parsed.scorer_hash, /^[0-9a-f]{64}$/);
+  try {
+    const candidate = createAttemptWorkspace(path.join(dataset, "corpora", task.corpus), "e2e", tmp);
+    const tools = buildToolSet("control", "qa", { candidateRoot: candidate });
+    const evidencePath = gold.required_evidence[0].path;
+    const lastRequired = Math.max(...gold.required_evidence.map(item => item.end_line));
+    const read = await tools.invoke("read", { path: evidencePath, startLine: 1, maxLines: lastRequired });
+    const attemptFor = (repeat, maxBytes) => {
+      const recorder = createRecorder();
+      const serialized = serializeModelToolResult("read", read, { maxBytes });
+      recorder.recordModelDelivery({ callId: `c${repeat}`, toolName: "read", contentHash: serialized.modelPayloadHash, payloadBytes: 0, slices: serialized.slices });
+      return {
+        key: { taskId: task.id, variant: "primary", arm: "control", repeat },
+        state: "COMPLETED",
+        answer: gold.answer,
+        usage: null,
+        sourceReceived: recorder.events()
+      };
+    };
+    const hashes = JSON.parse(execFileSync("python3", ["-c",
+      "import json,sys;from pathlib import Path;from harness.dataset import dataset_digest;from harness.cli import corpus_fingerprint;d=Path(sys.argv[1]);print(json.dumps({'dataset':dataset_digest(d),'corpus':corpus_fingerprint(d/'corpora')}))",
+      dataset], { cwd: kitRoot, encoding: "utf8", env: { ...process.env, PYTHONDONTWRITEBYTECODE: "1" } }));
+    // repeat 0: whole window delivered; repeat 1: a budget that cuts the tail.
+    const pack = buildFrozenResultsPack({
+      plan: [{ taskId: task.id, variant: "primary", repeat: 0 }, { taskId: task.id, variant: "primary", repeat: 1 }],
+      attempts: [attemptFor(0, 32768), attemptFor(1, 600)],
+      arm: "control",
+      datasetHash: hashes.dataset,
+      runProfile: runProfileFrom({ corpusHash: hashes.corpus, corpusMode: "bundled-scoped", repeats: 2 })
+    });
+    const packPath = path.join(tmp, "pack.json");
+    const reportPath = path.join(tmp, "report.json");
+    writeFileSync(packPath, JSON.stringify(pack), "utf8");
+    execFileSync("python3", ["-m", "harness", "--dataset", dataset, "score", "--input", packPath, "--split", "dev", "--output", reportPath], { cwd: kitRoot, env: { ...process.env, PYTHONDONTWRITEBYTECODE: "1" } });
+    const report = JSON.parse(readFileSync(reportPath, "utf8"));
+    const row = repeat => report.rows.find(r => r.task_id === task.id && r.repeat === repeat);
+    assert.deepEqual(row(0).errors, [], "kit must accept the adapter's read receipts byte-exactly");
+    assert.equal(row(0).qa_contract_pass, true);
+    assert.equal(row(1).received_evidence_complete, false, "lines cut from the model payload are not received");
+    assert.equal(row(1).qa_contract_pass, false);
+    assert.equal(report.rows.filter(r => r.status === "MISSING").length, 2 * 23, "the rest of the dev split stays in the denominator");
+    assert.match(report.scorer_hash, /^[0-9a-f]{64}$/);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
 });

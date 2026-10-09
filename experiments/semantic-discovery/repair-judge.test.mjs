@@ -270,3 +270,28 @@ test("smoke: task lookup covers all repair entries", () => {
 test.after(() => {
   if (!process.env.JSB_KEEP_SCRATCH) rmSync(scratch, { recursive: true, force: true });
 });
+
+test("javaHome: the probed JDK is the JDK the frozen judge runs (it is first on PATH)", async t => {
+  // Resolve the JDK that `javac` on PATH belongs to, then hide every java
+  // directory from PATH: the judge must still compile through javaHome.
+  const probe = spawnSync("java", ["-XshowSettings:properties", "-version"], { encoding: "utf8" });
+  const homeLine = `${probe.stderr}${probe.stdout}`.split("\n").find(line => line.trim().startsWith("java.home ="));
+  if (!homeLine) {
+    t.skip("javac unavailable (BLOCKED_ENV)");
+    return;
+  }
+  const javaHome = homeLine.split("=")[1].trim();
+  const entry = manifest.find(row => row.task_id === "JSB-PAYMENTS-03");
+  const savedPath = process.env.PATH;
+  process.env.PATH = savedPath.split(path.delimiter)
+    .filter(dir => spawnSync("sh", ["-c", `test -x "${dir}/javac" || test -x "${dir}/java"`]).status !== 0)
+    .join(path.delimiter);
+  try {
+    assert.notEqual(spawnSync("sh", ["-c", "command -v javac"]).status, 0, "test setup: javac must be hidden from PATH");
+    const result = await evaluateRepair({ kitRoot: KIT, taskId: entry.task_id, mode: "reference", outputRoot: path.join(scratch, "java home on path"), javaHome });
+    assert.equal(result.state, REPAIR_STATE.VALIDATED_SUCCESS, result.reason ?? result.python?.stderr);
+    assert.equal(result.toolchain.javac, path.join(javaHome, "bin", "javac"));
+  } finally {
+    process.env.PATH = savedPath;
+  }
+});

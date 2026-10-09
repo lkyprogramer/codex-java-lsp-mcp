@@ -5,7 +5,7 @@
 // output: java-devkit-task-eval/v1 兼容 results pack（仓库外）+ 每任务提示块留档。
 // pos:    docs/10 实验控制 —— 各臂共享 model/prompt/native tools/预算；
 //         provider 开销进总账（本驱动记录 embedding 调用与建库成本）。
-import { existsSync, readFileSync, readdirSync, statSync, mkdirSync, cpSync, rmSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, readdirSync, statSync, mkdirSync } from "node:fs";
 import { writeFile, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,35 +15,18 @@ import {
   liveProjectCacheRoot
 } from "../../scripts/run-agent-trace-live.mjs";
 import { openaiCompatibleChat, openaiCompatibleConfig } from "../../scripts/openai-compatible-chat.mjs";
-import { resolveInCandidate } from "../../scripts/eval-native-tools.mjs";
+import { buildToolSet, createAttemptWorkspace } from "../../scripts/eval-native-tools.mjs";
 import {
   EVAL_SYSTEM_PROMPT,
   EVAL_JAVA_SYMBOL_TOOL,
-  EVAL_READ_TOOL,
+  armOrder,
+  createRecorder,
   scoreRunOutcome
 } from "../../scripts/evaluate-java-task.mjs";
 import { DenseDiscoveryIndex, EmbeddingProvider, readSearchDocumentFacts, cosine } from "./provider.mjs";
 import { gatedDenseSearch, shouldRunDense } from "./gate.mjs";
-import { judgeRepair } from "./repair-judge.mjs";
-import { REPAIR_STATE, evaluateRepair } from "../../scripts/eval-repair-adapter.mjs";
-
-// docs/07：agent 在自己的候选拷贝里干活；判断器比较 candidate 与原始
-// fixture 的全部文件 hash，非 allowed_edits 变动即拒绝。
-const EVAL_WRITE_FILE_TOOL = {
-  type: "function",
-  function: {
-    name: "write_file",
-    description: "Write a full file into your working copy of the repository (repo-relative path). Use for repair tasks; the evaluator judges the resulting file diff.",
-    parameters: {
-      type: "object",
-      properties: {
-        path: { type: "string" },
-        content: { type: "string" }
-      },
-      required: ["path", "content"]
-    }
-  }
-};
+import { evaluateRepair } from "../../scripts/eval-repair-adapter.mjs";
+import { redactBackend, summarizeArm } from "./ab-summary.mjs";
 
 // 可搬运：每个根目录都来自 CLI 参数或环境变量；没有个人绝对路径默认值，
 // 缺参数就直接失败，而不是悄悄写到某个人的家目录。
@@ -73,6 +56,7 @@ const PILOT_TASK_IDS = (process.env.M3_PILOT
   : (() => { return readFileSync(TASKS_FILE, "utf8").trim().split("\n").map(l => JSON.parse(l).id); })());
 const REPEATS = Math.max(1, Number(process.env.M3_REPEATS ?? 3));
 const MAX_ROUNDS = 16;
+const SEED = Number(process.env.M3_SEED ?? 1984);
 
 function findSqliteFiles(root) {
   const out = [];
@@ -229,153 +213,100 @@ async function main() {
           : "");
       const baseText = isRepair
         ? `${task.query}\nThis is a repair task: locate the defect and FIX it by using the write_file tool to write the full corrected content of each source file you change (repo-relative path). Only change what the fix requires. Finish by replying with ONE JSON object with exactly these keys: ${contract}.`
-        : `${task.query}${contract ? `\nAnswer contract: reply with ONE JSON object with exactly these keys: ${contract}.` : ""}`;
+        : `${task.query}${contract ? `\nAnswer contract: reply with ONE JSON object with exactly these keys: ${contract}.` : ""}${task.budget ? `\nSource budget: all source you receive (read windows and previews together) may total at most ${task.budget.max_lines} lines / ${task.budget.max_bytes} bytes; receiving more fails the task.` : ""}`;
       const repairManifestEntry = isRepair
         ? JSON.parse(await readFile(path.join(KIT, "dataset/repairs/manifest.json"), "utf8")).find(e => e.task_id === task.id)
         : undefined;
       const hintBlock = formatHintBlock((dense.get(task.id) ?? { hints: [] }).hints ?? []);
-      for (const arm of ["a2-lexical", "a3-dense-hint"]) {
-        for (let repeat = 1; repeat <= REPEATS; repeat += 1) {
-          // 每轮独立候选拷贝 + 独立会话：会话初始绑定 fixture，agent 写入
-          // candidate 后 rebind 到 candidate，使下一跳 java_symbol 观察到修改。
-          const runWork = path.join(OUTPUT, "repair-work", `${task.id}:${arm}:r${repeat}`);
-          rmSync(runWork, { recursive: true, force: true });
-          mkdirSync(runWork, { recursive: true });
-          const candidateRoot = path.join(runWork, "candidate");
-          cpSync(repoRoot, candidateRoot, { recursive: true });
-          const attemptSession = { session: await openImpactSession({ repoRoot, serverJs: SERVER_JS, cacheRoot, env: process.env }) };
-          const rebond = async () => {
-            const old = attemptSession.session;
-            attemptSession.session = await openImpactSession({ repoRoot: candidateRoot, serverJs: SERVER_JS, cacheRoot: `${cacheRoot}-cand-r${repeat}`, env: process.env });
-            await old.close().catch(() => undefined);
-          };
+      for (let repeat = 1; repeat <= REPEATS; repeat += 1) {
+        // Seed-balanced arm order per (task, repeat): neither arm always runs first.
+        for (const arm of armOrder(["a2-lexical", "a3-dense-hint"], { seed: SEED, taskId: task.id, repeat })) {
+          // R03: one isolated candidate per attempt is the single read/write/
+          // test root, and the java_symbol session is opened ON it; after every
+          // write the session is re-opened on a fresh index so the next query
+          // observes the change.
+          const attemptKey = `${task.id}:${arm}:r${repeat}`;
+          const candidateRoot = createAttemptWorkspace(repoRoot, attemptKey, OUTPUT);
+          const toolSet = buildToolSet("product", isRepair ? "repair" : "qa", { candidateRoot });
+          let generation = 0;
+          const cacheFor = () => path.join(CACHE_ROOT, "attempts", path.basename(candidateRoot), `w${generation}`);
+          const sessions = [];
+          let session = await openImpactSession({ repoRoot: candidateRoot, serverJs: SERVER_JS, cacheRoot: cacheFor(), env: process.env });
+          sessions.push(session);
+          const recorder = createRecorder();
           const toolTrace = [];
-          const run = await runLiveAgentTask({
-            task: {
-              taskId: task.id,
-              // The only per-arm difference: A3 appends the precomputed external
-              // hint block. Everything else (prompt, tools, budget) is shared.
-              taskText: arm === "a3-dense-hint" ? `${baseText}${hintBlock}` : baseText,
-              projectId: task.corpus,
-              requiredContextFiles: (goldRow?.required_evidence ?? []).map(item => item.path),
-              anchor: task.anchors?.[0] ?? { file: "unknown", line: 1, column: 1 }
-            },
-            arm: "old",
-            systemPrompt: EVAL_SYSTEM_PROMPT,
-            tools: isRepair
-              ? [EVAL_JAVA_SYMBOL_TOOL, EVAL_READ_TOOL, EVAL_WRITE_FILE_TOOL]
-              : [EVAL_JAVA_SYMBOL_TOOL, EVAL_READ_TOOL],
-            chat: ({ messages, tools, maxTokens }) => chatWithRetry({ messages, tools, maxTokens }),
-            maxRounds: MAX_ROUNDS,
-            invoke: async (name, args) => {
-              let result;
-              if (name === "java_symbol") {
-                result = await attemptSession.session.symbol(args);
-              } else if (name === "read") {
-                const check = resolveInCandidate(candidateRoot, args.path);
-                if (check.error) {
-                  result = { error: check.error };
+          let run;
+          try {
+            run = await runLiveAgentTask({
+              task: {
+                taskId: task.id,
+                // The only per-arm difference: A3 appends the precomputed external
+                // hint block. Everything else (prompt, tools, budget) is shared.
+                taskText: arm === "a3-dense-hint" ? `${baseText}${hintBlock}` : baseText,
+                projectId: task.corpus,
+                requiredContextFiles: [],
+                anchor: task.anchors?.[0] ?? { file: "unknown", line: 1, column: 1 }
+              },
+              arm: "old",
+              systemPrompt: EVAL_SYSTEM_PROMPT,
+              tools: [EVAL_JAVA_SYMBOL_TOOL, ...toolSet.tools],
+              chat: ({ messages, tools, maxTokens }) => chatWithRetry({ messages, tools, maxTokens }),
+              maxRounds: MAX_ROUNDS,
+              onChat: request => {
+                appendFileSync(path.join(OUTPUT, "model-payloads.jsonl"), `${JSON.stringify({ attempt: { taskId: task.id, arm, repeat }, requestIndex: request.requestIndex, payloadHash: request.payloadHash, tools: request.tools, messages: request.messages })}\n`);
+                for (const receipt of request.newReceipts) recorder.recordModelDelivery(receipt, request);
+              },
+              invoke: async (name, args, callId) => {
+                let result;
+                if (name === "java_symbol") {
+                  result = session
+                    ? await session.symbol(args)
+                    : { error: "discovery session unavailable after a write; results would be stale", errorClass: "PARTIAL" };
                 } else {
+                  result = await toolSet.invoke(name, args);
+                }
+                recorder.recordToolResult({ callId, toolName: name, result });
+                if (result?.written === true) {
+                  const old = session;
+                  session = null;
+                  await old?.close?.().catch(() => undefined);
+                  generation += 1;
                   try {
-                    const full = readFileSync(check.target, "utf8");
-                    const lines = full.split("\n");
-                    const startLine = Math.max(1, Math.trunc(args.startLine ?? 1));
-                    const maxLines = Math.max(1, Math.min(400, Math.trunc(args.maxLines ?? 200)));
-                    result = {
-                      path: args.path,
-                      text: lines.slice(startLine - 1, startLine - 1 + maxLines).join("\n"),
-                      startLine,
-                      endLine: Math.min(lines.length, startLine - 1 + maxLines)
-                    };
+                    session = await openImpactSession({ repoRoot: candidateRoot, serverJs: SERVER_JS, cacheRoot: cacheFor(), env: process.env });
+                    sessions.push(session);
                   } catch (error) {
-                    result = { error: String(error.message ?? error) };
+                    recorder.record({ type: "SESSION_REBIND_FAILED", callId, error: String(error?.message ?? error).slice(0, 300) });
                   }
                 }
-              } else if (name === "write_file") {
-                const check = resolveInCandidate(candidateRoot, args.path);
-                if (check.error) {
-                  result = { error: check.error };
-                } else {
-                  try {
-                    mkdirSync(path.dirname(check.target), { recursive: true });
-                    await writeFile(check.target, String(args.content ?? ""), "utf8");
-                    result = { path: args.path, written: true };
-                    // 写入后把会话 rebind 到 candidate：下一跳 java_symbol 观察修改。
-                    await rebond();
-                  } catch (error) {
-                    result = { error: String(error.message ?? error) };
-                  }
-                }
-              } else {
-                result = { error: `unknown tool ${name}` };
+                const errText = typeof result?.error === "string" ? result.error : null;
+                toolTrace.push({
+                  name,
+                  args: { query: args.query, path: args.path, startLine: args.startLine },
+                  ok: !errText,
+                  error: errText ? errText.slice(0, 200) : undefined,
+                  candidateCount: Array.isArray(result?.candidates) ? result.candidates.length : undefined,
+                  written: result?.written === true || undefined
+                });
+                return result;
               }
-              const errText = typeof result?.error === "string" ? result.error : null;
-              toolTrace.push({
-                name,
-                args: { query: args.query, path: args.path, startLine: args.startLine },
-                ok: !errText,
-                error: errText ? errText.slice(0, 200) : undefined,
-                candidateCount: Array.isArray(result?.candidates) ? result.candidates.length : undefined,
-                written: result?.written === true || undefined
-              });
-              return result;
-            }
-          });
-          // docs/07：repair 结果由实际文件 diff + 外部冻结测试判定；
-          // 模型声称的 patchApplied/summary、实际 diff、外部测试三分记录，不合并。
-          // R04：优先走原 Python frozen judge（thin bridge）；只有环境阻塞
-          // （无 Python/无编译器）时才退回同策略的离线判定器，并如实记录实现。
-          let judge = null;
-          if (isRepair && repairManifestEntry) {
-            const bridged = await evaluateRepair({
-              kitRoot: KIT,
-              taskId: task.id,
-              mode: "candidate",
-              candidateRoot,
-              outputRoot: path.join(runWork, "judge"),
-              timeoutMs: (repairManifestEntry.timeout_seconds ?? 10) * 4_000 + 60_000
             });
-            judge = {
-              judgeImplementation: "frozen-python-bridge",
-              status: bridged.state,
-              passed: bridged.validatedSuccess,
-              detail: bridged.reason ?? null,
-              diffReport: bridged.policy ?? null,
-              judgeArtifactPath: bridged.judgeArtifactPath ?? null
-            };
-            if ([REPAIR_STATE.BLOCKED_ENV, REPAIR_STATE.BLOCKED_SETUP].includes(bridged.state)) {
-              const offline = await judgeRepair({
-                task: { id: task.id },
-                manifestEntry: repairManifestEntry,
-                fixtureRoot: repoRoot,
-                candidateRoot,
-                workDir: path.join(runWork, "judge-offline"),
-                javaHome: process.env.JAVA_HOME || null,
-                testSourceFile: path.join(KIT, "dataset", repairManifestEntry.test_file)
-              });
-              judge = { ...offline, judgeImplementation: "js-offline-fallback", blockedBy: bridged.reason };
-            }
+          } finally {
+            for (const opened of sessions) await opened.close?.().catch(() => undefined);
           }
-          const judgeBlocked = judge
-            ? [REPAIR_STATE.BLOCKED_ENV, REPAIR_STATE.BLOCKED_SETUP, REPAIR_STATE.JUDGE_ERROR, REPAIR_STATE.TIMEOUT].includes(judge.status)
-            : false;
-          const scored = isRepair && repairManifestEntry
-            ? {
-                taskOutcome: judgeBlocked ? "BLOCKED" : "MEASURED",
-                taskSuccess: judgeBlocked ? null : judge.passed,
-                answerStatus: judgeBlocked ? `REPAIR_${judge.status}` : judge.passed ? "REPAIR_PASS" : `REPAIR_FAIL_${judge.status}`
-              }
-            : scoreRunOutcome({
-                task,
-                goldRow,
-                run: {
-                  stopReason: run.stopReason,
-                  error: run.error,
-                  finalContent: run.finalContent,
-                  usage: run.usage,
-                  toolCallCount: run.toolCallCount
-                }
-              });
+          // R04: repair success comes ONLY from the frozen Python judge on this
+          // attempt's candidate tree; a blocked judge is UNMEASURED (it stays in
+          // the denominator), never replaced by another implementation's verdict.
+          const repairVerdict = isRepair
+            ? await evaluateRepair({
+                kitRoot: KIT,
+                taskId: task.id,
+                mode: "candidate",
+                candidateRoot,
+                outputRoot: path.join(OUTPUT, "judge", path.basename(candidateRoot))
+              })
+            : null;
+          const events = recorder.events();
+          const scored = scoreRunOutcome({ task, goldRow, run: { ...run, sourceReceived: events }, repairVerdict });
           runs.push({
             taskId: task.id,
             arm,
@@ -388,59 +319,44 @@ async function main() {
             taskOutcome: scored.taskOutcome,
             taskSuccess: scored.taskSuccess,
             answerStatus: scored.answerStatus,
-            judge: judge
+            candidateRoot,
+            judge: repairVerdict
               ? {
-                  status: judge.status,
-                  passed: judge.passed,
-                  detail: judge.detail,
-                  diffReport: judge.diffReport ?? judge.policy ?? null,
-                  judgeImplementation: judge.judgeImplementation,
-                  judgeArtifactPath: judge.judgeArtifactPath
+                  implementation: "frozen-python-bridge",
+                  state: repairVerdict.state,
+                  validatedSuccess: repairVerdict.validatedSuccess === true,
+                  reason: repairVerdict.reason ?? null,
+                  policy: repairVerdict.policy ?? null,
+                  judgeArtifactPath: repairVerdict.judgeArtifactPath ?? null
                 }
               : undefined,
+            sourceReceived: events.filter(event => event.type === "SOURCE_RECEIVED"),
             toolTrace,
             finalAnswer: (run.finalContent ?? "").slice(0, 400)
           });
           process.stderr.write(`[m3-ab] ${task.id} ${arm} r${repeat} ${scored.taskOutcome}/${scored.answerStatus} success=${scored.taskSuccess}\n`);
-          await attemptSession.session.close?.().catch(() => undefined);
         }
       }
     }
   }
 
-  // 汇总：两臂共享分母（全部 attempt），measured 只计可判定 attempt；
-  // BLOCKED 的 attempt 留在分母里，不静默丢弃。
+  // 汇总：成功率 = 成功 / 全部计划 attempt（失败、阻塞都在分母里）；
+  // conditionalAccuracy 只作上下文。
   {
-    const measured = runs.filter(run => run.taskOutcome === "MEASURED");
-  const summarize = arm => {
-    const subset = measured.filter(run => run.arm === arm);
-    const byKind = kind => {
-      const ks = subset.filter(run => (run.kind ?? "qa") === kind);
-      return ks.length ? { measured: ks.length, successes: ks.filter(run => run.taskSuccess).length, rate: ks.filter(run => run.taskSuccess).length / ks.length } : null;
-    };
-    return {
-      arm,
-      measured: subset.length,
-      denominator: runs.filter(run => run.arm === arm).length,
-      successes: subset.filter(run => run.taskSuccess).length,
-      rate: subset.length ? subset.filter(run => run.taskSuccess).length / subset.length : null,
-      qa: byKind("qa"),
-      repair: byKind("repair")
-    };
-  };
   const pack = {
     schema: "java-specialist-m3-agent-ab/v1",
     generatedAt: new Date().toISOString(),
-    backend: chatEnv,
+    backend: redactBackend(chatEnv),
     embedding: { ...provider.costReport() },
     arms: {
-      "a2-lexical": "java_symbol (production) + read",
+      "a2-lexical": "java_symbol (production) + native list/rg/read (repair: + write_file/test)",
       "a3-dense-hint": "a2-lexical + precomputed external DISCOVERY_HINT block in task text"
     },
     repeats: REPEATS,
     maxRounds: MAX_ROUNDS,
     taskIds: PILOT_TASK_IDS,
-    summary: [summarize("a2-lexical"), summarize("a3-dense-hint")],
+    seed: SEED,
+    summary: [summarizeArm(runs, "a2-lexical"), summarizeArm(runs, "a3-dense-hint")],
     perTask: PILOT_TASK_IDS.map(id => ({
       taskId: id,
       a2: runs.filter(run => run.taskId === id && run.arm === "a2-lexical").map(run => run.taskSuccess),

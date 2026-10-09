@@ -13,15 +13,19 @@
 //      run against the candidate worktree. Path occurrences only ever feed the
 //      coverage proxy, never the task outcome.
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   runLiveAgentTask,
-  openImpactSession,
-  liveProjectCacheRoot
+  openImpactSession
 } from "./run-agent-trace-live.mjs";
 import { openaiCompatibleChat, openaiCompatibleConfig } from "./openai-compatible-chat.mjs";
 import { buildToolSet, createAttemptWorkspace, nativeToolNames } from "./eval-native-tools.mjs";
+import { splitSourceLines } from "./eval-tool-wire.mjs";
+import { buildFrozenResultsPack, runProfileFrom } from "./eval-frozen-adapter.mjs";
+import { evaluateRepair } from "./eval-repair-adapter.mjs";
 
 /** R03: the native tool surface shared by BOTH arms; the only arm
  * difference is java_symbol on the product arm. */
@@ -40,7 +44,7 @@ const DISCOVERY_SCHEMA = "java-discovery/v1";
 // R01/W05 + R03: the prompt only references tools actually provided; both
 // arms share the same native tools (list/rg/read; repair adds write_file)
 // and the ONLY arm difference is the product arm's java_symbol.
-export const EVAL_SYSTEM_PROMPT = `You are a Java specialist agent working in the repository given in the task. Use only the tools actually provided in this session - both arms share the native list, rg and read tools; the product arm additionally provides java_symbol; repair tasks additionally get write_file - in any order, or none at all. Never assume a tool that is not listed. Finish by replying with ONE strict JSON object and nothing else: for qa tasks use exactly the keys named in the task; for repair tasks use {"patchApplied": true|false, "summary": "..."}.`;;
+export const EVAL_SYSTEM_PROMPT = `You are a Java specialist agent working in the repository given in the task. Use only the tools actually provided in this session - both arms share the native list, rg and read tools; the product arm additionally provides java_symbol; repair tasks additionally get write_file and test (a compile check) - in any order, or none at all. Never assume a tool that is not listed. Finish by replying with ONE strict JSON object and nothing else: for qa tasks use exactly the keys named in the task; for repair tasks use {"patchApplied": true|false, "summary": "..."}.`;;
 
 export const EVAL_JAVA_SYMBOL_TOOL = {
   type: "function",
@@ -147,8 +151,13 @@ export function findDuplicateJsonKeys(text) {
       else if (ch === "\\") escape = true;
       else if (ch === '"') {
         inString = false;
-        const value = buffer;
+        let value = buffer;
         buffer = "";
+        try {
+          value = JSON.parse(`"${value}"`);
+        } catch {
+          // malformed escape: JSON.parse of the whole answer rejects it later
+        }
         if (expectKey) {
           const top = topFrame();
           if (top && top.kind === "obj") {
@@ -211,27 +220,30 @@ export function strictEqualDeep(a, b) {
  * The answer alone is NOT an answer: scoreRunOutcome additionally gates on
  * the frozen required_evidence lines having been received.
  */
-export function scoreQaAnswer(goldAnswer, rawAnswer) {
-  if (typeof rawAnswer !== "string") {
-    return { status: "INVALID_ANSWER", correct: false, reason: "not_string" };
-  }
+/** Strict answer parse shared by the preliminary scorer and the frozen-kit
+ * adapter: {ok, value} or {ok:false, reason}. */
+export function parseStrictAnswer(rawAnswer) {
+  if (typeof rawAnswer !== "string") return { ok: false, reason: "not_string" };
   const text = rawAnswer.trim();
-  if (text.length > MAX_STRICT_ANSWER_CHARS) {
-    return { status: "INVALID_ANSWER", correct: false, reason: "input_too_long" };
-  }
+  if (text.length > MAX_STRICT_ANSWER_CHARS) return { ok: false, reason: "input_too_long" };
   const duplicates = findDuplicateJsonKeys(text);
-  if (duplicates.length > 0) {
-    return { status: "INVALID_ANSWER", correct: false, reason: "duplicate_keys", duplicates };
-  }
+  if (duplicates.length > 0) return { ok: false, reason: "duplicate_keys", duplicates };
   let value;
   try {
     value = JSON.parse(text);
   } catch {
-    return { status: "INVALID_ANSWER", correct: false, reason: "parse_error" };
+    return { ok: false, reason: "parse_error" };
   }
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    return { status: "INVALID_ANSWER", correct: false, reason: "not_object" };
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return { ok: false, reason: "not_object" };
+  return { ok: true, value };
+}
+
+export function scoreQaAnswer(goldAnswer, rawAnswer) {
+  const parsed = parseStrictAnswer(rawAnswer);
+  if (!parsed.ok) {
+    return { status: "INVALID_ANSWER", correct: false, reason: parsed.reason, ...(parsed.duplicates ? { duplicates: parsed.duplicates } : {}) };
   }
+  const value = parsed.value;
   if (!goldAnswer || typeof goldAnswer !== "object" || Array.isArray(goldAnswer)) {
     return { status: "NO_GOLD", correct: false };
   }
@@ -245,9 +257,16 @@ export function scoreQaAnswer(goldAnswer, rawAnswer) {
   return { status: "CORRECT", correct: true };
 }
 
-/** Line-set coverage of frozen required_evidence by actually received source
- * (SOURCE_RECEIVED rows). Mirrors the kit's line_set/validate_regions
- * semantics on the host-recorded events. */
+/** Only payload-attached source counts as received: SOURCE_RECEIVED rows
+ * are minted from the slices of a tool message that was actually dispatched
+ * in a chat request (recordModelDelivery). SOURCE_FETCHED rows (raw tool
+ * output, possibly larger than what the model saw) are never credited. */
+export function receivedSourceEvents(events) {
+  return (Array.isArray(events) ? events : []).filter(event => event?.type === "SOURCE_RECEIVED");
+}
+
+/** Line-set coverage of frozen required_evidence by received source.
+ * Mirrors the kit's line_set/validate_regions semantics. */
 export function receivedLineCoverage(requiredEvidence, sourceReceived) {
   const required = (Array.isArray(requiredEvidence) ? requiredEvidence : [])
     .map(item => ({
@@ -259,12 +278,16 @@ export function receivedLineCoverage(requiredEvidence, sourceReceived) {
       && Number.isInteger(item.startLine) && item.startLine >= 1
       && Number.isInteger(item.endLine) && item.endLine >= item.startLine);
   const covered = new Set();
-  for (const event of Array.isArray(sourceReceived) ? sourceReceived : []) {
+  let receivedLines = 0;
+  let receivedBytes = 0;
+  for (const event of receivedSourceEvents(sourceReceived)) {
     const path = String(event?.path ?? "").replaceAll("\\", "/");
     const start = Number(event?.startLine);
     const end = Number(event?.endLine);
     if (path.length === 0 || !Number.isInteger(start) || start < 1
       || !Number.isInteger(end) || end < start) continue;
+    receivedLines += end - start + 1;
+    receivedBytes += Buffer.byteLength(String(event.text ?? ""), "utf8");
     for (let line = start; line <= end; line += 1) covered.add(`${path}:${line}`);
   }
   const missing = [];
@@ -278,21 +301,32 @@ export function receivedLineCoverage(requiredEvidence, sourceReceived) {
   }
   return {
     requiredLines: required.reduce((sum, item) => sum + item.endLine - item.startLine + 1, 0),
+    receivedLines,
+    receivedBytes,
     missing
   };
 }
 
+/** Lines of a source window, terminators kept; a trailing terminator does
+ * not add a phantom line. */
+function countSourceLines(text) {
+  return splitSourceLines(String(text)).length;
+}
+
 /**
- * One SOURCE_RECEIVED event per chunk of actual source text that crossed the
- * wire. The recorder builds these from transport/tool output; a model
- * narrative (a summary that merely mentions a path) never creates an event.
+ * One source event per window of actual source text. `type` is
+ * SOURCE_FETCHED for raw tool output and SOURCE_RECEIVED only for slices
+ * that crossed the model-payload boundary. `contentHash` hashes the slice
+ * text; `fileContentHash` is the whole-file sha256 the frozen kit validates.
  */
-export function sourceReceivedEvent({ callId, toolName, path: repoRelativePath, text, startLine, endLine }) {
+export function sourceEvent({ type, callId, toolName, path: repoRelativePath, text, startLine, endLine, fileContentHash }) {
   return {
-    type: "SOURCE_RECEIVED",
+    type,
     callId,
+    toolName,
     path: String(repoRelativePath).replaceAll("\\", "/").replace(/^\.\/+/, ""),
     contentHash: createHash("sha256").update(String(text), "utf8").digest("hex"),
+    ...(typeof fileContentHash === "string" ? { fileContentHash } : {}),
     startLine: Number(startLine),
     endLine: Number(endLine),
     text: String(text),
@@ -301,11 +335,9 @@ export function sourceReceivedEvent({ callId, toolName, path: repoRelativePath, 
 }
 
 /**
- * Extracts SOURCE_RECEIVED events from one tool result. Two shapes exist:
- *  - the read tool: the host returns the exact file text plus its range;
- *  - java_symbol (discovery): candidates carry byte-exact source previews
- *    with evidenceRange, identified by the frozen schemaVersion.
- * Plain text summaries produce no event: a summary is not source.
+ * Extracts raw SOURCE_FETCHED events from one tool result (the read tool's
+ * exact window, java_symbol byte-exact previews). Fetched is not received:
+ * these rows are diagnostics and never feed the task outcome.
  */
 export function extractSourceEvents({ callId, toolName, result }) {
   const events = [];
@@ -315,15 +347,16 @@ export function extractSourceEvents({ callId, toolName, result }) {
       : Array.isArray(result) ? result.map(block => (typeof block?.text === "string" ? block.text : "")).join("")
         : "";
     if (typeof result.path === "string" && text) {
-      const lines = text.split("\n");
       const startLine = Number(result.startLine ?? 1);
-      events.push(sourceReceivedEvent({
+      events.push(sourceEvent({
+        type: "SOURCE_FETCHED",
         callId,
         toolName,
         path: result.path,
         text,
         startLine,
-        endLine: startLine + Math.max(0, lines.length - 1)
+        endLine: startLine + Math.max(0, countSourceLines(text) - 1),
+        fileContentHash: typeof result.contentHash === "string" ? result.contentHash : undefined
       }));
     }
     return events;
@@ -334,8 +367,6 @@ export function extractSourceEvents({ callId, toolName, result }) {
         : "";
   let payload;
   if (typeof result === "object" && result !== null && !Array.isArray(result) && "schemaVersion" in result) {
-    // The live session parses discovery wire text before handing it to the
-    // recorder; accept the already-parsed payload instead of re-parsing.
     payload = result;
   } else if (text) {
     try {
@@ -352,13 +383,15 @@ export function extractSourceEvents({ callId, toolName, result }) {
   for (const candidate of payload.candidates) {
     if (candidate?.previewKind === "source" && typeof candidate.preview === "string"
       && candidate.declaration?.relativePath && candidate.evidenceRange) {
-      events.push(sourceReceivedEvent({
+      events.push(sourceEvent({
+        type: "SOURCE_FETCHED",
         callId,
         toolName,
         path: candidate.declaration.relativePath,
         text: candidate.preview,
         startLine: candidate.evidenceRange.startLine,
-        endLine: candidate.evidenceRange.endLine
+        endLine: candidate.evidenceRange.endLine,
+        fileContentHash: candidate.declaration.contentHash
       }));
     }
   }
@@ -372,18 +405,36 @@ export function createRecorder() {
       for (const event of extractSourceEvents({ callId, toolName, result })) events.push(event);
       return events.length;
     },
-    // R01: minted only at the chat request boundary. A delivery receipt proves
-    // the exact model payload contained the tool content; it does NOT prove
-    // the model attended to it.
-    recordModelDelivery(receipt) {
+    /** R01: called only from the chat request boundary with the receipts the
+     * request newly attached. Proves payload attachment, not attention. */
+    recordModelDelivery(receipt, { requestIndex, payloadHash } = {}) {
       events.push({
-        type: "MODEL_TOOL_DELIVERED",
+        type: "MODEL_PAYLOAD_ATTACHED",
         callId: receipt.callId,
         toolName: receipt.toolName,
         contentHash: receipt.contentHash,
+        rawHash: receipt.rawHash ?? null,
         payloadBytes: receipt.payloadBytes,
-        ...(receipt.slices?.length ? { slices: receipt.slices } : {})
+        truncated: receipt.truncated === true,
+        ...(requestIndex !== undefined ? { requestIndex } : {}),
+        ...(payloadHash ? { requestPayloadHash: payloadHash } : {})
       });
+      for (const slice of receipt.slices ?? []) {
+        events.push(sourceEvent({
+          type: "SOURCE_RECEIVED",
+          callId: receipt.callId,
+          toolName: receipt.toolName,
+          path: slice.path,
+          text: slice.text,
+          startLine: slice.startLine,
+          endLine: slice.endLine,
+          fileContentHash: slice.fileContentHash
+        }));
+      }
+      return events.length;
+    },
+    record(event) {
+      events.push(event);
       return events.length;
     },
     events: () => events
@@ -414,8 +465,12 @@ export function assemblePack({ status, backend, datasetHash, arms, repeats, runs
     taskOutcome: run.taskOutcome ?? "UNMEASURED",
     taskSuccess: run.taskSuccess === true ? true : (run.taskSuccess === false ? false : null),
     answerStatus: run.answerStatus ?? null,
+    ...(run.attemptState ? { attemptState: run.attemptState } : {}),
+    ...(run.repairJudge ? { repairJudge: run.repairJudge } : {}),
+    ...(run.frozenScore ? { frozenScore: run.frozenScore, preliminary: run.preliminary } : {}),
+    ...(run.partial ? { partial: true } : {}),
     toolCallCount: run.toolCallCount ?? 0,
-    sourceReceived: run.sourceReceived ?? [],
+    sourceReceived: receivedSourceEvents(run.sourceReceived),
     usage: usageOrNull(run.usage),
     timedOut: Boolean(run.timedOut),
     ...(run.stopReason ? { stopReason: run.stopReason } : {}),
@@ -424,7 +479,21 @@ export function assemblePack({ status, backend, datasetHash, arms, repeats, runs
   });
   // The scheduled universe: the explicit plan when provided (missing rows are
   // synthesized as MISSING_RESULT), otherwise the rows actually delivered.
-  const keyOf = row => `${row.taskId ?? row}\u0000${row.arm ?? ""}\u0000${row.repeat ?? 1}`;
+  const keyOf = row => `${row.taskId}\u0000${row.arm ?? ""}\u0000${row.repeat ?? 1}`;
+  if (planned !== undefined) {
+    if (!Array.isArray(planned)) throw new Error("planned must be a flat list of attempt rows");
+    const seenPlan = new Set();
+    for (const row of planned) {
+      if (!row || typeof row !== "object" || Array.isArray(row) || typeof row.taskId !== "string") {
+        throw new Error("planned must be a flat list of {taskId, arm, repeat} rows");
+      }
+      if (seenPlan.has(keyOf(row))) throw new Error(`duplicate planned attempt: ${row.taskId} / ${row.arm} / repeat ${row.repeat}`);
+      seenPlan.add(keyOf(row));
+    }
+    for (const key of byKey.keys()) {
+      if (!seenPlan.has(key)) throw new Error(`result row outside the frozen plan: ${key.replaceAll("\u0000", " / ")}`);
+    }
+  }
   const universe = Array.isArray(planned) && planned.length > 0 ? planned : [...byKey.values()];
   const missing = [];
   const packs = [];
@@ -478,12 +547,38 @@ export function loadGoldFile(file) {
   return new Map(rows.map(row => [row.id, row]));
 }
 
+/** The full frozen schedule (task x arm x repeat, primary variant) - one
+ * flat row per attempt, fixed before anything runs. */
+export function buildPlannedAttempts(tasks, arms, repeats) {
+  return tasks.flatMap(task => arms.flatMap(arm =>
+    Array.from({ length: repeats }, (_, i) => ({ taskId: task.id, variant: "primary", arm, repeat: i + 1 }))));
+}
+
+/** Seed-balanced arm order per (task, repeat): the starting arm rotates with
+ * the repeat index from a seeded per-task offset, so no arm is always run
+ * first (warm caches, provider drift) and the order is reproducible. */
+export function armOrder(arms, { seed = 1984, taskId, repeat }) {
+  const offset = createHash("sha256").update(`${seed}:${taskId}`, "utf8").digest()[0];
+  const shift = (offset + repeat - 1) % arms.length;
+  return [...arms.slice(shift), ...arms.slice(0, shift)];
+}
+
+const REPAIR_BLOCKED_STATES = new Set(["BLOCKED_ENV", "BLOCKED_SETUP", "JUDGE_ERROR"]);
+
+function attemptStateOf(run) {
+  if (run.setupError) return "BLOCKED_SETUP";
+  if (["FAILED_RUNTIME", "FAILED_CONTEXT_CAP", "MAX_COMPLETION_TOKENS"].includes(run.stopReason)) return "FAILED_RUNTIME";
+  if (typeof run.stopReason !== "string") return "MISSING_RESULT";
+  return "COMPLETED";
+}
+
 /**
- * Live eval runner (T09 step 5): 12 devpilot tasks x arms x repeats through
- * the real product MCP server and an authorized model backend. Only reached
- * with a real backend; without one, main() already reported BLOCKED_AUTH.
- * Q-track outcomes are scored against frozen gold; P-track (repair) outcomes
- * stay UNMEASURED unless an external frozen-test runner is injected.
+ * Live eval runner: every planned attempt (task x arm x repeat) gets its own
+ * candidate workspace that is the single analysis/read/write/test root; the
+ * product arm's java_symbol session is opened ON that candidate and re-opened
+ * after every write so the next query observes the change. Arm order is
+ * seed-balanced. QA is scored on payload-attached source only; repair is
+ * judged by the frozen Python judge on the attempt's candidate tree.
  */
 export async function runLiveEvalRun({
   tasks,
@@ -494,223 +589,209 @@ export async function runLiveEvalRun({
   outputDir,
   env = process.env,
   serverJs,
-  repairTester
+  kitRoot,
+  seed = 1984,
+  maxRounds = 16,
+  chat,
+  repairJudge = evaluateRepair
 }) {
   const config = openaiCompatibleConfig(env);
-  if (!config.baseUrl || !config.apiKey || !config.model) {
+  if (!chat && (!config.baseUrl || !config.apiKey || !config.model)) {
     throw new Error("OPENAI_BASE_URL, OPENAI_API_KEY, and OPENAI_MODEL are required for a live eval run");
   }
+  const chatImpl = chat ?? (({ messages, tools, maxTokens }) => openaiCompatibleChat({ ...config, messages, tools, maxTokens }));
   mkdirSync(outputDir, { recursive: true });
+  const payloadLog = path.join(outputDir, "model-payloads.jsonl");
   const recorder = createRecorder();
   const runs = [];
   for (const task of tasks) {
-    const repoRoot = repoRoots?.[task.corpus];
-    if (!repoRoot) {
-      for (const arm of arms) {
-        for (let repeat = 1; repeat <= repeats; repeat += 1) {
-          runs.push({
-            taskId: task.id,
-            arm,
-            repeat,
-            taskOutcome: "UNMEASURED",
-            taskSuccess: null,
-            error: `no staged repository for corpus ${task.corpus}`
-          });
-        }
-      }
-      continue;
-    }
     const goldRow = gold?.get(task.id);
-    // R03: the pristine fixture is opened ONCE per corpus for the MCP
-    // session's index; each attempt then gets its own candidate workspace
-    // that all host tools (list/rg/read/write) operate on.
-    const fixtureRoot = repoRoot;
-    const lastCandidateSession = {};
-    for (const arm of arms) {
-      let fixtureSession;
-      try {
-        fixtureSession = await openImpactSession({
-          repoRoot: fixtureRoot,
-          serverJs,
-          cacheRoot: liveProjectCacheRoot(outputDir, task.corpus),
-          env
-        });
-        for (let repeat = 1; repeat <= repeats; repeat += 1) {
-          // Each attempt starts from a live session bound to the PRISTINE
-          // fixture; a previous attempt's write-rebind may have closed it.
-          if (!fixtureSession) {
-            fixtureSession = await openImpactSession({
-              repoRoot: fixtureRoot,
-              serverJs,
-              cacheRoot: liveProjectCacheRoot(outputDir, task.corpus),
-              env
-            });
-          }
-          let callSeq = 0;
-          const eventsBefore = recorder.events().length;
-          const deliveredReceipts = new Set();
-          // One isolated candidate copy per attempt (arm x repeat); the
-          // candidate root is the single read/write root for this attempt.
-          const candidateRoot = createAttemptWorkspace(
-            fixtureRoot,
-            `${task.id}:${arm}:r${repeat}`,
-            path.join(outputDir, "candidates")
-          );
-          const toolSet = buildToolSet(
-            arm === "product" ? "product" : "control",
-            task.kind === "repair" ? "repair" : "qa",
-            { candidateRoot }
-          );
-          const attemptSession = { session: fixtureSession };
-          const rebinding = { value: false };
-          const rebindingError = { value: null };
-          const rebondSession = async () => {
-            const old = attemptSession.session;
-            const cache = liveProjectCacheRoot(outputDir, task.corpus, `${arm}-cand-r${repeat}`);
-            attemptSession.session = await openImpactSession({
-              repoRoot: candidateRoot,
-              serverJs,
-              cacheRoot: cache,
-              env
-            });
-            lastCandidateSession[arm] = attemptSession.session;
-            fixtureSession = null; // the bound session is consumed by the rebind
-            await old.close().catch(() => undefined);
-          };
-          // The frozen output contract (answer keys) is part of the task both
-          // arms see; without it the model invents its own key names.
+    const fixtureRoot = repoRoots?.[task.corpus]
+      ?? (kitRoot ? path.join(path.resolve(kitRoot), "dataset", "corpora", task.corpus) : undefined);
+    for (let repeat = 1; repeat <= repeats; repeat += 1) {
+      for (const arm of armOrder(arms, { seed, taskId: task.id, repeat })) {
+        const attemptKey = `${task.id}:${arm}:r${repeat}`;
+        const eventsBefore = recorder.events().length;
+        const attemptStarted = Date.now();
+        const base = { taskId: task.id, variant: "primary", arm, repeat, kind: task.kind };
+        if (!fixtureRoot || !existsSync(fixtureRoot)) {
+          runs.push({ ...base, attemptState: "BLOCKED_SETUP", taskOutcome: "UNMEASURED", taskSuccess: null, answerStatus: "NO_STAGED_REPOSITORY", error: `no staged repository for corpus ${task.corpus}` });
+          continue;
+        }
+        let candidateRoot;
+        let session = null;
+        let sessionGeneration = 0;
+        const sessions = [];
+        let partial = false;
+        const cacheFor = generation => path.join(outputDir, "mcp-cache", createHash("sha256").update(attemptKey).digest("hex").slice(0, 16), `w${generation}`);
+        const openSession = async () => {
+          const opened = await openImpactSession({ repoRoot: candidateRoot, serverJs, cacheRoot: cacheFor(sessionGeneration), env });
+          sessions.push(opened);
+          return opened;
+        };
+        try {
+          candidateRoot = createAttemptWorkspace(fixtureRoot, attemptKey, outputDir);
+          const toolSet = buildToolSet(arm === "product" ? "product" : "control", task.kind === "repair" ? "repair" : "qa", { candidateRoot });
+          // The control arm never needs (or pays for) a discovery session.
+          if (arm === "product") session = await openSession();
           const contract = task.output_contract?.answer_keys
-            ? Object.entries(task.output_contract.answer_keys)
-                .map(([key, type]) => `${key}: ${type}`)
-                .join(", ")
+            ? Object.entries(task.output_contract.answer_keys).map(([key, type]) => `${key}: ${type}`).join(", ")
             : "";
+          const budget = task.budget
+            ? `\nSource budget: all source you receive (read windows and previews together) may total at most ${task.budget.max_lines} lines / ${task.budget.max_bytes} bytes; receiving more fails the task.`
+            : "";
+          let callSeq = 0;
           const run = await runLiveAgentTask({
             task: {
               taskId: task.id,
-              taskText: `${task.query}${contract ? `\nAnswer contract: reply with ONE JSON object with exactly these keys: ${contract}.` : ""}`,
+              taskText: `${task.query}${contract ? `\nAnswer contract: reply with ONE JSON object with exactly these keys: ${contract}.` : ""}${task.kind === "qa" ? budget : ""}`,
               projectId: task.corpus,
-              requiredContextFiles: (goldRow?.required_evidence ?? []).map(item => item.path),
+              requiredContextFiles: [],
               anchor: task.anchors?.[0] ?? { file: "unknown", line: 1, column: 1 }
             },
             arm: "old",
-            // R03 symmetric tools: both arms get list/rg/read (repair adds
-            // write_file); the ONLY arm difference is java_symbol.
             systemPrompt: EVAL_SYSTEM_PROMPT,
-            tools: arm === "product"
-              ? [EVAL_JAVA_SYMBOL_TOOL, ...toolSet.tools]
-              : toolSet.tools,
-            chat: ({ messages, tools, maxTokens }) => openaiCompatibleChat({ ...config, messages, tools, maxTokens }),
-            // R01: delivery receipts are minted at the chat request boundary;
-            // payload-attached evidence is only credited after this point.
-            onChat: ({ receipts, payloadHash }) => {
-              for (const receipt of receipts) {
-                if (!deliveredReceipts.has(receipt.callId)) {
-                  deliveredReceipts.add(receipt.callId);
-                  recorder.recordModelDelivery(receipt);
-                }
+            tools: arm === "product" ? [EVAL_JAVA_SYMBOL_TOOL, ...toolSet.tools] : toolSet.tools,
+            chat: chatImpl,
+            maxRounds,
+            onChat: request => {
+              appendFileSync(payloadLog, `${JSON.stringify({
+                attempt: { taskId: task.id, arm, repeat },
+                requestIndex: request.requestIndex,
+                payloadHash: request.payloadHash,
+                tools: request.tools,
+                messages: request.messages
+              })}\n`, "utf8");
+              for (const receipt of request.newReceipts) {
+                recorder.recordModelDelivery(receipt, { requestIndex: request.requestIndex, payloadHash: request.payloadHash });
               }
             },
-            // Both arms get the same, larger round budget; the model is free
-            // to stop earlier whenever it has its answer.
-            maxRounds: 16,
             invoke: async (name, args) => {
               callSeq += 1;
               const callId = `eval:${task.id}:${arm}:${repeat}:${callSeq}`;
               if (name === "java_symbol") {
-                return attemptSession.session.symbol(args, text => {
-                  recorder.recordToolResult({ callId, toolName: name, result: text });
-                });
+                if (arm !== "product") return { error: "tool java_symbol is not provided in this session" };
+                if (!session) {
+                  return { error: "discovery session unavailable after a write; results would be stale", errorClass: "PARTIAL" };
+                }
+                const result = await session.symbol(args);
+                recorder.recordToolResult({ callId, toolName: name, result });
+                return result;
               }
               const result = await toolSet.invoke(name, args);
-              if (result && result.written === true) {
-                recorder.recordToolResult({ callId, toolName: name, result });
-                // The candidate changed: rebase the discovery session onto
-                // the candidate so the NEXT query observes the modification.
-                if (!rebinding.value) {
-                  rebinding.value = true;
-                  try {
-                    await rebondSession();
-                  } catch (error) {
-                    rebindingError.value = error instanceof Error ? error.message : String(error);
-                  }
+              if (name === "read") recorder.recordToolResult({ callId, toolName: name, result });
+              if (result?.written === true && arm === "product") {
+                // The candidate changed: the next java_symbol query must see
+                // it, so the session is re-opened on a fresh index.
+                const old = session;
+                session = null;
+                await old?.close().catch(() => undefined);
+                sessionGeneration += 1;
+                try {
+                  session = await openSession();
+                } catch (error) {
+                  partial = true;
+                  recorder.record({ type: "SESSION_REBIND_FAILED", callId, error: String(error?.message ?? error).slice(0, 300) });
                 }
-              } else if (result && result.text != null) {
-                recorder.recordToolResult({ callId, toolName: name, result });
               }
               return result;
             }
           });
-          if (rebindingError.value) {
-            recorder.recordToolResult({ callId: `eval:${task.id}:${arm}:${repeat}:rebind`, toolName: "session_rebind", result: { error: rebindingError.value } });
+          let repairVerdict = null;
+          if (task.kind === "repair" && kitRoot) {
+            repairVerdict = await repairJudge({
+              kitRoot,
+              taskId: task.id,
+              mode: "candidate",
+              candidateRoot,
+              outputRoot: path.join(outputDir, "judge", path.basename(candidateRoot))
+            });
           }
-          const sourceReceived = recorder.events().slice(eventsBefore);
-          const scored = scoreRunOutcome({ task, goldRow, run: {
-            stopReason: run.stopReason,
-            error: run.error,
-            finalContent: run.finalContent,
-            usage: run.usage,
-            toolCallCount: run.toolCallCount,
-            sourceReceived
-          }, repairTester });
+          const events = recorder.events().slice(eventsBefore);
+          const scored = scoreRunOutcome({ task, goldRow, run: { ...run, sourceReceived: events }, repairVerdict });
           runs.push({
-            taskId: task.id,
-            arm,
-            repeat,
+            ...base,
+            attemptState: attemptStateOf(run),
             taskOutcome: scored.taskOutcome,
             taskSuccess: scored.taskSuccess,
             answerStatus: scored.answerStatus,
+            ...(scored.missingEvidence ? { missingEvidence: scored.missingEvidence } : {}),
             stopReason: run.stopReason,
             toolCallCount: run.toolCallCount,
             usage: run.usage,
-            sourceReceived: recorder.events().slice(eventsBefore),
-            finalAnswer: typeof run.finalContent === "string" ? run.finalContent.slice(0, 1000) : "",
-            timedOut: run.stopReason === "MAX_ROUNDS" || run.stopReason === "FAILED_RUNTIME",
+            elapsedMs: Date.now() - attemptStarted,
+            candidateRoot,
+            ...(partial ? { partial: true } : {}),
+            ...(repairVerdict ? {
+              repairJudge: {
+                state: repairVerdict.state,
+                validatedSuccess: repairVerdict.validatedSuccess === true,
+                reason: repairVerdict.reason ?? null,
+                judgeArtifactPath: repairVerdict.judgeArtifactPath ?? null,
+                policy: repairVerdict.policy ?? null
+              }
+            } : {}),
+            sourceReceived: events,
+            finalAnswer: typeof run.finalContent === "string" ? run.finalContent.slice(0, 4000) : "",
+            timedOut: run.stopReason === "MAX_ROUNDS",
             ...(run.error ? { error: run.error } : {})
           });
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        for (let repeat = 1; repeat <= repeats; repeat += 1) {
+        } catch (error) {
           runs.push({
-            taskId: task.id,
-            arm,
-            repeat,
+            ...base,
+            attemptState: "FAILED_RUNTIME",
             taskOutcome: "UNMEASURED",
             taskSuccess: null,
-            error: message.slice(0, 300)
+            answerStatus: "ATTEMPT_SETUP_OR_RUNTIME_ERROR",
+            ...(candidateRoot ? { candidateRoot } : {}),
+            sourceReceived: recorder.events().slice(eventsBefore),
+            error: String(error instanceof Error ? error.message : error).slice(0, 500)
           });
-        }
-      } finally {
-        // Close whatever session this arm is currently bound to (fixture or
-        // rebound candidate) so no server process leaks.
-        const toClose = new Set();
-        if (fixtureSession) toClose.add(fixtureSession);
-        if (lastCandidateSession[arm]) toClose.add(lastCandidateSession[arm]);
-        for (const s of toClose) {
-          await s.close().catch(() => undefined);
+        } finally {
+          for (const opened of sessions) await opened.close().catch(() => undefined);
         }
       }
     }
   }
   return {
     runs,
-    sourceReceived: recorder.events(),
-    backend: { kind: "openai-api", model: config.model }
+    backend: chat ? { kind: "injected-chat" } : { kind: "openai-api", model: config.model, baseUrlHost: safeHost(config.baseUrl) }
   };
 }
 
+function safeHost(baseUrl) {
+  try {
+    return new URL(baseUrl).host;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * R02: the single canonical outcome scorer - there is no parallel weak
- * path. QA requires the strict answer AND full receipt of the frozen
- * required_evidence lines; repair requires the injected frozen judge to
- * return `passed === true` (a Promise or truthy object is never a success).
- * Failed stops and unmeasured kinds stay taskSuccess null - but their
- * scheduled row remains in the denominator.
+ * Preliminary per-attempt outcome (the frozen kit scorer, when available,
+ * is authoritative for QA - see scoreWithFrozenKit). QA requires the strict
+ * answer, every frozen required_evidence line among PAYLOAD-ATTACHED
+ * source, and the task's received-source budget. Repair requires the frozen
+ * judge's validatedSuccess === true on the attempt's candidate tree. Failed
+ * stops and blocked judges stay taskSuccess null - their scheduled row
+ * remains in the denominator.
  */
-export function scoreRunOutcome({ task, goldRow, run, repairTester }) {
+export function scoreRunOutcome({ task, goldRow, run, repairVerdict }) {
   const failed = run.stopReason === "FAILED_RUNTIME"
     || run.stopReason === "FAILED_CONTEXT_CAP"
     || run.stopReason === "MAX_COMPLETION_TOKENS";
+  if (task.kind === "repair") {
+    // The candidate tree is judged even when the agent loop failed: what
+    // counts is the code it left behind, never its self-report.
+    if (!repairVerdict || typeof repairVerdict !== "object" || typeof repairVerdict.then === "function") {
+      return { taskOutcome: "UNMEASURED", taskSuccess: null, answerStatus: repairVerdict ? "INVALID_JUDGE_VERDICT" : "NO_FROZEN_JUDGE" };
+    }
+    if (REPAIR_BLOCKED_STATES.has(repairVerdict.state)) {
+      return { taskOutcome: "UNMEASURED", taskSuccess: null, answerStatus: `REPAIR_${repairVerdict.state}` };
+    }
+    const passed = repairVerdict.validatedSuccess === true;
+    return { taskOutcome: "MEASURED", taskSuccess: passed, answerStatus: passed ? "REPAIR_VALIDATED" : `REPAIR_${repairVerdict.state ?? "REJECTED"}` };
+  }
   if (failed) {
     return { taskOutcome: "UNMEASURED", taskSuccess: null, answerStatus: run.stopReason };
   }
@@ -722,8 +803,6 @@ export function scoreRunOutcome({ task, goldRow, run, repairTester }) {
     if (!score.correct) {
       return { taskOutcome: "MEASURED", taskSuccess: false, answerStatus: score.status };
     }
-    // E04: a correct answer is not an answer until the required frozen
-    // source lines were actually received on this attempt.
     const required = Array.isArray(goldRow.required_evidence) ? goldRow.required_evidence : [];
     if (required.length === 0) {
       return { taskOutcome: "MEASURED", taskSuccess: false, answerStatus: "NO_REQUIRED_EVIDENCE" };
@@ -732,21 +811,107 @@ export function scoreRunOutcome({ task, goldRow, run, repairTester }) {
     if (coverage.missing.length > 0) {
       return { taskOutcome: "MEASURED", taskSuccess: false, answerStatus: "MISSING_REQUIRED_EVIDENCE", missingEvidence: coverage.missing };
     }
+    const budget = task.budget;
+    if (budget && (coverage.receivedLines > budget.max_lines || coverage.receivedBytes > budget.max_bytes)) {
+      return { taskOutcome: "MEASURED", taskSuccess: false, answerStatus: "RECEIVED_OVER_BUDGET" };
+    }
     return { taskOutcome: "MEASURED", taskSuccess: true, answerStatus: score.status };
   }
-  if (task.kind === "repair") {
-    if (typeof repairTester !== "function") {
-      return { taskOutcome: "UNMEASURED", taskSuccess: null, answerStatus: "NO_FROZEN_JUDGE" };
-    }
-    const verdict = repairTester({ task, finalContent: run.finalContent });
-    const passed = verdict != null && verdict.passed === true;
-    return {
-      taskOutcome: "MEASURED",
-      taskSuccess: passed,
-      answerStatus: passed ? (verdict?.status ?? "external") : (verdict?.status ?? "REJECTED")
-    };
-  }
   return { taskOutcome: "UNMEASURED", taskSuccess: null, answerStatus: task.kind };
+}
+
+function runPython(argv, { cwd, timeoutMs = 300_000 }) {
+  const result = spawnSync(argv[0], argv.slice(1), {
+    cwd,
+    encoding: "utf8",
+    timeout: timeoutMs,
+    maxBuffer: 64 * 1024 * 1024,
+    env: { PATH: process.env.PATH ?? "", PYTHONDONTWRITEBYTECODE: "1", LC_ALL: "C.UTF-8", HOME: process.env.HOME ?? "" }
+  });
+  return { status: result.status, stdout: result.stdout ?? "", stderr: result.stderr ?? "", error: result.error ? String(result.error.message ?? result.error) : null };
+}
+
+/**
+ * The frozen kit is the single authoritative QA scorer: each arm's attempts
+ * become a java-specialist-results/v1 pack (eval-frozen-adapter) and are
+ * scored by `python -m harness score` against the kit's own corpora. QA
+ * taskSuccess is replaced by the kit's qa_contract_pass; the JS outcome is
+ * kept only as `preliminary`. Repair rows keep the frozen judge verdict.
+ */
+export function scoreWithFrozenKit({ kitRoot, tasks, runs, arms, repeats, outputDir, model, python = process.env.JSB_PYTHON ?? "python3" }) {
+  const kit = path.resolve(kitRoot);
+  const dataset = path.join(kit, "dataset");
+  const digest = runPython([python, "-c",
+    "import json,sys;from pathlib import Path;from harness.dataset import dataset_digest;from harness.cli import corpus_fingerprint;d=Path(sys.argv[1]);print(json.dumps({'dataset':dataset_digest(d),'corpus':corpus_fingerprint(d/'corpora')}))",
+    dataset], { cwd: kit });
+  if (digest.status !== 0) {
+    return { kind: "preliminary-js", reason: `frozen kit digest failed: ${(digest.error ?? digest.stderr).slice(0, 300)}` };
+  }
+  const hashes = JSON.parse(digest.stdout.trim());
+  const splits = [...new Set(tasks.map(task => task.split))];
+  const split = splits.length === 1 && ["dev", "locked"].includes(splits[0]) ? splits[0] : "all";
+  const scoreDir = path.join(outputDir, "frozen-score");
+  mkdirSync(scoreDir, { recursive: true });
+  const reports = {};
+  for (const arm of arms) {
+    const armRuns = runs.filter(run => run.arm === arm);
+    const plan = tasks.flatMap(task => Array.from({ length: repeats }, (_, i) => ({ taskId: task.id, variant: "primary", repeat: i })));
+    const attempts = armRuns.map(run => {
+      const parsed = parseStrictAnswer(run.finalAnswer);
+      return {
+        key: { taskId: run.taskId, variant: "primary", arm, repeat: run.repeat - 1 },
+        state: run.attemptState === "COMPLETED" ? "COMPLETED"
+          : run.attemptState === "BLOCKED_SETUP" ? "BLOCKED_SETUP"
+            : run.attemptState === "MISSING_RESULT" ? "MISSING_RESULT" : "FAILED_RUNTIME",
+        answer: run.kind === "qa" && parsed.ok ? parsed.value : null,
+        usage: run.usage,
+        sourceReceived: run.sourceReceived ?? [],
+        elapsedMs: run.elapsedMs
+      };
+    });
+    const pack = buildFrozenResultsPack({
+      plan,
+      attempts,
+      arm,
+      datasetHash: hashes.dataset,
+      runProfile: runProfileFrom({ corpusHash: hashes.corpus, corpusMode: "bundled-scoped", repeats, model }),
+      model
+    });
+    const packPath = path.join(scoreDir, `${arm}-results.json`);
+    const reportPath = path.join(scoreDir, `${arm}-report.json`);
+    writeFileSync(packPath, `${JSON.stringify(pack, null, 2)}\n`, "utf8");
+    const scored = runPython([python, "-m", "harness", "--dataset", dataset, "score", "--input", packPath, "--split", split, "--output", reportPath], { cwd: kit });
+    if (scored.status !== 0) {
+      return { kind: "preliminary-js", reason: `frozen kit score failed for ${arm}: ${(scored.error ?? scored.stderr).slice(0, 300)}` };
+    }
+    reports[arm] = { packPath, reportPath, report: JSON.parse(readFileSync(reportPath, "utf8")) };
+  }
+  for (const run of runs) {
+    if (run.kind !== "qa" || !reports[run.arm]) continue;
+    const row = reports[run.arm].report.rows.find(r => r.task_id === run.taskId && r.variant === "primary" && r.repeat === run.repeat - 1);
+    if (!row) continue;
+    run.preliminary = { taskSuccess: run.taskSuccess, answerStatus: run.answerStatus };
+    run.frozenScore = {
+      qaContractPass: row.qa_contract_pass,
+      valid: row.valid,
+      budgetPass: row.budget_pass,
+      receivedEvidenceComplete: row.received_evidence_complete,
+      receivedLines: row.received_lines,
+      receivedBytes: row.received_bytes,
+      errors: row.errors
+    };
+    run.taskOutcome = "MEASURED";
+    run.taskSuccess = row.qa_contract_pass === true;
+  }
+  const first = Object.values(reports)[0]?.report;
+  return {
+    kind: "frozen-kit",
+    split,
+    datasetHash: hashes.dataset,
+    corpusHash: hashes.corpus,
+    scorerHash: first?.scorer_hash ?? null,
+    reports: Object.fromEntries(Object.entries(reports).map(([arm, value]) => [arm, { packPath: value.packPath, reportPath: value.reportPath }]))
+  };
 }
 
 export async function main(argv = process.argv.slice(2), env = process.env) {
@@ -759,10 +924,13 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   const output = flag("--output");
   const arms = (flag("--arms") ?? "product,control").split(",").filter(Boolean);
   const repeats = Math.max(1, Number(flag("--repeats") ?? 1));
+  const seed = Number(flag("--seed") ?? 1984);
+  const maxRounds = Math.max(1, Number(flag("--max-rounds") ?? 16));
+  const kitRoot = flag("--kit-root");
   const dryRun = argv.includes("--dry-run");
   const filter = (flag("--filter") ?? "").split(",").filter(Boolean);
   if (!tasksFile || !output) {
-    console.error("usage: evaluate-java-task.mjs --tasks <dev.jsonl> [--gold <gold.jsonl>] [--filter <id,id..>] [--repo-roots <corpus=path,..>] --output <dir> [--arms product,control] [--repeats N] [--dry-run]");
+    console.error("usage: evaluate-java-task.mjs --tasks <dev.jsonl> [--gold <gold.jsonl>] [--kit-root <frozen kit>] [--filter <id,id..>] [--repo-roots <corpus=path,..>] --output <dir> [--arms product,control] [--repeats N] [--seed N] [--max-rounds N] [--server-js dist/server.js] [--dry-run]");
     return 2;
   }
   const datasetHash = goldFile
@@ -770,16 +938,14 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     : null;
   const allTasks = loadTaskFile(tasksFile);
   const tasks = filter.length > 0 ? allTasks.filter(task => filter.includes(task.id)) : allTasks;
+  // The full schedule is frozen before anything runs; every row stays in the
+  // denominator whatever happens to it.
+  const planned = buildPlannedAttempts(tasks, arms, repeats);
+  mkdirSync(output, { recursive: true });
+  writeFileSync(path.join(output, "schedule.jsonl"), planned.map(row => JSON.stringify(row)).join("\n") + (planned.length ? "\n" : ""), "utf8");
   const backend = detectBackend(env);
   if (!backend || dryRun) {
-    const runs = tasks.flatMap(task => arms.flatMap(arm =>
-      Array.from({ length: repeats }, (_, repeat) => ({
-        taskId: task.id,
-        arm,
-        repeat: repeat + 1,
-        taskOutcome: "UNMEASURED",
-        taskSuccess: null
-      }))));
+    const runs = planned.map(row => ({ ...row, taskOutcome: "UNMEASURED", taskSuccess: null }));
     const pack = assemblePack({
       status: dryRun ? "DRY_RUN" : "BLOCKED_AUTH",
       backend: dryRun ? null : backend,
@@ -787,15 +953,13 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
       arms,
       repeats,
       runs,
+      planned,
       blockedReasons: dryRun ? undefined : backendDeficit(env)
-    });    mkdirSync(output, { recursive: true });
+    });
     writeFileSync(path.join(output, "results-pack.json"), `${JSON.stringify(pack, null, 2)}\n`, "utf8");
     console.log(JSON.stringify({ status: pack.status, denominator: pack.denominator, taskSuccessRate: pack.taskSuccessRate, output: path.join(output, "results-pack.json") }, null, 2));
     return 0;
   }
-  // Live path: an authorized backend exists. A live run additionally needs a
-  // staged corpus per task and gold; without them the pack reports exactly
-  // what is missing instead of measuring anything.
   const repoRoots = Object.fromEntries(String(flag("--repo-roots") ?? "").split(",")
     .filter(Boolean)
     .map(pair => {
@@ -806,6 +970,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     console.error("live run requires --gold <gold.jsonl> (frozen evaluator-side labels)");
     return 2;
   }
+  const scriptDir = path.dirname(fileURLToPath(import.meta.url));
   const live = await runLiveEvalRun({
     tasks,
     gold: loadGoldFile(goldFile),
@@ -814,8 +979,14 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     repoRoots,
     outputDir: output,
     env,
-    serverJs: flag("--server-js") ?? path.join(path.dirname(new URL(import.meta.url).pathname), "dist", "server.js")
+    kitRoot,
+    seed,
+    maxRounds,
+    serverJs: flag("--server-js") ?? path.join(scriptDir, "..", "dist", "server.js")
   });
+  const scorer = kitRoot
+    ? scoreWithFrozenKit({ kitRoot, tasks, runs: live.runs, arms, repeats, outputDir: output, model: live.backend.model ?? null })
+    : { kind: "preliminary-js", reason: "--kit-root not given: QA uses the preliminary JS scorer and repair is UNMEASURED" };
   const pack = assemblePack({
     status: "MEASURED",
     backend: live.backend,
@@ -823,16 +994,20 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     arms,
     repeats,
     runs: live.runs,
-    // Full scheduled plan: every task x arm x repeat row stays in the
-    // denominator even if its result row never materialized.
-    planned: tasks.flatMap(task => arms.map(arm =>
-      Array.from({ length: repeats }, (_, i) => ({ taskId: task.id, arm, repeat: i + 1 }))))
+    planned
   });
-  mkdirSync(output, { recursive: true });
+  pack.scorer = scorer;
+  pack.seed = seed;
+  pack.maxRounds = maxRounds;
+  pack.byArm = Object.fromEntries(arms.map(arm => {
+    const rows = pack.packs.filter(row => row.arm === arm);
+    const successes = rows.filter(row => row.taskSuccess === true).length;
+    const measured = rows.filter(row => row.taskSuccess === true || row.taskSuccess === false).length;
+    return [arm, { scheduled: rows.length, successes, successRate: rows.length ? successes / rows.length : null, measured, conditionalAccuracy: measured ? successes / measured : null }];
+  }));
   writeFileSync(path.join(output, "results-pack.json"), `${JSON.stringify(pack, null, 2)}\n`, "utf8");
-  writeFileSync(path.join(output, "source-received.jsonl"),
-    `${live.sourceReceived.map(event => JSON.stringify(event)).join("\n")}${live.sourceReceived.length ? "\n" : ""}`, "utf8");
-  console.log(JSON.stringify({ status: pack.status, denominator: pack.denominator, taskSuccessRate: pack.taskSuccessRate, output: path.join(output, "results-pack.json") }, null, 2));
+  writeFileSync(path.join(output, "attempts.json"), `${JSON.stringify(live.runs, null, 2)}\n`, "utf8");
+  console.log(JSON.stringify({ status: pack.status, scorer: scorer.kind, denominator: pack.denominator, taskSuccessRate: pack.taskSuccessRate, byArm: pack.byArm, output: path.join(output, "results-pack.json") }, null, 2));
   return 0;
 }
 

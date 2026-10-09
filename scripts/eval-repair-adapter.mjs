@@ -215,6 +215,11 @@ export async function probeJavaToolchain({ javaHome = null, release = null } = {
   if (major < REQUIRED_JDK_MAJOR) {
     return { available: false, javac, version, reason: `frozen judge compiles with --release and needs JDK ${REQUIRED_JDK_MAJOR}+ (found javac ${version})` };
   }
+  const java = javaHome ? path.join(javaHome, "bin", "java") : "java";
+  const javaProbe = await runBounded([java, "-version"], { timeoutMs: 15_000 });
+  if (javaProbe.spawnError || javaProbe.exitCode !== 0) {
+    return { available: false, javac, version, reason: `java launcher is not runnable next to javac: ${javaProbe.spawnError ?? javaProbe.stderr.slice(0, 200)}` };
+  }
   if (release != null) {
     const releaseProbe = await runBounded([javac, "--release", String(release), "-version"], { timeoutMs: 15_000 });
     const releaseText = `${releaseProbe.stderr}\n${releaseProbe.stdout}`;
@@ -271,8 +276,9 @@ export async function evaluateRepair({
   if (!existsSync(path.join(dataset, "repairs", "manifest.json"))) {
     return blocked(REPAIR_STATE.BLOCKED_SETUP, `frozen repair manifest not found under ${dataset}`);
   }
-  if (out === kit || out.startsWith(dataset + path.sep)) {
-    return blocked(REPAIR_STATE.BLOCKED_SETUP, "outputRoot must stay outside the frozen kit inputs");
+  const relToKit = path.relative(kit, out);
+  if (relToKit === "" || (!relToKit.startsWith(`..${path.sep}`) && relToKit !== ".." && !path.isAbsolute(relToKit))) {
+    return blocked(REPAIR_STATE.BLOCKED_SETUP, "outputRoot must stay outside the frozen kit");
   }
   const spec = readRepairSpec(dataset, taskId);
   if (!spec) return blocked(REPAIR_STATE.BLOCKED_SETUP, `${taskId} is not a repair task in the frozen manifest`);
@@ -308,8 +314,10 @@ export async function evaluateRepair({
   // Isolated, portable environment: no personal HOME/cache writes, and the
   // frozen kit stays byte-identical (no __pycache__ inside it).
   for (const dir of ["home", "tmp", "pycache"]) mkdirSync(path.join(out, dir), { recursive: true });
+  // The frozen judge runs bare `javac`/`java`: put the probed toolchain first
+  // on PATH so the JDK that was probed is the JDK that judges.
   const env = {
-    PATH: process.env.PATH ?? "",
+    PATH: javaHome ? [path.join(javaHome, "bin"), process.env.PATH ?? ""].join(path.delimiter) : (process.env.PATH ?? ""),
     HOME: path.join(out, "home"),
     TMPDIR: path.join(out, "tmp"),
     PYTHONDONTWRITEBYTECODE: "1",

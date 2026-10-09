@@ -52,9 +52,12 @@ export function usageToKitRow(usage) {
   return row;
 }
 
-/** SOURCE_RECEIVED events (host-recorded, raw-side) become the kit's
- * read_events rows; the frozen scorer re-verifies their text against the
- * corpus files, so a lossy or fabricated event is caught there. */
+/** SOURCE_RECEIVED events become the kit's read_events rows. They are
+ * minted only from slices of a tool message that was dispatched to the
+ * model (payload-attached), never from raw tool output (SOURCE_FETCHED).
+ * content_hash is the WHOLE-FILE sha256 the kit validates; the kit also
+ * re-reads the corpus and compares the exact text, so a lossy, stale or
+ * fabricated slice is rejected there, not here. */
 export function sourceReceivedToReadEvents(sourceReceived) {
   return (Array.isArray(sourceReceived) ? sourceReceived : [])
     .filter(event => event?.type === "SOURCE_RECEIVED")
@@ -62,7 +65,7 @@ export function sourceReceivedToReadEvents(sourceReceived) {
       path: String(event.path).replaceAll("\\", "/"),
       start_line: Number(event.startLine),
       end_line: Number(event.endLine),
-      content_hash: String(event.contentHash ?? ""),
+      content_hash: String(event.fileContentHash ?? ""),
       text: String(event.text ?? ""),
       origin: event.origin === "explicit_read" ? "explicit_read" : "tool_response"
     }));
@@ -98,6 +101,12 @@ export function buildFrozenResultsPack({
   if (!runProfile || typeof runProfile !== "object" || !runProfile.evaluation_mode || !runProfile.corpus_hash) {
     throw new Error("runProfile with evaluation_mode and corpus_hash is required");
   }
+  const planned = new Set();
+  for (const entry of plan) {
+    const key = plannedKey({ taskId: entry.taskId ?? entry, variant: entry.variant, repeat: entry.repeat });
+    if (planned.has(key)) throw new Error(`duplicate planned attempt: ${key.replaceAll("\u0000", " / ")}`);
+    planned.add(key);
+  }
   const seen = new Map();
   const results = [];
   for (const attempt of attempts) {
@@ -114,6 +123,9 @@ export function buildFrozenResultsPack({
     }
     if (seen.has(packKey)) {
       throw new Error(`duplicate scheduled attempt: ${packKey}`);
+    }
+    if (!planned.has(packKey)) {
+      throw new Error(`attempt outside the frozen plan: ${packKey.replaceAll("\u0000", " / ")}`);
     }
     seen.set(packKey, true);
     const repeat = Number(key.repeat ?? 0);
@@ -184,6 +196,12 @@ export function scheduledDenominatorSummary({ plan, attempts }) {
   if (!Array.isArray(attempts)) {
     throw new Error("attempts must be a list");
   }
+  const planned = new Set();
+  for (const entry of plan) {
+    const key = plannedKey({ taskId: entry.taskId ?? entry, variant: entry.variant, repeat: entry.repeat });
+    if (planned.has(key)) throw new Error(`duplicate planned attempt: ${key}`);
+    planned.add(key);
+  }
   const seen = new Set();
   let successes = 0;
   let scored = 0;
@@ -194,6 +212,7 @@ export function scheduledDenominatorSummary({ plan, attempts }) {
     }
     const packKey = `${key.taskId}\u0000${key.variant ?? "primary"}\u0000${key.repeat ?? 0}`;
     if (seen.has(packKey)) throw new Error(`duplicate scheduled attempt: ${packKey}`);
+    if (!planned.has(packKey)) throw new Error(`attempt outside the frozen plan: ${packKey}`);
     seen.add(packKey);
     const success = attempt.taskSuccess;
     if (success === true) {
@@ -219,22 +238,27 @@ export function scheduledDenominatorSummary({ plan, attempts }) {
   };
 }
 
-export function runProfileFrom({ corpusHash, arm, variants = "primary", repeats, model, sourceSha }) {
-  const profile = {
-    corpus_mode: "external-full",
+/** corpus_mode must say what was actually indexed: the kit's bundled
+ * scoped corpora and an external full checkout are never mixed. */
+export function runProfileFrom({ corpusHash, corpusMode, variants = "primary", repeats, model, hostId = "eval-frozen-adapter/v1" }) {
+  if (corpusMode !== "bundled-scoped" && corpusMode !== "external-full") {
+    throw new Error("corpusMode must be bundled-scoped or external-full");
+  }
+  return {
+    corpus_mode: corpusMode,
     corpus_hash: corpusHash,
     variant_set: variants,
     evaluation_mode: "agent",
     repeats,
     cache_state: "per-attempt-retrieval-control",
     model_id: model ?? null,
-    host_id: "eval-frozen-adapter/v1"
+    host_id: hostId,
+    budget_profile: "fixed-160-lines-16000-bytes/v1"
   };
-  return profile;
 }
 
 /** CLI: node eval-frozen-adapter.mjs --plan plan.json --attempts attempts.json
- *  --arm product --dataset-hash <sha> --corpus-hash <sha> [--source-sha <sha>]
+ *  --arm product --dataset-hash <sha> --corpus-hash <sha> [--corpus-mode bundled-scoped|external-full] [--source-sha <sha>]
  *  [--model <id>] [--repeats N] --output results.json
  * Writes the java-specialist-results/v1 pack ready for the kit scorer. */
 async function main(argv = process.argv.slice(2)) {
@@ -258,6 +282,7 @@ async function main(argv = process.argv.slice(2)) {
     sourceSha: flag("--source-sha"),
     runProfile: runProfileFrom({
       corpusHash: flag("--corpus-hash") ?? "",
+      corpusMode: flag("--corpus-mode") ?? "bundled-scoped",
       repeats: Number(flag("--repeats") ?? 1),
       model: flag("--model")
     }),

@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "test": "node --test semantic-discovery.test.mjs repair-judge.test.mjs",
+    "test": "node --test semantic-discovery.test.mjs repair-judge.test.mjs ab-summary.test.mjs",
     "compare": "node compare.mjs",
     "agent-ab": "node agent-ab.mjs"
   }

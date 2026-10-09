@@ -14,6 +14,9 @@ export function openaiCompatibleConfig(env = process.env) {
   return { baseUrl, apiKey, model, reasoningEffort };
 }
 
+/** Absolute per-request deadline (connect + headers + body). */
+export const DEFAULT_CHAT_TIMEOUT_MS = 300_000;
+
 export async function openaiCompatibleChat({
   baseUrl,
   apiKey,
@@ -24,6 +27,7 @@ export async function openaiCompatibleChat({
   maxTokens = DEFAULT_MAX_COMPLETION_TOKENS,
   temperature = 0,
   reasoningEffort,
+  timeoutMs = DEFAULT_CHAT_TIMEOUT_MS,
   fetchImpl = globalThis.fetch
 }) {
   if (!baseUrl) throw new Error("OPENAI_BASE_URL is required");
@@ -45,15 +49,25 @@ export async function openaiCompatibleChat({
   // codex gateways); symmetric for every arm. Ignored by endpoints that
   // do not recognize the field.
   if (reasoningEffort) body.reasoning_effort = reasoningEffort;
-  const response = await fetchImpl(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(body)
-  });
-  const text = await response.text();
+  // One absolute deadline covers connect, headers AND body decoding.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new Error(`openai-compatible request exceeded ${timeoutMs}ms`)), timeoutMs);
+  let response;
+  let text;
+  try {
+    response = await fetchImpl(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal
+    });
+    text = await response.text();
+  } finally {
+    clearTimeout(timer);
+  }
   if (!response.ok) {
     throw new Error(`openai-compatible HTTP ${response.status}: ${text.slice(0, 500)}`);
   }

@@ -23,8 +23,7 @@ import {
   loadGoldFile,
   main,
   scoreQaAnswer,
-  scoreRunOutcome,
-  sourceReceivedEvent
+  scoreRunOutcome
 } from "./evaluate-java-task.mjs";
 
 test("backend detection: no credentials is null, OpenAI triple is openai-api, codex cli wins otherwise", () => {
@@ -91,7 +90,7 @@ test("BLOCKED_AUTH pack: every task UNMEASURED, null success, null usage, exit 0
   }
 });
 
-test("SOURCE_RECEIVED: java_symbol preview becomes a tool_response event with sha256 + range", () => {
+test("SOURCE_FETCHED: java_symbol preview becomes a raw tool_response event with sha256 + range", () => {
   const discovery = JSON.stringify({
     schemaVersion: "java-discovery/v1",
     candidates: [
@@ -116,7 +115,10 @@ test("SOURCE_RECEIVED: java_symbol preview becomes a tool_response event with sh
   });
   assert.equal(events.length, 1);
   const event = events[0];
-  assert.equal(event.type, "SOURCE_RECEIVED");
+  // Raw tool output is FETCHED, never RECEIVED: only a payload-attached
+  // slice (recordModelDelivery) can be credited as received.
+  assert.equal(event.type, "SOURCE_FETCHED");
+  assert.equal(event.fileContentHash, "abc");
   assert.equal(event.callId, "call-1");
   assert.equal(event.path, "src/main/java/x/OrderService.java");
   assert.equal(event.origin, "tool_response");
@@ -125,7 +127,7 @@ test("SOURCE_RECEIVED: java_symbol preview becomes a tool_response event with sh
   assert.equal(event.contentHash, createHash("sha256").update("public void submit() {\n    queue.offer(order);\n}\n", "utf8").digest("hex"));
 });
 
-test("SOURCE_RECEIVED: the read tool is explicit_read; summaries create no event", () => {
+test("SOURCE_FETCHED: the read tool is explicit_read, no phantom line; summaries create no event", () => {
   const readEvents = extractSourceEvents({
     callId: "call-2",
     toolName: "read",
@@ -135,6 +137,9 @@ test("SOURCE_RECEIVED: the read tool is explicit_read; summaries create no event
   assert.equal(readEvents[0].origin, "explicit_read");
   assert.equal(readEvents[0].startLine, 4);
   assert.equal(readEvents[0].endLine, 6);
+  // a trailing newline does not create a phantom line
+  const trailing = extractSourceEvents({ callId: "c", toolName: "read", result: { path: "A.java", text: "a\nb\n", startLine: 1 } });
+  assert.equal(trailing[0].endLine, 2);
 
   // A model-facing summary that merely names a path is not source.
   const summary = extractSourceEvents({
@@ -156,7 +161,7 @@ test("SOURCE_RECEIVED: the read tool is explicit_read; summaries create no event
   assert.equal(noPreview.length, 0);
 });
 
-test("SOURCE_RECEIVED: a pre-parsed discovery payload (live session path) still records", () => {
+test("SOURCE_FETCHED: a pre-parsed discovery payload (live session path) still records", () => {
   const payload = {
     schemaVersion: "java-discovery/v1",
     candidates: [{
@@ -198,11 +203,35 @@ test("scoreRunOutcome: failures stay UNMEASURED in the denominator; qa outcomes 
     run: {
       stopReason: "MODEL_STOP",
       finalContent: JSON.stringify({ a: "1" }),
-      sourceReceived: [{ path: "A.java", startLine: 1, endLine: 1, text: "t", origin: "explicit_read" }]
+      sourceReceived: [{ type: "SOURCE_RECEIVED", path: "A.java", startLine: 1, endLine: 1, text: "t", origin: "explicit_read" }]
     }
   });
   assert.equal(qaGood.taskOutcome, "MEASURED");
   assert.equal(qaGood.taskSuccess, true);
+  // the same window merely FETCHED (never attached to a request) is no evidence
+  const qaFetchedOnly = scoreRunOutcome({
+    task,
+    goldRow: { answer: { a: "1" }, required_evidence: [{ path: "A.java", start_line: 1, end_line: 1 }] },
+    run: {
+      stopReason: "MODEL_STOP",
+      finalContent: JSON.stringify({ a: "1" }),
+      sourceReceived: [{ type: "SOURCE_FETCHED", path: "A.java", startLine: 1, endLine: 1, text: "t", origin: "explicit_read" }]
+    }
+  });
+  assert.equal(qaFetchedOnly.taskSuccess, false);
+  assert.equal(qaFetchedOnly.answerStatus, "MISSING_REQUIRED_EVIDENCE");
+  // received source over the task budget fails, as in the frozen kit
+  const qaOverBudget = scoreRunOutcome({
+    task: { ...task, budget: { max_lines: 1, max_bytes: 16000 } },
+    goldRow: { answer: { a: "1" }, required_evidence: [{ path: "A.java", start_line: 1, end_line: 1 }] },
+    run: {
+      stopReason: "MODEL_STOP",
+      finalContent: JSON.stringify({ a: "1" }),
+      sourceReceived: [{ type: "SOURCE_RECEIVED", path: "A.java", startLine: 1, endLine: 2, text: "t\nu\n", origin: "explicit_read" }]
+    }
+  });
+  assert.equal(qaOverBudget.taskSuccess, false);
+  assert.equal(qaOverBudget.answerStatus, "RECEIVED_OVER_BUDGET");
   // correct answer without the required frozen source is NOT a success
   const qaNoEvidence = scoreRunOutcome({
     task,
@@ -215,20 +244,19 @@ test("scoreRunOutcome: failures stay UNMEASURED in the denominator; qa outcomes 
   const qaNoGold = scoreRunOutcome({ task, goldRow: null, run: { stopReason: "MODEL_STOP", finalContent: "{}" } });
   assert.equal(qaNoGold.taskOutcome, "UNMEASURED");
   assert.equal(qaNoGold.taskSuccess, null);
-  const repairWithoutTester = scoreRunOutcome({
+  const repairWithoutJudge = scoreRunOutcome({
     task: { id: "T-B", kind: "repair" },
     goldRow: null,
-    run: { stopReason: "MODEL_STOP", finalContent: "{}" },
-    repairTester: undefined
+    run: { stopReason: "MODEL_STOP", finalContent: "{}" }
   });
-  assert.equal(repairWithoutTester.taskOutcome, "UNMEASURED");
-  const repairWithTester = scoreRunOutcome({
+  assert.equal(repairWithoutJudge.taskOutcome, "UNMEASURED");
+  const repairValidated = scoreRunOutcome({
     task: { id: "T-B", kind: "repair" },
     goldRow: null,
-    run: { stopReason: "MODEL_STOP", finalContent: "{}" },
-    repairTester: () => ({ passed: true, status: "tests-pass" })
+    run: { stopReason: "MODEL_STOP", finalContent: '{"patchApplied":false}' },
+    repairVerdict: { state: "VALIDATED_SUCCESS", validatedSuccess: true }
   });
-  assert.equal(repairWithTester.taskSuccess, true);
+  assert.equal(repairValidated.taskSuccess, true, "the frozen judge, not patchApplied, decides");
 });
 
 test("recorded-run replay: pack invariants hold for a mix of measured and failed runs", () => {
