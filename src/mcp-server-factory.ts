@@ -85,7 +85,7 @@ export function createMcpServer(
 
   register(track("java_symbol"), {
     title: "Java Symbol",
-    description: "operation=query (default): static discovery over the on-disk index (no JDT); pass backend=jdt for legacy workspace symbols. operation=position (default with file/line/column): hover/definition/implementation at a position. operation=references: summary-only references. position/references and backend=jdt always use live JDT.",
+    description: "operation=query (default): static discovery over the on-disk index (no JDT); pass backend=jdt for legacy workspace symbols. Static query: limit 1..20 (default 8; selectionLimited=true means more matched), terms add words to the query, searchMode=exact never falls back to fuzzy search (exact=miss|ambiguous). operation=position (default with file/line/column): hover/definition/implementation at a position. operation=references: summary-only references. position/references and backend=jdt always use live JDT.",
     inputSchema: symbolSchema
   }, args => withContext(args, (context, request) => javaSymbol(context, args, request), {
     // T06: the JDT admission predicate is computed per request and must match

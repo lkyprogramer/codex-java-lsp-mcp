@@ -131,9 +131,26 @@ export function searchEntities(
   return chunkHits;
 }
 
-// T07: the in-memory reference has no physical work, so a budget can never
-// truncate it; scope is applied before the cap with the same predicate as
-// the SQL engine, which keeps no-budget parity tests meaningful.
+// R07 reference for the detailed (discovery) path: same routing as
+// SqlEntitySearch.searchDetailed - an exact selector resolves through the
+// name layers only (FQN, type simple name, method simple name) and a miss is
+// a miss; text merges both BM25 routes; every route is read to cap+1 so
+// `selectionLimited` says whether more candidates existed. Scope filters the
+// pool before anything else. No physical work, so no budget truncation.
+function oracleSimpleNameRoute(pool: readonly EntityRecord[], task: string, kind: "type" | "method"): EntityRecord[] {
+  const nameLexemes = identifierLexemes(task);
+  const hits = pool.filter(entity => entity.kind === kind && nameLexemes.includes(entity.simpleName.toLowerCase()));
+  const df = new Map<string, number>();
+  for (const entity of hits) df.set(entity.simpleName.toLowerCase(), (df.get(entity.simpleName.toLowerCase()) ?? 0) + 1);
+  return hits.sort((left, right) => {
+    const lengthDelta = right.simpleName.length - left.simpleName.length;
+    if (lengthDelta !== 0) return lengthDelta;
+    const uniqueDelta = (df.get(left.simpleName.toLowerCase()) ?? 0) - (df.get(right.simpleName.toLowerCase()) ?? 0);
+    if (uniqueDelta !== 0) return uniqueDelta;
+    return left.entityId.localeCompare(right.entityId);
+  });
+}
+
 export function searchEntitiesDetailed(
   entities: readonly EntityRecord[],
   task: string,
@@ -141,19 +158,43 @@ export function searchEntitiesDetailed(
   mode: EntitySearchMode = "auto",
   options: EntitySearchOptions = {}
 ): DetailedEntitySearchResult {
+  const cap = Math.min(Math.max(1, limit), ENTITY_SEARCH_MAX_LIMIT);
   const roots = options.scope?.sourceRoots;
   const pool =
     roots && roots.length > 0
       ? entities.filter(record =>
-          roots.some(root => record.relativePath === root || record.relativePath.startsWith(`${root}/`))
+          roots.some(root => record.relativePath === root || record.relativePath.startsWith(`${root.replace(/\/+$/, "")}/`))
         )
       : entities;
-  return {
-    hits: searchEntities(pool, task, limit, mode),
-    truncated: false,
-    work: { postings: 0 },
-    generation: 0
-  };
+  const base = { truncated: false as const, work: { postings: 0 }, generation: 0 };
+  if (task.trim().length === 0) return { ...base, hits: [], selectionLimited: false };
+  const intent = mode === "auto" ? classifyQuery(task, mode) : mode;
+  if (intent === "exact") {
+    const fqn = extractFqnCandidates(task)
+      .flatMap(candidate => pool.filter(entity => entity.fqn === candidate || entity.fqn.endsWith(`.${candidate}`)))
+      .filter((entity, index, all) => all.findIndex(item => item.entityId === entity.entityId) === index)
+      .sort((left, right) => left.entityId.localeCompare(right.entityId));
+    const routes: Array<[EntityRecord[], EntityLayer]> = [
+      [fqn, "FQN"],
+      [oracleSimpleNameRoute(pool, task, "type"), "SIMPLE_NAME"],
+      [oracleSimpleNameRoute(pool, task, "method"), "SIMPLE_NAME"]
+    ];
+    for (const [found, layer] of routes) {
+      if (found.length === 0) continue;
+      return {
+        ...base,
+        hits: found.slice(0, cap).map(entity => toHit(entity, layer, 1)),
+        selectionLimited: found.length > cap,
+        exact: found.length > 1 ? "ambiguous" : "match"
+      };
+    }
+    return { ...base, hits: [], selectionLimited: false, exact: "miss" };
+  }
+  const queryTokens = tokenize(task);
+  const identifierHits = rankByBm25(pool, queryTokens, "identifierTokens", "BM25_IDENTIFIER", cap + 1);
+  const chunkHits = rankByBm25(pool, queryTokens, "chunkTokens", "CHUNK", cap + 1);
+  const merged = mergeByRank(identifierHits, chunkHits, cap + 1);
+  return { ...base, hits: merged.slice(0, cap), selectionLimited: merged.length > cap };
 }
 
 function mergeByRank(identifier: EntityHit[], chunk: EntityHit[], cap: number): EntityHit[] {

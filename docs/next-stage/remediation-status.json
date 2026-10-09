@@ -39,11 +39,13 @@
     },
     "R06": {
       "state": "DONE",
-      "commit": "(this commit: fix(search): constrain candidates before ranking and limits)",
+      "commit": "77d7e61",
       "report": "docs/next-stage/r06-task-result.md"
     },
     "R07": {
-      "state": "NOT_STARTED"
+      "state": "DONE",
+      "commit": "(this commit: fix(discovery): unify exact intent expansion and result limits)",
+      "report": "docs/next-stage/r07-task-result.md"
     },
     "R08": {
       "state": "NOT_STARTED",

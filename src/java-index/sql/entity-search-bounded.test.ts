@@ -329,3 +329,99 @@ test("R06: the posting budget is only spent on in-scope postings", () => {
     close(db);
   }
 });
+
+// ---------------------------------------------------------------- R07
+
+function r07Record(entityId: string, relativePath: string, overrides: Partial<EntityRecord> = {}): EntityRecord {
+  return {
+    entityId,
+    kind: "type",
+    fqn: "demo.OrderService",
+    simpleName: "OrderService",
+    relativePath,
+    identifierTokens: ["demo", "order", "service", "orderservice"],
+    chunkTokens: ["refund"],
+    ...overrides
+  };
+}
+
+function r07Db(records: EntityRecord[]) {
+  const db = openIndexDb(":memory:");
+  ensureSchema(db);
+  replaceAllEntities(db, records);
+  return db;
+}
+
+test("R07: an exact miss is a miss - never a fuzzy BM25 hit", () => {
+  const records = [r07Record("a", "A.java"), r07Record("m", "A.java", { kind: "method", fqn: "demo.OrderService#refund", simpleName: "refund", identifierTokens: ["refund", "missing", "service"] })];
+  const db = r07Db(records);
+  try {
+    const search = new SqlEntitySearch(db);
+    for (const [task, mode] of [["demo.MissingService", "exact"], ["demo.MissingService", "auto"], ["MissingService", "auto"], ["MissingService", "exact"]] as const) {
+      const result = search.searchDetailed(task, 8, mode);
+      assert.equal(result.hits.length, 0, `${task}/${mode}: ${JSON.stringify(result.hits)}`);
+      assert.equal(result.exact, "miss");
+      assert.deepEqual(result.hits, searchEntitiesDetailed(records, task, 8, mode).hits);
+    }
+    // the same words as a text search do match fuzzily - that is the caller's choice
+    assert.ok(search.searchDetailed("missing service", 8, "text").hits.length > 0);
+  } finally {
+    close(db);
+  }
+});
+
+test("R07: exact match, ambiguous duplicates and camelCase method selectors", () => {
+  const records = [
+    r07Record("a", "a/OrderService.java"),
+    r07Record("b", "b/OrderService.java"),
+    r07Record("w", "W.java", { fqn: "demo.Widget", simpleName: "Widget", identifierTokens: ["widget"] }),
+    r07Record("w#update", "W.java", { kind: "method", fqn: "demo.Widget#updateWidget", simpleName: "updateWidget", identifierTokens: ["update", "widget"] })
+  ];
+  const db = r07Db(records);
+  try {
+    const search = new SqlEntitySearch(db);
+    const one = search.searchDetailed("demo.Widget", 8, "exact");
+    assert.deepEqual([one.exact, one.hits.map(h => h.entityId)], ["match", ["w"]]);
+    const two = search.searchDetailed("demo.OrderService", 8, "exact");
+    assert.deepEqual([two.exact, two.hits.map(h => h.entityId).sort()], ["ambiguous", ["a", "b"]]);
+    const method = search.searchDetailed("updateWidget", 8, "auto");
+    assert.deepEqual([method.exact, method.hits.map(h => h.entityId)], ["match", ["w#update"]], "a method selector resolves by name when no type has it");
+    const typeFirst = search.searchDetailed("Widget", 8, "exact");
+    assert.deepEqual(typeFirst.hits.map(h => h.entityId), ["w"], "a type of that name outranks same-named methods");
+    for (const [task, mode] of [["demo.Widget", "exact"], ["demo.OrderService", "exact"], ["updateWidget", "auto"], ["Widget", "exact"]] as const) {
+      const oracle = searchEntitiesDetailed(records, task, 8, mode);
+      const sql = search.searchDetailed(task, 8, mode);
+      assert.deepEqual([sql.exact, sql.hits.map(h => h.entityId)], [oracle.exact, oracle.hits.map(h => h.entityId)], `${task}: SQL/oracle parity`);
+    }
+  } finally {
+    close(db);
+  }
+});
+
+test("R07: limit 20 returns 20 and selectionLimited says when more matched (cap+1)", () => {
+  const make = (n: number) => Array.from({ length: n }, (_, i) => r07Record(`e${String(i).padStart(2, "0")}`, `${i}/A.java`));
+  for (const [count, limit, expectedHits, limited] of [[21, 20, 20, true], [20, 20, 20, false], [12, 10, 10, true], [3, 20, 3, false]] as const) {
+    const records = make(count);
+    const db = r07Db(records);
+    try {
+      const search = new SqlEntitySearch(db);
+      const text = search.searchDetailed("refund", limit, "text");
+      assert.equal(text.hits.length, expectedHits, `${count} candidates, limit ${limit}`);
+      assert.equal(text.selectionLimited, limited);
+      assert.equal(text.truncated, false, "a ranked top-K is not a budget truncation");
+      const exact = search.searchDetailed("demo.OrderService", limit, "exact");
+      assert.equal(exact.hits.length, expectedHits);
+      assert.equal(exact.selectionLimited, limited);
+      const oracle = searchEntitiesDetailed(records, "refund", limit, "text");
+      assert.deepEqual([text.selectionLimited, text.hits.map(h => h.entityId)], [oracle.selectionLimited, oracle.hits.map(h => h.entityId)]);
+    } finally {
+      close(db);
+    }
+  }
+  const db = r07Db(make(25));
+  try {
+    assert.equal(new SqlEntitySearch(db).searchDetailed("refund", 500, "text").hits.length, 20, "the SQL layer clamps to the shared cap of 20 (discovery rejects >20 earlier)");
+  } finally {
+    close(db);
+  }
+});

@@ -130,15 +130,15 @@ function fqnHits(db: IndexDatabase, task: string, cap: number, scope?: ScopeSql)
   return hits.slice(0, cap).map(entity => toHit(entity, "FQN", 1));
 }
 
-function simpleNameHits(db: IndexDatabase, task: string, cap: number, scope?: ScopeSql): EntityHit[] {
+function simpleNameHits(db: IndexDatabase, task: string, cap: number, scope?: ScopeSql, kind: EntityKind = "type"): EntityHit[] {
   const lexemes = identifierLexemes(task);
   if (lexemes.length === 0) return [];
   const hits: EntityRow[] = [];
   for (const chunk of bindChunks(lexemes)) {
     for (const row of prepareCached(
       db,
-      `${ENTITY_SELECT} WHERE e.kind='type' AND e.simple_name_lc IN ${inClause(chunk.length)}${scope?.sql ?? ""}`
-    ).iterate(...chunk, ...(scope?.params ?? [])) as Iterable<Record<string, SQLOutputValue>>) {
+      `${ENTITY_SELECT} WHERE e.kind=? AND e.simple_name_lc IN ${inClause(chunk.length)}${scope?.sql ?? ""}`
+    ).iterate(kind, ...chunk, ...(scope?.params ?? [])) as Iterable<Record<string, SQLOutputValue>>) {
       hits.push(loadEntityRow(db, row));
     }
   }
@@ -156,6 +156,24 @@ function simpleNameHits(db: IndexDatabase, task: string, cap: number, scope?: Sc
     return left.entityId.localeCompare(right.entityId);
   });
   return hits.slice(0, cap).map(entity => toHit(entity, "SIMPLE_NAME", 1));
+}
+
+/**
+ * R07: an exact selector resolves through the name layers only - FQN, then a
+ * type simple name, then (no type of that name) a method simple name. A miss
+ * is a miss: it never falls through to BM25. Several declarations for one
+ * selector are reported as ambiguous.
+ */
+function exactHits(db: IndexDatabase, task: string, cap: number, scope: ScopeSql): { hits: EntityHit[]; outcome: "match" | "miss" | "ambiguous" } {
+  for (const route of [
+    () => fqnHits(db, task, cap + 1, scope),
+    () => simpleNameHits(db, task, cap + 1, scope, "type"),
+    () => simpleNameHits(db, task, cap + 1, scope, "method")
+  ]) {
+    const hits = route();
+    if (hits.length > 0) return { hits, outcome: hits.length > 1 ? "ambiguous" : "match" };
+  }
+  return { hits: [], outcome: "miss" };
 }
 
 // T07: corpus statistics are maintained by the writer (rebuildEntityDf)
@@ -449,32 +467,37 @@ export class SqlEntitySearch {
       );
     }
     const stop: { reason?: EntitySearchStopReason } = {};
-    const finish = (hits: EntityHit[]): DetailedEntitySearchResult => {
+    // Every route fetches cap+1: the extra row only proves "more exist"
+    // (selectionLimited) and is never returned.
+    const finish = (selected: EntityHit[], exact?: "match" | "miss" | "ambiguous"): DetailedEntitySearchResult => {
       const result: DetailedEntitySearchResult = {
-        hits: attachLocators(this.db, hits),
+        hits: attachLocators(this.db, selected.slice(0, cap)),
         truncated: stop.reason !== undefined,
+        selectionLimited: selected.length > cap,
         work: { postings: budget ? budget.visited() : 0 },
         generation
       };
+      if (exact) result.exact = exact;
       if (stop.reason !== undefined) result.stopReason = stop.reason;
       return result;
     };
     if (task.trim().length === 0) return finish([]);
     const scope = scopeSql("e.path_sym", options.scope);
-    const intent = classifyQuery(task, mode);
+    // An explicit mode is authoritative (discovery classifies the raw query
+    // itself and may send query+terms, longer than one selector).
+    const intent = mode === "auto" ? classifyQuery(task, mode) : mode;
     if (intent === "exact") {
-      const fqn = fqnHits(this.db, task, cap, scope);
-      if (fqn.length > 0) return finish(fqn);
-      const simple = simpleNameHits(this.db, task, cap, scope);
-      if (simple.length > 0) return finish(simple);
+      const exact = exactHits(this.db, task, cap, scope);
+      return finish(exact.hits, exact.outcome);
     }
-    const identifier = rankBm25(this.db, task, 0, "BM25_IDENTIFIER", cap, budget, stop, scope);
-    const chunk = rankBm25(this.db, task, 1, "CHUNK", cap, budget, stop, scope);
+    const fetch = cap + 1;
+    const identifier = rankBm25(this.db, task, 0, "BM25_IDENTIFIER", fetch, budget, stop, scope);
+    const chunk = rankBm25(this.db, task, 1, "CHUNK", fetch, budget, stop, scope);
     if (intent === "text") {
-      const doc = docHits(this.db, task, cap, budget, stop, scope);
-      return finish(mergeByRank([identifier, chunk, doc], cap));
+      const doc = docHits(this.db, task, fetch, budget, stop, scope);
+      return finish(mergeByRank([identifier, chunk, doc], fetch));
     }
-    return finish(firstNonEmpty(identifier, chunk, cap));
+    return finish(mergeByRank([identifier, chunk], fetch));
   }
 }
 
@@ -500,6 +523,9 @@ function mergeByRank(routes: EntityHit[][], cap: number): EntityHit[] {
   return merged;
 }
 
+// Legacy search() only (java_impact lexical fallbacks): an exact shape with no
+// name-layer hit still falls back to BM25 there. The discovery path
+// (searchDetailed) never does.
 function firstNonEmpty(identifier: EntityHit[], chunk: EntityHit[], cap: number): EntityHit[] {
   if (identifier.length > 0) return identifier.slice(0, cap);
   return chunk.slice(0, cap);

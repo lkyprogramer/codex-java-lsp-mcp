@@ -20,8 +20,13 @@ export {
   tokenize
 } from "./entity-scoring.js";
 
+/** Legacy default of the internal lexical search (java_impact fallbacks). */
 export const ENTITY_SEARCH_DEFAULT_LIMIT = 3;
-export const ENTITY_SEARCH_MAX_LIMIT = 10;
+/** R07: the one result cap shared by every discovery layer (tool, discovery
+ *  API, SQL clamp). A request above it is rejected, never silently clamped. */
+export const ENTITY_SEARCH_MAX_LIMIT = 20;
+/** R07: java_symbol static discovery default. */
+export const DISCOVERY_DEFAULT_LIMIT = 8;
 
 export type EntitySearchMode = "auto" | "exact" | "text";
 
@@ -68,10 +73,18 @@ export type EntitySearchScope = {
 
 export type EntitySearchStopReason = "deadline" | "postings";
 
+/** R07: exact lookups never fall back to fuzzy routes; they say what happened. */
+export type ExactLookupOutcome = "match" | "miss" | "ambiguous";
+
 export type DetailedEntitySearchResult = {
   hits: EntityHit[];
   /** True when the candidate scan stopped before it could be exhaustive. */
   truncated: boolean;
+  /** True when more candidates than `limit` matched (cap+1 detection): the
+   *  hits are a ranked top-K, not the complete candidate set. */
+  selectionLimited: boolean;
+  /** Present for exact-intent lookups only. */
+  exact?: ExactLookupOutcome;
   stopReason?: EntitySearchStopReason;
   /** Physical work counters for the budget that was applied (if any). */
   work: { postings: number };

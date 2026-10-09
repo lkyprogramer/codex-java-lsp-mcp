@@ -10,7 +10,13 @@ import path from "node:path";
 import { classifyQuery } from "./query-intent.js";
 import { resolveSearchScope, sourceRootRecordFromPath, type ResolvedSearchScope, type SourceRootRecord } from "./scope.js";
 import type { JavaIndexClientApi } from "../java-index/java-index-client-api.js";
-import type { EntityHit, EntitySearchMode, EntitySearchOptions } from "../java-index/entity-search.js";
+import {
+  DISCOVERY_DEFAULT_LIMIT,
+  ENTITY_SEARCH_MAX_LIMIT,
+  type EntityHit,
+  type EntitySearchMode,
+  type ExactLookupOutcome
+} from "../java-index/entity-search.js";
 
 export const DISCOVERY_SCHEMA_VERSION = "java-discovery/v1" as const;
 
@@ -27,8 +33,8 @@ export class DiscoveryUnsupportedError extends Error {
     this.name = "DiscoveryUnsupportedError";
   }
 }
-export const DISCOVERY_DEFAULT_LIMIT = 8;
-export const DISCOVERY_MAX_LIMIT = 20;
+/** R07: one limit contract for the tool, this API and the SQL clamp. */
+export { DISCOVERY_DEFAULT_LIMIT, ENTITY_SEARCH_MAX_LIMIT as DISCOVERY_MAX_LIMIT } from "../java-index/entity-search.js";
 export const DISCOVERY_QUERY_MAX_UNITS = 512;
 export const DISCOVERY_MAX_TERMS = 6;
 export const DISCOVERY_TERM_MAX_UNITS = 64;
@@ -76,7 +82,12 @@ export type DiscoveryResult = {
   generation: number;
   candidates: DiscoveryCandidate[];
   scopeState: "READY" | "PARTIAL";
+  /** Budget/deadline stopped the scan: the candidate set may be incomplete. */
   truncated: boolean;
+  /** More candidates matched than `limit`: this is a ranked top-K. */
+  selectionLimited: boolean;
+  /** Exact-intent outcome; a miss never falls back to a fuzzy search. */
+  exact?: ExactLookupOutcome;
   stopReason?: "candidate_budget" | "deadline" | "index_partial" | "layout_unknown" | "scope_empty";
   /** Hits that had no stored declaration range or file hash; they are not
    *  actionable locators and are reported, not rendered. */
@@ -94,7 +105,14 @@ const LAYER_MATCH: Record<EntityHit["layer"], DiscoveryCandidate["matchedBy"][nu
   DOCUMENT: "comment"
 };
 
-function validateArgs(args: StaticDiscoveryArgs): { task: string; limit: number; searchMode: EntitySearchMode } {
+/**
+ * R07 input contract. `query` is kept verbatim; `terms` SUPPLEMENT it (never
+ * replace it). Intent comes from the raw query alone: only an explicit exact
+ * request, or a raw query that is as a whole one exact selector (and has no
+ * terms), takes the exact route. `limit` is 1..DISCOVERY_MAX_LIMIT; anything
+ * else is rejected rather than silently clamped.
+ */
+function validateArgs(args: StaticDiscoveryArgs): { task: string; limit: number; intent: "exact" | "text" } {
   const query = args.query;
   if (typeof query !== "string" || query.trim().length === 0) {
     throw new Error("discovery query must be 1..512 code units");
@@ -102,9 +120,9 @@ function validateArgs(args: StaticDiscoveryArgs): { task: string; limit: number;
   if (query.length > DISCOVERY_QUERY_MAX_UNITS) {
     throw new Error(`discovery query exceeds ${DISCOVERY_QUERY_MAX_UNITS} code units`);
   }
-  let task = query;
-  if (args.terms && args.terms.length > 0) {
-    if (args.terms.length > DISCOVERY_MAX_TERMS) {
+  const terms: string[] = [];
+  if (args.terms !== undefined) {
+    if (!Array.isArray(args.terms) || args.terms.length > DISCOVERY_MAX_TERMS) {
       throw new Error(`discovery terms are limited to ${DISCOVERY_MAX_TERMS}`);
     }
     for (const term of args.terms) {
@@ -114,23 +132,31 @@ function validateArgs(args: StaticDiscoveryArgs): { task: string; limit: number;
       if (term.length > DISCOVERY_TERM_MAX_UNITS) {
         throw new Error(`discovery terms are limited to ${DISCOVERY_TERM_MAX_UNITS} code units`);
       }
+      terms.push(term.trim());
     }
-    task = args.terms.join(" ");
   }
-  const limit = Math.min(Math.max(1, Math.trunc(args.limit ?? DISCOVERY_DEFAULT_LIMIT)), DISCOVERY_MAX_LIMIT);
+  if (args.limit !== undefined && (!Number.isInteger(args.limit) || args.limit < 1 || args.limit > ENTITY_SEARCH_MAX_LIMIT)) {
+    throw new Error(`discovery limit must be an integer 1..${ENTITY_SEARCH_MAX_LIMIT}`);
+  }
+  const limit = args.limit ?? DISCOVERY_DEFAULT_LIMIT;
   const searchMode: EntitySearchMode = args.searchMode ?? "auto";
   // M2-2: generic type arguments ("Map<String, V>") are not declarations the
   // static index stores; an explicit exact request must say so instead of
   // returning zero hits that read as "symbol absent". Auto mode keeps the
   // text route: there the query is task intent, not an address.
-  if (searchMode === "exact" && /</.test(task)) {
-    const raw = task.replace(/<.*>/, "").trim();
+  if (searchMode === "exact" && /</.test(query)) {
+    const raw = query.replace(/<.*>/, "").trim();
     throw new DiscoveryUnsupportedError(
-      `exact discovery cannot address parameterized shapes: the static index stores raw declarations, so "${task}" never matches. ` +
+      `exact discovery cannot address parameterized shapes: the static index stores raw declarations, so "${query}" never matches. ` +
       (raw ? `Retry with the raw name "${raw}" ` : "") + "or use searchMode auto/text for task intent."
     );
   }
-  return { task, limit, searchMode };
+  if (searchMode === "exact" && terms.length > 0) {
+    throw new DiscoveryUnsupportedError("terms supplement a text search; an exact selector takes no terms. Drop terms or use searchMode auto/text.");
+  }
+  const intent = terms.length > 0 ? "text" : classifyQuery(query, searchMode);
+  const task = terms.length > 0 ? [query, ...terms].join(" ") : query;
+  return { task, limit, intent };
 }
 
 /** Index coverage roots (the layout roots the builder indexed) as scope records. */
@@ -176,7 +202,7 @@ function previewAt(repoRoot: string, relativePath: string, line: number, content
 }
 
 export async function runStaticDiscovery(client: JavaIndexClientApi, args: StaticDiscoveryArgs): Promise<DiscoveryResult> {
-  const { task, limit, searchMode } = validateArgs(args);
+  const { task, limit, intent } = validateArgs(args);
   // docs/03 §2: module/sourceSet resolve against the roots the index was
   // built from, as an AND, BEFORE the query; the resolved roots are pushed
   // down into every SQL route ahead of postings budget, ranking and cap.
@@ -193,6 +219,7 @@ export async function runStaticDiscovery(client: JavaIndexClientApi, args: Stati
       candidates: [],
       scopeState: "READY",
       truncated: false,
+      selectionLimited: false,
       stopReason: "scope_empty",
       droppedUnlocatable: 0,
       scope: resolved
@@ -200,12 +227,11 @@ export async function runStaticDiscovery(client: JavaIndexClientApi, args: Stati
   }
   const result = await client.querySearch(task, {
     limit,
-    mode: searchMode,
+    mode: intent,
     ...(resolved.state === "RESOLVED" || resolved.state === "PARTIAL" ? { scope: { sourceRoots: resolved.sourceRootIds } } : {}),
     budget: args.budget?.remainingMs ? { remainingMs: args.budget.remainingMs } : undefined
   });
-  const intent = classifyQuery(task, searchMode);
-  const ambiguousExact = intent === "exact" && result.hits.length > 1;
+  const ambiguousExact = intent === "exact" && (result.exact === "ambiguous" || result.hits.length > 1);
   const candidates: DiscoveryCandidate[] = [];
   let droppedUnlocatable = 0;
   for (const hit of result.hits) {
@@ -256,6 +282,8 @@ export async function runStaticDiscovery(client: JavaIndexClientApi, args: Stati
     candidates,
     scopeState: partial ? "PARTIAL" : "READY",
     truncated: result.truncated,
+    selectionLimited: result.selectionLimited === true,
+    ...(intent === "exact" ? { exact: result.exact ?? (result.hits.length === 0 ? "miss" : result.hits.length > 1 ? "ambiguous" : "match") } : {}),
     ...(stopReason ? { stopReason } : {}),
     droppedUnlocatable,
     scope: resolved
