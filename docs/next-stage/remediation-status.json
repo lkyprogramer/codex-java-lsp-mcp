@@ -44,12 +44,13 @@
     },
     "R07": {
       "state": "DONE",
-      "commit": "(this commit: fix(discovery): unify exact intent expansion and result limits)",
+      "commit": "791c520",
       "report": "docs/next-stage/r07-task-result.md"
     },
     "R08": {
-      "state": "NOT_STARTED",
-      "known_input": "src/discovery/query.ts previewAt splits CRLF line endings into two lines (found 2026-10-09; see r01-r04-review-fixes.md)"
+      "state": "DONE",
+      "commit": "(this commit: fix(evidence): bind previews to current source provenance)",
+      "report": "docs/next-stage/r08-task-result.md"
     },
     "R09": {
       "state": "NOT_STARTED"

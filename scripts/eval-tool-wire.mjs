@@ -106,7 +106,10 @@ function serializeRead(domain, maxBytes) {
 
 function candidateSlice(candidate) {
   const range = candidate?.evidenceRange;
-  const relativePath = candidate?.declaration?.relativePath;
+  // R08: a preview is evidence of its own source (a MyBatis XML statement is
+  // not the Java mapper file); older results only carried the declaration.
+  const relativePath = range?.relativePath ?? candidate?.declaration?.relativePath;
+  const contentHash = range?.relativePath ? range.contentHash : candidate?.declaration?.contentHash;
   if (candidate?.previewKind !== "source" || typeof candidate?.preview !== "string" || !relativePath
     || !Number.isInteger(range?.startLine) || !Number.isInteger(range?.endLine)) return null;
   // The preview must be exactly the declared window; anything else is not
@@ -117,7 +120,7 @@ function candidateSlice(candidate) {
     startLine: range.startLine,
     endLine: range.endLine,
     text: candidate.preview,
-    ...(typeof candidate.declaration.contentHash === "string" ? { fileContentHash: candidate.declaration.contentHash } : {})
+    ...(typeof contentHash === "string" ? { fileContentHash: contentHash } : {})
   };
 }
 

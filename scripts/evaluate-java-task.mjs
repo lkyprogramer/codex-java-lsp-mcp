@@ -381,17 +381,18 @@ export function extractSourceEvents({ callId, toolName, result }) {
     return events;
   }
   for (const candidate of payload.candidates) {
+    const sourcePath = candidate?.evidenceRange?.relativePath ?? candidate?.declaration?.relativePath;
     if (candidate?.previewKind === "source" && typeof candidate.preview === "string"
-      && candidate.declaration?.relativePath && candidate.evidenceRange) {
+      && sourcePath && candidate.evidenceRange) {
       events.push(sourceEvent({
         type: "SOURCE_FETCHED",
         callId,
         toolName,
-        path: candidate.declaration.relativePath,
+        path: sourcePath,
         text: candidate.preview,
         startLine: candidate.evidenceRange.startLine,
         endLine: candidate.evidenceRange.endLine,
-        fileContentHash: candidate.declaration.contentHash
+        fileContentHash: candidate.evidenceRange.relativePath ? candidate.evidenceRange.contentHash : candidate.declaration.contentHash
       }));
     }
   }

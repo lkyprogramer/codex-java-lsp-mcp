@@ -13,6 +13,7 @@ import {
   ENTITY_SEARCH_MAX_LIMIT,
   type DetailedEntitySearchResult,
   type EntityHit,
+  type EntityHitEvidence,
   type EntityKind,
   type EntityLayer,
   type EntitySearchMode,
@@ -20,7 +21,7 @@ import {
   type EntitySearchScope,
   type EntitySearchStopReason
 } from "../entity-search.js";
-import { bindChunks, inClause, prepareCached, type IndexDatabase } from "./driver.js";
+import { bindChunks, inClause, prepareCached, withReadSnapshot, type IndexDatabase } from "./driver.js";
 import { asCount } from "./facts-store.js";
 import { decodeFacts } from "./rows.js";
 import { symId, symText } from "./sym.js";
@@ -364,6 +365,7 @@ function docHits(
       const sym = asInt(row.sym);
       const best = bestByDeclaration.get(sym);
       if (!best) continue;
+      const evidence = documentEvidence(db, best.docSym);
       out.push({
         entityId: symText(db, sym),
         kind: String(row.kind) as EntityKind,
@@ -371,12 +373,29 @@ function docHits(
         simpleName: String(row.simpleName),
         relativePath: rowPath(db, row.pathSym as SQLOutputValue | null | undefined),
         layer: "DOCUMENT",
-        score: best.score
+        score: best.score,
+        ...(evidence ? { evidence } : {})
       });
     }
   }
   out.sort((left, right) => right.score - left.score || left.entityId.localeCompare(right.entityId));
   return out.slice(0, cap);
+}
+
+/** The matched document's own source (XML for a MyBatis statement). */
+function documentEvidence(db: IndexDatabase, docSym: number): EntityHitEvidence | undefined {
+  const row = prepareCached(
+    db,
+    "SELECT source_path_sym AS sourcePathSym, content_hash AS contentHash, kind AS kind, start_line AS startLine, end_line AS endLine FROM search_doc WHERE sym=?"
+  ).get(docSym) as Record<string, SQLOutputValue> | undefined;
+  if (!row || row.sourcePathSym == null) return undefined;
+  return {
+    relativePath: symText(db, asInt(row.sourcePathSym)),
+    contentHash: String(row.contentHash),
+    startLine: asInt(row.startLine),
+    endLine: asInt(row.endLine),
+    sourceKind: String(row.kind)
+  };
 }
 
 // T06: declaration locator enrichment for the discovery API. Point lookups
@@ -450,12 +469,23 @@ export class SqlEntitySearch {
   // visited (never the returned rows); scope is pushed into every route's SQL
   // so it precedes the posting budget, ranking and the result cap; any exhausted budget reports an explicit partial result with the
   // stop reason instead of pretending the scan was complete. The reported
-  // generation labels the snapshot the scan observed (K20).
+  // generation labels the snapshot the scan observed (K20): every route,
+  // the locators and the generation are read inside ONE read transaction, so
+  // a concurrent writer commit can never mix two generations in one result.
   searchDetailed(
     task: string,
     limit: number = ENTITY_SEARCH_DEFAULT_LIMIT,
     mode: EntitySearchMode = "auto",
     options: EntitySearchOptions = {}
+  ): DetailedEntitySearchResult {
+    return withReadSnapshot(this.db, () => this.searchDetailedInSnapshot(task, limit, mode, options));
+  }
+
+  private searchDetailedInSnapshot(
+    task: string,
+    limit: number,
+    mode: EntitySearchMode,
+    options: EntitySearchOptions
   ): DetailedEntitySearchResult {
     const cap = clampLimit(limit);
     const generation = readIndexGeneration(this.db);

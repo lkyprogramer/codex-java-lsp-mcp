@@ -57,6 +57,42 @@ function deleteTokensForPath(db: IndexDatabase, pathSym: number): void {
   prepareCached(db, "DELETE FROM search_doc WHERE path_sym=?").run(pathSym);
 }
 
+function deleteTokensForSource(db: IndexDatabase, sourcePathSym: number): void {
+  prepareCached(
+    db,
+    `DELETE FROM search_doc_token WHERE doc_sym IN (SELECT sym FROM search_doc WHERE source_path_sym=?)`
+  ).run(sourcePathSym);
+  prepareCached(db, "DELETE FROM search_doc WHERE source_path_sym=?").run(sourcePathSym);
+}
+
+function insertDocuments(db: IndexDatabase, ownerPath: string, documents: readonly SearchDocument[]): void {
+  const ownerSym = internSymNullable(db, ownerPath);
+  const insertDoc = prepareCached(
+    db,
+    `INSERT INTO search_doc(sym, declaration_sym, path_sym, source_path_sym, content_hash, kind, start_line, end_line, token_len)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+  const insertToken = prepareCached(db, "INSERT INTO search_doc_token(doc_sym, token_sym, tf) VALUES (?, ?, ?)");
+  for (const doc of documents) {
+    const docSym = internSym(db, doc.documentId);
+    const tokens = documentTokens(doc.normalizedText);
+    insertDoc.run(
+      docSym,
+      internSym(db, doc.declarationId),
+      ownerSym,
+      internSym(db, doc.source.relativePath),
+      doc.source.contentHash,
+      doc.sourceKind,
+      doc.source.startLine,
+      doc.source.endLine,
+      tokens.length
+    );
+    const tf = new Map<string, number>();
+    for (const token of tokens) tf.set(token, (tf.get(token) ?? 0) + 1);
+    for (const [token, count] of tf) insertToken.run(docSym, internSym(db, token), count);
+  }
+}
+
 /** Rebuilds search_doc_df from the current postings (writer-side only). */
 export function rebuildSearchDocDf(db: IndexDatabase): void {
   runInWriteTx(db, () => {
@@ -68,36 +104,35 @@ export function rebuildSearchDocDf(db: IndexDatabase): void {
 }
 
 /**
- * Replaces every document that belongs to one file path. The path key doubles
- * as the undo handle: a rename or content change deletes the old hash's
- * documents before the new ones publish, so queries never see both.
+ * Replaces every document owned by one Java file path (its own Java-sourced
+ * documents and the XML-sourced documents that target its declarations). The
+ * path key doubles as the undo handle: a rename or content change deletes the
+ * old hash's documents before the new ones publish, so queries never see both.
  */
 export function replaceSearchDocuments(db: IndexDatabase, relativePath: string, documents: readonly SearchDocument[]): void {
   runInWriteTx(db, () => {
-    const pathSym = internSym(db, relativePath);
-    deleteTokensForPath(db, pathSym);
-    const insertDoc = prepareCached(
-      db,
-      `INSERT INTO search_doc(sym, declaration_sym, path_sym, content_hash, kind, start_line, end_line, token_len)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    );
-    const insertToken = prepareCached(db, "INSERT INTO search_doc_token(doc_sym, token_sym, tf) VALUES (?, ?, ?)");
-    for (const doc of documents) {
-      const docSym = internSym(db, doc.documentId);
-      const tokens = documentTokens(doc.normalizedText);
-      insertDoc.run(
-        docSym,
-        internSym(db, doc.declarationId),
-        internSymNullable(db, doc.path),
-        doc.contentHash,
-        doc.sourceKind,
-        doc.startLine,
-        doc.endLine,
-        tokens.length
-      );
-      const tf = new Map<string, number>();
-      for (const token of tokens) tf.set(token, (tf.get(token) ?? 0) + 1);
-      for (const [token, count] of tf) insertToken.run(docSym, internSym(db, token), count);
+    deleteTokensForPath(db, internSym(db, relativePath));
+    insertDocuments(db, relativePath, documents);
+  });
+}
+
+/**
+ * R08: replaces every document whose evidence SOURCE is one (resource) file,
+ * e.g. a mapper XML edited while the Java mapper is unchanged. Each document
+ * keeps its owning Java file so a later Java rewrite still undoes it.
+ */
+export function replaceSearchDocumentsForSource(
+  db: IndexDatabase,
+  sourcePath: string,
+  documents: ReadonlyArray<{ ownerPath: string; document: SearchDocument }>
+): void {
+  runInWriteTx(db, () => {
+    deleteTokensForSource(db, internSym(db, sourcePath));
+    for (const { ownerPath, document } of documents) {
+      if (document.source.relativePath !== sourcePath) {
+        throw new Error(`document ${document.documentId} is not sourced from ${sourcePath}`);
+      }
+      insertDocuments(db, ownerPath, [document]);
     }
   });
 }

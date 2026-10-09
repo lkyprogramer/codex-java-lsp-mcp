@@ -179,16 +179,13 @@ async function main() {
       }
         const a2Paths = (a2?.candidates ?? []).map(c => {
           const decl = c.declaration ?? {};
-          const relPath = decl.relativePath ?? c.relativePath;
-          let startLine = decl.selection?.line;
-          let endLine = startLine;
-          if (typeof c.preview === "string" && c.previewKind === "source") {
-            const lines = c.preview.split(/(?<=\r\n|\n|\r)/);
-            if (lines[lines.length - 1] === "") lines.pop();
-            startLine = decl.selection?.line;
-            endLine = startLine != null ? startLine + lines.length - 1 : undefined;
+          if (typeof c.preview === "string" && c.previewKind === "source" && c.evidenceRange) {
+            // The product reports the preview's own source range (R08).
+            const range = c.evidenceRange;
+            return { path: range.relativePath ?? decl.relativePath ?? c.relativePath, startLine: range.startLine, endLine: range.endLine };
           }
-          return { path: relPath, startLine, endLine };
+          const startLine = decl.selection?.line;
+          return { path: decl.relativePath ?? c.relativePath, startLine, endLine: startLine };
         });
         // 行范围取候选的 read 窗口；M2 的 SOURCE_RECEIVED 口径是 (path, line) 命中证据。
         const a2Coverage = coverage(a2Paths, g);

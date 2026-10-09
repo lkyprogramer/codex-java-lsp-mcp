@@ -59,6 +59,18 @@ export type EntityHit = {
   module?: string;
   sourceRoot?: string;
   signature?: string;
+  // R08: a DOCUMENT hit names the document that actually matched (comment,
+  // framework key, MyBatis XML statement) as its evidence source, separate
+  // from the target declaration locator above.
+  evidence?: EntityHitEvidence;
+};
+
+export type EntityHitEvidence = {
+  relativePath: string;
+  contentHash: string;
+  startLine: number;
+  endLine: number;
+  sourceKind: string;
 };
 
 // T07: query work budget is not the returned row count. It bounds physical

@@ -9,7 +9,7 @@ import { recordsFromBundle } from "../java-index/entity-search.js";
 import type { JavaFileBundle } from "../java-index/index-types.js";
 import { parseJavaSourceFile } from "../java-index/java-index-file-parse.js";
 import { createJavaParserBackend } from "../java-index/java-parser-backend.js";
-import { discoverJavaFiles } from "../java-index/manifest.js";
+import { discoverJavaFiles, discoverMyBatisResourceFiles } from "../java-index/manifest.js";
 import { extractMyBatisMapperFacts } from "../java-index/mybatis-xml-extractor.js";
 import type { MyBatisMapperResourceFacts } from "../java-index/mybatis-types.js";
 import { JavaNameResolver } from "../java-index/name-resolver.js";
@@ -20,9 +20,10 @@ import {
   commitSearchDocStats,
   deleteSearchDocumentsForPath,
   rebuildSearchDocDf,
-  replaceSearchDocuments
+  replaceSearchDocuments,
+  replaceSearchDocumentsForSource
 } from "../java-index/sql/search-docs.js";
-import { buildSearchDocuments } from "../discovery/search-document.js";
+import { buildMyBatisSearchDocuments, buildSearchDocuments, type SearchDocument } from "../discovery/search-document.js";
 import { SqlFactsStore } from "../java-index/sql/facts-store.js";
 import { SqlKnowledgeGraph } from "../java-index/sql/knowledge-graph.js";
 import { buildSqlRegistryView } from "../java-index/sql/registry-view.js";
@@ -282,12 +283,36 @@ function resyncNamespace(db: IndexDatabase, generation: number, namespace: strin
   graph.flushMeta();
 }
 
+/**
+ * R08: an XML-only change replaces the documents SOURCED from that XML even
+ * though no Java file changed: the old namespace's statements disappear, the
+ * new ones bind to every Java declaration of the (new) namespace, each with
+ * the XML path/hash/range as source.
+ */
+function replaceResourceDocuments(db: IndexDatabase, relativePath: string, resource: MyBatisMapperResourceFacts | undefined): void {
+  const documents: Array<{ ownerPath: string; document: SearchDocument }> = [];
+  if (resource?.namespace) {
+    const store = new SqlFactsStore(db);
+    const owners = new Set(store.typesByFqn(resource.namespace).map(type =>
+      type.fileId.startsWith("file:") ? type.fileId.slice("file:".length) : type.fileId));
+    for (const ownerPath of [...owners].sort()) {
+      const bundle = readBundle(db, ownerPath);
+      if (!bundle) continue;
+      for (const document of buildMyBatisSearchDocuments({ bundle, myBatisResources: [resource] })) {
+        documents.push({ ownerPath, document });
+      }
+    }
+  }
+  replaceSearchDocumentsForSource(db, relativePath, documents);
+}
+
 async function applyResources(
   db: IndexDatabase,
   repoRoot: string,
   generation: number,
   changedInputs: readonly string[],
-  deletedInputs: readonly string[]
+  deletedInputs: readonly string[],
+  options: { publish?: boolean } = {}
 ): Promise<void> {
   const layout = probeLayout(repoRoot);
   writeBuildProgress(db, { phase: "declare", done: 0, total: Math.max(1, changedInputs.length + deletedInputs.length) });
@@ -307,7 +332,11 @@ async function applyResources(
       const content = await readFile(resolved.abs, "utf8");
       const contentHash = createHash("sha256").update(content, "utf8").digest("hex");
       if (before?.contentHash === contentHash) continue;
-      writes.push({ relativePath, facts: extractMyBatisMapperFacts({ relativePath, content, contentHash, generation }) });
+      const facts = extractMyBatisMapperFacts({ relativePath, content, contentHash, generation });
+      // A non-mapper XML that was never indexed stays a no-op (reconcile
+      // offers every resource XML; it must not rewrite df for each of them).
+      if (!facts && !before) continue;
+      writes.push({ relativePath, facts });
       if (before?.namespace) namespaces.add(before.namespace);
     } catch (err) {
       if (errCode(err) !== "ENOENT") throw err;
@@ -326,7 +355,13 @@ async function applyResources(
       }
     }
     for (const namespace of namespaces) resyncNamespace(db, generation, namespace);
-    finishIndex(db, generation, layout.sourceRoots.map(root => root.relativePath));
+    for (const relativePath of deletePaths) replaceResourceDocuments(db, relativePath, undefined);
+    for (const write of writes) replaceResourceDocuments(db, write.relativePath, write.facts);
+    if (deletePaths.length > 0 || writes.length > 0) {
+      rebuildSearchDocDf(db);
+      commitSearchDocStats(db);
+    }
+    if (options.publish !== false) finishIndex(db, generation, layout.sourceRoots.map(root => root.relativePath));
   });
 }
 
@@ -354,10 +389,52 @@ function stampFileTimes(db: IndexDatabase, stamps: readonly MtimeStamp[]): void 
   for (const stamp of stamps) stmt.run(stamp.mtimeMs, stamp.ctimeMs, stamp.path);
 }
 
+/**
+ * R08/K21: reconcile also covers mapper XML. A worktree whose XML differs
+ * from the copied sibling DB while every Java hash matches must still replace
+ * the XML-sourced evidence before READY. Content hash decides, not mtime.
+ */
+async function changedResources(
+  db: IndexDatabase,
+  repoRoot: string,
+  layout: LayoutContext
+): Promise<{ changed: string[]; deleted: string[] }> {
+  const indexed = new Map(
+    (prepareCached(db, "SELECT path, content_hash AS contentHash FROM mybatis_resource").all() as Array<{ path: string; contentHash: string | null }>)
+      .map(row => [row.path, row.contentHash])
+  );
+  const changed: string[] = [];
+  const seen = new Set<string>();
+  for (const file of await discoverMyBatisResourceFiles(repoRoot, layout)) {
+    seen.add(file.relativePath);
+    const previous = indexed.get(file.relativePath);
+    // Unindexed XML: applyResources parses it and skips non-mappers.
+    if (previous === undefined || await contentHashOf(file.absolutePath) !== previous) changed.push(file.absolutePath);
+  }
+  const deleted = [...indexed.keys()].filter(relativePath => !seen.has(relativePath));
+  return { changed, deleted };
+}
+
 async function applyReconcile(db: IndexDatabase, repoRoot: string, generation: number): Promise<void> {
   const layout = probeLayout(repoRoot);
   const roots = layout.sourceRoots.map(root => root.relativePath);
   writeBuildProgress(db, { phase: "declare", done: 0, total: 1 });
+  // XML first, unpublished: the Java pass below is what publishes this
+  // generation, so no reader sees generation N with the old XML evidence.
+  const resources = await changedResources(db, repoRoot, layout);
+  if (resources.changed.length > 0 || resources.deleted.length > 0) {
+    await applyResources(db, repoRoot, generation, resources.changed, resources.deleted, { publish: false });
+  }
+  await applyJavaReconcile(db, repoRoot, generation, layout, roots);
+}
+
+async function applyJavaReconcile(
+  db: IndexDatabase,
+  repoRoot: string,
+  generation: number,
+  layout: LayoutContext,
+  roots: readonly string[]
+): Promise<void> {
   const discovered = await discoverJavaFiles(repoRoot, layout);
   const indexed = new Map(
     (prepareCached(

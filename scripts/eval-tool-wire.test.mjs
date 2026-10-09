@@ -299,3 +299,40 @@ test("serializer: content is always valid JSON within maxBytes, for every tool s
     }
   }
 });
+
+test("R08: a java_symbol preview is credited against its evidence source; a redacted preview never", () => {
+  const xmlHash = "x".repeat(64);
+  const javaHash = "j".repeat(64);
+  const declaration = { id: "m", name: "load", relativePath: "src/main/java/demo/Mapper.java", contentHash: javaHash, selection: { line: 3, column: 9 } };
+  const raw = {
+    schemaVersion: "java-discovery/v1",
+    scopeState: "READY",
+    candidates: [
+      {
+        declaration,
+        matchedBy: ["framework"],
+        binding: "source-declaration",
+        preview: "  <select id=\"load\">\r\n    SELECT 1\r\n",
+        previewKind: "source",
+        evidenceRange: { relativePath: "src/main/resources/Mapper.xml", contentHash: xmlHash, startLine: 2, endLine: 3 }
+      },
+      {
+        declaration: { ...declaration, id: "t" },
+        binding: "source-declaration",
+        preview: "String API_TOKEN = \"<value-redacted>\";\n",
+        previewKind: "redacted-preview",
+        evidenceRange: { relativePath: "src/main/java/demo/Mapper.java", contentHash: javaHash, startLine: 5, endLine: 5 }
+      }
+    ]
+  };
+  const { slices } = serializeModelToolResult("java_symbol", raw, MODEL_TOOL_MESSAGE_MAX_BYTES);
+  assert.deepEqual(slices.map(({ sliceHash, ...slice }) => slice), [{
+    path: "src/main/resources/Mapper.xml",
+    startLine: 2,
+    endLine: 3,
+    text: raw.candidates[0].preview,
+    fileContentHash: xmlHash
+  }], "the XML slice with the XML hash; the redacted preview is not source evidence");
+  assert.equal(slices[0].sliceHash, sha256(raw.candidates[0].preview));
+  assert.equal(splitSourceLines(raw.candidates[0].preview).length, 2, "CRLF counts one terminator per line");
+});

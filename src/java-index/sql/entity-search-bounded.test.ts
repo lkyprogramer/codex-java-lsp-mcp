@@ -252,9 +252,10 @@ function r06Fixture() {
   const docs = records.map((record, index) => ({
     documentId: `doc:${record.entityId}`,
     declarationId: record.entityId,
+    source: { relativePath: record.relativePath, contentHash: "h", startLine: 1, endLine: 1 },
     path: record.relativePath,
     contentHash: "h",
-    representationVersion: 1 as const,
+    representationVersion: 2 as const,
     sourceKind: "comment" as const,
     startLine: 1,
     endLine: 1,

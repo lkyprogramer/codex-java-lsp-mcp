@@ -105,6 +105,26 @@ export function withTransaction<T>(db: IndexDatabase, fn: () => T): T {
   }
 }
 
+/**
+ * Runs read-only work on one WAL snapshot (BEGIN DEFERRED takes the read
+ * snapshot at the first SELECT). Nested inside an open transaction it simply
+ * joins it.
+ */
+export function withReadSnapshot<T>(db: IndexDatabase, fn: () => T): T {
+  if (db.isTransaction) return fn();
+  db.exec("BEGIN");
+  try {
+    return fn();
+  } finally {
+    try {
+      db.exec("COMMIT");
+    } catch {
+      // A read transaction has nothing to lose; never mask fn()'s outcome.
+      try { db.exec("ROLLBACK"); } catch { /* already closed */ }
+    }
+  }
+}
+
 export function prepareCached(db: IndexDatabase, sql: string): StatementSync {
   let cached = statementCache.get(db);
   if (!cached) {
