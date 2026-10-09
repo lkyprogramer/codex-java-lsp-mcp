@@ -9,7 +9,8 @@ export function buildSqlRegistryView(store: SqlFactsStore): TypeRegistryView {
   const nested = new Map<string, string>();
   return {
     byId: store.typesById as unknown as TypeRegistryView["byId"],
-    byFqn: store.typeIdByFqn as unknown as TypeRegistryView["byFqn"],
+    byFqn: store.typeIdsByFqn,
+    locationOf: typeId => store.declarationLocation(typeId),
     bySimpleName: store.typeIdsBySimpleName as unknown as TypeRegistryView["bySimpleName"],
     nestedByOwnerAndSimpleName: {
       get(key: string): string | undefined {

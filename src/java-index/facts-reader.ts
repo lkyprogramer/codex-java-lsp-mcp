@@ -11,6 +11,7 @@ import type {
   StaticEdgeKind
 } from "./index-types.js";
 import type { MyBatisMapperResourceFacts } from "./mybatis-types.js";
+import type { DeclarationLocation } from "./name-resolver.js";
 
 export type FactsLookup<V> = {
   get(key: string): V | undefined;
@@ -23,13 +24,15 @@ export type FactsReader = {
   readonly methodsById: FactsLookup<JavaMethodFacts>;
   readonly fieldsById: FactsLookup<JavaFieldFacts>;
   readonly filesByPath: FactsLookup<JavaFileFacts>;
-  readonly typeIdByFqn: FactsLookup<string>;
+  /** Every declaration of an FQN (id order); never a single "winner". */
+  readonly typeIdsByFqn: FactsLookup<readonly string[]>;
   readonly typeIdsBySimpleName: FactsLookup<ReadonlySet<string>>;
   readonly methodIdsByOwnerAndName: FactsLookup<ReadonlySet<string>>;
   files(paths: readonly string[]): JavaFileBundle[];
   file(path: string): JavaFileFacts | undefined;
   methodsOfOwner(typeId: string): JavaMethodFacts[];
-  typeByFqn(fqn: string): JavaTypeFacts | undefined;
+  typesByFqn(fqn: string): JavaTypeFacts[];
+  declarationLocation(typeId: string): DeclarationLocation | undefined;
   implementers(typeId: string, limit?: number): JavaTypeFacts[];
   callers(methodId: string, limit?: number): IndexedReference[];
   callees(methodId: string, limit?: number): IndexedReference[];

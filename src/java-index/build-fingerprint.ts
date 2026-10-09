@@ -24,7 +24,9 @@ const BUILD_MARKER_RELATIVE_PATHS = [
 // Bumped whenever ast-extractor.ts's fact shape changes in a way that isn't
 // already covered by a schemaVersion bump. Do not put gitSha in extractorVersion:
 // a telemetry/runtime install must not discard every repo's JavaIndex snapshot.
-const JAVA_FACTS_REVISION = 2;
+// 3: duplicate FQNs resolve by module/source-set visibility or stay
+// AMBIGUOUS (R05) - refs/edges written by revision 2 bound the lowest id.
+const JAVA_FACTS_REVISION = 3;
 const LEGACY_EXTRACTOR_CODE_SUFFIX = /\|extractor-code-[0-9a-f]{7,40}$/i;
 
 // Parser + facts revision only. tree-sitter version changes and JAVA_FACTS_REVISION

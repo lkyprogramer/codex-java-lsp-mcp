@@ -3,19 +3,64 @@
   "note": "Task progress lives here, not in the audit kit: docs/java-specialist-release-audit-v1.1/tasks/*.md and plan.json are hashed by the kit's SHA256SUMS (tools/check_bundle.py) and stay byte-identical to the delivered package.",
   "updated": "2026-10-09",
   "tasks": {
-    "R00": { "state": "DONE", "commit": "b061409", "report": "docs/next-stage/r00-task-result.json" },
-    "R01": { "state": "DONE", "commit": "321bde0", "review_fix": "docs/next-stage/r01-r04-review-fixes.md", "report": "docs/next-stage/r01-task-result.md" },
-    "R02": { "state": "DONE", "commit": "ee3e774", "review_fix": "docs/next-stage/r01-r04-review-fixes.md", "report": "docs/next-stage/r02-task-result.md" },
-    "R03": { "state": "DONE", "commit": "b58d3f1", "review_fix": "docs/next-stage/r01-r04-review-fixes.md", "report": "docs/next-stage/r03-task-result.md" },
-    "R04": { "state": "DONE", "commit": "c8ab600", "review_fix": "docs/next-stage/r01-r04-review-fixes.md", "report": "docs/next-stage/r04-task-result.md" },
-    "R05": { "state": "NOT_STARTED" },
-    "R06": { "state": "NOT_STARTED" },
-    "R07": { "state": "NOT_STARTED" },
-    "R08": { "state": "NOT_STARTED", "known_input": "src/discovery/query.ts previewAt splits CRLF line endings into two lines (found 2026-10-09; see r01-r04-review-fixes.md)" },
-    "R09": { "state": "NOT_STARTED" },
-    "R10": { "state": "NOT_STARTED" },
-    "R11": { "state": "NOT_STARTED" },
-    "R12": { "state": "NOT_STARTED" },
-    "R13": { "state": "NOT_STARTED" }
+    "R00": {
+      "state": "DONE",
+      "commit": "b061409",
+      "report": "docs/next-stage/r00-task-result.json"
+    },
+    "R01": {
+      "state": "DONE",
+      "commit": "321bde0",
+      "review_fix": "docs/next-stage/r01-r04-review-fixes.md",
+      "report": "docs/next-stage/r01-task-result.md"
+    },
+    "R02": {
+      "state": "DONE",
+      "commit": "ee3e774",
+      "review_fix": "docs/next-stage/r01-r04-review-fixes.md",
+      "report": "docs/next-stage/r02-task-result.md"
+    },
+    "R03": {
+      "state": "DONE",
+      "commit": "b58d3f1",
+      "review_fix": "docs/next-stage/r01-r04-review-fixes.md",
+      "report": "docs/next-stage/r03-task-result.md"
+    },
+    "R04": {
+      "state": "DONE",
+      "commit": "c8ab600",
+      "review_fix": "docs/next-stage/r01-r04-review-fixes.md",
+      "report": "docs/next-stage/r04-task-result.md"
+    },
+    "R05": {
+      "state": "DONE",
+      "commit": "(this commit: fix(index): preserve duplicate declarations through resolution)",
+      "report": "docs/next-stage/r05-task-result.md"
+    },
+    "R06": {
+      "state": "NOT_STARTED"
+    },
+    "R07": {
+      "state": "NOT_STARTED"
+    },
+    "R08": {
+      "state": "NOT_STARTED",
+      "known_input": "src/discovery/query.ts previewAt splits CRLF line endings into two lines (found 2026-10-09; see r01-r04-review-fixes.md)"
+    },
+    "R09": {
+      "state": "NOT_STARTED"
+    },
+    "R10": {
+      "state": "NOT_STARTED"
+    },
+    "R11": {
+      "state": "NOT_STARTED"
+    },
+    "R12": {
+      "state": "NOT_STARTED"
+    },
+    "R13": {
+      "state": "NOT_STARTED"
+    }
   }
 }

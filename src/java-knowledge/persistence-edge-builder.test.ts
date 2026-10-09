@@ -244,3 +244,43 @@ test("Template suffix plus generic argument emits REPOSITORY_MANAGES_ENTITY", ()
   assert.equal(managed.length, 1);
   assert.ok(managed[0]?.toId?.includes("Order"));
 });
+
+test("R05: a statement type declared twice (two modules) binds no entity and is not called external", () => {
+  const mapper = mapperBundle();
+  const entity = entityBundle();
+  const otherPath = "other/src/main/java/demo/Order.java";
+  const otherTypeId = javaTypeId({ fqn: "demo.Order", relativePath: otherPath, range: RANGE });
+  const other: JavaFileBundle = {
+    ...entity,
+    file: { ...entity.file, fileId: javaFileId(otherPath), relativePath: otherPath, module: "other", sourceRoot: "other/src/main/java", topLevelTypeIds: [otherTypeId], allTypeIds: [otherTypeId] },
+    types: [{ ...entity.types[0]!, typeId: otherTypeId, fileId: javaFileId(otherPath) }]
+  };
+  assert.notEqual(otherTypeId, entity.types[0]!.typeId);
+  const index = new MemoryFacts();
+  index.replaceFile(entity);
+  index.replaceFile(other);
+  index.replaceFile(mapper);
+  index.replaceMyBatisResource({
+    resourceId: myBatisResourceId("src/main/resources/mapper/OrderMapper.xml"),
+    relativePath: "src/main/resources/mapper/OrderMapper.xml",
+    namespace: "demo.OrderMapper",
+    statements: [{
+      statementId: myBatisStatementId("demo.OrderMapper", "findById"),
+      namespace: "demo.OrderMapper",
+      id: "findById",
+      kind: "select",
+      resultType: "demo.Order"
+    }],
+    resultMaps: [],
+    includes: [],
+    contentHash: "x",
+    generation: 1,
+    parseState: "COMPLETE"
+  });
+  const graph = sqlGraph();
+  new KnowledgeGraphBuilder(graph).rebuildFromStore(index.store, 1);
+  const edges = allSqlEdges(graph);
+  assert.equal(edges.filter(edge => edge.kind === "MYBATIS_METHOD_BINDS_STATEMENT").length, 1, "the unique mapper still binds");
+  assert.equal(edges.filter(edge => edge.kind === "MYBATIS_STATEMENT_USES_ENTITY").length, 0, "no guess between the two demo.Order declarations");
+  assert.ok(![...graph.nodesById.entries()].some(([id]) => id === "ext:demo.Order"), "a repo type is never relabelled external");
+});

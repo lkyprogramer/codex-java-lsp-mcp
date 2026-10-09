@@ -105,6 +105,7 @@ test("SqlFactsStore point lookups, files, mybatis, and iterators match JavaIndex
     assert.equal([...asIter.iterFiles()].length, [...asHeapIter.iterFiles()].length);
     const paths = bundles.map(bundle => bundle.file.relativePath);
     const typeIds = [...sql.iterTypes()].map(type => type.typeId);
+    const heapRegistry = buildTypeRegistryView(bundles.flatMap(bundle => bundle.types), [], undefined, bundles.map(bundle => bundle.file));
     const methodIds = [...sql.iterMethods()].map(method => method.methodId);
     const fieldIds = [...sql.iterFields()].map(field => field.fieldId);
 
@@ -112,7 +113,7 @@ test("SqlFactsStore point lookups, files, mybatis, and iterators match JavaIndex
     assert.equal(sql.typesById.size, store.typesById.size);
     assert.equal(sql.methodsById.size, store.methodsById.size);
     assert.equal(sql.fieldsById.size, store.fieldsById.size);
-    assert.equal(sql.typeIdByFqn.size, store.typeIdByFqn.size);
+    assert.equal(sql.typeIdsByFqn.size, store.typeIdsByFqn.size);
     assert.equal(sql.typeIdsBySimpleName.size, store.typeIdsBySimpleName.size);
     assert.equal(sql.methodIdsByOwnerAndName.size, store.methodIdsByOwnerAndName.size);
 
@@ -131,8 +132,14 @@ test("SqlFactsStore point lookups, files, mybatis, and iterators match JavaIndex
       assert.deepEqual(sql.typesById.get(typeId), jsonClone(store.typesById.get(typeId)), typeId);
       const type = store.typesById.get(typeId)!;
       if (type.fqn) {
-        assert.equal(sql.typeIdByFqn.get(type.fqn), typeId);
-        assert.deepEqual(sql.typeByFqn(type.fqn), jsonClone(store.typeByFqn(type.fqn)));
+        // Every declaration of the FQN, never a single winner; SQL and the
+        // in-memory registry list the same candidates.
+        assert.ok(sql.typeIdsByFqn.get(type.fqn)?.includes(typeId), typeId);
+        assert.deepEqual([...(sql.typeIdsByFqn.get(type.fqn) ?? [])], [...(heapRegistry.byFqn.get(type.fqn) ?? [])], type.fqn);
+        assert.deepEqual(sql.typesByFqn(type.fqn).map(found => found.typeId), [...(sql.typeIdsByFqn.get(type.fqn) ?? [])]);
+        const file = sql.file(relativePathOfFileId(type.fileId))!;
+        assert.deepEqual(sql.declarationLocation(typeId), { module: file.module, sourceSet: file.sourceSet, sourceRoot: file.sourceRoot });
+        assert.deepEqual(heapRegistry.locationOf(typeId), sql.declarationLocation(typeId));
       }
       assert.deepEqual(sql.methodsOfOwner(typeId), jsonClone(store.methodsOfOwner(typeId)), typeId);
       assert.deepEqual(sorted(sql.typeIdsBySimpleName.get(type.simpleName) ?? []), sorted(store.typeIdsBySimpleName.get(type.simpleName) ?? []));

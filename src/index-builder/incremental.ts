@@ -268,13 +268,17 @@ async function applyRefresh(
 function resyncNamespace(db: IndexDatabase, generation: number, namespace: string | undefined): void {
   if (!namespace) return;
   const store = new SqlFactsStore(db);
-  const type = store.typeByFqn(namespace);
-  if (!type) return;
-  const relativePath = type.fileId.startsWith("file:") ? type.fileId.slice("file:".length) : type.fileId;
-  const bundle = readBundle(db, relativePath);
-  if (!bundle) return;
+  // Every declaration of the namespace FQN is refreshed: resyncing more
+  // files is safe, picking one of several would leave the others stale.
+  const types = store.typesByFqn(namespace);
+  if (types.length === 0) return;
   const graph = new SqlKnowledgeGraph(db);
-  new KnowledgeGraphBuilder(graph).replaceFile(bundle, store, generation);
+  const builder = new KnowledgeGraphBuilder(graph);
+  for (const type of types) {
+    const relativePath = type.fileId.startsWith("file:") ? type.fileId.slice("file:".length) : type.fileId;
+    const bundle = readBundle(db, relativePath);
+    if (bundle) builder.replaceFile(bundle, store, generation);
+  }
   graph.flushMeta();
 }
 

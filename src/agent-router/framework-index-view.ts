@@ -340,8 +340,9 @@ export function bundleToFrameworkFileFacts(bundle: JavaFileBundle): FrameworkFil
 // A v2 declaration also answers legacy "type:<fqn>" (and
 // "method:type:<fqn>#<sig>" / "field:type:<fqn>#<name>") request ids: the
 // framework adapters and older persisted consumers still reference types by
-// bare FQN. Aliases keep the lowest-id declaration, mirroring the
-// deterministic byFqn winner in the store and the in-memory registry.
+// bare FQN. A legacy alias that two declarations share (the same FQN in two
+// source roots) is ambiguous and answers nothing (reported missing), the same
+// "never guess between duplicates" rule the name resolver applies.
 export function v1AliasIds(id: string): string[] {
   if (id.startsWith("type:v2:")) {
     const fqn = fqnOfTypeId(id);
@@ -373,12 +374,13 @@ export function bundlesToRequestedDeclarations(
     for (const method of declarations.methods) methodsById.set(method.methodId, method);
     for (const field of declarations.fields) fieldsById.set(field.fieldId, field);
   }
-  const typeAliasById = new Map<string, { id: string; decl: FrameworkTypeDeclaration }>();
-  const methodAliasById = new Map<string, { id: string; decl: FrameworkMethodDeclaration }>();
-  const fieldAliasById = new Map<string, { id: string; decl: FrameworkFieldDeclaration }>();
-  const aliasWin = <T,>(map: Map<string, { id: string; decl: T }>, alias: string, id: string, decl: T): void => {
+  const typeAliasById = new Map<string, { id: string; decl?: FrameworkTypeDeclaration }>();
+  const methodAliasById = new Map<string, { id: string; decl?: FrameworkMethodDeclaration }>();
+  const fieldAliasById = new Map<string, { id: string; decl?: FrameworkFieldDeclaration }>();
+  const aliasWin = <T,>(map: Map<string, { id: string; decl?: T }>, alias: string, id: string, decl: T): void => {
     const current = map.get(alias);
-    if (current === undefined || current.id > id) map.set(alias, { id, decl });
+    if (current === undefined) map.set(alias, { id, decl });
+    else if (current.id !== id) map.set(alias, { id: current.id });
   };
   for (const [id, type] of typesById) for (const alias of v1AliasIds(id)) aliasWin(typeAliasById, alias, id, type);
   for (const [id, method] of methodsById) for (const alias of v1AliasIds(id)) aliasWin(methodAliasById, alias, id, method);

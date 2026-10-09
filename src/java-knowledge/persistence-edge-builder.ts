@@ -50,8 +50,11 @@ function upsert(
 
 function resolveNamedType(name: string | undefined, store: FactsReader): string | undefined {
   if (!name) return undefined;
-  const byFqn = store.typeByFqn(name);
-  if (byFqn) return knowledgeIdForType(byFqn);
+  // Several repo declarations of one FQN and no referring location here:
+  // stay unbound rather than guess (and never call it external).
+  const byFqn = store.typesByFqn(name);
+  if (byFqn.length === 1) return knowledgeIdForType(byFqn[0]!);
+  if (byFqn.length > 1) return undefined;
   const simple = name.includes(".") ? name.slice(name.lastIndexOf(".") + 1) : name;
   const hits = store.typesBySimpleNameOrFqn(simple, name);
   if (hits.length === 1) return knowledgeIdForType(hits[0]!);

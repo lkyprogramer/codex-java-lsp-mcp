@@ -271,3 +271,26 @@ test("bundlesToRequestedDeclarations returns only the requested ids across multi
   assert.deepEqual(result.fields.map(f => f.fieldId), [fieldA.fieldId]);
   assert.deepEqual(result.missingIds, ["field:type:demo.C#missing"]);
 });
+
+test("R05: a legacy bare-FQN alias shared by two declarations is ambiguous and answers nothing", () => {
+  const owner = (path: string) => `type:v2:${encodeURIComponent(path)}#demo.Shared`;
+  const field = (ownerTypeId: string): JavaFieldFacts => ({
+    fieldId: `field:${ownerTypeId}#count`,
+    ownerTypeId,
+    name: "count",
+    type: unresolvedRef("int"),
+    modifiers: [],
+    annotations: [],
+    range: RANGE
+  });
+  const a = field(owner("a/src/main/java/demo/Shared.java"));
+  const b = field(owner("b/src/main/java/demo/Shared.java"));
+  const only = field(`type:v2:${encodeURIComponent("a/src/main/java/demo/Only.java")}#demo.Only`);
+  const bundleA: JavaFileBundle = { file: file({ relativePath: "a/src/main/java/demo/Shared.java" }), types: [], fields: [a, only], methods: [], edges: [] };
+  const bundleB: JavaFileBundle = { file: file({ relativePath: "b/src/main/java/demo/Shared.java" }), types: [], fields: [b], methods: [], edges: [] };
+  for (const order of [[bundleA, bundleB], [bundleB, bundleA]]) {
+    const result = bundlesToRequestedDeclarations(order, ["field:type:demo.Shared#count", b.fieldId, "field:type:demo.Only#count"]);
+    assert.deepEqual(result.fields.map(f => f.fieldId), [b.fieldId, only.fieldId], "exact v2 ids and unique aliases still answer");
+    assert.deepEqual(result.missingIds, ["field:type:demo.Shared#count"], "the shared alias is never resolved to the lowest id");
+  }
+});

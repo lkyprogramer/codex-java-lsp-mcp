@@ -12,6 +12,7 @@ import type { SliceMethod } from "./statement-slicer.js";
 import type { GraphSearchResult } from "./graph-search.js";
 import type { JavaFileBundle, JavaMethodFacts, JavaTypeFacts, JavaTypeRef } from "../java-index/index-types.js";
 import { splitIdentifier } from "../java-index/entity-search.js";
+import { locationOfFile, selectVisibleDeclaration, type DeclarationLocation } from "../java-index/name-resolver.js";
 
 export type PlanQueryInput = {
   graph: GraphReader;
@@ -88,7 +89,7 @@ function typeModule(store: FactsReader | undefined, bundle: JavaFileBundle, ref:
   const ids = [...resolvedRepoTypeIds(ref)];
   if (ids.length === 0) {
     const imported = importBySimpleName(bundle).get(ref.simpleName);
-    const id = imported ? typeIdByFqn(store, imported) : undefined;
+    const id = imported ? typeIdByFqn(store, imported, locationOfFile(bundle.file)) : undefined;
     if (id) ids.push(id);
   }
   for (const id of ids) {
@@ -198,8 +199,11 @@ function simpleNamesOfRef(ref: JavaTypeRef | undefined): string[] {
   return [ref.simpleName, ...ref.typeArguments.flatMap(simpleNamesOfRef)].filter(name => name.length > 1);
 }
 
-function typeIdByFqn(store: FactsReader, fqn: string): string | undefined {
-  return store.typeIdByFqn.get(fqn);
+// The declaration of `fqn` visible from the referring file; undefined when
+// the FQN is absent or AMBIGUOUS (duplicates are never guessed).
+function typeIdByFqn(store: FactsReader, fqn: string, from: DeclarationLocation | undefined): string | undefined {
+  const selection = selectVisibleDeclaration(store.typeIdsByFqn.get(fqn), from, id => store.declarationLocation(id));
+  return selection.kind === "unique" ? selection.typeId : undefined;
 }
 
 function uniqueTypeIdBySimpleName(store: FactsReader, simpleName: string): string | undefined {
@@ -255,6 +259,7 @@ function seedType(seeds: Map<string, DiscoverySeed>, typeId: string, hops: 1 | 2
 function mentionRef(
   store: FactsReader,
   importBySimple: Map<string, string>,
+  from: DeclarationLocation | undefined,
   seeds: Map<string, DiscoverySeed>,
   ref: JavaTypeRef | undefined,
   hops: 1 | 2,
@@ -265,7 +270,7 @@ function mentionRef(
   for (const id of resolvedRepoTypeIds(ref)) seedType(seeds, id, hops, kind, name);
   for (const simple of simpleNamesOfRef(ref)) {
     const imported = importBySimple.get(simple);
-    const id = (imported ? typeIdByFqn(store, imported) : undefined)
+    const id = (imported ? typeIdByFqn(store, imported, from) : undefined)
       ?? (looseSimple ? uniqueTypeIdBySimpleName(store, simple) : undefined);
     if (id) seedType(seeds, id, hops, kind, name);
   }
@@ -279,13 +284,14 @@ function collectAnchorSeeds(store: FactsReader, bundle: JavaFileBundle, anchorLi
   for (const owner of owners) seedType(seeds, owner, 1, "IMPORTS");
   for (const method of containing) seedType(seeds, method.ownerTypeId, 1, "IMPORTS", method.name);
   const importBySimple = importBySimpleName(bundle);
+  const anchorLocation = locationOfFile(bundle.file);
   const mention = (ref: JavaTypeRef | undefined, hops: 1 | 2, kind: DiscoveryKind, name?: string) => {
-    mentionRef(store, importBySimple, seeds, ref, hops, kind, name);
+    mentionRef(store, importBySimple, anchorLocation, seeds, ref, hops, kind, name);
   };
   const methodTokens = new Set(containing.flatMap(method => splitIdentifier(method.name)).filter(token => token.length > 3));
   for (const [simple, fqn] of importBySimple) {
     if (!splitIdentifier(simple).some(token => methodTokens.has(token))) continue;
-    const id = typeIdByFqn(store, fqn) ?? uniqueTypeIdBySimpleName(store, simple);
+    const id = typeIdByFqn(store, fqn, anchorLocation) ?? uniqueTypeIdBySimpleName(store, simple);
     if (id) seedType(seeds, id, 1, "IMPORTS");
   }
   for (const method of containing) {
@@ -299,7 +305,7 @@ function collectAnchorSeeds(store: FactsReader, bundle: JavaFileBundle, anchorLi
     for (const site of method.callSites) {
       if (!neighborhoodCallName(site.name, site.receiverText) || !site.receiverText) continue;
       const field = bundle.fields.find(item => item.name === site.receiverText && owners.has(item.ownerTypeId));
-      if (field) mentionRef(store, importBySimple, seeds, field.type, 1, "CALLS_EXACT", site.name, false);
+      if (field) mentionRef(store, importBySimple, anchorLocation, seeds, field.type, 1, "CALLS_EXACT", site.name, false);
     }
   }
   for (const field of bundle.fields) {
@@ -308,7 +314,7 @@ function collectAnchorSeeds(store: FactsReader, bundle: JavaFileBundle, anchorLi
       ...resolvedRepoTypeIds(field.type),
       ...simpleNamesOfRef(field.type).flatMap(simple => {
         const imported = importBySimple.get(simple);
-        const id = imported ? typeIdByFqn(store, imported) : undefined;
+        const id = imported ? typeIdByFqn(store, imported, anchorLocation) : undefined;
         return id ? [id] : [];
       })
     ];
@@ -340,6 +346,7 @@ function collectAnchorSeeds(store: FactsReader, bundle: JavaFileBundle, anchorLi
     const type = store.typesById.get(typeId);
     if (!type) continue;
     const hop1File = store.filesByPath.get(relativePathOfFileId(type.fileId));
+    const hop1Location = hop1File ? locationOfFile(hop1File) : undefined;
     const hop1Imports = new Map<string, string>();
     for (const item of hop1File?.imports ?? []) {
       if (item.wildcard) continue;
@@ -357,7 +364,7 @@ function collectAnchorSeeds(store: FactsReader, bundle: JavaFileBundle, anchorLi
         const field = type.fieldIds
           .map(id => store.fieldsById.get(id))
           .find(item => item !== undefined && item.name === site.receiverText && item.ownerTypeId === typeId);
-        if (field) mentionRef(store, hop1Imports, seeds, field.type, 2, "CALLS_VIRTUAL", site.name, false);
+        if (field) mentionRef(store, hop1Imports, hop1Location, seeds, field.type, 2, "CALLS_VIRTUAL", site.name, false);
       }
     }
     for (const fieldId of type.fieldIds) {
@@ -367,7 +374,7 @@ function collectAnchorSeeds(store: FactsReader, bundle: JavaFileBundle, anchorLi
         ...resolvedRepoTypeIds(field.type),
         ...simpleNamesOfRef(field.type).flatMap(simple => {
           const imported = hop1Imports.get(simple);
-          const id = imported ? typeIdByFqn(store, imported) : undefined;
+          const id = imported ? typeIdByFqn(store, imported, hop1Location) : undefined;
           return id ? [id] : [];
         })
       ];

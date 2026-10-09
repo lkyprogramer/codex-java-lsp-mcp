@@ -10,7 +10,7 @@ import type {
 } from "./index-types.js";
 import type { SourceRange } from "../runtime/source-range.js";
 import { javaEdgeId, javaParameterId } from "./stable-id.js";
-import { JavaNameResolver, type JavaResolutionContext, type TypeRegistryView } from "./name-resolver.js";
+import { JavaNameResolver, locationOfFile, type JavaResolutionContext, type TypeRegistryView } from "./name-resolver.js";
 
 // Confidence keys on strategy name, not resolution state - EXTERNAL/QUALIFIED
 // and RESOLVED_REPO/QUALIFIED both read the same QUALIFIED entry. JAVA_LANG
@@ -42,7 +42,9 @@ function baseContext(bundle: ExtractedJavaFile, enclosingTypeIds: string[], type
     packageName: bundle.file.packageName,
     imports: bundle.file.imports,
     enclosingTypeIds,
-    typeParameterNames
+    typeParameterNames,
+    // Duplicate FQNs bind by the referring file's module/source set.
+    location: locationOfFile(bundle.file)
   };
 }
 

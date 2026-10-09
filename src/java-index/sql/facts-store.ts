@@ -16,7 +16,7 @@ import type {
   StaticEdgeKind
 } from "../index-types.js";
 import { javaFileId, splitOwnerMemberKey } from "../stable-id.js";
-import { JavaNameResolver, type TypeRegistryView } from "../name-resolver.js";
+import { JavaNameResolver, locationOfFile, type DeclarationLocation, type TypeRegistryView } from "../name-resolver.js";
 import type { MyBatisMapperResourceFacts } from "../mybatis-types.js";
 import { myBatisQualifiedId } from "../mybatis-types.js";
 import { bindChunks, inClause, prepareCached, type IndexDatabase } from "./driver.js";
@@ -92,7 +92,7 @@ export class SqlFactsStore {
   readonly methodsById: PointLookup<JavaMethodFacts>;
   readonly fieldsById: PointLookup<JavaFieldFacts>;
   readonly filesByPath: PointLookup<JavaFileFacts>;
-  readonly typeIdByFqn: PointLookup<string>;
+  readonly typeIdsByFqn: PointLookup<readonly string[]>;
   readonly typeIdsBySimpleName: PointLookup<ReadonlySet<string>>;
   readonly methodIdsByOwnerAndName: PointLookup<ReadonlySet<string>>;
   private readonly db: IndexDatabase;
@@ -104,16 +104,15 @@ export class SqlFactsStore {
     this.methodsById = new PointMap(id => this.cached(`method:${id}`, () => this.selectMemberFacts("method", id)), () => this.countTable("method"));
     this.fieldsById = new PointMap(id => this.cached(`field:${id}`, () => this.selectMemberFacts("field", id)), () => this.countTable("field"));
     this.filesByPath = new PointMap(path => this.cached(`file:${path}`, () => this.selectFacts("file", "path", path)), () => this.countTable("file"));
-    this.typeIdByFqn = new PointMap(fqn => this.cached(`fqn:${fqn}`, () => {
-      // A FQN can name several declarations (same FQN in different source
-      // roots). The winner is deterministic: the lowest v2 id text, which is
-      // scoped by source path - so the same store always resolves the same
-      // declaration, regardless of write order.
-      const row = prepareCached(
+    this.typeIdsByFqn = new PointMap(fqn => this.cached(`fqn:${fqn}`, () => {
+      // Every declaration of the FQN (the same FQN can be declared in several
+      // source roots). Which one a reference binds to is decided by the
+      // resolver from the referring location, never here.
+      const ids = prepareCached(
         this.db,
-        "SELECT s.text AS id FROM type t JOIN sym s ON s.id=t.sym WHERE t.fqn=? ORDER BY s.text LIMIT 1"
-      ).get(fqn);
-      return typeof row?.id === "string" ? row.id : undefined;
+        "SELECT s.text AS id FROM type t JOIN sym s ON s.id=t.sym WHERE t.fqn=? ORDER BY s.text"
+      ).all(fqn).map(row => row.id).filter((id): id is string => typeof id === "string");
+      return ids.length > 0 ? ids : undefined;
     }), () => asCount(prepareCached(this.db, "SELECT count(DISTINCT fqn) AS n FROM type WHERE fqn IS NOT NULL").get()));
     this.typeIdsBySimpleName = new PointMap(
       name => this.loadIdSet(`simple:${name}`, "SELECT s.text AS id FROM type t JOIN sym s ON s.id=t.sym WHERE t.simple_name=?", name),
@@ -166,9 +165,18 @@ export class SqlFactsStore {
     return results;
   }
 
-  typeByFqn(fqn: string): JavaTypeFacts | undefined {
-    const typeId = this.typeIdByFqn.get(fqn);
-    return typeId ? this.typesById.get(typeId) : undefined;
+  /** Every declaration of `fqn`, id order. */
+  typesByFqn(fqn: string): JavaTypeFacts[] {
+    return (this.typeIdsByFqn.get(fqn) ?? [])
+      .map(id => this.typesById.get(id))
+      .filter((type): type is JavaTypeFacts => type !== undefined);
+  }
+
+  /** Compilation location of a declaration, from its file's layout facts. */
+  declarationLocation(typeId: string): DeclarationLocation | undefined {
+    const type = this.typesById.get(typeId);
+    const file = type ? this.filesByPath.get(relativePathOfFileId(type.fileId)) : undefined;
+    return file ? locationOfFile(file) : undefined;
   }
 
   nestedTypeId(ownerTypeId: string, simpleName: string): string | undefined {
@@ -361,7 +369,8 @@ export class SqlFactsStore {
   typeLookup(typeText: string, scopeFile?: string): JavaTypeLookupResult {
     const registry: TypeRegistryView = {
       byId: this.typesById as unknown as TypeRegistryView["byId"],
-      byFqn: this.typeIdByFqn as unknown as TypeRegistryView["byFqn"],
+      byFqn: this.typeIdsByFqn,
+      locationOf: typeId => this.declarationLocation(typeId),
       bySimpleName: this.typeIdsBySimpleName as unknown as TypeRegistryView["bySimpleName"],
       nestedByOwnerAndSimpleName: new Map(),
       methodsByOwnerTypeId: new Map()
@@ -372,7 +381,8 @@ export class SqlFactsStore {
       packageName: file?.packageName ?? "",
       imports: file?.imports ?? [],
       enclosingTypeIds: [],
-      typeParameterNames: new Set()
+      typeParameterNames: new Set(),
+      ...(file ? { location: locationOfFile(file) } : {})
     }).resolution;
     this.clearRequestCache();
     switch (resolution.state) {

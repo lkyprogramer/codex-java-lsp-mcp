@@ -1168,8 +1168,8 @@ export class RouterJavaIndex implements JavaIndexView, RouterIndex, FrameworkInd
   /**
    * Batch-hydrates arbitrary type/method/field ids (e.g. resolvedCallees'
    * targetId values) into their declarations. A "type:<fqn>" owner resolves
-   * via one batched exact-fqn queryTypes() call (QUALIFIED strategy matches
-   * typeIdByFqn directly, so this cannot come back AMBIGUOUS); a
+   * via one batched exact-fqn queryTypes() call; an FQN declared more than
+   * once comes back AMBIGUOUS and its ids stay in missingIds (no guess); a
    * "type-local:<path>:.." owner's file is already embedded in the id. Both
    * paths converge on a single batched queryFiles() call, mirroring
    * typesToFacts()'s existing group-by-file-then-hydrate-once pattern.
