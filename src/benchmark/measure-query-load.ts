@@ -1,36 +1,81 @@
-// input: synthetic repository size (file count) and an output directory.
-// output: raw load report — EXPLAIN QUERY PLAN captures, rare-exact vs
-//         broad-term comparisons, a bounded 20-query queue, and P50/P95.
-// pos: T07 evidence helper. The synthetic corpus proves the mechanisms at
-//      scale; it is NOT a performance-gate PASS (warm real-corpus thresholds
-//      are measured separately and must not be extrapolated from this).
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { performance } from "node:perf_hooks";
+// input: a repository (synthetic --files N, or a real --repo with its own
+//        --db), an output directory.
+// output: raw load report - EXPLAIN QUERY PLAN captures, rare-exact vs
+//         broad-term comparisons, and (R09) a step load through the real
+//         query boundary: SqlClient -> runStaticDiscovery on this thread,
+//         SQL on the shared read-only worker, with event-loop delay, queue
+//         peak, P50/P95/P99, deadline stops and concurrent writer commits.
+// pos: T07/R09 evidence helper. A synthetic corpus proves mechanisms only;
+//      the warm 150ms / 20ms gates are judged on a real corpus on the gate
+//      machine and are never extrapolated from here.
+import { mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { monitorEventLoopDelay, performance } from "node:perf_hooks";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { openIndexDb, close, type IndexDatabase } from "../java-index/sql/driver.js";
 import { ensureSchema } from "../java-index/sql/schema.js";
 import { runSqlColdBuild } from "../index-builder/cold-build.js";
 import { SqlEntitySearch, readIndexGeneration } from "../java-index/sql/entity-search.js";
+import { SqlJavaIndexClient } from "../java-index/sql/sql-client.js";
+import { runStaticDiscovery, type DiscoveryResult } from "../discovery/query.js";
+import { sharedQueryWorker, type QueryWorkerStats } from "../discovery/query-worker.js";
+import { repoCacheBase } from "../repo-layout.js";
+
+function isInside(file: string, dir: string): boolean {
+  const relative = path.relative(path.resolve(dir), path.resolve(file));
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
 
 interface LoadArgs {
   files: number;
   output: string;
+  repo?: string;
+  db?: string;
+  deadlineMs: number;
+  samples: number;
+  steps: number[];
+  writerIntervalMs: number;
+  queries?: LoadQuery[];
 }
 
 function parseArgs(argv: string[]): LoadArgs {
   let files = 1000;
   let output: string | undefined;
+  let repo: string | undefined;
+  let db: string | undefined;
+  let deadlineMs = 1000;
+  let samples = 100;
+  let writerIntervalMs = 100;
+  let steps = [1, 5, 10, 20];
+  let queries: LoadQuery[] | undefined;
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === "--files" && argv[i + 1]) files = Number(argv[i + 1]);
     else if (argv[i] === "--output" && argv[i + 1]) output = argv[i + 1];
+    else if (argv[i] === "--repo" && argv[i + 1]) repo = path.resolve(argv[i + 1]!);
+    else if (argv[i] === "--db" && argv[i + 1]) db = path.resolve(argv[i + 1]!);
+    else if (argv[i] === "--deadline-ms" && argv[i + 1]) deadlineMs = Number(argv[i + 1]);
+    else if (argv[i] === "--samples" && argv[i + 1]) samples = Number(argv[i + 1]);
+    else if (argv[i] === "--writer-interval-ms" && argv[i + 1]) writerIntervalMs = Number(argv[i + 1]);
+    else if (argv[i] === "--steps" && argv[i + 1]) steps = argv[i + 1]!.split(",").map(Number);
+    // kind:mode:text, repeatable (e.g. --query broad:text:order)
+    else if (argv[i] === "--query" && argv[i + 1]) {
+      const [kind, mode, ...text] = argv[i + 1]!.split(":");
+      (queries ??= []).push({ kind: kind!, mode: mode as LoadQuery["mode"], query: text.join(":") });
+    }
   }
   if (!Number.isInteger(files) || files < 1) throw new Error("--files must be a positive integer");
   if (!output) throw new Error("--output is required");
-  return { files, output };
+  if (repo && !db) throw new Error("--repo requires --db (a scratch index path; never the production cache)");
+  // The writer step bumps indexedGeneration: never point it at a live cache.
+  if (db && isInside(db, repoCacheBase())) throw new Error(`--db must not be inside the index cache (${repoCacheBase()})`);
+  if (!(deadlineMs > 0) || !Number.isInteger(samples) || samples < 1 || !(writerIntervalMs > 0) || steps.some(step => !Number.isInteger(step) || step < 1)) {
+    throw new Error("invalid --deadline-ms/--rounds/--steps");
+  }
+  return { files, output, repo, db, deadlineMs, samples, steps, writerIntervalMs, queries };
 }
 
-function generateRepo(root: string, count: number): string[] {
+export function generateRepo(root: string, count: number): string[] {
   const written: string[] = [];
   for (let i = 0; i < count; i += 1) {
     const pkg = `p${String(Math.floor(i / 50)).padStart(5, "0")}`;
@@ -89,120 +134,243 @@ function percentile(values: number[], p: number): number {
   return sorted[index];
 }
 
+
+export type LoadQuery = { kind: string; mode: "auto" | "exact" | "text"; query: string };
+
+export type StepLoadReport = {
+  concurrency: number;
+  requests: number;
+  deadlineMs: number;
+  latencyMs: { p50: number; p95: number; p99: number; max: number };
+  byKind: Record<string, { n: number; p50: number; p95: number; p99: number }>;
+  eventLoopDelayMs: { p50: number; p95: number; p99: number; max: number };
+  stopReasons: Record<string, number>;
+  scopeStates: Record<string, number>;
+  writerCommits: number;
+  writerIntervalMs: number | null;
+  rssMb: number;
+  /** Worker counters for this step only (queuePeak is the step's peak). */
+  worker: QueryWorkerStats;
+  /** After the step: nothing queued, nothing running. */
+  settled: boolean;
+};
+
+/**
+ * R09: `concurrency` requests in flight at once, `rounds` times, each with its
+ * own absolute deadline, through the real boundary (SqlClient.querySearch ->
+ * shared worker). With `writerIntervalMs`, a separate connection commits a
+ * generation bump that often while the step runs (query/update interleaving;
+ * answers straddling a commit must come back PARTIAL, never mixed).
+ */
+export async function runStepLoad(input: {
+  repoRoot: string;
+  dbPath: string;
+  queries: readonly LoadQuery[];
+  concurrency: number;
+  rounds: number;
+  deadlineMs: number;
+  /** Commit (and bump indexedGeneration) on a separate connection this often. */
+  writerIntervalMs?: number;
+}): Promise<StepLoadReport> {
+  const client = new SqlJavaIndexClient(input.repoRoot, input.dbPath);
+  await client.open(1);
+  const worker = sharedQueryWorker();
+  const before = worker.stats();
+  worker.resetPeak();
+  let writerCommits = 0;
+  const writerDb = input.writerIntervalMs ? openIndexDb(input.dbPath) : undefined;
+  const writerTimer = writerDb
+    ? setInterval(() => {
+      writerDb.exec("BEGIN IMMEDIATE");
+      writerDb.prepare("UPDATE meta SET value=CAST(value AS INTEGER)+1 WHERE key='indexedGeneration'").run();
+      writerDb.exec("COMMIT");
+      writerCommits += 1;
+    }, input.writerIntervalMs)
+    : undefined;
+  const latencies: Array<{ kind: string; ms: number }> = [];
+  const stopReasons: Record<string, number> = {};
+  const scopeStates: Record<string, number> = {};
+  const delay = monitorEventLoopDelay({ resolution: 1 });
+  try {
+    // Warm-up: one pass of every query (connection open, statement prep).
+    for (const query of input.queries) await discover(client, input.repoRoot, query, input.deadlineMs);
+    delay.enable();
+    for (let round = 0; round < input.rounds; round += 1) {
+      await Promise.all(Array.from({ length: input.concurrency }, async (_, slot) => {
+        const query = input.queries[(round * input.concurrency + slot) % input.queries.length]!;
+        const started = performance.now();
+        const result = await discover(client, input.repoRoot, query, input.deadlineMs);
+        latencies.push({ kind: query.kind, ms: performance.now() - started });
+        const reason = result.stopReason ?? "none";
+        stopReasons[reason] = (stopReasons[reason] ?? 0) + 1;
+        scopeStates[result.scopeState] = (scopeStates[result.scopeState] ?? 0) + 1;
+      }));
+    }
+    delay.disable();
+  } finally {
+    if (writerTimer) clearInterval(writerTimer);
+    if (writerDb) close(writerDb);
+    await client.close();
+  }
+  const after = worker.stats();
+  const all = latencies.map(item => item.ms);
+  const byKind: StepLoadReport["byKind"] = {};
+  for (const kind of new Set(latencies.map(item => item.kind))) {
+    const values = latencies.filter(item => item.kind === kind).map(item => item.ms);
+    byKind[kind] = { n: values.length, p50: round3(percentile(values, 50)), p95: round3(percentile(values, 95)), p99: round3(percentile(values, 99)) };
+  }
+  return {
+    concurrency: input.concurrency,
+    requests: latencies.length,
+    deadlineMs: input.deadlineMs,
+    latencyMs: { p50: round3(percentile(all, 50)), p95: round3(percentile(all, 95)), p99: round3(percentile(all, 99)), max: round3(Math.max(0, ...all)) },
+    byKind,
+    eventLoopDelayMs: {
+      p50: round3(delay.percentile(50) / 1e6),
+      p95: round3(delay.percentile(95) / 1e6),
+      p99: round3(delay.percentile(99) / 1e6),
+      max: round3(delay.max / 1e6)
+    },
+    stopReasons,
+    scopeStates,
+    writerCommits,
+    writerIntervalMs: input.writerIntervalMs ?? null,
+    rssMb: round3(process.memoryUsage().rss / 1024 / 1024),
+    worker: {
+      ...after,
+      completed: after.completed - before.completed,
+      rejectedQueueFull: after.rejectedQueueFull - before.rejectedQueueFull,
+      expiredInQueue: after.expiredInQueue - before.expiredInQueue,
+      terminated: after.terminated - before.terminated,
+      spawned: after.spawned - before.spawned
+    },
+    settled: after.queued === 0 && !after.running
+  };
+}
+
+function discover(client: SqlJavaIndexClient, repoRoot: string, query: LoadQuery, deadlineMs: number): Promise<DiscoveryResult> {
+  const deadline = performance.now() + deadlineMs;
+  return runStaticDiscovery(client, {
+    repoRoot,
+    query: query.query,
+    searchMode: query.mode,
+    limit: 8,
+    budget: { remainingMs: () => Math.max(0, deadline - performance.now()) }
+  });
+}
+
+const SYNTHETIC_QUERIES: LoadQuery[] = [
+  { kind: "rare-fqn", mode: "exact", query: "com.synth.p00000.Service00000" },
+  { kind: "common-word", mode: "text", query: "order" },
+  { kind: "broad", mode: "text", query: "order refund ledger payment" },
+  { kind: "fuzzy", mode: "auto", query: "refundOrder" }
+];
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   mkdirSync(args.output, { recursive: true });
-  const root = path.join(os.tmpdir(), `devkit-load-${Date.now()}-${Math.random().toString(16).slice(2)}`);
-  const dbPath = path.join(root, "load.sqlite");
+  const scratch = path.join(os.tmpdir(), `devkit-load-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+  const repoRoot = args.repo ?? scratch;
+  const dbPath = args.db ?? path.join(scratch, "load.sqlite");
   let buildSeconds = 0;
-  let buildCounts: unknown;
+  let buildCounts: unknown = "reused";
   try {
-    mkdirSync(root, { recursive: true });
-    const generatedAt = performance.now();
-    generateRepo(root, args.files);
-    const generateSeconds = (performance.now() - generatedAt) / 1000;
-    const buildDb = openIndexDb(dbPath);
-    ensureSchema(buildDb);
-    const buildStarted = performance.now();
-    const build = await runSqlColdBuild({ db: buildDb, repoRoot: root });
-    buildSeconds = (performance.now() - buildStarted) / 1000;
-    buildCounts = build;
-    close(buildDb);
+    mkdirSync(scratch, { recursive: true });
+    let generateSeconds = 0;
+    if (!args.repo) {
+      const generatedAt = performance.now();
+      generateRepo(repoRoot, args.files);
+      generateSeconds = (performance.now() - generatedAt) / 1000;
+    }
+    if (!existsSyncSafe(dbPath)) {
+      mkdirSync(path.dirname(dbPath), { recursive: true });
+      const buildDb = openIndexDb(dbPath);
+      ensureSchema(buildDb);
+      const buildStarted = performance.now();
+      buildCounts = await runSqlColdBuild({ db: buildDb, repoRoot });
+      buildSeconds = (performance.now() - buildStarted) / 1000;
+      close(buildDb);
+    }
 
     const db = openIndexDb(dbPath, { readOnly: true });
+    let mechanism: Record<string, unknown>;
     try {
       const search = new SqlEntitySearch(db);
       const generation = readIndexGeneration(db);
-      // Deterministic samples: the first file of the corpus.
       const sampleFqn = "com.synth.p00000.Service00000";
       const plans = explainPlans(db, sampleFqn, "service00000");
-
       // Rare exact: point lookup must not visit a single posting row.
       const exactDeadline = performance.now() + 500;
       const exact = search.searchDetailed(sampleFqn, 10, "exact", {
         budget: { maxPostings: 1, remainingMs: () => Math.max(0, exactDeadline - performance.now()) }
       });
-      const broadUnboundedStarted = performance.now();
-      const broadUnbounded = search.searchDetailed("order", 10, "text");
-      const broadUnboundedMs = performance.now() - broadUnboundedStarted;
-      const broadDeadlineMs = 200;
-      const broadBoundedStarted = performance.now();
-      const broadBounded = search.searchDetailed("order", 10, "text", {
-        budget: { maxPostings: 5000, remainingMs: () => Math.max(0, broadBoundedStarted + broadDeadlineMs - performance.now()) }
-      });
-      const broadBoundedMs = performance.now() - broadBoundedStarted;
-
-      // Bounded queue: 20 broad queries on one synchronous connection, each
-      // with its own 200ms parent deadline. Sequential by construction —
-      // synchronous SQLite cannot interleave, so "concurrent" means queued.
-      const queue: Array<{ ms: number; truncated: boolean; stopReason: string | undefined; postings: number; hits: number }> = [];
-      for (let i = 0; i < 20; i += 1) {
-        const started = performance.now();
-        const result = search.searchDetailed("order refund ledger", 10, "text", {
-          budget: { maxPostings: 5000, remainingMs: () => Math.max(0, started + 200 - performance.now()) }
-        });
-        queue.push({
-          ms: performance.now() - started,
-          truncated: result.truncated,
-          stopReason: result.stopReason,
-          postings: result.work.postings,
-          hits: result.hits.length
-        });
-      }
-      const queueMs = queue.map(item => item.ms);
-      const report = {
-        kind: "synthetic-load",
-        files: args.files,
-        generateSeconds: round3(generateSeconds),
-        buildSeconds: round3(buildSeconds),
-        build: buildCounts,
+      // Expired entry: no SQL, PARTIAL/deadline (Q03).
+      const expired = search.searchDetailed(sampleFqn, 10, "exact", { budget: { remainingMs: () => 0 } });
+      const broadStarted = performance.now();
+      const broad = search.searchDetailed("order", 10, "text", { budget: { remainingMs: () => 60_000 } });
+      const broadMs = performance.now() - broadStarted;
+      mechanism = {
         generation,
         explain: plans,
-        exact: {
-          fqn: sampleFqn,
-          hits: exact.hits.length,
-          truncated: exact.truncated,
-          stopReason: exact.stopReason ?? null,
-          postingsVisited: exact.work.postings
-        },
-        broad: {
-          term: "order",
-          unbounded: { hits: broadUnbounded.hits.length, ms: round3(broadUnboundedMs), truncated: broadUnbounded.truncated, postingsVisited: broadUnbounded.work.postings },
-          bounded: {
-            maxPostings: 5000,
-            deadlineMs: broadDeadlineMs,
-            hits: broadBounded.hits.length,
-            ms: round3(broadBoundedMs),
-            truncated: broadBounded.truncated,
-            stopReason: broadBounded.stopReason ?? null,
-            postingsVisited: broadBounded.work.postings
-          }
-        },
-        queue: {
-          queries: 20,
-          perQueryDeadlineMs: 200,
-          p50Ms: round3(percentile(queueMs, 50)),
-          p95Ms: round3(percentile(queueMs, 95)),
-          timeouts: queue.filter(item => item.stopReason === "deadline").length,
-          postingsStops: queue.filter(item => item.stopReason === "postings").length,
-          truncated: queue.filter(item => item.truncated).length,
-          rejections: 0
-        },
-        fts5: "NOT_RUN (same-representation experiment only; no second default backend)",
-        note: "Synthetic corpus: mechanism evidence only. Warm 150ms / event-loop thresholds are UNMEASURED without a real corpus."
+        exact: { fqn: sampleFqn, hits: exact.hits.length, stopReason: exact.stopReason ?? null, postingsVisited: exact.work.postings },
+        expiredEntry: { stopReason: expired.stopReason ?? null, postingsVisited: expired.work.postings, stages: expired.trace?.length ?? 0 },
+        broadInProcess: { term: "order", ms: round3(broadMs), postingsVisited: broad.work.postings, stopReason: broad.stopReason ?? null, trace: broad.trace }
       };
-      writeFileSync(path.join(args.output, "query-load-report.json"), `${JSON.stringify(report, null, 2)}\n`, "utf8");
       writeFileSync(
         path.join(args.output, "query-load-explain.txt"),
         Object.entries(plans).map(([name, rows]) => `# ${name}\n${rows.flat().join("\n")}\n`).join("\n"),
         "utf8"
       );
-      process.stdout.write(`${JSON.stringify({ ok: true, files: args.files, buildSeconds: report.buildSeconds, queueP95Ms: report.queue.p95Ms, queueTimeouts: report.queue.timeouts })}\n`);
     } finally {
       close(db);
     }
+
+    const queries = args.queries ?? SYNTHETIC_QUERIES;
+    const steps: StepLoadReport[] = [];
+    for (const concurrency of args.steps) {
+      const rounds = Math.ceil(args.samples / concurrency);
+      steps.push(await runStepLoad({ repoRoot, dbPath, queries, concurrency, rounds, deadlineMs: args.deadlineMs }));
+    }
+    const peak = Math.max(...args.steps);
+    const withUpdates = await runStepLoad({
+      repoRoot, dbPath, queries, concurrency: peak, rounds: Math.ceil(args.samples / peak), deadlineMs: args.deadlineMs, writerIntervalMs: args.writerIntervalMs
+    });
+    const report = {
+      kind: args.repo ? "real-repo-load" : "synthetic-load",
+      repo: args.repo ? path.basename(args.repo) : null,
+      files: args.repo ? null : args.files,
+      generateSeconds: args.repo ? null : round3(generateSeconds),
+      buildSeconds: round3(buildSeconds),
+      build: buildCounts,
+      host: { platform: process.platform, arch: process.arch, cpus: os.cpus().length, node: process.version },
+      ...mechanism,
+      queries,
+      steps,
+      withUpdates,
+      gates: {
+        note: "Reference targets only (gates.json): warm static P95 <= 150ms, event-loop P95 <= 20ms. Not signed from this run.",
+        warmStaticP95TargetMs: 150,
+        eventLoopP95TargetMs: 20
+      }
+    };
+    writeFileSync(path.join(args.output, "query-load-report.json"), `${JSON.stringify(report, null, 2)}\n`, "utf8");
+    process.stdout.write(`${JSON.stringify({
+      ok: true,
+      kind: report.kind,
+      steps: steps.map(step => ({ c: step.concurrency, p95: step.latencyMs.p95, loopP95: step.eventLoopDelayMs.p95, loopMax: step.eventLoopDelayMs.max, queuePeak: step.worker.queuePeak, stops: step.stopReasons })),
+      withUpdates: { p95: withUpdates.latencyMs.p95, loopP95: withUpdates.eventLoopDelayMs.p95, commits: withUpdates.writerCommits, stops: withUpdates.stopReasons }
+    })}\n`);
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    await sharedQueryWorker().close();
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
+function existsSyncSafe(file: string): boolean {
+  try {
+    return realpathSync(file) !== "";
+  } catch {
+    return false;
   }
 }
 
@@ -210,7 +378,18 @@ function round3(value: number): number {
   return Math.round(value * 1000) / 1000;
 }
 
-main().catch(error => {
-  process.stderr.write(`${error instanceof Error ? error.stack : String(error)}\n`);
-  process.exit(1);
-});
+function isMainModule(): boolean {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+if (isMainModule()) {
+  main().catch(error => {
+    process.stderr.write(`${error instanceof Error ? error.stack : String(error)}\n`);
+    process.exit(1);
+  });
+}

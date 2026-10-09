@@ -53,7 +53,9 @@
       "report": "docs/next-stage/r08-task-result.md"
     },
     "R09": {
-      "state": "NOT_STARTED"
+      "state": "DONE",
+      "commit": "(this commit: fix(search): enforce one deadline across lookup and delivery)",
+      "report": "docs/next-stage/r09-task-result.md"
     },
     "R10": {
       "state": "NOT_STARTED"
@@ -71,7 +73,7 @@
   "reviewFixes": {
     "scope": "R05-R08 independent review (2 P1, 3 P2, 5 P3)",
     "state": "DONE",
-    "commit": "(this commit: fix(index,discovery): close R05-R08 review findings)",
+    "commit": "b22c0a5",
     "report": "docs/next-stage/r05-r08-review-fixes.md"
   }
 }

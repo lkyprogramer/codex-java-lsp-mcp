@@ -156,7 +156,15 @@ test("R08: a file over 2 MiB is hash-verified by streaming (READY, no preview); 
 test("R08: the request deadline stops source reads (locator kept, PARTIAL deadline)", async () => {
   const text = "class A {}\n";
   await withRepo({ "A.java": text }, async root => {
-    const r = await discover(root, [hit("A.java", text)], { budget: { remainingMs: () => 0 } });
+    // The deadline passes after the query answered (R09: one expired on
+    // entry never reaches the query; see query-deadline.test.ts).
+    let queried = false;
+    const base = client([hit("A.java", text)]);
+    const r = await runStaticDiscovery({ ...base, querySearch: async (...args: Parameters<JavaIndexClientApi["querySearch"]>) => {
+      const result = await base.querySearch(...args);
+      queried = true;
+      return result;
+    } } as JavaIndexClientApi, { repoRoot: root, query: "demo.A", searchMode: "text", budget: { remainingMs: () => (queried ? 0 : 60_000) } });
     assert.equal(r.candidates[0]!.previewOmitted, "deadline");
     assert.equal(r.scopeState, "PARTIAL");
     assert.equal(r.stopReason, "deadline");

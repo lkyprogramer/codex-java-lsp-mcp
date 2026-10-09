@@ -11,6 +11,7 @@ import { readFile, stat } from "node:fs/promises";
 import { StringDecoder } from "node:string_decoder";
 import path from "node:path";
 import { classifyQuery } from "./query-intent.js";
+import { QueryTrace, type QueryStageTrace } from "./query-budget.js";
 import { redactPreviewLine } from "./search-document.js";
 import { resolveSearchScope, sourceRootRecordFromPath, type ModuleAliases, type ResolvedSearchScope, type SourceRootRecord } from "./scope.js";
 import type { JavaIndexClientApi } from "../java-index/java-index-client-api.js";
@@ -62,6 +63,9 @@ export type StaticDiscoveryArgs = {
   repoRoot: string;
   repoHash?: string;
   budget?: { remainingMs?: () => number };
+  /** R09: return per-stage timings (status, SQL stages, preview). Off on the
+   *  MCP wire; used by load measurement and tests. */
+  trace?: boolean;
 };
 
 export type DiscoveryLocator = {
@@ -121,7 +125,8 @@ export type DiscoveryResult = {
     | "scope_empty"
     | "changed_during_request"
     | "source_changed"
-    | "read_budget";
+    | "read_budget"
+    | "queue_full";
   /** Hits that had no stored declaration range or file hash; they are not
    *  actionable locators and are reported, not rendered. */
   droppedUnlocatable: number;
@@ -130,8 +135,11 @@ export type DiscoveryResult = {
    *  PARTIAL. */
   droppedStale: number;
   /** The scope the query actually ran under (module AND sourceSet over the
-   *  indexed layout roots); EMPTY says why nothing was searched. */
-  scope: ResolvedSearchScope;
+   *  indexed layout roots); EMPTY says why nothing was searched; NOT_RESOLVED
+   *  when the deadline had passed before the scope was resolved. */
+  scope: ResolvedSearchScope | { state: "NOT_RESOLVED" };
+  /** R09: per-stage timings, only when requested (`trace: true`). */
+  trace?: QueryStageTrace[];
 };
 
 const LAYER_MATCH: Record<EntityHit["layer"], DiscoveryCandidate["matchedBy"][number]> = {
@@ -377,6 +385,10 @@ function previewWindow(lines: readonly string[], startLine: number, lastLine: nu
   };
 }
 
+async function traced<T>(trace: QueryTrace | undefined, operation: string, fn: () => Promise<{ value: T; visited: number }>): Promise<T> {
+  return trace ? trace.stageAsync(operation, fn) : (await fn()).value;
+}
+
 const DOCUMENT_MATCH: Record<string, DiscoveryCandidate["matchedBy"][number]> = {
   comment: "comment",
   "framework-key": "framework",
@@ -385,10 +397,31 @@ const DOCUMENT_MATCH: Record<string, DiscoveryCandidate["matchedBy"][number]> = 
 
 export async function runStaticDiscovery(client: JavaIndexClientApi, args: StaticDiscoveryArgs): Promise<DiscoveryResult> {
   const { task, limit, intent } = validateArgs(args);
+  const remainingMs = args.budget?.remainingMs;
+  const trace = args.trace ? new QueryTrace(remainingMs) : undefined;
+  const expired = () => remainingMs !== undefined && remainingMs() <= 0;
+  // R09: one absolute deadline for the whole request. Already expired on
+  // entry -> PARTIAL/deadline without reading status or running any SQL.
+  if (expired()) {
+    return {
+      schemaVersion: DISCOVERY_SCHEMA_VERSION,
+      repoHash: args.repoHash ?? "",
+      generation: 0,
+      candidates: [],
+      scopeState: "PARTIAL",
+      truncated: true,
+      selectionLimited: false,
+      stopReason: "deadline",
+      droppedUnlocatable: 0,
+      droppedStale: 0,
+      scope: { state: "NOT_RESOLVED" },
+      ...(trace ? { trace: trace.stages } : {})
+    };
+  }
   // docs/03 §2: module/sourceSet resolve against the roots the index was
   // built from, as an AND, BEFORE the query; the resolved roots are pushed
   // down into every SQL route ahead of postings budget, ranking and cap.
-  const status = await client.status();
+  const status = await traced(trace, "status", async () => ({ value: await client.status(), visited: 1 }));
   const records = sourceRootRecords(status.coverage);
   const resolved: ResolvedSearchScope = resolveSearchScope(records, {
     module: args.module,
@@ -410,15 +443,24 @@ export async function runStaticDiscovery(client: JavaIndexClientApi, args: Stati
       stopReason: incomplete ? "index_partial" : "scope_empty",
       droppedUnlocatable: 0,
       droppedStale: 0,
-      scope: resolved
+      scope: resolved,
+      ...(trace ? { trace: trace.stages } : {})
     };
   }
-  const result = await client.querySearch(task, {
-    limit,
-    mode: intent,
-    ...(resolved.state === "RESOLVED" || resolved.state === "PARTIAL" ? { scope: { sourceRoots: resolved.sourceRootIds } } : {}),
-    budget: args.budget?.remainingMs ? { remainingMs: args.budget.remainingMs } : undefined
+  // The query itself checks the same deadline on entry and at every stage.
+  const result = await traced(trace, "query", async () => {
+    const value = await client.querySearch(task, {
+      limit,
+      mode: intent,
+      ...(resolved.state === "RESOLVED" || resolved.state === "PARTIAL" ? { scope: { sourceRoots: resolved.sourceRootIds } } : {}),
+      budget: remainingMs ? { remainingMs } : undefined
+    });
+    return { value, visited: value.work?.postings ?? 0 };
   });
+  if (trace && result.trace) {
+    for (const stage of result.trace) trace.stages.push({ ...stage, operation: `sql:${stage.operation}` });
+  }
+  const endPreview = trace?.start("preview");
   const ambiguousExact = intent === "exact" && (result.exact === "ambiguous" || result.hits.length > 1);
   const reader = new RequestSourceReader(args.repoRoot, args.budget?.remainingMs);
   const candidates: DiscoveryCandidate[] = [];
@@ -502,6 +544,7 @@ export async function runStaticDiscovery(client: JavaIndexClientApi, args: Stati
     }
     candidates.push(candidate);
   }
+  endPreview?.(result.hits.length);
   // Completeness comes from the index snapshot, the query budget and the
   // source verification, never from the candidates list being non-empty.
   const indexPartial = status.state !== "READY";
@@ -511,15 +554,23 @@ export async function runStaticDiscovery(client: JavaIndexClientApi, args: Stati
   const sourceChanged = droppedStale > 0 || staleEvidence > 0;
   const partial = indexPartial || changedDuringRequest || result.truncated || result.stopReason !== undefined
     || droppedUnlocatable > 0 || sourceChanged || unverified.size > 0 || resolved.state === "PARTIAL";
+  // A scan that never opened a snapshot (expired before it ran, or rejected
+  // by a full queue) observed no generation to compare; once a snapshot was
+  // read, a generation change still outranks a later deadline.
+  const notStarted = result.stopReason === "queue_full" || (result.stopReason === "deadline" && result.generation === 0)
+    ? result.stopReason
+    : undefined;
   const stopReason: DiscoveryResult["stopReason"] = indexPartial
     ? "index_partial"
-    : changedDuringRequest
-      ? "changed_during_request"
-      : result.stopReason === "postings"
-        ? "candidate_budget"
-        : result.stopReason === "deadline" || unverified.has("deadline")
-          ? "deadline"
-          : sourceChanged
+    : notStarted
+      ? notStarted
+      : changedDuringRequest
+        ? "changed_during_request"
+        : result.stopReason === "postings"
+          ? "candidate_budget"
+          : result.stopReason === "deadline" || unverified.has("deadline")
+            ? "deadline"
+            : sourceChanged
             ? "source_changed"
             : unverified.has("read_budget")
               ? "read_budget"
@@ -534,10 +585,15 @@ export async function runStaticDiscovery(client: JavaIndexClientApi, args: Stati
     scopeState: partial ? "PARTIAL" : "READY",
     truncated: result.truncated,
     selectionLimited: result.selectionLimited === true,
-    ...(intent === "exact" ? { exact: result.exact ?? (result.hits.length === 0 ? "miss" : result.hits.length > 1 ? "ambiguous" : "match") } : {}),
+    // An interrupted exact lookup has no outcome ("miss" would claim the
+    // selector does not exist).
+    ...(intent === "exact" && (result.exact !== undefined || result.stopReason === undefined)
+      ? { exact: result.exact ?? (result.hits.length === 0 ? "miss" : result.hits.length > 1 ? "ambiguous" : "match") }
+      : {}),
     ...(stopReason ? { stopReason } : {}),
     droppedUnlocatable,
     droppedStale,
-    scope: resolved
+    scope: resolved,
+    ...(trace ? { trace: trace.stages } : {})
   };
 }

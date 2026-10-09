@@ -186,7 +186,9 @@ test("K20: a writer commit during the scan cannot mix generations into one detai
     const original = (db.prepare("SELECT content_hash AS h FROM file WHERE path=?").get(ITEM_JAVA) as { h: string }).h;
     let wrote = false;
     const remainingMs = () => {
-      if (!wrote) {
+      // Commit once the scan's read snapshot is open (R09: the first
+      // deadline check runs on entry, before the snapshot).
+      if (!wrote && db.isTransaction) {
         wrote = true;
         writer.exec("BEGIN IMMEDIATE");
         writer.prepare("UPDATE file SET content_hash='changed-by-writer'").run();

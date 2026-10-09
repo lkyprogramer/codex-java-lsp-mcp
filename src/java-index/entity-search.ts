@@ -10,6 +10,7 @@ import {
   identifierTokensForMethod,
   identifierTokensForType
 } from "./entity-scoring.js";
+import type { QueryStageTrace } from "../discovery/query-budget.js";
 
 export {
   bm25Score,
@@ -83,7 +84,8 @@ export type EntitySearchScope = {
   sourceRoots?: readonly string[];
 };
 
-export type EntitySearchStopReason = "deadline" | "postings";
+/** "queue_full": the shared query worker's bounded queue rejected the scan. */
+export type EntitySearchStopReason = "deadline" | "postings" | "queue_full";
 
 /** R07: exact lookups never fall back to fuzzy routes; they say what happened. */
 export type ExactLookupOutcome = "match" | "miss" | "ambiguous";
@@ -100,8 +102,11 @@ export type DetailedEntitySearchResult = {
   stopReason?: EntitySearchStopReason;
   /** Physical work counters for the budget that was applied (if any). */
   work: { postings: number };
-  /** Index generation the scan observed; 0 when the db has no generation meta. */
+  /** Index generation the scan observed; 0 when the db has no generation meta
+   *  or no snapshot was read (a request whose deadline expired on entry). */
   generation: number;
+  /** R09: per-stage begin/end/remaining/visited; empty when nothing ran. */
+  trace?: QueryStageTrace[];
 };
 
 export type EntitySearchOptions = {

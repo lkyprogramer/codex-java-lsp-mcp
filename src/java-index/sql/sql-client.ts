@@ -34,11 +34,12 @@ import type { MyBatisMapperResourceFacts } from "../mybatis-types.js";
 import { readIndexCounts, readMeta, writeBuildProgress, writeMeta } from "../../index-builder/progress.js";
 import { BuilderSupervisor, type BuilderSupervisorJob } from "../builder-supervisor.js";
 import { noteTelemetryHydratePhases } from "../../telemetry/impact-telemetry.js";
-import { close as closeDb, compactWalFile, DEFAULT_SQLITE_CACHE_KB, openIndexDb, prepareCached, withTransaction, type IndexDatabase } from "./driver.js";
+import { close as closeDb, compactWalFile, DEFAULT_SQLITE_CACHE_KB, isMemoryPath, openIndexDb, prepareCached, withTransaction, type IndexDatabase } from "./driver.js";
 import { schemaVersionsMatch } from "./schema.js";
 
 const execFileAsync = promisify(execFile);
 import { SqlEntitySearch } from "./entity-search.js";
+import { absoluteNow, sharedQueryWorker } from "../../discovery/query-worker.js";
 import { SqlFactsStore } from "./facts-store.js";
 import { SqlKnowledgeGraph } from "./knowledge-graph.js";
 import {
@@ -193,6 +194,9 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     this.graph = undefined;
     this.search = undefined;
     this.lastStatus = { ...this.lastStatus, state: "CLOSED" };
+    // Always: a query queued before an idle drop may have reopened the
+    // worker's reader; release is a no-op without a worker.
+    await sharedQueryWorker().release(this.dbPath);
     await this.supervisor?.stop().catch(() => undefined);
   }
 
@@ -258,12 +262,27 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
       : parentRemaining
         ? { remainingMs: parentRemaining }
         : undefined;
-    return deps.search.searchDetailed(
+    const limit = options.limit ?? ENTITY_SEARCH_DEFAULT_LIMIT;
+    const mode = options.mode ?? "auto";
+    if (isMemoryPath(this.dbPath)) {
+      // Same physical budget as the worker path: never an unbounded scan.
+      return deps.search.searchDetailed(task, limit, mode, { scope: options.scope, budget: budget ?? {} });
+    }
+    // R09: the scan runs on the shared read-only query worker so a broad
+    // query never blocks this event loop; the remaining time becomes one
+    // absolute deadline the worker checks at every stage and row boundary.
+    const remaining = budget?.remainingMs?.();
+    const deadlineAt = remaining === undefined || !Number.isFinite(remaining) ? undefined : absoluteNow() + Math.max(0, remaining);
+    return sharedQueryWorker().search({
+      dbPath: this.dbPath,
       task,
-      options.limit ?? ENTITY_SEARCH_DEFAULT_LIMIT,
-      options.mode ?? "auto",
-      { scope: options.scope, budget }
-    );
+      limit,
+      mode,
+      scope: options.scope,
+      maxPostings: budget?.maxPostings,
+      deadlineAt,
+      idleMs: this.connIdleMs
+    });
   }
   async queryGraphReachable(
     fromRelativePath: string,
@@ -398,6 +417,9 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
       return;
     }
     this.db = openIndexDb(this.dbPath, { readOnly: true });
+    // A reload may follow a rebuilt/replaced file: drop the worker's reader
+    // of the old inode now instead of at its next request or idle timeout.
+    void sharedQueryWorker().release(this.dbPath);
     this.store = new SqlFactsStore(this.db);
     this.graph = new SqlKnowledgeGraph(this.db);
     this.search = new SqlEntitySearch(this.db);
@@ -438,7 +460,10 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     this.store = undefined;
     this.graph = undefined;
     this.search = undefined;
-    compactWalFile(this.dbPath);
+    // The query worker's reader goes first, so the compaction can be the
+    // file's last close.
+    const dbPath = this.dbPath;
+    void sharedQueryWorker().release(dbPath).finally(() => compactWalFile(dbPath));
   }
 
   private clearIdle(): void {

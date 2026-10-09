@@ -36,7 +36,7 @@ export type IndexDatabase = DatabaseSync;
 
 const statementCache = new WeakMap<IndexDatabase, Map<string, StatementSync>>();
 
-function isMemoryPath(path: string): boolean {
+export function isMemoryPath(path: string): boolean {
   return path === ":memory:" || path.startsWith("file:");
 }
 
