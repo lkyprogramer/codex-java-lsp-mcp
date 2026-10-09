@@ -8,6 +8,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { classifyQuery } from "./query-intent.js";
+import { resolveSearchScope, sourceRootRecordFromPath, type ResolvedSearchScope, type SourceRootRecord } from "./scope.js";
 import type { JavaIndexClientApi } from "../java-index/java-index-client-api.js";
 import type { EntityHit, EntitySearchMode, EntitySearchOptions } from "../java-index/entity-search.js";
 
@@ -76,10 +77,13 @@ export type DiscoveryResult = {
   candidates: DiscoveryCandidate[];
   scopeState: "READY" | "PARTIAL";
   truncated: boolean;
-  stopReason?: "candidate_budget" | "deadline" | "index_partial";
+  stopReason?: "candidate_budget" | "deadline" | "index_partial" | "layout_unknown" | "scope_empty";
   /** Hits that had no stored declaration range or file hash; they are not
    *  actionable locators and are reported, not rendered. */
   droppedUnlocatable: number;
+  /** The scope the query actually ran under (module AND sourceSet over the
+   *  indexed layout roots); EMPTY says why nothing was searched. */
+  scope: ResolvedSearchScope;
 };
 
 const LAYER_MATCH: Record<EntityHit["layer"], DiscoveryCandidate["matchedBy"][number]> = {
@@ -90,7 +94,7 @@ const LAYER_MATCH: Record<EntityHit["layer"], DiscoveryCandidate["matchedBy"][nu
   DOCUMENT: "comment"
 };
 
-function validateArgs(args: StaticDiscoveryArgs): { task: string; limit: number; searchMode: EntitySearchMode; scope?: EntitySearchOptions["scope"] } {
+function validateArgs(args: StaticDiscoveryArgs): { task: string; limit: number; searchMode: EntitySearchMode } {
   const query = args.query;
   if (typeof query !== "string" || query.trim().length === 0) {
     throw new Error("discovery query must be 1..512 code units");
@@ -126,16 +130,14 @@ function validateArgs(args: StaticDiscoveryArgs): { task: string; limit: number;
       (raw ? `Retry with the raw name "${raw}" ` : "") + "or use searchMode auto/text for task intent."
     );
   }
-  const sourceRoots: string[] = [];
-  if (args.sourceSet) sourceRoots.push(args.sourceSet === "test" ? "src/test" : "src/main");
-  // A module is honored when the repository is actually laid out as a
-  // multi-module tree (<module>/src exists); in a single-module repo the
-  // name cannot address a path and filtering on it would silently drop
-  // everything, so it stays a no-op instead.
-  if (args.module && existsSync(path.join(args.repoRoot, args.module, "src"))) {
-    sourceRoots.push(args.module);
-  }
-  return { task, limit, searchMode, scope: sourceRoots.length > 0 ? { sourceRoots } : undefined };
+  return { task, limit, searchMode };
+}
+
+/** Index coverage roots (the layout roots the builder indexed) as scope records. */
+export function sourceRootRecords(coverage: ReadonlyArray<{ root: string }> | undefined): SourceRootRecord[] {
+  return (coverage ?? [])
+    .map(entry => sourceRootRecordFromPath(entry.root))
+    .filter((record): record is SourceRootRecord => record !== undefined);
 }
 
 type Preview = {
@@ -174,16 +176,34 @@ function previewAt(repoRoot: string, relativePath: string, line: number, content
 }
 
 export async function runStaticDiscovery(client: JavaIndexClientApi, args: StaticDiscoveryArgs): Promise<DiscoveryResult> {
-  const { task, limit, searchMode, scope } = validateArgs(args);
-  const [result, status] = await Promise.all([
-    client.querySearch(task, {
-      limit,
-      mode: searchMode,
-      scope,
-      budget: args.budget?.remainingMs ? { remainingMs: args.budget.remainingMs } : undefined
-    }),
-    client.status()
-  ]);
+  const { task, limit, searchMode } = validateArgs(args);
+  // docs/03 §2: module/sourceSet resolve against the roots the index was
+  // built from, as an AND, BEFORE the query; the resolved roots are pushed
+  // down into every SQL route ahead of postings budget, ranking and cap.
+  const status = await client.status();
+  const resolved: ResolvedSearchScope = resolveSearchScope(sourceRootRecords(status.coverage), {
+    module: args.module,
+    sourceSet: args.sourceSet
+  });
+  if (resolved.state === "EMPTY") {
+    return {
+      schemaVersion: DISCOVERY_SCHEMA_VERSION,
+      repoHash: args.repoHash ?? "",
+      generation: status.indexedGeneration ?? 0,
+      candidates: [],
+      scopeState: "READY",
+      truncated: false,
+      stopReason: "scope_empty",
+      droppedUnlocatable: 0,
+      scope: resolved
+    };
+  }
+  const result = await client.querySearch(task, {
+    limit,
+    mode: searchMode,
+    ...(resolved.state === "RESOLVED" || resolved.state === "PARTIAL" ? { scope: { sourceRoots: resolved.sourceRootIds } } : {}),
+    budget: args.budget?.remainingMs ? { remainingMs: args.budget.remainingMs } : undefined
+  });
   const intent = classifyQuery(task, searchMode);
   const ambiguousExact = intent === "exact" && result.hits.length > 1;
   const candidates: DiscoveryCandidate[] = [];
@@ -218,14 +238,17 @@ export async function runStaticDiscovery(client: JavaIndexClientApi, args: Stati
   // Completeness comes from the index snapshot and the query budget, never
   // from the candidates list being non-empty.
   const indexPartial = status.state !== "READY";
-  const partial = indexPartial || result.truncated || result.stopReason !== undefined || droppedUnlocatable > 0;
+  const partial = indexPartial || result.truncated || result.stopReason !== undefined || droppedUnlocatable > 0
+    || resolved.state === "PARTIAL";
   const stopReason = indexPartial
     ? "index_partial"
     : result.stopReason === "postings"
       ? "candidate_budget"
       : result.stopReason === "deadline"
         ? "deadline"
-        : undefined;
+        : resolved.state === "PARTIAL"
+          ? "layout_unknown"
+          : undefined;
   return {
     schemaVersion: DISCOVERY_SCHEMA_VERSION,
     repoHash: args.repoHash ?? "",
@@ -234,6 +257,7 @@ export async function runStaticDiscovery(client: JavaIndexClientApi, args: Stati
     scopeState: partial ? "PARTIAL" : "READY",
     truncated: result.truncated,
     ...(stopReason ? { stopReason } : {}),
-    droppedUnlocatable
+    droppedUnlocatable,
+    scope: resolved
   };
 }

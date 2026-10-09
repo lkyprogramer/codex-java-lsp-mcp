@@ -34,11 +34,13 @@
     },
     "R05": {
       "state": "DONE",
-      "commit": "(this commit: fix(index): preserve duplicate declarations through resolution)",
+      "commit": "3c12b57",
       "report": "docs/next-stage/r05-task-result.md"
     },
     "R06": {
-      "state": "NOT_STARTED"
+      "state": "DONE",
+      "commit": "(this commit: fix(search): constrain candidates before ranking and limits)",
+      "report": "docs/next-stage/r06-task-result.md"
     },
     "R07": {
       "state": "NOT_STARTED"

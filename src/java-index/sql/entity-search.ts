@@ -11,13 +11,13 @@ import {
   DEFAULT_QUERY_MAX_POSTINGS,
   ENTITY_SEARCH_DEFAULT_LIMIT,
   ENTITY_SEARCH_MAX_LIMIT,
-  filterHitsByScope,
   type DetailedEntitySearchResult,
   type EntityHit,
   type EntityKind,
   type EntityLayer,
   type EntitySearchMode,
   type EntitySearchOptions,
+  type EntitySearchScope,
   type EntitySearchStopReason
 } from "../entity-search.js";
 import { bindChunks, inClause, prepareCached, type IndexDatabase } from "./driver.js";
@@ -84,6 +84,24 @@ const ENTITY_SELECT = `SELECT s.text AS entityId, e.kind AS kind, e.fqn AS fqn, 
   e.path_sym AS pathSym, e.ident_len AS identLen, e.chunk_len AS chunkLen
   FROM entity e JOIN sym s ON s.id=e.sym`;
 
+/**
+ * R06: the scope predicate every route pushes into its SQL, so out-of-scope
+ * rows never reach the postings budget, ranking or the result cap. Same
+ * semantics as filterHitsByScope (path === root or under `root/`); roots are
+ * bound parameters, never interpolated.
+ */
+type ScopeSql = { sql: string; params: string[] };
+
+function scopeSql(pathSymColumn: string, scope: EntitySearchScope | undefined): ScopeSql {
+  const roots = [...new Set((scope?.sourceRoots ?? []).map(root => root.replace(/\/+$/, "")).filter(root => root.length > 0))];
+  if (roots.length === 0) return { sql: "", params: [] };
+  const terms = roots.map(() => "(ps.text=? OR substr(ps.text, 1, length(?))=?)").join(" OR ");
+  return {
+    sql: ` AND EXISTS (SELECT 1 FROM sym ps WHERE ps.id=${pathSymColumn} AND (${terms}))`,
+    params: roots.flatMap(root => [root, `${root}/`, `${root}/`])
+  };
+}
+
 function existingTokenSyms(db: IndexDatabase, tokens: readonly string[]): number[] {
   const ids: number[] = [];
   for (const token of tokens) {
@@ -93,14 +111,14 @@ function existingTokenSyms(db: IndexDatabase, tokens: readonly string[]): number
   return ids;
 }
 
-function fqnHits(db: IndexDatabase, task: string, cap: number): EntityHit[] {
+function fqnHits(db: IndexDatabase, task: string, cap: number, scope?: ScopeSql): EntityHit[] {
   const seen = new Set<string>();
   const hits: EntityRow[] = [];
   for (const candidate of extractFqnCandidates(task)) {
     for (const row of prepareCached(
       db,
-      `${ENTITY_SELECT} WHERE e.fqn=? OR e.fqn LIKE '%.' || ?`
-    ).iterate(candidate, candidate) as Iterable<Record<string, SQLOutputValue>>) {
+      `${ENTITY_SELECT} WHERE (e.fqn=? OR e.fqn LIKE '%.' || ?)${scope?.sql ?? ""}`
+    ).iterate(candidate, candidate, ...(scope?.params ?? [])) as Iterable<Record<string, SQLOutputValue>>) {
       const entity = loadEntityRow(db, row);
       if (entity.fqn !== candidate && !entity.fqn.endsWith(`.${candidate}`)) continue;
       if (seen.has(entity.entityId)) continue;
@@ -112,15 +130,15 @@ function fqnHits(db: IndexDatabase, task: string, cap: number): EntityHit[] {
   return hits.slice(0, cap).map(entity => toHit(entity, "FQN", 1));
 }
 
-function simpleNameHits(db: IndexDatabase, task: string, cap: number): EntityHit[] {
+function simpleNameHits(db: IndexDatabase, task: string, cap: number, scope?: ScopeSql): EntityHit[] {
   const lexemes = identifierLexemes(task);
   if (lexemes.length === 0) return [];
   const hits: EntityRow[] = [];
   for (const chunk of bindChunks(lexemes)) {
     for (const row of prepareCached(
       db,
-      `${ENTITY_SELECT} WHERE e.kind='type' AND e.simple_name_lc IN ${inClause(chunk.length)}`
-    ).iterate(...chunk) as Iterable<Record<string, SQLOutputValue>>) {
+      `${ENTITY_SELECT} WHERE e.kind='type' AND e.simple_name_lc IN ${inClause(chunk.length)}${scope?.sql ?? ""}`
+    ).iterate(...chunk, ...(scope?.params ?? [])) as Iterable<Record<string, SQLOutputValue>>) {
       hits.push(loadEntityRow(db, row));
     }
   }
@@ -182,7 +200,8 @@ function rankBm25(
   layer: EntityLayer,
   cap: number,
   budget?: QueryWorkBudget,
-  stop?: { reason?: EntitySearchStopReason }
+  stop?: { reason?: EntitySearchStopReason },
+  scope?: ScopeSql
 ): EntityHit[] {
   const queryTokens = tokenize(task);
   const tokenSyms = existingTokenSyms(db, queryTokens);
@@ -211,8 +230,8 @@ function rankBm25(
         t.token_sym AS tokenSym, t.tf AS tf
        FROM entity e JOIN sym s ON s.id=e.sym
        JOIN entity_token t ON t.entity_sym=e.sym
-       WHERE t.field=? AND t.token_sym IN ${inClause(chunk.length)}`
-    ).iterate(field, ...chunk) as Iterable<Record<string, SQLOutputValue>>) {
+       WHERE t.field=? AND t.token_sym IN ${inClause(chunk.length)}${scope?.sql ?? ""}`
+    ).iterate(field, ...chunk, ...(scope?.params ?? [])) as Iterable<Record<string, SQLOutputValue>>) {
       // T07: every posting row is billed against the query work budget at
       // the interruptible boundary between rows; synchronous SQL cannot stop
       // mid-statement, so the scan ends at the row boundary.
@@ -247,7 +266,8 @@ function docHits(
   task: string,
   cap: number,
   budget?: QueryWorkBudget,
-  stop?: { reason?: EntitySearchStopReason }
+  stop?: { reason?: EntitySearchStopReason },
+  scope?: ScopeSql
 ): EntityHit[] {
   const queryTokens = tokenize(task);
   const tokenSyms = existingTokenSyms(db, queryTokens);
@@ -273,10 +293,13 @@ function docHits(
   for (const chunk of bindChunks(postingSyms)) {
     for (const row of prepareCached(
       db,
+      // Scope applies to the declaration a document points at (the hit is
+      // that declaration), joined before any posting is billed.
       `SELECT t.doc_sym AS docSym, t.token_sym AS tokenSym, t.tf AS tf, d.token_len AS docLen
          FROM search_doc_token t JOIN search_doc d ON d.sym=t.doc_sym
-        WHERE t.token_sym IN ${inClause(chunk.length)}`
-    ).iterate(...chunk) as Iterable<Record<string, SQLOutputValue>>) {
+         ${scope?.sql ? "JOIN entity e ON e.sym=d.declaration_sym" : ""}
+        WHERE t.token_sym IN ${inClause(chunk.length)}${scope?.sql ?? ""}`
+    ).iterate(...chunk, ...(scope?.params ?? [])) as Iterable<Record<string, SQLOutputValue>>) {
       if (budget) {
         const verdict = budget.take();
         if (verdict !== "ok") {
@@ -405,9 +428,9 @@ export class SqlEntitySearch {
     return firstNonEmpty(identifier, chunk, cap);
   }
 
-  // T07: budgeted, scoped retrieval. The work budget bounds posting rows
-  // visited (never the returned rows); scope is applied before the result
-  // cap; any exhausted budget reports an explicit partial result with the
+  // T07/R06: budgeted, scoped retrieval. The work budget bounds posting rows
+  // visited (never the returned rows); scope is pushed into every route's SQL
+  // so it precedes the posting budget, ranking and the result cap; any exhausted budget reports an explicit partial result with the
   // stop reason instead of pretending the scan was complete. The reported
   // generation labels the snapshot the scan observed (K20).
   searchDetailed(
@@ -437,20 +460,18 @@ export class SqlEntitySearch {
       return result;
     };
     if (task.trim().length === 0) return finish([]);
+    const scope = scopeSql("e.path_sym", options.scope);
     const intent = classifyQuery(task, mode);
     if (intent === "exact") {
-      const fqn = filterHitsByScope(fqnHits(this.db, task, cap), options.scope);
+      const fqn = fqnHits(this.db, task, cap, scope);
       if (fqn.length > 0) return finish(fqn);
-      const simple = filterHitsByScope(simpleNameHits(this.db, task, cap), options.scope);
+      const simple = simpleNameHits(this.db, task, cap, scope);
       if (simple.length > 0) return finish(simple);
     }
-    const identifier = filterHitsByScope(
-      rankBm25(this.db, task, 0, "BM25_IDENTIFIER", cap, budget, stop),
-      options.scope
-    );
-    const chunk = filterHitsByScope(rankBm25(this.db, task, 1, "CHUNK", cap, budget, stop), options.scope);
+    const identifier = rankBm25(this.db, task, 0, "BM25_IDENTIFIER", cap, budget, stop, scope);
+    const chunk = rankBm25(this.db, task, 1, "CHUNK", cap, budget, stop, scope);
     if (intent === "text") {
-      const doc = filterHitsByScope(docHits(this.db, task, cap, budget, stop), options.scope);
+      const doc = docHits(this.db, task, cap, budget, stop, scope);
       return finish(mergeByRank([identifier, chunk, doc], cap));
     }
     return finish(firstNonEmpty(identifier, chunk, cap));

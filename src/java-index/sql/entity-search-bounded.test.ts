@@ -13,6 +13,7 @@ import { close, openIndexDb } from "./driver.js";
 import { ensureSchema } from "./schema.js";
 import { replaceAllEntities, writeEntityRecord } from "./entity-tokens.js";
 import { SqlEntitySearch } from "./entity-search.js";
+import { commitSearchDocStats, rebuildSearchDocDf, replaceSearchDocuments } from "./search-docs.js";
 
 const ALPHA_SOURCE = `package alpha;
 public class AlphaService {
@@ -217,4 +218,114 @@ test("T07 in-memory and SQL detailed results agree with no budget", () => {
       await teardown(fixture);
     }
   })();
+});
+// ---------------------------------------------------------------- R06
+// 20 high-frequency out-of-scope candidates that sort/rank ahead of the one
+// in-scope candidate; with limit 1 every route must still return the
+// in-scope one, and the posting budget must only be spent inside the scope.
+
+const TARGET = "z/src/main/java/demo/OrderService.java";
+
+function r06Record(entityId: string, relativePath: string, heavy: boolean): EntityRecord {
+  const repeat = (token: string) => (heavy ? [token, token, token] : [token]);
+  return {
+    entityId,
+    kind: "type",
+    fqn: "demo.OrderService",
+    simpleName: "OrderService",
+    relativePath,
+    identifierTokens: ["demo", "order", "service", "orderservice", ...repeat("refund")],
+    chunkTokens: repeat("ledger")
+  };
+}
+
+function r06Fixture() {
+  const db = openIndexDb(":memory:");
+  ensureSchema(db);
+  const records: EntityRecord[] = Array.from({ length: 20 }, (_, i) =>
+    r06Record(`a${String(i).padStart(2, "0")}`, `noise${i}/src/main/java/demo/OrderService.java`, true));
+  // a prefix sibling of the scope root and a LIKE-metacharacter path
+  records.push(r06Record("b-sibling", "zz/src/main/java/demo/OrderService.java", true));
+  records.push(r06Record("b-meta", "z_x/src/main/java/demo/OrderService.java", true));
+  records.push(r06Record("zz-target", TARGET, false));
+  replaceAllEntities(db, records);
+  const docs = records.map((record, index) => ({
+    documentId: `doc:${record.entityId}`,
+    declarationId: record.entityId,
+    path: record.relativePath,
+    contentHash: "h",
+    representationVersion: 1 as const,
+    sourceKind: "comment" as const,
+    startLine: 1,
+    endLine: 1,
+    normalizedText: index < 22 ? "rollback rollback rollback compensation" : "rollback"
+  }));
+  for (const doc of docs) replaceSearchDocuments(db, doc.path, [doc]);
+  rebuildSearchDocDf(db);
+  commitSearchDocStats(db);
+  return { db, records };
+}
+
+test("R06: scope precedes every route's ranking and cap (limit 1, 20+ outside candidates)", () => {
+  const { db, records } = r06Fixture();
+  try {
+    const search = new SqlEntitySearch(db);
+    const cases: Array<[string, "auto" | "exact" | "text", string]> = [
+      ["demo.OrderService", "exact", "FQN"],
+      ["OrderService", "exact", "SIMPLE_NAME"],
+      ["refund", "auto", "BM25_IDENTIFIER"],
+      ["ledger", "auto", "CHUNK"],
+      ["rollback compensation", "text", "any"]
+    ];
+    for (const [task, mode, layer] of cases) {
+      const unscoped = search.searchDetailed(task, 1, mode);
+      assert.notEqual(unscoped.hits[0]?.relativePath, TARGET, `${task}: without scope an outside candidate wins (the fixture is adversarial)`);
+      for (const roots of [["z"], ["z/"], ["z/src/main/java"]]) {
+        const scoped = search.searchDetailed(task, 1, mode, { scope: { sourceRoots: roots } });
+        assert.equal(scoped.hits.length, 1, `${task} @ ${roots}: ${JSON.stringify(scoped.hits)}`);
+        assert.equal(scoped.hits[0]!.relativePath, TARGET);
+        if (layer !== "any") assert.equal(scoped.hits[0]!.layer, layer);
+      }
+      const oracle = searchEntitiesDetailed(records, task, 1, mode, { scope: { sourceRoots: ["z"] } });
+      if (mode !== "text") {
+        assert.deepEqual(search.searchDetailed(task, 1, mode, { scope: { sourceRoots: ["z"] } }).hits.map(hit => hit.entityId), oracle.hits.map(hit => hit.entityId), `${task}: SQL/oracle parity`);
+      }
+    }
+    // the document route: tokens that only the search docs carry
+    const docOnly = search.searchDetailed("compensation rollback", 1, "text", { scope: { sourceRoots: ["z"] } });
+    assert.equal(docOnly.hits[0]?.relativePath, TARGET);
+  } finally {
+    close(db);
+  }
+});
+
+test("R06: prefix siblings and LIKE metacharacters never widen the scope", () => {
+  const { db } = r06Fixture();
+  try {
+    const search = new SqlEntitySearch(db);
+    const z = search.searchDetailed("OrderService", 10, "exact", { scope: { sourceRoots: ["z"] } });
+    assert.deepEqual(z.hits.map(hit => hit.relativePath), [TARGET], "z must not match zz/ or z_x/");
+    assert.deepEqual(search.searchDetailed("OrderService", 10, "exact", { scope: { sourceRoots: ["%"] } }).hits, []);
+    assert.deepEqual(search.searchDetailed("OrderService", 10, "exact", { scope: { sourceRoots: ["z_"] } }).hits, []);
+    const two = search.searchDetailed("OrderService", 10, "exact", { scope: { sourceRoots: ["z", "zz"] } });
+    assert.deepEqual(two.hits.map(hit => hit.relativePath).sort(), [TARGET, "zz/src/main/java/demo/OrderService.java"].sort(), "several roots are a union of exact roots");
+  } finally {
+    close(db);
+  }
+});
+
+test("R06: the posting budget is only spent on in-scope postings", () => {
+  const { db } = r06Fixture();
+  try {
+    const search = new SqlEntitySearch(db);
+    const budget = { maxPostings: 3, remainingMs: () => 10_000 };
+    const unscoped = search.searchDetailed("refund ledger", 1, "auto", { budget });
+    assert.equal(unscoped.truncated, true, "outside postings alone exhaust this budget");
+    const scoped = search.searchDetailed("refund ledger", 1, "auto", { budget, scope: { sourceRoots: ["z"] } });
+    assert.equal(scoped.truncated, false, `scope is applied before billing: ${JSON.stringify(scoped)}`);
+    assert.equal(scoped.hits[0]?.relativePath, TARGET);
+    assert.ok(scoped.work.postings <= 2, `only the target's postings are visited, got ${scoped.work.postings}`);
+  } finally {
+    close(db);
+  }
 });
