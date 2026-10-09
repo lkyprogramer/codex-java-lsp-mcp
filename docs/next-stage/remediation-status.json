@@ -49,7 +49,7 @@
     },
     "R08": {
       "state": "DONE",
-      "commit": "(this commit: fix(evidence): bind previews to current source provenance)",
+      "commit": "8a9d485",
       "report": "docs/next-stage/r08-task-result.md"
     },
     "R09": {
@@ -67,5 +67,11 @@
     "R13": {
       "state": "NOT_STARTED"
     }
+  },
+  "reviewFixes": {
+    "scope": "R05-R08 independent review (2 P1, 3 P2, 5 P3)",
+    "state": "DONE",
+    "commit": "(this commit: fix(index,discovery): close R05-R08 review findings)",
+    "report": "docs/next-stage/r05-r08-review-fixes.md"
   }
 }

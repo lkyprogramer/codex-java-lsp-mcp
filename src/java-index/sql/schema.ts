@@ -1,11 +1,14 @@
 import { STABLE_ID_VERSION } from "../stable-id.js";
+import { JAVA_FACTS_REVISION } from "../build-fingerprint.js";
 import { forgetPrepared, prepareCached, type IndexDatabase } from "./driver.js";
 
 // v5: source-linked search documents (T05). v6 (R08): search documents carry
 // their evidence source path separately from the owning Java file. Bumping
 // this version drops and rebuilds derived DBs; sibling copies are only reused
-// when their recorded schema+identity versions match exactly.
-export const SCHEMA_VERSION = 6;
+// when their recorded schema+identity versions match exactly. v7 (R05 review):
+// type_ref_name lets an incremental refresh find the files whose type
+// references a declaration change can re-resolve (ambiguous refs have no edge).
+export const SCHEMA_VERSION = 7;
 
 export const INDEX_SCHEMA_SQL = `
 CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -36,6 +39,15 @@ CREATE TABLE edge(id INTEGER PRIMARY KEY, kind_sym INTEGER NOT NULL, from_sym IN
 CREATE INDEX edge_from_kind ON edge(from_sym, kind_sym);
 CREATE INDEX edge_to_kind ON edge(to_sym, kind_sym);
 CREATE INDEX edge_file ON edge(file_id);
+-- Every identifier a file uses in a type position (type refs, imports, call
+-- receivers, annotations), lower-cased and interned: a superset of the names
+-- whose declarations can change how this file resolves.
+CREATE TABLE type_ref_name(name_sym INTEGER NOT NULL, file_id INTEGER NOT NULL REFERENCES file(id) ON DELETE CASCADE,
+  PRIMARY KEY(name_sym, file_id)) WITHOUT ROWID;
+CREATE INDEX type_ref_name_file ON type_ref_name(file_id);
+-- Every resource XML the builder has looked at (mapper or not) with its
+-- hash/size/mtime, so reconcile can skip unchanged XML like unchanged Java.
+CREATE TABLE resource_scan(path TEXT PRIMARY KEY, content_hash TEXT NOT NULL, size INTEGER, mtime_ms REAL);
 CREATE TABLE mybatis_resource(path TEXT PRIMARY KEY, namespace TEXT, content_hash TEXT, facts BLOB NOT NULL);
 CREATE INDEX mybatis_ns ON mybatis_resource(namespace);
 CREATE TABLE source_root_coverage(root TEXT PRIMARY KEY, state TEXT NOT NULL, generation INTEGER NOT NULL);
@@ -100,10 +112,13 @@ export function ensureSchema(db: IndexDatabase): void {
   db.exec(INDEX_SCHEMA_SQL);
   db.prepare("INSERT INTO meta(key, value) VALUES ('schemaVersion', ?)").run(String(SCHEMA_VERSION));
   db.prepare("INSERT INTO meta(key, value) VALUES ('identityVersion', ?)").run(String(STABLE_ID_VERSION));
+  db.prepare("INSERT INTO meta(key, value) VALUES ('factsRevision', ?)").run(String(JAVA_FACTS_REVISION));
   db.prepare("INSERT INTO meta(key, value) VALUES ('factsEncoding', 'deflate-raw')").run();
 }
 
-// True when this database was written by the current schema+identity pair.
+// True when this database was written by the current schema+identity pair
+// and the current facts revision (resolution semantics: a revision bump means
+// stored refs/edges were computed by other rules).
 // Sibling-seed copies must pass this check before reuse; anything else is
 // dropped and rebuilt rather than silently mixing old and new identities.
 export function schemaVersionsMatch(db: IndexDatabase): boolean {
@@ -119,5 +134,9 @@ export function schemaVersionsMatch(db: IndexDatabase): boolean {
   const identity = prepareCached(db, "SELECT value FROM meta WHERE key='identityVersion'").get() as
     | { value: string }
     | undefined;
-  return !!identity && Number(identity.value) === STABLE_ID_VERSION;
+  if (!identity || Number(identity.value) !== STABLE_ID_VERSION) return false;
+  const facts = prepareCached(db, "SELECT value FROM meta WHERE key='factsRevision'").get() as
+    | { value: string }
+    | undefined;
+  return !!facts && Number(facts.value) === JAVA_FACTS_REVISION;
 }

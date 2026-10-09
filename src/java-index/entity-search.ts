@@ -114,6 +114,52 @@ export type EntitySearchOptions = {
   };
 };
 
+/**
+ * R07: one exact selector, matched as a whole - never by one of its words.
+ * `a.b.C` / `Outer$Inner` / `C` name a type (then, for a dotted selector, the
+ * `Owner.method` reading), `Owner#method(...)` names a method. Qualifiers
+ * must match whole FQN segments: `Outer.Inner` matches `demo.Outer.Inner`,
+ * `demo.Missing` never matches `demo.Demo`. Parameter lists are not
+ * signatures (overloads stay ambiguous). Not a selector -> no alternatives.
+ */
+export type ExactSelectorAlternative =
+  | { kind: "type"; name: string; qualifier?: string }
+  | { kind: "method"; name: string; owner?: string };
+
+const SELECTOR_IDENT = "[A-Za-z_$][A-Za-z0-9_$]*";
+const SELECTOR_SHAPE = new RegExp(`^(${SELECTOR_IDENT}(?:[.$]${SELECTOR_IDENT})*)(?:#(${SELECTOR_IDENT})(?:\\([^()]*\\))?)?$`);
+
+export function parseExactSelector(raw: string): ExactSelectorAlternative[] {
+  const match = SELECTOR_SHAPE.exec(raw.trim());
+  if (!match) return [];
+  // `$` is the binary nested-type separator; the index stores canonical dots.
+  const path = match[1]!.replace(/\$/g, ".").split(".").filter(Boolean);
+  if (path.length === 0) return [];
+  if (match[2] !== undefined) return [{ kind: "method", name: match[2], owner: path.join(".") }];
+  const name = path[path.length - 1]!;
+  if (path.length === 1) return [{ kind: "type", name }, { kind: "method", name }];
+  const prefix = path.slice(0, -1).join(".");
+  return [{ kind: "type", name, qualifier: prefix }, { kind: "method", name, owner: prefix }];
+}
+
+// Stored nested FQNs are binary (`demo.Outer$Inner`); selectors may use
+// either separator, so both sides compare in dotted form.
+const dotted = (fqn: string) => fqn.replace(/\$/g, ".");
+const qualifiedBy = (actual: string, expected: string) => {
+  const name = dotted(actual);
+  return name === expected || name.endsWith(`.${expected}`);
+};
+
+export function matchesExactSelector(alternative: ExactSelectorAlternative, entity: { kind: EntityKind; fqn: string; simpleName: string }): boolean {
+  if (entity.kind !== alternative.kind || entity.simpleName !== alternative.name) return false;
+  if (alternative.kind === "type") {
+    return alternative.qualifier === undefined || qualifiedBy(entity.fqn, `${alternative.qualifier}.${alternative.name}`);
+  }
+  if (alternative.owner === undefined) return true;
+  const hash = entity.fqn.lastIndexOf("#");
+  return hash > 0 && qualifiedBy(entity.fqn.slice(0, hash), alternative.owner);
+}
+
 /** Scope is applied before the result cap: a scoped candidate can never be
  *  pushed out of the cap by an out-of-scope candidate. */
 export function filterHitsByScope(hits: readonly EntityHit[], scope: EntitySearchScope | undefined): EntityHit[] {

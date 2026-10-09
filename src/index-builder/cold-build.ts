@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { realpath, readFile } from "node:fs/promises";
+import { realpath, readFile, stat } from "node:fs/promises";
 import { cpus } from "node:os";
 import path from "node:path";
 import { probeLayout } from "../layout-probe.js";
@@ -19,6 +19,7 @@ import { prepareCached, withTransaction, type IndexDatabase } from "../java-inde
 import { rebuildEntityDf, writeEntityRecord } from "../java-index/sql/entity-tokens.js";
 import {
   commitSearchDocStats,
+  myBatisBindingFilter,
   rebuildSearchDocDf,
   replaceSearchDocuments
 } from "../java-index/sql/search-docs.js";
@@ -26,7 +27,7 @@ import { buildSearchDocuments } from "../discovery/search-document.js";
 import { SqlFactsStore } from "../java-index/sql/facts-store.js";
 import { SqlKnowledgeGraph } from "../java-index/sql/knowledge-graph.js";
 import { buildSqlRegistryView } from "../java-index/sql/registry-view.js";
-import { readBundle, readMyBatisResource, replaceBundleEdges, updateBundleFacts, writeBundle, writeMyBatisResource } from "../java-index/sql/rows.js";
+import { readBundle, readMyBatisResource, recordResourceScan, replaceBundleEdges, updateBundleFacts, writeBundle, writeMyBatisResource } from "../java-index/sql/rows.js";
 import {
   clearIndexData,
   readBuildProgress,
@@ -165,18 +166,23 @@ export async function runSqlColdBuild(options: SqlColdBuildOptions): Promise<Sql
 
     const xmlFiles = await discoverMyBatisResourceFiles(resolvedRepoRoot, layout);
     const resources: MyBatisMapperResourceFacts[] = [];
+    const scans: Array<{ relativePath: string; contentHash: string; size: number; mtimeMs: number }> = [];
     for (const file of xmlFiles) {
+      const info = await stat(file.absolutePath);
       const content = await readFile(file.absolutePath, "utf8");
+      const contentHash = createHash("sha256").update(content, "utf8").digest("hex");
+      scans.push({ relativePath: file.relativePath, contentHash, size: info.size, mtimeMs: info.mtimeMs });
       const resource = extractMyBatisMapperFacts({
         relativePath: file.relativePath,
         content,
-        contentHash: createHash("sha256").update(content, "utf8").digest("hex"),
+        contentHash,
         generation
       });
       if (resource) resources.push(resource);
     }
     progress = withTransaction(db, () => {
       for (const resource of resources) writeMyBatisResource(db, resource);
+      for (const scan of scans) recordResourceScan(db, scan.relativePath, scan.contentHash, scan.size, scan.mtimeMs);
       const next: BuildProgress = { phase: "resolve", done: 0, total };
       commitProgress(db, next);
       return next;
@@ -258,6 +264,7 @@ function writeKnowledgeAndEntities(db: IndexDatabase, generation: number): void 
   });
   const repoRoot = readMeta(db, "repoRoot") ?? "";
   const resources = listMyBatisResources(db);
+  const bindsMyBatis = myBatisBindingFilter(db);
   for (const file of sql.iterFiles()) {
     const bundle = readBundle(db, file.relativePath);
     if (!bundle) continue;
@@ -268,7 +275,7 @@ function writeKnowledgeAndEntities(db: IndexDatabase, generation: number): void 
       // Documents, entities and the file row move in one transaction so a
       // query can never rank text from a newer hash against facts of an older
       // one.
-      replaceSearchDocuments(db, bundle.file.relativePath, buildSearchDocuments({ bundle, content, myBatisResources: resources }));
+      replaceSearchDocuments(db, bundle.file.relativePath, buildSearchDocuments({ bundle, content, myBatisResources: resources, bindsMyBatis }));
     });
     sql.clearRequestCache();
   }

@@ -29,6 +29,9 @@ export type ResolvedSearchScope =
 
 export type SearchScopeRequest = { module?: string; sourceSet?: DiscoverySourceSetFilter };
 
+/** Build-declared module names (e.g. Maven artifactId) -> module directories. */
+export type ModuleAliases = ReadonlyMap<string, readonly string[]>;
+
 const POSIX = (value: string) => value.replaceAll("\\", "/").replace(/\/+$/, "");
 
 /**
@@ -58,7 +61,11 @@ export function sourceRootRecordFromPath(rootPath: string): SourceRootRecord | u
  * at all -> PARTIAL(LAYOUT_UNKNOWN) with the conventional
  * `<module>/src/<set>` prefixes, flagged so callers never read it as exact.
  */
-export function resolveSearchScope(roots: readonly SourceRootRecord[], request: SearchScopeRequest): ResolvedSearchScope {
+export function resolveSearchScope(
+  roots: readonly SourceRootRecord[],
+  request: SearchScopeRequest,
+  aliases: ModuleAliases | (() => ModuleAliases) = new Map()
+): ResolvedSearchScope {
   const module = request.module === undefined ? undefined : POSIX(request.module.trim()) || ".";
   const sourceSet = request.sourceSet;
   if (module === undefined && sourceSet === undefined) return { state: "UNSCOPED" };
@@ -72,8 +79,15 @@ export function resolveSearchScope(roots: readonly SourceRootRecord[], request: 
   if (module !== undefined) {
     // An exact module directory wins; a bare layout name that names several
     // module directories (a/core, b/core) is ambiguous, never a union.
+    // Then a build-declared module name (Maven artifactId) whose directory
+    // differs from the name.
     const byPath = javaRoots.filter(root => root.modulePath === module);
-    const byName = javaRoots.filter(root => root.module === module);
+    let byName = javaRoots.filter(root => root.module === module);
+    if (byPath.length === 0 && byName.length === 0) {
+      const aliasMap = typeof aliases === "function" ? aliases() : aliases;
+      const dirs = new Set(aliasMap.get(module) ?? []);
+      byName = javaRoots.filter(root => dirs.has(root.modulePath));
+    }
     inModule = byPath.length > 0 ? byPath : byName;
     if (inModule.length === 0) return { state: "EMPTY", reason: "UNKNOWN_MODULE" };
     if (byPath.length === 0 && new Set(byName.map(root => root.modulePath)).size > 1) {

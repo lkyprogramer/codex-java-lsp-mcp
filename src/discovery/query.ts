@@ -6,11 +6,13 @@
 // pos: Discovery layer for the java_symbol static backend. Assembles index
 //      results only; it never starts or queries JDT.
 import { createHash } from "node:crypto";
+import { createReadStream, existsSync, readFileSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
+import { StringDecoder } from "node:string_decoder";
 import path from "node:path";
 import { classifyQuery } from "./query-intent.js";
 import { redactPreviewLine } from "./search-document.js";
-import { resolveSearchScope, sourceRootRecordFromPath, type ResolvedSearchScope, type SourceRootRecord } from "./scope.js";
+import { resolveSearchScope, sourceRootRecordFromPath, type ModuleAliases, type ResolvedSearchScope, type SourceRootRecord } from "./scope.js";
 import type { JavaIndexClientApi } from "../java-index/java-index-client-api.js";
 import {
   DISCOVERY_DEFAULT_LIMIT,
@@ -201,16 +203,63 @@ export function sourceRootRecords(coverage: ReadonlyArray<{ root: string }> | un
     .filter((record): record is SourceRootRecord => record !== undefined);
 }
 
+/** Maven artifactIds of the indexed module directories (read lazily, only
+ *  when a module name matched no directory or layout name). Gradle project
+ *  names are not read. */
+function mavenArtifactAliases(repoRoot: string, records: readonly SourceRootRecord[]): ModuleAliases {
+  const aliases = new Map<string, string[]>();
+  for (const modulePath of new Set(records.map(record => record.modulePath))) {
+    let pom: string;
+    try {
+      pom = readFileSync(path.join(repoRoot, modulePath, "pom.xml"), "utf8");
+    } catch {
+      continue;
+    }
+    const own = pom.replace(/<!--[\s\S]*?-->/g, "").replace(/<parent>[\s\S]*?<\/parent>/, "");
+    const artifactId = /<artifactId>\s*([^<\s]+)\s*<\/artifactId>/.exec(own)?.[1];
+    if (artifactId) aliases.set(artifactId, [...(aliases.get(artifactId) ?? []), modulePath]);
+  }
+  return aliases;
+}
+
+/** The requested scope exists on disk but is not in the index coverage (a
+ *  module added since the last index publish): EMPTY there is not complete. */
+function scopeOnDiskButUnindexed(repoRoot: string, module: string | undefined, sourceSet: DiscoverySourceSet | undefined): boolean {
+  const base = module === undefined || module.trim() === "" || module.trim() === "." ? "." : module.trim();
+  const root = path.resolve(repoRoot);
+  const moduleDir = path.resolve(root, base);
+  const inside = path.relative(root, moduleDir);
+  if (inside.startsWith("..") || path.isAbsolute(inside)) return false;
+  return (sourceSet ? [sourceSet] : ["main", "test"]).some(set => existsSync(path.join(moduleDir, "src", set, "java")));
+}
+
 type SourceRead =
   | { state: "ok"; contentHash: string; lines: string[] }
+  /** Over the per-file preview cap: hashed by streaming (freshness known),
+   *  content not kept, so no preview. */
+  | { state: "hashed_only"; contentHash: string }
   | { state: "missing" }
   | { state: "file_too_large" | "read_budget" | "deadline" };
 
-/** Physical lines with their terminators (CRLF, LF or lone CR, each one
- *  terminator); a trailing terminator does not create a phantom line. */
+/** sha256 of the UTF-8 decoded text (the indexer's definition), streamed. */
+async function streamContentHash(absolute: string): Promise<{ hash: string; bytes: number }> {
+  const hash = createHash("sha256");
+  const decoder = new StringDecoder("utf8");
+  let bytes = 0;
+  for await (const chunk of createReadStream(absolute)) {
+    bytes += (chunk as Buffer).length;
+    hash.update(decoder.write(chunk as Buffer), "utf8");
+  }
+  hash.update(decoder.end(), "utf8");
+  return { hash: hash.digest("hex"), bytes };
+}
+
+/** Physical lines with their terminators, numbered like the index parser
+ *  (tree-sitter) and rg: a line ends at LF (a CRLF is one terminator, a lone
+ *  CR is line content). A trailing terminator does not create a phantom line. */
 export function splitSourceLines(content: string): string[] {
   if (content.length === 0) return [];
-  const lines = content.split(/(?<=\n|\r(?!\n))/);
+  const lines = content.split(/(?<=\n)/);
   if (lines[lines.length - 1] === "") lines.pop();
   return lines;
 }
@@ -254,8 +303,20 @@ export class RequestSourceReader {
     } catch {
       return { state: "missing" };
     }
-    if (size > DISCOVERY_FILE_READ_MAX_BYTES) return { state: "file_too_large" };
-    if (this.bytesRead + size > DISCOVERY_REQUEST_READ_MAX_BYTES) return { state: "read_budget" };
+    if (this.bytesRead + size > DISCOVERY_REQUEST_READ_MAX_BYTES) {
+      return { state: size > DISCOVERY_FILE_READ_MAX_BYTES ? "file_too_large" : "read_budget" };
+    }
+    if (size > DISCOVERY_FILE_READ_MAX_BYTES) {
+      // Large (often generated) file: verify freshness without holding it.
+      this.reads += 1;
+      try {
+        const streamed = await streamContentHash(absolute);
+        this.bytesRead += streamed.bytes;
+        return { state: "hashed_only", contentHash: streamed.hash };
+      } catch {
+        return { state: "missing" };
+      }
+    }
     let bytes: Buffer;
     this.reads += 1;
     try {
@@ -328,20 +389,25 @@ export async function runStaticDiscovery(client: JavaIndexClientApi, args: Stati
   // built from, as an AND, BEFORE the query; the resolved roots are pushed
   // down into every SQL route ahead of postings budget, ranking and cap.
   const status = await client.status();
-  const resolved: ResolvedSearchScope = resolveSearchScope(sourceRootRecords(status.coverage), {
+  const records = sourceRootRecords(status.coverage);
+  const resolved: ResolvedSearchScope = resolveSearchScope(records, {
     module: args.module,
     sourceSet: args.sourceSet
-  });
+  }, () => mavenArtifactAliases(args.repoRoot, records));
   if (resolved.state === "EMPTY") {
+    // EMPTY is a complete answer only for a READY index whose coverage
+    // already includes everything on disk for that scope.
+    const incomplete = status.state !== "READY"
+      || (resolved.reason !== "AMBIGUOUS_MODULE" && scopeOnDiskButUnindexed(args.repoRoot, args.module, args.sourceSet));
     return {
       schemaVersion: DISCOVERY_SCHEMA_VERSION,
       repoHash: args.repoHash ?? "",
       generation: status.indexedGeneration ?? 0,
       candidates: [],
-      scopeState: "READY",
+      scopeState: incomplete ? "PARTIAL" : "READY",
       truncated: false,
       selectionLimited: false,
-      stopReason: "scope_empty",
+      stopReason: incomplete ? "index_partial" : "scope_empty",
       droppedUnlocatable: 0,
       droppedStale: 0,
       scope: resolved
@@ -371,7 +437,8 @@ export async function runStaticDiscovery(client: JavaIndexClientApi, args: Stati
     // candidate (counted, result PARTIAL) instead of returning READY with a
     // stale line/column.
     const declarationRead = await reader.read(hit.relativePath);
-    if (declarationRead.state === "missing" || (declarationRead.state === "ok" && declarationRead.contentHash !== hit.contentHash)) {
+    const declarationHash = declarationRead.state === "ok" || declarationRead.state === "hashed_only" ? declarationRead.contentHash : undefined;
+    if (declarationRead.state === "missing" || (declarationHash !== undefined && declarationHash !== hit.contentHash)) {
       droppedStale += 1;
       continue;
     }
@@ -393,6 +460,12 @@ export async function runStaticDiscovery(client: JavaIndexClientApi, args: Stati
       matchedBy: [hit.layer === "DOCUMENT" && hit.evidence ? DOCUMENT_MATCH[hit.evidence.sourceKind] ?? "comment" : LAYER_MATCH[hit.layer]],
       binding: ambiguousExact ? "ambiguous" : "source-declaration"
     };
+    if (declarationRead.state === "hashed_only") {
+      // Verified fresh, but too large to preview.
+      candidate.previewOmitted = "file_too_large";
+      candidates.push(candidate);
+      continue;
+    }
     if (declarationRead.state !== "ok") {
       // Not read (cap/deadline): a safe locator with the reason, unverified.
       candidate.previewOmitted = declarationRead.state;
@@ -405,11 +478,12 @@ export async function runStaticDiscovery(client: JavaIndexClientApi, args: Stati
     // declaration head.
     const evidence = hit.evidence ?? { relativePath: hit.relativePath, contentHash: hit.contentHash, startLine: hit.line, endLine: Number.MAX_SAFE_INTEGER };
     const sourceRead = evidence.relativePath === hit.relativePath ? declarationRead : await reader.read(evidence.relativePath);
-    if (sourceRead.state === "missing" || (sourceRead.state === "ok" && sourceRead.contentHash !== evidence.contentHash)) {
+    const sourceHash = sourceRead.state === "ok" || sourceRead.state === "hashed_only" ? sourceRead.contentHash : undefined;
+    if (sourceRead.state === "missing" || (sourceHash !== undefined && sourceHash !== evidence.contentHash)) {
       candidate.previewOmitted = "source_changed";
       staleEvidence += 1;
     } else if (sourceRead.state !== "ok") {
-      candidate.previewOmitted = sourceRead.state;
+      candidate.previewOmitted = sourceRead.state === "hashed_only" ? "file_too_large" : sourceRead.state;
     } else {
       const window = previewWindow(sourceRead.lines, evidence.startLine, evidence.endLine, previewBudget);
       if ("omitted" in window) {

@@ -73,5 +73,6 @@
 - 文档命中在跨路由合并时按实体去重：若同一实体先由 identifier 路由命中，该候选的 preview 仍是声明头。
 - 无元素范围的 statement（重复 id/不匹配标签）不生成可检索文档。
 - 红act规则是有限的名称/形状规则，不声称识别所有密钥；配置文件（properties/yaml）的 key 检索与 canary（K18 的配置部分）不在本轮范围。
-- reconcile 每次对 resource 根下的 XML 读取并计算 hash（无 mtime 快路径）；mapper 数量大的仓库需在 R09/R12 度量。
+- reconcile 每次对 resource 根下的 XML 读取并计算 hash（无 mtime 快路径）；mapper 数量大的仓库需在 R09/R12 度量。（评审修复后：用 `resource_scan` 走 size+mtime 快路径，并记住非 mapper XML。）
+- **更正（R05–R08 评审）**：单独 CR 曾按换行计行，而 tree-sitter 与 rg 只按 LF 计，导致 preview 与声明错位一行（单独 CR 的测试把这种错位固化成了预期）；>2 MiB 的文件会让结果永久 PARTIAL；MyBatis XML 不遵守模块可见性。均已修复，见 `r05-r08-review-fixes.md`。
 - 符号链接仅做词法 repo 内检查；内容必须与索引 hash 一致才会展示，与改动前行为相同。

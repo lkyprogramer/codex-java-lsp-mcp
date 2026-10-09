@@ -1,6 +1,6 @@
 # R05 — 贯通重复 FQN 多候选与编译范围消歧（N01）
 
-**Status**: DONE（GREEN；源码导出层 + parser/SQL 层 + 真实 cold build 运行态。JDT 绑定不在本任务范围）
+**Status**: DONE（R05–R08 评审发现增量路径缺口 P1，已在 `r05-r08-review-fixes.md` 修复）（GREEN；源码导出层 + parser/SQL 层 + 真实 cold build 运行态。JDT 绑定不在本任务范围）
 **源码基线**: `04f8e2d`（R01–R04 审查修复）；RED 在同一基线上取得
 **Date**: 2026-10-09
 
@@ -22,7 +22,7 @@
 2. `selectVisibleDeclaration(candidates, from, locationOf)`：同模块同 sourceSet → 同模块 main（仅 test 引用方）→ 其他模块 main 或位置未知；main 看不到 test，其他模块的 test 不可见。第一个非空层级决定：1 个绑定，多个 `AMBIGUOUS`；引用方位置未知时所有候选同层，重复 FQN 一律 `AMBIGUOUS`。不推断模块间依赖。
 3. `JavaResolutionContext.location`：edge-builder 由被解析文件的 layout 事实填入；`typeLookup(typeText, scopeFile)` 由 scope 文件填入。repo-unique 简单名兜底（步骤 8）只剔除可证明不可见的候选，不增加偏好。
 4. 生产 consumer 全部改为候选语义：`plan-query` 按引用文件位置选择（歧义不播种）；`persistence-edge-builder` 多声明不绑定实体、也不误标 external；MyBatis namespace 重同步刷新全部同名声明；框架层旧 `type:<fqn>` 别名被两个声明共享时不再取最小 id，而是记为 missing；`queryTypes` 精确查找重复 FQN 返回 AMBIGUOUS（ids 进 missingIds）。
-5. `JAVA_FACTS_REVISION` 2→3：旧快照里按最小 id 写入的 refs/edges 整体重建，不与新语义混用。无 SQL schema 变更（`file` 表已有 module/source_root）。
+5. `JAVA_FACTS_REVISION` 2→3。**更正（R05–R08 评审）**：本提交时该常量只进入 `computeExtractorVersion()`，SQLite 索引的复用判定并不检查它，旧库**不会**因此重建（HEAD 上是 R08 的 schema v6 顺带触发了重建）。评审修复已把它写入 meta，并接入 `schemaVersionsMatch`，见 `r05-r08-review-fixes.md`。无 SQL schema 变更（`file` 表已有 module/source_root）。
 
 ## 回归锁与边界
 

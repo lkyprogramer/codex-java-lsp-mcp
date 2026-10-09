@@ -279,8 +279,62 @@ export function writeBundle(db: IndexDatabase, bundle: JavaFileBundle, fileId?: 
       );
     }
     for (const edge of bundle.edges) insertStaticEdge(db, edge, id);
+    const insertRefName = prepareCached(db, "INSERT OR IGNORE INTO type_ref_name(name_sym, file_id) VALUES (?, ?)");
+    for (const name of typeReferenceNames(bundle)) insertRefName.run(internSym(db, name), id);
     return id;
   });
+}
+
+/** Records that a resource XML (mapper or not) was examined at this state. */
+export function recordResourceScan(db: IndexDatabase, relativePath: string, contentHash: string, size: number, mtimeMs: number): void {
+  prepareCached(
+    db,
+    `INSERT INTO resource_scan(path, content_hash, size, mtime_ms) VALUES (?, ?, ?, ?)
+     ON CONFLICT(path) DO UPDATE SET content_hash=excluded.content_hash, size=excluded.size, mtime_ms=excluded.mtime_ms`
+  ).run(relativePath, contentHash, size, mtimeMs);
+}
+
+export function deleteResourceScan(db: IndexDatabase, relativePath: string): void {
+  prepareCached(db, "DELETE FROM resource_scan WHERE path=?").run(relativePath);
+}
+
+const REF_IDENTIFIER = /[A-Za-z_$][A-Za-z0-9_$]*/g;
+
+/**
+ * Lower-cased identifiers a file uses where a type name can appear: every
+ * type reference (text, simple and qualified name, type arguments), import,
+ * call receiver text and annotation name. Over-approximate on purpose: the
+ * set only decides which files an incremental refresh re-resolves.
+ */
+export function typeReferenceNames(bundle: JavaFileBundle): string[] {
+  const names = new Set<string>();
+  const addText = (text: unknown) => {
+    if (typeof text !== "string") return;
+    for (const match of text.matchAll(REF_IDENTIFIER)) names.add(match[0].toLowerCase());
+  };
+  const visit = (value: unknown, parentKey: string | undefined): void => {
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item, parentKey);
+      return;
+    }
+    if (!value || typeof value !== "object") return;
+    const record = value as Record<string, unknown>;
+    if ("resolution" in record && typeof record.simpleName === "string") {
+      addText(record.text);
+      addText(record.simpleName);
+      addText(record.qualifiedName);
+    }
+    if (parentKey === "annotations") addText(record.name);
+    addText(record.receiverText);
+    for (const [key, child] of Object.entries(record)) {
+      if (child && typeof child === "object") visit(child, key);
+    }
+  };
+  for (const entry of bundle.file.imports) addText(entry.qualifiedName);
+  visit(bundle.types, "types");
+  visit(bundle.fields, "fields");
+  visit(bundle.methods, "methods");
+  return [...names].sort();
 }
 
 function fileIdByPath(db: IndexDatabase, path: string): number {

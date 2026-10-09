@@ -70,7 +70,8 @@ const SIGNATURE_MAX_LINES = 5;
 const SIGNATURE_MAX_CHARS = 300;
 
 function lineAt(content: string, line: number, maxChars: number): string {
-  const lines = content.split(/\r\n|\n|\r/);
+  // Same line numbering as the parser ranges: LF ends a line.
+  const lines = content.split(/\r?\n/);
   const text = lines[line - 1] ?? "";
   return text.length > maxChars ? `${text.slice(0, maxChars)}…` : text;
 }
@@ -103,20 +104,29 @@ export function redactSecretLiterals(text: string): string {
   );
 }
 
-// A secret-named key directly assigned a literal on the same line:
-// `String API_TOKEN = "..."`, `"password": "..."`. Name-based, so it also
-// catches short values the value-shape test misses; calls such as
-// `tokenizer.split(",")` are not assignments and keep their source text. It
-// is a limited rule, not a claim to recognise every secret.
-const SECRET_ASSIGNMENT_PATTERN = /(secret|token|password|passwd|credential|api[_-]?key|authorization)[\w.-]*["']?\s*[=:]\s*"/i;
+// A secret-named key given a literal on the same line: assigned
+// (`String API_TOKEN = "..."`, `"password": "..."`, `db.password='...'`) or
+// passed to a secret-named call (`setPassword("...")`, `.apiKey("...")`).
+// The key word must end an identifier word (camelCase/`_`/`.` boundary), so
+// `tokenizerName = "ws"` and `tokenizer.split(",")` keep their source text.
+// Name-based, so it also catches short values the value-shape test misses;
+// a limited per-line rule (text blocks and multi-line literals are not
+// covered), not a claim to recognise every secret.
+const SECRET_KEY_WORD = "(?:[Ss]ecret|SECRET|[Tt]oken|TOKEN|[Pp]assw(?:or)?d|PASSW(?:OR)?D|[Cc]redentials?|CREDENTIALS?|[Aa]pi[_-]?[Kk]ey|API[_-]?KEY|[Aa]uthorization|AUTHORIZATION)(?![a-z])";
+const SECRET_ASSIGNMENT_PATTERN = new RegExp(`${SECRET_KEY_WORD}(?:[A-Z_.-][\\w.-]*)?["']?\\s*[=:]\\s*["']|${SECRET_KEY_WORD}\\s*\\(\\s*["']`);
+const ANY_LITERAL = /"([^"]{1,200})"|'([^']{1,200})'/g;
 
 /** Preview-side redaction of one physical source line (terminator kept). */
 export function redactPreviewLine(line: string): string {
   const redacted = redactSecretLiterals(line);
-  if (!SECRET_ASSIGNMENT_PATTERN.test(redacted)) return redacted;
-  return redacted.replace(/"([^"]{1,200})"/g, (literal, value: string) =>
-    value === "<value-redacted>" || SAFE_VALUE_PATTERN.test(value) ? literal : '"<value-redacted>"'
-  );
+  // The key is judged on the original line: the literal rule may already
+  // have redacted a quoted key (`"password": ...`).
+  if (!SECRET_ASSIGNMENT_PATTERN.test(line)) return redacted;
+  return redacted.replace(ANY_LITERAL, (literal, double: string | undefined, single: string | undefined) => {
+    const value = double ?? single ?? "";
+    if (value === "<value-redacted>" || SAFE_VALUE_PATTERN.test(value)) return literal;
+    return double !== undefined ? '"<value-redacted>"' : "'<value-redacted>'";
+  });
 }
 
 function frameworkKeyText(annotationName: string, argumentsText: string | undefined): string {
@@ -136,10 +146,15 @@ const ROUTE_ANNOTATIONS = new Set([
   "FeignClient", "Mapper", "WebServiceRoute", "MessageMapping"
 ]);
 
+/** Whether a mapper XML may bind to this bundle's declaration of its
+ *  namespace (module visibility, see myBatisBindingFilter); default: yes. */
+export type MyBatisBindingFilter = (resource: MyBatisMapperResourceFacts, bundle: JavaFileBundle) => boolean;
+
 type DocBuilderArgs = {
   bundle: JavaFileBundle;
   content?: string;
   myBatisResources?: readonly MyBatisMapperResourceFacts[];
+  bindsMyBatis?: MyBatisBindingFilter;
 };
 
 function methodsByOwnerAndName(bundle: JavaFileBundle): Map<string, JavaMethodFacts[]> {
@@ -158,14 +173,17 @@ function methodsByOwnerAndName(bundle: JavaFileBundle): Map<string, JavaMethodFa
 // statement without a located element range has no source range and gets no
 // document - it is never re-labelled with Java lines.
 function pushMyBatisDocuments(
+  bundle: JavaFileBundle,
   type: JavaTypeFacts,
   methods: ReadonlyMap<string, JavaMethodFacts[]>,
   resources: readonly MyBatisMapperResourceFacts[],
-  push: (input: DocInput) => void
+  push: (input: DocInput) => void,
+  bindsMyBatis?: MyBatisBindingFilter
 ): void {
   if (!type.fqn) return;
   for (const resource of resources) {
     if (resource.namespace !== type.fqn) continue;
+    if (bindsMyBatis && !bindsMyBatis(resource, bundle)) continue;
     for (const statement of resource.statements) {
       if (!statement.range) continue;
       for (const method of methods.get(`${type.typeId}#${statement.id}`) ?? []) {
@@ -198,15 +216,19 @@ function collector(): { docs: SearchDocument[]; push: (input: DocInput) => void 
 
 /** Only the XML-sourced documents of one Java bundle: used when a mapper XML
  *  changes while the Java file (and its own documents) did not. */
-export function buildMyBatisSearchDocuments(args: { bundle: JavaFileBundle; myBatisResources: readonly MyBatisMapperResourceFacts[] }): SearchDocument[] {
+export function buildMyBatisSearchDocuments(args: {
+  bundle: JavaFileBundle;
+  myBatisResources: readonly MyBatisMapperResourceFacts[];
+  bindsMyBatis?: MyBatisBindingFilter;
+}): SearchDocument[] {
   const { docs, push } = collector();
   const methods = methodsByOwnerAndName(args.bundle);
-  for (const type of args.bundle.types) pushMyBatisDocuments(type, methods, args.myBatisResources, push);
+  for (const type of args.bundle.types) pushMyBatisDocuments(args.bundle, type, methods, args.myBatisResources, push, args.bindsMyBatis);
   return docs;
 }
 
 export function buildSearchDocuments(args: DocBuilderArgs): SearchDocument[] {
-  const { bundle, content, myBatisResources = [] } = args;
+  const { bundle, content, myBatisResources = [], bindsMyBatis } = args;
   const { file } = bundle;
   const { docs, push } = collector();
   const java = (startLine: number, endLine: number): SearchDocumentSource => ({
@@ -236,7 +258,7 @@ export function buildSearchDocuments(args: DocBuilderArgs): SearchDocument[] {
         text: frameworkKeyText(annotation.name, annotation.argumentsText)
       });
     }
-    pushMyBatisDocuments(type, methods, myBatisResources, push);
+    pushMyBatisDocuments(bundle, type, methods, myBatisResources, push, bindsMyBatis);
   }
 
   for (const method of bundle.methods) {

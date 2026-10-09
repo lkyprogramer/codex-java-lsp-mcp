@@ -206,7 +206,10 @@ const TEXT_BLOB_ALLOW = new Set([
   // T05: document kind is source metadata and content_hash pins each document
   // to the file content it was derived from (freshness anchor).
   "search_doc.kind", "search_doc.content_hash",
-  "source_root_coverage.root", "source_root_coverage.state"
+  "source_root_coverage.root", "source_root_coverage.state",
+  // R08 review: one row per resource XML ever examined (same shape as
+  // mybatis_resource's path/hash), so reconcile can skip unchanged XML.
+  "resource_scan.path", "resource_scan.content_hash"
 ]);
 
 test("schema v5 has no facts on reconstructable tables and no extra TEXT/BLOB columns", () => {

@@ -5,6 +5,8 @@ import {
   tokenize,
   ENTITY_SEARCH_DEFAULT_LIMIT,
   ENTITY_SEARCH_MAX_LIMIT,
+  matchesExactSelector,
+  parseExactSelector,
   type EntityHit,
   type EntityLayer,
   type EntityRecord,
@@ -133,24 +135,10 @@ export function searchEntities(
 
 // R07 reference for the detailed (discovery) path: same routing as
 // SqlEntitySearch.searchDetailed - an exact selector resolves through the
-// name layers only (FQN, type simple name, method simple name) and a miss is
-// a miss; text merges both BM25 routes; every route is read to cap+1 so
+// whole selector only (parseExactSelector/matchesExactSelector) and a miss
+// is a miss; text merges both BM25 routes; every route is read to cap+1 so
 // `selectionLimited` says whether more candidates existed. Scope filters the
 // pool before anything else. No physical work, so no budget truncation.
-function oracleSimpleNameRoute(pool: readonly EntityRecord[], task: string, kind: "type" | "method"): EntityRecord[] {
-  const nameLexemes = identifierLexemes(task);
-  const hits = pool.filter(entity => entity.kind === kind && nameLexemes.includes(entity.simpleName.toLowerCase()));
-  const df = new Map<string, number>();
-  for (const entity of hits) df.set(entity.simpleName.toLowerCase(), (df.get(entity.simpleName.toLowerCase()) ?? 0) + 1);
-  return hits.sort((left, right) => {
-    const lengthDelta = right.simpleName.length - left.simpleName.length;
-    if (lengthDelta !== 0) return lengthDelta;
-    const uniqueDelta = (df.get(left.simpleName.toLowerCase()) ?? 0) - (df.get(right.simpleName.toLowerCase()) ?? 0);
-    if (uniqueDelta !== 0) return uniqueDelta;
-    return left.entityId.localeCompare(right.entityId);
-  });
-}
-
 export function searchEntitiesDetailed(
   entities: readonly EntityRecord[],
   task: string,
@@ -170,17 +158,12 @@ export function searchEntitiesDetailed(
   if (task.trim().length === 0) return { ...base, hits: [], selectionLimited: false };
   const intent = mode === "auto" ? classifyQuery(task, mode) : mode;
   if (intent === "exact") {
-    const fqn = extractFqnCandidates(task)
-      .flatMap(candidate => pool.filter(entity => entity.fqn === candidate || entity.fqn.endsWith(`.${candidate}`)))
-      .filter((entity, index, all) => all.findIndex(item => item.entityId === entity.entityId) === index)
-      .sort((left, right) => left.entityId.localeCompare(right.entityId));
-    const routes: Array<[EntityRecord[], EntityLayer]> = [
-      [fqn, "FQN"],
-      [oracleSimpleNameRoute(pool, task, "type"), "SIMPLE_NAME"],
-      [oracleSimpleNameRoute(pool, task, "method"), "SIMPLE_NAME"]
-    ];
-    for (const [found, layer] of routes) {
+    for (const alternative of parseExactSelector(task)) {
+      const found = pool
+        .filter(entity => matchesExactSelector(alternative, entity))
+        .sort((left, right) => left.entityId.localeCompare(right.entityId));
       if (found.length === 0) continue;
+      const layer: EntityLayer = alternative.kind === "type" && alternative.qualifier === undefined ? "SIMPLE_NAME" : "FQN";
       return {
         ...base,
         hits: found.slice(0, cap).map(entity => toHit(entity, layer, 1)),

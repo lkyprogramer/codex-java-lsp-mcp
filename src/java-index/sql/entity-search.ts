@@ -11,6 +11,8 @@ import {
   DEFAULT_QUERY_MAX_POSTINGS,
   ENTITY_SEARCH_DEFAULT_LIMIT,
   ENTITY_SEARCH_MAX_LIMIT,
+  matchesExactSelector,
+  parseExactSelector,
   type DetailedEntitySearchResult,
   type EntityHit,
   type EntityHitEvidence,
@@ -160,19 +162,25 @@ function simpleNameHits(db: IndexDatabase, task: string, cap: number, scope?: Sc
 }
 
 /**
- * R07: an exact selector resolves through the name layers only - FQN, then a
- * type simple name, then (no type of that name) a method simple name. A miss
- * is a miss: it never falls through to BM25. Several declarations for one
- * selector are reported as ambiguous.
+ * R07: an exact selector resolves as a WHOLE selector (parseExactSelector):
+ * candidates come from the simple-name index, then must match every
+ * qualifier segment. A miss is a miss: no word-level match and no fall
+ * through to BM25. Several declarations for one selector are ambiguous.
  */
 function exactHits(db: IndexDatabase, task: string, cap: number, scope: ScopeSql): { hits: EntityHit[]; outcome: "match" | "miss" | "ambiguous" } {
-  for (const route of [
-    () => fqnHits(db, task, cap + 1, scope),
-    () => simpleNameHits(db, task, cap + 1, scope, "type"),
-    () => simpleNameHits(db, task, cap + 1, scope, "method")
-  ]) {
-    const hits = route();
-    if (hits.length > 0) return { hits, outcome: hits.length > 1 ? "ambiguous" : "match" };
+  for (const alternative of parseExactSelector(task)) {
+    const found: EntityRow[] = [];
+    for (const row of prepareCached(
+      db,
+      `${ENTITY_SELECT} WHERE e.kind=? AND e.simple_name_lc=?${scope?.sql ?? ""}`
+    ).iterate(alternative.kind, alternative.name.toLowerCase(), ...(scope?.params ?? [])) as Iterable<Record<string, SQLOutputValue>>) {
+      const entity = loadEntityRow(db, row);
+      if (matchesExactSelector(alternative, entity)) found.push(entity);
+    }
+    if (found.length === 0) continue;
+    found.sort((left, right) => left.entityId.localeCompare(right.entityId));
+    const hits = found.slice(0, cap + 1).map(entity => toHit(entity, alternative.kind === "type" && alternative.qualifier === undefined ? "SIMPLE_NAME" : "FQN", 1));
+    return { hits, outcome: found.length > 1 ? "ambiguous" : "match" };
   }
   return { hits: [], outcome: "miss" };
 }

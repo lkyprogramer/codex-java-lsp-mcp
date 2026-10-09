@@ -1,6 +1,6 @@
 # R07 — exact / terms / limit 统一语义（Q02 / Q04 / Q05）
 
-**Status**: DONE（GREEN；源码导出层 + SQL 层 + 真实 stdio MCP `java_symbol` 运行态）
+**Status**: DONE（R05–R08 评审发现 exact 按单词命中 P1，已在 `r05-r08-review-fixes.md` 修复）（GREEN；源码导出层 + SQL 层 + 真实 stdio MCP `java_symbol` 运行态）
 **源码基线**: `77d7e61`（R06）；RED 在该提交的干净 detached worktree 上取得（取证后已移除）
 **Date**: 2026-10-09
 
@@ -59,4 +59,5 @@
 - 入口已过期的 exact 仍返回成功（Q03）与阶段 deadline 检查属 R09。
 - `selectionLimited` 表示“排名截断、还有更多”，不代表索引不完整；索引/预算不完整仍由 `scopeState=PARTIAL` 与 `truncated` 表达。
 - exact 的方法简单名路由在没有同名类型时才启用；同一 selector 命中多个重载按 `ambiguous` 上报，不做签名级消歧（需要签名时使用 `Owner#method(...)`）。
-- 工具 zod schema 的 `limit` 仍是各操作共用的 `max(300)`（references 等操作使用）；静态 query 的 1..20 在 discovery 边界强制并写入工具描述。
+- 工具 zod schema 的 `limit` 仍是各操作共用的 `max(300)`（references 等操作使用）；静态 query 的 1..20 在 discovery 边界强制并写入工具描述。（评审修复后描述文本由同一常量生成。）
+- **更正（R05–R08 评审）**：本提交的 exact 简单名路由按 selector 中的单个词命中（`demo.MissingService` 命中 `demo.Demo` 并报 `match`），`$` 截断后又做 FQN 后缀匹配；Q02 能通过只是因为样例里碰巧没有 `Demo` 类型。已改为整体 selector 匹配，见 `r05-r08-review-fixes.md`。

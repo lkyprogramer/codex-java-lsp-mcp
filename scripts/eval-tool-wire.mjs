@@ -17,11 +17,13 @@ const ERROR_TEXT_LIMIT = 2_000;
 const sha256 = text => createHash("sha256").update(text, "utf8").digest("hex");
 const byteLength = text => Buffer.byteLength(text, "utf8");
 
-/** Lines with their own terminators (CRLF/LF/CR); a trailing terminator does
+/** Lines with their own terminators (LF or CRLF); a trailing terminator does
  * not create a phantom empty line. Joining the result reproduces the input. */
 export function splitSourceLines(text) {
   if (typeof text !== "string" || text.length === 0) return [];
-  const lines = text.split(/(?<=\r\n|\n|\r(?!\n))/);
+  // Line numbers follow the index parser and rg: a line ends at LF; a lone
+  // CR is line content (CRLF still keeps its CR with the line).
+  const lines = text.split(/(?<=\n)/);
   if (lines[lines.length - 1] === "") lines.pop();
   return lines;
 }

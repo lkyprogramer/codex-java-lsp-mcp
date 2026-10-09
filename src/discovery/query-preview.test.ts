@@ -14,12 +14,14 @@ import {
   DISCOVERY_PREVIEW_LINES,
   DISCOVERY_PREVIEW_MAX_BYTES,
   DISCOVERY_REQUEST_PREVIEW_MAX_BYTES,
+  DISCOVERY_REQUEST_READ_MAX_BYTES,
   RequestSourceReader,
   runStaticDiscovery,
   splitSourceLines,
   type DiscoveryResult
 } from "./query.js";
 import type { DetailedEntitySearchResult, EntityHit } from "../java-index/entity-search.js";
+import { redactPreviewLine } from "./search-document.js";
 import type { JavaIndexClientApi } from "../java-index/java-index-client-api.js";
 
 const sha = (text: string) => createHash("sha256").update(text, "utf8").digest("hex");
@@ -127,17 +129,23 @@ test("R08: preview bytes are capped per request (16 KiB); later candidates keep 
   });
 });
 
-test("R08: per-file (2 MiB) and per-request (8 MiB) read caps leave unverified locators and PARTIAL", async () => {
+test("R08: a file over 2 MiB is hash-verified by streaming (READY, no preview); the 8 MiB request cap leaves unverified locators", async () => {
   const big = `class Big {}\n${"/".repeat(DISCOVERY_FILE_READ_MAX_BYTES)}\n`;
   const nearCap = `class N {}\n${"/".repeat(DISCOVERY_FILE_READ_MAX_BYTES - 100)}\n`;
-  const files: Record<string, string> = { "Big.java": big };
+  const huge = `class H {}\n${"/".repeat(DISCOVERY_REQUEST_READ_MAX_BYTES)}\n`;
+  const files: Record<string, string> = { "Big.java": big, "H.java": huge };
   for (let i = 0; i < 5; i += 1) files[`N${i}.java`] = nearCap;
   await withRepo(files, async root => {
-    const tooLarge = await discover(root, [hit("Big.java", big)]);
-    assert.equal(tooLarge.candidates[0]!.previewOmitted, "file_too_large");
-    assert.equal(tooLarge.candidates[0]!.declaration.relativePath, "Big.java", "a safe locator with the reason");
-    assert.equal(tooLarge.scopeState, "PARTIAL", "an unverified locator is not READY");
-    assert.equal(tooLarge.stopReason, "read_budget");
+    const large = await discover(root, [hit("Big.java", big)]);
+    assert.equal(large.candidates[0]!.previewOmitted, "file_too_large");
+    assert.equal(large.candidates[0]!.preview, undefined);
+    assert.equal(large.scopeState, "READY", "the locator is verified fresh even without a preview");
+    const staleLarge = await discover(root, [hit("Big.java", `${big}changed`)]);
+    assert.equal(staleLarge.droppedStale, 1, "a changed large file is still detected");
+    const unverifiable = await discover(root, [hit("H.java", huge)]);
+    assert.equal(unverifiable.candidates[0]!.previewOmitted, "file_too_large");
+    assert.equal(unverifiable.scopeState, "PARTIAL", "over the request read budget the locator is unverified");
+    assert.equal(unverifiable.stopReason, "read_budget");
     const r = await discover(root, [0, 1, 2, 3, 4].map(i => hit(`N${i}.java`, nearCap)));
     assert.deepEqual(r.candidates.map(c => c.previewOmitted === "read_budget"), [false, false, false, false, true],
       "four ~2 MiB files fit in 8 MiB, the fifth is not read");
@@ -172,7 +180,7 @@ test("R08: each unique file is read once per request and its hash is recomputed 
   });
 });
 
-test("K09/R08: CRLF, lone CR, UTF-8/emoji and EOF ranges map to physical lines", async () => {
+test("K09/R08: CRLF, lone CR, UTF-8/emoji and EOF ranges use the parser's LF line numbering", async () => {
   const crlf = "package demo;\r\nclass A {\r\n}\r\n";
   const cr = "package demo;\rclass A {\r}\r";
   const emoji = "package demo;\n// 冲正 😀😀\nclass A {}";
@@ -181,13 +189,14 @@ test("K09/R08: CRLF, lone CR, UTF-8/emoji and EOF ranges map to physical lines",
     assert.equal(c.preview, "class A {\r\n}\r\n", "CRLF stays one terminator per line, bytes untouched");
     assert.deepEqual([c.evidenceRange!.startLine, c.evidenceRange!.endLine], [2, 3]);
     const r = (await discover(root, [hit("R.java", cr, 1)])).candidates[0]!;
-    assert.deepEqual([r.evidenceRange!.startLine, r.evidenceRange!.endLine], [1, 3]);
+    assert.deepEqual([r.evidenceRange!.startLine, r.evidenceRange!.endLine], [1, 1], "a lone CR is line content, as for tree-sitter and rg");
+    assert.equal(r.preview, cr);
     const u = (await discover(root, [hit("U.java", emoji, 2)])).candidates[0]!;
     assert.equal(u.preview, "// 冲正 😀😀\nclass A {}", "the last line without terminator is still a line");
     assert.deepEqual([u.evidenceRange!.startLine, u.evidenceRange!.endLine], [2, 3]);
     const eof = await discover(root, [hit("U.java", emoji, 4)]);
     assert.equal(eof.candidates[0]!.previewOmitted, "range_invalid", "a line past EOF is never previewed");
-    assert.equal(splitSourceLines("a\r\nb\rc\n").length, 3);
+    assert.deepEqual(splitSourceLines("a\r\nb\rc\n"), ["a\r\n", "b\rc\n"]);
     assert.ok(DISCOVERY_PREVIEW_LINES >= 3);
   });
 });
@@ -208,6 +217,24 @@ test("R08: a recognised credential is redacted and the preview is not source evi
     assert.equal(candidate.previewKind, "redacted-preview");
     assert.ok(!JSON.stringify(r).includes(canary), "the canary appears nowhere in the result");
   });
+});
+
+test("R08 review: preview redaction covers setter/call, quoted-key and single-quote shapes; identifier words that merely contain a key word stay source", () => {
+  const redacted = [
+    'ds.setPassword("hunter2");',
+    "db.password='pw12'",
+    '"password": "p1",',
+    'String accessToken = "t1";',
+    'builder.apiKey("k1")',
+    'SECRET_KEY = "s1"'
+  ];
+  for (const line of redacted) {
+    const out = redactPreviewLine(line);
+    assert.ok(/<value-redacted>/.test(out) && !/hunter2|pw12|"p1"|t1|k1|s1/.test(out), `${line} -> ${out}`);
+  }
+  for (const line of ['String tokenizerName = "ws";', 'parts = tokenizer.split(",");', 'String path = "/a/b";', 'String label = tokenStore.name("ws");']) {
+    assert.equal(redactPreviewLine(line), line, line);
+  }
 });
 
 test("P01/R08: a document hit previews its own evidence source (XML), verified against the XML hash", async () => {

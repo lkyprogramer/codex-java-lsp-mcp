@@ -5,13 +5,21 @@
 //      cleared the plan's savedTokens>=200 merge gate).
 import { z } from "zod";
 import { clampLimit, normalizeRepoFile } from "../repo-layout.js";
-import { runStaticDiscovery } from "../discovery/query.js";
+import { DISCOVERY_DEFAULT_LIMIT, DISCOVERY_MAX_LIMIT, runStaticDiscovery } from "../discovery/query.js";
 import type { JavaIndexClientApi } from "../java-index/java-index-client-api.js";
 import type { DeadlineBudget } from "../runtime/deadline-budget.js";
 import type { LspLocation, LspLocationLink } from "../jdtls-session.js";
 import type { RequestContext } from "../runtime/request-context.js";
 import type { ToolContext } from "./context.js";
 import { compact, describeFile, describeLocation, detailSchema, isDiagnosticDetail, normalizeHover, symbolKindName, type ResponseDetail } from "./shared.js";
+
+// R07: the static query limit contract comes from the one discovery/SQL
+// constant. The schema field is shared with references/jdt (clamped at
+// SYMBOL_LIMIT_MAX); a static query outside 1..DISCOVERY_MAX_LIMIT is
+// rejected by discovery, never clamped, and the description says so.
+export const SYMBOL_LIMIT_MAX = 300;
+export const STATIC_QUERY_LIMIT_DESCRIPTION =
+  `limit 1..${DISCOVERY_MAX_LIMIT} (default ${DISCOVERY_DEFAULT_LIMIT}; larger is rejected; selectionLimited=true means more matched)`;
 
 export const symbolSchema = {
   projectId: z.string().min(1).optional(),
@@ -21,7 +29,7 @@ export const symbolSchema = {
   file: z.string().optional(),
   line: z.number().int().positive().optional(),
   column: z.number().int().positive().optional(),
-  limit: z.number().int().positive().max(300).optional(),
+  limit: z.number().int().positive().max(SYMBOL_LIMIT_MAX).optional(),
   semanticTimeoutMs: z.number().int().positive().max(10000).default(3000),
   includeDeclaration: z.boolean().default(false),
   positionsPerFile: z.number().int().positive().max(20).default(3),

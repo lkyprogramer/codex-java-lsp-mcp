@@ -20,6 +20,7 @@ import {
   commitSearchDocStats,
   deleteSearchDocumentsForPath,
   rebuildSearchDocDf,
+  myBatisBindingFilter,
   replaceSearchDocuments,
   replaceSearchDocumentsForSource
 } from "../java-index/sql/search-docs.js";
@@ -27,7 +28,7 @@ import { buildMyBatisSearchDocuments, buildSearchDocuments, type SearchDocument 
 import { SqlFactsStore } from "../java-index/sql/facts-store.js";
 import { SqlKnowledgeGraph } from "../java-index/sql/knowledge-graph.js";
 import { buildSqlRegistryView } from "../java-index/sql/registry-view.js";
-import { readBundle, readMyBatisResource, replaceBundleEdges, updateBundleFacts, writeBundle, writeMyBatisResource } from "../java-index/sql/rows.js";
+import { deleteResourceScan, readBundle, readMyBatisResource, recordResourceScan, replaceBundleEdges, updateBundleFacts, writeBundle, writeMyBatisResource } from "../java-index/sql/rows.js";
 import { internSym, symId } from "../java-index/sql/sym.js";
 import { readIndexCounts, readMeta, refreshIndexCounts, writeBuildProgress, writeMeta } from "./progress.js";
 
@@ -103,6 +104,44 @@ function dependentPaths(db: IndexDatabase, ids: readonly string[], exclude: Read
   return [...paths];
 }
 
+/** (fqn, path) of every named type a file declares, with its simple name. */
+function declaredTypes(db: IndexDatabase, relativePath: string): Map<string, string> {
+  const rows = prepareCached(
+    db,
+    "SELECT t.fqn AS fqn, t.simple_name AS simpleName FROM type t JOIN file f ON f.id=t.file_id WHERE f.path=? AND t.fqn IS NOT NULL"
+  ).all(relativePath) as Array<{ fqn: string; simpleName: string }>;
+  return new Map(rows.map(row => [`${row.fqn}|${relativePath}`, row.simpleName]));
+}
+
+/**
+ * R05 review: a reference left AMBIGUOUS (several visible declarations) has
+ * no edge, and a reference bound to A has no edge to a newly added B, so
+ * edge-based dependents miss them. When the set of (fqn, path) declarations
+ * changes - added, removed or moved types - every file that uses one of the
+ * changed simple names in a type position is re-resolved as well.
+ */
+function nameDependentPaths(
+  db: IndexDatabase,
+  before: ReadonlyMap<string, string>,
+  after: ReadonlyMap<string, string>,
+  exclude: ReadonlySet<string>
+): string[] {
+  const names = new Set<string>();
+  for (const [key, simpleName] of before) if (!after.has(key)) names.add(simpleName.toLowerCase());
+  for (const [key, simpleName] of after) if (!before.has(key)) names.add(simpleName.toLowerCase());
+  const nameSyms = [...names].map(name => symId(db, name)).filter((sym): sym is number => sym !== undefined);
+  if (nameSyms.length === 0) return [];
+  const paths = new Set<string>();
+  for (const chunk of bindChunks(nameSyms)) {
+    const rows = prepareCached(
+      db,
+      `SELECT DISTINCT f.path AS path FROM type_ref_name r JOIN file f ON f.id=r.file_id WHERE r.name_sym IN ${inClause(chunk.length)}`
+    ).all(...chunk) as Array<{ path: string }>;
+    for (const row of rows) if (!exclude.has(row.path)) paths.add(row.path);
+  }
+  return [...paths];
+}
+
 function resolveTouched(db: IndexDatabase, relativePaths: readonly string[]): void {
   const store = new SqlFactsStore(db);
   for (const relativePath of relativePaths) {
@@ -142,13 +181,14 @@ function rewriteGraphAndEntities(
   }
   const repoRoot = readMeta(db, "repoRoot") ?? "";
   const resources = listMyBatisResources(db);
+  const bindsMyBatis = myBatisBindingFilter(db);
   for (const relativePath of rewritten) {
     const bundle = readBundle(db, relativePath);
     if (!bundle) continue;
     for (const record of recordsFromBundle(bundle)) writeEntityRecord(db, record);
     // Same-transaction document update keeps text and facts on one hash.
     const content = repoRoot ? readFileSyncSafe(path.join(repoRoot, relativePath)) : undefined;
-    replaceSearchDocuments(db, bundle.file.relativePath, buildSearchDocuments({ bundle, content, myBatisResources: resources }));
+    replaceSearchDocuments(db, bundle.file.relativePath, buildSearchDocuments({ bundle, content, myBatisResources: resources, bindsMyBatis }));
   }
   rebuildEntityDf(db);
   rebuildSearchDocDf(db);
@@ -225,17 +265,43 @@ function applyParsedRefresh(
   const exclude = new Set([...deleted, ...changed]);
   const oldIds = [...deleted, ...changed].flatMap(relativePath => ownedIds(db, relativePath));
   const dependents = new Set(dependentPaths(db, oldIds, exclude));
+  const declaredBefore = new Map([...deleted, ...changed].flatMap(relativePath => [...declaredTypes(db, relativePath)]));
   withTransaction(db, () => {
     for (const relativePath of deleted) prepareCached(db, "DELETE FROM file WHERE path=?").run(relativePath);
     for (const bundle of bundles) writeBundle(db, bundle);
     for (const relativePath of dependentPaths(db, [...oldIds, ...changed.flatMap(item => ownedIds(db, item))], exclude)) {
       dependents.add(relativePath);
     }
+    const declaredAfter = new Map(changed.flatMap(relativePath => [...declaredTypes(db, relativePath)]));
+    for (const relativePath of nameDependentPaths(db, declaredBefore, declaredAfter, exclude)) dependents.add(relativePath);
     const rewritten = [...changed, ...dependents].sort();
     resolveTouched(db, rewritten);
     rewriteGraphAndEntities(db, generation, deleted, rewritten);
+    rebindChangedNamespaces(db, declaredBefore, declaredAfter);
     finishIndex(db, generation, roots);
   });
+}
+
+/**
+ * A declaration of a mapper namespace appeared, vanished or moved: the XML
+ * binding visibility (myBatisBindingFilter) may change for owners that were
+ * not rewritten, so every XML of that namespace rebinds from scratch.
+ */
+function rebindChangedNamespaces(db: IndexDatabase, before: ReadonlyMap<string, string>, after: ReadonlyMap<string, string>): void {
+  const fqns = new Set<string>();
+  for (const key of before.keys()) if (!after.has(key)) fqns.add(key.slice(0, key.lastIndexOf("|")));
+  for (const key of after.keys()) if (!before.has(key)) fqns.add(key.slice(0, key.lastIndexOf("|")));
+  let touched = false;
+  for (const fqn of fqns) {
+    for (const row of prepareCached(db, "SELECT path FROM mybatis_resource WHERE namespace=?").all(fqn) as Array<{ path: string }>) {
+      replaceResourceDocuments(db, row.path, readMyBatisResource(db, row.path));
+      touched = true;
+    }
+  }
+  if (touched) {
+    rebuildSearchDocDf(db);
+    commitSearchDocStats(db);
+  }
 }
 
 async function applyRefresh(
@@ -298,7 +364,7 @@ function replaceResourceDocuments(db: IndexDatabase, relativePath: string, resou
     for (const ownerPath of [...owners].sort()) {
       const bundle = readBundle(db, ownerPath);
       if (!bundle) continue;
-      for (const document of buildMyBatisSearchDocuments({ bundle, myBatisResources: [resource] })) {
+      for (const document of buildMyBatisSearchDocuments({ bundle, myBatisResources: [resource], bindsMyBatis: myBatisBindingFilter(db) })) {
         documents.push({ ownerPath, document });
       }
     }
@@ -320,6 +386,7 @@ async function applyResources(
   const deletePaths: string[] = [];
   for (const input of deletedInputs) deletePaths.push((await resolveInput(repoRoot, input)).rel);
   const writes: Array<{ relativePath: string; facts: ReturnType<typeof extractMyBatisMapperFacts> }> = [];
+  const scans: Array<{ relativePath: string; contentHash: string; size: number; mtimeMs: number }> = [];
   for (const relativePath of deletePaths) {
     const before = readMyBatisResource(db, relativePath);
     if (before?.namespace) namespaces.add(before.namespace);
@@ -329,8 +396,10 @@ async function applyResources(
     const relativePath = resolved.rel;
     const before = readMyBatisResource(db, relativePath);
     try {
+      const info = await stat(resolved.abs);
       const content = await readFile(resolved.abs, "utf8");
       const contentHash = createHash("sha256").update(content, "utf8").digest("hex");
+      scans.push({ relativePath, contentHash, size: info.size, mtimeMs: info.mtimeMs });
       if (before?.contentHash === contentHash) continue;
       const facts = extractMyBatisMapperFacts({ relativePath, content, contentHash, generation });
       // A non-mapper XML that was never indexed stays a no-op (reconcile
@@ -345,6 +414,8 @@ async function applyResources(
     }
   }
   withTransaction(db, () => {
+    for (const scan of scans) recordResourceScan(db, scan.relativePath, scan.contentHash, scan.size, scan.mtimeMs);
+    for (const relativePath of deletePaths) deleteResourceScan(db, relativePath);
     for (const relativePath of deletePaths) prepareCached(db, "DELETE FROM mybatis_resource WHERE path=?").run(relativePath);
     for (const write of writes) {
       if (write.facts) {
@@ -390,29 +461,44 @@ function stampFileTimes(db: IndexDatabase, stamps: readonly MtimeStamp[]): void 
 }
 
 /**
- * R08/K21: reconcile also covers mapper XML. A worktree whose XML differs
+ * R08/K21: reconcile also covers resource XML. A worktree whose XML differs
  * from the copied sibling DB while every Java hash matches must still replace
- * the XML-sourced evidence before READY. Content hash decides, not mtime.
+ * the XML-sourced evidence before READY. Like Java: equal size+mtime skips,
+ * otherwise the content hash decides (an mtime-only change is restamped, not
+ * reparsed). Non-mapper XML is remembered in resource_scan, so it is not
+ * reparsed on every reconcile.
  */
-async function changedResources(
+export async function changedResources(
   db: IndexDatabase,
   repoRoot: string,
   layout: LayoutContext
-): Promise<{ changed: string[]; deleted: string[] }> {
-  const indexed = new Map(
-    (prepareCached(db, "SELECT path, content_hash AS contentHash FROM mybatis_resource").all() as Array<{ path: string; contentHash: string | null }>)
-      .map(row => [row.path, row.contentHash])
+): Promise<{ changed: string[]; deleted: string[]; stamps: Array<{ path: string; hash: string; size: number; mtimeMs: number }> }> {
+  const scanned = new Map(
+    (prepareCached(db, "SELECT path, content_hash AS contentHash, size AS size, mtime_ms AS mtime FROM resource_scan").all() as Array<{
+      path: string; contentHash: string; size: number | null; mtime: number | null;
+    }>).map(row => [row.path, row])
   );
+  const known = new Set([
+    ...scanned.keys(),
+    ...(prepareCached(db, "SELECT path FROM mybatis_resource").all() as Array<{ path: string }>).map(row => row.path)
+  ]);
   const changed: string[] = [];
+  const stamps: Array<{ path: string; hash: string; size: number; mtimeMs: number }> = [];
   const seen = new Set<string>();
   for (const file of await discoverMyBatisResourceFiles(repoRoot, layout)) {
     seen.add(file.relativePath);
-    const previous = indexed.get(file.relativePath);
-    // Unindexed XML: applyResources parses it and skips non-mappers.
-    if (previous === undefined || await contentHashOf(file.absolutePath) !== previous) changed.push(file.absolutePath);
+    const previous = scanned.get(file.relativePath);
+    const info = await stat(file.absolutePath);
+    if (previous && Number(previous.size) === info.size && Math.abs(Number(previous.mtime) - info.mtimeMs) <= 0.5) continue;
+    const hash = await contentHashOf(file.absolutePath);
+    if (previous && hash === previous.contentHash) {
+      stamps.push({ path: file.relativePath, hash, size: info.size, mtimeMs: info.mtimeMs });
+      continue;
+    }
+    changed.push(file.absolutePath);
   }
-  const deleted = [...indexed.keys()].filter(relativePath => !seen.has(relativePath));
-  return { changed, deleted };
+  const deleted = [...known].filter(relativePath => !seen.has(relativePath));
+  return { changed, deleted, stamps };
 }
 
 async function applyReconcile(db: IndexDatabase, repoRoot: string, generation: number): Promise<void> {
@@ -422,6 +508,11 @@ async function applyReconcile(db: IndexDatabase, repoRoot: string, generation: n
   // XML first, unpublished: the Java pass below is what publishes this
   // generation, so no reader sees generation N with the old XML evidence.
   const resources = await changedResources(db, repoRoot, layout);
+  if (resources.stamps.length > 0) {
+    withTransaction(db, () => {
+      for (const stamp of resources.stamps) recordResourceScan(db, stamp.path, stamp.hash, stamp.size, stamp.mtimeMs);
+    });
+  }
   if (resources.changed.length > 0 || resources.deleted.length > 0) {
     await applyResources(db, repoRoot, generation, resources.changed, resources.deleted, { publish: false });
   }

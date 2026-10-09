@@ -13,7 +13,7 @@ import { JAVA_IMPACT_TOOL_DESCRIPTION, impactSchema, javaImpact } from "./tools/
 import { javaRuntime, runtimeSchema } from "./tools/runtime.js";
 import { isDiagnosticDetail } from "./tools/shared.js";
 import { javaStatus, statusSchema, summarizeResourceStatus } from "./tools/status.js";
-import { javaSymbol, symbolNeedsJdt, symbolSchema } from "./tools/symbol.js";
+import { javaSymbol, STATIC_QUERY_LIMIT_DESCRIPTION, symbolNeedsJdt, symbolSchema } from "./tools/symbol.js";
 import { logToolFailure } from "./log.js";
 import { noteTelemetryRepoHash, recordToolInvocation, withTelemetryRequestScope } from "./telemetry/impact-telemetry.js";
 
@@ -85,7 +85,7 @@ export function createMcpServer(
 
   register(track("java_symbol"), {
     title: "Java Symbol",
-    description: "operation=query (default): static discovery over the on-disk index (no JDT); pass backend=jdt for legacy workspace symbols. Static query: limit 1..20 (default 8; selectionLimited=true means more matched), terms add words to the query, searchMode=exact never falls back to fuzzy search (exact=miss|ambiguous). operation=position (default with file/line/column): hover/definition/implementation at a position. operation=references: summary-only references. position/references and backend=jdt always use live JDT.",
+    description: "operation=query (default): static discovery over the on-disk index (no JDT); pass backend=jdt for legacy workspace symbols. Static query: " + STATIC_QUERY_LIMIT_DESCRIPTION + ", terms add words to the query, searchMode=exact never falls back to fuzzy search (exact=miss|ambiguous). operation=position (default with file/line/column): hover/definition/implementation at a position. operation=references: summary-only references. position/references and backend=jdt always use live JDT.",
     inputSchema: symbolSchema
   }, args => withContext(args, (context, request) => javaSymbol(context, args, request), {
     // T06: the JDT admission predicate is computed per request and must match

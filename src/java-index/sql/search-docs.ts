@@ -11,7 +11,7 @@ function runInWriteTx<T>(db: IndexDatabase, fn: () => T): T {
   if (db.isTransaction) return fn();
   return withTransaction(db, fn);
 }
-import type { SearchDocument } from "../../discovery/search-document.js";
+import type { MyBatisBindingFilter, SearchDocument } from "../../discovery/search-document.js";
 import { documentTokens } from "../../discovery/search-document.js";
 import { internSym, internSymNullable } from "./sym.js";
 
@@ -135,6 +135,36 @@ export function replaceSearchDocumentsForSource(
       insertDocuments(db, ownerPath, [document]);
     }
   });
+}
+
+/** Module directory of a repo-relative path: everything before `src/`. */
+function moduleDirOf(relativePath: string): string {
+  const parts = relativePath.split("/");
+  const src = parts.indexOf("src");
+  return src <= 0 ? "." : parts.slice(0, src).join("/");
+}
+
+/**
+ * Module visibility for mapper XML (same rule as R05 for duplicate FQNs): when
+ * the XML's own module declares its namespace type, it binds only there; with
+ * no same-module declaration it binds to every declaration (a cross-module
+ * mapper interface is legitimate). Memoized per namespace for one batch.
+ */
+export function myBatisBindingFilter(db: IndexDatabase): MyBatisBindingFilter {
+  const declaringModules = new Map<string, Set<string>>();
+  return (resource, bundle) => {
+    let modules = declaringModules.get(resource.namespace);
+    if (!modules) {
+      const rows = prepareCached(
+        db,
+        "SELECT f.path AS path FROM type t JOIN file f ON f.id=t.file_id WHERE t.fqn=?"
+      ).all(resource.namespace) as Array<{ path: string }>;
+      modules = new Set(rows.map(row => moduleDirOf(row.path)));
+      declaringModules.set(resource.namespace, modules);
+    }
+    const xmlModule = moduleDirOf(resource.relativePath);
+    return !modules.has(xmlModule) || moduleDirOf(bundle.file.relativePath) === xmlModule;
+  };
 }
 
 export function deleteSearchDocumentsForPath(db: IndexDatabase, relativePath: string): void {

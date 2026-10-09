@@ -91,6 +91,7 @@ export function clearIndexData(db: IndexDatabase): void {
     DELETE FROM kg_edge;
     DELETE FROM kg_node;
     DELETE FROM mybatis_resource;
+    DELETE FROM resource_scan;
     DELETE FROM source_root_coverage;
     DELETE FROM file;
     DELETE FROM meta WHERE key != 'schemaVersion';

@@ -52,6 +52,7 @@
 
 ## 限制与剩余缺口
 
+- **评审修复**：EMPTY 只在索引 READY、且磁盘上没有未索引的同 scope 源根时才算 READY；module 可用 Maven artifactId 指定（见 `r05-r08-review-fixes.md`）。
 - scope 粒度是 layout-probe 发现的约定 Java 源根（`<module>/src/{main,test}/java`）。Maven `<sourceDirectory>` / Gradle 自定义 sourceSets 目前不被 layout probe 发现，因此也不在索引内；本任务不做 build 文件解析（不猜 `m/src`，而是只认索引实际建库的根）。
 - 资源（MyBatis XML）文档按其关联的 Java 声明路径参与 scope；XML 与 Java 之间的“同框架配置”关系与证据归属属 R08（P01）。
 - BM25 的 df/avgdl 仍是全库统计（排序归一化），scope 只改变候选集合与预算计费。
