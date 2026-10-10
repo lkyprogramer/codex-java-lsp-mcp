@@ -16,13 +16,8 @@ import {
   HINT_AUTHORITY,
   UNVERSIONED_CACHE_EPOCH,
   cacheIdentity,
-  discoveryHint,
-  embeddingProviderFromEnv,
-  readSearchDocumentFacts
+  discoveryHint
 } from "./provider.mjs";
-import { waitForReadyIndex } from "./provider.mjs";
-import { DatabaseSync } from "node:sqlite";
-import { classifyQueryIntent, gatedDenseSearch, shouldRunDense } from "./gate.mjs";
 
 class FakeProvider {
   constructor({ failWith, timeout } = {}) {
@@ -275,61 +270,6 @@ test("R10: the deadline covers the response body, retries and backoff; timers ar
   assert.equal(timersAfter, timersBefore, "a finished call leaves no deadline timer behind");
 });
 
-test("Z2: exact and known-anchor queries never call the embedding provider", async () => {
-  const provider = new FakeProvider();
-  const index = builtIndex(provider);
-  await index.build();
-  const buildCalls = provider.calls;
-
-  const exact = await gatedDenseSearch({ query: "com.acme.Payment#accept", index, provider });
-  assert.equal(exact.fallback, "A2");
-  assert.equal(exact.reason, "exact_not_embedded");
-  assert.equal(provider.calls, buildCalls, "exact queries must not embed");
-
-  const anchor = await gatedDenseSearch({
-    query: "a/Payment.java",
-    index,
-    provider,
-    knownAnchorPaths: ["a/Payment.java"]
-  });
-  assert.equal(anchor.reason, "known_anchor_not_embedded");
-  assert.equal(provider.calls, buildCalls, "known anchor names must not embed");
-});
-
-test("Z2: free-text intent does embed and returns DISCOVERY_HINT hints", async () => {
-  const provider = new FakeProvider();
-  const index = builtIndex(provider);
-  await index.build();
-  const before = provider.calls;
-  const result = await gatedDenseSearch({ query: "duplicate request guard", index, provider });
-  assert.equal(result.fallback, "NONE");
-  assert.ok(result.hints.length > 0);
-  assert.ok(provider.calls > before);
-  assert.ok(result.hints.every(hint => hint.authority === HINT_AUTHORITY));
-});
-
-test("K27: unauthorized / failing provider falls back to A2 quietly without retry storms", async () => {
-  // Unauthorized: constructing the real provider with no key throws; the gate
-  // layer must never let that crash the caller.
-  assert.throws(() => new EmbeddingProvider({ apiKey: "", model: "x" }), /NOT_AUTHORIZED/);
-
-  const provider = new FakeProvider({ failWith: new Error("offline") });
-  const index = builtIndex(provider);
-  await index.build().catch(() => undefined);
-  index.vectors = FACTS.map(() => new Array(EMBEDDING_DIM).fill(0.05));
-  const result = await gatedDenseSearch({
-    query: "duplicate request guard",
-    index,
-    provider,
-    queryEmbed: async () => {
-      throw new Error("embedding endpoint unreachable");
-    }
-  });
-  assert.equal(result.fallback, "A2");
-  assert.equal(result.reason, "provider_error");
-  assert.deepEqual(result.hints, []);
-});
-
 test("K27: timeout aborts the in-flight embedding call (bounded, no infinite wait)", async () => {
   const slowFetch = async (_url, options) => {
     await new Promise((_, reject) => {
@@ -447,159 +387,6 @@ test("R10: a declaration with documents from another source file is stale when t
   }
 });
 
-test("intent classifier matches the A2 contract: CJK and code shapes route differently", () => {
-  assert.equal(classifyQueryIntent("PaymentService"), "exact");
-  assert.equal(classifyQueryIntent("com.acme.Payment#accept"), "exact");
-  assert.equal(classifyQueryIntent("PaymentService 在哪里阻止重复请求？"), "text");
-  assert.equal(classifyQueryIntent("Map<String, V>"), "text");
-  assert.equal(classifyQueryIntent("rollback"), "text");
-  assert.equal(shouldRunDense({ query: "com.acme.Payment#accept" }).run, false);
-  assert.equal(shouldRunDense({ query: "重复请求怎么拦截" }).run, true);
-});
-
-// The product's own DDL (read as text: the experiment imports no product
-// code), so a fixture index cannot drift from the real schema.
-const SCHEMA_TS = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "../../src/java-index/sql/schema.ts"), "utf8");
-function productTable(name) {
-  const match = SCHEMA_TS.match(new RegExp(`CREATE TABLE ${name}\\([\\s\\S]*?\\)( WITHOUT ROWID)?;`));
-  assert.ok(match, `schema.ts defines ${name}`);
-  return match[0];
-}
-
-/** A fixture index with the product's sym/search_doc[/search_doc_text] tables. */
-function fixtureIndex(docs, { withText = true, skipTextFor = [], buildState = "READY" } = {}) {
-  const dir = mkdtempSync(path.join(tmpdir(), "sem-disc-index-"));
-  const db = new DatabaseSync(path.join(dir, "index.sqlite"));
-  db.exec(productTable("meta"));
-  if (buildState) db.prepare("INSERT INTO meta(key, value) VALUES ('buildState', ?)").run(buildState);
-  db.exec(productTable("sym"));
-  db.exec(productTable("search_doc"));
-  if (withText) db.exec(productTable("search_doc_text"));
-  const syms = new Map();
-  const sym = text => {
-    if (!syms.has(text)) {
-      db.prepare("INSERT INTO sym(text) VALUES (?)").run(text);
-      syms.set(text, Number(db.prepare("SELECT id FROM sym WHERE text=?").get(text).id));
-    }
-    return syms.get(text);
-  };
-  for (const doc of docs) {
-    const docSym = sym(doc.id);
-    db.prepare(
-      `INSERT INTO search_doc(sym, declaration_sym, path_sym, source_path_sym, content_hash, kind, start_line, end_line, token_len)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(docSym, sym(doc.declarationId), sym(doc.owner), sym(doc.source), doc.contentHash, doc.kind, doc.startLine, doc.endLine, 1);
-    if (withText && !skipTextFor.includes(doc.id)) db.prepare("INSERT INTO search_doc_text(doc_sym, text) VALUES (?, ?)").run(docSym, doc.text);
-  }
-  db.close();
-  return { dir, dbPath: path.join(dir, "index.sqlite") };
-}
-
-const MAPPER_DOCS = [
-  { id: "d-xml", declarationId: "m#load", owner: "src/M.java", source: "res/M.xml", contentHash: "hx", kind: "framework-key", startLine: 2, endLine: 4, text: "mybatis select demo.M.load" },
-  { id: "d-sig", declarationId: "m#load", owner: "src/M.java", source: "src/M.java", contentHash: "hj", kind: "signature", startLine: 9, endLine: 9, text: "int load(int id);" },
-  { id: "d-com", declarationId: "m#load", owner: "src/M.java", source: "src/M.java", contentHash: "hj", kind: "comment", startLine: 8, endLine: 8, text: "/** 先冻结订单再退款 */" }
-];
-
-test("dense input: an index without ordered SearchDocument text is refused, never rebuilt from tokens", () => {
-  const legacy = fixtureIndex(MAPPER_DOCS, { withText: false });
-  const partial = fixtureIndex(MAPPER_DOCS, { skipTextFor: ["d-sig"] });
-  try {
-    assert.throws(() => readSearchDocumentFacts(REPO, legacy.dbPath), /DISABLED_INVALID: this index has no ordered SearchDocument text/);
-    assert.throws(() => readSearchDocumentFacts(REPO, partial.dbPath), /DISABLED_INVALID: 1 search documents have no stored text/);
-  } finally {
-    rmSync(legacy.dir, { recursive: true, force: true });
-    rmSync(partial.dir, { recursive: true, force: true });
-  }
-});
-
-test("dense input: a snapshot of an index still building is refused; the wait ends on READY or the deadline", async () => {
-  const building = fixtureIndex(MAPPER_DOCS, { buildState: "BUILDING" });
-  const absent = fixtureIndex(MAPPER_DOCS, { buildState: null });
-  try {
-    assert.throws(() => readSearchDocumentFacts(REPO, building.dbPath), /INDEX_NOT_READY: buildState=BUILDING/);
-    assert.throws(() => readSearchDocumentFacts(REPO, absent.dbPath), /INDEX_NOT_READY: buildState=absent/);
-    await assert.rejects(waitForReadyIndex(building.dbPath, { timeoutMs: 120, pollMs: 20 }), /INDEX_NOT_READY after 120ms: buildState=BUILDING/);
-    const waiting = waitForReadyIndex(building.dbPath, { timeoutMs: 5_000, pollMs: 20 });
-    setTimeout(() => {
-      const db = new DatabaseSync(building.dbPath);
-      db.exec("UPDATE meta SET value='READY' WHERE key='buildState'");
-      db.close();
-    }, 60);
-    await waiting;
-    assert.equal(readSearchDocumentFacts(REPO, building.dbPath).length, MAPPER_DOCS.length);
-  } finally {
-    rmSync(building.dir, { recursive: true, force: true });
-    rmSync(absent.dir, { recursive: true, force: true });
-  }
-});
-
-test("dense input: the stored ordered text is embedded, own-file documents first, XML provenance kept", async () => {
-  const fixture = fixtureIndex(MAPPER_DOCS);
-  try {
-    const facts = readSearchDocumentFacts(REPO, fixture.dbPath);
-    const xml = facts.find(fact => fact.sourcePath === "res/M.xml");
-    assert.deepEqual(
-      { relativePath: xml.relativePath, sourcePath: xml.sourcePath, contentHash: xml.contentHash, text: xml.text },
-      { relativePath: "src/M.java", sourcePath: "res/M.xml", contentHash: "hx", text: "mybatis select demo.M.load" },
-      "the target is the owning Java file; the source is the XML it was read from"
-    );
-    const seen = [];
-    const provider = offlineProvider({ fetchImpl: async (_url, init) => {
-      const input = JSON.parse(init.body).input;
-      seen.push(...input);
-      return { ok: true, json: async () => ({ data: input.map((_, index) => ({ index, embedding: [1, 0] })) }) };
-    } });
-    const index = new DenseDiscoveryIndex({ provider, facts, corpusHash: "c".repeat(40), repoRoot: REPO });
-    assert.equal(await index.build(), 1, "three documents, one declaration");
-    assert.deepEqual([index.buildCost.deltaHttpCalls, index.buildCost.deltaItemsEmbedded], [1, 1], "build cost is a real delta");
-    assert.deepEqual(seen, ["/** 先冻结订单再退款 */\nint load(int id);\nmybatis select demo.M.load"],
-      "the verbatim ordered text: own file by line, then the XML source");
-    assert.deepEqual([index.rows[0].startLine, index.rows[0].endLine], [8, 9], "the range comes from the declaration's own file only");
-    assert.deepEqual(index.rows[0].sources.map(source => source.path), ["res/M.xml", "src/M.java"]);
-  } finally {
-    rmSync(fixture.dir, { recursive: true, force: true });
-  }
-});
-
-test("provider from env: vendor keys are bound to their host, dimensions sent and part of the identity", async () => {
-  assert.throws(() => embeddingProviderFromEnv({ EMBEDDING_MODEL: "m" }), /EMBEDDING_NOT_AUTHORIZED/);
-  assert.throws(() => embeddingProviderFromEnv({ SILICONFLOW_API_KEY: "sf", EMBEDDING_MODEL: "m" }), /EMBEDDING_NOT_AUTHORIZED: no key for openrouter.ai/,
-    "a SiliconFlow key is never sent to the default OpenRouter endpoint");
-  assert.throws(() => embeddingProviderFromEnv({ OPENROUTER_API_KEY: "or", EMBEDDING_BASE_URL: "https://api.siliconflow.cn/v1", EMBEDDING_MODEL: "m" }),
-    /EMBEDDING_NOT_AUTHORIZED: no key for api.siliconflow.cn/, "an OpenRouter key is never sent to SiliconFlow");
-  assert.throws(() => embeddingProviderFromEnv({ SILICONFLOW_API_KEY: "sf", EMBEDDING_BASE_URL: "https://evil.example/siliconflow.cn", EMBEDDING_MODEL: "m" }),
-    /EMBEDDING_NOT_AUTHORIZED/, "binding is by host, not by URL text");
-  assert.throws(() => embeddingProviderFromEnv({ OPENROUTER_API_KEY: "undefined", EMBEDDING_MODEL: "m" }), /EMBEDDING_NOT_AUTHORIZED/,
-    "the string \"undefined\" is not a key");
-  assert.equal(embeddingProviderFromEnv({ OPENROUTER_API_KEY: "or", EMBEDDING_MODEL: "m" }).apiKey, "or");
-  assert.throws(() => embeddingProviderFromEnv({ SILICONFLOW_API_KEY: "k", EMBEDDING_BASE_URL: "https://api.siliconflow.cn/v1" }), /EMBEDDING_MODEL is required/);
-  assert.throws(() => embeddingProviderFromEnv({ SILICONFLOW_API_KEY: "k", EMBEDDING_BASE_URL: "https://api.siliconflow.cn/v1", EMBEDDING_MODEL: "m", EMBEDDING_DIMENSIONS: "7.5" }), /positive integer/);
-  const env = {
-    EMBEDDING_API_KEY: "explicit", SILICONFLOW_API_KEY: "sf", OPENROUTER_API_KEY: "or",
-    EMBEDDING_BASE_URL: "https://api.siliconflow.cn/v1", EMBEDDING_MODEL: "Qwen/Qwen3-VL-Embedding-8B", EMBEDDING_DIMENSIONS: "1024"
-  };
-  const provider = embeddingProviderFromEnv(env);
-  assert.equal(provider.apiKey, "explicit");
-  assert.equal(embeddingProviderFromEnv({ ...env, EMBEDDING_API_KEY: undefined }).apiKey, "sf");
-  assert.deepEqual(
-    { ...provider.identityBase() },
-    { endpoint: "https://api.siliconflow.cn/v1/embeddings", provider: "api.siliconflow.cn", model: "Qwen/Qwen3-VL-Embedding-8B",
-      revision: `unversioned:${UNVERSIONED_CACHE_EPOCH}`, dim: 1024, metric: "cosine" }
-  );
-  const other = embeddingProviderFromEnv({ ...env, EMBEDDING_DIMENSIONS: "2048" }).identityBase();
-  const key = base => cacheIdentity({ ...base, representationVersion: "r", declarationId: "d", textHash: "t", sourceManifestHash: "s" });
-  assert.notEqual(key(other), key(provider.identityBase()), "another dimension is another vector identity");
-  let body;
-  provider.fetchImpl = async (_url, init) => {
-    body = JSON.parse(init.body);
-    return { ok: true, json: async () => ({ data: [{ index: 0, embedding: new Array(1024).fill(0.5) }] }) };
-  };
-  await provider.embed(["x"]);
-  assert.equal(body.dimensions, 1024);
-  assert.equal(JSON.stringify(body).includes("explicit"), false, "the key never enters the body");
-});
-
 test("query vectors are cached under the provider identity; the cache file is read once per instance", async () => {
   const dir = mkdtempSync(path.join(tmpdir(), "sem-disc-query-"));
   try {
@@ -630,16 +417,4 @@ test("query vectors are cached under the provider identity; the cache file is re
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-});
-
-test("E2E (optional): real embedding round-trip when EMBEDDING_E2E=1", { skip: process.env.EMBEDDING_E2E !== "1", timeout: 120_000 }, async () => {
-  const provider = embeddingProviderFromEnv(process.env);
-  const vectors = await provider.embed(["duplicate request guard", "processed set adds request id"]);
-  assert.equal(vectors.length, 2);
-  assert.ok(vectors[0].length > 0 && (provider.dimensions == null || vectors[0].length === provider.dimensions));
-  assert.ok(provider.costReport().itemsEmbedded === 2);
-  const similar = await provider.embed(["duplicate request guard", "completely unrelated logistics"]);
-  const sameTopic = vectors[0].reduce((sum, v, i) => sum + v * similar[0][i], 0);
-  const crossTopic = vectors[0].reduce((sum, v, i) => sum + v * similar[1][i], 0);
-  assert.ok(sameTopic > crossTopic, "sanity: same-topic similarity must exceed cross-topic");
 });

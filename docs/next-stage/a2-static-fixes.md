@@ -11,6 +11,8 @@ Commits:
 
 Base commit `a1c9d26`. Evidence is in `java-specialist-audit-runs/fixes-*/`.
 
+> **Correction:** the failure analysis below said agents "answer after a head preview without reading the evidence". The attempt rows do not show that. Product evidence failures are all ACCESS-01: the agent paged through a 392-line method instead of searching it. Most product QA failures (8 of 11) are answer-format errors. See `a2-evidence-pilot.md`. Since then, the dense drivers and `search_doc_text` have been removed (index schema v9).
+
 ## Fixes
 
 | # | Problem (R11) | Fix | Regression test (RED first) |

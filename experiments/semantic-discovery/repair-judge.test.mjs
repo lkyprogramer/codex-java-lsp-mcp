@@ -76,12 +76,10 @@ function syntheticFixture(name, { source, testSource, testClass = "FrozenTest", 
   };
 }
 
-test("portable: repair judge, adapter and A/B drivers carry no personal absolute paths", () => {
+test("portable: repair judge and adapter carry no personal absolute paths", () => {
   const sources = [
     "experiments/semantic-discovery/repair-judge.mjs",
     "experiments/semantic-discovery/repair-judge.test.mjs",
-    "experiments/semantic-discovery/agent-ab.mjs",
-    "experiments/semantic-discovery/compare.mjs",
     "scripts/eval-repair-adapter.mjs"
   ];
   for (const rel of sources) {

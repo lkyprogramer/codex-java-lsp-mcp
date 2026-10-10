@@ -1,130 +1,22 @@
-# semantic-discovery (optional dense experiment)
+# semantic-discovery (closed)
 
-A standalone experiment comparing the product's lexical discovery (A2) with an optional external dense route. It is **not a product dependency**:
-- Nothing under `src/` imports it.
-- It imports no product source, only the frozen evaluation harness scripts.
-- Dense results are `DISCOVERY_HINT` only and never bind a declaration.
+The optional dense-discovery experiment is closed. The R11 re-measurement under eval protocol v1.2 (`docs/next-stage/a2-static-fixes.md`) returned `NO_GO`. Its drivers (`compare.mjs`, `agent-ab.mjs`, `budget.mjs`, `gate.mjs`) and the product's dense input table (`search_doc_text`, index schema v8) were then removed. History: `docs/next-stage/dense-input-result.md`, `r11-task-result.md`.
 
-## Status
+## What remains, and why
 
-| Part | State |
-|---|---|
-| `EmbeddingProvider`, `DenseDiscoveryIndex`, `gate.mjs` | Repaired in R10; offline tests plus an optional real-endpoint E2E |
-| `readSearchDocumentFacts` (index → dense input) | Reads the ordered `search_doc_text` (index schema v8+). An older index is refused (`DISABLED_INVALID`) |
-| `compare.mjs`, `agent-ab.mjs` | Runnable. They fail closed: a corpus without a dense index stops the run instead of producing two identical arms. `agent-ab` also stops before any chat call if a query embedding fails. Both wait until the index's `buildState` is `READY` |
-| `pilot-compare.mjs` | Paired frozen-kit comparison of a finished agent pack on the pilot rows, plus agent evidence (QA delta CI, prompt-token median ratio) |
-| `budget.mjs` | R11 equal-budget protocol: RRF fusion, one declaration resolver and evidence renderer for both arms, the frozen kit scorer bridge, `ExperimentProfile` and protocol hash, the four-way decision |
+The frozen release audit (`docs/java-specialist-release-audit-v1.1/tools/audit-regressions.mjs`, hashed and never edited) imports two modules by path:
 
-### Dense input: `search_doc_text`
+| File | Audit cases | Content |
+|---|---|---|
+| `provider.mjs` | D01–D04 | `EmbeddingProvider` (cache identity, deadline, retries) and `DenseDiscoveryIndex` (per-declaration vectors, stale hints are path-only) |
+| `repair-judge.mjs` | J01 | The frozen repair judge over `scripts/eval-repair-adapter.mjs` |
 
-- The product stores each SearchDocument's ordered, redacted `normalizedText` in `search_doc_text` (schema v8). It is written in the same transaction as the document's postings and deleted with it.
-- **Redaction** uses the preview rule, applied per line: value shape plus secret-named assignments, for example `PASSWORD = "..."` or `token: '...'`. A joined multi-line signature is one line, so one secret-named assignment redacts every literal in it.
-- **Limit**: the rule is name- and shape-based. It does not recognise every secret, such as values in text blocks or unnamed short literals.
-- The postings are exactly `documentTokens(text)`, so A2 and the dense route read one text surface.
-- One dense row per declaration joins its documents:
-  - first the declaration's own file, by line;
-  - then the other source files (for example a MyBatis XML), by path and line.
-- The line range comes only from the own-file documents. Every source file and its hash are in the source manifest.
-- An index without `search_doc_text`, or with a document that has no stored text, is refused. Joining unordered tokens would embed a different representation, so it is never approximated.
-
-### Provider configuration (`embeddingProviderFromEnv`)
-
-| Variable | Meaning |
-|---|---|
-| `EMBEDDING_API_KEY` | Explicit key for any endpoint |
-| `SILICONFLOW_API_KEY` / `OPENROUTER_API_KEY` | Vendor keys. Each is used **only** when `EMBEDDING_BASE_URL`'s host is that vendor's host (`*.siliconflow.cn` / `*.openrouter.ai`), so a vendor key is never sent to another host. Keep keys in the git-ignored `.env`; a key is never part of a cache key or a request body |
-| `EMBEDDING_BASE_URL` | OpenAI-compatible base URL (default OpenRouter) |
-| `EMBEDDING_MODEL` | Required |
-| `EMBEDDING_DIMENSIONS` | Optional. Sent as `dimensions` and part of the cache identity |
-| `EMBEDDING_PROVIDER` | Optional. Defaults to the endpoint host |
-
-Example (SiliconFlow, 1024-d):
-
-```bash
-EMBEDDING_DIMENSIONS=1024 node --env-file=.env experiments/semantic-discovery/compare.mjs \
-  --stage <hydrated full-stage> --out <run dir> --cache <cache dir>
-```
-
-Query vectors are cached under the same `cacheIdentity`: the provider identity, `QUERY_REPRESENTATION_VERSION` and the query text hash. Measured on SiliconFlow, the same query gives slightly different vectors across runs; the largest top-score difference was 0.0018 cosine, enough to reorder near-tied hints. Caching makes a rerun reproducible. `compare.mjs` records each query vector's sha256 and the top-9 cosine scores.
-
-### R11 protocol (`budget.mjs`; full description in `docs/next-stage/experiment-v1.1.md`)
-
-**Arms**
-- **Fill control** (`a2-seeded-fill`): the lexical list padded to K by a seeded shuffle of the remaining declarations. It separates "more candidates" from dense semantics.
-- **A2**: the product `java_symbol` top-10 declarations.
-- **A3**: `RRF(lexical, dense, k0=60)`, deduplicated by declarationId, top 10. Each channel contributes at most 10 to the pool; the cap applies to the fused list.
-
-**Rendering**
-- Both arms go through one `DeclarationResolver`, which reads the product index facts: the locator line is `range.start.line`, as in the product.
-- Both arms use one `renderEvidence`:
-  - up to 10 candidates;
-  - up to `max_regions` regions, each of `floor(max_lines / max_regions)` lines from the declaration start;
-  - clipped to the remaining 160-line / 16,000-byte task budget.
-- A file whose current sha256 differs from the indexed hash is dropped. It is never path-only credit or a stale range.
-
-**Variants**: `compare.mjs --variants all` (default) runs the kit primary query and each language variant. Strata are by variant, origin and corpus. `java_symbol` is called with `preview: "none"`.
-
-**Scoring**: the kit itself.
-- `compare.mjs` writes `java-specialist-results/v1` packs and runs `harness score`, then `harness compare` (cluster bootstrap).
-- `agent-ab.mjs` uses `scoreWithFrozenKit` and the frozen repair judge.
-
-**Reported per arm**
-- Macro-task and micro-evidence line recall, each with its numerator and denominator.
-- `decideFourWay` v2 applies the frozen `gates.json` thresholds. GO needs the screen, a win over the fill control, no MRR/line-recall regression and agent evidence. The retrieval layer alone is at most INCONCLUSIVE.
-
-**Agent layer**: both arms receive one candidate block (`formatCandidateBlock`) of the same shape. It holds locators only, never source text; only the list differs.
-
-**Protocol hash**: every pack records `protocolHash`, the sha256 of the canonical `ExperimentProfile`. The earlier unequal-budget protocols are listed as `LEGACY_INVALID_PROTOCOLS`.
-
-## Cache identity
-
-```text
-cacheIdentity({ endpoint, provider, model, revision, dim, metric,
-                representationVersion, declarationId, textHash, sourceManifestHash }) -> sha256
-```
-
-- **Canonical JSON** of exactly these fields. Unknown fields, including any credential, are rejected.
-- **Endpoint** is the origin plus path of the embeddings URL, so the same model behind two endpoints has two identities.
-- **Revision**: when the endpoint reports none, the identity is `unversioned:<UNVERSIONED_CACHE_EPOCH>`. It does not claim to be reproducible over time; bump the epoch to start a new cache.
-- **Per-row fields**: each declaration row has its own `textHash` (the SHA-256 of its ordered text) and its own `sourceManifestHash` (the sorted list of source path and contentHash pairs). Two declarations in one file therefore never share a vector.
-- **Index identity**: `providerIndexIdentity` (on every hint) is derived from the same provider identity plus the representation version and the corpus hash.
-
-The cache file layout is `dense-cache/r10`:
-
-- **Load and write**:
-  - The file is read once per provider instance and kept in memory. An `embed` call writes it, through a temporary file and `rename`, only when it added entries.
-  - Batches that finished before a later batch failed are still saved.
-  - Keyless calls never read or write the file. Entry scripts embed queries through `embedQuery`, which is keyed.
-  - `embed` calls on one provider instance must be sequential. Between processes, the last `rename` wins.
-- **What counts as a hit**: the record's key must match, the vector must have the recorded dimension, and every value must be finite. All hits in one build must share one dimension.
-- **Everything else, including pre-R10 entries** (`model::path::hash`), is a miss and is re-embedded.
-
-## Deadline, failures, stale hints
-
-- **Deadline per batch**: `timeoutMs` covers one batch in total: the connect, the headers, decoding the body, every retry and every backoff. A backoff that cannot fit before the deadline is not started. Every attempt's timer is cleared in `finally`.
-- **Retries**: only HTTP 429 and 5xx are retried, up to `maxRetries`. Other failures throw `EmbeddingProviderError`.
-- **Response checks**: the row count, a single dimension and finite values are verified. An error message never becomes vector text.
-- **Error reporting**: when a fast HTTP 429/5xx failure's retry cannot fit before the deadline, the error is reported as `retry budget exhausted`, not as a timeout. A body-stage timeout aborts the request signal.
-- **Counters**: `errors` counts failed attempts. `latencyMs` counts successful attempts only.
-- **Stale hints**: a hint carries `indexedContentHash` and a line range only when **every** source file of the declaration still has its indexed hash (for example, the Java file and the MyBatis XML file). Otherwise it is a path-only hint with `startLine`/`endLine` set to `null`; the caller must re-read the file and locate the declaration again.
-- **Range sources**: the range is taken only from documents in the declaration's own file.
-
-## Known limits
-
-- **READY is not quiescent.** Reads require `buildState=READY` in one snapshot. A reconcile of an existing index commits XML and Java separately while staying READY, so a read can land between them. The stage is frozen during a run, so this is unlikely.
-- **Overlapping regions.** A type and one of its methods can both be rendered, and their regions may overlap. The kit counts both, so the budget is spent twice by the same rule in both arms.
-- **No zvec profile.** A native zvec system profile was not run. It would be a separate system-level comparison.
+Nothing under `src/` or `scripts/` imports this directory. The native-vs-A2 pilot comparison now lives in `scripts/eval-pilot-compare.mjs`.
 
 ## Tests
 
 ```bash
-node --test semantic-discovery.test.mjs repair-judge.test.mjs ab-summary.test.mjs
-# R11 budget/fusion/scorer contract (needs the product build and python3):
-node --test ../../scripts/eval-experiment-budget.test.mjs
+node --test semantic-discovery.test.mjs repair-judge.test.mjs
 ```
 
-All tests are offline, using a fake `fetch` and no API key. The optional real-endpoint round trip runs only with `EMBEDDING_E2E=1`:
-
-```bash
-EMBEDDING_E2E=1 node --env-file=../../.env --test semantic-discovery.test.mjs
-```
+All offline, using a fake `fetch` and no API key.

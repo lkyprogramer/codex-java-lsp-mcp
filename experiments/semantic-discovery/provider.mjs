@@ -6,10 +6,11 @@
 // pos:    docs/10 阶段 Z1/Z2 - 相似性证据只标 DISCOVERY_HINT，绝不标 JDT_BOUND；
 //         无 indexedContentHash 时调用方必须重读并重新定位声明，不承认旧行号。
 // 授权:   用户显式提供 OpenRouter key（仓库外存储）并授权网络与免费 embedding 推理。
+// 状态:   dense 实验已关闭（R11 重测 NO_GO），驱动与产品侧输入已删除；本文件只因
+//         冻结审计 tools/audit-regressions.mjs（D01-D04）按此路径导入而保留。
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
 
 export const HINT_AUTHORITY = "DISCOVERY_HINT";
 /** Cache epoch for a model whose revision the endpoint does not report. */
@@ -320,51 +321,6 @@ export class EmbeddingProvider {
   }
 }
 
-/** Vendor keys are only ever sent to their own host. */
-const HOST_KEYS = [
-  { suffix: "siliconflow.cn", variable: "SILICONFLOW_API_KEY" },
-  { suffix: "openrouter.ai", variable: "OPENROUTER_API_KEY" }
-];
-
-function hostMatches(host, suffix) {
-  return host === suffix || host.endsWith(`.${suffix}`);
-}
-
-/**
- * Provider from the environment (entry scripts). EMBEDDING_BASE_URL selects
- * the endpoint (default OpenRouter); the key is EMBEDDING_API_KEY (explicit,
- * any host) or the vendor key bound to that host (SILICONFLOW_API_KEY for
- * *.siliconflow.cn, OPENROUTER_API_KEY for *.openrouter.ai) - a vendor key is
- * never sent to another host. EMBEDDING_MODEL (or OPENROUTER_EMBEDDING_MODEL);
- * optional EMBEDDING_DIMENSIONS (sent as `dimensions`, part of the identity)
- * and EMBEDDING_PROVIDER (defaults to the endpoint host).
- */
-export function embeddingProviderFromEnv(env, { cacheFile = null, timeoutMs = 60_000 } = {}) {
-  const present = name => (typeof env[name] === "string" && env[name] !== "" && env[name] !== "undefined" ? env[name] : undefined);
-  const baseUrl = present("EMBEDDING_BASE_URL") ?? "https://openrouter.ai/api/v1";
-  const host = new URL(baseUrl).hostname;
-  const bound = HOST_KEYS.find(entry => hostMatches(host, entry.suffix));
-  const apiKey = present("EMBEDDING_API_KEY") ?? (bound ? present(bound.variable) : undefined);
-  if (!apiKey) {
-    throw new Error(`EMBEDDING_NOT_AUTHORIZED: no key for ${host} (EMBEDDING_API_KEY${bound ? ` or ${bound.variable}` : ""})`);
-  }
-  const model = present("EMBEDDING_MODEL") ?? present("OPENROUTER_EMBEDDING_MODEL");
-  if (!model) throw new Error("EMBEDDING_MODEL is required");
-  const dimensions = present("EMBEDDING_DIMENSIONS") ? Number(env.EMBEDDING_DIMENSIONS) : null;
-  if (dimensions !== null && !(Number.isInteger(dimensions) && dimensions > 0)) {
-    throw new Error(`EMBEDDING_DIMENSIONS must be a positive integer, got ${env.EMBEDDING_DIMENSIONS}`);
-  }
-  return new EmbeddingProvider({
-    apiKey,
-    model,
-    baseUrl,
-    dimensions,
-    providerName: present("EMBEDDING_PROVIDER") ?? host,
-    timeoutMs,
-    cacheFile
-  });
-}
-
 const CACHE_LAYOUT = "dense-cache/r10";
 /** Query text is embedded verbatim (no SearchDocument join). */
 export const QUERY_REPRESENTATION_VERSION = "query-verbatim-v1";
@@ -373,94 +329,6 @@ export class EmbeddingProviderError extends Error {
   constructor(message) {
     super(message);
     this.name = "EmbeddingProviderError";
-  }
-}
-
-/**
- * Dense input from the product index: each SearchDocument's ordered,
- * already-redacted normalizedText (search_doc_text, index schema v8+). The
- * text is the same representation the A2 postings were tokenized from, so
- * dense and lexical compare one text surface.
- *
- * An index without search_doc_text (schema < 8) only has unordered token
- * postings; rebuilding "text" from them is a different representation, so
- * that index is refused (DISABLED_INVALID), never approximated.
- *
- * Each fact: relativePath = the declaration's own (owning) file, sourcePath +
- * contentHash = where the text was read from (a MyBatis statement's XML).
- *
- * The build state and every document are read in one snapshot, and only a
- * READY snapshot is accepted: a cold build in progress has written only part
- * of the documents (INDEX_NOT_READY; see waitForReadyIndex).
- */
-export function readSearchDocumentFacts(_repoRoot, dbPath) {
-  // A short writer checkpoint must not fail the whole run.
-  const db = new DatabaseSync(dbPath, { readOnly: true, timeout: 5_000 });
-  try {
-    db.exec("BEGIN");
-    const hasText = db.prepare("SELECT 1 AS ok FROM sqlite_master WHERE type='table' AND name='search_doc_text'").get();
-    if (!hasText) {
-      throw new Error(
-        "DISABLED_INVALID: this index has no ordered SearchDocument text (search_doc_text, schema v8+); " +
-        "rebuilding text from unordered token postings is a different representation - rebuild the index"
-      );
-    }
-    const missing = db.prepare(
-      "SELECT count(*) AS n FROM search_doc d LEFT JOIN search_doc_text t ON t.doc_sym=d.sym WHERE t.doc_sym IS NULL"
-    ).get();
-    if (Number(missing.n) > 0) throw new Error(`DISABLED_INVALID: ${missing.n} search documents have no stored text`);
-    const state = indexBuildState(db);
-    if (state !== "READY") throw new Error(`INDEX_NOT_READY: buildState=${state ?? "absent"}`);
-    return db.prepare(
-      `SELECT d.sym AS docId, op.text AS relativePath, sp.text AS sourcePath, d.start_line AS startLine,
-              d.end_line AS endLine, d.kind AS kind, d.content_hash AS contentHash, ds.text AS declarationId,
-              t.text AS text
-         FROM search_doc d
-         JOIN search_doc_text t ON t.doc_sym = d.sym
-         JOIN sym sp ON sp.id = d.source_path_sym
-         JOIN sym ds ON ds.id = d.declaration_sym
-         LEFT JOIN sym op ON op.id = d.path_sym`
-    ).all().map(row => ({
-      docId: Number(row.docId),
-      relativePath: row.relativePath ?? row.sourcePath,
-      sourcePath: row.sourcePath,
-      startLine: Number(row.startLine),
-      endLine: Number(row.endLine),
-      kind: row.kind,
-      contentHash: row.contentHash,
-      declarationId: row.declarationId,
-      text: row.text
-    }));
-  } finally {
-    if (db.isTransaction) db.exec("COMMIT");
-    db.close();
-  }
-}
-
-function indexBuildState(db) {
-  const hasMeta = db.prepare("SELECT 1 AS ok FROM sqlite_master WHERE type='table' AND name='meta'").get();
-  return hasMeta ? db.prepare("SELECT value FROM meta WHERE key='buildState'").get()?.value : undefined;
-}
-
-/** Polls the index until its build state is READY (the product writes BUILDING
- *  while a cold build runs); throws INDEX_NOT_READY at the deadline. */
-export async function waitForReadyIndex(dbPath, { timeoutMs = 600_000, pollMs = 500 } = {}) {
-  const deadline = Date.now() + timeoutMs;
-  let state;
-  for (;;) {
-    try {
-      const db = new DatabaseSync(dbPath, { readOnly: true });
-      try {
-        state = indexBuildState(db);
-      } finally {
-        db.close();
-      }
-    } catch (error) {
-      state = `unreadable (${error instanceof Error ? error.message : String(error)})`;
-    }
-    if (state === "READY") return;
-    if (Date.now() >= deadline) throw new Error(`INDEX_NOT_READY after ${timeoutMs}ms: buildState=${state ?? "absent"}`);
-    await new Promise(resolve => setTimeout(resolve, pollMs));
   }
 }
 

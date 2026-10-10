@@ -4,13 +4,13 @@ This protocol replaces the T10/M3 comparisons, which are `INVALID_EXPERIMENT_FOR
 - A3 was A2 plus extra hints, so the arms had unequal budgets.
 - The scorers credited path-only hints with the whole file, or skipped region validation.
 
-The configuration is registered in `docs/java-specialist-devkit-v1/configs/experiment.json` (`r11_protocol`). The code is in `experiments/semantic-discovery/budget.mjs`.
+The configuration is registered in `docs/java-specialist-devkit-v1/configs/experiment.json` (`r11_protocol`). The code was `experiments/semantic-discovery/budget.mjs` (removed after the v1.2 re-measurement returned NO_GO; last version at commit `d157b58`).
 
 ## Questions and arms
 
 | Question | Arms | Driver | Corpus |
 |---|---|---|---|
-| Product increment (primary control) | `control`: native list/rg/read(/write/test) vs `product`: A2 = `java_symbol` + the same native tools | `scripts/evaluate-java-task.mjs --arms product,control`, then `experiments/semantic-discovery/pilot-compare.mjs --baseline control --candidate product` | kit bundled corpora |
+| Product increment (primary control) | `control`: native list/rg/read(/write/test) vs `product`: A2 = `java_symbol` + the same native tools | `scripts/evaluate-java-task.mjs --arms product,control`, then `scripts/eval-pilot-compare.mjs --baseline control --candidate product` | kit bundled corpora |
 | Dense mechanism, retrieval layer | A2 = lexical top-K vs A3 = RRF(lexical, dense) top-K, plus the **non-semantic control** `a2-seeded-fill` (lexical padded to K by a seeded shuffle of the remaining declarations) | `experiments/semantic-discovery/compare.mjs [--agent-pack <agent evidence>]` | hydrated external-full corpus |
 | Dense mechanism, agent layer | Same model, prompt, tools and budget. The task text carries one candidate block: A2 = lexical top-K, A3 = RRF top-K | `experiments/semantic-discovery/agent-ab.mjs` | kit bundled corpora |
 

@@ -54,7 +54,6 @@ function deleteTokensForPath(db: IndexDatabase, pathSym: number): void {
     db,
     `DELETE FROM search_doc_token WHERE doc_sym IN (SELECT sym FROM search_doc WHERE path_sym=?)`
   ).run(pathSym);
-  prepareCached(db, "DELETE FROM search_doc_text WHERE doc_sym IN (SELECT sym FROM search_doc WHERE path_sym=?)").run(pathSym);
   prepareCached(db, "DELETE FROM search_doc WHERE path_sym=?").run(pathSym);
 }
 
@@ -62,10 +61,6 @@ function deleteTokensForSource(db: IndexDatabase, sourcePathSym: number): void {
   prepareCached(
     db,
     `DELETE FROM search_doc_token WHERE doc_sym IN (SELECT sym FROM search_doc WHERE source_path_sym=?)`
-  ).run(sourcePathSym);
-  prepareCached(
-    db,
-    "DELETE FROM search_doc_text WHERE doc_sym IN (SELECT sym FROM search_doc WHERE source_path_sym=?)"
   ).run(sourcePathSym);
   prepareCached(db, "DELETE FROM search_doc WHERE source_path_sym=?").run(sourcePathSym);
 }
@@ -78,7 +73,6 @@ function insertDocuments(db: IndexDatabase, ownerPath: string, documents: readon
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const insertToken = prepareCached(db, "INSERT INTO search_doc_token(doc_sym, token_sym, tf) VALUES (?, ?, ?)");
-  const insertText = prepareCached(db, "INSERT INTO search_doc_text(doc_sym, text) VALUES (?, ?)");
   for (const doc of documents) {
     const docSym = internSym(db, doc.documentId);
     const tokens = documentTokens(doc.normalizedText);
@@ -93,7 +87,6 @@ function insertDocuments(db: IndexDatabase, ownerPath: string, documents: readon
       doc.source.endLine,
       tokens.length
     );
-    insertText.run(docSym, doc.normalizedText);
     const tf = new Map<string, number>();
     for (const token of tokens) tf.set(token, (tf.get(token) ?? 0) + 1);
     for (const [token, count] of tf) insertToken.run(docSym, internSym(db, token), count);
