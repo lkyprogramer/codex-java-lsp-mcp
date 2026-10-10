@@ -37,6 +37,13 @@ export function nativeNames(arm) {
 }
 
 export const EVAL_PACK_SCHEMA_VERSION = "java-devkit-task-eval/v1";
+/**
+ * Eval protocol: v1.2 adds the per-round received-source ledger (QA tasks with
+ * a budget), the 80-line default read window and the java_symbol description
+ * with head previews / no-vocabulary diagnosis. Results of different protocol
+ * versions are not comparable.
+ */
+export const EVAL_PROTOCOL_VERSION = "eval-protocol/v1.2";
 const DISCOVERY_SCHEMA = "java-discovery/v1";
 
 // T09 step 3: the agent gets the same model, prompt and budget and may use
@@ -50,7 +57,7 @@ export const EVAL_JAVA_SYMBOL_TOOL = {
   type: "function",
   function: {
     name: "java_symbol",
-    description: "Locate Java declarations (types/methods) by name, FQN, or task intent. Returns declarations with 1-based locators and byte-exact source previews.",
+    description: "Locate Java declarations (types/methods) by name, FQN, or task intent. Matching is lexical over code identifiers, comments and framework keys: query with likely code identifiers (usually English); a query sharing no word with the code returns emptyReason=no_vocabulary_overlap. Returns declarations with 1-based locators (the declaration name) and short byte-exact previews (preview=head by default; window or none on request).",
     parameters: {
       type: "object",
       properties: {
@@ -59,7 +66,8 @@ export const EVAL_JAVA_SYMBOL_TOOL = {
         searchMode: { type: "string", enum: ["auto", "exact", "text"] },
         limit: { type: "integer" },
         module: { type: "string" },
-        sourceSet: { type: "string", enum: ["main", "test"] }
+        sourceSet: { type: "string", enum: ["main", "test"] },
+        preview: { type: "string", enum: ["none", "head", "window"] }
       },
       required: ["query"]
     }
@@ -520,6 +528,7 @@ export function assemblePack({ status, backend, datasetHash, arms, repeats, runs
   const successes = packs.filter(pack => pack.taskSuccess === true).length;
   return {
     schemaVersion: EVAL_PACK_SCHEMA_VERSION,
+    evalProtocol: EVAL_PROTOCOL_VERSION,
     status,
     ...(blockedReasons?.length ? { blockedReasons } : {}),
     backend: backend ?? null,
@@ -655,6 +664,8 @@ export async function runLiveEvalRun({
             tools: arm === "product" ? [EVAL_JAVA_SYMBOL_TOOL, ...toolSet.tools] : toolSet.tools,
             chat: chatImpl,
             maxRounds,
+            // Eval protocol v1.2: the same received-source ledger for every arm.
+            ...(task.kind === "qa" && task.budget ? { sourceBudget: task.budget } : {}),
             onChat: request => {
               appendFileSync(payloadLog, `${JSON.stringify({
                 attempt: { taskId: task.id, arm, repeat },

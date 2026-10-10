@@ -65,7 +65,7 @@
     },
     "R11": {
       "state": "DONE",
-      "commit": "(this commit: test(experiment): compare equal evidence budgets with canonical scoring)",
+      "commit": "a1c9d26",
       "report": "docs/next-stage/r11-task-result.md",
       "protocol": "docs/next-stage/experiment-v1.1.md",
       "decision": "INCONCLUSIVE (decideFourWay v2; dense gain not separable from a seeded fill control; agent QA lower and 1.86x tokens); closed after one pre-registered pilot"
@@ -94,5 +94,16 @@
     "state": "DONE",
     "commit": "1bbb63c",
     "report": "docs/next-stage/dense-input-result.md"
+  },
+  "a2StaticFixes": {
+    "scope": "R11 follow-up: name locators (facts revision 4), no_vocabulary_overlap diagnosis, java_symbol preview modes, eval protocol v1.2 ledger/read window, stale existing index rebuild",
+    "state": "DONE",
+    "commits": [
+      "0348a16",
+      "aed7603",
+      "(this commit: test(experiment): re-measure R11 under eval protocol v1.2)"
+    ],
+    "report": "docs/next-stage/a2-static-fixes.md",
+    "decision": "dense retrieval NO_GO (decideFourWay v2); native vs A2 INCONCLUSIVE"
   }
 }

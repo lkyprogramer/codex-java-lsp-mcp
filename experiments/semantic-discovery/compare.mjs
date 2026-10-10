@@ -58,6 +58,10 @@ function requiredPath({ flag, env, fallback, label }) {
 const KIT = requiredPath({ flag: "--kit-root", env: "JSB_KIT_ROOT", fallback: path.join(REPO_ROOT, "docs/java-specialist-release-audit-v1.1/baseline-kit"), label: "frozen kit root" });
 const STAGE = requiredPath({ flag: "--stage", env: "M3_STAGE", label: "hydrated external-full corpus root (harness hydrate-public)" });
 const SPLIT = cliValue("--split") ?? "dev";
+// "all" also runs each task's language variants (kit expected_cases), so a
+// cross-language miss is reported per variant, not as an A2 ranking loss.
+const VARIANTS = cliValue("--variants") ?? "all";
+if (!["primary", "all"].includes(VARIANTS)) throw new Error("--variants must be primary or all");
 const SERVER_JS = requiredPath({ flag: "--server-js", env: "M3_SERVER_JS", fallback: path.join(REPO_ROOT, "dist/server.js"), label: "product dist/server.js" });
 const OUTPUT = requiredPath({ flag: "--out", env: "M3_OUT", label: "run output root (outside the checkout)" });
 const CACHE_ROOT = requiredPath({ flag: "--cache", env: "M3_CACHE", fallback: path.join(OUTPUT, "index-cache"), label: "index cache root (outside the checkout)" });
@@ -129,9 +133,9 @@ async function main() {
   const profile = experimentProfile({
     question: "dense mechanism: A2 lexical vs A3 lexical+dense RRF on one SearchDocument representation (retrieval layer)",
     arms: ARMS,
-    corpus: { mode: "external-full", corpusHash: hashes.corpus, datasetHash: hashes.dataset, split: SPLIT, taskIds: tasks.map(task => task.id) },
+    corpus: { mode: "external-full", corpusHash: hashes.corpus, datasetHash: hashes.dataset, split: SPLIT, variants: VARIANTS, taskIds: tasks.map(task => task.id) },
     representation: {
-      searchDocument: "search_doc_text (product index schema v8)",
+      searchDocument: "search_doc_text (product index schema v8, java facts revision 4: locator = declaration name)",
       dense: DENSE_REPRESENTATION_VERSION,
       query: QUERY_REPRESENTATION_VERSION
     },
@@ -172,20 +176,25 @@ async function main() {
       process.stderr.write(`[r11]   dense index: ${declared} declarations, ${index.buildCost.deltaItemsEmbedded} embeddings\n`);
       resolver = new DeclarationResolver(dbPath);
 
-      for (const task of corpusTasks) {
-        const lexicalResult = await session.symbol({ query: task.query, limit: CANDIDATE_K });
+      const cases = corpusTasks.flatMap(task => [
+        { task, variant: "primary", query: task.query },
+        ...(VARIANTS === "all" ? (task.variants ?? []).map(variant => ({ task, variant: variant.id, query: variant.query })) : [])
+      ]);
+      for (const { task, variant, query } of cases) {
+        // Discovery previews are not scored here; locators only.
+        const lexicalResult = await session.symbol({ query, limit: CANDIDATE_K, preview: "none" });
         if (lexicalResult?.error) throw new Error(`java_symbol failed for ${task.id}: ${lexicalResult.error}`);
         // A PARTIAL scope means the index did not cover the request: not a valid A2 answer.
         if (lexicalResult?.scopeState === "PARTIAL") throw new Error(`java_symbol scope PARTIAL for ${task.id} (stopReason ${lexicalResult.stopReason})`);
         const lexicalIds = lexicalDeclarationIds(lexicalResult, CHANNEL_POOL_K);
         // Exact/anchored intents never embed (Z2 gate): A3 then equals A2.
-        const gate = shouldRunDense({ query: task.query });
+        const gate = shouldRunDense({ query });
         let dense = [];
         let queryVectorSha256 = null;
         if (gate.run) {
           // A failed query embedding stops the run: a silent A2 fallback would
           // be scored as "no dense gain".
-          const vector = await provider.embedQuery(task.query);
+          const vector = await provider.embedQuery(query);
           queryVectorSha256 = createHash("sha256").update(JSON.stringify(vector)).digest("hex");
           dense = index.rank(vector, { topK: CHANNEL_POOL_K });
         }
@@ -193,15 +202,22 @@ async function main() {
         const a2 = renderEvidence({ declarationIds: lexicalIds, resolver, repoRoot, budget });
         const a3 = renderEvidence({ declarationIds: fused.map(entry => entry.declarationId), resolver, repoRoot, budget });
         const fill = renderEvidence({ declarationIds: seededFill(lexicalIds, index.rows.map(row => row.declarationId)), resolver, repoRoot, budget });
-        results["a2-lexical"].push(kitResult(task.id, a2));
-        results["a3-rrf-dense"].push(kitResult(task.id, a3));
-        results["a2-seeded-fill"].push(kitResult(task.id, fill));
+        results["a2-lexical"].push(kitResult(task.id, a2, variant));
+        results["a3-rrf-dense"].push(kitResult(task.id, a3, variant));
+        results["a2-seeded-fill"].push(kitResult(task.id, fill, variant));
         rows.push({
           taskId: task.id,
+          variant,
+          query,
           corpus,
           gate: gate.reason,
           queryVectorSha256,
-          lexical: { ids: lexicalIds, truncated: lexicalResult?.truncated ?? null, scopeState: lexicalResult?.scopeState ?? null },
+          lexical: {
+            ids: lexicalIds,
+            truncated: lexicalResult?.truncated ?? null,
+            scopeState: lexicalResult?.scopeState ?? null,
+            emptyReason: lexicalResult?.emptyReason?.kind ?? null
+          },
           dense: dense.map(({ declarationId, score, rank }) => ({ declarationId, score, rank })),
           fused,
           arms: {
@@ -210,7 +226,7 @@ async function main() {
             "a2-seeded-fill": { finalCandidates: fill.finalCandidates, regions: fill.regions, emitted_lines: fill.emitted_lines, emitted_bytes: fill.emitted_bytes, dropped: fill.dropped }
           }
         });
-        process.stderr.write(`[r11]   ${task.id} gate=${gate.reason} a2=${a2.finalCandidates.length}c/${a2.emitted_lines}l a3=${a3.finalCandidates.length}c/${a3.emitted_lines}l dense-only=${fused.filter(entry => entry.lexicalRank === null).length}\n`);
+        process.stderr.write(`[r11]   ${task.id}/${variant} gate=${gate.reason} a2=${a2.finalCandidates.length}c/${a2.emitted_lines}l a3=${a3.finalCandidates.length}c/${a3.emitted_lines}l dense-only=${fused.filter(entry => entry.lexicalRank === null).length}\n`);
       }
     } finally {
       resolver?.close();
@@ -225,7 +241,7 @@ async function main() {
   const runProfile = {
     corpus_mode: "external-full",
     corpus_hash: hashes.corpus,
-    variant_set: "primary",
+    variant_set: VARIANTS,
     evaluation_mode: "retrieval",
     repeats: 1,
     cache_state: "warm-declaration-and-query-vectors",
@@ -263,7 +279,7 @@ async function main() {
   });
   const strata = {};
   for (const [name, base] of [["a2-lexical", "a2-lexical"], ["a2-seeded-fill", "a2-seeded-fill"]]) {
-    strata[`${name}->a3-rrf-dense`] = Object.fromEntries(["origin", "corpus"].map(by => [by, Object.fromEntries(
+    strata[`${name}->a3-rrf-dense`] = Object.fromEntries(["origin", "corpus", "variant"].map(by => [by, Object.fromEntries(
       ["declaration_recall_at_10", "mrr", "required_line_recall"].map(metric => [metric, stratifiedDelta(reports[base], reports["a3-rrf-dense"], metric, by)])
     )]));
   }

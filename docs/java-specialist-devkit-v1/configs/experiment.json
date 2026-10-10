@@ -102,6 +102,9 @@
   },
   "scorer": "frozen kit harness/scoring.py (harness score/compare; scoreWithFrozenKit for agent QA); repair: frozen judge",
   "decision": "decideFourWay/v2: GO_OPTIONAL needs Recall@10 delta >= gates.dense_recall_at_10_min_delta with lower bound > 0 over >= 8 clusters, A3 beating the seeded-fill control (lower > 0), MRR and line-recall lower bounds >= 0, agent QA lower bound >= 0 and prompt-token median ratio <= gates.dense_input_token_median_max_ratio; NO_GO when the Recall@10 upper bound < gate over >= 8 clusters; else INCONCLUSIVE; invalid/over-budget rows -> INVALID_EXPERIMENT",
-  "zvec": "not run: a native zvec system profile would be a separate system-level comparison, never mixed with this same-representation ablation"
+  "zvec": "not run: a native zvec system profile would be a separate system-level comparison, never mixed with this same-representation ablation",
+  "eval_protocol": "eval-protocol/v1.2 (scripts/evaluate-java-task.mjs EVAL_PROTOCOL_VERSION): per-round received-source ledger for both arms (QA), 80-line default read window, java_symbol head previews and no_vocabulary_overlap diagnosis",
+  "retrieval_variants": "all (kit primary + language variants), stratified by variant",
+  "follow_up": "docs/next-stage/a2-static-fixes.md (retrieval dense decision NO_GO under v1.2 with name locators)"
  }
 }

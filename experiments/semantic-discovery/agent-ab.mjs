@@ -26,6 +26,7 @@ import {
   armOrder,
   attemptStateOf,
   createRecorder,
+  EVAL_PROTOCOL_VERSION,
   scoreRunOutcome,
   scoreWithFrozenKit
 } from "../../scripts/evaluate-java-task.mjs";
@@ -289,6 +290,8 @@ async function main() {
               tools: [EVAL_JAVA_SYMBOL_TOOL, ...toolSet.tools],
               chat: ({ messages, tools, maxTokens }) => chatWithRetry({ messages, tools, maxTokens }),
               maxRounds: MAX_ROUNDS,
+              // Eval protocol v1.2: the same received-source ledger for both arms.
+              ...(!isRepair && task.budget ? { sourceBudget: task.budget } : {}),
               onChat: request => {
                 appendFileSync(path.join(OUTPUT, "model-payloads.jsonl"), `${JSON.stringify({ attempt: { taskId: task.id, arm, repeat }, requestIndex: request.requestIndex, payloadHash: request.payloadHash, tools: request.tools, messages: request.messages })}\n`);
                 for (const receipt of request.newReceipts) recorder.recordModelDelivery(receipt, request);
@@ -416,7 +419,7 @@ async function main() {
     arms: ARMS,
     corpus: { mode: "bundled-scoped", corpusHash: scorer.corpusHash, datasetHash: scorer.datasetHash, split: scorer.split, taskIds: PILOT_TASK_IDS },
     representation: {
-      searchDocument: "search_doc_text (product index schema v8)",
+      searchDocument: "search_doc_text (product index schema v8, java facts revision 4: locator = declaration name)",
       dense: DENSE_REPRESENTATION_VERSION,
       query: QUERY_REPRESENTATION_VERSION
     },
@@ -429,6 +432,7 @@ async function main() {
       systemPromptSha256: sha256(EVAL_SYSTEM_PROMPT),
       tools: ["java_symbol", "native (buildToolSet product)"],
       candidateBlock: "formatCandidateBlock: ranked path:line name, at most K",
+      evalProtocol: EVAL_PROTOCOL_VERSION,
       maxRounds: MAX_ROUNDS,
       repeats: REPEATS,
       seed: SEED

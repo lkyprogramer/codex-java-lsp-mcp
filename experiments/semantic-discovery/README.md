@@ -62,6 +62,8 @@ Query vectors are cached under the same `cacheIdentity`: the provider identity, 
   - clipped to the remaining 160-line / 16,000-byte task budget.
 - A file whose current sha256 differs from the indexed hash is dropped. It is never path-only credit or a stale range.
 
+**Variants**: `compare.mjs --variants all` (default) runs the kit primary query and each language variant. Strata are by variant, origin and corpus. `java_symbol` is called with `preview: "none"`.
+
 **Scoring**: the kit itself.
 - `compare.mjs` writes `java-specialist-results/v1` packs and runs `harness score`, then `harness compare` (cluster bootstrap).
 - `agent-ab.mjs` uses `scoreWithFrozenKit` and the frozen repair judge.

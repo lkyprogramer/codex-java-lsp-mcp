@@ -1,5 +1,7 @@
 # R11 result: equal-budget experiment and four-way conclusion
 
+> **Follow-up:** `docs/next-stage/a2-static-fixes.md` fixed the A2 gaps listed below (name locators, no-vocabulary diagnosis, bounded previews) and a stale-index bug, then re-measured under eval protocol v1.2. With correct locators and both language variants, the retrieval-layer dense decision is **NO_GO**; native vs A2 stays INCONCLUSIVE. The numbers in this file are the R11 (v1.1) measurement.
+
 **State: DONE. Conclusion: `INCONCLUSIVE`.** This follows the kit 06 stop rule: one pre-registered pilot, then close. No other provider or model is tried.
 - **Valid experiment**: equal budgets, the kit's own scorer, deterministic reruns, and 0 invalid or over-budget rows.
 - **Retrieval layer**: under equal budgets, dense fusion's Recall@10 gain cannot be separated from padding the lexical list with **random** declarations. It only appears in the 14–19-declaration authored corpora, and MRR drops significantly.

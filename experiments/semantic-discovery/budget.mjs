@@ -139,8 +139,10 @@ export function lexicalDeclarationIds(result, k = CHANNEL_POOL_K) {
 
 /**
  * Declaration locators from the product index facts (type/method rows), the
- * same source the product's own locator uses (line = range.start.line). Both
- * arms resolve through this one resolver.
+ * same source the product's own locator uses: line = the name
+ * (nameRange.start), the window starts at the declaration head
+ * (range.start, annotations included). Both arms resolve through this one
+ * resolver.
  */
 export class DeclarationResolver {
   constructor(dbPath) {
@@ -169,7 +171,9 @@ export class DeclarationResolver {
         name: kind === "type" ? facts.simpleName : facts.name,
         path: row.path,
         contentHash: row.contentHash,
-        line: range.start.line,
+        // The product locator: the declaration name (facts revision 4).
+        line: (facts.nameRange?.start ?? range.start).line,
+        startLine: range.start.line,
         endLine: range.end.line
       };
       break;
@@ -204,7 +208,7 @@ function sourceLines(buffer) {
  * - an unresolvable id or a file whose current sha256 differs from the
  *   indexed hash is DROPPED (never a path-only or stale-range credit);
  * - up to K candidates {path, line, name};
- * - up to max_regions regions, each from the declaration start for
+ * - up to max_regions regions, each from the declaration head for
  *   floor(max_lines / max_regions) lines, clipped to the remaining line and
  *   byte budget, so emitted lines/bytes never exceed the task budget.
  */
@@ -236,13 +240,13 @@ export function renderEvidence({ declarationIds, resolver, repoRoot, budget, k =
       continue;
     }
     const file = fileOf(locator.path);
-    if (!file || file.hash !== locator.contentHash || locator.line > file.lines.length) {
+    if (!file || file.hash !== locator.contentHash || (locator.startLine ?? locator.line) > file.lines.length) {
       dropped.stale.push(declarationId);
       continue;
     }
     finalCandidates.push({ path: locator.path, line: locator.line, name: locator.name, declarationId });
     if (regions.length >= budget.max_regions) continue;
-    const start = locator.line;
+    const start = locator.startLine ?? locator.line;
     let end = Math.min(locator.endLine, start + share - 1, start + (budget.max_lines - lines) - 1, file.lines.length);
     let size = 0;
     for (let line = start; line <= end; line += 1) size += file.lines[line - 1].length;
@@ -270,9 +274,10 @@ export function formatCandidateBlock(finalCandidates) {
 }
 
 /** One kit result row (java-specialist-results/v1 `results[]` entry). */
-export function kitResult(taskId, rendered) {
+export function kitResult(taskId, rendered, variant = "primary") {
   return {
     task_id: taskId,
+    variant,
     status: "OK",
     regions: rendered.regions,
     candidates: rendered.finalCandidates.map(({ path: candidatePath, line, name }) => ({ path: candidatePath, line, name })),
@@ -461,12 +466,13 @@ export function medianPromptTokens(runs) {
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
-/** Per-origin / per-corpus deltas of one metric from two kit reports. */
+/** Per-origin / per-corpus / per-variant deltas of one metric from two kit reports (paired by task, variant, repeat). */
 export function stratifiedDelta(baseline, candidate, metric, by) {
   const groups = new Map();
-  const index = new Map(baseline.rows.map(row => [row.task_id, row]));
+  const keyOf = row => `${row.task_id}\u0000${row.variant ?? "primary"}\u0000${row.repeat ?? 0}`;
+  const index = new Map(baseline.rows.map(row => [keyOf(row), row]));
   for (const row of candidate.rows) {
-    const base = index.get(row.task_id);
+    const base = index.get(keyOf(row));
     if (!base || base[metric] == null || row[metric] == null) continue;
     const key = row[by] ?? base[by];
     const entry = groups.get(key) ?? { tasks: 0, baseline: 0, candidate: 0 };

@@ -500,7 +500,11 @@ export async function runLiveAgentTask({
   maxRounds = MAX_LIVE_ROUNDS,
   maxCompletionTokens = DEFAULT_MAX_COMPLETION_TOKENS,
   toolResultMaxBytes = MODEL_TOOL_MESSAGE_MAX_BYTES,
-  onChat
+  onChat,
+  // Eval protocol v1.2: { max_lines, max_bytes } of the task. When given, a
+  // ledger of the source received so far follows every tool round, identical
+  // for every arm.
+  sourceBudget
 }) {
   const started = Date.now();
   const observedPaths = new Set();
@@ -555,8 +559,15 @@ export async function runLiveAgentTask({
     requestIndex += 1;
     return chat(request);
   };
+  // Received source as the kit counts it: every retained slice, overlaps
+  // included (a preview and a later read of the same lines count twice).
+  const ledger = { lines: 0, bytes: 0 };
   const pushToolMessage = (id, name, raw) => {
     const serialized = serializeModelToolResult(name, raw, { maxBytes: toolResultMaxBytes });
+    for (const slice of serialized.slices ?? []) {
+      ledger.lines += slice.endLine - slice.startLine + 1;
+      ledger.bytes += Buffer.byteLength(slice.text, "utf8");
+    }
     messages.push({ role: "tool", tool_call_id: id, content: serialized.content });
     toolReceipts.push({
       callId: id,
@@ -630,6 +641,12 @@ export async function runLiveAgentTask({
         for (const filePath of toolPaths) observedPaths.add(filePath);
         for (const filePath of collectCandidatePaths(raw)) candidatePaths.add(filePath);
         toolCalls.push({ name, args, pathCount: toolPaths.length });
+      }
+      if (sourceBudget) {
+        messages.push({
+          role: "user",
+          content: `Source budget so far: received ${ledger.lines} of ${sourceBudget.max_lines} lines and ${ledger.bytes} of ${sourceBudget.max_bytes} bytes (read windows and previews together; receiving more fails the task).`
+        });
       }
       if (!answerNudgeSent && round >= Math.floor(maxRounds * 0.6)) {
         answerNudgeSent = true;

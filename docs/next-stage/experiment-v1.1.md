@@ -18,6 +18,13 @@ A native zvec system profile is a different system and is not run here. It must 
 
 ## Fixed profile (`ExperimentProfile`, hashed as `protocolHash`)
 
+- **Since the A2 fixes (`docs/next-stage/a2-static-fixes.md`)**:
+  - The retrieval layer runs `--variants all` by default: the kit primary query plus each task's language variant, stratified by variant.
+  - `java_symbol` is called with `preview: "none"` (locators only; the shared renderer owns the evidence).
+  - Agent drivers run **eval protocol v1.2**: a received-source ledger after every tool round for both arms, and an 80-line default `read` window.
+  - Results from different protocol versions are not compared.
+
+
 - **Corpus**: mode, kit `corpus_fingerprint`, `dataset_digest`, split and task ids. `compare.mjs` refuses a stage whose hash differs from its hydrate manifest.
 - **Representation**: `search_doc_text` (product index schema v8), `searchdoc-v2/declaration-join-v1` and `query-verbatim-v1`.
 - **Provider**: endpoint, provider, model, revision/epoch, dimension and metric. No credential is ever included.

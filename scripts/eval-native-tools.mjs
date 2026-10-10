@@ -37,6 +37,9 @@ export const NATIVE_TOOL_LIMIT = 8_000;
 /** docs/03 §1.1: an ordinary read returns at most 16000 source bytes. */
 export const READ_MAX_SOURCE_BYTES = 16_000;
 const MAX_READ_LINES = 400;
+/** Eval protocol v1.2: a read without maxLines returns this window (was 200);
+ *  longer windows stay available up to MAX_READ_LINES by asking for them. */
+export const DEFAULT_READ_LINES = 80;
 const LIST_MAX_ENTRIES = 500;
 
 export const EVAL_LIST_TOOL = {
@@ -241,7 +244,7 @@ export function buildToolSet(profile, kind, { candidateRoot, budget = {} } = {})
   }
   const outputCapBytes = budget.outputCapBytes ?? NATIVE_TOOL_LIMIT;
   const rgTimeoutMs = budget.rgTimeoutMs ?? 20_000;
-  const maxLines = budget.maxLines ?? 200;
+  const maxLines = budget.maxLines ?? DEFAULT_READ_LINES;
   const readMaxBytes = budget.readMaxBytes ?? READ_MAX_SOURCE_BYTES;
   const tools = [...(kind === "repair" ? [EVAL_WRITE_FILE_TOOL, EVAL_TEST_TOOL] : []), EVAL_LIST_TOOL, EVAL_RG_TOOL, EVAL_READ_TOOL];
   const invoke = async (name, args) => {
