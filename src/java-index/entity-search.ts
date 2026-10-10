@@ -100,8 +100,12 @@ export type DetailedEntitySearchResult = {
   /** Present for exact-intent lookups only. */
   exact?: ExactLookupOutcome;
   stopReason?: EntitySearchStopReason;
-  /** Physical work counters for the budget that was applied (if any). */
-  work: { postings: number };
+  /** Physical work counters for the budget that was applied (if any):
+   *  `postings` are the billed (in-scope) posting rows; `examined` also
+   *  counts the rows a scope filtered out, which cost scan time but no budget.
+   *  `examined` is an upper bound: a scoped scan counts whole pages, and the
+   *  row that hit the budget is counted though not billed. */
+  work: { postings: number; examined?: number };
   /** Index generation the scan observed; 0 when the db has no generation meta
    *  or no snapshot was read (a request whose deadline expired on entry). */
   generation: number;

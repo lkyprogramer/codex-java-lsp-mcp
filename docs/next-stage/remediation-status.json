@@ -1,7 +1,7 @@
 {
   "schema": "java-specialist-remediation-status/v1",
   "note": "Task progress lives here, not in the audit kit: docs/java-specialist-release-audit-v1.1/tasks/*.md and plan.json are hashed by the kit's SHA256SUMS (tools/check_bundle.py) and stay byte-identical to the delivered package.",
-  "updated": "2026-10-09",
+  "updated": "2026-10-10",
   "tasks": {
     "R00": {
       "state": "DONE",
@@ -54,7 +54,7 @@
     },
     "R09": {
       "state": "DONE",
-      "commit": "(this commit: fix(search): enforce one deadline across lookup and delivery)",
+      "commit": "836f772",
       "report": "docs/next-stage/r09-task-result.md"
     },
     "R10": {
@@ -75,5 +75,11 @@
     "state": "DONE",
     "commit": "b22c0a5",
     "report": "docs/next-stage/r05-r08-review-fixes.md"
+  },
+  "r09Followups": {
+    "scope": "R09 residual items: cold-build lock, HOL queue order (low-concurrency), scope-filtered deadline, legacy search bound",
+    "state": "DONE",
+    "commit": "(this commit)",
+    "report": "docs/next-stage/r09-followups.md"
   }
 }

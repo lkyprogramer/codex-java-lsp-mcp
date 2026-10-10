@@ -4,7 +4,8 @@
 //      default posting budget blocks synchronous SQLite for 25-50ms, over the
 //      20ms event-loop gate, and SQLite itself needs ~1us/posting. So ONE
 //      shared read-only worker runs the scans: queue <= 32, one query at a
-//      time, expired waiters leave the queue without running SQL, and a query
+//      time (waiting exact lookups ahead of waiting broad scans), expired
+//      waiters leave the queue without running SQL, and a query
 //      stalled past its deadline + grace (between native steps) is
 //      terminated; its result settles only after the thread (and its
 //      connections) exited, and no second thread starts meanwhile. The worker
@@ -17,6 +18,7 @@ import type {
   EntitySearchMode,
   EntitySearchScope
 } from "../java-index/entity-search.js";
+import { classifyQuery } from "./query-intent.js";
 
 export const QUERY_WORKER_QUEUE_MAX = 32;
 /**
@@ -63,6 +65,8 @@ export type QueryWorkerStats = {
 type Pending = {
   id: number;
   request: QueryWorkerRequest;
+  /** An exact lookup: an index point read, served before waiting scans. */
+  point: boolean;
   resolve: (result: DetailedEntitySearchResult) => void;
   reject: (error: Error) => void;
   expiry?: NodeJS.Timeout;
@@ -72,6 +76,15 @@ type WorkerReply =
   | { id: number; ok: true; result: DetailedEntitySearchResult }
   | { id: number; ok: false; error: string }
   | { released: number };
+
+/** Same intent rule as the scan itself (searchDetailed); never throws. */
+function isPointLookup(request: QueryWorkerRequest): boolean {
+  try {
+    return (request.mode === "auto" ? classifyQuery(request.task, request.mode) : request.mode) === "exact";
+  } catch {
+    return false; // classifyQuery rejects empty/oversized text: the scan answers it
+  }
+}
 
 export function absoluteNow(): number {
   return performance.timeOrigin + performance.now();
@@ -123,7 +136,7 @@ export class QueryWorkerPool {
       return Promise.resolve(stoppedResult("queue_full"));
     }
     return new Promise((resolve, reject) => {
-      const pending: Pending = { id: this.nextId++, request, resolve, reject };
+      const pending: Pending = { id: this.nextId++, request, point: isPointLookup(request), resolve, reject };
       if (request.deadlineAt !== undefined) {
         // An expired waiter leaves the queue; it never reaches the worker.
         pending.expiry = setTimeout(() => {
@@ -135,7 +148,14 @@ export class QueryWorkerPool {
           this.updateRef();
         }, Math.max(0, request.deadlineAt - absoluteNow()));
       }
-      this.queue.push(pending);
+      // Low-concurrency HOL fix: one thread, no preemption of the running
+      // scan, but a waiting point lookup goes ahead of waiting scans (FIFO
+      // within each class). A scan with a deadline cannot starve past it; one
+      // without a deadline could in principle wait behind a steady stream of
+      // point lookups (not a concern for a single-user server).
+      const firstScan = pending.point ? this.queue.findIndex(waiting => !waiting.point) : -1;
+      if (firstScan >= 0) this.queue.splice(firstScan, 0, pending);
+      else this.queue.push(pending);
       this.counters.queuePeak = Math.max(this.counters.queuePeak, this.queue.length);
       this.pump();
     });

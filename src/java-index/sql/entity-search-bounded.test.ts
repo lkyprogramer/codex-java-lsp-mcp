@@ -331,6 +331,52 @@ test("R06: the posting budget is only spent on in-scope postings", () => {
   }
 });
 
+// Scope follow-up: out-of-scope postings are never billed (R06), but the scan
+// still reads them, so it must consult the deadline while it does. 20k
+// out-of-scope entities share four chunk tokens (80k filtered postings) with
+// the one in-scope target; the scope filters them inside SQL, so without a
+// per-page check nothing would observe the deadline until the scan is over.
+test("scope-filtered postings are counted as examined work and stop at the deadline", () => {
+  const db = openIndexDb(":memory:");
+  ensureSchema(db);
+  try {
+    const shared = ["ledger", "journal", "balance", "posting"];
+    const record = (entityId: string, relativePath: string): EntityRecord => ({
+      ...r06Record(entityId, relativePath, false),
+      chunkTokens: shared
+    });
+    const records: EntityRecord[] = Array.from({ length: 20_000 }, (_, i) =>
+      record(`n${String(i).padStart(5, "0")}`, `noise/src/main/java/demo/N${i}.java`));
+    records.push(record("zz-target", TARGET));
+    replaceAllEntities(db, records);
+    const search = new SqlEntitySearch(db);
+    const task = shared.join(" ");
+    const total = shared.length * records.length;
+    let checks = 0;
+    const complete = search.searchDetailed(task, 1, "auto", {
+      budget: { remainingMs: () => (checks += 1, 10_000) },
+      scope: { sourceRoots: ["z"] }
+    });
+    assert.equal(complete.stopReason, undefined);
+    assert.equal(complete.hits[0]?.relativePath, TARGET);
+    assert.equal(complete.work.postings, shared.length, "only the target's postings are billed");
+    assert.equal(complete.work.examined, total, "every filtered posting is counted as examined");
+    assert.ok(checks >= total / 2048, `the deadline is consulted at least once per page of filtered rows: ${checks} checks for ${total} rows`);
+
+    // a deadline that passes mid-scan stops it there
+    let calls = 0;
+    const stopAt = Math.floor(checks / 2);
+    const stopped = search.searchDetailed(task, 1, "auto", {
+      budget: { remainingMs: () => ((calls += 1) >= stopAt ? 0 : 10_000) },
+      scope: { sourceRoots: ["z"] }
+    });
+    assert.equal(stopped.stopReason, "deadline");
+    assert.ok((stopped.work.examined ?? 0) > 0 && (stopped.work.examined ?? 0) < total, `stopped mid-scan after ${stopped.work.examined} of ${total}`);
+  } finally {
+    close(db);
+  }
+});
+
 // ---------------------------------------------------------------- R07
 
 function r07Record(entityId: string, relativePath: string, overrides: Partial<EntityRecord> = {}): EntityRecord {
@@ -422,6 +468,58 @@ test("R07: limit 20 returns 20 and selectionLimited says when more matched (cap+
   const db = r07Db(make(25));
   try {
     assert.equal(new SqlEntitySearch(db).searchDetailed("refund", 500, "text").hits.length, 20, "the SQL layer clamps to the shared cap of 20 (discovery rejects >20 earlier)");
+  } finally {
+    close(db);
+  }
+});
+
+// Keyset page boundaries: df is exactly two pages (4096) and the in-scope
+// rows sit at scan positions 2047, 2048 and 2049, around the first page end.
+test("scoped keyset pages neither skip nor repeat rows at a page boundary", () => {
+  const db = openIndexDb(":memory:");
+  ensureSchema(db);
+  try {
+    const inScope = new Set([2046, 2047, 2048]);
+    const records: EntityRecord[] = Array.from({ length: 4096 }, (_, i) =>
+      r06Record(`e${String(i).padStart(4, "0")}`, inScope.has(i) ? `z/src/main/java/demo/E${i}.java` : `noise/src/main/java/demo/E${i}.java`, false));
+    replaceAllEntities(db, records);
+    const search = new SqlEntitySearch(db);
+    const scoped = search.searchDetailed("ledger", 10, "text", { budget: { remainingMs: () => 10_000 }, scope: { sourceRoots: ["z"] } });
+    assert.deepEqual(scoped.hits.map(hit => hit.entityId).sort(), ["e2046", "e2047", "e2048"]);
+    assert.equal(scoped.work.postings, 3);
+    assert.equal(scoped.work.examined, 4096);
+    assert.equal(scoped.stopReason, undefined);
+
+    // a route that starts with the posting budget already spent reads no page
+    const spent = search.searchDetailed("service ledger", 10, "text", {
+      budget: { maxPostings: 3, remainingMs: () => 10_000 },
+      scope: { sourceRoots: ["z"] }
+    });
+    assert.equal(spent.stopReason, "postings");
+    assert.equal(spent.work.postings, 3, "the identifier route billed the three in-scope rows");
+    assert.equal(spent.work.examined, 4096, "the chunk route did not scan its filtered pages");
+  } finally {
+    close(db);
+  }
+});
+
+// Legacy-path follow-up: search() (queryEntitySearch / the context-graph
+// lexical fallback) keeps its route semantics but is bounded like
+// searchDetailed - the default posting cap and the caller's deadline.
+test("legacy search() honors the caller deadline and the default posting cap", () => {
+  const db = openIndexDb(":memory:");
+  ensureSchema(db);
+  try {
+    const records: EntityRecord[] = Array.from({ length: 20_000 }, (_, i) =>
+      r06Record(`n${String(i).padStart(5, "0")}`, `noise/src/main/java/demo/N${i}.java`, false));
+    // visited last (highest sym) and the best match: only an unbounded scan reaches it
+    records.push(r06Record("zz-target", TARGET, true));
+    replaceAllEntities(db, records);
+    const search = new SqlEntitySearch(db);
+    assert.deepEqual(search.search("ledger", 1, "text", { remainingMs: () => 0 }), [], "an expired deadline runs no scan");
+    const top = search.search("ledger", 1, "text", { remainingMs: () => 10_000 });
+    assert.equal(top.length, 1);
+    assert.notEqual(top[0]!.relativePath, TARGET, "the 20k posting cap stops the scan before the 20,001st posting");
   } finally {
     close(db);
   }

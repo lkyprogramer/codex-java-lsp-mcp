@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { cp, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { existsSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { BuilderSupervisor } from "../builder-supervisor.js";
+import { DeadlineBudget } from "../../runtime/deadline-budget.js";
 import { runSqlColdBuild } from "../../index-builder/cold-build.js";
 import { close, openIndexDb } from "./driver.js";
 import { ensureSchema } from "./schema.js";
@@ -282,5 +283,110 @@ test("sibling VACUUM INTO copy retargets repoRoot and waits for reconcile", asyn
     await client.close();
     await supervisor.stop();
     await rm(repo, { recursive: true, force: true });
+  }
+});
+
+// Cold-build lock follow-up: an agent polling java_symbol while the index is
+// BUILDING (status + awaitPrewarmReady, the R09 runtime path) must never make
+// the real builder child fail with "database is locked". maxRestarts=0 so a
+// single lock failure is visible instead of being hidden by a restart.
+test("polling a BUILDING index never fails the real cold builder", async () => {
+  const repo = await mkdtemp(path.join(tmpdir(), "iod-life-poll-repo-"));
+  await writeFile(path.join(repo, "pom.xml"), "<project><modelVersion>4.0.0</modelVersion><groupId>p</groupId><artifactId>p</artifactId><version>1</version></project>");
+  for (let i = 0; i < 300; i += 1) {
+    const dir = path.join(repo, "src", "main", "java", "demo", `p${i % 10}`);
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, `S${i}.java`), `package demo.p${i % 10};\n/** order ledger ${i} */\npublic class S${i} { public void updateOrder(int id) {} public void refund(long id) {} }\n`);
+  }
+  const outcomes: string[] = [];
+  try {
+    for (let round = 0; round < 6; round += 1) {
+      const dbDir = await mkdtemp(path.join(tmpdir(), "iod-life-poll-db-"));
+      const dbPath = path.join(dbDir, "index.sqlite");
+      const supervisor = new BuilderSupervisor({ repoRoot: repo, dbPath, maxRestarts: 0, idleMs: 5_000 });
+      const client = new SqlJavaIndexClient(repo, dbPath, supervisor, 5_000);
+      let polling = false;
+      const poll = setInterval(() => {
+        if (polling) return;
+        polling = true;
+        void (async () => {
+          try {
+            const status = await client.status();
+            if (status.state === "BUILDING") await client.awaitPrewarmReady().catch(() => undefined);
+          } catch {
+            // not opened yet / closed
+          } finally {
+            polling = false;
+          }
+        })();
+      }, 5);
+      try {
+        await client.open(1);
+        await waitUntil(() => !["BUILDING", "NEW"].includes(client.localStatus().state), 60_000);
+        const status = client.localStatus();
+        outcomes.push(`${status.state}${status.lastError ? `:${status.lastError}` : ""}`);
+      } finally {
+        clearInterval(poll);
+        await client.close();
+        await supervisor.stop();
+        await rm(dbDir, { recursive: true, force: true });
+      }
+    }
+    assert.deepEqual(outcomes, Array(6).fill("READY"));
+  } finally {
+    await rm(repo, { recursive: true, force: true });
+  }
+});
+
+test("awaitPrewarmReady without a budget ends when the cold build fails or the client closes", { timeout: 10_000 }, async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "iod-life-prewarm-fail-"));
+  const dbPath = path.join(dir, "index.sqlite");
+  const scriptPath = path.join(dir, "fake-builder.mjs");
+  await writeFile(scriptPath, `const mode = process.argv[process.argv.indexOf("--mode") + 1];
+if (mode === "cold") process.exit(1);
+`);
+  const supervisor = new BuilderSupervisor({ repoRoot: dir, dbPath, scriptPath, maxRestarts: 0, idleMs: 5_000, stallMs: 5_000, watchdogIntervalMs: 200 });
+  const client = new SqlJavaIndexClient(dir, dbPath, supervisor, 5_000);
+  try {
+    assert.equal((await client.open(1)).state, "BUILDING");
+    await assert.rejects(client.awaitPrewarmReady(), /cold-build exited 1/);
+    await client.close();
+    await assert.rejects(client.awaitPrewarmReady(), /closed/);
+  } finally {
+    await client.close();
+    await supervisor.stop();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("dropping the reader while a builder is alive leaves WAL truncation to the builder", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "iod-life-compact-gate-"));
+  const dbPath = path.join(dir, "index.sqlite");
+  const wal = `${dbPath}-wal`;
+  const stub = {
+    status: () => ({ state: "cold-building" as const, queued: 0 }),
+    coldBuild: () => new Promise<void>(() => undefined),
+    submit: () => new Promise(() => undefined),
+    stop: async () => undefined
+  } as unknown as BuilderSupervisor;
+  const client = new SqlJavaIndexClient(dir, dbPath, stub, 5_000);
+  let builder: ReturnType<typeof openIndexDb> | undefined;
+  try {
+    assert.equal((await client.open(1)).state, "BUILDING");
+    // stands in for the builder child: the writer, with WAL frames pending
+    builder = openIndexDb(dbPath);
+    ensureSchema(builder);
+    builder.exec("PRAGMA wal_autocheckpoint=0");
+    builder.exec("CREATE TABLE IF NOT EXISTS bulk(payload TEXT)");
+    for (let i = 0; i < 50; i += 1) builder.prepare("INSERT INTO bulk VALUES (?)").run("x".repeat(2048));
+    await client.status(); // opens this process's reader
+    assert.ok((client as unknown as ClientInternals).db);
+    await assert.rejects(client.awaitPrewarmReady({ budget: DeadlineBudget.fromTimeout(30) }));
+    await new Promise(resolve => setTimeout(resolve, 150)); // release() + the would-be compaction
+    assert.ok(existsSync(wal) && statSync(wal).size > 0, "a live builder's WAL must not be truncated from the MCP process");
+  } finally {
+    if (builder) close(builder);
+    await client.close();
+    await rm(dir, { recursive: true, force: true });
   }
 });

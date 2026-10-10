@@ -51,6 +51,12 @@ import {
   type SqlQueryDeps
 } from "./sql-queries.js";
 
+/** The request deadline as the legacy search's remaining-time source. */
+function remainingMsOf(requestOptions: JavaIndexRequestOptions | undefined): (() => number) | undefined {
+  const budget = requestOptions?.budget;
+  return budget ? () => budget.remainingMs() : undefined;
+}
+
 function emptyStatus(state: JavaIndexStatus["state"] = "NEW"): JavaIndexStatus {
   return {
     state,
@@ -229,6 +235,14 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     this.dropConn();
     for (;;) {
       requestOptions?.budget?.throwIfExpired("awaitPrewarmReady");
+      // Without a budget this loop must still end once nothing can make the
+      // index READY: the client closed, or the cold build failed for good.
+      if (!this.opened || this.lastStatus.state === "CLOSED") {
+        throw new JavaIntelligenceError("INDEX_PARTIAL", "Java index client closed while waiting for prewarm");
+      }
+      if (this.lastStatus.state === "DEGRADED" && this.supervisor?.status().state !== "cold-building") {
+        throw new JavaIntelligenceError("INDEX_PARTIAL", this.lastStatus.lastError ?? "cold build failed");
+      }
       if (this.peekBuildState() === "READY") {
         this.reload();
         return this.lastStatus;
@@ -293,14 +307,14 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
   }
   async queryContextGraph(
     input: Parameters<JavaIndexClientApi["queryContextGraph"]>[0],
-    _requestOptions?: JavaIndexRequestOptions
+    requestOptions?: JavaIndexRequestOptions
   ): Promise<ContextGraphResult> {
     this.ensureConn();
     this.graph?.prefetch();
-    return runContextGraph(this.queryDeps(), input);
+    return runContextGraph(this.queryDeps(), input, remainingMsOf(requestOptions));
   }
-  async queryEntitySearch(task: string, limit = ENTITY_SEARCH_DEFAULT_LIMIT, _requestOptions?: JavaIndexRequestOptions): Promise<EntityHit[]> {
-    return runEntitySearch(this.queryDeps(), task, limit);
+  async queryEntitySearch(task: string, limit = ENTITY_SEARCH_DEFAULT_LIMIT, requestOptions?: JavaIndexRequestOptions): Promise<EntityHit[]> {
+    return runEntitySearch(this.queryDeps(), task, limit, remainingMsOf(requestOptions));
   }
 
   async queryAnchor(file: string, line: number, column: number): Promise<AnchorFacts | undefined> {
@@ -461,9 +475,13 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     this.graph = undefined;
     this.search = undefined;
     // The query worker's reader goes first, so the compaction can be the
-    // file's last close.
+    // file's last close. While a builder child is alive it is the only
+    // writer and truncates WAL on its own close; this process stays a reader.
     const dbPath = this.dbPath;
-    void sharedQueryWorker().release(dbPath).finally(() => compactWalFile(dbPath));
+    const released = sharedQueryWorker().release(dbPath);
+    void released.finally(() => {
+      if (!this.supervisor || this.supervisor.status().state === "absent") compactWalFile(dbPath);
+    });
   }
 
   private clearIdle(): void {

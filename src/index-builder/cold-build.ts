@@ -265,10 +265,14 @@ function writeKnowledgeAndEntities(db: IndexDatabase, generation: number): void 
   const repoRoot = readMeta(db, "repoRoot") ?? "";
   const resources = listMyBatisResources(db);
   const bindsMyBatis = myBatisBindingFilter(db);
-  for (const file of sql.iterFiles()) {
-    const bundle = readBundle(db, file.relativePath);
+  // Paths are read up front: a cursor left open across the per-file write
+  // transactions would turn each BEGIN IMMEDIATE into an upgrade of a stale
+  // read snapshot, which fails at once (no busy wait) after any other commit.
+  const paths = (prepareCached(db, "SELECT path FROM file ORDER BY rowid").all() as Array<{ path: string }>).map(row => row.path);
+  for (const relativePath of paths) {
+    const bundle = readBundle(db, relativePath);
     if (!bundle) continue;
-    const content = repoRoot ? readFileSyncSafe(path.join(repoRoot, file.relativePath)) : undefined;
+    const content = repoRoot ? readFileSyncSafe(path.join(repoRoot, relativePath)) : undefined;
     withTransaction(db, () => {
       builder.replaceFile(bundle, sql, generation);
       for (const record of recordsFromBundle(bundle)) writeEntityRecord(db, record);

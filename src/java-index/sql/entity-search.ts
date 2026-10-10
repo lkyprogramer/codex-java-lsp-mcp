@@ -105,6 +105,77 @@ function scopeSql(pathSymColumn: string, scope: EntitySearchScope | undefined): 
   };
 }
 
+/**
+ * Scope follow-up: the scope stays in SQL (R06: only in-scope rows reach the
+ * posting budget), but a statement whose rows are all filtered out yields no
+ * row boundary, so nothing would check the deadline while it reads them. A
+ * scoped scan therefore reads each token's postings in keyset pages of this
+ * many rows - index order, so the visit order is unchanged - checks the
+ * deadline before every page and counts the page as examined work.
+ */
+const SCOPED_SCAN_PAGE_ROWS = 2048;
+
+type PostingRow = Record<string, SQLOutputValue>;
+type PostingSource = {
+  /** Unscoped: every row is billed, so one IN-list statement per chunk. */
+  all(chunk: number[]): Iterable<PostingRow>;
+  /** Key of the posting that ends the page after `after`; undefined on the last page. */
+  pageEnd(tokenSym: number, after: number): number | undefined;
+  /** In-scope rows with key in (after, upTo]. */
+  page(tokenSym: number, after: number, upTo: number): Iterable<PostingRow>;
+};
+
+function* postingRows(
+  context: RouteContext,
+  tokens: ReadonlyArray<{ sym: number; df: number }>,
+  source: PostingSource,
+  extraBinds: number
+): Generator<PostingRow, void, undefined> {
+  const { budget, stop, work } = context;
+  if (!context.scope?.sql) {
+    for (const chunk of bindChunks(tokens.map(token => token.sym), extraBinds)) {
+      for (const row of source.all(chunk)) {
+        work.examined += 1;
+        yield row;
+      }
+    }
+    return;
+  }
+  for (const token of [...tokens].sort((left, right) => left.sym - right.sym)) {
+    let after = Number.MIN_SAFE_INTEGER;
+    let read = 0;
+    for (;;) {
+      if (budget?.expired()) {
+        if (stop) recordStop(stop, "deadline");
+        return;
+      }
+      // An earlier route may have spent the posting budget: no in-scope row
+      // could be billed, so do not read the filtered pages either.
+      if (budget && budget.visited() >= budget.maxPostings) {
+        if (stop) recordStop(stop, "postings");
+        return;
+      }
+      const upTo = source.pageEnd(token.sym, after);
+      // df is the token's posting count, so the last page is the remainder.
+      work.examined += upTo === undefined ? Math.max(0, token.df - read) : SCOPED_SCAN_PAGE_ROWS;
+      read += SCOPED_SCAN_PAGE_ROWS;
+      yield* source.page(token.sym, after, upTo ?? Number.MAX_SAFE_INTEGER);
+      if (upTo === undefined) break;
+      after = upTo;
+    }
+  }
+}
+
+/** In-scope rows are billed at the row boundary; returns false to stop the scan. */
+function billPosting(context: RouteContext): boolean {
+  const { budget, stop } = context;
+  if (!budget) return true;
+  const verdict = budget.take();
+  if (verdict === "ok") return true;
+  if (stop) recordStop(stop, verdict);
+  return false;
+}
+
 // Query tokens that exist in the corpus, keyed by sym: posting rows carry
 // token syms, so a row maps back to its token without a per-row lookup.
 function queryTokenSyms(db: IndexDatabase, tokens: readonly string[]): Map<number, string> {
@@ -120,6 +191,7 @@ type RouteContext = {
   budget?: QueryWorkBudget;
   stop?: { reason?: EntitySearchStopReason };
   scope?: ScopeSql;
+  work: { examined: number };
   trace?: QueryTrace;
 };
 
@@ -193,10 +265,14 @@ function fqnHits(db: IndexDatabase, task: string, cap: number, scope?: ScopeSql)
   const seen = new Set<string>();
   const hits: EntityRow[] = [];
   for (const candidate of extractFqnCandidates(task)) {
+    // An entity's simple name is the last [.#$] segment of its fqn, so a
+    // suffix match implies a simple-name match: the entity_simple index
+    // bounds the lookup instead of a leading-wildcard LIKE over every fqn.
+    const simpleName = candidate.split(/[.#]/).pop()!.toLowerCase();
     for (const row of prepareCached(
       db,
-      `${ENTITY_SELECT} WHERE (e.fqn=? OR e.fqn LIKE '%.' || ?)${scope?.sql ?? ""}`
-    ).iterate(candidate, candidate, ...(scope?.params ?? [])) as Iterable<Record<string, SQLOutputValue>>) {
+      `${ENTITY_SELECT} WHERE e.simple_name_lc=? AND (e.fqn=? OR e.fqn LIKE '%.' || ?)${scope?.sql ?? ""}`
+    ).iterate(simpleName, candidate, candidate, ...(scope?.params ?? [])) as Iterable<Record<string, SQLOutputValue>>) {
       const entity = loadEntityRow(db, row);
       if (entity.fqn !== candidate && !entity.fqn.endsWith(`.${candidate}`)) continue;
       if (seen.has(entity.entityId)) continue;
@@ -313,11 +389,10 @@ function rankBm25(
   field: 0 | 1,
   layer: EntityLayer,
   cap: number,
-  context: RouteContext = {}
+  context: RouteContext = { work: { examined: 0 } }
 ): EntityHit[] {
   const route = field === FIELD_IDENTIFIER ? "identifier" : "chunk";
   if (expiredBefore(context)) return [];
-  const { budget, stop, scope } = context;
   const queryTokens = tokenize(task);
   const tokenBySym = queryTokenSyms(db, queryTokens);
   if (tokenBySym.size === 0) return [];
@@ -337,29 +412,35 @@ function rankBm25(
   const grouped = staged(context, `postings:${route}`, () => {
     const byEntity = new Map<number, { length: number; tf: Map<string, number> }>();
     let visited = 0;
-    scan: for (const chunk of bindChunks([...tokenBySym.keys()], 1)) {
-      for (const row of prepareCached(
+    const scope = context.scope;
+    const columns = `SELECT t.entity_sym AS entitySym, t.token_sym AS tokenSym, t.tf AS tf, e.${lengthColumn} AS len
+           FROM entity_token t JOIN entity e ON e.sym=t.entity_sym`;
+    const tokens = [...tokenBySym].map(([sym, token]) => ({ sym, df: dfByToken.get(token) ?? 0 }));
+    const source: PostingSource = {
+      all: chunk => prepareCached(db, `${columns} WHERE t.field=? AND t.token_sym IN ${inClause(chunk.length)}`)
+        .iterate(field, ...chunk) as Iterable<PostingRow>,
+      pageEnd: (tokenSym, after) => {
+        const row = prepareCached(
+          db,
+          "SELECT entity_sym AS k FROM entity_token WHERE field=? AND token_sym=? AND entity_sym>? ORDER BY entity_sym LIMIT 1 OFFSET ?"
+        ).get(field, tokenSym, after, SCOPED_SCAN_PAGE_ROWS - 1) as { k: SQLOutputValue } | undefined;
+        return row ? asInt(row.k) : undefined;
+      },
+      page: (tokenSym, after, upTo) => prepareCached(
         db,
-        `SELECT t.entity_sym AS entitySym, t.token_sym AS tokenSym, t.tf AS tf, e.${lengthColumn} AS len
-           FROM entity_token t JOIN entity e ON e.sym=t.entity_sym
-          WHERE t.field=? AND t.token_sym IN ${inClause(chunk.length)}${scope?.sql ?? ""}`
-      ).iterate(field, ...chunk, ...(scope?.params ?? [])) as Iterable<Record<string, SQLOutputValue>>) {
-        // T07: every posting row is billed against the query work budget at
-        // the interruptible boundary between rows; synchronous SQL cannot stop
-        // mid-statement, so the scan ends at the row boundary.
-        if (budget) {
-          const verdict = budget.take();
-          if (verdict !== "ok") {
-            if (stop) recordStop(stop, verdict);
-            break scan;
-          }
-        }
-        visited += 1;
-        const entitySym = asInt(row.entitySym);
-        const bucket = byEntity.get(entitySym) ?? { length: asInt(row.len), tf: new Map<string, number>() };
-        bucket.tf.set(tokenBySym.get(asInt(row.tokenSym))!, asInt(row.tf));
-        byEntity.set(entitySym, bucket);
-      }
+        `${columns} WHERE t.field=? AND t.token_sym=? AND t.entity_sym>? AND t.entity_sym<=?${scope?.sql ?? ""}`
+      ).iterate(field, tokenSym, after, upTo, ...(scope?.params ?? [])) as Iterable<PostingRow>
+    };
+    // T07: every posting row is billed against the query work budget at the
+    // interruptible boundary between rows; synchronous SQL cannot stop
+    // mid-statement, so the scan ends at the row boundary.
+    for (const row of postingRows(context, tokens, source, 1)) {
+      if (!billPosting(context)) break;
+      visited += 1;
+      const entitySym = asInt(row.entitySym);
+      const bucket = byEntity.get(entitySym) ?? { length: asInt(row.len), tf: new Map<string, number>() };
+      bucket.tf.set(tokenBySym.get(asInt(row.tokenSym))!, asInt(row.tf));
+      byEntity.set(entitySym, bucket);
     }
     return { value: byEntity, visited };
   });
@@ -385,10 +466,9 @@ function docHits(
   db: IndexDatabase,
   task: string,
   cap: number,
-  context: RouteContext = {}
+  context: RouteContext = { work: { examined: 0 } }
 ): EntityHit[] {
   if (expiredBefore(context)) return [];
-  const { budget, stop, scope } = context;
   const queryTokens = tokenize(task);
   const tokenBySym = queryTokenSyms(db, queryTokens);
   if (tokenBySym.size === 0) return [];
@@ -397,43 +477,48 @@ function docHits(
   const avgdl = stats.totalLen / stats.docCount;
   const dfByToken = new Map<string, number>();
   for (const token of queryTokens) dfByToken.set(token, 0);
-  const postingSyms: number[] = [];
+  const postingTokens: Array<{ sym: number; df: number }> = [];
   for (const [tokenSym, token] of tokenBySym) {
     const dfRow = prepareCached(db, "SELECT df AS n FROM search_doc_df WHERE token_sym=?").get(tokenSym) as
       | { n: SQLOutputValue }
       | undefined;
     const df = asCount(dfRow);
     dfByToken.set(token, df);
-    if (df > 0) postingSyms.push(tokenSym);
+    if (df > 0) postingTokens.push({ sym: tokenSym, df });
   }
-  if (postingSyms.length === 0) return [];
+  if (postingTokens.length === 0) return [];
   const docs = staged(context, "postings:document", () => {
     // docSym -> { tfByToken, docLen, declarationSym }
     const byDoc = new Map<number, { tf: Map<string, number>; docLen: number; declarationSym: number }>();
     let visited = 0;
-    scan: for (const chunk of bindChunks(postingSyms)) {
-      for (const row of prepareCached(
+    const scope = context.scope;
+    const columns = `SELECT t.doc_sym AS docSym, t.token_sym AS tokenSym, t.tf AS tf, d.token_len AS docLen, d.declaration_sym AS declarationSym
+           FROM search_doc_token t JOIN search_doc d ON d.sym=t.doc_sym`;
+    const source: PostingSource = {
+      all: chunk => prepareCached(db, `${columns} WHERE t.token_sym IN ${inClause(chunk.length)}`)
+        .iterate(...chunk) as Iterable<PostingRow>,
+      pageEnd: (tokenSym, after) => {
+        const row = prepareCached(
+          db,
+          "SELECT doc_sym AS k FROM search_doc_token WHERE token_sym=? AND doc_sym>? ORDER BY doc_sym LIMIT 1 OFFSET ?"
+        ).get(tokenSym, after, SCOPED_SCAN_PAGE_ROWS - 1) as { k: SQLOutputValue } | undefined;
+        return row ? asInt(row.k) : undefined;
+      },
+      // Scope applies to the declaration a document points at (the hit is
+      // that declaration), joined before any posting is billed.
+      page: (tokenSym, after, upTo) => prepareCached(
         db,
-        // Scope applies to the declaration a document points at (the hit is
-        // that declaration), joined before any posting is billed.
-        `SELECT t.doc_sym AS docSym, t.token_sym AS tokenSym, t.tf AS tf, d.token_len AS docLen, d.declaration_sym AS declarationSym
-           FROM search_doc_token t JOIN search_doc d ON d.sym=t.doc_sym
-           ${scope?.sql ? "JOIN entity e ON e.sym=d.declaration_sym" : ""}
-          WHERE t.token_sym IN ${inClause(chunk.length)}${scope?.sql ?? ""}`
-      ).iterate(...chunk, ...(scope?.params ?? [])) as Iterable<Record<string, SQLOutputValue>>) {
-        if (budget) {
-          const verdict = budget.take();
-          if (verdict !== "ok") {
-            if (stop) recordStop(stop, verdict);
-            break scan;
-          }
-        }
-        visited += 1;
-        const docSym = asInt(row.docSym);
-        const bucket = byDoc.get(docSym) ?? { tf: new Map<string, number>(), docLen: asInt(row.docLen), declarationSym: asInt(row.declarationSym) };
-        bucket.tf.set(tokenBySym.get(asInt(row.tokenSym))!, asInt(row.tf));
-        byDoc.set(docSym, bucket);
-      }
+        `${columns} JOIN entity e ON e.sym=d.declaration_sym
+          WHERE t.token_sym=? AND t.doc_sym>? AND t.doc_sym<=?${scope?.sql ?? ""}`
+      ).iterate(tokenSym, after, upTo, ...(scope?.params ?? [])) as Iterable<PostingRow>
+    };
+    for (const row of postingRows(context, postingTokens, source, 0)) {
+      if (!billPosting(context)) break;
+      visited += 1;
+      const docSym = asInt(row.docSym);
+      const bucket = byDoc.get(docSym) ?? { tf: new Map<string, number>(), docLen: asInt(row.docLen), declarationSym: asInt(row.declarationSym) };
+      bucket.tf.set(tokenBySym.get(asInt(row.tokenSym))!, asInt(row.tf));
+      byDoc.set(docSym, bucket);
     }
     return { value: byDoc, visited };
   });
@@ -522,9 +607,24 @@ function attachLocators(db: IndexDatabase, hits: EntityHit[]): EntityHit[] {
 export class SqlEntitySearch {
   constructor(private readonly db: IndexDatabase) {}
 
-  search(task: string, limit: number = ENTITY_SEARCH_DEFAULT_LIMIT, mode: EntitySearchMode = "auto"): EntityHit[] {
+  /**
+   * Legacy ranked search (queryEntitySearch, the context-graph lexical
+   * fallback). Its route semantics stay as they are (an exact miss falls
+   * through to BM25), but the work is bounded like searchDetailed: the default
+   * posting cap and, when given, the caller's deadline. A bounded scan simply
+   * returns what it ranked; this API has no partial flag.
+   */
+  search(
+    task: string,
+    limit: number = ENTITY_SEARCH_DEFAULT_LIMIT,
+    mode: EntitySearchMode = "auto",
+    options: { remainingMs?: () => number } = {}
+  ): EntityHit[] {
     const cap = clampLimit(limit);
     if (task.trim().length === 0) return [];
+    const budget = new QueryWorkBudget(DEFAULT_QUERY_MAX_POSTINGS, options.remainingMs ?? (() => Number.POSITIVE_INFINITY));
+    if (budget.expired()) return [];
+    const context: RouteContext = { budget, work: { examined: 0 } };
     // T04: exact code shapes may short-circuit on the name layers; free-text
     // task intent must let every route compete, so a class name in the query
     // never hides the method that matches the intent words. The 1..512 length
@@ -537,10 +637,10 @@ export class SqlEntitySearch {
       const simple = simpleNameHits(this.db, task, cap);
       if (simple.length > 0) return simple;
     }
-    const identifier = rankBm25(this.db, task, FIELD_IDENTIFIER, "BM25_IDENTIFIER", cap);
-    const chunk = rankBm25(this.db, task, FIELD_CHUNK, "CHUNK", cap);
+    const identifier = rankBm25(this.db, task, FIELD_IDENTIFIER, "BM25_IDENTIFIER", cap, context);
+    const chunk = rankBm25(this.db, task, FIELD_CHUNK, "CHUNK", cap, context);
     if (intent === "text") {
-      const doc = docHits(this.db, task, cap);
+      const doc = docHits(this.db, task, cap, context);
       return mergeByRank([identifier, chunk, doc], cap);
     }
     return firstNonEmpty(identifier, chunk, cap);
@@ -570,7 +670,7 @@ export class SqlEntitySearch {
       )
       : undefined;
     if (budget?.expired()) {
-      return { hits: [], truncated: true, selectionLimited: false, work: { postings: 0 }, generation: 0, stopReason: "deadline", trace: [] };
+      return { hits: [], truncated: true, selectionLimited: false, work: { postings: 0, examined: 0 }, generation: 0, stopReason: "deadline", trace: [] };
     }
     return withReadSnapshot(this.db, () => this.searchDetailedInSnapshot(task, limit, mode, options, budget));
   }
@@ -586,7 +686,13 @@ export class SqlEntitySearch {
     const trace = new QueryTrace(budget ? () => budget.remaining() : undefined);
     const generation = readIndexGeneration(this.db);
     const stop: { reason?: EntitySearchStopReason } = {};
-    const context: RouteContext = { budget, stop, scope: scopeSql("e.path_sym", options.scope), trace };
+    const context: RouteContext = {
+      budget,
+      stop,
+      scope: scopeSql("e.path_sym", options.scope),
+      work: { examined: 0 },
+      trace
+    };
     // Every route fetches cap+1: the extra row only proves "more exist"
     // (selectionLimited) and is never returned.
     const finish = (selected: EntityHit[], exact?: "match" | "miss" | "ambiguous"): DetailedEntitySearchResult => {
@@ -601,7 +707,7 @@ export class SqlEntitySearch {
         hits,
         truncated: stop.reason !== undefined,
         selectionLimited: selected.length > cap,
-        work: { postings: budget ? budget.visited() : 0 },
+        work: { postings: budget ? budget.visited() : 0, examined: context.work.examined },
         generation,
         trace: trace.stages
       };

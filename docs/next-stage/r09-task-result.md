@@ -154,11 +154,11 @@ SQLite 自身扫描约 1µs/posting（只看整数列的聚合微基准：4029 �
 
 ## 限制与剩余缺口
 
-- **门槛没有签署**。lishuedu 20 并发的 P95 超过 150ms；稀有 exact 存在队头阻塞。可能的方向是按 exact/宽泛分队列或调整优先级，需要单独的设计与 profile，不在本轮范围。按 K29，这一项仍留在统一矩阵中。
+- **门槛没有签署**。lishuedu 20 并发的 P95 超过 150ms；稀有 exact 存在队头阻塞（后续按低并发设计：排队中的 exact 优先于宽泛查询，见 `r09-followups.md` §2）。可能的方向是按 exact/宽泛分队列或调整优先级，需要单独的设计与 profile，不在本轮范围。按 K29，这一项仍留在统一矩阵中。
 - 线程被强制终止后，SQLite 连接靠线程环境清理来关闭。本轮观测到 checkpoint busy=0、lsof 句柄为 0，但没有在 Linux 上验证。原生单步耗时很长时，终止要等这一步结束（见机制 5）。
-- 带 scope 的扫描中，被过滤掉的 posting 不计入预算，SQLite 内部的扫描量没有上限。这个问题早于 R09 就存在。
-- legacy `queryEntitySearch` / `search()`（java_impact 的词法回退路径）仍在主线程执行，且没有预算，不在 R09 列出的文件范围内。
+- 带 scope 的扫描中，被过滤掉的 posting 不计入预算，SQLite 内部的扫描量没有上限。这个问题早于 R09 就存在。（已在后续修复：按 keyset 分页检查 deadline，见 `r09-followups.md` §3。）
+- legacy `queryEntitySearch` / `search()` 仍在主线程执行，且没有预算，不在 R09 列出的文件范围内。（更正：这条路径在生产中没有调用方，不是 java_impact 的词法回退；后续已加上 posting 上限和请求 deadline，见 `r09-followups.md` §4。）
 - RSS 只记录整个进程的数值，没有把 daemon 和 worker 分开。
 - 带写入的步骤用合成提交（推进 generation）模拟刷新，没有跑真实 builder 进程。
 - 主线程上的单次 status 读和 preview 文件读不经过 worker：status 是元数据点查，preview 是异步 IO。
-- **早于 R09 就存在的缺陷（未修，单独跟进）**：冷建库期间如果反复调用 `java_symbol`（每 500ms 一次，300 个文件），builder 子进程的 `BEGIN IMMEDIATE` 偶发 `database is locked`，冷建库失败，索引一直不能 READY。同一个脚本在 `b22c0a5` 上跑 3 次，失败 2 次，3 次都出现锁错误（`r09/runtime-r09-base1..3.log`）；在本提交上跑 4 次，失败 1 次。推测与 BUILDING 期间 `awaitPrewarmReady → dropConn → compactWalFile` 打开读写连接有关，但未验证。
+- **早于 R09 就存在的缺陷（未修，单独跟进）**：冷建库期间如果反复调用 `java_symbol`（每 500ms 一次，300 个文件），builder 子进程的 `BEGIN IMMEDIATE` 偶发 `database is locked`，冷建库失败，索引一直不能 READY。同一个脚本在 `b22c0a5` 上跑 3 次，失败 2 次，3 次都出现锁错误（`r09/runtime-r09-base1..3.log`）；在本提交上跑 4 次，失败 1 次。推测与 BUILDING 期间 `awaitPrewarmReady → dropConn → compactWalFile` 打开读写连接有关，但未验证。（后续已定位并修复：主因是只读连接关闭时执行 checkpoint，`compactWalFile` 的写提交是第二个原因；见 `r09-followups.md` §1。）

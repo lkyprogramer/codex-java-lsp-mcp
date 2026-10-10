@@ -217,3 +217,47 @@ test("R09 worker: while a stalled thread is being terminated, no second thread s
     await fixture.done();
   }
 });
+
+// HOL follow-up (low-concurrency design: still one thread, no new lane): a
+// waiting exact lookup (an index point read, ~1ms) is served before waiting
+// broad scans, FIFO within each class; a scan already running is not
+// preempted.
+test("worker queue: waiting exact lookups run before waiting broad scans", async () => {
+  const fixture = await corpus(5);
+  const pool = new QueryWorkerPool({ allowTestHooks: true });
+  try {
+    const deadlineAt = absoluteNow() + 60_000;
+    const order: string[] = [];
+    const track = (name: string, promise: Promise<unknown>) => promise.then(result => { order.push(name); return result; });
+    const running = track("running-scan", pool.search({ dbPath: fixture.dbPath, task: "order ledger", limit: 5, mode: "text", deadlineAt, testBlockMs: 200 }));
+    const scanA = track("scan-a", pool.search({ dbPath: fixture.dbPath, task: "order", limit: 5, mode: "text", deadlineAt }));
+    const pointA = track("point-a", pool.search({ dbPath: fixture.dbPath, task: "demo.Service001", limit: 5, mode: "exact", deadlineAt }));
+    const scanB = track("scan-b", pool.search({ dbPath: fixture.dbPath, task: "refund order", limit: 5, mode: "auto", deadlineAt }));
+    const pointB = track("point-b", pool.search({ dbPath: fixture.dbPath, task: "Service002", limit: 5, mode: "auto", deadlineAt }));
+    const results = await Promise.all([running, scanA, pointA, scanB, pointB]);
+    assert.deepEqual(order, ["running-scan", "point-a", "point-b", "scan-a", "scan-b"]);
+    assert.ok(results.every(result => (result as { stopReason?: string }).stopReason === undefined));
+  } finally {
+    await pool.close();
+    await fixture.done();
+  }
+});
+
+test("worker queue: text the classifier rejects is queued as a scan, not a rejection", async () => {
+  const fixture = await corpus(2);
+  const pool = new QueryWorkerPool();
+  try {
+    const deadlineAt = absoluteNow() + 60_000;
+    const empty = await pool.search({ dbPath: fixture.dbPath, task: "   ", limit: 5, mode: "auto", deadlineAt });
+    assert.deepEqual(empty.hits, []);
+    // oversized text reaches the scan, which rejects it exactly as in-process
+    await assert.rejects(
+      pool.search({ dbPath: fixture.dbPath, task: "order ".repeat(120), limit: 5, mode: "auto", deadlineAt }),
+      /query length must be 1\.\.512/
+    );
+    assert.equal(pool.stats().queued, 0);
+  } finally {
+    await pool.close();
+    await fixture.done();
+  }
+});

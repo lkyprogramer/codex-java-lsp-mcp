@@ -107,6 +107,85 @@ test("writer close truncates WAL; a held reader can delay that until compactWalF
   rmSync(dir, { recursive: true, force: true });
 });
 
+// Cold-build lock follow-up: readers live in the MCP process while a builder
+// child owns the writer lock. A reader's close must never take (or wait for)
+// that lock, and the WAL compaction must never commit.
+test("read-only close never checkpoints, so it never waits on a live writer", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "iod-ro-close-"));
+  const file = path.join(dir, "index.sqlite");
+  const writer = openIndexDb(file);
+  try {
+    writer.exec("CREATE TABLE t(x)");
+    writer.exec("INSERT INTO t VALUES (1)");
+    const reader = openIndexDb(file, { readOnly: true });
+    reader.prepare("SELECT x FROM t").get();
+    writer.exec("BEGIN IMMEDIATE");
+    writer.exec("INSERT INTO t VALUES (2)");
+    const started = Date.now();
+    close(reader);
+    const elapsed = Date.now() - started;
+    writer.exec("COMMIT");
+    assert.ok(elapsed < 1000, `read-only close blocked ${elapsed}ms on the writer lock`);
+  } finally {
+    close(writer);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("read-only close never resets the WAL under a writer's open cursor", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "iod-ro-reset-"));
+  const file = path.join(dir, "index.sqlite");
+  const writer = openIndexDb(file);
+  try {
+    writer.exec("CREATE TABLE t(x)");
+    for (let i = 0; i < 5; i += 1) writer.exec(`INSERT INTO t VALUES (${i})`);
+    // a fully backfilled WAL: a TRUNCATE checkpoint from any connection,
+    // even a read-only one, would restart it
+    writer.exec("PRAGMA wal_checkpoint(PASSIVE)");
+    const cursor = writer.prepare("SELECT x FROM t").iterate();
+    cursor.next();
+    const reader = openIndexDb(file, { readOnly: true });
+    reader.prepare("SELECT x FROM t").get();
+    close(reader);
+    writer.exec("BEGIN IMMEDIATE");
+    writer.exec("INSERT INTO t VALUES (99)");
+    writer.exec("COMMIT");
+    cursor.return?.();
+  } finally {
+    close(writer);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("compactWalFile never commits and never waits on a live writer", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "iod-compact-"));
+  const file = path.join(dir, "index.sqlite");
+  const writer = openIndexDb(file);
+  try {
+    writer.exec("PRAGMA wal_autocheckpoint=0");
+    writer.exec("CREATE TABLE t(x)");
+    for (let i = 0; i < 5; i += 1) writer.exec(`INSERT INTO t VALUES (${i})`);
+    // WAL frames not yet backfilled + an open cursor: any foreign commit
+    // (the writer pragmas did one) breaks this connection's next write.
+    const cursor = writer.prepare("SELECT x FROM t").iterate();
+    cursor.next();
+    compactWalFile(file);
+    writer.exec("BEGIN IMMEDIATE");
+    writer.exec("INSERT INTO t VALUES (99)");
+    writer.exec("COMMIT");
+    cursor.return?.();
+    writer.exec("BEGIN IMMEDIATE");
+    const started = Date.now();
+    compactWalFile(file);
+    const elapsed = Date.now() - started;
+    writer.exec("COMMIT");
+    assert.ok(elapsed < 1000, `compaction blocked ${elapsed}ms behind the writer`);
+  } finally {
+    close(writer);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("vacuumInto copies a file database to a new path", () => {
   const dir = mkdtempSync(path.join(tmpdir(), "iod-vacuum-"));
   const source = path.join(dir, "src.sqlite");

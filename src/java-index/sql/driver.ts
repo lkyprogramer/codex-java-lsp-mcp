@@ -35,6 +35,10 @@ export type OpenIndexDbOptions = {
 export type IndexDatabase = DatabaseSync;
 
 const statementCache = new WeakMap<IndexDatabase, Map<string, StatementSync>>();
+// Read-only connections never checkpoint: a checkpoint takes the WAL writer
+// lock (and waits busy_timeout for it), which a reader in the MCP process must
+// never contend for while the builder child is writing.
+const readOnlyConnections = new WeakSet<IndexDatabase>();
 
 export function isMemoryPath(path: string): boolean {
   return path === ":memory:" || path.startsWith("file:");
@@ -54,6 +58,7 @@ export function openIndexDb(path: string, options: OpenIndexDbOptions = {}): Ind
     mkdirSync(dirname(path), { recursive: true });
   }
   const db = new DatabaseSync(path, { readOnly: options.readOnly === true });
+  if (options.readOnly === true) readOnlyConnections.add(db);
   db.exec(`PRAGMA busy_timeout=${DEFAULT_BUSY_TIMEOUT_MS}`);
   const cacheKb = resolveCacheKb(options.cacheKb);
   if (!options.readOnly) {
@@ -78,14 +83,24 @@ export function checkpointWal(db: IndexDatabase, mode: "PASSIVE" | "TRUNCATE" | 
   }
 }
 
-/** Open a writer just long enough to truncate WAL after the last reader drops. */
+/**
+ * Truncate WAL after the last reader drops. Only a bare checkpoint: the
+ * openIndexDb writer pragmas (auto_vacuum) commit a transaction, which breaks
+ * any other connection's read snapshot. Never waits: a busy writer means the
+ * builder owns the file and truncates on its own close.
+ */
 export function compactWalFile(dbPath: string): void {
   if (isMemoryPath(dbPath) || !existsSync(dbPath)) return;
   try {
-    const db = openIndexDb(dbPath);
-    close(db);
+    const db = new DatabaseSync(dbPath);
+    try {
+      db.exec("PRAGMA busy_timeout=0");
+      checkpointWal(db, "TRUNCATE");
+    } finally {
+      db.close();
+    }
   } catch {
-    // Another writer (builder) owns the file; the next close will truncate.
+    // Another connection holds the file; the next writer close will truncate.
   }
 }
 
@@ -144,6 +159,15 @@ export function forgetPrepared(db: IndexDatabase): void {
 
 export function close(db: IndexDatabase): void {
   forgetPrepared(db);
-  checkpointWal(db, "TRUNCATE");
+  if (!readOnlyConnections.has(db)) {
+    // Best effort and non-blocking: with a reader still open the truncate
+    // simply fails and a later close or compactWalFile retries it.
+    try {
+      db.exec("PRAGMA busy_timeout=0");
+    } catch {
+      // keep closing
+    }
+    checkpointWal(db, "TRUNCATE");
+  }
   db.close();
 }

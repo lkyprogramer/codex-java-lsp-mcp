@@ -4,6 +4,7 @@ import { mkdtemp, readFile, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { Worker } from "node:worker_threads";
 import { fileURLToPath } from "node:url";
 import { buildStaticEdges, resolveFileRefs } from "../edge-builder.js";
 import { writeBundle, writeMyBatisResource } from "../sql/rows.js";
@@ -158,4 +159,44 @@ test("sql cold build resumes resolve after an injected abort", async () => {
   } finally {
     close(second);
   }
+});
+
+// Cold-build lock follow-up: the entity/document phase must not hold a read
+// cursor across its per-file write transactions. With a cursor open, BEGIN
+// IMMEDIATE is an upgrade of a stale read snapshot, which SQLite refuses at
+// once (SQLITE_BUSY, no busy wait) as soon as any other connection commits.
+test("sql cold build survives foreign commits during the entity phase", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "iod-cold-foreign-"));
+  const dbPath = path.join(dir, "index.sqlite");
+  const db = openIndexDb(dbPath);
+  ensureSchema(db);
+  db.exec("CREATE TABLE zz_noise(x INTEGER)");
+  const stop = new Int32Array(new SharedArrayBuffer(8));
+  const noise = new Worker(`
+    const { workerData, parentPort } = require("node:worker_threads");
+    const { DatabaseSync } = require("node:sqlite");
+    const flags = new Int32Array(workerData.stop);
+    const db = new DatabaseSync(workerData.dbPath);
+    db.exec("PRAGMA busy_timeout=5000");
+    let commits = 0;
+    while (Atomics.load(flags, 0) === 0) {
+      db.exec("BEGIN IMMEDIATE; INSERT INTO zz_noise VALUES (1); COMMIT");
+      commits += 1;
+      Atomics.wait(flags, 0, 0, 1);
+    }
+    db.close();
+    parentPort.postMessage(commits);
+  `, { eval: true, workerData: { dbPath, stop: stop.buffer } });
+  const commits = new Promise<number>(resolve => noise.once("message", resolve));
+  let foreignCommits = 0;
+  try {
+    await runSqlColdBuild({ repoRoot: fixturesRoot, db, generation: 1 });
+    assert.equal(readMeta(db, "buildState"), "READY");
+  } finally {
+    Atomics.store(stop, 0, 1);
+    Atomics.notify(stop, 0);
+    foreignCommits = await commits;
+    close(db);
+  }
+  assert.ok(foreignCommits > 0, "the foreign writer must have committed during the build");
 });
