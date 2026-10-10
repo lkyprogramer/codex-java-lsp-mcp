@@ -44,9 +44,7 @@ function at(line: number, needle: string): { line: number; column: number } {
   return { line, column: index + 1 };
 }
 
-type Find = (query: string, kind: "type" | "method", name: string, preview?: "none" | "head" | "window") => Promise<DiscoveryCandidate>;
-
-async function withDiscovery(fn: (find: Find) => Promise<void>) {
+async function withDiscovery(fn: (find: (query: string, kind: "type" | "method", name: string) => Promise<DiscoveryCandidate>) => Promise<void>) {
   const repoRoot = await mkdtemp(path.join(tmpdir(), "locator-name-"));
   await mkdir(path.join(repoRoot, path.dirname(REL)), { recursive: true });
   await writeFile(path.join(repoRoot, REL), SOURCE, "utf8");
@@ -58,8 +56,8 @@ async function withDiscovery(fn: (find: Find) => Promise<void>) {
   const client = new SqlJavaIndexClient(repoRoot, dbPath);
   await client.open(1);
   try {
-    await fn(async (query, kind, name, preview) => {
-      const result = await runStaticDiscovery(client as unknown as JavaIndexClientApi, { repoRoot, query, searchMode: "text", ...(preview ? { preview } : {}) });
+    await fn(async (query, kind, name) => {
+      const result = await runStaticDiscovery(client as unknown as JavaIndexClientApi, { repoRoot, query, searchMode: "text" });
       const candidate = result.candidates.find(entry => entry.declaration.kind === kind && entry.declaration.name === name);
       assert.ok(candidate, `${kind} ${name} for "${query}": ${JSON.stringify(result.candidates.map(entry => entry.declaration.name))}`);
       return candidate!;
@@ -94,22 +92,5 @@ test("the preview of an identifier hit still starts at the declaration head, ann
 
     const validate = await find("validate", "method", "validate");
     assert.equal(validate.evidenceRange?.startLine, 7, "the method preview keeps @Override");
-  });
-});
-
-// The preview is a short head, not the evidence: the locator also says which
-// lines the whole declaration spans (annotations to the closing brace), so an
-// agent can read exactly what it needs, or see that the body is longer than
-// its remaining budget and search inside it instead.
-test("the locator carries the whole declaration's line range in every preview mode", async () => {
-  await withDiscovery(async find => {
-    for (const preview of [undefined, "none", "window"] as const) {
-      const type = await find("PetValidator", "type", "PetValidator", preview);
-      assert.deepEqual(type.declaration.range, { startLine: 3, endLine: 16 }, `type (${preview ?? "default"})`);
-      const validate = await find("validate", "method", "validate", preview);
-      assert.deepEqual(validate.declaration.range, { startLine: 7, endLine: 9 }, `method body (${preview ?? "default"})`);
-      const supports = await find("supports", "method", "supports", preview);
-      assert.deepEqual(supports.declaration.range, { startLine: 11, endLine: 11 }, "one-line method");
-    }
   });
 });

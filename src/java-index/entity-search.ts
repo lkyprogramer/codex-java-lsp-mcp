@@ -58,8 +58,6 @@ export type EntityHit = {
   column?: number;
   /** First line of the whole declaration (annotations included): the head preview start. */
   declarationStartLine?: number;
-  /** Last line of the whole declaration (closing brace). */
-  declarationEndLine?: number;
   contentHash?: string;
   module?: string;
   sourceRoot?: string;

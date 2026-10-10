@@ -589,7 +589,6 @@ function attachLocators(db: IndexDatabase, hits: EntityHit[]): EntityHit[] {
       hit.line = selection.line;
       hit.column = selection.column;
       hit.declarationStartLine = range.start.line;
-      hit.declarationEndLine = range.end.line;
     }
     if (hit.kind === "method") {
       const arity = (fileRow as { arity?: SQLOutputValue }).arity;

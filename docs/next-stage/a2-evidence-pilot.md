@@ -1,6 +1,6 @@
 # A2 evidence pilot: declaration ranges and "a preview is not evidence" (eval protocol v1.3)
 
-**State: PRE-REGISTERED** (written and committed before the run; results are appended below without changing this section).
+**State: DONE, decision REVERT** (pre-registered and committed in `fc11d90` before the run; the change was reverted by the pre-registered rule; results below).
 
 ## Correction to the v1.2 diagnosis
 
@@ -37,3 +37,38 @@
 - **KEEP** if E < 3 and both guards hold. **REVERT** (product field and description removed) otherwise.
 - **Secondary, no decision**: kit compare product − control on QA (`scripts/eval-pilot-compare.mjs`), and ACCESS-01 per-arm outcomes.
 - **Power**: three baseline events make this a coarse check. KEEP means "the targeted failure moved and nothing regressed", not a measured effect size.
+
+## Results (`fixes-evidence/agent-native-vs-a2-v13`, eval-protocol/v1.3)
+
+| | v1.2 product | v1.3 product | v1.2 control | v1.3 control |
+|---|---|---|---|---|
+| Success / 36 | 22 | 21 | 24 | 26 |
+| QA / 24 | 13 | 12 | 15 | 17 |
+| Repair / 12 | 9 | 9 | 9 | 9 |
+| **E** (missing evidence + over budget) | 3 | **2** | 5 | 3 |
+| Median prompt tokens | 10,639 | **12,446.5** | 8,917 | 8,737 |
+| ACCESS-01 | 0/3 | **2/3** | 0/3 | 2/3 |
+
+**Decision by the pre-registered rule: REVERT.**
+- E fell from 3 to 2: pass.
+- QA 12: pass, exactly at the guard.
+- Median prompt tokens 12,446.5 against a guard of 12,235: **fail**.
+
+`declaration.range`, its test and the description change were reverted. The eval protocol is back to the v1.2 description. The v1.3 packs stay labelled v1.3.
+
+**Observed:**
+- The targeted task moved: product ACCESS-01 went from 0/3 to 2/3. The remaining failure is an FQN answer (`lab.access.SignedAccessPolicy#isAllowed`).
+- The two remaining product evidence failures are new: MYBATIS-01 and GSON-03, both `RECEIVED_OVER_BUDGET`.
+- Answer format dominates again. Product `WRONG_ANSWER` 8: PAYMENTS-01 ×3 `Set<String> (HashSet)`, INVENTORY-02 ×3 FQN-with-path, ACCESS-01 FQN, MYBATIS-01 `param2`. `INVALID_ANSWER` 2: JSON in a code fence, or after prose.
+- Kit compare, product − control, QA: −0.238, CI [−0.476, −0.048], over 7 clusters. In this run A2 is below native on QA with a CI that excludes 0. Token ratio 1.42.
+- Control also moved between runs, from 15 to 17 QA with the same tools and protocol. Run-to-run noise is about two QA attempts per arm.
+
+**Inference (not tested):** most of the remaining product-arm gap is answer format, not discovery. Product answers echo `java_symbol` identities (FQN, `path:line`) into fields that want a bare name. A fair test would change the answer contract for both arms, a symmetric eval-protocol change. That is outside this card.
+
+## Evidence hashes (`java-specialist-audit-runs/`)
+
+```text
+9bc90c25c819a2c574b8b6904c5bf1d990a981d69afa10d71ba9bdab1f244ac4  fixes-evidence/red-range.txt
+29b599b617170b552210eb7faf9c15cd92de6705c8b10873b2063637294984a5  fixes-evidence/agent-native-vs-a2-v13/results-pack.json
+7dd0327084d0aa85743898ce3e788dfc3c9b9f8248d80de8aa6670baa7d9cf10  fixes-evidence/agent-native-vs-a2-v13/frozen-score/native-vs-a2-v13-evidence.json
+```

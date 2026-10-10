@@ -107,6 +107,6 @@
   "retrieval_variants": "all (kit primary + language variants), stratified by variant",
   "follow_up": "docs/next-stage/a2-static-fixes.md (retrieval dense decision NO_GO under v1.2 with name locators)",
   "dense_closed": "dense experiment closed: drivers and the product search_doc_text table (index schema v8) removed, schema v9; experiments/semantic-discovery keeps only provider.mjs and repair-judge.mjs, which the frozen audit imports by path",
-  "evidence_pilot": "docs/next-stage/a2-evidence-pilot.md (eval-protocol/v1.3: declaration ranges, preview-is-not-evidence guidance)"
+  "evidence_pilot": "docs/next-stage/a2-evidence-pilot.md (eval-protocol/v1.3: declaration ranges, preview-is-not-evidence guidance; REVERT by the pre-registered token guard)"
  }
 }

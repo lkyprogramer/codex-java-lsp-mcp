@@ -126,7 +126,11 @@ For the product, the next lever is not retrieval but evidence: agents now stop r
 ## Limits
 
 - **Small sample**: 12 pilot tasks × 3 repeats; 48 retrieval cases from 8 projects.
-- **JDT not exercised**: the locator change is tested through the index and discovery path. A real JDT run at a name position was not exercised (no JDT in the isolated runner).
+- **JDT (follow-up, real run)**: `scripts/jdt-locator-probe.mjs` inside `run-isolated-jdt-benchmark` (jdtls 1.56.0, private JDT/cache/alias state) on the petclinic corpus as a plain source project; `pom.xml` was dropped because the isolated Maven home cannot resolve Spring offline and the import stalled. Result (`fixes-evidence/jdt-probe.json`, sha256 `b82526ca4a1505b05881bda1153c248ea39e4460bdfc040fc85038f055a7f662`):
+  - 18 static candidates over 12 names, every one annotated (`@Controller`, `@GetMapping`, `@InitBinder`, `@Entity`, `@MappedSuperclass`, `@Test` and others);
+  - at the new selection, JDT `definition` returns the declaration itself (same path and line) for **18/18**;
+  - at the old locator (the declaration's first line, i.e. the annotation), **0/18**;
+  - limit: without dependencies the annotation types are unresolved, so the old position returns an empty hover. With dependencies it would resolve to the annotation type, which is still not the declaration.
 - **Older eval packs**: `evalProtocol` is absent from v1.1 packs; they are v1.1 by date (R11).
 
 ## Evidence hashes (`java-specialist-audit-runs/`)

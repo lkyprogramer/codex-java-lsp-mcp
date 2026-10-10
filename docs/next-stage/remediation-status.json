@@ -105,5 +105,27 @@
     ],
     "report": "docs/next-stage/a2-static-fixes.md",
     "decision": "dense retrieval NO_GO (decideFourWay v2); native vs A2 INCONCLUSIVE"
+  },
+  "denseRemoval": {
+    "scope": "close the dense experiment: drivers, tests and the product search_doc_text table removed (index schema v9); provider.mjs/repair-judge.mjs kept for the frozen audit",
+    "state": "DONE",
+    "commit": "7f62569"
+  },
+  "jdtLocatorProbe": {
+    "scope": "real JDT check of static name locators (petclinic, 18 annotated declarations)",
+    "state": "DONE",
+    "commit": "93f3f64",
+    "result": "definition at selection 18/18; at the old annotation-line locator 0/18",
+    "report": "docs/next-stage/a2-static-fixes.md (Limits)"
+  },
+  "evidencePilot": {
+    "scope": "declaration.range + preview-is-not-evidence description (eval-protocol/v1.3), pre-registered",
+    "state": "DONE",
+    "commits": [
+      "fc11d90 (change + pre-registration)",
+      "(this commit: revert + results)"
+    ],
+    "decision": "REVERT (token guard failed: median 12,446.5 > 12,235; E 3 -> 2, ACCESS-01 0/3 -> 2/3)",
+    "report": "docs/next-stage/a2-evidence-pilot.md"
   }
 }
