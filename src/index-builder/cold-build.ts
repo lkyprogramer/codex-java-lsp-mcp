@@ -259,7 +259,7 @@ function writeKnowledgeAndEntities(db: IndexDatabase, generation: number): void 
   graph.generation = generation;
   withTransaction(db, () => {
     db.exec("DELETE FROM entity_token; DELETE FROM entity_df; DELETE FROM entity;");
-    db.exec("DELETE FROM search_doc_token; DELETE FROM search_doc; DELETE FROM search_doc_df;");
+    db.exec("DELETE FROM search_doc_token; DELETE FROM search_doc_text; DELETE FROM search_doc; DELETE FROM search_doc_df;");
     db.prepare("DELETE FROM meta WHERE key=?").run("searchDocStats");
   });
   const repoRoot = readMeta(db, "repoRoot") ?? "";

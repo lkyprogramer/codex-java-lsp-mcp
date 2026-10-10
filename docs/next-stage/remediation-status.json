@@ -59,9 +59,9 @@
     },
     "R10": {
       "state": "DONE",
-      "commit": "(this commit: fix(experiment): isolate embeddings by representation and provider)",
+      "commit": "aa8a1e3",
       "report": "docs/next-stage/r10-task-result.md",
-      "note": "index-backed dense input DISABLED_INVALID (no ordered SearchDocument text in the product index); compare.mjs scorer path-only coverage recorded as an R11 label challenge"
+      "note": "index-backed dense input was DISABLED_INVALID at aa8a1e3; resolved by the denseInput follow-up (search_doc_text, schema v8). compare.mjs scorer path-only coverage fixed there (line-recall.mjs); R11 equal-budget still open"
     },
     "R11": {
       "state": "NOT_STARTED"
@@ -84,5 +84,11 @@
     "state": "DONE",
     "commit": "463ba33",
     "report": "docs/next-stage/r09-followups.md"
+  },
+  "denseInput": {
+    "scope": "R10 residual: ordered SearchDocument text for the dense experiment + first real-provider pilot (SiliconFlow Qwen3-VL-Embedding-8B, openclaw/Qwen3.8-next)",
+    "state": "DONE",
+    "commit": "(this commit: feat(index): persist ordered search document text for dense input)",
+    "report": "docs/next-stage/dense-input-result.md"
   }
 }

@@ -9,6 +9,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 
 export const HINT_AUTHORITY = "DISCOVERY_HINT";
 /** Cache epoch for a model whose revision the endpoint does not report. */
@@ -51,8 +52,8 @@ export function discoveryHint({ provider, providerIndexIdentity, relativePath, s
  *   都在同一个截止时间内，放不下的退避不开始；每次尝试的 timer 都在 finally 清理。
  * - 缓存按 cacheIdentity（endpoint/provider/model/revision/dim/metric/表示版本/
  *   declarationId/文本 hash/源 manifest hash）键控，不含 API key；命中时校验维度
- *   与有限数值，非法或旧格式记录当作未命中。缓存文件每次 embed 只整体读一次、
- *   原子写一次（临时文件 + rename）；单进程 writer，并发进程以最后一次 rename 为准。
+ *   与有限数值，非法或旧格式记录当作未命中。缓存文件每个实例只读一次（内存复用），
+ *   有新条目的 embed 调用原子写一次（临时文件 + rename）；单进程 writer，并发进程以最后一次 rename 为准。
  * - 端点不报告模型 revision 时，身份使用显式 epoch（UNVERSIONED_CACHE_EPOCH），
  *   不声称跨时间可复现。
  */
@@ -119,8 +120,8 @@ export class EmbeddingProvider {
 
   /**
    * 一个实例内的 embed 调用须串行（缓存是读-改-整体写）。没有 key 的调用
-   * （查询向量）不读也不写缓存；只有新写入条目时才保存，失败的批次之前
-   * 已成功的批次也会保存。
+   * 不读也不写缓存（入口脚本的查询向量走 embedQuery，带 key）；只有新写入
+   * 条目时才保存（整文件重写），失败的批次之前已成功的批次也会保存。
    */
   async embed(texts, keys) {
     if (!Array.isArray(texts) || texts.length === 0) return [];
@@ -154,6 +155,27 @@ export class EmbeddingProvider {
     return vectors;
   }
 
+  /**
+   * Query vectors are cached under the same identity as declaration vectors
+   * (provider identity + query representation + text hash), so a rerun sees
+   * the same query vector even when the endpoint's output drifts slightly
+   * over time, and a vector never crosses endpoint/model/dimension.
+   */
+  queryCacheKey(query) {
+    return cacheIdentity({
+      ...this.identityBase(),
+      representationVersion: QUERY_REPRESENTATION_VERSION,
+      declarationId: "query",
+      textHash: createHash("sha256").update(query, "utf8").digest("hex"),
+      sourceManifestHash: "none"
+    });
+  }
+
+  async embedQuery(query) {
+    const [vector] = await this.embed([query], [this.queryCacheKey(query)]);
+    return vector;
+  }
+
   /** 一个合法记录：键吻合、维度一致的有限数值向量；否则 undefined（未命中）。 */
   validCached(record, key) {
     if (!record || typeof record !== "object" || record.key !== key || !Array.isArray(record.vector)) return undefined;
@@ -164,8 +186,14 @@ export class EmbeddingProvider {
     return vector;
   }
 
+  /** Read once per instance; later calls reuse (and extend) the same map. */
   loadCache() {
     if (!this.cacheFile) return undefined;
+    this.cacheMemo ??= this.readCacheFile();
+    return this.cacheMemo;
+  }
+
+  readCacheFile() {
     try {
       const data = JSON.parse(readFileSync(this.cacheFile, "utf8"));
       // 只认 R10 布局；旧的 model::path::hash 布局整体不复用。
@@ -230,7 +258,12 @@ export class EmbeddingProvider {
           Authorization: `Bearer ${this.apiKey}`,
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ model: this.model, input: batch, encoding_format: "float" }),
+        body: JSON.stringify({
+          model: this.model,
+          input: batch,
+          encoding_format: "float",
+          ...(this.dimensions ? { dimensions: this.dimensions } : {})
+        }),
         signal: controller.signal
       }));
       if (!response.ok) {
@@ -287,7 +320,54 @@ export class EmbeddingProvider {
   }
 }
 
+/** Vendor keys are only ever sent to their own host. */
+const HOST_KEYS = [
+  { suffix: "siliconflow.cn", variable: "SILICONFLOW_API_KEY" },
+  { suffix: "openrouter.ai", variable: "OPENROUTER_API_KEY" }
+];
+
+function hostMatches(host, suffix) {
+  return host === suffix || host.endsWith(`.${suffix}`);
+}
+
+/**
+ * Provider from the environment (entry scripts). EMBEDDING_BASE_URL selects
+ * the endpoint (default OpenRouter); the key is EMBEDDING_API_KEY (explicit,
+ * any host) or the vendor key bound to that host (SILICONFLOW_API_KEY for
+ * *.siliconflow.cn, OPENROUTER_API_KEY for *.openrouter.ai) - a vendor key is
+ * never sent to another host. EMBEDDING_MODEL (or OPENROUTER_EMBEDDING_MODEL);
+ * optional EMBEDDING_DIMENSIONS (sent as `dimensions`, part of the identity)
+ * and EMBEDDING_PROVIDER (defaults to the endpoint host).
+ */
+export function embeddingProviderFromEnv(env, { cacheFile = null, timeoutMs = 60_000 } = {}) {
+  const present = name => (typeof env[name] === "string" && env[name] !== "" && env[name] !== "undefined" ? env[name] : undefined);
+  const baseUrl = present("EMBEDDING_BASE_URL") ?? "https://openrouter.ai/api/v1";
+  const host = new URL(baseUrl).hostname;
+  const bound = HOST_KEYS.find(entry => hostMatches(host, entry.suffix));
+  const apiKey = present("EMBEDDING_API_KEY") ?? (bound ? present(bound.variable) : undefined);
+  if (!apiKey) {
+    throw new Error(`EMBEDDING_NOT_AUTHORIZED: no key for ${host} (EMBEDDING_API_KEY${bound ? ` or ${bound.variable}` : ""})`);
+  }
+  const model = present("EMBEDDING_MODEL") ?? present("OPENROUTER_EMBEDDING_MODEL");
+  if (!model) throw new Error("EMBEDDING_MODEL is required");
+  const dimensions = present("EMBEDDING_DIMENSIONS") ? Number(env.EMBEDDING_DIMENSIONS) : null;
+  if (dimensions !== null && !(Number.isInteger(dimensions) && dimensions > 0)) {
+    throw new Error(`EMBEDDING_DIMENSIONS must be a positive integer, got ${env.EMBEDDING_DIMENSIONS}`);
+  }
+  return new EmbeddingProvider({
+    apiKey,
+    model,
+    baseUrl,
+    dimensions,
+    providerName: present("EMBEDDING_PROVIDER") ?? host,
+    timeoutMs,
+    cacheFile
+  });
+}
+
 const CACHE_LAYOUT = "dense-cache/r10";
+/** Query text is embedded verbatim (no SearchDocument join). */
+export const QUERY_REPRESENTATION_VERSION = "query-verbatim-v1";
 
 export class EmbeddingProviderError extends Error {
   constructor(message) {
@@ -297,28 +377,91 @@ export class EmbeddingProviderError extends Error {
 }
 
 /**
- * R10: DISABLED_INVALID. 产品索引只存 SearchDocument 的 token postings
- * （search_doc_token 按 token 去重计数），不存保序的 normalizedText；把 token
- * 拼回“文章”得到的是另一种（无序）表示，dense 与 A2 不再比较同一文本，缓存
- * 身份也无从谈起。在产品持久化保序表示之前，从索引构建 dense 输入一律拒绝；
- * 调用方可直接传入带保序 text 的 facts。
+ * Dense input from the product index: each SearchDocument's ordered,
+ * already-redacted normalizedText (search_doc_text, index schema v8+). The
+ * text is the same representation the A2 postings were tokenized from, so
+ * dense and lexical compare one text surface.
+ *
+ * An index without search_doc_text (schema < 8) only has unordered token
+ * postings; rebuilding "text" from them is a different representation, so
+ * that index is refused (DISABLED_INVALID), never approximated.
+ *
+ * Each fact: relativePath = the declaration's own (owning) file, sourcePath +
+ * contentHash = where the text was read from (a MyBatis statement's XML).
+ *
+ * The build state and every document are read in one snapshot, and only a
+ * READY snapshot is accepted: a cold build in progress has written only part
+ * of the documents (INDEX_NOT_READY; see waitForReadyIndex).
  */
-export const DENSE_INPUT_STATE = "DISABLED_INVALID";
-const DISABLED_INVALID_MESSAGE =
-  "DISABLED_INVALID: the product index stores SearchDocument token postings, not the ordered normalizedText; " +
-  "rebuilding text from unordered tokens is a different representation (see experiments/semantic-discovery/README.md)";
-
-export function readSearchDocumentFacts(_repoRoot, _dbPath) {
-  throw new Error(DISABLED_INVALID_MESSAGE);
+export function readSearchDocumentFacts(_repoRoot, dbPath) {
+  // A short writer checkpoint must not fail the whole run.
+  const db = new DatabaseSync(dbPath, { readOnly: true, timeout: 5_000 });
+  try {
+    db.exec("BEGIN");
+    const hasText = db.prepare("SELECT 1 AS ok FROM sqlite_master WHERE type='table' AND name='search_doc_text'").get();
+    if (!hasText) {
+      throw new Error(
+        "DISABLED_INVALID: this index has no ordered SearchDocument text (search_doc_text, schema v8+); " +
+        "rebuilding text from unordered token postings is a different representation - rebuild the index"
+      );
+    }
+    const missing = db.prepare(
+      "SELECT count(*) AS n FROM search_doc d LEFT JOIN search_doc_text t ON t.doc_sym=d.sym WHERE t.doc_sym IS NULL"
+    ).get();
+    if (Number(missing.n) > 0) throw new Error(`DISABLED_INVALID: ${missing.n} search documents have no stored text`);
+    const state = indexBuildState(db);
+    if (state !== "READY") throw new Error(`INDEX_NOT_READY: buildState=${state ?? "absent"}`);
+    return db.prepare(
+      `SELECT d.sym AS docId, op.text AS relativePath, sp.text AS sourcePath, d.start_line AS startLine,
+              d.end_line AS endLine, d.kind AS kind, d.content_hash AS contentHash, ds.text AS declarationId,
+              t.text AS text
+         FROM search_doc d
+         JOIN search_doc_text t ON t.doc_sym = d.sym
+         JOIN sym sp ON sp.id = d.source_path_sym
+         JOIN sym ds ON ds.id = d.declaration_sym
+         LEFT JOIN sym op ON op.id = d.path_sym`
+    ).all().map(row => ({
+      docId: Number(row.docId),
+      relativePath: row.relativePath ?? row.sourcePath,
+      sourcePath: row.sourcePath,
+      startLine: Number(row.startLine),
+      endLine: Number(row.endLine),
+      kind: row.kind,
+      contentHash: row.contentHash,
+      declarationId: row.declarationId,
+      text: row.text
+    }));
+  } finally {
+    if (db.isTransaction) db.exec("COMMIT");
+    db.close();
+  }
 }
 
-/**
- * Experiment entry points call this before any session, embedding or model
- * call: with no valid dense input, a run would spend model budget on two
- * identical arms and report "no dense gain" as if it were a result.
- */
-export function assertDenseRunnable() {
-  if (DENSE_INPUT_STATE === "DISABLED_INVALID") throw new Error(DISABLED_INVALID_MESSAGE);
+function indexBuildState(db) {
+  const hasMeta = db.prepare("SELECT 1 AS ok FROM sqlite_master WHERE type='table' AND name='meta'").get();
+  return hasMeta ? db.prepare("SELECT value FROM meta WHERE key='buildState'").get()?.value : undefined;
+}
+
+/** Polls the index until its build state is READY (the product writes BUILDING
+ *  while a cold build runs); throws INDEX_NOT_READY at the deadline. */
+export async function waitForReadyIndex(dbPath, { timeoutMs = 600_000, pollMs = 500 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  let state;
+  for (;;) {
+    try {
+      const db = new DatabaseSync(dbPath, { readOnly: true });
+      try {
+        state = indexBuildState(db);
+      } finally {
+        db.close();
+      }
+    } catch (error) {
+      state = `unreadable (${error instanceof Error ? error.message : String(error)})`;
+    }
+    if (state === "READY") return;
+    if (Date.now() >= deadline) throw new Error(`INDEX_NOT_READY after ${timeoutMs}ms: buildState=${state ?? "absent"}`);
+    await new Promise(resolve => setTimeout(resolve, pollMs));
+  }
 }
 
 export function cosine(a, b) {
@@ -391,7 +534,7 @@ export class DenseDiscoveryIndex {
     }
     this.buildCost = {
       ...this.provider.costReport(),
-      deltaHttpCalls: this.provider.calls - costBefore.calls,
+      deltaHttpCalls: this.provider.calls - costBefore.httpCalls,
       deltaItemsEmbedded: this.provider.itemsEmbedded - costBefore.itemsEmbedded,
       deltaLatencyMs: this.provider.latencyMs - costBefore.latencyMs,
       wallMs: Date.now() - startedAt
@@ -404,14 +547,17 @@ export class DenseDiscoveryIndex {
 
   /**
    * 全部事实按 (path, declarationId) 归并，行序与文本拼接序都与输入顺序无关：
-   * 声明按 (path, declarationId) 排序，文档按 (startLine, endLine, kind, text)。
+   * 声明按 (path, declarationId) 排序，文档先自身文件、再其他源文件（按源路径），
+   * 同一源内按 (startLine, endLine, kind, text)。
    * 源 manifest 是该声明全部 (源路径, contentHash) 的有序列表的 hash。
    */
   declarationRows() {
     const compare = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+    const sourceOf = fact => fact.sourcePath ?? fact.relativePath;
+    const foreign = fact => (sourceOf(fact) === fact.relativePath ? 0 : 1);
     const facts = [...this.facts].sort((a, b) =>
       compare(a.relativePath, b.relativePath) || compare(String(a.declarationId), String(b.declarationId)) ||
-      a.startLine - b.startLine || a.endLine - b.endLine || compare(String(a.kind ?? ""), String(b.kind ?? "")) ||
+      foreign(a) - foreign(b) || compare(sourceOf(a), sourceOf(b)) || a.startLine - b.startLine || a.endLine - b.endLine || compare(String(a.kind ?? ""), String(b.kind ?? "")) ||
       compare(String(a.text ?? ""), String(b.text ?? "")));
     const merged = new Map();
     for (const fact of facts) {

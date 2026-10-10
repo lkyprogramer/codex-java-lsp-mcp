@@ -8,7 +8,9 @@ import { forgetPrepared, prepareCached, type IndexDatabase } from "./driver.js";
 // when their recorded schema+identity versions match exactly. v7 (R05 review):
 // type_ref_name lets an incremental refresh find the files whose type
 // references a declaration change can re-resolve (ambiguous refs have no edge).
-export const SCHEMA_VERSION = 7;
+// v8: search_doc_text keeps each document's ordered (redacted) normalizedText,
+// the representation its postings are derived from.
+export const SCHEMA_VERSION = 8;
 
 export const INDEX_SCHEMA_SQL = `
 CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -83,6 +85,10 @@ CREATE TABLE search_doc(sym INTEGER PRIMARY KEY REFERENCES sym(id), declaration_
 CREATE INDEX search_doc_declaration ON search_doc(declaration_sym);
 CREATE INDEX search_doc_path ON search_doc(path_sym);
 CREATE INDEX search_doc_source_path ON search_doc(source_path_sym);
+-- The ordered normalizedText the postings were tokenized from (already
+-- redacted). Kept out of search_doc so the stats scans stay narrow; written
+-- and deleted with its document.
+CREATE TABLE search_doc_text(doc_sym INTEGER PRIMARY KEY REFERENCES search_doc(sym) ON DELETE CASCADE, text TEXT NOT NULL);
 CREATE TABLE search_doc_token(doc_sym INTEGER NOT NULL REFERENCES search_doc(sym) ON DELETE CASCADE,
   token_sym INTEGER NOT NULL, tf INTEGER NOT NULL,
   PRIMARY KEY(doc_sym, token_sym)) WITHOUT ROWID;

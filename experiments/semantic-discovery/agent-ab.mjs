@@ -23,14 +23,10 @@ import {
   createRecorder,
   scoreRunOutcome
 } from "../../scripts/evaluate-java-task.mjs";
-import { DenseDiscoveryIndex, EmbeddingProvider, assertDenseRunnable, readSearchDocumentFacts, cosine } from "./provider.mjs";
+import { DenseDiscoveryIndex, embeddingProviderFromEnv, readSearchDocumentFacts, waitForReadyIndex } from "./provider.mjs";
 import { gatedDenseSearch, shouldRunDense } from "./gate.mjs";
 import { evaluateRepair } from "../../scripts/eval-repair-adapter.mjs";
 import { redactBackend, summarizeArm } from "./ab-summary.mjs";
-
-// R10: refuse before reading arguments or opening any session, embedding or
-// model call (README: DISABLED_INVALID). Entry scripts only; nothing imports them.
-assertDenseRunnable();
 
 // 可搬运：每个根目录都来自 CLI 参数或环境变量；没有个人绝对路径默认值，
 // 缺参数就直接失败，而不是悄悄写到某个人的家目录。
@@ -91,20 +87,19 @@ function formatHintBlock(hints) {
 
 async function main() {
   const chatEnvFile = CHAT_ENV_FILE ? JSON.parse(readFileSync(CHAT_ENV_FILE, "utf8")) : {};
-  process.env.OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? chatEnvFile.OPENROUTER_API_KEY;
+  if (process.env.OPENROUTER_API_KEY === undefined && typeof chatEnvFile.OPENROUTER_API_KEY === "string") {
+    process.env.OPENROUTER_API_KEY = chatEnvFile.OPENROUTER_API_KEY;
+  }
   const chatEnv = openaiCompatibleConfig();
   if (!chatEnv.baseUrl || !chatEnv.apiKey || !chatEnv.model) {
     throw new Error(
       "chat backend not configured: pass --chat-env <json> or export PCR_LIVE_*/OPENAI_* (base URL, API key, model). No model call is made without it."
     );
   }
-  const provider = new EmbeddingProvider({
-    apiKey: process.env.EMBEDDING_API_KEY ?? process.env.OPENROUTER_API_KEY,
-    model: process.env.OPENROUTER_EMBEDDING_MODEL ?? chatEnvFile.OPENROUTER_EMBEDDING_MODEL,
-    baseUrl: process.env.EMBEDDING_BASE_URL ?? "https://openrouter.ai/api/v1",
-    timeoutMs: 60_000,
-    cacheFile: path.join(CACHE_ROOT, "embeddings-cache.json")
-  });
+  const provider = embeddingProviderFromEnv(
+    { OPENROUTER_EMBEDDING_MODEL: chatEnvFile.OPENROUTER_EMBEDDING_MODEL, ...process.env },
+    { cacheFile: path.join(CACHE_ROOT, "embeddings-cache.json") }
+  );
   await mkdirSync(OUTPUT, { recursive: true });
   const hintsDir = path.join(OUTPUT, "hints");
   await mkdirSync(hintsDir, { recursive: true });
@@ -157,14 +152,23 @@ async function main() {
     process.stderr.write(`[m3-ab] corpus=${corpus} tasks=${corpusTasks.length}\n`);
 
     // A3 的 dense 提示在任务开始前一次性算好（外部 provider，预算内）。
+    // Fail closed: without a dense index both arms get the same text and the
+    // run would spend model budget to report "no dense gain" as a result.
     const dense = new Map();
-    let denseBuild = { unavailable: true, reason: "not attempted" };
-    try {
+    let denseBuild;
+    {
       const session0 = await openImpactSession({ repoRoot, serverJs: SERVER_JS, cacheRoot, env: process.env });
-      await session0.symbol({ query: "java", limit: 1 }).catch(() => undefined);
-      await session0.close?.().catch(() => undefined);
       let dbPath = path.join(cacheRoot, "index.sqlite");
-      const found = existsSync(dbPath) ? [dbPath] : findSqliteFiles(cacheRoot);
+      let found;
+      try {
+        await session0.symbol({ query: "java", limit: 1 }).catch(() => undefined);
+        found = existsSync(dbPath) ? [dbPath] : findSqliteFiles(cacheRoot);
+        // The warm-up may return mid-build; keep the server (and its builder)
+        // alive until the index is READY.
+        if (found.length > 0) await waitForReadyIndex(found[0]);
+      } finally {
+        await session0.close?.().catch(() => undefined);
+      }
       if (found.length > 0) {
         dbPath = found[0];
         const index = new DenseDiscoveryIndex({
@@ -174,6 +178,7 @@ async function main() {
           repoRoot
         });
         const declared = await index.build();
+        if (declared === 0) throw new Error(`dense index for ${corpus} has no declarations`);
         denseBuild = { dbPath, declarations: declared, ...index.buildCost, indexIdentity: index.providerIndexIdentity };
         for (const task of corpusTasks) {
           const gate = shouldRunDense({ query: task.query });
@@ -181,19 +186,20 @@ async function main() {
             dense.set(task.id, { hints: [], reason: gate.reason });
             continue;
           }
+          // Cached under cacheIdentity (provider identity + query text hash).
+          // A failure stops the run before any chat call: a task without its
+          // hints would spend model budget on two identical arms.
+          let vector;
           try {
-            const vectors = await provider.embed([task.query], [`${provider.model}::query::${task.query}`]);
-            const result = { hints: index.search(vectors[0], { topK: 8 }), reason: "ok" };
-            dense.set(task.id, result);
-          } catch {
-            dense.set(task.id, { hints: [], reason: "embedding_failed" });
+            vector = await provider.embedQuery(task.query);
+          } catch (error) {
+            throw new Error(`query embedding failed for ${task.id}; no chat call was made: ${error instanceof Error ? error.message : String(error)}`);
           }
+          dense.set(task.id, { hints: index.search(vector, { topK: 8 }), reason: "ok" });
         }
       } else {
-        denseBuild = { unavailable: true, reason: "index.sqlite not found" };
+        throw new Error(`dense index UNAVAILABLE for ${corpus}: index.sqlite not found under ${cacheRoot}`);
       }
-    } catch (error) {
-      denseBuild = { unavailable: true, reason: error instanceof Error ? error.message : String(error) };
     }
     corpusCosts.push({ corpus, denseBuild });
     for (const task of corpusTasks) {

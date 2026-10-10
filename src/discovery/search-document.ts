@@ -62,7 +62,8 @@ function finish(input: DocInput): SearchDocument {
     endLine: source.endLine,
     representationVersion: SEARCH_DOCUMENT_REPRESENTATION_VERSION,
     sourceKind,
-    normalizedText: redactSecretLiterals(text)
+    // Same rules as previews: value shape plus secret-named assignments, per line.
+    normalizedText: text.split("\n").map(redactPreviewLine).join("\n")
   };
 }
 

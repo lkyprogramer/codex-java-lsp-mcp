@@ -1,6 +1,6 @@
 # R10 result: dense experiment cache identity, body deadline, stale safety
 
-**State: DONE.** The experiment is repaired. Its index-backed runs are **DISABLED_INVALID**, and the entry scripts refuse to start; see Decision. The audit cases D01–D04 went from RED to GREEN, and the full audit is now 27/27. Product code (`src/`, `scripts/`) is unchanged. Base commit `463ba33`; evidence is in `java-specialist-audit-runs/r10*/`.
+**State: DONE.** The experiment is repaired. **Follow-up:** the DISABLED_INVALID input below was resolved later in `dense-input-result.md` (ordered `search_doc_text`, schema v8, real-provider pilot). Its index-backed runs are **DISABLED_INVALID**, and the entry scripts refuse to start; see Decision. The audit cases D01–D04 went from RED to GREEN, and the full audit is now 27/27. Product code (`src/`, `scripts/`) is unchanged. Base commit `463ba33`; evidence is in `java-specialist-audit-runs/r10*/`.
 
 ## What changed (`experiments/semantic-discovery/`)
 

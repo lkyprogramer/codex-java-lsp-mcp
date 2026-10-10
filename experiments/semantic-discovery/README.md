@@ -5,18 +5,54 @@ A standalone experiment comparing the product's lexical discovery (A2) with an o
 - It imports no product source, only the frozen evaluation harness scripts.
 - Dense results are `DISCOVERY_HINT` only and never bind a declaration.
 
-## Status (R10)
+## Status
 
 | Part | State |
 |---|---|
-| `EmbeddingProvider`, `DenseDiscoveryIndex`, `gate.mjs` | Repaired; offline tests only |
-| `readSearchDocumentFacts` (index → dense input) | **DISABLED_INVALID** |
-| `compare.mjs`, `agent-ab.mjs` | **Refuse to start** (`assertDenseRunnable()` right after their imports, before arguments, sessions, embedding or model calls). A provider pilot needs explicit approval (R11). |
+| `EmbeddingProvider`, `DenseDiscoveryIndex`, `gate.mjs` | Repaired in R10; offline tests plus an optional real-endpoint E2E |
+| `readSearchDocumentFacts` (index → dense input) | Reads the ordered `search_doc_text` (index schema v8+). An older index is refused (`DISABLED_INVALID`) |
+| `compare.mjs`, `agent-ab.mjs` | Runnable. They fail closed: a corpus without a dense index stops the run instead of producing two identical arms. `agent-ab` also stops before any chat call if a query embedding fails. Both wait until the index's `buildState` is `READY` |
+| `line-recall.mjs` | `compare.mjs` scorer with the kit's `required_line_recall` semantics |
 
-`readSearchDocumentFacts` is disabled for this reason:
-- The product index stores SearchDocument **token postings** (`search_doc_token`, deduplicated per document with a tf count). It does not store the ordered `normalizedText`.
-- Joining tokens back into "text" embeds a different, unordered representation. Dense and A2 would then not compare the same text, so the comparison could not be attributed to the retrieval method.
-- Until the ordered representation is persisted, building dense input from the index throws, and both entry scripts refuse to run. Running them anyway would spend model budget on two identical arms and report "no dense gain" as if it were a result. Callers of `DenseDiscoveryIndex` may pass facts that already carry ordered `text`.
+### Dense input: `search_doc_text`
+
+- The product stores each SearchDocument's ordered, redacted `normalizedText` in `search_doc_text` (schema v8). It is written in the same transaction as the document's postings and deleted with it.
+- **Redaction** uses the preview rule, applied per line: value shape plus secret-named assignments, for example `PASSWORD = "..."` or `token: '...'`. A joined multi-line signature is one line, so one secret-named assignment redacts every literal in it.
+- **Limit**: the rule is name- and shape-based. It does not recognise every secret, such as values in text blocks or unnamed short literals.
+- The postings are exactly `documentTokens(text)`, so A2 and the dense route read one text surface.
+- One dense row per declaration joins its documents:
+  - first the declaration's own file, by line;
+  - then the other source files (for example a MyBatis XML), by path and line.
+- The line range comes only from the own-file documents. Every source file and its hash are in the source manifest.
+- An index without `search_doc_text`, or with a document that has no stored text, is refused. Joining unordered tokens would embed a different representation, so it is never approximated.
+
+### Provider configuration (`embeddingProviderFromEnv`)
+
+| Variable | Meaning |
+|---|---|
+| `EMBEDDING_API_KEY` | Explicit key for any endpoint |
+| `SILICONFLOW_API_KEY` / `OPENROUTER_API_KEY` | Vendor keys. Each is used **only** when `EMBEDDING_BASE_URL`'s host is that vendor's host (`*.siliconflow.cn` / `*.openrouter.ai`), so a vendor key is never sent to another host. Keep keys in the git-ignored `.env`; a key is never part of a cache key or a request body |
+| `EMBEDDING_BASE_URL` | OpenAI-compatible base URL (default OpenRouter) |
+| `EMBEDDING_MODEL` | Required |
+| `EMBEDDING_DIMENSIONS` | Optional. Sent as `dimensions` and part of the cache identity |
+| `EMBEDDING_PROVIDER` | Optional. Defaults to the endpoint host |
+
+Example (SiliconFlow, 1024-d):
+
+```bash
+EMBEDDING_DIMENSIONS=1024 node --env-file=.env experiments/semantic-discovery/compare.mjs \
+  --stage <hydrated full-stage> --out <run dir> --cache <cache dir>
+```
+
+Query vectors are cached under the same `cacheIdentity`: the provider identity, `QUERY_REPRESENTATION_VERSION` and the query text hash. Measured on SiliconFlow, the same query gives slightly different vectors across runs; the largest top-score difference was 0.0018 cosine, enough to reorder near-tied hints. Caching makes a rerun reproducible. `compare.mjs` records each query vector's sha256 and the top-9 cosine scores.
+
+### Scorer
+
+`compare.mjs` uses `required_line_recall` = `|pred ∩ req| / |req|` over `(path, line)` points, as `harness/scoring.py` does:
+- A path-only hint contributes no lines.
+- An overlap counts only the lines it covers.
+
+The arms are still **not equal-budget**: A3 is A2 plus up to 8 hints, and the pack records both arms' unique covered lines. Equal K/line/byte budgets after fusion are R11 work.
 
 ## Cache identity
 
@@ -34,9 +70,9 @@ cacheIdentity({ endpoint, provider, model, revision, dim, metric,
 The cache file layout is `dense-cache/r10`:
 
 - **Load and write**:
-  - The file is read once per keyed `embed` call. It is written through a temporary file and `rename` only when new entries were added.
+  - The file is read once per provider instance and kept in memory. An `embed` call writes it, through a temporary file and `rename`, only when it added entries.
   - Batches that finished before a later batch failed are still saved.
-  - Keyless calls (query embeddings) never read or write the file.
+  - Keyless calls never read or write the file. Entry scripts embed queries through `embedQuery`, which is keyed.
   - `embed` calls on one provider instance must be sequential. Between processes, the last `rename` wins.
 - **What counts as a hit**: the record's key must match, the vector must have the recorded dimension, and every value must be finite. All hits in one build must share one dimension.
 - **Everything else, including pre-R10 entries** (`model::path::hash`), is a miss and is re-embedded.
@@ -51,11 +87,11 @@ The cache file layout is `dense-cache/r10`:
 - **Stale hints**: a hint carries `indexedContentHash` and a line range only when **every** source file of the declaration still has its indexed hash (for example, the Java file and the MyBatis XML file). Otherwise it is a path-only hint with `startLine`/`endLine` set to `null`; the caller must re-read the file and locate the declaration again.
 - **Range sources**: the range is taken only from documents in the declaration's own file.
 
-## Known gaps before a pilot (R11)
+## Known gaps (R11)
 
-- **No ordered dense input.** There is no ordered SearchDocument text source: see `readSearchDocumentFacts` above.
-- **Scorer bug (label challenge, not changed here).** `compare.mjs` `coverage()` counts a path-only hint as covering the whole file. Since R10, stale dense hints are path-only, so this scorer would *raise* A3 recall for stale hits. `docs/06-experiment-redesign.md` says "候选路径缺范围不计 line coverage" (a candidate path without a range does not count toward line coverage). The scorer must change before any comparison is reported.
-- **Query cache key outside the identity.** `agent-ab.mjs` caches query embeddings under `${model}::query::${query}`, which is outside `cacheIdentity` and has no endpoint. Route it through the identity before a pilot.
+- **Unequal budget.** A2 and A3 are not capped to the same K/lines/bytes after fusion (RRF); R11 defines that profile.
+- **No region validation.** `compare.mjs` scores candidate ranges directly. It does not run the kit's region validation (content hash, byte cost), and a malformed region only contributes nothing instead of invalidating the arm (see `line-recall.mjs`).
+- **READY is not quiescent.** Reads require `buildState=READY` in one snapshot. A reconcile of an existing index commits XML and Java separately while staying READY, so a read can land between them. The stage is frozen during a run, so this is unlikely.
 
 ## Tests
 
@@ -63,4 +99,8 @@ The cache file layout is `dense-cache/r10`:
 node --test semantic-discovery.test.mjs repair-judge.test.mjs ab-summary.test.mjs
 ```
 
-All tests are offline, using a fake `fetch` and no API key. The optional real-endpoint round trip runs only with `EMBEDDING_E2E=1` and a key kept outside the repository.
+All tests are offline, using a fake `fetch` and no API key. The optional real-endpoint round trip runs only with `EMBEDDING_E2E=1`:
+
+```bash
+EMBEDDING_E2E=1 node --env-file=../../.env --test semantic-discovery.test.mjs
+```

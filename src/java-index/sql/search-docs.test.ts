@@ -215,6 +215,29 @@ test("K18: a secret value never enters any document, token, or search response",
   }
 });
 
+test("K18: a short secret assigned to a secret-named key is redacted in document text, as in previews", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "java-index-t05-k18-short-"));
+  try {
+    const backend = await createJavaParserBackend();
+    const source = [
+      "package demo;",
+      "public class Svc {",
+      "    /** default token: 'zq7short' */",
+      "    public void init() { String password = \"s3cr3t!\"; }",
+      "}"
+    ].join("\n");
+    const bundle = await writeAndParse(root, backend, source);
+    const docs = buildSearchDocuments({ bundle, content: source });
+    const texts = docs.map(doc => doc.normalizedText).join("\n");
+    assert.ok(texts.includes("password"), `the key name stays searchable: ${texts}`);
+    for (const value of ["s3cr3t!", "zq7short"]) {
+      assert.ok(!texts.includes(value), `the value ${value} must not enter any document: ${texts}`);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("T05/R08: document ids are deterministic over target, kind, source path/range/hash and version", () => {
   const base = {
     declarationId: "method:demo.Svc#refund()",

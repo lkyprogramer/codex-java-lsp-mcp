@@ -209,7 +209,10 @@ const TEXT_BLOB_ALLOW = new Set([
   "source_root_coverage.root", "source_root_coverage.state",
   // R08 review: one row per resource XML ever examined (same shape as
   // mybatis_resource's path/hash), so reconcile can skip unchanged XML.
-  "resource_scan.path", "resource_scan.content_hash"
+  "resource_scan.path", "resource_scan.content_hash",
+  // v8: the ordered (redacted) SearchDocument text the postings are tokenized
+  // from; the dense experiment's aligned input (search_doc_text).
+  "search_doc_text.text"
 ]);
 
 test("schema v5 has no facts on reconstructable tables and no extra TEXT/BLOB columns", () => {
