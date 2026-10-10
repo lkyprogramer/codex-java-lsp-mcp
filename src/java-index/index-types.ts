@@ -100,6 +100,8 @@ export type JavaMethodFacts = {
   constructor: boolean;
   signatureKey: string;
   range: SourceRange;
+  /** The name identifier (the locator / LSP selection); range starts at the first annotation. */
+  nameRange?: SourceRange;
   bodyRange?: SourceRange;
   modifiers: string[];
   annotations: JavaAnnotationFact[];
@@ -121,6 +123,8 @@ export type JavaTypeFacts = {
   fileId: string;
   enclosingTypeId?: string;
   range: SourceRange;
+  /** The name identifier (the locator / LSP selection); range starts at the first annotation. */
+  nameRange?: SourceRange;
   modifiers: string[];
   annotations: JavaAnnotationFact[];
   typeParameters: JavaTypeParameterFact[];

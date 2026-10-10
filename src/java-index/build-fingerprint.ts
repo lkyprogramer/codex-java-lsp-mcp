@@ -28,7 +28,9 @@ const BUILD_MARKER_RELATIVE_PATHS = [
 // AMBIGUOUS (R05) - refs/edges written by revision 2 bound the lowest id.
 // The SQLite index records it in meta and is dropped/rebuilt on mismatch
 // (schema.ts schemaVersionsMatch), like a schema version.
-export const JAVA_FACTS_REVISION = 3;
+// Revision 4: type/method facts carry nameRange, the declaration name the
+// discovery locator points at (range starts at the first annotation).
+export const JAVA_FACTS_REVISION = 4;
 const LEGACY_EXTRACTOR_CODE_SUFFIX = /\|extractor-code-[0-9a-f]{7,40}$/i;
 
 // Parser + facts revision only. tree-sitter version changes and JAVA_FACTS_REVISION

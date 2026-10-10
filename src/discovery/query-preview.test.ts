@@ -91,33 +91,33 @@ test("K20: hits from another generation than the status are not stitched into RE
   });
 });
 
-test("Q09: a preview has a 4 KiB byte cap and whole lines; the range is recomputed from the kept lines", async () => {
+test("Q09 (preview=window): a preview has a 4 KiB byte cap and whole lines; the range is recomputed from the kept lines", async () => {
   const longLine = `class A { String x="${"x".repeat(100_000)}"; }\n`;
   const kiloLines = Array.from({ length: 12 }, (_, i) => `// ${String(i).padStart(2, "0")} ${"y".repeat(994)}\n`).join("");
   const exact = `${"z".repeat(DISCOVERY_PREVIEW_MAX_BYTES - 1)}\n${"w".repeat(10)}\n`;
   await withRepo({ "A.java": longLine, "K.java": kiloLines, "E.java": exact }, async root => {
-    const huge = await discover(root, [hit("A.java", longLine)]);
+    const huge = await discover(root, [hit("A.java", longLine)], { preview: "window" });
     assert.equal(huge.candidates[0]!.preview, undefined);
     assert.equal(huge.candidates[0]!.previewOmitted, "preview_byte_cap");
     assert.equal(huge.scopeState, "READY", "a verified locator without preview is still complete");
 
-    const kilo = (await discover(root, [hit("K.java", kiloLines)])).candidates[0]!;
+    const kilo = (await discover(root, [hit("K.java", kiloLines)], { preview: "window" })).candidates[0]!;
     assert.ok(Buffer.byteLength(kilo.preview!) <= DISCOVERY_PREVIEW_MAX_BYTES, `${Buffer.byteLength(kilo.preview!)}`);
     assert.equal(splitSourceLines(kilo.preview!).length, 4, "four 1000-byte lines fit, the fifth would exceed 4096");
     assert.deepEqual([kilo.evidenceRange!.startLine, kilo.evidenceRange!.endLine], [1, 4]);
     assert.ok(kiloLines.startsWith(kilo.preview!), "byte-for-byte source window");
 
-    const boundary = (await discover(root, [hit("E.java", exact)])).candidates[0]!;
+    const boundary = (await discover(root, [hit("E.java", exact)], { preview: "window" })).candidates[0]!;
     assert.equal(Buffer.byteLength(boundary.preview!), DISCOVERY_PREVIEW_MAX_BYTES, "exactly 4096 bytes is admitted");
     assert.equal(boundary.evidenceRange!.endLine, 1);
   });
 });
 
-test("R08: preview bytes are capped per request (16 KiB); later candidates keep safe locators", async () => {
+test("R08 (preview=window): preview bytes are capped per request (16 KiB); later candidates keep safe locators", async () => {
   const body = Array.from({ length: 3 }, () => `${"q".repeat(999)}\n`).join("");
   const files = Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`F${i}.java`, body]));
   await withRepo(files, async root => {
-    const r = await discover(root, Object.keys(files).map(rel => hit(rel, body)));
+    const r = await discover(root, Object.keys(files).map(rel => hit(rel, body)), { preview: "window" });
     const total = r.candidates.reduce((sum, c) => sum + Buffer.byteLength(c.preview ?? ""), 0);
     assert.ok(total <= DISCOVERY_REQUEST_PREVIEW_MAX_BYTES, `${total}`);
     assert.equal(r.candidates.length, 8, "no locator is dropped for preview budget");

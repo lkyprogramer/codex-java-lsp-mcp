@@ -56,6 +56,8 @@ export type EntityHit = {
   // (SQL client, in-memory oracle). 1-based UTF-16, ready for java_impact.
   line?: number;
   column?: number;
+  /** First line of the whole declaration (annotations included): the head preview start. */
+  declarationStartLine?: number;
   contentHash?: string;
   module?: string;
   sourceRoot?: string;
@@ -111,6 +113,9 @@ export type DetailedEntitySearchResult = {
   generation: number;
   /** R09: per-stage begin/end/remaining/visited; empty when nothing ran. */
   trace?: QueryStageTrace[];
+  /** Set on a complete, empty non-exact scan: how many query tokens the
+   *  index vocabulary (identifier, chunk or document postings) knows. */
+  vocabulary?: { queryTokens: number; knownTokens: number };
 };
 
 export type EntitySearchOptions = {

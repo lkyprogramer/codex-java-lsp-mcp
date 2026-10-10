@@ -176,6 +176,7 @@ function extractType(node: JavaSyntaxNode, context: ExtractContext, isLocal: boo
     fileId: javaFileId(context.input.relativePath),
     ...(parent ? { enclosingTypeId: parent.typeId } : {}),
     range,
+    ...(nameNode ? { nameRange: rangeOf(nameNode) } : {}),
     modifiers: extractModifiers(modifiersNode),
     annotations: extractAnnotations(modifiersNode, context.source),
     typeParameters: typeParametersNode
@@ -389,6 +390,7 @@ function buildMethod(node: JavaSyntaxNode, context: ExtractContext, ownerTypeId:
     constructor: isConstructor,
     signatureKey,
     range: rangeOf(node),
+    ...(nameNode ? { nameRange: rangeOf(nameNode) } : {}),
     ...(bodyNode ? { bodyRange: rangeOf(bodyNode) } : {}),
     modifiers: extractModifiers(modifiersNode),
     annotations: extractAnnotations(modifiersNode, context.source),

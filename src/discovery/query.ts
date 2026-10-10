@@ -18,6 +18,7 @@ import type { JavaIndexClientApi } from "../java-index/java-index-client-api.js"
 import {
   DISCOVERY_DEFAULT_LIMIT,
   ENTITY_SEARCH_MAX_LIMIT,
+  type DetailedEntitySearchResult,
   type EntityHit,
   type EntitySearchMode,
   type ExactLookupOutcome
@@ -48,6 +49,23 @@ export const DISCOVERY_PREVIEW_LINES = 12;
 // preview, preview bytes per request, bytes read per file and per request.
 export const DISCOVERY_PREVIEW_MAX_BYTES = 4096;
 export const DISCOVERY_REQUEST_PREVIEW_MAX_BYTES = 16384;
+
+/**
+ * Preview modes. A preview is a discovery aid, not the evidence an agent reads
+ * next, so the default is a short declaration head under a small per-request
+ * cap: one discovery call cannot spend an agent's whole source budget (kit
+ * tasks allow 160 lines / 16000 bytes in total). "window" is the R08 window;
+ * "none" returns hash-verified locators only.
+ */
+export type DiscoveryPreviewMode = "none" | "head" | "window";
+export const DISCOVERY_DEFAULT_PREVIEW_MODE: DiscoveryPreviewMode = "head";
+export const DISCOVERY_HEAD_PREVIEW_LINES = 4;
+export const DISCOVERY_HEAD_PREVIEW_MAX_BYTES = 1024;
+export const DISCOVERY_HEAD_REQUEST_PREVIEW_MAX_BYTES = 2048;
+const PREVIEW_PROFILES: Record<Exclude<DiscoveryPreviewMode, "none">, { lines: number; maxBytes: number; requestBytes: number }> = {
+  head: { lines: DISCOVERY_HEAD_PREVIEW_LINES, maxBytes: DISCOVERY_HEAD_PREVIEW_MAX_BYTES, requestBytes: DISCOVERY_HEAD_REQUEST_PREVIEW_MAX_BYTES },
+  window: { lines: DISCOVERY_PREVIEW_LINES, maxBytes: DISCOVERY_PREVIEW_MAX_BYTES, requestBytes: DISCOVERY_REQUEST_PREVIEW_MAX_BYTES }
+};
 export const DISCOVERY_FILE_READ_MAX_BYTES = 2 * 1024 * 1024;
 export const DISCOVERY_REQUEST_READ_MAX_BYTES = 8 * 1024 * 1024;
 
@@ -60,6 +78,8 @@ export type StaticDiscoveryArgs = {
   limit?: number;
   module?: string;
   sourceSet?: DiscoverySourceSet;
+  /** Default "head" (see DiscoveryPreviewMode). */
+  preview?: DiscoveryPreviewMode;
   repoRoot: string;
   repoHash?: string;
   budget?: { remainingMs?: () => number };
@@ -84,6 +104,7 @@ export type DiscoveryLocator = {
 /** Why a candidate carries no preview; the locator itself stays usable
  *  unless the result says otherwise (scopeState/droppedStale). */
 export type DiscoveryPreviewOmitted =
+  | "not_requested"
   | "file_too_large"
   | "read_budget"
   | "deadline"
@@ -140,7 +161,36 @@ export type DiscoveryResult = {
   scope: ResolvedSearchScope | { state: "NOT_RESOLVED" };
   /** R09: per-stage timings, only when requested (`trace: true`). */
   trace?: QueryStageTrace[];
+  /** Why a complete answer is empty, when the index can tell: no query word
+   *  exists in the index vocabulary. Rephrase with code identifiers; there is
+   *  never a fuzzy fallback (R07). */
+  emptyReason?: DiscoveryEmptyReason;
 };
+
+export type DiscoveryEmptyReason = {
+  kind: "no_vocabulary_overlap";
+  queryTokens: number;
+  knownTokens: 0;
+  /** Unicode scripts of the query words, e.g. ["Han"] or ["Latin"]. */
+  queryScripts: string[];
+  hint: string;
+};
+
+const NO_VOCABULARY_HINT =
+  "No word of this query occurs in the indexed code, comments or framework keys. " +
+  "Rephrase with likely code identifiers (class, method or field names, usually English), e.g. translate the key nouns.";
+
+function queryScripts(query: string): string[] {
+  const scripts: string[] = [];
+  if (/\p{Script=Han}/u.test(query)) scripts.push("Han");
+  if (/[A-Za-z]/.test(query)) scripts.push("Latin");
+  return scripts;
+}
+
+function emptyReasonOf(query: string, vocabulary: DetailedEntitySearchResult["vocabulary"]): DiscoveryEmptyReason | undefined {
+  if (!vocabulary || vocabulary.queryTokens === 0 || vocabulary.knownTokens !== 0) return undefined;
+  return { kind: "no_vocabulary_overlap", queryTokens: vocabulary.queryTokens, knownTokens: 0, queryScripts: queryScripts(query), hint: NO_VOCABULARY_HINT };
+}
 
 const LAYER_MATCH: Record<EntityHit["layer"], DiscoveryCandidate["matchedBy"][number]> = {
   FQN: "exact",
@@ -182,6 +232,9 @@ function validateArgs(args: StaticDiscoveryArgs): { task: string; limit: number;
   }
   if (args.limit !== undefined && (!Number.isInteger(args.limit) || args.limit < 1 || args.limit > ENTITY_SEARCH_MAX_LIMIT)) {
     throw new Error(`discovery limit must be an integer 1..${ENTITY_SEARCH_MAX_LIMIT}`);
+  }
+  if (args.preview !== undefined && !["none", "head", "window"].includes(args.preview)) {
+    throw new Error("discovery preview must be none, head or window");
   }
   const limit = args.limit ?? DISCOVERY_DEFAULT_LIMIT;
   const searchMode: EntitySearchMode = args.searchMode ?? "auto";
@@ -356,10 +409,16 @@ type PreviewWindow =
  * would carry a recognised secret is redacted and the preview is then
  * labelled redacted-preview (not source evidence).
  */
-function previewWindow(lines: readonly string[], startLine: number, lastLine: number, budgetBytes: number): PreviewWindow {
+function previewWindow(
+  lines: readonly string[],
+  startLine: number,
+  lastLine: number,
+  budgetBytes: number,
+  profile: { lines: number; maxBytes: number }
+): PreviewWindow {
   if (startLine < 1 || startLine > lines.length || lastLine < startLine) return { omitted: "range_invalid" };
-  const maxBytes = Math.min(DISCOVERY_PREVIEW_MAX_BYTES, budgetBytes);
-  const end = Math.min(lines.length, lastLine, startLine + DISCOVERY_PREVIEW_LINES - 1);
+  const maxBytes = Math.min(profile.maxBytes, budgetBytes);
+  const end = Math.min(lines.length, lastLine, startLine + profile.lines - 1);
   const kept: string[] = [];
   let bytes = 0;
   let redacted = false;
@@ -374,7 +433,7 @@ function previewWindow(lines: readonly string[], startLine: number, lastLine: nu
   }
   if (kept.length === 0) {
     const first = Buffer.byteLength(redactPreviewLine(lines[startLine - 1]!), "utf8");
-    return { omitted: first > DISCOVERY_PREVIEW_MAX_BYTES ? "preview_byte_cap" : "preview_budget" };
+    return { omitted: first > profile.maxBytes ? "preview_byte_cap" : "preview_budget" };
   }
   return {
     preview: kept.join(""),
@@ -468,7 +527,9 @@ export async function runStaticDiscovery(client: JavaIndexClientApi, args: Stati
   let droppedStale = 0;
   let staleEvidence = 0;
   const unverified = new Set<"deadline" | "read_budget">();
-  let previewBudget = DISCOVERY_REQUEST_PREVIEW_MAX_BYTES;
+  const previewMode = args.preview ?? DISCOVERY_DEFAULT_PREVIEW_MODE;
+  const previewProfile = previewMode === "none" ? undefined : PREVIEW_PROFILES[previewMode];
+  let previewBudget = previewProfile?.requestBytes ?? 0;
   for (const hit of result.hits) {
     if (!hit.line || !hit.column || !hit.contentHash) {
       droppedUnlocatable += 1;
@@ -508,6 +569,12 @@ export async function runStaticDiscovery(client: JavaIndexClientApi, args: Stati
       candidates.push(candidate);
       continue;
     }
+    if (!previewProfile && declarationRead.state === "ok") {
+      // Hash-verified locator; the caller asked for no preview.
+      candidate.previewOmitted = "not_requested";
+      candidates.push(candidate);
+      continue;
+    }
     if (declarationRead.state !== "ok") {
       // Not read (cap/deadline): a safe locator with the reason, unverified.
       candidate.previewOmitted = declarationRead.state;
@@ -518,7 +585,12 @@ export async function runStaticDiscovery(client: JavaIndexClientApi, args: Stati
     // The preview shows what actually matched: a document hit's own source
     // (comment lines, framework key, MyBatis XML statement), else the
     // declaration head.
-    const evidence = hit.evidence ?? { relativePath: hit.relativePath, contentHash: hit.contentHash, startLine: hit.line, endLine: Number.MAX_SAFE_INTEGER };
+    const evidence = hit.evidence ?? {
+      relativePath: hit.relativePath,
+      contentHash: hit.contentHash,
+      startLine: hit.declarationStartLine ?? hit.line,
+      endLine: Number.MAX_SAFE_INTEGER
+    };
     const sourceRead = evidence.relativePath === hit.relativePath ? declarationRead : await reader.read(evidence.relativePath);
     const sourceHash = sourceRead.state === "ok" || sourceRead.state === "hashed_only" ? sourceRead.contentHash : undefined;
     if (sourceRead.state === "missing" || (sourceHash !== undefined && sourceHash !== evidence.contentHash)) {
@@ -527,7 +599,7 @@ export async function runStaticDiscovery(client: JavaIndexClientApi, args: Stati
     } else if (sourceRead.state !== "ok") {
       candidate.previewOmitted = sourceRead.state === "hashed_only" ? "file_too_large" : sourceRead.state;
     } else {
-      const window = previewWindow(sourceRead.lines, evidence.startLine, evidence.endLine, previewBudget);
+      const window = previewWindow(sourceRead.lines, evidence.startLine, evidence.endLine, previewBudget, previewProfile!);
       if ("omitted" in window) {
         candidate.previewOmitted = window.omitted;
       } else {
@@ -594,6 +666,7 @@ export async function runStaticDiscovery(client: JavaIndexClientApi, args: Stati
     droppedUnlocatable,
     droppedStale,
     scope: resolved,
-    ...(trace ? { trace: trace.stages } : {})
+    ...(trace ? { trace: trace.stages } : {}),
+    ...(candidates.length === 0 && !partial ? (reason => (reason ? { emptyReason: reason } : {}))(emptyReasonOf(args.query, result.vocabulary)) : {})
   };
 }

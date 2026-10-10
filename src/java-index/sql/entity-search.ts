@@ -583,8 +583,12 @@ function attachLocators(db: IndexDatabase, hits: EntityHit[]): EntityHit[] {
       : (decodeFacts<JavaMethodFacts>(fileRow.facts) ?? undefined);
     const range = declaration?.range;
     if (range) {
-      hit.line = range.start.line;
-      hit.column = range.start.column;
+      // The locator is the name (an LSP selection); the head preview starts
+      // at the declaration's first line so annotations stay visible.
+      const selection = declaration?.nameRange?.start ?? range.start;
+      hit.line = selection.line;
+      hit.column = selection.column;
+      hit.declarationStartLine = range.start.line;
     }
     if (hit.kind === "method") {
       const arity = (fileRow as { arity?: SQLOutputValue }).arity;
@@ -737,8 +741,25 @@ export class SqlEntitySearch {
       const value = mergeByRank(routes, fetch);
       return { value, visited: routes.reduce((sum, route) => sum + route.length, 0) };
     });
-    return finish(merged);
+    const result = finish(merged);
+    // A complete empty answer says whether the index knows any query word
+    // (an all-CJK question over English code knows none): point lookups,
+    // bounded by the query's own token count.
+    if (merged.length === 0 && result.stopReason === undefined) result.vocabulary = queryVocabulary(this.db, task);
+    return result;
   }
+}
+
+function queryVocabulary(db: IndexDatabase, task: string): { queryTokens: number; knownTokens: number } {
+  const tokens = tokenize(task);
+  const known = prepareCached(
+    db,
+    `SELECT 1 AS ok FROM sym s WHERE s.text=? AND (
+       EXISTS(SELECT 1 FROM entity_df WHERE field=0 AND token_sym=s.id)
+       OR EXISTS(SELECT 1 FROM entity_df WHERE field=1 AND token_sym=s.id)
+       OR EXISTS(SELECT 1 FROM search_doc_df WHERE token_sym=s.id))`
+  );
+  return { queryTokens: tokens.length, knownTokens: tokens.filter(token => known.get(token) !== undefined).length };
 }
 
 // text intent merges both BM25 routes so a type hit never preempts a method

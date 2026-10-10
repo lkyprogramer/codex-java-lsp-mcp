@@ -41,6 +41,9 @@ export const symbolSchema = {
   backend: z.enum(["static", "jdt"]).optional(),
   searchMode: z.enum(["auto", "exact", "text"]).optional(),
   terms: z.array(z.string().min(1).max(64)).max(6).optional(),
+  // Static query previews: head (default, short declaration heads under a
+  // small per-request cap), window (12-line windows) or none (locators only).
+  preview: z.enum(["none", "head", "window"]).optional(),
   detail: detailSchema
 };
 
@@ -88,6 +91,7 @@ export async function javaSymbol(
         limit: args.limit,
         module: args.module,
         sourceSet: args.sourceSet,
+        preview: args.preview,
         repoRoot: context.repoRoot,
         repoHash: context.repoHash,
         budget: request ? { remainingMs: () => request.budget.remainingMs() } : undefined
