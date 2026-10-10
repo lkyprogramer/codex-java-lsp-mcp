@@ -106,6 +106,13 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     }
     this.layout = probeLayout(this.repoRoot);
     try {
+      // An index written by another schema/identity/facts revision (an older
+      // product version) is never served: its facts follow other rules (e.g.
+      // locators). It is removed and rebuilt like a missing index.
+      if (existsSync(this.dbPath) && !this.existingSchemaMatches()) {
+        await sharedQueryWorker().release(this.dbPath);
+        for (const suffix of ["", "-wal", "-shm"]) rmSync(`${this.dbPath}${suffix}`, { force: true });
+      }
       if (!existsSync(this.dbPath)) {
         let siblingReused = false;
         if (options?.siblingDbPath && existsSync(options.siblingDbPath)) {
@@ -524,6 +531,19 @@ export class SqlJavaIndexClient implements JavaIndexClientApi {
     }
     renameSync(tmp, this.dbPath);
     return Date.now() - started;
+  }
+
+  /** Read-only check of an existing index file; unreadable counts as stale. */
+  private existingSchemaMatches(): boolean {
+    let db: IndexDatabase | undefined;
+    try {
+      db = openIndexDb(this.dbPath, { readOnly: true });
+      return schemaVersionsMatch(db);
+    } catch {
+      return false;
+    } finally {
+      if (db) closeDb(db);
+    }
   }
 
   private copiedSchemaMatches(): boolean {

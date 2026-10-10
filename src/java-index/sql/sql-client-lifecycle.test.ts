@@ -10,6 +10,7 @@ import { DeadlineBudget } from "../../runtime/deadline-budget.js";
 import { runSqlColdBuild } from "../../index-builder/cold-build.js";
 import { close, openIndexDb } from "./driver.js";
 import { ensureSchema } from "./schema.js";
+import { JAVA_FACTS_REVISION } from "../build-fingerprint.js";
 import { SqlJavaIndexClient } from "./sql-client.js";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -178,6 +179,38 @@ test("sibling copy with a stale schema/identity version is discarded and rebuilt
     await client.close();
     await supervisor.stop();
     await rm(destDir, { recursive: true, force: true });
+  }
+});
+
+test("an existing index from an older facts revision is never served; it is rebuilt", async () => {
+  const repo = await mkdtemp(path.join(tmpdir(), "iod-life-oldrev-repo-"));
+  await cp(fixturesRoot, repo, { recursive: true });
+  const dbPath = await coldDb(repo);
+  {
+    // An index written by the previous product version: same schema, older
+    // facts revision (e.g. locators without nameRange).
+    const db = openIndexDb(dbPath);
+    db.prepare("UPDATE meta SET value=? WHERE key='factsRevision'").run(String(JAVA_FACTS_REVISION - 1));
+    close(db);
+  }
+  const supervisor = new BuilderSupervisor({ repoRoot: repo, dbPath, idleMs: 5_000, stallMs: 60_000 });
+  const client = new SqlJavaIndexClient(repo, dbPath, supervisor, 5_000);
+  try {
+    const status = await client.open(1);
+    assert.equal(status.state, "BUILDING", "a stale-revision index is not served as READY");
+    await waitUntil(async () => (await client.status()).state === "READY", 60_000);
+    const db = openIndexDb(dbPath, { readOnly: true });
+    try {
+      const revision = db.prepare("SELECT value FROM meta WHERE key='factsRevision'").get() as { value: string };
+      assert.equal(Number(revision.value), JAVA_FACTS_REVISION, "the rebuilt index has the current facts revision");
+    } finally {
+      close(db);
+    }
+  } finally {
+    await client.close();
+    await supervisor.stop();
+    await rm(path.dirname(dbPath), { recursive: true, force: true });
+    await rm(repo, { recursive: true, force: true });
   }
 });
 
